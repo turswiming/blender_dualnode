@@ -1278,6 +1278,28 @@ extern struct CLG_LogRef *WM_LOG_TOOLS;
 extern struct CLG_LogRef *WM_LOG_MSGBUS_PUB;
 extern struct CLG_LogRef *WM_LOG_MSGBUS_SUB;
 
+/* imageformat stuff (move elsewhere) */
+typedef struct imfImageFormatType {
+  const char *name;
+  const char *idname;
+  const char *extensions;
+  const char *translation_context;
+  const char *description;
+
+  /* Returns if a  */
+  bool (*is_a_bytes)(
+      struct imfImageFormatType *,
+      const char *buf);  // TODO: have a filepointer instead (how does python handle this?)
+  struct Image *(*load)(struct imfImageFormatType *, const char *buf);
+  int (*save)(struct imfImageFormatType *, struct ImBuf *, const char *path);
+
+  /** rna for properties */
+  struct StructRNA *srna;
+
+  /** RNA integration */
+  ExtensionRNA rna_ext;
+} imfImageFormatType;
+
 #ifdef __cplusplus
 }
 #endif

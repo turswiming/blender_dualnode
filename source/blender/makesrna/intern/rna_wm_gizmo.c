@@ -25,6 +25,8 @@
 
 #include "WM_types.h"
 
+#pragma optimize("", off)
+
 #ifdef RNA_RUNTIME
 /* enum definitions */
 #endif /* RNA_RUNTIME */

@@ -21,6 +21,7 @@ struct PackedFile;
 struct RenderResult;
 struct Scene;
 struct anim;
+struct imfImageFormatType;
 
 /* ImageUser is in Texture, in Nodes, Background Image, Image Window, .... */
 /* should be used in conjunction with an ID * to Image. */
@@ -272,6 +273,14 @@ enum {
   IMA_ALPHA_CHANNEL_PACKED = 2,
   IMA_ALPHA_IGNORE = 3,
 };
+
+typedef struct imfImageFormat {
+  struct imfImageFormat *next, *prev;
+
+  const char *bl_extensions;
+
+  struct imfImageFormatType *type;
+} imfImageFormat;
 
 #ifdef __cplusplus
 }
