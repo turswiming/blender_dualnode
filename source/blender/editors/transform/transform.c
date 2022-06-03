@@ -1571,7 +1571,7 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
     /* do we check for parameter? */
     if (transformModeUseSnap(t)) {
       if (!(t->modifiers & MOD_SNAP) != !(t->tsnap.flag & SCE_SNAP)) {
-        char *snap_flag_ptr;
+        short *snap_flag_ptr;  // eSnapFlag
 
         wmMsgParams_RNA msg_key_params = {{0}};
         RNA_pointer_create(&t->scene->id, &RNA_ToolSettings, ts, &msg_key_params.ptr);

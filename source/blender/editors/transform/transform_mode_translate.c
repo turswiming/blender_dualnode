@@ -469,8 +469,8 @@ static void applyTranslation(TransInfo *t, const int UNUSED(mval[2]))
       add_v3_v3(global_dir, values_ofs);
     }
 
-    t->tsnap.snapElem = 0;
-    applySnapping(t, global_dir);
+    t->tsnap.snapElem = SCE_SNAP_MODE_NONE;
+    applySnappingAsGroup(t, global_dir);
     transform_snap_grid(t, global_dir);
 
     if (t->con.mode & CON_APPLY) {
@@ -486,7 +486,7 @@ static void applyTranslation(TransInfo *t, const int UNUSED(mval[2]))
 
       /* Test for mixed snap with grid. */
       float snap_dist_sq = FLT_MAX;
-      if (t->tsnap.snapElem != 0) {
+      if (t->tsnap.snapElem != SCE_SNAP_MODE_NONE) {
         snap_dist_sq = len_squared_v3v3(t->values, global_dir);
       }
       if ((snap_dist_sq == FLT_MAX) || (len_squared_v3v3(global_dir, incr_dir) < snap_dist_sq)) {
