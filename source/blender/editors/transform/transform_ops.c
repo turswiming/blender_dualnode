@@ -566,6 +566,16 @@ static bool transform_poll_property(const bContext *UNUSED(C),
     }
   }
 
+  /* Snapping. */
+  {
+    PropertyRNA *prop_pet = RNA_struct_find_property(op->ptr, "snap");
+    if (prop_pet && (prop_pet != prop) && (RNA_property_boolean_get(op->ptr, prop_pet) == false)) {
+      if (STRPREFIX(prop_id, "snap") || STRPREFIX(prop_id, "use_snap")) {
+        return false;
+      }
+    }
+  }
+
   return true;
 }
 
@@ -645,18 +655,21 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
 
   if (flags & P_SNAP) {
     prop = RNA_def_boolean(ot->srna, "snap", 0, "Use Snapping Options", "");
-    RNA_def_property_flag(prop, PROP_HIDDEN);
+
+    prop = RNA_def_enum(
+        ot->srna, "snap_elements", rna_enum_snap_element_items, 0, "Snap to Elements", "");
+    RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+
+    RNA_def_boolean(ot->srna, "use_snap_project", false, "Project Individual Elements", "");
 
     if (flags & P_GEO_SNAP) {
-      prop = RNA_def_enum(ot->srna, "snap_target", rna_enum_snap_target_items, 0, "Target", "");
-      RNA_def_property_flag(prop, PROP_HIDDEN);
+      RNA_def_enum(ot->srna, "snap_target", rna_enum_snap_target_items, 0, "Target", "");
       prop = RNA_def_float_vector(
           ot->srna, "snap_point", 3, NULL, -FLT_MAX, FLT_MAX, "Point", "", -FLT_MAX, FLT_MAX);
       RNA_def_property_flag(prop, PROP_HIDDEN);
 
       if (flags & P_ALIGN_SNAP) {
-        prop = RNA_def_boolean(ot->srna, "snap_align", 0, "Align with Point Normal", "");
-        RNA_def_property_flag(prop, PROP_HIDDEN);
+        RNA_def_boolean(ot->srna, "snap_align", 0, "Align with Point Normal", "");
         prop = RNA_def_float_vector(
             ot->srna, "snap_normal", 3, NULL, -FLT_MAX, FLT_MAX, "Normal", "", -FLT_MAX, FLT_MAX);
         RNA_def_property_flag(prop, PROP_HIDDEN);

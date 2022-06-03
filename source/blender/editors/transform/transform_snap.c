@@ -816,12 +816,7 @@ static eSnapTargetSelect snap_select_target_get(TransInfo *t)
 
 static void initSnappingMode(TransInfo *t)
 {
-  ToolSettings *ts = t->settings;
-  t->tsnap.mode = snap_mode_from_spacetype(t);
-  t->tsnap.target_select = snap_select_target_get(t);
-  t->tsnap.face_nearest_steps = max_ii(ts->snap_face_nearest_steps, 1);
-
-  if ((t->spacetype != SPACE_VIEW3D) || !(ts->snap_mode & SCE_SNAP_MODE_FACE_RAYCAST)) {
+  if ((t->spacetype != SPACE_VIEW3D) || !(t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST)) {
     /* Force project off when not supported. */
     t->tsnap.project = false;
   }
@@ -867,10 +862,14 @@ static void initSnappingMode(TransInfo *t)
 
 void initSnapping(TransInfo *t, wmOperator *op)
 {
-  resetSnapping(t);
-  t->tsnap.flag = snap_flag_from_spacetype(t);
   ToolSettings *ts = t->settings;
   eSnapTarget snap_target = ts->snap_target;
+
+  resetSnapping(t);
+  t->tsnap.mode = snap_mode_from_spacetype(t);
+  t->tsnap.flag = snap_flag_from_spacetype(t);
+  t->tsnap.target_select = snap_select_target_get(t);
+  t->tsnap.face_nearest_steps = max_ii(ts->snap_face_nearest_steps, 1);
 
   /* if snap property exists */
   PropertyRNA *prop;
@@ -878,6 +877,11 @@ void initSnapping(TransInfo *t, wmOperator *op)
       RNA_property_is_set(op->ptr, prop)) {
     if (RNA_property_boolean_get(op->ptr, prop)) {
       t->modifiers |= MOD_SNAP;
+
+      if ((prop = RNA_struct_find_property(op->ptr, "snap_elements")) &&
+          RNA_property_is_set(op->ptr, prop)) {
+        t->tsnap.mode = RNA_property_enum_get(op->ptr, prop);
+      }
 
       if ((prop = RNA_struct_find_property(op->ptr, "snap_target")) &&
           RNA_property_is_set(op->ptr, prop)) {
@@ -1174,7 +1178,7 @@ static void snap_calc_uv_fn(TransInfo *t, float *UNUSED(vec))
                                    objects,
                                    objects_len,
                                    t->mval,
-                                   t->tsnap.modeSelect == SNAP_NOT_SELECTED,
+                                   t->tsnap.mode == SCE_SNAP_MODE_NONE,
                                    &dist_sq,
                                    t->tsnap.snapPoint)) {
       t->tsnap.snapPoint[0] *= t->aspect[0];
