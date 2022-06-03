@@ -272,7 +272,7 @@ bool GeometrySet::has_pointcloud() const
 bool GeometrySet::has_instances() const
 {
   const InstancesComponent *component = this->get_component_for_read<InstancesComponent>();
-  return component != nullptr && component->instances_amount() >= 1;
+  return component != nullptr && component->instances_num() >= 1;
 }
 
 bool GeometrySet::has_volume() const
@@ -470,7 +470,7 @@ void GeometrySet::gather_attributes_for_propagation(
           return;
         }
 
-        AttributeDomain domain = meta_data.domain;
+        eAttrDomain domain = meta_data.domain;
         if (dst_component_type != GEO_COMPONENT_TYPE_INSTANCES && domain == ATTR_DOMAIN_INSTANCE) {
           domain = ATTR_DOMAIN_POINT;
         }
@@ -567,7 +567,7 @@ void GeometrySet::modify_geometry_sets(ForeachSubGeometryCallback callback)
 namespace blender::bke {
 
 GVArray NormalFieldInput::get_varray_for_context(const GeometryComponent &component,
-                                                 const AttributeDomain domain,
+                                                 const eAttrDomain domain,
                                                  IndexMask mask) const
 {
   if (component.type() == GEO_COMPONENT_TYPE_MESH) {

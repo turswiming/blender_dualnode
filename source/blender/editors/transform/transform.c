@@ -1172,12 +1172,20 @@ int transformEvent(TransInfo *t, const wmEvent *event)
                                   MOD_CONSTRAINT_SELECT_PLANE;
               if (t->con.mode & CON_APPLY) {
                 stopConstraint(t);
-              }
+                initSelectConstraint(t);
 
-              initSelectConstraint(t);
-              /* Use #TREDRAW_SOFT so that #selectConstraint is only called on the next event.
-               * This allows us to "deselect" the constraint. */
-              t->redraw = TREDRAW_SOFT;
+                /* In this case we might just want to remove the constraint,
+                 * so set #TREDRAW_SOFT to only select the constraint on the next mouse move event.
+                 * This way we can kind of "cancel" due to confirmation without constraint. */
+                t->redraw = TREDRAW_SOFT;
+              }
+              else {
+                initSelectConstraint(t);
+
+                /* When first called, set #TREDRAW_HARD to select constraint immediately in
+                 * #selectConstraint. */
+                BLI_assert(t->redraw == TREDRAW_HARD);
+              }
             }
           }
           handled = true;
@@ -1777,13 +1785,6 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   /* Needed to translate tweak events to mouse buttons. */
   t->launch_event = event ? WM_userdef_event_type_from_keymap_type(event->type) : -1;
   t->is_launch_event_drag = event ? (event->val == KM_CLICK_DRAG) : false;
-
-  /* XXX Remove this when wm_operator_call_internal doesn't use window->eventstate
-   * (which can have type = 0) */
-  /* For gizmo only, so assume LEFTMOUSE. */
-  if (t->launch_event == 0) {
-    t->launch_event = LEFTMOUSE;
-  }
 
   unit_m3(t->spacemtx);
 

@@ -2023,38 +2023,17 @@ def km_node_editor(params):
         {"items": items},
     )
 
-    def node_select_ops(select_mouse):
-        return [
-            ("node.select", {"type": select_mouse, "value": 'PRESS'},
-             {"properties": [("deselect_all", True)]}),
-            ("node.select", {"type": select_mouse, "value": 'PRESS', "ctrl": True}, None),
-            ("node.select", {"type": select_mouse, "value": 'PRESS', "alt": True}, None),
-            ("node.select", {"type": select_mouse, "value": 'PRESS', "ctrl": True, "alt": True}, None),
-            ("node.select", {"type": select_mouse, "value": 'PRESS', "shift": True},
-             {"properties": [("extend", True)]}),
-            ("node.select", {"type": select_mouse, "value": 'PRESS', "shift": True, "ctrl": True},
-             {"properties": [("extend", True)]}),
-            ("node.select", {"type": select_mouse, "value": 'PRESS', "shift": True, "alt": True},
-             {"properties": [("extend", True)]}),
-            ("node.select", {"type": select_mouse, "value": 'PRESS', "shift": True, "ctrl": True, "alt": True},
-             {"properties": [("extend", True)]}),
-        ]
-
-    # Allow node selection with both for RMB select
     if not params.legacy:
+        items.extend(_template_node_select(type=params.select_mouse,
+                     value=params.select_mouse_value, select_passthrough=True))
+        # Allow node selection with both for RMB select.
         if params.select_mouse == 'RIGHTMOUSE':
-            items.extend(node_select_ops('LEFTMOUSE'))
-            items.extend(node_select_ops('RIGHTMOUSE'))
-        else:
-            items.extend(node_select_ops('LEFTMOUSE'))
+            items.extend(_template_node_select(type='LEFTMOUSE', value='PRESS', select_passthrough=True))
     else:
-        items.extend(node_select_ops('RIGHTMOUSE'))
-        items.extend([
-            ("node.select", {"type": 'LEFTMOUSE', "value": 'PRESS'},
-             {"properties": [("deselect_all", False)]}),
-            ("node.select", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
-             {"properties": [("extend", True)]}),
-        ])
+        items.extend(_template_node_select(
+            type='RIGHTMOUSE', value=params.select_mouse_value, select_passthrough=True))
+        items.extend(_template_node_select(
+            type='LEFTMOUSE', value='PRESS', select_passthrough=True))
 
     items.extend([
         ("node.select_box", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
@@ -4741,6 +4720,10 @@ def _template_view3d_select(*, type, value, legacy, select_passthrough, exclude_
     # NOTE: `exclude_mod` is needed since we don't want this tool to exclude Control-RMB actions when this is used
     # as a tool key-map with RMB-select and `use_fallback_tool_rmb` is enabled. See T92467.
 
+    props_vert_without_handles = ()
+    if select_passthrough:
+        props_vert_without_handles = ("vert_without_handles",)
+
     # See: `use_tweak_select_passthrough` doc-string.
     if select_passthrough and (value in {'CLICK', 'RELEASE'}):
         select_passthrough = False
@@ -4750,9 +4733,9 @@ def _template_view3d_select(*, type, value, legacy, select_passthrough, exclude_
         {"type": type, "value": value, **{m: True for m in mods}},
         {"properties": [(c, True) for c in props]},
     ) for props, mods in (
-        ((("deselect_all", "select_passthrough") if select_passthrough else
-          ("deselect_all",)) if not legacy else (), ()),
-        (("toggle",), ("shift",)),
+        ((("deselect_all", "select_passthrough", *props_vert_without_handles) if select_passthrough else
+          ("deselect_all", *props_vert_without_handles)) if not legacy else (), ()),
+        (("toggle", *props_vert_without_handles), ("shift",)),
         (("center", "object"), ("ctrl",)),
         (("enumerate",), ("alt",)),
         (("toggle", "center"), ("shift", "ctrl")),
@@ -4767,7 +4750,10 @@ def _template_view3d_select(*, type, value, legacy, select_passthrough, exclude_
         items.append((
             "view3d.select",
             {"type": type, "value": 'CLICK'},
-            {"properties": [("deselect_all", True)]},
+            {"properties": [
+                (c, True)
+                for c in ("deselect_all", *props_vert_without_handles)
+            ]},
         ))
 
     return items
@@ -4786,6 +4772,35 @@ def _template_view3d_gpencil_select(*, type, value, legacy, use_select_mouse=Tru
         ("gpencil.select", {"type": type, "value": value, "shift": True, "alt": True},
          {"properties": [("extend", True), ("entire_strokes", True)]}),
     ]
+
+
+def _template_node_select(*, type, value, select_passthrough):
+    items = [
+        ("node.select", {"type": type, "value": value},
+         {"properties": [("deselect_all", True), ("select_passthrough", select_passthrough)]}),
+        ("node.select", {"type": type, "value": value, "ctrl": True}, None),
+        ("node.select", {"type": type, "value": value, "alt": True}, None),
+        ("node.select", {"type": type, "value": value, "ctrl": True, "alt": True}, None),
+        ("node.select", {"type": type, "value": value, "shift": True},
+         {"properties": [("toggle", True)]}),
+        ("node.select", {"type": type, "value": value, "shift": True, "ctrl": True},
+         {"properties": [("toggle", True)]}),
+        ("node.select", {"type": type, "value": value, "shift": True, "alt": True},
+         {"properties": [("toggle", True)]}),
+        ("node.select", {"type": type, "value": value, "shift": True, "ctrl": True, "alt": True},
+         {"properties": [("toggle", True)]}),
+    ]
+
+    if select_passthrough and (value == 'PRESS'):
+        # Add an additional click item to de-select all other items,
+        # needed so pass-through is able to de-select other items.
+        items.append((
+            "node.select",
+            {"type": type, "value": 'CLICK'},
+            {"properties": [("deselect_all", True)]},
+        ))
+
+    return items
 
 
 def _template_uv_select(*, type, value, select_passthrough, legacy):
@@ -5586,7 +5601,14 @@ def km_sculpt_curves(params):
          {"properties": [("mode", 'NORMAL')]}),
         ("sculpt_curves.brush_stroke", {"type": 'LEFTMOUSE', "value": 'PRESS', "ctrl": True},
          {"properties": [("mode", 'INVERT')]}),
+        ("sculpt_curves.brush_stroke", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
+         {"properties": [("mode", 'SMOOTH')]}),
+        ("curves.set_selection_domain", {"type": 'ONE', "value": 'PRESS'}, {"properties": [("domain", 'POINT')]}),
+        ("curves.set_selection_domain", {"type": 'TWO', "value": 'PRESS'}, {"properties": [("domain", 'CURVE')]}),
+        ("curves.disable_selection", {"type": 'ONE', "value": 'PRESS', "alt": True}, None),
+        ("curves.disable_selection", {"type": 'TWO', "value": 'PRESS', "alt": True}, None),
         *_template_paint_radial_control("curves_sculpt"),
+        *_template_items_select_actions(params, "sculpt_curves.select_all"),
     ])
 
     return keymap
@@ -6549,10 +6571,11 @@ def km_node_editor_tool_select(params, *, fallback):
         _fallback_id("Node Tool: Tweak", fallback),
         {"space_type": 'NODE_EDITOR', "region_type": 'WINDOW'},
         {"items": [
-            *([] if (fallback and (params.select_mouse == 'RIGHTMOUSE')) else [
-                ("node.select", {"type": params.select_mouse, "value": 'PRESS'},
-                 {"properties": [("deselect_all", not params.legacy)]}),
-            ]),
+            # The node key-map already selects, leave this empty.
+            # NOTE: intentionally don't check `fallback` here (unlike other tweak tool checks).
+            # as this should only be used on LMB select which would otherwise activate on click, not press.
+            *([] if (params.select_mouse == 'RIGHTMOUSE') else
+              _template_node_select(type=params.select_mouse, value='PRESS', select_passthrough=True)),
         ]},
     )
 
@@ -6569,6 +6592,8 @@ def km_node_editor_tool_select_box(params, *, fallback):
                    params.tool_tweak_event),
                 properties=[("tweak", True)],
             )),
+            *([] if (params.select_mouse == 'RIGHTMOUSE') else
+              _template_node_select(type='LEFTMOUSE', value='PRESS', select_passthrough=True)),
         ]},
     )
 

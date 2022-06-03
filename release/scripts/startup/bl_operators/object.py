@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8-80 compliant>
-
 import bpy
 from bpy.types import Operator
 from bpy.props import (
@@ -847,10 +845,6 @@ class DupliOffsetFromCursor(Operator):
     bl_idname = "object.instance_offset_from_cursor"
     bl_label = "Set Offset from Cursor"
     bl_options = {'INTERNAL', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        return (context.active_object is not None)
 
     def execute(self, context):
         scene = context.scene

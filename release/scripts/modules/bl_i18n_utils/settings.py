@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8 compliant>
-
 # Global settings used by all scripts in this dir.
 # XXX Before any use of the tools in this dir, please make a copy of this file
 #     named "setting.py"
@@ -256,7 +254,7 @@ PYGETTEXT_KEYWORDS = (() +
     # bUnitDef unit names.
     # NOTE: regex is a bit more complex than it would need too. Since the actual
     # identifier (`B_UNIT_DEF_`) is at the end, if it's simpler/too general it
-    # becomes extremely slow to process some (unrelated) source files. 
+    # becomes extremely slow to process some (unrelated) source files.
     ((r"\{(?:(?:\s*\"[^\"',]+\"\s*,)|(?:\s*NULL\s*,)){4}\s*" +
       _msg_re + r"\s*,(?:(?:\s*\"[^\"',]+\"\s*,)|(?:\s*NULL\s*,))(?:[^,]+,){2}"
       + "\s*B_UNIT_DEF_[_A-Z]+\s*\}"),) +

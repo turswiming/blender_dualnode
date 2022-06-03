@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-
-# <pep8 compliant>
 import bpy
 import nodeitems_utils
 from nodeitems_utils import (
@@ -145,10 +143,10 @@ def geometry_node_items(context):
     yield NodeItem("GeometryNodeConvexHull")
     yield NodeItem("GeometryNodeDeleteGeometry")
     yield NodeItem("GeometryNodeDuplicateElements")
-    yield NodeItem("GeometryNodeGeometryToInstance")
-    yield NodeItem("GeometryNodeMergeByDistance")
     yield NodeItem("GeometryNodeProximity")
+    yield NodeItem("GeometryNodeGeometryToInstance")
     yield NodeItem("GeometryNodeJoinGeometry")
+    yield NodeItem("GeometryNodeMergeByDistance")
     yield NodeItem("GeometryNodeRaycast")
     yield NodeItem("GeometryNodeSeparateComponents")
     yield NodeItem("GeometryNodeSeparateGeometry")
