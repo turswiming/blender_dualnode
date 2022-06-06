@@ -532,13 +532,13 @@ void applySnappingIndividual(TransInfo *t)
       if ((t->flag & T_PROP_EDIT) && (td->factor == 0.0f)) {
         continue;
       }
+    }
 
-      applyFaceProject(t, tc, td);
-      applyFaceNearest(t, tc, td);
+    applyFaceProject(t, tc, td);
+    applyFaceNearest(t, tc, td);
 #if 0 /* TODO: support this? */
       constraintTransLim(t, td);
 #endif
-    }
   }
 }
 
@@ -634,7 +634,7 @@ void resetSnapping(TransInfo *t)
   t->tsnap.project = false;
   t->tsnap.mode = SCE_SNAP_MODE_NONE;
   t->tsnap.target_select = SCE_SNAP_TARGET_ALL;
-  t->tsnap.target = SCE_SNAP_TARGET_CLOSEST;
+  t->tsnap.source_select = SCE_SNAP_SOURCE_CLOSEST;
   t->tsnap.last = 0;
 
   t->tsnap.snapNormal[0] = 0;
@@ -702,7 +702,7 @@ static eSnapFlag snap_flag_from_spacetype(TransInfo *t)
   return ts->snap_flag;
 }
 
-static short snap_mode_from_spacetype(TransInfo *t)
+static eSnapMode snap_mode_from_spacetype(TransInfo *t)
 {
   ToolSettings *ts = t->settings;
 
@@ -711,7 +711,7 @@ static short snap_mode_from_spacetype(TransInfo *t)
   }
 
   if (t->spacetype == SPACE_IMAGE) {
-    short snap_mode = ts->snap_uv_mode;
+    eSnapMode snap_mode = ts->snap_uv_mode;
     if ((snap_mode & SCE_SNAP_MODE_INCREMENT) && (ts->snap_uv_flag & SCE_SNAP_ABS_GRID) &&
         (t->mode == TFM_TRANSLATION)) {
       snap_mode &= ~SCE_SNAP_MODE_INCREMENT;
@@ -729,7 +729,7 @@ static short snap_mode_from_spacetype(TransInfo *t)
       return SCE_SNAP_MODE_INCREMENT;
     }
 
-    short snap_mode = ts->snap_mode;
+    eSnapMode snap_mode = ts->snap_mode;
     if ((snap_mode & SCE_SNAP_MODE_INCREMENT) && (ts->snap_flag & SCE_SNAP_ABS_GRID) &&
         (t->mode == TFM_TRANSLATION)) {
       /* Special case in which snap to increments is transformed to snap to grid. */
@@ -885,7 +885,10 @@ void initSnapping(TransInfo *t, wmOperator *op)
 
       if ((prop = RNA_struct_find_property(op->ptr, "snap_target")) &&
           RNA_property_is_set(op->ptr, prop)) {
-        snap_target = RNA_property_enum_get(op->ptr, prop);
+        /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid
+         * previous ambiguity of "target" (now, "source" is geometry to be moved and "target" is
+         * geometry to which moved geometry is snapped). */
+        snap_source = RNA_property_enum_get(op->ptr, prop);
       }
 
       if ((prop = RNA_struct_find_property(op->ptr, "snap_point")) &&
@@ -961,7 +964,7 @@ void initSnapping(TransInfo *t, wmOperator *op)
     t->tsnap.peel = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
   }
 
-  t->tsnap.target = snap_target;
+  t->tsnap.source_select = snap_source;
 
   initSnappingMode(t);
 }
@@ -1002,11 +1005,11 @@ static void setSnappingCallback(TransInfo *t)
     return;
   }
 
-  switch (t->tsnap.target) {
-    case SCE_SNAP_TARGET_CLOSEST:
+  switch (t->tsnap.source_select) {
+    case SCE_SNAP_SOURCE_CLOSEST:
       t->tsnap.targetSnap = TargetSnapClosest;
       break;
-    case SCE_SNAP_TARGET_CENTER:
+    case SCE_SNAP_SOURCE_CENTER:
       if (!ELEM(t->mode, TFM_ROTATION, TFM_RESIZE)) {
         t->tsnap.targetSnap = TargetSnapCenter;
         break;
@@ -1014,10 +1017,10 @@ static void setSnappingCallback(TransInfo *t)
       /* Can't do TARGET_CENTER with these modes,
        * use TARGET_MEDIAN instead. */
       ATTR_FALLTHROUGH;
-    case SCE_SNAP_TARGET_MEDIAN:
+    case SCE_SNAP_SOURCE_MEDIAN:
       t->tsnap.targetSnap = TargetSnapMedian;
       break;
-    case SCE_SNAP_TARGET_ACTIVE:
+    case SCE_SNAP_SOURCE_ACTIVE:
       t->tsnap.targetSnap = TargetSnapActive;
       break;
   }
@@ -1178,7 +1181,7 @@ static void snap_calc_uv_fn(TransInfo *t, float *UNUSED(vec))
                                    objects,
                                    objects_len,
                                    t->mval,
-                                   t->tsnap.mode == SCE_SNAP_MODE_NONE,
+                                   t->tsnap.target_select & SCE_SNAP_TARGET_NOT_SELECTED,
                                    &dist_sq,
                                    t->tsnap.snapPoint)) {
       t->tsnap.snapPoint[0] *= t->aspect[0];
@@ -1348,7 +1351,7 @@ static void TargetSnapActive(TransInfo *t)
     }
     /* No active, default to median */
     else {
-      t->tsnap.target = SCE_SNAP_TARGET_MEDIAN;
+      t->tsnap.source_select = SCE_SNAP_SOURCE_MEDIAN;
       t->tsnap.targetSnap = TargetSnapMedian;
       TargetSnapMedian(t);
     }

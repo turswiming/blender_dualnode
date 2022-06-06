@@ -26,15 +26,6 @@ struct View3D;
 /* transform_snap_object.cc */
 
 /* ED_transform_snap_object_*** API */
-typedef enum eSnapTargetSelect {
-  SCE_SNAP_TARGET_ALL = 0,
-  SCE_SNAP_TARGET_NOT_SELECTED = (1 << 0),
-  SCE_SNAP_TARGET_NOT_ACTIVE = (1 << 1),
-  SCE_SNAP_TARGET_NOT_EDITED = (1 << 2),
-  SCE_SNAP_TARGET_ONLY_SELECTABLE = (1 << 3),
-  SCE_SNAP_TARGET_NOT_NONEDITED = (1 << 4),
-} eSnapTargetSelect;
-
 typedef enum eSnapEditType {
   SNAP_GEOM_FINAL = 0,
   SNAP_GEOM_CAGE = 1,

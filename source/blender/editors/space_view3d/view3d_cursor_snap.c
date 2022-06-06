@@ -619,9 +619,7 @@ static void v3d_cursor_snap_update(V3DSnapCursorState *state,
   }
 #endif
 
-  if (snap_elements & (SCE_SNAP_MODE_VERTEX | SCE_SNAP_MODE_EDGE | SCE_SNAP_MODE_FACE_RAYCAST |
-                       SCE_SNAP_MODE_EDGE_MIDPOINT | SCE_SNAP_MODE_EDGE_PERPENDICULAR |
-                       SCE_SNAP_MODE_FACE_NEAREST)) {
+  if (snap_elements & SCE_SNAP_MODE_GEOM) {
     float prev_co[3] = {0.0f};
     if (state->prevpoint) {
       copy_v3_v3(prev_co, state->prevpoint);

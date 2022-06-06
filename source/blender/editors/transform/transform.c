@@ -1579,7 +1579,8 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
     /* do we check for parameter? */
     if (transformModeUseSnap(t)) {
       if (!(t->modifiers & MOD_SNAP) != !(t->tsnap.flag & SCE_SNAP)) {
-        short *snap_flag_ptr;  // eSnapFlag
+        /* Type is #eSnapFlag, but type must match various snap attributes in #ToolSettings. */
+        char *snap_flag_ptr;
 
         wmMsgParams_RNA msg_key_params = {{0}};
         RNA_pointer_create(&t->scene->id, &RNA_ToolSettings, ts, &msg_key_params.ptr);
@@ -2053,4 +2054,18 @@ bool checkUseAxisMatrix(TransInfo *t)
   }
 
   return false;
+}
+
+bool transform_apply_matrix(TransInfo *t, float mat[4][4])
+{
+  if (t->transform_matrix != NULL) {
+    t->transform_matrix(t, mat);
+    return true;
+  }
+  return false;
+}
+
+void transform_final_value_get(const TransInfo *t, float *value, const int value_num)
+{
+  memcpy(value, t->values_final, sizeof(float) * value_num);
 }

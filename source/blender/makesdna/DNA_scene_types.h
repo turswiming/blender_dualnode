@@ -991,6 +991,9 @@ typedef struct Sculpt {
   // float pivot[3]; XXX not used?
   int flags;
 
+  /* Transform tool. */
+  int transform_mode;
+
   int automasking_flags;
 
   /* Control tablet input */
@@ -1010,6 +1013,8 @@ typedef struct Sculpt {
   /** Constant detail resolution (Blender unit / constant_detail). */
   float constant_detail;
   float detail_percent;
+
+  char _pad[4];
 
   struct Object *gravity_object;
 } Sculpt;
@@ -1500,7 +1505,8 @@ typedef struct ToolSettings {
   short snap_flag_node;
   short snap_flag_seq;
   short snap_uv_flag;
-  /** Default snap source, #eSnapTarget. */
+  /** Default snap source, #eSnapSourceSelect. */
+  /* TODO(@gfxcoder): Rename `snap_target` to `snap_source_point`, because target is incorrect. */
   char snap_target;
   /** Snap mask for transform modes, #eSnapTransformMode. */
   char snap_transform_mode_flag;
@@ -2088,19 +2094,35 @@ typedef enum eSnapFlag {
   SCE_SNAP_BACKFACE_CULLING = (1 << 6),
   // SCE_SNAP_SEQ = (1 << 7),
   SCE_SNAP_KEEP_ON_SAME_OBJECT = (1 << 8),
-  /* see eSnapTargetSelect */
+  /* see #eSnapTargetSelect */
   SCE_SNAP_TO_INCLUDE_EDITED = (1 << 9),
   SCE_SNAP_TO_INCLUDE_NONEDITED = (1 << 10),
   SCE_SNAP_TO_ONLY_SELECTABLE = (1 << 11),
 } eSnapFlag;
+/* Due to dependency conflicts with Cycles, header cannot directly include `BLI_utildefines.h`. */
+/* TODO: move this macro to a more general place. */
+#ifdef ENUM_OPERATORS
+ENUM_OPERATORS(eSnapFlag, SCE_SNAP_BACKFACE_CULLING)
+#endif
 
-/** #ToolSettings.snap_target */
-typedef enum eSnapTarget {
-  SCE_SNAP_TARGET_CLOSEST = 0,
-  SCE_SNAP_TARGET_CENTER = 1,
-  SCE_SNAP_TARGET_MEDIAN = 2,
-  SCE_SNAP_TARGET_ACTIVE = 3,
-} eSnapTarget;
+/** #ToolSettings.snap_target and #TransSnap.source_select */
+typedef enum eSnapSourceSelect {
+  SCE_SNAP_SOURCE_CLOSEST = 0,
+  SCE_SNAP_SOURCE_CENTER = 1,
+  SCE_SNAP_SOURCE_MEDIAN = 2,
+  SCE_SNAP_SOURCE_ACTIVE = 3,
+} eSnapSourceSelect;
+
+/** #TransSnap.target_select and #ToolSettings.snap_flag (SCE_SNAP_NO_SELF) */
+/* TODO(@gfxcoder): map to new numbering in versioning. */
+typedef enum eSnapTargetSelect {
+  SCE_SNAP_TARGET_ALL = 0,
+  SCE_SNAP_TARGET_NOT_SELECTED = 1,
+  SCE_SNAP_TARGET_NOT_ACTIVE = 2,
+  SCE_SNAP_TARGET_NOT_EDITED = 3,
+  SCE_SNAP_TARGET_ONLY_SELECTABLE = 4,
+  SCE_SNAP_TARGET_NOT_NONEDITED = (1 << 4),
+} eSnapTargetSelect;
 
 /** #ToolSettings.snap_mode */
 typedef enum eSnapMode {
@@ -2121,10 +2143,15 @@ typedef enum eSnapMode {
   SCE_SNAP_MODE_NODE_X = (1 << 0),
   SCE_SNAP_MODE_NODE_Y = (1 << 1),
 
-  /** #ToolSettings.snap_mode and #ToolSettings.snap_node_mode */
+  /** #ToolSettings.snap_mode and #ToolSettings.snap_node_mode and #ToolSettings.snap_uv_mode */
   SCE_SNAP_MODE_INCREMENT = (1 << 6),
   SCE_SNAP_MODE_GRID = (1 << 7),
 } eSnapMode;
+/* Due to dependency conflicts with Cycles, header cannot directly include `BLI_utildefines.h`. */
+/* TODO: move this macro to a more general place. */
+#ifdef ENUM_OPERATORS
+ENUM_OPERATORS(eSnapMode, SCE_SNAP_MODE_GRID)
+#endif
 
 /** #SequencerToolSettings.snap_mode */
 #define SEQ_SNAP_TO_STRIPS (1 << 0)
@@ -2294,6 +2321,12 @@ typedef enum eSculptFlags {
   /* Don't display face sets in viewport. */
   SCULPT_HIDE_FACE_SETS = (1 << 17),
 } eSculptFlags;
+
+/* Sculpt.transform_mode */
+typedef enum eSculptTransformMode {
+  SCULPT_TRANSFORM_MODE_ALL_VERTICES = 0,
+  SCULPT_TRANSFORM_MODE_RADIUS_ELASTIC = 1,
+} eSculptTrasnformMode;
 
 /** PaintModeSettings.mode */
 typedef enum ePaintCanvasSource {

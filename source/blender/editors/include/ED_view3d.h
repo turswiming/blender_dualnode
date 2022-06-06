@@ -323,7 +323,7 @@ typedef struct V3DSnapCursorState {
   struct wmGizmoGroupType *gzgrp_type; /* Force cursor to be drawn only when gizmo is available. */
   float *prevpoint;
   float box_dimensions[3];
-  eSnapMode snap_elem_force; /* If zero (SCE_SNAP_MODE_NONE), use scene settings. */
+  eSnapMode snap_elem_force; /* If SCE_SNAP_MODE_NONE, use scene settings. */
   short plane_axis;
   bool use_plane_axis_auto;
   bool draw_point;
