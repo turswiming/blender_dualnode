@@ -655,6 +655,7 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
   }
 
   if (flags & P_SNAP) {
+    // TODO: rename `snap` to `use_snap`?
     prop = RNA_def_boolean(ot->srna, "snap", 0, "Use Snapping Options", "");
 
     prop = RNA_def_enum(
