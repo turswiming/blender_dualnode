@@ -568,8 +568,9 @@ static bool transform_poll_property(const bContext *UNUSED(C),
 
   /* Snapping. */
   {
-    PropertyRNA *prop_pet = RNA_struct_find_property(op->ptr, "snap");
-    if (prop_pet && (prop_pet != prop) && (RNA_property_boolean_get(op->ptr, prop_pet) == false)) {
+    PropertyRNA *prop_snap = RNA_struct_find_property(op->ptr, "snap");
+    if (prop_snap && (prop_snap != prop) &&
+        (RNA_property_boolean_get(op->ptr, prop_snap) == false)) {
       if (STRPREFIX(prop_id, "snap") || STRPREFIX(prop_id, "use_snap")) {
         return false;
       }
