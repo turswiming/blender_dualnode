@@ -6787,7 +6787,7 @@ class VIEW3D_PT_snapping(Panel):
                     # active_use_self &= tool_settings.use_snap_edit
                     col_targetsel.prop(tool_settings, "use_snap_self", text="Include Active", icon='EDITMODE_HLT')
                     col_targetsel.prop(tool_settings, "use_snap_edit", text="Include Edited", icon='OUTLINER_DATA_MESH')
-                    col_targetsel.prop(tool_settings, "use_snap_nonedit", text="Include Non-edited", icon='OUTLINER_OB_MESH')
+                    col_targetsel.prop(tool_settings, "use_snap_nonedit", text="Include Non-Edited", icon='OUTLINER_OB_MESH')
                 col_targetsel.prop(tool_settings, "use_snap_selectable", text="Exclude Non-Selectable", icon='RESTRICT_SELECT_OFF')
 
                 if object_mode in {'OBJECT', 'POSE', 'EDIT', 'WEIGHT_PAINT'}:
