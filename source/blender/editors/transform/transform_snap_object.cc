@@ -3113,16 +3113,16 @@ static void snap_obj_fn(SnapObjectContext *sctx,
     case OB_FONT: {
       const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
       if (mesh_eval) {
-        retval = static_cast<eSnapMode>(retval | snapMesh(sctx,
-                                                          params,
-                                                          ob_eval,
-                                                          mesh_eval,
-                                                          obmat,
-                                                          false,
-                                                          dt->dist_px,
-                                                          dt->r_loc,
-                                                          dt->r_no,
-                                                          dt->r_index));
+        retval |= snapMesh(sctx,
+                           params,
+                           ob_eval,
+                           mesh_eval,
+                           obmat,
+                           false,
+                           dt->dist_px,
+                           dt->r_loc,
+                           dt->r_no,
+                           dt->r_index);
       }
       break;
     }
