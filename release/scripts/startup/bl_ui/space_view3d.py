@@ -6780,15 +6780,15 @@ class VIEW3D_PT_snapping(Panel):
 
             if obj:
                 col.label(text="Target Selection")
-                targetselection = col.column(align=True)
+                col_targetsel = col.column(align=True)
                 if object_mode == 'EDIT' and obj.type not in {'LATTICE', 'META', 'FONT'}:
                     # active_use_self = True
                     # active_use_self &= not (tool_settings.use_proportional_edit and obj.type == 'MESH')
                     # active_use_self &= tool_settings.use_snap_edit
-                    targetselection.prop(tool_settings, "use_snap_self", text="Include Active", icon='EDITMODE_HLT')
-                    targetselection.prop(tool_settings, "use_snap_edit", text="Include Edited", icon='OUTLINER_DATA_MESH')
-                    targetselection.prop(tool_settings, "use_snap_nonedit", text="Include Non-edited", icon='OUTLINER_OB_MESH')
-                targetselection.prop(tool_settings, "use_snap_selectable", text="Exclude Non-Selectable", icon='RESTRICT_SELECT_OFF')
+                    col_targetsel.prop(tool_settings, "use_snap_self", text="Include Active", icon='EDITMODE_HLT')
+                    col_targetsel.prop(tool_settings, "use_snap_edit", text="Include Edited", icon='OUTLINER_DATA_MESH')
+                    col_targetsel.prop(tool_settings, "use_snap_nonedit", text="Include Non-edited", icon='OUTLINER_OB_MESH')
+                col_targetsel.prop(tool_settings, "use_snap_selectable", text="Exclude Non-Selectable", icon='RESTRICT_SELECT_OFF')
 
                 if object_mode in {'OBJECT', 'POSE', 'EDIT', 'WEIGHT_PAINT'}:
                     col.prop(tool_settings, "use_snap_align_rotation")

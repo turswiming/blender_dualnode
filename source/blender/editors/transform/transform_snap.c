@@ -413,12 +413,6 @@ static bool applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td
     return false;
   }
 
-#if 0
-  if (tc->use_local_mat) {
-    mul_m4_v3(tc->imat, loc);
-  }
-#endif
-
   float tvec[3];
   sub_v3_v3v3(tvec, loc, iloc);
 
@@ -431,7 +425,7 @@ static bool applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td
     const float *original_normal;
     float mat[3][3];
 
-    /* In pose mode, we want to align normals with Y axis of bones... */
+    /* In pose mode, we want to align normals with Y axis of bones. */
     original_normal = td->axismtx[2];
 
     rotation_between_vecs_to_mat3(mat, original_normal, no);
@@ -489,31 +483,12 @@ static void applyFaceNearest(TransInfo *t, TransDataContainer *tc, TransData *td
     return;
   }
 
-#if 0
-  if (tc->use_local_mat) {
-    mul_m4_v3(tc->imat, loc);
-  }
-#endif
-
   float tvec[3];
   sub_v3_v3v3(tvec, snap_loc, prev_loc);
   mul_m3_v3(td->smtx, tvec);
   add_v3_v3(td->loc, tvec);
 
-  if (t->tsnap.align && (t->options & CTX_OBJECT)) {
-    /* handle alignment as well */
-    const float *init_no;
-    float mat[3][3];
-
-    /* In pose mode, we want to align normals with Y axis of bones... */
-    init_no = td->axismtx[2];
-
-    rotation_between_vecs_to_mat3(mat, init_no, snap_no);
-
-    transform_data_ext_rotate(td, mat, true);
-
-    /* TODO: support constraints for rotation too? see #ElementRotation. */
-  }
+  /* TODO: support snap alignment similar to #SCE_SNAP_MODE_FACE_RAYCAST? */
 }
 
 void applySnappingIndividual(TransInfo *t)
@@ -759,10 +734,10 @@ static eSnapTargetSelect snap_select_target_get(TransInfo *t)
 
   eSnapTargetSelect ret = SCE_SNAP_TARGET_ALL;
 
-  bool snapto_self = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_ACTIVE);
-  bool snapto_edit = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_EDITED);
-  bool snapto_nonedit = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_NONEDITED);
-  bool snapto_only_selectable = (t->tsnap.target_select & SCE_SNAP_TARGET_ONLY_SELECTABLE);
+  bool use_snap_active = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_ACTIVE);
+  bool use_snap_edit = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_EDITED);
+  bool use_snap_nonedit = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_NONEDITED);
+  bool use_snap_selectable_only = (t->tsnap.target_select & SCE_SNAP_TARGET_ONLY_SELECTABLE);
 
   if (ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE) && !(t->options & CTX_CAMERA)) {
     if (base_act && (base_act->object->mode & OB_MODE_PARTICLE_EDIT)) {
@@ -770,7 +745,7 @@ static eSnapTargetSelect snap_select_target_get(TransInfo *t)
       return ret;
     }
 
-    if (snapto_only_selectable) {
+    if (use_snap_selectable_only) {
       ret |= SCE_SNAP_TARGET_ONLY_SELECTABLE;
     }
 
@@ -792,13 +767,13 @@ static eSnapTargetSelect snap_select_target_get(TransInfo *t)
           /* Exclude editmesh when using proportional edit */
           ret |= SCE_SNAP_TARGET_NOT_EDITED;
         }
-        if (!snapto_self) {
+        if (!use_snap_active) {
           ret |= SCE_SNAP_TARGET_NOT_ACTIVE;
         }
-        if (!snapto_edit) {
+        if (!use_snap_edit) {
           ret |= SCE_SNAP_TARGET_NOT_EDITED;
         }
-        if (!snapto_nonedit) {
+        if (!use_snap_nonedit) {
           ret |= SCE_SNAP_TARGET_NOT_NONEDITED;
         }
       }
@@ -888,11 +863,11 @@ void initSnapping(TransInfo *t, wmOperator *op)
         t->tsnap.mode = RNA_property_enum_get(op->ptr, prop);
       }
 
+      /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid previous ambiguity of
+       * "target" (now, "source" is geometry to be moved and "target" is geometry to which moved
+       * geometry is snapped). */
       if ((prop = RNA_struct_find_property(op->ptr, "snap_target")) &&
           RNA_property_is_set(op->ptr, prop)) {
-        /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid
-         * previous ambiguity of "target" (now, "source" is geometry to be moved and "target" is
-         * geometry to which moved geometry is snapped). */
         snap_source = RNA_property_enum_get(op->ptr, prop);
       }
 
@@ -955,7 +930,7 @@ void initSnapping(TransInfo *t, wmOperator *op)
     t->tsnap.align = ((t->tsnap.flag & SCE_SNAP_ROTATE) != 0);
     t->tsnap.project = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
-                       (t->settings->snap_flag & SCE_SNAP_NO_SELF),
+                       (t->settings->snap_flag & SCE_SNAP_NOT_TO_ACTIVE),
                        SCE_SNAP_TARGET_NOT_ACTIVE);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
                        !(t->settings->snap_flag & SCE_SNAP_TO_INCLUDE_EDITED),
@@ -1517,7 +1492,7 @@ bool peelObjectsTransform(TransInfo *t,
           .edit_mode_type = (t->flag & T_EDIT) != 0 ? SNAP_GEOM_EDIT : SNAP_GEOM_FINAL,
       },
       mval,
-      FLT_MAX,
+      -1.0f,
       false,
       &depths_peel);
 

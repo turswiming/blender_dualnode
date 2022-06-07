@@ -663,10 +663,10 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
     RNA_def_boolean(ot->srna, "use_snap_project", false, "Project Individual Elements", "");
 
     if (flags & P_GEO_SNAP) {
-      /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid
-       * previous ambiguity of "target" (now, "source" is geometry to be moved and "target" is
-       * geometry to which moved geometry is snapped).  Use "Source snap point" and "Point on
-       * source that will snap to target" for name and description, respectively. */
+      /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid previous ambiguity of
+       * "target" (now, "source" is geometry to be moved and "target" is geometry to which moved
+       * geometry is snapped).  Use "Source snap point" and "Point on source that will snap to
+       * target" for name and description, respectively. */
       prop = RNA_def_enum(ot->srna, "snap_target", rna_enum_snap_source_items, 0, "Target", "");
       // RNA_def_property_flag(prop, PROP_HIDDEN);
       prop = RNA_def_float_vector(

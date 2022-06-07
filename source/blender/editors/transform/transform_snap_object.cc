@@ -1247,7 +1247,7 @@ static bool nearest_world_tree(SnapObjectContext *UNUSED(sctx),
                                int *r_index)
 {
   if (curr_co == nullptr || init_co == nullptr) {
-    // TODO(jon): how to handle this case?
+    /* No location to work with, so just return. */
     return false;
   }
 
@@ -1456,7 +1456,7 @@ static void nearest_world_object_fn(SnapObjectContext *sctx,
 
 /**
  * Main Nearest World Surface Function
- * ======================
+ * ===================================
  *
  * Walks through all objects in the scene to find the nearest location on target surface.
  *
@@ -3276,7 +3276,9 @@ bool ED_transform_snap_object_project_ray_all(SnapObjectContext *sctx,
   sctx->runtime.depsgraph = depsgraph;
   sctx->runtime.v3d = v3d;
 
-  ray_depth = MIN2(ray_depth, BVH_RAYCAST_DIST_MAX);
+  if (ray_depth == -1.0f) {
+    ray_depth = BVH_RAYCAST_DIST_MAX;
+  }
 
 #ifdef DEBUG
   float ray_depth_prev = ray_depth;
@@ -3400,7 +3402,9 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
 
   bool use_occlusion_test = params->use_occlusion_test && !XRAY_ENABLED(v3d);
 
-  if (snap_to_flag & SCE_SNAP_MODE_FACE_NEAREST) {
+  /* Note: if both face raycast and face nearest are enabled, first find result of nearest, then
+   * override with raycast. */
+  if ((snap_to_flag & SCE_SNAP_MODE_FACE_NEAREST) && !has_hit) {
     has_hit = nearestWorldObjects(
         sctx, params, init_co, prev_co, loc, no, &index, &ob_eval, obmat);
 
@@ -3427,7 +3431,7 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
     float ray_start[3], ray_normal[3];
     if (!ED_view3d_win_to_ray_clipped_ex(
             depsgraph, region, v3d, mval, nullptr, ray_normal, ray_start, true)) {
-      return SCE_SNAP_MODE_NONE;
+      return retval;
     }
 
     float dummy_ray_depth = BVH_RAYCAST_DIST_MAX;

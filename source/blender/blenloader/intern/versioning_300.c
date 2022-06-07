@@ -3066,5 +3066,13 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
         SEQ_for_each_callback(&ed->seqbase, version_merge_still_offsets, NULL);
       }
     }
+
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      ToolSettings *tool_settings = scene->toolsettings;
+      /* Minimum of snap steps for face nearest is 1. */
+      tool_settings->snap_face_nearest_steps = 1;
+      /* Set snap to edited and nonedited as default. */
+      tool_settings->snap_flag |= SCE_SNAP_TO_INCLUDE_EDITED | SCE_SNAP_TO_INCLUDE_NONEDITED;
+    }
   }
 }

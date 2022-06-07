@@ -1506,7 +1506,9 @@ typedef struct ToolSettings {
   short snap_flag_seq;
   short snap_uv_flag;
   /** Default snap source, #eSnapSourceSelect. */
-  /* TODO(@gfxcoder): Rename `snap_target` to `snap_source_point`, because target is incorrect. */
+  /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid previous ambiguity of
+   * "target" (now, "source" is geometry to be moved and "target" is geometry to which moved
+   * geometry is snapped). */
   char snap_target;
   /** Snap mask for transform modes, #eSnapTransformMode. */
   char snap_transform_mode_flag;
@@ -2088,16 +2090,15 @@ typedef enum eSnapFlag {
   SCE_SNAP = (1 << 0),
   SCE_SNAP_ROTATE = (1 << 1),
   SCE_SNAP_PEEL_OBJECT = (1 << 2),
-  SCE_SNAP_PROJECT = (1 << 3),
-  SCE_SNAP_NO_SELF = (1 << 4),  // active, not self
+  SCE_SNAP_PROJECT = (1 << 3),        // Project individual elements instead of whole object.
+  SCE_SNAP_NOT_TO_ACTIVE = (1 << 4),  // Was SCE_SNAP_NO_SELF, but self should be active.
   SCE_SNAP_ABS_GRID = (1 << 5),
   SCE_SNAP_BACKFACE_CULLING = (1 << 6),
-  // SCE_SNAP_SEQ = (1 << 7),
-  SCE_SNAP_KEEP_ON_SAME_OBJECT = (1 << 8),
+  SCE_SNAP_KEEP_ON_SAME_OBJECT = (1 << 7),
   /* see #eSnapTargetSelect */
-  SCE_SNAP_TO_INCLUDE_EDITED = (1 << 9),
-  SCE_SNAP_TO_INCLUDE_NONEDITED = (1 << 10),
-  SCE_SNAP_TO_ONLY_SELECTABLE = (1 << 11),
+  SCE_SNAP_TO_INCLUDE_EDITED = (1 << 8),
+  SCE_SNAP_TO_INCLUDE_NONEDITED = (1 << 9),
+  SCE_SNAP_TO_ONLY_SELECTABLE = (1 << 10),
 } eSnapFlag;
 /* Due to dependency conflicts with Cycles, header cannot directly include `BLI_utildefines.h`. */
 /* TODO: move this macro to a more general place. */
@@ -2105,7 +2106,7 @@ typedef enum eSnapFlag {
 ENUM_OPERATORS(eSnapFlag, SCE_SNAP_BACKFACE_CULLING)
 #endif
 
-/** #ToolSettings.snap_target and #TransSnap.source_select */
+/** See #ToolSettings.snap_target (to be renamed `snap_source`) and #TransSnap.source_select */
 typedef enum eSnapSourceSelect {
   SCE_SNAP_SOURCE_CLOSEST = 0,
   SCE_SNAP_SOURCE_CENTER = 1,
@@ -2113,14 +2114,14 @@ typedef enum eSnapSourceSelect {
   SCE_SNAP_SOURCE_ACTIVE = 3,
 } eSnapSourceSelect;
 
-/** #TransSnap.target_select and #ToolSettings.snap_flag (SCE_SNAP_NO_SELF) */
-/* TODO(@gfxcoder): map to new numbering in versioning. */
+/** #TransSnap.target_select and #ToolSettings.snap_flag (#SCE_SNAP_NOT_TO_ACTIVE,
+ * #SCE_SNAP_TO_INCLUDE_EDITED, #SCE_SNAP_TO_INCLUDE_NONEDITED, #SCE_SNAP_TO_ONLY_SELECTABLE) */
 typedef enum eSnapTargetSelect {
   SCE_SNAP_TARGET_ALL = 0,
-  SCE_SNAP_TARGET_NOT_SELECTED = 1,
-  SCE_SNAP_TARGET_NOT_ACTIVE = 2,
-  SCE_SNAP_TARGET_NOT_EDITED = 3,
-  SCE_SNAP_TARGET_ONLY_SELECTABLE = 4,
+  SCE_SNAP_TARGET_NOT_SELECTED = (1 << 0),
+  SCE_SNAP_TARGET_NOT_ACTIVE = (1 << 1),
+  SCE_SNAP_TARGET_NOT_EDITED = (1 << 2),
+  SCE_SNAP_TARGET_ONLY_SELECTABLE = (1 << 3),
   SCE_SNAP_TARGET_NOT_NONEDITED = (1 << 4),
 } eSnapTargetSelect;
 

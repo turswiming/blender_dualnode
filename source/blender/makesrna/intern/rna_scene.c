@@ -3330,9 +3330,9 @@ static void rna_def_tool_settings(BlenderRNA *brna)
       "Absolute grid alignment while translating (based on the pivot center)");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
-  /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid
-   * previous ambiguity of "target" (now, "source" is geometry to be moved and "target" is
-   * geometry to which moved geometry is snapped). */
+  /* TODO(@gfxcoder): Rename `snap_target` to `snap_source` to avoid previous ambiguity of "target"
+   * (now, "source" is geometry to be moved and "target" is geometry to which moved geometry is
+   * snapped). */
   prop = RNA_def_property(srna, "snap_target", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "snap_target");
   RNA_def_property_enum_items(prop, rna_enum_snap_source_items);
@@ -3357,10 +3357,12 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Backface Culling", "Exclude back facing geometry from snapping");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
+  /* TODO(@gfxcoder): Rename `use_snap_self` to `use_snap_active`, because active is correct but
+   * self is not (breaks API). This only makes a difference when more than one mesh is edited. */
   prop = RNA_def_property(srna, "use_snap_self", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_negative_sdna(prop, NULL, "snap_flag", SCE_SNAP_NO_SELF);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "snap_flag", SCE_SNAP_NOT_TO_ACTIVE);
   RNA_def_property_ui_text(
-      prop, "Snap onto Self", "Snap onto itself only if enabled (Edit Mode Only)");
+      prop, "Snap onto Active", "Snap onto itself only if enabled (Edit Mode Only)");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
   prop = RNA_def_property(srna, "use_snap_edit", PROP_BOOLEAN, PROP_NONE);
