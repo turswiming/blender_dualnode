@@ -368,10 +368,10 @@ eRedrawFlag handleSnapping(TransInfo *t, const wmEvent *event)
   return status;
 }
 
-static void applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td)
+static bool applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td)
 {
   if (!(t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST)) {
-    return;
+    return false;
   }
 
   float iloc[3], loc[3], no[3];
@@ -388,7 +388,7 @@ static void applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td
 
   if (ED_view3d_project_float_global(t->region, iloc, mval_fl, V3D_PROJ_TEST_NOP) !=
       V3D_PROJ_RET_OK) {
-    return;
+    return false;
   }
 
   eSnapMode hit = ED_transform_snap_object_project_view3d(
@@ -410,7 +410,7 @@ static void applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td
       loc,
       no);
   if (hit != SCE_SNAP_MODE_FACE_RAYCAST) {
-    return;
+    return false;
   }
 
 #if 0
@@ -440,6 +440,7 @@ static void applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td
 
     /* TODO: support constraints for rotation too? see #ElementRotation. */
   }
+  return true;
 }
 
 static void applyFaceNearest(TransInfo *t, TransDataContainer *tc, TransData *td)
@@ -532,13 +533,17 @@ void applySnappingIndividual(TransInfo *t)
       if ((t->flag & T_PROP_EDIT) && (td->factor == 0.0f)) {
         continue;
       }
-    }
 
-    applyFaceProject(t, tc, td);
-    applyFaceNearest(t, tc, td);
+      /* If both face raycast and face nearest methods are enabled, start with face raycast and
+       * fallback to face nearest raycast does not hit. */
+      bool hit = applyFaceProject(t, tc, td);
+      if (!hit) {
+        applyFaceNearest(t, tc, td);
+      }
 #if 0 /* TODO: support this? */
       constraintTransLim(t, td);
 #endif
+    }
   }
 }
 
@@ -863,7 +868,7 @@ static void initSnappingMode(TransInfo *t)
 void initSnapping(TransInfo *t, wmOperator *op)
 {
   ToolSettings *ts = t->settings;
-  eSnapTarget snap_target = ts->snap_target;
+  eSnapSourceSelect snap_source = ts->snap_target;
 
   resetSnapping(t);
   t->tsnap.mode = snap_mode_from_spacetype(t);

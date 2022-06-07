@@ -24,7 +24,7 @@ void transform_operatortypes(void);
 /* ******************** Macros & Prototypes *********************** */
 
 /* MODE AND NUMINPUT FLAGS */
-typedef enum eTfmMode {
+typedef enum {
   TFM_INIT = -1,
   TFM_DUMMY,
   TFM_TRANSLATION,
