@@ -734,10 +734,10 @@ static eSnapTargetSelect snap_select_target_get(TransInfo *t)
 
   eSnapTargetSelect ret = SCE_SNAP_TARGET_ALL;
 
-  bool use_snap_active = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_ACTIVE);
-  bool use_snap_edit = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_EDITED);
-  bool use_snap_nonedit = !(t->tsnap.target_select & SCE_SNAP_TARGET_NOT_NONEDITED);
-  bool use_snap_selectable_only = (t->tsnap.target_select & SCE_SNAP_TARGET_ONLY_SELECTABLE);
+  bool use_snap_active = (t->tsnap.target_select & SCE_SNAP_TARGET_NOT_ACTIVE) == 0;
+  bool use_snap_edit = (t->tsnap.target_select & SCE_SNAP_TARGET_NOT_EDITED) == 0;
+  bool use_snap_nonedit = (t->tsnap.target_select & SCE_SNAP_TARGET_NOT_NONEDITED) == 0;
+  bool use_snap_selectable_only = (t->tsnap.target_select & SCE_SNAP_TARGET_ONLY_SELECTABLE) != 0;
 
   if (ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE) && !(t->options & CTX_CAMERA)) {
     if (base_act && (base_act->object->mode & OB_MODE_PARTICLE_EDIT)) {
