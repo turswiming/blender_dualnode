@@ -59,9 +59,10 @@ struct SnapObjectParams {
   bool use_occlusion_test : true;
   /* exclude back facing geometry from snapping */
   bool use_backface_culling : true;
-  short face_nearest_steps; /* break nearest face snapping into steps */
-  bool keep_on_same_target; /* nearest face snapping should snap only to target source was
-                               initially near */
+  /* Break nearest face snapping into steps to improve transformations across U-shaped targets. */
+  short face_nearest_steps;
+  /* Enable to force nearest face snapping to snap to target the source was initially near. */
+  bool keep_on_same_target;
 };
 
 typedef struct SnapObjectContext SnapObjectContext;
