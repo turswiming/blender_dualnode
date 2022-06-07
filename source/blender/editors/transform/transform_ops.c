@@ -657,6 +657,7 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
   if (flags & P_SNAP) {
     // TODO: rename `snap` to `use_snap`?
     prop = RNA_def_boolean(ot->srna, "snap", 0, "Use Snapping Options", "");
+    RNA_def_property_flag(prop, PROP_HIDDEN);
 
     prop = RNA_def_enum(
         ot->srna, "snap_elements", rna_enum_snap_element_items, 0, "Snap to Elements", "");
@@ -670,7 +671,7 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
        * geometry is snapped).  Use "Source snap point" and "Point on source that will snap to
        * target" for name and description, respectively. */
       prop = RNA_def_enum(ot->srna, "snap_target", rna_enum_snap_source_items, 0, "Target", "");
-      // RNA_def_property_flag(prop, PROP_HIDDEN);
+      RNA_def_property_flag(prop, PROP_HIDDEN);
       prop = RNA_def_float_vector(
           ot->srna, "snap_point", 3, NULL, -FLT_MAX, FLT_MAX, "Point", "", -FLT_MAX, FLT_MAX);
       RNA_def_property_flag(prop, PROP_HIDDEN);
