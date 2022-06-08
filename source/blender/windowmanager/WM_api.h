@@ -314,6 +314,7 @@ void WM_paint_cursor_tag_redraw(struct wmWindow *win, struct ARegion *region);
  * This function requires access to the GHOST_SystemHandle (g_system).
  */
 void WM_cursor_warp(struct wmWindow *win, int x, int y);
+void WM_cursor_warp_relative(struct wmWindow *win, int x, int y);
 /**
  * Set x, y to values we can actually position the cursor to.
  */

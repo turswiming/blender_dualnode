@@ -727,6 +727,13 @@ void RNA_api_window(StructRNA *srna)
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
   RNA_def_function_ui_description(func, "Set the cursor position");
 
+  func = RNA_def_function(srna, "cursor_warp_relative", "WM_cursor_warp_relative");
+  parm = RNA_def_int(func, "x", 0, INT_MIN, INT_MAX, "", "Offset of x", INT_MIN, INT_MAX);
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+  parm = RNA_def_int(func, "y", 0, INT_MIN, INT_MAX, "", "Offset of y", INT_MIN, INT_MAX);
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+  RNA_def_function_ui_description(func, "Offset the cursor position");
+
   func = RNA_def_function(srna, "cursor_set", "WM_cursor_set");
   parm = RNA_def_property(func, "cursor", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(parm, rna_enum_window_cursor_items);

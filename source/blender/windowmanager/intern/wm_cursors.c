@@ -279,14 +279,6 @@ void WM_cursor_grab_disable(wmWindow *win, const int mouse_ungrab_xy[2])
   }
 }
 
-static void wm_cursor_warp_relative(wmWindow *win, int x, int y)
-{
-  /* NOTE: don't use wmEvent coords because of continuous grab T36409. */
-  int cx, cy;
-  wm_cursor_position_get(win, &cx, &cy);
-  WM_cursor_warp(win, cx + x, cy + y);
-}
-
 bool wm_cursor_arrow_move(wmWindow *win, const wmEvent *event)
 {
   /* TODO: give it a modal keymap? Hard coded for now */
@@ -296,19 +288,19 @@ bool wm_cursor_arrow_move(wmWindow *win, const wmEvent *event)
     float fac = GHOST_GetNativePixelSize(win->ghostwin);
 
     if (event->type == EVT_UPARROWKEY) {
-      wm_cursor_warp_relative(win, 0, fac);
+      WM_cursor_warp_relative(win, 0, fac);
       return 1;
     }
     if (event->type == EVT_DOWNARROWKEY) {
-      wm_cursor_warp_relative(win, 0, -fac);
+      WM_cursor_warp_relative(win, 0, -fac);
       return 1;
     }
     if (event->type == EVT_LEFTARROWKEY) {
-      wm_cursor_warp_relative(win, -fac, 0);
+      WM_cursor_warp_relative(win, -fac, 0);
       return 1;
     }
     if (event->type == EVT_RIGHTARROWKEY) {
-      wm_cursor_warp_relative(win, fac, 0);
+      WM_cursor_warp_relative(win, fac, 0);
       return 1;
     }
   }
