@@ -2022,6 +2022,16 @@ void WM_cursor_warp(wmWindow *win, int x, int y)
   }
 }
 
+void WM_cursor_warp_relative(wmWindow *win, int x, int y)
+{
+  if (win && win->ghostwin) {
+    /* NOTE: don't use wmEvent coords because of continuous grab T36409. */
+    int cx, cy;
+    wm_cursor_position_get(win, &cx, &cy);
+    WM_cursor_warp(win, cx + x, cy + y);
+  }
+}
+
 void WM_cursor_compatible_xy(wmWindow *win, int *x, int *y)
 {
   float f = GHOST_GetNativePixelSize(win->ghostwin);
