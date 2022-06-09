@@ -502,3 +502,10 @@ set(LEVEL_ZERO_URI https://github.com/oneapi-src/level-zero/archive/refs/tags/${
 set(LEVEL_ZERO_HASH c39bb05a8e5898aa6c444e1704105b93d3f1888b9c333f8e7e73825ffbfb2617)
 set(LEVEL_ZERO_HASH_TYPE SHA256)
 set(LEVEL_ZERO_FILE level-zero-${LEVEL_ZERO_VERSION}.tar.gz)
+
+set(OPENPGL_VERSION v0.3.1-beta)
+set(OPENPGL_SHORT_VERSION 0.3.1)
+set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/refs/tags/${OPENPGL_VERSION}.tar.gz)
+set(OPENPGL_HASH 3830098c485c962018932766199527aab453a8029528dbbc04d4454d82431e2c)
+set(OPENPGL_HASH_TYPE SHA256)
+set(OPENPGL_FILE openpgl-${OPENPGL_VERSION}.tar.gz)
