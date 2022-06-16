@@ -47,11 +47,18 @@ class MixRGBShaderNode : public ShaderNode {
     GPUNodeStack *inputs = get_inputs_array();
     GPUNodeStack *outputs = get_outputs_array();
 
-    GPU_stack_link(material, &bnode(), get_shader_function_name(), inputs, outputs);
-
     if (get_use_alpha()) {
-      GPU_link(material, "multiply_by_alpha", inputs[0].link, inputs[1].link, &inputs[0].link);
+      if (!inputs[0].hasinput) {
+        GPUNodeLink *factor;
+        GPU_link(material, "set_value", GPU_uniform(inputs[0].vec), &factor);
+        GPU_link(material, "multiply_by_alpha", factor, inputs[2].link, &inputs[0].link);
+      }
+      else {
+        GPU_link(material, "multiply_by_alpha", inputs[0].link, inputs[2].link, &inputs[0].link);
+      }
     }
+
+    GPU_stack_link(material, &bnode(), get_shader_function_name(), inputs, outputs);
 
     if (!get_should_clamp()) {
       return;
