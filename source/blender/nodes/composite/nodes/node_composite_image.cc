@@ -477,7 +477,6 @@ class ImageOperation : public NodeOperation {
       }
 
       RenderLayer *render_layer = get_render_layer();
-
       if (!render_layer) {
         return false;
       }
@@ -540,6 +539,11 @@ class ImageOperation : public NodeOperation {
   ImageUser compute_image_user_for_output(StringRef identifier)
   {
     ImageUser image_user = *get_image_user();
+
+    /* Set the needed view. */
+    image_user.view = get_view_index();
+
+    /* Set the needed pass. */
     if (BKE_image_is_multilayer(get_image())) {
       image_user.pass = get_pass_index(get_pass_name(identifier));
       BKE_image_multilayer_index(get_image()->rr, &image_user);
@@ -598,6 +602,47 @@ class ImageOperation : public NodeOperation {
   int get_pass_index(const char *name)
   {
     return BLI_findstringindex(&get_render_layer()->passes, name, offsetof(RenderPass, name));
+  }
+
+  /* Get the index of the view selected in the node. If the image is not a multi-view image or only
+   * has a single view, then zero is returned. Otherwise, if the image is a multi-view image, the
+   * index of the selected view is returned. However, note that the value of the view member of the
+   * image user is not the actual index of the view. More specifically, the index 0 is reserved to
+   * denote the special mode of operation "All", which dynamically selects the view whose name
+   * matches the view currently being rendered. It follows that the views are then indexed starting
+   * from 1. So for non zero view values, the actual index of the view is the value of the view
+   * member of the image user minus 1. */
+  int get_view_index()
+  {
+    /* The image is not a multi-view image, so just return zero. */
+    if (!BKE_image_is_multiview(get_image())) {
+      return 0;
+    }
+
+    const ListBase *views = &get_image()->rr->views;
+    /* There is only one view and its index is 0. */
+    if (BLI_listbase_count_at_most(views, 2) < 2) {
+      return 0;
+    }
+
+    const int view = get_image_user()->view;
+    /* The view is not zero, which means it is manually specified and the actual index is then the
+     * view value minus 1. */
+    if (view != 0) {
+      return view - 1;
+    }
+
+    /* Otherwise, the view value is zero, denoting the special mode of operation "All", which finds
+     * the index of the view whose name matches the view currently being rendered. */
+    const char *view_name = context().get_view_name().data();
+    const int matched_view = BLI_findstringindex(views, view_name, offsetof(RenderView, name));
+
+    /* No view matches the view currently being rendered, so fallback to the first view. */
+    if (matched_view == -1) {
+      return 0;
+    }
+
+    return matched_view;
   }
 };
 
@@ -804,11 +849,11 @@ class RenderLayerOperation : public NodeOperation {
     GPU_texture_unbind(pass_texture);
     alpha_result.unbind_as_image();
 
+    /* Other output passes are not supported for now, so allocate them as invalid. */
     for (const OutputSocketRef *output : node()->outputs()) {
-      if (output->identifier() == "Image" || output->identifier() == "Alpha") {
-        continue;
+      if (output->identifier() != "Image" && output->identifier() != "Alpha") {
+        get_result(output->identifier()).allocate_invalid();
       }
-      get_result(output->identifier()).allocate_invalid();
     }
   }
 };
