@@ -90,15 +90,13 @@ class ViewerOperation : public NodeOperation {
 
   GPUShader *get_split_viewer_shader()
   {
-    if (get_split_axis() == 0) {
+    if (get_split_axis() == CMP_NODE_SPLIT_VIEWER_HORIZONTAL) {
       return shader_pool().acquire("compositor_split_viewer_horizontal");
     }
 
     return shader_pool().acquire("compositor_split_viewer_vertical");
   }
 
-  /* 0 -> Split Horizontal.
-   * 1 -> Split Vertical. */
   int get_split_axis()
   {
     return bnode().custom2;

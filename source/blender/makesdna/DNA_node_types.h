@@ -1828,6 +1828,12 @@ enum {
 /* viewer and composite output. */
 #define CMP_NODE_OUTPUT_IGNORE_ALPHA 1
 
+/* Split Viewer Node. Stored in custom2. */
+enum {
+  CMP_NODE_SPLIT_VIEWER_HORIZONTAL = 0,
+  CMP_NODE_SPLIT_VIEWER_VERTICAL = 1,
+};
+
 /* Plane track deform node. */
 
 enum {
