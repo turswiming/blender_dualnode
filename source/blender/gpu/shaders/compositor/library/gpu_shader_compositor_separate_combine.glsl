@@ -46,6 +46,23 @@ void node_composite_separate_hsva(vec4 color, out float h, out float s, out floa
   a = hsva.a;
 }
 
+/* ** Combine/Separate HSLA ** */
+
+void node_composite_combine_hsla(float h, float s, float l, float a, out vec4 color)
+{
+  hsl_to_rgb(vec4(h, s, l, a), color);
+}
+
+void node_composite_separate_hsla(vec4 color, out float h, out float s, out float l, out float a)
+{
+  vec4 hsla;
+  rgb_to_hsl(color, hsla);
+  h = hsla.x;
+  s = hsla.y;
+  l = hsla.z;
+  a = hsla.a;
+}
+
 /* ** Combine/Separate YCCA ** */
 
 void node_composite_combine_ycca_itu_601(float y, float cb, float cr, float a, out vec4 color)
