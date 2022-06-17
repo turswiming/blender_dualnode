@@ -294,7 +294,7 @@ class ColorCorrectionShaderNode : public ShaderNode {
     float luminance_coefficients[3];
     IMB_colormanagement_get_luminance_coefficients(luminance_coefficients);
 
-    const NodeColorCorrection *node_color_correction = get_node_color_correction();
+    const NodeColorCorrection *data = get_data();
 
     GPU_stack_link(material,
                    &bnode(),
@@ -302,28 +302,28 @@ class ColorCorrectionShaderNode : public ShaderNode {
                    inputs,
                    outputs,
                    GPU_constant(enabled_channels),
-                   GPU_uniform(&node_color_correction->startmidtones),
-                   GPU_uniform(&node_color_correction->endmidtones),
-                   GPU_uniform(&node_color_correction->master.saturation),
-                   GPU_uniform(&node_color_correction->master.contrast),
-                   GPU_uniform(&node_color_correction->master.gamma),
-                   GPU_uniform(&node_color_correction->master.gain),
-                   GPU_uniform(&node_color_correction->master.lift),
-                   GPU_uniform(&node_color_correction->shadows.saturation),
-                   GPU_uniform(&node_color_correction->shadows.contrast),
-                   GPU_uniform(&node_color_correction->shadows.gamma),
-                   GPU_uniform(&node_color_correction->shadows.gain),
-                   GPU_uniform(&node_color_correction->shadows.lift),
-                   GPU_uniform(&node_color_correction->midtones.saturation),
-                   GPU_uniform(&node_color_correction->midtones.contrast),
-                   GPU_uniform(&node_color_correction->midtones.gamma),
-                   GPU_uniform(&node_color_correction->midtones.gain),
-                   GPU_uniform(&node_color_correction->midtones.lift),
-                   GPU_uniform(&node_color_correction->highlights.saturation),
-                   GPU_uniform(&node_color_correction->highlights.contrast),
-                   GPU_uniform(&node_color_correction->highlights.gamma),
-                   GPU_uniform(&node_color_correction->highlights.gain),
-                   GPU_uniform(&node_color_correction->highlights.lift),
+                   GPU_uniform(&data->startmidtones),
+                   GPU_uniform(&data->endmidtones),
+                   GPU_uniform(&data->master.saturation),
+                   GPU_uniform(&data->master.contrast),
+                   GPU_uniform(&data->master.gamma),
+                   GPU_uniform(&data->master.gain),
+                   GPU_uniform(&data->master.lift),
+                   GPU_uniform(&data->shadows.saturation),
+                   GPU_uniform(&data->shadows.contrast),
+                   GPU_uniform(&data->shadows.gamma),
+                   GPU_uniform(&data->shadows.gain),
+                   GPU_uniform(&data->shadows.lift),
+                   GPU_uniform(&data->midtones.saturation),
+                   GPU_uniform(&data->midtones.contrast),
+                   GPU_uniform(&data->midtones.gamma),
+                   GPU_uniform(&data->midtones.gain),
+                   GPU_uniform(&data->midtones.lift),
+                   GPU_uniform(&data->highlights.saturation),
+                   GPU_uniform(&data->highlights.contrast),
+                   GPU_uniform(&data->highlights.gamma),
+                   GPU_uniform(&data->highlights.gain),
+                   GPU_uniform(&data->highlights.lift),
                    GPU_constant(luminance_coefficients));
   }
 
@@ -334,7 +334,7 @@ class ColorCorrectionShaderNode : public ShaderNode {
     }
   }
 
-  NodeColorCorrection *get_node_color_correction()
+  NodeColorCorrection *get_data()
   {
     return static_cast<NodeColorCorrection *>(bnode().storage);
   }

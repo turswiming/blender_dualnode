@@ -74,19 +74,19 @@ class LuminanceMatteShaderNode : public ShaderNode {
                    GPU_constant(luminance_coefficients));
   }
 
-  NodeChroma *get_node_chroma()
+  NodeChroma *get_data()
   {
     return static_cast<NodeChroma *>(bnode().storage);
   }
 
   float get_high()
   {
-    return get_node_chroma()->t1;
+    return get_data()->t1;
   }
 
   float get_low()
   {
-    return get_node_chroma()->t2;
+    return get_data()->t2;
   }
 };
 

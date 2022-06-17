@@ -90,7 +90,7 @@ class DistanceMatteShaderNode : public ShaderNode {
                    GPU_uniform(&falloff));
   }
 
-  NodeChroma *get_node_chroma()
+  NodeChroma *get_data()
   {
     return static_cast<NodeChroma *>(bnode().storage);
   }
@@ -99,17 +99,17 @@ class DistanceMatteShaderNode : public ShaderNode {
    * 1 -> RGBA */
   int get_color_space()
   {
-    return get_node_chroma()->channel;
+    return get_data()->channel;
   }
 
   float get_tolerance()
   {
-    return get_node_chroma()->t1;
+    return get_data()->t1;
   }
 
   float get_falloff()
   {
-    return get_node_chroma()->t2;
+    return get_data()->t2;
   }
 };
 

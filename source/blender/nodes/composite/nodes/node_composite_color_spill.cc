@@ -134,24 +134,24 @@ class ColorSpillShaderNode : public ShaderNode {
     return bnode().custom2;
   }
 
-  NodeColorspill *get_node_color_spill()
+  NodeColorspill *get_data()
   {
     return static_cast<NodeColorspill *>(bnode().storage);
   }
 
   void get_spill_scale(float spill_scale[3])
   {
-    const NodeColorspill *node_color_spill = get_node_color_spill();
-    if (node_color_spill->unspill == 0) {
+    const NodeColorspill *data = get_data();
+    if (data->unspill == 0) {
       spill_scale[0] = 0.0f;
       spill_scale[1] = 0.0f;
       spill_scale[2] = 0.0f;
       spill_scale[get_spill_channel()] = -1.0f;
     }
     else {
-      spill_scale[0] = node_color_spill->uspillr;
-      spill_scale[1] = node_color_spill->uspillg;
-      spill_scale[2] = node_color_spill->uspillb;
+      spill_scale[0] = data->uspillr;
+      spill_scale[1] = data->uspillg;
+      spill_scale[2] = data->uspillb;
       spill_scale[get_spill_channel()] *= -1.0f;
     }
   }
@@ -159,7 +159,7 @@ class ColorSpillShaderNode : public ShaderNode {
   /* Get the index of the channel used for limiting. */
   int get_limit_channel()
   {
-    return get_node_color_spill()->limchan;
+    return get_data()->limchan;
   }
 
   /* Get the indices of the channels used to compute the limit value. We always assume the limit
@@ -182,7 +182,7 @@ class ColorSpillShaderNode : public ShaderNode {
 
   float get_limit_scale()
   {
-    return get_node_color_spill()->limscale;
+    return get_data()->limscale;
   }
 };
 

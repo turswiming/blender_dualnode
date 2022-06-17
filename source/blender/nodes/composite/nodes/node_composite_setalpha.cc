@@ -54,9 +54,7 @@ class SetAlphaShaderNode : public ShaderNode {
     GPUNodeStack *inputs = get_inputs_array();
     GPUNodeStack *outputs = get_outputs_array();
 
-    const NodeSetAlpha *node_set_alpha = get_node_set_alpha();
-
-    if (node_set_alpha->mode == CMP_NODE_SETALPHA_MODE_APPLY) {
+    if (get_data()->mode == CMP_NODE_SETALPHA_MODE_APPLY) {
       GPU_stack_link(material, &bnode(), "node_composite_set_alpha_apply", inputs, outputs);
       return;
     }
@@ -64,7 +62,7 @@ class SetAlphaShaderNode : public ShaderNode {
     GPU_stack_link(material, &bnode(), "node_composite_set_alpha_replace", inputs, outputs);
   }
 
-  NodeSetAlpha *get_node_set_alpha()
+  NodeSetAlpha *get_data()
   {
     return static_cast<NodeSetAlpha *>(bnode().storage);
   }

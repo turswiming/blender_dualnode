@@ -84,24 +84,24 @@ class ChromaMatteShaderNode : public ShaderNode {
                    GPU_uniform(&falloff));
   }
 
-  NodeChroma *get_node_chroma()
+  NodeChroma *get_data()
   {
     return static_cast<NodeChroma *>(bnode().storage);
   }
 
   float get_acceptance()
   {
-    return std::tan(get_node_chroma()->t1) / 2.0f;
+    return std::tan(get_data()->t1) / 2.0f;
   }
 
   float get_cutoff()
   {
-    return get_node_chroma()->t2;
+    return get_data()->t2;
   }
 
   float get_falloff()
   {
-    return get_node_chroma()->fstrength;
+    return get_data()->fstrength;
   }
 };
 

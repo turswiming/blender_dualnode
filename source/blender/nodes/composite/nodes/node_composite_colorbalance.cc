@@ -161,7 +161,7 @@ class ColorBalanceShaderNode : public ShaderNode {
     GPUNodeStack *inputs = get_inputs_array();
     GPUNodeStack *outputs = get_outputs_array();
 
-    const NodeColorBalance *node_color_balance = get_node_color_balance();
+    const NodeColorBalance *data = get_data();
 
     if (get_color_balance_method() == 0) {
       GPU_stack_link(material,
@@ -169,9 +169,9 @@ class ColorBalanceShaderNode : public ShaderNode {
                      "node_composite_color_balance_lgg",
                      inputs,
                      outputs,
-                     GPU_uniform(node_color_balance->lift),
-                     GPU_uniform(node_color_balance->gamma),
-                     GPU_uniform(node_color_balance->gain));
+                     GPU_uniform(data->lift),
+                     GPU_uniform(data->gamma),
+                     GPU_uniform(data->gain));
       return;
     }
 
@@ -180,10 +180,10 @@ class ColorBalanceShaderNode : public ShaderNode {
                    "node_composite_color_balance_asc_cdl",
                    inputs,
                    outputs,
-                   GPU_uniform(node_color_balance->offset),
-                   GPU_uniform(node_color_balance->power),
-                   GPU_uniform(node_color_balance->slope),
-                   GPU_uniform(&node_color_balance->offset_basis));
+                   GPU_uniform(data->offset),
+                   GPU_uniform(data->power),
+                   GPU_uniform(data->slope),
+                   GPU_uniform(&data->offset_basis));
   }
 
   /* Get color balance method.
@@ -194,7 +194,7 @@ class ColorBalanceShaderNode : public ShaderNode {
     return bnode().custom1;
   }
 
-  NodeColorBalance *get_node_color_balance()
+  NodeColorBalance *get_data()
   {
     return static_cast<NodeColorBalance *>(bnode().storage);
   }
