@@ -352,6 +352,7 @@ void LightManager::device_update_distribution(Device *,
     for (int index = 0; index < linearized_bvh.size(); index++) {
       const PackedLightTreeNode &node = linearized_bvh[index];
 
+      light_tree_nodes[index].energy = node.energy;
       for (int i = 0; i < 3; i++) {
         light_tree_nodes[index].bounding_box_min[i] = node.bbox.min[i];
         light_tree_nodes[index].bounding_box_max[i] = node.bbox.max[i];
@@ -536,6 +537,7 @@ void LightManager::device_update_distribution(Device *,
      * the light has been sampled through the light distribution.
      * Therefore, we override it for now and adjust the pdf manually in the light tree.*/
     if (scene->integrator->get_use_light_tree()) {
+      kintegrator->pdf_triangles = 1.0f;
       kintegrator->pdf_lights = 1.0f;
     }
     else {

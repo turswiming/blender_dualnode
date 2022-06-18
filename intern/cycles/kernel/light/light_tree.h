@@ -21,7 +21,7 @@ ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
   corners[6] = make_float3(bbox_max.x, bbox_max.y, bbox_min.z);
   corners[7] = bbox_max;
   for (int i = 0; i < 8; ++i) {
-    float3 point_to_corner = normalize(P - corners[i]);
+    float3 point_to_corner = normalize(corners[i] - P);
     const float cos_theta_u = dot(point_to_centroid, point_to_corner);
     theta_u = fmaxf(fast_acosf(cos_theta_u), theta_u);
   }
@@ -41,9 +41,12 @@ ccl_device float light_tree_node_importance(const float3 P,
                                             const float energy)
 {
   const float3 centroid = 0.5f * bbox_min + 0.5f * bbox_max;
-  const float3 point_to_centroid = normalize(P - centroid);
+  const float3 point_to_centroid = normalize(centroid - P);
 
-  const float distance_squared = len_squared(P - centroid);
+  /* Since we're not using the splitting heuristic, we clamp
+   * the distance to half the radius of the cluster. */
+  const float distance_squared = fminf(len_squared(centroid - P),
+                                       0.25f * len_squared(bbox_max - centroid));
 
   const float theta = fast_acosf(dot(bcone_axis, -point_to_centroid));
   const float theta_i = fast_acosf(dot(point_to_centroid, N));
@@ -51,17 +54,15 @@ ccl_device float light_tree_node_importance(const float3 P,
 
   /* to-do: compare this with directly using fmaxf and cosf. */
   /* Avoid using cosine until needed. */
-  const float theta_prime = fmaxf(theta_i - theta_u, 0);
-  /* to-do: this is also a rough heuristic to see if any contribution is possible.
-   * In the paper, this is only theta_e, but this seems to be off for point lights. */
-  if (theta_prime >= theta_o + theta_e) {
+  const float theta_prime = fmaxf(theta - theta_o - theta_u, 0);
+  if (theta_prime >= theta_e) {
     return 0;
   }
-  const float cos_theta_prime = cosf(theta_prime);
+  const float cos_theta_prime = fast_cosf(theta_prime);
 
   float cos_theta_i_prime = 1;
-  if (theta - theta_o - theta_u > 0) {
-    cos_theta_i_prime = fabsf(cosf(theta - theta_o - theta_u));
+  if (theta_i - theta_u > 0) {
+    cos_theta_i_prime = fabsf(fast_cosf(theta_i - theta_u));
   }
 
   /* to-do: find a good approximation for this value. */
@@ -160,11 +161,16 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     const float left_probability = left_importance / (left_importance + right_importance);
 
     if (tree_u < left_probability) {
+      index = index + 1;
       knode = left;
+      tree_u = tree_u * (left_importance + right_importance) / left_importance;
       *pdf_factor *= left_probability;
     }
     else {
+      index = knode->child_index;
       knode = right;
+      tree_u = (tree_u * (left_importance + right_importance) - left_importance) /
+               right_importance;
       *pdf_factor *= (1 - left_probability);
     }
   }

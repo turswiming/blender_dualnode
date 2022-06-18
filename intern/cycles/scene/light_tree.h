@@ -87,6 +87,10 @@ struct LightTreePrimitive {
 /* Light Tree Bucket Info
  * */
 struct LightTreeBucketInfo {
+  LightTreeBucketInfo()
+      : energy(0.0f), bbox(BoundBox::empty), bcone(OrientationBounds::empty), count(0)
+  {}
+
   float energy; /* Total energy in the partition */
   BoundBox bbox;
   OrientationBounds bcone;

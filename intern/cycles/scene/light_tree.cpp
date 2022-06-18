@@ -37,9 +37,9 @@ OrientationBounds merge(const OrientationBounds& cone_a,
   }
   else {
     /* Compute new theta_o that contains both a and b. */
-    float theta_o = (theta_d + a->theta_o + b->theta_o) / 2;
+    float theta_o = (theta_d + a->theta_o + b->theta_o) * 0.5f;
 
-    if (theta_o > M_PI_F) {
+    if (theta_o >= M_PI_F) {
       return OrientationBounds({a->axis, M_PI_F, theta_e});
     }
 
@@ -158,7 +158,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
   LightTreeBuildNode *node = new LightTreeBuildNode();
   total_nodes++;
   BoundBox node_bbox = BoundBox::empty;
-  OrientationBounds node_bcone;
+  OrientationBounds node_bcone = OrientationBounds::empty;
   BoundBox centroid_bounds = BoundBox::empty;
   float energy_total = 0.0;
   float energy_squared_total = 0.0;
@@ -178,7 +178,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
   float energy_variance = (energy_squared_total / num_prims) - (energy_total / num_prims) * (energy_total / num_prims);
 
   /* to-do: find a better way to handle when all centroids overlap. */
-  if (num_prims == 1 || centroid_bounds.area() == 0.0f) {
+  if (num_prims == 1 || len(centroid_bounds.size()) == 0.0f) {
     int first_prim_offset = ordered_prims.size();
     /* to-do: reduce this? */
     for (int i = start; i < end; i++) {
@@ -257,7 +257,8 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
                            int& min_dim,
                            int& min_bucket)
 {
-  /* to-do: test without using this in the calculation, since it's the same for every bucket. */
+  /* Even though this factor is used for every bucket, we use it to compare
+   * the min_cost and total_energy (when deciding between creating a leaf or interior node. */
   const float inv_total_cost = 1 / (bbox.area() * bcone.calculate_measure());
   const float max_extent = max3(centroid_bbox.size());
 
@@ -305,22 +306,26 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
       bcone_R = OrientationBounds::empty;
 
       for (int left = 0; left <= split; left++) {
-        energy_L += buckets[left].energy;
-        bbox_L.grow(buckets[left].bbox);
-        bcone_L = merge(bcone_L, buckets[left].bcone);
+        if (buckets[left].bbox.valid()) {
+          energy_L += buckets[left].energy;
+          bbox_L.grow(buckets[left].bbox);
+          bcone_L = merge(bcone_L, buckets[left].bcone);
+        }
       }
 
       for (int right = split + 1; right < LightTreeBucketInfo::num_buckets; right++) {
-        energy_R += buckets[right].energy;
-        bbox_R.grow(buckets[right].bbox);
-        bcone_R = merge(bcone_R, buckets[right].bcone);
+        if (buckets[right].bbox.valid()) {
+          energy_R += buckets[right].energy;
+          bbox_R.grow(buckets[right].bbox);
+          bcone_R = merge(bcone_R, buckets[right].bcone);
+        }
       }
       
       /* Calculate the cost of splitting using the heuristic as described in the paper. */
-      float left = energy_L * bbox_L.area() * bcone_L.calculate_measure();
-      float right = energy_R * bbox_R.area() * bcone_R.calculate_measure();
+      float left = (bbox_L.valid()) ? energy_L * bbox_L.area() * bcone_L.calculate_measure() : 0.0f;
+      float right = (bbox_R.valid()) ? energy_R * bbox_R.area() * bcone_R.calculate_measure() : 0.0f;
       float regularization = max_extent * inv_extent;
-      bucket_costs[split] = regularization * left * right * inv_total_cost;
+      bucket_costs[split] = regularization * (left + right) * inv_total_cost;
 
       if (bucket_costs[split] < min_cost) {
         min_cost = bucket_costs[split];
