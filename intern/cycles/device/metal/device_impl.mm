@@ -86,6 +86,10 @@ MetalDevice::MetalDevice(const DeviceInfo &info, Stats &stats, Profiler &profile
     use_metalrt = (atoi(metalrt) != 0);
   }
 
+  if (getenv("CYCLES_DEBUG_METAL_CAPTURE_KERNEL")) {
+    capture_enabled = true;
+  }
+
   MTLArgumentDescriptor *arg_desc_params = [[MTLArgumentDescriptor alloc] init];
   arg_desc_params.dataType = MTLDataTypePointer;
   arg_desc_params.access = MTLArgumentAccessReadOnly;
@@ -394,7 +398,7 @@ MetalDevice::MetalMem *MetalDevice::generic_alloc(device_memory &mem)
   }
 
   if (size > 0) {
-    if (mem.type == MEM_DEVICE_ONLY) {
+    if (mem.type == MEM_DEVICE_ONLY && !capture_enabled) {
       options = MTLResourceStorageModePrivate;
     }
 
@@ -407,9 +411,9 @@ MetalDevice::MetalMem *MetalDevice::generic_alloc(device_memory &mem)
   }
 
   if (mem.name) {
-    VLOG(2) << "Buffer allocate: " << mem.name << ", "
-            << string_human_readable_number(mem.memory_size()) << " bytes. ("
-            << string_human_readable_size(mem.memory_size()) << ")";
+    VLOG_WORK << "Buffer allocate: " << mem.name << ", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
   }
 
   mem.device_size = metal_buffer.allocatedSize;
@@ -796,9 +800,9 @@ void MetalDevice::tex_alloc(device_texture &mem)
     desc.textureType = MTLTextureType3D;
     desc.depth = mem.data_depth;
 
-    VLOG(2) << "Texture 3D allocate: " << mem.name << ", "
-            << string_human_readable_number(mem.memory_size()) << " bytes. ("
-            << string_human_readable_size(mem.memory_size()) << ")";
+    VLOG_WORK << "Texture 3D allocate: " << mem.name << ", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
 
     mtlTexture = [mtlDevice newTextureWithDescriptor:desc];
     assert(mtlTexture);
@@ -830,9 +834,9 @@ void MetalDevice::tex_alloc(device_texture &mem)
     desc.storageMode = storage_mode;
     desc.usage = MTLTextureUsageShaderRead;
 
-    VLOG(2) << "Texture 2D allocate: " << mem.name << ", "
-            << string_human_readable_number(mem.memory_size()) << " bytes. ("
-            << string_human_readable_size(mem.memory_size()) << ")";
+    VLOG_WORK << "Texture 2D allocate: " << mem.name << ", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
 
     mtlTexture = [mtlDevice newTextureWithDescriptor:desc];
     assert(mtlTexture);

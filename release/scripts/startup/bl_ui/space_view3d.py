@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-
-# <pep8 compliant>
 import bpy
 from bpy.types import (
     Header,
@@ -97,7 +95,7 @@ class VIEW3D_HT_tool_header(Header):
         elif tool_mode == 'PAINT_GPENCIL':
             if is_valid_context:
                 brush = context.tool_settings.gpencil_paint.brush
-                if brush.gpencil_tool != 'ERASE':
+                if brush and brush.gpencil_tool != 'ERASE':
                     if brush.gpencil_tool != 'TINT':
                         layout.popover("VIEW3D_PT_tools_grease_pencil_brush_advanced")
 
@@ -108,10 +106,11 @@ class VIEW3D_HT_tool_header(Header):
         elif tool_mode == 'SCULPT_GPENCIL':
             if is_valid_context:
                 brush = context.tool_settings.gpencil_sculpt_paint.brush
-                tool = brush.gpencil_sculpt_tool
-                if tool != 'CLONE':
-                    layout.popover("VIEW3D_PT_tools_grease_pencil_sculpt_brush_popover")
-                layout.popover("VIEW3D_PT_tools_grease_pencil_sculpt_appearance")
+                if brush:
+                    tool = brush.gpencil_sculpt_tool
+                    if tool != 'CLONE':
+                        layout.popover("VIEW3D_PT_tools_grease_pencil_sculpt_brush_popover")
+                    layout.popover("VIEW3D_PT_tools_grease_pencil_sculpt_appearance")
         elif tool_mode == 'WEIGHT_GPENCIL':
             if is_valid_context:
                 layout.popover("VIEW3D_PT_tools_grease_pencil_weight_appearance")
@@ -512,30 +511,27 @@ class _draw_tool_settings_context_mode:
                 header=True,
             )
 
-        if brush.curves_sculpt_tool == 'COMB':
+        curves_tool = brush.curves_sculpt_tool
+
+        if curves_tool == 'COMB':
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_tools_brush_falloff")
-
-        if brush.curves_sculpt_tool == 'ADD':
+        elif curves_tool == 'ADD':
             layout.prop(brush, "falloff_shape", expand=True)
             layout.prop(brush.curves_sculpt_settings, "add_amount")
             layout.popover("VIEW3D_PT_curves_sculpt_add_shape", text="Curve Shape")
             layout.prop(brush, "use_frontface", text="Front Faces Only")
-
-        if brush.curves_sculpt_tool == 'GROW_SHRINK':
+        elif curves_tool == 'GROW_SHRINK':
             layout.prop(brush, "direction", expand=True, text="")
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_curves_sculpt_grow_shrink_scaling", text="Scaling")
             layout.popover("VIEW3D_PT_tools_brush_falloff")
-
-        if brush.curves_sculpt_tool == 'SNAKE_HOOK':
+        elif curves_tool == 'SNAKE_HOOK':
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_tools_brush_falloff")
-
-        if brush.curves_sculpt_tool == 'DELETE':
+        elif curves_tool == 'DELETE':
             layout.prop(brush, "falloff_shape", expand=True)
-
-        if brush.curves_sculpt_tool == 'SELECTION_PAINT':
+        elif curves_tool == 'SELECTION_PAINT':
             layout.prop(brush, "direction", expand=True, text="")
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_tools_brush_falloff")

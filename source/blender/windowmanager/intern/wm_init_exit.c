@@ -338,10 +338,10 @@ void WM_init(bContext *C, int argc, const char **argv)
 
   if (!G.background) {
     if (wm_start_with_console) {
-      setConsoleWindowState(GHOST_kConsoleWindowStateShow);
+      GHOST_setConsoleWindowState(GHOST_kConsoleWindowStateShow);
     }
     else {
-      setConsoleWindowState(GHOST_kConsoleWindowStateHideForNonConsoleLaunch);
+      GHOST_setConsoleWindowState(GHOST_kConsoleWindowStateHideForNonConsoleLaunch);
     }
   }
 
@@ -380,7 +380,7 @@ static void free_openrecent(void)
 }
 
 #ifdef WIN32
-/* Read console events until there is a key event.  Also returns on any error. */
+/* Read console events until there is a key event. Also returns on any error. */
 static void wait_for_console_key(void)
 {
   HANDLE hConsoleInput = GetStdHandle(STD_INPUT_HANDLE);
