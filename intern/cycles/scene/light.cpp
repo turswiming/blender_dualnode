@@ -288,6 +288,7 @@ void LightManager::device_update_distribution(Device *,
   int scene_light_index = 0;
   foreach (Light *light, scene->lights) {
     if (light->is_enabled) {
+      /* to-do: make sure not to add background lights to the light tree once those scenes are tested. */
       LightTreePrimitive light_prim;
       light_prim.prim_id = ~device_light_index; /* -prim_id - 1 is a light source index. */
       light_prim.lamp_id = scene_light_index;

@@ -60,28 +60,93 @@ OrientationBounds merge(const OrientationBounds& cone_a,
 BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
 {
   BoundBox bbox = BoundBox::empty;
-  Light *lamp = scene->lights[lamp_id];
-  /* A point light can emit light from any point within its radius. */
-  bbox.grow(lamp->get_co() - make_float3(lamp->get_size()));
-  bbox.grow(lamp->get_co() + make_float3(lamp->get_size()));
+
+  if (prim_id >= 0) {
+    /* to-do: handle mesh lights in the future. */
+  }
+  else {
+    Light *lamp = scene->lights[lamp_id];
+    LightType type = lamp->get_light_type();
+    const float3 center = lamp->get_co();
+    const float size = lamp->get_size();
+
+    if (type == LIGHT_POINT || type == LIGHT_SPOT) {
+      /* Point and spot lights can emit light from any point within its radius. */
+      const float3 radius = make_float3(size);
+      bbox.grow(center - radius);
+      bbox.grow(center + radius);
+    }
+    else if (type == LIGHT_AREA) {
+      /* For an area light, sizeu and sizev determine the 2 dimensions of the area light,
+       * while axisu and axisv determine the orientation of the 2 dimensions. 
+       * We want to add all 4 corners to our bounding box. */
+      const float3 half_extentu = 0.5 * lamp->get_sizeu() * lamp->get_axisu() * size;
+      const float3 half_extentv = 0.5 * lamp->get_sizev() * lamp->get_axisv() * size;
+
+      bbox.grow(center + half_extentu + half_extentv);
+      bbox.grow(center + half_extentu - half_extentv);
+      bbox.grow(center - half_extentu + half_extentv);
+      bbox.grow(center - half_extentu - half_extentv);
+    }
+    else {
+      /* This should never be reached during construction. */
+      assert(false);
+    }
+  }
+
   return bbox;
 }
 
 OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
 {
-  OrientationBounds bcone;
-  Light *lamp = scene->lights[lamp_id];
-  bcone.axis = lamp->get_dir() / len(lamp->get_dir());
-  bcone.theta_o = M_PI_F;
-  bcone.theta_e = M_PI_2_F;
+  OrientationBounds bcone = OrientationBounds::empty;
+
+  if (prim_id >= 0) {
+    /* to-do: handle mesh lights in the future. */
+  }
+  else {
+    Light *lamp = scene->lights[lamp_id];
+    LightType type = lamp->get_light_type();
+
+    bcone.axis = normalize(lamp->get_dir());
+
+    if (type == LIGHT_POINT) {
+      bcone.theta_o = M_PI_F;
+      bcone.theta_e = M_PI_2_F;
+    }
+    else if (type == LIGHT_SPOT) {
+      bcone.theta_o = 0;
+      bcone.theta_e = lamp->get_spot_angle() * 0.5f;
+    }
+    else if (type == LIGHT_AREA) {
+      bcone.theta_o = 0;
+      bcone.theta_e = M_PI_2_F;
+    }
+    else {
+      /* This should never be reached during construction. */
+      assert(false);
+    }
+  }
+  
   return bcone;
 }
 
 float LightTreePrimitive::calculate_energy(Scene *scene) const
 {
-  Light *lamp = scene->lights[lamp_id];
-  /* Past GSoC work also divides this by pi, but will need to test which is more accurate. */
-  return scene->shader_manager->linear_rgb_to_gray(lamp->get_strength());
+  float3 strength = make_float3(0.0f);
+
+  if (prim_id >= 0) {
+    /* to-do: handle mesh lights in the future. */
+  }
+  else {
+    Light *lamp = scene->lights[lamp_id];
+    /* to-do: Past GSoC work also divides this by pi, but will need to test which is more accurate. 
+     * It seems like direction should be handled implicitly by the bounding cone, 
+     * by testing will provide more conclusive answers. */
+    strength = lamp->get_strength();
+  }
+
+  return scene->shader_manager->linear_rgb_to_gray(strength);
 }
 
 void LightTreeBuildNode::init_leaf(

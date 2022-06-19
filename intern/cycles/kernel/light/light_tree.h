@@ -84,28 +84,22 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
   if (prim >= 0) {
     /* to-do: handle case for mesh lights. */
   }
-  else {
-    const int lamp = -prim - 1;
-    const ccl_global KernelLight *klight = &kernel_tex_fetch(__lights, lamp);
-    if (klight->type == LIGHT_POINT) {
-      const float radius = klight->spot.radius;
-      const float3 bbox_min = make_float3(
-          klight->co[0] - radius, klight->co[1] - radius, klight->co[2] - radius);
-      const float3 bbox_max = make_float3(
-          klight->co[0] + radius, klight->co[1] + radius, klight->co[2] + radius);
-      const float3 rgb_strength = make_float3(
-          klight->strength[0], klight->strength[1], klight->strength[2]);
 
-      /* to-do: only the radius and invarea from the spotlight properties is used for a point light,
-       * but we still need to choose an arbitrary direction. Maybe this can be replaced with something else? */
-      const float3 bcone_axis = make_float3(
-          klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
+  /* If we're not at a mesh light, then we should be at a point, spot, or area light. */
+  const int lamp = -prim - 1;
+  const ccl_global KernelLight *klight = &kernel_tex_fetch(__lights, lamp);
+  const float radius = klight->spot.radius;
+  const float3 bbox_min = make_float3(
+      klight->co[0] - radius, klight->co[1] - radius, klight->co[2] - radius);
+  const float3 bbox_max = make_float3(
+      klight->co[0] + radius, klight->co[1] + radius, klight->co[2] + radius);
+  const float3 bcone_axis = make_float3(
+      klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
+  const float3 rgb_strength = make_float3(
+      klight->strength[0], klight->strength[1], klight->strength[2]);
 
-      return light_tree_node_importance(
-          P, N, bbox_min, bbox_max, bcone_axis, M_PI_F, M_PI_2_F, linear_rgb_to_gray(kg, rgb_strength));
-    }
-  }
-
+  return light_tree_node_importance(
+      P, N, bbox_min, bbox_max, bcone_axis, M_PI_F, M_PI_2_F, linear_rgb_to_gray(kg, rgb_strength));
 }
 
 ccl_device float light_tree_cluster_importance(KernelGlobals kg,
@@ -208,6 +202,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
 
   /* We should never reach this point. */
   assert(false);
+  return false;
 }
 
 ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
