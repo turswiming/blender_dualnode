@@ -276,9 +276,6 @@ enum {
 
 typedef struct imfImageFormat {
   struct imfImageFormat *next, *prev;
-
-  const char *bl_extensions;
-
   struct imfImageFormatType *type;
 } imfImageFormat;
 

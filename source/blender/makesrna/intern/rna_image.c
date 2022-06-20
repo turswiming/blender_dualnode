@@ -53,45 +53,6 @@ static const EnumPropertyItem image_source_items[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
-#ifdef WITH_PYTHON
-
-static bool rna_imageformat_is_a_bytes_cb(const struct bContext *C,
-                                          struct imfImageFormatType *ift,
-                                          const char *bytes)
-{
-  extern FunctionRNA rna_ImageFormat_is_a_bytes_func;
-
-  PointerRNA ptr;
-  ParameterList list;
-  FunctionRNA *func;
-  void *ret;
-  bool is_a_bytes;
-
-  /* seems to be some sort of temporary rna pointer?? */
-  RNA_pointer_create(NULL, ift->rna_ext.srna, NULL, &ptr);
-  func = &rna_ImageFormat_is_a_bytes_func;
-
-  /* set up arguments */
-  RNA_parameter_list_create(&list, &ptr, func);
-  RNA_parameter_set_lookup(&list, "data", bytes);
-
-  /* call function */
-  ift->rna_ext.call((struct bContext *)C, &ptr, func, &list);
-
-  /* get return value */
-  RNA_parameter_get_lookup(&list, "result", &ret);
-  is_a_bytes = *(bool *)ret;
-
-  return is_a_bytes;
-}
-
-static Image *rna_imageformat_load_cb(struct imfImageFormatType *ift, const char *bytes)
-{
-  return NULL;
-}
-
-#endif /* WITH_PYTHON */
-
 
 #ifdef RNA_RUNTIME
 
@@ -731,129 +692,6 @@ static void rna_UDIMTile_remove(Image *image, PointerRNA *ptr)
   WM_main_add_notifier(NC_IMAGE | ND_DRAW, NULL);
 }
 
-static StructRNA *rna_ImageFormat_register(Main *bmain,
-                                           ReportList *reports,
-                                           void *data,
-                                           const char *identifier,
-                                           StructValidateFunc validate,
-                                           StructCallbackFunc call,
-                                           StructFreeFunc free)
-{
-  struct {
-    char idname[MAX_NAME];
-    char extensions[MAX_NAME];
-  } temp_buffers;
-
-  imfImageFormatType dummy_type = {NULL};
-  imfImageFormat dummy = {NULL};
-  PointerRNA mnp_ptr;
-
-  /* TODO: how is the size determined? magic of rna defs? */
-  int have_function[2];
-
-  /* setup dummy gizmo & gizmo type to store static properties in */
-  dummy.type = &dummy_type;
-  dummy_type.idname = temp_buffers.idname;
-  dummy_type.extensions = temp_buffers.extensions;
-  RNA_pointer_create(NULL, &RNA_ImageFormat, &dummy, &mnp_ptr);
-
-  /* Clear so we can detect if it's left unset. */
-  temp_buffers.idname[0] = '\0';
-  temp_buffers.extensions[0] = '\0';
-
-  /* validate the python class */
-  if (validate(&mnp_ptr, data, have_function) != 0) {
-    return NULL;
-  }
-
-  /* make sure the id does not exceeed buffer length */
-  if (strlen(identifier) >= sizeof(temp_buffers.idname)) {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Registering image format class: '%s' is too long, maximum length is %d",
-                identifier,
-                (int)sizeof(temp_buffers.idname));
-    return NULL;
-  }
-
-  // TODO: check if we've added this gizmo before, remove it if so.
-  {
-  }
-
-  if (!RNA_struct_available_or_report(reports, dummy_type.idname)) {
-    return NULL;
-  }
-
-  if (!RNA_struct_bl_idname_ok_or_report(reports, dummy_type.idname, "_IF_")) {
-    return NULL;
-  }
-
-  {
-    /* allocate the idname */
-    dummy_type.idname = BLI_strdup(temp_buffers.idname);
-  }
-
-  /* Create a new ImageFormat type. */
-  dummy_type.rna_ext.srna = RNA_def_struct_ptr(&BLENDER_RNA, dummy_type.idname, &RNA_ImageFormat);
-  dummy_type.rna_ext.data = data;
-  dummy_type.rna_ext.call = call;
-  dummy_type.rna_ext.free = free;
-  RNA_def_struct_flag(dummy_type.rna_ext.srna, STRUCT_NO_IDPROPERTIES | STRUCT_RUNTIME);
-
-  // function callbacks
-  {
-    int i = 0;
-    dummy_type.is_a_bytes = (have_function[i++]) ? rna_imageformat_is_a_bytes_cb : NULL;
-    dummy_type.load = (have_function[i++]) ? rna_imageformat_load_cb : NULL;
-    BLI_assert(i == ARRAY_SIZE(have_function));
-  }
-
-  // TODO: actually register the type in a list somewhere! (wm, probably)
-
-  /* update while blender is running */
-  WM_main_add_notifier(NC_SCREEN | NA_EDITED, NULL);
-
-  return dummy_type.rna_ext.srna;
-}
-
-static void rna_ImageFormat_unregister(Main *UNUSED(bmain), StructRNA *type)
-{
-  imfImageFormatType *ift = RNA_struct_blender_type_get(type);
-
-  if (!ift) {
-    return;
-  }
-
-  //WM_gizmotype_remove_ptr(NULL, bmain, gzt);
-
-  /* Free extension after removing instances so `__del__` doesn't crash, see: T85567. */
-  RNA_struct_free_extension(type, &ift->rna_ext);
-  RNA_struct_free(&BLENDER_RNA, type);
-
-  /* Free gizmo group after the extension as it owns the identifier memory. */
-  //WM_gizmotype_free_ptr(gzt);
-
-  WM_main_add_notifier(NC_SCREEN | NA_EDITED, NULL);
-}
-
-static StructRNA *rna_ImageFormat_refine(PointerRNA *ptr)
-{
-  imfImageFormat *imf = (imfImageFormat *)ptr->data;
-  return (imf->type && imf->type->rna_ext.srna) ? imf->type->rna_ext.srna : &RNA_ImageFormat;
-}
-
-static void rna_ImageFormat_bl_extensions_set(PointerRNA *ptr, const char *value)
-{
-  imfImageFormat *data = ptr->data;
-  char *str = (char *)data->type->extensions;
-  if (!str[0]) {
-    BLI_strncpy(str, value, MAX_NAME); /* utf8 already ensured */
-  }
-  else {
-    BLI_assert_msg(0, "setting the bl_idname on a non-builtin operator");
-  }
-}
-
 #else
 
 static void rna_def_imageuser(BlenderRNA *brna)
@@ -1113,55 +951,6 @@ static void rna_def_udim_tiles(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_pointer(func, "tile", "UDIMTile", "", "Image tile to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, 0);
-}
-
-static void rna_def_imageformat(BlenderRNA *brna)
-{
-  StructRNA *srna;
-  PropertyRNA *prop;
-  FunctionRNA *func;
-
-  // TODO: are we just missing a text thingy?
-  srna = RNA_def_struct(brna, "ImageFormat", NULL);
-  RNA_def_struct_sdna(srna, "imfImageFormat");
-  RNA_def_struct_flag(srna, STRUCT_NO_DATABLOCK_IDPROPERTIES);
-  RNA_def_struct_register_funcs(srna, "rna_ImageFormat_register", "rna_ImageFormat_unregister", NULL);
-  RNA_def_struct_refine_func(srna, "rna_ImageFormat_refine");
-
-  /*
-  TODO: ideally we want a list of these instead of a single string,
-  but we'll have to deal with this for now
-  */
-  /* extensions (semicolon separated) */
-  prop = RNA_def_property(srna, "bl_extensions", PROP_STRING, PROP_NONE);
-  //RNA_def_property_string_sdna(prop, NULL, "type->extensions");
-  RNA_def_property_string_maxlength(prop, MAX_NAME);
-  RNA_def_property_flag(prop, PROP_NEVER_NULL | PROP_REGISTER);
-  RNA_def_property_string_funcs(prop, NULL, NULL, "rna_ImageFormat_bl_extensions_set");
-
-  /* idname */
-  prop = RNA_def_property(srna, "bl_idname", PROP_STRING, PROP_NONE);
-  RNA_def_property_string_sdna(prop, NULL, "type->idname");
-  RNA_def_property_string_maxlength(prop, MAX_NAME);
-  RNA_def_property_flag(prop, PROP_REGISTER);
-
-  /* is_a_bytes */
-  func = RNA_def_function(srna, "is_a_bytes", NULL);
-  RNA_def_function_ui_description(func, "FILLMEIN");
-  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER);
-  prop = RNA_def_property(func, "data", PROP_STRING, PROP_BYTESTRING);
-  RNA_def_parameter_flags(prop, PROP_NEVER_NULL, PARM_REQUIRED);
-  prop = RNA_def_boolean(func, "result", false, "", "");
-  RNA_def_function_return(func, prop);
-
-  /* load */
-  func = RNA_def_function(srna, "load", NULL);
-  RNA_def_function_ui_description(func, "FILLMEIN");
-  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER);
-  prop = RNA_def_property(func, "data", PROP_STRING, PROP_BYTESTRING);
-  RNA_def_parameter_flags(prop, PROP_NEVER_NULL, PARM_REQUIRED);
-  prop = RNA_def_pointer(func, "result", "Image", "", "");  // TODO: this should return an imbuf!
-  RNA_def_function_return(func, prop);
 }
 
 static void rna_def_image(BlenderRNA *brna)
@@ -1466,7 +1255,6 @@ void RNA_def_image(BlenderRNA *brna)
 {
   rna_def_render_slot(brna);
   rna_def_udim_tile(brna);
-  rna_def_imageformat(brna);
   rna_def_image(brna);
   rna_def_imageuser(brna);
   rna_def_image_packed_files(brna);

@@ -1792,6 +1792,28 @@ bool WM_xr_actionmap_binding_remove(XrActionMapItem *ami, XrActionMapBinding *am
 XrActionMapBinding *WM_xr_actionmap_binding_find(XrActionMapItem *ami, const char *name);
 #endif /* WITH_XR_OPENXR */
 
+/**
+ * Image Formats
+ */
+
+imfImageFormatType *WM_imageformattype_find(const char *idname, bool quiet);
+void wm_imageformattype_iter(struct GHashIterator *ghi);
+static imfImageFormatType *wm_imageformattype_append__begin(void);
+static void wm_imageformattype_append__end(imfImageFormatType *ift);
+void wm_imageformattype_append(void (*opfunc)(imfImageFormatType *));
+void wm_imageformattype_append_ptr(void (*opfunc)(imfImageFormatType *, void *), void *userdata);
+void wm_imageformattype_remove_ptr(imfImageFormatType *ift);
+bool wm_imageformattype_remove(const char *idname);
+void wm_imageformattype_init(void);
+static void imageformattype_ghash_free_cb(imfImageFormatType *ift);
+void wm_imageformattype_free(void);
+void wm_imageformattype_idname_visit_for_search(const struct bContext *C,
+                                                PointerRNA *ptr,
+                                                PropertyRNA *prop,
+                                                const char *edit_text,
+                                                StringPropertySearchVisitFunc visit_fn,
+                                                void *visit_user_data);
+
 #ifdef __cplusplus
 }
 #endif

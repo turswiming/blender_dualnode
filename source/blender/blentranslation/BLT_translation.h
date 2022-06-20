@@ -69,6 +69,9 @@ const char *BLT_translate_do_new_dataname(const char *msgctxt, const char *msgid
 /* Default context for operator names/labels. */
 #define BLT_I18NCONTEXT_OPERATOR_DEFAULT "Operator"
 
+/* Default context for image format names/labels. */
+#define BLT_I18CONTEXT_IMAGEFORMAT_DEFAULT "Image Format"
+
 /* Context for events/keymaps (necessary, since those often use one or two letters,
  * easy to get collisions with other areas...). */
 #define BLT_I18NCONTEXT_UI_EVENTS "UI_Events_KeyMaps"
