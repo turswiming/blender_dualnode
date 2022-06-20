@@ -807,6 +807,7 @@ bool UVIslandsMask::is_masked(const short island_index, const float2 uv) const
 
 /** \} */
 
+#ifdef DEBUG_SVG
 /* -------------------------------------------------------------------- */
 /** \name SVG export
  *
@@ -998,7 +999,7 @@ void svg(std::ostream &ss, const UVPrimitive &primitive)
     svg_coords(ss, edge.get_uv_vertex(0)->uv);
   }
   ss << "\"/>\n";
-#if 0
+#  if 0
 
   float2 center(0.0, 0.0);
   for (const UVBorderEdge &edge : border.edges) {
@@ -1018,7 +1019,7 @@ void svg(std::ostream &ss, const UVPrimitive &primitive)
     ss << edge.get_uv_vertex(0)->vertex->v;
     ss << "</text>\n";
   }
-#endif
+#  endif
 }
 
 void svg(std::ostream &ss, const UVPrimitive &primitive, int step)
@@ -1055,5 +1056,6 @@ void svg(std::ostream &ss, const UVBorder &border, int step)
 }
 
 /** \} */
+#endif
 
 }  // namespace blender::bke::uv_islands

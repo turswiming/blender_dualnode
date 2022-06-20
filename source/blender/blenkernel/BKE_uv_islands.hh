@@ -26,7 +26,7 @@ namespace blender::bke::uv_islands {
  * algorithm makes decisions.
  */
 //#define DEBUG_SVG
-// #define VALIDATE
+//#define VALIDATE
 
 struct UVIslands;
 struct UVIslandsMask;
@@ -734,6 +734,7 @@ struct UVIsland {
 #endif
 };
 
+#ifdef DEBUG_SVG
 /* Debug functions to export to a SVG file. */
 void svg_header(std::ostream &ss);
 void svg(std::ostream &ss, const UVIsland &islands, int step, int64_t first_new_prim_index);
@@ -743,6 +744,7 @@ void svg(std::ostream &ss, const UVPrimitive &primitive, int step);
 void svg(std::ostream &ss, const UVIslandsMask &mask, int step);
 void svg(std::ostream &ss, const UVBorder &border, int step);
 void svg_footer(std::ostream &ss);
+#endif
 
 struct UVIslands {
   Vector<UVIsland> islands;
@@ -947,41 +949,6 @@ struct UVIslandsMask {
   }
 
   void dilate(int max_iterations);
-
-  void print() const
-  {
-    int offset = 0;
-    for (int y = 0; y < resolution.y; y++) {
-      for (int x = 0; x < resolution.x; x++) {
-        uint16_t value = mask[offset++];
-        if (value == 0xffff) {
-          printf(" ");
-        }
-        else if (value == 0) {
-          printf("0");
-        }
-        else if (value == 1) {
-          printf("1");
-        }
-        else if (value == 2) {
-          printf("2");
-        }
-        else if (value == 3) {
-          printf("3");
-        }
-        else if (value == 4) {
-          printf("4");
-        }
-        else if (value == 5) {
-          printf("5");
-        }
-        else if (value == 6) {
-          printf("6");
-        }
-      }
-      printf("\n");
-    }
-  }
 };
 
 }  // namespace blender::bke::uv_islands
