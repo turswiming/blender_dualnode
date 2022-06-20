@@ -25,7 +25,8 @@ namespace blender::bke::uv_islands {
  * When enabled various parts of the code would generate an SVG file to visual see how the
  * algorithm makes decisions.
  */
-#define DEBUG_SVG
+//#define DEBUG_SVG
+// #define VALIDATE
 
 struct UVIslands;
 struct UVIslandsMask;
@@ -137,6 +138,7 @@ struct MeshData {
     init_primitives();
     init_edges();
 
+#ifdef VALIDATE
     for (const MeshVertex &v : vertices) {
       printf("Vert {v%lld}\n", v.v);
       for (const MeshEdge *e : v.edges) {
@@ -150,6 +152,7 @@ struct MeshData {
         }
       }
     }
+#endif
   }
   void init_vertices()
   {
@@ -541,7 +544,9 @@ struct UVBorder {
 
   static std::optional<UVBorder> extract_from_edges(Vector<UVBorderEdge> &edges);
 
+#ifdef VALIDATE
   void validate() const;
+#endif
 
   /** Remove edge from the border. updates the indexes. */
   void remove(int64_t index)
@@ -620,9 +625,7 @@ struct UVIsland {
   /** Initialize the border attribute. */
   void extract_borders();
   /** Iterative extend border to fit the mask. */
-  void extend_border(const UVIslandsMask &mask,
-                     const short island_index,
-                     const MeshData &mesh_data);
+  void extend_border(const UVIslandsMask &mask, const short island_index);
 
  private:
   void append(const UVPrimitive &primitive)
@@ -683,6 +686,7 @@ struct UVIsland {
     }
   }
 
+#ifdef VALIDATE
   void validate_primitives() const
   {
     /* Each UVPrimitive that points to the same mesh primitive should contain the same mesh
@@ -727,6 +731,7 @@ struct UVIsland {
       border.validate();
     }
   }
+#endif
 };
 
 /* Debug functions to export to a SVG file. */
@@ -787,15 +792,19 @@ struct UVIslands {
 #endif
   }
 
-  void extend_borders(const UVIslandsMask &islands_mask, const MeshData &mesh_data)
+  void extend_borders(const UVIslandsMask &islands_mask)
   {
+#ifdef VALIDATE
     printf("Extending borders\n");
     printf("=================\n");
+#endif
     ushort index = 0;
     for (UVIsland &island : islands) {
+#ifdef VALIDATE
       printf("Island %d\n", index);
       printf("---------\n");
-      island.extend_border(islands_mask, index++, mesh_data);
+#endif
+      island.extend_border(islands_mask, index++);
     }
 
 #ifdef DEBUG_SVG
@@ -852,6 +861,7 @@ struct UVIslands {
     return &islands.last();
   }
 
+#ifdef VALIDATE
   bool validate() const
   {
     /* After operations it is not allowed that islands share any edges. In that case it should
@@ -867,6 +877,7 @@ struct UVIslands {
     }
     return true;
   }
+#endif
 };
 
 /* Bitmask containing the num of the nearest Island. */

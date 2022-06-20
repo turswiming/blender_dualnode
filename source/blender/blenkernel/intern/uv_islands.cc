@@ -145,7 +145,9 @@ struct Fan {
         }
       }
       if (stop == false) {
+#ifdef VALIDATE
         printf("unknown how to create the fan for vert %lld\n", vertex.v);
+#endif
         flags.full = false;
         break;
       }
@@ -212,6 +214,7 @@ struct Fan {
   }
 };
 
+#ifdef VALIDATE
 static void print(const Fan &fan)
 {
   for (const InnerEdge &fan_edge : fan.inner_edges) {
@@ -225,6 +228,7 @@ static void print(const Fan &fan)
     printf(" %d\n", fan_edge.flags.found);
   }
 }
+#endif
 
 static void add_uv_primitive_shared_uv_edge(UVIsland &island,
                                             UVVertex *connected_vert_1,
@@ -264,28 +268,38 @@ static void add_uv_primitive_shared_uv_edge(UVIsland &island,
   prim1.append_to_uv_edges();
   prim1.append_to_uv_vertices();
   island.uv_primitives.append(prim1);
+#ifdef VALIDATE
   island.validate_primitive(island.uv_primitives.last());
+#endif
 }
 
 static MeshPrimitive *find_fill_border(const MeshVertex &v1,
                                        const MeshVertex &v2,
                                        const MeshVertex &v3)
 {
+#ifdef VALIDATE
   printf("find primitive containing (%lld,%lld,%lld)\n", v1.v, v2.v, v3.v);
+#endif
   for (MeshEdge *edge : v1.edges) {
     for (MeshPrimitive *primitive : edge->primitives) {
+#ifdef VALIDATE
       printf("- try primitive %lld containing (%lld,%lld,%lld)\n",
              primitive->index,
              primitive->vertices[0].vertex->v,
              primitive->vertices[1].vertex->v,
              primitive->vertices[2].vertex->v);
+#endif
       if (primitive->has_vertex(v1) && primitive->has_vertex(v2) && primitive->has_vertex(v3)) {
+#ifdef VALIDATE
         printf("- found primitive\n");
+#endif
         return primitive;
       }
     }
   }
+#ifdef VALIDATE
   printf("- No primitive found\n");
+#endif
   return nullptr;
 }
 /**
@@ -334,10 +348,9 @@ static void add_uv_primitive_fill(UVIsland &island,
   uv_primitive.append_to_uv_edges();
   uv_primitive.append_to_uv_vertices();
   island.uv_primitives.append(uv_primitive);
-  // island.validate_primitive(island.uv_primitives.last());
 }
 
-static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, const MeshData &mesh_data)
+static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
 {
   int border_index = corner.first->border_index;
   UVBorder &border = island.borders[border_index];
@@ -350,13 +363,14 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, const MeshD
   }
   fan.init_uv_coordinates(*uv_vertex, island);
   fan.mark_already_added_segments(*uv_vertex);
+#ifdef VALIDATE
   print(fan);
+#endif
 
   // tag them as being 'not fixed in uv space'. count them and determine a position in uv space.
   // add UV primitives for them.
   // recalc the border.
   int num_to_add = fan.count_num_to_add();
-  printf("Found %d new edges to add\n", num_to_add);
 
   if (num_to_add == 0) {
     MeshPrimitive *fill_primitive_1 = corner.second->uv_primitive->primitive;
@@ -372,13 +386,11 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, const MeshD
     }
 
     float2 center_uv = corner.uv(0.5f);
-    printf(" - add new projection for {%lld}\n", fill_primitive_1->index);
     add_uv_primitive_shared_uv_edge(island,
                                     corner.first->get_uv_vertex(1),
                                     corner.first->get_uv_vertex(0),
                                     center_uv,
                                     fill_primitive_1);
-    printf(" - add new projection for {%lld}\n", fill_primitive_2->index);
     add_uv_primitive_shared_uv_edge(island,
                                     corner.second->get_uv_vertex(0),
                                     corner.second->get_uv_vertex(1),
@@ -508,9 +520,7 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, const MeshD
   border.update_extendability();
 }
 
-void UVIsland::extend_border(const UVIslandsMask &mask,
-                             const short island_index,
-                             const MeshData &mesh_data)
+void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index)
 {
   // Find sharpest corner that still inside the island mask and can be extended.
   // exit when no corner could be found.
@@ -534,12 +544,9 @@ void UVIsland::extend_border(const UVIslandsMask &mask,
   // cases have been implemented.
   int num_iterations = 99999;
   while (num_iterations) {
-    printf("**iterations left %d**\n", num_iterations);
-    if (step == 366) {
-      printf("Debug iteration\n");
-      // break;
-    }
+#ifdef VALIDATE
     validate_border();
+#endif
     std::optional<UVBorderCorner> extension_corner = sharpest_border_corner(*this);
     if (!extension_corner.has_value()) {
       break;
@@ -551,9 +558,10 @@ void UVIsland::extend_border(const UVIslandsMask &mask,
       continue;
     }
 
-    // TODO: extend
-    extend_at_vert(*this, *extension_corner, mesh_data);
+    extend_at_vert(*this, *extension_corner);
+#ifdef VALIDATE
     validate_border();
+#endif
 
     /* Mark that the vert is extended. Unable to extend twice. */
     extension_corner->second->flags.extendable = false;
@@ -671,7 +679,7 @@ void UVBorder::update_extendability()
     }
   }
 }
-
+#ifdef VALIDATE
 void UVBorder::validate() const
 {
   for (const UVBorderEdge &edge : edges) {
@@ -687,6 +695,7 @@ void UVBorder::validate() const
     BLI_assert(edge.get_uv_vertex(1)->uv == edges[edge.next_index].get_uv_vertex(0)->uv);
   }
 }
+#endif
 
 /** \} */
 
@@ -832,7 +841,7 @@ void svg_footer(std::ostream &ss)
 {
   ss << "</svg>\n";
 }
-void svg(std::ostream &ss, const UVEdge &edge)
+static void svg(std::ostream &ss, const UVEdge &edge)
 {
   ss << "       <line x1=\"" << svg_x(*edge.vertices[0]) << "\" y1=\"" << svg_y(*edge.vertices[0])
      << "\" x2=\"" << svg_x(*edge.vertices[1]) << "\" y2=\"" << svg_y(*edge.vertices[1])
@@ -975,7 +984,7 @@ void svg(std::ostream &ss, const UVIslandsMask &mask, int step)
   ss << "</g>\n";
 }
 
-void svg_coords(std::ostream &ss, const float2 &coords)
+static void svg_coords(std::ostream &ss, const float2 &coords)
 {
   ss << svg_x(coords) << "," << svg_y(coords);
 }

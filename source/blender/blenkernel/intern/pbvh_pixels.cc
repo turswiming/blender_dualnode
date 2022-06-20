@@ -337,13 +337,15 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
       pbvh->looptri, pbvh->totprim, pbvh->totvert, pbvh->mloop, ldata_uv);
   uv_islands::UVIslands islands(mesh_data);
 
-  // TODO: Currenly uv_masks only supports a single udim tile. We should create one for each tile.
+  // TODO: Currently uv_masks only supports a single udim tile. We should create one for each tile.
+  // TODO: mask resolution should be based on the actual resolution of the image buffer (or a
+  // factor of it).
   uv_islands::UVIslandsMask uv_masks(float2(0.0, 0.0), ushort2(256, 256));
   uv_masks.add(islands);
   uv_masks.dilate(image->seamfix_iter);
 
   islands.extract_borders();
-  islands.extend_borders(uv_masks, mesh_data);
+  islands.extend_borders(uv_masks);
   update_geom_primitives(*pbvh, mesh_data);
 
   EncodePixelsUserData user_data;
