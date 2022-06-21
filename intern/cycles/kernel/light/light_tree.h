@@ -77,8 +77,8 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
                                                const float3 N,
                                                int emitter_index)
 {
-  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_tex_fetch(__light_tree_emitters,
-                                                                        emitter_index);
+  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
+                                                                         emitter_index);
 
   /* Convert the data from the struct into float3 for calculations. */
   const float3 bbox_min = make_float3(kemitter->bounding_box_min[0],
@@ -136,12 +136,12 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
 
   /* to-do: is it better to generate a new random sample for each step of the traversal? */
   float tree_u = path_state_rng_1D(kg, rng_state, 1);
-  const ccl_global KernelLightTreeNode *knode = &kernel_tex_fetch(__light_tree_nodes, index);
+  const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
   while (knode->child_index > 0) {
     /* At an interior node, the left child is directly next to the parent,
      * while the right child is stored as the child index. */
-    const ccl_global KernelLightTreeNode *left = &kernel_tex_fetch(__light_tree_nodes, index + 1);
-    const ccl_global KernelLightTreeNode *right = &kernel_tex_fetch(__light_tree_nodes, knode->child_index);
+    const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, index + 1);
+    const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes, knode->child_index);
 
     const float left_importance = light_tree_cluster_importance(kg, P, N, left);
     const float right_importance = light_tree_cluster_importance(kg, P, N, right);
@@ -186,8 +186,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     emitter_cdf += emitter_pdf;
     if (tree_u < emitter_cdf) {
       *pdf_factor *= emitter_pdf;
-      ccl_global const KernelLightDistribution *kdistribution = &kernel_tex_fetch(__light_distribution,
-                                                                                  prim_index);
+      ccl_global const KernelLightDistribution *kdistribution = &kernel_data_fetch(light_distribution,
+                                                                                   prim_index);
 
       /* to-do: this is the same code as light_distribution_sample, except the index is determined differently.
        * Would it be better to refactor this into a separate function? */
@@ -199,7 +199,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
 
         /* Exclude synthetic meshes from shadow catcher pass. */
         if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
-            !(kernel_tex_fetch(__object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
+            !(kernel_data_fetch(object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
           return false;
         }
 
