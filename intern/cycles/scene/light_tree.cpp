@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright 2011-2022 Blender Foundation */
 
+#include "scene/mesh.h"
+#include "scene/object.h"
 #include "scene/light_tree.h"
 
 CCL_NAMESPACE_BEGIN
@@ -62,7 +64,27 @@ BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
   BoundBox bbox = BoundBox::empty;
 
   if (prim_id >= 0) {
-    /* to-do: handle mesh lights in the future. */
+    Object *object = scene->objects[object_id];
+    Mesh *mesh = static_cast<Mesh*>(object->get_geometry());
+    Mesh::Triangle triangle = mesh->get_triangle(prim_id - mesh->prim_offset);
+
+    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
+                   mesh->get_verts()[triangle.v[1]],
+                   mesh->get_verts()[triangle.v[2]]};
+
+    /* instanced mesh lights have not applied their transform at this point.
+     * in this case, these points have to be transformed to get the proper
+     * spatial bound. */
+    if (!mesh->transform_applied) {
+      const Transform &tfm = object->get_tfm();
+      for (int i = 0; i < 3; i++) {
+        p[i] = transform_point(&tfm, p[i]);
+      }
+    }
+
+    for (int i = 0; i < 3; i++) {
+      bbox.grow(p[i]);
+    }
   }
   else {
     Light *lamp = scene->lights[lamp_id];
@@ -102,7 +124,29 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
   OrientationBounds bcone = OrientationBounds::empty;
 
   if (prim_id >= 0) {
-    /* to-do: handle mesh lights in the future. */
+    Object *object = scene->objects[object_id];
+    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+    Mesh::Triangle triangle = mesh->get_triangle(prim_id - mesh->prim_offset);
+
+    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
+                   mesh->get_verts()[triangle.v[1]],
+                   mesh->get_verts()[triangle.v[2]]};
+
+    /* instanced mesh lights have not applied their transform at this point.
+     * in this case, these points have to be transformed to get the proper
+     * spatial bound. */
+    if (!mesh->transform_applied) {
+      const Transform &tfm = object->get_tfm();
+      for (int i = 0; i < 3; i++) {
+        p[i] = transform_point(&tfm, p[i]);
+      }
+    }
+
+    float3 normal = triangle.compute_normal(p);
+
+    bcone.axis = normal;
+    bcone.theta_o = 0;
+    bcone.theta_e = M_PI_2_F;
   }
   else {
     Light *lamp = scene->lights[lamp_id];
@@ -136,7 +180,28 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
   float3 strength = make_float3(0.0f);
 
   if (prim_id >= 0) {
-    /* to-do: handle mesh lights in the future. */
+    Object *object = scene->objects[object_id];
+    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+    Mesh::Triangle triangle = mesh->get_triangle(prim_id - mesh->prim_offset);
+    Shader *shader = static_cast<Shader*>(mesh->get_used_shaders()[mesh->get_shader()[prim_id - mesh->prim_offset]]);
+
+    if (!shader->is_constant_emission(&strength)) {
+      strength = make_float3(1.0f);
+    }
+
+    const Transform &tfm = object->get_tfm();
+    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
+                   mesh->get_verts()[triangle.v[1]],
+                   mesh->get_verts()[triangle.v[2]]};
+
+    for (int i = 0; i < 3; i++) {
+      p[i] = transform_point(&tfm, p[i]);
+    }
+
+    float area = triangle_area(p[0], p[1], p[2]);
+
+    /* to-do: Past GSoC work also multiplies this by 4, but not sure why. Further investigation required. */
+    strength *= area;
   }
   else {
     Light *lamp = scene->lights[lamp_id];

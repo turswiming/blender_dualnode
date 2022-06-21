@@ -1526,6 +1526,27 @@ typedef struct KernelLightTreeNode {
 } KernelLightTreeNode;
 static_assert_align(KernelLightTreeNode, 16);
 
+typedef struct KernelLightTreeEmitter {
+  /* Bounding box. */
+  float bounding_box_min[3];
+  float bounding_box_max[3];
+
+  /* Bounding cone. */
+  float bounding_cone_axis[3];
+  float theta_o;
+  float theta_e;
+
+  /* Energy. */
+  float energy;
+
+  /* If this is positive, this is a triangle. Otherwise, it's a light source. */
+  int prim_id;
+
+  /* Padding. */
+  int pad1, pad2, pad3;
+} KernelLightTreeEmitter;
+static_assert_align(KernelLightTreeEmitter, 16);
+
 typedef struct KernelParticle {
   int index;
   float age;

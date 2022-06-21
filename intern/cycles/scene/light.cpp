@@ -350,6 +350,7 @@ void LightManager::device_update_distribution(Device *,
     LightTree light_tree(light_prims, scene, 8);
     light_prims = light_tree.get_prims();
 
+    /* First initialize the light tree's nodes. */
     const vector<PackedLightTreeNode> &linearized_bvh = light_tree.get_nodes();
     KernelLightTreeNode *light_tree_nodes = dscene->light_tree_nodes.alloc(linearized_bvh.size());
     for (int index = 0; index < linearized_bvh.size(); index++) {
@@ -374,8 +375,28 @@ void LightManager::device_update_distribution(Device *,
         light_tree_nodes[index].child_index = node.second_child_index;
       }
     }
-
     dscene->light_tree_nodes.copy_to_device();
+
+    /* The light tree emitters store extra information about their bounds. */
+    KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(num_distribution);
+    for (int index = 0; index < num_distribution; index++) {
+      LightTreePrimitive &prim = light_prims[index];
+      BoundBox bbox = prim.calculate_bbox(scene);
+      OrientationBounds bcone = prim.calculate_bcone(scene);
+      float energy = prim.calculate_energy(scene);
+
+      light_tree_emitters[index].energy = energy;
+      for (int i = 0; i < 3; i++) {
+        light_tree_emitters[index].bounding_box_min[i] = bbox.min[i];
+        light_tree_emitters[index].bounding_box_max[i] = bbox.max[i];
+        light_tree_emitters[index].bounding_cone_axis[i] = bcone.axis[i];
+      }
+      light_tree_emitters[index].theta_o = bcone.theta_o;
+      light_tree_emitters[index].theta_e = bcone.theta_e;
+
+      light_tree_emitters[index].prim_id = prim.prim_id;
+    }
+    dscene->light_tree_emitters.copy_to_device();
   }
 
   /* triangles */
@@ -1099,6 +1120,7 @@ void LightManager::device_free(Device *, DeviceScene *dscene, const bool free_ba
 {
   /* to-do: check if the light tree member variables need to be wrapped in a conditional too*/
   dscene->light_tree_nodes.free();
+  dscene->light_tree_emitters.free();
   dscene->light_distribution.free();
   dscene->lights.free();
   if (free_background) {

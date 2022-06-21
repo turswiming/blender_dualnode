@@ -77,29 +77,22 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
                                                const float3 N,
                                                int emitter_index)
 {
-  ccl_global const KernelLightDistribution *kdistribution = &kernel_tex_fetch(__light_distribution,
-                                                                              emitter_index);
-  const int prim = kdistribution->prim;
+  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_tex_fetch(__light_tree_emitters,
+                                                                        emitter_index);
 
-  if (prim >= 0) {
-    /* to-do: handle case for mesh lights. */
-  }
-
-  /* If we're not at a mesh light, then we should be at a point, spot, or area light. */
-  const int lamp = -prim - 1;
-  const ccl_global KernelLight *klight = &kernel_tex_fetch(__lights, lamp);
-  const float radius = klight->spot.radius;
-  const float3 bbox_min = make_float3(
-      klight->co[0] - radius, klight->co[1] - radius, klight->co[2] - radius);
-  const float3 bbox_max = make_float3(
-      klight->co[0] + radius, klight->co[1] + radius, klight->co[2] + radius);
-  const float3 bcone_axis = make_float3(
-      klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
-  const float3 rgb_strength = make_float3(
-      klight->strength[0], klight->strength[1], klight->strength[2]);
+  /* Convert the data from the struct into float3 for calculations. */
+  const float3 bbox_min = make_float3(kemitter->bounding_box_min[0],
+                                      kemitter->bounding_box_min[1],
+                                      kemitter->bounding_box_min[2]);
+  const float3 bbox_max = make_float3(kemitter->bounding_box_max[0],
+                                      kemitter->bounding_box_max[1],
+                                      kemitter->bounding_box_max[2]);
+  const float3 bcone_axis = make_float3(kemitter->bounding_cone_axis[0],
+                                        kemitter->bounding_cone_axis[1],
+                                        kemitter->bounding_cone_axis[2]);
 
   return light_tree_node_importance(
-      P, N, bbox_min, bbox_max, bcone_axis, M_PI_F, M_PI_2_F, linear_rgb_to_gray(kg, rgb_strength));
+      P, N, bbox_min, bbox_max, bcone_axis, kemitter->theta_o, kemitter->theta_e, kemitter->energy);
 }
 
 ccl_device float light_tree_cluster_importance(KernelGlobals kg,
@@ -193,10 +186,36 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     emitter_cdf += emitter_pdf;
     if (tree_u < emitter_cdf) {
       *pdf_factor *= emitter_pdf;
-      if (UNLIKELY(light_select_reached_max_bounces(kg, prim_index, bounce))) {
+      ccl_global const KernelLightDistribution *kdistribution = &kernel_tex_fetch(__light_distribution,
+                                                                                  prim_index);
+
+      /* to-do: this is the same code as light_distribution_sample, except the index is determined differently.
+       * Would it be better to refactor this into a separate function? */
+      const int prim = kdistribution->prim;
+
+      if (prim >= 0) {
+        /* Mesh light. */
+        const int object = kdistribution->mesh_light.object_id;
+
+        /* Exclude synthetic meshes from shadow catcher pass. */
+        if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
+            !(kernel_tex_fetch(__object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
+          return false;
+        }
+
+        const int shader_flag = kdistribution->mesh_light.shader_flag;
+        triangle_light_sample<in_volume_segment>(kg, prim, object, randu, randv, time, ls, P);
+        ls->shader |= shader_flag;
+        return (ls->pdf > 0.0f);
+      }
+
+      const int lamp = -prim - 1;
+
+      if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
         return false;
       }
-      return light_sample<in_volume_segment>(kg, prim_index, randu, randv, P, path_flag, ls);
+
+      return light_sample<in_volume_segment>(kg, lamp, randu, randv, P, path_flag, ls);
     }
   }
 

@@ -62,6 +62,7 @@ KERNEL_TEX(float2, __light_background_conditional_cdf)
 
 /* light tree */
 KERNEL_TEX(KernelLightTreeNode, __light_tree_nodes)
+KERNEL_TEX(KernelLightTreeEmitter, __light_tree_emitters)
 
 /* particles */
 KERNEL_TEX(KernelParticle, __particles)
