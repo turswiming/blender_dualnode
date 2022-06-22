@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import pathlib
 import shlex
 import shutil
 import subprocess
@@ -100,24 +101,18 @@ if inside_blender:
 def get_gpu_vendor(blender):
     command = [
         blender,
-        "--background",
         "-noaudio",
         "--factory-startup",
-        "--python-expr",
-        "import gpu;print('GPU_VENDOR:'+gpu.platform.vendor_get())"
+        "--python",
+        str(pathlib.Path(__file__).parent / "gpu_info.py")
     ]
     vendor = None
     try:
         completed_process = subprocess.run(command, stdout=subprocess.PIPE)
-        if completed_process.returncode != 0:
-            return None
-        print(completed_process.stdout)
         for line in completed_process.stdout.read_text():
-            print(line)
             if line.startswith("GPU_VENDOR:"):
                 vendor = line.split(':')[1]
-            vendor = completed_process
-        print()
+                break
     except BaseException as e:
         return None
     return vendor
@@ -159,13 +154,16 @@ def main():
     idiff = args.idiff[0]
     output_dir = args.outdir[0]
 
-    gpu_platform = get_gpu_vendor(blender)
-    print(gpu_platform)
+    gpu_vendor = get_gpu_vendor(blender)
+    reference_override_dir = None
+    if gpu_vendor == "AMD":
+        reference_override_dir = "eevee_renders/amd"
 
     from modules import render_report
     report = render_report.Report("Eevee", output_dir, idiff)
     report.set_pixelated(True)
     report.set_reference_dir("eevee_renders")
+    report.set_reference_override_dir(reference_override_dir)
     report.set_compare_engine('cycles', 'CPU')
     ok = report.run(test_dir, blender, get_arguments, batch=True)
 
