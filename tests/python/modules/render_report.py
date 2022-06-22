@@ -85,11 +85,11 @@ def test_get_images(output_dir, filepath, reference_dir, reference_override_dir)
     old_dirpath = os.path.join(dirpath, reference_dir)
     old_img = os.path.join(old_dirpath, testname + ".png")
     if reference_override_dir:
-        platform_dirpath = os.path.join(dirpath, reference_override_dir)
-        platform_img = os.path.join(platform_dirpath, testname + ".png")
+        override_dirpath = os.path.join(dirpath, reference_override_dir)
+        override_img = os.path.join(override_dirpath, testname + ".png")
         if os.path.exists(old_img):
-            old_dirpath = platform_dirpath
-            old_img = platform_img
+            old_dirpath = override_dirpath
+            old_img = override_img
 
     ref_dirpath = os.path.join(output_dir, os.path.basename(dirpath), "ref")
     ref_img = os.path.join(ref_dirpath, testname + ".png")

@@ -98,7 +98,7 @@ if inside_blender:
         print(e)
         sys.exit(1)
 
-def get_gpu_vendor(blender):
+def get_gpu_device_type(blender):
     command = [
         blender,
         "-noaudio",
@@ -106,16 +106,15 @@ def get_gpu_vendor(blender):
         "--python",
         str(pathlib.Path(__file__).parent / "gpu_info.py")
     ]
-    vendor = None
     try:
         completed_process = subprocess.run(command, stdout=subprocess.PIPE)
         for line in completed_process.stdout.read_text():
-            if line.startswith("GPU_VENDOR:"):
+            if line.startswith("GPU_DEVICE_TYPE:"):
                 vendor = line.split(':')[1]
-                break
+                return vendor
     except BaseException as e:
         return None
-    return vendor
+    return None
 
 
 
@@ -154,9 +153,9 @@ def main():
     idiff = args.idiff[0]
     output_dir = args.outdir[0]
 
-    gpu_vendor = get_gpu_vendor(blender)
+    gpu_device_type = get_gpu_device_type(blender)
     reference_override_dir = None
-    if gpu_vendor == "AMD":
+    if gpu_device_type == "AMD":
         reference_override_dir = "eevee_renders/amd"
 
     from modules import render_report
