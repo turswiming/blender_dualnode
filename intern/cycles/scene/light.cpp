@@ -444,37 +444,28 @@ void LightManager::device_update_distribution(Device *,
       shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
     }
 
-    size_t mesh_num_triangles = mesh->num_triangles();
-    for (size_t i = 0; i < mesh_num_triangles; i++) {
-      int shader_index = mesh->get_shader()[i];
-      Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
-                           static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
-                           scene->default_surface;
+    distribution[offset].totarea = totarea;
+    distribution[offset].prim = prim.prim_id;
+    distribution[offset].mesh_light.shader_flag = shader_flag;
+    distribution[offset].mesh_light.object_id = prim.object_id;
+    offset++;
 
-      if (shader->get_use_mis() && shader->has_surface_emission) {
-        distribution[offset].totarea = totarea;
-        distribution[offset].prim = prim.prim_id;
-        distribution[offset].mesh_light.shader_flag = shader_flag;
-        distribution[offset].mesh_light.object_id = prim.object_id;
-        offset++;
-
-        Mesh::Triangle t = mesh->get_triangle(i);
-        if (!t.valid(&mesh->get_verts()[0])) {
-          continue;
-        }
-        float3 p1 = mesh->get_verts()[t.v[0]];
-        float3 p2 = mesh->get_verts()[t.v[1]];
-        float3 p3 = mesh->get_verts()[t.v[2]];
-
-        if (!transform_applied) {
-          p1 = transform_point(&tfm, p1);
-          p2 = transform_point(&tfm, p2);
-          p3 = transform_point(&tfm, p3);
-        }
-
-        totarea += triangle_area(p1, p2, p3);
-      }
+    int triangle_index = prim.prim_id - mesh->prim_offset;
+    Mesh::Triangle t = mesh->get_triangle(triangle_index);
+    if (!t.valid(&mesh->get_verts()[0])) {
+      continue;
     }
+    float3 p1 = mesh->get_verts()[t.v[0]];
+    float3 p2 = mesh->get_verts()[t.v[1]];
+    float3 p3 = mesh->get_verts()[t.v[2]];
+
+    if (!transform_applied) {
+      p1 = transform_point(&tfm, p1);
+      p2 = transform_point(&tfm, p2);
+      p3 = transform_point(&tfm, p3);
+    }
+
+    totarea += triangle_area(p1, p2, p3);
   }
 
   float trianglearea = totarea;
