@@ -4,11 +4,12 @@
 # library itself does not depend on them, so should give no problems.
 
 set(OPENPGL_EXTRA_ARGS
-    -DOPENPGL_BUILD_PYTHON=OFF  
+    -DOPENPGL_BUILD_PYTHON=OFF
     -DOPENPGL_BUILD_STATIC=ON
     -DOPENPGL_TBB_ROOT=${LIBDIR}/tbb
     -DTBB_ROOT=${LIBDIR}/tbb
     -Dembree_DIR=${LIBDIR}/embree/lib/cmake/embree-${EMBREE_VERSION}
+    -DCMAKE_DEBUG_POSTFIX=_d
 )
 
 if(TBB_STATIC_LIBRARY)
@@ -33,18 +34,17 @@ add_dependencies(
     external_embree
 )
 
-#if(WIN32)
+if(WIN32)
 
-#  if(BUILD_MODE STREQUAL Release)
-#    ExternalProject_Add_Step(external_openpgl after_install
-#      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/openpgl ${HARVEST_TARGET}/openpgl
-#      DEPENDEES install
-#    )
-#  else()
-#  ExternalProject_Add_Step(external_openpgl after_install
-#      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/openpgl/lib/openpgl.lib ${HARVEST_TARGET}/openpgl/lib/openpgl_d.lib
-#      DEPENDEES install
-#    )
-#  endif()
-
-#endif()
+  if(BUILD_MODE STREQUAL Release)
+    ExternalProject_Add_Step(external_openpgl after_install
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/openpgl ${HARVEST_TARGET}/openpgl
+      DEPENDEES install
+    )
+  else()
+  ExternalProject_Add_Step(external_openpgl after_install
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/openpgl/lib/openpgl_d.lib ${HARVEST_TARGET}/openpgl/lib/openpgl_d.lib
+      DEPENDEES install
+    )
+  endif()
+endif()
