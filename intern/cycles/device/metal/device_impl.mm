@@ -35,7 +35,7 @@ void MetalDevice::set_error(const string &error)
 }
 
 MetalDevice::MetalDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
-    : Device(info, stats, profiler), texture_info(this, "__texture_info", MEM_GLOBAL)
+    : Device(info, stats, profiler), texture_info(this, "texture_info", MEM_GLOBAL)
 {
   mtlDevId = info.num;
 
@@ -84,6 +84,10 @@ MetalDevice::MetalDevice(const DeviceInfo &info, Stats &stats, Profiler &profile
 
   if (auto metalrt = getenv("CYCLES_METALRT")) {
     use_metalrt = (atoi(metalrt) != 0);
+  }
+
+  if (getenv("CYCLES_DEBUG_METAL_CAPTURE_KERNEL")) {
+    capture_enabled = true;
   }
 
   MTLArgumentDescriptor *arg_desc_params = [[MTLArgumentDescriptor alloc] init];
@@ -394,7 +398,7 @@ MetalDevice::MetalMem *MetalDevice::generic_alloc(device_memory &mem)
   }
 
   if (size > 0) {
-    if (mem.type == MEM_DEVICE_ONLY) {
+    if (mem.type == MEM_DEVICE_ONLY && !capture_enabled) {
       options = MTLResourceStorageModePrivate;
     }
 
@@ -407,9 +411,9 @@ MetalDevice::MetalMem *MetalDevice::generic_alloc(device_memory &mem)
   }
 
   if (mem.name) {
-    VLOG(2) << "Buffer allocate: " << mem.name << ", "
-            << string_human_readable_number(mem.memory_size()) << " bytes. ("
-            << string_human_readable_size(mem.memory_size()) << ")";
+    VLOG_WORK << "Buffer allocate: " << mem.name << ", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
   }
 
   mem.device_size = metal_buffer.allocatedSize;
@@ -621,7 +625,7 @@ device_ptr MetalDevice::mem_alloc_sub_ptr(device_memory &mem, size_t offset, siz
 
 void MetalDevice::const_copy_to(const char *name, void *host, size_t size)
 {
-  if (strcmp(name, "__data") == 0) {
+  if (strcmp(name, "data") == 0) {
     assert(size == sizeof(KernelData));
     memcpy((uint8_t *)&launch_params + offsetof(KernelParamsMetal, data), host, size);
     return;
@@ -642,19 +646,19 @@ void MetalDevice::const_copy_to(const char *name, void *host, size_t size)
       };
 
   /* Update data storage pointers in launch parameters. */
-  if (strcmp(name, "__integrator_state") == 0) {
+  if (strcmp(name, "integrator_state") == 0) {
     /* IntegratorStateGPU is contiguous pointers */
     const size_t pointer_block_size = sizeof(IntegratorStateGPU);
     update_launch_pointers(
-        offsetof(KernelParamsMetal, __integrator_state), host, size, pointer_block_size);
+        offsetof(KernelParamsMetal, integrator_state), host, size, pointer_block_size);
   }
-#  define KERNEL_TEX(data_type, tex_name) \
+#  define KERNEL_DATA_ARRAY(data_type, tex_name) \
     else if (strcmp(name, #tex_name) == 0) \
     { \
       update_launch_pointers(offsetof(KernelParamsMetal, tex_name), host, size, size); \
     }
-#  include "kernel/textures.h"
-#  undef KERNEL_TEX
+#  include "kernel/data_arrays.h"
+#  undef KERNEL_DATA_ARRAY
 }
 
 void MetalDevice::global_alloc(device_memory &mem)
@@ -796,9 +800,9 @@ void MetalDevice::tex_alloc(device_texture &mem)
     desc.textureType = MTLTextureType3D;
     desc.depth = mem.data_depth;
 
-    VLOG(2) << "Texture 3D allocate: " << mem.name << ", "
-            << string_human_readable_number(mem.memory_size()) << " bytes. ("
-            << string_human_readable_size(mem.memory_size()) << ")";
+    VLOG_WORK << "Texture 3D allocate: " << mem.name << ", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
 
     mtlTexture = [mtlDevice newTextureWithDescriptor:desc];
     assert(mtlTexture);
@@ -830,9 +834,9 @@ void MetalDevice::tex_alloc(device_texture &mem)
     desc.storageMode = storage_mode;
     desc.usage = MTLTextureUsageShaderRead;
 
-    VLOG(2) << "Texture 2D allocate: " << mem.name << ", "
-            << string_human_readable_number(mem.memory_size()) << " bytes. ("
-            << string_human_readable_size(mem.memory_size()) << ")";
+    VLOG_WORK << "Texture 2D allocate: " << mem.name << ", "
+              << string_human_readable_number(mem.memory_size()) << " bytes. ("
+              << string_human_readable_size(mem.memory_size()) << ")";
 
     mtlTexture = [mtlDevice newTextureWithDescriptor:desc];
     assert(mtlTexture);

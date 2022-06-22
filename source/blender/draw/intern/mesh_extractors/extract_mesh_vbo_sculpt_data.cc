@@ -12,7 +12,7 @@
 #include "BKE_paint.h"
 
 #include "draw_subdivision.h"
-#include "extract_mesh.h"
+#include "extract_mesh.hh"
 
 namespace blender::draw {
 
@@ -31,7 +31,7 @@ static GPUVertFormat *get_sculpt_data_format()
 }
 
 static void extract_sculpt_data_init(const MeshRenderData *mr,
-                                     struct MeshBatchCache *UNUSED(cache),
+                                     MeshBatchCache *UNUSED(cache),
                                      void *buf,
                                      void *UNUSED(tls_data))
 {
@@ -113,7 +113,7 @@ static void extract_sculpt_data_init(const MeshRenderData *mr,
 
 static void extract_sculpt_data_init_subdiv(const DRWSubdivCache *subdiv_cache,
                                             const MeshRenderData *mr,
-                                            struct MeshBatchCache *UNUSED(cache),
+                                            MeshBatchCache *UNUSED(cache),
                                             void *buffer,
                                             void *UNUSED(data))
 {
@@ -215,6 +215,4 @@ constexpr MeshExtract create_extractor_sculpt_data()
 
 }  // namespace blender::draw
 
-extern "C" {
 const MeshExtract extract_sculpt_data = blender::draw::create_extractor_sculpt_data();
-}

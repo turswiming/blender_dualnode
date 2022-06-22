@@ -670,6 +670,16 @@ typedef struct AttributeDescriptor {
   int offset;
 } AttributeDescriptor;
 
+/* For looking up attributes on objects and geometry. */
+typedef struct AttributeMap {
+  uint id;       /* Global unique identifier. */
+  uint element;  /* AttributeElement. */
+  int offset;    /* Offset into __attributes global arrays. */
+  uint8_t type;  /* NodeAttributeType. */
+  uint8_t flags; /* AttributeFlag. */
+  uint8_t pad[2];
+} AttributeMap;
+
 /* Closure data */
 
 #ifndef __MAX_CLOSURE__
@@ -1700,6 +1710,8 @@ enum KernelFeatureFlag : uint32_t {
 #define KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT \
   (KERNEL_FEATURE_NODE_EMISSION | KERNEL_FEATURE_NODE_VORONOI_EXTRA | \
    KERNEL_FEATURE_NODE_LIGHT_PATH)
+#define KERNEL_FEATURE_NODE_MASK_SURFACE_BACKGROUND \
+  (KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT | KERNEL_FEATURE_NODE_AOV)
 #define KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW \
   (KERNEL_FEATURE_NODE_BSDF | KERNEL_FEATURE_NODE_EMISSION | KERNEL_FEATURE_NODE_VOLUME | \
    KERNEL_FEATURE_NODE_BUMP | KERNEL_FEATURE_NODE_BUMP_STATE | \

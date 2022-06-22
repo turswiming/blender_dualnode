@@ -155,8 +155,38 @@ GHOST_TSuccess GHOST_Window::setCursorGrab(GHOST_TGrabCursorMode mode,
 
 GHOST_TSuccess GHOST_Window::getCursorGrabBounds(GHOST_Rect &bounds)
 {
+  if (m_cursorGrab != GHOST_kGrabWrap) {
+    return GHOST_kFailure;
+  }
   bounds = m_cursorGrabBounds;
   return (bounds.m_l == -1 && bounds.m_r == -1) ? GHOST_kFailure : GHOST_kSuccess;
+}
+
+void GHOST_Window::getCursorGrabState(GHOST_TGrabCursorMode &mode,
+                                      GHOST_TAxisFlag &wrap_axis,
+                                      GHOST_Rect &bounds,
+                                      bool &use_software_cursor)
+{
+  mode = m_cursorGrab;
+  if (m_cursorGrab == GHOST_kGrabWrap) {
+    bounds = m_cursorGrabBounds;
+    wrap_axis = m_cursorGrabAxis;
+  }
+  else {
+    bounds.m_l = -1;
+    bounds.m_r = -1;
+    bounds.m_t = -1;
+    bounds.m_b = -1;
+    wrap_axis = GHOST_kGrabAxisNone;
+  }
+  use_software_cursor = (m_cursorGrab != GHOST_kGrabDisable) ? getCursorGrabUseSoftwareDisplay() :
+                                                               false;
+}
+
+bool GHOST_Window::getCursorGrabUseSoftwareDisplay()
+{
+  /* Sub-classes may override, by default don't use software cursor. */
+  return false;
 }
 
 GHOST_TSuccess GHOST_Window::setCursorShape(GHOST_TStandardCursor cursorShape)
@@ -175,6 +205,12 @@ GHOST_TSuccess GHOST_Window::setCustomCursorShape(
     m_cursorShape = GHOST_kStandardCursorCustom;
     return GHOST_kSuccess;
   }
+  return GHOST_kFailure;
+}
+
+GHOST_TSuccess GHOST_Window::getCursorBitmap(GHOST_CursorBitmapRef * /*bitmap*/)
+{
+  /* Sub-classes may override. */
   return GHOST_kFailure;
 }
 

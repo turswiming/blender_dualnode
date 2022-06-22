@@ -732,7 +732,8 @@ typedef struct MaskSpaceInfo {
   char draw_flag;
   char draw_type;
   char overlay_mode;
-  char _pad3[5];
+  char _pad3[1];
+  float blend_factor;
 } MaskSpaceInfo;
 
 /** #SpaceSeq.gizmo_flag */
@@ -2014,6 +2015,7 @@ typedef enum eSpreadsheetColumnValueType {
   SPREADSHEET_VALUE_TYPE_INSTANCES = 6,
   SPREADSHEET_VALUE_TYPE_STRING = 7,
   SPREADSHEET_VALUE_TYPE_BYTE_COLOR = 8,
+  SPREADSHEET_VALUE_TYPE_INT8 = 9,
 } eSpreadsheetColumnValueType;
 
 /**

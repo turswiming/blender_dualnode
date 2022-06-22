@@ -51,12 +51,7 @@ class SelectionPaintOperation : public CurvesSculptStrokeOperation {
 
 struct SelectionPaintOperationExecutor {
   SelectionPaintOperation *self_ = nullptr;
-  const bContext *C_ = nullptr;
-  const Depsgraph *depsgraph_ = nullptr;
-  const Scene *scene_ = nullptr;
-  ARegion *region_ = nullptr;
-  const View3D *v3d_ = nullptr;
-  const RegionView3D *rv3d_ = nullptr;
+  CurvesSculptCommonContext ctx_;
 
   Object *object_ = nullptr;
   Curves *curves_id_ = nullptr;
@@ -71,29 +66,30 @@ struct SelectionPaintOperationExecutor {
 
   float2 brush_pos_re_;
 
-  float4x4 curves_to_world_mat_;
-  float4x4 world_to_curves_mat_;
+  CurvesSculptTransforms transforms_;
+
+  SelectionPaintOperationExecutor(const bContext &C) : ctx_(C)
+  {
+  }
 
   void execute(SelectionPaintOperation &self,
                const bContext &C,
                const StrokeExtension &stroke_extension)
   {
     self_ = &self;
-    depsgraph_ = CTX_data_depsgraph_pointer(&C);
-    scene_ = CTX_data_scene(&C);
     object_ = CTX_data_active_object(&C);
-    region_ = CTX_wm_region(&C);
-    v3d_ = CTX_wm_view3d(&C);
-    rv3d_ = CTX_wm_region_view3d(&C);
 
     curves_id_ = static_cast<Curves *>(object_->data);
     curves_ = &CurvesGeometry::wrap(curves_id_->geometry);
     curves_id_->flag |= CV_SCULPT_SELECTION_ENABLED;
+    if (curves_->curves_num() == 0) {
+      return;
+    }
 
-    brush_ = BKE_paint_brush_for_read(&scene_->toolsettings->curves_sculpt->paint);
-    brush_radius_base_re_ = BKE_brush_size_get(scene_, brush_);
+    brush_ = BKE_paint_brush_for_read(&ctx_.scene->toolsettings->curves_sculpt->paint);
+    brush_radius_base_re_ = BKE_brush_size_get(ctx_.scene, brush_);
     brush_radius_factor_ = brush_radius_factor(*brush_, stroke_extension);
-    brush_strength_ = BKE_brush_alpha_get(scene_, brush_);
+    brush_strength_ = BKE_brush_alpha_get(ctx_.scene, brush_);
 
     brush_pos_re_ = stroke_extension.mouse_position;
 
@@ -108,8 +104,7 @@ struct SelectionPaintOperationExecutor {
       }
     }
 
-    curves_to_world_mat_ = object_->obmat;
-    world_to_curves_mat_ = curves_to_world_mat_.inverted();
+    transforms_ = CurvesSculptTransforms(*object_, curves_id_->surface);
 
     const eBrushFalloffShape falloff_shape = static_cast<eBrushFalloffShape>(
         brush_->falloff_shape);
@@ -145,7 +140,7 @@ struct SelectionPaintOperationExecutor {
      * selection is handled as a generic attribute for now. */
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);
     WM_main_add_notifier(NC_GEOM | ND_DATA, &curves_id_->id);
-    ED_region_tag_redraw(region_);
+    ED_region_tag_redraw(ctx_.region);
   }
 
   void paint_point_selection_projected_with_symmetry(MutableSpan<float> selection)
@@ -163,7 +158,7 @@ struct SelectionPaintOperationExecutor {
     const float4x4 brush_transform_inv = brush_transform.inverted();
 
     float4x4 projection;
-    ED_view3d_ob_project_mat_get(rv3d_, object_, projection.values);
+    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.values);
 
     Span<float3> positions_cu = curves_->positions();
 
@@ -176,7 +171,7 @@ struct SelectionPaintOperationExecutor {
 
         /* Find the position of the point in screen space. */
         float2 pos_re;
-        ED_view3d_project_float_v2_m4(region_, pos_cu, pos_re, projection.values);
+        ED_view3d_project_float_v2_m4(ctx_.region, pos_cu, pos_re, projection.values);
 
         const float distance_to_brush_sq_re = math::distance_squared(pos_re, brush_pos_re_);
         if (distance_to_brush_sq_re > brush_radius_sq_re) {
@@ -199,15 +194,15 @@ struct SelectionPaintOperationExecutor {
   void paint_point_selection_spherical_with_symmetry(MutableSpan<float> selection)
   {
     float4x4 projection;
-    ED_view3d_ob_project_mat_get(rv3d_, object_, projection.values);
+    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.values);
 
     float3 brush_wo;
-    ED_view3d_win_to_3d(v3d_,
-                        region_,
-                        curves_to_world_mat_ * self_->brush_3d_.position_cu,
+    ED_view3d_win_to_3d(ctx_.v3d,
+                        ctx_.region,
+                        transforms_.curves_to_world * self_->brush_3d_.position_cu,
                         brush_pos_re_,
                         brush_wo);
-    const float3 brush_cu = world_to_curves_mat_ * brush_wo;
+    const float3 brush_cu = transforms_.world_to_curves * brush_wo;
 
     const Vector<float4x4> symmetry_brush_transforms = get_symmetry_brush_transforms(
         eCurvesSymmetryType(curves_id_->symmetry));
@@ -264,7 +259,7 @@ struct SelectionPaintOperationExecutor {
     const float4x4 brush_transform_inv = brush_transform.inverted();
 
     float4x4 projection;
-    ED_view3d_ob_project_mat_get(rv3d_, object_, projection.values);
+    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.values);
 
     const float brush_radius_re = brush_radius_base_re_ * brush_radius_factor_;
     const float brush_radius_sq_re = pow2f(brush_radius_re);
@@ -283,8 +278,8 @@ struct SelectionPaintOperationExecutor {
 
                 float2 pos1_re;
                 float2 pos2_re;
-                ED_view3d_project_float_v2_m4(region_, pos1_cu, pos1_re, projection.values);
-                ED_view3d_project_float_v2_m4(region_, pos2_cu, pos2_re, projection.values);
+                ED_view3d_project_float_v2_m4(ctx_.region, pos1_cu, pos1_re, projection.values);
+                ED_view3d_project_float_v2_m4(ctx_.region, pos2_cu, pos2_re, projection.values);
 
                 const float distance_sq_re = dist_squared_to_line_segment_v2(
                     brush_pos_re_, pos1_re, pos2_re);
@@ -307,15 +302,15 @@ struct SelectionPaintOperationExecutor {
   void paint_curve_selection_spherical_with_symmetry(MutableSpan<float> selection)
   {
     float4x4 projection;
-    ED_view3d_ob_project_mat_get(rv3d_, object_, projection.values);
+    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.values);
 
     float3 brush_wo;
-    ED_view3d_win_to_3d(v3d_,
-                        region_,
-                        curves_to_world_mat_ * self_->brush_3d_.position_cu,
+    ED_view3d_win_to_3d(ctx_.v3d,
+                        ctx_.region,
+                        transforms_.curves_to_world * self_->brush_3d_.position_cu,
                         brush_pos_re_,
                         brush_wo);
-    const float3 brush_cu = world_to_curves_mat_ * brush_wo;
+    const float3 brush_cu = transforms_.world_to_curves * brush_wo;
 
     const Vector<float4x4> symmetry_brush_transforms = get_symmetry_brush_transforms(
         eCurvesSymmetryType(curves_id_->symmetry));
@@ -364,8 +359,13 @@ struct SelectionPaintOperationExecutor {
 
   void initialize_spherical_brush_reference_point()
   {
-    std::optional<CurvesBrush3D> brush_3d = sample_curves_3d_brush(
-        *depsgraph_, *region_, *v3d_, *rv3d_, *object_, brush_pos_re_, brush_radius_base_re_);
+    std::optional<CurvesBrush3D> brush_3d = sample_curves_3d_brush(*ctx_.depsgraph,
+                                                                   *ctx_.region,
+                                                                   *ctx_.v3d,
+                                                                   *ctx_.rv3d,
+                                                                   *object_,
+                                                                   brush_pos_re_,
+                                                                   brush_radius_base_re_);
     if (brush_3d.has_value()) {
       self_->brush_3d_ = *brush_3d;
     }
@@ -375,7 +375,7 @@ struct SelectionPaintOperationExecutor {
 void SelectionPaintOperation::on_stroke_extended(const bContext &C,
                                                  const StrokeExtension &stroke_extension)
 {
-  SelectionPaintOperationExecutor executor;
+  SelectionPaintOperationExecutor executor{C};
   executor.execute(*this, C, stroke_extension);
 }
 
