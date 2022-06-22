@@ -1538,12 +1538,6 @@ typedef struct KernelLightTreeEmitter {
 
   /* Energy. */
   float energy;
-
-  /* If this is positive, this is a triangle. Otherwise, it's a light source. */
-  int prim_id;
-
-  /* Padding. */
-  int pad1, pad2, pad3;
 } KernelLightTreeEmitter;
 static_assert_align(KernelLightTreeEmitter, 16);
 

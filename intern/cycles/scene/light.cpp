@@ -393,8 +393,6 @@ void LightManager::device_update_distribution(Device *,
       }
       light_tree_emitters[index].theta_o = bcone.theta_o;
       light_tree_emitters[index].theta_e = bcone.theta_e;
-
-      light_tree_emitters[index].prim_id = prim.prim_id;
     }
     dscene->light_tree_emitters.copy_to_device();
   }
