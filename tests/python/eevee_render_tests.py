@@ -97,6 +97,32 @@ if inside_blender:
         print(e)
         sys.exit(1)
 
+def get_gpu_vendor(blender):
+    command = [
+        blender,
+        "--background",
+        "-noaudio",
+        "--factory-startup",
+        "--python-expr",
+        "import gpu;print('GPU_VENDOR:'+gpu.platform.vendor_get())"
+    ]
+    vendor = None
+    try:
+        completed_process = subprocess.run(command, stdout=subprocess.PIPE)
+        if completed_process.returncode != 0:
+            return None
+        print(completed_process.stdout)
+        for line in completed_process.stdout.read_text():
+            print(line)
+            if line.startswith("GPU_VENDOR:"):
+                vendor = line.split(':')[1]
+            vendor = completed_process
+        print()
+    except BaseException as e:
+        return None
+    return vendor
+
+
 
 def get_arguments(filepath, output_filepath):
     return [
@@ -132,6 +158,9 @@ def main():
     test_dir = args.testdir[0]
     idiff = args.idiff[0]
     output_dir = args.outdir[0]
+
+    gpu_platform = get_gpu_vendor(blender)
+    print(gpu_platform)
 
     from modules import render_report
     report = render_report.Report("Eevee", output_dir, idiff)
