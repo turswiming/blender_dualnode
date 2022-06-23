@@ -318,6 +318,8 @@ DefNode(GeometryNode, GEO_NODE_INPUT_CURVE_HANDLES, 0, "INPUT_CURVE_HANDLES", In
 DefNode(GeometryNode, GEO_NODE_INPUT_CURVE_TILT, 0, "INPUT_CURVE_TILT", InputCurveTilt, "Curve Tilt", "")
 DefNode(GeometryNode, GEO_NODE_INPUT_ID, 0, "INPUT_ID", InputID, "ID", "")
 DefNode(GeometryNode, GEO_NODE_INPUT_INDEX, 0, "INDEX", InputIndex, "Index", "")
+DefNode(GeometryNode, GEO_NODE_INPUT_INSTANCE_ROTATION, 0, "INPUT_INSTANCE_ROTATION", InputInstanceRotation, "Instance Rotation", "")
+DefNode(GeometryNode, GEO_NODE_INPUT_INSTANCE_SCALE, 0, "INPUT_INSTANCE_SCALE", InputInstanceScale, "Instance Scale", "")
 DefNode(GeometryNode, GEO_NODE_INPUT_MATERIAL_INDEX, 0, "INPUT_MATERIAL_INDEX", InputMaterialIndex, "Material Index", "")
 DefNode(GeometryNode, GEO_NODE_INPUT_MATERIAL, def_geo_input_material, "INPUT_MATERIAL", InputMaterial, "Material", "")
 DefNode(GeometryNode, GEO_NODE_INPUT_MESH_EDGE_ANGLE, 0, "MESH_EDGE_ANGLE", InputMeshEdgeAngle, "Edge Angle", "")
@@ -395,6 +397,7 @@ DefNode(GeometryNode, GEO_NODE_TRANSLATE_INSTANCES, 0, "TRANSLATE_INSTANCES", Tr
 DefNode(GeometryNode, GEO_NODE_TRIANGULATE, def_geo_triangulate, "TRIANGULATE", Triangulate, "Triangulate", "")
 DefNode(GeometryNode, GEO_NODE_TRIM_CURVE, def_geo_curve_trim, "TRIM_CURVE", TrimCurve, "Trim Curve", "")
 DefNode(GeometryNode, GEO_NODE_VIEWER, def_geo_viewer, "VIEWER", Viewer, "Viewer", "")
+DefNode(GeometryNode, GEO_NODE_VOLUME_CUBE, 0, "VOLUME_CUBE", VolumeCube, "Volume Cube", "")
 DefNode(GeometryNode, GEO_NODE_VOLUME_TO_MESH, def_geo_volume_to_mesh, "VOLUME_TO_MESH", VolumeToMesh, "Volume to Mesh", "")
 
 /* undefine macros */

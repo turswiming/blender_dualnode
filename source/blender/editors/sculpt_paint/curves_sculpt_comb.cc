@@ -99,12 +99,8 @@ struct CombOperationExecutor {
   float2 brush_pos_prev_re_;
   float2 brush_pos_re_;
   float2 brush_pos_diff_re_;
-  float brush_pos_diff_length_re_;
 
-  float4x4 curves_to_world_mat_;
-  float4x4 world_to_curves_mat_;
-  float4x4 surface_to_world_mat_;
-  float4x4 world_to_surface_mat_;
+  CurvesSculptTransforms transforms_;
 
   CombOperationExecutor(const bContext &C) : ctx_(C)
   {
@@ -124,9 +120,6 @@ struct CombOperationExecutor {
     brush_radius_factor_ = brush_radius_factor(*brush_, stroke_extension);
     brush_strength_ = brush_strength_get(*ctx_.scene, *brush_, stroke_extension);
 
-    curves_to_world_mat_ = object_->obmat;
-    world_to_curves_mat_ = curves_to_world_mat_.inverted();
-
     falloff_shape_ = static_cast<eBrushFalloffShape>(brush_->falloff_shape);
 
     curves_id_ = static_cast<Curves *>(object_->data);
@@ -135,13 +128,14 @@ struct CombOperationExecutor {
       return;
     }
 
+    transforms_ = CurvesSculptTransforms(*object_, curves_id_->surface);
+
     point_factors_ = get_point_selection(*curves_id_);
     curve_selection_ = retrieve_selected_curves(*curves_id_, selected_curve_indices_);
 
     brush_pos_prev_re_ = self_->brush_pos_last_re_;
     brush_pos_re_ = stroke_extension.mouse_position;
     brush_pos_diff_re_ = brush_pos_re_ - brush_pos_prev_re_;
-    brush_pos_diff_length_re_ = math::length(brush_pos_diff_re_);
 
     if (stroke_extension.is_first) {
       if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
@@ -229,11 +223,11 @@ struct CombOperationExecutor {
           float3 new_position_wo;
           ED_view3d_win_to_3d(ctx_.v3d,
                               ctx_.region,
-                              curves_to_world_mat_ * old_pos_cu,
+                              transforms_.curves_to_world * old_pos_cu,
                               new_position_re,
                               new_position_wo);
           const float3 new_position_cu = brush_transform *
-                                         (world_to_curves_mat_ * new_position_wo);
+                                         (transforms_.world_to_curves * new_position_wo);
           positions_cu[point_i] = new_position_cu;
 
           curve_changed = true;
@@ -256,16 +250,16 @@ struct CombOperationExecutor {
     float3 brush_start_wo, brush_end_wo;
     ED_view3d_win_to_3d(ctx_.v3d,
                         ctx_.region,
-                        curves_to_world_mat_ * self_->brush_3d_.position_cu,
+                        transforms_.curves_to_world * self_->brush_3d_.position_cu,
                         brush_pos_prev_re_,
                         brush_start_wo);
     ED_view3d_win_to_3d(ctx_.v3d,
                         ctx_.region,
-                        curves_to_world_mat_ * self_->brush_3d_.position_cu,
+                        transforms_.curves_to_world * self_->brush_3d_.position_cu,
                         brush_pos_re_,
                         brush_end_wo);
-    const float3 brush_start_cu = world_to_curves_mat_ * brush_start_wo;
-    const float3 brush_end_cu = world_to_curves_mat_ * brush_end_wo;
+    const float3 brush_start_cu = transforms_.world_to_curves * brush_start_wo;
+    const float3 brush_end_cu = transforms_.world_to_curves * brush_end_wo;
 
     const float brush_radius_cu = self_->brush_3d_.radius_cu * brush_radius_factor_;
 

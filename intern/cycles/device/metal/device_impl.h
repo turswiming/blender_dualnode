@@ -31,6 +31,8 @@ class MetalDevice : public Device {
   string source[PSO_NUM];
   string source_md5[PSO_NUM];
 
+  bool capture_enabled = false;
+
   KernelParamsMetal launch_params = {0};
 
   /* MetalRT members ----------------------------------*/
@@ -40,7 +42,6 @@ class MetalDevice : public Device {
       nil; /* encoder used for fetching device pointers from MTLAccelerationStructure */
   /*---------------------------------------------------*/
 
-  string device_name;
   MetalGPUVendor device_vendor;
 
   uint kernel_features;

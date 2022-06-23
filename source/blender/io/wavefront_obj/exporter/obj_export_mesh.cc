@@ -117,15 +117,12 @@ std::pair<Mesh *, bool> OBJMesh::triangulate_mesh_eval()
   return {triangulated, true};
 }
 
-void OBJMesh::set_world_axes_transform(const eTransformAxisForward forward,
-                                       const eTransformAxisUp up)
+void OBJMesh::set_world_axes_transform(const eIOAxis forward, const eIOAxis up)
 {
   float axes_transform[3][3];
   unit_m3(axes_transform);
   /* +Y-forward and +Z-up are the default Blender axis settings. */
-  mat3_from_axis_conversion(OBJ_AXIS_Y_FORWARD, OBJ_AXIS_Z_UP, forward, up, axes_transform);
-  /* mat3_from_axis_conversion returns a transposed matrix! */
-  transpose_m3(axes_transform);
+  mat3_from_axis_conversion(forward, up, IO_AXIS_Y, IO_AXIS_Z, axes_transform);
   mul_m4_m3m4(world_and_axes_transform_, axes_transform, export_object_eval_.obmat);
   /* mul_m4_m3m4 does not transform last row of obmat, i.e. location data. */
   mul_v3_m3v3(world_and_axes_transform_[3], axes_transform, export_object_eval_.obmat[3]);
