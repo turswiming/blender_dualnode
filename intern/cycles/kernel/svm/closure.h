@@ -24,7 +24,7 @@ ccl_device void svm_node_glass_setup(ccl_private ShaderData *sd,
     else {
       bsdf->alpha_y = 0.0f;
       bsdf->alpha_x = 0.0f;
-      bsdf->ior = 0.0f;
+      bsdf->ior = eta;
       sd->flag |= bsdf_reflection_setup(bsdf);
     }
   }
@@ -541,7 +541,8 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
       float roughness = sqr(param1);
 
       bsdf->N = N;
-      bsdf->ior = 0.0f;
+      // TODO (sherholz): this should be set to the correct eta 
+      bsdf->ior = 1.0f;
       bsdf->extra = NULL;
 
       if (data_node.y == SVM_STACK_INVALID) {
@@ -1197,6 +1198,10 @@ ccl_device void svm_node_closure_weight(ccl_private ShaderData *sd,
                                         uint weight_offset)
 {
   float3 weight = stack_load_float3(stack, weight_offset);
+  weight.x = max(0.f, weight.x);
+  weight.y = max(0.f, weight.y);
+  weight.z = max(0.f, weight.z);
+  assert(weight.x >= 0.f && weight.y >= 0.f && weight.z >= 0.f);
   svm_node_closure_store_weight(sd, weight);
 }
 

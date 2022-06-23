@@ -713,7 +713,7 @@ class MicrofacetMultiGGXClosure : public MicrofacetMultiClosure {
       return;
     }
 
-    bsdf->ior = 0.0f;
+    bsdf->ior = 1.0f;
     bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
     bsdf->alpha_y = bsdf->alpha_x;
     sd->flag |= bsdf_microfacet_multi_ggx_setup(bsdf);
@@ -743,7 +743,7 @@ class MicrofacetMultiGGXAnisoClosure : public MicrofacetMultiClosure {
       return;
     }
 
-    bsdf->ior = 0.0f;
+    bsdf->ior = 1.0f;
     sd->flag |= bsdf_microfacet_multi_ggx_setup(bsdf);
   }
 };
