@@ -659,32 +659,6 @@ bool ED_operator_editmball(bContext *C)
   return false;
 }
 
-bool ED_operator_mask(bContext *C)
-{
-  ScrArea *area = CTX_wm_area(C);
-  if (area && area->spacedata.first) {
-    switch (area->spacetype) {
-      case SPACE_CLIP: {
-        SpaceClip *screen = area->spacedata.first;
-        return ED_space_clip_check_show_maskedit(screen);
-      }
-      case SPACE_SEQ: {
-        SpaceSeq *sseq = area->spacedata.first;
-        Scene *scene = CTX_data_scene(C);
-        return ED_space_sequencer_check_show_maskedit(sseq, scene);
-      }
-      case SPACE_IMAGE: {
-        SpaceImage *sima = area->spacedata.first;
-        ViewLayer *view_layer = CTX_data_view_layer(C);
-        Object *obedit = OBEDIT_FROM_VIEW_LAYER(view_layer);
-        return ED_space_image_check_show_maskedit(sima, obedit);
-      }
-    }
-  }
-
-  return false;
-}
-
 bool ED_operator_camera_poll(bContext *C)
 {
   struct Camera *cam = CTX_data_pointer_get_type(C, "camera", &RNA_Camera).data;
@@ -2490,6 +2464,7 @@ static int area_split_modal(bContext *C, wmOperator *op, const wmEvent *event)
       return OPERATOR_CANCELLED;
 
     case EVT_LEFTCTRLKEY:
+    case EVT_RIGHTCTRLKEY:
       sd->do_snap = event->val == KM_PRESS;
       update_factor = true;
       break;

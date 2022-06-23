@@ -56,6 +56,7 @@
 #include "WM_types.h"
 
 #include "ED_armature.h"
+#include "ED_image.h"
 #include "ED_mesh.h"
 #include "ED_object.h"
 #include "ED_screen.h"
@@ -139,8 +140,8 @@ struct NormalAnglePrecalc {
 /* Returns number of elements. */
 static int get_vcol_elements(Mesh *me, size_t *r_elem_size)
 {
-  CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
-  eAttrDomain domain = BKE_id_attribute_domain(&me->id, layer);
+  const CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
+  const eAttrDomain domain = BKE_id_attribute_domain(&me->id, layer);
 
   if (r_elem_size) {
     *r_elem_size = layer->type == CD_PROP_COLOR ? sizeof(float) * 4ULL : 4ULL;
@@ -217,29 +218,13 @@ static MDeformVert *defweight_prev_init(MDeformVert *dvert_prev,
                                         MDeformVert *dvert_curr,
                                         int index)
 {
-  MDeformVert *dv_curr = &dvert_curr[index];
+  const MDeformVert *dv_curr = &dvert_curr[index];
   MDeformVert *dv_prev = &dvert_prev[index];
   if (dv_prev->flag == 1) {
     dv_prev->flag = 0;
     BKE_defvert_copy(dv_prev, dv_curr);
   }
   return dv_prev;
-}
-
-/* check if we can do partial updates and have them draw realtime
- * (without evaluating modifiers) */
-static bool vertex_paint_use_fast_update_check(Object *ob)
-{
-  const Mesh *me_eval = BKE_object_get_evaluated_mesh(ob);
-
-  if (me_eval != nullptr) {
-    Mesh *me = BKE_mesh_from_object(ob);
-    if (me && me->mloopcol) {
-      return (me->mloopcol == CustomData_get_layer(&me_eval->ldata, CD_PROP_BYTE_COLOR));
-    }
-  }
-
-  return false;
 }
 
 static void paint_last_stroke_update(Scene *scene, const float location[3])
@@ -252,13 +237,14 @@ static void paint_last_stroke_update(Scene *scene, const float location[3])
 
 bool vertex_paint_mode_poll(bContext *C)
 {
-  Object *ob = CTX_data_active_object(C);
+  const Object *ob = CTX_data_active_object(C);
 
-  if (!(ob && ob->mode == OB_MODE_VERTEX_PAINT && ((Mesh *)ob->data)->totpoly)) {
+  if (!(ob && ob->mode == OB_MODE_VERTEX_PAINT && ((const Mesh *)ob->data)->totpoly)) {
     return false;
   }
 
-  CustomDataLayer *layer = BKE_id_attributes_active_color_get((ID *)ob->data);
+  const CustomDataLayer *layer = BKE_id_attributes_active_color_get(
+      static_cast<const ID *>(ob->data));
 
   return layer != nullptr;
 }
@@ -291,15 +277,15 @@ bool vertex_paint_poll_ignore_tool(bContext *C)
 
 bool weight_paint_mode_poll(bContext *C)
 {
-  Object *ob = CTX_data_active_object(C);
+  const Object *ob = CTX_data_active_object(C);
 
-  return ob && ob->mode == OB_MODE_WEIGHT_PAINT && ((Mesh *)ob->data)->totpoly;
+  return ob && ob->mode == OB_MODE_WEIGHT_PAINT && ((const Mesh *)ob->data)->totpoly;
 }
 
 static bool weight_paint_poll_ex(bContext *C, bool check_tool)
 {
-  Object *ob = CTX_data_active_object(C);
-  ScrArea *area;
+  const Object *ob = CTX_data_active_object(C);
+  const ScrArea *area;
 
   if ((ob != nullptr) && (ob->mode & OB_MODE_WEIGHT_PAINT) &&
       (BKE_paint_brush(&CTX_data_tool_settings(C)->wpaint->paint) != nullptr) &&
@@ -327,7 +313,7 @@ bool weight_paint_poll_ignore_tool(bContext *C)
 template<typename Color, typename Traits, eAttrDomain domain>
 static Color vpaint_get_current_col(Scene *scene, VPaint *vp, bool secondary)
 {
-  Brush *brush = BKE_paint_brush(&vp->paint);
+  const Brush *brush = BKE_paint_brush_for_read(&vp->paint);
   float color[4];
   const float *brush_color = secondary ? BKE_brush_secondary_color_get(scene, brush) :
                                          BKE_brush_color_get(scene, brush);
@@ -360,7 +346,7 @@ static Color vpaint_blend(const VPaint *vp,
   const Brush *brush = vp->paint.brush;
   const IMB_BlendMode blend = (IMB_BlendMode)brush->blend;
 
-  Color color_blend = BLI_mix_colors<Color, Traits>(blend, color_curr, color_paint, alpha);
+  const Color color_blend = BLI_mix_colors<Color, Traits>(blend, color_curr, color_paint, alpha);
 
   /* If no accumulate, clip color adding with `color_orig` & `color_test`. */
   if (!brush_use_accumulate(vp)) {
@@ -1321,7 +1307,7 @@ static void ed_vwpaintmode_enter_generic(
 
     BKE_paint_ensure(scene->toolsettings, (Paint **)&scene->toolsettings->vpaint);
     Paint *paint = BKE_paint_get_active_from_paintmode(scene, paint_mode);
-    paint_cursor_start(paint, vertex_paint_poll);
+    ED_paint_cursor_start(paint, vertex_paint_poll);
     BKE_paint_init(bmain, scene, paint_mode, PAINT_CURSOR_VERTEX_PAINT);
   }
   else if (mode_flag == OB_MODE_WEIGHT_PAINT) {
@@ -1329,7 +1315,7 @@ static void ed_vwpaintmode_enter_generic(
 
     BKE_paint_ensure(scene->toolsettings, (Paint **)&scene->toolsettings->wpaint);
     Paint *paint = BKE_paint_get_active_from_paintmode(scene, paint_mode);
-    paint_cursor_start(paint, weight_paint_poll);
+    ED_paint_cursor_start(paint, weight_paint_poll);
     BKE_paint_init(bmain, scene, paint_mode, PAINT_CURSOR_WEIGHT_PAINT);
 
     /* weight paint specific */
@@ -1606,10 +1592,10 @@ static void smooth_brush_toggle_off(const bContext *C, Paint *paint, StrokeCache
 
 /* Initialize the stroke cache invariants from operator properties */
 static void vwpaint_update_cache_invariants(
-    bContext *C, VPaint *vp, SculptSession *ss, wmOperator *op, const float mouse[2])
+    bContext *C, VPaint *vp, SculptSession *ss, wmOperator *op, const float mval[2])
 {
   StrokeCache *cache;
-  Scene *scene = CTX_data_scene(C);
+  const Scene *scene = CTX_data_scene(C);
   UnifiedPaintSettings *ups = &CTX_data_tool_settings(C)->unified_paint_settings;
   ViewContext *vc = paint_stroke_view_context((PaintStroke *)op->customdata);
   Object *ob = CTX_data_active_object(C);
@@ -1627,8 +1613,8 @@ static void vwpaint_update_cache_invariants(
   }
 
   /* Initial mouse location */
-  if (mouse) {
-    copy_v2_v2(cache->initial_mouse, mouse);
+  if (mval) {
+    copy_v2_v2(cache->initial_mouse, mval);
   }
   else {
     zero_v2(cache->initial_mouse);
@@ -1651,7 +1637,7 @@ static void vwpaint_update_cache_invariants(
   }
 
   copy_v2_v2(cache->mouse, cache->initial_mouse);
-  Brush *brush = vp->paint.brush;
+  const Brush *brush = vp->paint.brush;
   /* Truly temporary data that isn't stored in properties */
   cache->vc = vc;
   cache->brush = brush;
@@ -2836,16 +2822,6 @@ struct VPaintData : public VPaintDataBase {
   struct VertProjHandle *vp_handle;
   CoNo *vertexcosnos;
 
-  /**
-   * Modify #Mesh.mloopcol directly, since the derived mesh is drawing from this
-   * array, otherwise we need to refresh the modifier stack.
-   */
-  bool use_fast_update;
-
-  /* loops tagged as having been painted, to apply shared vertex color
-   * blending only to modified loops */
-  bool *mlooptag;
-
   bool is_texbrush;
 
   /* Special storage for smear brush, avoid feedback loop - update each step. */
@@ -2890,20 +2866,6 @@ static void *vpaint_init_vpaint(bContext *C,
       scene, vp, (RNA_enum_get(op->ptr, "mode") == BRUSH_STROKE_INVERT));
 
   vpd->is_texbrush = !(brush->vertexpaint_tool == VPAINT_TOOL_BLUR) && brush->mtex.tex;
-
-  /* are we painting onto a modified mesh?,
-   * if not we can skip face map trickiness */
-  if (vertex_paint_use_fast_update_check(ob)) {
-    vpd->use_fast_update = true;
-  }
-  else {
-    vpd->use_fast_update = false;
-  }
-
-  /* to keep tracked of modified loops for shared vertex color blending */
-  if (brush->vertexpaint_tool == VPAINT_TOOL_BLUR) {
-    vpd->mlooptag = (bool *)MEM_mallocN(sizeof(bool) * elem_num, "VPaintData mlooptag");
-  }
 
   if (brush->vertexpaint_tool == VPAINT_TOOL_SMEAR) {
     CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
@@ -3899,15 +3861,7 @@ static void vpaint_stroke_update_step_intern(bContext *C, PaintStroke *stroke, P
 
   ED_region_tag_redraw(vc->region);
 
-  if (vpd->use_fast_update == false) {
-    /* recalculate modifier stack to get new colors, slow,
-     * avoid this if we can! */
-    DEG_id_tag_update((ID *)ob->data, 0);
-  }
-  else {
-    /* Flush changes through DEG. */
-    DEG_id_tag_update((ID *)ob->data, ID_RECALC_COPY_ON_WRITE);
-  }
+  DEG_id_tag_update((ID *)ob->data, ID_RECALC_GEOMETRY);
 }
 
 static void vpaint_stroke_update_step(bContext *C,
@@ -3948,9 +3902,6 @@ static void vpaint_free_vpaintdata(Object *UNUSED(ob), void *_vpd)
     ED_vpaint_proj_handle_free(vpd->vp_handle);
   }
 
-  if (vpd->mlooptag) {
-    MEM_freeN(vpd->mlooptag);
-  }
   if (vpd->smear.color_prev) {
     MEM_freeN(vpd->smear.color_prev);
   }

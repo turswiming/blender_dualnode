@@ -4,6 +4,7 @@
 
 #include "curves_sculpt_intern.hh"
 
+#include "BKE_attribute_math.hh"
 #include "BKE_bvhutils.h"
 #include "BKE_context.h"
 #include "BKE_curves.hh"
@@ -11,6 +12,9 @@
 #include "ED_view3d.h"
 
 #include "UI_interface.h"
+
+#include "DNA_mesh_types.h"
+#include "DNA_meshdata_types.h"
 
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_length_parameterize.hh"
@@ -250,6 +254,55 @@ std::optional<CurvesBrush3D> sample_curves_3d_brush(const Depsgraph &depsgraph,
   return brush_3d;
 }
 
+std::optional<CurvesBrush3D> sample_curves_surface_3d_brush(
+    const Depsgraph &depsgraph,
+    const ARegion &region,
+    const View3D &v3d,
+    const CurvesSculptTransforms &transforms,
+    const BVHTreeFromMesh &surface_bvh,
+    const float2 &brush_pos_re,
+    const float brush_radius_re)
+{
+  float3 brush_ray_start_wo, brush_ray_end_wo;
+  ED_view3d_win_to_segment_clipped(
+      &depsgraph, &region, &v3d, brush_pos_re, brush_ray_start_wo, brush_ray_end_wo, true);
+  const float3 brush_ray_start_su = transforms.world_to_surface * brush_ray_start_wo;
+  const float3 brush_ray_end_su = transforms.world_to_surface * brush_ray_end_wo;
+
+  const float3 brush_ray_direction_su = math::normalize(brush_ray_end_su - brush_ray_start_su);
+
+  BVHTreeRayHit ray_hit;
+  ray_hit.dist = FLT_MAX;
+  ray_hit.index = -1;
+  BLI_bvhtree_ray_cast(surface_bvh.tree,
+                       brush_ray_start_su,
+                       brush_ray_direction_su,
+                       0.0f,
+                       &ray_hit,
+                       surface_bvh.raycast_callback,
+                       const_cast<void *>(static_cast<const void *>(&surface_bvh)));
+  if (ray_hit.index == -1) {
+    return std::nullopt;
+  }
+
+  float3 brush_radius_ray_start_wo, brush_radius_ray_end_wo;
+  ED_view3d_win_to_segment_clipped(&depsgraph,
+                                   &region,
+                                   &v3d,
+                                   brush_pos_re + float2(brush_radius_re, 0),
+                                   brush_radius_ray_start_wo,
+                                   brush_radius_ray_end_wo,
+                                   true);
+  const float3 brush_radius_ray_start_cu = transforms.world_to_curves * brush_radius_ray_start_wo;
+  const float3 brush_radius_ray_end_cu = transforms.world_to_curves * brush_radius_ray_end_wo;
+
+  const float3 brush_pos_su = ray_hit.co;
+  const float3 brush_pos_cu = transforms.surface_to_curves * brush_pos_su;
+  const float brush_radius_cu = dist_to_line_v3(
+      brush_pos_cu, brush_radius_ray_start_cu, brush_radius_ray_end_cu);
+  return CurvesBrush3D{brush_pos_cu, brush_radius_cu};
+}
+
 Vector<float4x4> get_symmetry_brush_transforms(const eCurvesSymmetryType symmetry)
 {
   Vector<float4x4> matrices;
@@ -276,6 +329,16 @@ Vector<float4x4> get_symmetry_brush_transforms(const eCurvesSymmetryType symmetr
   }
 
   return matrices;
+}
+
+float transform_brush_radius(const float4x4 &transform,
+                             const float3 &brush_position,
+                             const float old_radius)
+{
+  const float3 offset_position = brush_position + float3(old_radius, 0.0f, 0.0f);
+  const float3 new_position = transform * brush_position;
+  const float3 new_offset_position = transform * offset_position;
+  return math::distance(new_position, new_offset_position);
 }
 
 void move_last_point_and_resample(MutableSpan<float3> positions, const float3 &new_last_position)
@@ -316,6 +379,20 @@ CurvesSculptCommonContext::CurvesSculptCommonContext(const bContext &C)
   this->region = CTX_wm_region(&C);
   this->v3d = CTX_wm_view3d(&C);
   this->rv3d = CTX_wm_region_view3d(&C);
+}
+
+CurvesSculptTransforms::CurvesSculptTransforms(const Object &curves_ob, const Object *surface_ob)
+{
+  this->curves_to_world = curves_ob.obmat;
+  this->world_to_curves = this->curves_to_world.inverted();
+
+  if (surface_ob != nullptr) {
+    this->surface_to_world = surface_ob->obmat;
+    this->world_to_surface = this->surface_to_world.inverted();
+    this->surface_to_curves = this->world_to_curves * this->surface_to_world;
+    this->curves_to_surface = this->world_to_surface * this->curves_to_world;
+    this->surface_to_curves_normal = this->surface_to_curves.inverted().transposed();
+  }
 }
 
 }  // namespace blender::ed::sculpt_paint

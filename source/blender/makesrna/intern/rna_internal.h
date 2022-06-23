@@ -404,6 +404,7 @@ bool rna_GPencil_datablocks_obdata_poll(struct PointerRNA *ptr, const struct Poi
 
 char *rna_TextureSlot_path(const struct PointerRNA *ptr);
 char *rna_Node_ImageUser_path(const struct PointerRNA *ptr);
+char *rna_CameraBackgroundImage_image_or_movieclip_user_path(const struct PointerRNA *ptr);
 
 /* Set U.is_dirty and redraw. */
 
@@ -634,6 +635,7 @@ PointerRNA rna_pointer_inherit_refine(struct PointerRNA *ptr, struct StructRNA *
 /* Functions */
 
 int rna_parameter_size(struct PropertyRNA *parm);
+int rna_parameter_size_pad(const int size);
 
 /* XXX, these should not need to be defined here~! */
 struct MTex *rna_mtex_texture_slots_add(struct ID *self,
