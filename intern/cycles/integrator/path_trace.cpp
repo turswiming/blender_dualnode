@@ -162,7 +162,6 @@ void PathTrace::render_pipeline(RenderWork render_work)
 {
   /* NOTE: Only check for "instant" cancel here. The user-requested cancel via progress is
    * checked in Session and the work in the event of cancel is to be finished here. */
-
   render_scheduler_.set_need_schedule_cryptomatte(device_scene_->data.film.cryptomatte_passes !=
                                                   0);
 
@@ -174,10 +173,29 @@ void PathTrace::render_pipeline(RenderWork render_work)
 
   rebalance(render_work);
 
+#ifdef __PATH_GUIDING__
+  /* Prepare all per-thread guiding structures before we start with the
+   * next rendering iteration/progression. */
+  const bool use_guiding = device_scene_->data.integrator.guiding;
+  if (use_guiding) {
+    guiding_prepare_structures();
+  }
+#endif
+
   path_trace(render_work);
   if (render_cancel_.is_requested) {
     return;
   }
+
+#ifdef __PATH_GUIDING__
+  /* Update the guiding field using the training data/samples collected
+   * during the rendering iteration/progression.
+   * Note: we also should check if the guiding structure should be reseted due to scene changes
+   */
+  if (use_guiding) {
+    guiding_update_structures();
+  }
+#endif
 
   adaptive_sample(render_work);
   if (render_cancel_.is_requested) {
@@ -341,7 +359,6 @@ void PathTrace::init_render_buffers(const RenderWork &render_work)
     tile_buffer_read();
   }
 }
-
 void PathTrace::path_trace(RenderWork &render_work)
 {
   if (!render_work.path_trace.num_samples) {
@@ -1217,5 +1234,100 @@ string PathTrace::full_report() const
 
   return result;
 }
+
+#ifdef __PATH_GUIDING__
+void PathTrace::set_guiding_params(ccl::Device *device, const GuidingParams &guiding)
+{
+  guiding_sample_data_storage_ = new openpgl::cpp::SampleStorage();
+  guiding_sample_data_storage_->Clear();
+
+  PGLFieldArguments guidingFieldArgs;
+  switch (guiding.type) {
+    default:
+    // Using parallax-aware von Mises-Fisher mixture models.
+    case GUIDING_TYPE_PAVMM: {
+      pglFieldArgumentsSetDefaults(
+          guidingFieldArgs,
+          PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+          PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_PARALLAX_AWARE_VMM);
+      break;
+    }
+    // Using directional quad-trees.
+    case GUIDING_TYPE_DQT: {
+      pglFieldArgumentsSetDefaults(
+          guidingFieldArgs,
+          PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+          PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_QUADTREE);
+      break;
+    }
+    // Using von Mises-Fisher mixture models.
+    case GUIDING_TYPE_VMM: {
+      pglFieldArgumentsSetDefaults(
+          guidingFieldArgs,
+          PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+          PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_VMM);
+      break;
+    }
+  }
+  guiding_field_ = static_cast<openpgl::cpp::Field *>(
+      device->create_guiding_field(&guidingFieldArgs));
+}
+
+void PathTrace::reset_guiding_field()
+{
+  if (guiding_field_) {
+    guiding_field_->Reset();
+  }
+}
+
+void PathTrace::guiding_prepare_structures()
+{
+  for (auto &&path_trace_work : path_trace_works_) {
+    path_trace_work->guiding_init_kernel_globals(guiding_field_, guiding_sample_data_storage_);
+  }
+}
+
+void PathTrace::guiding_update_structures()
+{
+  // TODO(sherholz): implement
+#  ifdef WITH_PATH_GUIDING_DEBUG_PRINT
+  std::cout << "update guiding structures" << std::endl;
+  std::cout << "SampleDataStrorage: #surface samples = "
+            << guiding_sample_data_storage_->GetSizeSurface()
+            << "\t#volumesamples = " << guiding_sample_data_storage_->GetSizeVolume() << std::endl;
+#  endif
+  // int training_iteration = guiding_field_->GetIteration();
+  if (true) {
+    const size_t num_valid_samples = guiding_sample_data_storage_->GetSizeSurface() +
+                                     guiding_sample_data_storage_->GetSizeVolume();
+    if (num_valid_samples >= 128) {
+
+      /*
+            if(guiding_update_count == 128)
+            {
+              std::string dump_sds_file_name =
+         "/data/sherholz/Data/openpgl/guiding_sample_storage_" +
+         std::to_string(guiding_update_count) +  ".sds";
+              guiding_sample_data_storage_->Store(dump_sds_file_name);
+
+              if(guiding_update_count>0)
+              {
+                std::string fieldFileName = "/data/sherholz/Data/openpgl/guiding_field_" +
+         std::to_string(guiding_update_count) +  ".field"; guiding_field_->Store(fieldFileName);
+              }
+            }
+      */
+      const size_t num_samples = 1;
+      guiding_field_->Update(*guiding_sample_data_storage_, num_samples);
+      guiding_update_count++;
+      std::cout << "Field: valid = " << guiding_field_->Validate() << std::endl;
+      // if(guiding_update_count<=1)
+
+      guiding_sample_data_storage_->Clear();
+    }
+  }
+}
+
+#endif
 
 CCL_NAMESPACE_END

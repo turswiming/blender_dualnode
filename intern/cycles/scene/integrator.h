@@ -9,6 +9,9 @@
 #include "device/denoise.h" /* For the parameters and type enum. */
 #include "graph/node.h"
 #include "integrator/adaptive_sampling.h"
+#ifdef WITH_PATH_GUIDING
+#  include "integrator/guiding.h"
+#endif
 
 CCL_NAMESPACE_BEGIN
 
@@ -42,6 +45,17 @@ class Integrator : public Node {
 
   NODE_SOCKET_API(int, volume_max_steps)
   NODE_SOCKET_API(float, volume_step_rate)
+
+#ifdef WITH_PATH_GUIDING
+  NODE_SOCKET_API(bool, guiding);
+  NODE_SOCKET_API(bool, surface_guiding);
+  NODE_SOCKET_API(float, surface_guiding_probability);
+  NODE_SOCKET_API(bool, volume_guiding);
+  NODE_SOCKET_API(float, volume_guiding_probability);
+  NODE_SOCKET_API(bool, guide_direct_light);
+  NODE_SOCKET_API(bool, use_mis_weights);
+  NODE_SOCKET_API(GuidingDistributionType, guiding_distribution_type);
+#endif
 
   NODE_SOCKET_API(bool, caustics_reflective)
   NODE_SOCKET_API(bool, caustics_refractive)
@@ -105,6 +119,9 @@ class Integrator : public Node {
 
   AdaptiveSampling get_adaptive_sampling() const;
   DenoiseParams get_denoise_params() const;
+#ifdef WITH_PATH_GUIDING
+  GuidingParams get_guiding_params() const;
+#endif
 };
 
 CCL_NAMESPACE_END

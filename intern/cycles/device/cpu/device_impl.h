@@ -43,6 +43,9 @@ class CPUDevice : public Device {
   RTCScene embree_scene = NULL;
   RTCDevice embree_device;
 #endif
+#ifdef __PATH_GUIDING__
+  openpgl::cpp::Device *openpgl_device = NULL;
+#endif
 
   CPUDevice(const DeviceInfo &info_, Stats &stats_, Profiler &profiler_);
   ~CPUDevice();
@@ -72,6 +75,10 @@ class CPUDevice : public Device {
   void tex_free(device_texture &mem);
 
   void build_bvh(BVH *bvh, Progress &progress, bool refit) override;
+
+#ifdef __PATH_GUIDING__
+  void *create_guiding_field(void *guiding_field_args) const override;
+#endif
 
   virtual void get_cpu_kernel_thread_globals(
       vector<CPUKernelThreadGlobals> &kernel_thread_globals) override;

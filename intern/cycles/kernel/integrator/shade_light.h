@@ -67,15 +67,20 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
     return;
   }
 
+  float mis_weight = 1.0f;
   /* MIS weighting. */
   if (!(path_flag & PATH_RAY_MIS_SKIP)) {
     /* multiple importance sampling, get regular light pdf,
      * and compute weight with respect to BSDF pdf */
     const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-    const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
-    light_eval *= mis_weight;
+    mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
   }
-
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (kernel_data.integrator.guiding) {
+    guiding_add_direct_contribution(state, light_eval, mis_weight);
+  }
+#endif
+  light_eval *= mis_weight;
   /* Write to render buffer. */
   const float3 throughput = INTEGRATOR_STATE(state, path, throughput);
   kernel_accum_emission(kg, state, throughput * light_eval, render_buffer, ls.group);

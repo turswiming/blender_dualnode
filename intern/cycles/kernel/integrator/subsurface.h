@@ -62,6 +62,9 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   }
 
   INTEGRATOR_STATE_WRITE(state, path, throughput) *= weight;
+#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= weight;
+#  endif
   INTEGRATOR_STATE_WRITE(state, path, flag) = path_flag;
 
   /* Advance random number offset for bounce. */
@@ -78,6 +81,7 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, subsurface, albedo) = bssrdf->albedo;
   INTEGRATOR_STATE_WRITE(state, subsurface, radius) = bssrdf->radius;
   INTEGRATOR_STATE_WRITE(state, subsurface, anisotropy) = bssrdf->anisotropy;
+  INTEGRATOR_STATE_WRITE(state, subsurface, bssrdf_weight) = weight;
 
   return LABEL_SUBSURFACE_SCATTER;
 }

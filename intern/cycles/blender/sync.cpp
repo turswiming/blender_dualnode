@@ -412,6 +412,19 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   integrator->set_direct_light_sampling_type(direct_light_sampling_type);
 #endif
 
+#ifdef __PATH_GUIDING__
+  integrator->set_guiding(get_boolean(cscene, "guiding"));
+  integrator->set_surface_guiding(get_boolean(cscene, "surface_guiding"));
+  integrator->set_surface_guiding_probability(get_float(cscene, "surface_guiding_probability"));
+  integrator->set_volume_guiding(get_boolean(cscene, "volume_guiding"));
+  integrator->set_volume_guiding_probability(get_float(cscene, "volume_guiding_probability"));
+  integrator->set_guide_direct_light(get_boolean(cscene, "guide_direct_light"));
+  integrator->set_use_mis_weights(get_boolean(cscene, "use_mis_weights"));
+  GuidingDistributionType guiding_distribution_type = (GuidingDistributionType)get_enum(
+      cscene, "guiding_distribution_type", GUIDING_NUM_TYPES, GUIDING_TYPE_PAVMM);
+  integrator->set_guiding_distribution_type(guiding_distribution_type);
+#endif
+
   const DenoiseParams denoise_params = get_denoise_params(b_scene, b_view_layer, background);
   integrator->set_use_denoise(denoise_params.use);
 
@@ -723,6 +736,17 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
     b_engine.add_pass("Denoising Depth", 1, "Z", b_view_layer.name().c_str());
     pass_add(scene, PASS_DENOISING_DEPTH, "Denoising Depth", PassMode::NOISY);
   }
+
+#if defined(__PATH_GUIDING__) && defined(PATH_GUIDING_DEBUG_PASS)
+  b_engine.add_pass("OpenPGL Color", 3, "RGB", b_view_layer.name().c_str());
+  pass_add(scene, PASS_OPGL_COLOR, "OpenPGL Color", PassMode::NOISY);
+
+  b_engine.add_pass("OpenPGL Guiding Prob", 1, "X", b_view_layer.name().c_str());
+  pass_add(scene, PASS_OPGL_GUIDING_PROB, "OpenPGL Guiding Prob", PassMode::NOISY);
+
+  b_engine.add_pass("OpenPGL Avg Roughness", 1, "X", b_view_layer.name().c_str());
+  pass_add(scene, PASS_OPGL_AVG_ROUGHNESS, "OpenPGL Avg Roughness", PassMode::NOISY);
+#endif
 
   /* Custom AOV passes. */
   BL::ViewLayer::aovs_iterator b_aov_iter;

@@ -90,6 +90,74 @@ ccl_device_inline void shader_copy_volume_phases(ccl_private ShaderVolumePhases 
 }
 #endif /* __VOLUME__ */
 
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+ccl_device_inline void shader_prepare_surface_guiding(KernelGlobals kg,
+                                                      IntegratorState state,
+                                                      ccl_private ShaderData *sd,
+                                                      ccl_private const RNGState *rng_state)
+{
+  const bool guiding = kernel_data.integrator.guiding;
+  const bool surface_guiding = kernel_data.integrator.surface_guiding;
+  const float surface_guiding_probability = kernel_data.integrator.surface_guiding_probability;
+
+  float diffuse_sampling_fraction = 0.f;
+  float bssrdf_sampling_fraction = 0.f;
+  float bsdf_bssrdf_sampling_sum = 0.f;
+  float guiding_sampling_prob = 0.f;
+
+  float grand = 0.f;
+
+  bool useGuiding = false;
+
+  if (guiding && surface_guiding) {
+
+    grand = path_state_rng_1D(kg, rng_state, PRNG_GUIDING);
+
+    for (int i = 0; i < sd->num_closure; i++) {
+      ShaderClosure *sc = &sd->closure[i];
+      if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
+
+        const float sweight = sc->sample_weight;
+        assert(sweight >= 0.f);
+        bsdf_bssrdf_sampling_sum += sweight;
+        if (CLOSURE_IS_BSDF_DIFFUSE(sc->type)) {
+          diffuse_sampling_fraction += sweight;
+        }
+        if (CLOSURE_IS_BSSRDF(sc->type)) {
+          bssrdf_sampling_fraction += sweight;
+        }
+      }
+    }
+
+    if (bsdf_bssrdf_sampling_sum > 0.f) {
+      diffuse_sampling_fraction /= bsdf_bssrdf_sampling_sum;
+      bssrdf_sampling_fraction /= bsdf_bssrdf_sampling_sum;
+    }
+
+    if (diffuse_sampling_fraction > 0.f) {
+      const float3 P = sd->P;
+      const float3 N = sd->N;
+      pgl_point3f pgl_p = openpgl::cpp::Point3(P[0], P[1], P[2]);
+      pgl_point3f pgl_N = openpgl::cpp::Point3(N[0], N[1], N[2]);
+
+      useGuiding = state->guiding.surface_sampling_distribution->Init(
+          kg->opgl_guiding_field, pgl_p, grand, true);
+
+      if (useGuiding) {
+        state->guiding.surface_sampling_distribution->ApplyCosineProduct(pgl_N);
+        guiding_sampling_prob = surface_guiding_probability * diffuse_sampling_fraction;
+      }
+    }
+  }
+
+  assert(guiding_sampling_prob >= 0.f && guiding_sampling_prob <= 1.0f);
+  state->guiding.surface_guiding_sampling_prob = guiding_sampling_prob;
+  state->guiding.bssrdf_sampling_prob = bssrdf_sampling_fraction;
+  state->guiding.use_surface_guiding = useGuiding;
+  state->guiding.sample_surface_guiding_rand = grand;
+}
+#endif
+
 ccl_device_inline void shader_prepare_surface_closures(KernelGlobals kg,
                                                        ConstIntegratorState state,
                                                        ccl_private ShaderData *sd,
@@ -152,7 +220,6 @@ ccl_device_inline void shader_prepare_surface_closures(KernelGlobals kg,
       }
     }
   }
-
   /* Filter glossy.
    *
    * Blurring of bsdf after bounces, for rays that have a small likelihood
@@ -184,6 +251,11 @@ ccl_device_inline bool shader_bsdf_is_transmission(ccl_private const ShaderData 
                                                    const float3 omega_in)
 {
   return dot(sd->N, omega_in) < 0.0f;
+}
+
+ccl_device_inline bool shader_bsdf_is_transmission3(const ShaderClosure *sc, const float3 omega_in)
+{
+  return dot(sc->N, omega_in) < 0.0f;
 }
 
 ccl_device_forceinline bool _shader_bsdf_exclude(ClosureType type, uint light_shader_flags)
@@ -246,6 +318,81 @@ ccl_device_inline float _shader_bsdf_multi_eval(KernelGlobals kg,
   return (sum_sample_weight > 0.0f) ? sum_pdf / sum_sample_weight : 0.0f;
 }
 
+ccl_device_inline float shader_bsdf_eval_pdfs(const KernelGlobals kg,
+                                              ShaderData *sd,
+                                              const float3 omega_in,
+                                              const bool is_transmission,
+                                              BsdfEval *result_eval,
+                                              float *pdfs,
+                                              const uint light_shader_flags)
+{
+  float sum_pdf = 0.0f;
+  float sum_sample_weight = 0.0f;
+  bsdf_eval_init(result_eval, CLOSURE_NONE_ID, zero_float3());
+  /* this is the veach one-sample model with balance heuristic, some pdf
+   * factors drop out when using balance heuristic weighting */
+  for (int i = 0; i < sd->num_closure; i++) {
+    const ShaderClosure *sc = &sd->closure[i];
+
+    if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
+      if (CLOSURE_IS_BSDF(sc->type) && !_shader_bsdf_exclude(sc->type, light_shader_flags)) {
+        float bsdf_pdf = 0.0f;
+        float3 eval = bsdf_eval(kg, sd, sc, omega_in, is_transmission, &bsdf_pdf);
+        assert(bsdf_pdf >= 0.f);
+        if (bsdf_pdf != 0.0f) {
+          bsdf_eval_accum(result_eval, sc->type, eval * sc->weight);
+          sum_pdf += bsdf_pdf * sc->sample_weight;
+          assert(bsdf_pdf * sc->sample_weight >= 0.f);
+          pdfs[i] = bsdf_pdf * sc->sample_weight;
+        }
+        else {
+          pdfs[i] = 0.f;
+        }
+      }
+      else {
+        pdfs[i] = 0.f;
+      }
+
+      sum_sample_weight += sc->sample_weight;
+    }
+    else {
+      pdfs[i] = 0.f;
+    }
+  }
+  if (sum_pdf > 0.f) {
+    for (int i = 0; i < sd->num_closure; i++) {
+      pdfs[i] /= sum_pdf;
+    }
+  }
+
+  return (sum_sample_weight > 0.0f) ? sum_pdf / sum_sample_weight : 0.0f;
+}
+
+/*
+ccl_device_inline float _shader_bsdf_single_eval(const KernelGlobals *kg,
+                                                ShaderData *sd,
+                                                const ShaderClosure *sc,
+                                                const float3 omega_in,
+                                                const bool is_transmission,
+                                                BsdfEval *result_eval,
+                                                const uint light_shader_flags)
+{
+  float bsdf_pdf = 0.0f;
+  if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
+    if (CLOSURE_IS_BSDF(sc->type) && !_shader_bsdf_exclude(sc->type, light_shader_flags)) {
+
+      float3 eval = bsdf_eval(kg, sd, sc, omega_in, is_transmission, &bsdf_pdf);
+
+      if (bsdf_pdf != 0.0f) {
+        const bool is_diffuse = (CLOSURE_IS_BSDF_DIFFUSE(sc->type) ||
+                                  CLOSURE_IS_BSDF_BSSRDF(sc->type));
+        bsdf_eval_accum(result_eval, is_diffuse, eval * sc->weight, 1.0f);
+      }
+    }
+  }
+  return (bsdf_pdf > 0.0f) ? bsdf_pdf : 0.0f;
+}
+*/
 #ifndef __KERNEL_CUDA__
 ccl_device
 #else
@@ -330,6 +477,179 @@ shader_bssrdf_sample_weight(ccl_private const ShaderData *ccl_restrict sd,
   return weight;
 }
 
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+/* Sample direction for picked BSDF, and return evaluation and pdf for all
+ * BSDFs combined using MIS. */
+
+ccl_device int shader_guided_bsdf_sample_closure(KernelGlobals kg,
+                                                 IntegratorState state,
+                                                 ShaderData *sd,
+                                                 const ShaderClosure *sc,
+                                                 float randu,
+                                                 float randv,
+                                                 BsdfEval *bsdf_eval,
+                                                 float3 *omega_in,
+                                                 differential3 *domega_in,
+                                                 float *guided_bsdf_pdf,
+                                                 float *bsdf_pdf,
+                                                 float2 *sampled_rougness,
+                                                 float *eta)
+{
+  /* BSSRDF should already have been handled elsewhere. */
+  kernel_assert(CLOSURE_IS_BSDF(sc->type));
+  bool useGuiding = kernel_data.integrator.guiding && state->guiding.use_surface_guiding;
+  const float guiding_sampling_prob = state->guiding.surface_guiding_sampling_prob;
+  float randw = state->guiding.sample_surface_guiding_rand;
+
+  differential3 old_domega_in = *domega_in;
+
+  bool sampleGuding = false;
+  if (useGuiding && randw < guiding_sampling_prob) {
+    sampleGuding = true;
+    randw /= guiding_sampling_prob;
+  }
+  else {
+    randw -= guiding_sampling_prob;
+    randw /= (1.0f - guiding_sampling_prob);
+  }
+
+  // used for debugging can be removed later
+  float3 bsdf_weight = bsdf_eval_sum(bsdf_eval);
+
+  int label = LABEL_NONE;
+  float3 eval = zero_float3();
+  bsdf_eval_init(bsdf_eval, CLOSURE_NONE_ID, eval);
+
+  *bsdf_pdf = 0.f;
+  float guide_pdf = 0.f;
+
+  float bsdf_pdfs[MAX_CLOSURE];
+
+  float bssrdf_sampling_prob = state->guiding.bssrdf_sampling_prob;
+
+  if (sampleGuding) {
+    // sample guiding distr.
+    pgl_vec3f pglWo;
+    pgl_point2f pglSample = openpgl::cpp::Point2(randu, randv);
+    guide_pdf = state->guiding.surface_sampling_distribution->SamplePDF(pglSample, pglWo);
+    *omega_in = make_float3(pglWo.x, pglWo.y, pglWo.z);
+    *guided_bsdf_pdf = 0.0f;
+    if (guide_pdf != 0.0f) {
+      // TODO: update is_transmission when closure is picked
+      const bool is_transmission = shader_bsdf_is_transmission(sd, *omega_in);
+      *bsdf_pdf = shader_bsdf_eval_pdfs(
+          kg, sd, *omega_in, is_transmission, bsdf_eval, bsdf_pdfs, 0);
+      *guided_bsdf_pdf = (guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob)) +
+                         ((1.f - guiding_sampling_prob) * (*bsdf_pdf));
+      float sumPDFs = 0.0f;
+
+      if (*bsdf_pdf > 0.f) {
+        int idx = -1;
+        for (int i = 0; i < sd->num_closure; i++) {
+          sumPDFs += bsdf_pdfs[i];
+          if (randw <= sumPDFs) {
+            idx = i;
+            break;
+          }
+        }
+
+        assert(idx >= 0);
+        // set the default idx to the last in the list
+        // in case of numerical problems and randw is just >=1.0f and
+        // the sum of all bsdf_pdfs is just < 1.0f
+        idx = (randw > sumPDFs) ? sd->num_closure - 1 : idx;
+
+        label = bsdf_label(kg, &sd->closure[idx], is_transmission);
+      }
+    }
+
+    bsdf_weight = bsdf_eval_sum(bsdf_eval);
+    assert(bsdf_weight[0] >= 0.f && bsdf_weight[1] >= 0.f && bsdf_weight[2] >= 0.f);
+
+    *sampled_rougness = make_float2(1.f, 1.f);
+    *eta = 1.f;
+  }
+  else {
+    *guided_bsdf_pdf = 0.0f;
+    label = bsdf_sample(
+        kg, sd, sc, randu, randv, &eval, omega_in, domega_in, bsdf_pdf, sampled_rougness, eta);
+#  ifdef WITH_CYCLES_DEBUG
+    ///////
+    // validation code to test the bsdf_label function
+    ///////
+    bool is_transmission3 = shader_bsdf_is_transmission3(sc, *omega_in);
+    int label2 = bsdf_label(kg, sc, is_transmission3);
+
+    if (*bsdf_pdf > 0.f && label != label2) {
+      std::cout << "LABEL ERROR: " << std::endl;
+      std::cout << "LABEL:  reflect = " << (label & LABEL_REFLECT)
+                << "\t transmit = " << (label & LABEL_TRANSMIT)
+                << "\t diffuse = " << (label & LABEL_DIFFUSE)
+                << "\t glossy = " << (label & LABEL_GLOSSY)
+                << "\t singular = " << (label & LABEL_SINGULAR) << std::endl;
+      std::cout << "LABEL2: reflect = " << (label2 & LABEL_REFLECT)
+                << "\t transmit = " << (label2 & LABEL_TRANSMIT)
+                << "\t diffuse = " << (label2 & LABEL_DIFFUSE)
+                << "\t glossy = " << (label2 & LABEL_GLOSSY)
+                << "\t singular = " << (label2 & LABEL_SINGULAR) << std::endl;
+      // int label2 = bsdf_label(kg, sc, is_transmission3);
+    }
+
+    float2 sampled_rougness2;
+    float eta2;
+    bsdf_roughness_eta(kg, sc, &sampled_rougness2, &eta2);
+    if (*bsdf_pdf > 0.f && (*eta != eta2 || sampled_rougness->x != sampled_rougness2.x ||
+                            sampled_rougness->y != sampled_rougness2.y)) {
+      std::cout << "ROUGHNESS ETA ERROR: " << std::endl;
+      std::cout << "ETA:  eta = " << *eta << "\t eta2 = " << eta2
+                << "\t rough.x = " << sampled_rougness->x << "\t rough.y = " << sampled_rougness->y
+                << "\t rough2.x = " << sampled_rougness2.x
+                << "\t rough2.y = " << sampled_rougness2.y << std::endl;
+      bsdf_roughness_eta(kg, sc, &sampled_rougness2, &eta2);
+    }
+
+    ////////
+#  endif
+
+    if (*bsdf_pdf != 0.0f) {
+      bsdf_eval_init(bsdf_eval, sc->type, eval * sc->weight);
+
+      bsdf_weight = bsdf_eval_sum(bsdf_eval);
+      assert(bsdf_weight[0] >= 0.f && bsdf_weight[1] >= 0.f && bsdf_weight[2] >= 0.f);
+
+      if (sd->num_closure > 1) {
+        const bool is_transmission = shader_bsdf_is_transmission(sd, *omega_in);
+        float sweight = sc->sample_weight;
+        // BsdfEval bsdf_eval_old = *bsdf_eval;
+        *bsdf_pdf = _shader_bsdf_multi_eval(
+            kg, sd, *omega_in, is_transmission, sc, bsdf_eval, (*bsdf_pdf) * sweight, sweight, 0);
+        bsdf_weight = bsdf_eval_sum(bsdf_eval);
+        assert(bsdf_weight[0] >= 0.f && bsdf_weight[1] >= 0.f && bsdf_weight[2] >= 0.f);
+      }
+      *guided_bsdf_pdf = *bsdf_pdf;
+
+      if (useGuiding) {
+        const float3 omega = *omega_in;
+        pgl_vec3f pglWo = openpgl::cpp::Vector3(omega[0], omega[1], omega[2]);
+        guide_pdf = state->guiding.surface_sampling_distribution->PDF(pglWo);
+        *guided_bsdf_pdf *= 1.0f - guiding_sampling_prob;
+        *guided_bsdf_pdf += guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob);
+      }
+    }
+    else {
+      bsdf_eval_init(bsdf_eval, sc->type, zero_float3());
+    }
+
+    bsdf_weight = bsdf_eval_sum(bsdf_eval);
+    assert(bsdf_weight[0] >= 0.f && bsdf_weight[1] >= 0.f && bsdf_weight[2] >= 0.f);
+  }
+  *domega_in = old_domega_in;
+
+  return label;
+}
+
+#endif
+
 /* Sample direction for picked BSDF, and return evaluation and pdf for all
  * BSDFs combined using MIS. */
 ccl_device int shader_bsdf_sample_closure(KernelGlobals kg,
@@ -340,7 +660,9 @@ ccl_device int shader_bsdf_sample_closure(KernelGlobals kg,
                                           ccl_private BsdfEval *bsdf_eval,
                                           ccl_private float3 *omega_in,
                                           ccl_private differential3 *domega_in,
-                                          ccl_private float *pdf)
+                                          ccl_private float *pdf,
+                                          ccl_private float2 *sampled_rougness,
+                                          ccl_private float *eta)
 {
   /* BSSRDF should already have been handled elsewhere. */
   kernel_assert(CLOSURE_IS_BSDF(sc->type));
@@ -349,7 +671,8 @@ ccl_device int shader_bsdf_sample_closure(KernelGlobals kg,
   float3 eval = zero_float3();
 
   *pdf = 0.0f;
-  label = bsdf_sample(kg, sd, sc, randu, randv, &eval, omega_in, domega_in, pdf);
+  label = bsdf_sample(
+      kg, sd, sc, randu, randv, &eval, omega_in, domega_in, pdf, sampled_rougness, eta);
 
   if (*pdf != 0.0f) {
     bsdf_eval_init(bsdf_eval, sc->type, eval * sc->weight);
@@ -360,6 +683,9 @@ ccl_device int shader_bsdf_sample_closure(KernelGlobals kg,
       *pdf = _shader_bsdf_multi_eval(
           kg, sd, *omega_in, is_transmission, sc, bsdf_eval, *pdf * sweight, sweight, 0);
     }
+  }
+  else {
+    bsdf_eval_init(bsdf_eval, sc->type, zero_float3());
   }
 
   return label;
@@ -691,6 +1017,22 @@ ccl_device_inline float _shader_volume_phase_multi_eval(
 
 ccl_device float shader_volume_phase_eval(KernelGlobals kg,
                                           ccl_private const ShaderData *sd,
+                                          ccl_private const ShaderVolumeClosure *svc,
+                                          const float3 omega_in,
+                                          ccl_private BsdfEval *phase_eval)
+{
+  float phase_pdf = 0.0f;
+  float3 eval = volume_phase_eval(sd, svc, omega_in, &phase_pdf);
+
+  if (phase_pdf != 0.0f) {
+    bsdf_eval_accum(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
+  }
+
+  return phase_pdf;
+}
+
+ccl_device float shader_volume_phase_eval(KernelGlobals kg,
+                                          ccl_private const ShaderData *sd,
                                           ccl_private const ShaderVolumePhases *phases,
                                           const float3 omega_in,
                                           ccl_private BsdfEval *phase_eval)
@@ -700,6 +1042,90 @@ ccl_device float shader_volume_phase_eval(KernelGlobals kg,
   return _shader_volume_phase_multi_eval(sd, phases, omega_in, -1, phase_eval, 0.0f, 0.0f);
 }
 
+#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+ccl_device int shader_guided_volume_phase_sample(KernelGlobals kg,
+                                                 IntegratorState state,
+                                                 ccl_private const ShaderData *sd,
+                                                 ccl_private const ShaderVolumeClosure *svc,
+                                                 float randu,
+                                                 float randv,
+                                                 ccl_private BsdfEval *phase_eval,
+                                                 ccl_private float3 *omega_in,
+                                                 ccl_private differential3 *domega_in,
+                                                 ccl_private float *guided_phase_pdf,
+                                                 ccl_private float *phase_pdf,
+                                                 ccl_private float *sampled_roughness)
+{
+
+  bool useGuiding = kernel_data.integrator.guiding && state->guiding.use_volume_guiding;
+  const float guiding_sampling_prob = state->guiding.volume_guiding_sampling_prob;
+  float randw = state->guiding.sample_volume_guiding_rand;
+
+  bool sampleGuding = false;
+  if (useGuiding && randw < guiding_sampling_prob) {
+    sampleGuding = true;
+    randw /= guiding_sampling_prob;
+  }
+  else {
+    randw -= guiding_sampling_prob;
+    randw /= (1.0f - guiding_sampling_prob);
+  }
+
+  int label = LABEL_NONE;
+  float3 eval = zero_float3();
+
+  *phase_pdf = 0.f;
+  float guide_pdf = 0.f;
+  float3 phase_weight;
+  *sampled_roughness = 1.0f - fabsf(svc->g);
+
+  bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, make_float3(0.f, 0.f, 0.f));
+
+  if (sampleGuding) {
+    pgl_vec3f pglWo;
+    pgl_point2f pglSample = openpgl::cpp::Point2(randu, randv);
+    guide_pdf = state->guiding.volume_sampling_distribution->SamplePDF(pglSample, pglWo);
+    *omega_in = make_float3(pglWo.x, pglWo.y, pglWo.z);
+    *guided_phase_pdf = 0.0f;
+
+    if (guide_pdf != 0.0f) {
+      *phase_pdf = shader_volume_phase_eval(kg, sd, svc, *omega_in, phase_eval);
+      *guided_phase_pdf = (guiding_sampling_prob * guide_pdf) +
+                          ((1.f - guiding_sampling_prob) * (*phase_pdf));
+      label = LABEL_VOLUME_SCATTER;
+    }
+    domega_in->dx = make_float3(0.0f, 0.0f, 0.0f);
+    domega_in->dy = make_float3(0.0f, 0.0f, 0.0f);
+  }
+  else {
+    *guided_phase_pdf = 0.0f;
+    label = volume_phase_sample(sd, svc, randu, randv, &eval, omega_in, domega_in, phase_pdf);
+
+    if (*phase_pdf != 0.0f) {
+      bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
+
+      *guided_phase_pdf = *phase_pdf;
+      if (useGuiding) {
+        const float3 omega = *omega_in;
+        pgl_vec3f pglWo = openpgl::cpp::Vector3(omega[0], omega[1], omega[2]);
+        guide_pdf = state->guiding.volume_sampling_distribution->PDF(pglWo);
+        *guided_phase_pdf *= 1.0f - guiding_sampling_prob;
+        *guided_phase_pdf += guiding_sampling_prob * guide_pdf;
+      }
+      // phase_weight = bsdf_eval_sum(phase_eval);
+      // assert(phase_weight[0] >= 0.f && phase_weight[1] >= 0.f && phase_weight[2] >= 0.f);
+    }
+    else {
+      bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, zero_float3());
+    }
+
+    phase_weight = bsdf_eval_sum(phase_eval);
+    assert(phase_weight[0] >= 0.f && phase_weight[1] >= 0.f && phase_weight[2] >= 0.f);
+  }
+  return label;
+}
+#  endif
+
 ccl_device int shader_volume_phase_sample(KernelGlobals kg,
                                           ccl_private const ShaderData *sd,
                                           ccl_private const ShaderVolumePhases *phases,
@@ -708,7 +1134,8 @@ ccl_device int shader_volume_phase_sample(KernelGlobals kg,
                                           ccl_private BsdfEval *phase_eval,
                                           ccl_private float3 *omega_in,
                                           ccl_private differential3 *domega_in,
-                                          ccl_private float *pdf)
+                                          ccl_private float *pdf,
+                                          ccl_private float *sampled_roughness)
 {
   int sampled = 0;
 
@@ -747,6 +1174,7 @@ ccl_device int shader_volume_phase_sample(KernelGlobals kg,
    * depending on color channels, even if this is perhaps not a common case */
   ccl_private const ShaderVolumeClosure *svc = &phases->closure[sampled];
   int label;
+  *sampled_roughness = 1.f - fabsf(svc->g);
   float3 eval = zero_float3();
 
   *pdf = 0.0f;

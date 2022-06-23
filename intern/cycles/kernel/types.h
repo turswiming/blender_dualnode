@@ -96,6 +96,9 @@ CCL_NAMESPACE_BEGIN
 #  ifdef WITH_OSL
 #    define __OSL__
 #  endif
+#  ifdef WITH_PATH_GUIDING
+#    define __PATH_GUIDING__
+#  endif
 #  define __VOLUME_RECORD_ALL__
 #endif /* __KERNEL_CPU__ */
 
@@ -182,6 +185,8 @@ enum PathTraceDimension {
   PRNG_PHASE_CHANNEL = 6,
   PRNG_SCATTER_DISTANCE = 7,
   PRNG_BOUNCE_NUM = 8,
+
+  PRNG_GUIDING = 9,
 
   PRNG_BEVEL_U = 6, /* reuse volume dimension, correlation won't harm */
   PRNG_BEVEL_V = 7,
@@ -404,8 +409,14 @@ typedef enum PassType {
   PASS_SHADOW_CATCHER,
   PASS_SHADOW_CATCHER_SAMPLE_COUNT,
   PASS_SHADOW_CATCHER_MATTE,
-
+#if defined(WITH_PATH_GUIDING) && defined(PATH_GUIDING_DEBUG_PASS)
+  PASS_OPGL_COLOR,
+  PASS_OPGL_GUIDING_PROB,
+  PASS_OPGL_AVG_ROUGHNESS,
+  PASS_CATEGORY_DATA_END = 66,
+#else
   PASS_CATEGORY_DATA_END = 63,
+#endif
 
   PASS_BAKE_PRIMITIVE,
   PASS_BAKE_DIFFERENTIAL,
@@ -472,6 +483,16 @@ typedef enum LightType {
   LIGHT_SPOT,
   LIGHT_TRIANGLE
 } LightType;
+
+/* Guiding Distribution Type */
+
+typedef enum GuidingDistributionType {
+  GUIDING_TYPE_PAVMM = 0,
+  GUIDING_TYPE_DQT = 1,
+  GUIDING_TYPE_VMM = 2,
+
+  GUIDING_NUM_TYPES,
+} GuidingDistributionType;
 
 /* Camera Type */
 
@@ -1139,6 +1160,13 @@ typedef struct KernelFilm {
   int pass_aov_value;
   int pass_lightgroup;
 
+//#ifdef __PATH_GUIDING__
+#if 1
+  int pass_opgl_color;
+  int pass_opgl_guiding_prob;
+  int pass_opgl_avg_roughness;
+#endif
+
   /* XYZ to rendering color space transform. float4 instead of float3 to
    * ensure consistent padding/alignment across devices. */
   float4 xyz_to_r;
@@ -1298,8 +1326,24 @@ typedef struct KernelIntegrator {
   /* MIS debugging. */
   int direct_light_sampling_type;
 
+//#ifdef __PATH_GUIDING__
+#if 1
+  /* Guiding */
+  float surface_guiding_probability;
+  float volume_guiding_probability;
+  GuidingDistributionType guiding_distribution_type;
+  bool guiding;
+  bool surface_guiding;
+  bool volume_guiding;
+  bool guide_direct_light;
+  bool use_mis_weights;
+  /* padding */
+  bool pad1, pad2, pad3;
+  // int pad4;
+#else
   /* padding */
   int pad1;
+#endif
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 

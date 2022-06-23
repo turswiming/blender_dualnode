@@ -178,6 +178,12 @@ enum_view3d_shading_render_pass = (
     ('SAMPLE_COUNT', "Sample Count", "Per-pixel number of samples"),
 )
 
+enum_guiding_distribution = (
+    ('PAVMM', "Paralax-Aware VMM", "Use Parallax-aware von Mises-Fisher models as directional distribution", 0),
+    ('DQT', "Directional Quad Tree", "Use Directional Quad Trees as directional distribution", 1),
+    ('VMM', "VMM", "Use von Mises-Fisher models as directional distribution", 2),
+)
+
 
 def enum_openimagedenoise_denoiser(self, context):
     import _cycles
@@ -504,6 +510,57 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         "to reduce noise at the cost of accuracy",
         min=0.0, max=10.0,
         default=1.0,
+    )
+
+    guiding: BoolProperty(
+        name="Guiding",
+        description="Use path guiding for sampling paths",
+        default=True,
+    )
+
+    guiding_distribution_type: EnumProperty(
+        name="Guiding Distribution Type",
+        description="The type of the used representation for the guiding distribution",
+        items=enum_guiding_distribution,
+        default='PAVMM',
+    )
+
+    surface_guiding: BoolProperty(
+        name="Surface Guiding",
+        description="Use guiding when sampling directions on a surface",
+        default=True,
+    )
+
+    surface_guiding_probability: FloatProperty(
+        name="Surface Guiding Prob.",
+        description="The probability of guiding a direction on a surface",
+        min=0.0, max=1.0,
+        default=0.5,
+    )
+
+    volume_guiding: BoolProperty(
+        name="Volume Guiding",
+        description="Use guiding when sampling directions inside a volume",
+        default=True,
+    )
+
+    volume_guiding_probability: FloatProperty(
+        name="Volume Guiding Prob.",
+        description="The probability of guiding a direction inside a volume",
+        min=0.0, max=1.0,
+        default=0.5,
+    )
+
+    guide_direct_light: BoolProperty(
+        name="Guide Direct Light",
+        description="Consider the contribution of directly visible light sources during guiding",
+        default=True,
+    )
+
+    use_mis_weights: BoolProperty(
+        name="Use MIS Weights",
+        description="Use the MIS weight to weight the contribution of directly visible light sources during guiding",
+        default=True,
     )
 
     max_bounces: IntProperty(

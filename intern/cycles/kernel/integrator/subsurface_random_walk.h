@@ -184,6 +184,10 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   const int object = INTEGRATOR_STATE(state, isect, object);
   const int prim = INTEGRATOR_STATE(state, isect, prim);
 
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  float3 bssrdf_weight = INTEGRATOR_STATE(state, subsurface, bssrdf_weight);
+#endif
+
   /* Sample diffuse surface scatter into the object. */
   float3 D;
   float pdf;
@@ -217,9 +221,20 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   const float anisotropy = INTEGRATOR_STATE(state, subsurface, anisotropy);
 
   float3 sigma_t, alpha;
-  float3 throughput = INTEGRATOR_STATE_WRITE(state, path, throughput);
+  float3 throughput = INTEGRATOR_STATE(state, path, throughput);
   subsurface_random_walk_coefficients(albedo, radius, anisotropy, &sigma_t, &alpha, &throughput);
   float3 sigma_s = sigma_t * alpha;
+
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  // we need to add a new segment or add the direction
+  // or at lease the sampling direction to the new path segment
+  const bool use_guiding = kernel_data.integrator.guiding;
+  bssrdf_weight = safe_divide_color(bssrdf_weight, albedo);
+  float3 initial_throughput = throughput;
+  if (use_guiding) {
+    guiding_add_bssrdf_data(state, bssrdf_weight, pdf, N, D);
+  }
+#endif
 
   /* Theoretically it should be better to use the exact alpha for the channel we're sampling at
    * each bounce, but in practice there doesn't seem to be a noticeable difference in exchange
@@ -360,9 +375,14 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
       if (guided) {
         sample_sigma_t *= guide_backward ? backward_stretching : forward_stretching;
       }
+
+#ifdef __PATH_GUIDING__
+      /* generate new volume segment and add the directional components */
+      // TOD: when we want to start guiding SSS
+#endif
     }
 
-    /* Sample direction along ray. */
+    /* Sample distance along ray. */
     float t = -logf(1.0f - randt) / sample_sigma_t;
 
     /* On the first bounce, we use the ray-cast to check if the opposite side is nearby.
@@ -437,7 +457,14 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
     /* Finally, we're applying MIS again to combine the three color channels.
      * Altogether, the MIS computation combines up to nine different estimators:
      * {classic, guided, backward_guided} x {r, g, b} */
-    throughput *= (hit ? transmittance : sigma_s * transmittance) / dot(channel_pdf, pdf);
+    const float3 transmittance_weight = (hit ? transmittance : sigma_s * transmittance) /
+                                        dot(channel_pdf, pdf);
+    throughput *= transmittance_weight;
+
+#ifdef __PATH_GUIDING__
+    // set the transmittance weight for the current random walk segment
+    // TODO: when we start guiding SSS
+#endif
 
     if (hit) {
       /* If we hit the surface, we are done. */
@@ -454,7 +481,20 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   if (hit) {
     kernel_assert(isfinite3_safe(throughput));
     INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+    INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= safe_divide_color(throughput,
+                                                                            initial_throughput);
+#endif
   }
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (use_guiding) {
+    // calculate the transmittance weight for the comple SSS-random walk
+    initial_throughput = safe_divide_color(throughput, initial_throughput);
+    openpgl::cpp::SetTransmittanceWeight(
+        state->guiding.path_segment,
+        openpgl::cpp::Vector3(initial_throughput.x, initial_throughput.y, initial_throughput.z));
+  }
+#endif
 
   return hit;
 }

@@ -209,6 +209,17 @@ class Device {
     return false;
   }
 
+#if defined(__PATH_GUIDING__)
+  /* Guiding */
+
+  /* Creating and returning a new, empty guiding field. */
+  virtual void *create_guiding_field(void *) const
+  {
+    LOG(ERROR) << "Request guiding field from a device which does not support it.";
+    return nullptr;
+  }
+#endif
+
   /* Buffer denoising. */
 
   /* Returns true if task is fully handled. */

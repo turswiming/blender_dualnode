@@ -353,9 +353,14 @@ ccl_device int bsdf_principled_hair_sample(KernelGlobals kg,
                                            ccl_private float3 *omega_in,
                                            ccl_private float3 *domega_in_dx,
                                            ccl_private float3 *domega_in_dy,
-                                           ccl_private float *pdf)
+                                           ccl_private float *pdf,
+                                           ccl_private float2 *sampled_roughness,
+                                           ccl_private float *eta)
 {
   ccl_private PrincipledHairBSDF *bsdf = (ccl_private PrincipledHairBSDF *)sc;
+
+  *sampled_roughness = make_float2(bsdf->m0_roughness, bsdf->m0_roughness);
+  *eta = bsdf->eta;
 
   float3 Y = float4_to_float3(bsdf->extra->geom);
 

@@ -39,6 +39,26 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
   /* Read subsurface scattering parameters. */
   const float3 radius = INTEGRATOR_STATE(state, subsurface, radius);
 
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  // TODO (sherholz): The new segement is a virtual one only connecting the
+  //				  point of entry with the point of exit
+  //				  We need to flag the segment as invalid so that
+  //                  no samples are generated for the entry point.
+  const float3 albedo = INTEGRATOR_STATE(state, subsurface, albedo);
+  float3 throughput = INTEGRATOR_STATE(state, path, throughput);
+  throughput = safe_divide_color(throughput, albedo);
+  const bool use_guiding = kernel_data.integrator.guiding;
+  float3 bssrdf_weight = INTEGRATOR_STATE(state, subsurface, bssrdf_weight);
+  // const float3 albedo = INTEGRATOR_STATE(state, subsurface, albedo);
+  // we need to add a new segment or add the direction
+  // or at lease the sampling direction to the new path segment
+  bssrdf_weight = safe_divide_color(bssrdf_weight, albedo);
+  float3 initial_throughput = throughput;
+  if (use_guiding) {
+    guiding_add_bssrdf_data(state, bssrdf_weight, 1.f, Ng, -Ng);
+  }
+#endif
+
   /* Pick random axis in local frame and point on disk. */
   float3 disk_N, disk_T, disk_B;
   float pick_pdf_N, pick_pdf_T, pick_pdf_B;
@@ -182,13 +202,27 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
     if (r < next_sum) {
       /* Return exit point. */
       INTEGRATOR_STATE_WRITE(state, path, throughput) *= weight * sum_weights / sample_weight;
-
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+      INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= weight * sum_weights / sample_weight;
+#endif
       ss_isect.hits[0] = ss_isect.hits[hit];
       ss_isect.Ng[0] = ss_isect.Ng[hit];
 
       ray.P = ray.P + ray.D * ss_isect.hits[hit].t;
       ray.D = ss_isect.Ng[hit];
       ray.t = 1.0f;
+
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+      // calculate the transmittance weight for the comple SSS-random walk
+      if (use_guiding) {
+        throughput = INTEGRATOR_STATE(state, path, throughput);
+        initial_throughput = safe_divide_color(throughput, initial_throughput);
+        openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment,
+                                             openpgl::cpp::Vector3(initial_throughput.x,
+                                                                   initial_throughput.y,
+                                                                   initial_throughput.z));
+      }
+#endif
       return true;
     }
 

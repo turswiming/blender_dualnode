@@ -159,13 +159,15 @@ ccl_device int bsdf_hair_reflection_sample(ccl_private const ShaderClosure *sc,
                                            ccl_private float3 *omega_in,
                                            ccl_private float3 *domega_in_dx,
                                            ccl_private float3 *domega_in_dy,
-                                           ccl_private float *pdf)
+                                           ccl_private float *pdf,
+                                           ccl_private float2 *sampled_roughness)
 {
   ccl_private const HairBsdf *bsdf = (ccl_private const HairBsdf *)sc;
   float offset = bsdf->offset;
   float3 Tg = bsdf->T;
   float roughness1 = bsdf->roughness1;
   float roughness2 = bsdf->roughness2;
+  *sampled_roughness = make_float2(roughness1, roughness2);
   float Iz = dot(Tg, I);
   float3 locy = normalize(I - Tg * Iz);
   float3 locx = cross(locy, Tg);
@@ -220,13 +222,15 @@ ccl_device int bsdf_hair_transmission_sample(ccl_private const ShaderClosure *sc
                                              ccl_private float3 *omega_in,
                                              ccl_private float3 *domega_in_dx,
                                              ccl_private float3 *domega_in_dy,
-                                             ccl_private float *pdf)
+                                             ccl_private float *pdf,
+                                             ccl_private float2 *sampled_roughness)
 {
   ccl_private const HairBsdf *bsdf = (ccl_private const HairBsdf *)sc;
   float offset = bsdf->offset;
   float3 Tg = bsdf->T;
   float roughness1 = bsdf->roughness1;
   float roughness2 = bsdf->roughness2;
+  *sampled_roughness = make_float2(roughness1, roughness2);
   float Iz = dot(Tg, I);
   float3 locy = normalize(I - Tg * Iz);
   float3 locx = cross(locy, Tg);

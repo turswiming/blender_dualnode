@@ -458,6 +458,41 @@ class CYCLES_RENDER_PT_light_paths_caustics(CyclesButtonsPanel, Panel):
         col.prop(cscene, "caustics_refractive", text="Refractive")
 
 
+class CYCLES_RENDER_PT_light_paths_guiding(CyclesButtonsPanel, Panel):
+    bl_label = "Guiding"
+    bl_parent_id = "CYCLES_RENDER_PT_light_paths"
+
+    def draw_header(self, context):
+        scene = context.scene
+        cscene = scene.cycles
+
+        if cscene.device != 'CPU':
+            return
+
+        self.layout.prop(cscene, "guiding", text="")
+
+    def draw(self, context):
+        scene = context.scene
+        cscene = scene.cycles
+
+        if cscene.device != 'CPU':
+            return
+
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.active = cscene.guiding
+
+        col = layout.column(align=True)
+        col.prop(cscene, "guiding_distribution_type", text="Distribution Type")
+        col.prop(cscene, "surface_guiding", text="Surface Guiding")
+        col.prop(cscene, "surface_guiding_probability", text="Surface Guiding Probability")
+        col.prop(cscene, "volume_guiding", text="Volume Guiding")
+        col.prop(cscene, "volume_guiding_probability", text="Volume Guiding Probability")
+        col.prop(cscene, "guide_direct_light", text="Guide Direct Light")
+        col.prop(cscene, "use_mis_weights", text="Use MIS Weights")
+
+
 class CYCLES_RENDER_PT_light_paths_fast_gi(CyclesButtonsPanel, Panel):
     bl_label = "Fast GI Approximation"
     bl_options = {'DEFAULT_CLOSED'}
@@ -2271,6 +2306,7 @@ classes = (
     CYCLES_RENDER_PT_sampling_advanced,
     CYCLES_RENDER_PT_light_paths,
     CYCLES_RENDER_PT_light_paths_max_bounces,
+    CYCLES_RENDER_PT_light_paths_guiding,
     CYCLES_RENDER_PT_light_paths_clamping,
     CYCLES_RENDER_PT_light_paths_caustics,
     CYCLES_RENDER_PT_light_paths_fast_gi,

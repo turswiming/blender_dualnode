@@ -9,6 +9,10 @@
 #include "kernel/types.h"
 #include "kernel/util/profiling.h"
 
+#ifdef __PATH_GUIDING__
+#  include <openpgl/cpp/OpenPGL.h>
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 /* On the CPU, we pass along the struct KernelGlobals to nearly everywhere in
@@ -46,6 +50,30 @@ typedef struct KernelGlobalsCPU {
   OSLGlobals *osl;
   OSLShadingSystem *osl_ss;
   OSLThreadData *osl_tdata;
+#endif
+
+#ifdef __PATH_GUIDING__
+  /* Add per thread local guiding data structures needed by each integrator instance:
+    SurfaceSamplingDistribution
+    VolumeSamplingDistribution
+    PathSegmentStorage
+
+    As well as pointers to the global data structures:
+    GuidingField
+    SampleDataStorage
+   */
+
+#  if PATH_GUIDING_LEVEL >= 1
+  openpgl::cpp::PathSegmentStorage *opgl_path_segment_storage{nullptr};
+#  endif
+#  if PATH_GUIDING_LEVEL >= 3
+  openpgl::cpp::SampleStorage *opgl_sample_data_storage{nullptr};
+#  endif
+#  if PATH_GUIDING_LEVEL >= 4
+  openpgl::cpp::Field *opgl_guiding_field{nullptr};
+  openpgl::cpp::SurfaceSamplingDistribution *opgl_surface_sampling_distribution{nullptr};
+  openpgl::cpp::VolumeSamplingDistribution *opgl_volume_sampling_distribution{nullptr};
+#  endif
 #endif
 
   /* **** Run-time data ****  */

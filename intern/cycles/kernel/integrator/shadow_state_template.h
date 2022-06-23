@@ -40,6 +40,22 @@ KERNEL_STRUCT_MEMBER(shadow_path, packed_float3, pass_glossy_weight, KERNEL_FEAT
 KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, num_hits, KERNEL_FEATURE_PATH_TRACING)
 /* Light group. */
 KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, lightgroup, KERNEL_FEATURE_PATH_TRACING)
+#ifdef __PATH_GUIDING__
+KERNEL_STRUCT_MEMBER(shadow_path,
+                     packed_float3,
+                     scattered_contribution,
+                     KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(shadow_path,
+                     openpgl::cpp::PathSegment *,
+                     path_segment,
+                     KERNEL_FEATURE_PATH_TRACING)
+#else
+KERNEL_STRUCT_MEMBER(shadow_path,
+                     packed_float3,
+                     scattered_contribution,
+                     KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(shadow_path, void *, path_segment, KERNEL_FEATURE_PATH_TRACING)
+#endif
 KERNEL_STRUCT_END(shadow_path)
 
 /********************************** Shadow Ray *******************************/

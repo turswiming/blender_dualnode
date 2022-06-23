@@ -48,13 +48,17 @@ ccl_device_forceinline bool integrator_intersect_terminate(KernelGlobals kg,
    * surfaces in front of emission do we need to evaluate the shader, since we
    * perform MIS as part of indirect rays. */
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  const float probability = path_state_continuation_probability(kg, state, path_flag);
-  INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = probability;
-
-  if (probability != 1.0f) {
+  const float continuation_probability = path_state_continuation_probability(kg, state, path_flag);
+  INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = continuation_probability;
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (kernel_data.integrator.guiding) {
+    guiding_set_continuation_probability(state, continuation_probability);
+  }
+#endif
+  if (continuation_probability != 1.0f) {
     const float terminate = path_state_rng_1D(kg, &rng_state, PRNG_TERMINATE);
 
-    if (probability == 0.0f || terminate >= probability) {
+    if (continuation_probability == 0.0f || terminate >= continuation_probability) {
       if (shader_flags & SD_HAS_EMISSION) {
         /* Mark path to be terminated right after shader evaluation on the surface. */
         INTEGRATOR_STATE_WRITE(state, path, flag) |= PATH_RAY_TERMINATE_ON_NEXT_SURFACE;
@@ -218,6 +222,11 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
   if (hit) {
     /* Hit a surface, continue with light or surface kernel. */
     if (isect->type & PRIMITIVE_LAMP) {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+      if (kernel_data.integrator.guiding) {
+        guiding_new_virtual_light_segment(state, isect);
+      }
+#endif
       INTEGRATOR_PATH_NEXT(current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT);
     }
     else {

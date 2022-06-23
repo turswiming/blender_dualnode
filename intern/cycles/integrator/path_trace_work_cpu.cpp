@@ -6,6 +6,7 @@
 #include "device/cpu/kernel.h"
 #include "device/device.h"
 
+#include "kernel/film/write_passes.h"
 #include "kernel/integrator/path_state.h"
 
 #include "integrator/pass_accessor_cpu.h"
@@ -56,11 +57,48 @@ void PathTraceWorkCPU::init_execution()
   device_->get_cpu_kernel_thread_globals(kernel_thread_globals_);
 }
 
+#if defined(__PATH_GUIDING__)
+/* Note: It seems that this is called before every rendering iteration/progression and not once per
+ * rendering. May be we find a way to call it only once per renderering. */
+void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field, void *sample_data_storage)
+{
+  /* Cache per-thread kernel globals. */
+  // device_->get_cpu_kernel_thread_globals(kernel_thread_globals_);
+#  if PATH_GUIDING_LEVEL >= 4
+  openpgl::cpp::Field *field = (openpgl::cpp::Field *)guiding_field;
+#  endif
+  for (int thread_index = 0; thread_index < kernel_thread_globals_.size(); thread_index++) {
+#  if PATH_GUIDING_LEVEL >= 3
+
+    kernel_thread_globals_[thread_index].opgl_sample_data_storage = (openpgl::cpp::SampleStorage *)
+        sample_data_storage;
+#  endif
+
+#  if PATH_GUIDING_LEVEL >= 4
+    kernel_thread_globals_[thread_index].opgl_guiding_field = field;
+    /* We might be able to just create a new Sampling distribution if the pointer is NULL */
+    if (kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution)
+      delete kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution;
+    kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution =
+        new openpgl::cpp::SurfaceSamplingDistribution(field);
+    if (kernel_thread_globals_[thread_index].opgl_volume_sampling_distribution)
+      delete kernel_thread_globals_[thread_index].opgl_volume_sampling_distribution;
+    kernel_thread_globals_[thread_index].opgl_volume_sampling_distribution =
+        new openpgl::cpp::VolumeSamplingDistribution(field);
+#  endif
+  }
+}
+#endif
+
 void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
                                       int start_sample,
                                       int samples_num,
                                       int sample_offset)
 {
+#if defined(__PATH_GUIDING__) && defined(WITH_PATH_GUIDING_DEBUG_PRINT)
+  std::cout << "render_samples: start_sample = " << start_sample
+            << "\t samples_num = " << samples_num << std::endl;
+#endif
   const int64_t image_width = effective_buffer_params_.width;
   const int64_t image_height = effective_buffer_params_.height;
   const int64_t total_pixels_num = image_width * image_height;
@@ -106,7 +144,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   statistics.occupancy = 1.0f;
 }
 
-void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kernel_globals,
+void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kg,
                                                     const KernelWorkTile &work_tile,
                                                     const int samples_num)
 {
@@ -131,22 +169,34 @@ void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kernel_glo
     }
 
     if (has_bake) {
-      if (!kernels_.integrator_init_from_bake(
-              kernel_globals, state, &sample_work_tile, render_buffer)) {
+      if (!kernels_.integrator_init_from_bake(kg, state, &sample_work_tile, render_buffer)) {
         break;
       }
     }
     else {
-      if (!kernels_.integrator_init_from_camera(
-              kernel_globals, state, &sample_work_tile, render_buffer)) {
+      if (!kernels_.integrator_init_from_camera(kg, state, &sample_work_tile, render_buffer)) {
         break;
       }
     }
 
-    kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
+#ifdef __PATH_GUIDING__
+    const bool use_guiding = kernel_data.integrator.guiding;
+    if (use_guiding) {
+      /* Clear path segment storage. */
+      guiding_prepare_integrator_state(kg, state);
+    }
+#endif
 
+    kernels_.integrator_megakernel(kg, state, render_buffer);
+
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+    if (use_guiding) {
+      /* Push the generated sample data to the global sample data storage. */
+      guiding_push_sample_data_to_global_storage(kg, state, render_buffer);
+    }
+#endif
     if (shadow_catcher_state) {
-      kernels_.integrator_megakernel(kernel_globals, shadow_catcher_state, render_buffer);
+      kernels_.integrator_megakernel(kg, shadow_catcher_state, render_buffer);
     }
 
     ++sample_work_tile.start_sample;
@@ -275,5 +325,87 @@ void PathTraceWorkCPU::cryptomatte_postproces()
     });
   });
 }
+
+#if defined(__PATH_GUIDING__)
+void PathTraceWorkCPU::guiding_prepare_integrator_state(KernelGlobalsCPU *kg,
+                                                        IntegratorStateCPU *state)
+{
+#  if PATH_GUIDING_LEVEL >= 1
+  /* Linking to the thread local instances of the path segment storage and the guided sampling
+   * distrubtion */
+  state->guiding.path_segment_storage = kg->opgl_path_segment_storage;
+  // TODO: find a better place to do this (once per rendering)
+  state->guiding.path_segment_storage->Reserve(kernel_data.integrator.transparent_max_bounce +
+                                               kernel_data.integrator.max_bounce + 3);
+  state->guiding.path_segment_storage->Clear();
+  /* Resetting the pointers to current path segment */
+  state->guiding.path_segment = nullptr;
+  state->ao.shadow_path.path_segment = nullptr;
+  state->shadow.shadow_path.path_segment = nullptr;
+#  endif
+
+#  if PATH_GUIDING_LEVEL >= 4
+  state->guiding.surface_sampling_distribution = kg->opgl_surface_sampling_distribution;
+  state->guiding.volume_sampling_distribution = kg->opgl_volume_sampling_distribution;
+#  endif
+}
+
+#  if PATH_GUIDING_LEVEL >= 1
+void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
+    KernelGlobalsCPU *kg, IntegratorStateCPU *state, ccl_global float *ccl_restrict render_buffer)
+{
+
+#    if defined(PATH_GUIDING_DEBUG_VALIDATE) && PATH_GUIDING_LEVEL >= 5
+  /* we can guard this check with a debug flag/define */
+  bool validSegments = state->guiding.path_segment_storage->ValidateSegments();
+  if (!validSegments)
+    std::cout << "!!! validSegments = " << validSegments << " !!!" << std::endl;
+#    endif
+
+#    if defined(PATH_GUIDING_DEBUG_PASS) && PATH_GUIDING_LEVEL >= 5
+  // guiding_write_pixel_estimate_buffer(kg, state, render_buffer);
+
+  pgl_vec3f pgl_final_color = state->guiding.path_segment_storage->CalculatePixelEstimate(false);
+  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
+                                        kernel_data.film.pass_stride;
+  ccl_global float *buffer = render_buffer + render_buffer_offset;
+  float3 final_color = make_float3(pgl_final_color.x, pgl_final_color.y, pgl_final_color.z);
+  if (kernel_data.film.pass_opgl_color != PASS_UNUSED) {
+    kernel_write_pass_float3(buffer + kernel_data.film.pass_opgl_color, final_color);
+  }
+#    endif
+#    if PATH_GUIDING_LEVEL >= 2
+  /* Converting the path segment representation of the random walk into radiance samples. */
+  const bool guide_direct_light = kernel_data.integrator.guide_direct_light;
+  const bool use_mis_weights = kernel_data.integrator.use_mis_weights;
+  state->guiding.path_segment_storage->PrepareSamples(
+      false, nullptr, use_mis_weights, guide_direct_light, false);
+#    endif
+
+#    if defined(PATH_GUIDING_DEBUG_VALIDATE) && PATH_GUIDING_LEVEL >= 5
+  bool validSamples = state->guiding.path_segment_storage->ValidateSamples();
+  if (!validSamples)
+    std::cout << "!!! validSamples = " << validSamples << " !!!" << std::endl;
+#    endif
+
+#    if PATH_GUIDING_LEVEL >= 3
+  /* Pushing the radiance data/samples from the current random walk/path to the global sample
+   * stoarge. */
+  size_t nSamples = 0;
+  const openpgl::cpp::SampleData *samples = state->guiding.path_segment_storage->GetSamples(
+      nSamples);
+  kg->opgl_sample_data_storage->AddSamples(samples, nSamples);
+#    endif
+
+#    if PATH_GUIDING_LEVEL >= 1
+  /* Clearing the storage and the pointer to the current segment to be ready for the next random
+   * walk/path. */
+  state->guiding.path_segment_storage->Clear();
+  state->guiding.path_segment = nullptr;
+#    endif
+}
+#  endif
+#endif
 
 CCL_NAMESPACE_END

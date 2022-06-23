@@ -47,10 +47,20 @@ ccl_device int bsdf_refraction_sample(ccl_private const ShaderClosure *sc,
                                       ccl_private float3 *omega_in,
                                       ccl_private float3 *domega_in_dx,
                                       ccl_private float3 *domega_in_dy,
-                                      ccl_private float *pdf)
+                                      ccl_private float *pdf,
+                                      ccl_private float *eta)
 {
   ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
   float m_eta = bsdf->ior;
+  // TODO:
+
+  /*
+  // check which side of the surface we are on
+    if (cos > 0) {
+      // we are on the outside of the surface, going in
+      neta = 1 / eta;
+  */
+  *eta = 1.0f / m_eta;
   float3 N = bsdf->N;
 
   float3 R, T;

@@ -142,6 +142,17 @@ void Session::run_main_render_loop()
 {
   path_trace_->clear_display();
 
+#if defined(WITH_PATH_GUIDING)
+  /* guiding settings. */
+  // TODO: is this the right place
+  {
+    const GuidingParams guiding_params = scene->integrator->get_guiding_params();
+    if (guiding_params.use) {
+      path_trace_->set_guiding_params(scene->device, guiding_params);
+    }
+  }
+#endif
+
   while (true) {
     RenderWork render_work = run_update_for_next_iteration();
 
@@ -336,6 +347,12 @@ RenderWork Session::run_update_for_next_iteration()
       switched_to_new_tile = true;
     }
   }
+
+#if defined(WITH_PATH_GUIDING)
+  if (scene->need_reset(false)) {
+    path_trace_->reset_guiding_field();
+  }
+#endif
 
   if (render_work) {
     scoped_timer update_timer;

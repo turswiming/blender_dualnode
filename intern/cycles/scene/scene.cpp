@@ -437,9 +437,9 @@ bool Scene::need_data_update()
           film->is_modified() || procedural_manager->need_update());
 }
 
-bool Scene::need_reset()
+bool Scene::need_reset(const bool check_camera)
 {
-  return need_data_update() || camera->is_modified();
+  return need_data_update() || (check_camera && camera->is_modified());
 }
 
 void Scene::reset()

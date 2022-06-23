@@ -13,6 +13,11 @@
 #include "util/unique_ptr.h"
 #include "util/vector.h"
 
+#ifdef __PATH_GUIDING__
+#  include "integrator/guiding.h"
+#  include <openpgl/cpp/OpenPGL.h>
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 class AdaptiveSampling;
@@ -88,6 +93,15 @@ class PathTrace {
   /* Set parameters used for adaptive sampling.
    * Use this to configure the adaptive sampler before rendering any samples. */
   void set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling);
+
+#ifdef __PATH_GUIDING__
+  /* Set the parameters for guiding.
+   * Use this to create/configure/activate the guiding structures before each rendering
+   * iteration.*/
+  void set_guiding_params(ccl::Device *device, const GuidingParams &params);
+
+  void reset_guiding_field();
+#endif
 
   /* Sets output driver for render buffer output. */
   void set_output_driver(unique_ptr<OutputDriver> driver);
@@ -205,6 +219,16 @@ class PathTrace {
   void write_tile_buffer(const RenderWork &render_work);
   void finalize_full_buffer_on_disk(const RenderWork &render_work);
 
+#ifdef __PATH_GUIDING__
+  /* Updates/initializes the guiding structures after a rendering iteration.
+   * The structures are updated using the training data/samples generated during the previous
+   * rendering iteration */
+  void guiding_update_structures();
+
+  /* Prepares the per-kernel thread related guiding structures (e.g., )*/
+  void guiding_prepare_structures();
+#endif
+
   /* Get number of samples in the current state of the render buffers. */
   int get_num_samples_in_buffer();
 
@@ -260,6 +284,21 @@ class PathTrace {
 
   /* Denoiser which takes care of denoising the big tile. */
   unique_ptr<Denoiser> denoiser_;
+
+#ifdef __PATH_GUIDING__
+  /* Guiding related attributes */
+
+  /* The guiding field which holds the representation of the incident radiance field for the
+   * complete scene. */
+  openpgl::cpp::Field *guiding_field_{nullptr};
+
+  /* The storage container which holds the training data/samples generated during the last
+   * rendering iteration. */
+  openpgl::cpp::SampleStorage *guiding_sample_data_storage_{nullptr};
+
+  /* The number of already performed training iterations for the guiding field.*/
+  int guiding_update_count{0};
+#endif
 
   /* State which is common for all the steps of the render work.
    * Is brought up to date in the `render()` call and is accessed from all the steps involved into

@@ -54,6 +54,7 @@ ccl_device float3 integrator_eval_background_shader(KernelGlobals kg,
     L = shader_background_eval(emission_sd);
   }
 
+  float mis_weight = 1.0f;
   /* Background MIS weights. */
 #  ifdef __BACKGROUND_MIS__
   /* Check if background light exists or if we should skip pdf. */
@@ -67,11 +68,17 @@ ccl_device float3 integrator_eval_background_shader(KernelGlobals kg,
     /* multiple importance sampling, get background light pdf for ray
      * direction, and compute weight with respect to BSDF pdf */
     const float pdf = background_light_pdf(kg, ray_P - ray_D * mis_ray_t, ray_D);
-    const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
-    L *= mis_weight;
+    mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
   }
 #  endif
 
+#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (kernel_data.integrator.guiding) {
+    guiding_add_background(state, L, mis_weight);
+  }
+#  endif
+
+  L *= mis_weight;
   return L;
 #else
   return make_float3(0.8f, 0.8f, 0.8f);

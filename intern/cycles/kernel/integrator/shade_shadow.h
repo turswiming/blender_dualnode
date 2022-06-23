@@ -98,18 +98,28 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
 {
   /* Accumulate shadow for transparent surfaces. */
   const uint num_recorded_hits = min(num_hits, INTEGRATOR_SHADOW_ISECT_SIZE);
-
+#  if defined(__PATH_GUIDING__)
+  const bool use_guiding = kernel_data.integrator.guiding;
+#  endif
   for (uint hit = 0; hit < num_recorded_hits + 1; hit++) {
     /* Volume shaders. */
     if (hit < num_recorded_hits || !shadow_intersections_has_remaining(num_hits)) {
 #  ifdef __VOLUME__
       if (!integrator_state_shadow_volume_stack_is_empty(kg, state)) {
         float3 throughput = INTEGRATOR_STATE(state, shadow_path, throughput);
-        integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &throughput);
+        float3 transmittance = make_float3(1.f, 1.f, 1.f);
+        integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &transmittance);
+        throughput *= transmittance;
+#    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+        // TODO
+        if (use_guiding) {
+          INTEGRATOR_STATE_WRITE(state, shadow_path, scattered_contribution) =
+              INTEGRATOR_STATE(state, shadow_path, scattered_contribution) * transmittance;
+        }
+#    endif
         if (is_zero(throughput)) {
           return true;
         }
-
         INTEGRATOR_STATE_WRITE(state, shadow_path, throughput) = throughput;
       }
 #  endif
@@ -119,6 +129,12 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
     if (hit < num_recorded_hits) {
       const float3 shadow = integrate_transparent_surface_shadow(kg, state, hit);
       const float3 throughput = INTEGRATOR_STATE(state, shadow_path, throughput) * shadow;
+#  ifdef __PATH_GUIDING__
+      if (use_guiding) {
+        INTEGRATOR_STATE_WRITE(state, shadow_path, scattered_contribution) =
+            INTEGRATOR_STATE(state, shadow_path, scattered_contribution) * shadow;
+      }
+#  endif
       if (is_zero(throughput)) {
         return true;
       }
@@ -170,6 +186,14 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
     return;
   }
   else {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+    // we need to find a way to reset this pointer and to identify if we are in AO mode
+    const bool use_guiding = kernel_data.integrator.guiding;
+    if (use_guiding && state->shadow_path.path_segment) {
+      float3 scattered_contribution = INTEGRATOR_STATE(state, shadow_path, scattered_contribution);
+      guiding_add_scattered_contribution(state, scattered_contribution);
+    }
+#endif
     kernel_accum_light(kg, state, render_buffer);
     INTEGRATOR_SHADOW_PATH_TERMINATE(DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;

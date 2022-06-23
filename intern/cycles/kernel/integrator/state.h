@@ -31,6 +31,10 @@
 
 #include "util/types.h"
 
+#ifdef __PATH_GUIDING__
+#  include <openpgl/cpp/OpenPGL.h>
+#endif
+
 #pragma once
 
 CCL_NAMESPACE_BEGIN
