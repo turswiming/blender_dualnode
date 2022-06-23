@@ -449,6 +449,9 @@ if(NOT APPLE)
   mark_as_advanced(CYCLES_HIP_BINARIES_ARCH)
 endif()
 
+# Intel OpenPGL
+option(WITH_CYCLES_PATH_GUIDING              "Build Cycles with path guiding support" OFF)
+
 # Apple Metal
 if(APPLE)
   option(WITH_CYCLES_DEVICE_METAL       "Enable Cycles Apple Metal compute support" ON)

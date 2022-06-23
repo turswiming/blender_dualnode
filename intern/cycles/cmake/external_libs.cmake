@@ -262,6 +262,18 @@ if(CYCLES_STANDALONE_REPOSITORY AND WITH_CYCLES_OSL)
   endif()
 endif()
 
+
+if(WITH_CYCLES_PATH_GUIDING)
+  if(NOT openpgl_DIR)
+    if(LIBDIR)
+      set(openpgl_DIR ${LIBDIR}/openpgl/lib/cmake/openpgl)
+      endif()
+  endif()
+  find_package(openpgl REQUIRED)
+  get_target_property(OPENPGL_LIBRARIES openpgl::openpgl LOCATION)
+  get_target_property(OPENPGL_INCLUDE_DIR openpgl::openpgl INTERFACE_INCLUDE_DIRECTORIES)
+endif()
+
 ###########################################################################
 # OpenColorIO
 ###########################################################################
