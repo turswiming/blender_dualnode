@@ -311,13 +311,15 @@ static bool gpencil_asset_edit_poll(bContext *C)
 {
   const enum eContextObjectMode mode = CTX_data_mode_enum(C);
 
-  /* Only allowed in Grease Pencil Edit mode. */
-  if (mode != CTX_MODE_EDIT_GPENCIL) {
+  Object *ob = CTX_data_active_object(C);
+  if ((ob == NULL) || (ob->type != OB_GPENCIL)) {
+    CTX_wm_operator_poll_msg_set(C, "Need a Grease Pencil object selected");
     return false;
   }
 
-  Object *ob = CTX_data_active_object(C);
-  if ((ob == NULL) || (ob->type != OB_GPENCIL)) {
+  /* Only allowed in Grease Pencil Edit mode. */
+  if (mode != CTX_MODE_EDIT_GPENCIL) {
+    CTX_wm_operator_poll_msg_set(C, "Grease Pencil object must be in Edit mode");
     return false;
   }
 
