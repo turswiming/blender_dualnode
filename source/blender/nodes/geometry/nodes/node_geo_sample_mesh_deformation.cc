@@ -2,6 +2,7 @@
 
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
+#include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_type_conversions.hh"
 
@@ -33,6 +34,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>(N_("Rest Position")).hide_value().supports_field();
   b.add_input<decl::Vector>(N_("UV Map")).hide_value().supports_field();
   b.add_input<decl::Vector>(N_("Sample UV")).supports_field();
+  b.add_input<decl::Bool>(N_("Smooth Normals")).default_value(true);
   b.add_output<decl::Vector>(N_("Translation")).dependent_field({3});
   b.add_output<decl::Vector>(N_("Rotation")).dependent_field({3});
 }
@@ -52,24 +54,39 @@ static void node_update(bNodeTree *UNUSED(ntree), bNode *UNUSED(node))
 class SampleMeshDeformationFunction : public fn::MultiFunction {
  private:
   GeometrySet geometry_;
-  const Mesh *mesh_;
+  Mesh *mesh_;
   Span<MVert> verts_;
   Array<float3> rest_positions_;
   Array<float2> uv_map_;
+  Span<float3> corner_normals_;
+  Span<float3> face_normals_;
   std::optional<ReverseUVSampler> reverse_uv_sampler;
+  bool smooth_normals_;
 
  public:
   SampleMeshDeformationFunction(GeometrySet geometry,
                                 VArray<float3> rest_positions,
-                                VArray<float2> uv_map)
+                                VArray<float2> uv_map,
+                                const bool smooth_normals)
       : geometry_(std::move(geometry)),
         rest_positions_(VArray_Span(rest_positions)),
-        uv_map_(VArray_Span(uv_map))
+        uv_map_(VArray_Span(uv_map)),
+        smooth_normals_(smooth_normals)
   {
-    mesh_ = geometry_.get_mesh_for_read();
+    mesh_ = geometry_.get_mesh_for_write();
     verts_ = Span<MVert>(mesh_->mvert, mesh_->totvert);
     const Span<MLoopTri> looptris{BKE_mesh_runtime_looptri_ensure(mesh_),
                                   BKE_mesh_runtime_looptri_len(mesh_)};
+
+    if (!CustomData_has_layer(&mesh_->ldata, CD_NORMAL)) {
+      BKE_mesh_calc_normals_split(mesh_);
+    }
+    corner_normals_ = {
+        reinterpret_cast<const float3 *>(CustomData_get_layer(&mesh_->ldata, CD_NORMAL)),
+        mesh_->totloop};
+    face_normals_ = {reinterpret_cast<const float3 *>(BKE_mesh_poly_normals_ensure(mesh_)),
+                     mesh_->totpoly};
+
     reverse_uv_sampler.emplace(uv_map_, looptris);
 
     static fn::MFSignature signature = create_signature();
@@ -141,11 +158,22 @@ class SampleMeshDeformationFunction : public fn::MultiFunction {
         const float3 old_dir_2 = old_pos_2 - old_pos_0;
         const float3 new_dir_1 = new_pos_1 - new_pos_0;
         const float3 new_dir_2 = new_pos_2 - new_pos_0;
+
+        /* This can lead to issues if the original face was not planar. */
         const float3 old_normal = math::normalize(math::cross(old_dir_1, old_dir_2));
-        const float3 new_normal = math::normalize(math::cross(new_dir_1, new_dir_2));
-        const float3 old_tangent_x = math::normalize(old_dir_1);
-        const float3 new_tangent_x = math::normalize(new_dir_1);
+        const float3 old_tangent_x = math::normalize(math::cross(old_normal, old_dir_1));
         const float3 old_tangent_y = math::cross(old_normal, old_tangent_x);
+
+        const float3 new_normal = [&]() {
+          if (smooth_normals_) {
+            const float3 &new_normal_0 = corner_normals_[corner_0];
+            const float3 &new_normal_1 = corner_normals_[corner_1];
+            const float3 &new_normal_2 = corner_normals_[corner_2];
+            return math::normalize(mix3(bary_weights, new_normal_0, new_normal_1, new_normal_2));
+          }
+          return face_normals_[looptri.poly];
+        }();
+        const float3 new_tangent_x = math::normalize(math::cross(new_normal, new_dir_1));
         const float3 new_tangent_y = math::cross(new_normal, new_tangent_x);
 
         float3x3 old_transform;
@@ -175,6 +203,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   Field<float3> rest_positions_field = params.extract_input<Field<float3>>("Rest Position");
   Field<float3> uv_map_field = params.extract_input<Field<float3>>("UV Map");
   Field<float3> sample_uv_field = params.extract_input<Field<float3>>("Sample UV");
+  const bool smooth_normals = params.extract_input<bool>("Smooth Normals");
 
   if (!geometry.has_mesh()) {
     params.set_default_remaining_outputs();
@@ -196,7 +225,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   VArray<float2> uv_map = field_evaluator.get_evaluated<float2>(1);
 
   auto fn = std::make_unique<SampleMeshDeformationFunction>(
-      std::move(geometry), std::move(rest_positions), std::move(uv_map));
+      std::move(geometry), std::move(rest_positions), std::move(uv_map), smooth_normals);
 
   Field<float2> sample_uv_field_float2 = conversions.try_convert(std::move(sample_uv_field),
                                                                  CPPType::get<float2>());
