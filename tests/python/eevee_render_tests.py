@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def setup():
@@ -164,6 +165,11 @@ def main():
     report.set_reference_dir("eevee_renders")
     report.set_reference_override_dir(reference_override_dir)
     report.set_compare_engine('cycles', 'CPU')
+
+    test_dir_name = Path(test_dir).name
+    if test_dir_name.startswith('image'):
+        report.set_fail_threshold(0.051)
+
     ok = report.run(test_dir, blender, get_arguments, batch=True)
 
     sys.exit(not ok)
