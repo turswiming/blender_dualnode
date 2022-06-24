@@ -371,9 +371,11 @@ void GPENCIL_OT_asset_create(wmOperatorType *ot)
        0,
        "All Layers Separated",
        "Create an asset by layer."},
+      RNA_ENUM_ITEM_SEPR,
       {GP_ASSET_MODE_ACTIVE_FRAME, "FRAME", 0, "Active Frame (Active Layer)", ""},
       {GP_ASSET_MODE_ACTIVE_FRAME_ALL_LAYERS, "FRAME_ALL", 0, "Active Frame (All Layers)", ""},
       {GP_ASSET_MODE_SELECTED_FRAMES, "FRAME_SELECTED", 0, "Selected Frames", ""},
+      RNA_ENUM_ITEM_SEPR,
       {GP_ASSET_MODE_SELECTED_STROKES, "SELECTED", 0, "Selected Strokes", ""},
       {0, NULL, 0, NULL, NULL},
   };
