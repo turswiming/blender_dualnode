@@ -151,6 +151,7 @@ static bool gpencil_asset_create(const bContext *C,
 {
   Main *bmain = CTX_data_main(C);
   bool non_supported_feature = false;
+  const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd_src);
 
   /* Create a copy of selected data block. */
   bGPdata *gpd = (bGPdata *)BKE_id_copy(bmain, &gpd_src->id);
@@ -209,8 +210,10 @@ static bool gpencil_asset_create(const bContext *C,
     const bGPDframe *gpf_active = gpl->actframe;
 
     LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
-      /* If Active Frame mode, delete non active frames. */
-      if ((ELEM(mode, GP_ASSET_MODE_ACTIVE_FRAME, GP_ASSET_MODE_ACTIVE_FRAME_ALL_LAYERS)) &&
+      /* If Active Frame mode, delete non active frames or if multi frame edition is not enabled.
+       */
+      if ((ELEM(mode, GP_ASSET_MODE_ACTIVE_FRAME, GP_ASSET_MODE_ACTIVE_FRAME_ALL_LAYERS) ||
+           !is_multiedit) &&
           (gpf != gpf_active)) {
         BKE_gpencil_layer_frame_delete(gpl, gpf);
         continue;
