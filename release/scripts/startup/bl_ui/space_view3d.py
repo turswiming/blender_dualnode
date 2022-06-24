@@ -5177,9 +5177,13 @@ class VIEW3D_MT_edit_gpencil_asset(Menu):
         layout.operator("gpencil.asset_create", text="Active Layer").mode = 'LAYER'
         layout.operator("gpencil.asset_create", text="All Layers").mode = 'LAYERS_ALL'
         layout.operator("gpencil.asset_create", text="All Layers Separated").mode = 'LAYERS_SPLIT'
+        layout.separator()
+
         layout.operator("gpencil.asset_create", text="Active Frame (Active Layer)").mode = 'FRAME'
         layout.operator("gpencil.asset_create", text="Active Frame (All Layers)").mode = 'FRAME_ALL'
         layout.operator("gpencil.asset_create", text="Selected Frames").mode = 'FRAME_SELECTED'
+        layout.separator()
+
         layout.operator("gpencil.asset_create", text="Selected Strokes").mode = 'SELECTED'
 
 
