@@ -10,6 +10,12 @@ set(OPENPGL_EXTRA_ARGS
     -DTBB_ROOT=${LIBDIR}/tbb
     -Dembree_DIR=${LIBDIR}/embree/lib/cmake/embree-${EMBREE_VERSION}
     -DCMAKE_DEBUG_POSTFIX=_d
+# openpgl's build uses the embree config files which are aware it is
+# a static version of embree, but never actually pass -DEMBREE_STATIC_LIB
+# to openpgl's CXX flags, resulting in the assumption that embree is dynamic,
+# which causes linker errors when we link it against static embree in the final
+# blender binary.
+    -DCMAKE_CXX_FLAGS=-DEMBREE_STATIC_LIB
 )
 
 if(TBB_STATIC_LIBRARY)
