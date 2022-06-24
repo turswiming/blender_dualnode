@@ -143,6 +143,7 @@ static void apply_layer_settings(bGPDlayer *gpl)
 /* Helper: Create an asset for data block.
  * return: False if there are features non supported. */
 static bool gpencil_asset_create(const bContext *C,
+                                 const wmOperator *op,
                                  const bGPdata *gpd_src,
                                  const bGPDlayer *gpl_filter,
                                  const eGP_AssetModes mode,
@@ -275,6 +276,20 @@ static bool gpencil_asset_create(const bContext *C,
     is_animation |= (BLI_listbase_count(&gpl->frames) > 1);
   }
 
+  /* Check if something to do. */
+  bool do_export = false;
+  LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+    if (BLI_listbase_count(&gpl->frames) > 0) {
+      do_export = true;
+      break;
+    }
+  }
+  /* Nothing to export. */
+  if (!do_export) {
+    BKE_report(op->reports, RPT_ERROR, "No strokes were found to create the asset.");
+    return false;
+  }
+
   /* Set origin to bounding box of strokes. */
   if (reset_origin) {
     float gpcenter[3];
@@ -360,12 +375,12 @@ static int gpencil_asset_create_exec(const bContext *C, const wmOperator *op)
   if (mode == GP_ASSET_MODE_ALL_LAYERS_SPLIT) {
     LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd_src->layers) {
       non_supported_feature |= gpencil_asset_create(
-          C, gpd_src, gpl, mode, reset_origin, flatten_layers);
+          C, op, gpd_src, gpl, mode, reset_origin, flatten_layers);
     }
   }
   else {
     non_supported_feature = gpencil_asset_create(
-        C, gpd_src, NULL, mode, reset_origin, flatten_layers);
+        C, op, gpd_src, NULL, mode, reset_origin, flatten_layers);
   }
 
   /* Warnings for non supported features in the created asset. */
