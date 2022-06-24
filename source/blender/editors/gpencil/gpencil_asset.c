@@ -48,8 +48,6 @@
 
 #include "gpencil_intern.h"
 
-#define ROTATION_CONTROL_GAP 15.0f
-
 typedef struct tGPDAssetStroke {
   bGPDlayer *gpl;
   bGPDframe *gpf;
@@ -108,6 +106,8 @@ typedef enum eGP_AssetModes {
   GP_ASSET_MODE_SELECTED_FRAMES,
   /* Selected Strokes. */
   GP_ASSET_MODE_SELECTED_STROKES,
+  /* Selected Strokes. */
+  GP_ASSET_MODE_SELECTED_POINTS,
 } eGP_AssetModes;
 
 /* Helper: Apply layer settings. */
@@ -223,7 +223,7 @@ static bool gpencil_asset_create(const bContext *C,
       }
 
       /* Remove any unselected stroke if selected strokes mode. */
-      if (mode == GP_ASSET_MODE_SELECTED_STROKES) {
+      if (ELEM(mode, GP_ASSET_MODE_SELECTED_STROKES, GP_ASSET_MODE_SELECTED_POINTS)) {
         LISTBASE_FOREACH_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
           if ((gps->flag & GP_STROKE_SELECT) == 0) {
             BLI_remlink(&gpf->strokes, gps);
@@ -232,6 +232,24 @@ static bool gpencil_asset_create(const bContext *C,
           }
         }
       }
+      /* Remove any unselected point if selected point mode. */
+      if (mode == GP_ASSET_MODE_SELECTED_POINTS) {
+        LISTBASE_FOREACH_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
+          if (gps->flag & GP_STROKE_SELECT) {
+            /* Mark the points to dissolve */
+            bGPDspoint *pt;
+            int i;
+            for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
+              if ((pt->flag & GP_SPOINT_SELECT) == 0) {
+                pt->flag |= GP_SPOINT_TAG;
+              }
+            }
+            BKE_gpencil_stroke_delete_tagged_points(
+                gpd, gpf, gps, gps->next, GP_SPOINT_TAG, false, false, 0);
+          }
+        }
+      }
+
       /* Unselect all strokes and points. */
       gpd->select_last_index = 0;
       LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
@@ -377,6 +395,7 @@ void GPENCIL_OT_asset_create(wmOperatorType *ot)
       {GP_ASSET_MODE_SELECTED_FRAMES, "FRAME_SELECTED", 0, "Selected Frames", ""},
       RNA_ENUM_ITEM_SEPR,
       {GP_ASSET_MODE_SELECTED_STROKES, "SELECTED", 0, "Selected Strokes", ""},
+      {GP_ASSET_MODE_SELECTED_POINTS, "POINT", 0, "Selected Points", ""},
       {0, NULL, 0, NULL, NULL},
   };
 

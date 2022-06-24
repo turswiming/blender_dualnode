@@ -5185,6 +5185,7 @@ class VIEW3D_MT_edit_gpencil_asset(Menu):
         layout.separator()
 
         layout.operator("gpencil.asset_create", text="Selected Strokes").mode = 'SELECTED'
+        layout.operator("gpencil.asset_create", text="Selected Points").mode = 'POINT'
 
 
 class VIEW3D_MT_weight_gpencil(Menu):
