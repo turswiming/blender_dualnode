@@ -1054,7 +1054,6 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
       klights[light_index].co[1] = co.y;
       klights[light_index].co[2] = co.z;
 
-
       klights[light_index].area.axisu[0] = axisu.x;
       klights[light_index].area.axisu[1] = axisu.y;
       klights[light_index].area.axisu[2] = axisu.z;
@@ -1210,6 +1209,8 @@ void LightManager::device_free(Device *, DeviceScene *dscene, const bool free_ba
   /* to-do: check if the light tree member variables need to be wrapped in a conditional too*/
   dscene->light_tree_nodes.free();
   dscene->light_tree_emitters.free();
+  dscene->light_tree_distant_group.free();
+
   dscene->light_distribution.free();
   dscene->lights.free();
   if (free_background) {
