@@ -80,6 +80,35 @@ static void shade_background_pixels(Device *device,
       });
 }
 
+static float average_background_energy(Device *device,
+                                       DeviceScene *dscene,
+                                       Progress &progress,
+                                       Scene *scene,
+                                       Light *light)
+{
+  if (light->get_light_type() != LIGHT_BACKGROUND) {
+    assert(false);
+  }
+
+  /* get the resolution from the light's size (we stuff it in there) */
+  int2 res = make_int2(light->get_map_resolution(), light->get_map_resolution() / 2);
+  /* If it's still unknown, just use the default. */
+  if (res.x == 0 || res.y == 0) {
+    res = make_int2(1024, 512);
+    VLOG_INFO << "Setting World MIS resolution to default\n";
+  }
+
+  vector<float3> pixels;
+  shade_background_pixels(device, dscene, res.x, res.y, pixels, progress);
+  
+  float total_energy = 0.0f;
+  for (int i = 0; i < pixels.size(); i++) {
+    total_energy += scene->shader_manager->linear_rgb_to_gray(pixels[i]);
+  }
+
+  return total_energy / pixels.size();
+}
+
 /* Light */
 
 NODE_DEFINE(Light)
@@ -263,7 +292,7 @@ bool LightManager::object_usable_as_light(Object *object)
   return false;
 }
 
-void LightManager::device_update_distribution(Device *,
+void LightManager::device_update_distribution(Device *device,
                                               DeviceScene *dscene,
                                               Scene *scene,
                                               Progress &progress)
@@ -274,12 +303,15 @@ void LightManager::device_update_distribution(Device *,
   size_t num_lights = 0;
   size_t num_portals = 0;
   size_t num_background_lights = 0;
+  size_t num_distant_lights = 0;
   size_t num_triangles = 0;
 
   bool background_mis = false;
 
   /* We want to add both lights and emissive triangles to this vector for light tree construction. */
+  bool light_tree_enabled = scene->integrator->get_use_light_tree();
   vector<LightTreePrimitive> light_prims;
+  vector<LightTreePrimitive> distant_lights;
 
   /* When we keep track of the light index, only contributing lights will be added to the device.
    * Therefore, we want to keep track of the light's index on the device.
@@ -288,14 +320,21 @@ void LightManager::device_update_distribution(Device *,
   int scene_light_index = 0;
   foreach (Light *light, scene->lights) {
     if (light->is_enabled) {
-      /* to-do: make sure not to add background lights to the light tree once those scenes are tested. */
       LightTreePrimitive light_prim;
       light_prim.prim_id = ~device_light_index; /* -prim_id - 1 is a light source index. */
       light_prim.lamp_id = scene_light_index;
-      light_prims.push_back(light_prim);
 
-      num_lights++;
+      /* Distant lights get added to a separate vector. */
+      if (light->light_type == LIGHT_DISTANT || light->light_type == LIGHT_BACKGROUND) {
+        distant_lights.push_back(light_prim);
+        num_distant_lights++;
+      }
+      else {
+        light_prims.push_back(light_prim);
+      }
+
       device_light_index++;
+      num_lights++;
     }
     if (light->is_portal) {
       num_portals++;
@@ -309,6 +348,11 @@ void LightManager::device_update_distribution(Device *,
   foreach (Object *object, scene->objects) {
     if (progress.get_cancel())
       return;
+
+    /* Don't add any emissive triangles to the distribution if light tree is enabled. */
+    if (light_tree_enabled) {
+      continue;
+    }
 
     if (!object_usable_as_light(object)) {
       continue;
@@ -344,7 +388,7 @@ void LightManager::device_update_distribution(Device *,
   KernelLightDistribution *distribution = dscene->light_distribution.alloc(num_distribution + 1);
   float totarea = 0.0f;
 
-  if (scene->integrator->get_use_light_tree()) {
+  if (light_tree_enabled) {
     /* For now, we'll start with a smaller number of max lights in a node.
      * More benchmarking is needed to determine what number works best. */
     LightTree light_tree(light_prims, scene, 8);
@@ -378,8 +422,8 @@ void LightManager::device_update_distribution(Device *,
     dscene->light_tree_nodes.copy_to_device();
 
     /* The light tree emitters store extra information about their bounds. */
-    KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(num_distribution);
-    for (int index = 0; index < num_distribution; index++) {
+    KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(light_prims.size());
+    for (int index = 0; index < light_prims.size(); index++) {
       LightTreePrimitive &prim = light_prims[index];
       BoundBox bbox = prim.calculate_bbox(scene);
       OrientationBounds bcone = prim.calculate_bcone(scene);
@@ -393,8 +437,62 @@ void LightManager::device_update_distribution(Device *,
       }
       light_tree_emitters[index].theta_o = bcone.theta_o;
       light_tree_emitters[index].theta_e = bcone.theta_e;
+
+      light_tree_emitters[index].prim_id = prim.prim_id;
     }
     dscene->light_tree_emitters.copy_to_device();
+
+    /* We also add distant lights to a separate group. */
+    KernelLightTreeDistantEmitter *light_tree_distant_group =
+        dscene->light_tree_distant_group.alloc(num_distant_lights + 1);
+    float total_energy = 0.0f;
+    for (int index = 0; index < num_distant_lights; index++) {
+      LightTreePrimitive prim = distant_lights[index];
+      Light *light = scene->lights[prim.lamp_id];
+      
+      /* Lights in this group are either a background or distant light. */
+      light_tree_distant_group[index].prim_id = prim.prim_id;
+
+      float energy = 0.0f;
+      if (light->light_type == LIGHT_BACKGROUND) {
+        energy = average_background_energy(device, dscene, progress, scene, light);
+
+        /* We can set an arbitrary direction for the background light. */
+        light_tree_distant_group[index].direction[0] = 0.0f;
+        light_tree_distant_group[index].direction[1] = 0.0f;
+        light_tree_distant_group[index].direction[2] = 1.0f;
+
+        /* to-do: this may depend on portal lights as well. */
+        light_tree_distant_group[index].bounding_radius = M_PI_F;
+      }
+      else {
+        energy = prim.calculate_energy(scene);
+
+        for (int i = 0; i < 3; i++) {
+          light_tree_distant_group[index].direction[i] = -light->co[i];
+        }
+        light_tree_distant_group[index].bounding_radius = tanf(light->angle * 0.5f);
+      }
+
+      light_tree_distant_group[index].energy = energy;
+      total_energy += energy;
+    }
+
+    /* The final node is just used to store the total energy. */
+    if (num_distant_lights > 0) {
+      light_tree_distant_group[num_distant_lights].energy = total_energy;
+      for (int i = 0; i < 3; i++) {
+        light_tree_distant_group[num_distant_lights].direction[i] = 0.0f;
+      }
+      light_tree_distant_group[num_distant_lights].bounding_radius = 0.0f;
+    }
+
+    dscene->light_tree_distant_group.copy_to_device();
+  }
+  
+  /* Add the distant lights to the distribution. */
+  foreach (LightTreePrimitive prim, distant_lights) {
+    light_prims.push_back(prim);
   }
 
   /* triangles */
@@ -483,7 +581,7 @@ void LightManager::device_update_distribution(Device *,
         offset++;
         continue;
       }
-
+      
       Light *light = scene->lights[prim.lamp_id];
       if (!light->is_enabled)
         continue;
@@ -545,11 +643,12 @@ void LightManager::device_update_distribution(Device *,
     /* sample one, with 0.5 probability of light or triangle */
     /* to-do: this pdf is probably going to need adjustment if a light tree is used. */
     kintegrator->num_all_lights = num_lights;
+    kintegrator->num_distant_lights = num_distant_lights;
 
     /* pdf_lights is used when sampling lights, and assumes that
      * the light has been sampled through the light distribution.
      * Therefore, we override it for now and adjust the pdf manually in the light tree.*/
-    if (scene->integrator->get_use_light_tree()) {
+    if (light_tree_enabled) {
       kintegrator->pdf_triangles = 1.0f;
       kintegrator->pdf_lights = 1.0f;
     }
@@ -954,6 +1053,7 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
       klights[light_index].co[0] = co.x;
       klights[light_index].co[1] = co.y;
       klights[light_index].co[2] = co.z;
+
 
       klights[light_index].area.axisu[0] = axisu.x;
       klights[light_index].area.axisu[1] = axisu.y;

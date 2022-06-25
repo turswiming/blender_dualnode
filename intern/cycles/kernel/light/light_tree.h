@@ -30,7 +30,7 @@ ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
 
 /* This is the general function for calculating the importance of either a cluster or an emitter.
  * Both of the specialized functions obtain the necessary data before calling this function.
- * to-do: find a better way to handle this? */
+ * to-do: find a better way to handle this? or rename it to be more clear? */
 ccl_device float light_tree_node_importance(const float3 P,
                                             const float3 N,
                                             const float3 bbox_min,
@@ -112,11 +112,10 @@ ccl_device float light_tree_cluster_importance(KernelGlobals kg,
       P, N, bbox_min, bbox_max, bcone_axis, knode->theta_o, knode->theta_e, knode->energy);
 }
 
-
 /* to-do: for now, we're not going to worry about being in a volume for now,
  * but this seems to be a good way to differentiate whether we're in a volume or not. */
 template<bool in_volume_segment>
-ccl_device bool light_tree_sample(KernelGlobals kg,
+ccl_device int light_tree_sample(KernelGlobals kg,
                                   ccl_private const RNGState *rng_state,
                                   float randu,
                                   const float randv,
@@ -186,11 +185,11 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     emitter_cdf += emitter_pdf;
     if (tree_u < emitter_cdf) {
       *pdf_factor *= emitter_pdf;
-      ccl_global const KernelLightDistribution *kdistribution = &kernel_data_fetch(light_distribution,
-                                                                                   prim_index);
+      ccl_global const KernelLightDistribution *kdistribution = &kernel_data_fetch(
+          light_distribution, prim_index);
 
-      /* to-do: this is the same code as light_distribution_sample, except the index is determined differently.
-       * Would it be better to refactor this into a separate function? */
+      /* to-do: this is the same code as light_distribution_sample, except the index is determined
+       * differently. Would it be better to refactor this into a separate function? */
       const int prim = kdistribution->prim;
 
       if (prim >= 0) {
@@ -224,6 +223,60 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
   return false;
 }
 
+/* to-do: assign relative importances for the background and distant lights.
+ * Can we somehow adjust the importance measure to account for these as well? */
+ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
+                                                     const float3 P,
+                                                     const float3 N,
+                                                     const int index)
+{
+  ccl_global const KernelLightTreeDistantEmitter *kdistant = &kernel_data_fetch(
+      light_tree_distant_group, index);
+  return kdistant->energy;
+}
+
+template<bool in_volume_segment>
+ccl_device int light_tree_sample_distant_lights(KernelGlobals kg,
+                                                ccl_private const RNGState *rng_state,
+                                                float randu,
+                                                const float randv,
+                                                const float time,
+                                                const float3 N,
+                                                const float3 P,
+                                                const int bounce,
+                                                const uint32_t path_flag,
+                                                ccl_private LightSample *ls,
+                                                float *pdf_factor)
+{
+  const int num_distant_lights = kernel_data.integrator.num_distant_lights;
+  float total_importance = 0.0f;
+  for (int i = 0; i < num_distant_lights; i++) {
+    total_importance += light_tree_distant_light_importance(kg, P, N, i);
+  }
+  const float inv_total_importance = 1 / total_importance;
+
+  float light_cdf = 0.0f;
+  float distant_u = path_state_rng_1D(kg, rng_state, 1);
+  for (int i = 0; i < num_distant_lights; i++) {
+    const float light_pdf = light_tree_distant_light_importance(kg, P, N, i) *
+                            inv_total_importance;
+    light_cdf += light_pdf;
+    if (distant_u < light_cdf) {
+      *pdf_factor *= light_pdf;
+      ccl_global const KernelLightTreeDistantEmitter *kdistant = &kernel_data_fetch(
+          light_tree_distant_group, i);
+
+      const int lamp = -kdistant->prim_id - 1;
+
+      if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
+        return false;
+      }
+
+      return light_sample<in_volume_segment>(kg, lamp, randu, randv, P, path_flag, ls);
+    }
+  }
+}
+
 ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 ccl_private const RNGState *rng_state,
                                                 float randu,
@@ -235,10 +288,40 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 const uint32_t path_flag,
                                                 ccl_private LightSample *ls)
 {
-  float pdf_factor;
-  bool ret = light_tree_sample<false>(
-      kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
-  assert(pdf_factor != 0.0f);
+  const int num_distant_lights = kernel_data.integrator.num_distant_lights;
+  const int num_light_tree_prims = kernel_data.integrator.num_distribution - num_distant_lights;
+
+  float pdf_factor = 1.0f;
+  bool ret = false;
+  if (num_distant_lights == 0) {
+    ret = light_tree_sample<false>(
+        kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
+  }
+  else if (num_light_tree_prims == 0) {
+    ret = light_tree_sample_distant_lights<false>(
+        kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
+  }
+  else {
+    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, 0);
+    const float light_tree_importance = light_tree_cluster_importance(kg, P, N, knode);
+    const float distant_light_importance = light_tree_distant_light_importance(kg, P, N, num_distant_lights);
+
+    const float light_tree_probability = light_tree_importance /
+                                         (light_tree_importance +
+                                          distant_light_importance);
+
+    if (randu < light_tree_probability) {
+      ret = light_tree_sample<false>(
+          kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
+      pdf_factor *= light_tree_probability;
+    }
+    else {
+      ret = light_tree_sample_distant_lights<false>(
+          kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
+      pdf_factor *= (1 - light_tree_probability);
+    }
+  }
+
   ls->pdf *= pdf_factor;
   return ret;
 }

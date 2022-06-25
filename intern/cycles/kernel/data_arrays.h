@@ -63,6 +63,7 @@ KERNEL_DATA_ARRAY(float2, light_background_conditional_cdf)
 /* light tree */
 KERNEL_DATA_ARRAY(KernelLightTreeNode, light_tree_nodes)
 KERNEL_DATA_ARRAY(KernelLightTreeEmitter, light_tree_emitters)
+KERNEL_DATA_ARRAY(KernelLightTreeDistantEmitter, light_tree_distant_group)
 
 /* particles */
 KERNEL_DATA_ARRAY(KernelParticle, particles)

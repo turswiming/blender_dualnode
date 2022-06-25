@@ -114,6 +114,7 @@ class DeviceScene {
   /* light tree */
   device_vector<KernelLightTreeNode> light_tree_nodes;
   device_vector<KernelLightTreeEmitter> light_tree_emitters;
+  device_vector<KernelLightTreeDistantEmitter> light_tree_distant_group;
 
   /* particles */
   device_vector<KernelParticle> particles;

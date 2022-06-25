@@ -1239,6 +1239,7 @@ typedef struct KernelIntegrator {
   int use_direct_light;
   int num_distribution;
   int num_all_lights;
+  int num_distant_lights;
   float pdf_triangles;
   float pdf_lights;
   float light_inv_rr_threshold;
@@ -1303,7 +1304,7 @@ typedef struct KernelIntegrator {
   float splitting_threshold;
 
   /* padding */
-  int pad1, pad2, pad3;
+  int pad1, pad2;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 
@@ -1538,8 +1539,32 @@ typedef struct KernelLightTreeEmitter {
 
   /* Energy. */
   float energy;
+
+  /* prim_id denotes the location in the lights or triangles array. */
+  int prim_id;
+
+  /* Padding. */
+  int pad1, pad2, pad3;
 } KernelLightTreeEmitter;
 static_assert_align(KernelLightTreeEmitter, 16);
+
+typedef struct KernelLightTreeDistantEmitter {
+  /* Direction from world to light. */
+  float direction[3];
+
+  /* Size of light (in radians). */
+  float bounding_radius;
+
+  /* Energy. */
+  float energy;
+
+  /* Prim ID. */
+  int prim_id;
+
+  /* Padding. */
+  int pad1, pad2;
+} KernelLightTreeDistantEmitter;
+static_assert_align(KernelLightTreeDistantEmitter, 16);
 
 typedef struct KernelParticle {
   int index;

@@ -73,6 +73,7 @@ DeviceScene::DeviceScene(Device *device)
       light_background_conditional_cdf(device, "light_background_conditional_cdf", MEM_GLOBAL),
       light_tree_nodes(device, "light_tree_nodes", MEM_GLOBAL),
       light_tree_emitters(device, "light_tree_emitters", MEM_GLOBAL),
+      light_tree_distant_group(device, "light_tree_distant_group", MEM_GLOBAL),
       particles(device, "particles", MEM_GLOBAL),
       svm_nodes(device, "svm_nodes", MEM_GLOBAL),
       shaders(device, "shaders", MEM_GLOBAL),
