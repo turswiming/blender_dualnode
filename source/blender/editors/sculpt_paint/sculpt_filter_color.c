@@ -337,6 +337,9 @@ static int sculpt_color_filter_invoke(bContext *C, wmOperator *op, const wmEvent
 
   const bool use_automasking = SCULPT_is_automasking_enabled(sd, ss, NULL);
   if (use_automasking) {
+    /* Increment stroke id for automasking system. */
+    ss->stroke_id++;
+
     /* Update the active face set manually as the paint cursor is not enabled when using the Mesh
      * Filter Tool. */
     float mval_fl[2] = {UNPACK2(event->mval)};
