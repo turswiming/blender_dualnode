@@ -1660,8 +1660,7 @@ static void rigidbody_update_sim_world(Scene *scene, RigidBodyWorld *rbw)
   rigidbody_update_ob_array(rbw);
 }
 
-static void rigidbody_update_sim_ob(
-    Depsgraph *depsgraph, Scene *scene, RigidBodyWorld *rbw, Object *ob, RigidBodyOb *rbo)
+static void rigidbody_update_sim_ob(Depsgraph *depsgraph, Object *ob, RigidBodyOb *rbo)
 {
   /* only update if rigid body exists */
   if (rbo->shared->physics_object == NULL) {
@@ -1806,7 +1805,7 @@ static void rigidbody_update_simulation(Depsgraph *depsgraph,
       rbo->flag &= ~(RBO_FLAG_NEEDS_VALIDATE | RBO_FLAG_NEEDS_RESHAPE);
 
       /* update simulation object... */
-      rigidbody_update_sim_ob(depsgraph, scene, rbw, ob, rbo);
+      rigidbody_update_sim_ob(depsgraph, ob, rbo);
     }
   }
   FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
@@ -1964,24 +1963,24 @@ static void rigidbody_update_external_forces(Depsgraph *depsgraph,
         float eff_loc[3], eff_vel[3];
 
         /* create dummy 'point' which represents last known position of object as result of sim
-          */
+         */
         /* XXX: this can create some inaccuracies with sim position,
-          * but is probably better than using un-simulated values? */
+         * but is probably better than using un-simulated values? */
         RB_body_get_position(rbo->shared->physics_object, eff_loc);
         RB_body_get_linear_velocity(rbo->shared->physics_object, eff_vel);
 
         pd_point_from_loc(scene, eff_loc, eff_vel, 0, &epoint);
 
         /* Calculate net force of effectors, and apply to sim object:
-          * - we use 'central force' since apply force requires a "relative position"
-          *   which we don't have... */
+         * - we use 'central force' since apply force requires a "relative position"
+         *   which we don't have... */
         BKE_effectors_apply(effectors, NULL, effector_weights, &epoint, eff_force, NULL, NULL);
         if (G.f & G_DEBUG) {
           printf("\tapplying force (%f,%f,%f) to '%s'\n",
-                  eff_force[0],
-                  eff_force[1],
-                  eff_force[2],
-                  ob->id.name + 2);
+                 eff_force[0],
+                 eff_force[1],
+                 eff_force[2],
+                 ob->id.name + 2);
         }
         /* activate object in case it is deactivated */
         if (!is_zero_v3(eff_force)) {
