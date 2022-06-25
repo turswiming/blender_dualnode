@@ -906,6 +906,11 @@ static void rna_def_sculpt(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Invert Cavity Mask", "Invert cavity masking.");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
+  prop = RNA_def_property(srna, "use_automasking_cavity_direct_blur", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "automasking_cavity_blur_direct", 1);
+  RNA_def_property_ui_text(prop, "Blur Mode 2", "Blur Mode 2");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
   prop = RNA_def_property(srna, "invert_automasking_cavity", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_CAVITY_INVERT);
   RNA_def_property_ui_text(prop, "Invert Cavity Mask", "Invert cavity masking.");

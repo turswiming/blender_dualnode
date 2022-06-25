@@ -185,6 +185,20 @@ static float sculpt_automasking_cavity_factor_intern(SculptSession *ss,
   return (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERT) ? 1.0f - factor : factor;
 }
 
+static float sculpt_automasking_cavity_factor_intern2(SculptSession *ss,
+                                                      AutomaskingCache *automasking,
+                                                      float factor)
+{
+  float sign = signf(factor);
+
+  factor = fabsf(factor) * automasking->settings.cavity_factor * 50.0f;
+
+  factor = factor * sign * 0.5f + 0.5f;
+  CLAMP(factor, 0.0f, 1.0f);
+
+  return (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERT) ? 1.0f - factor : factor;
+}
+
 struct CavityBlurVert {
   int vertex;
   float dist;
@@ -207,10 +221,8 @@ struct CavityBlurVert {
   }
 };
 
-static void sculpt_calc_blurred_cavity(SculptSession *ss,
-                                       AutomaskingCache *automasking,
-                                       int steps,
-                                       int vertex)
+static void sculpt_calc_blurred_cavity(
+    SculptSession *ss, AutomaskingCache *automasking, int steps, int vertex, bool direct_blur_mode)
 {
   if (steps == 0) {
     ss->cavity_factor[vertex] = sculpt_automasking_cavity_factor_intern(ss, automasking, vertex);
@@ -218,6 +230,18 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
 
     return;
   }
+
+  float sno1[3];
+  float sno2[3];
+  float sco1[3];
+  float sco2[3];
+  float len1_sum = 0.0f, len2_sum = 0.0f;
+  int sco1_num = 0, sco2_num = 0;
+
+  zero_v3(sno1);
+  zero_v3(sno2);
+  zero_v3(sco1);
+  zero_v3(sco2);
 
   Vector<CavityBlurVert, 64> queue;
   Set<int, 64> visit;
@@ -238,13 +262,34 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
   factor_sum += sculpt_automasking_cavity_factor_intern(ss, automasking, vertex);
   factor_len++;
 
+  const float *co1 = SCULPT_vertex_co_get(ss, vertex);
+
   while (start != end) {
     CavityBlurVert &blurvert = queue[start];
     int v = blurvert.vertex;
     start = (start + 1) % queue.size();
 
+    float no[3];
+
+    const float *co = SCULPT_vertex_co_get(ss, v);
+    SCULPT_vertex_normal_get(ss, v, no);
+
+    float centdist = len_v3v3(co, co1);
+
+    add_v3_v3(sco1, co);
+    add_v3_v3(sno1, no);
+    len1_sum += centdist;
+    sco1_num++;
+
+    if (blurvert.depth < steps) {
+      add_v3_v3(sco2, co);
+      add_v3_v3(sno2, no);
+      len2_sum += centdist;
+      sco2_num++;
+    }
+
     if (blurvert.depth >= steps) {
-      break;
+      continue;
     }
 
     SculptVertexNeighborIter ni;
@@ -291,6 +336,44 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
     factor_sum /= factor_len;
   }
 
+  if (sco1_num == sco2_num) {
+    printf("error! %d %d\n", sco1_num, sco2_num);
+  }
+
+  if (!sco1_num) {
+    copy_v3_v3(sco1, SCULPT_vertex_co_get(ss, vertex));
+  }
+  else {
+    mul_v3_fl(sco1, 1.0f / (float)sco1_num);
+    len1_sum /= sco1_num;
+  }
+
+  if (!sco2_num) {
+    copy_v3_v3(sco2, SCULPT_vertex_co_get(ss, vertex));
+  }
+  else {
+    mul_v3_fl(sco2, 1.0f / (float)sco2_num);
+    len2_sum /= sco2_num;
+  }
+
+  normalize_v3(sno1);
+  if (dot_v3v3(sno1, sno1) == 0.0f) {
+    SCULPT_vertex_normal_get(ss, vertex, sno1);
+  }
+
+  normalize_v3(sno2);
+  if (dot_v3v3(sno2, sno2) == 0.0f) {
+    SCULPT_vertex_normal_get(ss, vertex, sno2);
+  }
+
+  if (direct_blur_mode) {
+    float vec[3];
+    sub_v3_v3v3(vec, sco1, sco2);
+    factor_sum = dot_v3v3(vec, sno2) / len1_sum;
+
+    factor_sum = sculpt_automasking_cavity_factor_intern2(ss, automasking, factor_sum);
+  }
+
   ss->cavity_factor[vertex] = factor_sum;
   ss->cavity_stroke_id[vertex] = ss->stroke_id;
 }
@@ -300,7 +383,7 @@ static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
                                               int vertex)
 {
   if (ss->cavity_stroke_id[vertex] != ss->stroke_id) {
-    sculpt_calc_blurred_cavity(ss, automasking, automasking->settings.cavity_blur_steps, vertex);
+    sculpt_calc_blurred_cavity(ss, automasking, automasking->settings.cavity_blur_steps, vertex, automasking->settings.cavity_blur_direct);
   }
 
   float factor = ss->cavity_factor[vertex];
@@ -556,6 +639,8 @@ static void SCULPT_automasking_cache_settings_update(AutomaskingCache *automaski
   automasking->settings.cavity_factor = sd->automasking_cavity_factor;
   automasking->settings.cavity_blur_steps = sd->automasking_cavity_blur_steps;
   automasking->settings.cavity_curve = sd->automasking_cavity_curve;
+
+  automasking->settings.cavity_blur_direct = sd->automasking_cavity_blur_direct;
 }
 
 AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object *ob)

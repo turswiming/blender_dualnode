@@ -979,6 +979,8 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
             col.prop(sculpt, "invert_automasking_cavity", text="Invert Cavity")
             col.prop(sculpt, "automasking_cavity_factor", text="Cavity Factor")
             col.prop(sculpt, "automasking_cavity_blur_steps", text="Cavity Blur")
+            
+            col.prop(sculpt, "use_automasking_cavity_direct_blur", text="Blur Mode 2")
             col.prop(sculpt, "use_automasking_custom_cavity_curve", text="Use Curve")
 
             if sculpt.use_automasking_custom_cavity_curve:
