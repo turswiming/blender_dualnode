@@ -105,6 +105,10 @@ Curves *curve_legacy_to_curves(const Curve &curve_legacy, const ListBase &nurbs_
 
   curves.update_curve_types();
 
+  if (curves.curves_num() == 0) {
+    return curves_id;
+  }
+
   MutableSpan<float3> positions = curves.positions_for_write();
   OutputAttribute_Typed<float> radius_attribute =
       component.attribute_try_get_for_output_only<float>("radius", ATTR_DOMAIN_POINT);
@@ -128,7 +132,7 @@ Curves *curve_legacy_to_curves(const Curve &curve_legacy, const ListBase &nurbs_
     });
   };
 
-  /* Note: For curve handles, legacy curves can end up in invalid situations where the handle
+  /* NOTE: For curve handles, legacy curves can end up in invalid situations where the handle
    * positions don't agree with the types because of evaluation, or because one-sided aligned
    * handles weren't considered. While recalculating automatic handles to fix those situations
    * is an option, currently this opts not to for the sake of flexibility. */
