@@ -462,12 +462,14 @@ class CYCLES_RENDER_PT_light_paths_guiding(CyclesButtonsPanel, Panel):
     bl_label = "Guiding"
     bl_parent_id = "CYCLES_RENDER_PT_light_paths"
 
+    @classmethod
+    def poll(cls, context):
+        from . import engine
+        return use_cpu(context) and engine.with_path_guiding()
+
     def draw_header(self, context):
         scene = context.scene
         cscene = scene.cycles
-
-        if cscene.device != 'CPU':
-            return
 
         self.layout.prop(cscene, "guiding", text="")
 
@@ -475,8 +477,7 @@ class CYCLES_RENDER_PT_light_paths_guiding(CyclesButtonsPanel, Panel):
         scene = context.scene
         cscene = scene.cycles
 
-        if cscene.device != 'CPU':
-            return
+        experimentalView = context.scene.cycles.feature_set == 'EXPERIMENTAL'
 
         layout = self.layout
         layout.use_property_split = True
@@ -484,13 +485,16 @@ class CYCLES_RENDER_PT_light_paths_guiding(CyclesButtonsPanel, Panel):
         layout.active = cscene.guiding
 
         col = layout.column(align=True)
-        col.prop(cscene, "guiding_distribution_type", text="Distribution Type")
+        if experimentalView:
+            col.prop(cscene, "guiding_distribution_type", text="Distribution Type")
         col.prop(cscene, "surface_guiding", text="Surface Guiding")
-        col.prop(cscene, "surface_guiding_probability", text="Surface Guiding Probability")
+        if experimentalView:
+            col.prop(cscene, "surface_guiding_probability", text="Surface Guiding Probability")
         col.prop(cscene, "volume_guiding", text="Volume Guiding")
-        col.prop(cscene, "volume_guiding_probability", text="Volume Guiding Probability")
-        col.prop(cscene, "guide_direct_light", text="Guide Direct Light")
-        col.prop(cscene, "use_mis_weights", text="Use MIS Weights")
+        if experimentalView:
+            col.prop(cscene, "volume_guiding_probability", text="Volume Guiding Probability")
+            col.prop(cscene, "guide_direct_light", text="Guide Direct Light")
+            col.prop(cscene, "use_mis_weights", text="Use MIS Weights")
 
 
 class CYCLES_RENDER_PT_light_paths_fast_gi(CyclesButtonsPanel, Panel):

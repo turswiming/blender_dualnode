@@ -515,7 +515,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     guiding: BoolProperty(
         name="Guiding",
         description="Use path guiding for sampling paths",
-        default=True,
+        default=False,
     )
 
     guiding_distribution_type: EnumProperty(

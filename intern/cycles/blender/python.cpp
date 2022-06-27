@@ -1007,6 +1007,14 @@ void *CCL_python_module_init()
   PyModule_AddStringConstant(mod, "osl_version_string", "unknown");
 #endif
 
+#ifdef WITH_PATH_GUIDING
+  PyModule_AddObject(mod, "with_path_guiding", Py_True);
+  Py_INCREF(Py_True);
+#else  /* WITH_PATH_GUIDING */
+  PyModule_AddObject(mod, "with_path_guiding", Py_False);
+  Py_INCREF(Py_False);
+#endif /* WITH_PATH_GUIDING */
+
 #ifdef WITH_EMBREE
   PyModule_AddObject(mod, "with_embree", Py_True);
   Py_INCREF(Py_True);
