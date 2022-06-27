@@ -1288,7 +1288,10 @@ void SCULPT_orig_vert_data_unode_init(SculptOrigVertData *data, Object *ob, Scul
   }
 }
 
-void SCULPT_orig_vert_data_init(SculptOrigVertData *data, Object *ob, PBVHNode *node, SculptUndoType type)
+void SCULPT_orig_vert_data_init(SculptOrigVertData *data,
+                                Object *ob,
+                                PBVHNode *node,
+                                SculptUndoType type)
 {
   SculptUndoNode *unode;
   unode = SCULPT_undo_push_node(ob, node, type);
@@ -2447,7 +2450,9 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
   avg *= 1.0f - mask;
 
   /* Auto-masking. */
-  avg *= SCULPT_automasking_factor_get(cache->automasking, ss, vertex_index);
+  if (vertex_index != -1) {
+    avg *= SCULPT_automasking_factor_get(cache->automasking, ss, vertex_index);
+  }
 
   return avg;
 }
@@ -4173,6 +4178,7 @@ static void sculpt_update_cache_invariants(
 {
   StrokeCache *cache = MEM_callocN(sizeof(StrokeCache), "stroke cache");
   UnifiedPaintSettings *ups = &CTX_data_tool_settings(C)->unified_paint_settings;
+  ToolSettings *tool_settings = CTX_data_tool_settings(C);
   Brush *brush = BKE_paint_brush(&sd->paint);
   ViewContext *vc = paint_stroke_view_context(op->customdata);
   Object *ob = CTX_data_active_object(C);
@@ -4182,6 +4188,8 @@ static void sculpt_update_cache_invariants(
   int mode;
 
   ss->cache = cache;
+
+  cache->use_pixels = sculpt_needs_pbvh_pixels(&tool_settings->paint_mode, brush, ob);
 
   /* Set scaling adjustment. */
   max_scale = 0.0f;
@@ -5332,6 +5340,11 @@ static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const f
     }
     else {
       SCULPT_undo_push_begin(ob, sculpt_tool_name(sd));
+    }
+
+    /* Mark all pbvh nodes for update. */
+    if (ss->pbvh) {
+      BKE_pbvh_node_automasking_mark_all(ss->pbvh);
     }
 
     return true;

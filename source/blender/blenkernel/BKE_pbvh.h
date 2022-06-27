@@ -79,6 +79,7 @@ typedef enum {
   PBVH_UpdateTopology = 1 << 13,
   PBVH_UpdateColor = 1 << 14,
   PBVH_RebuildPixels = 1 << 15,
+  PBVH_RebuildAutomasking = 1 << 16,
 
 } PBVHNodeFlags;
 
@@ -413,7 +414,7 @@ typedef struct PBVHVertexIter {
   /* mesh */
   struct MVert *mverts;
   float (*vert_normals)[3];
-  int totvert;
+  int totvert, unique_verts;
   const int *vert_indices;
   float *vmask;
 
@@ -586,6 +587,23 @@ void BKE_pbvh_vertex_color_get(const PBVH *pbvh, int vertex, float r_color[4]);
 
 void BKE_pbvh_ensure_node_loops(PBVH *pbvh);
 bool BKE_pbvh_draw_cache_invalid(const PBVH *pbvh);
+
+void BKE_pbvh_node_automasking_mark(PBVH *pbvh, PBVHNode *node);
+void BKE_pbvh_node_automasking_unmark(PBVH *pbvh, PBVHNode *node);
+bool BKE_pbvh_node_needs_automasking(PBVH *pbvh, PBVHNode *node);
+void BKE_pbvh_node_automasking_mark_all(PBVH *pbvh);
+
+/* XXX Temporary attribute for patch development; remove for final patch! */
+#ifdef __clang__
+#  define ATTR_NO_OPT __attribute__((optnone))
+#elif defined(_MSC_VER)
+#  define ATTR_NO_OPT __pragma(optimize("", off))
+#elif defined(__GNUC__)
+#  define ATTR_NO_OPT __attribute__((optimize("O0")))
+#else
+#  define ATTR_NO_OPT
+#endif
+
 
 #ifdef __cplusplus
 }

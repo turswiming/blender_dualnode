@@ -394,6 +394,9 @@ typedef struct AutomaskingSettings {
   /* Flags from eAutomasking_flag. */
   int flags;
   int initial_face_set;
+  float start_normal_limit, start_normal_falloff;
+  float view_normal_limit, view_normal_falloff;
+  bool use_original_normal;
 } AutomaskingSettings;
 
 typedef struct AutomaskingCache {
@@ -401,6 +404,7 @@ typedef struct AutomaskingCache {
   /* Precomputed auto-mask factor indexed by vertex, owned by the auto-masking system and
    * initialized in #SCULPT_automasking_cache_init when needed. */
   float *factor;
+  bool has_full_factor_cache; /* Cache was built for entire mesh at once. */
 } AutomaskingCache;
 
 typedef struct FilterCache {
@@ -631,6 +635,7 @@ typedef struct StrokeCache {
   rcti previous_r; /* previous redraw rectangle */
   rcti current_r;  /* current redraw rectangle */
 
+  bool use_pixels;
 } StrokeCache;
 
 /* -------------------------------------------------------------------- */
@@ -1288,6 +1293,10 @@ float *SCULPT_boundary_automasking_init(Object *ob,
                                         eBoundaryAutomaskMode mode,
                                         int propagation_steps,
                                         float *automask_factor);
+
+bool SCULPT_automasking_needs_normal(const SculptSession *ss,
+                                     const Sculpt *sculpt,
+                                     const Brush *brush);
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1804,6 +1813,11 @@ void SCULPT_bmesh_topology_rake(
 void SCULPT_OT_brush_stroke(struct wmOperatorType *ot);
 
 /* end sculpt_ops.c */
+
+void SCULPT_automasking_cache_check(struct SculptSession *ss,
+                                    struct AutomaskingCache *automasking,
+                                    struct PBVHNode **nodes,
+                                    int totnode);
 
 #define SCULPT_TOOL_NEEDS_COLOR(tool) ELEM(tool, SCULPT_TOOL_PAINT, SCULPT_TOOL_SMEAR)
 
