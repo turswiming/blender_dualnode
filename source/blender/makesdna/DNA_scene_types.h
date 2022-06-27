@@ -1016,6 +1016,9 @@ typedef struct Sculpt {
 
   char _pad[4];
 
+  float automasking_start_normal_limit, automasking_start_normal_falloff;
+  float automasking_view_normal_limit, automasking_view_normal_falloff;
+
   struct Object *gravity_object;
 } Sculpt;
 

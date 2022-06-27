@@ -394,6 +394,9 @@ typedef struct AutomaskingSettings {
   /* Flags from eAutomasking_flag. */
   int flags;
   int initial_face_set;
+  float start_normal_limit, start_normal_falloff;
+  float view_normal_limit, view_normal_falloff;
+  bool use_original_normal;
 } AutomaskingSettings;
 
 typedef struct AutomaskingCache {
@@ -1288,6 +1291,10 @@ float *SCULPT_boundary_automasking_init(Object *ob,
                                         eBoundaryAutomaskMode mode,
                                         int propagation_steps,
                                         float *automask_factor);
+
+bool SCULPT_automasking_needs_normal(const SculptSession *ss,
+                                     const Sculpt *sculpt,
+                                     const Brush *brush);
 /** \} */
 
 /* -------------------------------------------------------------------- */

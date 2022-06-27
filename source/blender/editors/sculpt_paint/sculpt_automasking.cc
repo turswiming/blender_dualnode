@@ -87,6 +87,12 @@ bool SCULPT_is_automasking_enabled(const Sculpt *sd, const SculptSession *ss, co
   if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS)) {
     return true;
   }
+  if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
+    return true;
+  }
+  if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_VIEW_NORMAL)) {
+    return true;
+  }
   return false;
 }
 
@@ -96,6 +102,45 @@ static int sculpt_automasking_mode_effective_bits(const Sculpt *sculpt, const Br
     return sculpt->automasking_flags | brush->automasking_flags;
   }
   return sculpt->automasking_flags;
+}
+
+bool SCULPT_automasking_needs_normal(const SculptSession *ss,
+                                     const Sculpt *sculpt,
+                                     const Brush *brush)
+{
+  int flags = sculpt_automasking_mode_effective_bits(sculpt, brush);
+
+  return flags & (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL);
+}
+
+static float sculpt_automasking_normal_calc(AutomaskingCache *automasking,
+                                            SculptSession *ss,
+                                            int vertex,
+                                            const float normal[3],
+                                            float limit_lower,
+                                            float limit_upper)
+{
+  float normal_v[3];
+
+  SCULPT_vertex_normal_get(ss, vertex, normal_v);
+
+  float angle = saacos(dot_v3v3(normal, normal_v));
+
+  /* note that limit is pre-divided by M_PI */
+
+  if (angle > limit_lower && angle < limit_upper) {
+    float t = 1.0f - (angle - limit_lower) / (limit_upper - limit_lower);
+
+    /* smoothstep */
+    t = t * t * (3.0 - 2.0 * t);
+
+    return t;
+  }
+  else if (angle > limit_upper) {
+    return 0.0f;
+  }
+
+  return 1.0f;
 }
 
 static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush *brush)
@@ -144,7 +189,32 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession
     }
   }
 
-  return 1.0f;
+  float mask = 1.0f;
+
+  if (ss->cache && (automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
+    float falloff = automasking->settings.start_normal_falloff * M_PI;
+
+    mask *= sculpt_automasking_normal_calc(
+        automasking,
+        ss,
+        vert,
+        ss->cache->initial_normal,
+        automasking->settings.start_normal_limit - falloff * 0.5f,
+        automasking->settings.start_normal_limit + falloff * 0.5f);
+  }
+
+  if (ss->cache && (automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_NORMAL)) {
+    float falloff = automasking->settings.view_normal_falloff * M_PI;
+
+    mask *= sculpt_automasking_normal_calc(automasking,
+                                           ss,
+                                           vert,
+                                           ss->cache->view_normal,
+                                           automasking->settings.view_normal_limit,
+                                           automasking->settings.view_normal_limit + falloff);
+  }
+
+  return mask;
 }
 
 void SCULPT_automasking_cache_free(AutomaskingCache *automasking)
@@ -319,6 +389,12 @@ static void SCULPT_automasking_cache_settings_update(AutomaskingCache *automaski
 {
   automasking->settings.flags = sculpt_automasking_mode_effective_bits(sd, brush);
   automasking->settings.initial_face_set = SCULPT_active_face_set_get(ss);
+
+  automasking->settings.view_normal_limit = sd->automasking_view_normal_limit;
+  automasking->settings.view_normal_falloff = sd->automasking_view_normal_falloff;
+  automasking->settings.start_normal_limit = sd->automasking_start_normal_limit;
+  automasking->settings.start_normal_falloff = sd->automasking_start_normal_falloff;
+  automasking->settings.use_original_normal = sd->automasking_use_original_normal;
 }
 
 AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object *ob)

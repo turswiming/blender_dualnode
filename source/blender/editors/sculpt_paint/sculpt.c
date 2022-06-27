@@ -1231,11 +1231,11 @@ static bool sculpt_brush_use_topology_rake(const SculptSession *ss, const Brush 
 /**
  * Test whether the #StrokeCache.sculpt_normal needs update in #do_brush_action
  */
-static int sculpt_brush_needs_normal(const SculptSession *ss, const Brush *brush)
+static int sculpt_brush_needs_normal(const SculptSession *ss, Sculpt *sd, const Brush *brush)
 {
   return ((SCULPT_TOOL_HAS_NORMAL_WEIGHT(brush->sculpt_tool) &&
            (ss->cache->normal_weight > 0.0f)) ||
-
+          SCULPT_automasking_needs_normal(ss, sd, brush) ||
           ELEM(brush->sculpt_tool,
                SCULPT_TOOL_BLOB,
                SCULPT_TOOL_CREASE,
@@ -1288,7 +1288,10 @@ void SCULPT_orig_vert_data_unode_init(SculptOrigVertData *data, Object *ob, Scul
   }
 }
 
-void SCULPT_orig_vert_data_init(SculptOrigVertData *data, Object *ob, PBVHNode *node, SculptUndoType type)
+void SCULPT_orig_vert_data_init(SculptOrigVertData *data,
+                                Object *ob,
+                                PBVHNode *node,
+                                SculptUndoType type)
 {
   SculptUndoNode *unode;
   unode = SCULPT_undo_push_node(ob, node, type);
@@ -3344,7 +3347,7 @@ static void do_brush_action(Sculpt *sd,
     BLI_task_parallel_range(0, totnode, &task_data, do_brush_action_task_cb, &settings);
   }
 
-  if (sculpt_brush_needs_normal(ss, brush)) {
+  if (sculpt_brush_needs_normal(ss, sd, brush)) {
     update_sculpt_normal(sd, ob, nodes, totnode);
   }
 

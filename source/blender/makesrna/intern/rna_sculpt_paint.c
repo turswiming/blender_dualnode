@@ -900,7 +900,59 @@ static void rna_def_sculpt(BlenderRNA *brna)
                            "Face Sets Boundary Auto-Masking",
                            "Do not affect vertices that belong to a Face Set boundary");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+  
+  prop = RNA_def_property(srna, "use_automasking_start_normal", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_BRUSH_NORMAL);
+  RNA_def_property_ui_text(prop,
+                           "Initial Normal",
+                           "Only include vertices with similar normal to initial brush dab");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
+  prop = RNA_def_property(srna, "use_automasking_view_normal", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_VIEW_NORMAL);
+  RNA_def_property_ui_text(prop,
+                           "Occlusion",
+                           "Ignore back facing vertices");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+  prop = RNA_def_property(srna, "automasking_start_normal_limit", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_float_sdna(
+      prop, NULL, "automasking_start_normal_limit");
+  RNA_def_property_range(prop, 0.0001f, M_PI);  
+  RNA_def_property_ui_text(prop,
+                           "Initial Limit",
+                           "Initial normal limit");            
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+  prop = RNA_def_property(srna, "automasking_start_normal_falloff", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(
+      prop, NULL, "automasking_start_normal_falloff");
+  RNA_def_property_range(prop, 0.0001f, 1.0f);  
+  RNA_def_property_ui_text(prop,
+                           "Initial Falloff",
+                           "Initial normal falloff");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+  prop = RNA_def_property(srna, "automasking_view_normal_limit", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_float_sdna(
+      prop, NULL, "automasking_view_normal_limit");
+  RNA_def_property_range(prop, 0.0001f, M_PI);  
+  RNA_def_property_ui_text(prop,
+                           "Occlusion Limit",
+                           "Occlusion normal limit");            
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+  prop = RNA_def_property(srna, "automasking_view_normal_falloff", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(
+      prop, NULL, "automasking_view_normal_falloff");
+  RNA_def_property_range(prop, 0.0001f, 1.0f);  
+  RNA_def_property_ui_text(prop,
+                           "Occlusion Falloff",
+                           "Occlusion normal falloff");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+  
   prop = RNA_def_property(srna, "symmetrize_direction", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_symmetrize_direction_items);
   RNA_def_property_ui_text(prop, "Direction", "Source and destination for symmetrize operator");

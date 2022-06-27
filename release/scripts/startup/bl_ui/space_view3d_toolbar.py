@@ -970,7 +970,20 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         col.prop(sculpt, "use_automasking_topology", text="Topology")
         col.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
         col.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
-        col.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+        col.prop(sculpt, "use_automasking_start_normal", text="Initial Normal")
+        col.prop(sculpt, "use_automasking_view_normal", text="Occlusion")
+
+        if sculpt.use_automasking_start_normal:
+            col.separator()
+
+            col.prop(sculpt, "automasking_start_normal_limit")
+            col.prop(sculpt, "automasking_start_normal_falloff")
+
+        if sculpt.use_automasking_view_normal:
+            col.separator()
+
+            col.prop(sculpt, "automasking_view_normal_limit")
+            col.prop(sculpt, "automasking_view_normal_falloff")
 
 
 class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
