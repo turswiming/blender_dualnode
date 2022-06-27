@@ -396,7 +396,6 @@ typedef struct AutomaskingSettings {
   int initial_face_set;
   float start_normal_limit, start_normal_falloff;
   float view_normal_limit, view_normal_falloff;
-  bool use_original_normal;
 } AutomaskingSettings;
 
 typedef struct AutomaskingCache {

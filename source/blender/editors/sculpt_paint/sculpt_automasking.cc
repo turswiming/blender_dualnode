@@ -394,7 +394,6 @@ static void SCULPT_automasking_cache_settings_update(AutomaskingCache *automaski
   automasking->settings.view_normal_falloff = sd->automasking_view_normal_falloff;
   automasking->settings.start_normal_limit = sd->automasking_start_normal_limit;
   automasking->settings.start_normal_falloff = sd->automasking_start_normal_falloff;
-  automasking->settings.use_original_normal = sd->automasking_use_original_normal;
 }
 
 AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object *ob)
