@@ -3065,11 +3065,8 @@ static int wm_save_as_mainfile_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   char path[FILE_MAX];
   const bool is_save_as = (op->type->invoke == wm_save_as_mainfile_invoke);
-  const bool use_save_as_copy = (RNA_struct_property_is_set(op->ptr, "copy") &&
-                                 RNA_boolean_get(op->ptr, "copy"));
-  const bool use_legacy_mesh_format = (RNA_struct_property_is_set(op->ptr,
-                                                                  "use_legacy_mesh_format") &&
-                                       RNA_boolean_get(op->ptr, "use_legacy_mesh_format"));
+  const bool use_save_as_copy = RNA_boolean_get(op->ptr, "copy");
+  const bool use_legacy_mesh_format = RNA_boolean_get(op->ptr, "use_legacy_mesh_format");
 
   /* We could expose all options to the users however in most cases remapping
    * existing relative paths is a good default.
@@ -3211,6 +3208,7 @@ void WM_OT_save_as_mainfile(wmOperatorType *ot)
       false,
       "Legacy Mesh Format",
       "Save mesh data with a legacy format that can be read by earlier versions");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 static int wm_save_mainfile_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
