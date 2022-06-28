@@ -229,6 +229,8 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   // we need to add a new segment or add the direction
   // or at lease the sampling direction to the new path segment
   const bool use_guiding = kernel_data.integrator.guiding;
+  float3 rr_throughput = INTEGRATOR_STATE(state, path, rr_throughput);
+  rr_throughput = safe_divide_color(rr_throughput, albedo);
   bssrdf_weight = safe_divide_color(bssrdf_weight, albedo);
   float3 initial_throughput = throughput;
   if (use_guiding) {
@@ -462,8 +464,7 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
     throughput *= transmittance_weight;
 
 #ifdef __PATH_GUIDING__
-    // set the transmittance weight for the current random walk segment
-    // TODO: when we start guiding SSS
+    rr_throughput *= transmittance_weight;
 #endif
 
     if (hit) {
@@ -482,8 +483,7 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
     kernel_assert(isfinite3_safe(throughput));
     INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-    INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= safe_divide_color(throughput,
-                                                                            initial_throughput);
+    INTEGRATOR_STATE_WRITE(state, path, rr_throughput) = rr_throughput;
 #endif
   }
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
