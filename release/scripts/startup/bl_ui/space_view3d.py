@@ -6765,7 +6765,9 @@ class VIEW3D_PT_snapping(Panel):
         layout = self.layout
         col = layout.column()
         col.active = tool_settings.use_snap
+
         col.label(text="Snap To")
+
         col.prop(tool_settings, "snap_elements", expand=True)
 
         col.separator()
@@ -6779,9 +6781,10 @@ class VIEW3D_PT_snapping(Panel):
                 row.prop(tool_settings, "snap_target", expand=True)
 
             if obj:
+                show_target_options = object_mode == 'EDIT' and obj.type not in {'LATTICE', 'META', 'FONT'}
                 col.label(text="Target Selection")
                 col_targetsel = col.column(align=True)
-                if object_mode == 'EDIT' and obj.type not in {'LATTICE', 'META', 'FONT'}:
+                if show_target_options:
                     # active_use_self = True
                     # active_use_self &= not (tool_settings.use_proportional_edit and obj.type == 'MESH')
                     # active_use_self &= tool_settings.use_snap_edit
@@ -6789,6 +6792,8 @@ class VIEW3D_PT_snapping(Panel):
                     col_targetsel.prop(tool_settings, "use_snap_edit", text="Include Edited", icon='OUTLINER_DATA_MESH')
                     col_targetsel.prop(tool_settings, "use_snap_nonedit", text="Include Non-Edited", icon='OUTLINER_OB_MESH')
                 col_targetsel.prop(tool_settings, "use_snap_selectable", text="Exclude Non-Selectable", icon='RESTRICT_SELECT_OFF')
+                if show_target_options:
+                    col_targetsel.prop(tool_settings, "use_snap_retopology_mode", text="Use Retopology Mode", icon='MOD_MESHDEFORM')
 
                 if object_mode in {'OBJECT', 'POSE', 'EDIT', 'WEIGHT_PAINT'}:
                     col.prop(tool_settings, "use_snap_align_rotation")

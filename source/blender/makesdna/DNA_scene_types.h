@@ -2099,6 +2099,7 @@ typedef enum eSnapFlag {
   SCE_SNAP_TO_INCLUDE_EDITED = (1 << 8),
   SCE_SNAP_TO_INCLUDE_NONEDITED = (1 << 9),
   SCE_SNAP_TO_ONLY_SELECTABLE = (1 << 10),
+  SCE_SNAP_RETOPOLOGY_MODE = (1 << 11),
 } eSnapFlag;
 /* Due to dependency conflicts with Cycles, header cannot directly include `BLI_utildefines.h`. */
 /* TODO: move this macro to a more general place. */
@@ -2123,6 +2124,7 @@ typedef enum eSnapTargetSelect {
   SCE_SNAP_TARGET_NOT_EDITED = (1 << 2),
   SCE_SNAP_TARGET_ONLY_SELECTABLE = (1 << 3),
   SCE_SNAP_TARGET_NOT_NONEDITED = (1 << 4),
+  SCE_SNAP_TARGET_RETOPOLOGY_MODE = (1 << 5),
 } eSnapTargetSelect;
 
 /** #ToolSettings.snap_mode */

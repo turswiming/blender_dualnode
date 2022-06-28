@@ -128,11 +128,12 @@ bool activeSnap(const TransInfo *t)
 
 bool activeSnap_SnappingIndividual(const TransInfo *t)
 {
-  if (activeSnap(t) && t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST) {
+  if (t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST) {
+    // Face Nearest snapping always snaps individual vertices
     return true;
   }
 
-  if (!t->tsnap.project) {
+  if (t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST && !t->tsnap.project) {
     return false;
   }
 
@@ -154,10 +155,6 @@ bool activeSnap_SnappingAsGroup(const TransInfo *t)
   }
 
   if (t->tsnap.mode == SCE_SNAP_MODE_FACE_RAYCAST && t->tsnap.project) {
-    return false;
-  }
-
-  if (t->tsnap.mode == SCE_SNAP_MODE_FACE_NEAREST) {
     return false;
   }
 
@@ -368,8 +365,10 @@ eRedrawFlag handleSnapping(TransInfo *t, const wmEvent *event)
   return status;
 }
 
-static bool applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td)
+static bool applyFaceProject_Individual(TransInfo *t, TransDataContainer *tc, TransData *td)
 {
+  /* TODO(gfxcoder): remove debug print */
+  printf("applyFaceProject_Individual: %d\n", t->tsnap.flag);
   if (!(t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST)) {
     return false;
   }
@@ -493,7 +492,10 @@ static void applyFaceNearest(TransInfo *t, TransDataContainer *tc, TransData *td
 
 void applySnappingIndividual(TransInfo *t)
 {
+  /* TODO(gfxcoder): remove debug print */
+  printf("applySnappingIndividual\n");
   if (!activeSnap_SnappingIndividual(t)) {
+    printf("  skipping!\n");
     return;
   }
 
@@ -511,8 +513,11 @@ void applySnappingIndividual(TransInfo *t)
 
       /* If both face raycast and face nearest methods are enabled, start with face raycast and
        * fallback to face nearest raycast does not hit. */
-      bool hit = applyFaceProject(t, tc, td);
-      if (!hit) {
+      bool hit = false;
+      if (t->tsnap.flag & SCE_SNAP_PROJECT && t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST) {
+        hit = applyFaceProject_Individual(t, tc, td);
+      }
+      if (!hit && t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST) {
         applyFaceNearest(t, tc, td);
       }
 #if 0 /* TODO: support this? */
@@ -574,7 +579,10 @@ void applyGridAbsolute(TransInfo *t)
 
 void applySnappingAsGroup(TransInfo *t, float *vec)
 {
+  /* TODO(gfxcoder): remove debug print */
+  printf("applySnappingAsGroup\n");
   if (!activeSnap_SnappingAsGroup(t)) {
+    printf("  skipping!\n");
     return;
   }
 
@@ -738,6 +746,7 @@ static eSnapTargetSelect snap_select_target_get(TransInfo *t)
   bool use_snap_edit = (t->tsnap.target_select & SCE_SNAP_TARGET_NOT_EDITED) == 0;
   bool use_snap_nonedit = (t->tsnap.target_select & SCE_SNAP_TARGET_NOT_NONEDITED) == 0;
   bool use_snap_selectable_only = (t->tsnap.target_select & SCE_SNAP_TARGET_ONLY_SELECTABLE) != 0;
+  // bool use_retopology_mode = (t->tsnap.target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE) != 0;
 
   if (ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE) && !(t->options & CTX_CAMERA)) {
     if (base_act && (base_act->object->mode & OB_MODE_PARTICLE_EDIT)) {
@@ -918,6 +927,13 @@ void initSnapping(TransInfo *t, wmOperator *op)
                            RNA_property_boolean_get(op->ptr, prop),
                            SCE_SNAP_TARGET_ONLY_SELECTABLE);
       }
+
+      if ((prop = RNA_struct_find_property(op->ptr, "use_snap_retopology_mode")) &&
+          RNA_property_is_set(op->ptr, prop)) {
+        SET_FLAG_FROM_TEST(t->tsnap.target_select,
+                           RNA_property_boolean_get(op->ptr, prop),
+                           SCE_SNAP_TARGET_RETOPOLOGY_MODE);
+      }
     }
   }
   /* use scene defaults only when transform is modal */
@@ -941,6 +957,9 @@ void initSnapping(TransInfo *t, wmOperator *op)
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
                        (t->settings->snap_flag & SCE_SNAP_TO_ONLY_SELECTABLE),
                        SCE_SNAP_TARGET_ONLY_SELECTABLE);
+    SET_FLAG_FROM_TEST(t->tsnap.target_select,
+                       (t->settings->snap_flag & SCE_SNAP_RETOPOLOGY_MODE),
+                       SCE_SNAP_TARGET_RETOPOLOGY_MODE);
     t->tsnap.peel = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
   }
 
@@ -1447,16 +1466,38 @@ eSnapMode snapObjectsTransform(
     TransInfo *t, const float mval[2], float *dist_px, float r_loc[3], float r_no[3])
 {
   float *target = (t->tsnap.status & TARGET_INIT) ? t->tsnap.snapTarget : t->center_global;
+
+  // filter mode to group snapping modes
+  eSnapMode mode = t->tsnap.mode;
+  mode &= ~(SCE_SNAP_MODE_FACE_NEAREST);
+  if (t->tsnap.flag & SCE_SNAP_PROJECT) {
+    mode &= ~(SCE_SNAP_MODE_FACE_RAYCAST);
+  }
+
+  const bool use_retopo_mode = (t->tsnap.target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE);
+  const bool face_raycast_only = t->settings->snap_mode == SCE_SNAP_MODE_FACE_RAYCAST;
+  const bool use_occlusion_test = use_retopo_mode || !face_raycast_only;
+
+  /* TODO(gfxcoder): remove debug print */
+  printf(
+      "snapObjectsTransform: target_select:%d snap_mode:%d use_retopo_mode:%s "
+      "face_raycast_only:%s use_occlusion_test:%s\n",
+      t->tsnap.target_select,
+      t->settings->snap_mode,
+      use_retopo_mode ? "t" : "f",
+      face_raycast_only ? "t" : "f",
+      use_occlusion_test ? "t" : "f");
+
   return ED_transform_snap_object_project_view3d(
       t->tsnap.object_context,
       t->depsgraph,
       t->region,
       t->view,
-      t->tsnap.mode,
+      mode,
       &(const struct SnapObjectParams){
           .snap_target_select = t->tsnap.target_select,
           .edit_mode_type = (t->flag & T_EDIT) != 0 ? SNAP_GEOM_EDIT : SNAP_GEOM_FINAL,
-          .use_occlusion_test = t->settings->snap_mode != SCE_SNAP_MODE_FACE_RAYCAST,
+          .use_occlusion_test = use_occlusion_test,
           .use_backface_culling = t->tsnap.use_backface_culling,
       },
       NULL,

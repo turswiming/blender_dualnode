@@ -538,6 +538,8 @@ static void iter_snap_objects(SnapObjectContext *sctx,
   const eSnapTargetSelect snap_target_select = params->snap_target_select;
   Base *base_act = view_layer->basact;
 
+  /* TODO(gfxcoder): removed debug print */
+  printf("iter_snap_object:\n");
   LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
     if (!snap_object_is_snappable(sctx, snap_target_select, base_act, base)) {
       continue;
@@ -553,6 +555,15 @@ static void iter_snap_objects(SnapObjectContext *sctx,
       }
       free_object_duplilist(lb);
     }
+
+    // TODO(@gfxcoder): remove these debug prints once retopology mode is getting set correctly
+    const bool use_retopo_mode = (params->snap_target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE);
+    const bool is_object_edited = BKE_object_is_in_editmode(obj_eval);
+    printf("  snap_callback:%d obj:%s retopo:%s edit:%s\n",
+           sob_callback,
+           obj_eval->id.name,
+           use_retopo_mode ? "t" : "f",
+           is_object_edited ? "t" : "f");
 
     sob_callback(sctx, params, obj_eval, obj_eval->obmat, is_object_active, data);
   }
@@ -1023,6 +1034,19 @@ static void raycast_obj_fn(SnapObjectContext *sctx,
   /* read/write args */
   float *ray_depth = dt->ray_depth;
 
+  const bool use_retopo_mode = params->snap_target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE;
+  const bool is_object_edited = BKE_object_is_in_editmode(ob_eval);
+  /* TODO(gfxcoder): removed debug print */
+  printf("raycast_obj_fn: obj:%s retopo:%s edit:%s occlusion:%s\n",
+         ob_eval->id.name,
+         use_retopo_mode ? "t" : "f",
+         is_object_edited ? "t" : "f",
+         use_occlusion_test ? "t" : "f");
+  if (use_retopo_mode && is_object_edited) {
+    printf("  skipped\n");
+    return;
+  }
+
   bool retval = false;
   if (use_occlusion_test) {
     if (ELEM(ob_eval->dt, OB_BOUNDBOX, OB_WIRE)) {
@@ -1176,6 +1200,8 @@ static bool raycastObjects(SnapObjectContext *sctx,
   data.use_occlusion_test = params->use_occlusion_test;
   data.ret = false;
 
+  /* TODO(gfxcoder): removed debug print */
+  printf("raycastObjects\n");
   iter_snap_objects(sctx, params, raycast_obj_fn, &data);
 
   return data.ret;
@@ -1382,6 +1408,18 @@ static void nearest_world_object_fn(SnapObjectContext *sctx,
 {
   struct NearestWorldObjUserData *dt = static_cast<NearestWorldObjUserData *>(data);
 
+  const bool use_retopo_mode = params->snap_target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE;
+  const bool is_object_edited = BKE_object_is_in_editmode(ob_eval);
+  /* TODO(gfxcoder): removed debug print */
+  printf("nearest_world_object_fn: obj:%s retopo:%s edit:%s\n",
+         ob_eval->id.name,
+         use_retopo_mode ? "t" : "f",
+         is_object_edited ? "t" : "f");
+  if (use_retopo_mode && is_object_edited) {
+    printf("  skipped\n");
+    return;
+  }
+
   bool retval = false;
   switch (ob_eval->type) {
     case OB_MESH: {
@@ -1495,6 +1533,8 @@ static bool nearestWorldObjects(SnapObjectContext *sctx,
   data.r_obmat = r_obmat;
   data.ret = false;
 
+  /* TODO(gfxcoder): removed debug print */
+  printf("nearestWorldObjects\n");
   iter_snap_objects(sctx, params, nearest_world_object_fn, &data);
   return data.ret;
 }
@@ -3053,6 +3093,18 @@ static void snap_obj_fn(SnapObjectContext *sctx,
   SnapObjUserData *dt = static_cast<SnapObjUserData *>(data);
   eSnapMode retval = SCE_SNAP_MODE_NONE;
 
+  const bool use_retopo_mode = (params->snap_target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE);
+  const bool is_object_edited = BKE_object_is_in_editmode(ob_eval);
+  /* TODO(gfxcoder): removed debug print */
+  printf("snap_obj_fn: obj:%s retopo:%s edit:%s\n",
+         ob_eval->id.name,
+         use_retopo_mode ? "t" : "f",
+         is_object_edited ? "t" : "f");
+  if (use_retopo_mode && !is_object_edited) {
+    printf("  skipped\n");
+    return;
+  }
+
   switch (ob_eval->type) {
     case OB_MESH: {
       const eSnapEditType edit_mode_type = params->edit_mode_type;
@@ -3193,6 +3245,8 @@ static eSnapMode snapObjectsRay(SnapObjectContext *sctx,
   data.r_obmat = r_obmat;
   data.ret = SCE_SNAP_MODE_NONE;
 
+  /* TODO(gfxcoder): removed debug print */
+  printf("snapObjectsRay\n");
   iter_snap_objects(sctx, params, snap_obj_fn, &data);
 
   return data.ret;
@@ -3385,47 +3439,33 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
   sctx->runtime.region = region;
   sctx->runtime.v3d = v3d;
 
-  BLI_assert((snap_to_flag & SCE_SNAP_MODE_GEOM) != 0);
+  if ((snap_to_flag & SCE_SNAP_MODE_GEOM) == 0) {
+    return SCE_SNAP_MODE_NONE;
+  }
+
+  // BLI_assert((snap_to_flag & SCE_SNAP_MODE_GEOM) != 0);
 
   eSnapMode retval = SCE_SNAP_MODE_NONE;
 
   bool has_hit = false;
   Object *ob_eval = nullptr;
+  Object *ob_ray = nullptr;
   float loc[3];
   /* Not all snapping callbacks set the normal,
    * initialize this since any hit copies both the `loc` and `no`. */
   float no[3] = {0.0f, 0.0f, 0.0f};
   float obmat[4][4];
+  float obmat_ray[4][4];
   int index = -1;
 
   const RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
-  bool use_occlusion_test = params->use_occlusion_test && !XRAY_ENABLED(v3d);
+  const bool use_retopo_mode = params->snap_target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE;
+  const bool use_occlusion_test = params->use_occlusion_test && !XRAY_ENABLED(v3d);
 
-  /* Note: if both face raycast and face nearest are enabled, first find result of nearest, then
-   * override with raycast. */
-  if ((snap_to_flag & SCE_SNAP_MODE_FACE_NEAREST) && !has_hit) {
-    has_hit = nearestWorldObjects(
-        sctx, params, init_co, prev_co, loc, no, &index, &ob_eval, obmat);
-
-    if (has_hit) {
-      retval = SCE_SNAP_MODE_FACE_NEAREST;
-
-      copy_v3_v3(r_loc, loc);
-      if (r_no) {
-        copy_v3_v3(r_no, no);
-      }
-      if (r_ob) {
-        *r_ob = ob_eval;
-      }
-      if (r_obmat) {
-        copy_m4_m4(r_obmat, obmat);
-      }
-      if (r_index) {
-        *r_index = index;
-      }
-    }
-  }
+  /* TODO(gfxcoder): removed debug print */
+  printf("--- transform_snap_context_project_view3d_mixed_impl occlusion:%s ---\n",
+         use_occlusion_test ? "t" : "f");
 
   if (snap_to_flag & SCE_SNAP_MODE_FACE_RAYCAST || use_occlusion_test) {
     float ray_start[3], ray_normal[3];
@@ -3444,16 +3484,19 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
                              loc,
                              no,
                              &index,
-                             &ob_eval,
-                             obmat,
+                             &ob_ray,    // &ob_eval,
+                             obmat_ray,  // obmat,
                              nullptr);
 
     if (has_hit) {
+      /* TODO(gfxcoder): removed debug print */
+      printf("HIT FACE RAYCAST\n");
       if (r_face_nor) {
         copy_v3_v3(r_face_nor, no);
       }
 
       if ((snap_to_flag & SCE_SNAP_MODE_FACE_RAYCAST)) {
+        /* Record snap results only if face raycast snapping mode is enabled. */
         retval = SCE_SNAP_MODE_FACE_RAYCAST;
 
         copy_v3_v3(r_loc, loc);
@@ -3461,14 +3504,18 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
           copy_v3_v3(r_no, no);
         }
         if (r_ob) {
-          *r_ob = ob_eval;
+          *r_ob = ob_ray;  // ob_eval;
         }
         if (r_obmat) {
-          copy_m4_m4(r_obmat, obmat);
+          copy_m4_m4(r_obmat, obmat_ray);  // obmat
         }
         if (r_index) {
           *r_index = index;
         }
+      }
+      if (use_occlusion_test && !use_retopo_mode) {
+        ob_eval = ob_ray;
+        copy_m4_m4(obmat, obmat_ray);
       }
     }
   }
@@ -3504,7 +3551,7 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
     sctx->runtime.has_occlusion_plane = false;
 
     /* By convention we only snap to the original elements of a curve. */
-    if (has_hit && ob_eval->type != OB_CURVES_LEGACY) {
+    if (has_hit && ob_ray->type != OB_CURVES_LEGACY) {
       /* Compute the new clip_pane but do not add it yet. */
       float new_clipplane[4];
       BLI_ASSERT_UNIT_V3(no);
@@ -3518,8 +3565,9 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
       new_clipplane[3] += 0.01f;
 
       /* Try to snap only to the polygon. */
-      elem_test = snap_mesh_polygon(sctx, params, ob_eval, obmat, &dist_px_tmp, loc, no, &index);
-      if (elem_test) {
+      elem_test = snap_mesh_polygon(
+          sctx, params, ob_ray, obmat_ray, &dist_px_tmp, loc, no, &index);
+      if (elem_test && !use_retopo_mode) {
         elem = elem_test;
       }
 
@@ -3546,6 +3594,8 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
     }
 
     if (elem & snap_to_flag) {
+      /* TODO(gfxcoder): removed debug print */
+      printf("HIT %d\n", elem);
       retval = elem;
 
       copy_v3_v3(r_loc, loc);
@@ -3567,6 +3617,33 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
       }
 
       *dist_px = dist_px_tmp;
+    }
+  }
+
+  /* Note: if both face raycast and face nearest are enabled, first find result of nearest, then
+   * override with raycast. */
+  if ((snap_to_flag & SCE_SNAP_MODE_FACE_NEAREST) && !has_hit) {
+    has_hit = nearestWorldObjects(
+        sctx, params, init_co, prev_co, loc, no, &index, &ob_eval, obmat);
+
+    if (has_hit) {
+      /* TODO(gfxcoder): removed debug print */
+      printf("HIT FACE NEAREST\n");
+      retval = SCE_SNAP_MODE_FACE_NEAREST;
+
+      copy_v3_v3(r_loc, loc);
+      if (r_no) {
+        copy_v3_v3(r_no, no);
+      }
+      if (r_ob) {
+        *r_ob = ob_eval;
+      }
+      if (r_obmat) {
+        copy_m4_m4(r_obmat, obmat);
+      }
+      if (r_index) {
+        *r_index = index;
+      }
     }
   }
 

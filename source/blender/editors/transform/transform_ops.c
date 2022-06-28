@@ -656,7 +656,7 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
 
   if (flags & P_SNAP) {
     // TODO: rename `snap` to `use_snap`?
-    prop = RNA_def_boolean(ot->srna, "snap", 0, "Use Snapping Options", "");
+    prop = RNA_def_boolean(ot->srna, "snap", false, "Use Snapping Options", "");
     RNA_def_property_flag(prop, PROP_HIDDEN);
 
     prop = RNA_def_enum(
@@ -678,10 +678,26 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
       RNA_def_property_flag(prop, PROP_HIDDEN);
       prop = RNA_def_boolean(ot->srna, "use_snap_edit", true, "Target: Include Edit", "");
       RNA_def_property_flag(prop, PROP_HIDDEN);
-      prop = RNA_def_boolean(ot->srna, "use_snap_nonedit", true, "Target: Include Non-Edited", "");
+      prop = RNA_def_boolean(
+          ot->srna, "use_snap_nonedit", false, "Target: Include Non-Edited", "");
       RNA_def_property_flag(prop, PROP_HIDDEN);
       prop = RNA_def_boolean(
           ot->srna, "use_snap_selectable", true, "Target: Exclude Non-Selectable", "");
+      RNA_def_property_flag(prop, PROP_HIDDEN);
+      prop = RNA_def_boolean(ot->srna,
+                             "use_snap_retopology_mode",
+                             true,
+                             "Target: Retopology Mode",
+                             "Snap grabbed geometry to vertices and edges of edited objects (if "
+                             "enabled) and to faces of non-edited objects (if enabled)");
+      RNA_def_property_flag(prop, PROP_HIDDEN);
+
+      /* Face Nearest options */
+      prop = RNA_def_boolean(
+          ot->srna, "use_snap_to_same_target", false, "Snap to Same Target", "");
+      RNA_def_property_flag(prop, PROP_HIDDEN);
+      prop = RNA_def_int(
+          ot->srna, "snap_face_nearest_steps", 1, 1, 32767, "Face Nearest Steps", "", 1, 32767);
       RNA_def_property_flag(prop, PROP_HIDDEN);
 
       prop = RNA_def_float_vector(
@@ -689,7 +705,7 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
       RNA_def_property_flag(prop, PROP_HIDDEN);
 
       if (flags & P_ALIGN_SNAP) {
-        prop = RNA_def_boolean(ot->srna, "snap_align", 0, "Align with Point Normal", "");
+        prop = RNA_def_boolean(ot->srna, "snap_align", false, "Align with Point Normal", "");
         RNA_def_property_flag(prop, PROP_HIDDEN);
         prop = RNA_def_float_vector(
             ot->srna, "snap_normal", 3, NULL, -FLT_MAX, FLT_MAX, "Normal", "", -FLT_MAX, FLT_MAX);
