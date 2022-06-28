@@ -45,7 +45,8 @@ void main()
 
   vec4 pos_ndc = point_world_to_ndc(world_pos);
 
-#if 1
+#if 0
+  /* TODO: make screen size aware. */
   if (hairThicknessRes > 1) {
     vec3 orig_pos;
     orig_pos = world_pos + binor * -thick_time;
