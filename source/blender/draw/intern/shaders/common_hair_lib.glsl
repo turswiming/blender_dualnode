@@ -210,8 +210,9 @@ void hair_get_pos_tan_binor_time(bool is_persp,
     /* Take object scale into account.
      * NOTE: This only works fine with uniform scaling. */
     float scale = 1.0 / length(mat3(invmodel_mat) * wbinor);
+    thick_time *= scale;  // HACK: thick_time is now in world space...
 
-    wpos += wbinor * thick_time * scale;
+    wpos += wbinor * thick_time;
   }
   else {
     /* NOTE: Ensures 'hairThickTime' is initialized -
