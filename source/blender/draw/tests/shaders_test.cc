@@ -256,6 +256,7 @@ static void test_overlay_glsl_shaders()
     EXPECT_NE(OVERLAY_shader_uniform_color(), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass(false), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass(true), nullptr);
+    EXPECT_NE(OVERLAY_shader_outline_prepass_curves(), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass_gpencil(), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass_pointcloud(), nullptr);
     EXPECT_NE(OVERLAY_shader_extra_grid(), nullptr);
