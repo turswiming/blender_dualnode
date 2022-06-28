@@ -173,6 +173,11 @@ bool sequencer_edit_poll(bContext *C)
   return (SEQ_editing_get(CTX_data_scene(C)) != NULL);
 }
 
+bool sequencer_editing_initialized_and_active(bContext *C)
+{
+  return ED_operator_sequencer_active(C) && sequencer_edit_poll(C);
+}
+
 #if 0 /* UNUSED */
 bool sequencer_strip_poll(bContext *C)
 {
@@ -581,21 +586,13 @@ static int sequencer_slip_invoke(bContext *C, wmOperator *op, const wmEvent *eve
 
 static void sequencer_slip_recursively(Scene *scene, SlipData *data, int offset)
 {
-  /* Iterate in reverse so meta-strips are iterated after their children. */
   for (int i = data->num_seq - 1; i >= 0; i--) {
     Sequence *seq = data->seq_array[i];
-    int endframe;
 
-    /* Offset seq start. */
     seq->start = data->ts[i].start + offset;
-
     if (data->trim[i]) {
-      /* Find the end-frame. */
-      endframe = seq->start + seq->len;
-
-      /* Compute the sequence offsets. */
-      seq->endofs = endframe - SEQ_time_right_handle_frame_get(seq);
-      seq->startofs = SEQ_time_left_handle_frame_get(seq) - seq->start;
+      seq->startofs = data->ts[i].startofs - offset;
+      seq->endofs = data->ts[i].endofs + offset;
     }
   }
 
@@ -1914,11 +1911,9 @@ static int sequencer_meta_toggle_exec(bContext *C, wmOperator *UNUSED(op))
   SEQ_prefetch_stop(scene);
 
   if (active_seq && active_seq->type == SEQ_TYPE_META && active_seq->flag & SELECT) {
-    /* Enter meta-strip. */
-    SEQ_meta_stack_alloc(ed, active_seq);
-    SEQ_seqbase_active_set(ed, &active_seq->seqbase);
-    SEQ_channels_displayed_set(ed, &active_seq->channels);
+    /* Deselect active meta seq. */
     SEQ_select_active_set(scene, NULL);
+    SEQ_meta_stack_set(scene, active_seq);
   }
   else {
     /* Exit meta-strip if possible. */
@@ -1926,14 +1921,12 @@ static int sequencer_meta_toggle_exec(bContext *C, wmOperator *UNUSED(op))
       return OPERATOR_CANCELLED;
     }
 
-    MetaStack *ms = SEQ_meta_stack_active_get(ed);
-    SEQ_seqbase_active_set(ed, ms->oldbasep);
-    SEQ_channels_displayed_set(ed, ms->old_channels);
-    SEQ_select_active_set(scene, ms->parseq);
-    SEQ_meta_stack_free(ed, ms);
+    /* Display parent meta. */
+    Sequence *meta_parent = SEQ_meta_stack_pop(ed);
+    SEQ_select_active_set(scene, meta_parent);
   }
 
-  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  // DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
@@ -2397,6 +2390,13 @@ static void sequencer_copy_animation(Scene *scene, Sequence *seq)
     return;
   }
 
+  /* Add curves for strips inside meta strip. */
+  if (seq->type == SEQ_TYPE_META) {
+    LISTBASE_FOREACH (Sequence *, meta_child, &seq->seqbase) {
+      sequencer_copy_animation(scene, meta_child);
+    }
+  }
+
   GSet *fcurves = SEQ_fcurves_by_strip_get(seq, &scene->adt->action->curves);
   if (fcurves == NULL) {
     return;
@@ -2406,6 +2406,7 @@ static void sequencer_copy_animation(Scene *scene, Sequence *seq)
     BLI_addtail(&fcurves_clipboard, BKE_fcurve_copy(fcu));
   }
   GSET_FOREACH_END();
+
   BLI_gset_free(fcurves, NULL);
 }
 
