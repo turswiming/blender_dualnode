@@ -450,7 +450,7 @@ if(NOT APPLE)
 endif()
 
 # Intel OpenPGL
-option(WITH_CYCLES_PATH_GUIDING              "Build Cycles with path guiding support" OFF)
+option(WITH_CYCLES_PATH_GUIDING              "Build Cycles with path guiding support" ON)
 
 # Apple Metal
 if(APPLE)
