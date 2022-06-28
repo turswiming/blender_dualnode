@@ -146,9 +146,9 @@ void Session::run_main_render_loop()
   /* guiding settings. */
   // TODO: is this the right place
   {
-    const GuidingParams guiding_params = scene->integrator->get_guiding_params();
-    if (guiding_params.use) {
-      path_trace_->set_guiding_params(scene->device, guiding_params);
+    guiding_params_ = scene->integrator->get_guiding_params();
+    if (guiding_params_.use) {
+      path_trace_->set_guiding_params(scene->device, guiding_params_);
     }
   }
 #endif
@@ -328,6 +328,18 @@ RenderWork Session::run_update_for_next_iteration()
     const AdaptiveSampling adaptive_sampling = scene->integrator->get_adaptive_sampling();
     path_trace_->set_adaptive_sampling(adaptive_sampling);
   }
+
+#if defined(WITH_PATH_GUIDING)
+  /* Update path guiding. */
+  {
+    const GuidingParams guiding_params = scene->integrator->get_guiding_params();
+    // check if the path guiding parameters have changed since session started
+    if (guiding_params_.modified(guiding_params)) {
+      guiding_params_ = guiding_params;
+      path_trace_->set_guiding_params(scene->device, guiding_params_);
+    }
+  }
+#endif
 
   render_scheduler_.set_num_samples(params.samples);
   render_scheduler_.set_start_sample(params.sample_offset);

@@ -6,6 +6,9 @@
 
 #include "device/device.h"
 #include "integrator/render_scheduler.h"
+#if defined(WITH_PATH_GUIDING)
+#  include "integrator/guiding.h"
+#endif
 #include "scene/shader.h"
 #include "scene/stats.h"
 #include "session/buffers.h"
@@ -223,6 +226,10 @@ class Session {
 
   TileManager tile_manager_;
   BufferParams buffer_params_;
+
+#if defined(WITH_PATH_GUIDING)
+  GuidingParams guiding_params_;
+#endif
 
   /* Render scheduler is used to get work to be rendered with the current big tile. */
   RenderScheduler render_scheduler_;

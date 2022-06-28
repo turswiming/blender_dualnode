@@ -96,8 +96,8 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
                                       int sample_offset)
 {
 #if defined(__PATH_GUIDING__) && defined(WITH_PATH_GUIDING_DEBUG_PRINT)
-  std::cout << "render_samples: start_sample = " << start_sample
-            << "\t samples_num = " << samples_num << std::endl;
+  VLOG_WORK << "render_samples: start_sample = " << start_sample
+            << "\t samples_num = " << samples_num;
 #endif
   const int64_t image_width = effective_buffer_params_.width;
   const int64_t image_height = effective_buffer_params_.height;

@@ -1238,7 +1238,9 @@ string PathTrace::full_report() const
 #ifdef __PATH_GUIDING__
 void PathTrace::set_guiding_params(ccl::Device *device, const GuidingParams &guiding)
 {
-  guiding_sample_data_storage_ = new openpgl::cpp::SampleStorage();
+  if (!guiding_sample_data_storage_) {
+    guiding_sample_data_storage_ = new openpgl::cpp::SampleStorage();
+  }
   guiding_sample_data_storage_->Clear();
 
   PGLFieldArguments guidingFieldArgs;
@@ -1269,6 +1271,10 @@ void PathTrace::set_guiding_params(ccl::Device *device, const GuidingParams &gui
       break;
     }
   }
+
+  if (guiding_field_) {
+    delete guiding_field_;
+  }
   guiding_field_ = static_cast<openpgl::cpp::Field *>(
       device->create_guiding_field(&guidingFieldArgs));
 }
@@ -1291,10 +1297,10 @@ void PathTrace::guiding_update_structures()
 {
   // TODO(sherholz): implement
 #  ifdef WITH_PATH_GUIDING_DEBUG_PRINT
-  std::cout << "update guiding structures" << std::endl;
-  std::cout << "SampleDataStrorage: #surface samples = "
+  VLOG_WORK << "Path Guiding: update guiding structures";
+  VLOG_WORK << "SampleDataStrorage: #surface samples = "
             << guiding_sample_data_storage_->GetSizeSurface()
-            << "\t#volumesamples = " << guiding_sample_data_storage_->GetSizeVolume() << std::endl;
+            << "\t#volumesamples = " << guiding_sample_data_storage_->GetSizeVolume();
 #  endif
   // int training_iteration = guiding_field_->GetIteration();
   if (true) {
@@ -1320,7 +1326,9 @@ void PathTrace::guiding_update_structures()
       const size_t num_samples = 1;
       guiding_field_->Update(*guiding_sample_data_storage_, num_samples);
       guiding_update_count++;
-      std::cout << "Field: valid = " << guiding_field_->Validate() << std::endl;
+#  ifdef WITH_PATH_GUIDING_DEBUG_PRINT
+      VLOG_WORK << "Field: valid = " << guiding_field_->Validate();
+#  endif
       // if(guiding_update_count<=1)
 
       guiding_sample_data_storage_->Clear();

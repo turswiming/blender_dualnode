@@ -23,6 +23,8 @@ class GuidingParams {
  public:
   GuidingParams() = default;
 
+  // the subset of path guiding parameters that can
+  // trigger a creation/rebuild of the guiding field
   bool use{false};
   GuidingDistributionType type{GUIDING_TYPE_PAVMM};
 
