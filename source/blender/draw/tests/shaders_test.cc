@@ -397,6 +397,7 @@ static void test_basic_glsl_shaders()
     eGPUShaderConfig sh_cfg = static_cast<eGPUShaderConfig>(i);
     BASIC_shaders_depth_sh_get(sh_cfg);
     BASIC_shaders_pointcloud_depth_sh_get(sh_cfg);
+    BASIC_shaders_curves_depth_sh_get(sh_cfg);
     BASIC_shaders_depth_conservative_sh_get(sh_cfg);
     BASIC_shaders_pointcloud_depth_conservative_sh_get(sh_cfg);
   }
