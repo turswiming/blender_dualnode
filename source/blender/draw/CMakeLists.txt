@@ -531,6 +531,7 @@ set(GLSL_SRC
   engines/overlay/shaders/overlay_motion_path_line_vert.glsl
   engines/overlay/shaders/overlay_motion_path_point_vert.glsl
   engines/overlay/shaders/overlay_outline_detect_frag.glsl
+  engines/overlay/shaders/overlay_outline_prepass_curves_vert.glsl
   engines/overlay/shaders/overlay_outline_prepass_frag.glsl
   engines/overlay/shaders/overlay_outline_prepass_geom.glsl
   engines/overlay/shaders/overlay_outline_prepass_gpencil_frag.glsl
