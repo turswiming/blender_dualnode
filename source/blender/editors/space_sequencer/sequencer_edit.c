@@ -173,6 +173,11 @@ bool sequencer_edit_poll(bContext *C)
   return (SEQ_editing_get(CTX_data_scene(C)) != NULL);
 }
 
+bool sequencer_editing_initialized_and_active(bContext *C)
+{
+  return ED_operator_sequencer_active(C) && sequencer_edit_poll(C);
+}
+
 #if 0 /* UNUSED */
 bool sequencer_strip_poll(bContext *C)
 {
@@ -1906,11 +1911,9 @@ static int sequencer_meta_toggle_exec(bContext *C, wmOperator *UNUSED(op))
   SEQ_prefetch_stop(scene);
 
   if (active_seq && active_seq->type == SEQ_TYPE_META && active_seq->flag & SELECT) {
-    /* Enter meta-strip. */
-    SEQ_meta_stack_alloc(ed, active_seq);
-    SEQ_seqbase_active_set(ed, &active_seq->seqbase);
-    SEQ_channels_displayed_set(ed, &active_seq->channels);
+    /* Deselect active meta seq. */
     SEQ_select_active_set(scene, NULL);
+    SEQ_meta_stack_set(scene, active_seq);
   }
   else {
     /* Exit meta-strip if possible. */
@@ -1918,14 +1921,12 @@ static int sequencer_meta_toggle_exec(bContext *C, wmOperator *UNUSED(op))
       return OPERATOR_CANCELLED;
     }
 
-    MetaStack *ms = SEQ_meta_stack_active_get(ed);
-    SEQ_seqbase_active_set(ed, ms->oldbasep);
-    SEQ_channels_displayed_set(ed, ms->old_channels);
-    SEQ_select_active_set(scene, ms->parseq);
-    SEQ_meta_stack_free(ed, ms);
+    /* Display parent meta. */
+    Sequence *meta_parent = SEQ_meta_stack_pop(ed);
+    SEQ_select_active_set(scene, meta_parent);
   }
 
-  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  // DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
