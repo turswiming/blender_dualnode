@@ -45,20 +45,22 @@ void main()
 
   vec4 pos_ndc = point_world_to_ndc(world_pos);
 
+#if 1
   if (hairThicknessRes > 1) {
     vec3 orig_pos;
     orig_pos = world_pos + binor * -thick_time;
     vec4 orig_pos_ndc = point_world_to_ndc(orig_pos);
+    vec3 pos_view = point_world_to_view(world_pos);
     vec3 orig_pos_view = point_world_to_view(orig_pos);
-    gl_Position.xyz = orig_pos_view;
-    return;
-    vec4 d = pos_ndc - orig_pos_ndc;
+    vec3 d = pos_view - orig_pos_view;
     float distance = length(d.xy);
-    /*if (distance < 0.01) {
-      distance = 0.01;
-    }*/
-    pos_ndc = orig_pos_ndc + d * distance;
+    if (distance < 0.0001) {
+      distance = 0.0001;
+    }
+    pos_view = orig_pos_view + distance * normalize(d);
+    pos_ndc = point_view_to_ndc(pos_view);
   }
+#endif
 
   gl_Position = pos_ndc;
 
