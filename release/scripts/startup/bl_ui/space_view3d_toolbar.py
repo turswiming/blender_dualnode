@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-from bpy.types import Menu, Panel, UIList
+from bpy.types import Menu, Panel, UIList, WindowManager
 from bl_ui.properties_grease_pencil_common import (
     GreasePencilSculptAdvancedPanel,
     GreasePencilDisplayPanel,
@@ -939,7 +939,6 @@ class VIEW3D_PT_sculpt_voxel_remesh(Panel, View3DPaintPanel):
 
         layout.operator("object.voxel_remesh", text="Remesh")
 
-
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
     bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)
@@ -1011,7 +1010,29 @@ class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
         col.active = capabilities.has_gravity
         col.prop(sculpt, "gravity", slider=True, text="Factor")
         col.prop(sculpt, "gravity_object")
+    
+class VIEW3D_PT_sculpt_automask_bake(Panel, View3DPaintPanel):
+    bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)
+    bl_label = "Bake Automask"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_ui_units_x = 12
+    bl_parent_id = "VIEW3D_PT_sculpt_options"
 
+    @classmethod
+    def poll(cls, context):
+        return (context.sculpt_object and context.tool_settings.sculpt)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        tool_settings = context.tool_settings
+        sculpt = tool_settings.sculpt
+
+        layout.prop(WindowManager.operator_properties_last("sculpt.bake_automask"), "mix_mode")
+        layout.prop(WindowManager.operator_properties_last("sculpt.bake_automask"), "factor")
+        props = layout.operator("sculpt.bake_automask")
 
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
@@ -2455,6 +2476,7 @@ classes = (
     VIEW3D_PT_tools_grease_pencil_brush_vertex_color,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_palette,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff,
+    VIEW3D_PT_sculpt_automask_bake,
 )
 
 if __name__ == "__main__":  # only for live edit.

@@ -1127,6 +1127,155 @@ static void SCULPT_OT_mask_by_color(wmOperatorType *ot)
                 1.0f);
 }
 
+typedef enum {
+  AUTOMASK_BAKE_MIX,
+  AUTOMASK_BAKE_MULTIPLY,
+  AUTOMASK_BAKE_DIVIDE,
+  AUTOMASK_BAKE_ADD,
+  AUTOMASK_BAKE_SUBTRACT,
+} AutomaskBakeMixMode;
+
+typedef struct AutomaskBakeTaskData {
+  SculptSession *ss;
+  AutomaskingCache *automasking;
+  PBVHNode **nodes;
+  AutomaskBakeMixMode mode;
+  float factor;
+  Object *ob;
+} AutomaskBakeTaskData;
+
+static void sculpt_bake_automask_exec_task_cb(void *__restrict userdata,
+                                              const int n,
+                                              const TaskParallelTLS *__restrict UNUSED(tls))
+{
+  AutomaskBakeTaskData *tdata = userdata;
+  SculptSession *ss = tdata->ss;
+  PBVHNode *node = tdata->nodes[n];
+  PBVHVertexIter vd;
+  const AutomaskBakeMixMode mode = tdata->mode;
+  const float factor = tdata->factor;
+
+  SCULPT_undo_push_node(tdata->ob, node, SCULPT_UNDO_MASK);
+
+  BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
+    float automask = SCULPT_automasking_factor_get(tdata->automasking, ss, vd.index);
+    float mask;
+
+    switch (mode) {
+      case AUTOMASK_BAKE_MIX:
+        mask = automask;
+        break;
+      case AUTOMASK_BAKE_MULTIPLY:
+        mask = *vd.mask * automask;
+        break;
+        break;
+      case AUTOMASK_BAKE_DIVIDE:
+        mask = automask > 0.00001f ? *vd.mask / automask : 0.0f;
+        break;
+        break;
+      case AUTOMASK_BAKE_ADD:
+        mask = *vd.mask + automask;
+        break;
+      case AUTOMASK_BAKE_SUBTRACT:
+        mask = *vd.mask - automask;
+        break;
+    }
+
+    mask = *vd.mask + (mask - *vd.mask) * factor;
+    CLAMP(mask, 0.0f, 1.0f);
+
+    *vd.mask = mask;
+
+    if (vd.mvert) {
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+    }
+  }
+  BKE_pbvh_vertex_iter_end;
+
+  BKE_pbvh_node_mark_redraw(node);
+}
+
+static int sculpt_bake_automask_exec(bContext *C, wmOperator *op)
+{
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  Object *ob = CTX_data_active_object(C);
+  SculptSession *ss = ob->sculpt;
+  Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
+  Brush *brush = BKE_paint_brush(&sd->paint);
+
+  BKE_sculpt_update_object_for_edit(depsgraph, ob, true, true, false);
+  SCULPT_vertex_random_access_ensure(ss);
+
+  SCULPT_undo_push_begin(ob, "Bake Automask");
+
+  AutomaskBakeMixMode mode = RNA_enum_get(op->ptr, "mix_mode");
+  float factor = RNA_float_get(op->ptr, "factor");
+
+  PBVHNode **nodes;
+  int totnode;
+
+  BKE_pbvh_search_gather(ss->pbvh, NULL, NULL, &nodes, &totnode);
+
+  AutomaskBakeTaskData tdata;
+
+  tdata.ob = ob;
+  tdata.mode = mode;
+  tdata.factor = factor;
+  tdata.ss = ss;
+  tdata.nodes = nodes;
+  tdata.automasking = SCULPT_automasking_cache_init(sd, brush, ob);
+
+  ss->stroke_id++;
+
+  TaskParallelSettings settings;
+  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
+  BLI_task_parallel_range(0, totnode, &tdata, sculpt_bake_automask_exec_task_cb, &settings);
+
+  MEM_SAFE_FREE(nodes);
+  SCULPT_automasking_cache_free(tdata.automasking);
+
+  BKE_pbvh_update_vertex_data(ss->pbvh, PBVH_UpdateMask);
+  SCULPT_undo_push_end(ob);
+
+  SCULPT_flush_update_done(C, ob, SCULPT_UPDATE_MASK);
+
+  /* Unlike other operators we do not tag the ID for update here;
+   * it triggers a PBVH rebuild which is too slow and ruins
+   * the interactivity of the tool. */
+
+  return OPERATOR_FINISHED;
+}
+
+static void SCULPT_OT_bake_automask(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Bake Automask";
+  ot->idname = "SCULPT_OT_bake_automask";
+  ot->description = "Creates a mask based on automasking settings";
+
+  static EnumPropertyItem mix_modes[] = {
+      {AUTOMASK_BAKE_MIX, "MIX", ICON_NONE, "Mix", ""},
+      {AUTOMASK_BAKE_MIX, "MULTIPLY", ICON_NONE, "Multiply", ""},
+      {AUTOMASK_BAKE_MIX, "DIVIDE", ICON_NONE, "Divide", ""},
+      {AUTOMASK_BAKE_MIX, "ADD", ICON_NONE, "Add", ""},
+      {AUTOMASK_BAKE_MIX, "SUBTRACT", ICON_NONE, "Subtract", ""},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  /* api callbacks */
+  ot->exec = sculpt_bake_automask_exec;
+  ot->poll = SCULPT_mode_poll;
+
+  ot->flag = OPTYPE_REGISTER;
+
+  PropertyRNA *prop;
+
+  prop = RNA_def_enum(ot->srna, "mix_mode", mix_modes, AUTOMASK_BAKE_MIX, "Mode", "Mix mode");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+
+  RNA_def_float(ot->srna, "factor", 1.0f, 0.0f, 4.0f, "Mix Factor", "", 0.0f, 1.0f);
+}
+
 void ED_operatortypes_sculpt(void)
 {
   WM_operatortype_append(SCULPT_OT_brush_stroke);
@@ -1164,4 +1313,5 @@ void ED_operatortypes_sculpt(void)
   WM_operatortype_append(SCULPT_OT_mask_init);
 
   WM_operatortype_append(SCULPT_OT_expand);
+  WM_operatortype_append(SCULPT_OT_bake_automask);
 }
