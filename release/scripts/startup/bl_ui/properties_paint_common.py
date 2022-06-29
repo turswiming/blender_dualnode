@@ -946,6 +946,23 @@ def brush_settings_advanced(layout, context, brush, popover=False):
         col.prop(brush, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
         col.prop(brush, "automasking_boundary_edges_propagation_steps")
 
+        col.prop(brush, "use_automasking_start_normal", text="Area Normal")
+        col.prop(brush, "use_automasking_view_normal", text="View Normal")
+
+        sculpt = context.tool_settings.sculpt
+
+        if brush.use_automasking_start_normal:
+            col.separator()
+
+            col.prop(sculpt, "automasking_start_normal_limit")
+            col.prop(sculpt, "automasking_start_normal_falloff")
+
+        if brush.use_automasking_view_normal:
+            col.separator()
+
+            col.prop(sculpt, "automasking_view_normal_limit")
+            col.prop(sculpt, "automasking_view_normal_falloff")
+
         layout.separator()
 
         # sculpt plane settings

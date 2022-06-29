@@ -3127,6 +3127,22 @@ static void rna_def_brush(BlenderRNA *brna)
                            "Do not affect vertices that belong to a Face Set boundary");
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
+  prop = RNA_def_property(srna, "use_automasking_start_normal", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_BRUSH_NORMAL);
+  RNA_def_property_ui_text(prop,
+                           "Area Normal",
+                           "Only include vertices with similar normal to initial brush dab");
+  RNA_def_property_update(prop, 0, "rna_Brush_update");
+
+  prop = RNA_def_property(srna, "use_automasking_view_normal", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_VIEW_NORMAL);
+  RNA_def_property_ui_text(prop,
+                           "View Normal",
+                           "Mask back facing vertices");
+  RNA_def_property_update(prop, 0, "rna_Brush_update");
+  
   prop = RNA_def_property(srna, "use_scene_spacing", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_bitflag_sdna(prop, NULL, "flag");
   RNA_def_property_enum_items(prop, brush_spacing_unit_items);
