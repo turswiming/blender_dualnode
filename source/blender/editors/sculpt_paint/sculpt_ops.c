@@ -1268,11 +1268,7 @@ static void SCULPT_OT_bake_automask(wmOperatorType *ot)
 
   ot->flag = OPTYPE_REGISTER;
 
-  PropertyRNA *prop;
-
-  prop = RNA_def_enum(ot->srna, "mix_mode", mix_modes, AUTOMASK_BAKE_MIX, "Mode", "Mix mode");
-  RNA_def_property_flag(prop, PROP_EDITABLE);
-
+  RNA_def_enum(ot->srna, "mix_mode", mix_modes, AUTOMASK_BAKE_MIX, "Mode", "Mix mode");
   RNA_def_float(ot->srna, "factor", 1.0f, 0.0f, 4.0f, "Mix Factor", "", 0.0f, 1.0f);
 }
 
