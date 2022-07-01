@@ -164,41 +164,42 @@ float hair_shaperadius(float shape, float root, float tip, float time)
 in float dummy;
 #  endif
 
-void hair_get_pos_tan_binor_time(bool is_persp,
-                                 mat4 invmodel_mat,
-                                 vec3 camera_pos,
-                                 vec3 camera_z,
-                                 out vec3 wpos,
-                                 out vec3 wtan,
-                                 out vec3 wbinor,
-                                 out float time,
-                                 out float thickness,
-                                 out float thick_time)
+void hair_get_pos_tan_binor_time_ex(bool is_persp,
+                                    mat4 invmodel_mat,
+                                    vec3 camera_pos,
+                                    vec3 camera_z,
+                                    out vec3 orig_wpos,
+                                    out vec3 wpos,
+                                    out vec3 wtan,
+                                    out vec3 wbinor,
+                                    out float time,
+                                    out float thickness,
+                                    out float thick_time)
 {
   int id = hair_get_base_id();
   vec4 data = texelFetch(hairPointBuffer, id);
-  wpos = data.point_position;
+  orig_wpos = data.point_position;
   time = data.point_time;
 
 #  if defined(OS_MAC) && defined(GPU_OPENGL)
   /* Generate a dummy read to avoid the driver bug with shaders having no
    * vertex reads on macOS (T60171) */
-  wpos.y += dummy * 0.0;
+  orig_wpos.y += dummy * 0.0;
 #  endif
 
   if (time == 0.0) {
     /* Hair root */
-    wtan = texelFetch(hairPointBuffer, id + 1).point_position - wpos;
+    wtan = texelFetch(hairPointBuffer, id + 1).point_position - orig_wpos;
   }
   else {
-    wtan = wpos - texelFetch(hairPointBuffer, id - 1).point_position;
+    wtan = orig_wpos - texelFetch(hairPointBuffer, id - 1).point_position;
   }
 
   mat4 obmat = hairDupliMatrix;
-  wpos = (obmat * vec4(wpos, 1.0)).xyz;
+  orig_wpos = (obmat * vec4(orig_wpos, 1.0)).xyz;
   wtan = -normalize(mat3(obmat) * wtan);
 
-  vec3 camera_vec = (is_persp) ? camera_pos - wpos : camera_z;
+  vec3 camera_vec = (is_persp) ? camera_pos - orig_wpos : camera_z;
   wbinor = normalize(cross(camera_vec, wtan));
 
   thickness = hair_shaperadius(hairRadShape, hairRadRoot, hairRadTip, time);
@@ -211,14 +212,38 @@ void hair_get_pos_tan_binor_time(bool is_persp,
      * NOTE: This only works fine with uniform scaling. */
     float scale = 1.0 / length(mat3(invmodel_mat) * wbinor);
     thick_time *= scale;  // HACK: thick_time is now in world space...
-
-    wpos += wbinor * thick_time;
   }
   else {
     /* NOTE: Ensures 'hairThickTime' is initialized -
      * avoids undefined behavior on certain macOS configurations. */
     thick_time = 0.0;
   }
+  wpos = orig_wpos + wbinor * thick_time;
+}
+
+void hair_get_pos_tan_binor_time(bool is_persp,
+                                 mat4 invmodel_mat,
+                                 vec3 camera_pos,
+                                 vec3 camera_z,
+                                 out vec3 wpos,
+                                 out vec3 wtan,
+                                 out vec3 wbinor,
+                                 out float time,
+                                 out float thickness,
+                                 out float thick_time)
+{
+  vec3 orig_wpos;
+  hair_get_pos_tan_binor_time_ex(is_persp,
+                                 invmodel_mat,
+                                 camera_pos,
+                                 camera_z,
+                                 orig_wpos,
+                                 wpos,
+                                 wtan,
+                                 wbinor,
+                                 time,
+                                 thickness,
+                                 thick_time);
 }
 
 float hair_get_customdata_float(const samplerBuffer cd_buf)

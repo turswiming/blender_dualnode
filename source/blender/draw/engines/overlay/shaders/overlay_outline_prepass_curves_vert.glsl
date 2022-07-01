@@ -31,29 +31,31 @@ void main()
 {
   bool is_persp = (ProjectionMatrix[3][3] == 0.0);
   float time, thick_time, thickness;
-  vec3 world_pos, tan, binor;
-  hair_get_pos_tan_binor_time(is_persp,
-                              ModelMatrixInverse,
-                              ViewMatrixInverse[3].xyz,
-                              ViewMatrixInverse[2].xyz,
-                              world_pos,
-                              tan,
-                              binor,
-                              time,
-                              thickness,
-                              thick_time);
+  vec3 center_world_pos, world_pos, tan, binor;
+
+  hair_get_pos_tan_binor_time_ex(is_persp,
+                                 ModelMatrixInverse,
+                                 ViewMatrixInverse[3].xyz,
+                                 ViewMatrixInverse[2].xyz,
+                                 center_world_pos,
+                                 world_pos,
+                                 tan,
+                                 binor,
+                                 time,
+                                 thickness,
+                                 thick_time);
 
   vec4 pos_ndc = point_world_to_ndc(world_pos);
 
-#if 0
-  /* TODO: make screen size aware. */
   if (hairThicknessRes > 1) {
-    vec3 orig_pos;
-    orig_pos = world_pos + binor * -thick_time;
-    vec4 orig_pos_ndc = point_world_to_ndc(orig_pos);
+    if (thick_time == 0.0) {
+      float thick_time = ((gl_VertexID % hairThicknessRes) == 0 ? -1.0 : 1.0) * 0.0001;
+      world_pos = center_world_pos + binor * thick_time;
+    }
     vec3 pos_view = point_world_to_view(world_pos);
-    vec3 orig_pos_view = point_world_to_view(orig_pos);
+    vec3 orig_pos_view = point_world_to_view(center_world_pos);
     vec3 d = pos_view - orig_pos_view;
+    /* TODO: make screen size aware. */
     float distance = length(d.xy);
     if (distance < 0.0001) {
       distance = 0.0001;
@@ -61,12 +63,11 @@ void main()
     pos_view = orig_pos_view + distance * normalize(d);
     pos_ndc = point_view_to_ndc(pos_view);
   }
-#endif
 
   gl_Position = pos_ndc;
 
 #ifdef USE_GEOM
-  vert.pos = point_world_to_view(world_pos);
+  vert.pos = point_world_to_view(world_pos);  // TODO: use pos_view...
 #endif
 
   /* Small bias to always be on top of the geom. */
