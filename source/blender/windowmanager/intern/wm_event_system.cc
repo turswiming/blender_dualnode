@@ -2355,7 +2355,7 @@ static int wm_handler_operator_call(bContext *C,
           }
         }
 
-        /* Important to run 'wm_operator_finished' before nullptr-ing the context members. */
+        /* Important to run 'wm_operator_finished' before setting the context members to null. */
         if (retval & OPERATOR_FINISHED) {
           wm_operator_finished(C, op, false, true);
           handler->op = nullptr;
@@ -3376,9 +3376,8 @@ static int wm_handlers_do(bContext *C, wmEvent *event, ListBase *handlers)
         }
       }
 
-      if (event->prev_press_type == event->type) {
-
-        if (event->val == KM_RELEASE) {
+      if (event->val == KM_RELEASE) {
+        if (event->prev_press_type == event->type) {
           if (event->prev_val == KM_PRESS) {
             if (win->event_queue_check_click) {
               if (WM_event_drag_test(event, event->prev_press_xy)) {
@@ -3408,15 +3407,15 @@ static int wm_handlers_do(bContext *C, wmEvent *event, ListBase *handlers)
             }
           }
         }
-        else if (event->val == KM_DBL_CLICK) {
-          /* The underlying event is a press, so try and handle this. */
-          event->val = KM_PRESS;
-          action |= wm_handlers_do_intern(C, win, event, handlers);
+      }
+      else if (event->val == KM_DBL_CLICK) {
+        /* The underlying event is a press, so try and handle this. */
+        event->val = KM_PRESS;
+        action |= wm_handlers_do_intern(C, win, event, handlers);
 
-          /* Revert value if not handled. */
-          if (wm_action_not_handled(action)) {
-            event->val = KM_DBL_CLICK;
-          }
+        /* Revert value if not handled. */
+        if (wm_action_not_handled(action)) {
+          event->val = KM_DBL_CLICK;
         }
       }
     }
