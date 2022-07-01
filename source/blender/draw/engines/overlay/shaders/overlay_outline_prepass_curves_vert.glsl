@@ -55,10 +55,9 @@ void main()
     pos_ndc = point_world_to_ndc(world_pos);
     vec4 orig_pos_ndc = point_world_to_ndc(center_world_pos);
     vec4 d = pos_ndc - orig_pos_ndc;
-    float distance = max(length(d.xy),
-                         (drw_view.viewport_size_inverse.x * drw_view.wininv[0][0] +
-                          drw_view.viewport_size_inverse.y * drw_view.wininv[1][1]) /
-                             2.0);
+    float distance = (length(d.xy) + (drw_view.viewport_size_inverse.x * drw_view.wininv[0][0] +
+                                      drw_view.viewport_size_inverse.y * drw_view.wininv[1][1]) /
+                                         2.0);
     pos_ndc = orig_pos_ndc + distance * normalize(d);
   }
   else {
