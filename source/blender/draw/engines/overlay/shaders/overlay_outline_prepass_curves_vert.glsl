@@ -45,23 +45,24 @@ void main()
                                  thickness,
                                  thick_time);
 
-  vec4 pos_ndc = point_world_to_ndc(world_pos);
+  vec4 pos_ndc;
 
   if (hairThicknessRes > 1) {
     if (thick_time == 0.0) {
-      float thick_time = ((gl_VertexID % hairThicknessRes) == 0 ? -1.0 : 1.0) * 0.0001;
+      float thick_time = ((gl_VertexID % hairThicknessRes) == 0 ? -1.0 : 1.0) * 0.00001;
       world_pos = center_world_pos + binor * thick_time;
     }
-    vec3 pos_view = point_world_to_view(world_pos);
-    vec3 orig_pos_view = point_world_to_view(center_world_pos);
-    vec3 d = pos_view - orig_pos_view;
-    /* TODO: make screen size aware. */
-    float distance = length(d.xy);
-    if (distance < 0.0001) {
-      distance = 0.0001;
-    }
-    pos_view = orig_pos_view + distance * normalize(d);
-    pos_ndc = point_view_to_ndc(pos_view);
+    pos_ndc = point_world_to_ndc(world_pos);
+    vec4 orig_pos_ndc = point_world_to_ndc(center_world_pos);
+    vec4 d = pos_ndc - orig_pos_ndc;
+    float distance = max(length(d.xy),
+                         (drw_view.viewport_size_inverse.x * drw_view.wininv[0][0] +
+                          drw_view.viewport_size_inverse.y * drw_view.wininv[1][1]) /
+                             2.0);
+    pos_ndc = orig_pos_ndc + distance * normalize(d);
+  }
+  else {
+    pos_ndc = point_world_to_ndc(world_pos);
   }
 
   gl_Position = pos_ndc;
