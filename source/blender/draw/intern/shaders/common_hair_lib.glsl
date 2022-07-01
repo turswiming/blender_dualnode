@@ -203,22 +203,22 @@ void hair_get_pos_tan_binor_time_ex(bool is_persp,
   wbinor = normalize(cross(camera_vec, wtan));
 
   thickness = hair_shaperadius(hairRadShape, hairRadRoot, hairRadTip, time);
-
+  float scale;
   if (hairThicknessRes > 1) {
     thick_time = float(gl_VertexID % hairThicknessRes) / float(hairThicknessRes - 1);
     thick_time = thickness * (thick_time * 2.0 - 1.0);
 
     /* Take object scale into account.
      * NOTE: This only works fine with uniform scaling. */
-    float scale = 1.0 / length(mat3(invmodel_mat) * wbinor);
-    thick_time *= scale;  // HACK: thick_time is now in world space...
+    scale = 1.0 / length(mat3(invmodel_mat) * wbinor);
   }
   else {
     /* NOTE: Ensures 'hairThickTime' is initialized -
      * avoids undefined behavior on certain macOS configurations. */
     thick_time = 0.0;
+    scale = 1.0;
   }
-  wpos = orig_wpos + wbinor * thick_time;
+  wpos = orig_wpos + wbinor * thick_time * scale;
 }
 
 void hair_get_pos_tan_binor_time(bool is_persp,
