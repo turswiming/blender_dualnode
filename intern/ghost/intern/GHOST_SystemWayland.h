@@ -79,8 +79,14 @@ class GHOST_SystemWayland : public GHOST_System {
 
   uint8_t getNumDisplays() const override;
 
-  GHOST_TSuccess getCursorPosition(int32_t &x, int32_t &y) const override;
+  GHOST_TSuccess getCursorPositionClientRelative(const GHOST_IWindow *window,
+                                                 int32_t &x,
+                                                 int32_t &y) const override;
+  GHOST_TSuccess setCursorPositionClientRelative(GHOST_IWindow *window,
+                                                 int32_t x,
+                                                 int32_t y) override;
 
+  GHOST_TSuccess getCursorPosition(int32_t &x, int32_t &y) const override;
   GHOST_TSuccess setCursorPosition(int32_t x, int32_t y) override;
 
   void getMainDisplayDimensions(uint32_t &width, uint32_t &height) const override;
@@ -102,23 +108,6 @@ class GHOST_SystemWayland : public GHOST_System {
                               const bool exclusive,
                               const bool is_dialog,
                               const GHOST_IWindow *parentWindow) override;
-
-  wl_display *display();
-
-  wl_compositor *compositor();
-
-#ifdef WITH_GHOST_WAYLAND_LIBDECOR
-  libdecor *decor_context();
-#else
-  xdg_wm_base *xdg_shell();
-  zxdg_decoration_manager_v1 *xdg_decoration_manager();
-#endif
-
-  const std::vector<output_t *> &outputs() const;
-
-  wl_shm *shm() const;
-
-  void setSelection(const std::string &selection);
 
   GHOST_TSuccess setCursorShape(GHOST_TStandardCursor shape);
 
@@ -144,6 +133,34 @@ class GHOST_SystemWayland : public GHOST_System {
   GHOST_TSuccess setCursorGrab(const GHOST_TGrabCursorMode mode,
                                const GHOST_TGrabCursorMode mode_current,
                                wl_surface *surface);
+
+  /* WAYLAND direct-data access. */
+
+  wl_display *display();
+
+  wl_compositor *compositor();
+
+#ifdef WITH_GHOST_WAYLAND_LIBDECOR
+  libdecor *decor_context();
+#else
+  xdg_wm_base *xdg_shell();
+  zxdg_decoration_manager_v1 *xdg_decoration_manager();
+#endif
+
+  const std::vector<output_t *> &outputs() const;
+
+  wl_shm *shm() const;
+
+  /* WAYLAND query access. */
+
+  output_t *output_find_by_wl(const struct wl_output *output) const;
+
+  /* WAYLAND utility functions. */
+
+  void selection_set(const std::string &selection);
+
+  /** Clear all references to this surface to prevent accessing NULL pointers. */
+  void window_surface_unref(const wl_surface *surface);
 
  private:
   struct display_t *d;
