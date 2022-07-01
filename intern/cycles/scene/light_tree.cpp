@@ -145,7 +145,9 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
     float3 normal = triangle.compute_normal(p);
 
     bcone.axis = normal;
-    bcone.theta_o = 0;
+
+    /* to-do: is there a better way to handle this case where both sides of the triangle are visible? */
+    bcone.theta_o = M_PI_F;
     bcone.theta_e = M_PI_2_F;
   }
   else {
@@ -201,7 +203,7 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
     float area = triangle_area(p[0], p[1], p[2]);
 
     /* to-do: Past GSoC work also multiplies this by 4, but not sure why. Further investigation required. */
-    strength *= area;
+    strength *= area * 4;
   }
   else {
     Light *lamp = scene->lights[lamp_id];
@@ -390,7 +392,8 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
   /* Even though this factor is used for every bucket, we use it to compare
    * the min_cost and total_energy (when deciding between creating a leaf or interior node. */
   const float inv_total_cost = 1 / (bbox.area() * bcone.calculate_measure());
-  const float max_extent = max3(centroid_bbox.size());
+  const float3 extent = centroid_bbox.size();
+  const float max_extent = max4(extent.x, extent.y, extent.z, 0.0f);
 
   /* Check each dimension to find the minimum splitting cost. */
   min_cost = FLT_MAX;

@@ -1542,9 +1542,19 @@ typedef struct KernelLightTreeEmitter {
 
   /* prim_id denotes the location in the lights or triangles array. */
   int prim_id;
+  union {
+    struct {
+      int shader_flag;
+      int object_id;
+    } mesh_light;
+    struct {
+      float pad;
+      float size;
+    } lamp;
+  };
 
   /* Padding. */
-  int pad1, pad2, pad3;
+  int pad1;
 } KernelLightTreeEmitter;
 static_assert_align(KernelLightTreeEmitter, 16);
 

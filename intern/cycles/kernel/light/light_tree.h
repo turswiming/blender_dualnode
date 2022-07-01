@@ -185,16 +185,16 @@ ccl_device int light_tree_sample(KernelGlobals kg,
     emitter_cdf += emitter_pdf;
     if (tree_u < emitter_cdf) {
       *pdf_factor *= emitter_pdf;
-      ccl_global const KernelLightDistribution *kdistribution = &kernel_data_fetch(
-          light_distribution, prim_index);
+      ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(
+          light_tree_emitters, prim_index);
 
       /* to-do: this is the same code as light_distribution_sample, except the index is determined
        * differently. Would it be better to refactor this into a separate function? */
-      const int prim = kdistribution->prim;
+      const int prim = kemitter->prim_id;
 
       if (prim >= 0) {
         /* Mesh light. */
-        const int object = kdistribution->mesh_light.object_id;
+        const int object = kemitter->mesh_light.object_id;
 
         /* Exclude synthetic meshes from shadow catcher pass. */
         if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
@@ -202,9 +202,32 @@ ccl_device int light_tree_sample(KernelGlobals kg,
           return false;
         }
 
-        const int shader_flag = kdistribution->mesh_light.shader_flag;
+        const int shader_flag = kemitter->mesh_light.shader_flag;
         triangle_light_sample<in_volume_segment>(kg, prim, object, randu, randv, time, ls, P);
         ls->shader |= shader_flag;
+
+        /* triangle_light sample also multiplies the pdf by the triangle's area
+         * because of the precomputed light distribution PDF.
+         * We need to reverse this because it's not needed here.*/
+        float area = 0.0f;
+
+        float3 V[3];
+        bool has_motion = triangle_world_space_vertices(kg, object, prim, time, V);
+
+        const float3 e0 = V[1] - V[0];
+        const float3 e1 = V[2] - V[0];
+        const float3 e2 = V[2] - V[1];
+
+        const float3 N0 = cross(e0, e1);
+        if (has_motion) {
+          /* get the center frame vertices, this is what the PDF was calculated from */
+          triangle_world_space_vertices(kg, object, prim, -1.0f, V);
+          area = triangle_area(V[0], V[1], V[2]);
+        }
+        else {
+          area = 0.5f * len(N0);
+        }
+        ls->pdf /= area;
         return (ls->pdf > 0.0f);
       }
 
@@ -225,6 +248,8 @@ ccl_device int light_tree_sample(KernelGlobals kg,
 
 /* to-do: assign relative importances for the background and distant lights.
  * Can we somehow adjust the importance measure to account for these as well? */
+
+/*
 ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
                                                      const float3 P,
                                                      const float3 N,
@@ -276,6 +301,7 @@ ccl_device int light_tree_sample_distant_lights(KernelGlobals kg,
     }
   }
 }
+*/
 
 ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 ccl_private const RNGState *rng_state,
@@ -288,10 +314,15 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 const uint32_t path_flag,
                                                 ccl_private LightSample *ls)
 {
+  /*
   const int num_distant_lights = kernel_data.integrator.num_distant_lights;
   const int num_light_tree_prims = kernel_data.integrator.num_distribution - num_distant_lights;
+  */
 
   float pdf_factor = 1.0f;
+  bool ret = light_tree_sample<false>(
+        kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
+  /*
   bool ret = false;
   if (num_distant_lights == 0) {
     ret = light_tree_sample<false>(
@@ -321,6 +352,7 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
       pdf_factor *= (1 - light_tree_probability);
     }
   }
+  */
 
   ls->pdf *= pdf_factor;
   return ret;

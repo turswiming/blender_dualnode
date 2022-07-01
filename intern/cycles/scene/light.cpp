@@ -320,20 +320,23 @@ void LightManager::device_update_distribution(Device *device,
   int scene_light_index = 0;
   foreach (Light *light, scene->lights) {
     if (light->is_enabled) {
-      LightTreePrimitive light_prim;
-      light_prim.prim_id = ~device_light_index; /* -prim_id - 1 is a light source index. */
-      light_prim.lamp_id = scene_light_index;
+      if (light_tree_enabled) {
+        LightTreePrimitive light_prim;
+        light_prim.prim_id = ~device_light_index; /* -prim_id - 1 is a light source index. */
+        light_prim.lamp_id = scene_light_index;
 
-      /* Distant lights get added to a separate vector. */
-      if (light->light_type == LIGHT_DISTANT || light->light_type == LIGHT_BACKGROUND) {
-        distant_lights.push_back(light_prim);
-        num_distant_lights++;
-      }
-      else {
-        light_prims.push_back(light_prim);
+        /* Distant lights get added to a separate vector. */
+        if (light->light_type == LIGHT_DISTANT || light->light_type == LIGHT_BACKGROUND) {
+          distant_lights.push_back(light_prim);
+          num_distant_lights++;
+        }
+        else {
+          light_prims.push_back(light_prim);
+        }
+
+        device_light_index++;
       }
 
-      device_light_index++;
       num_lights++;
     }
     if (light->is_portal) {
@@ -344,17 +347,13 @@ void LightManager::device_update_distribution(Device *device,
   }
 
   /* Similarly, we also want to keep track of the index of triangles that are emissive. */
-  int device_triangle_index = 0;
+  int object_id = 0;
   foreach (Object *object, scene->objects) {
     if (progress.get_cancel())
       return;
 
-    /* Don't add any emissive triangles to the distribution if light tree is enabled. */
-    if (light_tree_enabled) {
-      continue;
-    }
-
     if (!object_usable_as_light(object)) {
+      object_id++;
       continue;
     }
 
@@ -368,25 +367,21 @@ void LightManager::device_update_distribution(Device *device,
                            scene->default_surface;
 
       if (shader->get_use_mis() && shader->has_surface_emission) {
-        /* to-do: for the light tree implementation, we eventually want to include emissive triangles.
-         * Right now, point lights are the main concern. */
-        LightTreePrimitive light_prim;
-        light_prim.prim_id = i + mesh->prim_offset;
-        light_prim.object_id = device_triangle_index;
-        light_prims.push_back(light_prim);
+        /* to-do: for the light tree implementation, we eventually want to include emissive
+         * triangles. Right now, point lights are the main concern. */
+        if (light_tree_enabled) {
+          LightTreePrimitive light_prim;
+          light_prim.prim_id = i + mesh->prim_offset;
+          light_prim.object_id = object_id;
+          light_prims.push_back(light_prim);
+        }
+        
         num_triangles++;
       }
     }
 
-    device_triangle_index++;
+    object_id++;
   }
-
-  size_t num_distribution = num_triangles + num_lights;
-  VLOG_INFO << "Total " << num_distribution << " of light distribution primitives.";
-
-  /* emission area */
-  KernelLightDistribution *distribution = dscene->light_distribution.alloc(num_distribution + 1);
-  float totarea = 0.0f;
 
   if (light_tree_enabled) {
     /* For now, we'll start with a smaller number of max lights in a node.
@@ -439,6 +434,38 @@ void LightManager::device_update_distribution(Device *device,
       light_tree_emitters[index].theta_e = bcone.theta_e;
 
       light_tree_emitters[index].prim_id = prim.prim_id;
+
+      if (prim.prim_id >= 0) {
+        light_tree_emitters[index].mesh_light.object_id = prim.object_id;
+
+        int shader_flag = 0;
+        Object *object = scene->objects[prim.object_id];
+        if (!(object->get_visibility() & PATH_RAY_CAMERA)) {
+          shader_flag |= SHADER_EXCLUDE_CAMERA;
+        }
+        if (!(object->get_visibility() & PATH_RAY_DIFFUSE)) {
+          shader_flag |= SHADER_EXCLUDE_DIFFUSE;
+        }
+        if (!(object->get_visibility() & PATH_RAY_GLOSSY)) {
+          shader_flag |= SHADER_EXCLUDE_GLOSSY;
+        }
+        if (!(object->get_visibility() & PATH_RAY_TRANSMIT)) {
+          shader_flag |= SHADER_EXCLUDE_TRANSMIT;
+        }
+        if (!(object->get_visibility() & PATH_RAY_VOLUME_SCATTER)) {
+          shader_flag |= SHADER_EXCLUDE_SCATTER;
+        }
+        if (!(object->get_is_shadow_catcher())) {
+          shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
+        }
+
+        light_tree_emitters[index].mesh_light.shader_flag = shader_flag;
+      }
+      else {
+        Light *lamp = scene->lights[prim.lamp_id];
+        light_tree_emitters[index].lamp.size = lamp->size;
+        light_tree_emitters[index].lamp.pad = 1.0f;
+      }
     }
     dscene->light_tree_emitters.copy_to_device();
 
@@ -489,38 +516,31 @@ void LightManager::device_update_distribution(Device *device,
 
     dscene->light_tree_distant_group.copy_to_device();
   }
-  
-  /* Add the distant lights to the distribution. */
-  foreach (LightTreePrimitive prim, distant_lights) {
-    light_prims.push_back(prim);
-  }
+
+  size_t num_distribution = num_triangles + num_lights;
+  VLOG_INFO << "Total " << num_distribution << " of light distribution primitives.";
+
+  /* emission area */
+  KernelLightDistribution *distribution = dscene->light_distribution.alloc(num_distribution + 1);
+  float totarea = 0.0f;
 
   /* triangles */
   size_t offset = 0;
+  int j = 0;
 
-  /* Since the LightTree construction will re-order the primitives such that
-   * light primitives in the same cluster will be adjacent to one another.
-   * Just to be safe, we iterate through the light_prims array in case they've been reordered. */
-  foreach (LightTreePrimitive prim, light_prims) {
+  foreach (Object *object, scene->objects) {
     if (progress.get_cancel())
       return;
 
-    /* Since we're now iterating through all emissive primitives, we need
-     * to first check if the primitive is actually a triangle. */
-    if (prim.prim_id < 0) {
-      offset++;
-      continue;
-    }
-
-    Object *object = scene->objects[prim.object_id];
-
     if (!object_usable_as_light(object)) {
+      j++;
       continue;
     }
     /* Sum area. */
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
     bool transform_applied = mesh->transform_applied;
     Transform tfm = object->get_tfm();
+    int object_id = j;
     int shader_flag = 0;
 
     if (!(object->get_visibility() & PATH_RAY_CAMERA)) {
@@ -542,28 +562,39 @@ void LightManager::device_update_distribution(Device *device,
       shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
     }
 
-    distribution[offset].totarea = totarea;
-    distribution[offset].prim = prim.prim_id;
-    distribution[offset].mesh_light.shader_flag = shader_flag;
-    distribution[offset].mesh_light.object_id = prim.object_id;
-    offset++;
+    size_t mesh_num_triangles = mesh->num_triangles();
+    for (size_t i = 0; i < mesh_num_triangles; i++) {
+      int shader_index = mesh->get_shader()[i];
+      Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
+                           static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
+                           scene->default_surface;
 
-    int triangle_index = prim.prim_id - mesh->prim_offset;
-    Mesh::Triangle t = mesh->get_triangle(triangle_index);
-    if (!t.valid(&mesh->get_verts()[0])) {
-      continue;
+      if (shader->get_use_mis() && shader->has_surface_emission) {
+        distribution[offset].totarea = totarea;
+        distribution[offset].prim = i + mesh->prim_offset;
+        distribution[offset].mesh_light.shader_flag = shader_flag;
+        distribution[offset].mesh_light.object_id = object_id;
+        offset++;
+
+        Mesh::Triangle t = mesh->get_triangle(i);
+        if (!t.valid(&mesh->get_verts()[0])) {
+          continue;
+        }
+        float3 p1 = mesh->get_verts()[t.v[0]];
+        float3 p2 = mesh->get_verts()[t.v[1]];
+        float3 p3 = mesh->get_verts()[t.v[2]];
+
+        if (!transform_applied) {
+          p1 = transform_point(&tfm, p1);
+          p2 = transform_point(&tfm, p2);
+          p3 = transform_point(&tfm, p3);
+        }
+
+        totarea += triangle_area(p1, p2, p3);
+      }
     }
-    float3 p1 = mesh->get_verts()[t.v[0]];
-    float3 p2 = mesh->get_verts()[t.v[1]];
-    float3 p3 = mesh->get_verts()[t.v[2]];
 
-    if (!transform_applied) {
-      p1 = transform_point(&tfm, p1);
-      p2 = transform_point(&tfm, p2);
-      p3 = transform_point(&tfm, p3);
-    }
-
-    totarea += triangle_area(p1, p2, p3);
+    j++;
   }
 
   float trianglearea = totarea;
@@ -573,21 +604,12 @@ void LightManager::device_update_distribution(Device *device,
 
   if (num_lights > 0) {
     float lightarea = (totarea > 0.0f) ? totarea / num_lights : 1.0f;
-
-    /* Again, we iterate over the light_prims array. */
-    offset = 0;
-    foreach (LightTreePrimitive prim, light_prims) {
-      if (prim.prim_id >= 0) {
-        offset++;
-        continue;
-      }
-      
-      Light *light = scene->lights[prim.lamp_id];
+    foreach (Light *light, scene->lights) {
       if (!light->is_enabled)
         continue;
 
       distribution[offset].totarea = totarea;
-      distribution[offset].prim = prim.prim_id;
+      distribution[offset].prim = ~light_index;
       distribution[offset].lamp.pad = 1.0f;
       distribution[offset].lamp.size = light->size;
       totarea += lightarea;
