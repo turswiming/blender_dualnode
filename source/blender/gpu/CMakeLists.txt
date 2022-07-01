@@ -25,6 +25,9 @@ set(INC
   # For theme color access.
   ../editors/include
 
+  # For *_info.hh includes.
+  ../draw/engines/eevee_next
+
   # For node muting stuff.
   ../nodes
 
@@ -188,7 +191,10 @@ set(OPENGL_SRC
 set(METAL_SRC
   metal/mtl_backend.mm
   metal/mtl_context.mm
+  metal/mtl_command_buffer.mm
   metal/mtl_debug.mm
+  metal/mtl_framebuffer.mm
+  metal/mtl_memory.mm
   metal/mtl_state.mm
   metal/mtl_texture.mm
   metal/mtl_texture_util.mm
@@ -198,6 +204,8 @@ set(METAL_SRC
   metal/mtl_common.hh
   metal/mtl_context.hh
   metal/mtl_debug.hh
+  metal/mtl_framebuffer.hh
+  metal/mtl_memory.hh
   metal/mtl_state.hh
   metal/mtl_texture.hh
 )
@@ -442,6 +450,7 @@ list(APPEND INC ${CMAKE_CURRENT_BINARY_DIR})
 
 set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/basic/shaders/infos/basic_depth_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_film_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_material_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_velocity_info.hh
   ../draw/engines/gpencil/shaders/infos/gpencil_info.hh
