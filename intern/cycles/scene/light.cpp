@@ -383,7 +383,11 @@ void LightManager::device_update_distribution(Device *device,
     object_id++;
   }
 
-  if (light_tree_enabled) {
+  size_t num_distribution = num_triangles + num_lights;
+  VLOG_INFO << "Total " << num_distribution << " of light distribution primitives.";
+
+  float pdf_light_tree = 0.0f;
+  if (light_tree_enabled && num_distribution > 0) {
     /* For now, we'll start with a smaller number of max lights in a node.
      * More benchmarking is needed to determine what number works best. */
     LightTree light_tree(light_prims, scene, 8);
@@ -392,10 +396,15 @@ void LightManager::device_update_distribution(Device *device,
     /* First initialize the light tree's nodes. */
     const vector<PackedLightTreeNode> &linearized_bvh = light_tree.get_nodes();
     KernelLightTreeNode *light_tree_nodes = dscene->light_tree_nodes.alloc(linearized_bvh.size());
+    float light_tree_energy = 0.0f;
     for (int index = 0; index < linearized_bvh.size(); index++) {
       const PackedLightTreeNode &node = linearized_bvh[index];
 
       light_tree_nodes[index].energy = node.energy;
+      if (index == 0) {
+        light_tree_energy = node.energy;
+      }
+
       for (int i = 0; i < 3; i++) {
         light_tree_nodes[index].bounding_box_min[i] = node.bbox.min[i];
         light_tree_nodes[index].bounding_box_max[i] = node.bbox.max[i];
@@ -471,8 +480,8 @@ void LightManager::device_update_distribution(Device *device,
 
     /* We also add distant lights to a separate group. */
     KernelLightTreeDistantEmitter *light_tree_distant_group =
-        dscene->light_tree_distant_group.alloc(num_distant_lights + 1);
-    float total_energy = 0.0f;
+        dscene->light_tree_distant_group.alloc(num_distant_lights);
+    float distant_light_energy = 0.0f;
     for (int index = 0; index < num_distant_lights; index++) {
       LightTreePrimitive prim = distant_lights[index];
       Light *light = scene->lights[prim.lamp_id];
@@ -502,23 +511,15 @@ void LightManager::device_update_distribution(Device *device,
       }
 
       light_tree_distant_group[index].energy = energy;
-      total_energy += energy;
+      distant_light_energy += energy;
     }
 
-    /* The final node is just used to store the total energy. */
-    if (num_distant_lights > 0) {
-      light_tree_distant_group[num_distant_lights].energy = total_energy;
-      for (int i = 0; i < 3; i++) {
-        light_tree_distant_group[num_distant_lights].direction[i] = 0.0f;
-      }
-      light_tree_distant_group[num_distant_lights].bounding_radius = 0.0f;
+    if (light_tree_energy > 0.0f) {
+      pdf_light_tree = light_tree_energy / (light_tree_energy + distant_light_energy);
     }
 
     dscene->light_tree_distant_group.copy_to_device();
   }
-
-  size_t num_distribution = num_triangles + num_lights;
-  VLOG_INFO << "Total " << num_distribution << " of light distribution primitives.";
 
   /* emission area */
   KernelLightDistribution *distribution = dscene->light_distribution.alloc(num_distribution + 1);
@@ -670,6 +671,7 @@ void LightManager::device_update_distribution(Device *device,
     /* pdf_lights is used when sampling lights, and assumes that
      * the light has been sampled through the light distribution.
      * Therefore, we override it for now and adjust the pdf manually in the light tree.*/
+    kintegrator->pdf_light_tree = pdf_light_tree;
     if (light_tree_enabled) {
       kintegrator->pdf_triangles = 1.0f;
       kintegrator->pdf_lights = 1.0f;

@@ -248,8 +248,6 @@ ccl_device int light_tree_sample(KernelGlobals kg,
 
 /* to-do: assign relative importances for the background and distant lights.
  * Can we somehow adjust the importance measure to account for these as well? */
-
-/*
 ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
                                                      const float3 P,
                                                      const float3 N,
@@ -301,7 +299,6 @@ ccl_device int light_tree_sample_distant_lights(KernelGlobals kg,
     }
   }
 }
-*/
 
 ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 ccl_private const RNGState *rng_state,
@@ -314,45 +311,19 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 const uint32_t path_flag,
                                                 ccl_private LightSample *ls)
 {
-  /*
-  const int num_distant_lights = kernel_data.integrator.num_distant_lights;
-  const int num_light_tree_prims = kernel_data.integrator.num_distribution - num_distant_lights;
-  */
-
   float pdf_factor = 1.0f;
-  bool ret = light_tree_sample<false>(
-        kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
-  /*
-  bool ret = false;
-  if (num_distant_lights == 0) {
+  bool ret;
+  float tree_u = path_state_rng_1D(kg, rng_state, 1);
+  if (tree_u < kernel_data.integrator.pdf_light_tree) {
+    pdf_factor *= kernel_data.integrator.pdf_light_tree;
     ret = light_tree_sample<false>(
         kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
   }
-  else if (num_light_tree_prims == 0) {
+  else {
+    pdf_factor *= (1 - kernel_data.integrator.pdf_light_tree);
     ret = light_tree_sample_distant_lights<false>(
         kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
   }
-  else {
-    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, 0);
-    const float light_tree_importance = light_tree_cluster_importance(kg, P, N, knode);
-    const float distant_light_importance = light_tree_distant_light_importance(kg, P, N, num_distant_lights);
-
-    const float light_tree_probability = light_tree_importance /
-                                         (light_tree_importance +
-                                          distant_light_importance);
-
-    if (randu < light_tree_probability) {
-      ret = light_tree_sample<false>(
-          kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
-      pdf_factor *= light_tree_probability;
-    }
-    else {
-      ret = light_tree_sample_distant_lights<false>(
-          kg, rng_state, randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
-      pdf_factor *= (1 - light_tree_probability);
-    }
-  }
-  */
 
   ls->pdf *= pdf_factor;
   return ret;
