@@ -39,16 +39,16 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
                                                float3 L,
                                                float3 H)
 {
-  float3 F = make_float3(1.0f, 1.0f, 1.0f);
-  bool use_fresnel = (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID ||
-                      bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID);
-  if (use_fresnel) {
-    float F0 = fresnel_dielectric_cos(1.0f, bsdf->ior);
-
-    F = interpolate_fresnel_color(L, H, bsdf->ior, F0, bsdf->extra->cspec0);
+  if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID) {
+    return interpolate_fresnel_color(L, H, bsdf->ior, bsdf->extra->cspec0);
   }
-
-  return F;
+  else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
+    return 0.25f * interpolate_fresnel_color(L, H, bsdf->ior, bsdf->extra->cspec0) *
+           bsdf->extra->clearcoat;
+  }
+  else {
+    return one_float3();
+  }
 }
 
 ccl_device_forceinline void bsdf_microfacet_fresnel_color(ccl_private const ShaderData *sd,
@@ -56,9 +56,8 @@ ccl_device_forceinline void bsdf_microfacet_fresnel_color(ccl_private const Shad
 {
   kernel_assert(CLOSURE_IS_BSDF_MICROFACET_FRESNEL(bsdf->type));
 
-  float F0 = fresnel_dielectric_cos(1.0f, bsdf->ior);
   bsdf->extra->fresnel_color = interpolate_fresnel_color(
-      sd->I, bsdf->N, bsdf->ior, F0, bsdf->extra->cspec0);
+      sd->I, bsdf->N, bsdf->ior, bsdf->extra->cspec0);
 
   if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
     bsdf->extra->fresnel_color *= 0.25f * bsdf->extra->clearcoat;
@@ -295,9 +294,6 @@ ccl_device float3 bsdf_microfacet_ggx_eval_reflect(ccl_private const ShaderClosu
     float common = D * 0.25f / cosNO;
 
     float3 F = reflection_color(bsdf, omega_in, m);
-    if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
-      F *= 0.25f * bsdf->extra->clearcoat;
-    }
 
     float3 out = F * common / (1 + lambdaO + lambdaI);
     *pdf = common / (1 + lambdaO);
@@ -409,18 +405,11 @@ ccl_device int bsdf_microfacet_ggx_sample(ccl_private const ShaderClosure *sc,
         *omega_in = 2 * cosMO * m - I;
 
         if (dot(Ng, *omega_in) > 0) {
+          float3 F = reflection_color(bsdf, *omega_in, m);
           if (alpha_x * alpha_y <= 1e-7f) {
             /* Specular case, just return some high number for MIS */
             *pdf = 1e6f;
-            *eval = make_float3(1e6f, 1e6f, 1e6f);
-
-            bool use_fresnel = (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID ||
-                                bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID);
-
-            /* if fresnel is used, calculate the color with reflection_color(...) */
-            if (use_fresnel) {
-              *eval *= reflection_color(bsdf, *omega_in, m);
-            }
+            *eval = make_float3(1e6f, 1e6f, 1e6f) * F;
 
             label = LABEL_REFLECT | LABEL_SINGULAR;
           }
@@ -465,13 +454,7 @@ ccl_device int bsdf_microfacet_ggx_sample(ccl_private const ShaderClosure *sc,
             float common = D * 0.25f / cosNO;
             *pdf = common / (1 + lambdaO);
 
-            float3 F = reflection_color(bsdf, *omega_in, m);
-
             *eval = common * F / (1 + lambdaO + lambdaI);
-          }
-
-          if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
-            *eval *= 0.25f * bsdf->extra->clearcoat;
           }
 
 #ifdef __RAY_DIFFERENTIALS__

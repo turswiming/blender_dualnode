@@ -73,9 +73,8 @@ ccl_device_forceinline float3 MF_FUNCTION_FULL_NAME(mf_eval)(float3 wi,
   eval = make_float3(val, val, val);
 #endif
 
-  float F0 = fresnel_dielectric_cos(1.0f, eta);
   if (use_fresnel) {
-    throughput = interpolate_fresnel_color(wi, wh, eta, F0, cspec0);
+    throughput = interpolate_fresnel_color(wi, wh, eta, cspec0);
 
     eval *= throughput;
   }
@@ -144,11 +143,11 @@ ccl_device_forceinline float3 MF_FUNCTION_FULL_NAME(mf_eval)(float3 wi,
         throughput *= color;
       }
       else if (use_fresnel && order > 0) {
-        throughput *= interpolate_fresnel_color(wi_prev, wm, eta, F0, cspec0);
+        throughput *= interpolate_fresnel_color(wi_prev, wm, eta, cspec0);
       }
 #else /* MF_MULTI_GLOSSY */
       if (use_fresnel && order > 0) {
-        throughput *= interpolate_fresnel_color(-wr, wm, eta, F0, cspec0);
+        throughput *= interpolate_fresnel_color(-wr, wm, eta, cspec0);
       }
       wr = mf_sample_phase_glossy(-wr, &throughput, wm);
 #endif
@@ -192,8 +191,6 @@ ccl_device_forceinline float3 MF_FUNCTION_FULL_NAME(mf_sample)(float3 wi,
   float G1_r = 0.0f;
   bool outside = true;
 
-  float F0 = fresnel_dielectric_cos(1.0f, eta);
-
   int order;
   for (order = 0; order < 10; order++) {
     /* Sample microfacet height. */
@@ -229,7 +226,7 @@ ccl_device_forceinline float3 MF_FUNCTION_FULL_NAME(mf_sample)(float3 wi,
         throughput *= color;
       }
       else {
-        float3 t_color = interpolate_fresnel_color(wi_prev, wm, eta, F0, cspec0);
+        float3 t_color = interpolate_fresnel_color(wi_prev, wm, eta, cspec0);
 
         if (order == 0)
           throughput = t_color;
@@ -239,7 +236,7 @@ ccl_device_forceinline float3 MF_FUNCTION_FULL_NAME(mf_sample)(float3 wi,
     }
 #else /* MF_MULTI_GLOSSY */
     if (use_fresnel) {
-      float3 t_color = interpolate_fresnel_color(-wr, wm, eta, F0, cspec0);
+      float3 t_color = interpolate_fresnel_color(-wr, wm, eta, cspec0);
 
       if (order == 0)
         throughput = t_color;
