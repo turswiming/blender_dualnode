@@ -10,6 +10,7 @@
 #include "kernel/closure/bsdf_phong_ramp.h"
 #include "kernel/closure/bsdf_diffuse_ramp.h"
 #include "kernel/closure/bsdf_microfacet.h"
+#include "kernel/closure/bsdf_microfacet_beckmann.h"
 #include "kernel/closure/bsdf_microfacet_multi.h"
 #include "kernel/closure/bsdf_reflection.h"
 #include "kernel/closure/bsdf_refraction.h"
@@ -233,8 +234,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
-      label = bsdf_microfacet_ggx_sample(kg,
-                                         sc,
+      label = bsdf_microfacet_ggx_sample(sc,
                                          Ng,
                                          sd->I,
                                          sd->dI.dx,

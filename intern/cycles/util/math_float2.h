@@ -41,6 +41,7 @@ ccl_device_inline float distance(const float2 &a, const float2 &b);
 ccl_device_inline float dot(const float2 &a, const float2 &b);
 ccl_device_inline float cross(const float2 &a, const float2 &b);
 ccl_device_inline float len(const float2 a);
+ccl_device_inline float len_squared(const float2 a);
 ccl_device_inline float2 normalize(const float2 &a);
 ccl_device_inline float2 normalize_len(const float2 &a, float *t);
 ccl_device_inline float2 safe_normalize(const float2 &a);
@@ -249,6 +250,11 @@ ccl_device_inline float2 floor(const float2 &a)
 ccl_device_inline float len(const float2 a)
 {
   return sqrtf(dot(a, a));
+}
+
+ccl_device_inline float len_squared(const float2 a)
+{
+  return dot(a, a);
 }
 
 ccl_device_inline float2 safe_divide_float2_float(const float2 a, const float b)
