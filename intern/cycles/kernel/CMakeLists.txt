@@ -131,6 +131,7 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/camera.h
   svm/clamp.h
   svm/closure.h
+  svm/closure_principled.h
   svm/convert.h
   svm/checker.h
   svm/color_util.h
