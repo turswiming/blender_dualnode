@@ -61,7 +61,7 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
     return make_float3(f, f, f);
   }
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID) {
-    MicrofacetExtrav2 *extra = (MicrofacetExtrav2*) bsdf->extra;
+    MicrofacetExtrav2 *extra = (MicrofacetExtrav2 *)bsdf->extra;
     float cosHL = dot(H, L);
     /* Metallic Fresnel: Kinda Schlick-Fresnel-like with configurable F0 and F90
      * as well as falloff control. F90=white and falloff=0.2 gives classic Schlick Fresnel.
@@ -179,7 +179,7 @@ ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(ccl_private MicrofacetBsdf *
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
   bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
-  MicrofacetExtrav2 *extra = (MicrofacetExtrav2*) bsdf->extra;
+  MicrofacetExtrav2 *extra = (MicrofacetExtrav2 *)bsdf->extra;
 
   if (metallic > 0.0f) {
     extra->metal_base = saturate(extra->metal_base);

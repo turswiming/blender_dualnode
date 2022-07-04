@@ -348,8 +348,8 @@ bool cycles_precompute(std::string name)
           float rough = 1.0f - (float(y) + lcg_step_float(&rng)) / float(ny);
           float mu = (float(x) + lcg_step_float(&rng)) / float(nx);
           float ior = (float(z) + lcg_step_float(&rng)) / float(nz);
-          /* Encode IOR remapped as sqrt(0.5*(IOR-1)) for more resolution at the start, where most of the
-           * changes happen (also places the most common range around 1.5 in the center) */
+          /* Encode IOR remapped as sqrt(0.5*(IOR-1)) for more resolution at the start, where most
+           * of the changes happen (also places the most common range around 1.5 in the center) */
           ior = 1.0f + 2.0f * sqr(ior);
           float u1 = VanDerCorput(i, scramble1);
           float u2 = Sobol2(i, scramble2);
