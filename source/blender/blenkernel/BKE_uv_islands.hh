@@ -16,6 +16,8 @@
 
 #include "DNA_meshdata_types.h"
 
+#include "PIL_time_utildefines.h"
+
 namespace blender::bke::uv_islands {
 // TODO: primitives can be added twice
 // TODO: Joining uv island should check where the borders could be merged.
@@ -134,6 +136,7 @@ struct MeshData {
         mloop(mloop),
         mloopuv(mloopuv)
   {
+    TIMEIT_START(init_mesh_data);
     init_vertices();
     init_primitives();
     init_edges();
@@ -153,6 +156,7 @@ struct MeshData {
       }
     }
 #endif
+    TIMEIT_END(init_mesh_data);
   }
   void init_vertices()
   {
@@ -751,6 +755,7 @@ struct UVIslands {
 
   explicit UVIslands(MeshData &mesh_data)
   {
+    TIMEIT_START(uv_islands);
     islands.reserve(1000);
 
 #ifdef DEBUG_SVG
@@ -769,10 +774,12 @@ struct UVIslands {
       add(primitive);
     }
 #endif
+    TIMEIT_END(uv_islands);
   }
 
   void extract_borders()
   {
+    TIMEIT_START(extract_borders);
     for (UVIsland &island : islands) {
       island.extract_borders();
     }
@@ -792,10 +799,12 @@ struct UVIslands {
     svg_footer(of);
     of.close();
 #endif
+    TIMEIT_END(extract_borders);
   }
 
   void extend_borders(const UVIslandsMask &islands_mask)
   {
+    TIMEIT_START(extend_borders);
 #ifdef VALIDATE
     printf("Extending borders\n");
     printf("=================\n");
@@ -821,6 +830,7 @@ struct UVIslands {
     svg_footer(of);
     of.close();
 #endif
+    TIMEIT_END(extend_borders);
   }
 
  private:
