@@ -2929,7 +2929,7 @@ void PrincipledBsdfNode::compile_v2(SVMCompiler &compiler)
   uint sss = compiler.encode_uchar4(compiler.stack_assign(input("Subsurface Scale")),
                                     compiler.stack_assign(input("Subsurface Anisotropy")),
                                     compiler.stack_assign(input("Subsurface Radius")),
-                                    SVM_STACK_INVALID);
+                                    subsurface_method);
   uint metallic = compiler.encode_uchar4(compiler.stack_assign(input("Metallic Falloff")),
                                          compiler.stack_assign(input("Metallic Edge")),
                                          SVM_STACK_INVALID,

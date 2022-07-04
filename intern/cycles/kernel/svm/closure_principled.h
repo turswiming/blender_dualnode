@@ -430,15 +430,51 @@ ccl_device_inline void principled_v1_clearcoat(KernelGlobals kg,
 
 /* Principled v2 components */
 
-ccl_device_inline void principled_v2_diffuse(
-    ccl_private ShaderData *sd, float3 weight, float3 base_color, float diffuse_weight, float3 N)
+ccl_device_inline void principled_v2_diffuse_sss(ccl_private ShaderData *sd,
+                                                 ccl_private float *stack,
+                                                 float3 weight,
+                                                 int path_flag,
+                                                 uint data,
+                                                 float3 base_color,
+                                                 float ior,
+                                                 float3 N)
 {
-  if (diffuse_weight <= CLOSURE_WEIGHT_CUTOFF) {
+  if (reduce_max(weight * base_color) <= CLOSURE_WEIGHT_CUTOFF) {
     return;
   }
 
+#ifdef __SUBSURFACE__
+  uint method, scale_offset, aniso_offset, radius_offset;
+  svm_unpack_node_uchar4(data, &scale_offset, &aniso_offset, &radius_offset, &method);
+
+  float aniso = stack_load_float(stack, aniso_offset);
+  float3 radius = stack_load_float3(stack, radius_offset) * stack_load_float(stack, scale_offset);
+
+  /* Fall back to diffuse if there has been a diffuse bounce before or the radius is too small. */
+  if ((path_flag & PATH_RAY_DIFFUSE_ANCESTOR) == 0 && reduce_max(radius) > 1e-7f) {
+    ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, base_color * weight);
+
+    if (bssrdf == NULL) {
+      return;
+    }
+
+    bssrdf->radius = radius;
+    bssrdf->albedo = base_color;
+    bssrdf->N = N;
+    bssrdf->roughness = FLT_MAX;
+
+    /* Clamps protecting against bad/extreme and non physical values. */
+    bssrdf->anisotropy = clamp(aniso, 0.0f, 0.9f);
+
+    /* setup bsdf */
+    sd->flag |= bssrdf_setup(sd, bssrdf, (ClosureType)method, clamp(ior, 1.01f, 3.8f));
+
+    return;
+  }
+#endif
+
   ccl_private DiffuseBsdf *bsdf = (ccl_private DiffuseBsdf *)bsdf_alloc(
-      sd, sizeof(DiffuseBsdf), diffuse_weight * base_color * weight);
+      sd, sizeof(DiffuseBsdf), base_color * weight);
 
   if (bsdf == NULL) {
     return;
@@ -695,7 +731,7 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
 
   weight *= (1.0f - transmission) * (1.0f - dielectric_albedo);
 
-  principled_v2_diffuse(sd, weight, base_color, 1.0f, N);
+  principled_v2_diffuse_sss(sd, stack, weight, path_flag, node_1.w, base_color, ior, N);
 }
 
 ccl_device void svm_node_closure_principled(KernelGlobals kg,
