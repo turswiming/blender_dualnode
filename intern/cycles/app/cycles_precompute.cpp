@@ -167,8 +167,31 @@ static float precompute_ggx_glass_E(
 
 static float precompute_ggx_dielectric_E(float rough, float mu, float eta, float u1, float u2)
 {
-  // TODO: Reparametrize based on fresnel_dielectric_cos(mu, eta) instead of mu to get more resolution?
-  // Probably need lerp(mu, fresnel_dielectric_cos(mu, eta), 0.9) or so because of flat IOR region.
+  {
+    /* Reparametrize based on macrosurface fresnel to get more resolution into areas where
+     * the Fresnel curve is rapidly changing. Particularly important for eta<1 due to the TIR edge.
+     * However, in the eta<1 case, the entire TIR area would be compressed down to a point, which
+     * is an issue since there are changes in that range at higher roughnesses.
+     * Therefore, the remapping is blended with the identity function for a compromise.
+     */
+    float F0 = fresnel_dielectric_cos(1.0f, eta);
+    auto get_remap = [eta, F0](float x) {
+      return lerp(x, inverse_lerp(1.0f, F0, fresnel_dielectric_cos(x, eta)), 0.5f);
+    };
+
+    float remap_target = mu;
+    float start = 0.0f, end = 1.0f;
+    while (end - start > 1e-7f) {
+      mu = (end + start) * 0.5f;
+      if (get_remap(mu) > remap_target) {
+        end = mu;
+      }
+      else {
+        start = mu;
+      }
+    }
+  }
+
   MicrofacetExtrav2 extra;
   MicrofacetBsdf bsdf;
   bsdf.weight = one_float3();

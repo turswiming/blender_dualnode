@@ -9,7 +9,6 @@
 #pragma once
 
 #include "kernel/closure/bsdf_microfacet_util.h"
-#include "kernel/closure/bsdf_util.h"
 
 CCL_NAMESPACE_BEGIN
 

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "kernel/closure/bsdf_util.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* GGX microfacet with Smith shadow-masking from:
@@ -112,6 +114,8 @@ ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float
 
 ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, float ior)
 {
+  mu = lerp(mu, inverse_lerp(1.0f, fresnel_dielectric_cos(1.0f, ior), fresnel_dielectric_cos(mu, ior)), 0.5f);
+
   bool inv_table = (ior < 1.0f);
   if (inv_table) {
     ior = 1.0f / ior;
