@@ -514,6 +514,39 @@ ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
   return 0.04f * clearcoat;  // TODO better approx
 }
 
+ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
+                                            ccl_private ShaderData *sd,
+                                            ccl_private float *stack,
+                                            float3 weight,
+                                            float3 N,
+                                            uint data)
+{
+  uint sheen_offset, sheen_tint_offset, sheen_roughness_offset, dummy;
+  svm_unpack_node_uchar4(data, &dummy, &sheen_offset, &sheen_tint_offset, &sheen_roughness_offset);
+
+  float sheen = stack_load_float(stack, sheen_offset);
+  if (sheen <= CLOSURE_WEIGHT_CUTOFF) {
+    return 0.0f;
+  }
+
+  float3 tint = stack_load_float3(stack, sheen_tint_offset);
+  float roughness = stack_load_float(stack, sheen_roughness_offset);
+  ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
+      sd, sizeof(PrincipledSheenBsdf), sheen * weight); // TODO include tint
+
+  if (bsdf == NULL) {
+    return 0.0f;
+  }
+
+  bsdf->N = N;
+  bsdf->roughness = sqr(roughness);
+
+  /* setup bsdf */
+  sd->flag |= bsdf_principled_sheen_v2_setup(sd, bsdf);
+
+  return sheen * bsdf->avg_value; // TODO include tint
+}
+
 ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                ccl_private ShaderData *sd,
                                                ccl_private float *stack,
@@ -541,9 +574,10 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
   float ior = fmaxf(stack_load_float(stack, ior_offset), 1e-5f);
   float transmission = saturatef(stack_load_float(stack, transmission_offset));
 
-  float clearcoat_albedo = principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
+  weight *= 1.0f - principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
+  weight *= 1.0f - principled_v2_sheen(kg, sd, stack, weight, N, node_2.z);
 
-  principled_v2_diffuse(sd, weight, base_color, 1.0f - clearcoat_albedo, N);
+  principled_v2_diffuse(sd, weight, base_color, 1.0f, N);
 }
 
 ccl_device void svm_node_closure_principled(KernelGlobals kg,

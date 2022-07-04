@@ -383,6 +383,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
                                              pdf);
       break;
     case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
+    case CLOSURE_BSDF_PRINCIPLED_SHEEN_V2_ID:
       label = bsdf_principled_sheen_sample(sc,
                                            Ng,
                                            sd->I,
@@ -519,6 +520,7 @@ ccl_device_inline
         eval = bsdf_principled_diffuse_eval_reflect(sc, sd->I, omega_in, pdf);
         break;
       case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
+      case CLOSURE_BSDF_PRINCIPLED_SHEEN_V2_ID:
         eval = bsdf_principled_sheen_eval_reflect(sc, sd->I, omega_in, pdf);
         break;
 #  endif /* __PRINCIPLED__ */
@@ -599,6 +601,7 @@ ccl_device_inline
         eval = bsdf_principled_diffuse_eval_transmit(sc, sd->I, omega_in, pdf);
         break;
       case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
+      case CLOSURE_BSDF_PRINCIPLED_SHEEN_V2_ID:
         eval = bsdf_principled_sheen_eval_transmit(sc, sd->I, omega_in, pdf);
         break;
 #  endif /* __PRINCIPLED__ */

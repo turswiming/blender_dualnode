@@ -72,7 +72,7 @@ ccl_device_forceinline void kernel_write_denoising_features_surface(
       ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)sc;
       closure_albedo *= bsdf->extra->fresnel_color;
     }
-    else if (sc->type == CLOSURE_BSDF_PRINCIPLED_SHEEN_ID) {
+    else if (CLOSURE_IS_BSDF_SHEEN(sc->type)) {
       ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)sc;
       closure_albedo *= bsdf->avg_value;
     }

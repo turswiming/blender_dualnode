@@ -77,7 +77,7 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(
 }
 
 /* Albedo correction.
- * TODO: Use proper lookup table code for this data. */
+ * TODO: Use proper lookup table code for this data. Also use 0.5px offset. */
 
 ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float ior)
 {

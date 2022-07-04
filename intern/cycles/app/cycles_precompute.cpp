@@ -13,6 +13,7 @@
 
 #include "kernel/closure/bsdf_microfacet.h"
 #include "kernel/closure/bsdf_microfacet_glass.h"
+#include "kernel/closure/bsdf_principled_sheen.h"
 
 #include <iostream>
 
@@ -35,6 +36,35 @@ inline float Sobol2(uint32_t n, uint32_t scramble)
     if (n & 0x1)
       scramble ^= v;
   return ((scramble >> 8) & 0xffffff) / float(1 << 24);
+}
+
+static float precompute_sheen_E(float rough, float mu, float u1, float u2)
+{
+  PrincipledSheenBsdf bsdf;
+  bsdf.weight = one_float3();
+  bsdf.type = CLOSURE_BSDF_PRINCIPLED_SHEEN_V2_ID;
+  bsdf.sample_weight = 1.0f;
+  bsdf.N = make_float3(0.0f, 0.0f, 1.0f);
+  bsdf.roughness = sqr(rough);
+
+  float3 eval, omega_in, domega_in_dx, domega_in_dy;
+  float pdf = 0.0f;
+  bsdf_principled_sheen_sample((ShaderClosure *)&bsdf,
+                               make_float3(0.0f, 0.0f, 1.0f),
+                               make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
+                               zero_float3(),
+                               zero_float3(),
+                               u1,
+                               u2,
+                               &eval,
+                               &omega_in,
+                               &domega_in_dx,
+                               &domega_in_dy,
+                               &pdf);
+  if (pdf != 0.0f) {
+    return clamp(average(eval) / pdf, 0.0f, 1e5f);
+  }
+  return 0.0f;
 }
 
 static float precompute_ggx_E(float rough, float mu, float u1, float u2)
@@ -144,6 +174,10 @@ bool cycles_precompute(std::string name);
 bool cycles_precompute(std::string name)
 {
   std::map<string, PrecomputeTerm> precompute_terms;
+  precompute_terms["sheen_E"] = {
+      2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+        return precompute_sheen_E(rough, mu, u1, u2);
+      }};
   precompute_terms["ggx_E"] = {
       2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
         return precompute_ggx_E(rough, mu, u1, u2);
