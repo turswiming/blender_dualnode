@@ -217,7 +217,7 @@ static float precompute_ggx_dielectric_E(float rough, float mu, float eta, float
      */
     float F0 = fresnel_dielectric_cos(1.0f, eta);
     auto get_remap = [eta, F0](float x) {
-      return lerp(x, inverse_lerp(1.0f, F0, fresnel_dielectric_cos(x, eta)), 0.5f);
+      return mix(x, inverse_lerp(1.0f, F0, fresnel_dielectric_cos(x, eta)), 0.5f);
     };
 
     float remap_target = mu;

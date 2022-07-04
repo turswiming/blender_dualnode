@@ -55,7 +55,7 @@ ccl_device_inline void principled_v1_diffuse_sss(ccl_private ShaderData *sd,
   float3 subsurface_color = stack_load_float3(stack, color_offset);
   float3 subsurface_radius = stack_load_float3(stack, radius_offset);
 
-  float3 mixed_ss_base_color = lerp(base_color, subsurface_color, subsurface);
+  float3 mixed_ss_base_color = mix(base_color, subsurface_color, subsurface);
 
   /* disable in case of diffuse ancestor, can't see it well then and
    * adds considerably noise due to probabilities of continuing path
@@ -157,9 +157,9 @@ ccl_device_inline void principled_v1_specular(KernelGlobals kg,
   // normalize lum. to isolate hue+sat
   float m_cdlum = linear_rgb_to_gray(kg, base_color);
   float3 m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_float3();
-  float3 specular_color = lerp(one_float3(), m_ctint, specular_tint);
+  float3 specular_color = mix(one_float3(), m_ctint, specular_tint);
 
-  bsdf->extra->cspec0 = lerp(specular * 0.08f * specular_color, base_color, metallic);
+  bsdf->extra->cspec0 = mix(specular * 0.08f * specular_color, base_color, metallic);
   bsdf->extra->color = base_color;
 
   /* setup bsdf */
@@ -203,7 +203,7 @@ ccl_device_inline void principled_v1_glass_refl(ccl_private ShaderData *sd,
   bsdf->ior = ior;
 
   bsdf->extra->color = base_color;
-  bsdf->extra->cspec0 = lerp(one_float3(), base_color, specular_tint);
+  bsdf->extra->cspec0 = mix(one_float3(), base_color, specular_tint);
 
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
@@ -338,7 +338,7 @@ ccl_device_inline void principled_v1_glass_multi(KernelGlobals kg,
   bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / eta : eta;
 
   bsdf->extra->color = base_color;
-  bsdf->extra->cspec0 = lerp(one_float3(), base_color, specular_tint);
+  bsdf->extra->cspec0 = mix(one_float3(), base_color, specular_tint);
 
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(bsdf, sd);
@@ -368,7 +368,7 @@ ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
 
   /* color of the sheen component */
   float sheen_tint = stack_load_float(stack, sheen_tint_offset);
-  float3 sheen_color = lerp(one_float3(), m_ctint, sheen_tint);
+  float3 sheen_color = mix(one_float3(), m_ctint, sheen_tint);
 
   ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
       sd, sizeof(PrincipledSheenBsdf), sheen_weight * sheen_color * weight);
@@ -532,7 +532,7 @@ ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
      * the cosNI of the exit bounce will be much higher on average, so the tint would be
      * less extreme.
      * TODO: Maybe account for this by setting
-     * OD := 0.5*OD + 0.5*lerp(1.59, OD, metallic * (1 - roughness)),
+     * OD := 0.5*OD + 0.5*mix(1.59, OD, metallic * (1 - roughness)),
      * where 1.59 is the closest numerical fit for average optical depth on lambertian reflectors.
      * That way, mirrors preserve their look, but diffuse-ish objects have a more natural behavior.
      */

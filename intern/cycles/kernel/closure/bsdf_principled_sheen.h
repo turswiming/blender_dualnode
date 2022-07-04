@@ -56,11 +56,11 @@ calculate_principled_sheen_brdf(float3 N, float3 V, float3 L, float3 H, ccl_priv
  */
 ccl_device_inline float sheen_v2_lambda(float mu, float w)
 {
-  float a = lerp(11.9095f, 13.7000f, w);
-  float b = lerp(4.68753f, 2.92754f, w);
-  float c = lerp(0.33467f, 0.28670f, w);
-  float d = lerp(-2.22664f, -0.81757f, w);
-  float e = lerp(-1.76591f, -1.22466f, w);
+  float a = mix(11.9095f, 13.7000f, w);
+  float b = mix(4.68753f, 2.92754f, w);
+  float c = mix(0.33467f, 0.28670f, w);
+  float d = mix(-2.22664f, -0.81757f, w);
+  float e = mix(-1.76591f, -1.22466f, w);
 
   float exponent;
   if (mu < 0.5f) {
@@ -116,9 +116,9 @@ ccl_device_forceinline float sheen_v2_E(float mu, float rough)
   rough -= rough_i;
   mu -= mu_i;
 
-  float a = lerp(table_sheen_E[rough_i][mu_i], table_sheen_E[rough_i][mu_i1], mu);
-  float b = lerp(table_sheen_E[rough_i1][mu_i], table_sheen_E[rough_i1][mu_i1], mu);
-  return saturatef(lerp(a, b, rough));
+  float a = mix(table_sheen_E[rough_i][mu_i], table_sheen_E[rough_i][mu_i1], mu);
+  float b = mix(table_sheen_E[rough_i1][mu_i], table_sheen_E[rough_i1][mu_i1], mu);
+  return saturatef(mix(a, b, rough));
 }
 
 ccl_device int bsdf_principled_sheen_setup(ccl_private const ShaderData *sd,

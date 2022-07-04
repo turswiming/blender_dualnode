@@ -67,7 +67,7 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
      * as well as falloff control. F90=white and falloff=0.2 gives classic Schlick Fresnel.
      * Metallic factor and albedo scaling is baked into the F0 and F90 parameters. */
     float metallicBlend = powf(1.0f - cosHL, extra->metal_falloff);
-    float3 metallic = lerp(extra->metal_base, extra->metal_edge, metallicBlend);
+    float3 metallic = mix(extra->metal_base, extra->metal_edge, metallicBlend);
     /* Dielectric Fresnel, just basic IOR control. */
     float dielectric = extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior);
 

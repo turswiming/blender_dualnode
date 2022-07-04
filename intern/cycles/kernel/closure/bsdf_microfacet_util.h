@@ -86,7 +86,7 @@ ccl_device_forceinline float microfacet_table_1D(const float *table, float x, in
   x = saturatef(x - (0.5f / size)) * size;
   int i = min(size - 1, (int)x);
   int i1 = min(size - 1, i + 1);
-  return lerp(table[i], table[i1], x - i);
+  return mix(table[i], table[i1], x - i);
 }
 
 ccl_device_forceinline float microfacet_table_2D(
@@ -95,9 +95,9 @@ ccl_device_forceinline float microfacet_table_2D(
   y = saturatef(y - (0.5f / ysize)) * ysize;
   int i = min(ysize - 1, (int)y);
   int i1 = min(ysize - 1, i + 1);
-  return lerp(microfacet_table_1D(table + xsize * i, x, xsize),
-              microfacet_table_1D(table + xsize * i1, x, xsize),
-              y - i);
+  return mix(microfacet_table_1D(table + xsize * i, x, xsize),
+             microfacet_table_1D(table + xsize * i1, x, xsize),
+             y - i);
 }
 
 ccl_device_forceinline float microfacet_table_3D(
@@ -106,9 +106,9 @@ ccl_device_forceinline float microfacet_table_3D(
   z = saturatef(z - (0.5f / zsize)) * zsize;
   int i = min(zsize - 1, (int)z);
   int i1 = min(zsize - 1, i + 1);
-  return lerp(microfacet_table_2D(table + xsize * ysize * i, x, y, xsize, ysize),
-              microfacet_table_2D(table + xsize * ysize * i1, x, y, xsize, ysize),
-              z - i);
+  return mix(microfacet_table_2D(table + xsize * ysize * i, x, y, xsize, ysize),
+             microfacet_table_2D(table + xsize * ysize * i1, x, y, xsize, ysize),
+             z - i);
 }
 
 ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float ior)
@@ -133,7 +133,7 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, 
 
   float macro_fresnel = fresnel_dielectric_cos(mu, ior);
   float F0 = fresnel_dielectric_cos(1.0f, ior);
-  float x = lerp(mu, inverse_lerp(1.0f, F0, macro_fresnel), 0.5f);
+  float x = mix(mu, inverse_lerp(1.0f, F0, macro_fresnel), 0.5f);
   float y = 1 - rough;
   float z = sqrtf(0.5f * (ior - 1.0f));
 
@@ -158,8 +158,8 @@ ccl_device_forceinline float clearcoat_E(float mu, float rough)
 
 ccl_device_inline float3 metallic_Fss(float3 F0, float3 F90, float falloff)
 {
-  /* Fss for lerp(F0, F90, (1-cosNI)^falloff) */
-  return lerp(F0, F90, 2.0f / (sqr(falloff) + 3 * falloff + 2));
+  /* Fss for mix(F0, F90, (1-cosNI)^falloff) */
+  return mix(F0, F90, 2.0f / (sqr(falloff) + 3 * falloff + 2));
 }
 
 ccl_device_inline float3 schlick_fresnel_Fss(float3 F0)

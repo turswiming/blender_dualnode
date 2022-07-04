@@ -114,12 +114,12 @@ ccl_device_forceinline float3
 interpolate_fresnel_color(float3 L, float3 H, float ior, float3 F0)
 {
   /* Compute the real Fresnel term and remap it from real_F0...1 to F0...1.
-   * We could also just use actual Schlick fresnel (lerp(F0, 1, (1-cosI)^5)) here. */
+   * We could also just use actual Schlick fresnel (mix(F0, 1, (1-cosI)^5)) here. */
   float real_F0 = fresnel_dielectric_cos(1.0f, ior);
   float F0_norm = 1.0f / (1.0f - real_F0);
   float FH = (fresnel_dielectric_cos(dot(L, H), ior) - real_F0) * F0_norm;
 
-  return lerp(F0, one_float3(), FH);
+  return mix(F0, one_float3(), FH);
 }
 
 ccl_device float3 ensure_valid_reflection(float3 Ng, float3 I, float3 N)
