@@ -579,7 +579,6 @@ ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
     return 1.0f;
   }
 
-  float3 tint = stack_load_float3(stack, sheen_tint_offset);
   float roughness = stack_load_float(stack, sheen_roughness_offset);
   ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
       sd, sizeof(PrincipledSheenBsdf), sheen * weight);  // TODO include tint
