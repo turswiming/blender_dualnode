@@ -157,7 +157,7 @@ ccl_device float3 bsdf_principled_sheen_eval_reflect(ccl_private const ShaderClo
   float3 H = normalize(L + V);
 
   if (dot(N, omega_in) > 0.0f) {
-    *pdf = fmaxf(dot(N, omega_in), 0.0f) * M_1_PI_F;
+    *pdf = M_1_2PI_F;
     if (bsdf->type == CLOSURE_BSDF_PRINCIPLED_SHEEN_V2_ID) {
       return sheen_v2_eval(N, V, L, H, bsdf->roughness, pdf);
     }
@@ -197,7 +197,7 @@ ccl_device int bsdf_principled_sheen_sample(ccl_private const ShaderClosure *sc,
 
   float3 N = bsdf->N;
 
-  sample_cos_hemisphere(N, randu, randv, omega_in, pdf);
+  sample_uniform_hemisphere(N, randu, randv, omega_in, pdf);
 
   if (dot(Ng, *omega_in) > 0) {
     float3 H = normalize(I + *omega_in);
