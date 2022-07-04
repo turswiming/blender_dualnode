@@ -5,6 +5,162 @@
 
 CCL_NAMESPACE_BEGIN
 
+ccl_device_inline void principled_v1_glass_refl(ccl_private ShaderData *sd,
+                                                float3 weight,
+                                                float3 base_color,
+                                                float reflection_weight,
+                                                float3 N,
+                                                float roughness,
+                                                float ior,
+                                                float specular_tint)
+{
+  if (reflection_weight <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), reflection_weight * weight);
+  if (bsdf == NULL) {
+    return;
+  }
+
+  ccl_private MicrofacetExtra *extra = (ccl_private MicrofacetExtra *)closure_alloc_extra(
+      sd, sizeof(MicrofacetExtra));
+  if (extra == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+  bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
+  bsdf->extra = extra;
+
+  bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
+  bsdf->ior = ior;
+
+  bsdf->extra->color = base_color;
+  bsdf->extra->cspec0 = lerp(one_float3(), base_color, specular_tint);
+  bsdf->extra->clearcoat = 0.0f;
+
+  /* setup bsdf */
+  sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
+}
+
+ccl_device_inline void principled_v1_glass_refr(ccl_private ShaderData *sd,
+                                                float3 weight,
+                                                float3 base_color,
+                                                float refraction_weight,
+                                                float3 N,
+                                                float roughness,
+                                                float ior)
+{
+  if (refraction_weight <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), base_color * weight * refraction_weight);
+  if (bsdf == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+  bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
+  bsdf->extra = NULL;
+
+  bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
+  bsdf->ior = ior;
+
+  /* setup bsdf */
+  sd->flag |= bsdf_microfacet_ggx_refraction_setup(bsdf);
+}
+
+ccl_device_inline void principled_v1_glass_single(KernelGlobals kg,
+                                                  ccl_private ShaderData *sd,
+                                                  float3 weight,
+                                                  ClosureType distribution,
+                                                  int path_flag,
+                                                  float3 base_color,
+                                                  float glass_weight,
+                                                  float3 N,
+                                                  float roughness,
+                                                  float transmission_roughness,
+                                                  float eta,
+                                                  float specular_tint)
+{
+  if (glass_weight <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+  /* calculate ior */
+  float ior = (sd->flag & SD_BACKFACING) ? 1.0f / eta : eta;
+
+  // calculate fresnel for refraction
+  float fresnel = fresnel_dielectric_cos(dot(N, sd->I), ior);
+
+  /* reflection */
+  float reflection_weight = glass_weight * fresnel;
+#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
+    reflection_weight = 0.0f;
+  }
+#endif
+  principled_v1_glass_refl(
+      sd, weight, base_color, reflection_weight, N, roughness, ior, specular_tint);
+
+  /* refraction */
+  /* TODO: MNEE ensured that this is always >0, is that correct?? */
+  float refraction_weight = glass_weight * (1.0f - fresnel);
+#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_refractive && (path_flag & PATH_RAY_DIFFUSE)) {
+    refraction_weight = 0.0f;
+  }
+#endif
+  if (distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID)
+    transmission_roughness = 1.0f - (1.0f - roughness) * (1.0f - transmission_roughness);
+  else
+    transmission_roughness = roughness;
+  principled_v1_glass_refr(
+      sd, weight, base_color, refraction_weight, N, transmission_roughness, ior);
+}
+
+ccl_device_inline void principled_v1_glass_multi(ccl_private ShaderData *sd,
+                                                 float3 weight,
+                                                 float3 base_color,
+                                                 float glass_weight,
+                                                 float3 N,
+                                                 float roughness,
+                                                 float eta,
+                                                 float specular_tint)
+{
+  if (glass_weight <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), glass_weight * weight);
+  if (bsdf == NULL) {
+    return;
+  }
+  ccl_private MicrofacetExtra *extra = (ccl_private MicrofacetExtra *)closure_alloc_extra(
+      sd, sizeof(MicrofacetExtra));
+  if (extra == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+  bsdf->extra = extra;
+  bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
+
+  bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
+  bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / eta : eta;
+
+  bsdf->extra->color = base_color;
+  bsdf->extra->cspec0 = lerp(one_float3(), base_color, specular_tint);
+  bsdf->extra->clearcoat = 0.0f;
+
+  /* setup bsdf */
+  sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(bsdf, sd);
+}
+
 ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
                                            float3 weight,
@@ -124,13 +280,6 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
   /* rotate tangent */
   if (anisotropic_rotation != 0.0f)
     T = rotate_around_axis(T, N, anisotropic_rotation * M_2PI_F);
-
-  /* calculate ior */
-  float ior = (sd->flag & SD_BACKFACING) ? 1.0f / eta : eta;
-
-  // calculate fresnel for refraction
-  float cosNO = dot(N, sd->I);
-  float fresnel = fresnel_dielectric_cos(cosNO, ior);
 
   // calculate weights of the diffuse and specular part
   float diffuse_weight = (1.0f - saturatef(metallic)) * (1.0f - saturatef(transmission));
@@ -291,108 +440,32 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
   }
 #endif
 
-  /* BSDF */
+  /* glass */
 #ifdef __CAUSTICS_TRICKS__
-  if (kernel_data.integrator.caustics_reflective || kernel_data.integrator.caustics_refractive ||
-      (path_flag & PATH_RAY_DIFFUSE) == 0) {
-#endif
-    if (final_transmission > CLOSURE_WEIGHT_CUTOFF) {
-      float3 glass_weight = weight * final_transmission;
-      float3 cspec0 = base_color * specular_tint +
-                      make_float3(1.0f, 1.0f, 1.0f) * (1.0f - specular_tint);
-
-      if (roughness <= 5e-2f ||
-          distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID) { /* use single-scatter GGX */
-        float refl_roughness = roughness;
-
-        /* reflection */
-#ifdef __CAUSTICS_TRICKS__
-        if (kernel_data.integrator.caustics_reflective || (path_flag & PATH_RAY_DIFFUSE) == 0)
-#endif
-        {
-          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-              sd, sizeof(MicrofacetBsdf), glass_weight * fresnel);
-          ccl_private MicrofacetExtra *extra =
-              (bsdf != NULL) ?
-                  (ccl_private MicrofacetExtra *)closure_alloc_extra(sd, sizeof(MicrofacetExtra)) :
-                  NULL;
-
-          if (bsdf && extra) {
-            bsdf->N = N;
-            bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
-            bsdf->extra = extra;
-
-            bsdf->alpha_x = refl_roughness * refl_roughness;
-            bsdf->alpha_y = refl_roughness * refl_roughness;
-            bsdf->ior = ior;
-
-            bsdf->extra->color = base_color;
-            bsdf->extra->cspec0 = cspec0;
-            bsdf->extra->clearcoat = 0.0f;
-
-            /* setup bsdf */
-            sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
-          }
-        }
-
-        /* refraction */
-#ifdef __CAUSTICS_TRICKS__
-        if (kernel_data.integrator.caustics_refractive || (path_flag & PATH_RAY_DIFFUSE) == 0)
-#endif
-        {
-          /* This is to prevent MNEE from receiving a null BSDF. */
-          float refraction_fresnel = fmaxf(0.0001f, 1.0f - fresnel);
-          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-              sd, sizeof(MicrofacetBsdf), base_color * glass_weight * refraction_fresnel);
-          if (bsdf) {
-            bsdf->N = N;
-            bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
-            bsdf->extra = NULL;
-
-            if (distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID)
-              transmission_roughness = 1.0f -
-                                       (1.0f - refl_roughness) * (1.0f - transmission_roughness);
-            else
-              transmission_roughness = refl_roughness;
-
-            bsdf->alpha_x = transmission_roughness * transmission_roughness;
-            bsdf->alpha_y = transmission_roughness * transmission_roughness;
-            bsdf->ior = ior;
-
-            /* setup bsdf */
-            sd->flag |= bsdf_microfacet_ggx_refraction_setup(bsdf);
-          }
-        }
-      }
-      else { /* use multi-scatter GGX */
-        ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-            sd, sizeof(MicrofacetBsdf), glass_weight);
-        ccl_private MicrofacetExtra *extra =
-            (bsdf != NULL) ?
-                (ccl_private MicrofacetExtra *)closure_alloc_extra(sd, sizeof(MicrofacetExtra)) :
-                NULL;
-
-        if (bsdf && extra) {
-          bsdf->N = N;
-          bsdf->extra = extra;
-          bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
-
-          bsdf->alpha_x = roughness * roughness;
-          bsdf->alpha_y = roughness * roughness;
-          bsdf->ior = ior;
-
-          bsdf->extra->color = base_color;
-          bsdf->extra->cspec0 = cspec0;
-          bsdf->extra->clearcoat = 0.0f;
-
-          /* setup bsdf */
-          sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(bsdf, sd);
-        }
-      }
-    }
-#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && !kernel_data.integrator.caustics_refractive &&
+      (path_flag & PATH_RAY_DIFFUSE)) {
+    final_transmission = 0.0f;
   }
 #endif
+  if (roughness <= 5e-2f ||
+      distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID) { /* use single-scatter GGX */
+    principled_v1_glass_single(kg,
+                               sd,
+                               weight,
+                               distribution,
+                               path_flag,
+                               base_color,
+                               final_transmission,
+                               N,
+                               roughness,
+                               transmission_roughness,
+                               eta,
+                               specular_tint);
+  }
+  else { /* use multi-scatter GGX */
+    principled_v1_glass_multi(
+        sd, weight, base_color, final_transmission, N, roughness, eta, specular_tint);
+  }
 
   /* clearcoat */
 #ifdef __CAUSTICS_TRICKS__
