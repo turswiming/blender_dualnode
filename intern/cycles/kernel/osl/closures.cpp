@@ -27,7 +27,7 @@
 #include "kernel/closure/bsdf_diffuse.h"
 #include "kernel/closure/bsdf_microfacet.h"
 #include "kernel/closure/bsdf_microfacet_beckmann.h"
-#include "kernel/closure/bsdf_microfacet_multi.h"
+#include "kernel/closure/bsdf_microfacet_glass.h"
 #include "kernel/closure/bsdf_oren_nayar.h"
 #include "kernel/closure/bsdf_reflection.h"
 #include "kernel/closure/bsdf_refraction.h"
@@ -681,14 +681,7 @@ class MicrofacetMultiClosure : public CBSDFClosure {
       return NULL;
     }
 
-    MicrofacetExtra *extra = (MicrofacetExtra *)closure_alloc_extra(sd, sizeof(MicrofacetExtra));
-    if (!extra) {
-      return NULL;
-    }
-
-    bsdf->extra = extra;
-    bsdf->extra->color = color;
-    bsdf->extra->cspec0 = make_float3(0.0f, 0.0f, 0.0f);
+    bsdf->extra = NULL;
     return bsdf;
   }
 };
@@ -704,10 +697,12 @@ class MicrofacetMultiGGXClosure : public MicrofacetMultiClosure {
       return;
     }
 
+    const KernelGlobalsCPU *kg = sd->osl_globals;
+
     bsdf->ior = 0.0f;
     bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
     bsdf->alpha_y = bsdf->alpha_x;
-    sd->flag |= bsdf_microfacet_multi_ggx_setup(bsdf);
+    sd->flag |= bsdf_microfacet_multi_ggx_setup(kg, bsdf, sd, color);
   }
 };
 
@@ -734,8 +729,10 @@ class MicrofacetMultiGGXAnisoClosure : public MicrofacetMultiClosure {
       return;
     }
 
+    const KernelGlobalsCPU *kg = sd->osl_globals;
+
     bsdf->ior = 0.0f;
-    sd->flag |= bsdf_microfacet_multi_ggx_setup(bsdf);
+    sd->flag |= bsdf_microfacet_multi_ggx_setup(kg, bsdf, sd, color);
   }
 };
 
@@ -768,9 +765,11 @@ class MicrofacetMultiGGXGlassClosure : public MicrofacetMultiClosure {
       return;
     }
 
+    const KernelGlobalsCPU *kg = sd->osl_globals;
+
     bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
     bsdf->alpha_y = bsdf->alpha_x;
-    sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(bsdf);
+    sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(kg, bsdf, sd, color);
   }
 };
 
@@ -833,9 +832,11 @@ class MicrofacetMultiGGXFresnelClosure : public MicrofacetMultiFresnelClosure {
       return;
     }
 
+    const KernelGlobalsCPU *kg = sd->osl_globals;
+
     bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
     bsdf->alpha_y = bsdf->alpha_x;
-    sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(bsdf, sd);
+    sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(kg, bsdf, sd);
   }
 };
 
@@ -865,7 +866,9 @@ class MicrofacetMultiGGXAnisoFresnelClosure : public MicrofacetMultiFresnelClosu
       return;
     }
 
-    sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(bsdf, sd);
+    const KernelGlobalsCPU *kg = sd->osl_globals;
+
+    sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(kg, bsdf, sd);
   }
 };
 
@@ -901,9 +904,11 @@ class MicrofacetMultiGGXGlassFresnelClosure : public MicrofacetMultiFresnelClosu
       return;
     }
 
+    const KernelGlobalsCPU *kg = sd->osl_globals;
+
     bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
     bsdf->alpha_y = bsdf->alpha_x;
-    sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(bsdf, sd);
+    sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(kg, bsdf, sd);
   }
 };
 

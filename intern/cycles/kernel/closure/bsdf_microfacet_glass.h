@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "kernel/sample/lcg.h"
+
 CCL_NAMESPACE_BEGIN
 
 ccl_device_inline float3

@@ -5,6 +5,8 @@
 
 #include "kernel/closure/bsdf_util.h"
 
+#include "kernel/util/lookup_table.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* GGX microfacet with Smith shadow-masking from:
