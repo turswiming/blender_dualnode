@@ -4662,13 +4662,8 @@ static EnumPropertyItem node_ies_mode_items[] = {
 };
 
 static const EnumPropertyItem node_principled_distribution_items[] = {
-    {SHD_GLOSSY_GGX, "GGX", 0, "GGX", ""},
-    {SHD_GLOSSY_MULTI_GGX,
-     "MULTI_GGX",
-     0,
-     "Multiscatter GGX",
-     "Slower than GGX but gives a more energy conserving results, which would otherwise be "
-     "visible as excessive darkening"},
+    {SHD_PRINCIPLED_GGX, "GGX", 0, "GGX", ""},
+    {SHD_PRINCIPLED_MULTI_GGX, "MULTI_GGX", 0, "Multiscatter GGX", ""},
     {0, NULL, 0, NULL, NULL},
 };
 

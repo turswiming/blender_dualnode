@@ -1509,6 +1509,11 @@ typedef struct NodeCombSepColor {
 #define SHD_GLOSSY_ASHIKHMIN_SHIRLEY 3
 #define SHD_GLOSSY_MULTI_GGX 4
 
+/* principled bsdf mode
+ * Note: GGX and MULTI_GGX must align with SHD_GLOSSY for backwards compatibility */
+#define SHD_PRINCIPLED_GGX 2
+#define SHD_PRINCIPLED_MULTI_GGX 4
+
 /* vector transform */
 #define SHD_VECT_TRANSFORM_TYPE_VECTOR 0
 #define SHD_VECT_TRANSFORM_TYPE_POINT 1

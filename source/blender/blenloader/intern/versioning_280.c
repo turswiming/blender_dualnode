@@ -1866,7 +1866,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
                    STREQ(node->idname, "ShaderNodeEeveeMetallic")) {
             node->type = SH_NODE_BSDF_PRINCIPLED;
             BLI_strncpy(node->idname, "ShaderNodeBsdfPrincipled", sizeof(node->idname));
-            node->custom1 = SHD_GLOSSY_MULTI_GGX;
+            node->custom1 = SHD_PRINCIPLED_MULTI_GGX;
             error |= NTREE_DOVERSION_TRANSPARENCY_EMISSION;
           }
         }

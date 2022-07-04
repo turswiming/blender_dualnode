@@ -115,7 +115,7 @@ static void node_shader_buts_principled(uiLayout *layout, bContext *UNUSED(C), P
 
 static void node_shader_init_principled(bNodeTree *UNUSED(ntree), bNode *node)
 {
-  node->custom1 = SHD_GLOSSY_GGX;
+  node->custom1 = SHD_PRINCIPLED_GGX;
   node->custom2 = SHD_SUBSURFACE_RANDOM_WALK;
 }
 
@@ -175,7 +175,7 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
     use_subsurf = GPU_material_sss_profile_create(mat, &socket_data->value[1]);
   }
 
-  float use_multi_scatter = (node->custom1 == SHD_GLOSSY_MULTI_GGX) ? 1.0f : 0.0f;
+  float use_multi_scatter = (node->custom1 != SHD_PRINCIPLED_GGX) ? 1.0f : 0.0f;
   float use_sss = (use_subsurf) ? 1.0f : 0.0f;
   float use_diffuse_f = (use_diffuse) ? 1.0f : 0.0f;
   float use_clear_f = (use_clear) ? 1.0f : 0.0f;
@@ -202,7 +202,7 @@ static void node_shader_update_principled(bNodeTree *ntree, bNode *node)
 
   LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
     if (STREQ(sock->name, "Transmission Roughness")) {
-      nodeSetSocketAvailability(ntree, sock, distribution == SHD_GLOSSY_GGX);
+      nodeSetSocketAvailability(ntree, sock, distribution == SHD_PRINCIPLED_GGX);
     }
 
     if (STR_ELEM(sock->name, "Subsurface IOR", "Subsurface Anisotropy")) {
