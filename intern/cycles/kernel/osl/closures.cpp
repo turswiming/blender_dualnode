@@ -592,7 +592,6 @@ class MicrofacetFresnelClosure : public CBSDFClosure {
     bsdf->extra = extra;
     bsdf->extra->color = color;
     bsdf->extra->cspec0 = cspec0;
-    bsdf->extra->clearcoat = 0.0f;
     return bsdf;
   }
 };
@@ -690,7 +689,6 @@ class MicrofacetMultiClosure : public CBSDFClosure {
     bsdf->extra = extra;
     bsdf->extra->color = color;
     bsdf->extra->cspec0 = make_float3(0.0f, 0.0f, 0.0f);
-    bsdf->extra->clearcoat = 0.0f;
     return bsdf;
   }
 };
@@ -820,7 +818,6 @@ class MicrofacetMultiFresnelClosure : public CBSDFClosure {
     bsdf->extra = extra;
     bsdf->extra->color = color;
     bsdf->extra->cspec0 = cspec0;
-    bsdf->extra->clearcoat = 0.0f;
     return bsdf;
   }
 };

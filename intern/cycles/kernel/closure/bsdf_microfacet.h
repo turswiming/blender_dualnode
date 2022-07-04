@@ -16,7 +16,6 @@ CCL_NAMESPACE_BEGIN
 typedef struct MicrofacetExtra {
   float3 color, cspec0;
   float3 fresnel_color;
-  float clearcoat;
 } MicrofacetExtra;
 
 typedef struct MicrofacetBsdf {

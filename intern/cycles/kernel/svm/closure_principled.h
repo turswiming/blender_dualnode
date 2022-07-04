@@ -161,7 +161,6 @@ ccl_device_inline void principled_v1_specular(KernelGlobals kg,
 
   bsdf->extra->cspec0 = lerp(specular * 0.08f * specular_color, base_color, metallic);
   bsdf->extra->color = base_color;
-  bsdf->extra->clearcoat = 0.0f;
 
   /* setup bsdf */
   if (distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID ||
@@ -205,7 +204,6 @@ ccl_device_inline void principled_v1_glass_refl(ccl_private ShaderData *sd,
 
   bsdf->extra->color = base_color;
   bsdf->extra->cspec0 = lerp(one_float3(), base_color, specular_tint);
-  bsdf->extra->clearcoat = 0.0f;
 
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
@@ -341,7 +339,6 @@ ccl_device_inline void principled_v1_glass_multi(KernelGlobals kg,
 
   bsdf->extra->color = base_color;
   bsdf->extra->cspec0 = lerp(one_float3(), base_color, specular_tint);
-  bsdf->extra->clearcoat = 0.0f;
 
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(bsdf, sd);
