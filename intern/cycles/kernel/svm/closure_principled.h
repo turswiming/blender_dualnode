@@ -5,6 +5,38 @@
 
 CCL_NAMESPACE_BEGIN
 
+ccl_device_inline void principled_v1_clearcoat(ccl_private ShaderData *sd,
+                                               float3 weight,
+                                               float clearcoat,
+                                               float clearcoat_roughness,
+                                               float3 clearcoat_normal)
+{
+  if (clearcoat <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), 0.25f * weight * clearcoat);
+
+  if (bsdf == NULL) {
+    return;
+  }
+
+  if (!(sd->type & PRIMITIVE_CURVE)) {
+    clearcoat_normal = ensure_valid_reflection(sd->Ng, sd->I, clearcoat_normal);
+  }
+
+  bsdf->N = clearcoat_normal;
+  bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
+  bsdf->ior = 1.5f;
+  bsdf->extra = NULL;
+
+  bsdf->alpha_x = bsdf->alpha_y = sqr(clearcoat_roughness);
+
+  /* setup bsdf */
+  sd->flag |= bsdf_microfacet_ggx_clearcoat_setup(bsdf, sd);
+}
+
 ccl_device void svm_node_closure_principled(KernelGlobals kg,
                                             ccl_private ShaderData *sd,
                                             ccl_private float *stack,
@@ -86,9 +118,6 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
   uint4 data_cn_ssr = read_node(kg, offset);
   float3 clearcoat_normal = stack_valid(data_cn_ssr.x) ? stack_load_float3(stack, data_cn_ssr.x) :
                                                          sd->N;
-  if (!(sd->type & PRIMITIVE_CURVE)) {
-    clearcoat_normal = ensure_valid_reflection(sd->Ng, sd->I, clearcoat_normal);
-  }
   float3 subsurface_radius = stack_valid(data_cn_ssr.y) ? stack_load_float3(stack, data_cn_ssr.y) :
                                                           make_float3(1.0f, 1.0f, 1.0f);
   float subsurface_ior = stack_valid(data_cn_ssr.z) ? stack_load_float(stack, data_cn_ssr.z) :
@@ -356,27 +385,11 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
 
   /* clearcoat */
 #ifdef __CAUSTICS_TRICKS__
-  if (kernel_data.integrator.caustics_reflective || (path_flag & PATH_RAY_DIFFUSE) == 0) {
-#endif
-    if (clearcoat > CLOSURE_WEIGHT_CUTOFF) {
-      ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-          sd, sizeof(MicrofacetBsdf), 0.25f * clearcoat * weight);
-
-      if (bsdf) {
-        bsdf->N = clearcoat_normal;
-        bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
-        bsdf->ior = 1.5f;
-        bsdf->extra = NULL;
-
-        bsdf->alpha_x = bsdf->alpha_y = sqr(clearcoat_roughness);
-
-        /* setup bsdf */
-        sd->flag |= bsdf_microfacet_ggx_clearcoat_setup(bsdf, sd);
-      }
-    }
-#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
+    clearcoat = 0.0f;
   }
 #endif
+  principled_v1_clearcoat(sd, weight, clearcoat, clearcoat_roughness, clearcoat_normal);
 }
 
 CCL_NAMESPACE_END
