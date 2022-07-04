@@ -2782,6 +2782,8 @@ PrincipledBsdfNode::PrincipledBsdfNode() : BsdfBaseNode(get_node_type())
 
 void PrincipledBsdfNode::expand(ShaderGraph *graph)
 {
+  /* TODO: Disconnect unused depending on model */
+
   ShaderOutput *principled_out = output("BSDF");
 
   ShaderInput *emission_in = input("Emission");
@@ -2855,96 +2857,63 @@ void PrincipledBsdfNode::attributes(Shader *shader, AttributeRequestSet *attribu
 
 void PrincipledBsdfNode::compile(SVMCompiler &compiler)
 {
-  ShaderInput *base_color_in = input("Base Color");
-  ShaderInput *subsurface_color_in = input("Subsurface Color");
-  ShaderInput *p_metallic = input("Metallic");
-  ShaderInput *p_subsurface = input("Subsurface");
-  ShaderInput *p_subsurface_radius = input("Subsurface Radius");
-  ShaderInput *p_subsurface_ior = input("Subsurface IOR");
-  ShaderInput *p_subsurface_anisotropy = input("Subsurface Anisotropy");
-  ShaderInput *p_specular = input("Specular");
-  ShaderInput *p_roughness = input("Roughness");
-  ShaderInput *p_specular_tint = input("Specular Tint");
-  ShaderInput *p_anisotropic = input("Anisotropic");
-  ShaderInput *p_sheen = input("Sheen");
-  ShaderInput *p_sheen_tint = input("Sheen Tint");
-  ShaderInput *p_clearcoat = input("Clearcoat");
-  ShaderInput *p_clearcoat_roughness = input("Clearcoat Roughness");
-  ShaderInput *p_ior = input("IOR");
-  ShaderInput *p_transmission = input("Transmission");
-  ShaderInput *p_anisotropic_rotation = input("Anisotropic Rotation");
-  ShaderInput *p_transmission_roughness = input("Transmission Roughness");
-  ShaderInput *normal_in = input("Normal");
-  ShaderInput *clearcoat_normal_in = input("Clearcoat Normal");
-  ShaderInput *tangent_in = input("Tangent");
+  compiler.add_node(NODE_CLOSURE_SET_WEIGHT, one_float3());
 
-  float3 weight = one_float3();
+  if (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID) {
+    compile_v2(compiler);
+  }
+  else {
+    compile_v1(compiler);
+  }
+}
 
-  compiler.add_node(NODE_CLOSURE_SET_WEIGHT, weight);
+void PrincipledBsdfNode::compile_v1(SVMCompiler &compiler)
+{
+  /* TODO skip generation of stack entries (normal, tangent, default vals.) if possible */
+  /* If we ever have more than 255 closures, the packing here needs to change. */
+  static_assert(NBUILTIN_CLOSURES < SVM_STACK_SIZE);
 
-  int normal_offset = compiler.stack_assign_if_linked(normal_in);
-  int clearcoat_normal_offset = compiler.stack_assign_if_linked(clearcoat_normal_in);
-  int tangent_offset = compiler.stack_assign_if_linked(tangent_in);
-  int specular_offset = compiler.stack_assign(p_specular);
-  int roughness_offset = compiler.stack_assign(p_roughness);
-  int specular_tint_offset = compiler.stack_assign(p_specular_tint);
-  int anisotropic_offset = compiler.stack_assign(p_anisotropic);
-  int sheen_offset = compiler.stack_assign(p_sheen);
-  int sheen_tint_offset = compiler.stack_assign(p_sheen_tint);
-  int clearcoat_offset = compiler.stack_assign(p_clearcoat);
-  int clearcoat_roughness_offset = compiler.stack_assign(p_clearcoat_roughness);
-  int ior_offset = compiler.stack_assign(p_ior);
-  int transmission_offset = compiler.stack_assign(p_transmission);
-  int transmission_roughness_offset = compiler.stack_assign(p_transmission_roughness);
-  int anisotropic_rotation_offset = compiler.stack_assign(p_anisotropic_rotation);
-  int subsurface_radius_offset = compiler.stack_assign(p_subsurface_radius);
-  int subsurface_ior_offset = compiler.stack_assign(p_subsurface_ior);
-  int subsurface_anisotropy_offset = compiler.stack_assign(p_subsurface_anisotropy);
+  uint base_1 = compiler.encode_uchar4(closure,
+                                       compiler.stack_assign(input("Base Color")),
+                                       compiler.stack_assign_if_linked(input("Normal")),
+                                       compiler.closure_mix_weight_offset());
+  uint base_2 = compiler.encode_uchar4(compiler.stack_assign(input("Roughness")),
+                                       compiler.stack_assign(input("Metallic")),
+                                       compiler.stack_assign(input("Transmission")),
+                                       compiler.stack_assign(input("Specular Tint")));
+  uint sss_1 = compiler.encode_uchar4(subsurface_method,
+                                      compiler.stack_assign(input("Subsurface")),
+                                      compiler.stack_assign(input("Subsurface Anisotropy")),
+                                      compiler.stack_assign(input("Subsurface Radius")));
+  uint sss_2 = compiler.encode_uchar4(compiler.stack_assign(input("Subsurface Color")),
+                                      compiler.stack_assign(input("Subsurface IOR")),
+                                      SVM_STACK_INVALID,
+                                      distribution);
+  uint specular = compiler.encode_uchar4(compiler.stack_assign(input("Specular")),
+                                         compiler.stack_assign(input("Anisotropic")),
+                                         compiler.stack_assign(input("Anisotropic Rotation")),
+                                         compiler.stack_assign_if_linked(input("Tangent")));
+  uint sheen_glass = compiler.encode_uchar4(
+      compiler.stack_assign(input("IOR")),
+      compiler.stack_assign(input("Sheen")),
+      compiler.stack_assign(input("Sheen Tint")),
+      compiler.stack_assign(input("Transmission Roughness")));
+  uint clearcoat = compiler.encode_uchar4(
+      compiler.stack_assign(input("Clearcoat")),
+      compiler.stack_assign(input("Clearcoat Roughness")),
+      compiler.stack_assign_if_linked(input("Clearcoat Normal")),
+      SVM_STACK_INVALID);
 
-  compiler.add_node(NODE_CLOSURE_BSDF,
-                    compiler.encode_uchar4(closure,
-                                           compiler.stack_assign(p_metallic),
-                                           compiler.stack_assign(p_subsurface),
-                                           compiler.closure_mix_weight_offset()),
-                    __float_as_int((p_metallic) ? get_float(p_metallic->socket_type) : 0.0f),
-                    __float_as_int((p_subsurface) ? get_float(p_subsurface->socket_type) : 0.0f));
+  compiler.add_node(NODE_CLOSURE_BSDF, base_1, base_2, sss_1);
+  compiler.add_node(sss_2, specular, sheen_glass, clearcoat);
+}
 
-  compiler.add_node(
-      normal_offset,
-      tangent_offset,
-      compiler.encode_uchar4(
-          specular_offset, roughness_offset, specular_tint_offset, anisotropic_offset),
-      compiler.encode_uchar4(
-          sheen_offset, sheen_tint_offset, clearcoat_offset, clearcoat_roughness_offset));
+void PrincipledBsdfNode::compile_v2(SVMCompiler &compiler)
+{
+  /* If we ever have more than 255 closures, the packing here needs to change. */
+  static_assert(NBUILTIN_CLOSURES < SVM_STACK_SIZE);
 
-  compiler.add_node(compiler.encode_uchar4(ior_offset,
-                                           transmission_offset,
-                                           anisotropic_rotation_offset,
-                                           transmission_roughness_offset),
-                    distribution,
-                    subsurface_method,
-                    SVM_STACK_INVALID);
-
-  float3 bc_default = get_float3(base_color_in->socket_type);
-
-  compiler.add_node(
-      ((base_color_in->link) ? compiler.stack_assign(base_color_in) : SVM_STACK_INVALID),
-      __float_as_int(bc_default.x),
-      __float_as_int(bc_default.y),
-      __float_as_int(bc_default.z));
-
-  compiler.add_node(clearcoat_normal_offset,
-                    subsurface_radius_offset,
-                    subsurface_ior_offset,
-                    subsurface_anisotropy_offset);
-
-  float3 ss_default = get_float3(subsurface_color_in->socket_type);
-
-  compiler.add_node(((subsurface_color_in->link) ? compiler.stack_assign(subsurface_color_in) :
-                                                   SVM_STACK_INVALID),
-                    __float_as_int(ss_default.x),
-                    __float_as_int(ss_default.y),
-                    __float_as_int(ss_default.z));
+  assert(false);
 }
 
 bool PrincipledBsdfNode::has_integrator_dependency()

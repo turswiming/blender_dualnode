@@ -1130,6 +1130,7 @@ int ShaderGraph::get_num_closures()
       num_closures += 2;
     }
     else if (CLOSURE_IS_PRINCIPLED(closure_type)) {
+      /* TODO adjust */
       num_closures += 8;
     }
     else if (CLOSURE_IS_VOLUME(closure_type)) {

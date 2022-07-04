@@ -562,6 +562,9 @@ class PrincipledBsdfNode : public BsdfBaseNode {
  private:
   ClosureType distribution_orig;
 
+  void compile_v1(SVMCompiler &compiler);
+  void compile_v2(SVMCompiler &compiler);
+
  public:
   bool has_integrator_dependency();
   void attributes(Shader *shader, AttributeRequestSet *attributes);

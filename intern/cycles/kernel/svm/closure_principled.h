@@ -5,23 +5,132 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* Principled v1 components */
+
+ccl_device_inline void principled_v1_diffuse(ccl_private ShaderData *sd,
+                                             float3 weight,
+                                             float3 base_color,
+                                             float diffuse_weight,
+                                             float3 N,
+                                             float roughness)
+{
+  if (diffuse_weight <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+
+  ccl_private PrincipledDiffuseBsdf *bsdf = (ccl_private PrincipledDiffuseBsdf *)bsdf_alloc(
+      sd, sizeof(PrincipledDiffuseBsdf), diffuse_weight * base_color * weight);
+
+  if (bsdf == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+  bsdf->roughness = roughness;
+
+  /* setup bsdf */
+  sd->flag |= bsdf_principled_diffuse_setup(bsdf, PRINCIPLED_DIFFUSE_FULL);
+}
+
+ccl_device_inline void principled_v1_diffuse_sss(ccl_private ShaderData *sd,
+                                                 ccl_private float *stack,
+                                                 float3 weight,
+                                                 int path_flag,
+                                                 uint data_1,
+                                                 uint data_2,
+                                                 float3 base_color,
+                                                 float diffuse_weight,
+                                                 float3 N,
+                                                 float roughness)
+{
+#ifdef __SUBSURFACE__
+  uint method, subsurface_offset, aniso_offset, radius_offset;
+  uint color_offset, ior_offset, dummy;
+  svm_unpack_node_uchar4(data_1, &method, &subsurface_offset, &aniso_offset, &radius_offset);
+  svm_unpack_node_uchar4(data_2, &color_offset, &ior_offset, &dummy, &dummy);
+
+  float subsurface = stack_load_float(stack, subsurface_offset);
+  float subsurface_anisotropy = stack_load_float(stack, aniso_offset);
+  float subsurface_ior = stack_load_float(stack, ior_offset);
+  float3 subsurface_color = stack_load_float3(stack, color_offset);
+  float3 subsurface_radius = stack_load_float3(stack, radius_offset);
+
+  float3 mixed_ss_base_color = lerp(base_color, subsurface_color, subsurface);
+
+  /* disable in case of diffuse ancestor, can't see it well then and
+   * adds considerably noise due to probabilities of continuing path
+   * getting lower and lower */
+  if (path_flag & PATH_RAY_DIFFUSE_ANCESTOR) {
+    subsurface = 0.0f;
+  }
+
+  /* diffuse */
+  if (fabsf(average(mixed_ss_base_color)) > CLOSURE_WEIGHT_CUTOFF) {
+    if (subsurface > CLOSURE_WEIGHT_CUTOFF) {
+      float3 subsurf_weight = weight * mixed_ss_base_color * diffuse_weight;
+      ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, subsurf_weight);
+
+      if (bssrdf == NULL) {
+        return;
+      }
+
+      bssrdf->radius = subsurface_radius * subsurface;
+      bssrdf->albedo = mixed_ss_base_color;
+      bssrdf->N = N;
+      bssrdf->roughness = roughness;
+
+      /* Clamps protecting against bad/extreme and non physical values. */
+      subsurface_ior = clamp(subsurface_ior, 1.01f, 3.8f);
+      bssrdf->anisotropy = clamp(subsurface_anisotropy, 0.0f, 0.9f);
+
+      /* setup bsdf */
+      sd->flag |= bssrdf_setup(sd, bssrdf, (ClosureType)method, subsurface_ior);
+    }
+    else {
+      principled_v1_diffuse(sd, weight, mixed_ss_base_color, diffuse_weight, N, roughness);
+    }
+  }
+#else
+  /* diffuse */
+  principled_v1_diffuse(sd, weight, base_color, diffuse_weight, N, roughness);
+#endif
+}
+
 ccl_device_inline void principled_v1_specular(KernelGlobals kg,
                                               ccl_private ShaderData *sd,
+                                              ccl_private float *stack,
                                               float3 weight,
+                                              int path_flag,
                                               ClosureType distribution,
+                                              uint data,
                                               float3 base_color,
                                               float3 N,
-                                              float3 T,
                                               float specular_weight,
-                                              float specular,
                                               float metallic,
                                               float roughness,
-                                              float anisotropic,
                                               float specular_tint)
 {
+#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
+    return;
+  }
+#endif
+
+  uint specular_offset, aniso_offset, rotation_offset, tangent_offset;
+  svm_unpack_node_uchar4(data, &specular_offset, &aniso_offset, &rotation_offset, &tangent_offset);
+
+  float specular = stack_load_float(stack, specular_offset);
+
   if ((specular_weight <= CLOSURE_WEIGHT_CUTOFF) ||
       (specular + metallic <= CLOSURE_WEIGHT_CUTOFF)) {
     return;
+  }
+
+  float anisotropic = stack_load_float(stack, aniso_offset);
+  float3 T = stack_valid(tangent_offset) ? stack_load_float3(stack, tangent_offset) :
+                                           zero_float3();
+  if (stack_valid(rotation_offset)) {
+    T = rotate_around_axis(T, N, stack_load_float(stack, rotation_offset) * M_2PI_F);
   }
 
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
@@ -133,20 +242,26 @@ ccl_device_inline void principled_v1_glass_refr(ccl_private ShaderData *sd,
 
 ccl_device_inline void principled_v1_glass_single(KernelGlobals kg,
                                                   ccl_private ShaderData *sd,
+                                                  ccl_private float *stack,
                                                   float3 weight,
-                                                  ClosureType distribution,
                                                   int path_flag,
+                                                  ClosureType distribution,
+                                                  uint data,
                                                   float3 base_color,
                                                   float glass_weight,
                                                   float3 N,
                                                   float roughness,
-                                                  float transmission_roughness,
-                                                  float eta,
                                                   float specular_tint)
 {
   if (glass_weight <= CLOSURE_WEIGHT_CUTOFF) {
     return;
   }
+
+  uint transmission_roughness_offset, eta_offset, dummy;
+  svm_unpack_node_uchar4(data, &eta_offset, &dummy, &dummy, &transmission_roughness_offset);
+  float transmission_roughness = stack_load_float(stack, transmission_roughness_offset);
+  float eta = fmaxf(stack_load_float(stack, eta_offset), 1e-5f);
+
   /* calculate ior */
   float ior = (sd->flag & SD_BACKFACING) ? 1.0f / eta : eta;
 
@@ -179,18 +294,32 @@ ccl_device_inline void principled_v1_glass_single(KernelGlobals kg,
       sd, weight, base_color, refraction_weight, N, transmission_roughness, ior);
 }
 
-ccl_device_inline void principled_v1_glass_multi(ccl_private ShaderData *sd,
+ccl_device_inline void principled_v1_glass_multi(KernelGlobals kg,
+                                                 ccl_private ShaderData *sd,
+                                                 ccl_private float *stack,
                                                  float3 weight,
+                                                 int path_flag,
+                                                 uint data,
                                                  float3 base_color,
                                                  float glass_weight,
                                                  float3 N,
                                                  float roughness,
-                                                 float eta,
                                                  float specular_tint)
 {
+#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && !kernel_data.integrator.caustics_refractive &&
+      (path_flag & PATH_RAY_DIFFUSE)) {
+    return;
+  }
+#endif
+
   if (glass_weight <= CLOSURE_WEIGHT_CUTOFF) {
     return;
   }
+
+  uint eta_offset, dummy;
+  svm_unpack_node_uchar4(data, &eta_offset, &dummy, &dummy, &dummy);
+  float eta = fmaxf(stack_load_float(stack, eta_offset), 1e-5f);
 
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
       sd, sizeof(MicrofacetBsdf), glass_weight * weight);
@@ -220,12 +349,18 @@ ccl_device_inline void principled_v1_glass_multi(ccl_private ShaderData *sd,
 
 ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
+                                           ccl_private float *stack,
                                            float3 weight,
+                                           uint data,
                                            float3 base_color,
-                                           float3 N,
-                                           float sheen_weight,
-                                           float sheen_tint)
+                                           float diffuse_weight,
+                                           float3 N)
 {
+  uint sheen_offset, sheen_tint_offset, dummy;
+  svm_unpack_node_uchar4(data, &dummy, &sheen_offset, &sheen_tint_offset, &dummy);
+  float sheen = stack_load_float(stack, sheen_offset);
+
+  float sheen_weight = diffuse_weight * sheen;
   if (sheen_weight <= CLOSURE_WEIGHT_CUTOFF) {
     return;
   }
@@ -235,6 +370,7 @@ ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
   float3 m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_float3();
 
   /* color of the sheen component */
+  float sheen_tint = stack_load_float(stack, sheen_tint_offset);
   float3 sheen_color = lerp(one_float3(), m_ctint, sheen_tint);
 
   ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
@@ -250,14 +386,31 @@ ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
   sd->flag |= bsdf_principled_sheen_setup(sd, bsdf);
 }
 
-ccl_device_inline void principled_v1_clearcoat(ccl_private ShaderData *sd,
+ccl_device_inline void principled_v1_clearcoat(KernelGlobals kg,
+                                               ccl_private ShaderData *sd,
+                                               ccl_private float *stack,
                                                float3 weight,
-                                               float clearcoat,
-                                               float clearcoat_roughness,
-                                               float3 clearcoat_normal)
+                                               int path_flag,
+                                               uint data)
 {
+#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
+    return;
+  }
+#endif
+
+  uint clearcoat_offset, roughness_offset, normal_offset, dummy;
+  svm_unpack_node_uchar4(data, &clearcoat_offset, &roughness_offset, &normal_offset, &dummy);
+  float clearcoat = stack_load_float(stack, clearcoat_offset);
+
   if (clearcoat <= CLOSURE_WEIGHT_CUTOFF) {
     return;
+  }
+
+  float roughness = stack_load_float(stack, roughness_offset);
+  float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
+  if (!(sd->type & PRIMITIVE_CURVE)) {
+    N = ensure_valid_reflection(sd->Ng, sd->I, N);
   }
 
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
@@ -267,16 +420,12 @@ ccl_device_inline void principled_v1_clearcoat(ccl_private ShaderData *sd,
     return;
   }
 
-  if (!(sd->type & PRIMITIVE_CURVE)) {
-    clearcoat_normal = ensure_valid_reflection(sd->Ng, sd->I, clearcoat_normal);
-  }
-
-  bsdf->N = clearcoat_normal;
+  bsdf->N = N;
   bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
   bsdf->ior = 1.5f;
   bsdf->extra = NULL;
 
-  bsdf->alpha_x = bsdf->alpha_y = sqr(clearcoat_roughness);
+  bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
 
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_ggx_clearcoat_setup(bsdf, sd);
@@ -285,220 +434,101 @@ ccl_device_inline void principled_v1_clearcoat(ccl_private ShaderData *sd,
 ccl_device void svm_node_closure_principled(KernelGlobals kg,
                                             ccl_private ShaderData *sd,
                                             ccl_private float *stack,
-                                            uint4 data_node,
-                                            float param1,
-                                            float param2,
-                                            float3 N,
+                                            uint4 node_1,
+                                            uint4 node_2,
                                             float mix_weight,
                                             int path_flag,
                                             int *offset)
 {
-  uint specular_offset, roughness_offset, specular_tint_offset, anisotropic_offset, sheen_offset,
-      sheen_tint_offset, clearcoat_offset, clearcoat_roughness_offset, eta_offset,
-      transmission_offset, anisotropic_rotation_offset, transmission_roughness_offset;
-  uint4 data_node2 = read_node(kg, offset);
+  /* Load distribution type. */
+  uint packed_distribution, dummy;
+  svm_unpack_node_uchar4(node_2.x, &dummy, &dummy, &dummy, &packed_distribution);
+  ClosureType distribution = (ClosureType)packed_distribution;
 
-  float3 T = stack_load_float3(stack, data_node.y);
-  svm_unpack_node_uchar4(data_node.z,
-                         &specular_offset,
-                         &roughness_offset,
-                         &specular_tint_offset,
-                         &anisotropic_offset);
-  svm_unpack_node_uchar4(data_node.w,
-                         &sheen_offset,
-                         &sheen_tint_offset,
-                         &clearcoat_offset,
-                         &clearcoat_roughness_offset);
-  svm_unpack_node_uchar4(data_node2.x,
-                         &eta_offset,
-                         &transmission_offset,
-                         &anisotropic_rotation_offset,
-                         &transmission_roughness_offset);
+  if (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID) {
+    return;
+  }
 
-  // get Disney principled parameters
-  float metallic = param1;
-  float subsurface = param2;
-  float specular = stack_load_float(stack, specular_offset);
-  float roughness = stack_load_float(stack, roughness_offset);
-  float specular_tint = stack_load_float(stack, specular_tint_offset);
-  float anisotropic = stack_load_float(stack, anisotropic_offset);
-  float sheen = stack_load_float(stack, sheen_offset);
-  float sheen_tint = stack_load_float(stack, sheen_tint_offset);
-  float clearcoat = stack_load_float(stack, clearcoat_offset);
-  float clearcoat_roughness = stack_load_float(stack, clearcoat_roughness_offset);
-  float transmission = stack_load_float(stack, transmission_offset);
-  float anisotropic_rotation = stack_load_float(stack, anisotropic_rotation_offset);
-  float transmission_roughness = stack_load_float(stack, transmission_roughness_offset);
-  float eta = fmaxf(stack_load_float(stack, eta_offset), 1e-5f);
+  /* Load shared parameter data. */
+  uint base_color_offset, normal_offset;
+  uint roughness_offset, metallic_offset, transmission_offset, specular_tint_offset;
+  svm_unpack_node_uchar4(node_1.y, &dummy, &base_color_offset, &normal_offset, &dummy);
+  svm_unpack_node_uchar4(
+      node_1.z, &roughness_offset, &metallic_offset, &transmission_offset, &specular_tint_offset);
 
-  ClosureType distribution = (ClosureType)data_node2.y;
-  ClosureType subsurface_method = (ClosureType)data_node2.z;
+  float3 base_color = stack_load_float3(stack, base_color_offset);
+  float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
+  if (!(sd->type & PRIMITIVE_CURVE)) {
+    N = ensure_valid_reflection(sd->Ng, sd->I, N);
+  }
+  float roughness = saturatef(stack_load_float(stack, roughness_offset));
+  float metallic = saturatef(stack_load_float(stack, metallic_offset));
+  float transmission = saturatef(stack_load_float(stack, transmission_offset));
+  float specular_tint = saturatef(stack_load_float(stack, specular_tint_offset));
 
-  /* rotate tangent */
-  if (anisotropic_rotation != 0.0f)
-    T = rotate_around_axis(T, N, anisotropic_rotation * M_2PI_F);
-
-  // calculate weights of the diffuse and specular part
-  float diffuse_weight = (1.0f - saturatef(metallic)) * (1.0f - saturatef(transmission));
-
-  float final_transmission = saturatef(transmission) * (1.0f - saturatef(metallic));
-  float specular_weight = (1.0f - final_transmission);
-
-  // get the base color
-  uint4 data_base_color = read_node(kg, offset);
-  float3 base_color = stack_valid(data_base_color.x) ?
-                          stack_load_float3(stack, data_base_color.x) :
-                          make_float3(__uint_as_float(data_base_color.y),
-                                      __uint_as_float(data_base_color.z),
-                                      __uint_as_float(data_base_color.w));
-
-  // get the additional clearcoat normal and subsurface scattering radius
-  uint4 data_cn_ssr = read_node(kg, offset);
-  float3 clearcoat_normal = stack_valid(data_cn_ssr.x) ? stack_load_float3(stack, data_cn_ssr.x) :
-                                                         sd->N;
-  float3 subsurface_radius = stack_valid(data_cn_ssr.y) ? stack_load_float3(stack, data_cn_ssr.y) :
-                                                          make_float3(1.0f, 1.0f, 1.0f);
-  float subsurface_ior = stack_valid(data_cn_ssr.z) ? stack_load_float(stack, data_cn_ssr.z) :
-                                                      1.4f;
-  float subsurface_anisotropy = stack_valid(data_cn_ssr.w) ?
-                                    stack_load_float(stack, data_cn_ssr.w) :
-                                    0.0f;
-
-  // get the subsurface color
-  uint4 data_subsurface_color = read_node(kg, offset);
-  float3 subsurface_color = stack_valid(data_subsurface_color.x) ?
-                                stack_load_float3(stack, data_subsurface_color.x) :
-                                make_float3(__uint_as_float(data_subsurface_color.y),
-                                            __uint_as_float(data_subsurface_color.z),
-                                            __uint_as_float(data_subsurface_color.w));
-
+  /* Calculate closure mix weights.
+   * The combined BSDF is mix(mix(Diffuse+SSS, Glass, transmission), Metal, metallic). */
+  float diffuse_weight = (1.0f - metallic) * (1.0f - transmission);
+  transmission *= 1.0f - metallic;
+  /* NOTE: The mixing here is incorrect, the specular lobe should be metallic + (1 - transmission)
+   * since it models both the metallic specular as well as the non-glass dielectric specular.
+   * This only affects materials mixing diffuse, glass AND metal though. */
+  float specular_weight = (1.0f - transmission);
   float3 weight = sd->svm_closure_weight * mix_weight;
 
-#ifdef __SUBSURFACE__
-  float3 mixed_ss_base_color = subsurface_color * subsurface + base_color * (1.0f - subsurface);
-  float3 subsurf_weight = weight * mixed_ss_base_color * diffuse_weight;
-
-  /* disable in case of diffuse ancestor, can't see it well then and
-   * adds considerably noise due to probabilities of continuing path
-   * getting lower and lower */
-  if (path_flag & PATH_RAY_DIFFUSE_ANCESTOR) {
-    subsurface = 0.0f;
-
-    /* need to set the base color in this case such that the
-     * rays get the correctly mixed color after transmitting
-     * the object */
-    base_color = mixed_ss_base_color;
-  }
-
-  /* diffuse */
-  if (fabsf(average(mixed_ss_base_color)) > CLOSURE_WEIGHT_CUTOFF) {
-    if (subsurface <= CLOSURE_WEIGHT_CUTOFF && diffuse_weight > CLOSURE_WEIGHT_CUTOFF) {
-      float3 diff_weight = weight * base_color * diffuse_weight;
-
-      ccl_private PrincipledDiffuseBsdf *bsdf = (ccl_private PrincipledDiffuseBsdf *)bsdf_alloc(
-          sd, sizeof(PrincipledDiffuseBsdf), diff_weight);
-
-      if (bsdf) {
-        bsdf->N = N;
-        bsdf->roughness = roughness;
-
-        /* setup bsdf */
-        sd->flag |= bsdf_principled_diffuse_setup(bsdf, PRINCIPLED_DIFFUSE_FULL);
-      }
-    }
-    else if (subsurface > CLOSURE_WEIGHT_CUTOFF) {
-      ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, subsurf_weight);
-
-      if (bssrdf) {
-        bssrdf->radius = subsurface_radius * subsurface;
-        bssrdf->albedo = mixed_ss_base_color;
-        bssrdf->N = N;
-        bssrdf->roughness = roughness;
-
-        /* Clamps protecting against bad/extreme and non physical values. */
-        subsurface_ior = clamp(subsurface_ior, 1.01f, 3.8f);
-        bssrdf->anisotropy = clamp(subsurface_anisotropy, 0.0f, 0.9f);
-
-        /* setup bsdf */
-        sd->flag |= bssrdf_setup(sd, bssrdf, subsurface_method, subsurface_ior);
-      }
-    }
-  }
-#else
-  /* diffuse */
-  if (diffuse_weight > CLOSURE_WEIGHT_CUTOFF) {
-    float3 diff_weight = weight * base_color * diffuse_weight;
-
-    ccl_private PrincipledDiffuseBsdf *bsdf = (ccl_private PrincipledDiffuseBsdf *)bsdf_alloc(
-        sd, sizeof(PrincipledDiffuseBsdf), diff_weight);
-
-    if (bsdf) {
-      bsdf->N = N;
-      bsdf->roughness = roughness;
-
-      /* setup bsdf */
-      sd->flag |= bsdf_principled_diffuse_setup(bsdf, PRINCIPLED_DIFFUSE_FULL);
-    }
-  }
-#endif
+  /* Diffuse and subsurface */
+  principled_v1_diffuse_sss(
+      sd, stack, weight, path_flag, node_1.w, node_2.x, base_color, diffuse_weight, N, roughness);
 
   /* sheen */
-  principled_v1_sheen(kg, sd, weight, base_color, N, diffuse_weight * sheen, sheen_tint);
+  principled_v1_sheen(kg, sd, stack, weight, node_2.z, base_color, diffuse_weight, N);
 
   /* specular reflection */
-#ifdef __CAUSTICS_TRICKS__
-  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
-    specular_weight = 0.0f;
-  }
-#endif
   principled_v1_specular(kg,
                          sd,
+                         stack,
                          weight,
+                         path_flag,
                          distribution,
+                         node_2.y,
                          base_color,
                          N,
-                         T,
                          specular_weight,
-                         specular,
                          metallic,
                          roughness,
-                         anisotropic,
                          specular_tint);
 
   /* glass */
-#ifdef __CAUSTICS_TRICKS__
-  if (!kernel_data.integrator.caustics_reflective && !kernel_data.integrator.caustics_refractive &&
-      (path_flag & PATH_RAY_DIFFUSE)) {
-    final_transmission = 0.0f;
-  }
-#endif
-  if (roughness <= 5e-2f ||
-      distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID) { /* use single-scatter GGX */
+  if (roughness <= 5e-2f || distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID) {
     principled_v1_glass_single(kg,
                                sd,
+                               stack,
                                weight,
-                               distribution,
                                path_flag,
+                               distribution,
+                               node_2.z,
                                base_color,
-                               final_transmission,
+                               transmission,
                                N,
                                roughness,
-                               transmission_roughness,
-                               eta,
                                specular_tint);
   }
-  else { /* use multi-scatter GGX */
-    principled_v1_glass_multi(
-        sd, weight, base_color, final_transmission, N, roughness, eta, specular_tint);
+  else {
+    principled_v1_glass_multi(kg,
+                              sd,
+                              stack,
+                              weight,
+                              path_flag,
+                              node_2.z,
+                              base_color,
+                              transmission,
+                              N,
+                              roughness,
+                              specular_tint);
   }
 
   /* clearcoat */
-#ifdef __CAUSTICS_TRICKS__
-  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
-    clearcoat = 0.0f;
-  }
-#endif
-  principled_v1_clearcoat(sd, weight, clearcoat, clearcoat_roughness, clearcoat_normal);
+  principled_v1_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
 }
 
 CCL_NAMESPACE_END

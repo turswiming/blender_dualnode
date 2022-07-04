@@ -54,19 +54,6 @@ ccl_device void svm_node_glass_setup(ccl_private ShaderData *sd,
   }
 }
 
-ccl_device_inline int svm_node_closure_bsdf_skip(KernelGlobals kg, int offset, uint type)
-{
-  if (type == CLOSURE_BSDF_PRINCIPLED_ID) {
-    /* Read all principled BSDF extra data to get the right offset. */
-    read_node(kg, &offset);
-    read_node(kg, &offset);
-    read_node(kg, &offset);
-    read_node(kg, &offset);
-  }
-
-  return offset;
-}
-
 template<uint node_feature_mask, ShaderType shader_type>
 ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
                                               ccl_private ShaderData *sd,
@@ -89,13 +76,21 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
   IF_KERNEL_NODES_FEATURE(BSDF)
   {
     if ((shader_type != SHADER_TYPE_SURFACE) || mix_weight == 0.0f) {
-      return svm_node_closure_bsdf_skip(kg, offset, type);
+      return offset;
     }
   }
   else
   {
-    return svm_node_closure_bsdf_skip(kg, offset, type);
+    return offset;
   }
+
+#ifdef __PRINCIPLED__
+  if (type == CLOSURE_BSDF_PRINCIPLED_ID) {
+    /* Principled BSDF uses different parameter packing. */
+    svm_node_closure_principled(kg, sd, stack, node, data_node, mix_weight, path_flag, &offset);
+    return offset;
+  }
+#endif /* __PRINCIPLED__ */
 
   float3 N = stack_valid(data_node.x) ? stack_load_float3(stack, data_node.x) : sd->N;
   if (!(sd->type & PRIMITIVE_CURVE)) {
@@ -108,13 +103,6 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
                                                 __uint_as_float(node.w);
 
   switch (type) {
-#ifdef __PRINCIPLED__
-    case CLOSURE_BSDF_PRINCIPLED_ID: {
-      svm_node_closure_principled(
-          kg, sd, stack, data_node, param1, param2, N, mix_weight, path_flag, &offset);
-      break;
-    }
-#endif /* __PRINCIPLED__ */
     case CLOSURE_BSDF_DIFFUSE_ID: {
       float3 weight = sd->svm_closure_weight * mix_weight;
       ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)bsdf_alloc(
