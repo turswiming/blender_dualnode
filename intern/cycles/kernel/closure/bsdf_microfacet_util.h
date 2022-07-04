@@ -137,6 +137,12 @@ ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
   return lerp(table_ggx_E_avg[rough_i], table_ggx_E_avg[rough_i1], rough);
 }
 
+ccl_device_inline float3 metallic_Fss(float3 F0, float3 F90, float falloff)
+{
+  /* Fss for lerp(F0, F90, (1-cosNI)^falloff) */
+  return lerp(F0, F90, 2.0f / (sqr(falloff) + 3*falloff + 2));
+}
+
 ccl_device_inline float3 schlick_fresnel_Fss(float3 F0)
 {
   /* TODO validate using multiGGX code */
@@ -144,7 +150,7 @@ ccl_device_inline float3 schlick_fresnel_Fss(float3 F0)
 }
 
 /* TODO Imageworks source */
-ccl_device_inline float3 dielectic_fresnel_Fss(float eta)
+ccl_device_inline float dielectric_fresnel_Fss(float eta)
 {
   /* TODO validate using multiGGX code */
   float f;
@@ -154,7 +160,7 @@ ccl_device_inline float3 dielectic_fresnel_Fss(float eta)
   else {
     f = (eta - 1.0f) / (4.08567f + 1.00071f * eta);
   }
-  return make_float3(f, f, f);
+  return f;
 }
 
 CCL_NAMESPACE_END

@@ -127,9 +127,9 @@ ccl_device_inline void principled_v1_specular(KernelGlobals kg,
   }
 
   float anisotropic = stack_load_float(stack, aniso_offset);
-  float3 T = stack_valid(tangent_offset) ? stack_load_float3(stack, tangent_offset) :
-                                           zero_float3();
-  if (stack_valid(rotation_offset)) {
+  float3 T = zero_float3();
+  if (stack_valid(tangent_offset)) {
+    T = stack_load_float3(stack, tangent_offset);
     T = rotate_around_axis(T, N, stack_load_float(stack, rotation_offset) * M_2PI_F);
   }
 
@@ -544,6 +544,69 @@ ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
   return sheen * bsdf->avg_value; // TODO include tint
 }
 
+ccl_device_inline float principled_v2_specular(ccl_private ShaderData *sd,
+                                               ccl_private float *stack,
+                                               float3 weight,
+                                               float3 base_color,
+                                               float roughness,
+                                               float metallic,
+                                               float ior,
+                                               float transmission,
+                                               float3 N,
+                                               uint data1,
+                                               uint data2)
+{
+  // TODO Handle caustics flag
+
+  uint falloff_offset, edge_offset, dummy;
+  uint aniso_offset, rotation_offset, tangent_offset;
+  svm_unpack_node_uchar4(data1, &falloff_offset, &edge_offset, &dummy, &dummy);
+  svm_unpack_node_uchar4(data2, &aniso_offset, &rotation_offset, &tangent_offset, &dummy);
+
+  /* This function handles two specular components:
+   * 1. Metallic: The overall energy is given by the metallic input
+   * 2. Dielectric opaque: The overall energy is given by (1-metallic)*(1-transmission)
+   * Both of these are handled by one closure, which adds up two Fresnel terms.
+   * On top of that, there is also the transmissive component, that is handled by the glass code.
+   */
+
+  float anisotropic = stack_load_float(stack, aniso_offset);
+  float aspect = safe_sqrtf(1.0f - anisotropic * 0.9f);
+  float3 T = zero_float3();
+  if (stack_valid(tangent_offset)) {
+    T = stack_load_float3(stack, tangent_offset);
+    T = rotate_around_axis(T, N, stack_load_float(stack, rotation_offset) * M_2PI_F);
+  }
+
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), weight);
+  if (bsdf == NULL) {
+    return 0.0f;
+  }
+  ccl_private MicrofacetExtrav2 *extra = (ccl_private MicrofacetExtrav2 *)closure_alloc_extra(
+      sd, sizeof(MicrofacetExtrav2));
+  if (extra == NULL) {
+    return 0.0f;
+  }
+
+  bsdf->N = N;
+  bsdf->ior = ior;
+  bsdf->T = T;
+  bsdf->extra = (MicrofacetExtra *)extra;
+
+  bsdf->alpha_x = sqr(roughness) / aspect;
+  bsdf->alpha_y = sqr(roughness) * aspect;
+
+  extra->metal_base = base_color;
+  extra->metal_edge = stack_load_float3(stack, edge_offset);
+  extra->metal_falloff = stack_load_float(stack, falloff_offset);
+
+  float dielectric = (1.0f - metallic) * (1.0f - transmission);
+  sd->flag |= bsdf_microfacet_ggx_fresnel_v2_setup(bsdf, sd, metallic, dielectric);
+
+  return 0.0f;  // TODO energy conservation
+}
+
 ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                ccl_private ShaderData *sd,
                                                ccl_private float *stack,
@@ -573,6 +636,23 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
 
   weight *= 1.0f - principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
   weight *= 1.0f - principled_v2_sheen(kg, sd, stack, weight, N, node_2.z);
+
+  principled_v2_specular(sd,
+                         stack,
+                         weight,
+                         base_color,
+                         roughness,
+                         metallic,
+                         ior,
+                         transmission,
+                         N,
+                         node_2.x,
+                         node_2.y);
+  weight *= 1.0f - metallic;
+
+  // TODO Glass
+
+  weight *= 1.0f - transmission;
 
   principled_v2_diffuse(sd, weight, base_color, 1.0f, N);
 }

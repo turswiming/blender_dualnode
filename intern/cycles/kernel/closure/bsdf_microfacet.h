@@ -18,6 +18,18 @@ typedef struct MicrofacetExtra {
   float3 fresnel_color;
 } MicrofacetExtra;
 
+typedef struct MicrofacetExtrav2 {
+  /* Metallic fresnel control */
+  float3 metal_base, metal_edge;
+  float metal_falloff;
+  float dielectric;
+} MicrofacetExtrav2;
+
+// TODO probably remove this for the final code
+static_assert(sizeof(MicrofacetExtra) <= sizeof(ShaderClosure), "Try to shrink MicrofacetExtra!");
+static_assert(sizeof(MicrofacetExtrav2) <= sizeof(ShaderClosure),
+              "Try to shrink MicrofacetExtra!");
+
 typedef struct MicrofacetBsdf {
   SHADER_CLOSURE_BASE;
 
@@ -44,6 +56,19 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
   }
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
     return interpolate_fresnel_color(L, H, bsdf->ior, make_float3(0.04f, 0.04f, 0.04f));
+  }
+  else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID) {
+    MicrofacetExtrav2 *extra = (MicrofacetExtrav2*) bsdf->extra;
+    float cosHL = dot(H, L);
+    /* Metallic Fresnel: Kinda Schlick-Fresnel-like with configurable F0 and F90
+     * as well as falloff control. F90=white and falloff=0.2 gives classic Schlick Fresnel.
+     * Metallic factor and albedo scaling is baked into the F0 and F90 parameters. */
+    float metallicBlend = powf(1.0f - cosHL, extra->metal_falloff);
+    float3 metallic = lerp(extra->metal_base, extra->metal_edge, metallicBlend);
+    /* Dielectric Fresnel, just basic IOR control. */
+    float dielectric = extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior);
+
+    return metallic + make_float3(dielectric, dielectric, dielectric);
   }
   else {
     return one_float3();
@@ -78,6 +103,18 @@ ccl_device_inline float3 microfacet_ggx_albedo_scaling(ccl_private const Microfa
 
   return one_float3() + Fms * ((1.0f - E) / E);
   /* TODO: Ensure that increase in weight does not mess up glossy color, albedo etc. passes */
+}
+
+ccl_device_inline float microfacet_ggx_albedo_scaling_float(ccl_private const MicrofacetBsdf *bsdf,
+                                                            ccl_private const ShaderData *sd,
+                                                            const float Fss)
+{
+  // TOOD: Deduplicate somehow?
+  float mu = dot(sd->I, bsdf->N);
+  float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
+  float E = microfacet_ggx_E(mu, rough), E_avg = microfacet_ggx_E_avg(rough);
+  float Fms = Fss * E_avg / (1.0f - Fss * (1.0f - E_avg));
+  return 1.0f + Fms * ((1.0f - E) / E);
 }
 
 ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf)
@@ -129,6 +166,46 @@ ccl_device int bsdf_microfacet_multi_ggx_fresnel_setup(ccl_private MicrofacetBsd
   float3 Fss = schlick_fresnel_Fss(bsdf->extra->cspec0);
   bsdf->weight *= microfacet_ggx_albedo_scaling(bsdf, sd, Fss);
   return bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
+}
+
+ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(ccl_private MicrofacetBsdf *bsdf,
+                                                    ccl_private const ShaderData *sd,
+                                                    float metallic,
+                                                    float dielectric)
+{
+  bsdf->alpha_x = saturatef(bsdf->alpha_x);
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
+
+  MicrofacetExtrav2 *extra = (MicrofacetExtrav2*) bsdf->extra;
+
+  if (metallic > 0.0f) {
+    extra->metal_base = saturate(extra->metal_base);
+    extra->metal_edge = saturate(extra->metal_edge);
+    extra->metal_falloff = 1.0f / clamp(extra->metal_falloff, 1e-3f, 1.0f);
+    float3 metal_Fss = metallic_Fss(extra->metal_base, extra->metal_edge, extra->metal_falloff);
+    float3 metal_scale = microfacet_ggx_albedo_scaling(bsdf, sd, metal_Fss);
+    extra->metal_base *= metallic * metal_scale;
+    extra->metal_edge *= metallic * metal_scale;
+  }
+  else {
+    extra->metal_falloff = 0.0f;
+    extra->metal_base = zero_float3();
+    extra->metal_edge = zero_float3();
+  }
+
+  if (dielectric > 0.0f) {
+    float dielectric_Fss = dielectric_fresnel_Fss(bsdf->ior);
+    extra->dielectric = dielectric * microfacet_ggx_albedo_scaling_float(bsdf, sd, dielectric_Fss);
+  }
+  else {
+    extra->dielectric = 0.0f;
+  }
+
+  bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID;
+
+  // bsdf_microfacet_fresnel_color(sd, bsdf); // TODO
+
+  return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
 ccl_device int bsdf_microfacet_ggx_clearcoat_setup(ccl_private MicrofacetBsdf *bsdf,
