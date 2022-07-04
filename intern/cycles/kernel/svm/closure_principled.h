@@ -501,7 +501,10 @@ ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
      * That way, mirrors preserve their look, but diffuse-ish objects have a more natural behavior.
      */
     float cosNI = dot(sd->I, N);
-    float optical_depth = 1.0f / cosNI;
+    /* Refract incoming direction into clearcoat material, which has a fixed IOR of 1.5.
+     * TIR is no concern here since we're always coming from the outside. */
+    float cosNT = sqrtf(1.0f - sqr(1.0f / 1.5f) * (1 - sqr(cosNI)));
+    float optical_depth = 1.0f / cosNT;
     tint = pow(tint, optical_depth * clearcoat);
   }
 
@@ -659,7 +662,8 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
   uint base_color_offset, normal_offset, dummy;
   uint roughness_offset, metallic_offset, ior_offset, transmission_offset;
   svm_unpack_node_uchar4(node_1.y, &dummy, &base_color_offset, &normal_offset, &dummy);
-  svm_unpack_node_uchar4(node_1.z, &roughness_offset, &metallic_offset, &ior_offset, &transmission_offset);
+  svm_unpack_node_uchar4(
+      node_1.z, &roughness_offset, &metallic_offset, &ior_offset, &transmission_offset);
 
   float3 base_color = stack_load_float3(stack, base_color_offset);
   float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
