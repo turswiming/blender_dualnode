@@ -621,6 +621,29 @@ ccl_device_inline float principled_v2_specular(ccl_private ShaderData *sd,
   return microfacet_ggx_dielectric_E(dot(sd->I, N), roughness, ior);
 }
 
+ccl_device_inline void principled_v2_glass(ccl_private ShaderData *sd,
+                                           float3 weight,
+                                           float transmission,
+                                           float roughness,
+                                           float ior,
+                                           float3 N)
+{
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), transmission * weight);
+  if (bsdf == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+  bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
+
+  bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
+  bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / ior : ior;
+
+  /* setup bsdf */
+  sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(bsdf, sd, one_float3());
+}
+
 ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                ccl_private ShaderData *sd,
                                                ccl_private float *stack,
@@ -664,7 +687,7 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                    node_2.y);
   weight *= 1.0f - metallic;
 
-  // TODO Glass
+  principled_v2_glass(sd, weight, transmission, roughness, ior, N);
 
   weight *= (1.0f - transmission) * (1.0f - dielectric_albedo);
 
