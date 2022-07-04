@@ -67,6 +67,25 @@ ccl_device_forceinline void bsdf_microfacet_fresnel_color(ccl_private const Shad
   bsdf->sample_weight *= average(bsdf->extra->fresnel_color);
 }
 
+ccl_device_inline float3 microfacet_ggx_albedo_scaling(ccl_private const MicrofacetBsdf *bsdf,
+                                                       ccl_private const ShaderData *sd,
+                                                       const float3 Fss)
+{
+  float mu = dot(sd->I, bsdf->N);
+  float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
+  float E = microfacet_ggx_E(mu, rough);
+
+  float E_avg = microfacet_ggx_E_avg(rough);
+  /* Fms here is based on the appendix of
+   * https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf,
+   * with one Fss cancelled out since this is just a multiplier on top of
+   * the single-scattering BSDF, which already contains one bounce of Fresnel. */
+  float3 Fms = Fss * E_avg / (one_float3() - Fss * (1.0f - E_avg));
+
+  return one_float3() + Fms * ((1.0f - E) / E);
+  /* TODO: Ensure that increase in weight does not mess up glossy color, albedo etc. passes */
+}
+
 ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->extra = NULL;
@@ -91,6 +110,7 @@ ccl_device int bsdf_microfacet_multi_ggx_setup(ccl_private MicrofacetBsdf *bsdf,
                                                ccl_private const ShaderData *sd,
                                                const float3 color)
 {
+  bsdf->weight *= microfacet_ggx_albedo_scaling(bsdf, sd, saturate(color));
   return bsdf_microfacet_ggx_setup(bsdf);
 }
 
@@ -112,6 +132,8 @@ ccl_device int bsdf_microfacet_ggx_fresnel_setup(ccl_private MicrofacetBsdf *bsd
 ccl_device int bsdf_microfacet_multi_ggx_fresnel_setup(ccl_private MicrofacetBsdf *bsdf,
                                                        ccl_private const ShaderData *sd)
 {
+  float3 Fss = schlick_fresnel_Fss(bsdf->extra->cspec0);
+  bsdf->weight *= microfacet_ggx_albedo_scaling(bsdf, sd, Fss);
   return bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
 }
 

@@ -5,6 +5,24 @@
 
 CCL_NAMESPACE_BEGIN
 
+ccl_device_inline float3 microfacet_ggx_glass_albedo_scaling(
+    ccl_private const ShaderData *sd, ccl_private const MicrofacetBsdf *bsdf, const float3 Fss)
+{
+  float mu = dot(sd->I, bsdf->N);
+  float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
+  float E = microfacet_ggx_glass_E(mu, rough, bsdf->ior);
+
+  /* Close enough for glass, coloring here is unphysical anyways and it's unclear how to
+   * approximate it better. */
+  float3 Fms = Fss;
+
+  return one_float3() + Fms * ((1.0f - E) / E);
+  /* TODO: Ensure that increase in weight does not mess up glossy color, albedo etc. passes */
+}
+
+/* Currently no non-albedo-scaled version is implemented, could easily be added
+ * but would still break compatibility with the old glass due to the microfacet Fresnel. */
+
 ccl_device int bsdf_microfacet_multi_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf,
                                                      ccl_private const ShaderData *sd,
                                                      const float3 color)
@@ -15,6 +33,8 @@ ccl_device int bsdf_microfacet_multi_ggx_glass_setup(ccl_private MicrofacetBsdf 
   bsdf->alpha_y = bsdf->alpha_x;
 
   bsdf->type = CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID;
+
+  bsdf->weight *= microfacet_ggx_glass_albedo_scaling(sd, bsdf, saturate(color));
 
   return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_NEEDS_LCG;
 }
@@ -30,6 +50,9 @@ ccl_device int bsdf_microfacet_multi_ggx_glass_fresnel_setup(ccl_private Microfa
   bsdf->type = CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID;
 
   bsdf_microfacet_fresnel_color(sd, bsdf);
+
+  float3 Fss = schlick_fresnel_Fss(bsdf->extra->cspec0);
+  bsdf->weight *= microfacet_ggx_glass_albedo_scaling(sd, bsdf, Fss);
 
   return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_NEEDS_LCG;
 }
