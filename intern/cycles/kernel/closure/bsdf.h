@@ -12,6 +12,7 @@
 #include "kernel/closure/bsdf_microfacet.h"
 #include "kernel/closure/bsdf_microfacet_beckmann.h"
 #include "kernel/closure/bsdf_microfacet_multi.h"
+#include "kernel/closure/bsdf_microfacet_glass.h"
 #include "kernel/closure/bsdf_reflection.h"
 #include "kernel/closure/bsdf_refraction.h"
 #include "kernel/closure/bsdf_transparent.h"
