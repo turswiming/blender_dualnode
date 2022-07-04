@@ -5,6 +5,38 @@
 
 CCL_NAMESPACE_BEGIN
 
+ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
+                                           ccl_private ShaderData *sd,
+                                           float3 weight,
+                                           float3 base_color,
+                                           float3 N,
+                                           float sheen_weight,
+                                           float sheen_tint)
+{
+  if (sheen_weight <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+
+  // normalize lum. to isolate hue+sat
+  float m_cdlum = linear_rgb_to_gray(kg, base_color);
+  float3 m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_float3();
+
+  /* color of the sheen component */
+  float3 sheen_color = lerp(one_float3(), m_ctint, sheen_tint);
+
+  ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
+      sd, sizeof(PrincipledSheenBsdf), sheen_weight * sheen_color * weight);
+
+  if (bsdf == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+
+  /* setup bsdf */
+  sd->flag |= bsdf_principled_sheen_setup(sd, bsdf);
+}
+
 ccl_device_inline void principled_v1_clearcoat(ccl_private ShaderData *sd,
                                                float3 weight,
                                                float clearcoat,
@@ -205,28 +237,7 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
 #endif
 
   /* sheen */
-  if (diffuse_weight > CLOSURE_WEIGHT_CUTOFF && sheen > CLOSURE_WEIGHT_CUTOFF) {
-    float m_cdlum = linear_rgb_to_gray(kg, base_color);
-    float3 m_ctint = m_cdlum > 0.0f ?
-                         base_color / m_cdlum :
-                         make_float3(1.0f, 1.0f, 1.0f);  // normalize lum. to isolate hue+sat
-
-    /* color of the sheen component */
-    float3 sheen_color = make_float3(1.0f, 1.0f, 1.0f) * (1.0f - sheen_tint) +
-                         m_ctint * sheen_tint;
-
-    float3 sheen_weight = weight * sheen * sheen_color * diffuse_weight;
-
-    ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
-        sd, sizeof(PrincipledSheenBsdf), sheen_weight);
-
-    if (bsdf) {
-      bsdf->N = N;
-
-      /* setup bsdf */
-      sd->flag |= bsdf_principled_sheen_setup(sd, bsdf);
-    }
-  }
+  principled_v1_sheen(kg, sd, weight, base_color, N, diffuse_weight * sheen, sheen_tint);
 
   /* specular reflection */
 #ifdef __CAUSTICS_TRICKS__
