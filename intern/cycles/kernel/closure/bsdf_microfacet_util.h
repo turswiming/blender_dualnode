@@ -81,120 +81,85 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(
 /* Albedo correction.
  * TODO: Use proper lookup table code for this data. */
 
+ccl_device_forceinline float microfacet_table_1D(const float *table, float x, int size)
+{
+  x = saturatef(x - (0.5f / size)) * size;
+  int i = min(size - 1, (int)x);
+  int i1 = min(size - 1, i + 1);
+  return lerp(table[i], table[i1], x - i);
+}
+
+ccl_device_forceinline float microfacet_table_2D(
+    const float *table, float x, float y, int xsize, int ysize)
+{
+  y = saturatef(y - (0.5f / ysize)) * ysize;
+  int i = min(ysize - 1, (int)y);
+  int i1 = min(ysize - 1, i + 1);
+  return lerp(microfacet_table_1D(table + xsize * i, x, xsize),
+              microfacet_table_1D(table + xsize * i1, x, xsize),
+              y - i);
+}
+
+ccl_device_forceinline float microfacet_table_3D(
+    const float *table, float x, float y, float z, int xsize, int ysize, int zsize)
+{
+  z = saturatef(z - (0.5f / zsize)) * zsize;
+  int i = min(zsize - 1, (int)z);
+  int i1 = min(zsize - 1, i + 1);
+  return lerp(microfacet_table_2D(table + xsize * ysize * i, x, y, xsize, ysize),
+              microfacet_table_2D(table + xsize * ysize * i1, x, y, xsize, ysize),
+              z - i);
+}
+
 ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float ior)
 {
   bool inv_table = (ior < 1.0f);
   if (inv_table) {
     ior = 1.0f / ior;
   }
-
-  rough = saturatef(1 - rough - 1.0f/32.0f) * 16.0f;
-  mu = saturatef(mu - 1.0f/32.0f) * 16.0f;
-  ior = saturatef(sqrtf(0.5f * (ior - 1.0f)) - 1.0f/32.0f) * 16.0f;
-
-  int rough_i = min(15, (int)rough);
-  int rough_i1 = min(15, rough_i + 1);
-  int mu_i = min(15, (int)mu);
-  int mu_i1 = min(15, mu_i + 1);
-  int ior_i = min(15, (int)ior);
-  int ior_i1 = min(15, ior_i + 1);
-
-  rough -= rough_i;
-  mu -= mu_i;
-  ior -= ior_i;
-
   auto &table = inv_table ? table_ggx_glass_inv_E : table_ggx_glass_E;
-  float a = lerp(table[ior_i][rough_i][mu_i], table[ior_i][rough_i][mu_i1], mu);
-  float b = lerp(table[ior_i][rough_i1][mu_i], table[ior_i][rough_i1][mu_i1], mu);
-  float c = lerp(table[ior_i1][rough_i][mu_i], table[ior_i1][rough_i][mu_i1], mu);
-  float d = lerp(table[ior_i1][rough_i1][mu_i], table[ior_i1][rough_i1][mu_i1], mu);
 
-  return saturatef(lerp(lerp(a, b, rough), lerp(c, d, rough), ior));
+  float x = mu, y = 1 - rough, z = sqrtf(0.5f * (ior - 1.0f));
+  return saturatef(microfacet_table_3D(&table[0][0][0], x, y, z, 16, 16, 16));
 }
 
 ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, float ior)
 {
-  mu = lerp(mu, inverse_lerp(1.0f, fresnel_dielectric_cos(1.0f, ior), fresnel_dielectric_cos(mu, ior)), 0.5f);
-
   bool inv_table = (ior < 1.0f);
   if (inv_table) {
     ior = 1.0f / ior;
   }
-
-  rough = saturatef(1 - rough - 1.0f/32.0f) * 16.0f;
-  mu = saturatef(mu - 1.0f/32.0f) * 16.0f;
-  ior = saturatef(sqrtf(0.5f * (ior - 1.0f)) - 1.0f/32.0f) * 16.0f;
-
-  int rough_i = min(15, (int)rough);
-  int rough_i1 = min(15, rough_i + 1);
-  int mu_i = min(15, (int)mu);
-  int mu_i1 = min(15, mu_i + 1);
-  int ior_i = min(15, (int)ior);
-  int ior_i1 = min(15, ior_i + 1);
-
-  rough -= rough_i;
-  mu -= mu_i;
-  ior -= ior_i;
-
   auto &table = inv_table ? table_ggx_dielectric_inv_E : table_ggx_dielectric_E;
-  float a = lerp(table[ior_i][rough_i][mu_i], table[ior_i][rough_i][mu_i1], mu);
-  float b = lerp(table[ior_i][rough_i1][mu_i], table[ior_i][rough_i1][mu_i1], mu);
-  float c = lerp(table[ior_i1][rough_i][mu_i], table[ior_i1][rough_i][mu_i1], mu);
-  float d = lerp(table[ior_i1][rough_i1][mu_i], table[ior_i1][rough_i1][mu_i1], mu);
 
-  return saturatef(lerp(lerp(a, b, rough), lerp(c, d, rough), ior));
+  float macro_fresnel = fresnel_dielectric_cos(mu, ior);
+  float F0 = fresnel_dielectric_cos(1.0f, ior);
+  float x = lerp(mu, inverse_lerp(1.0f, F0, macro_fresnel), 0.5f);
+  float y = 1 - rough;
+  float z = sqrtf(0.5f * (ior - 1.0f));
+
+  return saturatef(microfacet_table_3D(&table[0][0][0], x, y, z, 16, 16, 16));
 }
 
 ccl_device_forceinline float microfacet_ggx_E(float mu, float rough)
 {
-  rough = saturatef(1 - rough - 1.0f/64.0f) * 32.0f;
-  mu = saturatef(mu - 1.0f/64.0f) * 32.0f;
-
-  int rough_i = min(31, (int)rough);
-  int rough_i1 = min(31, rough_i + 1);
-  int mu_i = min(31, (int)mu);
-  int mu_i1 = min(31, mu_i + 1);
-
-  rough -= rough_i;
-  mu -= mu_i;
-
-  float a = lerp(table_ggx_E[rough_i][mu_i], table_ggx_E[rough_i][mu_i1], mu);
-  float b = lerp(table_ggx_E[rough_i1][mu_i], table_ggx_E[rough_i1][mu_i1], mu);
-  return saturatef(lerp(a, b, rough));
+  return saturatef(microfacet_table_2D(&table_ggx_E[0][0], mu, 1 - rough, 32, 32));
 }
 
 ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
 {
-  rough = saturatef(1 - rough - 1.0f/64.0f) * 32.0f;
-  int rough_i = min(31, (int)rough);
-  int rough_i1 = min(31, rough_i + 1);
-  rough -= rough_i;
-  return saturatef(lerp(table_ggx_E_avg[rough_i], table_ggx_E_avg[rough_i1], rough));
+  return saturatef(microfacet_table_1D(&table_ggx_E_avg[0], 1 - rough, 32));
 }
 
 ccl_device_forceinline float clearcoat_E(float mu, float rough)
 {
-  float macro_fresnel = fresnel_dielectric_cos(mu, 1.5f);
-  rough = saturatef(1 - rough - 1.0f / 32.0f) * 16.0f;
-  mu = saturatef(mu - 1.0f / 32.0f) * 16.0f;
-
-  int rough_i = min(15, (int)rough);
-  int rough_i1 = min(15, rough_i + 1);
-  int mu_i = min(15, (int)mu);
-  int mu_i1 = min(15, mu_i + 1);
-
-  rough -= rough_i;
-  mu -= mu_i;
-
-  float a = lerp(table_clearcoat_E[rough_i][mu_i], table_clearcoat_E[rough_i][mu_i1], mu);
-  float b = lerp(table_clearcoat_E[rough_i1][mu_i], table_clearcoat_E[rough_i1][mu_i1], mu);
-  return saturatef(lerp(a, b, rough)) * macro_fresnel;
+  float table = saturatef(microfacet_table_2D(&table_clearcoat_E[0][0], mu, 1 - rough, 16, 16));
+  return table * fresnel_dielectric_cos(mu, 1.5f);
 }
 
 ccl_device_inline float3 metallic_Fss(float3 F0, float3 F90, float falloff)
 {
   /* Fss for lerp(F0, F90, (1-cosNI)^falloff) */
-  return lerp(F0, F90, 2.0f / (sqr(falloff) + 3*falloff + 2));
+  return lerp(F0, F90, 2.0f / (sqr(falloff) + 3 * falloff + 2));
 }
 
 ccl_device_inline float3 schlick_fresnel_Fss(float3 F0)
