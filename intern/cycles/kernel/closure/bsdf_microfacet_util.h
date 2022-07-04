@@ -139,7 +139,22 @@ ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
 
 ccl_device_inline float3 schlick_fresnel_Fss(float3 F0)
 {
+  /* TODO validate using multiGGX code */
   return (one_float3() + 20.0f * saturate(F0)) * (1.0f / 21.0f);
+}
+
+/* TODO Imageworks source */
+ccl_device_inline float3 dielectic_fresnel_Fss(float eta)
+{
+  /* TODO validate using multiGGX code */
+  float f;
+  if (eta < 1.0f) {
+    f = 0.997118f + eta * (0.1014f - eta * (0.965241f + eta * 0.130607f));
+  }
+  else {
+    f = (eta - 1.0f) / (4.08567f + 1.00071f * eta);
+  }
+  return make_float3(f, f, f);
 }
 
 CCL_NAMESPACE_END

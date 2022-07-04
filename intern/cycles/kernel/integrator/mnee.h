@@ -644,6 +644,7 @@ ccl_device_forceinline float3 mnee_eval_bsdf_contribution(ccl_private ShaderClos
   float cosThetaM = dot(bsdf->N, Ht);
 
   float G;
+  /* TODO: Use bsdf_microfacet_util.h */
   if (bsdf->type == CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID) {
     /* Eq. 26, 27: now calculate G1(i,m) and G1(o,m). */
     G = bsdf_beckmann_G1(bsdf->alpha_x, cosNO) * bsdf_beckmann_G1(bsdf->alpha_x, cosNI);

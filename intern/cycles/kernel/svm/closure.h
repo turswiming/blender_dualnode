@@ -670,7 +670,8 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
       if (kernel_data.integrator.caustics_refractive || (path_flag & PATH_RAY_DIFFUSE) == 0)
 #endif
       {
-        /* This is to prevent MNEE from receiving a null BSDF. */
+        /* This is to prevent MNEE from receiving a null BSDF.
+         * TODO: Doesn't this always enable the closure? */
         float refraction_fresnel = fmaxf(0.0001f, 1.0f - fresnel);
         ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
             sd, sizeof(MicrofacetBsdf), weight * refraction_fresnel);
