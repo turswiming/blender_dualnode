@@ -2853,27 +2853,27 @@ void PrincipledBsdfNode::attributes(Shader *shader, AttributeRequestSet *attribu
   ShaderNode::attributes(shader, attributes);
 }
 
-void PrincipledBsdfNode::compile(SVMCompiler &compiler,
-                                 ShaderInput *p_metallic,
-                                 ShaderInput *p_subsurface,
-                                 ShaderInput *p_subsurface_radius,
-                                 ShaderInput *p_subsurface_ior,
-                                 ShaderInput *p_subsurface_anisotropy,
-                                 ShaderInput *p_specular,
-                                 ShaderInput *p_roughness,
-                                 ShaderInput *p_specular_tint,
-                                 ShaderInput *p_anisotropic,
-                                 ShaderInput *p_sheen,
-                                 ShaderInput *p_sheen_tint,
-                                 ShaderInput *p_clearcoat,
-                                 ShaderInput *p_clearcoat_roughness,
-                                 ShaderInput *p_ior,
-                                 ShaderInput *p_transmission,
-                                 ShaderInput *p_anisotropic_rotation,
-                                 ShaderInput *p_transmission_roughness)
+void PrincipledBsdfNode::compile(SVMCompiler &compiler)
 {
   ShaderInput *base_color_in = input("Base Color");
   ShaderInput *subsurface_color_in = input("Subsurface Color");
+  ShaderInput *p_metallic = input("Metallic");
+  ShaderInput *p_subsurface = input("Subsurface");
+  ShaderInput *p_subsurface_radius = input("Subsurface Radius");
+  ShaderInput *p_subsurface_ior = input("Subsurface IOR");
+  ShaderInput *p_subsurface_anisotropy = input("Subsurface Anisotropy");
+  ShaderInput *p_specular = input("Specular");
+  ShaderInput *p_roughness = input("Roughness");
+  ShaderInput *p_specular_tint = input("Specular Tint");
+  ShaderInput *p_anisotropic = input("Anisotropic");
+  ShaderInput *p_sheen = input("Sheen");
+  ShaderInput *p_sheen_tint = input("Sheen Tint");
+  ShaderInput *p_clearcoat = input("Clearcoat");
+  ShaderInput *p_clearcoat_roughness = input("Clearcoat Roughness");
+  ShaderInput *p_ior = input("IOR");
+  ShaderInput *p_transmission = input("Transmission");
+  ShaderInput *p_anisotropic_rotation = input("Anisotropic Rotation");
+  ShaderInput *p_transmission_roughness = input("Transmission Roughness");
   ShaderInput *normal_in = input("Normal");
   ShaderInput *clearcoat_normal_in = input("Clearcoat Normal");
   ShaderInput *tangent_in = input("Tangent");
@@ -2951,28 +2951,6 @@ bool PrincipledBsdfNode::has_integrator_dependency()
 {
   ShaderInput *roughness_input = input("Roughness");
   return !roughness_input->link && roughness <= 1e-4f;
-}
-
-void PrincipledBsdfNode::compile(SVMCompiler &compiler)
-{
-  compile(compiler,
-          input("Metallic"),
-          input("Subsurface"),
-          input("Subsurface Radius"),
-          input("Subsurface IOR"),
-          input("Subsurface Anisotropy"),
-          input("Specular"),
-          input("Roughness"),
-          input("Specular Tint"),
-          input("Anisotropic"),
-          input("Sheen"),
-          input("Sheen Tint"),
-          input("Clearcoat"),
-          input("Clearcoat Roughness"),
-          input("IOR"),
-          input("Transmission"),
-          input("Anisotropic Rotation"),
-          input("Transmission Roughness"));
 }
 
 void PrincipledBsdfNode::compile(OSLCompiler &compiler)
