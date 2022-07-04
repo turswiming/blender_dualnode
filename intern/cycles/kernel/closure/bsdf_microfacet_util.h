@@ -78,58 +78,35 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(
   return normalize(make_float3(alpha_x * Mh.x, alpha_y * Mh.y, max(0.0f, Mh.z)));
 }
 
-/* Albedo correction.
- * TODO: Use proper lookup table code for this data. */
+/* Albedo correction. */
 
-ccl_device_forceinline float microfacet_table_1D(const float *table, float x, int size)
-{
-  x = saturatef(x - (0.5f / size)) * size;
-  int i = min(size - 1, (int)x);
-  int i1 = min(size - 1, i + 1);
-  return mix(table[i], table[i1], x - i);
-}
-
-ccl_device_forceinline float microfacet_table_2D(
-    const float *table, float x, float y, int xsize, int ysize)
-{
-  y = saturatef(y - (0.5f / ysize)) * ysize;
-  int i = min(ysize - 1, (int)y);
-  int i1 = min(ysize - 1, i + 1);
-  return mix(microfacet_table_1D(table + xsize * i, x, xsize),
-             microfacet_table_1D(table + xsize * i1, x, xsize),
-             y - i);
-}
-
-ccl_device_forceinline float microfacet_table_3D(
-    const float *table, float x, float y, float z, int xsize, int ysize, int zsize)
-{
-  z = saturatef(z - (0.5f / zsize)) * zsize;
-  int i = min(zsize - 1, (int)z);
-  int i1 = min(zsize - 1, i + 1);
-  return mix(microfacet_table_2D(table + xsize * ysize * i, x, y, xsize, ysize),
-             microfacet_table_2D(table + xsize * ysize * i1, x, y, xsize, ysize),
-             z - i);
-}
-
-ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float ior)
+ccl_device_forceinline float microfacet_ggx_glass_E(KernelGlobals kg,
+                                                    float mu,
+                                                    float rough,
+                                                    float ior)
 {
   bool inv_table = (ior < 1.0f);
   if (inv_table) {
     ior = 1.0f / ior;
   }
-  auto &table = inv_table ? table_ggx_glass_inv_E : table_ggx_glass_E;
+  int offset = inv_table ? kernel_data.tables.ggx_glass_inv_E_offset :
+                           kernel_data.tables.ggx_glass_E_offset;
 
   float x = mu, y = 1 - rough, z = sqrtf(0.5f * (ior - 1.0f));
-  return saturatef(microfacet_table_3D(&table[0][0][0], x, y, z, 16, 16, 16));
+  return lookup_table_read_3D(kg, x, y, z, offset, 16, 16, 16);
 }
 
-ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, float ior)
+ccl_device_forceinline float microfacet_ggx_dielectric_E(KernelGlobals kg,
+                                                         float mu,
+                                                         float rough,
+                                                         float ior)
 {
   bool inv_table = (ior < 1.0f);
   if (inv_table) {
     ior = 1.0f / ior;
   }
-  auto &table = inv_table ? table_ggx_dielectric_inv_E : table_ggx_dielectric_E;
+  int offset = inv_table ? kernel_data.tables.ggx_dielectric_inv_E_offset :
+                           kernel_data.tables.ggx_dielectric_E_offset;
 
   float macro_fresnel = fresnel_dielectric_cos(mu, ior);
   float F0 = fresnel_dielectric_cos(1.0f, ior);
@@ -137,22 +114,23 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, 
   float y = 1 - rough;
   float z = sqrtf(0.5f * (ior - 1.0f));
 
-  return saturatef(microfacet_table_3D(&table[0][0][0], x, y, z, 16, 16, 16));
+  return lookup_table_read_3D(kg, x, y, z, offset, 16, 16, 16);
 }
 
-ccl_device_forceinline float microfacet_ggx_E(float mu, float rough)
+ccl_device_forceinline float microfacet_ggx_E(KernelGlobals kg, float mu, float rough)
 {
-  return saturatef(microfacet_table_2D(&table_ggx_E[0][0], mu, 1 - rough, 32, 32));
+  return lookup_table_read_2D(kg, mu, 1 - rough, kernel_data.tables.ggx_E_offset, 32, 32);
 }
 
-ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
+ccl_device_forceinline float microfacet_ggx_E_avg(KernelGlobals kg, float rough)
 {
-  return saturatef(microfacet_table_1D(&table_ggx_E_avg[0], 1 - rough, 32));
+  return lookup_table_read(kg, 1 - rough, kernel_data.tables.ggx_E_avg_offset, 32);
 }
 
-ccl_device_forceinline float clearcoat_E(float mu, float rough)
+ccl_device_forceinline float clearcoat_E(KernelGlobals kg, float mu, float rough)
 {
-  float table = saturatef(microfacet_table_2D(&table_clearcoat_E[0][0], mu, 1 - rough, 16, 16));
+  float x = mu, y = 1 - rough;
+  float table = lookup_table_read_2D(kg, x, y, kernel_data.tables.ggx_clearcoat_E_offset, 16, 16);
   return table * fresnel_dielectric_cos(mu, 1.5f);
 }
 

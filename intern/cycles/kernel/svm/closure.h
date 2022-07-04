@@ -197,7 +197,7 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
       else if (type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID) {
         kernel_assert(stack_valid(data_node.w));
         float3 color = stack_load_float3(stack, data_node.w);
-        sd->flag |= bsdf_microfacet_multi_ggx_setup(bsdf, sd, color);
+        sd->flag |= bsdf_microfacet_multi_ggx_setup(kg, bsdf, sd, color);
       }
       else {
         sd->flag |= bsdf_ashikhmin_shirley_setup(bsdf);
@@ -333,7 +333,7 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
       float3 color = stack_load_float3(stack, data_node.z);
 
       /* setup bsdf */
-      sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(bsdf, sd, color);
+      sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(kg, bsdf, sd, color);
       break;
     }
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID: {

@@ -31,6 +31,8 @@ namespace OCIO = OCIO_NAMESPACE;
 
 CCL_NAMESPACE_BEGIN
 
+#include "scene/shader.tables"
+
 thread_mutex ShaderManager::lookup_table_mutex;
 vector<float> ShaderManager::beckmann_table;
 bool ShaderManager::beckmann_table_ready = false;
@@ -566,6 +568,33 @@ void ShaderManager::device_update_common(Device * /*device*/,
   }
   ktables->beckmann_offset = (int)beckmann_table_offset;
 
+  auto bsdf_table = [&](int *offset_entry, const float *data, size_t size, string name) {
+    if (!(bsdf_lookup_tables.count(name))) {
+      vector<float> entries(data, data + size);
+      bsdf_lookup_tables[name] = scene->lookup_tables->add_table(dscene, entries);
+    }
+    *offset_entry = bsdf_lookup_tables[name];
+  };
+  bsdf_table(&ktables->ggx_E_offset, &table_ggx_E[0][0], 32 * 32, "ggx_E");
+  bsdf_table(&ktables->ggx_E_avg_offset, &table_ggx_E_avg[0], 32, "ggx_E_avg");
+  bsdf_table(
+      &ktables->ggx_clearcoat_E_offset, &table_clearcoat_E[0][0], 16 * 16, "ggx_clearcoat_E");
+  bsdf_table(
+      &ktables->ggx_glass_E_offset, &table_ggx_glass_E[0][0][0], 16 * 16 * 16, "ggx_glass_E");
+  bsdf_table(&ktables->ggx_glass_inv_E_offset,
+             &table_ggx_glass_inv_E[0][0][0],
+             16 * 16 * 16,
+             "ggx_glass_inv_E");
+  bsdf_table(&ktables->ggx_dielectric_E_offset,
+             &table_ggx_dielectric_E[0][0][0],
+             16 * 16 * 16,
+             "ggx_dielectric_E");
+  bsdf_table(&ktables->ggx_dielectric_inv_E_offset,
+             &table_ggx_dielectric_inv_E[0][0][0],
+             16 * 16 * 16,
+             "ggx_dielectric_inv_E");
+  bsdf_table(&ktables->sheen_E_offset, &table_sheen_E[0][0], 32 * 32, "sheen_E");
+
   /* integrator */
   KernelIntegrator *kintegrator = &dscene->data.integrator;
   kintegrator->use_volumes = has_volumes;
@@ -588,6 +617,10 @@ void ShaderManager::device_update_common(Device * /*device*/,
 void ShaderManager::device_free_common(Device *, DeviceScene *dscene, Scene *scene)
 {
   scene->lookup_tables->remove_table(&beckmann_table_offset);
+  for (auto &entry : bsdf_lookup_tables) {
+    scene->lookup_tables->remove_table(&entry.second);
+  }
+  bsdf_lookup_tables.clear();
 
   dscene->shaders.free();
 }

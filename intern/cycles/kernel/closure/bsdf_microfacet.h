@@ -89,15 +89,16 @@ ccl_device_forceinline void bsdf_microfacet_fresnel_color(ccl_private const Shad
   }
 }
 
-ccl_device_inline float3 microfacet_ggx_albedo_scaling(ccl_private const MicrofacetBsdf *bsdf,
+ccl_device_inline float3 microfacet_ggx_albedo_scaling(KernelGlobals kg,
+                                                       ccl_private const MicrofacetBsdf *bsdf,
                                                        ccl_private const ShaderData *sd,
                                                        const float3 Fss)
 {
   float mu = dot(sd->I, bsdf->N);
   float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
-  float E = microfacet_ggx_E(mu, rough);
+  float E = microfacet_ggx_E(kg, mu, rough);
 
-  float E_avg = microfacet_ggx_E_avg(rough);
+  float E_avg = microfacet_ggx_E_avg(kg, rough);
   /* Fms here is based on the appendix of
    * https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf,
    * with one Fss cancelled out since this is just a multiplier on top of
@@ -108,14 +109,15 @@ ccl_device_inline float3 microfacet_ggx_albedo_scaling(ccl_private const Microfa
   /* TODO: Ensure that increase in weight does not mess up glossy color, albedo etc. passes */
 }
 
-ccl_device_inline float microfacet_ggx_albedo_scaling_float(ccl_private const MicrofacetBsdf *bsdf,
+ccl_device_inline float microfacet_ggx_albedo_scaling_float(KernelGlobals kg,
+                                                            ccl_private const MicrofacetBsdf *bsdf,
                                                             ccl_private const ShaderData *sd,
                                                             const float Fss)
 {
   // TOOD: Deduplicate somehow?
   float mu = dot(sd->I, bsdf->N);
   float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
-  float E = microfacet_ggx_E(mu, rough), E_avg = microfacet_ggx_E_avg(rough);
+  float E = microfacet_ggx_E(kg, mu, rough), E_avg = microfacet_ggx_E_avg(kg, rough);
   float Fms = Fss * E_avg / (1.0f - Fss * (1.0f - E_avg));
   return 1.0f + Fms * ((1.0f - E) / E);
 }
@@ -140,11 +142,12 @@ ccl_device int bsdf_microfacet_ggx_isotropic_setup(ccl_private MicrofacetBsdf *b
   return bsdf_microfacet_ggx_setup(bsdf);
 }
 
-ccl_device int bsdf_microfacet_multi_ggx_setup(ccl_private MicrofacetBsdf *bsdf,
+ccl_device int bsdf_microfacet_multi_ggx_setup(KernelGlobals kg,
+                                               ccl_private MicrofacetBsdf *bsdf,
                                                ccl_private const ShaderData *sd,
                                                const float3 color)
 {
-  bsdf->weight *= microfacet_ggx_albedo_scaling(bsdf, sd, saturate(color));
+  bsdf->weight *= microfacet_ggx_albedo_scaling(kg, bsdf, sd, saturate(color));
   return bsdf_microfacet_ggx_setup(bsdf);
 }
 
@@ -163,15 +166,17 @@ ccl_device int bsdf_microfacet_ggx_fresnel_setup(ccl_private MicrofacetBsdf *bsd
   return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
-ccl_device int bsdf_microfacet_multi_ggx_fresnel_setup(ccl_private MicrofacetBsdf *bsdf,
+ccl_device int bsdf_microfacet_multi_ggx_fresnel_setup(KernelGlobals kg,
+                                                       ccl_private MicrofacetBsdf *bsdf,
                                                        ccl_private const ShaderData *sd)
 {
   float3 Fss = schlick_fresnel_Fss(bsdf->extra->cspec0);
-  bsdf->weight *= microfacet_ggx_albedo_scaling(bsdf, sd, Fss);
+  bsdf->weight *= microfacet_ggx_albedo_scaling(kg, bsdf, sd, Fss);
   return bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
 }
 
-ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(ccl_private MicrofacetBsdf *bsdf,
+ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(KernelGlobals kg,
+                                                    ccl_private MicrofacetBsdf *bsdf,
                                                     ccl_private const ShaderData *sd,
                                                     float metallic,
                                                     float dielectric)
@@ -186,7 +191,7 @@ ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(ccl_private MicrofacetBsdf *
     extra->metal_edge = saturate(extra->metal_edge);
     extra->metal_falloff = 1.0f / clamp(extra->metal_falloff, 1e-3f, 1.0f);
     float3 metal_Fss = metallic_Fss(extra->metal_base, extra->metal_edge, extra->metal_falloff);
-    float3 metal_scale = microfacet_ggx_albedo_scaling(bsdf, sd, metal_Fss);
+    float3 metal_scale = microfacet_ggx_albedo_scaling(kg, bsdf, sd, metal_Fss);
     extra->metal_base *= metallic * metal_scale;
     extra->metal_edge *= metallic * metal_scale;
   }
@@ -198,7 +203,8 @@ ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(ccl_private MicrofacetBsdf *
 
   if (dielectric > 0.0f) {
     float dielectric_Fss = dielectric_fresnel_Fss(bsdf->ior);
-    extra->dielectric = dielectric * microfacet_ggx_albedo_scaling_float(bsdf, sd, dielectric_Fss);
+    extra->dielectric = dielectric *
+                        microfacet_ggx_albedo_scaling_float(kg, bsdf, sd, dielectric_Fss);
   }
   else {
     extra->dielectric = 0.0f;
@@ -224,7 +230,8 @@ ccl_device int bsdf_microfacet_ggx_clearcoat_setup(ccl_private MicrofacetBsdf *b
   return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
-ccl_device int bsdf_microfacet_ggx_clearcoat_v2_setup(ccl_private MicrofacetBsdf *bsdf,
+ccl_device int bsdf_microfacet_ggx_clearcoat_v2_setup(KernelGlobals kg,
+                                                      ccl_private MicrofacetBsdf *bsdf,
                                                       ccl_private const ShaderData *sd)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
@@ -233,7 +240,7 @@ ccl_device int bsdf_microfacet_ggx_clearcoat_v2_setup(ccl_private MicrofacetBsdf
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID;
 
   float Fss = dielectric_fresnel_Fss(bsdf->ior);
-  bsdf->weight *= microfacet_ggx_albedo_scaling_float(bsdf, sd, Fss);
+  bsdf->weight *= microfacet_ggx_albedo_scaling_float(kg, bsdf, sd, Fss);
 
   bsdf_microfacet_fresnel_color(sd, bsdf);
 

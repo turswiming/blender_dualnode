@@ -167,7 +167,7 @@ ccl_device_inline void principled_v1_specular(KernelGlobals kg,
       roughness <= 0.075f) /* use single-scatter GGX */
     sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
   else /* use multi-scatter GGX */
-    sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(bsdf, sd);
+    sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(kg, bsdf, sd);
 }
 
 ccl_device_inline void principled_v1_glass_refl(ccl_private ShaderData *sd,
@@ -341,7 +341,7 @@ ccl_device_inline void principled_v1_glass_multi(KernelGlobals kg,
   bsdf->extra->cspec0 = mix(one_float3(), base_color, specular_tint);
 
   /* setup bsdf */
-  sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(bsdf, sd);
+  sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(kg, bsdf, sd);
 }
 
 ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
@@ -559,9 +559,9 @@ ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
   bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
 
   /* setup bsdf */
-  sd->flag |= bsdf_microfacet_ggx_clearcoat_v2_setup(bsdf, sd);
+  sd->flag |= bsdf_microfacet_ggx_clearcoat_v2_setup(kg, bsdf, sd);
 
-  return tint * (1.0f - clearcoat_E(dot(sd->I, N), roughness) * clearcoat);
+  return tint * (1.0f - clearcoat_E(kg, dot(sd->I, N), roughness) * clearcoat);
 }
 
 ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
@@ -591,12 +591,13 @@ ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
   bsdf->roughness = sqr(roughness);
 
   /* setup bsdf */
-  sd->flag |= bsdf_principled_sheen_v2_setup(sd, bsdf);
+  sd->flag |= bsdf_principled_sheen_v2_setup(kg, sd, bsdf);
 
   return 1.0f - sheen * bsdf->avg_value;  // TODO include tint
 }
 
-ccl_device_inline float principled_v2_specular(ccl_private ShaderData *sd,
+ccl_device_inline float principled_v2_specular(KernelGlobals kg,
+                                               ccl_private ShaderData *sd,
                                                ccl_private float *stack,
                                                float3 weight,
                                                float3 base_color,
@@ -654,12 +655,13 @@ ccl_device_inline float principled_v2_specular(ccl_private ShaderData *sd,
   extra->metal_falloff = stack_load_float(stack, falloff_offset);
 
   float dielectric = (1.0f - metallic) * (1.0f - transmission);
-  sd->flag |= bsdf_microfacet_ggx_fresnel_v2_setup(bsdf, sd, metallic, dielectric);
+  sd->flag |= bsdf_microfacet_ggx_fresnel_v2_setup(kg, bsdf, sd, metallic, dielectric);
 
-  return microfacet_ggx_dielectric_E(dot(sd->I, N), roughness, ior);
+  return microfacet_ggx_dielectric_E(kg, dot(sd->I, N), roughness, ior);
 }
 
-ccl_device_inline void principled_v2_glass(ccl_private ShaderData *sd,
+ccl_device_inline void principled_v2_glass(KernelGlobals kg,
+                                           ccl_private ShaderData *sd,
                                            float3 weight,
                                            float transmission,
                                            float roughness,
@@ -679,7 +681,7 @@ ccl_device_inline void principled_v2_glass(ccl_private ShaderData *sd,
   bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / ior : ior;
 
   /* setup bsdf */
-  sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(bsdf, sd, one_float3());
+  sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(kg, bsdf, sd, one_float3());
 }
 
 ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
@@ -713,7 +715,8 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
   weight *= principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
   weight *= principled_v2_sheen(kg, sd, stack, weight, N, node_2.z);
 
-  float dielectric_albedo = principled_v2_specular(sd,
+  float dielectric_albedo = principled_v2_specular(kg,
+                                                   sd,
                                                    stack,
                                                    weight,
                                                    base_color,
@@ -726,7 +729,7 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                    node_2.y);
   weight *= 1.0f - metallic;
 
-  principled_v2_glass(sd, weight, transmission, roughness, ior, N);
+  principled_v2_glass(kg, sd, weight, transmission, roughness, ior, N);
 
   weight *= (1.0f - transmission) * (1.0f - dielectric_albedo);
 

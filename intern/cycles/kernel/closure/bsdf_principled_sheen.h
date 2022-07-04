@@ -102,23 +102,9 @@ ccl_device_inline float3 sheen_v2_eval(float3 N, float3 V, float3 L, float3 H, f
   return make_float3(val, val, val);
 }
 
-ccl_device_forceinline float sheen_v2_E(float mu, float rough)
+ccl_device_forceinline float sheen_v2_E(KernelGlobals kg, float mu, float rough)
 {
-  /* TODO: Cleanup. */
-  rough = saturatef(1 - sqrtf(rough) - 1.0f / 64.0f) * 32.0f;
-  mu = saturatef(mu - 1.0f / 64.0f) * 32.0f;
-
-  int rough_i = min(31, (int)rough);
-  int rough_i1 = min(31, rough_i + 1);
-  int mu_i = min(31, (int)mu);
-  int mu_i1 = min(31, mu_i + 1);
-
-  rough -= rough_i;
-  mu -= mu_i;
-
-  float a = mix(table_sheen_E[rough_i][mu_i], table_sheen_E[rough_i][mu_i1], mu);
-  float b = mix(table_sheen_E[rough_i1][mu_i], table_sheen_E[rough_i1][mu_i1], mu);
-  return saturatef(mix(a, b, rough));
+  return lookup_table_read_2D(kg, mu, 1 - sqrtf(rough), kernel_data.tables.sheen_E_offset, 32, 32);
 }
 
 ccl_device int bsdf_principled_sheen_setup(ccl_private const ShaderData *sd,
@@ -130,7 +116,8 @@ ccl_device int bsdf_principled_sheen_setup(ccl_private const ShaderData *sd,
   return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
-ccl_device int bsdf_principled_sheen_v2_setup(ccl_private const ShaderData *sd,
+ccl_device int bsdf_principled_sheen_v2_setup(KernelGlobals kg,
+                                              ccl_private const ShaderData *sd,
                                               ccl_private PrincipledSheenBsdf *bsdf)
 {
   // TODO: Also expose as separate node. Add enum to Velvet BSDF maybe?
@@ -138,7 +125,7 @@ ccl_device int bsdf_principled_sheen_v2_setup(ccl_private const ShaderData *sd,
 
   bsdf->roughness = clamp(bsdf->roughness, 1e-3f, 1.0f);
 
-  bsdf->avg_value = sheen_v2_E(dot(bsdf->N, sd->I), bsdf->roughness);
+  bsdf->avg_value = sheen_v2_E(kg, dot(bsdf->N, sd->I), bsdf->roughness);
   bsdf->sample_weight *= bsdf->avg_value;
 
   return SD_BSDF | SD_BSDF_HAS_EVAL;

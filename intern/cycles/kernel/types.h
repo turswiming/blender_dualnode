@@ -1349,6 +1349,14 @@ static_assert_align(KernelBVH, 16);
 
 typedef struct KernelTables {
   int beckmann_offset;
+  int ggx_E_offset;
+  int ggx_E_avg_offset;
+  int ggx_clearcoat_E_offset;
+  int ggx_glass_E_offset;
+  int ggx_glass_inv_E_offset;
+  int ggx_dielectric_E_offset;
+  int ggx_dielectric_inv_E_offset;
+  int sheen_E_offset;
   int pad1, pad2, pad3;
 } KernelTables;
 static_assert_align(KernelTables, 16);

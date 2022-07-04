@@ -231,6 +231,7 @@ class ShaderManager {
   static bool beckmann_table_ready;
 
   size_t beckmann_table_offset;
+  unordered_map<string, size_t> bsdf_lookup_tables;
 
   uint get_graph_kernel_features(ShaderGraph *graph);
 
