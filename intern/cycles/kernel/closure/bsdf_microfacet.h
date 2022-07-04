@@ -44,8 +44,7 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
     return interpolate_fresnel_color(L, H, bsdf->ior, bsdf->extra->cspec0);
   }
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
-    return 0.25f * interpolate_fresnel_color(L, H, bsdf->ior, bsdf->extra->cspec0) *
-           bsdf->extra->clearcoat;
+    return interpolate_fresnel_color(L, H, bsdf->ior, make_float3(0.04f, 0.04f, 0.04f));
   }
   else {
     return one_float3();
@@ -55,16 +54,12 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
 ccl_device_forceinline void bsdf_microfacet_fresnel_color(ccl_private const ShaderData *sd,
                                                           ccl_private MicrofacetBsdf *bsdf)
 {
-  kernel_assert(CLOSURE_IS_BSDF_MICROFACET_FRESNEL(bsdf->type));
+  float3 average_fresnel = reflection_color(bsdf, sd->I, bsdf->N);
+  bsdf->sample_weight *= average(average_fresnel);
 
-  bsdf->extra->fresnel_color = interpolate_fresnel_color(
-      sd->I, bsdf->N, bsdf->ior, bsdf->extra->cspec0);
-
-  if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
-    bsdf->extra->fresnel_color *= 0.25f * bsdf->extra->clearcoat;
+  if (bsdf->extra) {
+    bsdf->extra->fresnel_color = average_fresnel;
   }
-
-  bsdf->sample_weight *= average(bsdf->extra->fresnel_color);
 }
 
 ccl_device_inline float3 microfacet_ggx_albedo_scaling(ccl_private const MicrofacetBsdf *bsdf,

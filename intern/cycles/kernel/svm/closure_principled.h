@@ -360,24 +360,15 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
 #endif
     if (clearcoat > CLOSURE_WEIGHT_CUTOFF) {
       ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-          sd, sizeof(MicrofacetBsdf), weight);
-      ccl_private MicrofacetExtra *extra = (bsdf != NULL) ?
-                                               (ccl_private MicrofacetExtra *)closure_alloc_extra(
-                                                   sd, sizeof(MicrofacetExtra)) :
-                                               NULL;
+          sd, sizeof(MicrofacetBsdf), 0.25f * clearcoat * weight);
 
-      if (bsdf && extra) {
+      if (bsdf) {
         bsdf->N = clearcoat_normal;
         bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
         bsdf->ior = 1.5f;
-        bsdf->extra = extra;
+        bsdf->extra = NULL;
 
-        bsdf->alpha_x = clearcoat_roughness * clearcoat_roughness;
-        bsdf->alpha_y = clearcoat_roughness * clearcoat_roughness;
-
-        bsdf->extra->color = make_float3(0.0f, 0.0f, 0.0f);
-        bsdf->extra->cspec0 = make_float3(0.04f, 0.04f, 0.04f);
-        bsdf->extra->clearcoat = clearcoat;
+        bsdf->alpha_x = bsdf->alpha_y = sqr(clearcoat_roughness);
 
         /* setup bsdf */
         sd->flag |= bsdf_microfacet_ggx_clearcoat_setup(bsdf, sd);

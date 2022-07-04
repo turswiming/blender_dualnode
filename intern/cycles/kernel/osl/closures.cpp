@@ -264,24 +264,16 @@ class PrincipledClearcoatClosure : public CBSDFClosure {
   MicrofacetBsdf *alloc(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
     MicrofacetBsdf *bsdf = (MicrofacetBsdf *)bsdf_alloc_osl(
-        sd, sizeof(MicrofacetBsdf), weight, &params);
+        sd, sizeof(MicrofacetBsdf), 0.25f * clearcoat * weight, &params);
     if (!bsdf) {
       return NULL;
     }
 
-    MicrofacetExtra *extra = (MicrofacetExtra *)closure_alloc_extra(sd, sizeof(MicrofacetExtra));
-    if (!extra) {
-      return NULL;
-    }
-
     bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
-    bsdf->extra = extra;
+    bsdf->extra = NULL;
     bsdf->ior = 1.5f;
     bsdf->alpha_x = clearcoat_roughness;
     bsdf->alpha_y = clearcoat_roughness;
-    bsdf->extra->color = make_float3(0.0f, 0.0f, 0.0f);
-    bsdf->extra->cspec0 = make_float3(0.04f, 0.04f, 0.04f);
-    bsdf->extra->clearcoat = clearcoat;
     return bsdf;
   }
 
