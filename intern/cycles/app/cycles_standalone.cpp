@@ -37,6 +37,8 @@
 
 CCL_NAMESPACE_BEGIN
 
+bool cycles_precompute(std::string name);
+
 struct Options {
   Session *session;
   Scene *scene;
@@ -535,6 +537,10 @@ int main(int argc, const char **argv)
   util_logging_init(argv[0]);
   path_init();
   options_parse(argc, argv);
+
+  if (cycles_precompute(options.filepath)) {
+    return 0;
+  }
 
 #ifdef WITH_CYCLES_STANDALONE_GUI
   if (options.session_params.background) {

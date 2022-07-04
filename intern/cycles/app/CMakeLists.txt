@@ -60,6 +60,7 @@ include_directories(SYSTEM ${INC_SYS})
 if(WITH_CYCLES_STANDALONE)
   set(SRC
     cycles_standalone.cpp
+    cycles_precompute.cpp
     cycles_xml.cpp
     cycles_xml.h
     oiio_output_driver.cpp
