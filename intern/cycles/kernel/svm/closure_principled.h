@@ -508,7 +508,7 @@ ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_ggx_clearcoat_v2_setup(bsdf, sd);
 
-  return 0.04f * clearcoat;  // TODO better approx
+  return clearcoat_E(dot(sd->I, N), roughness) * clearcoat;
 }
 
 ccl_device_inline float principled_v2_sheen(KernelGlobals kg,

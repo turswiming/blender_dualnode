@@ -67,6 +67,47 @@ static float precompute_sheen_E(float rough, float mu, float u1, float u2)
   return 0.0f;
 }
 
+static float precompute_clearcoat_E(float rough, float mu, float u1, float u2)
+{
+  MicrofacetBsdf bsdf;
+  bsdf.weight = one_float3();
+  bsdf.type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID;
+  bsdf.sample_weight = 1.0f;
+  bsdf.N = make_float3(0.0f, 0.0f, 1.0f);
+  bsdf.alpha_x = bsdf.alpha_y = sqr(rough);
+  bsdf.ior = 1.5f;
+  bsdf.extra = nullptr;
+  bsdf.T = make_float3(1.0f, 0.0f, 0.0f);
+
+  /* Account for the albedo scaling that the closure performs.
+   * Dependency warning - this relies on the ggx_E and ggx_E_avg lookup tables! */
+  float E = microfacet_ggx_E(mu, rough), E_avg = microfacet_ggx_E_avg(rough);
+  float Fss = dielectric_fresnel_Fss(1.5f);
+  float Fms = Fss * E_avg / (1.0f - Fss * (1.0f - E_avg));
+  float albedo_scale = 1.0f + Fms * ((1.0f - E) / E);
+
+  float3 eval, omega_in, domega_in_dx, domega_in_dy;
+  float pdf = 0.0f;
+  bsdf_microfacet_ggx_sample((ShaderClosure *)&bsdf,
+                             make_float3(0.0f, 0.0f, 1.0f),
+                             make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
+                             zero_float3(),
+                             zero_float3(),
+                             u1,
+                             u2,
+                             &eval,
+                             &omega_in,
+                             &domega_in_dx,
+                             &domega_in_dy,
+                             &pdf);
+  if (pdf != 0.0f) {
+    /* Encode relative to macrosurface Fresnel, saves resolution.
+     * TODO: Worth the extra evaluation? */
+    return albedo_scale * (average(eval) / pdf) / fresnel_dielectric_cos(mu, 1.5f);
+  }
+  return 0.0f;
+}
+
 static float precompute_ggx_E(float rough, float mu, float u1, float u2)
 {
   MicrofacetBsdf bsdf;
@@ -243,6 +284,10 @@ bool cycles_precompute(std::string name)
   precompute_terms["sheen_E"] = {
       2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
         return precompute_sheen_E(rough, mu, u1, u2);
+      }};
+  precompute_terms["clearcoat_E"] = {
+      2, 1 << 23, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+        return precompute_clearcoat_E(rough, mu, u1, u2);
       }};
   precompute_terms["ggx_E"] = {
       2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {

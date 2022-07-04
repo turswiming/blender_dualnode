@@ -172,6 +172,25 @@ ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
   return saturatef(lerp(table_ggx_E_avg[rough_i], table_ggx_E_avg[rough_i1], rough));
 }
 
+ccl_device_forceinline float clearcoat_E(float mu, float rough)
+{
+  float macro_fresnel = fresnel_dielectric_cos(mu, 1.5f);
+  rough = saturatef(1 - rough - 1.0f / 32.0f) * 16.0f;
+  mu = saturatef(mu - 1.0f / 32.0f) * 16.0f;
+
+  int rough_i = min(15, (int)rough);
+  int rough_i1 = min(15, rough_i + 1);
+  int mu_i = min(15, (int)mu);
+  int mu_i1 = min(15, mu_i + 1);
+
+  rough -= rough_i;
+  mu -= mu_i;
+
+  float a = lerp(table_clearcoat_E[rough_i][mu_i], table_clearcoat_E[rough_i][mu_i1], mu);
+  float b = lerp(table_clearcoat_E[rough_i1][mu_i], table_clearcoat_E[rough_i1][mu_i1], mu);
+  return saturatef(lerp(a, b, rough)) * macro_fresnel;
+}
+
 ccl_device_inline float3 metallic_Fss(float3 F0, float3 F90, float falloff)
 {
   /* Fss for lerp(F0, F90, (1-cosNI)^falloff) */
