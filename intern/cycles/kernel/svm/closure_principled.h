@@ -431,6 +431,121 @@ ccl_device_inline void principled_v1_clearcoat(KernelGlobals kg,
   sd->flag |= bsdf_microfacet_ggx_clearcoat_setup(bsdf, sd);
 }
 
+/* Principled v2 components */
+
+ccl_device_inline void principled_v2_diffuse(
+    ccl_private ShaderData *sd, float3 weight, float3 base_color, float diffuse_weight, float3 N)
+{
+  if (diffuse_weight <= CLOSURE_WEIGHT_CUTOFF) {
+    return;
+  }
+
+  ccl_private DiffuseBsdf *bsdf = (ccl_private DiffuseBsdf *)bsdf_alloc(
+      sd, sizeof(DiffuseBsdf), diffuse_weight * base_color * weight);
+
+  if (bsdf == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+
+  /* setup bsdf */
+  sd->flag |= bsdf_diffuse_setup(bsdf);
+}
+
+ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
+                                                ccl_private ShaderData *sd,
+                                                ccl_private float *stack,
+                                                float3 weight,
+                                                int path_flag,
+                                                uint data)
+{
+#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
+    return 0.0f;
+  }
+#endif
+
+  uint clearcoat_offset, roughness_offset, tint_offset, normal_offset;
+  svm_unpack_node_uchar4(data, &clearcoat_offset, &roughness_offset, &tint_offset, &normal_offset);
+  float clearcoat = saturatef(stack_load_float(stack, clearcoat_offset));
+
+  if (clearcoat <= CLOSURE_WEIGHT_CUTOFF) {
+    return 0.0f;
+  }
+
+  float roughness = saturatef(stack_load_float(stack, roughness_offset));
+  float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
+  if (!(sd->type & PRIMITIVE_CURVE)) {
+    N = ensure_valid_reflection(sd->Ng, sd->I, N);
+  }
+  float3 tint = saturate(stack_load_float3(stack, tint_offset));
+
+  if (tint != one_float3()) {
+    /* Tint is normalized to perpendicular incidence.
+     * Therefore, if we define the coating thickness as length 1, the length along the ray is
+     * t = tan(angle(N, I)) = tan(acos(dotNI)) = sqrt(1-dotNI^2) / dotNI.
+     * From Beer's law, we have T = exp(-sigma_e * t).
+     * Therefore, tint = exp(-sigma_e * 1) (per def.), so -sigma_e = log(tint).
+     * From this, T = exp(log(tint) * t) = exp(log(tint)) ^ t = tint ^ t;
+     */
+    float cosNI = dot(sd->I, N);
+    float optical_depth = safe_sqrtf(1.0f - sqr(cosNI)) / cosNI;
+    tint = pow(tint, optical_depth);
+  }
+
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), tint * clearcoat * weight);
+
+  if (bsdf == NULL) {
+    return 0.0f;
+  }
+
+  bsdf->N = N;
+  bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
+  bsdf->ior = 1.5f;
+  bsdf->extra = NULL;
+
+  bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
+
+  /* setup bsdf */
+  sd->flag |= bsdf_microfacet_ggx_clearcoat_setup(bsdf, sd);
+
+  return 0.04f * clearcoat;  // TODO better approx
+}
+
+ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
+                                               ccl_private ShaderData *sd,
+                                               ccl_private float *stack,
+                                               uint4 node_1,
+                                               uint4 node_2,
+                                               float mix_weight,
+                                               int path_flag,
+                                               int *offset)
+{
+  float3 weight = sd->svm_closure_weight * mix_weight;
+
+  /* Load shared parameter data. */
+  uint base_color_offset, normal_offset, dummy;
+  uint roughness_offset, metallic_offset, ior_offset, transmission_offset;
+  svm_unpack_node_uchar4(node_1.y, &dummy, &base_color_offset, &normal_offset, &dummy);
+  svm_unpack_node_uchar4(node_1.z, &roughness_offset, &metallic_offset, &ior_offset, &transmission_offset);
+
+  float3 base_color = stack_load_float3(stack, base_color_offset);
+  float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
+  if (!(sd->type & PRIMITIVE_CURVE)) {
+    N = ensure_valid_reflection(sd->Ng, sd->I, N);
+  }
+  float roughness = saturatef(stack_load_float(stack, roughness_offset));
+  float metallic = saturatef(stack_load_float(stack, metallic_offset));
+  float ior = fmaxf(stack_load_float(stack, ior_offset), 1e-5f);
+  float transmission = saturatef(stack_load_float(stack, transmission_offset));
+
+  float clearcoat_albedo = principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
+
+  principled_v2_diffuse(sd, weight, base_color, 1.0f - clearcoat_albedo, N);
+}
+
 ccl_device void svm_node_closure_principled(KernelGlobals kg,
                                             ccl_private ShaderData *sd,
                                             ccl_private float *stack,
@@ -446,6 +561,7 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
   ClosureType distribution = (ClosureType)packed_distribution;
 
   if (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID) {
+    svm_node_closure_principled_v2(kg, sd, stack, node_1, node_2, mix_weight, path_flag, offset);
     return;
   }
 
