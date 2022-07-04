@@ -79,7 +79,7 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(
 }
 
 /* Albedo correction.
- * TODO: Use proper lookup table code for this data. Also use 0.5px offset. */
+ * TODO: Use proper lookup table code for this data. */
 
 ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float ior)
 {
@@ -88,9 +88,9 @@ ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float
     ior = 1.0f / ior;
   }
 
-  rough = saturatef(1 - rough) * 16.0f;
-  mu = saturatef(mu) * 16.0f;
-  ior = saturatef(sqrtf(0.5f * (ior - 1.0f))) * 16.0f;
+  rough = saturatef(1 - rough - 1.0f/32.0f) * 16.0f;
+  mu = saturatef(mu - 1.0f/32.0f) * 16.0f;
+  ior = saturatef(sqrtf(0.5f * (ior - 1.0f)) - 1.0f/32.0f) * 16.0f;
 
   int rough_i = min(15, (int)rough);
   int rough_i1 = min(15, rough_i + 1);
@@ -121,9 +121,9 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, 
     ior = 1.0f / ior;
   }
 
-  rough = saturatef(1 - rough) * 16.0f;
-  mu = saturatef(mu) * 16.0f;
-  ior = saturatef(sqrtf(0.5f * (ior - 1.0f))) * 16.0f;
+  rough = saturatef(1 - rough - 1.0f/32.0f) * 16.0f;
+  mu = saturatef(mu - 1.0f/32.0f) * 16.0f;
+  ior = saturatef(sqrtf(0.5f * (ior - 1.0f)) - 1.0f/32.0f) * 16.0f;
 
   int rough_i = min(15, (int)rough);
   int rough_i1 = min(15, rough_i + 1);
@@ -147,8 +147,8 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, 
 
 ccl_device_forceinline float microfacet_ggx_E(float mu, float rough)
 {
-  rough = saturatef(1 - rough) * 32.0f;
-  mu = saturatef(mu) * 32.0f;
+  rough = saturatef(1 - rough - 1.0f/64.0f) * 32.0f;
+  mu = saturatef(mu - 1.0f/64.0f) * 32.0f;
 
   int rough_i = min(31, (int)rough);
   int rough_i1 = min(31, rough_i + 1);
@@ -165,7 +165,7 @@ ccl_device_forceinline float microfacet_ggx_E(float mu, float rough)
 
 ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
 {
-  rough = saturatef(1 - rough) * 32.0f;
+  rough = saturatef(1 - rough - 1.0f/64.0f) * 32.0f;
   int rough_i = min(31, (int)rough);
   int rough_i1 = min(31, rough_i + 1);
   rough -= rough_i;
