@@ -2726,7 +2726,8 @@ NODE_DEFINE(PrincipledBsdfNode)
 
   static NodeEnum distribution_enum;
   distribution_enum.insert("GGX", CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID);
-  distribution_enum.insert("Multiscatter GGX", CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
+  distribution_enum.insert("Multiscatter GGX", CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID);
+  distribution_enum.insert("Principled v2", CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
   SOCKET_ENUM(
       distribution, "Distribution", distribution_enum, CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
 

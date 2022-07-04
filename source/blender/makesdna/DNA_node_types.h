@@ -1511,6 +1511,7 @@ typedef struct NodeCombSepColor {
 
 /* principled bsdf mode
  * Note: GGX and MULTI_GGX must align with SHD_GLOSSY for backwards compatibility */
+#define SHD_PRINCIPLED_V2 0 /* TODO: Better name */
 #define SHD_PRINCIPLED_GGX 2
 #define SHD_PRINCIPLED_MULTI_GGX 4
 

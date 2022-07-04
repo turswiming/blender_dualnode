@@ -10,12 +10,15 @@ namespace blender::nodes::node_shader_bsdf_principled_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  /* TODO: Tooltips depending on old/new model. */
   b.add_input<decl::Color>(N_("Base Color")).default_value({0.8f, 0.8f, 0.8f, 1.0f});
   b.add_input<decl::Float>(N_("Subsurface"))
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  /* TODO: Somehow merge with "Subsurface". Needs different subtype though... */
+  b.add_input<decl::Float>(N_("Subsurface Scale")).default_value(0.0f).min(0.0f).max(100.0f);
   b.add_input<decl::Vector>(N_("Subsurface Radius"))
       .default_value({1.0f, 0.2f, 0.1f})
       .min(0.0f)
@@ -37,11 +40,20 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  /* TODO: Also add support to Principled v1? Would be compatible at defaults afaics. */
+  b.add_input<decl::Color>(N_("Metallic Edge")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Float>(N_("Metallic Falloff"))
+      .default_value(0.2f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR);
   b.add_input<decl::Float>(N_("Specular"))
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  /* TODO: Should be a color input in v2. Any way to keep compatibility?
+   * Maybe change to color everywhere and detect special case when float is connected? */
   b.add_input<decl::Float>(N_("Specular Tint"))
       .default_value(0.0f)
       .min(0.0f)
@@ -67,7 +79,14 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  /* TODO: Should be a color input in v2. Any way to keep compatibility?
+   * Maybe change to color everywhere and detect special case when float is connected? */
   b.add_input<decl::Float>(N_("Sheen Tint"))
+      .default_value(0.5f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR);
+  b.add_input<decl::Float>(N_("Sheen Roughness"))
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
@@ -82,6 +101,9 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  /* TODO: Also add support to Principled v1? Would remain compatible and reduce differences. */
+  b.add_input<decl::Color>(N_("Clearcoat Tint")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  /* TODO: Restrict min/max (e.g. 0.1 to 10) */
   b.add_input<decl::Float>(N_("IOR")).default_value(1.45f).min(0.0f).max(1000.0f);
   b.add_input<decl::Float>(N_("Transmission"))
       .default_value(0.0f)
@@ -93,6 +115,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+  /* TODO: Swap defaults (white, strength 0)? */
   b.add_input<decl::Color>(N_("Emission")).default_value({0.0f, 0.0f, 0.0f, 1.0f});
   b.add_input<decl::Float>(N_("Emission Strength")).default_value(1.0).min(0.0f).max(1000000.0f);
   b.add_input<decl::Float>(N_("Alpha"))
@@ -115,7 +138,7 @@ static void node_shader_buts_principled(uiLayout *layout, bContext *UNUSED(C), P
 
 static void node_shader_init_principled(bNodeTree *UNUSED(ntree), bNode *node)
 {
-  node->custom1 = SHD_PRINCIPLED_GGX;
+  node->custom1 = SHD_PRINCIPLED_V2;
   node->custom2 = SHD_SUBSURFACE_RANDOM_WALK;
 }
 
@@ -201,12 +224,41 @@ static void node_shader_update_principled(bNodeTree *ntree, bNode *node)
   const int sss_method = node->custom2;
 
   LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
+    const bool is_v2 = (distribution == SHD_PRINCIPLED_V2);
     if (STREQ(sock->name, "Transmission Roughness")) {
+      /* Only supported by the old separable glass model. */
       nodeSetSocketAvailability(ntree, sock, distribution == SHD_PRINCIPLED_GGX);
     }
 
-    if (STR_ELEM(sock->name, "Subsurface IOR", "Subsurface Anisotropy")) {
-      nodeSetSocketAvailability(ntree, sock, sss_method != SHD_SUBSURFACE_BURLEY);
+    if (STR_ELEM(sock->name, "Subsurface Anisotropy")) {
+      /* Only available with random-walk SSS.
+       * Principled v2 always uses random-walk SSS, so enable regardless of sss_method there. */
+      nodeSetSocketAvailability(ntree, sock, is_v2 || (sss_method != SHD_SUBSURFACE_BURLEY));
+    }
+
+    if (STR_ELEM(sock->name, "Subsurface IOR")) {
+      /* Only available with random-walk SSS. Principled v2 uses the regular IOR input, however. */
+      nodeSetSocketAvailability(ntree, sock, !is_v2 && (sss_method != SHD_SUBSURFACE_BURLEY));
+    }
+
+    if (STR_ELEM(sock->name,
+                 "Subsurface",
+                 "Subsurface Color",
+                 "Specular",
+                 "Specular Tint",
+                 "Sheen Tint")) {
+      /* Sockets exclusive to Principled v1. */
+      nodeSetSocketAvailability(ntree, sock, !is_v2);
+    }
+
+    if (STR_ELEM(sock->name,
+                 "Subsurface Scale",
+                 "Clearcoat Tint",
+                 "Sheen Roughness",
+                 "Metallic Edge",
+                 "Metallic Falloff")) {
+      /* Sockets exclusive to Principled v2. */
+      nodeSetSocketAvailability(ntree, sock, is_v2);
     }
   }
 }

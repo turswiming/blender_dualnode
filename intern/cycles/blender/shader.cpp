@@ -616,6 +616,9 @@ static ShaderNode *add_node(Scene *scene,
         principled->set_distribution(CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID);
         break;
       case BL::ShaderNodeBsdfPrincipled::distribution_MULTI_GGX:
+        principled->set_distribution(CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID);
+        break;
+      case BL::ShaderNodeBsdfPrincipled::distribution_V2:
         principled->set_distribution(CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
         break;
     }

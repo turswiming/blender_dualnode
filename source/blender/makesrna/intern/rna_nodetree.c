@@ -4664,6 +4664,7 @@ static EnumPropertyItem node_ies_mode_items[] = {
 static const EnumPropertyItem node_principled_distribution_items[] = {
     {SHD_PRINCIPLED_GGX, "GGX", 0, "GGX", ""},
     {SHD_PRINCIPLED_MULTI_GGX, "MULTI_GGX", 0, "Multiscatter GGX", ""},
+    {SHD_PRINCIPLED_V2, "V2", 0, "Principled v2", ""},
     {0, NULL, 0, NULL, NULL},
 };
 
