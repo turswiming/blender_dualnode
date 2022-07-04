@@ -87,6 +87,13 @@ ccl_device int bsdf_microfacet_ggx_isotropic_setup(ccl_private MicrofacetBsdf *b
   return bsdf_microfacet_ggx_setup(bsdf);
 }
 
+ccl_device int bsdf_microfacet_multi_ggx_setup(ccl_private MicrofacetBsdf *bsdf,
+                                               ccl_private const ShaderData *sd,
+                                               const float3 color)
+{
+  return bsdf_microfacet_ggx_setup(bsdf);
+}
+
 ccl_device int bsdf_microfacet_ggx_fresnel_setup(ccl_private MicrofacetBsdf *bsdf,
                                                  ccl_private const ShaderData *sd)
 {
@@ -100,6 +107,12 @@ ccl_device int bsdf_microfacet_ggx_fresnel_setup(ccl_private MicrofacetBsdf *bsd
   bsdf_microfacet_fresnel_color(sd, bsdf);
 
   return SD_BSDF | SD_BSDF_HAS_EVAL;
+}
+
+ccl_device int bsdf_microfacet_multi_ggx_fresnel_setup(ccl_private MicrofacetBsdf *bsdf,
+                                                       ccl_private const ShaderData *sd)
+{
+  return bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
 }
 
 ccl_device int bsdf_microfacet_ggx_clearcoat_setup(ccl_private MicrofacetBsdf *bsdf,

@@ -11,7 +11,6 @@
 #include "kernel/closure/bsdf_diffuse_ramp.h"
 #include "kernel/closure/bsdf_microfacet.h"
 #include "kernel/closure/bsdf_microfacet_beckmann.h"
-#include "kernel/closure/bsdf_microfacet_multi.h"
 #include "kernel/closure/bsdf_microfacet_glass.h"
 #include "kernel/closure/bsdf_reflection.h"
 #include "kernel/closure/bsdf_refraction.h"
@@ -248,10 +247,9 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
                                          &domega_in->dy,
                                          pdf);
       break;
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_FRESNEL_ID:
-      label = bsdf_microfacet_multi_ggx_sample(kg,
-                                               sc,
+    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
+    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
+      label = bsdf_microfacet_ggx_glass_sample(sc,
                                                Ng,
                                                sd->I,
                                                sd->dI.dx,
@@ -264,23 +262,6 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
                                                &domega_in->dy,
                                                pdf,
                                                &sd->lcg_state);
-      break;
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
-      label = bsdf_microfacet_multi_ggx_glass_sample(kg,
-                                                     sc,
-                                                     Ng,
-                                                     sd->I,
-                                                     sd->dI.dx,
-                                                     sd->dI.dy,
-                                                     randu,
-                                                     randv,
-                                                     eval,
-                                                     omega_in,
-                                                     &domega_in->dx,
-                                                     &domega_in->dy,
-                                                     pdf,
-                                                     &sd->lcg_state);
       break;
     case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
@@ -504,14 +485,9 @@ ccl_device_inline
       case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
         eval = bsdf_microfacet_ggx_eval_reflect(sc, sd->I, omega_in, pdf);
         break;
-      case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
-      case CLOSURE_BSDF_MICROFACET_MULTI_GGX_FRESNEL_ID:
-        eval = bsdf_microfacet_multi_ggx_eval_reflect(sc, sd->I, omega_in, pdf, &sd->lcg_state);
-        break;
       case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
       case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
-        eval = bsdf_microfacet_multi_ggx_glass_eval_reflect(
-            sc, sd->I, omega_in, pdf, &sd->lcg_state);
+        eval = bsdf_microfacet_ggx_glass_eval_reflect(sc, sd->I, omega_in, pdf);
         break;
       case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
       case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
@@ -589,14 +565,9 @@ ccl_device_inline
       case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
         eval = bsdf_microfacet_ggx_eval_transmit(sc, sd->I, omega_in, pdf);
         break;
-      case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
-      case CLOSURE_BSDF_MICROFACET_MULTI_GGX_FRESNEL_ID:
-        eval = bsdf_microfacet_multi_ggx_eval_transmit(sc, sd->I, omega_in, pdf, &sd->lcg_state);
-        break;
       case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
       case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
-        eval = bsdf_microfacet_multi_ggx_glass_eval_transmit(
-            sc, sd->I, omega_in, pdf, &sd->lcg_state);
+        eval = bsdf_microfacet_ggx_glass_eval_transmit(sc, sd->I, omega_in, pdf);
         break;
       case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
       case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
@@ -653,16 +624,12 @@ ccl_device void bsdf_blur(KernelGlobals kg, ccl_private ShaderClosure *sc, float
   /* TODO: do we want to blur volume closures? */
 #ifdef __SVM__
   switch (sc->type) {
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_FRESNEL_ID:
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
-      bsdf_microfacet_multi_ggx_blur(sc, roughness);
-      break;
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
+    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
+    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
       bsdf_microfacet_ggx_blur(sc, roughness);
       break;
     case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:

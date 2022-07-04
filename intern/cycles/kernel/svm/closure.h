@@ -578,14 +578,8 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
         sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
       else if (type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID) {
         kernel_assert(stack_valid(data_node.w));
-        bsdf->extra = (ccl_private MicrofacetExtra *)closure_alloc_extra(sd,
-                                                                         sizeof(MicrofacetExtra));
-        if (bsdf->extra) {
-          bsdf->extra->color = stack_load_float3(stack, data_node.w);
-          bsdf->extra->cspec0 = make_float3(0.0f, 0.0f, 0.0f);
-          bsdf->extra->clearcoat = 0.0f;
-          sd->flag |= bsdf_microfacet_multi_ggx_setup(bsdf);
-        }
+        float3 color = stack_load_float3(stack, data_node.w);
+        sd->flag |= bsdf_microfacet_multi_ggx_setup(bsdf, sd, color);
       }
       else {
         sd->flag |= bsdf_ashikhmin_shirley_setup(bsdf);
@@ -704,14 +698,10 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
         break;
       }
 
-      ccl_private MicrofacetExtra *extra = (ccl_private MicrofacetExtra *)closure_alloc_extra(
-          sd, sizeof(MicrofacetExtra));
-      if (!extra) {
-        break;
-      }
+      /* TODO: Detect sharp, fallback. */
 
       bsdf->N = N;
-      bsdf->extra = extra;
+      bsdf->extra = NULL;
       bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
 
       float roughness = sqr(param1);
@@ -721,12 +711,10 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
       bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / eta : eta;
 
       kernel_assert(stack_valid(data_node.z));
-      bsdf->extra->color = stack_load_float3(stack, data_node.z);
-      bsdf->extra->cspec0 = make_float3(0.0f, 0.0f, 0.0f);
-      bsdf->extra->clearcoat = 0.0f;
+      float3 color = stack_load_float3(stack, data_node.z);
 
       /* setup bsdf */
-      sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(bsdf);
+      sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(bsdf, sd, color);
       break;
     }
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID: {

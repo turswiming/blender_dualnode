@@ -101,8 +101,6 @@ set(SRC_KERNEL_CLOSURE_HEADERS
   closure/bsdf_diffuse_ramp.h
   closure/bsdf_microfacet.h
   closure/bsdf_microfacet_beckmann.h
-  closure/bsdf_microfacet_multi.h
-  closure/bsdf_microfacet_multi_impl.h
   closure/bsdf_microfacet_glass.h
   closure/bsdf_microfacet_util.h
   closure/bsdf_oren_nayar.h
