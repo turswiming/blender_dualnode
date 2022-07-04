@@ -110,6 +110,37 @@ ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float
   return lerp(lerp(a, b, rough), lerp(c, d, rough), ior);
 }
 
+ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, float ior)
+{
+  bool inv_table = (ior < 1.0f);
+  if (inv_table) {
+    ior = 1.0f / ior;
+  }
+
+  rough = saturatef(1 - rough) * 16.0f;
+  mu = saturatef(mu) * 16.0f;
+  ior = saturatef(sqrtf(0.5f * (ior - 1.0f))) * 16.0f;
+
+  int rough_i = min(15, (int)rough);
+  int rough_i1 = min(15, rough_i + 1);
+  int mu_i = min(15, (int)mu);
+  int mu_i1 = min(15, mu_i + 1);
+  int ior_i = min(15, (int)ior);
+  int ior_i1 = min(15, ior_i + 1);
+
+  rough -= rough_i;
+  mu -= mu_i;
+  ior -= ior_i;
+
+  auto &table = inv_table ? table_ggx_dielectric_inv_E : table_ggx_dielectric_E;
+  float a = lerp(table[ior_i][rough_i][mu_i], table[ior_i][rough_i][mu_i1], mu);
+  float b = lerp(table[ior_i][rough_i1][mu_i], table[ior_i][rough_i1][mu_i1], mu);
+  float c = lerp(table[ior_i1][rough_i][mu_i], table[ior_i1][rough_i][mu_i1], mu);
+  float d = lerp(table[ior_i1][rough_i1][mu_i], table[ior_i1][rough_i1][mu_i1], mu);
+
+  return lerp(lerp(a, b, rough), lerp(c, d, rough), ior);
+}
+
 ccl_device_forceinline float microfacet_ggx_E(float mu, float rough)
 {
   rough = saturatef(1 - rough) * 32.0f;

@@ -604,7 +604,7 @@ ccl_device_inline float principled_v2_specular(ccl_private ShaderData *sd,
   float dielectric = (1.0f - metallic) * (1.0f - transmission);
   sd->flag |= bsdf_microfacet_ggx_fresnel_v2_setup(bsdf, sd, metallic, dielectric);
 
-  return 0.0f;  // TODO energy conservation
+  return microfacet_ggx_dielectric_E(dot(sd->I, N), roughness, ior);
 }
 
 ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
@@ -637,22 +637,22 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
   weight *= 1.0f - principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
   weight *= 1.0f - principled_v2_sheen(kg, sd, stack, weight, N, node_2.z);
 
-  principled_v2_specular(sd,
-                         stack,
-                         weight,
-                         base_color,
-                         roughness,
-                         metallic,
-                         ior,
-                         transmission,
-                         N,
-                         node_2.x,
-                         node_2.y);
+  float dielectric_albedo = principled_v2_specular(sd,
+                                                   stack,
+                                                   weight,
+                                                   base_color,
+                                                   roughness,
+                                                   metallic,
+                                                   ior,
+                                                   transmission,
+                                                   N,
+                                                   node_2.x,
+                                                   node_2.y);
   weight *= 1.0f - metallic;
 
   // TODO Glass
 
-  weight *= 1.0f - transmission;
+  weight *= (1.0f - transmission) * (1.0f - dielectric_albedo);
 
   principled_v2_diffuse(sd, weight, base_color, 1.0f, N);
 }
