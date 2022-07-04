@@ -109,7 +109,7 @@ ccl_device_forceinline float microfacet_ggx_glass_E(float mu, float rough, float
   float c = lerp(table[ior_i1][rough_i][mu_i], table[ior_i1][rough_i][mu_i1], mu);
   float d = lerp(table[ior_i1][rough_i1][mu_i], table[ior_i1][rough_i1][mu_i1], mu);
 
-  return lerp(lerp(a, b, rough), lerp(c, d, rough), ior);
+  return saturatef(lerp(lerp(a, b, rough), lerp(c, d, rough), ior));
 }
 
 ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, float ior)
@@ -142,7 +142,7 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(float mu, float rough, 
   float c = lerp(table[ior_i1][rough_i][mu_i], table[ior_i1][rough_i][mu_i1], mu);
   float d = lerp(table[ior_i1][rough_i1][mu_i], table[ior_i1][rough_i1][mu_i1], mu);
 
-  return lerp(lerp(a, b, rough), lerp(c, d, rough), ior);
+  return saturatef(lerp(lerp(a, b, rough), lerp(c, d, rough), ior));
 }
 
 ccl_device_forceinline float microfacet_ggx_E(float mu, float rough)
@@ -160,7 +160,7 @@ ccl_device_forceinline float microfacet_ggx_E(float mu, float rough)
 
   float a = lerp(table_ggx_E[rough_i][mu_i], table_ggx_E[rough_i][mu_i1], mu);
   float b = lerp(table_ggx_E[rough_i1][mu_i], table_ggx_E[rough_i1][mu_i1], mu);
-  return lerp(a, b, rough);
+  return saturatef(lerp(a, b, rough));
 }
 
 ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
@@ -169,7 +169,7 @@ ccl_device_forceinline float microfacet_ggx_E_avg(float rough)
   int rough_i = min(31, (int)rough);
   int rough_i1 = min(31, rough_i + 1);
   rough -= rough_i;
-  return lerp(table_ggx_E_avg[rough_i], table_ggx_E_avg[rough_i1], rough);
+  return saturatef(lerp(table_ggx_E_avg[rough_i], table_ggx_E_avg[rough_i1], rough));
 }
 
 ccl_device_inline float3 metallic_Fss(float3 F0, float3 F90, float falloff)

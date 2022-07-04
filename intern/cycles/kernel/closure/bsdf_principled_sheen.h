@@ -118,7 +118,7 @@ ccl_device_forceinline float sheen_v2_E(float mu, float rough)
 
   float a = lerp(table_sheen_E[rough_i][mu_i], table_sheen_E[rough_i][mu_i1], mu);
   float b = lerp(table_sheen_E[rough_i1][mu_i], table_sheen_E[rough_i1][mu_i1], mu);
-  return lerp(a, b, rough);
+  return saturatef(lerp(a, b, rough));
 }
 
 ccl_device int bsdf_principled_sheen_setup(ccl_private const ShaderData *sd,
