@@ -5,6 +5,63 @@
 
 CCL_NAMESPACE_BEGIN
 
+ccl_device_inline void principled_v1_specular(KernelGlobals kg,
+                                              ccl_private ShaderData *sd,
+                                              float3 weight,
+                                              ClosureType distribution,
+                                              float3 base_color,
+                                              float3 N,
+                                              float3 T,
+                                              float specular_weight,
+                                              float specular,
+                                              float metallic,
+                                              float roughness,
+                                              float anisotropic,
+                                              float specular_tint)
+{
+  if ((specular_weight <= CLOSURE_WEIGHT_CUTOFF) ||
+      (specular + metallic <= CLOSURE_WEIGHT_CUTOFF)) {
+    return;
+  }
+
+  ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+      sd, sizeof(MicrofacetBsdf), specular_weight * weight);
+  if (bsdf == NULL) {
+    return;
+  }
+  ccl_private MicrofacetExtra *extra = (ccl_private MicrofacetExtra *)closure_alloc_extra(
+      sd, sizeof(MicrofacetExtra));
+  if (extra == NULL) {
+    return;
+  }
+
+  bsdf->N = N;
+  bsdf->ior = (2.0f / (1.0f - safe_sqrtf(0.08f * specular))) - 1.0f;
+  bsdf->T = T;
+  bsdf->extra = extra;
+
+  float aspect = safe_sqrtf(1.0f - anisotropic * 0.9f);
+
+  bsdf->alpha_x = sqr(roughness) / aspect;
+  bsdf->alpha_y = sqr(roughness) * aspect;
+
+  // normalize lum. to isolate hue+sat
+  float m_cdlum = linear_rgb_to_gray(kg, base_color);
+  float3 m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_float3();
+  float3 specular_color = lerp(one_float3(), m_ctint, specular_tint);
+
+  bsdf->extra->cspec0 = lerp(specular * 0.08f * specular_color, base_color, metallic);
+  bsdf->extra->color = base_color;
+  bsdf->extra->clearcoat = 0.0f;
+
+  /* setup bsdf */
+  if (distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID ||
+      roughness <= 0.075f) /* use single-scatter GGX */
+    sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
+  else /* use multi-scatter GGX */
+    sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(bsdf, sd);
+}
+
 ccl_device_inline void principled_v1_glass_refl(ccl_private ShaderData *sd,
                                                 float3 weight,
                                                 float3 base_color,
@@ -390,55 +447,23 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
 
   /* specular reflection */
 #ifdef __CAUSTICS_TRICKS__
-  if (kernel_data.integrator.caustics_reflective || (path_flag & PATH_RAY_DIFFUSE) == 0) {
-#endif
-    if (specular_weight > CLOSURE_WEIGHT_CUTOFF &&
-        (specular > CLOSURE_WEIGHT_CUTOFF || metallic > CLOSURE_WEIGHT_CUTOFF)) {
-      float3 spec_weight = weight * specular_weight;
-
-      ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-          sd, sizeof(MicrofacetBsdf), spec_weight);
-      ccl_private MicrofacetExtra *extra = (bsdf != NULL) ?
-                                               (ccl_private MicrofacetExtra *)closure_alloc_extra(
-                                                   sd, sizeof(MicrofacetExtra)) :
-                                               NULL;
-
-      if (bsdf && extra) {
-        bsdf->N = N;
-        bsdf->ior = (2.0f / (1.0f - safe_sqrtf(0.08f * specular))) - 1.0f;
-        bsdf->T = T;
-        bsdf->extra = extra;
-
-        float aspect = safe_sqrtf(1.0f - anisotropic * 0.9f);
-        float r2 = roughness * roughness;
-
-        bsdf->alpha_x = r2 / aspect;
-        bsdf->alpha_y = r2 * aspect;
-
-        float m_cdlum = 0.3f * base_color.x + 0.6f * base_color.y +
-                        0.1f * base_color.z;  // luminance approx.
-        float3 m_ctint = m_cdlum > 0.0f ?
-                             base_color / m_cdlum :
-                             make_float3(1.0f, 1.0f, 1.0f);  // normalize lum. to isolate hue+sat
-        float3 tmp_col = make_float3(1.0f, 1.0f, 1.0f) * (1.0f - specular_tint) +
-                         m_ctint * specular_tint;
-
-        bsdf->extra->cspec0 = (specular * 0.08f * tmp_col) * (1.0f - metallic) +
-                              base_color * metallic;
-        bsdf->extra->color = base_color;
-        bsdf->extra->clearcoat = 0.0f;
-
-        /* setup bsdf */
-        if (distribution == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID ||
-            roughness <= 0.075f) /* use single-scatter GGX */
-          sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
-        else /* use multi-scatter GGX */
-          sd->flag |= bsdf_microfacet_multi_ggx_fresnel_setup(bsdf, sd);
-      }
-    }
-#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
+    specular_weight = 0.0f;
   }
 #endif
+  principled_v1_specular(kg,
+                         sd,
+                         weight,
+                         distribution,
+                         base_color,
+                         N,
+                         T,
+                         specular_weight,
+                         specular,
+                         metallic,
+                         roughness,
+                         anisotropic,
+                         specular_tint);
 
   /* glass */
 #ifdef __CAUSTICS_TRICKS__
