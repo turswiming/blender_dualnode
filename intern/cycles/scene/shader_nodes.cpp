@@ -2744,7 +2744,10 @@ NODE_DEFINE(PrincipledBsdfNode)
   SOCKET_IN_COLOR(base_color, "Base Color", make_float3(0.8f, 0.8f, 0.8f));
   SOCKET_IN_COLOR(subsurface_color, "Subsurface Color", make_float3(0.8f, 0.8f, 0.8f));
   SOCKET_IN_FLOAT(metallic, "Metallic", 0.0f);
+  SOCKET_IN_FLOAT(metallic_falloff, "Metallic Falloff", 0.2f);
+  SOCKET_IN_COLOR(metallic_edge, "Metallic Edge", make_float3(1.0f, 1.0f, 1.0f));
   SOCKET_IN_FLOAT(subsurface, "Subsurface", 0.0f);
+  SOCKET_IN_FLOAT(subsurface_scale, "Subsurface Scale", 0.0f);
   SOCKET_IN_VECTOR(subsurface_radius, "Subsurface Radius", make_float3(0.1f, 0.1f, 0.1f));
   SOCKET_IN_FLOAT(subsurface_ior, "Subsurface IOR", 1.4f);
   SOCKET_IN_FLOAT(subsurface_anisotropy, "Subsurface Anisotropy", 0.0f);
@@ -2754,8 +2757,10 @@ NODE_DEFINE(PrincipledBsdfNode)
   SOCKET_IN_FLOAT(anisotropic, "Anisotropic", 0.0f);
   SOCKET_IN_FLOAT(sheen, "Sheen", 0.0f);
   SOCKET_IN_FLOAT(sheen_tint, "Sheen Tint", 0.0f);
+  SOCKET_IN_FLOAT(sheen_roughness, "Sheen Roughness", 0.5f);
   SOCKET_IN_FLOAT(clearcoat, "Clearcoat", 0.0f);
   SOCKET_IN_FLOAT(clearcoat_roughness, "Clearcoat Roughness", 0.03f);
+  SOCKET_IN_COLOR(clearcoat_tint, "Clearcoat Tint", make_float3(1.0f, 1.0f, 1.0f));
   SOCKET_IN_FLOAT(ior, "IOR", 0.0f);
   SOCKET_IN_FLOAT(transmission, "Transmission", 0.0f);
   SOCKET_IN_FLOAT(transmission_roughness, "Transmission Roughness", 0.0f);
@@ -2913,7 +2918,38 @@ void PrincipledBsdfNode::compile_v2(SVMCompiler &compiler)
   /* If we ever have more than 255 closures, the packing here needs to change. */
   static_assert(NBUILTIN_CLOSURES < SVM_STACK_SIZE);
 
-  assert(false);
+  uint base_1 = compiler.encode_uchar4(closure,
+                                       compiler.stack_assign(input("Base Color")),
+                                       compiler.stack_assign_if_linked(input("Normal")),
+                                       compiler.closure_mix_weight_offset());
+  uint base_2 = compiler.encode_uchar4(compiler.stack_assign(input("Roughness")),
+                                       compiler.stack_assign(input("Metallic")),
+                                       compiler.stack_assign(input("IOR")),
+                                       compiler.stack_assign(input("Transmission")));
+  uint sss = compiler.encode_uchar4(compiler.stack_assign(input("Subsurface Scale")),
+                                    compiler.stack_assign(input("Subsurface Anisotropy")),
+                                    compiler.stack_assign(input("Subsurface Radius")),
+                                    SVM_STACK_INVALID);
+  uint metallic = compiler.encode_uchar4(compiler.stack_assign(input("Metallic Falloff")),
+                                         compiler.stack_assign(input("Metallic Edge")),
+                                         SVM_STACK_INVALID,
+                                         distribution);
+  uint specular = compiler.encode_uchar4(compiler.stack_assign(input("Anisotropic")),
+                                         compiler.stack_assign(input("Anisotropic Rotation")),
+                                         compiler.stack_assign_if_linked(input("Tangent")),
+                                         SVM_STACK_INVALID);
+  uint sheen = compiler.encode_uchar4(compiler.stack_assign(input("IOR")),
+                                      compiler.stack_assign(input("Sheen")),
+                                      compiler.stack_assign(input("Sheen Tint")),
+                                      compiler.stack_assign(input("Sheen Roughness")));
+  uint clearcoat = compiler.encode_uchar4(
+      compiler.stack_assign(input("Clearcoat")),
+      compiler.stack_assign(input("Clearcoat Roughness")),
+      compiler.stack_assign(input("Clearcoat Tint")),
+      compiler.stack_assign_if_linked(input("Clearcoat Normal")));
+
+  compiler.add_node(NODE_CLOSURE_BSDF, base_1, base_2, sss);
+  compiler.add_node(metallic, specular, sheen, clearcoat);
 }
 
 bool PrincipledBsdfNode::has_integrator_dependency()
