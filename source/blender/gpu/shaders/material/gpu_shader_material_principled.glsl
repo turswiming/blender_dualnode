@@ -15,11 +15,14 @@ float principled_sheen(float NV)
 
 void node_bsdf_principled(vec4 base_color,
                           float subsurface,
+                          float subsurface_scale, //todo
                           vec3 subsurface_radius,
                           vec4 subsurface_color,
                           float subsurface_ior,
                           float subsurface_anisotropy,
                           float metallic,
+                          vec4 metallic_edge, //todo
+                          float metallic_falloff, //todo
                           float specular,
                           float specular_tint,
                           float roughness,
@@ -27,8 +30,10 @@ void node_bsdf_principled(vec4 base_color,
                           float anisotropic_rotation,
                           float sheen,
                           float sheen_tint,
+                          float sheen_roughness, //todo
                           float clearcoat,
                           float clearcoat_roughness,
+                          vec4 clearcoat_tint, //todo
                           float ior,
                           float transmission,
                           float transmission_roughness,
