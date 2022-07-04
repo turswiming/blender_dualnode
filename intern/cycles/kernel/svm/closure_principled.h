@@ -450,16 +450,16 @@ ccl_device_inline void principled_v2_diffuse(
   sd->flag |= bsdf_diffuse_setup(bsdf);
 }
 
-ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
-                                                ccl_private ShaderData *sd,
-                                                ccl_private float *stack,
-                                                float3 weight,
-                                                int path_flag,
-                                                uint data)
+ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
+                                                 ccl_private ShaderData *sd,
+                                                 ccl_private float *stack,
+                                                 float3 weight,
+                                                 int path_flag,
+                                                 uint data)
 {
 #ifdef __CAUSTICS_TRICKS__
   if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
-    return 0.0f;
+    return one_float3();
   }
 #endif
 
@@ -468,7 +468,7 @@ ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
   float clearcoat = saturatef(stack_load_float(stack, clearcoat_offset));
 
   if (clearcoat <= CLOSURE_WEIGHT_CUTOFF) {
-    return 0.0f;
+    return one_float3();
   }
 
   float roughness = saturatef(stack_load_float(stack, roughness_offset));
@@ -481,21 +481,35 @@ ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
   if (tint != one_float3()) {
     /* Tint is normalized to perpendicular incidence.
      * Therefore, if we define the coating thickness as length 1, the length along the ray is
-     * t = tan(angle(N, I)) = tan(acos(dotNI)) = sqrt(1-dotNI^2) / dotNI.
+     * t = sqrt(1+tan^2(angle(N, I))) = sqrt(1+tan^2(acos(dotNI))) = 1 / dotNI.
      * From Beer's law, we have T = exp(-sigma_e * t).
      * Therefore, tint = exp(-sigma_e * 1) (per def.), so -sigma_e = log(tint).
      * From this, T = exp(log(tint) * t) = exp(log(tint)) ^ t = tint ^ t;
+     * Additionally, the strength input controls the optical depth for a smooth fade
+     * from maximum to zero impact.
+     *
+     * Note that this is only an approximation - in particular, the exit path of the
+     * light that bounces off the main layer is not accounted for.
+     * Ideally, we should be attenuating by sqrt(tint) both ways. Currently, the model
+     * is accurate for perfect mirrors since both entry and exit have the same cosNI there,
+     * but if e.g. the base is diffuse and we look at it from a grazing angle, in reality
+     * the cosNI of the exit bounce will be much higher on average, so the tint would be
+     * less extreme.
+     * TODO: Maybe account for this by setting
+     * OD := 0.5*OD + 0.5*lerp(1.59, OD, metallic * (1 - roughness)),
+     * where 1.59 is the closest numerical fit for average optical depth on lambertian reflectors.
+     * That way, mirrors preserve their look, but diffuse-ish objects have a more natural behavior.
      */
     float cosNI = dot(sd->I, N);
-    float optical_depth = safe_sqrtf(1.0f - sqr(cosNI)) / cosNI;
-    tint = pow(tint, optical_depth);
+    float optical_depth = 1.0f / cosNI;
+    tint = pow(tint, optical_depth * clearcoat);
   }
 
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-      sd, sizeof(MicrofacetBsdf), tint * clearcoat * weight);
+      sd, sizeof(MicrofacetBsdf), clearcoat * weight);
 
   if (bsdf == NULL) {
-    return 0.0f;
+    return one_float3();
   }
 
   bsdf->N = N;
@@ -508,7 +522,7 @@ ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_ggx_clearcoat_v2_setup(bsdf, sd);
 
-  return clearcoat_E(dot(sd->I, N), roughness) * clearcoat;
+  return tint * (1.0f - clearcoat_E(dot(sd->I, N), roughness) * clearcoat);
 }
 
 ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
@@ -523,16 +537,16 @@ ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
 
   float sheen = stack_load_float(stack, sheen_offset);
   if (sheen <= CLOSURE_WEIGHT_CUTOFF) {
-    return 0.0f;
+    return 1.0f;
   }
 
   float3 tint = stack_load_float3(stack, sheen_tint_offset);
   float roughness = stack_load_float(stack, sheen_roughness_offset);
   ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
-      sd, sizeof(PrincipledSheenBsdf), sheen * weight); // TODO include tint
+      sd, sizeof(PrincipledSheenBsdf), sheen * weight);  // TODO include tint
 
   if (bsdf == NULL) {
-    return 0.0f;
+    return 1.0f;
   }
 
   bsdf->N = N;
@@ -541,7 +555,7 @@ ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
   /* setup bsdf */
   sd->flag |= bsdf_principled_sheen_v2_setup(sd, bsdf);
 
-  return sheen * bsdf->avg_value; // TODO include tint
+  return 1.0f - sheen * bsdf->avg_value;  // TODO include tint
 }
 
 ccl_device_inline float principled_v2_specular(ccl_private ShaderData *sd,
@@ -634,8 +648,8 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
   float ior = fmaxf(stack_load_float(stack, ior_offset), 1e-5f);
   float transmission = saturatef(stack_load_float(stack, transmission_offset));
 
-  weight *= 1.0f - principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
-  weight *= 1.0f - principled_v2_sheen(kg, sd, stack, weight, N, node_2.z);
+  weight *= principled_v2_clearcoat(kg, sd, stack, weight, path_flag, node_2.w);
+  weight *= principled_v2_sheen(kg, sd, stack, weight, N, node_2.z);
 
   float dielectric_albedo = principled_v2_specular(sd,
                                                    stack,
