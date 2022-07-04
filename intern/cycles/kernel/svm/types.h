@@ -523,6 +523,8 @@ typedef enum ClosureType {
   CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID,
   /* GTR1 for Clearcoat (TODO: Rename, is not really GGX) */
   CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID,
+  /* GGX with dielectric Fresnel term (used for Clearcoat for v2) */
+  CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID,
   /* Virtual closure, gets turned into regular GGX with adjusted weight */
   CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID,
   CLOSURE_BSDF_MICROFACET_BECKMANN_ID,

@@ -506,7 +506,7 @@ ccl_device_inline float principled_v2_clearcoat(KernelGlobals kg,
   bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
 
   /* setup bsdf */
-  sd->flag |= bsdf_microfacet_ggx_clearcoat_setup(bsdf, sd);
+  sd->flag |= bsdf_microfacet_ggx_clearcoat_v2_setup(bsdf, sd);
 
   return 0.04f * clearcoat;  // TODO better approx
 }

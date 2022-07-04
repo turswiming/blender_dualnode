@@ -56,6 +56,10 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
     return interpolate_fresnel_color(L, H, bsdf->ior, make_float3(0.04f, 0.04f, 0.04f));
   }
+  else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID) {
+    float f = fresnel_dielectric_cos(dot(H, L), bsdf->ior);
+    return make_float3(f, f, f);
+  }
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID) {
     MicrofacetExtrav2 *extra = (MicrofacetExtrav2*) bsdf->extra;
     float cosHL = dot(H, L);
@@ -214,6 +218,22 @@ ccl_device int bsdf_microfacet_ggx_clearcoat_setup(ccl_private MicrofacetBsdf *b
   bsdf->alpha_y = bsdf->alpha_x;
 
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID;
+
+  bsdf_microfacet_fresnel_color(sd, bsdf);
+
+  return SD_BSDF | SD_BSDF_HAS_EVAL;
+}
+
+ccl_device int bsdf_microfacet_ggx_clearcoat_v2_setup(ccl_private MicrofacetBsdf *bsdf,
+                                                      ccl_private const ShaderData *sd)
+{
+  bsdf->alpha_x = saturatef(bsdf->alpha_x);
+  bsdf->alpha_y = bsdf->alpha_x;
+
+  bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID;
+
+  float Fss = dielectric_fresnel_Fss(bsdf->ior);
+  bsdf->weight *= microfacet_ggx_albedo_scaling_float(bsdf, sd, Fss);
 
   bsdf_microfacet_fresnel_color(sd, bsdf);
 
