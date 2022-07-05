@@ -29,7 +29,7 @@ uint outline_colorid_get(void)
 
 void main()
 {
-  bool is_persp = (ProjectionMatrix[3][3] == 0.0);
+  bool is_persp = (drw_view.winmat[3][3] == 0.0);
   float time, thick_time, thickness;
   vec3 center_world_pos, world_pos, tan, binor;
 
