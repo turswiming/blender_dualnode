@@ -74,7 +74,13 @@ ccl_device float3 bsdf_microfacet_ggx_glass_eval_reflect(ccl_private const Shade
   ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
   float alpha_x = bsdf->alpha_x;
   float alpha_y = bsdf->alpha_y;
-  kernel_assert(alpha_x * alpha_y > 1e-7f);
+  float alpha2 = alpha_x * alpha_y;
+
+  if (alpha2 <= 1e-7f) {
+    *pdf = 0.0f;
+    return zero_float3();
+  }
+
   float3 N = bsdf->N;
 
   float cosNO = dot(N, I);
@@ -85,7 +91,6 @@ ccl_device float3 bsdf_microfacet_ggx_glass_eval_reflect(ccl_private const Shade
   }
 
   float3 m = normalize(omega_in + I);
-  float alpha2 = alpha_x * alpha_y;
   float D = microfacet_ggx_D(dot(N, m), alpha2);
   float lambdaO = microfacet_ggx_lambda(cosNO, alpha2);
   float lambdaI = microfacet_ggx_lambda(cosNI, alpha2);
@@ -111,9 +116,14 @@ ccl_device float3 bsdf_microfacet_ggx_glass_eval_transmit(ccl_private const Shad
   ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
   float alpha_x = bsdf->alpha_x;
   float alpha_y = bsdf->alpha_y;
-  kernel_assert(alpha_x * alpha_y > 1e-7f);
+  float alpha2 = alpha_x * alpha_y;
   float eta = bsdf->ior;
   float3 N = bsdf->N;
+
+  if (alpha2 <= 1e-7f) {
+    *pdf = 0.0f;
+    return zero_float3();
+  }
 
   float cosNO = dot(N, I);
   float cosNI = dot(N, omega_in);
@@ -134,7 +144,6 @@ ccl_device float3 bsdf_microfacet_ggx_glass_eval_transmit(ccl_private const Shad
     return zero_float3();
   }
 
-  float alpha2 = alpha_x * alpha_y;
   float D = microfacet_ggx_D(dot(N, m), alpha2);
   float lambdaO = microfacet_ggx_lambda(cosNO, alpha2);
   float lambdaI = microfacet_ggx_lambda(cosNI, alpha2);
@@ -168,7 +177,6 @@ ccl_device int bsdf_microfacet_ggx_glass_sample(ccl_private const ShaderClosure 
   ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
   float alpha_x = bsdf->alpha_x;
   float alpha_y = bsdf->alpha_y;
-  kernel_assert(alpha_x * alpha_y > 1e-7f);
   float eta = bsdf->ior;
   float3 N = bsdf->N;
   int label;
@@ -220,8 +228,26 @@ ccl_device int bsdf_microfacet_ggx_glass_sample(ccl_private const ShaderClosure 
   float randw = hash_float2_to_float(make_float2(randu, randv));
   bool do_reflect = randw < fresnel;
 
-  /* Common microfacet model terms. */
   float alpha2 = alpha_x * alpha_y;
+  if (alpha2 <= 1e-7f) {
+    /* Specular case, just return some high number for MIS */
+    *pdf = 1e6f;
+    *eval = make_float3(1e6f, 1e6f, 1e6f);
+
+    *omega_in = do_reflect ? R : T;
+#ifdef __RAY_DIFFERENTIALS__
+    *domega_in_dx = do_reflect ? dRdx : dTdx;
+    *domega_in_dy = do_reflect ? dRdy : dTdy;
+#endif
+
+    if (bsdf->type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID) {
+      *eval *= do_reflect ? reflection_color(bsdf, *omega_in, m) : bsdf->extra->color;
+    }
+
+    return LABEL_SINGULAR | (do_reflect ? LABEL_REFLECT : LABEL_TRANSMIT);
+  }
+
+  /* Common microfacet model terms. */
   float D = microfacet_ggx_D(cosThetaM, alpha2);
   float lambdaO = microfacet_ggx_lambda(cosNO, alpha2);
 
@@ -269,7 +295,7 @@ ccl_device int bsdf_microfacet_ggx_glass_sample(ccl_private const ShaderClosure 
   *eval = make_float3(out, out, out);
 
   if (bsdf->type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID) {
-    *eval *= (label & LABEL_REFLECT) ? reflection_color(bsdf, *omega_in, m) : bsdf->extra->color;
+    *eval *= do_reflect ? reflection_color(bsdf, *omega_in, m) : bsdf->extra->color;
   }
   return label;
 }
