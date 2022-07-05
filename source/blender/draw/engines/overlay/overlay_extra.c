@@ -1527,8 +1527,7 @@ void OVERLAY_extra_cache_populate(OVERLAY_Data *vedata, Object *ob)
   const bool is_paint_mode = (draw_ctx->object_mode &
                               (OB_MODE_ALL_PAINT | OB_MODE_ALL_PAINT_GPENCIL)) != 0;
   const bool from_dupli = (ob->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI)) != 0;
-  const bool has_bounds = !ELEM(
-      ob->type, OB_LAMP, OB_CAMERA, OB_EMPTY, OB_SPEAKER, OB_LIGHTPROBE, OB_CURVES);
+  const bool has_bounds = !ELEM(ob->type, OB_LAMP, OB_CAMERA, OB_EMPTY, OB_SPEAKER, OB_LIGHTPROBE);
   const bool has_texspace = has_bounds &&
                             !ELEM(ob->type, OB_EMPTY, OB_LATTICE, OB_ARMATURE, OB_GPENCIL);
 
