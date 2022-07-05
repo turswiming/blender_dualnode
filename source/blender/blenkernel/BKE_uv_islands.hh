@@ -699,12 +699,25 @@ struct UVIsland {
     return result;
   }
 
+  UVEdge *lookup (const UVEdge&edge) {
+    UVVertex * found_vertex = lookup(*edge.vertices[0]);
+    if (found_vertex == nullptr) {
+      return nullptr;
+    }
+    for (UVEdge*e: found_vertex->uv_edges) {
+      UVVertex*other_vertex = e->get_other_uv_vertex(found_vertex->vertex);
+      if (other_vertex->vertex == edge.vertices[1]->vertex && other_vertex->uv == edge.vertices[1]->uv) {
+        return e;
+      }
+    }
+    return nullptr;
+  }
+
   UVEdge *lookup_or_create(const UVEdge &edge)
   {
-    for (UVEdge &uv_edge : uv_edges) {
-      if (uv_edge.has_same_uv_vertices(edge)) {
-        return &uv_edge;
-      }
+    UVEdge *found_edge = lookup(edge);
+    if (found_edge != nullptr) {
+      return found_edge;
     }
 
     uv_edges.append(edge);
