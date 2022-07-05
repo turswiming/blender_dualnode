@@ -645,15 +645,11 @@ struct UVIsland {
    */
   Vector<UVBorder> borders;
 
-  /* UV bounds of this island to add early exits. */
-  rctf uv_bounds;
-
   UVIsland()
   {
     uv_vertices.reserve(100000);
     uv_edges.reserve(100000);
     uv_primitives.reserve(100000);
-    BLI_rctf_init_minmax(&uv_bounds);
   }
 
   UVPrimitive *add_primitive(MeshPrimitive &primitive)
@@ -671,7 +667,6 @@ struct UVIsland {
       uv_primitive_ptr->edges.append(uv_edge);
       uv_edge->append_to_uv_vertices();
       uv_edge->uv_primitives.append(uv_primitive_ptr);
-      BLI_rctf_do_minmax_v(&uv_bounds, v1.uv);
     }
     return uv_primitive_ptr;
   }
@@ -738,12 +733,6 @@ struct UVIsland {
 
   bool has_shared_edge(const MeshPrimitive &primitive) const
   {
-    /* Early exit, uv bounds of the primitive should intersect with the uv bounds of the island. */
-    rctf prim_uv_bounds = primitive.uv_bounds();
-    if (!BLI_rctf_isect(&uv_bounds, &prim_uv_bounds, nullptr)) {
-      return false;
-    }
-
     for (const UVPrimitive &prim : uv_primitives) {
       if (prim.has_shared_edge(primitive)) {
         return true;
