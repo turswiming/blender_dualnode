@@ -68,6 +68,12 @@ struct MeshPrimitive {
   Vector<MeshEdge *, 3> edges;
   Vector<MeshUVVert, 3> vertices;
 
+  /**
+   * UV island this primitive belongs to. This is used to speed up the initial uv island
+   * extraction, but should not be used when extending uv islands.
+   */
+  int64_t uv_island_id;
+
   const MeshUVVert &get_uv_vert(const MeshVertex *vert) const
   {
     for (const MeshUVVert &uv_vert : vertices) {
@@ -110,6 +116,19 @@ struct MeshPrimitive {
     }
     return result;
   }
+
+  bool has_shared_uv_edge(const MeshPrimitive *other) const
+  {
+    int shared_uv_verts = 0;
+    for (const MeshUVVert &vert : vertices) {
+      for (const MeshUVVert &other_vert : other->vertices) {
+        if (vert.uv == other_vert.uv) {
+          shared_uv_verts += 1;
+        }
+      }
+    }
+    return shared_uv_verts >= 2;
+  }
 };
 
 /** Wrapper to contain all required mesh data. */
@@ -125,6 +144,7 @@ struct MeshData {
   Vector<MeshPrimitive> primitives;
   Vector<MeshEdge> edges;
   Vector<MeshVertex> vertices;
+  int64_t uv_island_len;
 
   explicit MeshData(const MLoopTri *looptri,
                     const int64_t looptri_len,
@@ -141,6 +161,7 @@ struct MeshData {
     init_vertices();
     init_primitives();
     init_edges();
+    init_primitive_uv_island_ids();
 
 #ifdef VALIDATE
     for (const MeshVertex &v : vertices) {
@@ -194,7 +215,7 @@ struct MeshData {
   {
     /* TODO: use actual sized. */
     edges.reserve(looptri_len * 2);
-    EdgeHash *eh = BLI_edgehash_new_ex(__func__, looptri_len * 2);
+    EdgeHash *eh = BLI_edgehash_new_ex(__func__, looptri_len * 3);
     for (int64_t i = 0; i < looptri_len; i++) {
       const MLoopTri &tri = looptri[i];
       MeshPrimitive &primitive = primitives[i];
@@ -225,6 +246,55 @@ struct MeshData {
       }
     }
     BLI_edgehash_free(eh, nullptr);
+  }
+
+  static const int64_t INVALID_UV_ISLAND_ID = -1;
+  /**
+   * NOTE: doesn't support weird topology where unconnected mesh primitives share the same uv
+   * island. For a accurate implementation we should use uv_prim_lookup.
+   */
+  static void _extract_uv_neighbors(Vector<MeshPrimitive *> &prims_to_add,
+                                    MeshPrimitive *primitive)
+  {
+    for (MeshEdge *edge : primitive->edges) {
+      for (MeshPrimitive *other_primitive : edge->primitives) {
+        if (primitive == other_primitive) {
+          continue;
+        }
+        if (other_primitive->uv_island_id != MeshData::INVALID_UV_ISLAND_ID) {
+          continue;
+        }
+
+        if (primitive->has_shared_uv_edge(other_primitive)) {
+          prims_to_add.append(other_primitive);
+        }
+      }
+    }
+  }
+
+  void init_primitive_uv_island_ids()
+  {
+    for (MeshPrimitive &primitive : primitives) {
+      primitive.uv_island_id = INVALID_UV_ISLAND_ID;
+    }
+
+    int64_t uv_island_id = 0;
+    Vector<MeshPrimitive *> prims_to_add;
+    for (MeshPrimitive &primitive : primitives) {
+      /* Early exit when uv island id is already extracted during uv neighbor extractions. */
+      if (primitive.uv_island_id != INVALID_UV_ISLAND_ID) {
+        continue;
+      }
+
+      prims_to_add.append(&primitive);
+      while (!prims_to_add.is_empty()) {
+        MeshPrimitive *primitive = prims_to_add.pop_last();
+        primitive->uv_island_id = uv_island_id;
+        _extract_uv_neighbors(prims_to_add, primitive);
+      }
+      uv_island_id++;
+    }
+    uv_island_len = uv_island_id;
   }
 };
 
@@ -602,7 +672,6 @@ struct UVIsland {
       uv_edge->append_to_uv_vertices();
       uv_edge->uv_primitives.append(uv_primitive_ptr);
       BLI_rctf_do_minmax_v(&uv_bounds, v1.uv);
-      BLI_rctf_do_minmax_v(&uv_bounds, v2.uv);
     }
     return uv_primitive_ptr;
   }
@@ -692,20 +761,6 @@ struct UVIsland {
     }
   }
 
-  /**
-   * Join 2 uv islands together where the primitive gives the location that joins the two islands
-   * together.
-   *
-   * NOTE: this cannot be used to join two islands that have multiple shared primitives, or
-   * connecting via multiple primitives.
-   * */
-  void join(const UVIsland &other)
-  {
-    for (const UVPrimitive &other_prim : other.uv_primitives) {
-      append(other_prim);
-    }
-  }
-
 #ifdef VALIDATE
   void validate_primitives() const
   {
@@ -772,24 +827,27 @@ struct UVIslands {
   explicit UVIslands(MeshData &mesh_data)
   {
     TIMEIT_START(uv_islands);
-    islands.reserve(1000);
+    islands.reserve(mesh_data.uv_island_len);
+
+    for (int64_t uv_island_id = 0; uv_island_id < mesh_data.uv_island_len; uv_island_id++) {
+      islands.append(UVIsland());
+      UVIsland *uv_island = &islands.last();
+      for (MeshPrimitive &primitive : mesh_data.primitives) {
+        if (primitive.uv_island_id == uv_island_id) {
+          uv_island->add_primitive(primitive);
+        }
+      }
+    }
 
 #ifdef DEBUG_SVG
     std::ofstream of;
     of.open("/tmp/islands.svg");
     svg_header(of);
-    int step = 0;
-    for (MeshPrimitive &primitive : mesh_data.primitives) {
-      add(primitive);
-      svg(of, *this, step++);
-    }
+    svg(of, *this, 0);
     svg_footer(of);
     of.close();
-#else
-    for (MeshPrimitive &primitive : mesh_data.primitives) {
-      add(primitive);
-    }
 #endif
+
     TIMEIT_END(uv_islands);
   }
 
@@ -849,47 +907,8 @@ struct UVIslands {
     TIMEIT_END(extend_borders);
   }
 
- private:
-  void add(MeshPrimitive &primitive)
-  {
-    Vector<uint64_t> extended_islands;
-    for (uint64_t index = 0; index < islands.size(); index++) {
-      UVIsland &island = islands[index];
-      if (island.has_shared_edge(primitive)) {
-        extended_islands.append(index);
-      }
-    }
-
-    if (extended_islands.size() > 0) {
-      UVIsland &island = islands[extended_islands[0]];
-      island.add_primitive(primitive);
-
-      /* `extended_islands` can hold upto 3 islands that are connected with the given tri.
-       * they can be joined to a single island, using the first as its target. */
-      for (uint64_t index = 1; index < extended_islands.size(); index++) {
-        island.join(islands[extended_islands[index]]);
-      }
-
-      /* remove the islands that have been joined, starting at the end. */
-      for (uint64_t index = extended_islands.size() - 1; index > 0; index--) {
-        islands.remove(extended_islands[index]);
-      }
-
-      return;
-    }
-
-    /* if the tri has not been added we can create a new island. */
-    UVIsland *island = create_island();
-    island->add_primitive(primitive);
-  }
-
-  UVIsland *create_island()
-  {
-    islands.append(UVIsland());
-    return &islands.last();
-  }
-
 #ifdef VALIDATE
+ private:
   bool validate() const
   {
     /* After operations it is not allowed that islands share any edges. In that case it should
