@@ -611,6 +611,10 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
 {
   // TODO Handle caustics flag
 
+  if (metallic + (1.0f - transmission) <= CLOSURE_WEIGHT_CUTOFF) {
+    return 0.0f;
+  }
+
   uint falloff_offset, edge_offset, dummy;
   uint aniso_offset, rotation_offset, tangent_offset;
   svm_unpack_node_uchar4(data1, &falloff_offset, &edge_offset, &dummy, &dummy);
