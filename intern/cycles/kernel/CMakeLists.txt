@@ -540,7 +540,8 @@ endif()
 
 # HIP module
 
-if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
+# TODO: Re-enable HIP and figure out compiler crash
+if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP AND FALSE)
   # build for each arch
   set(hip_sources device/hip/kernel.cpp
     ${SRC_KERNEL_HEADERS}
