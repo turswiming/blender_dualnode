@@ -9,7 +9,7 @@
 #include "BLI_array.hh"
 #include "BLI_edgehash.h"
 #include "BLI_float3x3.hh"
-#include "BLI_kdtree.h"
+#include "BLI_map.hh"
 #include "BLI_math.h"
 #include "BLI_math_vec_types.hh"
 #include "BLI_rect.h"
@@ -644,30 +644,13 @@ struct UVIsland {
    * be completely encapsulated by another one.
    */
   Vector<UVBorder> borders;
-  KDTree_2d *uv_vertex_lookup;
+  Map<int64_t, Vector<UVVertex *>> uv_vertex_lookup;
 
   UVIsland()
   {
     uv_vertices.reserve(100000);
     uv_edges.reserve(100000);
     uv_primitives.reserve(100000);
-    uv_vertex_lookup = BLI_kdtree_2d_new(uv_vertices.capacity());
-    BLI_kdtree_2d_balance(uv_vertex_lookup);
-  }
-
-  UVIsland(UVIsland &&other)
-  {
-    uv_vertices = std::move(other.uv_vertices);
-    uv_edges = std::move(other.uv_edges);
-    uv_primitives = std::move(other.uv_primitives);
-    borders = std::move(other.borders);
-    uv_vertex_lookup = other.uv_vertex_lookup;
-    other.uv_vertex_lookup = nullptr;
-  }
-
-  ~UVIsland()
-  {
-    BLI_kdtree_2d_free(uv_vertex_lookup);
   }
 
   UVPrimitive *add_primitive(MeshPrimitive &primitive)
@@ -689,39 +672,30 @@ struct UVIsland {
     return uv_primitive_ptr;
   }
 
+  UVVertex *lookup(const UVVertex &vertex)
+  {
+    int64_t vert_index = vertex.vertex->v;
+    Vector<UVVertex *> &vertices = uv_vertex_lookup.lookup_or_add_default(vert_index);
+    for (UVVertex *v : vertices) {
+      if (v->uv == vertex.uv) {
+        return v;
+      }
+    }
+    return nullptr;
+  }
+
   UVVertex *lookup_or_create(const UVVertex &vertex)
   {
-    struct CallbackData {
-      UVVertex *found_vertex;
-      const UVVertex &vertex;
-      Vector<UVVertex> &uv_vertices;
-    } callback_data = {nullptr, vertex, uv_vertices};
-    BLI_kdtree_2d_range_search_cb(
-        uv_vertex_lookup,
-        vertex.uv,
-        0.0001f,
-        [](void *user_data, int index, const float *UNUSED(co), float UNUSED(dist_sq)) {
-          CallbackData *data = static_cast<CallbackData *>(user_data);
-          UVVertex &vertex = data->uv_vertices[index];
-          if (vertex.uv == data->vertex.uv && vertex.vertex == data->vertex.vertex) {
-            data->found_vertex = &vertex;
-            return false;
-          }
-
-          return true;
-        },
-        static_cast<void *>(&callback_data));
-
-    if (callback_data.found_vertex != nullptr) {
-      return callback_data.found_vertex;
+    UVVertex *found_vertex = lookup(vertex);
+    if (found_vertex != nullptr) {
+      return found_vertex;
     }
 
-    int64_t vert_index = uv_vertices.size();
-    BLI_kdtree_2d_insert(uv_vertex_lookup, vert_index, vertex.uv);
-    BLI_kdtree_2d_balance(uv_vertex_lookup);
     uv_vertices.append(vertex);
     UVVertex *result = &uv_vertices.last();
     result->uv_edges.clear();
+    /* v is already a key. Ensured by UVIsland::lookup in this method. */
+    uv_vertex_lookup.lookup(vertex.vertex->v).append(result);
     return result;
   }
 
