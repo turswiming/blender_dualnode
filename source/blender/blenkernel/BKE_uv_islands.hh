@@ -644,12 +644,30 @@ struct UVIsland {
    * be completely encapsulated by another one.
    */
   Vector<UVBorder> borders;
+  KDTree_2d *uv_vertex_lookup;
 
   UVIsland()
   {
     uv_vertices.reserve(100000);
     uv_edges.reserve(100000);
     uv_primitives.reserve(100000);
+    uv_vertex_lookup = BLI_kdtree_2d_new(uv_vertices.capacity());
+    BLI_kdtree_2d_balance(uv_vertex_lookup);
+  }
+
+  UVIsland(UVIsland &&other)
+  {
+    uv_vertices = std::move(other.uv_vertices);
+    uv_edges = std::move(other.uv_edges);
+    uv_primitives = std::move(other.uv_primitives);
+    borders = std::move(other.borders);
+    uv_vertex_lookup = other.uv_vertex_lookup;
+    other.uv_vertex_lookup = nullptr;
+  }
+
+  ~UVIsland()
+  {
+    BLI_kdtree_2d_free(uv_vertex_lookup);
   }
 
   UVPrimitive *add_primitive(MeshPrimitive &primitive)
@@ -673,12 +691,34 @@ struct UVIsland {
 
   UVVertex *lookup_or_create(const UVVertex &vertex)
   {
-    for (UVVertex &uv_vertex : uv_vertices) {
-      if (uv_vertex.uv == vertex.uv && uv_vertex.vertex == vertex.vertex) {
-        return &uv_vertex;
-      }
+    struct CallbackData {
+      UVVertex *found_vertex;
+      const UVVertex &vertex;
+      Vector<UVVertex> &uv_vertices;
+    } callback_data = {nullptr, vertex, uv_vertices};
+    BLI_kdtree_2d_range_search_cb(
+        uv_vertex_lookup,
+        vertex.uv,
+        0.0001f,
+        [](void *user_data, int index, const float *UNUSED(co), float UNUSED(dist_sq)) {
+          CallbackData *data = static_cast<CallbackData *>(user_data);
+          UVVertex &vertex = data->uv_vertices[index];
+          if (vertex.uv == data->vertex.uv && vertex.vertex == data->vertex.vertex) {
+            data->found_vertex = &vertex;
+            return false;
+          }
+
+          return true;
+        },
+        static_cast<void *>(&callback_data));
+
+    if (callback_data.found_vertex != nullptr) {
+      return callback_data.found_vertex;
     }
 
+    int64_t vert_index = uv_vertices.size();
+    BLI_kdtree_2d_insert(uv_vertex_lookup, vert_index, vertex.uv);
+    BLI_kdtree_2d_balance(uv_vertex_lookup);
     uv_vertices.append(vertex);
     UVVertex *result = &uv_vertices.last();
     result->uv_edges.clear();
@@ -819,7 +859,7 @@ struct UVIslands {
     islands.reserve(mesh_data.uv_island_len);
 
     for (int64_t uv_island_id = 0; uv_island_id < mesh_data.uv_island_len; uv_island_id++) {
-      islands.append(UVIsland());
+      islands.append_as(UVIsland());
       UVIsland *uv_island = &islands.last();
       for (MeshPrimitive &primitive : mesh_data.primitives) {
         if (primitive.uv_island_id == uv_island_id) {
