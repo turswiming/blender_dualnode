@@ -21,10 +21,12 @@ struct View3D;
 struct Object;
 struct Brush;
 struct Scene;
+struct BVHTreeFromMesh;
 
 namespace blender::ed::sculpt_paint {
 
 using bke::CurvesGeometry;
+using bke::CurvesSurfaceTransforms;
 
 struct StrokeExtension {
   bool is_first;
@@ -60,6 +62,13 @@ std::unique_ptr<CurvesSculptStrokeOperation> new_grow_shrink_operation(
     const BrushStrokeMode brush_mode, const bContext &C);
 std::unique_ptr<CurvesSculptStrokeOperation> new_selection_paint_operation(
     const BrushStrokeMode brush_mode, const bContext &C);
+std::unique_ptr<CurvesSculptStrokeOperation> new_pinch_operation(const BrushStrokeMode brush_mode,
+                                                                 const bContext &C);
+std::unique_ptr<CurvesSculptStrokeOperation> new_smooth_operation();
+std::unique_ptr<CurvesSculptStrokeOperation> new_puff_operation();
+std::unique_ptr<CurvesSculptStrokeOperation> new_density_operation(
+    const BrushStrokeMode brush_mode, const bContext &C, const StrokeExtension &stroke_start);
+std::unique_ptr<CurvesSculptStrokeOperation> new_slide_operation();
 
 struct CurvesBrush3D {
   float3 position_cu;
@@ -97,23 +106,28 @@ IndexMask retrieve_selected_curves(const Curves &curves_id, Vector<int64_t> &r_i
 
 void move_last_point_and_resample(MutableSpan<float3> positions, const float3 &new_last_position);
 
-float3 compute_surface_point_normal(const MLoopTri &looptri,
-                                    const float3 &bary_coord,
-                                    const Span<float3> corner_normals);
-
-float3 compute_bary_coord_in_triangle(const Mesh &mesh,
-                                      const MLoopTri &looptri,
-                                      const float3 &position);
-
 class CurvesSculptCommonContext {
  public:
   const Depsgraph *depsgraph = nullptr;
   const Scene *scene = nullptr;
   ARegion *region = nullptr;
   const View3D *v3d = nullptr;
-  const RegionView3D *rv3d = nullptr;
+  RegionView3D *rv3d = nullptr;
 
   CurvesSculptCommonContext(const bContext &C);
 };
+
+std::optional<CurvesBrush3D> sample_curves_surface_3d_brush(
+    const Depsgraph &depsgraph,
+    const ARegion &region,
+    const View3D &v3d,
+    const CurvesSurfaceTransforms &transforms,
+    const BVHTreeFromMesh &surface_bvh,
+    const float2 &brush_pos_re,
+    const float brush_radius_re);
+
+float transform_brush_radius(const float4x4 &transform,
+                             const float3 &brush_position,
+                             const float old_radius);
 
 }  // namespace blender::ed::sculpt_paint

@@ -283,8 +283,10 @@ static SnapData_Mesh *snap_object_data_mesh_get(SnapObjectContext *sctx,
     }
   }
   else {
-    /* Any existing #SnapData_EditMesh is now invalid. */
-    sctx->editmesh_caches.remove(BKE_editmesh_from_object(ob_eval));
+    if (ob_eval->type == OB_MESH) {
+      /* Any existing #SnapData_EditMesh is now invalid. */
+      sctx->editmesh_caches.remove(BKE_editmesh_from_object(ob_eval));
+    }
 
     std::unique_ptr<SnapData_Mesh> sod_ptr = std::make_unique<SnapData_Mesh>();
     sod = sod_ptr.get();
@@ -442,8 +444,8 @@ static BVHTreeFromEditMesh *snap_object_data_editmesh_treedata_get(SnapObjectCon
       MEM_freeN(elem_mask);
     }
     else {
-      /* Only cache if bvhtree is created without a mask.
-+       * This helps keep a standardized bvhtree in cache. */
+      /* Only cache if BVH-tree is created without a mask.
+       * This helps keep a standardized BVH-tree in cache. */
       BKE_bvhtree_from_editmesh_get(treedata,
                                     em,
                                     4,
@@ -538,8 +540,6 @@ static void iter_snap_objects(SnapObjectContext *sctx,
   const eSnapTargetSelect snap_target_select = params->snap_target_select;
   Base *base_act = view_layer->basact;
 
-  /* TODO(gfxcoder): removed debug print */
-  printf("iter_snap_object:\n");
   LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
     if (!snap_object_is_snappable(sctx, snap_target_select, base_act, base)) {
       continue;
@@ -1296,9 +1296,9 @@ static bool nearest_world_tree(SnapObjectContext *UNUSED(sctx),
         tree, nearest_cb, treedata, init_co_local, nullptr, nullptr, nullptr, &dist_sq);
   }
   else {
-    /* Note: when params->face_nearest_steps == 1, the return variables of function below contain
-     * the answer.  We could return immediately after updating r_loc, r_no, r_index, but that would
-     * also complicate the code.  Foregoing slight optimization for code clarity. */
+    /* NOTE: when `params->face_nearest_steps == 1`, the return variables of function below contain
+     * the answer.  We could return immediately after updating 'r_loc', 'r_no', 'r_index', but that
+     * would also complicate the code. Foregoing slight optimization for code clarity. */
     nearest_world_tree_co(
         tree, nearest_cb, treedata, curr_co_local, nullptr, nullptr, nullptr, &dist_sq);
   }
@@ -1410,13 +1410,7 @@ static void nearest_world_object_fn(SnapObjectContext *sctx,
 
   const bool use_retopo_mode = params->snap_target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE;
   const bool is_object_edited = BKE_object_is_in_editmode(ob_eval);
-  /* TODO(gfxcoder): removed debug print */
-  printf("nearest_world_object_fn: obj:%s retopo:%s edit:%s\n",
-         ob_eval->id.name,
-         use_retopo_mode ? "t" : "f",
-         is_object_edited ? "t" : "f");
   if (use_retopo_mode && is_object_edited) {
-    printf("  skipped\n");
     return;
   }
 
@@ -1533,8 +1527,6 @@ static bool nearestWorldObjects(SnapObjectContext *sctx,
   data.r_obmat = r_obmat;
   data.ret = false;
 
-  /* TODO(gfxcoder): removed debug print */
-  printf("nearestWorldObjects\n");
   iter_snap_objects(sctx, params, nearest_world_object_fn, &data);
   return data.ret;
 }
@@ -2661,7 +2653,7 @@ static eSnapMode snapCamera(const SnapObjectContext *sctx,
 
       if ((tracking_object->flag & TRACKING_OBJECT_CAMERA) == 0) {
         BKE_tracking_camera_get_reconstructed_interpolate(
-            tracking, tracking_object, CFRA, reconstructed_camera_mat);
+            tracking, tracking_object, scene->r.cfra, reconstructed_camera_mat);
 
         invert_m4_m4(reconstructed_camera_imat, reconstructed_camera_mat);
       }
@@ -3150,11 +3142,8 @@ static void snap_obj_fn(SnapObjectContext *sctx,
                             dt->r_index);
       break;
     case OB_CURVES_LEGACY:
-      retval = snapCurve(
-          sctx, params, ob_eval, obmat, dt->dist_px, dt->r_loc, dt->r_no, dt->r_index);
-      break; /* Use ATTR_FALLTHROUGH if we want to snap to the generated mesh. */
     case OB_SURF:
-      if (BKE_object_is_in_editmode(ob_eval)) {
+      if (ob_eval->type == OB_CURVES_LEGACY || BKE_object_is_in_editmode(ob_eval)) {
         retval = snapCurve(
             sctx, params, ob_eval, obmat, dt->dist_px, dt->r_loc, dt->r_no, dt->r_index);
         if (params->edit_mode_type != SNAP_GEOM_FINAL) {
@@ -3467,6 +3456,31 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
   printf("--- transform_snap_context_project_view3d_mixed_impl occlusion:%s ---\n",
          use_occlusion_test ? "t" : "f");
 
+  /* Note: if both face raycast and face nearest are enabled, first find result of nearest, then
+   * override with raycast. */
+  if ((snap_to_flag & SCE_SNAP_MODE_FACE_NEAREST) && !has_hit) {
+    has_hit = nearestWorldObjects(
+        sctx, params, init_co, prev_co, loc, no, &index, &ob_eval, obmat);
+
+    if (has_hit) {
+      retval = SCE_SNAP_MODE_FACE_NEAREST;
+
+      copy_v3_v3(r_loc, loc);
+      if (r_no) {
+        copy_v3_v3(r_no, no);
+      }
+      if (r_ob) {
+        *r_ob = ob_eval;
+      }
+      if (r_obmat) {
+        copy_m4_m4(r_obmat, obmat);
+      }
+      if (r_index) {
+        *r_index = index;
+      }
+    }
+  }
+
   if (snap_to_flag & SCE_SNAP_MODE_FACE_RAYCAST || use_occlusion_test) {
     float ray_start[3], ray_normal[3];
     if (!ED_view3d_win_to_ray_clipped_ex(
@@ -3610,10 +3624,6 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
       }
       if (r_index) {
         *r_index = index;
-      }
-      if (r_face_nor && !has_hit) {
-        /* Fallback. */
-        copy_v3_v3(r_face_nor, no);
       }
 
       *dist_px = dist_px_tmp;

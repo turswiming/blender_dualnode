@@ -387,6 +387,7 @@ class CurvesGeometry : public ::CurvesGeometry {
 
   void update_customdata_pointers();
 
+  void remove_points(IndexMask points_to_delete);
   void remove_curves(IndexMask curves_to_delete);
 
   /**
@@ -422,7 +423,7 @@ namespace curves {
  * The number of segments between control points, accounting for the last segment of cyclic
  * curves. The logic is simple, but this function should be used to make intentions clearer.
  */
-inline int curve_segment_num(const int points_num, const bool cyclic)
+inline int segments_num(const int points_num, const bool cyclic)
 {
   BLI_assert(points_num > 0);
   return (cyclic && points_num > 1) ? points_num : points_num - 1;
@@ -513,6 +514,14 @@ void calculate_evaluated_offsets(Span<int8_t> handle_types_left,
                                  bool cyclic,
                                  int resolution,
                                  MutableSpan<int> evaluated_offsets);
+
+/**
+ * Calculate the automatically defined positions for a vector handle (#BEZIER_HANDLE_VECTOR). While
+ * this can be calculated automatically with #calculate_auto_handles, when more context is
+ * available, it can be preferable for performance reasons to calculate it for a single segment
+ * when necessary.
+ */
+float3 calculate_vector_handle(const float3 &point, const float3 &next_point);
 
 /**
  * Recalculate all auto (#BEZIER_HANDLE_AUTO) and vector (#BEZIER_HANDLE_VECTOR) handles with
@@ -781,7 +790,7 @@ inline IndexRange CurvesGeometry::lengths_range_for_curve(const int curve_index,
   BLI_assert(cyclic == this->cyclic()[curve_index]);
   const IndexRange points = this->evaluated_points_for_curve(curve_index);
   const int start = points.start() + curve_index;
-  return {start, curves::curve_segment_num(points.size(), cyclic)};
+  return {start, curves::segments_num(points.size(), cyclic)};
 }
 
 inline Span<float> CurvesGeometry::evaluated_lengths_for_curve(const int curve_index,
@@ -818,8 +827,26 @@ inline bool point_is_sharp(const Span<int8_t> handle_types_left,
          ELEM(handle_types_right[index], BEZIER_HANDLE_VECTOR, BEZIER_HANDLE_FREE);
 }
 
+inline float3 calculate_vector_handle(const float3 &point, const float3 &next_point)
+{
+  return math::interpolate(point, next_point, 1.0f / 3.0f);
+}
+
 /** \} */
 
 }  // namespace curves::bezier
+
+struct CurvesSurfaceTransforms {
+  float4x4 curves_to_world;
+  float4x4 curves_to_surface;
+  float4x4 world_to_curves;
+  float4x4 world_to_surface;
+  float4x4 surface_to_world;
+  float4x4 surface_to_curves;
+  float4x4 surface_to_curves_normal;
+
+  CurvesSurfaceTransforms() = default;
+  CurvesSurfaceTransforms(const Object &curves_ob, const Object *surface_ob);
+};
 
 }  // namespace blender::bke

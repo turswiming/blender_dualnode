@@ -128,12 +128,11 @@ bool activeSnap(const TransInfo *t)
 
 bool activeSnap_SnappingIndividual(const TransInfo *t)
 {
-  if (t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST) {
-    // Face Nearest snapping always snaps individual vertices
+  if (activeSnap(t) && (t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST)) {
     return true;
   }
 
-  if (t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST && !t->tsnap.project) {
+  if ((t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST) && !t->tsnap.project) {
     return false;
   }
 
@@ -155,6 +154,10 @@ bool activeSnap_SnappingAsGroup(const TransInfo *t)
   }
 
   if (t->tsnap.mode == SCE_SNAP_MODE_FACE_RAYCAST && t->tsnap.project) {
+    return false;
+  }
+
+  if (t->tsnap.mode == SCE_SNAP_MODE_FACE_NEAREST) {
     return false;
   }
 
@@ -365,10 +368,8 @@ eRedrawFlag handleSnapping(TransInfo *t, const wmEvent *event)
   return status;
 }
 
-static bool applyFaceProject_Individual(TransInfo *t, TransDataContainer *tc, TransData *td)
+static bool applyFaceProject(TransInfo *t, TransDataContainer *tc, TransData *td)
 {
-  /* TODO(gfxcoder): remove debug print */
-  printf("applyFaceProject_Individual: %d\n", t->tsnap.flag);
   if (!(t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST)) {
     return false;
   }
@@ -492,10 +493,7 @@ static void applyFaceNearest(TransInfo *t, TransDataContainer *tc, TransData *td
 
 void applySnappingIndividual(TransInfo *t)
 {
-  /* TODO(gfxcoder): remove debug print */
-  printf("applySnappingIndividual\n");
   if (!activeSnap_SnappingIndividual(t)) {
-    printf("  skipping!\n");
     return;
   }
 
@@ -514,10 +512,11 @@ void applySnappingIndividual(TransInfo *t)
       /* If both face raycast and face nearest methods are enabled, start with face raycast and
        * fallback to face nearest raycast does not hit. */
       bool hit = false;
-      if (t->tsnap.flag & SCE_SNAP_PROJECT && t->tsnap.mode & SCE_SNAP_MODE_FACE_RAYCAST) {
-        hit = applyFaceProject_Individual(t, tc, td);
+      if (t->tsnap.flag & SCE_SNAP_PROJECT) {
+        /* Only raycast in this function if projecting individual elements. */
+        hit = applyFaceProject(t, tc, td);
       }
-      if (!hit && t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST) {
+      if (!hit) {
         applyFaceNearest(t, tc, td);
       }
 #if 0 /* TODO: support this? */
@@ -579,10 +578,7 @@ void applyGridAbsolute(TransInfo *t)
 
 void applySnappingAsGroup(TransInfo *t, float *vec)
 {
-  /* TODO(gfxcoder): remove debug print */
-  printf("applySnappingAsGroup\n");
   if (!activeSnap_SnappingAsGroup(t)) {
-    printf("  skipping!\n");
     return;
   }
 
@@ -735,7 +731,7 @@ static eSnapMode snap_mode_from_spacetype(TransInfo *t)
   return SCE_SNAP_MODE_INCREMENT;
 }
 
-static eSnapTargetSelect snap_select_target_get(TransInfo *t)
+static eSnapTargetSelect snap_target_select_from_spacetype(TransInfo *t)
 {
   ViewLayer *view_layer = t->view_layer;
   Base *base_act = view_layer->basact;
@@ -793,7 +789,7 @@ static eSnapTargetSelect snap_select_target_get(TransInfo *t)
     }
     else {
       /* Object or pose mode. */
-      ret |= SCE_SNAP_TARGET_NOT_SELECTED;
+      ret |= SCE_SNAP_TARGET_NOT_SELECTED | SCE_SNAP_TARGET_NOT_ACTIVE;
     }
   }
   else if (ELEM(t->spacetype, SPACE_NODE, SPACE_SEQ)) {
@@ -857,7 +853,7 @@ void initSnapping(TransInfo *t, wmOperator *op)
   resetSnapping(t);
   t->tsnap.mode = snap_mode_from_spacetype(t);
   t->tsnap.flag = snap_flag_from_spacetype(t);
-  t->tsnap.target_select = snap_select_target_get(t);
+  t->tsnap.target_select = snap_target_select_from_spacetype(t);
   t->tsnap.face_nearest_steps = max_ii(ts->snap_face_nearest_steps, 1);
 
   /* if snap property exists */
@@ -945,22 +941,22 @@ void initSnapping(TransInfo *t, wmOperator *op)
     t->tsnap.target_select = SCE_SNAP_TARGET_ALL;
     t->tsnap.align = ((t->tsnap.flag & SCE_SNAP_ROTATE) != 0);
     t->tsnap.project = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
+    t->tsnap.peel = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
-                       (t->settings->snap_flag & SCE_SNAP_NOT_TO_ACTIVE),
+                       (ts->snap_flag & SCE_SNAP_NOT_TO_ACTIVE),
                        SCE_SNAP_TARGET_NOT_ACTIVE);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
-                       !(t->settings->snap_flag & SCE_SNAP_TO_INCLUDE_EDITED),
+                       !(ts->snap_flag & SCE_SNAP_TO_INCLUDE_EDITED),
                        SCE_SNAP_TARGET_NOT_EDITED);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
-                       !(t->settings->snap_flag & SCE_SNAP_TO_INCLUDE_NONEDITED),
+                       !(ts->snap_flag & SCE_SNAP_TO_INCLUDE_NONEDITED),
                        SCE_SNAP_TARGET_NOT_NONEDITED);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
-                       (t->settings->snap_flag & SCE_SNAP_TO_ONLY_SELECTABLE),
+                       (ts->snap_flag & SCE_SNAP_TO_ONLY_SELECTABLE),
                        SCE_SNAP_TARGET_ONLY_SELECTABLE);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
                        (t->settings->snap_flag & SCE_SNAP_RETOPOLOGY_MODE),
                        SCE_SNAP_TARGET_RETOPOLOGY_MODE);
-    t->tsnap.peel = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
   }
 
   t->tsnap.source_select = snap_source;

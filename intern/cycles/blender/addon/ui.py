@@ -111,6 +111,12 @@ def use_optix(context):
     return (get_device_type(context) == 'OPTIX' and cscene.device == 'GPU')
 
 
+def use_oneapi(context):
+    cscene = context.scene.cycles
+
+    return (get_device_type(context) == 'ONEAPI' and cscene.device == 'GPU')
+
+
 def use_multi_device(context):
     cscene = context.scene.cycles
     if cscene.device != 'GPU':
@@ -753,8 +759,6 @@ class CYCLES_RENDER_PT_filter(CyclesButtonsPanel, Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-
-        with_freestyle = bpy.app.build_options.freestyle
 
         scene = context.scene
         rd = scene.render

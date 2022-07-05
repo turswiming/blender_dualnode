@@ -448,7 +448,7 @@ static int poselib_add_menu_invoke(bContext *C, wmOperator *op, const wmEvent *U
                ICON_NONE,
                "POSELIB_OT_pose_add",
                "frame",
-               CFRA);
+               scene->r.cfra);
 
     /* Replace existing - sub-menu. */
     uiItemMenuF(
@@ -1113,7 +1113,7 @@ static void poselib_keytag_pose(bContext *C, Scene *scene, tPoseLib_PreviewData 
   /* perform actual auto-keying now */
   if (autokey) {
     /* insert keyframes for all relevant bones in one go */
-    ANIM_apply_keyingset(C, &dsources, NULL, ks, MODIFYKEY_MODE_INSERT, (float)CFRA);
+    ANIM_apply_keyingset(C, &dsources, NULL, ks, MODIFYKEY_MODE_INSERT, (float)scene->r.cfra);
     BLI_freelistN(&dsources);
   }
 
@@ -1431,7 +1431,7 @@ static int poselib_preview_handle_event(bContext *UNUSED(C), wmOperator *op, con
         ret = OPERATOR_PASS_THROUGH;
         break;
 
-      /* quicky compare to original */
+      /* Quickly compare to original. */
       case EVT_TABKEY:
         pld->flag &= ~PL_PREVIEW_SHOWORIGINAL;
         pld->redraw = PL_PREVIEW_REDRAWALL;
