@@ -5,6 +5,8 @@
 
 #include "kernel/sample/lcg.h"
 
+#include "util/hash.h"
+
 CCL_NAMESPACE_BEGIN
 
 ccl_device_inline float3
@@ -42,7 +44,7 @@ ccl_device int bsdf_microfacet_multi_ggx_glass_setup(KernelGlobals kg,
 
   bsdf->weight *= microfacet_ggx_glass_albedo_scaling(kg, sd, bsdf, saturate(color));
 
-  return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_NEEDS_LCG;
+  return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
 ccl_device int bsdf_microfacet_multi_ggx_glass_fresnel_setup(KernelGlobals kg,
@@ -61,7 +63,7 @@ ccl_device int bsdf_microfacet_multi_ggx_glass_fresnel_setup(KernelGlobals kg,
   float3 Fss = schlick_fresnel_Fss(bsdf->extra->cspec0);
   bsdf->weight *= microfacet_ggx_glass_albedo_scaling(kg, sd, bsdf, Fss);
 
-  return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_NEEDS_LCG;
+  return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
 ccl_device float3 bsdf_microfacet_ggx_glass_eval_reflect(ccl_private const ShaderClosure *sc,
@@ -161,8 +163,7 @@ ccl_device int bsdf_microfacet_ggx_glass_sample(ccl_private const ShaderClosure 
                                                 ccl_private float3 *omega_in,
                                                 ccl_private float3 *domega_in_dx,
                                                 ccl_private float3 *domega_in_dy,
-                                                ccl_private float *pdf,
-                                                ccl_private uint *lcg_state)
+                                                ccl_private float *pdf)
 {
   ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
   float alpha_x = bsdf->alpha_x;
@@ -215,7 +216,8 @@ ccl_device int bsdf_microfacet_ggx_glass_sample(ccl_private const ShaderClosure 
 #endif
                                      &inside);
 
-  float randw = lcg_step_float(lcg_state);
+  // TODO: Somehow get a properly stratified value here, this causes considerable noise
+  float randw = hash_float2_to_float(make_float2(randu, randv));
   bool do_reflect = randw < fresnel;
 
   /* Common microfacet model terms. */

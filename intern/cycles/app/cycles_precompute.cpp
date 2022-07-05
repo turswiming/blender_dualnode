@@ -173,7 +173,7 @@ static float precompute_ggx_refract_E(float rough, float mu, float eta, float u1
 }
 
 static float precompute_ggx_glass_E(
-    float rough, float mu, float eta, float u1, float u2, uint *rng)
+    float rough, float mu, float eta, float u1, float u2)
 {
   MicrofacetBsdf bsdf;
   bsdf.weight = one_float3();
@@ -198,8 +198,7 @@ static float precompute_ggx_glass_E(
                                    &omega_in,
                                    &domega_in_dx,
                                    &domega_in_dy,
-                                   &pdf,
-                                   rng);
+                                   &pdf);
   if (pdf != 0.0f) {
     return average(eval) / pdf;
   }
@@ -274,7 +273,7 @@ static float precompute_ggx_dielectric_E(float rough, float mu, float eta, float
 
 struct PrecomputeTerm {
   int dim, samples, res;
-  std::function<float(float, float, float, float, float, uint *)> evaluation;
+  std::function<float(float, float, float, float, float)> evaluation;
 };
 
 bool cycles_precompute(std::string name);
@@ -282,44 +281,44 @@ bool cycles_precompute(std::string name)
 {
   std::map<string, PrecomputeTerm> precompute_terms;
   precompute_terms["sheen_E"] = {
-      2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2) {
         return precompute_sheen_E(rough, mu, u1, u2);
       }};
   precompute_terms["clearcoat_E"] = {
-      2, 1 << 23, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      2, 1 << 23, 16, [](float rough, float mu, float ior, float u1, float u2) {
         return precompute_clearcoat_E(rough, mu, u1, u2);
       }};
   precompute_terms["ggx_E"] = {
-      2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      2, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2) {
         return precompute_ggx_E(rough, mu, u1, u2);
       }};
   precompute_terms["ggx_E_avg"] = {
-      1, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      1, 1 << 23, 32, [](float rough, float mu, float ior, float u1, float u2) {
         return 2.0f * mu * precompute_ggx_E(rough, mu, u1, u2);
       }};
   precompute_terms["ggx_glass_E"] = {
-      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
-        return precompute_ggx_glass_E(rough, mu, ior, u1, u2, rng);
+      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2) {
+        return precompute_ggx_glass_E(rough, mu, ior, u1, u2);
       }};
   precompute_terms["ggx_glass_inv_E"] = {
-      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
-        return precompute_ggx_glass_E(rough, mu, 1.0f / ior, u1, u2, rng);
+      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2) {
+        return precompute_ggx_glass_E(rough, mu, 1.0f / ior, u1, u2);
       }};
   precompute_terms["ggx_refract_E"] = {
-      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2) {
         return precompute_ggx_refract_E(rough, mu, ior, u1, u2);
       }};
   precompute_terms["ggx_refract_inv_E"] = {
-      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2) {
         return precompute_ggx_refract_E(rough, mu, 1.0f / ior, u1, u2);
       }};
   precompute_terms["ggx_dielectric_E"] = {
-      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2) {
         return precompute_ggx_dielectric_E(rough, mu, ior, u1, u2);
       }};
   // TODO: Consider more X resolution for this table.
   precompute_terms["ggx_dielectric_inv_E"] = {
-      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2, uint *rng) {
+      3, 1 << 20, 16, [](float rough, float mu, float ior, float u1, float u2) {
         return precompute_ggx_dielectric_E(rough, mu, 1.0f / ior, u1, u2);
       }};
 
@@ -354,7 +353,7 @@ bool cycles_precompute(std::string name)
           float u1 = VanDerCorput(i, scramble1);
           float u2 = Sobol2(i, scramble2);
 
-          float value = term.evaluation(rough, mu, ior, u1, u2, &rng);
+          float value = term.evaluation(rough, mu, ior, u1, u2);
           if (isnan(value)) {
             value = 0.0f;
           }

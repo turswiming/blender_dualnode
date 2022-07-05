@@ -262,8 +262,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
                                                omega_in,
                                                &domega_in->dx,
                                                &domega_in->dy,
-                                               pdf,
-                                               &sd->lcg_state);
+                                               pdf);
       break;
     case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
