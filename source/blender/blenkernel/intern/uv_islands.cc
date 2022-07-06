@@ -185,24 +185,21 @@ struct Fan {
     }
   }
 
-  void init_uv_coordinates(UVVertex &uv_vertex, const UVIsland &island)
+  void init_uv_coordinates(UVVertex &uv_vertex)
   {
     for (InnerEdge &fan_edge : inner_edges) {
-      int2 test_edge = int2(fan_edge.primitive->vertices[fan_edge.vert_order[0]].vertex->v,
-                            fan_edge.primitive->vertices[fan_edge.vert_order[1]].vertex->v);
-      for (const UVPrimitive &uv_primitive : island.uv_primitives) {
-        for (UVEdge *edge : uv_primitive.edges) {
-          int2 o(edge->vertices[0]->vertex->v, edge->vertices[1]->vertex->v);
-          if ((test_edge.x == o.x && test_edge.y == o.y) ||
-              (test_edge.x == o.y && test_edge.y == o.x)) {
-            fan_edge.uvs[0] = uv_vertex.uv;
-            for (int i = 0; i < 2; i++) {
-              if (edge->vertices[i]->uv == uv_vertex.uv) {
-                fan_edge.uvs[1] = edge->vertices[1 - i]->uv;
-                break;
-              }
-            }
-          }
+      int64_t other_v = fan_edge.primitive->vertices[fan_edge.vert_order[0]].vertex->v;
+      if (other_v == uv_vertex.vertex->v) {
+        other_v = fan_edge.primitive->vertices[fan_edge.vert_order[1]].vertex->v;
+      }
+
+      for (UVEdge *edge : uv_vertex.uv_edges) {
+        const UVVertex *other_uv_vertex = edge->get_other_uv_vertex(uv_vertex.vertex);
+        int64_t other_edge_v = other_uv_vertex->vertex->v;
+        if (other_v == other_edge_v) {
+          fan_edge.uvs[0] = uv_vertex.uv;
+          fan_edge.uvs[1] = other_uv_vertex->uv;
+          break;
         }
       }
     }
@@ -361,7 +358,7 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
     printf("TODO: Unknown how to handle non-manifold meshes.\n");
     return;
   }
-  fan.init_uv_coordinates(*uv_vertex, island);
+  fan.init_uv_coordinates(*uv_vertex);
   fan.mark_already_added_segments(*uv_vertex);
 #ifdef VALIDATE
   print(fan);
