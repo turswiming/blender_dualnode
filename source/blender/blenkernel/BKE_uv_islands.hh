@@ -648,9 +648,10 @@ struct UVIsland {
 
   UVIsland()
   {
-    uv_vertices.reserve(100000);
-    uv_edges.reserve(100000);
-    uv_primitives.reserve(100000);
+    // TODO: Base on actual island primitives. or replace pointers with indices.
+    uv_vertices.reserve(1000000);
+    uv_edges.reserve(1000000);
+    uv_primitives.reserve(1000000);
   }
 
   UVPrimitive *add_primitive(MeshPrimitive &primitive)
@@ -699,14 +700,16 @@ struct UVIsland {
     return result;
   }
 
-  UVEdge *lookup (const UVEdge&edge) {
-    UVVertex * found_vertex = lookup(*edge.vertices[0]);
+  UVEdge *lookup(const UVEdge &edge)
+  {
+    UVVertex *found_vertex = lookup(*edge.vertices[0]);
     if (found_vertex == nullptr) {
       return nullptr;
     }
-    for (UVEdge*e: found_vertex->uv_edges) {
-      UVVertex*other_vertex = e->get_other_uv_vertex(found_vertex->vertex);
-      if (other_vertex->vertex == edge.vertices[1]->vertex && other_vertex->uv == edge.vertices[1]->uv) {
+    for (UVEdge *e : found_vertex->uv_edges) {
+      UVVertex *other_vertex = e->get_other_uv_vertex(found_vertex->vertex);
+      if (other_vertex->vertex == edge.vertices[1]->vertex &&
+          other_vertex->uv == edge.vertices[1]->uv) {
         return e;
       }
     }
