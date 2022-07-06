@@ -110,14 +110,42 @@ static void update_geom_primitives(PBVH &pbvh, const uv_islands::MeshData &mesh_
   }
 }
 
+struct UVPrimitiveLookup {
+  struct Entry {
+    uv_islands::UVPrimitive *uv_primitive;
+    uint64_t uv_island_index;
+
+    Entry(uv_islands::UVPrimitive *uv_primitive, uint64_t uv_island_index)
+        : uv_primitive(uv_primitive), uv_island_index(uv_island_index)
+    {
+    }
+  };
+
+  Vector<Vector<Entry>> lookup;
+
+  UVPrimitiveLookup(const uint64_t geom_primitive_len, uv_islands::UVIslands &uv_islands)
+  {
+    lookup.append_n_times(Vector<Entry>(), geom_primitive_len);
+
+    uint64_t uv_island_index = 0;
+    for (uv_islands::UVIsland &uv_island : uv_islands.islands) {
+      for (uv_islands::UVPrimitive &uv_primitive : uv_island.uv_primitives) {
+        lookup[uv_primitive.primitive->index].append_as(Entry(&uv_primitive, uv_island_index));
+      }
+      uv_island_index++;
+    }
+  }
+};
+
 struct EncodePixelsUserData {
   Image *image;
   ImageUser *image_user;
   PBVH *pbvh;
   Vector<PBVHNode *> *nodes;
   const MLoopUV *ldata_uv;
-  const uv_islands::UVIslands *uv_islands;
   const uv_islands::UVIslandsMask *uv_masks;
+  /** Lookup to retrieve the UV primitives based on the primitive index. */
+  const UVPrimitiveLookup *uv_primitive_lookup;
 };
 
 static void do_encode_pixels(void *__restrict userdata,
@@ -146,49 +174,43 @@ static void do_encode_pixels(void *__restrict userdata,
     for (int pbvh_node_prim_index = 0; pbvh_node_prim_index < node->totprim;
          pbvh_node_prim_index++) {
       int64_t geom_prim_index = node->prim_indices[pbvh_node_prim_index];
-      int64_t uv_island_index = 0;
-      for (const uv_islands::UVIsland &island : data->uv_islands->islands) {
-        for (const uv_islands::UVPrimitive &uv_primitive : island.uv_primitives) {
-          if (uv_primitive.primitive->index != geom_prim_index) {
-            continue;
-          }
-          uv_islands::UVBorder uv_border = uv_primitive.extract_border();
-          float2 uvs[3] = {
-              uv_primitive.get_uv_vertex(0)->uv - tile_offset,
-              uv_primitive.get_uv_vertex(1)->uv - tile_offset,
-              uv_primitive.get_uv_vertex(2)->uv - tile_offset,
-          };
-          const float minv = clamp_f(min_fff(uvs[0].y, uvs[1].y, uvs[2].y), 0.0f, 1.0f);
-          const int miny = floor(minv * image_buffer->y);
-          const float maxv = clamp_f(max_fff(uvs[0].y, uvs[1].y, uvs[2].y), 0.0f, 1.0f);
-          const int maxy = min_ii(ceil(maxv * image_buffer->y), image_buffer->y);
-          const float minu = clamp_f(min_fff(uvs[0].x, uvs[1].x, uvs[2].x), 0.0f, 1.0f);
-          const int minx = floor(minu * image_buffer->x);
-          const float maxu = clamp_f(max_fff(uvs[0].x, uvs[1].x, uvs[2].x), 0.0f, 1.0f);
-          const int maxx = min_ii(ceil(maxu * image_buffer->x), image_buffer->x);
+      for (const UVPrimitiveLookup::Entry &entry :
+           data->uv_primitive_lookup->lookup[geom_prim_index]) {
+        uv_islands::UVBorder uv_border = entry.uv_primitive->extract_border();
+        float2 uvs[3] = {
+            entry.uv_primitive->get_uv_vertex(0)->uv - tile_offset,
+            entry.uv_primitive->get_uv_vertex(1)->uv - tile_offset,
+            entry.uv_primitive->get_uv_vertex(2)->uv - tile_offset,
+        };
+        const float minv = clamp_f(min_fff(uvs[0].y, uvs[1].y, uvs[2].y), 0.0f, 1.0f);
+        const int miny = floor(minv * image_buffer->y);
+        const float maxv = clamp_f(max_fff(uvs[0].y, uvs[1].y, uvs[2].y), 0.0f, 1.0f);
+        const int maxy = min_ii(ceil(maxv * image_buffer->y), image_buffer->y);
+        const float minu = clamp_f(min_fff(uvs[0].x, uvs[1].x, uvs[2].x), 0.0f, 1.0f);
+        const int minx = floor(minu * image_buffer->x);
+        const float maxu = clamp_f(max_fff(uvs[0].x, uvs[1].x, uvs[2].x), 0.0f, 1.0f);
+        const int maxx = min_ii(ceil(maxu * image_buffer->x), image_buffer->x);
 
-          /* TODO: Perform bounds check */
-          int64_t uv_prim_index = node_data->uv_primitives.size();
-          node_data->uv_primitives.append(geom_prim_index);
-          UVPrimitivePaintInput &paint_input = node_data->uv_primitives.last();
+        /* TODO: Perform bounds check */
+        int64_t uv_prim_index = node_data->uv_primitives.size();
+        node_data->uv_primitives.append(geom_prim_index);
+        UVPrimitivePaintInput &paint_input = node_data->uv_primitives.last();
 
-          /* Calculate barycentric delta */
-          paint_input.delta_barycentric_coord_u = calc_barycentric_delta_x(
-              image_buffer, uvs, minx, miny);
+        /* Calculate barycentric delta */
+        paint_input.delta_barycentric_coord_u = calc_barycentric_delta_x(
+            image_buffer, uvs, minx, miny);
 
-          /* Extract the pixels. */
-          extract_barycentric_pixels(tile_data,
-                                     image_buffer,
-                                     uv_masks,
-                                     uv_island_index,
-                                     uv_prim_index,
-                                     uvs,
-                                     minx,
-                                     miny,
-                                     maxx,
-                                     maxy);
-        }
-        uv_island_index++;
+        /* Extract the pixels. */
+        extract_barycentric_pixels(tile_data,
+                                   image_buffer,
+                                   uv_masks,
+                                   entry.uv_island_index,
+                                   uv_prim_index,
+                                   uvs,
+                                   minx,
+                                   miny,
+                                   maxx,
+                                   maxy);
       }
     }
     BKE_image_release_ibuf(image, image_buffer, nullptr);
@@ -348,13 +370,15 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
   islands.extend_borders(uv_masks);
   update_geom_primitives(*pbvh, mesh_data);
 
+  UVPrimitiveLookup uv_primitive_lookup(mesh_data.looptri_len, islands);
+
   EncodePixelsUserData user_data;
   user_data.pbvh = pbvh;
   user_data.image = image;
   user_data.image_user = image_user;
   user_data.ldata_uv = ldata_uv;
   user_data.nodes = &nodes_to_update;
-  user_data.uv_islands = &islands;
+  user_data.uv_primitive_lookup = &uv_primitive_lookup;
   user_data.uv_masks = &uv_masks;
 
   TaskParallelSettings settings;
