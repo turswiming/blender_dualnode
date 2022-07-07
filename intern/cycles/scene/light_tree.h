@@ -130,6 +130,7 @@ struct PackedLightTreeNode {
   };
   int num_lights;
   bool is_leaf_node;
+  int parent_index;
 };
 
 /* Light BVH
@@ -152,7 +153,7 @@ private:
   LightTreeBuildNode* recursive_build(vector<LightTreePrimitiveInfo> &primitive_info, int start, int end, int &total_nodes, vector<LightTreePrimitive> &ordered_prims);
   void split_saoh(const BoundBox &centroid_bounds,
                   const vector<LightTreePrimitiveInfo> &primitive_info, int start, int end, const BoundBox &bbox, const OrientationBounds &bcone, float& min_cost, int& min_dim, int& min_bucket);
-  int flatten_tree(const LightTreeBuildNode *node, int &offset);
+  int flatten_tree(const LightTreeBuildNode *node, int &offset, int parent);
 };
 
 CCL_NAMESPACE_END

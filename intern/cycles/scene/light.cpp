@@ -305,6 +305,7 @@ void LightManager::device_update_distribution(Device *device,
   size_t num_background_lights = 0;
   size_t num_distant_lights = 0;
   size_t num_triangles = 0;
+  size_t total_triangles = 0;
 
   bool background_mis = false;
 
@@ -360,6 +361,7 @@ void LightManager::device_update_distribution(Device *device,
     /* Count emissive triangles. */
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
     size_t mesh_num_triangles = mesh->num_triangles();
+    total_triangles += mesh_num_triangles;
     for (size_t i = 0; i < mesh_num_triangles; i++) {
       int shader_index = mesh->get_shader()[i];
       Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?
@@ -393,9 +395,15 @@ void LightManager::device_update_distribution(Device *device,
     LightTree light_tree(light_prims, scene, 8);
     light_prims = light_tree.get_prims();
 
+    /* We want to create separate arrays corresponding to triangles and lights,
+     * which will be used to index back into the light tree for PDF calculations. */
+    uint *light_array = dscene->light_to_tree.alloc(num_lights);
+    uint *triangle_array = dscene->triangle_to_tree.alloc(total_triangles);
+
     /* First initialize the light tree's nodes. */
     const vector<PackedLightTreeNode> &linearized_bvh = light_tree.get_nodes();
     KernelLightTreeNode *light_tree_nodes = dscene->light_tree_nodes.alloc(linearized_bvh.size());
+    KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(light_prims.size());
     float light_tree_energy = 0.0f;
     for (int index = 0; index < linearized_bvh.size(); index++) {
       const PackedLightTreeNode &node = linearized_bvh[index];
@@ -413,70 +421,73 @@ void LightManager::device_update_distribution(Device *device,
       light_tree_nodes[index].theta_o = node.bcone.theta_o;
       light_tree_nodes[index].theta_e = node.bcone.theta_e;
 
+      light_tree_nodes[index].parent_index = node.parent_index;
+
       /* Here we need to make a distinction between interior and leaf nodes. */
       if (node.is_leaf_node) {
         light_tree_nodes[index].num_prims = node.num_lights;
         light_tree_nodes[index].child_index = -node.first_prim_index;
+
+        for (int i = 0; i < node.num_lights; i++) {
+          int emitter_index = i + node.first_prim_index;
+          LightTreePrimitive &prim = light_prims[emitter_index];
+          BoundBox bbox = prim.calculate_bbox(scene);
+          OrientationBounds bcone = prim.calculate_bcone(scene);
+          float energy = prim.calculate_energy(scene);
+
+          light_tree_emitters[emitter_index].energy = energy;
+          for (int i = 0; i < 3; i++) {
+            light_tree_emitters[emitter_index].bounding_box_min[i] = bbox.min[i];
+            light_tree_emitters[emitter_index].bounding_box_max[i] = bbox.max[i];
+            light_tree_emitters[emitter_index].bounding_cone_axis[i] = bcone.axis[i];
+          }
+          light_tree_emitters[emitter_index].theta_o = bcone.theta_o;
+          light_tree_emitters[emitter_index].theta_e = bcone.theta_e;
+
+          light_tree_emitters[emitter_index].prim_id = prim.prim_id;
+
+          if (prim.prim_id >= 0) {
+            light_tree_emitters[emitter_index].mesh_light.object_id = prim.object_id;
+
+            int shader_flag = 0;
+            Object *object = scene->objects[prim.object_id];
+            if (!(object->get_visibility() & PATH_RAY_CAMERA)) {
+              shader_flag |= SHADER_EXCLUDE_CAMERA;
+            }
+            if (!(object->get_visibility() & PATH_RAY_DIFFUSE)) {
+              shader_flag |= SHADER_EXCLUDE_DIFFUSE;
+            }
+            if (!(object->get_visibility() & PATH_RAY_GLOSSY)) {
+              shader_flag |= SHADER_EXCLUDE_GLOSSY;
+            }
+            if (!(object->get_visibility() & PATH_RAY_TRANSMIT)) {
+              shader_flag |= SHADER_EXCLUDE_TRANSMIT;
+            }
+            if (!(object->get_visibility() & PATH_RAY_VOLUME_SCATTER)) {
+              shader_flag |= SHADER_EXCLUDE_SCATTER;
+            }
+            if (!(object->get_is_shadow_catcher())) {
+              shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
+            }
+
+            light_tree_emitters[emitter_index].mesh_light.shader_flag = shader_flag;
+            triangle_array[prim.prim_id] = emitter_index;
+          }
+          else {
+            Light *lamp = scene->lights[prim.lamp_id];
+            light_tree_emitters[emitter_index].lamp.size = lamp->size;
+            light_tree_emitters[emitter_index].lamp.pad = 1.0f;
+            light_array[~prim.prim_id] = emitter_index;
+          }
+
+          light_tree_emitters[emitter_index].parent_index = index;
+        }
       }
       else {
         light_tree_nodes[index].energy_variance = node.energy_variance;
         light_tree_nodes[index].child_index = node.second_child_index;
       }
     }
-    dscene->light_tree_nodes.copy_to_device();
-
-    /* The light tree emitters store extra information about their bounds. */
-    KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(light_prims.size());
-    for (int index = 0; index < light_prims.size(); index++) {
-      LightTreePrimitive &prim = light_prims[index];
-      BoundBox bbox = prim.calculate_bbox(scene);
-      OrientationBounds bcone = prim.calculate_bcone(scene);
-      float energy = prim.calculate_energy(scene);
-
-      light_tree_emitters[index].energy = energy;
-      for (int i = 0; i < 3; i++) {
-        light_tree_emitters[index].bounding_box_min[i] = bbox.min[i];
-        light_tree_emitters[index].bounding_box_max[i] = bbox.max[i];
-        light_tree_emitters[index].bounding_cone_axis[i] = bcone.axis[i];
-      }
-      light_tree_emitters[index].theta_o = bcone.theta_o;
-      light_tree_emitters[index].theta_e = bcone.theta_e;
-
-      light_tree_emitters[index].prim_id = prim.prim_id;
-
-      if (prim.prim_id >= 0) {
-        light_tree_emitters[index].mesh_light.object_id = prim.object_id;
-
-        int shader_flag = 0;
-        Object *object = scene->objects[prim.object_id];
-        if (!(object->get_visibility() & PATH_RAY_CAMERA)) {
-          shader_flag |= SHADER_EXCLUDE_CAMERA;
-        }
-        if (!(object->get_visibility() & PATH_RAY_DIFFUSE)) {
-          shader_flag |= SHADER_EXCLUDE_DIFFUSE;
-        }
-        if (!(object->get_visibility() & PATH_RAY_GLOSSY)) {
-          shader_flag |= SHADER_EXCLUDE_GLOSSY;
-        }
-        if (!(object->get_visibility() & PATH_RAY_TRANSMIT)) {
-          shader_flag |= SHADER_EXCLUDE_TRANSMIT;
-        }
-        if (!(object->get_visibility() & PATH_RAY_VOLUME_SCATTER)) {
-          shader_flag |= SHADER_EXCLUDE_SCATTER;
-        }
-        if (!(object->get_is_shadow_catcher())) {
-          shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
-        }
-
-        light_tree_emitters[index].mesh_light.shader_flag = shader_flag;
-      }
-      else {
-        Light *lamp = scene->lights[prim.lamp_id];
-        light_tree_emitters[index].lamp.size = lamp->size;
-        light_tree_emitters[index].lamp.pad = 1.0f;
-      }
-    }
-    dscene->light_tree_emitters.copy_to_device();
 
     /* We also add distant lights to a separate group. */
     KernelLightTreeDistantEmitter *light_tree_distant_group =
@@ -487,7 +498,7 @@ void LightManager::device_update_distribution(Device *device,
       Light *light = scene->lights[prim.lamp_id];
       
       /* Lights in this group are either a background or distant light. */
-      light_tree_distant_group[index].prim_id = prim.prim_id;
+      light_tree_distant_group[index].prim_id = ~prim.prim_id;
 
       float energy = 0.0f;
       if (light->light_type == LIGHT_BACKGROUND) {
@@ -511,6 +522,7 @@ void LightManager::device_update_distribution(Device *device,
       }
 
       light_tree_distant_group[index].energy = energy;
+      light_array[~prim.prim_id] = index;
       distant_light_energy += energy;
     }
 
@@ -518,7 +530,11 @@ void LightManager::device_update_distribution(Device *device,
       pdf_light_tree = light_tree_energy / (light_tree_energy + distant_light_energy);
     }
 
+    dscene->light_tree_nodes.copy_to_device();
+    dscene->light_tree_emitters.copy_to_device();
     dscene->light_tree_distant_group.copy_to_device();
+    dscene->light_to_tree.copy_to_device();
+    dscene->triangle_to_tree.copy_to_device();
   }
 
   /* emission area */
@@ -721,6 +737,13 @@ void LightManager::device_update_distribution(Device *device,
     kbackground->map_weight = background_mis ? 1.0f : 0.0f;
   }
   else {
+    if (light_tree_enabled) {
+      dscene->light_tree_nodes.free();
+      dscene->light_tree_emitters.free();
+      dscene->light_tree_distant_group.free();
+      dscene->light_to_tree.free();
+      dscene->triangle_to_tree.free();
+    }
     dscene->light_distribution.free();
 
     kintegrator->num_distribution = 0;
@@ -1234,6 +1257,8 @@ void LightManager::device_free(Device *, DeviceScene *dscene, const bool free_ba
   dscene->light_tree_nodes.free();
   dscene->light_tree_emitters.free();
   dscene->light_tree_distant_group.free();
+  dscene->light_to_tree.free();
+  dscene->triangle_to_tree.free();
 
   dscene->light_distribution.free();
   dscene->lights.free();

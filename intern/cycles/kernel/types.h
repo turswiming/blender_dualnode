@@ -1523,8 +1523,11 @@ typedef struct KernelLightTreeNode {
     float energy_variance; /* interior nodes use the energy variance for the splitting heuristic. */
   };
 
+  /* Parent. */
+  int parent_index;
+
   /* Padding. */
-  int pad1, pad2;
+  int pad1;
 } KernelLightTreeNode;
 static_assert_align(KernelLightTreeNode, 16);
 
@@ -1554,8 +1557,8 @@ typedef struct KernelLightTreeEmitter {
     } lamp;
   };
 
-  /* Padding. */
-  int pad1;
+  /* Parent. */
+  int parent_index;
 } KernelLightTreeEmitter;
 static_assert_align(KernelLightTreeEmitter, 16);
 

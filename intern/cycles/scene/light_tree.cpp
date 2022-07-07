@@ -268,7 +268,7 @@ LightTree::LightTree(const vector<LightTreePrimitive> &prims, Scene *scene, uint
 
   int offset = 0;
   nodes_.resize(total_nodes);
-  flatten_tree(root, offset);
+  flatten_tree(root, offset, -1);
 }
 
 const vector<LightTreePrimitive> &LightTree::get_prims() const
@@ -469,14 +469,15 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
   }
 }
 
-int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset)
+int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset, int parent)
 {
   PackedLightTreeNode *current_node = &nodes_[offset];
   current_node->bbox = node->bbox;
   current_node->bcone = node->bcone;
   current_node->energy = node->energy;
   current_node->energy_variance = node->energy_variance;
-  int original_offset = offset;
+  current_node->parent_index = parent;
+  int current_index = offset;
   offset++;
 
   /* If current node contains lights, then it is a leaf node.
@@ -491,11 +492,11 @@ int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset)
     current_node->is_leaf_node = false;
 
     /* The first child is located directly to the right of the parent. */
-    flatten_tree(node->children[0], offset);
-    current_node->second_child_index = flatten_tree(node->children[1], offset);
+    flatten_tree(node->children[0], offset, current_index);
+    current_node->second_child_index = flatten_tree(node->children[1], offset, current_index);
   }
 
-  return original_offset;
+  return current_index;
 }
 
 CCL_NAMESPACE_END
