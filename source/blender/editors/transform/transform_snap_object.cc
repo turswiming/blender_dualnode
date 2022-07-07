@@ -3426,31 +3426,6 @@ static eSnapMode transform_snap_context_project_view3d_mixed_impl(SnapObjectCont
   const bool use_retopo_mode = params->snap_target_select & SCE_SNAP_TARGET_RETOPOLOGY_MODE;
   const bool use_occlusion_test = params->use_occlusion_test && !XRAY_ENABLED(v3d);
 
-  /* Note: if both face raycast and face nearest are enabled, first find result of nearest, then
-   * override with raycast. */
-  if ((snap_to_flag & SCE_SNAP_MODE_FACE_NEAREST) && !has_hit) {
-    has_hit = nearestWorldObjects(
-        sctx, params, init_co, prev_co, loc, no, &index, &ob_eval, obmat);
-
-    if (has_hit) {
-      retval = SCE_SNAP_MODE_FACE_NEAREST;
-
-      copy_v3_v3(r_loc, loc);
-      if (r_no) {
-        copy_v3_v3(r_no, no);
-      }
-      if (r_ob) {
-        *r_ob = ob_eval;
-      }
-      if (r_obmat) {
-        copy_m4_m4(r_obmat, obmat);
-      }
-      if (r_index) {
-        *r_index = index;
-      }
-    }
-  }
-
   if (snap_to_flag & SCE_SNAP_MODE_FACE_RAYCAST || use_occlusion_test) {
     float ray_start[3], ray_normal[3];
     if (!ED_view3d_win_to_ray_clipped_ex(
