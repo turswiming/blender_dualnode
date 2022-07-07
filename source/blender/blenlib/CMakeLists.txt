@@ -324,6 +324,7 @@ set(SRC
   BLI_uvproject.h
   BLI_vector.hh
   BLI_vector_adaptor.hh
+  BLI_vector_list.hh
   BLI_vector_set.hh
   BLI_vector_set_slots.hh
   BLI_virtual_array.hh
