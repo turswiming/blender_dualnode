@@ -24,7 +24,7 @@ namespace blender::ed::curves {
 static bool has_surface_deformation_node(const bNodeTree &ntree)
 {
   LISTBASE_FOREACH (const bNode *, node, &ntree.nodes) {
-    if (node->type == GEO_NODE_DEFORM_CURVES_WITH_SURFACE) {
+    if (node->type == GEO_NODE_DEFORM_CURVES_ON_SURFACE) {
       return true;
     }
     if (node->type == NODE_GROUP) {
@@ -65,16 +65,16 @@ void ensure_surface_deformation_node_exists(bContext &C, Object &curves_ob)
   Scene *scene = CTX_data_scene(&C);
 
   ModifierData *md = ED_object_modifier_add(
-      nullptr, bmain, scene, &curves_ob, "Hair Deform", eModifierType_Nodes);
+      nullptr, bmain, scene, &curves_ob, "Surface Deform", eModifierType_Nodes);
   NodesModifierData &nmd = *reinterpret_cast<NodesModifierData *>(md);
-  nmd.node_group = ntreeAddTree(bmain, "Hair Deform", "GeometryNodeTree");
+  nmd.node_group = ntreeAddTree(bmain, "Surface Deform", "GeometryNodeTree");
 
   bNodeTree *ntree = nmd.node_group;
   ntreeAddSocketInterface(ntree, SOCK_IN, "NodeSocketGeometry", "Geometry");
   ntreeAddSocketInterface(ntree, SOCK_OUT, "NodeSocketGeometry", "Geometry");
   bNode *group_input = nodeAddStaticNode(&C, ntree, NODE_GROUP_INPUT);
   bNode *group_output = nodeAddStaticNode(&C, ntree, NODE_GROUP_OUTPUT);
-  bNode *deform_node = nodeAddStaticNode(&C, ntree, GEO_NODE_DEFORM_CURVES_WITH_SURFACE);
+  bNode *deform_node = nodeAddStaticNode(&C, ntree, GEO_NODE_DEFORM_CURVES_ON_SURFACE);
 
   ED_node_tree_propagate_change(&C, bmain, nmd.node_group);
 

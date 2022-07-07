@@ -49,7 +49,7 @@ static void deform_curves(CurvesGeometry &curves,
                           const Span<float3> corner_normals_new,
                           const Span<float3> rest_positions,
                           const float4x4 &surface_to_curves,
-                          std::atomic<bool> &r_found_invalid_uv)
+                          std::atomic<int> &r_invalid_uv_count)
 {
   /* Find attachment points on old and new mesh. */
   const int curves_num = curves.curves_num();
@@ -67,12 +67,12 @@ static void deform_curves(CurvesGeometry &curves,
     for (const int curve_i : range) {
       const ReverseUVSampler::Result &surface_sample_old = surface_samples_old[curve_i];
       if (surface_sample_old.type != ReverseUVSampler::ResultType::Ok) {
-        r_found_invalid_uv.store(true);
+        r_invalid_uv_count++;
         continue;
       }
       const ReverseUVSampler::Result &surface_sample_new = surface_samples_new[curve_i];
       if (surface_sample_new.type != ReverseUVSampler::ResultType::Ok) {
-        r_found_invalid_uv.store(true);
+        r_invalid_uv_count++;
         continue;
       }
 
@@ -132,7 +132,7 @@ static void deform_curves(CurvesGeometry &curves,
        * computed based on the rest position attribute instead of positions on the old mesh. This
        * way the old and new tangent reference use the same topology.
        *
-       * Todo: Figure out if this can be smoothly interpolated across the surface as well.
+       * TODO: Figure out if this can be smoothly interpolated across the surface as well.
        * Currently, this is a source of discontinuity in the deformation, because the vector
        * changes intantly from one triangle to the next. */
       const float3 tangent_reference_dir_old = rest_pos_1 - rest_pos_0;
@@ -280,7 +280,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       reinterpret_cast<const float3 *>(CustomData_get_layer(&surface_mesh_eval->ldata, CD_NORMAL)),
       surface_mesh_eval->totloop};
 
-  std::atomic<bool> found_invalid_uv = false;
+  std::atomic<int> invalid_uv_count = 0;
 
   const bke::CurvesSurfaceTransforms transforms{*self_ob_eval, surface_ob_eval};
 
@@ -294,12 +294,16 @@ static void node_geo_exec(GeoNodeExecParams params)
                 corner_normals_eval,
                 rest_positions,
                 transforms.surface_to_curves,
-                found_invalid_uv);
+                invalid_uv_count);
 
   curves.tag_positions_changed();
 
-  if (found_invalid_uv) {
-    params.error_message_add(NodeWarningType::Warning, "Invalid uvs found");
+  if (invalid_uv_count) {
+    char *error = BLI_sprintfN(
+        TIP_("Invalid surface attachment UV coordinates found on %d curves"),
+        invalid_uv_count.load());
+    params.error_message_add(NodeWarningType::Warning, error);
+    MEM_freeN(error);
   }
 
   params.set_output("Curves", curves_geometry);
@@ -307,16 +311,15 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 }  // namespace blender::nodes::node_geo_deform_curves_with_surface_cc
 
-void register_node_type_geo_deform_curves_with_surface()
+void register_node_type_geo_deform_curves_on_surface()
 {
   namespace file_ns = blender::nodes::node_geo_deform_curves_with_surface_cc;
 
   static bNodeType ntype;
-  geo_node_type_base(&ntype,
-                     GEO_NODE_DEFORM_CURVES_WITH_SURFACE,
-                     "Deform Curves with Surface",
-                     NODE_CLASS_GEOMETRY);
+  geo_node_type_base(
+      &ntype, GEO_NODE_DEFORM_CURVES_ON_SURFACE, "Deform Curves on Surface", NODE_CLASS_GEOMETRY);
   ntype.geometry_node_execute = file_ns::node_geo_exec;
   ntype.declare = file_ns::node_declare;
+  node_type_size(&ntype, 170, 120, 700);
   nodeRegisterType(&ntype);
 }

@@ -191,7 +191,7 @@ static bool node_needs_own_transform_relation(const bNode &node)
     return storage.transform_space == GEO_NODE_TRANSFORM_SPACE_RELATIVE;
   }
 
-  if (node.type == GEO_NODE_DEFORM_CURVES_WITH_SURFACE) {
+  if (node.type == GEO_NODE_DEFORM_CURVES_ON_SURFACE) {
     return true;
   }
 

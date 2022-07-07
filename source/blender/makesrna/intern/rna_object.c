@@ -3583,8 +3583,8 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "modifier_flag", OB_MODIFIER_FLAG_ADD_REST_POSITION);
   RNA_def_property_ui_text(prop,
                            "Add Rest Position",
-                           "Add a rest_position attribute that is a copy of the position "
-                           "attribute right before shape keys and modifiers are evaluated");
+                           "Add a \"rest_position\" attribute that is a copy of the position "
+                           "attribute before shape keys and modifiers are evaluated");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update_data");
 
   /* render */
