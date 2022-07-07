@@ -16,7 +16,15 @@
 
 #include "GHOST_ContextEGL.h"
 
+#ifdef WITH_GHOST_WAYLAND_DYNLOAD
+#  include <wayland_dynload_API.h> /* For `ghost_wl_dynload_libraries`. */
+#endif
+
 #include <EGL/egl.h>
+
+#ifdef WITH_GHOST_WAYLAND_DYNLOAD
+#  include <wayland_dynload_egl.h>
+#endif
 #include <wayland-egl.h>
 
 #include <algorithm>
@@ -26,6 +34,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifdef WITH_GHOST_WAYLAND_DYNLOAD
+#  include <wayland_dynload_cursor.h>
+#endif
 #include <wayland-cursor.h>
 
 #include "GHOST_WaylandCursorSettings.h"
@@ -786,7 +797,7 @@ static void relative_pointer_handle_relative_motion(
 {
   input_t *input = static_cast<input_t *>(data);
   if (wl_surface *focus_surface = input->pointer.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     const wl_fixed_t scale = win->scale();
     const wl_fixed_t xy_next[2] = {
         input->pointer.xy[0] + (dx / scale),
@@ -810,7 +821,7 @@ static void dnd_events(const input_t *const input, const GHOST_TEventType event)
 {
   /* NOTE: `input->data_offer_dnd_mutex` must already be locked. */
   if (wl_surface *focus_surface = input->focus_dnd) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     const wl_fixed_t scale = win->scale();
     const int event_xy[2] = {
         wl_fixed_to_int(scale * input->data_offer_dnd->dnd.xy[0]),
@@ -992,6 +1003,10 @@ static void data_device_handle_enter(void *data,
                                      const wl_fixed_t y,
                                      struct wl_data_offer *id)
 {
+  if (!ghost_wl_surface_own(surface)) {
+    return;
+  }
+
   input_t *input = static_cast<input_t *>(data);
   std::lock_guard lock{input->data_offer_dnd_mutex};
 
@@ -1077,9 +1092,7 @@ static void data_device_handle_drop(void *data, struct wl_data_device * /*wl_dat
       static constexpr const char *file_proto = "file://";
       static constexpr const char *crlf = "\r\n";
 
-      GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_find(surface);
-      GHOST_ASSERT(win != nullptr, "Unable to find window for drop event from surface");
-
+      GHOST_WindowWayland *win = ghost_wl_surface_user_data(surface);
       std::vector<std::string> uris;
 
       size_t pos = 0;
@@ -1203,7 +1216,7 @@ static void cursor_buffer_handle_release(void *data, struct wl_buffer *wl_buffer
   }
 }
 
-const struct wl_buffer_listener cursor_buffer_listener = {
+static const struct wl_buffer_listener cursor_buffer_listener = {
     cursor_buffer_handle_release,
 };
 
@@ -1238,12 +1251,13 @@ static void cursor_surface_handle_enter(void *data,
                                         struct wl_surface * /*wl_surface*/,
                                         struct wl_output *output)
 {
-  input_t *input = static_cast<input_t *>(data);
-  for (const output_t *reg_output : input->system->outputs()) {
-    if (reg_output->wl_output == output) {
-      input->cursor.outputs.insert(reg_output);
-    }
+  if (!ghost_wl_output_own(output)) {
+    return;
   }
+
+  input_t *input = static_cast<input_t *>(data);
+  const output_t *reg_output = ghost_wl_output_user_data(output);
+  input->cursor.outputs.insert(reg_output);
   update_cursor_scale(input->cursor, input->system->shm());
 }
 
@@ -1251,16 +1265,17 @@ static void cursor_surface_handle_leave(void *data,
                                         struct wl_surface * /*wl_surface*/,
                                         struct wl_output *output)
 {
-  input_t *input = static_cast<input_t *>(data);
-  for (const output_t *reg_output : input->system->outputs()) {
-    if (reg_output->wl_output == output) {
-      input->cursor.outputs.erase(reg_output);
-    }
+  if (!(output && ghost_wl_output_own(output))) {
+    return;
   }
+
+  input_t *input = static_cast<input_t *>(data);
+  const output_t *reg_output = ghost_wl_output_user_data(output);
+  input->cursor.outputs.erase(reg_output);
   update_cursor_scale(input->cursor, input->system->shm());
 }
 
-struct wl_surface_listener cursor_surface_listener = {
+static const struct wl_surface_listener cursor_surface_listener = {
     cursor_surface_handle_enter,
     cursor_surface_handle_leave,
 };
@@ -1278,7 +1293,11 @@ static void pointer_handle_enter(void *data,
                                  const wl_fixed_t surface_x,
                                  const wl_fixed_t surface_y)
 {
-  GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(surface);
+  if (!ghost_wl_surface_own(surface)) {
+    return;
+  }
+
+  GHOST_WindowWayland *win = ghost_wl_surface_user_data(surface);
 
   win->activate();
 
@@ -1307,8 +1326,8 @@ static void pointer_handle_leave(void *data,
 {
   /* First clear the `pointer.wl_surface`, since the window won't exist when closing the window. */
   static_cast<input_t *>(data)->pointer.wl_surface = nullptr;
-  if (surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(surface);
+  if (surface && ghost_wl_surface_own(surface)) {
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(surface);
     win->deactivate();
   }
 }
@@ -1324,7 +1343,7 @@ static void pointer_handle_motion(void *data,
   input->pointer.xy[1] = surface_y;
 
   if (wl_surface *focus_surface = input->pointer.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     const wl_fixed_t scale = win->scale();
     input->system->pushEvent(new GHOST_EventCursor(input->system->getMilliSeconds(),
                                                    GHOST_kEventCursorMove,
@@ -1383,7 +1402,7 @@ static void pointer_handle_button(void *data,
   input->pointer.buttons.set(ebutton, state == WL_POINTER_BUTTON_STATE_PRESSED);
 
   if (wl_surface *focus_surface = input->pointer.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventButton(
         input->system->getMilliSeconds(), etype, win, ebutton, GHOST_TABLET_DATA_NONE));
   }
@@ -1402,7 +1421,7 @@ static void pointer_handle_axis(void *data,
   }
 
   if (wl_surface *focus_surface = input->pointer.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventWheel(
         input->system->getMilliSeconds(), win, std::signbit(value) ? +1 : -1));
   }
@@ -1474,6 +1493,10 @@ static void tablet_tool_handle_proximity_in(void *data,
                                             struct zwp_tablet_v2 * /*tablet*/,
                                             struct wl_surface *surface)
 {
+  if (!ghost_wl_surface_own(surface)) {
+    return;
+  }
+
   tablet_tool_input_t *tool_input = static_cast<tablet_tool_input_t *>(data);
   tool_input->proximity = true;
 
@@ -1492,7 +1515,7 @@ static void tablet_tool_handle_proximity_in(void *data,
   /* In case pressure isn't supported. */
   td.Pressure = 1.0f;
 
-  GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(input->tablet.wl_surface);
+  GHOST_WindowWayland *win = ghost_wl_surface_user_data(input->tablet.wl_surface);
 
   win->activate();
 
@@ -1520,7 +1543,7 @@ static void tablet_tool_handle_down(void *data,
   input->tablet.buttons.set(ebutton, true);
 
   if (wl_surface *focus_surface = input->tablet.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventButton(
         input->system->getMilliSeconds(), etype, win, ebutton, tool_input->data));
   }
@@ -1536,7 +1559,7 @@ static void tablet_tool_handle_up(void *data, struct zwp_tablet_tool_v2 * /*zwp_
   input->tablet.buttons.set(ebutton, false);
 
   if (wl_surface *focus_surface = input->tablet.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventButton(
         input->system->getMilliSeconds(), etype, win, ebutton, tool_input->data));
   }
@@ -1608,7 +1631,7 @@ static void tablet_tool_handle_wheel(void *data,
   tablet_tool_input_t *tool_input = static_cast<tablet_tool_input_t *>(data);
   input_t *input = tool_input->input;
   if (wl_surface *focus_surface = input->tablet.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventWheel(input->system->getMilliSeconds(), win, clicks));
   }
 }
@@ -1648,7 +1671,7 @@ static void tablet_tool_handle_button(void *data,
   input->tablet.buttons.set(ebutton, state == WL_POINTER_BUTTON_STATE_PRESSED);
 
   if (wl_surface *focus_surface = input->tablet.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventButton(
         input->system->getMilliSeconds(), etype, win, ebutton, tool_input->data));
   }
@@ -1661,7 +1684,7 @@ static void tablet_tool_handle_frame(void *data,
   input_t *input = tool_input->input;
 
   if (wl_surface *focus_surface = input->tablet.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     const wl_fixed_t scale = win->scale();
     input->system->pushEvent(new GHOST_EventCursor(input->system->getMilliSeconds(),
                                                    GHOST_kEventCursorMove,
@@ -1738,7 +1761,7 @@ static void tablet_seat_handle_pad_added(void * /*data*/,
   /* Pass. */
 }
 
-const struct zwp_tablet_seat_v2_listener tablet_seat_listener = {
+static const struct zwp_tablet_seat_v2_listener tablet_seat_listener = {
     tablet_seat_handle_tablet_added,
     tablet_seat_handle_tool_added,
     tablet_seat_handle_pad_added,
@@ -1813,6 +1836,10 @@ static void keyboard_handle_enter(void *data,
                                   struct wl_surface *surface,
                                   struct wl_array * /*keys*/)
 {
+  if (!ghost_wl_surface_own(surface)) {
+    return;
+  }
+
   input_t *input = static_cast<input_t *>(data);
   input->keyboard.serial = serial;
   input->keyboard.wl_surface = surface;
@@ -1827,8 +1854,12 @@ static void keyboard_handle_enter(void *data,
 static void keyboard_handle_leave(void *data,
                                   struct wl_keyboard * /*wl_keyboard*/,
                                   const uint32_t /*serial*/,
-                                  struct wl_surface * /*surface*/)
+                                  struct wl_surface *surface)
 {
+  if (!(surface && ghost_wl_surface_own(surface))) {
+    return;
+  }
+
   input_t *input = static_cast<input_t *>(data);
   input->keyboard.wl_surface = nullptr;
 
@@ -1983,7 +2014,7 @@ static void keyboard_handle_key(void *data,
   input->data_source_serial = serial;
 
   if (wl_surface *focus_surface = input->keyboard.wl_surface) {
-    GHOST_IWindow *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_IWindow *win = ghost_wl_surface_user_data(focus_surface);
     input->system->pushEvent(new GHOST_EventKey(
         input->system->getMilliSeconds(), etype, win, gkey, '\0', utf8_buf, false));
   }
@@ -2008,7 +2039,7 @@ static void keyboard_handle_key(void *data,
 
       input_t *input = payload->input;
       if (wl_surface *focus_surface = input->keyboard.wl_surface) {
-        GHOST_IWindow *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+        GHOST_IWindow *win = ghost_wl_surface_user_data(focus_surface);
         GHOST_SystemWayland *system = input->system;
         /* Calculate this value every time in case modifier keys are pressed. */
         char utf8_buf[sizeof(GHOST_TEventKeyData::utf8_buf)] = {'\0'};
@@ -2378,6 +2409,9 @@ static void global_handle_add(void *data,
     output_t *output = new output_t;
     output->wl_output = static_cast<wl_output *>(
         wl_registry_bind(wl_registry, name, &wl_output_interface, 2));
+    ghost_wl_output_tag(output->wl_output);
+    wl_output_set_user_data(output->wl_output, output);
+
     display->outputs.push_back(output);
     wl_output_add_listener(output->wl_output, &output_listener, output);
 
@@ -2692,7 +2726,7 @@ GHOST_TSuccess GHOST_SystemWayland::getCursorPosition(int32_t &x, int32_t &y) co
   }
 
   if (wl_surface *focus_surface = input_state->wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     return getCursorPositionClientRelative_impl(input_state, win, x, y);
   }
   return GHOST_kFailure;
@@ -2708,7 +2742,7 @@ GHOST_TSuccess GHOST_SystemWayland::setCursorPosition(const int32_t x, const int
   /* Intentionally different from `getCursorPosition` which supports both tablet & pointer.
    * In the case of setting the cursor location, tablets don't support this. */
   if (wl_surface *focus_surface = input->pointer.wl_surface) {
-    GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(focus_surface);
+    GHOST_WindowWayland *win = ghost_wl_surface_user_data(focus_surface);
     return setCursorPositionClientRelative_impl(input, win, x, y);
   }
   return GHOST_kFailure;
@@ -3255,7 +3289,7 @@ static bool setCursorGrab_use_software_confine(const GHOST_TGrabCursorMode mode,
   if (mode != GHOST_kGrabNormal) {
     return false;
   }
-  const GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface(surface);
+  const GHOST_WindowWayland *win = ghost_wl_surface_user_data(surface);
   if (!win) {
     return false;
   }
@@ -3281,183 +3315,33 @@ static input_grab_state_t input_grab_state_from_mode(const GHOST_TGrabCursorMode
   return grab_state;
 }
 
-GHOST_TSuccess GHOST_SystemWayland::setCursorGrab(const GHOST_TGrabCursorMode mode,
-                                                  const GHOST_TGrabCursorMode mode_current,
-                                                  int32_t init_grab_xy[2],
-                                                  wl_surface *surface)
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Public WAYLAND Proxy Ownership API
+ * \{ */
+
+static const char *ghost_wl_output_tag_id = "GHOST-output";
+static const char *ghost_wl_surface_tag_id = "GHOST-window";
+
+bool ghost_wl_output_own(const struct wl_output *output)
 {
-  /* Ignore, if the required protocols are not supported. */
-  if (!d->relative_pointer_manager || !d->pointer_constraints) {
-    return GHOST_kFailure;
-  }
+  return wl_proxy_get_tag((struct wl_proxy *)output) == &ghost_wl_output_tag_id;
+}
 
-  if (d->inputs.empty()) {
-    return GHOST_kFailure;
-  }
-  /* No change, success. */
-  if (mode == mode_current) {
-    return GHOST_kSuccess;
-  }
+bool ghost_wl_surface_own(const struct wl_surface *surface)
+{
+  return wl_proxy_get_tag((struct wl_proxy *)surface) == &ghost_wl_surface_tag_id;
+}
 
-  input_t *input = d->inputs[0];
+void ghost_wl_output_tag(struct wl_output *output)
+{
+  wl_proxy_set_tag((struct wl_proxy *)output, &ghost_wl_output_tag_id);
+}
 
-#ifdef USE_GNOME_CONFINE_HACK
-  const bool was_software_confine = input->use_pointer_software_confine;
-  const bool use_software_confine = setCursorGrab_use_software_confine(mode, surface);
-#else
-  const bool was_software_confine = false;
-  const bool use_software_confine = false;
-#endif
-
-  const struct input_grab_state_t grab_state_prev = input_grab_state_from_mode(
-      mode_current, was_software_confine);
-  const struct input_grab_state_t grab_state_next = input_grab_state_from_mode(
-      mode, use_software_confine);
-
-  /* Check for wrap as #supportsCursorWarp isn't supported. */
-  const bool use_visible = !(((mode == GHOST_kGrabHide) || (mode == GHOST_kGrabWrap)) ||
-                             use_software_confine);
-
-  const bool is_hardware_cursor = !cursor_is_software(mode, use_software_confine);
-
-  /* Only hide so the cursor is not made visible before it's location is restored.
-   * This function is called again at the end of this function which only shows. */
-  cursor_visible_set(input, use_visible, is_hardware_cursor, CURSOR_VISIBLE_ONLY_HIDE);
-
-  /* Switching from one grab mode to another,
-   * in this case disable the current locks as it makes logic confusing,
-   * postpone changing the cursor to avoid flickering. */
-  if (!grab_state_next.use_lock) {
-    if (input->relative_pointer) {
-      zwp_relative_pointer_v1_destroy(input->relative_pointer);
-      input->relative_pointer = nullptr;
-    }
-    if (input->locked_pointer) {
-      /* Request location to restore to. */
-      if (mode_current == GHOST_kGrabWrap) {
-        /* Since this call is initiated by Blender, we can be sure the window wasn't closed
-         * by logic outside this function - as the window was needed to make this call. */
-        GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(surface);
-        GHOST_ASSERT(win, "could not find window from surface when un-grabbing!");
-
-        GHOST_Rect bounds;
-        int32_t xy_new[2] = {input->pointer.xy[0], input->pointer.xy[1]};
-
-        /* Fallback to window bounds. */
-        if (win->getCursorGrabBounds(bounds) == GHOST_kFailure) {
-          win->getClientBounds(bounds);
-        }
-
-        const int scale = win->scale();
-
-        bounds.m_l = wl_fixed_from_int(bounds.m_l) / scale;
-        bounds.m_t = wl_fixed_from_int(bounds.m_t) / scale;
-        bounds.m_r = wl_fixed_from_int(bounds.m_r) / scale;
-        bounds.m_b = wl_fixed_from_int(bounds.m_b) / scale;
-
-        bounds.wrapPoint(xy_new[0], xy_new[1], 0, win->getCursorGrabAxis());
-
-        /* Push an event so the new location is registered. */
-        if ((xy_new[0] != input->pointer.xy[0]) || (xy_new[1] != input->pointer.xy[1])) {
-          input->system->pushEvent(new GHOST_EventCursor(input->system->getMilliSeconds(),
-                                                         GHOST_kEventCursorMove,
-                                                         win,
-                                                         wl_fixed_to_int(scale * xy_new[0]),
-                                                         wl_fixed_to_int(scale * xy_new[1]),
-                                                         GHOST_TABLET_DATA_NONE));
-        }
-        input->pointer.xy[0] = xy_new[0];
-        input->pointer.xy[1] = xy_new[1];
-
-        zwp_locked_pointer_v1_set_cursor_position_hint(
-            input->locked_pointer, xy_new[0], xy_new[1]);
-        wl_surface_commit(surface);
-      }
-      else if (mode_current == GHOST_kGrabHide) {
-        if ((init_grab_xy[0] != input->grab_lock_xy[0]) ||
-            (init_grab_xy[1] != input->grab_lock_xy[1])) {
-          GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(surface);
-          const int scale = win->scale();
-          const wl_fixed_t xy_next[2] = {
-              wl_fixed_from_int(init_grab_xy[0]) / scale,
-              wl_fixed_from_int(init_grab_xy[1]) / scale,
-          };
-          zwp_locked_pointer_v1_set_cursor_position_hint(
-              input->locked_pointer, xy_next[0], xy_next[1]);
-          wl_surface_commit(surface);
-        }
-      }
-#ifdef USE_GNOME_CONFINE_HACK
-      else if (mode_current == GHOST_kGrabNormal) {
-        if (was_software_confine) {
-          zwp_locked_pointer_v1_set_cursor_position_hint(
-              input->locked_pointer, input->pointer.xy[0], input->pointer.xy[1]);
-          wl_surface_commit(surface);
-        }
-      }
-#endif
-
-      zwp_locked_pointer_v1_destroy(input->locked_pointer);
-      input->locked_pointer = nullptr;
-    }
-  }
-
-  if (!grab_state_next.use_confine) {
-    if (input->confined_pointer) {
-      zwp_confined_pointer_v1_destroy(input->confined_pointer);
-      input->confined_pointer = nullptr;
-    }
-  }
-
-  if (mode != GHOST_kGrabDisable) {
-    if (grab_state_next.use_lock) {
-      if (!grab_state_prev.use_lock) {
-        /* TODO(@campbellbarton): As WAYLAND does not support warping the pointer it may not be
-         * possible to support #GHOST_kGrabWrap by pragmatically settings it's coordinates.
-         * An alternative could be to draw the cursor in software (and hide the real cursor),
-         * or just accept a locked cursor on WAYLAND. */
-        input->relative_pointer = zwp_relative_pointer_manager_v1_get_relative_pointer(
-            d->relative_pointer_manager, input->wl_pointer);
-        zwp_relative_pointer_v1_add_listener(
-            input->relative_pointer, &relative_pointer_listener, input);
-        input->locked_pointer = zwp_pointer_constraints_v1_lock_pointer(
-            d->pointer_constraints,
-            surface,
-            input->wl_pointer,
-            nullptr,
-            ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
-      }
-      if (mode == GHOST_kGrabHide) {
-        /* Set the initial position to detect any changes when un-grabbing,
-         * otherwise the unlocked cursor defaults to un-locking in-place. */
-        GHOST_WindowWayland *win = GHOST_WindowWayland::from_surface_mut(surface);
-        const int scale = win->scale();
-        init_grab_xy[0] = wl_fixed_to_int(scale * input->pointer.xy[0]);
-        init_grab_xy[1] = wl_fixed_to_int(scale * input->pointer.xy[1]);
-        input->grab_lock_xy[0] = init_grab_xy[0];
-        input->grab_lock_xy[1] = init_grab_xy[1];
-      }
-    }
-    else if (grab_state_next.use_confine) {
-      if (!grab_state_prev.use_confine) {
-        input->confined_pointer = zwp_pointer_constraints_v1_confine_pointer(
-            d->pointer_constraints,
-            surface,
-            input->wl_pointer,
-            nullptr,
-            ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
-      }
-    }
-  }
-
-  /* Only show so the cursor is made visible as the last step. */
-  cursor_visible_set(input, use_visible, is_hardware_cursor, CURSOR_VISIBLE_ONLY_SHOW);
-
-#ifdef USE_GNOME_CONFINE_HACK
-  input->use_pointer_software_confine = use_software_confine;
-#endif
-
-  return GHOST_kSuccess;
+void ghost_wl_surface_tag(struct wl_surface *surface)
+{
+  wl_proxy_set_tag((struct wl_proxy *)surface, &ghost_wl_surface_tag_id);
 }
 
 /** \} */
@@ -3515,14 +3399,20 @@ wl_shm *GHOST_SystemWayland::shm() const
 /** \name Public WAYLAND Query Access
  * \{ */
 
-output_t *GHOST_SystemWayland::output_find_by_wl(const struct wl_output *output) const
+struct output_t *ghost_wl_output_user_data(struct wl_output *wl_output)
 {
-  for (output_t *reg_output : this->outputs()) {
-    if (reg_output->wl_output == output) {
-      return reg_output;
-    }
-  }
-  return nullptr;
+  GHOST_ASSERT(wl_output, "output must not be NULL");
+  GHOST_ASSERT(ghost_wl_output_own(wl_output), "output is not owned by GHOST");
+  output_t *output = static_cast<output_t *>(wl_output_get_user_data(wl_output));
+  return output;
+}
+
+GHOST_WindowWayland *ghost_wl_surface_user_data(struct wl_surface *surface)
+{
+  GHOST_ASSERT(surface, "surface must not be NULL");
+  GHOST_ASSERT(ghost_wl_surface_own(surface), "surface is not owned by GHOST");
+  GHOST_WindowWayland *win = static_cast<GHOST_WindowWayland *>(wl_surface_get_user_data(surface));
+  return win;
 }
 
 /** \} */
@@ -3555,5 +3445,205 @@ void GHOST_SystemWayland::window_surface_unref(const wl_surface *surface)
   }
 #undef SURFACE_CLEAR_PTR
 }
+
+bool GHOST_SystemWayland::window_cursor_grab_set(const GHOST_TGrabCursorMode mode,
+                                                 const GHOST_TGrabCursorMode mode_current,
+                                                 int32_t init_grab_xy[2],
+                                                 const GHOST_Rect *wrap_bounds,
+                                                 const GHOST_TAxisFlag wrap_axis,
+                                                 wl_surface *surface,
+                                                 const int scale)
+{
+  /* Ignore, if the required protocols are not supported. */
+  if (!d->relative_pointer_manager || !d->pointer_constraints) {
+    return GHOST_kFailure;
+  }
+
+  if (d->inputs.empty()) {
+    return GHOST_kFailure;
+  }
+  /* No change, success. */
+  if (mode == mode_current) {
+    return GHOST_kSuccess;
+  }
+
+  input_t *input = d->inputs[0];
+
+#ifdef USE_GNOME_CONFINE_HACK
+  const bool was_software_confine = input->use_pointer_software_confine;
+  const bool use_software_confine = setCursorGrab_use_software_confine(mode, surface);
+#else
+  const bool was_software_confine = false;
+  const bool use_software_confine = false;
+#endif
+
+  const struct input_grab_state_t grab_state_prev = input_grab_state_from_mode(
+      mode_current, was_software_confine);
+  const struct input_grab_state_t grab_state_next = input_grab_state_from_mode(
+      mode, use_software_confine);
+
+  /* Check for wrap as #supportsCursorWarp isn't supported. */
+  const bool use_visible = !(((mode == GHOST_kGrabHide) || (mode == GHOST_kGrabWrap)) ||
+                             use_software_confine);
+
+  const bool is_hardware_cursor = !cursor_is_software(mode, use_software_confine);
+
+  /* Only hide so the cursor is not made visible before it's location is restored.
+   * This function is called again at the end of this function which only shows. */
+  cursor_visible_set(input, use_visible, is_hardware_cursor, CURSOR_VISIBLE_ONLY_HIDE);
+
+  /* Switching from one grab mode to another,
+   * in this case disable the current locks as it makes logic confusing,
+   * postpone changing the cursor to avoid flickering. */
+  if (!grab_state_next.use_lock) {
+    if (input->relative_pointer) {
+      zwp_relative_pointer_v1_destroy(input->relative_pointer);
+      input->relative_pointer = nullptr;
+    }
+    if (input->locked_pointer) {
+      /* Request location to restore to. */
+      if (mode_current == GHOST_kGrabWrap) {
+        /* Since this call is initiated by Blender, we can be sure the window wasn't closed
+         * by logic outside this function - as the window was needed to make this call. */
+        int32_t xy_new[2] = {input->pointer.xy[0], input->pointer.xy[1]};
+
+        GHOST_Rect bounds_scale;
+
+        bounds_scale.m_l = wl_fixed_from_int(wrap_bounds->m_l) / scale;
+        bounds_scale.m_t = wl_fixed_from_int(wrap_bounds->m_t) / scale;
+        bounds_scale.m_r = wl_fixed_from_int(wrap_bounds->m_r) / scale;
+        bounds_scale.m_b = wl_fixed_from_int(wrap_bounds->m_b) / scale;
+
+        bounds_scale.wrapPoint(xy_new[0], xy_new[1], 0, wrap_axis);
+
+        /* Push an event so the new location is registered. */
+        if ((xy_new[0] != input->pointer.xy[0]) || (xy_new[1] != input->pointer.xy[1])) {
+          input->system->pushEvent(new GHOST_EventCursor(input->system->getMilliSeconds(),
+                                                         GHOST_kEventCursorMove,
+                                                         ghost_wl_surface_user_data(surface),
+                                                         wl_fixed_to_int(scale * xy_new[0]),
+                                                         wl_fixed_to_int(scale * xy_new[1]),
+                                                         GHOST_TABLET_DATA_NONE));
+        }
+        input->pointer.xy[0] = xy_new[0];
+        input->pointer.xy[1] = xy_new[1];
+
+        zwp_locked_pointer_v1_set_cursor_position_hint(
+            input->locked_pointer, xy_new[0], xy_new[1]);
+        wl_surface_commit(surface);
+      }
+      else if (mode_current == GHOST_kGrabHide) {
+        if ((init_grab_xy[0] != input->grab_lock_xy[0]) ||
+            (init_grab_xy[1] != input->grab_lock_xy[1])) {
+          const wl_fixed_t xy_next[2] = {
+              wl_fixed_from_int(init_grab_xy[0]) / scale,
+              wl_fixed_from_int(init_grab_xy[1]) / scale,
+          };
+          zwp_locked_pointer_v1_set_cursor_position_hint(
+              input->locked_pointer, xy_next[0], xy_next[1]);
+          wl_surface_commit(surface);
+        }
+      }
+#ifdef USE_GNOME_CONFINE_HACK
+      else if (mode_current == GHOST_kGrabNormal) {
+        if (was_software_confine) {
+          zwp_locked_pointer_v1_set_cursor_position_hint(
+              input->locked_pointer, input->pointer.xy[0], input->pointer.xy[1]);
+          wl_surface_commit(surface);
+        }
+      }
+#endif
+
+      zwp_locked_pointer_v1_destroy(input->locked_pointer);
+      input->locked_pointer = nullptr;
+    }
+  }
+
+  if (!grab_state_next.use_confine) {
+    if (input->confined_pointer) {
+      zwp_confined_pointer_v1_destroy(input->confined_pointer);
+      input->confined_pointer = nullptr;
+    }
+  }
+
+  if (mode != GHOST_kGrabDisable) {
+    if (grab_state_next.use_lock) {
+      if (!grab_state_prev.use_lock) {
+        /* TODO(@campbellbarton): As WAYLAND does not support warping the pointer it may not be
+         * possible to support #GHOST_kGrabWrap by pragmatically settings it's coordinates.
+         * An alternative could be to draw the cursor in software (and hide the real cursor),
+         * or just accept a locked cursor on WAYLAND. */
+        input->relative_pointer = zwp_relative_pointer_manager_v1_get_relative_pointer(
+            d->relative_pointer_manager, input->wl_pointer);
+        zwp_relative_pointer_v1_add_listener(
+            input->relative_pointer, &relative_pointer_listener, input);
+        input->locked_pointer = zwp_pointer_constraints_v1_lock_pointer(
+            d->pointer_constraints,
+            surface,
+            input->wl_pointer,
+            nullptr,
+            ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
+      }
+      if (mode == GHOST_kGrabHide) {
+        /* Set the initial position to detect any changes when un-grabbing,
+         * otherwise the unlocked cursor defaults to un-locking in-place. */
+        init_grab_xy[0] = wl_fixed_to_int(scale * input->pointer.xy[0]);
+        init_grab_xy[1] = wl_fixed_to_int(scale * input->pointer.xy[1]);
+        input->grab_lock_xy[0] = init_grab_xy[0];
+        input->grab_lock_xy[1] = init_grab_xy[1];
+      }
+    }
+    else if (grab_state_next.use_confine) {
+      if (!grab_state_prev.use_confine) {
+        input->confined_pointer = zwp_pointer_constraints_v1_confine_pointer(
+            d->pointer_constraints,
+            surface,
+            input->wl_pointer,
+            nullptr,
+            ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
+      }
+    }
+  }
+
+  /* Only show so the cursor is made visible as the last step. */
+  cursor_visible_set(input, use_visible, is_hardware_cursor, CURSOR_VISIBLE_ONLY_SHOW);
+
+#ifdef USE_GNOME_CONFINE_HACK
+  input->use_pointer_software_confine = use_software_confine;
+#endif
+
+  return GHOST_kSuccess;
+}
+
+#ifdef WITH_GHOST_WAYLAND_DYNLOAD
+bool ghost_wl_dynload_libraries()
+{
+  /* Only report when `libwayland-client` is not found when building without X11,
+   * which will be used as a fallback. */
+#  ifdef WITH_GHOST_X11
+  bool verbose = false;
+#  else
+  bool verbose = true;
+#  endif
+
+  if (wayland_dynload_client_init(verbose) && /* `libwayland-client`. */
+      wayland_dynload_cursor_init(verbose) && /* `libwayland-cursor`. */
+      wayland_dynload_egl_init(verbose) &&    /* `libwayland-egl`. */
+#  ifdef WITH_GHOST_WAYLAND_LIBDECOR
+      wayland_dynload_libdecor_init(verbose) && /* `libdecor-0`. */
+#  endif
+      true) {
+    return true;
+  }
+#  ifdef WITH_GHOST_WAYLAND_LIBDECOR
+  wayland_dynload_libdecor_exit();
+#  endif
+  wayland_dynload_client_exit();
+  wayland_dynload_cursor_exit();
+  wayland_dynload_egl_exit();
+
+  return false;
+}
+#endif /* WITH_GHOST_WAYLAND_DYNLOAD */
 
 /** \} */
