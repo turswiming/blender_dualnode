@@ -2,6 +2,8 @@
 
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
+#include "BKE_editmesh.h"
+#include "BKE_lib_id.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_mesh_wrapper.h"
@@ -197,7 +199,15 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet curves_geometry = params.extract_input<GeometrySet>("Curves");
 
-  auto pass_through_input = [&]() { params.set_output("Curves", std::move(curves_geometry)); };
+  Mesh *surface_mesh_orig = nullptr;
+  bool free_suface_mesh_orig = false;
+
+  auto pass_through_input = [&]() {
+    params.set_output("Curves", std::move(curves_geometry));
+    if (free_suface_mesh_orig) {
+      BKE_id_free(nullptr, surface_mesh_orig);
+    }
+  };
 
   const Object *self_ob_eval = params.self_object();
   if (self_ob_eval == nullptr || self_ob_eval->type != OB_CURVES) {
@@ -218,19 +228,28 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
   Object *surface_ob_orig = DEG_get_original_object(surface_ob_eval);
-  Mesh &surface_mesh_orig = *static_cast<Mesh *>(surface_ob_orig->data);
+  Mesh &surface_object_data = *static_cast<Mesh *>(surface_ob_orig->data);
+
+  if (BMEditMesh *em = surface_object_data.edit_mesh) {
+    surface_mesh_orig = BKE_mesh_from_bmesh_for_eval_nomain(em->bm, NULL, &surface_object_data);
+    free_suface_mesh_orig = true;
+  }
+  else {
+    surface_mesh_orig = &surface_object_data;
+  }
   Mesh *surface_mesh_eval = BKE_modifier_get_evaluated_mesh_from_evaluated_object(surface_ob_eval,
                                                                                   false);
   if (surface_mesh_eval == nullptr) {
     pass_through_input();
     return;
   }
+
   BKE_mesh_wrapper_ensure_mdata(surface_mesh_eval);
 
   MeshComponent mesh_eval;
   mesh_eval.replace(surface_mesh_eval, GeometryOwnershipType::ReadOnly);
   MeshComponent mesh_orig;
-  mesh_orig.replace(&surface_mesh_orig, GeometryOwnershipType::ReadOnly);
+  mesh_orig.replace(surface_mesh_orig, GeometryOwnershipType::ReadOnly);
 
   Curves &curves_id = *curves_geometry.get_curves_for_write();
   CurvesGeometry &curves = CurvesGeometry::wrap(curves_id.geometry);
@@ -259,8 +278,8 @@ static void node_geo_exec(GeoNodeExecParams params)
       rest_position_name, ATTR_DOMAIN_POINT, {0.0f, 0.0f, 0.0f});
   const Span<float2> surface_uv_coords = curves.surface_uv_coords();
 
-  const Span<MLoopTri> looptris_orig{BKE_mesh_runtime_looptri_ensure(&surface_mesh_orig),
-                                     BKE_mesh_runtime_looptri_len(&surface_mesh_orig)};
+  const Span<MLoopTri> looptris_orig{BKE_mesh_runtime_looptri_ensure(surface_mesh_orig),
+                                     BKE_mesh_runtime_looptri_len(surface_mesh_orig)};
   const Span<MLoopTri> looptris_eval{BKE_mesh_runtime_looptri_ensure(surface_mesh_eval),
                                      BKE_mesh_runtime_looptri_len(surface_mesh_eval)};
   const ReverseUVSampler reverse_uv_sampler_orig{uv_map_orig, looptris_orig};
@@ -270,10 +289,10 @@ static void node_geo_exec(GeoNodeExecParams params)
    * because face normals or vertex normals may lose information (custom normals, auto smooth) in
    * some cases. It isn't yet possible to retrieve lazily calculated face corner normals from a
    * const mesh, so they are calculated here every time. */
-  Array<float3> corner_normals_orig(surface_mesh_orig.totloop);
+  Array<float3> corner_normals_orig(surface_mesh_orig->totloop);
   Array<float3> corner_normals_eval(surface_mesh_eval->totloop);
   BKE_mesh_calc_normals_split_ex(
-      &surface_mesh_orig, nullptr, reinterpret_cast<float(*)[3]>(corner_normals_orig.data()));
+      surface_mesh_orig, nullptr, reinterpret_cast<float(*)[3]>(corner_normals_orig.data()));
   BKE_mesh_calc_normals_split_ex(
       surface_mesh_eval, nullptr, reinterpret_cast<float(*)[3]>(corner_normals_eval.data()));
 
@@ -282,7 +301,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   const bke::CurvesSurfaceTransforms transforms{*self_ob_eval, surface_ob_eval};
 
   deform_curves(curves,
-                surface_mesh_orig,
+                *surface_mesh_orig,
                 *surface_mesh_eval,
                 surface_uv_coords,
                 reverse_uv_sampler_orig,
@@ -301,6 +320,10 @@ static void node_geo_exec(GeoNodeExecParams params)
         invalid_uv_count.load());
     params.error_message_add(NodeWarningType::Warning, error);
     MEM_freeN(error);
+  }
+
+  if (free_suface_mesh_orig) {
+    BKE_id_free(nullptr, surface_mesh_orig);
   }
 
   params.set_output("Curves", curves_geometry);
