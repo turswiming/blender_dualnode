@@ -266,19 +266,16 @@ static void node_geo_exec(GeoNodeExecParams params)
   const ReverseUVSampler reverse_uv_sampler_orig{uv_map_orig, looptris_orig};
   const ReverseUVSampler reverse_uv_sampler_eval{uv_map_eval, looptris_eval};
 
-  /* TODO: Figure out how to get this data in a thread-safe way. */
-  if (!CustomData_has_layer(&surface_mesh_orig.ldata, CD_NORMAL)) {
-    BKE_mesh_calc_normals_split(&surface_mesh_orig);
-  }
-  if (!CustomData_has_layer(&surface_mesh_eval->ldata, CD_NORMAL)) {
-    BKE_mesh_calc_normals_split(surface_mesh_eval);
-  }
-  const Span<float3> corner_normals_orig = {
-      reinterpret_cast<const float3 *>(CustomData_get_layer(&surface_mesh_orig.ldata, CD_NORMAL)),
-      surface_mesh_orig.totloop};
-  const Span<float3> corner_normals_eval = {
-      reinterpret_cast<const float3 *>(CustomData_get_layer(&surface_mesh_eval->ldata, CD_NORMAL)),
-      surface_mesh_eval->totloop};
+  /* Retrieve face corner normals from each mesh. It's necessary to use face corner normals
+   * because face normals or vertex normals may lose information (custom normals, auto smooth) in
+   * some cases. It isn't yet possible to retrieve lazily calculated face corner normals from a
+   * const mesh, so they are calculated here every time. */
+  Array<float3> corner_normals_orig(surface_mesh_orig.totloop);
+  Array<float3> corner_normals_eval(surface_mesh_eval->totloop);
+  BKE_mesh_calc_normals_split_ex(
+      &surface_mesh_orig, nullptr, reinterpret_cast<float(*)[3]>(corner_normals_orig.data()));
+  BKE_mesh_calc_normals_split_ex(
+      surface_mesh_eval, nullptr, reinterpret_cast<float(*)[3]>(corner_normals_eval.data()));
 
   std::atomic<int> invalid_uv_count = 0;
 
