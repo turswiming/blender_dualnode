@@ -2391,7 +2391,7 @@ bool ED_image_save_all_modified(const bContext *C, ReportList *reports)
         if (image_has_valid_path(ima)) {
           ImageSaveOptions opts;
           Scene *scene = CTX_data_scene(C);
-          if (!BKE_image_save_options_init(&opts, bmain, scene, ima, NULL, false, false)) {
+          if (BKE_image_save_options_init(&opts, bmain, scene, ima, NULL, false, false)) {
             bool saved_successfully = BKE_image_save(reports, bmain, ima, NULL, &opts);
             ok = ok && saved_successfully;
           }
@@ -3580,9 +3580,9 @@ static void change_frame_apply(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
 
   /* set the new frame number */
-  CFRA = RNA_int_get(op->ptr, "frame");
-  FRAMENUMBER_MIN_CLAMP(CFRA);
-  SUBFRA = 0.0f;
+  scene->r.cfra = RNA_int_get(op->ptr, "frame");
+  FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
+  scene->r.subframe = 0.0f;
 
   /* do updates */
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
@@ -3603,7 +3603,7 @@ static int frame_from_event(bContext *C, const wmEvent *event)
   int framenr = 0;
 
   if (region->regiontype == RGN_TYPE_WINDOW) {
-    float sfra = SFRA, efra = EFRA, framelen = region->winx / (efra - sfra + 1);
+    float sfra = scene->r.sfra, efra = scene->r.efra, framelen = region->winx / (efra - sfra + 1);
 
     framenr = sfra + event->mval[0] / framelen;
   }

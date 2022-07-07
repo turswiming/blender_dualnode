@@ -1811,7 +1811,10 @@ float SCULPT_calc_cavity(SculptSession *ss, const int vertex);
 
 /* end sculpt_ops.c */
 
-#define SCULPT_TOOL_NEEDS_COLOR(tool) ELEM(tool, SCULPT_TOOL_PAINT, SCULPT_TOOL_SMEAR)
+BLI_INLINE bool SCULPT_tool_is_paint(int tool)
+{
+  return ELEM(tool, SCULPT_TOOL_PAINT, SCULPT_TOOL_SMEAR);
+}
 
 #ifdef __cplusplus
 }
