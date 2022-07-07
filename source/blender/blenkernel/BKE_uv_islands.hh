@@ -641,12 +641,36 @@ struct UVIsland {
   Vector<UVBorder> borders;
   Map<int64_t, Vector<UVVertex *>> uv_vertex_lookup;
 
-  UVIsland()
+  UVIsland(const uint64_t mesh_prim_len)
   {
-    // TODO: Base on actual island primitives. or replace pointers with indices.
-    uv_vertices.reserve(1000000);
-    uv_edges.reserve(1000000);
-    uv_primitives.reserve(1000000);
+    /*
+     * Reserve enough space for uv island extension. Worse case scenarios include islands
+     * containing only a few faces, or the prims are oriented as a triangle strip. As we don't
+     * categorize the exact topology we over allocate.
+     *
+     * There will at least be a single edge shared. Commonly this number is somewhere between 2-3,
+     * except when topology form a triangle strip.
+     *
+     * There will at least be two vertices shared. Commonly there are 3 vertices shared.
+     *
+     * NOTE: This could be improved by counting outer edges.
+     *
+     * The overallocation is needed as the elements in the vector are referenced to. When the
+     * capacity of a vector is changed the pointers will become invalid. Other solutions:
+     * - Store indices, but that decreases the readability of the code.
+     * - Use dynamic memory pool (Vector of Arrays of Elements) as elements are only added or
+     *   modified, never removed. See https://developer.blender.org/D13289 for
+     *   `BLI_vector_list.hh`.
+     * - Detect when vectors allocate and update pointers. Not easy to maintain when algorithm
+     *   will change in the future.
+     */
+    uint64_t uv_prim_len = max_ii(2 * mesh_prim_len, 10000);
+    uint64_t uv_edge_len = uv_prim_len * 2;
+    uint64_t uv_vertex_len = uv_prim_len * 2;
+
+    uv_vertices.reserve(uv_vertex_len);
+    uv_edges.reserve(uv_edge_len);
+    uv_primitives.reserve(uv_prim_len);
   }
 
   UVPrimitive *add_primitive(MeshPrimitive &primitive)
@@ -844,7 +868,14 @@ struct UVIslands {
     islands.reserve(mesh_data.uv_island_len);
 
     for (int64_t uv_island_id = 0; uv_island_id < mesh_data.uv_island_len; uv_island_id++) {
-      islands.append_as(UVIsland());
+      uint64_t mesh_prim_len = 0;
+      for (MeshPrimitive &primitive : mesh_data.primitives) {
+        if (primitive.uv_island_id == uv_island_id) {
+          mesh_prim_len++;
+        }
+      }
+
+      islands.append_as(UVIsland(mesh_prim_len));
       UVIsland *uv_island = &islands.last();
       for (MeshPrimitive &primitive : mesh_data.primitives) {
         if (primitive.uv_island_id == uv_island_id) {
