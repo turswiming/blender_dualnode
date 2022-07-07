@@ -6,6 +6,7 @@
 #include "kernel/film/accumulate.h"
 #include "kernel/integrator/shader_eval.h"
 #include "kernel/light/light.h"
+#include "kernel/light/light_tree.h"
 #include "kernel/light/sample.h"
 
 CCL_NAMESPACE_BEGIN
@@ -66,7 +67,11 @@ ccl_device float3 integrator_eval_background_shader(KernelGlobals kg,
 
     /* multiple importance sampling, get background light pdf for ray
      * direction, and compute weight with respect to BSDF pdf */
-    const float pdf = background_light_pdf(kg, ray_P - ray_D * mis_ray_t, ray_D);
+    float pdf = background_light_pdf(kg, ray_P - ray_D * mis_ray_t, ray_D);
+    if (kernel_data.integrator.use_light_tree) {
+      const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
+      pdf *= distant_lights_pdf(kg, ray_P, N, kernel_data.background.light_index);
+    }
     const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
     L *= mis_weight;
   }
@@ -180,6 +185,11 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
         /* multiple importance sampling, get regular light pdf,
          * and compute weight with respect to BSDF pdf */
         const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
+        if (kernel_data.integrator.use_light_tree) {
+          const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
+          const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
+          ls.pdf *= distant_lights_pdf(kg, ray_P, N, lamp);
+        }
         const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
         light_eval *= mis_weight;
       }

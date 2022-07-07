@@ -42,6 +42,7 @@ KERNEL_STRUCT_MEMBER(path, uint8_t, mnee, KERNEL_FEATURE_PATH_TRACING)
  * compute the complete distance through transparent surfaces and volumes. */
 KERNEL_STRUCT_MEMBER(path, float, mis_ray_pdf, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER(path, float, mis_ray_t, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(path, packed_float3, mis_origin_n, KERNEL_FEATURE_PATH_TRACING)
 /* Filter glossy. */
 KERNEL_STRUCT_MEMBER(path, float, min_ray_pdf, KERNEL_FEATURE_PATH_TRACING)
 /* Continuation probability for path termination. */

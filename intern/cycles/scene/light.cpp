@@ -353,15 +353,16 @@ void LightManager::device_update_distribution(Device *device,
     if (progress.get_cancel())
       return;
 
+    /* Count emissive triangles. */
+    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+    size_t mesh_num_triangles = mesh->num_triangles();
+    total_triangles += mesh_num_triangles;
+
     if (!object_usable_as_light(object)) {
       object_id++;
       continue;
     }
 
-    /* Count emissive triangles. */
-    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    size_t mesh_num_triangles = mesh->num_triangles();
-    total_triangles += mesh_num_triangles;
     for (size_t i = 0; i < mesh_num_triangles; i++) {
       int shader_index = mesh->get_shader()[i];
       Shader *shader = (shader_index < mesh->get_used_shaders().size()) ?

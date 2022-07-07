@@ -642,15 +642,17 @@ ccl_device_forceinline float triangle_light_pdf(KernelGlobals kg,
     }
     else {
       float area = 1.0f;
-      if (has_motion) {
-        /* get the center frame vertices, this is what the PDF was calculated from */
-        triangle_world_space_vertices(kg, sd->object, sd->prim, -1.0f, V);
-        area = triangle_area(V[0], V[1], V[2]);
+      if (!kernel_data.integrator.use_light_tree) {
+        if (has_motion) {
+          /* get the center frame vertices, this is what the PDF was calculated from */
+          triangle_world_space_vertices(kg, sd->object, sd->prim, -1.0f, V);
+          area = triangle_area(V[0], V[1], V[2]);
+        }
+        else {
+          area = 0.5f * len(N);
+        }
       }
-      else {
-        area = 0.5f * len(N);
-      }
-      const float pdf = area * kernel_data.integrator.pdf_triangles;
+      float pdf = area * kernel_data.integrator.pdf_triangles;
       return pdf / solid_angle;
     }
   }
@@ -665,9 +667,10 @@ ccl_device_forceinline float triangle_light_pdf(KernelGlobals kg,
        * area = the area the sample was taken from
        * area_pre = the are from which pdf_triangles was calculated from */
       triangle_world_space_vertices(kg, sd->object, sd->prim, -1.0f, V);
-      const float area_pre = triangle_area(V[0], V[1], V[2]);
+      const float area_pre = (kernel_data.integrator.use_light_tree) ? 1.0 : triangle_area(V[0], V[1], V[2]);
       pdf = pdf * area_pre / area;
     }
+
     return pdf;
   }
 }

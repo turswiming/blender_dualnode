@@ -1229,8 +1229,11 @@ typedef struct KernelBackground {
 
   int lightgroup;
 
+  /* index into lights array */
+  int light_index;
+
   /* Padding */
-  int pad1, pad2;
+  int pad1;
 } KernelBackground;
 static_assert_align(KernelBackground, 16);
 

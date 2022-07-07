@@ -4,6 +4,7 @@
 #include "scene/background.h"
 #include "device/device.h"
 #include "scene/integrator.h"
+#include "scene/light.h"
 #include "scene/scene.h"
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
@@ -102,6 +103,19 @@ void Background::device_update(Device *device, DeviceScene *dscene, Scene *scene
     if (!(visibility & PATH_RAY_CAMERA))
       kbackground->surface_shader |= SHADER_EXCLUDE_CAMERA;
   }
+
+  /* Find background index in lights. */
+  int device_light_index = 0;
+  int background_light_index = -1;
+  foreach (Light *light, scene->lights) {
+    if (light->get_is_enabled()) {
+      if (light->get_light_type() == LIGHT_BACKGROUND) {
+        background_light_index = device_light_index;
+      }
+      device_light_index++;
+    }
+  }
+  kbackground->light_index = background_light_index;
 
   /* Light group. */
   auto it = scene->lightgroups.find(lightgroup);

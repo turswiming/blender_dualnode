@@ -206,28 +206,6 @@ ccl_device int light_tree_sample(KernelGlobals kg,
         triangle_light_sample<in_volume_segment>(kg, prim, object, randu, randv, time, ls, P);
         ls->shader |= shader_flag;
 
-        /* triangle_light sample also multiplies the pdf by the triangle's area
-         * because of the precomputed light distribution PDF.
-         * We need to reverse this because it's not needed here.*/
-        float area = 0.0f;
-
-        float3 V[3];
-        bool has_motion = triangle_world_space_vertices(kg, object, prim, time, V);
-
-        const float3 e0 = V[1] - V[0];
-        const float3 e1 = V[2] - V[0];
-        const float3 e2 = V[2] - V[1];
-
-        const float3 N0 = cross(e0, e1);
-        if (has_motion) {
-          /* get the center frame vertices, this is what the PDF was calculated from */
-          triangle_world_space_vertices(kg, object, prim, -1.0f, V);
-          area = triangle_area(V[0], V[1], V[2]);
-        }
-        else {
-          area = 0.5f * len(N0);
-        }
-        ls->pdf /= area;
         return (ls->pdf > 0.0f);
       }
 
@@ -350,7 +328,7 @@ ccl_device float light_tree_pdf(KernelGlobals kg, const float3 P, const float3 N
   for (int i = 0; i < kleaf->num_prims; i++) {
     int prim = i - kleaf->child_index; /* At a leaf node, the negative value is the index into first prim. */
     const float importance = light_tree_emitter_importance(kg, P, N, prim);
-    if (i == emitter) {
+    if (prim == emitter) {
       emitter_importance = importance;
     }
     total_importance += importance;
