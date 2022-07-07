@@ -87,7 +87,7 @@ struct SlideOperationExecutor {
   Object *surface_ob_ = nullptr;
   Mesh *surface_ = nullptr;
   Span<MLoopTri> surface_looptris_;
-  VArray_Span<float2> surface_uv_map_;
+  VArraySpan<float2> surface_uv_map_;
 
   VArray<float> curve_factors_;
   VArray<float> point_factors_;
@@ -98,7 +98,7 @@ struct SlideOperationExecutor {
   float2 brush_pos_re_;
   float2 brush_pos_diff_re_;
 
-  CurvesSculptTransforms transforms_;
+  CurvesSurfaceTransforms transforms_;
 
   BVHTreeFromMesh surface_bvh_;
 
@@ -136,7 +136,7 @@ struct SlideOperationExecutor {
     brush_pos_diff_re_ = brush_pos_re_ - brush_pos_prev_re_;
     BLI_SCOPED_DEFER([&]() { self_->brush_pos_last_re_ = brush_pos_re_; });
 
-    transforms_ = CurvesSculptTransforms(*object_, curves_id_->surface);
+    transforms_ = CurvesSurfaceTransforms(*object_, curves_id_->surface);
 
     surface_ob_ = curves_id_->surface;
     surface_ = static_cast<Mesh *>(surface_ob_->data);

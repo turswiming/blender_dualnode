@@ -1013,7 +1013,7 @@ static void gpencil_brush_clone_add(bContext *C, tGP_BrushEditData *gso)
         gpl = CTX_data_active_gpencil_layer(C);
       }
       bGPDframe *gpf = BKE_gpencil_layer_frame_get(
-          gpl, CFRA, IS_AUTOKEY_ON(scene) ? GP_GETFRAME_ADD_NEW : GP_GETFRAME_USE_PREV);
+          gpl, scene->r.cfra, IS_AUTOKEY_ON(scene) ? GP_GETFRAME_ADD_NEW : GP_GETFRAME_USE_PREV);
       if (gpf == NULL) {
         continue;
       }
@@ -1336,7 +1336,7 @@ static void gpencil_sculpt_brush_init_stroke(bContext *C, tGP_BrushEditData *gso
   bGPdata *gpd = gso->gpd;
 
   Scene *scene = gso->scene;
-  int cfra = CFRA;
+  int cfra = scene->r.cfra;
 
   /* only try to add a new frame if this is the first stroke, or the frame has changed */
   if ((gpd == NULL) || (cfra == gso->cfra)) {
@@ -1518,7 +1518,8 @@ static bool gpencil_sculpt_brush_do_stroke(tGP_BrushEditData *gso,
 
           /* To each point individually... */
           pt = &gps->points[i];
-          if ((pt->runtime.pt_orig == NULL) && (tool != GPSCULPT_TOOL_GRAB)) {
+          if ((i != gps->totpoints - 2) && (pt->runtime.pt_orig == NULL) &&
+              (tool != GPSCULPT_TOOL_GRAB)) {
             continue;
           }
           pt_active = (pt->runtime.pt_orig) ? pt->runtime.pt_orig : pt;

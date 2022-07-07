@@ -30,10 +30,10 @@
 
 /**
  * The code below uses a prefix naming convention to indicate the coordinate space:
- * cu: Local space of the curves object that is being edited.
- * su: Local space of the surface object.
- * wo: World space.
- * re: 2D coordinates within the region.
+ * `cu`: Local space of the curves object that is being edited.
+ * `su`: Local space of the surface object.
+ * `wo`: World space.
+ * `re`: 2D coordinates within the region.
  */
 
 namespace blender::ed::sculpt_paint {
@@ -68,7 +68,7 @@ struct PinchOperationExecutor {
   Vector<int64_t> selected_curve_indices_;
   IndexMask curve_selection_;
 
-  CurvesSculptTransforms transforms_;
+  CurvesSurfaceTransforms transforms_;
 
   const CurvesSculpt *curves_sculpt_ = nullptr;
   const Brush *brush_ = nullptr;
@@ -103,7 +103,7 @@ struct PinchOperationExecutor {
 
     invert_factor_ = self_->invert_pinch_ ? -1.0f : 1.0f;
 
-    transforms_ = CurvesSculptTransforms(*object_, curves_id_->surface);
+    transforms_ = CurvesSurfaceTransforms(*object_, curves_id_->surface);
 
     point_factors_ = get_point_selection(*curves_id_);
     curve_selection_ = retrieve_selected_curves(*curves_id_, selected_curve_indices_);
