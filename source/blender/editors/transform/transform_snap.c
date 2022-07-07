@@ -1474,16 +1474,6 @@ eSnapMode snapObjectsTransform(
   const bool face_raycast_only = t->settings->snap_mode == SCE_SNAP_MODE_FACE_RAYCAST;
   const bool use_occlusion_test = use_retopo_mode || !face_raycast_only;
 
-  /* TODO(gfxcoder): remove debug print */
-  printf(
-      "snapObjectsTransform: target_select:%d snap_mode:%d use_retopo_mode:%s "
-      "face_raycast_only:%s use_occlusion_test:%s\n",
-      t->tsnap.target_select,
-      t->settings->snap_mode,
-      use_retopo_mode ? "t" : "f",
-      face_raycast_only ? "t" : "f",
-      use_occlusion_test ? "t" : "f");
-
   return ED_transform_snap_object_project_view3d(
       t->tsnap.object_context,
       t->depsgraph,

@@ -1979,9 +1979,6 @@ void transformApply(bContext *C, TransInfo *t)
 {
   t->context = C;
 
-  /* TODO(gfxcoder): removed debug print */
-  printf("\n\ntransformApply\n");
-
   if (t->redraw == TREDRAW_HARD) {
     selectConstraint(t);
     if (t->transform) {

@@ -469,8 +469,6 @@ static void applyTranslation(TransInfo *t, const int UNUSED(mval[2]))
       add_v3_v3(global_dir, values_ofs);
     }
 
-    /* TODO(gfxcoder): removed debug print */
-    printf("applyTranslation -> applySnappingAsGroup()\n");
     t->tsnap.snapElem = SCE_SNAP_MODE_NONE;
     applySnappingAsGroup(t, global_dir);
     transform_snap_grid(t, global_dir);
@@ -516,8 +514,6 @@ static void applyTranslation(TransInfo *t, const int UNUSED(mval[2]))
   mul_v3_m3v3(t->values_final, t->spacemtx_inv, global_dir);
   headerTranslation(t, (t->con.mode & CON_APPLY) ? t->values_final : global_dir, str);
 
-  /* TODO(gfxcoder): removed debug print */
-  printf("applyTranslation -> recalcData()\n");
   recalcData(t);
   ED_area_status_text(t->area, str);
 }
