@@ -20,10 +20,6 @@
 #include "PIL_time_utildefines.h"
 
 namespace blender::bke::uv_islands {
-// TODO: primitives can be added twice
-// TODO: Joining uv island should check where the borders could be merged.
-// TODO: this isn't optimized for performance.
-
 /*
  * When enabled various parts of the code would generate an SVG file to visual see how the
  * algorithm makes decisions.
@@ -31,18 +27,15 @@ namespace blender::bke::uv_islands {
 //#define DEBUG_SVG
 //#define VALIDATE
 
+struct MeshEdge;
+struct MeshPrimitive;
+struct UVBorder;
+struct UVEdge;
 struct UVIslands;
 struct UVIslandsMask;
-struct MeshEdge;
-struct MeshPrimitive;
 struct UVPrimitive;
 struct UVPrimitiveEdge;
-struct UVBorder;
 struct UVVertex;
-struct UVEdge;
-
-struct MeshEdge;
-struct MeshPrimitive;
 
 struct MeshVertex {
   int64_t v;
@@ -131,7 +124,10 @@ struct MeshPrimitive {
   }
 };
 
-/** Wrapper to contain all required mesh data. */
+/**
+ * MeshData contains input geometry data converted in a list of primitives, edges and vertices for
+ * quick access for both local space and uv space.
+ */
 struct MeshData {
  public:
   const MLoopTri *looptri;
@@ -144,6 +140,7 @@ struct MeshData {
   Vector<MeshPrimitive> primitives;
   Vector<MeshEdge> edges;
   Vector<MeshVertex> vertices;
+  /** Total number of uv islands detected. */
   int64_t uv_island_len;
 
   explicit MeshData(const MLoopTri *looptri,
@@ -213,7 +210,6 @@ struct MeshData {
 
   void init_edges()
   {
-    /* TODO: use actual sized. */
     edges.reserve(looptri_len * 2);
     EdgeHash *eh = BLI_edgehash_new_ex(__func__, looptri_len * 3);
     for (int64_t i = 0; i < looptri_len; i++) {
@@ -251,10 +247,9 @@ struct MeshData {
   static const int64_t INVALID_UV_ISLAND_ID = -1;
   /**
    * NOTE: doesn't support weird topology where unconnected mesh primitives share the same uv
-   * island. For a accurate implementation we should use uv_prim_lookup.
+   * island. For a accurate implementation we should use implement an uv_prim_lookup.
    */
-  static void _extract_uv_neighbors(Vector<MeshPrimitive *> &prims_to_add,
-                                    MeshPrimitive *primitive)
+  static void extract_uv_neighbors(Vector<MeshPrimitive *> &prims_to_add, MeshPrimitive *primitive)
   {
     for (MeshEdge *edge : primitive->edges) {
       for (MeshPrimitive *other_primitive : edge->primitives) {
@@ -290,7 +285,7 @@ struct MeshData {
       while (!prims_to_add.is_empty()) {
         MeshPrimitive *primitive = prims_to_add.pop_last();
         primitive->uv_island_id = uv_island_id;
-        _extract_uv_neighbors(prims_to_add, primitive);
+        extract_uv_neighbors(prims_to_add, primitive);
       }
       uv_island_id++;
     }
@@ -303,7 +298,7 @@ struct UVVertex {
   /* Position in uv space. */
   float2 uv;
 
-  /* uv edges that are connected to this uvvertex. */
+  /* uv edges that share this UVVertex. */
   Vector<UVEdge *> uv_edges;
 
   explicit UVVertex()
