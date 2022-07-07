@@ -14,6 +14,7 @@
 #include "BLI_math_vec_types.hh"
 #include "BLI_rect.h"
 #include "BLI_vector.hh"
+#include "BLI_vector_list.hh"
 
 #include "DNA_meshdata_types.h"
 
@@ -631,47 +632,15 @@ struct UVBorder {
 };
 
 struct UVIsland {
-  Vector<UVVertex> uv_vertices;
-  Vector<UVEdge> uv_edges;
-  Vector<UVPrimitive> uv_primitives;
+  VectorList<UVVertex> uv_vertices;
+  VectorList<UVEdge> uv_edges;
+  VectorList<UVPrimitive> uv_primitives;
   /**
    * List of borders of this island. There can be multiple borders per island as a border could
    * be completely encapsulated by another one.
    */
   Vector<UVBorder> borders;
   Map<int64_t, Vector<UVVertex *>> uv_vertex_lookup;
-
-  UVIsland(const uint64_t mesh_prim_len)
-  {
-    /*
-     * Reserve enough space for uv island extension. Worse case scenarios include islands
-     * containing only a few faces, or the prims are oriented as a triangle strip. As we don't
-     * categorize the exact topology we over allocate.
-     *
-     * There will at least be a single edge shared. Commonly this number is somewhere between 2-3,
-     * except when topology form a triangle strip.
-     *
-     * There will at least be two vertices shared. Commonly there are 3 vertices shared.
-     *
-     * NOTE: This could be improved by counting outer edges.
-     *
-     * The overallocation is needed as the elements in the vector are referenced to. When the
-     * capacity of a vector is changed the pointers will become invalid. Other solutions:
-     * - Store indices, but that decreases the readability of the code.
-     * - Use dynamic memory pool (Vector of Arrays of Elements) as elements are only added or
-     *   modified, never removed. See https://developer.blender.org/D13289 for
-     *   `BLI_vector_list.hh`.
-     * - Detect when vectors allocate and update pointers. Not easy to maintain when algorithm
-     *   will change in the future.
-     */
-    uint64_t uv_prim_len = max_ii(2 * mesh_prim_len, 10000);
-    uint64_t uv_edge_len = uv_prim_len * 2;
-    uint64_t uv_vertex_len = uv_prim_len * 2;
-
-    uv_vertices.reserve(uv_vertex_len);
-    uv_edges.reserve(uv_edge_len);
-    uv_primitives.reserve(uv_prim_len);
-  }
 
   UVPrimitive *add_primitive(MeshPrimitive &primitive)
   {
@@ -772,9 +741,11 @@ struct UVIsland {
  public:
   bool has_shared_edge(const UVPrimitive &primitive) const
   {
-    for (const UVPrimitive &prim : uv_primitives) {
-      if (prim.has_shared_edge(primitive)) {
-        return true;
+    for (const VectorList<UVPrimitive>::UsedVector &prims : uv_primitives) {
+      for (const UVPrimitive &prim : prims) {
+        if (prim.has_shared_edge(primitive)) {
+          return true;
+        }
       }
     }
     return false;
@@ -782,9 +753,11 @@ struct UVIsland {
 
   bool has_shared_edge(const MeshPrimitive &primitive) const
   {
-    for (const UVPrimitive &prim : uv_primitives) {
-      if (prim.has_shared_edge(primitive)) {
-        return true;
+    for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
+      for (const UVPrimitive &prim : primitives) {
+        if (prim.has_shared_edge(primitive)) {
+          return true;
+        }
       }
     }
     return false;
@@ -792,9 +765,11 @@ struct UVIsland {
 
   const void extend_border(const UVPrimitive &primitive)
   {
-    for (UVPrimitive &prim : uv_primitives) {
-      if (prim.has_shared_edge(primitive)) {
-        append(primitive);
+    for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
+      for (const UVPrimitive &prim : primitives) {
+        if (prim.has_shared_edge(primitive)) {
+          append(primitive);
+        }
       }
     }
   }
@@ -868,14 +843,7 @@ struct UVIslands {
     islands.reserve(mesh_data.uv_island_len);
 
     for (int64_t uv_island_id = 0; uv_island_id < mesh_data.uv_island_len; uv_island_id++) {
-      uint64_t mesh_prim_len = 0;
-      for (MeshPrimitive &primitive : mesh_data.primitives) {
-        if (primitive.uv_island_id == uv_island_id) {
-          mesh_prim_len++;
-        }
-      }
-
-      islands.append_as(UVIsland(mesh_prim_len));
+      islands.append_as(UVIsland());
       UVIsland *uv_island = &islands.last();
       for (MeshPrimitive &primitive : mesh_data.primitives) {
         if (primitive.uv_island_id == uv_island_id) {
@@ -1006,36 +974,37 @@ struct UVIslandsMask {
 
   void add(short island_index, const UVIsland &island)
   {
-    for (const UVPrimitive &uv_primitive : island.uv_primitives) {
-      const MeshPrimitive *mesh_primitive = uv_primitive.primitive;
+    for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives)
+      for (const UVPrimitive &uv_primitive : uv_primitives) {
+        const MeshPrimitive *mesh_primitive = uv_primitive.primitive;
 
-      rctf uv_bounds = mesh_primitive->uv_bounds();
-      rcti buffer_bounds;
-      buffer_bounds.xmin = max_ii(floor((uv_bounds.xmin - udim_offset.x) * resolution.x), 0);
-      buffer_bounds.xmax = min_ii(ceil((uv_bounds.xmax - udim_offset.x) * resolution.x),
-                                  resolution.x - 1);
-      buffer_bounds.ymin = max_ii(floor((uv_bounds.ymin - udim_offset.y) * resolution.y), 0);
-      buffer_bounds.ymax = min_ii(ceil((uv_bounds.ymax - udim_offset.y) * resolution.y),
-                                  resolution.y - 1);
+        rctf uv_bounds = mesh_primitive->uv_bounds();
+        rcti buffer_bounds;
+        buffer_bounds.xmin = max_ii(floor((uv_bounds.xmin - udim_offset.x) * resolution.x), 0);
+        buffer_bounds.xmax = min_ii(ceil((uv_bounds.xmax - udim_offset.x) * resolution.x),
+                                    resolution.x - 1);
+        buffer_bounds.ymin = max_ii(floor((uv_bounds.ymin - udim_offset.y) * resolution.y), 0);
+        buffer_bounds.ymax = min_ii(ceil((uv_bounds.ymax - udim_offset.y) * resolution.y),
+                                    resolution.y - 1);
 
-      for (int y = buffer_bounds.ymin; y < buffer_bounds.ymax + 1; y++) {
-        for (int x = buffer_bounds.xmin; x < buffer_bounds.xmax + 1; x++) {
-          float2 uv(float(x) / resolution.x, float(y) / resolution.y);
-          float3 weights;
-          barycentric_weights_v2(mesh_primitive->vertices[0].uv,
-                                 mesh_primitive->vertices[1].uv,
-                                 mesh_primitive->vertices[2].uv,
-                                 uv,
-                                 weights);
-          if (!barycentric_inside_triangle_v2(weights)) {
-            continue;
+        for (int y = buffer_bounds.ymin; y < buffer_bounds.ymax + 1; y++) {
+          for (int x = buffer_bounds.xmin; x < buffer_bounds.xmax + 1; x++) {
+            float2 uv(float(x) / resolution.x, float(y) / resolution.y);
+            float3 weights;
+            barycentric_weights_v2(mesh_primitive->vertices[0].uv,
+                                   mesh_primitive->vertices[1].uv,
+                                   mesh_primitive->vertices[2].uv,
+                                   uv,
+                                   weights);
+            if (!barycentric_inside_triangle_v2(weights)) {
+              continue;
+            }
+
+            uint64_t offset = resolution.x * y + x;
+            mask[offset] = island_index;
           }
-
-          uint64_t offset = resolution.x * y + x;
-          mask[offset] = island_index;
         }
       }
-    }
   }
 
   void dilate(int max_iterations);

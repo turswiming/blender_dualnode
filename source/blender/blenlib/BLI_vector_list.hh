@@ -23,8 +23,11 @@
 namespace blender {
 
 template<typename T> class VectorList {
- private:
+ public:
   using UsedVector = Vector<T, 0>;
+
+ private:
+  // TODO: Should be template variables.
   static constexpr int64_t vector_capacity_start = 32;
   static constexpr int64_t vector_capacity_soft_limit = 4096;
 
@@ -73,6 +76,11 @@ template<typename T> class VectorList {
   const UsedVector *end() const
   {
     return vectors_.end();
+  }
+
+  T &last()
+  {
+    return vectors_.last().last();
   }
 
  private:

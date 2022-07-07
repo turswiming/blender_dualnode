@@ -15,11 +15,12 @@ void UVIsland::extract_borders()
 {
   /* Lookup all borders of the island. */
   Vector<UVBorderEdge> edges;
-  for (int64_t prim_index = 0; prim_index < uv_primitives.size(); prim_index++) {
-    UVPrimitive &prim = uv_primitives[prim_index];
-    for (UVEdge *edge : prim.edges) {
-      if (edge->is_border_edge()) {
-        edges.append(UVBorderEdge(edge, &prim));
+  for (VectorList<UVPrimitive>::UsedVector &prims : uv_primitives) {
+    for (UVPrimitive &prim : prims) {
+      for (UVEdge *edge : prim.edges) {
+        if (edge->is_border_edge()) {
+          edges.append(UVBorderEdge(edge, &prim));
+        }
       }
     }
   }
@@ -388,24 +389,25 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
                                     corner.first->get_uv_vertex(0),
                                     center_uv,
                                     fill_primitive_1);
+    UVPrimitive &new_prim_1 = island.uv_primitives.last();
     add_uv_primitive_shared_uv_edge(island,
                                     corner.second->get_uv_vertex(0),
                                     corner.second->get_uv_vertex(1),
                                     center_uv,
                                     fill_primitive_2);
+    UVPrimitive &new_prim_2 = island.uv_primitives.last();
+
     /* Update border after adding the new geometry. */
     {
-      UVPrimitive &new_prim = island.uv_primitives[island.uv_primitives.size() - 2];
       UVBorderEdge *border_edge = corner.first;
-      border_edge->uv_primitive = &new_prim;
+      border_edge->uv_primitive = &new_prim_1;
       border_edge->edge = border_edge->uv_primitive->get_uv_edge(
           corner.first->get_uv_vertex(0)->uv, center_uv);
       border_edge->reverse_order = border_edge->edge->vertices[0]->uv == center_uv;
     }
     {
-      UVPrimitive &new_prim = island.uv_primitives[island.uv_primitives.size() - 1];
       UVBorderEdge *border_edge = corner.second;
-      border_edge->uv_primitive = &new_prim;
+      border_edge->uv_primitive = &new_prim_2;
       border_edge->edge = border_edge->uv_primitive->get_uv_edge(
           corner.second->get_uv_vertex(1)->uv, center_uv);
       border_edge->reverse_order = border_edge->edge->vertices[1]->uv == center_uv;
@@ -457,7 +459,7 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
 
         segment.flags.found = true;
 
-        UVPrimitive &new_prim = island.uv_primitives[island.uv_primitives.size() - 1];
+        UVPrimitive &new_prim = island.uv_primitives.last();
         current_edge = new_prim.get_uv_edge(uv_vertex->vertex, other_prim_vertex);
         UVBorderEdge new_border(new_prim.get_uv_edge(shared_edge_vertex, other_prim_vertex),
                                 &new_prim);
@@ -489,7 +491,7 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
       UVVertex *vertex_3_ptr = island.lookup_or_create(uv_vertex_template);
       add_uv_primitive_fill(island, *vertex_1_ptr, *vertex_2_ptr, *vertex_3_ptr, *fill_primitive);
 
-      UVPrimitive &new_prim = island.uv_primitives[island.uv_primitives.size() - 1];
+      UVPrimitive &new_prim = island.uv_primitives.last();
       UVBorderEdge new_border(new_prim.get_uv_edge(shared_edge_vertex, other_prim_vertex),
                               &new_prim);
       new_border_edges.append(new_border);
