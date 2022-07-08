@@ -30,32 +30,33 @@ uint outline_colorid_get(void)
 void main()
 {
   bool is_persp = (drw_view.winmat[3][3] == 0.0);
-  float time, thick_time, thickness;
-  vec3 center_world_pos, world_pos, tan, binor;
+  float time, thickness;
+  vec3 center_wpos, tan, binor;
 
-  hair_get_pos_tan_binor_time_ex(is_persp,
-                                 ModelMatrixInverse,
-                                 drw_view.viewinv[3].xyz,
-                                 drw_view.viewinv[2].xyz,
-                                 center_world_pos,
-                                 world_pos,
-                                 tan,
-                                 binor,
-                                 time,
-                                 thickness,
-                                 thick_time);
-
+  hair_get_center_pos_tan_binor_time(is_persp,
+                                     ModelMatrixInverse,
+                                     drw_view.viewinv[3].xyz,
+                                     drw_view.viewinv[2].xyz,
+                                     center_wpos,
+                                     tan,
+                                     binor,
+                                     time,
+                                     thickness);
+  vec3 world_pos;
   if (hairThicknessRes > 1) {
-    /* Recalculate the thickness, thicktime, worldpos taken into account the outline. */
-    float outline_width = point_world_to_ndc(center_world_pos).w * 1.25 *
+    /* Calculate the thickness, thicktime, worldpos taken into account the outline. */
+    float outline_width = point_world_to_ndc(center_wpos).w * 1.25 *
                           drw_view.viewport_size_inverse.y * drw_view.wininv[1][1];
     thickness += outline_width;
-    thick_time = float(gl_VertexID % hairThicknessRes) / float(hairThicknessRes - 1);
+    float thick_time = float(gl_VertexID % hairThicknessRes) / float(hairThicknessRes - 1);
     thick_time = thickness * (thick_time * 2.0 - 1.0);
     /* Take object scale into account.
      * NOTE: This only works fine with uniform scaling. */
     float scale = 1.0 / length(mat3(ModelMatrixInverse) * binor);
-    world_pos = center_world_pos + binor * thick_time * scale;
+    world_pos = center_wpos + binor * thick_time * scale;
+  }
+  else {
+    world_pos = center_wpos;
   }
 
   gl_Position = point_world_to_ndc(world_pos);
