@@ -192,6 +192,8 @@ static void OVERLAY_cache_init(void *vedata)
       OVERLAY_edit_curves_cache_init(vedata);
       break;
     case CTX_MODE_SCULPT_CURVES:
+      OVERLAY_sculpt_curves_cache_init(vedata);
+      break;
     case CTX_MODE_OBJECT:
       break;
     default:
@@ -312,6 +314,8 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
                                     (draw_ctx->object_mode & OB_MODE_SCULPT_CURVES);
   const bool in_sculpt_mode = (ob == draw_ctx->obact) && (ob->sculpt != NULL) &&
                               (ob->sculpt->mode_type == OB_MODE_SCULPT);
+  const bool in_curves_sculpt_mode = (ob == draw_ctx->obact) &&
+                                     (ob->mode == OB_MODE_SCULPT_CURVES);
   const bool has_surface = ELEM(ob->type,
                                 OB_MESH,
                                 OB_CURVES_LEGACY,
@@ -429,6 +433,9 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
 
   if (in_sculpt_mode) {
     OVERLAY_sculpt_cache_populate(vedata, ob);
+  }
+  else if (in_curves_sculpt_mode) {
+    OVERLAY_sculpt_curves_cache_populate(vedata, ob);
   }
 
   if (draw_motion_paths) {
@@ -592,6 +599,9 @@ static void OVERLAY_draw_scene(void *vedata)
   switch (pd->ctx_mode) {
     case CTX_MODE_SCULPT:
       OVERLAY_sculpt_draw(vedata);
+      break;
+    case CTX_MODE_SCULPT_CURVES:
+      OVERLAY_sculpt_curves_draw(vedata);
       break;
     case CTX_MODE_EDIT_MESH:
     case CTX_MODE_POSE:
