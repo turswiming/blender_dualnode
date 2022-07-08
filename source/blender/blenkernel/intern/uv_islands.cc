@@ -719,7 +719,7 @@ UVBorder UVPrimitive::extract_border() const
 /** \name UVIslandsMask
  * \{ */
 
-static bool dilate_x(UVIslandsMask &islands_mask)
+static bool dilate_x(UVIslandsMask::Tile &islands_mask)
 {
   bool changed = false;
   const Array<uint16_t> prev_mask = islands_mask.mask;
@@ -742,7 +742,7 @@ static bool dilate_x(UVIslandsMask &islands_mask)
   return changed;
 }
 
-static bool dilate_y(UVIslandsMask &islands_mask)
+static bool dilate_y(UVIslandsMask::Tile &islands_mask)
 {
   bool changed = false;
   const Array<uint16_t> prev_mask = islands_mask.mask;
@@ -766,33 +766,27 @@ static bool dilate_y(UVIslandsMask &islands_mask)
   return changed;
 }
 
-void UVIslandsMask::dilate(int max_iterations)
+static void dilate_tile(UVIslandsMask::Tile &tile, int max_iterations)
 {
-#ifdef DEBUG_SVG
-  std::ofstream of;
-  of.open("/tmp/dilate.svg");
-  svg_header(of);
-#endif
-
   int index = 0;
   while (index < max_iterations) {
-    bool changed = dilate_x(*this);
-    changed |= dilate_y(*this);
+    bool changed = dilate_x(tile);
+    changed |= dilate_y(tile);
     if (!changed) {
       break;
     }
-#ifdef DEBUG_SVG
-    svg(of, *this, index);
-#endif
     index++;
   }
-#ifdef DEBUG_SVG
-  svg_footer(of);
-  of.close();
-#endif
 }
 
-bool UVIslandsMask::is_masked(const short island_index, const float2 uv) const
+void UVIslandsMask::dilate(int max_iterations)
+{
+  for (Tile &tile : tiles) {
+    dilate_tile(tile, max_iterations);
+  }
+}
+
+bool UVIslandsMask::Tile::is_masked(const uint16_t island_index, const float2 uv) const
 {
   float2 local_uv = uv - udim_offset;
   if (local_uv.x < 0.0f || local_uv.y < 0.0f || local_uv.x >= 1.0f || local_uv.y >= 1.0f) {
@@ -802,6 +796,17 @@ bool UVIslandsMask::is_masked(const short island_index, const float2 uv) const
   ushort2 pixel_pos = ushort2(pixel_pos_f.x, pixel_pos_f.y);
   uint64_t offset = pixel_pos.y * resolution.x + pixel_pos.x;
   return mask[offset] == island_index;
+}
+
+bool UVIslandsMask::is_masked(const short island_index, const float2 uv) const
+{
+  // TODO: should find tile containing the uv coords not going over all of them.
+  for (const Tile &tile : tiles) {
+    if (tile.is_masked(island_index, uv)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** \} */

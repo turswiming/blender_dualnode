@@ -61,6 +61,7 @@ static void extract_barycentric_pixels(UDIMTilePixels &tile_data,
                                        const int64_t uv_island_index,
                                        const int64_t uv_primitive_index,
                                        const float2 uvs[3],
+                                       const float2 tile_offset,
                                        const int minx,
                                        const int miny,
                                        const int maxx,
@@ -79,7 +80,7 @@ static void extract_barycentric_pixels(UDIMTilePixels &tile_data,
       barycentric_weights_v2(uvs[0], uvs[1], uvs[2], uv, barycentric_weights);
 
       const bool is_inside = barycentric_inside_triangle_v2(barycentric_weights);
-      const bool is_masked = uv_mask.is_masked(uv_island_index, uv);
+      const bool is_masked = uv_mask.is_masked(uv_island_index, uv + tile_offset);
       if (!start_detected && is_inside && is_masked) {
         start_detected = true;
         pixel_row.start_image_coordinate = ushort2(x, y);
@@ -210,6 +211,7 @@ static void do_encode_pixels(void *__restrict userdata,
                                    entry.uv_island_index,
                                    uv_prim_index,
                                    uvs,
+                                   tile_offset,
                                    minx,
                                    miny,
                                    maxx,
@@ -365,7 +367,12 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
   // TODO: Currently uv_masks only supports a single udim tile. We should create one for each tile.
   // TODO: mask resolution should be based on the actual resolution of the image buffer (or a
   // factor of it).
-  uv_islands::UVIslandsMask uv_masks(float2(0.0, 0.0), ushort2(256, 256));
+  uv_islands::UVIslandsMask uv_masks;
+  LISTBASE_FOREACH (ImageTile *, tile_data, &image->tiles) {
+    image::ImageTileWrapper image_tile(tile_data);
+    uv_masks.add_tile(float2(image_tile.get_tile_x_offset(), image_tile.get_tile_y_offset()),
+                      ushort2(256, 256));
+  }
   uv_masks.add(islands);
   uv_masks.dilate(image->seamfix_iter);
 

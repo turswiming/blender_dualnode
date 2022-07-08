@@ -943,20 +943,67 @@ struct UVIslands {
 /* Bitmask containing the num of the nearest Island. */
 // TODO: this is a really quick implementation.
 struct UVIslandsMask {
-  float2 udim_offset;
-  ushort2 resolution;
-  Array<uint16_t> mask;
 
-  UVIslandsMask(float2 udim_offset, ushort2 resolution)
-      : udim_offset(udim_offset), resolution(resolution), mask(resolution.x * resolution.y)
+  struct Tile {
+    float2 udim_offset;
+    ushort2 resolution;
+    Array<uint16_t> mask;
+
+    Tile(float2 udim_offset, ushort2 resolution)
+        : udim_offset(udim_offset), resolution(resolution), mask(resolution.x * resolution.y)
+    {
+      clear();
+    }
+
+    void clear()
+    {
+      mask.fill(0xffff);
+    }
+
+    void add(short island_index, const UVIsland &island)
+    {
+      for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives)
+        for (const UVPrimitive &uv_primitive : uv_primitives) {
+          const MeshPrimitive *mesh_primitive = uv_primitive.primitive;
+
+          rctf uv_bounds = mesh_primitive->uv_bounds();
+          rcti buffer_bounds;
+          buffer_bounds.xmin = max_ii(floor((uv_bounds.xmin - udim_offset.x) * resolution.x), 0);
+          buffer_bounds.xmax = min_ii(ceil((uv_bounds.xmax - udim_offset.x) * resolution.x),
+                                      resolution.x - 1);
+          buffer_bounds.ymin = max_ii(floor((uv_bounds.ymin - udim_offset.y) * resolution.y), 0);
+          buffer_bounds.ymax = min_ii(ceil((uv_bounds.ymax - udim_offset.y) * resolution.y),
+                                      resolution.y - 1);
+
+          for (int y = buffer_bounds.ymin; y < buffer_bounds.ymax + 1; y++) {
+            for (int x = buffer_bounds.xmin; x < buffer_bounds.xmax + 1; x++) {
+              float2 uv(float(x) / resolution.x, float(y) / resolution.y);
+              float3 weights;
+              barycentric_weights_v2(mesh_primitive->vertices[0].uv,
+                                     mesh_primitive->vertices[1].uv,
+                                     mesh_primitive->vertices[2].uv,
+                                     uv + udim_offset,
+                                     weights);
+              if (!barycentric_inside_triangle_v2(weights)) {
+                continue;
+              }
+
+              uint64_t offset = resolution.x * y + x;
+              mask[offset] = island_index;
+            }
+          }
+        }
+    }
+    bool is_masked(const uint16_t island_index, const float2 uv) const;
+  };
+
+  Vector<Tile> tiles;
+
+  void add_tile(float2 udim_offset, ushort2 resolution)
   {
-    clear();
+    tiles.append_as(Tile(udim_offset, resolution));
   }
 
-  void clear()
-  {
-    mask.fill(0xffff);
-  }
   /**
    * Is the given uv coordinate part of the given island_index mask.
    *
@@ -967,44 +1014,11 @@ struct UVIslandsMask {
 
   void add(const UVIslands &islands)
   {
-    for (int index = 0; index < islands.islands.size(); index++) {
-      add(index, islands.islands[index]);
-    }
-  }
-
-  void add(short island_index, const UVIsland &island)
-  {
-    for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives)
-      for (const UVPrimitive &uv_primitive : uv_primitives) {
-        const MeshPrimitive *mesh_primitive = uv_primitive.primitive;
-
-        rctf uv_bounds = mesh_primitive->uv_bounds();
-        rcti buffer_bounds;
-        buffer_bounds.xmin = max_ii(floor((uv_bounds.xmin - udim_offset.x) * resolution.x), 0);
-        buffer_bounds.xmax = min_ii(ceil((uv_bounds.xmax - udim_offset.x) * resolution.x),
-                                    resolution.x - 1);
-        buffer_bounds.ymin = max_ii(floor((uv_bounds.ymin - udim_offset.y) * resolution.y), 0);
-        buffer_bounds.ymax = min_ii(ceil((uv_bounds.ymax - udim_offset.y) * resolution.y),
-                                    resolution.y - 1);
-
-        for (int y = buffer_bounds.ymin; y < buffer_bounds.ymax + 1; y++) {
-          for (int x = buffer_bounds.xmin; x < buffer_bounds.xmax + 1; x++) {
-            float2 uv(float(x) / resolution.x, float(y) / resolution.y);
-            float3 weights;
-            barycentric_weights_v2(mesh_primitive->vertices[0].uv,
-                                   mesh_primitive->vertices[1].uv,
-                                   mesh_primitive->vertices[2].uv,
-                                   uv,
-                                   weights);
-            if (!barycentric_inside_triangle_v2(weights)) {
-              continue;
-            }
-
-            uint64_t offset = resolution.x * y + x;
-            mask[offset] = island_index;
-          }
-        }
+    for (Tile &tile : tiles) {
+      for (int index = 0; index < islands.islands.size(); index++) {
+        tile.add(index, islands.islands[index]);
       }
+    }
   }
 
   void dilate(int max_iterations);
