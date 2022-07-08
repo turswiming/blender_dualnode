@@ -2377,6 +2377,51 @@ class _defs_curves_sculpt:
             data_block='GROW_SHRINK'
         )
 
+    @ToolDef.from_fn
+    def pinch():
+        return dict(
+            idname="builtin_brush.pinch",
+            label="Pinch",
+            icon="ops.curves.sculpt_pinch",
+            data_block='PINCH'
+        )
+
+    @ToolDef.from_fn
+    def smooth():
+        return dict(
+            idname="builtin_brush.smooth",
+            label="Smooth",
+            icon="ops.curves.sculpt_smooth",
+            data_block='SMOOTH'
+        )
+
+    @ToolDef.from_fn
+    def puff():
+        return dict(
+            idname="builtin_brush.puff",
+            label="Puff",
+            icon="ops.curves.sculpt_puff",
+            data_block='PUFF'
+        )
+
+    @ToolDef.from_fn
+    def density():
+        return dict(
+            idname="builtin_brush.density",
+            label="Density",
+            icon="ops.curves.sculpt_density",
+            data_block="DENSITY"
+        )
+
+    @ToolDef.from_fn
+    def slide():
+        return dict(
+            idname="builtin_brush.slide",
+            label="Slide",
+            icon="ops.curves.sculpt_slide",
+            data_block="SLIDE"
+        )
+
 
 class _defs_gpencil_vertex:
 
@@ -3127,19 +3172,18 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             ),
         ],
         'SCULPT_CURVES': [
-            lambda context: (
-                (
-                    _defs_curves_sculpt.selection_paint,
-                    None,
-                )
-                if context is None or context.preferences.experimental.use_new_curves_tools
-                else ()
-            ),
+            _defs_curves_sculpt.selection_paint,
+            None,
             _defs_curves_sculpt.comb,
             _defs_curves_sculpt.add,
             _defs_curves_sculpt.delete,
             _defs_curves_sculpt.snake_hook,
             _defs_curves_sculpt.grow_shrink,
+            _defs_curves_sculpt.pinch,
+            _defs_curves_sculpt.smooth,
+            _defs_curves_sculpt.puff,
+            _defs_curves_sculpt.density,
+            _defs_curves_sculpt.slide,
             None,
             *_tools_annotate,
         ],

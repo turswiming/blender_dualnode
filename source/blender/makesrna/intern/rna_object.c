@@ -2950,6 +2950,22 @@ static void rna_def_object_lineart(BlenderRNA *brna)
   RNA_def_property_ui_range(prop, 0.0f, DEG2RAD(180.0f), 0.01f, 1);
   RNA_def_property_ui_text(prop, "Crease", "Angles smaller than this will be treated as creases");
   RNA_def_property_update(prop, 0, "rna_object_lineart_update");
+
+  prop = RNA_def_property(srna, "use_intersection_priority_override", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", OBJECT_LRT_OWN_INTERSECTION_PRIORITY);
+  RNA_def_property_ui_text(
+      prop,
+      "Use Intersection Priority",
+      "Use this object's intersection priority to override collection setting");
+  RNA_def_property_update(prop, 0, "rna_object_lineart_update");
+
+  prop = RNA_def_property(srna, "intersection_priority", PROP_INT, PROP_NONE);
+  RNA_def_property_range(prop, 0, 255);
+  RNA_def_property_ui_text(prop,
+                           "Intersection Priority",
+                           "The intersection line will be included into the object with the "
+                           "higher intersection priority value");
+  RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_object_lineart_update");
 }
 
 static void rna_def_object_visibility(StructRNA *srna)
@@ -3562,6 +3578,14 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, prop_empty_image_side_items);
   RNA_def_property_ui_text(prop, "Empty Image Side", "Show front/back side");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
+  prop = RNA_def_property(srna, "add_rest_position_attribute", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "modifier_flag", OB_MODIFIER_FLAG_ADD_REST_POSITION);
+  RNA_def_property_ui_text(prop,
+                           "Add Rest Position",
+                           "Add a \"rest_position\" attribute that is a copy of the position "
+                           "attribute before shape keys and modifiers are evaluated");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update_data");
 
   /* render */
   prop = RNA_def_property(srna, "pass_index", PROP_INT, PROP_UNSIGNED);

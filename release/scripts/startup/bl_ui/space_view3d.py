@@ -535,6 +535,31 @@ class _draw_tool_settings_context_mode:
             layout.prop(brush, "direction", expand=True, text="")
             layout.prop(brush, "falloff_shape", expand=True)
             layout.popover("VIEW3D_PT_tools_brush_falloff")
+        elif curves_tool == 'PINCH':
+            layout.prop(brush, "direction", expand=True, text="")
+            layout.prop(brush, "falloff_shape", expand=True)
+            layout.popover("VIEW3D_PT_tools_brush_falloff")
+        elif curves_tool == 'SMOOTH':
+            layout.prop(brush, "falloff_shape", expand=True)
+            layout.popover("VIEW3D_PT_tools_brush_falloff")
+        elif curves_tool == 'PUFF':
+            layout.prop(brush, "falloff_shape", expand=True)
+            layout.popover("VIEW3D_PT_tools_brush_falloff")
+        elif curves_tool == 'DENSITY':
+            layout.prop(brush, "falloff_shape", expand=True)
+            row = layout.row(align=True)
+            row.prop(brush.curves_sculpt_settings, "density_mode", text="", expand=True)
+            row = layout.row(align=True)
+            row.prop(brush.curves_sculpt_settings, "minimum_distance", text="Distance Min")
+            row.operator_context = 'INVOKE_REGION_WIN'
+            row.operator("sculpt_curves.min_distance_edit", text="", icon='DRIVER_DISTANCE')
+            row = layout.row(align=True)
+            row.enabled = brush.curves_sculpt_settings.density_mode != 'REMOVE'
+            row.prop(brush.curves_sculpt_settings, "density_add_attempts", text="Count Max")
+            layout.popover("VIEW3D_PT_tools_brush_falloff")
+            layout.popover("VIEW3D_PT_curves_sculpt_add_shape", text="Curve Shape")
+        elif curves_tool == "SLIDE":
+            layout.popover("VIEW3D_PT_tools_brush_falloff")
 
 
 class VIEW3D_HT_header(Header):
@@ -693,19 +718,17 @@ class VIEW3D_HT_header(Header):
 
                 row = layout.row(align=True)
 
-                experimental = context.preferences.experimental
-                if experimental.use_new_curves_tools:
-                    # Combine the "use selection" toggle with the "set domain" operators
-                    # to allow turning selection off directly.
-                    domain = curves.selection_domain
-                    if domain == 'POINT':
-                        row.prop(curves, "use_sculpt_selection", text="", icon='CURVE_BEZCIRCLE')
-                    else:
-                        row.operator("curves.set_selection_domain", text="", icon='CURVE_BEZCIRCLE').domain = 'POINT'
-                    if domain == 'CURVE':
-                        row.prop(curves, "use_sculpt_selection", text="", icon='CURVE_PATH')
-                    else:
-                        row.operator("curves.set_selection_domain", text="", icon='CURVE_PATH').domain = 'CURVE'
+                # Combine the "use selection" toggle with the "set domain" operators
+                # to allow turning selection off directly.
+                domain = curves.selection_domain
+                if domain == 'POINT':
+                    row.prop(curves, "use_sculpt_selection", text="", icon='CURVE_BEZCIRCLE')
+                else:
+                    row.operator("curves.set_selection_domain", text="", icon='CURVE_BEZCIRCLE').domain = 'POINT'
+                if domain == 'CURVE':
+                    row.prop(curves, "use_sculpt_selection", text="", icon='CURVE_PATH')
+                else:
+                    row.operator("curves.set_selection_domain", text="", icon='CURVE_PATH').domain = 'CURVE'
 
         # Grease Pencil
         if obj and obj.type == 'GPENCIL' and context.gpencil_data:
@@ -2005,6 +2028,9 @@ class VIEW3D_MT_select_sculpt_curves(Menu):
         layout.operator("sculpt_curves.select_all", text="All").action = 'SELECT'
         layout.operator("sculpt_curves.select_all", text="None").action = 'DESELECT'
         layout.operator("sculpt_curves.select_all", text="Invert").action = 'INVERT'
+        layout.operator("sculpt_curves.select_random", text="Random")
+        layout.operator("sculpt_curves.select_end", text="Endpoints")
+        layout.operator("sculpt_curves.select_grow", text="Grow")
 
 
 class VIEW3D_MT_angle_control(Menu):
@@ -2083,14 +2109,13 @@ class VIEW3D_MT_curve_add(Menu):
         layout.operator("curve.primitive_nurbs_circle_add", text="Nurbs Circle", icon='CURVE_NCIRCLE')
         layout.operator("curve.primitive_nurbs_path_add", text="Path", icon='CURVE_PATH')
 
+        layout.separator()
+
+        layout.operator("object.curves_empty_hair_add", text="Empty Hair", icon='CURVES_DATA')
+
         experimental = context.preferences.experimental
-        if experimental.use_new_curves_type:
-            layout.separator()
-
-            layout.operator("object.curves_empty_hair_add", text="Empty Hair", icon='CURVES_DATA')
-
-            if experimental.use_new_curves_tools:
-                layout.operator("object.curves_random_add", text="Random", icon='CURVES_DATA')
+        if experimental.use_new_curves_tools:
+            layout.operator("object.curves_random_add", text="Random", icon='CURVES_DATA')
 
 
 class VIEW3D_MT_surface_add(Menu):
@@ -2326,8 +2351,6 @@ class VIEW3D_MT_object_relations(Menu):
         layout = self.layout
 
         layout.operator("object.make_override_library", text="Make Library Override...")
-        layout.operator("object.make_override_library",
-                        text="Make Library Override - Fully Editable...").do_fully_editable = True
 
         layout.operator("object.make_dupli_face")
 
@@ -6641,6 +6664,7 @@ class VIEW3D_PT_overlay_sculpt_curves(Panel):
         overlay = view.overlay
 
         row = layout.row(align=True)
+        row.active = overlay.show_overlays
         row.prop(overlay, "sculpt_mode_mask_opacity", text="Selection Opacity")
 
 
@@ -6796,22 +6820,52 @@ class VIEW3D_PT_snapping(Panel):
             col.prop(tool_settings, "use_snap_grid_absolute")
 
         if snap_elements != {'INCREMENT'}:
-            col.label(text="Snap With")
-            row = col.row(align=True)
-            row.prop(tool_settings, "snap_target", expand=True)
-
-            col.prop(tool_settings, "use_snap_backface_culling")
+            if snap_elements != {'FACE_NEAREST'}:
+                col.label(text="Snap With")
+                row = col.row(align=True)
+                row.prop(tool_settings, "snap_target", expand=True)
 
             if obj:
+                col.label(text="Target Selection")
+                col_targetsel = col.column(align=True)
                 if object_mode == 'EDIT' and obj.type not in {'LATTICE', 'META', 'FONT'}:
-                    sub = col.column()
-                    sub.active = not (tool_settings.use_proportional_edit and obj.type == 'MESH')
-                    sub.prop(tool_settings, "use_snap_self")
+                    col_targetsel.prop(
+                        tool_settings,
+                        "use_snap_self",
+                        text="Include Active",
+                        icon='EDITMODE_HLT',
+                    )
+                    col_targetsel.prop(
+                        tool_settings,
+                        "use_snap_edit",
+                        text="Include Edited",
+                        icon='OUTLINER_DATA_MESH',
+                    )
+                    col_targetsel.prop(
+                        tool_settings,
+                        "use_snap_nonedit",
+                        text="Include Non-Edited",
+                        icon='OUTLINER_OB_MESH',
+                    )
+                col_targetsel.prop(
+                    tool_settings,
+                    "use_snap_selectable",
+                    text="Exclude Non-Selectable",
+                    icon='RESTRICT_SELECT_OFF',
+                )
+
                 if object_mode in {'OBJECT', 'POSE', 'EDIT', 'WEIGHT_PAINT'}:
                     col.prop(tool_settings, "use_snap_align_rotation")
 
+            col.prop(tool_settings, "use_snap_backface_culling")
+
             if 'FACE' in snap_elements:
                 col.prop(tool_settings, "use_snap_project")
+
+            if 'FACE_NEAREST' in snap_elements:
+                col.prop(tool_settings, 'use_snap_to_same_target')
+                if object_mode == 'EDIT':
+                    col.prop(tool_settings, 'snap_face_nearest_steps')
 
             if 'VOLUME' in snap_elements:
                 col.prop(tool_settings, "use_snap_peel_object")
