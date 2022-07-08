@@ -1202,6 +1202,7 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
       BKE_curveprofile_blend_read(reader, sce->toolsettings->custom_bevel_profile_preset);
     }
 
+    BLO_read_data_address(reader, &sce->toolsettings->paint_mode.canvas_image);
     BLO_read_data_address(reader, &sce->toolsettings->sequencer_tool_settings);
   }
 
