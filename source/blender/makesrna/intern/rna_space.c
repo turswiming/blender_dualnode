@@ -5298,6 +5298,7 @@ static void rna_def_space_image_overlay(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_overlays", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "overlay.flag", SI_OVERLAY_SHOW_OVERLAYS);
   RNA_def_property_ui_text(prop, "Show Overlays", "Display overlays like UV Maps and Metadata");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, NULL);
 
   prop = RNA_def_property(srna, "show_grid_background", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "overlay.flag", SI_OVERLAY_SHOW_GRID_BACKGROUND);
@@ -7803,12 +7804,6 @@ static void rna_def_spreadsheet_row_filter(BlenderRNA *brna)
   prop = RNA_def_property(srna, "value_color", PROP_FLOAT, PROP_NONE);
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(prop, "Color Value", "");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SPREADSHEET, NULL);
-
-  prop = RNA_def_property(srna, "value_byte_color", PROP_INT, PROP_NONE);
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_range(prop, 0, 255);
-  RNA_def_property_ui_text(prop, "Byte Color Value", "");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SPREADSHEET, NULL);
 
   prop = RNA_def_property(srna, "value_string", PROP_STRING, PROP_NONE);
