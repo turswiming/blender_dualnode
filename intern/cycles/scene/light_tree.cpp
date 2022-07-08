@@ -246,6 +246,10 @@ void LightTreeBuildNode::init_interior(LightTreeBuildNode *c0, LightTreeBuildNod
 
 LightTree::LightTree(const vector<LightTreePrimitive> &prims, Scene *scene, uint max_lights_in_leaf)
 {
+  if (prims.size() == 0) {
+    return;
+  }
+
   prims_ = prims;
   scene_ = scene;
   max_lights_in_leaf_ = max_lights_in_leaf;
