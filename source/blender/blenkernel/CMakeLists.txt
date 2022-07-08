@@ -88,7 +88,7 @@ set(SRC
   intern/blendfile_link_append.c
   intern/boids.c
   intern/bpath.c
-  intern/brush.c
+  intern/brush.cc
   intern/bvhutils.cc
   intern/cachefile.c
   intern/callbacks.c
@@ -325,7 +325,7 @@ set(SRC
   BKE_asset_library.h
   BKE_asset_library.hh
   BKE_attribute.h
-  BKE_attribute_access.hh
+  BKE_attribute.hh
   BKE_attribute_math.hh
   BKE_autoexec.h
   BKE_blender.h
