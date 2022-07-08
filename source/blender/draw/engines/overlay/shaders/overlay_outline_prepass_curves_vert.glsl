@@ -35,8 +35,8 @@ void main()
 
   hair_get_pos_tan_binor_time_ex(is_persp,
                                  ModelMatrixInverse,
-                                 ViewMatrixInverse[3].xyz,
-                                 ViewMatrixInverse[2].xyz,
+                                 drw_view.viewinv[3].xyz,
+                                 drw_view.viewinv[2].xyz,
                                  center_world_pos,
                                  world_pos,
                                  tan,
