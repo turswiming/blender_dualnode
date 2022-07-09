@@ -389,7 +389,6 @@ void LightManager::device_update_distribution(Device *device,
   size_t num_distribution = num_triangles + num_lights;
   VLOG_INFO << "Total " << num_distribution << " of light distribution primitives.";
 
-  float pdf_light_tree = 0.0f;
   if (light_tree_enabled && num_distribution > 0) {
     /* For now, we'll start with a smaller number of max lights in a node.
      * More benchmarking is needed to determine what number works best. */
@@ -492,11 +491,15 @@ void LightManager::device_update_distribution(Device *device,
 
     /* We also add distant lights to a separate group. */
     KernelLightTreeDistantEmitter *light_tree_distant_group =
-        dscene->light_tree_distant_group.alloc(num_distant_lights);
+        dscene->light_tree_distant_group.alloc(num_distant_lights + 1);
+
+    /* We use OrientationBounds here to */
+    OrientationBounds distant_light_bounds = OrientationBounds::empty;
     float distant_light_energy = 0.0f;
     for (int index = 0; index < num_distant_lights; index++) {
       LightTreePrimitive prim = distant_lights[index];
       Light *light = scene->lights[prim.lamp_id];
+      OrientationBounds light_bounds;
       
       /* Lights in this group are either a background or distant light. */
       light_tree_distant_group[index].prim_id = ~prim.prim_id;
@@ -506,30 +509,39 @@ void LightManager::device_update_distribution(Device *device,
         energy = average_background_energy(device, dscene, progress, scene, light);
 
         /* We can set an arbitrary direction for the background light. */
-        light_tree_distant_group[index].direction[0] = 0.0f;
-        light_tree_distant_group[index].direction[1] = 0.0f;
-        light_tree_distant_group[index].direction[2] = 1.0f;
+        light_bounds.axis[0] = 0.0f;
+        light_bounds.axis[1] = 0.0f;
+        light_bounds.axis[2] = 1.0f;
 
         /* to-do: this may depend on portal lights as well. */
-        light_tree_distant_group[index].bounding_radius = M_PI_F;
+        light_bounds.theta_o = M_PI_F;
       }
       else {
         energy = prim.calculate_energy(scene);
-
         for (int i = 0; i < 3; i++) {
-          light_tree_distant_group[index].direction[i] = -light->co[i];
+          light_bounds.axis[i] = -light->dir[i];
         }
-        light_tree_distant_group[index].bounding_radius = tanf(light->angle * 0.5f);
+        light_bounds.theta_o = tanf(light->angle * 0.5f);
       }
+
+      distant_light_bounds = merge(distant_light_bounds, light_bounds);
+      for (int i = 0; i < 3; i++) {
+        light_tree_distant_group[index].direction[i] = light_bounds.axis[i];
+      }
+      light_tree_distant_group[index].bounding_radius = light_bounds.theta_o;
 
       light_tree_distant_group[index].energy = energy;
       light_array[~prim.prim_id] = index;
       distant_light_energy += energy;
-    }
+    } 
 
-    if (light_tree_energy > 0.0f) {
-      pdf_light_tree = light_tree_energy / (light_tree_energy + distant_light_energy);
+    /* The net OrientationBounds contain bounding information about all the distant lights. */
+    light_tree_distant_group[num_distant_lights].prim_id = -1;
+    light_tree_distant_group[num_distant_lights].energy = distant_light_energy;
+    for (int i = 0; i < 3; i++) {
+      light_tree_distant_group[num_distant_lights].direction[i] = distant_light_bounds.axis[i];
     }
+    light_tree_distant_group[num_distant_lights].bounding_radius = distant_light_bounds.theta_o;
 
     dscene->light_tree_nodes.copy_to_device();
     dscene->light_tree_emitters.copy_to_device();
@@ -688,7 +700,6 @@ void LightManager::device_update_distribution(Device *device,
     /* pdf_lights is used when sampling lights, and assumes that
      * the light has been sampled through the light distribution.
      * Therefore, we override it for now and adjust the pdf manually in the light tree.*/
-    kintegrator->pdf_light_tree = pdf_light_tree;
     if (light_tree_enabled) {
       kintegrator->pdf_triangles = 1.0f;
       kintegrator->pdf_lights = 1.0f;

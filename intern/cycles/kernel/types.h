@@ -1303,12 +1303,11 @@ typedef struct KernelIntegrator {
   int direct_light_sampling_type;
 
   /* Light tree. */
-  float pdf_light_tree;
   int use_light_tree;
   float splitting_threshold;
 
   /* padding */
-  int pad1;
+  int pad1, pad2;
 } KernelIntegrator;
 static_assert_align(KernelIntegrator, 16);
 
