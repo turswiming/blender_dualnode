@@ -21,6 +21,13 @@ float OrientationBounds::calculate_measure() const
 OrientationBounds merge(const OrientationBounds& cone_a, 
 						const OrientationBounds& cone_b)
 {
+  if (is_zero(cone_a.axis)) {
+    return cone_b;
+  }
+  else if (is_zero(cone_b.axis)) {
+    return cone_a;
+  }
+
   /* Set cone a to always have the greater theta_o. */
   const OrientationBounds *a = &cone_a;
   const OrientationBounds *b = &cone_b;
@@ -187,6 +194,7 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
     Mesh::Triangle triangle = mesh->get_triangle(prim_id - mesh->prim_offset);
     Shader *shader = static_cast<Shader*>(mesh->get_used_shaders()[mesh->get_shader()[prim_id - mesh->prim_offset]]);
 
+    /* to-do: need a better way to handle this when textures are used. */
     if (!shader->is_constant_emission(&strength)) {
       strength = make_float3(1.0f);
     }
@@ -200,10 +208,11 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
       p[i] = transform_point(&tfm, p[i]);
     }
 
-    float area = triangle_area(p[0], p[1], p[2]);
+    // float area = triangle_area(p[0], p[1], p[2]);
 
-    /* to-do: Past GSoC work also multiplies this by 4, but not sure why. Further investigation required. */
-    strength *= area * 4;
+    /* to-do: Past GSoC work also multiplies this by 4, but not sure why. Further investigation
+     * required. */
+    // strength *= area * 4;
   }
   else {
     Light *lamp = scene->lights[lamp_id];

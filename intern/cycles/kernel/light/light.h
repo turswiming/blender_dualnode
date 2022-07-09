@@ -796,6 +796,10 @@ ccl_device_forceinline void triangle_light_sample(KernelGlobals kg,
         triangle_world_space_vertices(kg, object, prim, -1.0f, V);
         area = triangle_area(V[0], V[1], V[2]);
       }
+
+      if (kernel_data.integrator.use_light_tree) {
+        area = 1.0f;
+      }
       const float pdf = area * kernel_data.integrator.pdf_triangles;
       ls->pdf = pdf / solid_angle;
     }
@@ -824,7 +828,9 @@ ccl_device_forceinline void triangle_light_sample(KernelGlobals kg,
        * area = the area the sample was taken from
        * area_pre = the are from which pdf_triangles was calculated from */
       triangle_world_space_vertices(kg, object, prim, -1.0f, V);
-      const float area_pre = triangle_area(V[0], V[1], V[2]);
+      const float area_pre = (kernel_data.integrator.use_light_tree) ?
+                                 1.0 :
+                                 triangle_area(V[0], V[1], V[2]);
       ls->pdf = ls->pdf * area_pre / area;
     }
     ls->u = u;

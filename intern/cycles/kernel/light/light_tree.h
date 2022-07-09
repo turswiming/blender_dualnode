@@ -45,8 +45,7 @@ ccl_device float light_tree_node_importance(const float3 P,
 
   /* Since we're not using the splitting heuristic, we clamp
    * the distance to half the radius of the cluster. */
-  const float distance_squared = fminf(len_squared(centroid - P),
-                                       0.25f * len_squared(bbox_max - centroid));
+  const float distance_squared = len_squared(centroid - P);
 
   const float theta = fast_acosf(dot(bcone_axis, -point_to_centroid));
   const float theta_i = fast_acosf(dot(point_to_centroid, N));
@@ -61,7 +60,11 @@ ccl_device float light_tree_node_importance(const float3 P,
   const float cos_theta_prime = fast_cosf(theta_prime);
 
   float cos_theta_i_prime = 1;
-  if (theta_i - theta_u > 0) {
+  if (theta_i - theta_u > M_PI_2_F) {
+    /* If the lights are guaranteed to be completely behind the shading point,
+     * should we still perform further calculations? */
+    cos_theta_i_prime = 0;
+  } else if (theta_i - theta_u > 0) {
     cos_theta_i_prime = fabsf(fast_cosf(theta_i - theta_u));
   }
 
@@ -106,7 +109,7 @@ ccl_device float light_tree_cluster_importance(KernelGlobals kg,
   const float3 bbox_max = make_float3(
       knode->bounding_box_max[0], knode->bounding_box_max[1], knode->bounding_box_max[2]);
   const float3 bcone_axis = make_float3(
-      knode->bounding_cone_axis[0], knode->bounding_cone_axis[1], knode->bounding_cone_axis[1]);
+      knode->bounding_cone_axis[0], knode->bounding_cone_axis[1], knode->bounding_cone_axis[2]);
 
   return light_tree_node_importance(
       P, N, bbox_min, bbox_max, bcone_axis, knode->theta_o, knode->theta_e, knode->energy);
@@ -131,7 +134,6 @@ ccl_device int light_tree_sample(KernelGlobals kg,
   /* Also keep track of the probability of traversing to a given node, */
   /* so that we can scale our PDF accordingly later. */
   int index = 0;
-  *pdf_factor = 1.0f;
 
   /* to-do: is it better to generate a new random sample for each step of the traversal? */
   float tree_u = path_state_rng_1D(kg, rng_state, 1);
@@ -144,19 +146,18 @@ ccl_device int light_tree_sample(KernelGlobals kg,
 
     const float left_importance = light_tree_cluster_importance(kg, P, N, left);
     const float right_importance = light_tree_cluster_importance(kg, P, N, right);
-    const float left_probability = left_importance / (left_importance + right_importance);
+    float left_probability = left_importance / (left_importance + right_importance);
 
     if (tree_u < left_probability) {
       index = index + 1;
       knode = left;
-      tree_u = tree_u * (left_importance + right_importance) / left_importance;
+      tree_u = tree_u * left_probability;
       *pdf_factor *= left_probability;
     }
     else {
       index = knode->child_index;
       knode = right;
-      tree_u = (tree_u * (left_importance + right_importance) - left_importance) /
-               right_importance;
+      tree_u = (tree_u - left_probability) / (1 - left_probability);
       *pdf_factor *= (1 - left_probability);
     }
   }
@@ -282,6 +283,95 @@ ccl_device int light_tree_sample_distant_lights(KernelGlobals kg,
   return -1;
 }
 
+/* We need to be able to find the probability of selecting a given light, for MIS. */
+ccl_device float light_tree_pdf(KernelGlobals kg, const float3 P, const float3 N, const int prim)
+{
+  float pdf = kernel_data.integrator.pdf_light_tree;
+
+  const int emitter = (prim >= 0) ? kernel_data_fetch(triangle_to_tree, prim) :
+                                    kernel_data_fetch(light_to_tree, ~prim);
+  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
+                                                                         emitter);
+  int parent = kemitter->parent_index;
+  ccl_global const KernelLightTreeNode *kleaf = &kernel_data_fetch(light_tree_nodes, parent);
+
+  /* First, we find the probability of selecting the primitive out of the leaf node. */
+  float total_importance = 0.0f;
+  float emitter_importance = 0.0f;
+  for (int i = 0; i < kleaf->num_prims; i++) {
+    int prim =
+        i -
+        kleaf->child_index; /* At a leaf node, the negative value is the index into first prim. */
+    const float importance = light_tree_emitter_importance(kg, P, N, prim);
+    if (prim == emitter) {
+      emitter_importance = importance;
+    }
+    total_importance += importance;
+  }
+  pdf *= emitter_importance / total_importance;
+
+  /* Next, we find the probability of traversing to that leaf node. */
+  int child_index = parent;
+  parent = kleaf->parent_index;
+  while (parent != -1) {
+    const ccl_global KernelLightTreeNode *kparent = &kernel_data_fetch(light_tree_nodes, parent);
+
+    const int left_index = parent + 1;
+    const int right_index = kparent->child_index;
+    const ccl_global KernelLightTreeNode *kleft = &kernel_data_fetch(light_tree_nodes, left_index);
+    const ccl_global KernelLightTreeNode *kright = &kernel_data_fetch(light_tree_nodes,
+                                                                      right_index);
+
+    const float left_importance = light_tree_cluster_importance(kg, P, N, kleft);
+    const float right_importance = light_tree_cluster_importance(kg, P, N, kright);
+    float left_probability = left_importance / (left_importance + right_importance);
+
+    if (left_probability > kernel_data.integrator.splitting_threshold) {
+      left_probability = kernel_data.integrator.splitting_threshold;
+    }
+
+    /* If the child index matches the left index, then we must've traversed left, otherwise right.
+     */
+    if (left_index == child_index) {
+      pdf *= left_probability;
+    }
+    else {
+      pdf *= (1 - left_probability);
+    }
+
+    child_index = parent;
+    parent = kparent->parent_index;
+  }
+
+  return pdf;
+}
+
+ccl_device float distant_lights_pdf(KernelGlobals kg,
+                                    const float3 P,
+                                    const float3 N,
+                                    const int prim)
+{
+  float pdf = (1 - kernel_data.integrator.pdf_light_tree);
+
+  /* The light_to_tree array doubles as a lookup table for
+   * both the light tree as well as the distant lights group.*/
+  const int distant_light = kernel_data_fetch(light_to_tree, prim);
+  const int num_distant_lights = kernel_data.integrator.num_distant_lights;
+
+  float emitter_importance = 0.0f;
+  float total_importance = 0.0f;
+  for (int i = 0; i < num_distant_lights; i++) {
+    float importance = light_tree_distant_light_importance(kg, P, N, i);
+    if (i == distant_light) {
+      emitter_importance = importance;
+    }
+    total_importance += importance;
+  }
+
+  pdf *= emitter_importance / total_importance;
+  return pdf;
+}
+
 ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 ccl_private const RNGState *rng_state,
                                                 float randu,
@@ -309,83 +399,6 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
 
   ls->pdf *= pdf_factor;
   return ret;
-}
-
-/* We need to be able to find the probability of selecting a given light, for MIS. */
-ccl_device float light_tree_pdf(KernelGlobals kg, const float3 P, const float3 N, const int prim)
-{
-  float pdf = kernel_data.integrator.pdf_light_tree;
-
-  const int emitter = (prim >= 0) ? kernel_data_fetch(triangle_to_tree, prim) : kernel_data_fetch(light_to_tree, ~prim);
-  ccl_global const KernelLightTreeEmitter* kemitter = &kernel_data_fetch(light_tree_emitters,
-                                                                         emitter);
-  int parent = kemitter->parent_index;
-  ccl_global const KernelLightTreeNode* kleaf = &kernel_data_fetch(light_tree_nodes, parent);
-
-  /* First, we find the probability of selecting the primitive out of the leaf node. */
-  float total_importance = 0.0f;
-  float emitter_importance = 0.0f;
-  for (int i = 0; i < kleaf->num_prims; i++) {
-    int prim = i - kleaf->child_index; /* At a leaf node, the negative value is the index into first prim. */
-    const float importance = light_tree_emitter_importance(kg, P, N, prim);
-    if (prim == emitter) {
-      emitter_importance = importance;
-    }
-    total_importance += importance;
-  }
-  pdf *= emitter_importance / total_importance;
-
-  /* Next, we find the probability of traversing to that leaf node. */
-  int child_index = parent; 
-  parent = kleaf->parent_index;
-  while (parent != -1) {
-    const ccl_global KernelLightTreeNode *kparent = &kernel_data_fetch(light_tree_nodes, parent);
-
-    const int left_index = parent + 1;
-    const int right_index = kparent->child_index;
-    const ccl_global KernelLightTreeNode *kleft = &kernel_data_fetch(light_tree_nodes, left_index);
-    const ccl_global KernelLightTreeNode *kright = &kernel_data_fetch(light_tree_nodes, right_index);
-
-    const float left_importance = light_tree_cluster_importance(kg, P, N, kleft);
-    const float right_importance = light_tree_cluster_importance(kg, P, N, kright);
-    const float left_probability = left_importance / (left_importance + right_importance);
-
-    /* If the child index matches the left index, then we must've traversed left, otherwise right. */
-    if (left_index == child_index) {
-      pdf *= left_probability;
-    }
-    else {
-      pdf *= (1 - left_probability);
-    }
-
-    child_index = parent;
-    parent = kparent->parent_index;
-  }
-
-  return pdf;
-}
-
-ccl_device float distant_lights_pdf(KernelGlobals kg, const float3 P, const float3 N, const int prim)
-{
-  float pdf = (1 - kernel_data.integrator.pdf_light_tree);
-
-  /* The light_to_tree array doubles as a lookup table for
-   * both the light tree as well as the distant lights group.*/
-  const int distant_light = kernel_data_fetch(light_to_tree, prim);
-  const int num_distant_lights = kernel_data.integrator.num_distant_lights;
-
-  float emitter_importance = 0.0f;
-  float total_importance = 0.0f;
-  for (int i = 0; i < num_distant_lights; i++) {
-    float importance = light_tree_distant_light_importance(kg, P, N, i);
-    if (i == distant_light) {
-      emitter_importance = importance;
-    }
-    total_importance += importance;
-  }
-
-  pdf *= emitter_importance / total_importance;
-  return pdf;
 }
 
 CCL_NAMESPACE_END

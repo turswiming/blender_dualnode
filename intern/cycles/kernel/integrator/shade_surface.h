@@ -78,13 +78,16 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
 #  endif
   {
     const float bsdf_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-    const float t = sd->ray_length + INTEGRATOR_STATE(state, path, mis_ray_t);
+    const float mis_ray_t = INTEGRATOR_STATE(state, path, mis_ray_t);
+    const float t = sd->ray_length + mis_ray_t;
 
     /* Multiple importance sampling, get triangle light pdf,
      * and compute weight with respect to BSDF pdf. */
     float pdf = triangle_light_pdf(kg, sd, t);
     if (kernel_data.integrator.use_light_tree) {
-      const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
+      float3 ray_P = INTEGRATOR_STATE(state, ray, P);
+      const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
+      ray_P -= ray_D * mis_ray_t;
       const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
       pdf *= light_tree_pdf(kg, ray_P, N, sd->prim);
     }

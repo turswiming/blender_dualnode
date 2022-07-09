@@ -74,7 +74,7 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
     const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
     if (kernel_data.integrator.use_light_tree) {
       const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-      ls.pdf *= light_tree_pdf(kg, ray_P, N, ~isect.prim);
+      ls.pdf *= light_tree_pdf(kg, ray_P, N, ~ls.lamp);
     }
     const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
     light_eval *= mis_weight;
