@@ -24,6 +24,119 @@
 
 #include "sequencer_intern.h"
 
+#define USE_MY_LOADING
+
+#ifdef USE_MY_LOADING
+typedef struct PreviewJob {
+  bool is_threadpool_create;
+  ListBase threads;
+  ThreadMutex *mutex;
+  Scene *scene;
+  int processing;
+  short stop;
+} PreviewJob;
+
+typedef struct PreviewJobAudio {
+  PreviewJob *pj;
+  struct Main *bmain;
+  bSound *sound;
+} PreviewJobAudio;
+
+// static PreviewJob previewjb = {
+//   .is_threadpool_create = false,
+//   .processing = 0,
+//   .stop = 0
+// };
+
+static void preview_job(void *data)
+{
+  PreviewJobAudio *audio_job = data;
+  PreviewJob *pj = audio_job->pj;
+  BKE_sound_read_waveform(audio_job->bmain, audio_job->sound, &pj->stop);
+
+  BLI_mutex_lock(pj->mutex);
+  pj->processing--;
+  BLI_mutex_unlock(pj->mutex);
+  WM_main_add_notifier(NC_SPACE | ND_SPACE_SEQUENCER, NULL);
+
+  MEM_freeN(data);
+}
+
+static void preview_startjob(void *data, short *stop, short *do_update, float *progress)
+{
+  PreviewJob *previewjb = data;
+  int processing;
+  while (1) {
+    BLI_mutex_lock(previewjb->mutex);
+    processing = previewjb->processing;
+    if (*stop || G.is_break) {
+      previewjb->stop = *stop;
+    }
+    BLI_mutex_unlock(previewjb->mutex);
+    if (!processing) {
+      return;
+    }
+  }
+}
+
+static void preview_endjob(void *data)
+{
+  (void)data;
+}
+
+static void free_preview_job(void *data)
+{
+  PreviewJob *pj = (PreviewJob *)data;
+  BLI_mutex_free(pj->mutex);
+  BLI_threadpool_end(&pj->threads);
+  MEM_freeN(pj);
+}
+
+void sequencer_preview_add_sound(const bContext *C, Sequence *seq)
+{
+  wmJob *wm_job;
+  struct Main *bmain = CTX_data_main(C);
+  bSound *sound = seq->sound;
+  ScrArea *area = CTX_wm_area(C);
+  wm_job = WM_jobs_get(CTX_wm_manager(C),
+                       CTX_wm_window(C),
+                       CTX_data_scene(C),
+                       "Strip Previews",
+                       WM_JOB_PRIORITY,
+                       WM_JOB_TYPE_SEQ_BUILD_PREVIEW);
+  PreviewJob *previewjb = WM_jobs_customdata_get(wm_job);
+
+  if (!previewjb) {
+    previewjb = MEM_mallocN(sizeof(PreviewJob), "preview_job");
+    /*for the number of sound strips is unknow, we create a large pool*/
+    BLI_threadpool_init(&previewjb->threads, preview_job, 200);
+    previewjb->is_threadpool_create = true;
+    previewjb->processing = 0;
+    previewjb->stop = 0;
+    previewjb->mutex = BLI_mutex_alloc();
+    previewjb->scene = CTX_data_scene(C);
+    WM_jobs_customdata_set(wm_job, previewjb, free_preview_job);
+    WM_jobs_timer(wm_job, 0.1, NC_SCENE | ND_SEQUENCER, NC_SCENE | ND_SEQUENCER);
+    WM_jobs_callbacks(wm_job, preview_startjob, NULL, NULL, NULL);
+  }
+  PreviewJobAudio *audio_job = MEM_callocN(sizeof(PreviewJobAudio), "preview_audio");
+  audio_job->bmain = bmain;
+  audio_job->sound = sound;
+  audio_job->pj = previewjb;
+  BLI_threadpool_insert(&previewjb->threads, audio_job);
+  BLI_mutex_lock(previewjb->mutex);
+  previewjb->processing++;
+  BLI_mutex_unlock(previewjb->mutex);
+
+  if (!WM_jobs_is_running(wm_job)) {
+    G.is_break = false;
+    WM_jobs_start(CTX_wm_manager(C), wm_job);
+  }
+
+  ED_area_tag_redraw(area);
+}
+
+#else  // USE_MY_LOADING
 typedef struct PreviewJob {
   ListBase previews;
   ThreadMutex *mutex;
@@ -151,3 +264,5 @@ void sequencer_preview_add_sound(const bContext *C, Sequence *seq)
 
   ED_area_tag_redraw(area);
 }
+
+#endif
