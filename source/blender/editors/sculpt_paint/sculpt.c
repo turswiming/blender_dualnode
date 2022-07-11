@@ -2366,7 +2366,8 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
                                    const float fno[3],
                                    const float mask,
                                    const int vertex_index,
-                                   const int thread_id)
+                                   const int thread_id,
+                                   AutomaskingNodeData *automask_data)
 {
   StrokeCache *cache = ss->cache;
   const Scene *scene = cache->vc->scene;
@@ -2450,7 +2451,7 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
   avg *= 1.0f - mask;
 
   /* Auto-masking. */
-  avg *= SCULPT_automasking_factor_get(cache->automasking, ss, vertex_index);
+  avg *= SCULPT_automasking_factor_get(cache->automasking, ss, vertex_index, automask_data);
 
   return avg;
 }
@@ -3040,7 +3041,8 @@ static void do_gravity_task_cb_ex(void *__restrict userdata,
                                                     vd.fno,
                                                     vd.mask ? *vd.mask : 0.0f,
                                                     vd.index,
-                                                    thread_id);
+                                                    thread_id,
+                                                    NULL);
 
     mul_v3_v3fl(proxy[vd.i], offset, fade);
 
@@ -5906,6 +5908,33 @@ void SCULPT_fake_neighbors_free(Object *ob)
 {
   SculptSession *ss = ob->sculpt;
   sculpt_pose_fake_neighbors_free(ss);
+}
+
+void SCULPT_automasking_node_begin(Object *ob,
+                                   const SculptSession *ss,
+                                   AutomaskingCache *automasking,
+                                   AutomaskingNodeData *node_data,
+                                   PBVHNode *node)
+{
+  node_data->node = node;
+  node_data->have_orig_data = automasking->settings.flags &
+                              (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL);
+
+  if (node_data->have_orig_data) {
+    SCULPT_orig_vert_data_init(&node_data->orig_data, ob, node, SCULPT_UNDO_COORDS);
+  }
+  else {
+    memset(&node_data->orig_data, 0, sizeof(node_data->orig_data));
+  }
+}
+
+void SCULPT_automasking_node_update(SculptSession *ss,
+                                    AutomaskingNodeData *automask_data,
+                                    PBVHVertexIter *vd)
+{
+  if (automask_data->have_orig_data) {
+    SCULPT_orig_vert_data_update(&automask_data->orig_data, vd);
+  }
 }
 
 /** \} */

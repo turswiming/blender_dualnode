@@ -288,15 +288,20 @@ static void mesh_filter_task_cb(void *__restrict userdata,
   /* This produces better results as the relax operation is no completely focused on the
    * boundaries. */
   const bool relax_face_sets = !(ss->filter_cache->iteration_count % 3 == 0);
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(data->ob, ss, ss->cache->automasking, &automask_data, node);
 
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
     SCULPT_orig_vert_data_update(&orig_data, &vd);
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     float orig_co[3], val[3], avg[3], disp[3], disp2[3], transform[3][3], final_pos[3];
     float fade = vd.mask ? *vd.mask : 0.0f;
     fade = 1.0f - fade;
     fade *= data->filter_strength;
-    fade *= SCULPT_automasking_factor_get(ss->filter_cache->automasking, ss, vd.index);
+    fade *= SCULPT_automasking_factor_get(
+        ss->filter_cache->automasking, ss, vd.index, &automask_data);
 
     if (fade == 0.0f && filter_type != MESH_FILTER_SURFACE_SMOOTH) {
       /* Surface Smooth can't skip the loop for this vertex as it needs to calculate its
@@ -572,11 +577,18 @@ static void mesh_filter_surface_smooth_displace_task_cb(
   PBVHNode *node = data->nodes[i];
   PBVHVertexIter vd;
 
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(
+      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[i]);
+
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     float fade = vd.mask ? *vd.mask : 0.0f;
     fade = 1.0f - fade;
     fade *= data->filter_strength;
-    fade *= SCULPT_automasking_factor_get(ss->filter_cache->automasking, ss, vd.index);
+    fade *= SCULPT_automasking_factor_get(
+        ss->filter_cache->automasking, ss, vd.index, &automask_data);
     if (fade == 0.0f) {
       continue;
     }

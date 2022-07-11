@@ -95,6 +95,10 @@ static void color_filter_task_cb(void *__restrict userdata,
   SculptOrigVertData orig_data;
   SCULPT_orig_vert_data_init(&orig_data, data->ob, data->nodes[n], SCULPT_UNDO_COLOR);
 
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(
+      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     SCULPT_orig_vert_data_update(&orig_data, &vd);
@@ -104,7 +108,7 @@ static void color_filter_task_cb(void *__restrict userdata,
     float fade = vd.mask ? *vd.mask : 0.0f;
     fade = 1.0f - fade;
     fade *= data->filter_strength;
-    fade *= SCULPT_automasking_factor_get(ss->filter_cache->automasking, ss, vd.index);
+    fade *= SCULPT_automasking_factor_get(ss->filter_cache->automasking, ss, vd.index, &automask_data);
     if (fade == 0.0f) {
       continue;
     }

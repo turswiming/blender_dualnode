@@ -501,6 +501,10 @@ static void do_cloth_brush_apply_forces_task_cb_ex(void *__restrict userdata,
     madd_v3_v3fl(gravity, ss->cache->gravity_direction, -data->sd->gravity_factor);
   }
 
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(
+      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     float force[3];
     float sim_location[3];
@@ -541,7 +545,8 @@ static void do_cloth_brush_apply_forces_task_cb_ex(void *__restrict userdata,
                                                     vd.fno,
                                                     vd.mask ? *vd.mask : 0.0f,
                                                     vd.index,
-                                                    thread_id);
+                                                    thread_id,
+                                                    &automask_data);
 
     float brush_disp[3];
 
@@ -757,6 +762,9 @@ static void do_cloth_brush_solve_simulation_task_cb_ex(
   }
 
   AutomaskingCache *automasking = SCULPT_automasking_active_cache_get(ss);
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(
+      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     float sim_location[3];
@@ -780,7 +788,7 @@ static void do_cloth_brush_solve_simulation_task_cb_ex(
     mul_v3_fl(pos_diff, (1.0f - cloth_sim->damping) * sim_factor);
 
     const float mask_v = (1.0f - (vd.mask ? *vd.mask : 0.0f)) *
-                         SCULPT_automasking_factor_get(automasking, ss, vd.index);
+                         SCULPT_automasking_factor_get(automasking, ss, vd.index, &automask_data);
 
     madd_v3_v3fl(cloth_sim->pos[i], pos_diff, mask_v);
     madd_v3_v3fl(cloth_sim->pos[i], cloth_sim->acceleration[i], mask_v);
@@ -813,6 +821,9 @@ static void cloth_brush_satisfy_constraints(SculptSession *ss,
 {
 
   AutomaskingCache *automasking = SCULPT_automasking_active_cache_get(ss);
+  AutomaskingNodeData automask_data = {0};
+
+  automask_data.have_orig_data = true;
 
   for (int constraint_it = 0; constraint_it < CLOTH_SIMULATION_ITERATIONS; constraint_it++) {
     for (int i = 0; i < cloth_sim->tot_length_constraints; i++) {
@@ -848,10 +859,13 @@ static void cloth_brush_satisfy_constraints(SculptSession *ss,
 
       mul_v3_v3fl(correction_vector_half, correction_vector, 0.5f);
 
+      automask_data.orig_data.co = cloth_sim->init_pos[v1];
       const float mask_v1 = (1.0f - SCULPT_vertex_mask_get(ss, v1)) *
-                            SCULPT_automasking_factor_get(automasking, ss, v1);
+                            SCULPT_automasking_factor_get(automasking, ss, v1, &automask_data);
+
+      automask_data.orig_data.co = cloth_sim->init_pos[v2];
       const float mask_v2 = (1.0f - SCULPT_vertex_mask_get(ss, v2)) *
-                            SCULPT_automasking_factor_get(automasking, ss, v2);
+                            SCULPT_automasking_factor_get(automasking, ss, v2, &automask_data);
 
       float sim_location[3];
       cloth_brush_simulation_location_get(ss, brush, sim_location);
@@ -1418,11 +1432,14 @@ static void cloth_filter_apply_forces_task_cb(void *__restrict userdata,
     sculpt_gravity[2] = -1.0f;
   }
   mul_v3_fl(sculpt_gravity, sd->gravity_factor * data->filter_strength);
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(data->ob, ss, ss->cache->automasking, &automask_data, node);
 
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
     float fade = vd.mask ? *vd.mask : 0.0f;
-    fade *= SCULPT_automasking_factor_get(ss->filter_cache->automasking, ss, vd.index);
+    fade *= SCULPT_automasking_factor_get(
+        ss->filter_cache->automasking, ss, vd.index, &automask_data);
     fade = 1.0f - fade;
     float force[3] = {0.0f, 0.0f, 0.0f};
     float disp[3], temp[3], transform[3][3];

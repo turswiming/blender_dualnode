@@ -27,6 +27,7 @@ extern "C" {
 #endif
 
 struct AutomaskingCache;
+struct AutomaskingNodeData;
 struct Image;
 struct ImageUser;
 struct KeyBlock;
@@ -1186,7 +1187,8 @@ float SCULPT_brush_strength_factor(struct SculptSession *ss,
                                    const float fno[3],
                                    float mask,
                                    int vertex_index,
-                                   int thread_id);
+                                   int thread_id,
+                                   struct AutomaskingNodeData *automask_data);
 
 /**
  * Tilts a normal by the x and y tilt values using the view axis.
@@ -1272,9 +1274,25 @@ enum eDynTopoWarnFlag SCULPT_dynamic_topology_check(Scene *scene, Object *ob);
 /** \name Auto-masking.
  * \{ */
 
+typedef struct AutomaskingNodeData {
+  PBVHNode *node;
+  SculptOrigVertData orig_data;
+  bool have_orig_data;
+} AutomaskingNodeData;
+
+void SCULPT_automasking_node_begin(struct Object *ob,
+                                   const SculptSession *ss,
+                                   struct AutomaskingCache *automasking,
+                                   AutomaskingNodeData *automask_data,
+                                   PBVHNode *node);
+void SCULPT_automasking_node_update(SculptSession *ss,
+                                    AutomaskingNodeData *automask_data,
+                                    PBVHVertexIter *vd);
+
 float SCULPT_automasking_factor_get(struct AutomaskingCache *automasking,
                                     SculptSession *ss,
-                                    int vert);
+                                    int vert,
+                                    AutomaskingNodeData *automask_data);
 
 /* Returns the automasking cache depending on the active tool. Used for code that can run both for
  * brushes and filter. */
@@ -1294,6 +1312,8 @@ float *SCULPT_boundary_automasking_init(Object *ob,
 bool SCULPT_automasking_needs_normal(const SculptSession *ss,
                                      const Sculpt *sculpt,
                                      const Brush *brush);
+bool SCULPT_automasking_needs_origco(const SculptSession *ss, const Sculpt *sd, const Brush *br);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

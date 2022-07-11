@@ -118,11 +118,17 @@ static float sculpt_automasking_normal_calc(AutomaskingCache *automasking,
                                             int vertex,
                                             const float normal[3],
                                             float limit_lower,
-                                            float limit_upper)
+                                            float limit_upper,
+                                            AutomaskingNodeData *automask_data)
 {
   float normal_v[3];
 
-  SCULPT_vertex_normal_get(ss, vertex, normal_v);
+  if (automask_data->orig_data.no) {
+    copy_v3_v3(normal_v, automask_data->orig_data.no);
+  }
+  else {
+    SCULPT_vertex_normal_get(ss, vertex, normal_v);
+  }
 
   float angle = saacos(dot_v3v3(normal, normal_v));
 
@@ -159,11 +165,15 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
   return false;
 }
 
-float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession *ss, int vert)
+float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
+                                    SculptSession *ss,
+                                    int vert,
+                                    AutomaskingNodeData *automask_data)
 {
   if (!automasking) {
     return 1.0f;
   }
+
   /* If the cache is initialized with valid info, use the cache. This is used when the
    * automasking information can't be computed in real time per vertex and needs to be
    * initialized for the whole mesh when the stroke starts. */
@@ -200,7 +210,8 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession
         vert,
         ss->cache->initial_normal,
         automasking->settings.start_normal_limit - falloff * 0.5f,
-        automasking->settings.start_normal_limit + falloff * 0.5f);
+        automasking->settings.start_normal_limit + falloff * 0.5f,
+        automask_data);
   }
 
   if (ss->cache && (automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_NORMAL)) {
@@ -211,7 +222,8 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession
                                            vert,
                                            ss->cache->view_normal,
                                            automasking->settings.view_normal_limit,
-                                           automasking->settings.view_normal_limit + falloff);
+                                           automasking->settings.view_normal_limit + falloff,
+                                           automask_data);
   }
 
   return mask;
@@ -444,4 +456,19 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   }
 
   return automasking;
+}
+
+bool SCULPT_automasking_needs_origco(const SculptSession *ss, const Sculpt *sd, const Brush *br)
+{
+  if (br &&
+      br->automasking_flags & (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL)) {
+    return true;
+  }
+
+  if (sd &&
+      sd->automasking_flags & (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL)) {
+    return true;
+  }
+
+  return false;
 }

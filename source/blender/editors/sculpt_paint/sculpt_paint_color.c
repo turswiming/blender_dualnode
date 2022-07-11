@@ -69,10 +69,17 @@ static void do_color_smooth_task_cb_exec(void *__restrict userdata,
       ss, &test, data->brush->falloff_shape);
   const int thread_id = BLI_task_parallel_thread_id(tls);
 
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(
+      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     if (!sculpt_brush_test_sq_fn(&test, vd.co)) {
       continue;
     }
+
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     const float fade = bstrength * SCULPT_brush_strength_factor(ss,
                                                                 brush,
                                                                 vd.co,
@@ -81,7 +88,8 @@ static void do_color_smooth_task_cb_exec(void *__restrict userdata,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
                                                                 vd.index,
-                                                                thread_id);
+                                                                thread_id,
+                                                                &automask_data);
 
     float smooth_color[4];
     SCULPT_neighbor_color_average(ss, smooth_color, vd.index);
@@ -126,6 +134,10 @@ static void do_paint_brush_task_cb_ex(void *__restrict userdata,
                                  BKE_brush_color_get(ss->scene, brush));
   IMB_colormanagement_srgb_to_scene_linear_v3(brush_color, brush_color);
 
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(
+      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     SCULPT_orig_vert_data_update(&orig_data, &vd);
 
@@ -144,6 +156,8 @@ static void do_paint_brush_task_cb_ex(void *__restrict userdata,
       continue;
     }
 
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     float fade = bstrength * SCULPT_brush_strength_factor(ss,
                                                           brush,
                                                           vd.co,
@@ -152,7 +166,8 @@ static void do_paint_brush_task_cb_ex(void *__restrict userdata,
                                                           vd.fno,
                                                           vd.mask ? *vd.mask : 0.0f,
                                                           vd.index,
-                                                          thread_id);
+                                                          thread_id,
+                                                          &automask_data);
 
     /* Density. */
     float noise = 1.0f;
@@ -389,10 +404,17 @@ static void do_smear_brush_task_cb_exec(void *__restrict userdata,
     sub_v3_v3v3(brush_delta, ss->cache->location, ss->cache->last_location);
   }
 
+  AutomaskingNodeData automask_data;
+  SCULPT_automasking_node_begin(
+      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     if (!sculpt_brush_test_sq_fn(&test, vd.co)) {
       continue;
     }
+
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     const float fade = bstrength * SCULPT_brush_strength_factor(ss,
                                                                 brush,
                                                                 vd.co,
@@ -401,7 +423,8 @@ static void do_smear_brush_task_cb_exec(void *__restrict userdata,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
                                                                 vd.index,
-                                                                thread_id);
+                                                                thread_id,
+                                                                &automask_data);
 
     float current_disp[3];
     float current_disp_norm[3];
