@@ -530,8 +530,7 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
   std::ofstream of;
   of.open(filename.str());
   svg_header(of);
-  uint64_t first_new_prim_index = uv_primitives.size();
-  svg(of, *this, step++, first_new_prim_index);
+  svg(of, *this, step++);
 #endif
 
   int64_t border_index = 0;
@@ -560,8 +559,7 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
 #endif
 
 #ifdef DEBUG_SVG
-    svg(of, *this, step++, first_new_prim_index);
-    first_new_prim_index = uv_primitives.size();
+    svg(of, *this, step++);
 #endif
   }
 #ifdef DEBUG_SVG
@@ -847,36 +845,31 @@ static void svg(std::ostream &ss, const UVEdge &edge)
      << "\"/>\n";
 }
 
-void svg(std::ostream &ss, const UVIsland &island, int step, int64_t first_new_prim_index)
+void svg(std::ostream &ss, const UVIsland &island, int step)
 {
   ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
   ss << "  <g fill=\"none\">\n";
 
   /* Inner edges */
   ss << "    <g stroke=\"grey\" stroke-width=\"1\">\n";
-  for (const UVPrimitive &primitive :
-       Span<const UVPrimitive>(island.uv_primitives.begin(), first_new_prim_index)) {
-    svg(ss, primitive);
-  }
-  ss << "     </g>\n";
-
-  ss << "    <g stroke=\"grey\" fill=\"green\" stroke-width=\"1\">\n";
-  for (const UVPrimitive &primitive :
-       Span<const UVPrimitive>(&island.uv_primitives[first_new_prim_index],
-                               island.uv_primitives.size() - first_new_prim_index)) {
-    svg(ss, primitive);
+  for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
+    for (const UVPrimitive &primitive : uv_primitives) {
+      svg(ss, primitive);
+    }
   }
   ss << "     </g>\n";
 
   /* Border */
   ss << "    <g stroke=\"black\" stroke-width=\"2\">\n";
-  for (const UVPrimitive &primitive : island.uv_primitives) {
-    for (int i = 0; i < 3; i++) {
-      const UVEdge &edge = *primitive.edges[i];
-      if (!edge.is_border_edge()) {
-        continue;
+  for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
+    for (const UVPrimitive &primitive : uv_primitives) {
+      for (int i = 0; i < 3; i++) {
+        const UVEdge &edge = *primitive.edges[i];
+        if (!edge.is_border_edge()) {
+          continue;
+        }
+        svg(ss, edge);
       }
-      svg(ss, edge);
     }
   }
   ss << "     </g>\n";
@@ -909,26 +902,30 @@ void svg(std::ostream &ss, const UVIslands &islands, int step)
 
     /* Inner edges */
     ss << "    <g stroke=\"grey\" stroke-dasharray=\"5 5\">\n";
-    for (const UVPrimitive &primitive : island.uv_primitives) {
-      for (int i = 0; i < 3; i++) {
-        const UVEdge &edge = *primitive.edges[i];
-        if (edge.is_border_edge()) {
-          continue;
+    for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
+      for (const UVPrimitive &primitive : uv_primitives) {
+        for (int i = 0; i < 3; i++) {
+          const UVEdge &edge = *primitive.edges[i];
+          if (edge.is_border_edge()) {
+            continue;
+          }
+          svg(ss, edge);
         }
-        svg(ss, edge);
       }
     }
     ss << "     </g>\n";
 
     /* Border */
     ss << "    <g stroke=\"black\" stroke-width=\"2\">\n";
-    for (const UVPrimitive &primitive : island.uv_primitives) {
-      for (int i = 0; i < 3; i++) {
-        const UVEdge &edge = *primitive.edges[i];
-        if (!edge.is_border_edge()) {
-          continue;
+    for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
+      for (const UVPrimitive &primitive : uv_primitives) {
+        for (int i = 0; i < 3; i++) {
+          const UVEdge &edge = *primitive.edges[i];
+          if (!edge.is_border_edge()) {
+            continue;
+          }
+          svg(ss, edge);
         }
-        svg(ss, edge);
       }
     }
     ss << "     </g>\n";
@@ -944,43 +941,46 @@ void svg(std::ostream &ss, const UVIslandsMask &mask, int step)
 {
   ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
   ss << " <g fill=\"none\" stroke=\"black\">\n";
+  for (const UVIslandsMask::Tile&tile: mask.tiles)
+    {
 
-  float2 resolution = float2(mask.resolution.x, mask.resolution.y);
-  for (int x = 0; x < mask.resolution.x; x++) {
-    for (int y = 0; y < mask.resolution.y; y++) {
-      int offset = y * mask.resolution.x + x;
-      int offset2 = offset - 1;
-      if (y == 0 && mask.mask[offset] == 0xffff) {
-        continue;
+      float2 resolution = float2(tile.resolution.x, tile.resolution.y);
+      for (int x = 0; x < tile.resolution.x; x++) {
+        for (int y = 0; y < tile.resolution.y; y++) {
+          int offset = y * tile.resolution.x + x;
+          int offset2 = offset - 1;
+          if (y == 0 && tile.mask[offset] == 0xffff) {
+            continue;
+          }
+          if (x > 0 && tile.mask[offset] == tile.mask[offset2]) {
+            continue;
+          }
+          float2 start = float2(float(x), float(y)) / resolution;
+          float2 end = float2(float(x), float(y + 1)) / resolution;
+          ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
+             << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
+        }
       }
-      if (x > 0 && mask.mask[offset] == mask.mask[offset2]) {
-        continue;
-      }
-      float2 start = float2(float(x), float(y)) / resolution;
-      float2 end = float2(float(x), float(y + 1)) / resolution;
-      ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
-         << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
-    }
-  }
 
-  for (int x = 0; x < mask.resolution.x; x++) {
-    for (int y = 0; y < mask.resolution.y; y++) {
-      int offset = y * mask.resolution.x + x;
-      int offset2 = offset - mask.resolution.x;
-      if (x == 0 && mask.mask[offset] == 0xffff) {
-        continue;
+      for (int x = 0; x < tile.resolution.x; x++) {
+        for (int y = 0; y < tile.resolution.y; y++) {
+          int offset = y * tile.resolution.x + x;
+          int offset2 = offset - tile.resolution.x;
+          if (x == 0 && tile.mask[offset] == 0xffff) {
+            continue;
+          }
+          if (y > 0 && tile.mask[offset] == tile.mask[offset2]) {
+            continue;
+          }
+          float2 start = float2(float(x), float(y)) / resolution;
+          float2 end = float2(float(x + 1), float(y)) / resolution;
+          ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
+             << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
+        }
       }
-      if (y > 0 && mask.mask[offset] == mask.mask[offset2]) {
-        continue;
-      }
-      float2 start = float2(float(x), float(y)) / resolution;
-      float2 end = float2(float(x + 1), float(y)) / resolution;
-      ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
-         << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
+      ss << " </g>\n";
+      ss << "</g>\n";
     }
-  }
-  ss << " </g>\n";
-  ss << "</g>\n";
 }
 
 static void svg_coords(std::ostream &ss, const float2 &coords)

@@ -83,6 +83,15 @@ template<typename T> class VectorList {
     return vectors_.last().last();
   }
 
+  int64_t size() const
+  {
+    int64_t result = 0;
+    for (const UsedVector &vector : *this) {
+      result += vector.size();
+    }
+    return result;
+  }
+
  private:
   UsedVector &ensure_space_for_one()
   {
