@@ -539,10 +539,7 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
     border.update_indexes(border_index++);
   }
 
-  // Debug setting to reduce the extension to a number of iterations as long as not all corner
-  // cases have been implemented.
-  int num_iterations = 99999;
-  while (num_iterations) {
+  while (true) {
 #ifdef VALIDATE
     validate_border();
 #endif
@@ -552,19 +549,16 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
     }
 
     /* When outside the mask, the uv should not be considered for extension. */
-    if (!mask.is_masked(island_index, extension_corner->second->get_uv_vertex(0)->uv)) {
-      extension_corner->second->flags.extendable = false;
-      continue;
+    if (mask.is_masked(island_index, extension_corner->second->get_uv_vertex(0)->uv)) {
+      extend_at_vert(*this, *extension_corner);
     }
+    /* Mark that the vert is extended. Unable to extend twice. */
+    extension_corner->second->flags.extendable = false;
 
-    extend_at_vert(*this, *extension_corner);
 #ifdef VALIDATE
     validate_border();
 #endif
 
-    /* Mark that the vert is extended. Unable to extend twice. */
-    extension_corner->second->flags.extendable = false;
-    num_iterations--;
 #ifdef DEBUG_SVG
     svg(of, *this, step++, first_new_prim_index);
     first_new_prim_index = uv_primitives.size();
