@@ -5916,6 +5916,11 @@ void SCULPT_automasking_node_begin(Object *ob,
                                    AutomaskingNodeData *node_data,
                                    PBVHNode *node)
 {
+  if (!automasking) {
+    memset(node_data, 0, sizeof(*node_data));
+    return;
+  }
+
   node_data->node = node;
   node_data->have_orig_data = automasking->settings.flags &
                               (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL);
