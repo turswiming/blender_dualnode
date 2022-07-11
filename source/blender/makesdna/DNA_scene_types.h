@@ -1016,9 +1016,8 @@ typedef struct Sculpt {
 
   int automasking_cavity_blur_steps;
   float automasking_cavity_factor;
-  char _pad[3];
+  char _pad[4];
 
-  char automasking_cavity_blur_direct;
   struct CurveMapping *automasking_cavity_curve;
   struct Object *gravity_object;
 } Sculpt;
