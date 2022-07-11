@@ -38,10 +38,7 @@
 #include "DNA_modifier_types.h"
 #include "DNA_screen_types.h"
 
-#ifdef USE_BVHTREEKDOP
-#  include "BKE_bvhutils.h"
-#endif
-
+#include "BKE_bvhutils.h"
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_modifier.h"
@@ -71,15 +68,40 @@ using namespace blender::math;
 
 
 Vector<Vector<int>> tetFaces({{2,1,0}, {0,1,3}, {1,2,3}, {2,0,3}});
-float inf = 1000000000000;// C has no FLOAT_MAX :/
+float directions[6][3] = {{1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1}};
+
+float inf = FLT_MAX;// C has no FLOAT_MAX :/
+float eps = 1e-4;
 
 static float randomEps(){
-  // Why are we using a random epsilon value? 
-  return 0;
+  float eps = 1e-6 ;
+  return -eps + 2.0 * (static_cast <float> (rand()) / static_cast <float> (RAND_MAX)) * eps;
 }
 
-static bool isInside(Vector<float> vert){
-  return true;
+static bool isInside(float3 vert, BVHTreeFromMesh *treedata){
+  int count =  0;
+  float min_dist = 0.0f;
+  for(auto dir : directions){
+    float radius = 0.0f;
+    
+    float max_length = FLT_MAX;
+
+    BVHTreeRayHit rayhit = {0};
+    rayhit.index = -1;
+    rayhit.dist = max_length;
+    BLI_bvhtree_ray_cast(treedata->tree, vert, dir, radius, &rayhit, treedata->raycast_callback, treedata);
+
+    if (rayhit.index != -1 && rayhit.dist <= max_length) {
+      if(dot_v3v3(rayhit.no, dir) > eps){
+        count++;
+      }
+
+      if((min_dist > eps) && (min_dist - rayhit.dist) > eps)
+        return false;
+    }
+  }
+
+  return count > 3;
 }
 
 // Used to populate a tets face normals and planesD
@@ -101,78 +123,13 @@ static void setTetProperties(Vector<float3> &verts,
   }
 }
 
-static int findContainingTet(Vector<float3> &verts, 
-                    Vector<int> &tetVertId, 
-                    Vector<int> &tetFaceNeighbors, 
-                    Vector<float3> &faceNormals, 
-                    Vector<float> &planesD, 
-                    int tetMarkId, 
-                    Vector<int> &tetMarks,
-                    float3 currVert){
-  
-  bool found = false;
-  int tetNr = 0;
-
-  while(tetNr < tetVertId.size()/4 && tetVertId[4*tetNr]<0)
-    tetNr++;
-
-  float3 center(0.0, 0.0, 0.0);
-  while(!found){
-    if(tetNr < 0 || tetMarks[tetNr] == tetMarkId){
-      break;
-    }
-    
-    tetMarks[tetNr] = tetMarkId;
-
-    center = {0.0,0.0,0.0};
-    for(int i = 0; i<4; i++){
-      center += verts[tetVertId[4*tetNr + i]];
-    }
-    center*=0.25;
-
-    float minT = inf; //
-    int minFaceNr = -1;
-
-    for(int i = 0; i<4; i++){
-      float3 normal = faceNormals[4*tetNr + i];
-      float d = planesD[4*tetNr + i];
-
-      float hp = dot(normal, currVert) - d;
-      float hc = dot(normal, center) - d;
-
-      float t = hp - hc;
-      if(t == 0.0)
-        continue;
-
-      t = -hc/t;
-
-      if(t >= 0.0 && t < minT){
-        minT = t;
-        minFaceNr = i;
-      }
-    }
-
-    if(minT >= 1.0){
-      found = true;
-    }
-    else{
-      tetNr = tetFaceNeighbors[4*tetNr + minFaceNr];
-    }
-  }
-
-  if(found)
-    return tetNr;
-  else
-    return -1;
-}
-
 static float3 getCircumCenter(float3 p0, float3 p1, float3 p2, float3 p3){
   float3 b = p1 - p0;
   float3 c = p2 - p0;
   float3 d = p3 - p0;
 
   float det = 2.0 * (b.x*(c.y*d.z - c.z*d.y) - b.y*(c.x*d.z - c.z*d.x) + b.z*(c.x*d.y - c.y*d.x));
-  if (det == 0.0){
+  if (det <= eps){
     return p0;
   }
   else{
@@ -183,12 +140,138 @@ static float3 getCircumCenter(float3 p0, float3 p1, float3 p2, float3 p3){
       
 }
 
-// Remove unused params
+// bool isSameSide(float3 p0, float3 p1, float3 p2, float3 p4, float3 vert){
+
+// }
+
+// bool isInsideTet(float3 p0, float3 p1, float3 p2, float3 p3, float3 vert){
+
+// }
+
+static int findContainingTet(Vector<float3> &verts, 
+                    Vector<int> &tetVertId, 
+                    Vector<int> &tetFaceNeighbors, 
+                    Vector<float3> &faceNormals, 
+                    Vector<float> &planesD, 
+                    int tetMarkId, 
+                    Vector<int> &tetMarks,
+                    float3 currVert){
+  
+  /* --------------------
+  Matthias Method
+  ----------------------*/
+
+  // bool found = false;
+  // int tetNr = 0;
+
+  // while(tetNr < tetVertId.size()/4 && tetVertId[4*tetNr]<0)
+  //   tetNr++;
+
+  // float3 center(0.0, 0.0, 0.0);
+  // while(!found){
+  //   if(tetNr < 0 || tetMarks[tetNr] == tetMarkId){
+  //     break;
+  //   }
+    
+  //   tetMarks[tetNr] = tetMarkId;
+
+  //   center = {0.0,0.0,0.0};
+  //   for(int i = 0; i<4; i++){
+  //     center += verts[tetVertId[4*tetNr + i]];
+  //   }
+  //   center*=0.25;
+
+  //   float minT = inf; //
+  //   int minFaceNr = -1;
+
+  //   for(int i = 0; i<4; i++){
+  //     float3 normal = faceNormals[4*tetNr + i];
+  //     float d = planesD[4*tetNr + i];
+
+  //     float hp = dot(normal, currVert) - d;
+  //     float hc = dot(normal, center) - d;
+
+  //     float t = hp - hc;
+  //     if(t <= eps)
+  //       continue;
+
+  //     t = -hc/t;
+
+  //     if((t >= eps) && ((t - minT) > eps)){
+  //       minT = t;
+  //       minFaceNr = i;
+  //     }
+  //   }
+
+  //   if(minT >= 1.0){
+  //     found = true;
+  //   }
+  //   else{
+  //     tetNr = tetFaceNeighbors[4*tetNr + minFaceNr];
+  //   }
+  // }
+
+  // if(found)
+  //   return tetNr;
+  // else
+  //   return -1;
+
+  /* --------------------
+  Brute force finding first violating tet
+  ----------------------*/
+
+  for(int currTet = 0; currTet<tetVertId.size()/4; currTet++){
+    if(tetVertId[4*currTet] == -1)
+      continue;
+    
+    float3 p0 = verts[tetVertId[4*currTet + 0]];
+    float3 p1 = verts[tetVertId[4*currTet + 1]];
+    float3 p2 = verts[tetVertId[4*currTet + 2]];
+    float3 p3 = verts[tetVertId[4*currTet + 3]];
+
+    float3 circumCenter = getCircumCenter(p0, p1, p2, p3);
+    float circumRadius = length(p0 - circumCenter);
+    
+    if((circumRadius - length(currVert - circumCenter)) >= eps){
+      return currTet;
+    }
+  }
+
+  /* -----------------------
+  My method, checks if point is inside tet, if not finds the face that is connecting to the point and center
+  ------------------------*/
+
+  // bool found = false;
+  // int tetNr = 0;
+  // while(tetNr < tetVertId.size()/4 && tetVertId[4*tetNr] < 0)
+  //   tetNr++;
+
+  // while(!found){
+  //   float3 p0 = verts[tetVertId[4*currTet + 0]];
+  //   float3 p1 = verts[tetVertId[4*currTet + 1]];
+  //   float3 p2 = verts[tetVertId[4*currTet + 2]];
+  //   float3 p3 = verts[tetVertId[4*currTet + 3]];
+    
+  //   if(isInsideTet(p0, p1, p2, p3, currVert))
+  //     return tetNr;
+    
+  //   for(int i = 0; i<4; i++)
+  // }
+
+  return -1;
+}
+
+/*
+The basic assumption employed is that 2 violating tets cannot not be neighbors. 
+Simple BFS approach that checks neighbors of all violating tets and adds them to stack
+
+If a violating tet shares a face with a non-violating tet, that's a boundary face and for each violating tet, list of its boundary faces is returned
+
+Note - BFS can be written better
+*/
 static Vector<std::pair<int, Vector<int>>> getViolatingTets(Vector<float3> &verts, 
                             Vector<int> &tetVertId, 
                             Vector<int> &tetFaceNeighbors, 
-                            Vector<float3> &faceNormals, 
-                            Vector<float> &planesD, 
                             int tetMarkId, 
                             Vector<int> &tetMarks,
                             float3 currVert,
@@ -198,13 +281,15 @@ static Vector<std::pair<int, Vector<int>>> getViolatingTets(Vector<float3> &vert
   Vector< std::pair<int,Vector<int>> > violatingTets;
   Vector<int> stack;
 
-  stack.append(containingTetNr);
-  tetMarks[containingTetNr] = tetMarkId;
+  stack.append(containingTetNr);  
 
   while(stack.size()){
     int currTet = stack.last();
     stack.remove_last();
 
+    if(tetMarks[currTet] == tetMarkId){
+      continue;
+    }
     tetMarks[currTet] = tetMarkId; 
     Vector<int> currTetBorderFaces;
 
@@ -219,17 +304,17 @@ static Vector<std::pair<int, Vector<int>>> getViolatingTets(Vector<float3> &vert
         continue;
       }
       
-      float3 p0 = verts[tetVertId[4*currTet + 0]];
-      float3 p1 = verts[tetVertId[4*currTet + 1]];
-      float3 p2 = verts[tetVertId[4*currTet + 2]];
-      float3 p3 = verts[tetVertId[4*currTet + 3]];
+      float3 p0 = verts[tetVertId[4*neighborTet + 0]];
+      float3 p1 = verts[tetVertId[4*neighborTet + 1]];
+      float3 p2 = verts[tetVertId[4*neighborTet + 2]];
+      float3 p3 = verts[tetVertId[4*neighborTet + 3]];
 
       float3 circumCenter = getCircumCenter(p0, p1, p2, p3);
       float circumRadius = length(p0 - circumCenter);
 
-      if(length(currVert - circumCenter) <= circumRadius){
+      if((circumRadius - length(currVert - circumCenter)) >= eps){
         stack.append(neighborTet);
-        tetMarks[neighborTet] = tetMarkId;
+        // tetMarks[neighborTet] = tetMarkId;
       }
       else{
         currTetBorderFaces.append(i);
@@ -238,21 +323,10 @@ static Vector<std::pair<int, Vector<int>>> getViolatingTets(Vector<float3> &vert
     violatingTets.append({currTet, currTetBorderFaces});
   }
 
-  // for(int currTet = 0; currTet<tetVertId.size()/4; currTet++){
-  //   float3 p0 = verts[tetVertId[4*currTet + 0]];
-  //   float3 p1 = verts[tetVertId[4*currTet + 1]];
-  //   float3 p2 = verts[tetVertId[4*currTet + 2]];
-  //   float3 p3 = verts[tetVertId[4*currTet + 3]];
-
-  //   float3 circumCenter = getCircumCenter(p0, p1, p2, p3);
-  //   float circumRadius = length(p0 - circumCenter);
-  //   if()
-  // }
-
   return violatingTets;
 }
 
-static Vector<int> createTets(Vector<float3> verts, /*tree, */ float minTetQuality){
+static Vector<int> createTets(Vector<float3> verts, BVHTreeFromMesh *treedata, float minTetQuality){
   Vector<int> tetVertId; // Stores indices of vertex that form a tet. Every tet is stored as 4 indices 
   Vector<int> tetFaceNeighbors; // Stores index of tet that shares the face as per tetFaces order. 4 neighbors per tet, 1 for each face
 
@@ -293,14 +367,18 @@ static Vector<int> createTets(Vector<float3> verts, /*tree, */ float minTetQuali
       continue;
     }
 
+    // Find Violating Tets - Returns all tets that are violating the Delaunay condition along with a list of face indices that are boundary faces
+    // Boundary faces may be outermost face of the structure or the face shared by a violating tet and a non violating tet
     tetMarkId += 1;
-    Vector<std::pair<int, Vector<int>>> violatingTets = getViolatingTets(verts, tetVertId, tetFaceNeighbors, faceNormals, planesD, tetMarkId, tetMarks, currVert, containingTetNr);
+    Vector<std::pair<int, Vector<int>>> violatingTets = getViolatingTets(verts, tetVertId, tetFaceNeighbors, tetMarkId, tetMarks, currVert, containingTetNr);
 
-    Vector<int> newTets; // Stores tet numbers of the new tets formed. Used for making neighbors of the new tets formed
+    //Create new tets centered at the new point and including the boundary faces
+    Vector<int> newTets; // Stores tet indices of the new tets formed. Used for making neighbors of the new tets formed
     for(int violatingTetNr = 0; violatingTetNr<violatingTets.size(); violatingTetNr++){
       int violatingTet = violatingTets[violatingTetNr].first;
       Vector<int> boundaryFaces = violatingTets[violatingTetNr].second;
 
+      // Copying old tet information
       Vector<int> currTetVerts;
       Vector<int> currTetNeighbors;
       for(int i = 0; i<4; i++){
@@ -308,13 +386,14 @@ static Vector<int> createTets(Vector<float3> verts, /*tree, */ float minTetQuali
         currTetNeighbors.append(tetFaceNeighbors[4*violatingTet + i]);
       }
 
+      // Deleting old tet. For each deleted tet, index 1 stores the index of next free tet
       tetVertId[4*violatingTet] = -1;
       tetVertId[4*violatingTet + 1] = firstFreeTet;
       firstFreeTet = violatingTet;
 
       for(int i = 0; i<boundaryFaces.size(); i++){
         Vector<int> faceVerts;
-        for(int j = 0; j<3; j++){
+        for(int j = 2; j>=0; j--){
           faceVerts.append(currTetVerts[tetFaces[boundaryFaces[i]][j]]); 
         }
 
@@ -336,20 +415,19 @@ static Vector<int> createTets(Vector<float3> verts, /*tree, */ float minTetQuali
           firstFreeTet = tetVertId[4*firstFreeTet + 1];
           for(int j = 0; j<3; j++){
             tetVertId[4*newTetNr + j] = faceVerts[j];
+            tetFaceNeighbors[4*newTetNr + j] = -1;
           }
           tetVertId[4*newTetNr + 3] = vertNr;
+          tetFaceNeighbors[4*newTetNr + 3] = -1;
           tetMarks[newTetNr] = 0;
         }
-
         newTets.append(newTetNr);
 
+        tetFaceNeighbors[4*newTetNr] = currTetNeighbors[boundaryFaces[i]];
         // If the boundary face has no neighboring tet
-        if(currTetNeighbors[boundaryFaces[i]] == -1){
-          // continue;
-        }  
-        else{
+        if(currTetNeighbors[boundaryFaces[i]] != -1){
           // Else correcting the neighbors for the shared face
-          tetFaceNeighbors[4*newTetNr] = currTetNeighbors[boundaryFaces[i]];
+          // tetFaceNeighbors[4*newTetNr] = currTetNeighbors[boundaryFaces[i]];
           for(int j = 0; j<4; j++){
             if(tetFaceNeighbors[4*currTetNeighbors[boundaryFaces[i]] + j] == violatingTet){
               tetFaceNeighbors[4*currTetNeighbors[boundaryFaces[i]] + j] = newTetNr;
@@ -366,6 +444,10 @@ static Vector<int> createTets(Vector<float3> verts, /*tree, */ float minTetQuali
     for(int i = 0; i<newTets.size(); i++){
       for(int j = 0; j<newTets.size(); j++){
         
+        if(j == i){
+          continue;
+        }
+
         for(int facei = 0; facei<4; facei++){
           int vertsI[3];
           for(int k = 0; k<3; k++){
@@ -384,21 +466,31 @@ static Vector<int> createTets(Vector<float3> verts, /*tree, */ float minTetQuali
 
           if(count == 3){
             tetFaceNeighbors[4*newTets[i] + facei] = newTets[j];
-            tetFaceNeighbors[4*newTets[i] + facei] = newTets[j];
+            // tetFaceNeighbors[4*newTets[i] + facei] = newTets[j];
           }
         }
       }
     }
   }
 
-  // Remove empty tets
+  // Remove empty tets and tets that lie outside the structure
   int emptyTet = 0;
   int tetLen = tetVertId.size()/4;
   for(int tetNr = 0; tetNr<tetLen; tetNr++){
+    
+    int flag = 1;
+    float3 center(0.0f, 0.0f, 0.0f);
     for(int i = 0; i<4; i++){
+      center += verts[tetVertId[4*tetNr + i]];
       if(tetVertId[4*tetNr + i]<0 || tetVertId[4*tetNr + i]>=bigTet){
-        continue;
+        flag = 0;
+        break;
       }
+    }
+    center*=0.25;
+
+    if(!flag || !isInside(center, treedata)){
+      continue;
     }
 
     for(int i = 0; i<4; i++){
@@ -407,21 +499,31 @@ static Vector<int> createTets(Vector<float3> verts, /*tree, */ float minTetQuali
     emptyTet++;
   }
 
-  tetVertId.remove(4*emptyTet, 4*(tetLen - emptyTet));
+    tetVertId.remove(4*emptyTet, 4*(tetLen - emptyTet));
 
-  return tetVertId;
+    return tetVertId;
 }
 
 static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx), Mesh *mesh)
 {
   // Parameters of tetrahedralization, need to be taken as user input, being defined here as placeholders
-  float interiorResolution = 10;
+  float interiorResolution = 0;
   float minTetQuality = 0.001; // Exp goes from -4 to 0
-  bool oneFacePerTet = true;
+  bool oneFacePerTet = false;
   float tetScale = 0.8;
+
+  BVHTreeFromMesh treedata = {NULL};
+  BKE_bvhtree_from_mesh_get(&treedata, mesh, BVHTREE_FROM_LOOPTRI, 2);
 
   Mesh *result;
   BMesh *bm;
+  bool use_operators = true;
+  
+  BMeshCreateParams bmcParam;
+  bmcParam.use_toolflags = true;
+  bm = BM_mesh_create(&bm_mesh_allocsize_default,
+                      &bmcParam);
+  
   Vector<float3> tetVerts;
 
   float3 center(0,0,0);
@@ -465,7 +567,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
         for(int zi = 0; zi<(int)(boundLen[2]/sampleLen); zi++){
           float z = bmin[2] + zi*sampleLen + randomEps(); 
 
-          if(isInside({x,y,z})){
+          if(isInside({x,y,z}, &treedata)){
             tetVerts.append({x,y,z});  
           }
         }
@@ -480,7 +582,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
   tetVerts.append({0.0, bigTetSize, bigTetSize});
   tetVerts.append({0.0, -bigTetSize, bigTetSize});
 
-  Vector<int> tetVertId = createTets(tetVerts, minTetQuality);
+  Vector<int> tetVertId = createTets(tetVerts, &treedata, minTetQuality);
 
   Vector<BMVert *> bmverts;
   if(oneFacePerTet){
@@ -493,14 +595,37 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
   }
   else{
     // Add vertices multiple times to make the tets distinctly visible
+    for(int tetNr = 0; tetNr<tetVertId.size()/4; tetNr++){
+      float3 center(0,0,0);
+      for(int j = 0; j<4; j++){
+        center += tetVerts[tetVertId[4*tetNr + j]];
+      }
+      center *= 0.25;
+
+      for(int faceNr = 0; faceNr < 4; faceNr++){
+        for(int faceVertNr = 0; faceVertNr < 3; faceVertNr++){
+          float3 vert = tetVerts[tetVertId[4*tetNr + tetFaces[faceNr][faceVertNr]]];
+          vert = center + (vert - center)*tetScale;
+          bmverts.append(BM_vert_create(bm, vert, NULL, BM_CREATE_NOP));
+        }
+      }
+    }
   }
 
-  // What's ensure lookup table?
-  // BM_mesh_elem_table_ensure()
-
   int numTets = tetVertId.size()/4;
+  int nr = 0;
   for(int i = 0; i<numTets; i++){
-    BM_face_create_quad_tri(bm, bmverts[tetVertId[4*i + 0]], bmverts[tetVertId[4*i + 1]], bmverts[tetVertId[4*i + 2]], bmverts[tetVertId[4*i + 3]], NULL, BM_CREATE_NO_DOUBLE);
+    if(oneFacePerTet){
+      if(tetVertId[4*i] < 0)
+        continue;
+      BM_face_create_quad_tri(bm, bmverts[tetVertId[4*i + 0]], bmverts[tetVertId[4*i + 1]], bmverts[tetVertId[4*i + 2]], bmverts[tetVertId[4*i + 3]], NULL, BM_CREATE_NO_DOUBLE);
+    }
+    else{
+      for(int faceNr = 0; faceNr<4; faceNr++){
+        BM_face_create_quad_tri(bm, bmverts[nr], bmverts[nr+1], bmverts[nr+2], NULL, NULL, BM_CREATE_NO_DOUBLE);
+        nr+=3;
+      }
+    }
   }
 
   CustomData_MeshMasks cd_mask_extra = {
@@ -589,7 +714,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx)
 
 // static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *UNUSED(ctx), Mesh *mesh)
 // {
-//   const WeldModifierData &wmd = reinterpret_cast<WeldModifierData &>(*md);
+// const WeldModifierData &wmd = reinterpret_cast<WeldModifierData &>(*md);
 
 //   std::optional<Mesh *> result = calculate_weld(*mesh, wmd);
 //   if (!result) {
