@@ -886,18 +886,30 @@ void svg(std::ostream &ss, const UVIsland &island, int step)
   ss << "     </g>\n";
 
   /* Mark Border corners that can be extended. */
-  for (const UVBorder &border : island.borders) {
-    ss << "    <g fill=\"green\">\n";
-    for (const UVBorderEdge &edge : border.edges) {
-      if (edge.flags.extendable) {
-        const UVVertex *uv_vertex = edge.get_uv_vertex(0);
-        ss << "<circle cx=\"" << svg_x(*uv_vertex) << "\"";
-        ss << " cy=\"" << svg_y(*uv_vertex) << "\"";
+  ss << "    <g fill=\"green\">\n";
+  for (const VectorList<UVVertex>::UsedVector &uv_vertices : island.uv_vertices) {
+    for (const UVVertex &uv_vertex : uv_vertices) {
+      if (uv_vertex.flags.is_border && !uv_vertex.flags.is_extended) {
+        ss << "<circle cx=\"" << svg_x(uv_vertex) << "\"";
+        ss << " cy=\"" << svg_y(uv_vertex) << "\"";
         ss << " r=\"3\" />\n";
       }
     }
-    ss << "     </g>\n";
   }
+  ss << "     </g>\n";
+
+  /* Mark Border corners that can be extended. */
+  ss << "    <g fill=\"orange\">\n";
+  for (const VectorList<UVVertex>::UsedVector &uv_vertices : island.uv_vertices) {
+    for (const UVVertex &uv_vertex : uv_vertices) {
+      if (uv_vertex.flags.is_border && uv_vertex.flags.is_extended) {
+        ss << "<circle cx=\"" << svg_x(uv_vertex) << "\"";
+        ss << " cy=\"" << svg_y(uv_vertex) << "\"";
+        ss << " r=\"3\" />\n";
+      }
+    }
+  }
+  ss << "     </g>\n";
 
   ss << "   </g>\n";
 
