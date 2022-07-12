@@ -345,6 +345,10 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   integrator->set_use_light_tree(get_boolean(cscene, "use_light_tree"));
   integrator->set_splitting_threshold(get_float(cscene, "splitting_threshold"));
 
+  if (integrator->use_light_tree_is_modified()) {
+    scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
+  }
+
   SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
       cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_SOBOL);
   integrator->set_sampling_pattern(sampling_pattern);
