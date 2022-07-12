@@ -42,7 +42,10 @@ static std::optional<UVBorderCorner> sharpest_border_corner(UVBorder &border, fl
   *r_angle = std::numeric_limits<float>::max();
   std::optional<UVBorderCorner> result;
   for (UVBorderEdge &edge : border.edges) {
-    if (edge.flags.extendable == false) {
+    const UVVertex *uv_vertex = edge.get_uv_vertex(0);
+    /* Only allow extending from tagged border vertices that have not been extended yet. During
+     * extending new borders are created, those are ignored as their is_border is set to false. */
+    if (!uv_vertex->flags.is_border || uv_vertex->flags.is_extended) {
       continue;
     }
     float new_angle = border.outside_angle(edge);
@@ -508,15 +511,28 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
       border_next--;
     }
     border.remove(border_next);
-    for (UVBorderEdge &edge : new_border_edges) {
-      edge.flags.extendable = false;
-    }
     border.edges.insert(border_insert, new_border_edges);
 
     border.update_indexes(border_index);
   }
+}
 
-  border.update_extendability();
+/* Marks vertices that can be extended. Only vertices that are part of a border can be extended. */
+static void reset_extendability_flags(UVIsland &island)
+{
+  for (VectorList<UVVertex>::UsedVector &uv_vertices : island.uv_vertices) {
+    for (UVVertex &uv_vertex : uv_vertices) {
+      uv_vertex.flags.is_border = false;
+      uv_vertex.flags.is_extended = false;
+    }
+  }
+
+  for (UVBorder border : island.borders) {
+    for (UVBorderEdge &border_edge : border.edges) {
+      border_edge.edge->vertices[0]->flags.is_border = true;
+      border_edge.edge->vertices[1]->flags.is_border = true;
+    }
+  }
 }
 
 void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index)
@@ -533,6 +549,8 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
   svg(of, *this, step++);
 #endif
 
+  reset_extendability_flags(*this);
+
   int64_t border_index = 0;
   for (UVBorder &border : borders) {
     border.update_indexes(border_index++);
@@ -547,12 +565,14 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
       break;
     }
 
+    UVVertex *uv_vertex = extension_corner->second->get_uv_vertex(0);
+
     /* When outside the mask, the uv should not be considered for extension. */
-    if (mask.is_masked(island_index, extension_corner->second->get_uv_vertex(0)->uv)) {
+    if (mask.is_masked(island_index, uv_vertex->uv)) {
       extend_at_vert(*this, *extension_corner);
     }
     /* Mark that the vert is extended. Unable to extend twice. */
-    extension_corner->second->flags.extendable = false;
+    uv_vertex->flags.is_extended = true;
 
 #ifdef VALIDATE
     validate_border();
@@ -661,15 +681,6 @@ void UVBorder::update_indexes(uint64_t border_index)
   }
 }
 
-void UVBorder::update_extendability()
-{
-  for (UVBorderEdge &edge : edges) {
-    UVBorderEdge &prev_edge = edges[edge.prev_index];
-    if (prev_edge.get_uv_vertex(1) != edge.get_uv_vertex(0)) {
-      edge.flags.extendable = false;
-    }
-  }
-}
 #ifdef VALIDATE
 void UVBorder::validate() const
 {
@@ -941,46 +952,45 @@ void svg(std::ostream &ss, const UVIslandsMask &mask, int step)
 {
   ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
   ss << " <g fill=\"none\" stroke=\"black\">\n";
-  for (const UVIslandsMask::Tile&tile: mask.tiles)
-    {
+  for (const UVIslandsMask::Tile &tile : mask.tiles) {
 
-      float2 resolution = float2(tile.resolution.x, tile.resolution.y);
-      for (int x = 0; x < tile.resolution.x; x++) {
-        for (int y = 0; y < tile.resolution.y; y++) {
-          int offset = y * tile.resolution.x + x;
-          int offset2 = offset - 1;
-          if (y == 0 && tile.mask[offset] == 0xffff) {
-            continue;
-          }
-          if (x > 0 && tile.mask[offset] == tile.mask[offset2]) {
-            continue;
-          }
-          float2 start = float2(float(x), float(y)) / resolution;
-          float2 end = float2(float(x), float(y + 1)) / resolution;
-          ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
-             << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
+    float2 resolution = float2(tile.resolution.x, tile.resolution.y);
+    for (int x = 0; x < tile.resolution.x; x++) {
+      for (int y = 0; y < tile.resolution.y; y++) {
+        int offset = y * tile.resolution.x + x;
+        int offset2 = offset - 1;
+        if (y == 0 && tile.mask[offset] == 0xffff) {
+          continue;
         }
-      }
-
-      for (int x = 0; x < tile.resolution.x; x++) {
-        for (int y = 0; y < tile.resolution.y; y++) {
-          int offset = y * tile.resolution.x + x;
-          int offset2 = offset - tile.resolution.x;
-          if (x == 0 && tile.mask[offset] == 0xffff) {
-            continue;
-          }
-          if (y > 0 && tile.mask[offset] == tile.mask[offset2]) {
-            continue;
-          }
-          float2 start = float2(float(x), float(y)) / resolution;
-          float2 end = float2(float(x + 1), float(y)) / resolution;
-          ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
-             << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
+        if (x > 0 && tile.mask[offset] == tile.mask[offset2]) {
+          continue;
         }
+        float2 start = float2(float(x), float(y)) / resolution;
+        float2 end = float2(float(x), float(y + 1)) / resolution;
+        ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
+           << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
       }
-      ss << " </g>\n";
-      ss << "</g>\n";
     }
+
+    for (int x = 0; x < tile.resolution.x; x++) {
+      for (int y = 0; y < tile.resolution.y; y++) {
+        int offset = y * tile.resolution.x + x;
+        int offset2 = offset - tile.resolution.x;
+        if (x == 0 && tile.mask[offset] == 0xffff) {
+          continue;
+        }
+        if (y > 0 && tile.mask[offset] == tile.mask[offset2]) {
+          continue;
+        }
+        float2 start = float2(float(x), float(y)) / resolution;
+        float2 end = float2(float(x + 1), float(y)) / resolution;
+        ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
+           << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
+      }
+    }
+    ss << " </g>\n";
+    ss << "</g>\n";
+  }
 }
 
 static void svg_coords(std::ostream &ss, const float2 &coords)

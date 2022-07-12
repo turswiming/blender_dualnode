@@ -302,12 +302,21 @@ struct UVVertex {
   /* uv edges that share this UVVertex. */
   Vector<UVEdge *> uv_edges;
 
+  struct {
+    bool is_border : 1;
+    bool is_extended : 1;
+  } flags;
+
   explicit UVVertex()
   {
+    flags.is_border = false;
+    flags.is_extended = false;
   }
 
   explicit UVVertex(const MeshUVVert &vert) : vertex(vert.vertex), uv(vert.uv)
   {
+    flags.is_border = false;
+    flags.is_extended = false;
   }
 };
 
@@ -524,15 +533,9 @@ struct UVBorderEdge {
   int64_t next_index = -1;
   int64_t border_index = -1;
 
-  struct {
-    /* Is possible to extend on the `get_uv_vertex(0)` */
-    bool extendable : 1;
-  } flags;
-
   explicit UVBorderEdge(UVEdge *edge, UVPrimitive *uv_primitive)
       : edge(edge), uv_primitive(uv_primitive)
   {
-    flags.extendable = true;
   }
 
   UVVertex *get_uv_vertex(int index)
@@ -608,13 +611,6 @@ struct UVBorder {
 
   void update_indexes(uint64_t border_index);
 
-  /**
-   * Mark edges not extendable when they don't share the same vertex.
-   *
-   * No solutions exists (yet) when the vertexes are different.
-   */
-  void update_extendability();
-
   static std::optional<UVBorder> extract_from_edges(Vector<UVBorderEdge> &edges);
 
 #ifdef VALIDATE
@@ -640,6 +636,11 @@ struct UVIsland {
    * be completely encapsulated by another one.
    */
   Vector<UVBorder> borders;
+
+  /**
+   * Key is mesh vert index, Value is list of UVVertices that refer to the mesh vertex with that
+   * index. Map is used internally to quickly lookup similar UVVertices.
+   */
   Map<int64_t, Vector<UVVertex *>> uv_vertex_lookup;
 
   UVPrimitive *add_primitive(MeshPrimitive &primitive)
