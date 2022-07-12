@@ -7,6 +7,8 @@
 #include "curves_sculpt_intern.h"
 #include "paint_intern.h"
 
+#include "BKE_bvhutils.h"
+#include "BLI_enumerable_thread_specific.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
@@ -103,6 +105,43 @@ VArray<float> get_point_selection(const Curves &curves_id);
  * or curves that have their own selection factor greater than zero.
  */
 IndexMask retrieve_selected_curves(const Curves &curves_id, Vector<int64_t> &r_indices);
+
+class CurvesConstraintSolver {
+ private:
+  /** Length of each segment indexed by the index of the first point in the segment. */
+  Array<float> segment_lengths_cu_;
+
+  /** BVH tree of the surface mesh for finding collisions. */
+  BVHTreeFromMesh surface_bvh_;
+
+  struct Contact {
+    float dist_;
+    float3 normal_;
+    float3 point_;
+  };
+
+  Array<int> contacts_num_;
+  Array<Contact> contacts_;
+
+ public:
+  /* Remember the initial length of all curve segments. This allows restoring the length after
+   * combing.
+   */
+  void initialize(const CurvesGeometry *curves);
+
+  void find_contact_points(const Depsgraph *depsgraph,
+                           Object *object,
+                           const CurvesGeometry *curves,
+                           const Object *surface,
+                           Span<float3> orig_positions,
+                           threading::EnumerableThreadSpecific<Vector<int>> &changed_curves);
+
+  /**
+   * Satisfy constraints on curve points based on initial deformation.
+   */
+  void solve_constraints(CurvesGeometry *curves,
+                         threading::EnumerableThreadSpecific<Vector<int>> &changed_curves) const;
+};
 
 void move_last_point_and_resample(MutableSpan<float3> positions, const float3 &new_last_position);
 

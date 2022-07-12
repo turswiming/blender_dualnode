@@ -63,8 +63,8 @@ class CombOperation : public CurvesSculptStrokeOperation {
   /** Only used when a 3D brush is used. */
   CurvesBrush3D brush_3d_;
 
-  /** Length of each segment indexed by the index of the first point in the segment. */
-  Array<float> segment_lengths_cu_;
+  /** Solver for length and contact constraints. */
+  CurvesConstraintSolver constraint_solver_;
 
   friend struct CombOperationExecutor;
 
@@ -95,6 +95,7 @@ struct CombOperationExecutor {
   VArray<float> point_factors_;
   Vector<int64_t> selected_curve_indices_;
   IndexMask curve_selection_;
+  Array<float3> orig_positions_;
 
   float2 brush_pos_prev_re_;
   float2 brush_pos_re_;
@@ -141,10 +142,12 @@ struct CombOperationExecutor {
       if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
         this->initialize_spherical_brush_reference_point();
       }
-      this->initialize_segment_lengths();
+      self_->constraint_solver_.initialize(curves_);
       /* Combing does nothing when there is no mouse movement, so return directly. */
       return;
     }
+
+    orig_positions_ = curves_->positions();
 
     EnumerableThreadSpecific<Vector<int>> changed_curves;
 
@@ -158,7 +161,10 @@ struct CombOperationExecutor {
       BLI_assert_unreachable();
     }
 
-    this->restore_segment_lengths(changed_curves);
+    self_->constraint_solver_.find_contact_points(
+        ctx_.depsgraph, object_, curves_, curves_id_->surface, orig_positions_, changed_curves);
+
+    self_->constraint_solver_.solve_constraints(curves_, changed_curves);
 
     curves_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);
@@ -332,51 +338,6 @@ struct CombOperationExecutor {
     if (brush_3d.has_value()) {
       self_->brush_3d_ = *brush_3d;
     }
-  }
-
-  /**
-   * Remember the initial length of all curve segments. This allows restoring the length after
-   * combing.
-   */
-  void initialize_segment_lengths()
-  {
-    const Span<float3> positions_cu = curves_->positions();
-    self_->segment_lengths_cu_.reinitialize(curves_->points_num());
-    threading::parallel_for(curves_->curves_range(), 128, [&](const IndexRange range) {
-      for (const int curve_i : range) {
-        const IndexRange points = curves_->points_for_curve(curve_i);
-        for (const int point_i : points.drop_back(1)) {
-          const float3 &p1_cu = positions_cu[point_i];
-          const float3 &p2_cu = positions_cu[point_i + 1];
-          const float length_cu = math::distance(p1_cu, p2_cu);
-          self_->segment_lengths_cu_[point_i] = length_cu;
-        }
-      }
-    });
-  }
-
-  /**
-   * Restore previously stored length for each segment in the changed curves.
-   */
-  void restore_segment_lengths(EnumerableThreadSpecific<Vector<int>> &changed_curves)
-  {
-    const Span<float> expected_lengths_cu = self_->segment_lengths_cu_;
-    MutableSpan<float3> positions_cu = curves_->positions_for_write();
-
-    threading::parallel_for_each(changed_curves, [&](const Vector<int> &changed_curves) {
-      threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
-        for (const int curve_i : changed_curves.as_span().slice(range)) {
-          const IndexRange points = curves_->points_for_curve(curve_i);
-          for (const int segment_i : points.drop_back(1)) {
-            const float3 &p1_cu = positions_cu[segment_i];
-            float3 &p2_cu = positions_cu[segment_i + 1];
-            const float3 direction = math::normalize(p2_cu - p1_cu);
-            const float expected_length_cu = expected_lengths_cu[segment_i];
-            p2_cu = p1_cu + direction * expected_length_cu;
-          }
-        }
-      });
-    });
   }
 };
 
