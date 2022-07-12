@@ -364,14 +364,13 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
       pbvh->looptri, pbvh->totprim, pbvh->totvert, pbvh->mloop, ldata_uv);
   uv_islands::UVIslands islands(mesh_data);
 
-  // TODO: Currently uv_masks only supports a single udim tile. We should create one for each tile.
   // TODO: mask resolution should be based on the actual resolution of the image buffer (or a
   // factor of it).
   uv_islands::UVIslandsMask uv_masks;
   LISTBASE_FOREACH (ImageTile *, tile_data, &image->tiles) {
     image::ImageTileWrapper image_tile(tile_data);
     uv_masks.add_tile(float2(image_tile.get_tile_x_offset(), image_tile.get_tile_y_offset()),
-                      ushort2(256, 256));
+                      ushort2(1024, 1024));
   }
   uv_masks.add(islands);
   uv_masks.dilate(image->seamfix_iter);
