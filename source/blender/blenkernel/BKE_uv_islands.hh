@@ -24,6 +24,8 @@ namespace blender::bke::uv_islands {
 /*
  * When enabled various parts of the code would generate an SVG file to visual see how the
  * algorithm makes decisions.
+ *
+ * TODO: These will be removed before this patch will land in master.
  */
 //#define DEBUG_SVG
 //#define VALIDATE
@@ -68,27 +70,6 @@ struct MeshPrimitive {
    */
   int64_t uv_island_id;
 
-  const MeshUVVert &get_uv_vert(const MeshVertex *vert) const
-  {
-    for (const MeshUVVert &uv_vert : vertices) {
-      if (uv_vert.vertex == vert) {
-        return uv_vert;
-      }
-    }
-    BLI_assert_unreachable();
-    return vertices[0];
-  }
-
-  bool has_vertex(const MeshVertex &v) const
-  {
-    for (int i = 0; i < 3; i++) {
-      if (vertices[i].vertex == &v) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   MeshUVVert *get_other_uv_vertex(const MeshVertex *v1, const MeshVertex *v2)
   {
     BLI_assert(vertices[0].vertex == v1 || vertices[1].vertex == v1 || vertices[2].vertex == v1);
@@ -101,15 +82,7 @@ struct MeshPrimitive {
     return nullptr;
   }
 
-  rctf uv_bounds() const
-  {
-    rctf result;
-    BLI_rctf_init_minmax(&result);
-    for (const MeshUVVert &uv_vertex : vertices) {
-      BLI_rctf_do_minmax_v(&result, uv_vertex.uv);
-    }
-    return result;
-  }
+  rctf uv_bounds() const;
 
   bool has_shared_uv_edge(const MeshPrimitive *other) const
   {
@@ -643,25 +616,6 @@ struct UVIsland {
    */
   Map<int64_t, Vector<UVVertex *>> uv_vertex_lookup;
 
-  UVPrimitive *add_primitive(MeshPrimitive &primitive)
-  {
-    UVPrimitive uv_primitive(&primitive);
-    uv_primitives.append(uv_primitive);
-    UVPrimitive *uv_primitive_ptr = &uv_primitives.last();
-    for (MeshEdge *edge : primitive.edges) {
-      const MeshUVVert &v1 = primitive.get_uv_vert(edge->vert1);
-      const MeshUVVert &v2 = primitive.get_uv_vert(edge->vert2);
-      UVEdge uv_edge_template;
-      uv_edge_template.vertices[0] = lookup_or_create(UVVertex(v1));
-      uv_edge_template.vertices[1] = lookup_or_create(UVVertex(v2));
-      UVEdge *uv_edge = lookup_or_create(uv_edge_template);
-      uv_primitive_ptr->edges.append(uv_edge);
-      uv_edge->append_to_uv_vertices();
-      uv_edge->uv_primitives.append(uv_primitive_ptr);
-    }
-    return uv_primitive_ptr;
-  }
-
   UVVertex *lookup(const UVVertex &vertex)
   {
     int64_t vert_index = vertex.vertex->v;
@@ -838,88 +792,10 @@ void svg_footer(std::ostream &ss);
 struct UVIslands {
   Vector<UVIsland> islands;
 
-  explicit UVIslands(MeshData &mesh_data)
-  {
-    TIMEIT_START(uv_islands);
-    islands.reserve(mesh_data.uv_island_len);
+  explicit UVIslands(MeshData &mesh_data);
 
-    for (int64_t uv_island_id = 0; uv_island_id < mesh_data.uv_island_len; uv_island_id++) {
-      islands.append_as(UVIsland());
-      UVIsland *uv_island = &islands.last();
-      for (MeshPrimitive &primitive : mesh_data.primitives) {
-        if (primitive.uv_island_id == uv_island_id) {
-          uv_island->add_primitive(primitive);
-        }
-      }
-    }
-
-#ifdef DEBUG_SVG
-    std::ofstream of;
-    of.open("/tmp/islands.svg");
-    svg_header(of);
-    svg(of, *this, 0);
-    svg_footer(of);
-    of.close();
-#endif
-
-    TIMEIT_END(uv_islands);
-  }
-
-  void extract_borders()
-  {
-    TIMEIT_START(extract_borders);
-    for (UVIsland &island : islands) {
-      island.extract_borders();
-    }
-
-#ifdef DEBUG_SVG
-    std::ofstream of;
-    of.open("/tmp/borders.svg");
-    svg_header(of);
-    for (UVIsland &island : islands) {
-      int index = 0;
-      for (UVBorder &border : island.borders) {
-        border.update_indexes(index);
-        index++;
-        svg(of, border, 0);
-      }
-    }
-    svg_footer(of);
-    of.close();
-#endif
-    TIMEIT_END(extract_borders);
-  }
-
-  void extend_borders(const UVIslandsMask &islands_mask)
-  {
-    TIMEIT_START(extend_borders);
-#ifdef VALIDATE
-    printf("Extending borders\n");
-    printf("=================\n");
-#endif
-    ushort index = 0;
-    for (UVIsland &island : islands) {
-#ifdef VALIDATE
-      printf("Island %d\n", index);
-      printf("---------\n");
-#endif
-      island.extend_border(islands_mask, index++);
-    }
-
-#ifdef DEBUG_SVG
-    std::ofstream of;
-    of.open("/tmp/borders.svg");
-    svg_header(of);
-    for (const UVIsland &island : islands) {
-      for (const UVBorder &border : island.borders) {
-        svg(of, border, 0);
-      }
-    }
-    svg_footer(of);
-    of.close();
-#endif
-    TIMEIT_END(extend_borders);
-  }
+  void extract_borders();
+  void extend_borders(const UVIslandsMask &islands_mask);
 
 #ifdef VALIDATE
  private:
@@ -941,69 +817,23 @@ struct UVIslands {
 #endif
 };
 
-/* Bitmask containing the num of the nearest Island. */
-// TODO: this is a really quick implementation.
+/** Mask to find the index of the UVIsland for a given UV coordinate. */
 struct UVIslandsMask {
 
+  /** Mask for each udim tile. */
   struct Tile {
     float2 udim_offset;
     ushort2 resolution;
     Array<uint16_t> mask;
 
-    Tile(float2 udim_offset, ushort2 resolution)
-        : udim_offset(udim_offset), resolution(resolution), mask(resolution.x * resolution.y)
-    {
-      clear();
-    }
+    Tile(float2 udim_offset, ushort2 resolution);
 
-    void clear()
-    {
-      mask.fill(0xffff);
-    }
-
-    void add(short island_index, const UVIsland &island)
-    {
-      for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives)
-        for (const UVPrimitive &uv_primitive : uv_primitives) {
-          const MeshPrimitive *mesh_primitive = uv_primitive.primitive;
-
-          rctf uv_bounds = mesh_primitive->uv_bounds();
-          rcti buffer_bounds;
-          buffer_bounds.xmin = max_ii(floor((uv_bounds.xmin - udim_offset.x) * resolution.x), 0);
-          buffer_bounds.xmax = min_ii(ceil((uv_bounds.xmax - udim_offset.x) * resolution.x),
-                                      resolution.x - 1);
-          buffer_bounds.ymin = max_ii(floor((uv_bounds.ymin - udim_offset.y) * resolution.y), 0);
-          buffer_bounds.ymax = min_ii(ceil((uv_bounds.ymax - udim_offset.y) * resolution.y),
-                                      resolution.y - 1);
-
-          for (int y = buffer_bounds.ymin; y < buffer_bounds.ymax + 1; y++) {
-            for (int x = buffer_bounds.xmin; x < buffer_bounds.xmax + 1; x++) {
-              float2 uv(float(x) / resolution.x, float(y) / resolution.y);
-              float3 weights;
-              barycentric_weights_v2(mesh_primitive->vertices[0].uv,
-                                     mesh_primitive->vertices[1].uv,
-                                     mesh_primitive->vertices[2].uv,
-                                     uv + udim_offset,
-                                     weights);
-              if (!barycentric_inside_triangle_v2(weights)) {
-                continue;
-              }
-
-              uint64_t offset = resolution.x * y + x;
-              mask[offset] = island_index;
-            }
-          }
-        }
-    }
     bool is_masked(const uint16_t island_index, const float2 uv) const;
   };
 
   Vector<Tile> tiles;
 
-  void add_tile(float2 udim_offset, ushort2 resolution)
-  {
-    tiles.append_as(Tile(udim_offset, resolution));
-  }
+  void add_tile(float2 udim_offset, ushort2 resolution);
 
   /**
    * Is the given uv coordinate part of the given island_index mask.
@@ -1011,16 +841,13 @@ struct UVIslandsMask {
    * true - part of the island mask.
    * false - not part of the island mask.
    */
-  bool is_masked(const short island_index, const float2 uv) const;
+  bool is_masked(const uint16_t island_index, const float2 uv) const;
 
-  void add(const UVIslands &islands)
-  {
-    for (Tile &tile : tiles) {
-      for (int index = 0; index < islands.islands.size(); index++) {
-        tile.add(index, islands.islands[index]);
-      }
-    }
-  }
+  /**
+   * Add the given UVIslands to the mask. Tiles should be added beforehand using the 'add_tile'
+   * method.
+   */
+  void add(const UVIslands &islands);
 
   void dilate(int max_iterations);
 };
