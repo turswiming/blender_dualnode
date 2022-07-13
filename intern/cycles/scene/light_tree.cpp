@@ -149,7 +149,12 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
       }
     }
 
-    float3 normal = triangle.compute_normal(p);
+    float3 normal = cross(p[1] - p[0], p[2] - p[0]);
+    const float normlen = len(normal);
+    if (normlen == 0.0f) {
+      normal = make_float3(1.0f, 0.0f, 0.0f);
+    }
+    normal = normal / normlen;
 
     bcone.axis = normal;
 

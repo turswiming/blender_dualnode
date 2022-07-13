@@ -151,7 +151,7 @@ ccl_device int light_tree_sample(KernelGlobals kg,
     if (tree_u < left_probability) {
       index = index + 1;
       knode = left;
-      tree_u = tree_u * left_probability;
+      tree_u = tree_u / left_probability;
       *pdf_factor *= left_probability;
     }
     else {

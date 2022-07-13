@@ -658,17 +658,25 @@ ccl_device_forceinline float triangle_light_pdf(KernelGlobals kg,
   }
   else {
     float pdf = triangle_light_pdf_area(kg, sd->Ng, sd->I, t);
-    if (has_motion) {
-      const float area = 0.5f * len(N);
-      if (UNLIKELY(area == 0.0f)) {
-        return 0.0f;
-      }
+    const float area = 0.5f * len(N);
+    if (UNLIKELY(area == 0.0f)) {
+      return 0.0f;
+    }
+
+    if (area != 0.0f) {
       /* scale the PDF.
        * area = the area the sample was taken from
        * area_pre = the are from which pdf_triangles was calculated from */
-      triangle_world_space_vertices(kg, sd->object, sd->prim, -1.0f, V);
-      const float area_pre = (kernel_data.integrator.use_light_tree) ? 1.0 : triangle_area(V[0], V[1], V[2]);
-      pdf = pdf * area_pre / area;
+      if (has_motion) {
+        triangle_world_space_vertices(kg, sd->object, sd->prim, sd->time, V);
+        const float area_pre = (kernel_data.integrator.use_light_tree) ?
+                                   1.0 :
+                                   triangle_area(V[0], V[1], V[2]);
+        pdf *= area_pre / area;
+      }
+      else if (kernel_data.integrator.use_light_tree) {
+        pdf /= area;
+      }
     }
 
     return pdf;
@@ -823,15 +831,20 @@ ccl_device_forceinline void triangle_light_sample(KernelGlobals kg,
     /* compute incoming direction, distance and pdf */
     ls->D = normalize_len(ls->P - P, &ls->t);
     ls->pdf = triangle_light_pdf_area(kg, ls->Ng, -ls->D, ls->t);
-    if (has_motion && area != 0.0f) {
+    if (area != 0.0f) {
       /* scale the PDF.
        * area = the area the sample was taken from
        * area_pre = the are from which pdf_triangles was calculated from */
-      triangle_world_space_vertices(kg, object, prim, -1.0f, V);
-      const float area_pre = (kernel_data.integrator.use_light_tree) ?
-                                 1.0 :
-                                 triangle_area(V[0], V[1], V[2]);
-      ls->pdf = ls->pdf * area_pre / area;
+      if (has_motion) {
+        triangle_world_space_vertices(kg, object, prim, -1.0f, V);
+        const float area_pre = (kernel_data.integrator.use_light_tree) ?
+                                   1.0 :
+                                   triangle_area(V[0], V[1], V[2]);
+        ls->pdf = ls->pdf * area_pre / area;
+      }
+      else if (kernel_data.integrator.use_light_tree) {
+        ls->pdf = ls->pdf / area;
+      }
     }
     ls->u = u;
     ls->v = v;
