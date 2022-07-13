@@ -162,7 +162,7 @@ struct CombOperationExecutor {
     }
 
     self_->constraint_solver_.find_contact_points(
-        ctx_.depsgraph, object_, curves_, curves_id_->surface, orig_positions_, changed_curves);
+        ctx_.depsgraph, object_, curves_, curves_id_->surface, transforms_, orig_positions_, changed_curves);
 
     self_->constraint_solver_.solve_constraints(curves_, changed_curves);
 

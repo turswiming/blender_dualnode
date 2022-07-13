@@ -46,6 +46,7 @@ void CurvesConstraintSolver::find_contact_points(
     Object *object,
     const CurvesGeometry *curves,
     const Object *surface_ob,
+    const CurvesSurfaceTransforms &transforms,
     Span<float3> orig_positions,
     threading::EnumerableThreadSpecific<Vector<int>> &changed_curves)
 {
@@ -53,6 +54,9 @@ void CurvesConstraintSolver::find_contact_points(
     contacts_.reinitialize(0);
     return;
   }
+
+  const float curves_to_surface_scale = mat4_to_scale(transforms.curves_to_surface.ptr());
+  const float surface_to_curves_scale = mat4_to_scale(transforms.curves_to_surface.ptr());
 
   VArray<float> radius = curves->attributes().lookup_or_default<float>(
       "radius", ATTR_DOMAIN_POINT, 0.0f);
@@ -66,7 +70,6 @@ void CurvesConstraintSolver::find_contact_points(
 
   contacts_num_.fill(0);
 
-  //std::cout << "FIND contacts:" << std::endl;
   threading::parallel_for_each(changed_curves, [&](const Vector<int> &changed_curves) {
     threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
       for (const int curve_i : changed_curves.as_span().slice(range)) {
@@ -76,24 +79,24 @@ void CurvesConstraintSolver::find_contact_points(
           const float3 &old_p = orig_positions[point_i];
           const float3 &new_p = curves->positions()[point_i];
           const float margin = radius[point_i];
-          const float margin_sq = margin * margin;
 
           MutableSpan<Contact> contacts(contacts_.begin() + MAX_CONTACTS * point_i, MAX_CONTACTS);
 
-          float3 dir = new_p - old_p;
-          float hit_dist = normalize_v3(dir) + margin;
-          //std::cout << "  p " << point_i << " move distance " << hit_dist << std::endl;
+          float3 start_su = transforms.curves_to_surface * old_p;
+          float3 dir_su = transforms.curves_to_surface.ref_3x3() * (new_p - old_p);
+          float margin_su = curves_to_surface_scale * margin;
+          float hit_dist_su = normalize_v3(dir_su) + margin_su;
           BLI_bvhtree_ray_cast_all_cpp(
               *surface_bvh_.tree,
-              old_p,
-              dir,
-              margin,
-              hit_dist,
+              start_su,
+              dir_su,
+              margin_su,
+              hit_dist_su,
               [&](const int triangle_i, const BVHTreeRay &ray, BVHTreeRayHit &hit) {
                 surface_bvh_.raycast_callback(&surface_bvh_, triangle_i, &ray, &hit);
 
                 if (hit.index >= 0) {
-                  const float dist = hit.dist;
+                  const float dist_cu = surface_to_curves_scale * hit.dist;
 
                   const int contacts_num = contacts_num_[point_i];
                   int insert_i;
@@ -103,36 +106,20 @@ void CurvesConstraintSolver::find_contact_points(
                   }
                   else {
                     /* Replace the contact with the largest distance. */
-                    /* XXX this is ugly, can be optimized a good deal (simd?) */
-                    float max_dist = dist;
                     insert_i = -1;
-
-                    if (contacts[0].dist_ > max_dist) {
-                      max_dist = contacts[0].dist_;
-                      insert_i = 0;
-
-                      if (contacts[1].dist_ > max_dist) {
-                        max_dist = contacts[1].dist_;
-                        insert_i = 1;
-
-                        if (contacts[2].dist_ > max_dist) {
-                          max_dist = contacts[2].dist_;
-                          insert_i = 2;
-
-                          if (contacts[3].dist_ > max_dist) {
-                            max_dist = contacts[3].dist_;
-                            insert_i = 3;
-                          }
-                        }
+                    float max_dist_cu = dist_cu;
+                    for (int contact_i : IndexRange(4)) {
+                      if (contacts[contact_i].dist_ > max_dist_cu) {
+                        insert_i = contact_i;
+                        max_dist_cu = contacts[contact_i].dist_;
                       }
                     }
                   }
-
                   if (insert_i >= 0) {
-                    contacts[insert_i] = Contact{dist, hit.no, hit.co};
-                    // std::cout << "  point " << point_i << " normal " << normal_su << " distance
-                    // "
-                    // << sqrtf(dist_sq) << std::endl;
+                    contacts[insert_i] = Contact{dist_cu,
+                                                 transforms.surface_to_curves_normal *
+                                                     float3{hit.no},
+                                                 transforms.surface_to_curves * float3{hit.co}};
                   }
                 }
               });
@@ -156,13 +143,6 @@ void CurvesConstraintSolver::solve_constraints(
   VArray<float> radius = curves->attributes().lookup_or_default<float>(
       "radius", ATTR_DOMAIN_POINT, 0.0f);
 
-//#define DEBUG_POINT 1
-#ifdef DEBUG_POINT
-  const int debug_point = 1;
-  if (contacts_num_[debug_point] > 0) {
-    std::cout << "SOLVE:" << std::endl;
-  }
-#endif
   threading::parallel_for_each(changed_curves, [&](const Vector<int> &changed_curves) {
     threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
       for (const int curve_i : changed_curves.as_span().slice(range)) {
@@ -172,17 +152,9 @@ void CurvesConstraintSolver::solve_constraints(
         for (const int point_i : points.drop_front(1)) {
           float3 &p = positions_cu[point_i];
           const int contacts_num = contacts_num_[point_i];
-#ifdef DEBUG_POINT
-           if (point_i == debug_point && contacts_num > 0) {
-            std::cout << "  point " << point_i << " contacts " << contacts_num << std::endl;
-          }
-#endif
           for (int solver_i : IndexRange(solver_iterations)) {
             /* Solve contact constraints */
             Span<Contact> contacts(contacts_.begin() + MAX_CONTACTS * point_i, contacts_num);
-#ifdef DEBUG_POINT
-            int contact_i = 0;
-#endif
             for (const Contact &c : contacts) {
               /* Lagrange multiplier for solving a single contact constraint.
                * Note: The contact point is already offset from the surface by the radius due to the raycast callback,
@@ -191,12 +163,6 @@ void CurvesConstraintSolver::solve_constraints(
               if (lambda < 0.0f) {
                 p -= lambda * c.normal_;
               }
-#ifdef DEBUG_POINT
-              if (point_i == debug_point) {
-                std::cout << "    contact " << contact_i << " lambda=" << lambda << " p=(" << p.x << ", " << p.y << ", " << p.z << ")" << std::endl;
-              }
-              ++contact_i;
-#endif
             }
 
             /* Solve distance constraint */

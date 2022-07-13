@@ -133,6 +133,7 @@ class CurvesConstraintSolver {
                            Object *object,
                            const CurvesGeometry *curves,
                            const Object *surface,
+                           const CurvesSurfaceTransforms &transforms,
                            Span<float3> orig_positions,
                            threading::EnumerableThreadSpecific<Vector<int>> &changed_curves);
 
