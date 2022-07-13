@@ -670,7 +670,7 @@ ccl_device_forceinline float triangle_light_pdf(KernelGlobals kg,
       if (has_motion) {
         triangle_world_space_vertices(kg, sd->object, sd->prim, sd->time, V);
         const float area_pre = (kernel_data.integrator.use_light_tree) ?
-                                   1.0 :
+                                   1.0f :
                                    triangle_area(V[0], V[1], V[2]);
         pdf *= area_pre / area;
       }
@@ -838,7 +838,7 @@ ccl_device_forceinline void triangle_light_sample(KernelGlobals kg,
       if (has_motion) {
         triangle_world_space_vertices(kg, object, prim, -1.0f, V);
         const float area_pre = (kernel_data.integrator.use_light_tree) ?
-                                   1.0 :
+                                   1.0f :
                                    triangle_area(V[0], V[1], V[2]);
         ls->pdf = ls->pdf * area_pre / area;
       }
