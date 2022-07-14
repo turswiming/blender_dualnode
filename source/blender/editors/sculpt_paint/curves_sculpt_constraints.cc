@@ -49,6 +49,8 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
                                                  Span<float3> orig_positions,
                                                  Span<int> changed_curves)
 {
+  contacts_num_.fill(0);
+
   if (surface_ob == nullptr || surface_ob->type != OB_MESH) {
     contacts_.reinitialize(0);
     return;
@@ -66,8 +68,6 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
 
   BKE_bvhtree_from_mesh_get(&surface_bvh_, surface, BVHTREE_FROM_LOOPTRI, 2);
   BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&surface_bvh_); });
-
-  contacts_num_.fill(0);
 
   threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
     for (const int curve_i : changed_curves.slice(range)) {
