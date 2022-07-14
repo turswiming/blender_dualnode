@@ -29,8 +29,8 @@ class PuffOperation : public CurvesSculptStrokeOperation {
   /** Only used when a 3D brush is used. */
   CurvesBrush3D brush_3d_;
 
-  /** Length of each segment indexed by the index of the first point in the segment. */
-  Array<float> segment_lengths_cu_;
+  /** Solver for length and contact constraints. */
+  CurvesConstraintSolver constraint_solver_;
 
   friend struct PuffOperationExecutor;
 
@@ -116,6 +116,7 @@ struct PuffOperationExecutor {
 
     point_factors_ = get_point_selection(*curves_id_);
     curve_selection_ = retrieve_selected_curves(*curves_id_, selected_curve_indices_);
+    Array<float3> orig_positions_;
 
     falloff_shape_ = static_cast<eBrushFalloffShape>(brush_->falloff_shape);
 
@@ -138,7 +139,8 @@ struct PuffOperationExecutor {
                          BKE_mesh_runtime_looptri_len(surface_)};
 
     if (stroke_extension.is_first) {
-      this->initialize_segment_lengths();
+      self_->constraint_solver_.initialize(curves_);
+
       if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
         self.brush_3d_ = *sample_curves_3d_brush(*ctx_.depsgraph,
                                                  *ctx_.region,
@@ -149,6 +151,8 @@ struct PuffOperationExecutor {
                                                  brush_radius_base_re_);
       }
     }
+
+    orig_positions_ = curves_->positions();
 
     Array<float> curve_weights(curve_selection_.size(), 0.0f);
 
@@ -163,7 +167,26 @@ struct PuffOperationExecutor {
     }
 
     this->puff(curve_weights);
-    this->restore_segment_lengths();
+
+    /* XXX Dumb array conversion to pass to the constraint solver.
+     * Should become unnecessary once brushes use the same methods for computing weights */
+    Vector<int> changed_curves_indices;
+    changed_curves_indices.reserve(curve_selection_.size());
+    for (int select_i : curve_selection_.index_range()) {
+      if (curve_weights[select_i] > 0.0f) {
+        changed_curves_indices.append(curve_selection_[select_i]);
+      }
+    }
+
+    self_->constraint_solver_.find_contact_points(ctx_.depsgraph,
+                                                  object_,
+                                                  curves_,
+                                                  curves_id_->surface,
+                                                  transforms_,
+                                                  orig_positions_,
+                                                  changed_curves_indices);
+
+    self_->constraint_solver_.solve_constraints(curves_, changed_curves_indices);
 
     curves_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);
@@ -337,42 +360,6 @@ struct PuffOperationExecutor {
           }
 
           positions_cu[point_i] = new_pos_cu;
-        }
-      }
-    });
-  }
-
-  void initialize_segment_lengths()
-  {
-    const Span<float3> positions_cu = curves_->positions();
-    self_->segment_lengths_cu_.reinitialize(curves_->points_num());
-    threading::parallel_for(curves_->curves_range(), 128, [&](const IndexRange range) {
-      for (const int curve_i : range) {
-        const IndexRange points = curves_->points_for_curve(curve_i);
-        for (const int point_i : points.drop_back(1)) {
-          const float3 &p1_cu = positions_cu[point_i];
-          const float3 &p2_cu = positions_cu[point_i + 1];
-          const float length_cu = math::distance(p1_cu, p2_cu);
-          self_->segment_lengths_cu_[point_i] = length_cu;
-        }
-      }
-    });
-  }
-
-  void restore_segment_lengths()
-  {
-    const Span<float> expected_lengths_cu = self_->segment_lengths_cu_;
-    MutableSpan<float3> positions_cu = curves_->positions_for_write();
-
-    threading::parallel_for(curves_->curves_range(), 256, [&](const IndexRange range) {
-      for (const int curve_i : range) {
-        const IndexRange points = curves_->points_for_curve(curve_i);
-        for (const int segment_i : points.drop_back(1)) {
-          const float3 &p1_cu = positions_cu[segment_i];
-          float3 &p2_cu = positions_cu[segment_i + 1];
-          const float3 direction = math::normalize(p2_cu - p1_cu);
-          const float expected_length_cu = expected_lengths_cu[segment_i];
-          p2_cu = p1_cu + direction * expected_length_cu;
         }
       }
     });

@@ -135,13 +135,12 @@ class CurvesConstraintSolver {
                            const Object *surface,
                            const CurvesSurfaceTransforms &transforms,
                            Span<float3> orig_positions,
-                           threading::EnumerableThreadSpecific<Vector<int>> &changed_curves);
+                           Span<int> changed_curves);
 
   /**
    * Satisfy constraints on curve points based on initial deformation.
    */
-  void solve_constraints(CurvesGeometry *curves,
-                         threading::EnumerableThreadSpecific<Vector<int>> &changed_curves) const;
+  void solve_constraints(CurvesGeometry *curves, Span<int> changed_curves) const;
 };
 
 void move_last_point_and_resample(MutableSpan<float3> positions, const float3 &new_last_position);

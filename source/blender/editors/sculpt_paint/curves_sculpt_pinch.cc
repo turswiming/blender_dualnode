@@ -41,7 +41,9 @@ namespace blender::ed::sculpt_paint {
 class PinchOperation : public CurvesSculptStrokeOperation {
  private:
   bool invert_pinch_;
-  Array<float> segment_lengths_cu_;
+
+  /** Solver for length and contact constraints. */
+  CurvesConstraintSolver constraint_solver_;
 
   /** Only used when a 3D brush is used. */
   CurvesBrush3D brush_3d_;
@@ -67,6 +69,7 @@ struct PinchOperationExecutor {
   VArray<float> point_factors_;
   Vector<int64_t> selected_curve_indices_;
   IndexMask curve_selection_;
+  Array<float3> orig_positions_;
 
   CurvesSurfaceTransforms transforms_;
 
@@ -113,7 +116,7 @@ struct PinchOperationExecutor {
         brush_->falloff_shape);
 
     if (stroke_extension.is_first) {
-      this->initialize_segment_lengths();
+      self_->constraint_solver_.initialize(curves_);
 
       if (falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
         self_->brush_3d_ = *sample_curves_3d_brush(*ctx_.depsgraph,
@@ -126,6 +129,8 @@ struct PinchOperationExecutor {
       }
     }
 
+    orig_positions_ = curves_->positions();
+
     Array<bool> changed_curves(curves_->curves_num(), false);
     if (falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
       this->pinch_projected_with_symmetry(changed_curves);
@@ -137,7 +142,26 @@ struct PinchOperationExecutor {
       BLI_assert_unreachable();
     }
 
-    this->restore_segment_lengths(changed_curves);
+    /* XXX Dumb array conversion to pass to the constraint solver.
+     * Should become unnecessary once brushes use the same methods for computing weights */
+    Vector<int> changed_curves_indices;
+    changed_curves_indices.reserve(curves_->curves_num());
+    for (int curve_i : changed_curves.index_range()) {
+      if (changed_curves[curve_i]) {
+        changed_curves_indices.append(curve_i);
+      }
+    }
+
+    self_->constraint_solver_.find_contact_points(ctx_.depsgraph,
+                                                  object_,
+                                                  curves_,
+                                                  curves_id_->surface,
+                                                  transforms_,
+                                                  orig_positions_,
+                                                  changed_curves_indices);
+
+    self_->constraint_solver_.solve_constraints(curves_, changed_curves_indices);
+
     curves_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);
     WM_main_add_notifier(NC_GEOM | ND_DATA, &curves_id_->id);
@@ -242,45 +266,6 @@ struct PinchOperationExecutor {
           positions_cu[point_i] = new_pos_cu;
 
           r_changed_curves[curve_i] = true;
-        }
-      }
-    });
-  }
-
-  void initialize_segment_lengths()
-  {
-    const Span<float3> positions_cu = curves_->positions();
-    self_->segment_lengths_cu_.reinitialize(curves_->points_num());
-    threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
-      for (const int curve_i : curve_selection_.slice(range)) {
-        const IndexRange points = curves_->points_for_curve(curve_i);
-        for (const int point_i : points.drop_back(1)) {
-          const float3 &p1_cu = positions_cu[point_i];
-          const float3 &p2_cu = positions_cu[point_i + 1];
-          const float length_cu = math::distance(p1_cu, p2_cu);
-          self_->segment_lengths_cu_[point_i] = length_cu;
-        }
-      }
-    });
-  }
-
-  void restore_segment_lengths(const Span<bool> changed_curves)
-  {
-    const Span<float> expected_lengths_cu = self_->segment_lengths_cu_;
-    MutableSpan<float3> positions_cu = curves_->positions_for_write();
-
-    threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
-      for (const int curve_i : range) {
-        if (!changed_curves[curve_i]) {
-          continue;
-        }
-        const IndexRange points = curves_->points_for_curve(curve_i);
-        for (const int segment_i : IndexRange(points.size() - 1)) {
-          const float3 &p1_cu = positions_cu[points[segment_i]];
-          float3 &p2_cu = positions_cu[points[segment_i] + 1];
-          const float3 direction = math::normalize(p2_cu - p1_cu);
-          const float expected_length_cu = expected_lengths_cu[points[segment_i]];
-          p2_cu = p1_cu + direction * expected_length_cu;
         }
       }
     });
