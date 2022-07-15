@@ -547,19 +547,13 @@ struct UVBorderCorner {
   {
   }
 
-  float2 uv(float factor)
-  {
-    float2 origin = first->get_uv_vertex(1)->uv;
-    float angle_between = angle * factor;
-    float desired_len = second->length() * factor + first->length() * (1.0 - factor);
-    float2 v = first->get_uv_vertex(0)->uv - origin;
-    normalize_v2(v);
-
-    float3x3 rot_mat = float3x3::from_rotation(angle_between);
-    float2 rotated = rot_mat * v;
-    float2 result = rotated * desired_len + first->get_uv_vertex(1)->uv;
-    return result;
-  }
+  /**
+   * Calculate a uv coordinate between the edges of the corner.
+   *
+   * 'min_uv_distance' is the minimum distance between the corner and the
+   * resulting uv coordinate. The distance is in uv space.
+   */
+  float2 uv(float factor, float min_uv_distance);
 };
 
 struct UVBorder {
@@ -823,17 +817,25 @@ struct UVIslandsMask {
   /** Mask for each udim tile. */
   struct Tile {
     float2 udim_offset;
-    ushort2 resolution;
+    ushort2 tile_resolution;
+    ushort2 mask_resolution;
     Array<uint16_t> mask;
 
-    Tile(float2 udim_offset, ushort2 resolution);
+    Tile(float2 udim_offset, ushort2 tile_resolution);
 
     bool is_masked(const uint16_t island_index, const float2 uv) const;
+    bool contains(const float2 uv) const;
+    float get_pixel_size_in_uv_space() const;
   };
 
   Vector<Tile> tiles;
 
   void add_tile(float2 udim_offset, ushort2 resolution);
+
+  /**
+   * Find a tile containing the given uv coordinate.
+   */
+  const Tile *find_tile(const float2 uv) const;
 
   /**
    * Is the given uv coordinate part of the given island_index mask.

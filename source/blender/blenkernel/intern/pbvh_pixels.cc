@@ -367,10 +367,17 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
   // TODO: mask resolution should be based on the actual resolution of the image buffer (or a
   // factor of it).
   uv_islands::UVIslandsMask uv_masks;
+  ImageUser tile_user = *image_user;
   LISTBASE_FOREACH (ImageTile *, tile_data, &image->tiles) {
     image::ImageTileWrapper image_tile(tile_data);
+    tile_user.tile = image_tile.get_tile_number();
+    ImBuf *tile_buffer = BKE_image_acquire_ibuf(image, &tile_user, nullptr);
+    if (tile_buffer == nullptr) {
+      continue;
+    }
     uv_masks.add_tile(float2(image_tile.get_tile_x_offset(), image_tile.get_tile_y_offset()),
-                      ushort2(1024, 1024));
+                      ushort2(tile_buffer->x, tile_buffer->y));
+    BKE_image_release_ibuf(image, tile_buffer, nullptr);
   }
   uv_masks.add(islands);
   uv_masks.dilate(image->seamfix_iter);

@@ -406,7 +406,7 @@ static void add_uv_primitive_fill(UVIsland &island,
   island.uv_primitives.append(uv_primitive);
 }
 
-static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
+static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, float min_uv_distance)
 {
   int border_index = corner.first->border_index;
   UVBorder &border = island.borders[border_index];
@@ -441,7 +441,7 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
       fill_primitive_2 = fill_primitive;
     }
 
-    float2 center_uv = corner.uv(0.5f);
+    float2 center_uv = corner.uv(0.5f, min_uv_distance);
     add_uv_primitive_shared_uv_edge(island,
                                     corner.first->get_uv_vertex(1),
                                     corner.first->get_uv_vertex(0),
@@ -482,7 +482,7 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner)
           current_edge->get_other_uv_vertex(uv_vertex->vertex)->vertex;
 
       float factor = (i + 1.0f) / (num_to_add + 1.0f);
-      float2 new_uv = corner.uv(factor);
+      float2 new_uv = corner.uv(factor, min_uv_distance);
 
       // Find an segment that contains the 'current edge'.
       for (InnerEdge &segment : fan.inner_edges) {
@@ -623,8 +623,9 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
     UVVertex *uv_vertex = extension_corner->second->get_uv_vertex(0);
 
     /* When outside the mask, the uv should not be considered for extension. */
-    if (mask.is_masked(island_index, uv_vertex->uv)) {
-      extend_at_vert(*this, *extension_corner);
+    const UVIslandsMask::Tile *tile = mask.find_tile(uv_vertex->uv);
+    if (tile && tile->is_masked(island_index, uv_vertex->uv)) {
+      extend_at_vert(*this, *extension_corner, tile->get_pixel_size_in_uv_space() * 2.0f);
     }
     /* Mark that the vert is extended. Unable to extend twice. */
     uv_vertex->flags.is_extended = true;
@@ -757,6 +758,26 @@ void UVBorder::validate() const
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name UVBorderCorner
+ * \{ */
+float2 UVBorderCorner::uv(float factor, float min_uv_distance)
+{
+  float2 origin = first->get_uv_vertex(1)->uv;
+  float angle_between = angle * factor;
+  float desired_len = max_ff(second->length() * factor + first->length() * (1.0 - factor),
+                             min_uv_distance);
+  float2 v = first->get_uv_vertex(0)->uv - origin;
+  normalize_v2(v);
+
+  float3x3 rot_mat = float3x3::from_rotation(angle_between);
+  float2 rotated = rot_mat * v;
+  float2 result = rotated * desired_len + first->get_uv_vertex(1)->uv;
+  return result;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name UVPrimitive
  * \{ */
 
@@ -858,11 +879,29 @@ void UVIslands::extend_borders(const UVIslandsMask &islands_mask)
 /* -------------------------------------------------------------------- */
 /** \name UVIslandsMask
  * \{ */
+constexpr ushort2 mask_resolution_from_tile_resolution(ushort2 tile_resolution)
+{
+  return tile_resolution;
+}
 
-UVIslandsMask::Tile::Tile(float2 udim_offset, ushort2 resolution)
-    : udim_offset(udim_offset), resolution(resolution), mask(resolution.x * resolution.y)
+UVIslandsMask::Tile::Tile(float2 udim_offset, ushort2 tile_resolution)
+    : udim_offset(udim_offset),
+      tile_resolution(tile_resolution),
+      mask_resolution(mask_resolution_from_tile_resolution(tile_resolution)),
+      mask(mask_resolution.x * mask_resolution.y)
 {
   mask.fill(0xffff);
+}
+
+bool UVIslandsMask::Tile::contains(const float2 uv) const
+{
+  const float2 tile_uv = uv - udim_offset;
+  return IN_RANGE(tile_uv.x, 0.0, 1.0f) && IN_RANGE(tile_uv.y, 0.0f, 1.0f);
+}
+
+float UVIslandsMask::Tile::get_pixel_size_in_uv_space() const
+{
+  return min_ff(1.0f / tile_resolution.x, 1.0f / tile_resolution.y);
 }
 
 static void add_uv_island(UVIslandsMask::Tile &tile,
@@ -875,18 +914,20 @@ static void add_uv_island(UVIslandsMask::Tile &tile,
 
       rctf uv_bounds = mesh_primitive->uv_bounds();
       rcti buffer_bounds;
-      buffer_bounds.xmin = max_ii(floor((uv_bounds.xmin - tile.udim_offset.x) * tile.resolution.x),
-                                  0);
-      buffer_bounds.xmax = min_ii(ceil((uv_bounds.xmax - tile.udim_offset.x) * tile.resolution.x),
-                                  tile.resolution.x - 1);
-      buffer_bounds.ymin = max_ii(floor((uv_bounds.ymin - tile.udim_offset.y) * tile.resolution.y),
-                                  0);
-      buffer_bounds.ymax = min_ii(ceil((uv_bounds.ymax - tile.udim_offset.y) * tile.resolution.y),
-                                  tile.resolution.y - 1);
+      buffer_bounds.xmin = max_ii(
+          floor((uv_bounds.xmin - tile.udim_offset.x) * tile.mask_resolution.x), 0);
+      buffer_bounds.xmax = min_ii(
+          ceil((uv_bounds.xmax - tile.udim_offset.x) * tile.mask_resolution.x),
+          tile.mask_resolution.x - 1);
+      buffer_bounds.ymin = max_ii(
+          floor((uv_bounds.ymin - tile.udim_offset.y) * tile.mask_resolution.y), 0);
+      buffer_bounds.ymax = min_ii(
+          ceil((uv_bounds.ymax - tile.udim_offset.y) * tile.mask_resolution.y),
+          tile.mask_resolution.y - 1);
 
       for (int y = buffer_bounds.ymin; y < buffer_bounds.ymax + 1; y++) {
         for (int x = buffer_bounds.xmin; x < buffer_bounds.xmax + 1; x++) {
-          float2 uv(float(x) / tile.resolution.x, float(y) / tile.resolution.y);
+          float2 uv(float(x) / tile.mask_resolution.x, float(y) / tile.mask_resolution.y);
           float3 weights;
           barycentric_weights_v2(mesh_primitive->vertices[0].uv,
                                  mesh_primitive->vertices[1].uv,
@@ -897,7 +938,7 @@ static void add_uv_island(UVIslandsMask::Tile &tile,
             continue;
           }
 
-          uint64_t offset = tile.resolution.x * y + x;
+          uint64_t offset = tile.mask_resolution.x * y + x;
           tile.mask[offset] = island_index;
         }
       }
@@ -922,9 +963,9 @@ static bool dilate_x(UVIslandsMask::Tile &islands_mask)
 {
   bool changed = false;
   const Array<uint16_t> prev_mask = islands_mask.mask;
-  for (int y = 0; y < islands_mask.resolution.y; y++) {
-    for (int x = 0; x < islands_mask.resolution.x; x++) {
-      uint64_t offset = y * islands_mask.resolution.x + x;
+  for (int y = 0; y < islands_mask.mask_resolution.y; y++) {
+    for (int x = 0; x < islands_mask.mask_resolution.x; x++) {
+      uint64_t offset = y * islands_mask.mask_resolution.x + x;
       if (prev_mask[offset] != 0xffff) {
         continue;
       }
@@ -932,7 +973,7 @@ static bool dilate_x(UVIslandsMask::Tile &islands_mask)
         islands_mask.mask[offset] = prev_mask[offset - 1];
         changed = true;
       }
-      else if (x < islands_mask.resolution.x - 1 && prev_mask[offset + 1] != 0xffff) {
+      else if (x < islands_mask.mask_resolution.x - 1 && prev_mask[offset + 1] != 0xffff) {
         islands_mask.mask[offset] = prev_mask[offset + 1];
         changed = true;
       }
@@ -945,19 +986,19 @@ static bool dilate_y(UVIslandsMask::Tile &islands_mask)
 {
   bool changed = false;
   const Array<uint16_t> prev_mask = islands_mask.mask;
-  for (int y = 0; y < islands_mask.resolution.y; y++) {
-    for (int x = 0; x < islands_mask.resolution.x; x++) {
-      uint64_t offset = y * islands_mask.resolution.x + x;
+  for (int y = 0; y < islands_mask.mask_resolution.y; y++) {
+    for (int x = 0; x < islands_mask.mask_resolution.x; x++) {
+      uint64_t offset = y * islands_mask.mask_resolution.x + x;
       if (prev_mask[offset] != 0xffff) {
         continue;
       }
-      if (y != 0 && prev_mask[offset - islands_mask.resolution.x] != 0xffff) {
-        islands_mask.mask[offset] = prev_mask[offset - islands_mask.resolution.x];
+      if (y != 0 && prev_mask[offset - islands_mask.mask_resolution.x] != 0xffff) {
+        islands_mask.mask[offset] = prev_mask[offset - islands_mask.mask_resolution.x];
         changed = true;
       }
-      else if (y < islands_mask.resolution.y - 1 &&
-               prev_mask[offset + islands_mask.resolution.x] != 0xffff) {
-        islands_mask.mask[offset] = prev_mask[offset + islands_mask.resolution.x];
+      else if (y < islands_mask.mask_resolution.y - 1 &&
+               prev_mask[offset + islands_mask.mask_resolution.x] != 0xffff) {
+        islands_mask.mask[offset] = prev_mask[offset + islands_mask.mask_resolution.x];
         changed = true;
       }
     }
@@ -991,21 +1032,29 @@ bool UVIslandsMask::Tile::is_masked(const uint16_t island_index, const float2 uv
   if (local_uv.x < 0.0f || local_uv.y < 0.0f || local_uv.x >= 1.0f || local_uv.y >= 1.0f) {
     return false;
   }
-  float2 pixel_pos_f = local_uv * float2(resolution.x, resolution.y);
+  float2 pixel_pos_f = local_uv * float2(mask_resolution.x, mask_resolution.y);
   ushort2 pixel_pos = ushort2(pixel_pos_f.x, pixel_pos_f.y);
-  uint64_t offset = pixel_pos.y * resolution.x + pixel_pos.x;
+  uint64_t offset = pixel_pos.y * mask_resolution.x + pixel_pos.x;
   return mask[offset] == island_index;
+}
+
+const UVIslandsMask::Tile *UVIslandsMask::find_tile(const float2 uv) const
+{
+  for (const Tile &tile : tiles) {
+    if (tile.contains(uv)) {
+      return &tile;
+    }
+  }
+  return nullptr;
 }
 
 bool UVIslandsMask::is_masked(const uint16_t island_index, const float2 uv) const
 {
-  // TODO: should find tile containing the uv coords not going over all of them.
-  for (const Tile &tile : tiles) {
-    if (tile.is_masked(island_index, uv)) {
-      return true;
-    }
+  const Tile *tile = find_tile(uv);
+  if (tile == nullptr) {
+    return false;
   }
-  return false;
+  return tile->is_masked(island_index, uv);
 }
 
 /** \} */
