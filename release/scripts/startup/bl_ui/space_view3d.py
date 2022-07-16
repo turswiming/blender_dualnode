@@ -6857,7 +6857,7 @@ class VIEW3D_PT_snapping(Panel):
                 )
             col_targetsel.prop(
                 tool_settings,
-                "use_snap_selectable",
+                "use_snap_selectable_only",
                 text="Exclude Non-Selectable",
                 icon='RESTRICT_SELECT_OFF',
             )
