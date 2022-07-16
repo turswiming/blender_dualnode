@@ -404,14 +404,11 @@ void LightManager::device_update_distribution(Device *device,
     const vector<PackedLightTreeNode> &linearized_bvh = light_tree.get_nodes();
     KernelLightTreeNode *light_tree_nodes = dscene->light_tree_nodes.alloc(linearized_bvh.size());
     KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(light_prims.size());
-    float light_tree_energy = 0.0f;
+    float max_light_tree_energy = 0.0f;
     for (int index = 0; index < linearized_bvh.size(); index++) {
       const PackedLightTreeNode &node = linearized_bvh[index];
 
       light_tree_nodes[index].energy = node.energy;
-      if (index == 0) {
-        light_tree_energy = node.energy;
-      }
 
       for (int i = 0; i < 3; i++) {
         light_tree_nodes[index].bounding_box_min[i] = node.bbox.min[i];
@@ -436,6 +433,10 @@ void LightManager::device_update_distribution(Device *device,
           float energy = prim.calculate_energy(scene);
 
           light_tree_emitters[emitter_index].energy = energy;
+          if (energy > max_light_tree_energy) {
+            max_light_tree_energy = energy;
+          }
+
           for (int i = 0; i < 3; i++) {
             light_tree_emitters[emitter_index].bounding_box_min[i] = bbox.min[i];
             light_tree_emitters[emitter_index].bounding_box_max[i] = bbox.max[i];
@@ -489,13 +490,19 @@ void LightManager::device_update_distribution(Device *device,
       }
     }
 
+    /* We set the parent node's energy to be the average energy,
+     * which is used for deciding between the tree and distant lights. */
+    if (max_light_tree_energy > 0.0f) {
+      light_tree_nodes[0].energy = max_light_tree_energy;
+    }
+
     /* We also add distant lights to a separate group. */
     KernelLightTreeDistantEmitter *light_tree_distant_group =
         dscene->light_tree_distant_group.alloc(num_distant_lights + 1);
 
     /* We use OrientationBounds here to */
     OrientationBounds distant_light_bounds = OrientationBounds::empty;
-    float distant_light_energy = 0.0f;
+    float max_distant_light_energy = 0.0f;
     for (int index = 0; index < num_distant_lights; index++) {
       LightTreePrimitive prim = distant_lights[index];
       Light *light = scene->lights[prim.lamp_id];
@@ -532,12 +539,15 @@ void LightManager::device_update_distribution(Device *device,
 
       light_tree_distant_group[index].energy = energy;
       light_array[~prim.prim_id] = index;
-      distant_light_energy += energy;
+      
+      if (energy > max_distant_light_energy) {
+        max_distant_light_energy = energy;
+      }
     } 
 
     /* The net OrientationBounds contain bounding information about all the distant lights. */
     light_tree_distant_group[num_distant_lights].prim_id = -1;
-    light_tree_distant_group[num_distant_lights].energy = distant_light_energy;
+    light_tree_distant_group[num_distant_lights].energy = max_distant_light_energy;
     for (int i = 0; i < 3; i++) {
       light_tree_distant_group[num_distant_lights].direction[i] = distant_light_bounds.axis[i];
     }

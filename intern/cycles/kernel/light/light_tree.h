@@ -45,7 +45,8 @@ ccl_device float light_tree_node_importance(const float3 P,
 
   /* Since we're not using the splitting heuristic, we clamp
    * the distance to half the radius of the cluster. */
-  const float distance_squared = len_squared(centroid - P);
+  const float distance_squared = fmaxf(0.25 * len_squared(centroid - bbox_max),
+                                       len_squared(centroid - P));
 
   const float theta = fast_acosf(dot(bcone_axis, -point_to_centroid));
   const float theta_i = fast_acosf(dot(point_to_centroid, N));
