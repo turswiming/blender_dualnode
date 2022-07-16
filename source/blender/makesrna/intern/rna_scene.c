@@ -3394,7 +3394,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
       prop, "Snap onto Non-edited", "Snap onto objects not in Edit Mode (Edit Mode Only)");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
-  prop = RNA_def_property(srna, "use_snap_selectable", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "use_snap_selectable_only", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "snap_flag", SCE_SNAP_TO_ONLY_SELECTABLE);
   RNA_def_property_ui_text(
       prop, "Snap onto Selectable Only", "Snap only onto objects that are selectable");

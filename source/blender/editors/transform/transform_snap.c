@@ -917,7 +917,7 @@ void initSnapping(TransInfo *t, wmOperator *op)
                            SCE_SNAP_TARGET_NOT_NONEDITED);
       }
 
-      if ((prop = RNA_struct_find_property(op->ptr, "use_snap_selectable")) &&
+      if ((prop = RNA_struct_find_property(op->ptr, "use_snap_selectable_only")) &&
           RNA_property_is_set(op->ptr, prop)) {
         SET_FLAG_FROM_TEST(t->tsnap.target_select,
                            RNA_property_boolean_get(op->ptr, prop),
