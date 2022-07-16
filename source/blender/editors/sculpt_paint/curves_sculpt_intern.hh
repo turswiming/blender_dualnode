@@ -111,9 +111,6 @@ class CurvesConstraintSolver {
   /** Length of each segment indexed by the index of the first point in the segment. */
   Array<float> segment_lengths_cu_;
 
-  /** BVH tree of the surface mesh for finding collisions. */
-  BVHTreeFromMesh surface_bvh_;
-
   struct Contact {
     float dist_;
     float3 normal_;

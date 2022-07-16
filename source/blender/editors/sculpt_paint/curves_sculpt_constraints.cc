@@ -59,15 +59,17 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
   const float curves_to_surface_scale = mat4_to_scale(transforms.curves_to_surface.ptr());
   const float surface_to_curves_scale = mat4_to_scale(transforms.curves_to_surface.ptr());
 
-  VArray<float> radius = curves->attributes().lookup_or_default<float>(
-      "radius", ATTR_DOMAIN_POINT, 0.0f);
-
   const Mesh *surface = static_cast<Mesh *>(surface_ob->data);
   Span<MLoopTri> surface_looptris = {BKE_mesh_runtime_looptri_ensure(surface),
                                      BKE_mesh_runtime_looptri_len(surface)};
 
-  BKE_bvhtree_from_mesh_get(&surface_bvh_, surface, BVHTREE_FROM_LOOPTRI, 2);
-  BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&surface_bvh_); });
+  /** BVH tree of the surface mesh for finding collisions. */
+  BVHTreeFromMesh surface_bvh;
+  BKE_bvhtree_from_mesh_get(&surface_bvh, surface, BVHTREE_FROM_LOOPTRI, 2);
+  BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&surface_bvh); });
+
+  VArray<float> radius = curves->attributes().lookup_or_default<float>(
+      "radius", ATTR_DOMAIN_POINT, 0.0f);
 
   threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
     for (const int curve_i : changed_curves.slice(range)) {
@@ -85,13 +87,13 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
         float margin_su = curves_to_surface_scale * margin;
         float hit_dist_su = normalize_v3(dir_su) + margin_su;
         BLI_bvhtree_ray_cast_all_cpp(
-            *surface_bvh_.tree,
+            *surface_bvh.tree,
             start_su,
             dir_su,
             margin_su,
             hit_dist_su,
             [&](const int triangle_i, const BVHTreeRay &ray, BVHTreeRayHit &hit) {
-              surface_bvh_.raycast_callback(&surface_bvh_, triangle_i, &ray, &hit);
+              surface_bvh.raycast_callback(&surface_bvh, triangle_i, &ray, &hit);
 
               if (hit.index >= 0) {
                 const float dist_cu = surface_to_curves_scale * hit.dist;
@@ -115,9 +117,9 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
                 }
                 if (insert_i >= 0) {
                   contacts[insert_i] = Contact{dist_cu,
-                                               transforms.surface_to_curves_normal *
-                                                   float3{hit.no},
-                                               transforms.surface_to_curves * float3{hit.co}};
+                                                transforms.surface_to_curves_normal *
+                                                    float3{hit.no},
+                                                transforms.surface_to_curves * float3{hit.co}};
                 }
               }
             });

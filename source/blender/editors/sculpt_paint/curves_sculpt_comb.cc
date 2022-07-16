@@ -161,16 +161,17 @@ struct CombOperationExecutor {
       BLI_assert_unreachable();
     }
 
-    Vector<int> &local_changed_curves = changed_curves.local();
-    self_->constraint_solver_.find_contact_points(ctx_.depsgraph,
-                                                  object_,
-                                                  curves_,
-                                                  curves_id_->surface,
-                                                  transforms_,
-                                                  orig_positions_,
-                                                  local_changed_curves);
+    threading::parallel_for_each(changed_curves, [&](const Vector<int> &changed_curves) {
+      self_->constraint_solver_.find_contact_points(ctx_.depsgraph,
+                                                    object_,
+                                                    curves_,
+                                                    curves_id_->surface,
+                                                    transforms_,
+                                                    orig_positions_,
+                                                    changed_curves);
 
-    self_->constraint_solver_.solve_constraints(curves_, local_changed_curves);
+      self_->constraint_solver_.solve_constraints(curves_, changed_curves);
+    });
 
     curves_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);
