@@ -357,7 +357,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
        * This is an O(n) algorithm where we iterate from the left and right side,
        * and swaps the appropriate left and right elements until complete. */
       int left = start, right = end - 1;
-      float bounding_dimension = min_bucket * (centroid_bounds.size()[min_dim] /
+      float bounding_dimension = (min_bucket + 1) * (centroid_bounds.size()[min_dim] /
                                                LightTreeBucketInfo::num_buckets) +
                                  centroid_bounds.min[min_dim];
       while (left < right) {
