@@ -108,6 +108,15 @@ IndexMask retrieve_selected_curves(const Curves &curves_id, Vector<int64_t> &r_i
 
 class CurvesConstraintSolver {
  private:
+  /* Number of iterations to satisfy constraints. */
+  int solver_iterations_ = 5;
+
+  /* Maximum number of simultaneous contacts to record per point. */
+  int max_contacts_per_point_ = 4;
+
+  /* Default radius to offset curves from the surface, if curve radius attribute is not defined. */
+  float default_curve_radius_ = 0.05f;
+
   /** Length of each segment indexed by the index of the first point in the segment. */
   Array<float> segment_lengths_cu_;
 
@@ -121,6 +130,15 @@ class CurvesConstraintSolver {
   Array<Contact> contacts_;
 
  public:
+  int solver_iterations() const;
+  void set_solver_iterations(int solver_iterations);
+
+  int max_contacts_per_point() const;
+  void set_max_contacts_per_point(int max_contacts_per_point);
+
+  float default_curve_radius() const;
+  void set_default_curve_radius(float default_curve_radius);
+
   /* Remember the initial length of all curve segments. This allows restoring the length after
    * combing.
    */

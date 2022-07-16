@@ -15,7 +15,35 @@ namespace blender::ed::sculpt_paint {
 using blender::bke::CurvesGeometry;
 using threading::EnumerableThreadSpecific;
 
-static const int MAX_CONTACTS = 4;
+int CurvesConstraintSolver::solver_iterations() const
+{
+  return solver_iterations_;
+}
+
+void CurvesConstraintSolver::set_solver_iterations(int solver_iterations)
+{
+  solver_iterations_ = solver_iterations;
+}
+
+int CurvesConstraintSolver::max_contacts_per_point() const
+{
+  return max_contacts_per_point_;
+}
+
+void CurvesConstraintSolver::set_max_contacts_per_point(int max_contacts_per_point)
+{
+  max_contacts_per_point_ = max_contacts_per_point;
+}
+
+float CurvesConstraintSolver::default_curve_radius() const
+{
+  return default_curve_radius_;
+}
+
+void CurvesConstraintSolver::set_default_curve_radius(float default_curve_radius)
+{
+  default_curve_radius_ = default_curve_radius;
+}
 
 void CurvesConstraintSolver::initialize(const CurvesGeometry *curves)
 {
@@ -38,7 +66,7 @@ void CurvesConstraintSolver::initialize(const CurvesGeometry *curves)
   });
 
   contacts_num_.reinitialize(curves->points_num());
-  contacts_.reinitialize(MAX_CONTACTS * curves->points_num());
+  contacts_.reinitialize(max_contacts_per_point_ * curves->points_num());
 }
 
 void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
@@ -49,6 +77,10 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
                                                  Span<float3> orig_positions,
                                                  Span<int> changed_curves)
 {
+  /* Should be set when initializing constraints */
+  BLI_assert(contacts_num_.size() == curves->points_num());
+  BLI_assert(contacts_.size() == curves->points_num() * max_contacts_per_point_);
+
   contacts_num_.fill(0);
 
   if (surface_ob == nullptr || surface_ob->type != OB_MESH) {
@@ -69,7 +101,7 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
   BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&surface_bvh); });
 
   VArray<float> radius = curves->attributes().lookup_or_default<float>(
-      "radius", ATTR_DOMAIN_POINT, 0.0f);
+      "radius", ATTR_DOMAIN_POINT, default_curve_radius_);
 
   threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
     for (const int curve_i : changed_curves.slice(range)) {
@@ -80,7 +112,8 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
         const float3 &new_p = curves->positions()[point_i];
         const float margin = radius[point_i];
 
-        MutableSpan<Contact> contacts(contacts_.begin() + MAX_CONTACTS * point_i, MAX_CONTACTS);
+        MutableSpan<Contact> contacts(contacts_.begin() + max_contacts_per_point_ * point_i,
+                                      max_contacts_per_point_);
 
         float3 start_su = transforms.curves_to_surface * old_p;
         float3 dir_su = transforms.curves_to_surface.ref_3x3() * (new_p - old_p);
@@ -100,7 +133,7 @@ void CurvesConstraintSolver::find_contact_points(const Depsgraph *depsgraph,
 
                 const int contacts_num = contacts_num_[point_i];
                 int insert_i;
-                if (contacts_num < MAX_CONTACTS) {
+                if (contacts_num < max_contacts_per_point_) {
                   insert_i = contacts_num;
                   ++contacts_num_[point_i];
                 }
@@ -135,12 +168,11 @@ void CurvesConstraintSolver::solve_constraints(
    * See for example "Position-Based Simulation Methods in Computer Graphics"
    * by Mueller et. al. for an in-depth description.
    */
-  const int solver_iterations = 5;
 
   const Span<float> expected_lengths_cu = segment_lengths_cu_;
   MutableSpan<float3> positions_cu = curves->positions_for_write();
   VArray<float> radius = curves->attributes().lookup_or_default<float>(
-      "radius", ATTR_DOMAIN_POINT, 0.0f);
+      "radius", ATTR_DOMAIN_POINT, default_curve_radius_);
 
   threading::parallel_for(changed_curves.index_range(), 256, [&](const IndexRange range) {
     for (const int curve_i : changed_curves.slice(range)) {
@@ -150,9 +182,10 @@ void CurvesConstraintSolver::solve_constraints(
       for (const int point_i : points.drop_front(1)) {
         float3 &p = positions_cu[point_i];
         const int contacts_num = contacts_num_[point_i];
-        for (int solver_i : IndexRange(solver_iterations)) {
+        for (int solver_i : IndexRange(solver_iterations_)) {
           /* Solve contact constraints */
-          Span<Contact> contacts(contacts_.begin() + MAX_CONTACTS * point_i, contacts_num);
+          Span<Contact> contacts(contacts_.begin() + max_contacts_per_point_ * point_i,
+                                 contacts_num);
           for (const Contact &c : contacts) {
             /* Lagrange multiplier for solving a single contact constraint.
               * Note: The contact point is already offset from the surface by the radius due to the raycast callback,
