@@ -85,7 +85,7 @@ void createTransSculpt(bContext *C, TransInfo *t)
   copy_m3_m4(td->axismtx, ob->obmat);
 
   BLI_assert(!(t->options & CTX_PAINT_CURVE));
-  ED_sculpt_init_transform(C, ob);
+  ED_sculpt_init_transform(C, ob, t->mval);
 }
 
 /** \} */

@@ -663,6 +663,7 @@ typedef struct SculptSession {
    */
   char *last_paint_canvas_key;
 
+  float last_normal[3];
 } SculptSession;
 
 void BKE_sculptsession_free(struct Object *ob);

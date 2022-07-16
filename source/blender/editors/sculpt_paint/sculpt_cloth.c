@@ -503,7 +503,7 @@ static void do_cloth_brush_apply_forces_task_cb_ex(void *__restrict userdata,
 
   AutomaskingNodeData automask_data;
   SCULPT_automasking_node_begin(
-      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+      data->ob, ss, SCULPT_automasking_active_cache_get(ss), &automask_data, data->nodes[n]);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     float force[3];
@@ -764,7 +764,7 @@ static void do_cloth_brush_solve_simulation_task_cb_ex(
   AutomaskingCache *automasking = SCULPT_automasking_active_cache_get(ss);
   AutomaskingNodeData automask_data;
   SCULPT_automasking_node_begin(
-      data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+      data->ob, ss, SCULPT_automasking_active_cache_get(ss), &automask_data, data->nodes[n]);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     float sim_location[3];
@@ -1433,7 +1433,8 @@ static void cloth_filter_apply_forces_task_cb(void *__restrict userdata,
   }
   mul_v3_fl(sculpt_gravity, sd->gravity_factor * data->filter_strength);
   AutomaskingNodeData automask_data;
-  SCULPT_automasking_node_begin(data->ob, ss, ss->cache->automasking, &automask_data, node);
+  SCULPT_automasking_node_begin(
+      data->ob, ss, SCULPT_automasking_active_cache_get(ss), &automask_data, node);
 
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
@@ -1580,7 +1581,8 @@ static int sculpt_cloth_filter_invoke(bContext *C, wmOperator *op, const wmEvent
   BKE_sculpt_update_object_for_edit(depsgraph, ob, true, true, false);
 
   SCULPT_undo_push_begin(ob, "Cloth filter");
-  SCULPT_filter_cache_init(C, ob, sd, SCULPT_UNDO_COORDS);
+  SCULPT_filter_cache_init(
+      C, ob, sd, SCULPT_UNDO_COORDS, event->mval, RNA_float_get(op->ptr, "area_normal_radius"));
 
   ss->filter_cache->automasking = SCULPT_automasking_cache_init(sd, NULL, ob);
 
@@ -1643,14 +1645,14 @@ void SCULPT_OT_cloth_filter(struct wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* RNA. */
+  SCULPT_mesh_filter_properties(ot);
+
   RNA_def_enum(ot->srna,
                "type",
                prop_cloth_filter_type,
                CLOTH_FILTER_GRAVITY,
                "Filter Type",
                "Operation that is going to be applied to the mesh");
-  RNA_def_float(
-      ot->srna, "strength", 1.0f, -10.0f, 10.0f, "Strength", "Filter strength", -10.0f, 10.0f);
   RNA_def_enum_flag(ot->srna,
                     "force_axis",
                     prop_cloth_filter_force_axis_items,

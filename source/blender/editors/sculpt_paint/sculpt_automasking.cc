@@ -201,26 +201,45 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
 
   float mask = 1.0f;
 
-  if (ss->cache && (automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
+  if ((ss->cache || ss->filter_cache) &&
+      (automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
     float falloff = automasking->settings.start_normal_falloff * M_PI;
+    float initial_normal[3];
+
+    if (ss->cache) {
+      copy_v3_v3(initial_normal, ss->cache->initial_normal);
+    }
+    else {
+      copy_v3_v3(initial_normal, ss->filter_cache->initial_normal);
+    }
 
     mask *= sculpt_automasking_normal_calc(
         automasking,
         ss,
         vert,
-        ss->cache->initial_normal,
+        initial_normal,
         automasking->settings.start_normal_limit - falloff * 0.5f,
         automasking->settings.start_normal_limit + falloff * 0.5f,
         automask_data);
   }
 
-  if (ss->cache && (automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_NORMAL)) {
+  if ((ss->cache || ss->filter_cache) &&
+      (automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_NORMAL)) {
     float falloff = automasking->settings.view_normal_falloff * M_PI;
+
+    float view_normal[3];
+
+    if (ss->cache) {
+      copy_v3_v3(view_normal, ss->cache->view_normal);
+    }
+    else {
+      copy_v3_v3(view_normal, ss->filter_cache->view_normal);
+    }
 
     mask *= sculpt_automasking_normal_calc(automasking,
                                            ss,
                                            vert,
-                                           ss->cache->view_normal,
+                                           view_normal,
                                            automasking->settings.view_normal_limit,
                                            automasking->settings.view_normal_limit + falloff,
                                            automask_data);

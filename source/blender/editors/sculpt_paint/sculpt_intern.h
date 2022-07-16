@@ -463,6 +463,8 @@ typedef struct FilterCache {
 
   /* Auto-masking. */
   AutomaskingCache *automasking;
+  float initial_normal[3];
+  float view_normal[3];
 
   /* Pre-smoothed colors used by sharpening. Colors are HSL. */
   float (*pre_smoothed_color)[4];
@@ -1340,8 +1342,14 @@ float *SCULPT_geodesic_from_vertex(Object *ob, int vertex, float limit_radius);
 /** \name Filter API
  * \{ */
 
-void SCULPT_filter_cache_init(struct bContext *C, Object *ob, Sculpt *sd, int undo_type);
+void SCULPT_filter_cache_init(struct bContext *C,
+                              Object *ob,
+                              Sculpt *sd,
+                              int undo_type,
+                              const int mval[2],
+                              float area_normal_radius);
 void SCULPT_filter_cache_free(SculptSession *ss);
+void SCULPT_mesh_filter_properties(struct wmOperatorType *ot);
 
 void SCULPT_mask_filter_smooth_apply(
     Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode, int smooth_iterations);
