@@ -659,8 +659,12 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
     prop = RNA_def_boolean(ot->srna, "snap", false, "Use Snapping Options", "");
     RNA_def_property_flag(prop, PROP_HIDDEN);
 
-    prop = RNA_def_enum(
-        ot->srna, "snap_elements", rna_enum_snap_element_items, 0, "Snap to Elements", "");
+    prop = RNA_def_enum(ot->srna,
+                        "snap_elements",
+                        rna_enum_snap_element_items,
+                        SCE_SNAP_MODE_INCREMENT,
+                        "Snap to Elements",
+                        "");
     RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 
     RNA_def_boolean(ot->srna, "use_snap_project", false, "Project Individual Elements", "");
@@ -678,11 +682,10 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
       RNA_def_property_flag(prop, PROP_HIDDEN);
       prop = RNA_def_boolean(ot->srna, "use_snap_edit", true, "Target: Include Edit", "");
       RNA_def_property_flag(prop, PROP_HIDDEN);
-      prop = RNA_def_boolean(
-          ot->srna, "use_snap_nonedit", false, "Target: Include Non-Edited", "");
+      prop = RNA_def_boolean(ot->srna, "use_snap_nonedit", true, "Target: Include Non-Edited", "");
       RNA_def_property_flag(prop, PROP_HIDDEN);
       prop = RNA_def_boolean(
-          ot->srna, "use_snap_selectable", true, "Target: Exclude Non-Selectable", "");
+          ot->srna, "use_snap_selectable_only", false, "Target: Exclude Non-Selectable", "");
       RNA_def_property_flag(prop, PROP_HIDDEN);
       prop = RNA_def_boolean(ot->srna,
                              "use_snap_retopology_mode",
@@ -714,7 +717,7 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
     }
     else {
       prop = RNA_def_boolean(
-          ot->srna, "use_snap_selectable", true, "Target: Exclude Non-Selectable", "");
+          ot->srna, "use_snap_selectable_only", false, "Target: Exclude Non-Selectable", "");
       RNA_def_property_flag(prop, PROP_HIDDEN);
     }
   }
