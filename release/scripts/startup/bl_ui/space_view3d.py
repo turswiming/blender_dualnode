@@ -632,6 +632,14 @@ class VIEW3D_HT_header(Header):
             row = layout.row(align=True)
             row.prop(tool_settings, "use_snap", text="")
 
+            if object_mode == 'EDIT' and obj.type == 'MESH':
+                row.prop(
+                    tool_settings,
+                    "use_snap_retopology_mode",
+                    text="",
+                    icon='MOD_MESHDEFORM',
+                )
+
             sub = row.row(align=True)
             sub.popover(
                 panel="VIEW3D_PT_snapping",
@@ -6810,45 +6818,65 @@ class VIEW3D_PT_snapping(Panel):
         obj = context.active_object
         object_mode = obj.mode if obj else 'OBJECT'
         show_target_options = object_mode == 'EDIT' and obj.type not in {'LATTICE', 'META', 'FONT'}
+        multiple_objects = len(context.objects_in_mode) > 1
+        retopo_mode = object_mode == 'EDIT' and tool_settings.use_snap_retopology_mode
 
         layout = self.layout
         col = layout.column()
 
-        if snap_elements != {'INCREMENT'} and show_target_options:
+        if show_target_options:
             col.prop(
                 tool_settings,
                 "use_snap_retopology_mode",
-                text="Use Retopology Mode",
+                text="Retopology Mode",
                 # icon='MOD_MESHDEFORM',
             )
 
-        col.label(text="Snap To")
-        col.prop(tool_settings, "snap_elements", expand=True)
+        if not retopo_mode:
+            col_snapto = col.column(align=True, heading="Snap To")
+            col_snapto.prop(tool_settings, "snap_elements", expand=True)
+        else:
+            col_snapto_edited = col.column(align=True, heading="Snap To Edited")
+            col_snapto_edited.prop_enum(tool_settings, "snap_elements", 'VERTEX')
+            col_snapto_edited.prop_enum(tool_settings, "snap_elements", 'EDGE')
+            col_snapto_edited.prop_enum(tool_settings, "snap_elements", 'EDGE_MIDPOINT')
+            col_snapto_edited.prop_enum(tool_settings, "snap_elements", 'EDGE_PERPENDICULAR')
 
-        if 'INCREMENT' in snap_elements:
-            col.prop(tool_settings, "use_snap_grid_absolute")
+            col_snapto_nonedited = col.column(align=True, heading="Snap To Non-Edited")
+            col_snapto_nonedited.prop_enum(tool_settings, "snap_elements", 'FACE')
+            col_snapto_nonedited.prop_enum(tool_settings, "snap_elements", 'FACE_NEAREST')
 
         if snap_elements - {'INCREMENT', 'FACE_NEAREST'}:
-            col.label(text="Snap With")
-            row = col.row(align=True)
-            row.prop(tool_settings, "snap_target", expand=True)
+            col_snapwith = col.column(align=True)
+            col_snapwith.label(text='Snap With')
+            col_snapwith.row().prop(tool_settings, "snap_target", expand=True)
 
         if snap_elements != {'INCREMENT'}:
-            col.label(text="Target Selection")
-            col_targetsel = col.column(align=True)
-            if show_target_options:
-                col_targetsel.prop(
-                    tool_settings,
-                    "use_snap_self",
-                    text="Include Active",
-                    icon='EDITMODE_HLT',
-                )
-                col_targetsel.prop(
-                    tool_settings,
-                    "use_snap_edit",
-                    text="Include Edited",
-                    icon='OUTLINER_DATA_MESH',
-                )
+            col_targetsel = col.column(align=True, heading="Target Selection")
+            if not retopo_mode and show_target_options:
+                if not multiple_objects:
+                    col_targetsel.prop(
+                        tool_settings,
+                        'use_snap_self',
+                        text="Include Edited",
+                        # description='Snap onto edited objects (Edit Mode Only)',
+                        icon='EDITMODE_HLT',
+                    )
+                else:
+                    col_targetsel.prop(
+                        tool_settings,
+                        "use_snap_self",
+                        text="Include Active Edited",
+                        # description='Snap onto active edited object (Edit Mode Only)',
+                        icon='EDITMODE_HLT',
+                    )
+                    col_targetsel.prop(
+                        tool_settings,
+                        "use_snap_edit",
+                        text="Include Other Edited",
+                        # description='Snap onto non-active edited object(s) (Edit Mode Only)',
+                        icon='OUTLINER_DATA_MESH',
+                    )
                 col_targetsel.prop(
                     tool_settings,
                     "use_snap_nonedit",
@@ -6862,26 +6890,29 @@ class VIEW3D_PT_snapping(Panel):
                 icon='RESTRICT_SELECT_OFF',
             )
 
-            col.label(text="Options")
+        col_options = col.column(heading="Options")
+        if 'INCREMENT' in snap_elements:
+            col_options.prop(tool_settings, "use_snap_grid_absolute")
+        if snap_elements != {'INCREMENT'}:
             # TODO(@gfxcoder): Does WEIGHT_PAINT have any snapping?
             if object_mode in {'OBJECT', 'POSE', 'EDIT', 'WEIGHT_PAINT'}:
-                col.prop(tool_settings, "use_snap_align_rotation")
+                col_options.prop(tool_settings, "use_snap_align_rotation")
             if snap_elements != {'FACE_NEAREST'}:
-                col.prop(tool_settings, "use_snap_backface_culling")
-            if 'FACE' in snap_elements:
-                col.prop(tool_settings, "use_snap_project")
+                col_options.prop(tool_settings, "use_snap_backface_culling")
+            if 'FACE' in snap_elements and not retopo_mode:
+                col_options.prop(tool_settings, "use_snap_project")
             if 'FACE_NEAREST' in snap_elements:
-                col.prop(tool_settings, 'use_snap_to_same_target')
+                col_options.prop(tool_settings, 'use_snap_to_same_target')
                 if object_mode == 'EDIT':
-                    col.prop(tool_settings, 'snap_face_nearest_steps')
+                    col_options.prop(tool_settings, 'snap_face_nearest_steps')
             if 'VOLUME' in snap_elements:
-                col.prop(tool_settings, "use_snap_peel_object")
+                col_options.prop(tool_settings, "use_snap_peel_object")
 
-        col.label(text="Affect")
-        row = col.row(align=True)
-        row.prop(tool_settings, "use_snap_translate", text="Move", toggle=True)
-        row.prop(tool_settings, "use_snap_rotate", text="Rotate", toggle=True)
-        row.prop(tool_settings, "use_snap_scale", text="Scale", toggle=True)
+        if not retopo_mode:
+            row = col.row(align=True, heading="Affect")
+            row.prop(tool_settings, "use_snap_translate", text="Move", toggle=True)
+            row.prop(tool_settings, "use_snap_rotate", text="Rotate", toggle=True)
+            row.prop(tool_settings, "use_snap_scale", text="Scale", toggle=True)
 
 
 class VIEW3D_PT_proportional_edit(Panel):

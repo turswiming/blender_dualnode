@@ -168,9 +168,22 @@ bool activeSnap_SnappingAsGroup(const TransInfo *t)
   return true;
 }
 
+static bool useSnapRetopoMode(const TransInfo *t)
+{
+  if (t->spacetype != SPACE_VIEW3D || t->obedit_type != OB_MESH) {
+    /* Not the correct context for retopology mode. */
+    return false;
+  }
+  return t->settings->snap_flag & SCE_SNAP_RETOPOLOGY_MODE;
+}
+
 bool transformModeUseSnap(const TransInfo *t)
 {
   ToolSettings *ts = t->settings;
+  if (useSnapRetopoMode(t)) {
+    /* Always use snap when retopology mode is enabled. */
+    return true;
+  }
   if (t->mode == TFM_TRANSLATION) {
     return (ts->snap_transform_mode_flag & SCE_SNAP_TRANSFORM_MODE_TRANSLATE) != 0;
   }
@@ -845,6 +858,19 @@ static void initSnappingMode(TransInfo *t)
   }
 }
 
+static void initSnappingRetopoMode(TransInfo *t)
+{
+  if (!useSnapRetopoMode(t)) {
+    /* Not using retopology mode. */
+    return;
+  }
+
+  /* Enable all possible targets.  The targets will be filtered based on snap method. */
+  t->tsnap.target_select &= ~(SCE_SNAP_TARGET_NOT_ACTIVE | SCE_SNAP_TARGET_NOT_EDITED |
+                              SCE_SNAP_TARGET_NOT_NONEDITED);
+  t->tsnap.project = true;
+}
+
 void initSnapping(TransInfo *t, wmOperator *op)
 {
   ToolSettings *ts = t->settings;
@@ -962,6 +988,7 @@ void initSnapping(TransInfo *t, wmOperator *op)
   t->tsnap.source_select = snap_source;
 
   initSnappingMode(t);
+  initSnappingRetopoMode(t);
 }
 
 void freeSnapping(TransInfo *t)

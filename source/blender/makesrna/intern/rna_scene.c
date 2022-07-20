@@ -3313,10 +3313,10 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   prop = RNA_def_property(srna, "snap_face_nearest_steps", PROP_INT, PROP_FACTOR);
   RNA_def_property_int_sdna(prop, NULL, "snap_face_nearest_steps");
   RNA_def_property_range(prop, 1, 100);
-  RNA_def_property_ui_text(
-      prop,
-      "Face Nearest Steps",
-      "Number of steps to break transformation into for face nearest snapping");
+  RNA_def_property_ui_text(prop,
+                           "Face Nearest Steps",
+                           "Increase precision and smooth large changes by dividing "
+                           "transformation into smaller steps (Face Nearest Only)");
 
   prop = RNA_def_property(srna, "use_snap_to_same_target", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "snap_flag", SCE_SNAP_KEEP_ON_SAME_OBJECT);
@@ -3379,13 +3379,13 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_snap_self", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, NULL, "snap_flag", SCE_SNAP_NOT_TO_ACTIVE);
   RNA_def_property_ui_text(
-      prop, "Snap onto Active", "Snap onto itself only if enabled (Edit Mode Only)");
+      prop, "Snap onto Active", "Snap onto active edited object (Edit Mode Only)");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
   prop = RNA_def_property(srna, "use_snap_edit", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "snap_flag", SCE_SNAP_TO_INCLUDE_EDITED);
   RNA_def_property_ui_text(
-      prop, "Snap onto Edited", "Snap onto non-active objects in Edit Mode (Edit Mode Only)");
+      prop, "Snap onto Edited", "Snap onto non-active edited objects (Edit Mode Only)");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
   prop = RNA_def_property(srna, "use_snap_nonedit", PROP_BOOLEAN, PROP_NONE);
@@ -3404,8 +3404,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "snap_flag", SCE_SNAP_RETOPOLOGY_MODE);
   RNA_def_property_ui_text(prop,
                            "Retopology Target Mode",
-                           "Snap grabbed geometry to vertices and edges of edited objects (if "
-                           "enabled) and to faces of non-edited objects (if enabled)");
+                           "When enabled, snapping options are optimized for retopology work");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
   prop = RNA_def_property(srna, "use_snap_translate", PROP_BOOLEAN, PROP_NONE);

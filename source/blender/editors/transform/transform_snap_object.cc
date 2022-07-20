@@ -1267,7 +1267,7 @@ static bool nearest_world_tree(SnapObjectContext *UNUSED(sctx),
 
   /* compute offset between init co and prev co in local space */
   float init_co_local[3], curr_co_local[3];
-  float delta_local[3];
+  float delta_local[3], delta_step[3];
   mul_v3_m4v3(init_co_local, imat, init_co);
   mul_v3_m4v3(curr_co_local, imat, curr_co);
   sub_v3_v3v3(delta_local, curr_co_local, init_co_local);
@@ -1290,8 +1290,9 @@ static bool nearest_world_tree(SnapObjectContext *UNUSED(sctx),
   *r_dist_sq = dist_sq;
 
   /* scale to make `snap_face_nearest_steps` steps */
-  float step_scale_factor = 1.0f / max_ff(1.0f, (float)params->face_nearest_steps);
-  mul_v3_fl(delta_local, step_scale_factor);
+  int steps = max_ii(1, params->face_nearest_steps);
+  float factor = 1.0f / (float)steps;
+  mul_v3_v3fl(delta_step, delta_local, factor);
 
   float co_local[3];
   float no_local[3];
@@ -1299,8 +1300,8 @@ static bool nearest_world_tree(SnapObjectContext *UNUSED(sctx),
 
   copy_v3_v3(co_local, init_co_local);
 
-  for (int i = 0; i < params->face_nearest_steps; i++) {
-    add_v3_v3(co_local, delta_local);
+  for (int i = 0; i < steps; i++) {
+    add_v3_v3(co_local, delta_step);
     nearest_world_tree_co(
         tree, nearest_cb, treedata, co_local, co_local, no_local, &index, nullptr);
   }
