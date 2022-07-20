@@ -358,10 +358,7 @@ static ComponentAttributeProviders create_attribute_providers_for_curve()
         const CurvesGeometry &curves = *static_cast<const CurvesGeometry *>(owner);
         return curves.curves_num();
       },
-      [](void *owner) {
-        CurvesGeometry &curves = *static_cast<CurvesGeometry *>(owner);
-        curves.update_customdata_pointers();
-      }};
+      [](void * /*owner*/) {}};
   static CustomDataAccessInfo point_access = {
       [](void *owner) -> CustomData * {
         CurvesGeometry &curves = *static_cast<CurvesGeometry *>(owner);
@@ -375,10 +372,7 @@ static ComponentAttributeProviders create_attribute_providers_for_curve()
         const CurvesGeometry &curves = *static_cast<const CurvesGeometry *>(owner);
         return curves.points_num();
       },
-      [](void *owner) {
-        CurvesGeometry &curves = *static_cast<CurvesGeometry *>(owner);
-        curves.update_customdata_pointers();
-      }};
+      [](void * /*owner*/) {}};
 
   static BuiltinCustomDataLayerProvider position("position",
                                                  ATTR_DOMAIN_POINT,
@@ -644,6 +638,7 @@ std::optional<blender::bke::AttributeAccessor> CurveComponent::attributes() cons
 
 std::optional<blender::bke::MutableAttributeAccessor> CurveComponent::attributes_for_write()
 {
-  return blender::bke::MutableAttributeAccessor(curves_ ? &curves_->geometry : nullptr,
+  Curves *curves = this->get_for_write();
+  return blender::bke::MutableAttributeAccessor(curves ? &curves->geometry : nullptr,
                                                 blender::bke::get_curves_accessor_functions_ref());
 }

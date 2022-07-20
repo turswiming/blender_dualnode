@@ -444,7 +444,8 @@ static void brush_defaults(Brush *brush)
 
   const Brush *brush_def = DNA_struct_default_get(Brush);
 
-#define FROM_DEFAULT(member) memcpy(&brush->member, &brush_def->member, sizeof(brush->member))
+#define FROM_DEFAULT(member) \
+  memcpy((void *)&brush->member, (void *)&brush_def->member, sizeof(brush->member))
 #define FROM_DEFAULT_PTR(member) memcpy(brush->member, brush_def->member, sizeof(brush->member))
 
   FROM_DEFAULT(blend);
@@ -586,15 +587,15 @@ bool BKE_brush_delete(Main *bmain, Brush *brush)
   return true;
 }
 
-/* grease pencil cumapping->preset */
-typedef enum eGPCurveMappingPreset {
+/** Local grease pencil curve mapping preset. */
+using eGPCurveMappingPreset = enum eGPCurveMappingPreset {
   GPCURVE_PRESET_PENCIL = 0,
   GPCURVE_PRESET_INK = 1,
   GPCURVE_PRESET_INKNOISE = 2,
   GPCURVE_PRESET_MARKER = 3,
   GPCURVE_PRESET_CHISEL_SENSIVITY = 4,
   GPCURVE_PRESET_CHISEL_STRENGTH = 5,
-} eGPCurveMappingPreset;
+};
 
 static void brush_gpencil_curvemap_reset(CurveMap *cuma, int tot, int preset)
 {

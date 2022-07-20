@@ -111,10 +111,7 @@ namespace blender::bke {
  */
 static ComponentAttributeProviders create_attribute_providers_for_point_cloud()
 {
-  static auto update_custom_data_pointers = [](void *owner) {
-    PointCloud *pointcloud = static_cast<PointCloud *>(owner);
-    BKE_pointcloud_update_customdata_pointers(pointcloud);
-  };
+  static auto update_custom_data_pointers = [](void * /*owner*/) {};
   static CustomDataAccessInfo point_access = {
       [](void *owner) -> CustomData * {
         PointCloud *pointcloud = static_cast<PointCloud *>(owner);
@@ -226,8 +223,9 @@ std::optional<blender::bke::AttributeAccessor> PointCloudComponent::attributes()
 
 std::optional<blender::bke::MutableAttributeAccessor> PointCloudComponent::attributes_for_write()
 {
+  PointCloud *pointcloud = this->get_for_write();
   return blender::bke::MutableAttributeAccessor(
-      pointcloud_, blender::bke::get_pointcloud_accessor_functions_ref());
+      pointcloud, blender::bke::get_pointcloud_accessor_functions_ref());
 }
 
 /** \} */
