@@ -197,6 +197,7 @@ KERNEL_STRUCT_MEMBER(integrator, int, use_light_tree)
 KERNEL_STRUCT_MEMBER(integrator, float, splitting_threshold)
 /* Padding */
 KERNEL_STRUCT_MEMBER(integrator, int, pad1)
+KERNEL_STRUCT_MEMBER(integrator, int, pad2)
 KERNEL_STRUCT_END(KernelIntegrator)
 
 /* SVM. For shader specialization. */

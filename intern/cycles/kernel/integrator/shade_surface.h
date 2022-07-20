@@ -86,7 +86,6 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
     if (kernel_data.integrator.use_light_tree) {
       float3 ray_P = INTEGRATOR_STATE(state, ray, P);
       const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
-      ray_P -= ray_D * mis_ray_t;
       const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
       pdf *= light_tree_pdf(kg, ray_P, N, sd->prim);
     }
