@@ -39,7 +39,6 @@
 
 #include "BLO_read_write.h"
 
-#include "BKE_curveprofile.h"
 #include "bmesh.h"
 #include "bmesh_tools.h"
 
@@ -418,7 +417,7 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Bevel = {
-    /* name */ "Bevel",
+    /* name */ N_("Bevel"),
     /* structName */ "BevelModifierData",
     /* structSize */ sizeof(BevelModifierData),
     /* srna */ &RNA_BevelModifier,

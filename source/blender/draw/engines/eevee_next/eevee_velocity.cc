@@ -162,7 +162,7 @@ bool VelocityModule::step_object_sync(Object *ob,
   }
 
   /* TODO(@fclem): Reset sampling here? Should ultimately be covered by depsgraph update tags. */
-  // inst_.sampling.reset();
+  inst_.sampling.reset();
 
   return true;
 }
@@ -185,7 +185,7 @@ void VelocityModule::step_swap()
       dst_ofs += src_len;
     }
     /* TODO(@fclem): Fail gracefully (disable motion blur + warning print) if
-       `tot_len * sizeof(float4)` is greater than max SSBO size. */
+     * `tot_len * sizeof(float4)` is greater than max SSBO size. */
     geometry_steps[step_]->resize(max_ii(16, dst_ofs));
 
     for (VelocityGeometryData &geom : geometry_map.values()) {
@@ -264,7 +264,7 @@ void VelocityModule::end_sync()
   }
 
   if (deleted_obj.size() > 0) {
-    // inst_.sampling.reset();
+    inst_.sampling.reset();
   }
 
   for (auto key : deleted_obj) {

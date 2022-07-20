@@ -21,6 +21,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_lib_id.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_legacy_convert.h"
 #include "BKE_modifier.h"
 #include "BKE_particle.h"
 #include "BKE_screen.h"
@@ -300,15 +301,16 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_ParticleSystem = {
-    /* name */ "ParticleSystem",
+    /* name */ N_("ParticleSystem"),
     /* structName */ "ParticleSystemModifierData",
     /* structSize */ sizeof(ParticleSystemModifierData),
     /* srna */ &RNA_ParticleSystemModifier,
     /* type */ eModifierTypeType_OnlyDeform,
     /* flags */ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
-        eModifierTypeFlag_UsesPointCache /* |
-                          eModifierTypeFlag_SupportsEditmode |
-                          eModifierTypeFlag_EnableInEditmode */
+        eModifierTypeFlag_UsesPointCache
+#if 0
+        | eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_EnableInEditmode
+#endif
     ,
     /* icon */ ICON_MOD_PARTICLES,
 

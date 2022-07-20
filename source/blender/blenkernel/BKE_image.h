@@ -97,7 +97,7 @@ int BKE_imbuf_write(struct ImBuf *ibuf, const char *name, const struct ImageForm
  */
 int BKE_imbuf_write_as(struct ImBuf *ibuf,
                        const char *name,
-                       struct ImageFormatData *imf,
+                       const struct ImageFormatData *imf,
                        bool save_copy);
 
 /**
@@ -193,6 +193,14 @@ struct Image *BKE_image_add_generated(struct Main *bmain,
  * caller should take care to drop its reference by calling #IMB_freeImBuf if needed.
  */
 struct Image *BKE_image_add_from_imbuf(struct Main *bmain, struct ImBuf *ibuf, const char *name);
+
+/**
+ * For a non-viewer single-buffer image (single frame file, or generated image) replace its image
+ * buffer with the given one.
+ * If an unsupported image type (multi-layer, image sequence, ...) the function will assert in the
+ * debug mode and will have an undefined behavior in the release mode.
+ */
+void BKE_image_replace_imbuf(struct Image *image, struct ImBuf *ibuf);
 
 /**
  * For reload, refresh, pack.
@@ -369,6 +377,11 @@ typedef enum {
   UDIM_TILE_FORMAT_UDIM = 1,
   UDIM_TILE_FORMAT_UVTILE = 2
 } eUDIM_TILE_FORMAT;
+
+/**
+ * Checks if the filename portion of the path contains a UDIM token.
+ */
+bool BKE_image_is_filename_tokenized(char *filepath);
 
 /**
  * Ensures that `filename` contains a UDIM token if we find a supported format pattern.

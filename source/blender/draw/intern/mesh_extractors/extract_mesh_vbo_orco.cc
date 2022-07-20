@@ -5,7 +5,7 @@
  * \ingroup draw
  */
 
-#include "extract_mesh.h"
+#include "extract_mesh.hh"
 
 namespace blender::draw {
 
@@ -19,7 +19,7 @@ struct MeshExtract_Orco_Data {
 };
 
 static void extract_orco_init(const MeshRenderData *mr,
-                              struct MeshBatchCache *UNUSED(cache),
+                              MeshBatchCache *UNUSED(cache),
                               void *buf,
                               void *tls_data)
 {
@@ -94,6 +94,4 @@ constexpr MeshExtract create_extractor_orco()
 
 }  // namespace blender::draw
 
-extern "C" {
 const MeshExtract extract_orco = blender::draw::create_extractor_orco();
-}

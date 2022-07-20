@@ -20,7 +20,7 @@
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
 
-#include "BKE_attribute_access.hh"
+#include "BKE_attribute.hh"
 
 namespace blender::bke {
 
@@ -182,6 +182,7 @@ class CurvesGeometry : public ::CurvesGeometry {
   void update_curve_types();
 
   bool has_curve_with_type(CurveType type) const;
+  bool has_curve_with_type(Span<CurveType> types) const;
   /** Return true if all of the curves have the provided type. */
   bool is_single_type(CurveType type) const;
   /** Return the number of curves with each type. */
@@ -264,22 +265,15 @@ class CurvesGeometry : public ::CurvesGeometry {
   MutableSpan<float> nurbs_weights_for_write();
 
   /**
-   * The index of a triangle (#MLoopTri) that a curve is attached to.
-   * The index is -1, if the curve is not attached.
+   * UV coordinate for each curve that encodes where the curve is attached to the surface mesh.
    */
-  VArray<int> surface_triangle_indices() const;
-  MutableSpan<int> surface_triangle_indices_for_write();
+  Span<float2> surface_uv_coords() const;
+  MutableSpan<float2> surface_uv_coords_for_write();
 
-  /**
-   * Barycentric coordinates of the attachment point within a triangle.
-   * Only the first two coordinates are stored. The third coordinate can be derived because the sum
-   * of the three coordinates is 1.
-   *
-   * When the triangle index is -1, this coordinate should be ignored.
-   * The span can be empty, when all triangle indices are -1.
-   */
-  Span<float2> surface_triangle_coords() const;
-  MutableSpan<float2> surface_triangle_coords_for_write();
+  VArray<float> selection_point_float() const;
+  MutableSpan<float> selection_point_float_for_write();
+  VArray<float> selection_curve_float() const;
+  MutableSpan<float> selection_curve_float_for_write();
 
   /**
    * Calculate the largest and smallest position values, only including control points
@@ -391,8 +385,7 @@ class CurvesGeometry : public ::CurvesGeometry {
 
   void calculate_bezier_auto_handles();
 
-  void update_customdata_pointers();
-
+  void remove_points(IndexMask points_to_delete);
   void remove_curves(IndexMask curves_to_delete);
 
   /**
@@ -401,11 +394,24 @@ class CurvesGeometry : public ::CurvesGeometry {
    */
   void reverse_curves(IndexMask curves_to_reverse);
 
+  /**
+   * Remove any attributes that are unused based on the types in the curves.
+   */
+  void remove_attributes_based_on_types();
+
+  AttributeAccessor attributes() const;
+  MutableAttributeAccessor attributes_for_write();
+
   /* --------------------------------------------------------------------
    * Attributes.
    */
 
-  GVArray adapt_domain(const GVArray &varray, AttributeDomain from, AttributeDomain to) const;
+  GVArray adapt_domain(const GVArray &varray, eAttrDomain from, eAttrDomain to) const;
+  template<typename T>
+  VArray<T> adapt_domain(const VArray<T> &varray, eAttrDomain from, eAttrDomain to) const
+  {
+    return this->adapt_domain(GVArray(varray), from, to).typed<T>();
+  }
 };
 
 namespace curves {
@@ -418,7 +424,7 @@ namespace curves {
  * The number of segments between control points, accounting for the last segment of cyclic
  * curves. The logic is simple, but this function should be used to make intentions clearer.
  */
-inline int curve_segment_num(const int points_num, const bool cyclic)
+inline int segments_num(const int points_num, const bool cyclic)
 {
   BLI_assert(points_num > 0);
   return (cyclic && points_num > 1) ? points_num : points_num - 1;
@@ -453,7 +459,7 @@ void calculate_tangents(Span<float3> positions, bool is_cyclic, MutableSpan<floa
 
 /**
  * Calculate directions perpendicular to the tangent at every point by rotating an arbitrary
- * starting vector by the same rotation of each tangent. If the curve is cylic, propagate a
+ * starting vector by the same rotation of each tangent. If the curve is cyclic, propagate a
  * correction through the entire to make sure the first and last normal align.
  */
 void calculate_normals_minimum(Span<float3> tangents, bool cyclic, MutableSpan<float3> normals);
@@ -478,15 +484,18 @@ namespace bezier {
  * Return true if the handles that make up a segment both have a vector type. Vector segments for
  * Bezier curves have special behavior because they aren't divided into many evaluated points.
  */
+bool segment_is_vector(const HandleType left, const HandleType right);
+bool segment_is_vector(const int8_t left, const int8_t right);
 bool segment_is_vector(Span<int8_t> handle_types_left,
                        Span<int8_t> handle_types_right,
                        int segment_index);
 
 /**
- * Return true if the curve's last cylic segment has a vector type.
+ * Return true if the curve's last cyclic segment has a vector type.
  * This only makes a difference in the shape of cyclic curves.
  */
-bool last_cylic_segment_is_vector(Span<int8_t> handle_types_left, Span<int8_t> handle_types_right);
+bool last_cyclic_segment_is_vector(Span<int8_t> handle_types_left,
+                                   Span<int8_t> handle_types_right);
 
 /**
  * Return true if the handle types at the index are free (#BEZIER_HANDLE_FREE) or vector
@@ -508,6 +517,43 @@ void calculate_evaluated_offsets(Span<int8_t> handle_types_left,
                                  bool cyclic,
                                  int resolution,
                                  MutableSpan<int> evaluated_offsets);
+
+/** See #insert. */
+struct Insertion {
+  float3 handle_prev;
+  float3 left_handle;
+  float3 position;
+  float3 right_handle;
+  float3 handle_next;
+};
+
+/**
+ * Compute the Bezier segment insertion for the given parameter on the segment, returning
+ * the position and handles of the new point and the updated existing handle positions.
+ * <pre>
+ *           handle_prev         handle_next
+ *                x-----------------x
+ *               /                   \
+ *              /      x---O---x      \
+ *             /        result         \
+ *            /                         \
+ *           O                           O
+ *       point_prev                   point_next
+ * </pre>
+ */
+Insertion insert(const float3 &point_prev,
+                 const float3 &handle_prev,
+                 const float3 &handle_next,
+                 const float3 &point_next,
+                 float parameter);
+
+/**
+ * Calculate the automatically defined positions for a vector handle (#BEZIER_HANDLE_VECTOR). While
+ * this can be calculated automatically with #calculate_auto_handles, when more context is
+ * available, it can be preferable for performance reasons to calculate it for a single segment
+ * when necessary.
+ */
+float3 calculate_vector_handle(const float3 &point, const float3 &next_point);
 
 /**
  * Recalculate all auto (#BEZIER_HANDLE_AUTO) and vector (#BEZIER_HANDLE_VECTOR) handles with
@@ -592,6 +638,15 @@ int calculate_evaluated_num(int points_num, bool cyclic, int resolution);
  * #calculate_evaluated_num and is expected to divide evenly by the #src span's segment size.
  */
 void interpolate_to_evaluated(GSpan src, bool cyclic, int resolution, GMutableSpan dst);
+
+/**
+ * Evaluate the Catmull Rom curve. The size of each segment and its offset in the #dst span
+ * is encoded in #evaluated_offsets, with the same method as #CurvesGeometry::offsets().
+ */
+void interpolate_to_evaluated(const GSpan src,
+                              const bool cyclic,
+                              const Span<int> evaluated_offsets,
+                              GMutableSpan dst);
 
 }  // namespace catmull_rom
 
@@ -678,6 +733,12 @@ Curves *curves_new_nomain(CurvesGeometry curves);
  */
 Curves *curves_new_nomain_single(int points_num, CurveType type);
 
+/**
+ * Copy data from #src to #dst, except the geometry data in #CurvesGeometry. Typically used to
+ * copy high-level parameters when a geometry-altering operation creates a new curves data-block.
+ */
+void curves_copy_parameters(const Curves &src, Curves &dst);
+
 std::array<int, CURVE_TYPES_NUM> calculate_type_counts(const VArray<int8_t> &types);
 
 /* -------------------------------------------------------------------- */
@@ -709,6 +770,12 @@ inline bool CurvesGeometry::is_single_type(const CurveType type) const
 inline bool CurvesGeometry::has_curve_with_type(const CurveType type) const
 {
   return this->curve_type_counts()[type] > 0;
+}
+
+inline bool CurvesGeometry::has_curve_with_type(const Span<CurveType> types) const
+{
+  return std::any_of(
+      types.begin(), types.end(), [&](CurveType type) { return this->has_curve_with_type(type); });
 }
 
 inline const std::array<int, CURVE_TYPES_NUM> &CurvesGeometry::curve_type_counts() const
@@ -770,7 +837,7 @@ inline IndexRange CurvesGeometry::lengths_range_for_curve(const int curve_index,
   BLI_assert(cyclic == this->cyclic()[curve_index]);
   const IndexRange points = this->evaluated_points_for_curve(curve_index);
   const int start = points.start() + curve_index;
-  return {start, curves::curve_segment_num(points.size(), cyclic)};
+  return {start, curves::segments_num(points.size(), cyclic)};
 }
 
 inline Span<float> CurvesGeometry::evaluated_lengths_for_curve(const int curve_index,
@@ -785,6 +852,9 @@ inline float CurvesGeometry::evaluated_length_total_for_curve(const int curve_in
                                                               const bool cyclic) const
 {
   const Span<float> lengths = this->evaluated_lengths_for_curve(curve_index, cyclic);
+  if (lengths.is_empty()) {
+    return 0.0f;
+  }
   return lengths.last();
 }
 
@@ -804,8 +874,36 @@ inline bool point_is_sharp(const Span<int8_t> handle_types_left,
          ELEM(handle_types_right[index], BEZIER_HANDLE_VECTOR, BEZIER_HANDLE_FREE);
 }
 
+inline bool segment_is_vector(const HandleType left, const HandleType right)
+{
+  return left == BEZIER_HANDLE_VECTOR && right == BEZIER_HANDLE_VECTOR;
+}
+
+inline bool segment_is_vector(const int8_t left, const int8_t right)
+{
+  return segment_is_vector(HandleType(left), HandleType(right));
+}
+
+inline float3 calculate_vector_handle(const float3 &point, const float3 &next_point)
+{
+  return math::interpolate(point, next_point, 1.0f / 3.0f);
+}
+
 /** \} */
 
 }  // namespace curves::bezier
+
+struct CurvesSurfaceTransforms {
+  float4x4 curves_to_world;
+  float4x4 curves_to_surface;
+  float4x4 world_to_curves;
+  float4x4 world_to_surface;
+  float4x4 surface_to_world;
+  float4x4 surface_to_curves;
+  float4x4 surface_to_curves_normal;
+
+  CurvesSurfaceTransforms() = default;
+  CurvesSurfaceTransforms(const Object &curves_ob, const Object *surface_ob);
+};
 
 }  // namespace blender::bke

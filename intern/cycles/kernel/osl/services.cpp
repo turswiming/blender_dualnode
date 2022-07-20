@@ -132,7 +132,7 @@ OSLRenderServices::OSLRenderServices(OSL::TextureSystem *texture_system)
 OSLRenderServices::~OSLRenderServices()
 {
   if (texture_system) {
-    VLOG(2) << "OSL texture system stats:\n" << texture_system->getstats();
+    VLOG_INFO << "OSL texture system stats:\n" << texture_system->getstats();
   }
 }
 
@@ -1094,10 +1094,8 @@ bool OSLRenderServices::get_background_attribute(const KernelGlobalsCPU *kg,
       ndc[0] = camera_world_to_ndc(kg, sd, sd->ray_P);
 
       if (derivatives) {
-        ndc[1] = camera_world_to_ndc(kg, sd, sd->ray_P + make_float3(sd->ray_dP, 0.0f, 0.0f)) -
-                 ndc[0];
-        ndc[2] = camera_world_to_ndc(kg, sd, sd->ray_P + make_float3(0.0f, sd->ray_dP, 0.0f)) -
-                 ndc[0];
+        ndc[1] = zero_float3();
+        ndc[2] = zero_float3();
       }
     }
     else {
@@ -1671,7 +1669,8 @@ bool OSLRenderServices::trace(TraceOpt &options,
 
   ray.P = TO_FLOAT3(P);
   ray.D = TO_FLOAT3(R);
-  ray.t = (options.maxdist == 1.0e30f) ? FLT_MAX : options.maxdist - options.mindist;
+  ray.tmin = 0.0f;
+  ray.tmax = (options.maxdist == 1.0e30f) ? FLT_MAX : options.maxdist - options.mindist;
   ray.time = sd->time;
   ray.self.object = OBJECT_NONE;
   ray.self.prim = PRIM_NONE;
@@ -1710,12 +1709,12 @@ bool OSLRenderServices::trace(TraceOpt &options,
 
   const KernelGlobalsCPU *kg = sd->osl_globals;
 
-  /* Can't raytrace from shaders like displacement, before BVH exists. */
+  /* Can't ray-trace from shaders like displacement, before BVH exists. */
   if (kernel_data.bvh.bvh_layout == BVH_LAYOUT_NONE) {
     return false;
   }
 
-  /* Raytrace, leaving out shadow opaque to avoid early exit. */
+  /* Ray-trace, leaving out shadow opaque to avoid early exit. */
   uint visibility = PATH_RAY_ALL_VISIBILITY - PATH_RAY_SHADOW_OPAQUE;
   tracedata->hit = scene_intersect(kg, &ray, visibility, &tracedata->isect);
   return tracedata->hit;

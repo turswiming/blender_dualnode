@@ -302,7 +302,6 @@ static void warpModifier_do(WarpModifierData *wmd,
       if (tex_co) {
         struct Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
         TexResult texres;
-        texres.nor = NULL;
         BKE_texture_get_value(scene, tex_target, tex_co[i], &texres, false);
         fac *= texres.tin;
       }
@@ -511,7 +510,7 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Warp = {
-    /* name */ "Warp",
+    /* name */ N_("Warp"),
     /* structName */ "WarpModifierData",
     /* structSize */ sizeof(WarpModifierData),
     /* srna */ &RNA_WarpModifier,

@@ -486,6 +486,7 @@ static int groupname_to_code(const char *group);
 static uint64_t groupname_to_filter_id(const char *group);
 
 static void filelist_cache_clear(FileListEntryCache *cache, size_t new_size);
+static bool filelist_intern_entry_is_main_file(const FileListInternEntry *intern_entry);
 
 /* ********** Sort helpers ********** */
 
@@ -1027,13 +1028,6 @@ static bool is_filtered_lib(FileListInternEntry *file, const char *root, FileLis
   return is_filtered_lib_type(file, root, filter) && is_filtered_file_relpath(file, filter);
 }
 
-static bool is_filtered_asset_library(FileListInternEntry *file,
-                                      const char *root,
-                                      FileListFilter *filter)
-{
-  return is_filtered_lib_type(file, root, filter) && is_filtered_asset(file, filter);
-}
-
 static bool is_filtered_main(FileListInternEntry *file,
                              const char *UNUSED(dir),
                              FileListFilter *filter)
@@ -1048,6 +1042,17 @@ static bool is_filtered_main_assets(FileListInternEntry *file,
   /* "Filtered" means *not* being filtered out... So return true if the file should be visible. */
   return is_filtered_id_file_type(file, file->relpath, file->name, filter) &&
          is_filtered_asset(file, filter);
+}
+
+static bool is_filtered_asset_library(FileListInternEntry *file,
+                                      const char *root,
+                                      FileListFilter *filter)
+{
+  if (filelist_intern_entry_is_main_file(file)) {
+    return is_filtered_main_assets(file, root, filter);
+  }
+
+  return is_filtered_lib_type(file, root, filter) && is_filtered_asset(file, filter);
 }
 
 void filelist_tag_needs_filtering(FileList *filelist)
@@ -2807,7 +2812,7 @@ int ED_path_extension_type(const char *path)
     return FILE_TYPE_ARCHIVE;
   }
   if (BLI_path_extension_check_n(
-          path, ".obj", ".mtl", ".3ds", ".fbx", ".glb", ".gltf", ".svg", NULL)) {
+          path, ".obj", ".mtl", ".3ds", ".fbx", ".glb", ".gltf", ".svg", ".stl", NULL)) {
     return FILE_TYPE_OBJECT_IO;
   }
   if (BLI_path_extension_check_array(path, imb_ext_image)) {
@@ -3079,7 +3084,7 @@ static int filelist_readjob_list_dir(const char *root,
           }
           target = entry->redirection_path;
 #ifdef WIN32
-          /* On Windows don't show ".lnk" extension for valid shortcuts. */
+          /* On Windows don't show `.lnk` extension for valid shortcuts. */
           BLI_path_extension_replace(entry->relpath, FILE_MAXDIR, "");
 #endif
         }

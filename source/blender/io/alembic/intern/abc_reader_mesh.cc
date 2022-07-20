@@ -77,10 +77,8 @@ static void assign_materials(Main *bmain,
                              const std::map<std::string, int> &mat_index_map)
 {
   std::map<std::string, int>::const_iterator it;
-  for (it = mat_index_map.begin(); it != mat_index_map.end(); ++it) {
-    if (!BKE_object_material_slot_add(bmain, ob)) {
-      return;
-    }
+  if (mat_index_map.size() > MAXMAT) {
+    return;
   }
 
   std::map<std::string, Material *> matname_to_material = build_material_map(bmain);
@@ -100,7 +98,7 @@ static void assign_materials(Main *bmain,
       assigned_mat = mat_iter->second;
     }
 
-    BKE_object_material_assign(bmain, ob, assigned_mat, mat_index, BKE_MAT_ASSIGN_OBDATA);
+    BKE_object_material_assign_single_obdata(bmain, ob, assigned_mat, mat_index);
   }
 }
 
@@ -376,7 +374,7 @@ BLI_INLINE void read_uvs_params(CDStreamConfig &config,
 
 static void *add_customdata_cb(Mesh *mesh, const char *name, int data_type)
 {
-  CustomDataType cd_data_type = static_cast<CustomDataType>(data_type);
+  eCustomDataType cd_data_type = static_cast<eCustomDataType>(data_type);
 
   /* unsupported custom data type -- don't do anything. */
   if (!ELEM(cd_data_type, CD_MLOOPUV, CD_PROP_BYTE_COLOR)) {

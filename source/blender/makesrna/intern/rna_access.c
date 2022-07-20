@@ -1989,7 +1989,7 @@ bool RNA_property_editable_index(PointerRNA *ptr, PropertyRNA *prop, const int i
   return rna_property_editable_do(ptr, prop, index, NULL);
 }
 
-bool RNA_property_animateable(PointerRNA *ptr, PropertyRNA *prop)
+bool RNA_property_animateable(const PointerRNA *ptr, PropertyRNA *prop)
 {
   /* check that base ID-block can support animation data */
   if (!id_can_have_animdata(ptr->owner_id)) {
@@ -2141,6 +2141,7 @@ void RNA_property_update(bContext *C, PointerRNA *ptr, PropertyRNA *prop)
 
 void RNA_property_update_main(Main *bmain, Scene *scene, PointerRNA *ptr, PropertyRNA *prop)
 {
+  BLI_assert(bmain != NULL);
   rna_property_update(NULL, bmain, scene, ptr, prop);
 }
 
@@ -5482,6 +5483,52 @@ static UNUSED_FUNCTION_WITH_RETURN_TYPE(char *, RNA_path_back)(const char *path)
   return result;
 }
 
+const char *RNA_path_array_index_token_find(const char *rna_path, const PropertyRNA *array_prop)
+{
+  if (array_prop != NULL) {
+    if (!ELEM(array_prop->type, PROP_BOOLEAN, PROP_INT, PROP_FLOAT)) {
+      BLI_assert(array_prop->arraydimension == 0);
+      return NULL;
+    }
+    if (array_prop->arraydimension == 0) {
+      return NULL;
+    }
+  }
+
+  /* Valid 'array part' of a rna path can only have '[', ']' and digit characters.
+   * It may have more than one of those (e.g. `[12][1]`) in case of multi-dimensional arrays. */
+  off_t rna_path_len = (off_t)strlen(rna_path);
+  if (rna_path[rna_path_len] != ']') {
+    return NULL;
+  }
+  const char *last_valid_index_token_start = NULL;
+  for (rna_path_len--; rna_path_len >= 0; rna_path_len--) {
+    switch (rna_path[rna_path_len]) {
+      case '[':
+        if (rna_path_len <= 0 || rna_path[rna_path_len - 1] != ']') {
+          return &rna_path[rna_path_len];
+        }
+        last_valid_index_token_start = &rna_path[rna_path_len];
+        rna_path_len--;
+        break;
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        break;
+      default:
+        return last_valid_index_token_start;
+    }
+  }
+  return last_valid_index_token_start;
+}
+
 /* generic path search func
  * if its needed this could also reference the IDProperty direct */
 typedef struct IDP_Chain {
@@ -6062,7 +6109,7 @@ char *RNA_path_struct_property_py(PointerRNA *ptr, PropertyRNA *prop, int index)
   }
 
   if ((index == -1) || (RNA_property_array_check(prop) == false)) {
-    ret = BLI_sprintfN("%s", data_path);
+    ret = BLI_strdup(data_path);
   }
   else {
     ret = BLI_sprintfN("%s[%d]", data_path, index);
@@ -7084,7 +7131,7 @@ ParameterList *RNA_parameter_list_create(ParameterList *parms,
 
   /* allocate data */
   for (parm = func->cont.properties.first; parm; parm = parm->next) {
-    alloc_size += rna_parameter_size(parm);
+    alloc_size += rna_parameter_size_pad(rna_parameter_size(parm));
 
     if (parm->flag_parameter & PARM_OUTPUT) {
       parms->ret_count++;
@@ -7160,7 +7207,7 @@ ParameterList *RNA_parameter_list_create(ParameterList *parms,
       }
     }
 
-    data = ((char *)data) + rna_parameter_size(parm);
+    data = ((char *)data) + rna_parameter_size_pad(size);
   }
 
   return parms;
@@ -7184,7 +7231,7 @@ void RNA_parameter_list_free(ParameterList *parms)
       }
     }
 
-    tot += rna_parameter_size(parm);
+    tot += rna_parameter_size_pad(rna_parameter_size(parm));
   }
 
   MEM_freeN(parms->data);
@@ -7226,7 +7273,7 @@ void RNA_parameter_list_begin(ParameterList *parms, ParameterIterator *iter)
 
 void RNA_parameter_list_next(ParameterIterator *iter)
 {
-  iter->offset += iter->size;
+  iter->offset += rna_parameter_size_pad(iter->size);
   iter->parm = iter->parm->next;
   iter->valid = iter->parm != NULL;
 

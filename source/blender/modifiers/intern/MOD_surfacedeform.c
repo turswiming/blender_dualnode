@@ -1449,7 +1449,7 @@ static void surfacedeformModifier_do(ModifierData *md,
   }
 
   Object *ob_target = smd->target;
-  target = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target, false);
+  target = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target);
   if (!target) {
     BKE_modifier_set_error(ob, md, "No valid target mesh");
     return;
@@ -1521,11 +1521,11 @@ static void surfacedeformModifier_do(ModifierData *md,
      * added after the original ones. This covers typical case when target was at the subdivision
      * level 0 and then subdivision was increased (i.e. for the render purposes). */
 
-    BKE_modifier_set_error(ob,
-                           md,
-                           "Target vertices changed from %u to %u, continuing anyway",
-                           smd->target_verts_num,
-                           target_verts_num);
+    BKE_modifier_set_warning(ob,
+                             md,
+                             "Target vertices changed from %u to %u, continuing anyway",
+                             smd->target_verts_num,
+                             target_verts_num);
 
     /* In theory we only need the `smd->verts_num` vertices in the `targetCos` for evaluation, but
      * it is not currently possible to request a subset of coordinates: the API expects that the
@@ -1672,8 +1672,9 @@ static void panelRegister(ARegionType *region_type)
 static void blendWrite(BlendWriter *writer, const ID *id_owner, const ModifierData *md)
 {
   SurfaceDeformModifierData smd = *(const SurfaceDeformModifierData *)md;
+  const bool is_undo = BLO_write_is_undo(writer);
 
-  if (ID_IS_OVERRIDE_LIBRARY(id_owner)) {
+  if (ID_IS_OVERRIDE_LIBRARY(id_owner) && !is_undo) {
     BLI_assert(!ID_IS_LINKED(id_owner));
     const bool is_local = (md->flag & eModifierFlag_OverrideLibrary_Local) != 0;
     if (!is_local) {
@@ -1740,7 +1741,7 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_SurfaceDeform = {
-    /* name */ "SurfaceDeform",
+    /* name */ N_("SurfaceDeform"),
     /* structName */ "SurfaceDeformModifierData",
     /* structSize */ sizeof(SurfaceDeformModifierData),
     /* srna */ &RNA_SurfaceDeformModifier,

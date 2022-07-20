@@ -580,7 +580,7 @@ GHOST_TKey GHOST_SystemWin32::hardKey(RAWINPUT const &raw,
   // extra handling of modifier keys: don't send repeats out from GHOST
   if (key >= GHOST_kKeyLeftShift && key <= GHOST_kKeyRightAlt) {
     bool changed = false;
-    GHOST_TModifierKeyMask modifier;
+    GHOST_TModifierKey modifier;
     switch (key) {
       case GHOST_kKeyLeftShift: {
         changed = (modifiers.get(GHOST_kModifierKeyLeftShift) != *r_keyDown);
@@ -864,7 +864,7 @@ GHOST_TKey GHOST_SystemWin32::convertKey(short vKey, short scanCode, short exten
 
 GHOST_EventButton *GHOST_SystemWin32::processButtonEvent(GHOST_TEventType type,
                                                          GHOST_WindowWin32 *window,
-                                                         GHOST_TButtonMask mask)
+                                                         GHOST_TButton mask)
 {
   GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
 
@@ -1256,9 +1256,8 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_WindowWin32 *window, RA
                                keyDown ? GHOST_kEventKeyDown : GHOST_kEventKeyUp,
                                window,
                                key,
-                               ascii,
-                               utf8_char,
-                               is_repeat);
+                               is_repeat,
+                               utf8_char);
 
     // GHOST_PRINTF("%c\n", ascii); // we already get this info via EventPrinter
   }
@@ -2211,30 +2210,27 @@ char *GHOST_SystemWin32::getClipboard(bool selection) const
 
 void GHOST_SystemWin32::putClipboard(const char *buffer, bool selection) const
 {
-  if (selection) {
+  if (selection || !buffer) {
     return;
   }  // for copying the selection, used on X11
 
   if (OpenClipboard(NULL)) {
-    HLOCAL clipbuffer;
-    wchar_t *data;
+    EmptyClipboard();
 
-    if (buffer) {
-      size_t len = count_utf_16_from_8(buffer);
-      EmptyClipboard();
+    // Get length of buffer including the terminating null
+    size_t len = count_utf_16_from_8(buffer);
 
-      clipbuffer = LocalAlloc(LMEM_FIXED, sizeof(wchar_t) * len);
-      data = (wchar_t *)GlobalLock(clipbuffer);
+    HGLOBAL clipbuffer = GlobalAlloc(GMEM_MOVEABLE, sizeof(wchar_t) * len);
+    if (clipbuffer) {
+      wchar_t *data = (wchar_t *)GlobalLock(clipbuffer);
 
       conv_utf_8_to_16(buffer, data, len);
 
-      LocalUnlock(clipbuffer);
+      GlobalUnlock(clipbuffer);
       SetClipboardData(CF_UNICODETEXT, clipbuffer);
     }
+
     CloseClipboard();
-  }
-  else {
-    return;
   }
 }
 

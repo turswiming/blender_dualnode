@@ -353,7 +353,7 @@ static void meshdeformModifier_do(ModifierData *md,
    * We'll support this case once granular dependency graph is landed.
    */
   Object *ob_target = mmd->object;
-  cagemesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target, false);
+  cagemesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target);
   if (cagemesh == NULL) {
     BKE_modifier_set_error(ctx->object, md, "Cannot get mesh from cage object");
     return;
@@ -584,8 +584,9 @@ static void panelRegister(ARegionType *region_type)
 static void blendWrite(BlendWriter *writer, const ID *id_owner, const ModifierData *md)
 {
   MeshDeformModifierData mmd = *(const MeshDeformModifierData *)md;
+  const bool is_undo = BLO_write_is_undo(writer);
 
-  if (ID_IS_OVERRIDE_LIBRARY(id_owner)) {
+  if (ID_IS_OVERRIDE_LIBRARY(id_owner) && !is_undo) {
     BLI_assert(!ID_IS_LINKED(id_owner));
     const bool is_local = (md->flag & eModifierFlag_OverrideLibrary_Local) != 0;
     if (!is_local) {
@@ -649,7 +650,7 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_MeshDeform = {
-    /* name */ "MeshDeform",
+    /* name */ N_("MeshDeform"),
     /* structName */ "MeshDeformModifierData",
     /* structSize */ sizeof(MeshDeformModifierData),
     /* srna */ &RNA_MeshDeformModifier,

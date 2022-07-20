@@ -774,6 +774,20 @@ static void rna_def_sculpt(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
+  static const EnumPropertyItem sculpt_transform_mode_items[] = {
+      {SCULPT_TRANSFORM_MODE_ALL_VERTICES,
+       "ALL_VERTICES",
+       0,
+       "All Vertices",
+       "Applies the transformation to all vertices in the mesh"},
+      {SCULPT_TRANSFORM_MODE_RADIUS_ELASTIC,
+       "RADIUS_ELASTIC",
+       0,
+       "Elastic",
+       "Applies the transformation simulating elasticity using the radius of the cursor"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
   StructRNA *srna;
   PropertyRNA *prop;
 
@@ -910,6 +924,12 @@ static void rna_def_sculpt(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 3);
   RNA_def_property_ui_text(prop, "Gravity", "Amount of gravity after each dab");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+  prop = RNA_def_property(srna, "transform_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, sculpt_transform_mode_items);
+  RNA_def_property_ui_text(
+      prop, "Transform Mode", "How the transformation is going to be applied to the target");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
   prop = RNA_def_property(srna, "gravity_object", PROP_POINTER, PROP_NONE);
@@ -1283,6 +1303,7 @@ static void rna_def_particle_edit(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "flag", PE_INTERPOLATE_ADDED);
   RNA_def_property_ui_text(
       prop, "Interpolate", "Interpolate new particles from the existing ones");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
   prop = RNA_def_property(srna, "default_key_count", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "totaddkey");

@@ -197,7 +197,6 @@ static void displaceModifier_do_task(void *__restrict userdata,
   }
 
   if (data->tex_target) {
-    texres.nor = NULL;
     BKE_texture_get_value_ex(
         data->scene, data->tex_target, tex_co[iter], &texres, data->pool, false);
     delta = texres.tin - dmd->midlevel;
@@ -474,7 +473,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_Displace = {
-    /* name */ "Displace",
+    /* name */ N_("Displace"),
     /* structName */ "DisplaceModifierData",
     /* structSize */ sizeof(DisplaceModifierData),
     /* srna */ &RNA_DisplaceModifier,

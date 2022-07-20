@@ -284,7 +284,7 @@ bool RNA_property_editable_index(PointerRNA *ptr, PropertyRNA *prop, const int i
  */
 bool RNA_property_editable_flag(PointerRNA *ptr, PropertyRNA *prop);
 
-bool RNA_property_animateable(PointerRNA *ptr, PropertyRNA *prop);
+bool RNA_property_animateable(const PointerRNA *ptr, PropertyRNA *prop);
 bool RNA_property_animated(PointerRNA *ptr, PropertyRNA *prop);
 /**
  * \note Does not take into account editable status, this has to be checked separately
@@ -489,6 +489,18 @@ char *RNA_path_append(
 #if 0 /* UNUSED. */
 char *RNA_path_back(const char *path);
 #endif
+
+/**
+ * Search for the start of the 'rna array index' part of the given `rna_path`.
+ *
+ * Given the root RNA pointer and resolved RNA property, and the RNA path, return the first
+ * character in `rna_path` that is part of the array index for the given property. Return NULL if
+ * none can be found, e.g. because the property is not an RNA array.
+ *
+ * \param array_prop: if not NULL, the #PropertyRNA assumed to be the last one from the RNA path.
+ * Only used to ensure it is a valid array property.
+ */
+const char *RNA_path_array_index_token_find(const char *rna_path, const PropertyRNA *array_prop);
 
 /* RNA_path_resolve() variants only ensure that a valid pointer (and optionally property) exist. */
 

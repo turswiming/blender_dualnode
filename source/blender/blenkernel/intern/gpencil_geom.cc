@@ -25,8 +25,6 @@
 #include "BLI_polyfill_2d.h"
 #include "BLI_span.hh"
 
-#include "BLT_translation.h"
-
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_material_types.h"
@@ -2708,7 +2706,7 @@ bool BKE_gpencil_convert_mesh(Main *bmain,
       gpl_fill = BKE_gpencil_layer_addnew(gpd, element_name, true, false);
     }
     bGPDframe *gpf_fill = BKE_gpencil_layer_frame_get(
-        gpl_fill, CFRA + frame_offset, GP_GETFRAME_ADD_NEW);
+        gpl_fill, scene->r.cfra + frame_offset, GP_GETFRAME_ADD_NEW);
     int i;
     for (i = 0; i < mpoly_len; i++) {
       const MPoly *mp = &mpoly[i];
@@ -2783,7 +2781,7 @@ bool BKE_gpencil_convert_mesh(Main *bmain,
     gpl_stroke = BKE_gpencil_layer_addnew(gpd, element_name, true, false);
   }
   bGPDframe *gpf_stroke = BKE_gpencil_layer_frame_get(
-      gpl_stroke, CFRA + frame_offset, GP_GETFRAME_ADD_NEW);
+      gpl_stroke, scene->r.cfra + frame_offset, GP_GETFRAME_ADD_NEW);
 
   gpencil_generate_edgeloops(ob_eval,
                              gpd,
@@ -4209,7 +4207,14 @@ bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(struct RegionView3D *rv3d,
   if (gps->totpoints == 0) {
     return nullptr;
   }
-  bGPDstroke *gps_temp = BKE_gpencil_stroke_duplicate(gps, true, false);
+  /* Duplicate only points and fill data. Weight and Curve are not needed. */
+  bGPDstroke *gps_temp = (bGPDstroke *)MEM_dupallocN(gps);
+  gps_temp->prev = gps_temp->next = nullptr;
+  gps_temp->triangles = (bGPDtriangle *)MEM_dupallocN(gps->triangles);
+  gps_temp->points = (bGPDspoint *)MEM_dupallocN(gps->points);
+  gps_temp->dvert = nullptr;
+  gps_temp->editcurve = nullptr;
+
   const bool cyclic = ((gps_temp->flag & GP_STROKE_CYCLIC) != 0);
 
   /* If Cyclic, add a new point. */

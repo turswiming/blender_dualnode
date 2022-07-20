@@ -166,6 +166,11 @@ EvalOutputAPI::~EvalOutputAPI()
   delete implementation_;
 }
 
+void EvalOutputAPI::setSettings(const OpenSubdiv_EvaluatorSettings *settings)
+{
+  implementation_->updateSettings(settings);
+}
+
 void EvalOutputAPI::setCoarsePositions(const float *positions,
                                        const int start_vertex_index,
                                        const int num_vertices)
@@ -435,14 +440,8 @@ OpenSubdiv_EvaluatorImpl::~OpenSubdiv_EvaluatorImpl()
 OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
     OpenSubdiv_TopologyRefiner *topology_refiner,
     eOpenSubdivEvaluator evaluator_type,
-    OpenSubdiv_EvaluatorCacheImpl *evaluator_cache_descr,
-    const OpenSubdiv_EvaluatorSettings *settings)
+    OpenSubdiv_EvaluatorCacheImpl *evaluator_cache_descr)
 {
-  // Only CPU and GLCompute are implemented at the moment.
-  if (evaluator_type != OPENSUBDIV_EVALUATOR_CPU &&
-      evaluator_type != OPENSUBDIV_EVALUATOR_GLSL_COMPUTE) {
-    return NULL;
-  }
   using blender::opensubdiv::vector;
   TopologyRefiner *refiner = topology_refiner->impl->topology_refiner;
   if (refiner == NULL) {
@@ -455,7 +454,6 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
   const bool has_face_varying_data = (num_face_varying_channels != 0);
   const int level = topology_refiner->getSubdivisionLevel(topology_refiner);
   const bool is_adaptive = topology_refiner->getIsAdaptive(topology_refiner);
-  const int vertex_data_width = settings->num_vertex_data;
   // Common settings for stencils and patches.
   const bool stencil_generate_intermediate_levels = is_adaptive;
   const bool stencil_generate_offsets = true;
@@ -548,8 +546,8 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
   // Create OpenSubdiv's CPU side evaluator.
   blender::opensubdiv::EvalOutputAPI::EvalOutput *eval_output = nullptr;
 
-  const bool use_gl_evaluator = evaluator_type == OPENSUBDIV_EVALUATOR_GLSL_COMPUTE;
-  if (use_gl_evaluator) {
+  const bool use_gpu_evaluator = evaluator_type == OPENSUBDIV_EVALUATOR_GPU;
+  if (use_gpu_evaluator) {
     blender::opensubdiv::GpuEvalOutput::EvaluatorCache *evaluator_cache = nullptr;
     if (evaluator_cache_descr) {
       evaluator_cache = static_cast<blender::opensubdiv::GpuEvalOutput::EvaluatorCache *>(
@@ -560,17 +558,12 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
                                                          varying_stencils,
                                                          all_face_varying_stencils,
                                                          2,
-                                                         vertex_data_width,
                                                          patch_table,
                                                          evaluator_cache);
   }
   else {
-    eval_output = new blender::opensubdiv::CpuEvalOutput(vertex_stencils,
-                                                         varying_stencils,
-                                                         all_face_varying_stencils,
-                                                         2,
-                                                         vertex_data_width,
-                                                         patch_table);
+    eval_output = new blender::opensubdiv::CpuEvalOutput(
+        vertex_stencils, varying_stencils, all_face_varying_stencils, 2, patch_table);
   }
 
   blender::opensubdiv::PatchMap *patch_map = new blender::opensubdiv::PatchMap(*patch_table);
@@ -581,7 +574,7 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
   evaluator_descr->eval_output = new blender::opensubdiv::EvalOutputAPI(eval_output, patch_map);
   evaluator_descr->patch_map = patch_map;
   evaluator_descr->patch_table = patch_table;
-  // TOOD(sergey): Look into whether we've got duplicated stencils arrays.
+  // TODO(sergey): Look into whether we've got duplicated stencils arrays.
   delete vertex_stencils;
   delete varying_stencils;
   for (const StencilTable *table : all_face_varying_stencils) {

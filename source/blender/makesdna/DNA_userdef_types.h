@@ -315,7 +315,7 @@ typedef struct ThemeSpace {
   char _pad5[3];
   float dash_alpha;
 
-  /* syntax for textwindow and nodes */
+  /* Syntax for text-window and nodes. */
   unsigned char syntaxl[4], syntaxs[4]; /* in nodespace used for backdrop matte */
   unsigned char syntaxb[4], syntaxn[4]; /* in nodespace used for color input */
   unsigned char syntaxv[4], syntaxc[4]; /* in nodespace used for converter group */
@@ -638,14 +638,13 @@ typedef struct UserDef_Experimental {
   /* Debug options, always available. */
   char use_undo_legacy;
   char no_override_auto_resync;
+  char use_override_new_fully_editable;
   char use_cycles_debug;
   char show_asset_debug_info;
   char no_asset_indexing;
   char SANITIZE_AFTER_HERE;
   /* The following options are automatically sanitized (set to 0)
    * when the release cycle is not alpha. */
-  char use_new_curves_type;
-  /** Only available when #use_new_curves_type is enabled. */
   char use_new_curves_tools;
   char use_new_point_cloud_type;
   char use_full_frame_compositor;
@@ -860,7 +859,7 @@ typedef struct UserDef {
 
   float glalphaclip;
 
-  /** #eAutokey_Mode, autokeying mode. */
+  /** #eAutokey_Mode, auto-keying mode. */
   short autokey_mode;
   /** Flags for autokeying. */
   short autokey_flag;
@@ -915,8 +914,7 @@ typedef struct UserDef {
   /** Pie menu distance from center before a direction is set. */
   short pie_menu_threshold;
 
-  short opensubdiv_compute_type;
-  short _pad6;
+  short _pad6[2];
 
   char factor_display_type;
 

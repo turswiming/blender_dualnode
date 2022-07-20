@@ -314,6 +314,10 @@ typedef struct bNodeType {
 
   /* Execute a geometry node. */
   NodeGeometryExecFunction geometry_node_execute;
+  /**
+   * If true, the geometry nodes evaluator can call the execute function multiple times to improve
+   * performance by specifying required data in one call and using it for calculations in another.
+   */
   bool geometry_node_execute_supports_laziness;
 
   /* Declares which sockets the node has. */
@@ -1493,6 +1497,15 @@ struct TexResult;
 #define GEO_NODE_STORE_NAMED_ATTRIBUTE 1156
 #define GEO_NODE_INPUT_NAMED_ATTRIBUTE 1157
 #define GEO_NODE_REMOVE_ATTRIBUTE 1158
+#define GEO_NODE_INPUT_INSTANCE_ROTATION 1159
+#define GEO_NODE_INPUT_INSTANCE_SCALE 1160
+#define GEO_NODE_VOLUME_CUBE 1161
+#define GEO_NODE_POINTS 1162
+#define GEO_NODE_FIELD_ON_DOMAIN 1163
+#define GEO_NODE_MESH_TO_VOLUME 1164
+#define GEO_NODE_UV_UNWRAP 1165
+#define GEO_NODE_UV_PACK_ISLANDS 1166
+#define GEO_NODE_DEFORM_CURVES_ON_SURFACE 1167
 
 /** \} */
 

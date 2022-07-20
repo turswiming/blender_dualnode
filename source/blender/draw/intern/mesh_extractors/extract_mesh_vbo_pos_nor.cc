@@ -7,7 +7,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "extract_mesh.h"
+#include "extract_mesh.hh"
 
 #include "draw_subdivision.h"
 
@@ -28,7 +28,7 @@ struct MeshExtract_PosNor_Data {
 };
 
 static void extract_pos_nor_init(const MeshRenderData *mr,
-                                 struct MeshBatchCache *UNUSED(cache),
+                                 MeshBatchCache *UNUSED(cache),
                                  void *buf,
                                  void *tls_data)
 {
@@ -171,7 +171,7 @@ static void extract_pos_nor_iter_lvert_mesh(const MeshRenderData *mr,
 }
 
 static void extract_pos_nor_finish(const MeshRenderData *UNUSED(mr),
-                                   struct MeshBatchCache *UNUSED(cache),
+                                   MeshBatchCache *UNUSED(cache),
                                    void *UNUSED(buf),
                                    void *_data)
 {
@@ -201,7 +201,7 @@ static GPUVertFormat *get_custom_normals_format()
 
 static void extract_pos_nor_init_subdiv(const DRWSubdivCache *subdiv_cache,
                                         const MeshRenderData *UNUSED(mr),
-                                        struct MeshBatchCache *cache,
+                                        MeshBatchCache *cache,
                                         void *buffer,
                                         void *UNUSED(data))
 {
@@ -234,7 +234,7 @@ static void extract_pos_nor_init_subdiv(const DRWSubdivCache *subdiv_cache,
 
   if (subdiv_cache->use_custom_loop_normals) {
     Mesh *coarse_mesh = subdiv_cache->mesh;
-    const float(*lnors)[3] = static_cast<float(*)[3]>(
+    const float(*lnors)[3] = static_cast<const float(*)[3]>(
         CustomData_get_layer(&coarse_mesh->ldata, CD_NORMAL));
     BLI_assert(lnors != nullptr);
 
@@ -372,7 +372,7 @@ struct MeshExtract_PosNorHQ_Data {
 };
 
 static void extract_pos_nor_hq_init(const MeshRenderData *mr,
-                                    struct MeshBatchCache *UNUSED(cache),
+                                    MeshBatchCache *UNUSED(cache),
                                     void *buf,
                                     void *tls_data)
 {
@@ -521,7 +521,7 @@ static void extract_pos_nor_hq_iter_lvert_mesh(const MeshRenderData *mr,
 }
 
 static void extract_pos_nor_hq_finish(const MeshRenderData *UNUSED(mr),
-                                      struct MeshBatchCache *UNUSED(cache),
+                                      MeshBatchCache *UNUSED(cache),
                                       void *UNUSED(buf),
                                       void *_data)
 {
@@ -552,7 +552,5 @@ constexpr MeshExtract create_extractor_pos_nor_hq()
 
 }  // namespace blender::draw
 
-extern "C" {
 const MeshExtract extract_pos_nor = blender::draw::create_extractor_pos_nor();
 const MeshExtract extract_pos_nor_hq = blender::draw::create_extractor_pos_nor_hq();
-}

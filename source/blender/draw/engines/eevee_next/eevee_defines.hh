@@ -12,7 +12,7 @@
 #pragma once
 
 /**
-   Number of items in a culling batch. Needs to be Power of 2. Must be <= to 65536.
+ * Number of items in a culling batch. Needs to be Power of 2. Must be <= to 65536.
  * Current limiting factor is the sorting phase which is single pass and only sort within a
  * thread-group which maximum size is 1024.
  */
@@ -43,3 +43,5 @@
 
 /* Minimum visibility size. */
 #define LIGHTPROBE_FILTER_VIS_GROUP_SIZE 16
+
+#define FILM_GROUP_SIZE 16

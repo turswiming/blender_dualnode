@@ -156,10 +156,24 @@ struct GPUBatch *DRW_lattice_batch_cache_get_edit_verts(struct Lattice *lt);
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Hair
+/** \name Curves
  * \{ */
 
 int DRW_curves_material_count_get(struct Curves *curves);
+
+/**
+ * Provide GPU access to a specific evaluated attribute on curves.
+ *
+ * \return A pointer to location where the texture will be
+ * stored, which will be filled by #DRW_shgroup_curves_create_sub.
+ */
+struct GPUTexture **DRW_curves_texture_for_evaluated_attribute(struct Curves *curves,
+                                                               const char *name,
+                                                               bool *r_is_point_domain);
+
+struct GPUBatch *DRW_curves_batch_cache_get_edit_points(struct Curves *curves);
+
+void DRW_curves_batch_cache_create_requested(struct Object *ob);
 
 /** \} */
 
@@ -349,16 +363,6 @@ struct GPUBatch *DRW_particles_batch_cache_get_edit_inner_points(struct Object *
 struct GPUBatch *DRW_particles_batch_cache_get_edit_tip_points(struct Object *object,
                                                                struct ParticleSystem *psys,
                                                                struct PTCacheEdit *edit);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Curves
- * \{ */
-
-struct GPUBatch *DRW_curves_batch_cache_get_edit_points(struct Curves *curves);
-
-void DRW_curves_batch_cache_create_requested(const struct Object *ob);
 
 /** \} */
 

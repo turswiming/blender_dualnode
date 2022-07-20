@@ -428,10 +428,13 @@ static void libblock_remap_data_update_tags(ID *old_id, ID *new_id, void *user_d
 }
 
 static void libblock_remap_reset_remapping_status_callback(ID *old_id,
-                                                           ID *UNUSED(new_id),
+                                                           ID *new_id,
                                                            void *UNUSED(user_data))
 {
   BKE_libblock_runtime_reset_remapping_status(old_id);
+  if (new_id != NULL) {
+    BKE_libblock_runtime_reset_remapping_status(new_id);
+  }
 }
 
 /**
@@ -454,7 +457,7 @@ static void libblock_remap_reset_remapping_status_callback(ID *old_id,
  * \param old_id: the data-block to dereference (may be NULL if \a id is non-NULL).
  * \param new_id: the new data-block to replace \a old_id references with (may be NULL).
  * \param r_id_remap_data: if non-NULL, the IDRemap struct to use
- * (uselful to retrieve info about remapping process).
+ * (useful to retrieve info about remapping process).
  */
 ATTR_NONNULL(1)
 static void libblock_remap_data(Main *bmain,

@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-
-# <pep8 compliant>
 import bpy
 from bpy.types import Panel, Menu
 from rna_prop_ui import PropertyPanel
@@ -74,7 +72,7 @@ class PARTICLE_MT_context_menu(Menu):
         props.use_active = False
         props.remove_target_particles = True
 
-        if experimental.use_new_curves_type and psys.settings.type == 'HAIR':
+        if psys.settings.type == 'HAIR':
             layout.operator(
                 "curves.convert_from_particle_system",
                 text="Convert to Curves")

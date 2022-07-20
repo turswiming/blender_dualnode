@@ -65,9 +65,10 @@ bool drw_attributes_overlap(const DRW_Attributes *a, const DRW_Attributes *b)
 }
 
 DRW_AttributeRequest *drw_attributes_add_request(DRW_Attributes *attrs,
-                                                 CustomDataType type,
-                                                 int layer,
-                                                 AttributeDomain domain)
+                                                 const char *name,
+                                                 const eCustomDataType type,
+                                                 const int layer_index,
+                                                 const eAttrDomain domain)
 {
   if (attrs->num_requests >= GPU_MAX_ATTR) {
     return nullptr;
@@ -75,7 +76,8 @@ DRW_AttributeRequest *drw_attributes_add_request(DRW_Attributes *attrs,
 
   DRW_AttributeRequest *req = &attrs->requests[attrs->num_requests];
   req->cd_type = type;
-  req->layer_index = layer;
+  BLI_strncpy(req->attribute_name, name, sizeof(req->attribute_name));
+  req->layer_index = layer_index;
   req->domain = domain;
   attrs->num_requests += 1;
   return req;
@@ -84,9 +86,9 @@ DRW_AttributeRequest *drw_attributes_add_request(DRW_Attributes *attrs,
 bool drw_custom_data_match_attribute(const CustomData *custom_data,
                                      const char *name,
                                      int *r_layer_index,
-                                     int *r_type)
+                                     eCustomDataType *r_type)
 {
-  const int possible_attribute_types[7] = {
+  const eCustomDataType possible_attribute_types[7] = {
       CD_PROP_BOOL,
       CD_PROP_INT8,
       CD_PROP_INT32,
@@ -97,7 +99,7 @@ bool drw_custom_data_match_attribute(const CustomData *custom_data,
   };
 
   for (int i = 0; i < ARRAY_SIZE(possible_attribute_types); i++) {
-    const int attr_type = possible_attribute_types[i];
+    const eCustomDataType attr_type = possible_attribute_types[i];
     int layer_index = CustomData_get_named_layer(custom_data, attr_type, name);
     if (layer_index == -1) {
       continue;

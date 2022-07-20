@@ -2391,7 +2391,7 @@ void GlossyBsdfNode::simplify_settings(Scene *scene)
      * NOTE: Keep the epsilon in sync with kernel!
      */
     if (!roughness_input->link && roughness <= 1e-4f) {
-      VLOG(3) << "Using sharp glossy BSDF.";
+      VLOG_DEBUG << "Using sharp glossy BSDF.";
       distribution = CLOSURE_BSDF_REFLECTION_ID;
     }
   }
@@ -2400,7 +2400,7 @@ void GlossyBsdfNode::simplify_settings(Scene *scene)
      * benefit from closure blur to remove unwanted noise.
      */
     if (roughness_input->link == NULL && distribution == CLOSURE_BSDF_REFLECTION_ID) {
-      VLOG(3) << "Using GGX glossy with filter glossy.";
+      VLOG_DEBUG << "Using GGX glossy with filter glossy.";
       distribution = CLOSURE_BSDF_MICROFACET_GGX_ID;
       roughness = 0.0f;
     }
@@ -2484,7 +2484,7 @@ void GlassBsdfNode::simplify_settings(Scene *scene)
      * NOTE: Keep the epsilon in sync with kernel!
      */
     if (!roughness_input->link && roughness <= 1e-4f) {
-      VLOG(3) << "Using sharp glass BSDF.";
+      VLOG_DEBUG << "Using sharp glass BSDF.";
       distribution = CLOSURE_BSDF_SHARP_GLASS_ID;
     }
   }
@@ -2493,7 +2493,7 @@ void GlassBsdfNode::simplify_settings(Scene *scene)
      * benefit from closure blur to remove unwanted noise.
      */
     if (roughness_input->link == NULL && distribution == CLOSURE_BSDF_SHARP_GLASS_ID) {
-      VLOG(3) << "Using GGX glass with filter glossy.";
+      VLOG_DEBUG << "Using GGX glass with filter glossy.";
       distribution = CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID;
       roughness = 0.0f;
     }
@@ -2577,7 +2577,7 @@ void RefractionBsdfNode::simplify_settings(Scene *scene)
      * NOTE: Keep the epsilon in sync with kernel!
      */
     if (!roughness_input->link && roughness <= 1e-4f) {
-      VLOG(3) << "Using sharp refraction BSDF.";
+      VLOG_DEBUG << "Using sharp refraction BSDF.";
       distribution = CLOSURE_BSDF_REFRACTION_ID;
     }
   }
@@ -2586,7 +2586,7 @@ void RefractionBsdfNode::simplify_settings(Scene *scene)
      * benefit from closure blur to remove unwanted noise.
      */
     if (roughness_input->link == NULL && distribution == CLOSURE_BSDF_REFRACTION_ID) {
-      VLOG(3) << "Using GGX refraction with filter glossy.";
+      VLOG_DEBUG << "Using GGX refraction with filter glossy.";
       distribution = CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID;
       roughness = 0.0f;
     }
@@ -6671,7 +6671,7 @@ void CurvesNode::compile(SVMCompiler &compiler,
 
   ShaderInput *fac_in = input("Fac");
 
-  compiler.add_node(type,
+  compiler.add_node(ShaderNodeType(type),
                     compiler.encode_uchar4(compiler.stack_assign(fac_in),
                                            compiler.stack_assign(value_in),
                                            compiler.stack_assign(value_out),
@@ -6736,7 +6736,7 @@ void RGBCurvesNode::constant_fold(const ConstantFolder &folder)
 
 void RGBCurvesNode::compile(SVMCompiler &compiler)
 {
-  CurvesNode::compile(compiler, NODE_RGB_CURVES, input("Color"), output("Color"));
+  CurvesNode::compile(compiler, NODE_CURVES, input("Color"), output("Color"));
 }
 
 void RGBCurvesNode::compile(OSLCompiler &compiler)
@@ -6774,7 +6774,7 @@ void VectorCurvesNode::constant_fold(const ConstantFolder &folder)
 
 void VectorCurvesNode::compile(SVMCompiler &compiler)
 {
-  CurvesNode::compile(compiler, NODE_VECTOR_CURVES, input("Vector"), output("Vector"));
+  CurvesNode::compile(compiler, NODE_CURVES, input("Vector"), output("Vector"));
 }
 
 void VectorCurvesNode::compile(OSLCompiler &compiler)

@@ -71,6 +71,7 @@
 #include "BKE_mball.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
+#include "BKE_node_runtime.hh"
 #include "BKE_object.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
@@ -691,7 +692,7 @@ void DepsgraphRelationBuilder::build_object(Object *object)
 
   const BuilderStack::ScopedEntry stack_entry = stack_.trace(object->id);
 
-  /* Object Transforms */
+  /* Object Transforms. */
   OperationCode base_op = (object->parent) ? OperationCode::TRANSFORM_PARENT :
                                              OperationCode::TRANSFORM_LOCAL;
   OperationKey base_op_key(&object->id, NodeType::TRANSFORM, base_op);
@@ -704,9 +705,12 @@ void DepsgraphRelationBuilder::build_object(Object *object)
   OperationKey final_transform_key(
       &object->id, NodeType::TRANSFORM, OperationCode::TRANSFORM_FINAL);
   OperationKey ob_eval_key(&object->id, NodeType::TRANSFORM, OperationCode::TRANSFORM_EVAL);
+
   add_relation(init_transform_key, local_transform_key, "Transform Init");
+
   /* Various flags, flushing from bases/collections. */
   build_object_layer_component_relations(object);
+
   /* Parenting. */
   if (object->parent != nullptr) {
     /* Make sure parent object's relations are built. */
@@ -716,30 +720,35 @@ void DepsgraphRelationBuilder::build_object(Object *object)
     /* Local -> parent. */
     add_relation(local_transform_key, parent_transform_key, "ObLocal -> ObParent");
   }
+
   /* Modifiers. */
   if (object->modifiers.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
     BKE_modifiers_foreach_ID_link(object, modifier_walk, &data);
   }
+
   /* Grease Pencil Modifiers. */
   if (object->greasepencil_modifiers.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
     BKE_gpencil_modifiers_foreach_ID_link(object, modifier_walk, &data);
   }
+
   /* Shader FX. */
   if (object->shader_fx.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
     BKE_shaderfx_foreach_ID_link(object, modifier_walk, &data);
   }
+
   /* Constraints. */
   if (object->constraints.first != nullptr) {
     BuilderWalkUserData data;
     data.builder = this;
     BKE_constraints_id_loop(&object->constraints, constraint_walk, &data);
   }
+
   /* Object constraints. */
   OperationKey object_transform_simulation_init_key(
       &object->id, NodeType::TRANSFORM, OperationCode::TRANSFORM_SIMULATION_INIT);
@@ -766,30 +775,39 @@ void DepsgraphRelationBuilder::build_object(Object *object)
                  final_transform_key,
                  "Simulation -> Final Transform");
   }
+
   build_idproperties(object->id.properties);
+
   /* Animation data */
   build_animdata(&object->id);
+
   /* Object data. */
   build_object_data(object);
+
   /* Particle systems. */
   if (object->particlesystem.first != nullptr) {
     build_particle_systems(object);
   }
+
   /* Force field Texture. */
   if ((object->pd != nullptr) && (object->pd->forcefield == PFIELD_TEXTURE) &&
       (object->pd->tex != nullptr)) {
     build_texture(object->pd->tex);
   }
+
   /* Object dupligroup. */
   if (object->instance_collection != nullptr) {
     build_collection(nullptr, object, object->instance_collection);
   }
+
   /* Point caches. */
   build_object_pointcache(object);
+
   /* Synchronization back to original object. */
   OperationKey synchronize_key(
       &object->id, NodeType::SYNCHRONIZATION, OperationCode::SYNCHRONIZE_TO_ORIGINAL);
   add_relation(final_transform_key, synchronize_key, "Synchronize to Original");
+
   /* Parameters. */
   build_parameters(&object->id);
 }
@@ -1136,6 +1154,7 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
   /* Add dependencies for each constraint in turn. */
   for (bConstraint *con = (bConstraint *)constraints->first; con; con = con->next) {
     const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+    ListBase targets = {nullptr, nullptr};
     /* Invalid constraint type. */
     if (cti == nullptr) {
       continue;
@@ -1187,9 +1206,7 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
         add_relation(cache_key, constraint_op_key, cti->name);
       }
     }
-    else if (cti->get_constraint_targets) {
-      ListBase targets = {nullptr, nullptr};
-      cti->get_constraint_targets(con, &targets);
+    else if (BKE_constraint_targets_get(con, &targets)) {
       LISTBASE_FOREACH (bConstraintTarget *, ct, &targets) {
         if (ct->tar == nullptr) {
           continue;
@@ -1299,9 +1316,7 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
           add_relation(target_transform_key, constraint_op_key, cti->name);
         }
       }
-      if (cti->flush_constraint_targets) {
-        cti->flush_constraint_targets(con, &targets, true);
-      }
+      BKE_constraint_targets_flush(con, &targets, true);
     }
   }
 }
@@ -1459,7 +1474,8 @@ void DepsgraphRelationBuilder::build_animation_images(ID *id)
   bool has_image_animation = false;
   if (ELEM(GS(id->name), ID_MA, ID_WO)) {
     bNodeTree *ntree = *BKE_ntree_ptr_from_id(id);
-    if (ntree != nullptr && ntree->runtime_flag & NTREE_RUNTIME_FLAG_HAS_IMAGE_ANIMATION) {
+    if (ntree != nullptr &&
+        ntree->runtime->runtime_flag & NTREE_RUNTIME_FLAG_HAS_IMAGE_ANIMATION) {
       has_image_animation = true;
     }
   }
@@ -1711,6 +1727,37 @@ void DepsgraphRelationBuilder::build_driver_variables(ID *id, FCurve *fcu)
           continue;
         }
         add_relation(variable_exit_key, driver_key, "RNA Target -> Driver");
+
+        /* It is possible that RNA path points to a property of a different ID than the target_id:
+         * for example, paths like "data" on Object, "camera" on Scene.
+         *
+         * For the demonstration purposes lets consider a driver variable uses Scene ID as target
+         * and "camera.location.x" as its RNA path. If the scene has 2 different cameras at
+         * 2 different locations changing the active scene camera is expected to immediately be
+         * reflected in the variable value. In order to achieve this behavior we create a relation
+         * from the target ID to the driver so that if the ID property of the target ID changes the
+         * driver is re-evaluated.
+         *
+         * The most straightforward (at the moment of writing this comment) way of figuring out
+         * such relation is to use copy-on-write operation of the target ID. There are two down
+         * sides of this approach which are considered a design limitation as there is a belief
+         * that they are not common in practice or are not reliable due to other issues:
+         *
+         * - IDs which are not covered with the copy-on-write mechanism.
+         *
+         *   Such IDs are either do not have ID properties, or are not part of the dependency
+         *   graph.
+         *
+         * - Modifications of evaluated IDs from a Python handler.
+         *   Such modifications are not fully integrated in the dependency graph evaluation as it
+         *   has issues with copy-on-write tagging and the fact that relations are defined by the
+         *   original main database status. */
+        if (target_id != variable_exit_key.ptr.owner_id) {
+          if (deg_copy_on_write_is_needed(GS(target_id->name))) {
+            ComponentKey target_id_key(target_id, NodeType::COPY_ON_WRITE);
+            add_relation(target_id_key, driver_key, "Target ID -> Driver");
+          }
+        }
 
         /* The RNA getter for `object.data` can write to the mesh datablock due
          * to the call to `BKE_mesh_wrapper_ensure_subdivision()`. This relation
@@ -2159,9 +2206,9 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
         ctx.node = reinterpret_cast<::DepsNodeHandle *>(&handle);
         mti->updateDepsgraph(md, &ctx);
       }
-      if (BKE_object_modifier_use_time(scene_, object, md)) {
+      if (BKE_modifier_depends_ontime(scene_, md)) {
         TimeSourceKey time_src_key;
-        add_relation(time_src_key, obdata_ubereval_key, "Time Source");
+        add_relation(time_src_key, obdata_ubereval_key, "Time Source -> Modifier");
       }
     }
   }
@@ -2178,7 +2225,7 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
         ctx.node = reinterpret_cast<::DepsNodeHandle *>(&handle);
         mti->updateDepsgraph(md, &ctx, graph_->mode);
       }
-      if (BKE_object_modifier_gpencil_use_time(object, md)) {
+      if (BKE_gpencil_modifier_depends_ontime(md)) {
         TimeSourceKey time_src_key;
         add_relation(time_src_key, obdata_ubereval_key, "Time Source");
       }
@@ -2196,7 +2243,7 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
         ctx.node = reinterpret_cast<::DepsNodeHandle *>(&handle);
         fxi->updateDepsgraph(fx, &ctx);
       }
-      if (BKE_object_shaderfx_use_time(object, fx)) {
+      if (BKE_shaderfx_depends_ontime(fx)) {
         TimeSourceKey time_src_key;
         add_relation(time_src_key, obdata_ubereval_key, "Time Source");
       }
@@ -2429,6 +2476,13 @@ void DepsgraphRelationBuilder::build_camera(Camera *camera)
     ComponentKey camera_parameters_key(&camera->id, NodeType::PARAMETERS);
     ComponentKey dof_ob_key(&camera->dof.focus_object->id, NodeType::TRANSFORM);
     add_relation(dof_ob_key, camera_parameters_key, "Camera DOF");
+    if (camera->dof.focus_subtarget[0]) {
+      OperationKey target_key(&camera->dof.focus_object->id,
+                              NodeType::BONE,
+                              camera->dof.focus_subtarget,
+                              OperationCode::BONE_DONE);
+      add_relation(target_key, camera_parameters_key, "Camera DOF subtarget");
+    }
   }
 }
 

@@ -34,8 +34,8 @@ static eOpenSubdivEvaluator opensubdiv_evalutor_from_subdiv_evaluator_type(
     case SUBDIV_EVALUATOR_TYPE_CPU: {
       return OPENSUBDIV_EVALUATOR_CPU;
     }
-    case SUBDIV_EVALUATOR_TYPE_GLSL_COMPUTE: {
-      return OPENSUBDIV_EVALUATOR_GLSL_COMPUTE;
+    case SUBDIV_EVALUATOR_TYPE_GPU: {
+      return OPENSUBDIV_EVALUATOR_GPU;
     }
   }
   BLI_assert_msg(0, "Unknown evaluator type");
@@ -62,7 +62,7 @@ bool BKE_subdiv_eval_begin(Subdiv *subdiv,
         opensubdiv_evalutor_from_subdiv_evaluator_type(evaluator_type);
     BKE_subdiv_stats_begin(&subdiv->stats, SUBDIV_STATS_EVALUATOR_CREATE);
     subdiv->evaluator = openSubdiv_createEvaluatorFromTopologyRefiner(
-        subdiv->topology_refiner, opensubdiv_evaluator_type, evaluator_cache, settings);
+        subdiv->topology_refiner, opensubdiv_evaluator_type, evaluator_cache);
     BKE_subdiv_stats_end(&subdiv->stats, SUBDIV_STATS_EVALUATOR_CREATE);
     if (subdiv->evaluator == NULL) {
       return false;
@@ -71,6 +71,7 @@ bool BKE_subdiv_eval_begin(Subdiv *subdiv,
   else {
     /* TODO(sergey): Check for topology change. */
   }
+  subdiv->evaluator->setSettings(subdiv->evaluator, settings);
   BKE_subdiv_eval_init_displacement(subdiv);
   return true;
 }
@@ -246,7 +247,7 @@ bool BKE_subdiv_eval_refine_from_mesh(Subdiv *subdiv,
   }
   /* Set coordinates of base mesh vertices. */
   set_coarse_positions(subdiv, mesh, coarse_vertex_cos);
-  /* Set face-varyign data to UV maps. */
+  /* Set face-varying data to UV maps. */
   const int num_uv_layers = CustomData_number_of_layers(&mesh->ldata, CD_MLOOPUV);
   for (int layer_index = 0; layer_index < num_uv_layers; layer_index++) {
     const MLoopUV *mloopuv = CustomData_get_layer_n(&mesh->ldata, CD_MLOOPUV, layer_index);

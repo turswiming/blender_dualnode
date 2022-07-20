@@ -55,8 +55,6 @@
 
 #include "BLO_read_write.h"
 
-#include "BKE_gpencil.h"
-
 static CLG_LogRef LOG = {"bke.gpencil"};
 
 static void greasepencil_copy_data(Main *UNUSED(bmain),
@@ -867,7 +865,7 @@ bGPDstroke *BKE_gpencil_stroke_duplicate(bGPDstroke *gps_src,
   if (dup_points) {
     gps_dst->points = MEM_dupallocN(gps_src->points);
 
-    if ((gps_src->dvert != NULL) && (gps_src->dvert->totweight > 0)) {
+    if (gps_src->dvert != NULL) {
       gps_dst->dvert = MEM_dupallocN(gps_src->dvert);
       BKE_gpencil_stroke_weights_duplicate(gps_src, gps_dst);
     }

@@ -104,7 +104,7 @@ int ED_markers_post_apply_transform(
     ListBase *markers, Scene *scene, int mode, float value, char side)
 {
   TimeMarker *marker;
-  float cfra = (float)CFRA;
+  float cfra = (float)scene->r.cfra;
   int changed_tot = 0;
 
   /* sanity check - no markers, or locked markers */
@@ -543,7 +543,6 @@ void ED_markers_draw(const bContext *C, int flag)
   View2D *v2d = UI_view2d_fromcontext(C);
   int cfra = CTX_data_scene(C)->r.cfra;
 
-  const float line_width = GPU_line_width_get();
   GPU_line_width(1.0f);
 
   rctf markers_region_rect;
@@ -578,7 +577,6 @@ void ED_markers_draw(const bContext *C, int flag)
     }
   }
 
-  GPU_line_width(line_width);
   GPU_matrix_pop();
 }
 
@@ -1499,8 +1497,8 @@ static void ED_markers_select_leftright(bAnimContext *ac,
   }
 
   LISTBASE_FOREACH (TimeMarker *, marker, markers) {
-    if ((mode == MARKERS_LRSEL_LEFT && marker->frame <= CFRA) ||
-        (mode == MARKERS_LRSEL_RIGHT && marker->frame >= CFRA)) {
+    if ((mode == MARKERS_LRSEL_LEFT && marker->frame <= scene->r.cfra) ||
+        (mode == MARKERS_LRSEL_RIGHT && marker->frame >= scene->r.cfra)) {
       marker->flag |= SELECT;
     }
   }
@@ -1590,12 +1588,13 @@ static void MARKER_OT_delete(wmOperatorType *ot)
   ot->idname = "MARKER_OT_delete";
 
   /* api callbacks */
-  ot->invoke = WM_operator_confirm;
+  ot->invoke = WM_operator_confirm_or_exec;
   ot->exec = ed_marker_delete_exec;
   ot->poll = ed_markers_poll_selected_no_locked_markers;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  WM_operator_properties_confirm_or_exec(ot);
 }
 
 /** \} */
@@ -1756,11 +1755,11 @@ static int ed_marker_camera_bind_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  marker = ED_markers_find_nearest_marker(markers, CFRA);
-  if ((marker == NULL) || (marker->frame != CFRA)) {
+  marker = ED_markers_find_nearest_marker(markers, scene->r.cfra);
+  if ((marker == NULL) || (marker->frame != scene->r.cfra)) {
     marker = MEM_callocN(sizeof(TimeMarker), "Camera TimeMarker");
     marker->flag = SELECT;
-    marker->frame = CFRA;
+    marker->frame = scene->r.cfra;
     BLI_addtail(markers, marker);
 
     /* deselect all others, so that the user can then move it without problems */

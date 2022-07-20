@@ -58,6 +58,7 @@
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_legacy_convert.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_particle.h"
@@ -2276,7 +2277,7 @@ void psys_emitter_customdata_mask(ParticleSystem *psys, CustomData_MeshMasks *r_
     r_cddata_masks->fmask |= CD_MASK_MTFACE;
   }
 
-  /* ask for vertexgroups if we need them */
+  /* Ask for vertex-groups if we need them. */
   for (i = 0; i < PSYS_TOT_VG; i++) {
     if (psys->vgroup[i]) {
       r_cddata_masks->vmask |= CD_MASK_MDEFORMVERT;
