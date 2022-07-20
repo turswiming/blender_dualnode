@@ -1238,6 +1238,11 @@ static void execute_realize_curve_tasks(const RealizeInstancesOptions &options,
   dst_component.replace(dst_curves_id);
   bke::MutableAttributeAccessor dst_attributes = dst_curves.attributes_for_write();
 
+  /* Copy settings from the first input geometry set with curves. */
+  const RealizeCurveTask &first_task = tasks.first();
+  const Curves &first_curves_id = *first_task.curve_info->curves;
+  bke::curves_copy_parameters(first_curves_id, *dst_curves_id);
+
   /* Prepare id attribute. */
   SpanAttributeWriter<int> point_ids;
   if (all_curves_info.create_id_attribute) {
@@ -1294,6 +1299,15 @@ static void execute_realize_curve_tasks(const RealizeInstancesOptions &options,
                                  resolution.span);
     }
   });
+
+  /* Type counts have to be updated eagerly. */
+  dst_curves.runtime->type_counts.fill(0);
+  for (const RealizeCurveTask &task : tasks) {
+    for (const int i : IndexRange(CURVE_TYPES_NUM)) {
+      dst_curves.runtime->type_counts[i] +=
+          task.curve_info->curves->geometry.runtime->type_counts[i];
+    }
+  }
 
   /* Tag modified attributes. */
   for (GSpanAttributeWriter &dst_attribute : dst_attribute_writers) {

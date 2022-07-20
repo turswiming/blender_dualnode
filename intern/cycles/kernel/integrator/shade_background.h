@@ -63,11 +63,10 @@ ccl_device float3 integrator_eval_background_shader(KernelGlobals kg,
     const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
     const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
     const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-    const float mis_ray_t = INTEGRATOR_STATE(state, path, mis_ray_t);
 
     /* multiple importance sampling, get background light pdf for ray
      * direction, and compute weight with respect to BSDF pdf */
-    float pdf = background_light_pdf(kg, ray_P - ray_D * mis_ray_t, ray_D);
+    float pdf = background_light_pdf(kg, ray_P, ray_D);
     if (kernel_data.integrator.use_light_tree) {
       const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
       pdf *= distant_lights_pdf(kg, ray_P, N, kernel_data.background.light_index);
@@ -223,7 +222,7 @@ ccl_device void integrator_shade_background(KernelGlobals kg,
   }
 #endif
 
-  INTEGRATOR_PATH_TERMINATE(DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
+  integrator_path_terminate(kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
 }
 
 CCL_NAMESPACE_END
