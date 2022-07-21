@@ -1228,6 +1228,15 @@ uiBut *uiDefIconButO_ptr(uiBlock *block,
                          short width,
                          short height,
                          const char *tip);
+uiBut *uiDefButPadding(uiBlock *block, int x, int y, short width, short height);
+uiBut *uiDefButPreviewTile(uiBlock *block,
+                           int preview_icon_id,
+                           const char *label,
+                           int x,
+                           int y,
+                           short width,
+                           short height,
+                           const uchar mono_color[4]);
 uiBut *uiDefButImage(
     uiBlock *block, void *imbuf, int x, int y, short width, short height, const uchar color[4]);
 uiBut *uiDefButAlert(uiBlock *block, int icon, int x, int y, short width, short height);
@@ -1746,6 +1755,7 @@ struct PointerRNA *UI_but_extra_operator_icon_opptr_get(struct uiButExtraOpIcon 
 int UI_preview_tile_size_x(void);
 int UI_preview_tile_size_y(void);
 int UI_preview_tile_size_y_no_label(void);
+rcti UI_preview_tile_but_preview_rect_get(const uiBut *but);
 
 /* Autocomplete
  *

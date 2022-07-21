@@ -1503,6 +1503,7 @@ static void icon_draw_rect(float x,
                            int rh,
                            uint *rect,
                            float alpha,
+                           const uchar mono_rgba[4],
                            const float desaturate)
 {
   int draw_w = w;
@@ -1518,7 +1519,12 @@ static void icon_draw_rect(float x,
     return;
   }
   /* modulate color */
-  const float col[4] = {alpha, alpha, alpha, alpha};
+  float col[4] = {alpha, alpha, alpha, alpha};
+  if (mono_rgba) {
+    /* Optionally use a mono color to recolor the image. */
+    rgba_uchar_to_float(col, mono_rgba);
+    mul_v4_fl(col, alpha);
+  }
 
   float scale_x = 1.0f;
   float scale_y = 1.0f;
@@ -1813,9 +1819,10 @@ static void icon_draw_size(float x,
   if (di->type == ICON_TYPE_IMBUF) {
     ImBuf *ibuf = icon->obj;
 
-    GPU_blend(GPU_BLEND_ALPHA_PREMULT);
-    icon_draw_rect(x, y, w, h, aspect, ibuf->x, ibuf->y, ibuf->rect, alpha, desaturate);
-    GPU_blend(GPU_BLEND_ALPHA);
+    /* TODO preview images are premultiplied apparently (see ICON_TYPE_PREVIEW). */
+    //    GPU_blend(GPU_BLEND_ALPHA_PREMULT);
+    icon_draw_rect(x, y, w, h, aspect, ibuf->x, ibuf->y, ibuf->rect, alpha, mono_rgba, desaturate);
+    //    GPU_blend(GPU_BLEND_ALPHA);
   }
   else if (di->type == ICON_TYPE_VECTOR) {
     /* vector icons use the uiBlock transformation, they are not drawn
@@ -1854,7 +1861,7 @@ static void icon_draw_size(float x,
     }
 
     GPU_blend(GPU_BLEND_ALPHA_PREMULT);
-    icon_draw_rect(x, y, w, h, aspect, w, h, ibuf->rect, alpha, desaturate);
+    icon_draw_rect(x, y, w, h, aspect, w, h, ibuf->rect, alpha, NULL, desaturate);
     GPU_blend(GPU_BLEND_ALPHA);
   }
   else if (di->type == ICON_TYPE_EVENT) {
@@ -1922,7 +1929,7 @@ static void icon_draw_size(float x,
       return;
     }
 
-    icon_draw_rect(x, y, w, h, aspect, iimg->w, iimg->h, iimg->rect, alpha, desaturate);
+    icon_draw_rect(x, y, w, h, aspect, iimg->w, iimg->h, iimg->rect, alpha, NULL, desaturate);
   }
   else if (di->type == ICON_TYPE_PREVIEW) {
     PreviewImage *pi = (icon->id_type != 0) ? BKE_previewimg_id_ensure((ID *)icon->obj) :
@@ -1938,7 +1945,7 @@ static void icon_draw_size(float x,
       /* Preview images use premultiplied alpha. */
       GPU_blend(GPU_BLEND_ALPHA_PREMULT);
       icon_draw_rect(
-          x, y, w, h, aspect, pi->w[size], pi->h[size], pi->rect[size], alpha, desaturate);
+          x, y, w, h, aspect, pi->w[size], pi->h[size], pi->rect[size], alpha, NULL, desaturate);
       GPU_blend(GPU_BLEND_ALPHA);
     }
   }
@@ -2433,9 +2440,10 @@ void UI_icon_draw_alpha(float x, float y, int icon_id, float alpha)
   UI_icon_draw_ex(x, y, icon_id, U.inv_dpi_fac, alpha, 0.0f, NULL, false);
 }
 
-void UI_icon_draw_preview(float x, float y, int icon_id, float aspect, float alpha, int size)
+void UI_icon_draw_preview(
+    float x, float y, int icon_id, float aspect, float alpha, int size, const uchar mono_color[4])
 {
-  icon_draw_size(x, y, icon_id, aspect, alpha, ICON_SIZE_PREVIEW, size, false, NULL, false);
+  icon_draw_size(x, y, icon_id, aspect, alpha, ICON_SIZE_PREVIEW, size, 0.0f, mono_color, false);
 }
 
 void UI_icon_draw_ex(float x,

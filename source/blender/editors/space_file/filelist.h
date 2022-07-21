@@ -85,6 +85,7 @@ struct ImBuf *filelist_getimage(struct FileList *filelist, int index);
 struct ImBuf *filelist_file_getimage(const FileDirEntry *file);
 struct ImBuf *filelist_geticon_image_ex(const FileDirEntry *file);
 struct ImBuf *filelist_geticon_image(struct FileList *filelist, int index);
+struct ImBuf *filelist_file_geticon_image(const FileDirEntry *file);
 int filelist_geticon(struct FileList *filelist, int index, bool is_main);
 int /* ThumbSource */ filelist_preview_source_get(int /* eFileSel_File_Types */ file_type);
 

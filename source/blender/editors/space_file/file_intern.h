@@ -19,6 +19,7 @@ struct ARegion;
 struct ARegionType;
 struct AssetLibrary;
 struct FileAssetSelectParams;
+struct FileList;
 struct FileSelectParams;
 struct SpaceFile;
 struct View2D;
@@ -38,6 +39,7 @@ void file_draw_list(const bContext *C, ARegion *region);
  * \return true if the list is invalid and a hint was drawn.
  */
 bool file_draw_hint_if_invalid(const bContext *C, const SpaceFile *sfile, ARegion *region);
+void file_view_preview_grid_draw(const bContext *C, ARegion *region);
 
 void file_draw_check_ex(bContext *C, struct ScrArea *area);
 void file_draw_check(bContext *C);
@@ -195,6 +197,12 @@ void file_tile_boundbox(const ARegion *region, FileLayout *layout, int file, rct
  * If \a path leads to a .blend, remove the trailing slash (if needed).
  */
 void file_path_to_ui_path(const char *path, char *r_pathi, int max_size);
+
+/* file_view_grid.cc */
+
+void file_grid_view_create_in_layout(struct FileList *files,
+                                     const View2D *v2d,
+                                     struct uiLayout *layout);
 
 /* asset_catalog_tree_view.cc */
 

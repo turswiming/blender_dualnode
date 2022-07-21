@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "BLI_index_range.hh"
+#include "BLI_math_vector.h"
 
 #include "WM_types.h"
 
@@ -410,29 +411,26 @@ PreviewGridItem::PreviewGridItem(StringRef identifier, StringRef label, int prev
 {
 }
 
-void PreviewGridItem::build_grid_tile(uiLayout &layout) const
+uiBut *PreviewGridItem::add_preview_button(uiLayout &layout,
+                                           const int preview_icon_id,
+                                           const uchar mono_color[4]) const
 {
   const GridViewStyle &style = get_view().get_style();
   uiBlock *block = uiLayoutGetBlock(&layout);
 
-  uiBut *but = uiDefBut(block,
-                        UI_BTYPE_PREVIEW_TILE,
-                        0,
-                        label.c_str(),
-                        0,
-                        0,
-                        style.tile_width,
-                        style.tile_height,
-                        nullptr,
-                        0,
-                        0,
-                        0,
-                        0,
-                        "");
-  ui_def_but_icon(but,
-                  preview_icon_id,
-                  /* NOLINTNEXTLINE: bugprone-suspicious-enum-usage */
-                  UI_HAS_ICON | UI_BUT_ICON_PREVIEW);
+  return uiDefButPreviewTile(block,
+                             preview_icon_id,
+                             label.c_str(),
+                             0,
+                             0,
+                             style.tile_width,
+                             style.tile_height,
+                             mono_color);
+}
+
+void PreviewGridItem::build_grid_tile(uiLayout &layout) const
+{
+  add_preview_button(layout, preview_icon_id);
 }
 
 void PreviewGridItem::set_on_activate_fn(ActivateFn fn)

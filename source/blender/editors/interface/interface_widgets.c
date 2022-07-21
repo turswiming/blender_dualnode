@@ -1316,22 +1316,40 @@ static float widget_alpha_factor(const uiWidgetStateInfo *state)
   return 1.0f;
 }
 
-static void widget_draw_preview(BIFIconID icon, float alpha, const rcti *rect)
+rcti ui_preview_draw_rect_get(const rcti *bounds_rect)
+{
+  const int max_width = BLI_rcti_size_x(bounds_rect);
+  const int max_height = BLI_rcti_size_y(bounds_rect);
+
+  rcti rect = {0};
+
+  const int draw_size = MIN2(max_width, max_height) - PREVIEW_PAD * 2;
+  if (draw_size > 0) {
+    rect.xmin = bounds_rect->xmin + max_width / 2 - draw_size / 2;
+    rect.ymin = bounds_rect->ymin + max_height / 2 - draw_size / 2;
+    rect.xmax = rect.xmin + draw_size;
+    rect.ymax = rect.ymin + draw_size;
+  }
+
+  return rect;
+}
+
+static void widget_draw_preview(BIFIconID icon,
+                                float alpha,
+                                const rcti *rect,
+                                const uchar mono_color[4])
 {
   if (icon == ICON_NONE) {
     return;
   }
 
-  const int w = BLI_rcti_size_x(rect);
-  const int h = BLI_rcti_size_y(rect);
-  const int size = MIN2(w, h) - PREVIEW_PAD * 2;
-
-  if (size > 0) {
-    const int x = rect->xmin + w / 2 - size / 2;
-    const int y = rect->ymin + h / 2 - size / 2;
-
-    UI_icon_draw_preview(x, y, icon, 1.0f, alpha, size);
+  const rcti draw_rect = ui_preview_draw_rect_get(rect);
+  if (BLI_rcti_is_empty(&draw_rect)) {
+    return;
   }
+
+  UI_icon_draw_preview(
+      draw_rect.xmin, draw_rect.ymin, icon, 1.0f, alpha, BLI_rcti_size_x(&draw_rect), mono_color);
 }
 
 static int ui_but_draw_menu_icon(const uiBut *but)
@@ -1346,7 +1364,7 @@ static void widget_draw_icon(
 {
   if (but->flag & UI_BUT_ICON_PREVIEW) {
     GPU_blend(GPU_BLEND_ALPHA);
-    widget_draw_preview(icon, alpha, rect);
+    widget_draw_preview(icon, alpha, rect, mono_color);
     GPU_blend(GPU_BLEND_NONE);
     return;
   }
@@ -2313,7 +2331,7 @@ static void widget_draw_text_icon(const uiFontStyle *fstyle,
     /* draw icon in rect above the space reserved for the label */
     rect->ymin += text_size;
     GPU_blend(GPU_BLEND_ALPHA);
-    widget_draw_preview(icon, alpha, rect);
+    widget_draw_preview(icon, alpha, rect, but->col[3] != 0 ? but->col : NULL);
     GPU_blend(GPU_BLEND_NONE);
 
     /* offset rect to draw label in */
@@ -4002,8 +4020,13 @@ static void widget_preview_tile(uiBut *but,
                                 const float UNUSED(zoom))
 {
   const uiStyle *style = UI_style_get();
-  ui_draw_preview_item_stateless(
-      &style->widget, rect, but->drawstr, but->icon, wcol->text, UI_STYLE_TEXT_CENTER);
+  ui_draw_preview_item_stateless(&style->widget,
+                                 rect,
+                                 but->drawstr,
+                                 but->icon,
+                                 wcol->text,
+                                 but->col[3] ? but->col : NULL,
+                                 UI_STYLE_TEXT_CENTER);
 }
 
 static void widget_menuiconbut(uiWidgetColors *wcol,
@@ -5510,6 +5533,7 @@ void ui_draw_preview_item_stateless(const uiFontStyle *fstyle,
                                     const char *name,
                                     int iconid,
                                     const uchar text_col[4],
+                                    const uchar mono_col[4],
                                     eFontStyle_Align text_align)
 {
   rcti trect = *rect;
@@ -5526,7 +5550,7 @@ void ui_draw_preview_item_stateless(const uiFontStyle *fstyle,
     rect->ymin += round_fl_to_int(font_dims[1] + 2 * padding);
   }
   GPU_blend(GPU_BLEND_ALPHA);
-  widget_draw_preview(iconid, 1.0f, rect);
+  widget_draw_preview(iconid, 1.0f, rect, mono_col);
   GPU_blend(GPU_BLEND_NONE);
 
   if (!has_text) {
@@ -5573,7 +5597,7 @@ void ui_draw_preview_item(const uiFontStyle *fstyle,
   wt->state(wt, &state, UI_EMBOSS_UNDEFINED);
   wt->draw(&wt->wcol, rect, &STATE_INFO_NULL, 0, 1.0f);
 
-  ui_draw_preview_item_stateless(fstyle, rect, name, iconid, wt->wcol.text, text_align);
+  ui_draw_preview_item_stateless(fstyle, rect, name, iconid, wt->wcol.text, NULL, text_align);
 }
 
 /** \} */

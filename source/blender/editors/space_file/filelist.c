@@ -1331,6 +1331,11 @@ ImBuf *filelist_geticon_image(struct FileList *filelist, const int index)
   return filelist_geticon_image_ex(file);
 }
 
+ImBuf *filelist_file_geticon_image(const FileDirEntry *file)
+{
+  return filelist_geticon_image_ex(file);
+}
+
 static int filelist_geticon_ex(const FileDirEntry *file,
                                const char *root,
                                const bool is_main,

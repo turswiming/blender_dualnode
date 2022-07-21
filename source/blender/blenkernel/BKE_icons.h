@@ -77,7 +77,9 @@ struct PreviewImage;
 struct StudioLight;
 struct bGPDlayer;
 
+#ifndef __cplusplus
 enum eIconSizes;
+#endif
 
 void BKE_icons_init(int first_dyn_id);
 

@@ -1161,3 +1161,40 @@ bool file_draw_hint_if_invalid(const bContext *C, const SpaceFile *sfile, ARegio
 
   return true;
 }
+
+void file_view_preview_grid_draw(const bContext *C, ARegion *region)
+{
+  SpaceFile *sfile = CTX_wm_space_file(C);
+  //  bScreen *screen = CTX_wm_screen(C);
+  View2D *v2d = &region->v2d;
+
+  const uiStyle *style = UI_style_get_dpi();
+  const float padding = style->panelouter;
+  uiBlock *block = UI_block_begin(C, region, __func__, UI_EMBOSS);
+  uiLayout *layout = UI_block_layout(
+      block,
+      UI_LAYOUT_VERTICAL,
+      UI_LAYOUT_PANEL,
+      padding,
+      -padding,
+      /* 3x (instead of 2x) padding to add extra space for the scrollbar on the right. */
+      region->winx - 3 * padding,
+      1,
+      0,
+      style);
+
+  //  PointerRNA asset_space_ptr;
+  //  RNA_pointer_create(&screen->id, &RNA_SpaceAssetBrowser, asset_space, &asset_space_ptr);
+  //  PropertyRNA *active_asset_idx_prop = RNA_struct_find_property(&asset_space_ptr,
+  //                                                                "active_asset_idx");
+
+  file_grid_view_create_in_layout(sfile->files, v2d, layout);
+
+  /* Update main region View2d dimensions. */
+  int layout_width, layout_height;
+  UI_block_layout_resolve(block, &layout_width, &layout_height);
+  UI_view2d_totRect_set(v2d, layout_width, layout_height);
+
+  UI_block_end(C, block);
+  UI_block_draw(C, block);
+}

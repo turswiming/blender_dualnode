@@ -4826,6 +4826,37 @@ uiBut *uiDefBut(uiBlock *block,
   return but;
 }
 
+uiBut *uiDefButPadding(uiBlock *block, int x, int y, short width, short height)
+{
+  uiBut *but = ui_def_but(
+      block, UI_BTYPE_LABEL, 0, "", x, y, width, height, nullptr, 0, 0, 0, 0, "");
+  ui_but_update(but);
+  return but;
+}
+
+uiBut *uiDefButPreviewTile(uiBlock *block,
+                           int preview_icon_id,
+                           const char *label,
+                           int x,
+                           int y,
+                           short width,
+                           short height,
+                           const uchar mono_color[4])
+{
+  uiBut *but = ui_def_but(
+      block, UI_BTYPE_PREVIEW_TILE, 0, label, x, y, width, height, nullptr, 0, 0, 0, 0, "");
+  ui_def_but_icon(but,
+                  preview_icon_id,
+                  /* NOLINTNEXTLINE: bugprone-suspicious-enum-usage */
+                  UI_HAS_ICON | UI_BUT_ICON_PREVIEW);
+  if (mono_color) {
+    copy_v4_v4_uchar(but->col, mono_color);
+  }
+
+  ui_but_update(but);
+  return but;
+}
+
 uiBut *uiDefButImage(
     uiBlock *block, void *imbuf, int x, int y, short width, short height, const uchar color[4])
 {
@@ -4993,6 +5024,30 @@ int UI_preview_tile_size_y_no_label(void)
   return round_fl_to_int((96.0f / 20.0f) * UI_UNIT_Y + 2.0f * pad);
 }
 
+#define PREVIEW_PAD 4
+
+rcti UI_preview_tile_but_preview_rect_get(const uiBut *but)
+{
+  rcti rect;
+
+  BLI_rcti_rctf_copy_round(&rect, &but->rect);
+
+  if (but->drawstr[0]) {
+    const uiStyle *style = UI_style_get();
+    const uiFontStyle *fstyle = &style->widget;
+    float font_dims[2] = {0.0f, 0.0f};
+
+    UI_fontstyle_set(fstyle);
+    BLF_width_and_height(
+        fstyle->uifont_id, but->drawstr, BLF_DRAW_STR_DUMMY_MAX, &font_dims[0], &font_dims[1]);
+    /* draw icon in rect above the space reserved for the label */
+    rect.ymin += round_fl_to_int(font_dims[1] + 2 * PREVIEW_PAD);
+  }
+
+  return ui_preview_draw_rect_get(&rect);
+}
+
+#undef PREVIEW_PAD
 #undef PREVIEW_TILE_PAD
 
 static void ui_but_update_and_icon_set(uiBut *but, int icon)

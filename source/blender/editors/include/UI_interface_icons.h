@@ -96,7 +96,8 @@ int UI_icon_preview_to_render_size(enum eIconSizes size);
  */
 void UI_icon_draw(float x, float y, int icon_id);
 void UI_icon_draw_alpha(float x, float y, int icon_id, float alpha);
-void UI_icon_draw_preview(float x, float y, int icon_id, float aspect, float alpha, int size);
+void UI_icon_draw_preview(
+    float x, float y, int icon_id, float aspect, float alpha, int size, const uchar mono_color[4]);
 
 void UI_icon_draw_ex(float x,
                      float y,

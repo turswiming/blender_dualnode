@@ -28,6 +28,7 @@ set(SRC
   file_ops.c
   file_panels.c
   file_utils.c
+  file_view_grid.cc
   filelist.c
   filesel.c
   fsmenu.c

@@ -1236,6 +1236,8 @@ void ui_draw_preview_item(const struct uiFontStyle *fstyle,
                           int iconid,
                           int but_flag,
                           eFontStyle_Align text_align);
+rcti ui_preview_draw_rect_get(const rcti *bounds_rect);
+
 /**
  * Version of #ui_draw_preview_item() that does not draw the menu background and item text based on
  * state. It just draws the preview and text directly.
@@ -1245,6 +1247,7 @@ void ui_draw_preview_item_stateless(const struct uiFontStyle *fstyle,
                                     const char *name,
                                     int iconid,
                                     const uchar text_col[4],
+                                    const uchar mono_col[4],
                                     eFontStyle_Align text_align);
 
 #define UI_TEXT_MARGIN_X 0.4f
