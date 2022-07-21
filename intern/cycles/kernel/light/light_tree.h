@@ -48,8 +48,13 @@ ccl_device float light_tree_node_importance(const float3 P,
   const float distance_squared = fmaxf(0.25f * len_squared(centroid - bbox_max),
                                        len_squared(centroid - P));
 
+  /* to-do: should there be a different importance calculations for different surfaces?
+   * opaque surfaces could just return 0 importance in this case. */
   const float theta = fast_acosf(dot(bcone_axis, -point_to_centroid));
-  const float theta_i = fast_acosf(dot(point_to_centroid, N));
+  float theta_i = fast_acosf(dot(point_to_centroid, N));
+  if (theta_i > M_PI_2_F) {
+    theta_i = M_PI_F - theta_i;
+  }
   const float theta_u = light_tree_bounding_box_angle(bbox_min, bbox_max, P, point_to_centroid);
 
   /* to-do: compare this with directly using fmaxf and cosf. */
@@ -61,11 +66,7 @@ ccl_device float light_tree_node_importance(const float3 P,
   const float cos_theta_prime = fast_cosf(theta_prime);
 
   float cos_theta_i_prime = 1.0f;
-  if (theta_i - theta_u > M_PI_2_F) {
-    /* If the lights are guaranteed to be completely behind the shading point,
-     * should we still perform further calculations? */
-    return 0.0f;
-  } else if (theta_i - theta_u > 0.0f) {
+  if (theta_i - theta_u > 0.0f) {
     cos_theta_i_prime = fabsf(fast_cosf(theta_i - theta_u));
   }
 
