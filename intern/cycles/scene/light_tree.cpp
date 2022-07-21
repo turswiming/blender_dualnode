@@ -73,7 +73,7 @@ BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
   if (prim_id >= 0) {
     Object *object = scene->objects[object_id];
     Mesh *mesh = static_cast<Mesh*>(object->get_geometry());
-    Mesh::Triangle triangle = mesh->get_triangle(prim_id - mesh->prim_offset);
+    Mesh::Triangle triangle = mesh->get_triangle(prim_id);
 
     float3 p[3] = {mesh->get_verts()[triangle.v[0]],
                    mesh->get_verts()[triangle.v[1]],
@@ -133,7 +133,7 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
   if (prim_id >= 0) {
     Object *object = scene->objects[object_id];
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    Mesh::Triangle triangle = mesh->get_triangle(prim_id - mesh->prim_offset);
+    Mesh::Triangle triangle = mesh->get_triangle(prim_id);
 
     float3 p[3] = {mesh->get_verts()[triangle.v[0]],
                    mesh->get_verts()[triangle.v[1]],
@@ -196,8 +196,8 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
   if (prim_id >= 0) {
     Object *object = scene->objects[object_id];
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    Mesh::Triangle triangle = mesh->get_triangle(prim_id - mesh->prim_offset);
-    Shader *shader = static_cast<Shader*>(mesh->get_used_shaders()[mesh->get_shader()[prim_id - mesh->prim_offset]]);
+    Mesh::Triangle triangle = mesh->get_triangle(prim_id);
+    Shader *shader = static_cast<Shader*>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
 
     /* to-do: need a better way to handle this when textures are used. */
     if (!shader->is_constant_emission(&strength)) {

@@ -87,7 +87,9 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
       float3 ray_P = INTEGRATOR_STATE(state, ray, P);
       const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
       const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-      pdf *= light_tree_pdf(kg, ray_P, N, sd->prim);
+      uint lookup_offset = kernel_data_fetch(object_lookup_offset, sd->object);
+      uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
+      pdf *= light_tree_pdf(kg, ray_P, N, sd->prim - prim_offset + lookup_offset);
     }
     float mis_weight = light_sample_mis_weight_forward(kg, bsdf_pdf, pdf);
     L *= mis_weight;

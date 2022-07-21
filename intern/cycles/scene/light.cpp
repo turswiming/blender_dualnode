@@ -313,6 +313,7 @@ void LightManager::device_update_distribution(Device *device,
   bool light_tree_enabled = scene->integrator->get_use_light_tree();
   vector<LightTreePrimitive> light_prims;
   vector<LightTreePrimitive> distant_lights;
+  vector<uint> object_lookup_offsets(scene->objects.size());
 
   /* When we keep track of the light index, only contributing lights will be added to the device.
    * Therefore, we want to keep track of the light's index on the device.
@@ -353,15 +354,18 @@ void LightManager::device_update_distribution(Device *device,
     if (progress.get_cancel())
       return;
 
-    /* Count emissive triangles. */
-    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    size_t mesh_num_triangles = mesh->num_triangles();
-    total_triangles += mesh_num_triangles;
-
     if (!object_usable_as_light(object)) {
       object_id++;
       continue;
     }
+
+    if (light_tree_enabled) {
+      object_lookup_offsets[object_id] = total_triangles;
+    }
+
+    /* Count emissive triangles. */
+    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+    size_t mesh_num_triangles = mesh->num_triangles();
 
     for (size_t i = 0; i < mesh_num_triangles; i++) {
       int shader_index = mesh->get_shader()[i];
@@ -374,7 +378,7 @@ void LightManager::device_update_distribution(Device *device,
          * triangles. Right now, point lights are the main concern. */
         if (light_tree_enabled) {
           LightTreePrimitive light_prim;
-          light_prim.prim_id = i + mesh->prim_offset;
+          light_prim.prim_id = i;
           light_prim.object_id = object_id;
           light_prims.push_back(light_prim);
         }
@@ -383,6 +387,7 @@ void LightManager::device_update_distribution(Device *device,
       }
     }
 
+    total_triangles += mesh_num_triangles;
     object_id++;
   }
 
@@ -398,7 +403,12 @@ void LightManager::device_update_distribution(Device *device,
     /* We want to create separate arrays corresponding to triangles and lights,
      * which will be used to index back into the light tree for PDF calculations. */
     uint *light_array = dscene->light_to_tree.alloc(num_lights);
+    uint *object_offsets = dscene->object_lookup_offset.alloc(object_lookup_offsets.size());
     uint *triangle_array = dscene->triangle_to_tree.alloc(total_triangles);
+
+    for (int i = 0; i < object_lookup_offsets.size(); i++) {
+      object_offsets[i] = object_lookup_offsets[i];
+    }
 
     /* First initialize the light tree's nodes. */
     const vector<PackedLightTreeNode> &linearized_bvh = light_tree.get_nodes();
@@ -445,13 +455,12 @@ void LightManager::device_update_distribution(Device *device,
           light_tree_emitters[emitter_index].theta_o = bcone.theta_o;
           light_tree_emitters[emitter_index].theta_e = bcone.theta_e;
 
-          light_tree_emitters[emitter_index].prim_id = prim.prim_id;
-
           if (prim.prim_id >= 0) {
             light_tree_emitters[emitter_index].mesh_light.object_id = prim.object_id;
 
             int shader_flag = 0;
             Object *object = scene->objects[prim.object_id];
+            Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
             if (!(object->get_visibility() & PATH_RAY_CAMERA)) {
               shader_flag |= SHADER_EXCLUDE_CAMERA;
             }
@@ -471,11 +480,13 @@ void LightManager::device_update_distribution(Device *device,
               shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
             }
 
+            light_tree_emitters[emitter_index].prim_id = prim.prim_id + mesh->prim_offset;
             light_tree_emitters[emitter_index].mesh_light.shader_flag = shader_flag;
-            triangle_array[prim.prim_id] = emitter_index;
+            triangle_array[prim.prim_id + object_lookup_offsets[prim.object_id]] = emitter_index;
           }
           else {
             Light *lamp = scene->lights[prim.lamp_id];
+            light_tree_emitters[emitter_index].prim_id = prim.prim_id;
             light_tree_emitters[emitter_index].lamp.size = lamp->size;
             light_tree_emitters[emitter_index].lamp.pad = 1.0f;
             light_array[~prim.prim_id] = emitter_index;
@@ -557,6 +568,7 @@ void LightManager::device_update_distribution(Device *device,
     dscene->light_tree_emitters.copy_to_device();
     dscene->light_tree_distant_group.copy_to_device();
     dscene->light_to_tree.copy_to_device();
+    dscene->object_lookup_offset.copy_to_device();
     dscene->triangle_to_tree.copy_to_device();
   }
 
@@ -764,6 +776,7 @@ void LightManager::device_update_distribution(Device *device,
       dscene->light_tree_emitters.free();
       dscene->light_tree_distant_group.free();
       dscene->light_to_tree.free();
+      dscene->object_lookup_offset.free();
       dscene->triangle_to_tree.free();
     }
     dscene->light_distribution.free();

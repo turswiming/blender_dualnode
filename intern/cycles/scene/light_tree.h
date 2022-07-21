@@ -67,7 +67,7 @@ struct LightTreePrimitiveInfo {
 /* Light Tree Primitive
  * Struct that indexes into the scene's triangle and light arrays. */
 struct LightTreePrimitive {
-  /* prim_id >= 0 is an index into the global triangle index,
+  /* prim_id >= 0 is an index into an object's local triangle index,
    * otherwise -prim_id-1 is an index into device lights array.
    * */
   int prim_id;
