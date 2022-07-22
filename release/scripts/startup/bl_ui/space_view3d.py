@@ -619,7 +619,11 @@ class VIEW3D_HT_header(Header):
         if show_snap:
             snap_items = bpy.types.ToolSettings.bl_rna.properties["snap_elements"].enum_items
             snap_elements = tool_settings.snap_elements
-            if len(snap_elements) == 1:
+            active_tool = context.workspace.tools.from_space_view3d_mode(context.mode, create=False)
+            if active_tool.idname.startswith('retopology'):
+                text = "Tool"
+                icon = 'NONE'
+            elif len(snap_elements) == 1:
                 text = ""
                 for elem in snap_elements:
                     icon = snap_items[elem].icon
