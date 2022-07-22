@@ -493,27 +493,11 @@ ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
                                                  int path_flag,
                                                  uint data)
 {
-#ifdef __CAUSTICS_TRICKS__
-  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
-    return one_float3();
-  }
-#endif
-
   uint clearcoat_offset, roughness_offset, tint_offset, normal_offset;
   svm_unpack_node_uchar4(data, &clearcoat_offset, &roughness_offset, &tint_offset, &normal_offset);
-  float clearcoat = saturatef(stack_load_float(stack, clearcoat_offset));
 
-  if (clearcoat <= CLOSURE_WEIGHT_CUTOFF) {
-    return one_float3();
-  }
-
-  float roughness = saturatef(stack_load_float(stack, roughness_offset));
   float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
-  if (!(sd->type & PRIMITIVE_CURVE)) {
-    N = ensure_valid_reflection(sd->Ng, sd->I, N);
-  }
   float3 tint = saturate(stack_load_float3(stack, tint_offset));
-
   if (tint != one_float3()) {
     /* Tint is normalized to perpendicular incidence.
      * Therefore, if we define the coating thickness as length 1, the length along the ray is
@@ -521,8 +505,6 @@ ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
      * From Beer's law, we have T = exp(-sigma_e * t).
      * Therefore, tint = exp(-sigma_e * 1) (per def.), so -sigma_e = log(tint).
      * From this, T = exp(log(tint) * t) = exp(log(tint)) ^ t = tint ^ t;
-     * Additionally, the strength input controls the optical depth for a smooth fade
-     * from maximum to zero impact.
      *
      * Note that this is only an approximation - in particular, the exit path of the
      * light that bounces off the main layer is not accounted for.
@@ -541,14 +523,30 @@ ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
      * TIR is no concern here since we're always coming from the outside. */
     float cosNT = sqrtf(1.0f - sqr(1.0f / 1.5f) * (1 - sqr(cosNI)));
     float optical_depth = 1.0f / cosNT;
-    tint = pow(tint, optical_depth * clearcoat);
+    tint = pow(tint, optical_depth);
+  }
+
+  float clearcoat = saturatef(stack_load_float(stack, clearcoat_offset));
+  if (clearcoat <= CLOSURE_WEIGHT_CUTOFF) {
+    return tint;
+  }
+
+#ifdef __CAUSTICS_TRICKS__
+  if (!kernel_data.integrator.caustics_reflective && (path_flag & PATH_RAY_DIFFUSE)) {
+    return tint;
+  }
+#endif
+
+  float roughness = saturatef(stack_load_float(stack, roughness_offset));
+  if (!(sd->type & PRIMITIVE_CURVE)) {
+    N = ensure_valid_reflection(sd->Ng, sd->I, N);
   }
 
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
       sd, sizeof(MicrofacetBsdf), clearcoat * weight);
 
   if (bsdf == NULL) {
-    return one_float3();
+    return tint;
   }
 
   bsdf->N = N;
