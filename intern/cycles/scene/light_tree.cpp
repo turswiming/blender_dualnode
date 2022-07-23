@@ -204,20 +204,22 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
       strength = make_float3(1.0f);
     }
 
-    const Transform &tfm = object->get_tfm();
-    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
+     float3 p[3] = {mesh->get_verts()[triangle.v[0]],
                    mesh->get_verts()[triangle.v[1]],
                    mesh->get_verts()[triangle.v[2]]};
 
-    for (int i = 0; i < 3; i++) {
-      p[i] = transform_point(&tfm, p[i]);
+    /* instanced mesh lights have not applied their transform at this point.
+     * in this case, these points have to be transformed to get the proper
+     * spatial bound. */
+    if (!mesh->transform_applied) {
+      const Transform &tfm = object->get_tfm();
+      for (int i = 0; i < 3; i++) {
+        p[i] = transform_point(&tfm, p[i]);
+      }
     }
 
-    // float area = triangle_area(p[0], p[1], p[2]);
-
-    /* to-do: Past GSoC work also multiplies this by 4, but not sure why. Further investigation
-     * required. */
-    // strength *= area * 4;
+    float area = triangle_area(p[0], p[1], p[2]);
+    strength *= area;
   }
   else {
     Light *lamp = scene->lights[lamp_id];
