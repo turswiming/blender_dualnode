@@ -88,13 +88,11 @@ ccl_device_forceinline float microfacet_ggx_glass_E(KernelGlobals kg,
                                                     float ior)
 {
   bool inv_table = (ior < 1.0f);
-  if (inv_table) {
-    ior = 1.0f / ior;
-  }
   int offset = inv_table ? kernel_data.tables.ggx_glass_inv_E_offset :
                            kernel_data.tables.ggx_glass_E_offset;
 
-  float x = mu, y = 1 - rough, z = sqrtf(0.5f * (ior - 1.0f));
+  float x = mu, y = 1 - rough;
+  float z = sqrtf(0.5f * ((inv_table? 1.0f / ior : ior) - 1.0f));
   return lookup_table_read_3D(kg, x, y, z, offset, 16, 16, 16);
 }
 
@@ -104,9 +102,6 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(KernelGlobals kg,
                                                          float ior)
 {
   bool inv_table = (ior < 1.0f);
-  if (inv_table) {
-    ior = 1.0f / ior;
-  }
   int offset = inv_table ? kernel_data.tables.ggx_dielectric_inv_E_offset :
                            kernel_data.tables.ggx_dielectric_E_offset;
 
@@ -114,7 +109,7 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(KernelGlobals kg,
   float F0 = fresnel_dielectric_cos(1.0f, ior);
   float x = mix(mu, inverse_lerp(1.0f, F0, macro_fresnel), 0.5f);
   float y = 1 - rough;
-  float z = sqrtf(0.5f * (ior - 1.0f));
+  float z = sqrtf(0.5f * ((inv_table? 1.0f / ior : ior) - 1.0f));
 
   return lookup_table_read_3D(kg, x, y, z, offset, 16, 16, 16);
 }
