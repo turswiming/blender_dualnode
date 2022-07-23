@@ -178,7 +178,7 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
     }
     else if (type == LIGHT_AREA) {
       bcone.theta_o = 0;
-      bcone.theta_e = M_PI_2_F;
+      bcone.theta_e = lamp->get_spread() * 0.5f;
     }
     else {
       /* This should never be reached during construction. */
