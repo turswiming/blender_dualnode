@@ -22,7 +22,6 @@ void node_bsdf_principled(vec4 base_color,
                           float subsurface_anisotropy,
                           float metallic,
                           vec4 metallic_edge, //todo
-                          float metallic_falloff, //todo
                           float specular,
                           float specular_tint,
                           float roughness,

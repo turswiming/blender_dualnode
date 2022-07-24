@@ -242,8 +242,7 @@ static float precompute_ggx_dielectric_E(float rough, float mu, float eta, float
   bsdf.ior = eta;
   bsdf.extra = (MicrofacetExtra *)&extra;
   bsdf.T = make_float3(1.0f, 0.0f, 0.0f);
-  extra.metal_base = extra.metal_edge = zero_float3();
-  extra.metal_falloff = 0.0f;
+  extra.metallic = extra.metal_base = extra.metal_edge_factor = zero_float3();
 
   /* Dependency warning - this relies on the ggx_E and ggx_E_avg lookup tables! */
   float E = microfacet_ggx_E(mu, rough), E_avg = microfacet_ggx_E_avg(rough);

@@ -42,11 +42,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_FACTOR);
   /* TODO: Also add support to Principled v1? Would be compatible at defaults afaics. */
   b.add_input<decl::Color>(N_("Metallic Edge")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Float>(N_("Metallic Falloff"))
-      .default_value(0.2f)
-      .min(0.0f)
-      .max(1.0f)
-      .subtype(PROP_FACTOR);
   b.add_input<decl::Float>(N_("Specular"))
       .default_value(0.5f)
       .min(0.0f)
@@ -255,8 +250,7 @@ static void node_shader_update_principled(bNodeTree *ntree, bNode *node)
                  "Subsurface Scale",
                  "Clearcoat Tint",
                  "Sheen Roughness",
-                 "Metallic Edge",
-                 "Metallic Falloff")) {
+                 "Metallic Edge")) {
       /* Sockets exclusive to Principled v2. */
       nodeSetSocketAvailability(ntree, sock, is_v2);
     }

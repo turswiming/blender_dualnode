@@ -109,6 +109,32 @@ ccl_device float schlick_fresnel(float u)
   return m2 * m2 * m;  // pow(m, 5)
 }
 
+/* Metallic Fresnel term with edge color control.
+ * Based on Schlick Fresnel, but with an optional F82 input that adds the dip at
+ * near-grazing angles that is characteristic for conductors.
+ *
+ * Source:
+ * https://substance3d.adobe.com/documentation/s3d/files/225969599/225969601/1/1647019577092/Adobe+Standard+Material+-+Technical+Documentation.pdf
+ */
+ccl_device float3 metallic_edge_factor(float3 F0, float3 F82)
+{
+  if (F82 == one_float3()) {
+    return zero_float3();
+  }
+
+  /* Precompute the B factor of the F82 model, which scales an additional term around cosI == 1/7. */
+  const float f = 6.0f / 7.0f; /* 1 - cosI_max */
+  const float f5 = sqr(sqr(f)) * f;
+  return (7.0f / (f5 * f)) * mix(F0, one_float3(), f5) * (one_float3() - F82);
+}
+
+ccl_device float3 fresnel_metallic(float3 F0, float3 B, float cosi)
+{
+  float s = saturatef(1.0f - cosi);
+  float s5 = sqr(sqr(s)) * s;
+  return saturate(mix(F0, one_float3(), s5) - B * cosi * s5 * s);
+}
+
 /* Calculate the fresnel color which is a blend between white and the F0 color */
 ccl_device_forceinline float3 interpolate_fresnel_color(float3 L, float3 H, float ior, float3 F0)
 {

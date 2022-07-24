@@ -2744,7 +2744,6 @@ NODE_DEFINE(PrincipledBsdfNode)
   SOCKET_IN_COLOR(base_color, "Base Color", make_float3(0.8f, 0.8f, 0.8f));
   SOCKET_IN_COLOR(subsurface_color, "Subsurface Color", make_float3(0.8f, 0.8f, 0.8f));
   SOCKET_IN_FLOAT(metallic, "Metallic", 0.0f);
-  SOCKET_IN_FLOAT(metallic_falloff, "Metallic Falloff", 0.2f);
   SOCKET_IN_COLOR(metallic_edge, "Metallic Edge", make_float3(1.0f, 1.0f, 1.0f));
   SOCKET_IN_FLOAT(subsurface, "Subsurface", 0.0f);
   SOCKET_IN_FLOAT(subsurface_scale, "Subsurface Scale", 0.0f);
@@ -2930,7 +2929,7 @@ void PrincipledBsdfNode::compile_v2(SVMCompiler &compiler)
                                     compiler.stack_assign(input("Subsurface Anisotropy")),
                                     compiler.stack_assign(input("Subsurface Radius")),
                                     subsurface_method);
-  uint metallic = compiler.encode_uchar4(compiler.stack_assign(input("Metallic Falloff")),
+  uint metallic = compiler.encode_uchar4(SVM_STACK_INVALID,
                                          compiler.stack_assign(input("Metallic Edge")),
                                          SVM_STACK_INVALID,
                                          distribution);

@@ -613,9 +613,9 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
     return 0.0f;
   }
 
-  uint falloff_offset, edge_offset, dummy;
+  uint edge_offset, dummy;
   uint aniso_offset, rotation_offset, tangent_offset;
-  svm_unpack_node_uchar4(data1, &falloff_offset, &edge_offset, &dummy, &dummy);
+  svm_unpack_node_uchar4(data1, &dummy, &edge_offset, &dummy, &dummy);
   svm_unpack_node_uchar4(data2, &aniso_offset, &rotation_offset, &tangent_offset, &dummy);
 
   /* This function handles two specular components:
@@ -632,6 +632,7 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
     T = stack_load_float3(stack, tangent_offset);
     T = rotate_around_axis(T, N, stack_load_float(stack, rotation_offset) * M_2PI_F);
   }
+  float3 edge_color = stack_load_float3(stack, edge_offset);
 
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
       sd, sizeof(MicrofacetBsdf), weight);
@@ -653,8 +654,7 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
   bsdf->alpha_y = sqr(roughness) * aspect;
 
   extra->metal_base = base_color;
-  extra->metal_edge = stack_load_float3(stack, edge_offset);
-  extra->metal_falloff = stack_load_float(stack, falloff_offset);
+  extra->metal_edge_factor = metallic_edge_factor(base_color, edge_color);
 
   float dielectric = (1.0f - metallic) * (1.0f - transmission);
   sd->flag |= bsdf_microfacet_ggx_fresnel_v2_setup(kg, bsdf, sd, metallic, dielectric);

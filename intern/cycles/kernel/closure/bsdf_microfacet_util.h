@@ -131,16 +131,14 @@ ccl_device_forceinline float clearcoat_E(KernelGlobals kg, float mu, float rough
   return table * fresnel_dielectric_cos(mu, 1.5f);
 }
 
-ccl_device_inline float3 metallic_Fss(float3 F0, float3 F90, float falloff)
+ccl_device_inline float3 fresnel_metallic_Fss(float3 F0, float3 B)
 {
-  /* Fss for mix(F0, F90, (1-cosNI)^falloff) */
-  return mix(F0, F90, 2.0f / (sqr(falloff) + 3 * falloff + 2));
+  return saturate(mix(F0, one_float3(), 1.0f / 21.0f) - B * (1.0f / 126.0f));
 }
 
 ccl_device_inline float3 schlick_fresnel_Fss(float3 F0)
 {
-  /* TODO validate using multiGGX code */
-  return (one_float3() + 20.0f * saturate(F0)) * (1.0f / 21.0f);
+  return saturate(mix(F0, one_float3(), 1.0f / 21.0f));
 }
 
 /* TODO Imageworks source */

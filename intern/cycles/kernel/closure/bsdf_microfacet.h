@@ -19,8 +19,8 @@ typedef struct MicrofacetExtra {
 
 typedef struct MicrofacetExtrav2 {
   /* Metallic fresnel control */
-  float3 metal_base, metal_edge;
-  float metal_falloff;
+  float3 metal_base, metal_edge_factor;
+  float3 metallic;
   float dielectric;
 } MicrofacetExtrav2;
 
@@ -66,8 +66,8 @@ ccl_device_forceinline float3 reflection_color(ccl_private const MicrofacetBsdf 
     /* Metallic Fresnel: Kinda Schlick-Fresnel-like with configurable F0 and F90
      * as well as falloff control. F90=white and falloff=0.2 gives classic Schlick Fresnel.
      * Metallic factor and albedo scaling is baked into the F0 and F90 parameters. */
-    float metallicBlend = powf(1.0f - cosHL, extra->metal_falloff);
-    float3 metallic = mix(extra->metal_base, extra->metal_edge, metallicBlend);
+    float3 metallic = extra->metallic *
+                      fresnel_metallic(extra->metal_base, extra->metal_edge_factor, cosHL);
     /* Dielectric Fresnel, just basic IOR control. */
     float dielectric = extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior);
 
@@ -187,18 +187,13 @@ ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(KernelGlobals kg,
   MicrofacetExtrav2 *extra = (MicrofacetExtrav2 *)bsdf->extra;
 
   if (metallic > 0.0f) {
-    extra->metal_base = saturate(extra->metal_base);
-    extra->metal_edge = saturate(extra->metal_edge);
-    extra->metal_falloff = 1.0f / clamp(extra->metal_falloff, 1e-3f, 1.0f);
-    float3 metal_Fss = metallic_Fss(extra->metal_base, extra->metal_edge, extra->metal_falloff);
-    float3 metal_scale = microfacet_ggx_albedo_scaling(kg, bsdf, sd, metal_Fss);
-    extra->metal_base *= metallic * metal_scale;
-    extra->metal_edge *= metallic * metal_scale;
+    float3 metal_Fss = fresnel_metallic_Fss(extra->metal_base, extra->metal_edge_factor);
+    extra->metallic = metallic * microfacet_ggx_albedo_scaling(kg, bsdf, sd, metal_Fss);
   }
   else {
-    extra->metal_falloff = 0.0f;
+    extra->metallic = zero_float3();
     extra->metal_base = zero_float3();
-    extra->metal_edge = zero_float3();
+    extra->metal_edge_factor = zero_float3();
   }
 
   if (dielectric > 0.0f) {

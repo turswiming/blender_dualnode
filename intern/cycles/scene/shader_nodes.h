@@ -536,7 +536,6 @@ class PrincipledBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float, subsurface_ior)
   NODE_SOCKET_API(float, subsurface_anisotropy)
   NODE_SOCKET_API(float, metallic)
-  NODE_SOCKET_API(float, metallic_falloff)
   NODE_SOCKET_API(float3, metallic_edge)
   NODE_SOCKET_API(float, subsurface)
   NODE_SOCKET_API(float, subsurface_scale)
