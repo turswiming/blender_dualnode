@@ -1332,10 +1332,10 @@ typedef struct KernelIntegrator {
   float surface_guiding_probability;
   float volume_guiding_probability;
   GuidingDistributionType guiding_distribution_type;
-  bool guiding;
-  bool surface_guiding;
-  bool volume_guiding;
-  bool guide_direct_light;
+  bool use_guiding;
+  bool use_surface_guiding;
+  bool use_volume_guiding;
+  bool use_guide_direct_light;
   bool use_mis_weights;
   /* padding */
   bool pad1, pad2, pad3;

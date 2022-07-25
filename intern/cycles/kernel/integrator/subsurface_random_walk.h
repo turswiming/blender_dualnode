@@ -228,7 +228,7 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   // we need to add a new segment or add the direction
   // or at lease the sampling direction to the new path segment
-  const bool use_guiding = kernel_data.integrator.guiding;
+  const bool use_guiding = kernel_data.integrator.use_guiding;
   float3 rr_throughput = INTEGRATOR_STATE(state, path, rr_throughput);
   rr_throughput = safe_divide_color(rr_throughput, albedo);
   bssrdf_weight = safe_divide_color(bssrdf_weight, albedo);

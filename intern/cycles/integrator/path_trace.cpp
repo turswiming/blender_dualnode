@@ -176,7 +176,7 @@ void PathTrace::render_pipeline(RenderWork render_work)
 #ifdef __PATH_GUIDING__
   /* Prepare all per-thread guiding structures before we start with the
    * next rendering iteration/progression. */
-  const bool use_guiding = device_scene_->data.integrator.guiding;
+  const bool use_guiding = device_scene_->data.integrator.use_guiding;
   if (use_guiding) {
     guiding_prepare_structures();
   }

@@ -68,12 +68,12 @@ NODE_DEFINE(Integrator)
   guiding_ditribution_enum.insert("DQT", GUIDING_TYPE_DQT);
   guiding_ditribution_enum.insert("VMM", GUIDING_TYPE_VMM);
 
-  SOCKET_BOOLEAN(guiding, "Guiding", true);
-  SOCKET_BOOLEAN(surface_guiding, "Surface Guiding", true);
+  SOCKET_BOOLEAN(use_guiding, "Guiding", true);
+  SOCKET_BOOLEAN(use_surface_guiding, "Surface Guiding", true);
   SOCKET_FLOAT(surface_guiding_probability, "Surface Guiding Probability", 0.5f);
-  SOCKET_BOOLEAN(volume_guiding, "Volume Guiding", true);
+  SOCKET_BOOLEAN(use_volume_guiding, "Volume Guiding", true);
   SOCKET_FLOAT(volume_guiding_probability, "Volume Guiding Probability", 0.5f);
-  SOCKET_BOOLEAN(guide_direct_light, "Guide Direct Light", true);
+  SOCKET_BOOLEAN(use_guide_direct_light, "Guide Direct Light", true);
   SOCKET_BOOLEAN(use_mis_weights, "Use MIS Weights", true);
   SOCKET_ENUM(guiding_distribution_type,
               "Guiding Distribution Type",
@@ -249,12 +249,12 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   }
 
 #ifdef WITH_PATH_GUIDING
-  kintegrator->guiding = guiding;
-  kintegrator->surface_guiding = surface_guiding;
+  kintegrator->use_guiding = use_guiding;
+  kintegrator->use_surface_guiding = use_surface_guiding;
   kintegrator->surface_guiding_probability = surface_guiding_probability;
-  kintegrator->volume_guiding = volume_guiding;
+  kintegrator->use_volume_guiding = use_volume_guiding;
   kintegrator->volume_guiding_probability = volume_guiding_probability;
-  kintegrator->guide_direct_light = guide_direct_light;
+  kintegrator->use_guide_direct_light = use_guide_direct_light;
   kintegrator->use_mis_weights = use_mis_weights;
   kintegrator->guiding_distribution_type = guiding_distribution_type;
 #endif
@@ -423,7 +423,7 @@ DenoiseParams Integrator::get_denoise_params() const
 GuidingParams Integrator::get_guiding_params() const
 {
   GuidingParams guiding_params;
-  guiding_params.use = guiding;
+  guiding_params.use = use_guiding;
   guiding_params.type = guiding_distribution_type;
   return guiding_params;
 }

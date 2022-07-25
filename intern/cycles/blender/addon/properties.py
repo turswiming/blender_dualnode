@@ -512,9 +512,11 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=1.0,
     )
 
-    guiding: BoolProperty(
+    use_guiding: BoolProperty(
         name="Guiding",
-        description="Use path guiding for sampling paths",
+        description="Use path guiding for sampling paths. Path guiding incrementally "
+        "learns the light distribution of the scene and guides path into directions "
+        "with high indirect/direct light contributions.",
         default=False,
     )
 
@@ -525,33 +527,33 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default='PAVMM',
     )
 
-    surface_guiding: BoolProperty(
+    use_surface_guiding: BoolProperty(
         name="Surface Guiding",
         description="Use guiding when sampling directions on a surface",
         default=True,
     )
 
     surface_guiding_probability: FloatProperty(
-        name="Surface Guiding Prob.",
+        name="Surface Guiding Probability",
         description="The probability of guiding a direction on a surface",
         min=0.0, max=1.0,
         default=0.5,
     )
 
-    volume_guiding: BoolProperty(
+    use_volume_guiding: BoolProperty(
         name="Volume Guiding",
         description="Use guiding when sampling directions inside a volume",
         default=True,
     )
 
     volume_guiding_probability: FloatProperty(
-        name="Volume Guiding Prob.",
+        name="Volume Guiding Probability",
         description="The probability of guiding a direction inside a volume",
         min=0.0, max=1.0,
         default=0.5,
     )
 
-    guide_direct_light: BoolProperty(
+    use_guide_direct_light: BoolProperty(
         name="Guide Direct Light",
         description="Consider the contribution of directly visible light sources during guiding",
         default=True,

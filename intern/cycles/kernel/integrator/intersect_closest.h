@@ -51,7 +51,7 @@ ccl_device_forceinline bool integrator_intersect_terminate(KernelGlobals kg,
   const float continuation_probability = path_state_continuation_probability(kg, state, path_flag);
   INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = continuation_probability;
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     guiding_set_continuation_probability(state, continuation_probability);
   }
 #endif
@@ -223,7 +223,7 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
     /* Hit a surface, continue with light or surface kernel. */
     if (isect->type & PRIMITIVE_LAMP) {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-      if (kernel_data.integrator.guiding) {
+      if (kernel_data.integrator.use_guiding) {
         guiding_new_virtual_light_segment(state, isect);
       }
 #endif

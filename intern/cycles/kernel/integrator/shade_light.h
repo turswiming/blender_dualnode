@@ -76,7 +76,7 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
     mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
   }
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     guiding_add_direct_contribution(state, light_eval, mis_weight);
   }
 #endif

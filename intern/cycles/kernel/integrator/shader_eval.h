@@ -96,8 +96,8 @@ ccl_device_inline void shader_prepare_surface_guiding(KernelGlobals kg,
                                                       ccl_private ShaderData *sd,
                                                       ccl_private const RNGState *rng_state)
 {
-  const bool guiding = kernel_data.integrator.guiding;
-  const bool surface_guiding = kernel_data.integrator.surface_guiding;
+  const bool guiding = kernel_data.integrator.use_guiding;
+  const bool surface_guiding = kernel_data.integrator.use_surface_guiding;
   const float surface_guiding_probability = kernel_data.integrator.surface_guiding_probability;
 
   float diffuse_sampling_fraction = 0.f;
@@ -497,7 +497,7 @@ ccl_device int shader_guided_bsdf_sample_closure(KernelGlobals kg,
 {
   /* BSSRDF should already have been handled elsewhere. */
   kernel_assert(CLOSURE_IS_BSDF(sc->type));
-  bool useGuiding = kernel_data.integrator.guiding && state->guiding.use_surface_guiding;
+  bool useGuiding = kernel_data.integrator.use_guiding && state->guiding.use_surface_guiding;
   const float guiding_sampling_prob = state->guiding.surface_guiding_sampling_prob;
   float randw = state->guiding.sample_surface_guiding_rand;
 
@@ -1057,7 +1057,7 @@ ccl_device int shader_guided_volume_phase_sample(KernelGlobals kg,
                                                  ccl_private float *sampled_roughness)
 {
 
-  bool useGuiding = kernel_data.integrator.guiding && state->guiding.use_volume_guiding;
+  bool useGuiding = kernel_data.integrator.use_guiding && state->guiding.use_volume_guiding;
   const float guiding_sampling_prob = state->guiding.volume_guiding_sampling_prob;
   float randw = state->guiding.sample_volume_guiding_rand;
 

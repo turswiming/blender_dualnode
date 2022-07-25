@@ -180,7 +180,7 @@ void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kg,
     }
 
 #ifdef __PATH_GUIDING__
-    const bool use_guiding = kernel_data.integrator.guiding;
+    const bool use_guiding = kernel_data.integrator.use_guiding;
     if (use_guiding) {
       /* Clear path segment storage. */
       guiding_prepare_integrator_state(kg, state);
@@ -377,10 +377,10 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
 #    endif
 #    if PATH_GUIDING_LEVEL >= 2
   /* Converting the path segment representation of the random walk into radiance samples. */
-  const bool guide_direct_light = kernel_data.integrator.guide_direct_light;
+  const bool use_guide_direct_light = kernel_data.integrator.use_guide_direct_light;
   const bool use_mis_weights = kernel_data.integrator.use_mis_weights;
   state->guiding.path_segment_storage->PrepareSamples(
-      false, nullptr, use_mis_weights, guide_direct_light, false);
+      false, nullptr, use_mis_weights, use_guide_direct_light, false);
 #    endif
 
 #    if defined(PATH_GUIDING_DEBUG_VALIDATE) && PATH_GUIDING_LEVEL >= 5

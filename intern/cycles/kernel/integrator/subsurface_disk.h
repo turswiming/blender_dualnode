@@ -47,7 +47,7 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
   const float3 albedo = INTEGRATOR_STATE(state, subsurface, albedo);
   float3 throughput = INTEGRATOR_STATE(state, path, throughput);
   throughput = safe_divide_color(throughput, albedo);
-  const bool use_guiding = kernel_data.integrator.guiding;
+  const bool use_guiding = kernel_data.integrator.use_guiding;
   float3 bssrdf_weight = INTEGRATOR_STATE(state, subsurface, bssrdf_weight);
   // const float3 albedo = INTEGRATOR_STATE(state, subsurface, albedo);
   // we need to add a new segment or add the direction

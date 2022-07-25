@@ -86,7 +86,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
   }
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     guiding_add_direct_contribution(state, L, mis_weight);
   }
 #  endif
@@ -176,7 +176,7 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
 
     /* Evaluate BSDF. */
 #  ifdef __PATH_GUIDING__
-    const bool use_guiding = kernel_data.integrator.guiding;
+    const bool use_guiding = kernel_data.integrator.use_guiding;
     float bsdf_pdf = 0.f;
     bsdf_pdf = shader_bsdf_eval(kg, sd, ls.D, is_transmission, &bsdf_eval, ls.shader);
     if (use_guiding && state->guiding.use_surface_guiding) {
@@ -349,7 +349,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   float guided_bsdf_pdf;
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     label = shader_guided_bsdf_sample_closure(kg,
                                               state,
                                               sd,
@@ -460,7 +460,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   float guided_bsdf_pdf = bsdf_pdf;
 #  endif
   const bool bsdf_is_delta = min_bsdf_sampled_roughness > 0.f ? false : true;
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     guiding_add_bsdf_data(state,
                           sd,
                           bsdf_weight,
@@ -618,7 +618,7 @@ ccl_device bool integrate_surface(KernelGlobals kg,
   if (!(sd.flag & SD_HAS_ONLY_VOLUME)) {
 #endif
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-    if (kernel_data.integrator.guiding) {
+    if (kernel_data.integrator.use_guiding) {
       guiding_new_surface_segment(state, &sd);
     }
 #endif
@@ -694,7 +694,7 @@ ccl_device bool integrate_surface(KernelGlobals kg,
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
     shader_prepare_surface_guiding(kg, state, &sd, &rng_state);
 #  if defined(PATH_GUIDING_DEBUG_PASS)
-    const bool use_guiding = kernel_data.integrator.guiding;
+    const bool use_guiding = kernel_data.integrator.use_guiding;
     if (use_guiding) {
       guiding_write_guiding_prob_buffer(kg, state, render_buffer);
 

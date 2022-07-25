@@ -799,7 +799,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
 #    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   float phase_pdf = 0.f;
   phase_pdf = shader_volume_phase_eval(kg, sd, phases, ls->D, &phase_eval);
-  if (kernel_data.integrator.guiding && state->guiding.use_volume_guiding) {
+  if (kernel_data.integrator.use_guiding && state->guiding.use_volume_guiding) {
     const float guiding_sampling_prob = state->guiding.volume_guiding_sampling_prob;
     if (guiding_sampling_prob > 0.f) {
       pgl_vec3f pglWo = openpgl::cpp::Vector3(ls->D[0], ls->D[1], ls->D[2]);
@@ -941,7 +941,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   float guided_phase_pdf;
   int label;
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     label = shader_guided_volume_phase_sample(kg,
                                               state,
                                               sd,
@@ -1000,7 +1000,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   const float3 phase_weight = bsdf_eval_sum(&phase_eval) / guided_phase_pdf;
   // add phase function sampling data to the path segment
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     guiding_add_phase_data(
         state, sd, phase_weight, guided_phase_pdf, normalize(phase_omega_in), sampled_roughness);
   }
@@ -1046,8 +1046,8 @@ ccl_device_inline void shader_prepare_volume_guiding(KernelGlobals kg,
                                                      ccl_private const ShaderVolumePhases *phases,
                                                      const VolumeSampleMethod direct_sample_method)
 {
-  const bool guiding = kernel_data.integrator.guiding;
-  const bool volume_guiding = kernel_data.integrator.volume_guiding;
+  const bool guiding = kernel_data.integrator.use_guiding;
+  const bool volume_guiding = kernel_data.integrator.use_volume_guiding;
   const float volume_guiding_probability = kernel_data.integrator.volume_guiding_probability;
 
   float guiding_sampling_prob = 0.f;
@@ -1127,7 +1127,7 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
   const float step_size = volume_stack_step_size(kg, volume_read_lambda_pass);
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  const bool use_guiding = kernel_data.integrator.guiding;
+  const bool use_guiding = kernel_data.integrator.use_guiding;
   const float3 throughput = INTEGRATOR_STATE(state, path, throughput);
 #  endif
 

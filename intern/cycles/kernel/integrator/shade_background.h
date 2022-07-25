@@ -73,7 +73,7 @@ ccl_device float3 integrator_eval_background_shader(KernelGlobals kg,
 #  endif
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (kernel_data.integrator.guiding) {
+  if (kernel_data.integrator.use_guiding) {
     guiding_add_background(state, L, mis_weight);
   }
 #  endif

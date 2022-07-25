@@ -471,7 +471,7 @@ class CYCLES_RENDER_PT_light_paths_guiding(CyclesButtonsPanel, Panel):
         scene = context.scene
         cscene = scene.cycles
 
-        self.layout.prop(cscene, "guiding", text="")
+        self.layout.prop(cscene, "use_guiding", text="")
 
     def draw(self, context):
         scene = context.scene
@@ -482,18 +482,18 @@ class CYCLES_RENDER_PT_light_paths_guiding(CyclesButtonsPanel, Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        layout.active = cscene.guiding
+        layout.active = cscene.use_guiding
 
         col = layout.column(align=True)
         if experimentalView:
             col.prop(cscene, "guiding_distribution_type", text="Distribution Type")
-        col.prop(cscene, "surface_guiding", text="Surface Guiding")
+        col.prop(cscene, "use_surface_guiding", text="Surface Guiding")
         if experimentalView:
             col.prop(cscene, "surface_guiding_probability", text="Surface Guiding Probability")
-        col.prop(cscene, "volume_guiding", text="Volume Guiding")
+        col.prop(cscene, "use_volume_guiding", text="Volume Guiding")
         if experimentalView:
             col.prop(cscene, "volume_guiding_probability", text="Volume Guiding Probability")
-            col.prop(cscene, "guide_direct_light", text="Guide Direct Light")
+            col.prop(cscene, "use_guide_direct_light", text="Guide Direct Light")
             col.prop(cscene, "use_mis_weights", text="Use MIS Weights")
 
 

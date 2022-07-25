@@ -99,7 +99,7 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
   /* Accumulate shadow for transparent surfaces. */
   const uint num_recorded_hits = min(num_hits, INTEGRATOR_SHADOW_ISECT_SIZE);
 #  if defined(__PATH_GUIDING__)
-  const bool use_guiding = kernel_data.integrator.guiding;
+  const bool use_guiding = kernel_data.integrator.use_guiding;
 #  endif
   for (uint hit = 0; hit < num_recorded_hits + 1; hit++) {
     /* Volume shaders. */
@@ -188,7 +188,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
   else {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
     // we need to find a way to reset this pointer and to identify if we are in AO mode
-    const bool use_guiding = kernel_data.integrator.guiding;
+    const bool use_guiding = kernel_data.integrator.use_guiding;
     if (use_guiding && state->shadow_path.path_segment) {
       float3 scattered_contribution = INTEGRATOR_STATE(state, shadow_path, scattered_contribution);
       guiding_add_scattered_contribution(state, scattered_contribution);
