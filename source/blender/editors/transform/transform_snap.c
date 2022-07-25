@@ -866,9 +866,14 @@ static void initSnappingRetopoMode(TransInfo *t)
   }
 
   /* Enable all possible targets.  The targets will be filtered based on snap method. */
+  t->tsnap.source_select = SCE_SNAP_SOURCE_ACTIVE;
   t->tsnap.target_select &= ~(SCE_SNAP_TARGET_NOT_ACTIVE | SCE_SNAP_TARGET_NOT_EDITED |
                               SCE_SNAP_TARGET_NOT_NONEDITED);
+  t->tsnap.mode = t->tsnap.mode &
+                  ~(SCE_SNAP_MODE_INCREMENT | SCE_SNAP_MODE_GRID | SCE_SNAP_MODE_VOLUME);
   t->tsnap.project = true;
+
+  setSnappingCallback(t);
 }
 
 void initSnapping(TransInfo *t, wmOperator *op)

@@ -3402,9 +3402,8 @@ static void rna_def_tool_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_snap_retopology_mode", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "snap_flag", SCE_SNAP_RETOPOLOGY_MODE);
-  RNA_def_property_ui_text(prop,
-                           "Retopology Target Mode",
-                           "When enabled, snapping options are optimized for retopology work");
+  RNA_def_property_ui_text(
+      prop, "Retopology Snapping Mode", "Optimize snapping options for retopology work");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
   prop = RNA_def_property(srna, "use_snap_translate", PROP_BOOLEAN, PROP_NONE);

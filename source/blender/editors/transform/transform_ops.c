@@ -691,8 +691,7 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
                              "use_snap_retopology_mode",
                              true,
                              "Target: Retopology Mode",
-                             "Snap grabbed geometry to vertices and edges of edited objects (if "
-                             "enabled) and to faces of non-edited objects (if enabled)");
+                             "Optimize snapping options for retopology work");
       RNA_def_property_flag(prop, PROP_HIDDEN);
 
       /* Face Nearest options */

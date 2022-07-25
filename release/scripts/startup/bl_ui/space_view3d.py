@@ -6849,8 +6849,11 @@ class VIEW3D_PT_snapping(Panel):
             col_snapto_nonedited = col.column(align=True, heading="Snap To Non-Edited")
             col_snapto_nonedited.prop_enum(tool_settings, "snap_elements", 'FACE')
             col_snapto_nonedited.prop_enum(tool_settings, "snap_elements", 'FACE_NEAREST')
+            # row = col_snapto_nonedited.row(align=True)
+            # row.enabled = False
+            # row.prop_enum(tool_settings, "snap_elements", 'FACE_NEAREST')
 
-        if snap_elements - {'INCREMENT', 'FACE_NEAREST'}:
+        if not retopo_mode and snap_elements - {'INCREMENT', 'FACE_NEAREST'}:
             col_snapwith = col.column(align=True)
             col_snapwith.label(text='Snap With')
             col_snapwith.row().prop(tool_settings, "snap_target", expand=True)
