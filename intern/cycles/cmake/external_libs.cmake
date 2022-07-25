@@ -262,6 +262,9 @@ if(CYCLES_STANDALONE_REPOSITORY AND WITH_CYCLES_OSL)
   endif()
 endif()
 
+###########################################################################
+# OpenPGL
+###########################################################################
 
 if(WITH_CYCLES_PATH_GUIDING)
   if(NOT openpgl_DIR)

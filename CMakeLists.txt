@@ -405,6 +405,7 @@ mark_as_advanced(WITH_CPU_SIMD)
 # Cycles
 option(WITH_CYCLES                   "Enable Cycles Render Engine" ON)
 option(WITH_CYCLES_OSL               "Build Cycles with OpenShadingLanguage support" ON)
+option(WITH_CYCLES_PATH_GUIDING      "Build Cycles with path guiding support" ON)
 option(WITH_CYCLES_EMBREE            "Build Cycles with Embree support" ON)
 option(WITH_CYCLES_LOGGING           "Build Cycles with logging support" ON)
 option(WITH_CYCLES_DEBUG             "Build Cycles with options useful for debugging (e.g., MIS)" OFF)
@@ -448,9 +449,6 @@ if(NOT APPLE)
   mark_as_advanced(WITH_CYCLES_DEVICE_HIP)
   mark_as_advanced(CYCLES_HIP_BINARIES_ARCH)
 endif()
-
-# Intel OpenPGL
-option(WITH_CYCLES_PATH_GUIDING              "Build Cycles with path guiding support" ON)
 
 # Apple Metal
 if(APPLE)
