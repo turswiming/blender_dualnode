@@ -19,6 +19,7 @@
 #include "BKE_bvhutils.h"
 #include "BKE_context.h"
 #include "BKE_curves.hh"
+#include "BKE_curves_constraints.hh"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_paint.h"
@@ -50,6 +51,7 @@
 namespace blender::ed::sculpt_paint {
 
 using blender::bke::CurvesGeometry;
+using blender::bke::curves::ConstraintSolver;
 using threading::EnumerableThreadSpecific;
 
 /**
@@ -64,7 +66,7 @@ class CombOperation : public CurvesSculptStrokeOperation {
   CurvesBrush3D brush_3d_;
 
   /** Solver for length and contact constraints. */
-  CurvesConstraintSolver constraint_solver_;
+  ConstraintSolver constraint_solver_;
 
   friend struct CombOperationExecutor;
 
@@ -142,7 +144,11 @@ struct CombOperationExecutor {
       if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
         this->initialize_spherical_brush_reference_point();
       }
-      self_->constraint_solver_.initialize(curves_);
+
+      ConstraintSolver::Params params;
+      params.use_collision_constraints = curves_id_->flag & CV_SCULPT_COLLISION_ENABLED;
+      self_->constraint_solver_.initialize(params, *curves_);
+
       /* Combing does nothing when there is no mouse movement, so return directly. */
       return;
     }
@@ -161,17 +167,14 @@ struct CombOperationExecutor {
       BLI_assert_unreachable();
     }
 
-    threading::parallel_for_each(changed_curves, [&](const Vector<int> &changed_curves) {
-      self_->constraint_solver_.find_contact_points(ctx_.depsgraph,
-                                                    object_,
-                                                    curves_,
-                                                    curves_id_->surface,
-                                                    transforms_,
-                                                    orig_positions_,
-                                                    changed_curves);
-
-      self_->constraint_solver_.solve_constraints(curves_, changed_curves);
-    });
+    const Mesh *surface = curves_id_->surface && curves_id_->surface->type == OB_MESH ?
+                              static_cast<Mesh *>(curves_id_->surface->data) :
+                              nullptr;
+    self_->constraint_solver_.clear_result();
+    for (auto curves : changed_curves) {
+      self_->constraint_solver_.step_curves(
+          *curves_, surface, transforms_, orig_positions_, VArray<int>::ForSpan(curves));
+    }
 
     curves_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);
