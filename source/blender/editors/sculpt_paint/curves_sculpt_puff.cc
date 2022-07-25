@@ -4,6 +4,7 @@
 #include "BKE_brush.h"
 #include "BKE_bvhutils.h"
 #include "BKE_context.h"
+#include "BKE_crazyspace.hh"
 #include "BKE_curves_constraints.hh"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
@@ -20,6 +21,8 @@
 #include "WM_api.h"
 
 #include "BLI_length_parameterize.hh"
+
+#include "GEO_add_curves_on_mesh.hh"
 
 #include "curves_sculpt_intern.hh"
 
@@ -41,23 +44,6 @@ class PuffOperation : public CurvesSculptStrokeOperation {
   void on_stroke_extended(const bContext &C, const StrokeExtension &stroke_extension) override;
 };
 
-static float3 compute_surface_point_normal(const MLoopTri &looptri,
-                                           const float3 &bary_coord,
-                                           const Span<float3> corner_normals)
-{
-  const int l0 = looptri.tri[0];
-  const int l1 = looptri.tri[1];
-  const int l2 = looptri.tri[2];
-
-  const float3 &l0_normal = corner_normals[l0];
-  const float3 &l1_normal = corner_normals[l1];
-  const float3 &l2_normal = corner_normals[l2];
-
-  const float3 normal = math::normalize(
-      attribute_math::mix3(bary_coord, l0_normal, l1_normal, l2_normal));
-  return normal;
-}
-
 /**
  * Utility class that actually executes the update when the stroke is updated. That's useful
  * because it avoids passing a very large number of parameters between functions.
@@ -73,6 +59,7 @@ struct PuffOperationExecutor {
   VArray<float> point_factors_;
   Vector<int64_t> selected_curve_indices_;
   IndexMask curve_selection_;
+  Array<float3> start_positions_;
 
   const CurvesSculpt *curves_sculpt_ = nullptr;
   const Brush *brush_ = nullptr;
@@ -119,7 +106,6 @@ struct PuffOperationExecutor {
 
     point_factors_ = get_point_selection(*curves_id_);
     curve_selection_ = retrieve_selected_curves(*curves_id_, selected_curve_indices_);
-    Array<float3> orig_positions_;
 
     falloff_shape_ = static_cast<eBrushFalloffShape>(brush_->falloff_shape);
 
@@ -157,7 +143,7 @@ struct PuffOperationExecutor {
       self_->constraint_solver_.initialize(params, *curves_);
     }
 
-    orig_positions_ = curves_->positions();
+    start_positions_ = curves_->positions();
 
     Array<float> curve_weights(curve_selection_.size(), 0.0f);
 
@@ -187,7 +173,7 @@ struct PuffOperationExecutor {
     self_->constraint_solver_.step_curves(*curves_,
                                           surface_,
                                           transforms_,
-                                          orig_positions_,
+                                          start_positions_,
                                           VArray<int>::ForContainer(changed_curves_indices));
 
     curves_->tag_positions_changed();
@@ -208,8 +194,6 @@ struct PuffOperationExecutor {
   void find_curve_weights_projected(const float4x4 &brush_transform,
                                     MutableSpan<float> r_curve_weights)
   {
-    Span<float3> positions_cu = curves_->positions();
-
     const float4x4 brush_transform_inv = brush_transform.inverted();
 
     float4x4 projection;
@@ -218,15 +202,18 @@ struct PuffOperationExecutor {
     const float brush_radius_re = brush_radius_base_re_ * brush_radius_factor_;
     const float brush_radius_sq_re = pow2f(brush_radius_re);
 
+    const bke::crazyspace::GeometryDeformation deformation =
+        bke::crazyspace::get_evaluated_curves_deformation(*ctx_.depsgraph, *object_);
+
     threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
       for (const int curve_selection_i : range) {
         const int curve_i = curve_selection_[curve_selection_i];
         const IndexRange points = curves_->points_for_curve(curve_i);
-        const float3 first_pos_cu = brush_transform_inv * positions_cu[points[0]];
+        const float3 first_pos_cu = brush_transform_inv * deformation.positions[points[0]];
         float2 prev_pos_re;
         ED_view3d_project_float_v2_m4(ctx_.region, first_pos_cu, prev_pos_re, projection.values);
         for (const int point_i : points.drop_front(1)) {
-          const float3 pos_cu = brush_transform_inv * positions_cu[point_i];
+          const float3 pos_cu = brush_transform_inv * deformation.positions[point_i];
           float2 pos_re;
           ED_view3d_project_float_v2_m4(ctx_.region, pos_cu, pos_re, projection.values);
           BLI_SCOPED_DEFER([&]() { prev_pos_re = pos_re; });
@@ -273,16 +260,18 @@ struct PuffOperationExecutor {
                                      const float brush_radius_cu,
                                      MutableSpan<float> r_curve_weights)
   {
-    const Span<float3> positions_cu = curves_->positions();
     const float brush_radius_sq_cu = pow2f(brush_radius_cu);
+
+    const bke::crazyspace::GeometryDeformation deformation =
+        bke::crazyspace::get_evaluated_curves_deformation(*ctx_.depsgraph, *object_);
 
     threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
       for (const int curve_selection_i : range) {
         const int curve_i = curve_selection_[curve_selection_i];
         const IndexRange points = curves_->points_for_curve(curve_i);
         for (const int point_i : points.drop_front(1)) {
-          const float3 &prev_pos_cu = positions_cu[point_i - 1];
-          const float3 &pos_cu = positions_cu[point_i];
+          const float3 &prev_pos_cu = deformation.positions[point_i - 1];
+          const float3 &pos_cu = deformation.positions[point_i];
           const float dist_to_brush_sq_cu = dist_squared_to_line_segment_v3(
               brush_pos_cu, prev_pos_cu, pos_cu);
           if (dist_to_brush_sq_cu > brush_radius_sq_cu) {
@@ -330,7 +319,7 @@ struct PuffOperationExecutor {
         const float3 &v2_su = surface_->mvert[surface_->mloop[looptri.tri[2]].v].co;
         float3 bary_coords;
         interp_weights_tri_v3(bary_coords, v0_su, v1_su, v2_su, closest_pos_su);
-        const float3 normal_su = compute_surface_point_normal(
+        const float3 normal_su = geometry::compute_surface_point_normal(
             looptri, bary_coords, corner_normals_su_);
         const float3 normal_cu = math::normalize(transforms_.surface_to_curves_normal * normal_su);
 

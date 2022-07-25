@@ -114,7 +114,7 @@ class ConstraintSolver {
   void step_curves(CurvesGeometry &curves,
                    const Mesh *surface,
                    const CurvesSurfaceTransforms &transforms,
-                   Span<float3> orig_positions,
+                   Span<float3> start_positions,
                    VArray<int> changed_curves);
 
  private:

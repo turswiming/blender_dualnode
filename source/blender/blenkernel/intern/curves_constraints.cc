@@ -83,7 +83,7 @@ void ConstraintSolver::initialize(const Params &params, const CurvesGeometry &cu
 void ConstraintSolver::step_curves(CurvesGeometry &curves,
                                    const Mesh *surface,
                                    const CurvesSurfaceTransforms &transforms,
-                                   Span<float3> orig_positions,
+                                   Span<float3> start_positions,
                                    VArray<int> changed_curves)
 {
   double step_start = PIL_check_seconds_timer();
@@ -104,7 +104,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
           const int curve_i = changed_curves[i];
           const IndexRange points = curves.points_for_curve(curve_i);
           for (const int point_i : points.drop_front(1)) {
-            float3 delta_step = positions[point_i] - orig_positions[point_i];
+            float3 delta_step = positions[point_i] - start_positions[point_i];
 
             const float travel_sq = len_squared_v3(delta_step);
             if (travel_sq > max_travel_distance_sq) {
@@ -116,7 +116,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
             }
 
             dX[point_i] = delta_step / params_.substep_count;
-            positions[point_i] = orig_positions[point_i];
+            positions[point_i] = start_positions[point_i];
           }
         }
       });

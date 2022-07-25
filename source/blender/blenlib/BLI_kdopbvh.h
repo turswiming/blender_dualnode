@@ -332,7 +332,8 @@ extern const float bvhtree_kdop_axes[13][3];
 
 namespace blender {
 
-using BVHTree_RayCastCallback_CPP = FunctionRef<void(int index, const BVHTreeRay &ray, BVHTreeRayHit &hit)>;
+using BVHTree_RayCastCallback_CPP =
+    FunctionRef<void(int index, const BVHTreeRay &ray, BVHTreeRayHit &hit)>;
 
 inline void BLI_bvhtree_ray_cast_all_cpp(BVHTree &tree,
                                          const float3 co,
