@@ -320,7 +320,7 @@ typedef enum eAutomasking_flag {
   BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS = (1 << 3),
   BRUSH_AUTOMASKING_BRUSH_NORMAL = (1 << 8),
   BRUSH_AUTOMASKING_VIEW_NORMAL = (1 << 9),
-
+  BRUSH_AUTOMASKING_VIEW_OCCLUSION = (1 << 10),
 } eAutomasking_flag;
 
 typedef enum ePaintBrush_flag {

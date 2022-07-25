@@ -93,6 +93,9 @@ bool SCULPT_is_automasking_enabled(const Sculpt *sd, const SculptSession *ss, co
   if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_VIEW_NORMAL)) {
     return true;
   }
+  if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_VIEW_OCCLUSION)) {
+    return true;
+  }
   return false;
 }
 
@@ -180,6 +183,15 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
   if (automasking->factor) {
     return automasking->factor[vert];
   }
+  if (automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
+    if (!automasking->occluded[vert]) {
+      automasking->occluded[vert] = SCULPT_vertex_is_occluded(ss, vert, true) ? 2 : 1;
+    }
+
+    if (automasking->occluded[vert] - 1) {
+      return 0.0f;
+    }
+  }
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
     if (!SCULPT_vertex_has_face_set(ss, vert, automasking->settings.initial_face_set)) {
@@ -255,6 +267,7 @@ void SCULPT_automasking_cache_free(AutomaskingCache *automasking)
   }
 
   MEM_SAFE_FREE(automasking->factor);
+  MEM_SAFE_FREE(automasking->occluded);
   MEM_SAFE_FREE(automasking);
 }
 
@@ -440,6 +453,10 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
                                                                   "automasking cache");
   SCULPT_automasking_cache_settings_update(automasking, ss, sd, brush);
   SCULPT_boundary_info_ensure(ob);
+
+  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_VIEW_OCCLUSION)) {
+    automasking->occluded = (char *)MEM_callocN(totvert, "automasking->occluded");
+  }
 
   if (!SCULPT_automasking_needs_factors_cache(sd, brush)) {
     return automasking;

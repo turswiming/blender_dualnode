@@ -917,6 +917,11 @@ static void rna_def_sculpt(BlenderRNA *brna)
                            "Mask back facing vertices");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
+  prop = RNA_def_property(srna, "use_automasking_view_occlusion", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_VIEW_OCCLUSION);
+  RNA_def_property_ui_text(prop, "Occlusion", "Mask occluded vertices");
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
   prop = RNA_def_property(srna, "automasking_start_normal_limit", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(
       prop, NULL, "automasking_start_normal_limit");

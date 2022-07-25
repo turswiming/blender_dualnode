@@ -37,7 +37,7 @@
 
 #include <limits.h>
 
-#define LEAF_LIMIT 10000
+#define LEAF_LIMIT 400
 
 //#define PERFCNTRS
 

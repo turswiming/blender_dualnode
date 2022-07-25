@@ -404,6 +404,7 @@ typedef struct AutomaskingCache {
   /* Precomputed auto-mask factor indexed by vertex, owned by the auto-masking system and
    * initialized in #SCULPT_automasking_cache_init when needed. */
   float *factor;
+  char *occluded;
 } AutomaskingCache;
 
 typedef struct FilterCache {
@@ -908,6 +909,8 @@ void SCULPT_vertex_normal_get(SculptSession *ss, int index, float no[3]);
 float SCULPT_vertex_mask_get(struct SculptSession *ss, int index);
 void SCULPT_vertex_color_get(const SculptSession *ss, int index, float r_color[4]);
 void SCULPT_vertex_color_set(SculptSession *ss, int index, const float color[4]);
+
+bool SCULPT_vertex_is_occluded(SculptSession *ss, int vertex, bool original);
 
 /** Returns true if a color attribute exists in the current sculpt session. */
 bool SCULPT_has_colors(const SculptSession *ss);

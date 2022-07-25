@@ -5942,4 +5942,37 @@ void SCULPT_automasking_node_update(SculptSession *ss,
   }
 }
 
+bool SCULPT_vertex_is_occluded(SculptSession *ss, int vertex, bool original)
+{
+  float ray_start[3], ray_end[3], ray_normal[3], face_normal[3];
+  float co[3];
+
+  copy_v3_v3(co, SCULPT_vertex_co_get(ss, vertex));
+  float mouse[2];
+
+  ED_view3d_project_float_v2_m4(ss->cache->vc->region, co, mouse, ss->cache->projection_mat);
+
+  int depth = SCULPT_raycast_init(
+      ss->cache->vc, mouse, ray_end, ray_start, ray_normal, original);
+
+  negate_v3(ray_normal);
+
+  copy_v3_v3(ray_start, SCULPT_vertex_co_get(ss, vertex));
+  madd_v3_v3fl(ray_start, ray_normal, 0.002);
+
+  SculptRaycastData srd = {0};
+  srd.original = original;
+  srd.ss = ss;
+  srd.hit = false;
+  srd.ray_start = ray_start;
+  srd.ray_normal = ray_normal;
+  srd.depth = depth;
+  srd.face_normal = face_normal;
+
+  isect_ray_tri_watertight_v3_precalc(&srd.isect_precalc, ray_normal);
+  BKE_pbvh_raycast(ss->pbvh, sculpt_raycast_cb, &srd, ray_start, ray_normal, srd.original);
+
+  return srd.hit;
+}
+
 /** \} */
