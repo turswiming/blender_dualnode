@@ -289,9 +289,6 @@ static void sculpt_transform_radius_elastic(Sculpt *sd, Object *ob, const float 
       flip_v3_v3(data.elastic_transform_pivot, ss->pivot_pos, symmpass);
       flip_v3_v3(data.elastic_transform_pivot_init, ss->init_pivot_pos, symmpass);
 
-      printf(
-          "%.2f %.2f %.2f\n", ss->init_pivot_pos[0], ss->init_pivot_pos[1], ss->init_pivot_pos[2]);
-
       const int symm_area = SCULPT_get_vertex_symm_area(data.elastic_transform_pivot);
       copy_m4_m4(data.elastic_transform_mat, data.transform_mats[symm_area]);
       BLI_task_parallel_range(
@@ -426,7 +423,7 @@ static int sculpt_set_pivot_position_exec(bContext *C, wmOperator *op)
         RNA_float_get(op->ptr, "mouse_x"),
         RNA_float_get(op->ptr, "mouse_y"),
     };
-    if (SCULPT_stroke_get_location(C, stroke_location, mval)) {
+    if (SCULPT_stroke_get_location(C, stroke_location, mval, false)) {
       copy_v3_v3(ss->pivot_pos, stroke_location);
     }
   }
