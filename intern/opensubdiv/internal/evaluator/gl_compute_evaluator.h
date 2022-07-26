@@ -25,6 +25,8 @@
 #ifndef OPENSUBDIV_GL_COMPUTE_EVALUATOR_H_
 #define OPENSUBDIV_GL_COMPUTE_EVALUATOR_H_
 
+#undef OSD_USES_GLEW
+
 #include <opensubdiv/osd/bufferDescriptor.h>
 #include <opensubdiv/osd/opengl.h>
 #include <opensubdiv/osd/types.h>

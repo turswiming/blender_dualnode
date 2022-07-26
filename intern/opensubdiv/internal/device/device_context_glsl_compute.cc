@@ -18,14 +18,14 @@
 
 #include "internal/device/device_context_glsl_compute.h"
 
-#include <GL/glew.h>
+#include <epoxy/gl.h>
 
 namespace blender {
 namespace opensubdiv {
 
 bool GLSLComputeDeviceContext::isSupported()
 {
-  return GLEW_VERSION_4_3 || GLEW_ARB_compute_shader;
+  return epoxy_gl_version() >= 43 || epoxy_has_gl_extension("GL_ARB_compute_shader");
 }
 
 GLSLComputeDeviceContext::GLSLComputeDeviceContext()

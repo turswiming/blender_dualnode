@@ -11,7 +11,7 @@
 
 #include "GHOST_Context.h"
 
-#include <GL/wglew.h>
+#include <epoxy/wgl.h>
 
 #ifndef GHOST_OPENGL_WGL_RESET_NOTIFICATION_STRATEGY
 #  define GHOST_OPENGL_WGL_RESET_NOTIFICATION_STRATEGY 0
@@ -90,7 +90,7 @@ class GHOST_ContextWGL : public GHOST_Context {
   int choose_pixel_format_arb(bool stereoVisual, bool needAlpha);
   int _choose_pixel_format_arb_1(bool stereoVisual, bool needAlpha);
 
-  void initContextWGLEW(PIXELFORMATDESCRIPTOR &preferredPFD);
+  void initContext(PIXELFORMATDESCRIPTOR &preferredPFD);
 
   HWND m_hWnd;
   HDC m_hDC;

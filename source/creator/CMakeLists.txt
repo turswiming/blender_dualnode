@@ -3,7 +3,6 @@
 
 blender_include_dirs(
   ../../intern/clog
-  ../../intern/glew-mx
   ../../intern/guardedalloc
   ../blender/blenkernel
   ../blender/blenlib
@@ -716,6 +715,11 @@ if(UNIX AND NOT APPLE)
 elseif(WIN32)
 
   set(BLENDER_TEXT_FILES_DESTINATION ".")
+
+  install(
+    FILES ${LIBDIR}/epoxy/bin/epoxy-0.dll
+    DESTINATION "."
+  )
 
   if(WITH_OPENMP AND MSVC_CLANG)
     install(

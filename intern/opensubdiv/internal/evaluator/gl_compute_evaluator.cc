@@ -22,9 +22,9 @@
 //   language governing permissions and limitations under the Apache License.
 //
 
-#include "gl_compute_evaluator.h"
+#include <epoxy/gl.h>
 
-#include <GL/glew.h>
+#include "gl_compute_evaluator.h"
 
 #include <opensubdiv/far/error.h>
 #include <opensubdiv/far/patchDescriptor.h>
@@ -57,7 +57,7 @@ template<class T> GLuint createSSBO(std::vector<T> const &src)
   GLuint devicePtr = 0;
 
 #if defined(GL_ARB_direct_state_access)
-  if (GLEW_ARB_direct_state_access) {
+  if (epoxy_has_gl_extension("GL_ARB_direct_state_access")) {
     glCreateBuffers(1, &devicePtr);
     glNamedBufferData(devicePtr, src.size() * sizeof(T), &src.at(0), GL_STATIC_DRAW);
   }

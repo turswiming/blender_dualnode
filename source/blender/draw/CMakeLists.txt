@@ -27,7 +27,6 @@ set(INC
 
   ../../../intern/atomic
   ../../../intern/clog
-  ../../../intern/glew-mx
   ../../../intern/guardedalloc
   ../../../intern/opensubdiv
 

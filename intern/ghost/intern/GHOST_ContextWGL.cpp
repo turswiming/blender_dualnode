@@ -87,7 +87,7 @@ GHOST_TSuccess GHOST_ContextWGL::swapBuffers()
 
 GHOST_TSuccess GHOST_ContextWGL::setSwapInterval(int interval)
 {
-  if (WGLEW_EXT_swap_control)
+  if (epoxy_has_wgl_extension(m_hDC, "WGL_EXT_swap_control"))
     return WIN32_CHK(::wglSwapIntervalEXT(interval)) == TRUE ? GHOST_kSuccess : GHOST_kFailure;
   else
     return GHOST_kFailure;
@@ -95,7 +95,7 @@ GHOST_TSuccess GHOST_ContextWGL::setSwapInterval(int interval)
 
 GHOST_TSuccess GHOST_ContextWGL::getSwapInterval(int &intervalOut)
 {
-  if (WGLEW_EXT_swap_control) {
+  if (epoxy_has_wgl_extension(m_hDC, "WGL_EXT_swap_control")) {
     intervalOut = ::wglGetSwapIntervalEXT();
     return GHOST_kSuccess;
   }
@@ -266,7 +266,7 @@ static HWND clone_window(HWND hWnd, LPVOID lpParam)
   return hwndCloned;
 }
 
-void GHOST_ContextWGL::initContextWGLEW(PIXELFORMATDESCRIPTOR &preferredPFD)
+void GHOST_ContextWGL::initContext(PIXELFORMATDESCRIPTOR &preferredPFD)
 {
   HWND dummyHWND = NULL;
 
@@ -318,12 +318,6 @@ void GHOST_ContextWGL::initContextWGLEW(PIXELFORMATDESCRIPTOR &preferredPFD)
 
   if (!WIN32_CHK(::wglMakeCurrent(dummyHDC, dummyHGLRC)))
     goto finalize;
-
-  if (GLEW_CHK(glewInit()) != GLEW_OK) {
-    fprintf(stderr, "Warning! Dummy GLEW/WGLEW failed to initialize properly.\n");
-  }
-
-  /* The following are not technically WGLEW, but they also require a context to work. */
 
 #ifndef NDEBUG
   free((void *)m_dummyRenderer);
@@ -493,11 +487,11 @@ int GHOST_ContextWGL::choose_pixel_format(bool stereoVisual, bool needAlpha)
       0 /* layer, visible, and damage masks (ignored) */
   };
 
-  initContextWGLEW(preferredPFD);
+  initContext(preferredPFD);
 
   int iPixelFormat = 0;
 
-  if (WGLEW_ARB_pixel_format)
+  if (epoxy_has_wgl_extension(m_hDC, "WGL_ARB_pixel_format"))
     iPixelFormat = choose_pixel_format_arb(stereoVisual, needAlpha);
 
   if (iPixelFormat == 0)
@@ -526,7 +520,7 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
   HDC prevHDC = ::wglGetCurrentDC();
   WIN32_CHK(GetLastError() == NO_ERROR);
 
-  if (!WGLEW_ARB_create_context || ::GetPixelFormat(m_hDC) == 0) {
+  if (!epoxy_has_wgl_extension(m_hDC, "WGL_ARB_create_context") || ::GetPixelFormat(m_hDC) == 0) {
     const bool needAlpha = m_alphaBackground;
     int iPixelFormat;
     int lastPFD;
@@ -554,40 +548,23 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
     }
   }
 
-  if (WGLEW_ARB_create_context) {
+  if (epoxy_has_wgl_extension(m_hDC, "WGL_ARB_create_context")) {
     int profileBitCore = m_contextProfileMask & WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
     int profileBitCompat = m_contextProfileMask & WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
 
-#ifdef WITH_GLEW_ES
-    int profileBitES = m_contextProfileMask & WGL_CONTEXT_ES_PROFILE_BIT_EXT;
-#endif
-
-    if (!WGLEW_ARB_create_context_profile && profileBitCore)
+    if (!epoxy_has_wgl_extension(m_hDC, "WGL_ARB_create_context_profile") && profileBitCore)
       fprintf(stderr, "Warning! OpenGL core profile not available.\n");
 
-    if (!WGLEW_ARB_create_context_profile && profileBitCompat)
+    if (!epoxy_has_wgl_extension(m_hDC, "WGL_ARB_create_context_profile") && profileBitCompat)
       fprintf(stderr, "Warning! OpenGL compatibility profile not available.\n");
-
-#ifdef WITH_GLEW_ES
-    if (!WGLEW_EXT_create_context_es_profile && profileBitES && m_contextMajorVersion == 1)
-      fprintf(stderr, "Warning! OpenGL ES profile not available.\n");
-
-    if (!WGLEW_EXT_create_context_es2_profile && profileBitES && m_contextMajorVersion == 2)
-      fprintf(stderr, "Warning! OpenGL ES2 profile not available.\n");
-#endif
 
     int profileMask = 0;
 
-    if (WGLEW_ARB_create_context_profile && profileBitCore)
+    if (epoxy_has_wgl_extension(m_hDC, "WGL_ARB_create_context_profile") && profileBitCore)
       profileMask |= profileBitCore;
 
-    if (WGLEW_ARB_create_context_profile && profileBitCompat)
+    if (epoxy_has_wgl_extension(m_hDC, "WGL_ARB_create_context_profile") && profileBitCompat)
       profileMask |= profileBitCompat;
-
-#ifdef WITH_GLEW_ES
-    if (WGLEW_EXT_create_context_es_profile && profileBitES)
-      profileMask |= profileBitES;
-#endif
 
     if (profileMask != m_contextProfileMask)
       fprintf(stderr, "Warning! Ignoring untested OpenGL context profile mask bits.");
@@ -615,7 +592,7 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
     }
 
     if (m_contextResetNotificationStrategy != 0) {
-      if (WGLEW_ARB_create_context_robustness) {
+      if (epoxy_has_wgl_extension(m_hDC, "WGL_ARB_create_context_robustness")) {
         iAttributes.push_back(WGL_CONTEXT_RESET_NOTIFICATION_STRATEGY_ARB);
         iAttributes.push_back(m_contextResetNotificationStrategy);
       }
@@ -650,8 +627,6 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
   if (!WIN32_CHK(::wglMakeCurrent(m_hDC, m_hGLRC))) {
     goto error;
   }
-
-  initContextGLEW();
 
   if (is_crappy_intel_card()) {
     /* Some Intel cards with context 4.1 or 4.2

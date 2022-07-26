@@ -18,14 +18,14 @@
 
 #include "internal/device/device_context_glsl_transform_feedback.h"
 
-#include <GL/glew.h>
+#include <epoxy/gl.h>
 
 namespace blender {
 namespace opensubdiv {
 
 bool GLSLTransformFeedbackDeviceContext::isSupported()
 {
-  return GLEW_VERSION_4_1;
+  return epoxy_gl_version() >= 41;
 }
 
 GLSLTransformFeedbackDeviceContext::GLSLTransformFeedbackDeviceContext()

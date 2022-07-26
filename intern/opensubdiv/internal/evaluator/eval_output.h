@@ -19,6 +19,8 @@
 #ifndef OPENSUBDIV_EVAL_OUTPUT_H_
 #define OPENSUBDIV_EVAL_OUTPUT_H_
 
+#undef OSD_USES_GLEW
+
 #include <opensubdiv/osd/cpuPatchTable.h>
 #include <opensubdiv/osd/glPatchTable.h>
 #include <opensubdiv/osd/mesh.h>
