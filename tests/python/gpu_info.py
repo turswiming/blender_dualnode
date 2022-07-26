@@ -1,6 +1,6 @@
 """
     Prints GPU backend information to the console and exits.
-    
+
     Use this script as `blender --background --python gpu_info.py`.
 """
 import bpy
