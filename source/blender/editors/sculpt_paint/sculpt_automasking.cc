@@ -159,13 +159,75 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
   if (automasking_flags & BRUSH_AUTOMASKING_TOPOLOGY) {
     return true;
   }
-  if (automasking_flags & BRUSH_AUTOMASKING_BOUNDARY_EDGES) {
-    return brush && brush->automasking_boundary_edges_propagation_steps != 1;
-  }
-  if (automasking_flags & BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS) {
+  if (automasking_flags & (BRUSH_AUTOMASKING_BOUNDARY_EDGES,
+                           BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS,
+                           BRUSH_AUTOMASKING_BRUSH_NORMAL,
+                           BRUSH_AUTOMASKING_VIEW_NORMAL,
+                           BRUSH_AUTOMASKING_VIEW_OCCLUSION)) {
     return brush && brush->automasking_boundary_edges_propagation_steps != 1;
   }
   return false;
+}
+
+static float automasking_brush_normal_factor(AutomaskingCache *automasking,
+                                             SculptSession *ss,
+                                             int vertex,
+                                             AutomaskingNodeData *automask_data)
+{
+  float falloff = automasking->settings.start_normal_falloff * M_PI;
+  float initial_normal[3];
+
+  if (ss->cache) {
+    copy_v3_v3(initial_normal, ss->cache->initial_normal);
+  }
+  else {
+    copy_v3_v3(initial_normal, ss->filter_cache->initial_normal);
+  }
+
+  return sculpt_automasking_normal_calc(automasking,
+                                        ss,
+                                        vertex,
+                                        initial_normal,
+                                        automasking->settings.start_normal_limit - falloff * 0.5f,
+                                        automasking->settings.start_normal_limit + falloff * 0.5f,
+                                        automask_data);
+}
+
+static float automasking_view_normal_factor(AutomaskingCache *automasking,
+                                            SculptSession *ss,
+                                            int vertex,
+                                            AutomaskingNodeData *automask_data)
+{
+  float falloff = automasking->settings.view_normal_falloff * M_PI;
+
+  float view_normal[3];
+
+  if (ss->cache) {
+    copy_v3_v3(view_normal, ss->cache->view_normal);
+  }
+  else {
+    copy_v3_v3(view_normal, ss->filter_cache->view_normal);
+  }
+
+  return sculpt_automasking_normal_calc(automasking,
+                                        ss,
+                                        vertex,
+                                        view_normal,
+                                        automasking->settings.view_normal_limit,
+                                        automasking->settings.view_normal_limit + falloff,
+                                        automask_data);
+}
+
+static float automasking_view_occlusion_factor(AutomaskingCache *automasking,
+                                               SculptSession *ss,
+                                               int vertex,
+                                               AutomaskingNodeData *automask_data)
+{
+  if (!automasking->occluded[vertex]) {
+    automasking->occluded[vertex] = SCULPT_vertex_is_occluded(ss, vertex, true) ? 2 : 1;
+  }
+
+  return automasking->occluded[vertex] == 2;
 }
 
 float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
@@ -183,14 +245,10 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
   if (automasking->factor) {
     return automasking->factor[vert];
   }
-  if (automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
-    if (!automasking->occluded[vert]) {
-      automasking->occluded[vert] = SCULPT_vertex_is_occluded(ss, vert, true) ? 2 : 1;
-    }
 
-    if (automasking->occluded[vert] - 1) {
-      return 0.0f;
-    }
+  if ((automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_OCCLUSION) &&
+      automasking_view_occlusion_factor(automasking, ss, vert, automask_data)) {
+    return 0.0f;
   }
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
@@ -215,46 +273,12 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
 
   if ((ss->cache || ss->filter_cache) &&
       (automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
-    float falloff = automasking->settings.start_normal_falloff * M_PI;
-    float initial_normal[3];
-
-    if (ss->cache) {
-      copy_v3_v3(initial_normal, ss->cache->initial_normal);
-    }
-    else {
-      copy_v3_v3(initial_normal, ss->filter_cache->initial_normal);
-    }
-
-    mask *= sculpt_automasking_normal_calc(
-        automasking,
-        ss,
-        vert,
-        initial_normal,
-        automasking->settings.start_normal_limit - falloff * 0.5f,
-        automasking->settings.start_normal_limit + falloff * 0.5f,
-        automask_data);
+    mask *= automasking_brush_normal_factor(automasking, ss, vert, automask_data);
   }
 
   if ((ss->cache || ss->filter_cache) &&
       (automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_NORMAL)) {
-    float falloff = automasking->settings.view_normal_falloff * M_PI;
-
-    float view_normal[3];
-
-    if (ss->cache) {
-      copy_v3_v3(view_normal, ss->cache->view_normal);
-    }
-    else {
-      copy_v3_v3(view_normal, ss->filter_cache->view_normal);
-    }
-
-    mask *= sculpt_automasking_normal_calc(automasking,
-                                           ss,
-                                           vert,
-                                           view_normal,
-                                           automasking->settings.view_normal_limit,
-                                           automasking->settings.view_normal_limit + falloff,
-                                           automask_data);
+    mask *= automasking_view_normal_factor(automasking, ss, vert, automask_data);
   }
 
   return mask;
@@ -440,6 +464,31 @@ static void SCULPT_automasking_cache_settings_update(AutomaskingCache *automaski
   automasking->settings.start_normal_falloff = sd->automasking_start_normal_falloff;
 }
 
+void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automasking,
+                                              Object *ob,
+                                              float *factor,
+                                              eAutomasking_flag mode)
+{
+  SculptSession *ss = ob->sculpt;
+  const int totvert = SCULPT_vertex_count_get(ss);
+
+  /* No need to build original data since this is only called at the beginning of strokes.*/
+  AutomaskingNodeData nodedata;
+  nodedata.have_orig_data = false;
+
+  for (int i = 0; i < totvert; i++) {
+    if ((int)mode & BRUSH_AUTOMASKING_BRUSH_NORMAL) {
+      factor[i] *= automasking_brush_normal_factor(automasking, ss, i, &nodedata);
+    }
+    if ((int)mode & BRUSH_AUTOMASKING_VIEW_NORMAL) {
+      factor[i] *= automasking_view_normal_factor(automasking, ss, i, &nodedata);
+    }
+    if ((int)mode & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
+      factor[i] *= automasking_view_occlusion_factor(automasking, ss, i, &nodedata);
+    }
+  }
+}
+
 AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object *ob)
 {
   SculptSession *ss = ob->sculpt;
@@ -478,6 +527,15 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_FACE_SETS)) {
     SCULPT_vertex_random_access_ensure(ss);
     sculpt_face_sets_automasking_init(sd, ob, automasking->factor);
+  }
+
+  int normal_bits = sculpt_automasking_mode_effective_bits(sd, brush) &
+                    (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL |
+                     BRUSH_AUTOMASKING_VIEW_OCCLUSION);
+
+  if (normal_bits) {
+    sculpt_normal_occlusion_automasking_fill(
+        automasking, ob, automasking->factor, (eAutomasking_flag)normal_bits);
   }
 
   if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_BOUNDARY_EDGES)) {

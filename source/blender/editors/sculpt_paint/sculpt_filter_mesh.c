@@ -171,7 +171,7 @@ void SCULPT_filter_cache_init(bContext *C,
   float co[3];
   float mval_fl[2] = {(float)mval[0], (float)mval[1]};
 
-  if (SCULPT_stroke_get_location(C, co, mval_fl)) {
+  if (SCULPT_stroke_get_location(C, co, mval_fl, false)) {
     PBVHNode **nodes;
     int totnode;
 
