@@ -867,13 +867,14 @@ static void initSnappingRetopoMode(TransInfo *t)
 
   /* Enable all possible targets.  The targets will be filtered based on snap method. */
   t->tsnap.source_select = SCE_SNAP_SOURCE_ACTIVE;
+  t->tsnap.targetSnap = TargetSnapActive;
   t->tsnap.target_select &= ~(SCE_SNAP_TARGET_NOT_ACTIVE | SCE_SNAP_TARGET_NOT_EDITED |
                               SCE_SNAP_TARGET_NOT_NONEDITED);
-  t->tsnap.mode = t->tsnap.mode &
-                  ~(SCE_SNAP_MODE_INCREMENT | SCE_SNAP_MODE_GRID | SCE_SNAP_MODE_VOLUME);
+  t->tsnap.flag |= (SCE_SNAP_TO_INCLUDE_EDITED | SCE_SNAP_TO_INCLUDE_NONEDITED);
+  t->tsnap.flag &= ~(SCE_SNAP_NOT_TO_ACTIVE);
+  t->tsnap.mode &= ~(SCE_SNAP_MODE_INCREMENT | SCE_SNAP_MODE_GRID | SCE_SNAP_MODE_VOLUME);
   t->tsnap.project = true;
-
-  setSnappingCallback(t);
+  t->tsnap.flag |= SCE_SNAP_PROJECT;
 }
 
 void initSnapping(TransInfo *t, wmOperator *op)
@@ -972,7 +973,7 @@ void initSnapping(TransInfo *t, wmOperator *op)
     t->tsnap.target_select = SCE_SNAP_TARGET_ALL;
     t->tsnap.align = ((t->tsnap.flag & SCE_SNAP_ROTATE) != 0);
     t->tsnap.project = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
-    t->tsnap.peel = ((t->tsnap.flag & SCE_SNAP_PROJECT) != 0);
+    t->tsnap.peel = ((t->tsnap.flag & SCE_SNAP_PEEL_OBJECT) != 0);
     SET_FLAG_FROM_TEST(t->tsnap.target_select,
                        (ts->snap_flag & SCE_SNAP_NOT_TO_ACTIVE),
                        SCE_SNAP_TARGET_NOT_ACTIVE);
