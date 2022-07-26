@@ -2001,6 +2001,22 @@ void WM_init_native_pixels(bool do_it)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Operator API
+ * \{ */
+
+bool WM_active_modal_operator_test(struct wmWindow *win)
+{
+  LISTBASE_FOREACH (wmEventHandler *, handler_base, &win->modalhandlers) {
+    if (handler_base->type == WM_HANDLER_TYPE_OP) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Cursor API
  * \{ */
 

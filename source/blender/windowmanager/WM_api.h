@@ -311,6 +311,11 @@ void WM_paint_cursor_remove_by_type(struct wmWindowManager *wm,
 void WM_paint_cursor_tag_redraw(struct wmWindow *win, struct ARegion *region);
 
 /**
+ * Determines whether an operator is actively running modal.
+ */
+bool WM_active_modal_operator_test(struct wmWindow *win);
+
+/**
  * This function requires access to the GHOST_SystemHandle (g_system).
  */
 void WM_cursor_warp(struct wmWindow *win, int x, int y);

@@ -714,6 +714,11 @@ void RNA_api_window(StructRNA *srna)
   FunctionRNA *func;
   PropertyRNA *parm;
 
+  func = RNA_def_function(srna, "is_operator_modal", "WM_active_modal_operator_test");
+  RNA_def_function_ui_description(func, "Test if an operator is actively running modal.");
+  parm = RNA_def_boolean(func, "result", 0, "", "Operator running modal");
+  RNA_def_function_return(func, parm);
+
   func = RNA_def_function(srna, "cursor_warp", "WM_cursor_warp");
   parm = RNA_def_int(func, "x", 0, INT_MIN, INT_MAX, "", "", INT_MIN, INT_MAX);
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
