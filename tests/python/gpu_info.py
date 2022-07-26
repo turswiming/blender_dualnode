@@ -1,12 +1,20 @@
 """
     Prints GPU backend information to the console and exits.
     
-    Use this script as `blender --python gpu_info.py`.
-    Doesn't work with `--background` parameter as then the GPU backend won't
-    be initialized.
+    Use this script as `blender --background --python gpu_info.py`.
 """
+import bpy
 import gpu
 import sys
+
+# Render with workbench to initialize the GPU backend otherwise it would fail when running in 
+# background mode as the GPU backend won't be initialized.
+scene = bpy.context.scene
+scene.render.resolution_x = 1
+scene.render.resolution_y = 1
+scene.render.engine = "BLENDER_WORKBENCH"
+bpy.ops.render.render(animation=False, write_still=False)
+
 
 print('GPU_VENDOR:' + gpu.platform.vendor_get())
 print('GPU_RENDERER:' + gpu.platform.renderer_get())
