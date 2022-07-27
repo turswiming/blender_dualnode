@@ -97,7 +97,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
   const bool clamp_travel = true;
 
   /* Compute position delta per substep ("velocity") */
-  Array<float3> dX(curves.points_num());
+  Array<float3> delta_substep(curves.points_num());
   threading::parallel_for(
       changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
         for (const int i : range) {
@@ -115,7 +115,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
               }
             }
 
-            dX[point_i] = delta_step / params_.substep_count;
+            delta_substep[point_i] = delta_step / params_.substep_count;
             positions[point_i] = start_positions[point_i];
           }
         }
@@ -129,7 +129,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
             const int curve_i = changed_curves[i];
             const IndexRange points = curves.points_for_curve(curve_i);
             for (const int point_i : points.drop_front(1)) {
-              positions[point_i] += dX[point_i];
+              positions[point_i] += delta_substep[point_i];
             }
           }
         });
