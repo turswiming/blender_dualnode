@@ -374,7 +374,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
   else {
     result_.rms_residual = 0.0;
   }
-  if (result_.max_error_squared < params_.error_threshold * params_.error_threshold) {
+  if (result_.max_error_squared > params_.error_threshold * params_.error_threshold) {
     result_.error = ErrorType::NotConverged;
   }
 
