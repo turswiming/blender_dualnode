@@ -275,7 +275,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
 
                 float length_cu;
                 const float3 direction = math::normalize_and_get_length(pb - pa, length_cu);
-                const float expected_length_cu = segment_lengths_cu_[segment_i];
+                const float expected_length_cu = segment_lengths_cu_[point_a];
                 /* Constraint function */
                 const float C = length_cu - expected_length_cu;
                 const float3 gradient = direction;
@@ -327,7 +327,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
               const float w = w0 + w1;
 
               float length_cu = math::length(pb - pa);
-              const float expected_length_cu = segment_lengths_cu_[segment_i];
+              const float expected_length_cu = segment_lengths_cu_[point_a];
               /* Constraint function */
               const float C = length_cu - expected_length_cu;
               /* Lagrange multiplier */
