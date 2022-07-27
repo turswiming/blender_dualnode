@@ -44,19 +44,22 @@ void ConstraintSolver::clear_result()
   result_ = Result{};
 }
 
-void ConstraintSolver::initialize(const Params &params, const CurvesGeometry &curves)
+void ConstraintSolver::initialize(const Params &params,
+                                  const CurvesGeometry &curves,
+                                  IndexMask curve_selection)
 {
   params_ = params;
 
   if (params_.use_length_constraints) {
-    Span<float3> positions_cu = curves.positions();
     segment_lengths_cu_.reinitialize(curves.points_num());
-    threading::parallel_for(curves.curves_range(), curves_grain_size, [&](const IndexRange range) {
-      for (const int curve_i : range) {
-        const IndexRange points = curves.points_for_curve(curve_i);
+
+    const Span<float3> positions_cu = curves.positions();
+    threading::parallel_for(curve_selection.index_range(), 256, [&](const IndexRange range) {
+      for (const int curve_i : curve_selection.slice(range)) {
+        const IndexRange points = curves.points_for_curve(curve_i).drop_back(1);
 
         float length_cu = 0.0f, prev_length_cu;
-        for (const int point_i : points.drop_back(1)) {
+        for (const int point_i : points) {
           const float3 &p1_cu = positions_cu[point_i];
           const float3 &p2_cu = positions_cu[point_i + 1];
           prev_length_cu = length_cu;

@@ -149,7 +149,7 @@ struct CombOperationExecutor {
 
       ConstraintSolver::Params params;
       params.use_collision_constraints = curves_id_orig_->flag & CV_SCULPT_COLLISION_ENABLED;
-      self_->constraint_solver_.initialize(params, *curves_orig_);
+      self_->constraint_solver_.initialize(params, *curves_orig_, curve_selection_);
 
       /* Combing does nothing when there is no mouse movement, so return directly. */
       return;

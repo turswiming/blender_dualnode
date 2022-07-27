@@ -140,7 +140,7 @@ struct PuffOperationExecutor {
 
       ConstraintSolver::Params params;
       params.use_collision_constraints = curves_id_->flag & CV_SCULPT_COLLISION_ENABLED;
-      self_->constraint_solver_.initialize(params, *curves_);
+      self_->constraint_solver_.initialize(params, *curves_, curve_selection_);
     }
 
     start_positions_ = curves_->positions();

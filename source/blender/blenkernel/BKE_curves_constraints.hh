@@ -108,7 +108,7 @@ class ConstraintSolver {
 
   /* Initialize the solver for a given set of curves.
    * The solver must be reinitialized if the curve set changes. */
-  void initialize(const Params &params, const CurvesGeometry &curves);
+  void initialize(const Params &params, const CurvesGeometry &curves, IndexMask curve_selection);
 
   /* Solve constraints for an independent subset of curves. */
   void step_curves(CurvesGeometry &curves,

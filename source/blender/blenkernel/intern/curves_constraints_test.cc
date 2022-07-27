@@ -95,7 +95,7 @@ TEST(curves_constraints, LengthAndRootConstraint)
   ConstraintSolver::Params params;
   params.use_collision_constraints = false;
 
-  solver.initialize(params, curves);
+  solver.initialize(params, curves, curves.curves_range());
 
   VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
                                                     [](int64_t i) { return (int)i; });
@@ -297,7 +297,7 @@ TEST_P(CurveConstraintSolverPerfTestSuite, UniformLengthConstraintPerformance)
   ConstraintSolver::Params params;
   params.max_solver_iterations = GetParam();
 
-  solver.initialize(params, curves);
+  solver.initialize(params, curves, curves.curves_range());
 
   VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
                                                     [](int64_t i) { return (int)i; });
