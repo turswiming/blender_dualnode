@@ -257,7 +257,12 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
   VArray<float> radius = curves.attributes().lookup_or_default<float>(
       "radius", ATTR_DOMAIN_POINT, 0.0f);
 
-  /* Compliance value */
+  /* Compliance (inverse stiffness)
+   * Alpha is used in physical simulation to control the softness of a constraint:
+   * For alpha == 0 the constraint is stiff and the maximum correction factor is applied.
+   * For values > 0 the constraint becomes squishy, and some violation is
+   * permitted, and the constraint gets corrected over multiple time steps.
+   */
   const float alpha = 0.0f;
 
   threading::parallel_for(
