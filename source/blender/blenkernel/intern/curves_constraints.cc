@@ -181,10 +181,11 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
       changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
         for (const int i : range) {
           const int curve_i = changed_curves[i];
-          const IndexRange points = curves.points_for_curve(curve_i);
-
           /* First point is anchored to the surface, ignore collisions. */
-          for (const int point_i : points.drop_front(1)) {
+          const IndexRange points = params_.use_root_constraints ?
+                                        curves.points_for_curve(curve_i).drop_front(1) :
+                                        curves.points_for_curve(curve_i);
+          for (const int point_i : points) {
             const float3 &new_p = curves.positions()[point_i];
 
             MutableSpan<Contact> contacts(contacts_.begin() +
@@ -288,9 +289,10 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
 
             /* Contact constraints */
             if (params_.use_collision_constraints) {
-              IndexRange points_range = (params_.use_root_constraints ? points.drop_front(1) :
-                                                                         points);
-              for (int point_i : points_range) {
+              const IndexRange points = params_.use_root_constraints ?
+                                            curves.points_for_curve(curve_i).drop_front(1) :
+                                            curves.points_for_curve(curve_i);
+              for (int point_i : points) {
                 float3 &p = positions_cu[point_i];
                 const float radius_p = radius[point_i];
                 const int contacts_num = contacts_num_[point_i];
@@ -340,9 +342,10 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
 
           /* Contact constraints */
           if (params_.use_collision_constraints) {
-            IndexRange points_range = (params_.use_root_constraints ? points.drop_front(1) :
-                                                                       points);
-            for (const int point_i : points_range) {
+            const IndexRange points = params_.use_root_constraints ?
+                                          curves.points_for_curve(curve_i).drop_front(1) :
+                                          curves.points_for_curve(curve_i);
+            for (const int point_i : points) {
               float3 &p = positions_cu[point_i];
               const float radius_p = radius[point_i];
               const int contacts_num = contacts_num_[point_i];
