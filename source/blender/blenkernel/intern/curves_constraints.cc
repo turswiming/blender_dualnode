@@ -253,9 +253,12 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
    */
 
   double solve_constraints_start = PIL_check_seconds_timer();
+
   MutableSpan<float3> positions_cu = curves.positions_for_write();
   VArray<float> radius = curves.attributes().lookup_or_default<float>(
       "radius", ATTR_DOMAIN_POINT, 0.0f);
+
+  const int skipped_root_points = params_.use_root_constraints ? 1 : 0;
 
   /* Compliance (inverse stiffness)
    * Alpha is used in physical simulation to control the softness of a constraint:
@@ -281,7 +284,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
                 float3 &pa = positions_cu[point_a];
                 float3 &pb = positions_cu[point_b];
 
-                const float w0 = (params_.use_root_constraints && segment_i == 0 ? 0.0f : 1.0f);
+                const float w0 = (segment_i < skipped_root_points ? 0.0f : 1.0f);
                 const float w1 = 1.0f;
                 const float w = w0 + w1;
 
@@ -300,9 +303,8 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
 
             /* Contact constraints */
             if (params_.use_collision_constraints) {
-              const IndexRange points = params_.use_root_constraints ?
-                                            curves.points_for_curve(curve_i).drop_front(1) :
-                                            curves.points_for_curve(curve_i);
+              const IndexRange points = curves.points_for_curve(curve_i).drop_front(
+                  skipped_root_points);
               for (const int point_i : points) {
                 float3 &p = positions_cu[point_i];
                 const float radius_p = radius[point_i];
@@ -335,7 +337,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
               float3 &pa = positions_cu[point_a];
               float3 &pb = positions_cu[point_b];
 
-              const float w0 = (params_.use_root_constraints && segment_i == 0 ? 0.0f : 1.0f);
+              const float w0 = (segment_i < skipped_root_points ? 0.0f : 1.0f);
               const float w1 = 1.0f;
               const float w = w0 + w1;
 
@@ -353,9 +355,8 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
 
           /* Contact constraints */
           if (params_.use_collision_constraints) {
-            const IndexRange points = params_.use_root_constraints ?
-                                          curves.points_for_curve(curve_i).drop_front(1) :
-                                          curves.points_for_curve(curve_i);
+            const IndexRange points = curves.points_for_curve(curve_i).drop_front(
+                skipped_root_points);
             for (const int point_i : points) {
               float3 &p = positions_cu[point_i];
               const float radius_p = radius[point_i];
