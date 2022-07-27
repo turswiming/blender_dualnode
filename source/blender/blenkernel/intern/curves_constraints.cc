@@ -103,7 +103,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
         for (const int i : range) {
           const int curve_i = changed_curves[i];
           const IndexRange points = curves.points_for_curve(curve_i);
-          for (const int point_i : points.drop_front(1)) {
+          for (const int point_i : points) {
             float3 delta_step = positions[point_i] - start_positions[point_i];
 
             const float travel_sq = len_squared_v3(delta_step);
@@ -128,7 +128,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
           for (const int i : range) {
             const int curve_i = changed_curves[i];
             const IndexRange points = curves.points_for_curve(curve_i);
-            for (const int point_i : points.drop_front(1)) {
+            for (const int point_i : points) {
               positions[point_i] += delta_substep[point_i];
             }
           }
