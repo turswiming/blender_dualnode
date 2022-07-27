@@ -83,7 +83,7 @@ void ConstraintSolver::initialize(const Params &params, const CurvesGeometry &cu
 void ConstraintSolver::step_curves(CurvesGeometry &curves,
                                    const Mesh *surface,
                                    const CurvesSurfaceTransforms &transforms,
-                                   Span<float3> start_positions,
+                                   const Span<float3> start_positions,
                                    VArray<int> changed_curves)
 {
   double step_start = PIL_check_seconds_timer();
@@ -104,24 +104,27 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
           const int curve_i = changed_curves[i];
           const IndexRange points = curves.points_for_curve(curve_i);
           for (const int point_i : points) {
-            float3 delta_step = positions[point_i] - start_positions[point_i];
+            const float3 delta_step = positions[point_i] - start_positions[point_i];
+            positions[point_i] = start_positions[point_i];
 
             const float travel_sq = len_squared_v3(delta_step);
-            if (travel_sq > max_travel_distance_sq) {
-              result_.max_travel_exceeded = true;
-              if (clamp_travel) {
-                normalize_v3(delta_step);
-                delta_step *= params_.max_travel_distance;
-              }
+            if (travel_sq <= max_travel_distance_sq) {
+              delta_substep[point_i] = delta_step / params_.substep_count;
+              continue;
             }
 
-            delta_substep[point_i] = delta_step / params_.substep_count;
-            positions[point_i] = start_positions[point_i];
+            result_.max_travel_exceeded = true;
+            if (clamp_travel) {
+              delta_substep[point_i] = math::normalize(delta_step) * max_substep_travel_distance;
+            }
+            else {
+              delta_substep[point_i] = delta_step / params_.substep_count;
+            }
           }
         }
       });
 
-  for (int substep : IndexRange(params_.substep_count)) {
+  for (const int substep : IndexRange(params_.substep_count)) {
     /* Set unconstrained position: x <- x + v*dt */
     threading::parallel_for(
         changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
@@ -146,7 +149,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
 void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
                                            const Mesh *surface,
                                            const CurvesSurfaceTransforms &transforms,
-                                           float max_dist,
+                                           const float max_dist,
                                            VArray<int> changed_curves)
 {
   /* Should be set when initializing constraints */
@@ -261,10 +264,10 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
           const IndexRange points = curves.points_for_curve(curve_i);
 
           /* Solve constraints */
-          for (int solver_i : IndexRange(params_.max_solver_iterations)) {
+          for (const int solver_i : IndexRange(params_.max_solver_iterations)) {
             /* Distance constraints */
             if (params_.use_length_constraints) {
-              for (int segment_i : IndexRange(points.size() - 1)) {
+              for (const int segment_i : IndexRange(points.size() - 1)) {
                 const int point_a = points[segment_i];
                 const int point_b = points[segment_i + 1];
                 float3 &pa = positions_cu[point_a];
@@ -292,7 +295,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
               const IndexRange points = params_.use_root_constraints ?
                                             curves.points_for_curve(curve_i).drop_front(1) :
                                             curves.points_for_curve(curve_i);
-              for (int point_i : points) {
+              for (const int point_i : points) {
                 float3 &p = positions_cu[point_i];
                 const float radius_p = radius[point_i];
                 const int contacts_num = contacts_num_[point_i];
@@ -318,7 +321,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
           /* Distance constraints */
           if (params_.use_length_constraints) {
             result_.constraint_count += points.size() - 1;
-            for (int segment_i : IndexRange(points.size() - 1)) {
+            for (const int segment_i : IndexRange(points.size() - 1)) {
               const int point_a = points[segment_i];
               const int point_b = points[segment_i + 1];
               float3 &pa = positions_cu[point_a];
