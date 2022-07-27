@@ -22,6 +22,8 @@
 
 namespace blender::bke::tests {
 
+using curves::ConstraintSolver;
+
 class BaseTestSuite : public testing::Test {
  public:
   /* Sets up Blender just enough to not crash on creating a mesh. */
@@ -52,15 +54,6 @@ class BaseTestSuite : public testing::Test {
   }
 };
 
-using curves::ConstraintSolver;
-
-#define DO_PERF_TESTS 0
-
-#if DO_PERF_TESTS
-
-const uint32_t randomized_curves_seed = 12345;
-const uint32_t randomized_offset_seed = 23451;
-
 inline CurvesSurfaceTransforms create_curves_surface_transforms()
 {
   CurvesSurfaceTransforms transforms;
@@ -73,6 +66,69 @@ inline CurvesSurfaceTransforms create_curves_surface_transforms()
   transforms.surface_to_curves_normal = float4x4::identity();
   return transforms;
 }
+
+TEST(curves_constraints, LengthAndRootConstraint)
+{
+  CurvesGeometry curves(9, 3);
+  curves.fill_curve_types(CURVE_TYPE_POLY);
+  MutableSpan<int> point_offsets = curves.offsets_for_write();
+  point_offsets[0] = 0;
+  point_offsets[1] = 2;
+  point_offsets[2] = 6;
+  point_offsets[3] = 9;
+  MutableSpan<float3> positions = curves.positions_for_write();
+  positions[0] = float3(.0f, 0, 0);
+  positions[1] = float3(.1f, 0, 0);
+
+  positions[2] = float3(.0f, 0, 1);
+  positions[3] = float3(.1f, 0, 1);
+  positions[4] = float3(.15f, 0, 1);
+
+  positions[5] = float3(.0f, 0, 2);
+  positions[6] = float3(.1f, 0, 2);
+  positions[7] = float3(.15f, 0, 2);
+  positions[8] = float3(.25f, 0, 2);
+
+  CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
+
+  ConstraintSolver solver;
+  ConstraintSolver::Params params;
+  params.use_collision_constraints = false;
+
+  solver.initialize(params, curves);
+
+  VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
+                                                    [](int64_t i) { return (int)i; });
+  Array<float3> orig_positions = curves.positions();
+
+  positions[1].y += 0.1f;
+  positions[3].y += 0.1f;
+  positions[6].y += 0.1f;
+
+  solver.step_curves(curves, nullptr, transforms, orig_positions, changed_curves);
+
+  EXPECT_EQ(solver.result().error, ConstraintSolver::ErrorType::Ok);
+  EXPECT_LE(solver.result().max_error_squared, params.error_threshold * params.error_threshold);
+  EXPECT_LE(solver.result().rms_residual, params.error_threshold);
+
+  const float eps = 0.005f;
+  EXPECT_V3_NEAR(positions[0], float3(0.0f, 0.0f, 0.0f), eps);
+  EXPECT_V3_NEAR(positions[1], float3(0.065f, 0.075f, 0.0f), eps);
+  EXPECT_V3_NEAR(positions[2], float3(0.0f, 0.0f, 1.0f), eps);
+  EXPECT_V3_NEAR(positions[3], float3(0.0824425220, 0.057f, 1.0f), eps);
+  EXPECT_V3_NEAR(positions[4], float3(0.118486673, 0.022f, 1.0f), eps);
+  EXPECT_V3_NEAR(positions[5], float3(0.0f, 0.0f, 2.0f), eps);
+  EXPECT_V3_NEAR(positions[6], float3(0.1f, 0.1f, 2.0f), eps);
+  EXPECT_V3_NEAR(positions[7], float3(0.125f, 0.057f, 2.0f), eps);
+  EXPECT_V3_NEAR(positions[8], float3(0.213f, 0.009f, 2.0f), eps);
+}
+
+#define DO_PERF_TESTS 0
+
+#if DO_PERF_TESTS
+
+const uint32_t randomized_curves_seed = 12345;
+const uint32_t randomized_offset_seed = 23451;
 
 static float3 random_point_inside_unit_sphere(RandomNumberGenerator &rng)
 {
