@@ -123,7 +123,7 @@ TEST(curves_constraints, LengthAndRootConstraint)
   EXPECT_V3_NEAR(positions[8], float3(0.213f, 0.009f, 2.0f), eps);
 }
 
-#define DO_PERF_TESTS 0
+#define DO_PERF_TESTS 1
 
 #if DO_PERF_TESTS
 
@@ -144,9 +144,9 @@ static Mesh *create_noise_grid(const float noise = 0.1f, const int resolution = 
   const int tot_polys = (resolution - 1) * (resolution - 1);
   const int tot_loops = tot_polys * 4;
   Mesh *mesh = BKE_mesh_new_nomain(tot_verts, 0, 0, tot_loops, tot_polys);
-  MVert *mvert = mesh->mvert;
-  MPoly *mpoly = mesh->mpoly;
-  MLoop *mloop = mesh->mloop;
+  const MutableSpan<MVert> mverts(mesh->mvert, mesh->totvert);
+  const MutableSpan<MPoly> mpolys(mesh->mpoly, mesh->totpoly);
+  const MutableSpan<MLoop> mloops(mesh->mloop, mesh->totloop);
 
   for (const int i : IndexRange(resolution)) {
     for (const int j : IndexRange(resolution)) {
@@ -155,7 +155,7 @@ static Mesh *create_noise_grid(const float noise = 0.1f, const int resolution = 
       co += noise * (offset - float3(0.5f));
 
       const int vert_i = i * resolution + j;
-      copy_v3_v3(mvert[vert_i].co, co);
+      copy_v3_v3(mverts[vert_i].co, co);
     }
   }
 
@@ -165,13 +165,13 @@ static Mesh *create_noise_grid(const float noise = 0.1f, const int resolution = 
       const int poly_i = i * (resolution - 1) + j;
       const int loop_i = poly_i * 4;
 
-      mpoly[poly_i].loopstart = loop_i;
-      mpoly[poly_i].totloop = 4;
+      mpolys[poly_i].loopstart = loop_i;
+      mpolys[poly_i].totloop = 4;
 
-      mloop[loop_i + 0].v = vert_i;
-      mloop[loop_i + 1].v = vert_i + 1;
-      mloop[loop_i + 2].v = vert_i + resolution + 1;
-      mloop[loop_i + 3].v = vert_i + resolution;
+      mloops[loop_i + 0].v = vert_i;
+      mloops[loop_i + 1].v = vert_i + 1;
+      mloops[loop_i + 2].v = vert_i + resolution + 1;
+      mloops[loop_i + 3].v = vert_i + resolution;
     }
   }
 
