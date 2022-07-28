@@ -143,7 +143,14 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
     if (params_.use_collision_constraints) {
       find_contact_points(curves, surface, transforms, max_collision_distance, changed_curves);
     }
-    solve_constraints(curves, changed_curves);
+    switch (params_.solver_type) {
+      case SolverType::Sequential:
+        solve_sequential(curves, changed_curves);
+        break;
+      case SolverType::PositionBasedDynamics:
+        solve_position_based_dynamics(curves, changed_curves);
+        break;
+    }
   }
 
   result_.timing.step_total += PIL_check_seconds_timer() - step_start;
@@ -244,12 +251,112 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
   result_.timing.find_contacts += PIL_check_seconds_timer() - find_contacts_start;
 }
 
-void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> changed_curves) const
+void ConstraintSolver::apply_distance_constraint(float3 &point_a,
+                                                 float3 &point_b,
+                                                 const float segment_length,
+                                                 const float weight_a,
+                                                 const float weight_b) const
+{
+  float length_cu;
+  const float3 direction = math::normalize_and_get_length(point_b - point_a, length_cu);
+  /* Constraint function */
+  const float C = length_cu - segment_length;
+  const float3 gradient = direction;
+
+  /* Lagrange multiplier */
+  const float lambda = -C / (weight_a + weight_b + params_.alpha);
+  point_a -= gradient * lambda * weight_a;
+  point_b += gradient * lambda * weight_b;
+}
+
+float ConstraintSolver::get_distance_constraint_error(const float3 &point_a,
+                                                      const float3 &point_b,
+                                                      const float segment_length) const
+{
+  float length_cu = math::length(point_b - point_a);
+  /* Constraint function */
+  const float C = length_cu - segment_length;
+  return C;
+}
+
+void ConstraintSolver::apply_contact_constraint(float3 &point,
+                                                const float radius,
+                                                const ConstraintSolver::Contact &contact) const
+{
+  /* Constraint function */
+  const float C = math::dot(point - contact.point_, contact.normal_) - radius;
+  const float3 gradient = contact.normal_;
+
+  /* Lagrange multiplier */
+  const float lambda = -C / (1.0f + params_.alpha);
+  if (lambda > 0.0f) {
+    point += gradient * lambda;
+  }
+}
+
+float ConstraintSolver::get_contact_constraint_error(
+    const float3 &point, const float radius, const ConstraintSolver::Contact &contact) const
+{
+  /* Constraint function */
+  const float C = math::dot(point - contact.point_, contact.normal_) - radius;
+  return math::min(C, 0.0f);
+}
+
+
+void ConstraintSolver::solve_sequential(CurvesGeometry &curves, VArray<int> changed_curves) const
+{
+  /* Simple sequential solver that needs only a single iteration,
+   * as described in "Fast Simulation of Inextensible Hair and Fur"
+   * by Matthias Mueller and Tae Yong Kim. */
+
+  double solve_constraints_start = PIL_check_seconds_timer();
+
+  MutableSpan<float3> positions_cu = curves.positions_for_write();
+  VArray<float> radius = curves.attributes().lookup_or_default<float>(
+      "radius", ATTR_DOMAIN_POINT, 0.0f);
+
+  if (params_.use_length_constraints) {
+    threading::parallel_for(
+        changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
+          for (const int idx_curve : range) {
+            const int curve_i = changed_curves[idx_curve];
+            const IndexRange points = curves.points_for_curve(curve_i);
+
+            result_.constraint_count += points.size() - 1;
+
+            for (const int segment_i : IndexRange(points.size() - 1)) {
+              /* Distance constraints */
+              const int point_a = points[segment_i];
+              const int point_b = points[segment_i + 1];
+              const float segment_length = segment_lengths_cu_[point_a];
+              float3 &pa = positions_cu[point_a];
+              float3 &pb = positions_cu[point_b];
+
+              apply_distance_constraint(pa, pb, segment_length, 0.0f, 1.0f);
+            }
+          }
+        });
+  }
+
+  if (result_.constraint_count > 0) {
+    result_.rms_residual = sqrt(result_.error_squared_sum / result_.constraint_count);
+  }
+  else {
+    result_.rms_residual = 0.0;
+  }
+  if (result_.max_error_squared > params_.error_threshold * params_.error_threshold) {
+    result_.error = ErrorType::NotConverged;
+  }
+
+  result_.timing.solve_constraints += PIL_check_seconds_timer() - solve_constraints_start;
+}
+
+void ConstraintSolver::solve_position_based_dynamics(CurvesGeometry &curves,
+                                                     VArray<int> changed_curves) const
 {
   /* Gauss-Seidel method for solving length and contact constraints.
    * See for example "Position-Based Simulation Methods in Computer Graphics"
-   * by Mueller et. al. for an in-depth description.
-   */
+   * by Mueller et. al. for an in-depth description. */
 
   double solve_constraints_start = PIL_check_seconds_timer();
 
@@ -258,14 +365,6 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
       "radius", ATTR_DOMAIN_POINT, 0.0f);
 
   const int skipped_root_points = params_.use_root_constraints ? 1 : 0;
-
-  /* Compliance (inverse stiffness)
-   * Alpha is used in physical simulation to control the softness of a constraint:
-   * For alpha == 0 the constraint is stiff and the maximum correction factor is applied.
-   * For values > 0 the constraint becomes squishy, and some violation is
-   * permitted, and the constraint gets corrected over multiple time steps.
-   */
-  const float alpha = 0.0f;
 
   threading::parallel_for(
       changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
@@ -280,23 +379,13 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
               for (const int segment_i : IndexRange(points.size() - 1)) {
                 const int point_a = points[segment_i];
                 const int point_b = points[segment_i + 1];
+                const float segment_length = segment_lengths_cu_[point_a];
                 float3 &pa = positions_cu[point_a];
                 float3 &pb = positions_cu[point_b];
 
                 const float w0 = (segment_i < skipped_root_points ? 0.0f : 1.0f);
                 const float w1 = 1.0f;
-                const float w = w0 + w1;
-
-                float length_cu;
-                const float3 direction = math::normalize_and_get_length(pb - pa, length_cu);
-                const float expected_length_cu = segment_lengths_cu_[point_a];
-                /* Constraint function */
-                const float C = length_cu - expected_length_cu;
-                const float3 gradient = direction;
-                /* Lagrange multiplier */
-                const float lambda = -C / (w + alpha);
-                pa -= gradient * lambda * w0;
-                pb += gradient * lambda * w1;
+                apply_distance_constraint(pa, pb, segment_length, w0, w1);
               }
             }
 
@@ -311,14 +400,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
                 const Span<Contact> contacts = contacts_.as_span().slice(
                     params_.max_contacts_per_point * point_i, contacts_num);
                 for (const Contact &c : contacts) {
-                  /* Constraint function */
-                  const float C = math::dot(p - c.point_, c.normal_) - radius_p;
-                  const float3 gradient = c.normal_;
-                  /* Lagrange multiplier */
-                  const float lambda = -C / (1.0f + alpha);
-                  if (lambda > 0.0f) {
-                    p += gradient * lambda;
-                  }
+                  apply_contact_constraint(p, radius_p, c);
                 }
               }
             }
@@ -332,20 +414,12 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
             for (const int segment_i : IndexRange(points.size() - 1)) {
               const int point_a = points[segment_i];
               const int point_b = points[segment_i + 1];
-              float3 &pa = positions_cu[point_a];
-              float3 &pb = positions_cu[point_b];
+              const float segment_length = segment_lengths_cu_[point_a];
+              const float3 &pa = positions_cu[point_a];
+              const float3 &pb = positions_cu[point_b];
 
-              const float w0 = (segment_i < skipped_root_points ? 0.0f : 1.0f);
-              const float w1 = 1.0f;
-              const float w = w0 + w1;
-
-              float length_cu = math::length(pb - pa);
-              const float expected_length_cu = segment_lengths_cu_[point_a];
-              /* Constraint function */
-              const float C = length_cu - expected_length_cu;
-              /* Lagrange multiplier */
-              const float lambda = -C / (w + alpha);
-              const double error_sq = lambda * lambda;
+              const float error = get_distance_constraint_error(pa, pb, segment_length);
+              const double error_sq = error * error;
               result_.error_squared_sum += error_sq;
               result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
             }
@@ -363,15 +437,10 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
               const Span<Contact> contacts = contacts_.as_span().slice(
                   params_.max_contacts_per_point * point_i, contacts_num);
               for (const Contact &c : contacts) {
-                /* Constraint function */
-                const float C = math::dot(p - c.point_, c.normal_) - radius_p;
-                /* Lagrange multiplier */
-                const float lambda = -C / (1.0f + alpha);
-                if (lambda > 0.0f) {
-                  const double error_sq = lambda * lambda;
-                  result_.error_squared_sum += error_sq;
-                  result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
-                }
+                const float error = get_contact_constraint_error(p, radius_p, c);
+                const double error_sq = error * error;
+                result_.error_squared_sum += error_sq;
+                result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
               }
             }
           }

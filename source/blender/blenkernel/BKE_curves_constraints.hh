@@ -14,18 +14,46 @@ namespace blender::bke::curves {
 
 class ConstraintSolver {
  public:
+  enum SolverType {
+    /* A fast single-iteration solver that solves constraints sequentially
+     * from the root down (Follow-the-Leader, FTL).
+     * The result is not physically correct, but very fast to compute.
+     * This solver type is suitable for editing, but not so much for accurate
+     * physical simulations, since the root side of a curve is infinitely stiff.
+     *
+     * For details see "Fast Simulation of Inextensible Hair and Fur"
+     * by Matthias Mueller and Tae Yong Kim. */
+    Sequential,
+    /* Position Based Dynamics (PBD) solves constraints based on relative mass.
+     * The solver requires multiple iterations per step. This is generally slower
+     * than the FTL method, but leads to physically correct movement.
+     *
+     * Based on "XPBD: Position-Based Simulation of Compliant Constrained Dynamics" */
+    PositionBasedDynamics,
+  };
+
   enum ErrorType {
     Ok,
     NotConverged,
   };
 
   struct Params {
+    SolverType solver_type = SolverType::Sequential;
+
     /* Keep the distance between points constant. */
     bool use_length_constraints = true;
     /* Root point is fixed to the surface. */
     bool use_root_constraints = true;
     /* Points do not penetrate the surface. */
     bool use_collision_constraints = true;
+
+    /* Compliance (inverse stiffness)
+     * Alpha is used in physical simulation to control the softness of a constraint:
+     * For alpha == 0 the constraint is stiff and the maximum correction factor is applied.
+     * For values > 0 the constraint becomes squishy, and some violation is
+     * permitted, and the constraint gets corrected over multiple time steps.
+     */
+    float alpha = 0.0f;
 
     /* Number of substeps to perform.
      * More substeps can be faster overall because of reduced search radius for collisions. */
@@ -124,10 +152,28 @@ class ConstraintSolver {
                            float max_dist,
                            VArray<int> changed_curves);
 
-  /**
-   * Satisfy constraints on curve points based on initial deformation.
-   */
-  void solve_constraints(CurvesGeometry &curves, VArray<int> changed_curves) const;
+  void apply_distance_constraint(float3 &point_a,
+                                 float3 &point_b,
+                                 float segment_length,
+                                 float weight_a,
+                                 float weight_b) const;
+
+  float get_distance_constraint_error(const float3 &point_a,
+                                      const float3 &point_b,
+                                      const float segment_length) const;
+
+  void apply_contact_constraint(float3 &point,
+                                float radius,
+                                const ConstraintSolver::Contact &contact) const;
+
+  float get_contact_constraint_error(const float3 &point,
+                                     float radius,
+                                     const ConstraintSolver::Contact &contact) const;
+
+  /** Solve constraints using the sequential follow-the-leader method. */
+  void solve_sequential(CurvesGeometry &curves, VArray<int> changed_curves) const;
+  /** Solve constraints using the position-based-dynamics method. */
+  void solve_position_based_dynamics(CurvesGeometry &curves, VArray<int> changed_curves) const;
 };
 
 }  // namespace blender::bke::curves
