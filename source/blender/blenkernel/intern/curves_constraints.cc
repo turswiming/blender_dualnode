@@ -194,9 +194,8 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
           for (const int point_i : points) {
             const float3 &new_p = curves.positions()[point_i];
 
-            MutableSpan<Contact> contacts(contacts_.begin() +
-                                              params_.max_contacts_per_point * point_i,
-                                          params_.max_contacts_per_point);
+            MutableSpan<Contact> contacts = contacts_.as_mutable_span().slice(
+                params_.max_contacts_per_point * point_i, params_.max_contacts_per_point);
 
             float3 p_su = transforms.curves_to_surface * new_p;
             BLI_bvhtree_range_query_cpp(
@@ -309,9 +308,8 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
                 float3 &p = positions_cu[point_i];
                 const float radius_p = radius[point_i];
                 const int contacts_num = contacts_num_[point_i];
-                Span<Contact> contacts(
-                    contacts_.begin() + params_.max_contacts_per_point * point_i,
-                                       contacts_num);
+                Span<Contact> contacts = contacts_.as_span().slice(
+                    params_.max_contacts_per_point * point_i, contacts_num);
                 for (const Contact &c : contacts) {
                   /* Constraint function */
                   const float C = math::dot(p - c.point_, c.normal_) - radius_p;
@@ -362,8 +360,8 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
               const float radius_p = radius[point_i];
               const int contacts_num = contacts_num_[point_i];
               result_.constraint_count += contacts_num;
-              Span<Contact> contacts(contacts_.begin() + params_.max_contacts_per_point * point_i,
-                                     contacts_num);
+              Span<Contact> contacts = contacts_.as_span().slice(
+                  params_.max_contacts_per_point * point_i, contacts_num);
               for (const Contact &c : contacts) {
                 /* Constraint function */
                 const float C = math::dot(p - c.point_, c.normal_) - radius_p;
