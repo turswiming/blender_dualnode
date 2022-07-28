@@ -116,8 +116,8 @@ extern "C" __global__ void __anyhit__kernel_optix_local_hit()
   isect->type = kernel_data_fetch(objects, isect->object).primitive_type;
 
   const float2 barycentrics = optixGetTriangleBarycentrics();
-  isect->u = 1.0f - barycentrics.y - barycentrics.x;
-  isect->v = barycentrics.x;
+  isect->u = barycentrics.x;
+  isect->v = barycentrics.y;
 
   /* Record geometric normal. */
   const uint tri_vindex = kernel_data_fetch(tri_vindex, prim).w;
@@ -152,8 +152,8 @@ extern "C" __global__ void __anyhit__kernel_optix_shadow_all_hit()
   int type = 0;
   if (optixIsTriangleHit()) {
     const float2 barycentrics = optixGetTriangleBarycentrics();
-    u = 1.0f - barycentrics.y - barycentrics.x;
-    v = barycentrics.x;
+    u = barycentrics.x;
+    v = barycentrics.y;
     type = kernel_data_fetch(objects, object).primitive_type;
   }
 #  ifdef __HAIR__
@@ -166,7 +166,7 @@ extern "C" __global__ void __anyhit__kernel_optix_shadow_all_hit()
     prim = segment.prim;
 
 #    if OPTIX_ABI_VERSION < 55
-    /* Filter out curve endcaps. */
+    /* Filter out curve end-caps. */
     if (u == 0.0f || u == 1.0f) {
       return optixIgnoreIntersection();
     }
@@ -290,7 +290,7 @@ extern "C" __global__ void __anyhit__kernel_optix_visibility_test()
 #ifdef __HAIR__
 #  if OPTIX_ABI_VERSION < 55
   if (optixGetPrimitiveType() == OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE) {
-    /* Filter out curve endcaps. */
+    /* Filter out curve end-caps. */
     const float u = __uint_as_float(optixGetAttribute_0());
     if (u == 0.0f || u == 1.0f) {
       return optixIgnoreIntersection();
@@ -336,8 +336,8 @@ extern "C" __global__ void __closesthit__kernel_optix_hit()
 
   if (optixIsTriangleHit()) {
     const float2 barycentrics = optixGetTriangleBarycentrics();
-    optixSetPayload_1(__float_as_uint(1.0f - barycentrics.y - barycentrics.x));
-    optixSetPayload_2(__float_as_uint(barycentrics.x));
+    optixSetPayload_1(__float_as_uint(barycentrics.x));
+    optixSetPayload_2(__float_as_uint(barycentrics.y));
     optixSetPayload_3(prim);
     optixSetPayload_5(kernel_data_fetch(objects, object).primitive_type);
   }
