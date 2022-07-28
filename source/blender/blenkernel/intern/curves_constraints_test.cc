@@ -71,12 +71,12 @@ TEST(curves_constraints, LengthAndRootConstraint)
 {
   CurvesGeometry curves(9, 3);
   curves.fill_curve_types(CURVE_TYPE_POLY);
-  MutableSpan<int> point_offsets = curves.offsets_for_write();
+  const MutableSpan<int> point_offsets = curves.offsets_for_write();
   point_offsets[0] = 0;
   point_offsets[1] = 2;
   point_offsets[2] = 6;
   point_offsets[3] = 9;
-  MutableSpan<float3> positions = curves.positions_for_write();
+  const MutableSpan<float3> positions = curves.positions_for_write();
   positions[0] = float3(.0f, 0, 0);
   positions[1] = float3(.1f, 0, 0);
 
@@ -89,7 +89,7 @@ TEST(curves_constraints, LengthAndRootConstraint)
   positions[7] = float3(.15f, 0, 2);
   positions[8] = float3(.25f, 0, 2);
 
-  CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
+  const CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
 
   ConstraintSolver solver;
   ConstraintSolver::Params params;
@@ -97,9 +97,9 @@ TEST(curves_constraints, LengthAndRootConstraint)
 
   solver.initialize(params, curves, curves.curves_range());
 
-  VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
+  const VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
                                                     [](int64_t i) { return (int)i; });
-  Array<float3> orig_positions = curves.positions();
+  const Array<float3> orig_positions = curves.positions();
 
   positions[1].y += 0.1f;
   positions[3].y += 0.1f;
@@ -123,7 +123,7 @@ TEST(curves_constraints, LengthAndRootConstraint)
   EXPECT_V3_NEAR(positions[8], float3(0.213f, 0.009f, 2.0f), eps);
 }
 
-#define DO_PERF_TESTS 1
+#define DO_PERF_TESTS 0
 
 #if DO_PERF_TESTS
 
@@ -151,7 +151,7 @@ static Mesh *create_noise_grid(const float noise = 0.1f, const int resolution = 
   for (const int i : IndexRange(resolution)) {
     for (const int j : IndexRange(resolution)) {
       float3 co = float3((float)i - 0.5f, (float)j - 0.5f, 0) * size;
-      float3 offset = noise::perlin_float3_fractal_distorted(co, 2.0f, 0.5f, 0.0f);
+      const float3 offset = noise::perlin_float3_fractal_distorted(co, 2.0f, 0.5f, 0.0f);
       co += noise * (offset - float3(0.5f));
 
       const int vert_i = i * resolution + j;
@@ -201,7 +201,7 @@ static CurvesGeometry create_randomized_curves(const int curve_num,
   curves.fill_curve_types(CURVE_TYPE_POLY);
   curves.offsets_for_write().copy_from(point_offsets);
 
-  MutableSpan<float3> positions = curves.positions_for_write();
+  const MutableSpan<float3> positions = curves.positions_for_write();
   for (int curve_i : curves.curves_range()) {
     float3 pos = random_point_inside_unit_sphere(rng);
     for (int point_i : curves.points_for_curve(curve_i)) {
@@ -226,7 +226,7 @@ static void randomized_point_offset(CurvesGeometry &curves,
   float3 n1, n2;
   ortho_basis_v3v3_v3(n1, n2, direction);
 
-  MutableSpan<float3> positions = curves.positions_for_write();
+  const MutableSpan<float3> positions = curves.positions_for_write();
   for (int i : changed_curves.index_range()) {
     const int curve_i = changed_curves[i];
     for (int point_i : curves.points_for_curve(curve_i)) {
@@ -289,7 +289,7 @@ Vector<CurveConstraintSolverPerfTestSuite::TestResult> CurveConstraintSolverPerf
 TEST_P(CurveConstraintSolverPerfTestSuite, UniformLengthConstraintPerformance)
 {
   CurvesGeometry curves = create_randomized_curves(10000, 4, 50, 0.1f, 0.1f);
-  CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
+  const CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
 
   Mesh *surface = create_noise_grid();
 
@@ -299,9 +299,9 @@ TEST_P(CurveConstraintSolverPerfTestSuite, UniformLengthConstraintPerformance)
 
   solver.initialize(params, curves, curves.curves_range());
 
-  VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
+  const VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
                                                     [](int64_t i) { return (int)i; });
-  Array<float3> orig_positions = curves.positions();
+  const Array<float3> orig_positions = curves.positions();
   randomized_point_offset(curves, changed_curves, 0.0f, 1.0f);
   solver.step_curves(curves, surface, transforms, orig_positions, changed_curves);
 
