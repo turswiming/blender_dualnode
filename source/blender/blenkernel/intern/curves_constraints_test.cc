@@ -20,7 +20,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
-namespace blender::bke::tests {
+namespace blender::bke::curves::tests {
 
 using curves::ConstraintSolver;
 
@@ -323,4 +323,4 @@ INSTANTIATE_TEST_SUITE_P(CurveConstraintSolverPerfTests,
 
 #endif  // DO_PERF_TESTS
 
-}  // namespace blender::bke::tests
+}  // namespace blender::bke::curves::tests
