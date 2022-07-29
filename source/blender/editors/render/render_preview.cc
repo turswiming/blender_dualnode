@@ -1045,7 +1045,7 @@ static Scene *gpencil_preview_scene_create(const struct ObjectPreviewData *previ
   Scene *scene = BKE_scene_add(preview_data->pr_main, "Object preview scene");
   /* Grease pencil needs to set the scene to the current frame or the strokes
    * will not be visible in the preview.  */
-  CFRA = preview_data->cfra;
+  scene->r.cfra = preview_data->cfra;
   ViewLayer *view_layer = (ViewLayer *)scene->view_layers.first;
   Depsgraph *depsgraph = DEG_graph_new(
       preview_data->pr_main, scene, view_layer, DAG_EVAL_VIEWPORT);
