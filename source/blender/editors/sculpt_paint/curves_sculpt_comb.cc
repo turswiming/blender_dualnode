@@ -173,10 +173,37 @@ struct CombOperationExecutor {
                               static_cast<Mesh *>(curves_id_orig_->surface->data) :
                               nullptr;
     self_->constraint_solver_.clear_result();
+
+    ///* Simple sequential loop */
+    //for (auto curves : changed_curves) {
+    //  self_->constraint_solver_.step_curves(
+    //      *curves_orig_, surface, transforms_, start_positions_, VArray<int>::ForSpan(curves));
+    //};
+
+    ///* Parallel loop with varying task size */
+    //threading::parallel_for_each(changed_curves, [&](const Vector<int> &changed_curves) {
+    //  self_->constraint_solver_.step_curves(
+    //      *curves_orig_, surface, transforms_, start_positions_, VArray<int>::ForSpan(changed_curves));
+    //});
+
+    /* Combine TLS curves into a single array (solver parallelizes internally) */
+    int totcurves = 0;
     for (auto curves : changed_curves) {
-      self_->constraint_solver_.step_curves(
-          *curves_orig_, surface, transforms_, start_positions_, VArray<int>::ForSpan(curves));
+      totcurves += curves.size();
     }
+    Array<int> all_changed_curves(totcurves);
+    totcurves = 0;
+    for (auto curves : changed_curves) {
+      all_changed_curves.as_mutable_span().slice(totcurves, curves.size()).copy_from(curves);
+      totcurves += curves.size();
+    };
+    self_->constraint_solver_.step_curves(
+        *curves_orig_, surface, transforms_, start_positions_, VArray<int>::ForSpan(all_changed_curves));
+
+    //{
+    //  std::cout << totcurves << ", " << self_->constraint_solver_.result().timing.step_total
+    //            << ", " << std::endl;
+    //}
 
     curves_orig_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_orig_->id, ID_RECALC_GEOMETRY);
