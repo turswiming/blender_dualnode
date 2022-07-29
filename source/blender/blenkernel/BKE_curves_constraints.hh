@@ -164,16 +164,23 @@ class ConstraintSolver {
 
   void apply_contact_constraint(float3 &point,
                                 float radius,
-                                const ConstraintSolver::Contact &contact) const;
+                                const Contact &contact) const;
 
   float get_contact_constraint_error(const float3 &point,
                                      float radius,
-                                     const ConstraintSolver::Contact &contact) const;
+                                     const Contact &contact) const;
 
-  /** Solve constraints using the sequential follow-the-leader method. */
-  void solve_sequential(CurvesGeometry &curves, VArray<int> changed_curves) const;
-  /** Solve constraints using the position-based-dynamics method. */
-  void solve_position_based_dynamics(CurvesGeometry &curves, VArray<int> changed_curves) const;
+  void solve_constraints(CurvesGeometry &curves, VArray<int> changed_curves) const;
+
+  void solve_curve_constraints(CurvesGeometry &curves,
+                               const VArray<float> radius,
+                               const IndexRange points) const;
+
+  void compute_error(CurvesGeometry &curves, VArray<int> changed_curves) const;
+
+  void compute_curve_error(const CurvesGeometry &curves,
+                           const VArray<float> radius,
+                           const IndexRange points) const;
 };
 
 }  // namespace blender::bke::curves

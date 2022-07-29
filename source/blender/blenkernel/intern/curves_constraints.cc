@@ -89,9 +89,9 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
                                    const Span<float3> start_positions,
                                    VArray<int> changed_curves)
 {
-  double step_start = PIL_check_seconds_timer();
+  const double step_start = PIL_check_seconds_timer();
 
-  MutableSpan<float3> positions = curves.positions_for_write();
+  const MutableSpan<float3> positions = curves.positions_for_write();
 
   const float max_substep_travel_distance = params_.max_travel_distance / params_.substep_count;
   const float max_collision_distance = 2.0f * max_substep_travel_distance;
@@ -143,14 +143,8 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
     if (params_.use_collision_constraints) {
       find_contact_points(curves, surface, transforms, max_collision_distance, changed_curves);
     }
-    switch (params_.solver_type) {
-      case SolverType::Sequential:
-        solve_sequential(curves, changed_curves);
-        break;
-      case SolverType::PositionBasedDynamics:
-        solve_position_based_dynamics(curves, changed_curves);
-        break;
-    }
+
+    solve_constraints(curves, changed_curves);
   }
 
   result_.timing.step_total += PIL_check_seconds_timer() - step_start;
@@ -177,11 +171,12 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
   const float max_dist_su = curves_to_surface_scale * max_dist;
   const float max_dist_sq_su = max_dist_su * max_dist_su;
 
-  Span<MLoopTri> surface_looptris = {BKE_mesh_runtime_looptri_ensure(surface),
-                                     BKE_mesh_runtime_looptri_len(surface)};
+  const Span<MLoopTri> surface_looptris = {BKE_mesh_runtime_looptri_ensure(surface),
+                                           BKE_mesh_runtime_looptri_len(surface)};
+
+  const double build_bvh_start = PIL_check_seconds_timer();
 
   /** BVH tree of the surface mesh for finding collisions. */
-  double build_bvh_start = PIL_check_seconds_timer();
   BVHTreeFromMesh surface_bvh;
   BKE_bvhtree_from_mesh_get(&surface_bvh, surface, BVHTREE_FROM_LOOPTRI, 2);
   BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&surface_bvh); });
@@ -204,7 +199,7 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
             const MutableSpan<Contact> contacts = contacts_.as_mutable_span().slice(
                 params_.max_contacts_per_point * point_i, params_.max_contacts_per_point);
 
-            float3 p_su = transforms.curves_to_surface * new_p;
+            const float3 p_su = transforms.curves_to_surface * new_p;
             BLI_bvhtree_range_query_cpp(
                 *surface_bvh.tree,
                 p_su,
@@ -302,69 +297,21 @@ float ConstraintSolver::get_contact_constraint_error(
   return math::min(C, 0.0f);
 }
 
-
-void ConstraintSolver::solve_sequential(CurvesGeometry &curves, VArray<int> changed_curves) const
+void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> changed_curves) const
 {
-  /* Simple sequential solver that needs only a single iteration,
-   * as described in "Fast Simulation of Inextensible Hair and Fur"
-   * by Matthias Mueller and Tae Yong Kim. */
+  const int solver_max_iterations = [&]() {
+    switch (params_.solver_type) {
+      case SolverType::Sequential:
+        return 1;
+      case SolverType::PositionBasedDynamics:
+        return params_.max_solver_iterations;
+    }
+  }();
 
-  double solve_constraints_start = PIL_check_seconds_timer();
+  const double solve_constraints_start = PIL_check_seconds_timer();
 
-  MutableSpan<float3> positions_cu = curves.positions_for_write();
   VArray<float> radius = curves.attributes().lookup_or_default<float>(
       "radius", ATTR_DOMAIN_POINT, 0.0f);
-
-  if (params_.use_length_constraints) {
-    threading::parallel_for(
-        changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
-          for (const int idx_curve : range) {
-            const int curve_i = changed_curves[idx_curve];
-            const IndexRange points = curves.points_for_curve(curve_i);
-
-            result_.constraint_count += points.size() - 1;
-
-            for (const int segment_i : IndexRange(points.size() - 1)) {
-              /* Distance constraints */
-              const int point_a = points[segment_i];
-              const int point_b = points[segment_i + 1];
-              const float segment_length = segment_lengths_cu_[point_a];
-              float3 &pa = positions_cu[point_a];
-              float3 &pb = positions_cu[point_b];
-
-              apply_distance_constraint(pa, pb, segment_length, 0.0f, 1.0f);
-            }
-          }
-        });
-  }
-
-  if (result_.constraint_count > 0) {
-    result_.rms_residual = sqrt(result_.error_squared_sum / result_.constraint_count);
-  }
-  else {
-    result_.rms_residual = 0.0;
-  }
-  if (result_.max_error_squared > params_.error_threshold * params_.error_threshold) {
-    result_.error = ErrorType::NotConverged;
-  }
-
-  result_.timing.solve_constraints += PIL_check_seconds_timer() - solve_constraints_start;
-}
-
-void ConstraintSolver::solve_position_based_dynamics(CurvesGeometry &curves,
-                                                     VArray<int> changed_curves) const
-{
-  /* Gauss-Seidel method for solving length and contact constraints.
-   * See for example "Position-Based Simulation Methods in Computer Graphics"
-   * by Mueller et. al. for an in-depth description. */
-
-  double solve_constraints_start = PIL_check_seconds_timer();
-
-  MutableSpan<float3> positions_cu = curves.positions_for_write();
-  VArray<float> radius = curves.attributes().lookup_or_default<float>(
-      "radius", ATTR_DOMAIN_POINT, 0.0f);
-
-  const int skipped_root_points = params_.use_root_constraints ? 1 : 0;
 
   threading::parallel_for(
       changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
@@ -373,79 +320,74 @@ void ConstraintSolver::solve_position_based_dynamics(CurvesGeometry &curves,
           const IndexRange points = curves.points_for_curve(curve_i);
 
           /* Solve constraints */
-          for (const int solver_i : IndexRange(params_.max_solver_iterations)) {
-            /* Distance constraints */
-            if (params_.use_length_constraints) {
-              for (const int segment_i : IndexRange(points.size() - 1)) {
-                const int point_a = points[segment_i];
-                const int point_b = points[segment_i + 1];
-                const float segment_length = segment_lengths_cu_[point_a];
-                float3 &pa = positions_cu[point_a];
-                float3 &pb = positions_cu[point_b];
-
-                const float w0 = (segment_i < skipped_root_points ? 0.0f : 1.0f);
-                const float w1 = 1.0f;
-                apply_distance_constraint(pa, pb, segment_length, w0, w1);
-              }
-            }
-
-            /* Contact constraints */
-            if (params_.use_collision_constraints) {
-              const IndexRange points = curves.points_for_curve(curve_i).drop_front(
-                  skipped_root_points);
-              for (const int point_i : points) {
-                float3 &p = positions_cu[point_i];
-                const float radius_p = radius[point_i];
-                const int contacts_num = contacts_num_[point_i];
-                const Span<Contact> contacts = contacts_.as_span().slice(
-                    params_.max_contacts_per_point * point_i, contacts_num);
-                for (const Contact &c : contacts) {
-                  apply_contact_constraint(p, radius_p, c);
-                }
-              }
-            }
-          }
-
-          /* Compute residuals */
-
-          /* Distance constraints */
-          if (params_.use_length_constraints) {
-            result_.constraint_count += points.size() - 1;
-            for (const int segment_i : IndexRange(points.size() - 1)) {
-              const int point_a = points[segment_i];
-              const int point_b = points[segment_i + 1];
-              const float segment_length = segment_lengths_cu_[point_a];
-              const float3 &pa = positions_cu[point_a];
-              const float3 &pb = positions_cu[point_b];
-
-              const float error = get_distance_constraint_error(pa, pb, segment_length);
-              const double error_sq = error * error;
-              result_.error_squared_sum += error_sq;
-              result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
-            }
-          }
-
-          /* Contact constraints */
-          if (params_.use_collision_constraints) {
-            const IndexRange points = curves.points_for_curve(curve_i).drop_front(
-                skipped_root_points);
-            for (const int point_i : points) {
-              float3 &p = positions_cu[point_i];
-              const float radius_p = radius[point_i];
-              const int contacts_num = contacts_num_[point_i];
-              result_.constraint_count += contacts_num;
-              const Span<Contact> contacts = contacts_.as_span().slice(
-                  params_.max_contacts_per_point * point_i, contacts_num);
-              for (const Contact &c : contacts) {
-                const float error = get_contact_constraint_error(p, radius_p, c);
-                const double error_sq = error * error;
-                result_.error_squared_sum += error_sq;
-                result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
-              }
-            }
+          for (const int solver_i : IndexRange(solver_max_iterations)) {
+            solve_curve_constraints(curves, radius, points);
           }
         }
       });
+
+  result_.timing.solve_constraints += PIL_check_seconds_timer() - solve_constraints_start;
+}
+
+void ConstraintSolver::solve_curve_constraints(CurvesGeometry &curves,
+                                               const VArray<float> radius,
+                                               const IndexRange points) const
+{
+  const int skipped_root_points = [&]() {
+    switch (params_.solver_type) {
+      /* The sequential solver only moves the 2nd point of each segment. */
+      case SolverType::Sequential:
+        return (int)points.size();
+      /* The PBD solver moves both points, except for the pinned root. */
+      case SolverType::PositionBasedDynamics:
+        return params_.use_root_constraints ? 1 : 0;
+    }
+  }();
+
+  MutableSpan<float3> positions_cu = curves.positions_for_write();
+
+  /* Distance constraints */
+  if (params_.use_length_constraints) {
+    for (const int segment_i : IndexRange(points.size() - 1)) {
+      const int point_a = points[segment_i];
+      const int point_b = points[segment_i + 1];
+      const float segment_length = segment_lengths_cu_[point_a];
+      float3 &pa = positions_cu[point_a];
+      float3 &pb = positions_cu[point_b];
+
+      const float w0 = (segment_i < skipped_root_points ? 0.0f : 1.0f);
+      const float w1 = 1.0f;
+      apply_distance_constraint(pa, pb, segment_length, w0, w1);
+    }
+  }
+
+  /* Contact constraints */
+  if (params_.use_collision_constraints) {
+    for (const int point_i : points.drop_front(skipped_root_points)) {
+      float3 &p = positions_cu[point_i];
+      const float radius_p = radius[point_i];
+      const int contacts_num = contacts_num_[point_i];
+      const Span<Contact> contacts = contacts_.as_span().slice(
+          params_.max_contacts_per_point * point_i, contacts_num);
+      for (const Contact &c : contacts) {
+        apply_contact_constraint(p, radius_p, c);
+      }
+    }
+  }
+}
+
+void ConstraintSolver::compute_error(CurvesGeometry &curves, VArray<int> changed_curves) const
+{
+  MutableSpan<float3> positions_cu = curves.positions_for_write();
+  VArray<float> radius = curves.attributes().lookup_or_default<float>(
+      "radius", ATTR_DOMAIN_POINT, 0.0f);
+
+  /* Accumulate error (no threading) */
+  for (int i : changed_curves.index_range()) {
+    const int curve_i = changed_curves[i];
+    const IndexRange points = curves.points_for_curve(curve_i);
+    compute_curve_error(curves, radius, points);
+  }
 
   if (result_.constraint_count > 0) {
     result_.rms_residual = sqrt(result_.error_squared_sum / result_.constraint_count);
@@ -453,11 +395,52 @@ void ConstraintSolver::solve_position_based_dynamics(CurvesGeometry &curves,
   else {
     result_.rms_residual = 0.0;
   }
+
   if (result_.max_error_squared > params_.error_threshold * params_.error_threshold) {
     result_.error = ErrorType::NotConverged;
   }
+}
 
-  result_.timing.solve_constraints += PIL_check_seconds_timer() - solve_constraints_start;
+void ConstraintSolver::compute_curve_error(const CurvesGeometry &curves,
+                                           const VArray<float> radius,
+                                           const IndexRange points) const
+{
+  Span<float3> positions_cu = curves.positions();
+
+  /* Distance constraints */
+  if (params_.use_length_constraints) {
+    result_.constraint_count += points.size() - 1;
+    for (const int segment_i : IndexRange(points.size() - 1)) {
+      const int point_a = points[segment_i];
+      const int point_b = points[segment_i + 1];
+      const float segment_length = segment_lengths_cu_[point_a];
+      const float3 &pa = positions_cu[point_a];
+      const float3 &pb = positions_cu[point_b];
+
+      const float error = get_distance_constraint_error(pa, pb, segment_length);
+      const double error_sq = error * error;
+      result_.error_squared_sum += error_sq;
+      result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
+    }
+  }
+
+  /* Contact constraints */
+  if (params_.use_collision_constraints) {
+    for (const int point_i : points) {
+      const float3 &p = positions_cu[point_i];
+      const float radius_p = radius[point_i];
+      const int contacts_num = contacts_num_[point_i];
+      result_.constraint_count += contacts_num;
+      const Span<Contact> contacts = contacts_.as_span().slice(
+          params_.max_contacts_per_point * point_i, contacts_num);
+      for (const Contact &c : contacts) {
+        const float error = get_contact_constraint_error(p, radius_p, c);
+        const double error_sq = error * error;
+        result_.error_squared_sum += error_sq;
+        result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
+      }
+    }
+  }
 }
 
 }  // namespace blender::bke::curves
