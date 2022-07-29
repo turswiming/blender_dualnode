@@ -178,7 +178,8 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
 
   /** BVH tree of the surface mesh for finding collisions. */
   BVHTreeFromMesh surface_bvh;
-  BKE_bvhtree_from_mesh_get(&surface_bvh, surface, BVHTREE_FROM_LOOPTRI, 2);
+  BKE_bvhtree_from_mesh_get(
+      &surface_bvh, surface, BVHTREE_FROM_LOOPTRI, params_.bvh_branching_factor);
   BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&surface_bvh); });
   if (!surface_bvh.cached) {
     result_.timing.build_bvh += PIL_check_seconds_timer() - build_bvh_start;

@@ -69,6 +69,9 @@ class ConstraintSolver {
     /* Maximum number of simultaneous contacts to record per point. */
     int max_contacts_per_point = 4;
 
+    /* Branching factor for the surface mesh BVH. */
+    int bvh_branching_factor = 2;
+
     /* Number of iterations to satisfy constraints. */
     int max_solver_iterations = 5;
 

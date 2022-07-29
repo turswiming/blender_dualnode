@@ -24,7 +24,7 @@ namespace blender::bke::curves::tests {
 
 using curves::ConstraintSolver;
 
-class BaseTestSuite : public testing::Test {
+class CurveConstraintSolverPerfTestSuite : public testing::Test {
  public:
   /* Sets up Blender just enough to not crash on creating a mesh. */
   static void SetUpTestSuite()
@@ -123,7 +123,7 @@ TEST(curves_constraints, LengthAndRootConstraint)
   EXPECT_V3_NEAR(positions[8], float3(0.213f, 0.009f, 2.0f), eps);
 }
 
-#define DO_PERF_TESTS 0
+#define DO_PERF_TESTS 1
 
 #if DO_PERF_TESTS
 
@@ -253,8 +253,9 @@ static void print_test_stats(const CurvesGeometry &curves, const ConstraintSolve
             << " ms, solve: " << result.timing.solve_constraints * 1000.0f << " ms" << std::endl;
 }
 
-class CurveConstraintSolverPerfTestSuite : public BaseTestSuite,
-                                           public testing::WithParamInterface<int> {
+class SolverIterationsTestSuite : public CurveConstraintSolverPerfTestSuite,
+                                  public testing::WithParamInterface<int>
+{
  public:
   struct TestResult {
     int param;
@@ -264,7 +265,7 @@ class CurveConstraintSolverPerfTestSuite : public BaseTestSuite,
 
   static void SetUpTestSuite()
   {
-    BaseTestSuite::SetUpTestSuite();
+    CurveConstraintSolverPerfTestSuite::SetUpTestSuite();
 
     results_.clear();
   }
@@ -280,15 +281,15 @@ class CurveConstraintSolverPerfTestSuite : public BaseTestSuite,
                 << result.solver_result.timing.solve_constraints << std::endl;
     }
 
-    BaseTestSuite::TearDownTestSuite();
+    CurveConstraintSolverPerfTestSuite::TearDownTestSuite();
   }
 };
 
-Vector<CurveConstraintSolverPerfTestSuite::TestResult> CurveConstraintSolverPerfTestSuite::results_;
+Vector<SolverIterationsTestSuite::TestResult> SolverIterationsTestSuite::results_;
 
-TEST_P(CurveConstraintSolverPerfTestSuite, UniformLengthConstraintPerformance)
+TEST_P(SolverIterationsTestSuite, RandomizedTest)
 {
-  CurvesGeometry curves = create_randomized_curves(10000, 4, 50, 0.1f, 0.1f);
+  CurvesGeometry curves = create_randomized_curves(10000, 4, 50, 0.1f, 0.2f);
   const CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
 
   Mesh *surface = create_noise_grid();
@@ -308,16 +309,85 @@ TEST_P(CurveConstraintSolverPerfTestSuite, UniformLengthConstraintPerformance)
   BKE_id_free(nullptr, surface);
 
   print_test_stats(curves, solver.result());
-  CurveConstraintSolverPerfTestSuite::results_.append(
-      CurveConstraintSolverPerfTestSuite::TestResult{GetParam(), solver.result()});
+  SolverIterationsTestSuite::results_.append(
+      SolverIterationsTestSuite::TestResult{GetParam(), solver.result()});
 }
 
-INSTANTIATE_TEST_SUITE_P(CurveConstraintSolverPerfTests,
-                         CurveConstraintSolverPerfTestSuite,
+INSTANTIATE_TEST_SUITE_P(SolverIterationsTests,
+                         SolverIterationsTestSuite,
                          testing::Values(1, 5, 10, 20, 50, 100),
                          [](const testing::TestParamInfo<int> info) {
                            std::stringstream ss;
-                           ss << "MaxIterationsTest_" << info.param;
+                           ss << "SolverIterationsTest_" << info.param;
+                           return ss.str();
+                         });
+
+class BVHBranchingFactorTestSuite : public CurveConstraintSolverPerfTestSuite,
+                                    public testing::WithParamInterface<int> {
+ public:
+  struct TestResult {
+    int param;
+    ConstraintSolver::Result solver_result;
+  };
+  static Vector<TestResult> results_;
+
+  static void SetUpTestSuite()
+  {
+    CurveConstraintSolverPerfTestSuite::SetUpTestSuite();
+
+    results_.clear();
+  }
+
+  static void TearDownTestSuite()
+  {
+    /* CSV printout for simple data import */
+    std::cout << "BVH Branching Factor,RMS Error,Max Error,Collision Detection (ms),Solve Time (ms)"
+              << std::endl;
+    for (const TestResult &result : results_) {
+      std::cout << result.param << "," << result.solver_result.rms_residual << ","
+                << sqrtf(result.solver_result.max_error_squared) << ","
+                << result.solver_result.timing.find_contacts << ","
+                << result.solver_result.timing.solve_constraints << std::endl;
+    }
+
+    CurveConstraintSolverPerfTestSuite::TearDownTestSuite();
+  }
+};
+
+Vector<BVHBranchingFactorTestSuite::TestResult> BVHBranchingFactorTestSuite::results_;
+
+TEST_P(BVHBranchingFactorTestSuite, RandomizedTest)
+{
+  CurvesGeometry curves = create_randomized_curves(10000, 4, 50, 0.1f, 0.2f);
+  const CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
+
+  Mesh *surface = create_noise_grid();
+
+  ConstraintSolver solver;
+  ConstraintSolver::Params params;
+  params.bvh_branching_factor = GetParam();
+
+  solver.initialize(params, curves, curves.curves_range());
+
+  const VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
+                                                          [](int64_t i) { return (int)i; });
+  const Array<float3> orig_positions = curves.positions();
+  randomized_point_offset(curves, changed_curves, 0.0f, 1.0f);
+  solver.step_curves(curves, surface, transforms, orig_positions, changed_curves);
+
+  BKE_id_free(nullptr, surface);
+
+  print_test_stats(curves, solver.result());
+  BVHBranchingFactorTestSuite::results_.append(
+      BVHBranchingFactorTestSuite::TestResult{GetParam(), solver.result()});
+}
+
+INSTANTIATE_TEST_SUITE_P(BVHBranchingFactorTests,
+                         BVHBranchingFactorTestSuite,
+                         testing::Values(2, 4, 6, 8, 16, 32),
+                         [](const testing::TestParamInfo<int> info) {
+                           std::stringstream ss;
+                           ss << "BVHBranchingFactorTest_" << info.param;
                            return ss.str();
                          });
 
