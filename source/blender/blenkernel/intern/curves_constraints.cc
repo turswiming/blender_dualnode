@@ -354,8 +354,11 @@ void ConstraintSolver::solve_curve_constraints(CurvesGeometry &curves,
 
   MutableSpan<float3> positions_cu = curves.positions_for_write();
 
+  result_.constraint_count = 0;
+
   /* Distance constraints */
   if (params_.use_length_constraints) {
+    result_.constraint_count += points.size() - 1;
     for (const int segment_i : IndexRange(points.size() - 1)) {
       const int point_a = points[segment_i];
       const int point_b = points[segment_i + 1];
@@ -375,6 +378,8 @@ void ConstraintSolver::solve_curve_constraints(CurvesGeometry &curves,
       float3 &p = positions_cu[point_i];
       const float radius_p = radius[point_i];
       const int contacts_num = contacts_num_[point_i];
+      result_.constraint_count += contacts_num;
+
       const Span<Contact> contacts = contacts_.as_span().slice(
           params_.max_contacts_per_point * point_i, contacts_num);
       for (const Contact &c : contacts) {
@@ -397,14 +402,15 @@ void ConstraintSolver::compute_error(const CurvesGeometry &curves, VArray<int> c
   }
 
   if (result_.constraint_count > 0) {
-    result_.rms_residual = sqrt(result_.error_squared_sum / result_.constraint_count);
+    result_.residual.rms_error = sqrt(result_.residual.error_squared_sum /
+                                      result_.constraint_count);
   }
   else {
-    result_.rms_residual = 0.0;
+    result_.residual.rms_error = 0.0;
   }
 
-  if (result_.max_error_squared > params_.error_threshold * params_.error_threshold) {
-    result_.error = ErrorType::NotConverged;
+  if (result_.residual.max_error_squared > params_.error_threshold * params_.error_threshold) {
+    result_.status = Result::Status::ErrorNoConvergence;
   }
 }
 
@@ -416,7 +422,6 @@ void ConstraintSolver::compute_curve_error(const CurvesGeometry &curves,
 
   /* Distance constraints */
   if (params_.use_length_constraints) {
-    result_.constraint_count += points.size() - 1;
     for (const int segment_i : IndexRange(points.size() - 1)) {
       const int point_a = points[segment_i];
       const int point_b = points[segment_i + 1];
@@ -426,8 +431,8 @@ void ConstraintSolver::compute_curve_error(const CurvesGeometry &curves,
 
       const float error = get_distance_constraint_error(pa, pb, segment_length);
       const double error_sq = error * error;
-      result_.error_squared_sum += error_sq;
-      result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
+      result_.residual.error_squared_sum += error_sq;
+      result_.residual.max_error_squared = std::max(result_.residual.max_error_squared, error_sq);
     }
   }
 
@@ -437,14 +442,14 @@ void ConstraintSolver::compute_curve_error(const CurvesGeometry &curves,
       const float3 &p = positions_cu[point_i];
       const float radius_p = radius[point_i];
       const int contacts_num = contacts_num_[point_i];
-      result_.constraint_count += contacts_num;
       const Span<Contact> contacts = contacts_.as_span().slice(
           params_.max_contacts_per_point * point_i, contacts_num);
       for (const Contact &c : contacts) {
         const float error = get_contact_constraint_error(p, radius_p, c);
         const double error_sq = error * error;
-        result_.error_squared_sum += error_sq;
-        result_.max_error_squared = std::max(result_.max_error_squared, error_sq);
+        result_.residual.error_squared_sum += error_sq;
+        result_.residual.max_error_squared = std::max(result_.residual.max_error_squared,
+                                                      error_sq);
       }
     }
   }

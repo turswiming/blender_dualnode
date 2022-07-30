@@ -107,9 +107,9 @@ TEST(curves_constraints, LengthAndRootConstraint)
 
   solver.step_curves(curves, nullptr, transforms, orig_positions, changed_curves);
 
-  EXPECT_EQ(solver.result().error, ConstraintSolver::ErrorType::Ok);
-  EXPECT_LE(solver.result().max_error_squared, params.error_threshold * params.error_threshold);
-  EXPECT_LE(solver.result().rms_residual, params.error_threshold);
+  EXPECT_EQ(solver.result().status, ConstraintSolver::Result::Status::Ok);
+  EXPECT_LE(solver.result().residual.max_error_squared, params.error_threshold * params.error_threshold);
+  EXPECT_LE(solver.result().residual.rms_error, params.error_threshold);
 
   const float eps = 0.005f;
   EXPECT_V3_NEAR(positions[0], float3(0.0f, 0.0f, 0.0f), eps);
@@ -245,7 +245,8 @@ static void print_test_stats(const CurvesGeometry &curves, const ConstraintSolve
   const testing::TestInfo *const test_info = testing::UnitTest::GetInstance()->current_test_info();
 
   std::cout << "Curves: " << curves.curves_num() << " Points: " << curves.points_num() << std::endl;
-  std::cout << "RMS=" << result.rms_residual << " max error=" << sqrt(result.max_error_squared)
+  std::cout << "RMS=" << result.residual.rms_error
+            << " max error=" << sqrt(result.residual.max_error_squared)
             << std::endl;
   std::cout << "total: " << result.timing.step_total * 1000.0f
             << " ms, build bvh: " << result.timing.build_bvh * 1000.0f
@@ -280,8 +281,8 @@ class SolverPerfTestSuite : public CurveConstraintSolverPerfTestSuite,
     /* CSV printout for simple data import */
     std::cout << "Parameter,RMS Error,Max Error,Collision Detection (ms),Solve Time (ms)" << std::endl;
     for (const TestResult &result : results()) {
-      std::cout << result.param << "," << result.solver_result.rms_residual << ","
-                << sqrtf(result.solver_result.max_error_squared) << ","
+      std::cout << result.param << "," << result.solver_result.residual.rms_error << ","
+                << sqrtf(result.solver_result.residual.max_error_squared) << ","
                 << result.solver_result.timing.find_contacts << ","
                 << result.solver_result.timing.solve_constraints << std::endl;
     }

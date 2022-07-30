@@ -32,11 +32,6 @@ class ConstraintSolver {
     PositionBasedDynamics,
   };
 
-  enum ErrorType {
-    Ok,
-    NotConverged,
-  };
-
   struct Params {
     SolverType solver_type = SolverType::Sequential;
 
@@ -80,23 +75,32 @@ class ConstraintSolver {
   };
 
   struct Result {
-    ErrorType error = ErrorType::Ok;
+    enum Status {
+      Ok,
+      ErrorNoConvergence,
+    };
+
+    Status status = Status::Ok;
 
     /* True if any point's original travel was larger than the allowed maximum.
      * If clamping is enabled the point's travel will be shorter than the input. */
     bool max_travel_exceeded = false;
 
-    /* Root-mean-square of the constraint residuals, indicating numerical quality
-     * of the solution. For a positional solver this value is in length units
-     * and describes how far constraints are violated on average. */
-    double rms_residual = 0.0;
-
-    /* Sum of squared errors (in length units). */
-    double error_squared_sum = 0.0;
-    /* Largest squared error. */
-    double max_error_squared = 0.0;
     /* Total number of constraints solved. */
     int constraint_count = 0;
+
+    /* Residual error values to judge convergence.
+     * Eror computation must be explicitly enabled during solving. */
+    struct {
+      /* Root-mean-square of the constraint residuals, indicating numerical quality
+       * of the solution. For a positional solver this value is in length units
+       * and describes how far constraints are violated on average. */
+      double rms_error = 0.0;
+      /* Sum of squared errors (in length units). */
+      double error_squared_sum = 0.0;
+      /* Largest squared error. */
+      double max_error_squared = 0.0;
+    } residual;
 
     struct {
       /* Time in seconds for the entire step. */
