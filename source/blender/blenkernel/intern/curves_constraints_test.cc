@@ -317,6 +317,7 @@ using SolverIterationsTestSuite = SolverPerfTestSuite<int>;
 TEST_P(SolverIterationsTestSuite, RandomizedTest)
 {
   ConstraintSolver::Params params;
+  params.solver_type = ConstraintSolver::SolverType::PositionBasedDynamics;
   params.max_solver_iterations = GetParam();
 
   randomized_test(GetParam(), params);
