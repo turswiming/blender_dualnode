@@ -146,7 +146,8 @@ class ConstraintSolver {
                    const Mesh *surface,
                    const CurvesSurfaceTransforms &transforms,
                    Span<float3> start_positions,
-                   VArray<int> changed_curves);
+                   VArray<int> changed_curves,
+                   bool update_error = false);
 
  private:
   void find_contact_points(const CurvesGeometry &curves,
@@ -179,7 +180,7 @@ class ConstraintSolver {
                                const VArray<float> radius,
                                const IndexRange points) const;
 
-  void compute_error(CurvesGeometry &curves, VArray<int> changed_curves) const;
+  void compute_error(const CurvesGeometry &curves, VArray<int> changed_curves) const;
 
   void compute_curve_error(const CurvesGeometry &curves,
                            const VArray<float> radius,

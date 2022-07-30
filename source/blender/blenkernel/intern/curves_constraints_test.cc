@@ -303,7 +303,7 @@ class SolverPerfTestSuite : public CurveConstraintSolverPerfTestSuite,
                                                             [](int64_t i) { return (int)i; });
     const Array<float3> orig_positions = curves.positions();
     randomized_point_offset(curves, changed_curves, 0.0f, 1.0f);
-    solver.step_curves(curves, surface, transforms, orig_positions, changed_curves);
+    solver.step_curves(curves, surface, transforms, orig_positions, changed_curves, true);
 
     BKE_id_free(nullptr, surface);
 

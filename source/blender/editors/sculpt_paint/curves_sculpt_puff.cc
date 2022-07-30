@@ -169,7 +169,6 @@ struct PuffOperationExecutor {
       }
     }
 
-    self_->constraint_solver_.clear_result();
     self_->constraint_solver_.step_curves(*curves_,
                                           surface_,
                                           transforms_,

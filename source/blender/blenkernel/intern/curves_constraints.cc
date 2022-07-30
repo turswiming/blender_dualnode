@@ -87,9 +87,12 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
                                    const Mesh *surface,
                                    const CurvesSurfaceTransforms &transforms,
                                    const Span<float3> start_positions,
-                                   VArray<int> changed_curves)
+                                   VArray<int> changed_curves,
+                                   bool update_error)
 {
   const double step_start = PIL_check_seconds_timer();
+
+  clear_result();
 
   const MutableSpan<float3> positions = curves.positions_for_write();
 
@@ -145,6 +148,10 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
     }
 
     solve_constraints(curves, changed_curves);
+  }
+
+  if (update_error) {
+    compute_error(curves, changed_curves);
   }
 
   result_.timing.step_total += PIL_check_seconds_timer() - step_start;
@@ -377,9 +384,8 @@ void ConstraintSolver::solve_curve_constraints(CurvesGeometry &curves,
   }
 }
 
-void ConstraintSolver::compute_error(CurvesGeometry &curves, VArray<int> changed_curves) const
+void ConstraintSolver::compute_error(const CurvesGeometry &curves, VArray<int> changed_curves) const
 {
-  MutableSpan<float3> positions_cu = curves.positions_for_write();
   VArray<float> radius = curves.attributes().lookup_or_default<float>(
       "radius", ATTR_DOMAIN_POINT, 0.0f);
 

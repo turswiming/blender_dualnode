@@ -160,7 +160,6 @@ struct PinchOperationExecutor {
     const Mesh *surface = curves_id_->surface && curves_id_->surface->type == OB_MESH ?
                               static_cast<Mesh *>(curves_id_->surface->data) :
                               nullptr;
-    self_->constraint_solver_.clear_result();
     self_->constraint_solver_.step_curves(*curves_,
                                           surface,
                                           transforms_,

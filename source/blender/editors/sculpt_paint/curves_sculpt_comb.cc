@@ -172,7 +172,6 @@ struct CombOperationExecutor {
     const Mesh *surface = curves_id_orig_->surface && curves_id_orig_->surface->type == OB_MESH ?
                               static_cast<Mesh *>(curves_id_orig_->surface->data) :
                               nullptr;
-    self_->constraint_solver_.clear_result();
 
     ///* Simple sequential loop */
     //for (auto curves : changed_curves) {
