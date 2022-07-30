@@ -321,14 +321,14 @@ static void do_draw_brush_task_cb_ex(void *__restrict userdata,
                                                     vd.no,
                                                     vd.fno,
                                                     vd.mask ? *vd.mask : 0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], offset, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -426,14 +426,14 @@ static void do_fill_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], val, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -531,14 +531,14 @@ static void do_scrape_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], val, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -656,14 +656,14 @@ static void do_clay_thumb_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], val, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -818,14 +818,14 @@ static void do_flatten_brush_task_cb_ex(void *__restrict userdata,
                                                                   vd.no,
                                                                   vd.fno,
                                                                   vd.mask ? *vd.mask : 0.0f,
-                                                                  vd.index,
+                                                                  vd.vertex,
                                                                   thread_id,
                                                                   &automask_data);
 
       mul_v3_v3fl(proxy[vd.i], val, fade);
 
       if (vd.mvert) {
-        BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+        BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
       }
     }
   }
@@ -982,14 +982,14 @@ static void do_clay_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], val, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1116,14 +1116,14 @@ static void do_clay_strips_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], val, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1276,7 +1276,7 @@ static void do_snake_hook_brush_task_cb_ex(void *__restrict userdata,
                                                       vd.no,
                                                       vd.fno,
                                                       vd.mask ? *vd.mask : 0.0f,
-                                                      vd.index,
+                                                      vd.vertex,
                                                       thread_id,
                                                       &automask_data);
     }
@@ -1327,12 +1327,12 @@ static void do_snake_hook_brush_task_cb_ex(void *__restrict userdata,
       }
       mul_v3_fl(
           disp,
-          SCULPT_automasking_factor_get(ss->cache->automasking, ss, vd.index, &automask_data));
+          SCULPT_automasking_factor_get(ss->cache->automasking, ss, vd.vertex, &automask_data));
       copy_v3_v3(proxy[vd.i], disp);
     }
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1418,14 +1418,14 @@ static void do_thumb_brush_task_cb_ex(void *__restrict userdata,
                                                                 orig_data.no,
                                                                 NULL,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], cono, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1497,7 +1497,7 @@ static void do_rotate_brush_task_cb_ex(void *__restrict userdata,
                                                                 orig_data.no,
                                                                 NULL,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
@@ -1508,7 +1508,7 @@ static void do_rotate_brush_task_cb_ex(void *__restrict userdata,
     sub_v3_v3(proxy[vd.i], orig_data.co);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1575,7 +1575,7 @@ static void do_layer_brush_task_cb_ex(void *__restrict userdata,
                                                     vd.no,
                                                     vd.fno,
                                                     vd.mask ? *vd.mask : 0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
 
@@ -1612,9 +1612,10 @@ static void do_layer_brush_task_cb_ex(void *__restrict userdata,
     float normal[3];
 
     if (use_persistent_base) {
-      SCULPT_vertex_persistent_normal_get(ss, vi, normal);
+      SCULPT_vertex_persistent_normal_get(ss, vd.vertex, normal);
       mul_v3_fl(normal, brush->height);
-      madd_v3_v3v3fl(final_co, SCULPT_vertex_persistent_co_get(ss, vi), normal, *disp_factor);
+      madd_v3_v3v3fl(
+          final_co, SCULPT_vertex_persistent_co_get(ss, vd.vertex), normal, *disp_factor);
     }
     else {
       copy_v3_v3(normal, orig_data.no);
@@ -1630,7 +1631,7 @@ static void do_layer_brush_task_cb_ex(void *__restrict userdata,
     SCULPT_clip(sd, ss, vd.co, final_co);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1694,7 +1695,7 @@ static void do_inflate_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
     float val[3];
@@ -1710,7 +1711,7 @@ static void do_inflate_brush_task_cb_ex(void *__restrict userdata,
     mul_v3_v3v3(proxy[vd.i], val, ss->cache->scale);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1769,14 +1770,14 @@ static void do_nudge_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], cono, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1855,7 +1856,7 @@ static void do_crease_brush_task_cb_ex(void *__restrict userdata,
                                                     vd.no,
                                                     vd.fno,
                                                     vd.mask ? *vd.mask : 0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
     float val1[3];
@@ -1877,7 +1878,7 @@ static void do_crease_brush_task_cb_ex(void *__restrict userdata,
     add_v3_v3v3(proxy[vd.i], val1, val2);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -1978,7 +1979,7 @@ static void do_pinch_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
     float disp_center[3];
@@ -2003,7 +2004,7 @@ static void do_pinch_brush_task_cb_ex(void *__restrict userdata,
     mul_v3_v3fl(proxy[vd.i], disp_center, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2101,7 +2102,7 @@ static void do_grab_brush_task_cb_ex(void *__restrict userdata,
                                                           orig_data.no,
                                                           NULL,
                                                           vd.mask ? *vd.mask : 0.0f,
-                                                          vd.index,
+                                                          vd.vertex,
                                                           thread_id,
                                                           &automask_data);
 
@@ -2119,7 +2120,7 @@ static void do_grab_brush_task_cb_ex(void *__restrict userdata,
     mul_v3_v3fl(proxy[vd.i], grab_delta, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2225,13 +2226,14 @@ static void do_elastic_deform_brush_task_cb_ex(void *__restrict userdata,
       mul_v3_fl(final_disp, 1.0f - *vd.mask);
     }
 
-    mul_v3_fl(final_disp,
-              SCULPT_automasking_factor_get(ss->cache->automasking, ss, vd.index, &automask_data));
+    mul_v3_fl(
+        final_disp,
+        SCULPT_automasking_factor_get(ss->cache->automasking, ss, vd.vertex, &automask_data));
 
     copy_v3_v3(proxy[vd.i], final_disp);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2309,14 +2311,14 @@ static void do_draw_sharp_brush_task_cb_ex(void *__restrict userdata,
                                                     orig_data.no,
                                                     NULL,
                                                     vd.mask ? *vd.mask : 0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], offset, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2399,7 +2401,7 @@ static void do_topology_slide_task_cb_ex(void *__restrict userdata,
                                                     orig_data.no,
                                                     NULL,
                                                     vd.mask ? *vd.mask : 0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
     float current_disp[3];
@@ -2422,10 +2424,10 @@ static void do_topology_slide_task_cb_ex(void *__restrict userdata,
     mul_v3_v3fl(current_disp, current_disp_norm, ss->cache->bstrength);
 
     SculptVertexNeighborIter ni;
-    SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vd.index, ni) {
+    SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vd.vertex, ni) {
       float vertex_disp[3];
       float vertex_disp_norm[3];
-      sub_v3_v3v3(vertex_disp, SCULPT_vertex_co_get(ss, ni.index), vd.co);
+      sub_v3_v3v3(vertex_disp, SCULPT_vertex_co_get(ss, ni.vertex), vd.co);
       normalize_v3_v3(vertex_disp_norm, vertex_disp);
       if (dot_v3v3(current_disp_norm, vertex_disp_norm) > 0.0f) {
         madd_v3_v3fl(final_disp, vertex_disp_norm, dot_v3v3(current_disp, vertex_disp));
@@ -2436,7 +2438,7 @@ static void do_topology_slide_task_cb_ex(void *__restrict userdata,
     mul_v3_v3fl(proxy[vd.i], final_disp, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2455,31 +2457,31 @@ void SCULPT_relax_vertex(SculptSession *ss,
   int neighbor_count = 0;
   zero_v3(smooth_pos);
   zero_v3(boundary_normal);
-  const bool is_boundary = SCULPT_vertex_is_boundary(ss, vd->index);
+  const bool is_boundary = SCULPT_vertex_is_boundary(ss, vd->vertex);
 
   SculptVertexNeighborIter ni;
-  SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vd->index, ni) {
+  SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vd->vertex, ni) {
     neighbor_count++;
     if (!filter_boundary_face_sets ||
-        (filter_boundary_face_sets && !SCULPT_vertex_has_unique_face_set(ss, ni.index))) {
+        (filter_boundary_face_sets && !SCULPT_vertex_has_unique_face_set(ss, ni.vertex))) {
 
       /* When the vertex to relax is boundary, use only connected boundary vertices for the average
        * position. */
       if (is_boundary) {
-        if (!SCULPT_vertex_is_boundary(ss, ni.index)) {
+        if (!SCULPT_vertex_is_boundary(ss, ni.vertex)) {
           continue;
         }
-        add_v3_v3(smooth_pos, SCULPT_vertex_co_get(ss, ni.index));
+        add_v3_v3(smooth_pos, SCULPT_vertex_co_get(ss, ni.vertex));
         avg_count++;
 
         /* Calculate a normal for the constraint plane using the edges of the boundary. */
         float to_neighbor[3];
-        sub_v3_v3v3(to_neighbor, SCULPT_vertex_co_get(ss, ni.index), vd->co);
+        sub_v3_v3v3(to_neighbor, SCULPT_vertex_co_get(ss, ni.vertex), vd->co);
         normalize_v3(to_neighbor);
         add_v3_v3(boundary_normal, to_neighbor);
       }
       else {
-        add_v3_v3(smooth_pos, SCULPT_vertex_co_get(ss, ni.index));
+        add_v3_v3(smooth_pos, SCULPT_vertex_co_get(ss, ni.vertex));
         avg_count++;
       }
     }
@@ -2508,7 +2510,7 @@ void SCULPT_relax_vertex(SculptSession *ss,
     normalize_v3_v3(vno, boundary_normal);
   }
   else {
-    SCULPT_vertex_normal_get(ss, vd->index, vno);
+    SCULPT_vertex_normal_get(ss, vd->vertex, vno);
   }
 
   if (is_zero_v3(vno)) {
@@ -2563,13 +2565,13 @@ static void do_topology_relax_task_cb_ex(void *__restrict userdata,
                                                     orig_data.no,
                                                     NULL,
                                                     vd.mask ? *vd.mask : 0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
 
     SCULPT_relax_vertex(ss, &vd, fade * bstrength, false, vd.co);
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2646,18 +2648,18 @@ static void do_displacement_eraser_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     float limit_co[3];
     float disp[3];
-    SCULPT_vertex_limit_surface_get(ss, vd.index, limit_co);
+    SCULPT_vertex_limit_surface_get(ss, vd.vertex, limit_co);
     sub_v3_v3v3(disp, limit_co, vd.co);
     mul_v3_v3fl(proxy[vd.i], disp, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2719,7 +2721,7 @@ static void do_displacement_smear_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
@@ -2747,11 +2749,11 @@ static void do_displacement_smear_brush_task_cb_ex(void *__restrict userdata,
     float weights_accum = 1.0f;
 
     SculptVertexNeighborIter ni;
-    SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vd.index, ni) {
+    SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vd.vertex, ni) {
       float vertex_disp[3];
       float vertex_disp_norm[3];
       float neighbor_limit_co[3];
-      SCULPT_vertex_limit_surface_get(ss, ni.index, neighbor_limit_co);
+      SCULPT_vertex_limit_surface_get(ss, ni.vertex, neighbor_limit_co);
       sub_v3_v3v3(vertex_disp,
                   ss->cache->limit_surface_co[ni.index],
                   ss->cache->limit_surface_co[vd.index]);
@@ -2776,7 +2778,7 @@ static void do_displacement_smear_brush_task_cb_ex(void *__restrict userdata,
     interp_v3_v3v3(vd.co, vd.co, new_co, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2791,7 +2793,7 @@ static void do_displacement_smear_store_prev_disp_task_cb_ex(
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     sub_v3_v3v3(ss->cache->prev_displacement[vd.index],
-                SCULPT_vertex_co_get(ss, vd.index),
+                SCULPT_vertex_co_get(ss, vd.vertex),
                 ss->cache->limit_surface_co[vd.index]);
   }
   BKE_pbvh_vertex_iter_end;
@@ -2810,9 +2812,11 @@ void SCULPT_do_displacement_smear_brush(Sculpt *sd, Object *ob, PBVHNode **nodes
         totvert, sizeof(float[3]), "prev displacement");
     ss->cache->limit_surface_co = MEM_malloc_arrayN(totvert, sizeof(float[3]), "limit surface co");
     for (int i = 0; i < totvert; i++) {
-      SCULPT_vertex_limit_surface_get(ss, i, ss->cache->limit_surface_co[i]);
+      PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+      SCULPT_vertex_limit_surface_get(ss, vertex, ss->cache->limit_surface_co[i]);
       sub_v3_v3v3(ss->cache->prev_displacement[i],
-                  SCULPT_vertex_co_get(ss, i),
+                  SCULPT_vertex_co_get(ss, vertex),
                   ss->cache->limit_surface_co[i]);
     }
   }
@@ -2886,7 +2890,7 @@ static void do_topology_rake_bmesh_task_cb_ex(void *__restrict userdata,
                                                     vd.no,
                                                     vd.fno,
                                                     *vd.mask,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data) *
                        ss->cache->pressure;
@@ -2902,7 +2906,7 @@ static void do_topology_rake_bmesh_task_cb_ex(void *__restrict userdata,
     SCULPT_clip(sd, ss, vd.co, val);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -2969,7 +2973,6 @@ static void do_mask_brush_draw_task_cb_ex(void *__restrict userdata,
     }
 
     SCULPT_automasking_node_update(ss, &automask_data, &vd);
-
     const float fade = SCULPT_brush_strength_factor(ss,
                                                     brush,
                                                     vd.co,
@@ -2977,7 +2980,7 @@ static void do_mask_brush_draw_task_cb_ex(void *__restrict userdata,
                                                     vd.no,
                                                     vd.fno,
                                                     0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
 
@@ -2990,7 +2993,7 @@ static void do_mask_brush_draw_task_cb_ex(void *__restrict userdata,
     *vd.mask = clamp_f(*vd.mask, 0.0f, 1.0f);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
     BKE_pbvh_vertex_iter_end;
   }

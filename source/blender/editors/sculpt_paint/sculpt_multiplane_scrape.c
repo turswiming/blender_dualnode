@@ -93,7 +93,7 @@ static void calc_multiplane_scrape_surface_task_cb(void *__restrict userdata,
                                                     vd.no,
                                                     vd.fno,
                                                     vd.mask ? *vd.mask : 0.0f,
-                                                    vd.index,
+                                                    vd.vertex,
                                                     thread_id,
                                                     &automask_data);
 
@@ -209,14 +209,14 @@ static void do_multiplane_scrape_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     mul_v3_v3fl(proxy[vd.i], val, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;

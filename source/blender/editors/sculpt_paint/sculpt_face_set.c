@@ -145,7 +145,7 @@ static void do_draw_face_sets_brush_task_cb_ex(void *__restrict userdata,
                                                                     vd.no,
                                                                     vd.fno,
                                                                     vd.mask ? *vd.mask : 0.0f,
-                                                                    vd.index,
+                                                                    vd.vertex,
                                                                     thread_id,
                                                                     &automask_data);
 
@@ -165,12 +165,12 @@ static void do_draw_face_sets_brush_task_cb_ex(void *__restrict userdata,
                                                                   vd.no,
                                                                   vd.fno,
                                                                   vd.mask ? *vd.mask : 0.0f,
-                                                                  vd.index,
+                                                                  vd.vertex,
                                                                   thread_id,
                                                                   &automask_data);
 
       if (fade > 0.05f) {
-        SCULPT_vertex_face_set_set(ss, vd.index, ss->cache->paint_face_set);
+        SCULPT_vertex_face_set_set(ss, vd.vertex, ss->cache->paint_face_set);
       }
     }
   }
@@ -207,7 +207,7 @@ static void do_relax_face_sets_brush_task_cb_ex(void *__restrict userdata,
     if (!sculpt_brush_test_sq_fn(&test, vd.co)) {
       continue;
     }
-    if (relax_face_sets == SCULPT_vertex_has_unique_face_set(ss, vd.index)) {
+    if (relax_face_sets == SCULPT_vertex_has_unique_face_set(ss, vd.vertex)) {
       continue;
     }
 
@@ -218,13 +218,13 @@ static void do_relax_face_sets_brush_task_cb_ex(void *__restrict userdata,
                                                                 vd.no,
                                                                 vd.fno,
                                                                 vd.mask ? *vd.mask : 0.0f,
-                                                                vd.index,
+                                                                vd.vertex,
                                                                 thread_id,
                                                                 &automask_data);
 
     SCULPT_relax_vertex(ss, &vd, fade * bstrength, relax_face_sets, vd.co);
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -333,8 +333,11 @@ static int sculpt_face_set_create_exec(bContext *C, wmOperator *op)
 
   if (mode == SCULPT_FACE_SET_MASKED) {
     for (int i = 0; i < tot_vert; i++) {
-      if (SCULPT_vertex_mask_get(ss, i) >= threshold && SCULPT_vertex_visible_get(ss, i)) {
-        SCULPT_vertex_face_set_set(ss, i, next_face_set);
+      PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+      if (SCULPT_vertex_mask_get(ss, vertex) >= threshold &&
+          SCULPT_vertex_visible_get(ss, vertex)) {
+        SCULPT_vertex_face_set_set(ss, vertex, next_face_set);
       }
     }
   }
@@ -346,7 +349,9 @@ static int sculpt_face_set_create_exec(bContext *C, wmOperator *op)
      * sets and the performance hit of rendering the overlay. */
     bool all_visible = true;
     for (int i = 0; i < tot_vert; i++) {
-      if (!SCULPT_vertex_visible_get(ss, i)) {
+      PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+      if (!SCULPT_vertex_visible_get(ss, vertex)) {
         all_visible = false;
         break;
       }
@@ -360,15 +365,19 @@ static int sculpt_face_set_create_exec(bContext *C, wmOperator *op)
     }
 
     for (int i = 0; i < tot_vert; i++) {
-      if (SCULPT_vertex_visible_get(ss, i)) {
-        SCULPT_vertex_face_set_set(ss, i, next_face_set);
+      PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+      if (SCULPT_vertex_visible_get(ss, vertex)) {
+        SCULPT_vertex_face_set_set(ss, vertex, next_face_set);
       }
     }
   }
 
   if (mode == SCULPT_FACE_SET_ALL) {
     for (int i = 0; i < tot_vert; i++) {
-      SCULPT_vertex_face_set_set(ss, i, next_face_set);
+      PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+      SCULPT_vertex_face_set_set(ss, vertex, next_face_set);
     }
   }
 
@@ -878,7 +887,9 @@ static int sculpt_face_sets_change_visibility_exec(bContext *C, wmOperator *op)
      * be synced from face sets to non-manifold vertices. */
     if (BKE_pbvh_type(ss->pbvh) == PBVH_GRIDS) {
       for (int i = 0; i < tot_vert; i++) {
-        if (!SCULPT_vertex_visible_get(ss, i)) {
+        PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+        if (!SCULPT_vertex_visible_get(ss, vertex)) {
           hidden_vertex = true;
           break;
         }
@@ -1231,9 +1242,11 @@ static void sculpt_face_set_edit_fair_face_set(Object *ob,
   SCULPT_boundary_info_ensure(ob);
 
   for (int i = 0; i < totvert; i++) {
-    fair_vertices[i] = !SCULPT_vertex_is_boundary(ss, i) &&
-                       SCULPT_vertex_has_face_set(ss, i, active_face_set_id) &&
-                       SCULPT_vertex_has_unique_face_set(ss, i);
+    PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+    fair_vertices[i] = !SCULPT_vertex_is_boundary(ss, vertex) &&
+                       SCULPT_vertex_has_face_set(ss, vertex, active_face_set_id) &&
+                       SCULPT_vertex_has_unique_face_set(ss, vertex);
   }
 
   MVert *mvert = SCULPT_mesh_deformed_mverts_get(ss);
