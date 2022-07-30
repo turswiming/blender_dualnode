@@ -4,6 +4,9 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* to-do: this seems like a relative expensive computation, and we can make it a lot cheaper
+ * by using a bounding sphere instead of a bounding box. This will be more inaccurate, but it
+ * might be fine when used along with the adaptive splitting. */
 ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
                                                const float3 bbox_max,
                                                const float3 P,
@@ -77,6 +80,15 @@ ccl_device float light_tree_node_importance(const float3 P,
   return importance;
 }
 
+/* This is uniformly sampling the reservoir for now. */
+ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
+                                                     const float3 P,
+                                                     const float3 N,
+                                                     int emitter_index)
+{
+  return 1.0f;
+}
+
 ccl_device float light_tree_emitter_importance(KernelGlobals kg,
                                                const float3 P,
                                                const float3 N,
@@ -100,6 +112,40 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
       P, N, bbox_min, bbox_max, bcone_axis, kemitter->theta_o, kemitter->theta_e, kemitter->energy);
 }
 
+/* to-do: this is using a lot of the same calculations as the cluster importance,
+ * so it may be better to compute these once and then hold on to it somewhere. */
+ccl_device float light_tree_should_split(KernelGlobals kg,
+                                         const float3 P,
+                                         const ccl_global KernelLightTreeNode *knode)
+{
+  const float3 bbox_min = make_float3(
+      knode->bounding_box_min[0], knode->bounding_box_min[1], knode->bounding_box_min[2]);
+  const float3 bbox_max = make_float3(
+      knode->bounding_box_max[0], knode->bounding_box_max[1], knode->bounding_box_max[2]);
+  const float3 centroid = 0.5f * bbox_min + 0.5f * bbox_max;
+
+  const float radius = len(bbox_max - centroid);
+  const float distance = len(P - centroid);
+
+  if (distance < radius) {
+    return true;
+  }
+
+  const float a = distance - radius;
+  const float b = distance + radius;
+
+  const float E_g = 1.0f / (a * b);
+  const float E_e = knode->energy;
+
+  /* This is a simplified version of the expression given in the paper. */
+  const float V_g = (b - a) * (b - a) * E_g * E_g * E_g / 3.0f;
+  const float V_e = knode->energy_variance;
+
+  const float total_variance = V_e * V_g + V_e * E_g * E_g + E_e * E_e * V_g;
+  const float normalized_variance = sqrt(sqrt(1.0f / (1.0f + sqrt(total_variance))));
+  return (normalized_variance < kernel_data.integrator.splitting_threshold);
+}
+
 ccl_device float light_tree_cluster_importance(KernelGlobals kg,
                                                const float3 P,
                                                const float3 N,
@@ -117,52 +163,13 @@ ccl_device float light_tree_cluster_importance(KernelGlobals kg,
       P, N, bbox_min, bbox_max, bcone_axis, knode->theta_o, knode->theta_e, knode->energy);
 }
 
-/* to-do: for now, we're not going to worry about being in a volume for now,
- * but this seems to be a good way to differentiate whether we're in a volume or not. */
-template<bool in_volume_segment>
-ccl_device int light_tree_sample(KernelGlobals kg,
-                                  ccl_private const RNGState *rng_state,
-                                  float *randu,
-                                  const float randv,
-                                  const float time,
-                                  const float3 N,
-                                  const float3 P,
-                                  const int bounce,
-                                  const uint32_t path_flag,
-                                  ccl_private LightSample *ls,
-                                  float *pdf_factor)
+ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
+                                                 float *randu,
+                                                 const float3 P,
+                                                 const float3 N,
+                                                 const ccl_global KernelLightTreeNode *knode,
+                                                 float *pdf_factor)
 {
-  /* First traverse the light tree until a leaf node is reached. */
-  /* Also keep track of the probability of traversing to a given node, */
-  /* so that we can scale our PDF accordingly later. */
-  int index = 0;
-
-  /* to-do: is it better to generate a new random sample for each step of the traversal? */
-  const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
-  while (knode->child_index > 0) {
-    /* At an interior node, the left child is directly next to the parent,
-     * while the right child is stored as the child index. */
-    const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, index + 1);
-    const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes, knode->child_index);
-
-    const float left_importance = light_tree_cluster_importance(kg, P, N, left);
-    const float right_importance = light_tree_cluster_importance(kg, P, N, right);
-    float left_probability = left_importance / (left_importance + right_importance);
-
-    if (*randu < left_probability) {
-      index = index + 1;
-      knode = left;
-      *randu = *randu / left_probability;
-      *pdf_factor *= left_probability;
-    }
-    else {
-      index = knode->child_index;
-      knode = right;
-      *randu = (*randu - left_probability) / (1.0f - left_probability);
-      *pdf_factor *= (1.0f - left_probability);
-    }
-  }
-
   /* Right now, sampling is done by incrementing the CDF by the PDF.
    * However, we first need to calculate the total importance so that we can normalize the CDF. */
   float total_emitter_importance = 0.0f;
@@ -173,7 +180,7 @@ ccl_device int light_tree_sample(KernelGlobals kg,
 
   /* to-do: need to handle a case when total importance is 0. */
   if (total_emitter_importance == 0.0f) {
-    return false;
+    return -1;
   }
 
   /* Once we have the total importance, we can normalize the CDF and sample it. */
@@ -187,44 +194,160 @@ ccl_device int light_tree_sample(KernelGlobals kg,
     if (*randu < emitter_cdf + emitter_pdf) {
       *randu = (*randu - emitter_cdf) / emitter_pdf;
       *pdf_factor *= emitter_pdf;
-      ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(
-          light_tree_emitters, prim_index);
-
-      /* to-do: this is the same code as light_distribution_sample, except the index is determined
-       * differently. Would it be better to refactor this into a separate function? */
-      const int prim = kemitter->prim_id;
-
-      if (prim >= 0) {
-        /* Mesh light. */
-        const int object = kemitter->mesh_light.object_id;
-
-        /* Exclude synthetic meshes from shadow catcher pass. */
-        if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
-            !(kernel_data_fetch(object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
-          return false;
-        }
-
-        const int shader_flag = kemitter->mesh_light.shader_flag;
-        triangle_light_sample<in_volume_segment>(kg, prim, object, *randu, randv, time, ls, P);
-        ls->shader |= shader_flag;
-
-        return (ls->pdf > 0.0f);
-      }
-
-      const int lamp = -prim - 1;
-
-      if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
-        return false;
-      }
-
-      return light_sample<in_volume_segment>(kg, lamp, *randu, randv, P, path_flag, ls);
+      return prim_index;
     }
     emitter_cdf += emitter_pdf;
   }
 
-  /* We should never reach this point. */
+  /* This point should never be reached. */
   assert(false);
   return -1;
+}
+
+/* to-do: for now, we're not going to worry about being in a volume for now,
+ * but this seems to be a good way to differentiate whether we're in a volume or not. */
+template<bool in_volume_segment>
+ccl_device bool light_tree_sample(KernelGlobals kg,
+                                  ccl_private const RNGState *rng_state,
+                                  float *randu,
+                                  const float randv,
+                                  const float time,
+                                  const float3 N,
+                                  const float3 P,
+                                  const int bounce,
+                                  const uint32_t path_flag,
+                                  ccl_private LightSample *ls,
+                                  float *pdf_factor)
+{
+  /* We keep track of the currently selected primitive and its weight,
+   * as well as the total weight as part of the weighted reservoir sampling. */
+  int current_light = -1;
+  float current_weight = -1.0f;
+  float total_weight = 0.0f;
+  float current_pdf = 1.0f;
+
+  /* We need a stack to substitute for recursion. */
+  const int stack_size = 32;
+  int stack[stack_size];
+  float pdfs[stack_size];
+  int stack_index = 0;
+  stack[0] = 0;
+  pdfs[0] = 1.0f;
+
+  /* First traverse the light tree until a leaf node is reached.
+   * Also keep track of the probability of traversing to a given node,
+   * so that we can scale our PDF accordingly later. */
+  while (stack_index >= 0) {
+    const float pdf = pdfs[stack_index];
+    const int index = stack[stack_index];
+    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
+
+    /* If we're at a leaf node, we choose a primitive. Otherwise, we check if we should split
+     * or traverse down the light tree. */
+    if (knode->child_index <= 0) {
+      float light_probability = 1.0f;
+      const int selected_light = light_tree_cluster_select_emitter(kg, randu, P, N, knode, &light_probability);
+
+      if (selected_light < 0) {
+        stack_index--;
+        continue;
+      }
+
+      const float light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
+      if (light_weight == 0.0f) {
+        stack_index--;
+        continue;
+      }
+      total_weight += light_weight;
+
+      /* We compute the probability of switching to the new candidate sample,
+       * otherwise we stick with the old one. */
+      const float selection_probability = light_weight / total_weight;
+      if (*randu < selection_probability) {
+        *randu = *randu / selection_probability;
+        current_light = selected_light;
+        current_weight = light_weight;
+        current_pdf = pdf * light_probability;
+      }
+      else {
+        *randu = (*randu - selection_probability) / (1.0f - selection_probability);
+      }
+
+      stack_index--;
+      continue;
+    }
+
+    /* At an interior node, the left child is directly after the parent,
+     * while the right child is stored as the child index.
+     * We adaptively split if the variance is high enough. */
+    const int left_index = index + 1;
+    const int right_index = knode->child_index;
+    if (light_tree_should_split(kg, P, knode) &&
+        stack_index < stack_size - 1) {
+      stack[stack_index] = left_index;
+      pdfs[stack_index] = pdf;
+      stack[stack_index + 1] = right_index;
+      pdfs[stack_index + 1] = pdf;
+      stack_index++;
+      continue;
+    }
+
+    /* If we don't split, then we need to choose sampling between the left or right child. */
+    const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
+    const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes, right_index);
+
+    const float left_importance = light_tree_cluster_importance(kg, P, N, left);
+    const float right_importance = light_tree_cluster_importance(kg, P, N, right);
+    float left_probability = left_importance / (left_importance + right_importance);
+
+    if (*randu < left_probability) {
+      stack[stack_index] = left_index;
+      *randu = *randu / left_probability;
+      pdfs[stack_index] = pdf * left_probability;
+    }
+    else {
+      stack[stack_index] = right_index;
+      *randu = (*randu - left_probability) / (1.0f - left_probability);
+      pdfs[stack_index] = pdf * (1.0f - left_probability);
+    }
+  }
+
+  if (total_weight == 0.0f) {
+    return false;
+  }
+
+  *pdf_factor *= current_pdf * current_weight / total_weight;
+
+  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
+                                                                         current_light);
+
+  /* to-do: this is the same code as light_distribution_sample, except the index is determined
+   * differently. Would it be better to refactor this into a separate function? */
+  const int prim = kemitter->prim_id;
+  if (prim >= 0) {
+    /* Mesh light. */
+    const int object = kemitter->mesh_light.object_id;
+
+    /* Exclude synthetic meshes from shadow catcher pass. */
+    if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
+        !(kernel_data_fetch(object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
+      return false;
+    }
+
+    const int shader_flag = kemitter->mesh_light.shader_flag;
+    triangle_light_sample<in_volume_segment>(kg, prim, object, *randu, randv, time, ls, P);
+    ls->shader |= shader_flag;
+
+    return (ls->pdf > 0.0f);
+  }
+
+  const int lamp = -prim - 1;
+
+  if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
+    return false;
+  }
+
+  return light_sample<in_volume_segment>(kg, lamp, *randu, randv, P, path_flag, ls);
 }
 
 ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
@@ -259,7 +382,7 @@ ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
 }
 
 template<bool in_volume_segment>
-ccl_device int light_tree_sample_distant_lights(KernelGlobals kg,
+ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
                                                 ccl_private const RNGState *rng_state,
                                                 float *randu,
                                                 const float randv,
@@ -417,6 +540,8 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 const uint32_t path_flag,
                                                 ccl_private LightSample *ls)
 {
+  /* to-do: with weighted reservoir sampling, we can also pick a sample from the distant light group
+   * and compare it to the sample from the light tree. */
   float distant_light_importance = light_tree_distant_light_importance(
       kg, P, N, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
