@@ -338,12 +338,14 @@ class SolverPerfTestSuite : public CurveConstraintSolverPerfTestSuite,
     CurveConstraintSolverPerfTestSuite::TearDownTestSuite();
   }
 
-  void randomized_test(const ParamType &test_param, const ConstraintSolver::Params &solver_params)
+  void randomized_test(const ParamType &test_param,
+                       const ConstraintSolver::Params &solver_params,
+                       const int mesh_resolution = 100)
   {
     CurvesGeometry curves = create_randomized_curves(10000, 4, 50, 0.1f, 0.2f);
     const CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
 
-    Mesh *surface = create_torus(200, 200, 1.0f, 0.5f);
+    Mesh *surface = create_torus(mesh_resolution * 2, mesh_resolution, 1.0f, 0.5f);
 
     ConstraintSolver solver;
     solver.initialize(solver_params, curves, curves.curves_range());
@@ -371,7 +373,7 @@ TEST_P(SolverIterationsTestSuite, RandomizedTest)
   randomized_test(GetParam(), params);
 }
 
-INSTANTIATE_TEST_SUITE_P(SolverIterationsTests,
+INSTANTIATE_TEST_SUITE_P(curves_constraints_performance,
                          SolverIterationsTestSuite,
                          testing::Values(1, 5, 10, 20, 50, 100),
                          [](const testing::TestParamInfo<int> info) {
@@ -390,12 +392,30 @@ TEST_P(BVHBranchingFactorTestSuite, RandomizedTest)
   randomized_test(GetParam(), params);
 }
 
-INSTANTIATE_TEST_SUITE_P(BVHBranchingFactorTests,
+INSTANTIATE_TEST_SUITE_P(curves_constraints_performance,
                          BVHBranchingFactorTestSuite,
                          testing::Values(2, 4, 6, 8, 16, 32),
                          [](const testing::TestParamInfo<int> info) {
                            std::stringstream ss;
                            ss << "BVHBranchingFactorTest_" << info.param;
+                           return ss.str();
+                         });
+
+using MeshDensityTestSuite = SolverPerfTestSuite<int>;
+
+TEST_P(MeshDensityTestSuite, RandomizedTest)
+{
+  ConstraintSolver::Params params;
+
+  randomized_test(GetParam(), params, GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(curves_constraints_performance,
+                         MeshDensityTestSuite,
+                         testing::Values(50, 100, 150, 200, 250),
+                         [](const testing::TestParamInfo<int> info) {
+                           std::stringstream ss;
+                           ss << "MeshDensityTest_" << info.param;
                            return ss.str();
                          });
 
