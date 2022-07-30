@@ -180,6 +180,54 @@ static Mesh *create_noise_grid(const float noise = 0.1f, const int resolution = 
   return mesh;
 }
 
+static Mesh *create_torus(const int major_segments = 64,
+                          const int minor_segments = 16,
+                          const float major_radius = 1.0f,
+                          const float minor_radius = 0.5f)
+{
+  const int tot_verts = major_segments * minor_segments;
+  const int tot_polys = major_segments * minor_segments;
+  const int tot_loops = tot_polys * 4;
+  Mesh *mesh = BKE_mesh_new_nomain(tot_verts, 0, 0, tot_loops, tot_polys);
+  const MutableSpan<MVert> mverts(mesh->mvert, mesh->totvert);
+  const MutableSpan<MPoly> mpolys(mesh->mpoly, mesh->totpoly);
+  const MutableSpan<MLoop> mloops(mesh->mloop, mesh->totloop);
+
+  for (const int i : IndexRange(major_segments)) {
+    for (const int j : IndexRange(minor_segments)) {
+      const float alpha = 2.0 * M_PI * i / major_segments;
+      const float beta = 2.0 * M_PI * j / minor_segments;
+      const float3 tmp = float3(cosf(beta) + major_radius, 0.0f, sinf(beta)) * minor_radius;
+      const float3 co = float3(tmp.x * cosf(alpha), tmp.x * sinf(alpha), tmp.z);
+
+      const int vert_i = i * minor_segments + j;
+      copy_v3_v3(mverts[vert_i].co, co);
+    }
+  }
+
+  for (const int i : IndexRange(major_segments)) {
+    for (const int j : IndexRange(minor_segments)) {
+      const int vert_i = i * minor_segments + j;
+      const int poly_i = i * minor_segments + j;
+      const int loop_i = poly_i * 4;
+
+      mpolys[poly_i].loopstart = loop_i;
+      mpolys[poly_i].totloop = 4;
+
+      const int di = i < major_segments - 1 ? minor_segments : minor_segments - tot_verts;
+      const int dj = j < minor_segments - 1 ? 1 : 1 - minor_segments;
+      mloops[loop_i + 0].v = vert_i;
+      mloops[loop_i + 1].v = vert_i + dj;
+      mloops[loop_i + 2].v = vert_i + di + dj;
+      mloops[loop_i + 3].v = vert_i + di;
+    }
+  }
+
+  BKE_mesh_calc_edges(mesh, false, false);
+
+  return mesh;
+}
+
 static CurvesGeometry create_randomized_curves(const int curve_num,
                                                const int point_num_min,
                                                const int point_num_max,
@@ -295,7 +343,7 @@ class SolverPerfTestSuite : public CurveConstraintSolverPerfTestSuite,
     CurvesGeometry curves = create_randomized_curves(10000, 4, 50, 0.1f, 0.2f);
     const CurvesSurfaceTransforms transforms = create_curves_surface_transforms();
 
-    Mesh *surface = create_noise_grid();
+    Mesh *surface = create_torus(200, 200, 1.0f, 0.5f);
 
     ConstraintSolver solver;
     solver.initialize(solver_params, curves, curves.curves_range());
@@ -317,7 +365,7 @@ using SolverIterationsTestSuite = SolverPerfTestSuite<int>;
 TEST_P(SolverIterationsTestSuite, RandomizedTest)
 {
   ConstraintSolver::Params params;
-  params.solver_type = ConstraintSolver::SolverType::PositionBasedDynamics;
+  params.solver_type = ConstraintSolver::SolverType::PositionBasedDynamics; 
   params.max_solver_iterations = GetParam();
 
   randomized_test(GetParam(), params);
