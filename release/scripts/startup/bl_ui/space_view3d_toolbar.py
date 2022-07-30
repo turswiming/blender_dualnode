@@ -972,8 +972,7 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         col.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
         col.prop(sculpt, "use_automasking_start_normal", text="Area Normal")
         col.prop(sculpt, "use_automasking_view_normal", text="View Normal")
-        col.prop(sculpt, "use_automasking_view_occlusion", text="Occlusion")
-
+        
         if sculpt.use_automasking_start_normal:
             col.separator()
 
@@ -983,6 +982,7 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         if sculpt.use_automasking_view_normal:
             col.separator()
 
+            col.prop(sculpt, "use_automasking_view_occlusion", text="Occlusion")
             col.prop(sculpt, "automasking_view_normal_limit")
             col.prop(sculpt, "automasking_view_normal_falloff")
 

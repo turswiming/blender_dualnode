@@ -5475,7 +5475,6 @@ class VIEW3D_MT_sculpt_automasking_pie(Menu):
         pie.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
         pie.prop(sculpt, "use_automasking_start_normal", text="Area Normal")
         pie.prop(sculpt, "use_automasking_view_normal", text="View Normal")
-        pie.prop(sculpt, "use_automasking_view_occlusion", text="Occlusion")
 
 
 class VIEW3D_MT_sculpt_face_sets_edit_pie(Menu):

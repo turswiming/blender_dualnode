@@ -93,9 +93,6 @@ bool SCULPT_is_automasking_enabled(const Sculpt *sd, const SculptSession *ss, co
   if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_VIEW_NORMAL)) {
     return true;
   }
-  if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_VIEW_OCCLUSION)) {
-    return true;
-  }
   return false;
 }
 
@@ -126,7 +123,7 @@ static float sculpt_automasking_normal_calc(AutomaskingCache *automasking,
 {
   float normal_v[3];
 
-  if (automask_data->orig_data.no) {
+  if (automask_data->have_orig_data) {
     copy_v3_v3(normal_v, automask_data->orig_data.no);
   }
   else {
@@ -162,8 +159,7 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
   if (automasking_flags & (BRUSH_AUTOMASKING_BOUNDARY_EDGES,
                            BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS,
                            BRUSH_AUTOMASKING_BRUSH_NORMAL,
-                           BRUSH_AUTOMASKING_VIEW_NORMAL,
-                           BRUSH_AUTOMASKING_VIEW_OCCLUSION)) {
+                           BRUSH_AUTOMASKING_VIEW_NORMAL)) {
     return brush && brush->automasking_boundary_edges_propagation_steps != 1;
   }
   return false;
@@ -250,8 +246,10 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
     return automasking->factor[index];
   }
 
-  if ((automasking->settings.flags & BRUSH_AUTOMASKING_VIEW_OCCLUSION) &&
-      automasking_view_occlusion_factor(automasking, ss, vert, automask_data)) {
+  bool do_occlusion = (automasking->settings.flags &
+                       (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL)) ==
+                      (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL);
+  if (do_occlusion && automasking_view_occlusion_factor(automasking, ss, vert, automask_data)) {
     return 0.0f;
   }
 
@@ -498,10 +496,11 @@ void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automasking,
       factor[i] *= automasking_brush_normal_factor(automasking, ss, vertex, &nodedata);
     }
     if ((int)mode & BRUSH_AUTOMASKING_VIEW_NORMAL) {
+      if ((int)mode & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
+        factor[i] *= automasking_view_occlusion_factor(automasking, ss, vertex, &nodedata);
+      }
+
       factor[i] *= automasking_view_normal_factor(automasking, ss, vertex, &nodedata);
-    }
-    if ((int)mode & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
-      factor[i] *= automasking_view_occlusion_factor(automasking, ss, vertex, &nodedata);
     }
   }
 }
@@ -520,7 +519,7 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   SCULPT_automasking_cache_settings_update(automasking, ss, sd, brush);
   SCULPT_boundary_info_ensure(ob);
 
-  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_VIEW_OCCLUSION)) {
+  if (sculpt_automasking_mode_effective_bits(sd, brush) & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
     automasking->occluded = (char *)MEM_callocN(totvert, "automasking->occluded");
   }
 
