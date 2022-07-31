@@ -21,7 +21,6 @@
 #include "BKE_context.h"
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
-#include "BKE_curves_constraints.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
@@ -39,6 +38,8 @@
 #include "ED_screen.h"
 #include "ED_view3d.h"
 
+#include "GEO_constraint_solver.hh"
+
 #include "UI_interface.h"
 
 #include "WM_api.h"
@@ -54,7 +55,7 @@
 namespace blender::ed::sculpt_paint {
 
 using blender::bke::CurvesGeometry;
-using blender::bke::curves::ConstraintSolver;
+using geometry::ConstraintSolver;
 using threading::EnumerableThreadSpecific;
 
 /**

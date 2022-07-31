@@ -5,7 +5,6 @@
 #include "BKE_bvhutils.h"
 #include "BKE_context.h"
 #include "BKE_crazyspace.hh"
-#include "BKE_curves_constraints.hh"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 
@@ -23,12 +22,13 @@
 #include "BLI_length_parameterize.hh"
 
 #include "GEO_add_curves_on_mesh.hh"
+#include "GEO_constraint_solver.hh"
 
 #include "curves_sculpt_intern.hh"
 
 namespace blender::ed::sculpt_paint {
 
-using bke::curves::ConstraintSolver;
+using geometry::ConstraintSolver;
 
 class PuffOperation : public CurvesSculptStrokeOperation {
  private:

@@ -14,7 +14,6 @@
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_curves.hh"
-#include "BKE_curves_constraints.hh"
 #include "BKE_paint.h"
 
 #include "DNA_brush_enums.h"
@@ -23,6 +22,8 @@
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
+
+#include "GEO_constraint_solver.hh"
 
 #include "ED_screen.h"
 #include "ED_view3d.h"
@@ -39,7 +40,7 @@
 
 namespace blender::ed::sculpt_paint {
 
-using bke::curves::ConstraintSolver;
+using geometry::ConstraintSolver;
 
 class PinchOperation : public CurvesSculptStrokeOperation {
  private:

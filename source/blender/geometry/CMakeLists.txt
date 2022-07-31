@@ -16,6 +16,7 @@ set(INC
 
 set(SRC
   intern/add_curves_on_mesh.cc
+  intern/constraint_solver.cc
   intern/fillet_curves.cc
   intern/mesh_merge_by_distance.cc
   intern/mesh_primitive_cuboid.cc
@@ -30,6 +31,7 @@ set(SRC
   intern/uv_parametrizer.c
 
   GEO_add_curves_on_mesh.hh
+  GEO_constraint_solver.hh
   GEO_fillet_curves.hh
   GEO_mesh_merge_by_distance.hh
   GEO_mesh_primitive_cuboid.hh
@@ -76,3 +78,18 @@ if(WITH_TBB)
 endif()
 
 blender_add_lib(bf_geometry "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+if(WITH_GTESTS)
+  set(TEST_SRC
+    tests/GEO_constraint_solver_test.cc
+  )
+  set(TEST_INC
+  )
+  set(TEST_LIB
+    bf_geometry
+  )
+  include(GTestTesting)
+  blender_add_test_executable(geometry "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+
+  add_subdirectory(tests/performance)
+endif()

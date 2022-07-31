@@ -4,7 +4,7 @@
  * \ingroup bke
  */
 
-#include "BKE_curves_constraints.hh"
+#include "GEO_constraint_solver.hh"
 
 #include "BLI_index_mask_ops.hh"
 
@@ -17,9 +17,10 @@
 
 #include "PIL_time.h"
 
-namespace blender::bke::curves {
+namespace blender::geometry {
 
-using blender::bke::CurvesGeometry;
+using bke::CurvesGeometry;
+using bke::CurvesSurfaceTransforms;
 using threading::EnumerableThreadSpecific;
 
 static const int curves_grain_size = 64;
@@ -314,6 +315,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
       case SolverType::PositionBasedDynamics:
         return params_.max_solver_iterations;
     }
+    return 0;
   }();
 
   const double solve_constraints_start = PIL_check_seconds_timer();
@@ -350,6 +352,7 @@ void ConstraintSolver::solve_curve_constraints(CurvesGeometry &curves,
       case SolverType::PositionBasedDynamics:
         return params_.use_root_constraints ? 1 : 0;
     }
+    return 0;
   }();
 
   MutableSpan<float3> positions_cu = curves.positions_for_write();
@@ -455,4 +458,4 @@ void ConstraintSolver::compute_curve_error(const CurvesGeometry &curves,
   }
 }
 
-}  // namespace blender::bke::curves
+}  // namespace blender::geometry

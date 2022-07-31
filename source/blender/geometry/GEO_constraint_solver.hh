@@ -6,11 +6,11 @@
 #include "BKE_curves.hh"
 
 /** \file
- * \ingroup bke
+ * \ingroup geo
  * \brief Constraint solver for curve deformations.
  */
 
-namespace blender::bke::curves {
+namespace blender::geometry {
 
 class ConstraintSolver {
  public:
@@ -143,20 +143,20 @@ class ConstraintSolver {
 
   /* Initialize the solver for a given set of curves.
    * The solver must be reinitialized if the curve set changes. */
-  void initialize(const Params &params, const CurvesGeometry &curves, IndexMask curve_selection);
+  void initialize(const Params &params, const bke::CurvesGeometry &curves, IndexMask curve_selection);
 
   /* Solve constraints for an independent subset of curves. */
-  void step_curves(CurvesGeometry &curves,
+  void step_curves(bke::CurvesGeometry &curves,
                    const Mesh *surface,
-                   const CurvesSurfaceTransforms &transforms,
+                   const bke::CurvesSurfaceTransforms &transforms,
                    Span<float3> start_positions,
                    VArray<int> changed_curves,
                    bool update_error = false);
 
  private:
-  void find_contact_points(const CurvesGeometry &curves,
+  void find_contact_points(const bke::CurvesGeometry &curves,
                            const Mesh *surface,
-                           const CurvesSurfaceTransforms &transforms,
+                           const bke::CurvesSurfaceTransforms &transforms,
                            float max_dist,
                            VArray<int> changed_curves);
 
@@ -178,17 +178,17 @@ class ConstraintSolver {
                                      float radius,
                                      const Contact &contact) const;
 
-  void solve_constraints(CurvesGeometry &curves, VArray<int> changed_curves) const;
+  void solve_constraints(bke::CurvesGeometry &curves, VArray<int> changed_curves) const;
 
-  void solve_curve_constraints(CurvesGeometry &curves,
+  void solve_curve_constraints(bke::CurvesGeometry &curves,
                                const VArray<float> radius,
                                const IndexRange points) const;
 
-  void compute_error(const CurvesGeometry &curves, VArray<int> changed_curves) const;
+  void compute_error(const bke::CurvesGeometry &curves, VArray<int> changed_curves) const;
 
-  void compute_curve_error(const CurvesGeometry &curves,
+  void compute_curve_error(const bke::CurvesGeometry &curves,
                            const VArray<float> radius,
                            const IndexRange points) const;
 };
 
-}  // namespace blender::bke::curves
+}  // namespace blender::geometry
