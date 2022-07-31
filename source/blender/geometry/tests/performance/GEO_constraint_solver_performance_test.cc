@@ -270,8 +270,8 @@ class SolverPerfTestSuite : public CurveConstraintSolverPerfTestSuite,
     for (const TestResult &result : results()) {
       std::cout << result.param << "," << result.solver_result.residual.rms_error << ","
                 << sqrtf(result.solver_result.residual.max_error_squared) << ","
-                << result.solver_result.timing.find_contacts << ","
-                << result.solver_result.timing.solve_constraints << std::endl;
+                << (result.solver_result.timing.find_contacts * 1000.0) << ","
+                << (result.solver_result.timing.solve_constraints * 1000.0) << std::endl;
     }
 
     CurveConstraintSolverPerfTestSuite::TearDownTestSuite();
