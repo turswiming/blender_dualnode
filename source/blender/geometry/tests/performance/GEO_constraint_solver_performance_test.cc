@@ -202,7 +202,7 @@ static CurvesGeometry create_randomized_curves(const int curve_num,
 }
 
 static void randomized_point_offset(CurvesGeometry &curves,
-                                    VArray<int> changed_curves,
+                                    IndexMask changed_curves,
                                     float dist_min,
                                     float dist_max,
                                     float3 direction = float3(1, 0, 0),
@@ -215,8 +215,7 @@ static void randomized_point_offset(CurvesGeometry &curves,
   ortho_basis_v3v3_v3(n1, n2, direction);
 
   const MutableSpan<float3> positions = curves.positions_for_write();
-  for (int i : changed_curves.index_range()) {
-    const int curve_i = changed_curves[i];
+  for (const int curve_i : changed_curves) {
     for (int point_i : curves.points_for_curve(curve_i)) {
       const float theta = rng.get_float() * cone_angle;
       const float phi = rng.get_float() * (float)(2.0 * M_PI);
@@ -290,11 +289,9 @@ class SolverPerfTestSuite : public CurveConstraintSolverPerfTestSuite,
     ConstraintSolver solver;
     solver.initialize(solver_params, curves, curves.curves_range());
 
-    const VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
-                                                            [](int64_t i) { return (int)i; });
     const Array<float3> orig_positions = curves.positions();
-    randomized_point_offset(curves, changed_curves, 0.0f, 1.0f);
-    solver.step_curves(curves, surface, transforms, orig_positions, changed_curves, true);
+    randomized_point_offset(curves, curves.curves_range(), 0.0f, 1.0f);
+    solver.step_curves(curves, surface, transforms, orig_positions, curves.curves_range(), true);
 
     BKE_id_free(nullptr, surface);
 

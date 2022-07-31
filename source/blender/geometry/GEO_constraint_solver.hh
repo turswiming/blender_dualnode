@@ -150,7 +150,7 @@ class ConstraintSolver {
                    const Mesh *surface,
                    const bke::CurvesSurfaceTransforms &transforms,
                    Span<float3> start_positions,
-                   VArray<int> changed_curves,
+                   IndexMask changed_curves,
                    bool update_error = false);
 
  private:
@@ -158,7 +158,7 @@ class ConstraintSolver {
                            const Mesh *surface,
                            const bke::CurvesSurfaceTransforms &transforms,
                            float max_dist,
-                           VArray<int> changed_curves);
+                           IndexMask changed_curves);
 
   void apply_distance_constraint(float3 &point_a,
                                  float3 &point_b,
@@ -178,13 +178,13 @@ class ConstraintSolver {
                                      float radius,
                                      const Contact &contact) const;
 
-  void solve_constraints(bke::CurvesGeometry &curves, VArray<int> changed_curves) const;
+  void solve_constraints(bke::CurvesGeometry &curves, IndexMask changed_curves) const;
 
   void solve_curve_constraints(bke::CurvesGeometry &curves,
                                const VArray<float> radius,
                                const IndexRange points) const;
 
-  void compute_error(const bke::CurvesGeometry &curves, VArray<int> changed_curves) const;
+  void compute_error(const bke::CurvesGeometry &curves, IndexMask changed_curves) const;
 
   void compute_curve_error(const bke::CurvesGeometry &curves,
                            const VArray<float> radius,

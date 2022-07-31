@@ -158,7 +158,7 @@ struct CombOperationExecutor {
 
     start_positions_ = curves_orig_->positions();
 
-    EnumerableThreadSpecific<Vector<int>> changed_curves;
+    EnumerableThreadSpecific<Vector<int64_t>> changed_curves;
 
     if (falloff_shape_ == PAINT_FALLOFF_SHAPE_TUBE) {
       this->comb_projected_with_symmetry(changed_curves);
@@ -174,36 +174,21 @@ struct CombOperationExecutor {
                               static_cast<Mesh *>(curves_id_orig_->surface->data) :
                               nullptr;
 
-    ///* Simple sequential loop */
-    //for (auto curves : changed_curves) {
-    //  self_->constraint_solver_.step_curves(
-    //      *curves_orig_, surface, transforms_, start_positions_, VArray<int>::ForSpan(curves));
-    //};
-
-    ///* Parallel loop with varying task size */
-    //threading::parallel_for_each(changed_curves, [&](const Vector<int> &changed_curves) {
-    //  self_->constraint_solver_.step_curves(
-    //      *curves_orig_, surface, transforms_, start_positions_, VArray<int>::ForSpan(changed_curves));
-    //});
-
-    /* Combine TLS curves into a single array (solver parallelizes internally) */
+    /* Combine TLS curves into a single array for redistributing thread load.
+     * Brush filtering results in TLS lists with potentially very uneven sizes. */
     int totcurves = 0;
     for (auto curves : changed_curves) {
       totcurves += curves.size();
     }
-    Array<int> all_changed_curves(totcurves);
+    Array<int64_t> all_changed_curves(totcurves);
     totcurves = 0;
     for (auto curves : changed_curves) {
       all_changed_curves.as_mutable_span().slice(totcurves, curves.size()).copy_from(curves);
       totcurves += curves.size();
     };
-    self_->constraint_solver_.step_curves(
-        *curves_orig_, surface, transforms_, start_positions_, VArray<int>::ForSpan(all_changed_curves));
 
-    //{
-    //  std::cout << totcurves << ", " << self_->constraint_solver_.result().timing.step_total
-    //            << ", " << std::endl;
-    //}
+    self_->constraint_solver_.step_curves(
+        *curves_orig_, surface, transforms_, start_positions_, IndexMask(all_changed_curves));
 
     curves_orig_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_orig_->id, ID_RECALC_GEOMETRY);
@@ -214,7 +199,7 @@ struct CombOperationExecutor {
   /**
    * Do combing in screen space.
    */
-  void comb_projected_with_symmetry(EnumerableThreadSpecific<Vector<int>> &r_changed_curves)
+  void comb_projected_with_symmetry(EnumerableThreadSpecific<Vector<int64_t>> &r_changed_curves)
   {
     const Vector<float4x4> symmetry_brush_transforms = get_symmetry_brush_transforms(
         eCurvesSymmetryType(curves_id_orig_->symmetry));
@@ -223,7 +208,7 @@ struct CombOperationExecutor {
     }
   }
 
-  void comb_projected(EnumerableThreadSpecific<Vector<int>> &r_changed_curves,
+  void comb_projected(EnumerableThreadSpecific<Vector<int64_t>> &r_changed_curves,
                       const float4x4 &brush_transform)
   {
     const float4x4 brush_transform_inv = brush_transform.inverted();
@@ -239,7 +224,7 @@ struct CombOperationExecutor {
     const float brush_radius_sq_re = pow2f(brush_radius_re);
 
     threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
-      Vector<int> &local_changed_curves = r_changed_curves.local();
+      Vector<int64_t> &local_changed_curves = r_changed_curves.local();
       for (const int curve_i : curve_selection_.slice(range)) {
         bool curve_changed = false;
         const IndexRange points = curves_orig_->points_for_curve(curve_i);
@@ -295,7 +280,7 @@ struct CombOperationExecutor {
   /**
    * Do combing in 3D space.
    */
-  void comb_spherical_with_symmetry(EnumerableThreadSpecific<Vector<int>> &r_changed_curves)
+  void comb_spherical_with_symmetry(EnumerableThreadSpecific<Vector<int64_t>> &r_changed_curves)
   {
     float4x4 projection;
     ED_view3d_ob_project_mat_get(ctx_.rv3d, curves_ob_orig_, projection.values);
@@ -326,7 +311,7 @@ struct CombOperationExecutor {
     }
   }
 
-  void comb_spherical(EnumerableThreadSpecific<Vector<int>> &r_changed_curves,
+  void comb_spherical(EnumerableThreadSpecific<Vector<int64_t>> &r_changed_curves,
                       const float3 &brush_start_cu,
                       const float3 &brush_end_cu,
                       const float brush_radius_cu)
@@ -339,7 +324,7 @@ struct CombOperationExecutor {
         bke::crazyspace::get_evaluated_curves_deformation(*ctx_.depsgraph, *curves_ob_orig_);
 
     threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
-      Vector<int> &local_changed_curves = r_changed_curves.local();
+      Vector<int64_t> &local_changed_curves = r_changed_curves.local();
       for (const int curve_i : curve_selection_.slice(range)) {
         bool curve_changed = false;
         const IndexRange points = curves_orig_->points_for_curve(curve_i);

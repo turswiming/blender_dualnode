@@ -150,9 +150,9 @@ struct PinchOperationExecutor {
 
     /* XXX Dumb array conversion to pass to the constraint solver.
      * Should become unnecessary once brushes use the same methods for computing weights */
-    Vector<int> changed_curves_indices;
+    Vector<int64_t> changed_curves_indices;
     changed_curves_indices.reserve(curves_->curves_num());
-    for (int curve_i : changed_curves.index_range()) {
+    for (int64_t curve_i : changed_curves.index_range()) {
       if (changed_curves[curve_i]) {
         changed_curves_indices.append(curve_i);
       }
@@ -165,7 +165,7 @@ struct PinchOperationExecutor {
                                           surface,
                                           transforms_,
                                           start_positions_,
-                                          VArray<int>::ForContainer(changed_curves_indices));
+                                          IndexMask(changed_curves_indices));
 
     curves_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);

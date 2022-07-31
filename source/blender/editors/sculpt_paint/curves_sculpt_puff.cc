@@ -161,9 +161,9 @@ struct PuffOperationExecutor {
 
     /* XXX Dumb array conversion to pass to the constraint solver.
       * Should become unnecessary once brushes use the same methods for computing weights */
-    Vector<int> changed_curves_indices;
+    Vector<int64_t> changed_curves_indices;
     changed_curves_indices.reserve(curve_selection_.size());
-    for (int select_i : curve_selection_.index_range()) {
+    for (int64_t select_i : curve_selection_.index_range()) {
       if (curve_weights[select_i] > 0.0f) {
         changed_curves_indices.append(curve_selection_[select_i]);
       }
@@ -173,7 +173,7 @@ struct PuffOperationExecutor {
                                           surface_,
                                           transforms_,
                                           start_positions_,
-                                          VArray<int>::ForContainer(changed_curves_indices));
+                                          IndexMask(changed_curves_indices));
 
     curves_->tag_positions_changed();
     DEG_id_tag_update(&curves_id_->id, ID_RECALC_GEOMETRY);

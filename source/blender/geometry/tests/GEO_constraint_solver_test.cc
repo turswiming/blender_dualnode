@@ -58,15 +58,13 @@ TEST(curves_constraints, LengthAndRootConstraint)
 
   solver.initialize(params, curves, curves.curves_range());
 
-  const VArray<int> changed_curves = VArray<int>::ForFunc(curves.curves_num(),
-                                                    [](int64_t i) { return (int)i; });
   const Array<float3> orig_positions = curves.positions();
 
   positions[1].y += 0.1f;
   positions[3].y += 0.1f;
   positions[6].y += 0.1f;
 
-  solver.step_curves(curves, nullptr, transforms, orig_positions, changed_curves);
+  solver.step_curves(curves, nullptr, transforms, orig_positions, curves.curves_range());
 
   EXPECT_EQ(solver.result().status, ConstraintSolver::Result::Status::Ok);
   EXPECT_LE(solver.result().residual.max_error_squared, params.error_threshold * params.error_threshold);

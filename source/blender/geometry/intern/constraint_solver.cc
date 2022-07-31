@@ -88,7 +88,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
                                    const Mesh *surface,
                                    const CurvesSurfaceTransforms &transforms,
                                    const Span<float3> start_positions,
-                                   VArray<int> changed_curves,
+                                   const IndexMask changed_curves,
                                    bool update_error)
 {
   const double step_start = PIL_check_seconds_timer();
@@ -107,8 +107,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
   Array<float3> delta_substep(curves.points_num());
   threading::parallel_for(
       changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
-        for (const int i : range) {
-          const int curve_i = changed_curves[i];
+        for (const int curve_i : changed_curves.slice(range)) {
           const IndexRange points = curves.points_for_curve(curve_i);
           for (const int point_i : points) {
             const float3 delta_step = positions[point_i] - start_positions[point_i];
@@ -135,8 +134,7 @@ void ConstraintSolver::step_curves(CurvesGeometry &curves,
     /* Set unconstrained position: x <- x + v*dt */
     threading::parallel_for(
         changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
-          for (const int i : range) {
-            const int curve_i = changed_curves[i];
+          for (const int curve_i : changed_curves.slice(range)) {
             const IndexRange points = curves.points_for_curve(curve_i);
             for (const int point_i : points) {
               positions[point_i] += delta_substep[point_i];
@@ -162,7 +160,7 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
                                            const Mesh *surface,
                                            const CurvesSurfaceTransforms &transforms,
                                            const float max_dist,
-                                           VArray<int> changed_curves)
+                                           const IndexMask changed_curves)
 {
   /* Should be set when initializing constraints */
   BLI_assert(contacts_num_.size() == curves.points_num());
@@ -196,8 +194,7 @@ void ConstraintSolver::find_contact_points(const CurvesGeometry &curves,
   double find_contacts_start = PIL_check_seconds_timer();
   threading::parallel_for(
       changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
-        for (const int i : range) {
-          const int curve_i = changed_curves[i];
+        for (const int curve_i : changed_curves.slice(range)) {
           /* First point is anchored to the surface, ignore collisions. */
           const IndexRange points = params_.use_root_constraints ?
                                         curves.points_for_curve(curve_i).drop_front(1) :
@@ -306,7 +303,7 @@ float ConstraintSolver::get_contact_constraint_error(
   return math::min(C, 0.0f);
 }
 
-void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> changed_curves) const
+void ConstraintSolver::solve_constraints(CurvesGeometry &curves, const IndexMask changed_curves) const
 {
   const int solver_max_iterations = [&]() {
     switch (params_.solver_type) {
@@ -325,8 +322,7 @@ void ConstraintSolver::solve_constraints(CurvesGeometry &curves, VArray<int> cha
 
   threading::parallel_for(
       changed_curves.index_range(), curves_grain_size, [&](const IndexRange range) {
-        for (const int idx_curve : range) {
-          const int curve_i = changed_curves[idx_curve];
+        for (const int curve_i : changed_curves.slice(range)) {
           const IndexRange points = curves.points_for_curve(curve_i);
 
           /* Solve constraints */
@@ -392,14 +388,13 @@ void ConstraintSolver::solve_curve_constraints(CurvesGeometry &curves,
   }
 }
 
-void ConstraintSolver::compute_error(const CurvesGeometry &curves, VArray<int> changed_curves) const
+void ConstraintSolver::compute_error(const CurvesGeometry &curves, const IndexMask changed_curves) const
 {
   VArray<float> radius = curves.attributes().lookup_or_default<float>(
       "radius", ATTR_DOMAIN_POINT, 0.0f);
 
   /* Accumulate error (no threading) */
-  for (int i : changed_curves.index_range()) {
-    const int curve_i = changed_curves[i];
+  for (const int curve_i : changed_curves) {
     const IndexRange points = curves.points_for_curve(curve_i);
     compute_curve_error(curves, radius, points);
   }
