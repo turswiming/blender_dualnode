@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "BLI_utildefines.h"
+
 #include "DNA_asset_types.h"
 #include "DNA_color_types.h" /* for Histogram */
 #include "DNA_defs.h"
@@ -1028,6 +1030,7 @@ typedef enum eFileSel_Params_Flag {
   /** Enables filtering by asset catalog. */
   FILE_FILTER_ASSET_CATALOG = (1 << 15),
 } eFileSel_Params_Flag;
+ENUM_OPERATORS(eFileSel_Params_Flag, FILE_FILTER_ASSET_CATALOG);
 
 typedef enum eFileSel_Params_AssetCatalogVisibility {
   FILE_SHOW_ASSETS_ALL_CATALOGS,
@@ -1939,7 +1942,7 @@ typedef struct SpaceSpreadsheet {
   uint8_t geometry_component_type;
   /* #eAttrDomain. */
   uint8_t attribute_domain;
-  /* eSpaceSpreadsheet_ObjectContext. */
+  /* eSpaceSpreadsheet_ObjectEvalState. */
   uint8_t object_eval_state;
 
   /* eSpaceSpreadsheet_Flag. */
@@ -1977,7 +1980,7 @@ typedef struct SpreadsheetRowFilter {
   float value_float2[2];
   float value_float3[3];
   float value_color[4];
-  uint8_t value_byte_color[4];
+  char _pad1[4];
 } SpreadsheetRowFilter;
 
 typedef enum eSpaceSpreadsheet_RowFilterFlag {

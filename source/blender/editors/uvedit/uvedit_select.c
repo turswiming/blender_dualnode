@@ -81,6 +81,7 @@ static void uv_select_tag_update_for_object(Depsgraph *depsgraph,
 typedef enum {
   UV_SSIM_AREA_UV = 1000,
   UV_SSIM_AREA_3D,
+  UV_SSIM_FACE,
   UV_SSIM_LENGTH_UV,
   UV_SSIM_LENGTH_3D,
   UV_SSIM_SIDES,
@@ -2935,12 +2936,14 @@ void UV_OT_select_edge_ring(wmOperatorType *ot)
   ot->poll = ED_operator_uvedit; /* requires space image */
 
   /* properties */
-  RNA_def_boolean(ot->srna,
-                  "extend",
-                  0,
-                  "Extend",
-                  "Extend selection rather than clearing the existing selection");
-  RNA_def_float_vector(
+  PropertyRNA *prop;
+  prop = RNA_def_boolean(ot->srna,
+                         "extend",
+                         0,
+                         "Extend",
+                         "Extend selection rather than clearing the existing selection");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_float_vector(
       ot->srna,
       "location",
       2,
@@ -2951,6 +2954,7 @@ void UV_OT_select_edge_ring(wmOperatorType *ot)
       "Mouse location in normalized coordinates, 0.0 to 1.0 is within the image bounds",
       -100.0f,
       100.0f);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /** \} */
@@ -3579,6 +3583,7 @@ static int uv_box_select_exec(bContext *C, wmOperator *op)
       }
     }
     else if (use_edge && !pinned) {
+      bool do_second_pass = true;
       BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
         if (!uvedit_face_visible_test(scene, efa)) {
           continue;
@@ -3593,9 +3598,33 @@ static int uv_box_select_exec(bContext *C, wmOperator *op)
             uvedit_edge_select_set_with_sticky(
                 scene, em, l_prev, select, false, cd_loop_uv_offset);
             changed = true;
+            do_second_pass = false;
           }
           l_prev = l;
           luv_prev = luv;
+        }
+      }
+      /* Do a second pass if no complete edges could be selected.
+       * This matches wire-frame edit-mesh selection in the 3D view. */
+      if (do_second_pass) {
+        /* Second pass to check if edges partially overlap with the selection area (box). */
+        BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+          if (!uvedit_face_visible_test(scene, efa)) {
+            continue;
+          }
+          BMLoop *l_prev = BM_FACE_FIRST_LOOP(efa)->prev;
+          MLoopUV *luv_prev = BM_ELEM_CD_GET_VOID_P(l_prev, cd_loop_uv_offset);
+
+          BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
+            luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
+            if (BLI_rctf_isect_segment(&rectf, luv_prev->uv, luv->uv)) {
+              uvedit_edge_select_set_with_sticky(
+                  scene, em, l_prev, select, false, cd_loop_uv_offset);
+              changed = true;
+            }
+            l_prev = l;
+            luv_prev = luv;
+          }
         }
       }
     }
@@ -3917,6 +3946,24 @@ static bool do_lasso_select_mesh_uv_is_point_inside(const ARegion *region,
   return false;
 }
 
+static bool do_lasso_select_mesh_uv_is_edge_inside(const ARegion *region,
+                                                   const rcti *clip_rect,
+                                                   const int mcoords[][2],
+                                                   const int mcoords_len,
+                                                   const float co_test_a[2],
+                                                   const float co_test_b[2])
+{
+  int co_screen_a[2], co_screen_b[2];
+  if (UI_view2d_view_to_region_segment_clip(
+          &region->v2d, co_test_a, co_test_b, co_screen_a, co_screen_b) &&
+      BLI_rcti_isect_segment(clip_rect, co_screen_a, co_screen_b) &&
+      BLI_lasso_is_edge_inside(
+          mcoords, mcoords_len, UNPACK2(co_screen_a), UNPACK2(co_screen_b), V2D_IS_CLIPPED)) {
+    return true;
+  }
+  return false;
+}
+
 static bool do_lasso_select_mesh_uv(bContext *C,
                                     const int mcoords[][2],
                                     const int mcoords_len,
@@ -3985,6 +4032,7 @@ static bool do_lasso_select_mesh_uv(bContext *C,
       }
     }
     else if (use_edge) {
+      bool do_second_pass = true;
       BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
         if (!uvedit_face_visible_test(scene, efa)) {
           continue;
@@ -4001,10 +4049,35 @@ static bool do_lasso_select_mesh_uv(bContext *C,
                   region, &rect, mcoords, mcoords_len, luv_prev->uv)) {
             uvedit_edge_select_set_with_sticky(
                 scene, em, l_prev, select, false, cd_loop_uv_offset);
+            do_second_pass = false;
             changed = true;
           }
           l_prev = l;
           luv_prev = luv;
+        }
+      }
+      /* Do a second pass if no complete edges could be selected.
+       * This matches wire-frame edit-mesh selection in the 3D view. */
+      if (do_second_pass) {
+        /* Second pass to check if edges partially overlap with the selection area (lasso). */
+        BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+          if (!uvedit_face_visible_test(scene, efa)) {
+            continue;
+          }
+          BMLoop *l_prev = BM_FACE_FIRST_LOOP(efa)->prev;
+          MLoopUV *luv_prev = BM_ELEM_CD_GET_VOID_P(l_prev, cd_loop_uv_offset);
+
+          BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
+            MLoopUV *luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
+            if (do_lasso_select_mesh_uv_is_edge_inside(
+                    region, &rect, mcoords, mcoords_len, luv->uv, luv_prev->uv)) {
+              uvedit_edge_select_set_with_sticky(
+                  scene, em, l_prev, select, false, cd_loop_uv_offset);
+              changed = true;
+            }
+            l_prev = l;
+            luv_prev = luv;
+          }
         }
       }
     }
@@ -4566,6 +4639,33 @@ static float get_uv_face_needle(const eUVSelectSimilar type,
   return result;
 }
 
+static float get_uv_island_needle(const eUVSelectSimilar type,
+                                  const struct FaceIsland *island,
+                                  const float ob_m3[3][3],
+                                  const int cd_loop_uv_offset)
+
+{
+  float result = 0.0f;
+  switch (type) {
+    case UV_SSIM_AREA_UV:
+      for (int i = 0; i < island->faces_len; i++) {
+        result += BM_face_calc_area_uv(island->faces[i], cd_loop_uv_offset);
+      }
+      break;
+    case UV_SSIM_AREA_3D:
+      for (int i = 0; i < island->faces_len; i++) {
+        result += BM_face_calc_area_with_mat3(island->faces[i], ob_m3);
+      }
+      break;
+    case UV_SSIM_FACE:
+      return island->faces_len;
+    default:
+      BLI_assert_unreachable();
+      return false;
+  }
+  return result;
+}
+
 static int uv_select_similar_vert_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
@@ -4897,6 +4997,136 @@ static int uv_select_similar_face_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static bool uv_island_selected(const Scene *scene, struct FaceIsland *island)
+{
+  BLI_assert(island && island->faces_len);
+  return uvedit_face_select_test(scene, island->faces[0], island->cd_loop_uv_offset);
+}
+
+static int uv_select_similar_island_exec(bContext *C, wmOperator *op)
+{
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  ToolSettings *ts = CTX_data_tool_settings(C);
+
+  const eUVSelectSimilar type = RNA_enum_get(op->ptr, "type");
+  const float threshold = RNA_float_get(op->ptr, "threshold");
+  const eSimilarCmp compare = RNA_enum_get(op->ptr, "compare");
+
+  uint objects_len = 0;
+  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      view_layer, ((View3D *)NULL), &objects_len);
+
+  ListBase *island_list_ptr = MEM_callocN(sizeof(*island_list_ptr) * objects_len, __func__);
+  int island_list_len = 0;
+
+  const bool face_selected = !(scene->toolsettings->uv_flag & UV_SYNC_SELECTION);
+
+  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+    Object *obedit = objects[ob_index];
+    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
+    if (cd_loop_uv_offset == -1) {
+      continue;
+    }
+
+    float aspect_y = 1.0f; /* Placeholder value, aspect doesn't change connectivity. */
+    island_list_len += bm_mesh_calc_uv_islands(scene,
+                                               em->bm,
+                                               &island_list_ptr[ob_index],
+                                               face_selected,
+                                               false,
+                                               false,
+                                               aspect_y,
+                                               cd_loop_uv_offset);
+  }
+
+  struct FaceIsland **island_array = MEM_callocN(sizeof(*island_array) * island_list_len,
+                                                 __func__);
+
+  int tree_index = 0;
+  KDTree_1d *tree_1d = BLI_kdtree_1d_new(island_list_len);
+
+  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+    Object *obedit = objects[ob_index];
+    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
+    if (cd_loop_uv_offset == -1) {
+      continue;
+    }
+
+    float ob_m3[3][3];
+    copy_m3_m4(ob_m3, obedit->obmat);
+
+    int index;
+    LISTBASE_FOREACH_INDEX (struct FaceIsland *, island, &island_list_ptr[ob_index], index) {
+      island_array[index] = island;
+      if (!uv_island_selected(scene, island)) {
+        continue;
+      }
+      float needle = get_uv_island_needle(type, island, ob_m3, cd_loop_uv_offset);
+      if (tree_1d) {
+        BLI_kdtree_1d_insert(tree_1d, tree_index++, &needle);
+      }
+    }
+  }
+
+  if (tree_1d != NULL) {
+    BLI_kdtree_1d_deduplicate(tree_1d);
+    BLI_kdtree_1d_balance(tree_1d);
+  }
+
+  int tot_island_index = 0;
+  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+    Object *obedit = objects[ob_index];
+    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
+    if (cd_loop_uv_offset == -1) {
+      continue;
+    }
+    float ob_m3[3][3];
+    copy_m3_m4(ob_m3, obedit->obmat);
+
+    bool changed = false;
+    int index;
+    LISTBASE_FOREACH_INDEX (struct FaceIsland *, island, &island_list_ptr[ob_index], index) {
+      island_array[tot_island_index++] = island; /* To deallocate later. */
+      if (uv_island_selected(scene, island)) {
+        continue;
+      }
+      float needle = get_uv_island_needle(type, island, ob_m3, cd_loop_uv_offset);
+      bool select = ED_select_similar_compare_float_tree(tree_1d, needle, threshold, compare);
+      if (!select) {
+        continue;
+      }
+      bool do_history = false;
+      for (int j = 0; j < island->faces_len; j++) {
+        uvedit_face_select_set(
+            scene, em, island->faces[j], select, do_history, island->cd_loop_uv_offset);
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      uv_select_tag_update_for_object(depsgraph, ts, obedit);
+    }
+  }
+
+  BLI_assert(tot_island_index == island_list_len);
+  for (int i = 0; i < island_list_len; i++) {
+    MEM_SAFE_FREE(island_array[i]->faces);
+    MEM_SAFE_FREE(island_array[i]);
+  }
+
+  MEM_SAFE_FREE(island_array);
+  MEM_SAFE_FREE(island_list_ptr);
+  MEM_SAFE_FREE(objects);
+  BLI_kdtree_1d_free(tree_1d);
+
+  return OPERATOR_FINISHED;
+}
+
 /* Select similar UV faces/edges/verts based on current selection. */
 static int uv_select_similar_exec(bContext *C, wmOperator *op)
 {
@@ -4914,11 +5144,11 @@ static int uv_select_similar_exec(bContext *C, wmOperator *op)
   if (selectmode & UV_SELECT_EDGE) {
     return uv_select_similar_edge_exec(C, op);
   }
-  else if (selectmode & UV_SELECT_FACE) {
+  if (selectmode & UV_SELECT_FACE) {
     return uv_select_similar_face_exec(C, op);
   }
   if (selectmode & UV_SELECT_ISLAND) {
-    // return uv_select_similar_island_exec(C, op);
+    return uv_select_similar_island_exec(C, op);
   }
 
   return uv_select_similar_vert_exec(C, op);
@@ -4939,6 +5169,12 @@ static EnumPropertyItem prop_face_similar_types[] = {
     {UV_SSIM_MATERIAL, "MATERIAL", 0, "Material", ""},
     {0}};
 
+static EnumPropertyItem prop_island_similar_types[] = {
+    {UV_SSIM_AREA_UV, "AREA", 0, "Area", ""},
+    {UV_SSIM_AREA_3D, "AREA_3D", 0, "Area 3D", ""},
+    {UV_SSIM_FACE, "FACE", 0, "Amount of Faces in Island", ""},
+    {0}};
+
 static EnumPropertyItem prop_similar_compare_types[] = {{SIM_CMP_EQ, "EQUAL", 0, "Equal", ""},
                                                         {SIM_CMP_GT, "GREATER", 0, "Greater", ""},
                                                         {SIM_CMP_LT, "LESS", 0, "Less", ""},
@@ -4957,6 +5193,9 @@ static const EnumPropertyItem *uv_select_similar_type_itemf(bContext *C,
     }
     if (selectmode & UV_SELECT_FACE) {
       return prop_face_similar_types;
+    }
+    if (selectmode & UV_SELECT_ISLAND) {
+      return prop_island_similar_types;
     }
   }
 
@@ -5151,7 +5390,7 @@ static void uv_isolate_selected_islands(const Scene *scene,
   BLI_assert((scene->toolsettings->uv_flag & UV_SYNC_SELECTION) == 0);
   BMFace *efa;
   BMIter iter, liter;
-  UvElementMap *elementmap = BM_uv_element_map_create(em->bm, scene, true, false, false, true);
+  UvElementMap *elementmap = BM_uv_element_map_create(em->bm, scene, false, false, true);
   if (elementmap == NULL) {
     return;
   }

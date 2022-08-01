@@ -34,6 +34,7 @@
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
+#include "BKE_main_namemap.h"
 #include "BKE_node.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -51,6 +52,7 @@
 #include "PIL_time.h"
 
 #include "RNA_access.h"
+#include "RNA_path.h"
 #include "RNA_prototypes.h"
 #include "RNA_types.h"
 
@@ -428,12 +430,40 @@ static void lib_override_prefill_newid_from_existing_overrides(Main *bmain, ID *
 {
   ID *id_iter;
   FOREACH_MAIN_ID_BEGIN (bmain, id_iter) {
-    if (ID_IS_OVERRIDE_LIBRARY_REAL(id_iter) &&
-        id_iter->override_library->hierarchy_root == id_hierarchy_root) {
-      id_iter->override_library->reference->newid = id_iter;
+    ID *id = id_iter;
+    if (GS(id_iter->name) == ID_KE) {
+      id = reinterpret_cast<Key *>(id_iter)->from;
+      BLI_assert(id != nullptr);
+    }
+    if (ID_IS_OVERRIDE_LIBRARY_REAL(id) &&
+        id->override_library->hierarchy_root == id_hierarchy_root) {
+      id->override_library->reference->newid = id;
+      if (GS(id_iter->name) == ID_KE) {
+        Key *reference_key = BKE_key_from_id(id->override_library->reference);
+        if (reference_key != nullptr) {
+          reference_key->id.newid = id_iter;
+        }
+      }
     }
   }
   FOREACH_MAIN_ID_END;
+}
+
+static void lib_override_remapper_overrides_add(IDRemapper *id_remapper,
+                                                ID *reference_id,
+                                                ID *local_id)
+{
+  BKE_id_remapper_add(id_remapper, reference_id, local_id);
+
+  Key *reference_key, *local_key = nullptr;
+  if ((reference_key = BKE_key_from_id(reference_id)) != nullptr) {
+    if (reference_id->newid != nullptr) {
+      local_key = BKE_key_from_id(reference_id->newid);
+      BLI_assert(local_key != nullptr);
+    }
+
+    BKE_id_remapper_add(id_remapper, &reference_key->id, &local_key->id);
+  }
 }
 
 /* TODO: Make this static local function instead? API is becoming complex, and it's not used
@@ -544,6 +574,7 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
     BLI_assert(id_hierarchy_root != nullptr);
 
     LinkNode *relinked_ids = nullptr;
+    IDRemapper *id_remapper = BKE_id_remapper_create();
     /* Still checking the whole Main, that way we can tag other local IDs as needing to be
      * remapped to use newly created overriding IDs, if needed. */
     ID *id;
@@ -568,6 +599,14 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
        * consider we should also relink it, as part of recursive resync. */
       if ((other_id->tag & LIB_TAG_DOIT) != 0 && other_id->lib != id_root_reference->lib) {
         BLI_linklist_prepend(&relinked_ids, other_id);
+        if (ID_IS_OVERRIDE_LIBRARY_REAL(other_id) &&
+            other_id->override_library->hierarchy_root == id_hierarchy_root) {
+          reference_id = other_id->override_library->reference;
+          ID *local_id = reference_id->newid;
+          if (other_id == local_id) {
+            lib_override_remapper_overrides_add(id_remapper, reference_id, local_id);
+          }
+        }
       }
       if (other_id != id) {
         other_id->lib = id_root_reference->lib;
@@ -575,7 +614,6 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
     }
     FOREACH_MAIN_ID_END;
 
-    IDRemapper *id_remapper = BKE_id_remapper_create();
     for (todo_id_iter = static_cast<LinkData *>(todo_ids.first); todo_id_iter != nullptr;
          todo_id_iter = todo_id_iter->next) {
       reference_id = static_cast<ID *>(todo_id_iter->data);
@@ -587,15 +625,7 @@ bool BKE_lib_override_library_create_from_tag(Main *bmain,
 
       local_id->override_library->hierarchy_root = id_hierarchy_root;
 
-      BKE_id_remapper_add(id_remapper, reference_id, local_id);
-
-      Key *reference_key, *local_key = nullptr;
-      if ((reference_key = BKE_key_from_id(reference_id)) != nullptr) {
-        local_key = BKE_key_from_id(reference_id->newid);
-        BLI_assert(local_key != nullptr);
-
-        BKE_id_remapper_add(id_remapper, &reference_key->id, &local_key->id);
-      }
+      lib_override_remapper_overrides_add(id_remapper, reference_id, local_id);
     }
 
     BKE_libblock_relink_multiple(bmain,
@@ -687,6 +717,51 @@ static void lib_override_group_tag_data_clear(LibOverrideGroupTagData *data)
   memset(data, 0, sizeof(*data));
 }
 
+static void lib_override_hierarchy_dependencies_recursive_tag_from(LibOverrideGroupTagData *data)
+{
+  Main *bmain = data->bmain;
+  ID *id = data->id_root;
+  const bool is_override = data->is_override;
+
+  if ((*(uint *)&id->tag & data->tag) == 0) {
+    /* This ID is not tagged, no reason to proceed further to its parents. */
+    return;
+  }
+
+  MainIDRelationsEntry *entry = static_cast<MainIDRelationsEntry *>(
+      BLI_ghash_lookup(bmain->relations->relations_from_pointers, id));
+  BLI_assert(entry != nullptr);
+
+  if (entry->tags & MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_FROM) {
+    /* This ID has already been processed. */
+    return;
+  }
+  /* This way we won't process again that ID, should we encounter it again through another
+   * relationship hierarchy. */
+  entry->tags |= MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_FROM;
+
+  for (MainIDRelationsEntryItem *from_id_entry = entry->from_ids; from_id_entry != nullptr;
+       from_id_entry = from_id_entry->next) {
+    if ((from_id_entry->usage_flag & IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE) != 0) {
+      /* Never consider non-overridable relationships ('from', 'parents', 'owner' etc. pointers)
+       * as actual dependencies. */
+      continue;
+    }
+    /* We only consider IDs from the same library. */
+    ID *from_id = from_id_entry->id_pointer.from;
+    if (from_id == nullptr || from_id->lib != id->lib ||
+        (is_override && !ID_IS_OVERRIDE_LIBRARY(from_id))) {
+      /* IDs from different libraries, or non-override IDs in case we are processing overrides,
+       * are both barriers of dependency. */
+      continue;
+    }
+    from_id->tag |= data->tag;
+    LibOverrideGroupTagData sub_data = *data;
+    sub_data.id_root = from_id;
+    lib_override_hierarchy_dependencies_recursive_tag_from(&sub_data);
+  }
+}
+
 /* Tag all IDs in dependency relationships within an override hierarchy/group.
  *
  * Requires existing `Main.relations`.
@@ -698,18 +773,19 @@ static bool lib_override_hierarchy_dependencies_recursive_tag(LibOverrideGroupTa
   Main *bmain = data->bmain;
   ID *id = data->id_root;
   const bool is_override = data->is_override;
+  const bool is_resync = data->is_resync;
 
   MainIDRelationsEntry *entry = static_cast<MainIDRelationsEntry *>(
       BLI_ghash_lookup(bmain->relations->relations_from_pointers, id));
   BLI_assert(entry != nullptr);
 
-  if (entry->tags & MAINIDRELATIONS_ENTRY_TAGS_PROCESSED) {
+  if (entry->tags & MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_TO) {
     /* This ID has already been processed. */
     return (*(uint *)&id->tag & data->tag) != 0;
   }
   /* This way we won't process again that ID, should we encounter it again through another
    * relationship hierarchy. */
-  entry->tags |= MAINIDRELATIONS_ENTRY_TAGS_PROCESSED;
+  entry->tags |= MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_TO;
 
   for (MainIDRelationsEntryItem *to_id_entry = entry->to_ids; to_id_entry != nullptr;
        to_id_entry = to_id_entry->next) {
@@ -731,6 +807,15 @@ static bool lib_override_hierarchy_dependencies_recursive_tag(LibOverrideGroupTa
     if (lib_override_hierarchy_dependencies_recursive_tag(&sub_data)) {
       id->tag |= data->tag;
     }
+  }
+
+  /* If the current ID is/has been tagged for override above, then check its reversed dependencies
+   * (i.e. IDs that depend on the current one).
+   *
+   * This will cover e.g. the case where user override an armature, and would expect the mesh
+   * object deformed by that armature to also be overridden. */
+  if ((*(uint *)&id->tag & data->tag) != 0 && !is_resync) {
+    lib_override_hierarchy_dependencies_recursive_tag_from(data);
   }
 
   return (*(uint *)&id->tag & data->tag) != 0;
@@ -880,11 +965,6 @@ static void lib_override_linked_group_tag(LibOverrideGroupTagData *data)
   }
   else {
     id_root->tag |= data->tag;
-  }
-
-  /* Only objects and groups are currently considered as 'keys' in override hierarchies. */
-  if (!ELEM(GS(id_root->name), ID_OB, ID_GR)) {
-    return;
   }
 
   /* Tag all collections and objects recursively. */
@@ -1071,14 +1151,26 @@ static bool lib_override_library_create_do(Main *bmain,
   BKE_main_relations_tag_set(bmain, MAINIDRELATIONS_ENTRY_TAGS_PROCESSED, false);
   lib_override_hierarchy_dependencies_recursive_tag(&data);
 
+  /* In case the operation is on an already partially overridden hierarchy, all existing overrides
+   * in that hierarchy need to be tagged for remapping from linked reference ID usages to newly
+   * created overrides ones. */
+  if (id_hierarchy_root_reference->lib != id_root_reference->lib) {
+    BLI_assert(ID_IS_OVERRIDE_LIBRARY_REAL(id_hierarchy_root_reference));
+    BLI_assert(id_hierarchy_root_reference->override_library->reference->lib ==
+               id_root_reference->lib);
+
+    BKE_main_relations_tag_set(bmain, MAINIDRELATIONS_ENTRY_TAGS_PROCESSED, false);
+    data.hierarchy_root_id = id_hierarchy_root_reference;
+    data.id_root = id_hierarchy_root_reference;
+    data.is_override = true;
+    lib_override_overrides_group_tag(&data);
+  }
+
   BKE_main_relations_free(bmain);
   lib_override_group_tag_data_clear(&data);
 
   bool success = false;
   if (id_hierarchy_root_reference->lib != id_root_reference->lib) {
-    BLI_assert(ID_IS_OVERRIDE_LIBRARY_REAL(id_hierarchy_root_reference));
-    BLI_assert(id_hierarchy_root_reference->override_library->reference->lib ==
-               id_root_reference->lib);
     success = BKE_lib_override_library_create_from_tag(bmain,
                                                        owner_library,
                                                        id_root_reference,
@@ -1694,11 +1786,16 @@ static bool lib_override_library_resync(Main *bmain,
         id->tag |= LIB_TAG_MISSING;
       }
 
-      if (id->tag & LIB_TAG_DOIT && (id->lib == id_root->lib) && ID_IS_OVERRIDE_LIBRARY(id)) {
+      if ((id->lib == id_root->lib) && ID_IS_OVERRIDE_LIBRARY(id)) {
         /* While this should not happen in typical cases (and won't be properly supported here),
          * user is free to do all kind of very bad things, including having different local
          * overrides of a same linked ID in a same hierarchy. */
         IDOverrideLibrary *id_override_library = lib_override_get(bmain, id, nullptr);
+
+        if (id_override_library->hierarchy_root != id_root->override_library->hierarchy_root) {
+          continue;
+        }
+
         ID *reference_id = id_override_library->reference;
         if (GS(reference_id->name) != GS(id->name)) {
           switch (GS(id->name)) {
@@ -1716,11 +1813,16 @@ static bool lib_override_library_resync(Main *bmain,
               break;
           }
         }
+        if (reference_id == nullptr) {
+          /* Can happen e.g. when there is a local override of a shapekey, but the matching linked
+           * obdata (mesh etc.) does not have any shapekey anymore. */
+          continue;
+        }
         BLI_assert(GS(reference_id->name) == GS(id->name));
 
         if (!BLI_ghash_haskey(linkedref_to_old_override, reference_id)) {
           BLI_ghash_insert(linkedref_to_old_override, reference_id, id);
-          if (!ID_IS_OVERRIDE_LIBRARY_REAL(id)) {
+          if (!ID_IS_OVERRIDE_LIBRARY_REAL(id) || (id->tag & LIB_TAG_DOIT) == 0) {
             continue;
           }
           if ((id->override_library->reference->tag & LIB_TAG_DOIT) == 0) {
@@ -2569,6 +2671,8 @@ void BKE_lib_override_library_main_resync(Main *bmain,
                 library->filepath);
     }
   }
+
+  BLI_assert(BKE_main_namemap_validate(bmain));
 }
 
 void BKE_lib_override_library_delete(Main *bmain, ID *id_root)
@@ -3537,6 +3641,9 @@ void BKE_lib_override_library_update(Main *bmain, ID *local)
     return;
   }
 
+  /* Remove the pair (idname, lib) of this temp id from the name map. */
+  BKE_main_namemap_remove_name(bmain, tmp_id, tmp_id->name + 2);
+
   tmp_id->lib = local->lib;
 
   /* This ID name is problematic, since it is an 'rna name property' it should not be editable or
@@ -3551,7 +3658,9 @@ void BKE_lib_override_library_update(Main *bmain, ID *local)
   Key *tmp_key = BKE_key_from_id(tmp_id);
   if (local_key != nullptr && tmp_key != nullptr) {
     tmp_key->id.flag |= (local_key->id.flag & LIB_EMBEDDED_DATA_LIB_OVERRIDE);
+    BKE_main_namemap_remove_name(bmain, &tmp_key->id, tmp_key->id.name + 2);
     tmp_key->id.lib = local_key->id.lib;
+    BLI_strncpy(tmp_key->id.name, local_key->id.name, sizeof(tmp_key->id.name));
   }
 
   PointerRNA rnaptr_src, rnaptr_dst, rnaptr_storage_stack, *rnaptr_storage = nullptr;
@@ -3588,8 +3697,10 @@ void BKE_lib_override_library_update(Main *bmain, ID *local)
   }
 
   /* Again, horribly inefficient in our case, we need something off-Main
-   * (aka more generic nolib copy/free stuff)! */
-  BKE_id_free_ex(bmain, tmp_id, LIB_ID_FREE_NO_UI_USER, true);
+   * (aka more generic nolib copy/free stuff).
+   * NOTE: Do not remove this tmp_id's name from the namemap here, since this name actually still
+   * exists in `bmain`. */
+  BKE_id_free_ex(bmain, tmp_id, LIB_ID_FREE_NO_UI_USER | LIB_ID_FREE_NO_NAMEMAP_REMOVE, true);
 
   if (GS(local->name) == ID_AR) {
     /* Fun times again, thanks to bone pointers in pose data of objects. We keep same ID addresses,
@@ -3633,12 +3744,16 @@ void BKE_lib_override_library_main_update(Main *bmain)
   Main *orig_gmain = G_MAIN;
   G_MAIN = bmain;
 
+  BLI_assert(BKE_main_namemap_validate(bmain));
+
   FOREACH_MAIN_ID_BEGIN (bmain, id) {
     if (id->override_library != nullptr) {
       BKE_lib_override_library_update(bmain, id);
     }
   }
   FOREACH_MAIN_ID_END;
+
+  BLI_assert(BKE_main_namemap_validate(bmain));
 
   G_MAIN = orig_gmain;
 }

@@ -263,20 +263,20 @@ static bool sculpt_undo_restore_coords(bContext *C, Depsgraph *depsgraph, Sculpt
         if (ss->deform_modifiers_active) {
           for (int i = 0; i < unode->totvert; i++) {
             sculpt_undo_restore_deformed(ss, unode, i, index[i], mvert[index[i]].co);
-            BKE_pbvh_vert_mark_update(ss->pbvh, index[i]);
+            BKE_pbvh_vert_mark_update(ss->pbvh, BKE_pbvh_make_vref(index[i]));
           }
         }
         else {
           for (int i = 0; i < unode->totvert; i++) {
             swap_v3_v3(mvert[index[i]].co, unode->orig_co[i]);
-            BKE_pbvh_vert_mark_update(ss->pbvh, index[i]);
+            BKE_pbvh_vert_mark_update(ss->pbvh, BKE_pbvh_make_vref(index[i]));
           }
         }
       }
       else {
         for (int i = 0; i < unode->totvert; i++) {
           swap_v3_v3(mvert[index[i]].co, unode->co[i]);
-          BKE_pbvh_vert_mark_update(ss->pbvh, index[i]);
+          BKE_pbvh_vert_mark_update(ss->pbvh, BKE_pbvh_make_vref(index[i]));
         }
       }
     }
@@ -320,7 +320,7 @@ static bool sculpt_undo_restore_hidden(bContext *C, SculptUndoNode *unode)
       if ((BLI_BITMAP_TEST(unode->vert_hidden, i) != 0) != ((v->flag & ME_HIDE) != 0)) {
         BLI_BITMAP_FLIP(unode->vert_hidden, i);
         v->flag ^= ME_HIDE;
-        BKE_pbvh_vert_mark_update(ss->pbvh, unode->index[i]);
+        BKE_pbvh_vert_mark_update(ss->pbvh, BKE_pbvh_make_vref(unode->index[i]));
       }
     }
   }
@@ -360,7 +360,7 @@ static bool sculpt_undo_restore_color(bContext *C, SculptUndoNode *unode)
 
   if (modified) {
     for (int i = 0; i < unode->totvert; i++) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, unode->index[i]);
+      BKE_pbvh_vert_mark_update(ss->pbvh, BKE_pbvh_index_to_vertex(ss->pbvh, unode->index[i]));
     }
   }
 
@@ -385,7 +385,7 @@ static bool sculpt_undo_restore_mask(bContext *C, SculptUndoNode *unode)
     for (int i = 0; i < unode->totvert; i++) {
       if (vmask[index[i]] != unode->mask[i]) {
         SWAP(float, vmask[index[i]], unode->mask[i]);
-        BKE_pbvh_vert_mark_update(ss->pbvh, index[i]);
+        BKE_pbvh_vert_mark_update(ss->pbvh, BKE_pbvh_make_vref(index[i]));
       }
     }
   }
@@ -855,7 +855,7 @@ static void sculpt_undo_restore_list(bContext *C, Depsgraph *depsgraph, ListBase
 
     if (tag_update) {
       Mesh *mesh = ob->data;
-      BKE_mesh_normals_tag_dirty(mesh);
+      BKE_mesh_tag_coords_changed(mesh);
 
       BKE_sculptsession_free_deformMats(ss);
     }
@@ -961,7 +961,7 @@ static bool sculpt_undo_cleanup(bContext *C, ListBase *lb)
 }
 #endif
 
-SculptUndoNode *SCULPT_undo_get_node(PBVHNode *node)
+SculptUndoNode *SCULPT_undo_get_node(PBVHNode *node, SculptUndoType type)
 {
   UndoSculpt *usculpt = sculpt_undo_get_nodes();
 
@@ -969,7 +969,13 @@ SculptUndoNode *SCULPT_undo_get_node(PBVHNode *node)
     return NULL;
   }
 
-  return BLI_findptr(&usculpt->nodes, node, offsetof(SculptUndoNode, node));
+  LISTBASE_FOREACH (SculptUndoNode *, unode, &usculpt->nodes) {
+    if (unode->node == node && unode->type == type) {
+      return unode;
+    }
+  }
+
+  return NULL;
 }
 
 SculptUndoNode *SCULPT_undo_get_first_node()
@@ -1381,7 +1387,7 @@ SculptUndoNode *SCULPT_undo_push_node(Object *ob, PBVHNode *node, SculptUndoType
     BLI_thread_unlock(LOCK_CUSTOM1);
     return unode;
   }
-  if ((unode = SCULPT_undo_get_node(node))) {
+  if ((unode = SCULPT_undo_get_node(node, type))) {
     BLI_thread_unlock(LOCK_CUSTOM1);
     return unode;
   }

@@ -14,6 +14,8 @@
 
 #ifdef __KERNEL_METAL__
 #  include "kernel/device/metal/context_begin.h"
+#elif defined(__KERNEL_ONEAPI__)
+#  include "kernel/device/oneapi/context_begin.h"
 #endif
 
 #include "kernel/device/gpu/work_stealing.h"
@@ -40,6 +42,8 @@
 
 #ifdef __KERNEL_METAL__
 #  include "kernel/device/metal/context_end.h"
+#elif defined(__KERNEL_ONEAPI__)
+#  include "kernel/device/oneapi/context_end.h"
 #endif
 
 #include "kernel/film/read.h"
@@ -242,7 +246,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 ccl_gpu_kernel_postfix
 
 #if defined(__KERNEL_METAL_APPLE__) && defined(__METALRT__)
-constant int __dummy_constant [[function_constant(0)]];
+constant int __dummy_constant [[function_constant(Kernel_DummyConstant)]];
 #endif
 
 ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)

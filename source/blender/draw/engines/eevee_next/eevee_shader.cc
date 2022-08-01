@@ -78,8 +78,18 @@ ShaderModule::~ShaderModule()
 const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_type)
 {
   switch (shader_type) {
-    case VELOCITY_RESOLVE:
-      return "eevee_velocity_resolve";
+    case FILM_FRAG:
+      return "eevee_film_frag";
+    case FILM_COMP:
+      return "eevee_film_comp";
+    case MOTION_BLUR_GATHER:
+      return "eevee_motion_blur_gather";
+    case MOTION_BLUR_TILE_DILATE:
+      return "eevee_motion_blur_tiles_dilate";
+    case MOTION_BLUR_TILE_FLATTEN_RENDER:
+      return "eevee_motion_blur_tiles_flatten_render";
+    case MOTION_BLUR_TILE_FLATTEN_VIEWPORT:
+      return "eevee_motion_blur_tiles_flatten_viewport";
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:
       return "";
@@ -161,7 +171,6 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
         }
       }
       info.vertex_inputs_.clear();
-      info.additional_info("draw_curves_infos");
       break;
     case MAT_GEOM_WORLD:
       /**

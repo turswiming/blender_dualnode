@@ -166,6 +166,7 @@ void register_node_tree_type_sh()
 
   tt->type = NTREE_SHADER;
   strcpy(tt->idname, "ShaderNodeTree");
+  strcpy(tt->group_idname, "ShaderNodeGroup");
   strcpy(tt->ui_name, N_("Shader Editor"));
   tt->ui_icon = ICON_NODE_MATERIAL;
   strcpy(tt->ui_description, N_("Shader nodes"));
@@ -712,6 +713,7 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
 
       switch (node->type) {
         case SH_NODE_SHADERTORGB:
+        case SH_NODE_OUTPUT_LIGHT:
         case SH_NODE_OUTPUT_WORLD:
         case SH_NODE_OUTPUT_MATERIAL: {
           /* Start the tree with full weight. */
@@ -810,6 +812,7 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
 
         switch (node->type) {
           case SH_NODE_SHADERTORGB:
+          case SH_NODE_OUTPUT_LIGHT:
           case SH_NODE_OUTPUT_WORLD:
           case SH_NODE_OUTPUT_MATERIAL:
           case SH_NODE_ADD_SHADER: {

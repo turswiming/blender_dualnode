@@ -38,6 +38,7 @@ struct ReportList;
 struct Scene;
 struct ScrArea;
 struct SnapObjectContext;
+struct TransConvertTypeInfo;
 struct TransDataContainer;
 struct TransInfo;
 struct TransSnap;
@@ -204,36 +205,6 @@ typedef enum {
   HLP_TRACKBALL = 6,
 } eTHelpline;
 
-typedef enum {
-  TC_NONE = 0,
-  TC_ACTION_DATA,
-  TC_POSE,
-  TC_ARMATURE_VERTS,
-  TC_CURSOR_IMAGE,
-  TC_CURSOR_SEQUENCER,
-  TC_CURSOR_VIEW3D,
-  TC_CURVE_VERTS,
-  TC_GRAPH_EDIT_DATA,
-  TC_GPENCIL,
-  TC_LATTICE_VERTS,
-  TC_MASKING_DATA,
-  TC_MBALL_VERTS,
-  TC_MESH_VERTS,
-  TC_MESH_EDGES,
-  TC_MESH_SKIN,
-  TC_MESH_UV,
-  TC_NLA_DATA,
-  TC_NODE_DATA,
-  TC_OBJECT,
-  TC_OBJECT_TEXSPACE,
-  TC_PAINT_CURVE_VERTS,
-  TC_PARTICLE_VERTS,
-  TC_SCULPT,
-  TC_SEQ_DATA,
-  TC_SEQ_IMAGE_DATA,
-  TC_TRACKING_DATA,
-} eTConvertType;
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -306,9 +277,9 @@ typedef struct TransSnap {
   eSnapTargetSelect target_select;
   bool align;
   bool project;
-  bool snap_self;
   bool peel;
   bool use_backface_culling;
+  short face_nearest_steps;
   eTSnap status;
   /* Snapped Element Type (currently for objects only). */
   eSnapMode snapElem;
@@ -463,6 +434,8 @@ typedef struct TransDataContainer {
   int data_len;
   /** Total number of transformed data_mirror. */
   int data_mirror_len;
+  /** Total number of transformed gp-frames. */
+  int data_gpf_len;
 
   struct Object *obedit;
 
@@ -516,7 +489,7 @@ typedef struct TransInfo {
   int data_len_all;
 
   /** TODO: It should be a member of #TransDataContainer. */
-  eTConvertType data_type;
+  struct TransConvertTypeInfo *data_type;
 
   /** Current context/options for transform. */
   eTContext options;

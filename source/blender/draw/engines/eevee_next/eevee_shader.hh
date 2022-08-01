@@ -26,7 +26,13 @@ namespace blender::eevee {
 
 /* Keep alphabetical order and clean prefix. */
 enum eShaderType {
-  VELOCITY_RESOLVE = 0,
+  FILM_FRAG = 0,
+  FILM_COMP,
+
+  MOTION_BLUR_GATHER,
+  MOTION_BLUR_TILE_DILATE,
+  MOTION_BLUR_TILE_FLATTEN_RENDER,
+  MOTION_BLUR_TILE_FLATTEN_VIEWPORT,
 
   MAX_SHADER_TYPE,
 };

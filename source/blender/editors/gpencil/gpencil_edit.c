@@ -1718,7 +1718,7 @@ static int gpencil_strokes_paste_exec(bContext *C, wmOperator *op)
          *       we are obliged to add a new frame if one
          *       doesn't exist already
          */
-        gpf = BKE_gpencil_layer_frame_get(gpl, CFRA, GP_GETFRAME_ADD_NEW);
+        gpf = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, GP_GETFRAME_ADD_NEW);
         if (gpf) {
           /* Create new stroke */
           bGPDstroke *new_stroke = BKE_gpencil_stroke_duplicate(gps, true, true);
@@ -1971,7 +1971,7 @@ static int gpencil_blank_frame_add_exec(bContext *C, wmOperator *op)
 {
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   Scene *scene = CTX_data_scene(C);
-  int cfra = CFRA;
+  int cfra = scene->r.cfra;
 
   bGPDlayer *active_gpl = BKE_gpencil_layer_active_get(gpd);
 
@@ -2075,7 +2075,7 @@ static int gpencil_actframe_delete_exec(bContext *C, wmOperator *op)
 
   Scene *scene = CTX_data_scene(C);
 
-  bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, CFRA, GP_GETFRAME_USE_PREV);
+  bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, GP_GETFRAME_USE_PREV);
 
   /* if there's no existing Grease-Pencil data there, add some */
   if (gpd == NULL) {
@@ -2150,7 +2150,7 @@ static int gpencil_actframe_delete_all_exec(bContext *C, wmOperator *op)
 
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
     /* try to get the "active" frame - but only if it actually occurs on this frame */
-    bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, CFRA, GP_GETFRAME_USE_PREV);
+    bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, GP_GETFRAME_USE_PREV);
 
     if (gpf == NULL) {
       continue;
@@ -3709,35 +3709,44 @@ static int gpencil_stroke_flip_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
   const bool is_curve_edit = (bool)GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd);
+
   bool changed = false;
-  /* read all selected strokes */
+  /* Read all selected strokes. */
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
-    bGPDframe *gpf = gpl->actframe;
-    if (gpf == NULL) {
-      continue;
-    }
+    bGPDframe *init_gpf = (is_multiedit) ? gpl->frames.first : gpl->actframe;
 
-    LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-      if (gps->flag & GP_STROKE_SELECT) {
-        /* skip strokes that are invalid for current view */
-        if (ED_gpencil_stroke_can_use(C, gps) == false) {
+    for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+      if ((gpf == gpl->actframe) || ((gpf->flag & GP_FRAME_SELECT) && (is_multiedit))) {
+        if (gpf == NULL) {
           continue;
         }
-        /* check if the color is editable */
-        if (ED_gpencil_stroke_material_editable(ob, gpl, gps) == false) {
-          continue;
-        }
+        LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+          if (gps->flag & GP_STROKE_SELECT) {
+            /* skip strokes that are invalid for current view */
+            if (ED_gpencil_stroke_can_use(C, gps) == false) {
+              continue;
+            }
+            /* check if the color is editable */
+            if (ED_gpencil_stroke_material_editable(ob, gpl, gps) == false) {
+              continue;
+            }
 
-        if (is_curve_edit) {
-          BKE_report(op->reports, RPT_ERROR, "Not implemented!");
+            if (is_curve_edit) {
+              BKE_report(op->reports, RPT_ERROR, "Not implemented!");
+            }
+            else {
+              /* Flip stroke. */
+              BKE_gpencil_stroke_flip(gps);
+              changed = true;
+            }
+          }
         }
-        else {
-          /* Flip stroke. */
-          BKE_gpencil_stroke_flip(gps);
-        }
-
-        changed = true;
+      }
+      /* If not multi-edit, exit loop. */
+      if (!is_multiedit) {
+        break;
       }
     }
   }
@@ -3818,7 +3827,7 @@ static int gpencil_strokes_reproject_exec(bContext *C, wmOperator *op)
             /* update frame to get the new location of objects */
             if ((mode == GP_REPROJECT_SURFACE) && (cfra_prv != gpf->framenum)) {
               cfra_prv = gpf->framenum;
-              CFRA = gpf->framenum;
+              scene->r.cfra = gpf->framenum;
               BKE_scene_graph_update_for_newframe(depsgraph);
             }
 
@@ -3846,7 +3855,7 @@ static int gpencil_strokes_reproject_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   /* return frame state and DB to original state */
-  CFRA = oldframe;
+  scene->r.cfra = oldframe;
   BKE_scene_graph_update_for_newframe(depsgraph);
 
   if (sctx != NULL) {
@@ -3980,6 +3989,7 @@ static void gpencil_smooth_stroke(bContext *C, wmOperator *op)
       /* TODO use `BKE_gpencil_stroke_smooth` when the weights are better used. */
       bGPDstroke gps_old = *gps;
       gps_old.points = (bGPDspoint *)MEM_dupallocN(gps->points);
+      bool need_update = false;
       /* Here the iteration needs to be done outside the smooth functions,
        * as there are points that don't get smoothed. */
       for (int n = 0; n < repeat; n++) {
@@ -3991,6 +4001,7 @@ static void gpencil_smooth_stroke(bContext *C, wmOperator *op)
           /* Perform smoothing. */
           if (smooth_position) {
             BKE_gpencil_stroke_smooth_point(&gps_old, i, factor, 1, false, false, gps);
+            need_update = true;
           }
           if (smooth_strength) {
             BKE_gpencil_stroke_smooth_strength(&gps_old, i, factor, 1, gps);
@@ -4000,6 +4011,7 @@ static void gpencil_smooth_stroke(bContext *C, wmOperator *op)
           }
           if (smooth_uv) {
             BKE_gpencil_stroke_smooth_uv(&gps_old, i, factor, 1, gps);
+            need_update = true;
           }
         }
         if (n < repeat - 1) {
@@ -4007,6 +4019,11 @@ static void gpencil_smooth_stroke(bContext *C, wmOperator *op)
         }
       }
       MEM_freeN(gps_old.points);
+
+      if (need_update) {
+        gps->flag |= GP_STROKE_NEEDS_CURVE_UPDATE;
+        BKE_gpencil_stroke_geometry_update(gpd_, gps);
+      }
     }
   }
   GP_EDITABLE_STROKES_END(gpstroke_iter);

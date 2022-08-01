@@ -390,7 +390,7 @@ void PathTrace::path_trace(RenderWork &render_work)
     work_balance_infos_[i].time_spent += work_time;
     work_balance_infos_[i].occupancy = statistics.occupancy;
 
-    VLOG_WORK << "Rendered " << num_samples << " samples in " << work_time << " seconds ("
+    VLOG_INFO << "Rendered " << num_samples << " samples in " << work_time << " seconds ("
               << work_time / num_samples
               << " seconds per sample), occupancy: " << statistics.occupancy;
   });
@@ -1120,6 +1120,8 @@ static const char *device_type_for_description(const DeviceType type)
       return "OptiX";
     case DEVICE_HIP:
       return "HIP";
+    case DEVICE_ONEAPI:
+      return "oneAPI";
     case DEVICE_DUMMY:
       return "Dummy";
     case DEVICE_MULTI:

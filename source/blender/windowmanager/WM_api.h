@@ -314,10 +314,6 @@ void WM_paint_cursor_tag_redraw(struct wmWindow *win, struct ARegion *region);
  * This function requires access to the GHOST_SystemHandle (g_system).
  */
 void WM_cursor_warp(struct wmWindow *win, int x, int y);
-/**
- * Set x, y to values we can actually position the cursor to.
- */
-void WM_cursor_compatible_xy(wmWindow *win, int *x, int *y);
 
 /* Handlers. */
 
@@ -1218,10 +1214,24 @@ int WM_operator_flag_only_pass_through_on_press(int retval, const struct wmEvent
 /* Drag and drop. */
 
 /**
- * Note that the pointer should be valid allocated and not on stack.
+ * Start dragging immediately with the given data.
+ * Note that \a poin should be valid allocated and not on stack.
  */
-struct wmDrag *WM_event_start_drag(
+void WM_event_start_drag(
     struct bContext *C, int icon, int type, void *poin, double value, unsigned int flags);
+/**
+ * Create and fill the dragging data, but don't start dragging just yet (unlike
+ * #WM_event_start_drag()). Must be followed up by #WM_event_start_prepared_drag(), otherwise the
+ * returned pointer will leak memory.
+ *
+ * Note that \a poin should be valid allocated and not on stack.
+ */
+wmDrag *WM_drag_data_create(
+    struct bContext *C, int icon, int type, void *poin, double value, unsigned int flags);
+/**
+ * Invoke dragging using the given \a drag data.
+ */
+void WM_event_start_prepared_drag(struct bContext *C, wmDrag *drag);
 void WM_event_drag_image(struct wmDrag *, struct ImBuf *, float scale);
 void WM_drag_free(struct wmDrag *drag);
 void WM_drag_data_free(int dragtype, void *poin);
@@ -1531,10 +1541,10 @@ void WM_event_print(const struct wmEvent *event);
 bool WM_event_is_modal_drag_exit(const struct wmEvent *event,
                                  short init_event_type,
                                  short init_event_val);
-bool WM_event_is_last_mousemove(const struct wmEvent *event);
 bool WM_event_is_mouse_drag(const struct wmEvent *event);
 bool WM_event_is_mouse_drag_or_press(const wmEvent *event);
 int WM_event_drag_direction(const wmEvent *event);
+char WM_event_utf8_to_ascii(const struct wmEvent *event) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
 
 /**
  * Detect motion between selection (callers should only use this for selection picking),

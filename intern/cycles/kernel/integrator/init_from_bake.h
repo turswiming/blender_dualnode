@@ -49,7 +49,8 @@ ccl_device const float2 bake_offset_towards_center(KernelGlobals kg,
   const float3 to_center = center - P;
 
   const float3 offset_P = P + normalize(to_center) *
-                                  min(len(to_center), max(max3(fabs(P)), 1.0f) * position_offset);
+                                  min(len(to_center),
+                                      max(reduce_max(fabs(P)), 1.0f) * position_offset);
 
   /* Compute barycentric coordinates at new position. */
   const float3 v1 = tri_verts[1] - tri_verts[0];
@@ -154,6 +155,11 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
                                  1.0f - u);
   }
 
+  /* Convert from Blender to Cycles/Embree/OptiX barycentric convention. */
+  const float tmp = u;
+  u = v;
+  v = 1.0f - tmp - v;
+
   /* Position and normal on triangle. */
   const int object = kernel_data.bake.object_index;
   float3 P, Ng;
@@ -173,14 +179,15 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
     Ray ray ccl_optional_struct_init;
     ray.P = zero_float3();
     ray.D = normalize(P);
-    ray.t = FLT_MAX;
+    ray.tmin = 0.0f;
+    ray.tmax = FLT_MAX;
     ray.time = 0.5f;
     ray.dP = differential_zero_compact();
     ray.dD = differential_zero_compact();
     integrator_state_write_ray(kg, state, &ray);
 
     /* Setup next kernel to execute. */
-    INTEGRATOR_PATH_INIT(DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
+    integrator_path_init(kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
   }
   else {
     /* Surface baking. */
@@ -209,7 +216,8 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
     Ray ray ccl_optional_struct_init;
     ray.P = P + N;
     ray.D = -N;
-    ray.t = FLT_MAX;
+    ray.tmin = 0.0f;
+    ray.tmax = FLT_MAX;
     ray.time = 0.5f;
 
     /* Setup differentials. */
@@ -246,13 +254,15 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
     const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
 
     if (use_caustics) {
-      INTEGRATOR_PATH_INIT_SORTED(DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE, shader_index);
+      integrator_path_init_sorted(
+          kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE, shader_index);
     }
     else if (use_raytrace_kernel) {
-      INTEGRATOR_PATH_INIT_SORTED(DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE, shader_index);
+      integrator_path_init_sorted(
+          kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE, shader_index);
     }
     else {
-      INTEGRATOR_PATH_INIT_SORTED(DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE, shader_index);
+      integrator_path_init_sorted(kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE, shader_index);
     }
   }
 

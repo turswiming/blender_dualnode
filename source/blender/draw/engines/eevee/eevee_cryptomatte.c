@@ -94,7 +94,7 @@ BLI_INLINE int eevee_cryptomatte_pixel_stride(const ViewLayer *view_layer)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Init Renderpasses
+/** \name Init Render-Passes
  * \{ */
 
 void EEVEE_cryptomatte_renderpasses_init(EEVEE_Data *vedata)
@@ -249,7 +249,9 @@ void EEVEE_cryptomatte_object_curves_cache_populate(EEVEE_Data *vedata,
 {
   BLI_assert(ob->type == OB_CURVES);
   Material *material = BKE_object_material_get_eval(ob, CURVES_MATERIAL_NR);
-  eevee_cryptomatte_curves_cache_populate(vedata, sldata, ob, NULL, NULL, material);
+  DRWShadingGroup *grp = eevee_cryptomatte_shading_group_create(
+      vedata, sldata, ob, material, true);
+  DRW_shgroup_curves_create_sub(ob, grp, NULL);
 }
 
 void EEVEE_cryptomatte_particle_hair_cache_populate(EEVEE_Data *vedata,

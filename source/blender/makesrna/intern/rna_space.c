@@ -3478,11 +3478,6 @@ static void rna_def_space_mask_info(StructRNA *srna, int noteflag, const char *m
   RNA_def_property_ui_text(prop, "Edge Display Type", "Display type for mask splines");
   RNA_def_property_update(prop, noteflag, NULL);
 
-  prop = RNA_def_property(srna, "show_mask_smooth", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "mask_info.draw_flag", MASK_DRAWFLAG_SMOOTH);
-  RNA_def_property_ui_text(prop, "Display Smooth Splines", "");
-  RNA_def_property_update(prop, noteflag, NULL);
-
   prop = RNA_def_property(srna, "show_mask_spline", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "mask_info.draw_flag", MASK_DRAWFLAG_SPLINE);
   RNA_def_property_ui_text(prop, "Show Mask Spline", "");
@@ -4559,7 +4554,7 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_curve_display_handle_items);
   RNA_def_property_ui_text(
       prop, "Display Handles", "Limit the display of curve handles in edit mode");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPencil_update");
 
   prop = RNA_def_property(srna, "show_curve_normals", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "overlay.edit_flag", V3D_OVERLAY_EDIT_CU_NORMALS);
@@ -5303,6 +5298,7 @@ static void rna_def_space_image_overlay(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_overlays", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "overlay.flag", SI_OVERLAY_SHOW_OVERLAYS);
   RNA_def_property_ui_text(prop, "Show Overlays", "Display overlays like UV Maps and Metadata");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, NULL);
 
   prop = RNA_def_property(srna, "show_grid_background", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "overlay.flag", SI_OVERLAY_SHOW_GRID_BACKGROUND);
@@ -6589,7 +6585,7 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
   static const EnumPropertyItem display_size_items[] = {
       {64, "TINY", 0, "Tiny", ""},
       {96, "SMALL", 0, "Small", ""},
-      {128, "NORMAL", 0, "Regular", ""},
+      {128, "NORMAL", 0, "Medium", ""},
       {192, "LARGE", 0, "Large", ""},
       {0, NULL, 0, NULL, NULL},
   };
@@ -7808,12 +7804,6 @@ static void rna_def_spreadsheet_row_filter(BlenderRNA *brna)
   prop = RNA_def_property(srna, "value_color", PROP_FLOAT, PROP_NONE);
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(prop, "Color Value", "");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SPREADSHEET, NULL);
-
-  prop = RNA_def_property(srna, "value_byte_color", PROP_INT, PROP_NONE);
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_range(prop, 0, 255);
-  RNA_def_property_ui_text(prop, "Byte Color Value", "");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SPREADSHEET, NULL);
 
   prop = RNA_def_property(srna, "value_string", PROP_STRING, PROP_NONE);

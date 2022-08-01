@@ -1038,19 +1038,12 @@ static void obstacles_from_mesh(Object *coll_ob,
 
     /* Transform mesh vertices to domain grid space for fast lookups.
      * This is valid because the mesh is copied above. */
-    BKE_mesh_vertex_normals_ensure(me);
-    float(*vert_normals)[3] = BKE_mesh_vertex_normals_for_write(me);
     for (i = 0; i < numverts; i++) {
       float co[3];
 
       /* Vertex position. */
       mul_m4_v3(coll_ob->obmat, mvert[i].co);
       manta_pos_to_cell(fds, mvert[i].co);
-
-      /* Vertex normal. */
-      mul_mat3_m4_v3(coll_ob->obmat, vert_normals[i]);
-      mul_mat3_m4_v3(fds->imat, vert_normals[i]);
-      normalize_v3(vert_normals[i]);
 
       /* Vertex velocity. */
       add_v3fl_v3fl_v3i(co, mvert[i].co, fds->shift);
@@ -3761,16 +3754,16 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *fmd,
     MEM_freeN(objs);
   }
 
-  /* TODO(sebbas): Cache reset for when flow / effector object need update flag is set. */
-#  if 0
-  /* If the just updated flags now carry the 'outdated' flag, reset the cache here!
-   * Plus sanity check: Do not clear cache on file load. */
-  if (fds->cache_flag & FLUID_DOMAIN_OUTDATED_DATA &&
-      ((fds->flags & FLUID_DOMAIN_FILE_LOAD) == 0)) {
-    BKE_fluid_cache_free_all(fds, ob);
-    BKE_fluid_modifier_reset_ex(fmd, false);
+  /* If 'outdated', reset the cache here. */
+  if (is_startframe && mode == FLUID_DOMAIN_CACHE_REPLAY) {
+    PTCacheID pid;
+    BKE_ptcache_id_from_smoke(&pid, ob, fmd);
+    if (pid.cache->flag & PTCACHE_OUTDATED) {
+      BKE_ptcache_id_reset(scene, &pid, PTCACHE_RESET_OUTDATED);
+      BKE_fluid_cache_free_all(fds, ob);
+      BKE_fluid_modifier_reset_ex(fmd, false);
+    }
   }
-#  endif
 
   /* Fluid domain init must not fail in order to continue modifier evaluation. */
   if (!fds->fluid && !BKE_fluid_modifier_init(fmd, depsgraph, ob, scene, me)) {

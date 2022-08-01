@@ -51,7 +51,6 @@ typedef struct PVert {
   union PVertUnion {
     PHashKey key;       /* Construct. */
     int id;             /* ABF/LSCM matrix index. */
-    float distortion;   /* Area smoothing. */
     HeapNode *heaplink; /* Edge collapsing. */
   } u;
 
@@ -131,6 +130,7 @@ typedef struct PChart {
   PEdge *edges;
   PFace *faces;
   int nverts, nedges, nfaces;
+  int nboundaries;
 
   PVert *collapsed_verts;
   PEdge *collapsed_edges;
@@ -147,17 +147,13 @@ typedef struct PChart {
     } lscm;
     struct PChartPack {
       float rescale, area;
-      float size[2] /* , trans[2] */;
+      float size[2];
+      float origin[2];
     } pack;
   } u;
 
-  uchar flag;
-  ParamHandle *handle;
+  bool has_pins;
 } PChart;
-
-enum PChartFlag {
-  PCHART_HAS_PINS = 1,
-};
 
 enum PHandleState {
   PHANDLE_STATE_ALLOCATED,
@@ -187,7 +183,6 @@ typedef struct ParamHandle {
 
   RNG *rng;
   float blend;
-  bool do_aspect;
 } ParamHandle;
 
 /* PHash
@@ -224,8 +219,10 @@ static PHash *phash_new(PHashLink **list, int sizehint)
 
 static void phash_delete(PHash *ph)
 {
-  MEM_freeN(ph->buckets);
-  MEM_freeN(ph);
+  if (ph) {
+    MEM_SAFE_FREE(ph->buckets);
+  }
+  MEM_SAFE_FREE(ph);
 }
 
 static int phash_size(PHash *ph)
@@ -669,9 +666,9 @@ static PVert *p_vert_lookup(ParamHandle *handle, PHashKey key, const float co[3]
   return p_vert_add(handle, key, co, e);
 }
 
-static PVert *p_vert_copy(PChart *chart, PVert *v)
+static PVert *p_vert_copy(ParamHandle *handle, PVert *v)
 {
-  PVert *nv = (PVert *)BLI_memarena_alloc(chart->handle->arena, sizeof(*nv));
+  PVert *nv = (PVert *)BLI_memarena_alloc(handle->arena, sizeof(*nv));
 
   copy_v3_v3(nv->co, v->co);
   nv->uv[0] = v->uv[0];
@@ -724,20 +721,6 @@ static int p_face_exists(ParamHandle *handle, const ParamKey *pvkeys, int i1, in
   }
 
   return false;
-}
-
-static PChart *p_chart_new(ParamHandle *handle)
-{
-  PChart *chart = (PChart *)MEM_callocN(sizeof(*chart), "PChart");
-  chart->handle = handle;
-
-  return chart;
-}
-
-static void p_chart_delete(PChart *chart)
-{
-  /* the actual links are free by memarena */
-  MEM_freeN(chart);
 }
 
 static bool p_edge_implicit_seam(PEdge *e, PEdge *ep)
@@ -897,14 +880,14 @@ static int p_connect_pairs(ParamHandle *handle, bool topology_from_uvs)
   return ncharts;
 }
 
-static void p_split_vert(PChart *chart, PEdge *e)
+static void p_split_vert(ParamHandle *handle, PChart *chart, PEdge *e)
 {
   PEdge *we, *lastwe = NULL;
   PVert *v = e->vert;
   bool copy = true;
 
   if (e->flag & PEDGE_PIN) {
-    chart->flag |= PCHART_HAS_PINS;
+    chart->has_pins = true;
   }
 
   if (e->flag & PEDGE_VERTEX_SPLIT) {
@@ -937,7 +920,7 @@ static void p_split_vert(PChart *chart, PEdge *e)
   if (copy) {
     /* not found, copying */
     v->flag |= PVERT_SPLIT;
-    v = p_vert_copy(chart, v);
+    v = p_vert_copy(handle, v);
     v->flag |= PVERT_SPLIT;
 
     v->nextlink = chart->verts;
@@ -956,12 +939,11 @@ static void p_split_vert(PChart *chart, PEdge *e)
 
 static PChart **p_split_charts(ParamHandle *handle, PChart *chart, int ncharts)
 {
-  PChart **charts = MEM_mallocN(sizeof(*charts) * ncharts, "PCharts"), *nchart;
+  PChart **charts = MEM_mallocN(sizeof(*charts) * ncharts, "PCharts");
   PFace *f, *nextf;
-  int i;
 
-  for (i = 0; i < ncharts; i++) {
-    charts[i] = p_chart_new(handle);
+  for (int i = 0; i < ncharts; i++) {
+    charts[i] = (PChart *)MEM_callocN(sizeof(*chart), "PChart");
   }
 
   f = chart->faces;
@@ -969,7 +951,7 @@ static PChart **p_split_charts(ParamHandle *handle, PChart *chart, int ncharts)
     PEdge *e1 = f->edge, *e2 = e1->next, *e3 = e2->next;
     nextf = f->nextlink;
 
-    nchart = charts[f->u.chart];
+    PChart *nchart = charts[f->u.chart];
 
     f->nextlink = nchart->faces;
     nchart->faces = f;
@@ -983,9 +965,9 @@ static PChart **p_split_charts(ParamHandle *handle, PChart *chart, int ncharts)
     nchart->nfaces++;
     nchart->nedges += 3;
 
-    p_split_vert(nchart, e1);
-    p_split_vert(nchart, e2);
-    p_split_vert(nchart, e3);
+    p_split_vert(handle, nchart, e1);
+    p_split_vert(handle, nchart, e2);
+    p_split_vert(handle, nchart, e3);
 
     f = nextf;
   }
@@ -1085,9 +1067,9 @@ static PFace *p_face_add_construct(ParamHandle *handle,
   return f;
 }
 
-static PFace *p_face_add_fill(PChart *chart, PVert *v1, PVert *v2, PVert *v3)
+static PFace *p_face_add_fill(ParamHandle *handle, PChart *chart, PVert *v1, PVert *v2, PVert *v3)
 {
-  PFace *f = p_face_add(chart->handle);
+  PFace *f = p_face_add(handle);
   PEdge *e1 = f->edge, *e2 = e1->next, *e3 = e2->next;
 
   e1->vert = v1;
@@ -1139,14 +1121,12 @@ static bool p_quad_split_direction(ParamHandle *handle, const float **co, const 
 
 /* Construction: boundary filling */
 
-static void p_chart_boundaries(PChart *chart, int *r_nboundaries, PEdge **r_outer)
+static void p_chart_boundaries(PChart *chart, PEdge **r_outer)
 {
   PEdge *e, *be;
   float len, maxlen = -1.0;
 
-  if (r_nboundaries) {
-    *r_nboundaries = 0;
-  }
+  chart->nboundaries = 0;
   if (r_outer) {
     *r_outer = NULL;
   }
@@ -1156,9 +1136,7 @@ static void p_chart_boundaries(PChart *chart, int *r_nboundaries, PEdge **r_oute
       continue;
     }
 
-    if (r_nboundaries) {
-      (*r_nboundaries)++;
-    }
+    chart->nboundaries++;
 
     len = 0.0f;
 
@@ -1205,7 +1183,7 @@ static float p_edge_boundary_angle(PEdge *e)
   return angle;
 }
 
-static void p_chart_fill_boundary(PChart *chart, PEdge *be, int nedges)
+static void p_chart_fill_boundary(ParamHandle *handle, PChart *chart, PEdge *be, int nedges)
 {
   PEdge *e, *e1, *e2;
 
@@ -1246,7 +1224,7 @@ static void p_chart_fill_boundary(PChart *chart, PEdge *be, int nedges)
       e->flag |= PEDGE_FILLED;
       e1->flag |= PEDGE_FILLED;
 
-      f = p_face_add_fill(chart, e->vert, e1->vert, e2->vert);
+      f = p_face_add_fill(handle, chart, e->vert, e1->vert, e2->vert);
       f->flag |= PFACE_FILLED;
 
       ne = f->edge->next->next;
@@ -1282,7 +1260,7 @@ static void p_chart_fill_boundary(PChart *chart, PEdge *be, int nedges)
   BLI_heap_free(heap, NULL);
 }
 
-static void p_chart_fill_boundaries(PChart *chart, PEdge *outer)
+static void p_chart_fill_boundaries(ParamHandle *handle, PChart *chart, PEdge *outer)
 {
   PEdge *e, *be; /* *enext - as yet unused */
   int nedges;
@@ -1303,7 +1281,7 @@ static void p_chart_fill_boundaries(PChart *chart, PEdge *outer)
     } while (be != e);
 
     if (e != outer) {
-      p_chart_fill_boundary(chart, e, nedges);
+      p_chart_fill_boundary(handle, chart, e, nedges);
     }
   }
 }
@@ -3080,7 +3058,7 @@ static void p_chart_lscm_begin(PChart *chart, bool live, bool abf)
       /* No pins, let's find some ourself. */
       PEdge *outer;
 
-      p_chart_boundaries(chart, NULL, &outer);
+      p_chart_boundaries(chart, &outer);
 
       /* Outer can be NULL with non-finite coords. */
       if (!(outer && p_chart_symmetry_pins(chart, outer, &pin1, &pin2))) {
@@ -3310,8 +3288,10 @@ static float p_face_stretch(PFace *f)
 
   area = p_face_uv_area_signed(f);
 
-  if (area <= 0.0f) { /* flipped face -> infinite stretch */
-    return 1e10f;
+  if (area <= 0.0f) {
+    /* When a face is flipped, provide a large penalty.
+     * Add on a slight gradient to unflip the face, see also: T99781. */
+    return 1e8f * (1.0f + p_edge_uv_length(e1) + p_edge_uv_length(e2) + p_edge_uv_length(e3));
   }
 
   w = 1.0f / (2.0f * area);
@@ -3466,7 +3446,7 @@ static bool p_chart_convex_hull(PChart *chart, PVert ***r_verts, int *r_nverts, 
   int npoints = 0, i, ulen, llen;
   PVert **U, **L, **points, **p;
 
-  p_chart_boundaries(chart, NULL, &be);
+  p_chart_boundaries(chart, &be);
 
   if (!be) {
     return false;
@@ -3710,15 +3690,14 @@ static void p_chart_rotate_fit_aabb(PChart *chart)
 
 ParamHandle *GEO_uv_parametrizer_construct_begin(void)
 {
-  ParamHandle *handle = MEM_callocN(sizeof(*handle), "ParamHandle");
-  handle->construction_chart = p_chart_new(handle);
+  ParamHandle *handle = (ParamHandle *)MEM_callocN(sizeof(*handle), "ParamHandle");
+  handle->construction_chart = (PChart *)MEM_callocN(sizeof(PChart), "PChart");
   handle->state = PHANDLE_STATE_ALLOCATED;
   handle->arena = BLI_memarena_new(MEM_SIZE_OPTIMAL(1 << 16), "param construct arena");
   handle->polyfill_arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "param polyfill arena");
   handle->polyfill_heap = BLI_heap_new_ex(BLI_POLYFILL_ALLOC_NGON_RESERVE);
   handle->aspx = 1.0f;
   handle->aspy = 1.0f;
-  handle->do_aspect = false;
 
   handle->hash_verts = phash_new((PHashLink **)&handle->construction_chart->verts, 1);
   handle->hash_edges = phash_new((PHashLink **)&handle->construction_chart->edges, 1);
@@ -3731,17 +3710,14 @@ void GEO_uv_parametrizer_aspect_ratio(ParamHandle *phandle, float aspx, float as
 {
   phandle->aspx = aspx;
   phandle->aspy = aspy;
-  phandle->do_aspect = true;
 }
 
 void GEO_uv_parametrizer_delete(ParamHandle *phandle)
 {
-  int i;
-
   param_assert(ELEM(phandle->state, PHANDLE_STATE_ALLOCATED, PHANDLE_STATE_CONSTRUCTED));
 
-  for (i = 0; i < phandle->ncharts; i++) {
-    p_chart_delete(phandle->charts[i]);
+  for (int i = 0; i < phandle->ncharts; i++) {
+    MEM_SAFE_FREE(phandle->charts[i]);
   }
 
   MEM_SAFE_FREE(phandle->charts);
@@ -3751,13 +3727,11 @@ void GEO_uv_parametrizer_delete(ParamHandle *phandle)
     phandle->pin_hash = NULL;
   }
 
-  if (phandle->construction_chart) {
-    p_chart_delete(phandle->construction_chart);
+  MEM_SAFE_FREE(phandle->construction_chart);
 
-    phash_delete(phandle->hash_verts);
-    phash_delete(phandle->hash_edges);
-    phash_delete(phandle->hash_faces);
-  }
+  phash_delete(phandle->hash_verts);
+  phash_delete(phandle->hash_edges);
+  phash_delete(phandle->hash_faces);
 
   BLI_memarena_free(phandle->arena);
   BLI_memarena_free(phandle->polyfill_arena);
@@ -3952,7 +3926,7 @@ void GEO_uv_parametrizer_construct_end(ParamHandle *phandle,
                                        int *count_fail)
 {
   PChart *chart = phandle->construction_chart;
-  int i, j, nboundaries = 0;
+  int i, j;
   PEdge *outer;
 
   param_assert(phandle->state == PHANDLE_STATE_ALLOCATED);
@@ -3960,8 +3934,7 @@ void GEO_uv_parametrizer_construct_end(ParamHandle *phandle,
   phandle->ncharts = p_connect_pairs(phandle, topology_from_uvs);
   phandle->charts = p_split_charts(phandle, chart, phandle->ncharts);
 
-  p_chart_delete(phandle->construction_chart);
-  phandle->construction_chart = NULL;
+  MEM_SAFE_FREE(phandle->construction_chart);
 
   phash_delete(phandle->hash_verts);
   phash_delete(phandle->hash_edges);
@@ -3972,10 +3945,10 @@ void GEO_uv_parametrizer_construct_end(ParamHandle *phandle,
     PVert *v;
     chart = phandle->charts[i];
 
-    p_chart_boundaries(chart, &nboundaries, &outer);
+    p_chart_boundaries(chart, &outer);
 
-    if (!topology_from_uvs && nboundaries == 0) {
-      p_chart_delete(chart);
+    if (!topology_from_uvs && chart->nboundaries == 0) {
+      MEM_SAFE_FREE(chart);
       if (count_fail != NULL) {
         *count_fail += 1;
       }
@@ -3985,8 +3958,8 @@ void GEO_uv_parametrizer_construct_end(ParamHandle *phandle,
     phandle->charts[j] = chart;
     j++;
 
-    if (fill && (nboundaries > 1)) {
-      p_chart_fill_boundaries(chart, outer);
+    if (fill && (chart->nboundaries > 1)) {
+      p_chart_fill_boundaries(phandle, chart, outer);
     }
 
     for (v = chart->verts; v; v = v->nextlink) {
@@ -4028,7 +4001,7 @@ void GEO_uv_parametrizer_lscm_solve(ParamHandle *phandle, int *count_changed, in
     if (chart->u.lscm.context) {
       const bool result = p_chart_lscm_solve(phandle, chart);
 
-      if (result && !(chart->flag & PCHART_HAS_PINS)) {
+      if (result && !chart->has_pins) {
         p_chart_rotate_minimum_area(chart);
       }
       else if (result && chart->u.lscm.single_pin) {
@@ -4036,7 +4009,7 @@ void GEO_uv_parametrizer_lscm_solve(ParamHandle *phandle, int *count_changed, in
         p_chart_lscm_transform_single_pin(chart);
       }
 
-      if (!result || !(chart->flag & PCHART_HAS_PINS)) {
+      if (!result || !chart->has_pins) {
         p_chart_lscm_end(chart);
       }
 
@@ -4136,7 +4109,7 @@ static void GEO_uv_parametrizer_pack_rotate(ParamHandle *phandle, bool ignore_pi
   for (i = 0; i < phandle->ncharts; i++) {
     chart = phandle->charts[i];
 
-    if (ignore_pinned && (chart->flag & PCHART_HAS_PINS)) {
+    if (ignore_pinned && chart->has_pins) {
       continue;
     }
 
@@ -4177,7 +4150,7 @@ void GEO_uv_parametrizer_pack(ParamHandle *handle,
   for (i = 0; i < handle->ncharts; i++) {
     chart = handle->charts[i];
 
-    if (ignore_pinned && (chart->flag & PCHART_HAS_PINS)) {
+    if (ignore_pinned && chart->has_pins) {
       unpacked++;
       continue;
     }
@@ -4193,7 +4166,7 @@ void GEO_uv_parametrizer_pack(ParamHandle *handle,
 
     box->w = chart->u.pack.size[0] + trans[0];
     box->h = chart->u.pack.size[1] + trans[1];
-    box->index = i; /* warning this index skips PCHART_HAS_PINS boxes */
+    box->index = i; /* Warning this index skips chart->has_pins boxes. */
 
     if (margin > 0.0f) {
       area += (double)sqrtf(box->w * box->h);
@@ -4210,7 +4183,7 @@ void GEO_uv_parametrizer_pack(ParamHandle *handle,
     for (i = 0; i < handle->ncharts; i++) {
       chart = handle->charts[i];
 
-      if (ignore_pinned && (chart->flag & PCHART_HAS_PINS)) {
+      if (ignore_pinned && chart->has_pins) {
         unpacked++;
         continue;
       }
@@ -4249,7 +4222,10 @@ void GEO_uv_parametrizer_pack(ParamHandle *handle,
   }
 }
 
-void GEO_uv_parametrizer_average(ParamHandle *phandle, bool ignore_pinned)
+void GEO_uv_parametrizer_average(ParamHandle *phandle,
+                                 bool ignore_pinned,
+                                 bool scale_uv,
+                                 bool shear)
 {
   PChart *chart;
   int i;
@@ -4262,17 +4238,93 @@ void GEO_uv_parametrizer_average(ParamHandle *phandle, bool ignore_pinned)
   }
 
   for (i = 0; i < phandle->ncharts; i++) {
-    PFace *f;
     chart = phandle->charts[i];
 
-    if (ignore_pinned && (chart->flag & PCHART_HAS_PINS)) {
+    if (ignore_pinned && chart->has_pins) {
       continue;
+    }
+
+    p_chart_uv_bbox(chart, minv, maxv);
+    mid_v2_v2v2(chart->u.pack.origin, minv, maxv);
+
+    if (scale_uv || shear) {
+      /* It's possible that for some "bad" inputs, the following iteration will converge slowly or
+       * perhaps even diverge. Rather than infinite loop, we only iterate a maximum of `max_iter`
+       * times. (Also useful when making changes to the calculation.) */
+      int max_iter = 10;
+      for (int j = 0; j < max_iter; j++) {
+        /* An island could contain millions of polygons. When summing many small values, we need to
+         * use double precision in the accumulator to maintain accuracy. Note that the individual
+         * calculations only need to be at single precision.*/
+        double scale_cou = 0;
+        double scale_cov = 0;
+        double scale_cross = 0;
+        double weight_sum = 0;
+        for (PFace *f = chart->faces; f; f = f->nextlink) {
+          float m[2][2], s[2][2];
+          PVert *va = f->edge->vert;
+          PVert *vb = f->edge->next->vert;
+          PVert *vc = f->edge->next->next->vert;
+          s[0][0] = va->uv[0] - vc->uv[0];
+          s[0][1] = va->uv[1] - vc->uv[1];
+          s[1][0] = vb->uv[0] - vc->uv[0];
+          s[1][1] = vb->uv[1] - vc->uv[1];
+          /* Find the "U" axis and "V" axis in triangle co-ordinates. Normally this would require
+           * SVD, but in 2D we can use a cheaper matrix inversion instead.*/
+          if (!invert_m2_m2(m, s)) {
+            continue;
+          }
+          float cou[3], cov[3]; /* i.e. Texture "U" and texture "V" in 3D co-ordinates.*/
+          for (int k = 0; k < 3; k++) {
+            cou[k] = m[0][0] * (va->co[k] - vc->co[k]) + m[0][1] * (vb->co[k] - vc->co[k]);
+            cov[k] = m[1][0] * (va->co[k] - vc->co[k]) + m[1][1] * (vb->co[k] - vc->co[k]);
+          }
+          const float weight = p_face_area(f);
+          scale_cou += len_v3(cou) * weight;
+          scale_cov += len_v3(cov) * weight;
+          if (shear) {
+            normalize_v3(cov);
+            normalize_v3(cou);
+
+            /* Why is scale_cross called `cross` when we call `dot`? The next line calculates:
+             * `scale_cross += length(cross(cross(cou, face_normal), cov))`
+             * By construction, both `cou` and `cov` are orthogonal to the face normal.
+             * By definition, the normal vector has unit length. */
+            scale_cross += dot_v3v3(cou, cov) * weight;
+          }
+          weight_sum += weight;
+        }
+        if (scale_cou * scale_cov < 1e-10f) {
+          break;
+        }
+        const float scale_factor_u = scale_uv ? sqrtf(scale_cou / scale_cov) : 1.0f;
+
+        /* Compute correction transform. */
+        float t[2][2];
+        t[0][0] = scale_factor_u;
+        t[1][0] = clamp_f((float)(scale_cross / weight_sum), -0.5f, 0.5f);
+        t[0][1] = 0;
+        t[1][1] = 1.0f / scale_factor_u;
+
+        /* Apply the correction. */
+        p_chart_uv_transform(chart, t);
+
+        /* How far from the identity transform are we? [[1,0],[0,1]] */
+        const float err = fabsf(t[0][0] - 1.0f) + fabsf(t[1][0]) + fabsf(t[0][1]) +
+                          fabsf(t[1][1] - 1.0f);
+
+        const float tolerance = 1e-6f; /* Trade accuracy for performance. */
+        if (err < tolerance) {
+          /* Too slow? Use Richardson Extrapolation to accelerate the convergence.*/
+          break;
+        }
+      }
     }
 
     chart->u.pack.area = 0.0f;    /* 3d area */
     chart->u.pack.rescale = 0.0f; /* UV area, abusing rescale for tmp storage, oh well :/ */
 
-    for (f = chart->faces; f; f = f->nextlink) {
+    for (PFace *f = chart->faces; f; f = f->nextlink) {
       chart->u.pack.area += p_face_area(f);
       chart->u.pack.rescale += fabsf(p_face_uv_area_signed(f));
     }
@@ -4291,25 +4343,23 @@ void GEO_uv_parametrizer_average(ParamHandle *phandle, bool ignore_pinned)
   for (i = 0; i < phandle->ncharts; i++) {
     chart = phandle->charts[i];
 
-    if (ignore_pinned && (chart->flag & PCHART_HAS_PINS)) {
+    if (ignore_pinned && chart->has_pins) {
       continue;
     }
 
     if (chart->u.pack.area != 0.0f && chart->u.pack.rescale != 0.0f) {
       fac = chart->u.pack.area / chart->u.pack.rescale;
 
-      /* Get the island center */
-      p_chart_uv_bbox(chart, minv, maxv);
-      trans[0] = (minv[0] + maxv[0]) / -2.0f;
-      trans[1] = (minv[1] + maxv[1]) / -2.0f;
-
-      /* Move center to 0,0 */
-      p_chart_uv_translate(chart, trans);
+      /* Average scale. */
       p_chart_uv_scale(chart, sqrtf(fac / tot_fac));
 
-      /* Move to original center */
-      trans[0] = -trans[0];
-      trans[1] = -trans[1];
+      /* Get the current island center. */
+      p_chart_uv_bbox(chart, minv, maxv);
+
+      /* Move to original center. */
+      mid_v2_v2v2(trans, minv, maxv);
+      negate_v2(trans);
+      add_v2_v2(trans, chart->u.pack.origin);
       p_chart_uv_translate(chart, trans);
     }
   }

@@ -329,7 +329,7 @@ static void node_buts_image_user(uiLayout *layout,
     Scene *scene = CTX_data_scene(C);
 
     char numstr[32];
-    const int framenr = BKE_image_user_frame_get(iuser, CFRA, nullptr);
+    const int framenr = BKE_image_user_frame_get(iuser, scene->r.cfra, nullptr);
     BLI_snprintf(numstr, sizeof(numstr), IFACE_("Frame: %d"), framenr);
     uiItemL(layout, numstr, ICON_NONE);
   }
@@ -1455,7 +1455,11 @@ static void std_node_socket_interface_draw(bContext *UNUSED(C), uiLayout *layout
     }
     case SOCK_BOOLEAN:
     case SOCK_RGBA:
-    case SOCK_STRING: {
+    case SOCK_STRING:
+    case SOCK_OBJECT:
+    case SOCK_COLLECTION:
+    case SOCK_TEXTURE:
+    case SOCK_MATERIAL: {
       uiItemR(col, ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), 0);
       break;
     }

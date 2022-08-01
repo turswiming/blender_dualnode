@@ -52,16 +52,19 @@ using namespace blender::gpu::shader;
  */
 struct GPUCodegenCreateInfo : ShaderCreateInfo {
   struct NameBuffer {
+    using NameEntry = std::array<char, 32>;
+
     /** Duplicate attribute names to avoid reference the GPUNodeGraph directly. */
     char attr_names[16][GPU_MAX_SAFE_ATTR_NAME + 1];
     char var_names[16][8];
-    blender::Vector<std::array<char, 32>, 16> sampler_names;
+    blender::Vector<std::unique_ptr<NameEntry>, 16> sampler_names;
 
     /* Returns the appended name memory location */
     const char *append_sampler_name(const char name[32])
     {
-      auto index = sampler_names.append_and_get_index(std::array<char, 32>());
-      char *name_buffer = sampler_names[index].data();
+      auto index = sampler_names.size();
+      sampler_names.append(std::make_unique<NameEntry>());
+      char *name_buffer = sampler_names[index]->data();
       memcpy(name_buffer, name, 32);
       return name_buffer;
     }
@@ -277,6 +280,7 @@ class GPUCodegen {
 
   void node_serialize(std::stringstream &eval_ss, const GPUNode *node);
   char *graph_serialize(eGPUNodeTag tree_tag, GPUNodeLink *output_link);
+  char *graph_serialize(eGPUNodeTag tree_tag);
 
   static char *extract_c_str(std::stringstream &stream)
   {
@@ -299,7 +303,7 @@ void GPUCodegen::generate_attribs()
   info.vertex_out(iface);
 
   /* Input declaration, loading / assignment to interface and geometry shader passthrough. */
-  std::stringstream decl_ss, iface_ss, load_ss;
+  std::stringstream load_ss;
 
   int slot = 15;
   LISTBASE_FOREACH (GPUMaterialAttribute *, attr, &graph.attributes) {
@@ -497,6 +501,19 @@ char *GPUCodegen::graph_serialize(eGPUNodeTag tree_tag, GPUNodeLink *output_link
   return eval_c_str;
 }
 
+char *GPUCodegen::graph_serialize(eGPUNodeTag tree_tag)
+{
+  std::stringstream eval_ss;
+  LISTBASE_FOREACH (GPUNode *, node, &graph.nodes) {
+    if (node->tag & tree_tag) {
+      node_serialize(eval_ss, node);
+    }
+  }
+  char *eval_c_str = extract_c_str(eval_ss);
+  BLI_hash_mm2a_add(&hm2a_, (uchar *)eval_c_str, eval_ss.str().size());
+  return eval_c_str;
+}
+
 void GPUCodegen::generate_uniform_buffer()
 {
   /* Extract uniform inputs. */
@@ -536,6 +553,9 @@ void GPUCodegen::generate_graphs()
   output.volume = graph_serialize(GPU_NODE_TAG_VOLUME, graph.outlink_volume);
   output.displacement = graph_serialize(GPU_NODE_TAG_DISPLACEMENT, graph.outlink_displacement);
   output.thickness = graph_serialize(GPU_NODE_TAG_THICKNESS, graph.outlink_thickness);
+  if (!BLI_listbase_is_empty(&graph.outlink_compositor)) {
+    output.composite = graph_serialize(GPU_NODE_TAG_COMPOSITOR);
+  }
 
   if (!BLI_listbase_is_empty(&graph.material_functions)) {
     std::stringstream eval_ss;
@@ -566,9 +586,10 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
                            GPUCodegenCallbackFn finalize_source_cb,
                            void *thunk)
 {
-  /* Prune the unused nodes and extract attributes before compiling so the
-   * generated VBOs are ready to accept the future shader. */
   gpu_node_graph_prune_unused(graph);
+
+  /* Extract attributes before compiling so the generated VBOs are ready to accept the future
+   * shader. */
   gpu_node_graph_finalize_uniform_attrs(graph);
 
   GPUCodegen codegen(material, graph);

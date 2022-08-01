@@ -73,6 +73,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_legacy_convert.h"
 #include "BKE_node.h"
 #include "BKE_node_tree_update.h"
 #include "BKE_paint.h"
@@ -2408,7 +2409,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
             scene->toolsettings->snap_mode = (1 << 1); /* SCE_SNAP_MODE_EDGE */
             break;
           case 3:
-            scene->toolsettings->snap_mode = (1 << 2); /* SCE_SNAP_MODE_FACE */
+            scene->toolsettings->snap_mode = (1 << 2); /* SCE_SNAP_MODE_FACE_RAYCAST */
             break;
           case 4:
             scene->toolsettings->snap_mode = (1 << 3); /* SCE_SNAP_MODE_VOLUME */
@@ -3548,7 +3549,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 43)) {
     ListBase *lb = which_libbase(bmain, ID_BR);
-    BKE_main_id_repair_duplicate_names_listbase(lb);
+    BKE_main_id_repair_duplicate_names_listbase(bmain, lb);
   }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 44)) {

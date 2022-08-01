@@ -23,6 +23,7 @@ GHOST_Window::GHOST_Window(uint32_t width,
     : m_drawingContextType(GHOST_kDrawingContextTypeNone),
       m_cursorVisible(true),
       m_cursorGrab(GHOST_kGrabDisable),
+      m_cursorGrabAxis(GHOST_kAxisNone),
       m_cursorShape(GHOST_kStandardCursorDefault),
       m_wantStereoVisual(wantStereoVisual),
       m_context(new GHOST_ContextNone(false))
@@ -177,7 +178,7 @@ void GHOST_Window::getCursorGrabState(GHOST_TGrabCursorMode &mode,
     bounds.m_r = -1;
     bounds.m_t = -1;
     bounds.m_b = -1;
-    wrap_axis = GHOST_kGrabAxisNone;
+    wrap_axis = GHOST_kAxisNone;
   }
   use_software_cursor = (m_cursorGrab != GHOST_kGrabDisable) ? getCursorGrabUseSoftwareDisplay() :
                                                                false;

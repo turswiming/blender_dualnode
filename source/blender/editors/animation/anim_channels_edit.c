@@ -1498,7 +1498,8 @@ static int animchannels_rearrange_exec(bContext *C, wmOperator *op)
     int filter;
 
     /* get animdata blocks */
-    filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA);
+    filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA |
+              ANIMFILTER_FCURVESONLY);
     ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
 
     for (ale = anim_data.first; ale; ale = ale->next) {
@@ -2033,7 +2034,7 @@ static void setflag_anim_channels(bAnimContext *ac,
   if ((ac->spacetype == SPACE_GRAPH) && (ac->regiontype != RGN_TYPE_CHANNELS)) {
     /* graph editor (case 2) */
     filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_CHANNELS | ANIMFILTER_CURVE_VISIBLE |
-              ANIMFILTER_NODUPLIS);
+              ANIMFILTER_FCURVESONLY | ANIMFILTER_NODUPLIS);
   }
   else {
     /* standard case */
