@@ -20,6 +20,7 @@ struct CurveMapping;
 struct Image;
 struct MTex;
 struct Material;
+struct BrushChannelSet;
 
 typedef struct BrushClone {
   /** Image for clone tool. */
@@ -381,6 +382,8 @@ typedef struct Brush {
 
   struct BrushGpencilSettings *gpencil_settings;
   struct BrushCurvesSculptSettings *curves_sculpt_settings;
+
+  struct BrushChannelSet *channels;
 } Brush;
 
 /* Struct to hold palette colors for sorting. */

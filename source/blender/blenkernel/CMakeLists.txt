@@ -86,6 +86,7 @@ set(SRC
   intern/blender_user_menu.c
   intern/blendfile.c
   intern/blendfile_link_append.c
+  intern/brush_channel.cc
   intern/boids.c
   intern/bpath.c
   intern/brush.cc
@@ -340,6 +341,7 @@ set(SRC
   BKE_boids.h
   BKE_bpath.h
   BKE_brush.h
+  BKE_brush_channel.h
   BKE_bvhutils.h
   BKE_cachefile.h
   BKE_callbacks.h
@@ -494,6 +496,7 @@ set(SRC
   nla_private.h
   particle_private.h
   tracking_private.h
+  intern/brush_channel_define.h
   intern/CCGSubSurf.h
   intern/CCGSubSurf_inline.h
   intern/CCGSubSurf_intern.h

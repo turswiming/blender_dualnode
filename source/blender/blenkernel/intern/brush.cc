@@ -21,6 +21,7 @@
 
 #include "BKE_bpath.h"
 #include "BKE_brush.h"
+#include "BKE_brush_channel.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_gpencil.h"
@@ -321,6 +322,19 @@ static void brush_blend_read_data(BlendDataReader *reader, ID *id)
 
   brush->preview = nullptr;
   brush->icon_imbuf = nullptr;
+
+  BLO_read_data_address(reader, &brush->channels);
+
+  if (brush->sculpt_tool) {
+    if (!brush->channels) {
+      brush->channels = BKE_brush_channelset_create();
+    }
+    else {
+      BKE_brush_channelset_blend_read(brush->channels, reader);
+    }
+
+    BKE_brush_channelset_ensure_channels(brush->channels, brush->sculpt_tool);
+  }
 }
 
 static void brush_blend_read_lib(BlendLibReader *reader, ID *id)
@@ -2519,4 +2533,55 @@ struct ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary, bool
   }
 
   return im;
+}
+
+float BKE_brush_curve_strength_ex(
+    int curve_preset, const CurveMapping *curve, float p, const float len, const bool invert)
+{
+  float strength = 1.0f;
+
+  if (p >= len) {
+    return invert ? 0.0f : 1.0f;
+  }
+
+  p = p / len;
+
+  if (invert) {
+    p = 1.0f - p;
+  }
+
+  switch (curve_preset) {
+    case BRUSH_CURVE_CUSTOM:
+      strength = BKE_curvemapping_evaluateF(curve, 0, p);
+      break;
+    case BRUSH_CURVE_SHARP:
+      strength = p * p;
+      break;
+    case BRUSH_CURVE_SMOOTH:
+      strength = 3.0f * p * p - 2.0f * p * p * p;
+      break;
+    case BRUSH_CURVE_SMOOTHER:
+      strength = pow3f(p) * (p * (p * 6.0f - 15.0f) + 10.0f);
+      break;
+    case BRUSH_CURVE_ROOT:
+      strength = sqrtf(p);
+      break;
+    case BRUSH_CURVE_LIN:
+      strength = p;
+      break;
+    case BRUSH_CURVE_CONSTANT:
+      strength = 1.0f;
+      break;
+    case BRUSH_CURVE_SPHERE:
+      strength = sqrtf(2 * p - p * p);
+      break;
+    case BRUSH_CURVE_POW4:
+      strength = p * p * p * p;
+      break;
+    case BRUSH_CURVE_INVSQUARE:
+      strength = p * (2.0f - p);
+      break;
+  }
+
+  return strength;
 }

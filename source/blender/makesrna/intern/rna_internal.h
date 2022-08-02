@@ -31,6 +31,7 @@ struct Object;
 struct ReportList;
 struct SDNA;
 struct ViewLayer;
+struct BrushChannel;
 
 /* Data structures used during define */
 
@@ -146,6 +147,8 @@ void RNA_def_attribute(struct BlenderRNA *brna);
 void RNA_def_asset(struct BlenderRNA *brna);
 void RNA_def_boid(struct BlenderRNA *brna);
 void RNA_def_brush(struct BlenderRNA *brna);
+void RNA_def_brush_channels(struct BlenderRNA *brna);
+void RNA_def_brush_channelset(BlenderRNA *brna, PropertyRNA *cprop, const char *type_prefix);
 void RNA_def_cachefile(struct BlenderRNA *brna);
 void RNA_def_camera(struct BlenderRNA *brna);
 void RNA_def_cloth(struct BlenderRNA *brna);
@@ -409,6 +412,14 @@ bool rna_GPencil_datablocks_obdata_poll(struct PointerRNA *ptr, const struct Poi
 char *rna_TextureSlot_path(const struct PointerRNA *ptr);
 char *rna_Node_ImageUser_path(const struct PointerRNA *ptr);
 char *rna_CameraBackgroundImage_image_or_movieclip_user_path(const struct PointerRNA *ptr);
+
+int rna_BrushChannelSet_channels_assignint(struct PointerRNA *ptr,
+                                           int key,
+                                           const struct PointerRNA *assign_ptr);
+int rna_BrushChannelSet_channels_begin(struct CollectionPropertyIterator *iter,
+                                       struct PointerRNA *ptr);
+int rna_BrushChannelSet_length(struct PointerRNA *rna);
+void rna_BrushChannelSet_ensure(struct ID *id, const char *idname);
 
 /* Set U.is_dirty and redraw. */
 

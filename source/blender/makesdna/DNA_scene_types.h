@@ -44,6 +44,7 @@ struct SceneCollection;
 struct World;
 struct bGPdata;
 struct bNodeTree;
+struct BrushChannelSet;
 
 /* ************************************************************* */
 /* Scene Data */
@@ -1017,6 +1018,7 @@ typedef struct Sculpt {
   char _pad[4];
 
   struct Object *gravity_object;
+  struct BrushChannelSet *channels;
 } Sculpt;
 
 typedef struct CurvesSculpt {

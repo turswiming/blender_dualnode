@@ -87,6 +87,7 @@ set(SRC_DNA_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_workspace_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_world_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_xr_types.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_brush_channel_types.h
 )
 
 set(SRC_DNA_DEFAULTS_INC

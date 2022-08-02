@@ -97,7 +97,11 @@ float BKE_brush_curve_strength_clamped(const struct Brush *br, float p, float le
  * Uses the brush curve control to find a strength value.
  */
 float BKE_brush_curve_strength(const struct Brush *br, float p, float len);
-
+float BKE_brush_curve_strength_ex(int curve_preset,
+                                  const struct CurveMapping *curve,
+                                  float p,
+                                  const float len,
+                                  const bool invert);
 /* Sampling. */
 
 /**
