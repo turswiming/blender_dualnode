@@ -27,7 +27,6 @@ namespace blender::bke::pbvh::pixels {
 struct PaintGeometryPrimitives {
   /** Data accessed by the inner loop of the painting brush. */
   Vector<int3> vert_indices;
-  /* TODO: should also store the pos per vertex. (init_pixel_pos)*/
 
  public:
   void append(const int3 vert_indices)
