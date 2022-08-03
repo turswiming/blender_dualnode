@@ -82,10 +82,51 @@ ccl_device float light_tree_node_importance(const float3 P,
 
 /* This is uniformly sampling the reservoir for now. */
 ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
+                                                     const float randu,
+                                                     const float randv,
+                                                     const float time,
                                                      const float3 P,
                                                      const float3 N,
+                                                     const int bounce,
+                                                     const uint32_t path_flag,
                                                      int emitter_index)
 {
+  LightSample ls ccl_optional_struct_init;
+  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
+                                                                         emitter_index);
+  bool sampled = true;
+  const int prim = kemitter->prim_id;
+  if (prim >= 0) {
+    /* Mesh light. */
+    const int object = kemitter->mesh_light.object_id;
+
+    /* Exclude synthetic meshes from shadow catcher pass. */
+    if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
+        !(kernel_data_fetch(object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
+      return 0.0f;
+    }
+
+    const int shader_flag = kemitter->mesh_light.shader_flag;
+    triangle_light_sample<false>(kg, prim, object, randu, randv, time, &ls, P);
+    ls.shader |= shader_flag;
+
+    sampled = ls.pdf > 0.0f;
+  }
+  else {
+    const int lamp = -prim - 1;
+
+    if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
+      return 0.0f;
+    }
+
+    sampled = light_sample<false>(kg, lamp, randu, randv, P, path_flag, &ls);
+  }
+
+  
+  if (sampled == 0.0f) {
+    return 0.0f;
+  }
+
   return 1.0f;
 }
 
@@ -114,10 +155,18 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
 
 /* to-do: this is using a lot of the same calculations as the cluster importance,
  * so it may be better to compute these once and then hold on to it somewhere. */
-ccl_device float light_tree_should_split(KernelGlobals kg,
+ccl_device bool light_tree_should_split(KernelGlobals kg,
                                          const float3 P,
                                          const ccl_global KernelLightTreeNode *knode)
 {
+  const float splitting_threshold = kernel_data.integrator.splitting_threshold;
+  if (splitting_threshold == 0.0f) {
+    return false;
+  }
+  else if (splitting_threshold == 1.0f) {
+    return true;
+  }
+  
   const float3 bbox_min = make_float3(
       knode->bounding_box_min[0], knode->bounding_box_min[1], knode->bounding_box_min[2]);
   const float3 bbox_max = make_float3(
@@ -143,7 +192,7 @@ ccl_device float light_tree_should_split(KernelGlobals kg,
 
   const float total_variance = V_e * V_g + V_e * E_g * E_g + E_e * E_e * V_g;
   const float normalized_variance = sqrt(sqrt(1.0f / (1.0f + sqrt(total_variance))));
-  return (normalized_variance < kernel_data.integrator.splitting_threshold);
+  return (normalized_variance < splitting_threshold);
 }
 
 ccl_device float light_tree_cluster_importance(KernelGlobals kg,
@@ -253,7 +302,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
         continue;
       }
 
-      const float light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
+      const float light_weight = light_tree_emitter_reservoir_weight(
+          kg, time, *randu, randv, P, N, bounce, path_flag, selected_light);
       if (light_weight == 0.0f) {
         stack_index--;
         continue;
