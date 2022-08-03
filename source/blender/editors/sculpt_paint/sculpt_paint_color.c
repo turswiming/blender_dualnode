@@ -177,7 +177,7 @@ static void do_paint_brush_task_cb_ex(void *__restrict userdata,
     /* Final mix over the original color using brush alpha. We apply automaking again
      * at this point to avoid washing out non-binary masking modes like cavity masking.
      */
-    float automasking = SCULPT_automasking_factor_get(ss->cache->automasking, ss, vd.index);
+    float automasking = SCULPT_automasking_factor_get(ss->cache->automasking, ss, vd.vertex);
     mul_v4_v4fl(buffer_color, color_buffer->color[vd.i], brush->alpha * automasking);
 
     float col[4];

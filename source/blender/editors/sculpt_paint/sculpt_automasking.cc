@@ -550,7 +550,7 @@ static void sculpt_cavity_automasking_init(Sculpt *sd, Object *ob, AutomaskingCa
   int tot_vert = SCULPT_vertex_count_get(ss);
 
   if (!ss->cavity) {
-    ss->cavity = static_cast<float *>(
+    ss->cavity = static_cast<CavityMaskData *>(
         MEM_malloc_arrayN(tot_vert, sizeof(CavityMaskData), __func__));
 
     for (int i = 0; i < tot_vert; i++) {
