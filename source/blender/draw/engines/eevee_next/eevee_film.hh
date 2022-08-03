@@ -40,6 +40,9 @@ class Film {
  private:
   Instance &inst_;
 
+  /** Incomming combined buffer with post fx applied (motion blur + depth of field). */
+  GPUTexture *combined_final_tx_ = nullptr;
+
   /** Main accumulation textures containing every render-pass except depth and combined. */
   Texture color_accum_tx_;
   Texture value_accum_tx_;
@@ -47,14 +50,8 @@ class Film {
   Texture depth_tx_;
   /** Combined "Color" buffer. Double buffered to allow re-projection. */
   SwapChain<Texture, 2> combined_tx_;
-  /** Static reference as SwapChain does not actually move the objects when swapping. */
-  GPUTexture *combined_src_tx_ = nullptr;
-  GPUTexture *combined_dst_tx_ = nullptr;
   /** Weight buffers. Double buffered to allow updating it during accumulation. */
   SwapChain<Texture, 2> weight_tx_;
-  /** Static reference as SwapChain does not actually move the objects when swapping. */
-  GPUTexture *weight_src_tx_ = nullptr;
-  GPUTexture *weight_dst_tx_ = nullptr;
   /** User setting to disable reprojection. Useful for debugging or have a more precise render. */
   bool force_disable_reprojection_ = false;
 
@@ -74,7 +71,7 @@ class Film {
   void end_sync();
 
   /** Accumulate the newly rendered sample contained in #RenderBuffers and blit to display. */
-  void accumulate(const DRWView *view);
+  void accumulate(const DRWView *view, GPUTexture *combined_final_tx);
 
   /** Blit to display. No rendered sample needed. */
   void display();
@@ -82,6 +79,7 @@ class Film {
   float *read_pass(eViewLayerEEVEEPassType pass_type);
   float *read_aov(ViewLayerAOV *aov);
 
+  /** Returns shading views internal resolution. */
   int2 render_extent_get() const
   {
     return data_.render_extent;

@@ -132,7 +132,7 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
   return false;
 }
 
-float SCULPT_calc_cavity(SculptSession *ss, const int vertex)
+float SCULPT_calc_cavity(SculptSession *ss, const PBVHVertRef vertex)
 {
   SculptVertexNeighborIter ni;
   const float *co = SCULPT_vertex_co_get(ss, vertex);
@@ -143,7 +143,7 @@ float SCULPT_calc_cavity(SculptSession *ss, const int vertex)
   zero_v3(avg);
 
   SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vertex, ni) {
-    const float *co2 = SCULPT_vertex_co_get(ss, ni.index);
+    const float *co2 = SCULPT_vertex_co_get(ss, ni.vertex);
 
     length_sum += len_v3v3(co, co2);
     e_num += 1.0f;
@@ -185,11 +185,11 @@ static float sculpt_cavity_calc_factor(SculptSession *ss,
 }
 
 struct CavityBlurVert {
-  int vertex;
+  PBVHVertRef vertex;
   float dist;
   int depth;
 
-  CavityBlurVert(int vertex_, float dist_, int depth_)
+  CavityBlurVert(PBVHVertRef vertex_, float dist_, int depth_)
       : vertex(vertex_), dist(dist_), depth(depth_)
   {
   }
@@ -209,12 +209,14 @@ struct CavityBlurVert {
 static void sculpt_calc_blurred_cavity(SculptSession *ss,
                                        AutomaskingCache *automasking,
                                        int steps,
-                                       int vertex)
+                                       PBVHVertRef vertex)
 {
   if (steps == 0) {
-    ss->cavity_factor[vertex] = sculpt_cavity_calc_factor(
+    int index = BKE_pbvh_vertex_to_index(ss->pbvh, vertex);
+
+    ss->cavity[index].factor = sculpt_cavity_calc_factor(
         ss, automasking, SCULPT_calc_cavity(ss, vertex));
-    ss->cavity_stroke_id[vertex] = ss->stroke_id;
+    ss->cavity[index].stroke_id = ss->stroke_id;
 
     return;
   }
@@ -232,7 +234,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
   zero_v3(sco2);
 
   Vector<CavityBlurVert, 64> queue;
-  Set<int, 64> visit;
+  Set<intptr_t, 64> visit;
 
   int start = 0, end = 0;
 
@@ -240,7 +242,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
 
   CavityBlurVert initial(vertex, 0.0f, 0);
 
-  visit.add_new(vertex);
+  visit.add_new(vertex.i);
   queue[0] = initial;
   end = 1;
 
@@ -248,7 +250,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
 
   while (start != end) {
     CavityBlurVert &blurvert = queue[start];
-    int v = blurvert.vertex;
+    PBVHVertRef v = blurvert.vertex;
     start = (start + 1) % queue.size();
 
     float no[3];
@@ -276,15 +278,15 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
 
     SculptVertexNeighborIter ni;
     SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, v, ni) {
-      int v2 = ni.index;
+      PBVHVertRef v2 = ni.vertex;
 
-      if (visit.contains(v2)) {
+      if (visit.contains(v2.i)) {
         continue;
       }
 
       float dist = len_v3v3(SCULPT_vertex_co_get(ss, v2), SCULPT_vertex_co_get(ss, v));
 
-      visit.add_new(v2);
+      visit.add_new(v2.i);
       CavityBlurVert blurvert2(v2, dist, blurvert.depth + 1);
 
       int nextend = (end + 1) % queue.size();
@@ -347,19 +349,23 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
 
   factor_sum = sculpt_cavity_calc_factor(ss, automasking, factor_sum);
 
-  ss->cavity_factor[vertex] = factor_sum;
-  ss->cavity_stroke_id[vertex] = ss->stroke_id;
+  int index = BKE_pbvh_vertex_to_index(ss->pbvh, vertex);
+
+  ss->cavity[index].factor = factor_sum;
+  ss->cavity[index].stroke_id = ss->stroke_id;
 }
 
 static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
                                               SculptSession *ss,
-                                              int vertex)
+                                              PBVHVertRef vertex)
 {
-  if (ss->cavity_stroke_id[vertex] != ss->stroke_id) {
+  int index = BKE_pbvh_vertex_to_index(ss->pbvh, vertex);
+
+  if (ss->cavity[index].stroke_id != ss->stroke_id) {
     sculpt_calc_blurred_cavity(ss, automasking, automasking->settings.cavity_blur_steps, vertex);
   }
 
-  float factor = ss->cavity_factor[vertex];
+  float factor = ss->cavity[index].factor;
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_USE_CURVE) {
     factor = BKE_curvemapping_evaluateF(automasking->settings.cavity_curve, 0, factor);
@@ -368,16 +374,21 @@ static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
   return factor;
 }
 
-float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession *ss, int vert)
+float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
+                                    SculptSession *ss,
+                                    PBVHVertRef vert)
 {
   if (!automasking) {
     return 1.0f;
   }
+
+  int index = BKE_pbvh_vertex_to_index(ss->pbvh, vert);
+
   /* If the cache is initialized with valid info, use the cache. This is used when the
    * automasking information can't be computed in real time per vertex and needs to be
    * initialized for the whole mesh when the stroke starts. */
   if (automasking->factor) {
-    float factor = automasking->factor[vert];
+    float factor = automasking->factor[index];
 
     if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY) {
       factor *= sculpt_automasking_cavity_factor(automasking, ss, vert);
@@ -442,13 +453,18 @@ struct AutomaskFloodFillData {
   char symm;
 };
 
-static bool automask_floodfill_cb(
-    SculptSession *ss, int from_v, int to_v, bool UNUSED(is_duplicate), void *userdata)
+static bool automask_floodfill_cb(SculptSession *ss,
+                                  PBVHVertRef from_v,
+                                  PBVHVertRef to_v,
+                                  bool UNUSED(is_duplicate),
+                                  void *userdata)
 {
   AutomaskFloodFillData *data = (AutomaskFloodFillData *)userdata;
+  int from_v_i = BKE_pbvh_vertex_to_index(ss->pbvh, from_v);
+  int to_v_i = BKE_pbvh_vertex_to_index(ss->pbvh, to_v);
 
-  data->automask_factor[to_v] = 1.0f;
-  data->automask_factor[from_v] = 1.0f;
+  data->automask_factor[to_v_i] = 1.0f;
+  data->automask_factor[from_v_i] = 1.0f;
   return (!data->use_radius ||
           SCULPT_is_vertex_inside_brush_radius_symm(
               SCULPT_vertex_co_get(ss, to_v), data->location, data->radius, data->symm));
@@ -507,7 +523,9 @@ static float *sculpt_face_sets_automasking_init(Sculpt *sd, Object *ob, float *a
   int tot_vert = SCULPT_vertex_count_get(ss);
   int active_face_set = SCULPT_active_face_set_get(ss);
   for (int i : IndexRange(tot_vert)) {
-    if (!SCULPT_vertex_has_face_set(ss, i, active_face_set)) {
+    PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+    if (!SCULPT_vertex_has_face_set(ss, vertex, active_face_set)) {
       automask_factor[i] *= 0.0f;
     }
   }
@@ -531,12 +549,12 @@ static void sculpt_cavity_automasking_init(Sculpt *sd, Object *ob, AutomaskingCa
 
   int tot_vert = SCULPT_vertex_count_get(ss);
 
-  if (!ss->cavity_factor) {
-    ss->cavity_factor = static_cast<float *>(MEM_malloc_arrayN(tot_vert, sizeof(float), __func__));
-    ss->cavity_stroke_id = static_cast<int *>(MEM_malloc_arrayN(tot_vert, sizeof(int), __func__));
+  if (!ss->cavity) {
+    ss->cavity = static_cast<float *>(
+        MEM_malloc_arrayN(tot_vert, sizeof(CavityMaskData), __func__));
 
     for (int i = 0; i < tot_vert; i++) {
-      ss->cavity_stroke_id[i] = -1;
+      ss->cavity[i].stroke_id = -1;
     }
   }
 }
@@ -559,15 +577,17 @@ float *SCULPT_boundary_automasking_init(Object *ob,
   int *edge_distance = (int *)MEM_callocN(sizeof(int) * totvert, "automask_factor");
 
   for (int i : IndexRange(totvert)) {
+    PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
     edge_distance[i] = EDGE_DISTANCE_INF;
     switch (mode) {
       case AUTOMASK_INIT_BOUNDARY_EDGES:
-        if (SCULPT_vertex_is_boundary(ss, i)) {
+        if (SCULPT_vertex_is_boundary(ss, vertex)) {
           edge_distance[i] = 0;
         }
         break;
       case AUTOMASK_INIT_BOUNDARY_FACE_SETS:
-        if (!SCULPT_vertex_has_unique_face_set(ss, i)) {
+        if (!SCULPT_vertex_has_unique_face_set(ss, vertex)) {
           edge_distance[i] = 0;
         }
         break;
@@ -576,11 +596,13 @@ float *SCULPT_boundary_automasking_init(Object *ob,
 
   for (int propagation_it : IndexRange(propagation_steps)) {
     for (int i : IndexRange(totvert)) {
+      PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
       if (edge_distance[i] != EDGE_DISTANCE_INF) {
         continue;
       }
       SculptVertexNeighborIter ni;
-      SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, i, ni) {
+      SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vertex, ni) {
         if (edge_distance[ni.index] == propagation_it) {
           edge_distance[i] = propagation_it + 1;
         }
