@@ -5,7 +5,7 @@
 # to more easily highlight code-paths in other libraries that need to be refactored,
 # bf_gpu is allowed to have opengl regardless of this option.
 
-if(NOT WITH_OPENGL AND NOT WITH_METAL_BACKEND)
+if(NOT WITH_OPENGL AND NOT WITH_METAL_BACKEND AND NOT WITH_HEADLESS)
   add_definitions(-DWITH_OPENGL)
 endif()
 
@@ -195,9 +195,11 @@ set(METAL_SRC
   metal/mtl_debug.mm
   metal/mtl_framebuffer.mm
   metal/mtl_memory.mm
+  metal/mtl_query.mm
   metal/mtl_state.mm
   metal/mtl_texture.mm
   metal/mtl_texture_util.mm
+  metal/mtl_uniform_buffer.mm
 
   metal/mtl_backend.hh
   metal/mtl_capabilities.hh
@@ -206,8 +208,10 @@ set(METAL_SRC
   metal/mtl_debug.hh
   metal/mtl_framebuffer.hh
   metal/mtl_memory.hh
+  metal/mtl_query.hh
   metal/mtl_state.hh
   metal/mtl_texture.hh
+  metal/mtl_uniform_buffer.hh
 )
 
 # Select Backend source based on availability
@@ -450,8 +454,10 @@ list(APPEND INC ${CMAKE_CURRENT_BINARY_DIR})
 
 set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/basic/shaders/infos/basic_depth_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_depth_of_field_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_film_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_material_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_motion_blur_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_velocity_info.hh
   ../draw/engines/gpencil/shaders/infos/gpencil_info.hh
   ../draw/engines/gpencil/shaders/infos/gpencil_vfx_info.hh

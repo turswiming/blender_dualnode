@@ -853,6 +853,25 @@ def dump_src_messages(msgs, reports, settings):
             dump_src_file(path, rel_path, msgs, reports, settings)
 
 
+def dump_preset_messages(msgs, reports, settings):
+    files = []
+    for dpath, _, fnames in os.walk(settings.PRESETS_DIR):
+        for fname in fnames:
+            if fname.startswith("_") or not fname.endswith(".py"):
+                continue
+            path = os.path.join(dpath, fname)
+            try:  # can't always find the relative path (between drive letters on windows)
+                rel_path = os.path.relpath(path, settings.PRESETS_DIR)
+            except ValueError:
+                rel_path = path
+            files.append(rel_path)
+    for rel_path in files:
+        msgsrc, msgid = os.path.split(rel_path)
+        msgsrc = "Preset from " + msgsrc
+        msgid = bpy.path.display_name(msgid, title_case=False)
+        process_msg(msgs, settings.DEFAULT_CONTEXT, msgid, msgsrc, reports, None, settings)
+
+
 ##### Main functions! #####
 def dump_messages(do_messages, do_checks, settings):
     bl_ver = "Blender " + bpy.app.version_string
@@ -884,6 +903,9 @@ def dump_messages(do_messages, do_checks, settings):
 
     # Get strings from C source code.
     dump_src_messages(msgs, reports, settings)
+
+    # Get strings from presets.
+    dump_preset_messages(msgs, reports, settings)
 
     # Get strings from addons' categories.
     for uid, label, tip in bpy.types.WindowManager.addon_filter.keywords['items'](
@@ -962,7 +984,12 @@ def dump_addon_messages(module_name, do_checks, settings):
     # and make the diff!
     for key in minus_msgs:
         if key != settings.PO_HEADER_KEY:
-            del msgs[key]
+            if key in msgs:
+                del msgs[key]
+            else:
+                # This should not happen, but some messages seem to have
+                # leaked on add-on unregister and register?
+                print(f"Key not found in msgs: {key}")
 
     if check_ctxt:
         _diff_check_ctxt(check_ctxt, minus_check_ctxt)

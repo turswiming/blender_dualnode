@@ -41,11 +41,6 @@ class ShadingView {
   /** Matrix to apply to the viewmat. */
   const float (*face_matrix_)[4];
 
-  /** Post-FX modules. */
-  // DepthOfField dof_;
-  // MotionBlur mb_;
-  VelocityView velocity_;
-
   /** Raytracing persistent buffers. Only opaque and refraction can have surface tracing. */
   // RaytraceBuffer rt_buffer_opaque_;
   // RaytraceBuffer rt_buffer_refract_;
@@ -69,7 +64,7 @@ class ShadingView {
 
  public:
   ShadingView(Instance &inst, const char *name, const float (*face_matrix)[4])
-      : inst_(inst), name_(name), face_matrix_(face_matrix), velocity_(inst, name){};
+      : inst_(inst), name_(name), face_matrix_(face_matrix){};
 
   ~ShadingView(){};
 
@@ -79,7 +74,7 @@ class ShadingView {
 
   void render();
 
-  GPUTexture *render_post(GPUTexture *input_tx);
+  GPUTexture *render_postfx(GPUTexture *input_tx);
 
  private:
   void update_view();
