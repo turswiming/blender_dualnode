@@ -119,7 +119,31 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
       return 0.0f;
     }
 
-    sampled = light_sample<false>(kg, lamp, randu, randv, P, path_flag, &ls);
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
+
+    if (klight->type == LIGHT_SPOT) {
+      /* to-do: since spot light importance sampling isn't the best,
+       * we have a special case to check that the point is inside the cone. */
+      const float radius = klight->spot.radius;
+      const float cos_theta = klight->spot.spot_angle;
+      const float theta = fast_acosf(cos_theta);
+      const float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+      const float3 light_dir = make_float3(
+          klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
+
+      const float h1 = radius * fast_sinf(theta);
+      const float d1 = radius * cos_theta;
+      const float h2 = d1 / fast_tanf(theta);
+
+      const float3 apex = light_P - (h1 + h2) * light_dir;
+      const float3 apex_to_point = normalize(P - apex);
+      if (dot(apex_to_point, light_dir) < cos_theta) {
+        return 0.0f;
+      }
+    }
+    else {
+      sampled = light_sample<false>(kg, lamp, randu, randv, P, path_flag, &ls);
+    }
   }
 
   
