@@ -3431,7 +3431,7 @@ static void rna_def_brush(BlenderRNA *brna)
   // RNA_def_property_clear_flag(prop, PROP_PTR_NO_OWNERSHIP);
   RNA_def_property_override_flag(
       prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY | PROPOVERRIDE_LIBRARY_INSERTION);
-  RNA_def_brush_channelset(brna, prop, "Brush");
+  RNA_def_brush_channelset(brna, prop, "channels", "Brush");
 
   /* gradient source */
   prop = RNA_def_property(srna, "gradient_stroke_mode", PROP_ENUM, PROP_NONE);

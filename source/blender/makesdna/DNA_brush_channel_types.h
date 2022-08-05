@@ -176,6 +176,12 @@ typedef enum eBrushChannelFlag {
   BRUSH_CHANNEL_UI_EXPANDED = 1 << 3,
   BRUSH_CHANNEL_APPLY_MAPPING_TO_ALPHA = 1 << 4,
   BRUSH_CHANNEL_NEEDS_EVALUATE = 1 << 5,
+
+  /* Set in scene channels; forces inheritance on brush properties. */
+  BRUSH_CHANNEL_FORCE_INHERIT = 1 << 6,
+
+  /* Set in brush channels; ignores BRUSH_CHANNEL_FORCE_INHERIT. */
+  BRUSH_CHANNEL_IGNORE_FORCE_INHERIT = 1 << 7,
 } eBrushChannelFlag;
 
 typedef enum eBrushChannelUIFlag {

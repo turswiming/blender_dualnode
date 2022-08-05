@@ -81,11 +81,11 @@ BrushChannelSet *rna_BrushChannelSet_get_set(struct PointerRNA *ptr)
     case ID_SCE: {
       Scene *scene = (Scene *)id;
 
-      if (!scene->toolsettings || !scene->toolsettings->sculpt) {
+      if (!scene->toolsettings) {
         return NULL;
       }
 
-      chset = scene->toolsettings->sculpt->channels;
+      chset = scene->toolsettings->unified_channels;
       break;
     }
     default:
@@ -128,7 +128,7 @@ static BrushChannel *get_paired_radius_channel(PointerRNA *rna)
       Scene *scene = ((Scene *)rna->owner_id);
 
       if (scene->toolsettings && scene->toolsettings->sculpt) {
-        chset = scene->toolsettings->sculpt->channels;
+        chset = scene->toolsettings->unified_channels;
       }
     }
     else if (GS(rna->owner_id->name) == ID_BR) {
@@ -664,7 +664,10 @@ void RNA_def_brush_channel(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
 }
 
-void RNA_def_brush_channelset(BlenderRNA *brna, PropertyRNA *cprop, const char *type_prefix)
+void RNA_def_brush_channelset(BlenderRNA *brna,
+                              PropertyRNA *cprop,
+                              const char *propname,
+                              const char *type_prefix)
 {
   StructRNA *srna;
   PropertyRNA *prop;
@@ -696,7 +699,7 @@ void RNA_def_brush_channelset(BlenderRNA *brna, PropertyRNA *cprop, const char *
   // prop = RNA_def_property(srna, "channels", PROP_COLLECTION, PROP_NONE);
   prop = cprop;
 
-  RNA_def_property_collection_sdna(prop, NULL, "channels", NULL);
+  RNA_def_property_collection_sdna(prop, NULL, propname, NULL);
   RNA_def_property_collection_funcs(prop,
                                     "rna_BrushChannelSet_channels_begin",
                                     "rna_iterator_listbase_next",

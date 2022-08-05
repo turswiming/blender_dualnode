@@ -27,6 +27,8 @@
 #include "BKE_brush.h"
 #include "BKE_brush_channel.h"
 #include "BKE_colortools.h"
+#include "BKE_idprop.h"
+#include "BKE_idprop.hh"
 #include "BKE_paint.h"
 
 #include "BLO_read_write.h"
@@ -289,11 +291,11 @@ void _brush_channel_ensure_value(Brush *brush,
                                  BrushChannelSet *chset,
                                  const char *idname)
 {
-  Sculpt *sd = scene->toolsettings->sculpt;
+  ToolSettings *tool_settings = scene->toolsettings;
 
   BrushChannel *dest_ch = _BKE_brush_channelset_lookup(chset, idname);
   BrushChannel *brush_ch = _BKE_brush_channelset_lookup(brush->channels, idname);
-  BrushChannel *scene_ch = _BKE_brush_channelset_lookup(sd->channels, idname);
+  BrushChannel *scene_ch = _BKE_brush_channelset_lookup(tool_settings->unified_channels, idname);
 
   if (!(dest_ch->flag & BRUSH_CHANNEL_NEEDS_EVALUATE)) {
     return;
@@ -304,19 +306,24 @@ void _brush_channel_ensure_value(Brush *brush,
   ID *id;
 
   const char *rnaname = dest_ch->idname;
+  bool inherit = BKE_brush_channel_inherits(brush, scene->toolsettings, dest_ch);
 
-  if (brush_ch->flag & BRUSH_CHANNEL_INHERIT) {
+  if (!inherit) {
     path = "";
     id = &brush->id;
     srna = RNA_struct_find("Brush");
   }
   else {
-    path = "tool_settings.unified_paint_settings.";
+    path = "tool_settings.unified_properties[\"";
     id = &scene->id;
     srna = RNA_struct_find("Scene");
   }
 
   path += string(rnaname);
+
+  if (inherit) {
+    path += string("\"]");
+  }
 
   dest_ch->flag &= ~BRUSH_CHANNEL_NEEDS_EVALUATE;
   PointerRNA ptr, ptr2;
@@ -485,6 +492,13 @@ void BKE_brush_mapping_copy_data(BrushMapping *dest, BrushMapping *src)
   }
 }
 
+void BKE_brush_mapping_free_data(BrushMapping *mp)
+{
+  if (mp->curve.curve) {
+    BKE_curvemapping_free(mp->curve.curve);
+  }
+}
+
 void BKE_brush_channel_copy_data(BrushChannel *dest, BrushChannel *src)
 {
   *dest = *src;
@@ -545,4 +559,100 @@ extern "C" void BKE_brush_channelset_blend_read(BrushChannelSet *chset, BlendDat
     }
   }
 }
+
+extern "C" bool BKE_brush_channel_inherits(Brush *brush,
+                                           ToolSettings *tool_settings,
+                                           BrushChannel *ch)
+{
+  BrushChannel *scene_ch = _BKE_brush_channelset_lookup(tool_settings->unified_channels,
+                                                        ch->idname);
+
+  if (!scene_ch) {
+    return false;
+  }
+
+  if (ch->flag & BRUSH_CHANNEL_INHERIT) {
+    return true;
+  }
+
+  if (scene_ch->flag & BRUSH_CHANNEL_FORCE_INHERIT) {
+    return !(ch->flag & BRUSH_CHANNEL_IGNORE_FORCE_INHERIT);
+  }
+
+  return false;
+}
+
+BrushChannelSet *BKE_brush_channelset_create_final(Brush *brush,
+                                                   ToolSettings *tool_settings,
+                                                   BrushMappingData *mapdata)
+{
+  BrushChannelSet *chset = BKE_brush_channelset_copy(brush->channels);
+
+  LISTBASE_FOREACH (BrushChannel *, ch, &chset->channels) {
+    BrushChannel *ch1 = _BKE_brush_channelset_lookup(brush->channels, ch->idname);
+    BrushChannel *ch2 = _BKE_brush_channelset_lookup(tool_settings->unified_channels, ch->idname);
+    bool inherit = BKE_brush_channel_inherits(brush, tool_settings, ch);
+
+    if (inherit) {
+      BKE_brush_channel_copy_data(ch, ch2);
+    }
+
+    for (int i = 0; i < BRUSH_MAPPING_MAX; i++) {
+      BrushMapping *mp1 = ch1->mappings + i;
+      BrushMapping *mp2 = ch2->mappings + i;
+
+      if ((mp1->flag & BRUSH_MAPPING_INHERIT_NEVER) && inherit) {
+        BKE_brush_mapping_free_data(ch->mappings + i);
+        BKE_brush_mapping_copy_data(ch->mappings + i, mp1);
+      }
+      else if ((mp1->flag & BRUSH_MAPPING_INHERIT_ALWAYS) && !inherit) {
+        BKE_brush_mapping_free_data(ch->mappings + i);
+        BKE_brush_mapping_copy_data(ch->mappings + i, mp2);
+      }
+    }
+  }
+
+  return chset;
+}
+
+void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
+{
+  if (!ts->unified_properties) {
+    ts->unified_properties = IDP_New(IDP_GROUP, nullptr, "group");
+  }
+
+  if (!ts->unified_channels) {
+    ts->unified_channels = BKE_brush_channelset_create();
+  }
+
+  for (const BrushChannelType &type : builtin_channels.values()) {
+    _BKE_brush_channelset_ensure(ts->unified_channels, type.idname);
+  }
+
+  LISTBASE_FOREACH (BrushChannel *, ch, &ts->unified_channels) {
+    IDProperty *idprop = IDP_GetPropertyFromGroup(ts->unified_properties, ch->idname);
+
+    if (!idprop) {
+      IDPropertyTemplate tmpl;
+      IDPropertyType type;
+
+      switch (ch->type) {
+        case BRUSH_CHANNEL_TYPE_FLOAT:
+          tmpl.f = ch->fvalue;
+          type = IDP_FLOAT;
+          break;
+        case BRUSH_CHANNEL_TYPE_INT:
+        case BRUSH_CHANNEL_TYPE_ENUM:
+        case BRUSH_CHANNEL_TYPE_BITMASK:
+        case BRUSH_CHANNEL_TYPE_BOOL:
+          tmpl.i = ch->ivalue;
+          type = IDP_INT;
+          break;
+      }
+
+      prop = IDP_New(type, &tmpl, ch->idname);
+    }
+  }
+}
+
 }  // namespace blender

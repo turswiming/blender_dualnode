@@ -2738,6 +2738,11 @@ static void rna_FFmpegSettings_codec_update(Main *UNUSED(bmain),
 }
 #  endif
 
+static IDProperty **rna_UnifiedBrushProperties_idprops(PointerRNA *ptr)
+{
+  ToolSettings *ts = ptr->data;
+  return &ts->unified_properties;
+}
 #else
 
 /* Grease Pencil Interpolation tool settings */
@@ -2872,6 +2877,18 @@ static void rna_def_view3d_cursor(BlenderRNA *brna)
       prop, "Transform Matrix", "Matrix combining location and rotation of the cursor");
   RNA_def_property_float_funcs(
       prop, "rna_View3DCursor_matrix_get", "rna_View3DCursor_matrix_set", NULL);
+}
+
+static void rna_def_unified_brush_properties(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+  srna = RNA_def_struct(brna, "UnifiedBrushProperties", NULL);
+  RNA_def_struct_nested(brna, srna, "ToolSettings");
+
+  /* The struct has custom properties, but no pointer properties to other IDs! */
+  RNA_def_struct_idprops_func(srna, "rna_UnifiedBrushProperties_idprops");
+  RNA_def_struct_flag(srna, STRUCT_NO_DATABLOCK_IDPROPERTIES); /* Mandatory! */
 }
 
 static void rna_def_tool_settings(BlenderRNA *brna)
@@ -3014,6 +3031,23 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "ToolSettings", NULL);
   RNA_def_struct_path_func(srna, "rna_ToolSettings_path");
   RNA_def_struct_ui_text(srna, "Tool Settings", "");
+
+  rna_def_unified_brush_properties(brna);
+
+  prop = RNA_def_property(srna, "unified_properties", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "UnifiedBrushProperties");
+  RNA_def_property_ui_text(prop, "Unified Brush Property Storage", "");
+
+  prop = RNA_def_property(srna, "unified_channels", PROP_COLLECTION, 0);
+  RNA_def_property_collection_sdna(prop, NULL, "unified_channels", NULL);
+  RNA_def_property_struct_type(prop, "BrushChannel");
+  RNA_def_property_ui_text(prop, "Channels", "");
+  RNA_def_property_update(prop, 0, "rna_Brush_update");
+  // RNA_def_property_clear_flag(prop, PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_override_flag(
+      prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY | PROPOVERRIDE_LIBRARY_INSERTION);
+  RNA_def_property_ui_text(prop, "Unified Brush Channels", "");
+  RNA_def_brush_channelset(brna, prop, "unified_channels", "Scene");
 
   prop = RNA_def_property(srna, "sculpt", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "Sculpt");

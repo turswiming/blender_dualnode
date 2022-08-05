@@ -61,6 +61,7 @@ struct BlendExpander;
 struct Brush;
 struct Sculpt;
 struct LibraryForeachIDData;
+struct ToolSettings;
 struct UnifiedPaintSettings;
 
 #define make_builtin_ch_name(idname) BRUSH_BUILTIN_##idname
@@ -170,6 +171,12 @@ void _BKE_brush_channelset_float_set(struct Brush *br,
 
 BrushChannelSet *BKE_brush_channelset_copy(BrushChannelSet *chset);
 
+/* Create a (copied) final brush channel set with all inheritance and unified flags
+   and input mappings taken into account. */
+BrushChannelSet *BKE_brush_channelset_create_final(struct Brush *brush,
+                                                   struct ToolSettings *tool_settings,
+                                                   BrushMappingData *mapdata);
+
 #define BKE_brush_channelset_float_set(br, scene, chset, channel, f, set_rna) \
   _BKE_brush_channelset_float_set(br, scene, chset, make_builtin_ch_name(channel), f, set_rna)
 
@@ -197,6 +204,11 @@ BLI_INLINE const char *BKE_brush_mapping_type_to_typename(eBrushMappingType type
 
 const char *BKE_brush_channel_category_get(BrushChannel *ch);
 const void BKE_brush_channel_category_set(BrushChannel *ch, const char *category);
+bool BKE_brush_channel_inherits(struct Brush *brush,
+                                struct ToolSettings *tool_settings,
+                                BrushChannel *ch);
+BrushChannelSet *BKE_brush_channelset_get_final(struct Brush *brush,
+                                                struct ToolSettings *tool_settings);
 
 #ifdef __cplusplus
 }

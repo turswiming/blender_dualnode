@@ -1018,7 +1018,6 @@ typedef struct Sculpt {
   char _pad[4];
 
   struct Object *gravity_object;
-  struct BrushChannelSet *channels;
 } Sculpt;
 
 typedef struct CurvesSculpt {
@@ -1558,6 +1557,8 @@ typedef struct ToolSettings {
 
   /* Unified Paint Settings */
   struct UnifiedPaintSettings unified_paint_settings;
+  struct BrushChannelSet *unified_channels;
+  IDProperty *unified_properties;
 
   struct CurvePaintSettings curve_paint_settings;
 
