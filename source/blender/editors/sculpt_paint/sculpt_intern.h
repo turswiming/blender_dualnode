@@ -1306,6 +1306,8 @@ float *SCULPT_boundary_automasking_init(Object *ob,
                                         eBoundaryAutomaskMode mode,
                                         int propagation_steps,
                                         float *automask_factor);
+bool SCULPT_automasking_needs_original(const struct Sculpt *sd, const struct Brush *brush);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

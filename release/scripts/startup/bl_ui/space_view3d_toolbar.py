@@ -970,12 +970,12 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         col.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
         col.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
         col.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
-        col.prop(sculpt, "use_automasking_cavity", text="Cavity Masking")
+        col.prop(sculpt, "use_automasking_cavity", text="Cavity")
+        col.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
 
         col.separator()
 
-        if sculpt.use_automasking_cavity:
-            col.prop(sculpt, "invert_automasking_cavity", text="Invert Cavity")
+        if sculpt.use_automasking_cavity or sculpt.use_automasking_cavity_inverted:
             col.prop(sculpt, "automasking_cavity_factor", text="Cavity Factor")
             col.prop(sculpt, "automasking_cavity_blur_steps", text="Cavity Blur")
             

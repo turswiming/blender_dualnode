@@ -4326,6 +4326,10 @@ static void sculpt_update_cache_invariants(
     cache->original = true;
   }
 
+  if (SCULPT_automasking_needs_original(sd, brush)) {
+    cache->original = true;
+  }
+
   /* Draw sharp does not need the original coordinates to produce the accumulate effect, so it
    * should work the opposite way. */
   if (brush->sculpt_tool == SCULPT_TOOL_DRAW_SHARP) {

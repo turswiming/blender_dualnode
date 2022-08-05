@@ -73,10 +73,8 @@ bool SCULPT_is_automasking_mode_enabled(const Sculpt *sd,
   int automasking = sd->automasking_flags;
 
   if (br) {
-    /* Do not inherit secondary cavity mask flags if BRUSH_AUTOMASKING_CAVITY is unset.*/
-
-    if (!(sd->automasking_flags & BRUSH_AUTOMASKING_CAVITY)) {
-      automasking &= ~BRUSH_AUTOMASKING_CAVITY_INVERT;
+    /* Do not inherit secondary cavity mask flags if cavity mask is not enabled.*/
+    if (!(sd->automasking_flags & BRUSH_AUTOMASKING_CAVITY_ALL)) {
       automasking &= ~BRUSH_AUTOMASKING_CAVITY_USE_CURVE;
     }
 
@@ -103,7 +101,7 @@ bool SCULPT_is_automasking_enabled(const Sculpt *sd, const SculptSession *ss, co
   if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS)) {
     return true;
   }
-  if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_CAVITY)) {
+  if (SCULPT_is_automasking_mode_enabled(sd, br, BRUSH_AUTOMASKING_CAVITY_ALL)) {
     return true;
   }
 
@@ -181,7 +179,8 @@ static float sculpt_cavity_calc_factor(SculptSession *ss,
   factor = factor * sign * 0.5f + 0.5f;
   CLAMP(factor, 0.0f, 1.0f);
 
-  return (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERT) ? 1.0f - factor : factor;
+  return (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERTED) ? 1.0f - factor :
+                                                                             factor;
 }
 
 struct CavityBlurVert {
@@ -369,6 +368,10 @@ static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_USE_CURVE) {
     factor = BKE_curvemapping_evaluateF(automasking->settings.cavity_curve, 0, factor);
+
+    if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERTED) {
+      factor = 1.0f - factor;
+    }
   }
 
   return factor;
@@ -390,7 +393,7 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
   if (automasking->factor) {
     float factor = automasking->factor[index];
 
-    if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY) {
+    if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
       factor *= sculpt_automasking_cavity_factor(automasking, ss, vert);
     }
 
@@ -415,7 +418,7 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
     }
   }
 
-  if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY) {
+  if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
     return sculpt_automasking_cavity_factor(automasking, ss, vert);
   }
 
@@ -650,7 +653,7 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   SCULPT_automasking_cache_settings_update(automasking, ss, sd, brush);
   SCULPT_boundary_info_ensure(ob);
 
-  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY)) {
+  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_ALL)) {
     SCULPT_vertex_random_access_ensure(ss);
     sculpt_cavity_automasking_init(sd, ob, automasking);
   }
@@ -689,4 +692,9 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   }
 
   return automasking;
+}
+
+bool SCULPT_automasking_needs_original(const Sculpt *sd, const Brush *brush)
+{
+  return sculpt_automasking_mode_effective_bits(sd, brush) & BRUSH_AUTOMASKING_CAVITY_ALL;
 }

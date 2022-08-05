@@ -1078,6 +1078,28 @@ static int sculpt_bake_automask_exec(bContext *C, wmOperator *op)
   tdata.nodes = nodes;
   tdata.automasking = SCULPT_automasking_cache_init(sd, brush, ob);
 
+  if (!RNA_boolean_get(op->ptr, "use_scene_settings")) {
+    tdata.automasking->settings.flags = 0;
+
+    const EnumPropertyItem *entry = RNA_automasking_flags;
+    do {
+      if (entry->value & (BRUSH_AUTOMASKING_FACE_SETS | BRUSH_AUTOMASKING_TOPOLOGY)) {
+        /* These two modes require an active vertex. */
+        continue;
+      }
+
+      if (RNA_boolean_get(op->ptr, entry->identifier)) {
+        tdata.automasking->settings.flags |= entry->value;
+      }
+    } while ((++entry)->identifier);
+
+    if (tdata.automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
+      tdata.automasking->settings.cavity_blur_steps = RNA_int_get(op->ptr, "cavity_blur_steps");
+      tdata.automasking->settings.cavity_factor = RNA_float_get(op->ptr, "cavity_factor");
+      tdata.automasking->settings.cavity_curve = sd->automasking_cavity_curve;
+    }
+  }
+
   ss->stroke_id++;
 
   TaskParallelSettings settings;
@@ -1108,10 +1130,10 @@ static void SCULPT_OT_bake_automask(wmOperatorType *ot)
 
   static EnumPropertyItem mix_modes[] = {
       {AUTOMASK_BAKE_MIX, "MIX", ICON_NONE, "Mix", ""},
-      {AUTOMASK_BAKE_MIX, "MULTIPLY", ICON_NONE, "Multiply", ""},
-      {AUTOMASK_BAKE_MIX, "DIVIDE", ICON_NONE, "Divide", ""},
-      {AUTOMASK_BAKE_MIX, "ADD", ICON_NONE, "Add", ""},
-      {AUTOMASK_BAKE_MIX, "SUBTRACT", ICON_NONE, "Subtract", ""},
+      {AUTOMASK_BAKE_MULTIPLY, "MULTIPLY", ICON_NONE, "Multiply", ""},
+      {AUTOMASK_BAKE_DIVIDE, "DIVIDE", ICON_NONE, "Divide", ""},
+      {AUTOMASK_BAKE_ADD, "ADD", ICON_NONE, "Add", ""},
+      {AUTOMASK_BAKE_SUBTRACT, "SUBTRACT", ICON_NONE, "Subtract", ""},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -1119,10 +1141,35 @@ static void SCULPT_OT_bake_automask(wmOperatorType *ot)
   ot->exec = sculpt_bake_automask_exec;
   ot->poll = SCULPT_mode_poll;
 
-  ot->flag = OPTYPE_REGISTER;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_enum(ot->srna, "mix_mode", mix_modes, AUTOMASK_BAKE_MIX, "Mode", "Mix mode");
   RNA_def_float(ot->srna, "factor", 1.0f, 0.0f, 4.0f, "Mix Factor", "", 0.0f, 1.0f);
+
+  RNA_def_boolean(ot->srna,
+                  "use_scene_settings",
+                  true,
+                  "Use Default Settings",
+                  "Use default settings from Options panel in sculpt mode.");
+
+  RNA_def_float(ot->srna, "cavity_factor", 0.5f, 0.0f, 5.0f, "Cavity Factor", "", 0.0f, 1.0f);
+  RNA_def_int(ot->srna, "cavity_blur_steps", 2, 0, 25, "Cavity Blur", "", 0, 25);
+  RNA_def_boolean(
+      ot->srna,
+      "use_cavity_curve",
+      false,
+      "Use Cavity Curve",
+      "Use cavity curve (edit in the Options panel in\n sculpt mode with Cavity enabled)");
+
+  const EnumPropertyItem *entry = RNA_automasking_flags;
+  do {
+    if (entry->value & (BRUSH_AUTOMASKING_FACE_SETS | BRUSH_AUTOMASKING_TOPOLOGY)) {
+      /* These two modes require an active vertex. */
+      continue;
+    }
+
+    RNA_def_boolean(ot->srna, entry->identifier, false, entry->name, entry->description);
+  } while ((++entry)->identifier);
 }
 
 void ED_operatortypes_sculpt(void)

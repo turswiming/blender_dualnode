@@ -9,6 +9,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
+#include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
@@ -588,6 +589,31 @@ static char *rna_GPencilSculptGuide_path(const PointerRNA *UNUSED(ptr))
   return BLI_strdup("tool_settings.gpencil_sculpt.guide");
 }
 
+static void rna_Sculpt_automasking_invert_cavity_set(PointerRNA *ptr, bool val)
+{
+  Sculpt *sd = (Sculpt *)ptr->data;
+
+  if (val) {
+    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_NORMAL;
+    sd->automasking_flags |= BRUSH_AUTOMASKING_CAVITY_INVERTED;
+  }
+  else {
+    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_INVERTED;
+  }
+}
+
+static void rna_Sculpt_automasking_cavity_set(PointerRNA *ptr, bool val)
+{
+  Sculpt *sd = (Sculpt *)ptr->data;
+
+  if (val) {
+    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_INVERTED;
+    sd->automasking_flags |= BRUSH_AUTOMASKING_CAVITY_NORMAL;
+  }
+  else {
+    sd->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_NORMAL;
+  }
+}
 #else
 
 static void rna_def_paint_curve(BlenderRNA *brna)
@@ -873,49 +899,21 @@ static void rna_def_sculpt(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Sculpt_update");
 
-  prop = RNA_def_property(srna, "use_automasking_topology", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_TOPOLOGY);
-  RNA_def_property_ui_text(prop,
-                           "Topology Auto-Masking",
-                           "Affect only vertices connected to the active vertex under the brush");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+  const EnumPropertyItem *entry = RNA_automasking_flags;
+  do {
+    prop = RNA_def_property(srna, entry->identifier, PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", entry->value);
+    RNA_def_property_ui_text(prop, entry->name, entry->description);
 
-  prop = RNA_def_property(srna, "use_automasking_face_sets", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_FACE_SETS);
-  RNA_def_property_ui_text(prop,
-                           "Face Sets Auto-Masking",
-                           "Affect only vertices that share Face Sets with the active vertex");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+    if (entry->value == BRUSH_AUTOMASKING_CAVITY_NORMAL) {
+      RNA_def_property_boolean_funcs(prop, NULL, "rna_Sculpt_automasking_cavity_set");
+    }
+    else if (entry->value == BRUSH_AUTOMASKING_CAVITY_INVERTED) {
+      RNA_def_property_boolean_funcs(prop, NULL, "rna_Sculpt_automasking_invert_cavity_set");
+    }
 
-  prop = RNA_def_property(srna, "use_automasking_boundary_edges", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_BOUNDARY_EDGES);
-  RNA_def_property_ui_text(
-      prop, "Mesh Boundary Auto-Masking", "Do not affect non manifold boundary edges");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-  prop = RNA_def_property(srna, "use_automasking_boundary_face_sets", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(
-      prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS);
-  RNA_def_property_ui_text(prop,
-                           "Face Sets Boundary Auto-Masking",
-                           "Do not affect vertices that belong to a Face Set boundary");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-  prop = RNA_def_property(srna, "use_automasking_cavity", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_CAVITY);
-  RNA_def_property_ui_text(prop, "Invert Cavity Mask", "Invert cavity masking.");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-  prop = RNA_def_property(srna, "invert_automasking_cavity", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_CAVITY_INVERT);
-  RNA_def_property_ui_text(prop, "Invert Cavity Mask", "Invert cavity masking.");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-  prop = RNA_def_property(srna, "use_automasking_custom_cavity_curve", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(
-      prop, NULL, "automasking_flags", BRUSH_AUTOMASKING_CAVITY_USE_CURVE);
-  RNA_def_property_ui_text(prop, "Custom Cavity Curve", "Use custom curve.");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+    RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+  } while ((++entry)->identifier);
 
   prop = RNA_def_property(srna, "automasking_cavity_factor", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "automasking_cavity_factor");
