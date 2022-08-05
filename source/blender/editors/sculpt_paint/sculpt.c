@@ -5392,7 +5392,7 @@ static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const f
 
 static void sculpt_stroke_update_step(bContext *C,
                                       wmOperator *UNUSED(op),
-                                      struct PaintStroke *UNUSED(stroke),
+                                      struct PaintStroke *stroke,
                                       PointerRNA *itemptr)
 {
   UnifiedPaintSettings *ups = &CTX_data_tool_settings(C)->unified_paint_settings;
@@ -5401,6 +5401,8 @@ static void sculpt_stroke_update_step(bContext *C,
   SculptSession *ss = ob->sculpt;
   const Brush *brush = BKE_paint_brush(&sd->paint);
   ToolSettings *tool_settings = CTX_data_tool_settings(C);
+  StrokeCache *cache = ss->cache;
+  cache->stroke_distance = paint_stroke_distance_get(stroke);
 
   SCULPT_stroke_modifiers_check(C, ob, brush);
   sculpt_update_cache_variants(C, sd, ob, itemptr);
