@@ -372,6 +372,12 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
 
     const float left_importance = light_tree_cluster_importance(kg, P, N, left);
     const float right_importance = light_tree_cluster_importance(kg, P, N, right);
+    const float total_importance = left_importance + right_importance;
+
+    if (total_importance == 0.0f) {
+      stack_index--;
+      continue;
+    }
     float left_probability = left_importance / (left_importance + right_importance);
 
     if (*randu < left_probability) {
