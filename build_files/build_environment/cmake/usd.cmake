@@ -119,7 +119,7 @@ if(WIN32)
   endif()
   if(BUILD_MODE STREQUAL Debug)
     ExternalProject_Add_Step(external_usd after_install
-      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/usd/lib/python ${HARVEST_TARGET}/usd/lib/python
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/usd/lib/python ${HARVEST_TARGET}/usd/lib/debug/python
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/usd/lib/usd_usd_ms_d.dll ${HARVEST_TARGET}/usd/lib/usd_usd_ms_d.dll
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/usd/lib/usd_usd_ms_d.lib ${HARVEST_TARGET}/usd/lib/usd_usd_ms_d.lib
       DEPENDEES install

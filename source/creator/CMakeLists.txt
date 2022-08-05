@@ -946,12 +946,23 @@ elseif(WIN32)
         install(
           DIRECTORY ${USD_LIBRARY_DIR}/python/
           DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+          CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
           PATTERN ".svn" EXCLUDE
           PATTERN "__pycache__" EXCLUDE           # * any cache *
           PATTERN "*.pyc" EXCLUDE                 # * any cache *
           PATTERN "*.pyo" EXCLUDE                 # * any cache *
         )
-        unset(_suffix)
+
+        install(
+          DIRECTORY ${USD_LIBRARY_DIR}/debug/python/
+          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+          CONFIGURATIONS Debug
+          PATTERN ".svn" EXCLUDE
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+
       endif()
 
       if(WINDOWS_PYTHON_DEBUG)
