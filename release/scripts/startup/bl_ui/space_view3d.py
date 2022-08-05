@@ -3280,8 +3280,6 @@ class VIEW3D_MT_mask(Menu):
 
         layout.separator()
 
-        props = layout.operator("sculpt.dirty_mask", text='Dirty Mask')
-
         props = layout.operator("sculpt.bake_automask", text="Mask From Cavity")
 
         props.use_scene_settings = False

@@ -1144,7 +1144,7 @@ static void SCULPT_OT_bake_automask(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_enum(ot->srna, "mix_mode", mix_modes, AUTOMASK_BAKE_MIX, "Mode", "Mix mode");
-  RNA_def_float(ot->srna, "factor", 1.0f, 0.0f, 4.0f, "Mix Factor", "", 0.0f, 1.0f);
+  RNA_def_float(ot->srna, "factor", 1.0f, 0.0f, 4.0f, "Mix Factor", "", 0.0f, 2.0f);
 
   RNA_def_boolean(ot->srna,
                   "use_scene_settings",
@@ -1154,12 +1154,6 @@ static void SCULPT_OT_bake_automask(wmOperatorType *ot)
 
   RNA_def_float(ot->srna, "cavity_factor", 0.5f, 0.0f, 5.0f, "Cavity Factor", "", 0.0f, 1.0f);
   RNA_def_int(ot->srna, "cavity_blur_steps", 2, 0, 25, "Cavity Blur", "", 0, 25);
-  RNA_def_boolean(
-      ot->srna,
-      "use_cavity_curve",
-      false,
-      "Use Cavity Curve",
-      "Use cavity curve (edit in the Options panel in\n sculpt mode with Cavity enabled)");
 
   const EnumPropertyItem *entry = RNA_automasking_flags;
   do {
