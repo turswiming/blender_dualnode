@@ -3,7 +3,6 @@
 if(WIN32)
   option(ENABLE_MINGW64 "Enable building of ffmpeg/iconv/libsndfile/fftw3 by installing mingw64" ON)
 endif()
-option(WITH_BOOST_PYTHON "Enable building of boost with python support" OFF)
 cmake_host_system_information(RESULT NUM_CORES QUERY NUMBER_OF_LOGICAL_CORES)
 set(MAKE_THREADS ${NUM_CORES} CACHE STRING "Number of threads to run make with")
 
@@ -97,10 +96,11 @@ if(WIN32)
 else()
   set(PATCH_CMD patch)
   set(LIBEXT ".a")
-  set(SHAREDLIBEXT ".so")
   set(LIBPREFIX "lib")
 
   if(APPLE)
+    set(SHAREDLIBEXT ".dylib")
+
     # Let's get the current Xcode dir, to support xcode-select
     execute_process(
       COMMAND xcode-select --print-path
@@ -140,6 +140,8 @@ else()
       -DCMAKE_OSX_SYSROOT:PATH=${OSX_SYSROOT}
     )
   else()
+    set(SHAREDLIBEXT ".so")
+
     if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
       set(BLENDER_PLATFORM_ARM ON)
     endif()

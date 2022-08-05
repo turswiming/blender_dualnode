@@ -352,7 +352,7 @@ if(WITH_BOOST)
   # uses in build instructions to override include and library variables
   if(NOT BOOST_CUSTOM)
     if(WITH_STATIC_LIBS)
-      set(Boost_USE_STATIC_LIBS ON)
+      set(Boost_USE_STATIC_LIBS OFF)
     endif()
     set(Boost_USE_MULTITHREADED ON)
     set(__boost_packages filesystem regex thread date_time)
@@ -367,6 +367,12 @@ if(WITH_BOOST)
     endif()
     if(WITH_OPENVDB)
       list(APPEND __boost_packages iostreams)
+    endif()
+    if(WITH_OPENIMAGEIO)
+      list(APPEND __boost_packages filesystem)
+    endif()
+    if(WITH_USD)
+      list(APPEND __boost_packages python310)
     endif()
     list(APPEND __boost_packages system)
     find_package(Boost 1.48 COMPONENTS ${__boost_packages})
@@ -967,3 +973,25 @@ function(CONFIGURE_ATOMIC_LIB_IF_NEEDED)
 endfunction()
 
 CONFIGURE_ATOMIC_LIB_IF_NEEDED()
+
+# For binaries that are built but not installed (also not distributed) (datatoc,
+# makesdna, tests, etc.), we add an rpath to library dirs these depends on.
+#
+# For the installed Python module and installed Blender executable, CMAKE_INSTALL_RPATH
+# is modified to find everything in ./lib. Install step puts the libraries there.
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib)
+if(SYCL_LIBRARY)
+  get_filename_component(SYCL_LIBRARY_DIR "${SYCL_LIBRARY}" DIRECTORY)
+  list(APPEND CMAKE_BUILD_RPATH "${SYCL_LIBRARY_DIR}")
+endif()
+if(WITH_TBB)
+  list(APPEND CMAKE_BUILD_RPATH "${TBB_LIBRARY_DIR}")
+endif()
+if(WITH_USD)
+  list(APPEND CMAKE_BUILD_RPATH "${USD_LIBRARY_DIR}")
+endif()
+
+
+set(CMAKE_SKIP_INSTALL_RPATH FALSE)
+list(APPEND CMAKE_INSTALL_RPATH $ORIGIN/lib)

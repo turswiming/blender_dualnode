@@ -542,35 +542,36 @@ if(WITH_BOOST)
     endif()
     set(BOOST_POSTFIX "vc142-mt-x64-${BOOST_VERSION}.lib")
     set(BOOST_DEBUG_POSTFIX "vc142-mt-gd-x64-${BOOST_VERSION}.lib")
-    if(NOT EXISTS ${BOOST_LIBPATH}/libboost_date_time-${BOOST_POSTFIX})
+    if(NOT EXISTS ${BOOST_LIBPATH}/boost_date_time-${BOOST_POSTFIX})
       # If the new library names do not exist fall back to the old ones
       # to ease the transition period between the libs.
       set(BOOST_POSTFIX "vc141-mt-x64-${BOOST_VERSION}.lib")
       set(BOOST_DEBUG_POSTFIX "vc141-mt-gd-x64-${BOOST_VERSION}.lib")
     endif()
     set(BOOST_LIBRARIES
-      optimized ${BOOST_LIBPATH}/libboost_date_time-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_filesystem-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_regex-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_system-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_thread-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_chrono-${BOOST_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_date_time-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_filesystem-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_regex-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_system-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_thread-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_chrono-${BOOST_DEBUG_POSTFIX}
+      optimized ${BOOST_LIBPATH}/boost_date_time-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/boost_filesystem-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/boost_regex-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/boost_system-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/boost_thread-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/boost_chrono-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/boost_python310-${BOOST_POSTFIX}
+      debug ${BOOST_LIBPATH}/boost_date_time-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/boost_filesystem-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/boost_regex-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/boost_system-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/boost_thread-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/boost_chrono-${BOOST_DEBUG_POSTFIX}
     )
     if(WITH_CYCLES AND WITH_CYCLES_OSL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
-        optimized ${BOOST_LIBPATH}/libboost_wave-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/libboost_wave-${BOOST_DEBUG_POSTFIX})
+        optimized ${BOOST_LIBPATH}/boost_wave-${BOOST_POSTFIX}
+        debug ${BOOST_LIBPATH}/boost_wave-${BOOST_DEBUG_POSTFIX})
     endif()
     if(WITH_INTERNATIONAL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
-        optimized ${BOOST_LIBPATH}/libboost_locale-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/libboost_locale-${BOOST_DEBUG_POSTFIX})
+        optimized ${BOOST_LIBPATH}/boost_locale-${BOOST_POSTFIX}
+        debug ${BOOST_LIBPATH}/boost_locale-${BOOST_DEBUG_POSTFIX})
     endif()
   else() # we found boost using find_package
     set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
@@ -840,8 +841,8 @@ if(WITH_USD)
   windows_find_package(USD)
   if(NOT USD_FOUND)
     set(USD_INCLUDE_DIRS ${LIBDIR}/usd/include)
-    set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_m.lib)
-    set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_m_d.lib)
+    set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_ms.lib)
+    set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_ms_d.lib)
     set(USD_LIBRARY_DIR ${LIBDIR}/usd/lib)
     # Older USD had different filenames, if the new ones are
     # not found see if the older ones exist, to ease the

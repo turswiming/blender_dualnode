@@ -17,6 +17,10 @@ set(SRC
 set(LIB
 )
 
+if(WIN32)
+  add_definitions (-DBOOST_ALL_DYN_LINK=1)
+endif()
+
 if(APPLE)
   # Cocoa code to read the locale on OSX
   list(APPEND SRC

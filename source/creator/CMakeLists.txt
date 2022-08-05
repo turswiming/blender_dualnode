@@ -12,10 +12,12 @@ blender_include_dirs(
   ../blender/editors/include
   ../blender/gpu
   ../blender/imbuf
+  ../blender/io/usd
   ../blender/makesdna
   ../blender/makesrna
   ../blender/render
   ../blender/windowmanager
+
 )
 
 set(LIB
@@ -458,6 +460,34 @@ endif()
 
 if(UNIX AND NOT APPLE)
 
+  if(WITH_TBB)
+    install(
+      DIRECTORY ${LIBDIR}/tbb/lib/
+      DESTINATION "./lib"
+      FILES_MATCHING PATTERN "*.so*"
+    )
+  endif()
+  if(WITH_OPENSUBDIV)
+    install(
+      DIRECTORY ${LIBDIR}/opensubdiv/lib/
+      DESTINATION "./lib"
+      FILES_MATCHING PATTERN "*.so*"
+    )
+  endif()
+  if(WITH_USD)
+    install(
+      DIRECTORY ${LIBDIR}/usd/lib/
+      DESTINATION "./lib"
+      FILES_MATCHING PATTERN "libusd_usd_ms.so"
+    )
+  endif()
+  if(WITH_BOOST)
+    install(
+      DIRECTORY ${LIBDIR}/boost/lib/
+      DESTINATION "./lib"
+      FILES_MATCHING PATTERN "*.so*"
+    )
+  endif()
   if(NOT WITH_PYTHON_MODULE)
     if(WITH_DOC_MANPAGE)
       add_custom_target(
@@ -642,6 +672,24 @@ if(UNIX AND NOT APPLE)
         unset(_suffix)
       endif()
 
+      if(WITH_USD)
+        # Install to the same directory as the source, so debian-like
+        # distros are happy with their policy.
+        set(_suffix "site-packages")
+        if(${PYTHON_USD_PATH} MATCHES "dist-packages")
+          set(_suffix "dist-packages")
+        endif()
+        install(
+          DIRECTORY ${USD_LIBRARY_DIR}/python/
+          DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
+          PATTERN ".svn" EXCLUDE
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+        unset(_suffix)
+      endif()
+
       if(WITH_PYTHON_INSTALL_ZSTANDARD)
         # Install to the same directory as the source, so debian-like
         # distros are happy with their policy.
@@ -728,6 +776,34 @@ elseif(WIN32)
     install(
           FILES ${LIBDIR}/fftw3/lib/libfftw3-3.dll
           DESTINATION "."
+    )
+  endif()
+  if(WITH_USD)
+    install(
+          FILES ${LIBDIR}/usd/lib/usd_usd_ms.dll
+          DESTINATION "."
+    )
+  endif()
+  if(WITH_BOOST)
+    install(
+          FILES
+            ${LIBDIR}/boost/lib/boost_atomic-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_chrono-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_date_time-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_filesystem-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_iostreams-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_locale-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_numpy310-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_program_options-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_python310-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_regex-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_serialization-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_system-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_thread-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_wave-vc142-mt-x64-1_78.dll
+            ${LIBDIR}/boost/lib/boost_wserialization-vc142-mt-x64-1_78.dll
+          DESTINATION "."
+          CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
     )
   endif()
   if(MSVC_ASAN)
@@ -864,6 +940,18 @@ elseif(WIN32)
         DESTINATION ${BLENDER_VERSION}/python/bin
         CONFIGURATIONS Debug
       )
+
+      if(WITH_USD)
+        install(
+          DIRECTORY ${USD_LIBRARY_DIR}/python/
+          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+          PATTERN ".svn" EXCLUDE
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+        unset(_suffix)
+      endif()
 
       if(WINDOWS_PYTHON_DEBUG)
         install(
@@ -1096,6 +1184,35 @@ elseif(APPLE)
     install(
       FILES "${OpenMP_LIBRARY}"
       DESTINATION "${MAC_BLENDER_TARGET_DYLIBS_DIR}"
+    )
+  endif()
+
+  if(WITH_TBB)
+    install(
+      DIRECTORY ${LIBDIR}/tbb/lib/
+      DESTINATION "${MAC_BLENDER_TARGET_DYLIBS_DIR}"
+      FILES_MATCHING PATTERN "*.dylib*"
+    )
+  endif()
+  if(WITH_OPENSUBDIV)
+    install(
+      DIRECTORY ${LIBDIR}/opensubdiv/lib/
+      DESTINATION "${MAC_BLENDER_TARGET_DYLIBS_DIR}"
+      FILES_MATCHING PATTERN "*.dylib*"
+    )
+  endif()
+  if(WITH_USD)
+    install(
+      DIRECTORY ${LIBDIR}/usd/lib/
+      DESTINATION "${MAC_BLENDER_TARGET_DYLIBS_DIR}"
+      FILES_MATCHING PATTERN "libusd_usd_ms.dylib"
+    )
+  endif()
+  if(WITH_BOOST)
+    install(
+      DIRECTORY ${LIBDIR}/boost/lib/
+      DESTINATION "${MAC_BLENDER_TARGET_DYLIBS_DIR}"
+      FILES_MATCHING PATTERN "*.dylib*"
     )
   endif()
 

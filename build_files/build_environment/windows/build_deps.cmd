@@ -103,7 +103,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 set StatusFile=%BUILD_DIR%\%1_%2.log
-set path=%BUILD_DIR%\downloads\mingw\mingw64\msys\1.0\bin\;%BUILD_DIR%\downloads\nasm-2.12.01\;%path%
+set path=%BUILD_DIR%\downloads\mingw\mingw64\msys\1.0\bin\;%BUILD_DIR%\downloads\nasm-2.12.01\;%path%;%Staging%\%BuildDir%%ARCH%R\Release\boost\lib;%Staging%\%BuildDir%%ARCH%D\Debug\boost\lib;
 mkdir %STAGING%\%BuildDir%%ARCH%R
 cd %Staging%\%BuildDir%%ARCH%R
 echo %DATE% %TIME% : Start > %StatusFile%

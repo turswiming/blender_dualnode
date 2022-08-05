@@ -16,7 +16,13 @@ set(OPENVDB_EXTRA_ARGS
   ${DEFAULT_BOOST_FLAGS}
   -DBoost_COMPILER:STRING=${BOOST_COMPILER_STRING}
   -DBoost_USE_MULTITHREADED=ON
-  -DBoost_USE_STATIC_LIBS=ON
+  # This is the global toggle for static libs
+  -DBoost_USE_STATIC_LIBS=OFF
+  # Once the above switch is off, you can set it
+  # for each individual library below.
+  -DBLOSC_USE_STATIC_LIBS=ON
+  -DTBB_USE_STATIC_LIBS=OFF
+  -DBoost_USE_STATIC_LIBS=OFF
   -DBoost_USE_STATIC_RUNTIME=OFF
   -DBOOST_ROOT=${LIBDIR}/boost
   -DBoost_NO_SYSTEM_PATHS=ON

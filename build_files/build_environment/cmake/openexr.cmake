@@ -43,4 +43,5 @@ endif()
 add_dependencies(
   external_openexr
   external_zlib
+  external_imath
 )

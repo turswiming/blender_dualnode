@@ -22,19 +22,17 @@ else()
   set(BOOST_PATCH_COMMAND echo .)
 endif()
 
-if(WITH_BOOST_PYTHON)
-  set(JAM_FILE ${BUILD_DIR}/boost.user-config.jam)
-  configure_file(${PATCH_DIR}/boost.user.jam.in ${JAM_FILE})
+set(JAM_FILE ${BUILD_DIR}/boost.user-config.jam)
+configure_file(${PATCH_DIR}/boost.user.jam.in ${JAM_FILE})
+set(BOOST_PYTHON_OPTIONS
+  --with-python
+  --user-config=${JAM_FILE}
+)
+if(WIN32 AND BUILD_MODE STREQUAL Debug)
   set(BOOST_PYTHON_OPTIONS
-    --with-python
-    --user-config=${JAM_FILE}
+    ${BOOST_PYTHON_OPTIONS}
+    define=BOOST_DEBUG_PYTHON
   )
-  if(WIN32 AND BUILD_MODE STREQUAL Debug)
-    set(BOOST_PYTHON_OPTIONS
-      ${BOOST_PYTHON_OPTIONS}
-      define=BOOST_DEBUG_PYTHON
-    )
-  endif()
 endif()
 
 set(BOOST_OPTIONS
@@ -66,7 +64,7 @@ ExternalProject_Add(external_boost
   UPDATE_COMMAND  ""
   PATCH_COMMAND ${BOOST_PATCH_COMMAND}
   CONFIGURE_COMMAND ${BOOST_CONFIGURE_COMMAND}
-  BUILD_COMMAND ${BOOST_BUILD_COMMAND} ${BOOST_BUILD_OPTIONS} -j${MAKE_THREADS} architecture=${BOOST_ARCHITECTURE} address-model=${BOOST_ADDRESS_MODEL} link=static threading=multi ${BOOST_OPTIONS}    --prefix=${LIBDIR}/boost install
+  BUILD_COMMAND ${BOOST_BUILD_COMMAND} ${BOOST_BUILD_OPTIONS} -j${MAKE_THREADS} architecture=${BOOST_ARCHITECTURE} address-model=${BOOST_ADDRESS_MODEL} link=shared threading=multi ${BOOST_OPTIONS}    --prefix=${LIBDIR}/boost install
   BUILD_IN_SOURCE 1
   INSTALL_COMMAND "${BOOST_HARVEST_CMD}"
 )

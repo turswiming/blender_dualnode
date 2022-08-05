@@ -12,6 +12,17 @@ if(WIN32)
   set(USD_PLATFORM_FLAGS
     ${USD_OIIO_CMAKE_DEFINES}
     -DCMAKE_CXX_FLAGS=${USD_CXX_FLAGS}
+    -D_PXR_CXX_DEFINITIONS=/DBOOST_ALL_NO_LIB
+    -DCMAKE_SHARED_LINKER_FLAGS_INIT=/LIBPATH:${LIBDIR}/tbb/lib
+  )
+  if(BUILD_MODE STREQUAL Debug)
+    list(APPEND USD_PLATFORM_ARGS -DPXR_USE_DEBUG_PYTHON=On)
+  endif()
+endif()
+if(UNIX)
+  set(USD_PLATFORM_FLAGS
+    -DPYTHON_INCLUDE_DIR=${LIBDIR}/python/include/python${PYTHON_SHORT_VERSION}/
+    -DPYTHON_LIBRARY=${LIBDIR}/python/lib/libpython${PYTHON_SHORT_VERSION}${LIBEXT}
   )
 endif()
 
@@ -25,7 +36,8 @@ set(USD_EXTRA_ARGS
   -DOpenImageIO_ROOT=${LIBDIR}/openimageio
   -DOPENEXR_LIBRARIES=${LIBDIR}/imath/lib/imath${OPENEXR_VERSION_POSTFIX}${LIBEXT}
   -DOPENEXR_INCLUDE_DIR=${LIBDIR}/imath/include
-  -DPXR_ENABLE_PYTHON_SUPPORT=OFF
+  -DPXR_ENABLE_PYTHON_SUPPORT=ON
+  -DPXR_USE_PYTHON_3=ON
   -DPXR_BUILD_IMAGING=ON
   -DPXR_BUILD_TESTS=OFF
   -DPXR_BUILD_EXAMPLES=OFF
@@ -57,16 +69,14 @@ set(USD_EXTRA_ARGS
   -DPXR_ENABLE_PTEX_SUPPORT=OFF
   -DPXR_BUILD_USD_TOOLS=OFF
   -DCMAKE_DEBUG_POSTFIX=_d
-  -DBUILD_SHARED_LIBS=Off
-  # USD is hellbound on making a shared lib, unless you point this variable to a valid cmake file
-  # doesn't have to make sense, but as long as it points somewhere valid it will skip the shared lib.
-  -DPXR_MONOLITHIC_IMPORT=${BUILD_DIR}/usd/src/external_usd/cmake/defaults/Version.cmake
+  -DBUILD_SHARED_LIBS=ON
   -DTBB_INCLUDE_DIRS=${LIBDIR}/tbb/include
-  -DTBB_LIBRARIES=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${LIBEXT}
-  -DTbb_TBB_LIBRARY=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${LIBEXT}
+  -DTBB_LIBRARIES=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${SHAREDLIBEXT}
+  -DTbb_TBB_LIBRARY=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${SHAREDLIBEXT}
+  -DTBB_tbb_LIBRARY_RELEASE=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${SHAREDLIBEXT}
   # USD wants the tbb debug lib set even when you are doing a release build
   # Otherwise it will error out during the cmake configure phase.
-  -DTBB_LIBRARIES_DEBUG=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${LIBEXT}
+  -DTBB_LIBRARIES_DEBUG=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${SHAREDLIBEXT}
 )
 
 ExternalProject_Add(external_usd

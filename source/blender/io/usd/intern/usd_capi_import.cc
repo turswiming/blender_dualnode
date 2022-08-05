@@ -383,6 +383,11 @@ static void import_freejob(void *user_data)
 
 using namespace blender::io::usd;
 
+void USD_ensure_plugin_path_registered()
+{
+  blender::io::usd::ensure_usd_plugin_path_registered();
+}
+
 bool USD_import(struct bContext *C,
                 const char *filepath,
                 const USDImportParams *params,

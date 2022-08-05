@@ -48,17 +48,6 @@ diff -Naur org/CMakeLists.txt external_osl/CMakeLists.txt
 
  set (OSL_NO_DEFAULT_TEXTURESYSTEM OFF CACHE BOOL "Do not use create a raw OIIO::TextureSystem")
  if (OSL_NO_DEFAULT_TEXTURESYSTEM)
-diff -Naur external_osl_orig/src/cmake/externalpackages.cmake external_osl/src/cmake/externalpackages.cmake
---- external_osl_orig/src/cmake/externalpackages.cmake  2021-06-01 13:44:18 -0600
-+++ external_osl/src/cmake/externalpackages.cmake       2021-06-28 07:44:32 -0600
-@@ -80,6 +80,7 @@
-
-
- checked_find_package (ZLIB REQUIRED)  # Needed by several packages
-+checked_find_package (PNG REQUIRED)  # Needed since OIIO needs it
-
- # IlmBase & OpenEXR
- checked_find_package (OpenEXR REQUIRED
 diff -Naur external_osl_orig/src/liboslcomp/oslcomp.cpp external_osl/src/liboslcomp/oslcomp.cpp
 --- external_osl_orig/src/liboslcomp/oslcomp.cpp        2021-06-01 13:44:18 -0600
 +++ external_osl/src/liboslcomp/oslcomp.cpp     2021-06-28 09:11:06 -0600
@@ -76,3 +65,31 @@ diff -Naur external_osl_orig/src/liboslcomp/oslcomp.cpp external_osl/src/liboslc
  #include <clang/Basic/TargetInfo.h>
  #include <clang/Frontend/CompilerInstance.h>
  #include <clang/Frontend/TextDiagnosticPrinter.h>
+diff -Naur orig/src/cmake/externalpackages.cmake external_osl/src/cmake/externalpackages.cmake
+--- orig/src/cmake/externalpackages.cmake	2022-01-07 18:36:45 -0700
++++ external_osl/src/cmake/externalpackages.cmake	2022-08-02 08:10:27 -0600
+@@ -36,12 +36,10 @@
+ 
+ ###########################################################################
+ # Boost setup
+-if (LINKSTATIC)
+-    set (Boost_USE_STATIC_LIBS ON)
+-else ()
+-    if (MSVC)
+-        add_definitions (-DBOOST_ALL_DYN_LINK=1)
+-    endif ()
++# Blender links most things static, but not boost 
++set (Boost_USE_STATIC_LIBS OFF)
++if (MSVC)
++    add_definitions (-DBOOST_ALL_DYN_LINK=1)
+ endif ()
+ if (BOOST_CUSTOM)
+     set (Boost_FOUND true)
+@@ -80,6 +78,7 @@
+ 
+ 
+ checked_find_package (ZLIB REQUIRED)  # Needed by several packages
++checked_find_package (PNG REQUIRED)  # Needed since OIIO needs it
+ 
+ # IlmBase & OpenEXR
+ checked_find_package (OpenEXR REQUIRED
