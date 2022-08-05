@@ -14,9 +14,12 @@ if(WIN32)
     -DCMAKE_CXX_FLAGS=${USD_CXX_FLAGS}
     -D_PXR_CXX_DEFINITIONS=/DBOOST_ALL_NO_LIB
     -DCMAKE_SHARED_LINKER_FLAGS_INIT=/LIBPATH:${LIBDIR}/tbb/lib
+    -DPython_FIND_REGISTRY=NEVER
+    -DPYTHON_INCLUDE_DIRS=${LIBDIR}/python/include
+    -DPYTHON_LIBRARY=${LIBDIR}/python/libs/python${PYTHON_SHORT_VERSION_NO_DOTS}${PYTHON_POSTFIX}${LIBEXT}
   )
   if(BUILD_MODE STREQUAL Debug)
-    list(APPEND USD_PLATFORM_ARGS -DPXR_USE_DEBUG_PYTHON=On)
+    list(APPEND USD_PLATFORM_FLAGS -DPXR_USE_DEBUG_PYTHON=ON)
   endif()
 endif()
 if(UNIX)
@@ -83,6 +86,7 @@ ExternalProject_Add(external_usd
   URL file://${PACKAGE_DIR}/${USD_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   URL_HASH ${USD_HASH_TYPE}=${USD_HASH}
+  CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
   PREFIX ${BUILD_DIR}/usd
   PATCH_COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/usd/src/external_usd < ${PATCH_DIR}/usd.diff
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${LIBDIR}/usd -Wno-dev ${DEFAULT_CMAKE_FLAGS} ${USD_EXTRA_ARGS}
@@ -109,15 +113,15 @@ endif()
 if(WIN32)
   if(BUILD_MODE STREQUAL Release)
     ExternalProject_Add_Step(external_usd after_install
-      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/usd/ ${HARVEST_TARGET}/usd
-      COMMAND ${CMAKE_COMMAND} -E copy ${BUILD_DIR}/usd/src/external_usd-build/pxr/Release/usd_usd_m.lib ${HARVEST_TARGET}/usd/lib/usd_usd_m.lib
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/usd ${HARVEST_TARGET}/usd
       DEPENDEES install
     )
   endif()
   if(BUILD_MODE STREQUAL Debug)
     ExternalProject_Add_Step(external_usd after_install
-      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/usd/lib ${HARVEST_TARGET}/usd/lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${BUILD_DIR}/usd/src/external_usd-build/pxr/Debug/usd_usd_m_d.lib ${HARVEST_TARGET}/usd/lib/usd_usd_m_d.lib
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/usd/lib/python ${HARVEST_TARGET}/usd/lib/python
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/usd/lib/usd_usd_ms_d.dll ${HARVEST_TARGET}/usd/lib/usd_usd_ms_d.dll
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/usd/lib/usd_usd_ms_d.lib ${HARVEST_TARGET}/usd/lib/usd_usd_ms_d.lib
       DEPENDEES install
     )
   endif()

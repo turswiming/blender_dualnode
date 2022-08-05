@@ -47,6 +47,11 @@ if(WIN32)
     set(COMMON_MSVC_FLAGS "/Wv:18") #some deps with warnings as error aren't quite ready for dealing with the new 2017 warnings.
   endif()
   string(APPEND COMMON_MSVC_FLAGS " /bigobj")
+  # To keep MSVC from oversubscribing the CPU, force it to single threaded mode
+  # msbuild/ninja will queue as many compile units as there are cores, no need for
+  # msvc to be internally threading as well.
+  string(APPEND COMMON_MSVC_FLAGS " /cgthreads1 ")
+
   if(WITH_OPTIMIZED_DEBUG)
     set(BLENDER_CMAKE_C_FLAGS_DEBUG "/MDd ${COMMON_MSVC_FLAGS} /O2 /Ob2 /DNDEBUG /DPSAPI_VERSION=2 /DOIIO_STATIC_BUILD /DTINYFORMAT_ALLOW_WCHAR_STRINGS")
   else()
@@ -212,3 +217,11 @@ if(MSVC)
 endif()
 
 set(CMAKE_INSTALL_MESSAGE LAZY)
+
+# On windows we sometimes want to build with ninja, but not all projects quite
+# yet, so for select project we pass PLATFORM_ALT_GENERATOR as the generator
+if(WIN32)
+  set(PLATFORM_ALT_GENERATOR "Ninja")
+else()
+  set(PLATFORM_ALT_GENERATOR "Unix Makefiles")
+endif()

@@ -782,28 +782,29 @@ elseif(WIN32)
     install(
           FILES ${LIBDIR}/usd/lib/usd_usd_ms.dll
           DESTINATION "."
+          CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
     )
+    install(
+          FILES ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
+          DESTINATION "."
+          CONFIGURATIONS Debug
+    )
+
   endif()
   if(WITH_BOOST)
     install(
-          FILES
-            ${LIBDIR}/boost/lib/boost_atomic-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_chrono-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_date_time-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_filesystem-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_iostreams-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_locale-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_numpy310-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_program_options-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_python310-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_regex-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_serialization-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_system-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_thread-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_wave-vc142-mt-x64-1_78.dll
-            ${LIBDIR}/boost/lib/boost_wserialization-vc142-mt-x64-1_78.dll
+          DIRECTORY ${LIBDIR}/boost/lib/
           DESTINATION "."
           CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+          FILES_MATCHING PATTERN "*mt-x64*.dll"
+          PATTERN "cmake" EXCLUDE
+    )
+    install(
+          DIRECTORY ${LIBDIR}/boost/lib/
+          DESTINATION "."
+          CONFIGURATIONS Debug
+          FILES_MATCHING PATTERN "*mt-gyd-x64*.dll"
+          PATTERN "cmake" EXCLUDE
     )
   endif()
   if(MSVC_ASAN)

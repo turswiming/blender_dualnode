@@ -96,3 +96,17 @@ if(UNIX)
     external_zlib
   )
 endif()
+
+if(WIN32)
+  if(BUILD_MODE STREQUAL Debug)
+    ExternalProject_Add_Step(external_python after_install
+      # Boost can't keep it self from linking release python
+      # in a debug configuration even if all options are set
+      # correctly to instruct it to use the debug version
+      # of python. So just copy the debug imports file over
+      # and call it a day...
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/python/libs/python${PYTHON_SHORT_VERSION_NO_DOTS}${PYTHON_POSTFIX}.lib ${LIBDIR}/python/libs/python${PYTHON_SHORT_VERSION_NO_DOTS}.lib
+      DEPENDEES install
+    )
+  endif()
+endif()

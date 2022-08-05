@@ -412,9 +412,6 @@ int main(int argc,
   RE_texture_rng_init();
 
   BKE_callback_global_init();
-  #ifdef WITH_USD
-  USD_ensure_plugin_path_registered();
-  #endif
 
   /* First test for background-mode (#Global.background) */
 #ifndef WITH_PYTHON_MODULE
@@ -446,6 +443,10 @@ int main(int argc,
 
   /* Initialize sub-systems that use `BKE_appdir.h`. */
   IMB_init();
+
+#ifdef WITH_USD
+  USD_ensure_plugin_path_registered();
+#endif
 
 #ifndef WITH_PYTHON_MODULE
   /* First test for background-mode (#Global.background) */

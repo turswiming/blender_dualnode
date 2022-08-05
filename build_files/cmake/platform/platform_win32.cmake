@@ -546,7 +546,7 @@ if(WITH_BOOST)
       # If the new library names do not exist fall back to the old ones
       # to ease the transition period between the libs.
       set(BOOST_POSTFIX "vc141-mt-x64-${BOOST_VERSION}.lib")
-      set(BOOST_DEBUG_POSTFIX "vc141-mt-gd-x64-${BOOST_VERSION}.lib")
+      set(BOOST_DEBUG_POSTFIX "vc141-mt-gyd-x64-${BOOST_VERSION}.lib")
     endif()
     set(BOOST_LIBRARIES
       optimized ${BOOST_LIBPATH}/boost_date_time-${BOOST_POSTFIX}
@@ -555,7 +555,6 @@ if(WITH_BOOST)
       optimized ${BOOST_LIBPATH}/boost_system-${BOOST_POSTFIX}
       optimized ${BOOST_LIBPATH}/boost_thread-${BOOST_POSTFIX}
       optimized ${BOOST_LIBPATH}/boost_chrono-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/boost_python310-${BOOST_POSTFIX}
       debug ${BOOST_LIBPATH}/boost_date_time-${BOOST_DEBUG_POSTFIX}
       debug ${BOOST_LIBPATH}/boost_filesystem-${BOOST_DEBUG_POSTFIX}
       debug ${BOOST_LIBPATH}/boost_regex-${BOOST_DEBUG_POSTFIX}
@@ -563,6 +562,12 @@ if(WITH_BOOST)
       debug ${BOOST_LIBPATH}/boost_thread-${BOOST_DEBUG_POSTFIX}
       debug ${BOOST_LIBPATH}/boost_chrono-${BOOST_DEBUG_POSTFIX}
     )
+    if(WITH_USD)
+      set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
+        debug ${BOOST_LIBPATH}/boost_python310-${BOOST_DEBUG_POSTFIX}
+        optimized ${BOOST_LIBPATH}/boost_python310-${BOOST_POSTFIX}
+      )
+    endif()
     if(WITH_CYCLES AND WITH_CYCLES_OSL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
         optimized ${BOOST_LIBPATH}/boost_wave-${BOOST_POSTFIX}
