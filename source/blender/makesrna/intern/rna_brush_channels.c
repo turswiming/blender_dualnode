@@ -112,7 +112,7 @@ static BrushChannel *get_paired_radius_channel(PointerRNA *rna)
 {
   BrushChannel *ch = rna->data;
 
-  bool is_radius = STREQ(ch->idname, "radius");
+  bool is_radius = STREQ(ch->idname, "size");
   bool is_unproj = STREQ(ch->idname, "unprojected_radius");
 
   /*
@@ -140,7 +140,7 @@ static BrushChannel *get_paired_radius_channel(PointerRNA *rna)
     }
 
     return is_radius ? BKE_brush_channelset_lookup(chset, unprojected_radius) :
-                       BKE_brush_channelset_lookup(chset, radius);
+                       BKE_brush_channelset_lookup(chset, size);
   }
 
   return NULL;

@@ -210,6 +210,20 @@ bool BKE_brush_channel_inherits(struct Brush *brush,
 BrushChannelSet *BKE_brush_channelset_get_final(struct Brush *brush,
                                                 struct ToolSettings *tool_settings);
 
+void BKE_brush_channelset_toolsettings_init(struct ToolSettings *ts);
+
+
+/* Disable optimization for a function (for debugging use only!)*/
+#ifdef __clang__
+#  define ATTR_NO_OPT __attribute__((optnone))
+#elif defined(_MSC_VER)
+#  define ATTR_NO_OPT __pragma(optimize("", off))
+#elif defined(__GNUC__)
+#  define ATTR_NO_OPT __attribute__((optimize("O0")))
+#else
+#  define ATTR_NO_OPT
+#endif
+
 #ifdef __cplusplus
 }
 #endif

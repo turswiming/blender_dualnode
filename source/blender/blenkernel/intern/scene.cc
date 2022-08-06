@@ -56,6 +56,7 @@
 #include "BKE_animsys.h"
 #include "BKE_armature.h"
 #include "BKE_bpath.h"
+#include "BKE_brush_channel.h"
 #include "BKE_cachefile.h"
 #include "BKE_collection.h"
 #include "BKE_colortools.h"
@@ -136,6 +137,7 @@ static void scene_init_data(ID *id)
                      CURVEMAP_SLOPE_POS_NEG);
 
   scene->toolsettings = DNA_struct_default_alloc(ToolSettings);
+  BKE_brush_channelset_toolsettings_init(scene->toolsettings);
 
   scene->toolsettings->autokey_mode = (uchar)U.autokey_mode;
 
@@ -1127,6 +1129,16 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_data_address(reader, &sce->toolsettings);
   if (sce->toolsettings) {
+    BLO_read_data_address(reader, &sce->toolsettings->unified_channels);
+
+    BLO_read_data_address(reader, &sce->toolsettings->unified_properties);
+    IDP_BlendDataRead(reader, &sce->toolsettings->unified_properties);
+
+    if (sce->toolsettings->unified_channels) {
+      BKE_brush_channelset_blend_read(sce->toolsettings->unified_channels, reader);
+    }
+
+    BKE_brush_channelset_toolsettings_init(sce->toolsettings);
 
     /* Reset last_location and last_hit, so they are not remembered across sessions. In some files
      * these are also NaN, which could lead to crashes in painting. */

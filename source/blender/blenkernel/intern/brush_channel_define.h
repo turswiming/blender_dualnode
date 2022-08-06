@@ -37,10 +37,10 @@
 #define SHOW_HEADER BRUSH_CHANNEL_SHOW_IN_HEADER
 #define SHOW_ALL (SHOW_WORKSPACE | SHOW_CONTEXT | SHOW_HEADER)
 
-MAKE_PROP(radius, "Basic", SHOW_ALL)
+MAKE_PROP(size, "Basic", SHOW_ALL)
 MAKE_PROP(unprojected_radius, "Basic", SHOW_ALL)
 MAKE_PROP(strength, "Basic", SHOW_ALL)
-MAKE_PROP(autosmooth_factor, "Smooth", SHOW_WORKSPACE | SHOW_CONTEXT)
+MAKE_PROP(auto_smooth_factor, "Smooth", SHOW_WORKSPACE | SHOW_CONTEXT)
 
 #undef SHOW_WORKSPACE
 #undef SHOW_HEADER

@@ -35,17 +35,19 @@
 
 #include <string>
 
+#define BRUSH_CHANNEL_DEFINE_INTERNAL_NAMES
+#include "brush_channel_define.h"
+#undef BRUSH_CHANNEL_DEFINE_INTERNAL_NAMES
+
 using string = std::string;
 
 namespace blender {
 
-Map<const char *, BrushChannelType> builtin_channels;
+using KeyString = const char*;
+
+static Map<const char *, BrushChannelType> builtin_channels;
 
 using ChannelNameMap = Map<const char *, BrushChannel *>;
-
-#define BRUSH_CHANNEL_DEFINE_INTERNAL_NAMES
-#include "brush_channel_define.h"
-#undef BRUSH_CHANNEL_DEFINE_INTERNAL_NAMES
 
 static void init_builtin_brush_channels()
 {
@@ -77,6 +79,11 @@ static void init_builtin_brush_channels()
     PropertyRNA *prop = RNA_struct_type_find_property(srna, def.path);
     BLI_assert(prop);
 
+    if (!prop) {
+      printf("%s: Missing property %s\n", __func__, def.path);
+      continue;
+    }
+
     PropertyType prop_type = RNA_property_type(prop);
     PropertySubType prop_subtype = RNA_property_subtype(prop);
 
@@ -91,9 +98,10 @@ static void init_builtin_brush_channels()
     switch (prop_type) {
       case PROP_INT: {
         int min, max, soft_min, soft_max;
+        int step;
 
         RNA_property_int_range(nullptr, prop, &min, &max);
-        RNA_property_int_ui_range(nullptr, prop, &soft_min, &soft_max, nullptr);
+        RNA_property_int_ui_range(nullptr, prop, &soft_min, &soft_max, &step);
 
         type.min = (float)min;
         type.max = (float)max;
@@ -102,9 +110,11 @@ static void init_builtin_brush_channels()
         type.type = BRUSH_CHANNEL_TYPE_INT;
         break;
       }
-      case PROP_FLOAT:
+      case PROP_FLOAT: {
+        float precision, step;
+
         RNA_property_float_range(ptr, prop, &type.min, &type.max);
-        RNA_property_float_ui_range(ptr, prop, &type.soft_min, &type.soft_max, nullptr, nullptr);
+        RNA_property_float_ui_range(ptr, prop, &type.soft_min, &type.soft_max, &step, &precision);
 
         if (!RNA_property_array_check(prop)) {
           type.type = BRUSH_CHANNEL_TYPE_FLOAT;
@@ -124,6 +134,7 @@ static void init_builtin_brush_channels()
           }
         }
         break;
+      }
       default:
         break;
     }
@@ -149,6 +160,8 @@ static void init_builtin_brush_channels()
         break;
     }
 
+    printf("size: %i\n", (int)ARRAY_SIZE(channel_props));
+    printf("type: %s\n", type.idname); 
     builtin_channels.add(type.idname, type);
   }
 #undef BRUSH_CHANNEL_DEFINE_INTERNAL
@@ -259,9 +272,14 @@ extern "C" const void BKE_brush_channel_category_set(BrushChannel *ch, const cha
   ch->category = BLI_strdup(category);
 }
 
-extern "C" BrushChannel *_BKE_brush_channelset_ensure(BrushChannelSet *chset, const char *idname)
+ATTR_NO_OPT extern "C" BrushChannel *_BKE_brush_channelset_ensure(BrushChannelSet *chset, const char *idname)
 {
   if (!builtin_channels.contains(idname)) {
+    printf("channel types:\n");
+    for (const char *key : builtin_channels.keys()) {
+      printf("  %s\n", key);
+    }
+
     printf("Unknown brush channel %s\n", idname);
     return nullptr;
   }
@@ -278,7 +296,9 @@ extern "C" BrushChannel *_BKE_brush_channelset_ensure(BrushChannelSet *chset, co
 
 extern "C" void BKE_brush_channelset_ensure_channels(BrushChannelSet *chset, int sculpt_tool)
 {
-  BKE_brush_channelset_ensure(chset, radius);
+  check_builtin_brush_channels();
+
+  BKE_brush_channelset_ensure(chset, size);
   BKE_brush_channelset_ensure(chset, unprojected_radius);
   BKE_brush_channelset_ensure(chset, strength);
 
@@ -615,8 +635,10 @@ BrushChannelSet *BKE_brush_channelset_create_final(Brush *brush,
   return chset;
 }
 
-void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
+extern "C" void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
 {
+  check_builtin_brush_channels();
+
   if (!ts->unified_properties) {
     ts->unified_properties = IDP_New(IDP_GROUP, nullptr, "group");
   }
@@ -629,12 +651,14 @@ void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
     _BKE_brush_channelset_ensure(ts->unified_channels, type.idname);
   }
 
-  LISTBASE_FOREACH (BrushChannel *, ch, &ts->unified_channels) {
+  StructRNA *srna = RNA_struct_find("Brush");
+
+  LISTBASE_FOREACH (BrushChannel *, ch, &ts->unified_channels->channels) {
     IDProperty *idprop = IDP_GetPropertyFromGroup(ts->unified_properties, ch->idname);
 
     if (!idprop) {
       IDPropertyTemplate tmpl;
-      IDPropertyType type;
+      char type;
 
       switch (ch->type) {
         case BRUSH_CHANNEL_TYPE_FLOAT:
@@ -648,10 +672,60 @@ void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
           tmpl.i = ch->ivalue;
           type = IDP_INT;
           break;
+        default:
+          printf(
+              "%s: unsupported brush channel type for unified channel: %d\n", __func__, ch->type);
+          continue;
       }
 
-      prop = IDP_New(type, &tmpl, ch->idname);
+      idprop = IDP_New(type, &tmpl, ch->idname);
+      IDP_AddToGroup(ts->unified_properties, idprop);
     }
+
+    IDPropertyUIData *uidata = IDP_ui_data_ensure(idprop);
+
+    MEM_SAFE_FREE(uidata->description);
+    uidata->description = BLI_strdup(ch->def->tooltip);
+
+    PropertyRNA *prop = RNA_struct_type_find_property(srna, ch->def->idname);
+    BLI_assert(prop);
+
+    PropertyType prop_type = RNA_property_type(prop);
+    PropertySubType prop_subtype = RNA_property_subtype(prop);
+
+    switch (ch->type) {
+      case BRUSH_CHANNEL_TYPE_FLOAT: {
+        IDPropertyUIDataFloat *uidataf = reinterpret_cast<IDPropertyUIDataFloat *>(uidata);
+
+        float min, max, soft_min, soft_max, step, precision;
+
+        RNA_property_float_range(nullptr, prop, &min, &max);
+        RNA_property_float_ui_range(nullptr, prop, &soft_min, &soft_max, &step, &precision);
+
+        uidataf->min = (float)min;
+        uidataf->max = (float)max;
+        uidataf->soft_min = (float)soft_min;
+        uidataf->soft_max = (float)soft_max;
+        uidataf->step = (float)step;
+        uidataf->precision = (int)precision;
+        break;
+      }
+      case BRUSH_CHANNEL_TYPE_INT: {
+        IDPropertyUIDataInt *uidatai = reinterpret_cast<IDPropertyUIDataInt *>(uidata);
+
+        RNA_property_int_range(nullptr, prop, &uidatai->min, &uidatai->max);
+        RNA_property_int_ui_range(
+            nullptr, prop, &uidatai->soft_min, &uidatai->soft_max, &uidatai->step);
+        break;
+      }
+      case BRUSH_CHANNEL_TYPE_ENUM:
+      case BRUSH_CHANNEL_TYPE_BITMASK:
+      case BRUSH_CHANNEL_TYPE_BOOL: {
+        break;
+      }
+    }
+
+    uidata->rna_subtype = prop_subtype;
   }
 }
 
