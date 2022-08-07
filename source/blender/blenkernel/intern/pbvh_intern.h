@@ -34,6 +34,7 @@ struct MeshElemMap;
 struct PBVHNode {
   /* Opaque handle for drawing code */
   struct GPU_PBVH_Buffers *draw_buffers;
+  struct PBVHBatches *draw_batches;
 
   /* Voxel bounds */
   BB vb;

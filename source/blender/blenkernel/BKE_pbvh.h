@@ -37,7 +37,9 @@ struct MVert;
 struct Mesh;
 struct MeshElemMap;
 struct PBVH;
+struct PBVHBatches;
 struct PBVHNode;
+struct PBVH_GPU_Args;
 struct SubdivCCG;
 struct TaskParallelSettings;
 struct Image;
@@ -353,7 +355,10 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
                       bool update_only_visible,
                       PBVHFrustumPlanes *update_frustum,
                       PBVHFrustumPlanes *draw_frustum,
-                      void (*draw_fn)(void *user_data, struct GPU_PBVH_Buffers *buffers),
+                      void (*draw_fn)(void *user_data,
+                                      struct GPU_PBVH_Buffers *buffers,
+                                      struct PBVHBatches *batches,
+                                      struct PBVH_GPU_Args *args),
                       void *user_data,
                       bool full_render,
                       PBVHAttrReq *attrs,
@@ -720,4 +725,15 @@ bool BKE_pbvh_draw_cache_invalid(const PBVH *pbvh);
 
 #ifdef __cplusplus
 }
+#endif
+
+/* Disable optimization for a function (for debugging use only!)*/
+#ifdef __clang__
+#  define ATTR_NO_OPT __attribute__((optnone))
+#elif defined(_MSC_VER)
+#  define ATTR_NO_OPT __pragma(optimize("", off))
+#elif defined(__GNUC__)
+#  define ATTR_NO_OPT __attribute__((optimize("O0")))
+#else
+#  define ATTR_NO_OPT
 #endif

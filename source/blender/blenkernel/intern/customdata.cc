@@ -2577,6 +2577,13 @@ const char *CustomData_get_active_layer_name(const CustomData *data, const int t
   return layer_index < 0 ? nullptr : data->layers[layer_index].name;
 }
 
+const char *CustomData_get_render_layer_name(const CustomData *data, const int type)
+{
+  /* Get the layer index of the active layer of this type. */
+  const int layer_index = CustomData_get_render_layer_index(data, type);
+  return layer_index < 0 ? nullptr : data->layers[layer_index].name;
+}
+
 void CustomData_set_layer_active(CustomData *data, const int type, const int n)
 {
   for (int i = 0; i < data->totlayer; i++) {

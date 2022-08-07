@@ -978,6 +978,31 @@ GPUBatch *DRW_mesh_batch_cache_get_edit_mesh_analysis(Mesh *me)
   return DRW_batch_request(&cache->batch.edit_mesh_analysis);
 }
 
+extern "C" void DRW_mesh_get_attributes(Object *object,
+                                        Mesh *me,
+                                        struct GPUMaterial **gpumat_array,
+                                        int gpumat_array_len,
+                                        DRW_Attributes *r_attrs,
+                                        DRW_MeshCDMask *r_cd_needed)
+{
+  DRW_Attributes attrs_needed;
+  drw_attributes_clear(&attrs_needed);
+  DRW_MeshCDMask cd_needed = mesh_cd_calc_used_gpu_layers(
+      object, me, gpumat_array, gpumat_array_len, &attrs_needed);
+
+  BLI_assert(gpumat_array_len == cache->mat_len);
+
+  ThreadMutex *mesh_render_mutex = (ThreadMutex *)me->runtime.render_mutex;
+
+  if (r_attrs) {
+    *r_attrs = attrs_needed;
+  }
+
+  if (r_cd_needed) {
+    *r_cd_needed = cd_needed;
+  }
+}
+
 GPUBatch **DRW_mesh_batch_cache_get_surface_shaded(Object *object,
                                                    Mesh *me,
                                                    struct GPUMaterial **gpumat_array,
