@@ -16,6 +16,7 @@
 /* For embedding CCGKey in iterator. */
 #include "BKE_attribute.h"
 #include "BKE_ccg.h"
+#include "DNA_customdata_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,6 +98,12 @@ typedef struct PBVHPixelsNode {
    */
   void *node_data;
 } PBVHPixelsNode;
+
+typedef struct PBVHAttrReq {
+  char name[MAX_CUSTOMDATA_LAYER_NAME];
+  eAttrDomain domain;
+  eCustomDataType type;
+} PBVHAttrReq;
 
 typedef enum {
   PBVH_Leaf = 1 << 0,
@@ -348,7 +355,9 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
                       PBVHFrustumPlanes *draw_frustum,
                       void (*draw_fn)(void *user_data, struct GPU_PBVH_Buffers *buffers),
                       void *user_data,
-                      bool full_render);
+                      bool full_render,
+                      PBVHAttrReq *attrs,
+                      int attrs_num);
 
 void BKE_pbvh_draw_debug_cb(
     PBVH *pbvh,

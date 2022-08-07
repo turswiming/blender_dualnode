@@ -40,6 +40,359 @@
 
 #include "bmesh.h"
 
+#define MAX_PBVH_BATCH_KEY 512
+#define MAX_PBVH_VBOS 16
+
+#include "BLI_index_range.hh"
+#include "BLI_map.hh"
+#include "BLI_math_vec_types.hh"
+#include "BLI_vector.hh"
+#include <vector>
+
+#include <algorithm>
+#include <string>
+
+using blender::float2;
+using blender::float3;
+using blender::float4;
+using blender::IndexRange;
+using blender::Map;
+using blender::Vector;
+
+using string = std::string;
+using ushort3 = blender::vec_base<uint16_t, 3>;
+using short3 = blender::vec_base<int16_t, 3>;
+
+enum {
+  PBVH_CO_TYPE = CD_NUMTYPES,
+  PBVH_NO_TYPE = CD_NUMTYPES + 1,
+  PBVH_FSET_TYPE = CD_NUMTYPES + 2,
+  PBVH_MASK_TYPE = CD_NUMTYPES + 3
+};
+
+struct PBVHVbo {
+  uint64_t type;
+  eAttrDomain domain;
+  string name;
+  GPUVertBuf *vert_buf = nullptr;
+  string key;
+
+  PBVHVbo(eAttrDomain _domain, uint64_t _type, string _name)
+      : type(_type), domain(_domain), name(_name)
+  {
+  }
+
+  PBVHVbo(const PBVHVbo &b)
+  {
+    type = b.type;
+    domain = b.domain;
+    name = b.name;
+    vert_buf = b.vert_buf;
+    key = b.key;
+  }
+
+  string build_key()
+  {
+    char buf[512];
+
+    sprintf(buf, "%d:%d:%s", (int)type, (int)domain, name.c_str());
+
+    key = string(buf);
+    return key;
+  }
+};
+
+struct PBVHBatch {
+  Vector<PBVHVbo> vbos;
+  string key;
+  GPUBatch *tris, *lines;
+
+  void sort_vbos()
+  {
+    struct cmp {
+      bool operator()(const PBVHVbo &a, const PBVHVbo &b)
+      {
+        return a.key < b.key;
+      }
+    };
+
+    std::sort(vbos.begin(), vbos.end(), cmp());
+  }
+
+  string build_key()
+  {
+    key = "";
+
+    sort_vbos();
+
+    for (PBVHVbo &vbo : vbos) {
+      key += vbo.build_key() + ":";
+    }
+
+    return key;
+  }
+};
+
+struct PBVHBatches {
+  Vector<PBVHVbo> vbos;
+  Map<string, PBVHBatch> batches;
+  GPUIndexBuf *index_buf = nullptr;
+
+  ~PBVHBatches()
+  {
+    for (PBVHBatch &batch : batches.values()) {
+      GPU_BATCH_DISCARD_SAFE(batch.tris);
+      GPU_BATCH_DISCARD_SAFE(batch.lines);
+    }
+
+    for (PBVHVbo &vbo : vbos) {
+      GPU_vertbuf_discard(vbo.vert_buf);
+    }
+  }
+
+  string build_key(PBVHAttrReq *attrs, int attrs_num)
+  {
+    string key;
+    PBVHBatch batch;
+
+    for (int i : IndexRange(attrs_num)) {
+      PBVHAttrReq *attr = attrs + i;
+
+      PBVHVbo vbo(attr->domain, attr->type, string(attr->name));
+      vbo.build_key();
+
+      batch.vbos.append(vbo);
+    }
+
+    batch.build_key();
+    return batch.key;
+  }
+
+  bool has_vbo(eAttrDomain domain, int type, string name)
+  {
+    for (PBVHVbo &vbo : vbos) {
+      if (vbo.domain == domain && vbo.type == type && vbo.name == name) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  PBVHVbo &get_vbo(eAttrDomain domain, int type, string name)
+  {
+    for (PBVHVbo &vbo : vbos) {
+      if (vbo.domain == domain && vbo.type == type && vbo.name == name) {
+        return vbo;
+      }
+    }
+  }
+
+  bool has_batch(PBVHAttrReq *attrs, int attrs_num)
+  {
+    return batches.contains(build_key(attrs, attrs_num));
+  }
+
+  void update_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  {
+    if (!has_batch(attrs, attrs_num)) {
+      create_batch(attrs, attrs_num, args);
+    }
+  }
+
+  void fill_vbo_faces(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  {
+    auto foreach =
+        [&](std::function<void(int buffer_i, int tri_i, int vertex_i, MLoopTri *tri)> func) {
+          int buffer_i = 0;
+          MLoop *mloop = args->me->mloop;
+
+          for (int i : IndexRange(args->totprim)) {
+            MLoopTri *tri = args->mlooptri + args->prim_indicies[i];
+
+            for (int j : IndexRange(3)) {
+              func(buffer_i, j, mloop[tri->tri[j]].v, tri);
+              buffer_i++;
+            }
+          }
+        };
+
+    if (GPU_vertbuf_get_data(vbo.vert_buf) == NULL ||
+        GPU_vertbuf_get_vertex_len(vbo.vert_buf) != args->node_verts_num) {
+      /* Allocate buffer if not allocated yet or size changed. */
+      GPU_vertbuf_data_alloc(vbo.vert_buf, args->node_verts_num);
+    }
+
+    void *gpu_data = GPU_vertbuf_get_data(vbo.vert_buf);
+
+    if (vbo.type == PBVH_CO_TYPE) {
+      float3 *data = static_cast<float3 *>(gpu_data);
+
+      foreach ([&](int buffer_i, int tri_i, int vertex_i, MLoopTri *tri) {
+        data[buffer_i] = args->mvert[vertex_i].co;
+      })
+        ;
+    }
+    else if (vbo.type == PBVH_NO_TYPE) {
+      short3 *data = static_cast<short3 *>(gpu_data);
+
+      foreach ([&](int buffer_i, int tri_i, int vertex_i, MLoopTri *tri) {
+        short no[3];
+
+        normal_float_to_short_v3(no, args->vert_normals[vertex_i]);
+        data[buffer_i] = no;
+      })
+        ;
+    }
+    else if (vbo.type == PBVH_MASK_TYPE) {
+      ushort *data = static_cast<ushort *>(gpu_data);
+      float *mask = (float *)CustomData_get_layer(args->vdata, CD_PAINT_MASK);
+
+      foreach ([&](int buffer_i, int tri_i, int vertex_i, MLoopTri *tri) {
+        short no[3];
+
+        normal_float_to_short_v3(no, args->vert_normals[vertex_i]);
+        data[buffer_i] = mask[vertex_i];
+      })
+        ;
+    }
+  }
+
+  void fill_vbo_grids(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  {
+    if (!ELEM(vbo.type, PBVH_CO_TYPE, PBVH_NO_TYPE, PBVH_FSET_TYPE, PBVH_MASK_TYPE)) {
+      return; /* Failed. */
+    }
+  }
+
+  void fill_vbo_bmesh(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  {
+  }
+
+  void fill_vbo(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  {
+    switch (args->pbvh_type) {
+      case PBVH_FACES:
+        fill_vbo_faces(vbo, args);
+        break;
+      case PBVH_GRIDS:
+        fill_vbo_grids(vbo, args);
+        break;
+      case PBVH_BMESH:
+        fill_vbo_bmesh(vbo, args);
+        break;
+    }
+  }
+
+  void create_vbo(eAttrDomain domain, const uint32_t type, string name, PBVH_GPU_Args *args)
+  {
+    if (!has_vbo(domain, type, name)) {
+      PBVHVbo vbo(domain, type, name);
+      GPUVertFormat format;
+      const char *key = "a";
+
+      switch (type) {
+        case CD_PROP_FLOAT3:
+        case PBVH_CO_TYPE:
+          GPU_vertformat_attr_add(&format, key, GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+          break;
+        case PBVH_NO_TYPE:
+          GPU_vertformat_attr_add(&format, key, GPU_COMP_I16, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+          break;
+        case CD_PROP_FLOAT2:
+        case CD_MLOOPUV:
+          GPU_vertformat_attr_add(&format, key, GPU_COMP_U16, 2, GPU_FETCH_INT_TO_FLOAT_UNIT);
+          break;
+        case PBVH_FSET_TYPE:
+          GPU_vertformat_attr_add(&format, key, GPU_COMP_U8, 3, GPU_FETCH_INT_TO_FLOAT_UNIT);
+          break;
+        case PBVH_MASK_TYPE:
+        case CD_PROP_FLOAT:
+          GPU_vertformat_attr_add(&format, key, GPU_COMP_U8, 1, GPU_FETCH_INT_TO_FLOAT_UNIT);
+          break;
+        default:
+          break;
+      }
+
+      vbo.vert_buf = GPU_vertbuf_create_with_format_ex(&format, GPU_USAGE_STATIC);
+      vbos.append(vbo);
+    }
+
+    PBVHVbo &vbo = get_vbo(domain, type, name);
+    fill_vbo(vbo, args);
+  }
+
+  void create_index_faces(PBVH_GPU_Args *args)
+  {
+    MLoop *mloop = args->me->mloop;
+    GPUIndexBufBuilder elb;
+
+    GPU_indexbuf_init(&elb, GPU_PRIM_TRIS, args->totprim, INT_MAX);
+    int vertex_i = 0;
+
+    for (int i = 0; i < args->totprim; i++) {
+      GPU_indexbuf_add_tri_verts(&elb, vertex_i, vertex_i + 1, vertex_i + 2);
+      vertex_i += 3;
+    }
+
+    index_buf = GPU_indexbuf_build(&elb);
+  }
+
+  void create_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  {
+    if (!has_vbo(ATTR_DOMAIN_POINT, PBVH_CO_TYPE, "")) {
+      create_vbo(ATTR_DOMAIN_POINT, PBVH_CO_TYPE, "", args);
+    }
+    if (!has_vbo(ATTR_DOMAIN_POINT, PBVH_NO_TYPE, "")) {
+      create_vbo(ATTR_DOMAIN_POINT, PBVH_NO_TYPE, "", args);
+    }
+    if (!has_vbo(ATTR_DOMAIN_POINT, PBVH_FSET_TYPE, "")) {
+      create_vbo(ATTR_DOMAIN_POINT, PBVH_FSET_TYPE, "", args);
+    }
+    if (!has_vbo(ATTR_DOMAIN_POINT, PBVH_MASK_TYPE, "")) {
+      create_vbo(ATTR_DOMAIN_POINT, PBVH_MASK_TYPE, "", args);
+    }
+
+    for (int i : IndexRange(attrs_num)) {
+      PBVHAttrReq *attr = attrs + i;
+
+      if (!has_vbo(attr->domain, (int)attr->type, string(attr->name))) {
+        create_vbo(attr->domain, (uint32_t)attr->type, string(attr->name), args);
+      }
+    }
+
+    Vector<PBVHVbo *> vbos;
+
+    vbos.append(&get_vbo(ATTR_DOMAIN_POINT, PBVH_CO_TYPE, ""));
+    vbos.append(&get_vbo(ATTR_DOMAIN_POINT, PBVH_NO_TYPE, ""));
+    vbos.append(&get_vbo(ATTR_DOMAIN_POINT, PBVH_FSET_TYPE, ""));
+    vbos.append(&get_vbo(ATTR_DOMAIN_POINT, PBVH_MASK_TYPE, ""));
+
+    for (int i : IndexRange(attrs_num)) {
+      PBVHAttrReq *attr = attrs + i;
+
+      vbos.append(&get_vbo(attr->domain, (uint32_t)attr->type, attr->name));
+    }
+
+    PBVHBatch batch;
+    for (int i = 0; i < vbos.size(); i++) {
+      batch.vbos.append(*vbos[i]);
+    }
+
+    if (!index_buf) {
+      switch (args->pbvh_type) {
+        case PBVH_FACES:
+          create_index_faces(args);
+      }
+    }
+
+    batch.tris = GPU_batch_create(GPU_PRIM_TRIS,
+                                  batch.vbos[0].vert_buf,
+                                  /* can be NULL if buffer is empty */
+                                  index_buf);
+  }
+};
+
 struct GPU_PBVH_Buffers {
   GPUIndexBuf *index_buf, *index_buf_fast;
   GPUIndexBuf *index_lines_buf, *index_lines_buf_fast;
@@ -103,7 +456,7 @@ typedef struct PBVHGPUFormat {
 
 PBVHGPUFormat *GPU_pbvh_make_format(void)
 {
-  PBVHGPUFormat *vbo_id = MEM_callocN(sizeof(PBVHGPUFormat), "PBVHGPUFormat");
+  PBVHGPUFormat *vbo_id = (PBVHGPUFormat *)MEM_callocN(sizeof(PBVHGPUFormat), "PBVHGPUFormat");
 
   GPU_pbvh_attribute_names_update(PBVH_FACES, vbo_id, NULL, NULL, false);
 
@@ -305,7 +658,7 @@ void GPU_pbvh_mesh_buffers_update(PBVHGPUFormat *vbo_id,
 
           GPUAttrRef *ref = cd_uvs + uv_i;
           CustomDataLayer *layer = mesh->ldata.layers + ref->layer_idx;
-          MLoopUV *muv = layer->data;
+          MLoopUV *muv = (MLoopUV *)layer->data;
 
           for (uint i = 0; i < buffers->face_indices_len; i++) {
             const MLoopTri *lt = &buffers->looptri[buffers->face_indices[i]];
@@ -422,12 +775,12 @@ void GPU_pbvh_mesh_buffers_update(PBVHGPUFormat *vbo_id,
 
         for (uint j = 0; j < 3; j++) {
           const MVert *v = &mvert[vtri[j]];
-          copy_v3_v3(GPU_vertbuf_raw_step(&pos_step), v->co);
+          copy_v3_v3((float *)GPU_vertbuf_raw_step(&pos_step), v->co);
 
           if (buffers->smooth) {
             normal_float_to_short_v3(no, vert_normals[vtri[j]]);
           }
-          copy_v3_v3_short(GPU_vertbuf_raw_step(&nor_step), no);
+          copy_v3_v3_short((short *)GPU_vertbuf_raw_step(&nor_step), no);
 
           if (show_mask && buffers->smooth) {
             cmask = (uchar)(vmask[vtri[j]] * 255);
@@ -436,7 +789,7 @@ void GPU_pbvh_mesh_buffers_update(PBVHGPUFormat *vbo_id,
           *(uchar *)GPU_vertbuf_raw_step(&msk_step) = cmask;
           empty_mask = empty_mask && (cmask == 0);
           /* Face Sets. */
-          memcpy(GPU_vertbuf_raw_step(&fset_step), face_set_color, sizeof(uchar[3]));
+          memcpy(GPU_vertbuf_raw_step(&fset_step), (void *)face_set_color, sizeof(uchar[3]));
         }
       }
     }
@@ -467,7 +820,7 @@ GPU_PBVH_Buffers *GPU_pbvh_mesh_buffers_build(const Mesh *mesh,
   const MPoly *mpoly = mesh->mpoly;
   const MLoop *mloop = mesh->mloop;
 
-  buffers = MEM_callocN(sizeof(GPU_PBVH_Buffers), "GPU_Buffers");
+  buffers = (GPU_PBVH_Buffers *)MEM_callocN(sizeof(GPU_PBVH_Buffers), "GPU_Buffers");
 
   /* smooth or flat for all */
   buffers->smooth = mpoly[looptri[face_indices[0]].poly].flag & ME_SMOOTH;
@@ -882,7 +1235,7 @@ GPU_PBVH_Buffers *GPU_pbvh_grid_buffers_build(int totgrid, BLI_bitmap **grid_hid
 {
   GPU_PBVH_Buffers *buffers;
 
-  buffers = MEM_callocN(sizeof(GPU_PBVH_Buffers), "GPU_Buffers");
+  buffers = (GPU_PBVH_Buffers *)MEM_callocN(sizeof(GPU_PBVH_Buffers), "GPU_Buffers");
   buffers->grid_hidden = grid_hidden;
   buffers->totgrid = totgrid;
   buffers->smooth = smooth;
@@ -946,13 +1299,13 @@ static int gpu_bmesh_vert_visible_count(GSet *bm_unique_verts, GSet *bm_other_ve
   int totvert = 0;
 
   GSET_ITER (gs_iter, bm_unique_verts) {
-    BMVert *v = BLI_gsetIterator_getKey(&gs_iter);
+    BMVert *v = (BMVert *)BLI_gsetIterator_getKey(&gs_iter);
     if (!BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
       totvert++;
     }
   }
   GSET_ITER (gs_iter, bm_other_verts) {
-    BMVert *v = BLI_gsetIterator_getKey(&gs_iter);
+    BMVert *v = (BMVert *)BLI_gsetIterator_getKey(&gs_iter);
     if (!BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
       totvert++;
     }
@@ -968,7 +1321,7 @@ static int gpu_bmesh_face_visible_count(GSet *bm_faces)
   int totface = 0;
 
   GSET_ITER (gh_iter, bm_faces) {
-    BMFace *f = BLI_gsetIterator_getKey(&gh_iter);
+    BMFace *f = (BMFace *)BLI_gsetIterator_getKey(&gh_iter);
 
     if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
       totface++;
@@ -1050,7 +1403,7 @@ void GPU_pbvh_bmesh_buffers_update(PBVHGPUFormat *vbo_id,
 
     GSetIterator gs_iter;
     GSET_ITER (gs_iter, bm_faces) {
-      f = BLI_gsetIterator_getKey(&gs_iter);
+      f = (BMFace *)BLI_gsetIterator_getKey(&gs_iter);
 
       if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
         BMVert *v[3];
@@ -1109,7 +1462,7 @@ void GPU_pbvh_bmesh_buffers_update(PBVHGPUFormat *vbo_id,
     GPU_indexbuf_init(&elb_lines, GPU_PRIM_LINES, tottri * 3, tottri * 3);
 
     GSET_ITER (gs_iter, bm_faces) {
-      f = BLI_gsetIterator_getKey(&gs_iter);
+      f = (BMFace *)BLI_gsetIterator_getKey(&gs_iter);
 
       BLI_assert(f->len == 3);
 
@@ -1167,7 +1520,7 @@ GPU_PBVH_Buffers *GPU_pbvh_bmesh_buffers_build(bool smooth_shading)
 {
   GPU_PBVH_Buffers *buffers;
 
-  buffers = MEM_callocN(sizeof(GPU_PBVH_Buffers), "GPU_Buffers");
+  buffers = (GPU_PBVH_Buffers *)MEM_callocN(sizeof(GPU_PBVH_Buffers), "GPU_Buffers");
   buffers->use_bmesh = true;
   buffers->smooth = smooth_shading;
   buffers->show_overlay = true;
@@ -1220,7 +1573,8 @@ static int gpu_pbvh_make_attr_offs(eAttrDomainMask domain_mask,
   const CustomData *datas[4] = {vdata, edata, pdata, ldata};
 
   int count = 0;
-  for (eAttrDomain domain = 0; domain < 4; domain++) {
+  for (eAttrDomain domain = ATTR_DOMAIN_POINT; domain <= ATTR_DOMAIN_CORNER;
+       domain = (eAttrDomain)((int)domain + 1)) {
     const CustomData *cdata = datas[domain];
 
     if (!cdata || !((1 << domain) & domain_mask)) {
@@ -1319,7 +1673,7 @@ bool GPU_pbvh_attribute_names_update(PBVHType pbvh_type,
       eAttrDomain active_color_domain = active_color_layer ?
                                             BKE_id_attribute_domain(&me_query.id,
                                                                     active_color_layer) :
-                                            ATTR_DOMAIN_NUM;
+                                            (eAttrDomain)ATTR_DOMAIN_NUM;
 
       GPUAttrRef vcol_layers[MAX_GPU_ATTR];
       int totlayer = gpu_pbvh_make_attr_offs(ATTR_DOMAIN_MASK_COLOR,
@@ -1467,7 +1821,7 @@ void GPU_pbvh_buffers_free(GPU_PBVH_Buffers *buffers)
 {
   if (buffers) {
     gpu_pbvh_buffers_clear(buffers);
-    MEM_freeN(buffers);
+    MEM_freeN((void *)buffers);
   }
 }
 

@@ -1009,6 +1009,8 @@ typedef struct PBVHUpdateData {
   float (*vnors)[3];
   int flag;
   bool show_sculpt_face_sets;
+  PBVHAttrReq *attrs;
+  int attrs_num;
 } PBVHUpdateData;
 
 static void pbvh_update_normals_clear_task_cb(void *__restrict userdata,
@@ -2830,6 +2832,8 @@ void BKE_pbvh_face_sets_color_set(PBVH *pbvh, int seed, int color_default)
 typedef struct PBVHDrawSearchData {
   PBVHFrustumPlanes *frustum;
   int accum_update_flag;
+  PBVHAttrReq *attrs;
+  int attrs_num;
 } PBVHDrawSearchData;
 
 static bool pbvh_draw_search_cb(PBVHNode *node, void *data_v)
@@ -2849,7 +2853,9 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
                       PBVHFrustumPlanes *draw_frustum,
                       void (*draw_fn)(void *user_data, GPU_PBVH_Buffers *buffers),
                       void *user_data,
-                      bool UNUSED(full_render))
+                      bool UNUSED(full_render),
+                      PBVHAttrReq *attrs,
+                      int attrs_num)
 {
   PBVHNode **nodes;
   int totnode;
@@ -2860,7 +2866,8 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
   /* Search for nodes that need updates. */
   if (update_only_visible) {
     /* Get visible nodes with draw updates. */
-    PBVHDrawSearchData data = {.frustum = update_frustum, .accum_update_flag = 0};
+    PBVHDrawSearchData data = {
+        .frustum = update_frustum, .accum_update_flag = 0, attrs, attrs_num};
     BKE_pbvh_search_gather(pbvh, pbvh_draw_search_cb, &data, &nodes, &totnode);
     update_flag = data.accum_update_flag;
   }

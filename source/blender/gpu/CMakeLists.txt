@@ -47,7 +47,7 @@ set(SRC
   intern/gpu_batch.cc
   intern/gpu_batch_presets.c
   intern/gpu_batch_utils.c
-  intern/gpu_buffers.c
+  intern/gpu_buffers.cc
   intern/gpu_capabilities.cc
   intern/gpu_codegen.cc
   intern/gpu_compute.cc

@@ -34,6 +34,31 @@ struct PBVH;
 struct SubdivCCG;
 struct CustomData;
 
+typedef struct PBVH_GPU_Args {
+  PBVHType pbvh_type;
+
+  struct BMesh *bm;
+  struct Mesh *me;
+  struct MVert *mvert;
+  int verts_num, faces_num, grids_num;
+  struct CustomData *vdata, *ldata, *pdata;
+  const float (*vert_normals)[3];
+
+  int face_sets_color_seed, face_sets_color_default;
+
+  const struct DMFlagMat *grid_flag_mats;
+  const int *grid_indices;
+  const struct CCGKey *ccg_key;
+
+  int *prim_indicies;
+  int totprim;
+
+  int node_verts_num;
+
+  struct GSet *bm_unique_vert, *bm_other_verts, *bm_faces;
+  struct MLoopTri *mlooptri;
+} PBVH_GPU_Args;
+
 typedef struct PBVHGPUFormat PBVHGPUFormat;
 
 /**
