@@ -1010,9 +1010,9 @@ class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
         col.prop(sculpt, "gravity", slider=True, text="Factor")
         col.prop(sculpt, "gravity_object")
     
-class VIEW3D_PT_sculpt_automask_bake(Panel, View3DPaintPanel):
+class VIEW3D_PT_sculpt_cavity_bake(Panel, View3DPaintPanel):
     bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)
-    bl_label = "Bake Automask"
+    bl_label = "Bake Cavity Mask"
     bl_options = {'DEFAULT_CLOSED'}
     bl_ui_units_x = 12
     bl_parent_id = "VIEW3D_PT_sculpt_options"
@@ -1032,7 +1032,7 @@ class VIEW3D_PT_sculpt_automask_bake(Panel, View3DPaintPanel):
         layout.prop(WindowManager.operator_properties_last("sculpt.bake_cavity"), "mix_mode")
         layout.prop(WindowManager.operator_properties_last("sculpt.bake_cavity"), "factor")
         props = layout.operator("sculpt.bake_cavity")
-        props.use_scene_settings = True
+        props.use_automask_settings = True
 
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
@@ -2476,7 +2476,7 @@ classes = (
     VIEW3D_PT_tools_grease_pencil_brush_vertex_color,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_palette,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff,
-    VIEW3D_PT_sculpt_automask_bake,
+    VIEW3D_PT_sculpt_cavity_bake,
 )
 
 if __name__ == "__main__":  # only for live edit.

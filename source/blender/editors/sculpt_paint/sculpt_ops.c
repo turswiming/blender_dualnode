@@ -1062,7 +1062,7 @@ static int sculpt_bake_cavity_exec(bContext *C, wmOperator *op)
   SCULPT_undo_push_begin(ob, "Bake Cavity");
 
   CavityBakeMixMode mode = RNA_enum_get(op->ptr, "mix_mode");
-  float factor = RNA_float_get(op->ptr, "factor");
+  float factor = RNA_float_get(op->ptr, "mix_factor");
 
   PBVHNode **nodes;
   int totnode;
@@ -1098,7 +1098,13 @@ static int sculpt_bake_cavity_exec(bContext *C, wmOperator *op)
 
     tdata.automasking->settings.cavity_blur_steps = RNA_int_get(op->ptr, "blur_steps");
     tdata.automasking->settings.cavity_factor = RNA_float_get(op->ptr, "factor");
-    tdata.automasking->settings.cavity_curve = sd->automasking_cavity_curve_op;
+
+    if (RNA_boolean_get(op->ptr, "use_automask_settings")) {
+      tdata.automasking->settings.cavity_curve = sd->automasking_cavity_curve;
+    }
+    else {
+      tdata.automasking->settings.cavity_curve = sd->automasking_cavity_curve_op;
+    }
   }
 
   ss->stroke_id++;
@@ -1125,13 +1131,12 @@ static int sculpt_bake_cavity_exec(bContext *C, wmOperator *op)
 static void cavity_bake_ui(bContext *C, wmOperator *op)
 {
   uiLayout *layout = op->layout;
-  uiLayout *col, *row;
-  PointerRNA toolsettings_ptr;
 
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
   uiItemR(layout, op->ptr, "mix_mode", 0, NULL, ICON_NONE);
+  uiItemR(layout, op->ptr, "mix_factor", 0, NULL, ICON_NONE);
   uiItemR(layout, op->ptr, "factor", 0, NULL, ICON_NONE);
   uiItemR(layout, op->ptr, "use_automask_settings", 0, NULL, ICON_NONE);
   uiItemR(layout, op->ptr, "blur_steps", 0, NULL, ICON_NONE);
@@ -1142,10 +1147,18 @@ static void cavity_bake_ui(bContext *C, wmOperator *op)
     Scene *scene = CTX_data_scene(C);
     PointerRNA sculpt_ptr;
 
+    const char *curve_prop;
+
+    if (RNA_boolean_get(op->ptr, "use_automask_settings")) {
+      curve_prop = "automasking_cavity_curve";
+    }
+    else {
+      curve_prop = "automasking_cavity_curve_op";
+    }
+
     if (scene->toolsettings && scene->toolsettings->sculpt) {
       RNA_pointer_create(&scene->id, &RNA_Sculpt, scene->toolsettings->sculpt, &sculpt_ptr);
-      uiTemplateCurveMapping(
-          layout, &sculpt_ptr, "automasking_cavity_curve_op", 'v', false, false, false, false);
+      uiTemplateCurveMapping(layout, &sculpt_ptr, curve_prop, 'v', false, false, false, false);
     }
   }
   // uiItemS(layout);
@@ -1176,11 +1189,11 @@ static void SCULPT_OT_bake_cavity(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_enum(ot->srna, "mix_mode", mix_modes, AUTOMASK_BAKE_MIX, "Mode", "Mix mode");
-  RNA_def_float(ot->srna, "factor", 1.0f, 0.0f, 4.0f, "Mix Factor", "", 0.0f, 2.0f);
+  RNA_def_float(ot->srna, "mix_factor", 1.0f, 0.0f, 5.0f, "Mix Factor", "", 0.0f, 1.0f);
 
   RNA_def_boolean(ot->srna,
                   "use_automask_settings",
-                  true,
+                  false,
                   "Use Automask Settings",
                   "Use default settings from Options panel in sculpt mode.");
 
