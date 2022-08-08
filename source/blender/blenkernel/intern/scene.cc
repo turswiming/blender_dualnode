@@ -114,17 +114,30 @@
 
 #include "bmesh.h"
 
-void BKE_sculpt_init_cavity_curve(Sculpt *sd)
+static CurveMapping *sculpt_init_cavity_curves()
 
 {
-  CurveMapping *cumap = sd->automasking_cavity_curve = BKE_curvemapping_add(1, 0, 0, 1, 1);
+  CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
 
   cumap->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
   cumap->preset = CURVE_PRESET_LINE;
 
   BKE_curvemap_reset(cumap->cm, &cumap->clipr, cumap->preset, CURVEMAP_SLOPE_POSITIVE);
   BKE_curvemapping_changed(cumap, false);
-  BKE_curvemapping_init(sd->automasking_cavity_curve);
+  BKE_curvemapping_init(cumap);
+
+  return cumap;
+}
+
+void BKE_sculpt_check_cavity_curves(Sculpt *sd)
+{
+  if (!sd->automasking_cavity_curve) {
+    sd->automasking_cavity_curve = sculpt_init_cavity_curves();
+  }
+
+  if (!sd->automasking_cavity_curve_op) {
+    sd->automasking_cavity_curve_op = sculpt_init_cavity_curves();
+  }
 }
 
 static void scene_init_data(ID *id)
@@ -954,6 +967,9 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     if (tos->sculpt->automasking_cavity_curve) {
       BKE_curvemapping_blend_write(writer, tos->sculpt->automasking_cavity_curve);
     }
+    if (tos->sculpt->automasking_cavity_curve_op) {
+      BKE_curvemapping_blend_write(writer, tos->sculpt->automasking_cavity_curve_op);
+    }
 
     BKE_paint_blend_write(writer, &tos->sculpt->paint);
   }
@@ -1170,14 +1186,20 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
 
     if (sce->toolsettings->sculpt) {
       BLO_read_data_address(reader, &sce->toolsettings->sculpt->automasking_cavity_curve);
+      BLO_read_data_address(reader, &sce->toolsettings->sculpt->automasking_cavity_curve_op);
 
       if (sce->toolsettings->sculpt->automasking_cavity_curve) {
         BKE_curvemapping_blend_read(reader, sce->toolsettings->sculpt->automasking_cavity_curve);
         BKE_curvemapping_init(sce->toolsettings->sculpt->automasking_cavity_curve);
       }
-      else {
-        BKE_sculpt_init_cavity_curve(sce->toolsettings->sculpt);
+
+      if (sce->toolsettings->sculpt->automasking_cavity_curve_op) {
+        BKE_curvemapping_blend_read(reader,
+                                    sce->toolsettings->sculpt->automasking_cavity_curve_op);
+        BKE_curvemapping_init(sce->toolsettings->sculpt->automasking_cavity_curve_op);
       }
+
+      BKE_sculpt_check_cavity_curves(sce->toolsettings->sculpt);
     }
 
     /* Relink grease pencil interpolation curves. */
@@ -1773,6 +1795,12 @@ ToolSettings *BKE_toolsettings_copy(ToolSettings *toolsettings, const int flag)
           ts->sculpt->automasking_cavity_curve);
       BKE_curvemapping_init(ts->sculpt->automasking_cavity_curve);
     }
+
+    if (ts->sculpt->automasking_cavity_curve_op) {
+      ts->sculpt->automasking_cavity_curve_op = BKE_curvemapping_copy(
+          ts->sculpt->automasking_cavity_curve_op);
+      BKE_curvemapping_init(ts->sculpt->automasking_cavity_curve_op);
+    }
   }
   if (ts->uvsculpt) {
     ts->uvsculpt = static_cast<UvSculpt *>(MEM_dupallocN(ts->uvsculpt));
@@ -1832,6 +1860,9 @@ void BKE_toolsettings_free(ToolSettings *toolsettings)
   if (toolsettings->sculpt) {
     if (toolsettings->sculpt->automasking_cavity_curve) {
       BKE_curvemapping_free(toolsettings->sculpt->automasking_cavity_curve);
+    }
+    if (toolsettings->sculpt->automasking_cavity_curve_op) {
+      BKE_curvemapping_free(toolsettings->sculpt->automasking_cavity_curve_op);
     }
 
     BKE_paint_free(&toolsettings->sculpt->paint);

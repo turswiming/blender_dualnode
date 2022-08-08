@@ -311,10 +311,6 @@ typedef struct SculptThreadedTaskData {
   float *cloth_sim_initial_location;
   float cloth_sim_radius;
 
-  float dirty_mask_min;
-  float dirty_mask_max;
-  bool dirty_mask_dirty_only;
-
   /* Mask By Color Tool */
 
   float mask_by_color_threshold;
@@ -1591,7 +1587,6 @@ void SCULPT_OT_color_filter(struct wmOperatorType *ot);
 /* Mask filter and Dirty Mask. */
 
 void SCULPT_OT_mask_filter(struct wmOperatorType *ot);
-void SCULPT_OT_dirty_mask(struct wmOperatorType *ot);
 
 /* Mask and Face Sets Expand. */
 

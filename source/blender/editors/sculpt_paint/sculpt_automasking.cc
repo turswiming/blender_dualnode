@@ -367,6 +367,10 @@ static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
   float factor = ss->cavity[index].factor;
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_USE_CURVE) {
+    if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERTED) {
+      factor = 1.0f - factor;
+    }
+
     factor = BKE_curvemapping_evaluateF(automasking->settings.cavity_curve, 0, factor);
 
     if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERTED) {

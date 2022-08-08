@@ -1019,6 +1019,7 @@ typedef struct Sculpt {
   char _pad[4];
 
   struct CurveMapping *automasking_cavity_curve;
+  struct CurveMapping *automasking_cavity_curve_op; /* For use by operators */
   struct Object *gravity_object;
 } Sculpt;
 

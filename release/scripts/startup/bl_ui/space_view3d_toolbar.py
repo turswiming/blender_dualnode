@@ -1029,9 +1029,10 @@ class VIEW3D_PT_sculpt_automask_bake(Panel, View3DPaintPanel):
         tool_settings = context.tool_settings
         sculpt = tool_settings.sculpt
 
-        layout.prop(WindowManager.operator_properties_last("sculpt.bake_automask"), "mix_mode")
-        layout.prop(WindowManager.operator_properties_last("sculpt.bake_automask"), "factor")
-        props = layout.operator("sculpt.bake_automask")
+        layout.prop(WindowManager.operator_properties_last("sculpt.bake_cavity"), "mix_mode")
+        layout.prop(WindowManager.operator_properties_last("sculpt.bake_cavity"), "factor")
+        props = layout.operator("sculpt.bake_cavity")
+        props.use_scene_settings = True
 
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
