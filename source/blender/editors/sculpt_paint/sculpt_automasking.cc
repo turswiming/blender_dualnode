@@ -136,7 +136,7 @@ float SCULPT_calc_cavity(SculptSession *ss, const PBVHVertRef vertex)
   const float *co = SCULPT_vertex_co_get(ss, vertex);
   float avg[3];
   float length_sum = 0.0f;
-  float e_num = 0.0f;
+  int valence = 0;
 
   zero_v3(avg);
 
@@ -144,17 +144,18 @@ float SCULPT_calc_cavity(SculptSession *ss, const PBVHVertRef vertex)
     const float *co2 = SCULPT_vertex_co_get(ss, ni.vertex);
 
     length_sum += len_v3v3(co, co2);
-    e_num += 1.0f;
+    valence++;
+
     add_v3_v3(avg, co2);
   }
   SCULPT_VERTEX_NEIGHBORS_ITER_END(ni);
 
-  if (e_num == 0.0f) {
+  if (!valence) {
     return 0.0f;
   }
 
-  mul_v3_fl(avg, 1.0f / (float)e_num);
-  length_sum /= e_num;
+  mul_v3_fl(avg, 1.0f / (float)valence);
+  length_sum /= (float)valence;
 
   float no[3];
 
@@ -225,7 +226,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
   float sco1[3];
   float sco2[3];
   float len1_sum = 0.0f, len2_sum = 0.0f;
-  int sco1_num = 0, sco2_num = 0;
+  int sco1_len = 0, sco2_len = 0;
 
   zero_v3(sno1);
   zero_v3(sno2);
@@ -262,13 +263,13 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
     add_v3_v3(sco1, co);
     add_v3_v3(sno1, no);
     len1_sum += centdist;
-    sco1_num++;
+    sco1_len++;
 
     if (blurvert.depth < steps) {
       add_v3_v3(sco2, co);
       add_v3_v3(sno2, no);
       len2_sum += centdist;
-      sco2_num++;
+      sco2_len++;
     }
 
     if (blurvert.depth >= steps) {
@@ -312,24 +313,24 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
     SCULPT_VERTEX_NEIGHBORS_ITER_END(ni);
   }
 
-  if (sco1_num == sco2_num) {
-    printf("error! %d %d\n", sco1_num, sco2_num);
+  if (sco1_len == sco2_len) {
+    printf("error! %d %d\n", sco1_len, sco2_len);
   }
 
-  if (!sco1_num) {
+  if (!sco1_len) {
     copy_v3_v3(sco1, SCULPT_vertex_co_get(ss, vertex));
   }
   else {
-    mul_v3_fl(sco1, 1.0f / (float)sco1_num);
-    len1_sum /= sco1_num;
+    mul_v3_fl(sco1, 1.0f / (float)sco1_len);
+    len1_sum /= sco1_len;
   }
 
-  if (!sco2_num) {
+  if (!sco2_len) {
     copy_v3_v3(sco2, SCULPT_vertex_co_get(ss, vertex));
   }
   else {
-    mul_v3_fl(sco2, 1.0f / (float)sco2_num);
-    len2_sum /= sco2_num;
+    mul_v3_fl(sco2, 1.0f / (float)sco2_len);
+    len2_sum /= sco2_len;
   }
 
   normalize_v3(sno1);
