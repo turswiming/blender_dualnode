@@ -9,11 +9,14 @@
 #include "BLI_map.hh"
 #include "BLI_math.h"
 #include "BLI_math_vec_types.hh"
+#include "BLI_string_ref.hh"
+#include "BLI_string_utils.h"
 #include "BLI_vector.hh"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_path.h"
+#include "RNA_prototypes.h"
 
 #include "DNA_brush_channel_types.h"
 #include "DNA_brush_enums.h"
@@ -29,8 +32,8 @@
 #include "BKE_colortools.h"
 #include "BKE_idprop.h"
 #include "BKE_idprop.hh"
+#include "BKE_lib_id.h"
 #include "BKE_paint.h"
-
 #include "BLO_read_write.h"
 
 #include <string>
@@ -43,11 +46,12 @@ using string = std::string;
 
 namespace blender {
 
-using KeyString = const char*;
+using KeyString = const char *;
+using StringRef = blender::StringRef;
 
-static Map<const char *, BrushChannelType> builtin_channels;
+static Map<StringRef, BrushChannelType> builtin_channels;
 
-using ChannelNameMap = Map<const char *, BrushChannel *>;
+using ChannelNameMap = Map<StringRef, BrushChannel *>;
 
 static void init_builtin_brush_channels()
 {
@@ -67,6 +71,8 @@ static void init_builtin_brush_channels()
 
   Brush dummy = {0};
   PointerRNA _ptr = {&dummy.id}, *ptr = &_ptr;
+
+  printf("total properties: %i\n", (int)ARRAY_SIZE(channel_props));
 
   for (int i : IndexRange(ARRAY_SIZE(channel_props))) {
     ChannelProp &def = channel_props[i];
@@ -160,14 +166,19 @@ static void init_builtin_brush_channels()
         break;
     }
 
-    printf("size: %i\n", (int)ARRAY_SIZE(channel_props));
-    printf("type: %s\n", type.idname); 
-    builtin_channels.add(type.idname, type);
+    printf("  idname: %s\n", type.idname);
+    builtin_channels.add(strdup(type.idname), type);
+    printf("    success: %d\n", builtin_channels.contains(type.idname) ? 1 : 0);
   }
 #undef BRUSH_CHANNEL_DEFINE_INTERNAL
 }
 static void check_builtin_brush_channels()
 {
+  printf("size: %d %d\n", (int)builtin_channels.size(), (int)(builtin_channels.size() == 0));
+  for (auto &key : builtin_channels.keys()) {
+    printf("key: %s\n", key.data());
+  }
+
   if (builtin_channels.size() == 0) {
     init_builtin_brush_channels();
   }
@@ -221,6 +232,16 @@ extern "C" void BKE_brush_channelset_free(BrushChannelSet *chset)
   MEM_freeN(static_cast<void *>(chset));
 }
 
+static void brush_mapping_reset(BrushMapping *mp, int type)
+{
+  mp->type = type;
+  mp->premultiply_factor = 1.0f;
+  mp->min = 0.0f;
+  mp->max = 1.0f;
+  mp->blendmode = MA_RAMP_MULT;
+  mp->curve.preset = BRUSH_CURVE_LIN;
+}
+
 extern "C" BrushChannel *BKE_brush_channelset_add(BrushChannelSet *chset, BrushChannelType *type)
 {
   BrushChannel *ch = MEM_cnew<BrushChannel>("BrushChannel");
@@ -234,6 +255,11 @@ extern "C" BrushChannel *BKE_brush_channelset_add(BrushChannelSet *chset, BrushC
 
   BLI_addtail(&chset->channels, static_cast<void *>(ch));
   get_namemap(chset)->add(ch->idname, ch);
+
+  for (int i = 0; i < BRUSH_MAPPING_MAX; i++) {
+    BrushMapping *mp = ch->mappings + i;
+    brush_mapping_reset(mp, i);
+  }
 
   return ch;
 }
@@ -272,12 +298,13 @@ extern "C" const void BKE_brush_channel_category_set(BrushChannel *ch, const cha
   ch->category = BLI_strdup(category);
 }
 
-ATTR_NO_OPT extern "C" BrushChannel *_BKE_brush_channelset_ensure(BrushChannelSet *chset, const char *idname)
+ATTR_NO_OPT extern "C" BrushChannel *_BKE_brush_channelset_ensure(BrushChannelSet *chset,
+                                                                  const char *idname)
 {
   if (!builtin_channels.contains(idname)) {
     printf("channel types:\n");
-    for (const char *key : builtin_channels.keys()) {
-      printf("  %s\n", key);
+    for (StringRef key : builtin_channels.keys()) {
+      printf("  %s\n", key.data());
     }
 
     printf("Unknown brush channel %s\n", idname);
@@ -303,6 +330,23 @@ extern "C" void BKE_brush_channelset_ensure_channels(BrushChannelSet *chset, int
   BKE_brush_channelset_ensure(chset, strength);
 
   switch (sculpt_tool) {
+  }
+}
+
+extern "C" char *BKE_brush_channel_rna_path(ID *owner, BrushChannel *ch)
+{
+  switch (GS(owner->name)) {
+    case ID_BR:
+      return BLI_strdup(ch->idname);
+    case ID_SCE: {
+      string path = "tool_settings.channel_properties[\"";
+
+      path += string(ch->idname) + "\"]";
+
+      return BLI_strdup(path.c_str());
+    }
+    default:
+      return BLI_strdup("");
   }
 }
 
@@ -651,25 +695,57 @@ extern "C" void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
     _BKE_brush_channelset_ensure(ts->unified_channels, type.idname);
   }
 
-  StructRNA *srna = RNA_struct_find("Brush");
+  StructRNA *srna = &RNA_Brush;
+  Brush defaults = {0};
+
+  BLI_strncpy(defaults.id.name, "BRDefaults", sizeof(defaults.id.name));
+
+  defaults.sculpt_tool = SCULPT_TOOL_DRAW;
+  BKE_brush_sculpt_reset(&defaults);
+
+  PointerRNA ptr;
+  ptr.owner_id = &defaults.id;
+  ptr.data = &defaults;
+  ptr.type = &RNA_Brush;
 
   LISTBASE_FOREACH (BrushChannel *, ch, &ts->unified_channels->channels) {
     IDProperty *idprop = IDP_GetPropertyFromGroup(ts->unified_properties, ch->idname);
 
     if (!idprop) {
+      PointerRNA prop_ptr;
+      PropertyRNA *prop;
+      double default_value = 0.0;
+
+      if (RNA_path_resolve(&ptr, ch->idname, &prop_ptr, &prop)) {
+        switch (RNA_property_type(prop)) {
+          case PROP_INT:
+            default_value = RNA_int_get(&prop_ptr, ch->idname);
+            break;
+          case PROP_FLOAT:
+            default_value = RNA_float_get(&prop_ptr, ch->idname);
+            break;
+          case PROP_ENUM:
+            default_value = (double)RNA_enum_get(&prop_ptr, ch->idname);
+            break;
+          default:
+            break;
+        }
+        printf("found property!\n");
+      }
+
       IDPropertyTemplate tmpl;
       char type;
 
       switch (ch->type) {
         case BRUSH_CHANNEL_TYPE_FLOAT:
-          tmpl.f = ch->fvalue;
+          tmpl.f = (float)default_value;
           type = IDP_FLOAT;
           break;
         case BRUSH_CHANNEL_TYPE_INT:
         case BRUSH_CHANNEL_TYPE_ENUM:
         case BRUSH_CHANNEL_TYPE_BITMASK:
         case BRUSH_CHANNEL_TYPE_BOOL:
-          tmpl.i = ch->ivalue;
+          tmpl.i = (int)default_value;
           type = IDP_INT;
           break;
         default:
@@ -727,6 +803,8 @@ extern "C" void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
 
     uidata->rna_subtype = prop_subtype;
   }
+
+  BKE_libblock_free_data(&defaults.id, false);
 }
 
 }  // namespace blender

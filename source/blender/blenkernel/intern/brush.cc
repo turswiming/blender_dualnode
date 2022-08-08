@@ -1703,6 +1703,14 @@ void BKE_brush_sculpt_reset(Brush *br)
   brush_defaults(br);
   BKE_brush_curve_preset(br, CURVE_PRESET_SMOOTH);
 
+  /* Reset brush channels */
+  if (br->channels) {
+    BKE_brush_channelset_free(br->channels);
+  }
+
+  br->channels = BKE_brush_channelset_create();
+  BKE_brush_channelset_ensure_channels(br->channels, br->sculpt_tool);
+
   /* Use the curve presets by default */
   br->curve_preset = BRUSH_CURVE_SMOOTH;
 

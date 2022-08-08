@@ -212,6 +212,8 @@ BrushChannelSet *BKE_brush_channelset_get_final(struct Brush *brush,
 
 void BKE_brush_channelset_toolsettings_init(struct ToolSettings *ts);
 
+/* Get rna path for brush channel. Calling code should call MEM_SAFE_FREE on result. */
+char *BKE_brush_channel_rna_path(ID *owner, BrushChannel *ch);
 
 /* Disable optimization for a function (for debugging use only!)*/
 #ifdef __clang__

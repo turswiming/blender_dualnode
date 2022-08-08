@@ -2743,6 +2743,16 @@ static IDProperty **rna_UnifiedBrushProperties_idprops(PointerRNA *ptr)
   ToolSettings *ts = ptr->data;
   return &ts->unified_properties;
 }
+
+static PointerRNA rna_ToolSettings_unified_properties_get(PointerRNA *ptr)
+{
+  PointerRNA ret = *ptr;
+
+  ret.type = &RNA_UnifiedBrushProperties;
+
+  return ret;
+}
+
 #else
 
 /* Grease Pencil Interpolation tool settings */
@@ -2884,7 +2894,6 @@ static void rna_def_unified_brush_properties(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
   srna = RNA_def_struct(brna, "UnifiedBrushProperties", NULL);
-  RNA_def_struct_nested(brna, srna, "ToolSettings");
 
   /* The struct has custom properties, but no pointer properties to other IDs! */
   RNA_def_struct_idprops_func(srna, "rna_UnifiedBrushProperties_idprops");
@@ -3037,6 +3046,8 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   prop = RNA_def_property(srna, "unified_properties", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "UnifiedBrushProperties");
   RNA_def_property_ui_text(prop, "Unified Brush Property Storage", "");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_ToolSettings_unified_properties_get", NULL, NULL, NULL);
 
   prop = RNA_def_property(srna, "unified_channels", PROP_COLLECTION, 0);
   RNA_def_property_collection_sdna(prop, NULL, "unified_channels", NULL);

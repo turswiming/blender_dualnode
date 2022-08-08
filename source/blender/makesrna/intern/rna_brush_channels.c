@@ -171,6 +171,34 @@ bool rna_BrushChannel_inherit_get(PointerRNA *rna)
 {
   BrushChannel *ch = (BrushChannel *)rna->data;
 
+  return ch->flag & BRUSH_CHANNEL_FORCE_INHERIT;
+}
+
+void rna_BrushChannel_unified_set(PointerRNA *rna, bool value)
+{
+  BrushChannel *ch = (BrushChannel *)rna->data;
+  BrushChannel *ch2 = get_paired_radius_channel(rna);
+
+  if (value) {
+    ch->flag |= BRUSH_CHANNEL_FORCE_INHERIT;
+
+    if (ch2) {
+      ch2->flag |= BRUSH_CHANNEL_FORCE_INHERIT;
+    }
+  }
+  else {
+    ch->flag &= ~BRUSH_CHANNEL_FORCE_INHERIT;
+
+    if (ch2) {
+      ch2->flag &= ~BRUSH_CHANNEL_FORCE_INHERIT;
+    }
+  }
+}
+
+bool rna_BrushChannel_unified_get(PointerRNA *rna)
+{
+  BrushChannel *ch = (BrushChannel *)rna->data;
+
   return ch->flag & BRUSH_CHANNEL_INHERIT;
 }
 
@@ -345,6 +373,16 @@ void rna_BrushChannel_category_get(PointerRNA *ptr, char *value)
 int rna_BrushChannel_category_length(PointerRNA *ptr)
 {
   return strlen(BKE_brush_channel_category_get((BrushChannel *)ptr->data));
+}
+
+void rna_BrushChannel_rna_path_get(PointerRNA *ptr, char *value)
+{
+  strcpy(value, BKE_brush_channel_rna_path(ptr->owner_id, (BrushChannel *)ptr->data));
+}
+
+int rna_BrushChannel_rna_path_length(PointerRNA *ptr)
+{
+  return strlen(BKE_brush_channel_rna_path(ptr->owner_id, (BrushChannel *)ptr->data));
 }
 
 int rna_BrushChannel_factor_value_editable(PointerRNA *ptr, const char **r_info)
@@ -581,6 +619,11 @@ void RNA_def_brush_channel(BlenderRNA *brna)
 
   RNA_def_struct_name_property(srna, prop);
 
+  prop = RNA_def_property(srna, "rna_path", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE | PROP_ANIMATABLE);
+  RNA_def_property_string_funcs(
+      prop, "rna_BrushChannel_rna_path_get", "rna_BrushChannel_rna_path_length", NULL);
+
   prop = RNA_def_property(srna, "category", PROP_STRING, PROP_NONE);
   RNA_def_property_string_funcs(prop,
                                 "rna_BrushChannel_category_get",
@@ -607,10 +650,15 @@ void RNA_def_brush_channel(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Ordering", "Order of brush channel in panels and the header");
 
   prop = RNA_def_property(srna, "inherit", PROP_BOOLEAN, PROP_NONE);
-  // RNA_def_property_boolean_sdna(prop, "BrushChannel", "flag", BRUSH_CHANNEL_INHERIT);
   RNA_def_property_ui_text(prop, "Inherit", "Inherit from scene defaults");
   RNA_def_property_boolean_funcs(
       prop, "rna_BrushChannel_inherit_get", "rna_BrushChannel_inherit_set");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+
+  prop = RNA_def_property(srna, "unified", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Unified", "Force brushes to use default properties");
+  RNA_def_property_boolean_funcs(
+      prop, "rna_BrushChannel_unified_get", "rna_BrushChannel_unified_set");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
 
   prop = RNA_def_property(srna, "show_in_header", PROP_BOOLEAN, PROP_NONE);
