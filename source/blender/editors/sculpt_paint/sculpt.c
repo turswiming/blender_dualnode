@@ -5649,6 +5649,10 @@ static int sculpt_brush_stroke_modal(bContext *C, wmOperator *op, const wmEvent 
   return paint_stroke_modal(C, op, event, (struct PaintStroke **)&op->customdata);
 }
 
+static void empty_operator_ui(bContext *C, wmOperator *op)
+{
+}
+
 void SCULPT_OT_brush_stroke(wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -5662,9 +5666,10 @@ void SCULPT_OT_brush_stroke(wmOperatorType *ot)
   ot->exec = sculpt_brush_stroke_exec;
   ot->poll = SCULPT_poll;
   ot->cancel = sculpt_brush_stroke_cancel;
+  ot->ui = empty_operator_ui;
 
   /* Flags (sculpt does own undo? (ton)). */
-  ot->flag = OPTYPE_BLOCKING;
+  ot->flag = OPTYPE_BLOCKING | OPTYPE_UNDO | OPTYPE_REGISTER;
 
   /* Properties. */
 

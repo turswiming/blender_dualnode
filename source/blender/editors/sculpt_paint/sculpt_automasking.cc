@@ -211,22 +211,17 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
                                        int steps,
                                        PBVHVertRef vertex)
 {
-  if (steps == 0) {
-    int index = BKE_pbvh_vertex_to_index(ss->pbvh, vertex);
-
-    ss->cavity[index].factor = sculpt_cavity_calc_factor(
-        ss, automasking, SCULPT_calc_cavity(ss, vertex));
-    ss->cavity[index].stroke_id = ss->stroke_id;
-
-    return;
-  }
-
   float sno1[3];
   float sno2[3];
   float sco1[3];
   float sco2[3];
   float len1_sum = 0.0f, len2_sum = 0.0f;
   int sco1_len = 0, sco2_len = 0;
+
+  /* Steps starts at 1, but API and user interface
+   * are zero-based.
+   */
+  steps++;
 
   zero_v3(sno1);
   zero_v3(sno2);
@@ -640,7 +635,7 @@ static void SCULPT_automasking_cache_settings_update(AutomaskingCache *automaski
   automasking->settings.flags = sculpt_automasking_mode_effective_bits(sd, brush);
   automasking->settings.initial_face_set = SCULPT_active_face_set_get(ss);
   automasking->settings.cavity_factor = sd->automasking_cavity_factor;
-  automasking->settings.cavity_blur_steps = sd->automasking_cavity_blur_steps + 1;
+  automasking->settings.cavity_blur_steps = sd->automasking_cavity_blur_steps;
   automasking->settings.cavity_curve = sd->automasking_cavity_curve;
 }
 
