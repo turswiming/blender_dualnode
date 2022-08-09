@@ -326,6 +326,7 @@ set(SRC_UTIL_HEADERS
   ../util/rect.h
   ../util/static_assert.h
   ../util/transform.h
+  ../util/transform_inverse.h
   ../util/texture.h
   ../util/types.h
   ../util/types_float2.h
@@ -342,6 +343,7 @@ set(SRC_UTIL_HEADERS
   ../util/types_int3_impl.h
   ../util/types_int4.h
   ../util/types_int4_impl.h
+  ../util/types_spectrum.h
   ../util/types_uchar2.h
   ../util/types_uchar2_impl.h
   ../util/types_uchar3.h

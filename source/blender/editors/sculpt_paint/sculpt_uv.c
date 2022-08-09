@@ -549,7 +549,7 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
     int counter = -1;
     /* initialize the unique UVs */
     for (int i = 0; i < bm->totvert; i++) {
-      UvElement *element = data->elementMap->vert[i];
+      UvElement *element = data->elementMap->vertex[i];
       for (; element; element = element->next) {
         if (element->separate) {
           if (do_island_optimization && (element->island != island_index)) {
@@ -629,11 +629,13 @@ static UvSculptData *uv_sculpt_stroke_init(bContext *C, wmOperator *op, const wm
     }
 
     /* fill the edges with data */
-    int i = 0;
-    GHASH_ITER (gh_iter, edgeHash) {
-      data->uvedges[i++] = *((UvEdge *)BLI_ghashIterator_getKey(&gh_iter));
+    {
+      int i = 0;
+      GHASH_ITER (gh_iter, edgeHash) {
+        data->uvedges[i++] = *((UvEdge *)BLI_ghashIterator_getKey(&gh_iter));
+      }
+      data->totalUvEdges = BLI_ghash_len(edgeHash);
     }
-    data->totalUvEdges = BLI_ghash_len(edgeHash);
 
     /* cleanup temporary stuff */
     BLI_ghash_free(edgeHash, NULL, NULL);
