@@ -1012,7 +1012,7 @@ class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
     
 class VIEW3D_PT_sculpt_cavity_bake(Panel, View3DPaintPanel):
     bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)
-    bl_label = "Bake Cavity Mask"
+    bl_label = "Mask From Cavity"
     bl_options = {'DEFAULT_CLOSED'}
     bl_ui_units_x = 12
     bl_parent_id = "VIEW3D_PT_sculpt_options"
@@ -1029,10 +1029,33 @@ class VIEW3D_PT_sculpt_cavity_bake(Panel, View3DPaintPanel):
         tool_settings = context.tool_settings
         sculpt = tool_settings.sculpt
 
-        layout.prop(WindowManager.operator_properties_last("sculpt.mask_from_cavity"), "mix_mode")
-        layout.prop(WindowManager.operator_properties_last("sculpt.mask_from_cavity"), "factor")
-        props = layout.operator("sculpt.mask_from_cavity")
-        props.use_automask_settings = True
+        col = layout.column()
+
+        last = WindowManager.operator_properties_last("sculpt.mask_from_cavity")
+
+        col.prop(last, "mix_mode")
+        col.prop(last, "mix_factor")
+        col.prop(last, "use_automask_settings")
+
+        if not last.use_automask_settings:
+            col.prop(last, "factor", text="Factor")
+            col.prop(last, "blur_steps", text="Blur")
+            col.prop(last, "invert", text="Invert")
+            col.prop(last, "use_curve", text="Use Curve")
+
+            if last.use_curve:
+                col.template_curve_mapping(sculpt, "automasking_cavity_curve_op")
+        else:
+            col.prop(sculpt, "automasking_cavity_factor", text="Factor")
+            col.prop(sculpt, "automasking_cavity_blur_steps", text="Blur")
+            col.prop(sculpt, "use_automasking_cavity_inverted", text="Invert")
+            
+            col.prop(sculpt, "use_automasking_custom_cavity_curve", text="Use Curve")
+
+            if sculpt.use_automasking_custom_cavity_curve:
+                col.template_curve_mapping(sculpt, "automasking_cavity_curve")
+
+        layout.operator("sculpt.mask_from_cavity")
 
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
