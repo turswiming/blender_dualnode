@@ -4709,7 +4709,7 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt *sd, Object *ob, Po
 #else
   if (!BKE_brush_use_locked_size(scene, brush)) {
     int radius = BKE_brush_channelset_int_get(cache->channels, size);
-    cache->radius = paint_calc_object_space_radius(cache->vc, cache->true_location, radius);
+    cache->radius = paint_calc_object_space_radius(cache->vc, cache->true_initial_location, radius);
   }
   else {
     cache->radius = BKE_brush_channelset_float_get(cache->channels, unprojected_radius);

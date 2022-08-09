@@ -2174,6 +2174,15 @@ static void rna_UnifiedPaintSettings_update(bContext *C, PointerRNA *UNUSED(ptr)
   WM_main_add_notifier(NC_BRUSH | NA_EDITED, br);
 }
 
+static int rna_UnifiedPaintSettings_size_get(PointerRNA *ptr)
+{
+  Scene *scene = (Scene*)ptr->owner_id;
+  PointerRNA prop_ptr;
+
+  RNA_pointer_create(&scene->id, &RNA_UnifiedBrushProperties, scene->toolsettings, &prop_ptr);
+  return RNA_int_get(&prop_ptr, "[\"size\"]");
+}
+
 static void rna_UnifiedPaintSettings_size_set(PointerRNA *ptr, int value)
 {
   UnifiedPaintSettings *ups = ptr->data;
@@ -2189,6 +2198,8 @@ static void rna_UnifiedPaintSettings_size_set(PointerRNA *ptr, int value)
       &scene->id, &RNA_UnifiedBrushProperties, scene->toolsettings, &prop_ptr);
   RNA_int_set(&prop_ptr, "[\"size\"]", ups->size);
   RNA_float_set(&prop_ptr, "[\"unprojected_radius\"]", ups->unprojected_radius);
+
+  BKE_brush_channelset_mark_update(scene->toolsettings->unified_channels, size);
 }
 
 static void rna_UnifiedPaintSettings_unprojected_radius_set(PointerRNA *ptr, float value)
@@ -3934,7 +3945,7 @@ static void rna_def_unified_paint_settings(BlenderRNA *brna)
   /* unified paint settings that override the equivalent settings
    * from the active brush */
   prop = RNA_def_property(srna, "size", PROP_INT, PROP_PIXEL);
-  RNA_def_property_int_funcs(prop, NULL, "rna_UnifiedPaintSettings_size_set", NULL);
+  RNA_def_property_int_funcs(prop, "rna_UnifiedPaintSettings_size_get", "rna_UnifiedPaintSettings_size_set", NULL);
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_range(prop, 1, MAX_BRUSH_PIXEL_RADIUS * 10);
   RNA_def_property_ui_range(prop, 1, MAX_BRUSH_PIXEL_RADIUS, 1, -1);

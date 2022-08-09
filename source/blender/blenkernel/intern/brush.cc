@@ -2270,10 +2270,13 @@ void BKE_brush_size_set(Scene *scene, Brush *brush, int size)
 
 int BKE_brush_size_get(const Scene *scene, const Brush *brush)
 {
+  return BKE_brush_channelset_eval_int(brush, scene, size, NULL);
+#if 0
   UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
   int size = (ups->flag & UNIFIED_PAINT_SIZE) ? ups->size : brush->size;
 
   return size;
+#endif
 }
 
 bool BKE_brush_use_locked_size(const Scene *scene, const Brush *brush)

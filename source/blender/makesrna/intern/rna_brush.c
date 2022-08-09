@@ -19,6 +19,8 @@
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
+#include "BKE_brush_channel.h"
+
 #include "rna_internal.h"
 
 #include "IMB_imbuf.h"
@@ -763,6 +765,8 @@ static void rna_Brush_set_size(PointerRNA *ptr, int value)
   /* scale unprojected radius so it stays consistent with brush size */
   BKE_brush_scale_unprojected_radius(&brush->unprojected_radius, value, brush->size);
   brush->size = value;
+
+  BKE_brush_channelset_mark_update(brush->channels, size);
 }
 
 static void rna_Brush_use_gradient_set(PointerRNA *ptr, bool value)

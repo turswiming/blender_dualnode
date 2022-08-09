@@ -154,18 +154,23 @@ bool _BKE_brush_channelset_has(BrushChannelSet *chset, const char *idname);
    reevaluate values from RNA */
 void BKE_brush_channelset_begin(BrushChannelSet *chset, BrushChannelType *type);
 
-float _BKE_brush_channelset_eval_float(struct Brush *br,
-                                       struct Scene *scene,
-                                       BrushChannelSet *chset,
+float _BKE_brush_channelset_eval_float(const struct Brush *br,
+                                       const struct Scene *scene,
                                        const char *idname,
                                        BrushMappingData *mapping);
-#define BKE_brush_channelset_eval_float(br, scene, chset, channel, mapdata) \
-  _BKE_brush_channelset_eval_float(br, scene, chset, make_builtin_ch_name(channel), mapdata)
-
+int _BKE_brush_channelset_eval_int(const struct Brush *br,
+                                   const struct Scene *scene,
+                                   const char *idname,
+                                   BrushMappingData *mapping);
 float _BKE_brush_channelset_float_get(BrushChannelSet *chset, const char *idname);
 void _BKE_brush_channelset_float_set(BrushChannelSet *chset, const char *idname, float f);
 int _BKE_brush_channelset_int_get(BrushChannelSet *chset, const char *idname);
 void _BKE_brush_channelset_int_set(BrushChannelSet *chset, const char *idname, int i);
+
+#define BKE_brush_channelset_eval_float(br, scene, channel, mapdata) \
+  _BKE_brush_channelset_eval_float(br, scene, make_builtin_ch_name(channel), mapdata)
+#define BKE_brush_channelset_eval_int(br, scene, channel, mapdata) \
+  _BKE_brush_channelset_eval_int(br, scene, make_builtin_ch_name(channel), mapdata)
 
 #define BKE_brush_channelset_float_get(chset, idname) \
   _BKE_brush_channelset_float_get(chset, make_builtin_ch_name(idname))
@@ -180,8 +185,8 @@ BrushChannelSet *BKE_brush_channelset_copy(BrushChannelSet *chset);
 
 /* Create a (copied) final brush channel set with all inheritance and unified flags
    and input mappings taken into account. */
-BrushChannelSet *BKE_brush_channelset_create_final(struct Brush *brush,
-                                                   struct Scene *scene,
+BrushChannelSet *BKE_brush_channelset_create_final(const struct Brush *brush,
+                                                   const struct Scene *scene,
                                                    BrushMappingData *mapdata);
 
 BLI_INLINE const char *BKE_brush_mapping_type_to_typename(eBrushMappingType type)
@@ -208,16 +213,20 @@ BLI_INLINE const char *BKE_brush_mapping_type_to_typename(eBrushMappingType type
 
 const char *BKE_brush_channel_category_get(BrushChannel *ch);
 const void BKE_brush_channel_category_set(BrushChannel *ch, const char *category);
-bool BKE_brush_channel_inherits(struct Brush *brush,
-                                struct ToolSettings *tool_settings,
+bool BKE_brush_channel_inherits(const struct Brush *brush,
+                                const struct ToolSettings *tool_settings,
                                 BrushChannel *ch);
-BrushChannelSet *BKE_brush_channelset_get_final(struct Brush *brush,
-                                                struct ToolSettings *tool_settings);
+BrushChannelSet *BKE_brush_channelset_get_final(const struct Brush *brush,
+                                                const struct ToolSettings *tool_settings);
 
 void BKE_brush_channelset_toolsettings_init(struct ToolSettings *ts);
 
 /* Get rna path for brush channel. Calling code should call MEM_SAFE_FREE on result. */
 char *BKE_brush_channel_rna_path(ID *owner, BrushChannel *ch);
+
+void _BKE_brush_channelset_mark_update(BrushChannelSet *chset, const char *idname);
+#define BKE_brush_channelset_mark_update(chset, idname) \
+  _BKE_brush_channelset_mark_update(chset, make_builtin_ch_name(idname))
 
 /* Disable optimization for a function (for debugging use only!)*/
 #ifdef __clang__

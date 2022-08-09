@@ -45,12 +45,12 @@
 using string = std::string;
 
 using KeyString = const char *;
-using blender::StringRef;
-using blender::IndexRange;
-using blender::Vector;
 using blender::float3;
 using blender::float4;
+using blender::IndexRange;
 using blender::Map;
+using blender::StringRef;
+using blender::Vector;
 
 static Map<StringRef, BrushChannelType> builtin_channels;
 
@@ -357,7 +357,7 @@ char *BKE_brush_channel_rna_path(ID *owner, BrushChannel *ch)
   }
 }
 
-void brush_channel_ensure_value(ID *id, BrushChannel *ch)
+void brush_channel_ensure_value(const ID *id, BrushChannel *ch)
 {
   if (!(ch->flag & BRUSH_CHANNEL_NEEDS_EVALUATE)) {
     return;
@@ -385,7 +385,7 @@ void brush_channel_ensure_value(ID *id, BrushChannel *ch)
   PointerRNA ptr, ptr2;
   PropertyRNA *prop = nullptr;
 
-  RNA_pointer_create(id, srna, id, &ptr);
+  RNA_pointer_create(const_cast<ID *>(id), srna, const_cast<ID *>(id), &ptr);
   if (RNA_path_resolve(&ptr, path.c_str(), &ptr2, &prop)) {
     PropertyType prop_type = RNA_property_type(prop);
     PropertySubType prop_subtype = RNA_property_subtype(prop);
@@ -521,7 +521,9 @@ double BKE_brush_channel_eval_mappings(BrushChannel *ch,
   return f;
 }
 
-static BrushChannel *brush_channel_final(Brush *brush, Scene *scene, const char *idname)
+static BrushChannel *brush_channel_final(const Brush *brush,
+                                         const Scene *scene,
+                                         const char *idname)
 {
   BrushChannel *ch = _BKE_brush_channelset_lookup(brush->channels, idname);
 
@@ -536,19 +538,32 @@ static BrushChannel *brush_channel_final(Brush *brush, Scene *scene, const char 
   return ch;
 }
 
-float _BKE_brush_channelset_eval_float(Brush *brush,
-                                       Scene *scene,
-                                       BrushChannelSet *chset,
+float _BKE_brush_channelset_eval_float(const Brush *brush,
+                                       const Scene *scene,
                                        const char *idname,
                                        BrushMappingData *mapping)
 {
   BrushChannel *ch = brush_channel_final(brush, scene, idname);
 
-  return BKE_brush_channel_eval_mappings(ch, mapping, ch->fvalue, 0);
+  return mapping ? BKE_brush_channel_eval_mappings(ch, mapping, ch->fvalue, 0) : ch->fvalue;
 }
 
-static void brush_channel_evaluate(
-    Brush *br, Scene *scene, BrushChannelSet *chset, const char *idname, BrushMappingData *mapping)
+int _BKE_brush_channelset_eval_int(const Brush *brush,
+                                   const Scene *scene,
+                                   const char *idname,
+                                   BrushMappingData *mapping)
+{
+  BrushChannel *ch = brush_channel_final(brush, scene, idname);
+
+  return mapping ? (int)BKE_brush_channel_eval_mappings(ch, mapping, (double)ch->ivalue, 0) :
+                   ch->ivalue;
+}
+
+static void brush_channel_evaluate(const Brush *br,
+                                   const Scene *scene,
+                                   BrushChannelSet *chset,
+                                   const char *idname,
+                                   BrushMappingData *mapping)
 {
   BrushChannel *ch = _BKE_brush_channelset_lookup(chset, idname);
 
@@ -697,7 +712,9 @@ void BKE_brush_channelset_blend_read(BrushChannelSet *chset, BlendDataReader *re
   }
 }
 
-bool BKE_brush_channel_inherits(Brush *brush, ToolSettings *tool_settings, BrushChannel *ch)
+bool BKE_brush_channel_inherits(const Brush *brush,
+                                const ToolSettings *tool_settings,
+                                BrushChannel *ch)
 {
   BrushChannel *scene_ch = _BKE_brush_channelset_lookup(tool_settings->unified_channels,
                                                         ch->idname);
@@ -717,8 +734,8 @@ bool BKE_brush_channel_inherits(Brush *brush, ToolSettings *tool_settings, Brush
   return false;
 }
 
-BrushChannelSet *BKE_brush_channelset_create_final(Brush *brush,
-                                                   Scene *scene,
+BrushChannelSet *BKE_brush_channelset_create_final(const Brush *brush,
+                                                   const Scene *scene,
                                                    BrushMappingData *mapdata)
 {
   BrushChannelSet *chset = BKE_brush_channelset_copy(brush->channels);
@@ -889,4 +906,13 @@ void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
   }
 
   BKE_libblock_free_data(&defaults.id, false);
+}
+
+void _BKE_brush_channelset_mark_update(BrushChannelSet *chset, const char *idname)
+{
+  BrushChannel *ch = _BKE_brush_channelset_lookup(chset, idname);
+
+  if (ch) {
+    ch->flag |= BRUSH_CHANNEL_NEEDS_EVALUATE;
+  }
 }
