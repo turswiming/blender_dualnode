@@ -154,31 +154,35 @@ bool _BKE_brush_channelset_has(BrushChannelSet *chset, const char *idname);
    reevaluate values from RNA */
 void BKE_brush_channelset_begin(BrushChannelSet *chset, BrushChannelType *type);
 
-float _BKE_brush_channelset_float_get(struct Brush *br,
-                                      struct Scene *scene,
-                                      BrushChannelSet *chset,
-                                      const char *idname,
-                                      BrushMappingData *mapping);
-#define BKE_brush_channelset_float_get(br, scene, chset, channel, mapdata) \
-  _BKE_brush_channelset_float_get(br, scene, chset, make_builtin_ch_name(channel), mapdata)
+float _BKE_brush_channelset_eval_float(struct Brush *br,
+                                       struct Scene *scene,
+                                       BrushChannelSet *chset,
+                                       const char *idname,
+                                       BrushMappingData *mapping);
+#define BKE_brush_channelset_eval_float(br, scene, chset, channel, mapdata) \
+  _BKE_brush_channelset_eval_float(br, scene, chset, make_builtin_ch_name(channel), mapdata)
 
-void _BKE_brush_channelset_float_set(struct Brush *br,
-                                     struct Scene *scene,
-                                     BrushChannelSet *chset,
-                                     const char *idname,
-                                     float f,
-                                     bool set_rna);
+float _BKE_brush_channelset_float_get(BrushChannelSet *chset, const char *idname);
+void _BKE_brush_channelset_float_set(BrushChannelSet *chset, const char *idname, float f);
+int _BKE_brush_channelset_int_get(BrushChannelSet *chset, const char *idname);
+void _BKE_brush_channelset_int_set(BrushChannelSet *chset, const char *idname, int i);
+
+#define BKE_brush_channelset_float_get(chset, idname) \
+  _BKE_brush_channelset_float_get(chset, make_builtin_ch_name(idname))
+#define BKE_brush_channelset_float_set(chset, idname, f) \
+  _BKE_brush_channelset_float_set(chset, make_builtin_ch_name(idname), f)
+#define BKE_brush_channelset_int_get(chset, idname) \
+  _BKE_brush_channelset_int_get(chset, make_builtin_ch_name(idname))
+#define BKE_brush_channelset_int_set(chset, idname, f) \
+  _BKE_brush_channelset_int_set(chset, make_builtin_ch_name(idname), f)
 
 BrushChannelSet *BKE_brush_channelset_copy(BrushChannelSet *chset);
 
 /* Create a (copied) final brush channel set with all inheritance and unified flags
    and input mappings taken into account. */
 BrushChannelSet *BKE_brush_channelset_create_final(struct Brush *brush,
-                                                   struct ToolSettings *tool_settings,
+                                                   struct Scene *scene,
                                                    BrushMappingData *mapdata);
-
-#define BKE_brush_channelset_float_set(br, scene, chset, channel, f, set_rna) \
-  _BKE_brush_channelset_float_set(br, scene, chset, make_builtin_ch_name(channel), f, set_rna)
 
 BLI_INLINE const char *BKE_brush_mapping_type_to_typename(eBrushMappingType type)
 {

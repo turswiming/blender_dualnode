@@ -595,7 +595,7 @@ blender::draw::DebugDraw *DRW_debug_get()
 
 void drw_debug_draw()
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
+  if (!DST.debug || !GPU_shader_storage_buffer_objects_support()) {
     return;
   }
   /* TODO(fclem): Convenience for now. Will have to move to DRWManager. */

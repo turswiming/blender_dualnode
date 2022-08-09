@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DNA_brush_channel_types.h"
 #include "DNA_brush_types.h"
 #include "DNA_key_types.h"
 #include "DNA_listBase.h"
@@ -14,6 +15,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_vec_types.h"
 
+#include "BKE_brush_channel.h"
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
 #include "BLI_bitmap.h"
@@ -34,6 +36,8 @@ struct Object;
 struct SculptUndoNode;
 struct bContext;
 struct PaintModeSettings;
+struct RNG;
+struct BrushChannelSet;
 
 /* Updates */
 
@@ -476,6 +480,7 @@ typedef struct FilterCache {
 typedef struct StrokeCache {
   /* Invariants */
   float initial_radius;
+  float initial_raw_radius;
   float scale[3];
   int flag;
   float clip_tolerance[3];
@@ -636,6 +641,10 @@ typedef struct StrokeCache {
   rcti previous_r; /* previous redraw rectangle */
   rcti current_r;  /* current redraw rectangle */
 
+  struct BrushChannelSet *channels;
+  struct RNG *rng;
+  float angle, speed;
+  BrushMappingData mapdata;
 } StrokeCache;
 
 /* -------------------------------------------------------------------- */

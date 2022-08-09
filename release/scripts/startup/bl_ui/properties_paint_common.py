@@ -132,7 +132,12 @@ class UnifiedPaintPanel:
         if context.mode != "SCULPT":
             return UnifiedPaintPanel.prop_unified(layout, context, brush, prop_name, icon=icon, text=text, slider=slider, header=header, expand=expand)
 
+        sculpt = context.tool_settings.sculpt
         ch = brush.channels[prop_name]
+
+        inherit = ch.inherit
+        if context.tool_settings.unified_channels[ch.idname].unified:
+            inherit = True
 
         # dynamically switch to unprojected radius if necassary
         if prop_name == "size":
@@ -150,8 +155,10 @@ class UnifiedPaintPanel:
             layout = layout.column(align=True)
 
         row = layout.row(align=True)
-        row.use_property_split = True
-        row.use_property_decorate = False
+
+        if not header:
+            row.use_property_split = True
+            row.use_property_decorate = False
 
         if pressure is None:
             pressure = ch.type not in ["VEC3", "VEC4", "BITMASK", "ENUM", "BOOL"]
@@ -161,31 +168,27 @@ class UnifiedPaintPanel:
 
         path = ""
         proppath = ""
+        final_prop_name = prop_name
 
         pressurech = ch
 
-        if not brush_only and (ch.inherit or toolsettings_only):
-            sd = context.tool_settings.sculpt
-            # ensure channel exists in tool settings channel set
-            sd.channels.ensure(ch)
-
-            finalch = sd.channels[prop_name]
+        if not brush_only and (inherit or toolsettings_only):
+            finalch = context.tool_settings.unified_channels[prop_name]
 
             path = "tool_settings.unified_channels[\"%s\"]" % ch.idname
             proppath = "tool_settings.unified_properties"
+            final_prop_name = '["%s"]' % (prop_name)
         else:
             path = "tool_settings.sculpt.brush.channels[\"%s\"]" % ch.idname
             proppath = "tool_settings.sculpt.brush"
 
         finalowner = context.path_resolve(proppath)
         
-        if not (ch.inherit and ch.mappings["PRESSURE"].inherit_mode == "NEVER"):
+        if not (inherit and ch.mappings["PRESSURE"].inherit_mode == "NEVER"):
             pressurech = finalch
 
             if pressurech == ch and ch.mappings["PRESSURE"].inherit_mode == "ALWAYS":
-                sd = context.tool_settings.sculpt
-                sd.channels.ensure(ch)
-                pressurech = sd.channels[ch.idname]
+                pressurech = context.tool_settings.unified_channels[ch.idname]
 
         if show_reorder:
             props = row.operator("brush.change_channel_order", text="", icon="TRIA_UP")
@@ -217,7 +220,7 @@ class UnifiedPaintPanel:
         elif ch.type == "BITMASK":
             if header or not expand:
                 row.label(text=text)
-                row.prop_menu_enum(finalowner, prop_name, text=text)
+                row.prop_menu_enum(finalowner, final_prop_name, text=text)
             else:
                 # why is it so hard to make bitflag checkboxes? - joeedh
 
@@ -232,7 +235,7 @@ class UnifiedPaintPanel:
                         itemicon = "CHECKBOX_HLT"
                     else:
                         itemicon = "CHECKBOX_DEHLT"
-                    col.prop_enum(finalowner, prop_name, item.identifier, icon=itemicon)
+                    col.prop_enum(finalowner, final_prop_name, item.identifier, icon=itemicon)
 
         elif header and ch.idname == "direction":
             row2 = row.row(align=True)
@@ -241,12 +244,12 @@ class UnifiedPaintPanel:
 
             # replicate pre-existing functionality of direction showing up as
             # +/- in the header
-            row2.prop_enum(finalowner, prop_name, "ADD", text="")
-            row2.prop_enum(finalowner, prop_name, "SUBTRACT", text="")
+            row2.prop_enum(finalowner, final_prop_name, "ADD", text="")
+            row2.prop_enum(finalowner, final_prop_name, "SUBTRACT", text="")
         elif expand is not None:
-            row.prop(finalowner, prop_name, icon=icon, text=text, slider=slider, expand=expand)
+            row.prop(finalowner, final_prop_name, icon=icon, text=text, slider=slider, expand=expand)
         else:
-            row.prop(finalowner, prop_name, icon=icon, text=text, slider=slider)
+            row.prop(finalowner, final_prop_name, icon=icon, text=text, slider=slider)
 
         pressure = pressure and ch.type not in ["BOOL", "ENUM", "BITMASK", "CURVE"]
 
@@ -259,6 +262,7 @@ class UnifiedPaintPanel:
 
             if not toolsettings_only:
                 row.prop(context.tool_settings.unified_channels[prop_name], "unified", text="", icon='BRUSHES_ALL')
+
             if ui_editing and not toolsettings_only:
                 row.prop(ch, "inherit", text="", icon='BRUSHES_ALL')
 
@@ -280,9 +284,7 @@ class UnifiedPaintPanel:
                         mp = finalch.mappings[i]
 
                         if mp.inherit_mode == "ALWAYS" and finalch == ch:
-                            sd = context.tool_settings.sculpt
-                            sd.channels.ensure(ch)
-                            mp = sd.channels[ch.idname].mappings[i]
+                            mp = context.tool_channels.unified_channels[ch.idname].mappings[i]
 
                     row2 = layout.row(align=True)
                     row2.use_property_split = False
@@ -321,7 +323,7 @@ class UnifiedPaintPanel:
                         col.use_property_split = True
                         col.use_property_decorate = False
 
-                        if mp0.inherit_mode == "ALWAYS" or (mp0.inherit_mode == "USE_CHANNEL" and ch.inherits):
+                        if mp0.inherit_mode == "ALWAYS" or (mp0.inherit_mode == "USE_CHANNEL" and inherit):
                             path2 = path + ".mappings[\"%s\"].curve" % (mp.type)
                         else:
                             brushpath = "tool_settings.sculpt.brush.channels[\"%s\"]" % ch.idname
@@ -370,14 +372,9 @@ class UnifiedPaintPanel:
             along with their pen pressure setting and global toggle, if they exist. """
 
         if context.mode == "SCULPT":
-            if prop_name in channel_name_map:
-                prop_name = channel_name_map[prop_name]
-
-            if prop_name in brush.channels:
-                #    def channel_unified(layout, context, brush, prop_name,
-                #    icon='NONE', pressure=True, text=None, slider=False,
-                #    header=False):
-                return UnifiedPaintPanel.channel_unified(layout, context, brush, prop_name, icon=icon, text=text, slider=slider, header=header)
+            pass
+            #if prop_name in brush.channels:
+            #    return UnifiedPaintPanel.channel_unified(layout, context, brush, prop_name, icon=icon, text=text, slider=slider, header=header)
 
         row = layout.row(align=True)
         ups = context.tool_settings.unified_paint_settings

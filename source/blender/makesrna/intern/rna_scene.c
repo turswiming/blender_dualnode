@@ -29,6 +29,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_armature.h"
+#include "BKE_brush_channel.h"
 #include "BKE_editmesh.h"
 #include "BKE_idtype.h"
 #include "BKE_paint.h"
@@ -2180,6 +2181,14 @@ static void rna_UnifiedPaintSettings_size_set(PointerRNA *ptr, int value)
   /* scale unprojected radius so it stays consistent with brush size */
   BKE_brush_scale_unprojected_radius(&ups->unprojected_radius, value, ups->size);
   ups->size = value;
+
+  Scene *scene = (Scene *)ptr->owner_id;
+  PointerRNA prop_ptr;
+
+  RNA_pointer_create(
+      &scene->id, &RNA_UnifiedBrushProperties, scene->toolsettings, &prop_ptr);
+  RNA_int_set(&prop_ptr, "[\"size\"]", ups->size);
+  RNA_float_set(&prop_ptr, "[\"unprojected_radius\"]", ups->unprojected_radius);
 }
 
 static void rna_UnifiedPaintSettings_unprojected_radius_set(PointerRNA *ptr, float value)
@@ -2753,6 +2762,26 @@ static PointerRNA rna_ToolSettings_unified_properties_get(PointerRNA *ptr)
   return ret;
 }
 
+bool rna_UnifiedPaintSettings_use_unified_size_get(PointerRNA *ptr)
+{
+  Scene *scene = (Scene *)ptr->owner_id;
+  BrushChannel *ch = BKE_brush_channelset_lookup(scene->toolsettings->unified_channels, size);
+
+  return ch->flag & BRUSH_CHANNEL_FORCE_INHERIT;
+}
+
+void rna_UnifiedPaintSettings_use_unified_size_set(PointerRNA *ptr, bool val)
+{
+  Scene *scene = (Scene *)ptr->owner_id;
+  BrushChannel *ch = BKE_brush_channelset_lookup(scene->toolsettings->unified_channels, size);
+
+  if (val) {
+    ch->flag |= BRUSH_CHANNEL_FORCE_INHERIT;
+  }
+  else {
+    ch->flag &= ~BRUSH_CHANNEL_FORCE_INHERIT;
+  }
+}
 #else
 
 /* Grease Pencil Interpolation tool settings */
@@ -3877,6 +3906,10 @@ static void rna_def_unified_paint_settings(BlenderRNA *brna)
   /* high-level flags to enable or disable unified paint settings */
   prop = RNA_def_property(srna, "use_unified_size", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", UNIFIED_PAINT_SIZE);
+  RNA_def_property_boolean_funcs(prop,
+                                 "rna_UnifiedPaintSettings_use_unified_size_get",
+                                 "rna_UnifiedPaintSettings_use_unified_size_set");
+
   RNA_def_property_ui_text(prop,
                            "Use Unified Radius",
                            "Instead of per-brush radius, the radius is shared across brushes");

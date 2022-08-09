@@ -236,17 +236,28 @@ class _draw_tool_settings_context_mode:
         if size_owner.use_locked_size == 'SCENE':
             size = "unprojected_radius"
 
-        UnifiedPaintPanel.prop_unified(
-            layout,
-            context,
-            brush,
-            size,
-            pressure_name="use_pressure_size",
-            unified_name="use_unified_size",
-            text="Radius",
-            slider=True,
-            header=True,
-        )
+        if 0:
+            UnifiedPaintPanel.prop_unified(
+                layout,
+                context,
+                brush,
+                size,
+                pressure_name="use_pressure_size",
+                unified_name="use_unified_size",
+                text="Radius",
+                slider=True,
+                header=True,
+            )
+        else:
+            UnifiedPaintPanel.channel_unified(
+                layout,
+                context,
+                brush,
+                size,
+                text="Radius",
+                slider=True,
+                header=True,
+            )
 
         # strength, use_strength_pressure
         pressure_name = "use_pressure_strength" if capabilities.has_strength_pressure else None

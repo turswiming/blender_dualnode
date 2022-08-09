@@ -171,7 +171,7 @@ bool rna_BrushChannel_inherit_get(PointerRNA *rna)
 {
   BrushChannel *ch = (BrushChannel *)rna->data;
 
-  return ch->flag & BRUSH_CHANNEL_FORCE_INHERIT;
+  return ch->flag & BRUSH_CHANNEL_INHERIT;
 }
 
 void rna_BrushChannel_unified_set(PointerRNA *rna, bool value)
@@ -199,7 +199,7 @@ bool rna_BrushChannel_unified_get(PointerRNA *rna)
 {
   BrushChannel *ch = (BrushChannel *)rna->data;
 
-  return ch->flag & BRUSH_CHANNEL_INHERIT;
+  return ch->flag & BRUSH_CHANNEL_FORCE_INHERIT;
 }
 
 void rna_BrushChannel_set_value(PointerRNA *rna, float value)

@@ -16,6 +16,7 @@
 #include "BLI_math.h"
 #include "BLI_math_color.h"
 #include "BLI_math_color_blend.h"
+#include "BLI_rand.h"
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
 
@@ -33,6 +34,7 @@
 
 #include "BKE_attribute.h"
 #include "BKE_brush.h"
+#include "BKE_brush_channel.h"
 #include "BKE_ccg.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
@@ -4219,6 +4221,8 @@ static void sculpt_update_cache_invariants(
 
   ss->cache = cache;
 
+  cache->rng = BLI_rng_new((int)(PIL_check_seconds_timer() * 10000.0));
+
   /* Set scaling adjustment. */
   max_scale = 0.0f;
   for (int i = 0; i < 3; i++) {
@@ -4562,7 +4566,7 @@ static void sculpt_update_brush_delta(UnifiedPaintSettings *ups, Object *ob, Bru
   sculpt_rake_data_update(&cache->rake_data, grab_location);
 }
 
-static void sculpt_update_cache_paint_variants(StrokeCache *cache, const Brush *brush)
+ATTR_NO_OPT static void sculpt_update_cache_paint_variants(StrokeCache *cache, const Brush *brush)
 {
   cache->paint_brush.hardness = brush->hardness;
   if (brush->paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE) {
@@ -4648,6 +4652,32 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt *sd, Object *ob, Po
     }
   }
 
+  if (!cache->first_time && cache->radius != 0.0f) {
+    float mouse[2];
+    RNA_float_get_array(ptr, "mouse", mouse);
+
+    sub_v2_v2(mouse, cache->mouse);
+
+    cache->speed = len_v2(mouse) / cache->radius;
+    cache->angle = atan2(mouse[1], mouse[0]);
+  }
+
+  BrushMappingData mapdata;
+
+  mapdata.pressure = RNA_float_get(ptr, "pressure");
+  mapdata.xtilt = RNA_float_get(ptr, "x_tilt");
+  mapdata.ytilt = RNA_float_get(ptr, "y_tilt");
+  mapdata.stroke_t = cache->stroke_distance;
+  mapdata.random = BLI_rng_get_float(cache->rng);
+  mapdata.angle = cache->angle;
+  mapdata.speed = cache->speed;
+
+  if (cache->channels) {
+    BKE_brush_channelset_free(cache->channels);
+  }
+  cache->channels = BKE_brush_channelset_create_final(brush, scene, &mapdata);
+  cache->mapdata = mapdata;
+
   /* Clay stabilized pressure. */
   if (brush->sculpt_tool == SCULPT_TOOL_CLAY_THUMB) {
     if (SCULPT_stroke_is_first_brush_step_of_symmetry_pass(ss->cache)) {
@@ -4665,6 +4695,7 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt *sd, Object *ob, Po
     }
   }
 
+#if 0
   if (BKE_brush_use_size_pressure(brush) &&
       paint_supports_dynamic_size(brush, PAINT_MODE_SCULPT)) {
     cache->radius = sculpt_brush_dynamic_size_get(brush, cache, cache->initial_radius);
@@ -4675,6 +4706,16 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt *sd, Object *ob, Po
     cache->radius = cache->initial_radius;
     cache->dyntopo_pixel_radius = ups->initial_pixel_radius;
   }
+#else
+  if (!BKE_brush_use_locked_size(scene, brush)) {
+    int radius = BKE_brush_channelset_int_get(cache->channels, size);
+    cache->radius = paint_calc_object_space_radius(cache->vc, cache->true_location, radius);
+  }
+  else {
+    cache->radius = BKE_brush_channelset_float_get(cache->channels, unprojected_radius);
+  }
+
+#endif
 
   sculpt_update_cache_paint_variants(cache, brush);
 
