@@ -137,7 +137,6 @@ TRIVIAL_DEFAULT_INT_HASH(int32_t);
 TRIVIAL_DEFAULT_INT_HASH(uint32_t);
 TRIVIAL_DEFAULT_INT_HASH(int64_t);
 TRIVIAL_DEFAULT_INT_HASH(uint64_t);
-TRIVIAL_DEFAULT_INT_HASH(intptr_t);
 
 /**
  * One should try to avoid using floats as keys in hash tables, but sometimes it is convenient.

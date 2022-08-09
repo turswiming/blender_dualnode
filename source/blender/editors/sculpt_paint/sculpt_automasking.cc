@@ -234,7 +234,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
   zero_v3(sco2);
 
   Vector<CavityBlurVert, 64> queue;
-  Set<intptr_t, 64> visit;
+  Set<int64_t, 64> visit;
 
   int start = 0, end = 0;
 
