@@ -275,6 +275,12 @@ PointerRNA rna_BrushCurve_curve_get(PointerRNA *ptr)
 {
   BrushCurve *curve = (BrushCurve *)ptr->data;
 
+  if (!curve->curve) {
+    curve->curve = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+    rctf bounds = {0.0f, 1.0f, 0.0f, 1.0f};
+    BKE_curvemap_reset(curve->curve->cm, &bounds, CURVE_PRESET_LINE, CURVEMAP_SLOPE_POSITIVE);
+  }
+
   return rna_pointer_inherit_refine(ptr, &RNA_CurveMapping, curve->curve);
 }
 
