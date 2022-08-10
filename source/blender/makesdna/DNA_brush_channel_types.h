@@ -113,7 +113,7 @@ typedef struct BrushChannel {
   short type; /** eBrushChannelType */
   short ui_order;
   int flag; /** eBrushChannelFlag */
-  int ui_flag, _pad[1];
+  int ui_flag, evaluated_flag;
 } BrushChannel;
 
 typedef struct BrushChannelSet {

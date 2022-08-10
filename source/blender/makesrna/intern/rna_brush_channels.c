@@ -55,6 +55,36 @@ static EnumPropertyItem null_enum[2] = {{0, "null", ICON_NONE, "null"}, {0, NULL
 
 #  include "RNA_access.h"
 
+#if 0
+static void rna_brushchannel_update(Scene *scene, Brush *brush)
+{
+}
+
+void rna_BrushChannel_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  switch (GS(ptr->owner_id->name)) {
+    case ID_SCE: {
+      ToolSettings *ts = scene->toolsettings;
+      Paint *paints[] = {
+        &ts->sculpt,
+        &ts->
+      };
+      int paints_num = ARRAY_SIZE(paints);
+
+      break;
+    }
+    case ID_BR: {
+      Brush *brush = (Brush *)ptr->owner_id;
+      rna_brushchannel_update(scene, brush);
+      break;
+    }
+    default:
+      printf("%s: Invalid PointerRNA, unexpected owner_id \"%s\"\n", __func__, ptr->owner_id->name);
+      return;
+  }
+}
+#endif
+
 void rna_BrushChannel_update_tooltip(PointerRNA *ptr, const char *propname)
 {
   BrushChannel *ch = (BrushChannel *)ptr->data;

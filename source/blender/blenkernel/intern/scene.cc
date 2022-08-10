@@ -1072,6 +1072,10 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
 
   BKE_screen_view3d_shading_blend_write(writer, &sce->display.shading);
 
+  if (sce->toolsettings && sce->toolsettings->unified_channels) {
+    BKE_brush_channelset_blend_write(sce->toolsettings->unified_channels, writer);
+  }
+
   /* Freed on `do_versions()`. */
   BLI_assert(sce->layer_properties == nullptr);
 }

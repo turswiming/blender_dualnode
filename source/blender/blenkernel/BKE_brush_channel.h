@@ -36,11 +36,20 @@ a logical parameter with a type, input settings (e.g. pen),
 a falloff curve, etc.
 
 Brush channels have a concept of inheritance.  There is a
-BrushChannelSet (collection of channels) in Sculpt,
-in Brush, and in BrushCommand.  Inheritence behavior
-is controller via BrushChannel->flag.
+BrushChannelSet (collection of channels) in ToolSettings,
+and in Brush (Brush.channels and ToolSettings.unified_channels).
+Unified properties are stored in ToolSettings.unified_properties
+as IDProperties.
 
-This should completely replace UnifiedPaintSettings.
+Note: Many API functions start with an underscore.  These functions
+support compile-time property name checking.  This is done via macros;
+if you call the function without the underscore you'll go through a macro
+that will transform the property name into a global variable.  If that
+global variable does not exist you'll get an error.
+
+For example `BKE_brush_channelset_lookup(chset, size)` compiles down to
+`_BKE_brush_channelset_lookup(chset, BRUSH_BUILTIN_size)`
+
 */
 
 #include "BLI_compiler_compat.h"
@@ -65,12 +74,6 @@ struct ToolSettings;
 struct UnifiedPaintSettings;
 
 #define make_builtin_ch_name(idname) BRUSH_BUILTIN_##idname
-
-//#define DEBUG_CURVE_MAPPING_ALLOC
-#ifdef DEBUG_CURVE_MAPPING_ALLOC
-void namestack_push(const char *name);
-void *namestack_pop(void *passthru);
-#endif
 
 typedef void (*BrushChannelIDCallback)(void *userdata,
                                        struct ID *id,
@@ -138,48 +141,58 @@ set up static type checker for BKE_brush_channel_XXX name-checking macros
 #include "intern/brush_channel_define.h"
 #undef BRUSH_CHANNEL_DEFINE_EXTERNAL
 
+/* Remember that calling these without the leading underscore and with no
+ * quotes around idname will perform compile-time name checking.
+ */
 BrushChannel *_BKE_brush_channelset_ensure(BrushChannelSet *chset, const char *idname);
-#define BKE_brush_channelset_ensure(chset, idname) \
-  _BKE_brush_channelset_ensure(chset, make_builtin_ch_name(idname))
-
 BrushChannel *_BKE_brush_channelset_lookup(BrushChannelSet *chset, const char *idname);
-#define BKE_brush_channelset_lookup(chset, channel) \
-  _BKE_brush_channelset_lookup(chset, make_builtin_ch_name(channel))
 
 bool _BKE_brush_channelset_has(BrushChannelSet *chset, const char *idname);
-#define BKE_brush_channelset_has(chset, channel) \
-  _BKE_brush_channelset_has(chset, make_builtin_ch_name(channel))
 
 /* Flags all channels with BRUSH_CHANNEL_NEEDS_EVALUATE so we
    reevaluate values from RNA */
 void BKE_brush_channelset_begin(BrushChannelSet *chset, BrushChannelType *type);
 
-float _BKE_brush_channelset_eval_float(const struct Brush *br,
-                                       const struct Scene *scene,
-                                       const char *idname,
-                                       BrushMappingData *mapping);
-int _BKE_brush_channelset_eval_int(const struct Brush *br,
-                                   const struct Scene *scene,
-                                   const char *idname,
-                                   BrushMappingData *mapping);
+/* Evaluates a channel, taking unified channel inheritance into account.  Result
+ * is cached in channel, to force update call BKE_brush_channelset_mark_update. */
+float _BKE_brush_eval_float(const struct Brush *br,
+                            const struct Scene *scene,
+                            const char *idname,
+                            BrushMappingData *mapping);
+int _BKE_brush_eval_int(const struct Brush *br,
+                        const struct Scene *scene,
+                        const char *idname,
+                        BrushMappingData *mapping);
+
+/* Get and set internal cached values in brush channels. */
 float _BKE_brush_channelset_float_get(BrushChannelSet *chset, const char *idname);
 void _BKE_brush_channelset_float_set(BrushChannelSet *chset, const char *idname, float f);
 int _BKE_brush_channelset_int_get(BrushChannelSet *chset, const char *idname);
 void _BKE_brush_channelset_int_set(BrushChannelSet *chset, const char *idname, int i);
 
-#define BKE_brush_channelset_eval_float(br, scene, channel, mapdata) \
-  _BKE_brush_channelset_eval_float(br, scene, make_builtin_ch_name(channel), mapdata)
-#define BKE_brush_channelset_eval_int(br, scene, channel, mapdata) \
-  _BKE_brush_channelset_eval_int(br, scene, make_builtin_ch_name(channel), mapdata)
+/* Get and set channels' real values from RNA. ID can be either a Brush or a Scene.
+ * If a Scene the unified properties in Scene.toolsettings->unified_properties
+ * will be used.
+ */
+int _BKE_brush_int_get(const struct ID *id, BrushChannelSet *chset, const char *idname);
+void _BKE_brush_int_set(struct ID *id, BrushChannelSet *chset, const char *idname, int i);
+float _BKE_brush_float_get(const struct ID *id, BrushChannelSet *chset, const char *idname);
+void _BKE_brush_float_set(struct ID *id, BrushChannelSet *chset, const char *idname, float f);
 
-#define BKE_brush_channelset_float_get(chset, idname) \
-  _BKE_brush_channelset_float_get(chset, make_builtin_ch_name(idname))
-#define BKE_brush_channelset_float_set(chset, idname, f) \
-  _BKE_brush_channelset_float_set(chset, make_builtin_ch_name(idname), f)
-#define BKE_brush_channelset_int_get(chset, idname) \
-  _BKE_brush_channelset_int_get(chset, make_builtin_ch_name(idname))
-#define BKE_brush_channelset_int_set(chset, idname, f) \
-  _BKE_brush_channelset_int_set(chset, make_builtin_ch_name(idname), f)
+int _BKE_brush_int_get_unified(const struct Scene *scene,
+                               const struct Brush *brush,
+                               const char *idname);
+void _BKE_brush_int_set_unified(struct Scene *scene,
+                                struct Brush *brush,
+                                const char *idname,
+                                int i);
+float _BKE_brush_float_get_unified(const struct Scene *scene,
+                                   const struct Brush *brush,
+                                   const char *idname);
+void _BKE_brush_float_set_unified(struct Scene *scene,
+                                  struct Brush *brush,
+                                  const char *idname,
+                                  float i);
 
 BrushChannelSet *BKE_brush_channelset_copy(BrushChannelSet *chset);
 
@@ -222,11 +235,61 @@ BrushChannelSet *BKE_brush_channelset_get_final(const struct Brush *brush,
 void BKE_brush_channelset_toolsettings_init(struct ToolSettings *ts);
 
 /* Get rna path for brush channel. Calling code should call MEM_SAFE_FREE on result. */
-char *BKE_brush_channel_rna_path(ID *owner, BrushChannel *ch);
+char *BKE_brush_channel_rna_path(const ID *owner, const BrushChannel *ch);
 
 void _BKE_brush_channelset_mark_update(BrushChannelSet *chset, const char *idname);
 #define BKE_brush_channelset_mark_update(chset, idname) \
   _BKE_brush_channelset_mark_update(chset, make_builtin_ch_name(idname))
+
+/* Ensure BrushChannel.ui_order for all the channels inside chset are rational, i.e.
+ * they go from 0 to chset->channels_num-1.
+ */
+
+void BKE_brush_channelset_ui_order_check(BrushChannelSet *chset);
+
+#if 0
+/* Call when active brush changes. */
+void BKE_brush_channels_update(struct Brush *active_brush, struct Scene *scene);
+#endif
+
+#define BKE_brush_channelset_ensure(chset, idname) \
+  _BKE_brush_channelset_ensure(chset, make_builtin_ch_name(idname))
+#define BKE_brush_channelset_lookup(chset, channel) \
+  _BKE_brush_channelset_lookup(chset, make_builtin_ch_name(channel))
+#define BKE_brush_channelset_has(chset, channel) \
+  _BKE_brush_channelset_has(chset, make_builtin_ch_name(channel))
+
+#define BKE_brush_int_set_unified(scene, brush, idname, i) \
+  _BKE_brush_int_set_unified(scene, brush, make_builtin_ch_name(idname), i)
+#define BKE_brush_int_get_unified(scene, brush, idname) \
+  _BKE_brush_int_get_unified(scene, brush, make_builtin_ch_name(idname))
+#define BKE_brush_float_set_unified(scene, brush, idname, f) \
+  _BKE_brush_float_set_unified(scene, brush, make_builtin_ch_name(idname), f)
+#define BKE_brush_float_get_unified(scene, brush, idname) \
+  _BKE_brush_float_get_unified(scene, brush, make_builtin_ch_name(idname))
+
+#define BKE_brush_eval_float(br, scene, channel, mapdata) \
+  _BKE_brush_eval_float(br, scene, make_builtin_ch_name(channel), mapdata)
+#define BKE_brush_eval_int(br, scene, channel, mapdata) \
+  _BKE_brush_eval_int(br, scene, make_builtin_ch_name(channel), mapdata)
+
+#define BKE_brush_channelset_float_get(chset, idname) \
+  _BKE_brush_channelset_float_get(chset, make_builtin_ch_name(idname))
+#define BKE_brush_channelset_float_set(chset, idname, f) \
+  _BKE_brush_channelset_float_set(chset, make_builtin_ch_name(idname), f)
+#define BKE_brush_channelset_int_get(chset, idname) \
+  _BKE_brush_channelset_int_get(chset, make_builtin_ch_name(idname))
+#define BKE_brush_channelset_int_set(chset, idname, f) \
+  _BKE_brush_channelset_int_set(chset, make_builtin_ch_name(idname), f)
+
+#define BKE_brush_int_get(id, chset, idname) \
+  _BKE_brush_int_get(id, chset, make_builtin_ch_name(idname))
+#define BKE_brush_int_set(id, chset, idname, f) \
+  _BKE_brush_int_set(id, chset, make_builtin_ch_name(idname), f)
+#define BKE_brush_float_get(id, chset, idname) \
+  _BKE_brush_float_get(id, chset, make_builtin_ch_name(idname))
+#define BKE_brush_float_set(id, chset, idname, f) \
+  _BKE_brush_float_set(id, chset, make_builtin_ch_name(idname), f)
 
 /* Disable optimization for a function (for debugging use only!)*/
 #ifdef __clang__

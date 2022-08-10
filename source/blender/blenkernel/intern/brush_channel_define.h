@@ -26,6 +26,9 @@
 #ifdef SHOW_CONTEXT
 #  undef SHOW_CONTEXT
 #endif
+#ifdef SHOW_ALL
+#undef SHOW_ALL
+#endif
 
 /*
   UI visibility flags.  Note that some brush types
@@ -37,11 +40,24 @@
 #define SHOW_HEADER BRUSH_CHANNEL_SHOW_IN_HEADER
 #define SHOW_ALL (SHOW_WORKSPACE | SHOW_CONTEXT | SHOW_HEADER)
 
+/* Note that channel sets for individual brush types are built in
+ * BKE_brush_channelset_ensure_channels
+ */
+
 MAKE_PROP(size, "Basic", SHOW_ALL)
 MAKE_PROP(unprojected_radius, "Basic", SHOW_ALL)
 MAKE_PROP(strength, "Basic", SHOW_ALL)
 MAKE_PROP(auto_smooth_factor, "Smooth", SHOW_WORKSPACE | SHOW_CONTEXT)
+MAKE_PROP(density, "Basic", 0)
+MAKE_PROP(tip_scale_x, "Basic", 0)
+
+MAKE_PROP(color, "Color", 0)
+MAKE_PROP(secondary_color, "Color", 0)
+MAKE_PROP(wet_mix, "Color", 0)
+MAKE_PROP(flow, "Color", 0)
+MAKE_PROP(wet_persistence, "Color", 0)
 
 #undef SHOW_WORKSPACE
 #undef SHOW_HEADER
 #undef SHOW_CONTEXT
+#undef SHOW_ALL

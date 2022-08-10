@@ -35,6 +35,11 @@
 #include "BKE_paint.h"
 #include "BKE_texture.h"
 
+#include "RNA_access.h"
+#include "RNA_path.h"
+#include "RNA_prototypes.h"
+#include "RNA_types.h"
+
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
@@ -248,6 +253,10 @@ static void brush_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   }
   if (brush->gradient) {
     BLO_write_struct(writer, ColorBand, brush->gradient);
+  }
+
+  if (brush->channels) {
+    BKE_brush_channelset_blend_write(brush->channels, writer);
   }
 }
 
@@ -2255,6 +2264,9 @@ void BKE_brush_color_set(struct Scene *scene, struct Brush *brush, const float c
 
 void BKE_brush_size_set(Scene *scene, Brush *brush, int size)
 {
+  BKE_brush_int_set_unified(scene, brush, size, size);
+
+#if 0
   UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
 
   /* make sure range is sane */
@@ -2266,11 +2278,14 @@ void BKE_brush_size_set(Scene *scene, Brush *brush, int size)
   else {
     brush->size = size;
   }
+#endif
 }
 
 int BKE_brush_size_get(const Scene *scene, const Brush *brush)
 {
-  return BKE_brush_channelset_eval_int(brush, scene, size, NULL);
+  return BKE_brush_int_get_unified(scene, brush, size);
+  /* theoretically faster: return BKE_brush_eval_int(brush, scene, size, NULL); */
+
 #if 0
   UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
   int size = (ups->flag & UNIFIED_PAINT_SIZE) ? ups->size : brush->size;
@@ -2337,21 +2352,27 @@ float BKE_brush_unprojected_radius_get(const Scene *scene, const Brush *brush)
 
 void BKE_brush_alpha_set(Scene *scene, Brush *brush, float alpha)
 {
-  UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
+  BKE_brush_float_set_unified(scene, brush, strength, alpha);
 
+#if 0
+  UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
   if (ups->flag & UNIFIED_PAINT_ALPHA) {
     ups->alpha = alpha;
   }
   else {
     brush->alpha = alpha;
   }
+#endif
 }
 
 float BKE_brush_alpha_get(const Scene *scene, const Brush *brush)
 {
+  return BKE_brush_float_get_unified(scene, brush, strength);
+#if 0
   UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
 
   return (ups->flag & UNIFIED_PAINT_ALPHA) ? ups->alpha : brush->alpha;
+#endif
 }
 
 float BKE_brush_weight_get(const Scene *scene, const Brush *brush)

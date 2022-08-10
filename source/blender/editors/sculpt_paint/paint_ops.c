@@ -1376,6 +1376,81 @@ static void BRUSH_OT_stencil_reset_transform(wmOperatorType *ot)
       ot->srna, "mask", 0, "Modify Mask Stencil", "Modify either the primary or mask stencil");
 }
 
+static bool change_channel_order_poll(bContext *C)
+{
+  Paint *paint = BKE_paint_get_active_from_context(C);
+
+  if (!paint) {
+    return false;
+  }
+
+  Brush *brush = BKE_paint_brush(paint);
+  return brush != NULL;
+}
+
+static int change_channel_order_exec(bContext *C, wmOperator *op)
+{
+  Paint *paint = BKE_paint_get_active_from_context(C);
+  Brush *brush = BKE_paint_brush(paint);
+
+  char idname[BRUSH_CHANNEL_MAX_IDNAME];
+  RNA_string_get(op->ptr, "idname", idname);
+
+  if (!_BKE_brush_channelset_has(brush->channels, idname)) {
+    static char error[128];
+
+    sprintf(error, "Invalid brush channel \"%s\"", idname);
+    BKE_reportf(op->reports, RPT_ERROR_INVALID_INPUT, error);
+    return OPERATOR_CANCELLED;
+  }
+
+  BrushChannel *dest_ch = _BKE_brush_channelset_lookup(brush->channels, idname);
+  int neworder = dest_ch->ui_order;
+
+  BKE_brush_channelset_ui_order_check(brush->channels);
+
+  int dir = RNA_int_get(op->ptr, "direction");
+
+  if (dir < 0) {
+    neworder = (neworder - 1 + brush->channels->channels_num) % brush->channels->channels_num;
+  }
+  else {
+    neworder = (neworder + 1) % brush->channels->channels_num;
+  }
+
+  LISTBASE_FOREACH (BrushChannel *, ch, &brush->channels->channels) {
+    if (ch == dest_ch) {
+      continue;
+    }
+
+    if (ch->ui_order == neworder) {
+      ch->ui_order = dest_ch->ui_order;
+    }
+  }
+
+  dest_ch->ui_order = neworder;
+
+  return OPERATOR_FINISHED;
+}
+
+void BRUSH_OT_change_channel_order(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Change Brush Channel Order";
+  ot->description = "Move brush channels up or down";
+  ot->idname = "BRUSH_OT_change_channel_order";
+
+  /* api callbacks */
+  ot->exec = change_channel_order_exec;
+  ot->poll = change_channel_order_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "channel", "", BRUSH_CHANNEL_MAX_IDNAME, "Brush Channel", "");
+  RNA_def_int(ot->srna, "direction", 1, -1, 1, "Direction", "", -1, 1);
+}
+
 /**************************** registration **********************************/
 
 void ED_operatormacros_paint(void)
@@ -1485,6 +1560,8 @@ void ED_operatortypes_paint(void)
   WM_operatortype_append(PAINT_OT_mask_lasso_gesture);
   WM_operatortype_append(PAINT_OT_mask_box_gesture);
   WM_operatortype_append(PAINT_OT_mask_line_gesture);
+
+  WM_operatortype_append(BRUSH_OT_change_channel_order);
 }
 
 void ED_keymap_paint(wmKeyConfig *keyconf)

@@ -4669,18 +4669,26 @@ def km_curve(params):
 
 def radial_control_properties(paint, prop, secondary_prop, secondary_rotation=False, color=False, zoom=False):
     brush_path = 'tool_settings.' + paint + '.brush'
-    unified_path = 'tool_settings.unified_paint_settings'
+    unified_path = 'tool_settings.unified_properties'
+    channel_path = 'tool_settings.unified_channels'
     rotation = 'mask_texture_slot.angle' if secondary_rotation else 'texture_slot.angle'
+
+    def idprop(key):
+        return '["%s"]' % key
+
+    def rnaprop(key):
+        return "." + key
+
     return {
         "properties": [
             ("data_path_primary", brush_path + '.' + prop),
-            ("data_path_secondary", unified_path + '.' + prop if secondary_prop else ''),
-            ("use_secondary", unified_path + '.' + secondary_prop if secondary_prop else ''),
-            ("rotation_path", brush_path + '.' + rotation),
-            ("color_path", brush_path + '.cursor_color_add'),
-            ("fill_color_path", brush_path + '.color' if color else ''),
-            ("fill_color_override_path", unified_path + '.color' if color else ''),
-            ("fill_color_override_test_path", unified_path + '.use_unified_color' if color else ''),
+            ("data_path_secondary", unified_path + idprop(prop) if secondary_prop else ''),
+            ("use_secondary", channel_path + idprop(prop) + '.unified' if secondary_prop else ''),
+            ("rotation_path", brush_path + rnaprop(rotation)),
+            ("color_path", brush_path + rnaprop('cursor_color_add')),
+            ("fill_color_path", brush_path + rnaprop('color') if color else ''),
+            ("fill_color_override_path", unified_path + idprop('color') if color else ''),
+            ("fill_color_override_test_path", channel_path + idprop('color') + '.unified' if color else ''),
             ("zoom_path", 'space_data.zoom' if zoom else ''),
             ("image_id", brush_path + ''),
             ("secondary_tex", secondary_rotation),

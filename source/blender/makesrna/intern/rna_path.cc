@@ -345,14 +345,15 @@ static bool rna_path_parse_array_index(const char **path,
  *
  * \return \a true on success, \a false if the path is somehow invalid.
  */
-static bool rna_path_parse(const PointerRNA *ptr,
-                           const char *path,
-                           PointerRNA *r_ptr,
-                           PropertyRNA **r_prop,
-                           int *r_index,
-                           PointerRNA *r_item_ptr,
-                           ListBase *r_elements,
-                           const bool eval_pointer)
+#include "BKE_brush_channel.h"
+ATTR_NO_OPT static bool rna_path_parse(const PointerRNA *ptr,
+                                       const char *path,
+                                       PointerRNA *r_ptr,
+                                       PropertyRNA **r_prop,
+                                       int *r_index,
+                                       PointerRNA *r_item_ptr,
+                                       ListBase *r_elements,
+                                       const bool eval_pointer)
 {
   BLI_assert(r_item_ptr == NULL || !eval_pointer);
   PropertyRNA *prop;
