@@ -81,33 +81,23 @@ typedef struct BrushMapping {
 typedef struct BrushChannel {
   struct BrushChannel *next, *prev;
 
-  /** Channel id.  Avoid calling API methods that take strings directly.
-      There are API facilities to check channel idnames at compile time:
-      the BRUSHSET_XXX macros, SCULPT_get_XXX, etc.  On the C++ side
-      BrushChannelSetIF has accessor methods, e.g. BrushChannelSet::radius.
-  */
-  char idname[64];
+  char idname[64]; /* The RNA property name */
   char uiname[64]; /** user-friendly name */
   char *category;  /** category; if NULL, def->category will be used */
 
   struct BrushChannelType *def; /* Brush channel definition */
 
   /*
-    Need to investigate whether we
-    can use ID properties here.  ID properties
-    don't support CurveMappings and do support
-    things we don't want, like groups, strings and
-    ID pointer properties.
-
-    We could implement an ID property CurveMapping
-    type and prevent the creation of group properties
-    at the API level though.
+  Cached channel values.
   */
   float fvalue;    /** floating point value */
   int ivalue;      /** stores integer, boolean, enum and bitmasks */
   float vector[4]; /* stores 3 and 4 component vectors */
+
+  /* For curve channels. */
   BrushCurve curve;
 
+  /* Input device mappings */
   BrushMapping mappings[7]; /* dimension should always be BRUSH_MAPPING_MAX */
 
   short type; /** eBrushChannelType */
@@ -120,7 +110,7 @@ typedef struct BrushChannelSet {
   ListBase channels;
   int channels_num, _pad[1];
 
-  void *channelmap; /** quick lookup ghash, maps idnames to brush channels */
+  void *channelmap; /** idname -> channel map. */
 } BrushChannelSet;
 
 #define BRUSH_CHANNEL_MAX_IDNAME sizeof(((BrushChannel){0}).idname)
@@ -134,11 +124,9 @@ typedef enum eBrushMappingFlags {
 
 /* BrushMapping->inherit_mode */
 typedef enum eBrushMappingInheritMode {
-  /* never inherit */
   BRUSH_MAPPING_INHERIT_NEVER,
-  /* always inherit */
   BRUSH_MAPPING_INHERIT_ALWAYS,
-  /* use channel's inheritance mode */
+  /* Use channel's inheritance mode. */
   BRUSH_MAPPING_INHERIT_CHANNEL
 } eBrushMappingInheritMode;
 
@@ -152,7 +140,7 @@ typedef enum eBrushMappingFunc {
   BRUSH_MAPFUNC_SQUARE, /* square wave */
 } eBrushMappingFunc;
 
-// mapping types
+/* Input device mapping types. */
 typedef enum eBrushMappingType {
   BRUSH_MAPPING_PRESSURE = 0,
   BRUSH_MAPPING_XTILT = 1,
@@ -168,7 +156,6 @@ BLI_STATIC_ASSERT(offsetof(BrushChannel, type) - offsetof(BrushChannel, mappings
                       sizeof(BrushMapping) * BRUSH_MAPPING_MAX,
                   "BrushChannel.mappings must == BRUSH_MAPPING_MAX");
 
-// BrushChannel->flag
 typedef enum eBrushChannelFlag {
   BRUSH_CHANNEL_INHERIT = 1 << 0,
   BRUSH_CHANNEL_INHERIT_IF_UNSET = 1 << 1,
@@ -187,11 +174,11 @@ typedef enum eBrushChannelFlag {
 typedef enum eBrushChannelUIFlag {
   BRUSH_CHANNEL_SHOW_IN_WORKSPACE = 1 << 0,
   /* Has user overriden this, used for version patching. */
-  BRUSH_CHANNEL_SHOW_IN_WORKSPACE_SET = 1 << 1,
+  BRUSH_CHANNEL_SHOW_IN_WORKSPACE_USER_SET = 1 << 1,
   BRUSH_CHANNEL_SHOW_IN_HEADER = 1 << 2,
-  BRUSH_CHANNEL_SHOW_IN_HEADER_SET = 1 << 3,
+  BRUSH_CHANNEL_SHOW_IN_HEADER_USER_SET = 1 << 3,
   BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU = 1 << 4,
-  BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU_SET = 1 << 5,
+  BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU_USER_SET = 1 << 5,
 } eBrushChannelUIFlag;
 
 // BrushChannelType->type

@@ -55,7 +55,7 @@ static EnumPropertyItem null_enum[2] = {{0, "null", ICON_NONE, "null"}, {0, NULL
 
 #  include "RNA_access.h"
 
-#if 0
+#  if 0
 static void rna_brushchannel_update(Scene *scene, Brush *brush)
 {
 }
@@ -83,7 +83,7 @@ void rna_BrushChannel_update(Main *bmain, Scene *scene, PointerRNA *ptr)
       return;
   }
 }
-#endif
+#  endif
 
 void rna_BrushChannel_update_tooltip(PointerRNA *ptr, const char *propname)
 {
@@ -432,7 +432,44 @@ void rna_BrushChannel_category_set(PointerRNA *ptr, const char *value)
   BKE_brush_channel_category_set((BrushChannel *)ptr->data, value);
 }
 
-#endif
+static void channel_uiflag_set(PointerRNA *ptr, bool value, int flag, int user_set_flag)
+{
+  BrushChannel *ch = (BrushChannel *)ptr->data;
+
+  if (value) {
+    ch->ui_flag |= flag;
+  }
+  else {
+    ch->ui_flag &= ~flag;
+  }
+
+  if ((ch->ui_flag & flag) != (ch->def->ui_flag & flag)) {
+    ch->ui_flag |= user_set_flag;
+  }
+  else {
+    ch->ui_flag &= ~BRUSH_CHANNEL_SHOW_IN_HEADER_USER_SET;
+  }
+}
+
+void rna_BrushChannel_show_in_header_set(PointerRNA *ptr, bool value)
+{
+  channel_uiflag_set(
+      ptr, value, BRUSH_CHANNEL_SHOW_IN_HEADER, BRUSH_CHANNEL_SHOW_IN_HEADER_USER_SET);
+}
+
+void rna_BrushChannel_show_in_workspace_set(PointerRNA *ptr, bool value)
+{
+  channel_uiflag_set(
+      ptr, value, BRUSH_CHANNEL_SHOW_IN_WORKSPACE, BRUSH_CHANNEL_SHOW_IN_WORKSPACE_USER_SET);
+}
+
+void rna_BrushChannel_show_in_context_menu_set(PointerRNA *ptr, bool value)
+{
+  channel_uiflag_set(
+      ptr, value, BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU, BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU_USER_SET);
+}
+
+#else
 
 static EnumPropertyItem mapping_type_items[] = {
     {BRUSH_MAPPING_PRESSURE, "PRESSURE", ICON_NONE, "Pressure"},
@@ -696,16 +733,19 @@ void RNA_def_brush_channel(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "In Header", "Show in header");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_boolean_funcs(prop, NULL, "rna_BrushChannel_show_in_header_set");
 
   prop = RNA_def_property(srna, "show_in_workspace", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, "BrushChannel", "flag", BRUSH_CHANNEL_SHOW_IN_WORKSPACE);
   RNA_def_property_ui_text(prop, "In Workspace", "Show in workspace");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_boolean_funcs(prop, NULL, "rna_BrushChannel_show_in_workspace_set");
 
   prop = RNA_def_property(srna, "show_in_context_menu", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, "BrushChannel", "flag", BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU);
   RNA_def_property_ui_text(prop, "In Workspace", "Show in workspace");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_boolean_funcs(prop, NULL, "rna_BrushChannel_show_in_context_menu_set");
 
   prop = RNA_def_property(srna, "is_color", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_ui_text(prop, "Is Color", "Is this channel a color");
@@ -801,3 +841,4 @@ void RNA_def_brush_channels(BlenderRNA *brna)
   RNA_def_brush_mapping(brna);
   RNA_def_brush_channel(brna);
 }
+#endif
