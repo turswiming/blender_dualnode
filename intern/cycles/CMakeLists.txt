@@ -352,7 +352,6 @@ if(WITH_CYCLES_PATH_GUIDING)
   add_definitions(-DWITH_PATH_GUIDING_DEBUG_PRINT)
   add_definitions(-DPATH_GUIDING_LEVEL=5)
   add_definitions(-DPATH_GUIDING_PHASE_FUNCTION_PRODUCT)
-  add_definitions(-DPATH_GUIDING_DEBUG_PASS)
   add_definitions(-DPATH_GUIDING_DEBUG_VALIDATE)
   include_directories(
     SYSTEM

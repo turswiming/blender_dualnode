@@ -96,10 +96,11 @@ const NodeEnum *Pass::get_type_enum()
 
     pass_type_enum.insert("bake_primitive", PASS_BAKE_PRIMITIVE);
     pass_type_enum.insert("bake_differential", PASS_BAKE_DIFFERENTIAL);
-#if defined(WITH_PATH_GUIDING) && defined(PATH_GUIDING_DEBUG_PASS)
-    pass_type_enum.insert("opgl_color", PASS_OPGL_COLOR);
-    pass_type_enum.insert("opgl_guiding_prob", PASS_OPGL_GUIDING_PROB);
-    pass_type_enum.insert("opgl_avg_roughness", PASS_OPGL_AVG_ROUGHNESS);
+
+#ifdef WITH_CYCLES_DEBUG
+    pass_type_enum.insert("guiding_color", PASS_GUIDING_COLOR);
+    pass_type_enum.insert("guiding_probability", PASS_GUIDING_PROBABILITY);
+    pass_type_enum.insert("guiding_avg_roughness", PASS_GUIDING_AVG_ROUGHNESS);
 #endif
   }
 
@@ -346,17 +347,15 @@ PassInfo Pass::get_info(const PassType type, const bool include_albedo, const bo
       LOG(DFATAL) << "Unexpected pass type is used " << type;
       pass_info.num_components = 0;
       break;
-#if defined(WITH_PATH_GUIDING) && defined(PATH_GUIDING_DEBUG_PASS)
-    case PASS_OPGL_COLOR:
+    case PASS_GUIDING_COLOR:
       pass_info.num_components = 3;
       break;
-    case PASS_OPGL_GUIDING_PROB:
+    case PASS_GUIDING_PROBABILITY:
       pass_info.num_components = 1;
       break;
-    case PASS_OPGL_AVG_ROUGHNESS:
+    case PASS_GUIDING_AVG_ROUGHNESS:
       pass_info.num_components = 1;
       break;
-#endif
   }
 
   return pass_info;

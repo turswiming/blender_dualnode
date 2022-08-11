@@ -3,7 +3,7 @@
 
 #pragma once
 
-#if defined(PATH_GUIDING_DEBUG_PASS)
+#ifdef WITH_CYCLES_DEBUG
 #  include "kernel/closure/alloc.h"
 #  include "kernel/closure/bsdf.h"
 #  include "kernel/film/write_passes.h"
@@ -246,7 +246,7 @@ ccl_device_forceinline void guiding_set_continuation_probability(
 
 #  endif
 
-#  if defined(PATH_GUIDING_DEBUG_PASS)
+#  ifdef WITH_CYCLES_DEBUG
 /* Functions for writing guiding related debug information into separate frame buffers*/
 
 ccl_device_forceinline void guiding_write_guiding_prob_buffer(const KernelGlobalsCPU *kg,
@@ -260,8 +260,8 @@ ccl_device_forceinline void guiding_write_guiding_prob_buffer(const KernelGlobal
                                           kernel_data.film.pass_stride;
     ccl_global float *buffer = render_buffer + render_buffer_offset;
     float guiding_prob = state->guiding.surface_guiding_sampling_prob;
-    if (kernel_data.film.pass_opgl_guiding_prob != PASS_UNUSED) {
-      kernel_write_pass_float(buffer + kernel_data.film.pass_opgl_guiding_prob, guiding_prob);
+    if (kernel_data.film.pass_guiding_probability != PASS_UNUSED) {
+      kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_probability, guiding_prob);
     }
   }
 }
@@ -291,8 +291,8 @@ ccl_device_forceinline void guiding_write_avg_roughness_buffer(const KernelGloba
 
     avg_roughness = avg_roughness > 0.f ? avg_roughness / sum_sample_weight : 0.f;
 
-    if (kernel_data.film.pass_opgl_avg_roughness != PASS_UNUSED) {
-      kernel_write_pass_float(buffer + kernel_data.film.pass_opgl_avg_roughness, avg_roughness);
+    if (kernel_data.film.pass_guiding_avg_roughness != PASS_UNUSED) {
+      kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_avg_roughness, avg_roughness);
     }
   }
 }

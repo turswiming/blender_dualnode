@@ -742,7 +742,7 @@ ccl_device bool integrate_surface(KernelGlobals kg,
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
     shader_prepare_surface_guiding(kg, state, &sd, &rng_state);
-#  if defined(PATH_GUIDING_DEBUG_PASS)
+#  if defined(WITH_CYCLES_DEBUG)
     const bool use_guiding = kernel_data.integrator.use_guiding;
     if (use_guiding) {
       guiding_write_guiding_prob_buffer(kg, state, render_buffer);

@@ -743,15 +743,15 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
     pass_add(scene, PASS_DENOISING_DEPTH, "Denoising Depth", PassMode::NOISY);
   }
 
-#if defined(WITH_PATH_GUIDING) && defined(PATH_GUIDING_DEBUG_PASS)
-  b_engine.add_pass("OpenPGL Color", 3, "RGB", b_view_layer.name().c_str());
-  pass_add(scene, PASS_OPGL_COLOR, "OpenPGL Color", PassMode::NOISY);
+#ifdef WITH_CYCLES_DEBUG
+  b_engine.add_pass("Guiding Color", 3, "RGB", b_view_layer.name().c_str());
+  pass_add(scene, PASS_GUIDING_COLOR, "Guiding Color", PassMode::NOISY);
 
-  b_engine.add_pass("OpenPGL Guiding Prob", 1, "X", b_view_layer.name().c_str());
-  pass_add(scene, PASS_OPGL_GUIDING_PROB, "OpenPGL Guiding Prob", PassMode::NOISY);
+  b_engine.add_pass("Guiding Probability", 1, "X", b_view_layer.name().c_str());
+  pass_add(scene, PASS_GUIDING_PROBABILITY, "Guiding Probability", PassMode::NOISY);
 
-  b_engine.add_pass("OpenPGL Avg Roughness", 1, "X", b_view_layer.name().c_str());
-  pass_add(scene, PASS_OPGL_AVG_ROUGHNESS, "OpenPGL Avg Roughness", PassMode::NOISY);
+  b_engine.add_pass("Guiding Average Roughness", 1, "X", b_view_layer.name().c_str());
+  pass_add(scene, PASS_GUIDING_AVG_ROUGHNESS, "Guiding Average Roughness", PassMode::NOISY);
 #endif
 
   /* Custom AOV passes. */

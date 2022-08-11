@@ -200,11 +200,9 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->pass_shadow_catcher_sample_count = PASS_UNUSED;
   kfilm->pass_shadow_catcher_matte = PASS_UNUSED;
 
-#if defined(WITH_PATH_GUIDING) && defined(PATH_GUIDING_DEBUG_PASS)
-  kfilm->pass_opgl_color = PASS_UNUSED;
-  kfilm->pass_opgl_guiding_prob = PASS_UNUSED;
-  kfilm->pass_opgl_avg_roughness = PASS_UNUSED;
-#endif
+  kfilm->pass_guiding_color = PASS_UNUSED;
+  kfilm->pass_guiding_probability = PASS_UNUSED;
+  kfilm->pass_guiding_avg_roughness = PASS_UNUSED;
 
   bool have_cryptomatte = false;
   bool have_aov_color = false;
@@ -388,17 +386,15 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
           have_aov_value = true;
         }
         break;
-#if defined(WITH_PATH_GUIDING) && defined(PATH_GUIDING_DEBUG_PASS)
-      case PASS_OPGL_COLOR:
-        kfilm->pass_opgl_color = kfilm->pass_stride;
+      case PASS_GUIDING_COLOR:
+        kfilm->pass_guiding_color = kfilm->pass_stride;
         break;
-      case PASS_OPGL_GUIDING_PROB:
-        kfilm->pass_opgl_guiding_prob = kfilm->pass_stride;
+      case PASS_GUIDING_PROBABILITY:
+        kfilm->pass_guiding_probability = kfilm->pass_stride;
         break;
-      case PASS_OPGL_AVG_ROUGHNESS:
-        kfilm->pass_opgl_avg_roughness = kfilm->pass_stride;
+      case PASS_GUIDING_AVG_ROUGHNESS:
+        kfilm->pass_guiding_avg_roughness = kfilm->pass_stride;
         break;
-#endif
       default:
         assert(false);
         break;

@@ -133,12 +133,10 @@ KERNEL_STRUCT_MEMBER(film, int, pass_bake_primitive)
 KERNEL_STRUCT_MEMBER(film, int, pass_bake_differential)
 /* Shadow catcher. */
 KERNEL_STRUCT_MEMBER(film, int, use_approximate_shadow_catcher)
-#if 1
 /* Path Guiding */
-KERNEL_STRUCT_MEMBER(film, int, pass_opgl_color)
-KERNEL_STRUCT_MEMBER(film, int, pass_opgl_guiding_prob)
-KERNEL_STRUCT_MEMBER(film, int, pass_opgl_avg_roughness)
-#endif
+KERNEL_STRUCT_MEMBER(film, int, pass_guiding_color)
+KERNEL_STRUCT_MEMBER(film, int, pass_guiding_probability)
+KERNEL_STRUCT_MEMBER(film, int, pass_guiding_avg_roughness)
 /* Padding. */
 KERNEL_STRUCT_MEMBER(film, int, pad1)
 KERNEL_STRUCT_MEMBER(film, int, pad2)

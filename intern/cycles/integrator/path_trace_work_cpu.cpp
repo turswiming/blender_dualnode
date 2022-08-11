@@ -362,7 +362,7 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
     std::cout << "!!! validSegments = " << validSegments << " !!!" << std::endl;
 #    endif
 
-#    if defined(PATH_GUIDING_DEBUG_PASS) && PATH_GUIDING_LEVEL >= 5
+#    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
   // guiding_write_pixel_estimate_buffer(kg, state, render_buffer);
 
   pgl_vec3f pgl_final_color = state->guiding.path_segment_storage->CalculatePixelEstimate(false);
@@ -374,6 +374,8 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
   if (kernel_data.film.pass_opgl_color != PASS_UNUSED) {
     kernel_write_pass_float3(buffer + kernel_data.film.pass_opgl_color, final_color);
   }
+#    else
+  (void)render_buffer;
 #    endif
 #    if PATH_GUIDING_LEVEL >= 2
   /* Converting the path segment representation of the random walk into radiance samples. */
