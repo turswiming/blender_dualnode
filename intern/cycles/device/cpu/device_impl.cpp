@@ -73,21 +73,12 @@ CPUDevice::CPUDevice(const DeviceInfo &info_, Stats &stats_, Profiler &profiler_
   embree_device = rtcNewDevice("verbose=0");
 #endif
   need_texture_info = false;
-
-#ifdef WITH_PATH_GUIDING
-  // TODO(sherholz): we need to replace this with PGL_DEVICE_TYPE_CPU_AUTO
-  openpgl_device = new openpgl::cpp::Device(PGL_DEVICE_TYPE_CPU_4);
-#endif
 }
 
 CPUDevice::~CPUDevice()
 {
 #ifdef WITH_EMBREE
   rtcReleaseDevice(embree_device);
-#endif
-
-#ifdef WITH_PATH_GUIDING
-  delete openpgl_device;
 #endif
 
   texture_info.free();
@@ -292,15 +283,16 @@ void CPUDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
     Device::build_bvh(bvh, progress, refit);
 }
 
-void *CPUDevice::create_guiding_field(void *guiding_field_args_) const
+void *CPUDevice::get_guiding_device() const
 {
 #ifdef WITH_PATH_GUIDING
-  PGLFieldArguments guiding_field_args = *(static_cast<PGLFieldArguments *>(guiding_field_args_));
-  openpgl::cpp::Field *guiding_field_ptr = new openpgl::cpp::Field(openpgl_device,
-                                                                   guiding_field_args);
-  return static_cast<void *>(guiding_field_ptr);
+  if (!guiding_device) {
+    // TODO(sherholz): we need to replace this with PGL_DEVICE_TYPE_CPU_AUTO
+    guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_4);
+  }
+  return guiding_device.get();
 #else
-  return NULL;
+  return nullptr;
 #endif
 }
 

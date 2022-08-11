@@ -221,8 +221,8 @@ class Device {
 
   /* Guiding */
 
-  /* Creating and returning a new, empty guiding field. */
-  virtual void *create_guiding_field(void *) const
+  /* Returns path guiding device handle. */
+  virtual void *get_guiding_device() const
   {
     LOG(ERROR) << "Request guiding field from a device which does not support it.";
     return nullptr;
