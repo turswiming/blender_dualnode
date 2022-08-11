@@ -98,6 +98,7 @@ add_dependencies(
   external_tbb
   external_boost
   external_opensubdiv
+  external_python
 )
 
 # Since USD 21.11 the libraries are prefixed with "usd_", i.e. "libusd_m.a" became "libusd_usd_m.a".

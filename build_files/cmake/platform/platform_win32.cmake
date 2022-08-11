@@ -541,13 +541,7 @@ if(WITH_BOOST)
       message(FATAL_ERROR "Unable to determine Boost version")
     endif()
     set(BOOST_POSTFIX "vc142-mt-x64-${BOOST_VERSION}.lib")
-    set(BOOST_DEBUG_POSTFIX "vc142-mt-gd-x64-${BOOST_VERSION}.lib")
-    if(NOT EXISTS ${BOOST_LIBPATH}/boost_date_time-${BOOST_POSTFIX})
-      # If the new library names do not exist fall back to the old ones
-      # to ease the transition period between the libs.
-      set(BOOST_POSTFIX "vc141-mt-x64-${BOOST_VERSION}.lib")
-      set(BOOST_DEBUG_POSTFIX "vc141-mt-gyd-x64-${BOOST_VERSION}.lib")
-    endif()
+    set(BOOST_DEBUG_POSTFIX "vc142-mt-gyd-x64-${BOOST_VERSION}.lib")
     set(BOOST_LIBRARIES
       optimized ${BOOST_LIBPATH}/boost_date_time-${BOOST_POSTFIX}
       optimized ${BOOST_LIBPATH}/boost_filesystem-${BOOST_POSTFIX}

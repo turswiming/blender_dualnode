@@ -6,8 +6,15 @@ if(WIN32)
   set(BOOST_BUILD_OPTIONS runtime-link=shared)
   if(BUILD_MODE STREQUAL Debug)
     list(APPEND BOOST_BUILD_OPTIONS python-debugging=on variant=debug)
+    if(WITH_OPTIMIZED_DEBUG)
+      list(APPEND BOOST_BUILD_OPTIONS debug-symbols=off)
+    else()
+      list(APPEND BOOST_BUILD_OPTIONS debug-symbols=on)
+    endif()
+  else()
+    list(APPEND BOOST_BUILD_OPTIONS variant=release)
   endif()
-  set(BOOST_HARVEST_CMD   ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/boost/lib/ ${HARVEST_TARGET}/boost/lib/ )
+  set(BOOST_HARVEST_CMD ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/boost/lib/ ${HARVEST_TARGET}/boost/lib/)
   if(BUILD_MODE STREQUAL Release)
     set(BOOST_HARVEST_CMD ${BOOST_HARVEST_CMD} && ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/boost/include/boost-${BOOST_VERSION_NODOTS_SHORT}/ ${HARVEST_TARGET}/boost/include/)
   endif()
@@ -72,10 +79,8 @@ ExternalProject_Add(external_boost
   INSTALL_COMMAND "${BOOST_HARVEST_CMD}"
 )
 
-if(WITH_BOOST_PYTHON)
-  add_dependencies(
-    external_boost
-    external_python
-    external_numpy
-  )
-endif()
+add_dependencies(
+  external_boost
+  external_python
+  external_numpy
+)

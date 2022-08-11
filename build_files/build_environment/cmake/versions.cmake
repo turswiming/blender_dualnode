@@ -189,9 +189,9 @@ set(TBB_HASH 55ec8df6eae5ed6364a47f0e671e460c)
 set(TBB_HASH_TYPE MD5)
 set(TBB_FILE oneTBB-${TBB_VERSION}.tar.gz)
 
-set(OPENVDB_VERSION 9.0.0)
+set(OPENVDB_VERSION 9.1.0)
 set(OPENVDB_URI https://github.com/AcademySoftwareFoundation/openvdb/archive/v${OPENVDB_VERSION}.tar.gz)
-set(OPENVDB_HASH 684ce40c2f74f3a0c9cac530e1c7b07e)
+set(OPENVDB_HASH 8918de645a737734e577e16753325703)
 set(OPENVDB_HASH_TYPE MD5)
 set(OPENVDB_FILE openvdb-${OPENVDB_VERSION}.tar.gz)
 

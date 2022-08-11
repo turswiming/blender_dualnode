@@ -863,8 +863,18 @@ elseif(WIN32)
         CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
       )
       install(
+        FILES ${LIBDIR}/openvdb/python/pyopenvdb.pyd
+        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      )
+      install(
         FILES ${LIBDIR}/openvdb/bin/openvdb_d.dll
         DESTINATION "."
+        CONFIGURATIONS Debug
+      )
+      install(
+        FILES ${LIBDIR}/openvdb/python/pyopenvdb_d.pyd
+        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
         CONFIGURATIONS Debug
       )
   endif()
