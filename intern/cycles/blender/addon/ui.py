@@ -326,6 +326,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
 class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
     bl_label = "Path Guiding"
     bl_parent_id = "CYCLES_RENDER_PT_sampling"
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
@@ -342,24 +343,39 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
         scene = context.scene
         cscene = scene.cycles
 
-        experimentalView = context.scene.cycles.feature_set == 'EXPERIMENTAL'
-
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.active = cscene.use_guiding
 
         col = layout.column(align=True)
-        if experimentalView:
-            col.prop(cscene, "guiding_distribution_type", text="Distribution Type")
         col.prop(cscene, "use_surface_guiding", text="Surface Guiding")
-        if experimentalView:
-            col.prop(cscene, "surface_guiding_probability", text="Surface Guiding Probability")
         col.prop(cscene, "use_volume_guiding", text="Volume Guiding")
-        if experimentalView:
-            col.prop(cscene, "volume_guiding_probability", text="Volume Guiding Probability")
-            col.prop(cscene, "use_guide_direct_light", text="Guide Direct Light")
-            col.prop(cscene, "use_mis_weights", text="Use MIS Weights")
+
+
+class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Panel):
+    bl_label = "Debug"
+    bl_parent_id = "CYCLES_RENDER_PT_sampling_path_guiding"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        scene = context.scene
+        cscene = scene.cycles
+
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.active = cscene.use_guiding
+
+        layout.prop(cscene, "guiding_distribution_type", text="Distribution Type")
+
+        col = layout.column(align=True)
+        col.prop(cscene, "surface_guiding_probability", text="Surface Guiding Probability")
+        col.prop(cscene, "volume_guiding_probability", text="Volume Guiding Probability")
+
+        col = layout.column(align=True)
+        col.prop(cscene, "use_guide_direct_light", text="Guide Direct Light")
+        col.prop(cscene, "use_mis_weights", text="Use MIS Weights")
 
 
 class CYCLES_RENDER_PT_subdivision(CyclesButtonsPanel, Panel):
@@ -2327,6 +2343,7 @@ classes = (
     CYCLES_RENDER_PT_sampling_render_denoise,
     CYCLES_RENDER_PT_sampling_advanced,
     CYCLES_RENDER_PT_sampling_path_guiding,
+    CYCLES_RENDER_PT_sampling_path_guiding_debug,
     CYCLES_RENDER_PT_light_paths,
     CYCLES_RENDER_PT_light_paths_max_bounces,
     CYCLES_RENDER_PT_light_paths_clamping,

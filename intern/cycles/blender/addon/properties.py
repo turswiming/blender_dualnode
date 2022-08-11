@@ -517,13 +517,13 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         name="Guiding",
         description="Use path guiding for sampling paths. Path guiding incrementally "
         "learns the light distribution of the scene and guides path into directions "
-        "with high indirect/direct light contributions.",
+        "with high direct and indirect light contributions.",
         default=False,
     )
 
     guiding_distribution_type: EnumProperty(
         name="Guiding Distribution Type",
-        description="The type of the used representation for the guiding distribution",
+        description="Type of representation for the guiding distribution",
         items=enum_guiding_distribution,
         default='PARALLAX_AWARE_VMM',
     )
