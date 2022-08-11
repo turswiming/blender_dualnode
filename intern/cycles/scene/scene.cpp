@@ -555,6 +555,10 @@ void Scene::update_kernel_features()
     kernel_features |= KERNEL_FEATURE_MNEE;
   }
 
+  if (integrator->get_guiding_params(device).use) {
+    kernel_features |= KERNEL_FEATURE_PATH_GUIDING;
+  }
+
   if (bake_manager->get_baking()) {
     kernel_features |= KERNEL_FEATURE_BAKING;
   }

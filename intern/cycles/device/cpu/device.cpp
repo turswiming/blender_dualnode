@@ -27,6 +27,11 @@ void device_cpu_info(vector<DeviceInfo> &devices)
   info.has_osl = true;
   info.has_nanovdb = true;
   info.has_profiling = true;
+#ifdef WITH_PATH_GUIDING
+  info.has_guiding = true;
+#else
+  info.has_guiding = false;
+#endif
   if (openimagedenoise_supported()) {
     info.denoisers |= DENOISER_OPENIMAGEDENOISE;
   }

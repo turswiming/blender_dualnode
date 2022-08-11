@@ -48,7 +48,7 @@ KERNEL_STRUCT_MEMBER(path, float, continuation_probability, KERNEL_FEATURE_PATH_
 /* Throughput. */
 KERNEL_STRUCT_MEMBER(path, PackedSpectrum, throughput, KERNEL_FEATURE_PATH_TRACING)
 /* Throughput used for making Russian Roulette decisions. */
-KERNEL_STRUCT_MEMBER(path, PackedSpectrum, rr_throughput, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(path, PackedSpectrum, rr_throughput, KERNEL_FEATURE_PATH_GUIDING)
 /* Ratio of throughput to distinguish diffuse / glossy / transmission render passes. */
 KERNEL_STRUCT_MEMBER(path, PackedSpectrum, pass_diffuse_weight, KERNEL_FEATURE_LIGHT_PASSES)
 KERNEL_STRUCT_MEMBER(path, PackedSpectrum, pass_glossy_weight, KERNEL_FEATURE_LIGHT_PASSES)
@@ -110,65 +110,65 @@ KERNEL_STRUCT_BEGIN(guiding)
 KERNEL_STRUCT_MEMBER(guiding,
                      openpgl::cpp::PathSegmentStorage *,
                      path_segment_storage,
-                     KERNEL_FEATURE_PATH_TRACING)
+                     KERNEL_FEATURE_PATH_GUIDING)
 /* Current path segment of the random walk/path. */
 KERNEL_STRUCT_MEMBER(guiding,
                      openpgl::cpp::PathSegment *,
                      path_segment,
-                     KERNEL_FEATURE_PATH_TRACING)
+                     KERNEL_FEATURE_PATH_GUIDING)
 /* Guided sampling distribution for sampling new directions at a position on a surface. */
 KERNEL_STRUCT_MEMBER(guiding,
                      openpgl::cpp::SurfaceSamplingDistribution *,
                      surface_sampling_distribution,
-                     KERNEL_FEATURE_PATH_TRACING)
+                     KERNEL_FEATURE_PATH_GUIDING)
 /* Guided sampling distribution for sampling new directions at position inside a volume. */
 KERNEL_STRUCT_MEMBER(guiding,
                      openpgl::cpp::VolumeSamplingDistribution *,
                      volume_sampling_distribution,
-                     KERNEL_FEATURE_PATH_TRACING)
+                     KERNEL_FEATURE_PATH_GUIDING)
 /* If surface guiding is enabled */
-KERNEL_STRUCT_MEMBER(guiding, bool, use_surface_guiding, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, bool, use_surface_guiding, KERNEL_FEATURE_PATH_GUIDING)
 /* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
  * or bsdf sampling) */
-KERNEL_STRUCT_MEMBER(guiding, float, sample_surface_guiding_rand, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, sample_surface_guiding_rand, KERNEL_FEATURE_PATH_GUIDING)
 /* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob)*/
-KERNEL_STRUCT_MEMBER(guiding, float, surface_guiding_sampling_prob, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, surface_guiding_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
 /* Probability of sampling a bssrdf closure instead of a bsdf closure*/
-KERNEL_STRUCT_MEMBER(guiding, float, bssrdf_sampling_prob, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, bssrdf_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
 /* If volume guiding is enabled */
-KERNEL_STRUCT_MEMBER(guiding, bool, use_volume_guiding, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, bool, use_volume_guiding, KERNEL_FEATURE_PATH_GUIDING)
 /* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
  * or bsdf sampling) */
-KERNEL_STRUCT_MEMBER(guiding, float, sample_volume_guiding_rand, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, sample_volume_guiding_rand, KERNEL_FEATURE_PATH_GUIDING)
 /* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob)*/
-KERNEL_STRUCT_MEMBER(guiding, float, volume_guiding_sampling_prob, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, volume_guiding_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
 KERNEL_STRUCT_END(guiding)
 #else
 KERNEL_STRUCT_BEGIN(guiding)
 /* Storage container for holding all path segments of the random walk/path. */
-KERNEL_STRUCT_MEMBER(guiding, void *, path_segment_storage, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, void *, path_segment_storage, KERNEL_FEATURE_PATH_GUIDING)
 /* Current path segment of the random walk/path. */
-KERNEL_STRUCT_MEMBER(guiding, void *, path_segment, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, void *, path_segment, KERNEL_FEATURE_PATH_GUIDING)
 /* Guided sampling distribution for sampling new directions at a position on a surface. */
-KERNEL_STRUCT_MEMBER(guiding, void *, surface_sampling_distribution, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, void *, surface_sampling_distribution, KERNEL_FEATURE_PATH_GUIDING)
 /* Guided sampling distribution for sampling new directions at position inside a volume. */
-KERNEL_STRUCT_MEMBER(guiding, void *, volume_sampling_distribution, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, void *, volume_sampling_distribution, KERNEL_FEATURE_PATH_GUIDING)
 /* If surface guiding is enabled */
-KERNEL_STRUCT_MEMBER(guiding, bool, use_surface_guiding, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, bool, use_surface_guiding, KERNEL_FEATURE_PATH_GUIDING)
 /* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
  * or bsdf sampling) */
-KERNEL_STRUCT_MEMBER(guiding, float, sample_surface_guiding_rand, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, sample_surface_guiding_rand, KERNEL_FEATURE_PATH_GUIDING)
 /* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob)*/
-KERNEL_STRUCT_MEMBER(guiding, float, surface_guiding_sampling_prob, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, surface_guiding_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
 /* Probability of sampling a bssrdf closure instead of a bsdf closure*/
-KERNEL_STRUCT_MEMBER(guiding, float, bssrdf_sampling_prob, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, bssrdf_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
 /* If volume guiding is enabled */
-KERNEL_STRUCT_MEMBER(guiding, bool, use_volume_guiding, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, bool, use_volume_guiding, KERNEL_FEATURE_PATH_GUIDING)
 /* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
  * or bsdf sampling) */
-KERNEL_STRUCT_MEMBER(guiding, float, sample_volume_guiding_rand, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, sample_volume_guiding_rand, KERNEL_FEATURE_PATH_GUIDING)
 /* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob)*/
-KERNEL_STRUCT_MEMBER(guiding, float, volume_guiding_sampling_prob, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(guiding, float, volume_guiding_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
 KERNEL_STRUCT_END(guiding)
 /* */
 #endif

@@ -244,14 +244,15 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
     kintegrator->filter_closures |= FILTER_CLOSURE_TRANSPARENT;
   }
 
-  kintegrator->use_guiding = use_guiding;
+  GuidingParams guiding_params = get_guiding_params(device);
+  kintegrator->use_guiding = guiding_params.use;
   kintegrator->use_surface_guiding = use_surface_guiding;
   kintegrator->surface_guiding_probability = surface_guiding_probability;
   kintegrator->use_volume_guiding = use_volume_guiding;
   kintegrator->volume_guiding_probability = volume_guiding_probability;
   kintegrator->use_guide_direct_light = use_guide_direct_light;
   kintegrator->use_mis_weights = use_mis_weights;
-  kintegrator->guiding_distribution_type = guiding_distribution_type;
+  kintegrator->guiding_distribution_type = guiding_params.type;
 
   kintegrator->seed = seed;
 
@@ -413,14 +414,10 @@ DenoiseParams Integrator::get_denoise_params() const
   return denoise_params;
 }
 
-GuidingParams Integrator::get_guiding_params() const
+GuidingParams Integrator::get_guiding_params(const Device *device) const
 {
   GuidingParams guiding_params;
-#ifdef WITH_PATH_GUIDING
-  guiding_params.use = use_guiding;
-#else
-  guiding_params.use = false;
-#endif
+  guiding_params.use = use_guiding && device->info.has_guiding;
   guiding_params.type = guiding_distribution_type;
   return guiding_params;
 }

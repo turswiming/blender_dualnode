@@ -115,7 +115,7 @@ class Integrator : public Node {
 
   AdaptiveSampling get_adaptive_sampling() const;
   DenoiseParams get_denoise_params() const;
-  GuidingParams get_guiding_params() const;
+  GuidingParams get_guiding_params(const Device *device) const;
 };
 
 CCL_NAMESPACE_END

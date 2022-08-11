@@ -1527,6 +1527,9 @@ enum KernelFeatureFlag : uint32_t {
 
   /* MNEE. */
   KERNEL_FEATURE_MNEE = (1U << 27U),
+
+  /* Path guiding. */
+  KERNEL_FEATURE_PATH_GUIDING = (1U << 28U),
 };
 
 /* Shader node feature mask, to specialize shader evaluation for kernels. */

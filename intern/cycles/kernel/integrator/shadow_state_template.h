@@ -44,17 +44,17 @@ KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, lightgroup, KERNEL_FEATURE_PATH_TRACI
 KERNEL_STRUCT_MEMBER(shadow_path,
                      PackedSpectrum,
                      scattered_contribution,
-                     KERNEL_FEATURE_PATH_TRACING)
+                     KERNEL_FEATURE_PATH_GUIDING)
 KERNEL_STRUCT_MEMBER(shadow_path,
                      openpgl::cpp::PathSegment *,
                      path_segment,
-                     KERNEL_FEATURE_PATH_TRACING)
+                     KERNEL_FEATURE_PATH_GUIDING)
 #else
 KERNEL_STRUCT_MEMBER(shadow_path,
                      PackedSpectrum,
                      scattered_contribution,
-                     KERNEL_FEATURE_PATH_TRACING)
-KERNEL_STRUCT_MEMBER(shadow_path, void *, path_segment, KERNEL_FEATURE_PATH_TRACING)
+                     KERNEL_FEATURE_PATH_GUIDING)
+KERNEL_STRUCT_MEMBER(shadow_path, void *, path_segment, KERNEL_FEATURE_PATH_GUIDING)
 #endif
 KERNEL_STRUCT_END(shadow_path)
 
