@@ -475,8 +475,8 @@ typedef enum LightType {
 /* Guiding Distribution Type */
 
 typedef enum GuidingDistributionType {
-  GUIDING_TYPE_PAVMM = 0,
-  GUIDING_TYPE_DQT = 1,
+  GUIDING_TYPE_PARALLAX_AWARE_VMM = 0,
+  GUIDING_TYPE_DIRECTIONAL_QUAD_TREE = 1,
   GUIDING_TYPE_VMM = 2,
 
   GUIDING_NUM_TYPES,

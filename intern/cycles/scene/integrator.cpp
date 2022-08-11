@@ -62,8 +62,8 @@ NODE_DEFINE(Integrator)
   SOCKET_FLOAT(volume_step_rate, "Volume Step Rate", 1.0f);
 
   static NodeEnum guiding_ditribution_enum;
-  guiding_ditribution_enum.insert("PAVMM", GUIDING_TYPE_PAVMM);
-  guiding_ditribution_enum.insert("DQT", GUIDING_TYPE_DQT);
+  guiding_ditribution_enum.insert("PARALLAX_AWARE_VMM", GUIDING_TYPE_PARALLAX_AWARE_VMM);
+  guiding_ditribution_enum.insert("DIRECTIONAL_QUAD_TREE", GUIDING_TYPE_DIRECTIONAL_QUAD_TREE);
   guiding_ditribution_enum.insert("VMM", GUIDING_TYPE_VMM);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", true);
@@ -76,7 +76,7 @@ NODE_DEFINE(Integrator)
   SOCKET_ENUM(guiding_distribution_type,
               "Guiding Distribution Type",
               guiding_ditribution_enum,
-              GUIDING_TYPE_PAVMM);
+              GUIDING_TYPE_PARALLAX_AWARE_VMM);
 
   SOCKET_BOOLEAN(caustics_reflective, "Reflective Caustics", true);
   SOCKET_BOOLEAN(caustics_refractive, "Refractive Caustics", true);

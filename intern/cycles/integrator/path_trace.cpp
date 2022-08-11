@@ -173,29 +173,24 @@ void PathTrace::render_pipeline(RenderWork render_work)
 
   rebalance(render_work);
 
-#ifdef WITH_PATH_GUIDING
-  /* Prepare all per-thread guiding structures before we start with the
-   * next rendering iteration/progression. */
+  /* Prepare all per-thread guiding structures before we start with the next rendering
+   * iteration/progression. */
   const bool use_guiding = device_scene_->data.integrator.use_guiding;
   if (use_guiding) {
     guiding_prepare_structures();
   }
-#endif
 
   path_trace(render_work);
   if (render_cancel_.is_requested) {
     return;
   }
 
-#ifdef WITH_PATH_GUIDING
-  /* Update the guiding field using the training data/samples collected
-   * during the rendering iteration/progression.
-   * Note: we also should check if the guiding structure should be reseted due to scene changes
-   */
+  /* Update the guiding field using the training data/samples collected during the rendering
+   * iteration/progression. TODO: we also should check if the guiding structure should be reset
+   * due to scene changes. */
   if (use_guiding) {
     guiding_update_structures();
   }
-#endif
 
   adaptive_sample(render_work);
   if (render_cancel_.is_requested) {
@@ -1237,66 +1232,72 @@ string PathTrace::full_report() const
   return result;
 }
 
+void PathTrace::set_guiding_params(const GuidingParams &guiding_params, const bool reset)
+{
 #ifdef WITH_PATH_GUIDING
-void PathTrace::set_guiding_params(ccl::Device *device, const GuidingParams &guiding)
-{
-  if (!guiding_sample_data_storage_) {
-    guiding_sample_data_storage_ = new openpgl::cpp::SampleStorage();
-  }
-  guiding_sample_data_storage_->Clear();
+  if (guiding_params_.modified(guiding_params)) {
+    guiding_params_ = guiding_params;
 
-  PGLFieldArguments guidingFieldArgs;
-  switch (guiding.type) {
-    default:
-    // Using parallax-aware von Mises-Fisher mixture models.
-    case GUIDING_TYPE_PAVMM: {
-      pglFieldArgumentsSetDefaults(
-          guidingFieldArgs,
-          PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
-          PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_PARALLAX_AWARE_VMM);
-      break;
-    }
-    // Using directional quad-trees.
-    case GUIDING_TYPE_DQT: {
-      pglFieldArgumentsSetDefaults(
-          guidingFieldArgs,
-          PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
-          PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_QUADTREE);
-      break;
-    }
-    // Using von Mises-Fisher mixture models.
-    case GUIDING_TYPE_VMM: {
-      pglFieldArgumentsSetDefaults(
-          guidingFieldArgs,
-          PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
-          PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_VMM);
-      break;
-    }
-  }
+    if (guiding_params_.use) {
+      PGLFieldArguments guidingFieldArgs;
+      switch (guiding_params_.type) {
+        default:
+        /* Parallax-aware von Mises-Fisher mixture models. */
+        case GUIDING_TYPE_PARALLAX_AWARE_VMM: {
+          pglFieldArgumentsSetDefaults(
+              guidingFieldArgs,
+              PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+              PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_PARALLAX_AWARE_VMM);
+          break;
+        }
+        /* Directional quad-trees. */
+        case GUIDING_TYPE_DIRECTIONAL_QUAD_TREE: {
+          pglFieldArgumentsSetDefaults(
+              guidingFieldArgs,
+              PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+              PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_QUADTREE);
+          break;
+        }
+        /* von Mises-Fisher mixture models. */
+        case GUIDING_TYPE_VMM: {
+          pglFieldArgumentsSetDefaults(
+              guidingFieldArgs,
+              PGL_SPATIAL_STRUCTURE_TYPE::PGL_SPATIAL_STRUCTURE_KDTREE,
+              PGL_DIRECTIONAL_DISTRIBUTION_TYPE::PGL_DIRECTIONAL_DISTRIBUTION_VMM);
+          break;
+        }
+      }
 
-  if (guiding_field_) {
-    delete guiding_field_;
+      guiding_sample_data_storage_ = make_unique<openpgl::cpp::SampleStorage>();
+      guiding_field_.reset(
+          static_cast<openpgl::cpp::Field *>(device_->create_guiding_field(&guidingFieldArgs)));
+    }
+    else {
+      guiding_sample_data_storage_ = nullptr;
+      guiding_field_ = nullptr;
+    }
   }
-  guiding_field_ = static_cast<openpgl::cpp::Field *>(
-      device->create_guiding_field(&guidingFieldArgs));
-}
-
-void PathTrace::reset_guiding_field()
-{
-  if (guiding_field_) {
-    guiding_field_->Reset();
+  else if (reset) {
+    if (guiding_field_) {
+      guiding_field_->Reset();
+    }
   }
+#endif
 }
 
 void PathTrace::guiding_prepare_structures()
 {
+#ifdef WITH_PATH_GUIDING
   for (auto &&path_trace_work : path_trace_works_) {
-    path_trace_work->guiding_init_kernel_globals(guiding_field_, guiding_sample_data_storage_);
+    path_trace_work->guiding_init_kernel_globals(guiding_field_.get(),
+                                                 guiding_sample_data_storage_.get());
   }
+#endif
 }
 
 void PathTrace::guiding_update_structures()
 {
+#ifdef WITH_PATH_GUIDING
   // TODO(sherholz): implement
 #  ifdef WITH_PATH_GUIDING_DEBUG_PRINT
   VLOG_WORK << "Path Guiding: update guiding structures";
@@ -1336,8 +1337,7 @@ void PathTrace::guiding_update_structures()
       guiding_sample_data_storage_->Clear();
     }
   }
-}
-
 #endif
+}
 
 CCL_NAMESPACE_END

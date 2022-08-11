@@ -420,7 +420,7 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   integrator->set_use_guide_direct_light(get_boolean(cscene, "use_guide_direct_light"));
   integrator->set_use_mis_weights(get_boolean(cscene, "use_mis_weights"));
   GuidingDistributionType guiding_distribution_type = (GuidingDistributionType)get_enum(
-      cscene, "guiding_distribution_type", GUIDING_NUM_TYPES, GUIDING_TYPE_PAVMM);
+      cscene, "guiding_distribution_type", GUIDING_NUM_TYPES, GUIDING_TYPE_PARALLAX_AWARE_VMM);
   integrator->set_guiding_distribution_type(guiding_distribution_type);
 
   DenoiseParams denoise_params = get_denoise_params(b_scene, b_view_layer, background);

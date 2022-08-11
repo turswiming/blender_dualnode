@@ -180,8 +180,8 @@ enum_view3d_shading_render_pass = (
 )
 
 enum_guiding_distribution = (
-    ('PAVMM', "Paralax-Aware VMM", "Use Parallax-aware von Mises-Fisher models as directional distribution", 0),
-    ('DQT', "Directional Quad Tree", "Use Directional Quad Trees as directional distribution", 1),
+    ('PARALLAX_AWARE_VMM', "Parallax-Aware VMM", "Use Parallax-aware von Mises-Fisher models as directional distribution", 0),
+    ('DIRECTIONAL_QUAD_TREE', "Directional Quad Tree", "Use Directional Quad Trees as directional distribution", 1),
     ('VMM', "VMM", "Use von Mises-Fisher models as directional distribution", 2),
 )
 
@@ -525,7 +525,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         name="Guiding Distribution Type",
         description="The type of the used representation for the guiding distribution",
         items=enum_guiding_distribution,
-        default='PAVMM',
+        default='PARALLAX_AWARE_VMM',
     )
 
     use_surface_guiding: BoolProperty(
