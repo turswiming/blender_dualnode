@@ -80,7 +80,7 @@ ccl_device_forceinline void guiding_add_bsdf_data(IntegratorState state,
                                               clamp(bsdf_shading_normal[1], -1.f, 1.f),
                                               clamp(bsdf_shading_normal[2], -1.f, 1.f));
 
-  assert(state->guiding.path_segment != nullptr);
+  kernel_assert(state->guiding.path_segment != nullptr);
 
   openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment,
                                        openpgl::cpp::Vector3(1.0f, 1.0f, 1.0f));
@@ -129,7 +129,7 @@ ccl_device_forceinline void guiding_add_bssrdf_data(IntegratorState state,
                                               clamp(bssrdf_shading_normal[1], -1.f, 1.f),
                                               clamp(bssrdf_shading_normal[2], -1.f, 1.f));
 
-  assert(state->guiding.path_segment != nullptr);
+  kernel_assert(state->guiding.path_segment != nullptr);
 
   openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment,
                                        openpgl::cpp::Vector3(1.0f, 1.0f, 1.0f));
@@ -177,7 +177,7 @@ ccl_device_forceinline void guiding_add_phase_data(IntegratorState state,
       phase_weight_rgb[0], phase_weight_rgb[1], phase_weight_rgb[2]);
   pgl_vec3f pglNormal = openpgl::cpp::Vector3(0.f, 0.f, 1.f);
 
-  assert(state->guiding.path_segment != nullptr);
+  kernel_assert(state->guiding.path_segment != nullptr);
 
   openpgl::cpp::SetVolumeScatter(state->guiding.path_segment, true);
   openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment,

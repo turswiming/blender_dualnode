@@ -561,7 +561,7 @@ ccl_device int bsdf_microfacet_multi_ggx_sample(KernelGlobals kg,
   else
     *pdf = mf_ggx_pdf(localI, localO, bsdf->alpha_x);
   *pdf = fmaxf(0.f, *pdf);
-  // assert(*pdf >= 0.f);
+  // kernel_assert(*pdf >= 0.f);
   *eval *= *pdf;
 
 #ifdef __RAY_DIFFERENTIALS__
@@ -623,7 +623,7 @@ bsdf_microfacet_multi_ggx_glass_eval_transmit(ccl_private const ShaderClosure *s
   float3 localO = make_float3(dot(omega_in, X), dot(omega_in, Y), dot(omega_in, Z));
 
   *pdf = mf_glass_pdf(localI, localO, bsdf->alpha_x, bsdf->ior);
-  assert(*pdf >= 0.f);
+  kernel_assert(*pdf >= 0.f);
   return mf_eval_glass(localI,
                        localO,
                        false,
@@ -660,7 +660,7 @@ bsdf_microfacet_multi_ggx_glass_eval_reflect(ccl_private const ShaderClosure *sc
   float3 localO = make_float3(dot(omega_in, X), dot(omega_in, Y), dot(omega_in, Z));
 
   *pdf = mf_glass_pdf(localI, localO, bsdf->alpha_x, bsdf->ior);
-  assert(*pdf >= 0.f);
+  kernel_assert(*pdf >= 0.f);
   return mf_eval_glass(localI,
                        localO,
                        true,
@@ -756,7 +756,7 @@ ccl_device int bsdf_microfacet_multi_ggx_glass_sample(KernelGlobals kg,
                           use_fresnel,
                           bsdf->extra->cspec0);
   *pdf = mf_glass_pdf(localI, localO, bsdf->alpha_x, bsdf->ior);
-  assert(*pdf >= 0.f);
+  kernel_assert(*pdf >= 0.f);
   *eval *= *pdf;
 
   *omega_in = X * localO.x + Y * localO.y + Z * localO.z;

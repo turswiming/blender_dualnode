@@ -1097,7 +1097,7 @@ ccl_device_inline void shader_prepare_volume_guiding(KernelGlobals kg,
     }
   }
 
-  assert(guiding_sampling_prob >= 0.f && guiding_sampling_prob <= 1.0f);
+  kernel_assert(guiding_sampling_prob >= 0.f && guiding_sampling_prob <= 1.0f);
   state->guiding.volume_guiding_sampling_prob = guiding_sampling_prob;
   state->guiding.use_volume_guiding = useGuiding;
   state->guiding.sample_volume_guiding_rand = grand;
