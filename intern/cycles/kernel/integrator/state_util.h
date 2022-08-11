@@ -483,7 +483,7 @@ ccl_device_forceinline void guiding_new_surface_segment(IntegratorState state,
 
 ccl_device_forceinline void guiding_add_bsdf_data(IntegratorState state,
                                                   const ShaderData *sd,
-                                                  const float3 bsdf_weight,
+                                                  const Spectrum bsdf_weight,
                                                   const float bsdf_pdf,
                                                   const float3 bsdf_shading_normal,
                                                   const float3 bsdf_omega_in,
@@ -495,8 +495,11 @@ ccl_device_forceinline void guiding_add_bsdf_data(IntegratorState state,
   if (roughness > 0.0f)
     roughness = sqrt(roughness);
 
+  const float3 bsdf_weight_rgb = spectrum_to_rgb(bsdf_weight);
+
   pgl_vec3f pglWo = openpgl::cpp::Vector3(bsdf_omega_in[0], bsdf_omega_in[1], bsdf_omega_in[2]);
-  pgl_vec3f pglBSDFWeight = openpgl::cpp::Vector3(bsdf_weight[0], bsdf_weight[1], bsdf_weight[2]);
+  pgl_vec3f pglBSDFWeight = openpgl::cpp::Vector3(
+      bsdf_weight_rgb[0], bsdf_weight_rgb[1], bsdf_weight_rgb[2]);
   pgl_vec3f pglNormal = openpgl::cpp::Vector3(clamp(bsdf_shading_normal[0], -1.f, 1.f),
                                               clamp(bsdf_shading_normal[1], -1.f, 1.f),
                                               clamp(bsdf_shading_normal[2], -1.f, 1.f));
@@ -535,15 +538,17 @@ ccl_device_forceinline void guiding_new_bssrdf_segment(IntegratorState state,
 }
 
 ccl_device_forceinline void guiding_add_bssrdf_data(IntegratorState state,
-                                                    const float3 bssrdf_weight,
+                                                    const Spectrum bssrdf_weight,
                                                     const float bssrdf_pdf,
                                                     const float3 bssrdf_shading_normal,
                                                     const float3 bssrdf_omega_in)
 {
+  const float3 bssrdf_weight_rgb = spectrum_to_rgb(bssrdf_weight);
+
   pgl_vec3f pglWo = openpgl::cpp::Vector3(
       bssrdf_omega_in[0], bssrdf_omega_in[1], bssrdf_omega_in[2]);
   pgl_vec3f pglBSSRDFWeight = openpgl::cpp::Vector3(
-      bssrdf_weight[0], bssrdf_weight[1], bssrdf_weight[2]);
+      bssrdf_weight_rgb[0], bssrdf_weight_rgb[1], bssrdf_weight_rgb[2]);
   pgl_vec3f pglNormal = openpgl::cpp::Vector3(clamp(bssrdf_shading_normal[0], -1.f, 1.f),
                                               clamp(bssrdf_shading_normal[1], -1.f, 1.f),
                                               clamp(bssrdf_shading_normal[2], -1.f, 1.f));
@@ -584,14 +589,16 @@ ccl_device_forceinline void guiding_new_volume_segment(IntegratorState state,
 
 ccl_device_forceinline void guiding_add_phase_data(IntegratorState state,
                                                    const ShaderData *sd,
-                                                   const float3 phase_weight,
+                                                   const Spectrum phase_weight,
                                                    const float phase_pdf,
                                                    const float3 phase_omega_in,
                                                    const float phase_roughness)
 {
+  const float3 phase_weight_rgb = spectrum_to_rgb(phase_weight);
+
   pgl_vec3f pglWo = openpgl::cpp::Vector3(phase_omega_in[0], phase_omega_in[1], phase_omega_in[2]);
   pgl_vec3f pglPhaseWeight = openpgl::cpp::Vector3(
-      phase_weight[0], phase_weight[1], phase_weight[2]);
+      phase_weight_rgb[0], phase_weight_rgb[1], phase_weight_rgb[2]);
   pgl_vec3f pglNormal = openpgl::cpp::Vector3(0.f, 0.f, 1.f);
 
   assert(state->guiding.path_segment != nullptr);
@@ -609,10 +616,12 @@ ccl_device_forceinline void guiding_add_phase_data(IntegratorState state,
 }
 
 ccl_device_forceinline void guiding_add_background(IntegratorState state,
-                                                   const float3 L,
+                                                   const Spectrum L,
                                                    const float mis_weight)
 {
-  float3 background_pos = state->ray.P + (1e6f) * state->ray.D;
+  const float3 L_rgb = spectrum_to_rgb(L);
+  const float3 background_pos = state->ray.P + (1e6f) * state->ray.D;
+
   pgl_point3f pglEnvPos = openpgl::cpp::Vector3(
       background_pos[0], background_pos[1], background_pos[2]);
   pgl_vec3f pglNormal = openpgl::cpp::Vector3(0.0f, 0.0f, 1.0f);
@@ -624,26 +633,29 @@ ccl_device_forceinline void guiding_add_background(IntegratorState state,
   openpgl::cpp::SetNormal(&background_segment, pglNormal);
   openpgl::cpp::SetDirectionOut(&background_segment, pglDirectionOut);
   openpgl::cpp::SetDirectContribution(&background_segment,
-                                      openpgl::cpp::Vector3(L[0], L[1], L[2]));
+                                      openpgl::cpp::Vector3(L_rgb[0], L_rgb[1], L_rgb[2]));
   openpgl::cpp::SetMiWeight(&background_segment, mis_weight);
   state->guiding.path_segment_storage->AddSegment(background_segment);
 }
 
 ccl_device_forceinline void guiding_add_direct_contribution(IntegratorState state,
-                                                            const float3 Le,
+                                                            const Spectrum Le,
                                                             const float mis_weight)
 {
+  const float3 Le_rgb = spectrum_to_rgb(Le);
+
   openpgl::cpp::SetDirectContribution(state->guiding.path_segment,
-                                      openpgl::cpp::Vector3(Le[0], Le[1], Le[2]));
+                                      openpgl::cpp::Vector3(Le_rgb[0], Le_rgb[1], Le_rgb[2]));
   openpgl::cpp::SetMiWeight(state->guiding.path_segment, mis_weight);
 }
 
 ccl_device_forceinline void guiding_add_scattered_contribution(IntegratorShadowState state,
-                                                               const float3 Lo)
+                                                               const Spectrum Lo)
 {
   if (state->shadow_path.path_segment) {
+    const float3 Lo_rgb = spectrum_to_rgb(Lo);
     openpgl::cpp::AddScatteredContribution(state->shadow_path.path_segment,
-                                           openpgl::cpp::Vector3(Lo[0], Lo[1], Lo[2]));
+                                           openpgl::cpp::Vector3(Lo_rgb[0], Lo_rgb[1], Lo_rgb[2]));
   }
 }
 
