@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "kernel/integrator/guiding.h"
 #include "kernel/integrator/shade_volume.h"
 #include "kernel/integrator/shader_eval.h"
 #include "kernel/integrator/volume_stack.h"

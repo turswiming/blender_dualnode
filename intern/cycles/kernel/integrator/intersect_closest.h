@@ -5,6 +5,7 @@
 
 #include "kernel/camera/projection.h"
 
+#include "kernel/integrator/guiding.h"
 #include "kernel/integrator/path_state.h"
 #include "kernel/integrator/shadow_catcher.h"
 

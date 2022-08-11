@@ -6,6 +6,7 @@
 #include "kernel/film/accumulate.h"
 #include "kernel/film/passes.h"
 
+#include "kernel/integrator/guiding.h"
 #include "kernel/integrator/intersect_closest.h"
 #include "kernel/integrator/path_state.h"
 #include "kernel/integrator/shader_eval.h"

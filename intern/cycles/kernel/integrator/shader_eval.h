@@ -12,6 +12,8 @@
 
 #include "kernel/film/accumulate.h"
 
+#include "kernel/integrator/guiding.h"
+
 #include "kernel/svm/svm.h"
 
 #ifdef __OSL__

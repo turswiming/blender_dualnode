@@ -5,6 +5,8 @@
 
 #include "kernel/bvh/bvh.h"
 
+#include "kernel/integrator/guiding.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* Random walk subsurface scattering.

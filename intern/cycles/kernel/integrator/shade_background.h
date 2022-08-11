@@ -4,6 +4,7 @@
 #pragma once
 
 #include "kernel/film/accumulate.h"
+#include "kernel/integrator/guiding.h"
 #include "kernel/integrator/shader_eval.h"
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"

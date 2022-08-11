@@ -8,6 +8,7 @@
 
 #include "kernel/integrator/mnee.h"
 
+#include "kernel/integrator/guiding.h"
 #include "kernel/integrator/path_state.h"
 #include "kernel/integrator/shader_eval.h"
 #include "kernel/integrator/subsurface.h"
