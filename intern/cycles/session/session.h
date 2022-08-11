@@ -227,9 +227,7 @@ class Session {
   TileManager tile_manager_;
   BufferParams buffer_params_;
 
-#if defined(WITH_PATH_GUIDING)
   GuidingParams guiding_params_;
-#endif
 
   /* Render scheduler is used to get work to be rendered with the current big tile. */
   RenderScheduler render_scheduler_;

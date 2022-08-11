@@ -173,7 +173,7 @@ void PathTrace::render_pipeline(RenderWork render_work)
 
   rebalance(render_work);
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /* Prepare all per-thread guiding structures before we start with the
    * next rendering iteration/progression. */
   const bool use_guiding = device_scene_->data.integrator.use_guiding;
@@ -187,7 +187,7 @@ void PathTrace::render_pipeline(RenderWork render_work)
     return;
   }
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /* Update the guiding field using the training data/samples collected
    * during the rendering iteration/progression.
    * Note: we also should check if the guiding structure should be reseted due to scene changes
@@ -1237,7 +1237,7 @@ string PathTrace::full_report() const
   return result;
 }
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
 void PathTrace::set_guiding_params(ccl::Device *device, const GuidingParams &guiding)
 {
   if (!guiding_sample_data_storage_) {

@@ -412,7 +412,6 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   integrator->set_direct_light_sampling_type(direct_light_sampling_type);
 #endif
 
-#ifdef __PATH_GUIDING__
   integrator->set_use_guiding(get_boolean(cscene, "use_guiding"));
   integrator->set_use_surface_guiding(get_boolean(cscene, "use_surface_guiding"));
   integrator->set_surface_guiding_probability(get_float(cscene, "surface_guiding_probability"));
@@ -423,7 +422,6 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   GuidingDistributionType guiding_distribution_type = (GuidingDistributionType)get_enum(
       cscene, "guiding_distribution_type", GUIDING_NUM_TYPES, GUIDING_TYPE_PAVMM);
   integrator->set_guiding_distribution_type(guiding_distribution_type);
-#endif
 
   DenoiseParams denoise_params = get_denoise_params(b_scene, b_view_layer, background);
 
@@ -745,7 +743,7 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
     pass_add(scene, PASS_DENOISING_DEPTH, "Denoising Depth", PassMode::NOISY);
   }
 
-#if defined(__PATH_GUIDING__) && defined(PATH_GUIDING_DEBUG_PASS)
+#if defined(WITH_PATH_GUIDING) && defined(PATH_GUIDING_DEBUG_PASS)
   b_engine.add_pass("OpenPGL Color", 3, "RGB", b_view_layer.name().c_str());
   pass_add(scene, PASS_OPGL_COLOR, "OpenPGL Color", PassMode::NOISY);
 

@@ -140,7 +140,7 @@ class PathTraceWork {
     return device_;
   }
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /* Intializes the per-thread guiding kernel data. The function sets the pointers to the
    * global guiding field and the sample data storage as well es initializes the per-thread
    * guided sampling distrubtions (e.g., SurfaceSamplingDistribution and

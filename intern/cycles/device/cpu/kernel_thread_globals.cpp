@@ -25,7 +25,7 @@ CPUKernelThreadGlobals::CPUKernelThreadGlobals(const KernelGlobalsCPU &kernel_gl
   (void)osl_globals_memory;
 #endif
 
-#if defined(__PATH_GUIDING__)
+#if defined(WITH_PATH_GUIDING)
 #  if PATH_GUIDING_LEVEL >= 1
   opgl_path_segment_storage = new openpgl::cpp::PathSegmentStorage();
 #  endif
@@ -50,9 +50,8 @@ CPUKernelThreadGlobals::~CPUKernelThreadGlobals()
   OSLShader::thread_free(this);
 #endif
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (opgl_path_segment_storage)
-    delete opgl_path_segment_storage;
+#if defined(WITH_PATH_GUIDING) && PATH_GUIDING_LEVEL >= 1
+  delete opgl_path_segment_storage;
 #endif
 }
 
@@ -75,7 +74,7 @@ void CPUKernelThreadGlobals::reset_runtime_memory()
   osl = nullptr;
 #endif
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+#if defined(WITH_PATH_GUIDING) && PATH_GUIDING_LEVEL >= 1
   opgl_path_segment_storage = nullptr;
 #endif
 }

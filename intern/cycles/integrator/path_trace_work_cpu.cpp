@@ -57,7 +57,7 @@ void PathTraceWorkCPU::init_execution()
   device_->get_cpu_kernel_thread_globals(kernel_thread_globals_);
 }
 
-#if defined(__PATH_GUIDING__)
+#if defined(WITH_PATH_GUIDING)
 /* Note: It seems that this is called before every rendering iteration/progression and not once per
  * rendering. May be we find a way to call it only once per renderering. */
 void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field, void *sample_data_storage)
@@ -95,7 +95,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
                                       int samples_num,
                                       int sample_offset)
 {
-#if defined(__PATH_GUIDING__) && defined(WITH_PATH_GUIDING_DEBUG_PRINT)
+#if defined(WITH_PATH_GUIDING) && defined(WITH_PATH_GUIDING_DEBUG_PRINT)
   VLOG_WORK << "render_samples: start_sample = " << start_sample
             << "\t samples_num = " << samples_num;
 #endif
@@ -179,7 +179,7 @@ void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kg,
       }
     }
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
     const bool use_guiding = kernel_data.integrator.use_guiding;
     if (use_guiding) {
       /* Clear path segment storage. */
@@ -189,7 +189,7 @@ void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kg,
 
     kernels_.integrator_megakernel(kg, state, render_buffer);
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+#if defined(WITH_PATH_GUIDING) && PATH_GUIDING_LEVEL >= 1
     if (use_guiding) {
       /* Push the generated sample data to the global sample data storage. */
       guiding_push_sample_data_to_global_storage(kg, state, render_buffer);
@@ -326,7 +326,7 @@ void PathTraceWorkCPU::cryptomatte_postproces()
   });
 }
 
-#if defined(__PATH_GUIDING__)
+#if defined(WITH_PATH_GUIDING)
 void PathTraceWorkCPU::guiding_prepare_integrator_state(KernelGlobalsCPU *kg,
                                                         IntegratorStateCPU *state)
 {

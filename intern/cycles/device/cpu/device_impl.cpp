@@ -17,7 +17,7 @@
 #  include <embree3/rtcore.h>
 #endif
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
 #  include <openpgl/cpp/OpenPGL.h>
 #endif
 
@@ -74,7 +74,7 @@ CPUDevice::CPUDevice(const DeviceInfo &info_, Stats &stats_, Profiler &profiler_
 #endif
   need_texture_info = false;
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   // TODO(sherholz): we need to replace this with PGL_DEVICE_TYPE_CPU_AUTO
   openpgl_device = new openpgl::cpp::Device(PGL_DEVICE_TYPE_CPU_4);
 #endif
@@ -86,9 +86,8 @@ CPUDevice::~CPUDevice()
   rtcReleaseDevice(embree_device);
 #endif
 
-#ifdef __PATH_GUIDING__
-  if (openpgl_device)
-    delete openpgl_device;
+#ifdef WITH_PATH_GUIDING
+  delete openpgl_device;
 #endif
 
   texture_info.free();
@@ -293,15 +292,17 @@ void CPUDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
     Device::build_bvh(bvh, progress, refit);
 }
 
-#if defined(__PATH_GUIDING__)
 void *CPUDevice::create_guiding_field(void *guiding_field_args_) const
 {
+#ifdef WITH_PATH_GUIDING
   PGLFieldArguments guiding_field_args = *(static_cast<PGLFieldArguments *>(guiding_field_args_));
   openpgl::cpp::Field *guiding_field_ptr = new openpgl::cpp::Field(openpgl_device,
                                                                    guiding_field_args);
   return static_cast<void *>(guiding_field_ptr);
-}
+#else
+  return NULL;
 #endif
+}
 
 void CPUDevice::get_cpu_kernel_thread_globals(
     vector<CPUKernelThreadGlobals> &kernel_thread_globals)

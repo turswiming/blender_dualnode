@@ -808,7 +808,7 @@ int RenderScheduler::get_num_samples_to_path_trace() const
     return 1;
   }
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /*
    * Note: For training the guiding distribution we
    *       might need to force the num_samples_per_update to one
@@ -816,6 +816,7 @@ int RenderScheduler::get_num_samples_to_path_trace() const
    *       prob of 1/num_samples_per_update
    *       we can then updated only after the num_samples_per_update
    *       iterations are rendered
+   * TODO: only do this when path guiding is enabled.
    */
 
   const int num_samples_per_update = std::min(4, calculate_num_samples_per_update());

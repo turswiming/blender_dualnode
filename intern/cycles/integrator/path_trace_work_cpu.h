@@ -50,7 +50,7 @@ class PathTraceWorkCPU : public PathTraceWork {
   virtual int adaptive_sampling_converge_filter_count_active(float threshold, bool reset) override;
   virtual void cryptomatte_postproces() override;
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /* Prepares all local guiding structures and connects the per-thread guiding structures
    * to the current integrator state which is responsible for the upcomming random walk/path. */
   void guiding_prepare_integrator_state(KernelGlobalsCPU *kernel_globals,

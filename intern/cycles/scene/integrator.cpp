@@ -61,8 +61,6 @@ NODE_DEFINE(Integrator)
   SOCKET_INT(volume_max_steps, "Volume Max Steps", 1024);
   SOCKET_FLOAT(volume_step_rate, "Volume Step Rate", 1.0f);
 
-#ifdef WITH_PATH_GUIDING
-
   static NodeEnum guiding_ditribution_enum;
   guiding_ditribution_enum.insert("PAVMM", GUIDING_TYPE_PAVMM);
   guiding_ditribution_enum.insert("DQT", GUIDING_TYPE_DQT);
@@ -79,8 +77,6 @@ NODE_DEFINE(Integrator)
               "Guiding Distribution Type",
               guiding_ditribution_enum,
               GUIDING_TYPE_PAVMM);
-
-#endif
 
   SOCKET_BOOLEAN(caustics_reflective, "Reflective Caustics", true);
   SOCKET_BOOLEAN(caustics_refractive, "Refractive Caustics", true);
@@ -248,7 +244,6 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
     kintegrator->filter_closures |= FILTER_CLOSURE_TRANSPARENT;
   }
 
-#ifdef WITH_PATH_GUIDING
   kintegrator->use_guiding = use_guiding;
   kintegrator->use_surface_guiding = use_surface_guiding;
   kintegrator->surface_guiding_probability = surface_guiding_probability;
@@ -257,7 +252,6 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->use_guide_direct_light = use_guide_direct_light;
   kintegrator->use_mis_weights = use_mis_weights;
   kintegrator->guiding_distribution_type = guiding_distribution_type;
-#endif
 
   kintegrator->seed = seed;
 
@@ -419,13 +413,15 @@ DenoiseParams Integrator::get_denoise_params() const
   return denoise_params;
 }
 
-#ifdef WITH_PATH_GUIDING
 GuidingParams Integrator::get_guiding_params() const
 {
   GuidingParams guiding_params;
+#ifdef WITH_PATH_GUIDING
   guiding_params.use = use_guiding;
+#else
+  guiding_params.use = false;
+#endif
   guiding_params.type = guiding_distribution_type;
   return guiding_params;
 }
-#endif
 CCL_NAMESPACE_END

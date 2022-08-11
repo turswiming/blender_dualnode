@@ -13,7 +13,7 @@
 #include "util/unique_ptr.h"
 #include "util/vector.h"
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
 #  include "integrator/guiding.h"
 #  include <openpgl/cpp/OpenPGL.h>
 #endif
@@ -94,7 +94,7 @@ class PathTrace {
    * Use this to configure the adaptive sampler before rendering any samples. */
   void set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling);
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /* Set the parameters for guiding.
    * Use this to create/configure/activate the guiding structures before each rendering
    * iteration.*/
@@ -219,7 +219,7 @@ class PathTrace {
   void write_tile_buffer(const RenderWork &render_work);
   void finalize_full_buffer_on_disk(const RenderWork &render_work);
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /* Updates/initializes the guiding structures after a rendering iteration.
    * The structures are updated using the training data/samples generated during the previous
    * rendering iteration */
@@ -285,7 +285,7 @@ class PathTrace {
   /* Denoiser which takes care of denoising the big tile. */
   unique_ptr<Denoiser> denoiser_;
 
-#ifdef __PATH_GUIDING__
+#ifdef WITH_PATH_GUIDING
   /* Guiding related attributes */
 
   /* The guiding field which holds the representation of the incident radiance field for the
