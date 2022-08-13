@@ -207,6 +207,7 @@ set(ZSTANDARD_VERSION 0.16.0)
 set(AUTOPEP8_VERSION 1.6.0)
 set(PYCODESTYLE_VERSION 2.8.0)
 set(TOML_VERSION 0.10.2)
+set(MESON_VERSION 0.63.0)
 
 set(NUMPY_VERSION 1.22.0)
 set(NUMPY_SHORT_VERSION 1.22)
@@ -639,3 +640,15 @@ set(AOM_URI https://storage.googleapis.com/aom-releases/libaom-${AOM_VERSION}.ta
 set(AOM_HASH bd754b58c3fa69f3ffd29da77de591bd9c26970e3b18537951336d6c0252e354)
 set(AOM_HASH_TYPE SHA256)
 set(AOM_FILE libaom-${AOM_VERSION}.tar.gz)
+
+set(FRIBIDI_VERSION v1.0.12)
+set(FRIBIDI_URI https://github.com/fribidi/fribidi/archive/refs/tags/${FRIBIDI_VERSION}.tar.gz)
+set(FRIBIDI_HASH 2e9e859876571f03567ac91e5ed3b5308791f31cda083408c2b60fa1fe00a39d)
+set(FRIBIDI_HASH_TYPE SHA256)
+set(FRIBIDI_FILE fribidi-${FRIBIDI_VERSION}.tar.gz)
+
+set(HARFBUZZ_VERSION 5.1.0)
+set(HARFBUZZ_URI https://github.com/harfbuzz/harfbuzz/archive/refs/tags/${HARFBUZZ_VERSION}.tar.gz)
+set(HARFBUZZ_HASH 5352ff2eec538ea9a63a485cf01ad8332a3f63aa79921c5a2e301cef185caea1)
+set(HARFBUZZ_HASH_TYPE SHA256)
+set(HARFBUZZ_FILE harfbuzz-${HARFBUZZ_VERSION}.tar.gz)
