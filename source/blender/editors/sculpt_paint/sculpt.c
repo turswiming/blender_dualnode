@@ -4698,7 +4698,7 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt *sd, Object *ob, Po
   }
 
 #if 0
-  if (BKE_brush_use_size_pressure(brush) &&
+  if (BKE_brush_use_size_pressure(scene, brush) &&
       paint_supports_dynamic_size(brush, PAINT_MODE_SCULPT)) {
     cache->radius = sculpt_brush_dynamic_size_get(brush, cache, cache->initial_radius);
     cache->dyntopo_pixel_radius = sculpt_brush_dynamic_size_get(
@@ -4711,7 +4711,8 @@ static void sculpt_update_cache_variants(bContext *C, Sculpt *sd, Object *ob, Po
 #else
   if (!BKE_brush_use_locked_size(scene, brush)) {
     int radius = BKE_brush_channelset_int_get(cache->channels, size);
-    cache->radius = paint_calc_object_space_radius(cache->vc, cache->true_initial_location, radius);
+    cache->radius = paint_calc_object_space_radius(
+        cache->vc, cache->true_initial_location, radius);
 
     printf("radius: %d\n", radius);
   }
@@ -5168,7 +5169,7 @@ static void sculpt_brush_stroke_init(bContext *C, wmOperator *op)
   ED_paint_tool_update_sticky_shading_color(C, ob);
 }
 
-static void sculpt_restore_mesh(Sculpt *sd, Object *ob)
+static void sculpt_restore_mesh(Scene *scene, Sculpt *sd, Object *ob)
 {
   SculptSession *ss = ob->sculpt;
   Brush *brush = BKE_paint_brush(&sd->paint);
@@ -5182,7 +5183,7 @@ static void sculpt_restore_mesh(Sculpt *sd, Object *ob)
   /* Restore the mesh before continuing with anchored stroke. */
   if ((brush->flag & BRUSH_ANCHORED) ||
       ((ELEM(brush->sculpt_tool, SCULPT_TOOL_GRAB, SCULPT_TOOL_ELASTIC_DEFORM)) &&
-       BKE_brush_use_size_pressure(brush)) ||
+       BKE_brush_use_size_pressure(scene, brush)) ||
       (brush->flag & BRUSH_DRAG_DOT)) {
 
     SculptUndoNode *unode = SCULPT_undo_get_first_node();
@@ -5447,7 +5448,7 @@ static void sculpt_stroke_update_step(bContext *C,
 
   SCULPT_stroke_modifiers_check(C, ob, brush);
   sculpt_update_cache_variants(C, sd, ob, itemptr);
-  sculpt_restore_mesh(sd, ob);
+  sculpt_restore_mesh(CTX_data_scene(C), sd, ob);
 
   if (sd->flags & (SCULPT_DYNTOPO_DETAIL_CONSTANT | SCULPT_DYNTOPO_DETAIL_MANUAL)) {
     float object_space_constant_detail = 1.0f / (sd->constant_detail * mat4_to_scale(ob->obmat));

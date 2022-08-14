@@ -79,9 +79,11 @@ using blender::bke::CurvesGeometry;
 /** \name * SCULPT_CURVES_OT_brush_stroke
  * \{ */
 
-float brush_radius_factor(const Brush &brush, const StrokeExtension &stroke_extension)
+float brush_radius_factor(const Scene &scene,
+                          const Brush &brush,
+                          const StrokeExtension &stroke_extension)
 {
-  if (BKE_brush_use_size_pressure(&brush)) {
+  if (BKE_brush_use_size_pressure(&scene, &brush)) {
     return stroke_extension.pressure;
   }
   return 1.0f;
@@ -91,7 +93,7 @@ float brush_radius_get(const Scene &scene,
                        const Brush &brush,
                        const StrokeExtension &stroke_extension)
 {
-  return BKE_brush_size_get(&scene, &brush) * brush_radius_factor(brush, stroke_extension);
+  return BKE_brush_size_get(&scene, &brush) * brush_radius_factor(scene, brush, stroke_extension);
 }
 
 float brush_strength_factor(const Brush &brush, const StrokeExtension &stroke_extension)

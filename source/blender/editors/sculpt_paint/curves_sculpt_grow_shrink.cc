@@ -291,7 +291,7 @@ struct CurvesEffectOperationExecutor {
     brush_strength_ = brush_strength_get(*ctx_.scene, *brush_, stroke_extension);
 
     brush_radius_base_re_ = BKE_brush_size_get(ctx_.scene, brush_);
-    brush_radius_factor_ = brush_radius_factor(*brush_, stroke_extension);
+    brush_radius_factor_ = brush_radius_factor(*ctx_.scene, *brush_, stroke_extension);
     brush_strength_ = brush_strength_get(*ctx_.scene, *brush_, stroke_extension);
 
     falloff_shape_ = eBrushFalloffShape(brush_->falloff_shape);

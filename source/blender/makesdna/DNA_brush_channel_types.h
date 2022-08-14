@@ -104,6 +104,7 @@ typedef struct BrushChannel {
   short ui_order;
   int flag; /** eBrushChannelFlag */
   int ui_flag, evaluated_flag;
+  int active_mapping, _pad[1];
 } BrushChannel;
 
 typedef struct BrushChannelSet {
@@ -167,7 +168,7 @@ typedef enum eBrushChannelFlag {
   /* Set in scene channels; forces inheritance on brush properties. */
   BRUSH_CHANNEL_FORCE_INHERIT = 1 << 6,
 
-  /* Set in brush channels; ignores BRUSH_CHANNEL_FORCE_INHERIT. */
+  /* Set in local brush channels; ignores BRUSH_CHANNEL_FORCE_INHERIT. */
   BRUSH_CHANNEL_IGNORE_FORCE_INHERIT = 1 << 7,
 } eBrushChannelFlag;
 

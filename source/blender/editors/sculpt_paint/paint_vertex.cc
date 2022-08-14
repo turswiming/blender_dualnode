@@ -1691,7 +1691,7 @@ static void vwpaint_update_cache_variants(bContext *C, VPaint *vp, Object *ob, P
     BKE_brush_unprojected_radius_set(scene, brush, cache->initial_radius);
   }
 
-  if (BKE_brush_use_size_pressure(brush) &&
+  if (BKE_brush_use_size_pressure(scene, brush) &&
       paint_supports_dynamic_size(brush, PAINT_MODE_SCULPT)) {
     cache->radius = cache->initial_radius * cache->pressure;
   }
@@ -1869,7 +1869,7 @@ static void get_brush_alpha_data(const Scene *scene,
                                  float *r_brush_alpha_pressure)
 {
   *r_brush_size_pressure = BKE_brush_size_get(scene, brush) *
-                           (BKE_brush_use_size_pressure(brush) ? ss->cache->pressure : 1.0f);
+                           (BKE_brush_use_size_pressure(scene, brush) ? ss->cache->pressure : 1.0f);
   *r_brush_alpha_value = BKE_brush_alpha_get(scene, brush);
   *r_brush_alpha_pressure = (BKE_brush_use_alpha_pressure(brush) ? ss->cache->pressure : 1.0f);
 }

@@ -2302,9 +2302,16 @@ bool BKE_brush_use_locked_size(const Scene *scene, const Brush *brush)
                                           (brush->flag & BRUSH_LOCK_SIZE);
 }
 
-bool BKE_brush_use_size_pressure(const Brush *brush)
+bool BKE_brush_use_size_pressure(const Scene *scene, const Brush *brush)
 {
-  return brush->flag & BRUSH_SIZE_PRESSURE;
+  if (!BKE_brush_use_locked_size(scene, brush)) {
+    return BKE_brush_mapping_enabled(scene, brush, size, BRUSH_MAPPING_PRESSURE);
+  }
+  else {
+    return BKE_brush_mapping_enabled(scene, brush, unprojected_radius, BRUSH_MAPPING_PRESSURE);
+  }
+
+  //return brush->flag & BRUSH_SIZE_PRESSURE;
 }
 
 bool BKE_brush_use_alpha_pressure(const Brush *brush)

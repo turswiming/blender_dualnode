@@ -40,9 +40,7 @@
 
 const char builtin_brush_categories[][128] = {"Basic", "Smooth", "Color"};
 
-static BrushChannelType empty_brush_type = {
-  "error", "error", "error", "error"
-};
+static BrushChannelType empty_brush_type = {"error", "error", "error", "error"};
 
 #define BRUSH_CHANNEL_DEFINE_INTERNAL_NAMES
 #include "brush_channel_define.h"
@@ -584,9 +582,9 @@ static BrushChannel *brush_channel_final(const Brush *brush,
 }
 
 float _BKE_brush_eval_float(const Brush *brush,
-                                       const Scene *scene,
-                                       const char *idname,
-                                       BrushMappingData *mapping)
+                            const Scene *scene,
+                            const char *idname,
+                            BrushMappingData *mapping)
 {
   BrushChannel *ch = brush_channel_final(brush, scene, idname);
 
@@ -594,9 +592,9 @@ float _BKE_brush_eval_float(const Brush *brush,
 }
 
 int _BKE_brush_eval_int(const Brush *brush,
-                                   const Scene *scene,
-                                   const char *idname,
-                                   BrushMappingData *mapping)
+                        const Scene *scene,
+                        const char *idname,
+                        BrushMappingData *mapping)
 {
   BrushChannel *ch = brush_channel_final(brush, scene, idname);
 
@@ -755,10 +753,7 @@ float _BKE_brush_float_get(const ID *id, BrushChannelSet *chset, const char *idn
   return ret;
 }
 
-void _BKE_brush_float_set(ID *id,
-                                         BrushChannelSet *chset,
-                                         const char *idname,
-                                         float f)
+void _BKE_brush_float_set(ID *id, BrushChannelSet *chset, const char *idname, float f)
 {
   PointerRNA ptr;
   PropertyRNA *prop;
@@ -856,7 +851,7 @@ void BKE_brush_channelset_blend_read(BrushChannelSet *chset, BlendDataReader *re
       ch->def = &empty_brush_type;
     }
     /* Read user-defined category if it exists. */
-    BLO_read_data_address(reader, &ch->category); 
+    BLO_read_data_address(reader, &ch->category);
     BLO_read_data_address(reader, &ch->curve.curve);
 
     if (ch->curve.curve) {
@@ -1154,8 +1149,8 @@ void BKE_brush_channels_update(Brush *active_brush, Scene *scene)
 #endif
 
 int _BKE_brush_int_get_unified(const struct Scene *scene,
-                                              const struct Brush *brush,
-                                              const char *idname)
+                               const struct Brush *brush,
+                               const char *idname)
 {
   BrushChannel *ch = _BKE_brush_channelset_lookup(brush->channels, idname);
 
@@ -1173,9 +1168,9 @@ int _BKE_brush_int_get_unified(const struct Scene *scene,
 }
 
 void _BKE_brush_int_set_unified(struct Scene *scene,
-                                               struct Brush *brush,
-                                               const char *idname,
-                                               int i)
+                                struct Brush *brush,
+                                const char *idname,
+                                int i)
 {
   BrushChannel *ch = _BKE_brush_channelset_lookup(brush->channels, idname);
 
@@ -1185,8 +1180,7 @@ void _BKE_brush_int_set_unified(struct Scene *scene,
   }
 
   if (BKE_brush_channel_inherits(brush, scene->toolsettings, ch)) {
-    _BKE_brush_int_set(
-        &scene->id, scene->toolsettings->unified_channels, idname, i);
+    _BKE_brush_int_set(&scene->id, scene->toolsettings->unified_channels, idname, i);
   }
   else {
     _BKE_brush_int_set(&brush->id, brush->channels, idname, i);
@@ -1194,8 +1188,8 @@ void _BKE_brush_int_set_unified(struct Scene *scene,
 }
 
 float _BKE_brush_float_get_unified(const struct Scene *scene,
-                                                  const struct Brush *brush,
-                                                  const char *idname)
+                                   const struct Brush *brush,
+                                   const char *idname)
 {
   BrushChannel *ch = _BKE_brush_channelset_lookup(brush->channels, idname);
 
@@ -1205,8 +1199,7 @@ float _BKE_brush_float_get_unified(const struct Scene *scene,
   }
 
   if (BKE_brush_channel_inherits(brush, scene->toolsettings, ch)) {
-    return _BKE_brush_float_get(
-        &scene->id, scene->toolsettings->unified_channels, idname);
+    return _BKE_brush_float_get(&scene->id, scene->toolsettings->unified_channels, idname);
   }
   else {
     return _BKE_brush_float_get(&brush->id, brush->channels, idname);
@@ -1214,9 +1207,9 @@ float _BKE_brush_float_get_unified(const struct Scene *scene,
 }
 
 void _BKE_brush_float_set_unified(struct Scene *scene,
-                                                 struct Brush *brush,
-                                                 const char *idname,
-                                                 float f)
+                                  struct Brush *brush,
+                                  const char *idname,
+                                  float f)
 {
   BrushChannel *ch = _BKE_brush_channelset_lookup(brush->channels, idname);
 
@@ -1226,10 +1219,45 @@ void _BKE_brush_float_set_unified(struct Scene *scene,
   }
 
   if (BKE_brush_channel_inherits(brush, scene->toolsettings, ch)) {
-    _BKE_brush_float_set(
-        &scene->id, scene->toolsettings->unified_channels, idname, f);
+    _BKE_brush_float_set(&scene->id, scene->toolsettings->unified_channels, idname, f);
   }
   else {
     _BKE_brush_float_set(&brush->id, brush->channels, idname, f);
+  }
+}
+
+static bool brush_mapping_inherits(BrushChannel *owner,
+                                   BrushChannel *unified,
+                                   BrushMapping *mapping)
+{
+  bool inherit_ch = owner->flag & BRUSH_CHANNEL_INHERIT;
+
+  if ((unified->flag & BRUSH_CHANNEL_FORCE_INHERIT) &&
+      !(owner->flag & BRUSH_CHANNEL_IGNORE_FORCE_INHERIT)) {
+    inherit_ch = true;
+  }
+
+  bool inherit = mapping->inherit_mode == BRUSH_MAPPING_INHERIT_ALWAYS;
+  inherit = inherit || (mapping->inherit_mode == BRUSH_MAPPING_INHERIT_CHANNEL && inherit_ch);
+
+  return inherit;
+}
+bool _BKE_brush_mapping_enabled(const struct Scene *scene,
+                                const struct Brush *brush,
+                                const char *idname,
+                                eBrushMappingType mapping_type)
+{
+  BrushChannel *ch1 = _BKE_brush_channelset_lookup(brush->channels, idname);
+  BrushChannel *ch2 = _BKE_brush_channelset_lookup(scene->toolsettings->unified_channels, idname);
+
+  if (!ch1) {
+    return false;
+  }
+
+  if (brush_mapping_inherits(ch1, ch2, ch1->mappings + mapping_type)) {
+    return ch2->mappings[mapping_type].flag & BRUSH_MAPPING_ENABLED;
+  }
+  else {
+    return ch1->mappings[mapping_type].flag & BRUSH_MAPPING_ENABLED;
   }
 }

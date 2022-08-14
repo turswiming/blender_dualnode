@@ -32,6 +32,7 @@
 #include "DNA_texture_types.h"
 #include "DNA_workspace_types.h"
 
+#include "BLI_assert.h"
 #include "BLI_listbase.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
@@ -176,92 +177,62 @@ static BrushChannel *get_paired_radius_channel(PointerRNA *rna)
   return NULL;
 }
 
-void rna_BrushChannel_inherit_set(PointerRNA *rna, bool value)
+static void rna_brushchannel_paired_flag_set(PointerRNA *rna, int flag, bool value)
 {
   BrushChannel *ch = (BrushChannel *)rna->data;
   BrushChannel *ch2 = get_paired_radius_channel(rna);
 
   if (value) {
-    ch->flag |= BRUSH_CHANNEL_INHERIT;
+    ch->flag |= flag;
 
     if (ch2) {
-      ch2->flag |= BRUSH_CHANNEL_INHERIT;
+      ch2->flag |= flag;
     }
   }
   else {
-    ch->flag &= ~BRUSH_CHANNEL_INHERIT;
+    ch->flag &= ~flag;
 
     if (ch2) {
-      ch2->flag &= ~BRUSH_CHANNEL_INHERIT;
+      ch2->flag &= ~flag;
     }
   }
+}
+
+bool rna_brushchannel_paired_flag_get(PointerRNA *rna, int flag)
+{
+  BrushChannel *ch = (BrushChannel *)rna->data;
+
+  return ch->flag & flag;
+}
+
+void rna_BrushChannel_inherit_set(PointerRNA *rna, bool value)
+{
+  rna_brushchannel_paired_flag_set(rna, BRUSH_CHANNEL_INHERIT, value);
 }
 
 bool rna_BrushChannel_inherit_get(PointerRNA *rna)
 {
-  BrushChannel *ch = (BrushChannel *)rna->data;
-
-  return ch->flag & BRUSH_CHANNEL_INHERIT;
+  return rna_brushchannel_paired_flag_get(rna, BRUSH_CHANNEL_INHERIT);
 }
 
 void rna_BrushChannel_unified_set(PointerRNA *rna, bool value)
 {
-  BrushChannel *ch = (BrushChannel *)rna->data;
-  BrushChannel *ch2 = get_paired_radius_channel(rna);
-
-  if (value) {
-    ch->flag |= BRUSH_CHANNEL_FORCE_INHERIT;
-
-    if (ch2) {
-      ch2->flag |= BRUSH_CHANNEL_FORCE_INHERIT;
-    }
-  }
-  else {
-    ch->flag &= ~BRUSH_CHANNEL_FORCE_INHERIT;
-
-    if (ch2) {
-      ch2->flag &= ~BRUSH_CHANNEL_FORCE_INHERIT;
-    }
-  }
+  rna_brushchannel_paired_flag_set(rna, BRUSH_CHANNEL_FORCE_INHERIT, value);
 }
 
 bool rna_BrushChannel_unified_get(PointerRNA *rna)
 {
-  BrushChannel *ch = (BrushChannel *)rna->data;
-
-  return ch->flag & BRUSH_CHANNEL_FORCE_INHERIT;
+  return rna_brushchannel_paired_flag_get(rna, BRUSH_CHANNEL_FORCE_INHERIT);
 }
 
-void rna_BrushChannel_set_value(PointerRNA *rna, float value)
+void rna_BrushChannel_disable_unified_set(PointerRNA *rna, bool value)
 {
-  BrushChannel *ch = rna->data;
-  BrushChannel *ch2 = get_paired_radius_channel(rna);
-
-  if (ch2 && value != 0.0f && ch->fvalue != 0.0f) {
-    float ratio = value / ch->fvalue;
-    ch2->fvalue *= ratio;
-  }
-
-  ch->fvalue = value;
+  rna_brushchannel_paired_flag_set(rna, BRUSH_CHANNEL_IGNORE_FORCE_INHERIT, value);
 }
 
-void rna_BrushChannel_value_range(
-    PointerRNA *rna, float *min, float *max, float *soft_min, float *soft_max)
+bool rna_BrushChannel_disable_unified_get(PointerRNA *rna)
 {
-  BrushChannel *ch = rna->data;
-
-  if (ch->def) {
-    *min = ch->def->min;
-    *max = ch->def->max;
-    *soft_min = ch->def->soft_min;
-    *soft_max = ch->def->soft_max;
-  }
-  else {
-    *min = 0.0f;
-    *max = 1.0f;
-    *soft_min = 0.0f;
-    *soft_max = 1.0f;
-  }
+  return rna_brushchannel_paired_flag_get(rna, BRUSH_CHANNEL_IGNORE_FORCE_INHERIT);
 }
 
 PointerRNA rna_BrushMapping_curve_get(PointerRNA *ptr)
@@ -371,10 +342,71 @@ char *rna_BrushChannel_rnapath(const PointerRNA *ptr)
     return BLI_sprintfN("channels[\"%s\"]", ch->idname);
   }
   else if (GS(ptr->owner_id->name) == ID_SCE) {
-    return BLI_sprintfN("tool_settings.sculpt.channels[\"%s\"]", ch->idname);
+    return BLI_sprintfN("tool_settings.unified_channels[\"%s\"]", ch->idname);
   }
   else {
     return NULL;
+  }
+}
+
+char *rna_BrushMapping_rnapath(const PointerRNA *ptr)
+{
+  BrushMapping *mp = (BrushMapping *)ptr->data;
+
+  if (!ptr->owner_id) {
+    return NULL;
+  }
+
+  BrushChannelSet *chset;
+
+  switch (GS(ptr->owner_id->name)) {
+    case ID_SCE: {
+      Scene *scene = (Scene *)ptr->owner_id;
+      chset = scene->toolsettings->unified_channels;
+      break;
+    }
+    case ID_BR: {
+      Brush *brush = (Brush *)ptr->owner_id;
+      chset = brush->channels;
+      break;
+    }
+    default:
+      BLI_assert_unreachable();
+      return NULL;
+  }
+
+  BrushChannel *active_ch = NULL;
+
+  LISTBASE_FOREACH (BrushChannel *, ch, &chset->channels) {
+    if (active_ch) {
+      break;
+    }
+
+    for (int i = 0; i < BRUSH_MAPPING_MAX; i++) {
+      if (mp == ch->mappings + i) {
+        active_ch = ch;
+        break;
+      }
+    }
+  }
+
+  if (!active_ch) {
+    BLI_assert_unreachable();
+    return NULL;
+  }
+
+  switch (GS(ptr->owner_id->name)) {
+    case ID_SCE:
+      return BLI_sprintfN("tool_settings.unified_channels[\"%s\"].mappings[\"%s\"]",
+                          active_ch->idname,
+                          BKE_brush_mapping_type_to_typename(mp->type));
+    case ID_BR:
+      return BLI_sprintfN("channels[\"%s\"].mappings[\"%s\"]",
+                          active_ch->idname,
+                          BKE_brush_mapping_type_to_typename(mp->type));
+    default:
+      BLI_assert_unreachable();
+      return NULL;
   }
 }
 
@@ -496,6 +528,7 @@ void RNA_def_brush_mapping(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "BrushMapping", NULL);
   RNA_def_struct_sdna(srna, "BrushMapping");
   RNA_def_struct_ui_text(srna, "Brush Mapping", "Brush Mapping");
+  RNA_def_struct_path_func(srna, "rna_BrushMapping_rnapath");
 
   prop = RNA_def_property(srna, "factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "factor");
@@ -534,17 +567,17 @@ void RNA_def_brush_mapping(BlenderRNA *brna)
        "NEVER",
        ICON_NONE,
        "Never",
-       "Do not inherit from scene defaults even if channel is set to inherit"},
+       "Never use unified settings."},
       {BRUSH_MAPPING_INHERIT_ALWAYS,
        "ALWAYS",
        ICON_NONE,
        "Always",
-       "Inherit from scene defaults even if channel is not set to inherit"},
+       "Always use settings from unified channel."},
       {BRUSH_MAPPING_INHERIT_CHANNEL,
        "USE_CHANNEL",
        ICON_NONE,
-       "Use Channel",
-       "Use channel's inheritance mode"},
+       "If Enabled",
+       "Use unified settings if enabled in channel that owns this mapping."},
       {0, NULL, 0, NULL, NULL}};
 
   prop = RNA_def_property(srna, "inherit_mode", PROP_ENUM, PROP_NONE);
@@ -726,6 +759,14 @@ void RNA_def_brush_channel(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Inherit", "Inherit from scene defaults");
   RNA_def_property_boolean_funcs(
       prop, "rna_BrushChannel_inherit_get", "rna_BrushChannel_inherit_set");
+
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  prop = RNA_def_property(srna, "disable_unified", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Disable Unified",
+                           "Don't allow unified settings for this channel.  Local brush setting.");
+  RNA_def_property_boolean_funcs(
+      prop, "rna_BrushChannel_disable_unified_get", "rna_BrushChannel_disable_unified_set");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
 
   prop = RNA_def_property(srna, "unified", PROP_BOOLEAN, PROP_NONE);
@@ -785,6 +826,13 @@ void RNA_def_brush_channel(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "BrushCurve");
   RNA_def_property_ui_text(prop, "Curve", "Curve");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+
+  prop = RNA_def_property(srna, "active_mapping", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, mapping_type_items);
+  RNA_def_property_enum_sdna(prop, NULL, "active_mapping");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(prop, "Active Mapping", "");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
 }
 

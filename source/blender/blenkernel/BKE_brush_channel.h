@@ -247,6 +247,14 @@ void _BKE_brush_channelset_mark_update(BrushChannelSet *chset, const char *idnam
 
 void BKE_brush_channelset_ui_order_check(BrushChannelSet *chset);
 
+bool _BKE_brush_mapping_enabled(const struct Scene *scene,
+                                const struct Brush *brush,
+                                const char *idname,
+                                eBrushMappingType mapping_type);
+
+#define BKE_brush_mapping_enabled(scene, brush, idname, mapping_type) \
+  _BKE_brush_mapping_enabled(scene, brush, make_builtin_ch_name(idname), mapping_type)
+
 #if 0
 /* Call when active brush changes. */
 void BKE_brush_channels_update(struct Brush *active_brush, struct Scene *scene);

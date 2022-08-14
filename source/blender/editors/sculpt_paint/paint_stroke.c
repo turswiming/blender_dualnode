@@ -14,6 +14,7 @@
 
 #include "PIL_time.h"
 
+#include "DNA_brush_channel_types.h"
 #include "DNA_brush_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -22,6 +23,7 @@
 #include "RNA_access.h"
 
 #include "BKE_brush.h"
+#include "BKE_brush_channel.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_curve.h"
@@ -312,6 +314,7 @@ static bool paint_brush_update(bContext *C,
     copy_v2_v2(ups->last_rake, mouse);
     copy_v2_v2(ups->tex_mouse, mouse);
     copy_v2_v2(ups->mask_tex_mouse, mouse);
+
     stroke->cached_size_pressure = pressure;
 
     ups->do_linear_conversion = false;
@@ -346,7 +349,7 @@ static bool paint_brush_update(bContext *C,
   ups->pixel_radius = BKE_brush_size_get(scene, brush);
   ups->initial_pixel_radius = BKE_brush_size_get(scene, brush);
 
-  if (BKE_brush_use_size_pressure(brush) && paint_supports_dynamic_size(brush, mode)) {
+  if (BKE_brush_use_size_pressure(scene, brush) && paint_supports_dynamic_size(brush, mode)) {
     ups->pixel_radius *= stroke->cached_size_pressure;
   }
 
@@ -535,7 +538,7 @@ static void paint_brush_stroke_add_step(
   if (tablet && (pressure >= 0.99f) &&
       ((pop->s.brush->flag & BRUSH_SPACING_PRESSURE) ||
        BKE_brush_use_alpha_pressure(pop->s.brush) ||
-       BKE_brush_use_size_pressure(pop->s.brush))) {
+       BKE_brush_use_size_pressure(scene, pop->s.brush))) {
     return;
   }
 
@@ -548,7 +551,7 @@ static void paint_brush_stroke_add_step(
   if (tablet && (pressure < 0.0002f) &&
       ((pop->s.brush->flag & BRUSH_SPACING_PRESSURE) ||
        BKE_brush_use_alpha_pressure(pop->s.brush) ||
-       BKE_brush_use_size_pressure(pop->s.brush))) {
+       BKE_brush_use_size_pressure(scene, pop->s.brush))) {
     return;
   }
 #endif
@@ -677,7 +680,20 @@ static float paint_space_stroke_spacing(bContext *C,
   ePaintMode mode = BKE_paintmode_get_active_from_context(C);
   Brush *brush = BKE_paint_brush(paint);
   float size_clamp = 0.0f;
-  float size = BKE_brush_size_get(scene, stroke->brush) * size_pressure;
+  // float size = BKE_brush_size_get(scene, stroke->brush) * size_pressure;
+
+  BrushMappingData mapdata = {0};
+  mapdata.pressure = size_pressure;
+
+#if 1
+  BKE_brush_channelset_mark_update(scene->toolsettings->unified_channels, size);
+  BKE_brush_channelset_mark_update(brush->channels, size);
+  BKE_brush_channelset_mark_update(scene->toolsettings->unified_channels, unprojected_radius);
+  BKE_brush_channelset_mark_update(brush->channels, unprojected_radius);
+#endif
+
+  float size = BKE_brush_eval_int(brush, scene, size, &mapdata);
+
   if (paint_stroke_use_scene_spacing(brush, mode)) {
     if (!BKE_brush_use_locked_size(scene, brush)) {
       float last_object_space_position[3];
@@ -686,7 +702,8 @@ static float paint_space_stroke_spacing(bContext *C,
       size_clamp = paint_calc_object_space_radius(&stroke->vc, last_object_space_position, size);
     }
     else {
-      size_clamp = BKE_brush_unprojected_radius_get(scene, brush) * size_pressure;
+      // size_clamp = BKE_brush_unprojected_radius_get(scene, brush) * size_pressure;
+      size_clamp = BKE_brush_eval_float(brush, scene, unprojected_radius, &mapdata);
     }
   }
   else {
@@ -772,7 +789,7 @@ static float paint_space_stroke_spacing_variable(bContext *C,
                                                  float dpressure,
                                                  float length)
 {
-  if (BKE_brush_use_size_pressure(stroke->brush)) {
+  if (BKE_brush_use_size_pressure(scene, stroke->brush)) {
     /* use pressure to modify size. set spacing so that at 100%, the circles
      * are aligned nicely with no overlap. for this the spacing needs to be
      * the average of the previous and next size. */

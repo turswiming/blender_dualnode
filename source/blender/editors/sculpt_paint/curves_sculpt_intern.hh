@@ -39,7 +39,9 @@ struct StrokeExtension {
   ReportList *reports = nullptr;
 };
 
-float brush_radius_factor(const Brush &brush, const StrokeExtension &stroke_extension);
+float brush_radius_factor(const Scene &scene,
+                          const Brush &brush,
+                          const StrokeExtension &stroke_extension);
 float brush_radius_get(const Scene &scene,
                        const Brush &brush,
                        const StrokeExtension &stroke_extension);

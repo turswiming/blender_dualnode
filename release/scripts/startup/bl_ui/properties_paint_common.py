@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-from bpy.types import Menu
+from bpy.types import Menu, Panel
 
 def template_curve(layout, base, propname, full_path, use_negative_slope=None):
     layout.template_curve_mapping(base, propname, brush=True, use_negative_slope=use_negative_slope)
@@ -17,6 +17,67 @@ def template_curve(layout, base, propname, full_path, use_negative_slope=None):
         props.invert = not use_negative_slope
         props.shape = shape
         props.path = path
+
+class BRUSH_PT_channel_panel(Panel):
+    bl_label = "Settings"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        scene = context.scene
+        ts = context.tool_settings
+
+        print("\n")
+        for k in dir(context):
+            print(k)
+        print("\n")
+
+        ch = context.active_brush_channel
+        finalch = context.final_brush_channel
+
+        mp = ch.mappings[ch.active_mapping]
+
+        ch_inherit = ch.inherit
+        ch_inherit = ch_inherit or (finalch.unified and not ch.disable_unified)
+
+        inherit = mp.inherit_mode == "ALWAYS" or (mp.inherit_mode == "USE_CHANNEL" and ch_inherit)
+        finalmp = finalch.mappings[ch.active_mapping] if inherit else mp
+        finalid = context.active_brush if finalmp == mp else context.scene
+
+        col = layout.column()
+        row = col.row()
+        row.prop(ch, "active_mapping", text="")
+        row.prop(finalmp, "enabled", text="", icon="STYLUS_PRESSURE")
+
+        col.prop(mp, "inherit_mode", text="Unified Mode")
+
+        if finalmp == mp:
+            path2 = UnifiedPaintPanel.paint_settings(context).path_from_id()
+            path2 += ".brush."
+        else:
+            path2 = "scene."
+
+        path2 += finalmp.path_from_id()
+
+        print("PATH2", path2)
+
+        col.prop(finalmp.curve, "curve_preset", text="Curve")
+        if finalmp.curve.curve_preset == "CUSTOM":
+            template_curve(col, mp.curve, "curve", path2 + ".curve.curve", use_negative_slope=True)                            
+
+        #col.label(text="Input Mapping")
+        col.prop(finalmp, "premultiply")
+        #col.prop(mp, "mapfunc", text="Repeat")
+
+        #col.label(text="Output Mapping")
+        row = col.row()
+        row.prop(mp, "min", slider=True)
+        row.prop(mp, "max", slider=True)
+
+        #col.prop(finalmp, "blendmode")
+        
 
 class UnifiedPaintPanel:
     # subclass must set
@@ -184,11 +245,12 @@ class UnifiedPaintPanel:
 
         finalowner = context.path_resolve(proppath)
         
-        if not (inherit and ch.mappings["PRESSURE"].inherit_mode == "NEVER"):
-            pressurech = finalch
+        inherit_pressure = ch.mappings["PRESSURE"].inherit_mode == "ALWAYS"
+        if ch.mappings["PRESSURE"].inherit_mode == "USE_CHANNEL":
+            inherit_pressure = inherit
 
-            if pressurech == ch and ch.mappings["PRESSURE"].inherit_mode == "ALWAYS":
-                pressurech = context.tool_settings.unified_channels[ch.idname]
+        if pressurech == ch and inherit_pressure:
+            pressurech = context.tool_settings.unified_channels[ch.idname]
 
         if show_reorder:
             props = row.operator("brush.change_channel_order", text="", icon="TRIA_UP")
@@ -272,9 +334,14 @@ class UnifiedPaintPanel:
             if not show_mappings and not show_reorder:
                 return
 
-            row.prop(ch, "ui_expanded",  emboss=False, text="", icon="DOWNARROW_HLT" if ch.ui_expanded else "RIGHTARROW")
+            row.context_pointer_set("active_brush", brush)
+            row.context_pointer_set("active_brush_channel", ch)
+            row.context_pointer_set("final_brush_channel", finalch)
 
-            if ch.ui_expanded:
+            row.popover("BRUSH_PT_channel_panel", icon="DOWNARROW_HLT", text="")
+            #row.prop(ch, "ui_expanded",  emboss=False, text="", icon="DOWNARROW_HLT" if ch.ui_expanded else "RIGHTARROW")
+
+            if 0: #ch.ui_expanded:
                 layout = baselayout.column()
 
                 for i, mp in enumerate(ch.mappings):
@@ -1823,7 +1890,7 @@ def brush_basic_gpencil_vertex_settings(layout, _context, brush, *, compact=Fals
         row.prop(gp_settings, "vertex_mode", text="Mode")
 
 
-classes = (VIEW3D_MT_tools_projectpaint_clone,)
+classes = (VIEW3D_MT_tools_projectpaint_clone, BRUSH_PT_channel_panel)
 
 if __name__ == "__main__":  # only for live edit.
     from bpy.utils import register_class

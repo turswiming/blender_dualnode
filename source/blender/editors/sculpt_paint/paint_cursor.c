@@ -525,7 +525,8 @@ static int project_brush_radius(ViewContext *vc, float radius, const float locat
 
 /* Draw an overlay that shows what effect the brush's texture will
  * have on brush strength. */
-static bool paint_draw_tex_overlay(UnifiedPaintSettings *ups,
+static bool paint_draw_tex_overlay(Scene *scene,
+                                   UnifiedPaintSettings *ups,
                                    Brush *brush,
                                    ViewContext *vc,
                                    int x,
@@ -569,7 +570,7 @@ static bool paint_draw_tex_overlay(UnifiedPaintSettings *ups,
       GPU_matrix_translate_2f(-x, -y);
 
       /* Scale based on tablet pressure. */
-      if (primary && ups->stroke_active && BKE_brush_use_size_pressure(brush)) {
+      if (primary && ups->stroke_active && BKE_brush_use_size_pressure(scene, brush)) {
         const float scale = ups->size_pressure_value;
         GPU_matrix_translate_2f(x, y);
         GPU_matrix_scale_2f(scale, scale);
@@ -670,8 +671,13 @@ static bool paint_draw_tex_overlay(UnifiedPaintSettings *ups,
 
 /* Draw an overlay that shows what effect the brush's texture will
  * have on brush strength. */
-static bool paint_draw_cursor_overlay(
-    UnifiedPaintSettings *ups, Brush *brush, ViewContext *vc, int x, int y, float zoom)
+static bool paint_draw_cursor_overlay(Scene *scene,
+                                      UnifiedPaintSettings *ups,
+                                      Brush *brush,
+                                      ViewContext *vc,
+                                      int x,
+                                      int y,
+                                      float zoom)
 {
   rctf quad;
   /* Check for overlay mode. */
@@ -706,7 +712,7 @@ static bool paint_draw_cursor_overlay(
     }
 
     /* Scale based on tablet pressure. */
-    if (ups->stroke_active && BKE_brush_use_size_pressure(brush)) {
+    if (ups->stroke_active && BKE_brush_use_size_pressure(scene, brush)) {
       do_pop = true;
       GPU_matrix_push();
       GPU_matrix_translate_2fv(center);
@@ -752,7 +758,8 @@ static bool paint_draw_cursor_overlay(
   return true;
 }
 
-static bool paint_draw_alpha_overlay(UnifiedPaintSettings *ups,
+static bool paint_draw_alpha_overlay(Scene *scene,
+                                     UnifiedPaintSettings *ups,
                                      Brush *brush,
                                      ViewContext *vc,
                                      int x,
@@ -779,22 +786,24 @@ static bool paint_draw_alpha_overlay(UnifiedPaintSettings *ups,
   /* Colored overlay should be drawn separately. */
   if (col) {
     if (!(flags & PAINT_OVERLAY_OVERRIDE_PRIMARY)) {
-      alpha_overlay_active = paint_draw_tex_overlay(ups, brush, vc, x, y, zoom, mode, true, true);
+      alpha_overlay_active = paint_draw_tex_overlay(
+          scene, ups, brush, vc, x, y, zoom, mode, true, true);
     }
     if (!(flags & PAINT_OVERLAY_OVERRIDE_SECONDARY)) {
       alpha_overlay_active = paint_draw_tex_overlay(
-          ups, brush, vc, x, y, zoom, mode, false, false);
+          scene, ups, brush, vc, x, y, zoom, mode, false, false);
     }
     if (!(flags & PAINT_OVERLAY_OVERRIDE_CURSOR)) {
-      alpha_overlay_active = paint_draw_cursor_overlay(ups, brush, vc, x, y, zoom);
+      alpha_overlay_active = paint_draw_cursor_overlay(scene, ups, brush, vc, x, y, zoom);
     }
   }
   else {
     if (!(flags & PAINT_OVERLAY_OVERRIDE_PRIMARY) && (mode != PAINT_MODE_WEIGHT)) {
-      alpha_overlay_active = paint_draw_tex_overlay(ups, brush, vc, x, y, zoom, mode, false, true);
+      alpha_overlay_active = paint_draw_tex_overlay(
+          scene, ups, brush, vc, x, y, zoom, mode, false, true);
     }
     if (!(flags & PAINT_OVERLAY_OVERRIDE_CURSOR)) {
-      alpha_overlay_active = paint_draw_cursor_overlay(ups, brush, vc, x, y, zoom);
+      alpha_overlay_active = paint_draw_cursor_overlay(scene, ups, brush, vc, x, y, zoom);
     }
   }
 
@@ -1007,7 +1016,7 @@ static void paint_cursor_update_unprojected_radius(UnifiedPaintSettings *ups,
     unprojected_radius = paint_calc_object_space_radius(vc, location, projected_radius);
 
     /* Scale 3D brush radius by pressure. */
-    if (ups->stroke_active && BKE_brush_use_size_pressure(brush)) {
+    if (ups->stroke_active && BKE_brush_use_size_pressure(vc->scene, brush)) {
       unprojected_radius *= ups->size_pressure_value;
     }
 
@@ -1402,7 +1411,7 @@ static void paint_draw_2D_view_brush_cursor(PaintCursorContext *pcontext)
   immUniformColor3fvAlpha(pcontext->outline_col, pcontext->outline_alpha);
 
   /* Draw brush outline. */
-  if (pcontext->ups->stroke_active && BKE_brush_use_size_pressure(pcontext->brush)) {
+  if (pcontext->ups->stroke_active && BKE_brush_use_size_pressure(pcontext->scene, pcontext->brush)) {
     imm_draw_circle_wire_2d(pcontext->pos,
                             pcontext->translation[0],
                             pcontext->translation[1],
@@ -1842,7 +1851,8 @@ static void paint_cursor_update_rake_rotation(PaintCursorContext *pcontext)
 
 static void paint_cursor_check_and_draw_alpha_overlays(PaintCursorContext *pcontext)
 {
-  pcontext->alpha_overlay_drawn = paint_draw_alpha_overlay(pcontext->ups,
+  pcontext->alpha_overlay_drawn = paint_draw_alpha_overlay(pcontext->scene,
+                                                           pcontext->ups,
                                                            pcontext->brush,
                                                            &pcontext->vc,
                                                            pcontext->x,
