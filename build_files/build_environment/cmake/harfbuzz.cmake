@@ -1,23 +1,26 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 if(WIN32)
-  set(CONFIGURE_ENV ${CONFIGURE_ENV_MSVC})
-  set(FREETYPE_EXPORT set FREETYPE_DIR=${LIBDIR}/freetype)
+  set(HARFBUZZ_CONFIGURE_ENV ${CONFIGURE_ENV_MSVC} && set FREETYPE_DIR=${LIBDIR}/freetype)
 else()
-  set(FREETYPE_EXPORT export FREETYPE_DIR=${LIBDIR}/freetype)
+  set(HARFBUZZ_CONFIGURE_ENV ${CONFIGURE_ENV} && PKG_CONFIG_PATH=${LIBDIR}/freetype/lib/pkgconfig:${LIBDIR}/brotli/lib/pkgconfig)
 endif()
 
 set(HARFBUZZ_EXTRA_OPTIONS
   -Dtests=disabled
   -Dfreetype=enabled
+  -Dglib=disabled
+  -Dgobject=disabled
 )
+
+
 
 ExternalProject_Add(external_harfbuzz
   URL file://${PACKAGE_DIR}/${HARFBUZZ_FILE}
   URL_HASH ${HARFBUZZ_HASH_TYPE}=${HARFBUZZ_HASH}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   PREFIX ${BUILD_DIR}/harfbuzz
-  CONFIGURE_COMMAND ${CONFIGURE_ENV} && ${FREETYPE_EXPORT} && ${LIBDIR}/python/Scripts/meson setup --prefix ${LIBDIR}/harfbuzz ${HARFBUZZ_EXTRA_OPTIONS} --default-library static --libdir lib ${BUILD_DIR}/harfbuzz/src/external_harfbuzz-build ${BUILD_DIR}/harfbuzz/src/external_harfbuzz
+  CONFIGURE_COMMAND ${HARFBUZZ_CONFIGURE_ENV} && ${MESON} setup --prefix ${LIBDIR}/harfbuzz ${HARFBUZZ_EXTRA_OPTIONS} --default-library static --libdir lib ${BUILD_DIR}/harfbuzz/src/external_harfbuzz-build ${BUILD_DIR}/harfbuzz/src/external_harfbuzz
   BUILD_COMMAND ninja
   INSTALL_COMMAND ninja install
   INSTALL_DIR ${LIBDIR}/harfbuzz

@@ -39,7 +39,7 @@ if(WIN32)
   set(LIBEXT ".lib")
   set(SHAREDLIBEXT ".lib")
   set(LIBPREFIX "")
-
+  set(MESON ${LIBDIR}/python/Scripts/meson)
   # For OIIO and OSL
   set(COMMON_DEFINES /DPSAPI_VERSION=2 /DOIIO_STATIC_BUILD /DTINYFORMAT_ALLOW_WCHAR_STRINGS)
 
@@ -114,8 +114,8 @@ else()
   set(PATCH_CMD patch)
   set(LIBEXT ".a")
   set(LIBPREFIX "lib")
-
-  if(APPLE)
+  set(MESON ${LIBDIR}/python/bin/meson)
+if(APPLE)
     set(SHAREDLIBEXT ".dylib")
 
     # Let's get the current Xcode dir, to support xcode-select
