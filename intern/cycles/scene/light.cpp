@@ -428,7 +428,7 @@ void LightManager::device_update_distribution(Device *device,
       light_tree_nodes[index].theta_o = node.bcone.theta_o;
       light_tree_nodes[index].theta_e = node.bcone.theta_e;
 
-      light_tree_nodes[index].parent_index = node.parent_index;
+      light_tree_nodes[index].bit_trail = node.bit_trail;
 
       /* Here we need to make a distinction between interior and leaf nodes. */
       if (node.is_leaf_node) {

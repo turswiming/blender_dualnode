@@ -233,7 +233,7 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
 }
 
 void LightTreeBuildNode::init_leaf(
-    uint offset, uint n, const BoundBox &b, const OrientationBounds &c, float e, float e_var)
+    uint offset, uint n, const BoundBox &b, const OrientationBounds &c, float e, float e_var, uint bits)
 {
   bbox = b;
   bcone = c;
@@ -243,6 +243,7 @@ void LightTreeBuildNode::init_leaf(
   num_lights = n;
 
   children[0] = children[1] = nullptr;
+  bit_trail = bits;
   is_leaf = true;
 }
 
@@ -283,7 +284,7 @@ LightTree::LightTree(const vector<LightTreePrimitive> &prims, Scene *scene, uint
 
   int total_nodes = 0;
   vector<LightTreePrimitive> ordered_prims;
-  LightTreeBuildNode *root = recursive_build(build_data, 0, prims.size(), total_nodes, ordered_prims);
+  LightTreeBuildNode *root = recursive_build(build_data, 0, prims.size(), total_nodes, ordered_prims, 0, 0);
   prims_ = ordered_prims;
 
   int offset = 0;
@@ -305,7 +306,9 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
                                                int start,
                                                int end,
                                                int &total_nodes,
-                                               vector<LightTreePrimitive> &ordered_prims)
+                                               vector<LightTreePrimitive> &ordered_prims,
+                                               uint bit_trail,
+                                               int depth)
 {
   LightTreeBuildNode *node = new LightTreeBuildNode();
   total_nodes++;
@@ -337,7 +340,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
       int prim_num = primitive_info[i].prim_num;
       ordered_prims.push_back(prims_[prim_num]);
     }
-    node->init_leaf(first_prim_offset, num_prims, node_bbox, node_bcone, energy_total, energy_variance);
+    node->init_leaf(first_prim_offset, num_prims, node_bbox, node_bcone, energy_total, energy_variance, bit_trail);
   }
   else {
     /* Find the best place to split the primitives into 2 nodes. 
@@ -381,9 +384,9 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
       /* At this point, we should expect right to be just past left,
        * where left points to the first element that belongs to the right node. */
       LightTreeBuildNode *left_node = recursive_build(
-          primitive_info, start, left, total_nodes, ordered_prims);
+          primitive_info, start, left, total_nodes, ordered_prims, bit_trail, depth + 1);
       LightTreeBuildNode *right_node = recursive_build(
-          primitive_info, left, end, total_nodes, ordered_prims);
+          primitive_info, left, end, total_nodes, ordered_prims, bit_trail | (1u << bit_trail), depth + 1);
       node->init_interior(left_node, right_node);
     }
     else {
@@ -392,7 +395,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
         int prim_num = primitive_info[i].prim_num;
         ordered_prims.push_back(prims_[prim_num]);
       }
-      node->init_leaf(first_prim_offset, num_prims, node_bbox, node_bcone, energy_total, energy_variance);
+      node->init_leaf(first_prim_offset, num_prims, node_bbox, node_bcone, energy_total, energy_variance, bit_trail);
     }
   }
 
@@ -496,7 +499,6 @@ int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset, int par
   current_node->bcone = node->bcone;
   current_node->energy = node->energy;
   current_node->energy_variance = node->energy_variance;
-  current_node->parent_index = parent;
   int current_index = offset;
   offset++;
 
@@ -505,6 +507,7 @@ int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset, int par
   if (node->num_lights > 0) {
     current_node->first_prim_index = node->first_prim_index;
     current_node->num_lights = node->num_lights;
+    current_node->bit_trail = node->bit_trail;
     current_node->is_leaf_node = true;
   }
   else {

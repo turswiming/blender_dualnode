@@ -110,9 +110,10 @@ struct LightTreeBuildNode {
   LightTreeBuildNode *children[2];
   uint first_prim_index;
   uint num_lights;
+  uint bit_trail;
   bool is_leaf;
 
-  void init_leaf(uint offset, uint n, const BoundBox& b, const OrientationBounds& c, float e, float e_var);
+  void init_leaf(uint offset, uint n, const BoundBox& b, const OrientationBounds& c, float e, float e_var, uint bits);
   void init_interior(LightTreeBuildNode* c0, LightTreeBuildNode* c1);
 };
 
@@ -130,7 +131,10 @@ struct PackedLightTreeNode {
   };
   int num_lights;
   bool is_leaf_node;
-  int parent_index;
+
+  /* The bit trail traces the traversal from the root to a leaf node.
+   * A value of 0 denotes traversing left while a value of 1 denotes traversing right. */
+  uint bit_trail; 
 };
 
 /* Light BVH
@@ -150,7 +154,7 @@ public:
   const vector<PackedLightTreeNode> &get_nodes() const;
 
 private:
-  LightTreeBuildNode* recursive_build(vector<LightTreePrimitiveInfo> &primitive_info, int start, int end, int &total_nodes, vector<LightTreePrimitive> &ordered_prims);
+  LightTreeBuildNode* recursive_build(vector<LightTreePrimitiveInfo> &primitive_info, int start, int end, int &total_nodes, vector<LightTreePrimitive> &ordered_prims, uint bit_trail, int depth);
   void split_saoh(const BoundBox &centroid_bounds,
                   const vector<LightTreePrimitiveInfo> &primitive_info, int start, int end, const BoundBox &bbox, const OrientationBounds &bcone, float& min_cost, int& min_dim, int& min_bucket);
   int flatten_tree(const LightTreeBuildNode *node, int &offset, int parent);

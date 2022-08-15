@@ -82,44 +82,20 @@ ccl_device float light_tree_node_importance(const float3 P,
 
 /* This is uniformly sampling the reservoir for now. */
 ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
-                                                     const float randu,
-                                                     const float randv,
-                                                     const float time,
                                                      const float3 P,
                                                      const float3 N,
-                                                     const int bounce,
-                                                     const uint32_t path_flag,
                                                      int emitter_index)
 {
-  LightSample ls ccl_optional_struct_init;
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter_index);
-  bool sampled = true;
   const int prim = kemitter->prim_id;
-  if (prim >= 0) {
-    /* Mesh light. */
-    const int object = kemitter->mesh_light.object_id;
 
-    /* Exclude synthetic meshes from shadow catcher pass. */
-    if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
-        !(kernel_data_fetch(object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
-      return 0.0f;
-    }
-
-    const int shader_flag = kemitter->mesh_light.shader_flag;
-    triangle_light_sample<false>(kg, prim, object, randu, randv, time, &ls, P);
-    ls.shader |= shader_flag;
-
-    sampled = ls.pdf > 0.0f;
-  }
-  else {
+  /* Triangles are handled normally for now. */
+  if (prim < 0) {
     const int lamp = -prim - 1;
 
-    if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
-      return 0.0f;
-    }
-
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
+    float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
 
     if (klight->type == LIGHT_SPOT) {
       /* to-do: since spot light importance sampling isn't the best,
@@ -141,14 +117,28 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
         return 0.0f;
       }
     }
-    else {
-      sampled = light_sample<false>(kg, lamp, randu, randv, P, path_flag, &ls);
-    }
-  }
+    else if (klight->type == LIGHT_AREA) {
+      /* area light */
+      float3 axisu = make_float3(
+          klight->area.axisu[0], klight->area.axisu[1], klight->area.axisu[2]);
+      float3 axisv = make_float3(
+          klight->area.axisv[0], klight->area.axisv[1], klight->area.axisv[2]);
+      float3 Ng = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
+      bool is_round = (klight->area.invarea < 0.0f);
 
-  
-  if (sampled == 0.0f) {
-    return 0.0f;
+      if (dot(light_P - P, Ng) > 0.0f) {
+        return 0.0f;
+      }
+
+      if (!is_round) {
+        if (klight->area.tan_spread > 0.0f) {
+          if (!light_spread_clamp_area_light(
+                  P, Ng, &light_P, &axisu, &axisv, klight->area.tan_spread)) {
+            return 0.0f;
+          }
+        }
+      }
+    }
   }
 
   return 1.0f;
@@ -327,7 +317,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
       }
 
       const float light_weight = light_tree_emitter_reservoir_weight(
-          kg, time, *randu, randv, P, N, bounce, path_flag, selected_light);
+          kg, P, N, selected_light);
       if (light_weight == 0.0f) {
         stack_index--;
         continue;
@@ -508,7 +498,11 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
 }
 
 /* We need to be able to find the probability of selecting a given light, for MIS. */
-ccl_device float light_tree_pdf(KernelGlobals kg, const float3 P, const float3 N, const int prim)
+ccl_device float light_tree_pdf(KernelGlobals kg,
+                                ConstIntegratorState state,
+                                const float3 P,
+                                const float3 N,
+                                const int prim)
 {
   float distant_light_importance = light_tree_distant_light_importance(
       kg, P, N, kernel_data.integrator.num_distant_lights);
@@ -525,52 +519,124 @@ ccl_device float light_tree_pdf(KernelGlobals kg, const float3 P, const float3 N
                                     kernel_data_fetch(light_to_tree, ~prim);
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter);
-  int parent = kemitter->parent_index;
-  ccl_global const KernelLightTreeNode *kleaf = &kernel_data_fetch(light_tree_nodes, parent);
+  ccl_global const KernelLightTreeNode *kleaf = &kernel_data_fetch(light_tree_nodes,
+                                                                   kemitter->parent_index);
 
-  /* First, we find the probability of selecting the primitive out of the leaf node. */
-  float total_importance = 0.0f;
-  float emitter_importance = 0.0f;
-  for (int i = 0; i < kleaf->num_prims; i++) {
-    /* At a leaf node, the negative value is the index into first prim. */
-    int prim = i - kleaf->child_index;
-    const float importance = light_tree_emitter_importance(kg, P, N, prim);
-    if (prim == emitter) {
-      emitter_importance = importance;
+  /* We generate a random number to use for selecting a light. */
+  RNGState rng_state;
+  path_state_rng_load(state, &rng_state);
+  float randu = path_state_rng_1D_hash(kg, &rng_state, 0x6a21694c);
+
+  /* We traverse to the leaf node and
+   * find the probability of selecting the target light. */
+  const int stack_size = 32;
+  int stack[stack_size];
+  float pdfs[stack_size];
+  int stack_index = 0;
+  stack[0] = 0;
+  pdfs[0] = 1.0f;
+
+  float light_tree_pdf = 0.0f;
+  float light_leaf_pdf = 0.0f;
+  float total_weight = 0.0f;
+  float target_weight = 0.0f;
+
+  uint bit_trail = kleaf->bit_trail;
+  while (stack_index >= 0) {
+    const float pdf = pdfs[stack_index];
+    const int index = stack[stack_index];
+    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
+
+    if (knode->child_index <= 0) {
+      int selected_light = -1;
+      float light_weight = 0.0f;
+
+      /* If we're at the leaf node containing the light we need, 
+       * then we iterate through the lights to find the target emitter.
+       * Otherwise, we randomly select one. */
+      if (index == emitter) {
+        light_tree_pdf = pdf;
+
+        float target_emitter_importance = 0.0f;
+        float total_emitter_importance = 0.0f;
+        for (int i = 0; i < knode->num_prims; i++) {
+          const int prim_index = -knode->child_index + i;
+          float light_importance = light_tree_emitter_importance(kg, P, N, prim_index);
+          ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(
+              light_tree_emitters, prim_index);
+          if (kemitter->prim_id == prim) {
+            selected_light = prim_index;
+            light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
+            target_weight = light_weight;
+            target_emitter_importance = light_importance;
+          }
+          total_emitter_importance += light_importance;
+        }
+
+        light_leaf_pdf = target_emitter_importance / total_emitter_importance;
+      }
+      else {
+        float light_probability = 1.0f;
+        const int selected_light = light_tree_cluster_select_emitter(
+            kg, &randu, P, N, knode, &light_probability);
+        light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
+      }
+
+      if (selected_light < 0) {
+        stack_index--;
+        continue;
+      }
+
+      if (light_weight == 0.0f) {
+        stack_index--;
+        continue;
+      }
+      total_weight += light_weight;
+
+      stack_index--;
+      continue;
     }
-    total_importance += importance;
-  }
-  pdf *= emitter_importance / total_importance;
 
-  /* Next, we find the probability of traversing to that leaf node. */
-  int child_index = parent;
-  parent = kleaf->parent_index;
-  while (parent != -1) {
-    const ccl_global KernelLightTreeNode *kparent = &kernel_data_fetch(light_tree_nodes, parent);
+    /* At an interior node, the left child is directly after the parent,
+     * while the right child is stored as the child index.
+     * We adaptively split if the variance is high enough. */
+    const int left_index = index + 1;
+    const int right_index = knode->child_index;
+    if (light_tree_should_split(kg, P, knode) && stack_index < stack_size - 1) {
+      stack[stack_index] = left_index;
+      pdfs[stack_index] = pdf;
+      stack[stack_index + 1] = right_index;
+      pdfs[stack_index + 1] = pdf;
+      stack_index++;
+      continue;
+    }
 
-    const int left_index = parent + 1;
-    const int right_index = kparent->child_index;
-    const ccl_global KernelLightTreeNode *kleft = &kernel_data_fetch(light_tree_nodes, left_index);
-    const ccl_global KernelLightTreeNode *kright = &kernel_data_fetch(light_tree_nodes,
-                                                                      right_index);
+    /* If we don't split, the bit trail determines whether we go left or right. */
+    const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
+    const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes,
+                                                                     right_index);
 
-    const float left_importance = light_tree_cluster_importance(kg, P, N, kleft);
-    const float right_importance = light_tree_cluster_importance(kg, P, N, kright);
+    const float left_importance = light_tree_cluster_importance(kg, P, N, left);
+    const float right_importance = light_tree_cluster_importance(kg, P, N, right);
+    const float total_importance = left_importance + right_importance;
+
+    if (total_importance == 0.0f) {
+      stack_index--;
+      continue;
+    }
     float left_probability = left_importance / (left_importance + right_importance);
 
-    /* If the child index matches the left index, then we must've traversed left, otherwise right.
-     */
-    if (left_index == child_index) {
-      pdf *= left_probability;
+    if (bit_trail & 1) {
+      stack[stack_index] = left_index;
+      pdfs[stack_index] = pdf * left_probability;
     }
     else {
-      pdf *= (1.0f - left_probability);
+      stack[stack_index] = right_index;
+      pdfs[stack_index] = pdf * (1.0f - left_probability);
     }
-
-    child_index = parent;
-    parent = kparent->parent_index;
   }
-
+ 
+  pdf *= light_leaf_pdf * light_tree_pdf * target_weight / total_weight;
   return pdf;
 }
 

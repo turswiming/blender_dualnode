@@ -1323,8 +1323,8 @@ typedef struct KernelLightTreeNode {
     float energy_variance; /* interior nodes use the energy variance for the splitting heuristic. */
   };
 
-  /* Parent. */
-  int parent_index;
+  /* Bit trail. */
+  uint bit_trail;
 
   /* Padding. */
   int pad1;
