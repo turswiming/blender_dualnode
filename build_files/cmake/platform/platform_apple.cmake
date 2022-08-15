@@ -21,6 +21,18 @@ function(print_found_status
   endif()
 endfunction()
 
+# Utility to install shared libraries.
+macro(add_bundled_libraries library)
+  if(EXISTS ${LIBDIR})
+    set(_library_dir ${LIBDIR}/${library})
+    file(GLOB _all_library_versions ${_library_dir}/lib/*\.dylib*)
+    list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
+    list(APPEND PLATFORM_BUNDLED_LIBRARY_DIRS ${_library_dir})
+    unset(_all_library_versions)
+    unset(_library_dir)
+ endif()
+endmacro()
+
 # ------------------------------------------------------------------------
 # Find system provided libraries.
 
@@ -81,7 +93,9 @@ endif()
 
 if(WITH_USD)
   find_package(USD)
-  if(NOT USD_FOUND)
+  if(USD_FOUND)
+    add_bundled_libraries(usd)
+  else()
     message(STATUS "USD not found, disabling WITH_USD")
     set(WITH_USD OFF)
   endif()
@@ -89,6 +103,7 @@ endif()
 
 if(WITH_OPENSUBDIV)
   find_package(OpenSubdiv)
+  add_bundled_libraries(opensubdiv)
 endif()
 
 if(WITH_CODEC_SNDFILE)
@@ -114,6 +129,7 @@ endif()
 if(WITH_PYTHON)
   # Use precompiled libraries by default.
   set(PYTHON_VERSION 3.10)
+  set(PYTHON_VERSION_NO_DOTS 310)
   if(NOT WITH_PYTHON_MODULE AND NOT WITH_PYTHON_FRAMEWORK)
     # Normally cached but not since we include them with blender.
     set(PYTHON_INCLUDE_DIR "${LIBDIR}/python/include/python${PYTHON_VERSION}")
@@ -258,17 +274,16 @@ if(WITH_BOOST)
   if(WITH_INTERNATIONAL)
     list(APPEND _boost_FIND_COMPONENTS locale)
   endif()
-  if(WITH_OPENVDB)
-    list(APPEND _boost_FIND_COMPONENTS iostreams)
-  endif()
   if(WITH_USD)
-    list(APPEND _boost_FIND_COMPONENTS python310)
+    list(APPEND _boost_FIND_COMPONENTS python${PYTHON_VERSION_NO_DOTS})
   endif()
   find_package(Boost COMPONENTS ${_boost_FIND_COMPONENTS})
 
   set(BOOST_LIBRARIES ${Boost_LIBRARIES})
   set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
   set(BOOST_DEFINITIONS)
+
+  add_bundled_libraries(boost)
 
   mark_as_advanced(Boost_LIBRARIES)
   mark_as_advanced(Boost_INCLUDE_DIRS)
@@ -313,6 +328,7 @@ endif()
 if(WITH_OPENVDB)
   find_package(OpenVDB)
   set(OPENVDB_DEFINITIONS)
+  add_bundled_libraries(openvdb)
 endif()
 
 if(WITH_NANOVDB)
@@ -386,7 +402,9 @@ endif()
 
 if(WITH_TBB)
   find_package(TBB)
-  if(NOT TBB_FOUND)
+  if(TBB_FOUND)
+    add_bundled_libraries(tbb)
+  else()
     message(WARNING "TBB not found, disabling WITH_TBB")
     set(WITH_TBB OFF)
   endif()
@@ -412,6 +430,7 @@ if(WITH_OPENMP)
     set(OpenMP_LIBRARY_DIR "${LIBDIR}/openmp/lib/")
     set(OpenMP_LINKER_FLAGS "-L'${OpenMP_LIBRARY_DIR}' -lomp")
     set(OpenMP_LIBRARY "${OpenMP_LIBRARY_DIR}/libomp.dylib")
+    add_bundled_libraries(openmp)
   endif()
 endif()
 
@@ -501,21 +520,14 @@ if(WITH_COMPILER_CCACHE)
   endif()
 endif()
 
-# For binaries that are built but not installed (also not distributed) (datatoc,
-# makesdna, tests, etc.), we add an rpath to the OpenMP library dir through
-# CMAKE_BUILD_RPATH. This avoids having to make many copies of the dylib next to each binary.
-#
-# For the installed Python module and installed Blender executable, CMAKE_INSTALL_RPATH
-# is modified to find the dylib in an adjacent folder. Install step puts the libraries there.
+# For binaries that are built but not installed (like makesdan or tests), we add
+# the original directory of all shared libraries to the rpath. This avoids having
+# to install them as part of the build step.
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
-list(APPEND CMAKE_BUILD_RPATH "${OpenMP_LIBRARY_DIR}")
-if(WITH_TBB)
-  list(APPEND CMAKE_BUILD_RPATH "${TBB_LIBRARY_DIR}")
-endif()
-if(WITH_USD)
-  list(APPEND CMAKE_BUILD_RPATH "${USD_LIBRARY_DIR}")
-endif()
+list(APPEND CMAKE_BUILD_RPATH ${PLATFORM_BUNDLED_LIBRARY_DIRS})
 
+# For the installed Python module and installed Blender executable, we set the
+# rpath to the location where install step will copy the shared libraries.
 set(CMAKE_SKIP_INSTALL_RPATH FALSE)
 list(APPEND CMAKE_INSTALL_RPATH "@loader_path/../Resources/${BLENDER_VERSION}/lib")
 

@@ -12,6 +12,7 @@ if(UNIX)
     automake
     bison
     ${_libtoolize_name}
+    patchelf
     pkg-config
     tclsh
     yasm
@@ -54,7 +55,7 @@ if(UNIX)
       "  ${_software_missing}\n"
       "\n"
       "On Debian and Ubuntu:\n"
-      "  apt install autoconf automake libtool yasm tcl ninja-build meson python3-mako\n"
+      "  apt install autoconf automake libtool yasm tcl ninja-build meson python3-mako patchelf\n"
       "\n"
       "On macOS (with homebrew):\n"
       "  brew install autoconf automake bison flex libtool pkg-config yasm\n"

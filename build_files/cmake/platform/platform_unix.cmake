@@ -81,6 +81,19 @@ macro(find_package_wrapper)
   endif()
 endmacro()
 
+# Utility to install shared libraries, all that exist in the precompiled
+# library folder will be copied.
+macro(add_bundled_libraries library)
+  if(EXISTS ${LIBDIR})
+    set(_library_dir ${LIBDIR}/${library})
+    file(GLOB _all_library_versions ${_library_dir}/lib/*\.so*)
+    list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
+    list(APPEND PLATFORM_BUNDLED_LIBRARY_DIRS ${_library_dir})
+    unset(_all_library_versions)
+    unset(_library_dir)
+ endif()
+endmacro()
+
 # ----------------------------------------------------------------------------
 # Precompiled Libraries
 #
@@ -306,18 +319,22 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
 endif()
 
 if(WITH_OPENVDB)
-  find_package_wrapper(OpenVDB)
+  find_package(OpenVDB)
 
-  if(NOT OPENVDB_FOUND)
+  if(OPENVDB_FOUND)
+    add_bundled_libraries(openvdb)
+
+    if(NOT EXISTS ${LIBDIR})
+      find_package_wrapper(Blosc)
+      if(NOT BLOSC_FOUND)
+        set(WITH_OPENVDB_BLOSC OFF)
+        message(STATUS "Blosc not found, disabling it for OpenVBD")
+      endif()
+    endif()
+  else()
     set(WITH_OPENVDB OFF)
     set(WITH_OPENVDB_BLOSC OFF)
     message(STATUS "OpenVDB not found, disabling it")
-  else if(NOT EXISTS ${LIBDIR})
-    find_package_wrapper(Blosc)
-    if(NOT BLOSC_FOUND)
-      set(WITH_OPENVDB_BLOSC OFF)
-      message(STATUS "Blosc not found, disabling it for OpenVBD")
-    endif()
   endif()
 endif()
 
@@ -343,9 +360,11 @@ if(WITH_ALEMBIC)
 endif()
 
 if(WITH_USD)
-  find_package_wrapper(USD)
+  find_package(USD)
 
-  if(NOT USD_FOUND)
+  if(USD_FOUND)
+    add_bundled_libraries(usd)
+  else()
     set(WITH_USD OFF)
   endif()
 endif()
@@ -367,14 +386,11 @@ if(WITH_BOOST)
     if(WITH_INTERNATIONAL)
       list(APPEND __boost_packages locale)
     endif()
-    if(WITH_OPENVDB)
-      list(APPEND __boost_packages iostreams)
-    endif()
     if(WITH_OPENIMAGEIO)
       list(APPEND __boost_packages filesystem)
     endif()
     if(WITH_USD)
-      list(APPEND __boost_packages python310)
+      list(APPEND __boost_packages python${PYTHON_VERSION_NO_DOTS})
     endif()
     list(APPEND __boost_packages system)
     find_package(Boost 1.48 COMPONENTS ${__boost_packages})
@@ -402,6 +418,8 @@ if(WITH_BOOST)
     find_package(IcuLinux)
     list(APPEND BOOST_LIBRARIES ${ICU_LIBRARIES})
   endif()
+
+  add_bundled_libraries(boost)
 endif()
 
 if(WITH_PUGIXML)
@@ -505,12 +523,11 @@ if(WITH_LLVM)
 endif()
 
 if(WITH_OPENSUBDIV)
-  find_package_wrapper(OpenSubdiv)
+  find_package(OpenSubdiv)
 
-  set(OPENSUBDIV_LIBRARIES ${OPENSUBDIV_LIBRARIES})
-  set(OPENSUBDIV_LIBPATH)  # TODO, remove and reference the absolute path everywhere
-
-  if(NOT OPENSUBDIV_FOUND)
+  if(OPENSUBDIV_FOUND)
+    add_bundled_libraries(opensubdiv)
+  else()
     set(WITH_OPENSUBDIV OFF)
     message(STATUS "OpenSubdiv not found")
   endif()
@@ -518,7 +535,9 @@ endif()
 
 if(WITH_TBB)
   find_package_wrapper(TBB)
-  if(NOT TBB_FOUND)
+  if(TBB_FOUND)
+    add_bundled_libraries(tbb)
+  elseif(EXISTS ${LIBDIR})
     message(WARNING "TBB not found, disabling WITH_TBB")
     set(WITH_TBB OFF)
   endif()
@@ -978,24 +997,13 @@ endfunction()
 
 CONFIGURE_ATOMIC_LIB_IF_NEEDED()
 
-# For binaries that are built but not installed (also not distributed) (datatoc,
-# makesdna, tests, etc.), we add an rpath to library dirs these depends on.
-#
-# For the installed Python module and installed Blender executable, CMAKE_INSTALL_RPATH
-# is modified to find everything in ./lib. Install step puts the libraries there.
+# For binaries that are built but not installed (like makesdan or tests), we add
+# the original directory of all shared libraries to the rpath. This avoids having
+# to install them as part of the build step.
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
-list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib)
-if(SYCL_LIBRARY)
-  get_filename_component(SYCL_LIBRARY_DIR "${SYCL_LIBRARY}" DIRECTORY)
-  list(APPEND CMAKE_BUILD_RPATH "${SYCL_LIBRARY_DIR}")
-endif()
-if(WITH_TBB)
-  list(APPEND CMAKE_BUILD_RPATH "${TBB_LIBRARY_DIR}")
-endif()
-if(WITH_USD)
-  list(APPEND CMAKE_BUILD_RPATH "${USD_LIBRARY_DIR}")
-endif()
+list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib ${PLATFORM_BUNDLED_LIBRARY_DIRS})
 
-
+# For the installed Python module and installed Blender executable, we set the
+# rpath to the location where install step will copy the shared libraries.
 set(CMAKE_SKIP_INSTALL_RPATH FALSE)
 list(APPEND CMAKE_INSTALL_RPATH $ORIGIN/lib)
