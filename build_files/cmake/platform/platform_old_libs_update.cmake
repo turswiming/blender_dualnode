@@ -44,3 +44,17 @@ if(UNIX AND DEFINED NANOVDB_INCLUDE_DIR)
     unset_cache_variables("^NANOVDB")
   endif()
 endif()
+
+# Shared libraries.
+if(UNIX AND
+  DEFINED TBB_LIBRARY AND
+  TBB_LIBRARY MATCHES "libtbb.a$" AND
+  EXISTS ${LIBDIR}/usd/lib/python)
+  message(STATUS "Auto updating CMake configuration for Blender 3.4 libraries")
+  unset_cache_variables("^BLOSC")
+  unset_cache_variables("^BOOST")
+  unset_cache_variables("^OPENSUBDIV")
+  unset_cache_variables("^OPENVDB")
+  unset_cache_variables("^TBB")
+  unset_cache_variables("^USD")
+endif()
