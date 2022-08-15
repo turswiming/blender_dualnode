@@ -312,9 +312,6 @@ endif()
 
 if(WITH_OPENVDB)
   find_package(OpenVDB)
-  find_library(BLOSC_LIBRARIES NAMES blosc HINTS ${LIBDIR}/openvdb/lib)
-  print_found_status("Blosc" "${BLOSC_LIBRARIES}")
-  list(APPEND OPENVDB_LIBRARIES ${BLOSC_LIBRARIES})
   set(OPENVDB_DEFINITIONS)
 endif()
 

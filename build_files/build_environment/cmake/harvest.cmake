@@ -115,9 +115,6 @@ harvest(openal/include openal/include "*.h")
 if(UNIX AND NOT APPLE)
   harvest(openal/lib openal/lib "*.a")
 
-  harvest(blosc/include blosc/include "*.h")
-  harvest(blosc/lib blosc/lib "*.a")
-
   harvest(zlib/include zlib/include "*.h")
   harvest(zlib/lib zlib/lib "*.a")
 
@@ -126,7 +123,6 @@ if(UNIX AND NOT APPLE)
 
   harvest(wayland-protocols/share/wayland-protocols wayland-protocols/share/wayland-protocols/ "*.xml")
 else()
-  harvest(blosc/lib openvdb/lib "*.a")
   harvest(xml2/lib opencollada/lib "*.a")
 endif()
 harvest(opencollada/include/opencollada opencollada/include "*.h")
