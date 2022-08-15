@@ -21,11 +21,26 @@ if(WIN32)
   if(BUILD_MODE STREQUAL Debug)
     list(APPEND USD_PLATFORM_FLAGS -DPXR_USE_DEBUG_PYTHON=ON)
   endif()
-endif()
-if(UNIX)
+elseif(APPLE)
+  # Workaround USD not linking correctly with static Python library, where it would embed
+  # part of the interpret in the USD library. Allow undefined Python symbols and replace
+  # Python library with TBB so it doesn't complain about missing library.
+  set(USD_SHARED_LINKER_FLAGS "-Xlinker -undefined -Xlinker dynamic_lookup")
+  set(USD_PLATFORM_FLAGS
+    ${USD_PLATFORM_FLAGS}
+    -DPYTHON_INCLUDE_DIR=${LIBDIR}/python/include/python${PYTHON_SHORT_VERSION}/
+    -DPYTHON_LIBRARY=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${SHAREDLIBEXT}
+    -DCMAKE_SHARED_LINKER_FLAGS=${USD_SHARED_LINKER_FLAGS}
+    # Avoid adding absolute LC_RPATH, macOS adds relative by default.
+    -DCMAKE_SKIP_RPATH=ON
+   )
+else()
   set(USD_PLATFORM_FLAGS
     -DPYTHON_INCLUDE_DIR=${LIBDIR}/python/include/python${PYTHON_SHORT_VERSION}/
-    -DPYTHON_LIBRARY=${LIBDIR}/python/lib/libpython${PYTHON_SHORT_VERSION}${LIBEXT}
+    -DPYTHON_LIBRARY=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${SHAREDLIBEXT}
+    # Set relocatable rpath.
+    -DCMAKE_INSTALL_RPATH=\$ORIGIN
+    -DCMAKE_SKIP_RPATH=OFF
   )
 endif()
 

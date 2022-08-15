@@ -1,3 +1,18 @@
+--- a/cmake/macros/Private.cmake	2022-08-16 20:19:10.458300059 +0200
++++ b/cmake/macros/Private.cmake	2022-08-16 20:19:22.930536130 +0200
+@@ -632,12 +632,6 @@
+             list(APPEND final "${path}")
+         endif()
+     endforeach()
+-
+-    set_target_properties(${NAME}
+-        PROPERTIES
+-            INSTALL_RPATH_USE_LINK_PATH TRUE
+-            INSTALL_RPATH "${final}"
+-    )
+ endfunction()
+ 
+ # Split the library (target) names in libs into internal-to-the-monolithic-
 diff -x .git -ur usd.orig/cmake/defaults/Packages.cmake external_usd/cmake/defaults/Packages.cmake
 --- usd.orig/cmake/defaults/Packages.cmake	2019-10-24 22:39:53.000000000 +0200
 +++ external_usd/cmake/defaults/Packages.cmake	2019-11-28 13:00:33.185957483 +0100

@@ -25,6 +25,8 @@ set(OPENVDB_EXTRA_ARGS
   -DNANOVDB_BUILD_TOOLS=OFF
   -DBlosc_ROOT=${LIBDIR}/blosc/
   -DTBB_ROOT=${LIBDIR}/tbb/
+  -DTbb_INCLUDE_DIR=${LIBDIR}/tbb/include
+  -DTbb_LEGACY_INCLUDE_DIR=${LIBDIR}/tbb/include
   -DOPENVDB_CORE_SHARED=${OPENVDB_SHARED}
   -DOPENVDB_CORE_STATIC=${OPENVDB_STATIC}
   -DOPENVDB_BUILD_BINARIES=OFF
@@ -35,6 +37,7 @@ set(OPENVDB_EXTRA_ARGS
   -DOPENVDB_PYTHON_WRAP_ALL_GRID_TYPES=ON
   -DUSE_NUMPY=ON
   -DPython_EXECUTABLE=${PYTHON_BINARY}
+  -DOPENVDB_ENABLE_RPATH=OFF
 
   # OPENVDB_AX Disabled for now as it adds ~25MB distribution wise
   # with no blender code depending on it, seems wasteful.
@@ -43,6 +46,15 @@ set(OPENVDB_EXTRA_ARGS
   # -DOPENVDB_AX_STATIC=OFF
   # -DLLVM_DIR=${LIBDIR}/llvm/lib/cmake/llvm
 )
+
+if(UNIX AND NOT APPLE)
+  # OpenVDB sets absolute rpaths, so disable OPENVDB_ENABLE_RPATH and add our
+  # own relocatable rpath.
+  set(OPENVDB_EXTRA_ARGS
+    ${OPENVDB_EXTRA_ARGS}
+    -DCMAKE_INSTALL_RPATH=\$ORIGIN
+  )
+endif()
 
 ExternalProject_Add(openvdb
   URL file://${PACKAGE_DIR}/${OPENVDB_FILE}

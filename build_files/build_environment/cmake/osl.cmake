@@ -33,7 +33,6 @@ set(OSL_EXTRA_ARGS
   -DINSTALL_DOCS=OFF
   -Dpugixml_ROOT=${LIBDIR}/pugixml
   -DUSE_PYTHON=OFF
-  -DCMAKE_CXX_STANDARD=14
   -DImath_ROOT=${LIBDIR}/imath
 )
 
