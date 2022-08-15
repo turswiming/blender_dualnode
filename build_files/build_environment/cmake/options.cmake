@@ -81,7 +81,7 @@ if(WIN32)
 
   # some build systems like meson will respect the *nix like environment vars
   # like CFLAGS and LDFlags but will still build with the MSVC compiler, so for
-  # those we need to empty out the gcc style flags that are normally in there. 
+  # those we need to empty out the gcc style flags that are normally in there.
   set(CONFIGURE_ENV_MSVC
     cd ${MINGW_PATH} &&
     call ${PERL_SHELL} &&

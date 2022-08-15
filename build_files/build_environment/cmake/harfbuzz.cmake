@@ -13,8 +13,6 @@ set(HARFBUZZ_EXTRA_OPTIONS
   -Dgobject=disabled
 )
 
-
-
 ExternalProject_Add(external_harfbuzz
   URL file://${PACKAGE_DIR}/${HARFBUZZ_FILE}
   URL_HASH ${HARFBUZZ_HASH_TYPE}=${HARFBUZZ_HASH}
@@ -31,6 +29,7 @@ add_dependencies(
   external_python
   external_python_site_packages
 )
+
 if(BUILD_MODE STREQUAL Release AND WIN32)
   ExternalProject_Add_Step(external_harfbuzz after_install
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/harfbuzz/include ${HARVEST_TARGET}/harfbuzz/include
