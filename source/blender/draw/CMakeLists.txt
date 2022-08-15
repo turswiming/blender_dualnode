@@ -28,7 +28,6 @@ set(INC
 
   ../../../intern/atomic
   ../../../intern/clog
-  ../../../intern/glew-mx
   ../../../intern/guardedalloc
   ../../../intern/opensubdiv
 
@@ -142,6 +141,7 @@ set(SRC
   engines/eevee_next/eevee_instance.cc
   engines/eevee_next/eevee_light.cc
   engines/eevee_next/eevee_material.cc
+  engines/eevee_next/eevee_hizbuffer.cc
   engines/eevee_next/eevee_motion_blur.cc
   engines/eevee_next/eevee_pipeline.cc
   engines/eevee_next/eevee_renderbuffers.cc
@@ -392,6 +392,8 @@ set(GLSL_SRC
   engines/eevee_next/shaders/eevee_geom_gpencil_vert.glsl
   engines/eevee_next/shaders/eevee_geom_mesh_vert.glsl
   engines/eevee_next/shaders/eevee_geom_world_vert.glsl
+  engines/eevee_next/shaders/eevee_hiz_debug_frag.glsl
+  engines/eevee_next/shaders/eevee_hiz_update_comp.glsl
   engines/eevee_next/shaders/eevee_light_culling_debug_frag.glsl
   engines/eevee_next/shaders/eevee_light_culling_select_comp.glsl
   engines/eevee_next/shaders/eevee_light_culling_sort_comp.glsl
