@@ -11,12 +11,13 @@
 
 #pragma once
 
-/**
- * Number of items in a culling batch. Needs to be Power of 2. Must be <= to 65536.
- * Current limiting factor is the sorting phase which is single pass and only sort within a
- * thread-group which maximum size is 1024.
- */
-#define CULLING_BATCH_SIZE 1024
+/* Avoid too much overhead caused by resizing the light buffers too many time. */
+#define LIGHT_CHUNK 256
+
+#define CULLING_SELECT_GROUP_SIZE 256
+#define CULLING_SORT_GROUP_SIZE 256
+#define CULLING_ZBIN_GROUP_SIZE 1024
+#define CULLING_TILE_GROUP_SIZE 1024
 
 /**
  * IMPORTANT: Some data packing are tweaked for these values.
@@ -57,9 +58,11 @@
 #define DOF_TILES_DILATE_GROUP_SIZE 8
 #define DOF_BOKEH_LUT_SIZE 32
 #define DOF_MAX_SLIGHT_FOCUS_RADIUS 5
-#define DOF_REDUCE_GROUP_SIZE 8
+#define DOF_SLIGHT_FOCUS_SAMPLE_MAX 16
+#define DOF_MIP_COUNT 4
+#define DOF_REDUCE_GROUP_SIZE (1 << (DOF_MIP_COUNT - 1))
 #define DOF_DEFAULT_GROUP_SIZE 32
+#define DOF_STABILIZE_GROUP_SIZE 16
 #define DOF_FILTER_GROUP_SIZE 8
 #define DOF_GATHER_GROUP_SIZE DOF_TILES_SIZE
 #define DOF_RESOLVE_GROUP_SIZE (DOF_TILES_SIZE * 2)
-#define DOF_MIP_MAX 4

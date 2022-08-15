@@ -99,23 +99,19 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
     case DOF_GATHER_FOREGROUND_LUT:
       return "eevee_depth_of_field_gather_foreground_lut";
     case DOF_GATHER_FOREGROUND:
-      return "eevee_depth_of_field_gather_foreground";
+      return "eevee_depth_of_field_gather_foreground_no_lut";
     case DOF_GATHER_BACKGROUND_LUT:
       return "eevee_depth_of_field_gather_background_lut";
     case DOF_GATHER_BACKGROUND:
-      return "eevee_depth_of_field_gather_background";
+      return "eevee_depth_of_field_gather_background_no_lut";
     case DOF_GATHER_HOLE_FILL:
       return "eevee_depth_of_field_hole_fill";
     case DOF_REDUCE:
       return "eevee_depth_of_field_reduce";
     case DOF_RESOLVE:
-      return "eevee_depth_of_field_resolve_lq";
-    case DOF_RESOLVE_HQ:
-      return "eevee_depth_of_field_resolve_hq";
+      return "eevee_depth_of_field_resolve_no_lut";
     case DOF_RESOLVE_LUT:
-      return "eevee_depth_of_field_resolve_lq_lut";
-    case DOF_RESOLVE_LUT_HQ:
-      return "eevee_depth_of_field_resolve_hq_lut";
+      return "eevee_depth_of_field_resolve_lut";
     case DOF_SETUP:
       return "eevee_depth_of_field_setup";
     case DOF_SCATTER:
@@ -128,6 +124,16 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_depth_of_field_tiles_dilate_minmax";
     case DOF_TILES_FLATTEN:
       return "eevee_depth_of_field_tiles_flatten";
+    case LIGHT_CULLING_DEBUG:
+      return "eevee_light_culling_debug";
+    case LIGHT_CULLING_SELECT:
+      return "eevee_light_culling_select";
+    case LIGHT_CULLING_SORT:
+      return "eevee_light_culling_sort";
+    case LIGHT_CULLING_TILE:
+      return "eevee_light_culling_tile";
+    case LIGHT_CULLING_ZBIN:
+      return "eevee_light_culling_zbin";
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:
       return "";

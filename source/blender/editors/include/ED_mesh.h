@@ -144,6 +144,7 @@ void BM_uv_element_map_free(struct UvElementMap *element_map);
 struct UvElement *BM_uv_element_get(struct UvElementMap *map,
                                     struct BMFace *efa,
                                     struct BMLoop *l);
+struct UvElement *BM_uv_element_get_head(struct UvElementMap *map, struct UvElement *child);
 
 /**
  * Can we edit UV's for this mesh?
@@ -389,7 +390,10 @@ void ED_keymap_mesh(struct wmKeyConfig *keyconf);
  * Copy the face flags, most importantly selection from the mesh to the final derived mesh,
  * use in object mode when selecting faces (while painting).
  */
-void paintface_flush_flags(struct bContext *C, struct Object *ob, short flag);
+void paintface_flush_flags(struct bContext *C,
+                           struct Object *ob,
+                           bool flush_selection,
+                           bool flush_hidden);
 /**
  * \return True when pick finds an element or the selection changed.
  */
@@ -444,7 +448,7 @@ void ED_mesh_mirrtopo_init(struct BMEditMesh *em,
                            bool skip_em_vert_array_init);
 void ED_mesh_mirrtopo_free(MirrTopoStore_t *mesh_topo_store);
 
-/* object_vgroup.c */
+/* object_vgroup.cc */
 
 #define WEIGHT_REPLACE 1
 #define WEIGHT_ADD 2
