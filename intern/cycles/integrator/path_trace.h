@@ -255,6 +255,7 @@ class PathTrace {
   /* CPU device for creating temporary render buffers on the CPU side. */
   unique_ptr<Device> cpu_device_;
 
+  Film *film_;
   DeviceScene *device_scene_;
 
   RenderScheduler &render_scheduler_;
@@ -279,6 +280,9 @@ class PathTrace {
 
   /* Denoiser which takes care of denoising the big tile. */
   unique_ptr<Denoiser> denoiser_;
+
+  /* Denoiser device descriptor which holds the denoised big tile for multi-device workloads. */
+  unique_ptr<PathTraceWork> big_tile_denoise_work_;
 
 #ifdef WITH_PATH_GUIDING
   /* Guiding related attributes */

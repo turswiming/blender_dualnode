@@ -946,7 +946,6 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   float phase_pdf;
   BsdfEval phase_eval ccl_optional_struct_init;
   float3 phase_omega_in ccl_optional_struct_init;
-  differential3 phase_domega_in ccl_optional_struct_init;
 
   float sampled_roughness = 1.0f;
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
@@ -961,7 +960,6 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
                                               phase_v,
                                               &phase_eval,
                                               &phase_omega_in,
-                                              &phase_domega_in,
                                               &guided_phase_pdf,
                                               &phase_pdf,
                                               &sampled_roughness);
@@ -974,7 +972,6 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
                                        phase_v,
                                        &phase_eval,
                                        &phase_omega_in,
-                                       &phase_domega_in,
                                        &phase_pdf,
                                        &sampled_roughness);
     guided_phase_pdf = phase_pdf;
@@ -987,7 +984,6 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
                                                phase_v,
                                                &phase_eval,
                                                &phase_omega_in,
-                                               &phase_domega_in,
                                                &phase_pdf,
                                                &sampled_roughness);
 #  endif
@@ -1003,7 +999,6 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   INTEGRATOR_STATE_WRITE(state, ray, tmax) = FLT_MAX;
 #  ifdef __RAY_DIFFERENTIALS__
   INTEGRATOR_STATE_WRITE(state, ray, dP) = differential_make_compact(sd->dP);
-  INTEGRATOR_STATE_WRITE(state, ray, dD) = differential_make_compact(phase_domega_in);
 #  endif
   // Save memory by storing last hit prim and object in isect
   INTEGRATOR_STATE_WRITE(state, isect, prim) = sd->prim;

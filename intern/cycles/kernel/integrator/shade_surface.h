@@ -391,7 +391,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   float bsdf_pdf;
   BsdfEval bsdf_eval ccl_optional_struct_init;
   float3 bsdf_omega_in ccl_optional_struct_init;
-  differential3 bsdf_domega_in ccl_optional_struct_init;
   int label;
 
   float2 bsdf_sampled_roughness = make_float2(1.0f, 1.0f);
@@ -408,7 +407,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                               bsdf_v,
                                               &bsdf_eval,
                                               &bsdf_omega_in,
-                                              &bsdf_domega_in,
                                               &guided_bsdf_pdf,
                                               &bsdf_pdf,
                                               &bsdf_sampled_roughness,
@@ -422,7 +420,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                        bsdf_v,
                                        &bsdf_eval,
                                        &bsdf_omega_in,
-                                       &bsdf_domega_in,
                                        &bsdf_pdf,
                                        &bsdf_sampled_roughness,
                                        &bsdf_eta);
@@ -439,7 +436,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                      bsdf_v,
                                      &bsdf_eval,
                                      &bsdf_omega_in,
-                                     &bsdf_domega_in,
                                      &bsdf_pdf,
                                      &bsdf_sampled_roughness,
                                      &bsdf_eta);
@@ -467,7 +463,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
     INTEGRATOR_STATE_WRITE(state, ray, tmax) = FLT_MAX;
 #ifdef __RAY_DIFFERENTIALS__
     INTEGRATOR_STATE_WRITE(state, ray, dP) = differential_make_compact(sd->dP);
-    INTEGRATOR_STATE_WRITE(state, ray, dD) = differential_make_compact(bsdf_domega_in);
 #endif
   }
 

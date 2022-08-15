@@ -537,14 +537,10 @@ ccl_device int bsdf_microfacet_ggx_sample(KernelGlobals kg,
                                           ccl_private const ShaderClosure *sc,
                                           float3 Ng,
                                           float3 I,
-                                          float3 dIdx,
-                                          float3 dIdy,
                                           float randu,
                                           float randv,
                                           ccl_private Spectrum *eval,
                                           ccl_private float3 *omega_in,
-                                          ccl_private float3 *domega_in_dx,
-                                          ccl_private float3 *domega_in_dy,
                                           ccl_private float *pdf,
                                           ccl_private float2 *sampled_roughness,
                                           ccl_private float *eta)
@@ -678,11 +674,6 @@ ccl_device int bsdf_microfacet_ggx_sample(KernelGlobals kg,
           if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
             *eval *= 0.25f * bsdf->extra->clearcoat;
           }
-
-#ifdef __RAY_DIFFERENTIALS__
-          *domega_in_dx = (2 * dot(m, dIdx)) * m - dIdx;
-          *domega_in_dy = (2 * dot(m, dIdy)) * m - dIdy;
-#endif
         }
         else {
           *eval = zero_spectrum();
@@ -696,34 +687,13 @@ ccl_device int bsdf_microfacet_ggx_sample(KernelGlobals kg,
       /* CAUTION: the i and o variables are inverted relative to the paper
        * eq. 39 - compute actual refractive direction */
       float3 R, T;
-#ifdef __RAY_DIFFERENTIALS__
-      float3 dRdx, dRdy, dTdx, dTdy;
-#endif
       float m_eta = bsdf->ior, fresnel;
       bool inside;
 
-      fresnel = fresnel_dielectric(m_eta,
-                                   m,
-                                   I,
-                                   &R,
-                                   &T,
-#ifdef __RAY_DIFFERENTIALS__
-                                   dIdx,
-                                   dIdy,
-                                   &dRdx,
-                                   &dRdy,
-                                   &dTdx,
-                                   &dTdy,
-#endif
-                                   &inside);
+      fresnel = fresnel_dielectric(m_eta, m, I, &R, &T, &inside);
 
       if (!inside && fresnel != 1.0f) {
-
         *omega_in = T;
-#ifdef __RAY_DIFFERENTIALS__
-        *domega_in_dx = dTdx;
-        *domega_in_dy = dTdy;
-#endif
 
         if (alpha_x * alpha_y <= 1e-7f || fabsf(m_eta - 1.0f) < 1e-4f) {
           /* some high number for MIS */
@@ -984,14 +954,10 @@ ccl_device int bsdf_microfacet_beckmann_sample(KernelGlobals kg,
                                                ccl_private const ShaderClosure *sc,
                                                float3 Ng,
                                                float3 I,
-                                               float3 dIdx,
-                                               float3 dIdy,
                                                float randu,
                                                float randv,
                                                ccl_private Spectrum *eval,
                                                ccl_private float3 *omega_in,
-                                               ccl_private float3 *domega_in_dx,
-                                               ccl_private float3 *domega_in_dy,
                                                ccl_private float *pdf,
                                                ccl_private float2 *sampled_roughness,
                                                ccl_private float *eta)
@@ -1087,11 +1053,6 @@ ccl_device int bsdf_microfacet_beckmann_sample(KernelGlobals kg,
 
             *eval = make_spectrum(out);
           }
-
-#ifdef __RAY_DIFFERENTIALS__
-          *domega_in_dx = (2 * dot(m, dIdx)) * m - dIdx;
-          *domega_in_dy = (2 * dot(m, dIdy)) * m - dIdy;
-#endif
         }
         else {
           *eval = zero_spectrum();
@@ -1105,34 +1066,13 @@ ccl_device int bsdf_microfacet_beckmann_sample(KernelGlobals kg,
       /* CAUTION: the i and o variables are inverted relative to the paper
        * eq. 39 - compute actual refractive direction */
       float3 R, T;
-#ifdef __RAY_DIFFERENTIALS__
-      float3 dRdx, dRdy, dTdx, dTdy;
-#endif
       float m_eta = bsdf->ior, fresnel;
       bool inside;
 
-      fresnel = fresnel_dielectric(m_eta,
-                                   m,
-                                   I,
-                                   &R,
-                                   &T,
-#ifdef __RAY_DIFFERENTIALS__
-                                   dIdx,
-                                   dIdy,
-                                   &dRdx,
-                                   &dRdy,
-                                   &dTdx,
-                                   &dTdy,
-#endif
-                                   &inside);
+      fresnel = fresnel_dielectric(m_eta, m, I, &R, &T, &inside);
 
       if (!inside && fresnel != 1.0f) {
         *omega_in = T;
-
-#ifdef __RAY_DIFFERENTIALS__
-        *domega_in_dx = dTdx;
-        *domega_in_dy = dTdy;
-#endif
 
         if (alpha_x * alpha_y <= 1e-7f || fabsf(m_eta - 1.0f) < 1e-4f) {
           /* some high number for MIS */
