@@ -12,6 +12,7 @@ blender_include_dirs(
   ../blender/editors/include
   ../blender/gpu
   ../blender/imbuf
+  ../blender/io/usd
   ../blender/makesdna
   ../blender/makesrna
   ../blender/render
