@@ -47,13 +47,11 @@ endif()
 set(USD_EXTRA_ARGS
   ${DEFAULT_BOOST_FLAGS}
   ${USD_PLATFORM_FLAGS}
-  # This is a preventative measure that avoids possible conflicts when add-ons
-  # try to load another USD library into the same process space.
-  -DPXR_SET_INTERNAL_NAMESPACE=usdBlender
   -DOPENSUBDIV_ROOT_DIR=${LIBDIR}/opensubdiv
   -DOpenImageIO_ROOT=${LIBDIR}/openimageio
   -DOPENEXR_LIBRARIES=${LIBDIR}/imath/lib/imath${OPENEXR_VERSION_POSTFIX}${LIBEXT}
   -DOPENEXR_INCLUDE_DIR=${LIBDIR}/imath/include
+  -DOPENVDB_LOCATION=${LIBDIR}/openvdb
   -DPXR_ENABLE_PYTHON_SUPPORT=ON
   -DPXR_USE_PYTHON_3=ON
   -DPXR_BUILD_IMAGING=ON
@@ -62,7 +60,7 @@ set(USD_EXTRA_ARGS
   -DPXR_BUILD_TUTORIALS=OFF
   -DPXR_ENABLE_HDF5_SUPPORT=OFF
   -DPXR_ENABLE_MATERIALX_SUPPORT=OFF
-  -DPXR_ENABLE_OPENVDB_SUPPORT=OFF
+  -DPXR_ENABLE_OPENVDB_SUPPORT=ON
   -DPYTHON_EXECUTABLE=${PYTHON_BINARY}
   -DPXR_BUILD_MONOLITHIC=ON
   # OSL is an optional dependency of the Imaging module. However, since that
