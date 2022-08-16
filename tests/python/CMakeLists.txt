@@ -42,6 +42,7 @@ function(add_python_test testname testscript)
   add_test(
     NAME ${testname}
     COMMAND ${TEST_PYTHON_EXE} ${testscript} ${ARGN}
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:blender>
   )
   set_tests_properties(${testname} PROPERTIES ENVIRONMENT
     LSAN_OPTIONS=exitcode=0:$ENV{LSAN_OPTIONS}

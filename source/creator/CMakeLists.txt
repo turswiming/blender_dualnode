@@ -645,6 +645,24 @@ if(UNIX AND NOT APPLE)
         unset(_suffix)
       endif()
 
+      if(WITH_USD)
+        # Install to the same directory as the source, so debian-like
+        # distros are happy with their policy.
+        set(_suffix "site-packages")
+        if(${PYTHON_USD_PATH} MATCHES "dist-packages")
+          set(_suffix "dist-packages")
+        endif()
+        install(
+          DIRECTORY ${USD_LIBRARY_DIR}/python/
+          DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
+          PATTERN ".svn" EXCLUDE
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+        unset(_suffix)
+      endif()
+
       if(WITH_PYTHON_INSTALL_ZSTANDARD)
         # Install to the same directory as the source, so debian-like
         # distros are happy with their policy.
@@ -783,16 +801,26 @@ elseif(WIN32)
   endif()
 
   if(WITH_OPENVDB)
-    install(
-      FILES ${LIBDIR}/openvdb/bin/openvdb.dll
-      DESTINATION "."
-      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
-    )
-    install(
-      FILES ${LIBDIR}/openvdb/bin/openvdb_d.dll
-      DESTINATION "."
-      CONFIGURATIONS Debug
-    )
+      install(
+        FILES ${LIBDIR}/openvdb/bin/openvdb.dll
+        DESTINATION "."
+        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      )
+      install(
+        FILES ${LIBDIR}/openvdb/python/pyopenvdb.pyd
+        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      )
+      install(
+        FILES ${LIBDIR}/openvdb/bin/openvdb_d.dll
+        DESTINATION "."
+        CONFIGURATIONS Debug
+      )
+      install(
+        FILES ${LIBDIR}/openvdb/python/pyopenvdb_d.pyd
+        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+        CONFIGURATIONS Debug
+      )
   endif()
 
   if(WITH_PYTHON)
@@ -867,6 +895,29 @@ elseif(WIN32)
         DESTINATION ${BLENDER_VERSION}/python/bin
         CONFIGURATIONS Debug
       )
+
+            if(WITH_USD)
+        install(
+          DIRECTORY ${USD_LIBRARY_DIR}/python/
+          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+          CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+          PATTERN ".svn" EXCLUDE
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+
+        install(
+          DIRECTORY ${USD_LIBRARY_DIR}/debug/python/
+          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+          CONFIGURATIONS Debug
+          PATTERN ".svn" EXCLUDE
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+
+      endif()
 
       if(WINDOWS_PYTHON_DEBUG)
         install(
@@ -1231,12 +1282,44 @@ endif()
 # files are required at runtime.
 if(WITH_USD)
   add_definitions(-DWITH_USD)
+  blender_include_dirs(../blender/io/usd)
   install(DIRECTORY
     ${USD_LIBRARY_DIR}/usd
     DESTINATION "${TARGETDIR_VER}/datafiles"
   )
+  install(FILES
+    ${LIBDIR}/usd/lib/usd_usd_ms.dll
+    DESTINATION "."
+    CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+  )
+  install(FILES
+    ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
+    DESTINATION "."
+    CONFIGURATIONS Debug
+  )
 endif()
 
+if(WITH_BOOST)
+  install(DIRECTORY
+    ${LIBDIR}/boost/lib/
+    DESTINATION "."
+    CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+     PATTERN "*-gyd-*" EXCLUDE
+    PATTERN "*.lib" EXCLUDE
+    PATTERN "*.pdb" EXCLUDE
+    PATTERN "cmake/.*" EXCLUDE
+  )
+  install(DIRECTORY
+    ${LIBDIR}/boost/lib
+    DESTINATION "."
+    CONFIGURATIONS Debug
+    PATTERN "*mt-x64*" EXCLUDE
+    PATTERN "*.lib" EXCLUDE
+    PATTERN "*.pdb" EXCLUDE
+    PATTERN "cmake/.*" EXCLUDE
+    
+  )
+endif()
 
 # vcpkg substitutes our libs with theirs, which will cause issues when you
 # you run these builds on other systems due to missing dlls. So we opt out
