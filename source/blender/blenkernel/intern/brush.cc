@@ -60,6 +60,9 @@ static void brush_init_data(ID *id)
 
   /* the default alpha falloff curve */
   BKE_brush_curve_preset(brush, CURVE_PRESET_SMOOTH);
+
+  brush->channels = BKE_brush_channelset_create();
+  BKE_brush_channelset_ensure_channels(brush->channels, PAINT_MODE_INVALID, 0);
 }
 
 static void brush_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, const int flag)
@@ -104,6 +107,10 @@ static void brush_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, c
     brush_dst->curves_sculpt_settings = MEM_cnew(__func__, *(brush_src->curves_sculpt_settings));
   }
 
+  if (brush_src->channels) {
+    brush_dst->channels = BKE_brush_channelset_copy(brush_src->channels);
+  }
+
   /* enable fake user by default */
   id_fake_user_set(&brush_dst->id);
 }
@@ -137,6 +144,10 @@ static void brush_free_data(ID *id)
   MEM_SAFE_FREE(brush->gradient);
 
   BKE_previewimg_free(&(brush->preview));
+
+  if (brush->channels) {
+    BKE_brush_channelset_free(brush->channels);
+  }
 }
 
 static void brush_make_local(Main *bmain, ID *id, const int flags)
@@ -334,16 +345,11 @@ static void brush_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_data_address(reader, &brush->channels);
 
-  if (brush->sculpt_tool) {
-    if (!brush->channels) {
-      brush->channels = BKE_brush_channelset_create();
-    }
-    else {
-      BKE_brush_channelset_blend_read(brush->channels, reader);
-    }
-
-    BKE_brush_channelset_ensure_channels(brush->channels, brush->sculpt_tool);
+  if (brush->channels) {
+    BKE_brush_channelset_blend_read(brush->channels, reader);
   }
+
+  BKE_brush_channelset_ensure_all_modes(brush);
 }
 
 static void brush_blend_read_lib(BlendLibReader *reader, ID *id)
@@ -1718,7 +1724,7 @@ void BKE_brush_sculpt_reset(Brush *br)
   }
 
   br->channels = BKE_brush_channelset_create();
-  BKE_brush_channelset_ensure_channels(br->channels, br->sculpt_tool);
+  BKE_brush_channelset_ensure_channels(br->channels, PAINT_MODE_SCULPT, br->sculpt_tool);
 
   /* Use the curve presets by default */
   br->curve_preset = BRUSH_CURVE_SMOOTH;
@@ -2311,7 +2317,7 @@ bool BKE_brush_use_size_pressure(const Scene *scene, const Brush *brush)
     return BKE_brush_mapping_enabled(scene, brush, unprojected_radius, BRUSH_MAPPING_PRESSURE);
   }
 
-  //return brush->flag & BRUSH_SIZE_PRESSURE;
+  // return brush->flag & BRUSH_SIZE_PRESSURE;
 }
 
 bool BKE_brush_use_alpha_pressure(const Brush *brush)

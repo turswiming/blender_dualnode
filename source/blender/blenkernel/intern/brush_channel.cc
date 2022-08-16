@@ -34,9 +34,11 @@
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.h"
 #include "BKE_paint.h"
+#include "BKE_pbvh.h"
 #include "BLO_read_write.h"
 
 #include <string>
+#include <vector>
 
 const char builtin_brush_categories[][128] = {"Basic", "Smooth", "Color"};
 
@@ -60,20 +62,86 @@ static Map<StringRef, BrushChannelType> builtin_channels;
 
 using ChannelNameMap = Map<StringRef, BrushChannel *>;
 
-static void init_builtin_brush_channels()
+ATTR_NO_OPT static void init_builtin_brush_channels()
 {
+  struct UI {
+    int mode;
+    Vector<int> tools;
+    int uiflag;
+    bool all_tool_modes = false;
+    bool all_tools = false;
+    bool exists = true;
+
+    UI(const UI &b)
+    {
+      tools = b.tools;
+      uiflag = b.uiflag;
+      all_tool_modes = b.all_tool_modes;
+      all_tools = b.all_tools;
+      exists = b.exists;
+      mode = b.mode;
+    }
+
+    UI(int _mode, int _uiflag, int _tool) : mode(_mode), uiflag(_uiflag)
+    {
+      tools.append(_tool);
+    }
+
+    UI(int _uiflag) : uiflag(_uiflag)
+    {
+      all_tool_modes = all_tools = true;
+    }
+
+    UI(ePaintMode _mode, int _uiflag) : mode((int)_mode), uiflag(_uiflag)
+    {
+      all_tools = true;
+    }
+
+    UI(ePaintMode mode, int uiflag, int tool)
+    {
+      UI::UI((int)mode, uiflag, tool);
+    }
+
+    UI(ePaintMode _mode, int _uiflag, Vector<int> _tools)
+        : mode((int)_mode), tools(_tools), uiflag(_uiflag)
+    {
+    }
+  };
+
   struct ChannelProp {
     char path[512];
     char category[64];
-    int uiflag;
+    Vector<UI> extra_uiflags;
     int flag;
     BrushMappingPreset mappings;
   };
+
+#ifdef BRUSH_CHANNEL_DEFINE_EXTERNAL
+#  undef BRUSH_CHANNEL_DEFINE_EXTERNAL
+#endif
+
+#ifdef BRUSH_CHANNEL_DEFINE_INTERNAL_NAMES
+#  undef BRUSH_CHANNEL_DEFINE_INTERNAL_NAMES
+#endif
+#ifdef MAKE_PROP
+#  undef MAKE_PROP
+#endif
+#ifdef MAKE_PROP_EX
+#  undef MAKE_PROP_EX
+#endif
+
+  //#define MAKE_PROP(idname, category, uiflags) MAKE_PROP_EX(idname, category, uiflags, 0)
+
+  //#define SHOW_CONTEXT BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU
+  //#define SHOW_WORKSPACE BRUSH_CHANNEL_SHOW_IN_WORKSPACE
 
 #define BRUSH_CHANNEL_DEFINE_INTERNAL
   ChannelProp channel_props[] = {
 #include "brush_channel_define.h"
   };
+
+#undef SHOW_CONTEXT
+#undef SHOW_WORKSPACE
 
   StructRNA *srna = RNA_struct_find("Brush");
 
@@ -84,12 +152,32 @@ static void init_builtin_brush_channels()
 
   for (int i : IndexRange(ARRAY_SIZE(channel_props))) {
     ChannelProp &def = channel_props[i];
-    BrushChannelType type;
+    BrushChannelType type = {0};
 
     BLI_strncpy(type.idname, def.path, sizeof(type.idname));
     BLI_strncpy(type.category, def.category, sizeof(type.category));
     type.flag = def.flag;
-    type.ui_flag = def.uiflag;
+
+    for (auto &ui : def.extra_uiflags) {
+      for (int mode = 0; mode < (int)PAINT_MODE_INVALID; mode++) {
+        if (mode != ui.mode && !ui.all_tool_modes) {
+          continue;
+        }
+
+        int uiflag = ui.uiflag ? ui.uiflag : -1;
+
+        if (ui.all_tools) {
+          for (int j = 0; j < ARRAY_SIZE(type.paint_mode_uiflags); j++) {
+            type.paint_mode_uiflags[mode].tools[j] = uiflag;
+          }
+        }
+        else {
+          for (auto tool : ui.tools) {
+            type.paint_mode_uiflags[mode].tools[tool] = uiflag;
+          }
+        }
+      }
+    }
 
     PropertyRNA *prop = RNA_struct_type_find_property(srna, def.path);
     BLI_assert(prop);
@@ -111,6 +199,9 @@ static void init_builtin_brush_channels()
     type.soft_max = 1.0;
 
     switch (prop_type) {
+      case PROP_BOOLEAN:
+        type.type = BRUSH_CHANNEL_TYPE_BOOL;
+        break;
       case PROP_INT: {
         int min, max, soft_min, soft_max;
         int step;
@@ -329,15 +420,70 @@ ATTR_NO_OPT BrushChannel *_BKE_brush_channelset_ensure(BrushChannelSet *chset, c
   return _BKE_brush_channelset_lookup(chset, idname);
 }
 
-void BKE_brush_channelset_ensure_channels(BrushChannelSet *chset, int sculpt_tool)
+void BKE_brush_channelset_ensure_all_modes(Brush *brush)
+{
+  if (!brush->channels) {
+    brush->channels = BKE_brush_channelset_create();
+    BKE_brush_channelset_ensure_channels(brush->channels, PAINT_MODE_INVALID, 0);
+  }
+
+  if (brush->sculpt_tool) {
+    BKE_brush_channelset_ensure_channels(brush->channels, PAINT_MODE_SCULPT, brush->sculpt_tool);
+  }
+
+  if (brush->vertexpaint_tool) {
+    BKE_brush_channelset_ensure_channels(
+        brush->channels, PAINT_MODE_VERTEX, brush->vertexpaint_tool);
+  }
+
+  if (brush->imagepaint_tool) {
+    BKE_brush_channelset_ensure_channels(
+        brush->channels, PAINT_MODE_TEXTURE_3D, brush->imagepaint_tool);
+  }
+
+  if (brush->curves_sculpt_tool) {
+    BKE_brush_channelset_ensure_channels(
+        brush->channels, PAINT_MODE_SCULPT_CURVES, brush->curves_sculpt_tool);
+  }
+
+  if (brush->weightpaint_tool) {
+    BKE_brush_channelset_ensure_channels(
+        brush->channels, PAINT_MODE_WEIGHT, brush->weightpaint_tool);
+  }
+}
+void BKE_brush_channelset_ensure_channels(BrushChannelSet *chset, ePaintMode mode, int tool)
 {
   check_builtin_brush_channels();
 
   BKE_brush_channelset_ensure(chset, size);
   BKE_brush_channelset_ensure(chset, unprojected_radius);
   BKE_brush_channelset_ensure(chset, strength);
-  BKE_brush_channelset_ensure(chset, auto_smooth_factor);
+  BKE_brush_channelset_ensure(chset, spacing);
 
+  if (mode != PAINT_MODE_INVALID) {
+    for (BrushChannelType &type : builtin_channels.values()) {
+      int uiflag = type.paint_mode_uiflags[(int)mode].tools[tool];
+
+      if (uiflag) {
+        BrushChannel *ch = _BKE_brush_channelset_ensure(chset, type.idname);
+
+        if (uiflag != -1) {
+          if (!(ch->ui_flag & BRUSH_CHANNEL_SHOW_IN_HEADER_USER_SET)) {
+            ch->ui_flag &= ~BRUSH_CHANNEL_SHOW_IN_HEADER;
+            ch->ui_flag |= uiflag & BRUSH_CHANNEL_SHOW_IN_HEADER;
+          }
+          if (!(ch->ui_flag & BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU_USER_SET)) {
+            ch->ui_flag &= ~BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU;
+            ch->ui_flag |= uiflag & BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU;
+          }
+          if (!(ch->ui_flag & BRUSH_CHANNEL_SHOW_IN_WORKSPACE_USER_SET)) {
+            ch->ui_flag &= ~BRUSH_CHANNEL_SHOW_IN_WORKSPACE;
+            ch->ui_flag |= uiflag & BRUSH_CHANNEL_SHOW_IN_WORKSPACE;
+          }
+        }
+      }
+    }
+  }
   /* Some helper lambdas */
 
   auto _ensure = [&](const char *idname) { return _BKE_brush_channelset_ensure(chset, idname); };
@@ -368,16 +514,18 @@ void BKE_brush_channelset_ensure_channels(BrushChannelSet *chset, int sculpt_too
   const int SHOW_HEADER = BRUSH_CHANNEL_SHOW_IN_HEADER;
   const int SHOW_ALL = (SHOW_WORKSPACE | SHOW_CONTEXT | SHOW_HEADER);
 
-  switch (sculpt_tool) {
-    case SCULPT_TOOL_PAINT:
-      ensure_ui(wet_mix, SHOW_WORKSPACE);
-      ensure_ui(wet_persistence, SHOW_WORKSPACE);
-      ensure_ui(color, SHOW_ALL);
-      ensure_ui(secondary_color, SHOW_ALL);
-      ensure_ui(flow, SHOW_WORKSPACE | SHOW_CONTEXT);
-      ensure_ui(density, SHOW_WORKSPACE | SHOW_CONTEXT);
-      ensure_ui(tip_scale_x, SHOW_WORKSPACE | SHOW_CONTEXT);
-      break;
+  if (mode == PAINT_MODE_SCULPT) {
+    switch (tool) {
+      case SCULPT_TOOL_PAINT:
+        ensure_ui(wet_mix, SHOW_WORKSPACE);
+        ensure_ui(wet_persistence, SHOW_WORKSPACE);
+        ensure_ui(color, SHOW_ALL);
+        ensure_ui(secondary_color, SHOW_ALL);
+        ensure_ui(flow, SHOW_WORKSPACE | SHOW_CONTEXT);
+        ensure_ui(density, SHOW_WORKSPACE | SHOW_CONTEXT);
+        ensure_ui(tip_scale_x, SHOW_WORKSPACE | SHOW_CONTEXT);
+        break;
+    }
   }
 
 #undef ensure
@@ -1001,14 +1149,23 @@ void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
       PointerRNA prop_ptr;
       PropertyRNA *prop;
       double default_value = 0.0;
+      float vector4[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
       if (RNA_path_resolve(&ptr, ch->idname, &prop_ptr, &prop)) {
         switch (RNA_property_type(prop)) {
+          case PROP_BOOLEAN:
+            default_value = RNA_boolean_get(&prop_ptr, ch->idname) ? 1.0 : 0.0;
+            break;
           case PROP_INT:
             default_value = RNA_int_get(&prop_ptr, ch->idname);
             break;
           case PROP_FLOAT:
-            default_value = RNA_float_get(&prop_ptr, ch->idname);
+            if (RNA_property_array_check(prop)) {
+              RNA_float_get_array(&prop_ptr, ch->idname, vector4);
+            }
+            else {
+              default_value = RNA_float_get(&prop_ptr, ch->idname);
+            }
             break;
           case PROP_ENUM:
             default_value = (double)RNA_enum_get(&prop_ptr, ch->idname);
@@ -1034,14 +1191,25 @@ void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
           tmpl.i = (int)default_value;
           type = IDP_INT;
           break;
+        case BRUSH_CHANNEL_TYPE_VEC4:
+          tmpl.array.type = IDP_FLOAT;
+          tmpl.array.len = 4;
+          type = IDP_ARRAY;
+          break;
         default:
-          printf(
-              "%s: unsupported brush channel type for unified channel: %d\n", __func__, ch->type);
+          printf("%s: unsupported brush channel type for unified channel %s: %d\n",
+                 __func__,
+                 ch->idname,
+                 ch->type);
           continue;
       }
 
       idprop = IDP_New(type, &tmpl, ch->idname);
       IDP_AddToGroup(ts->unified_properties, idprop);
+
+      if (ch->type == BRUSH_CHANNEL_TYPE_VEC4) {
+        memcpy(idprop->data.pointer, static_cast<void *>(vector4), sizeof(vector4));
+      }
     }
 
     IDPropertyUIData *uidata = IDP_ui_data_ensure(idprop);
@@ -1082,7 +1250,14 @@ void BKE_brush_channelset_toolsettings_init(ToolSettings *ts)
       }
       case BRUSH_CHANNEL_TYPE_ENUM:
       case BRUSH_CHANNEL_TYPE_BITMASK:
+        break;
       case BRUSH_CHANNEL_TYPE_BOOL: {
+        IDPropertyUIDataInt *uidatai = reinterpret_cast<IDPropertyUIDataInt *>(uidata);
+
+        uidatai->min = uidatai->soft_min = 0;
+        uidatai->max = uidatai->soft_max = 1;
+        uidatai->step = 1;
+
         break;
       }
     }
@@ -1114,10 +1289,64 @@ void BKE_brush_channelset_ui_order_check(BrushChannelSet *chset)
     return ch1->ui_order < ch2->ui_order;
   };
 
-  std::sort(channels.begin(), channels.end());
+  std::sort(channels.begin(), channels.end(), cmp);
+
   for (int i = 0; i < channels.size(); i++) {
     channels[i]->ui_order = i;
   }
+}
+
+void BKE_brush_channelset_ui_order_move(BrushChannelSet *chset,
+                                        BrushChannel *ch,
+                                        int uiflag,
+                                        int dir)
+{
+  Vector<BrushChannel *> channels;
+
+  LISTBASE_FOREACH (BrushChannel *, ch, &chset->channels) {
+    channels.append(ch);
+  }
+
+  auto cmp = [](const BrushChannel *ch1, const BrushChannel *ch2) {
+    return ch1->ui_order < ch2->ui_order;
+  };
+
+  std::sort(channels.begin(), channels.end(), cmp);
+
+  const char *cat1 = BKE_brush_channel_category_get(ch);
+
+  for (int i = 0; i < channels.size(); i++) {
+    if (channels[i] == ch) {
+      int j = i;
+      BrushChannel *ch2 = NULL;
+      const char *cat2;
+
+      do {
+        j += dir < 0 ? -1 : 1;
+
+        if (j < 0 || j >= channels.size()) {
+          break;
+        }
+
+        ch2 = channels[j];
+        cat2 = BKE_brush_channel_category_get(ch2);
+      } while ((!(ch2->ui_flag & uiflag) || !STREQ(cat1, cat2)));
+
+      int neworder;
+
+      if (ch2) {
+        neworder = ch2->ui_order;
+        ch2->ui_order = ch->ui_order;
+      }
+      else {
+        neworder = dir < 0 ? 0 : channels.size();
+      }
+
+      ch->ui_order = neworder;
+    }
+  }
+
+  BKE_brush_channelset_ui_order_check(chset);
 }
 
 #if 0

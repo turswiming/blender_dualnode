@@ -8,6 +8,7 @@ from bpy.types import (
 from bl_ui.properties_paint_common import (
     UnifiedPaintPanel,
     brush_basic_texpaint_settings,
+    brush_settings_channels,
 )
 from bl_ui.properties_grease_pencil_common import (
     AnnotationDataPanel,

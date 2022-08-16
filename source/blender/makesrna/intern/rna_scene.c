@@ -3083,6 +3083,10 @@ static void rna_def_tool_settings(BlenderRNA *brna)
 
   rna_def_unified_brush_properties(brna);
 
+  prop = RNA_def_property(srna, "brush_editor_mode", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "brush_editor_mode", 1);
+  RNA_def_property_ui_text(prop, "Brush Editor Mode", "");
+
   prop = RNA_def_property(srna, "unified_properties", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "UnifiedBrushProperties");
   RNA_def_property_ui_text(prop, "Unified Brush Property Storage", "");

@@ -20,6 +20,7 @@ from bl_ui.properties_paint_common import (
     brush_settings,
     brush_settings_advanced,
     draw_color_settings,
+    brush_settings_channels,
 )
 from bl_ui.utils import PresetPanel
 
@@ -359,6 +360,29 @@ class VIEW3D_PT_tools_brush_select(Panel, View3DPaintBrushPanel, BrushSelectPane
     bl_context = ".paint_common"
     bl_label = "Brushes"
 
+class VIEW3D_PT_tools_brush_settings_channels(Panel, View3DPaintBrushPanel):
+    bl_context = ".paint_common"
+    bl_label = "Brush Settings"
+
+    @classmethod
+    def poll(cls, context):
+        settings = cls.paint_settings(context)
+
+        ok = settings and settings.brush is not None
+
+        return ok
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        settings = self.paint_settings(context)
+        brush = settings.brush
+
+        ui_editing = context.tool_settings.brush_editor_mode
+        brush_settings_channels(layout.column(), context, brush, popover=self.is_popover, ui_editing=ui_editing)
 
 # TODO, move to space_view3d.py
 class VIEW3D_PT_tools_brush_settings(Panel, View3DPaintBrushPanel):
@@ -378,6 +402,8 @@ class VIEW3D_PT_tools_brush_settings(Panel, View3DPaintBrushPanel):
 
         settings = self.paint_settings(context)
         brush = settings.brush
+
+        layout.prop(context.tool_settings, "brush_editor_mode")
 
         brush_settings(layout.column(), context, brush, popover=self.is_popover)
 
@@ -435,6 +461,55 @@ class VIEW3D_PT_tools_brush_color(Panel, View3DPaintPanel):
 
         draw_color_settings(context, layout, brush, color_type=not context.vertex_paint_object)
 
+class VIEW3D_PT_tools_persistent_base_channels(Panel, View3DPaintPanel):
+    bl_context = ".paint_common"
+    #bl_parent_id = "VIEW3D_PT_tools_brush_settings_channels"
+    bl_label = "Persistent Base"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        settings = cls.paint_settings(context)
+        if not settings:
+            return False
+
+        brush = settings.brush
+
+        ch = UnifiedPaintPanel.get_channel(context, brush, "use_persistent")
+
+        capabilities = brush.sculpt_capabilities
+
+        ok = context.mode == "SCULPT"
+        ok = ok and ch and ch.show_in_workspace
+        ok = ok or capabilities.has_persistence
+
+        return ok
+
+    def draw(self, context):
+        layout = self.layout
+        settings = self.paint_settings(context)
+        brush = settings.brush
+        sculpt = context.tool_settings.sculpt
+
+        UnifiedPaintPanel.channel_unified(layout,
+            context,
+            brush,
+            "use_persistent",
+            #text="Weight By Face Area",
+            ui_editing=False)
+
+        layout.operator("sculpt.set_persistent_base")
+
+        if sculpt.has_persistent_base():
+            layout.label(text="Persistent base exists")
+        else:
+            layout.label(text="No persisent base data")
+
+class VIEW3D_PT_tools_brush_swatches_channels(Panel, View3DPaintPanel, ColorPalettePanel):
+    bl_context = ".paint_common"
+    bl_parent_id = "VIEW3D_PT_tools_brush_settings_channels"
+    bl_label = "Color Palette"
+    bl_options = {'DEFAULT_CLOSED'}
 
 class VIEW3D_PT_tools_brush_swatches(Panel, View3DPaintPanel, ColorPalettePanel):
     bl_context = ".paint_common"
@@ -2439,6 +2514,9 @@ classes = (
     VIEW3D_PT_tools_grease_pencil_brush_vertex_color,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_palette,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff,
+    VIEW3D_PT_tools_brush_settings_channels,
+    VIEW3D_PT_tools_persistent_base_channels,
+    VIEW3D_PT_tools_brush_swatches_channels,
 )
 
 if __name__ == "__main__":  # only for live edit.

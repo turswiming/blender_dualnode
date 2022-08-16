@@ -25,6 +25,7 @@
  * \brief New brush engine for sculpt
  */
 
+#include "BKE_paint.h"
 #include "RNA_types.h"
 
 /*
@@ -114,6 +115,10 @@ typedef struct BrushEnumDef {
   const char description[512];
 } BrushEnumDef;
 
+typedef struct BrushUIFlagDef {
+  int tools[100];
+} BrushUIFlagDef;
+
 /*
   Defines a brush channel.  Includes limits, UI data,
   default values, etc.
@@ -123,6 +128,8 @@ typedef struct BrushChannelType {
   float min, max, soft_min, soft_max;
   BrushMappingPreset mappings;
 
+  BrushUIFlagDef paint_mode_uiflags[PAINT_MODE_INVALID];
+
   int type, flag, ui_flag;
   int subtype;
 
@@ -131,7 +138,11 @@ typedef struct BrushChannelType {
 
 BrushChannelSet *BKE_brush_channelset_create();
 void BKE_brush_channelset_free(BrushChannelSet *chset);
-void BKE_brush_channelset_ensure_channels(BrushChannelSet *chset, int sculpt_tool);
+void BKE_brush_channelset_ensure_channels(BrushChannelSet *chset, ePaintMode mode, int tool);
+
+/* Calls BKE_brush_channelset_ensure_channels for every paint mode with a tool inside of brush. */
+void BKE_brush_channelset_ensure_all_modes(struct Brush *brush);
+
 void BKE_brush_channelset_blend_read(BrushChannelSet *chset, struct BlendDataReader *reader);
 void BKE_brush_channelset_blend_write(BrushChannelSet *chset, struct BlendWriter *writer);
 /*
@@ -246,6 +257,10 @@ void _BKE_brush_channelset_mark_update(BrushChannelSet *chset, const char *idnam
  */
 
 void BKE_brush_channelset_ui_order_check(BrushChannelSet *chset);
+void BKE_brush_channelset_ui_order_move(BrushChannelSet *chset,
+                                        BrushChannel *ch,
+                                        int uiflag,
+                                        int dir);
 
 bool _BKE_brush_mapping_enabled(const struct Scene *scene,
                                 const struct Brush *brush,

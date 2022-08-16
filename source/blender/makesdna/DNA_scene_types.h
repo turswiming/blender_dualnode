@@ -1575,6 +1575,8 @@ typedef struct ToolSettings {
 
   struct SequencerToolSettings *sequencer_tool_settings;
 
+  char brush_editor_mode;
+  char _pad9[7];
 } ToolSettings;
 
 /* *************************************************************** */

@@ -1394,7 +1394,7 @@ static int change_channel_order_exec(bContext *C, wmOperator *op)
   Brush *brush = BKE_paint_brush(paint);
 
   char idname[BRUSH_CHANNEL_MAX_IDNAME];
-  RNA_string_get(op->ptr, "idname", idname);
+  RNA_string_get(op->ptr, "channel", idname);
 
   if (!_BKE_brush_channelset_has(brush->channels, idname)) {
     static char error[128];
@@ -1408,27 +1408,23 @@ static int change_channel_order_exec(bContext *C, wmOperator *op)
   int neworder = dest_ch->ui_order;
 
   BKE_brush_channelset_ui_order_check(brush->channels);
+  char filterkey[64];
+  int uiflag = 0;
+
+  RNA_string_get(op->ptr, "filterkey", filterkey);
+  if (STREQ(filterkey, "show_in_workspace")) {
+    uiflag = BRUSH_CHANNEL_SHOW_IN_WORKSPACE;
+  }
+  else if (STREQ(filterkey, "show_in_header")) {
+    uiflag = BRUSH_CHANNEL_SHOW_IN_HEADER;
+  }
+  else if (STREQ(filterkey, "show_in_context_menu")) {
+    uiflag = BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU;
+  }
 
   int dir = RNA_int_get(op->ptr, "direction");
 
-  if (dir < 0) {
-    neworder = (neworder - 1 + brush->channels->channels_num) % brush->channels->channels_num;
-  }
-  else {
-    neworder = (neworder + 1) % brush->channels->channels_num;
-  }
-
-  LISTBASE_FOREACH (BrushChannel *, ch, &brush->channels->channels) {
-    if (ch == dest_ch) {
-      continue;
-    }
-
-    if (ch->ui_order == neworder) {
-      ch->ui_order = dest_ch->ui_order;
-    }
-  }
-
-  dest_ch->ui_order = neworder;
+  BKE_brush_channelset_ui_order_move(brush->channels, dest_ch, uiflag, dir);
 
   return OPERATOR_FINISHED;
 }
@@ -1449,6 +1445,7 @@ void BRUSH_OT_change_channel_order(wmOperatorType *ot)
 
   RNA_def_string(ot->srna, "channel", "", BRUSH_CHANNEL_MAX_IDNAME, "Brush Channel", "");
   RNA_def_int(ot->srna, "direction", 1, -1, 1, "Direction", "", -1, 1);
+  RNA_def_string(ot->srna, "filterkey", NULL, 64, "filterkey", "filterkey");
 }
 
 /**************************** registration **********************************/

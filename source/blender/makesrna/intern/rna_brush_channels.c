@@ -481,12 +481,7 @@ static void channel_uiflag_set(PointerRNA *ptr, bool value, int flag, int user_s
     ch->ui_flag &= ~flag;
   }
 
-  if ((ch->ui_flag & flag) != (ch->def->ui_flag & flag)) {
-    ch->ui_flag |= user_set_flag;
-  }
-  else {
-    ch->ui_flag &= ~BRUSH_CHANNEL_SHOW_IN_HEADER_USER_SET;
-  }
+  ch->ui_flag |= user_set_flag;
 }
 
 void rna_BrushChannel_show_in_header_set(PointerRNA *ptr, bool value)
@@ -563,11 +558,7 @@ void RNA_def_brush_mapping(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Max", "");
 
   static EnumPropertyItem inherit_mode_items[] = {
-      {BRUSH_MAPPING_INHERIT_NEVER,
-       "NEVER",
-       ICON_NONE,
-       "Never",
-       "Never use unified settings."},
+      {BRUSH_MAPPING_INHERIT_NEVER, "NEVER", ICON_NONE, "Never", "Never use unified settings."},
       {BRUSH_MAPPING_INHERIT_ALWAYS,
        "ALWAYS",
        ICON_NONE,
@@ -776,20 +767,21 @@ void RNA_def_brush_channel(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
 
   prop = RNA_def_property(srna, "show_in_header", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, "BrushChannel", "flag", BRUSH_CHANNEL_SHOW_IN_HEADER);
+  RNA_def_property_boolean_sdna(prop, "BrushChannel", "ui_flag", BRUSH_CHANNEL_SHOW_IN_HEADER);
   RNA_def_property_ui_text(prop, "In Header", "Show in header");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_boolean_funcs(prop, NULL, "rna_BrushChannel_show_in_header_set");
 
   prop = RNA_def_property(srna, "show_in_workspace", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, "BrushChannel", "flag", BRUSH_CHANNEL_SHOW_IN_WORKSPACE);
+  RNA_def_property_boolean_sdna(prop, "BrushChannel", "ui_flag", BRUSH_CHANNEL_SHOW_IN_WORKSPACE);
   RNA_def_property_ui_text(prop, "In Workspace", "Show in workspace");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_boolean_funcs(prop, NULL, "rna_BrushChannel_show_in_workspace_set");
 
   prop = RNA_def_property(srna, "show_in_context_menu", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, "BrushChannel", "flag", BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU);
+  RNA_def_property_boolean_sdna(
+      prop, "BrushChannel", "ui_flag", BRUSH_CHANNEL_SHOW_IN_CONTEXT_MENU);
   RNA_def_property_ui_text(prop, "In Workspace", "Show in workspace");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_boolean_funcs(prop, NULL, "rna_BrushChannel_show_in_context_menu_set");
