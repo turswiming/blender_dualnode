@@ -47,8 +47,8 @@
 /**
  * IMPORTANT:
  * In order to be able to write to the same print buffer sequentially, we add a barrier to allow
- * multiple shader calls writting to the same buffer.
- * However, this adds explicit synchronisation events which might change the rest of the
+ * multiple shader calls writing to the same buffer.
+ * However, this adds explicit synchronization events which might change the rest of the
  * application behavior and hide some bugs. If you know you are using shader debug print in only
  * one shader pass, you can comment this out to remove the aforementioned barrier.
  */
@@ -662,7 +662,7 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
   drw_call_calc_orco(ob, ob_infos->orcotexfac);
   /* Random float value. */
   uint random = (DST.dupli_source) ?
-                    DST.dupli_source->random_id :
+                     DST.dupli_source->random_id :
                      /* TODO(fclem): this is rather costly to do at runtime. Maybe we can
                       * put it in ob->runtime and make depsgraph ensure it is up to date. */
                      BLI_hash_int_2d(BLI_hash_string(ob->id.name + 2), 0);
@@ -1188,16 +1188,15 @@ static void sculpt_draw_cb(DRWSculptCallbackData *scd, GPU_PBVH_Buffers *buffers
       DRW_shgroup_uniform_vec3(
           shgrp, "materialDiffuseColor", SCULPT_DEBUG_COLOR(scd->debug_node_nr++), 1);
     }
+
     /* DRW_shgroup_call_no_cull reuses matrices calculations for all the drawcalls of this
      * object. */
     DRW_shgroup_call_no_cull(shgrp, geom, scd->ob);
   }
 }
 
-static void sculpt_debug_cb(void *user_data,
-                            const float bmin[3],
-                            const float bmax[3],
-                            PBVHNodeFlags flag)
+static void sculpt_debug_cb(
+    PBVHNode *node, void *user_data, const float bmin[3], const float bmax[3], PBVHNodeFlags flag)
 {
   int *debug_node_nr = (int *)user_data;
   BoundBox bb;
@@ -1212,7 +1211,10 @@ static void sculpt_debug_cb(void *user_data,
   }
 #else /* Color coded leaf bounds. */
   if (flag & PBVH_Leaf) {
-    DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR((*debug_node_nr)++));
+    int color = (*debug_node_nr)++;
+    color += BKE_pbvh_debug_draw_gen_get(node);
+ 
+    DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR(color));
   }
 #endif
 }
@@ -1305,8 +1307,8 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
     DRW_debug_modelmat(scd->ob->obmat);
     BKE_pbvh_draw_debug_cb(
         pbvh,
-        (void (*)(
-            void *d, const float min[3], const float max[3], PBVHNodeFlags f))sculpt_debug_cb,
+        (void (*)(PBVHNode * n, void *d, const float min[3], const float max[3], PBVHNodeFlags f))
+            sculpt_debug_cb,
         &debug_node_nr);
   }
 }
@@ -1532,7 +1534,7 @@ static void drw_shgroup_init(DRWShadingGroup *shgroup, GPUShader *shader)
     drw_shgroup_uniform_create_ex(
         shgroup, debug_print_location, DRW_UNIFORM_STORAGE_BLOCK, buf, 0, 0, 1);
 #  ifndef DISABLE_DEBUG_SHADER_PRINT_BARRIER
-    /* Add a barrier to allow multiple shader writting to the same buffer. */
+    /* Add a barrier to allow multiple shader writing to the same buffer. */
     DRW_shgroup_barrier(shgroup, GPU_BARRIER_SHADER_STORAGE);
 #  endif
   }
@@ -2127,6 +2129,14 @@ void DRW_view_update(DRWView *view,
   draw_frustum_culling_planes_calc(view->storage.persmat, view->frustum_planes);
   draw_frustum_bound_sphere_calc(
       &view->frustum_corners, viewinv, winmat, wininv, &view->frustum_bsphere);
+
+  /* TODO(fclem): Deduplicate. */
+  for (int i = 0; i < 8; i++) {
+    copy_v3_v3(view->storage.frustum_corners[i], view->frustum_corners.vec[i]);
+  }
+  for (int i = 0; i < 6; i++) {
+    copy_v4_v4(view->storage.frustum_planes[i], view->frustum_planes[i]);
+  }
 
 #ifdef DRW_DEBUG_CULLING
   if (G.debug_value != 0) {
