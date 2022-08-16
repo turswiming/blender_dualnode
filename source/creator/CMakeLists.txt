@@ -1303,19 +1303,22 @@ if(WITH_USD)
     ${USD_LIBRARY_DIR}/usd
     DESTINATION "${TARGETDIR_VER}/datafiles"
   )
-  install(FILES
-    ${LIBDIR}/usd/lib/usd_usd_ms.dll
-    DESTINATION "."
-    CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
-  )
-  install(FILES
-    ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
-    DESTINATION "."
-    CONFIGURATIONS Debug
-  )
+
+  if(WIN32)
+    install(FILES
+      ${LIBDIR}/usd/lib/usd_usd_ms.dll
+      DESTINATION "."
+      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+    )
+    install(FILES
+      ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
+      DESTINATION "."
+      CONFIGURATIONS Debug
+    )
+  endif()
 endif()
 
-if(WITH_BOOST)
+if(WIN32 AND WITH_BOOST)
   install(DIRECTORY
     ${LIBDIR}/boost/lib/
     DESTINATION "."
