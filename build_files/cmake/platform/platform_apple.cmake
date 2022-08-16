@@ -21,11 +21,11 @@ function(print_found_status
   endif()
 endfunction()
 
-# Utility to install shared libraries.
+# Utility to install precompiled shared libraries.
 macro(add_bundled_libraries library)
   if(EXISTS ${LIBDIR})
-    set(_library_dir ${LIBDIR}/${library})
-    file(GLOB _all_library_versions ${_library_dir}/lib/*\.dylib*)
+    set(_library_dir ${LIBDIR}/${library}/lib)
+    file(GLOB _all_library_versions ${_library_dir}/*\.dylib*)
     list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
     list(APPEND PLATFORM_BUNDLED_LIBRARY_DIRS ${_library_dir})
     unset(_all_library_versions)

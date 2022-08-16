@@ -603,7 +603,7 @@ if(UNIX AND NOT APPLE)
       # Precompiled libraries, copy over complete lib directory.
       install_dir(
         ${PYTHON_LIBPATH}
-        ${TARGETDIR_VER}/python/lib
+        ${TARGETDIR_VER}/python
       )
     else()
       # System libraries.

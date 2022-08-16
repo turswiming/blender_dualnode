@@ -68,10 +68,6 @@ if(EXISTS ${LIBDIR})
   set(CLANG_ROOT_DIR ${LIBDIR}/llvm)
 endif()
 
-if(WITH_STATIC_LIBS)
-  string(APPEND CMAKE_EXE_LINKER_FLAGS " -static-libstdc++")
-endif()
-
 # Wrapper to prefer static libraries
 macro(find_package_wrapper)
   if(WITH_STATIC_LIBS)
@@ -81,12 +77,11 @@ macro(find_package_wrapper)
   endif()
 endmacro()
 
-# Utility to install shared libraries, all that exist in the precompiled
-# library folder will be copied.
+# Utility to install precompiled shared libraries.
 macro(add_bundled_libraries library)
   if(EXISTS ${LIBDIR})
-    set(_library_dir ${LIBDIR}/${library})
-    file(GLOB _all_library_versions ${_library_dir}/lib/*\.so*)
+    set(_library_dir ${LIBDIR}/${library}/lib)
+    file(GLOB _all_library_versions ${_library_dir}/*\.so*)
     list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
     list(APPEND PLATFORM_BUNDLED_LIBRARY_DIRS ${_library_dir})
     unset(_all_library_versions)
