@@ -1304,19 +1304,19 @@ if(WITH_BOOST)
     ${LIBDIR}/boost/lib/
     DESTINATION "."
     CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
-     PATTERN "*-gyd-*" EXCLUDE
+    PATTERN "*-gyd-*" EXCLUDE
     PATTERN "*.lib" EXCLUDE
     PATTERN "*.pdb" EXCLUDE
-    PATTERN "cmake/.*" EXCLUDE
+    PATTERN "cmake" EXCLUDE
   )
   install(DIRECTORY
-    ${LIBDIR}/boost/lib
+    ${LIBDIR}/boost/lib/
     DESTINATION "."
     CONFIGURATIONS Debug
     PATTERN "*mt-x64*" EXCLUDE
     PATTERN "*.lib" EXCLUDE
     PATTERN "*.pdb" EXCLUDE
-    PATTERN "cmake/.*" EXCLUDE
+    PATTERN "cmake" EXCLUDE
     
   )
 endif()
