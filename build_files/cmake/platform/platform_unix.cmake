@@ -995,8 +995,13 @@ CONFIGURE_ATOMIC_LIB_IF_NEEDED()
 # For binaries that are built but not installed (like makesdan or tests), we add
 # the original directory of all shared libraries to the rpath. This avoids having
 # to install them as part of the build step.
+#
+# This trick however does not work for executables like blender_test that uses
+# USD and openvdb which have indirect dependencies. For these cases also add the
+# absolute path to where libs will be installed, since they only need to work
+# after the install step.
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
-list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib ${PLATFORM_BUNDLED_LIBRARY_DIRS})
+list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib ${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib ${PLATFORM_BUNDLED_LIBRARY_DIRS})
 
 # For the installed Python module and installed Blender executable, we set the
 # rpath to the location where install step will copy the shared libraries.
