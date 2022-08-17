@@ -612,15 +612,14 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
                   "the material blend method will automatically be set based on the "
                   "shader's opacity and opacityThreshold inputs");
 
-  RNA_def_enum(
-      ot->srna,
-      "mtl_purpose",
-      rna_enum_usd_mtl_purpose_items,
-      USD_MTL_PURPOSE_ALL,
-      "Material Purpose",
-      "Attempt to import materials with the given purpose. "
-      "If no material with this purpose is bound to the primitive, "
-      "fall back on loading any other bound material");
+  RNA_def_enum(ot->srna,
+               "mtl_purpose",
+               rna_enum_usd_mtl_purpose_items,
+               USD_MTL_PURPOSE_ALL,
+               "Material Purpose",
+               "Attempt to import materials with the given purpose. "
+               "If no material with this purpose is bound to the primitive, "
+               "fall back on loading any other bound material");
 
   RNA_def_float(ot->srna,
                 "light_intensity_scale",

@@ -749,7 +749,8 @@ void USDMaterialReader::convert_usd_primvar_reader_float2(
       std::string varname;
       if (varname_val.IsHolding<std::string>()) {
         varname = varname_val.Get<std::string>();
-      } else if (varname_val.IsHolding<pxr::TfToken>()) {
+      }
+      else if (varname_val.IsHolding<pxr::TfToken>()) {
         varname = varname_val.Get<pxr::TfToken>().GetString();
       }
       if (!varname.empty()) {

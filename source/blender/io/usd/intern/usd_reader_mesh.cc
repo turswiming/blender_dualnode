@@ -62,7 +62,8 @@ static void build_mat_map(const Main *bmain, std::map<std::string, Material *> *
   }
 }
 
-static pxr::UsdShadeMaterial compute_bound_material(const pxr::UsdPrim &prim, eUSDMtlPurpose purpose)
+static pxr::UsdShadeMaterial compute_bound_material(const pxr::UsdPrim &prim,
+                                                    eUSDMtlPurpose purpose)
 {
   pxr::UsdShadeMaterial mtl;
 
@@ -791,8 +792,8 @@ void USDMeshReader::assign_facesets_to_mpoly(double motionSampleTime,
   if (!subsets.empty()) {
     for (const pxr::UsdGeomSubset &subset : subsets) {
 
-      pxr::UsdShadeMaterial subset_mtl =
-        utils::compute_bound_material(subset.GetPrim(), import_params_.mtl_purpose);
+      pxr::UsdShadeMaterial subset_mtl = utils::compute_bound_material(subset.GetPrim(),
+                                                                       import_params_.mtl_purpose);
       if (!subset_mtl) {
         continue;
       }
@@ -822,8 +823,7 @@ void USDMeshReader::assign_facesets_to_mpoly(double motionSampleTime,
 
   if (r_mat_map->empty()) {
 
-    pxr::UsdShadeMaterial mtl =
-      utils::compute_bound_material(prim_, import_params_.mtl_purpose);
+    pxr::UsdShadeMaterial mtl = utils::compute_bound_material(prim_, import_params_.mtl_purpose);
     if (mtl) {
       pxr::SdfPath mtl_path = mtl.GetPath();
 

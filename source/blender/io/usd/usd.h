@@ -31,7 +31,6 @@ typedef enum eUSDMtlPurpose {
   USD_MTL_PURPOSE_FULL = 2
 } eUSDMtlPurpose;
 
-
 struct USDExportParams {
   bool export_animation;
   bool export_hair;
