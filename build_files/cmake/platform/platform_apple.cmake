@@ -520,10 +520,18 @@ if(WITH_COMPILER_CCACHE)
   endif()
 endif()
 
+if(WITH_COMPILER_ASAN)
+  list(APPEND PLATFORM_BUNDLED_LIBRARIES ${COMPILER_ASAN_LIBRARY})
+endif()
+
 # For the installed Python module and installed Blender executable, we set the
 # rpath to the location where install step will copy the shared libraries.
 set(CMAKE_SKIP_INSTALL_RPATH FALSE)
-list(APPEND CMAKE_INSTALL_RPATH "@loader_path/../Resources/${BLENDER_VERSION}/lib")
+if(WITH_PYTHON_MODULE)
+  list(APPEND CMAKE_INSTALL_RPATH "@loader_path/${BLENDER_VERSION}/lib")
+else()
+  list(APPEND CMAKE_INSTALL_RPATH "@loader_path/../Resources/${BLENDER_VERSION}/lib")
+endif()
 
 # For binaries that are built but not installed (like makesdan or tests), we add
 # the original directory of all shared libraries to the rpath. This is needed because

@@ -304,8 +304,10 @@ set(BLENDER_TEXT_FILES
 if(UNIX AND NOT APPLE)
   if(WITH_PYTHON_MODULE)
     if(WITH_INSTALL_PORTABLE)
+      set(BPY_INSTALL_DIR ".")
       set(TARGETDIR_VER ${BLENDER_VERSION})
     else()
+      set(BPY_INSTALL_DIR ${PYTHON_SITE_PACKAGES})
       set(TARGETDIR_VER ${PYTHON_SITE_PACKAGES}/${BLENDER_VERSION})
     endif()
   else()
@@ -339,7 +341,6 @@ elseif(APPLE)
   endif()
   # License, copyright, readme files.
   set(BLENDER_TEXT_FILES_DESTINATION "${TARGETDIR_VER}/../text")
-  set(MAC_BLENDER_TARGET_DYLIBS_DIR "${TARGETDIR_VER}/lib")
   # Skip relinking on cpack / install
   set_target_properties(blender PROPERTIES BUILD_WITH_INSTALL_RPATH true)
 endif()
@@ -505,14 +506,22 @@ if(UNIX AND NOT APPLE)
     if(WITH_INSTALL_PORTABLE)
       install(
         TARGETS blender
-        DESTINATION "."
+        DESTINATION ${BPY_INSTALL_DIR}
       )
     else()
       install(
         TARGETS blender
-        LIBRARY DESTINATION ${PYTHON_SITE_PACKAGES}
+        LIBRARY DESTINATION ${BPY_INSTALL_DIR}
       )
     endif()
+
+    if(PLATFORM_BUNDLED_LIBRARIES)
+      install(
+        FILES ${PLATFORM_BUNDLED_LIBRARIES}
+        DESTINATION ${BPY_INSTALL_DIR}/lib
+      )
+    endif()
+
     # none of the other files are needed currently
   elseif(WITH_INSTALL_PORTABLE)
     install(
@@ -552,7 +561,10 @@ if(UNIX AND NOT APPLE)
     endif()
 
     if(PLATFORM_BUNDLED_LIBRARIES)
-      install(FILES ${PLATFORM_BUNDLED_LIBRARIES} DESTINATION "lib")
+      install(
+        FILES ${PLATFORM_BUNDLED_LIBRARIES}
+        DESTINATION lib
+      )
     endif()
 
     set(BLENDER_TEXT_FILES_DESTINATION ".")
@@ -1177,13 +1189,7 @@ elseif(APPLE)
   if(PLATFORM_BUNDLED_LIBRARIES)
     install(
       FILES ${PLATFORM_BUNDLED_LIBRARIES}
-      DESTINATION ${MAC_BLENDER_TARGET_DYLIBS_DIR})
-  endif()
-
-  if(WITH_COMPILER_ASAN)
-    install(
-      FILES "${COMPILER_ASAN_LIBRARY}"
-      DESTINATION "${MAC_BLENDER_TARGET_DYLIBS_DIR}"
+      DESTINATION ${TARGETDIR_VER}/lib
     )
   endif()
 
