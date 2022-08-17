@@ -67,6 +67,7 @@ if(CYCLES_STANDALONE_REPOSITORY)
   if(EXISTS ${_cycles_lib_dir})
     _set_default(ALEMBIC_ROOT_DIR "${_cycles_lib_dir}/alembic")
     _set_default(BOOST_ROOT "${_cycles_lib_dir}/boost")
+    _set_default(BLOSC_ROOT_DIR "${_cycles_lib_dir}/blosc")
     _set_default(EMBREE_ROOT_DIR "${_cycles_lib_dir}/embree")
     _set_default(IMATH_ROOT_DIR "${_cycles_lib_dir}/imath")
     _set_default(GLEW_ROOT_DIR "${_cycles_lib_dir}/glew")
@@ -437,6 +438,15 @@ if(CYCLES_STANDALONE_REPOSITORY AND WITH_CYCLES_OPENVDB)
 
   if(NOT USD_OVERRIDE_OPENVDB)
     find_package(OpenVDB REQUIRED)
+
+    if(MSVC AND EXISTS ${_cycles_lib_dir})
+      set(BLOSC_LIBRARY
+        optimized ${BLOSC_ROOT_DIR}/lib/libblosc.lib
+        debug ${BLOSC_ROOT_DIR}/lib/libblosc_d.lib
+      )
+    else()
+      find_package(Blosc REQUIRED)
+    endif()
   endif()
 endif()
 
