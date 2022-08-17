@@ -520,16 +520,17 @@ if(WITH_COMPILER_CCACHE)
   endif()
 endif()
 
-# For binaries that are built but not installed (like makesdan or tests), we add
-# the original directory of all shared libraries to the rpath. This avoids having
-# to install them as part of the build step.
-set(CMAKE_SKIP_BUILD_RPATH FALSE)
-list(APPEND CMAKE_BUILD_RPATH ${PLATFORM_BUNDLED_LIBRARY_DIRS})
-
 # For the installed Python module and installed Blender executable, we set the
 # rpath to the location where install step will copy the shared libraries.
 set(CMAKE_SKIP_INSTALL_RPATH FALSE)
 list(APPEND CMAKE_INSTALL_RPATH "@loader_path/../Resources/${BLENDER_VERSION}/lib")
+
+# For binaries that are built but not installed (like makesdan or tests), we add
+# the original directory of all shared libraries to the rpath. This is needed because
+# these can be in different folders, and because the build and install folder may be
+# different.
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+list(APPEND CMAKE_BUILD_RPATH ${PLATFORM_BUNDLED_LIBRARY_DIRS})
 
 # Same as `CFBundleIdentifier` in Info.plist.
 set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.blenderfoundation.blender")

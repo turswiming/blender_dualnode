@@ -60,6 +60,26 @@ function(harvest from to)
   endif()
 endfunction()
 
+# Set rpath on Python module to point to the shared libraries folder in the
+# Blender installation. Ideally this would be done as part of the Blender build
+# since it makes assumptions about where the files will be installed. However it
+# would add patchelf as a new dependency for building.
+function(harvest_with_rpath from to pattern)
+  harvest(${from} ${to} ${pattern})
+
+  install(CODE "\
+    file(GLOB_RECURSE shared_libs ${HARVEST_TARGET}/${to}/${pattern}\.so) \n
+    foreach(f \${shared_libs}) \n
+      get_filename_component(f_dir \${f} DIRECTORY) \n
+      file(RELATIVE_PATH relative_dir \${f_dir} ${HARVEST_TARGET}) \n
+      if(APPLE) \n
+        execute_process(COMMAND install_name_tool -add_rpath @loader_path/\${relative_dir}lib \${f}) \n
+      else() \n
+        execute_process(COMMAND patchelf --set-rpath $ORIGIN/\${relative_dir}../lib \${f}) \n
+      endif() \n
+    endforeach()")
+endfunction()
+
 harvest(alembic/include alembic/include "*.h")
 harvest(alembic/lib/libAlembic.a alembic/lib/libAlembic.a)
 harvest(alembic/bin alembic/bin "*")
@@ -148,7 +168,7 @@ harvest(opensubdiv/lib opensubdiv/lib "*${SHAREDLIBEXT}*")
 harvest(openvdb/include/openvdb openvdb/include/openvdb "*.h")
 harvest(openvdb/include/nanovdb openvdb/include/nanovdb "*.h")
 harvest(openvdb/lib openvdb/lib "*${SHAREDLIBEXT}*")
-harvest(openvdb/lib/python${PYTHON_SHORT_VERSION} python/lib/python${PYTHON_SHORT_VERSION} "*")
+harvest_with_rpath(openvdb/lib/python${PYTHON_SHORT_VERSION} python/lib/python${PYTHON_SHORT_VERSION} "*pyopenvdb*")
 harvest(xr_openxr_sdk/include/openxr xr_openxr_sdk/include/openxr "*.h")
 harvest(xr_openxr_sdk/lib xr_openxr_sdk/lib "*.a")
 harvest(osl/bin osl/bin "oslc")
@@ -184,7 +204,7 @@ harvest(webp/include webp/include "*.h")
 harvest(usd/include usd/include "*.h")
 harvest(usd/lib/libusd_usd_ms${SHAREDLIBEXT} usd/lib/libusd_usd_ms${SHAREDLIBEXT})
 harvest(usd/lib/usd usd/lib/usd "*")
-harvest(usd/lib/python/pxr python/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr "*")
+harvest_with_rpath(usd/lib/python/pxr python/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr "*")
 harvest(usd/plugin usd/plugin "*")
 harvest(potrace/include potrace/include "*.h")
 harvest(potrace/lib potrace/lib "*.a")
@@ -201,19 +221,4 @@ if(UNIX AND NOT APPLE)
   harvest(igc dpcpp/lib/igc "*")
   harvest(ocloc dpcpp/lib/ocloc "*")
 endif()
-
-# Set rpath so Python standalone executable can find shared libraries shipped
-# with Blender. This makes assumptions about the directory layout of Blender
-# installation and would ideally be done as part of the Blender build. However
-# it would add patchelf as a new dependency required to build.
-set(_python_executable_install_path ${HARVEST_TARGET}/python/bin/python${PYTHON_SHORT_VERSION})
-message(STATUS ${_python_executable_install_path})
-if(APPLE)
-  install(
-    CODE "execute_process(COMMAND install_name_tool -add_rpath @loader_path/../../lib ${_python_executable_install_path})")
-else()
-  install(
-    CODE "execute_process(COMMAND patchelf --set-rpath $ORIGIN/../../../lib ${_python_executable_install_path})")
-endif()
-
 endif()

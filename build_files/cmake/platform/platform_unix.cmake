@@ -80,12 +80,9 @@ endmacro()
 # Utility to install precompiled shared libraries.
 macro(add_bundled_libraries library)
   if(EXISTS ${LIBDIR})
-    set(_library_dir ${LIBDIR}/${library}/lib)
-    file(GLOB _all_library_versions ${_library_dir}/*\.so*)
+    file(GLOB _all_library_versions ${LIBDIR}/${library}/lib/*\.so*)
     list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
-    list(APPEND PLATFORM_BUNDLED_LIBRARY_DIRS ${_library_dir})
     unset(_all_library_versions)
-    unset(_library_dir)
  endif()
 endmacro()
 
@@ -992,18 +989,13 @@ endfunction()
 
 CONFIGURE_ATOMIC_LIB_IF_NEEDED()
 
-# For binaries that are built but not installed (like makesdan or tests), we add
-# the original directory of all shared libraries to the rpath. This avoids having
-# to install them as part of the build step.
-#
-# This trick however does not work for executables like blender_test that uses
-# USD and openvdb which have indirect dependencies. For these cases also add the
-# absolute path to where libs will be installed, since they only need to work
-# after the install step.
-set(CMAKE_SKIP_BUILD_RPATH FALSE)
-list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib ${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib ${PLATFORM_BUNDLED_LIBRARY_DIRS})
-
 # For the installed Python module and installed Blender executable, we set the
-# rpath to the location where install step will copy the shared libraries.
+# rpath to the relative path where the install step will copy the shared libraries.
 set(CMAKE_SKIP_INSTALL_RPATH FALSE)
 list(APPEND CMAKE_INSTALL_RPATH $ORIGIN/lib)
+
+# For executables that are built but not installed (mainly tests) we set an absolute
+# rpath to the lib folder. This is needed because these can be in different folders,
+# and because the build and install folder may be different.
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib ${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib)
