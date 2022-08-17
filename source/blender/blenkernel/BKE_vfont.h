@@ -41,8 +41,22 @@ typedef struct EditFont {
    * a copy of these is kept in Curve, but use these in editmode */
   int len, pos;
   int selstart, selend;
+  char _pad6[7];
+  char select_is_underline;
+  char select_is_italics;
+  char _pad0[7];
+  char select_is_bold;
+  char _pad1[7];
+  char select_is_smallcaps;
+  char _pad2[7];
+  char is_selected;
 
-  /**
+  float _pad3[7];
+  float m_loc[3];
+  int _pad4[7];
+  int m_pos;
+  int _pad9[7];
+    /**
    * ID data is older than edit-mode data.
    * Set #Main.is_memfile_undo_flush_needed when enabling.
    */
