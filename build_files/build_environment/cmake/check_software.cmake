@@ -14,11 +14,14 @@ if(UNIX)
     ${_libtoolize_name}
     meson
     ninja
-    patchelf
     pkg-config
     tclsh
     yasm
   )
+
+  if(NOT APPLE)
+    list(APPEND _required_software patchelf)
+  endif()
 
   foreach(_software ${_required_software})
     find_program(_software_find NAMES ${_software})
