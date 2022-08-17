@@ -67,6 +67,7 @@ if(CYCLES_STANDALONE_REPOSITORY)
   if(EXISTS ${_cycles_lib_dir})
     _set_default(ALEMBIC_ROOT_DIR "${_cycles_lib_dir}/alembic")
     _set_default(BOOST_ROOT "${_cycles_lib_dir}/boost")
+    _set_default(BLOSC_ROOT_DIR "${_cycles_lib_dir}/blosc")
     _set_default(EMBREE_ROOT_DIR "${_cycles_lib_dir}/embree")
     _set_default(IMATH_ROOT_DIR "${_cycles_lib_dir}/imath")
     _set_default(GLEW_ROOT_DIR "${_cycles_lib_dir}/glew")
@@ -437,6 +438,15 @@ if(CYCLES_STANDALONE_REPOSITORY AND WITH_CYCLES_OPENVDB)
 
   if(NOT USD_OVERRIDE_OPENVDB)
     find_package(OpenVDB REQUIRED)
+
+    if(MSVC AND EXISTS ${_cycles_lib_dir})
+      set(BLOSC_LIBRARY
+        optimized ${BLOSC_ROOT_DIR}/lib/libblosc.lib
+        debug ${BLOSC_ROOT_DIR}/lib/libblosc_d.lib
+      )
+    else()
+      find_package(Blosc REQUIRED)
+    endif()
   endif()
 endif()
 
@@ -495,26 +505,19 @@ if(CYCLES_STANDALONE_REPOSITORY)
 endif()
 
 ###########################################################################
-# GLEW
+# Epoxy
 ###########################################################################
 
 if(CYCLES_STANDALONE_REPOSITORY)
   if((WITH_CYCLES_STANDALONE AND WITH_CYCLES_STANDALONE_GUI) OR
      WITH_CYCLES_HYDRA_RENDER_DELEGATE)
     if(MSVC AND EXISTS ${_cycles_lib_dir})
-      set(GLEW_LIBRARY "${_cycles_lib_dir}/opengl/lib/glew.lib")
-      set(GLEW_INCLUDE_DIR "${_cycles_lib_dir}/opengl/include")
-      add_definitions(-DGLEW_STATIC)
+      set(Epoxy_LIBRARIES "${_cycles_lib_dir}/epoxy/lib/epoxy.lib")
+      set(Epoxy_INCLUDE_DIRS "${_cycles_lib_dir}/epoxy/include")
     else()
-      find_package(GLEW REQUIRED)
+      find_package(Epoxy REQUIRED)
     endif()
-
-    set(CYCLES_GLEW_LIBRARIES ${GLEW_LIBRARY})
   endif()
-else()
-  # Workaround for unconventional variable name use in Blender.
-  set(GLEW_INCLUDE_DIR "${GLEW_INCLUDE_PATH}")
-  set(CYCLES_GLEW_LIBRARIES bf_intern_glew_mx ${BLENDER_GLEW_LIBRARIES})
 endif()
 
 ###########################################################################
@@ -544,25 +547,6 @@ endif()
 if(EXISTS ${_cycles_lib_dir})
   unset(CMAKE_IGNORE_PATH)
   unset(_cycles_lib_dir)
-endif()
-
-###########################################################################
-# OpenGL
-###########################################################################
-
-if((WITH_CYCLES_STANDALONE AND WITH_CYCLES_STANDALONE_GUI) OR
-   WITH_CYCLES_HYDRA_RENDER_DELEGATE)
-  if(CYCLES_STANDALONE_REPOSITORY)
-    if(NOT DEFINED OpenGL_GL_PREFERENCE)
-      set(OpenGL_GL_PREFERENCE "LEGACY")
-    endif()
-
-    find_package(OpenGL REQUIRED)
-
-    set(CYCLES_GL_LIBRARIES ${OPENGL_gl_LIBRARY})
-  else()
-    set(CYCLES_GL_LIBRARIES ${BLENDER_GL_LIBRARIES})
-  endif()
 endif()
 
 ###########################################################################
