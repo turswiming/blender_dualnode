@@ -71,6 +71,28 @@ const EnumPropertyItem rna_enum_usd_mtl_name_collision_mode_items[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
+const EnumPropertyItem rna_enum_usd_mtl_purpose_items[] = {
+    {USD_MTL_PURPOSE_ALL,
+     "MTL_ALL_PURPOSE",
+     0,
+     "All Purpose",
+     "Attempt to import 'allPurpose' materials.  "
+     "Load 'preview' and 'full' materials as a fallback, in that order"},
+    {USD_MTL_PURPOSE_PREVIEW,
+     "MTL_PREVIEW",
+     0,
+     "Preview",
+     "Attempt to import 'preview' materials.  "
+     "Load 'allPurpose' and 'full' materials as a fallback, in that order"},
+    {USD_MTL_PURPOSE_FULL,
+     "MTL_FULL",
+     0,
+     "Full",
+     "Attempt to import 'full' materials.  "
+     "Load 'allPurpose' and 'preview' materials as a fallback, in that order"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 /* Stored in the wmOperator's customdata field to indicate it should run as a background job.
  * This is set when the operator is invoked, and not set when it is only executed. */
 enum { AS_BACKGROUND_JOB = 1 };
@@ -388,6 +410,8 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
   const eUSDMtlNameCollisionMode mtl_name_collision_mode = RNA_enum_get(op->ptr,
                                                                         "mtl_name_collision_mode");
 
+  const eUSDMtlPurpose mtl_purpose = RNA_enum_get(op->ptr, "mtl_purpose");
+
   /* TODO(makowalski): Add support for sequences. */
   const bool is_sequence = false;
   int offset = 0;
@@ -427,7 +451,8 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
                                    .import_usd_preview = import_usd_preview,
                                    .set_material_blend = set_material_blend,
                                    .light_intensity_scale = light_intensity_scale,
-                                   .mtl_name_collision_mode = mtl_name_collision_mode};
+                                   .mtl_name_collision_mode = mtl_name_collision_mode,
+                                   .mtl_purpose = mtl_purpose};
 
   const bool ok = USD_import(C, filename, &params, as_background_job);
 
@@ -479,6 +504,8 @@ static void wm_usd_import_draw(bContext *UNUSED(C), wmOperator *op)
   uiLayout *row = uiLayoutRow(col, true);
   uiItemR(row, ptr, "set_material_blend", 0, NULL, ICON_NONE);
   uiLayoutSetEnabled(row, RNA_boolean_get(ptr, "import_usd_preview"));
+  row = uiLayoutRow(col, true);
+  uiItemR(row, ptr, "mtl_purpose", 0, NULL, ICON_NONE);
 }
 
 void WM_OT_usd_import(struct wmOperatorType *ot)
@@ -584,6 +611,16 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
                   "If the Import USD Preview option is enabled, "
                   "the material blend method will automatically be set based on the "
                   "shader's opacity and opacityThreshold inputs");
+
+  RNA_def_enum(
+      ot->srna,
+      "mtl_purpose",
+      rna_enum_usd_mtl_purpose_items,
+      USD_MTL_PURPOSE_ALL,
+      "Material Purpose",
+      "Attempt to import materials with the given purpose. "
+      "If no material with this purpose is bound to the primitive, "
+      "fall back on loading any other bound material");
 
   RNA_def_float(ot->srna,
                 "light_intensity_scale",

@@ -22,6 +22,16 @@ typedef enum eUSDMtlNameCollisionMode {
   USD_MTL_NAME_COLLISION_REFERENCE_EXISTING = 1,
 } eUSDMtlNameCollisionMode;
 
+/* Enums specifying the USD material purpose,
+ * corresponding to pxr::UsdShadeTokens 'allPurpose',
+ * 'preview', and 'render', respectively. */
+typedef enum eUSDMtlPurpose {
+  USD_MTL_PURPOSE_ALL = 0,
+  USD_MTL_PURPOSE_PREVIEW = 1,
+  USD_MTL_PURPOSE_FULL = 2
+} eUSDMtlPurpose;
+
+
 struct USDExportParams {
   bool export_animation;
   bool export_hair;
@@ -65,6 +75,7 @@ struct USDImportParams {
   bool set_material_blend;
   float light_intensity_scale;
   eUSDMtlNameCollisionMode mtl_name_collision_mode;
+  eUSDMtlPurpose mtl_purpose;
 };
 
 /* The USD_export takes a as_background_job parameter, and returns a boolean.

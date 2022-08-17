@@ -62,21 +62,42 @@ static void build_mat_map(const Main *bmain, std::map<std::string, Material *> *
   }
 }
 
-static pxr::UsdShadeMaterial compute_bound_material(const pxr::UsdPrim &prim)
+static pxr::UsdShadeMaterial compute_bound_material(const pxr::UsdPrim &prim, eUSDMtlPurpose purpose)
 {
+  pxr::UsdShadeMaterial mtl;
+
   pxr::UsdShadeMaterialBindingAPI api = pxr::UsdShadeMaterialBindingAPI(prim);
 
-  /* Compute generically bound ('allPurpose') materials. */
-  pxr::UsdShadeMaterial mtl = api.ComputeBoundMaterial();
-
-  /* If no generic material could be resolved, also check for 'preview' and
-   * 'full' purpose materials as fallbacks. */
-  if (!mtl) {
-    mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->preview);
-  }
-
-  if (!mtl) {
-    mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->full);
+  switch (purpose) {
+    case USD_MTL_PURPOSE_ALL:
+      mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->allPurpose);
+      if (!mtl) {
+        mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->preview);
+      }
+      if (!mtl) {
+        mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->full);
+      }
+      break;
+    case USD_MTL_PURPOSE_PREVIEW:
+      mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->preview);
+      if (!mtl) {
+        mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->allPurpose);
+      }
+      if (!mtl) {
+        mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->full);
+      }
+      break;
+    case USD_MTL_PURPOSE_FULL:
+      mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->full);
+      if (!mtl) {
+        mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->allPurpose);
+      }
+      if (!mtl) {
+        mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->preview);
+      }
+      break;
+    default:
+      break;
   }
 
   return mtl;
@@ -351,6 +372,14 @@ void USDMeshReader::read_uvs(Mesh *mesh, const double motionSampleTime, const bo
   struct UVSample {
     pxr::VtVec2fArray uvs;
     pxr::TfToken interpolation;
+    /* The following is mutable as it might
+     * be modified for error reporting even
+     * when other members are const. */
+    mutable bool invalid_index_found;
+
+    UVSample() : invalid_index_found(false)
+    {
+    }
   };
 
   std::vector<UVSample> uv_primvars(ldata->totlayer);
@@ -396,6 +425,8 @@ void USDMeshReader::read_uvs(Mesh *mesh, const double motionSampleTime, const bo
     }
   }
 
+  std::vector<int> warned_invalid_index_for_layer(ldata->totlayer);
+
   for (int i = 0; i < face_counts_.size(); i++) {
     const int face_size = face_counts_[i];
 
@@ -435,8 +466,12 @@ void USDMeshReader::read_uvs(Mesh *mesh, const double motionSampleTime, const bo
                                loop_index;
 
         if (usd_uv_index >= sample.uvs.size()) {
-          std::cerr << "WARNING: out of bounds uv index " << usd_uv_index << " for uv "
-                    << layer->name << " of size " << sample.uvs.size() << std::endl;
+          /* Out of bounds index. */
+          if (!sample.invalid_index_found) {
+            sample.invalid_index_found = true;
+            std::cerr << "WARNING: out of bounds index detected for uv layer " << layer->name
+                      << std::endl;
+          }
           continue;
         }
 
@@ -756,7 +791,8 @@ void USDMeshReader::assign_facesets_to_mpoly(double motionSampleTime,
   if (!subsets.empty()) {
     for (const pxr::UsdGeomSubset &subset : subsets) {
 
-      pxr::UsdShadeMaterial subset_mtl = utils::compute_bound_material(subset.GetPrim());
+      pxr::UsdShadeMaterial subset_mtl =
+        utils::compute_bound_material(subset.GetPrim(), import_params_.mtl_purpose);
       if (!subset_mtl) {
         continue;
       }
@@ -786,7 +822,8 @@ void USDMeshReader::assign_facesets_to_mpoly(double motionSampleTime,
 
   if (r_mat_map->empty()) {
 
-    pxr::UsdShadeMaterial mtl = utils::compute_bound_material(prim_);
+    pxr::UsdShadeMaterial mtl =
+      utils::compute_bound_material(prim_, import_params_.mtl_purpose);
     if (mtl) {
       pxr::SdfPath mtl_path = mtl.GetPath();
 
@@ -850,7 +887,8 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
       if (ELEM(type,
                pxr::SdfValueTypeNames->TexCoord2hArray,
                pxr::SdfValueTypeNames->TexCoord2fArray,
-               pxr::SdfValueTypeNames->TexCoord2dArray)) {
+               pxr::SdfValueTypeNames->TexCoord2dArray,
+               pxr::SdfValueTypeNames->Float2Array)) {
         is_uv = true;
       }
       /* In some cases, the st primvar is stored as float2 values. */
