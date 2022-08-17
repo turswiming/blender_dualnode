@@ -850,20 +850,26 @@ elseif(WIN32)
         CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
       )
       install(
-        FILES ${LIBDIR}/openvdb/python/pyopenvdb.pyd
-        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
-        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
-      )
-      install(
         FILES ${LIBDIR}/openvdb/bin/openvdb_d.dll
         DESTINATION "."
         CONFIGURATIONS Debug
       )
-      install(
-        FILES ${LIBDIR}/openvdb/python/pyopenvdb_d.pyd
-        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
-        CONFIGURATIONS Debug
-      )
+
+      # This will not exist for 3.3 and earlier lib folders
+      # to ease the transition, support both 3.3 and 3.4 lib
+      # folders.
+      if(EXISTS ${LIBDIR}/openvdb/python/pyopenvdb_d.pyd)
+        install(
+          FILES ${LIBDIR}/openvdb/python/pyopenvdb_d.pyd
+          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+          CONFIGURATIONS Debug
+        )
+        install(
+          FILES ${LIBDIR}/openvdb/python/pyopenvdb.pyd
+          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+          CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+        )
+      endif()
   endif()
 
   if(WITH_PYTHON)
@@ -939,27 +945,32 @@ elseif(WIN32)
         CONFIGURATIONS Debug
       )
 
-            if(WITH_USD)
-        install(
-          DIRECTORY ${USD_LIBRARY_DIR}/python/
-          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
-          CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
-          PATTERN ".svn" EXCLUDE
-          PATTERN "__pycache__" EXCLUDE           # * any cache *
-          PATTERN "*.pyc" EXCLUDE                 # * any cache *
-          PATTERN "*.pyo" EXCLUDE                 # * any cache *
-        )
-
-        install(
-          DIRECTORY ${USD_LIBRARY_DIR}/debug/python/
-          DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
-          CONFIGURATIONS Debug
-          PATTERN ".svn" EXCLUDE
-          PATTERN "__pycache__" EXCLUDE           # * any cache *
-          PATTERN "*.pyc" EXCLUDE                 # * any cache *
-          PATTERN "*.pyo" EXCLUDE                 # * any cache *
-        )
-
+      if(WITH_USD)
+        # This will not exist for 3.3 and earlier lib folders
+        # to ease the transition, support both 3.3 and 3.4 lib
+        # folders.
+        if(EXISTS ${USD_LIBRARY_DIR}/python/)
+          install(
+            DIRECTORY ${USD_LIBRARY_DIR}/python/
+            DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+            CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+            PATTERN ".svn" EXCLUDE
+            PATTERN "__pycache__" EXCLUDE           # * any cache *
+            PATTERN "*.pyc" EXCLUDE                 # * any cache *
+            PATTERN "*.pyo" EXCLUDE                 # * any cache *
+          )
+        endif()
+        if(EXISTS ${USD_LIBRARY_DIR}/debug/python/)
+          install(
+            DIRECTORY ${USD_LIBRARY_DIR}/debug/python/
+            DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+            CONFIGURATIONS Debug
+            PATTERN ".svn" EXCLUDE
+            PATTERN "__pycache__" EXCLUDE           # * any cache *
+            PATTERN "*.pyc" EXCLUDE                 # * any cache *
+            PATTERN "*.pyo" EXCLUDE                 # * any cache *
+          )
+        endif()
       endif()
 
       if(WINDOWS_PYTHON_DEBUG)
@@ -1305,16 +1316,20 @@ if(WITH_USD)
   )
 
   if(WIN32)
-    install(FILES
-      ${LIBDIR}/usd/lib/usd_usd_ms.dll
-      DESTINATION "."
-      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
-    )
-    install(FILES
-      ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
-      DESTINATION "."
-      CONFIGURATIONS Debug
-    )
+    # If this file exists we are building against a 3.4 library folder
+    # that needs these dll's installed.
+    if(EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
+      install(FILES
+        ${LIBDIR}/usd/lib/usd_usd_ms.dll
+        DESTINATION "."
+        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      )
+      install(FILES
+        ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
+        DESTINATION "."
+        CONFIGURATIONS Debug
+      )
+    endif()
   endif()
 endif()
 
@@ -1336,7 +1351,7 @@ if(WIN32 AND WITH_BOOST)
     PATTERN "*.lib" EXCLUDE
     PATTERN "*.pdb" EXCLUDE
     PATTERN "cmake" EXCLUDE
-    
+
   )
 endif()
 

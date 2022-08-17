@@ -542,35 +542,44 @@ if(WITH_BOOST)
     endif()
     set(BOOST_POSTFIX "vc142-mt-x64-${BOOST_VERSION}.lib")
     set(BOOST_DEBUG_POSTFIX "vc142-mt-gyd-x64-${BOOST_VERSION}.lib")
+    set(BOOST_PREFIX "")
+    # This is file new in 3.4 if it does not exist, assume we are building against 3.3 libs
+    set(BOOST_34_TRIGGER_FILE ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_python310-${BOOST_DEBUG_POSTFIX})
+    if (NOT EXISTS ${BOOST_34_TRIGGER_FILE})
+      set(BOOST_DEBUG_POSTFIX "vc142-mt-gd-x64-${BOOST_VERSION}.lib")
+      set(BOOST_PREFIX "lib")
+    endif()
     set(BOOST_LIBRARIES
-      optimized ${BOOST_LIBPATH}/boost_date_time-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/boost_filesystem-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/boost_regex-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/boost_system-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/boost_thread-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/boost_chrono-${BOOST_POSTFIX}
-      debug ${BOOST_LIBPATH}/boost_date_time-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/boost_filesystem-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/boost_regex-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/boost_system-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/boost_thread-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/boost_chrono-${BOOST_DEBUG_POSTFIX}
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_date_time-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_filesystem-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_regex-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_system-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_thread-${BOOST_POSTFIX}
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_chrono-${BOOST_POSTFIX}
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_date_time-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_filesystem-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_regex-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_system-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_thread-${BOOST_DEBUG_POSTFIX}
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_chrono-${BOOST_DEBUG_POSTFIX}
     )
-    if(WITH_USD)
-      set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
-        debug ${BOOST_LIBPATH}/boost_python310-${BOOST_DEBUG_POSTFIX}
-        optimized ${BOOST_LIBPATH}/boost_python310-${BOOST_POSTFIX}
-      )
+    if (EXISTS ${BOOST_34_TRIGGER_FILE})
+      if(WITH_USD)
+        set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
+          debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_python310-${BOOST_DEBUG_POSTFIX}
+          optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_python310-${BOOST_POSTFIX}
+        )
+      endif()
     endif()
     if(WITH_CYCLES AND WITH_CYCLES_OSL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
-        optimized ${BOOST_LIBPATH}/boost_wave-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/boost_wave-${BOOST_DEBUG_POSTFIX})
+        optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_wave-${BOOST_POSTFIX}
+        debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_wave-${BOOST_DEBUG_POSTFIX})
     endif()
     if(WITH_INTERNATIONAL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
-        optimized ${BOOST_LIBPATH}/boost_locale-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/boost_locale-${BOOST_DEBUG_POSTFIX})
+        optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_locale-${BOOST_POSTFIX}
+        debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_locale-${BOOST_DEBUG_POSTFIX})
     endif()
   else() # we found boost using find_package
     set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
@@ -849,8 +858,8 @@ if(WITH_USD)
     # not found see if the older ones exist, to ease the
     # transition period while landing libs.
     if(NOT EXISTS "${USD_RELEASE_LIB}")
-      set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/libusd_m.lib)
-      set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/libusd_m_d.lib)
+      set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_m.lib)
+      set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_m_d.lib)
     endif()
     set(USD_LIBRARIES
       debug ${USD_DEBUG_LIB}
