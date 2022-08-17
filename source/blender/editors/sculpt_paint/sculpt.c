@@ -2257,7 +2257,8 @@ void SCULPT_calc_area_normal_and_center(
  * values pull vertices, negative values push. Uses tablet pressure and a
  * special multiplier found experimentally to scale the strength factor.
  */
-static float brush_strength(const Sculpt *sd,
+static float brush_strength(const SculptSession *ss,
+                            const Sculpt *sd,
                             const StrokeCache *cache,
                             const float feather,
                             const UnifiedPaintSettings *ups,
@@ -2267,10 +2268,12 @@ static float brush_strength(const Sculpt *sd,
   const Brush *brush = BKE_paint_brush((Paint *)&sd->paint);
 
   /* Primary strength input; square it to make lower values more sensitive. */
-  const float root_alpha = BKE_brush_alpha_get(scene, brush);
+  // float root_alpha = BKE_brush_alpha_get(scene, brush);
+
+  float root_alpha = BKE_brush_channelset_float_get(ss->cache->channels, strength);
+
   const float alpha = root_alpha * root_alpha;
   const float dir = (brush->flag & BRUSH_DIR_IN) ? -1.0f : 1.0f;
-  const float pressure = BKE_brush_use_alpha_pressure(brush) ? cache->pressure : 1.0f;
   const float pen_flip = cache->pen_flip ? -1.0f : 1.0f;
   const float invert = cache->invert ? -1.0f : 1.0f;
   float overlap = ups->overlap_factor;
@@ -2282,112 +2285,109 @@ static float brush_strength(const Sculpt *sd,
     flip = 1.0f;
   }
 
-  /* Pressure final value after being tweaked depending on the brush. */
-  float final_pressure;
-
   switch (brush->sculpt_tool) {
     case SCULPT_TOOL_CLAY:
-      final_pressure = pow4f(pressure);
+      // pressure = pow4f(pressure);
       overlap = (1.0f + overlap) / 2.0f;
-      return 0.25f * alpha * flip * final_pressure * overlap * feather;
+      return 0.25f * alpha * flip * overlap * feather;
     case SCULPT_TOOL_DRAW:
     case SCULPT_TOOL_DRAW_SHARP:
     case SCULPT_TOOL_LAYER:
-      return alpha * flip * pressure * overlap * feather;
+      return alpha * flip * overlap * feather;
     case SCULPT_TOOL_DISPLACEMENT_ERASER:
-      return alpha * pressure * overlap * feather;
+      return alpha * overlap * feather;
     case SCULPT_TOOL_CLOTH:
       if (brush->cloth_deform_type == BRUSH_CLOTH_DEFORM_GRAB) {
         /* Grab deform uses the same falloff as a regular grab brush. */
         return root_alpha * feather;
       }
       else if (brush->cloth_deform_type == BRUSH_CLOTH_DEFORM_SNAKE_HOOK) {
-        return root_alpha * feather * pressure * overlap;
+        return root_alpha * feather * overlap;
       }
       else if (brush->cloth_deform_type == BRUSH_CLOTH_DEFORM_EXPAND) {
         /* Expand is more sensible to strength as it keeps expanding the cloth when sculpting over
          * the same vertices. */
-        return 0.1f * alpha * flip * pressure * overlap * feather;
+        return 0.1f * alpha * flip * overlap * feather;
       }
       else {
         /* Multiply by 10 by default to get a larger range of strength depending on the size of the
          * brush and object. */
-        return 10.0f * alpha * flip * pressure * overlap * feather;
+        return 10.0f * alpha * flip * overlap * feather;
       }
     case SCULPT_TOOL_DRAW_FACE_SETS:
-      return alpha * pressure * overlap * feather;
+      return alpha * overlap * feather;
     case SCULPT_TOOL_SLIDE_RELAX:
-      return alpha * pressure * overlap * feather * 2.0f;
+      return alpha * overlap * feather * 2.0f;
     case SCULPT_TOOL_PAINT:
-      final_pressure = pressure * pressure;
-      return final_pressure * overlap * feather;
+      // pressure = pressure * pressure;
+      return overlap * feather;
     case SCULPT_TOOL_SMEAR:
     case SCULPT_TOOL_DISPLACEMENT_SMEAR:
-      return alpha * pressure * overlap * feather;
+      return alpha * overlap * feather;
     case SCULPT_TOOL_CLAY_STRIPS:
       /* Clay Strips needs less strength to compensate the curve. */
-      final_pressure = powf(pressure, 1.5f);
-      return alpha * flip * final_pressure * overlap * feather * 0.3f;
+      // pressure = powf(pressure, 1.5f);
+      return alpha * flip * overlap * feather * 0.3f;
     case SCULPT_TOOL_CLAY_THUMB:
-      final_pressure = pressure * pressure;
-      return alpha * flip * final_pressure * overlap * feather * 1.3f;
+      // pressure = pressure * pressure;
+      return alpha * flip * overlap * feather * 1.3f;
 
     case SCULPT_TOOL_MASK:
       overlap = (1.0f + overlap) / 2.0f;
       switch ((BrushMaskTool)brush->mask_tool) {
         case BRUSH_MASK_DRAW:
-          return alpha * flip * pressure * overlap * feather;
+          return alpha * flip * overlap * feather;
         case BRUSH_MASK_SMOOTH:
-          return alpha * pressure * feather;
+          return alpha * feather;
       }
       BLI_assert_msg(0, "Not supposed to happen");
       return 0.0f;
 
     case SCULPT_TOOL_CREASE:
     case SCULPT_TOOL_BLOB:
-      return alpha * flip * pressure * overlap * feather;
+      return alpha * flip * overlap * feather;
 
     case SCULPT_TOOL_INFLATE:
       if (flip > 0.0f) {
-        return 0.250f * alpha * flip * pressure * overlap * feather;
+        return 0.250f * alpha * flip * overlap * feather;
       }
       else {
-        return 0.125f * alpha * flip * pressure * overlap * feather;
+        return 0.125f * alpha * flip * overlap * feather;
       }
 
     case SCULPT_TOOL_MULTIPLANE_SCRAPE:
       overlap = (1.0f + overlap) / 2.0f;
-      return alpha * flip * pressure * overlap * feather;
+      return alpha * flip * overlap * feather;
 
     case SCULPT_TOOL_FILL:
     case SCULPT_TOOL_SCRAPE:
     case SCULPT_TOOL_FLATTEN:
       if (flip > 0.0f) {
         overlap = (1.0f + overlap) / 2.0f;
-        return alpha * flip * pressure * overlap * feather;
+        return alpha * flip * overlap * feather;
       }
       else {
         /* Reduce strength for DEEPEN, PEAKS, and CONTRAST. */
-        return 0.5f * alpha * flip * pressure * overlap * feather;
+        return 0.5f * alpha * flip * overlap * feather;
       }
 
     case SCULPT_TOOL_SMOOTH:
-      return flip * alpha * pressure * feather;
+      return flip * alpha * feather;
 
     case SCULPT_TOOL_PINCH:
       if (flip > 0.0f) {
-        return alpha * flip * pressure * overlap * feather;
+        return alpha * flip * overlap * feather;
       }
       else {
-        return 0.25f * alpha * flip * pressure * overlap * feather;
+        return 0.25f * alpha * flip * overlap * feather;
       }
 
     case SCULPT_TOOL_NUDGE:
       overlap = (1.0f + overlap) / 2.0f;
-      return alpha * pressure * overlap * feather;
+      return alpha * overlap * feather;
 
     case SCULPT_TOOL_THUMB:
-      return alpha * pressure * feather;
+      return alpha * feather;
 
     case SCULPT_TOOL_SNAKE_HOOK:
       return root_alpha * feather;
@@ -2396,7 +2396,7 @@ static float brush_strength(const Sculpt *sd,
       return root_alpha * feather;
 
     case SCULPT_TOOL_ROTATE:
-      return alpha * pressure * feather;
+      return alpha * feather;
 
     case SCULPT_TOOL_ELASTIC_DEFORM:
     case SCULPT_TOOL_POSE:
@@ -3974,7 +3974,7 @@ static void do_symmetrical_brush_actions(Sculpt *sd,
 
   float feather = calc_symmetry_feather(sd, ss->cache);
 
-  cache->bstrength = brush_strength(sd, cache, feather, ups, paint_mode_settings);
+  cache->bstrength = brush_strength(ss, sd, cache, feather, ups, paint_mode_settings);
   cache->symmetry = symm;
 
   /* `symm` is a bit combination of XYZ -

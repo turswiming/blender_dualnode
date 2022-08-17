@@ -262,13 +262,13 @@ class _draw_tool_settings_context_mode:
 
         # strength, use_strength_pressure
         pressure_name = "use_pressure_strength" if capabilities.has_strength_pressure else None
-        UnifiedPaintPanel.prop_unified(
+        UnifiedPaintPanel.channel_unified(
             layout,
             context,
             brush,
             "strength",
-            pressure_name=pressure_name,
-            unified_name="use_unified_strength",
+            #pressure_name=pressure_name,
+            #unified_name="use_unified_strength",
             text="Strength",
             header=True,
         )

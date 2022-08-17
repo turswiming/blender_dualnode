@@ -712,9 +712,7 @@ class UnifiedPaintPanel:
             along with their pen pressure setting and global toggle, if they exist. """
 
         if context.mode == "SCULPT":
-            pass
-            #if prop_name in brush.channels:
-            #    return UnifiedPaintPanel.channel_unified(layout, context, brush, prop_name, icon=icon, text=text, slider=slider, header=header)
+            return UnifiedPaintPanel.channel_unified(layout, context, brush, prop_name, icon=icon, text=text, slider=slider, header=header)
 
         row = layout.row(align=True)
         ups = context.tool_settings.unified_paint_settings
@@ -1642,14 +1640,14 @@ def brush_shared_settings(layout, context, brush, popover=False):
             layout.separator()
 
     if strength:
-        pressure_name = "use_pressure_strength" if strength_pressure else None
-        UnifiedPaintPanel.prop_unified(
+        #pressure_name = "use_pressure_strength" if strength_pressure else None
+        UnifiedPaintPanel.channel_unified(
             layout,
             context,
             brush,
             "strength",
-            unified_name="use_unified_strength",
-            pressure_name=pressure_name,
+            #unified_name="use_unified_strength",
+            #pressure_name=pressure_name,
             slider=True,
         )
         layout.separator()
