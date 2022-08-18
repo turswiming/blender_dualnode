@@ -5576,6 +5576,8 @@ def km_font(params):
          {"properties": [("delta", 1)]}),
         ("font.change_character", {"type": 'DOWN_ARROW', "value": 'PRESS', "alt": True, "repeat": True},
          {"properties": [("delta", -1)]}),
+        ("font.selection_set", {"type": 'LEFTMOUSE', "value": 'PRESS',"ctrl":True,"alt":True}, None),
+        ("font.select_word", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK',"ctrl":True,"alt":True}, None),
         ("font.select_all", {"type": 'A', "value": 'PRESS', "ctrl": True}, None),
         ("font.text_copy", {"type": 'C', "value": 'PRESS', "ctrl": True}, None),
         ("font.text_cut", {"type": 'X', "value": 'PRESS', "ctrl": True}, None),

@@ -17,6 +17,7 @@
 #include "BLI_math.h"
 #include "BLI_string_cursor_utf8.h"
 #include "BLI_utildefines.h"
+#include "BLI_math_geom.h"
 
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
@@ -1753,6 +1754,116 @@ void FONT_OT_text_insert(wmOperatorType *ot)
       "Next typed character will strike through previous, for special character input");
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Font Select Operator
+ * \{ */
+static void font_cursor_set_apply(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  Object *obedit = CTX_data_active_object(C);
+  Curve *cu = obedit->data;
+  EditFont *ef = cu->editfont;
+  ARegion *region = CTX_wm_region(C);
+  float rout[3];
+  float mal[2];
+  mal[0]=event->mval[0];
+  mal[1]=event->mval[1];
+  const float *co = obedit->obmat[3];
+  const float *no = obedit->obmat[2]; /* Z axis. */
+  float plane[4];
+  plane_from_point_normal_v3(plane, co, no);
+  ED_view3d_win_to_3d_on_plane(region,plane,mal,true,rout);
+  mul_m4_v3(obedit->imat, rout);
+  ef->m_loc[0]=rout[0];
+  ef->m_loc[1]=rout[1];
+  ef->pos=ef->m_pos;
+    if ((select) && (ef->selstart==0)) {
+      if(ef->pos==0)
+      ef->selstart = ef->selend =1;
+      else
+      ef->selstart = ef->selend = ef->pos+1;
+  }
+  ef->selend=ef->pos;
+  text_update_edited(C, obedit, true);
+
+}
+
+static int font_selection_set_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{ 
+  Object *obedit = CTX_data_active_object(C);
+  Curve *cu = obedit->data;
+  EditFont *ef = cu->editfont;
+
+  WM_event_add_modal_handler(C, op);
+
+  font_cursor_set_apply(C, op, event);
+  ef->selstart=0;
+  ef->selend=0;
+  
+  text_update_edited(C, obedit, true);
+
+  return OPERATOR_RUNNING_MODAL; 
+}
+
+static int font_selection_set_modal(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  Object *obedit = CTX_data_active_object(C);
+  Curve *cu = obedit->data;
+  EditFont *ef = cu->editfont;
+  switch (event->type) {
+    case LEFTMOUSE:
+      font_cursor_set_apply(C, op, event);
+      return OPERATOR_FINISHED;
+    case MIDDLEMOUSE:
+    case RIGHTMOUSE:
+      return OPERATOR_FINISHED; 
+    case TIMER:
+    case MOUSEMOVE:
+      font_cursor_set_apply(C, op, event);
+      break;
+  }
+  
+  return OPERATOR_RUNNING_MODAL;
+}
+
+void FONT_OT_selection_set(struct wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Set Selection";
+  ot->idname = "FONT_OT_selection_set";
+  ot->description = "Set cursor selection";
+  /* api callbacks */
+  ot->invoke = font_selection_set_invoke;
+  ot->modal = font_selection_set_modal;
+  ot->poll = ED_operator_editfont;
+}
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select Word Operator
+ * \{ */
+static  font_select_word_exec(bContext *C, wmOperator *op)
+{
+  Object *obedit = CTX_data_active_object(C);
+  Curve *cu = obedit->data;
+  EditFont *ef = cu->editfont;
+
+  move_cursor(C,PREV_WORD,false)+move_cursor(C,NEXT_WORD,true);
+  return OPERATOR_FINISHED; 
+}
+
+void FONT_OT_select_word(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Select Word";
+  ot->idname = "FONT_OT_select_word";
+  ot->description = "Select word under cursor";
+
+  /* api callbacks */
+  ot->exec = font_select_word_exec;
+  ot->poll = ED_operator_editfont;
+}
 /** \} */
 
 /* -------------------------------------------------------------------- */

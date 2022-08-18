@@ -68,6 +68,9 @@ bool select_bpoint(BPoint *bp, bool selstatus, uint8_t flag, bool hidden);
 void FONT_OT_text_insert(struct wmOperatorType *ot);
 void FONT_OT_line_break(struct wmOperatorType *ot);
 
+void FONT_OT_selection_set(struct wmOperatorType *ot);
+void FONT_OT_select_word(struct wmOperatorType *ot);
+
 void FONT_OT_case_toggle(struct wmOperatorType *ot);
 void FONT_OT_case_set(struct wmOperatorType *ot);
 void FONT_OT_style_toggle(struct wmOperatorType *ot);

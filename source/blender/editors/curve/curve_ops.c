@@ -28,6 +28,9 @@ void ED_operatortypes_curve(void)
   WM_operatortype_append(FONT_OT_text_insert);
   WM_operatortype_append(FONT_OT_line_break);
 
+  WM_operatortype_append(FONT_OT_selection_set);
+  WM_operatortype_append(FONT_OT_select_word);
+
   WM_operatortype_append(FONT_OT_case_toggle);
   WM_operatortype_append(FONT_OT_case_set);
   WM_operatortype_append(FONT_OT_style_toggle);

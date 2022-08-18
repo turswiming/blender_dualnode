@@ -837,6 +837,50 @@ static bool rna_Curve_is_editmode_get(PointerRNA *ptr)
   }
 }
 
+static bool rna_Curve_is_select_underline_get(PointerRNA *ptr)
+{
+  Curve *cu= (Curve *)ptr->owner_id;
+  if(cu->editfont != NULL)
+    return cu->editfont->select_is_underline;
+  else
+    return false;
+}
+
+static bool rna_Curve_is_select_bold_get(PointerRNA *ptr)
+{
+  Curve *cu= (Curve *)ptr->owner_id;
+  if(cu->editfont != NULL)
+    return cu->editfont->select_is_bold;
+  else
+    return false;
+}
+
+static bool rna_Curve_is_select_italics_get(PointerRNA *ptr)
+{
+  Curve *cu= (Curve *)ptr->owner_id;
+  if(cu->editfont != NULL)
+    return cu->editfont->select_is_italics;
+  else
+    return false;
+}
+
+static bool rna_Curve_is_select_smallcaps_get(PointerRNA *ptr)
+{
+  Curve *cu= (Curve *)ptr->owner_id;
+  if(cu->editfont != NULL)
+    return cu->editfont->select_is_smallcaps;
+  else
+    return false;
+}
+static bool rna_Curve_is_selected(PointerRNA *ptr)
+{
+  Curve *cu= (Curve *)ptr->owner_id;
+  if(cu->editfont != NULL)
+    return cu->editfont->is_selected;
+  else
+    return false;
+}
+
 #else
 
 static const float tilt_limit = DEG2RADF(21600.0f);
@@ -1270,6 +1314,41 @@ static void rna_def_font(BlenderRNA *UNUSED(brna), StructRNA *srna)
   prop = RNA_def_property(srna, "use_fast_edit", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", CU_FAST);
   RNA_def_property_ui_text(prop, "Fast Editing", "Don't fill polygons while editing");
+  RNA_def_property_update(prop, 0, "rna_Curve_update_data");
+
+  prop = RNA_def_property(srna, "select_is_underline", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Curve_is_select_underline_get", NULL);
+  RNA_def_property_ui_text(prop, "bold sig", "Checks for bold");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, 0, "rna_Curve_update_data");
+
+  prop = RNA_def_property(srna, "select_is_bold", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Curve_is_select_bold_get", NULL);
+  RNA_def_property_ui_text(prop, "bold sig", "Checks for bold");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, 0, "rna_Curve_update_data");
+
+  prop = RNA_def_property(srna, "select_is_italics", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Curve_is_select_italics_get", NULL);
+  RNA_def_property_ui_text(prop, "bold sig", "Checks for bold");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, 0, "rna_Curve_update_data");
+
+  prop = RNA_def_property(srna, "select_is_smallcaps", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Curve_is_select_smallcaps_get", NULL);
+  RNA_def_property_ui_text(prop, "bold sig", "Checks for bold");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, 0, "rna_Curve_update_data");
+
+  prop = RNA_def_property(srna, "is_selected", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Curve_is_selected", NULL);
+  RNA_def_property_ui_text(prop, "bold sig", "Checks for bold");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, 0, "rna_Curve_update_data");
 }
 

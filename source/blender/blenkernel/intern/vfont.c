@@ -873,8 +873,10 @@ static bool vfont_to_curve(Object *ob,
     if (BKE_vfont_select_get(ob, &selstart, &selend)) {
       ef->selboxes_len = (selend - selstart) + 1;
       ef->selboxes = MEM_calloc_arrayN(ef->selboxes_len, sizeof(EditFontSelBox), "font selboxes");
+      ef->is_selected= true;
     }
     else {
+      ef->is_selected=false;
       ef->selboxes_len = 0;
       ef->selboxes = NULL;
     }
@@ -906,6 +908,8 @@ static bool vfont_to_curve(Object *ob,
   }
 
   i = 0;
+  int ret=0;
+  float min_dist=0.0f;
   while (i <= slen) {
     /* Characters in the list */
     info = &custrinfo[i];
@@ -1120,9 +1124,36 @@ static bool vfont_to_curve(Object *ob,
       }
     }
     ct++;
+    if (ef != NULL && ob != NULL){
+      float fx=ef->m_loc[0];
+      float fy=ef->m_loc[1];
+      float di= (fx-xof)*(fx-xof)+(fy-yof)*(fy-yof);
+      if(i==0)
+      {
+        min_dist=di;
+        ret=i;
+      }
+      if(di<min_dist)
+      {
+        min_dist=di;
+        ret=i;
+      } 
+    }
     i++;
   }
-
+  if (ef != NULL && ob != NULL)
+  {
+    if(ret==0)
+    {
+      ret++;
+      ef->m_pos=ret;
+    }
+    else if(ret>0 && ret<=ef->len-1)
+    {
+      ret++;
+      ef->m_pos=ret;
+    }
+  }
   current_line_length += xof + twidth - MARGIN_X_MIN;
   longest_line_length = MAX2(current_line_length, longest_line_length);
 
@@ -1135,7 +1166,27 @@ static bool vfont_to_curve(Object *ob,
     }
   }
 
-  /* Line-data is now: width of line. */
+  bool is_bold=true;
+  bool is_italics=true;
+  bool is_underline=true;
+  bool is_smallcaps=true;
+  for(int k=selstart;k<=selend;k++)
+  {
+
+    info = &custrinfo[k];
+    is_bold = info->flag & CU_CHINFO_BOLD ? is_bold : false ;
+    is_italics = info->flag & CU_CHINFO_ITALIC ? is_italics : false ; 
+    is_underline = info->flag & CU_CHINFO_UNDERLINE ? is_underline : false ;
+    is_smallcaps = info->flag & CU_CHINFO_SMALLCAPS ? is_smallcaps : false ;  
+  }
+
+    if (ef != NULL && ob != NULL) {
+      ef->select_is_underline=is_underline;
+      ef->select_is_bold=is_bold;
+      ef->select_is_italics=is_italics;
+      ef->select_is_smallcaps=is_smallcaps;
+    }
+  /*TODO: Store the state of the text in one variable using flags*/
 
   if (cu->spacemode != CU_ALIGN_X_LEFT) {
     ct = chartransdata;
