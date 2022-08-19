@@ -93,7 +93,8 @@ void GPU_batch_init_ex(GPUBatch *batch,
  */
 void GPU_batch_copy(GPUBatch *batch_dst, GPUBatch *batch_src);
 
-#define GPU_batch_create(prim, verts, elem) GPU_batch_create_ex(prim, verts, elem, (eGPUBatchFlag)0)
+#define GPU_batch_create(prim, verts, elem) \
+  GPU_batch_create_ex(prim, verts, elem, (eGPUBatchFlag)0)
 #define GPU_batch_init(batch, prim, verts, elem) \
   GPU_batch_init_ex(batch, prim, verts, elem, (eGPUBatchFlag)0)
 

@@ -4199,6 +4199,14 @@ static void rna_def_space_view3d_shading(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Shader AOV Name", "Name of the active Shader AOV");
   RNA_def_property_flag(prop, PROP_HIDDEN);
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+  prop = RNA_def_property(srna, "use_compositor", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", V3D_SHADING_COMPOSITOR);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_boolean_default(prop, false);
+  RNA_def_property_ui_text(
+      prop, "Compositor", "Preview the compositor output inside the viewport");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D | NS_VIEW3D_SHADING, NULL);
 }
 
 static void rna_def_space_view3d_overlay(BlenderRNA *brna)
@@ -5901,7 +5909,7 @@ static void rna_def_space_text(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "font_size", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "lheight");
-  RNA_def_property_range(prop, 8, 32);
+  RNA_def_property_range(prop, 1, 256); /* Large range since Hi-DPI scales down size. */
   RNA_def_property_ui_text(prop, "Font Size", "Font size to use for displaying the text");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TEXT, NULL);
 
@@ -6395,7 +6403,7 @@ static void rna_def_space_console(BlenderRNA *brna)
   /* display */
   prop = RNA_def_property(srna, "font_size", PROP_INT, PROP_NONE); /* copied from text editor */
   RNA_def_property_int_sdna(prop, NULL, "lheight");
-  RNA_def_property_range(prop, 8, 32);
+  RNA_def_property_range(prop, 1, 256); /* Large range since Hi-DPI scales down size. */
   RNA_def_property_ui_text(prop, "Font Size", "Font size to use for displaying the text");
   RNA_def_property_update(prop, 0, "rna_SpaceConsole_rect_update");
 

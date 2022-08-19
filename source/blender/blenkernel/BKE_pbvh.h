@@ -364,10 +364,13 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
                       PBVHAttrReq *attrs,
                       int attrs_num);
 
-void BKE_pbvh_draw_debug_cb(
-    PBVH *pbvh,
-    void (*draw_fn)(void *user_data, const float bmin[3], const float bmax[3], PBVHNodeFlags flag),
-    void *user_data);
+void BKE_pbvh_draw_debug_cb(PBVH *pbvh,
+                            void (*draw_fn)(PBVHNode *node,
+                                            void *user_data,
+                                            const float bmin[3],
+                                            const float bmax[3],
+                                            PBVHNodeFlags flag),
+                            void *user_data);
 
 /* PBVH Access */
 
@@ -547,6 +550,7 @@ typedef struct PBVHVertexIter {
   /* mesh */
   struct MVert *mverts;
   float (*vert_normals)[3];
+  const bool *hide_vert;
   int totvert;
   const int *vert_indices;
   float *vmask;
@@ -607,7 +611,7 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
         else if (vi.mverts) { \
           vi.mvert = &vi.mverts[vi.vert_indices[vi.gx]]; \
           if (vi.respect_hide) { \
-            vi.visible = !(vi.mvert->flag & ME_HIDE); \
+            vi.visible = !(vi.hide_vert && vi.hide_vert[vi.vert_indices[vi.gx]]); \
             if (mode == PBVH_ITER_UNIQUE && !vi.visible) { \
               continue; \
             } \
@@ -681,6 +685,8 @@ void BKE_pbvh_parallel_range_settings(struct TaskParallelSettings *settings,
 
 struct MVert *BKE_pbvh_get_verts(const PBVH *pbvh);
 const float (*BKE_pbvh_get_vert_normals(const PBVH *pbvh))[3];
+const bool *BKE_pbvh_get_vert_hide(const PBVH *pbvh);
+bool *BKE_pbvh_get_vert_hide_for_write(PBVH *pbvh);
 
 PBVHColorBufferNode *BKE_pbvh_node_color_buffer_get(PBVHNode *node);
 void BKE_pbvh_node_color_buffer_free(PBVH *pbvh);
@@ -722,6 +728,7 @@ void BKE_pbvh_vertex_color_get(const PBVH *pbvh, PBVHVertRef vertex, float r_col
 
 void BKE_pbvh_ensure_node_loops(PBVH *pbvh);
 bool BKE_pbvh_draw_cache_invalid(const PBVH *pbvh);
+int BKE_pbvh_debug_draw_gen_get(PBVHNode *node);
 
 #ifdef __cplusplus
 }
