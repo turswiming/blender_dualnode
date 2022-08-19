@@ -114,24 +114,20 @@ BLI_STATIC_ASSERT_ALIGN(CurvesInfos, 16)
 /* Indirect commands structures. */
 
 struct DrawCommand {
-  uint v_count;
-  uint i_count;
-  uint v_first;
-  uint i_first;
-};
-BLI_STATIC_ASSERT_ALIGN(DrawCommand, 16)
-
-struct DrawCommandIndexed {
+  /* TODO(fclem): Rename */
   uint v_count;
   uint i_count;
   uint v_first;
   uint base_index;
-  uint i_first;
+  /* NOTE: base_index is i_first for non-indexed draw-calls. */
+#define _instance_first_array base_index
+  uint i_first; /* TODO(fclem): Rename to instance_first_indexed */
+  /* TODO(fclem): Pass other draw parameters here for shaders to read. */
   uint _pad0;
   uint _pad1;
   uint _pad2;
 };
-BLI_STATIC_ASSERT_ALIGN(DrawCommandIndexed, 16)
+BLI_STATIC_ASSERT_ALIGN(DrawCommand, 16)
 
 struct DispatchCommand {
   uint num_groups_x;
