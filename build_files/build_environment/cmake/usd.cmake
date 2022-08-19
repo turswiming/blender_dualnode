@@ -20,6 +20,7 @@ if(WIN32)
   )
   if(BUILD_MODE STREQUAL Debug)
     list(APPEND USD_PLATFORM_FLAGS -DPXR_USE_DEBUG_PYTHON=ON)
+    list(APPEND USD_PLATFORM_FLAGS -DOPENVDB_LIBRARY=${libdir}/openvdb/lib/openvdb_d.lib)
   endif()
 elseif(APPLE)
   # Workaround USD not linking correctly with static Python library, where it would embed
@@ -112,6 +113,7 @@ add_dependencies(
   external_boost
   external_opensubdiv
   external_python
+  openvdb
 )
 
 # Since USD 21.11 the libraries are prefixed with "usd_", i.e. "libusd_m.a" became "libusd_usd_m.a".
