@@ -8,6 +8,7 @@
 #pragma once
 
 #include "BLI_assert.h"
+#include "BLI_bitmap.h"
 #include "BLI_sys_types.h" /* for bool */
 #include "BLI_utildefines.h"
 
@@ -256,12 +257,15 @@ typedef struct PBVH_GPU_Args {
   const float (*vert_normals)[3];
 
   int face_sets_color_seed, face_sets_color_default;
+  int *face_sets; /* for PBVH_FACES and PBVH_GRIDS */
 
+  struct SubdivCCG *subdiv_ccg;
   const struct DMFlagMat *grid_flag_mats;
   const int *grid_indices;
   struct CCGKey ccg_key;
   CCGElem **grids;
   void **gridfaces;
+  BLI_bitmap **grid_hidden;
 
   int *prim_indicies;
   int totprim;

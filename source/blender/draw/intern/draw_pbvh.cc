@@ -66,6 +66,7 @@ using ushort4 = blender::vec_base<uint16_t, 4>;
 using short3 = blender::vec_base<int16_t, 3>;
 using uchar3 = blender::vec_base<uint8_t, 3>;
 using char3 = blender::vec_base<int8_t, 3>;
+using uchar4 = blender::vec_base<uint8_t, 4>;
 
 struct PBVHVbo {
   uint64_t type;
@@ -148,6 +149,7 @@ struct PBVHBatches {
   GPUIndexBuf *tri_index = nullptr;
   GPUIndexBuf *lines_index = nullptr;
   int tris_count = 0, lines_count = 0;
+  bool smooth = false;  // XXX
 
   int material_index = 0;
 
@@ -232,8 +234,173 @@ struct PBVHBatches {
     return batches.lookup(build_key(attrs, attrs_num));
   }
 
+  void fill_vbo_normal_faces(
+      PBVHVbo &vbo,
+      PBVH_GPU_Args *args,
+      std::function<void(std::function<void(int, int, int, const MLoopTri *)> callback)> foreach,
+      GPUVertBufRaw *access)
+  {
+    float fno[3];
+    short no[3];
+    int last_poly = -1;
+    bool smooth = false;
+
+    foreach ([&](int buffer_i, int tri_i, int vertex_i, const MLoopTri *tri) {
+      const MPoly *mp = args->mpoly + tri->poly;
+
+      if (tri->poly != last_poly) {
+        last_poly = tri->poly;
+
+        if (mp->flag & ME_SMOOTH) {
+          smooth = true;
+          BKE_mesh_calc_poly_normal(mp, args->mloop + mp->loopstart, args->mvert, fno);
+          normal_float_to_short_v3(no, fno);
+        }
+        else {
+          smooth = false;
+        }
+      }
+
+      if (!smooth) {
+        normal_float_to_short_v3(no, args->vert_normals[vertex_i]);
+      }
+
+#if 0
+        no[0] = no[1] = no[2] = 0;
+        no[last_poly % 3] = (1 << 15) - 1;
+#endif
+
+      *static_cast<short3 *>(GPU_vertbuf_raw_step(access)) = no;
+    })
+      ;
+  }
+
+  ATTR_NO_OPT void fill_vbo_grids_smooth(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  {
+  }
+
+  ATTR_NO_OPT void fill_vbo_grids_solid(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  {
+    int gridsize = args->ccg_key.grid_size;
+
+    uint totgrid = args->totprim;
+    uint vert_per_grid = square_i(args->ccg_key.grid_size - 1) * 4;
+    uint vert_count = totgrid * vert_per_grid;
+
+    auto foreach =
+        [&](std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)> func) {
+          for (int i = 0; i < totgrid; i++) {
+            const int grid_index = args->grid_indices[i];
+            CCGElem *grid = args->grids[grid_index];
+
+            for (int y = 0; y < gridsize - 1; y++) {
+              for (int x = 0; x < gridsize - 1; x++) {
+                CCGElem *elems[4] = {
+                    CCG_grid_elem(&args->ccg_key, grid, x, y),
+                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y),
+                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y + 1),
+                    CCG_grid_elem(&args->ccg_key, grid, x, y + 1),
+                };
+
+                func(x, y, grid_index, elems, 0);
+                func(x + 1, y, grid_index, elems, 1);
+                func(x + 1, y + 1, grid_index, elems, 2);
+                func(x, y + 1, grid_index, elems, 3);
+              }
+            }
+          }
+        };
+
+    int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
+    void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
+
+    printf("%p:%p: vbo.vert_buf: %p\n", args->node, this, vbo.vert_buf);
+
+    if (existing_data == NULL || existing_num != vert_count) {
+      /* Allocate buffer if not allocated yet or size changed. */
+      GPU_vertbuf_data_alloc(vbo.vert_buf, vert_count);
+    }
+
+    void *gpu_data = GPU_vertbuf_get_data(vbo.vert_buf);
+    GPUVertBufRaw access;
+    GPU_vertbuf_attr_get_raw_data(vbo.vert_buf, 0, &access);
+
+    if (!gpu_data || !args->totprim) {
+      printf("%s: eek!\n", __func__);
+    }
+
+    //        [&](std::function<void(int x, int y, CCGElem *grid, CCGElem *elems[4], int i)> func)
+    //        {
+    if (vbo.type == CD_PBVH_CO_TYPE) {
+      foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
+        float *co = CCG_elem_co(&args->ccg_key, elems[i]);
+
+        *static_cast<float3 *>(GPU_vertbuf_raw_step(&access)) = co;
+      })
+        ;
+    }
+
+    if (vbo.type == CD_PBVH_NO_TYPE) {
+      foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
+        float3 no(0.0f, 0.0f, 0.0f);
+
+        for (int j = 0; j < 4; j++) {
+          no += CCG_elem_no(&args->ccg_key, elems[j]);
+        }
+
+        normalize_v3(no);
+        short sno[3];
+
+        normal_float_to_short_v3(sno, no);
+
+        *static_cast<short3 *>(GPU_vertbuf_raw_step(&access)) = sno;
+      })
+        ;
+    }
+
+    if (vbo.type == CD_PBVH_MASK_TYPE) {
+      foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
+        float *mask = CCG_elem_mask(&args->ccg_key, elems[i]);
+
+        *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = mask ? (uchar)(*mask * 255.0f) :
+                                                                      255;
+      })
+        ;
+    }
+
+    if (vbo.type == CD_PBVH_FSET_TYPE) {
+      int *sculpt_face_sets = args->face_sets;
+
+      foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
+        uchar face_set_color[4] = {UCHAR_MAX, UCHAR_MAX, UCHAR_MAX, UCHAR_MAX};
+        const int face_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, grid_index);
+        const int fset = abs(sculpt_face_sets[face_index]);
+
+        /* Skip for the default color Face Set to render it white. */
+        if (fset != args->face_sets_color_default) {
+          BKE_paint_face_set_overlay_color_get(fset, args->face_sets_color_seed, face_set_color);
+        }
+
+        *static_cast<uchar4 *>(GPU_vertbuf_raw_step(&access)) = face_set_color;
+      })
+        ;
+    }
+  }
+
+  ATTR_NO_OPT void fill_vbo_grids(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  {
+    if (smooth) {
+      fill_vbo_grids_smooth(vbo, args);
+    }
+    else {
+      fill_vbo_grids_solid(vbo, args);
+    }
+  }
+
   ATTR_NO_OPT void fill_vbo_faces(PBVHVbo &vbo, PBVH_GPU_Args *args)
   {
+    int totvert = args->totprim * 3;
+
     auto foreach =
         [&](std::function<void(int buffer_i, int tri_i, int vertex_i, const MLoopTri *tri)> func) {
           int buffer_i = 0;
@@ -254,9 +421,9 @@ struct PBVHBatches {
 
     printf("%p:%p: vbo.vert_buf: %p\n", args->node, this, vbo.vert_buf);
 
-    if (existing_data == NULL || existing_num != args->totprim * 3) {
+    if (existing_data == NULL || existing_num != totvert) {
       /* Allocate buffer if not allocated yet or size changed. */
-      GPU_vertbuf_data_alloc(vbo.vert_buf, args->totprim * 3);
+      GPU_vertbuf_data_alloc(vbo.vert_buf, totvert);
     }
 
     void *gpu_data = GPU_vertbuf_get_data(vbo.vert_buf);
@@ -274,39 +441,11 @@ struct PBVHBatches {
         ;
     }
     else if (vbo.type == CD_PBVH_NO_TYPE) {
-      float fno[3];
-      short no[3];
-      int last_poly = -1;
-      bool smooth = false;
-
-      foreach ([&](int buffer_i, int tri_i, int vertex_i, const MLoopTri *tri) {
-        const MPoly *mp = args->mpoly + tri->poly;
-
-        if (tri->poly != last_poly) {
-          last_poly = tri->poly;
-
-          if (mp->flag & ME_SMOOTH) {
-            smooth = true;
-            BKE_mesh_calc_poly_normal(mp, args->mloop + mp->loopstart, args->mvert, fno);
-            normal_float_to_short_v3(no, fno);
-          }
-          else {
-            smooth = false;
-          }
-        }
-
-        if (!smooth) {
-          normal_float_to_short_v3(no, args->vert_normals[vertex_i]);
-        }
-
-#if 0
-        no[0] = no[1] = no[2] = 0;
-        no[last_poly % 3] = (1 << 15) - 1;
-#endif
-
-        *static_cast<short3 *>(GPU_vertbuf_raw_step(&access)) = no;
-      })
-        ;
+      switch (args->pbvh_type) {
+        case PBVH_FACES:
+          fill_vbo_normal_faces(vbo, args, foreach, &access);
+          break;
+      }
     }
     else if (vbo.type == CD_PBVH_MASK_TYPE) {
       float *mask = static_cast<float *>(CustomData_get_layer(args->vdata, CD_PAINT_MASK));
@@ -365,13 +504,6 @@ struct PBVHBatches {
         *static_cast<ushort4 *>(GPU_vertbuf_raw_step(&access)) = color;
       })
         ;
-    }
-  }
-
-  void fill_vbo_grids(PBVHVbo &vbo, PBVH_GPU_Args *args)
-  {
-    if (!ELEM(vbo.type, CD_PBVH_CO_TYPE, CD_PBVH_NO_TYPE, CD_PBVH_FSET_TYPE, CD_PBVH_MASK_TYPE)) {
-      return; /* Failed. */
     }
   }
 
@@ -515,14 +647,161 @@ struct PBVHBatches {
     vbos.append(vbo);
   }
 
+  ATTR_NO_OPT void update_pre(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  {
+  }
+
+  ATTR_NO_OPT void create_index_grids(PBVH_GPU_Args *args)
+  {
+    GPUIndexBufBuilder elb, elb_lines;
+    // GPUIndexBufBuilder elb_fast, elb_lines_fast;
+
+    CCGKey *key = &args->ccg_key;
+    int totgrid = args->totprim;
+
+    uint gridsize = args->ccg_key.grid_size;
+    // uint vert_per_grid = smooth ? key->grid_area : (square_i(gridsize - 1) * 4);
+    // uint vert_count = totgrid * vert_per_grid;
+
+    uint visible_quad_len = BKE_pbvh_count_grid_quads(
+        (BLI_bitmap **)args->grid_hidden, args->grid_indices, totgrid, key->grid_size);
+
+    GPU_indexbuf_init(&elb, GPU_PRIM_TRIS, 2 * visible_quad_len, INT_MAX);
+    // GPU_indexbuf_init(&elb_fast, GPU_PRIM_TRIS, 2 * totgrid, INT_MAX);
+    GPU_indexbuf_init(
+        &elb_lines, GPU_PRIM_LINES, 2 * totgrid * gridsize * (gridsize - 1), INT_MAX);
+    // GPU_indexbuf_init(&elb_lines_fast, GPU_PRIM_LINES, 4 * totgrid, INT_MAX);
+
+    if (smooth) {
+      uint offset = 0;
+      const uint grid_vert_len = gridsize * gridsize;
+      for (int i = 0; i < totgrid; i++, offset += grid_vert_len) {
+        uint v0, v1, v2, v3;
+        bool grid_visible = false;
+
+        BLI_bitmap *gh = args->grid_hidden[args->grid_indices[i]];
+
+        for (int j = 0; j < gridsize - 1; j++) {
+          for (int k = 0; k < gridsize - 1; k++) {
+            /* Skip hidden grid face */
+            if (gh && paint_is_grid_face_hidden(gh, gridsize, k, j)) {
+              continue;
+            }
+            /* Indices in a Clockwise QUAD disposition. */
+            v0 = offset + j * gridsize + k;
+            v1 = v0 + 1;
+            v2 = v1 + gridsize;
+            v3 = v2 - 1;
+
+            GPU_indexbuf_add_tri_verts(&elb, v0, v2, v1);
+            GPU_indexbuf_add_tri_verts(&elb, v0, v3, v2);
+
+            GPU_indexbuf_add_line_verts(&elb_lines, v0, v1);
+            GPU_indexbuf_add_line_verts(&elb_lines, v0, v3);
+
+            if (j + 2 == gridsize) {
+              GPU_indexbuf_add_line_verts(&elb_lines, v2, v3);
+            }
+            grid_visible = true;
+          }
+
+          if (grid_visible) {
+            GPU_indexbuf_add_line_verts(&elb_lines, v1, v2);
+          }
+        }
+
+        if (grid_visible) {
+          /* Grid corners */
+          v0 = offset;
+          v1 = offset + gridsize - 1;
+          v2 = offset + grid_vert_len - 1;
+          v3 = offset + grid_vert_len - gridsize;
+
+          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v2, v1);
+          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v3, v2);
+
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v0, v1);
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v1, v2);
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v2, v3);
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v3, v0);
+        }
+      }
+    }
+    else {
+      uint offset = 0;
+      const uint grid_vert_len = square_uint(gridsize - 1) * 4;
+      for (int i = 0; i < totgrid; i++, offset += grid_vert_len) {
+        bool grid_visible = false;
+        BLI_bitmap *gh = args->grid_hidden[args->grid_indices[i]];
+
+        uint v0, v1, v2, v3;
+        for (int j = 0; j < gridsize - 1; j++) {
+          for (int k = 0; k < gridsize - 1; k++) {
+            /* Skip hidden grid face */
+            if (gh && paint_is_grid_face_hidden(gh, gridsize, k, j)) {
+              continue;
+            }
+            /* VBO data are in a Clockwise QUAD disposition. */
+            v0 = offset + (j * (gridsize - 1) + k) * 4;
+            v1 = v0 + 1;
+            v2 = v0 + 2;
+            v3 = v0 + 3;
+
+            GPU_indexbuf_add_tri_verts(&elb, v0, v2, v1);
+            GPU_indexbuf_add_tri_verts(&elb, v0, v3, v2);
+
+            GPU_indexbuf_add_line_verts(&elb_lines, v0, v1);
+            GPU_indexbuf_add_line_verts(&elb_lines, v0, v3);
+
+            if (j + 2 == gridsize) {
+              GPU_indexbuf_add_line_verts(&elb_lines, v2, v3);
+            }
+            grid_visible = true;
+          }
+
+          if (grid_visible) {
+            GPU_indexbuf_add_line_verts(&elb_lines, v1, v2);
+          }
+        }
+
+        if (grid_visible) {
+          /* Grid corners */
+          v0 = offset;
+          v1 = offset + (gridsize - 1) * 4 - 3;
+          v2 = offset + grid_vert_len - 2;
+          v3 = offset + grid_vert_len - (gridsize - 1) * 4 + 3;
+
+          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v2, v1);
+          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v3, v2);
+
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v0, v1);
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v1, v2);
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v2, v3);
+          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v3, v0);
+        }
+      }
+    }
+
+    tri_index = GPU_indexbuf_build(&elb);
+    lines_index = GPU_indexbuf_build(&elb_lines);
+  }
+
+  ATTR_NO_OPT void create_index(PBVH_GPU_Args *args)
+  {
+    switch (args->pbvh_type) {
+      case PBVH_FACES:
+        /* tri_index should be nullptr in this case. */
+        break;
+      case PBVH_GRIDS:
+        create_index_grids(args);
+        break;
+    }
+  }
+
   ATTR_NO_OPT void create_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
   {
     if (!tri_index) {
-      switch (args->pbvh_type) {
-        case PBVH_FACES:
-          /* tri_index should be nullptr in this case. */
-          break;
-      }
+      create_index(args);
     }
 
     PBVHBatch batch;

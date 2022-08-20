@@ -545,12 +545,14 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
 {
   memset((void *)args, 0, sizeof(*args));
 
+  args->pbvh_type = pbvh->header.type;
   args->mesh_verts_num = pbvh->totvert;
   args->mesh_grids_num = pbvh->totgrid;
   args->node = node;
 
   BKE_pbvh_node_num_verts(pbvh, node, NULL, &args->node_verts_num);
 
+  args->grid_hidden = pbvh->grid_hidden;
   args->face_sets_color_default = pbvh->face_sets_color_default;
   args->face_sets_color_seed = pbvh->face_sets_color_seed;
   args->mvert = pbvh->verts;
@@ -571,12 +573,16 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
       args->prim_indicies = node->prim_indices;
       break;
     case PBVH_GRIDS:
-      args->mesh_faces_num = pbvh->mesh->totpoly;
       args->vdata = pbvh->vdata;
       args->ldata = pbvh->ldata;
       args->pdata = pbvh->pdata;
       args->ccg_key = pbvh->gridkey;
       args->me = pbvh->mesh;
+      args->totprim = node->totprim;
+      args->grid_indices = node->prim_indices;
+      args->subdiv_ccg = pbvh->subdiv_ccg;
+      args->face_sets = pbvh->face_sets;
+
       args->mesh_grids_num = pbvh->totgrid;
       args->grids = pbvh->grids;
       args->gridfaces = pbvh->gridfaces;
@@ -584,8 +590,6 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
       args->vert_normals = pbvh->vert_normals;
       break;
     case PBVH_BMESH:
-      args->mesh_faces_num = pbvh->header.bm->totface;
-
       args->bm = pbvh->header.bm;
       args->vdata = &args->bm->vdata;
       args->ldata = &args->bm->ldata;
