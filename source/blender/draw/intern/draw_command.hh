@@ -75,8 +75,6 @@ enum class Type : uint8_t {
  * stream.
  */
 struct Header {
-  /** Next header index. */
-  uint next;
   /** Command index in command heap of this type. */
   uint command_index;
   /** Command type. */
@@ -323,6 +321,12 @@ BLI_STATIC_ASSERT(sizeof(Undetermined) <= 24, "One of the command type is too la
  *
  * We sort by Command::MultiDraw index using a prefix sum on CPU.
  * Then we sort the MultiDrawUnit inside each MultiDraw by their drw_resource_id on GPU.
+ *
+ * For the sake of the example consider that:
+ * - Command1/2 are rendering with different shaders.
+ * - GPUBatch1/2 are two different mesh data block.
+ * - Each column is a MultiDrawUnit.
+ *
  * +---------------------------------------------------------------+------------------------------+
  * |                       CPU Timeline                            |          Granularity         |
  * +---------------------------------------------------------------+------------------------------+
@@ -338,17 +342,12 @@ BLI_STATIC_ASSERT(sizeof(Undetermined) <= 24, "One of the command type is too la
  * |   4   |   2   |   5   |   1   |   4   |   x   |  6+7  |   x   |  < DrawCommand (compacted)   |
  * +---------------------------------------------------------------+------------------------------+
  *
- * For the sake of the example consider that:
- * - Command1/2 are rendering with different shaders.
- * - GPUBatch1/2 are two different mesh data block.
- * - Each column is a MultiDrawUnit.
- *
  * In the example above, we will issue 4 multi draw indirect calls.
  *
  * Note that commands with Non-consecutive resources ID cannot be compacted together.
  * Note that visibility test can split a resource id sequence.
  *
- * As you can see, even if command are not executed in order, but are always in increasing order
+ * As you can see, even if commands are not executed in order, but are always in increasing order
  * inside a MDI command. This is because we want to keep drw_resource_id in increasing order to
  * be able to batch consecutive commands together.
  */

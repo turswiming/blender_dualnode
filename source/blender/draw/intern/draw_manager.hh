@@ -26,8 +26,6 @@ class Manager {
   /* TODO(fclem): Why doesn't this work? */
   // void submit(const PassCommon &pass);
   void submit(const Pass &pass);
-  void submit(const PassSimple &pass);
-  template<int64_t len> void submit(const PassImmutable<len> &pass);
 
   /**
    * Will turn the command stream into a debug string.
@@ -35,9 +33,6 @@ class Manager {
   /* TODO(fclem): Why doesn't this work? */
   // std::string serialize(const PassCommon &pass);
   std::string serialize(const Pass &pass);
-  std::string serialize(const PassSub &pass);
-  std::string serialize(const PassSimple &pass);
-  template<int64_t len> std::string serialize(const PassImmutable<len> &pass);
 };
 
 }  // namespace blender::draw
