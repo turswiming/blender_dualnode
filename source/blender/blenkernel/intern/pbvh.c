@@ -25,6 +25,8 @@
 #include "BKE_pbvh.h"
 #include "BKE_subdiv_ccg.h"
 
+#include "DRW_engine.h"
+
 #include "PIL_time.h"
 
 #include "GPU_buffers.h"
@@ -725,10 +727,7 @@ void BKE_pbvh_free(PBVH *pbvh)
 
     if (node->flag & PBVH_Leaf) {
       if (node->draw_batches) {
-        GPU_pbvh_node_free(node->draw_batches);
-      }
-      if (node->draw_buffers) {
-        GPU_pbvh_buffers_free(node->draw_buffers);
+        DRW_pbvh_node_free(node->draw_batches);
       }
       if (node->vert_indices) {
         MEM_freeN((void *)node->vert_indices);
@@ -774,10 +773,6 @@ void BKE_pbvh_free(PBVH *pbvh)
   }
 
   MEM_SAFE_FREE(pbvh->vert_bitmap);
-
-  if (pbvh->vbo_id) {
-    GPU_pbvh_free_format(pbvh->vbo_id);
-  }
 
   MEM_freeN(pbvh);
 }
@@ -1324,13 +1319,6 @@ void pbvh_update_BB_redraw(PBVH *pbvh, PBVHNode **nodes, int totnode, int flag)
   BLI_task_parallel_range(0, totnode, &data, pbvh_update_BB_redraw_task_cb, &settings);
 }
 
-static int pbvh_get_buffers_update_flags(PBVH *UNUSED(pbvh))
-{
-  int update_flags = GPU_PBVH_BUFFERS_SHOW_VCOL | GPU_PBVH_BUFFERS_SHOW_MASK |
-                     GPU_PBVH_BUFFERS_SHOW_SCULPT_FACE_SETS;
-  return update_flags;
-}
-
 bool BKE_pbvh_get_color_layer(const Mesh *me, CustomDataLayer **r_layer, eAttrDomain *r_attr)
 {
   CustomDataLayer *layer = BKE_id_attributes_active_color_get((ID *)me);
@@ -1370,83 +1358,17 @@ static void pbvh_update_draw_buffer_cb(void *__restrict userdata,
     PBVH_GPU_Args args;
     pbvh_draw_args(pbvh, &args, node);
 
-    node->draw_batches = GPU_pbvh_node_create(&args);
-
-    switch (pbvh->header.type) {
-      case PBVH_GRIDS: {
-        bool smooth = node->totprim > 0 ?
-                          pbvh->grid_flag_mats[node->prim_indices[0]].flag & ME_SMOOTH :
-                          false;
-
-        node->draw_buffers = GPU_pbvh_grid_buffers_build(node->totprim, pbvh->grid_hidden, smooth);
-        break;
-      }
-      case PBVH_FACES:
-        node->draw_buffers = GPU_pbvh_mesh_buffers_build(
-            pbvh->mesh,
-            pbvh->looptri,
-            CustomData_get_layer(pbvh->pdata, CD_SCULPT_FACE_SETS),
-            node->prim_indices,
-            node->totprim);
-        break;
-      case PBVH_BMESH:
-        node->draw_buffers = GPU_pbvh_bmesh_buffers_build(pbvh->flags &
-                                                          PBVH_DYNTOPO_SMOOTH_SHADING);
-        break;
-    }
+    node->draw_batches = DRW_pbvh_node_create(&args);
   }
 
   if (node->flag & PBVH_UpdateDrawBuffers) {
     node->debug_draw_gen++;
 
-    const int update_flags = pbvh_get_buffers_update_flags(pbvh);
-
     if (node->draw_batches) {
       PBVH_GPU_Args args;
 
       pbvh_draw_args(pbvh, &args, node);
-      GPU_pbvh_node_update(node->draw_batches, &args);
-    }
-
-    switch (pbvh->header.type) {
-      case PBVH_GRIDS:
-        GPU_pbvh_grid_buffers_update(pbvh->vbo_id,
-                                     node->draw_buffers,
-                                     pbvh->subdiv_ccg,
-                                     pbvh->grids,
-                                     pbvh->grid_flag_mats,
-                                     node->prim_indices,
-                                     node->totprim,
-                                     pbvh->face_sets,
-                                     pbvh->face_sets_color_seed,
-                                     pbvh->face_sets_color_default,
-                                     &pbvh->gridkey,
-                                     update_flags);
-        break;
-      case PBVH_FACES: {
-        /* Pass vertices separately because they may be not be the same as the mesh's vertices,
-         * and pass normals separately because they are managed by the PBVH. */
-        GPU_pbvh_mesh_buffers_update(pbvh->vbo_id,
-                                     node->draw_buffers,
-                                     pbvh->mesh,
-                                     pbvh->verts,
-                                     CustomData_get_layer(pbvh->vdata, CD_PAINT_MASK),
-                                     CustomData_get_layer(pbvh->pdata, CD_SCULPT_FACE_SETS),
-                                     pbvh->face_sets_color_seed,
-                                     pbvh->face_sets_color_default,
-                                     update_flags,
-                                     pbvh->vert_normals);
-        break;
-      }
-      case PBVH_BMESH:
-        GPU_pbvh_bmesh_buffers_update(pbvh->vbo_id,
-                                      node->draw_buffers,
-                                      pbvh->header.bm,
-                                      node->bm_faces,
-                                      node->bm_unique_verts,
-                                      node->bm_other_verts,
-                                      update_flags);
-        break;
+      DRW_pbvh_node_update(node->draw_batches, &args);
     }
   }
 }
@@ -1454,72 +1376,14 @@ static void pbvh_update_draw_buffer_cb(void *__restrict userdata,
 void pbvh_free_draw_buffers(PBVH *pbvh, PBVHNode *node)
 {
   if (node->draw_batches) {
-    GPU_pbvh_node_free(node->draw_batches);
+    DRW_pbvh_node_free(node->draw_batches);
     node->draw_batches = NULL;
-  }
-
-  if (node->draw_buffers) {
-    pbvh->draw_cache_invalid = true;
-
-    GPU_pbvh_buffers_free(node->draw_buffers);
-    node->draw_buffers = NULL;
-  }
-}
-
-static void pbvh_check_draw_layout(PBVH *pbvh)
-{
-  const CustomData *vdata;
-  const CustomData *ldata;
-
-  if (!pbvh->vbo_id) {
-    pbvh->vbo_id = GPU_pbvh_make_format();
-  }
-
-  switch (pbvh->header.type) {
-    case PBVH_BMESH:
-      if (!pbvh->header.bm) {
-        /* BMesh hasn't been created yet */
-        return;
-      }
-
-      vdata = &pbvh->header.bm->vdata;
-      ldata = &pbvh->header.bm->ldata;
-      break;
-    case PBVH_FACES:
-      vdata = pbvh->vdata;
-      ldata = pbvh->ldata;
-      break;
-    case PBVH_GRIDS:
-      ldata = vdata = NULL;
-      break;
-  }
-
-  /* Rebuild all draw buffers if attribute layout changed.
-   *
-   * NOTE: The optimization where we only send active attributes
-   * to the GPU in workbench mode is disabled due to bugs
-   * (there's no guarantee there isn't another EEVEE viewport which would
-   *  free the draw buffers and corrupt the draw cache).
-   */
-  if (GPU_pbvh_attribute_names_update(pbvh->header.type, pbvh->vbo_id, vdata, ldata, false)) {
-    /* attribute layout changed; force rebuild */
-    for (int i = 0; i < pbvh->totnode; i++) {
-      PBVHNode *node = pbvh->nodes + i;
-
-      if (node->flag & PBVH_Leaf) {
-        node->flag |= PBVH_RebuildDrawBuffers | PBVH_UpdateDrawBuffers | PBVH_UpdateRedraw;
-      }
-    }
   }
 }
 
 static void pbvh_update_draw_buffers(PBVH *pbvh, PBVHNode **nodes, int totnode, int update_flag)
 {
   const CustomData *vdata;
-
-  if (!pbvh->vbo_id) {
-    pbvh->vbo_id = GPU_pbvh_make_format();
-  }
 
   switch (pbvh->header.type) {
     case PBVH_BMESH:
@@ -1546,14 +1410,11 @@ static void pbvh_update_draw_buffers(PBVH *pbvh, PBVHNode **nodes, int totnode, 
       if (node->flag & PBVH_RebuildDrawBuffers) {
         pbvh_free_draw_buffers(pbvh, node);
       }
-      else if ((node->flag & PBVH_UpdateDrawBuffers) && node->draw_buffers) {
-        if (pbvh->header.type == PBVH_GRIDS) {
-          GPU_pbvh_grid_buffers_update_free(
-              node->draw_buffers, pbvh->grid_flag_mats, node->prim_indices);
-        }
-        else if (pbvh->header.type == PBVH_BMESH) {
-          GPU_pbvh_bmesh_buffers_update_free(node->draw_buffers);
-        }
+      else if ((node->flag & PBVH_UpdateDrawBuffers) && node->draw_batches) {
+        PBVH_GPU_Args args;
+
+        pbvh_draw_args(pbvh, &args, node);
+        DRW_pbvh_update_pre(node->draw_batches, &args);
       }
     }
   }
@@ -1573,10 +1434,9 @@ static void pbvh_update_draw_buffers(PBVH *pbvh, PBVHNode **nodes, int totnode, 
 
     if (node->flag & PBVH_UpdateDrawBuffers) {
       /* Flush buffers uses OpenGL, so not in parallel. */
-      GPU_pbvh_buffers_update_flush(node->draw_buffers);
 
       if (node->draw_batches) {
-        GPU_pbvh_node_gpu_flush(node->draw_batches);
+        DRW_pbvh_node_gpu_flush(node->draw_batches);
       }
     }
 
@@ -2939,7 +2799,6 @@ ATTR_NO_OPT void BKE_pbvh_draw_cb(PBVH *pbvh,
                                   PBVHFrustumPlanes *update_frustum,
                                   PBVHFrustumPlanes *draw_frustum,
                                   void (*draw_fn)(void *user_data,
-                                                  GPU_PBVH_Buffers *buffers,
                                                   PBVHBatches *batches,
                                                   PBVH_GPU_Args *args),
                                   void *user_data,
@@ -2969,8 +2828,6 @@ ATTR_NO_OPT void BKE_pbvh_draw_cb(PBVH *pbvh,
     update_flag = PBVH_RebuildDrawBuffers | PBVH_UpdateDrawBuffers;
   }
 
-  pbvh_check_draw_layout(pbvh);
-
   /* Update draw buffers. */
   if (totnode != 0 && (update_flag & (PBVH_RebuildDrawBuffers | PBVH_UpdateDrawBuffers))) {
     pbvh_update_draw_buffers(pbvh, nodes, totnode, update_flag);
@@ -2988,7 +2845,7 @@ ATTR_NO_OPT void BKE_pbvh_draw_cb(PBVH *pbvh,
     if (!(node->flag & PBVH_FullyHidden)) {
       pbvh_draw_args(pbvh, &args, node);
 
-      draw_fn(user_data, node->draw_buffers, node->draw_batches, &args);
+      draw_fn(user_data, node->draw_batches, &args);
     }
   }
 

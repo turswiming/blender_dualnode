@@ -7,6 +7,7 @@
 
 #include "draw_attributes.h"
 #include "draw_manager.h"
+#include "draw_pbvh.h"
 
 #include "BKE_curve.h"
 #include "BKE_duplilist.h"
@@ -1163,28 +1164,22 @@ static float sculpt_debug_colors[9][4] = {
 };
 
 ATTR_NO_OPT static void sculpt_draw_cb(DRWSculptCallbackData *scd,
-                                       GPU_PBVH_Buffers *buffers,
                                        PBVHBatches *batches,
                                        PBVH_GPU_Args *pbvh_draw_args)
 {
-  if (!buffers) {
-    return;
-  }
-
-  /* Meh... use_mask is a bit misleading here. */
-  if (scd->use_mask && !GPU_pbvh_buffers_has_overlays(buffers)) {
+  if (!batches) {
     return;
   }
 
   //GPUBatch *geom2 = GPU_pbvh_buffers_batch_get(buffers, scd->fast_mode, scd->use_wire);
   int primcount;
-  GPUBatch *geom = GPU_pbvh_tris_get(
+  GPUBatch *geom = DRW_pbvh_tris_get(
       batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount);
 
   short index = 0;
 
   if (scd->use_mats) {
-    index = GPU_pbvh_buffers_material_index_get(buffers);
+    index = drw_pbvh_material_index_get(batches);
     if (index >= scd->num_shading_groups) {
       index = 0;
     }
@@ -1309,7 +1304,7 @@ ATTR_NO_OPT static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
       update_only_visible,
       &update_frustum,
       &draw_frustum,
-      (void (*)(void *, GPU_PBVH_Buffers *, PBVHBatches *, PBVH_GPU_Args *))sculpt_draw_cb,
+      (void (*)(void *, PBVHBatches *, PBVH_GPU_Args *))sculpt_draw_cb,
       scd,
       scd->use_mats,
       scd->attrs,

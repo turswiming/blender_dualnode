@@ -1,3 +1,5 @@
+#if 0
+
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2005 Blender Foundation. All rights reserved. */
 
@@ -35,51 +37,6 @@ struct SubdivCCG;
 struct CustomData;
 struct GPUBatch;
 
-enum {
-  CD_PBVH_CO_TYPE = CD_NUMTYPES,
-  CD_PBVH_NO_TYPE = CD_NUMTYPES + 1,
-  CD_PBVH_FSET_TYPE = CD_NUMTYPES + 2,
-  CD_PBVH_MASK_TYPE = CD_NUMTYPES + 3
-};
-
-typedef struct PBVHBatches PBVHBatches;
-
-typedef struct PBVH_GPU_Args {
-  PBVHType pbvh_type;
-
-  struct BMesh *bm;
-  const struct Mesh *me;
-  const struct MVert *mvert;
-  const struct MLoop *mloop;
-  const struct MPoly *mpoly;
-  int mesh_verts_num, mesh_faces_num, mesh_grids_num;
-  struct CustomData *vdata, *ldata, *pdata;
-  const float (*vert_normals)[3];
-
-  int face_sets_color_seed, face_sets_color_default;
-
-  const struct DMFlagMat *grid_flag_mats;
-  const int *grid_indices;
-  struct CCGKey ccg_key;
-  CCGElem **grids;
-  void **gridfaces;
-
-  int *prim_indicies;
-  int totprim;
-
-  int node_verts_num;
-
-  const struct GSet *bm_unique_vert, *bm_other_verts, *bm_faces;
-  const struct MLoopTri *mlooptri;
-  PBVHNode *node;
-} PBVH_GPU_Args;
-
-typedef struct PBVHGPUFormat PBVHGPUFormat;
-
-/**
- * Buffers for drawing from PBVH grids.
- */
-typedef struct GPU_PBVH_Buffers GPU_PBVH_Buffers;
 
 /**
  * Build must be called once before using the other functions,
@@ -213,4 +170,5 @@ void GPU_pbvh_node_gpu_flush(PBVHBatches *batches);
 
 #ifdef __cplusplus
 }
+#endif
 #endif

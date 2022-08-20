@@ -18,6 +18,7 @@
 #include "BKE_pbvh.h"
 
 #include "GPU_buffers.h"
+#include "DRW_engine.h"
 
 #include "bmesh.h"
 #include "pbvh_intern.h"
@@ -347,8 +348,8 @@ static void pbvh_bmesh_node_split(PBVH *pbvh, const BBC *bbc_array, int node_ind
   n->bm_other_verts = NULL;
   n->layer_disp = NULL;
 
-  if (n->draw_buffers) {
-    pbvh_free_draw_buffers(pbvh, n);
+  if (n->draw_batches) {
+    DRW_pbvh_node_free(n->draw_batches);
   }
   n->flag &= ~PBVH_Leaf;
 

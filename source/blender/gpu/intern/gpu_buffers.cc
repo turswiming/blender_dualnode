@@ -1,3 +1,4 @@
+#if 0
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2005 Blender Foundation. All rights reserved. */
 
@@ -2036,3 +2037,4 @@ void GPU_pbvh_buffers_free(GPU_PBVH_Buffers *buffers)
 }
 
 /** \} */
+#endif

@@ -7,7 +7,11 @@
 
 #pragma once
 
+#include "BLI_assert.h"
 #include "BLI_sys_types.h" /* for bool */
+#include "BLI_utildefines.h"
+
+#include "BKE_ccg.h"
 
 #include "DNA_object_enums.h"
 
@@ -27,9 +31,16 @@ struct GPUVertFormat;
 struct CustomDataLayer;
 struct CustomData;
 struct GPUViewport;
+struct PBVHAttrReq;
+struct GPUBatch;
 struct ID;
 struct Main;
 struct Object;
+struct PBVH_GPU_Args;
+struct PBVHBatches;
+struct PBVHNode;
+struct CCGElem;
+struct DMFlagMat;
 struct Render;
 struct RenderEngine;
 struct RenderEngineType;
@@ -227,6 +238,60 @@ void DRW_cdlayer_attr_aliases_add(struct GPUVertFormat *format,
                                   const struct CustomDataLayer *cl,
                                   bool is_active_render,
                                   bool is_active_layer);
+
+/* PBVH */
+
+typedef struct PBVHBatches PBVHBatches;
+
+typedef struct PBVH_GPU_Args {
+  int pbvh_type;
+
+  struct BMesh *bm;
+  const struct Mesh *me;
+  const struct MVert *mvert;
+  const struct MLoop *mloop;
+  const struct MPoly *mpoly;
+  int mesh_verts_num, mesh_faces_num, mesh_grids_num;
+  struct CustomData *vdata, *ldata, *pdata;
+  const float (*vert_normals)[3];
+
+  int face_sets_color_seed, face_sets_color_default;
+
+  const struct DMFlagMat *grid_flag_mats;
+  const int *grid_indices;
+  struct CCGKey ccg_key;
+  CCGElem **grids;
+  void **gridfaces;
+
+  int *prim_indicies;
+  int totprim;
+
+  int node_verts_num;
+
+  const struct GSet *bm_unique_vert, *bm_other_verts, *bm_faces;
+  const struct MLoopTri *mlooptri;
+  struct PBVHNode *node;
+} PBVH_GPU_Args;
+
+typedef struct PBVHGPUFormat PBVHGPUFormat;
+
+void DRW_pbvh_node_update(struct PBVHBatches *batches, struct PBVH_GPU_Args *args);
+void DRW_pbvh_update_pre(struct PBVHBatches *batches, struct PBVH_GPU_Args *args);
+
+void DRW_pbvh_node_gpu_flush(struct PBVHBatches *batches);
+struct PBVHBatches *DRW_pbvh_node_create(struct PBVH_GPU_Args *args);
+void DRW_pbvh_node_free(struct PBVHBatches *batches);
+struct GPUBatch *DRW_pbvh_tris_get(struct PBVHBatches *batches,
+                                   struct PBVHAttrReq *attrs,
+                                   int attrs_num,
+                                   struct PBVH_GPU_Args *args,
+                                   int *r_prim_count);
+struct GPUBatch *DRW_pbvh_lines_get(struct PBVHBatches *batches,
+                                    struct PBVHAttrReq *attrs,
+                                    int attrs_num,
+                                    struct PBVH_GPU_Args *args,
+                                    int *r_prim_count);
+
 #ifdef __cplusplus
 }
 #endif

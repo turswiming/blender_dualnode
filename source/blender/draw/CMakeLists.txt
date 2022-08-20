@@ -92,6 +92,7 @@ set(SRC
   intern/draw_manager_shader.c
   intern/draw_manager_text.c
   intern/draw_manager_texture.c
+  intern/draw_pbvh.cc
   intern/draw_select_buffer.c
   intern/draw_shader.cc
   intern/draw_texture_pool.cc
@@ -222,6 +223,7 @@ set(SRC
   intern/draw_manager_profiling.h
   intern/draw_manager_testing.h
   intern/draw_manager_text.h
+  intern/draw_pbvh.h
   intern/draw_shader.h
   intern/draw_shader_shared.h
   intern/draw_subdivision.h

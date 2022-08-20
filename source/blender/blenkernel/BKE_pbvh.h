@@ -28,7 +28,6 @@ struct CCGElem;
 struct CCGKey;
 struct CustomData;
 struct DMFlagMat;
-struct GPU_PBVH_Buffers;
 struct IsectRayPrecalc;
 struct MLoop;
 struct MLoopTri;
@@ -356,7 +355,6 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
                       PBVHFrustumPlanes *update_frustum,
                       PBVHFrustumPlanes *draw_frustum,
                       void (*draw_fn)(void *user_data,
-                                      struct GPU_PBVH_Buffers *buffers,
                                       struct PBVHBatches *batches,
                                       struct PBVH_GPU_Args *args),
                       void *user_data,
