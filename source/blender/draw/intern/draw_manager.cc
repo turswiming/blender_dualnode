@@ -9,15 +9,16 @@
 
 namespace blender::draw {
 
-void Manager::submit(const Pass &pass)
+void Manager::submit(const PassSimple &pass)
 {
   command::RecordingState state;
   pass.submit(state);
 }
 
-std::string Manager::serialize(const Pass &pass)
+void Manager::submit(const PassMain &pass)
 {
-  return pass.serialize();
+  command::RecordingState state;
+  pass.submit(state);
 }
 
 }  // namespace blender::draw

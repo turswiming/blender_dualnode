@@ -326,10 +326,13 @@ std::string PushConstant::serialize() const
 
 std::string Draw::serialize() const
 {
-  return std::string(".draw(inst_len=") + std::to_string(instance_len) +
-         ", vert_len=" + std::to_string(vertex_len) +
-         ", vert_first=" + std::to_string(vertex_first) +
-         ", res_id=" + std::to_string(handle.resource_index()) + ")";
+  std::string inst_len = (instance_len == (uint)-1) ? "from_batch" : std::to_string(instance_len);
+  std::string vert_len = (vertex_len == (uint)-1) ? "from_batch" : std::to_string(vertex_len);
+  std::string vert_first = (vertex_first == (uint)-1) ? "from_batch" :
+                                                        std::to_string(vertex_first);
+  return std::string(".draw(inst_len=") + inst_len + ", vert_len=" + vert_len +
+         ", vert_first=" + vert_first + ", res_id=" + std::to_string(handle.resource_index()) +
+         ")";
 }
 
 std::string DrawIndirect::serialize() const
@@ -371,7 +374,7 @@ std::string Clear::serialize() const
     }
   }
   if (eGPUFrameBufferBits(clear_channels) & GPU_STENCIL_BIT) {
-    ss << "stencil=" << std::bitset<8>(stencil) << ")";
+    ss << "stencil=0b" << std::bitset<8>(stencil) << ")";
   }
   return std::string(".clear(") + ss.str() + ")";
 }
@@ -385,9 +388,8 @@ std::string StateSet::serialize() const
 std::string StencilSet::serialize() const
 {
   std::stringstream ss;
-  ss << ".stencil_set(write_mask=" << std::bitset<8>(write_mask)
-     << ", compare_mask=" << std::bitset<8>(compare_mask)
-     << ", reference=" << std::bitset<8>(reference);
+  ss << ".stencil_set(write_mask=0b" << std::bitset<8>(write_mask) << ", compare_mask=0b"
+     << std::bitset<8>(compare_mask) << ", reference=0b" << std::bitset<8>(reference);
   return ss.str();
 }
 

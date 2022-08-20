@@ -23,16 +23,8 @@ class Manager {
    * Submit a pass for drawing. All resource reference will be dereferenced and commands will be
    * sent to GPU.
    */
-  /* TODO(fclem): Why doesn't this work? */
-  // void submit(const PassCommon &pass);
-  void submit(const Pass &pass);
-
-  /**
-   * Will turn the command stream into a debug string.
-   */
-  /* TODO(fclem): Why doesn't this work? */
-  // std::string serialize(const PassCommon &pass);
-  std::string serialize(const Pass &pass);
+  void submit(const PassSimple &pass);
+  void submit(const PassMain &pass);
 };
 
 }  // namespace blender::draw

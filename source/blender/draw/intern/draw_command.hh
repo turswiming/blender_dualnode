@@ -56,6 +56,7 @@ enum class Type : uint8_t {
    */
   None = 0,
 
+  /** Commands stored as Undetermined in regular command buffer. */
   Barrier,
   Clear,
   Dispatch,
@@ -67,6 +68,10 @@ enum class Type : uint8_t {
   ShaderBind,
   StateSet,
   StencilSet,
+
+  /** Special commands stored in separate buffers. */
+  SubPass,
+  MultiDraw,
 };
 
 /**
@@ -75,12 +80,10 @@ enum class Type : uint8_t {
  * stream.
  */
 struct Header {
-  /** Command index in command heap of this type. */
-  uint command_index;
   /** Command type. */
   Type type;
-  /** Special hack as we store a SubPass as 2 commands. */
-  bool is_subpass;
+  /** Command index in command heap of this type. */
+  uint command_index;
 };
 
 struct ShaderBind {
@@ -103,6 +106,8 @@ struct ResourceBind {
   } type;
 
   union {
+    /** TODO: Use draw::Texture|StorageBuffer|UniformBuffer as resources as they will give more
+     * debug info. */
     GPUUniformBuf *uniform_buf;
     GPUUniformBuf **uniform_buf_ref;
     GPUStorageBuf *storage_buf;
@@ -218,8 +223,8 @@ struct PushConstant {
 struct Draw {
   GPUBatch *batch;
   uint instance_len;
-  uint vertex_first;
   uint vertex_len;
+  uint vertex_first;
   ResourceHandle handle;
 
   void execute(RecordingState &state) const;
@@ -291,18 +296,93 @@ struct StencilSet {
   std::string serialize() const;
 };
 
-union Undetermined {
-  ShaderBind shader_bind;
-  ResourceBind resource_bind;
-  PushConstant push_constant;
-  Draw draw;
-  DrawIndirect draw_indirect;
-  Dispatch dispatch;
-  DispatchIndirect dispatch_indirect;
-  Barrier barrier;
-  Clear clear;
-  StateSet state_set;
-  StencilSet stencil_set;
+struct Undetermined {
+  union {
+    ShaderBind shader_bind;
+    ResourceBind resource_bind;
+    PushConstant push_constant;
+    Draw draw;
+    DrawIndirect draw_indirect;
+    Dispatch dispatch;
+    DispatchIndirect dispatch_indirect;
+    Barrier barrier;
+    Clear clear;
+    StateSet state_set;
+    StencilSet stencil_set;
+  };
+
+  void execute(const command::Type &type, command::RecordingState &state) const
+  {
+    switch (type) {
+      case command::Type::ShaderBind:
+        shader_bind.execute(state);
+        break;
+      case command::Type::ResourceBind:
+        resource_bind.execute();
+        break;
+      case command::Type::PushConstant:
+        push_constant.execute(state);
+        break;
+      case command::Type::Draw:
+        draw.execute(state);
+        break;
+      case command::Type::DrawIndirect:
+        draw_indirect.execute(state);
+        break;
+      case command::Type::Dispatch:
+        dispatch.execute(state);
+        break;
+      case command::Type::DispatchIndirect:
+        dispatch_indirect.execute(state);
+        break;
+      case command::Type::Barrier:
+        barrier.execute();
+        break;
+      case command::Type::Clear:
+        clear.execute();
+        break;
+      case command::Type::StateSet:
+        state_set.execute(state);
+        break;
+      case command::Type::StencilSet:
+        stencil_set.execute();
+        break;
+      default:
+        /* Skip Type::None. */
+        break;
+    }
+  }
+
+  std::string serialize(const command::Type &type) const
+  {
+    switch (type) {
+      case command::Type::ShaderBind:
+        return shader_bind.serialize();
+      case command::Type::ResourceBind:
+        return resource_bind.serialize();
+      case command::Type::PushConstant:
+        return push_constant.serialize();
+      case command::Type::Draw:
+        return draw.serialize();
+      case command::Type::DrawIndirect:
+        return draw_indirect.serialize();
+      case command::Type::Dispatch:
+        return dispatch.serialize();
+      case command::Type::DispatchIndirect:
+        return dispatch_indirect.serialize();
+      case command::Type::Barrier:
+        return barrier.serialize();
+      case command::Type::Clear:
+        return clear.serialize();
+      case command::Type::StateSet:
+        return state_set.serialize();
+      case command::Type::StencilSet:
+        return stencil_set.serialize();
+      default:
+        /* Skip Type::None. */
+        return "";
+    }
+  }
 };
 
 /** Try to keep the command size as low as possible for performance. */

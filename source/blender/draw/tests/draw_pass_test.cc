@@ -10,8 +10,6 @@ namespace blender::draw {
 
 static void test_draw_pass_all_commands()
 {
-  Manager drw;
-
   Texture tex;
   tex.ensure_2d(GPU_RGBA16, int2(1));
 
@@ -24,7 +22,7 @@ static void test_draw_pass_all_commands()
   float alpha = 0.0f;
   int3 dispatch_size(1);
 
-  Pass pass = {"test.all_commands"};
+  PassSimple pass = {"test.all_commands"};
   pass.init();
   pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_STENCIL);
   pass.clear_color_depth_stencil(float4(0.25f, 0.5f, 100.0f, -2000.0f), 0.5f, 0xF0);
@@ -40,7 +38,7 @@ static void test_draw_pass_all_commands()
   pass.bind("missing_ssbo", &ssbo);           /* Should not crash. */
   pass.push_constant("alpha", alpha);
   pass.push_constant("alpha", &alpha);
-  pass.draw(GPU_PRIM_TRIS, 1, 3);
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   /* Should not crash even if shader is not a compute. This is because we only serialize. */
   /* TODO(fclem): Use real compute shader. */
@@ -53,10 +51,31 @@ static void test_draw_pass_all_commands()
   alpha = 1.0f;
   dispatch_size = int3(2);
 
-  std::string result = drw.serialize(pass);
-  StringRefNull expected = "";
+  std::string result = pass.serialize();
+  std::stringstream expected;
+  expected << "PassSimple(test.all_commands)" << std::endl;
+  expected << ".state_set(6)" << std::endl;
+  expected << ".clear(color=(0.25, 0.5, 100, -2000), depth=0.5, stencil=0b11110000))" << std::endl;
+  expected << ".stencil_set(write_mask=0b10000000, compare_mask=0b00001111, reference=0b10001111"
+           << std::endl;
+  expected << ".shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << ".bind_texture(0)" << std::endl;
+  expected << ".bind_texture_ref(0)" << std::endl;
+  expected << ".bind_image(-1)" << std::endl;
+  expected << ".bind_image_ref(-1)" << std::endl;
+  expected << ".bind_uniform_buf(-1)" << std::endl;
+  expected << ".bind_uniform_buf_ref(-1)" << std::endl;
+  expected << ".bind_storage_buf(-1)" << std::endl;
+  expected << ".bind_storage_buf_ref(-1)" << std::endl;
+  expected << ".push_constant(2, data=0)" << std::endl;
+  expected << ".push_constant(2, data=1)" << std::endl;
+  expected << ".draw(inst_len=1, vert_len=3, vert_first=from_batch, res_id=0)" << std::endl;
+  expected << ".shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << ".dispatch(1, 1, 1)" << std::endl;
+  expected << ".dispatch_ref(2, 2, 2)" << std::endl;
+  expected << ".barrier(4)" << std::endl;
 
-  EXPECT_EQ(result, expected);
+  EXPECT_EQ(result, expected.str());
 }
 DRAW_TEST(draw_pass_all_commands)
 
