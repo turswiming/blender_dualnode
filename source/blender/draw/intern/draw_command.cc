@@ -311,7 +311,7 @@ std::string PushConstant::serialize() const
             ss << *reinterpret_cast<const float4x4 *>(&float4_value);
             break;
           case Type::FloatReference:
-            ss << float4_ref[i];
+            ss << *float4x4_ref;
             break;
         }
         break;

@@ -77,6 +77,8 @@ std::string PassSimple::serialize() const
   ss << "PassSimple(" << debug_name << ")" << std::endl;
   for (const command::Header &header : headers_) {
     switch (header.type) {
+      case Type::None:
+        break;
       case Type::SubPass:
         ss << sub_passes_[header.command_index].serialize() << std::endl;
         break;
@@ -93,7 +95,13 @@ std::string PassSimple::Sub::serialize() const
   std::stringstream ss;
   ss << ".sub(" << debug_name << ")" << std::endl;
   for (const command::Header &header : headers_) {
-    ss << "  " << commands_[header.command_index].serialize(header.type) << std::endl;
+    switch (header.type) {
+      case Type::None:
+        break;
+      default:
+        ss << "  " << commands_[header.command_index].serialize(header.type) << std::endl;
+        break;
+    }
   }
   return ss.str();
 }
@@ -104,6 +112,8 @@ std::string PassMain::serialize() const
   ss << "PassMain(" << debug_name << ")" << std::endl;
   for (const command::Header &header : headers_) {
     switch (header.type) {
+      case Type::None:
+        break;
       case Type::SubPass:
         ss << sub_passes_[header.command_index].serialize() << std::endl;
         break;
@@ -124,6 +134,8 @@ std::string PassMain::Sub::serialize() const
   ss << ".sub(" << debug_name << ")" << std::endl;
   for (const command::Header &header : headers_) {
     switch (header.type) {
+      case Type::None:
+        break;
       case Type::MultiDraw:
         /* TODO */
         break;

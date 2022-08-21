@@ -38,6 +38,7 @@ static void test_draw_pass_all_commands()
   pass.bind("missing_ssbo", &ssbo);           /* Should not crash. */
   pass.push_constant("alpha", alpha);
   pass.push_constant("alpha", &alpha);
+  pass.push_constant("ModelViewProjectionMatrix", float4x4::identity());
   pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   /* Should not crash even if shader is not a compute. This is because we only serialize. */
@@ -69,6 +70,13 @@ static void test_draw_pass_all_commands()
   expected << ".bind_storage_buf_ref(-1)" << std::endl;
   expected << ".push_constant(2, data=0)" << std::endl;
   expected << ".push_constant(2, data=1)" << std::endl;
+  expected << ".push_constant(0, data=(" << std::endl;
+  expected << "(   1.000000,    0.000000,    0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    1.000000,    0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.000000,    1.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << ")" << std::endl;
+  expected << ")" << std::endl;
   expected << ".draw(inst_len=1, vert_len=3, vert_first=from_batch, res_id=0)" << std::endl;
   expected << ".shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
   expected << ".dispatch(1, 1, 1)" << std::endl;

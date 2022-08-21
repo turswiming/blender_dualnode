@@ -187,7 +187,7 @@ class PassBase {
    * Reference versions are to be used when the resource might change between the time it is
    * referenced and the time it is dereferenced for drawing.
    *
-   * IMPORTANT: Will keep a reference to  the data and dereference it upon drawing. Make sure data
+   * IMPORTANT: Will keep a reference to the data and dereference it upon drawing. Make sure data
    * still alive until pass submission.
    *
    * NOTE: bool reference version is expected to take bool1 reference which is aliased to int.
