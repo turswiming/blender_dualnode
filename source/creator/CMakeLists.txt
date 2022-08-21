@@ -1337,14 +1337,16 @@ if(WIN32 AND WITH_BOOST)
     python${_PYTHON_VERSION_NO_DOTS} numpy${_PYTHON_VERSION_NO_DOTS}
   )
   foreach(component ${BOOST_COMPONENTS})
-    windows_install_shared_manifest(
-      FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_POSTFIX}.dll
-      RELEASE
-    )
-    windows_install_shared_manifest(
-      FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_DEBUG_POSTFIX}.dll
-      DEBUG
-    )
+    if(EXISTS ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_POSTFIX}.dll)
+      windows_install_shared_manifest(
+        FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_POSTFIX}.dll
+        RELEASE
+      )
+      windows_install_shared_manifest(
+        FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_DEBUG_POSTFIX}.dll
+        DEBUG
+      )
+    endif()
   endforeach()
 endif()
 
@@ -1388,8 +1390,9 @@ endif()
 
 # -----------------------------------------------------------------------------
 # Windows shared library manifest
-windows_generate_shared_manifest()
-
+if(WIN32)
+  windows_generate_shared_manifest()
+endif()
 
 # -----------------------------------------------------------------------------
 # Post-install script
