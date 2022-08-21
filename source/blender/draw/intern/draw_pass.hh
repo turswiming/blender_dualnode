@@ -258,7 +258,11 @@ class PassSimple : public detail::PassBase {
     std::string serialize() const;
 
    private:
-    Sub(const char *name) : PassBase(name){};
+    Sub(const char *name, GPUShader *shader) : PassBase(name)
+    {
+      this->init();
+      this->shader_ = shader;
+    }
 
     void submit(command::RecordingState &state) const;
   };
@@ -320,8 +324,12 @@ class PassMain : public detail::PassBase {
    private:
     command::MultiDrawBuffer &multi_draws_;
 
-    Sub(const char *name, command::MultiDrawBuffer &multi_draws)
-        : PassBase(name), multi_draws_(multi_draws){};
+    Sub(const char *name, GPUShader *shader, command::MultiDrawBuffer &multi_draws)
+        : PassBase(name), multi_draws_(multi_draws)
+    {
+      this->init();
+      this->shader_ = shader;
+    }
 
     void draw(GPUBatch *batch,
               uint instance_len = -1,
@@ -376,7 +384,7 @@ class PassMain : public detail::PassBase {
 
 inline PassSimple::Sub &PassSimple::sub(const char *name)
 {
-  int64_t index = sub_passes_.append_and_get_index(PassSimple::Sub(name));
+  int64_t index = sub_passes_.append_and_get_index(PassSimple::Sub(name, shader_));
   headers_.append({command::Type::SubPass, static_cast<uint>(index)});
   return sub_passes_[index];
 }
@@ -389,7 +397,7 @@ inline PassSimple::Sub &PassSimple::sub(const char *name)
 
 inline PassMain::Sub &PassMain::sub(const char *name)
 {
-  int64_t index = sub_passes_.append_and_get_index(PassMain::Sub(name, multi_draws_));
+  int64_t index = sub_passes_.append_and_get_index(PassMain::Sub(name, shader_, multi_draws_));
   headers_.append({command::Type::SubPass, static_cast<uint>(index)});
   return sub_passes_[index];
 }
@@ -579,12 +587,12 @@ inline int PassBase::push_constant_offset(const char *name)
 
 inline void PassBase::bind(const char *name, GPUStorageBuf *buffer)
 {
-  bind(GPU_shader_get_uniform_block_binding(shader_, name), buffer);
+  bind(GPU_shader_get_ssbo(shader_, name), buffer);
 }
 
 inline void PassBase::bind(const char *name, GPUUniformBuf *buffer)
 {
-  bind(GPU_shader_get_ssbo(shader_, name), buffer);
+  bind(GPU_shader_get_uniform_block_binding(shader_, name), buffer);
 }
 
 inline void PassBase::bind(const char *name, GPUTexture *texture, eGPUSamplerState state)
@@ -619,12 +627,12 @@ inline void PassBase::bind(int slot, draw::Image *image)
 
 inline void PassBase::bind(const char *name, GPUStorageBuf **buffer)
 {
-  bind(GPU_shader_get_uniform_block_binding(shader_, name), buffer);
+  bind(GPU_shader_get_ssbo(shader_, name), buffer);
 }
 
 inline void PassBase::bind(const char *name, GPUUniformBuf **buffer)
 {
-  bind(GPU_shader_get_ssbo(shader_, name), buffer);
+  bind(GPU_shader_get_uniform_block_binding(shader_, name), buffer);
 }
 
 inline void PassBase::bind(const char *name, GPUTexture **texture, eGPUSamplerState state)

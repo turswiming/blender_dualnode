@@ -87,4 +87,46 @@ static void test_draw_pass_all_commands()
 }
 DRAW_TEST(draw_pass_all_commands)
 
+static void test_draw_pass_sub_ordering()
+{
+  PassSimple pass = {"test.sub_ordering"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA));
+  pass.push_constant("test_pass", 1);
+
+  PassSimple::Sub &sub1 = pass.sub("Sub1");
+  sub1.push_constant("test_sub1", 11);
+
+  PassSimple::Sub &sub2 = pass.sub("Sub2");
+  sub2.push_constant("test_sub2", 21);
+
+  /* Will execute after both sub. */
+  pass.push_constant("test_pass", 2);
+
+  /* Will execute after sub1. */
+  sub2.push_constant("test_sub2", 22);
+
+  /* Will execute before sub2. */
+  sub1.push_constant("test_sub1", 12);
+
+  /* Will execute before end of pass. */
+  sub2.push_constant("test_sub2", 23);
+
+  std::string result = pass.serialize();
+  std::stringstream expected;
+  expected << "PassSimple(test.sub_ordering)" << std::endl;
+  expected << ".shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << ".push_constant(-1, data=1)" << std::endl;
+  expected << ".sub(Sub1)" << std::endl;
+  expected << "  .push_constant(-1, data=11)" << std::endl;
+  expected << ".sub(Sub2)" << std::endl;
+  expected << "  .push_constant(-1, data=21)" << std::endl;
+  expected << "  .push_constant(-1, data=22)" << std::endl;
+  expected << "  .push_constant(-1, data=23)" << std::endl;
+  expected << ".push_constant(-1, data=2)" << std::endl;
+
+  EXPECT_EQ(result, expected.str());
+}
+DRAW_TEST(draw_pass_sub_ordering)
+
 }  // namespace blender::draw

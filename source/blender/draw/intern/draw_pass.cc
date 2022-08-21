@@ -5,6 +5,8 @@
  * \ingroup draw
  */
 
+#include "GPU_debug.h"
+
 #include "draw_pass.hh"
 
 namespace blender::draw {
@@ -15,6 +17,8 @@ namespace blender::draw {
 
 void PassSimple::submit(command::RecordingState &state) const
 {
+  GPU_debug_group_begin(debug_name);
+
   for (const command::Header &header : headers_) {
     switch (header.type) {
       case Type::SubPass:
@@ -25,17 +29,25 @@ void PassSimple::submit(command::RecordingState &state) const
         break;
     }
   }
+
+  GPU_debug_group_end();
 }
 
 void PassSimple::Sub::submit(command::RecordingState &state) const
 {
+  GPU_debug_group_begin(debug_name);
+
   for (const command::Header &header : headers_) {
     commands_[header.command_index].execute(header.type, state);
   }
+
+  GPU_debug_group_end();
 }
 
 void PassMain::submit(command::RecordingState &state) const
 {
+  GPU_debug_group_begin(debug_name);
+
   for (const command::Header &header : headers_) {
     switch (header.type) {
       case Type::SubPass:
@@ -49,10 +61,14 @@ void PassMain::submit(command::RecordingState &state) const
         break;
     }
   }
+
+  GPU_debug_group_end();
 }
 
 void PassMain::Sub::submit(command::RecordingState &state) const
 {
+  GPU_debug_group_begin(debug_name);
+
   for (const command::Header &header : headers_) {
     switch (header.type) {
       case Type::MultiDraw:
@@ -63,6 +79,8 @@ void PassMain::Sub::submit(command::RecordingState &state) const
         break;
     }
   }
+
+  GPU_debug_group_end();
 }
 
 /** \} */
@@ -80,7 +98,7 @@ std::string PassSimple::serialize() const
       case Type::None:
         break;
       case Type::SubPass:
-        ss << sub_passes_[header.command_index].serialize() << std::endl;
+        ss << sub_passes_[header.command_index].serialize();
         break;
       default:
         ss << commands_[header.command_index].serialize(header.type) << std::endl;
@@ -115,7 +133,7 @@ std::string PassMain::serialize() const
       case Type::None:
         break;
       case Type::SubPass:
-        ss << sub_passes_[header.command_index].serialize() << std::endl;
+        ss << sub_passes_[header.command_index].serialize();
         break;
       case Type::MultiDraw:
         /* TODO */
