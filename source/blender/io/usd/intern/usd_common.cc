@@ -11,6 +11,11 @@ namespace blender::io::usd {
 
 void ensure_usd_plugin_path_registered()
 {
+  /* Windows copies the files already to the right location, no hinting
+   * is required. */
+#ifdef WIN32
+  return;
+#endif
   static bool plugin_path_registered = false;
   if (plugin_path_registered) {
     return;

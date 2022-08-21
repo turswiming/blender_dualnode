@@ -382,8 +382,14 @@ if(WITH_PYTHON)
     PATTERN "__pycache__" EXCLUDE
     PATTERN "${ADDON_EXCLUDE_CONDITIONAL}" EXCLUDE
     PATTERN "${FREESTYLE_EXCLUDE_CONDITIONAL}" EXCLUDE
+    PATTERN "*usercustomize.py" EXCLUDE
   )
-
+  if(WIN32)
+    install(
+      FILES ${CMAKE_SOURCE_DIR}/release/scripts/usercustomize.py
+      DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+    )
+  endif()
   unset(ADDON_EXCLUDE_CONDITIONAL)
   unset(FREESTYLE_EXCLUDE_CONDITIONAL)
 endif()
@@ -792,22 +798,22 @@ elseif(WIN32)
 
   set(BLENDER_TEXT_FILES_DESTINATION ".")
 
-  install(
+  windows_install_shared_manifest(
     FILES ${LIBDIR}/epoxy/bin/epoxy-0.dll
-    DESTINATION "."
+    ALL
   )
 
   if(WITH_OPENMP AND MSVC_CLANG)
-    install(
+    windows_install_shared_manifest(
       FILES ${CLANG_OPENMP_DLL}
-      DESTINATION "."
+      ALL
     )
   endif()
 
   if(WITH_FFTW3)
-    install(
+    windows_install_shared_manifest(
       FILES ${LIBDIR}/fftw3/lib/libfftw3-3.dll
-      DESTINATION "."
+      ALL
     )
   endif()
   if(MSVC_ASAN)
@@ -817,34 +823,30 @@ elseif(WIN32)
     if(NOT EXISTS "${ASAN_DLL}")
       message(FATAL_ERROR "Asan is enabled, but the ASAN runtime is not detected, this is an optional component during the MSVC install, please install it")
     endif()
-    install(
+    windows_install_shared_manifest(
       FILES ${ASAN_DLL}
-      DESTINATION "."
-      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      RELEASE
     )
-    install(
+    windows_install_shared_manifest(
       FILES ${ASAN_DEBUG_DLL}
-      DESTINATION "."
-      CONFIGURATIONS Debug
+      DEBUG
     )
     unset(ASAN_DLL)
     unset(ASAN_DEBUG_DLL)
   endif()
 
   if(WITH_GMP)
-    install(
+    windows_install_shared_manifest(
       FILES ${LIBDIR}/gmp/lib/libgmp-10.dll
-      DESTINATION "."
+      ALL
     )
-    install(
+    windows_install_shared_manifest(
       FILES ${LIBDIR}/gmp/lib/libgmpxx.dll
-      DESTINATION "."
-      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      RELEASE
     )
-    install(
+    windows_install_shared_manifest(
       FILES ${LIBDIR}/gmp/lib/libgmpxx_d.dll
-      DESTINATION "."
-      CONFIGURATIONS Debug
+      DEBUG
     )
   endif()
 
@@ -860,15 +862,13 @@ elseif(WIN32)
   endif()
 
   if(WITH_OPENVDB)
-      install(
+      windows_install_shared_manifest(
         FILES ${LIBDIR}/openvdb/bin/openvdb.dll
-        DESTINATION "."
-        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+        RELEASE
       )
-      install(
+      windows_install_shared_manifest(
         FILES ${LIBDIR}/openvdb/bin/openvdb_d.dll
-        DESTINATION "."
-        CONFIGURATIONS Debug
+        DEBUG
       )
 
       # This will not exist for 3.3 and earlier lib folders
@@ -892,18 +892,16 @@ elseif(WIN32)
     string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 
     if(NOT CMAKE_COMPILER_IS_GNUCC)
-      install(
+      windows_install_shared_manifest(
         FILES ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/bin/python${_PYTHON_VERSION_NO_DOTS}.dll
               ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/bin/python3.dll
-        DESTINATION "."
-        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+        RELEASE
       )
 
-      install(
+      windows_install_shared_manifest(
         FILES ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/bin/python${_PYTHON_VERSION_NO_DOTS}_d.dll
               ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/bin/python3_d.dll
-        DESTINATION "."
-        CONFIGURATIONS Debug
+        DEBUG
       )
     endif()
 
@@ -931,7 +929,7 @@ elseif(WIN32)
         PATTERN ".svn" EXCLUDE
         PATTERN "__pycache__" EXCLUDE           # * any cache *
         PATTERN "*.pyc" EXCLUDE                 # * any cache *
-        PATTERN "*.pyo" EXCLUDE                 # * any cache *)
+        PATTERN "*.pyo" EXCLUDE                 # * any cache *
       )
 
       install(
@@ -1004,7 +1002,6 @@ elseif(WIN32)
       endif()
     endif()
 
-    unset(_PYTHON_VERSION_NO_DOTS)
   endif()
 
   if(WITH_CODEC_FFMPEG)
@@ -1012,7 +1009,7 @@ elseif(WIN32)
     # check both 5.0 and fallback to 4.4 to ease the transition
     # between versions.
     if(EXISTS "${LIBDIR}/ffmpeg/lib/avcodec-59.dll")
-      install(
+      windows_install_shared_manifest(
         FILES
           ${LIBDIR}/ffmpeg/lib/avcodec-59.dll
           ${LIBDIR}/ffmpeg/lib/avformat-59.dll
@@ -1020,10 +1017,10 @@ elseif(WIN32)
           ${LIBDIR}/ffmpeg/lib/avutil-57.dll
           ${LIBDIR}/ffmpeg/lib/swscale-6.dll
           ${LIBDIR}/ffmpeg/lib/swresample-4.dll
-        DESTINATION "."
+        ALL
       )
     else()
-      install(
+      windows_install_shared_manifest(
         FILES
           ${LIBDIR}/ffmpeg/lib/avcodec-58.dll
           ${LIBDIR}/ffmpeg/lib/avformat-58.dll
@@ -1031,61 +1028,57 @@ elseif(WIN32)
           ${LIBDIR}/ffmpeg/lib/avutil-56.dll
           ${LIBDIR}/ffmpeg/lib/swscale-5.dll
           ${LIBDIR}/ffmpeg/lib/swresample-3.dll
-        DESTINATION "."
+        ALL
       )
     endif()
   endif()
   if(WITH_TBB)
-    install(
+    windows_install_shared_manifest(
       FILES
         ${LIBDIR}/tbb/bin/tbb.dll
-      DESTINATION "."
-      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      RELEASE
     )
-    install(
+    windows_install_shared_manifest(
       FILES
         ${LIBDIR}/tbb/bin/tbb_debug.dll
-      DESTINATION "."
-      CONFIGURATIONS Debug
+      DEBUG
     )
   endif()
   if(WITH_TBB_MALLOC_PROXY)
-    install(
+    windows_install_shared_manifest(
       FILES
         ${LIBDIR}/tbb/bin/tbbmalloc.dll
         ${LIBDIR}/tbb/bin/tbbmalloc_proxy.dll
-      DESTINATION "."
-      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      RELEASE
     )
-    install(
+    windows_install_shared_manifest(
       FILES
         ${LIBDIR}/tbb/bin/tbbmalloc_debug.dll
         ${LIBDIR}/tbb/bin/tbbmalloc_proxy_debug.dll
-      DESTINATION "."
-      CONFIGURATIONS Debug
+      DEBUG
     )
     list(APPEND LIB ${TBB_MALLOC_LIBRARIES})
   endif()
 
   if(WITH_CODEC_SNDFILE)
-    install(
+    windows_install_shared_manifest(
       FILES ${LIBDIR}/sndfile/lib/libsndfile-1.dll
-      DESTINATION "."
+      ALL
     )
   endif()
 
   if(WITH_OPENAL)
-    install(
+    windows_install_shared_manifest(
       FILES
         ${LIBDIR}/openal/lib/OpenAL32.dll
-      DESTINATION "."
+      ALL
     )
   endif()
 
   if(WITH_SDL)
-    install(
+    windows_install_shared_manifest(
       FILES ${LIBDIR}/sdl/lib/SDL2.dll
-      DESTINATION "."
+      ALL
     )
   endif()
 
@@ -1308,49 +1301,51 @@ endif()
 if(WITH_USD)
   add_definitions(-DWITH_USD)
   blender_include_dirs(../blender/io/usd)
-  install(DIRECTORY
-    ${USD_LIBRARY_DIR}/usd
-    DESTINATION "${TARGETDIR_VER}/datafiles"
-  )
-
+  # On windows the usd library site in ./blender.shared copy the files
+  # relative to the location of the USD dll.
+  if(WIN32)
+    install(DIRECTORY
+      ${USD_LIBRARY_DIR}/usd
+      DESTINATION "./blender.shared"
+    )
+  else()
+    install(DIRECTORY
+      ${USD_LIBRARY_DIR}/usd
+      DESTINATION "${TARGETDIR_VER}/datafiles"
+    )
+  endif()
   if(WIN32)
     # If this file exists we are building against a 3.4 library folder
     # that needs these dll's installed.
     if(EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
-      install(FILES
+      windows_install_shared_manifest(FILES
         ${LIBDIR}/usd/lib/usd_usd_ms.dll
-        DESTINATION "."
-        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+        RELEASE
       )
-      install(FILES
+      windows_install_shared_manifest(FILES
         ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
-        DESTINATION "."
-        CONFIGURATIONS Debug
+        DEBUG
       )
     endif()
   endif()
 endif()
 
 if(WIN32 AND WITH_BOOST)
-  install(DIRECTORY
-    ${LIBDIR}/boost/lib/
-    DESTINATION "."
-    CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
-    PATTERN "*-gyd-*" EXCLUDE
-    PATTERN "*.lib" EXCLUDE
-    PATTERN "*.pdb" EXCLUDE
-    PATTERN "cmake" EXCLUDE
+  set(BOOST_COMPONENTS atomic chrono date_time filesystem
+    iostreams locale program_options regex
+    serialization system thread wave wserialization
+    python${_PYTHON_VERSION_NO_DOTS} numpy${_PYTHON_VERSION_NO_DOTS}
   )
-  install(DIRECTORY
-    ${LIBDIR}/boost/lib/
-    DESTINATION "."
-    CONFIGURATIONS Debug
-    PATTERN "*mt-x64*" EXCLUDE
-    PATTERN "*.lib" EXCLUDE
-    PATTERN "*.pdb" EXCLUDE
-    PATTERN "cmake" EXCLUDE
-
-  )
+  foreach(component ${BOOST_COMPONENTS})
+    windows_install_shared_manifest(
+      FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_POSTFIX}.dll
+      RELEASE
+    )
+    windows_install_shared_manifest(
+      FILES ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_${component}-${BOOST_DEBUG_POSTFIX}.dll
+      DEBUG
+    )
+  endforeach()
 endif()
 
 # vcpkg substitutes our libs with theirs, which will cause issues when you
@@ -1390,6 +1385,11 @@ if(WIN32 AND NOT WITH_PYTHON_MODULE)
       VS_USER_PROPS "blender.Cpp.user.props"
   )
 endif()
+
+# -----------------------------------------------------------------------------
+# Windows shared library manifest
+windows_generate_shared_manifest()
+
 
 # -----------------------------------------------------------------------------
 # Post-install script

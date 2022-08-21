@@ -31,6 +31,9 @@ function(add_blender_test testname)
   set_tests_properties(${testname} PROPERTIES ENVIRONMENT
     LSAN_OPTIONS=exitcode=0:$ENV{LSAN_OPTIONS}
   )
+  if(WIN32)
+    set_tests_properties(${testname} PROPERTIES ENVIRONMENT "PATH=$<TARGET_FILE_DIR:blender>/blender.shared/;$ENV{PATH}")
+  endif()
 endfunction()
 
 # Run Python script outside Blender.
@@ -47,6 +50,9 @@ function(add_python_test testname testscript)
   set_tests_properties(${testname} PROPERTIES ENVIRONMENT
     LSAN_OPTIONS=exitcode=0:$ENV{LSAN_OPTIONS}
   )
+  if(WIN32)
+    set_tests_properties(${testname} PROPERTIES ENVIRONMENT "PATH=$<TARGET_FILE_DIR:blender>/blender.shared/;$ENV{PATH}")
+  endif()
 endfunction()
 
 # ------------------------------------------------------------------------------
