@@ -14,7 +14,7 @@ GPU_SHADER_CREATE_INFO(eevee_shared)
 GPU_SHADER_CREATE_INFO(eevee_sampling_data)
     .define("EEVEE_SAMPLING_DATA")
     .additional_info("eevee_shared")
-    .storage_buf(14, Qualifier::READ, "SamplingData", "sampling_buf");
+    .storage_buf(6, Qualifier::READ, "SamplingData", "sampling_buf");
 
 GPU_SHADER_CREATE_INFO(eevee_utility_texture).sampler(8, ImageType::FLOAT_2D_ARRAY, "utility_tx");
 
@@ -80,7 +80,7 @@ GPU_SHADER_CREATE_INFO(eevee_aov_out)
     .define("MAT_AOV_SUPPORT")
     .image_array_out(5, Qualifier::WRITE, GPU_RGBA16F, "aov_color_img")
     .image_array_out(6, Qualifier::WRITE, GPU_R16F, "aov_value_img")
-    .storage_buf(7, Qualifier::READ, "AOVsInfoData", "aov_buf");
+    .storage_buf(5, Qualifier::READ, "AOVsInfoData", "aov_buf");
 
 GPU_SHADER_CREATE_INFO(eevee_surf_deferred)
     .vertex_out(eevee_surf_iface)

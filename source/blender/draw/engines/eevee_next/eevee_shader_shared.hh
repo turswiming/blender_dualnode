@@ -12,6 +12,8 @@
 #  include "BLI_memory_utils.hh"
 #  include "DRW_gpu_wrapper.hh"
 
+#  include "draw_manager.hh"
+
 #  include "eevee_defines.hh"
 
 #  include "GPU_shader_shared.h"
@@ -19,6 +21,8 @@
 namespace blender::eevee {
 
 using draw::Framebuffer;
+using draw::PassMain;
+using draw::PassSimple;
 using draw::SwapChain;
 using draw::Texture;
 using draw::TextureFromPool;
