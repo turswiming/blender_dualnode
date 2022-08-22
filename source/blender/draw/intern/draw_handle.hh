@@ -18,10 +18,10 @@
  * the origin.
  */
 
-#include "BKE_duplilist.h"
-#include "DNA_object_types.h"
-
 #include "draw_shader_shared.h"
+
+struct Object;
+struct DupliObject;
 
 namespace blender::draw {
 
@@ -45,6 +45,15 @@ struct ResourceHandle {
   {
     return (raw & 0x7FFFFFFFu);
   }
+};
+
+/* TODO(fclem): Move to somewhere more appropriated after cleaning up the header dependencies. */
+struct ObjectRef {
+  Object *object;
+  /** Dupli object that corresponds to the current object. */
+  DupliObject *dupli_object;
+  /** Object that created the dupli-list the current object is part of. */
+  Object *dupli_parent;
 };
 
 };  // namespace blender::draw

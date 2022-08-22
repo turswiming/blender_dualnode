@@ -13,40 +13,42 @@
 
 namespace blender::draw {
 
+class Manager;
+
+/* TODO deduplicate. */
+using ObjectBoundsBuf = StorageArrayBuffer<ObjectBounds, 128>;
+
 class View {
- public:
-  UniformBuffer<ViewInfos> data_;
+  friend Manager;
 
  private:
+  UniformBuffer<ViewInfos> data_;
   /** Result of the visibility computation. 1 bit per resource ID. */
   StorageArrayBuffer<uint4, 1, true> object_visibility_buf;
 
   const char *debug_name;
 
-  View *parent = nullptr;
-  bool do_visibility = true;
+  bool do_visibility_ = true;
+  bool dirty_ = true;
 
  public:
-  View(const char *name) : debug_name(name), object_visibility_buf(name){};
+  View(const char *name) : object_visibility_buf(name), debug_name(name){};
 
-  void sync();
+  void set_clip_planes(Span<float4> planes);
+
+  void sync(const float4x4 &view_mat, const float4x4 &win_mat);
 
  private:
-  void compute_visibility(Manager::ObjectBoundsBuf &bounds, uint resource_len)
-  {
-    object_visibility_buf.resize(divide_ceil_u(resource_len, 128));
+  /** Called from draw manager. */
+  void bind();
+  void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len);
 
-    if (do_visibility == false) {
-      object_visibility_buf.clear(0xFFFFFFFFu);
-      return;
-    }
+  void update_view_vectors();
+  void update_viewport_size();
 
-    uint thread_groups = divide_ceil_u(resource_len, DRW_VISIBILITY_GROUP_SIZE);
-    GPUShader *shader = draw_shader_visibility_get();
-    GPU_shader_bind(shader);
-    GPU_storagebuf_bind(bounds, 0);
-    GPU_compute_dispatch(shader, thread_groups, 1, 1);
-  }
+  void frustum_boundbox_calc(BoundBox &bbox);
+  void frustum_culling_planes_calc();
+  void frustum_culling_sphere_calc(const BoundBox &bbox, BoundSphere &bsphere);
 };
 
 }  // namespace blender::draw

@@ -232,8 +232,9 @@ set(SRC
   intern/draw_shader.h
   intern/draw_subdivision.h
   intern/draw_texture_pool.h
-  intern/draw_view.h
   intern/draw_view_data.h
+  intern/draw_view.cc
+  intern/draw_view.h
   intern/mesh_extractors/extract_mesh.hh
   intern/smaa_textures.h
   engines/basic/basic_engine.h

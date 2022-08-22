@@ -11,18 +11,12 @@
 #include "BLI_sys_types.h"
 
 #include "draw_pass.hh"
+#include "draw_resource.hh"
+#include "draw_view.hh"
 
 #include <string>
 
 namespace blender::draw {
-
-struct ObjectRef {
-  Object *object;
-  /** Dupli object that corresponds to the current object. */
-  DupliObject *dupli_object;
-  /** Object that created the dupli-list the current object is part of. */
-  Object *dupli_parent;
-};
 
 class Manager {
   using ObjectMatricesBuf = StorageArrayBuffer<ObjectMatrices, 128>;
@@ -59,14 +53,16 @@ class Manager {
   /**
    * Populate additional per resource data on demand.
    */
-  void object_attributes(ResourceHandle handle, Object &object, Span<GPUMaterial *> materials);
+  void extract_object_attributes(ResourceHandle handle,
+                                 Object &object,
+                                 Span<GPUMaterial *> materials);
 
   /**
    * Submit a pass for drawing. All resource reference will be dereferenced and commands will be
    * sent to GPU.
    */
   void submit(const PassSimple &pass);
-  void submit(const PassMain &pass);
+  void submit(const PassMain &pass, View &view);
 
  private:
   /**
@@ -83,21 +79,21 @@ class Manager {
 inline ResourceHandle Manager::resource_handle(const ObjectRef ref)
 {
   bool is_active_object = (ref.dupli_object ? ref.dupli_parent : ref.object) == object_active;
-  matrix_buf.get_or_resize(resource_len).init(*ref.object);
-  bounds_buf.get_or_resize(resource_len).init(*ref.object);
-  infos_buf.get_or_resize(resource_len).init(ref, is_active_object);
+  matrix_buf.get_or_resize(resource_len).sync(*ref.object);
+  bounds_buf.get_or_resize(resource_len).sync(*ref.object);
+  infos_buf.get_or_resize(resource_len).sync(ref, is_active_object);
   return ResourceHandle(resource_len++, (ref.object->transflag & OB_NEG_SCALE) != 0);
 }
 
 inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix)
 {
-  matrix_buf.get_or_resize(resource_len).init(model_matrix);
+  matrix_buf.get_or_resize(resource_len).sync(model_matrix);
   return ResourceHandle(resource_len++, false);
 }
 
-inline void Manager::object_attributes(ResourceHandle handle,
-                                       Object &object,
-                                       Span<GPUMaterial *> materials)
+inline void Manager::extract_object_attributes(ResourceHandle handle,
+                                               Object &object,
+                                               Span<GPUMaterial *> materials)
 {
   /* TODO */
   (void)handle;

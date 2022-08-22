@@ -45,7 +45,7 @@ GPU_SHADER_CREATE_INFO(draw_resource_handle)
  * \{ */
 
 GPU_SHADER_CREATE_INFO(draw_view)
-    .uniform_buf(0, "ViewInfos", "drw_view", Frequency::PASS)
+    .uniform_buf(DRW_VIEW_UBO_SLOT, "ViewInfos", "drw_view", Frequency::PASS)
     .typedef_source("draw_shader_shared.h");
 
 GPU_SHADER_CREATE_INFO(draw_modelmat)
@@ -154,10 +154,49 @@ GPU_SHADER_CREATE_INFO(draw_resource_finalize)
     .compute_source("draw_resource_finalize_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(draw_visibility_compute)
-    .local_group_size(128) /* Number of bits in a uvec4. */
+    .do_static_compilation(true)
+    .local_group_size(DRW_VISIBILITY_GROUP_SIZE)
     .storage_buf(0, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
-    .storage_buf(1, Qualifier::WRITE, "uint4", "visibility_buf[]")
+    .storage_buf(1, Qualifier::WRITE, "uint", "visibility_buf[]")
     .push_constant(Type::UINT, "resource_len")
-    .compute_source("draw_visibility_comp.glsl");
+    .compute_source("draw_visibility_comp.glsl")
+    .additional_info("draw_view");
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Draw Resource ID
+ * New implementation using gl_DrawID and storage buffers.
+ * \{ */
+
+GPU_SHADER_CREATE_INFO(draw_resource_id_draw_id).define("drw_DrawIndex", "gl_DrawID");
+
+/**
+ * Workaround the lack of gl_DrawID using our own emulation.
+ */
+GPU_SHADER_CREATE_INFO(draw_resource_id_fallback).vertex_in(15, Type::UINT, "drw_DrawIndex");
+
+GPU_SHADER_CREATE_INFO(draw_resource_id_new)
+    .typedef_source("draw_shader_shared.h")
+    .storage_buf(DRW_COMMAND_SLOT, Qualifier::READ, "DrawCommand", "drw_command_buf[]")
+    .define("drw_EngineInstanceCount", "drw_command_buf[drw_DrawIndex].engine_instance_count")
+    .define("drw_EngineInstanceIndex", "(gl_InstanceID % drw_EngineInstanceCount)")
+    .define("drw_ObjectInstanceIndex", "(gl_InstanceID / drw_EngineInstanceCount)")
+    .define("drw_ResourceIndexStart", "drw_command_buf[drw_DrawIndex].resource_id")
+    .define("drw_ResourceIndex", "(drw_ResourceIndexStart + drw_ObjectInstanceIndex)")
+    .additional_info("draw_resource_id_draw_id");
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Draw Object Resources
+ * \{ */
+
+GPU_SHADER_CREATE_INFO(draw_modelmat_new)
+    .typedef_source("draw_shader_shared.h")
+    .storage_buf(DRW_OBJ_MAT_SLOT, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
+    .define("drw_ModelMatrixInverse", "drw_matrix_buf[drw_ResourceIndex].drw_modelMatrix")
+    .define("drw_ModelMatrix", "drw_matrix_buf[drw_ResourceIndex].drw_modelMatrixInverse")
+    .additional_info("draw_resource_id_new");
 
 /** \} */

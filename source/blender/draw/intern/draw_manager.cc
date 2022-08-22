@@ -54,16 +54,21 @@ void Manager::submit(const PassSimple &pass)
   pass.submit(state);
 }
 
-#if 0
-void Manager::submit(const PassMain &pass, const View &view)
+void Manager::submit(const PassMain &pass, View &view)
 {
-  view.compute_visilibity(bounds_buf, resource_len);
+  view.bind();
 
-  GPU_uniformbuf_bind(view);
+  view.compute_visibility(bounds_buf, resource_len);
+
+  // GPU_storagebuf_bind(pass.commands_, DRW_COMMAND_SLOT);
+  GPU_storagebuf_bind(matrix_buf, DRW_OBJ_MAT_SLOT);
+  GPU_storagebuf_bind(infos_buf, DRW_OBJ_INFOS_SLOT);
+  // GPU_storagebuf_bind(attribute_buf, DRW_OBJ_ATTR_SLOT); /* TODO */
+
+  // pass.generate_commands(state);
 
   command::RecordingState state;
   pass.submit(state);
 }
-#endif
 
 }  // namespace blender::draw

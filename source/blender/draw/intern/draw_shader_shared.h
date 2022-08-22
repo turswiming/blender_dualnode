@@ -103,8 +103,8 @@ struct ObjectMatrices {
   float4x4 model_inverse;
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
-  void init(const Object &object);
-  void init(const float4x4 &object_mat);
+  void sync(const Object &object);
+  void sync(const float4x4 &model_matrix);
 #endif
 };
 BLI_STATIC_ASSERT_ALIGN(ObjectMatrices, 16)
@@ -138,14 +138,10 @@ struct ObjectInfos {
 #endif
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
-  void init(const blender::draw::ObjectRef ref, bool is_active_object);
+  void sync(const blender::draw::ObjectRef ref, bool is_active_object);
 #endif
 };
 BLI_STATIC_ASSERT_ALIGN(ObjectInfos, 16)
-
-#define OrcoTexCoFactors (drw_infos[resource_id].orco_mul_bias)
-#define ObjectInfo (drw_infos[resource_id].infos)
-#define ObjectColor (drw_infos[resource_id].color)
 
 struct ObjectBounds {
   /**
@@ -157,7 +153,7 @@ struct ObjectBounds {
   float4 bounding_sphere;
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
-  void init(const Object &object);
+  void sync(Object &ob);
 #endif
 };
 BLI_STATIC_ASSERT_ALIGN(ObjectBounds, 16)
