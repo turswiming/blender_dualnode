@@ -1306,8 +1306,9 @@ if(WITH_USD)
   add_definitions(-DWITH_USD)
   blender_include_dirs(../blender/io/usd)
   # On windows the usd library site in ./blender.shared copy the files
-  # relative to the location of the USD dll.
-  if(WIN32)
+  # relative to the location of the USD dll, if the dll does not exist
+  # assume we are linking against the static 3.4 lib.
+  if(WIN32 AND EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
     install(DIRECTORY
       ${USD_LIBRARY_DIR}/usd
       DESTINATION "./blender.shared"
