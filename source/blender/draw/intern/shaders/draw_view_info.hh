@@ -153,9 +153,10 @@ GPU_SHADER_CREATE_INFO(draw_resource_finalize)
     .push_constant(Type::UINT, "resource_len")
     .compute_source("draw_resource_finalize_comp.glsl");
 
-/* TODO */
 GPU_SHADER_CREATE_INFO(draw_visibility_compute)
-    .storage_buf(1, Qualifier::READ_WRITE, "ObjectBounds", "bounds_buf[]")
+    .local_group_size(128) /* Number of bits in a uvec4. */
+    .storage_buf(0, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
+    .storage_buf(1, Qualifier::WRITE, "uint4", "visibility_buf[]")
     .push_constant(Type::UINT, "resource_len")
     .compute_source("draw_visibility_comp.glsl");
 
