@@ -251,3 +251,9 @@ draw::Manager *DRW_manager_get()
   BLI_assert(DST.view_data_active->manager);
   return reinterpret_cast<draw::Manager *>(DST.view_data_active->manager);
 }
+
+draw::ObjectRef DRW_object_ref_get(Object *object)
+{
+  BLI_assert(DST.view_data_active->manager);
+  return {object, DST.dupli_source, DST.dupli_parent};
+}

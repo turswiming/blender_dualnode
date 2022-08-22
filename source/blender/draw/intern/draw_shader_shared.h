@@ -5,10 +5,12 @@
 
 #  include "GPU_shader.h"
 #  include "GPU_shader_shared_utils.h"
+#  include "draw_defines.h"
 
 typedef struct ViewInfos ViewInfos;
 typedef struct ObjectMatrices ObjectMatrices;
 typedef struct ObjectInfos ObjectInfos;
+typedef struct ObjectBounds ObjectBounds;
 typedef struct VolumeInfos VolumeInfos;
 typedef struct CurvesInfos CurvesInfos;
 typedef struct DrawCommand DrawCommand;
@@ -17,6 +19,22 @@ typedef struct DispatchCommand DispatchCommand;
 typedef struct DRWDebugPrintBuffer DRWDebugPrintBuffer;
 typedef struct DRWDebugVert DRWDebugVert;
 typedef struct DRWDebugDrawBuffer DRWDebugDrawBuffer;
+
+#  ifdef __cplusplus
+/* C++ only forward declarations. */
+struct Object;
+
+namespace blender::draw {
+
+struct ObjectRef;
+
+}  // namespace blender::draw
+
+#  else /* __cplusplus */
+/* C only forward declarations. */
+typedef enum eObjectInfoFlag eObjectInfoFlag;
+
+#  endif
 #endif
 
 #define DRW_SHADER_SHARED_H
@@ -48,9 +66,9 @@ struct ViewInfos {
   float2 viewport_size_inverse;
 
   /** Frustum culling data. */
-  /** NOTE: vec3 arrays are padded to vec4. */
-  float4 frustum_corners[8];
+  float4 frustum_corners[8]; /** NOTE: vec3 array padded to vec4. */
   float4 frustum_planes[6];
+  float4 frustum_bound_sphere;
 
   /** For debugging purpose */
   /* Mouse pixel. */
@@ -74,18 +92,81 @@ BLI_STATIC_ASSERT_ALIGN(ViewInfos, 16)
 #  define CameraTexCoFactors drw_view.viewcamtexcofac
 #endif
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Debug draw shapes
+ * \{ */
+
 struct ObjectMatrices {
-  float4x4 drw_modelMatrix;
-  float4x4 drw_modelMatrixInverse;
+  float4x4 model;
+  float4x4 model_inverse;
+
+#if !defined(GPU_SHADER) && defined(__cplusplus)
+  void init(const Object &object);
+  void init(const float4x4 &object_mat);
+#endif
 };
-BLI_STATIC_ASSERT_ALIGN(ViewInfos, 16)
+BLI_STATIC_ASSERT_ALIGN(ObjectMatrices, 16)
+
+enum eObjectInfoFlag {
+  OBJECT_SELECTED = (1 << 0),
+  OBJECT_FROM_DUPLI = (1 << 1),
+  OBJECT_FROM_SET = (1 << 2),
+  OBJECT_ACTIVE = (1 << 3),
+  OBJECT_NEGATIVE_SCALE = (1 << 4)
+};
 
 struct ObjectInfos {
-  float4 drw_OrcoTexCoFactors[2];
-  float4 drw_ObjectColor;
-  float4 drw_Infos;
+#if defined(GPU_SHADER) && !defined(DRAW_FINALIZE_SHADER)
+  /* TODO Rename to struct member for glsl too. */
+  float4 orco_mul_bias[2];
+  float4 color;
+  float4 infos;
+#else
+  /** Uploaded as center + size. Converted to mul+bias to local coord.  */
+  float3 orco_add;
+  float _pad0;
+  float3 orco_mul;
+  float _pad1;
+
+  float4 color;
+  uint index;
+  uint _pad2;
+  float random;
+  eObjectInfoFlag flag;
+#endif
+
+#if !defined(GPU_SHADER) && defined(__cplusplus)
+  void init(const blender::draw::ObjectRef ref, bool is_active_object);
+#endif
 };
-BLI_STATIC_ASSERT_ALIGN(ViewInfos, 16)
+BLI_STATIC_ASSERT_ALIGN(ObjectInfos, 16)
+
+#define OrcoTexCoFactors (drw_infos[resource_id].orco_mul_bias)
+#define ObjectInfo (drw_infos[resource_id].infos)
+#define ObjectColor (drw_infos[resource_id].color)
+
+struct ObjectBounds {
+  /**
+   * Uploaded as vertex (0, 4, 3, 1) of the bbox in local space, matching XYZ axis order.
+   * Then processed by GPU and stored as (0, 4-0, 3-0, 1-0) in world space for faster culling.
+   */
+  float4 bounding_corners[4];
+  /** Bounding sphere derived from the bounding corner. Computed on GPU. */
+  float4 bounding_sphere;
+
+#if !defined(GPU_SHADER) && defined(__cplusplus)
+  void init(const Object &object);
+#endif
+};
+BLI_STATIC_ASSERT_ALIGN(ObjectBounds, 16)
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object attributes
+ * \{ */
 
 struct VolumeInfos {
   /* Object to grid-space. */
@@ -107,11 +188,11 @@ struct CurvesInfos {
 };
 BLI_STATIC_ASSERT_ALIGN(CurvesInfos, 16)
 
-#define OrcoTexCoFactors (drw_infos[resource_id].drw_OrcoTexCoFactors)
-#define ObjectInfo (drw_infos[resource_id].drw_Infos)
-#define ObjectColor (drw_infos[resource_id].drw_ObjectColor)
+/** \} */
 
-/* Indirect commands structures. */
+/* -------------------------------------------------------------------- */
+/** \name Indirect commands structures.
+ * \{ */
 
 struct DrawCommand {
   /* TODO(fclem): Rename */
@@ -124,8 +205,9 @@ struct DrawCommand {
   uint i_first; /* TODO(fclem): Rename to instance_first_indexed */
   /* TODO(fclem): Pass other draw parameters here for shaders to read. */
   uint _pad0;
-  uint _pad1;
-  uint _pad2;
+  uint engine_instance_count;
+  /** Access to object / component resources (matrices, object infos, object attributes). */
+  uint resource_id;
 };
 BLI_STATIC_ASSERT_ALIGN(DrawCommand, 16)
 
@@ -136,6 +218,8 @@ struct DispatchCommand {
   uint _pad0;
 };
 BLI_STATIC_ASSERT_ALIGN(DispatchCommand, 16)
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Debug print

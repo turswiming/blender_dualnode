@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "draw_defines.h"
 #include "gpu_shader_create_info.hh"
 
 /* -------------------------------------------------------------------- */
@@ -49,8 +50,8 @@ GPU_SHADER_CREATE_INFO(draw_view)
 
 GPU_SHADER_CREATE_INFO(draw_modelmat)
     .uniform_buf(8, "ObjectMatrices", "drw_matrices[DRW_RESOURCE_CHUNK_LEN]", Frequency::BATCH)
-    .define("ModelMatrix", "(drw_matrices[resource_id].drw_modelMatrix)")
-    .define("ModelMatrixInverse", "(drw_matrices[resource_id].drw_modelMatrixInverse)")
+    .define("ModelMatrix", "(drw_matrices[resource_id].model)")
+    .define("ModelMatrixInverse", "(drw_matrices[resource_id].model_inverse)")
     .additional_info("draw_view");
 
 GPU_SHADER_CREATE_INFO(draw_modelmat_legacy)
@@ -134,5 +135,28 @@ GPU_SHADER_CREATE_INFO(draw_gpencil)
     /* Per Layer */
     .push_constant(Type::FLOAT, "gpThicknessOffset")
     .additional_info("draw_modelmat", "draw_resource_id_uniform", "draw_object_infos");
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Internal Draw Manager usage
+ * \{ */
+
+GPU_SHADER_CREATE_INFO(draw_resource_finalize)
+    .do_static_compilation(true)
+    .typedef_source("draw_shader_shared.h")
+    .define("DRAW_FINALIZE_SHADER")
+    .local_group_size(DRW_FINALIZE_GROUP_SIZE)
+    .storage_buf(0, Qualifier::READ, "ObjectMatrices", "matrix_buf[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "ObjectBounds", "bounds_buf[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "ObjectInfos", "infos_buf[]")
+    .push_constant(Type::UINT, "resource_len")
+    .compute_source("draw_resource_finalize_comp.glsl");
+
+/* TODO */
+GPU_SHADER_CREATE_INFO(draw_visibility_compute)
+    .storage_buf(1, Qualifier::READ_WRITE, "ObjectBounds", "bounds_buf[]")
+    .push_constant(Type::UINT, "resource_len")
+    .compute_source("draw_visibility_comp.glsl");
 
 /** \} */
