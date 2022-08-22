@@ -405,7 +405,7 @@ function(blender_add_test_suite)
       --test-release-dir "${_test_release_dir}"
   )
   if(WIN32)
-    set_tests_properties(${ARGS_SUITE_NAME} PROPERTIES ENVIRONMENT "PATH=$<TARGET_FILE_DIR:blender>/blender.shared/;$ENV{PATH}")
+    set_tests_properties(${ARGS_SUITE_NAME} PROPERTIES ENVIRONMENT "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/;$ENV{PATH}")
   endif()
   unset(_test_release_dir)
 endfunction()
