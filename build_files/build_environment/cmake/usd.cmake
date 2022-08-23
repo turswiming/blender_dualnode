@@ -47,6 +47,7 @@ set(USD_EXTRA_ARGS
   -DPXR_BUILD_TESTS=OFF
   -DPXR_BUILD_EXAMPLES=OFF
   -DPXR_BUILD_TUTORIALS=OFF
+  -DPXR_BUILD_USDVIEW=OFF
   -DPXR_ENABLE_HDF5_SUPPORT=OFF
   -DPXR_ENABLE_MATERIALX_SUPPORT=OFF
   -DPXR_ENABLE_OPENVDB_SUPPORT=ON
@@ -57,17 +58,13 @@ set(USD_EXTRA_ARGS
   # cube, etc.) to geometry, it's not necessary. Disabling it will make it
   # simpler to build Blender; currently only Cycles uses OSL.
   -DPXR_ENABLE_OSL_SUPPORT=OFF
-  # GL support on Linux also links to X11 libraries. Enabling it would break
-  # headless or Wayland-only builds. OpenGL support would be useful if someone
-  # wants to work on a Hydra viewport in Blender; when that's actually being
-  # worked on, we could patch in a new PXR_ENABLE_X11_SUPPORT option (to
-  # separate OpenGL from X11) and contribute it upstream.
-  -DPXR_ENABLE_GL_SUPPORT=OFF
-  # Disable Metal since USD fails to build this when OpenGL is disabled.
-  -DPXR_ENABLE_METAL_SUPPORT=OFF
-  # OIIO is used for loading image textures in Hydra Storm / Embree renderers,
-  # which we don't use.
-  -DPXR_BUILD_OPENIMAGEIO_PLUGIN=OFF
+  # Keep OpenGL and Metal enabled for Hydra support. Note that this indirectly also
+  # adds an X11 dependency on Linux, which would be good to eliminate for headless
+  # and Wayland only builds.
+  #-DPXR_ENABLE_GL_SUPPORT=OFF
+  #-DPXR_ENABLE_METAL_SUPPORT=OFF
+  # OIIO is used for loading image textures in Hydra Storm / Embree renderers.
+  -DPXR_BUILD_OPENIMAGEIO_PLUGIN=ON
   # USD 22.03 does not support OCIO 2.x
   # Tracking ticket https://github.com/PixarAnimationStudios/USD/issues/1386
   -DPXR_BUILD_OPENCOLORIO_PLUGIN=OFF
