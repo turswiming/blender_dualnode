@@ -17,6 +17,8 @@
 
 namespace blender::draw::command {
 
+class DrawCommandBuf;
+
 /* -------------------------------------------------------------------- */
 /** \name Recording State
  * \{ */
@@ -222,9 +224,9 @@ struct PushConstant {
 
 struct Draw {
   GPUBatch *batch;
-  uint instance_len;
   uint vertex_len;
   uint vertex_first;
+  uint instance_len;
   ResourceHandle handle;
 
   void execute(RecordingState &state) const;
@@ -391,10 +393,73 @@ BLI_STATIC_ASSERT(sizeof(Undetermined) <= 24, "One of the command type is too la
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Multi Draw Commands
+/** \name Draw Commands
+ *
+ * A draw command buffer used to issue single draw commands without instance merging or any
+ * other optimizations.
  * \{ */
 
-/**
+class DrawCommandBuf {
+ private:
+  using ResourceIdBuf = StorageArrayBuffer<uint, 128>;
+
+ public:
+  void clear(){};
+
+  void append_draw(Vector<command::Header> &headers,
+                   Vector<command::Undetermined> &commands,
+                   GPUBatch *batch,
+                   uint instance_len,
+                   uint vertex_len,
+                   uint vertex_first,
+                   ResourceHandle handle)
+  {
+    vertex_first = vertex_first != -1 ? vertex_first : 0;
+    instance_len = instance_len != -1 ? instance_len : 1;
+
+    int64_t index = commands.append_and_get_index({});
+    headers_.append({type, static_cast<uint>(index)});
+    commands[index].draw = {batch, instance_len, vertex_len, vertex_first, handle};
+  }
+
+  void bind(ResourceIdBuf &resource_id_buf)
+  {
+    uint total_instance = 0;
+    for (DrawCommand &cmd : command_buf_) {
+      int batch_vert_len, batch_inst_len;
+      /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
+      GPU_batch_draw_parameter_get(cmd.batch, &batch_vert_len, &batch_inst_len);
+      /* Instancing attributes are not supported using the new pipeline since we use the base
+       * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
+      BLI_assert(batch_inst_len == 1);
+
+      cmd.v_count = max_ii(cmd.v_count, batch_vert_len);
+
+      if (cmd.resource_id > 0) {
+        /* Save correct offset to start of resource_id buffer region for this draw. */
+        cmd.i_first = total_instance;
+        total_instance += cmd.i_count;
+        /* Ensure the buffer is big enough. */
+        resource_id_buf.get_or_resize(total_instance - 1);
+
+        /* Copy the resource id for all instances. */
+        for (int i = cmd.i_first; i < (cmd.i_first + cmd.i_count); i++) {
+          resource_id_buf[i] = cmd.resource_id;
+        }
+      }
+    }
+
+    if (total_instance > 0) {
+      resource_id_buf.push_update();
+    }
+  }
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Multi Draw Commands
+ *
  * For efficient rendering of large scene we strive to minimize the number of draw call and state
  * changes. This reduces the amount of work the CPU has to do. To this end, we group many rendering
  * commands and sort them per render state using Command::MultiDraw as a container.
@@ -419,19 +484,20 @@ BLI_STATIC_ASSERT(sizeof(Undetermined) <= 24, "One of the command type is too la
  * +---------------------------------------------------------------+------------------------------+
  * |   4   |   2       5   |   1   |   3       4   |   6       7   |  < Resource_id (sorted)      |
  * |   1   |   1       1   |   1   |   0   |   1   |   1       1   |  < Visibility test result    |
- * |   4   |   2   |   5   |   1   |   4   |   x   |  6+7  |   x   |  < DrawCommand (compacted)   |
+ * |   4   |     2 + 5     |         1 + 4         |      6+7      |  < DrawCommand (compacted)   |
  * +---------------------------------------------------------------+------------------------------+
  *
  * In the example above, we will issue 4 multi draw indirect calls.
  *
- * Note that commands with Non-consecutive resources ID cannot be compacted together.
- * Note that visibility test can split a resource id sequence.
- *
- * As you can see, even if commands are not executed in order, but are always in increasing order
- * inside a MDI command. This is because we want to keep drw_resource_id in increasing order to
- * be able to batch consecutive commands together.
- */
-struct MultiDrawBuffer {};
+ * \{ */
+
+struct MultiDrawBuf {
+  void clear(){};
+
+  void bind(){};
+
+  uint append(uint instance_len, uint vertex_len, uint vertex_first, ResourceHandle handle){};
+};
 
 /** \} */
 

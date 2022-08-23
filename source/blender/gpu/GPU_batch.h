@@ -164,6 +164,8 @@ void GPU_batch_program_set_builtin_with_config(GPUBatch *batch,
 #define GPU_batch_texture_bind(batch, name, tex) \
   GPU_texture_bind(tex, GPU_shader_get_texture_binding((batch)->shader, name));
 
+void GPU_batch_draw_parameter_get(GPUBatch *batch, int *r_v_count, int *r_i_count);
+
 void GPU_batch_draw(GPUBatch *batch);
 void GPU_batch_draw_range(GPUBatch *batch, int v_first, int v_count);
 /**

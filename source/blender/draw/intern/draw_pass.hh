@@ -114,31 +114,40 @@ class PassBase {
    * Record a draw call.
    * NOTE: Setting the count or first to -1 will use the values from the batch.
    * NOTE: An instance or vertex count of 0 will discard the draw call. It will not be recorded.
+   * NOTE: Implemented in derived class. Not a virtual function to avoid indirection. Here for API
+   * listing.
    */
   void draw(GPUBatch *batch,
             uint instance_len = -1,
             uint vertex_len = -1,
             uint vertex_first = -1,
             ResourceHandle handle = {0});
-  void draw_indirect(GPUBatch *batch,
-                     StorageBuffer<DrawCommand> &indirect_buffer,
-                     ResourceHandle handle = {0});
 
-  /** Shorter version for the common case. */
-  void draw(GPUBatch *batch, ResourceHandle handle)
-  {
-    draw(batch, -1, -1, -1, handle);
-  }
+  /**
+   * Shorter version for the common case.
+   * NOTE: Implemented in derived class. Not a virtual function to avoid indirection.
+   */
+  void draw(GPUBatch *batch, ResourceHandle handle);
 
   /**
    * Record a procedural draw call. Geometry is **NOT** source from a GPUBatch.
    * NOTE: An instance or vertex count of 0 will discard the draw call. It will not be recorded.
+   * NOTE: Implemented in derived class. Not a virtual function to avoid indirection. Here for
+   * API listing.
    */
   void draw_procedural(GPUPrimType primitive,
                        uint instance_len,
                        uint vertex_len,
                        uint vertex_first = -1,
                        ResourceHandle handle = {0});
+
+  /**
+   * Indirect variants.
+   * NOTE: If needed, the resource id need to also be set accordingly in the DrawCommand.
+   */
+  void draw_indirect(GPUBatch *batch,
+                     StorageBuffer<DrawCommand> &indirect_buffer,
+                     ResourceHandle handle = {0});
   void draw_procedural_indirect(GPUPrimType primitive,
                                 StorageBuffer<DrawCommand> &indirect_buffer,
                                 ResourceHandle handle = {0});
@@ -241,6 +250,12 @@ class PassBase {
 
 }  // namespace detail
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Normal pass type
+ * \{ */
+
 /**
  * Normal pass type. No visibility or draw-call optimisation.
  */
@@ -251,17 +266,51 @@ class PassSimple : public detail::PassBase {
   class Sub : public detail::PassBase {
     friend PassSimple;
 
+   private:
+    /* Parent pass draw commands. */
+    command::DrawCommandBuf &draw_commands_buf_;
+
    public:
-    /**
-     * Turn the pass into a string for inspection.
-     */
-    std::string serialize() const;
+    void draw(GPUBatch *batch,
+              uint instance_len = -1,
+              uint vertex_len = -1,
+              uint vertex_first = -1,
+              ResourceHandle handle = {0})
+    {
+      if (instance_len == 0 || vertex_len == 0) {
+        return;
+      }
+      BLI_assert(shader_);
+      create_command(Type::Draw).draw = {
+          batch,
+          &draw_commands_buf_,
+          draw_commands_buf_.append(instance_len, vertex_len, vertex_first, handle),
+          handle};
+    }
+
+    void draw(GPUBatch *batch, ResourceHandle handle)
+    {
+      draw(batch, -1, -1, -1, handle);
+    }
+
+    void draw_procedural(GPUPrimType primitive,
+                         uint instance_len,
+                         uint vertex_len,
+                         uint vertex_first = -1,
+                         ResourceHandle handle = {0})
+    {
+      draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
+    }
+
+    std::string serialize() const override final;
 
    private:
-    Sub(const char *name, GPUShader *shader) : PassBase(name)
+    Sub(const char *name, GPUShader *shader, command::DrawCommandBuf &draw_commands)
+        : PassBase(name), draw_commands_buf_(draw_commands)
     {
-      this->init();
-      this->shader_ = shader;
+      shader_ = shader;
+      headers_.clear();
+      commands_.clear();
     }
 
     void submit(command::RecordingState &state) const;
@@ -270,36 +319,74 @@ class PassSimple : public detail::PassBase {
  private:
   /** Sub-passes referenced by headers. */
   Vector<PassSimple::Sub> sub_passes_;
+  /** Draws are recorded as indirect draws for compatibility with the multi-draw pipeline. */
+  command::DrawCommandBuf draw_commands_buf_;
 
  public:
   PassSimple() = delete;
   PassSimple(const char *name) : PassBase(name){};
 
-  /**
-   * Create a sub-pass inside this pass. The sub-pass memory is auto managed.
-   */
-  PassSimple::Sub &sub(const char *name);
+  void init()
+  {
+    headers_.clear();
+    commands_.clear();
+    sub_passes_.clear();
+    draw_commands_buf_.clear();
+  }
+
+  PassSimple::Sub &sub(const char *name)
+  {
+    int64_t index = sub_passes_.append_and_get_index(
+        PassSimple::Sub(name, shader_, draw_commands_buf_));
+    headers_.append({command::Type::SubPass, static_cast<uint>(index)});
+    return sub_passes_[index];
+  }
 
   void draw(GPUBatch *batch,
             uint instance_len = -1,
             uint vertex_len = -1,
             uint vertex_first = -1,
-            ResourceHandle handle = {0});
+            ResourceHandle handle = {0})
+  {
+    if (instance_len == 0 || vertex_len == 0) {
+      return;
+    }
+    BLI_assert(shader_);
+    create_command(Type::Draw).draw = {
+        batch,
+        &draw_commands_buf_,
+        draw_commands_buf_.append(instance_len, vertex_len, vertex_first, handle),
+        handle};
+  }
 
-  /** Shorter version for the common case. */
   void draw(GPUBatch *batch, ResourceHandle handle)
   {
     draw(batch, -1, -1, -1, handle);
   }
 
+  void draw_procedural(GPUPrimType primitive,
+                       uint instance_len,
+                       uint vertex_len,
+                       uint vertex_first = -1,
+                       ResourceHandle handle = {0})
+  {
+    draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
+  }
+
   /**
    * Turn the pass into a string for inspection.
    */
-  std::string serialize() const;
+  std::string serialize() const override final;
 
  private:
   void submit(command::RecordingState &state) const;
-};
+};  // namespace blender::draw
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Main pass type
+ * \{ */
 
 /**
  * Main pass type.
@@ -316,26 +403,42 @@ class PassMain : public detail::PassBase {
     friend PassMain;
 
    public:
-    /**
-     * Turn the pass into a string for inspection.
-     */
-    std::string serialize() const;
+    std::string serialize() const override final;
 
    private:
-    command::MultiDrawBuffer &multi_draws_;
+    command::MultiDrawBuf &multi_draws_;
 
-    Sub(const char *name, GPUShader *shader, command::MultiDrawBuffer &multi_draws)
+    Sub(const char *name, GPUShader *shader, command::MultiDrawBuf &multi_draws)
         : PassBase(name), multi_draws_(multi_draws)
     {
-      this->init();
-      this->shader_ = shader;
+      headers_.clear();
+      commands_.clear();
+      shader_ = shader;
     }
 
     void draw(GPUBatch *batch,
               uint instance_len = -1,
               uint vertex_len = -1,
               uint vertex_first = -1,
-              ResourceHandle handle = {0});
+              ResourceHandle handle = {0})
+    {
+      /* TODO */
+      UNUSED_VARS(batch, instance_len, vertex_len, vertex_first, handle);
+    }
+
+    void draw(GPUBatch *batch, ResourceHandle handle)
+    {
+      draw(batch, -1, -1, -1, handle);
+    }
+
+    void draw_procedural(GPUPrimType primitive,
+                         uint instance_len,
+                         uint vertex_len,
+                         uint vertex_first = -1,
+                         ResourceHandle handle = {0})
+    {
+      draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
+    }
 
     void submit(command::RecordingState &state) const;
   };
@@ -344,63 +447,50 @@ class PassMain : public detail::PassBase {
   /** Sub-passes referenced by headers. */
   Vector<PassMain::Sub> sub_passes_;
   /** Multi draw indirect rendering for many draw calls efficient rendering. */
-  command::MultiDrawBuffer multi_draws_;
+  command::MultiDrawBuf multi_draws_;
 
  public:
   PassMain() = delete;
   PassMain(const char *name) : PassBase(name){};
 
-  /**
-   * Create a sub-pass inside this pass. The sub-pass memory is auto managed.
-   */
-  PassMain::Sub &sub(const char *name);
+  void init();
+
+  PassMain::Sub &sub(const char *name)
+  {
+    int64_t index = sub_passes_.append_and_get_index(PassMain::Sub(name, shader_, multi_draws_));
+    headers_.append({command::Type::SubPass, static_cast<uint>(index)});
+    return sub_passes_[index];
+  }
 
   void draw(GPUBatch *batch,
             uint instance_len = -1,
             uint vertex_len = -1,
             uint vertex_first = -1,
-            ResourceHandle handle = {0});
+            ResourceHandle handle = {0})
+  {
+    /* TODO */
+    UNUSED_VARS(batch, instance_len, vertex_len, vertex_first, handle);
+  }
 
-  /** Shorter version for the common case. */
   void draw(GPUBatch *batch, ResourceHandle handle)
   {
     draw(batch, -1, -1, -1, handle);
   }
 
-  /**
-   * Turn the pass into a string for inspection.
-   */
-  std::string serialize() const;
+  void draw_procedural(GPUPrimType primitive,
+                       uint instance_len,
+                       uint vertex_len,
+                       uint vertex_first = -1,
+                       ResourceHandle handle = {0})
+  {
+    draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
+  }
+
+  std::string serialize() const override final;
 
  private:
   void submit(command::RecordingState &state) const;
 };
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name PassSimple Implementation
- * \{ */
-
-inline PassSimple::Sub &PassSimple::sub(const char *name)
-{
-  int64_t index = sub_passes_.append_and_get_index(PassSimple::Sub(name, shader_));
-  headers_.append({command::Type::SubPass, static_cast<uint>(index)});
-  return sub_passes_[index];
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name PassMain Implementation
- * \{ */
-
-inline PassMain::Sub &PassMain::sub(const char *name)
-{
-  int64_t index = sub_passes_.append_and_get_index(PassMain::Sub(name, shader_, multi_draws_));
-  headers_.append({command::Type::SubPass, static_cast<uint>(index)});
-  return sub_passes_[index];
-}
 
 /** \} */
 
@@ -410,24 +500,12 @@ namespace detail {
 /** \name PassBase Implementation
  * \{ */
 
-inline void PassBase::init()
-{
-  headers_.clear();
-  commands_.clear();
-}
-
 inline command::Undetermined &PassBase::create_command(command::Type type)
 {
   int64_t index = commands_.append_and_get_index({});
   headers_.append({type, static_cast<uint>(index)});
   return commands_[index];
 }
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Draw Calls Implementation
- * \{ */
 
 inline void PassBase::clear(eGPUFrameBufferBits planes, float4 color, float depth, uint8_t stencil)
 {
@@ -452,15 +530,11 @@ inline GPUBatch *PassBase::procedural_batch_get(GPUPrimType primitive)
   }
 }
 
-inline void PassBase::draw(
-    GPUBatch *batch, uint instance_len, uint vertex_len, uint vertex_first, ResourceHandle handle)
-{
-  if (instance_len == 0 || vertex_len == 0) {
-    return;
-  }
-  BLI_assert(shader_);
-  create_command(Type::Draw).draw = {batch, instance_len, vertex_len, vertex_first, handle};
-}
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Indirect drawcalls
+ * \{ */
 
 inline void PassBase::draw_indirect(GPUBatch *batch,
                                     StorageBuffer<DrawCommand> &indirect_buffer,
@@ -468,15 +542,6 @@ inline void PassBase::draw_indirect(GPUBatch *batch,
 {
   BLI_assert(shader_);
   create_command(Type::DrawIndirect).draw_indirect = {batch, &indirect_buffer, handle};
-}
-
-inline void PassBase::draw_procedural(GPUPrimType primitive,
-                                      uint instance_len,
-                                      uint vertex_len,
-                                      uint vertex_first,
-                                      ResourceHandle handle)
-{
-  draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
 }
 
 inline void PassBase::draw_procedural_indirect(GPUPrimType primitive,

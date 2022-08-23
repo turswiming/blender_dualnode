@@ -66,17 +66,15 @@ void Draw::execute(RecordingState &state) const
 {
   state.front_facing_set(handle.has_inverted_handedness());
 
-  uint resource_id = handle.resource_index();
-
   GPU_batch_set_shader(batch, state.shader);
-  GPU_batch_draw_advanced(batch, vertex_first, vertex_len, resource_id, instance_len);
+  GPU_batch_draw_advanced(batch, vertex_first, vertex_len, 0, instance_len);
 }
 
 void DrawIndirect::execute(RecordingState &state) const
 {
   state.front_facing_set(handle.has_inverted_handedness());
 
-  GPU_batch_draw_indirect(batch, *indirect_buf);
+  GPU_batch_draw_indirect(batch, *indirect_buf, 0);
 }
 
 void Dispatch::execute(RecordingState &state) const

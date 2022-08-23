@@ -17,6 +17,9 @@ namespace blender::draw {
 
 void PassSimple::submit(command::RecordingState &state) const
 {
+  draw_commands_buf_.finalize();
+  draw_commands_buf_.bind();
+
   GPU_debug_group_begin(debug_name);
 
   for (const command::Header &header : headers_) {
@@ -67,6 +70,9 @@ void PassMain::submit(command::RecordingState &state) const
 
 void PassMain::Sub::submit(command::RecordingState &state) const
 {
+  draw_commands_buf_.finalize();
+  draw_commands_buf_.bind();
+
   GPU_debug_group_begin(debug_name);
 
   for (const command::Header &header : headers_) {

@@ -220,6 +220,26 @@ void GPU_batch_set_shader(GPUBatch *batch, GPUShader *shader)
 /** \name Drawing / Drawcall functions
  * \{ */
 
+void GPU_batch_draw_parameter_get(GPUBatch *gpu_batch, int *r_v_count, int *r_i_count)
+{
+  BLI_assert(Context::get()->shader != nullptr);
+  Batch *batch = static_cast<Batch *>(gpu_batch);
+
+  if (batch->elem) {
+    *r_v_count = batch->elem_()->index_len_get();
+  }
+  else {
+    *r_v_count = batch->verts_(0)->vertex_len;
+  }
+
+  int i_count = (batch->inst[0]) ? batch->inst_(0)->vertex_len : 1;
+  /* Meh. This is to be able to use different numbers of verts in instance VBO's. */
+  if (batch->inst[1] != nullptr) {
+    i_count = min_ii(i_count, batch->inst_(1)->vertex_len);
+  }
+  *r_i_count = i_count;
+}
+
 void GPU_batch_draw(GPUBatch *batch)
 {
   GPU_shader_bind(batch->shader);

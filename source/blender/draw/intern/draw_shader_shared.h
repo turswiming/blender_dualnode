@@ -14,7 +14,6 @@ typedef struct ObjectBounds ObjectBounds;
 typedef struct VolumeInfos VolumeInfos;
 typedef struct CurvesInfos CurvesInfos;
 typedef struct DrawCommand DrawCommand;
-typedef struct DrawCommandIndexed DrawCommandIndexed;
 typedef struct DispatchCommand DispatchCommand;
 typedef struct DRWDebugPrintBuffer DRWDebugPrintBuffer;
 typedef struct DRWDebugVert DRWDebugVert;
@@ -199,11 +198,13 @@ struct DrawCommand {
   /* NOTE: base_index is i_first for non-indexed draw-calls. */
 #define _instance_first_array base_index
   uint i_first; /* TODO(fclem): Rename to instance_first_indexed */
-  /* TODO(fclem): Pass other draw parameters here for shaders to read. */
-  uint _pad0;
+
+  /** Number of instances requested by the engine for this draw. */
   uint engine_instance_count;
   /** Access to object / component resources (matrices, object infos, object attributes). */
   uint resource_id;
+
+  uint _pad0;
 };
 BLI_STATIC_ASSERT_ALIGN(DrawCommand, 16)
 
