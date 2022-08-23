@@ -571,8 +571,11 @@ static uiBlock *id_search_menu(bContext *C, ARegion *region, void *arg_litem)
 /** \name ID Template
  * \{ */
 
-/* This is for browsing and editing the ID-blocks used */
+static void template_id_cb(bContext *C, void *arg_litem, void *arg_event);
 
+/**
+ * This is for browsing and editing the ID-blocks used.
+ */
 void UI_context_active_but_prop_get_templateID(bContext *C,
                                                PointerRNA *r_ptr,
                                                PropertyRNA **r_prop)
@@ -582,7 +585,7 @@ void UI_context_active_but_prop_get_templateID(bContext *C,
   memset(r_ptr, 0, sizeof(*r_ptr));
   *r_prop = NULL;
 
-  if (but && but->func_argN) {
+  if (but && (but->funcN == template_id_cb) && but->func_argN) {
     TemplateID *template_ui = but->func_argN;
     *r_ptr = template_ui->ptr;
     *r_prop = template_ui->prop;
@@ -887,8 +890,8 @@ static void template_id_liboverride_hierarchy_create(bContext *C,
      * created liboverride (note that in theory this remapping has already been done by code
      * above), but only in case owner ID was already an existing liboverride.
      *
-     * Otherwise, owner ID will also have been overridden, and remapped already to use itsoverride
-     * of the data too. */
+     * Otherwise, owner ID will also have been overridden, and remapped already to use
+     * it's override of the data too. */
     if (ID_IS_OVERRIDE_LIBRARY_REAL(owner_id)) {
       RNA_id_pointer_create(id_override, idptr);
     }
