@@ -34,6 +34,7 @@
 
 #include "BLI_vector.hh"
 #include "DRW_gpu_wrapper.hh"
+#include "GPU_debug.h"
 
 #include "draw_command.hh"
 #include "draw_handle.hh"
@@ -70,7 +71,7 @@ class PassBase {
   /* Reference to draw commands buffer. Either own or from parent pass. */
   DrawCommandBufType &draw_commands_buf_;
   /* Reference to sub-pass commands buffer. Either own or from parent pass. */
-  Vector<PassBase<DrawCommandBufType>> &sub_passes_;
+  Vector<PassBase<DrawCommandBufType>, 0> &sub_passes_;
   /** Currently bound shader. Used for interface queries. */
   GPUShader *shader_;
 
@@ -79,10 +80,10 @@ class PassBase {
 
   PassBase(const char *name,
            DrawCommandBufType &draw_command_buf,
-           Vector<PassBase<DrawCommandBufType>> &sub_passes,
+           Vector<PassBase<DrawCommandBufType>, 0> &sub_passes,
            GPUShader *shader = nullptr)
       : draw_commands_buf_(draw_command_buf),
-        sub_passes_(sub_passes_),
+        sub_passes_(sub_passes),
         shader_(shader),
         debug_name(name){};
 
@@ -150,8 +151,6 @@ class PassBase {
   /**
    * Record a procedural draw call. Geometry is **NOT** source from a GPUBatch.
    * NOTE: An instance or vertex count of 0 will discard the draw call. It will not be recorded.
-   * NOTE: Implemented in derived class. Not a virtual function to avoid indirection. Here for
-   * API listing.
    */
   void draw_procedural(GPUPrimType primitive,
                        uint instance_len,
@@ -269,23 +268,27 @@ class PassBase {
 };
 
 template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawCommandBufType> {
+ public:
+  using Sub = detail::PassBase<DrawCommandBuf>;
+
  private:
   /** Sub-passes referenced by headers. */
-  Vector<detail::PassBase<DrawCommandBufType>> sub_passes_;
+  Vector<detail::PassBase<DrawCommandBufType>, 0> sub_passes_main_;
   /** Draws are recorded as indirect draws for compatibility with the multi-draw pipeline. */
-  DrawCommandBufType draw_commands_buf_;
+  DrawCommandBufType draw_commands_buf_main_;
 
  public:
   Pass(const char *name)
-      : detail::PassBase<DrawCommandBufType>(name, draw_commands_buf_, sub_passes_){};
+      : detail::PassBase<DrawCommandBufType>(name, draw_commands_buf_main_, sub_passes_main_){};
 
   void init()
   {
-    headers_.clear();
-    commands_.clear();
-    sub_passes_.clear();
-    draw_commands_buf_.clear();
+    this->headers_.clear();
+    this->commands_.clear();
+    this->sub_passes_.clear();
+    this->draw_commands_buf_.clear();
   }
+
 };  // namespace blender::draw
 
 }  // namespace detail
@@ -360,10 +363,54 @@ template<class T> inline PassBase<T> &PassBase<T>::sub(const char *name)
   return sub_passes_[index];
 }
 
+template<class T> void PassBase<T>::submit(command::RecordingState &state) const
+{
+  GPU_debug_group_begin(debug_name);
+
+  for (const command::Header &header : headers_) {
+    switch (header.type) {
+      case Type::SubPass:
+        sub_passes_[header.command_index].submit(state);
+        break;
+      case Type::MultiDraw:
+        /* TODO */
+        break;
+      default:
+        commands_[header.command_index].execute(header.type, state);
+        break;
+    }
+  }
+
+  GPU_debug_group_end();
+}
+
+template<class T> std::string PassBase<T>::serialize(std::string line_prefix) const
+{
+  std::stringstream ss;
+  ss << line_prefix << "." << debug_name << std::endl;
+  line_prefix += "  ";
+  for (const command::Header &header : headers_) {
+    switch (header.type) {
+      case Type::None:
+        break;
+      case Type::SubPass:
+        ss << sub_passes_[header.command_index].serialize(line_prefix);
+        break;
+      case Type::MultiDraw:
+        /* TODO */
+        break;
+      default:
+        ss << line_prefix << commands_[header.command_index].serialize(header.type) << std::endl;
+        break;
+    }
+  }
+  return ss.str();
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Indirect drawcalls
+/** \name Draw calls
  * \{ */
 
 template<class T>
@@ -396,7 +443,7 @@ inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Indirect drawcalls
+/** \name Indirect draw calls
  * \{ */
 
 template<class T>

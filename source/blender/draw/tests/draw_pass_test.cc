@@ -54,34 +54,35 @@ static void test_draw_pass_all_commands()
 
   std::string result = pass.serialize();
   std::stringstream expected;
-  expected << "PassSimple(test.all_commands)" << std::endl;
-  expected << ".state_set(6)" << std::endl;
-  expected << ".clear(color=(0.25, 0.5, 100, -2000), depth=0.5, stencil=0b11110000))" << std::endl;
-  expected << ".stencil_set(write_mask=0b10000000, compare_mask=0b00001111, reference=0b10001111"
+  expected << ".test.all_commands" << std::endl;
+  expected << "  .state_set(6)" << std::endl;
+  expected << "  .clear(color=(0.25, 0.5, 100, -2000), depth=0.5, stencil=0b11110000))"
            << std::endl;
-  expected << ".shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
-  expected << ".bind_texture(0)" << std::endl;
-  expected << ".bind_texture_ref(0)" << std::endl;
-  expected << ".bind_image(-1)" << std::endl;
-  expected << ".bind_image_ref(-1)" << std::endl;
-  expected << ".bind_uniform_buf(-1)" << std::endl;
-  expected << ".bind_uniform_buf_ref(-1)" << std::endl;
-  expected << ".bind_storage_buf(-1)" << std::endl;
-  expected << ".bind_storage_buf_ref(-1)" << std::endl;
-  expected << ".push_constant(2, data=0)" << std::endl;
-  expected << ".push_constant(2, data=1)" << std::endl;
-  expected << ".push_constant(0, data=(" << std::endl;
+  expected << "  .stencil_set(write_mask=0b10000000, compare_mask=0b00001111, reference=0b10001111"
+           << std::endl;
+  expected << "  .shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << "  .bind_texture(0)" << std::endl;
+  expected << "  .bind_texture_ref(0)" << std::endl;
+  expected << "  .bind_image(-1)" << std::endl;
+  expected << "  .bind_image_ref(-1)" << std::endl;
+  expected << "  .bind_uniform_buf(-1)" << std::endl;
+  expected << "  .bind_uniform_buf_ref(-1)" << std::endl;
+  expected << "  .bind_storage_buf(-1)" << std::endl;
+  expected << "  .bind_storage_buf_ref(-1)" << std::endl;
+  expected << "  .push_constant(2, data=0)" << std::endl;
+  expected << "  .push_constant(2, data=1)" << std::endl;
+  expected << "  .push_constant(0, data=(" << std::endl;
   expected << "(   1.000000,    0.000000,    0.000000,    0.000000)" << std::endl;
   expected << "(   0.000000,    1.000000,    0.000000,    0.000000)" << std::endl;
   expected << "(   0.000000,    0.000000,    1.000000,    0.000000)" << std::endl;
   expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
   expected << ")" << std::endl;
   expected << ")" << std::endl;
-  expected << ".draw(inst_len=1, vert_len=3, vert_first=from_batch, res_id=0)" << std::endl;
-  expected << ".shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
-  expected << ".dispatch(1, 1, 1)" << std::endl;
-  expected << ".dispatch_ref(2, 2, 2)" << std::endl;
-  expected << ".barrier(4)" << std::endl;
+  expected << "  .draw(inst_len=1, vert_len=3, vert_first=from_batch, res_id=0)" << std::endl;
+  expected << "  .shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << "  .dispatch(1, 1, 1)" << std::endl;
+  expected << "  .dispatch_ref(2, 2, 2)" << std::endl;
+  expected << "  .barrier(4)" << std::endl;
 
   EXPECT_EQ(result, expected.str());
 }
@@ -114,16 +115,16 @@ static void test_draw_pass_sub_ordering()
 
   std::string result = pass.serialize();
   std::stringstream expected;
-  expected << "PassSimple(test.sub_ordering)" << std::endl;
-  expected << ".shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
-  expected << ".push_constant(-1, data=1)" << std::endl;
-  expected << ".sub(Sub1)" << std::endl;
-  expected << "  .push_constant(-1, data=11)" << std::endl;
-  expected << ".sub(Sub2)" << std::endl;
-  expected << "  .push_constant(-1, data=21)" << std::endl;
-  expected << "  .push_constant(-1, data=22)" << std::endl;
-  expected << "  .push_constant(-1, data=23)" << std::endl;
-  expected << ".push_constant(-1, data=2)" << std::endl;
+  expected << ".test.sub_ordering" << std::endl;
+  expected << "  .shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << "  .push_constant(-1, data=1)" << std::endl;
+  expected << "  .Sub1" << std::endl;
+  expected << "    .push_constant(-1, data=11)" << std::endl;
+  expected << "  .Sub2" << std::endl;
+  expected << "    .push_constant(-1, data=21)" << std::endl;
+  expected << "    .push_constant(-1, data=22)" << std::endl;
+  expected << "    .push_constant(-1, data=23)" << std::endl;
+  expected << "  .push_constant(-1, data=2)" << std::endl;
 
   EXPECT_EQ(result, expected.str());
 }

@@ -224,9 +224,9 @@ struct PushConstant {
 
 struct Draw {
   GPUBatch *batch;
+  uint instance_len;
   uint vertex_len;
   uint vertex_first;
-  uint instance_len;
   ResourceHandle handle;
 
   void execute(RecordingState &state) const;
@@ -399,10 +399,9 @@ BLI_STATIC_ASSERT(sizeof(Undetermined) <= 24, "One of the command type is too la
  * other optimizations.
  * \{ */
 
-class DrawCommandBuf {
- private:
-  using ResourceIdBuf = StorageArrayBuffer<uint, 128>;
+using ResourceIdBuf = StorageArrayBuffer<uint, 128>;
 
+class DrawCommandBuf {
  public:
   void clear(){};
 
@@ -496,15 +495,15 @@ class DrawCommandBuf {
 struct MultiDrawBuf {
   void clear(){};
 
-  void append_draw(Vector<command::Header> &headers,
-                   Vector<command::Undetermined> &commands,
-                   GPUBatch *batch,
-                   uint instance_len,
-                   uint vertex_len,
-                   uint vertex_first,
-                   ResourceHandle handle){};
+  void append_draw(Vector<command::Header> &,
+                   Vector<command::Undetermined> &,
+                   GPUBatch *,
+                   uint,
+                   uint,
+                   uint,
+                   ResourceHandle){};
 
-  void bind(){};
+  void bind(ResourceIdBuf &){};
 };
 
 /** \} */

@@ -60,14 +60,16 @@ void Manager::submit(const PassMain &pass, View &view)
 
   view.compute_visibility(bounds_buf, resource_len);
 
-  // GPU_storagebuf_bind(pass.commands_, DRW_COMMAND_SLOT);
   GPU_storagebuf_bind(matrix_buf, DRW_OBJ_MAT_SLOT);
   GPU_storagebuf_bind(infos_buf, DRW_OBJ_INFOS_SLOT);
   // GPU_storagebuf_bind(attribute_buf, DRW_OBJ_ATTR_SLOT); /* TODO */
 
-  // pass.generate_commands(state);
-
   command::RecordingState state;
+
+  pass.draw_commands_buf_.bind(resource_id_buf);
+
+  // GPU_storagebuf_bind(resource_id_buf, DRW_COMMAND_SLOT);
+
   pass.submit(state);
 }
 
