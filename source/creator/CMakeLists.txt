@@ -302,48 +302,51 @@ set(BLENDER_TEXT_FILES
 
 
 # -----------------------------------------------------------------------------
-# Platform Specific Var: TARGETDIR_VER
+# Platform specific target destinations for version dir, libs, bpy, text files.
 
 if(UNIX AND NOT APPLE)
   if(WITH_PYTHON_MODULE)
     if(WITH_INSTALL_PORTABLE)
-      set(BPY_INSTALL_DIR ".")
+      set(TARGETDIR_BPY .)
       set(TARGETDIR_VER ${BLENDER_VERSION})
+      set(TARGETDIR_LIB lib)
     else()
-      set(BPY_INSTALL_DIR ${PYTHON_SITE_PACKAGES})
+      set(TARGETDIR_BPY ${PYTHON_SITE_PACKAGES})
       set(TARGETDIR_VER ${PYTHON_SITE_PACKAGES}/${BLENDER_VERSION})
+      set(TARGETDIR_LIB ${PYTHON_SITE_PACKAGES}/lib)
     endif()
   else()
     if(WITH_INSTALL_PORTABLE)
       set(TARGETDIR_VER ${BLENDER_VERSION})
+      set(TARGETDIR_TEXT .)
+      set(TARGETDIR_LIB lib)
     else()
       set(TARGETDIR_VER share/blender/${BLENDER_VERSION})
+      set(TARGETDIR_TEXT share/doc/blender)
     endif()
   endif()
 
 elseif(WIN32)
   set(TARGETDIR_VER ${BLENDER_VERSION})
+  set(TARGETDIR_TEXT .)
 
 elseif(APPLE)
   if(WITH_PYTHON_MODULE)
     if(WITH_INSTALL_PORTABLE)
-      set(BPY_INSTALL_DIR)
       set(TARGETDIR_VER $<TARGET_FILE_DIR:blender>/../Resources/${BLENDER_VERSION})
-      # Keep the `BLENDER_VERSION` folder and bpy.so in the build folder.
-      set(INSTALL_BPY_TO_SITE_PACKAGES OFF)
+      set(TARGETDIR_LIB lib)
     else()
-      # Parent directory of bpy.so for installation.
-      set(BPY_INSTALL_DIR ${PYTHON_LIBPATH}/site-packages)
-      # Defined in terms of site-packages since the site-packages
+      # Paths defined in terms of site-packages since the site-packages
       # directory can be a symlink (brew for example).
-      set(TARGETDIR_VER "${BPY_INSTALL_DIR}/../Resources/${BLENDER_VERSION}")
-      set(INSTALL_BPY_TO_SITE_PACKAGES ON)
+      set(TARGETDIR_BPY ${PYTHON_LIBPATH}/site-packages)
+      set(TARGETDIR_VER ${TARGETDIR_BPY}/../Resources/${BLENDER_VERSION})
+      set(TARGETDIR_LIB ${TARGETDIR_BPY}/lib)
     endif()
   else()
     set(TARGETDIR_VER Blender.app/Contents/Resources/${BLENDER_VERSION})
+    set(TARGETDIR_LIB Blender.app/Contents/Resources/lib)
+    set(TARGETDIR_TEXT Blender.app/Contents/Resources/text)
   endif()
-  # License, copyright, readme files.
-  set(BLENDER_TEXT_FILES_DESTINATION "${TARGETDIR_VER}/../text")
   # Skip relinking on cpack / install
   set_target_properties(blender PROPERTIES BUILD_WITH_INSTALL_RPATH true)
 endif()
@@ -510,24 +513,24 @@ if(UNIX AND NOT APPLE)
     endif()
   endif()
 
+  if(PLATFORM_BUNDLED_LIBRARIES AND TARGETDIR_LIB)
+    install(
+      FILES ${PLATFORM_BUNDLED_LIBRARIES}
+      DESTINATION ${TARGETDIR_LIB}
+    )
+  endif()
+
   # there are a few differences between portable and system install
   if(WITH_PYTHON_MODULE)
     if(WITH_INSTALL_PORTABLE)
       install(
         TARGETS blender
-        DESTINATION ${BPY_INSTALL_DIR}
+        DESTINATION ${TARGETDIR_BPY}
       )
     else()
       install(
         TARGETS blender
-        LIBRARY DESTINATION ${BPY_INSTALL_DIR}
-      )
-    endif()
-
-    if(PLATFORM_BUNDLED_LIBRARIES)
-      install(
-        FILES ${PLATFORM_BUNDLED_LIBRARIES}
-        DESTINATION ${BPY_INSTALL_DIR}/lib
+        LIBRARY DESTINATION ${TARGETDIR_BPY}
       )
     endif()
 
@@ -567,16 +570,23 @@ if(UNIX AND NOT APPLE)
         ${CMAKE_SOURCE_DIR}/release/bin/blender-softwaregl
         DESTINATION "."
       )
-    endif()
 
-    if(PLATFORM_BUNDLED_LIBRARIES)
+      # Remove from old location, so existing builds don't start with software
+      # OpenGL now that the lib/ folder is used for other libraries.
       install(
-        FILES ${PLATFORM_BUNDLED_LIBRARIES}
-        DESTINATION lib
+        CODE
+        "file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGL.so)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGL.so.1)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGL.so.1.5.0)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGLU.so)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGLU.so.1)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libGLU.so.1.3.1)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0)\n
+         file(REMOVE ${CMAKE_BINARY_DIR}/bin/lib/libglapi.so.0.0.0)\n
+        "
       )
     endif()
-
-    set(BLENDER_TEXT_FILES_DESTINATION ".")
   else()
     # main blender binary
     install(
@@ -610,7 +620,6 @@ if(UNIX AND NOT APPLE)
         DESTINATION bin
       )
     endif()
-    set(BLENDER_TEXT_FILES_DESTINATION share/doc/blender)
   endif()
 
   if(WITH_PYTHON AND WITH_PYTHON_INSTALL)
@@ -799,9 +808,6 @@ if(UNIX AND NOT APPLE)
     )
   endif()
 elseif(WIN32)
-
-  set(BLENDER_TEXT_FILES_DESTINATION ".")
-
   windows_install_shared_manifest(
     FILES ${LIBDIR}/epoxy/bin/epoxy-0.dll
     ALL
@@ -1175,10 +1181,10 @@ elseif(APPLE)
       )
   endif()
 
-  if(PLATFORM_BUNDLED_LIBRARIES)
+  if(PLATFORM_BUNDLED_LIBRARIES AND TARGETDIR_LIB)
     install(
       FILES ${PLATFORM_BUNDLED_LIBRARIES}
-      DESTINATION ${TARGETDIR_VER}/lib
+      DESTINATION ${TARGETDIR_LIB}
     )
   endif()
 
@@ -1206,13 +1212,11 @@ elseif(APPLE)
     unset(_py_inc_suffix)
   endif()
 
-  if(WITH_PYTHON_MODULE)
-    if(INSTALL_BPY_TO_SITE_PACKAGES)
-      install(
-        TARGETS blender
-        LIBRARY DESTINATION ${BPY_INSTALL_DIR}
-      )
-    endif()
+  if(WITH_PYTHON_MODULE AND TARGETDIR_BPY)
+    install(
+      TARGETS blender
+      LIBRARY DESTINATION ${TARGETDIR_BPY}
+    )
   endif()
 
   if(WITH_DRACO)
@@ -1226,7 +1230,7 @@ endif()
 # -----------------------------------------------------------------------------
 # Generic Install, for all targets
 
-if(DEFINED BLENDER_TEXT_FILES_DESTINATION)
+if(DEFINED TARGETDIR_TEXT)
 
   configure_file(
     ${CMAKE_SOURCE_DIR}/release/text/readme.html
@@ -1239,13 +1243,13 @@ if(DEFINED BLENDER_TEXT_FILES_DESTINATION)
 
   install(
     FILES ${BLENDER_TEXT_FILES}
-    DESTINATION "${BLENDER_TEXT_FILES_DESTINATION}"
+    DESTINATION "${TARGETDIR_TEXT}"
   )
 
   install(
     DIRECTORY
     ${CMAKE_SOURCE_DIR}/release/license
-    DESTINATION "${BLENDER_TEXT_FILES_DESTINATION}"
+    DESTINATION "${TARGETDIR_TEXT}"
 )
 endif()
 
@@ -1253,7 +1257,7 @@ endif()
 delayed_do_install(${TARGETDIR_VER})
 
 unset(BLENDER_TEXT_FILES)
-unset(BLENDER_TEXT_FILES_DESTINATION)
+unset(TARGETDIR_TEXT)
 
 
 # -----------------------------------------------------------------------------
@@ -1312,6 +1316,11 @@ if(WITH_USD)
     install(DIRECTORY
       ${USD_LIBRARY_DIR}/usd
       DESTINATION "./blender.shared"
+    )
+  elseif(USD_PYTHON_SUPPORT)
+    install(DIRECTORY
+      ${USD_LIBRARY_DIR}/usd
+      DESTINATION ${TARGETDIR_LIB}
     )
   else()
     install(DIRECTORY
