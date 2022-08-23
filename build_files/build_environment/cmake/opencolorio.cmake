@@ -32,6 +32,7 @@ if(WIN32)
     -Dexpat_LIBRARY=${LIBDIR}/expat/lib/libexpatMD
     -Dyaml-cpp_LIBRARY=${LIBDIR}/expat/lib/libyaml-cppmd.lib
     -DImath_LIBRARY=${LIBDIR}/imath/lib/imath${OPENEXR_VERSION_POSTFIX}
+    -DCMAKE_CXX_FLAGS=-DIMATH_DLL
   )
 else()
   set(OPENCOLORIO_EXTRA_ARGS
@@ -43,6 +44,7 @@ ExternalProject_Add(external_opencolorio
   URL file://${PACKAGE_DIR}/${OPENCOLORIO_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   URL_HASH ${OPENCOLORIO_HASH_TYPE}=${OPENCOLORIO_HASH}
+  CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
   PREFIX ${BUILD_DIR}/opencolorio
   PATCH_COMMAND ${PATCH_CMD} -p 1 -N -d ${BUILD_DIR}/opencolorio/src/external_opencolorio < ${PATCH_DIR}/opencolorio.diff
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${LIBDIR}/opencolorio ${DEFAULT_CMAKE_FLAGS} ${OPENCOLORIO_EXTRA_ARGS}

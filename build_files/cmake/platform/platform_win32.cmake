@@ -472,9 +472,12 @@ if(WITH_IMAGE_OPENEXR)
     set(IMATH_INCLUDE_DIR ${IMATH}/include)
     set(IMATH_INCLUDE_DIRS ${IMATH_INCLUDE_DIR} ${IMATH}/include/Imath)
     set(IMATH_LIBPATH ${IMATH}/lib)
+    if(EXISTS ${IMATH_LIBPATH}/Imath_s.lib)
+      set(IMATH_POSTFIX _s)
+    endif()
     set(IMATH_LIBRARIES
-      optimized ${IMATH_LIBPATH}/Imath_s.lib
-      debug ${IMATH_LIBPATH}/Imath_s_d.lib
+      optimized ${IMATH_LIBPATH}/Imath${IMATH_POSTFIX}.lib
+      debug ${IMATH_LIBPATH}/Imath${IMATH_POSTFIX}_d.lib
     )
   endif()
   set(OPENEXR_ROOT_DIR ${LIBDIR}/openexr)
@@ -486,36 +489,24 @@ if(WITH_IMAGE_OPENEXR)
     set(OPENEXR_INCLUDE_DIR ${OPENEXR}/include)
     set(OPENEXR_INCLUDE_DIRS ${OPENEXR_INCLUDE_DIR} ${IMATH_INCLUDE_DIRS} ${OPENEXR}/include/OpenEXR)
     set(OPENEXR_LIBPATH ${OPENEXR}/lib)
-    # Check if the 3.x library name exists
-    # if not assume this is a 2.x library folder
+    # Check if the blender 3.3 lib static library eixts
+    # if not assume this is a 3.4+ dynamic version.
     if(EXISTS "${OPENEXR_LIBPATH}/OpenEXR_s.lib")
-      set(OPENEXR_LIBRARIES
-        optimized ${OPENEXR_LIBPATH}/Iex_s.lib
-        optimized ${OPENEXR_LIBPATH}/IlmThread_s.lib
-        optimized ${OPENEXR_LIBPATH}/OpenEXR_s.lib
-        optimized ${OPENEXR_LIBPATH}/OpenEXRCore_s.lib
-        optimized ${OPENEXR_LIBPATH}/OpenEXRUtil_s.lib
-        debug ${OPENEXR_LIBPATH}/Iex_s_d.lib
-        debug ${OPENEXR_LIBPATH}/IlmThread_s_d.lib
-        debug ${OPENEXR_LIBPATH}/OpenEXR_s_d.lib
-        debug ${OPENEXR_LIBPATH}/OpenEXRCore_s_d.lib
-        debug ${OPENEXR_LIBPATH}/OpenEXRUtil_s_d.lib
-        ${IMATH_LIBRARIES}
-      )
-    else()
-      set(OPENEXR_LIBRARIES
-        optimized ${OPENEXR_LIBPATH}/Iex_s.lib
-        optimized ${OPENEXR_LIBPATH}/Half_s.lib
-        optimized ${OPENEXR_LIBPATH}/IlmImf_s.lib
-        optimized ${OPENEXR_LIBPATH}/Imath_s.lib
-        optimized ${OPENEXR_LIBPATH}/IlmThread_s.lib
-        debug ${OPENEXR_LIBPATH}/Iex_s_d.lib
-        debug ${OPENEXR_LIBPATH}/Half_s_d.lib
-        debug ${OPENEXR_LIBPATH}/IlmImf_s_d.lib
-        debug ${OPENEXR_LIBPATH}/Imath_s_d.lib
-        debug ${OPENEXR_LIBPATH}/IlmThread_s_d.lib
-      )
+      set(OPENEXR_POSTFIX _s)
     endif()
+    set(OPENEXR_LIBRARIES
+      optimized ${OPENEXR_LIBPATH}/Iex${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/IlmThread${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/OpenEXR${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/OpenEXRCore${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/OpenEXRUtil${OPENEXR_POSTFIX}.lib
+      debug ${OPENEXR_LIBPATH}/Iex${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/IlmThread${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/OpenEXR${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/OpenEXRCore${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/OpenEXRUtil${OPENEXR_POSTFIX}_d.lib
+      ${IMATH_LIBRARIES}
+    )
   endif()
 endif()
 
@@ -645,7 +636,10 @@ if(WITH_OPENIMAGEIO)
   endif()
   set(OPENIMAGEIO_DEFINITIONS "-DUSE_TBB=0")
   set(OPENIMAGEIO_IDIFF "${OPENIMAGEIO}/bin/idiff.exe")
-  add_definitions(-DOIIO_STATIC_DEFINE)
+  # If the .dll does not exist, assume it is a static OIIO
+  if(NOT EXISTS ${OPENIMAGEIO}/bin/OpenImageIO.dll)
+    add_definitions(-DOIIO_STATIC_DEFINE)
+  endif()
   add_definitions(-DOIIO_NO_SSE=1)
 endif()
 

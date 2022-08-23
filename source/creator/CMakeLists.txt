@@ -844,7 +844,46 @@ elseif(WIN32)
     unset(ASAN_DLL)
     unset(ASAN_DEBUG_DLL)
   endif()
-
+  if(WITH_IMAGE_OPENEXR OR WITH_OPENIMAGEIO)
+    if(EXISTS ${LIBDIR}/openexr/bin/Iex.dll)
+      windows_install_shared_manifest(
+        FILES
+          ${LIBDIR}/openexr/bin/Iex.dll
+          ${LIBDIR}/openexr/bin/IlmThread.dll
+          ${LIBDIR}/openexr/bin/OpenEXRCore.dll
+          ${LIBDIR}/openexr/bin/OpenEXRUtil.dll
+          ${LIBDIR}/openexr/bin/OpenEXR.dll
+          ${LIBDIR}/imath/bin/imath.dll
+        RELEASE
+      )
+      windows_install_shared_manifest(
+        FILES
+          ${LIBDIR}/openexr/bin/Iex_d.dll
+          ${LIBDIR}/openexr/bin/IlmThread_d.dll
+          ${LIBDIR}/openexr/bin/OpenEXRCore_d.dll
+          ${LIBDIR}/openexr/bin/OpenEXRUtil_d.dll
+          ${LIBDIR}/openexr/bin/OpenEXR_d.dll
+          ${LIBDIR}/imath/bin/imath_d.dll
+        DEBUG
+      )
+    endif()
+  endif()
+  if(WITH_OPENIMAGEIO)
+    if(EXISTS ${LIBDIR}/openimageio/bin/openimageio.dll)
+      windows_install_shared_manifest(
+        FILES
+          ${LIBDIR}/openimageio/bin/openimageio.dll
+          ${LIBDIR}/openimageio/bin/openimageio_util.dll
+        RELEASE
+      )
+      windows_install_shared_manifest(
+        FILES
+          ${LIBDIR}/openimageio/bin/openimageio_d.dll
+          ${LIBDIR}/openimageio/bin/openimageio_util_d.dll
+        DEBUG
+      )
+    endif()
+  endif()
   if(WITH_GMP)
     windows_install_shared_manifest(
       FILES ${LIBDIR}/gmp/lib/libgmp-10.dll

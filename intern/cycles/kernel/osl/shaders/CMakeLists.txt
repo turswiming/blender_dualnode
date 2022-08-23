@@ -121,7 +121,11 @@ set(SRC_OSL_HEADERS
 set(SRC_OSO
 
 )
-
+if(WIN32)
+  set(OSLC_ENV ${CMAKE_COMMAND} -E env "PATH=${LIBDIR}/OpenImageIO/bin\;${LIBDIR}/boost/lib\;${LIBDIR}/openexr/bin\;${LIBDIR}/imath/bin\;${PATH}")
+else()
+  set(OSLC_ENV)
+endif()
 # TODO, add a module to compile OSL
 foreach(_file ${SRC_OSL})
   set(_OSL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/${_file})
@@ -130,13 +134,9 @@ foreach(_file ${SRC_OSL})
   string(REPLACE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} _OSO_FILE ${_OSO_FILE})
   add_custom_command(
     OUTPUT ${_OSO_FILE}
-    COMMAND ${OSL_COMPILER} -q -O2  -I"${CMAKE_CURRENT_SOURCE_DIR}" -I"${OSL_SHADER_DIR}" -o ${_OSO_FILE} ${_OSL_FILE}
+    COMMAND ${OSLC_ENV} ${OSL_COMPILER} -q -O2  -I"${CMAKE_CURRENT_SOURCE_DIR}" -I"${OSL_SHADER_DIR}" -o ${_OSO_FILE} ${_OSL_FILE}
     DEPENDS ${_OSL_FILE} ${SRC_OSL_HEADERS} ${OSL_COMPILER}
-    # This works since OSL only depends on a shared version of boost, if
-    # we ever take on extra shared deps this will turn around and bite us
-    # in the rear, something better may be needed.
-    WORKING_DIRECTORY ${BOOST_LIBPATH}
-    )
+  )
   list(APPEND SRC_OSO
     ${_OSO_FILE}
   )
