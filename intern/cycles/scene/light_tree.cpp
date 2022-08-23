@@ -62,10 +62,6 @@ OrientationBounds merge(const OrientationBounds& cone_a,
   }
 }
 
-/* to-do: right now, this is assuming that the primitive is a point light.
- * The plan is to progressively add support for more primitives. 
- * Some of the logic is different from the past GSoC work, so 
- * will have to see which logic is more correct. */
 BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
 {
   BoundBox bbox = BoundBox::empty;
@@ -229,7 +225,7 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
     strength = lamp->get_strength();
   }
 
-  return scene->shader_manager->linear_rgb_to_gray(strength);
+  return fabsf(scene->shader_manager->linear_rgb_to_gray(strength));
 }
 
 void LightTreeBuildNode::init_leaf(
