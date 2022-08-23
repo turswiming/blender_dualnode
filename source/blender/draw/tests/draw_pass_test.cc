@@ -78,13 +78,15 @@ static void test_draw_pass_all_commands()
   expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
   expected << ")" << std::endl;
   expected << ")" << std::endl;
-  expected << "  .draw(inst_len=1, vert_len=3, vert_first=from_batch, res_id=0)" << std::endl;
+  expected << "  .draw(inst_len=1, vert_len=3, vert_first=0, res_id=0)" << std::endl;
   expected << "  .shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
   expected << "  .dispatch(1, 1, 1)" << std::endl;
   expected << "  .dispatch_ref(2, 2, 2)" << std::endl;
   expected << "  .barrier(4)" << std::endl;
 
   EXPECT_EQ(result, expected.str());
+
+  DRW_shape_cache_free();
 }
 DRAW_TEST(draw_pass_all_commands)
 
