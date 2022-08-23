@@ -418,13 +418,14 @@ class DrawCommandBuf {
     instance_len = instance_len != -1 ? instance_len : 1;
 
     int64_t index = commands.append_and_get_index({});
-    headers_.append({type, static_cast<uint>(index)});
+    headers.append({command::Type::Draw, static_cast<uint>(index)});
     commands[index].draw = {batch, instance_len, vertex_len, vertex_first, handle};
   }
 
   void bind(ResourceIdBuf &resource_id_buf)
   {
     uint total_instance = 0;
+#if 0
     for (DrawCommand &cmd : command_buf_) {
       int batch_vert_len, batch_inst_len;
       /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
@@ -448,6 +449,7 @@ class DrawCommandBuf {
         }
       }
     }
+#endif
 
     if (total_instance > 0) {
       resource_id_buf.push_update();
@@ -494,9 +496,15 @@ class DrawCommandBuf {
 struct MultiDrawBuf {
   void clear(){};
 
-  void bind(){};
+  void append_draw(Vector<command::Header> &headers,
+                   Vector<command::Undetermined> &commands,
+                   GPUBatch *batch,
+                   uint instance_len,
+                   uint vertex_len,
+                   uint vertex_first,
+                   ResourceHandle handle){};
 
-  uint append(uint instance_len, uint vertex_len, uint vertex_first, ResourceHandle handle){};
+  void bind(){};
 };
 
 /** \} */

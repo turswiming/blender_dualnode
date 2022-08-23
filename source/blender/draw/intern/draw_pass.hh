@@ -56,6 +56,9 @@ namespace detail {
 /**
  * Public API of a draw pass.
  */
+template<
+    /** Type of command buffer used to create the draw calls. */
+    typename DrawCommandBufType>
 class PassBase {
   friend Manager;
 
@@ -64,19 +67,36 @@ class PassBase {
   Vector<command::Header> headers_;
   /** Commands referenced by headers (which contains their types). */
   Vector<command::Undetermined> commands_;
+  /* Reference to draw commands buffer. Either own or from parent pass. */
+  DrawCommandBufType &draw_commands_buf_;
+  /* Reference to sub-pass commands buffer. Either own or from parent pass. */
+  Vector<PassBase<DrawCommandBufType>> &sub_passes_;
   /** Currently bound shader. Used for interface queries. */
   GPUShader *shader_;
 
  public:
   const char *debug_name;
 
-  PassBase() = delete;
-  PassBase(const char *name = "Unamed") : debug_name(name){};
+  PassBase(const char *name,
+           DrawCommandBufType &draw_command_buf,
+           Vector<PassBase<DrawCommandBufType>> &sub_passes,
+           GPUShader *shader = nullptr)
+      : draw_commands_buf_(draw_command_buf),
+        sub_passes_(sub_passes_),
+        shader_(shader),
+        debug_name(name){};
 
   /**
    * Reset the pass command pool.
+   * NOTE: Implemented in derived class. Not a virtual function to avoid indirection. Here only for
+   * API readability listing.
    */
   void init();
+
+  /**
+   * Create a sub-pass inside this pass.
+   */
+  PassBase<DrawCommandBufType> &sub(const char *name);
 
   /**
    * Changes the fixed function pipeline state.
@@ -114,8 +134,6 @@ class PassBase {
    * Record a draw call.
    * NOTE: Setting the count or first to -1 will use the values from the batch.
    * NOTE: An instance or vertex count of 0 will discard the draw call. It will not be recorded.
-   * NOTE: Implemented in derived class. Not a virtual function to avoid indirection. Here for API
-   * listing.
    */
   void draw(GPUBatch *batch,
             uint instance_len = -1,
@@ -224,7 +242,7 @@ class PassBase {
   /**
    * Turn the pass into a string for inspection.
    */
-  virtual std::string serialize() const = 0;
+  std::string serialize(std::string line_prefix = "") const;
 
   friend std::ostream &operator<<(std::ostream &stream, const PassBase &pass)
   {
@@ -246,85 +264,20 @@ class PassBase {
    * Return a new command recorded with the given type.
    */
   command::Undetermined &create_command(command::Type type);
+
+  void submit(command::RecordingState &state) const;
 };
 
-}  // namespace detail
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Normal pass type
- * \{ */
-
-/**
- * Normal pass type. No visibility or draw-call optimisation.
- */
-class PassSimple : public detail::PassBase {
-  friend Manager;
-
- public:
-  class Sub : public detail::PassBase {
-    friend PassSimple;
-
-   private:
-    /* Parent pass draw commands. */
-    command::DrawCommandBuf &draw_commands_buf_;
-
-   public:
-    void draw(GPUBatch *batch,
-              uint instance_len = -1,
-              uint vertex_len = -1,
-              uint vertex_first = -1,
-              ResourceHandle handle = {0})
-    {
-      if (instance_len == 0 || vertex_len == 0) {
-        return;
-      }
-      BLI_assert(shader_);
-      create_command(Type::Draw).draw = {
-          batch,
-          &draw_commands_buf_,
-          draw_commands_buf_.append(instance_len, vertex_len, vertex_first, handle),
-          handle};
-    }
-
-    void draw(GPUBatch *batch, ResourceHandle handle)
-    {
-      draw(batch, -1, -1, -1, handle);
-    }
-
-    void draw_procedural(GPUPrimType primitive,
-                         uint instance_len,
-                         uint vertex_len,
-                         uint vertex_first = -1,
-                         ResourceHandle handle = {0})
-    {
-      draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
-    }
-
-    std::string serialize() const override final;
-
-   private:
-    Sub(const char *name, GPUShader *shader, command::DrawCommandBuf &draw_commands)
-        : PassBase(name), draw_commands_buf_(draw_commands)
-    {
-      shader_ = shader;
-      headers_.clear();
-      commands_.clear();
-    }
-
-    void submit(command::RecordingState &state) const;
-  };
-
+template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawCommandBufType> {
  private:
   /** Sub-passes referenced by headers. */
-  Vector<PassSimple::Sub> sub_passes_;
+  Vector<detail::PassBase<DrawCommandBufType>> sub_passes_;
   /** Draws are recorded as indirect draws for compatibility with the multi-draw pipeline. */
-  command::DrawCommandBuf draw_commands_buf_;
+  DrawCommandBufType draw_commands_buf_;
 
  public:
-  PassSimple() = delete;
-  PassSimple(const char *name) : PassBase(name){};
+  Pass(const char *name)
+      : detail::PassBase<DrawCommandBufType>(name, draw_commands_buf_, sub_passes_){};
 
   void init()
   {
@@ -333,60 +286,20 @@ class PassSimple : public detail::PassBase {
     sub_passes_.clear();
     draw_commands_buf_.clear();
   }
-
-  PassSimple::Sub &sub(const char *name)
-  {
-    int64_t index = sub_passes_.append_and_get_index(
-        PassSimple::Sub(name, shader_, draw_commands_buf_));
-    headers_.append({command::Type::SubPass, static_cast<uint>(index)});
-    return sub_passes_[index];
-  }
-
-  void draw(GPUBatch *batch,
-            uint instance_len = -1,
-            uint vertex_len = -1,
-            uint vertex_first = -1,
-            ResourceHandle handle = {0})
-  {
-    if (instance_len == 0 || vertex_len == 0) {
-      return;
-    }
-    BLI_assert(shader_);
-    create_command(Type::Draw).draw = {
-        batch,
-        &draw_commands_buf_,
-        draw_commands_buf_.append(instance_len, vertex_len, vertex_first, handle),
-        handle};
-  }
-
-  void draw(GPUBatch *batch, ResourceHandle handle)
-  {
-    draw(batch, -1, -1, -1, handle);
-  }
-
-  void draw_procedural(GPUPrimType primitive,
-                       uint instance_len,
-                       uint vertex_len,
-                       uint vertex_first = -1,
-                       ResourceHandle handle = {0})
-  {
-    draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
-  }
-
-  /**
-   * Turn the pass into a string for inspection.
-   */
-  std::string serialize() const override final;
-
- private:
-  void submit(command::RecordingState &state) const;
 };  // namespace blender::draw
+
+}  // namespace detail
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Main pass type
+/** \name Pass types
  * \{ */
+
+/**
+ * Normal pass type. No visibility or draw-call optimisation.
+ */
+using PassSimple = detail::Pass<DrawCommandBuf>;
 
 /**
  * Main pass type.
@@ -395,102 +308,7 @@ class PassSimple : public detail::PassBase {
  * IMPORTANT: To be used only for passes containing lots of draw calls since it has a potentially
  * high overhead due to batching and culling optimizations.
  */
-class PassMain : public detail::PassBase {
-  friend Manager;
-
- public:
-  class Sub : public detail::PassBase {
-    friend PassMain;
-
-   public:
-    std::string serialize() const override final;
-
-   private:
-    command::MultiDrawBuf &multi_draws_;
-
-    Sub(const char *name, GPUShader *shader, command::MultiDrawBuf &multi_draws)
-        : PassBase(name), multi_draws_(multi_draws)
-    {
-      headers_.clear();
-      commands_.clear();
-      shader_ = shader;
-    }
-
-    void draw(GPUBatch *batch,
-              uint instance_len = -1,
-              uint vertex_len = -1,
-              uint vertex_first = -1,
-              ResourceHandle handle = {0})
-    {
-      /* TODO */
-      UNUSED_VARS(batch, instance_len, vertex_len, vertex_first, handle);
-    }
-
-    void draw(GPUBatch *batch, ResourceHandle handle)
-    {
-      draw(batch, -1, -1, -1, handle);
-    }
-
-    void draw_procedural(GPUPrimType primitive,
-                         uint instance_len,
-                         uint vertex_len,
-                         uint vertex_first = -1,
-                         ResourceHandle handle = {0})
-    {
-      draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
-    }
-
-    void submit(command::RecordingState &state) const;
-  };
-
- private:
-  /** Sub-passes referenced by headers. */
-  Vector<PassMain::Sub> sub_passes_;
-  /** Multi draw indirect rendering for many draw calls efficient rendering. */
-  command::MultiDrawBuf multi_draws_;
-
- public:
-  PassMain() = delete;
-  PassMain(const char *name) : PassBase(name){};
-
-  void init();
-
-  PassMain::Sub &sub(const char *name)
-  {
-    int64_t index = sub_passes_.append_and_get_index(PassMain::Sub(name, shader_, multi_draws_));
-    headers_.append({command::Type::SubPass, static_cast<uint>(index)});
-    return sub_passes_[index];
-  }
-
-  void draw(GPUBatch *batch,
-            uint instance_len = -1,
-            uint vertex_len = -1,
-            uint vertex_first = -1,
-            ResourceHandle handle = {0})
-  {
-    /* TODO */
-    UNUSED_VARS(batch, instance_len, vertex_len, vertex_first, handle);
-  }
-
-  void draw(GPUBatch *batch, ResourceHandle handle)
-  {
-    draw(batch, -1, -1, -1, handle);
-  }
-
-  void draw_procedural(GPUPrimType primitive,
-                       uint instance_len,
-                       uint vertex_len,
-                       uint vertex_first = -1,
-                       ResourceHandle handle = {0})
-  {
-    draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
-  }
-
-  std::string serialize() const override final;
-
- private:
-  void submit(command::RecordingState &state) const;
-};
+using PassMain = detail::Pass<MultiDrawBuf>;
 
 /** \} */
 
@@ -500,19 +318,23 @@ namespace detail {
 /** \name PassBase Implementation
  * \{ */
 
-inline command::Undetermined &PassBase::create_command(command::Type type)
+template<class T> inline command::Undetermined &PassBase<T>::create_command(command::Type type)
 {
   int64_t index = commands_.append_and_get_index({});
   headers_.append({type, static_cast<uint>(index)});
   return commands_[index];
 }
 
-inline void PassBase::clear(eGPUFrameBufferBits planes, float4 color, float depth, uint8_t stencil)
+template<class T>
+inline void PassBase<T>::clear(eGPUFrameBufferBits planes,
+                               float4 color,
+                               float depth,
+                               uint8_t stencil)
 {
   create_command(command::Type::Clear).clear = {(uint8_t)planes, stencil, depth, color};
 }
 
-inline GPUBatch *PassBase::procedural_batch_get(GPUPrimType primitive)
+template<class T> inline GPUBatch *PassBase<T>::procedural_batch_get(GPUPrimType primitive)
 {
   switch (primitive) {
     case GPU_PRIM_POINTS:
@@ -530,23 +352,66 @@ inline GPUBatch *PassBase::procedural_batch_get(GPUPrimType primitive)
   }
 }
 
+template<class T> inline PassBase<T> &PassBase<T>::sub(const char *name)
+{
+  int64_t index = sub_passes_.append_and_get_index(
+      PassBase(name, draw_commands_buf_, sub_passes_, shader_));
+  headers_.append({command::Type::SubPass, static_cast<uint>(index)});
+  return sub_passes_[index];
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Indirect drawcalls
  * \{ */
 
-inline void PassBase::draw_indirect(GPUBatch *batch,
-                                    StorageBuffer<DrawCommand> &indirect_buffer,
-                                    ResourceHandle handle)
+template<class T>
+inline void PassBase<T>::draw(
+    GPUBatch *batch, uint instance_len, uint vertex_len, uint vertex_first, ResourceHandle handle)
+{
+  if (instance_len == 0 || vertex_len == 0) {
+    return;
+  }
+  BLI_assert(shader_);
+  draw_commands_buf_.append_draw(
+      headers_, commands_, batch, instance_len, vertex_len, vertex_first, handle);
+}
+
+template<class T> inline void PassBase<T>::draw(GPUBatch *batch, ResourceHandle handle)
+{
+  draw(batch, -1, -1, -1, handle);
+}
+
+template<class T>
+inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
+                                         uint instance_len,
+                                         uint vertex_len,
+                                         uint vertex_first,
+                                         ResourceHandle handle)
+{
+  draw(procedural_batch_get(primitive), instance_len, vertex_len, vertex_first, handle);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Indirect drawcalls
+ * \{ */
+
+template<class T>
+inline void PassBase<T>::draw_indirect(GPUBatch *batch,
+                                       StorageBuffer<DrawCommand> &indirect_buffer,
+                                       ResourceHandle handle)
 {
   BLI_assert(shader_);
   create_command(Type::DrawIndirect).draw_indirect = {batch, &indirect_buffer, handle};
 }
 
-inline void PassBase::draw_procedural_indirect(GPUPrimType primitive,
-                                               StorageBuffer<DrawCommand> &indirect_buffer,
-                                               ResourceHandle handle)
+template<class T>
+inline void PassBase<T>::draw_procedural_indirect(GPUPrimType primitive,
+                                                  StorageBuffer<DrawCommand> &indirect_buffer,
+                                                  ResourceHandle handle)
 {
   draw_indirect(procedural_batch_get(primitive), indirect_buffer, handle);
 }
@@ -557,19 +422,20 @@ inline void PassBase::draw_procedural_indirect(GPUPrimType primitive,
 /** \name Compute Dispatch Implementation
  * \{ */
 
-inline void PassBase::dispatch(int3 group_len)
+template<class T> inline void PassBase<T>::dispatch(int3 group_len)
 {
   BLI_assert(shader_);
   create_command(Type::Dispatch).dispatch = {group_len};
 }
 
-inline void PassBase::dispatch(int3 *group_len)
+template<class T> inline void PassBase<T>::dispatch(int3 *group_len)
 {
   BLI_assert(shader_);
   create_command(Type::Dispatch).dispatch = {group_len};
 }
 
-inline void PassBase::dispatch(StorageBuffer<DispatchCommand> &indirect_buffer)
+template<class T>
+inline void PassBase<T>::dispatch(StorageBuffer<DispatchCommand> &indirect_buffer)
 {
   BLI_assert(shader_);
   create_command(Type::DispatchIndirect).dispatch_indirect = {&indirect_buffer};
@@ -581,27 +447,28 @@ inline void PassBase::dispatch(StorageBuffer<DispatchCommand> &indirect_buffer)
 /** \name Clear Implementation
  * \{ */
 
-inline void PassBase::clear_color(float4 color)
+template<class T> inline void PassBase<T>::clear_color(float4 color)
 {
   clear(GPU_COLOR_BIT, color, 0.0f, 0);
 }
 
-inline void PassBase::clear_depth(float depth)
+template<class T> inline void PassBase<T>::clear_depth(float depth)
 {
   clear(GPU_DEPTH_BIT, float4(0.0f), depth, 0);
 }
 
-inline void PassBase::clear_stencil(uint8_t stencil)
+template<class T> inline void PassBase<T>::clear_stencil(uint8_t stencil)
 {
   clear(GPU_STENCIL_BIT, float4(0.0f), 0.0f, stencil);
 }
 
-inline void PassBase::clear_depth_stencil(float depth, uint8_t stencil)
+template<class T> inline void PassBase<T>::clear_depth_stencil(float depth, uint8_t stencil)
 {
   clear(GPU_DEPTH_BIT | GPU_STENCIL_BIT, float4(0.0f), depth, stencil);
 }
 
-inline void PassBase::clear_color_depth_stencil(float4 color, float depth, uint8_t stencil)
+template<class T>
+inline void PassBase<T>::clear_color_depth_stencil(float4 color, float depth, uint8_t stencil)
 {
   clear(GPU_DEPTH_BIT | GPU_STENCIL_BIT | GPU_COLOR_BIT, color, depth, stencil);
 }
@@ -612,7 +479,7 @@ inline void PassBase::clear_color_depth_stencil(float4 color, float depth, uint8
 /** \name Barrier Implementation
  * \{ */
 
-inline void PassBase::barrier(eGPUBarrier type)
+template<class T> inline void PassBase<T>::barrier(eGPUBarrier type)
 {
   create_command(Type::Barrier).barrier = {type};
 }
@@ -623,17 +490,18 @@ inline void PassBase::barrier(eGPUBarrier type)
 /** \name State Implementation
  * \{ */
 
-inline void PassBase::state_set(DRWState state)
+template<class T> inline void PassBase<T>::state_set(DRWState state)
 {
   create_command(Type::StateSet).state_set = {state};
 }
 
-inline void PassBase::state_stencil(uint8_t write_mask, uint8_t reference, uint8_t compare_mask)
+template<class T>
+inline void PassBase<T>::state_stencil(uint8_t write_mask, uint8_t reference, uint8_t compare_mask)
 {
   create_command(Type::StencilSet).stencil_set = {write_mask, reference, compare_mask};
 }
 
-inline void PassBase::shader_set(GPUShader *shader)
+template<class T> inline void PassBase<T>::shader_set(GPUShader *shader)
 {
   shader_ = shader;
   create_command(Type::ShaderBind).shader_bind = {shader};
@@ -645,88 +513,92 @@ inline void PassBase::shader_set(GPUShader *shader)
 /** \name Resource bind Implementation
  * \{ */
 
-inline int PassBase::push_constant_offset(const char *name)
+template<class T> inline int PassBase<T>::push_constant_offset(const char *name)
 {
   return GPU_shader_get_uniform(shader_, name);
 }
 
-inline void PassBase::bind(const char *name, GPUStorageBuf *buffer)
+template<class T> inline void PassBase<T>::bind(const char *name, GPUStorageBuf *buffer)
 {
   bind(GPU_shader_get_ssbo(shader_, name), buffer);
 }
 
-inline void PassBase::bind(const char *name, GPUUniformBuf *buffer)
+template<class T> inline void PassBase<T>::bind(const char *name, GPUUniformBuf *buffer)
 {
   bind(GPU_shader_get_uniform_block_binding(shader_, name), buffer);
 }
 
-inline void PassBase::bind(const char *name, GPUTexture *texture, eGPUSamplerState state)
+template<class T>
+inline void PassBase<T>::bind(const char *name, GPUTexture *texture, eGPUSamplerState state)
 {
   bind(GPU_shader_get_texture_binding(shader_, name), texture, state);
 }
 
-inline void PassBase::bind(const char *name, draw::Image *image)
+template<class T> inline void PassBase<T>::bind(const char *name, draw::Image *image)
 {
   bind(GPU_shader_get_texture_binding(shader_, name), image);
 }
 
-inline void PassBase::bind(int slot, GPUStorageBuf *buffer)
+template<class T> inline void PassBase<T>::bind(int slot, GPUStorageBuf *buffer)
 {
   create_command(Type::ResourceBind).resource_bind = {slot, buffer};
 }
 
-inline void PassBase::bind(int slot, GPUUniformBuf *buffer)
+template<class T> inline void PassBase<T>::bind(int slot, GPUUniformBuf *buffer)
 {
   create_command(Type::ResourceBind).resource_bind = {slot, buffer};
 }
 
-inline void PassBase::bind(int slot, GPUTexture *texture, eGPUSamplerState state)
+template<class T>
+inline void PassBase<T>::bind(int slot, GPUTexture *texture, eGPUSamplerState state)
 {
   create_command(Type::ResourceBind).resource_bind = {slot, texture, state};
 }
 
-inline void PassBase::bind(int slot, draw::Image *image)
+template<class T> inline void PassBase<T>::bind(int slot, draw::Image *image)
 {
   create_command(Type::ResourceBind).resource_bind = {slot, image};
 }
 
-inline void PassBase::bind(const char *name, GPUStorageBuf **buffer)
+template<class T> inline void PassBase<T>::bind(const char *name, GPUStorageBuf **buffer)
 {
   bind(GPU_shader_get_ssbo(shader_, name), buffer);
 }
 
-inline void PassBase::bind(const char *name, GPUUniformBuf **buffer)
+template<class T> inline void PassBase<T>::bind(const char *name, GPUUniformBuf **buffer)
 {
   bind(GPU_shader_get_uniform_block_binding(shader_, name), buffer);
 }
 
-inline void PassBase::bind(const char *name, GPUTexture **texture, eGPUSamplerState state)
+template<class T>
+inline void PassBase<T>::bind(const char *name, GPUTexture **texture, eGPUSamplerState state)
 {
   bind(GPU_shader_get_texture_binding(shader_, name), texture, state);
 }
 
-inline void PassBase::bind(const char *name, draw::Image **image)
+template<class T> inline void PassBase<T>::bind(const char *name, draw::Image **image)
 {
   bind(GPU_shader_get_texture_binding(shader_, name), image);
 }
 
-inline void PassBase::bind(int slot, GPUStorageBuf **buffer)
+template<class T> inline void PassBase<T>::bind(int slot, GPUStorageBuf **buffer)
 {
 
   create_command(Type::ResourceBind).resource_bind = {slot, buffer};
 }
 
-inline void PassBase::bind(int slot, GPUUniformBuf **buffer)
+template<class T> inline void PassBase<T>::bind(int slot, GPUUniformBuf **buffer)
 {
   create_command(Type::ResourceBind).resource_bind = {slot, buffer};
 }
 
-inline void PassBase::bind(int slot, GPUTexture **texture, eGPUSamplerState state)
+template<class T>
+inline void PassBase<T>::bind(int slot, GPUTexture **texture, eGPUSamplerState state)
 {
   create_command(Type::ResourceBind).resource_bind = {slot, texture, state};
 }
 
-inline void PassBase::bind(int slot, draw::Image **image)
+template<class T> inline void PassBase<T>::bind(int slot, draw::Image **image)
 {
   create_command(Type::ResourceBind).resource_bind = {slot, image};
 }
@@ -737,97 +609,105 @@ inline void PassBase::bind(int slot, draw::Image **image)
 /** \name Push Constant Implementation
  * \{ */
 
-inline void PassBase::push_constant(const char *name, const float &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const float &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const float2 &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const float2 &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const float3 &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const float3 &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const float4 &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const float4 &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const int &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const int &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const int2 &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const int2 &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const int3 &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const int3 &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const int4 &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const int4 &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const bool &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const bool &data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const float *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const float *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const float2 *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const float2 *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const float3 *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const float3 *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const float4 *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const float4 *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const int *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const int *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const int2 *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const int2 *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const int3 *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const int3 *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const int4 *data, int array_len)
+template<class T>
+inline void PassBase<T>::push_constant(const char *name, const int4 *data, int array_len)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data, array_len};
 }
 
-inline void PassBase::push_constant(const char *name, const float4x4 *data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const float4x4 *data)
 {
   create_command(Type::PushConstant).push_constant = {push_constant_offset(name), data};
 }
 
-inline void PassBase::push_constant(const char *name, const float4x4 &data)
+template<class T> inline void PassBase<T>::push_constant(const char *name, const float4x4 &data)
 {
   /* WORKAROUND: Push 3 consecutive commands to hold the 64 bytes of the float4x4.
    * This assumes that all commands are always stored in flat array of memory. */
