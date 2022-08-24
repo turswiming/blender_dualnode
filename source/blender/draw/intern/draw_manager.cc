@@ -48,13 +48,13 @@ void Manager::end_sync()
   GPU_compute_dispatch(shader, thread_groups, 1, 1);
 }
 
-void Manager::submit(const PassSimple &pass)
+void Manager::submit(PassSimple &pass)
 {
   command::RecordingState state;
   pass.submit(state);
 }
 
-void Manager::submit(const PassMain &pass, View &view)
+void Manager::submit(PassMain &pass, View &view)
 {
   view.bind();
 
@@ -66,9 +66,9 @@ void Manager::submit(const PassMain &pass, View &view)
 
   command::RecordingState state;
 
-  pass.draw_commands_buf_.bind(resource_id_buf);
+  pass.draw_commands_buf_.bind(pass.headers_, pass.commands_, resource_id_buf);
 
-  // GPU_storagebuf_bind(resource_id_buf, DRW_COMMAND_SLOT);
+  GPU_storagebuf_bind(resource_id_buf, DRW_COMMAND_SLOT);
 
   pass.submit(state);
 }

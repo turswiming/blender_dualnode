@@ -111,23 +111,23 @@ void StateSet::execute(RecordingState &recording_state) const
    */
   BLI_assert(DST.state_lock == 0);
 
-  if (!assign_if_different(recording_state.pipeline_state, state)) {
+  if (!assign_if_different(recording_state.pipeline_state, new_state)) {
     return;
   }
 
   /* Keep old API working. Keep the state tracking in sync. */
   /* TODO(fclem): Move at the end of a pass. */
-  DST.state = state;
+  DST.state = new_state;
 
-  GPU_state_set(to_write_mask(state),
-                to_blend(state),
-                to_face_cull_test(state),
-                to_depth_test(state),
-                to_stencil_test(state),
-                to_stencil_op(state),
-                to_provoking_vertex(state));
+  GPU_state_set(to_write_mask(new_state),
+                to_blend(new_state),
+                to_face_cull_test(new_state),
+                to_depth_test(new_state),
+                to_stencil_test(new_state),
+                to_stencil_op(new_state),
+                to_provoking_vertex(new_state));
 
-  if (state & DRW_STATE_SHADOW_OFFSET) {
+  if (new_state & DRW_STATE_SHADOW_OFFSET) {
     GPU_shadow_offset(true);
   }
   else {
@@ -135,14 +135,14 @@ void StateSet::execute(RecordingState &recording_state) const
   }
 
   /* TODO: this should be part of shader state. */
-  if (state & DRW_STATE_CLIP_PLANES) {
+  if (new_state & DRW_STATE_CLIP_PLANES) {
     GPU_clip_distances(recording_state.view_clip_plane_count);
   }
   else {
     GPU_clip_distances(0);
   }
 
-  if (state & DRW_STATE_IN_FRONT_SELECT) {
+  if (new_state & DRW_STATE_IN_FRONT_SELECT) {
     /* XXX `GPU_depth_range` is not a perfect solution
      * since very distant geometries can still be occluded.
      * Also the depth test precision of these geometries is impaired.
@@ -153,7 +153,7 @@ void StateSet::execute(RecordingState &recording_state) const
     GPU_depth_range(0.0f, 1.0f);
   }
 
-  if (state & DRW_STATE_PROGRAM_POINT_SIZE) {
+  if (new_state & DRW_STATE_PROGRAM_POINT_SIZE) {
     GPU_program_point_size(true);
   }
   else {
@@ -168,32 +168,34 @@ void StencilSet::execute() const
   GPU_stencil_reference_set(reference);
 }
 
-void MultiDraw::execute(RecordingState &state,
-                        Span<MultiDraw> multi_draw_buf,
-                        uint command_id) const
+void DrawMulti::execute(RecordingState &state) const
 {
-  while (command_id != (uint)-1) {
-    const MultiDraw &cmd = multi_draw_buf[command_id];
+  DrawMultiBuf::DrawCommandBuf &indirect_buf = multi_draw_buf->command_buf_;
+  DrawMultiBuf::DrawGroupBuf &groups = multi_draw_buf->group_buf_;
 
-    GPU_batch_set_shader(cmd.gpu_batch, state.shader);
+  uint group_index = this->group_first;
+  while (group_index != (uint)-1) {
+    const DrawGroup &grp = groups[group_index];
+
+    GPU_batch_set_shader(grp.gpu_batch, state.shader);
 
     constexpr intptr_t stride = sizeof(DrawCommand);
-    intptr_t offset = stride * cmd.command_start;
+    intptr_t offset = stride * grp.command_start;
 
     /* Draw negatively scaled geometry first. */
-    uint back_facing_len = cmd.command_len - cmd.front_facing_len;
+    uint back_facing_len = grp.command_len - grp.front_facing_len;
     if (back_facing_len > 0) {
       state.front_facing_set(false);
-      // GPU_batch_multi_draw_indirect(cmd.gpu_batch, offset, back_facing_len, stride);
+      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset);
       offset += stride * back_facing_len;
     }
 
-    if (cmd.front_facing_len > 0) {
+    if (grp.front_facing_len > 0) {
       state.front_facing_set(true);
-      // GPU_batch_multi_draw_indirect(cmd.gpu_batch, offset, cmd.front_facing_len, stride);
+      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset);
     }
 
-    command_id = cmd.next;
+    group_index = grp.next;
   }
 }
 
@@ -380,7 +382,7 @@ std::string Clear::serialize() const
 std::string StateSet::serialize() const
 {
   /* TOOD(fclem): Better serialization... */
-  return std::string(".state_set(") + std::to_string(state) + ")";
+  return std::string(".state_set(") + std::to_string(new_state) + ")";
 }
 
 std::string StencilSet::serialize() const

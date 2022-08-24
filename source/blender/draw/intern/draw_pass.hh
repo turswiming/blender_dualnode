@@ -311,7 +311,7 @@ using PassSimple = detail::Pass<DrawCommandBuf>;
  * IMPORTANT: To be used only for passes containing lots of draw calls since it has a potentially
  * high overhead due to batching and culling optimizations.
  */
-using PassMain = detail::Pass<MultiDrawBuf>;
+using PassMain = detail::Pass<DrawMultiBuf>;
 
 /** \} */
 
@@ -372,9 +372,6 @@ template<class T> void PassBase<T>::submit(command::RecordingState &state) const
       case Type::SubPass:
         sub_passes_[header.command_index].submit(state);
         break;
-      case Type::MultiDraw:
-        /* TODO */
-        break;
       default:
         commands_[header.command_index].execute(header.type, state);
         break;
@@ -395,9 +392,6 @@ template<class T> std::string PassBase<T>::serialize(std::string line_prefix) co
         break;
       case Type::SubPass:
         ss << sub_passes_[header.command_index].serialize(line_prefix);
-        break;
-      case Type::MultiDraw:
-        /* TODO */
         break;
       default:
         ss << line_prefix << commands_[header.command_index].serialize(header.type) << std::endl;

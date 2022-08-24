@@ -191,20 +191,24 @@ BLI_STATIC_ASSERT_ALIGN(CurvesInfos, 16)
 
 struct DrawCommand {
   /* TODO(fclem): Rename */
-  uint v_count;
-  uint i_count;
-  uint v_first;
+  uint vertex_len;
+  uint instance_len;
+  uint vertex_first;
+#if defined(GPU_SHADER)
   uint base_index;
   /* NOTE: base_index is i_first for non-indexed draw-calls. */
-#define _instance_first_array base_index
-  uint i_first; /* TODO(fclem): Rename to instance_first_indexed */
+#  define _instance_first_array base_index
+#else
+  union {
+    uint base_index;
+    /* Use this instead of instance_first_indexed for non indexed draw calls. */
+    uint instance_first_array;
+  };
+#endif
 
-  /** Number of instances requested by the engine for this draw. */
-  uint engine_instance_count;
-  /** Access to object / component resources (matrices, object infos, object attributes). */
-  uint resource_id;
+  uint instance_first_indexed;
 
-  uint _pad0;
+  uint _pad0, _pad1, _pad2;
 };
 BLI_STATIC_ASSERT_ALIGN(DrawCommand, 16)
 

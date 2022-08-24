@@ -9,6 +9,7 @@
  * Passes record draw commands.
  */
 
+#include "BLI_map.hh"
 #include "DRW_gpu_wrapper.hh"
 
 #include "draw_command_shared.hh"
@@ -18,6 +19,7 @@
 namespace blender::draw::command {
 
 class DrawCommandBuf;
+class DrawMultiBuf;
 
 /* -------------------------------------------------------------------- */
 /** \name Recording State
@@ -73,7 +75,7 @@ enum class Type : uint8_t {
 
   /** Special commands stored in separate buffers. */
   SubPass,
-  MultiDraw,
+  DrawMulti,
 };
 
 /**
@@ -233,6 +235,15 @@ struct Draw {
   std::string serialize() const;
 };
 
+struct DrawMulti {
+  DrawMultiBuf *multi_draw_buf;
+  uint group_first;
+  uint uuid;
+
+  void execute(RecordingState &state) const;
+  std::string serialize() const;
+};
+
 struct DrawIndirect {
   GPUBatch *batch;
   GPUStorageBuf **indirect_buf;
@@ -283,9 +294,9 @@ struct Clear {
 };
 
 struct StateSet {
-  DRWState state;
+  DRWState new_state;
 
-  void execute(RecordingState &recording_state) const;
+  void execute(RecordingState &state) const;
   std::string serialize() const;
 };
 
@@ -304,6 +315,7 @@ struct Undetermined {
     ResourceBind resource_bind;
     PushConstant push_constant;
     Draw draw;
+    DrawMulti draw_multi;
     DrawIndirect draw_indirect;
     Dispatch dispatch;
     DispatchIndirect dispatch_indirect;
@@ -327,6 +339,9 @@ struct Undetermined {
         break;
       case command::Type::Draw:
         draw.execute(state);
+        break;
+      case command::Type::DrawMulti:
+        draw_multi.execute(state);
         break;
       case command::Type::DrawIndirect:
         draw_indirect.execute(state);
@@ -405,8 +420,8 @@ class DrawCommandBuf {
  public:
   void clear(){};
 
-  void append_draw(Vector<command::Header> &headers,
-                   Vector<command::Undetermined> &commands,
+  void append_draw(Vector<Header> &headers,
+                   Vector<Undetermined> &commands,
                    GPUBatch *batch,
                    uint instance_len,
                    uint vertex_len,
@@ -417,15 +432,23 @@ class DrawCommandBuf {
     instance_len = instance_len != -1 ? instance_len : 1;
 
     int64_t index = commands.append_and_get_index({});
-    headers.append({command::Type::Draw, static_cast<uint>(index)});
+    headers.append({Type::Draw, static_cast<uint>(index)});
     commands[index].draw = {batch, instance_len, vertex_len, vertex_first, handle};
   }
 
-  void bind(ResourceIdBuf &resource_id_buf)
+  void bind(Vector<Header> &headers,
+            Vector<Undetermined> &commands,
+            ResourceIdBuf &resource_id_buf)
   {
     uint total_instance = 0;
-#if 0
-    for (DrawCommand &cmd : command_buf_) {
+
+    for (const Header &header : headers) {
+      if (header.type != Type::Draw) {
+        continue;
+      }
+
+      Draw &cmd = commands[header.command_index].draw;
+
       int batch_vert_len, batch_inst_len;
       /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
       GPU_batch_draw_parameter_get(cmd.batch, &batch_vert_len, &batch_inst_len);
@@ -433,22 +456,22 @@ class DrawCommandBuf {
        * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
       BLI_assert(batch_inst_len == 1);
 
-      cmd.v_count = max_ii(cmd.v_count, batch_vert_len);
+      cmd.vertex_len = max_ii(cmd.vertex_len, batch_vert_len);
 
-      if (cmd.resource_id > 0) {
+      if (cmd.handle.raw > 0) {
         /* Save correct offset to start of resource_id buffer region for this draw. */
-        cmd.i_first = total_instance;
-        total_instance += cmd.i_count;
+        uint instance_first = total_instance;
+        total_instance += cmd.instance_len;
         /* Ensure the buffer is big enough. */
         resource_id_buf.get_or_resize(total_instance - 1);
 
         /* Copy the resource id for all instances. */
-        for (int i = cmd.i_first; i < (cmd.i_first + cmd.i_count); i++) {
-          resource_id_buf[i] = cmd.resource_id;
+        uint index = cmd.handle.resource_index();
+        for (int i = instance_first; i < (instance_first + cmd.instance_len); i++) {
+          resource_id_buf[i] = index;
         }
       }
     }
-#endif
 
     if (total_instance > 0) {
       resource_id_buf.push_update();
@@ -492,18 +515,111 @@ class DrawCommandBuf {
  *
  * \{ */
 
-struct MultiDrawBuf {
-  void clear(){};
+class DrawMultiBuf {
+  friend DrawMulti;
 
-  void append_draw(Vector<command::Header> &,
-                   Vector<command::Undetermined> &,
-                   GPUBatch *,
-                   uint,
-                   uint,
-                   uint,
-                   ResourceHandle){};
+ private:
+  using DrawGroupBuf = StorageArrayBuffer<DrawGroup, 16>;
+  using DrawPrototypeBuf = StorageArrayBuffer<DrawPrototype, 16>;
+  using DrawCommandBuf = StorageArrayBuffer<DrawCommand, 16, true>;
 
-  void bind(ResourceIdBuf &){};
+  /** Key used to identify which DrawGroup to increment in the subgroup map. */
+  using DrawGroupKey = std::pair<uint, GPUBatch *>;
+  using DrawGroupMap = Map<DrawGroupKey, uint>;
+  /** Maps a command group and a gpu batch to their unique multi_draw command. */
+  DrawGroupMap group_ids_;
+
+  /** DrawGroup Command heap. Uploaded to GPU for sorting. */
+  DrawGroupBuf group_buf_;
+  /** Prototype commands. */
+  DrawPrototypeBuf prototype_buf_;
+  /** Command list generated by the sorting / compaction steps. Lives on GPU. */
+  DrawCommandBuf command_buf_;
+  /** Give unique ID to each header so we can use that as hash key. */
+  uint header_id_counter_ = 0;
+  /** Number of groups inside group_buf_. */
+  uint group_count_ = 0;
+  /** Number of groups inside group_buf_. */
+  uint prototype_count_ = 0;
+
+ public:
+  void clear()
+  {
+    header_id_counter_ = 0;
+    group_count_ = 0;
+  }
+
+  void append_draw(Vector<Header> &headers,
+                   Vector<Undetermined> &commands,
+                   GPUBatch *batch,
+                   uint instance_len,
+                   uint vertex_len,
+                   uint vertex_first,
+                   ResourceHandle handle)
+  {
+    /* Unsupported for now. Use PassSimple. */
+    BLI_assert(vertex_first == 0);
+
+    /* If there was some state changes since previous call, we have to create another command. */
+    if (headers.last().type != Type::DrawMulti) {
+      uint index = commands.append_and_get_index({});
+      headers.append({Type::DrawMulti, index});
+      commands[index].draw_multi = {this, (uint)-1, header_id_counter_++};
+    }
+
+    DrawMulti &cmd = commands.last().draw_multi;
+
+    uint group_id = group_ids_.lookup_default(DrawGroupKey(cmd.uuid, batch), (uint)-1);
+
+    if (group_id == (uint)-1) {
+      uint new_group_id = group_count_++;
+
+      DrawGroup &group = group_buf_.get_or_resize(new_group_id);
+      group.next = cmd.group_first;
+      group.command_len = 1;
+      group.front_facing_len = !handle.has_inverted_handedness();
+      group.gpu_batch = batch;
+
+      /* Append to list. */
+      cmd.group_first = new_group_id;
+      group_id = new_group_id;
+    }
+    else {
+      DrawGroup &group = group_buf_.get_or_resize(group_id);
+      group.command_len += 1;
+      group.front_facing_len += !handle.has_inverted_handedness();
+    }
+
+    DrawPrototype &draw = prototype_buf_.get_or_resize(prototype_count_++);
+    draw.group_id = group_id;
+    draw.resource_handle = handle.raw;
+    draw.instance_len = instance_len;
+    draw.vertex_len = vertex_len;
+  }
+
+  void bind(Vector<Header> &, Vector<Undetermined> &, ResourceIdBuf &)
+  {
+    /* Compute prefix sum for each multi draw command. */
+    uint prefix_sum = 0u;
+    for (DrawGroup &group : group_buf_) {
+      group.command_start = prefix_sum;
+      prefix_sum += group.command_len;
+
+      int batch_inst_len;
+      /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
+      GPU_batch_draw_parameter_get(group.gpu_batch, &group.vertex_len, &batch_inst_len);
+      /* Tag group as using index draw (changes indirect drawcall structure). */
+      if (group.gpu_batch->elem != nullptr) {
+        group.vertex_len = -group.vertex_len;
+      }
+      /* Instancing attributes are not supported using the new pipeline since we use the base
+       * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
+      BLI_assert(batch_inst_len == 1);
+      UNUSED_VARS_NDEBUG(batch_inst_len);
+    }
+
+    // GPU_compute_dispatch(resource_id_expand_shader, n, 1, 1);
+  }
 };
 
 /** \} */
