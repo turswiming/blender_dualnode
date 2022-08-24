@@ -127,3 +127,20 @@ diff -Naur orig/cmake/macros/Private.cmake external_usd/cmake/macros/Private.cma
          set(LIBRARY_NAME "_${NAME}_d")
      else()
          set(LIBRARY_NAME "_${NAME}")
+diff --git a/pxr/imaging/hioOpenVDB/CMakeLists.txt b/pxr/imaging/hioOpenVDB/CMakeLists.txt
+index e3db1d1319..2a2dfd5e72 100644
+--- a/pxr/imaging/hioOpenVDB/CMakeLists.txt
++++ b/pxr/imaging/hioOpenVDB/CMakeLists.txt
+@@ -7,6 +7,12 @@ if (NOT ${PXR_BUILD_GPU_SUPPORT})
+     return()
+ endif()
+ 
++if (WIN32)
++    # OpenVDB uses constants from <cmath> that aren't available on
++    # Windows unless this is defined.
++    add_definitions(-D_USE_MATH_DEFINES)
++endif()
++
+ pxr_library(hioOpenVDB
+     LIBRARIES
+         ar
