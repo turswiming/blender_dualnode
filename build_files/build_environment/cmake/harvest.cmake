@@ -57,23 +57,53 @@ function(harvest from to)
   endif()
 endfunction()
 
-# Set rpath on Python module to point to the shared libraries folder in the
-# Blender installation. Ideally this would be done as part of the Blender build
-# since it makes assumptions about where the files will be installed. However it
-# would add patchelf as a new dependency for building.
-function(harvest_with_rpath from to pattern)
+# Set rpath on shared libraries to $ORIGIN since all will be installed in the same
+# lib folder, and remove any absolute paths.
+#
+# Ideally this would be done as part of the Blender build since it makes assumptions
+# about where the files will be installed. However it would add patchelf as a new
+# dependency for building.
+if(APPLE)
+  set(set_rpath_cmd python3 ${CMAKE_CURRENT_SOURCE_DIR}/darwin/set_rpath.py @loader_path)
+else()
+  set(set_rpath_cmd patchelf --set-rpath $ORIGIN)
+endif()
+
+function(harvest_rpath_lib from to pattern)
   harvest(${from} ${to} ${pattern})
 
   install(CODE "\
-    file(GLOB_RECURSE shared_libs ${HARVEST_TARGET}/${to}/${pattern}\.so) \n
+    cmake_policy(SET CMP0009 NEW)\n
+    file(GLOB_RECURSE shared_libs ${HARVEST_TARGET}/${to}/${pattern}) \n
+    foreach(f \${shared_libs}) \n
+      if(NOT IS_SYMLINK \${f})\n
+        execute_process(COMMAND ${set_rpath_cmd} \${f}) \n
+      endif()\n
+    endforeach()")
+endfunction()
+
+# Set rpath on utility binaries assuming they are run from their install location.
+function(harvest_rpath_bin from to pattern)
+  harvest(${from} ${to} ${pattern})
+
+  install(CODE "\
+    file(GLOB_RECURSE shared_libs ${HARVEST_TARGET}/${to}/${pattern}) \n
+    foreach(f \${shared_libs}) \n
+      execute_process(COMMAND ${set_rpath_cmd}/../lib; \${f}) \n
+    endforeach()")
+endfunction()
+
+# Set rpath on Python module to point to the shared libraries folder in the Blender
+# installation.
+function(harvest_rpath_python from to pattern)
+  harvest(${from} ${to} ${pattern})
+
+  install(CODE "\
+    file(GLOB_RECURSE shared_libs ${HARVEST_TARGET}/${to}/${pattern}\.so*) \n
     foreach(f \${shared_libs}) \n
       get_filename_component(f_dir \${f} DIRECTORY) \n
       file(RELATIVE_PATH relative_dir \${f_dir} ${HARVEST_TARGET}) \n
-      if(APPLE) \n
-        execute_process(COMMAND install_name_tool -add_rpath @loader_path/\${relative_dir}lib \${f}) \n
-      else() \n
-        execute_process(COMMAND patchelf --set-rpath $ORIGIN/\${relative_dir}../lib \${f}) \n
-      endif() \n
+      execute_process(COMMAND ${set_rpath_cmd}/\${relative_dir}../lib \${f}) \n
     endforeach()")
 endfunction()
 
@@ -83,7 +113,7 @@ harvest(alembic/bin alembic/bin "*")
 harvest(brotli/include brotli/include "*.h")
 harvest(brotli/lib brotli/lib "*.a")
 harvest(boost/include boost/include "*")
-harvest(boost/lib boost/lib "*${SHAREDLIBEXT}*")
+harvest_rpath_lib(boost/lib boost/lib "*${SHAREDLIBEXT}*")
 harvest(imath/include imath/include "*.h")
 harvest(imath/lib imath/lib "*.a")
 harvest(ffmpeg/include ffmpeg/include "*.h")
@@ -161,11 +191,11 @@ harvest(embree/lib embree/lib "*.a")
 harvest(openjpeg/include/openjpeg-${OPENJPEG_SHORT_VERSION} openjpeg/include "*.h")
 harvest(openjpeg/lib openjpeg/lib "*.a")
 harvest(opensubdiv/include opensubdiv/include "*.h")
-harvest(opensubdiv/lib opensubdiv/lib "*${SHAREDLIBEXT}*")
+harvest_rpath_lib(opensubdiv/lib opensubdiv/lib "*${SHAREDLIBEXT}*")
 harvest(openvdb/include/openvdb openvdb/include/openvdb "*.h")
 harvest(openvdb/include/nanovdb openvdb/include/nanovdb "*.h")
-harvest(openvdb/lib openvdb/lib "*${SHAREDLIBEXT}*")
-harvest_with_rpath(openvdb/lib/python${PYTHON_SHORT_VERSION} python/lib/python${PYTHON_SHORT_VERSION} "*pyopenvdb*")
+harvest_rpath_lib(openvdb/lib openvdb/lib "*${SHAREDLIBEXT}*")
+harvest_rpath_python(openvdb/lib/python${PYTHON_SHORT_VERSION} python/lib/python${PYTHON_SHORT_VERSION} "*pyopenvdb*")
 harvest(xr_openxr_sdk/include/openxr xr_openxr_sdk/include/openxr "*.h")
 harvest(xr_openxr_sdk/lib xr_openxr_sdk/lib "*.a")
 harvest(osl/bin osl/bin "oslc")
@@ -186,7 +216,7 @@ harvest(sndfile/lib sndfile/lib "*.a")
 harvest(spnav/include spnav/include "*.h")
 harvest(spnav/lib spnav/lib "*.a")
 harvest(tbb/include tbb/include "*.h")
-harvest(tbb/lib/libtbb${SHAREDLIBEXT} tbb/lib/libtbb${SHAREDLIBEXT})
+harvest_rpath_lib(tbb/lib tbb/lib "libtbb${SHAREDLIBEXT}")
 harvest(theora/lib ffmpeg/lib "*.a")
 harvest(tiff/include tiff/include "*.h")
 harvest(tiff/lib tiff/lib "*.a")
@@ -199,9 +229,9 @@ harvest(aom/lib ffmpeg/lib "*.a")
 harvest(webp/lib webp/lib "*.a")
 harvest(webp/include webp/include "*.h")
 harvest(usd/include usd/include "*.h")
-harvest(usd/lib/libusd_usd_ms${SHAREDLIBEXT} usd/lib/libusd_usd_ms${SHAREDLIBEXT})
+harvest_rpath_lib(usd/lib usd/lib "libusd_usd_ms${SHAREDLIBEXT}")
 harvest(usd/lib/usd usd/lib/usd "*")
-harvest_with_rpath(usd/lib/python/pxr python/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr "*")
+harvest_rpath_python(usd/lib/python/pxr python/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr "*")
 harvest(usd/plugin usd/plugin "*")
 harvest(potrace/include potrace/include "*.h")
 harvest(potrace/lib potrace/lib "*.a")

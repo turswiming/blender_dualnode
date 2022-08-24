@@ -34,15 +34,6 @@ else()
     -DTBB_INCLUDE_DIR=${LIBDIR}/tbb/include
     -DTBB_tbb_LIBRARY=${LIBDIR}/tbb/lib/${LIBPREFIX}tbb${SHAREDLIBEXT}
   )
-  if(APPLE)
-    set(OPENSUBDIV_EXTRA_ARGS
-      ${OPENSUBDIV_EXTRA_ARGS}
-      # Ensure opensubdiv library itself will be referenced with @rpath.
-      -DCMAKE_MACOSX_RPATH=ON
-      # Avoid adding absolute LC_RPATH.
-      -DCMAKE_SKIP_RPATH=ON
-    )
-  endif()
 endif()
 
 ExternalProject_Add(external_opensubdiv
