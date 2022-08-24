@@ -87,7 +87,7 @@ struct Header {
   /** Command type. */
   Type type;
   /** Command index in command heap of this type. */
-  uint command_index;
+  uint index;
 };
 
 struct ShaderBind {
@@ -309,97 +309,19 @@ struct StencilSet {
   std::string serialize() const;
 };
 
-struct Undetermined {
-  union {
-    ShaderBind shader_bind;
-    ResourceBind resource_bind;
-    PushConstant push_constant;
-    Draw draw;
-    DrawMulti draw_multi;
-    DrawIndirect draw_indirect;
-    Dispatch dispatch;
-    DispatchIndirect dispatch_indirect;
-    Barrier barrier;
-    Clear clear;
-    StateSet state_set;
-    StencilSet stencil_set;
-  };
-
-  void execute(const command::Type &type, command::RecordingState &state) const
-  {
-    switch (type) {
-      case command::Type::ShaderBind:
-        shader_bind.execute(state);
-        break;
-      case command::Type::ResourceBind:
-        resource_bind.execute();
-        break;
-      case command::Type::PushConstant:
-        push_constant.execute(state);
-        break;
-      case command::Type::Draw:
-        draw.execute(state);
-        break;
-      case command::Type::DrawMulti:
-        draw_multi.execute(state);
-        break;
-      case command::Type::DrawIndirect:
-        draw_indirect.execute(state);
-        break;
-      case command::Type::Dispatch:
-        dispatch.execute(state);
-        break;
-      case command::Type::DispatchIndirect:
-        dispatch_indirect.execute(state);
-        break;
-      case command::Type::Barrier:
-        barrier.execute();
-        break;
-      case command::Type::Clear:
-        clear.execute();
-        break;
-      case command::Type::StateSet:
-        state_set.execute(state);
-        break;
-      case command::Type::StencilSet:
-        stencil_set.execute();
-        break;
-      default:
-        /* Skip Type::None. */
-        break;
-    }
-  }
-
-  std::string serialize(const command::Type &type) const
-  {
-    switch (type) {
-      case command::Type::ShaderBind:
-        return shader_bind.serialize();
-      case command::Type::ResourceBind:
-        return resource_bind.serialize();
-      case command::Type::PushConstant:
-        return push_constant.serialize();
-      case command::Type::Draw:
-        return draw.serialize();
-      case command::Type::DrawIndirect:
-        return draw_indirect.serialize();
-      case command::Type::Dispatch:
-        return dispatch.serialize();
-      case command::Type::DispatchIndirect:
-        return dispatch_indirect.serialize();
-      case command::Type::Barrier:
-        return barrier.serialize();
-      case command::Type::Clear:
-        return clear.serialize();
-      case command::Type::StateSet:
-        return state_set.serialize();
-      case command::Type::StencilSet:
-        return stencil_set.serialize();
-      default:
-        /* Skip Type::None. */
-        return "";
-    }
-  }
+union Undetermined {
+  ShaderBind shader_bind;
+  ResourceBind resource_bind;
+  PushConstant push_constant;
+  Draw draw;
+  DrawMulti draw_multi;
+  DrawIndirect draw_indirect;
+  Dispatch dispatch;
+  DispatchIndirect dispatch_indirect;
+  Barrier barrier;
+  Clear clear;
+  StateSet state_set;
+  StencilSet stencil_set;
 };
 
 /** Try to keep the command size as low as possible for performance. */
@@ -447,7 +369,7 @@ class DrawCommandBuf {
         continue;
       }
 
-      Draw &cmd = commands[header.command_index].draw;
+      Draw &cmd = commands[header.index].draw;
 
       int batch_vert_len, batch_inst_len;
       /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
@@ -523,10 +445,9 @@ class DrawMultiBuf {
   using DrawPrototypeBuf = StorageArrayBuffer<DrawPrototype, 16>;
   using DrawCommandBuf = StorageArrayBuffer<DrawCommand, 16, true>;
 
-  /** Key used to identify which DrawGroup to increment in the subgroup map. */
   using DrawGroupKey = std::pair<uint, GPUBatch *>;
   using DrawGroupMap = Map<DrawGroupKey, uint>;
-  /** Maps a command group and a gpu batch to their unique multi_draw command. */
+  /** Maps a DrawMulti command and a gpu batch to their unique DrawGroup command. */
   DrawGroupMap group_ids_;
 
   /** DrawGroup Command heap. Uploaded to GPU for sorting. */
@@ -547,6 +468,7 @@ class DrawMultiBuf {
   {
     header_id_counter_ = 0;
     group_count_ = 0;
+    prototype_count_ = 0;
   }
 
   void append_draw(Vector<Header> &headers,

@@ -369,11 +369,47 @@ template<class T> void PassBase<T>::submit(command::RecordingState &state) const
 
   for (const command::Header &header : headers_) {
     switch (header.type) {
-      case Type::SubPass:
-        sub_passes_[header.command_index].submit(state);
-        break;
       default:
-        commands_[header.command_index].execute(header.type, state);
+      case Type::None:
+        break;
+      case Type::SubPass:
+        sub_passes_[header.index].submit(state);
+        break;
+      case command::Type::ShaderBind:
+        commands_[header.index].shader_bind.execute(state);
+        break;
+      case command::Type::ResourceBind:
+        commands_[header.index].resource_bind.execute();
+        break;
+      case command::Type::PushConstant:
+        commands_[header.index].push_constant.execute(state);
+        break;
+      case command::Type::Draw:
+        commands_[header.index].draw.execute(state);
+        break;
+      case command::Type::DrawMulti:
+        commands_[header.index].draw_multi.execute(state);
+        break;
+      case command::Type::DrawIndirect:
+        commands_[header.index].draw_indirect.execute(state);
+        break;
+      case command::Type::Dispatch:
+        commands_[header.index].dispatch.execute(state);
+        break;
+      case command::Type::DispatchIndirect:
+        commands_[header.index].dispatch_indirect.execute(state);
+        break;
+      case command::Type::Barrier:
+        commands_[header.index].barrier.execute();
+        break;
+      case command::Type::Clear:
+        commands_[header.index].clear.execute();
+        break;
+      case command::Type::StateSet:
+        commands_[header.index].state_set.execute(state);
+        break;
+      case command::Type::StencilSet:
+        commands_[header.index].stencil_set.execute();
         break;
     }
   }
@@ -388,13 +424,44 @@ template<class T> std::string PassBase<T>::serialize(std::string line_prefix) co
   line_prefix += "  ";
   for (const command::Header &header : headers_) {
     switch (header.type) {
+      default:
       case Type::None:
         break;
       case Type::SubPass:
-        ss << sub_passes_[header.command_index].serialize(line_prefix);
+        ss << sub_passes_[header.index].serialize(line_prefix);
         break;
-      default:
-        ss << line_prefix << commands_[header.command_index].serialize(header.type) << std::endl;
+      case Type::ShaderBind:
+        ss << line_prefix << commands_[header.index].shader_bind.serialize() << std::endl;
+        break;
+      case Type::ResourceBind:
+        ss << line_prefix << commands_[header.index].resource_bind.serialize() << std::endl;
+        break;
+      case Type::PushConstant:
+        ss << line_prefix << commands_[header.index].push_constant.serialize() << std::endl;
+        break;
+      case Type::Draw:
+        ss << line_prefix << commands_[header.index].draw.serialize() << std::endl;
+        break;
+      case Type::DrawIndirect:
+        ss << line_prefix << commands_[header.index].draw_indirect.serialize() << std::endl;
+        break;
+      case Type::Dispatch:
+        ss << line_prefix << commands_[header.index].dispatch.serialize() << std::endl;
+        break;
+      case Type::DispatchIndirect:
+        ss << line_prefix << commands_[header.index].dispatch_indirect.serialize() << std::endl;
+        break;
+      case Type::Barrier:
+        ss << line_prefix << commands_[header.index].barrier.serialize() << std::endl;
+        break;
+      case Type::Clear:
+        ss << line_prefix << commands_[header.index].clear.serialize() << std::endl;
+        break;
+      case Type::StateSet:
+        ss << line_prefix << commands_[header.index].state_set.serialize() << std::endl;
+        break;
+      case Type::StencilSet:
+        ss << line_prefix << commands_[header.index].stencil_set.serialize() << std::endl;
         break;
     }
   }
