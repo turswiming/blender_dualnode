@@ -27,25 +27,33 @@ struct DrawGroup {
   /** Index of next DrawGroup from the same header. */
   uint next;
 
-  /** Index of the first command after sorting. */
-  uint command_start;
-  /** Total number of commands (including inverted facing). Needed to issue the draw call. */
-  uint command_len;
-  /** Number of non inverted scaling commands in this Group. */
+  /** Index of the first instances after sorting. */
+  uint start;
+  /** Total number of instances (including inverted facing). Needed to issue the draw call. */
+  uint len;
+  /** Number of non inverted scaling instances in this Group. */
   uint front_facing_len;
 
-  /** GPUBatch values to be copied to DrawCommand after sorting (if not overriden). */
-  int vertex_len; /** NOTE: Negative if using indexed draw. */
-  uint _pad0;
-
-#ifdef GPU_SHADER
-  uint _pad1 _pad2;
-#else
+#ifndef GPU_SHADER
   /* NOTE: Union just to make sure the struct has always the same size on all platform. */
   union {
-    /** Needed to create the correct draw call. */
-    GPUBatch *gpu_batch;
-    uint _pad1[2];
+    struct {
+      /** Needed to create the correct draw call. Deleted before upload. */
+      GPUBatch *gpu_batch;
+      /** For debugging only */
+      uint front_proto_len;
+      uint back_proto_len;
+    };
+    struct {
+#endif
+      /** GPUBatch values to be copied to DrawCommand after sorting (if not overriden). */
+      int vertex_len; /** NOTE: Negative if using indexed draw. */
+      /** Atomic counters used during command sorting. */
+      uint total_counter;
+      uint front_facing_counter;
+      uint back_facing_counter;
+#ifndef GPU_SHADER
+    };
   };
 #endif
 };
@@ -61,9 +69,9 @@ struct DrawPrototype {
   uint group_id;
   /* Resource handle associated with this call. Also reference visibility. */
   uint resource_handle;
-  /* Override of GPUBatch values. (uint)-1 otherwise. */
-  uint vertex_len;
+  /* Number of instances. */
   uint instance_len;
+  uint _pad0;
 };
 
 /** \} */

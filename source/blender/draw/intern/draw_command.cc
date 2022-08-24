@@ -70,6 +70,39 @@ void Draw::execute(RecordingState &state) const
   GPU_batch_draw_advanced(batch, vertex_first, vertex_len, 0, instance_len);
 }
 
+void DrawMulti::execute(RecordingState &state) const
+{
+  DrawMultiBuf::DrawCommandBuf &indirect_buf = multi_draw_buf->command_buf_;
+  DrawMultiBuf::DrawGroupBuf &groups = multi_draw_buf->group_buf_;
+
+  uint group_index = this->group_first;
+  while (group_index != (uint)-1) {
+    const DrawGroup &grp = groups[group_index];
+
+    /** IMPORTANT: We cannot use grp.gpu_batch here since it has been overriden by the atomic
+     * counters. Use the DrawMulti.batch instead. */
+
+    GPU_batch_set_shader(batch, state.shader);
+
+    constexpr intptr_t stride = sizeof(DrawCommand);
+    /* We have 2 indirect command reserved per draw group. */
+    intptr_t offset = stride * group_index * 2;
+
+    /* Draw negatively scaled geometry first. */
+    if (grp.len - grp.front_facing_len > 0) {
+      state.front_facing_set(false);
+      GPU_batch_draw_indirect(batch, indirect_buf, offset);
+    }
+
+    if (grp.front_facing_len > 0) {
+      state.front_facing_set(true);
+      GPU_batch_draw_indirect(batch, indirect_buf, offset + stride);
+    }
+
+    group_index = grp.next;
+  }
+}
+
 void DrawIndirect::execute(RecordingState &state) const
 {
   state.front_facing_set(handle.has_inverted_handedness());
@@ -166,37 +199,6 @@ void StencilSet::execute() const
   GPU_stencil_write_mask_set(write_mask);
   GPU_stencil_compare_mask_set(compare_mask);
   GPU_stencil_reference_set(reference);
-}
-
-void DrawMulti::execute(RecordingState &state) const
-{
-  DrawMultiBuf::DrawCommandBuf &indirect_buf = multi_draw_buf->command_buf_;
-  DrawMultiBuf::DrawGroupBuf &groups = multi_draw_buf->group_buf_;
-
-  uint group_index = this->group_first;
-  while (group_index != (uint)-1) {
-    const DrawGroup &grp = groups[group_index];
-
-    GPU_batch_set_shader(grp.gpu_batch, state.shader);
-
-    constexpr intptr_t stride = sizeof(DrawCommand);
-    intptr_t offset = stride * grp.command_start;
-
-    /* Draw negatively scaled geometry first. */
-    uint back_facing_len = grp.command_len - grp.front_facing_len;
-    if (back_facing_len > 0) {
-      state.front_facing_set(false);
-      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset);
-      offset += stride * back_facing_len;
-    }
-
-    if (grp.front_facing_len > 0) {
-      state.front_facing_set(true);
-      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset);
-    }
-
-    group_index = grp.next;
-  }
 }
 
 /** \} */
@@ -333,6 +335,70 @@ std::string Draw::serialize() const
   return std::string(".draw(inst_len=") + inst_len + ", vert_len=" + vert_len +
          ", vert_first=" + vert_first + ", res_id=" + std::to_string(handle.resource_index()) +
          ")";
+}
+
+std::string DrawMulti::serialize(std::string line_prefix) const
+{
+  DrawMultiBuf::DrawGroupBuf &groups = multi_draw_buf->group_buf_;
+
+  MutableSpan<DrawPrototype> prototypes(multi_draw_buf->prototype_buf_.data(),
+                                        multi_draw_buf->prototype_count_);
+
+  /* This emulates the GPU sorting but without the unstable draw order. */
+  std::sort(
+      prototypes.begin(), prototypes.end(), [](const DrawPrototype &a, const DrawPrototype &b) {
+        return (a.group_id < b.group_id) ||
+               (a.group_id == b.group_id && a.resource_handle > b.resource_handle);
+      });
+
+  /* Compute prefix sum to have correct offsets. */
+  uint prefix_sum = 0u;
+  for (DrawGroup &group : groups) {
+    group.start = prefix_sum;
+    prefix_sum += group.front_proto_len + group.back_proto_len;
+  }
+
+  std::stringstream ss;
+
+  uint group_len = 0;
+  uint group_index = this->group_first;
+  while (group_index != (uint)-1) {
+    const DrawGroup &grp = groups[group_index];
+
+    ss << std::endl << line_prefix << "  .group(id=" << group_index << ", len=" << grp.len << ")";
+
+    intptr_t offset = grp.start;
+
+    if (grp.back_proto_len > 0) {
+      for (DrawPrototype &proto : prototypes.slice({offset, grp.back_proto_len})) {
+        // BLI_assert(proto.group_id == group_index);
+        ResourceHandle handle(proto.resource_handle);
+        // BLI_assert(handle.has_inverted_handedness());
+        ss << std::endl
+           << line_prefix << "    .proto(instance_len=" << std::to_string(proto.instance_len)
+           << ", resource_id=" << std::to_string(handle.resource_index()) << ", back_face)";
+      }
+      offset += grp.back_proto_len;
+    }
+
+    if (grp.front_proto_len > 0) {
+      for (DrawPrototype &proto : prototypes.slice({offset, grp.front_proto_len})) {
+        // BLI_assert(proto.group_id == group_index);
+        ResourceHandle handle(proto.resource_handle);
+        // BLI_assert(!handle.has_inverted_handedness());
+        ss << std::endl
+           << line_prefix << "    .proto(instance_len=" << std::to_string(proto.instance_len)
+           << ", resource_id=" << std::to_string(handle.resource_index()) << ", front_face)";
+      }
+    }
+
+    group_index = grp.next;
+    group_len++;
+  }
+
+  ss << std::endl;
+
+  return line_prefix + ".draw_multi(" + std::to_string(group_len) + ")" + ss.str();
 }
 
 std::string DrawIndirect::serialize() const

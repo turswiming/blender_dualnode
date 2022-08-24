@@ -236,12 +236,13 @@ struct Draw {
 };
 
 struct DrawMulti {
+  GPUBatch *batch;
   DrawMultiBuf *multi_draw_buf;
   uint group_first;
   uint uuid;
 
   void execute(RecordingState &state) const;
-  std::string serialize() const;
+  std::string serialize(std::string line_prefix) const;
 };
 
 struct DrawIndirect {
@@ -460,7 +461,7 @@ class DrawMultiBuf {
   uint header_id_counter_ = 0;
   /** Number of groups inside group_buf_. */
   uint group_count_ = 0;
-  /** Number of groups inside group_buf_. */
+  /** Number of prototype command inside prototype_buf_. */
   uint prototype_count_ = 0;
 
  public:
@@ -480,52 +481,59 @@ class DrawMultiBuf {
                    ResourceHandle handle)
   {
     /* Unsupported for now. Use PassSimple. */
-    BLI_assert(vertex_first == 0);
+    BLI_assert(vertex_first == 0 || vertex_first == -1);
+    BLI_assert(vertex_len == -1);
 
     /* If there was some state changes since previous call, we have to create another command. */
     if (headers.last().type != Type::DrawMulti) {
       uint index = commands.append_and_get_index({});
       headers.append({Type::DrawMulti, index});
-      commands[index].draw_multi = {this, (uint)-1, header_id_counter_++};
+      commands[index].draw_multi = {batch, this, (uint)-1, header_id_counter_++};
     }
 
     DrawMulti &cmd = commands.last().draw_multi;
 
-    uint group_id = group_ids_.lookup_default(DrawGroupKey(cmd.uuid, batch), (uint)-1);
+    uint &group_id = group_ids_.lookup_or_add(DrawGroupKey(cmd.uuid, batch), (uint)-1);
+
+    bool inverted = handle.has_inverted_handedness();
 
     if (group_id == (uint)-1) {
       uint new_group_id = group_count_++;
 
       DrawGroup &group = group_buf_.get_or_resize(new_group_id);
       group.next = cmd.group_first;
-      group.command_len = 1;
-      group.front_facing_len = !handle.has_inverted_handedness();
+      group.len = instance_len;
+      group.front_facing_len = inverted ? 0 : instance_len;
       group.gpu_batch = batch;
-
+      group.front_proto_len = 0;
+      group.back_proto_len = 0;
+      /* For serialization only. */
+      (inverted ? group.back_proto_len : group.front_proto_len)++;
       /* Append to list. */
       cmd.group_first = new_group_id;
       group_id = new_group_id;
     }
     else {
-      DrawGroup &group = group_buf_.get_or_resize(group_id);
-      group.command_len += 1;
-      group.front_facing_len += !handle.has_inverted_handedness();
+      DrawGroup &group = group_buf_[group_id];
+      group.len += instance_len;
+      group.front_facing_len += inverted ? 0 : instance_len;
+      /* For serialization only. */
+      (inverted ? group.back_proto_len : group.front_proto_len)++;
     }
 
     DrawPrototype &draw = prototype_buf_.get_or_resize(prototype_count_++);
     draw.group_id = group_id;
     draw.resource_handle = handle.raw;
     draw.instance_len = instance_len;
-    draw.vertex_len = vertex_len;
   }
 
-  void bind(Vector<Header> &, Vector<Undetermined> &, ResourceIdBuf &)
+  void bind(Vector<Header> &, Vector<Undetermined> &, ResourceIdBuf &resource_id_buf)
   {
-    /* Compute prefix sum for each multi draw command. */
     uint prefix_sum = 0u;
     for (DrawGroup &group : group_buf_) {
-      group.command_start = prefix_sum;
-      prefix_sum += group.command_len;
+      /* Compute prefix sum of all instance of previous group. */
+      group.start = prefix_sum;
+      prefix_sum += group.len;
 
       int batch_inst_len;
       /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
@@ -538,7 +546,14 @@ class DrawMultiBuf {
        * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
       BLI_assert(batch_inst_len == 1);
       UNUSED_VARS_NDEBUG(batch_inst_len);
+
+      /* Now that we got the batch infos, we can set the counters to 0. */
+      group.total_counter = group.front_facing_counter = group.back_facing_counter = 0;
     }
+
+    group_buf_.push_update();
+    /* Allocate enough for the expansion pass. */
+    resource_id_buf.get_or_resize(prefix_sum);
 
     // GPU_compute_dispatch(resource_id_expand_shader, n, 1, 1);
   }

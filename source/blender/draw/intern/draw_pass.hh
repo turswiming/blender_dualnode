@@ -442,6 +442,9 @@ template<class T> std::string PassBase<T>::serialize(std::string line_prefix) co
       case Type::Draw:
         ss << line_prefix << commands_[header.index].draw.serialize() << std::endl;
         break;
+      case Type::DrawMulti:
+        ss << commands_[header.index].draw_multi.serialize(line_prefix);
+        break;
       case Type::DrawIndirect:
         ss << line_prefix << commands_[header.index].draw_indirect.serialize() << std::endl;
         break;

@@ -132,4 +132,40 @@ static void test_draw_pass_sub_ordering()
 }
 DRAW_TEST(draw_pass_sub_ordering)
 
+static void test_draw_pass_multi_draw()
+{
+  PassMain pass = {"test.multi_draw"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA));
+  /* Each draw procedural type uses a different batch. Groups are drawn in reverse order. */
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, {1});
+  pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, {2});
+  pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, {3});
+  pass.draw_procedural(GPU_PRIM_POINTS, 5, -1, -1, ResourceHandle(4, true));
+  pass.draw_procedural(GPU_PRIM_LINES, 1, -1, -1, {5});
+  pass.draw_procedural(GPU_PRIM_POINTS, 6, -1, -1, {5});
+  pass.draw_procedural(GPU_PRIM_TRIS, 3, -1, -1, {6});
+
+  std::string result = pass.serialize();
+  std::stringstream expected;
+  expected << ".test.multi_draw" << std::endl;
+  expected << "  .shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << "  .draw_multi(3)" << std::endl;
+  expected << "    .group(id=2, len=1)" << std::endl;
+  expected << "      .proto(instance_len=1, resource_id=5, front_face)" << std::endl;
+  expected << "    .group(id=1, len=15)" << std::endl;
+  expected << "      .proto(instance_len=5, resource_id=4, back_face)" << std::endl;
+  expected << "      .proto(instance_len=6, resource_id=5, front_face)" << std::endl;
+  expected << "      .proto(instance_len=4, resource_id=2, front_face)" << std::endl;
+  expected << "    .group(id=0, len=6)" << std::endl;
+  expected << "      .proto(instance_len=3, resource_id=6, front_face)" << std::endl;
+  expected << "      .proto(instance_len=2, resource_id=3, front_face)" << std::endl;
+  expected << "      .proto(instance_len=1, resource_id=1, front_face)" << std::endl;
+
+  EXPECT_EQ(result, expected.str());
+
+  DRW_shape_cache_free();
+}
+DRAW_TEST(draw_pass_multi_draw)
+
 }  // namespace blender::draw
