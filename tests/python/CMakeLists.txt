@@ -31,8 +31,8 @@ function(add_blender_test testname)
   set_tests_properties(${testname} PROPERTIES ENVIRONMENT
     LSAN_OPTIONS=exitcode=0:$ENV{LSAN_OPTIONS}
   )
-  if(WIN32)
-    set_tests_properties(${testname} PROPERTIES ENVIRONMENT "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/;$ENV{PATH}")
+  if(PLATFORM_ENV_INSTALL)
+    set_tests_properties(${testname} PROPERTIES ENVIRONMENT "${PLATFORM_ENV_INSTALL}")
   endif()
 endfunction()
 
@@ -50,8 +50,8 @@ function(add_python_test testname testscript)
   set_tests_properties(${testname} PROPERTIES ENVIRONMENT
     LSAN_OPTIONS=exitcode=0:$ENV{LSAN_OPTIONS}
   )
-  if(WIN32)
-    set_tests_properties(${testname} PROPERTIES ENVIRONMENT "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/;$ENV{PATH}")
+  if(PLATFORM_ENV_INSTALL)
+    set_tests_properties(${testname} PROPERTIES ENVIRONMENT "${PLATFORM_ENV_INSTALL}")
   endif()
 endfunction()
 

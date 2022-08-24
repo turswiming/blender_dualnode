@@ -21,18 +21,6 @@ function(print_found_status
   endif()
 endfunction()
 
-# Utility to install precompiled shared libraries.
-macro(add_bundled_libraries library)
-  if(EXISTS ${LIBDIR})
-    set(_library_dir ${LIBDIR}/${library}/lib)
-    file(GLOB _all_library_versions ${_library_dir}/*\.dylib*)
-    list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
-    list(APPEND PLATFORM_BUNDLED_LIBRARY_DIRS ${_library_dir})
-    unset(_all_library_versions)
-    unset(_library_dir)
- endif()
-endmacro()
-
 # ------------------------------------------------------------------------
 # Find system provided libraries.
 
@@ -94,7 +82,7 @@ endif()
 if(WITH_USD)
   find_package(USD)
   if(USD_FOUND)
-    add_bundled_libraries(usd)
+    add_bundled_libraries(usd/lib)
   else()
     message(STATUS "USD not found, disabling WITH_USD")
     set(WITH_USD OFF)
@@ -103,7 +91,7 @@ endif()
 
 if(WITH_OPENSUBDIV)
   find_package(OpenSubdiv)
-  add_bundled_libraries(opensubdiv)
+  add_bundled_libraries(opensubdiv/lib)
 endif()
 
 if(WITH_CODEC_SNDFILE)
@@ -169,6 +157,8 @@ list(APPEND FREETYPE_LIBRARIES
 
 if(WITH_IMAGE_OPENEXR)
   find_package(OpenEXR)
+  add_bundled_libraries(openexr/lib)
+  add_bundled_libraries(imath/lib)
 endif()
 
 if(WITH_CODEC_FFMPEG)
@@ -289,7 +279,7 @@ if(WITH_BOOST)
   set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
   set(BOOST_DEFINITIONS)
 
-  add_bundled_libraries(boost)
+  add_bundled_libraries(boost/lib)
 
   mark_as_advanced(Boost_LIBRARIES)
   mark_as_advanced(Boost_INCLUDE_DIRS)
@@ -320,6 +310,7 @@ if(WITH_OPENIMAGEIO)
   )
   set(OPENIMAGEIO_DEFINITIONS "-DOIIO_STATIC_BUILD")
   set(OPENIMAGEIO_IDIFF "${LIBDIR}/openimageio/bin/idiff")
+  add_bundled_libraries(openimageio/lib)
 endif()
 
 if(WITH_OPENCOLORIO)
@@ -340,7 +331,7 @@ if(WITH_OPENVDB)
     unset(BLOSC_LIBRARIES CACHE)
   endif()
   set(OPENVDB_DEFINITIONS)
-  add_bundled_libraries(openvdb)
+  add_bundled_libraries(openvdb/lib)
 endif()
 
 if(WITH_NANOVDB)
@@ -415,7 +406,7 @@ endif()
 if(WITH_TBB)
   find_package(TBB)
   if(TBB_FOUND)
-    add_bundled_libraries(tbb)
+    add_bundled_libraries(tbb/lib)
   else()
     message(WARNING "TBB not found, disabling WITH_TBB")
     set(WITH_TBB OFF)
@@ -442,7 +433,7 @@ if(WITH_OPENMP)
     set(OpenMP_LIBRARY_DIR "${LIBDIR}/openmp/lib/")
     set(OpenMP_LINKER_FLAGS "-L'${OpenMP_LIBRARY_DIR}' -lomp")
     set(OpenMP_LIBRARY "${OpenMP_LIBRARY_DIR}/libomp.dylib")
-    add_bundled_libraries(openmp)
+    add_bundled_libraries(openmp/lib)
   endif()
 endif()
 
@@ -552,6 +543,12 @@ if(PLATFORM_BUNDLED_LIBRARIES)
   # different.
   set(CMAKE_SKIP_BUILD_RPATH FALSE)
   list(APPEND CMAKE_BUILD_RPATH ${PLATFORM_BUNDLED_LIBRARY_DIRS})
+
+  # Environment variables to run precompiled executables that needed libraries.
+  list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
+  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};${DYLD_LIBRARY_PATH}\"")
+  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib/;$DYLD_LIBRARY_PATH")
+  unset(_library_paths)
 endif()
 
 # Same as `CFBundleIdentifier` in Info.plist.

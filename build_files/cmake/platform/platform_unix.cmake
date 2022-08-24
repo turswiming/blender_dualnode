@@ -77,15 +77,6 @@ macro(find_package_wrapper)
   endif()
 endmacro()
 
-# Utility to install precompiled shared libraries.
-macro(add_bundled_libraries library)
-  if(EXISTS ${LIBDIR})
-    file(GLOB _all_library_versions ${LIBDIR}/${library}/lib/*\.so*)
-    list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
-    unset(_all_library_versions)
- endif()
-endmacro()
-
 # ----------------------------------------------------------------------------
 # Precompiled Libraries
 #
@@ -144,7 +135,10 @@ endif()
 
 if(WITH_IMAGE_OPENEXR)
   find_package_wrapper(OpenEXR)  # our own module
-  if(NOT OPENEXR_FOUND)
+  if(OPENEXR_FOUND)
+    add_bundled_libraries(openexr/lib)
+    add_bundled_libraries(imath/lib)
+  else()
     set(WITH_IMAGE_OPENEXR OFF)
   endif()
 endif()
@@ -316,7 +310,7 @@ if(WITH_OPENVDB)
   find_package_wrapper(Blosc)
 
   if(OPENVDB_FOUND)
-    add_bundled_libraries(openvdb)
+    add_bundled_libraries(openvdb/lib)
 
     if(NOT EXISTS ${LIBDIR} AND NOT BLOSC_FOUND)
       set(WITH_OPENVDB_BLOSC OFF)
@@ -354,7 +348,7 @@ if(WITH_USD)
   find_package(USD)
 
   if(USD_FOUND)
-    add_bundled_libraries(usd)
+    add_bundled_libraries(usd/lib)
   else()
     set(WITH_USD OFF)
   endif()
@@ -410,7 +404,7 @@ if(WITH_BOOST)
     list(APPEND BOOST_LIBRARIES ${ICU_LIBRARIES})
   endif()
 
-  add_bundled_libraries(boost)
+  add_bundled_libraries(boost/lib)
 endif()
 
 if(WITH_PUGIXML)
@@ -440,7 +434,6 @@ if(WITH_OPENIMAGEIO)
     ${ZLIB_LIBRARIES}
     ${BOOST_LIBRARIES}
   )
-  set(OPENIMAGEIO_LIBPATH)  # TODO, remove and reference the absolute path everywhere
   set(OPENIMAGEIO_DEFINITIONS "")
 
   if(WITH_IMAGE_TIFF)
@@ -453,7 +446,9 @@ if(WITH_OPENIMAGEIO)
     list(APPEND OPENIMAGEIO_LIBRARIES "${WEBP_LIBRARIES}")
   endif()
 
-  if(NOT OPENIMAGEIO_FOUND)
+  if(OPENIMAGEIO_FOUND)
+    add_bundled_libraries(openimageio/lib)
+  else()
     set(WITH_OPENIMAGEIO OFF)
     message(STATUS "OpenImageIO not found, disabling WITH_CYCLES")
   endif()
@@ -517,7 +512,7 @@ if(WITH_OPENSUBDIV)
   find_package(OpenSubdiv)
 
   if(OPENSUBDIV_FOUND)
-    add_bundled_libraries(opensubdiv)
+    add_bundled_libraries(opensubdiv/lib)
   else()
     set(WITH_OPENSUBDIV OFF)
     message(STATUS "OpenSubdiv not found")
@@ -527,7 +522,7 @@ endif()
 if(WITH_TBB)
   find_package_wrapper(TBB)
   if(TBB_FOUND)
-    add_bundled_libraries(tbb)
+    add_bundled_libraries(tbb/lib)
   elseif(EXISTS ${LIBDIR})
     message(WARNING "TBB not found, disabling WITH_TBB")
     set(WITH_TBB OFF)
@@ -1000,4 +995,10 @@ if(PLATFORM_BUNDLED_LIBRARIES)
   # and because the build and install folder may be different.
   set(CMAKE_SKIP_BUILD_RPATH FALSE)
   list(APPEND CMAKE_BUILD_RPATH $ORIGIN/lib ${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib)
+
+  # Environment variables to run precompiled executables that needed libraries.
+  list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
+  set(PLATFORM_ENV_BUILD "LD_LIBRARY_PATH=\"${_library_paths};${LD_LIBRARY_PATH}\"")
+  set(PLATFORM_ENV_INSTALL "LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib/;$LD_LIBRARY_PATH")
+  unset(_library_paths)
 endif()

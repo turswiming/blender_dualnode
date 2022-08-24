@@ -1001,3 +1001,9 @@ set(ZSTD_LIBRARIES ${LIBDIR}/zstd/lib/zstd_static.lib)
 
 set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
 set(SYCL_ROOT_DIR ${LIBDIR}/dpcpp)
+
+# Environment variables to run precompiled executables that needed libraries.
+list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ";" _library_paths)
+set(PLATFORM_ENV_BUILD "PATH=${LIBDIR}/OpenImageIO/bin\;${LIBDIR}/boost/lib\;${LIBDIR}/openexr/bin\;${LIBDIR}/imath/bin\;${PATH}")
+set(PLATFORM_ENV_INSTALL "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/;$ENV{PATH}")
+unset(_library_paths)
