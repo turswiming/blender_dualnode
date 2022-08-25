@@ -137,16 +137,11 @@ ccl_device_inline void shader_prepare_surface_guiding(KernelGlobals kg,
     }
 
     if (diffuse_sampling_fraction > 0.f) {
-      const float3 P = sd->P;
-      const float3 N = sd->N;
-      pgl_point3f pgl_p = openpgl::cpp::Point3(P[0], P[1], P[2]);
-      pgl_point3f pgl_N = openpgl::cpp::Point3(N[0], N[1], N[2]);
-
       useGuiding = state->guiding.surface_sampling_distribution->Init(
-          kg->opgl_guiding_field, pgl_p, grand, true);
+          kg->opgl_guiding_field, guiding_point3f(sd->P), grand, true);
 
       if (useGuiding) {
-        state->guiding.surface_sampling_distribution->ApplyCosineProduct(pgl_N);
+        state->guiding.surface_sampling_distribution->ApplyCosineProduct(guiding_point3f(sd->N));
         guiding_sampling_prob = surface_guiding_probability * diffuse_sampling_fraction;
       }
     }

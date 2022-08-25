@@ -808,19 +808,17 @@ ccl_device_forceinline void integrate_volume_direct_light(
 
   /* Evaluate BSDF. */
   BsdfEval phase_eval ccl_optional_struct_init;
+  float phase_pdf = shader_volume_phase_eval(kg, sd, phases, ls->D, &phase_eval);
+
 #    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  float phase_pdf = 0.f;
-  phase_pdf = shader_volume_phase_eval(kg, sd, phases, ls->D, &phase_eval);
   if (kernel_data.integrator.use_guiding && state->guiding.use_volume_guiding) {
     const float guiding_sampling_prob = state->guiding.volume_guiding_sampling_prob;
     if (guiding_sampling_prob > 0.f) {
-      pgl_vec3f pglWo = openpgl::cpp::Vector3(ls->D[0], ls->D[1], ls->D[2]);
-      float guide_pdf = state->guiding.volume_sampling_distribution->PDF(pglWo);
+      const float guide_pdf = state->guiding.volume_sampling_distribution->PDF(
+          guiding_vec3f(ls->D));
       phase_pdf = (guiding_sampling_prob * guide_pdf) + (1.0f - guiding_sampling_prob) * phase_pdf;
     }
   }
-#    else
-  const float phase_pdf = shader_volume_phase_eval(kg, sd, phases, ls->D, &phase_eval);
 #    endif
 
   if (ls->shader & SHADER_USE_MIS) {

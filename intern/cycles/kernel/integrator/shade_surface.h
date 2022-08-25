@@ -214,22 +214,19 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
     }
 
     /* Evaluate BSDF. */
+    float bsdf_pdf = shader_bsdf_eval(kg, sd, ls.D, is_transmission, &bsdf_eval, ls.shader);
+
 #  ifdef __PATH_GUIDING__
-    const bool use_guiding = kernel_data.integrator.use_guiding;
-    float bsdf_pdf = 0.f;
-    bsdf_pdf = shader_bsdf_eval(kg, sd, ls.D, is_transmission, &bsdf_eval, ls.shader);
-    if (use_guiding && state->guiding.use_surface_guiding) {
+    if (kernel_data.integrator.use_guiding && state->guiding.use_surface_guiding) {
       const float guiding_sampling_prob = state->guiding.surface_guiding_sampling_prob;
       const float bssrdf_sampling_prob = state->guiding.bssrdf_sampling_prob;
       if (guiding_sampling_prob > 0.f) {
-        pgl_vec3f pglWo = openpgl::cpp::Vector3(ls.D[0], ls.D[1], ls.D[2]);
-        float guide_pdf = state->guiding.surface_sampling_distribution->PDF(pglWo);
+        const float guide_pdf = state->guiding.surface_sampling_distribution->PDF(
+            guiding_vec3f(ls.D));
         bsdf_pdf = (guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob)) +
                    (1.0f - guiding_sampling_prob) * bsdf_pdf;
       }
     }
-#  else
-    const float bsdf_pdf = shader_bsdf_eval(kg, sd, ls.D, is_transmission, &bsdf_eval, ls.shader);
 #  endif
     bsdf_eval_mul(&bsdf_eval, light_eval / ls.pdf);
 
