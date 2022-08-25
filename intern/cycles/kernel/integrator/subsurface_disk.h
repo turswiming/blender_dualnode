@@ -196,9 +196,6 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
     if (r < next_sum) {
       /* Return exit point. */
       INTEGRATOR_STATE_WRITE(state, path, throughput) *= weight * sum_weights / sample_weight;
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-      INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= weight * sum_weights / sample_weight;
-#endif
       ss_isect.hits[0] = ss_isect.hits[hit];
       ss_isect.Ng[0] = ss_isect.Ng[hit];
 

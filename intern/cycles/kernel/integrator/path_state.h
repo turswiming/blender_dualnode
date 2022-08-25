@@ -57,7 +57,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, throughput) = one_spectrum();
 
 #ifdef __PATH_GUIDING__
-  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) = one_spectrum();
+  INTEGRATOR_STATE_WRITE(state, path, guiding_throughput) = 1.0f;
 #endif
 
 #ifdef __MNEE__
@@ -253,11 +253,11 @@ ccl_device_inline float path_state_continuation_probability(KernelGlobals kg,
 
   /* Probabilistic termination: use sqrt() to roughly match typical view
    * transform and do path termination a bit later on average. */
-#ifdef __PATH_GUIDING__
-  return min(sqrtf(reduce_max(fabs(INTEGRATOR_STATE(state, path, rr_throughput)))), 1.0f);
-#else
-  return min(sqrtf(reduce_max(fabs(INTEGRATOR_STATE(state, path, throughput)))), 1.0f);
+  Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  throughput *= INTEGRATOR_STATE(state, path, guiding_throughput);
 #endif
+  return min(sqrtf(reduce_max(fabs(throughput))), 1.0f);
 }
 
 ccl_device_inline bool path_state_ao_bounce(KernelGlobals kg, ConstIntegratorState state)

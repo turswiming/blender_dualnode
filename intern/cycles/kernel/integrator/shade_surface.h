@@ -352,7 +352,8 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
 #  ifdef __PATH_GUIDING__
   INTEGRATOR_STATE_WRITE(
       shadow_state, shadow_path, scattered_contribution) = scattered_contribution;
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = state->guiding.path_segment;
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = INTEGRATOR_STATE(
+      state, guiding, path_segment);
 #  endif
 }
 #endif
@@ -381,7 +382,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 #endif
 
   /* BSDF closure, sample direction. */
-  float bsdf_pdf;
+  float bsdf_pdf = 0.0f, guided_bsdf_pdf = 0.0f;
   BsdfEval bsdf_eval ccl_optional_struct_init;
   float3 bsdf_omega_in ccl_optional_struct_init;
   int label;
@@ -390,7 +391,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   float bsdf_eta = 1.0f;
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  float guided_bsdf_pdf;
   if (kernel_data.integrator.use_guiding) {
     label = shader_guided_bsdf_sample_closure(kg,
                                               state,
@@ -404,8 +404,16 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                               &bsdf_pdf,
                                               &bsdf_sampled_roughness,
                                               &bsdf_eta);
+
+    if (guided_bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
+      return LABEL_NONE;
+    }
+
+    INTEGRATOR_STATE_WRITE(state, path, guiding_throughput) *= guided_bsdf_pdf / bsdf_pdf;
   }
-  else {
+  else
+#endif
+  {
     label = shader_bsdf_sample_closure(kg,
                                        sd,
                                        sc,
@@ -416,27 +424,13 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                        &bsdf_pdf,
                                        &bsdf_sampled_roughness,
                                        &bsdf_eta);
+
+    if (bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
+      return LABEL_NONE;
+    }
+
     guided_bsdf_pdf = bsdf_pdf;
   }
-  if (guided_bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
-    return LABEL_NONE;
-  }
-#else
-  label = shader_bsdf_sample_closure(kg,
-                                     sd,
-                                     sc,
-                                     bsdf_u,
-                                     bsdf_v,
-                                     &bsdf_eval,
-                                     &bsdf_omega_in,
-                                     &bsdf_pdf,
-                                     &bsdf_sampled_roughness,
-                                     &bsdf_eta);
-
-  if (bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
-    return LABEL_NONE;
-  }
-#endif
 
   if (label & LABEL_TRANSPARENT) {
     /* Only need to modify start distance for transparent. */
@@ -455,18 +449,8 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   }
 
   /* Update throughput. */
-  Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / guided_bsdf_pdf;
-#else
-  const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / bsdf_pdf;
-#endif
-  throughput *= bsdf_weight;
-  INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  const Spectrum rr_bsdf_weight = bsdf_eval_sum(&bsdf_eval) / bsdf_pdf;
-  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= rr_bsdf_weight;
-#endif
+  INTEGRATOR_STATE_WRITE(state, path, throughput) *= bsdf_weight;
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
     if (INTEGRATOR_STATE(state, path, bounce) == 0) {
@@ -479,21 +463,13 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
   /* Update path state */
   if (!(label & LABEL_TRANSPARENT)) {
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
     INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = guided_bsdf_pdf;
-#else
-    INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = bsdf_pdf;
-#endif
     INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = fminf(
         bsdf_pdf, INTEGRATOR_STATE(state, path, min_ray_pdf));
   }
 
   path_state_next(kg, state, label);
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-#  if PATH_GUIDING_LEVEL < 4
-  float guided_bsdf_pdf = bsdf_pdf;
-#  endif
   guiding_record_surface_bounce(kg,
                                 state,
                                 sd,
@@ -503,7 +479,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                 normalize(bsdf_omega_in),
                                 bsdf_sampled_roughness,
                                 bsdf_eta);
-#endif
 
   return label;
 }
@@ -535,9 +510,6 @@ ccl_device_forceinline bool integrate_surface_terminate(IntegratorState state,
   }
   else if (continuation_probability != 1.0f) {
     INTEGRATOR_STATE_WRITE(state, path, throughput) /= continuation_probability;
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-    INTEGRATOR_STATE_WRITE(state, path, rr_throughput) /= continuation_probability;
-#endif
   }
 
   return false;

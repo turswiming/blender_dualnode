@@ -63,9 +63,6 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   }
 
   INTEGRATOR_STATE_WRITE(state, path, throughput) *= weight;
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= weight;
-#  endif
   INTEGRATOR_STATE_WRITE(state, path, flag) = path_flag;
 
   /* Advance random number offset for bounce. */

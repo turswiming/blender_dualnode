@@ -916,7 +916,8 @@ ccl_device_forceinline void integrate_volume_direct_light(
 #    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   INTEGRATOR_STATE_WRITE(
       shadow_state, shadow_path, scattered_contribution) = scattered_contribution;
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = state->guiding.path_segment;
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = INTEGRATOR_STATE(
+      state, guiding, path_segment);
 #    endif
 
   integrator_state_copy_volume_stack_to_shadow(kg, shadow_state, state);
@@ -944,14 +945,13 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 #  endif
 
   /* Phase closure, sample direction. */
-  float phase_pdf;
+  float phase_pdf = 0.0f, guided_phase_pdf = 0.0f;
   BsdfEval phase_eval ccl_optional_struct_init;
   float3 phase_omega_in ccl_optional_struct_init;
-
   float sampled_roughness = 1.0f;
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  float guided_phase_pdf;
   int label;
+
+#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (kernel_data.integrator.use_guiding) {
     label = shader_guided_volume_phase_sample(kg,
                                               state,
@@ -964,8 +964,16 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
                                               &guided_phase_pdf,
                                               &phase_pdf,
                                               &sampled_roughness);
+
+    if (guided_phase_pdf == 0.0f || bsdf_eval_is_zero(&phase_eval)) {
+      return false;
+    }
+
+    INTEGRATOR_STATE_WRITE(state, path, guiding_throughput) *= guided_phase_pdf / phase_pdf;
   }
-  else {
+  else
+#  endif
+  {
     label = shader_volume_phase_sample(kg,
                                        sd,
                                        phases,
@@ -975,23 +983,12 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
                                        &phase_omega_in,
                                        &phase_pdf,
                                        &sampled_roughness);
-    guided_phase_pdf = phase_pdf;
-  }
-#  else
-  const int label = shader_volume_phase_sample(kg,
-                                               sd,
-                                               phases,
-                                               phase_u,
-                                               phase_v,
-                                               &phase_eval,
-                                               &phase_omega_in,
-                                               &phase_pdf,
-                                               &sampled_roughness);
-  const float guided_phase_pdf = phase_pdf;
-#  endif
 
-  if (phase_pdf == 0.0f || bsdf_eval_is_zero(&phase_eval)) {
-    return false;
+    if (phase_pdf == 0.0f || bsdf_eval_is_zero(&phase_eval)) {
+      return false;
+    }
+
+    guided_phase_pdf = phase_pdf;
   }
 
   /* Setup ray. */
@@ -1006,11 +1003,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   INTEGRATOR_STATE_WRITE(state, isect, prim) = sd->prim;
   INTEGRATOR_STATE_WRITE(state, isect, object) = sd->object;
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   const Spectrum phase_weight = bsdf_eval_sum(&phase_eval) / guided_phase_pdf;
-#  else
-  const Spectrum phase_weight = bsdf_eval_sum(&phase_eval) / phase_pdf;
-#  endif
 
   /* Add phase function sampling data to the path segment. */
   guiding_record_volume_bounce(
@@ -1020,10 +1013,6 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
   const Spectrum throughput_phase = throughput * phase_weight;
   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput_phase;
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  const Spectrum rr_phase_weight = bsdf_eval_sum(&phase_eval) / phase_pdf;
-  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= rr_phase_weight;
-#  endif
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
     INTEGRATOR_STATE_WRITE(state, path, pass_diffuse_weight) = one_spectrum();
@@ -1031,11 +1020,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   }
 
   /* Update path state */
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = guided_phase_pdf;
-#  else
-  INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = phase_pdf;
-#  endif
   INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = fminf(
       phase_pdf, INTEGRATOR_STATE(state, path, min_ray_pdf));
 
@@ -1231,10 +1216,6 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
     result.indirect_throughput /= continuation_probability;
   }
   INTEGRATOR_STATE_WRITE(state, path, throughput) = result.indirect_throughput;
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) *= safe_divide_color(
-      result.indirect_throughput, throughput);
-#  endif
 
   if (result.indirect_scatter) {
     sd.P = ray->P + result.indirect_t * ray->D;
