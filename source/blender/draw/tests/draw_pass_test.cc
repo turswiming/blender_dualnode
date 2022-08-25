@@ -132,6 +132,38 @@ static void test_draw_pass_sub_ordering()
 }
 DRAW_TEST(draw_pass_sub_ordering)
 
+static void test_draw_pass_simple_draw()
+{
+  PassSimple pass = {"test.simple_draw"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA));
+  /* Each draw procedural type uses a different batch. Groups are drawn in correct order. */
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, 10, 1, {1});
+  pass.draw_procedural(GPU_PRIM_POINTS, 4, 20, 2, {2});
+  pass.draw_procedural(GPU_PRIM_TRIS, 2, 30, 3, {3});
+  pass.draw_procedural(GPU_PRIM_POINTS, 5, 40, 4, ResourceHandle(4, true));
+  pass.draw_procedural(GPU_PRIM_LINES, 1, 50, 5, {5});
+  pass.draw_procedural(GPU_PRIM_POINTS, 6, 60, 6, {5});
+  pass.draw_procedural(GPU_PRIM_TRIS, 3, 70, 7, {6});
+
+  std::string result = pass.serialize();
+  std::stringstream expected;
+  expected << ".test.simple_draw" << std::endl;
+  expected << "  .shader_bind(gpu_shader_3D_image_modulate_alpha)" << std::endl;
+  expected << "  .draw(inst_len=1, vert_len=10, vert_first=1, res_id=1)" << std::endl;
+  expected << "  .draw(inst_len=4, vert_len=20, vert_first=2, res_id=2)" << std::endl;
+  expected << "  .draw(inst_len=2, vert_len=30, vert_first=3, res_id=3)" << std::endl;
+  expected << "  .draw(inst_len=5, vert_len=40, vert_first=4, res_id=4)" << std::endl;
+  expected << "  .draw(inst_len=1, vert_len=50, vert_first=5, res_id=5)" << std::endl;
+  expected << "  .draw(inst_len=6, vert_len=60, vert_first=6, res_id=5)" << std::endl;
+  expected << "  .draw(inst_len=3, vert_len=70, vert_first=7, res_id=6)" << std::endl;
+
+  EXPECT_EQ(result, expected.str());
+
+  DRW_shape_cache_free();
+}
+DRAW_TEST(draw_pass_simple_draw)
+
 static void test_draw_pass_multi_draw()
 {
   PassMain pass = {"test.multi_draw"};
