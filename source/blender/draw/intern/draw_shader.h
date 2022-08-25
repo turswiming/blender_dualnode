@@ -34,6 +34,7 @@ struct GPUShader *DRW_shader_debug_print_display_get(void);
 struct GPUShader *DRW_shader_debug_draw_display_get(void);
 struct GPUShader *DRW_shader_draw_visibility_compute_get(void);
 struct GPUShader *DRW_shader_draw_resource_finalize_get(void);
+struct GPUShader *DRW_shader_draw_command_generate_get(void);
 
 void DRW_shaders_free(void);
 

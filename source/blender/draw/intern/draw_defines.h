@@ -18,6 +18,7 @@
 #define DRW_OBJ_INFOS_SLOT 5
 #define DRW_OBJ_ATTR_SLOT 4
 
+#define DRW_COMMAND_GROUP_SIZE 64
 #define DRW_FINALIZE_GROUP_SIZE 64
 /* Must be multiple of 32. Set to 64 for optimal scheduling on GCN hardware. */
 #define DRW_VISIBILITY_GROUP_SIZE 64

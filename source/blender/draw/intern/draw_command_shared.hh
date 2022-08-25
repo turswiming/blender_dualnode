@@ -49,15 +49,15 @@ struct DrawGroup {
       /** GPUBatch values to be copied to DrawCommand after sorting (if not overriden). */
       int vertex_len; /** NOTE: Negative if using indexed draw. */
       /** Atomic counters used during command sorting. */
-      uint total_counter;
       uint front_facing_counter;
       uint back_facing_counter;
+      uint total_counter;
 #ifndef GPU_SHADER
     };
   };
 #endif
 };
-BLI_STATIC_ASSERT(sizeof(DrawGroup) == 32, "DrawGroup might not have the same size on GPU and CPU")
+BLI_STATIC_ASSERT_ALIGN(DrawGroup, 16)
 
 /**
  * Representation of a future draw call inside a DrawGroup. This #DrawPrototype is then
@@ -73,6 +73,7 @@ struct DrawPrototype {
   uint instance_len;
   uint _pad0;
 };
+BLI_STATIC_ASSERT_ALIGN(DrawPrototype, 16)
 
 /** \} */
 

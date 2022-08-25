@@ -529,16 +529,16 @@ class DrawMultiBuf {
 
   void bind(Vector<Header> &, Vector<Undetermined> &, ResourceIdBuf &resource_id_buf)
   {
-    uint prefix_sum = 0u;
+    uint instance_sum = 0u;
     for (DrawGroup &group : group_buf_) {
       /* Compute prefix sum of all instance of previous group. */
-      group.start = prefix_sum;
-      prefix_sum += group.len;
+      group.start = instance_sum;
+      instance_sum += group.len;
 
       int batch_inst_len;
       /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
       GPU_batch_draw_parameter_get(group.gpu_batch, &group.vertex_len, &batch_inst_len);
-      /* Tag group as using index draw (changes indirect drawcall structure). */
+      /* Tag group as using index draw (changes indirect draw call structure). */
       if (group.gpu_batch->elem != nullptr) {
         group.vertex_len = -group.vertex_len;
       }
@@ -552,8 +552,10 @@ class DrawMultiBuf {
     }
 
     group_buf_.push_update();
+    prototype_buf_.push_update();
     /* Allocate enough for the expansion pass. */
-    resource_id_buf.get_or_resize(prefix_sum);
+    resource_id_buf.get_or_resize(instance_sum);
+    command_buf_.get_or_resize(group_count_);
 
     // GPU_compute_dispatch(resource_id_expand_shader, n, 1, 1);
   }

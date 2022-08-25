@@ -487,6 +487,7 @@ set(GLSL_SRC
   intern/shaders/common_subdiv_vbo_sculpt_data_comp.glsl
   intern/shaders/common_view_clipping_lib.glsl
   intern/shaders/common_view_lib.glsl
+  intern/shaders/draw_command_generate_comp.glsl
   intern/shaders/draw_debug_draw_display_frag.glsl
   intern/shaders/draw_debug_draw_display_vert.glsl
   intern/shaders/draw_debug_info.hh
@@ -496,6 +497,7 @@ set(GLSL_SRC
   intern/shaders/draw_visibility_comp.glsl
 
   intern/draw_common_shader_shared.h
+  intern/draw_command_shared.hh
   intern/draw_shader_shared.h
   intern/draw_defines.h
 

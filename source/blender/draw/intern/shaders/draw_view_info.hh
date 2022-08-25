@@ -162,6 +162,19 @@ GPU_SHADER_CREATE_INFO(draw_visibility_compute)
     .compute_source("draw_visibility_comp.glsl")
     .additional_info("draw_view");
 
+GPU_SHADER_CREATE_INFO(draw_command_generate)
+    .do_static_compilation(true)
+    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_command_shared.hh")
+    .local_group_size(DRW_COMMAND_GROUP_SIZE)
+    .storage_buf(0, Qualifier::READ_WRITE, "DrawGroup", "group_buf[]")
+    .storage_buf(1, Qualifier::READ, "DrawPrototype", "prototype_buf[]")
+    .storage_buf(2, Qualifier::WRITE, "DrawCommand", "command_buf[]")
+    .storage_buf(3, Qualifier::WRITE, "uint", "resource_id_buf[]")
+    .storage_buf(4, Qualifier::READ, "uint", "visibility_buf[]")
+    .push_constant(Type::UINT, "prototype_len")
+    .compute_source("draw_command_generate_comp.glsl");
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
