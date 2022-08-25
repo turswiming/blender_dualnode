@@ -1,11 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+# Make shared libraries needed by modules available in standalone Python binary.
 
-#  Filename : usercustomize.py
-#  Author   : Brecht van Lommel
-#  Date     : 17/08/2022
-#  Purpose  : make shared libraries  needed by modules available in standalone Python binary
 import sys
 import os
+
 if sys.platform == 'win32':
     exe_dir, exe_file = os.path.split(sys.executable)
     if exe_file.startswith('python'):

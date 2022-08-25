@@ -389,11 +389,10 @@ if(WITH_PYTHON)
     PATTERN "__pycache__" EXCLUDE
     PATTERN "${ADDON_EXCLUDE_CONDITIONAL}" EXCLUDE
     PATTERN "${FREESTYLE_EXCLUDE_CONDITIONAL}" EXCLUDE
-    PATTERN "*usercustomize.py" EXCLUDE
   )
   if(WIN32)
     install(
-      FILES ${CMAKE_SOURCE_DIR}/release/scripts/usercustomize.py
+      FILES ${CMAKE_SOURCE_DIR}/release/windows/python/usercustomize.py
       DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
     )
   endif()
