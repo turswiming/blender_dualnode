@@ -257,3 +257,19 @@ draw::ObjectRef DRW_object_ref_get(Object *object)
   BLI_assert(DST.view_data_active->manager);
   return {object, DST.dupli_source, DST.dupli_parent};
 }
+
+void DRW_manager_begin_sync()
+{
+  if (DST.view_data_active->manager == nullptr) {
+    return;
+  }
+  reinterpret_cast<draw::Manager *>(DST.view_data_active->manager)->begin_sync();
+}
+
+void DRW_manager_end_sync()
+{
+  if (DST.view_data_active->manager == nullptr) {
+    return;
+  }
+  reinterpret_cast<draw::Manager *>(DST.view_data_active->manager)->end_sync();
+}
