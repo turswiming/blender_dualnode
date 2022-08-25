@@ -225,7 +225,7 @@ std::string ResourceBind::serialize() const
     case Type::Sampler:
       return std::string(".bind_texture") + (is_reference ? "_ref" : "") + "(" +
              std::to_string(slot) +
-             (sampler != GPU_SAMPLER_MAX ? std::string(", sampler=" + sampler) : "") + ")";
+             (sampler != GPU_SAMPLER_MAX ? ", sampler=" + std::to_string(sampler) : "") + ")";
     case Type::Image:
       return std::string(".bind_image") + (is_reference ? "_ref" : "") + "(" +
              std::to_string(slot) + ")";

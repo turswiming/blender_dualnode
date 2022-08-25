@@ -61,7 +61,7 @@ class Manager {
    * Submit a pass for drawing. All resource reference will be dereferenced and commands will be
    * sent to GPU.
    */
-  void submit(PassSimple &pass);
+  void submit(PassSimple &pass, View &view);
   void submit(PassMain &pass, View &view);
 
  private:

@@ -51,7 +51,7 @@ void main()
 
   DrawGroup group = group_buf[group_id];
 
-  if (!is_visible || proto.instance_len == 0) {
+  if (!is_visible) {
     /* Skip the draw but still count towards the completion. */
     if (atomicAddAndGet(group_buf[group_id].total_counter, proto.instance_len) == group.len) {
       write_draw_call(group, group_id);

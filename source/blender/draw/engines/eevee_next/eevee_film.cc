@@ -401,13 +401,13 @@ void Film::sync()
   /* NOTE(@fclem): 16 is the max number of sampled texture in many implementations.
    * If we need more, we need to pack more of the similar passes in the same textures as arrays or
    * use image binding instead. */
-  accumulate_ps_.bind("in_weight_img", &weight_tx_.current());
-  accumulate_ps_.bind("out_weight_img", &weight_tx_.next());
+  accumulate_ps_.bind("in_weight_img", draw::as_image(&weight_tx_.current()));
+  accumulate_ps_.bind("out_weight_img", draw::as_image(&weight_tx_.next()));
   accumulate_ps_.bind("in_combined_tx", &combined_tx_.current(), filter);
-  accumulate_ps_.bind("out_combined_img", &combined_tx_.next());
-  accumulate_ps_.bind("depth_img", &depth_tx_);
-  accumulate_ps_.bind("color_accum_img", &color_accum_tx_);
-  accumulate_ps_.bind("value_accum_img", &value_accum_tx_);
+  accumulate_ps_.bind("out_combined_img", draw::as_image(&combined_tx_.next()));
+  accumulate_ps_.bind("depth_img", draw::as_image(&depth_tx_));
+  accumulate_ps_.bind("color_accum_img", draw::as_image(&color_accum_tx_));
+  accumulate_ps_.bind("value_accum_img", draw::as_image(&value_accum_tx_));
   /* Sync with rendering passes. */
   accumulate_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH | GPU_BARRIER_SHADER_IMAGE_ACCESS);
   if (use_compute) {
@@ -561,8 +561,9 @@ void Film::accumulate(const DRWView *view, GPUTexture *combined_final_tx)
   data_.display_only = false;
   data_.push_update();
 
-  DRW_view_set_active(view);
-  DRW_manager_get()->submit(accumulate_ps_);
+  draw::View drw_view("MainView", view);
+
+  DRW_manager_get()->submit(accumulate_ps_, drw_view);
 
   combined_tx_.swap();
   weight_tx_.swap();
@@ -589,8 +590,9 @@ void Film::display()
   data_.display_only = true;
   data_.push_update();
 
-  DRW_view_set_active(nullptr);
-  DRW_manager_get()->submit(accumulate_ps_);
+  draw::View drw_view("MainView", DRW_view_default_get());
+
+  DRW_manager_get()->submit(accumulate_ps_, drw_view);
 
   inst_.render_buffers.release();
 

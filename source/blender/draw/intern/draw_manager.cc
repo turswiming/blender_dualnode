@@ -5,6 +5,7 @@
  * \ingroup draw
  */
 
+#include "BKE_global.h"
 #include "GPU_compute.h"
 
 #include "draw_manager.h"
@@ -49,9 +50,18 @@ void Manager::end_sync()
   GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
 }
 
-void Manager::submit(PassSimple &pass)
+void Manager::submit(PassSimple &pass, View &view)
 {
+  view.bind();
+
   command::RecordingState state;
+
+  pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_, view.visibility_buf_);
+
+  GPU_storagebuf_bind(matrix_buf, DRW_OBJ_MAT_SLOT);
+  GPU_storagebuf_bind(infos_buf, DRW_OBJ_INFOS_SLOT);
+  // GPU_storagebuf_bind(attribute_buf, DRW_OBJ_ATTR_SLOT); /* TODO */
+
   pass.submit(state);
 }
 
@@ -70,6 +80,13 @@ void Manager::submit(PassMain &pass, View &view)
   // GPU_storagebuf_bind(attribute_buf, DRW_OBJ_ATTR_SLOT); /* TODO */
 
   pass.submit(state);
+
+  if (G.debug & G_DEBUG_GPU) {
+    GPU_storagebuf_unbind_all();
+    GPU_texture_image_unbind_all();
+    GPU_texture_unbind_all();
+    GPU_uniformbuf_unbind_all();
+  }
 }
 
 }  // namespace blender::draw

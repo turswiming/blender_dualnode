@@ -8,6 +8,7 @@
  */
 
 #include "DRW_gpu_wrapper.hh"
+#include "DRW_render.h"
 
 #include "draw_shader_shared.h"
 
@@ -26,7 +27,7 @@ class View {
  private:
   UniformBuffer<ViewInfos> data_;
   /** Result of the visibility computation. 1 bit per resource ID. */
-  VisibilityBuf visibility_buf_ = {"VisibilityBuf"};
+  VisibilityBuf visibility_buf_;
 
   const char *debug_name_;
 
@@ -35,6 +36,14 @@ class View {
 
  public:
   View(const char *name) : visibility_buf_(name), debug_name_(name){};
+  /* For compatibility with old system. Will be removed at some point. */
+  View(const char *name, const DRWView *view) : visibility_buf_(name), debug_name_(name)
+  {
+    float4x4 view_mat, win_mat;
+    DRW_view_viewmat_get(view, view_mat.ptr(), false);
+    DRW_view_winmat_get(view, win_mat.ptr(), false);
+    this->sync(view_mat, win_mat);
+  }
 
   void set_clip_planes(Span<float4> planes);
 

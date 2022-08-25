@@ -222,7 +222,6 @@ void GPU_batch_set_shader(GPUBatch *batch, GPUShader *shader)
 
 void GPU_batch_draw_parameter_get(GPUBatch *gpu_batch, int *r_v_count, int *r_i_count)
 {
-  BLI_assert(Context::get()->shader != nullptr);
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   if (batch->elem) {
