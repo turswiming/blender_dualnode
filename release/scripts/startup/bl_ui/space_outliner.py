@@ -2,6 +2,11 @@
 import bpy
 from bpy.types import Header, Menu, Panel
 
+from bpy.app.translations import (
+    contexts as i18n_contexts,
+    pgettext_iface as iface_,
+)
+
 
 class OUTLINER_HT_header(Header):
     bl_space_type = 'OUTLINER'
@@ -211,7 +216,8 @@ class OUTLINER_MT_collection(Menu):
 
         space = context.space_data
 
-        layout.operator("outliner.collection_new", text="New").nested = True
+        layout.operator("outliner.collection_new", text="New",
+                        text_ctxt=i18n_contexts.id_collection).nested = True
         layout.operator("outliner.collection_duplicate", text="Duplicate Collection")
         layout.operator("outliner.collection_duplicate_linked", text="Duplicate Linked")
         layout.operator("outliner.id_copy", text="Copy", icon='COPYDOWN')
@@ -331,7 +337,7 @@ class OUTLINER_MT_liboverride(Menu):
         layout = self.layout
 
         layout.operator_menu_enum("outliner.liboverride_operation", "selection_set",
-                                  text="Create").type = 'OVERRIDE_LIBRARY_CREATE_HIERARCHY'
+                                  text="Make").type = 'OVERRIDE_LIBRARY_CREATE_HIERARCHY'
         layout.operator_menu_enum(
             "outliner.liboverride_operation",
             "selection_set",
@@ -339,8 +345,10 @@ class OUTLINER_MT_liboverride(Menu):
         layout.operator_menu_enum("outliner.liboverride_operation", "selection_set",
                                   text="Clear").type = 'OVERRIDE_LIBRARY_CLEAR_SINGLE'
 
+        layout.separator()
+
         layout.operator_menu_enum("outliner.liboverride_troubleshoot_operation", "type",
-                                  text="Troubleshoot Hierarchy").selection_set = 'SELECTED'
+                                  text="Troubleshoot").selection_set = 'SELECTED'
 
 
 class OUTLINER_PT_filter(Panel):

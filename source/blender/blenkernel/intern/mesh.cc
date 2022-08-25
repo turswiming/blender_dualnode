@@ -113,7 +113,7 @@ static void mesh_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const int 
    *
    * While this could be the callers responsibility, keep here since it's
    * highly unlikely we want to create a duplicate and not use it for drawing. */
-  mesh_dst->runtime.is_original = false;
+  mesh_dst->runtime.is_original_bmesh = false;
 
   /* Only do tessface if we have no polys. */
   const bool do_tessface = ((mesh_src->totface != 0) && (mesh_src->totpoly == 0));
@@ -212,6 +212,7 @@ static void mesh_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 
 static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
+  using namespace blender;
   Mesh *mesh = (Mesh *)id;
   const bool is_undo = BLO_write_is_undo(writer);
 
@@ -245,14 +246,17 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
     memset(&mesh->pdata, 0, sizeof(mesh->pdata));
   }
   else {
+    Set<std::string> names_to_skip;
     if (!BLO_write_is_undo(writer)) {
       BKE_mesh_legacy_convert_hide_layers_to_flags(mesh);
+      /* When converting to the old mesh format, don't save redunant attributes. */
+      names_to_skip.add_multiple_new({".hide_vert", ".hide_edge", ".hide_poly"});
     }
 
-    CustomData_blend_write_prepare(mesh->vdata, vert_layers, {".hide_vert"});
-    CustomData_blend_write_prepare(mesh->edata, edge_layers, {".hide_edge"});
-    CustomData_blend_write_prepare(mesh->ldata, loop_layers);
-    CustomData_blend_write_prepare(mesh->pdata, poly_layers, {".hide_poly"});
+    CustomData_blend_write_prepare(mesh->vdata, vert_layers, names_to_skip);
+    CustomData_blend_write_prepare(mesh->edata, edge_layers, names_to_skip);
+    CustomData_blend_write_prepare(mesh->ldata, loop_layers, names_to_skip);
+    CustomData_blend_write_prepare(mesh->pdata, poly_layers, names_to_skip);
   }
 
   BLO_write_id_struct(writer, Mesh, id_address, &mesh->id);
