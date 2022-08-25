@@ -1057,7 +1057,7 @@ ccl_device_inline void shader_prepare_volume_guiding(KernelGlobals kg,
       // if (fabsf(mean_cosine) < 0.1f ) { // for now we only support HG phase function with very
       // low anisotropy
       if (true) {
-        grand = path_state_rng_1D(kg, rng_state, PRNG_GUIDING);
+        grand = path_state_rng_1D_hash(kg, rng_state, 0xa172f2f0);
 
         pgl_point3f pgl_P = openpgl::cpp::Point3(P[0], P[1], P[2]);
         pgl_point3f pgl_W = openpgl::cpp::Vector3(W[0], W[1], W[2]);

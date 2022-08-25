@@ -113,7 +113,7 @@ ccl_device_inline void shader_prepare_surface_guiding(KernelGlobals kg,
 
   if (guiding && surface_guiding) {
 
-    grand = path_state_rng_1D(kg, rng_state, PRNG_GUIDING);
+    grand = path_state_rng_1D_hash(kg, rng_state, 0xa172f2f0);
 
     for (int i = 0; i < sd->num_closure; i++) {
       ShaderClosure *sc = &sd->closure[i];

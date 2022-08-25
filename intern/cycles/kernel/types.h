@@ -174,8 +174,6 @@ enum PathTraceDimension {
   PRNG_SCATTER_DISTANCE = 7,
   PRNG_BOUNCE_NUM = 8,
 
-  PRNG_GUIDING = 9,
-
   PRNG_BEVEL_U = 6, /* reuse volume dimension, correlation won't harm */
   PRNG_BEVEL_V = 7,
 };
