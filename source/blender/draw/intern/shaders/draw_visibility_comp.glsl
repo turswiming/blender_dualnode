@@ -6,39 +6,26 @@
 
 #pragma BLENDER_REQUIRE(common_math_lib.glsl)
 #pragma BLENDER_REQUIRE(common_intersect_lib.glsl)
+#pragma BLENDER_REQUIRE(common_debug_print_lib.glsl)
 
-const uint uint_len_per_group = gl_WorkGroupSize.x / 32u;
-shared uint shared_result[uint_len_per_group];
+shared uint shared_result;
 
 void main()
 {
-  if (gl_LocalInvocationID.x == 0) {
-    for (uint i = 0; i < uint_len_per_group; i++) {
-      shared_result[i] = 0u;
-    }
+  if (gl_GlobalInvocationID.x >= resource_len) {
+    return;
   }
 
-  barrier();
+  ObjectBounds bounds = bounds_buf[gl_GlobalInvocationID.x];
 
-  uint resource_id = min(gl_GlobalInvocationID.x, resource_len - 1u);
-
-  ObjectBounds bounds = bounds_buf[resource_id];
   if (bounds.bounding_sphere.w != -1.0) {
     IsectBox box = isect_data_setup(bounds.bounding_corners[0].xyz,
                                     bounds.bounding_corners[1].xyz,
                                     bounds.bounding_corners[2].xyz,
                                     bounds.bounding_corners[3].xyz);
-    if (intersect_view(box)) {
-      uint result = 1u << (gl_LocalInvocationID.x % 32u);
-      atomicOr(shared_result[gl_LocalInvocationID.x / 32u], result);
-    }
-  }
-
-  barrier();
-
-  if (gl_LocalInvocationID.x == 0) {
-    for (uint i = 0; i < uint_len_per_group; i++) {
-      visibility_buf[gl_WorkGroupID.x * uint_len_per_group + i] = shared_result[i];
+    if (intersect_view(box) == false) {
+      uint bit = 1u << gl_LocalInvocationID.x;
+      atomicAnd(visibility_buf[gl_WorkGroupID.x], ~bit);
     }
   }
 }

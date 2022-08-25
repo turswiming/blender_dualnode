@@ -33,10 +33,9 @@ void Manager::begin_sync()
 
 void Manager::end_sync()
 {
-  /* Make sure all buffers have the right amount of data. */
-  matrix_buf.get_or_resize(resource_len_ - 1);
-  bounds_buf.get_or_resize(resource_len_ - 1);
-  infos_buf.get_or_resize(resource_len_ - 1);
+  matrix_buf.push_update();
+  bounds_buf.push_update();
+  infos_buf.push_update();
 
   /* Dispatch compute to finalize the resources on GPU. Save a bit of CPU time. */
   uint thread_groups = divide_ceil_u(resource_len_, DRW_FINALIZE_GROUP_SIZE);
@@ -115,7 +114,20 @@ Manager::SubmitDebugOutput Manager::submit_debug(PassMain &pass, View &view)
   Manager::SubmitDebugOutput output;
   output.resource_id = {pass.draw_commands_buf_.resource_id_buf_.data(),
                         pass.draw_commands_buf_.resource_id_count_};
-  output.visibility = {(uint *)view.visibility_buf_.data(), resource_len_};
+  output.visibility = {(uint *)view.visibility_buf_.data(), divide_ceil_u(resource_len_, 32)};
+  return output;
+}
+
+Manager::DataDebugOutput Manager::data_debug()
+{
+  matrix_buf.read();
+  bounds_buf.read();
+  infos_buf.read();
+
+  Manager::DataDebugOutput output;
+  output.matrices = {matrix_buf.data(), resource_len_};
+  output.bounds = {bounds_buf.data(), resource_len_};
+  output.infos = {infos_buf.data(), resource_len_};
   return output;
 }
 

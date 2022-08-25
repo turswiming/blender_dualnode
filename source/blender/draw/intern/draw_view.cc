@@ -13,18 +13,6 @@
 
 namespace blender::draw {
 
-void View::bind()
-{
-  update_viewport_size();
-
-  if (dirty_) {
-    dirty_ = false;
-    data_.push_update();
-  }
-
-  GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
-}
-
 void View::sync(const float4x4 &view_mat, const float4x4 &win_mat)
 {
   data_.viewmat = view_mat;
@@ -284,21 +272,39 @@ void View::update_view_vectors()
   data_.viewvecs[1][2] = view_vecs[3][2] - view_vecs[0][2];
 }
 
+void View::bind()
+{
+  update_viewport_size();
+
+  if (dirty_) {
+    dirty_ = false;
+    data_.push_update();
+  }
+
+  GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
+}
+
 void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len)
 {
-  visibility_buf_.resize(divide_ceil_u(resource_len, sizeof(uint4)));
+  /* TODO(fclem): Early out if visibility hasn't changed. */
+  /* TODO(fclem): Resize to nearest pow2 to reduce fragmentation. */
+  visibility_buf_.resize(divide_ceil_u(resource_len, 128));
+
+  uint32_t data = 0xFFFFFFFFu;
+  GPU_storagebuf_clear(visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
 
   if (do_visibility_ == false) {
-    uint32_t data = 0xFFFFFFFFu;
-    GPU_storagebuf_clear(visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
     return;
   }
 
   GPUShader *shader = DRW_shader_draw_visibility_compute_get();
   GPU_shader_bind(shader);
   GPU_shader_uniform_1i(shader, "resource_len", resource_len);
-  GPU_storagebuf_bind(bounds, 0);
+  GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo(shader, "bounds_buf"));
+  GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo(shader, "visibility_buf"));
+  GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
   GPU_compute_dispatch(shader, divide_ceil_u(resource_len, DRW_VISIBILITY_GROUP_SIZE), 1, 1);
+  GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
 }
 
 }  // namespace blender::draw

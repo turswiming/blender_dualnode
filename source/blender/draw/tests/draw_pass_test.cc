@@ -6,6 +6,8 @@
 #include "draw_shader.h"
 #include "draw_testing.hh"
 
+#include <bitset>
+
 namespace blender::draw {
 
 static void test_draw_pass_all_commands()
@@ -199,5 +201,213 @@ static void test_draw_pass_multi_draw()
   DRW_shape_cache_free();
 }
 DRAW_TEST(draw_pass_multi_draw)
+
+static void test_draw_resource_id_gen()
+{
+  float4x4 win_mat;
+  orthographic_m4(win_mat.ptr(), -1, 1, -1, 1, -1, 1);
+
+  View view("test_view");
+  view.sync(float4x4::identity(), win_mat);
+
+  Manager drw;
+
+  float4x4 obmat_1 = float4x4::identity();
+  float4x4 obmat_2 = float4x4::identity();
+  obmat_1.apply_scale(-0.5f);
+  obmat_2.apply_scale(0.5f);
+
+  drw.begin_sync();
+  ResourceHandle handle1 = drw.resource_handle(obmat_1);
+  ResourceHandle handle2 = drw.resource_handle(obmat_1);
+  ResourceHandle handle3 = drw.resource_handle(obmat_2);
+  drw.resource_handle(obmat_2, float3(2), float3(1));
+  drw.end_sync();
+
+  StringRefNull expected = "2 1 1 1 1 3 3 1 1 1 1 1 3 2 2 2 2 2 2 1 1 1 ";
+
+  {
+    /* Computed on CPU. */
+    PassSimple pass = {"test.resource_id"};
+    pass.init();
+    pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA));
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, handle2);
+    pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, handle1);
+    pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, handle3);
+    pass.draw_procedural(GPU_PRIM_POINTS, 5, -1, -1, handle1);
+    pass.draw_procedural(GPU_PRIM_LINES, 1, -1, -1, handle3);
+    pass.draw_procedural(GPU_PRIM_POINTS, 6, -1, -1, handle2);
+    pass.draw_procedural(GPU_PRIM_TRIS, 3, -1, -1, handle1);
+
+    Manager::SubmitDebugOutput debug = drw.submit_debug(pass, view);
+
+    std::stringstream result;
+    for (auto val : debug.resource_id) {
+      result << val << " ";
+    }
+
+    EXPECT_EQ(result.str(), expected);
+  }
+  {
+    /* Same thing with PassMain (computed on GPU) */
+    PassSimple pass = {"test.resource_id"};
+    pass.init();
+    pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA));
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, handle2);
+    pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, handle1);
+    pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, handle3);
+    pass.draw_procedural(GPU_PRIM_POINTS, 5, -1, -1, handle1);
+    pass.draw_procedural(GPU_PRIM_LINES, 1, -1, -1, handle3);
+    pass.draw_procedural(GPU_PRIM_POINTS, 6, -1, -1, handle2);
+    pass.draw_procedural(GPU_PRIM_TRIS, 3, -1, -1, handle1);
+
+    Manager::SubmitDebugOutput debug = drw.submit_debug(pass, view);
+
+    std::stringstream result;
+    for (auto val : debug.resource_id) {
+      result << val << " ";
+    }
+
+    EXPECT_EQ(result.str(), expected);
+  }
+
+  DRW_shape_cache_free();
+  DRW_shaders_free();
+}
+DRAW_TEST(draw_resource_id_gen)
+
+static void test_draw_visibility()
+{
+  float4x4 win_mat;
+  orthographic_m4(win_mat.ptr(), -1, 1, -1, 1, -1, 1);
+
+  View view("test_view");
+  view.sync(float4x4::identity(), win_mat);
+
+  Manager drw;
+
+  float4x4 obmat_1 = float4x4::identity();
+  float4x4 obmat_2 = float4x4::identity();
+  obmat_1.apply_scale(-0.5f);
+  obmat_2.apply_scale(0.5f);
+
+  drw.begin_sync();                                   /* Default {0} always visible. */
+  drw.resource_handle(obmat_1);                       /* No bounds, always visible. */
+  drw.resource_handle(obmat_1, float3(3), float3(1)); /* Out of view. */
+  drw.resource_handle(obmat_2, float3(0), float3(1)); /* Inside view. */
+  drw.end_sync();
+
+  PassMain pass = {"test.visibility"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA));
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, -1);
+
+  Manager::SubmitDebugOutput debug = drw.submit_debug(pass, view);
+  Vector<uint32_t> expected_visibility = {0};
+
+  std::stringstream result;
+  for (auto val : debug.visibility) {
+    result << std::bitset<32>(val);
+  }
+
+  EXPECT_EQ(result.str(), "11111111111111111111111111111011");
+
+  DRW_shape_cache_free();
+  DRW_shaders_free();
+}
+DRAW_TEST(draw_visibility)
+
+static void test_draw_manager_sync()
+{
+  float4x4 obmat_1 = float4x4::identity();
+  float4x4 obmat_2 = float4x4::identity();
+  obmat_1.apply_scale(-0.5f);
+  obmat_2.apply_scale(0.5f);
+
+  /* TODO find a way to create a minimum object to test resource handle creation on it. */
+  Manager drw;
+
+  drw.begin_sync();
+  drw.resource_handle(obmat_1);
+  drw.resource_handle(obmat_2, float3(2), float3(1));
+  drw.end_sync();
+
+  Manager::DataDebugOutput debug = drw.data_debug();
+
+  std::stringstream result;
+  for (const auto &val : debug.matrices) {
+    result << val;
+  }
+  for (const auto &val : debug.bounds) {
+    result << val;
+  }
+  for (const auto &val : debug.infos) {
+    result << val;
+  }
+
+  std::stringstream expected;
+  expected << "ObjectMatrices(" << std::endl;
+  expected << "model=(" << std::endl;
+  expected << "(   1.000000,    0.000000,    0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    1.000000,    0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.000000,    1.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << ")" << std::endl;
+  expected << ", " << std::endl;
+  expected << "model_inverse=(" << std::endl;
+  expected << "(   1.000000,   -0.000000,    0.000000,   -0.000000)" << std::endl;
+  expected << "(  -0.000000,    1.000000,   -0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,   -0.000000,    1.000000,   -0.000000)" << std::endl;
+  expected << "(  -0.000000,    0.000000,   -0.000000,    1.000000)" << std::endl;
+  expected << ")" << std::endl;
+  expected << ")" << std::endl;
+  expected << "ObjectMatrices(" << std::endl;
+  expected << "model=(" << std::endl;
+  expected << "(  -0.500000,   -0.000000,   -0.000000,    0.000000)" << std::endl;
+  expected << "(  -0.000000,   -0.500000,   -0.000000,    0.000000)" << std::endl;
+  expected << "(  -0.000000,   -0.000000,   -0.500000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << ")" << std::endl;
+  expected << ", " << std::endl;
+  expected << "model_inverse=(" << std::endl;
+  expected << "(  -2.000000,    0.000000,   -0.000000,   -0.000000)" << std::endl;
+  expected << "(   0.000000,   -2.000000,    0.000000,    0.000000)" << std::endl;
+  expected << "(  -0.000000,    0.000000,   -2.000000,    0.000000)" << std::endl;
+  expected << "(  -0.000000,   -0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << ")" << std::endl;
+  expected << ")" << std::endl;
+  expected << "ObjectMatrices(" << std::endl;
+  expected << "model=(" << std::endl;
+  expected << "(   0.500000,    0.000000,    0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.500000,    0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.000000,    0.500000,    0.000000)" << std::endl;
+  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << ")" << std::endl;
+  expected << ", " << std::endl;
+  expected << "model_inverse=(" << std::endl;
+  expected << "(   2.000000,   -0.000000,    0.000000,   -0.000000)" << std::endl;
+  expected << "(  -0.000000,    2.000000,   -0.000000,    0.000000)" << std::endl;
+  expected << "(   0.000000,   -0.000000,    2.000000,   -0.000000)" << std::endl;
+  expected << "(  -0.000000,    0.000000,   -0.000000,    1.000000)" << std::endl;
+  expected << ")" << std::endl;
+  expected << ")" << std::endl;
+  expected << "ObjectBounds(skipped)" << std::endl;
+  expected << "ObjectBounds(skipped)" << std::endl;
+  expected << "ObjectBounds(" << std::endl;
+  expected << ".bounding_corners[0](0.5, 0.5, 0.5)" << std::endl;
+  expected << ".bounding_corners[1](1, 0, 0)" << std::endl;
+  expected << ".bounding_corners[2](0, 1, 0)" << std::endl;
+  expected << ".bounding_corners[3](0, 0, 1)" << std::endl;
+  expected << ".sphere=(pos=(1, 1, 1), rad=0.866025" << std::endl;
+  expected << ")" << std::endl;
+  expected << "ObjectInfos(skipped)" << std::endl;
+  expected << "ObjectInfos(skipped)" << std::endl;
+  expected << "ObjectInfos(skipped)" << std::endl;
+
+  EXPECT_EQ(result.str(), expected.str());
+
+  DRW_shaders_free();
+}
+DRAW_TEST(draw_manager_sync)
 
 }  // namespace blender::draw

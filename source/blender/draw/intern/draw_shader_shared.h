@@ -109,11 +109,12 @@ struct ObjectMatrices {
 BLI_STATIC_ASSERT_ALIGN(ObjectMatrices, 16)
 
 enum eObjectInfoFlag {
-  OBJECT_SELECTED = (1 << 0),
-  OBJECT_FROM_DUPLI = (1 << 1),
-  OBJECT_FROM_SET = (1 << 2),
-  OBJECT_ACTIVE = (1 << 3),
-  OBJECT_NEGATIVE_SCALE = (1 << 4)
+  OBJECT_SELECTED = (1u << 0u),
+  OBJECT_FROM_DUPLI = (1u << 1u),
+  OBJECT_FROM_SET = (1u << 2u),
+  OBJECT_ACTIVE = (1u << 3u),
+  OBJECT_NEGATIVE_SCALE = (1u << 4u),
+  OBJECT_NO_INFO = 0xFFFFFFFFu
 };
 
 struct ObjectInfos {
@@ -137,6 +138,7 @@ struct ObjectInfos {
 #endif
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
+  void sync();
   void sync(const blender::draw::ObjectRef ref, bool is_active_object);
 #endif
 };
@@ -152,7 +154,9 @@ struct ObjectBounds {
   float4 bounding_sphere;
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
+  void sync();
   void sync(Object &ob);
+  void sync(const float3 &center, const float3 &size);
 #endif
 };
 BLI_STATIC_ASSERT_ALIGN(ObjectBounds, 16)

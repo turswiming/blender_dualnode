@@ -150,17 +150,17 @@ GPU_SHADER_CREATE_INFO(draw_resource_finalize)
     .storage_buf(0, Qualifier::READ, "ObjectMatrices", "matrix_buf[]")
     .storage_buf(1, Qualifier::READ_WRITE, "ObjectBounds", "bounds_buf[]")
     .storage_buf(2, Qualifier::READ_WRITE, "ObjectInfos", "infos_buf[]")
-    .push_constant(Type::UINT, "resource_len")
+    .push_constant(Type::INT, "resource_len")
     .compute_source("draw_resource_finalize_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(draw_visibility_compute)
     .do_static_compilation(true)
     .local_group_size(DRW_VISIBILITY_GROUP_SIZE)
     .storage_buf(0, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
-    .storage_buf(1, Qualifier::WRITE, "uint", "visibility_buf[]")
-    .push_constant(Type::UINT, "resource_len")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "visibility_buf[]")
+    .push_constant(Type::INT, "resource_len")
     .compute_source("draw_visibility_comp.glsl")
-    .additional_info("draw_view");
+    .additional_info("draw_view", "draw_debug_print");
 
 GPU_SHADER_CREATE_INFO(draw_command_generate)
     .do_static_compilation(true)
@@ -172,7 +172,7 @@ GPU_SHADER_CREATE_INFO(draw_command_generate)
     .storage_buf(2, Qualifier::READ, "DrawPrototype", "prototype_buf[]")
     .storage_buf(3, Qualifier::WRITE, "DrawCommand", "command_buf[]")
     .storage_buf(4, Qualifier::WRITE, "uint", "resource_id_buf[]")
-    .push_constant(Type::UINT, "prototype_len")
+    .push_constant(Type::INT, "prototype_len")
     .compute_source("draw_command_generate_comp.glsl");
 
 /** \} */

@@ -24,6 +24,22 @@ class Manager {
   using ObjectInfosBuf = StorageArrayBuffer<ObjectInfos, 128>;
 
  public:
+  struct SubmitDebugOutput {
+    /** Indexed by resource id. */
+    Span<uint32_t> visibility;
+    /** Indexed by drawn instance. */
+    Span<uint32_t> resource_id;
+  };
+
+  struct DataDebugOutput {
+    /** Indexed by resource id. */
+    Span<ObjectMatrices> matrices;
+    /** Indexed by resource id. */
+    Span<ObjectBounds> bounds;
+    /** Indexed by resource id. */
+    Span<ObjectInfos> infos;
+  };
+
   /**
    * Buffers containing all object data. Referenced by resource index.
    * Exposed as public members for shader access after sync.
@@ -49,6 +65,14 @@ class Manager {
    * and there won't be any associated object info / bounds. Assumes correct handedness / winding.
    */
   ResourceHandle resource_handle(const float4x4 &model_matrix);
+  /**
+   * Get resource id for a loose matrix with bounds. The draw-calls for this resource handle will
+   * be culled bute there won't be any associated object info / bounds. Assumes correct handedness
+   * / winding.
+   */
+  ResourceHandle resource_handle(const float4x4 &model_matrix,
+                                 const float3 &bounds_center,
+                                 const float3 &bounds_half_extent);
 
   /**
    * Populate additional per resource data on demand.
@@ -64,26 +88,19 @@ class Manager {
   void submit(PassSimple &pass, View &view);
   void submit(PassMain &pass, View &view);
 
-  struct SubmitDebugOutput {
-    Span<uint32_t> visibility;
-    Span<uint32_t> resource_id;
-  };
-
   /**
    * Submit a pass for drawing but read back all data buffers for inspection.
    */
   SubmitDebugOutput submit_debug(PassSimple &pass, View &view);
   SubmitDebugOutput submit_debug(PassMain &pass, View &view);
 
-  /** TODO(fclem): The following should become private at some point. */
   /**
-   * Reset all buffers to be refilled.
+   * Check data buffers of the draw manager. Only to be used after end_sync().
    */
-  void begin_sync();
+  DataDebugOutput data_debug();
 
-  /**
-   * Finalize the object data on GPU.
-   */
+  /** TODO(fclem): The following should become private at some point. */
+  void begin_sync();
   void end_sync();
 };
 
@@ -99,6 +116,18 @@ inline ResourceHandle Manager::resource_handle(const ObjectRef ref)
 inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix)
 {
   matrix_buf.get_or_resize(resource_len_).sync(model_matrix);
+  bounds_buf.get_or_resize(resource_len_).sync();
+  infos_buf.get_or_resize(resource_len_).sync();
+  return ResourceHandle(resource_len_++, false);
+}
+
+inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix,
+                                               const float3 &bounds_center,
+                                               const float3 &bounds_half_extent)
+{
+  matrix_buf.get_or_resize(resource_len_).sync(model_matrix);
+  bounds_buf.get_or_resize(resource_len_).sync(bounds_center, bounds_half_extent);
+  infos_buf.get_or_resize(resource_len_).sync();
   return ResourceHandle(resource_len_++, false);
 }
 
