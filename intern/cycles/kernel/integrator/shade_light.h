@@ -58,19 +58,18 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
     return;
   }
 
-  float mis_weight = 1.0f;
   /* MIS weighting. */
+  float mis_weight = 1.0f;
   if (!(path_flag & PATH_RAY_MIS_SKIP)) {
     /* multiple importance sampling, get regular light pdf,
      * and compute weight with respect to BSDF pdf */
     const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
     mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
   }
-  guiding_record_surface_emission(kg, state, light_eval, mis_weight);
-  light_eval *= mis_weight;
+
   /* Write to render buffer. */
-  const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
-  kernel_accum_emission(kg, state, throughput * light_eval, render_buffer, ls.group);
+  guiding_record_surface_emission(kg, state, light_eval, mis_weight);
+  film_accum_surface_emission(kg, state, light_eval, mis_weight, render_buffer, ls.group);
 }
 
 ccl_device void integrator_shade_light(KernelGlobals kg,

@@ -76,7 +76,7 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
    * This logic allows to both count actual number of samples per pixel, and to add samples to this
    * pixel after it was converged and samples were added somewhere else (in which case the
    * `scheduled_sample` will be different from actual number of samples in this pixel). */
-  const int sample = kernel_accum_sample(
+  const int sample = film_accum_sample(
       kg, state, render_buffer, scheduled_sample, tile->sample_offset);
 
   /* Initialize random number seed for path. */

@@ -97,7 +97,7 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
   }
 
   /* Always count the sample, even if the camera sample will reject the ray. */
-  const int sample = kernel_accum_sample(
+  const int sample = film_accum_sample(
       kg, state, render_buffer, scheduled_sample, tile->sample_offset);
 
   /* Setup render buffers. */
@@ -112,7 +112,7 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
   int prim = __float_as_uint(primitive[1]);
   if (prim == -1) {
     /* Accumulate transparency for empty pixels. */
-    kernel_accum_transparent(kg, state, 0, 1.0f, buffer);
+    film_accum_transparent(kg, state, 0, 1.0f, buffer);
     return false;
   }
 

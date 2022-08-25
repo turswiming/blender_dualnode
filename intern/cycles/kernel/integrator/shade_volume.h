@@ -665,7 +665,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   /* Write accumulated emission. */
   if (!is_zero(accum_emission)) {
     /* TODO: record emission for path guiding? */
-    kernel_accum_emission(
+    film_accum_volume_emission(
         kg, state, accum_emission, render_buffer, object_lightgroup(kg, sd->object));
   }
 

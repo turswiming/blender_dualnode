@@ -92,7 +92,7 @@ ccl_device_forceinline bool integrate_surface_holdout(KernelGlobals kg,
     const Spectrum holdout_weight = shader_holdout_apply(kg, sd);
     const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
     const float transparent = average(holdout_weight * throughput);
-    kernel_accum_holdout(kg, state, path_flag, transparent, render_buffer);
+    film_accum_holdout(kg, state, path_flag, transparent, render_buffer);
     if (isequal(holdout_weight, one_spectrum())) {
       return false;
     }
@@ -132,11 +132,8 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
   }
 
   guiding_record_surface_emission(kg, state, L, mis_weight);
-  L *= mis_weight;
-
-  const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
-  kernel_accum_emission(
-      kg, state, throughput * L, render_buffer, object_lightgroup(kg, sd->object));
+  film_accum_surface_emission(
+      kg, state, L, mis_weight, render_buffer, object_lightgroup(kg, sd->object));
 }
 #endif /* __EMISSION__ */
 
