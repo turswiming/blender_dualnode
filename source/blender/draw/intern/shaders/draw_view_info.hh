@@ -168,10 +168,10 @@ GPU_SHADER_CREATE_INFO(draw_command_generate)
     .typedef_source("draw_command_shared.hh")
     .local_group_size(DRW_COMMAND_GROUP_SIZE)
     .storage_buf(0, Qualifier::READ_WRITE, "DrawGroup", "group_buf[]")
-    .storage_buf(1, Qualifier::READ, "DrawPrototype", "prototype_buf[]")
-    .storage_buf(2, Qualifier::WRITE, "DrawCommand", "command_buf[]")
-    .storage_buf(3, Qualifier::WRITE, "uint", "resource_id_buf[]")
-    .storage_buf(4, Qualifier::READ, "uint", "visibility_buf[]")
+    .storage_buf(1, Qualifier::READ, "uint", "visibility_buf[]")
+    .storage_buf(2, Qualifier::READ, "DrawPrototype", "prototype_buf[]")
+    .storage_buf(3, Qualifier::WRITE, "DrawCommand", "command_buf[]")
+    .storage_buf(4, Qualifier::WRITE, "uint", "resource_id_buf[]")
     .push_constant(Type::UINT, "prototype_len")
     .compute_source("draw_command_generate_comp.glsl");
 
@@ -179,25 +179,17 @@ GPU_SHADER_CREATE_INFO(draw_command_generate)
 
 /* -------------------------------------------------------------------- */
 /** \name Draw Resource ID
- * New implementation using gl_DrawID and storage buffers.
+ * New implementation using gl_BaseInstance and storage buffers.
  * \{ */
 
-GPU_SHADER_CREATE_INFO(draw_resource_id_draw_id).define("drw_DrawIndex", "gl_DrawID");
+GPU_SHADER_CREATE_INFO(draw_resource_id_new)
+    .storage_buf(DRW_RESOURCE_ID_SLOT, Qualifier::READ, "uint", "resource_id_buf[]")
+    .define("drw_ResourceIndex", "resource_id_buf[gl_BaseInstance + gl_InstanceID]");
 
 /**
- * Workaround the lack of gl_DrawID using our own emulation.
+ * Workaround the lack of gl_BaseInstance by binding the resource_id_buf as vertex buf.
  */
-GPU_SHADER_CREATE_INFO(draw_resource_id_fallback).vertex_in(15, Type::UINT, "drw_DrawIndex");
-
-GPU_SHADER_CREATE_INFO(draw_resource_id_new)
-    .typedef_source("draw_shader_shared.h")
-    .storage_buf(DRW_COMMAND_SLOT, Qualifier::READ, "DrawCommand", "drw_command_buf[]")
-    .define("drw_EngineInstanceCount", "drw_command_buf[drw_DrawIndex].engine_instance_count")
-    .define("drw_EngineInstanceIndex", "(gl_InstanceID % drw_EngineInstanceCount)")
-    .define("drw_ObjectInstanceIndex", "(gl_InstanceID / drw_EngineInstanceCount)")
-    .define("drw_ResourceIndexStart", "drw_command_buf[drw_DrawIndex].resource_id")
-    .define("drw_ResourceIndex", "(drw_ResourceIndexStart + drw_ObjectInstanceIndex)")
-    .additional_info("draw_resource_id_draw_id");
+GPU_SHADER_CREATE_INFO(draw_resource_id_fallback).vertex_in(15, Type::UINT, "drw_ResourceIndex");
 
 /** \} */
 

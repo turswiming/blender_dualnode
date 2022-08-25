@@ -17,6 +17,8 @@ class Manager;
 
 /* TODO deduplicate. */
 using ObjectBoundsBuf = StorageArrayBuffer<ObjectBounds, 128>;
+/* NOTE: Using uint4 for declaration but bound as uint. */
+using VisibilityBuf = StorageArrayBuffer<uint4, 1, true>;
 
 class View {
   friend Manager;
@@ -24,15 +26,15 @@ class View {
  private:
   UniformBuffer<ViewInfos> data_;
   /** Result of the visibility computation. 1 bit per resource ID. */
-  StorageArrayBuffer<uint4, 1, true> object_visibility_buf;
+  VisibilityBuf visibility_buf_ = {"VisibilityBuf"};
 
-  const char *debug_name;
+  const char *debug_name_;
 
   bool do_visibility_ = true;
   bool dirty_ = true;
 
  public:
-  View(const char *name) : object_visibility_buf(name), debug_name(name){};
+  View(const char *name) : visibility_buf_(name), debug_name_(name){};
 
   void set_clip_planes(Span<float4> planes);
 

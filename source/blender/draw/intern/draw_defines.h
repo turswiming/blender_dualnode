@@ -13,8 +13,8 @@
 
 #define DRW_VIEW_UBO_SLOT 0
 
-#define DRW_OBJ_MAT_SLOT 7
-#define DRW_COMMAND_SLOT 6
+#define DRW_RESOURCE_ID_SLOT 7
+#define DRW_OBJ_MAT_SLOT 6
 #define DRW_OBJ_INFOS_SLOT 5
 #define DRW_OBJ_ATTR_SLOT 4
 

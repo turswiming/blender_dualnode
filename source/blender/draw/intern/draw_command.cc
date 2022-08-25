@@ -6,12 +6,19 @@
  */
 
 #include "GPU_batch.h"
+#include "GPU_capabilities.h"
 #include "GPU_compute.h"
 
 #include "draw_command.hh"
+#include "draw_shader.h"
+#include "draw_view.hh"
 
 #include <bitset>
 #include <sstream>
+
+/* For debugging purpose */
+/* TODO limit to GL < 4.6 */
+#define WORKAROUND_RESOURCE_ID true
 
 namespace blender::draw::command {
 
@@ -457,6 +464,115 @@ std::string StencilSet::serialize() const
   ss << ".stencil_set(write_mask=0b" << std::bitset<8>(write_mask) << ", compare_mask=0b"
      << std::bitset<8>(compare_mask) << ", reference=0b" << std::bitset<8>(reference);
   return ss.str();
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Commands buffers binding / command / resource ID generation
+ * \{ */
+
+void DrawCommandBuf::bind(RecordingState &state,
+                          Vector<Header> &headers,
+                          Vector<Undetermined> &commands,
+                          VisibilityBuf &visibility_buf)
+{
+  UNUSED_VARS(headers, commands, visibility_buf);
+
+  uint total_instance = 0;
+
+  for (const Header &header : headers) {
+    if (header.type != Type::Draw) {
+      continue;
+    }
+
+    Draw &cmd = commands[header.index].draw;
+
+    int batch_vert_len, batch_inst_len;
+    /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
+    GPU_batch_draw_parameter_get(cmd.batch, &batch_vert_len, &batch_inst_len);
+    /* Instancing attributes are not supported using the new pipeline since we use the base
+     * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
+    BLI_assert(batch_inst_len == 1);
+
+    cmd.vertex_len = max_ii(cmd.vertex_len, batch_vert_len);
+
+    if (cmd.handle.raw > 0) {
+      /* Save correct offset to start of resource_id buffer region for this draw. */
+      uint instance_first = total_instance;
+      total_instance += cmd.instance_len;
+      /* Ensure the buffer is big enough. */
+      resource_id_buf_.get_or_resize(total_instance - 1);
+
+      /* Copy the resource id for all instances. */
+      uint index = cmd.handle.resource_index();
+      for (int i = instance_first; i < (instance_first + cmd.instance_len); i++) {
+        resource_id_buf_[i] = index;
+      }
+    }
+  }
+
+  resource_id_buf_.push_update();
+
+  if (WORKAROUND_RESOURCE_ID) {
+    state.resource_id_buf = resource_id_buf_;
+  }
+  else {
+    GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
+  }
+}
+
+void DrawMultiBuf::bind(RecordingState &state,
+                        Vector<Header> &headers,
+                        Vector<Undetermined> &commands,
+                        VisibilityBuf &visibility_buf)
+{
+  UNUSED_VARS(headers, commands);
+
+  uint instance_sum = 0u;
+  for (DrawGroup &group : group_buf_) {
+    /* Compute prefix sum of all instance of previous group. */
+    group.start = instance_sum;
+    instance_sum += group.len;
+
+    int batch_inst_len;
+    /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
+    GPU_batch_draw_parameter_get(group.gpu_batch, &group.vertex_len, &batch_inst_len);
+    /* Tag group as using index draw (changes indirect draw call structure). */
+    if (group.gpu_batch->elem != nullptr) {
+      group.vertex_len = -group.vertex_len;
+    }
+    /* Instancing attributes are not supported using the new pipeline since we use the base
+     * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
+    BLI_assert(batch_inst_len == 1);
+    UNUSED_VARS_NDEBUG(batch_inst_len);
+
+    /* Now that we got the batch infos, we can set the counters to 0. */
+    group.total_counter = group.front_facing_counter = group.back_facing_counter = 0;
+  }
+
+  group_buf_.push_update();
+  prototype_buf_.push_update();
+  /* Allocate enough for the expansion pass. */
+  resource_id_buf_.get_or_resize(instance_sum);
+  command_buf_.get_or_resize(group_count_);
+
+  GPUShader *shader = DRW_shader_draw_command_generate_get();
+  GPU_shader_bind(shader);
+  GPU_shader_uniform_1i(shader, "prototype_len", prototype_count_);
+  GPU_storagebuf_bind(group_buf_, 0);
+  GPU_storagebuf_bind(visibility_buf, 1);
+  GPU_storagebuf_bind(prototype_buf_, 2);
+  GPU_storagebuf_bind(command_buf_, 3);
+  GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
+  GPU_compute_dispatch(shader, divide_ceil_u(prototype_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
+  if (WORKAROUND_RESOURCE_ID) {
+    GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY);
+    state.resource_id_buf = resource_id_buf_;
+  }
+  else {
+    GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
 }
 
 /** \} */

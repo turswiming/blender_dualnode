@@ -31,7 +31,6 @@ class Manager {
   ObjectMatricesBuf matrix_buf;
   ObjectBoundsBuf bounds_buf;
   ObjectInfosBuf infos_buf;
-  ResourceIdBuf resource_id_buf;
 
  private:
   uint resource_len = 0;

@@ -46,6 +46,7 @@ void Manager::end_sync()
   GPU_storagebuf_bind(bounds_buf, 1);
   GPU_storagebuf_bind(infos_buf, 2);
   GPU_compute_dispatch(shader, thread_groups, 1, 1);
+  GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
 }
 
 void Manager::submit(PassSimple &pass)
@@ -60,15 +61,13 @@ void Manager::submit(PassMain &pass, View &view)
 
   view.compute_visibility(bounds_buf, resource_len);
 
+  command::RecordingState state;
+
+  pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_, view.visibility_buf_);
+
   GPU_storagebuf_bind(matrix_buf, DRW_OBJ_MAT_SLOT);
   GPU_storagebuf_bind(infos_buf, DRW_OBJ_INFOS_SLOT);
   // GPU_storagebuf_bind(attribute_buf, DRW_OBJ_ATTR_SLOT); /* TODO */
-
-  command::RecordingState state;
-
-  pass.draw_commands_buf_.bind(pass.headers_, pass.commands_, resource_id_buf);
-
-  GPU_storagebuf_bind(resource_id_buf, DRW_COMMAND_SLOT);
 
   pass.submit(state);
 }

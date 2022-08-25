@@ -286,11 +286,11 @@ void View::update_view_vectors()
 
 void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len)
 {
-  object_visibility_buf.resize(divide_ceil_u(resource_len, sizeof(uint4)));
+  visibility_buf_.resize(divide_ceil_u(resource_len, sizeof(uint4)));
 
   if (do_visibility_ == false) {
     uint32_t data = 0xFFFFFFFFu;
-    GPU_storagebuf_clear(object_visibility_buf, GPU_R32UI, GPU_DATA_UINT, &data);
+    GPU_storagebuf_clear(visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
     return;
   }
 
