@@ -288,7 +288,6 @@ template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawC
     this->sub_passes_.clear();
     this->draw_commands_buf_.clear();
   }
-
 };  // namespace blender::draw
 
 }  // namespace detail

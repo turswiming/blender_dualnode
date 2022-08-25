@@ -341,10 +341,15 @@ BLI_STATIC_ASSERT(sizeof(Undetermined) <= 24, "One of the command type is too la
  * \{ */
 
 class DrawCommandBuf {
+  friend Manager;
+
+ private:
   using ResourceIdBuf = StorageArrayBuffer<uint, 128, false>;
 
   /** Array of resource id. One per instance. Generated on GPU and send to GPU. */
   ResourceIdBuf resource_id_buf_;
+  /** Used items in the resource_id_buf_. Not it's allocated length. */
+  uint resource_id_count_ = 0;
 
  public:
   void clear(){};
@@ -408,6 +413,7 @@ class DrawCommandBuf {
  * \{ */
 
 class DrawMultiBuf {
+  friend Manager;
   friend DrawMulti;
 
  private:
@@ -435,6 +441,8 @@ class DrawMultiBuf {
   uint group_count_ = 0;
   /** Number of prototype command inside prototype_buf_. */
   uint prototype_count_ = 0;
+  /** Used items in the resource_id_buf_. Not it's allocated length. */
+  uint resource_id_count_ = 0;
 
  public:
   void clear()

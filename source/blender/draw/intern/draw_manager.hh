@@ -33,7 +33,7 @@ class Manager {
   ObjectInfosBuf infos_buf;
 
  private:
-  uint resource_len = 0;
+  uint resource_len_ = 0;
   Object *object = nullptr;
 
   Object *object_active = nullptr;
@@ -64,7 +64,18 @@ class Manager {
   void submit(PassSimple &pass, View &view);
   void submit(PassMain &pass, View &view);
 
- private:
+  struct SubmitDebugOutput {
+    Span<uint32_t> visibility;
+    Span<uint32_t> resource_id;
+  };
+
+  /**
+   * Submit a pass for drawing but read back all data buffers for inspection.
+   */
+  SubmitDebugOutput submit_debug(PassSimple &pass, View &view);
+  SubmitDebugOutput submit_debug(PassMain &pass, View &view);
+
+  /** TODO(fclem): The following should become private at some point. */
   /**
    * Reset all buffers to be refilled.
    */
@@ -79,16 +90,16 @@ class Manager {
 inline ResourceHandle Manager::resource_handle(const ObjectRef ref)
 {
   bool is_active_object = (ref.dupli_object ? ref.dupli_parent : ref.object) == object_active;
-  matrix_buf.get_or_resize(resource_len).sync(*ref.object);
-  bounds_buf.get_or_resize(resource_len).sync(*ref.object);
-  infos_buf.get_or_resize(resource_len).sync(ref, is_active_object);
-  return ResourceHandle(resource_len++, (ref.object->transflag & OB_NEG_SCALE) != 0);
+  matrix_buf.get_or_resize(resource_len_).sync(*ref.object);
+  bounds_buf.get_or_resize(resource_len_).sync(*ref.object);
+  infos_buf.get_or_resize(resource_len_).sync(ref, is_active_object);
+  return ResourceHandle(resource_len_++, (ref.object->transflag & OB_NEG_SCALE) != 0);
 }
 
 inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix)
 {
-  matrix_buf.get_or_resize(resource_len).sync(model_matrix);
-  return ResourceHandle(resource_len++, false);
+  matrix_buf.get_or_resize(resource_len_).sync(model_matrix);
+  return ResourceHandle(resource_len_++, false);
 }
 
 inline void Manager::extract_object_attributes(ResourceHandle handle,

@@ -18,7 +18,7 @@
 
 /* For debugging purpose */
 /* TODO limit to GL < 4.6 */
-#define WORKAROUND_RESOURCE_ID true
+#define WORKAROUND_RESOURCE_ID false
 
 namespace blender::draw::command {
 
@@ -479,7 +479,7 @@ void DrawCommandBuf::bind(RecordingState &state,
 {
   UNUSED_VARS(headers, commands, visibility_buf);
 
-  uint total_instance = 0;
+  resource_id_count_ = 0;
 
   for (const Header &header : headers) {
     if (header.type != Type::Draw) {
@@ -499,10 +499,10 @@ void DrawCommandBuf::bind(RecordingState &state,
 
     if (cmd.handle.raw > 0) {
       /* Save correct offset to start of resource_id buffer region for this draw. */
-      uint instance_first = total_instance;
-      total_instance += cmd.instance_len;
+      uint instance_first = resource_id_count_;
+      resource_id_count_ += cmd.instance_len;
       /* Ensure the buffer is big enough. */
-      resource_id_buf_.get_or_resize(total_instance - 1);
+      resource_id_buf_.get_or_resize(resource_id_count_ - 1);
 
       /* Copy the resource id for all instances. */
       uint index = cmd.handle.resource_index();
@@ -529,19 +529,27 @@ void DrawMultiBuf::bind(RecordingState &state,
 {
   UNUSED_VARS(headers, commands);
 
-  uint instance_sum = 0u;
-  for (DrawGroup &group : group_buf_) {
+  resource_id_count_ = 0u;
+  for (DrawGroup &group : MutableSpan<DrawGroup>(group_buf_.data(), group_count_)) {
     /* Compute prefix sum of all instance of previous group. */
-    group.start = instance_sum;
-    instance_sum += group.len;
+    group.start = resource_id_count_;
+    resource_id_count_ += group.len;
+
+    /* Need to do this before group.gpu_batch is mangled. */
+    bool is_indexed = (group.gpu_batch->elem != nullptr);
 
     int batch_inst_len;
     /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
+    /** WATCH: group.vertex_len and group.gpu_batch are in the same union.
+     * group.gpu_batch is not valid after this point. This is still ok to call this since the
+     * pointer is passed by value. */
     GPU_batch_draw_parameter_get(group.gpu_batch, &group.vertex_len, &batch_inst_len);
+
     /* Tag group as using index draw (changes indirect draw call structure). */
-    if (group.gpu_batch->elem != nullptr) {
+    if (is_indexed) {
       group.vertex_len = -group.vertex_len;
     }
+
     /* Instancing attributes are not supported using the new pipeline since we use the base
      * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
     BLI_assert(batch_inst_len == 1);
@@ -554,7 +562,7 @@ void DrawMultiBuf::bind(RecordingState &state,
   group_buf_.push_update();
   prototype_buf_.push_update();
   /* Allocate enough for the expansion pass. */
-  resource_id_buf_.get_or_resize(instance_sum);
+  resource_id_buf_.get_or_resize(resource_id_count_);
   command_buf_.get_or_resize(group_count_);
 
   GPUShader *shader = DRW_shader_draw_command_generate_get();
