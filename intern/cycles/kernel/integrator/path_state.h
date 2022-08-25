@@ -57,7 +57,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, throughput) = one_spectrum();
 
 #ifdef __PATH_GUIDING__
-  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) = make_float3(1.0f, 1.0f, 1.0f);
+  INTEGRATOR_STATE_WRITE(state, path, rr_throughput) = one_spectrum();
 #endif
 
 #ifdef __MNEE__

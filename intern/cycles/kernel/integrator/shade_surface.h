@@ -131,11 +131,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
     mis_weight = light_sample_mis_weight_forward(kg, bsdf_pdf, pdf);
   }
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (kernel_data.integrator.use_guiding) {
-    guiding_add_direct_contribution(state, L, mis_weight);
-  }
-#  endif
+  guiding_record_surface_emission(kg, state, L, mis_weight);
   L *= mis_weight;
 
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
@@ -445,11 +441,6 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   }
 #endif
 
-#if defined(__PATH_GUIDING__)
-  const float min_bsdf_sampled_roughness = fminf(bsdf_sampled_roughness.x,
-                                                 bsdf_sampled_roughness.y);
-#endif
-
   if (label & LABEL_TRANSPARENT) {
     /* Only need to modify start distance for transparent. */
     INTEGRATOR_STATE_WRITE(state, ray, tmin) = intersection_t_offset(sd->ray_length);
@@ -506,18 +497,15 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 #  if PATH_GUIDING_LEVEL < 4
   float guided_bsdf_pdf = bsdf_pdf;
 #  endif
-  const bool bsdf_is_delta = min_bsdf_sampled_roughness > 0.f ? false : true;
-  if (kernel_data.integrator.use_guiding) {
-    guiding_add_bsdf_data(state,
-                          sd,
-                          bsdf_weight,
-                          guided_bsdf_pdf,
-                          sd->N,
-                          normalize(bsdf_omega_in),
-                          bsdf_sampled_roughness,
-                          bsdf_eta,
-                          bsdf_is_delta);
-  }
+  guiding_record_surface_bounce(kg,
+                                state,
+                                sd,
+                                bsdf_weight,
+                                guided_bsdf_pdf,
+                                sd->N,
+                                normalize(bsdf_omega_in),
+                                bsdf_sampled_roughness,
+                                bsdf_eta);
 #endif
 
   return label;
@@ -661,11 +649,8 @@ ccl_device bool integrate_surface(KernelGlobals kg,
 #ifdef __VOLUME__
   if (!(sd.flag & SD_HAS_ONLY_VOLUME)) {
 #endif
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-    if (kernel_data.integrator.use_guiding) {
-      guiding_new_surface_segment(state, &sd);
-    }
-#endif
+    guiding_record_surface_segment(kg, state, &sd);
+
 #ifdef __SUBSURFACE__
     /* Can skip shader evaluation for BSSRDF exit point without bump mapping. */
     if (!(path_flag & PATH_RAY_SUBSURFACE) || ((sd.flag & SD_HAS_BSSRDF_BUMP)))
@@ -737,14 +722,7 @@ ccl_device bool integrate_surface(KernelGlobals kg,
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
     shader_prepare_surface_guiding(kg, state, &sd, &rng_state);
-#  if defined(WITH_CYCLES_DEBUG)
-    const bool use_guiding = kernel_data.integrator.use_guiding;
-    if (use_guiding) {
-      guiding_write_guiding_prob_buffer(kg, state, render_buffer);
-
-      guiding_write_avg_roughness_buffer(kg, state, &sd, render_buffer);
-    }
-#  endif
+    guiding_write_debug_passes(kg, state, &sd, render_buffer);
 #endif
     /* Direct light. */
     PROFILING_EVENT(PROFILING_SHADE_SURFACE_DIRECT_LIGHT);

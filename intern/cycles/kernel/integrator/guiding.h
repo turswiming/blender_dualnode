@@ -11,11 +11,16 @@
 
 CCL_NAMESPACE_BEGIN
 
-#if defined(__PATH_GUIDING__)
-#  if PATH_GUIDING_LEVEL >= 1
-ccl_device_forceinline void guiding_new_virtual_light_segment(
-    IntegratorState state, ccl_private const Intersection *ccl_restrict isect)
+/* Path recording for guiding. */
+
+ccl_device_forceinline void guiding_record_light_surface_segment(
+    KernelGlobals kg, IntegratorState state, ccl_private const Intersection *ccl_restrict isect)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const pgl_vec3f pglZero = openpgl::cpp::Vector3(0.f, 0.f, 0.f);
   const pgl_vec3f pglOne = openpgl::cpp::Vector3(1.f, 1.f, 1.f);
   float3 ray_P = INTEGRATOR_STATE(state, ray, P);
@@ -37,11 +42,18 @@ ccl_device_forceinline void guiding_new_virtual_light_segment(
   openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment, pglOne);
   openpgl::cpp::SetScatteringWeight(state->guiding.path_segment, pglOne);
   openpgl::cpp::SetEta(state->guiding.path_segment, 1.0f);
+#endif
 }
 
-ccl_device_forceinline void guiding_new_surface_segment(IntegratorState state,
-                                                        const ShaderData *sd)
+ccl_device_forceinline void guiding_record_surface_segment(KernelGlobals kg,
+                                                           IntegratorState state,
+                                                           ccl_private const ShaderData *sd)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const pgl_vec3f pglZero = openpgl::cpp::Vector3(0.f, 0.f, 0.f);
   const pgl_vec3f pglOne = openpgl::cpp::Vector3(1.f, 1.f, 1.f);
   pgl_point3f pglP = openpgl::cpp::Point3(sd->P.x, sd->P.y, sd->P.z);
@@ -55,22 +67,30 @@ ccl_device_forceinline void guiding_new_surface_segment(IntegratorState state,
   openpgl::cpp::SetDirectContribution(state->guiding.path_segment, pglZero);
   openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment, pglOne);
   openpgl::cpp::SetEta(state->guiding.path_segment, 1.0);
+#endif
 }
 
-ccl_device_forceinline void guiding_add_bsdf_data(IntegratorState state,
-                                                  const ShaderData *sd,
-                                                  const Spectrum bsdf_weight,
-                                                  const float bsdf_pdf,
-                                                  const float3 bsdf_shading_normal,
-                                                  const float3 bsdf_omega_in,
-                                                  const float2 bsdf_roughness,
-                                                  const float bsdf_eta,
-                                                  const bool bsdf_is_delta)
+ccl_device_forceinline void guiding_record_surface_bounce(KernelGlobals kg,
+                                                          IntegratorState state,
+                                                          ccl_private const ShaderData *sd,
+                                                          const Spectrum bsdf_weight,
+                                                          const float bsdf_pdf,
+                                                          const float3 bsdf_shading_normal,
+                                                          const float3 bsdf_omega_in,
+                                                          const float2 bsdf_roughness,
+                                                          const float bsdf_eta)
 {
-  float roughness = fminf(bsdf_roughness.x, bsdf_roughness.y);
-  if (roughness > 0.0f)
-    roughness = sqrt(roughness);
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
 
+  float roughness = fminf(bsdf_roughness.x, bsdf_roughness.y);
+  if (roughness > 0.0f) {
+    roughness = sqrt(roughness);
+  }
+
+  const bool bsdf_is_delta = roughness > 0.f ? false : true;
   const float3 bsdf_weight_rgb = spectrum_to_rgb(bsdf_weight);
 
   pgl_vec3f pglWo = openpgl::cpp::Vector3(bsdf_omega_in[0], bsdf_omega_in[1], bsdf_omega_in[2]);
@@ -92,12 +112,19 @@ ccl_device_forceinline void guiding_add_bsdf_data(IntegratorState state,
   openpgl::cpp::SetIsDelta(state->guiding.path_segment, bsdf_is_delta);
   openpgl::cpp::SetEta(state->guiding.path_segment, bsdf_eta);
   openpgl::cpp::SetRoughness(state->guiding.path_segment, roughness);
+#endif
 }
 
-ccl_device_forceinline void guiding_new_bssrdf_segment(IntegratorState state,
-                                                       const float3 &P,
-                                                       const float3 &I)
+ccl_device_forceinline void guiding_record_bssrdf_segment(KernelGlobals kg,
+                                                          IntegratorState state,
+                                                          const float3 &P,
+                                                          const float3 &I)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const pgl_vec3f pglZero = openpgl::cpp::Vector3(0.f, 0.f, 0.f);
   const pgl_vec3f pglOne = openpgl::cpp::Vector3(1.f, 1.f, 1.f);
   pgl_point3f pglP = openpgl::cpp::Point3(P.x, P.y, P.z);
@@ -111,14 +138,21 @@ ccl_device_forceinline void guiding_new_bssrdf_segment(IntegratorState state,
   openpgl::cpp::SetDirectContribution(state->guiding.path_segment, pglZero);
   openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment, pglOne);
   openpgl::cpp::SetEta(state->guiding.path_segment, 1.0);
+#endif
 }
 
-ccl_device_forceinline void guiding_add_bssrdf_data(IntegratorState state,
-                                                    const Spectrum bssrdf_weight,
-                                                    const float bssrdf_pdf,
-                                                    const float3 bssrdf_shading_normal,
-                                                    const float3 bssrdf_omega_in)
+ccl_device_forceinline void guiding_record_bssrdf_bounce(KernelGlobals kg,
+                                                         IntegratorState state,
+                                                         const Spectrum bssrdf_weight,
+                                                         const float bssrdf_pdf,
+                                                         const float3 bssrdf_shading_normal,
+                                                         const float3 bssrdf_omega_in)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const float3 bssrdf_weight_rgb = spectrum_to_rgb(bssrdf_weight);
 
   pgl_vec3f pglWo = openpgl::cpp::Vector3(
@@ -141,12 +175,19 @@ ccl_device_forceinline void guiding_add_bssrdf_data(IntegratorState state,
   openpgl::cpp::SetIsDelta(state->guiding.path_segment, false);
   openpgl::cpp::SetEta(state->guiding.path_segment, 1.0f);
   openpgl::cpp::SetRoughness(state->guiding.path_segment, 1.0f);
+#endif
 }
 
-ccl_device_forceinline void guiding_new_volume_segment(IntegratorState state,
-                                                       const float3 &P,
-                                                       const float3 &I)
+ccl_device_forceinline void guiding_record_volume_segment(KernelGlobals kg,
+                                                          IntegratorState state,
+                                                          const float3 &P,
+                                                          const float3 &I)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const pgl_vec3f pglZero = openpgl::cpp::Vector3(0.f, 0.f, 0.f);
   const pgl_vec3f pglOne = openpgl::cpp::Vector3(1.f, 1.f, 1.f);
   pgl_point3f pglP = openpgl::cpp::Point3(P.x, P.y, P.z);
@@ -161,15 +202,22 @@ ccl_device_forceinline void guiding_new_volume_segment(IntegratorState state,
   openpgl::cpp::SetDirectContribution(state->guiding.path_segment, pglZero);
   openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment, pglOne);
   openpgl::cpp::SetEta(state->guiding.path_segment, 1.0);
+#endif
 }
 
-ccl_device_forceinline void guiding_add_phase_data(IntegratorState state,
-                                                   const ShaderData *sd,
-                                                   const Spectrum phase_weight,
-                                                   const float phase_pdf,
-                                                   const float3 phase_omega_in,
-                                                   const float phase_roughness)
+ccl_device_forceinline void guiding_record_volume_bounce(KernelGlobals kg,
+                                                         IntegratorState state,
+                                                         ccl_private const ShaderData *sd,
+                                                         const Spectrum phase_weight,
+                                                         const float phase_pdf,
+                                                         const float3 phase_omega_in,
+                                                         const float phase_roughness)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const float3 phase_weight_rgb = spectrum_to_rgb(phase_weight);
 
   pgl_vec3f pglWo = openpgl::cpp::Vector3(phase_omega_in[0], phase_omega_in[1], phase_omega_in[2]);
@@ -189,12 +237,19 @@ ccl_device_forceinline void guiding_add_phase_data(IntegratorState state,
   openpgl::cpp::SetIsDelta(state->guiding.path_segment, false);
   openpgl::cpp::SetEta(state->guiding.path_segment, 1.f);
   openpgl::cpp::SetRoughness(state->guiding.path_segment, phase_roughness);
+#endif
 }
 
-ccl_device_forceinline void guiding_add_background(IntegratorState state,
-                                                   const Spectrum L,
-                                                   const float mis_weight)
+ccl_device_forceinline void guiding_record_background(KernelGlobals kg,
+                                                      IntegratorState state,
+                                                      const Spectrum L,
+                                                      const float mis_weight)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const float3 L_rgb = spectrum_to_rgb(L);
   const float3 background_pos = state->ray.P + (1e6f) * state->ray.D;
 
@@ -212,71 +267,87 @@ ccl_device_forceinline void guiding_add_background(IntegratorState state,
                                       openpgl::cpp::Vector3(L_rgb[0], L_rgb[1], L_rgb[2]));
   openpgl::cpp::SetMiWeight(&background_segment, mis_weight);
   state->guiding.path_segment_storage->AddSegment(background_segment);
+#endif
 }
 
-ccl_device_forceinline void guiding_add_direct_contribution(IntegratorState state,
+ccl_device_forceinline void guiding_record_surface_emission(KernelGlobals kg,
+                                                            IntegratorState state,
                                                             const Spectrum Le,
                                                             const float mis_weight)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   const float3 Le_rgb = spectrum_to_rgb(Le);
 
   openpgl::cpp::SetDirectContribution(state->guiding.path_segment,
                                       openpgl::cpp::Vector3(Le_rgb[0], Le_rgb[1], Le_rgb[2]));
   openpgl::cpp::SetMiWeight(state->guiding.path_segment, mis_weight);
+#endif
 }
 
-ccl_device_forceinline void guiding_add_scattered_contribution(IntegratorShadowState state,
-                                                               const Spectrum Lo)
+ccl_device_forceinline void guiding_record_direct_light(KernelGlobals kg,
+                                                        IntegratorShadowState state)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   if (state->shadow_path.path_segment) {
+    const Spectrum Lo = INTEGRATOR_STATE(state, shadow_path, scattered_contribution);
     const float3 Lo_rgb = spectrum_to_rgb(Lo);
     openpgl::cpp::AddScatteredContribution(state->shadow_path.path_segment,
                                            openpgl::cpp::Vector3(Lo_rgb[0], Lo_rgb[1], Lo_rgb[2]));
   }
+#endif
 }
 
-ccl_device_forceinline void guiding_set_continuation_probability(
-    IntegratorState state, const float continuation_probability)
+ccl_device_forceinline void guiding_record_continuation_probability(
+    KernelGlobals kg, IntegratorState state, const float continuation_probability)
 {
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
   if (state->guiding.path_segment) {
     openpgl::cpp::SetRussianRouletteProbability(state->guiding.path_segment,
                                                 continuation_probability);
   }
+#endif
 }
 
-#  endif
+/* Path guiding debug render passes. */
 
-#  ifdef WITH_CYCLES_DEBUG
-/* Functions for writing guiding related debug information into separate frame buffers*/
-
-ccl_device_forceinline void guiding_write_guiding_prob_buffer(const KernelGlobalsCPU *kg,
-                                                              IntegratorStateCPU *state,
-                                                              ccl_global float *ccl_restrict
-                                                                  render_buffer)
+ccl_device_forceinline void guiding_write_debug_passes(KernelGlobals kg,
+                                                       IntegratorStateCPU *state,
+                                                       ccl_private const ShaderData *sd,
+                                                       ccl_global float *ccl_restrict
+                                                           render_buffer)
 {
-  if (INTEGRATOR_STATE(state, path, bounce) == 0) {
-    const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-    const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
-                                          kernel_data.film.pass_stride;
-    ccl_global float *buffer = render_buffer + render_buffer_offset;
-    float guiding_prob = state->guiding.surface_guiding_sampling_prob;
-    if (kernel_data.film.pass_guiding_probability != PASS_UNUSED) {
-      kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_probability, guiding_prob);
-    }
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4 && defined(WITH_CYCLES_DEBUG)
+  if (!kernel_data.integrator.use_guiding) {
+    return;
   }
-}
 
-ccl_device_forceinline void guiding_write_avg_roughness_buffer(const KernelGlobalsCPU *kg,
-                                                               IntegratorStateCPU *state,
-                                                               ccl_private const ShaderData *sd,
-                                                               ccl_global float *ccl_restrict
-                                                                   render_buffer)
-{
-  if (INTEGRATOR_STATE(state, path, bounce) == 0) {
-    const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-    const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
-                                          kernel_data.film.pass_stride;
-    ccl_global float *buffer = render_buffer + render_buffer_offset;
+  if (INTEGRATOR_STATE(state, path, bounce) != 0) {
+    return;
+  }
+
+  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
+                                        kernel_data.film.pass_stride;
+  ccl_global float *buffer = render_buffer + render_buffer_offset;
+
+  if (kernel_data.film.pass_guiding_probability != PASS_UNUSED) {
+    float guiding_prob = state->guiding.surface_guiding_sampling_prob;
+    kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_probability, guiding_prob);
+  }
+
+  if (kernel_data.film.pass_guiding_avg_roughness != PASS_UNUSED) {
     float avg_roughness = 0.0f;
     float sum_sample_weight = 0.0f;
     for (int i = 0; i < sd->num_closure; i++) {
@@ -291,12 +362,9 @@ ccl_device_forceinline void guiding_write_avg_roughness_buffer(const KernelGloba
 
     avg_roughness = avg_roughness > 0.f ? avg_roughness / sum_sample_weight : 0.f;
 
-    if (kernel_data.film.pass_guiding_avg_roughness != PASS_UNUSED) {
-      kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_avg_roughness, avg_roughness);
-    }
+    kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_avg_roughness, avg_roughness);
   }
-}
-#  endif
 #endif
+}
 
 CCL_NAMESPACE_END

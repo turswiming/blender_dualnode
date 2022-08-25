@@ -182,15 +182,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
     return;
   }
   else {
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-    // we need to find a way to reset this pointer and to identify if we are in AO mode
-    const bool use_guiding = kernel_data.integrator.use_guiding;
-    if (use_guiding && state->shadow_path.path_segment) {
-      Spectrum scattered_contribution = INTEGRATOR_STATE(
-          state, shadow_path, scattered_contribution);
-      guiding_add_scattered_contribution(state, scattered_contribution);
-    }
-#endif
+    guiding_record_direct_light(kg, state);
     kernel_accum_light(kg, state, render_buffer);
     integrator_shadow_path_terminate(kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;

@@ -18,6 +18,8 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
   Intersection isect ccl_optional_struct_init;
   integrator_state_read_isect(kg, state, &isect);
 
+  guiding_record_light_surface_segment(kg, state, &isect);
+
   float3 ray_P = INTEGRATOR_STATE(state, ray, P);
   const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
   const float ray_time = INTEGRATOR_STATE(state, ray, time);
@@ -64,11 +66,7 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
     const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
     mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
   }
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (kernel_data.integrator.use_guiding) {
-    guiding_add_direct_contribution(state, light_eval, mis_weight);
-  }
-#endif
+  guiding_record_surface_emission(kg, state, light_eval, mis_weight);
   light_eval *= mis_weight;
   /* Write to render buffer. */
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);

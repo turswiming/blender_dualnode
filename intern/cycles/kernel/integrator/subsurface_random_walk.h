@@ -223,7 +223,7 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   bssrdf_weight = safe_divide_color(bssrdf_weight, albedo);
   Spectrum initial_throughput = throughput;
   if (use_guiding) {
-    guiding_add_bssrdf_data(state, bssrdf_weight, pdf, N, D);
+    guiding_record_bssrdf_bounce(kg, state, bssrdf_weight, pdf, N, D);
   }
 #endif
 

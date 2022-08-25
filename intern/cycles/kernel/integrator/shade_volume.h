@@ -664,6 +664,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
   /* Write accumulated emission. */
   if (!is_zero(accum_emission)) {
+    /* TODO: record emission for path guiding? */
     kernel_accum_emission(
         kg, state, accum_emission, render_buffer, object_lightgroup(kg, sd->object));
   }
@@ -986,6 +987,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
                                                &phase_omega_in,
                                                &phase_pdf,
                                                &sampled_roughness);
+  const float guided_phase_pdf = phase_pdf;
 #  endif
 
   if (phase_pdf == 0.0f || bsdf_eval_is_zero(&phase_eval)) {
@@ -1006,14 +1008,13 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   const Spectrum phase_weight = bsdf_eval_sum(&phase_eval) / guided_phase_pdf;
-  // add phase function sampling data to the path segment
-  if (kernel_data.integrator.use_guiding) {
-    guiding_add_phase_data(
-        state, sd, phase_weight, guided_phase_pdf, normalize(phase_omega_in), sampled_roughness);
-  }
 #  else
   const Spectrum phase_weight = bsdf_eval_sum(&phase_eval) / phase_pdf;
 #  endif
+
+  /* Add phase function sampling data to the path segment. */
+  guiding_record_volume_bounce(
+      kg, state, sd, phase_weight, guided_phase_pdf, normalize(phase_omega_in), sampled_roughness);
 
   /* Update throughput. */
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
@@ -1162,8 +1163,8 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
     return VOLUME_PATH_MISSED;
   }
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   bool guiding_generated_new_segment = false;
+#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   if (use_guiding) {
     // TODO(sherholz): find a nicer way to calaucate the transmittance weight
     //                 which avoids the division by the throughput
@@ -1191,7 +1192,7 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
         (result.direct_t == result.indirect_t)) {
       // next segment
       const float3 P = ray->P + result.indirect_t * ray->D;
-      guiding_new_volume_segment(state, P, sd.I);
+      guiding_record_volume_segment(kg, state, P, sd.I);
       guiding_generated_new_segment = true;
     }
 #    if PATH_GUIDING_LEVEL >= 4
@@ -1238,11 +1239,9 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
   if (result.indirect_scatter) {
     sd.P = ray->P + result.indirect_t * ray->D;
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-    if (use_guiding && !guiding_generated_new_segment) {
-      guiding_new_volume_segment(state, sd.P, sd.I);
+    if (!guiding_generated_new_segment) {
+      guiding_record_volume_segment(kg, state, sd.P, sd.I);
     }
-#  endif
     if (integrate_volume_phase_scatter(kg, state, &sd, &rng_state, &result.indirect_phases)) {
       return VOLUME_PATH_SCATTERED;
     }

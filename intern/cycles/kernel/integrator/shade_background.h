@@ -72,14 +72,9 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
   }
 #  endif
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (kernel_data.integrator.use_guiding) {
-    guiding_add_background(state, L, mis_weight);
-  }
-#  endif
+  guiding_record_background(kg, state, L, mis_weight);
 
-  L *= mis_weight;
-  return L;
+  return L * mis_weight;
 #else
   return make_spectrum(0.8f);
 #endif
@@ -183,18 +178,23 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
       }
 
       /* MIS weighting. */
+      float mis_weight = 1.0f;
       if (!(path_flag & PATH_RAY_MIS_SKIP)) {
         /* multiple importance sampling, get regular light pdf,
          * and compute weight with respect to BSDF pdf */
         const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-        const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
-        light_eval *= mis_weight;
+        mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
       }
+
+      guiding_record_background(kg, state, light_eval, mis_weight);
 
       /* Write to render buffer. */
       const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
-      kernel_accum_emission(
-          kg, state, throughput * light_eval, render_buffer, kernel_data.background.lightgroup);
+      kernel_accum_emission(kg,
+                            state,
+                            throughput * light_eval * mis_weight,
+                            render_buffer,
+                            kernel_data.background.lightgroup);
     }
   }
 }
