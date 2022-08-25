@@ -644,6 +644,7 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
       camera
       bsdf
       hair
+      guiding
       image_colorspace
       image_data_types
       image_mapping
