@@ -52,7 +52,6 @@ OrientationBounds merge(const OrientationBounds& cone_a,
       return OrientationBounds({a->axis, M_PI_F, theta_e});
     }
 
-    /* TODO: test if vectors can just be averaged. */
     /* Rotate new axis to be between a and b. */
     float theta_r = theta_o - a->theta_o;
     float3 new_axis = rotate_around_axis(a->axis, cross(a->axis, b->axis), theta_r);
@@ -154,7 +153,8 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
 
     bcone.axis = normal;
 
-    /* to-do: is there a better way to handle this case where both sides of the triangle are visible? */
+    /* to-do: is there a better way to handle this case where both sides of the triangle are visible? 
+     * Right now, we assume that the normal axis is within pi radians of the triangle normal. */
     bcone.theta_o = M_PI_F;
     bcone.theta_e = M_PI_2_F;
   }
@@ -219,9 +219,6 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
   }
   else {
     Light *lamp = scene->lights[lamp_id];
-    /* to-do: Past GSoC work also divides this by pi, but will need to test which is more accurate. 
-     * It seems like direction should be handled implicitly by the bounding cone, 
-     * by testing will provide more conclusive answers. */
     strength = lamp->get_strength();
   }
 
@@ -327,11 +324,8 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
 
   /* Var(X) = E[X^2] - E[X]^2 */
   float energy_variance = (energy_squared_total / num_prims) - (energy_total / num_prims) * (energy_total / num_prims);
-
-  /* to-do: find a better way to handle when all centroids overlap. */
   if (num_prims == 1 || len(centroid_bounds.size()) == 0.0f) {
     int first_prim_offset = ordered_prims.size();
-    /* to-do: reduce this? */
     for (int i = start; i < end; i++) {
       int prim_num = primitive_info[i].prim_num;
       ordered_prims.push_back(prims_[prim_num]);

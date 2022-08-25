@@ -68,8 +68,7 @@ struct LightTreePrimitiveInfo {
  * Struct that indexes into the scene's triangle and light arrays. */
 struct LightTreePrimitive {
   /* prim_id >= 0 is an index into an object's local triangle index,
-   * otherwise -prim_id-1 is an index into device lights array.
-   * */
+   * otherwise -prim_id-1 is an index into device lights array. */
   int prim_id;
 
   /* The primitive is either a light or an emissive triangle. */
@@ -78,14 +77,13 @@ struct LightTreePrimitive {
     int lamp_id;
   };
 
-  /* to-do: implement these using the index into the scene. */
   BoundBox calculate_bbox(Scene *scene) const;
   OrientationBounds calculate_bcone(Scene *scene) const;
   float calculate_energy(Scene *scene) const;
 };
 
 /* Light Tree Bucket Info
- * */
+ * Struct used to determine splitting costs in the light BVH. */
 struct LightTreeBucketInfo {
   LightTreeBucketInfo()
       : energy(0.0f), bbox(BoundBox::empty), bcone(OrientationBounds::empty), count(0)

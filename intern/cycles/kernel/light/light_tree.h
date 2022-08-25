@@ -12,7 +12,7 @@ ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
                                                const float3 P,
                                                const float3 point_to_centroid)
 {
-  /* Want to iterate through all 8 possible points of the bounding box. */
+  /* Iterate through all 8 possible points of the bounding box. */
   float theta_u = 0;
   float3 corners[8];
   corners[0] = bbox_min;
@@ -32,8 +32,7 @@ ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
 }
 
 /* This is the general function for calculating the importance of either a cluster or an emitter.
- * Both of the specialized functions obtain the necessary data before calling this function.
- * to-do: find a better way to handle this? or rename it to be more clear? */
+ * Both of the specialized functions obtain the necessary data before calling this function. */
 ccl_device float light_tree_node_importance(const float3 P,
                                             const float3 N,
                                             const float3 bbox_min,
@@ -60,7 +59,6 @@ ccl_device float light_tree_node_importance(const float3 P,
   }
   const float theta_u = light_tree_bounding_box_angle(bbox_min, bbox_max, P, point_to_centroid);
 
-  /* to-do: compare this with directly using fmaxf and cosf. */
   /* Avoid using cosine until needed. */
   const float theta_prime = fmaxf(theta - theta_o - theta_u, 0.0f);
   if (theta_prime >= theta_e) {
@@ -75,7 +73,6 @@ ccl_device float light_tree_node_importance(const float3 P,
 
   /* to-do: find a good approximation for this value. */
   const float f_a = 1.0f;
-
   float importance = f_a * cos_theta_i_prime * energy / distance_squared * cos_theta_prime;
   return importance;
 }
@@ -97,9 +94,9 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
     float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
 
+    /* We use a special calculation to check if a light is
+     * within the bounds of a spot or area light. */
     if (klight->type == LIGHT_SPOT) {
-      /* to-do: since spot light importance sampling isn't the best,
-       * we have a special case to check that the point is inside the cone. */
       const float radius = klight->spot.radius;
       const float cos_theta = klight->spot.spot_angle;
       const float theta = fast_acosf(cos_theta);
@@ -118,7 +115,6 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
       }
     }
     else if (klight->type == LIGHT_AREA) {
-      /* area light */
       float3 axisu = make_float3(
           klight->area.axisu[0], klight->area.axisu[1], klight->area.axisu[2]);
       float3 axisv = make_float3(
@@ -152,7 +148,6 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter_index);
 
-  /* Convert the data from the struct into float3 for calculations. */
   const float3 bbox_min = make_float3(kemitter->bounding_box_min[0],
                                       kemitter->bounding_box_min[1],
                                       kemitter->bounding_box_min[2]);
@@ -167,8 +162,6 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
       P, N, bbox_min, bbox_max, bcone_axis, kemitter->theta_o, kemitter->theta_e, kemitter->energy);
 }
 
-/* to-do: this is using a lot of the same calculations as the cluster importance,
- * so it may be better to compute these once and then hold on to it somewhere. */
 ccl_device bool light_tree_should_split(KernelGlobals kg,
                                          const float3 P,
                                          const ccl_global KernelLightTreeNode *knode)
@@ -214,7 +207,6 @@ ccl_device float light_tree_cluster_importance(KernelGlobals kg,
                                                const float3 N,
                                                const ccl_global KernelLightTreeNode *knode)
 {
-  /* Convert the data from the struct into float3 for calculations. */
   const float3 bbox_min = make_float3(
       knode->bounding_box_min[0], knode->bounding_box_min[1], knode->bounding_box_min[2]);
   const float3 bbox_max = make_float3(
@@ -233,8 +225,6 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  const ccl_global KernelLightTreeNode *knode,
                                                  float *pdf_factor)
 {
-  /* Right now, sampling is done by incrementing the CDF by the PDF.
-   * However, we first need to calculate the total importance so that we can normalize the CDF. */
   float total_emitter_importance = 0.0f;
   for (int i = 0; i < knode->num_prims; i++) {
     const int prim_index = -knode->child_index + i;
@@ -267,8 +257,8 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   return -1;
 }
 
-/* to-do: for now, we're not going to worry about being in a volume for now,
- * but this seems to be a good way to differentiate whether we're in a volume or not. */
+/* to-do: for now, we're not going to worry about being in a volume,
+ * but this is how the other function determines whether we're in a volume or not. */
 template<bool in_volume_segment>
 ccl_device bool light_tree_sample(KernelGlobals kg,
                                   ccl_private const RNGState *rng_state,
@@ -447,7 +437,6 @@ ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
   /* to-do: find a good value for this. */
   const float f_a = 1.0f;
   float importance = f_a * cos_theta_i_prime * kdistant->energy;
-
   return importance;
 }
 
@@ -497,7 +486,7 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
   return -1;
 }
 
-/* We need to be able to find the probability of selecting a given light, for MIS. */
+/* We need to be able to find the probability of selecting a given light for MIS. */
 ccl_device float light_tree_pdf(KernelGlobals kg,
                                 ConstIntegratorState state,
                                 const float3 P,
@@ -686,7 +675,7 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 const uint32_t path_flag,
                                                 ccl_private LightSample *ls)
 {
-  /* to-do: with weighted reservoir sampling, we can also pick a sample from the distant light group
+  /* to-do: with weighted reservoir sampling, we can also try picking a sample from the distant light group
    * and compare it to the sample from the light tree. */
   float distant_light_importance = light_tree_distant_light_importance(
       kg, P, N, kernel_data.integrator.num_distant_lights);
