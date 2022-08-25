@@ -58,11 +58,11 @@ set(USD_EXTRA_ARGS
   # cube, etc.) to geometry, it's not necessary. Disabling it will make it
   # simpler to build Blender; currently only Cycles uses OSL.
   -DPXR_ENABLE_OSL_SUPPORT=OFF
-  # Keep OpenGL and Metal enabled for Hydra support. Note that this indirectly also
-  # adds an X11 dependency on Linux, which would be good to eliminate for headless
-  # and Wayland only builds.
-  #-DPXR_ENABLE_GL_SUPPORT=OFF
-  #-DPXR_ENABLE_METAL_SUPPORT=OFF
+  # Enable OpenGL for Hydra support. Note that this indirectly also adds an X11
+  # dependency on Linux. This would be good to eliminate for headless and Wayland
+  # only builds, however is not worse than what Blender already links to for
+  # official releases currently.
+  -DPXR_ENABLE_GL_SUPPORT=ON
   # OIIO is used for loading image textures in Hydra Storm / Embree renderers.
   -DPXR_BUILD_OPENIMAGEIO_PLUGIN=ON
   # USD 22.03 does not support OCIO 2.x
