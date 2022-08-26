@@ -32,14 +32,20 @@
  * ResourceBind ref) it will have to be re-recorded if any of these reference becomes invalid.
  */
 
+#include "BKE_image.h"
 #include "BLI_vector.hh"
 #include "DRW_gpu_wrapper.hh"
 #include "GPU_debug.h"
+#include "GPU_material.h"
 
 #include "draw_command.hh"
 #include "draw_handle.hh"
+#include "draw_manager.hh"
+#include "draw_pass.hh"
 #include "draw_shader_shared.h"
 #include "draw_state.h"
+
+#include "intern/gpu_codegen.h"
 
 namespace blender::draw {
 
@@ -130,6 +136,13 @@ class PassBase {
    * Bind a shader. Any following bind() or push_constant() call will use its interface.
    */
   void shader_set(GPUShader *shader);
+
+  /**
+   * Bind a material shader along with its associated resources. Any following bind() or
+   * push_constant() call will use its interface.
+   * IMPORTANT: Assumes material is compiled and can be used (no compilation error).
+   */
+  void material_set(Manager &manager, GPUMaterial *material);
 
   /**
    * Record a draw call.
@@ -301,7 +314,7 @@ template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawC
 /**
  * Normal pass type. No visibility or draw-call optimisation.
  */
-using PassSimple = detail::Pass<DrawCommandBuf>;
+// using PassSimple = detail::Pass<DrawCommandBuf>;
 
 /**
  * Main pass type.
@@ -310,7 +323,7 @@ using PassSimple = detail::Pass<DrawCommandBuf>;
  * IMPORTANT: To be used only for passes containing lots of draw calls since it has a potentially
  * high overhead due to batching and culling optimizations.
  */
-using PassMain = detail::Pass<DrawMultiBuf>;
+// using PassMain = detail::Pass<DrawMultiBuf>;
 
 /** \} */
 
@@ -615,6 +628,44 @@ template<class T> inline void PassBase<T>::shader_set(GPUShader *shader)
 {
   shader_ = shader;
   create_command(Type::ShaderBind).shader_bind = {shader};
+}
+
+template<class T> inline void PassBase<T>::material_set(Manager &manager, GPUMaterial *material)
+{
+  GPUPass *gpupass = GPU_material_get_pass(material);
+  shader_set(GPU_pass_shader_get(gpupass));
+
+  /* Bind all textures needed by the material. */
+  ListBase textures = GPU_material_textures(material);
+  for (GPUMaterialTexture *tex : ListBaseWrapper<GPUMaterialTexture>(textures)) {
+    if (tex->ima) {
+      /* Image */
+      ImageUser *iuser = tex->iuser_available ? &tex->iuser : nullptr;
+      if (tex->tiled_mapping_name[0]) {
+        GPUTexture *tiles = BKE_image_get_gpu_tiles(tex->ima, iuser, nullptr);
+        manager.acquire_texture(tiles);
+        bind(tex->sampler_name, tiles, (eGPUSamplerState)tex->sampler_state);
+
+        GPUTexture *tile_map = BKE_image_get_gpu_tilemap(tex->ima, iuser, nullptr);
+        manager.acquire_texture(tile_map);
+        bind(tex->tiled_mapping_name, tile_map, (eGPUSamplerState)tex->sampler_state);
+      }
+      else {
+        GPUTexture *texture = BKE_image_get_gpu_texture(tex->ima, iuser, nullptr);
+        manager.acquire_texture(texture);
+        bind(tex->sampler_name, texture, (eGPUSamplerState)tex->sampler_state);
+      }
+    }
+    else if (tex->colorband) {
+      /* Color Ramp */
+      bind(tex->sampler_name, *tex->colorband);
+    }
+  }
+
+  GPUUniformBuf *ubo = GPU_material_uniform_buffer_get(material);
+  if (ubo != nullptr) {
+    bind(GPU_UBO_BLOCK_NAME, ubo);
+  }
 }
 
 /** \} */

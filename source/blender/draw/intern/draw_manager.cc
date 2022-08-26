@@ -10,12 +10,30 @@
 
 #include "draw_manager.h"
 #include "draw_manager.hh"
+#include "draw_pass.hh"
 #include "draw_shader.h"
 
 namespace blender::draw {
 
+Manager::~Manager()
+{
+  for (GPUTexture *texture : acquired_textures) {
+    /* Decrease refcount and free if 0. */
+    GPU_texture_free(texture);
+  }
+}
+
 void Manager::begin_sync()
 {
+  /* TODO: This means the reference is kept until further redraw or manager teardown. Instead, they
+   * should be released after each draw loop. But for now, mimics old DRW behavior. */
+  for (GPUTexture *texture : acquired_textures) {
+    /* Decrease refcount and free if 0. */
+    GPU_texture_free(texture);
+  }
+
+  acquired_textures.clear();
+
 #ifdef DEBUG
   /* Detect non-init data. */
   memset(matrix_buf.data(), 0xF0, resource_len_ * sizeof(*matrix_buf.data()));

@@ -3,6 +3,7 @@
 #include "testing/testing.h"
 
 #include "draw_manager.hh"
+#include "draw_pass.hh"
 #include "draw_shader.h"
 #include "draw_testing.hh"
 

@@ -17,6 +17,7 @@
 #include "BKE_volume.h"
 #include "BLI_hash.h"
 #include "DNA_curve_types.h"
+#include "DNA_layer_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
 

@@ -10,13 +10,26 @@
 
 #include "BLI_sys_types.h"
 
-#include "draw_pass.hh"
 #include "draw_resource.hh"
 #include "draw_view.hh"
 
 #include <string>
 
 namespace blender::draw {
+
+/* Forward declarations. */
+
+namespace detail {
+template<typename T> class Pass;
+}  // namespace detail
+
+namespace command {
+class DrawCommandBuf;
+class DrawMultiBuf;
+}  // namespace command
+
+using PassSimple = detail::Pass<command::DrawCommandBuf>;
+using PassMain = detail::Pass<command::DrawMultiBuf>;
 
 class Manager {
   using ObjectMatricesBuf = StorageArrayBuffer<ObjectMatrices, 128>;
@@ -48,6 +61,10 @@ class Manager {
   ObjectBoundsBuf bounds_buf;
   ObjectInfosBuf infos_buf;
 
+  /** List of textures coming from Image data-blocks. They need to be refcounted in order to avoid
+   * beeing freed in another thread. */
+  Vector<GPUTexture *> acquired_textures;
+
  private:
   uint resource_len_ = 0;
   Object *object = nullptr;
@@ -55,9 +72,12 @@ class Manager {
   Object *object_active = nullptr;
 
  public:
+  Manager(){};
+  ~Manager();
+
   /**
-   * Create a new resource handle for the given object. Can be called multiple time with the same
-   * object **successively** without duplicating the data.
+   * Create a new resource handle for the given object. Can be called multiple time with the
+   * same object **successively** without duplicating the data.
    */
   ResourceHandle resource_handle(const ObjectRef ref);
   /**
@@ -98,6 +118,16 @@ class Manager {
    * Check data buffers of the draw manager. Only to be used after end_sync().
    */
   DataDebugOutput data_debug();
+
+  /**
+   * Will acquire the texture using ref counting and release it after drawing. To be used for
+   * texture coming from blender Image.
+   */
+  void acquire_texture(GPUTexture *texture)
+  {
+    GPU_texture_ref(texture);
+    acquired_textures.append(texture);
+  }
 
   /** TODO(fclem): The following should become private at some point. */
   void begin_sync();
