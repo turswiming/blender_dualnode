@@ -17,13 +17,12 @@ GPU_SHADER_INTERFACE_INFO(eevee_velocity_surface_iface, "motion")
 
 GPU_SHADER_CREATE_INFO(eevee_velocity_camera)
     .define("VELOCITY_CAMERA")
-    .uniform_buf(1, "CameraData", "camera_prev")
-    .uniform_buf(2, "CameraData", "camera_curr")
-    .uniform_buf(3, "CameraData", "camera_next");
+    .uniform_buf(3, "CameraData", "camera_prev")
+    .uniform_buf(4, "CameraData", "camera_curr")
+    .uniform_buf(5, "CameraData", "camera_next");
 
 GPU_SHADER_CREATE_INFO(eevee_velocity_geom)
     .define("MAT_VELOCITY")
-    .auto_resource_location(true)
     .storage_buf(0, Qualifier::READ, "mat4", "velocity_obj_prev_buf[]")
     .storage_buf(1, Qualifier::READ, "mat4", "velocity_obj_next_buf[]")
     .storage_buf(2, Qualifier::READ, "vec4", "velocity_geo_prev_buf[]")

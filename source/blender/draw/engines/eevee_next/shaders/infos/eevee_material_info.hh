@@ -52,7 +52,7 @@ GPU_SHADER_CREATE_INFO(eevee_geom_world)
     .define("MAT_GEOM_WORLD")
     .builtins(BuiltinBits::VERTEX_ID)
     .vertex_source("eevee_geom_world_vert.glsl")
-    .additional_info("draw_modelmat", "draw_resource_id_varying", "draw_resource_handle");
+    .additional_info("draw_modelmat_new", "draw_resource_id_varying", "draw_view");
 
 /** \} */
 
@@ -104,7 +104,6 @@ GPU_SHADER_CREATE_INFO(eevee_surf_deferred)
     ;
 
 GPU_SHADER_CREATE_INFO(eevee_surf_forward)
-    .auto_resource_location(true)
     .vertex_out(eevee_surf_iface)
     /* Early fragment test is needed for render passes support for forward surfaces. */
     /* NOTE: This removes the possibility of using gl_FragDepth. */

@@ -199,8 +199,7 @@ static std::ostream &operator<<(std::ostream &stream, const GPUOutput *output)
 }
 
 /* Trick type to change overload and keep a somewhat nice syntax. */
-struct GPUConstant : public GPUInput {
-};
+struct GPUConstant : public GPUInput {};
 
 /* Print data constructor (i.e: vec2(1.0f, 1.0f)). */
 static std::ostream &operator<<(std::ostream &stream, const GPUConstant *input)
@@ -382,7 +381,7 @@ void GPUCodegen::generate_resources()
     }
     ss << "};\n\n";
 
-    info.uniform_buf(0, "NodeTree", GPU_UBO_BLOCK_NAME, Frequency::BATCH);
+    info.uniform_buf(1, "NodeTree", GPU_UBO_BLOCK_NAME, Frequency::BATCH);
   }
 
   if (!BLI_listbase_is_empty(&graph.uniform_attrs.list)) {
@@ -394,7 +393,7 @@ void GPUCodegen::generate_resources()
 
     /* TODO(fclem): Use the macro for length. Currently not working for EEVEE. */
     /* DRW_RESOURCE_CHUNK_LEN = 512 */
-    info.uniform_buf(0, "UniformAttrs", GPU_ATTRIBUTE_UBO_BLOCK_NAME "[512]", Frequency::BATCH);
+    info.uniform_buf(2, "UniformAttrs", GPU_ATTRIBUTE_UBO_BLOCK_NAME "[512]", Frequency::BATCH);
   }
 
   info.typedef_source_generated = ss.str();
