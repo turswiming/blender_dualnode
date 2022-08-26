@@ -7,7 +7,7 @@ if(WIN32)
     # USD does not look for debug libs, nor does it link them
     # when building static, so this is just to keep find_package happy
     # if we ever link dynamically on windows util will need to be linked as well.
-    set(USD_OIIO_CMAKE_DEFINES "-DOIIO_LIBRARIES=${LIBDIR}/openimageio/lib/OpenImageIO_d${LIBEXT}")
+    set(USD_OIIO_CMAKE_DEFINES "-DOIIO_LIBRARIES=${LIBDIR}/openimageio/lib/OpenImageIO_d${LIBEXT}^^${LIBDIR}/openimageio/lib/OpenImageIO_util_d${LIBEXT}")
   endif()
   set(USD_PLATFORM_FLAGS
     ${USD_OIIO_CMAKE_DEFINES}
@@ -20,7 +20,7 @@ if(WIN32)
   )
   if(BUILD_MODE STREQUAL Debug)
     list(APPEND USD_PLATFORM_FLAGS -DPXR_USE_DEBUG_PYTHON=ON)
-    list(APPEND USD_PLATFORM_FLAGS -DOPENVDB_LIBRARY=${libdir}/openvdb/lib/openvdb_d.lib)
+    list(APPEND USD_PLATFORM_FLAGS -DOPENVDB_LIBRARY=${LIBDIR}/openvdb/lib/openvdb_d.lib)
   endif()
 elseif(UNIX)
   # Workaround USD not linking correctly with static Python library, where it would embed
@@ -87,6 +87,7 @@ ExternalProject_Add(external_usd
   URL_HASH ${USD_HASH_TYPE}=${USD_HASH}
   CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
   PREFIX ${BUILD_DIR}/usd
+  LIST_SEPARATOR ^^
   PATCH_COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/usd/src/external_usd < ${PATCH_DIR}/usd.diff
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${LIBDIR}/usd -Wno-dev ${DEFAULT_CMAKE_FLAGS} ${USD_EXTRA_ARGS}
   INSTALL_DIR ${LIBDIR}/usd
