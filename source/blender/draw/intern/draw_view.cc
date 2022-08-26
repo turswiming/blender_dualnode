@@ -303,7 +303,7 @@ void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len)
     GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo(shader, "bounds_buf"));
     GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo(shader, "visibility_buf"));
     GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
-    // GPU_compute_dispatch(shader, divide_ceil_u(resource_len, DRW_VISIBILITY_GROUP_SIZE), 1, 1);
+    GPU_compute_dispatch(shader, divide_ceil_u(resource_len, DRW_VISIBILITY_GROUP_SIZE), 1, 1);
     GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 

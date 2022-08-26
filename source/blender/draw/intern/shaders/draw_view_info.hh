@@ -171,7 +171,7 @@ GPU_SHADER_CREATE_INFO(draw_command_generate)
     .storage_buf(1, Qualifier::READ, "uint", "visibility_buf[]")
     .storage_buf(2, Qualifier::READ, "DrawPrototype", "prototype_buf[]")
     .storage_buf(3, Qualifier::WRITE, "DrawCommand", "command_buf[]")
-    .storage_buf(4, Qualifier::WRITE, "uint", "resource_id_buf[]")
+    .storage_buf(DRW_RESOURCE_ID_SLOT, Qualifier::WRITE, "uint", "resource_id_buf[]")
     .push_constant(Type::INT, "prototype_len")
     .compute_source("draw_command_generate_comp.glsl");
 
@@ -183,7 +183,8 @@ GPU_SHADER_CREATE_INFO(draw_command_generate)
  * \{ */
 
 GPU_SHADER_CREATE_INFO(draw_resource_id_new)
-    .storage_buf(DRW_RESOURCE_ID_SLOT, Qualifier::READ, "uint", "resource_id_buf[]")
+    .define("UNIFORM_RESOURCE_ID_NEW")
+    .storage_buf(DRW_RESOURCE_ID_SLOT, Qualifier::READ, "int", "resource_id_buf[]")
     .define("drw_ResourceID", "resource_id_buf[gpu_BaseInstance + gl_InstanceID]");
 
 /**
@@ -200,8 +201,8 @@ GPU_SHADER_CREATE_INFO(draw_resource_id_fallback).vertex_in(15, Type::UINT, "drw
 GPU_SHADER_CREATE_INFO(draw_modelmat_new)
     .typedef_source("draw_shader_shared.h")
     .storage_buf(DRW_OBJ_MAT_SLOT, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
-    .define("drw_ModelMatrixInverse", "drw_matrix_buf[drw_ResourceID].drw_modelMatrix")
-    .define("drw_ModelMatrix", "drw_matrix_buf[drw_ResourceID].drw_modelMatrixInverse")
+    .define("drw_ModelMatrixInverse", "drw_matrix_buf[resource_id].model_inverse")
+    .define("drw_ModelMatrix", "drw_matrix_buf[resource_id].model")
     /* TODO For compatibility with old shaders. To be removed. */
     .define("ModelMatrixInverse", "drw_ModelMatrixInverse")
     .define("ModelMatrix", "drw_ModelMatrix")

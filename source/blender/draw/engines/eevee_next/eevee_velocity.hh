@@ -68,6 +68,7 @@ class VelocityModule {
   Instance &inst_;
 
   eVelocityStep step_ = STEP_CURRENT;
+  eVelocityStep next_step_ = STEP_NEXT;
 
  public:
   VelocityModule(Instance &inst) : inst_(inst)
@@ -111,6 +112,20 @@ class VelocityModule {
   void end_sync();
 
   void bind_resources(DRWShadingGroup *grp);
+
+  template<typename T> void bind_resources(draw::detail::Pass<T> *pass)
+  {
+    /* Storage Buf. */
+    pass->bind(0, &(*object_steps[STEP_PREVIOUS]));
+    pass->bind(1, &(*object_steps[next_step_]));
+    pass->bind(2, &(*geometry_steps[STEP_PREVIOUS]));
+    pass->bind(3, &(*geometry_steps[next_step_]));
+    pass->bind(4, &indirection_buf);
+    /* Uniform Buf. */
+    pass->bind(3, &(*camera_steps[STEP_PREVIOUS]));
+    pass->bind(4, &(*camera_steps[STEP_CURRENT]));
+    pass->bind(5, &(*camera_steps[next_step_]));
+  }
 
   bool camera_has_motion() const;
   bool camera_changed_projection() const;

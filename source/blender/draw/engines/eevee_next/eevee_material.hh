@@ -204,7 +204,7 @@ class DefaultSurfaceNodeTree {
 
 struct MaterialPass {
   GPUMaterial *gpumat = nullptr;
-  DRWShadingGroup *shgrp = nullptr;
+  PassMain::Sub *sub_pass = nullptr;
 };
 
 struct Material {
@@ -229,7 +229,7 @@ class MaterialModule {
   Instance &inst_;
 
   Map<MaterialKey, Material *> material_map_;
-  Map<ShaderKey, DRWShadingGroup *> shader_map_;
+  Map<ShaderKey, PassMain::Sub *> shader_map_;
 
   MaterialArray material_array_;
 

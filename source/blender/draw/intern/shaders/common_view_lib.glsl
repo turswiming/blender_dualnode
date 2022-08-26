@@ -126,7 +126,7 @@ uniform int drw_resourceChunk;
  * have the right resourceId and all the correct ubo datas. */
 uniform int drw_ResourceID;
 #      define resource_id drw_ResourceID
-#    else
+#    elif defined(UNIFORM_RESOURCE_ID_NEW)
 #      define resource_id (gpu_BaseInstance + instanceId)
 #    endif
 
@@ -155,7 +155,11 @@ uniform int drw_ResourceID;
 #    define PASS_RESOURCE_ID
 
 #  elif defined(GPU_VERTEX_SHADER)
-#    define resource_id gpu_InstanceIndex
+#    if defined(UNIFORM_RESOURCE_ID_NEW)
+#      define resource_id drw_ResourceID
+#    else
+#      define resource_id gpu_InstanceIndex
+#    endif
 #    define PASS_RESOURCE_ID drw_ResourceID_iface.resource_index = resource_id;
 
 #  elif defined(GPU_GEOMETRY_SHADER)

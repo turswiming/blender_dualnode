@@ -16,7 +16,7 @@ GPU_SHADER_CREATE_INFO(eevee_sampling_data)
     .additional_info("eevee_shared")
     .storage_buf(6, Qualifier::READ, "SamplingData", "sampling_buf");
 
-GPU_SHADER_CREATE_INFO(eevee_utility_texture).sampler(8, ImageType::FLOAT_2D_ARRAY, "utility_tx");
+GPU_SHADER_CREATE_INFO(eevee_utility_texture).sampler(14, ImageType::FLOAT_2D_ARRAY, "utility_tx");
 
 /** \} */
 
@@ -30,7 +30,7 @@ GPU_SHADER_CREATE_INFO(eevee_geom_mesh)
     .vertex_in(0, Type::VEC3, "pos")
     .vertex_in(1, Type::VEC3, "nor")
     .vertex_source("eevee_geom_mesh_vert.glsl")
-    .additional_info("draw_mesh", "draw_resource_id_varying", "draw_resource_handle");
+    .additional_info("draw_modelmat_new", "draw_resource_id_varying", "draw_view");
 
 GPU_SHADER_CREATE_INFO(eevee_geom_gpencil)
     .additional_info("eevee_shared")

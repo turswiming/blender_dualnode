@@ -52,12 +52,16 @@ class ForwardPipeline {
  private:
   Instance &inst_;
 
-  DRWPass *prepass_ps_ = nullptr;
-  DRWPass *prepass_velocity_ps_ = nullptr;
-  DRWPass *prepass_culled_ps_ = nullptr;
-  DRWPass *prepass_culled_velocity_ps_ = nullptr;
-  DRWPass *opaque_ps_ = nullptr;
-  DRWPass *opaque_culled_ps_ = nullptr;
+  PassMain prepass_ps_ = {"Prepass"};
+  PassMain::Sub *prepass_single_sided_static_ps_ = nullptr;
+  PassMain::Sub *prepass_single_sided_moving_ps_ = nullptr;
+  PassMain::Sub *prepass_double_sided_static_ps_ = nullptr;
+  PassMain::Sub *prepass_double_sided_moving_ps_ = nullptr;
+
+  PassMain opaque_ps_ = {"Shading"};
+  PassMain::Sub *opaque_single_sided_ps_ = nullptr;
+  PassMain::Sub *opaque_double_sided_ps_ = nullptr;
+
   DRWPass *transparent_ps_ = nullptr;
 
   // GPUTexture *input_screen_radiance_tx_ = nullptr;
@@ -67,28 +71,26 @@ class ForwardPipeline {
 
   void sync();
 
-  DRWShadingGroup *material_add(::Material *blender_mat, GPUMaterial *gpumat)
+  PassMain::Sub *material_add(::Material *blender_mat, GPUMaterial *gpumat)
   {
     return (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) ?
                material_transparent_add(blender_mat, gpumat) :
                material_opaque_add(blender_mat, gpumat);
   }
 
-  DRWShadingGroup *prepass_add(::Material *blender_mat, GPUMaterial *gpumat, bool has_motion)
+  PassMain::Sub *prepass_add(::Material *blender_mat, GPUMaterial *gpumat, bool has_motion)
   {
     return (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) ?
                prepass_transparent_add(blender_mat, gpumat) :
                prepass_opaque_add(blender_mat, gpumat, has_motion);
   }
 
-  DRWShadingGroup *material_opaque_add(::Material *blender_mat, GPUMaterial *gpumat);
-  DRWShadingGroup *prepass_opaque_add(::Material *blender_mat,
-                                      GPUMaterial *gpumat,
-                                      bool has_motion);
-  DRWShadingGroup *material_transparent_add(::Material *blender_mat, GPUMaterial *gpumat);
-  DRWShadingGroup *prepass_transparent_add(::Material *blender_mat, GPUMaterial *gpumat);
+  PassMain::Sub *material_opaque_add(::Material *blender_mat, GPUMaterial *gpumat);
+  PassMain::Sub *prepass_opaque_add(::Material *blender_mat, GPUMaterial *gpumat, bool has_motion);
+  PassMain::Sub *material_transparent_add(::Material *blender_mat, GPUMaterial *gpumat);
+  PassMain::Sub *prepass_transparent_add(::Material *blender_mat, GPUMaterial *gpumat);
 
-  void render(const DRWView *view,
+  void render(View &view,
               Framebuffer &prepass_fb,
               Framebuffer &combined_fb,
               GPUTexture *combined_tx);
@@ -192,9 +194,9 @@ class PipelineModule {
     // velocity.sync();
   }
 
-  DRWShadingGroup *material_add(::Material *blender_mat,
-                                GPUMaterial *gpumat,
-                                eMaterialPipeline pipeline_type)
+  PassMain::Sub *material_add(::Material *blender_mat,
+                              GPUMaterial *gpumat,
+                              eMaterialPipeline pipeline_type)
   {
     switch (pipeline_type) {
       case MAT_PIPE_DEFERRED_PREPASS:

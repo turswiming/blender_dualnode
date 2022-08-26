@@ -154,6 +154,15 @@ class LightModule {
 #endif
   }
 
+  template<typename T> void bind_resources(draw::detail::Pass<T> *pass)
+  {
+    /* Storage Buf. */
+    pass->bind(0, &culling_data_buf_);
+    pass->bind(1, &culling_light_buf_);
+    pass->bind(2, &culling_zbin_buf_);
+    pass->bind(3, &culling_tile_buf_);
+  }
+
  private:
   void culling_pass_sync();
   void debug_pass_sync();

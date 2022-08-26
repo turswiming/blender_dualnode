@@ -206,26 +206,15 @@ MaterialPass MaterialModule::material_pass_get(::Material *blender_mat,
   if ((pipeline_type == MAT_PIPE_FORWARD) &&
       GPU_material_flag_get(matpass.gpumat, GPU_MATFLAG_TRANSPARENT)) {
     /* Transparent needs to use one shgroup per object to support reordering. */
-    matpass.shgrp = inst_.pipelines.material_add(blender_mat, matpass.gpumat, pipeline_type);
+    matpass.sub_pass = inst_.pipelines.material_add(blender_mat, matpass.gpumat, pipeline_type);
   }
   else {
     ShaderKey shader_key(matpass.gpumat, geometry_type, pipeline_type);
 
-    auto add_cb = [&]() -> DRWShadingGroup * {
+    matpass.sub_pass = shader_map_.lookup_or_add_cb(shader_key, [&]() {
       /* First time encountering this shader. Create a shading group. */
       return inst_.pipelines.material_add(blender_mat, matpass.gpumat, pipeline_type);
-    };
-    DRWShadingGroup *grp = shader_map_.lookup_or_add_cb(shader_key, add_cb);
-
-    if (grp != nullptr) {
-      /* Shading group for this shader already exists. Create a sub one for this material. */
-      /* IMPORTANT: We always create a subgroup so that all subgroups are inserted after the
-       * first "empty" shgroup. This avoids messing the order of subgroups when there is more
-       * nested subgroup (i.e: hair drawing). */
-      /* TODO(@fclem): Remove material resource binding from the first group creation. */
-      matpass.shgrp = DRW_shgroup_create_sub(grp);
-      DRW_shgroup_add_material_resources(matpass.shgrp, matpass.gpumat);
-    }
+    });
   }
 
   return matpass;

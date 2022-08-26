@@ -43,6 +43,10 @@ void VelocityModule::init()
     step_ = STEP_CURRENT;
     /* Let the main sync loop handle the current step. */
   }
+
+  /* For viewport, only previous motion is supported.
+   * Still bind previous step to avoid undefined behavior. */
+  next_step_ = inst_.is_viewport() ? STEP_PREVIOUS : STEP_NEXT;
 }
 
 static void step_object_sync_render(void *velocity,
