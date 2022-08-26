@@ -51,6 +51,8 @@ void Manager::begin_sync()
 
 void Manager::end_sync()
 {
+  GPU_debug_group_begin("Manager.end_sync");
+
   matrix_buf.push_update();
   bounds_buf.push_update();
   infos_buf.push_update();
@@ -65,6 +67,8 @@ void Manager::end_sync()
   GPU_storagebuf_bind(infos_buf, 2);
   GPU_compute_dispatch(shader, thread_groups, 1, 1);
   GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+
+  GPU_debug_group_end();
 }
 
 void Manager::submit(PassSimple &pass, View &view)

@@ -8,6 +8,7 @@
 #include "GPU_batch.h"
 #include "GPU_capabilities.h"
 #include "GPU_compute.h"
+#include "GPU_debug.h"
 
 #include "draw_command.hh"
 #include "draw_shader.h"
@@ -529,6 +530,8 @@ void DrawMultiBuf::bind(RecordingState &state,
 {
   UNUSED_VARS(headers, commands);
 
+  GPU_debug_group_begin("DrawMultiBuf.bind");
+
   resource_id_count_ = 0u;
   for (DrawGroup &group : MutableSpan<DrawGroup>(group_buf_.data(), group_count_)) {
     /* Compute prefix sum of all instance of previous group. */
@@ -565,22 +568,26 @@ void DrawMultiBuf::bind(RecordingState &state,
   resource_id_buf_.get_or_resize(resource_id_count_);
   command_buf_.get_or_resize(group_count_);
 
-  GPUShader *shader = DRW_shader_draw_command_generate_get();
-  GPU_shader_bind(shader);
-  GPU_shader_uniform_1i(shader, "prototype_len", prototype_count_);
-  GPU_storagebuf_bind(group_buf_, 0);
-  GPU_storagebuf_bind(visibility_buf, 1);
-  GPU_storagebuf_bind(prototype_buf_, 2);
-  GPU_storagebuf_bind(command_buf_, 3);
-  GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
-  GPU_compute_dispatch(shader, divide_ceil_u(prototype_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
-  if (WORKAROUND_RESOURCE_ID) {
-    GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY);
-    state.resource_id_buf = resource_id_buf_;
+  if (prototype_count_ > 0) {
+    GPUShader *shader = DRW_shader_draw_command_generate_get();
+    GPU_shader_bind(shader);
+    GPU_shader_uniform_1i(shader, "prototype_len", prototype_count_);
+    GPU_storagebuf_bind(group_buf_, 0);
+    GPU_storagebuf_bind(visibility_buf, 1);
+    GPU_storagebuf_bind(prototype_buf_, 2);
+    GPU_storagebuf_bind(command_buf_, 3);
+    GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
+    GPU_compute_dispatch(shader, divide_ceil_u(prototype_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
+    if (WORKAROUND_RESOURCE_ID) {
+      GPU_memory_barrier(GPU_BARRIER_VERTEX_ATTRIB_ARRAY);
+      state.resource_id_buf = resource_id_buf_;
+    }
+    else {
+      GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
   }
-  else {
-    GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
-  }
+
+  GPU_debug_group_end();
 }
 
 /** \} */

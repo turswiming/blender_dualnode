@@ -450,6 +450,7 @@ class DrawMultiBuf {
     header_id_counter_ = 0;
     group_count_ = 0;
     prototype_count_ = 0;
+    group_ids_.clear();
   }
 
   void append_draw(Vector<Header> &headers,
@@ -463,6 +464,8 @@ class DrawMultiBuf {
     /* Unsupported for now. Use PassSimple. */
     BLI_assert(vertex_first == 0 || vertex_first == -1);
     BLI_assert(vertex_len == -1);
+
+    instance_len = instance_len != -1 ? instance_len : 1;
 
     /* If there was some state changes since previous call, we have to create another command. */
     if (headers.last().type != Type::DrawMulti) {

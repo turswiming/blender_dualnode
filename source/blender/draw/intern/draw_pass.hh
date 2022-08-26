@@ -202,6 +202,9 @@ class PassBase {
    *
    * IMPORTANT: Will keep a reference to the data and dereference it upon drawing. Make sure data
    * still alive until pass submission.
+   *
+   * NOTE: Variations using slot will not query a shader interface and can be used before
+   * binding a shader.
    */
   void bind(const char *name, GPUStorageBuf *buffer);
   void bind(const char *name, GPUUniformBuf *buffer);
@@ -282,7 +285,7 @@ class PassBase {
 
 template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawCommandBufType> {
  public:
-  using Sub = detail::PassBase<DrawCommandBuf>;
+  using Sub = detail::PassBase<DrawCommandBufType>;
 
  private:
   /** Sub-passes referenced by headers. */

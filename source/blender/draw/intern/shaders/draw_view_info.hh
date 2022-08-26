@@ -184,12 +184,12 @@ GPU_SHADER_CREATE_INFO(draw_command_generate)
 
 GPU_SHADER_CREATE_INFO(draw_resource_id_new)
     .storage_buf(DRW_RESOURCE_ID_SLOT, Qualifier::READ, "uint", "resource_id_buf[]")
-    .define("drw_ResourceIndex", "resource_id_buf[gl_BaseInstance + gl_InstanceID]");
+    .define("drw_ResourceID", "resource_id_buf[gpu_BaseInstance + gl_InstanceID]");
 
 /**
  * Workaround the lack of gl_BaseInstance by binding the resource_id_buf as vertex buf.
  */
-GPU_SHADER_CREATE_INFO(draw_resource_id_fallback).vertex_in(15, Type::UINT, "drw_ResourceIndex");
+GPU_SHADER_CREATE_INFO(draw_resource_id_fallback).vertex_in(15, Type::UINT, "drw_ResourceID");
 
 /** \} */
 
@@ -200,8 +200,11 @@ GPU_SHADER_CREATE_INFO(draw_resource_id_fallback).vertex_in(15, Type::UINT, "drw
 GPU_SHADER_CREATE_INFO(draw_modelmat_new)
     .typedef_source("draw_shader_shared.h")
     .storage_buf(DRW_OBJ_MAT_SLOT, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
-    .define("drw_ModelMatrixInverse", "drw_matrix_buf[drw_ResourceIndex].drw_modelMatrix")
-    .define("drw_ModelMatrix", "drw_matrix_buf[drw_ResourceIndex].drw_modelMatrixInverse")
+    .define("drw_ModelMatrixInverse", "drw_matrix_buf[drw_ResourceID].drw_modelMatrix")
+    .define("drw_ModelMatrix", "drw_matrix_buf[drw_ResourceID].drw_modelMatrixInverse")
+    /* TODO For compatibility with old shaders. To be removed. */
+    .define("ModelMatrixInverse", "drw_ModelMatrixInverse")
+    .define("ModelMatrix", "drw_ModelMatrix")
     .additional_info("draw_resource_id_new");
 
 /** \} */
