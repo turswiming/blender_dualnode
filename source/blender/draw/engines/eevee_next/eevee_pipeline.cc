@@ -24,36 +24,36 @@ namespace blender::eevee {
 
 void WorldPipeline::sync(GPUMaterial *gpumat)
 {
+  Manager &drw = *DRW_manager_get();
   RenderBuffers &rbufs = inst_.render_buffers;
 
-  DRWState state = DRW_STATE_WRITE_COLOR;
-  world_ps_ = DRW_pass_create("World", state);
+  ResourceHandle handle = drw.resource_handle(float4x4::identity().ptr());
 
-  /* Push a matrix at the same location as the camera. */
-  float4x4 camera_mat = float4x4::identity();
-  // copy_v3_v3(camera_mat[3], inst_.camera.data_get().viewinv[3]);
-
-  DRWShadingGroup *grp = DRW_shgroup_material_create(gpumat, world_ps_);
-  DRW_shgroup_uniform_texture(grp, "utility_tx", inst_.pipelines.utility_tx);
-  DRW_shgroup_call_obmat(grp, DRW_cache_fullscreen_quad_get(), camera_mat.ptr());
-  DRW_shgroup_uniform_float_copy(grp, "world_opacity_fade", inst_.film.background_opacity_get());
+  world_ps_.init();
+  world_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  world_ps_.material_set(drw, gpumat);
+  world_ps_.push_constant("world_opacity_fade", inst_.film.background_opacity_get());
+  world_ps_.bind("utility_tx", inst_.pipelines.utility_tx);
   /* AOVs. */
-  DRW_shgroup_uniform_image_ref(grp, "aov_color_img", &rbufs.aov_color_tx);
-  DRW_shgroup_uniform_image_ref(grp, "aov_value_img", &rbufs.aov_value_tx);
-  DRW_shgroup_storage_block_ref(grp, "aov_buf", &inst_.film.aovs_info);
+  world_ps_.bind("aov_color_img", as_image(&rbufs.aov_color_tx));
+  world_ps_.bind("aov_value_img", as_image(&rbufs.aov_value_tx));
+  world_ps_.bind("aov_buf", &inst_.film.aovs_info);
   /* RenderPasses. Cleared by background (even if bad practice). */
-  DRW_shgroup_uniform_image_ref(grp, "rp_normal_img", &rbufs.normal_tx);
-  DRW_shgroup_uniform_image_ref(grp, "rp_light_img", &rbufs.light_tx);
-  DRW_shgroup_uniform_image_ref(grp, "rp_diffuse_color_img", &rbufs.diffuse_color_tx);
-  DRW_shgroup_uniform_image_ref(grp, "rp_specular_color_img", &rbufs.specular_color_tx);
-  DRW_shgroup_uniform_image_ref(grp, "rp_emission_img", &rbufs.emission_tx);
+  world_ps_.bind("rp_normal_img", as_image(&rbufs.normal_tx));
+  world_ps_.bind("rp_light_img", as_image(&rbufs.light_tx));
+  world_ps_.bind("rp_diffuse_color_img", as_image(&rbufs.diffuse_color_tx));
+  world_ps_.bind("rp_specular_color_img", as_image(&rbufs.specular_color_tx));
+  world_ps_.bind("rp_emission_img", as_image(&rbufs.emission_tx));
+
+  world_ps_.draw(DRW_cache_fullscreen_quad_get(), handle);
   /* To allow opaque pass rendering over it. */
-  DRW_shgroup_barrier(grp, GPU_BARRIER_SHADER_IMAGE_ACCESS);
+  world_ps_.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
 }
 
-void WorldPipeline::render()
+void WorldPipeline::render(View &view)
 {
-  DRW_draw_pass(world_ps_);
+  Manager &drw = *DRW_manager_get();
+  drw.submit(world_ps_, view);
 }
 
 /** \} */

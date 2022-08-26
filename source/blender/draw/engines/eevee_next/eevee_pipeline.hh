@@ -31,13 +31,13 @@ class WorldPipeline {
  private:
   Instance &inst_;
 
-  DRWPass *world_ps_ = nullptr;
+  PassSimple world_ps_ = {"World.Background"};
 
  public:
   WorldPipeline(Instance &inst) : inst_(inst){};
 
   void sync(GPUMaterial *gpumat);
-  void render();
+  void render(View &view);
 };
 
 /** \} */
