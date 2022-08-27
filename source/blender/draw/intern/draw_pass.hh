@@ -61,6 +61,42 @@ class Manager;
 namespace detail {
 
 /**
+ * Special container that never moves allocated items and has fast indexing.
+ */
+template<typename T,
+         /** Numbers of element of type T to allocate together. */
+         int64_t block_size = 16>
+class SubPassVector {
+ private:
+  Vector<Vector<T, block_size>, 0> blocks_;
+
+ public:
+  void clear()
+  {
+    blocks_.clear();
+  }
+
+  int64_t append_and_get_index(T &&elem)
+  {
+    /* Do not go over the inline size so that existing members never move. */
+    if (blocks_.size() == 0 || blocks_.last().size() == block_size) {
+      blocks_.append({});
+    }
+    return blocks_.last().append_and_get_index(elem) + (blocks_.size() - 1) * block_size;
+  }
+
+  T &operator[](int64_t index)
+  {
+    return blocks_[index / block_size][index % block_size];
+  }
+
+  const T &operator[](int64_t index) const
+  {
+    return blocks_[index / block_size][index % block_size];
+  }
+};
+
+/**
  * Public API of a draw pass.
  */
 template<
@@ -71,13 +107,13 @@ class PassBase {
 
  protected:
   /** Highest level of the command stream. Split command stream in different command types. */
-  Vector<command::Header> headers_;
+  Vector<command::Header, 0> headers_;
   /** Commands referenced by headers (which contains their types). */
-  Vector<command::Undetermined> commands_;
+  Vector<command::Undetermined, 0> commands_;
   /* Reference to draw commands buffer. Either own or from parent pass. */
   DrawCommandBufType &draw_commands_buf_;
   /* Reference to sub-pass commands buffer. Either own or from parent pass. */
-  Vector<PassBase<DrawCommandBufType>, 0> &sub_passes_;
+  SubPassVector<PassBase<DrawCommandBufType>> &sub_passes_;
   /** Currently bound shader. Used for interface queries. */
   GPUShader *shader_;
 
@@ -86,7 +122,7 @@ class PassBase {
 
   PassBase(const char *name,
            DrawCommandBufType &draw_command_buf,
-           Vector<PassBase<DrawCommandBufType>, 0> &sub_passes,
+           SubPassVector<PassBase<DrawCommandBufType>> &sub_passes,
            GPUShader *shader = nullptr)
       : draw_commands_buf_(draw_command_buf),
         sub_passes_(sub_passes),
@@ -289,7 +325,7 @@ template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawC
 
  private:
   /** Sub-passes referenced by headers. */
-  Vector<detail::PassBase<DrawCommandBufType>, 0> sub_passes_main_;
+  SubPassVector<detail::PassBase<DrawCommandBufType>> sub_passes_main_;
   /** Draws are recorded as indirect draws for compatibility with the multi-draw pipeline. */
   DrawCommandBufType draw_commands_buf_main_;
 
@@ -716,12 +752,16 @@ template<class T> inline void PassBase<T>::bind(int slot, GPUUniformBuf *buffer)
 template<class T>
 inline void PassBase<T>::bind(int slot, GPUTexture *texture, eGPUSamplerState state)
 {
-  create_command(Type::ResourceBind).resource_bind = {slot, texture, state};
+  if (slot != -1) {
+    create_command(Type::ResourceBind).resource_bind = {slot, texture, state};
+  }
 }
 
 template<class T> inline void PassBase<T>::bind(int slot, draw::Image *image)
 {
-  create_command(Type::ResourceBind).resource_bind = {slot, image};
+  if (slot != -1) {
+    create_command(Type::ResourceBind).resource_bind = {slot, image};
+  }
 }
 
 template<class T> inline void PassBase<T>::bind(const char *name, GPUStorageBuf **buffer)

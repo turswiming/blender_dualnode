@@ -471,8 +471,8 @@ std::string StencilSet::serialize() const
  * \{ */
 
 void DrawCommandBuf::bind(RecordingState &state,
-                          Vector<Header> &headers,
-                          Vector<Undetermined> &commands,
+                          Vector<Header, 0> &headers,
+                          Vector<Undetermined, 0> &commands,
                           VisibilityBuf &visibility_buf)
 {
   UNUSED_VARS(headers, commands, visibility_buf);
@@ -521,8 +521,8 @@ void DrawCommandBuf::bind(RecordingState &state,
 }
 
 void DrawMultiBuf::bind(RecordingState &state,
-                        Vector<Header> &headers,
-                        Vector<Undetermined> &commands,
+                        Vector<Header, 0> &headers,
+                        Vector<Undetermined, 0> &commands,
                         VisibilityBuf &visibility_buf)
 {
   UNUSED_VARS(headers, commands);

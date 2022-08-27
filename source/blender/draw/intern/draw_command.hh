@@ -369,8 +369,8 @@ class DrawCommandBuf {
  public:
   void clear(){};
 
-  void append_draw(Vector<Header> &headers,
-                   Vector<Undetermined> &commands,
+  void append_draw(Vector<Header, 0> &headers,
+                   Vector<Undetermined, 0> &commands,
                    GPUBatch *batch,
                    uint instance_len,
                    uint vertex_len,
@@ -386,8 +386,8 @@ class DrawCommandBuf {
   }
 
   void bind(RecordingState &state,
-            Vector<Header> &headers,
-            Vector<Undetermined> &commands,
+            Vector<Header, 0> &headers,
+            Vector<Undetermined, 0> &commands,
             VisibilityBuf &visibility_buf);
 };
 
@@ -468,8 +468,8 @@ class DrawMultiBuf {
     group_ids_.clear();
   }
 
-  void append_draw(Vector<Header> &headers,
-                   Vector<Undetermined> &commands,
+  void append_draw(Vector<Header, 0> &headers,
+                   Vector<Undetermined, 0> &commands,
                    GPUBatch *batch,
                    uint instance_len,
                    uint vertex_len,
@@ -526,8 +526,8 @@ class DrawMultiBuf {
   }
 
   void bind(RecordingState &state,
-            Vector<Header> &headers,
-            Vector<Undetermined> &commands,
+            Vector<Header, 0> &headers,
+            Vector<Undetermined, 0> &commands,
             VisibilityBuf &visibility_buf);
 };
 
