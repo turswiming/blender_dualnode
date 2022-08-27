@@ -140,18 +140,14 @@ PassMain::Sub *ForwardPipeline::prepass_opaque_add(::Material *blender_mat,
                                           prepass_single_sided_static_ps_) :
                             (has_motion ? prepass_double_sided_moving_ps_ :
                                           prepass_double_sided_static_ps_);
-  PassMain::Sub *material_sub = &pass->sub(GPU_material_get_name(gpumat));
-  material_sub->material_set(*inst_.manager, gpumat);
-  return material_sub;
+  return &pass->sub(GPU_material_get_name(gpumat));
 }
 
 PassMain::Sub *ForwardPipeline::material_opaque_add(::Material *blender_mat, GPUMaterial *gpumat)
 {
   PassMain::Sub *pass = (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) ? opaque_single_sided_ps_ :
                                                                           opaque_double_sided_ps_;
-  PassMain::Sub *material_sub = &pass->sub(GPU_material_get_name(gpumat));
-  material_sub->material_set(*inst_.manager, gpumat);
-  return material_sub;
+  return &pass->sub(GPU_material_get_name(gpumat));
 }
 
 PassMain::Sub *ForwardPipeline::material_transparent_add(::Material *blender_mat,

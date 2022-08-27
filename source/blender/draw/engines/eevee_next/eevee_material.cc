@@ -215,6 +215,10 @@ MaterialPass MaterialModule::material_pass_get(::Material *blender_mat,
       /* First time encountering this shader. Create a shading group. */
       return inst_.pipelines.material_add(blender_mat, matpass.gpumat, pipeline_type);
     });
+
+    if (matpass.sub_pass != nullptr) {
+      matpass.sub_pass->material_set(*inst_.manager, matpass.gpumat);
+    }
   }
 
   return matpass;
@@ -242,8 +246,7 @@ Material &MaterialModule::material_sync(::Material *blender_mat,
   auto add_cb = [&]() { return new Material(); };
   Material &mat = *material_map_.lookup_or_add_cb(material_key, add_cb);
 
-  /* Forward pipeline needs to use one shgroup per object. */
-  if (mat.init == false || (surface_pipe == MAT_PIPE_FORWARD)) {
+  if (mat.init == false) {
     mat.init = true;
     /* Order is important for transparent. */
     mat.prepass = material_pass_get(blender_mat, prepass_pipe, geometry_type);

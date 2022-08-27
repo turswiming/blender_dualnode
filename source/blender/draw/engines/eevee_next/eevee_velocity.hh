@@ -105,7 +105,10 @@ class VelocityModule {
   void step_sync(eVelocityStep step, float time);
 
   /* Gather motion data. Returns true if the object **can** have motion. */
-  bool step_object_sync(Object *ob, ObjectKey &object_key, int recalc = 0);
+  bool step_object_sync(Object *ob,
+                        ObjectKey &object_key,
+                        ResourceHandle resource_handle,
+                        int recalc = 0);
 
   /* Moves next frame data to previous frame data. Nullify next frame data. */
   void step_swap();

@@ -557,7 +557,8 @@ void DrawMultiBuf::bind(RecordingState &state,
   prototype_buf_.push_update();
   /* Allocate enough for the expansion pass. */
   resource_id_buf_.get_or_resize(resource_id_count_);
-  command_buf_.get_or_resize(group_count_);
+  /* Two command per group. */
+  command_buf_.get_or_resize(group_count_ * 2);
 
   if (prototype_count_ > 0) {
     GPUShader *shader = DRW_shader_draw_command_generate_get();
