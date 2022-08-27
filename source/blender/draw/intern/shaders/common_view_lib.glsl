@@ -126,7 +126,7 @@ uniform int drw_resourceChunk;
  * have the right resourceId and all the correct ubo datas. */
 uniform int drw_ResourceID;
 #      define resource_id drw_ResourceID
-#    elif defined(UNIFORM_RESOURCE_ID_NEW)
+#    else
 #      define resource_id (gpu_BaseInstance + instanceId)
 #    endif
 
