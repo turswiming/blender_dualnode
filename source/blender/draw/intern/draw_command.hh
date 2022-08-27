@@ -483,7 +483,7 @@ class DrawMultiBuf {
     instance_len = instance_len != -1 ? instance_len : 1;
 
     /* If there was some state changes since previous call, we have to create another command. */
-    if (headers.last().type != Type::DrawMulti) {
+    if (headers.is_empty() || headers.last().type != Type::DrawMulti) {
       uint index = commands.append_and_get_index({});
       headers.append({Type::DrawMulti, index});
       commands[index].draw_multi = {batch, this, (uint)-1, header_id_counter_++};

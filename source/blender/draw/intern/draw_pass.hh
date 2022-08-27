@@ -68,7 +68,7 @@ template<typename T,
          int64_t block_size = 16>
 class SubPassVector {
  private:
-  Vector<Vector<T, block_size>, 0> blocks_;
+  Vector<std::unique_ptr<Vector<T, block_size>>, 0> blocks_;
 
  public:
   void clear()
@@ -79,20 +79,20 @@ class SubPassVector {
   int64_t append_and_get_index(T &&elem)
   {
     /* Do not go over the inline size so that existing members never move. */
-    if (blocks_.size() == 0 || blocks_.last().size() == block_size) {
-      blocks_.append({});
+    if (blocks_.is_empty() || blocks_.last()->size() == block_size) {
+      blocks_.append(std::make_unique<Vector<T, block_size>>());
     }
-    return blocks_.last().append_and_get_index(elem) + (blocks_.size() - 1) * block_size;
+    return blocks_.last()->append_and_get_index(elem) + (blocks_.size() - 1) * block_size;
   }
 
   T &operator[](int64_t index)
   {
-    return blocks_[index / block_size][index % block_size];
+    return (*blocks_[index / block_size])[index % block_size];
   }
 
   const T &operator[](int64_t index) const
   {
-    return blocks_[index / block_size][index % block_size];
+    return (*blocks_[index / block_size])[index % block_size];
   }
 };
 

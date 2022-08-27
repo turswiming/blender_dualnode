@@ -94,6 +94,7 @@ void Manager::submit(PassSimple &pass, View &view)
   debug_bind();
 
   command::RecordingState state;
+  state.inverted_view = view.is_inverted();
 
   pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_, view.visibility_buf_);
 
@@ -115,6 +116,7 @@ void Manager::submit(PassMain &pass, View &view)
   view.compute_visibility(bounds_buf, resource_len_);
 
   command::RecordingState state;
+  state.inverted_view = view.is_inverted();
 
   pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_, view.visibility_buf_);
 

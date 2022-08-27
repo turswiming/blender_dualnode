@@ -180,6 +180,12 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
   GPUCodegenOutput &codegen = *codegen_;
   ShaderCreateInfo &info = *reinterpret_cast<ShaderCreateInfo *>(codegen.create_info);
 
+  /* WORKAROUND: Replace by new ob info. */
+  int64_t ob_info_index = info.additional_infos_.first_index_of_try("draw_object_infos");
+  if (ob_info_index != -1) {
+    info.additional_infos_[ob_info_index] = "draw_object_infos_new";
+  }
+
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) {
     info.define("MAT_TRANSPARENT");
   }

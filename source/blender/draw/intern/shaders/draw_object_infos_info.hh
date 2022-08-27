@@ -21,7 +21,8 @@ GPU_SHADER_CREATE_INFO(draw_curves_infos)
 
 GPU_SHADER_CREATE_INFO(draw_object_infos_new)
     .typedef_source("draw_shader_shared.h")
-    .storage_buf(DRW_OBJ_INFOS_SLOT, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
-    .define("drw_ModelMatrixInverse", "drw_matrix_buf[drw_ResourceIndex].model")
-    .define("drw_ModelMatrix", "drw_matrix_buf[drw_ResourceIndex].model_inverse")
-    .additional_info("draw_resource_id_new");
+    .define("OBINFO_LIB")
+    .define("OrcoTexCoFactors", "(drw_infos[resource_id].orco_mul_bias)")
+    .define("ObjectInfo", "(drw_infos[resource_id].infos)")
+    .define("ObjectColor", "(drw_infos[resource_id].color)")
+    .storage_buf(DRW_OBJ_INFOS_SLOT, Qualifier::READ, "ObjectInfos", "drw_infos[]");

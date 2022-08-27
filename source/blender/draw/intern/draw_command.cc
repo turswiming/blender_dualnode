@@ -95,12 +95,12 @@ void DrawMulti::execute(RecordingState &state) const
 
     /* Draw negatively scaled geometry first. */
     if (grp.len - grp.front_facing_len > 0) {
-      state.front_facing_set(false);
+      state.front_facing_set(true);
       GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset);
     }
 
     if (grp.front_facing_len > 0) {
-      state.front_facing_set(true);
+      state.front_facing_set(false);
       GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset + stride);
     }
 

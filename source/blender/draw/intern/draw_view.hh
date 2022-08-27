@@ -54,6 +54,8 @@ class View {
     return data_.winmat[3][3] == 0.0f;
   }
 
+  bool is_inverted() const;
+
   float far_clip() const
   {
     if (is_persp()) {

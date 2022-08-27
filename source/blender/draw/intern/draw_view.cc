@@ -25,6 +25,8 @@ void View::sync(const float4x4 &view_mat, const float4x4 &win_mat)
   /* Should not be used anymore. */
   data_.viewcamtexcofac = float4(1.0f, 1.0f, 0.0f, 0.0f);
 
+  data_.is_inverted = (is_negative_m4(view_mat.ptr()) == is_negative_m4(win_mat.ptr()));
+
   update_view_vectors();
 
   BoundBox &bound_box = *reinterpret_cast<BoundBox *>(&data_.frustum_corners);
@@ -308,6 +310,11 @@ void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len)
   }
 
   GPU_debug_group_end();
+}
+
+bool View::is_inverted() const
+{
+  return data_.is_inverted;
 }
 
 }  // namespace blender::draw

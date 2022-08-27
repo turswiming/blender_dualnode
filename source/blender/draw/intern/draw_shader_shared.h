@@ -73,7 +73,9 @@ struct ViewInfos {
   /* Mouse pixel. */
   int2 mouse_pixel;
 
-  int2 _pad0;
+  /** True if facing needs to be inverted. */
+  bool1 is_inverted;
+  int _pad0;
 };
 BLI_STATIC_ASSERT_ALIGN(ViewInfos, 16)
 
