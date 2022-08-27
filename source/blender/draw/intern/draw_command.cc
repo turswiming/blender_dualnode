@@ -87,10 +87,7 @@ void DrawMulti::execute(RecordingState &state) const
   while (group_index != (uint)-1) {
     const DrawGroup &grp = groups[group_index];
 
-    /** IMPORTANT: We cannot use grp.gpu_batch here since it has been overriden by the atomic
-     * counters. Use the DrawMulti.batch instead. */
-
-    GPU_batch_set_shader(batch, state.shader);
+    GPU_batch_set_shader(grp.gpu_batch, state.shader);
 
     constexpr intptr_t stride = sizeof(DrawCommand);
     /* We have 2 indirect command reserved per draw group. */
@@ -99,12 +96,12 @@ void DrawMulti::execute(RecordingState &state) const
     /* Draw negatively scaled geometry first. */
     if (grp.len - grp.front_facing_len > 0) {
       state.front_facing_set(false);
-      GPU_batch_draw_indirect(batch, indirect_buf, offset);
+      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset);
     }
 
     if (grp.front_facing_len > 0) {
       state.front_facing_set(true);
-      GPU_batch_draw_indirect(batch, indirect_buf, offset + stride);
+      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset + stride);
     }
 
     group_index = grp.next;
@@ -379,9 +376,9 @@ std::string DrawMulti::serialize(std::string line_prefix) const
 
     if (grp.back_proto_len > 0) {
       for (DrawPrototype &proto : prototypes.slice({offset, grp.back_proto_len})) {
-        // BLI_assert(proto.group_id == group_index);
+        BLI_assert(proto.group_id == group_index);
         ResourceHandle handle(proto.resource_handle);
-        // BLI_assert(handle.has_inverted_handedness());
+        BLI_assert(handle.has_inverted_handedness());
         ss << std::endl
            << line_prefix << "    .proto(instance_len=" << std::to_string(proto.instance_len)
            << ", resource_id=" << std::to_string(handle.resource_index()) << ", back_face)";
@@ -391,9 +388,9 @@ std::string DrawMulti::serialize(std::string line_prefix) const
 
     if (grp.front_proto_len > 0) {
       for (DrawPrototype &proto : prototypes.slice({offset, grp.front_proto_len})) {
-        // BLI_assert(proto.group_id == group_index);
+        BLI_assert(proto.group_id == group_index);
         ResourceHandle handle(proto.resource_handle);
-        // BLI_assert(!handle.has_inverted_handedness());
+        BLI_assert(!handle.has_inverted_handedness());
         ss << std::endl
            << line_prefix << "    .proto(instance_len=" << std::to_string(proto.instance_len)
            << ", resource_id=" << std::to_string(handle.resource_index()) << ", front_face)";
@@ -538,18 +535,12 @@ void DrawMultiBuf::bind(RecordingState &state,
     group.start = resource_id_count_;
     resource_id_count_ += group.len;
 
-    /* Need to do this before group.gpu_batch is mangled. */
-    bool is_indexed = (group.gpu_batch->elem != nullptr);
-
     int batch_inst_len;
     /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
-    /** WATCH: group.vertex_len and group.gpu_batch are in the same union.
-     * group.gpu_batch is not valid after this point. This is still ok to call this since the
-     * pointer is passed by value. */
     GPU_batch_draw_parameter_get(group.gpu_batch, &group.vertex_len, &batch_inst_len);
 
     /* Tag group as using index draw (changes indirect draw call structure). */
-    if (is_indexed) {
+    if (group.gpu_batch->elem != nullptr) {
       group.vertex_len = -group.vertex_len;
     }
 

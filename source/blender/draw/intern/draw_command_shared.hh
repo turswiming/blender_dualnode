@@ -34,26 +34,25 @@ struct DrawGroup {
   /** Number of non inverted scaling instances in this Group. */
   uint front_facing_len;
 
+  /** GPUBatch values to be copied to DrawCommand after sorting (if not overriden). */
+  int vertex_len; /** NOTE: Negative if using indexed draw. */
+  /** Atomic counters used during command sorting. */
+  uint front_facing_counter;
+  uint back_facing_counter;
+  uint total_counter;
+
+  /** For debug printing only. */
+  uint front_proto_len;
+  uint back_proto_len;
+
 #ifndef GPU_SHADER
   /* NOTE: Union just to make sure the struct has always the same size on all platform. */
   union {
-    struct {
-      /** Needed to create the correct draw call. Deleted before upload. */
-      GPUBatch *gpu_batch;
-      /** For debugging only */
-      uint front_proto_len;
-      uint back_proto_len;
-    };
-    struct {
+    /** Needed to create the correct draw call. */
+    GPUBatch *gpu_batch;
 #endif
-      /** GPUBatch values to be copied to DrawCommand after sorting (if not overriden). */
-      int vertex_len; /** NOTE: Negative if using indexed draw. */
-      /** Atomic counters used during command sorting. */
-      uint front_facing_counter;
-      uint back_facing_counter;
-      uint total_counter;
+    uint2 _pad0;
 #ifndef GPU_SHADER
-    };
   };
 #endif
 };
