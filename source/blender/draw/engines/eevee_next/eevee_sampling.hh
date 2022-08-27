@@ -90,7 +90,7 @@ class Sampling {
   template<typename T> void bind_resources(draw::detail::Pass<T> *pass)
   {
     /* Storage Buf. */
-    pass->bind(6, &data_);
+    pass->bind(SAMPLING_BUF_SLOT, &data_);
   }
 
   /* Returns a pseudo random number in [0..1] range. Each dimension are de-correlated. */

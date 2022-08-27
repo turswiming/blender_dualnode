@@ -67,7 +67,9 @@ class VelocityModule {
  private:
   Instance &inst_;
 
+  /** Step being synced. */
   eVelocityStep step_ = STEP_CURRENT;
+  /** Step referenced as next step. */
   eVelocityStep next_step_ = STEP_NEXT;
 
  public:
@@ -116,15 +118,15 @@ class VelocityModule {
   template<typename T> void bind_resources(draw::detail::Pass<T> *pass)
   {
     /* Storage Buf. */
-    pass->bind(0, &(*object_steps[STEP_PREVIOUS]));
-    pass->bind(1, &(*object_steps[next_step_]));
-    pass->bind(2, &(*geometry_steps[STEP_PREVIOUS]));
-    pass->bind(3, &(*geometry_steps[next_step_]));
-    pass->bind(4, &indirection_buf);
+    pass->bind(VELOCITY_OBJ_PREV_BUF_SLOT, &(*object_steps[STEP_PREVIOUS]));
+    pass->bind(VELOCITY_OBJ_NEXT_BUF_SLOT, &(*object_steps[next_step_]));
+    pass->bind(VELOCITY_GEO_PREV_BUF_SLOT, &(*geometry_steps[STEP_PREVIOUS]));
+    pass->bind(VELOCITY_GEO_NEXT_BUF_SLOT, &(*geometry_steps[next_step_]));
+    pass->bind(VELOCITY_INDIRECTION_BUF_SLOT, &indirection_buf);
     /* Uniform Buf. */
-    pass->bind(3, &(*camera_steps[STEP_PREVIOUS]));
-    pass->bind(4, &(*camera_steps[STEP_CURRENT]));
-    pass->bind(5, &(*camera_steps[next_step_]));
+    pass->bind(VELOCITY_CAMERA_PREV_BUF, &(*camera_steps[STEP_PREVIOUS]));
+    pass->bind(VELOCITY_CAMERA_CURR_BUF, &(*camera_steps[STEP_CURRENT]));
+    pass->bind(VELOCITY_CAMERA_NEXT_BUF, &(*camera_steps[next_step_]));
   }
 
   bool camera_has_motion() const;

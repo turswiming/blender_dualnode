@@ -75,9 +75,10 @@ void ForwardPipeline::sync()
       /* Common resources. */
 
       /* Textures. */
-      prepass_ps_.bind(14, inst_.pipelines.utility_tx);
+      prepass_ps_.bind(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
 
       inst_.velocity.bind_resources(&prepass_ps_);
+      inst_.sampling.bind_resources(&prepass_ps_);
     }
 
     prepass_double_sided_static_ps_ = &prepass_ps_.sub("DoubleSided.Static");
@@ -99,18 +100,18 @@ void ForwardPipeline::sync()
       /* Common resources. */
 
       /* RenderPasses. */
-      opaque_ps_.bind(0, as_image(&inst_.render_buffers.normal_tx));
-      opaque_ps_.bind(1, as_image(&inst_.render_buffers.light_tx));
-      opaque_ps_.bind(2, as_image(&inst_.render_buffers.diffuse_color_tx));
-      opaque_ps_.bind(3, as_image(&inst_.render_buffers.specular_color_tx));
-      opaque_ps_.bind(4, as_image(&inst_.render_buffers.emission_tx));
+      opaque_ps_.bind(RBUFS_NORMAL_SLOT, as_image(&inst_.render_buffers.normal_tx));
+      opaque_ps_.bind(RBUFS_LIGHT_SLOT, as_image(&inst_.render_buffers.light_tx));
+      opaque_ps_.bind(RBUFS_DIFF_COLOR_SLOT, as_image(&inst_.render_buffers.diffuse_color_tx));
+      opaque_ps_.bind(RBUFS_SPEC_COLOR_SLOT, as_image(&inst_.render_buffers.specular_color_tx));
+      opaque_ps_.bind(RBUFS_EMISSION_SLOT, as_image(&inst_.render_buffers.emission_tx));
       /* AOVs. */
-      opaque_ps_.bind(5, as_image(&inst_.render_buffers.aov_color_tx));
-      opaque_ps_.bind(6, as_image(&inst_.render_buffers.aov_value_tx));
+      opaque_ps_.bind(RBUFS_AOV_COLOR_SLOT, as_image(&inst_.render_buffers.aov_color_tx));
+      opaque_ps_.bind(RBUFS_AOV_VALUE_SLOT, as_image(&inst_.render_buffers.aov_value_tx));
       /* Storage Buf. */
-      opaque_ps_.bind(5, &inst_.film.aovs_info);
+      opaque_ps_.bind(RBUFS_AOV_BUF_SLOT, &inst_.film.aovs_info);
       /* Textures. */
-      opaque_ps_.bind(14, inst_.pipelines.utility_tx);
+      opaque_ps_.bind(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
 
       inst_.lights.bind_resources(&opaque_ps_);
       inst_.sampling.bind_resources(&opaque_ps_);

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "eevee_defines.hh"
 #include "gpu_shader_create_info.hh"
 
 /* -------------------------------------------------------------------- */
@@ -16,7 +17,8 @@ GPU_SHADER_CREATE_INFO(eevee_sampling_data)
     .additional_info("eevee_shared")
     .storage_buf(6, Qualifier::READ, "SamplingData", "sampling_buf");
 
-GPU_SHADER_CREATE_INFO(eevee_utility_texture).sampler(14, ImageType::FLOAT_2D_ARRAY, "utility_tx");
+GPU_SHADER_CREATE_INFO(eevee_utility_texture)
+    .sampler(RBUFS_UTILITY_TEX_SLOT, ImageType::FLOAT_2D_ARRAY, "utility_tx");
 
 /** \} */
 
@@ -78,9 +80,9 @@ GPU_SHADER_INTERFACE_INFO(eevee_surf_iface, "interp")
 
 GPU_SHADER_CREATE_INFO(eevee_aov_out)
     .define("MAT_AOV_SUPPORT")
-    .image_array_out(5, Qualifier::WRITE, GPU_RGBA16F, "aov_color_img")
-    .image_array_out(6, Qualifier::WRITE, GPU_R16F, "aov_value_img")
-    .storage_buf(5, Qualifier::READ, "AOVsInfoData", "aov_buf");
+    .image_array_out(RBUFS_AOV_COLOR_SLOT, Qualifier::WRITE, GPU_RGBA16F, "aov_color_img")
+    .image_array_out(RBUFS_AOV_VALUE_SLOT, Qualifier::WRITE, GPU_R16F, "aov_value_img")
+    .storage_buf(RBUFS_AOV_BUF_SLOT, Qualifier::READ, "AOVsInfoData", "aov_buf");
 
 GPU_SHADER_CREATE_INFO(eevee_surf_deferred)
     .vertex_out(eevee_surf_iface)
@@ -111,11 +113,11 @@ GPU_SHADER_CREATE_INFO(eevee_surf_forward)
     .fragment_out(0, Type::VEC4, "out_radiance", DualBlend::SRC_0)
     .fragment_out(0, Type::VEC4, "out_transmittance", DualBlend::SRC_1)
     .fragment_source("eevee_surf_forward_frag.glsl")
-    .image_out(0, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_normal_img")
-    .image_array_out(1, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_light_img")
-    .image_out(2, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_diffuse_color_img")
-    .image_out(3, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_specular_color_img")
-    .image_out(4, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_emission_img")
+    .image_out(RBUFS_NORMAL_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_normal_img")
+    .image_array_out(RBUFS_LIGHT_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_light_img")
+    .image_out(RBUFS_DIFF_COLOR_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_diffuse_color_img")
+    .image_out(RBUFS_SPEC_COLOR_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_specular_color_img")
+    .image_out(RBUFS_EMISSION_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_emission_img")
     .additional_info("eevee_aov_out",
                      "eevee_light_data",
                      "eevee_utility_texture",
@@ -135,11 +137,11 @@ GPU_SHADER_CREATE_INFO(eevee_surf_depth)
 
 GPU_SHADER_CREATE_INFO(eevee_surf_world)
     .vertex_out(eevee_surf_iface)
-    .image_out(0, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_normal_img")
-    .image_array_out(1, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_light_img")
-    .image_out(2, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_diffuse_color_img")
-    .image_out(3, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_specular_color_img")
-    .image_out(4, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_emission_img")
+    .image_out(RBUFS_NORMAL_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_normal_img")
+    .image_array_out(RBUFS_LIGHT_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_light_img")
+    .image_out(RBUFS_DIFF_COLOR_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_diffuse_color_img")
+    .image_out(RBUFS_SPEC_COLOR_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_specular_color_img")
+    .image_out(RBUFS_EMISSION_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_emission_img")
     .push_constant(Type::FLOAT, "world_opacity_fade")
     .fragment_out(0, Type::VEC4, "out_background")
     .fragment_source("eevee_surf_world_frag.glsl")
