@@ -207,8 +207,8 @@ flat in int resourceIDFrag;
 #  ifndef DRW_SHADER_SHARED_H
 
 struct ObjectMatrices {
-  mat4 drw_modelMatrix;
-  mat4 drw_modelMatrixInverse;
+  mat4 model;
+  mat4 model_inverse;
 };
 #  endif /* DRW_SHADER_SHARED_H */
 
@@ -218,8 +218,8 @@ layout(std140) uniform modelBlock
   ObjectMatrices drw_matrices[DRW_RESOURCE_CHUNK_LEN];
 };
 
-#    define ModelMatrix (drw_matrices[resource_id].drw_modelMatrix)
-#    define ModelMatrixInverse (drw_matrices[resource_id].drw_modelMatrixInverse)
+#    define ModelMatrix (drw_matrices[resource_id].model)
+#    define ModelMatrixInverse (drw_matrices[resource_id].model_inverse)
 #  endif /* USE_GPU_SHADER_CREATE_INFO */
 
 #else /* GPU_INTEL */

@@ -9,6 +9,8 @@
  * and static shader usage.
  */
 
+#include "GPU_capabilities.h"
+
 #include "gpu_shader_create_info.hh"
 
 #include "eevee_shader.hh"
@@ -184,6 +186,15 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
   int64_t ob_info_index = info.additional_infos_.first_index_of_try("draw_object_infos");
   if (ob_info_index != -1) {
     info.additional_infos_[ob_info_index] = "draw_object_infos_new";
+  }
+
+  /* WORKAROUND: Avoid utility texture merge error. TODO: find a cleaner fix. */
+  for (auto &resource : info.batch_resources_) {
+    if (resource.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER) {
+      if (resource.slot == RBUFS_UTILITY_TEX_SLOT) {
+        resource.slot = GPU_max_textures_frag() - 1;
+      }
+    }
   }
 
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) {
