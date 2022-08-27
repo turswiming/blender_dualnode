@@ -49,6 +49,27 @@ class View {
 
   void sync(const float4x4 &view_mat, const float4x4 &win_mat);
 
+  bool is_persp() const
+  {
+    return data_.winmat[3][3] == 0.0f;
+  }
+
+  float far_clip() const
+  {
+    if (is_persp()) {
+      return -data_.winmat[3][2] / (data_.winmat[2][2] + 1.0f);
+    }
+    return -(data_.winmat[3][2] - 1.0f) / data_.winmat[2][2];
+  }
+
+  float near_clip() const
+  {
+    if (is_persp()) {
+      return -data_.winmat[3][2] / (data_.winmat[2][2] - 1.0f);
+    }
+    return -(data_.winmat[3][2] + 1.0f) / data_.winmat[2][2];
+  }
+
  private:
   /** Called from draw manager. */
   void bind();

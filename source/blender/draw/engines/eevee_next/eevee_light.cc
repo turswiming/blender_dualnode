@@ -399,49 +399,47 @@ void LightModule::culling_pass_sync()
   uint culling_tile_dispatch_size = divide_ceil_u(total_word_count_, CULLING_TILE_GROUP_SIZE);
 
   /* NOTE: We reference the buffers that may be resized or updated later. */
+
+  culling_ps_.init();
   {
-    DRW_PASS_CREATE(culling_select_ps_, DRW_STATE_NO_DRAW);
-    GPUShader *sh = inst_.shaders.static_shader_get(LIGHT_CULLING_SELECT);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, culling_select_ps_);
-    DRW_shgroup_storage_block_ref(grp, "light_cull_buf", &culling_data_buf_);
-    DRW_shgroup_storage_block(grp, "in_light_buf", light_buf_);
-    DRW_shgroup_storage_block(grp, "out_light_buf", culling_light_buf_);
-    DRW_shgroup_storage_block(grp, "out_zdist_buf", culling_zdist_buf_);
-    DRW_shgroup_storage_block(grp, "out_key_buf", culling_key_buf_);
-    DRW_shgroup_call_compute(grp, culling_select_dispatch_size, 1, 1);
-    DRW_shgroup_barrier(grp, GPU_BARRIER_SHADER_STORAGE);
+    auto &sub = culling_ps_.sub("Select");
+    sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_SELECT));
+    sub.bind("light_cull_buf", &culling_data_buf_);
+    sub.bind("in_light_buf", light_buf_);
+    sub.bind("out_light_buf", culling_light_buf_);
+    sub.bind("out_zdist_buf", culling_zdist_buf_);
+    sub.bind("out_key_buf", culling_key_buf_);
+    sub.dispatch(int3(culling_select_dispatch_size, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
   {
-    DRW_PASS_CREATE(culling_sort_ps_, DRW_STATE_NO_DRAW);
-    GPUShader *sh = inst_.shaders.static_shader_get(LIGHT_CULLING_SORT);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, culling_sort_ps_);
-    DRW_shgroup_storage_block_ref(grp, "light_cull_buf", &culling_data_buf_);
-    DRW_shgroup_storage_block(grp, "in_light_buf", light_buf_);
-    DRW_shgroup_storage_block(grp, "out_light_buf", culling_light_buf_);
-    DRW_shgroup_storage_block(grp, "in_zdist_buf", culling_zdist_buf_);
-    DRW_shgroup_storage_block(grp, "in_key_buf", culling_key_buf_);
-    DRW_shgroup_call_compute(grp, culling_sort_dispatch_size, 1, 1);
-    DRW_shgroup_barrier(grp, GPU_BARRIER_SHADER_STORAGE);
+    auto &sub = culling_ps_.sub("Sort");
+    sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_SORT));
+    sub.bind("light_cull_buf", &culling_data_buf_);
+    sub.bind("in_light_buf", light_buf_);
+    sub.bind("out_light_buf", culling_light_buf_);
+    sub.bind("in_zdist_buf", culling_zdist_buf_);
+    sub.bind("in_key_buf", culling_key_buf_);
+    sub.dispatch(int3(culling_sort_dispatch_size, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
   {
-    DRW_PASS_CREATE(culling_zbin_ps_, DRW_STATE_NO_DRAW);
-    GPUShader *sh = inst_.shaders.static_shader_get(LIGHT_CULLING_ZBIN);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, culling_zbin_ps_);
-    DRW_shgroup_storage_block_ref(grp, "light_cull_buf", &culling_data_buf_);
-    DRW_shgroup_storage_block(grp, "light_buf", culling_light_buf_);
-    DRW_shgroup_storage_block(grp, "out_zbin_buf", culling_zbin_buf_);
-    DRW_shgroup_call_compute(grp, 1, 1, 1);
-    DRW_shgroup_barrier(grp, GPU_BARRIER_SHADER_STORAGE);
+    auto &sub = culling_ps_.sub("Zbin");
+    sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_ZBIN));
+    sub.bind("light_cull_buf", &culling_data_buf_);
+    sub.bind("light_buf", culling_light_buf_);
+    sub.bind("out_zbin_buf", culling_zbin_buf_);
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
   {
-    DRW_PASS_CREATE(culling_tile_ps_, DRW_STATE_NO_DRAW);
-    GPUShader *sh = inst_.shaders.static_shader_get(LIGHT_CULLING_TILE);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, culling_tile_ps_);
-    DRW_shgroup_storage_block_ref(grp, "light_cull_buf", &culling_data_buf_);
-    DRW_shgroup_storage_block(grp, "light_buf", culling_light_buf_);
-    DRW_shgroup_storage_block(grp, "out_light_tile_buf", culling_tile_buf_);
-    DRW_shgroup_call_compute(grp, culling_tile_dispatch_size, 1, 1);
-    DRW_shgroup_barrier(grp, GPU_BARRIER_SHADER_STORAGE);
+    auto &sub = culling_ps_.sub("Tiles");
+    sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_TILE));
+    sub.bind("light_cull_buf", &culling_data_buf_);
+    sub.bind("light_buf", culling_light_buf_);
+    sub.bind("out_light_tile_buf", culling_tile_buf_);
+    sub.dispatch(int3(culling_tile_dispatch_size, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 }
 
@@ -453,7 +451,7 @@ void LightModule::debug_pass_sync()
   }
 
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM;
-  debug_draw_ps_ = DRW_pass_create("LightCulling.Debug", state);
+  debug_draw_ps_ = DRW_pass_create("Debug.LightCulling", state);
   GPUShader *sh = inst_.shaders.static_shader_get(LIGHT_CULLING_DEBUG);
   DRWShadingGroup *grp = DRW_shgroup_create(sh, debug_draw_ps_);
   inst_.hiz_buffer.bind_resources(grp);
@@ -465,10 +463,10 @@ void LightModule::debug_pass_sync()
   DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
 }
 
-void LightModule::set_view(const DRWView *view, const int2 extent)
+void LightModule::set_view(View &view, const int2 extent)
 {
-  float far_z = DRW_view_far_distance_get(view);
-  float near_z = DRW_view_near_distance_get(view);
+  float far_z = view.far_clip();
+  float near_z = view.near_clip();
 
   culling_data_buf_.zbin_scale = -CULLING_ZBIN_COUNT / fabsf(far_z - near_z);
   culling_data_buf_.zbin_bias = -near_z * culling_data_buf_.zbin_scale;
@@ -476,15 +474,7 @@ void LightModule::set_view(const DRWView *view, const int2 extent)
   culling_data_buf_.visible_count = 0;
   culling_data_buf_.push_update();
 
-  DRW_stats_group_start("Light Culling");
-
-  DRW_view_set_active(view);
-  DRW_draw_pass(culling_select_ps_);
-  DRW_draw_pass(culling_sort_ps_);
-  DRW_draw_pass(culling_zbin_ps_);
-  DRW_draw_pass(culling_tile_ps_);
-
-  DRW_stats_group_end();
+  inst_.manager->submit(culling_ps_, view);
 }
 
 void LightModule::debug_draw(GPUFrameBuffer *view_fb)

@@ -117,11 +117,11 @@ void ForwardPipeline::sync()
       inst_.sampling.bind_resources(&opaque_ps_);
     }
 
-    opaque_single_sided_ps_ = &opaque_ps_.sub("DoubleSided");
+    opaque_single_sided_ps_ = &opaque_ps_.sub("SingleSided");
     opaque_single_sided_ps_->state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL |
                                        DRW_STATE_CULL_BACK);
 
-    opaque_double_sided_ps_ = &opaque_ps_.sub("SingleSided");
+    opaque_double_sided_ps_ = &opaque_ps_.sub("DoubleSided");
     opaque_double_sided_ps_->state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL);
   }
   {

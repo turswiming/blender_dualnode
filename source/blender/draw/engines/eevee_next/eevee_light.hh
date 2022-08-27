@@ -116,10 +116,7 @@ class LightModule {
   /** Bitmap of lights touching each tiles. */
   LightCullingTileBuf culling_tile_buf_ = {"LightCull_tile"};
   /** Culling compute passes. */
-  DRWPass *culling_select_ps_ = nullptr;
-  DRWPass *culling_sort_ps_ = nullptr;
-  DRWPass *culling_zbin_ps_ = nullptr;
-  DRWPass *culling_tile_ps_ = nullptr;
+  PassSimple culling_ps_ = {"LightCulling"};
   /** Total number of words the tile buffer needs to contain for the render resolution. */
   uint total_word_count_ = 0;
 
@@ -138,7 +135,7 @@ class LightModule {
   /**
    * Update acceleration structure for the given view.
    */
-  void set_view(const DRWView *view, const int2 extent);
+  void set_view(View &view, const int2 extent);
 
   void debug_draw(GPUFrameBuffer *view_fb);
 
