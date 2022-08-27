@@ -102,6 +102,8 @@ void Manager::submit(PassSimple &pass, View &view)
   // GPU_storagebuf_bind(attribute_buf, DRW_OBJ_ATTR_SLOT); /* TODO */
 
   pass.submit(state);
+
+  state.cleanup();
 }
 
 void Manager::submit(PassMain &pass, View &view)
@@ -122,12 +124,7 @@ void Manager::submit(PassMain &pass, View &view)
 
   pass.submit(state);
 
-  if (G.debug & G_DEBUG_GPU) {
-    GPU_storagebuf_unbind_all();
-    GPU_texture_image_unbind_all();
-    GPU_texture_unbind_all();
-    GPU_uniformbuf_unbind_all();
-  }
+  state.cleanup();
 }
 
 Manager::SubmitDebugOutput Manager::submit_debug(PassSimple &pass, View &view)

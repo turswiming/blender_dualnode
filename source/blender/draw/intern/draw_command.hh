@@ -9,6 +9,7 @@
  * Passes record draw commands.
  */
 
+#include "BKE_global.h"
 #include "BLI_map.hh"
 #include "DRW_gpu_wrapper.hh"
 
@@ -39,13 +40,27 @@ struct RecordingState {
   /** Used for gl_BaseInstance workaround. */
   GPUStorageBuf *resource_id_buf = nullptr;
 
-  void front_facing_set(bool front_facing)
+  void front_facing_set(bool facing)
   {
     /* Facing is inverted if view is not in expected handedness. */
-    front_facing = this->inverted_view == front_facing;
+    facing = this->inverted_view == facing;
     /* Remove redundant changes. */
-    if (assign_if_different(this->front_facing, front_facing)) {
-      GPU_front_facing(!front_facing);
+    if (assign_if_different(this->front_facing, facing)) {
+      GPU_front_facing(!facing);
+    }
+  }
+
+  void cleanup()
+  {
+    if (front_facing == false) {
+      GPU_front_facing(false);
+    }
+
+    if (G.debug & G_DEBUG_GPU) {
+      GPU_storagebuf_unbind_all();
+      GPU_texture_image_unbind_all();
+      GPU_texture_unbind_all();
+      GPU_uniformbuf_unbind_all();
     }
   }
 };
