@@ -18,6 +18,9 @@
 #define DRW_OBJ_INFOS_SLOT 9
 #define DRW_OBJ_ATTR_SLOT 8
 
+#define DRW_DEBUG_PRINT_SLOT 15
+#define DRW_DEBUG_DRAW_SLOT 14
+
 #define DRW_COMMAND_GROUP_SIZE 64
 #define DRW_FINALIZE_GROUP_SIZE 64
 /* Must be multiple of 32. Set to 32 for shader simplicity. */

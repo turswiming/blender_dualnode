@@ -152,6 +152,8 @@ struct ObjectBounds {
   float4 bounding_corners[4];
   /** Bounding sphere derived from the bounding corner. Computed on GPU. */
   float4 bounding_sphere;
+  /** Radius of the inscribed sphere derived from the bounding corner. Computed on GPU. */
+#define _inner_sphere_radius bounding_corners[3].w
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
   void sync();

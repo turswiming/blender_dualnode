@@ -8,6 +8,8 @@
 #include "BKE_global.h"
 #include "GPU_compute.h"
 
+#include "draw_debug.hh"
+#include "draw_defines.h"
 #include "draw_manager.h"
 #include "draw_manager.hh"
 #include "draw_pass.hh"
@@ -57,23 +59,39 @@ void Manager::end_sync()
   bounds_buf.push_update();
   infos_buf.push_update();
 
+  debug_bind();
+
   /* Dispatch compute to finalize the resources on GPU. Save a bit of CPU time. */
   uint thread_groups = divide_ceil_u(resource_len_, DRW_FINALIZE_GROUP_SIZE);
   GPUShader *shader = DRW_shader_draw_resource_finalize_get();
   GPU_shader_bind(shader);
   GPU_shader_uniform_1i(shader, "resource_len", resource_len_);
-  GPU_storagebuf_bind(matrix_buf, 0);
-  GPU_storagebuf_bind(bounds_buf, 1);
-  GPU_storagebuf_bind(infos_buf, 2);
+  GPU_storagebuf_bind(matrix_buf, GPU_shader_get_ssbo(shader, "matrix_buf"));
+  GPU_storagebuf_bind(bounds_buf, GPU_shader_get_ssbo(shader, "bounds_buf"));
+  GPU_storagebuf_bind(infos_buf, GPU_shader_get_ssbo(shader, "infos_buf"));
   GPU_compute_dispatch(shader, thread_groups, 1, 1);
   GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
 
   GPU_debug_group_end();
 }
 
+void Manager::debug_bind()
+{
+#ifdef DEBUG
+  GPU_storagebuf_bind(drw_debug_gpu_draw_buf_get(), DRW_DEBUG_DRAW_SLOT);
+  GPU_storagebuf_bind(drw_debug_gpu_print_buf_get(), DRW_DEBUG_PRINT_SLOT);
+#  ifndef DISABLE_DEBUG_SHADER_PRINT_BARRIER
+  /* Add a barrier to allow multiple shader writing to the same buffer. */
+  GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+#  endif
+#endif
+}
+
 void Manager::submit(PassSimple &pass, View &view)
 {
   view.bind();
+
+  debug_bind();
 
   command::RecordingState state;
 
@@ -89,6 +107,8 @@ void Manager::submit(PassSimple &pass, View &view)
 void Manager::submit(PassMain &pass, View &view)
 {
   view.bind();
+
+  debug_bind();
 
   view.compute_visibility(bounds_buf, resource_len_);
 

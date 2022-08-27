@@ -160,7 +160,7 @@ GPU_SHADER_CREATE_INFO(draw_visibility_compute)
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "visibility_buf[]")
     .push_constant(Type::INT, "resource_len")
     .compute_source("draw_visibility_comp.glsl")
-    .additional_info("draw_view", "draw_debug_print");
+    .additional_info("draw_view");
 
 GPU_SHADER_CREATE_INFO(draw_command_generate)
     .do_static_compilation(true)

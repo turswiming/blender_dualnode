@@ -572,10 +572,10 @@ void DrawMultiBuf::bind(RecordingState &state,
     GPUShader *shader = DRW_shader_draw_command_generate_get();
     GPU_shader_bind(shader);
     GPU_shader_uniform_1i(shader, "prototype_len", prototype_count_);
-    GPU_storagebuf_bind(group_buf_, 0);
-    GPU_storagebuf_bind(visibility_buf, 1);
-    GPU_storagebuf_bind(prototype_buf_, 2);
-    GPU_storagebuf_bind(command_buf_, 3);
+    GPU_storagebuf_bind(group_buf_, GPU_shader_get_ssbo(shader, "group_buf"));
+    GPU_storagebuf_bind(visibility_buf, GPU_shader_get_ssbo(shader, "visibility_buf"));
+    GPU_storagebuf_bind(prototype_buf_, GPU_shader_get_ssbo(shader, "prototype_buf"));
+    GPU_storagebuf_bind(command_buf_, GPU_shader_get_ssbo(shader, "command_buf"));
     GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
     GPU_compute_dispatch(shader, divide_ceil_u(prototype_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
     if (WORKAROUND_RESOURCE_ID) {

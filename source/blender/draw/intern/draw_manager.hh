@@ -132,6 +132,8 @@ class Manager {
   /** TODO(fclem): The following should become private at some point. */
   void begin_sync();
   void end_sync();
+
+  void debug_bind();
 };
 
 inline ResourceHandle Manager::resource_handle(const ObjectRef ref)
