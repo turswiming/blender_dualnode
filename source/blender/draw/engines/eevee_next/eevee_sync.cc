@@ -246,6 +246,7 @@ void SyncModule::sync_gpencil(Object *ob, ObjectHandle &ob_handle, ResourceHandl
     inst_.gpencil_engine_enabled = true;
     return;
   }
+  UNUSED_VARS(res_handle);
 
   gpIterData iter(inst_, ob, ob_handle);
 
@@ -269,6 +270,7 @@ static void shgroup_curves_call(MaterialPass &matpass,
                                 ParticleSystem *part_sys = nullptr,
                                 ModifierData *modifier_data = nullptr)
 {
+  UNUSED_VARS(ob, modifier_data);
   if (matpass.sub_pass == nullptr) {
     return;
   }
@@ -285,6 +287,7 @@ void SyncModule::sync_curves(Object *ob,
                              ResourceHandle res_handle,
                              ModifierData *modifier_data)
 {
+  UNUSED_VARS(res_handle);
   int mat_nr = CURVES_MATERIAL_NR;
 
   ParticleSystem *part_sys = nullptr;
