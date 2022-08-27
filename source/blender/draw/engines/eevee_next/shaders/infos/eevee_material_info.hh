@@ -189,10 +189,7 @@ GPU_SHADER_CREATE_INFO(eevee_volume_deferred)
 GPU_SHADER_CREATE_INFO(eevee_material_stub).define("EEVEE_MATERIAL_STUBS");
 
 #  define EEVEE_MAT_FINAL_VARIATION(name, ...) \
-    GPU_SHADER_CREATE_INFO(name) \
-        .additional_info(__VA_ARGS__) \
-        .auto_resource_location(true) \
-        .do_static_compilation(true);
+    GPU_SHADER_CREATE_INFO(name).additional_info(__VA_ARGS__).do_static_compilation(true);
 
 #  define EEVEE_MAT_GEOM_VARIATIONS(prefix, ...) \
     EEVEE_MAT_FINAL_VARIATION(prefix##_world, "eevee_geom_world", __VA_ARGS__) \
