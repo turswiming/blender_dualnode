@@ -18,7 +18,7 @@ uint drw_debug_start_draw(uint v_needed)
 {
   uint vertid = atomicAdd(drw_debug_draw_v_count, v_needed);
   /* NOTE: Skip the header manually. */
-  vertid += 1;
+  vertid += 2;
   return vertid;
 }
 
