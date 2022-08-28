@@ -57,6 +57,7 @@ class ShadingView {
   DRWView *sub_view_ = nullptr;
   /** Same as sub_view_ but has Depth Of Field jitter applied. */
   DRWView *render_view_ = nullptr;
+  View render_view_new = {"Main"};
 
   /** Render size of the view. Can change between scene sample eval. */
   int2 extent_ = {-1, -1};
