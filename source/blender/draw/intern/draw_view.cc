@@ -9,6 +9,7 @@
 #include "GPU_compute.h"
 #include "GPU_debug.h"
 
+#include "draw_debug.hh"
 #include "draw_shader.h"
 #include "draw_view.hh"
 
@@ -287,8 +288,19 @@ void View::bind()
   GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
 }
 
-void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len)
+void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze)
 {
+  if (debug_freeze && frozen_ == false) {
+    data_freeze_ = static_cast<ViewInfos>(data_);
+    data_freeze_.push_update();
+  }
+#ifdef DEBUG
+  if (debug_freeze) {
+    drw_debug_matrix_as_bbox(data_freeze_.persinv, float4(0, 1, 0, 1));
+  }
+#endif
+  frozen_ = debug_freeze;
+
   GPU_debug_group_begin("View.compute_visibility");
 
   /* TODO(fclem): Early out if visibility hasn't changed. */
@@ -304,17 +316,17 @@ void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len)
     GPU_shader_uniform_1i(shader, "resource_len", resource_len);
     GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo(shader, "bounds_buf"));
     GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo(shader, "visibility_buf"));
-    GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
+    GPU_uniformbuf_bind((frozen_) ? data_freeze_ : data_, DRW_VIEW_UBO_SLOT);
     GPU_compute_dispatch(shader, divide_ceil_u(resource_len, DRW_VISIBILITY_GROUP_SIZE), 1, 1);
     GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
-  GPU_debug_group_end();
-}
+  if (frozen_) {
+    /* Bind back the non frozen data. */
+    GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
+  }
 
-bool View::is_inverted() const
-{
-  return data_.is_inverted;
+  GPU_debug_group_end();
 }
 
 }  // namespace blender::draw

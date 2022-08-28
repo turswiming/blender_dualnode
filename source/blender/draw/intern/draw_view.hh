@@ -26,6 +26,8 @@ class View {
 
  private:
   UniformBuffer<ViewInfos> data_;
+  /** Freezed version of data_ used for debugging culling. */
+  UniformBuffer<ViewInfos> data_freeze_;
   /** Result of the visibility computation. 1 bit per resource ID. */
   VisibilityBuf visibility_buf_;
 
@@ -33,6 +35,7 @@ class View {
 
   bool do_visibility_ = true;
   bool dirty_ = true;
+  bool frozen_ = false;
 
  public:
   View(const char *name) : visibility_buf_(name), debug_name_(name){};
@@ -54,7 +57,10 @@ class View {
     return data_.winmat[3][3] == 0.0f;
   }
 
-  bool is_inverted() const;
+  bool is_inverted() const
+  {
+    return data_.is_inverted;
+  }
 
   float far_clip() const
   {
@@ -75,7 +81,7 @@ class View {
  private:
   /** Called from draw manager. */
   void bind();
-  void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len);
+  void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze);
 
   void update_view_vectors();
   void update_viewport_size();
