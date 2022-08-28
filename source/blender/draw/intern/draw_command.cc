@@ -486,9 +486,10 @@ void DrawCommandBuf::bind(RecordingState &state,
 
     Draw &cmd = commands[header.index].draw;
 
-    int batch_vert_len, batch_inst_len;
+    int batch_vert_len, batch_vert_first, batch_base_index, batch_inst_len;
     /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
-    GPU_batch_draw_parameter_get(cmd.batch, &batch_vert_len, &batch_inst_len);
+    GPU_batch_draw_parameter_get(
+        cmd.batch, &batch_vert_len, &batch_vert_first, &batch_base_index, &batch_inst_len);
     /* Instancing attributes are not supported using the new pipeline since we use the base
      * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
     BLI_assert(batch_inst_len == 1);
@@ -537,7 +538,11 @@ void DrawMultiBuf::bind(RecordingState &state,
 
     int batch_inst_len;
     /* Now that GPUBatches are guaranteed to be finished, extract their parameters. */
-    GPU_batch_draw_parameter_get(group.gpu_batch, &group.vertex_len, &batch_inst_len);
+    GPU_batch_draw_parameter_get(group.gpu_batch,
+                                 &group.vertex_len,
+                                 &group.vertex_first,
+                                 &group.base_index,
+                                 &batch_inst_len);
 
     /* Tag group as using index draw (changes indirect draw call structure). */
     if (group.gpu_batch->elem != nullptr) {

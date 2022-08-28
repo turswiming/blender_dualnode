@@ -12,9 +12,9 @@ void write_draw_call(DrawGroup group, uint group_id)
 {
   DrawCommand cmd;
   cmd.vertex_len = abs(group.vertex_len);
-  cmd.vertex_first = 0;
-  if (group.vertex_len < 0) {
-    cmd.base_index = 0;
+  cmd.vertex_first = group.vertex_first;
+  if (group.base_index != -1) {
+    cmd.base_index = group.base_index;
     cmd.instance_first_indexed = group.start;
   }
   else {
