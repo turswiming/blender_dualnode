@@ -70,7 +70,7 @@
 #  include "BLI_math_base.h" /* M_PI */
 #endif
 
-using namespace blender::ed::outliner;
+namespace blender::ed::outliner {
 
 /* prototypes */
 static int outliner_exclude_filter_get(const SpaceOutliner *space_outliner);
@@ -215,11 +215,6 @@ bool outliner_requires_rebuild_on_select_or_active_change(const SpaceOutliner *s
   /* Need to rebuild tree to re-apply filter if select/active changed while filtering based on
    * select/active. */
   return exclude_flags & (SO_FILTER_OB_STATE_SELECTED | SO_FILTER_OB_STATE_ACTIVE);
-}
-
-bool outliner_requires_rebuild_on_open_change(const SpaceOutliner *space_outliner)
-{
-  return ELEM(space_outliner->outlinevis, SO_DATA_API);
 }
 
 /* special handling of hierarchical non-lib data */
@@ -791,8 +786,6 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
   }
 }
 
-namespace blender::ed::outliner {
-
 TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
                                   ListBase *lb,
                                   void *idv,
@@ -928,8 +921,6 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
 
   return te;
 }
-
-}  // namespace blender::ed::outliner
 
 /* ======================================================= */
 
@@ -1732,3 +1723,5 @@ void outliner_build_tree(Main *mainvar,
 }
 
 /** \} */
+
+}  // namespace blender::ed::outliner

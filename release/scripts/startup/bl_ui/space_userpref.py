@@ -8,6 +8,7 @@ from bpy.types import (
 from bpy.app.translations import (
     contexts as i18n_contexts,
     pgettext_iface as iface_,
+    pgettext_tip as tip_,
 )
 
 
@@ -1927,10 +1928,12 @@ class USERPREF_PT_addons(AddOnPanel, Panel):
 
             if is_visible:
                 if search and not (
-                        (search in info["name"].lower()) or
+                        (search in info["name"].lower() or
+                         search in iface_(info["name"]).lower()) or
                         (info["author"] and (search in info["author"].lower())) or
-                        ((filter == "All") and (search in info["category"].lower()))
-                ):
+                        ((filter == "All") and (search in info["category"].lower() or
+                                                search in iface_(info["category"]).lower()))
+                        ):
                     continue
 
                 # Addon UI Code
@@ -1953,7 +1956,7 @@ class USERPREF_PT_addons(AddOnPanel, Panel):
 
                 sub = row.row()
                 sub.active = is_enabled
-                sub.label(text="%s: %s" % (info["category"], info["name"]))
+                sub.label(text=iface_("%s: %s") % (iface_(info["category"]), iface_(info["name"])))
 
                 if info["warning"]:
                     sub.label(icon='ERROR')
@@ -1966,11 +1969,11 @@ class USERPREF_PT_addons(AddOnPanel, Panel):
                     if info["description"]:
                         split = colsub.row().split(factor=0.15)
                         split.label(text="Description:")
-                        split.label(text=info["description"])
+                        split.label(text=tip_(info["description"]))
                     if info["location"]:
                         split = colsub.row().split(factor=0.15)
                         split.label(text="Location:")
-                        split.label(text=info["location"])
+                        split.label(text=tip_(info["location"]))
                     if mod:
                         split = colsub.row().split(factor=0.15)
                         split.label(text="File:")
@@ -2092,7 +2095,10 @@ class StudioLightPanelMixin:
             for studio_light in lights:
                 self.draw_studio_light(flow, studio_light)
         else:
-            layout.label(text=iface_("No custom %s configured") % self.bl_label)
+            layout.label(text=self.get_error_message())
+
+    def get_error_message(self):
+        return tip_("No custom %s configured") % self.bl_label
 
     def draw_studio_light(self, layout, studio_light):
         box = layout.box()
@@ -2119,6 +2125,9 @@ class USERPREF_PT_studiolight_matcaps(StudioLightPanel, StudioLightPanelMixin, P
         layout.operator("preferences.studiolight_install", icon='IMPORT', text="Install...").type = 'MATCAP'
         layout.separator()
 
+    def get_error_message(self):
+        return tip_("No custom MatCaps configured")
+
 
 class USERPREF_PT_studiolight_world(StudioLightPanel, StudioLightPanelMixin, Panel):
     bl_label = "HDRIs"
@@ -2128,6 +2137,9 @@ class USERPREF_PT_studiolight_world(StudioLightPanel, StudioLightPanelMixin, Pan
         layout = self.layout
         layout.operator("preferences.studiolight_install", icon='IMPORT', text="Install...").type = 'WORLD'
         layout.separator()
+
+    def get_error_message(self):
+        return tip_("No custom HDRIs configured")
 
 
 class USERPREF_PT_studiolight_lights(StudioLightPanel, StudioLightPanelMixin, Panel):
@@ -2140,6 +2152,9 @@ class USERPREF_PT_studiolight_lights(StudioLightPanel, StudioLightPanelMixin, Pa
         op.type = 'STUDIO'
         op.filter_glob = ".sl"
         layout.separator()
+
+    def get_error_message(self):
+        return tip_("No custom Studio Lights configured")
 
 
 class USERPREF_PT_studiolight_light_editor(StudioLightPanel, Panel):

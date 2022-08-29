@@ -74,8 +74,7 @@
 #include "tree/tree_element_rna.hh"
 #include "tree/tree_iterator.hh"
 
-using namespace blender;
-using namespace blender::ed::outliner;
+namespace blender::ed::outliner {
 
 /* -------------------------------------------------------------------- */
 /** \name Tree Size Functions
@@ -3336,7 +3335,7 @@ static void outliner_draw_tree_element(bContext *C,
       /* Scene collection in view layer can't expand/collapse. */
     }
     else if (te->subtree.first || ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_SCE)) ||
-             (te->flag & TE_LAZY_CLOSED)) {
+             (te->flag & TE_PRETEND_HAS_CHILDREN)) {
       /* Open/close icon, only when sub-levels, except for scene. */
       int icon_x = startx;
 
@@ -3994,3 +3993,5 @@ void draw_outliner(const bContext *C)
 }
 
 /** \} */
+
+}  // namespace blender::ed::outliner

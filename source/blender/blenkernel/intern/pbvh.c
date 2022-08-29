@@ -1329,7 +1329,7 @@ bool BKE_pbvh_get_color_layer(const Mesh *me, CustomDataLayer **r_layer, eAttrDo
 
   if (!layer || !ELEM(layer->type, CD_PROP_COLOR, CD_PROP_BYTE_COLOR)) {
     *r_layer = NULL;
-    *r_attr = ATTR_DOMAIN_NUM;
+    *r_attr = ATTR_DOMAIN_POINT;
     return false;
   }
 
@@ -1337,7 +1337,7 @@ bool BKE_pbvh_get_color_layer(const Mesh *me, CustomDataLayer **r_layer, eAttrDo
 
   if (!ELEM(domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_CORNER)) {
     *r_layer = NULL;
-    *r_attr = ATTR_DOMAIN_NUM;
+    *r_attr = ATTR_DOMAIN_POINT;
     return false;
   }
 
