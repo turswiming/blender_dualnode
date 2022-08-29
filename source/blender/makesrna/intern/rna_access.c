@@ -2073,7 +2073,7 @@ static void rna_property_update(
     }
 
 #if 1
-    /* TODO(campbell): Should eventually be replaced entirely by message bus (below)
+    /* TODO(@campbellbarton): Should eventually be replaced entirely by message bus (below)
      * for now keep since COW, bugs are hard to track when we have other missing updates. */
     if (prop->noteflag) {
       WM_main_add_notifier(prop->noteflag, ptr->owner_id);
@@ -4078,6 +4078,20 @@ int RNA_property_collection_lookup_index(PointerRNA *ptr,
     return index;
   }
   return -1;
+}
+
+bool RNA_property_collection_lookup_int_has_fn(PropertyRNA *prop)
+{
+  BLI_assert(RNA_property_type(prop) == PROP_COLLECTION);
+  CollectionPropertyRNA *cprop = (CollectionPropertyRNA *)rna_ensure_property(prop);
+  return cprop->lookupint != NULL;
+}
+
+bool RNA_property_collection_lookup_string_has_fn(PropertyRNA *prop)
+{
+  BLI_assert(RNA_property_type(prop) == PROP_COLLECTION);
+  CollectionPropertyRNA *cprop = (CollectionPropertyRNA *)rna_ensure_property(prop);
+  return cprop->lookupstring != NULL;
 }
 
 int RNA_property_collection_lookup_int(PointerRNA *ptr,

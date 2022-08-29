@@ -2637,12 +2637,12 @@ static int sequencer_swap_data_exec(bContext *C, wmOperator *op)
   Sequence *seq_other;
   const char *error_msg;
 
-  if (SEQ_select_active_get_pair(scene, &seq_act, &seq_other) == 0) {
+  if (SEQ_select_active_get_pair(scene, &seq_act, &seq_other) == false) {
     BKE_report(op->reports, RPT_ERROR, "Please select two strips");
     return OPERATOR_CANCELLED;
   }
 
-  if (SEQ_edit_sequence_swap(scene, seq_act, seq_other, &error_msg) == 0) {
+  if (SEQ_edit_sequence_swap(scene, seq_act, seq_other, &error_msg) == false) {
     BKE_report(op->reports, RPT_ERROR, error_msg);
     return OPERATOR_CANCELLED;
   }
@@ -2869,7 +2869,7 @@ static int sequencer_change_path_exec(bContext *C, wmOperator *op)
 
     RNA_string_get(op->ptr, "directory", directory);
     if (is_relative_path) {
-      /* TODO(campbell): shouldn't this already be relative from the filesel?
+      /* TODO(@campbellbarton): shouldn't this already be relative from the filesel?
        * (as the 'filepath' is) for now just make relative here,
        * but look into changing after 2.60. */
       BLI_path_rel(directory, BKE_main_blendfile_path(bmain));

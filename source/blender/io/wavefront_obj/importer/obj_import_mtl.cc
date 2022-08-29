@@ -95,12 +95,8 @@ static Image *create_placeholder_image(Main *bmain, const std::string &path)
   return image;
 }
 
-static Image *load_texture_image(Main *bmain,
-                                 const tex_map_XX &tex_map,
-                                 bNode *r_node,
-                                 bool relative_paths)
+static Image *load_texture_image(Main *bmain, const tex_map_XX &tex_map, bool relative_paths)
 {
-  BLI_assert(r_node && r_node->type == SH_NODE_TEX_IMAGE);
   Image *image = nullptr;
 
   /* First try treating texture path as relative. */
@@ -130,6 +126,14 @@ static Image *load_texture_image(Main *bmain,
   std::replace(no_underscore_path.begin(), no_underscore_path.end(), '_', ' ');
   if (no_underscore_path != no_quote_path && no_underscore_path != tex_path) {
     image = load_image_at_path(bmain, no_underscore_path, relative_paths);
+    if (image != nullptr) {
+      return image;
+    }
+  }
+  /* Try taking just the basename from input path. */
+  std::string base_path{tex_map.mtl_dir_path + BLI_path_basename(tex_map.image_path.c_str())};
+  if (base_path != tex_path) {
+    image = load_image_at_path(bmain, base_path, relative_paths);
     if (image != nullptr) {
       return image;
     }
@@ -334,7 +338,7 @@ void ShaderNodetreeWrap::set_bsdf_socket_values(Material *mat)
   if (emission_color.x >= 0 && emission_color.y >= 0 && emission_color.z >= 0) {
     set_property_of_socket(SOCK_RGBA, "Emission", {emission_color, 3}, bsdf_);
   }
-  if (mtl_mat_.texture_maps.contains_as(eMTLSyntaxElement::map_Ke)) {
+  if (mtl_mat_.tex_map_of_type(eMTLSyntaxElement::map_Ke).is_valid()) {
     set_property_of_socket(SOCK_FLOAT, "Emission Strength", {1.0f}, bsdf_);
   }
   set_property_of_socket(SOCK_FLOAT, "Specular", {specular}, bsdf_);
@@ -357,13 +361,14 @@ void ShaderNodetreeWrap::add_image_textures(Main *bmain, Material *mat, bool rel
 {
   for (const Map<const eMTLSyntaxElement, tex_map_XX>::Item texture_map :
        mtl_mat_.texture_maps.items()) {
-    if (texture_map.value.image_path.empty()) {
+    if (!texture_map.value.is_valid()) {
       /* No Image texture node of this map type can be added to this material. */
       continue;
     }
 
     bNode *image_texture = add_node_to_tree(SH_NODE_TEX_IMAGE);
-    Image *image = load_texture_image(bmain, texture_map.value, image_texture, relative_paths);
+    BLI_assert(image_texture);
+    Image *image = load_texture_image(bmain, texture_map.value, relative_paths);
     if (image == nullptr) {
       continue;
     }

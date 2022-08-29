@@ -385,7 +385,8 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
 
   /* Only use scrambling distance in the viewport if user wants to. */
   bool preview_scrambling_distance = get_boolean(cscene, "preview_scrambling_distance");
-  if (preview && !preview_scrambling_distance) {
+  if ((preview && !preview_scrambling_distance) ||
+      sampling_pattern == SAMPLING_PATTERN_SOBOL_BURLEY) {
     scrambling_distance = 1.0f;
   }
 
@@ -801,7 +802,9 @@ void BlenderSync::free_data_after_sync(BL::Depsgraph &b_depsgraph)
 
 /* Scene Parameters */
 
-SceneParams BlenderSync::get_scene_params(BL::Scene &b_scene, bool background)
+SceneParams BlenderSync::get_scene_params(BL::Scene &b_scene,
+                                          const bool background,
+                                          const bool use_developer_ui)
 {
   SceneParams params;
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
@@ -812,7 +815,7 @@ SceneParams BlenderSync::get_scene_params(BL::Scene &b_scene, bool background)
   else if (shadingsystem == 1)
     params.shadingsystem = SHADINGSYSTEM_OSL;
 
-  if (background || DebugFlags().viewport_static_bvh)
+  if (background || (use_developer_ui && get_enum(cscene, "debug_bvh_type")))
     params.bvh_type = BVH_TYPE_STATIC;
   else
     params.bvh_type = BVH_TYPE_DYNAMIC;

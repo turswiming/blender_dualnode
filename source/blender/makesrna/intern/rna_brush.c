@@ -16,6 +16,8 @@
 
 #include "BLI_math.h"
 
+#include "BLT_translation.h"
+
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
@@ -778,11 +780,11 @@ static void rna_Brush_set_size(PointerRNA *ptr, int value)
   brush->size = value;
 }
 
-static void rna_Brush_use_gradient_set(PointerRNA *ptr, bool value)
+static void rna_Brush_use_gradient_set(PointerRNA *ptr, int value)
 {
   Brush *br = (Brush *)ptr->data;
 
-  if (value) {
+  if (value & BRUSH_USE_GRADIENT) {
     br->flag |= BRUSH_USE_GRADIENT;
   }
   else {
@@ -1363,6 +1365,7 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, NULL, "draw_jitter");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(prop, "Jitter", "Jitter factor for new strokes");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_BRUSH);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
 
@@ -1859,6 +1862,12 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Trim Stroke Ends", "Trim intersecting stroke ends");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
+  prop = RNA_def_property(srna, "use_settings_outline", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_OUTLINE_STROKE);
+  RNA_def_property_boolean_default(prop, false);
+  RNA_def_property_ui_text(prop, "Outline", "Convert stroke to perimeter");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
   prop = RNA_def_property(srna, "direction", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_bitflag_sdna(prop, NULL, "sculpt_flag");
   RNA_def_property_enum_items(prop, prop_direction_items);
@@ -1919,6 +1928,15 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_BrushGpencilSettings_material_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK | PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Material", "Material used for strokes drawn using this brush");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_Brush_material_update");
+
+  /* Secondary Material */
+  prop = RNA_def_property(srna, "material_alt", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "Material");
+  RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_BrushGpencilSettings_material_poll");
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK | PROP_CONTEXT_UPDATE);
+  RNA_def_property_ui_text(prop, "Material", "Material used for secondary uses for this brush");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_Brush_material_update");
 
@@ -2630,6 +2648,7 @@ static void rna_def_brush(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0f, 1000.0f);
   RNA_def_property_ui_range(prop, 0.0f, 2.0f, 0.1, 4);
   RNA_def_property_ui_text(prop, "Jitter", "Jitter the position of the brush while painting");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_BRUSH);
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
   prop = RNA_def_property(srna, "jitter_absolute", PROP_INT, PROP_PIXEL);
@@ -2637,6 +2656,7 @@ static void rna_def_brush(BlenderRNA *brna)
   RNA_def_property_range(prop, 0, 1000000);
   RNA_def_property_ui_text(
       prop, "Jitter", "Jitter the position of the brush in pixels while painting");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_BRUSH);
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
   prop = RNA_def_property(srna, "spacing", PROP_INT, PROP_PERCENTAGE);

@@ -193,7 +193,7 @@ static int sculpt_mask_filter_exec(bContext *C, wmOperator *op)
   int num_verts = SCULPT_vertex_count_get(ss);
 
   BKE_pbvh_search_gather(pbvh, NULL, NULL, &nodes, &totnode);
-  SCULPT_undo_push_begin(ob, "Mask Filter");
+  SCULPT_undo_push_begin(ob, op);
 
   for (int i = 0; i < totnode; i++) {
     SCULPT_undo_push_node(ob, nodes[i], SCULPT_UNDO_MASK);
