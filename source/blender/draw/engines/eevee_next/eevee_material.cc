@@ -211,12 +211,14 @@ MaterialPass MaterialModule::material_pass_get(::Material *blender_mat,
   else {
     ShaderKey shader_key(matpass.gpumat, geometry_type, pipeline_type);
 
-    matpass.sub_pass = shader_map_.lookup_or_add_cb(shader_key, [&]() {
-      /* First time encountering this shader. Create a shading group. */
+    PassMain::Sub *shader_sub = shader_map_.lookup_or_add_cb(shader_key, [&]() {
+      /* First time encountering this shader. Create a sub that will contain materials using it. */
       return inst_.pipelines.material_add(blender_mat, matpass.gpumat, pipeline_type);
     });
 
-    if (matpass.sub_pass != nullptr) {
+    if (shader_sub != nullptr) {
+      /* Create a sub for this material as `shader_sub` is for sharing shader between materials. */
+      matpass.sub_pass = &shader_sub->sub(GPU_material_get_name(matpass.gpumat));
       matpass.sub_pass->material_set(*inst_.manager, matpass.gpumat);
     }
   }
@@ -243,7 +245,7 @@ Material &MaterialModule::material_sync(::Material *blender_mat,
   MaterialKey material_key(blender_mat, geometry_type, surface_pipe);
 
   /* TODO: allocate in blocks to avoid memory fragmentation. */
-  auto add_cb = [&]() { return new Material(); };
+  auto add_cb = []() { return new Material(); };
   Material &mat = *material_map_.lookup_or_add_cb(material_key, add_cb);
 
   if (mat.init == false) {
