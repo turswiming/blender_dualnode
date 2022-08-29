@@ -20,13 +20,11 @@ void write_draw_call(DrawGroup group, uint group_id)
   else {
     cmd._instance_first_array = group.start;
   }
-  /* NOTE: Set instance count to 0 if vertex count is 0 to avoid a crash in some drivers. */
-
   /* Back-facing command. */
-  cmd.instance_len = (cmd.vertex_len == 0) ? 0 : group_buf[group_id].back_facing_counter;
+  cmd.instance_len = group_buf[group_id].back_facing_counter;
   command_buf[group_id * 2 + 0] = cmd;
   /* Front-facing command. */
-  cmd.instance_len = (cmd.vertex_len == 0) ? 0 : group_buf[group_id].front_facing_counter;
+  cmd.instance_len = group_buf[group_id].front_facing_counter;
   command_buf[group_id * 2 + 1] = cmd;
 
   /* Reset the counters for a next command gen dispatch. Avoids resending the whole data just

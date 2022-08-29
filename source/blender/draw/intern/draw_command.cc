@@ -85,26 +85,28 @@ void DrawMulti::execute(RecordingState &state) const
 
   uint group_index = this->group_first;
   while (group_index != (uint)-1) {
-    const DrawGroup &grp = groups[group_index];
+    const DrawGroup &group = groups[group_index];
 
-    GPU_batch_set_shader(grp.gpu_batch, state.shader);
+    if (group.vertex_len > 0) {
+      GPU_batch_set_shader(group.gpu_batch, state.shader);
 
-    constexpr intptr_t stride = sizeof(DrawCommand);
-    /* We have 2 indirect command reserved per draw group. */
-    intptr_t offset = stride * group_index * 2;
+      constexpr intptr_t stride = sizeof(DrawCommand);
+      /* We have 2 indirect command reserved per draw group. */
+      intptr_t offset = stride * group_index * 2;
 
-    /* Draw negatively scaled geometry first. */
-    if (grp.len - grp.front_facing_len > 0) {
-      state.front_facing_set(true);
-      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset);
+      /* Draw negatively scaled geometry first. */
+      if (group.len - group.front_facing_len > 0) {
+        state.front_facing_set(true);
+        GPU_batch_draw_indirect(group.gpu_batch, indirect_buf, offset);
+      }
+
+      if (group.front_facing_len > 0) {
+        state.front_facing_set(false);
+        GPU_batch_draw_indirect(group.gpu_batch, indirect_buf, offset + stride);
+      }
     }
 
-    if (grp.front_facing_len > 0) {
-      state.front_facing_set(false);
-      GPU_batch_draw_indirect(grp.gpu_batch, indirect_buf, offset + stride);
-    }
-
-    group_index = grp.next;
+    group_index = group.next;
   }
 }
 
@@ -545,11 +547,6 @@ void DrawMultiBuf::bind(RecordingState &state,
                                  &group.vertex_first,
                                  &group.base_index,
                                  &batch_inst_len);
-
-    /* Tag group as using index draw (changes indirect draw call structure). */
-    if (group.gpu_batch->elem != nullptr) {
-      group.base_index = -1;
-    }
 
     /* Instancing attributes are not supported using the new pipeline since we use the base
      * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
