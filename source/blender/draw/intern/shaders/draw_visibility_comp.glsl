@@ -38,9 +38,12 @@ void main()
       /* Not visible. */
       mask_visibility_bit();
     }
+#if 0 /* Still has some quirks for now. Would be nice to fix as it would remove a lot of false \
+         positive. */
     else if (intersect_view(box) == false) {
       /* Not visible. */
       mask_visibility_bit();
     }
+#endif
   }
 }
