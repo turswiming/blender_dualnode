@@ -494,7 +494,9 @@ void DrawCommandBuf::bind(RecordingState &state,
      * instance to set the correct resource_id. Workaround is a storage_buf + gl_InstanceID. */
     BLI_assert(batch_inst_len == 1);
 
-    cmd.vertex_len = max_ii(cmd.vertex_len, batch_vert_len);
+    if (cmd.vertex_len == (uint)-1) {
+      cmd.vertex_len = batch_vert_len;
+    }
 
     if (cmd.handle.raw > 0) {
       /* Save correct offset to start of resource_id buffer region for this draw. */
@@ -546,7 +548,7 @@ void DrawMultiBuf::bind(RecordingState &state,
 
     /* Tag group as using index draw (changes indirect draw call structure). */
     if (group.gpu_batch->elem != nullptr) {
-      group.vertex_len = -group.vertex_len;
+      group.base_index = -1;
     }
 
     /* Instancing attributes are not supported using the new pipeline since we use the base
