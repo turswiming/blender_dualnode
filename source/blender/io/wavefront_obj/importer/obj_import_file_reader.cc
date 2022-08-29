@@ -406,8 +406,7 @@ static void use_all_vertices_if_no_faces(Geometry *geom,
             all_geometries.begin(), all_geometries.end(), [](const std::unique_ptr<Geometry> &g) {
               return g->get_vertex_count() == 0;
             })) {
-      geom->track_vertex_index(0);
-      geom->track_vertex_index(global_vertices.vertices.size() - 1);
+      geom->track_all_vertices(global_vertices.vertices.size());
     }
   }
 }
@@ -749,7 +748,7 @@ MTLParser::MTLParser(StringRefNull mtl_library, StringRefNull obj_filepath)
 {
   char obj_file_dir[FILE_MAXDIR];
   BLI_split_dir_part(obj_filepath.data(), obj_file_dir, FILE_MAXDIR);
-  BLI_path_join(mtl_file_path_, FILE_MAX, obj_file_dir, mtl_library.data(), NULL);
+  BLI_path_join(mtl_file_path_, FILE_MAX, obj_file_dir, mtl_library.data(), nullptr);
   BLI_split_dir_part(mtl_file_path_, mtl_dir_path_, FILE_MAXDIR);
 }
 

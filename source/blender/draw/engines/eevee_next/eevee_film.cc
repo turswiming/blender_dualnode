@@ -389,9 +389,8 @@ void Film::sync()
   DRW_shgroup_uniform_texture_ref(grp, "combined_tx", &combined_final_tx_);
   DRW_shgroup_uniform_texture_ref(grp, "normal_tx", &rbuffers.normal_tx);
   DRW_shgroup_uniform_texture_ref(grp, "vector_tx", &rbuffers.vector_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "diffuse_light_tx", &rbuffers.diffuse_light_tx);
+  DRW_shgroup_uniform_texture_ref(grp, "light_tx", &rbuffers.light_tx);
   DRW_shgroup_uniform_texture_ref(grp, "diffuse_color_tx", &rbuffers.diffuse_color_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "specular_light_tx", &rbuffers.specular_light_tx);
   DRW_shgroup_uniform_texture_ref(grp, "specular_color_tx", &rbuffers.specular_color_tx);
   DRW_shgroup_uniform_texture_ref(grp, "volume_light_tx", &rbuffers.volume_light_tx);
   DRW_shgroup_uniform_texture_ref(grp, "emission_tx", &rbuffers.emission_tx);
@@ -403,10 +402,10 @@ void Film::sync()
   /* NOTE(@fclem): 16 is the max number of sampled texture in many implementations.
    * If we need more, we need to pack more of the similar passes in the same textures as arrays or
    * use image binding instead. */
-  DRW_shgroup_uniform_image_ref(grp, "in_weight_img", &weight_src_tx_);
-  DRW_shgroup_uniform_image_ref(grp, "out_weight_img", &weight_dst_tx_);
-  DRW_shgroup_uniform_texture_ref_ex(grp, "in_combined_tx", &combined_src_tx_, filter);
-  DRW_shgroup_uniform_image_ref(grp, "out_combined_img", &combined_dst_tx_);
+  DRW_shgroup_uniform_image_ref(grp, "in_weight_img", &weight_tx_.current());
+  DRW_shgroup_uniform_image_ref(grp, "out_weight_img", &weight_tx_.next());
+  DRW_shgroup_uniform_texture_ref_ex(grp, "in_combined_tx", &combined_tx_.current(), filter);
+  DRW_shgroup_uniform_image_ref(grp, "out_combined_img", &combined_tx_.next());
   DRW_shgroup_uniform_image_ref(grp, "depth_img", &depth_tx_);
   DRW_shgroup_uniform_image_ref(grp, "color_accum_img", &color_accum_tx_);
   DRW_shgroup_uniform_image_ref(grp, "value_accum_img", &value_accum_tx_);
@@ -483,7 +482,7 @@ void Film::update_sample_table()
     data_.samples_weight_total = 1.0f;
     data_.samples_len = 1;
   }
-  /* NOTE: Threshold determined by hand until we don't hit the assert bellow. */
+  /* NOTE: Threshold determined by hand until we don't hit the assert below. */
   else if (data_.filter_radius < 2.20f) {
     /* Small filter Size. */
     int closest_index = 0;
@@ -563,12 +562,6 @@ void Film::accumulate(const DRWView *view, GPUTexture *combined_final_tx)
 
   combined_final_tx_ = combined_final_tx;
 
-  /* Need to update the static references as there could have change from a previous swap. */
-  weight_src_tx_ = weight_tx_.current();
-  weight_dst_tx_ = weight_tx_.next();
-  combined_src_tx_ = combined_tx_.current();
-  combined_dst_tx_ = combined_tx_.next();
-
   data_.display_only = false;
   data_.push_update();
 
@@ -596,12 +589,6 @@ void Film::display()
   GPU_framebuffer_viewport_set(dfbl->default_fb, UNPACK2(data_.offset), UNPACK2(data_.extent));
 
   combined_final_tx_ = inst_.render_buffers.combined_tx;
-
-  /* Need to update the static references as there could have change from a previous swap. */
-  weight_src_tx_ = weight_tx_.current();
-  weight_dst_tx_ = weight_tx_.next();
-  combined_src_tx_ = combined_tx_.current();
-  combined_dst_tx_ = combined_tx_.next();
 
   data_.display_only = true;
   data_.push_update();

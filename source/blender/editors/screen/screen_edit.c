@@ -110,7 +110,7 @@ ScrArea *area_split(const wmWindow *win,
     return NULL;
   }
 
-  /* NOTE(campbell): regarding (fac > 0.5f) checks below.
+  /* NOTE(@campbellbarton): regarding (fac > 0.5f) checks below.
    * normally it shouldn't matter which is used since the copy should match the original
    * however with viewport rendering and python console this isn't the case. */
 
@@ -580,7 +580,7 @@ static void region_cursor_set(wmWindow *win, bool swin_changed)
   }
 }
 
-void ED_screen_do_listen(bContext *C, wmNotifier *note)
+void ED_screen_do_listen(bContext *C, const wmNotifier *note)
 {
   wmWindow *win = CTX_wm_window(C);
   bScreen *screen = CTX_wm_screen(C);

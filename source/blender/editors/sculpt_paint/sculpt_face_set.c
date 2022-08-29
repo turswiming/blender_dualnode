@@ -224,7 +224,7 @@ static void do_relax_face_sets_brush_task_cb_ex(void *__restrict userdata,
 
     SCULPT_relax_vertex(ss, &vd, fade * bstrength, relax_face_sets, vd.co);
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
+      BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -326,7 +326,7 @@ static int sculpt_face_set_create_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  SCULPT_undo_push_begin(ob, "face set change");
+  SCULPT_undo_push_begin(ob, op);
   SCULPT_undo_push_node(ob, nodes[0], SCULPT_UNDO_FACE_SETS);
 
   const int next_face_set = SCULPT_face_set_next_available_get(ss);
@@ -716,7 +716,7 @@ static int sculpt_face_set_init_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  SCULPT_undo_push_begin(ob, "face set change");
+  SCULPT_undo_push_begin(ob, op);
   SCULPT_undo_push_node(ob, nodes[0], SCULPT_UNDO_FACE_SETS);
 
   const float threshold = RNA_float_get(op->ptr, "threshold");
@@ -865,7 +865,7 @@ static int sculpt_face_sets_change_visibility_exec(bContext *C, wmOperator *op)
   const int mode = RNA_enum_get(op->ptr, "mode");
   const int active_face_set = SCULPT_active_face_set_get(ss);
 
-  SCULPT_undo_push_begin(ob, "Hide area");
+  SCULPT_undo_push_begin(ob, op);
 
   PBVH *pbvh = ob->sculpt->pbvh;
   PBVHNode **nodes;
@@ -1326,9 +1326,10 @@ static void sculpt_face_set_edit_modify_geometry(bContext *C,
                                                  Object *ob,
                                                  const int active_face_set,
                                                  const eSculptFaceSetEditMode mode,
-                                                 const bool modify_hidden)
+                                                 const bool modify_hidden,
+                                                 wmOperator *op)
 {
-  ED_sculpt_undo_geometry_begin(ob, "edit face set delete geometry");
+  ED_sculpt_undo_geometry_begin(ob, op);
   sculpt_face_set_apply_edit(ob, abs(active_face_set), mode, modify_hidden);
   ED_sculpt_undo_geometry_end(ob);
   BKE_mesh_batch_cache_dirty_tag(ob->data, BKE_MESH_BATCH_DIRTY_ALL);
@@ -1358,7 +1359,8 @@ static void face_set_edit_do_post_visibility_updates(Object *ob, PBVHNode **node
 static void sculpt_face_set_edit_modify_face_sets(Object *ob,
                                                   const int active_face_set,
                                                   const eSculptFaceSetEditMode mode,
-                                                  const bool modify_hidden)
+                                                  const bool modify_hidden,
+                                                  wmOperator *op)
 {
   PBVH *pbvh = ob->sculpt->pbvh;
   PBVHNode **nodes;
@@ -1368,7 +1370,7 @@ static void sculpt_face_set_edit_modify_face_sets(Object *ob,
   if (!nodes) {
     return;
   }
-  SCULPT_undo_push_begin(ob, "face set edit");
+  SCULPT_undo_push_begin(ob, op);
   SCULPT_undo_push_node(ob, nodes[0], SCULPT_UNDO_FACE_SETS);
   sculpt_face_set_apply_edit(ob, abs(active_face_set), mode, modify_hidden);
   SCULPT_undo_push_end(ob);
@@ -1379,7 +1381,8 @@ static void sculpt_face_set_edit_modify_face_sets(Object *ob,
 static void sculpt_face_set_edit_modify_coordinates(bContext *C,
                                                     Object *ob,
                                                     const int active_face_set,
-                                                    const eSculptFaceSetEditMode mode)
+                                                    const eSculptFaceSetEditMode mode,
+                                                    wmOperator *op)
 {
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
   SculptSession *ss = ob->sculpt;
@@ -1387,7 +1390,7 @@ static void sculpt_face_set_edit_modify_coordinates(bContext *C,
   PBVHNode **nodes;
   int totnode;
   BKE_pbvh_search_gather(pbvh, NULL, NULL, &nodes, &totnode);
-  SCULPT_undo_push_begin(ob, "face set edit");
+  SCULPT_undo_push_begin(ob, op);
   for (int i = 0; i < totnode; i++) {
     BKE_pbvh_node_mark_update(nodes[i]);
     SCULPT_undo_push_node(ob, nodes[i], SCULPT_UNDO_COORDS);
@@ -1430,15 +1433,15 @@ static int sculpt_face_set_edit_invoke(bContext *C, wmOperator *op, const wmEven
 
   switch (mode) {
     case SCULPT_FACE_SET_EDIT_DELETE_GEOMETRY:
-      sculpt_face_set_edit_modify_geometry(C, ob, active_face_set, mode, modify_hidden);
+      sculpt_face_set_edit_modify_geometry(C, ob, active_face_set, mode, modify_hidden, op);
       break;
     case SCULPT_FACE_SET_EDIT_GROW:
     case SCULPT_FACE_SET_EDIT_SHRINK:
-      sculpt_face_set_edit_modify_face_sets(ob, active_face_set, mode, modify_hidden);
+      sculpt_face_set_edit_modify_face_sets(ob, active_face_set, mode, modify_hidden, op);
       break;
     case SCULPT_FACE_SET_EDIT_FAIR_POSITIONS:
     case SCULPT_FACE_SET_EDIT_FAIR_TANGENCY:
-      sculpt_face_set_edit_modify_coordinates(C, ob, active_face_set, mode);
+      sculpt_face_set_edit_modify_coordinates(C, ob, active_face_set, mode, op);
       break;
   }
 

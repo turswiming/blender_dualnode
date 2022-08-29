@@ -139,9 +139,6 @@ static void sculpt_expand_task_cb(void *__restrict userdata,
       }
 
       if (*vd.mask != final_mask) {
-        if (vd.mvert) {
-          BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
-        }
         *vd.mask = final_mask;
         BKE_pbvh_node_mark_update_mask(node);
       }
@@ -364,7 +361,7 @@ static int sculpt_mask_expand_invoke(bContext *C, wmOperator *op, const wmEvent 
 
   BKE_pbvh_search_gather(pbvh, NULL, NULL, &ss->filter_cache->nodes, &ss->filter_cache->totnode);
 
-  SCULPT_undo_push_begin(ob, "Mask Expand");
+  SCULPT_undo_push_begin(ob, op);
 
   if (create_face_set) {
     SCULPT_undo_push_node(ob, ss->filter_cache->nodes[0], SCULPT_UNDO_FACE_SETS);

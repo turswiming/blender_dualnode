@@ -359,8 +359,7 @@ static void oldnewmap_insert(OldNewMap *onm, const void *oldaddr, void *newaddr,
   oldnewmap_insert_or_replace(onm, entry);
 }
 
-static void oldnewmap_lib_insert(
-    FileData *fd, const void *oldaddr, ID *newaddr, int nr)
+static void oldnewmap_lib_insert(FileData *fd, const void *oldaddr, ID *newaddr, int nr)
 {
   oldnewmap_insert(fd->libmap, oldaddr, newaddr, nr);
 }
@@ -2631,9 +2630,6 @@ static void lib_link_workspace_layout_restore(struct IDNameLib_Map *id_map,
         }
         else if (sl->spacetype == SPACE_OUTLINER) {
           SpaceOutliner *space_outliner = (SpaceOutliner *)sl;
-
-          space_outliner->search_tse.id = restore_pointer_by_name(
-              id_map, space_outliner->search_tse.id, USER_IGNORE);
 
           if (space_outliner->treestore) {
             TreeStoreElem *tselem;

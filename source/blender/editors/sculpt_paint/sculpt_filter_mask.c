@@ -162,9 +162,6 @@ static void mask_filter_task_cb(void *__restrict userdata,
     if (*vd.mask != prev_val) {
       update = true;
     }
-    if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
-    }
   }
   BKE_pbvh_vertex_iter_end;
 
@@ -196,7 +193,7 @@ static int sculpt_mask_filter_exec(bContext *C, wmOperator *op)
   int num_verts = SCULPT_vertex_count_get(ss);
 
   BKE_pbvh_search_gather(pbvh, NULL, NULL, &nodes, &totnode);
-  SCULPT_undo_push_begin(ob, "Mask Filter");
+  SCULPT_undo_push_begin(ob, op);
 
   for (int i = 0; i < totnode; i++) {
     SCULPT_undo_push_node(ob, nodes[i], SCULPT_UNDO_MASK);
@@ -387,10 +384,6 @@ static void dirty_mask_apply_task_cb(void *__restrict userdata,
       mask = fminf(mask, 0.5f) * 2.0f;
     }
     *vd.mask = CLAMPIS(mask, 0.0f, 1.0f);
-
-    if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.vertex);
-    }
   }
   BKE_pbvh_vertex_iter_end;
   BKE_pbvh_node_mark_update_mask(node);
@@ -416,7 +409,7 @@ static int sculpt_dirty_mask_exec(bContext *C, wmOperator *op)
   }
 
   BKE_pbvh_search_gather(pbvh, NULL, NULL, &nodes, &totnode);
-  SCULPT_undo_push_begin(ob, "Dirty Mask");
+  SCULPT_undo_push_begin(ob, op);
 
   for (int i = 0; i < totnode; i++) {
     SCULPT_undo_push_node(ob, nodes[i], SCULPT_UNDO_MASK);
