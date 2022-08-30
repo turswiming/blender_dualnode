@@ -125,6 +125,7 @@ static void test_draw_pass_sub_ordering()
   expected << "  .push_constant(-1, data=1)" << std::endl;
   expected << "  .Sub1" << std::endl;
   expected << "    .push_constant(-1, data=11)" << std::endl;
+  expected << "    .push_constant(-1, data=12)" << std::endl;
   expected << "  .Sub2" << std::endl;
   expected << "    .push_constant(-1, data=21)" << std::endl;
   expected << "    .push_constant(-1, data=22)" << std::endl;

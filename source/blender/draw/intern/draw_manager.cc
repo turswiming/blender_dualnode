@@ -78,6 +78,9 @@ void Manager::end_sync()
 void Manager::debug_bind()
 {
 #ifdef DEBUG
+  if (DST.debug == nullptr) {
+    return;
+  }
   GPU_storagebuf_bind(drw_debug_gpu_draw_buf_get(), DRW_DEBUG_DRAW_SLOT);
   GPU_storagebuf_bind(drw_debug_gpu_print_buf_get(), DRW_DEBUG_PRINT_SLOT);
 #  ifndef DISABLE_DEBUG_SHADER_PRINT_BARRIER

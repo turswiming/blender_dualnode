@@ -36,6 +36,9 @@ void ShaderBind::execute(RecordingState &state) const
 
 void ResourceBind::execute() const
 {
+  if (slot == -1) {
+    return;
+  }
   switch (type) {
     case ResourceBind::Type::Sampler:
       GPU_texture_bind_ex(is_reference ? *texture_ref : texture, sampler, slot, false);
@@ -54,6 +57,9 @@ void ResourceBind::execute() const
 
 void PushConstant::execute(RecordingState &state) const
 {
+  if (location == -1) {
+    return;
+  }
   switch (type) {
     case PushConstant::Type::IntValue:
       GPU_shader_uniform_vector_int(state.shader, location, comp_len, array_len, int4_value);

@@ -116,7 +116,8 @@ enum eObjectInfoFlag {
   OBJECT_FROM_SET = (1u << 2u),
   OBJECT_ACTIVE = (1u << 3u),
   OBJECT_NEGATIVE_SCALE = (1u << 4u),
-  OBJECT_NO_INFO = 0xFFFFFFFFu
+  /* Avoid skipped info to change culling. */
+  OBJECT_NO_INFO = ~OBJECT_NEGATIVE_SCALE
 };
 
 struct ObjectInfos {

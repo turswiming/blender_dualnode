@@ -811,16 +811,12 @@ template<class T> inline void PassBase<T>::bind(int slot, GPUUniformBuf *buffer)
 template<class T>
 inline void PassBase<T>::bind(int slot, GPUTexture *texture, eGPUSamplerState state)
 {
-  if (slot != -1) {
-    create_command(Type::ResourceBind).resource_bind = {slot, texture, state};
-  }
+  create_command(Type::ResourceBind).resource_bind = {slot, texture, state};
 }
 
 template<class T> inline void PassBase<T>::bind(int slot, draw::Image *image)
 {
-  if (slot != -1) {
-    create_command(Type::ResourceBind).resource_bind = {slot, image};
-  }
+  create_command(Type::ResourceBind).resource_bind = {slot, image};
 }
 
 template<class T> inline void PassBase<T>::bind(const char *name, GPUStorageBuf **buffer)

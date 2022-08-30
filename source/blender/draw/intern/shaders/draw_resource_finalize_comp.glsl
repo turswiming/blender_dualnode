@@ -22,6 +22,10 @@ void main()
     vec3 p01 = bounds.bounding_corners[1].xyz - p0;
     vec3 p02 = bounds.bounding_corners[2].xyz - p0;
     vec3 p03 = bounds.bounding_corners[3].xyz - p0;
+    /* Avoid flat box. */
+    p01.x = max(p01.x, 1e-4);
+    p02.y = max(p02.y, 1e-4);
+    p03.z = max(p03.z, 1e-4);
     vec3 diagonal = p01 + p02 + p03;
     vec3 center = p0 + diagonal * 0.5;
     float min_axis = min_v3(abs(diagonal));
