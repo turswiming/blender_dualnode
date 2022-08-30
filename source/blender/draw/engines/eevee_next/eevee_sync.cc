@@ -91,7 +91,8 @@ static inline void geometry_call(PassMain::Sub *sub_pass,
 
 void SyncModule::sync_mesh(Object *ob, ObjectHandle &ob_handle, ResourceHandle res_handle)
 {
-  bool has_motion = inst_.velocity.step_object_sync(ob, ob_handle.object_key, ob_handle.recalc);
+  bool has_motion = inst_.velocity.step_object_sync(
+      ob, ob_handle.object_key, res_handle, ob_handle.recalc);
 
   MaterialArray &material_array = inst_.materials.material_array_get(ob, has_motion);
 
@@ -142,11 +143,13 @@ struct gpIterData {
   int vcount = 0;
   bool instancing = false;
 
-  gpIterData(Instance &inst_, Object *ob_, ObjectHandle &ob_handle)
+  gpIterData(Instance &inst_, Object *ob_, ObjectHandle &ob_handle, ResourceHandle resource_handle)
       : inst(inst_),
         ob(ob_),
         material_array(inst_.materials.material_array_get(
-            ob_, inst_.velocity.step_object_sync(ob, ob_handle.object_key, ob_handle.recalc)))
+            ob_,
+            inst_.velocity.step_object_sync(
+                ob, ob_handle.object_key, resource_handle, ob_handle.recalc)))
   {
     cfra = DEG_get_ctime(inst.depsgraph);
   };
@@ -248,7 +251,7 @@ void SyncModule::sync_gpencil(Object *ob, ObjectHandle &ob_handle, ResourceHandl
   }
   UNUSED_VARS(res_handle);
 
-  gpIterData iter(inst_, ob, ob_handle);
+  gpIterData iter(inst_, ob, ob_handle, res_handle);
 
   BKE_gpencil_visible_stroke_iter((bGPdata *)ob->data, nullptr, gpencil_stroke_sync, &iter);
 
