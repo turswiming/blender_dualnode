@@ -212,10 +212,10 @@ class PassBase {
    * NOTE: If needed, the resource id need to also be set accordingly in the DrawCommand.
    */
   void draw_indirect(GPUBatch *batch,
-                     StorageBuffer<DrawCommand> &indirect_buffer,
+                     StorageBuffer<DrawCommand, true> &indirect_buffer,
                      ResourceHandle handle = {0});
   void draw_procedural_indirect(GPUPrimType primitive,
-                                StorageBuffer<DrawCommand> &indirect_buffer,
+                                StorageBuffer<DrawCommand, true> &indirect_buffer,
                                 ResourceHandle handle = {0});
 
   /**
@@ -618,7 +618,7 @@ inline void PassBase<T>::draw_procedural(GPUPrimType primitive,
 
 template<class T>
 inline void PassBase<T>::draw_indirect(GPUBatch *batch,
-                                       StorageBuffer<DrawCommand> &indirect_buffer,
+                                       StorageBuffer<DrawCommand, true> &indirect_buffer,
                                        ResourceHandle handle)
 {
   BLI_assert(shader_);
@@ -626,9 +626,10 @@ inline void PassBase<T>::draw_indirect(GPUBatch *batch,
 }
 
 template<class T>
-inline void PassBase<T>::draw_procedural_indirect(GPUPrimType primitive,
-                                                  StorageBuffer<DrawCommand> &indirect_buffer,
-                                                  ResourceHandle handle)
+inline void PassBase<T>::draw_procedural_indirect(
+    GPUPrimType primitive,
+    StorageBuffer<DrawCommand, true> &indirect_buffer,
+    ResourceHandle handle)
 {
   draw_indirect(procedural_batch_get(primitive), indirect_buffer, handle);
 }
