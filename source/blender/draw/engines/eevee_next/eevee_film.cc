@@ -380,34 +380,34 @@ void Film::sync()
   accumulate_ps_.init();
   accumulate_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_ALWAYS);
   accumulate_ps_.shader_set(inst_.shaders.static_shader_get(shader));
-  accumulate_ps_.bind("film_buf", &data_);
-  accumulate_ps_.bind("camera_prev", &(*velocity.camera_steps[STEP_PREVIOUS]));
-  accumulate_ps_.bind("camera_curr", &(*velocity.camera_steps[STEP_CURRENT]));
-  accumulate_ps_.bind("camera_next", &(*velocity.camera_steps[step_next]));
-  accumulate_ps_.bind("depth_tx", &rbuffers.depth_tx);
-  accumulate_ps_.bind("combined_tx", &combined_final_tx_);
-  accumulate_ps_.bind("normal_tx", &rbuffers.normal_tx);
-  accumulate_ps_.bind("vector_tx", &rbuffers.vector_tx);
-  accumulate_ps_.bind("light_tx", &rbuffers.light_tx);
-  accumulate_ps_.bind("diffuse_color_tx", &rbuffers.diffuse_color_tx);
-  accumulate_ps_.bind("specular_color_tx", &rbuffers.specular_color_tx);
-  accumulate_ps_.bind("volume_light_tx", &rbuffers.volume_light_tx);
-  accumulate_ps_.bind("emission_tx", &rbuffers.emission_tx);
-  accumulate_ps_.bind("environment_tx", &rbuffers.environment_tx);
-  accumulate_ps_.bind("shadow_tx", &rbuffers.shadow_tx);
-  accumulate_ps_.bind("ambient_occlusion_tx", &rbuffers.ambient_occlusion_tx);
-  accumulate_ps_.bind("aov_color_tx", &rbuffers.aov_color_tx);
-  accumulate_ps_.bind("aov_value_tx", &rbuffers.aov_value_tx);
+  accumulate_ps_.bind_ubo("film_buf", &data_);
+  accumulate_ps_.bind_ubo("camera_prev", &(*velocity.camera_steps[STEP_PREVIOUS]));
+  accumulate_ps_.bind_ubo("camera_curr", &(*velocity.camera_steps[STEP_CURRENT]));
+  accumulate_ps_.bind_ubo("camera_next", &(*velocity.camera_steps[step_next]));
+  accumulate_ps_.bind_texture("depth_tx", &rbuffers.depth_tx);
+  accumulate_ps_.bind_texture("combined_tx", &combined_final_tx_);
+  accumulate_ps_.bind_texture("normal_tx", &rbuffers.normal_tx);
+  accumulate_ps_.bind_texture("vector_tx", &rbuffers.vector_tx);
+  accumulate_ps_.bind_texture("light_tx", &rbuffers.light_tx);
+  accumulate_ps_.bind_texture("diffuse_color_tx", &rbuffers.diffuse_color_tx);
+  accumulate_ps_.bind_texture("specular_color_tx", &rbuffers.specular_color_tx);
+  accumulate_ps_.bind_texture("volume_light_tx", &rbuffers.volume_light_tx);
+  accumulate_ps_.bind_texture("emission_tx", &rbuffers.emission_tx);
+  accumulate_ps_.bind_texture("environment_tx", &rbuffers.environment_tx);
+  accumulate_ps_.bind_texture("shadow_tx", &rbuffers.shadow_tx);
+  accumulate_ps_.bind_texture("ambient_occlusion_tx", &rbuffers.ambient_occlusion_tx);
+  accumulate_ps_.bind_texture("aov_color_tx", &rbuffers.aov_color_tx);
+  accumulate_ps_.bind_texture("aov_value_tx", &rbuffers.aov_value_tx);
   /* NOTE(@fclem): 16 is the max number of sampled texture in many implementations.
    * If we need more, we need to pack more of the similar passes in the same textures as arrays or
    * use image binding instead. */
-  accumulate_ps_.bind("in_weight_img", draw::as_image(&weight_tx_.current()));
-  accumulate_ps_.bind("out_weight_img", draw::as_image(&weight_tx_.next()));
-  accumulate_ps_.bind("in_combined_tx", &combined_tx_.current(), filter);
-  accumulate_ps_.bind("out_combined_img", draw::as_image(&combined_tx_.next()));
-  accumulate_ps_.bind("depth_img", draw::as_image(&depth_tx_));
-  accumulate_ps_.bind("color_accum_img", draw::as_image(&color_accum_tx_));
-  accumulate_ps_.bind("value_accum_img", draw::as_image(&value_accum_tx_));
+  accumulate_ps_.bind_image("in_weight_img", &weight_tx_.current());
+  accumulate_ps_.bind_image("out_weight_img", &weight_tx_.next());
+  accumulate_ps_.bind_texture("in_combined_tx", &combined_tx_.current(), filter);
+  accumulate_ps_.bind_image("out_combined_img", &combined_tx_.next());
+  accumulate_ps_.bind_image("depth_img", &depth_tx_);
+  accumulate_ps_.bind_image("color_accum_img", &color_accum_tx_);
+  accumulate_ps_.bind_image("value_accum_img", &value_accum_tx_);
   /* Sync with rendering passes. */
   accumulate_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH | GPU_BARRIER_SHADER_IMAGE_ACCESS);
   if (use_compute) {

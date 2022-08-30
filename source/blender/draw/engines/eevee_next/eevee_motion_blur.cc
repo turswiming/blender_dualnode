@@ -144,10 +144,10 @@ void MotionBlurModule::sync()
     eShaderType shader = (inst_.is_viewport()) ? MOTION_BLUR_TILE_FLATTEN_VIEWPORT :
                                                  MOTION_BLUR_TILE_FLATTEN_RENDER;
     sub.shader_set(inst_.shaders.static_shader_get(shader));
-    sub.bind("motion_blur_buf", data_);
-    sub.bind("depth_tx", &render_buffers.depth_tx);
-    sub.bind("velocity_img", as_image(&render_buffers.vector_tx));
-    sub.bind("out_tiles_img", as_image(&tiles_tx_));
+    sub.bind_ubo("motion_blur_buf", data_);
+    sub.bind_texture("depth_tx", &render_buffers.depth_tx);
+    sub.bind_image("velocity_img", &render_buffers.vector_tx);
+    sub.bind_image("out_tiles_img", &tiles_tx_);
     sub.dispatch(&dispatch_flatten_size_);
     sub.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH);
   }
@@ -155,8 +155,8 @@ void MotionBlurModule::sync()
     /* Expand max velocity tiles by spreading them in their neighborhood. */
     PassSimple::Sub &sub = motion_blur_ps_.sub("TilesDilate");
     sub.shader_set(inst_.shaders.static_shader_get(MOTION_BLUR_TILE_DILATE));
-    sub.bind("tile_indirection_buf", tile_indirection_buf_);
-    sub.bind("in_tiles_img", as_image(&tiles_tx_));
+    sub.bind_ssbo("tile_indirection_buf", tile_indirection_buf_);
+    sub.bind_image("in_tiles_img", &tiles_tx_);
     sub.dispatch(&dispatch_dilate_size_);
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
@@ -164,13 +164,13 @@ void MotionBlurModule::sync()
     /* Do the motion blur gather algorithm. */
     PassSimple::Sub &sub = motion_blur_ps_.sub("ConvolveGather");
     sub.shader_set(inst_.shaders.static_shader_get(MOTION_BLUR_GATHER));
-    sub.bind("motion_blur_buf", data_);
-    sub.bind("tile_indirection_buf", tile_indirection_buf_);
-    sub.bind("depth_tx", &render_buffers.depth_tx, no_filter);
-    sub.bind("velocity_tx", &render_buffers.vector_tx, no_filter);
-    sub.bind("in_color_tx", &input_color_tx_, no_filter);
-    sub.bind("in_tiles_img", as_image(&tiles_tx_));
-    sub.bind("out_color_img", as_image(&output_color_tx_));
+    sub.bind_ubo("motion_blur_buf", data_);
+    sub.bind_ssbo("tile_indirection_buf", tile_indirection_buf_);
+    sub.bind_texture("depth_tx", &render_buffers.depth_tx, no_filter);
+    sub.bind_texture("velocity_tx", &render_buffers.vector_tx, no_filter);
+    sub.bind_texture("in_color_tx", &input_color_tx_, no_filter);
+    sub.bind_image("in_tiles_img", &tiles_tx_);
+    sub.bind_image("out_color_img", &output_color_tx_);
 
     sub.dispatch(&dispatch_gather_size_);
     sub.barrier(GPU_BARRIER_TEXTURE_FETCH);

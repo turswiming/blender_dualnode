@@ -78,8 +78,8 @@ class HiZBuffer {
   /* TODO(fclem): Hardcoded bind slots. */
   template<typename T> void bind_resources(draw::detail::PassBase<T> *pass)
   {
-    pass->bind("hiz_tx", &hiz_tx_);
-    pass->bind("hiz_buf", &data_);
+    pass->bind_texture("hiz_tx", &hiz_tx_);
+    pass->bind_ubo("hiz_buf", &data_);
   }
 };
 

@@ -153,10 +153,10 @@ class LightModule {
   template<typename T> void bind_resources(draw::detail::PassBase<T> *pass)
   {
     /* Storage Buf. */
-    pass->bind(LIGHT_CULL_BUF_SLOT, &culling_data_buf_);
-    pass->bind(LIGHT_BUF_SLOT, &culling_light_buf_);
-    pass->bind(LIGHT_ZBIN_BUF_SLOT, &culling_zbin_buf_);
-    pass->bind(LIGHT_TILE_BUF_SLOT, &culling_tile_buf_);
+    pass->bind_ssbo(LIGHT_CULL_BUF_SLOT, &culling_data_buf_);
+    pass->bind_ssbo(LIGHT_BUF_SLOT, &culling_light_buf_);
+    pass->bind_ssbo(LIGHT_ZBIN_BUF_SLOT, &culling_zbin_buf_);
+    pass->bind_ssbo(LIGHT_TILE_BUF_SLOT, &culling_tile_buf_);
   }
 
  private:

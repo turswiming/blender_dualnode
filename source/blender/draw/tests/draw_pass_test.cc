@@ -31,14 +31,14 @@ static void test_draw_pass_all_commands()
   pass.clear_color_depth_stencil(float4(0.25f, 0.5f, 100.0f, -2000.0f), 0.5f, 0xF0);
   pass.state_stencil(0x80, 0x0F, 0x8F);
   pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA));
-  pass.bind("image", tex);
-  pass.bind("image", &tex);
-  pass.bind("missing_image", as_image(tex));  /* Should not crash. */
-  pass.bind("missing_image", as_image(&tex)); /* Should not crash. */
-  pass.bind("missing_ubo", ubo);              /* Should not crash. */
-  pass.bind("missing_ubo", &ubo);             /* Should not crash. */
-  pass.bind("missing_ssbo", ssbo);            /* Should not crash. */
-  pass.bind("missing_ssbo", &ssbo);           /* Should not crash. */
+  pass.bind_texture("image", tex);
+  pass.bind_texture("image", &tex);
+  pass.bind_image("missing_image", tex);  /* Should not crash. */
+  pass.bind_image("missing_image", &tex); /* Should not crash. */
+  pass.bind_ubo("missing_ubo", ubo);      /* Should not crash. */
+  pass.bind_ubo("missing_ubo", &ubo);     /* Should not crash. */
+  pass.bind_ssbo("missing_ssbo", ssbo);   /* Should not crash. */
+  pass.bind_ssbo("missing_ssbo", &ssbo);  /* Should not crash. */
   pass.push_constant("alpha", alpha);
   pass.push_constant("alpha", &alpha);
   pass.push_constant("ModelViewProjectionMatrix", float4x4::identity());

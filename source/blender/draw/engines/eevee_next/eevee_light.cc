@@ -404,40 +404,40 @@ void LightModule::culling_pass_sync()
   {
     auto &sub = culling_ps_.sub("Select");
     sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_SELECT));
-    sub.bind("light_cull_buf", &culling_data_buf_);
-    sub.bind("in_light_buf", light_buf_);
-    sub.bind("out_light_buf", culling_light_buf_);
-    sub.bind("out_zdist_buf", culling_zdist_buf_);
-    sub.bind("out_key_buf", culling_key_buf_);
+    sub.bind_ssbo("light_cull_buf", &culling_data_buf_);
+    sub.bind_ssbo("in_light_buf", light_buf_);
+    sub.bind_ssbo("out_light_buf", culling_light_buf_);
+    sub.bind_ssbo("out_zdist_buf", culling_zdist_buf_);
+    sub.bind_ssbo("out_key_buf", culling_key_buf_);
     sub.dispatch(int3(culling_select_dispatch_size, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
   {
     auto &sub = culling_ps_.sub("Sort");
     sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_SORT));
-    sub.bind("light_cull_buf", &culling_data_buf_);
-    sub.bind("in_light_buf", light_buf_);
-    sub.bind("out_light_buf", culling_light_buf_);
-    sub.bind("in_zdist_buf", culling_zdist_buf_);
-    sub.bind("in_key_buf", culling_key_buf_);
+    sub.bind_ssbo("light_cull_buf", &culling_data_buf_);
+    sub.bind_ssbo("in_light_buf", light_buf_);
+    sub.bind_ssbo("out_light_buf", culling_light_buf_);
+    sub.bind_ssbo("in_zdist_buf", culling_zdist_buf_);
+    sub.bind_ssbo("in_key_buf", culling_key_buf_);
     sub.dispatch(int3(culling_sort_dispatch_size, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
   {
     auto &sub = culling_ps_.sub("Zbin");
     sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_ZBIN));
-    sub.bind("light_cull_buf", &culling_data_buf_);
-    sub.bind("light_buf", culling_light_buf_);
-    sub.bind("out_zbin_buf", culling_zbin_buf_);
+    sub.bind_ssbo("light_cull_buf", &culling_data_buf_);
+    sub.bind_ssbo("light_buf", culling_light_buf_);
+    sub.bind_ssbo("out_zbin_buf", culling_zbin_buf_);
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
   {
     auto &sub = culling_ps_.sub("Tiles");
     sub.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_TILE));
-    sub.bind("light_cull_buf", &culling_data_buf_);
-    sub.bind("light_buf", culling_light_buf_);
-    sub.bind("out_light_tile_buf", culling_tile_buf_);
+    sub.bind_ssbo("light_cull_buf", &culling_data_buf_);
+    sub.bind_ssbo("light_buf", culling_light_buf_);
+    sub.bind_ssbo("out_light_tile_buf", culling_tile_buf_);
     sub.dispatch(int3(culling_tile_dispatch_size, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
@@ -450,11 +450,11 @@ void LightModule::debug_pass_sync()
     debug_draw_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM);
     debug_draw_ps_.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_DEBUG));
     inst_.hiz_buffer.bind_resources(&debug_draw_ps_);
-    debug_draw_ps_.bind("light_buf", &culling_light_buf_);
-    debug_draw_ps_.bind("light_cull_buf", &culling_data_buf_);
-    debug_draw_ps_.bind("light_zbin_buf", &culling_zbin_buf_);
-    debug_draw_ps_.bind("light_tile_buf", &culling_tile_buf_);
-    debug_draw_ps_.bind("depth_tx", &inst_.render_buffers.depth_tx);
+    debug_draw_ps_.bind_ssbo("light_buf", &culling_light_buf_);
+    debug_draw_ps_.bind_ssbo("light_cull_buf", &culling_data_buf_);
+    debug_draw_ps_.bind_ssbo("light_zbin_buf", &culling_zbin_buf_);
+    debug_draw_ps_.bind_ssbo("light_tile_buf", &culling_tile_buf_);
+    debug_draw_ps_.bind_texture("depth_tx", &inst_.render_buffers.depth_tx);
     debug_draw_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
 }

@@ -34,16 +34,16 @@ void HiZBuffer::sync()
   {
     hiz_update_ps_.init();
     hiz_update_ps_.shader_set(inst_.shaders.static_shader_get(HIZ_UPDATE));
-    hiz_update_ps_.bind("finished_tile_counter", atomic_tile_counter_);
-    hiz_update_ps_.bind("depth_tx", &render_buffers.depth_tx, with_filter);
-    hiz_update_ps_.bind("out_mip_0", as_image(hiz_tx_.mip_view(0)));
-    hiz_update_ps_.bind("out_mip_1", as_image(hiz_tx_.mip_view(1)));
-    hiz_update_ps_.bind("out_mip_2", as_image(hiz_tx_.mip_view(2)));
-    hiz_update_ps_.bind("out_mip_3", as_image(hiz_tx_.mip_view(3)));
-    hiz_update_ps_.bind("out_mip_4", as_image(hiz_tx_.mip_view(4)));
-    hiz_update_ps_.bind("out_mip_5", as_image(hiz_tx_.mip_view(5)));
-    hiz_update_ps_.bind("out_mip_6", as_image(hiz_tx_.mip_view(6)));
-    hiz_update_ps_.bind("out_mip_7", as_image(hiz_tx_.mip_view(7)));
+    hiz_update_ps_.bind_ssbo("finished_tile_counter", atomic_tile_counter_);
+    hiz_update_ps_.bind_texture("depth_tx", &render_buffers.depth_tx, with_filter);
+    hiz_update_ps_.bind_image("out_mip_0", hiz_tx_.mip_view(0));
+    hiz_update_ps_.bind_image("out_mip_1", hiz_tx_.mip_view(1));
+    hiz_update_ps_.bind_image("out_mip_2", hiz_tx_.mip_view(2));
+    hiz_update_ps_.bind_image("out_mip_3", hiz_tx_.mip_view(3));
+    hiz_update_ps_.bind_image("out_mip_4", hiz_tx_.mip_view(4));
+    hiz_update_ps_.bind_image("out_mip_5", hiz_tx_.mip_view(5));
+    hiz_update_ps_.bind_image("out_mip_6", hiz_tx_.mip_view(6));
+    hiz_update_ps_.bind_image("out_mip_7", hiz_tx_.mip_view(7));
     /* TODO(@fclem): There might be occasions where we might not want to
      * copy mip 0 for performance reasons if there is no need for it. */
     hiz_update_ps_.push_constant("update_mip_0", true);
