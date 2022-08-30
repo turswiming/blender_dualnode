@@ -109,6 +109,10 @@ class Manager {
   void submit(PassSimple &pass, View &view);
   void submit(PassMain &pass, View &view);
   void submit(PassSortable &pass, View &view);
+  /**
+   * Variant without any view. Must not contain any shader using `draw_view` create info.
+   */
+  void submit(PassSimple &pass);
 
   /**
    * Submit a pass for drawing but read back all data buffers for inspection.

@@ -385,10 +385,7 @@ class DrawCommandBuf {
     commands[index].draw = {batch, instance_len, vertex_len, vertex_first, handle};
   }
 
-  void bind(RecordingState &state,
-            Vector<Header, 0> &headers,
-            Vector<Undetermined, 0> &commands,
-            VisibilityBuf &visibility_buf);
+  void bind(RecordingState &state, Vector<Header, 0> &headers, Vector<Undetermined, 0> &commands);
 };
 
 /** \} */
@@ -414,16 +411,16 @@ class DrawCommandBuf {
  * |                    Command1                   |    Command2   |  < Command::Header           |
  * |       GPUBatch1       |       GPUBatch2       |   GPUBatch1   |  < Command::MultiDraw        |
  * |   1   |   0       0   |   0       0       0   |   1       1   |  < Front facing inverted     |
- * |  MDI  |      MDI      |          MDI          |      MDI      |  < MultiDrawIndirect emitted |
+ * |  MDI  |      MDI      |          MDI          |      MDI      |  < DrawIndirect emitted |
  * +---------------------------------------------------------------+------------------------------+
  * |                       GPU Timeline                            |          Granularity         |
  * +---------------------------------------------------------------+------------------------------+
- * |   4   |   2       5   |   1   |   3       4   |   6       7   |  < Resource_id (sorted)      |
+ * |   4   |   2       5   |   1       3       4   |   6       7   |  < Resource_id (sorted)      |
  * |   1   |   1       1   |   1   |   0   |   1   |   1       1   |  < Visibility test result    |
  * |   4   |     2 + 5     |         1 + 4         |      6+7      |  < DrawCommand (compacted)   |
  * +---------------------------------------------------------------+------------------------------+
  *
- * In the example above, we will issue 4 multi draw indirect calls.
+ * In the example above, we will issue 4 draw indirect calls.
  *
  * \{ */
 

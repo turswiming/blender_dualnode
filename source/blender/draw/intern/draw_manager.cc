@@ -99,7 +99,7 @@ void Manager::submit(PassSimple &pass, View &view)
   command::RecordingState state;
   state.inverted_view = view.is_inverted();
 
-  pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_, view.visibility_buf_);
+  pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_);
 
   GPU_storagebuf_bind(matrix_buf, DRW_OBJ_MAT_SLOT);
   GPU_storagebuf_bind(infos_buf, DRW_OBJ_INFOS_SLOT);
@@ -140,6 +140,23 @@ void Manager::submit(PassSortable &pass, View &view)
   pass.sort();
 
   this->submit(static_cast<PassMain &>(pass), view);
+}
+
+void Manager::submit(PassSimple &pass)
+{
+  debug_bind();
+
+  command::RecordingState state;
+
+  pass.draw_commands_buf_.bind(state, pass.headers_, pass.commands_);
+
+  GPU_storagebuf_bind(matrix_buf, DRW_OBJ_MAT_SLOT);
+  GPU_storagebuf_bind(infos_buf, DRW_OBJ_INFOS_SLOT);
+  // GPU_storagebuf_bind(attribute_buf, DRW_OBJ_ATTR_SLOT); /* TODO */
+
+  pass.submit(state);
+
+  state.cleanup();
 }
 
 Manager::SubmitDebugOutput Manager::submit_debug(PassSimple &pass, View &view)
