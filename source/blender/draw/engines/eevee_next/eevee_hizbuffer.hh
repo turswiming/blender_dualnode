@@ -36,9 +36,9 @@ class HiZBuffer {
    */
   draw::StorageBuffer<uint4, true> atomic_tile_counter_ = {"atomic_tile_counter"};
   /** Single pass recursive downsample. */
-  DRWPass *hiz_update_ps_ = nullptr;
+  PassSimple hiz_update_ps_ = {"HizUpdate"};
   /** Debug pass. */
-  DRWPass *debug_draw_ps_ = nullptr;
+  PassSimple debug_draw_ps_ = {"HizUpdate.Debug"};
   /** Dirty flag to check if the update is necessary. */
   bool is_dirty_ = true;
 
@@ -73,6 +73,13 @@ class HiZBuffer {
   {
     DRW_shgroup_uniform_texture_ref(grp, "hiz_tx", &hiz_tx_);
     DRW_shgroup_uniform_block_ref(grp, "hiz_buf", &data_);
+  }
+
+  /* TODO(fclem): Hardcoded bind slots. */
+  template<typename T> void bind_resources(draw::detail::PassBase<T> *pass)
+  {
+    pass->bind("hiz_tx", &hiz_tx_);
+    pass->bind("hiz_buf", &data_);
   }
 };
 
