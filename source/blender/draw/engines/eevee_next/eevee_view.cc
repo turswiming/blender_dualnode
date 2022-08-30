@@ -158,7 +158,7 @@ GPUTexture *ShadingView::render_postfx(GPUTexture *input_tx)
 
   /* Swapping is done internally. Actual output is set to the next input. */
   inst_.depth_of_field.render(render_view_new_, &input_tx, &output_tx, dof_buffer_);
-  inst_.motion_blur.render(&input_tx, &output_tx);
+  inst_.motion_blur.render(render_view_new_, &input_tx, &output_tx);
 
   return input_tx;
 }
