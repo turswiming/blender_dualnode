@@ -145,9 +145,6 @@ MaterialModule::MaterialModule(Instance &inst) : inst_(inst)
 
 MaterialModule::~MaterialModule()
 {
-  for (Material *mat : material_map_.values()) {
-    delete mat;
-  }
   BKE_id_free(nullptr, glossy_mat);
   BKE_id_free(nullptr, diffuse_mat);
   BKE_id_free(nullptr, error_mat_);
@@ -157,13 +154,12 @@ void MaterialModule::begin_sync()
 {
   queued_shaders_count = 0;
 
-  for (Material *mat : material_map_.values()) {
-    mat->init = false;
-  }
+  material_map_.clear();
   shader_map_.clear();
 }
 
-MaterialPass MaterialModule::material_pass_get(::Material *blender_mat,
+MaterialPass MaterialModule::material_pass_get(Object *ob,
+                                               ::Material *blender_mat,
                                                eMaterialPipeline pipeline_type,
                                                eMaterialGeometry geometry_type)
 {
@@ -203,17 +199,20 @@ MaterialPass MaterialModule::material_pass_get(::Material *blender_mat,
     pipeline_type = MAT_PIPE_FORWARD;
   }
 
-  if ((pipeline_type == MAT_PIPE_FORWARD) &&
+  if (ELEM(pipeline_type,
+           MAT_PIPE_FORWARD,
+           MAT_PIPE_FORWARD_PREPASS,
+           MAT_PIPE_FORWARD_PREPASS_VELOCITY) &&
       GPU_material_flag_get(matpass.gpumat, GPU_MATFLAG_TRANSPARENT)) {
-    /* Transparent needs to use one shgroup per object to support reordering. */
-    matpass.sub_pass = inst_.pipelines.material_add(blender_mat, matpass.gpumat, pipeline_type);
+    /* Transparent pass is generated later. */
+    matpass.sub_pass = nullptr;
   }
   else {
     ShaderKey shader_key(matpass.gpumat, geometry_type, pipeline_type);
 
     PassMain::Sub *shader_sub = shader_map_.lookup_or_add_cb(shader_key, [&]() {
       /* First time encountering this shader. Create a sub that will contain materials using it. */
-      return inst_.pipelines.material_add(blender_mat, matpass.gpumat, pipeline_type);
+      return inst_.pipelines.material_add(ob, blender_mat, matpass.gpumat, pipeline_type);
     });
 
     if (shader_sub != nullptr) {
@@ -226,7 +225,8 @@ MaterialPass MaterialModule::material_pass_get(::Material *blender_mat,
   return matpass;
 }
 
-Material &MaterialModule::material_sync(::Material *blender_mat,
+Material &MaterialModule::material_sync(Object *ob,
+                                        ::Material *blender_mat,
                                         eMaterialGeometry geometry_type,
                                         bool has_motion)
 {
@@ -244,26 +244,32 @@ Material &MaterialModule::material_sync(::Material *blender_mat,
 
   MaterialKey material_key(blender_mat, geometry_type, surface_pipe);
 
-  /* TODO: allocate in blocks to avoid memory fragmentation. */
-  auto add_cb = []() { return new Material(); };
-  Material &mat = *material_map_.lookup_or_add_cb(material_key, add_cb);
-
-  if (mat.init == false) {
-    mat.init = true;
+  Material &mat = material_map_.lookup_or_add_cb(material_key, [&]() {
+    Material mat;
     /* Order is important for transparent. */
-    mat.prepass = material_pass_get(blender_mat, prepass_pipe, geometry_type);
-    mat.shading = material_pass_get(blender_mat, surface_pipe, geometry_type);
+    mat.prepass = material_pass_get(ob, blender_mat, prepass_pipe, geometry_type);
+    mat.shading = material_pass_get(ob, blender_mat, surface_pipe, geometry_type);
     if (blender_mat->blend_shadow == MA_BS_NONE) {
       mat.shadow = MaterialPass();
     }
     else {
-      mat.shadow = material_pass_get(blender_mat, MAT_PIPE_SHADOW, geometry_type);
+      mat.shadow = material_pass_get(ob, blender_mat, MAT_PIPE_SHADOW, geometry_type);
     }
-
     mat.is_alpha_blend_transparent = (blender_mat->blend_method == MA_BM_BLEND) &&
-                                     GPU_material_flag_get(mat.prepass.gpumat,
+                                     GPU_material_flag_get(mat.shading.gpumat,
                                                            GPU_MATFLAG_TRANSPARENT);
+    return mat;
+  });
+
+  if (mat.is_alpha_blend_transparent) {
+    /* Transparent needs to use one sub pass per object to support reordering.
+     * NOTE: Pre-pass needs to be created first in order to be sorted first. */
+    mat.prepass.sub_pass = inst_.pipelines.forward.prepass_transparent_add(
+        ob, blender_mat, mat.shading.gpumat);
+    mat.shading.sub_pass = inst_.pipelines.forward.material_transparent_add(
+        ob, blender_mat, mat.shading.gpumat);
   }
+
   return mat;
 }
 
@@ -291,7 +297,7 @@ MaterialArray &MaterialModule::material_array_get(Object *ob, bool has_motion)
 
   for (auto i : IndexRange(materials_len)) {
     ::Material *blender_mat = material_from_slot(ob, i);
-    Material &mat = material_sync(blender_mat, to_material_geometry(ob), has_motion);
+    Material &mat = material_sync(ob, blender_mat, to_material_geometry(ob), has_motion);
     material_array_.materials.append(&mat);
     material_array_.gpu_materials.append(mat.shading.gpumat);
   }
@@ -304,7 +310,7 @@ Material &MaterialModule::material_get(Object *ob,
                                        eMaterialGeometry geometry_type)
 {
   ::Material *blender_mat = material_from_slot(ob, mat_nr);
-  Material &mat = material_sync(blender_mat, geometry_type, has_motion);
+  Material &mat = material_sync(ob, blender_mat, geometry_type, has_motion);
   return mat;
 }
 

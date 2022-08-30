@@ -65,6 +65,8 @@ void WorldPipeline::render(View &view)
 
 void ForwardPipeline::sync()
 {
+  camera_forward_ = inst_.camera.forward();
+
   DRWState state_depth_only = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS;
   DRWState state_depth_color = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS |
                                DRW_STATE_WRITE_COLOR;
@@ -125,9 +127,18 @@ void ForwardPipeline::sync()
     opaque_double_sided_ps_->state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL);
   }
   {
-    /* TODO: Transparent pass needs sorting. */
-    // DRWState state = DRW_STATE_DEPTH_LESS_EQUAL;
-    // transparent_ps_ = DRW_pass_create("Forward.Transparent", state);
+    transparent_ps_.init();
+    /* Workaround limitation of PassSortable. Use dummy pass that will be sorted first in all
+     * circumstances. */
+    PassMain::Sub &sub = transparent_ps_.sub("ResourceBind", -FLT_MAX);
+
+    /* Common resources. */
+
+    /* Textures. */
+    sub.bind(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
+
+    inst_.lights.bind_resources(&sub);
+    inst_.sampling.bind_resources(&sub);
   }
 }
 
@@ -150,94 +161,37 @@ PassMain::Sub *ForwardPipeline::material_opaque_add(::Material *blender_mat, GPU
   return &pass->sub(GPU_material_get_name(gpumat));
 }
 
-PassMain::Sub *ForwardPipeline::material_transparent_add(::Material *blender_mat,
-                                                         GPUMaterial *gpumat)
-{
-#if 0
-  RenderBuffers &rbufs = inst_.render_buffers;
-  LightModule &lights = inst_.lights;
-  Sampling &sampling = inst_.sampling;
-  // LightProbeModule &lightprobes = inst_.lightprobes;
-  // RaytracingModule &raytracing = inst_.raytracing;
-  // eGPUSamplerState no_interp = GPU_SAMPLER_DEFAULT;
-  DRWShadingGroup *grp = DRW_shgroup_material_create(gpumat, transparent_ps_);
-  lights.bind_resources(grp);
-  sampling.bind_resources(grp);
-  // DRW_shgroup_uniform_block(grp, "sampling_buf", inst_.sampling.ubo_get());
-  // DRW_shgroup_uniform_block(grp, "grids_buf", lightprobes.grid_ubo_get());
-  // DRW_shgroup_uniform_block(grp, "cubes_buf", lightprobes.cube_ubo_get());
-  // DRW_shgroup_uniform_block(grp, "probes_buf", lightprobes.info_ubo_get());
-  // DRW_shgroup_uniform_texture_ref(grp, "lightprobe_grid_tx", lightprobes.grid_tx_ref_get());
-  // DRW_shgroup_uniform_texture_ref(grp, "lightprobe_cube_tx", lightprobes.cube_tx_ref_get());
-  DRW_shgroup_uniform_texture(grp, "utility_tx", inst_.pipelines.utility_tx);
-  /* TODO(fclem): Make this only needed if material uses it ... somehow. */
-  // if (true) {
-  // DRW_shgroup_uniform_texture_ref(
-  //     grp, "sss_transmittance_tx", inst_.subsurface.transmittance_ref_get());
-  // }
-  // if (raytracing.enabled()) {
-  // DRW_shgroup_uniform_block(grp, "rt_diffuse_buf", raytracing.diffuse_data);
-  // DRW_shgroup_uniform_block(grp, "rt_reflection_buf", raytracing.reflection_data);
-  // DRW_shgroup_uniform_block(grp, "rt_refraction_buf", raytracing.refraction_data);
-  // DRW_shgroup_uniform_texture_ref_ex(
-  //     grp, "rt_radiance_tx", &input_screen_radiance_tx_, no_interp);
-  // }
-  // if (raytracing.enabled()) {
-  // DRW_shgroup_uniform_block(grp, "hiz_buf", inst_.hiz.ubo_get());
-  // DRW_shgroup_uniform_texture_ref(grp, "hiz_tx", inst_.hiz_front.texture_ref_get());
-  // }
-  {
-    /* TODO(fclem): This is not needed. This is only to please the OpenGL debug Layer.
-     * If we are to introduce transparency render-passes support, it would be through a separate
-     * pass. */
-    /* AOVs. */
-    DRW_shgroup_uniform_image_ref(grp, "aov_color_img", &rbufs.aov_color_tx);
-    DRW_shgroup_uniform_image_ref(grp, "aov_value_img", &rbufs.aov_value_tx);
-    DRW_shgroup_storage_block_ref(grp, "aov_buf", &inst_.film.aovs_info);
-    /* RenderPasses. */
-    DRW_shgroup_uniform_image_ref(grp, "rp_normal_img", &rbufs.normal_tx);
-    DRW_shgroup_uniform_image_ref(grp, "rp_light_img", &rbufs.light_tx);
-    DRW_shgroup_uniform_image_ref(grp, "rp_diffuse_color_img", &rbufs.diffuse_color_tx);
-    DRW_shgroup_uniform_image_ref(grp, "rp_specular_color_img", &rbufs.specular_color_tx);
-    DRW_shgroup_uniform_image_ref(grp, "rp_emission_img", &rbufs.emission_tx);
-  }
-
-  DRWState state_disable = DRW_STATE_WRITE_DEPTH;
-  DRWState state_enable = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM;
-  if (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) {
-    state_enable |= DRW_STATE_CULL_BACK;
-  }
-  DRW_shgroup_state_disable(grp, state_disable);
-  DRW_shgroup_state_enable(grp, state_enable);
-  return grp;
-#else
-  UNUSED_VARS(blender_mat, gpumat);
-  return nullptr;
-#endif
-}
-
-PassMain::Sub *ForwardPipeline::prepass_transparent_add(::Material *blender_mat,
+PassMain::Sub *ForwardPipeline::prepass_transparent_add(const Object *ob,
+                                                        ::Material *blender_mat,
                                                         GPUMaterial *gpumat)
 {
-#if 0
   if ((blender_mat->blend_flag & MA_BL_HIDE_BACKFACE) == 0) {
     return nullptr;
   }
-
-  DRWShadingGroup *grp = DRW_shgroup_material_create(gpumat, transparent_ps_);
-
-  DRWState state_disable = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM;
-  DRWState state_enable = DRW_STATE_WRITE_DEPTH;
-  if (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) {
-    state_enable |= DRW_STATE_CULL_BACK;
+  DRWState state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL;
+  if ((blender_mat->blend_flag & MA_BL_CULL_BACKFACE)) {
+    state |= DRW_STATE_CULL_BACK;
   }
-  DRW_shgroup_state_disable(grp, state_disable);
-  DRW_shgroup_state_enable(grp, state_enable);
-  return grp;
-#else
-  UNUSED_VARS(blender_mat, gpumat);
-  return nullptr;
-#endif
+  float sorting_value = math::dot(float3(ob->obmat[3]), camera_forward_);
+  PassMain::Sub *pass = &transparent_ps_.sub(GPU_material_get_name(gpumat), sorting_value);
+  pass->state_set(state);
+  pass->material_set(*inst_.manager, gpumat);
+  return pass;
+}
+
+PassMain::Sub *ForwardPipeline::material_transparent_add(const Object *ob,
+                                                         ::Material *blender_mat,
+                                                         GPUMaterial *gpumat)
+{
+  DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM | DRW_STATE_DEPTH_LESS_EQUAL;
+  if ((blender_mat->blend_flag & MA_BL_CULL_BACKFACE)) {
+    state |= DRW_STATE_CULL_BACK;
+  }
+  float sorting_value = math::dot(float3(ob->obmat[3]), camera_forward_);
+  PassMain::Sub *pass = &transparent_ps_.sub(GPU_material_get_name(gpumat), sorting_value);
+  pass->state_set(state);
+  pass->material_set(*inst_.manager, gpumat);
+  return pass;
 }
 
 void ForwardPipeline::render(View &view,
@@ -268,13 +222,7 @@ void ForwardPipeline::render(View &view,
 
   DRW_stats_group_end();
 
-  DRW_stats_group_start("Forward.Transparent");
-  /* TODO(fclem) This is suboptimal. We could sort during sync. */
-  /* FIXME(fclem) This wont work for panoramic, where we need
-   * to sort by distance to camera, not by z. */
-  // DRW_pass_sort_shgroup_z(transparent_ps_);
-  // DRW_draw_pass(transparent_ps_);
-  DRW_stats_group_end();
+  inst_.manager->submit(transparent_ps_, view);
 
   // if (inst_.raytracing.enabled()) {
   //   gbuffer.ray_radiance_tx.release();

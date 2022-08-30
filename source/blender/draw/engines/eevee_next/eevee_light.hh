@@ -151,7 +151,7 @@ class LightModule {
 #endif
   }
 
-  template<typename T> void bind_resources(draw::detail::Pass<T> *pass)
+  template<typename T> void bind_resources(draw::detail::PassBase<T> *pass)
   {
     /* Storage Buf. */
     pass->bind(LIGHT_CULL_BUF_SLOT, &culling_data_buf_);

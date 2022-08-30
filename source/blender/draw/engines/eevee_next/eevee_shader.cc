@@ -199,7 +199,19 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
 
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) {
     info.define("MAT_TRANSPARENT");
+    /* Transparent material do not have any velocity specific pipeline. */
+    if (pipeline_type == MAT_PIPE_FORWARD_PREPASS_VELOCITY) {
+      pipeline_type = MAT_PIPE_FORWARD_PREPASS;
+    }
   }
+
+  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT) == false &&
+      pipeline_type == MAT_PIPE_FORWARD) {
+    /* Opaque forward do support AOVs and render pass. */
+    info.additional_info("eevee_aov_out");
+    info.additional_info("eevee_render_pass_out");
+  }
+
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_BARYCENTRIC)) {
     switch (geometry_type) {
       case MAT_GEOM_MESH:

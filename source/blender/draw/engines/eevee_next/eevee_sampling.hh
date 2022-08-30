@@ -87,7 +87,7 @@ class Sampling {
     DRW_shgroup_storage_block_ref(grp, "sampling_buf", &data_);
   }
 
-  template<typename T> void bind_resources(draw::detail::Pass<T> *pass)
+  template<typename T> void bind_resources(draw::detail::PassBase<T> *pass)
   {
     /* Storage Buf. */
     pass->bind(SAMPLING_BUF_SLOT, &data_);
