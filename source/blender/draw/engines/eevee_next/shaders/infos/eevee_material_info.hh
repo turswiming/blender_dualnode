@@ -138,17 +138,10 @@ GPU_SHADER_CREATE_INFO(eevee_surf_depth)
 
 GPU_SHADER_CREATE_INFO(eevee_surf_world)
     .vertex_out(eevee_surf_iface)
-    .image_out(RBUFS_NORMAL_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_normal_img")
-    .image_array_out(RBUFS_LIGHT_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_light_img")
-    .image_out(RBUFS_DIFF_COLOR_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_diffuse_color_img")
-    .image_out(RBUFS_SPEC_COLOR_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_specular_color_img")
-    .image_out(RBUFS_EMISSION_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_emission_img")
     .push_constant(Type::FLOAT, "world_opacity_fade")
     .fragment_out(0, Type::VEC4, "out_background")
     .fragment_source("eevee_surf_world_frag.glsl")
-    .additional_info("eevee_aov_out"
-                     //"eevee_utility_texture"
-    );
+    .additional_info("eevee_aov_out", "eevee_render_pass_out", "eevee_utility_texture");
 
 #undef image_out
 #undef image_array_out

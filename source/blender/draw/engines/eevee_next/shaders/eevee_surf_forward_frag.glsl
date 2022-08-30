@@ -97,7 +97,7 @@ void main()
   out_normal += g_refraction_data.N * g_refraction_data.weight;
   out_normal = safe_normalize(out_normal);
 
-#ifndef MAT_RENDER_PASS_SUPPORT
+#ifdef MAT_RENDER_PASS_SUPPORT
   ivec2 out_texel = ivec2(gl_FragCoord.xy);
   imageStore(rp_normal_img, out_texel, vec4(out_normal, 1.0));
   imageStore(
