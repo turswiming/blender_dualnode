@@ -445,22 +445,18 @@ void LightModule::culling_pass_sync()
 
 void LightModule::debug_pass_sync()
 {
-  if (inst_.debug_mode != eDebugMode::DEBUG_LIGHT_CULLING) {
-    debug_draw_ps_ = nullptr;
-    return;
+  if (inst_.debug_mode == eDebugMode::DEBUG_LIGHT_CULLING) {
+    debug_draw_ps_.init();
+    debug_draw_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM);
+    debug_draw_ps_.shader_set(inst_.shaders.static_shader_get(LIGHT_CULLING_DEBUG));
+    inst_.hiz_buffer.bind_resources(&debug_draw_ps_);
+    debug_draw_ps_.bind("light_buf", &culling_light_buf_);
+    debug_draw_ps_.bind("light_cull_buf", &culling_data_buf_);
+    debug_draw_ps_.bind("light_zbin_buf", &culling_zbin_buf_);
+    debug_draw_ps_.bind("light_tile_buf", &culling_tile_buf_);
+    debug_draw_ps_.bind("depth_tx", &inst_.render_buffers.depth_tx);
+    debug_draw_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
-
-  DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM;
-  debug_draw_ps_ = DRW_pass_create("Debug.LightCulling", state);
-  GPUShader *sh = inst_.shaders.static_shader_get(LIGHT_CULLING_DEBUG);
-  DRWShadingGroup *grp = DRW_shgroup_create(sh, debug_draw_ps_);
-  inst_.hiz_buffer.bind_resources(grp);
-  DRW_shgroup_storage_block_ref(grp, "light_buf", &culling_light_buf_);
-  DRW_shgroup_storage_block_ref(grp, "light_cull_buf", &culling_data_buf_);
-  DRW_shgroup_storage_block_ref(grp, "light_zbin_buf", &culling_zbin_buf_);
-  DRW_shgroup_storage_block_ref(grp, "light_tile_buf", &culling_tile_buf_);
-  DRW_shgroup_uniform_texture_ref(grp, "depth_tx", &inst_.render_buffers.depth_tx);
-  DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
 }
 
 void LightModule::set_view(View &view, const int2 extent)
@@ -477,15 +473,14 @@ void LightModule::set_view(View &view, const int2 extent)
   inst_.manager->submit(culling_ps_, view);
 }
 
-void LightModule::debug_draw(GPUFrameBuffer *view_fb)
+void LightModule::debug_draw(View &view, GPUFrameBuffer *view_fb)
 {
-  if (debug_draw_ps_ == nullptr) {
-    return;
+  if (inst_.debug_mode == eDebugMode::DEBUG_LIGHT_CULLING) {
+    inst_.info = "Debug Mode: Light Culling Validation";
+    inst_.hiz_buffer.update();
+    GPU_framebuffer_bind(view_fb);
+    inst_.manager->submit(debug_draw_ps_, view);
   }
-  inst_.info = "Debug Mode: Light Culling Validation";
-  inst_.hiz_buffer.update();
-  GPU_framebuffer_bind(view_fb);
-  DRW_draw_pass(debug_draw_ps_);
 }
 
 /** \} */

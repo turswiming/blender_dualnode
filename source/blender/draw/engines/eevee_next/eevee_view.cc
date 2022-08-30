@@ -132,8 +132,8 @@ void ShadingView::render()
 
   inst_.pipelines.forward.render(render_view_new_, prepass_fb_, combined_fb_, rbufs.combined_tx);
 
-  inst_.lights.debug_draw(combined_fb_);
-  inst_.hiz_buffer.debug_draw(combined_fb_);
+  inst_.lights.debug_draw(render_view_new_, combined_fb_);
+  inst_.hiz_buffer.debug_draw(render_view_new_, combined_fb_);
 
   GPUTexture *combined_final_tx = render_postfx(rbufs.combined_tx);
 

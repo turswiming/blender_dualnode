@@ -81,7 +81,7 @@ void HiZBuffer::update()
   }
 }
 
-void HiZBuffer::debug_draw(GPUFrameBuffer *view_fb)
+void HiZBuffer::debug_draw(View &view, GPUFrameBuffer *view_fb)
 {
   if (inst_.debug_mode == eDebugMode::DEBUG_HIZ_VALIDATION) {
     inst_.info =
@@ -89,9 +89,8 @@ void HiZBuffer::debug_draw(GPUFrameBuffer *view_fb)
         " - Red: pixel in front of HiZ tile value.\n"
         " - Blue: No error.";
     inst_.hiz_buffer.update();
-
     GPU_framebuffer_bind(view_fb);
-    inst_.manager->submit(debug_draw_ps_);
+    inst_.manager->submit(debug_draw_ps_, view);
   }
 }
 

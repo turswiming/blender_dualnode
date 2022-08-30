@@ -67,7 +67,7 @@ class HiZBuffer {
    */
   void update();
 
-  void debug_draw(GPUFrameBuffer *view_fb);
+  void debug_draw(View &view, GPUFrameBuffer *view_fb);
 
   void bind_resources(DRWShadingGroup *grp)
   {

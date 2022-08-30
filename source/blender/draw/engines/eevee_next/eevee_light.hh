@@ -121,8 +121,7 @@ class LightModule {
   uint total_word_count_ = 0;
 
   /** Debug Culling visualization. */
-  DRWPass *debug_draw_ps_ = nullptr;
-  /* GPUTexture *input_depth_tx_ = nullptr; */
+  PassSimple debug_draw_ps_ = {"LightCulling.Debug"};
 
  public:
   LightModule(Instance &inst) : inst_(inst){};
@@ -137,7 +136,7 @@ class LightModule {
    */
   void set_view(View &view, const int2 extent);
 
-  void debug_draw(GPUFrameBuffer *view_fb);
+  void debug_draw(View &view, GPUFrameBuffer *view_fb);
 
   void bind_resources(DRWShadingGroup *grp)
   {
