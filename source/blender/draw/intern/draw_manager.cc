@@ -135,6 +135,13 @@ void Manager::submit(PassMain &pass, View &view)
   state.cleanup();
 }
 
+void Manager::submit(PassSortable &pass, View &view)
+{
+  pass.sort();
+
+  this->submit(static_cast<PassMain &>(pass), view);
+}
+
 Manager::SubmitDebugOutput Manager::submit_debug(PassSimple &pass, View &view)
 {
   submit(pass, view);

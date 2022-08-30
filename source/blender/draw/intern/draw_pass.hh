@@ -369,6 +369,8 @@ template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawC
  * The base level can only be composed of sub passes that will be ordered by a special value.
  */
 class PassSortable : public PassMain {
+  friend Manager;
+
  private:
   /** Sorting value associated with each sub pass. */
   Vector<float> sorting_values_;
@@ -405,21 +407,15 @@ class PassSortable : public PassMain {
  protected:
   void sort()
   {
-    std::sort(headers_.begin(), headers_.end(), [&](Header &a, Header &b) {
-      BLI_assert(a.type == Type::SubPass && b.type == Type::SubPass);
-      float a_val = sorting_values_[a.index];
-      float b_val = sorting_values_[b.index];
-      return a_val < b_val || (a_val == b_val && a.index < b.index);
-    });
-    sorted_ = true;
-  }
-
-  void submit(command::RecordingState &state) const
-  {
     if (sorted_ == false) {
-      const_cast<PassSortable *>(this)->sort();
+      std::sort(headers_.begin(), headers_.end(), [&](Header &a, Header &b) {
+        BLI_assert(a.type == Type::SubPass && b.type == Type::SubPass);
+        float a_val = sorting_values_[a.index];
+        float b_val = sorting_values_[b.index];
+        return a_val < b_val || (a_val == b_val && a.index < b.index);
+      });
+      sorted_ = true;
     }
-    PassMain::submit(state);
   }
 };
 

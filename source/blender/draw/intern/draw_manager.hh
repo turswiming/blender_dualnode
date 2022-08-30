@@ -30,6 +30,7 @@ class DrawMultiBuf;
 
 using PassSimple = detail::Pass<command::DrawCommandBuf>;
 using PassMain = detail::Pass<command::DrawMultiBuf>;
+class PassSortable;
 
 class Manager {
   using ObjectMatricesBuf = StorageArrayBuffer<ObjectMatrices, 128>;
@@ -107,6 +108,7 @@ class Manager {
    */
   void submit(PassSimple &pass, View &view);
   void submit(PassMain &pass, View &view);
+  void submit(PassSortable &pass, View &view);
 
   /**
    * Submit a pass for drawing but read back all data buffers for inspection.
