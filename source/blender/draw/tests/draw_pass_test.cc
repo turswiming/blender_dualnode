@@ -203,6 +203,32 @@ static void test_draw_pass_multi_draw()
 }
 DRAW_TEST(draw_pass_multi_draw)
 
+static void test_draw_pass_sortable()
+{
+  PassSortable pass = {"test.sortable"};
+  pass.init();
+
+  pass.sub("Sub3", 3.0f);
+  pass.sub("Sub2", 2.0f);
+  pass.sub("Sub5", 4.0f);
+  pass.sub("Sub4", 3.0f);
+  pass.sub("Sub1", 1.0f);
+
+  std::string result = pass.serialize();
+  std::stringstream expected;
+  expected << ".test.sortable" << std::endl;
+  expected << "  .Sub1" << std::endl;
+  expected << "  .Sub2" << std::endl;
+  expected << "  .Sub3" << std::endl;
+  expected << "  .Sub4" << std::endl;
+  expected << "  .Sub5" << std::endl;
+
+  EXPECT_EQ(result, expected.str());
+
+  DRW_shape_cache_free();
+}
+DRAW_TEST(draw_pass_sortable)
+
 static void test_draw_resource_id_gen()
 {
   float4x4 win_mat;

@@ -364,6 +364,65 @@ template<typename DrawCommandBufType> class Pass : public detail::PassBase<DrawC
  */
 // using PassMain = detail::Pass<DrawMultiBuf>;
 
+/**
+ * Special pass type for rendering transparent objects.
+ * The base level can only be composed of sub passes that will be ordered by a special value.
+ */
+class PassSortable : public PassMain {
+ private:
+  /** Sorting value associated with each sub pass. */
+  Vector<float> sorting_values_;
+
+  bool sorted_ = false;
+
+ public:
+  PassSortable(const char *name_) : PassMain(name_){};
+
+  void init()
+  {
+    sorting_values_.clear();
+    sorted_ = false;
+    PassMain::init();
+  }
+
+  PassMain::Sub &sub(const char *name, float sorting_value)
+  {
+    int64_t index = sub_passes_.append_and_get_index(
+        PassBase(name, draw_commands_buf_, sub_passes_, shader_));
+    headers_.append({Type::SubPass, static_cast<uint>(index)});
+    sorting_values_.append(sorting_value);
+    return sub_passes_[index];
+  }
+
+  std::string serialize(std::string line_prefix = "") const
+  {
+    if (sorted_ == false) {
+      const_cast<PassSortable *>(this)->sort();
+    }
+    return PassMain::serialize(line_prefix);
+  }
+
+ protected:
+  void sort()
+  {
+    std::sort(headers_.begin(), headers_.end(), [&](Header &a, Header &b) {
+      BLI_assert(a.type == Type::SubPass && b.type == Type::SubPass);
+      float a_val = sorting_values_[a.index];
+      float b_val = sorting_values_[b.index];
+      return a_val < b_val || (a_val == b_val && a.index < b.index);
+    });
+    sorted_ = true;
+  }
+
+  void submit(command::RecordingState &state) const
+  {
+    if (sorted_ == false) {
+      const_cast<PassSortable *>(this)->sort();
+    }
+    PassMain::submit(state);
+  }
+};
+
 /** \} */
 
 namespace detail {
