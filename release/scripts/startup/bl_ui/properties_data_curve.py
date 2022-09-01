@@ -364,10 +364,11 @@ class DATA_PT_font(CurveButtonsPanelText, Panel):
                 row.prop(char, "use_underline", toggle=True)
                 row.prop(char, "use_small_caps", toggle=True)
             else:
-                layout.operator("font.style_toggle", text="Bold", icon='BOLD' , depress = text.select_is_bold).style = 'BOLD'
-                layout.operator("font.style_toggle", text="Italic", icon='ITALIC' , depress = text.select_is_italics).style = 'ITALIC'
-                layout.operator("font.style_toggle", text="Underline", icon='UNDERLINE' , depress = text.select_is_underline).style = 'UNDERLINE'
-                layout.operator("font.style_toggle", text="Small Caps", icon='SMALL_CAPS' , depress = text.select_is_smallcaps).style = 'SMALL_CAPS'
+                row = layout.row(align=True)
+                row.operator("font.style_toggle", text="Bold", icon='BOLD' , depress = text.select_is_bold).style = 'BOLD'
+                row.operator("font.style_toggle", text="Italic", icon='ITALIC' , depress = text.select_is_italics).style = 'ITALIC'
+                row.operator("font.style_toggle", text="Underline", icon='UNDERLINE' , depress = text.select_is_underline).style = 'UNDERLINE'
+                row.operator("font.style_toggle", text="Small Caps", icon='SMALL_CAPS' , depress = text.select_is_smallcaps).style = 'SMALL_CAPS'
 
 
 class DATA_PT_font_transform(CurveButtonsPanelText, Panel):

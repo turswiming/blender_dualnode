@@ -765,7 +765,7 @@ static float vfont_descent(const VFontData *vfd)
   return vfd->em_height - vfont_ascent(vfd);
 }
 
-static bool vfont_to_curve(Object *ob,
+static bool vfont_to_curve_ex(Object *ob,
                            Curve *cu,
                            int mode,
                            VFontToCurveIter *iter_data,
@@ -773,7 +773,8 @@ static bool vfont_to_curve(Object *ob,
                            const char32_t **r_text,
                            int *r_text_len,
                            bool *r_text_free,
-                           struct CharTrans **r_chartransdata)
+                           struct CharTrans **r_chartransdata,
+                           float cursor_location[2], int *r_cursor_locaiton_pos)
 {
   EditFont *ef = cu->editfont;
   EditFontSelBox *selboxes = NULL;
@@ -825,6 +826,14 @@ static bool vfont_to_curve(Object *ob,
   if (vfont == NULL) {
     return ok;
   }
+
+  if(cursor_location==NULL)
+  {  
+    float cur_loc_temp[2];
+    cur_loc_temp[0]=0.0;
+    cur_loc_temp[1]=0.0;
+    cursor_location=cur_loc_temp;
+  } 
 
   vfd = vfont_get_data(vfont);
 
@@ -908,8 +917,13 @@ static bool vfont_to_curve(Object *ob,
   }
 
   i = 0;
-  int ret=0;
-  float min_dist=0.0f;
+  int ret=-1;
+  float min_dist;
+  if(ef!=NULL && ob!=NULL)
+  { float ffx=cursor_location[0];
+    float ffy=cursor_location[1]; 
+    min_dist=ffx*ffx+ffy*ffy;
+  }
   while (i <= slen) {
     /* Characters in the list */
     info = &custrinfo[i];
@@ -1125,33 +1139,39 @@ static bool vfont_to_curve(Object *ob,
     }
     ct++;
     if (ef != NULL && ob != NULL){
-      float fx=ef->m_loc[0];
-      float fy=ef->m_loc[1];
+      float fx=cursor_location[0];
+      float fy=cursor_location[1];
       float di= (fx-xof)*(fx-xof)+(fy-yof)*(fy-yof);
-      if(i==0)
+      float di2=fx*fx+fy*fy;
+
+      if(di2<=min_dist && di2<di)
       {
-        min_dist=di;
-        ret=i;
+        min_dist=di2;
+        ret=-1;
       }
-      if(di<min_dist)
+      else if(di<min_dist)
       {
         min_dist=di;
         ret=i;
       } 
+
     }
     i++;
   }
   if (ef != NULL && ob != NULL)
   {
-    if(ret==0)
+
+    if(ret==-1)
     {
       ret++;
-      ef->m_pos=ret;
+      if(r_cursor_locaiton_pos)
+        *r_cursor_locaiton_pos=ret;
     }
-    else if(ret>0 && ret<=ef->len-1)
+    else if(ret>=0 && ret<=ef->len-1)
     {
       ret++;
-      ef->m_pos=ret;
+      if(r_cursor_locaiton_pos)
+        *r_cursor_locaiton_pos=ret;
     }
   }
   current_line_length += xof + twidth - MARGIN_X_MIN;
@@ -1754,6 +1774,20 @@ finally:
 #undef MARGIN_Y_MIN
 }
 
+
+static bool vfont_to_curve(Object *ob,
+                           Curve *cu,
+                           int mode,
+                           VFontToCurveIter *iter_data,
+                           ListBase *r_nubase,
+                           const char32_t **r_text,
+                           int *r_text_len,
+                           bool *r_text_free,
+                           struct CharTrans **r_chartransdata)
+{
+  return vfont_to_curve_ex(ob,cu,mode,iter_data,r_nubase,r_text,r_text_len,r_text_free,r_chartransdata,NULL,NULL);
+
+}
 #undef DESCENT
 #undef ASCENT
 
@@ -1775,8 +1809,34 @@ bool BKE_vfont_to_curve_ex(Object *ob,
   };
 
   do {
-    data.ok &= vfont_to_curve(
-        ob, cu, mode, &data, r_nubase, r_text, r_text_len, r_text_free, r_chartransdata);
+    data.ok &= vfont_to_curve_ex(
+        ob, cu, mode, &data, r_nubase, r_text, r_text_len, r_text_free, r_chartransdata,NULL,NULL);
+  } while (data.ok && ELEM(data.status, VFONT_TO_CURVE_SCALE_ONCE, VFONT_TO_CURVE_BISECT));
+
+  return data.ok;
+}
+
+bool BKE_vfont_to_curve_ex2(Object *ob,
+                           Curve *cu,
+                           int mode,
+                           ListBase *r_nubase,
+                           const char32_t **r_text,
+                           int *r_text_len,
+                           bool *r_text_free,
+                           struct CharTrans **r_chartransdata,
+                           float cursor_location[2], int *r_cursor_locaiton_pos)
+{
+  VFontToCurveIter data = {
+      .iteraction = cu->totbox * FONT_TO_CURVE_SCALE_ITERATIONS,
+      .scale_to_fit = 1.0f,
+      .word_wrap = true,
+      .ok = true,
+      .status = VFONT_TO_CURVE_INIT,
+  };
+
+  do {
+    data.ok &= vfont_to_curve_ex(
+        ob, cu, mode, &data, r_nubase, r_text, r_text_len, r_text_free, r_chartransdata,cursor_location,r_cursor_locaiton_pos);
   } while (data.ok && ELEM(data.status, VFONT_TO_CURVE_SCALE_ONCE, VFONT_TO_CURVE_BISECT));
 
   return data.ok;
@@ -1797,6 +1857,13 @@ bool BKE_vfont_to_curve(Object *ob, int mode)
   Curve *cu = ob->data;
 
   return BKE_vfont_to_curve_ex(ob, ob->data, mode, &cu->nurb, NULL, NULL, NULL, NULL);
+}
+
+bool BKE_vfont_to_curve_curloc(Object *ob, int mode,float cursor_location[2], int *r_cursor_locaiton_pos)
+{
+  Curve *cu = ob->data;
+
+  return BKE_vfont_to_curve_ex2(ob,ob->data,mode,&cu->nurb,NULL,NULL,NULL,NULL,cursor_location,r_cursor_locaiton_pos);
 }
 
 /* -------------------------------------------------------------------- */

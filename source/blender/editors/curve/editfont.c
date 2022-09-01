@@ -423,6 +423,29 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
 }
 
+static void text_update_edited_ex(bContext *C, Object *obedit, int mode,float cursor_location[2], int *r_cursor_locaiton_pos)
+{
+  Curve *cu = obedit->data;
+  EditFont *ef = cu->editfont;
+
+  BLI_assert(ef->len >= 0);
+    Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+    BKE_vfont_to_curve_curloc(DEG_get_evaluated_object(depsgraph, obedit), mode,cursor_location,r_cursor_locaiton_pos);
+
+  cu->curinfo = ef->textbufinfo[ef->pos ? ef->pos - 1 : 0];
+
+  if (obedit->totcol > 0) {
+    obedit->actcol = cu->curinfo.mat_nr;
+    if (obedit->actcol < 1) {
+      obedit->actcol = 1;
+    }
+  }
+
+  DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
+  WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
+}
+
+
 static int kill_selection(Object *obedit, int ins) /* ins == new character len */
 {
   Curve *cu = obedit->data;
@@ -1759,33 +1782,39 @@ void FONT_OT_text_insert(wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /** \name Font Select Operator
  * \{ */
-static void font_cursor_set_apply(bContext *C, wmOperator *op, const wmEvent *event)
+static void font_cursor_set_apply(bContext *C, const wmEvent *event)
 {
   Object *obedit = CTX_data_active_object(C);
   Curve *cu = obedit->data;
   EditFont *ef = cu->editfont;
   ARegion *region = CTX_wm_region(C);
+  int cur_loc_pos;
   float rout[3];
   float mal[2];
   mal[0]=event->mval[0];
   mal[1]=event->mval[1];
   const float *co = obedit->obmat[3];
-  const float *no = obedit->obmat[2]; /* Z axis. */
+  const float *no = obedit->obmat[2];
   float plane[4];
   plane_from_point_normal_v3(plane, co, no);
   ED_view3d_win_to_3d_on_plane(region,plane,mal,true,rout);
   mul_m4_v3(obedit->imat, rout);
-  ef->m_loc[0]=rout[0];
-  ef->m_loc[1]=rout[1];
-  ef->pos=ef->m_pos;
-    if ((select) && (ef->selstart==0)) {
-      if(ef->pos==0)
-      ef->selstart = ef->selend =1;
-      else
-      ef->selstart = ef->selend = ef->pos+1;
+  float curs_loc[2];
+  curs_loc[0]=rout[0];
+  curs_loc[1]=rout[1];
+
+  text_update_edited_ex(C, obedit, FO_CURS,curs_loc,&cur_loc_pos);
+  if(cur_loc_pos<=ef->len)
+  {  
+      if ((!ef->is_selected) && (ef->selstart==0)) {
+        if(ef->pos==0)
+        ef->selstart = ef->selend =1;
+        else
+        ef->selstart = ef->selend = cur_loc_pos+1;
+    }
+    ef->selend=cur_loc_pos;
+    ef->pos=cur_loc_pos;
   }
-  ef->selend=ef->pos;
-  text_update_edited(C, obedit, true);
 
 }
 
@@ -1795,32 +1824,26 @@ static int font_selection_set_invoke(bContext *C, wmOperator *op, const wmEvent 
   Curve *cu = obedit->data;
   EditFont *ef = cu->editfont;
 
-  WM_event_add_modal_handler(C, op);
-
-  font_cursor_set_apply(C, op, event);
+  font_cursor_set_apply(C, event);
   ef->selstart=0;
   ef->selend=0;
-  
-  text_update_edited(C, obedit, true);
+  WM_event_add_modal_handler(C, op);
 
   return OPERATOR_RUNNING_MODAL; 
 }
 
-static int font_selection_set_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static int font_selection_set_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
-  Object *obedit = CTX_data_active_object(C);
-  Curve *cu = obedit->data;
-  EditFont *ef = cu->editfont;
+
   switch (event->type) {
     case LEFTMOUSE:
-      font_cursor_set_apply(C, op, event);
+      font_cursor_set_apply(C, event);
       return OPERATOR_FINISHED;
     case MIDDLEMOUSE:
     case RIGHTMOUSE:
       return OPERATOR_FINISHED; 
-    case TIMER:
     case MOUSEMOVE:
-      font_cursor_set_apply(C, op, event);
+      font_cursor_set_apply(C, event);
       break;
   }
   
@@ -1843,13 +1866,10 @@ void FONT_OT_selection_set(struct wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /** \name Select Word Operator
  * \{ */
-static  font_select_word_exec(bContext *C, wmOperator *op)
+static int font_select_word_exec(bContext *C, wmOperator *UNUSED(op))
 {
-  Object *obedit = CTX_data_active_object(C);
-  Curve *cu = obedit->data;
-  EditFont *ef = cu->editfont;
-
-  move_cursor(C,PREV_WORD,false)+move_cursor(C,NEXT_WORD,true);
+  move_cursor(C,PREV_WORD,false);
+  move_cursor(C,NEXT_WORD,true);
   return OPERATOR_FINISHED; 
 }
 
