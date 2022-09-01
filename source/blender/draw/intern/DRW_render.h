@@ -409,7 +409,7 @@ void DRW_shgroup_call_ex(DRWShadingGroup *shgroup,
                          void *user_data);
 
 /**
- * If ob is NULL, unit modelmatrix is assumed and culling is bypassed.
+ * If ob is NULL, unit model-matrix is assumed and culling is bypassed.
  */
 #define DRW_shgroup_call(shgroup, geom, ob) \
   DRW_shgroup_call_ex(shgroup, ob, NULL, geom, false, NULL)
@@ -420,8 +420,8 @@ void DRW_shgroup_call_ex(DRWShadingGroup *shgroup,
 #define DRW_shgroup_call_obmat(shgroup, geom, obmat) \
   DRW_shgroup_call_ex(shgroup, NULL, obmat, geom, false, NULL)
 
-/* TODO(fclem): remove this when we have DRWView */
-/* user_data is used by DRWCallVisibilityFn defined in DRWView. */
+/* TODO(fclem): remove this when we have #DRWView */
+/* user_data is used by #DRWCallVisibilityFn defined in #DRWView. */
 #define DRW_shgroup_call_with_callback(shgroup, geom, ob, user_data) \
   DRW_shgroup_call_ex(shgroup, ob, NULL, geom, false, user_data)
 
@@ -984,7 +984,7 @@ typedef struct DRWContextState {
   struct ViewLayer *view_layer; /* 'CTX_data_view_layer(C)' */
 
   /* Use 'object_edit' for edit-mode */
-  struct Object *obact; /* 'OBACT' */
+  struct Object *obact;
 
   struct RenderEngineType *engine_type;
 

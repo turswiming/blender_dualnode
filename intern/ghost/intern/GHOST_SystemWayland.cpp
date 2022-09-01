@@ -2727,8 +2727,6 @@ static void output_handle_scale(void *data, struct wl_output * /*wl_output*/, co
     for (GHOST_IWindow *iwin : window_manager->getWindows()) {
       GHOST_WindowWayland *win = static_cast<GHOST_WindowWayland *>(iwin);
       win->outputs_changed_update_scale();
-      /* TODO(@campbellbarton): support refreshing the UI when the DPI changes.
-       * There are glitches when resizing the monitor which would be nice to solve. */
     }
   }
 }
@@ -3037,9 +3035,9 @@ bool GHOST_SystemWayland::processEvents(bool waitForEvent)
   return any_processed;
 }
 
-int GHOST_SystemWayland::setConsoleWindowState(GHOST_TConsoleWindowState /*action*/)
+bool GHOST_SystemWayland::setConsoleWindowState(GHOST_TConsoleWindowState /*action*/)
 {
-  return 0;
+  return false;
 }
 
 GHOST_TSuccess GHOST_SystemWayland::getModifierKeys(GHOST_ModifierKeys &keys) const

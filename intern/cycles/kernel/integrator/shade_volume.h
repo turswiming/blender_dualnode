@@ -145,11 +145,11 @@ ccl_device_forceinline void volume_step_init(KernelGlobals kg,
 
     /* Perform shading at this offset within a step, to integrate over
      * over the entire step segment. */
-    *step_shade_offset = path_state_rng_1D_hash(kg, rng_state, 0x1e31d8a4);
+    *step_shade_offset = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SHADE_OFFSET);
 
     /* Shift starting point of all segment by this random amount to avoid
      * banding artifacts from the volume bounding shape. */
-    *steps_offset = path_state_rng_1D_hash(kg, rng_state, 0x3d22c7b3);
+    *steps_offset = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_OFFSET);
   }
 }
 
@@ -550,8 +550,8 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   vstate.tmin = ray->tmin;
   vstate.tmax = ray->tmin;
   vstate.absorption_only = true;
-  vstate.rscatter = path_state_rng_1D(kg, rng_state, PRNG_SCATTER_DISTANCE);
-  vstate.rphase = path_state_rng_1D(kg, rng_state, PRNG_PHASE_CHANNEL);
+  vstate.rscatter = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_SCATTER_DISTANCE);
+  vstate.rphase = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_PHASE_CHANNEL);
 
   /* Multiple importance sampling: pick between equiangular and distance sampling strategy. */
   vstate.direct_sample_method = direct_sample_method;
@@ -696,11 +696,10 @@ ccl_device_forceinline bool integrate_volume_sample_light(
   /* Sample position on a light. */
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
-  float light_u, light_v;
-  path_state_rng_2D(kg, rng_state, PRNG_LIGHT_U, &light_u, &light_v);
+  const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
 
   if (!light_distribution_sample_from_volume_segment(
-          kg, light_u, light_v, sd->time, sd->P, bounce, path_flag, ls)) {
+          kg, rand_light.x, rand_light.y, sd->time, sd->P, bounce, path_flag, ls)) {
     return false;
   }
 
@@ -714,7 +713,7 @@ ccl_device_forceinline bool integrate_volume_sample_light(
 #    if defined(__PATH_GUIDING__)
 /* Randomly sample a volume phase function proportional to ShaderClosure.sample_weight. */
 ccl_device_inline ccl_private const ShaderVolumeClosure *shader_volume_phase_pick(
-    ccl_private const ShaderVolumePhases *phases, ccl_private float *randu)
+    ccl_private const ShaderVolumePhases *phases, ccl_private float2 *rand_phase)
 {
   int sampled = 0;
 
@@ -727,7 +726,7 @@ ccl_device_inline ccl_private const ShaderVolumeClosure *shader_volume_phase_pic
       sum += svc->sample_weight;
     }
 
-    float r = (*randu) * sum;
+    float r = (*rand_phase).x * sum;
     float partial_sum = 0.0f;
 
     for (sampled = 0; sampled < phases->num_closure; sampled++) {
@@ -736,7 +735,7 @@ ccl_device_inline ccl_private const ShaderVolumeClosure *shader_volume_phase_pic
 
       if (r <= next_sum) {
         /* Rescale to reuse for volume phase direction sample. */
-        *randu = (r - partial_sum) / svc->sample_weight;
+        (*rand_phase).x = (r - partial_sum) / svc->sample_weight;
         break;
       }
 
@@ -780,11 +779,10 @@ ccl_device_forceinline void integrate_volume_direct_light(
   {
     const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
-    float light_u, light_v;
-    path_state_rng_2D(kg, rng_state, PRNG_LIGHT_U, &light_u, &light_v);
+    const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
 
     if (!light_distribution_sample_from_position(
-            kg, light_u, light_v, sd->time, P, bounce, path_flag, ls)) {
+            kg, rand_light.x, rand_light.y, sd->time, P, bounce, path_flag, ls)) {
       return;
     }
   }
@@ -932,11 +930,10 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 {
   PROFILING_INIT(kg, PROFILING_SHADE_VOLUME_INDIRECT_LIGHT);
 
-  float phase_u, phase_v;
-  path_state_rng_2D(kg, rng_state, PRNG_BSDF_U, &phase_u, &phase_v);
+  float2 rand_phase = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_PHASE);
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  ccl_private const ShaderVolumeClosure *svc = shader_volume_phase_pick(phases, &phase_u);
+  ccl_private const ShaderVolumeClosure *svc = shader_volume_phase_pick(phases, &rand_phase);
   if (!svc) {
     return false;
   }
@@ -955,8 +952,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
                                               state,
                                               sd,
                                               svc,
-                                              phase_u,
-                                              phase_v,
+                                              rand_phase,
                                               &phase_eval,
                                               &phase_omega_in,
                                               &guided_phase_pdf,
@@ -972,15 +968,8 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   else
 #  endif
   {
-    label = shader_volume_phase_sample(kg,
-                                       sd,
-                                       phases,
-                                       phase_u,
-                                       phase_v,
-                                       &phase_eval,
-                                       &phase_omega_in,
-                                       &phase_pdf,
-                                       &sampled_roughness);
+    label = shader_volume_phase_sample(
+        kg, sd, phases, rand_phase, &phase_eval, &phase_omega_in, &phase_pdf, &sampled_roughness);
 
     if (phase_pdf == 0.0f || bsdf_eval_is_zero(&phase_eval)) {
       return false;
@@ -1057,7 +1046,7 @@ ccl_device_inline void shader_prepare_volume_guiding(KernelGlobals kg,
       // if (fabsf(mean_cosine) < 0.1f ) { // for now we only support HG phase function with very
       // low anisotropy
       if (true) {
-        grand = path_state_rng_1D_hash(kg, rng_state, 0xa172f2f0);
+        grand = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_PHASE_GUIDING);
 
         pgl_point3f pgl_P = openpgl::cpp::Point3(P[0], P[1], P[2]);
         pgl_point3f pgl_W = openpgl::cpp::Vector3(W[0], W[1], W[2]);

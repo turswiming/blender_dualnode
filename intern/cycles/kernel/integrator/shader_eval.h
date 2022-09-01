@@ -113,7 +113,7 @@ ccl_device_inline void shader_prepare_surface_guiding(KernelGlobals kg,
 
   if (guiding && surface_guiding) {
 
-    grand = path_state_rng_1D_hash(kg, rng_state, 0xa172f2f0);
+    grand = path_state_rng_1D(kg, rng_state, PRNG_SURFACE_BSDF_GUIDING);
 
     for (int i = 0; i < sd->num_closure; i++) {
       ShaderClosure *sc = &sd->closure[i];
@@ -411,7 +411,7 @@ ccl_device_inline
 
 /* Randomly sample a BSSRDF or BSDF proportional to ShaderClosure.sample_weight. */
 ccl_device_inline ccl_private const ShaderClosure *shader_bsdf_bssrdf_pick(
-    ccl_private const ShaderData *ccl_restrict sd, ccl_private float *randu)
+    ccl_private const ShaderData *ccl_restrict sd, ccl_private float2 *rand_bsdf)
 {
   int sampled = 0;
 
@@ -427,7 +427,7 @@ ccl_device_inline ccl_private const ShaderClosure *shader_bsdf_bssrdf_pick(
       }
     }
 
-    float r = (*randu) * sum;
+    float r = (*rand_bsdf).x * sum;
     float partial_sum = 0.0f;
 
     for (int i = 0; i < sd->num_closure; i++) {
@@ -440,7 +440,7 @@ ccl_device_inline ccl_private const ShaderClosure *shader_bsdf_bssrdf_pick(
           sampled = i;
 
           /* Rescale to reuse for direction sample, to better preserve stratification. */
-          *randu = (r - partial_sum) / sc->sample_weight;
+          (*rand_bsdf).x = (r - partial_sum) / sc->sample_weight;
           break;
         }
 
@@ -482,8 +482,7 @@ ccl_device int shader_guided_bsdf_sample_closure(KernelGlobals kg,
                                                  IntegratorState state,
                                                  ShaderData *sd,
                                                  const ShaderClosure *sc,
-                                                 float randu,
-                                                 float randv,
+                                                 const float2 rand_bsdf,
                                                  BsdfEval *bsdf_eval,
                                                  float3 *omega_in,
                                                  float *guided_bsdf_pdf,
@@ -524,7 +523,7 @@ ccl_device int shader_guided_bsdf_sample_closure(KernelGlobals kg,
   if (sampleGuding) {
     // sample guiding distr.
     pgl_vec3f pglWo;
-    pgl_point2f pglSample = openpgl::cpp::Point2(randu, randv);
+    pgl_point2f pglSample = openpgl::cpp::Point2(rand_bsdf.x, rand_bsdf.y);
     guide_pdf = state->guiding.surface_sampling_distribution->SamplePDF(pglSample, pglWo);
     *omega_in = make_float3(pglWo.x, pglWo.y, pglWo.z);
     *guided_bsdf_pdf = 0.0f;
@@ -566,7 +565,7 @@ ccl_device int shader_guided_bsdf_sample_closure(KernelGlobals kg,
   else {
     *guided_bsdf_pdf = 0.0f;
     label = bsdf_sample(
-        kg, sd, sc, randu, randv, &eval, omega_in, bsdf_pdf, sampled_rougness, eta);
+        kg, sd, sc, rand_bsdf.x, rand_bsdf.y, &eval, omega_in, bsdf_pdf, sampled_rougness, eta);
 #  ifdef WITH_CYCLES_DEBUG
     ///////
     // validation code to test the bsdf_label function
@@ -648,8 +647,7 @@ ccl_device int shader_guided_bsdf_sample_closure(KernelGlobals kg,
 ccl_device int shader_bsdf_sample_closure(KernelGlobals kg,
                                           ccl_private ShaderData *sd,
                                           ccl_private const ShaderClosure *sc,
-                                          float randu,
-                                          float randv,
+                                          const float2 rand_bsdf,
                                           ccl_private BsdfEval *bsdf_eval,
                                           ccl_private float3 *omega_in,
                                           ccl_private float *pdf,
@@ -663,7 +661,8 @@ ccl_device int shader_bsdf_sample_closure(KernelGlobals kg,
   Spectrum eval = zero_spectrum();
 
   *pdf = 0.0f;
-  label = bsdf_sample(kg, sd, sc, randu, randv, &eval, omega_in, pdf, sampled_rougness, eta);
+  label = bsdf_sample(
+      kg, sd, sc, rand_bsdf.x, rand_bsdf.y, &eval, omega_in, pdf, sampled_rougness, eta);
 
   if (*pdf != 0.0f) {
     bsdf_eval_init(bsdf_eval, sc->type, eval * sc->weight);
@@ -1039,8 +1038,7 @@ ccl_device int shader_guided_volume_phase_sample(KernelGlobals kg,
                                                  IntegratorState state,
                                                  ccl_private const ShaderData *sd,
                                                  ccl_private const ShaderVolumeClosure *svc,
-                                                 float randu,
-                                                 float randv,
+                                                 const float2 rand_phase,
                                                  ccl_private BsdfEval *phase_eval,
                                                  ccl_private float3 *omega_in,
                                                  ccl_private float *guided_phase_pdf,
@@ -1074,7 +1072,7 @@ ccl_device int shader_guided_volume_phase_sample(KernelGlobals kg,
 
   if (sampleGuding) {
     pgl_vec3f pglWo;
-    pgl_point2f pglSample = openpgl::cpp::Point2(randu, randv);
+    pgl_point2f pglSample = openpgl::cpp::Point2(rand_phase.x, rand_phase.y);
     guide_pdf = state->guiding.volume_sampling_distribution->SamplePDF(pglSample, pglWo);
     *omega_in = make_float3(pglWo.x, pglWo.y, pglWo.z);
     *guided_phase_pdf = 0.0f;
@@ -1088,7 +1086,7 @@ ccl_device int shader_guided_volume_phase_sample(KernelGlobals kg,
   }
   else {
     *guided_phase_pdf = 0.0f;
-    label = volume_phase_sample(sd, svc, randu, randv, &eval, omega_in, phase_pdf);
+    label = volume_phase_sample(sd, svc, rand_phase.x, rand_phase.y, &eval, omega_in, phase_pdf);
 
     if (*phase_pdf != 0.0f) {
       bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
@@ -1118,8 +1116,7 @@ ccl_device int shader_guided_volume_phase_sample(KernelGlobals kg,
 ccl_device int shader_volume_phase_sample(KernelGlobals kg,
                                           ccl_private const ShaderData *sd,
                                           ccl_private const ShaderVolumePhases *phases,
-                                          float randu,
-                                          float randv,
+                                          float2 rand_phase,
                                           ccl_private BsdfEval *phase_eval,
                                           ccl_private float3 *omega_in,
                                           ccl_private float *pdf,
@@ -1136,7 +1133,7 @@ ccl_device int shader_volume_phase_sample(KernelGlobals kg,
       sum += svc->sample_weight;
     }
 
-    float r = randu * sum;
+    float r = rand_phase.x * sum;
     float partial_sum = 0.0f;
 
     for (sampled = 0; sampled < phases->num_closure; sampled++) {
@@ -1145,7 +1142,7 @@ ccl_device int shader_volume_phase_sample(KernelGlobals kg,
 
       if (r <= next_sum) {
         /* Rescale to reuse for BSDF direction sample. */
-        randu = (r - partial_sum) / svc->sample_weight;
+        rand_phase.x = (r - partial_sum) / svc->sample_weight;
         break;
       }
 
@@ -1166,7 +1163,7 @@ ccl_device int shader_volume_phase_sample(KernelGlobals kg,
   Spectrum eval = zero_spectrum();
 
   *pdf = 0.0f;
-  label = volume_phase_sample(sd, svc, randu, randv, &eval, omega_in, pdf);
+  label = volume_phase_sample(sd, svc, rand_phase.x, rand_phase.y, &eval, omega_in, pdf);
 
   if (*pdf != 0.0f) {
     bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
@@ -1178,8 +1175,7 @@ ccl_device int shader_volume_phase_sample(KernelGlobals kg,
 ccl_device int shader_phase_sample_closure(KernelGlobals kg,
                                            ccl_private const ShaderData *sd,
                                            ccl_private const ShaderVolumeClosure *sc,
-                                           float randu,
-                                           float randv,
+                                           const float2 rand_phase,
                                            ccl_private BsdfEval *phase_eval,
                                            ccl_private float3 *omega_in,
                                            ccl_private float *pdf)
@@ -1188,7 +1184,7 @@ ccl_device int shader_phase_sample_closure(KernelGlobals kg,
   Spectrum eval = zero_spectrum();
 
   *pdf = 0.0f;
-  label = volume_phase_sample(sd, sc, randu, randv, &eval, omega_in, pdf);
+  label = volume_phase_sample(sd, sc, rand_phase.x, rand_phase.y, &eval, omega_in, pdf);
 
   if (*pdf != 0.0f)
     bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);

@@ -162,7 +162,7 @@ GPUNodeLink *GPU_differentiate_float_function(const char *function_name);
 
 bool GPU_link(GPUMaterial *mat, const char *name, ...);
 bool GPU_stack_link(GPUMaterial *mat,
-                    struct bNode *node,
+                    const struct bNode *node,
                     const char *name,
                     GPUNodeStack *in,
                     GPUNodeStack *out,
@@ -228,6 +228,7 @@ void GPU_materials_free(struct Main *bmain);
 struct Scene *GPU_material_scene(GPUMaterial *material);
 struct GPUPass *GPU_material_get_pass(GPUMaterial *material);
 struct GPUShader *GPU_material_get_shader(GPUMaterial *material);
+const char *GPU_material_get_name(GPUMaterial *material);
 /**
  * Return can be NULL if it's a world material.
  */
@@ -299,6 +300,10 @@ typedef struct GPUUniformAttr {
 
   /* Meaningful part of the attribute set key. */
   char name[64]; /* MAX_CUSTOMDATA_LAYER_NAME */
+  /** Escaped name with [""]. */
+  char name_id_prop[64 * 2 + 4];
+  /** Hash of name[64] + use_dupli. */
+  uint32_t hash_code;
   bool use_dupli;
 
   /* Helper fields used by code generation. */
@@ -313,7 +318,7 @@ typedef struct GPUUniformAttrList {
   unsigned int count, hash_code;
 } GPUUniformAttrList;
 
-GPUUniformAttrList *GPU_material_uniform_attributes(GPUMaterial *material);
+GPUUniformAttrList *GPU_material_uniform_attributes(const GPUMaterial *material);
 
 struct GHash *GPU_uniform_attr_list_hash_new(const char *info);
 void GPU_uniform_attr_list_copy(GPUUniformAttrList *dest, GPUUniformAttrList *src);

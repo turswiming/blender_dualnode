@@ -179,7 +179,7 @@ static const char *gpu_uniform_set_function_from_type(eNodeSocketDatatype type)
  * This is called for the input/output sockets that are not connected.
  */
 static GPUNodeLink *gpu_uniformbuffer_link(GPUMaterial *mat,
-                                           bNode *node,
+                                           const bNode *node,
                                            GPUNodeStack *stack,
                                            const int index,
                                            const eNodeSocketInOut in_out)
@@ -214,7 +214,7 @@ static GPUNodeLink *gpu_uniformbuffer_link(GPUMaterial *mat,
 }
 
 static void gpu_node_input_socket(
-    GPUMaterial *material, bNode *bnode, GPUNode *node, GPUNodeStack *sock, const int index)
+    GPUMaterial *material, const bNode *bnode, GPUNode *node, GPUNodeStack *sock, const int index)
 {
   if (sock->link) {
     gpu_node_input_link(node, sock->link, sock->type);
@@ -321,10 +321,18 @@ void gpu_node_graph_finalize_uniform_attrs(GPUNodeGraph *graph)
   LISTBASE_FOREACH (GPUUniformAttr *, attr, &attrs->list) {
     attr->id = next_id++;
 
-    attrs->hash_code ^= BLI_ghashutil_strhash_p(attr->name);
+    attr->hash_code = BLI_ghashutil_strhash_p(attr->name);
 
     if (attr->use_dupli) {
-      attrs->hash_code ^= BLI_ghashutil_uinthash(attr->id);
+      attr->hash_code ^= BLI_ghashutil_uinthash(attr->id);
+    }
+
+    attrs->hash_code ^= attr->hash_code;
+
+    {
+      char attr_name_esc[sizeof(attr->name) * 2];
+      BLI_str_escape(attr_name_esc, attr->name, sizeof(attr_name_esc));
+      SNPRINTF(attr->name_id_prop, "[\"%s\"]", attr_name_esc);
     }
   }
 }
@@ -652,7 +660,7 @@ bool GPU_link(GPUMaterial *mat, const char *name, ...)
 }
 
 static bool gpu_stack_link_v(GPUMaterial *material,
-                             bNode *bnode,
+                             const bNode *bnode,
                              const char *name,
                              GPUNodeStack *in,
                              GPUNodeStack *out,
@@ -724,7 +732,7 @@ static bool gpu_stack_link_v(GPUMaterial *material,
 }
 
 bool GPU_stack_link(GPUMaterial *material,
-                    bNode *bnode,
+                    const bNode *bnode,
                     const char *name,
                     GPUNodeStack *in,
                     GPUNodeStack *out,
