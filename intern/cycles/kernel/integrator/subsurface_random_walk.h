@@ -177,10 +177,6 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   const int object = INTEGRATOR_STATE(state, isect, object);
   const int prim = INTEGRATOR_STATE(state, isect, prim);
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  Spectrum bssrdf_weight = INTEGRATOR_STATE(state, subsurface, bssrdf_weight);
-#endif
-
   /* Sample diffuse surface scatter into the object. */
   float3 D;
   float pdf;
@@ -217,10 +213,9 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   // we need to add a new segment or add the direction
   // or at lease the sampling direction to the new path segment
   const bool use_guiding = kernel_data.integrator.use_guiding;
-  bssrdf_weight = safe_divide_color(bssrdf_weight, albedo);
   Spectrum initial_throughput = throughput;
   if (use_guiding) {
-    guiding_record_bssrdf_bounce(kg, state, bssrdf_weight, pdf, N, D);
+    guiding_record_bssrdf_bounce(kg, state, pdf, N, D);
   }
 #endif
 

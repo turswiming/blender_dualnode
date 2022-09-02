@@ -49,14 +49,11 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
   Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
   throughput = safe_divide_color(throughput, albedo);
   const bool use_guiding = kernel_data.integrator.use_guiding;
-  Spectrum bssrdf_weight = INTEGRATOR_STATE(state, subsurface, bssrdf_weight);
-  // const Spectrum albedo = INTEGRATOR_STATE(state, subsurface, albedo);
   // we need to add a new segment or add the direction
   // or at lease the sampling direction to the new path segment
-  bssrdf_weight = safe_divide_color(bssrdf_weight, albedo);
   Spectrum initial_throughput = throughput;
   if (use_guiding) {
-    guiding_record_bssrdf_bounce(kg, state, bssrdf_weight, 1.f, Ng, -Ng);
+    guiding_record_bssrdf_bounce(kg, state, 1.f, Ng, -Ng);
   }
 #endif
 

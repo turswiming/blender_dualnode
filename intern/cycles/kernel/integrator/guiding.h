@@ -137,9 +137,29 @@ ccl_device_forceinline void guiding_record_bssrdf_segment(KernelGlobals kg,
 #endif
 }
 
+ccl_device_forceinline void guiding_record_bssrdf_weight(KernelGlobals kg,
+                                                         IntegratorState state,
+                                                         const Spectrum weight)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
+  const float3 weight_rgb = spectrum_to_rgb(weight);
+
+  kernel_assert(state->guiding.path_segment != nullptr);
+
+  openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment, guiding_vec3f(zero_float3()));
+  openpgl::cpp::SetScatteringWeight(state->guiding.path_segment, guiding_vec3f(weight_rgb));
+  openpgl::cpp::SetIsDelta(state->guiding.path_segment, false);
+  openpgl::cpp::SetEta(state->guiding.path_segment, 1.0f);
+  openpgl::cpp::SetRoughness(state->guiding.path_segment, 1.0f);
+#endif
+}
+
 ccl_device_forceinline void guiding_record_bssrdf_bounce(KernelGlobals kg,
                                                          IntegratorState state,
-                                                         const Spectrum weight,
                                                          const float pdf,
                                                          const float3 N,
                                                          const float3 omega_in)
@@ -149,20 +169,14 @@ ccl_device_forceinline void guiding_record_bssrdf_bounce(KernelGlobals kg,
     return;
   }
 
-  const float3 weight_rgb = spectrum_to_rgb(weight);
   const float3 normal = clamp(N, -one_float3(), one_float3());
 
   kernel_assert(state->guiding.path_segment != nullptr);
 
-  openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment, guiding_vec3f(one_float3()));
   openpgl::cpp::SetVolumeScatter(state->guiding.path_segment, false);
   openpgl::cpp::SetNormal(state->guiding.path_segment, guiding_vec3f(normal));
   openpgl::cpp::SetDirectionIn(state->guiding.path_segment, guiding_vec3f(omega_in));
   openpgl::cpp::SetPDFDirectionIn(state->guiding.path_segment, pdf);
-  openpgl::cpp::SetScatteringWeight(state->guiding.path_segment, guiding_vec3f(weight_rgb));
-  openpgl::cpp::SetIsDelta(state->guiding.path_segment, false);
-  openpgl::cpp::SetEta(state->guiding.path_segment, 1.0f);
-  openpgl::cpp::SetRoughness(state->guiding.path_segment, 1.0f);
 #endif
 }
 

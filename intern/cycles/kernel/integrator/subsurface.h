@@ -77,7 +77,10 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, subsurface, albedo) = bssrdf->albedo;
   INTEGRATOR_STATE_WRITE(state, subsurface, radius) = bssrdf->radius;
   INTEGRATOR_STATE_WRITE(state, subsurface, anisotropy) = bssrdf->anisotropy;
-  INTEGRATOR_STATE_WRITE(state, subsurface, bssrdf_weight) = weight;
+
+  if (kernel_data.integrator.use_guiding) {
+    guiding_record_bssrdf_weight(kg, state, safe_divide_color(weight, bssrdf->albedo));
+  }
 
   return LABEL_SUBSURFACE_SCATTER;
 }
