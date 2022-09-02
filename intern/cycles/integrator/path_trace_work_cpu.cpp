@@ -6,7 +6,7 @@
 #include "device/cpu/kernel.h"
 #include "device/device.h"
 
-#include "kernel/film/write_passes.h"
+#include "kernel/film/write.h"
 #include "kernel/integrator/path_state.h"
 
 #include "integrator/pass_accessor_cpu.h"

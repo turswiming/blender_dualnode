@@ -233,7 +233,6 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       label = bsdf_principled_hair_sample(
           kg, sc, sd, randu, randv, eval, omega_in, pdf, sampled_roughness, eta);
       break;
-#  ifdef __PRINCIPLED__
     case CLOSURE_BSDF_PRINCIPLED_DIFFUSE_ID:
       label = bsdf_principled_diffuse_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
       *sampled_roughness = make_float2(1.0f, 1.0f);
@@ -244,7 +243,6 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       *sampled_roughness = make_float2(1.0f, 1.0f);
       *eta = 1.0f;
       break;
-#  endif /* __PRINCIPLED__ */
 #endif
     default:
       label = LABEL_NONE;
@@ -392,7 +390,6 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
       *roughness = make_float2(alpha, alpha);
       *eta = ((ccl_private PrincipledHairBSDF *)sc)->eta;
       break;
-#  ifdef __PRINCIPLED__
     case CLOSURE_BSDF_PRINCIPLED_DIFFUSE_ID:
       *roughness = make_float2(1.0f, 1.0f);
       *eta = 1.0f;
@@ -401,7 +398,6 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
       *roughness = make_float2(1.0f, 1.0f);
       *eta = 1.0f;
       break;
-#  endif /* __PRINCIPLED__ */
 #endif
     default:
       *roughness = make_float2(1.0f, 1.0f);
@@ -518,14 +514,12 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
       else
         label = LABEL_REFLECT | LABEL_GLOSSY;
       break;
-#  ifdef __PRINCIPLED__
     case CLOSURE_BSDF_PRINCIPLED_DIFFUSE_ID:
       label = LABEL_REFLECT | LABEL_DIFFUSE;
       break;
     case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
       label = LABEL_REFLECT | LABEL_DIFFUSE;
       break;
-#  endif /* __PRINCIPLED__ */
 #endif
     default:
       label = LABEL_NONE;
@@ -629,14 +623,12 @@ ccl_device_inline
       case CLOSURE_BSDF_HAIR_TRANSMISSION_ID:
         eval = bsdf_hair_transmission_eval_reflect(sc, sd->I, omega_in, pdf);
         break;
-#  ifdef __PRINCIPLED__
       case CLOSURE_BSDF_PRINCIPLED_DIFFUSE_ID:
         eval = bsdf_principled_diffuse_eval_reflect(sc, sd->I, omega_in, pdf);
         break;
       case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
         eval = bsdf_principled_sheen_eval_reflect(sc, sd->I, omega_in, pdf);
         break;
-#  endif /* __PRINCIPLED__ */
 #endif
       default:
         break;
@@ -714,14 +706,12 @@ ccl_device_inline
       case CLOSURE_BSDF_HAIR_TRANSMISSION_ID:
         eval = bsdf_hair_transmission_eval_transmit(sc, sd->I, omega_in, pdf);
         break;
-#  ifdef __PRINCIPLED__
       case CLOSURE_BSDF_PRINCIPLED_DIFFUSE_ID:
         eval = bsdf_principled_diffuse_eval_transmit(sc, sd->I, omega_in, pdf);
         break;
       case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
         eval = bsdf_principled_sheen_eval_transmit(sc, sd->I, omega_in, pdf);
         break;
-#  endif /* __PRINCIPLED__ */
 #endif
       default:
         break;

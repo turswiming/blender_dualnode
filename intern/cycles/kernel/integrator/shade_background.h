@@ -3,9 +3,11 @@
 
 #pragma once
 
-#include "kernel/film/accumulate.h"
+#include "kernel/film/light_passes.h"
+
 #include "kernel/integrator/guiding.h"
-#include "kernel/integrator/shader_eval.h"
+#include "kernel/integrator/surface_shader.h"
+
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"
 
@@ -15,7 +17,6 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
                                                       IntegratorState state,
                                                       ccl_global float *ccl_restrict render_buffer)
 {
-#ifdef __BACKGROUND__
   const int shader = kernel_data.background.surface_shader;
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
 
@@ -32,7 +33,7 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
 
   /* Use fast constant background color if available. */
   Spectrum L = zero_spectrum();
-  if (shader_constant_emission_eval(kg, shader, &L)) {
+  if (surface_shader_constant_emission(kg, shader, &L)) {
     return L;
   }
 
@@ -52,13 +53,10 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
 
   PROFILING_SHADER(emission_sd->object, emission_sd->shader);
   PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
-  shader_eval_surface<KERNEL_FEATURE_NODE_MASK_SURFACE_BACKGROUND>(
+  surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_BACKGROUND>(
       kg, state, emission_sd, render_buffer, path_flag | PATH_RAY_EMISSION);
 
-  return shader_background_eval(emission_sd);
-#else
-  return make_spectrum(0.8f);
-#endif
+  return surface_shader_background(emission_sd);
 }
 
 ccl_device_inline void integrate_background(KernelGlobals kg,
@@ -114,7 +112,6 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
 
     /* Background MIS weights. */
     float mis_weight = 1.0f;
-#ifdef __BACKGROUND_MIS__
     /* Check if background light exists or if we should skip pdf. */
     if (!(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_MIS_SKIP) &&
         kernel_data.background.use_mis) {
@@ -127,14 +124,13 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
       const float pdf = background_light_pdf(kg, ray_P, ray_D);
       mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
     }
-#endif
 
     guiding_record_background(kg, state, L, mis_weight);
     L *= mis_weight;
   }
 
   /* Write to render buffer. */
-  film_accum_background(kg, state, L, transparent, is_transparent_background_ray, render_buffer);
+  film_write_background(kg, state, L, transparent, is_transparent_background_ray, render_buffer);
 }
 
 ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
@@ -192,7 +188,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
 
       /* Write to render buffer. */
       guiding_record_background(kg, state, light_eval, mis_weight);
-      film_accum_surface_emission(
+      film_write_surface_emission(
           kg, state, light_eval, mis_weight, render_buffer, kernel_data.background.lightgroup);
     }
   }

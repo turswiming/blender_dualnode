@@ -5,7 +5,7 @@
 
 #include "kernel/integrator/guiding.h"
 #include "kernel/integrator/shade_volume.h"
-#include "kernel/integrator/shader_eval.h"
+#include "kernel/integrator/surface_shader.h"
 #include "kernel/integrator/volume_stack.h"
 
 CCL_NAMESPACE_BEGIN
@@ -41,7 +41,7 @@ ccl_device_inline Spectrum integrate_transparent_surface_shadow(KernelGlobals kg
 
   /* Evaluate shader. */
   if (!(shadow_sd->flag & SD_HAS_ONLY_VOLUME)) {
-    shader_eval_surface<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
+    surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
         kg, state, shadow_sd, NULL, PATH_RAY_SHADOW);
   }
 
@@ -51,7 +51,7 @@ ccl_device_inline Spectrum integrate_transparent_surface_shadow(KernelGlobals kg
 #  endif
 
   /* Compute transparency from closures. */
-  return shader_bsdf_transparency(kg, shadow_sd);
+  return surface_shader_transparency(kg, shadow_sd);
 }
 
 #  ifdef __VOLUME__
@@ -183,7 +183,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
   }
   else {
     guiding_record_direct_light(kg, state);
-    film_accum_direct_light(kg, state, render_buffer);
+    film_write_direct_light(kg, state, render_buffer);
     integrator_shadow_path_terminate(kg, state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
   }

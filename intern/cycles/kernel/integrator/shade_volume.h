@@ -3,13 +3,14 @@
 
 #pragma once
 
-#include "kernel/film/accumulate.h"
-#include "kernel/film/passes.h"
+#include "kernel/film/data_passes.h"
+#include "kernel/film/denoising_passes.h"
+#include "kernel/film/light_passes.h"
 
 #include "kernel/integrator/guiding.h"
 #include "kernel/integrator/intersect_closest.h"
 #include "kernel/integrator/path_state.h"
-#include "kernel/integrator/shader_eval.h"
+#include "kernel/integrator/volume_shader.h"
 #include "kernel/integrator/volume_stack.h"
 
 #include "kernel/light/light.h"
@@ -65,7 +66,7 @@ ccl_device_inline bool shadow_volume_shader_sample(KernelGlobals kg,
                                                    ccl_private Spectrum *ccl_restrict extinction)
 {
   VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i))
-  shader_eval_volume<true>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
+  volume_shader_eval<true>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
 
   if (!(sd->flag & SD_EXTINCTION)) {
     return false;
@@ -84,7 +85,7 @@ ccl_device_inline bool volume_shader_sample(KernelGlobals kg,
 {
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
-  shader_eval_volume<false>(kg, state, sd, path_flag, volume_read_lambda_pass);
+  volume_shader_eval<false>(kg, state, sd, path_flag, volume_read_lambda_pass);
 
   if (!(sd->flag & (SD_EXTINCTION | SD_SCATTER | SD_EMISSION))) {
     return false;
@@ -443,7 +444,7 @@ ccl_device_forceinline void volume_integrate_step_scattering(
 
       result.direct_scatter = true;
       result.direct_throughput *= coeff.sigma_s * new_transmittance / vstate.equiangular_pdf;
-      shader_copy_volume_phases(&result.direct_phases, sd);
+      volume_shader_copy_phases(&result.direct_phases, sd);
 
       /* Multiple importance sampling. */
       if (vstate.use_mis) {
@@ -479,7 +480,7 @@ ccl_device_forceinline void volume_integrate_step_scattering(
         result.indirect_scatter = true;
         result.indirect_t = new_t;
         result.indirect_throughput *= coeff.sigma_s * new_transmittance / distance_pdf;
-        shader_copy_volume_phases(&result.indirect_phases, sd);
+        volume_shader_copy_phases(&result.indirect_phases, sd);
 
         if (vstate.direct_sample_method != VOLUME_SAMPLE_EQUIANGULAR) {
           /* If using distance sampling for direct light, just copy parameters
@@ -487,7 +488,7 @@ ccl_device_forceinline void volume_integrate_step_scattering(
           result.direct_scatter = true;
           result.direct_t = result.indirect_t;
           result.direct_throughput = result.indirect_throughput;
-          shader_copy_volume_phases(&result.direct_phases, sd);
+          volume_shader_copy_phases(&result.direct_phases, sd);
 
           /* Multiple importance sampling. */
           if (vstate.use_mis) {
@@ -665,20 +666,19 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
   /* Write accumulated emission. */
   if (!is_zero(accum_emission)) {
     /* TODO: record emission for path guiding? */
-    film_accum_volume_emission(
+    film_write_volume_emission(
         kg, state, accum_emission, render_buffer, object_lightgroup(kg, sd->object));
   }
 
 #  ifdef __DENOISING_FEATURES__
   /* Write denoising features. */
   if (write_denoising_features) {
-    kernel_write_denoising_features_volume(
+    film_write_denoising_features_volume(
         kg, state, accum_albedo, result.indirect_scatter, render_buffer);
   }
 #  endif /* __DENOISING_FEATURES__ */
 }
 
-#  ifdef __EMISSION__
 /* Path tracing: sample point on light and evaluate light shader, then
  * queue shadow ray to be traced. */
 ccl_device_forceinline bool integrate_volume_sample_light(
@@ -709,49 +709,6 @@ ccl_device_forceinline bool integrate_volume_sample_light(
 
   return true;
 }
-
-#    if defined(__PATH_GUIDING__)
-/* Randomly sample a volume phase function proportional to ShaderClosure.sample_weight. */
-ccl_device_inline ccl_private const ShaderVolumeClosure *shader_volume_phase_pick(
-    ccl_private const ShaderVolumePhases *phases, ccl_private float2 *rand_phase)
-{
-  int sampled = 0;
-
-  if (phases->num_closure > 1) {
-    /* pick a phase closure based on sample weights */
-    float sum = 0.0f;
-
-    for (sampled = 0; sampled < phases->num_closure; sampled++) {
-      ccl_private const ShaderVolumeClosure *svc = &phases->closure[sampled];
-      sum += svc->sample_weight;
-    }
-
-    float r = (*rand_phase).x * sum;
-    float partial_sum = 0.0f;
-
-    for (sampled = 0; sampled < phases->num_closure; sampled++) {
-      ccl_private const ShaderVolumeClosure *svc = &phases->closure[sampled];
-      float next_sum = partial_sum + svc->sample_weight;
-
-      if (r <= next_sum) {
-        /* Rescale to reuse for volume phase direction sample. */
-        (*rand_phase).x = (r - partial_sum) / svc->sample_weight;
-        break;
-      }
-
-      partial_sum = next_sum;
-    }
-
-    if (sampled == phases->num_closure) {
-      return NULL;
-    }
-  }
-
-  /* todo: this isn't quite correct, we don't weight anisotropy properly
-   * depending on color channels, even if this is perhaps not a common case */
-  return &phases->closure[sampled];
-}
-#    endif
 
 /* Path tracing: sample point on light and evaluate light shader, then
  * queue shadow ray to be traced. */
@@ -806,9 +763,9 @@ ccl_device_forceinline void integrate_volume_direct_light(
 
   /* Evaluate BSDF. */
   BsdfEval phase_eval ccl_optional_struct_init;
-  float phase_pdf = shader_volume_phase_eval(kg, sd, phases, ls->D, &phase_eval);
+  float phase_pdf = volume_shader_phase_eval(kg, sd, phases, ls->D, &phase_eval);
 
-#    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (kernel_data.integrator.use_guiding && state->guiding.use_volume_guiding) {
     const float guiding_sampling_prob = state->guiding.volume_guiding_sampling_prob;
     if (guiding_sampling_prob > 0.f) {
@@ -817,7 +774,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
       phase_pdf = (guiding_sampling_prob * guide_pdf) + (1.0f - guiding_sampling_prob) * phase_pdf;
     }
   }
-#    endif
+#  endif
 
   if (ls->shader & SHADER_USE_MIS) {
     float mis_weight = light_sample_mis_weight_nee(kg, ls->pdf, phase_pdf);
@@ -895,9 +852,9 @@ ccl_device_forceinline void integrate_volume_direct_light(
       state, path, transmission_bounce);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, throughput) = throughput_phase;
 
-#    ifdef __PATH_GUIDING__
+#  ifdef __PATH_GUIDING__
   // TODO add scattered contriubtion
-#    endif
+#  endif
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_PASS) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unshadowed_throughput) = throughput;
@@ -909,16 +866,15 @@ ccl_device_forceinline void integrate_volume_direct_light(
                                                    ls->group + 1 :
                                                    kernel_data.background.lightgroup + 1;
 
-#    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   INTEGRATOR_STATE_WRITE(
       shadow_state, shadow_path, scattered_contribution) = scattered_contribution;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = INTEGRATOR_STATE(
       state, guiding, path_segment);
-#    endif
+#  endif
 
   integrator_state_copy_volume_stack_to_shadow(kg, shadow_state, state);
 }
-#  endif
 
 /* Path tracing: scatter in new direction using phase function */
 ccl_device_forceinline bool integrate_volume_phase_scatter(
@@ -933,7 +889,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   float2 rand_phase = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_PHASE);
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  ccl_private const ShaderVolumeClosure *svc = shader_volume_phase_pick(phases, &rand_phase);
+  ccl_private const ShaderVolumeClosure *svc = volume_shader_phase_pick(phases, &rand_phase);
   if (!svc) {
     return false;
   }
@@ -948,7 +904,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
 
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (kernel_data.integrator.use_guiding) {
-    label = shader_guided_volume_phase_sample(kg,
+    label = volume_shader_phase_guided_sample(kg,
                                               state,
                                               sd,
                                               svc,
@@ -968,7 +924,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   else
 #  endif
   {
-    label = shader_volume_phase_sample(
+    label = volume_shader_phase_sample(
         kg, sd, phases, rand_phase, &phase_eval, &phase_omega_in, &phase_pdf, &sampled_roughness);
 
     if (phase_pdf == 0.0f || bsdf_eval_is_zero(&phase_eval)) {
@@ -1014,63 +970,6 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   path_state_next(kg, state, label);
   return true;
 }
-
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-ccl_device_inline void shader_prepare_volume_guiding(KernelGlobals kg,
-                                                     IntegratorState state,
-                                                     ccl_private ShaderData *sd,
-                                                     ccl_private const RNGState *rng_state,
-                                                     const float3 P,
-                                                     const float3 W,
-                                                     ccl_private const ShaderVolumePhases *phases,
-                                                     const VolumeSampleMethod direct_sample_method)
-{
-  const bool guiding = kernel_data.integrator.use_guiding;
-  const bool volume_guiding = kernel_data.integrator.use_volume_guiding;
-  const float volume_guiding_probability = kernel_data.integrator.volume_guiding_probability;
-
-  float guiding_sampling_prob = 0.f;
-
-  float grand = 0.f;
-
-  bool useGuiding = false;
-
-  int num_phases = phases->num_closure;
-
-  if (guiding && volume_guiding && (direct_sample_method == VOLUME_SAMPLE_DISTANCE)) {
-
-    if (num_phases == 1) {  // for now we only support a single phase function
-      ccl_private const ShaderVolumeClosure *svc = &phases->closure[0];
-      const float mean_cosine = svc->g;
-
-      // if (fabsf(mean_cosine) < 0.1f ) { // for now we only support HG phase function with very
-      // low anisotropy
-      if (true) {
-        grand = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_PHASE_GUIDING);
-
-        pgl_point3f pgl_P = openpgl::cpp::Point3(P[0], P[1], P[2]);
-        pgl_point3f pgl_W = openpgl::cpp::Vector3(W[0], W[1], W[2]);
-
-        useGuiding = state->guiding.volume_sampling_distribution->Init(
-            kg->opgl_guiding_field, pgl_P, grand, true);
-
-        if (useGuiding) {
-#    if defined(PATH_GUIDING_PHASE_FUNCTION_PRODUCT)
-          state->guiding.volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(
-              pgl_W, mean_cosine);
-#    endif
-          guiding_sampling_prob = volume_guiding_probability;
-        }
-      }
-    }
-  }
-
-  kernel_assert(guiding_sampling_prob >= 0.f && guiding_sampling_prob <= 1.0f);
-  state->guiding.volume_guiding_sampling_prob = guiding_sampling_prob;
-  state->guiding.use_volume_guiding = useGuiding;
-  state->guiding.sample_volume_guiding_rand = grand;
-}
-#  endif
 
 /* get the volume attenuation and emission over line segment defined by
  * ray, with the assumption that there are no surfaces blocking light
@@ -1170,7 +1069,7 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
 #    if PATH_GUIDING_LEVEL >= 4
     if (result.indirect_scatter) {
       const float3 P = ray->P + result.indirect_t * ray->D;
-      shader_prepare_volume_guiding(
+      volume_shader_prepare_guiding(
           kg, state, &sd, &rng_state, P, ray->D, &result.direct_phases, direct_sample_method);
     }
     else {

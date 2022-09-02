@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "kernel/film/accumulate.h"
-#include "kernel/integrator/shader_eval.h"
+#include "kernel/film/light_passes.h"
+#include "kernel/integrator/surface_shader.h"
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"
 
@@ -69,7 +69,7 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
 
   /* Write to render buffer. */
   guiding_record_surface_emission(kg, state, light_eval, mis_weight);
-  film_accum_surface_emission(kg, state, light_eval, mis_weight, render_buffer, ls.group);
+  film_write_surface_emission(kg, state, light_eval, mis_weight, render_buffer, ls.group);
 }
 
 ccl_device void integrator_shade_light(KernelGlobals kg,

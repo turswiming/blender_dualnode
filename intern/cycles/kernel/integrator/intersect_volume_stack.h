@@ -5,8 +5,8 @@
 
 #include "kernel/bvh/bvh.h"
 #include "kernel/geom/geom.h"
+
 #include "kernel/integrator/guiding.h"
-#include "kernel/integrator/shader_eval.h"
 #include "kernel/integrator/volume_stack.h"
 
 CCL_NAMESPACE_BEGIN
