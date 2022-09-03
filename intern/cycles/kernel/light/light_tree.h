@@ -287,6 +287,9 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
   stack[0] = 0;
   pdfs[0] = 1.0f;
 
+  /* For now, we arbitrarily limit splitting to 8 so that it doesn't continuously split. */
+  int split_count = 0;
+
   /* First traverse the light tree until a leaf node is reached.
    * Also keep track of the probability of traversing to a given node,
    * so that we can scale our PDF accordingly later. */
@@ -337,12 +340,14 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     const int left_index = index + 1;
     const int right_index = knode->child_index;
     if (light_tree_should_split(kg, P, knode) &&
+        split_count < 8 && 
         stack_index < stack_size - 1) {
       stack[stack_index] = left_index;
       pdfs[stack_index] = pdf;
       stack[stack_index + 1] = right_index;
       pdfs[stack_index + 1] = pdf;
       stack_index++;
+      split_count++;
       continue;
     }
 
@@ -525,6 +530,8 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
   stack[0] = 0;
   pdfs[0] = 1.0f;
 
+  int split_count = 0;
+
   float light_tree_pdf = 0.0f;
   float light_leaf_pdf = 0.0f;
   float total_weight = 0.0f;
@@ -591,12 +598,15 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
      * We adaptively split if the variance is high enough. */
     const int left_index = index + 1;
     const int right_index = knode->child_index;
-    if (light_tree_should_split(kg, P, knode) && stack_index < stack_size - 1) {
+    if (light_tree_should_split(kg, P, knode) &&
+        split_count < 8 &&
+        stack_index < stack_size - 1) {
       stack[stack_index] = left_index;
       pdfs[stack_index] = pdf;
       stack[stack_index + 1] = right_index;
       pdfs[stack_index + 1] = pdf;
       stack_index++;
+      split_count++;
       continue;
     }
 
