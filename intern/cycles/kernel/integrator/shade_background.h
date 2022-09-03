@@ -121,7 +121,7 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
 
       /* multiple importance sampling, get background light pdf for ray
        * direction, and compute weight with respect to BSDF pdf */
-      const float pdf = background_light_pdf(kg, ray_P, ray_D);
+      float pdf = background_light_pdf(kg, ray_P, ray_D);
       if (kernel_data.integrator.use_light_tree) {
         const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
         pdf *= distant_lights_pdf(kg, ray_P, N, kernel_data.background.light_index);

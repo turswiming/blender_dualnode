@@ -519,7 +519,8 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
   /* We generate a random number to use for selecting a light. */
   RNGState rng_state;
   path_state_rng_load(state, &rng_state);
-  float randu = path_state_rng_1D_hash(kg, &rng_state, 0x6a21694c);
+  /* to-do: is this the correct macro to use? */
+  float randu = path_state_rng_1D(kg, &rng_state, PRNG_LIGHT); 
 
   /* We traverse to the leaf node and
    * find the probability of selecting the target light. */
