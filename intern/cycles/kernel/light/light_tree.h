@@ -513,8 +513,9 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
                                     kernel_data_fetch(light_to_tree, ~prim);
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter);
+  const int target_leaf = kemitter->parent_index;
   ccl_global const KernelLightTreeNode *kleaf = &kernel_data_fetch(light_tree_nodes,
-                                                                   kemitter->parent_index);
+                                                                   target_leaf);
 
   /* We generate a random number to use for selecting a light. */
   RNGState rng_state;
@@ -551,7 +552,7 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
       /* If we're at the leaf node containing the light we need, 
        * then we iterate through the lights to find the target emitter.
        * Otherwise, we randomly select one. */
-      if (index == emitter) {
+      if (index == target_leaf) {
         light_tree_pdf = pdf;
 
         float target_emitter_importance = 0.0f;
