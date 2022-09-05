@@ -52,6 +52,11 @@ void Instance::init(const int2 &output_res,
   drw_view = drw_view_;
   v3d = v3d_;
   rv3d = rv3d_;
+  manager = DRW_manager_get();
+
+  if (assign_if_different(debug_mode, (eDebugMode)G.debug_value)) {
+    sampling.reset();
+  }
 
   info = "";
 
@@ -96,11 +101,13 @@ void Instance::begin_sync()
 {
   materials.begin_sync();
   velocity.begin_sync(); /* NOTE: Also syncs camera. */
+  lights.begin_sync();
 
   gpencil_engine_enabled = false;
 
   depth_of_field.sync();
   motion_blur.sync();
+  hiz_buffer.sync();
   pipelines.sync();
   main_view.sync();
   world.sync();
@@ -109,7 +116,7 @@ void Instance::begin_sync()
 
 void Instance::object_sync(Object *ob)
 {
-  const bool is_renderable_type = ELEM(ob->type, OB_CURVES, OB_GPENCIL, OB_MESH);
+  const bool is_renderable_type = ELEM(ob->type, OB_CURVES, OB_GPENCIL, OB_MESH, OB_LAMP);
   const int ob_visibility = DRW_object_visibility_in_active_context(ob);
   const bool partsys_is_visible = (ob_visibility & OB_VISIBLE_PARTICLES) != 0 &&
                                   (ob->type == OB_MESH);
@@ -120,12 +127,16 @@ void Instance::object_sync(Object *ob)
     return;
   }
 
+  /* TODO cleanup. */
+  ObjectRef ob_ref = DRW_object_ref_get(ob);
+  ResourceHandle res_handle = manager->resource_handle(ob_ref);
+
   ObjectHandle &ob_handle = sync.sync_object(ob);
 
   if (partsys_is_visible && ob != DRW_context_state_get()->object_edit) {
     LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
       if (md->type == eModifierType_ParticleSystem) {
-        sync.sync_curves(ob, ob_handle, md);
+        sync.sync_curves(ob, ob_handle, res_handle, md);
       }
     }
   }
@@ -133,22 +144,18 @@ void Instance::object_sync(Object *ob)
   if (object_is_visible) {
     switch (ob->type) {
       case OB_LAMP:
+        lights.sync_light(ob, ob_handle);
         break;
       case OB_MESH:
-      case OB_CURVES_LEGACY:
-      case OB_SURF:
-      case OB_FONT:
-      case OB_MBALL: {
-        sync.sync_mesh(ob, ob_handle);
+        sync.sync_mesh(ob, ob_handle, res_handle, ob_ref);
         break;
-      }
       case OB_VOLUME:
         break;
       case OB_CURVES:
-        sync.sync_curves(ob, ob_handle);
+        sync.sync_curves(ob, ob_handle, res_handle);
         break;
       case OB_GPENCIL:
-        sync.sync_gpencil(ob, ob_handle);
+        sync.sync_gpencil(ob, ob_handle, res_handle);
         break;
       default:
         break;
@@ -172,6 +179,7 @@ void Instance::object_sync_render(void *instance_,
 void Instance::end_sync()
 {
   velocity.end_sync();
+  lights.end_sync();
   sampling.end_sync();
   film.end_sync();
 }

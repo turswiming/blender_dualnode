@@ -6,6 +6,9 @@
  * \ingroup bke
  */
 
+#include "DNA_mesh_types.h"
+
+#include "BKE_customdata.h"
 #include "BKE_mesh_types.h"
 #include "BLI_compiler_attrs.h"
 #include "BLI_utildefines.h"
@@ -193,7 +196,6 @@ void BKE_mesh_orco_ensure(struct Object *ob, struct Mesh *mesh);
 
 struct Mesh *BKE_mesh_from_object(struct Object *ob);
 void BKE_mesh_assign_object(struct Main *bmain, struct Object *ob, struct Mesh *me);
-void BKE_mesh_from_metaball(struct ListBase *lb, struct Mesh *me);
 void BKE_mesh_to_curve_nurblist(const struct Mesh *me,
                                 struct ListBase *nurblist,
                                 int edge_users_test);
@@ -853,7 +855,7 @@ struct Mesh *BKE_mesh_merge_verts(struct Mesh *mesh,
                                   int merge_mode);
 
 /**
- * Account for custom-data such as UV's becoming detached because of of imprecision
+ * Account for custom-data such as UV's becoming detached because of imprecision
  * in custom-data interpolation.
  * Without running this operation subdivision surface can cause UV's to be disconnected,
  * see: T81065.
@@ -865,19 +867,7 @@ void BKE_mesh_merge_customdata_for_apply_modifier(struct Mesh *me);
 /**
  * Update the hide flag for edges and faces from the corresponding flag in verts.
  */
-void BKE_mesh_flush_hidden_from_verts_ex(const struct MVert *mvert,
-                                         const struct MLoop *mloop,
-                                         struct MEdge *medge,
-                                         int totedge,
-                                         struct MPoly *mpoly,
-                                         int totpoly);
 void BKE_mesh_flush_hidden_from_verts(struct Mesh *me);
-void BKE_mesh_flush_hidden_from_polys_ex(struct MVert *mvert,
-                                         const struct MLoop *mloop,
-                                         struct MEdge *medge,
-                                         int totedge,
-                                         const struct MPoly *mpoly,
-                                         int totpoly);
 void BKE_mesh_flush_hidden_from_polys(struct Mesh *me);
 /**
  * simple poly -> vert/edge selection.
@@ -1031,6 +1021,30 @@ char *BKE_mesh_debug_info(const struct Mesh *me)
     ATTR_NONNULL(1) ATTR_MALLOC ATTR_WARN_UNUSED_RESULT;
 void BKE_mesh_debug_print(const struct Mesh *me) ATTR_NONNULL(1);
 #endif
+
+/**
+ * \return The material index for each polygon. May be null.
+ * \note In C++ code, prefer using the attribute API (#MutableAttributeAccessor)/
+ */
+BLI_INLINE const int *BKE_mesh_material_indices(const Mesh *mesh)
+{
+  return (const int *)CustomData_get_layer_named(&mesh->pdata, CD_PROP_INT32, "material_index");
+}
+
+/**
+ * \return The material index for each polygon. Create the layer if it doesn't exist.
+ * \note In C++ code, prefer using the attribute API (#MutableAttributeAccessor)/
+ */
+BLI_INLINE int *BKE_mesh_material_indices_for_write(Mesh *mesh)
+{
+  int *indices = (int *)CustomData_duplicate_referenced_layer_named(
+      &mesh->pdata, CD_PROP_INT32, "material_index", mesh->totpoly);
+  if (indices) {
+    return indices;
+  }
+  return (int *)CustomData_add_layer_named(
+      &mesh->pdata, CD_PROP_INT32, CD_SET_DEFAULT, NULL, mesh->totpoly, "material_index");
+}
 
 #ifdef __cplusplus
 }

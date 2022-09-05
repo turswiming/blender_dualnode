@@ -204,7 +204,7 @@ IDTypeInfo IDType_ID_CV = {
     /*main_listbase_index */ INDEX_ID_CV,
     /*struct_size */ sizeof(Curves),
     /*name */ "Curves",
-    /*name_plural */ "curves",
+    /*name_plural */ "hair_curves",
     /*translation_context */ BLT_I18NCONTEXT_ID_CURVES,
     /*flags */ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     /*asset_type_info */ nullptr,
@@ -366,6 +366,8 @@ namespace blender::bke {
 
 Curves *curves_new_nomain(const int points_num, const int curves_num)
 {
+  BLI_assert(points_num >= 0);
+  BLI_assert(curves_num >= 0);
   Curves *curves_id = static_cast<Curves *>(BKE_id_new_nomain(ID_CV, nullptr));
   CurvesGeometry &curves = CurvesGeometry::wrap(curves_id->geometry);
   curves.resize(points_num, curves_num);

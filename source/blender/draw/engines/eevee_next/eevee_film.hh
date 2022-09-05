@@ -40,7 +40,7 @@ class Film {
  private:
   Instance &inst_;
 
-  /** Incomming combined buffer with post fx applied (motion blur + depth of field). */
+  /** Incoming combined buffer with post FX applied (motion blur + depth of field). */
   GPUTexture *combined_final_tx_ = nullptr;
 
   /** Main accumulation textures containing every render-pass except depth and combined. */
@@ -55,7 +55,7 @@ class Film {
   /** User setting to disable reprojection. Useful for debugging or have a more precise render. */
   bool force_disable_reprojection_ = false;
 
-  DRWPass *accumulate_ps_ = nullptr;
+  PassSimple accumulate_ps_ = {"Film.Accumulate"};
 
   FilmDataBuf data_;
 

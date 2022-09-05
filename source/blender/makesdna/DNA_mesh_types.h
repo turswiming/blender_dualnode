@@ -112,7 +112,7 @@ typedef struct Mesh_Runtime {
    * (most #eModifierTypeType_NonGeometrical modifiers). Otherwise the edit-mesh
    * data will be used for drawing, missing changes from modifiers. See T79517.
    */
-  char is_original;
+  char is_original_bmesh;
 
   /** #eMeshWrapperType and others. */
   char wrapper_type;
@@ -161,7 +161,8 @@ typedef struct Mesh {
 
   /**
    * An array of materials, with length #totcol. These can be overridden by material slots
-   * on #Object. Indices in #MPoly.mat_nr control which material is used for every face.
+   * on #Object. Indices in the "material_index" attribute control which material is used for every
+   * face.
    */
   struct Material **mat;
 

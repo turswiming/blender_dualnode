@@ -47,6 +47,7 @@
 #include "BKE_image.h"
 #include "BKE_kelvinlet.h"
 #include "BKE_key.h"
+#include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_mesh.h"
@@ -215,7 +216,7 @@ static int sculpt_symmetrize_exec(bContext *C, wmOperator *op)
        * as deleted, then after symmetrize operation all BMesh elements
        * are logged as added (as opposed to attempting to store just the
        * parts that symmetrize modifies). */
-      SCULPT_undo_push_begin(ob, "Dynamic topology symmetrize");
+      SCULPT_undo_push_begin(ob, op);
       SCULPT_undo_push_node(ob, NULL, SCULPT_UNDO_DYNTOPO_SYMMETRIZE);
       BM_log_before_all_removed(ss->bm, ss->bm_log);
 
@@ -242,7 +243,7 @@ static int sculpt_symmetrize_exec(bContext *C, wmOperator *op)
       break;
     case PBVH_FACES:
       /* Mesh Symmetrize. */
-      ED_sculpt_undo_geometry_begin(ob, "mesh symmetrize");
+      ED_sculpt_undo_geometry_begin(ob, op);
       Mesh *mesh = ob->data;
 
       BKE_mesh_mirror_apply_mirror_on_axis(bmain, mesh, sd->symmetrize_direction, dist);
@@ -394,7 +395,7 @@ void ED_object_sculptmode_enter_ex(Main *bmain,
       bool has_undo = wm->undo_stack != NULL;
       /* Undo push is needed to prevent memory leak. */
       if (has_undo) {
-        SCULPT_undo_push_begin(ob, "Dynamic topology enable");
+        SCULPT_undo_push_begin_ex(ob, "Dynamic topology enable");
       }
       SCULPT_dynamic_topology_enable_ex(bmain, depsgraph, scene, ob);
       if (has_undo) {
@@ -418,7 +419,7 @@ void ED_object_sculptmode_enter(struct bContext *C, Depsgraph *depsgraph, Report
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
   ED_object_sculptmode_enter_ex(bmain, depsgraph, scene, ob, false, reports);
 }
 
@@ -470,7 +471,7 @@ void ED_object_sculptmode_exit(bContext *C, Depsgraph *depsgraph)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
   ED_object_sculptmode_exit_ex(bmain, depsgraph, scene, ob);
 }
 
@@ -482,7 +483,7 @@ static int sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ToolSettings *ts = scene->toolsettings;
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
   const int mode_flag = OB_MODE_SCULPT;
   const bool is_mode_set = (ob->mode & mode_flag) != 0;
 
@@ -510,7 +511,7 @@ static int sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
          * while it works it causes lag when undoing the first undo step, see T71564. */
         wmWindowManager *wm = CTX_wm_manager(C);
         if (wm->op_undo_depth <= 1) {
-          SCULPT_undo_push_begin(ob, op->type->name);
+          SCULPT_undo_push_begin(ob, op);
           SCULPT_undo_push_end(ob);
         }
       }
@@ -921,7 +922,7 @@ static int sculpt_mask_by_color_invoke(bContext *C, wmOperator *op, const wmEven
   const float mval_fl[2] = {UNPACK2(event->mval)};
   SCULPT_cursor_geometry_info_update(C, &sgi, mval_fl, false);
 
-  SCULPT_undo_push_begin(ob, "Mask by color");
+  SCULPT_undo_push_begin(ob, op);
   BKE_sculpt_color_layer_create_if_needed(ob);
 
   const PBVHVertRef active_vertex = SCULPT_active_vertex_get(ss);

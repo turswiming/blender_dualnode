@@ -425,6 +425,8 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
   } \
   (void)0
 
+  int *dst_material_index = BKE_mesh_material_indices_for_write(result);
+
   /* flip normals */
 
   if (do_shell) {
@@ -462,8 +464,8 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
 #endif
 
       if (mat_ofs) {
-        mp->mat_nr += mat_ofs;
-        CLAMP(mp->mat_nr, 0, mat_nr_max);
+        dst_material_index[mp - mpoly] += mat_ofs;
+        CLAMP(dst_material_index[mp - mpoly], 0, mat_nr_max);
       }
 
       e = ml2[0].e;
@@ -994,7 +996,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
     if (dvert == NULL) {
       /* Add a valid data layer! */
       dvert = CustomData_add_layer(
-          &result->vdata, CD_MDEFORMVERT, CD_CALLOC, NULL, result->totvert);
+          &result->vdata, CD_MDEFORMVERT, CD_SET_DEFAULT, NULL, result->totvert);
     }
     /* Ultimate security check. */
     if (dvert != NULL) {
@@ -1020,9 +1022,9 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
   if (do_rim) {
     uint i;
 
-    /* NOTE(campbell): Unfortunately re-calculate the normals for the new edge faces is necessary.
-     * This could be done in many ways, but probably the quickest way
-     * is to calculate the average normals for side faces only.
+    /* NOTE(@campbellbarton): Unfortunately re-calculate the normals for the new edge
+     * faces is necessary. This could be done in many ways, but probably the quickest
+     * way is to calculate the average normals for side faces only.
      * Then blend them with the normals of the edge verts.
      *
      * At the moment its easiest to allocate an entire array for every vertex,
@@ -1151,8 +1153,8 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
 
       /* use the next material index if option enabled */
       if (mat_ofs_rim) {
-        mp->mat_nr += mat_ofs_rim;
-        CLAMP(mp->mat_nr, 0, mat_nr_max);
+        dst_material_index[mp - mpoly] += mat_ofs_rim;
+        CLAMP(dst_material_index[mp - mpoly], 0, mat_nr_max);
       }
       if (crease_outer) {
         /* crease += crease_outer; without wrapping */

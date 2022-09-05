@@ -377,7 +377,7 @@ struct DRWUniform {
     /* DRW_UNIFORM_INT_COPY */
     int ivalue[4];
     /* DRW_UNIFORM_BLOCK_OBATTRS */
-    struct GPUUniformAttrList *uniform_attrs;
+    const struct GPUUniformAttrList *uniform_attrs;
   };
   int location;      /* Uniform location or binding point for textures and UBO's. */
   uint8_t type;      /* #DRWUniformType */
@@ -403,7 +403,7 @@ struct DRWShadingGroup {
       DRWResourceHandle pass_handle; /* Memblock key to parent pass. */
 
       /* Set of uniform attributes used by this shader. */
-      struct GPUUniformAttrList *uniform_attrs;
+      const struct GPUUniformAttrList *uniform_attrs;
     };
     /* This struct is used after cache populate if using the Z sorting.
      * It will not conflict with the above struct. */
@@ -500,20 +500,6 @@ typedef struct DRWCommandSmallChunk {
 #ifdef __LP64__
 BLI_STATIC_ASSERT_ALIGN(DRWCommandChunk, 16);
 #endif
-
-/* ------------- DRAW DEBUG ------------ */
-
-typedef struct DRWDebugLine {
-  struct DRWDebugLine *next; /* linked list */
-  float pos[2][3];
-  float color[4];
-} DRWDebugLine;
-
-typedef struct DRWDebugSphere {
-  struct DRWDebugSphere *next; /* linked list */
-  float mat[4][4];
-  float color[4];
-} DRWDebugSphere;
 
 /* ------------- Memory Pools ------------ */
 
@@ -656,11 +642,7 @@ typedef struct DRWManager {
 
   GPUDrawList *draw_list;
 
-  struct {
-    /* TODO(@fclem): optimize: use chunks. */
-    DRWDebugLine *lines;
-    DRWDebugSphere *spheres;
-  } debug;
+  DRWDebugModule *debug;
 } DRWManager;
 
 extern DRWManager DST; /* TODO: get rid of this and allow multi-threaded rendering. */
@@ -675,6 +657,9 @@ void drw_state_set(DRWState state);
 
 void drw_debug_draw(void);
 void drw_debug_init(void);
+void drw_debug_module_free(DRWDebugModule *module);
+GPUStorageBuf *drw_debug_gpu_draw_buf_get(void);
+GPUStorageBuf *drw_debug_gpu_print_buf_get(void);
 
 eDRWCommandType command_type_get(const uint64_t *command_type_bits, int index);
 
@@ -696,7 +681,7 @@ GPUBatch *drw_cache_procedural_triangles_get(void);
 GPUBatch *drw_cache_procedural_triangle_strips_get(void);
 
 void drw_uniform_attrs_pool_update(struct GHash *table,
-                                   struct GPUUniformAttrList *key,
+                                   const struct GPUUniformAttrList *key,
                                    DRWResourceHandle *handle,
                                    struct Object *ob,
                                    struct Object *dupli_parent,
@@ -708,6 +693,9 @@ void *drw_engine_data_engine_data_get(GPUViewport *viewport, void *engine_handle
 bool drw_engine_data_engines_data_validate(GPUViewport *viewport, void **engine_handle_array);
 void drw_engine_data_cache_release(GPUViewport *viewport);
 void drw_engine_data_free(GPUViewport *viewport);
+
+void DRW_manager_begin_sync(void);
+void DRW_manager_end_sync(void);
 
 #ifdef __cplusplus
 }

@@ -7,7 +7,7 @@
  * Functions to convert mesh data to and from legacy formats like #MFace.
  */
 
-// #include <climits>
+#define DNA_DEPRECATED_ALLOW
 
 #include "MEM_guardedalloc.h"
 
@@ -18,8 +18,10 @@
 #include "BLI_math.h"
 #include "BLI_memarena.h"
 #include "BLI_polyfill_2d.h"
+#include "BLI_task.hh"
 #include "BLI_utildefines.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_customdata.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_legacy_convert.h"
@@ -135,19 +137,19 @@ static void CustomData_to_bmeshpoly(CustomData *fdata, CustomData *ldata, int to
   for (int i = 0; i < fdata->totlayer; i++) {
     if (fdata->layers[i].type == CD_MTFACE) {
       CustomData_add_layer_named(
-          ldata, CD_MLOOPUV, CD_CALLOC, nullptr, totloop, fdata->layers[i].name);
+          ldata, CD_MLOOPUV, CD_SET_DEFAULT, nullptr, totloop, fdata->layers[i].name);
     }
     else if (fdata->layers[i].type == CD_MCOL) {
       CustomData_add_layer_named(
-          ldata, CD_PROP_BYTE_COLOR, CD_CALLOC, nullptr, totloop, fdata->layers[i].name);
+          ldata, CD_PROP_BYTE_COLOR, CD_SET_DEFAULT, nullptr, totloop, fdata->layers[i].name);
     }
     else if (fdata->layers[i].type == CD_MDISPS) {
       CustomData_add_layer_named(
-          ldata, CD_MDISPS, CD_CALLOC, nullptr, totloop, fdata->layers[i].name);
+          ldata, CD_MDISPS, CD_SET_DEFAULT, nullptr, totloop, fdata->layers[i].name);
     }
     else if (fdata->layers[i].type == CD_TESSLOOPNORMAL) {
       CustomData_add_layer_named(
-          ldata, CD_NORMAL, CD_CALLOC, nullptr, totloop, fdata->layers[i].name);
+          ldata, CD_NORMAL, CD_SET_DEFAULT, nullptr, totloop, fdata->layers[i].name);
     }
   }
 }
@@ -185,6 +187,12 @@ static void convert_mfaces_to_mpolys(ID *id,
   totpoly = totface_i;
   mpoly = (MPoly *)MEM_calloc_arrayN((size_t)totpoly, sizeof(MPoly), "mpoly converted");
   CustomData_add_layer(pdata, CD_MPOLY, CD_ASSIGN, mpoly, totpoly);
+  int *material_indices = static_cast<int *>(
+      CustomData_get_layer_named(pdata, CD_PROP_INT32, "material_index"));
+  if (material_indices == nullptr) {
+    material_indices = static_cast<int *>(CustomData_add_layer_named(
+        pdata, CD_PROP_INT32, CD_SET_DEFAULT, nullptr, totpoly, "material_index"));
+  }
 
   numTex = CustomData_number_of_layers(fdata, CD_MTFACE);
   numCol = CustomData_number_of_layers(fdata, CD_MCOL);
@@ -230,7 +238,7 @@ static void convert_mfaces_to_mpolys(ID *id,
 
     mp->totloop = mf->v4 ? 4 : 3;
 
-    mp->mat_nr = mf->mat_nr;
+    material_indices[i] = mf->mat_nr;
     mp->flag = mf->flag;
 
 #define ML(v1, v2) \
@@ -562,6 +570,8 @@ static int mesh_tessface_calc(CustomData *fdata,
 
   mpoly = (const MPoly *)CustomData_get_layer(pdata, CD_MPOLY);
   mloop = (const MLoop *)CustomData_get_layer(ldata, CD_MLOOP);
+  const int *material_indices = static_cast<const int *>(
+      CustomData_get_layer_named(pdata, CD_PROP_INT32, "material_index"));
 
   /* Allocate the length of `totfaces`, avoid many small reallocation's,
    * if all faces are triangles it will be correct, `quads == 2x` allocations. */
@@ -600,7 +610,7 @@ static int mesh_tessface_calc(CustomData *fdata,
     lidx[1] = l2; \
     lidx[2] = l3; \
     lidx[3] = 0; \
-    mf->mat_nr = mp->mat_nr; \
+    mf->mat_nr = material_indices ? material_indices[poly_index] : 0; \
     mf->flag = mp->flag; \
     mf->edcode = 0; \
     (void)0
@@ -623,7 +633,7 @@ static int mesh_tessface_calc(CustomData *fdata,
     lidx[1] = l2; \
     lidx[2] = l3; \
     lidx[3] = l4; \
-    mf->mat_nr = mp->mat_nr; \
+    mf->mat_nr = material_indices ? material_indices[poly_index] : 0; \
     mf->flag = mp->flag; \
     mf->edcode = TESSFACE_IS_QUAD; \
     (void)0
@@ -709,7 +719,7 @@ static int mesh_tessface_calc(CustomData *fdata,
         lidx[2] = l3;
         lidx[3] = 0;
 
-        mf->mat_nr = mp->mat_nr;
+        mf->mat_nr = material_indices ? material_indices[poly_index] : 0;
         mf->flag = mp->flag;
         mf->edcode = 0;
 
@@ -847,30 +857,156 @@ void BKE_mesh_add_mface_layers(CustomData *fdata, CustomData *ldata, int total)
   for (int i = 0; i < ldata->totlayer; i++) {
     if (ldata->layers[i].type == CD_MLOOPUV) {
       CustomData_add_layer_named(
-          fdata, CD_MTFACE, CD_CALLOC, nullptr, total, ldata->layers[i].name);
+          fdata, CD_MTFACE, CD_SET_DEFAULT, nullptr, total, ldata->layers[i].name);
     }
     if (ldata->layers[i].type == CD_PROP_BYTE_COLOR) {
-      CustomData_add_layer_named(fdata, CD_MCOL, CD_CALLOC, nullptr, total, ldata->layers[i].name);
+      CustomData_add_layer_named(
+          fdata, CD_MCOL, CD_SET_DEFAULT, nullptr, total, ldata->layers[i].name);
     }
     else if (ldata->layers[i].type == CD_PREVIEW_MLOOPCOL) {
       CustomData_add_layer_named(
-          fdata, CD_PREVIEW_MCOL, CD_CALLOC, nullptr, total, ldata->layers[i].name);
+          fdata, CD_PREVIEW_MCOL, CD_SET_DEFAULT, nullptr, total, ldata->layers[i].name);
     }
     else if (ldata->layers[i].type == CD_ORIGSPACE_MLOOP) {
       CustomData_add_layer_named(
-          fdata, CD_ORIGSPACE, CD_CALLOC, nullptr, total, ldata->layers[i].name);
+          fdata, CD_ORIGSPACE, CD_SET_DEFAULT, nullptr, total, ldata->layers[i].name);
     }
     else if (ldata->layers[i].type == CD_NORMAL) {
       CustomData_add_layer_named(
-          fdata, CD_TESSLOOPNORMAL, CD_CALLOC, nullptr, total, ldata->layers[i].name);
+          fdata, CD_TESSLOOPNORMAL, CD_SET_DEFAULT, nullptr, total, ldata->layers[i].name);
     }
     else if (ldata->layers[i].type == CD_TANGENT) {
       CustomData_add_layer_named(
-          fdata, CD_TANGENT, CD_CALLOC, nullptr, total, ldata->layers[i].name);
+          fdata, CD_TANGENT, CD_SET_DEFAULT, nullptr, total, ldata->layers[i].name);
     }
   }
 
   CustomData_bmesh_update_active_layers(fdata, ldata);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Hide Attribute and Legacy Flag Conversion
+ * \{ */
+
+void BKE_mesh_legacy_convert_hide_layers_to_flags(Mesh *mesh)
+{
+  using namespace blender;
+  using namespace blender::bke;
+  const AttributeAccessor attributes = mesh_attributes(*mesh);
+
+  MutableSpan<MVert> verts(mesh->mvert, mesh->totvert);
+  const VArray<bool> hide_vert = attributes.lookup_or_default<bool>(
+      ".hide_vert", ATTR_DOMAIN_POINT, false);
+  threading::parallel_for(verts.index_range(), 4096, [&](IndexRange range) {
+    for (const int i : range) {
+      SET_FLAG_FROM_TEST(verts[i].flag, hide_vert[i], ME_HIDE);
+    }
+  });
+
+  MutableSpan<MEdge> edges(mesh->medge, mesh->totedge);
+  const VArray<bool> hide_edge = attributes.lookup_or_default<bool>(
+      ".hide_edge", ATTR_DOMAIN_EDGE, false);
+  threading::parallel_for(edges.index_range(), 4096, [&](IndexRange range) {
+    for (const int i : range) {
+      SET_FLAG_FROM_TEST(edges[i].flag, hide_edge[i], ME_HIDE);
+    }
+  });
+
+  MutableSpan<MPoly> polys(mesh->mpoly, mesh->totpoly);
+  const VArray<bool> hide_poly = attributes.lookup_or_default<bool>(
+      ".hide_poly", ATTR_DOMAIN_FACE, false);
+  threading::parallel_for(polys.index_range(), 4096, [&](IndexRange range) {
+    for (const int i : range) {
+      SET_FLAG_FROM_TEST(polys[i].flag, hide_poly[i], ME_HIDE);
+    }
+  });
+}
+
+void BKE_mesh_legacy_convert_flags_to_hide_layers(Mesh *mesh)
+{
+  using namespace blender;
+  using namespace blender::bke;
+  MutableAttributeAccessor attributes = mesh_attributes_for_write(*mesh);
+
+  const Span<MVert> verts(mesh->mvert, mesh->totvert);
+  if (std::any_of(
+          verts.begin(), verts.end(), [](const MVert &vert) { return vert.flag & ME_HIDE; })) {
+    SpanAttributeWriter<bool> hide_vert = attributes.lookup_or_add_for_write_only_span<bool>(
+        ".hide_vert", ATTR_DOMAIN_POINT);
+    threading::parallel_for(verts.index_range(), 4096, [&](IndexRange range) {
+      for (const int i : range) {
+        hide_vert.span[i] = verts[i].flag & ME_HIDE;
+      }
+    });
+    hide_vert.finish();
+  }
+
+  const Span<MEdge> edges(mesh->medge, mesh->totedge);
+  if (std::any_of(
+          edges.begin(), edges.end(), [](const MEdge &edge) { return edge.flag & ME_HIDE; })) {
+    SpanAttributeWriter<bool> hide_edge = attributes.lookup_or_add_for_write_only_span<bool>(
+        ".hide_edge", ATTR_DOMAIN_EDGE);
+    threading::parallel_for(edges.index_range(), 4096, [&](IndexRange range) {
+      for (const int i : range) {
+        hide_edge.span[i] = edges[i].flag & ME_HIDE;
+      }
+    });
+    hide_edge.finish();
+  }
+
+  const Span<MPoly> polys(mesh->mpoly, mesh->totpoly);
+  if (std::any_of(
+          polys.begin(), polys.end(), [](const MPoly &poly) { return poly.flag & ME_HIDE; })) {
+    SpanAttributeWriter<bool> hide_poly = attributes.lookup_or_add_for_write_only_span<bool>(
+        ".hide_poly", ATTR_DOMAIN_FACE);
+    threading::parallel_for(polys.index_range(), 4096, [&](IndexRange range) {
+      for (const int i : range) {
+        hide_poly.span[i] = polys[i].flag & ME_HIDE;
+      }
+    });
+    hide_poly.finish();
+  }
+}
+
+/** \} */
+/* -------------------------------------------------------------------- */
+/** \name Material Index Conversion
+ * \{ */
+
+void BKE_mesh_legacy_convert_material_indices_to_mpoly(Mesh *mesh)
+{
+  using namespace blender;
+  using namespace blender::bke;
+  const AttributeAccessor attributes = mesh_attributes(*mesh);
+  MutableSpan<MPoly> polys(mesh->mpoly, mesh->totpoly);
+  const VArray<int> material_indices = attributes.lookup_or_default<int>(
+      "material_index", ATTR_DOMAIN_FACE, 0);
+  threading::parallel_for(polys.index_range(), 4096, [&](IndexRange range) {
+    for (const int i : range) {
+      polys[i].mat_nr = material_indices[i];
+    }
+  });
+}
+
+void BKE_mesh_legacy_convert_mpoly_to_material_indices(Mesh *mesh)
+{
+  using namespace blender;
+  using namespace blender::bke;
+  MutableAttributeAccessor attributes = mesh_attributes_for_write(*mesh);
+  const Span<MPoly> polys(mesh->mpoly, mesh->totpoly);
+  if (std::any_of(
+          polys.begin(), polys.end(), [](const MPoly &poly) { return poly.mat_nr != 0; })) {
+    SpanAttributeWriter<int> material_indices = attributes.lookup_or_add_for_write_only_span<int>(
+        "material_index", ATTR_DOMAIN_FACE);
+    threading::parallel_for(polys.index_range(), 4096, [&](IndexRange range) {
+      for (const int i : range) {
+        material_indices.span[i] = polys[i].mat_nr;
+      }
+    });
+    material_indices.finish();
+  }
 }
 
 /** \} */

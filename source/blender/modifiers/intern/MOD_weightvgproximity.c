@@ -401,7 +401,7 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
   }
 
   if (need_transform_relation) {
-    DEG_add_modifier_to_transform_relation(ctx->node, "WeightVGProximity Modifier");
+    DEG_add_depends_on_transform_relation(ctx->node, "WeightVGProximity Modifier");
   }
 }
 
@@ -640,7 +640,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   TIMEIT_END(perf);
 #endif
 
-  mesh->runtime.is_original = false;
+  mesh->runtime.is_original_bmesh = false;
 
   /* Return the vgroup-modified mesh. */
   return mesh;

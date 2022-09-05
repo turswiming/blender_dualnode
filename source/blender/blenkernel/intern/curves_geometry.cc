@@ -13,6 +13,7 @@
 #include "BLI_index_mask_ops.hh"
 #include "BLI_length_parameterize.hh"
 #include "BLI_math_rotation.hh"
+#include "BLI_task.hh"
 
 #include "DNA_curves_types.h"
 
@@ -57,7 +58,7 @@ CurvesGeometry::CurvesGeometry(const int point_num, const int curve_num)
 
   CustomData_add_layer_named(&this->point_data,
                              CD_PROP_FLOAT3,
-                             CD_DEFAULT,
+                             CD_CONSTRUCT,
                              nullptr,
                              this->point_num,
                              ATTR_POSITION.c_str());
@@ -221,7 +222,7 @@ static MutableSpan<T> get_mutable_attribute(CurvesGeometry &curves,
     return {data, num};
   }
   data = (T *)CustomData_add_layer_named(
-      &custom_data, type, CD_CALLOC, nullptr, num, name.c_str());
+      &custom_data, type, CD_SET_DEFAULT, nullptr, num, name.c_str());
   MutableSpan<T> span = {data, num};
   if (num > 0 && span.first() != default_value) {
     span.fill(default_value);
@@ -253,6 +254,12 @@ void CurvesGeometry::fill_curve_types(const IndexMask selection, const CurveType
   if (selection.size() == this->curves_num()) {
     this->fill_curve_types(type);
     return;
+  }
+  if (std::optional<int8_t> single_type = this->curve_types().get_if_single()) {
+    if (single_type == type) {
+      /* No need for an array if the types are already a single with the correct type. */
+      return;
+    }
   }
   /* A potential performance optimization is only counting the changed indices. */
   this->curve_types_for_write().fill_indices(selection, type);
@@ -938,6 +945,12 @@ void CurvesGeometry::ensure_evaluated_lengths() const
   this->runtime->length_cache_dirty = false;
 }
 
+void CurvesGeometry::ensure_can_interpolate_to_evaluated() const
+{
+  this->ensure_evaluated_offsets();
+  this->ensure_nurbs_basis_cache();
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1189,7 +1202,7 @@ static CurvesGeometry copy_with_removed_points(const CurvesGeometry &curves,
       },
       [&]() {
         /* Copy over curve attributes.
-         * In some cases points are just dissolved, so the the number of
+         * In some cases points are just dissolved, so the number of
          * curves will be the same. That could be optimized in the future. */
         for (bke::AttributeTransferData &attribute : curve_attributes) {
           if (new_curves.curves_num() == curves.curves_num()) {
@@ -1356,6 +1369,10 @@ static void reverse_swap_curve_point_data(const CurvesGeometry &curves,
         std::swap(a[end_index], b[i]);
         std::swap(b[end_index], a[i]);
       }
+      if (points.size() % 2) {
+        const int64_t middle_index = points.size() / 2;
+        std::swap(a[middle_index], b[middle_index]);
+      }
     }
   });
 }
@@ -1467,12 +1484,15 @@ static void adapt_curve_domain_point_to_curve_impl(const CurvesGeometry &curves,
                                                    MutableSpan<T> r_values)
 {
   attribute_math::DefaultMixer<T> mixer(r_values);
-  for (const int i_curve : IndexRange(curves.curves_num())) {
-    for (const int i_point : curves.points_for_curve(i_curve)) {
-      mixer.mix_in(i_curve, old_values[i_point]);
+
+  threading::parallel_for(curves.curves_range(), 128, [&](const IndexRange range) {
+    for (const int i_curve : range) {
+      for (const int i_point : curves.points_for_curve(i_curve)) {
+        mixer.mix_in(i_curve, old_values[i_point]);
+      }
     }
-  }
-  mixer.finalize();
+    mixer.finalize(range);
+  });
 }
 
 /**

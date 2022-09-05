@@ -3,6 +3,8 @@ import bpy
 from bpy.types import Menu, Panel, UIList
 from rna_prop_ui import PropertyPanel
 
+from bpy.app.translations import pgettext_tip as tip_
+
 
 class MESH_MT_vertex_group_context_menu(Menu):
     bl_label = "Vertex Group Specials"
@@ -578,7 +580,7 @@ class DATA_PT_mesh_attributes(MeshButtonsPanel, Panel):
         colliding_names = []
         for collection in (
                 # Built-in names.
-                {"position": None, "material_index": None, "shade_smooth": None, "normal": None, "crease": None},
+                {"position": None, "shade_smooth": None, "normal": None, "crease": None},
                 mesh.attributes,
                 mesh.uv_layers,
                 ob.vertex_groups,
@@ -592,7 +594,7 @@ class DATA_PT_mesh_attributes(MeshButtonsPanel, Panel):
         if not colliding_names:
             return
 
-        layout.label(text="Name collisions: " + ", ".join(set(colliding_names)), icon='ERROR')
+        layout.label(text=tip_("Name collisions: ") + ", ".join(set(colliding_names)), icon='ERROR')
 
 
 class ColorAttributesListBase():
