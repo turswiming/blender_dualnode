@@ -553,7 +553,6 @@ ccl_device int bsdf_microfacet_multi_ggx_sample(KernelGlobals kg,
   else
     *pdf = mf_ggx_pdf(localI, localO, bsdf->alpha_x);
   *pdf = fmaxf(0.f, *pdf);
-  // kernel_assert(*pdf >= 0.f);
   *eval *= *pdf;
 
   return LABEL_REFLECT | LABEL_GLOSSY;

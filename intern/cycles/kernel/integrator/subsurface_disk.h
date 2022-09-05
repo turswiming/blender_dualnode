@@ -41,16 +41,10 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
   const Spectrum radius = INTEGRATOR_STATE(state, subsurface, radius);
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  // TODO (sherholz): The new segement is a virtual one only connecting the
-  //				  point of entry with the point of exit
-  //				  We need to flag the segment as invalid so that
-  //                  no samples are generated for the entry point.
   const Spectrum albedo = INTEGRATOR_STATE(state, subsurface, albedo);
   Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
   throughput = safe_divide_color(throughput, albedo);
   const bool use_guiding = kernel_data.integrator.use_guiding;
-  // we need to add a new segment or add the direction
-  // or at lease the sampling direction to the new path segment
   Spectrum initial_throughput = throughput;
   if (use_guiding) {
     guiding_record_bssrdf_bounce(kg, state, 1.f, Ng, -Ng);

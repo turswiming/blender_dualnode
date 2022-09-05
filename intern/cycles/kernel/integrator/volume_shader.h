@@ -130,10 +130,8 @@ ccl_device_inline void volume_shader_prepare_guiding(KernelGlobals kg,
             kg->opgl_guiding_field, pgl_P, grand, true);
 
         if (useGuiding) {
-#    if defined(PATH_GUIDING_PHASE_FUNCTION_PRODUCT)
           state->guiding.volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(
               pgl_W, mean_cosine);
-#    endif
           guiding_sampling_prob = volume_guiding_probability;
         }
       }

@@ -53,16 +53,8 @@ typedef struct KernelGlobalsCPU {
 #endif
 
 #ifdef __PATH_GUIDING__
-  /* Add per thread local guiding data structures needed by each integrator instance:
-    SurfaceSamplingDistribution
-    VolumeSamplingDistribution
-    PathSegmentStorage
-
-    As well as pointers to the global data structures:
-    GuidingField
-    SampleDataStorage
-   */
-
+  /* For guiding we need a set of pointer to some global and local data 
+   * structures */
 #  if PATH_GUIDING_LEVEL >= 1
   openpgl::cpp::PathSegmentStorage *opgl_path_segment_storage{nullptr};
 #  endif

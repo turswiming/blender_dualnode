@@ -210,8 +210,6 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   Spectrum sigma_s = sigma_t * alpha;
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  // we need to add a new segment or add the direction
-  // or at lease the sampling direction to the new path segment
   const bool use_guiding = kernel_data.integrator.use_guiding;
   Spectrum initial_throughput = throughput;
   if (use_guiding) {
@@ -360,11 +358,6 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
       if (guided) {
         sample_sigma_t *= guide_backward ? backward_stretching : forward_stretching;
       }
-
-#ifdef __PATH_GUIDING__
-      /* generate new volume segment and add the directional components */
-      // TOD: when we want to start guiding SSS
-#endif
     }
 
     /* Sample distance along ray. */

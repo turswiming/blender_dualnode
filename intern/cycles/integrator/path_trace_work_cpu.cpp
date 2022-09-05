@@ -59,11 +59,11 @@ void PathTraceWorkCPU::init_execution()
 
 #if defined(WITH_PATH_GUIDING)
 /* Note: It seems that this is called before every rendering iteration/progression and not once per
- * rendering. May be we find a way to call it only once per renderering. */
+ * rendering. May be we find a way to call it only once per rendering. */
 void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field, void *sample_data_storage)
 {
-  /* Cache per-thread kernel globals. */
-  // device_->get_cpu_kernel_thread_globals(kernel_thread_globals_);
+  /* Linking the global guiding structures (e.g., Field and SampleStorage) to the per-thread
+   * kernel globals. */
 #  if PATH_GUIDING_LEVEL >= 4
   openpgl::cpp::Field *field = (openpgl::cpp::Field *)guiding_field;
 #  endif
@@ -76,7 +76,6 @@ void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field, void *sa
 
 #  if PATH_GUIDING_LEVEL >= 4
     kernel_thread_globals_[thread_index].opgl_guiding_field = field;
-    /* We might be able to just create a new Sampling distribution if the pointer is NULL */
     if (kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution)
       delete kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution;
     kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution =
@@ -95,10 +94,6 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
                                       int samples_num,
                                       int sample_offset)
 {
-#if defined(WITH_PATH_GUIDING) && defined(WITH_PATH_GUIDING_DEBUG_PRINT)
-  VLOG_WORK << "render_samples: start_sample = " << start_sample
-            << "\t samples_num = " << samples_num;
-#endif
   const int64_t image_width = effective_buffer_params_.width;
   const int64_t image_height = effective_buffer_params_.height;
   const int64_t total_pixels_num = image_width * image_height;
@@ -356,14 +351,13 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
 {
 
 #    if defined(PATH_GUIDING_DEBUG_VALIDATE) && PATH_GUIDING_LEVEL >= 5
-  /* we can guard this check with a debug flag/define */
+  /* Checks if the generated path segments contain valid values */
   bool validSegments = state->guiding.path_segment_storage->ValidateSegments();
   if (!validSegments)
-    std::cout << "!!! validSegments = " << validSegments << " !!!" << std::endl;
+    VLOG_WORK << "Guiding: Invalid path segments!" << std::endl;
 #    endif
 
 #    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
-  // guiding_write_pixel_estimate_buffer(kg, state, render_buffer);
 
   pgl_vec3f pgl_final_color = state->guiding.path_segment_storage->CalculatePixelEstimate(false);
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
@@ -371,8 +365,8 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
                                         kernel_data.film.pass_stride;
   ccl_global float *buffer = render_buffer + render_buffer_offset;
   float3 final_color = make_float3(pgl_final_color.x, pgl_final_color.y, pgl_final_color.z);
-  if (kernel_data.film.pass_opgl_color != PASS_UNUSED) {
-    kernel_write_pass_float3(buffer + kernel_data.film.pass_opgl_color, final_color);
+  if (kernel_data.film.pass_guiding_color != PASS_UNUSED) {
+    film_write_pass_float3(buffer + kernel_data.film.pass_guiding_color, final_color);
   }
 #    else
   (void)render_buffer;
@@ -386,13 +380,14 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
 #    endif
 
 #    if defined(PATH_GUIDING_DEBUG_VALIDATE) && PATH_GUIDING_LEVEL >= 5
+  /* Checking if the training/radiance samples generated py the path segment storage are valid.*/
   bool validSamples = state->guiding.path_segment_storage->ValidateSamples();
   if (!validSamples)
-    std::cout << "!!! validSamples = " << validSamples << " !!!" << std::endl;
+    VLOG_WORK << "Guiding: Path segment storage generated/contains invalid radiance/training samples!" << std::endl;
 #    endif
 
 #    if PATH_GUIDING_LEVEL >= 3
-  /* Pushing the radiance data/samples from the current random walk/path to the global sample
+  /* Pushing the radiance samples from the current random walk/path to the global sample
    * stoarge. */
   size_t nSamples = 0;
   const openpgl::cpp::SampleData *samples = state->guiding.path_segment_storage->GetSamples(

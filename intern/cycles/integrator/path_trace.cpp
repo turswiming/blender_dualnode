@@ -197,8 +197,7 @@ void PathTrace::render_pipeline(RenderWork render_work)
   }
 
   /* Update the guiding field using the training data/samples collected during the rendering
-   * iteration/progression. TODO: we also should check if the guiding structure should be reset
-   * due to scene changes. */
+   * iteration/progression. */
   if (use_guiding) {
     guiding_update_structures();
   }
@@ -1351,7 +1350,7 @@ void PathTrace::guiding_update_structures()
       const size_t num_samples = 1;
       guiding_field_->Update(*guiding_sample_data_storage_, num_samples);
       guiding_update_count++;
-#  ifdef WITH_PATH_GUIDING_DEBUG_PRINT
+#  ifdef WITH_PATH_GUIDING_DEBUG_PRINT && PATH_GUIDING_DEBUG_VALIDATE
       VLOG_WORK << "Field: valid = " << guiding_field_->Validate();
 #  endif
       // if(guiding_update_count<=1)

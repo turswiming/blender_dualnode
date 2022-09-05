@@ -542,7 +542,6 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
       float roughness = sqr(param1);
 
       bsdf->N = N;
-      // TODO (sherholz): this should be set to the correct eta
       bsdf->ior = 1.0f;
       bsdf->extra = NULL;
 

@@ -392,8 +392,13 @@ typedef enum PassType {
   PASS_SHADOW_CATCHER_SAMPLE_COUNT,
   PASS_SHADOW_CATCHER_MATTE,
 
+  /* Guiding related debug rendering passes */
+  /* The estimated sample color from the PathSegmentStorage. If everything is integrated correctly
+   * the output should be similar to PASS_COMBINED. */
   PASS_GUIDING_COLOR,
+  /* The guiding probability at the first bounce. */
   PASS_GUIDING_PROBABILITY,
+  /* The avg. roughness at the first bounce. */
   PASS_GUIDING_AVG_ROUGHNESS,
   PASS_CATEGORY_DATA_END = 63,
 

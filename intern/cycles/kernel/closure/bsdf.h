@@ -117,13 +117,13 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
   switch (sc->type) {
     case CLOSURE_BSDF_DIFFUSE_ID:
       label = bsdf_diffuse_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
 #ifdef __SVM__
     case CLOSURE_BSDF_OREN_NAYAR_ID:
       label = bsdf_oren_nayar_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
 #  ifdef __OSL__
@@ -134,26 +134,26 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       break;
     case CLOSURE_BSDF_DIFFUSE_RAMP_ID:
       label = bsdf_diffuse_ramp_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
 #  endif
     case CLOSURE_BSDF_TRANSLUCENT_ID:
       label = bsdf_translucent_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_REFLECTION_ID:
       label = bsdf_reflection_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf, eta);
-      *sampled_roughness = make_float2(0.0f, 0.0f);
+      *sampled_roughness = zero_float2();
       break;
     case CLOSURE_BSDF_REFRACTION_ID:
       label = bsdf_refraction_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf, eta);
-      *sampled_roughness = make_float2(0.0f, 0.0f);
+      *sampled_roughness = zero_float2();
       break;
     case CLOSURE_BSDF_TRANSPARENT_ID:
       label = bsdf_transparent_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(0.0f, 0.0f);
+      *sampled_roughness = zero_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
@@ -205,18 +205,18 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       label = bsdf_ashikhmin_velvet_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_DIFFUSE_TOON_ID:
       label = bsdf_diffuse_toon_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_GLOSSY_TOON_ID:
       label = bsdf_glossy_toon_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
       // double check if this is valid
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_HAIR_REFLECTION_ID:
@@ -235,12 +235,12 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       break;
     case CLOSURE_BSDF_PRINCIPLED_DIFFUSE_ID:
       label = bsdf_principled_diffuse_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
       label = bsdf_principled_sheen_sample(sc, Ng, sd->I, randu, randv, eval, omega_in, pdf);
-      *sampled_roughness = make_float2(1.0f, 1.0f);
+      *sampled_roughness = one_float2();
       *eta = 1.0f;
       break;
 #endif
@@ -291,12 +291,12 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
   float alpha = 1.0f;
   switch (sc->type) {
     case CLOSURE_BSDF_DIFFUSE_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
 #ifdef __SVM__
     case CLOSURE_BSDF_OREN_NAYAR_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
 #  ifdef __OSL__
@@ -306,27 +306,27 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_DIFFUSE_RAMP_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
 #  endif
     case CLOSURE_BSDF_TRANSLUCENT_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_REFLECTION_ID:
       bsdf = (ccl_private const MicrofacetBsdf *)sc;
-      *roughness = make_float2(0.0f, 0.0f);
+      *roughness = zero_float2();
       *eta = bsdf->ior;
       break;
     case CLOSURE_BSDF_REFRACTION_ID:
       bsdf = (ccl_private const MicrofacetBsdf *)sc;
-      *roughness = make_float2(0.0f, 0.0f);
+      *roughness = zero_float2();
       // do we need to inverse eta??
       *eta = bsdf->ior;
       break;
     case CLOSURE_BSDF_TRANSPARENT_ID:
-      *roughness = make_float2(0.0f, 0.0f);
+      *roughness = zero_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
@@ -363,16 +363,16 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_DIFFUSE_TOON_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_GLOSSY_TOON_ID:
       // double check if this is valid
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_HAIR_REFLECTION_ID:
@@ -391,16 +391,16 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
       *eta = ((ccl_private PrincipledHairBSDF *)sc)->eta;
       break;
     case CLOSURE_BSDF_PRINCIPLED_DIFFUSE_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
     case CLOSURE_BSDF_PRINCIPLED_SHEEN_ID:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
 #endif
     default:
-      *roughness = make_float2(1.0f, 1.0f);
+      *roughness = one_float2();
       *eta = 1.0f;
       break;
   }

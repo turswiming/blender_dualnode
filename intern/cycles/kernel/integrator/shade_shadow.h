@@ -108,7 +108,6 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
         integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &transmittance);
         throughput *= transmittance;
 #    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-        // TODO
         if (use_guiding) {
           INTEGRATOR_STATE_WRITE(state, shadow_path, scattered_contribution) =
               INTEGRATOR_STATE(state, shadow_path, scattered_contribution) * transmittance;

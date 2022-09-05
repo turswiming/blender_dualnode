@@ -221,7 +221,8 @@ class PathTrace {
    * rendering iteration */
   void guiding_update_structures();
 
-  /* Prepares the per-kernel thread related guiding structures (e.g., )*/
+  /* Prepares the per-kernel thread related guiding structures (e.g., PathSegmentStorage,
+   * pointers to the global Field and SegmentStorage)*/
   void guiding_prepare_structures();
 
   /* Get number of samples in the current state of the render buffers. */

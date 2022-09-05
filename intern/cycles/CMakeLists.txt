@@ -349,10 +349,23 @@ endif()
 
 if(WITH_CYCLES_PATH_GUIDING)
   add_definitions(-DWITH_PATH_GUIDING)
-  add_definitions(-DWITH_PATH_GUIDING_DEBUG_PRINT)
+  # The level of the guiding integration. 
+  # Different levels can be selected to measure the overhead of 
+  # different stages.
+  # 1 = recording the path segments
+  # 2 = 1 + generating (not storing) sample data from the segments
+  # 3 = 2 + storing the generates sample data
+  # 4 = 3 + training the guiding fields
+  # 5 = 4 + querying the trained guiding for sampling (full path guiding)  
   add_definitions(-DPATH_GUIDING_LEVEL=5)
-  add_definitions(-DPATH_GUIDING_PHASE_FUNCTION_PRODUCT)
-  add_definitions(-DPATH_GUIDING_DEBUG_VALIDATE)
+  if(WITH_CYCLES_DEBUG)
+    # Validates each generated guiding data structure 
+    # (e.g., PathSegments, SampleData) during rendering. 
+    # This mode comes with a computational overhead.
+    add_definitions(-DPATH_GUIDING_DEBUG_VALIDATE)
+    # Prints some guiding information (e.g., num. training samples per iteration)
+    add_definitions(-DWITH_PATH_GUIDING_DEBUG_PRINT)
+  endif()
   include_directories(
     SYSTEM
     ${OPENPGL_INCLUDE_DIR}

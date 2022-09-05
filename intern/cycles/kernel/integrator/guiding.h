@@ -6,7 +6,7 @@
 #ifdef WITH_CYCLES_DEBUG
 #  include "kernel/closure/alloc.h"
 #  include "kernel/closure/bsdf.h"
-#  include "kernel/film/write_passes.h"
+#  include "kernel/film/write.h"
 #endif
 
 CCL_NAMESPACE_BEGIN
@@ -333,7 +333,7 @@ ccl_device_forceinline void guiding_write_debug_passes(KernelGlobals kg,
 
   if (kernel_data.film.pass_guiding_probability != PASS_UNUSED) {
     float guiding_prob = state->guiding.surface_guiding_sampling_prob;
-    kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_probability, guiding_prob);
+    film_write_pass_float(buffer + kernel_data.film.pass_guiding_probability, guiding_prob);
   }
 
   if (kernel_data.film.pass_guiding_avg_roughness != PASS_UNUSED) {
@@ -351,7 +351,7 @@ ccl_device_forceinline void guiding_write_debug_passes(KernelGlobals kg,
 
     avg_roughness = avg_roughness > 0.f ? avg_roughness / sum_sample_weight : 0.f;
 
-    kernel_write_pass_float(buffer + kernel_data.film.pass_guiding_avg_roughness, avg_roughness);
+    film_write_pass_float(buffer + kernel_data.film.pass_guiding_avg_roughness, avg_roughness);
   }
 #endif
 }
