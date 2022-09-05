@@ -879,9 +879,13 @@ void UVIslands::extend_borders(const UVIslandsMask &islands_mask)
 /* -------------------------------------------------------------------- */
 /** \name UVIslandsMask
  * \{ */
-constexpr ushort2 mask_resolution_from_tile_resolution(ushort2 tile_resolution)
+
+static ushort2 mask_resolution_from_tile_resolution(ushort2 tile_resolution)
 {
-  return tile_resolution;
+  return ushort2(
+    max_ii(tile_resolution.x >> 2, 256),
+    max_ii(tile_resolution.y >> 2, 256)
+  );
 }
 
 UVIslandsMask::Tile::Tile(float2 udim_offset, ushort2 tile_resolution)

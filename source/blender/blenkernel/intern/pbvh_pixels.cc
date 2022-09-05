@@ -364,8 +364,6 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
       pbvh->looptri, pbvh->totprim, pbvh->totvert, pbvh->mloop, ldata_uv);
   uv_islands::UVIslands islands(mesh_data);
 
-  // TODO: mask resolution should be based on the actual resolution of the image buffer (or a
-  // factor of it).
   uv_islands::UVIslandsMask uv_masks;
   ImageUser tile_user = *image_user;
   LISTBASE_FOREACH (ImageTile *, tile_data, &image->tiles) {
