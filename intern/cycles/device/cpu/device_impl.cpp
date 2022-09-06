@@ -287,9 +287,18 @@ void *CPUDevice::get_guiding_device() const
 {
 #ifdef WITH_PATH_GUIDING
   if (!guiding_device) {
-    // TODO(sherholz): we need to replace this with PGL_DEVICE_TYPE_CPU_AUTO
-    guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_4);
+#if defined(__ARM_NEON)
+    guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_8);
+#else
+    if(system_cpu_support_avx2()) {
+      guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_8);
+    } else if(system_cpu_support_sse41()) {
+      guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_4);
+    } else {
+      guiding_device = nullptr;
+    }
   }
+#endif
   return guiding_device.get();
 #else
   return nullptr;
