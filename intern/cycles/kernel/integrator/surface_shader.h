@@ -174,14 +174,13 @@ ccl_device_inline void surface_shader_prepare_closures(KernelGlobals kg,
 }
 
 /* BSDF */
-
-ccl_device_inline bool surface_shader_is_transmission(ccl_private const ShaderData *sd,
+ccl_device_inline bool surface_shader_is_transmission_sd(ccl_private const ShaderData *sd,
                                                       const float3 omega_in)
 {
   return dot(sd->N, omega_in) < 0.0f;
 }
 
-ccl_device_inline bool surface_shader_is_transmission3(const ShaderClosure *sc,
+ccl_device_inline bool surface_shader_is_transmission_sc(const ShaderClosure *sc,
                                                        const float3 omega_in)
 {
   return dot(sc->N, omega_in) < 0.0f;
@@ -436,7 +435,7 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
     *guided_bsdf_pdf = 0.0f;
     if (guide_pdf != 0.0f) {
       // TODO: update is_transmission when closure is picked
-      const bool is_transmission = surface_shader_is_transmission(sd, *omega_in);
+      const bool is_transmission = surface_shader_is_transmission_sd(sd, *omega_in);
       *bsdf_pdf = surface_shader_bsdf_eval_pdfs(
           kg, sd, *omega_in, is_transmission, bsdf_eval, bsdf_pdfs, 0);
       *guided_bsdf_pdf = (guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob)) +
@@ -477,7 +476,7 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
     ///////
     // validation code to test the bsdf_label function
     ///////
-    bool is_transmission3 = surface_shader_bsdf_is_transmission3(sc, *omega_in);
+    bool is_transmission3 = surface_shader_is_transmission_sc(sc, *omega_in);
     int label2 = bsdf_label(kg, sc, is_transmission3);
 
     if (*bsdf_pdf > 0.f && label != label2) {
@@ -518,7 +517,7 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
       kernel_assert(reduce_min(bsdf_weight) >= 0.0f);
 
       if (sd->num_closure > 1) {
-        const bool is_transmission = surface_shader_is_transmission(sd, *omega_in);
+        const bool is_transmission = surface_shader_is_transmission_sd(sd, *omega_in);
         float sweight = sc->sample_weight;
         // BsdfEval bsdf_eval_old = *bsdf_eval;
         *bsdf_pdf = _surface_shader_bsdf_eval_mis(
@@ -575,7 +574,7 @@ ccl_device int surface_shader_bsdf_sample_closure(KernelGlobals kg,
     bsdf_eval_init(bsdf_eval, sc->type, eval * sc->weight);
 
     if (sd->num_closure > 1) {
-      const bool is_transmission = surface_shader_is_transmission(sd, *omega_in);
+      const bool is_transmission = surface_shader_is_transmission_sd(sd, *omega_in);
       float sweight = sc->sample_weight;
       *pdf = _surface_shader_bsdf_eval_mis(
           kg, sd, *omega_in, is_transmission, sc, bsdf_eval, *pdf * sweight, sweight, 0);

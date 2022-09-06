@@ -173,7 +173,7 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
 
   Ray ray ccl_optional_struct_init;
   BsdfEval bsdf_eval ccl_optional_struct_init;
-  const bool is_transmission = surface_shader_is_transmission(sd, ls.D);
+  const bool is_transmission = surface_shader_is_transmission_sd(sd, ls.D);
 
 #ifdef __MNEE__
   int mnee_vertex_count = 0;
