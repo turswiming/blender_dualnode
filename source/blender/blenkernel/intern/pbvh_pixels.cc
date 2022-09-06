@@ -2,6 +2,7 @@
  * Copyright 2022 Blender Foundation. All rights reserved. */
 
 #include "BKE_customdata.h"
+#include "BKE_mesh.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_pbvh.h"
 #include "BKE_pbvh_pixels.hh"
