@@ -613,6 +613,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
           const Spectrum emission = volume_emission_integrate(
               &coeff, closure_flag, transmittance, dt);
           accum_emission += result.indirect_throughput * emission;
+          guiding_record_volume_emission(kg, state, emission);
         }
       }
 
@@ -665,7 +666,6 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
   /* Write accumulated emission. */
   if (!is_zero(accum_emission)) {
-    /* TODO: record emission for path guiding? */
     film_write_volume_emission(
         kg, state, accum_emission, render_buffer, object_lightgroup(kg, sd->object));
   }

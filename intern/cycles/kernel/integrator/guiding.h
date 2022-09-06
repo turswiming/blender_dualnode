@@ -278,6 +278,22 @@ ccl_device_forceinline void guiding_record_surface_emission(KernelGlobals kg,
 #endif
 }
 
+ccl_device_forceinline void guiding_record_volume_emission(KernelGlobals kg,
+                                                            IntegratorState state,
+                                                            const Spectrum Le)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding) {
+    return;
+  }
+
+  const float3 Le_rgb = spectrum_to_rgb(Le);
+
+  openpgl::cpp::SetDirectContribution(state->guiding.path_segment, guiding_vec3f(Le_rgb));
+  openpgl::cpp::SetMiWeight(state->guiding.path_segment, 1.0f);
+#endif
+}
+
 ccl_device_forceinline void guiding_record_direct_light(KernelGlobals kg,
                                                         IntegratorShadowState state)
 {
