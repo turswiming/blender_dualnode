@@ -517,7 +517,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         name="Guiding",
         description="Use path guiding for sampling paths. Path guiding incrementally "
         "learns the light distribution of the scene and guides path into directions "
-        "with high direct and indirect light contributions.",
+        "with high direct and indirect light contributions",
         default=False,
     )
 

@@ -297,32 +297,6 @@ ccl_device_inline float surface_shader_bsdf_eval_pdfs(const KernelGlobals kg,
   return (sum_sample_weight > 0.0f) ? sum_pdf / sum_sample_weight : 0.0f;
 }
 
-/*
-ccl_device_inline float _surface_shader_bsdf_single_eval(const KernelGlobals *kg,
-                                                         ShaderData *sd,
-                                                         const ShaderClosure *sc,
-                                                         const float3 omega_in,
-                                                         const bool is_transmission,
-                                                         BsdfEval *result_eval,
-                                                         const uint light_shader_flags)
-{
-  float bsdf_pdf = 0.0f;
-  if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
-    if (CLOSURE_IS_BSDF(sc->type) && !_surface_shader_exclude(sc->type, light_shader_flags)) {
-
-      Spectrum eval = bsdf_eval(kg, sd, sc, omega_in, is_transmission, &bsdf_pdf);
-
-      if (bsdf_pdf != 0.0f) {
-        const bool is_diffuse = (CLOSURE_IS_BSDF_DIFFUSE(sc->type) ||
-                                  CLOSURE_IS_BSDF_BSSRDF(sc->type));
-        bsdf_eval_accum(result_eval, is_diffuse, eval * sc->weight, 1.0f);
-      }
-    }
-  }
-  return (bsdf_pdf > 0.0f) ? bsdf_pdf : 0.0f;
-}
-*/
-
 #ifndef __KERNEL_CUDA__
 ccl_device
 #else
