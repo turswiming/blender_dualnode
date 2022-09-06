@@ -52,7 +52,7 @@ ccl_device_inline void surface_shader_prepare_guiding(KernelGlobals kg,
         const float sweight = sc->sample_weight;
         kernel_assert(sweight >= 0.f);
         bsdf_bssrdf_sampling_sum += sweight;
-        if (CLOSURE_IS_BSDF_DIFFUSE(sc->type)) {
+        if (CLOSURE_IS_BSDF_DIFFUSE(sc->type) && sc->type < CLOSURE_BSDF_TRANSLUCENT_ID) {
           diffuse_sampling_fraction += sweight;
         }
         if (CLOSURE_IS_BSSRDF(sc->type)) {
