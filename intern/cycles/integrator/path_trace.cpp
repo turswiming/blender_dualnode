@@ -1333,14 +1333,12 @@ void PathTrace::guiding_prepare_structures()
 void PathTrace::guiding_update_structures()
 {
 #ifdef WITH_PATH_GUIDING
-  // TODO(sherholz): implement
 #  ifdef WITH_PATH_GUIDING_DEBUG_PRINT
   VLOG_WORK << "Path Guiding: update guiding structures";
   VLOG_WORK << "SampleDataStrorage: #surface samples = "
             << guiding_sample_data_storage_->GetSizeSurface()
             << "\t#volumesamples = " << guiding_sample_data_storage_->GetSizeVolume();
 #  endif
-  // int training_iteration = guiding_field_->GetIteration();
   if (true) {
     const size_t num_valid_samples = guiding_sample_data_storage_->GetSizeSurface() +
                                      guiding_sample_data_storage_->GetSizeVolume();
@@ -1361,14 +1359,16 @@ void PathTrace::guiding_update_structures()
               }
             }
       */
+#if OPENPGL_VERSION_MINOR < 4
       const size_t num_samples = 1;
       guiding_field_->Update(*guiding_sample_data_storage_, num_samples);
+#else
+      guiding_field_->Update(*guiding_sample_data_storage_);
+#endif
       guiding_update_count++;
 #  if defined(WITH_PATH_GUIDING_DEBUG_PRINT) && PATH_GUIDING_DEBUG_VALIDATE
       VLOG_WORK << "Field: valid = " << guiding_field_->Validate();
 #  endif
-      // if(guiding_update_count<=1)
-
       guiding_sample_data_storage_->Clear();
     }
   }
