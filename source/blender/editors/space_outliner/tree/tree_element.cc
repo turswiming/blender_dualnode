@@ -146,4 +146,75 @@ void tree_element_expand(const AbstractTreeElement &tree_element, SpaceOutliner 
   tree_element.expand(space_outliner);
 }
 
+/* -------------------------------------------------------------------- */
+
+SubTree::SubTree(TreeElement &parent) : parent_(&parent)
+{
+}
+
+SubTree::SubTree(SpaceOutliner_Runtime &) : parent_(nullptr)
+{
+}
+
+void SubTree::add_back(std::unique_ptr<TreeElement> element)
+{
+  element->parent = parent_;
+  /* TODO is this the right place for this? */
+  element->child_elements.parent_ = element.get();
+  elements_.push_back(std::move(element));
+}
+
+void SubTree::insert_before(Iterator pos, std::unique_ptr<TreeElement> element)
+{
+  element->parent = parent_;
+  elements_.insert(pos.iter_, std::move(element));
+}
+
+std::unique_ptr<TreeElement> SubTree::remove(TreeElement &element)
+{
+  std::unique_ptr<TreeElement> element_uptr = nullptr;
+  /* TODO doesn't free element entirely yet, #TreeElement.name may need freeing! See
+   * #outliner_free_tree_element(). */
+
+  for (decltype(elements_)::iterator iter = elements_.begin(); iter != elements_.end(); ++iter) {
+    if (iter->get() == &element) {
+      element_uptr = std::move(*iter);
+      elements_.erase(iter);
+      break;
+    }
+  }
+  BLI_assert(!has_child(element));
+
+  if (element_uptr) {
+    element_uptr->parent = nullptr;
+  }
+  return element_uptr;
+}
+
+void SubTree::clear()
+{
+  elements_.clear();
+  /* No need to clear the parent pointer, elements get destructed entirely anyway. */
+}
+
+bool SubTree::has_child(const TreeElement &needle) const
+{
+  for (const TreeElement &te : *this) {
+    if (&te == &needle) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool SubTree::is_empty() const
+{
+  return elements_.empty();
+}
+
+TreeElement *SubTree::parent() const
+{
+  return parent_;
+}
+
 }  // namespace blender::ed::outliner

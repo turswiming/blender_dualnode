@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <iterator>
+#include <list>
 #include <memory>
 
 #include "RNA_types.h"
@@ -40,10 +42,132 @@ namespace blender::ed::outliner {
 
 class AbstractTreeDisplay;
 class AbstractTreeElement;
+struct SpaceOutliner_Runtime;
+struct TreeElement;
 
 namespace treehash = blender::bke::outliner::treehash;
 
-struct TreeElement;
+/**
+ * Container to own a number of tree elements.
+ */
+class SubTree {
+  /** The tree element owning this sub-tree. Remains null for root level elements. */
+  TreeElement *parent_ = nullptr;
+
+  std::list<std::unique_ptr<TreeElement>> elements_;
+
+  /* TODO all this boilerplate... make this a generic indirect-iterator? */
+  template<typename IterT, typename NestedIterT, typename ElemT> class IteratorBase {
+   public:
+    NestedIterT iter_;
+
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = ElemT;
+    using difference_type = ptrdiff_t;
+    using pointer = ElemT *;
+    using reference = ElemT &;
+
+    explicit IteratorBase(NestedIterT iter) : iter_(iter)
+    {
+    }
+
+    ElemT &operator*()
+    {
+      return **iter_;
+    }
+    ElemT *operator->()
+    {
+      return &**iter_;
+    }
+    IterT &operator++()
+    {
+      ++iter_;
+      return *static_cast<IterT *>(this);
+    }
+    IterT &operator--()
+    {
+      --iter_;
+      return *static_cast<IterT *>(this);
+    }
+    IterT operator++(int)
+    {
+      IterT tmp = *this;
+      ++iter_;
+      return tmp;
+    }
+    IterT operator--(int)
+    {
+      IterT tmp = *this;
+      --iter_;
+      return tmp;
+    }
+    friend bool operator==(const IterT &a, const IterT &b)
+    {
+      return a.iter_ == b.iter_;
+    }
+    friend bool operator!=(const IterT &a, const IterT &b)
+    {
+      return a.iter_ != b.iter_;
+    }
+  };
+
+  class Iterator : public IteratorBase<Iterator, decltype(elements_)::iterator, TreeElement> {
+    using IteratorBase::IteratorBase;
+  };
+  class ConstIterator : public IteratorBase<ConstIterator,
+                                            decltype(elements_)::const_iterator,
+                                            const TreeElement> {
+    using IteratorBase::IteratorBase;
+  };
+
+ public:
+  using iterator = Iterator;
+  using const_iterator = Iterator;
+
+  Iterator begin()
+  {
+    return Iterator{elements_.begin()};
+  }
+  std::reverse_iterator<Iterator> rbegin()
+  {
+    return std::reverse_iterator<Iterator>(Iterator{elements_.end()});
+  }
+  Iterator end()
+  {
+    return Iterator{elements_.end()};
+  }
+  std::reverse_iterator<Iterator> rend()
+  {
+    return std::reverse_iterator<Iterator>(Iterator{elements_.begin()});
+  }
+  ConstIterator begin() const
+  {
+    return ConstIterator{elements_.begin()};
+  }
+  ConstIterator end() const
+  {
+    return ConstIterator{elements_.end()};
+  }
+
+  explicit SubTree(TreeElement &parent);
+  explicit SubTree(SpaceOutliner_Runtime &root);
+
+  void add_back(std::unique_ptr<TreeElement> elem);
+  void insert_before(Iterator pos, std::unique_ptr<TreeElement> elem);
+  /** Detaches the given element from this sub-tree, and moves ownership of it to the calling
+   * scope (by returning its unique pointer). This way the caller can decide to keep it still,
+   * for example to reinsert it elsewhere. If the caller doesn't use it (e.g. by ignoring the
+   * return value entirely), the element will be destructed and freed cleanly. */
+  std::unique_ptr<TreeElement> remove(TreeElement &element);
+  /** Erase and destruct all elements in the container. */
+  void clear();
+
+  bool has_child(const TreeElement &needle) const;
+
+  bool is_empty() const;
+  /** Get the element owning these children. Will return null in case of root level elements. */
+  TreeElement *parent() const;
+};
 
 struct SpaceOutliner_Runtime {
   /** Object to create and manage the tree for a specific display type (View Layers, Scenes,
@@ -53,7 +177,11 @@ struct SpaceOutliner_Runtime {
   /* Hash table for tree-store elements, using `(id, type, index)` as key. */
   std::unique_ptr<treehash::TreeHash> tree_hash;
 
-  SpaceOutliner_Runtime() = default;
+  /** Entry point for the outliner tree. This is essentially a sorted vector of #TreeElement's,
+   * whereby each can have its own #SubTree containing the same. */
+  SubTree root_elements;
+
+  SpaceOutliner_Runtime();
   /** Used for copying runtime data to a duplicated space. */
   SpaceOutliner_Runtime(const SpaceOutliner_Runtime &);
   ~SpaceOutliner_Runtime() = default;
@@ -76,6 +204,12 @@ enum TreeTraversalAction {
 
 typedef TreeTraversalAction (*TreeTraversalFunc)(TreeElement *te, void *customdata);
 
+/**
+ * Legacy representation of an item in the Outliner tree. The new representation is
+ * #AbstractTreeElement, efforts should be put into slowly transitioning to it. However, since not
+ * all tree element types support this yet (#TreeElement.abstract_element will be null), things are
+ * split between the too, and the situation is rather chaotic.
+ */
 struct TreeElement {
   TreeElement *next, *prev, *parent;
 
@@ -88,6 +222,9 @@ struct TreeElement {
   std::unique_ptr<AbstractTreeElement> abstract_element;
 
   ListBase subtree;
+
+  SubTree child_elements;
+
   int xs, ys;                /* Do selection. */
   TreeStoreElem *store_elem; /* Element in tree store. */
   short flag;                /* Flag for non-saved stuff. */
@@ -96,6 +233,10 @@ struct TreeElement {
   short xend;                /* Width of item display, for select. */
   const char *name;
   void *directdata; /* Armature Bones, Base, ... */
+
+  TreeElement() : child_elements(*this)
+  {
+  }
 };
 
 struct TreeElementIcon {
@@ -254,7 +395,6 @@ enum TreeItemSelectAction {
 
 /* outliner_tree.c ----------------------------------------------- */
 
-void outliner_free_tree(ListBase *tree);
 void outliner_cleanup_tree(struct SpaceOutliner *space_outliner);
 /**
  * Free \a element and its sub-tree and remove its link in \a parent_subtree.
@@ -262,7 +402,7 @@ void outliner_cleanup_tree(struct SpaceOutliner *space_outliner);
  * \note Does not remove the #TreeStoreElem of \a element!
  * \param parent_subtree: Sub-tree of the parent element, so the list containing \a element.
  */
-void outliner_free_tree_element(TreeElement *element, ListBase *parent_subtree);
+void outliner_free_tree_element(TreeElement *element, SubTree &parent_subtree);
 
 /**
  * Main entry point for building the tree data-structure that the outliner represents.

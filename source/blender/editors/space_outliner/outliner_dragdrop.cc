@@ -64,9 +64,9 @@ static TreeElement *outliner_dropzone_element(TreeElement *te,
     }
   }
   /* Not it.  Let's look at its children. */
-  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0 && (te->subtree.first)) {
-    LISTBASE_FOREACH (TreeElement *, te_sub, &te->subtree) {
-      TreeElement *te_valid = outliner_dropzone_element(te_sub, fmval, children);
+  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0) {
+    for (TreeElement &te_sub : te->child_elements) {
+      TreeElement *te_valid = outliner_dropzone_element(&te_sub, fmval, children);
       if (te_valid) {
         return te_valid;
       }
@@ -139,14 +139,14 @@ static TreeElement *outliner_drop_insert_find(bContext *C,
 
     if (view_mval[1] < (te_hovered->ys + margin)) {
       if (TSELEM_OPEN(TREESTORE(te_hovered), space_outliner) &&
-          !BLI_listbase_is_empty(&te_hovered->subtree)) {
+          !te_hovered->child_elements.is_empty()) {
         /* inserting after a open item means we insert into it, but as first child */
-        if (BLI_listbase_is_empty(&te_hovered->subtree)) {
+        if (te_hovered->child_elements.is_empty()) {
           *r_insert_type = TE_INSERT_INTO;
           return te_hovered;
         }
         *r_insert_type = TE_INSERT_BEFORE;
-        return static_cast<TreeElement *>(te_hovered->subtree.first);
+        return &*te_hovered->child_elements.begin();
       }
       *r_insert_type = TE_INSERT_AFTER;
       return te_hovered;

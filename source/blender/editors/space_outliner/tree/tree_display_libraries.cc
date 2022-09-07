@@ -29,9 +29,9 @@ TreeDisplayLibraries::TreeDisplayLibraries(SpaceOutliner &space_outliner)
 {
 }
 
-ListBase TreeDisplayLibraries::buildTree(const TreeSourceData &source_data)
+SubTree TreeDisplayLibraries::buildTree(const TreeSourceData &source_data)
 {
-  ListBase tree = {nullptr};
+  SubTree tree;
 
   {
     /* current file first - mainvar provides tselem with unique pointer - not used */
@@ -56,13 +56,13 @@ ListBase TreeDisplayLibraries::buildTree(const TreeSourceData &source_data)
   }
 
   /* make hierarchy */
-  for (TreeElement *ten : List<TreeElement>(tree)) {
-    if (ten == tree.first) {
+  for (TreeElement &ten : tree) {
+    if (&ten == &*tree.begin()) {
       /* First item is main, skip. */
       continue;
     }
 
-    TreeStoreElem *tselem = TREESTORE(ten);
+    TreeStoreElem *tselem = TREESTORE(&ten);
     Library *lib = (Library *)tselem->id;
     BLI_assert(!lib || (GS(lib->id.name) == ID_LI));
     if (!lib || !lib->parent) {
@@ -73,16 +73,12 @@ ListBase TreeDisplayLibraries::buildTree(const TreeSourceData &source_data)
 
     if (tselem->id->tag & LIB_TAG_INDIRECT) {
       /* Only remove from 'first level' if lib is not also directly used. */
-      BLI_remlink(&tree, ten);
-      BLI_addtail(&parent->subtree, ten);
-      ten->parent = parent;
+      std::unique_ptr<TreeElement> ten_uptr = tree.remove(ten);
+      parent->child_elements.add_back(std::move(ten_uptr));
     }
     else {
       /* Else, make a new copy of the libtree for our parent. */
-      TreeElement *dupten = add_library_contents(*source_data.bmain, parent->subtree, lib);
-      if (dupten) {
-        dupten->parent = parent;
-      }
+      add_library_contents(*source_data.bmain, parent->child_elements, lib);
     }
   }
   /* restore newid pointers */
@@ -93,7 +89,9 @@ ListBase TreeDisplayLibraries::buildTree(const TreeSourceData &source_data)
   return tree;
 }
 
-TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase &lb, Library *lib)
+TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
+                                                        SubTree &subtree,
+                                                        Library *lib)
 {
   const short filter_id_type = id_filter_get();
 
@@ -135,10 +133,10 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase 
       if (!tenlib) {
         /* Create library tree element on demand, depending if there are any data-blocks. */
         if (lib) {
-          tenlib = outliner_add_element(&space_outliner_, &lb, lib, nullptr, TSE_SOME_ID, 0);
+          tenlib = outliner_add_element(&space_outliner_, lib, subtree, TSE_SOME_ID, 0);
         }
         else {
-          tenlib = outliner_add_element(&space_outliner_, &lb, &mainvar, nullptr, TSE_ID_BASE, 0);
+          tenlib = outliner_add_element(&space_outliner_, &mainvar, subtree, TSE_ID_BASE, 0);
           tenlib->name = IFACE_("Current File");
         }
       }
@@ -151,15 +149,14 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase 
           ten = tenlib;
         }
         else {
-          ten = outliner_add_element(
-              &space_outliner_, &tenlib->subtree, lib, nullptr, TSE_ID_BASE, a);
+          ten = outliner_add_element(&space_outliner_, lib, subtree, TSE_ID_BASE, a);
           ten->directdata = lbarray[a];
           ten->name = outliner_idcode_to_plural(GS(id->name));
         }
 
         for (ID *id : List<ID>(lbarray[a])) {
           if (library_id_filter_poll(lib, id)) {
-            outliner_add_element(&space_outliner_, &ten->subtree, id, ten, TSE_SOME_ID, 0);
+            outliner_add_element(&space_outliner_, id, ten, TSE_SOME_ID, 0);
           }
         }
       }

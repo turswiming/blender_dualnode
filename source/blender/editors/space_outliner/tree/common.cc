@@ -36,25 +36,26 @@ const char *outliner_idcode_to_plural(short idcode)
 
 /** \} */
 
-void outliner_make_object_parent_hierarchy(ListBase *lb)
+void outliner_make_object_parent_hierarchy(SubTree &subtree)
 {
   /* build hierarchy */
   /* XXX also, set extents here... */
-  TreeElement *te = static_cast<TreeElement *>(lb->first);
-  while (te) {
-    TreeElement *ten = te->next;
-    TreeStoreElem *tselem = TREESTORE(te);
+  for (TreeElement &te : subtree) {
+    TreeStoreElem *tselem = TREESTORE(&te);
 
-    if ((tselem->type == TSE_SOME_ID) && te->idcode == ID_OB) {
-      Object *ob = (Object *)tselem->id;
-      if (ob->parent && ob->parent->id.newid) {
-        BLI_remlink(lb, te);
-        TreeElement *tep = (TreeElement *)ob->parent->id.newid;
-        BLI_addtail(&tep->subtree, te);
-        te->parent = tep;
-      }
+    if ((tselem->type != TSE_SOME_ID) || te.idcode != ID_OB) {
+      continue;
     }
-    te = ten;
+
+    Object *ob = (Object *)tselem->id;
+    if (!ob->parent || !ob->parent->id.newid) {
+      continue;
+    }
+
+    TreeElement *new_parent = reinterpret_cast<TreeElement *>(ob->parent->id.newid);
+
+    std::unique_ptr floating_te = subtree.remove(te);
+    new_parent->child_elements.add_back(std::move(floating_te));
   }
 }
 

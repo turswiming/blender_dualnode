@@ -27,9 +27,9 @@ TreeDisplayIDOrphans::TreeDisplayIDOrphans(SpaceOutliner &space_outliner)
 {
 }
 
-ListBase TreeDisplayIDOrphans::buildTree(const TreeSourceData &source_data)
+SubTree TreeDisplayIDOrphans::buildTree(const TreeSourceData &source_data)
 {
-  ListBase tree = {nullptr};
+  SubTree tree;
   ListBase *lbarray[INDEX_ID_MAX];
   short filter_id_type = (space_outliner_.filter & SO_FILTER_ID_TYPE) ?
                              space_outliner_.filter_id_type :
@@ -56,7 +56,7 @@ ListBase TreeDisplayIDOrphans::buildTree(const TreeSourceData &source_data)
     TreeElement *te = nullptr;
     if (!filter_id_type) {
       ID *id = (ID *)lbarray[a]->first;
-      te = outliner_add_element(&space_outliner_, &tree, lbarray[a], nullptr, TSE_ID_BASE, 0);
+      te = outliner_add_element(&space_outliner_, lbarray[a], tree, TSE_ID_BASE, 0);
       te->directdata = lbarray[a];
       te->name = outliner_idcode_to_plural(GS(id->name));
     }
@@ -64,8 +64,7 @@ ListBase TreeDisplayIDOrphans::buildTree(const TreeSourceData &source_data)
     /* Add the orphaned data-blocks - these will not be added with any subtrees attached. */
     for (ID *id : List<ID>(lbarray[a])) {
       if (ID_REAL_USERS(id) <= 0) {
-        outliner_add_element(
-            &space_outliner_, (te) ? &te->subtree : &tree, id, te, TSE_SOME_ID, 0);
+        outliner_add_element(&space_outliner_, id, te ? te->child_elements : tree, TSE_SOME_ID, 0);
       }
     }
   }

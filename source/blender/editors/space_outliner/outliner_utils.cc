@@ -70,8 +70,7 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
         return te_iter;
       }
 
-      if (BLI_listbase_is_empty(&te_iter->subtree) ||
-          !TSELEM_OPEN(TREESTORE(te_iter), space_outliner)) {
+      if (te_iter->child_elements.is_empty() || !TSELEM_OPEN(TREESTORE(te_iter), space_outliner)) {
         /* No need for recursion. */
         continue;
       }
@@ -95,35 +94,31 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
   return nullptr;
 }
 
-static TreeElement *outliner_find_item_at_x_in_row_recursive(const TreeElement *parent_te,
+static TreeElement *outliner_find_item_at_x_in_row_recursive(TreeElement *parent_te,
                                                              float view_co_x,
                                                              bool *r_is_merged_icon)
 {
-  TreeElement *child_te = static_cast<TreeElement *>(parent_te->subtree.first);
-
-  while (child_te) {
-    const bool over_element = (view_co_x > child_te->xs) && (view_co_x < child_te->xend);
-    if ((child_te->flag & TE_ICONROW) && over_element) {
-      return child_te;
+  for (TreeElement &child_te : parent_te->child_elements) {
+    const bool over_element = (view_co_x > child_te.xs) && (view_co_x < child_te.xend);
+    if ((child_te.flag & TE_ICONROW) && over_element) {
+      return &child_te;
     }
-    if ((child_te->flag & TE_ICONROW_MERGED) && over_element) {
+    if ((child_te.flag & TE_ICONROW_MERGED) && over_element) {
       if (r_is_merged_icon) {
         *r_is_merged_icon = true;
       }
-      return child_te;
+      return &child_te;
     }
 
     TreeElement *te = outliner_find_item_at_x_in_row_recursive(
-        child_te, view_co_x, r_is_merged_icon);
-    if (te != child_te) {
+        &child_te, view_co_x, r_is_merged_icon);
+    if (te != &child_te) {
       return te;
     }
-
-    child_te = child_te->next;
   }
 
   /* return parent if no child is hovered */
-  return (TreeElement *)parent_te;
+  return parent_te;
 }
 
 TreeElement *outliner_find_item_at_x_in_row(const SpaceOutliner *space_outliner,

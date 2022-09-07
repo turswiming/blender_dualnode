@@ -31,17 +31,16 @@ bool TreeDisplayScenes::supportsModeColumn() const
   return true;
 }
 
-ListBase TreeDisplayScenes::buildTree(const TreeSourceData &source_data)
+SubTree TreeDisplayScenes::buildTree(const TreeSourceData &source_data)
 {
   /* On first view we open scenes. */
   const int show_opened = !space_outliner_.treestore ||
                           !BLI_mempool_len(space_outliner_.treestore);
-  ListBase tree = {nullptr};
+  SubTree tree;
 
   for (ID *id : List<ID>(source_data.bmain->scenes)) {
     Scene *scene = reinterpret_cast<Scene *>(id);
-    TreeElement *te = outliner_add_element(
-        &space_outliner_, &tree, scene, nullptr, TSE_SOME_ID, 0);
+    TreeElement *te = outliner_add_element(&space_outliner_, scene, tree, TSE_SOME_ID, 0);
     TreeStoreElem *tselem = TREESTORE(te);
 
     /* New scene elements open by default */
@@ -49,7 +48,7 @@ ListBase TreeDisplayScenes::buildTree(const TreeSourceData &source_data)
       tselem->flag &= ~TSE_CLOSED;
     }
 
-    outliner_make_object_parent_hierarchy(&te->subtree);
+    outliner_make_object_parent_hierarchy(te->child_elements);
   }
 
   return tree;

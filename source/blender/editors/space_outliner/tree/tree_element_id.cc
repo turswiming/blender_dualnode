@@ -107,8 +107,7 @@ void TreeElementID::expand_animation_data(SpaceOutliner &space_outliner,
                                           const AnimData *anim_data) const
 {
   if (outliner_animdata_test(anim_data)) {
-    outliner_add_element(
-        &space_outliner, &legacy_te_.subtree, &id_, &legacy_te_, TSE_ANIM_DATA, 0);
+    outliner_add_element(&space_outliner, &id_, &legacy_te_, TSE_ANIM_DATA, 0);
   }
 }
 

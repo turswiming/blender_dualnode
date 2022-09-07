@@ -39,6 +39,10 @@
 
 namespace blender::ed::outliner {
 
+SpaceOutliner_Runtime::SpaceOutliner_Runtime() : root_elements()
+{
+}
+
 SpaceOutliner_Runtime::SpaceOutliner_Runtime(const SpaceOutliner_Runtime & /*other*/)
     : tree_display(nullptr), tree_hash(nullptr)
 {
@@ -345,7 +349,6 @@ static void outliner_free(SpaceLink *sl)
 {
   SpaceOutliner *space_outliner = (SpaceOutliner *)sl;
 
-  outliner_free_tree(&space_outliner->tree);
   if (space_outliner->treestore) {
     BLI_mempool_destroy(space_outliner->treestore);
   }

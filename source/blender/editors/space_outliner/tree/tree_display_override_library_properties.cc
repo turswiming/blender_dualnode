@@ -31,12 +31,12 @@ TreeDisplayOverrideLibraryProperties::TreeDisplayOverrideLibraryProperties(
 {
 }
 
-ListBase TreeDisplayOverrideLibraryProperties::buildTree(const TreeSourceData &source_data)
+SubTree TreeDisplayOverrideLibraryProperties::buildTree(const TreeSourceData &source_data)
 {
-  ListBase tree = add_library_contents(*source_data.bmain);
+  SubTree tree = add_library_contents(*source_data.bmain);
 
-  for (TreeElement *top_level_te : List<TreeElement>(tree)) {
-    TreeStoreElem *tselem = TREESTORE(top_level_te);
+  for (TreeElement &top_level_te : tree) {
+    TreeStoreElem *tselem = TREESTORE(&top_level_te);
     if (!tselem->used) {
       tselem->flag &= ~TSE_CLOSED;
     }
@@ -45,9 +45,9 @@ ListBase TreeDisplayOverrideLibraryProperties::buildTree(const TreeSourceData &s
   return tree;
 }
 
-ListBase TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainvar)
+SubTree TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainvar)
 {
-  ListBase tree = {nullptr};
+  SubTree tree;
 
   const short filter_id_type = id_filter_get();
 
@@ -82,33 +82,32 @@ ListBase TreeDisplayOverrideLibraryProperties::add_library_contents(Main &mainva
 
     /* Create data-block list parent element on demand. */
     TreeElement *id_base_te = nullptr;
-    ListBase *lb_to_expand = &tree;
+    SubTree *subtree_to_expand = &tree;
 
     if (!filter_id_type) {
-      id_base_te = outliner_add_element(
-          &space_outliner_, &tree, lbarray[a], nullptr, TSE_ID_BASE, 0);
+      id_base_te = outliner_add_element(&space_outliner_, lbarray[a], tree, TSE_ID_BASE, 0);
       id_base_te->directdata = lbarray[a];
       id_base_te->name = outliner_idcode_to_plural(GS(id->name));
 
-      lb_to_expand = &id_base_te->subtree;
+      subtree_to_expand = &id_base_te->child_elements;
     }
 
     for (ID *id : List<ID>(lbarray[a])) {
       if (ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_LINKED(id)) {
         TreeElement *override_tree_element = outliner_add_element(
-            &space_outliner_, lb_to_expand, id, id_base_te, TSE_LIBRARY_OVERRIDE_BASE, 0);
+            &space_outliner_, id, id_base_te, TSE_LIBRARY_OVERRIDE_BASE, 0);
 
-        if (BLI_listbase_is_empty(&override_tree_element->subtree)) {
-          outliner_free_tree_element(override_tree_element, lb_to_expand);
+        if (override_tree_element->child_elements.is_empty()) {
+          subtree_to_expand->remove(*override_tree_element);
         }
       }
     }
   }
 
   /* Remove ID base elements that turn out to be empty. */
-  LISTBASE_FOREACH_MUTABLE (TreeElement *, te, &tree) {
-    if (BLI_listbase_is_empty(&te->subtree)) {
-      outliner_free_tree_element(te, &tree);
+  for (TreeElement &te : tree) {
+    if (te.child_elements.is_empty()) {
+      tree.remove(te);
     }
   }
 

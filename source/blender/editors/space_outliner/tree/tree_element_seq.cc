@@ -45,13 +45,11 @@ void TreeElementSequence::expand(SpaceOutliner &space_outliner) const
 
   if (sequence_.type == SEQ_TYPE_META) {
     LISTBASE_FOREACH (Sequence *, child, &sequence_.seqbase) {
-      outliner_add_element(
-          &space_outliner, &legacy_te_.subtree, child, &legacy_te_, TSE_SEQUENCE, 0);
+      outliner_add_element(&space_outliner, child, &legacy_te_, TSE_SEQUENCE, 0);
     }
   }
   else {
-    outliner_add_element(
-        &space_outliner, &legacy_te_.subtree, sequence_.strip, &legacy_te_, TSE_SEQ_STRIP, 0);
+    outliner_add_element(&space_outliner, sequence_.strip, &legacy_te_, TSE_SEQ_STRIP, 0);
   }
 }
 

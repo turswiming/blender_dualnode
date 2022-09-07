@@ -29,7 +29,7 @@ void TreeElementViewLayerBase::expand(SpaceOutliner &space_outliner) const
 {
   for (auto *view_layer : ListBaseWrapper<ViewLayer>(scene_.view_layers)) {
     TreeElement *tenlay = outliner_add_element(
-        &space_outliner, &legacy_te_.subtree, &scene_, &legacy_te_, TSE_R_LAYER, 0);
+        &space_outliner, &scene_, &legacy_te_, TSE_R_LAYER, 0);
     tenlay->name = view_layer->name;
     tenlay->directdata = view_layer;
   }

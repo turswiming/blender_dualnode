@@ -140,7 +140,7 @@ static void outliner_storage_cleanup(SpaceOutliner *space_outliner)
 }
 
 static void check_persistent(
-    SpaceOutliner *space_outliner, TreeElement *te, ID *id, short type, short nr)
+    SpaceOutliner *space_outliner, TreeElement &te, ID *id, short type, short nr)
 {
   if (space_outliner->treestore == nullptr) {
     /* if treestore was not created in readfile.c, create it here */
@@ -156,7 +156,7 @@ static void check_persistent(
    * (note that there may be multiple unused elements in case of linked objects) */
   TreeStoreElem *tselem = space_outliner->runtime->tree_hash->lookup_unused(type, nr, id);
   if (tselem) {
-    te->store_elem = tselem;
+    te.store_elem = tselem;
     tselem->used = 1;
     return;
   }
@@ -168,7 +168,7 @@ static void check_persistent(
   tselem->id = id;
   tselem->used = 0;
   tselem->flag = TSE_CLOSED;
-  te->store_elem = tselem;
+  te.store_elem = tselem;
   space_outliner->runtime->tree_hash->add_element(*tselem);
 }
 
@@ -178,31 +178,20 @@ static void check_persistent(
 /** \name Tree Management
  * \{ */
 
-void outliner_free_tree(ListBase *tree)
-{
-  LISTBASE_FOREACH_MUTABLE (TreeElement *, element, tree) {
-    outliner_free_tree_element(element, tree);
-  }
-}
-
 void outliner_cleanup_tree(SpaceOutliner *space_outliner)
 {
-  outliner_free_tree(&space_outliner->tree);
+  space_outliner->runtime->root_elements.clear();
   outliner_storage_cleanup(space_outliner);
 }
 
-void outliner_free_tree_element(TreeElement *element, ListBase *parent_subtree)
+void outliner_free_tree_element(TreeElement *element, SubTree &parent_subtree)
 {
-  BLI_assert(BLI_findindex(parent_subtree, element) > -1);
-  BLI_remlink(parent_subtree, element);
-
-  outliner_free_tree(&element->subtree);
+  BLI_assert(parent_subtree.has_child(*element));
+  parent_subtree.remove(*element);
 
   if (element->flag & TE_FREE_NAME) {
     MEM_freeN((void *)element->name);
   }
-  element->abstract_element = nullptr;
-  MEM_delete(element);
 }
 
 /* ********************************************************* */
@@ -218,29 +207,22 @@ bool outliner_requires_rebuild_on_select_or_active_change(const SpaceOutliner *s
 }
 
 /* special handling of hierarchical non-lib data */
-static void outliner_add_bone(SpaceOutliner *space_outliner,
-                              ListBase *lb,
-                              ID *id,
-                              Bone *curBone,
-                              TreeElement *parent,
-                              int *a)
+static void outliner_add_bone(
+    SpaceOutliner *space_outliner, ID *id, Bone *curBone, TreeElement *parent, int *a)
 {
-  TreeElement *te = outliner_add_element(space_outliner, lb, id, parent, TSE_BONE, *a);
+  TreeElement *te = outliner_add_element(space_outliner, id, parent, TSE_BONE, *a);
 
   (*a)++;
   te->name = curBone->name;
   te->directdata = curBone;
 
   LISTBASE_FOREACH (Bone *, child_bone, &curBone->childbase) {
-    outliner_add_bone(space_outliner, &te->subtree, id, child_bone, te, a);
+    outliner_add_bone(space_outliner, id, child_bone, te, a);
   }
 }
 
 #ifdef WITH_FREESTYLE
-static void outliner_add_line_styles(SpaceOutliner *space_outliner,
-                                     ListBase *lb,
-                                     Scene *sce,
-                                     TreeElement *te)
+static void outliner_add_line_styles(SpaceOutliner *space_outliner, Scene *sce, TreeElement *te)
 {
   ViewLayer *view_layer;
   FreestyleLineSet *lineset;
@@ -261,7 +243,7 @@ static void outliner_add_line_styles(SpaceOutliner *space_outliner,
           continue;
         }
         linestyle->id.tag &= ~LIB_TAG_DOIT;
-        outliner_add_element(space_outliner, lb, linestyle, te, TSE_SOME_ID, 0);
+        outliner_add_element(space_outliner, linestyle, te, TSE_SOME_ID, 0);
       }
     }
   }
@@ -275,18 +257,17 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
                                          Object *ob)
 {
   if (outliner_animdata_test(ob->adt)) {
-    outliner_add_element(space_outliner, &te->subtree, ob, te, TSE_ANIM_DATA, 0);
+    outliner_add_element(space_outliner, ob, te, TSE_ANIM_DATA, 0);
   }
 
   /* FIXME: add a special type for this. */
-  outliner_add_element(space_outliner, &te->subtree, ob->poselib, te, TSE_SOME_ID, 0);
+  outliner_add_element(space_outliner, ob->poselib, te, TSE_SOME_ID, 0);
 
-  outliner_add_element(space_outliner, &te->subtree, ob->data, te, TSE_SOME_ID, 0);
+  outliner_add_element(space_outliner, ob->data, te, TSE_SOME_ID, 0);
 
   if (ob->pose) {
     bArmature *arm = static_cast<bArmature *>(ob->data);
-    TreeElement *tenla = outliner_add_element(
-        space_outliner, &te->subtree, ob, te, TSE_POSE_BASE, 0);
+    TreeElement *tenla = outliner_add_element(space_outliner, ob, te, TSE_POSE_BASE, 0);
     tenla->name = IFACE_("Pose");
 
     /* channels undefined in editmode, but we want the 'tenla' pose icon itself */
@@ -294,8 +275,7 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
       int const_index = 1000; /* ensure unique id for bone constraints */
       int a;
       LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &ob->pose->chanbase, a) {
-        TreeElement *ten = outliner_add_element(
-            space_outliner, &tenla->subtree, ob, tenla, TSE_POSE_CHANNEL, a);
+        TreeElement *ten = outliner_add_element(space_outliner, ob, tenla, TSE_POSE_CHANNEL, a);
         ten->name = pchan->name;
         ten->directdata = pchan;
         pchan->temp = (void *)ten;
@@ -303,13 +283,13 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
         if (!BLI_listbase_is_empty(&pchan->constraints)) {
           /* Object *target; */
           TreeElement *tenla1 = outliner_add_element(
-              space_outliner, &ten->subtree, ob, ten, TSE_CONSTRAINT_BASE, 0);
+              space_outliner, ob, ten, TSE_CONSTRAINT_BASE, 0);
           tenla1->name = IFACE_("Constraints");
           /* char *str; */
 
           LISTBASE_FOREACH (bConstraint *, con, &pchan->constraints) {
             TreeElement *ten1 = outliner_add_element(
-                space_outliner, &tenla1->subtree, ob, tenla1, TSE_CONSTRAINT, const_index);
+                space_outliner, ob, tenla1, TSE_CONSTRAINT, const_index);
 #if 0 /* disabled as it needs to be reworked for recoded constraints system */
             target = get_constraint_target(con, &str);
             if (str && str[0]) {
@@ -349,14 +329,13 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
 
     /* Pose Groups */
     if (!BLI_listbase_is_empty(&ob->pose->agroups)) {
-      TreeElement *ten_bonegrp = outliner_add_element(
-          space_outliner, &te->subtree, ob, te, TSE_POSEGRP_BASE, 0);
+      TreeElement *ten_bonegrp = outliner_add_element(space_outliner, ob, te, TSE_POSEGRP_BASE, 0);
       ten_bonegrp->name = IFACE_("Bone Groups");
 
       int index;
       LISTBASE_FOREACH_INDEX (bActionGroup *, agrp, &ob->pose->agroups, index) {
         TreeElement *ten = outliner_add_element(
-            space_outliner, &ten_bonegrp->subtree, ob, ten_bonegrp, TSE_POSEGRP, index);
+            space_outliner, ob, ten_bonegrp, TSE_POSEGRP, index);
         ten->name = agrp->name;
         ten->directdata = agrp;
       }
@@ -364,18 +343,16 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
   }
 
   for (int a = 0; a < ob->totcol; a++) {
-    outliner_add_element(space_outliner, &te->subtree, ob->mat[a], te, TSE_SOME_ID, a);
+    outliner_add_element(space_outliner, ob->mat[a], te, TSE_SOME_ID, a);
   }
 
   if (!BLI_listbase_is_empty(&ob->constraints)) {
-    TreeElement *tenla = outliner_add_element(
-        space_outliner, &te->subtree, ob, te, TSE_CONSTRAINT_BASE, 0);
+    TreeElement *tenla = outliner_add_element(space_outliner, ob, te, TSE_CONSTRAINT_BASE, 0);
     tenla->name = IFACE_("Constraints");
 
     int index;
     LISTBASE_FOREACH_INDEX (bConstraint *, con, &ob->constraints, index) {
-      TreeElement *ten = outliner_add_element(
-          space_outliner, &tenla->subtree, ob, tenla, TSE_CONSTRAINT, index);
+      TreeElement *ten = outliner_add_element(space_outliner, ob, tenla, TSE_CONSTRAINT, index);
 #if 0 /* disabled due to constraints system targets recode... code here needs review */
       target = get_constraint_target(con, &str);
       if (str && str[0]) {
@@ -395,54 +372,36 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
   }
 
   if (!BLI_listbase_is_empty(&ob->modifiers)) {
-    TreeElement *ten_mod = outliner_add_element(
-        space_outliner, &te->subtree, ob, te, TSE_MODIFIER_BASE, 0);
+    TreeElement *ten_mod = outliner_add_element(space_outliner, ob, te, TSE_MODIFIER_BASE, 0);
     ten_mod->name = IFACE_("Modifiers");
 
     int index;
     LISTBASE_FOREACH_INDEX (ModifierData *, md, &ob->modifiers, index) {
-      TreeElement *ten = outliner_add_element(
-          space_outliner, &ten_mod->subtree, ob, ten_mod, TSE_MODIFIER, index);
+      TreeElement *ten = outliner_add_element(space_outliner, ob, ten_mod, TSE_MODIFIER, index);
       ten->name = md->name;
       ten->directdata = md;
 
       if (md->type == eModifierType_Lattice) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((LatticeModifierData *)md)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((LatticeModifierData *)md)->object, ten, TSE_LINKED_OB, 0);
       }
       else if (md->type == eModifierType_Curve) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((CurveModifierData *)md)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((CurveModifierData *)md)->object, ten, TSE_LINKED_OB, 0);
       }
       else if (md->type == eModifierType_Armature) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((ArmatureModifierData *)md)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((ArmatureModifierData *)md)->object, ten, TSE_LINKED_OB, 0);
       }
       else if (md->type == eModifierType_Hook) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((HookModifierData *)md)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((HookModifierData *)md)->object, ten, TSE_LINKED_OB, 0);
       }
       else if (md->type == eModifierType_ParticleSystem) {
         ParticleSystem *psys = ((ParticleSystemModifierData *)md)->psys;
         TreeElement *ten_psys;
 
-        ten_psys = outliner_add_element(space_outliner, &ten->subtree, ob, te, TSE_LINKED_PSYS, 0);
+        ten_psys = outliner_add_element(space_outliner, ob, te, TSE_LINKED_PSYS, 0);
         ten_psys->directdata = psys;
         ten_psys->name = psys->part->id.name + 2;
       }
@@ -451,64 +410,45 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
 
   /* Grease Pencil modifiers. */
   if (!BLI_listbase_is_empty(&ob->greasepencil_modifiers)) {
-    TreeElement *ten_mod = outliner_add_element(
-        space_outliner, &te->subtree, ob, te, TSE_MODIFIER_BASE, 0);
+    TreeElement *ten_mod = outliner_add_element(space_outliner, ob, te, TSE_MODIFIER_BASE, 0);
     ten_mod->name = IFACE_("Modifiers");
 
     int index;
     LISTBASE_FOREACH_INDEX (GpencilModifierData *, md, &ob->greasepencil_modifiers, index) {
-      TreeElement *ten = outliner_add_element(
-          space_outliner, &ten_mod->subtree, ob, ten_mod, TSE_MODIFIER, index);
+      TreeElement *ten = outliner_add_element(space_outliner, ob, ten_mod, TSE_MODIFIER, index);
       ten->name = md->name;
       ten->directdata = md;
 
       if (md->type == eGpencilModifierType_Armature) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((ArmatureGpencilModifierData *)md)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((ArmatureGpencilModifierData *)md)->object, ten, TSE_LINKED_OB, 0);
       }
       else if (md->type == eGpencilModifierType_Hook) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((HookGpencilModifierData *)md)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((HookGpencilModifierData *)md)->object, ten, TSE_LINKED_OB, 0);
       }
       else if (md->type == eGpencilModifierType_Lattice) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((LatticeGpencilModifierData *)md)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((LatticeGpencilModifierData *)md)->object, ten, TSE_LINKED_OB, 0);
       }
     }
   }
 
   /* Grease Pencil effects. */
   if (!BLI_listbase_is_empty(&ob->shader_fx)) {
-    TreeElement *ten_fx = outliner_add_element(
-        space_outliner, &te->subtree, ob, te, TSE_GPENCIL_EFFECT_BASE, 0);
+    TreeElement *ten_fx = outliner_add_element(space_outliner, ob, te, TSE_GPENCIL_EFFECT_BASE, 0);
     ten_fx->name = IFACE_("Effects");
 
     int index;
     LISTBASE_FOREACH_INDEX (ShaderFxData *, fx, &ob->shader_fx, index) {
       TreeElement *ten = outliner_add_element(
-          space_outliner, &ten_fx->subtree, ob, ten_fx, TSE_GPENCIL_EFFECT, index);
+          space_outliner, ob, ten_fx, TSE_GPENCIL_EFFECT, index);
       ten->name = fx->name;
       ten->directdata = fx;
 
       if (fx->type == eShaderFxType_Swirl) {
-        outliner_add_element(space_outliner,
-                             &ten->subtree,
-                             ((SwirlShaderFxData *)fx)->object,
-                             ten,
-                             TSE_LINKED_OB,
-                             0);
+        outliner_add_element(
+            space_outliner, ((SwirlShaderFxData *)fx)->object, ten, TSE_LINKED_OB, 0);
       }
     }
   }
@@ -517,14 +457,12 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
   if (ELEM(ob->type, OB_MESH, OB_GPENCIL, OB_LATTICE)) {
     const ListBase *defbase = BKE_object_defgroup_list(ob);
     if (!BLI_listbase_is_empty(defbase)) {
-      TreeElement *tenla = outliner_add_element(
-          space_outliner, &te->subtree, ob, te, TSE_DEFGROUP_BASE, 0);
+      TreeElement *tenla = outliner_add_element(space_outliner, ob, te, TSE_DEFGROUP_BASE, 0);
       tenla->name = IFACE_("Vertex Groups");
 
       int index;
       LISTBASE_FOREACH_INDEX (bDeformGroup *, defgroup, defbase, index) {
-        TreeElement *ten = outliner_add_element(
-            space_outliner, &tenla->subtree, ob, tenla, TSE_DEFGROUP, index);
+        TreeElement *ten = outliner_add_element(space_outliner, ob, tenla, TSE_DEFGROUP, index);
         ten->name = defgroup->name;
         ten->directdata = defgroup;
       }
@@ -533,20 +471,19 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
 
   /* duplicated group */
   if (ob->instance_collection && (ob->transflag & OB_DUPLICOLLECTION)) {
-    outliner_add_element(
-        space_outliner, &te->subtree, ob->instance_collection, te, TSE_SOME_ID, 0);
+    outliner_add_element(space_outliner, ob->instance_collection, te, TSE_SOME_ID, 0);
   }
 }
 
 /* Can be inlined if necessary. */
 static void outliner_add_id_contents(SpaceOutliner *space_outliner,
-                                     TreeElement *te,
+                                     TreeElement &te,
                                      TreeStoreElem *tselem,
                                      ID *id)
 {
   /* tuck pointer back in object, to construct hierarchy */
   if (GS(id->name) == ID_OB) {
-    id->newid = (ID *)te;
+    id->newid = (ID *)&te;
   }
 
   /* expand specific data always */
@@ -556,19 +493,19 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       BLI_assert_msg(0, "ID type expected to be expanded through new tree-element design");
       break;
     case ID_OB: {
-      outliner_add_object_contents(space_outliner, te, tselem, (Object *)id);
+      outliner_add_object_contents(space_outliner, &te, tselem, (Object *)id);
       break;
     }
     case ID_ME: {
       Mesh *me = (Mesh *)id;
 
       if (outliner_animdata_test(me->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, me, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, me, &te, TSE_ANIM_DATA, 0);
       }
 
-      outliner_add_element(space_outliner, &te->subtree, me->key, te, TSE_SOME_ID, 0);
+      outliner_add_element(space_outliner, me->key, &te, TSE_SOME_ID, 0);
       for (int a = 0; a < me->totcol; a++) {
-        outliner_add_element(space_outliner, &te->subtree, me->mat[a], te, TSE_SOME_ID, a);
+        outliner_add_element(space_outliner, me->mat[a], &te, TSE_SOME_ID, a);
       }
       /* could do tfaces with image links, but the images are not grouped nicely.
        * would require going over all tfaces, sort images in use. etc... */
@@ -578,11 +515,11 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       Curve *cu = (Curve *)id;
 
       if (outliner_animdata_test(cu->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, cu, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, cu, &te, TSE_ANIM_DATA, 0);
       }
 
       for (int a = 0; a < cu->totcol; a++) {
-        outliner_add_element(space_outliner, &te->subtree, cu->mat[a], te, TSE_SOME_ID, a);
+        outliner_add_element(space_outliner, cu->mat[a], &te, TSE_SOME_ID, a);
       }
       break;
     }
@@ -590,40 +527,40 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       MetaBall *mb = (MetaBall *)id;
 
       if (outliner_animdata_test(mb->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, mb, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, mb, &te, TSE_ANIM_DATA, 0);
       }
 
       for (int a = 0; a < mb->totcol; a++) {
-        outliner_add_element(space_outliner, &te->subtree, mb->mat[a], te, TSE_SOME_ID, a);
+        outliner_add_element(space_outliner, mb->mat[a], &te, TSE_SOME_ID, a);
       }
       break;
     }
     case ID_MA: {
       Material *ma = (Material *)id;
       if (outliner_animdata_test(ma->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, ma, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, ma, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_TE: {
       Tex *tex = (Tex *)id;
       if (outliner_animdata_test(tex->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, tex, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, tex, &te, TSE_ANIM_DATA, 0);
       }
-      outliner_add_element(space_outliner, &te->subtree, tex->ima, te, TSE_SOME_ID, 0);
+      outliner_add_element(space_outliner, tex->ima, &te, TSE_SOME_ID, 0);
       break;
     }
     case ID_CA: {
       Camera *ca = (Camera *)id;
       if (outliner_animdata_test(ca->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, ca, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, ca, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_CF: {
       CacheFile *cache_file = (CacheFile *)id;
       if (outliner_animdata_test(cache_file->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, cache_file, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, cache_file, &te, TSE_ANIM_DATA, 0);
       }
 
       break;
@@ -631,35 +568,35 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
     case ID_LA: {
       Light *la = (Light *)id;
       if (outliner_animdata_test(la->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, la, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, la, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_SPK: {
       Speaker *spk = (Speaker *)id;
       if (outliner_animdata_test(spk->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, spk, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, spk, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_LP: {
       LightProbe *prb = (LightProbe *)id;
       if (outliner_animdata_test(prb->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, prb, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, prb, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_WO: {
       World *wrld = (World *)id;
       if (outliner_animdata_test(wrld->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, wrld, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, wrld, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_KE: {
       Key *key = (Key *)id;
       if (outliner_animdata_test(key->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, key, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, key, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
@@ -672,14 +609,13 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       bArmature *arm = (bArmature *)id;
 
       if (outliner_animdata_test(arm->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, arm, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, arm, &te, TSE_ANIM_DATA, 0);
       }
 
       if (arm->edbo) {
         int a = 0;
         LISTBASE_FOREACH_INDEX (EditBone *, ebone, arm->edbo, a) {
-          TreeElement *ten = outliner_add_element(
-              space_outliner, &te->subtree, id, te, TSE_EBONE, a);
+          TreeElement *ten = outliner_add_element(space_outliner, id, &te, TSE_EBONE, a);
           ten->directdata = ebone;
           ten->name = ebone->name;
           ebone->temp.p = ten;
@@ -689,20 +625,21 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
                                static_cast<TreeElement *>(((EditBone *)arm->edbo->first)->temp.p) :
                                nullptr;
         while (ten) {
-          TreeElement *nten = ten->next, *par;
+          TreeElement *nten = ten->next;
+
           EditBone *ebone = (EditBone *)ten->directdata;
           if (ebone->parent) {
-            BLI_remlink(&te->subtree, ten);
-            par = static_cast<TreeElement *>(ebone->parent->temp.p);
-            BLI_addtail(&par->subtree, ten);
-            ten->parent = par;
+            std::unique_ptr ten_uptr = te.child_elements.remove(*ten);
+
+            TreeElement *new_parent = static_cast<TreeElement *>(ebone->parent->temp.p);
+            new_parent->child_elements.add_back(std::move(ten_uptr));
           }
           ten = nten;
         }
       }
       else {
         /* do not extend Armature when we have posemode */
-        tselem = TREESTORE(te->parent);
+        tselem = TREESTORE(te.parent);
         if (TSE_IS_REAL_ID(tselem) && GS(tselem->id->name) == ID_OB &&
             ((Object *)tselem->id)->mode & OB_MODE_POSE) {
           /* pass */
@@ -710,7 +647,7 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
         else {
           int a = 0;
           LISTBASE_FOREACH (Bone *, bone, &arm->bonebase) {
-            outliner_add_bone(space_outliner, &te->subtree, id, bone, te, &a);
+            outliner_add_bone(space_outliner, id, bone, &te, &a);
           }
         }
       }
@@ -720,12 +657,12 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       FreestyleLineStyle *linestyle = (FreestyleLineStyle *)id;
 
       if (outliner_animdata_test(linestyle->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, linestyle, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, linestyle, &te, TSE_ANIM_DATA, 0);
       }
 
       for (int a = 0; a < MAX_MTEX; a++) {
         if (linestyle->mtex[a]) {
-          outliner_add_element(space_outliner, &te->subtree, linestyle->mtex[a]->tex, te, 0, a);
+          outliner_add_element(space_outliner, linestyle->mtex[a]->tex, &te, 0, a);
         }
       }
       break;
@@ -734,50 +671,50 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       bGPdata *gpd = (bGPdata *)id;
 
       if (outliner_animdata_test(gpd->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, gpd, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, gpd, &te, TSE_ANIM_DATA, 0);
       }
 
       /* TODO: base element for layers? */
       int index = 0;
       LISTBASE_FOREACH_BACKWARD (bGPDlayer *, gpl, &gpd->layers) {
-        outliner_add_element(space_outliner, &te->subtree, gpl, te, TSE_GP_LAYER, index);
+        outliner_add_element(space_outliner, gpl, &te, TSE_GP_LAYER, index);
         index++;
       }
       break;
     }
     case ID_GR: {
       /* Don't expand for instances, creates too many elements. */
-      if (!(te->parent && te->parent->idcode == ID_OB)) {
+      if (!(te.parent && te.parent->idcode == ID_OB)) {
         Collection *collection = (Collection *)id;
-        outliner_add_collection_recursive(space_outliner, collection, te);
+        outliner_add_collection_recursive(space_outliner, collection, &te);
       }
       break;
     }
     case ID_CV: {
       Curves *curves = (Curves *)id;
       if (outliner_animdata_test(curves->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, curves, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, curves, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_PT: {
       PointCloud *pointcloud = (PointCloud *)id;
       if (outliner_animdata_test(pointcloud->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, pointcloud, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, pointcloud, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_VO: {
       Volume *volume = (Volume *)id;
       if (outliner_animdata_test(volume->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, volume, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, volume, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
     case ID_SIM: {
       Simulation *simulation = (Simulation *)id;
       if (outliner_animdata_test(simulation->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, simulation, te, TSE_ANIM_DATA, 0);
+        outliner_add_element(space_outliner, simulation, &te, TSE_ANIM_DATA, 0);
       }
       break;
     }
@@ -787,7 +724,6 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
 }
 
 TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
-                                  ListBase *lb,
                                   void *idv,
                                   TreeElement *parent,
                                   short type,
@@ -823,27 +759,38 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
     BLI_assert(TREESTORE_ID_TYPE(id));
   }
 
-  TreeElement *te = MEM_new<TreeElement>(__func__);
-  /* add to the visual tree */
-  BLI_addtail(lb, te);
+  std::unique_ptr<TreeElement> te_uptr = std::make_unique<TreeElement>();
+  TreeElement &te = *te_uptr;
+
+  /* Add to the visual tree. Moves ownership the the proper element storage. */
+  if (parent) {
+    parent->child_elements.add_back(std::move(te_uptr));
+  }
+  else {
+    space_outliner->runtime->root_elements.add_back(std::move(te_uptr));
+  }
+
   /* add to the storage */
   check_persistent(space_outliner, te, id, type, index);
-  TreeStoreElem *tselem = TREESTORE(te);
+  TreeStoreElem *tselem = TREESTORE(&te);
 
   /* if we are searching for something expand to see child elements */
   if (SEARCHING_OUTLINER(space_outliner)) {
     tselem->flag |= TSE_CHILDSEARCH;
   }
 
-  te->parent = parent;
-  te->index = index; /* For data arrays. */
+  if (te.parent != parent) {
+    printf("error\n");
+  }
+  BLI_assert(te.parent == parent);
+  te.index = index; /* For data arrays. */
 
   /* New inheritance based element representation. Not all element types support this yet,
    * eventually it should replace #TreeElement entirely. */
-  te->abstract_element = AbstractTreeElement::createFromType(type, *te, idv);
-  if (te->abstract_element) {
+  te.abstract_element = AbstractTreeElement::createFromType(type, te, idv);
+  if (te.abstract_element) {
     /* Element types ported to the new design are expected to have their name set at this point! */
-    BLI_assert(te->name != nullptr);
+    BLI_assert(te.name != nullptr);
   }
 
   if (ELEM(type, TSE_SEQUENCE, TSE_SEQ_STRIP, TSE_SEQUENCE_DUP)) {
@@ -865,7 +812,7 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
     /* pass */
   }
   else if (type == TSE_SOME_ID) {
-    if (!te->abstract_element) {
+    if (!te.abstract_element) {
       BLI_assert_msg(0, "Expected this ID type to be ported to new Outliner tree-element design");
     }
   }
@@ -873,7 +820,7 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
                 TSE_LIBRARY_OVERRIDE_BASE,
                 TSE_LIBRARY_OVERRIDE,
                 TSE_LIBRARY_OVERRIDE_OPERATION)) {
-    if (!te->abstract_element) {
+    if (!te.abstract_element) {
       BLI_assert_msg(0,
                      "Expected override types to be ported to new Outliner tree-element design");
     }
@@ -884,21 +831,21 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
 
     /* The new type design sets the name already, don't override that here. We need to figure out
      * how to deal with the idcode for non-TSE_SOME_ID types still. Some rely on it... */
-    if (!te->abstract_element) {
-      te->name = id->name + 2; /* Default, can be overridden by Library or non-ID data. */
+    if (!te.abstract_element) {
+      te.name = id->name + 2; /* Default, can be overridden by Library or non-ID data. */
     }
-    te->idcode = GS(id->name);
+    te.idcode = GS(id->name);
   }
 
   if (!expand) {
     /* Pass */
   }
-  else if (te->abstract_element && te->abstract_element->isExpandValid()) {
-    tree_element_expand(*te->abstract_element, *space_outliner);
+  else if (te.abstract_element && te.abstract_element->isExpandValid()) {
+    tree_element_expand(*te.abstract_element, *space_outliner);
   }
   else if (type == TSE_SOME_ID) {
     /* ID types not (fully) ported to new design yet. */
-    if (te->abstract_element->expandPoll(*space_outliner)) {
+    if (te.abstract_element->expandPoll(*space_outliner)) {
       outliner_add_id_contents(space_outliner, te, tselem, id);
     }
   }
@@ -919,7 +866,17 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
     BLI_assert_msg(false, "Element type should already use new AbstractTreeElement design");
   }
 
-  return te;
+  return &te;
+}
+
+TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
+                                  void *idv,
+                                  SubTree &subtree,
+                                  short type,
+                                  short index,
+                                  const bool expand)
+{
+  return outliner_add_element(space_outliner, idv, subtree.parent(), type, index, expand);
 }
 
 /* ======================================================= */
@@ -931,12 +888,11 @@ BLI_INLINE void outliner_add_collection_init(TreeElement *te, Collection *collec
 }
 
 BLI_INLINE void outliner_add_collection_objects(SpaceOutliner *space_outliner,
-                                                ListBase *tree,
                                                 Collection *collection,
                                                 TreeElement *parent)
 {
   LISTBASE_FOREACH (CollectionObject *, cob, &collection->gobject) {
-    outliner_add_element(space_outliner, tree, cob->ob, parent, TSE_SOME_ID, 0);
+    outliner_add_element(space_outliner, cob->ob, parent, TSE_SOME_ID, 0);
   }
 }
 
@@ -947,12 +903,11 @@ TreeElement *outliner_add_collection_recursive(SpaceOutliner *space_outliner,
   outliner_add_collection_init(ten, collection);
 
   LISTBASE_FOREACH (CollectionChild *, child, &collection->children) {
-    outliner_add_element(
-        space_outliner, &ten->subtree, &child->collection->id, ten, TSE_SOME_ID, 0);
+    outliner_add_element(space_outliner, &child->collection->id, ten, TSE_SOME_ID, 0);
   }
 
   if (space_outliner->outlinevis != SO_SCENES) {
-    outliner_add_collection_objects(space_outliner, &ten->subtree, collection, ten);
+    outliner_add_collection_objects(space_outliner, collection, ten);
   }
 
   return ten;
@@ -1504,7 +1459,7 @@ static bool outliner_element_visible_get(ViewLayer *view_layer,
   return true;
 }
 
-static bool outliner_filter_has_name(TreeElement *te, const char *name, int flags)
+static bool outliner_filter_has_name(const TreeElement &te, const char *name, int flags)
 {
   int fn_flag = 0;
 
@@ -1512,7 +1467,7 @@ static bool outliner_filter_has_name(TreeElement *te, const char *name, int flag
     fn_flag |= FNM_CASEFOLD;
   }
 
-  return fnmatch(name, te->name, fn_flag) == 0;
+  return fnmatch(name, te.name, fn_flag) == 0;
 }
 
 static bool outliner_element_is_collection_or_object(TreeElement *te)
@@ -1531,54 +1486,57 @@ static bool outliner_element_is_collection_or_object(TreeElement *te)
   return false;
 }
 
-static TreeElement *outliner_extract_children_from_subtree(TreeElement *element,
-                                                           ListBase *parent_subtree)
+static SubTree::iterator outliner_extract_children_from_subtree(
+    SubTree::iterator te_iter,
+    /* The tree the given elemet is in. */
+    SubTree &parent_tree)
 {
-  TreeElement *te_next = element->next;
+  TreeElement &te = *te_iter;
+  SubTree::iterator te_next = std::next(te_iter);
 
-  if (outliner_element_is_collection_or_object(element)) {
-    TreeElement *te_prev = nullptr;
-    for (TreeElement *te = static_cast<TreeElement *>(element->subtree.last); te; te = te_prev) {
-      te_prev = te->prev;
+  BLI_assert(parent_tree.has_child(te));
 
-      if (!outliner_element_is_collection_or_object(te)) {
+  if (outliner_element_is_collection_or_object(&te)) {
+    for (std::reverse_iterator child_iter = te.child_elements.rbegin();
+         child_iter != te.child_elements.rend();
+         ++child_iter) {
+      TreeElement &child = *child_iter;
+
+      if (!outliner_element_is_collection_or_object(&child)) {
         continue;
       }
 
-      te_next = te;
-      BLI_remlink(&element->subtree, te);
-      BLI_insertlinkafter(parent_subtree, element->prev, te);
-      te->parent = element->parent;
+      std::unique_ptr floating_child = te.child_elements.remove(child);
+      parent_tree.insert_before(te_iter, std::move(floating_child));
+      te_next = child_iter.base();
     }
   }
 
-  outliner_free_tree_element(element, parent_subtree);
+  parent_tree.remove(te);
   return te_next;
 }
 
 static int outliner_filter_subtree(SpaceOutliner *space_outliner,
                                    ViewLayer *view_layer,
-                                   ListBase *lb,
+                                   SubTree &subtree,
                                    const char *search_string,
                                    const int exclude_filter)
 {
-  TreeElement *te, *te_next;
-  TreeStoreElem *tselem;
+  for (SubTree::iterator te_iter = subtree.begin(); te_iter != subtree.end(); ++te_iter) {
+    TreeElement &te = *te_iter;
 
-  for (te = static_cast<TreeElement *>(lb->first); te; te = te_next) {
-    te_next = te->next;
-    if ((outliner_element_visible_get(view_layer, te, exclude_filter) == false)) {
+    if ((outliner_element_visible_get(view_layer, &te, exclude_filter) == false)) {
       /* Don't free the tree, but extract the children from the parent and add to this tree. */
       /* This also needs filtering the subtree prior (see T69246). */
       outliner_filter_subtree(
-          space_outliner, view_layer, &te->subtree, search_string, exclude_filter);
-      te_next = outliner_extract_children_from_subtree(te, lb);
+          space_outliner, view_layer, te.child_elements, search_string, exclude_filter);
+      te_iter = outliner_extract_children_from_subtree(te_iter, subtree);
       continue;
     }
     if ((exclude_filter & SO_FILTER_SEARCH) == 0) {
       /* Filter subtree too. */
       outliner_filter_subtree(
-          space_outliner, view_layer, &te->subtree, search_string, exclude_filter);
+          space_outliner, view_layer, te.child_elements, search_string, exclude_filter);
       continue;
     }
 
@@ -1589,31 +1547,31 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
        * - otherwise, we can't see within the subtree and the item doesn't match,
        *     so these can be safely ignored (i.e. the subtree can get freed)
        */
-      tselem = TREESTORE(te);
+      TreeStoreElem *tselem = TREESTORE(&te);
 
       /* flag as not a found item */
       tselem->flag &= ~TSE_SEARCHMATCH;
 
       if ((!TSELEM_OPEN(tselem, space_outliner)) ||
           outliner_filter_subtree(
-              space_outliner, view_layer, &te->subtree, search_string, exclude_filter) == 0) {
-        outliner_free_tree_element(te, lb);
+              space_outliner, view_layer, te.child_elements, search_string, exclude_filter) == 0) {
+        subtree.remove(te);
       }
     }
     else {
-      tselem = TREESTORE(te);
+      TreeStoreElem *tselem = TREESTORE(&te);
 
       /* flag as a found item - we can then highlight it */
       tselem->flag |= TSE_SEARCHMATCH;
 
       /* filter subtree too */
       outliner_filter_subtree(
-          space_outliner, view_layer, &te->subtree, search_string, exclude_filter);
+          space_outliner, view_layer, te.child_elements, search_string, exclude_filter);
     }
   }
 
   /* if there are still items in the list, that means that there were still some matches */
-  return (BLI_listbase_is_empty(lb) == false);
+  return !subtree.is_empty();
 }
 
 static void outliner_filter_tree(SpaceOutliner *space_outliner, ViewLayer *view_layer)
@@ -1636,8 +1594,11 @@ static void outliner_filter_tree(SpaceOutliner *space_outliner, ViewLayer *view_
     search_string = search_buff;
   }
 
-  outliner_filter_subtree(
-      space_outliner, view_layer, &space_outliner->tree, search_string, exclude_filter);
+  outliner_filter_subtree(space_outliner,
+                          view_layer,
+                          space_outliner->runtime->root_elements,
+                          search_string,
+                          exclude_filter);
 }
 
 static void outliner_clear_newid_from_main(Main *bmain)
@@ -1691,8 +1652,7 @@ void outliner_build_tree(Main *mainvar,
   OutlinerTreeElementFocus focus;
   outliner_store_scrolling_position(space_outliner, region, &focus);
 
-  outliner_free_tree(&space_outliner->tree);
-  outliner_storage_cleanup(space_outliner);
+  outliner_cleanup_tree(space_outliner);
 
   space_outliner->runtime->tree_display = AbstractTreeDisplay::createFromDisplayMode(
       space_outliner->outlinevis, *space_outliner);
@@ -1701,7 +1661,8 @@ void outliner_build_tree(Main *mainvar,
   BLI_assert(space_outliner->runtime->tree_display != nullptr);
 
   TreeSourceData source_data{*mainvar, *scene, *view_layer};
-  space_outliner->tree = space_outliner->runtime->tree_display->buildTree(source_data);
+  space_outliner->runtime->root_elements = space_outliner->runtime->tree_display->buildTree(
+      source_data);
 
   if ((space_outliner->flag & SO_SKIP_SORT_ALPHA) == 0) {
     outliner_sort(&space_outliner->tree);

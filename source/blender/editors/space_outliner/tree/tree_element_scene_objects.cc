@@ -29,10 +29,10 @@ TreeElementSceneObjectsBase::TreeElementSceneObjectsBase(TreeElement &legacy_te,
 void TreeElementSceneObjectsBase::expand(SpaceOutliner &space_outliner) const
 {
   FOREACH_SCENE_OBJECT_BEGIN (&scene_, ob) {
-    outliner_add_element(&space_outliner, &legacy_te_.subtree, ob, &legacy_te_, TSE_SOME_ID, 0);
+    outliner_add_element(&space_outliner, ob, &legacy_te_, TSE_SOME_ID, 0);
   }
   FOREACH_SCENE_OBJECT_END;
-  outliner_make_object_parent_hierarchy(&legacy_te_.subtree);
+  outliner_make_object_parent_hierarchy(legacy_te_.child_elements);
 }
 
 }  // namespace blender::ed::outliner

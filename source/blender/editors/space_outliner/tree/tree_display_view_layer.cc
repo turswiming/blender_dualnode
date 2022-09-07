@@ -60,9 +60,9 @@ bool TreeDisplayViewLayer::supportsModeColumn() const
   return true;
 }
 
-ListBase TreeDisplayViewLayer::buildTree(const TreeSourceData &source_data)
+SubTree TreeDisplayViewLayer::buildTree(const TreeSourceData &source_data)
 {
-  ListBase tree = {nullptr};
+  SubTree subtree;
   Scene *scene = source_data.scene;
   show_objects_ = !(space_outliner_.filter & SO_FILTER_NO_OBJECT);
 
@@ -74,23 +74,23 @@ ListBase TreeDisplayViewLayer::buildTree(const TreeSourceData &source_data)
         continue;
       }
 
-      add_view_layer(*scene, tree, (TreeElement *)nullptr);
+      add_view_layer(*scene, subtree);
     }
     else {
       TreeElement &te_view_layer = *outliner_add_element(
-          &space_outliner_, &tree, scene, nullptr, TSE_R_LAYER, 0);
+          &space_outliner_, scene, subtree, TSE_R_LAYER, 0);
       TREESTORE(&te_view_layer)->flag &= ~TSE_CLOSED;
       te_view_layer.name = view_layer->name;
       te_view_layer.directdata = view_layer;
 
-      add_view_layer(*scene, te_view_layer.subtree, &te_view_layer);
+      add_view_layer(*scene, te_view_layer.child_elements);
     }
   }
 
-  return tree;
+  return subtree;
 }
 
-void TreeDisplayViewLayer::add_view_layer(Scene &scene, ListBase &tree, TreeElement *parent)
+void TreeDisplayViewLayer::add_view_layer(Scene &scene, SubTree &subtree)
 {
   const bool show_children = (space_outliner_.filter & SO_FILTER_NO_CHILDREN) == 0;
 
@@ -98,18 +98,18 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene, ListBase &tree, TreeElem
     /* Show objects in the view layer. */
     for (Base *base : List<Base>(view_layer_->object_bases)) {
       TreeElement *te_object = outliner_add_element(
-          &space_outliner_, &tree, base->object, parent, TSE_SOME_ID, 0);
+          &space_outliner_, base->object, subtree, TSE_SOME_ID, 0);
       te_object->directdata = base;
     }
 
     if (show_children) {
-      outliner_make_object_parent_hierarchy(&tree);
+      outliner_make_object_parent_hierarchy(subtree);
     }
   }
   else {
     /* Show collections in the view layer. */
     TreeElement &ten = *outliner_add_element(
-        &space_outliner_, &tree, &scene, parent, TSE_VIEW_COLLECTION_BASE, 0);
+        &space_outliner_, &scene, subtree, TSE_VIEW_COLLECTION_BASE, 0);
     ten.name = IFACE_("Scene Collection");
     TREESTORE(&ten)->flag &= ~TSE_CLOSED;
 
@@ -119,9 +119,9 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene, ListBase &tree, TreeElem
       return;
     }
 
-    add_layer_collections_recursive(ten.subtree, lc->layer_collections, ten);
+    add_layer_collections_recursive(lc->layer_collections, ten);
     if (show_objects_) {
-      add_layer_collection_objects(ten.subtree, *lc, ten);
+      add_layer_collection_objects(*lc, ten);
     }
     if (show_children) {
       add_layer_collection_objects_children(ten);
@@ -129,8 +129,7 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene, ListBase &tree, TreeElem
   }
 }
 
-void TreeDisplayViewLayer::add_layer_collections_recursive(ListBase &tree,
-                                                           ListBase &layer_collections,
+void TreeDisplayViewLayer::add_layer_collections_recursive(ListBase &layer_collections,
                                                            TreeElement &parent_ten)
 {
   for (LayerCollection *lc : List<LayerCollection>(layer_collections)) {
@@ -142,8 +141,7 @@ void TreeDisplayViewLayer::add_layer_collections_recursive(ListBase &tree,
     }
     else {
       ID *id = &lc->collection->id;
-      ten = outliner_add_element(
-          &space_outliner_, &tree, id, &parent_ten, TSE_LAYER_COLLECTION, 0);
+      ten = outliner_add_element(&space_outliner_, id, &parent_ten, TSE_LAYER_COLLECTION, 0);
 
       ten->name = id->name + 2;
       ten->directdata = lc;
@@ -155,21 +153,19 @@ void TreeDisplayViewLayer::add_layer_collections_recursive(ListBase &tree,
       }
     }
 
-    add_layer_collections_recursive(ten->subtree, lc->layer_collections, *ten);
+    add_layer_collections_recursive(lc->layer_collections, *ten);
     if (!exclude && show_objects_) {
-      add_layer_collection_objects(ten->subtree, *lc, *ten);
+      add_layer_collection_objects(*lc, *ten);
     }
   }
 }
 
-void TreeDisplayViewLayer::add_layer_collection_objects(ListBase &tree,
-                                                        LayerCollection &lc,
-                                                        TreeElement &ten)
+void TreeDisplayViewLayer::add_layer_collection_objects(LayerCollection &lc, TreeElement &ten)
 {
   for (CollectionObject *cob : List<CollectionObject>(lc.collection->gobject)) {
     Base *base = BKE_view_layer_base_find(view_layer_, cob->ob);
     TreeElement *te_object = outliner_add_element(
-        &space_outliner_, &tree, base->object, &ten, TSE_SOME_ID, 0);
+        &space_outliner_, base->object, &ten, TSE_SOME_ID, 0);
     te_object->directdata = base;
   }
 }
@@ -261,9 +257,10 @@ void ObjectsChildrenBuilder::make_object_parent_hierarchy_collections()
       for (TreeElement *child_ob_tree_element : child_ob_tree_elements) {
         if (child_ob_tree_element->parent == parent_ob_collection_tree_element) {
           /* Move from the collection subtree into the parent object subtree. */
-          BLI_remlink(&parent_ob_collection_tree_element->subtree, child_ob_tree_element);
-          BLI_addtail(&parent_ob_tree_element->subtree, child_ob_tree_element);
-          child_ob_tree_element->parent = parent_ob_tree_element;
+          std::unique_ptr<TreeElement> removed_te =
+              parent_ob_collection_tree_element->child_elements.remove(*child_ob_tree_element);
+          parent_ob_tree_element->child_elements.add_back(std::move(removed_te));
+
           found = true;
           break;
         }
@@ -272,13 +269,8 @@ void ObjectsChildrenBuilder::make_object_parent_hierarchy_collections()
       if (!found) {
         /* We add the child in the tree even if it is not in the collection.
          * We don't expand its sub-tree though, to make it less prominent. */
-        TreeElement *child_ob_tree_element = outliner_add_element(&outliner_,
-                                                                  &parent_ob_tree_element->subtree,
-                                                                  child,
-                                                                  parent_ob_tree_element,
-                                                                  TSE_SOME_ID,
-                                                                  0,
-                                                                  false);
+        TreeElement *child_ob_tree_element = outliner_add_element(
+            &outliner_, child, parent_ob_tree_element, TSE_SOME_ID, 0, false);
         child_ob_tree_element->flag |= TE_CHILD_NOT_IN_COLLECTION;
         child_ob_tree_elements.append(child_ob_tree_element);
       }
