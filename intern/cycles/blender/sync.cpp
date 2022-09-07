@@ -416,6 +416,7 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   integrator->set_use_guiding(get_boolean(cscene, "use_guiding"));
   integrator->set_use_surface_guiding(get_boolean(cscene, "use_surface_guiding"));
   integrator->set_use_volume_guiding(get_boolean(cscene, "use_volume_guiding"));
+  integrator->set_training_iterations(get_int(cscene, "training_iterations"));
 
   if (use_developer_ui) {
     integrator->set_surface_guiding_probability(get_float(cscene, "surface_guiding_probability"));

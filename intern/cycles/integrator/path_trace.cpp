@@ -198,7 +198,8 @@ void PathTrace::render_pipeline(RenderWork render_work)
 
   /* Update the guiding field using the training data/samples collected during the rendering
    * iteration/progression. */
-  if (use_guiding) {
+  const bool train_guiding = device_scene_->data.integrator.train_guiding;
+  if (use_guiding && train_guiding) {
     guiding_update_structures();
   }
 
@@ -1290,8 +1291,14 @@ void PathTrace::set_guiding_params(const GuidingParams &guiding_params, const bo
 
       openpgl::cpp::Device *guiding_device = static_cast<openpgl::cpp::Device *>(
           device_->get_guiding_device());
-      guiding_sample_data_storage_ = make_unique<openpgl::cpp::SampleStorage>();
-      guiding_field_ = make_unique<openpgl::cpp::Field>(guiding_device, field_args);
+      if (guiding_device) {
+        guiding_sample_data_storage_ = make_unique<openpgl::cpp::SampleStorage>();
+        guiding_field_ = make_unique<openpgl::cpp::Field>(guiding_device, field_args);
+      }
+      else {
+        guiding_sample_data_storage_ = nullptr;
+        guiding_field_ = nullptr;
+      }
     }
     else {
       guiding_sample_data_storage_ = nullptr;
@@ -1312,6 +1319,13 @@ void PathTrace::guiding_prepare_structures()
   for (auto &&path_trace_work : path_trace_works_) {
     path_trace_work->guiding_init_kernel_globals(guiding_field_.get(),
                                                  guiding_sample_data_storage_.get());
+  }
+  if ((guiding_params_.training_iterations == -1) ||
+      (guiding_field_->GetIteration() < guiding_params_.training_iterations)) {
+    device_scene_->data.integrator.train_guiding = true;
+  }
+  else {
+    device_scene_->data.integrator.train_guiding = false;
   }
 #endif
 }
@@ -1350,7 +1364,7 @@ void PathTrace::guiding_update_structures()
       const size_t num_samples = 1;
       guiding_field_->Update(*guiding_sample_data_storage_, num_samples);
       guiding_update_count++;
-#  ifdef WITH_PATH_GUIDING_DEBUG_PRINT && PATH_GUIDING_DEBUG_VALIDATE
+#  if defined(WITH_PATH_GUIDING_DEBUG_PRINT) && PATH_GUIDING_DEBUG_VALIDATE
       VLOG_WORK << "Field: valid = " << guiding_field_->Validate();
 #  endif
       // if(guiding_update_count<=1)

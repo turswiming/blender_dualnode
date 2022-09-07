@@ -547,6 +547,16 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
+    training_iterations: IntProperty(
+        name="Training Iterations",
+        description="The number of training iterations (i.e., SPPs) used for the guiding structures."
+        "If the this number is reached the guiding structure is used for sampling only which avoids the"
+        " computational over head of the training process."
+        "A value of -1 leads to continuous learning.",
+        min=-1,
+        default=128,
+    )
+
     volume_guiding_probability: FloatProperty(
         name="Volume Guiding Probability",
         description="The probability of guiding a direction inside a volume",

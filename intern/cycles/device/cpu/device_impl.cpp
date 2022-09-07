@@ -287,48 +287,50 @@ void *CPUDevice::get_guiding_device() const
 {
 #ifdef WITH_PATH_GUIDING
   if (!guiding_device) {
-#if defined(__ARM_NEON)
+#  if defined(__ARM_NEON)
     guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_8);
-#else
-    if(system_cpu_support_avx2()) {
+#  else
+    if (system_cpu_support_avx2()) {
       guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_8);
-    } else if(system_cpu_support_sse41()) {
+    }
+    else if (system_cpu_support_sse41()) {
       guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_4);
-    } else {
+    }
+    else {
       guiding_device = nullptr;
     }
   }
-#endif
-  return guiding_device.get();
+#  endif
+    return guiding_device.get();
 #else
   return nullptr;
 #endif
-}
-
-void CPUDevice::get_cpu_kernel_thread_globals(
-    vector<CPUKernelThreadGlobals> &kernel_thread_globals)
-{
-  /* Ensure latest texture info is loaded into kernel globals before returning. */
-  load_texture_info();
-  kernel_thread_globals.clear();
-  void *osl_memory = get_cpu_osl_memory();
-  for (int i = 0; i < info.cpu_threads; i++) {
-    kernel_thread_globals.emplace_back(kernel_globals, osl_memory, profiler);
   }
-}
 
-void *CPUDevice::get_cpu_osl_memory()
-{
+  void CPUDevice::get_cpu_kernel_thread_globals(vector<CPUKernelThreadGlobals> &
+                                                kernel_thread_globals)
+  {
+    /* Ensure latest texture info is loaded into kernel globals before returning. */
+    load_texture_info();
+    kernel_thread_globals.clear();
+    void *osl_memory = get_cpu_osl_memory();
+    for (int i = 0; i < info.cpu_threads; i++) {
+      kernel_thread_globals.emplace_back(kernel_globals, osl_memory, profiler);
+    }
+  }
+
+  void *CPUDevice::get_cpu_osl_memory()
+  {
 #ifdef WITH_OSL
-  return &osl_globals;
+    return &osl_globals;
 #else
   return NULL;
 #endif
-}
+  }
 
-bool CPUDevice::load_kernels(const uint /*kernel_features*/)
-{
-  return true;
-}
+  bool CPUDevice::load_kernels(const uint /*kernel_features*/)
+  {
+    return true;
+  }
 
-CCL_NAMESPACE_END
+  CCL_NAMESPACE_END

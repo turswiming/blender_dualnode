@@ -351,6 +351,7 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
         col = layout.column(align=True)
         col.prop(cscene, "use_surface_guiding", text="Surface Guiding")
         col.prop(cscene, "use_volume_guiding", text="Volume Guiding")
+        col.prop(cscene, "training_iterations", text="Training Iterations")
 
 
 class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Panel):

@@ -7,8 +7,8 @@
 /* Used for `info.denoisers`. */
 /* TODO(sergey): The denoisers are probably to be moved completely out of the device into their
  * own class. But until then keep API consistent with how it used to work before. */
-#include "util/openimagedenoise.h"
 #include "util/guiding.h"
+#include "util/openimagedenoise.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -28,7 +28,7 @@ void device_cpu_info(vector<DeviceInfo> &devices)
   info.has_osl = true;
   info.has_nanovdb = true;
   info.has_profiling = true;
-  if(guiding_supported()) {
+  if (guiding_supported()) {
     info.has_guiding = true;
   }
   else {

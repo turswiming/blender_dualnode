@@ -11,13 +11,13 @@ CCL_NAMESPACE_BEGIN
 static inline bool guiding_supported()
 {
 #ifdef WITH_PATH_GUIDING
-#if defined(__ARM_NEON)
-    return true;
+#  if defined(__ARM_NEON)
+  return true;
+#  else
+  return system_cpu_support_sse41();
+#  endif
 #else
-    return system_cpu_support_sse41();
-#endif
-#else
-    return false;
+  return false;
 #endif
 }
 

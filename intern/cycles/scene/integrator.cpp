@@ -70,6 +70,7 @@ NODE_DEFINE(Integrator)
   SOCKET_FLOAT(surface_guiding_probability, "Surface Guiding Probability", 0.5f);
   SOCKET_BOOLEAN(use_volume_guiding, "Volume Guiding", true);
   SOCKET_FLOAT(volume_guiding_probability, "Volume Guiding Probability", 0.5f);
+  SOCKET_INT(training_iterations, "Training Iterations", 128);
   SOCKET_BOOLEAN(use_guide_direct_light, "Guide Direct Light", true);
   SOCKET_BOOLEAN(use_mis_weights, "Use MIS Weights", true);
   SOCKET_ENUM(guiding_distribution_type,
@@ -228,6 +229,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
   GuidingParams guiding_params = get_guiding_params(device);
   kintegrator->use_guiding = guiding_params.use;
+  kintegrator->train_guiding = true;
   kintegrator->use_surface_guiding = use_surface_guiding;
   kintegrator->surface_guiding_probability = surface_guiding_probability;
   kintegrator->use_volume_guiding = use_volume_guiding;
@@ -386,6 +388,7 @@ GuidingParams Integrator::get_guiding_params(const Device *device) const
   GuidingParams guiding_params;
   guiding_params.use = use_guiding && device->info.has_guiding;
   guiding_params.type = guiding_distribution_type;
+  guiding_params.training_iterations = training_iterations;
   return guiding_params;
 }
 CCL_NAMESPACE_END

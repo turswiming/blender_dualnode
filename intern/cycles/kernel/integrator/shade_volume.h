@@ -1037,27 +1037,9 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
   bool guiding_generated_new_segment = false;
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   if (use_guiding) {
-    // TODO(sherholz): find a nicer way to calaucate the transmittance weight
-    //                 which avoids the division by the throughput
     float3 transmittance_weight = spectrum_to_rgb(
         safe_divide_color(result.indirect_throughput, throughput));
-    const pgl_vec3f pgl_transmittance_weight = openpgl::cpp::Vector3(
-        transmittance_weight[0], transmittance_weight[1], transmittance_weight[2]);
-
-    if (state->guiding.path_segment) {
-      // We need to find a better way to avoid this check
-      if ((transmittance_weight[0] < 0.f || !std::isfinite(transmittance_weight[0]) ||
-           std::isnan(transmittance_weight[0])) ||
-          (transmittance_weight[1] < 0.f || !std::isfinite(transmittance_weight[1]) ||
-           std::isnan(transmittance_weight[1])) ||
-          (transmittance_weight[2] < 0.f || !std::isfinite(transmittance_weight[2]) ||
-           std::isnan(transmittance_weight[2]))) {
-      }
-      else {
-        openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment,
-                                             pgl_transmittance_weight);
-      }
-    }
+    guiding_record_volume_transmission(kg, state, transmittance_weight);
 
     if ((result.direct_scatter && result.indirect_scatter) &&
         (result.direct_t == result.indirect_t)) {

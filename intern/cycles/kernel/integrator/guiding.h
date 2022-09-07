@@ -31,7 +31,7 @@ ccl_device_forceinline void guiding_record_light_surface_segment(
     KernelGlobals kg, IntegratorState state, ccl_private const Intersection *ccl_restrict isect)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -61,7 +61,7 @@ ccl_device_forceinline void guiding_record_surface_segment(KernelGlobals kg,
                                                            ccl_private const ShaderData *sd)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -90,7 +90,7 @@ ccl_device_forceinline void guiding_record_surface_bounce(KernelGlobals kg,
                                                           const float eta)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -119,7 +119,7 @@ ccl_device_forceinline void guiding_record_bssrdf_segment(KernelGlobals kg,
                                                           const float3 I)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -142,7 +142,7 @@ ccl_device_forceinline void guiding_record_bssrdf_weight(KernelGlobals kg,
                                                          const Spectrum weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -165,7 +165,7 @@ ccl_device_forceinline void guiding_record_bssrdf_bounce(KernelGlobals kg,
                                                          const float3 omega_in)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -186,7 +186,7 @@ ccl_device_forceinline void guiding_record_volume_segment(KernelGlobals kg,
                                                           const float3 I)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -214,7 +214,7 @@ ccl_device_forceinline void guiding_record_volume_bounce(KernelGlobals kg,
                                                          const float roughness)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -241,7 +241,7 @@ ccl_device_forceinline void guiding_record_background(KernelGlobals kg,
                                                       const float mis_weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -267,7 +267,7 @@ ccl_device_forceinline void guiding_record_surface_emission(KernelGlobals kg,
                                                             const float mis_weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -278,12 +278,38 @@ ccl_device_forceinline void guiding_record_surface_emission(KernelGlobals kg,
 #endif
 }
 
-ccl_device_forceinline void guiding_record_volume_emission(KernelGlobals kg,
-                                                            IntegratorState state,
-                                                            const Spectrum Le)
+ccl_device_forceinline void guiding_record_volume_transmission(KernelGlobals kg,
+                                                               IntegratorState state,
+                                                               const float3 transmittance_weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+    return;
+  }
+
+  if (state->guiding.path_segment) {
+    // We need to find a better way to avoid this check
+    if ((transmittance_weight[0] < 0.f || !std::isfinite(transmittance_weight[0]) ||
+         std::isnan(transmittance_weight[0])) ||
+        (transmittance_weight[1] < 0.f || !std::isfinite(transmittance_weight[1]) ||
+         std::isnan(transmittance_weight[1])) ||
+        (transmittance_weight[2] < 0.f || !std::isfinite(transmittance_weight[2]) ||
+         std::isnan(transmittance_weight[2]))) {
+    }
+    else {
+      openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment,
+                                           guiding_vec3f(transmittance_weight));
+    }
+  }
+#endif
+}
+
+ccl_device_forceinline void guiding_record_volume_emission(KernelGlobals kg,
+                                                           IntegratorState state,
+                                                           const Spectrum Le)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -298,7 +324,7 @@ ccl_device_forceinline void guiding_record_direct_light(KernelGlobals kg,
                                                         IntegratorShadowState state)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -314,7 +340,7 @@ ccl_device_forceinline void guiding_record_continuation_probability(
     KernelGlobals kg, IntegratorState state, const float continuation_probability)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -334,7 +360,7 @@ ccl_device_forceinline void guiding_write_debug_passes(KernelGlobals kg,
                                                            render_buffer)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4 && defined(WITH_CYCLES_DEBUG)
-  if (!kernel_data.integrator.use_guiding) {
+  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
     return;
   }
 

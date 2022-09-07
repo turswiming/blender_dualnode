@@ -53,7 +53,7 @@ typedef struct KernelGlobalsCPU {
 #endif
 
 #ifdef __PATH_GUIDING__
-  /* For guiding we need a set of pointer to some global and local data 
+  /* For guiding we need a set of pointer to some global and local data
    * structures */
 #  if PATH_GUIDING_LEVEL >= 1
   openpgl::cpp::PathSegmentStorage *opgl_path_segment_storage{nullptr};

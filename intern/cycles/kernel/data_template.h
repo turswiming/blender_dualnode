@@ -200,6 +200,7 @@ KERNEL_STRUCT_MEMBER(integrator, float, surface_guiding_probability)
 KERNEL_STRUCT_MEMBER(integrator, float, volume_guiding_probability)
 KERNEL_STRUCT_MEMBER(integrator, int, guiding_distribution_type)
 KERNEL_STRUCT_MEMBER(integrator, bool, use_guiding)
+KERNEL_STRUCT_MEMBER(integrator, bool, train_guiding)
 KERNEL_STRUCT_MEMBER(integrator, bool, use_surface_guiding)
 KERNEL_STRUCT_MEMBER(integrator, bool, use_volume_guiding)
 KERNEL_STRUCT_MEMBER(integrator, bool, use_guide_direct_light)
@@ -207,7 +208,6 @@ KERNEL_STRUCT_MEMBER(integrator, bool, use_mis_weights)
 /* Padding */
 KERNEL_STRUCT_MEMBER(integrator, bool, pad1)
 KERNEL_STRUCT_MEMBER(integrator, bool, pad2)
-KERNEL_STRUCT_MEMBER(integrator, bool, pad3)
 KERNEL_STRUCT_END(KernelIntegrator)
 
 /* SVM. For shader specialization. */

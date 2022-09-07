@@ -175,13 +175,13 @@ ccl_device_inline void surface_shader_prepare_closures(KernelGlobals kg,
 
 /* BSDF */
 ccl_device_inline bool surface_shader_is_transmission_sd(ccl_private const ShaderData *sd,
-                                                      const float3 omega_in)
+                                                         const float3 omega_in)
 {
   return dot(sd->N, omega_in) < 0.0f;
 }
 
 ccl_device_inline bool surface_shader_is_transmission_sc(const ShaderClosure *sc,
-                                                       const float3 omega_in)
+                                                         const float3 omega_in)
 {
   return dot(sc->N, omega_in) < 0.0f;
 }

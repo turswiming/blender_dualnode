@@ -10,12 +10,13 @@ struct GuidingParams {
    * of the guiding field. */
   bool use = false;
   GuidingDistributionType type = GUIDING_TYPE_PARALLAX_AWARE_VMM;
-
+  int training_iterations = 128;
   GuidingParams() = default;
 
   bool modified(const GuidingParams &other) const
   {
-    return !(use == other.use && type == other.type);
+    return !((use == other.use) && (type == other.type) &&
+             (training_iterations == other.training_iterations));
   }
 };
 
