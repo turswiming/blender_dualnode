@@ -521,6 +521,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=False,
     )
 
+    deterministic_guiding: BoolProperty(
+        name="Deterministic",
+        description="Makes path guiding deterministic which means renderings will be"
+        "reproducable (i.e., same pixel noise/value). This feature increases the"
+        "compute time during training",
+        default=False,
+    )
+
     guiding_distribution_type: EnumProperty(
         name="Guiding Distribution Type",
         description="Type of representation for the guiding distribution",

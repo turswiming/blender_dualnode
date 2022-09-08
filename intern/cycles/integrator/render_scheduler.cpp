@@ -45,6 +45,11 @@ void RenderScheduler::set_denoiser_params(const DenoiseParams &params)
   denoiser_params_ = params;
 }
 
+void RenderScheduler::set_limit_spp_for_guiding(const bool limit_spp)
+{
+  limit_spp_for_guiding_ = limit_spp;
+}
+
 void RenderScheduler::set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling)
 {
   adaptive_sampling_ = adaptive_sampling;
@@ -808,6 +813,7 @@ int RenderScheduler::get_num_samples_to_path_trace() const
     return 1;
   }
 
+  int num_samples_per_update = calculate_num_samples_per_update();
 #ifdef WITH_PATH_GUIDING
   /*
    * Note: For training the guiding distribution we
@@ -818,10 +824,9 @@ int RenderScheduler::get_num_samples_to_path_trace() const
    *       iterations are rendered
    * TODO: only do this when path guiding is enabled.
    */
-
-  const int num_samples_per_update = std::min(4, calculate_num_samples_per_update());
-#else
-  const int num_samples_per_update = calculate_num_samples_per_update();
+  if (limit_spp_for_guiding_) {
+    num_samples_per_update = std::min(4, num_samples_per_update);
+  }
 #endif
   const int path_trace_start_sample = get_start_sample_to_path_trace();
 

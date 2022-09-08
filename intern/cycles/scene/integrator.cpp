@@ -66,6 +66,7 @@ NODE_DEFINE(Integrator)
   guiding_ditribution_enum.insert("VMM", GUIDING_TYPE_VMM);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", true);
+  SOCKET_BOOLEAN(deterministic_guiding, "Deterministic", false);
   SOCKET_BOOLEAN(use_surface_guiding, "Surface Guiding", true);
   SOCKET_FLOAT(surface_guiding_probability, "Surface Guiding Probability", 0.5f);
   SOCKET_BOOLEAN(use_volume_guiding, "Volume Guiding", true);
@@ -389,6 +390,7 @@ GuidingParams Integrator::get_guiding_params(const Device *device) const
   guiding_params.use = use_guiding && device->info.has_guiding;
   guiding_params.type = guiding_distribution_type;
   guiding_params.training_iterations = training_iterations;
+  guiding_params.deterministic = deterministic_guiding;
   return guiding_params;
 }
 CCL_NAMESPACE_END

@@ -1288,7 +1288,9 @@ void PathTrace::set_guiding_params(const GuidingParams &guiding_params, const bo
           break;
         }
       }
-
+#  if OPENPGL_VERSION_MINOR >= 4
+      field_args.deterministic = guiding_params.deterministic;
+#  endif
       openpgl::cpp::Device *guiding_device = static_cast<openpgl::cpp::Device *>(
           device_->get_guiding_device());
       if (guiding_device) {
@@ -1323,9 +1325,11 @@ void PathTrace::guiding_prepare_structures()
   if ((guiding_params_.training_iterations == -1) ||
       (guiding_field_->GetIteration() < guiding_params_.training_iterations)) {
     device_scene_->data.integrator.train_guiding = true;
+    render_scheduler_.set_limit_spp_for_guiding(true);
   }
   else {
     device_scene_->data.integrator.train_guiding = false;
+    render_scheduler_.set_limit_spp_for_guiding(false);
   }
 #endif
 }
@@ -1359,12 +1363,12 @@ void PathTrace::guiding_update_structures()
               }
             }
       */
-#if OPENPGL_VERSION_MINOR < 4
+#  if OPENPGL_VERSION_MINOR < 4
       const size_t num_samples = 1;
       guiding_field_->Update(*guiding_sample_data_storage_, num_samples);
-#else
+#  else
       guiding_field_->Update(*guiding_sample_data_storage_);
-#endif
+#  endif
       guiding_update_count++;
 #  if defined(WITH_PATH_GUIDING_DEBUG_PRINT) && PATH_GUIDING_DEBUG_VALIDATE
       VLOG_WORK << "Field: valid = " << guiding_field_->Validate();

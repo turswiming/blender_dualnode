@@ -17,8 +17,8 @@
 #include "util/vector.h"
 
 #ifdef WITH_PATH_GUIDING
-#  include <openpgl/version.h>
 #  include <openpgl/cpp/OpenPGL.h>
+#  include <openpgl/version.h>
 #endif
 
 CCL_NAMESPACE_BEGIN

@@ -11,12 +11,14 @@ struct GuidingParams {
   bool use = false;
   GuidingDistributionType type = GUIDING_TYPE_PARALLAX_AWARE_VMM;
   int training_iterations = 128;
+  bool deterministic = false;
   GuidingParams() = default;
 
   bool modified(const GuidingParams &other) const
   {
     return !((use == other.use) && (type == other.type) &&
-             (training_iterations == other.training_iterations));
+             (training_iterations == other.training_iterations) &&
+             (deterministic == other.deterministic));
   }
 };
 
