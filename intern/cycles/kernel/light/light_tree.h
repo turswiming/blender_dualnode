@@ -626,13 +626,14 @@ ccl_device float light_tree_pdf(
     float left_probability = left_importance / (left_importance + right_importance);
 
     if (bit_trail & 1) {
-      stack[stack_index] = left_index;
-      pdfs[stack_index] = pdf * left_probability;
-    }
-    else {
       stack[stack_index] = right_index;
       pdfs[stack_index] = pdf * (1.0f - left_probability);
     }
+    else {
+      stack[stack_index] = left_index;
+      pdfs[stack_index] = pdf * left_probability;
+    }
+    bit_trail = bit_trail >> 1;
   }
 
   pdf *= light_leaf_pdf * light_tree_pdf * target_weight / total_weight;

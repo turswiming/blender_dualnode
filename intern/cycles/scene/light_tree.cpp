@@ -395,7 +395,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
                                                        end,
                                                        total_nodes,
                                                        ordered_prims,
-                                                       bit_trail | (1u << bit_trail),
+                                                       bit_trail | (1u << depth),
                                                        depth + 1);
       node->init_interior(left_node, right_node);
     }
