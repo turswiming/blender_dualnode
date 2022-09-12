@@ -558,12 +558,9 @@ ccl_device float light_tree_pdf(
         float target_emitter_importance = 0.0f;
         float total_emitter_importance = 0.0f;
         for (int i = 0; i < knode->num_prims; i++) {
-          const int prim_index = -knode->child_index + i;
-          float light_importance = light_tree_emitter_importance(kg, P, N, prim_index);
-          ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(
-              light_tree_emitters, prim_index);
-          if (kemitter->prim_id == prim) {
-            selected_light = prim_index;
+          const int leaf_emitter = -knode->child_index + i;
+          float light_importance = light_tree_emitter_importance(kg, P, N, leaf_emitter);
+          if (leaf_emitter == emitter) {
             light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
             target_weight = light_weight;
             target_emitter_importance = light_importance;
