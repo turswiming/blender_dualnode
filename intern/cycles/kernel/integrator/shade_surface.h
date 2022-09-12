@@ -161,7 +161,7 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
     const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
 
-    if (kg->data.integrator.use_light_tree) {
+    if (kernel_data.integrator.use_light_tree) {
       if (!light_tree_sample_from_position(
               kg, rng_state, rand_light.x, rand_light.y, sd->time, sd->P, sd->N, bounce, path_flag, &ls)) {
         return;

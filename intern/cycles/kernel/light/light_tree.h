@@ -219,11 +219,11 @@ ccl_device float light_tree_cluster_importance(KernelGlobals kg,
 }
 
 ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
-                                                 float *randu,
+                                                 ccl_private float *randu,
                                                  const float3 P,
                                                  const float3 N,
                                                  const ccl_global KernelLightTreeNode *knode,
-                                                 float *pdf_factor)
+                                                 ccl_private float *pdf_factor)
 {
   float total_emitter_importance = 0.0f;
   for (int i = 0; i < knode->num_prims; i++) {
@@ -262,7 +262,7 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
 template<bool in_volume_segment>
 ccl_device bool light_tree_sample(KernelGlobals kg,
                                   ccl_private const RNGState *rng_state,
-                                  float *randu,
+                                  ccl_private float *randu,
                                   const float randv,
                                   const float time,
                                   const float3 N,
@@ -270,7 +270,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                   const int bounce,
                                   const uint32_t path_flag,
                                   ccl_private LightSample *ls,
-                                  float *pdf_factor)
+                                  ccl_private float *pdf_factor)
 {
   /* We keep track of the currently selected primitive and its weight,
    * as well as the total weight as part of the weighted reservoir sampling. */
@@ -448,7 +448,7 @@ ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
 template<bool in_volume_segment>
 ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
                                                 ccl_private const RNGState *rng_state,
-                                                float *randu,
+                                                ccl_private float *randu,
                                                 const float randv,
                                                 const float time,
                                                 const float3 N,
@@ -456,7 +456,7 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
                                                 const int bounce,
                                                 const uint32_t path_flag,
                                                 ccl_private LightSample *ls,
-                                                float *pdf_factor)
+                                                ccl_private float *pdf_factor)
 {
   const int num_distant_lights = kernel_data.integrator.num_distant_lights;
   float total_importance = 0.0f;
