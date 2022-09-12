@@ -740,11 +740,14 @@ Span<float3> CurvesGeometry::evaluated_tangents() const
           const IndexRange points = this->points_for_curve(curve_index);
           const IndexRange evaluated_points = this->evaluated_points_for_curve(curve_index);
 
-          if (handles_right[points.first()] != positions[points.first()]) {
+          const float epsilon = 1e-6f;
+          if (!math::almost_equal_relative(
+                  handles_right[points.first()], positions[points.first()], epsilon)) {
             tangents[evaluated_points.first()] = math::normalize(handles_right[points.first()] -
                                                                  positions[points.first()]);
           }
-          if (handles_left[points.last()] != positions[points.last()]) {
+          if (!math::almost_equal_relative(
+                  handles_left[points.last()], positions[points.last()], epsilon)) {
             tangents[evaluated_points.last()] = math::normalize(positions[points.last()] -
                                                                 handles_left[points.last()]);
           }
@@ -960,11 +963,11 @@ void CurvesGeometry::ensure_can_interpolate_to_evaluated() const
 void CurvesGeometry::resize(const int points_num, const int curves_num)
 {
   if (points_num != this->point_num) {
-    CustomData_realloc(&this->point_data, points_num);
+    CustomData_realloc(&this->point_data, this->points_num(), points_num);
     this->point_num = points_num;
   }
   if (curves_num != this->curve_num) {
-    CustomData_realloc(&this->curve_data, curves_num);
+    CustomData_realloc(&this->curve_data, this->curves_num(), curves_num);
     this->curve_num = curves_num;
     this->curve_offsets = (int *)MEM_reallocN(this->curve_offsets, sizeof(int) * (curves_num + 1));
   }

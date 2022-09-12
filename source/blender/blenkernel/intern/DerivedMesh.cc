@@ -68,6 +68,8 @@
 
 using blender::float3;
 using blender::IndexRange;
+using blender::Span;
+using blender::VArray;
 
 /* very slow! enable for testing only! */
 //#define USE_MODIFIER_VALIDATE
@@ -145,54 +147,6 @@ static MPoly *dm_getPolyArray(DerivedMesh *dm)
   return mpoly;
 }
 
-static MVert *dm_dupVertArray(DerivedMesh *dm)
-{
-  MVert *tmp = (MVert *)MEM_malloc_arrayN(
-      dm->getNumVerts(dm), sizeof(*tmp), "dm_dupVertArray tmp");
-
-  if (tmp) {
-    dm->copyVertArray(dm, tmp);
-  }
-
-  return tmp;
-}
-
-static MEdge *dm_dupEdgeArray(DerivedMesh *dm)
-{
-  MEdge *tmp = (MEdge *)MEM_malloc_arrayN(
-      dm->getNumEdges(dm), sizeof(*tmp), "dm_dupEdgeArray tmp");
-
-  if (tmp) {
-    dm->copyEdgeArray(dm, tmp);
-  }
-
-  return tmp;
-}
-
-static MLoop *dm_dupLoopArray(DerivedMesh *dm)
-{
-  MLoop *tmp = (MLoop *)MEM_malloc_arrayN(
-      dm->getNumLoops(dm), sizeof(*tmp), "dm_dupLoopArray tmp");
-
-  if (tmp) {
-    dm->copyLoopArray(dm, tmp);
-  }
-
-  return tmp;
-}
-
-static MPoly *dm_dupPolyArray(DerivedMesh *dm)
-{
-  MPoly *tmp = (MPoly *)MEM_malloc_arrayN(
-      dm->getNumPolys(dm), sizeof(*tmp), "dm_dupPolyArray tmp");
-
-  if (tmp) {
-    dm->copyPolyArray(dm, tmp);
-  }
-
-  return tmp;
-}
-
 static int dm_getNumLoopTri(DerivedMesh *dm)
 {
   const int numlooptris = poly_to_tri_count(dm->getNumPolys(dm), dm->getNumLoops(dm));
@@ -231,10 +185,6 @@ void DM_init_funcs(DerivedMesh *dm)
   dm->getEdgeArray = dm_getEdgeArray;
   dm->getLoopArray = dm_getLoopArray;
   dm->getPolyArray = dm_getPolyArray;
-  dm->dupVertArray = dm_dupVertArray;
-  dm->dupEdgeArray = dm_dupEdgeArray;
-  dm->dupLoopArray = dm_dupLoopArray;
-  dm->dupPolyArray = dm_dupPolyArray;
 
   dm->getLoopTriArray = dm_getLoopTriArray;
 
@@ -327,36 +277,6 @@ bool DM_release(DerivedMesh *dm)
   CustomData_free_temporary(&dm->polyData, dm->numPolyData);
 
   return false;
-}
-
-void DM_DupPolys(DerivedMesh *source, DerivedMesh *target)
-{
-  CustomData_free(&target->loopData, source->numLoopData);
-  CustomData_free(&target->polyData, source->numPolyData);
-
-  CustomData_copy(&source->loopData,
-                  &target->loopData,
-                  CD_MASK_DERIVEDMESH.lmask,
-                  CD_DUPLICATE,
-                  source->numLoopData);
-  CustomData_copy(&source->polyData,
-                  &target->polyData,
-                  CD_MASK_DERIVEDMESH.pmask,
-                  CD_DUPLICATE,
-                  source->numPolyData);
-
-  target->numLoopData = source->numLoopData;
-  target->numPolyData = source->numPolyData;
-
-  if (!CustomData_has_layer(&target->polyData, CD_MPOLY)) {
-    MPoly *mpoly;
-    MLoop *mloop;
-
-    mloop = source->dupLoopArray(source);
-    mpoly = source->dupPolyArray(source);
-    CustomData_add_layer(&target->loopData, CD_MLOOP, CD_ASSIGN, mloop, source->numLoopData);
-    CustomData_add_layer(&target->polyData, CD_MPOLY, CD_ASSIGN, mpoly, source->numPolyData);
-  }
 }
 
 void DM_ensure_looptri_data(DerivedMesh *dm)
@@ -585,7 +505,6 @@ static void add_orco_mesh(Object *ob, BMEditMesh *em, Mesh *mesh, Mesh *mesh_orc
 
     if (!(layerorco = (float(*)[3])CustomData_get_layer(&mesh->vdata, layer))) {
       CustomData_add_layer(&mesh->vdata, layer, CD_SET_DEFAULT, nullptr, mesh->totvert);
-      BKE_mesh_update_customdata_pointers(mesh, false);
 
       layerorco = (float(*)[3])CustomData_get_layer(&mesh->vdata, layer);
     }
@@ -825,7 +744,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       mesh_final = BKE_mesh_copy_for_eval(mesh_input, true);
       ASSERT_IS_VALID_MESH(mesh_final);
     }
-    MutableAttributeAccessor attributes = mesh_attributes_for_write(*mesh_final);
+    MutableAttributeAccessor attributes = mesh_final->attributes_for_write();
     SpanAttributeWriter<float3> rest_positions =
         attributes.lookup_or_add_for_write_only_span<float3>("rest_position", ATTR_DOMAIN_POINT);
     if (rest_positions) {
@@ -2002,9 +1921,9 @@ void mesh_get_mapped_verts_coords(Mesh *me_eval, float (*r_cos)[3], const int to
     MEM_freeN(userData.vertex_visit);
   }
   else {
-    MVert *mv = me_eval->mvert;
-    for (int i = 0; i < totcos; i++, mv++) {
-      copy_v3_v3(r_cos[i], mv->co);
+    const Span<MVert> verts = me_eval->verts();
+    for (int i = 0; i < totcos; i++) {
+      copy_v3_v3(r_cos[i], verts[i].co);
     }
   }
 }
@@ -2017,9 +1936,11 @@ static void mesh_init_origspace(Mesh *mesh)
                                                                    CD_ORIGSPACE_MLOOP);
   const int numpoly = mesh->totpoly;
   // const int numloop = mesh->totloop;
-  MVert *mv = mesh->mvert;
-  MLoop *ml = mesh->mloop;
-  MPoly *mp = mesh->mpoly;
+  const Span<MVert> verts = mesh->verts();
+  const Span<MPoly> polys = mesh->polys();
+  const Span<MLoop> loops = mesh->loops();
+
+  const MPoly *mp = polys.data();
   int i, j, k;
 
   blender::Vector<blender::float2, 64> vcos_2d;
@@ -2033,19 +1954,19 @@ static void mesh_init_origspace(Mesh *mesh)
       }
     }
     else {
-      MLoop *l = &ml[mp->loopstart];
+      const MLoop *l = &loops[mp->loopstart];
       float p_nor[3], co[3];
       float mat[3][3];
 
       float min[2] = {FLT_MAX, FLT_MAX}, max[2] = {-FLT_MAX, -FLT_MAX};
       float translate[2], scale[2];
 
-      BKE_mesh_calc_poly_normal(mp, l, mv, p_nor);
+      BKE_mesh_calc_poly_normal(mp, l, verts.data(), p_nor);
       axis_dominant_v3_to_m3(mat, p_nor);
 
       vcos_2d.resize(mp->totloop);
       for (j = 0; j < mp->totloop; j++, l++) {
-        mul_v3_m3v3(co, mat, mv[l->v].co);
+        mul_v3_m3v3(co, mat, verts[l->v].co);
         copy_v2_v2(vcos_2d[j], co);
 
         for (k = 0; k < 2; k++) {

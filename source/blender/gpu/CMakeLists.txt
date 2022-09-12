@@ -211,13 +211,13 @@ set(METAL_SRC
   metal/mtl_framebuffer.hh
   metal/mtl_index_buffer.hh
   metal/mtl_memory.hh
-  metal/mtl_pso_descriptor_state.hh
   metal/mtl_primitive.hh
+  metal/mtl_pso_descriptor_state.hh
   metal/mtl_query.hh
   metal/mtl_shader.hh
   metal/mtl_shader_generator.hh
-  metal/mtl_shader_interface_type.hh
   metal/mtl_shader_interface.hh
+  metal/mtl_shader_interface_type.hh
   metal/mtl_shader_shared.h
   metal/mtl_state.hh
   metal/mtl_texture.hh
@@ -272,11 +272,7 @@ set(GLSL_SRC
   shaders/gpu_shader_2D_widget_shadow_frag.glsl
   shaders/gpu_shader_2D_nodelink_frag.glsl
   shaders/gpu_shader_2D_nodelink_vert.glsl
-  shaders/gpu_shader_2D_flat_color_vert.glsl
-  shaders/gpu_shader_2D_line_dashed_uniform_color_vert.glsl
   shaders/gpu_shader_2D_line_dashed_frag.glsl
-  shaders/gpu_shader_2D_smooth_color_vert.glsl
-  shaders/gpu_shader_2D_smooth_color_frag.glsl
   shaders/gpu_shader_2D_image_vert.glsl
   shaders/gpu_shader_2D_image_rect_vert.glsl
   shaders/gpu_shader_2D_image_multi_rect_vert.glsl
@@ -284,7 +280,6 @@ set(GLSL_SRC
   shaders/gpu_shader_image_desaturate_frag.glsl
   shaders/gpu_shader_image_overlays_merge_frag.glsl
   shaders/gpu_shader_image_overlays_stereo_merge_frag.glsl
-  shaders/gpu_shader_image_modulate_alpha_frag.glsl
   shaders/gpu_shader_image_shuffle_color_frag.glsl
   shaders/gpu_shader_image_color_frag.glsl
   shaders/gpu_shader_image_varying_color_frag.glsl
@@ -331,6 +326,7 @@ set(GLSL_SRC
 
   shaders/compositor/compositor_alpha_crop.glsl
   shaders/compositor/compositor_bilateral_blur.glsl
+  shaders/compositor/compositor_blur.glsl
   shaders/compositor/compositor_bokeh_image.glsl
   shaders/compositor/compositor_box_mask.glsl
   shaders/compositor/compositor_convert.glsl
@@ -350,8 +346,11 @@ set(GLSL_SRC
   shaders/compositor/compositor_screen_lens_distortion.glsl
   shaders/compositor/compositor_set_alpha.glsl
   shaders/compositor/compositor_split_viewer.glsl
+  shaders/compositor/compositor_symmetric_blur.glsl
+  shaders/compositor/compositor_symmetric_separable_blur.glsl
 
   shaders/compositor/library/gpu_shader_compositor_alpha_over.glsl
+  shaders/compositor/library/gpu_shader_compositor_blur_common.glsl
   shaders/compositor/library/gpu_shader_compositor_bright_contrast.glsl
   shaders/compositor/library/gpu_shader_compositor_channel_matte.glsl
   shaders/compositor/library/gpu_shader_compositor_chroma_matte.glsl
@@ -577,8 +576,6 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/infos/gpu_shader_2D_area_borders_info.hh
   shaders/infos/gpu_shader_2D_checker_info.hh
   shaders/infos/gpu_shader_2D_diag_stripes_info.hh
-  shaders/infos/gpu_shader_2D_flat_color_info.hh
-  shaders/infos/gpu_shader_2D_image_color_info.hh
   shaders/infos/gpu_shader_2D_image_desaturate_color_info.hh
   shaders/infos/gpu_shader_2D_image_info.hh
   shaders/infos/gpu_shader_2D_image_multi_rect_color_info.hh
@@ -590,13 +587,10 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/infos/gpu_shader_2D_point_uniform_size_uniform_color_aa_info.hh
   shaders/infos/gpu_shader_2D_point_uniform_size_uniform_color_outline_aa_info.hh
   shaders/infos/gpu_shader_2D_point_varying_size_varying_color_info.hh
-  shaders/infos/gpu_shader_2D_smooth_color_info.hh
-  shaders/infos/gpu_shader_2D_uniform_color_info.hh
   shaders/infos/gpu_shader_2D_widget_info.hh
   shaders/infos/gpu_shader_3D_depth_only_info.hh
   shaders/infos/gpu_shader_3D_flat_color_info.hh
   shaders/infos/gpu_shader_3D_image_info.hh
-  shaders/infos/gpu_shader_3D_image_modulate_alpha_info.hh
   shaders/infos/gpu_shader_3D_point_info.hh
   shaders/infos/gpu_shader_3D_polyline_info.hh
   shaders/infos/gpu_shader_3D_smooth_color_info.hh
@@ -611,6 +605,7 @@ set(SRC_SHADER_CREATE_INFOS
 
   shaders/compositor/infos/compositor_alpha_crop_info.hh
   shaders/compositor/infos/compositor_bilateral_blur_info.hh
+  shaders/compositor/infos/compositor_blur_info.hh
   shaders/compositor/infos/compositor_bokeh_image_info.hh
   shaders/compositor/infos/compositor_box_mask_info.hh
   shaders/compositor/infos/compositor_convert_info.hh
@@ -630,6 +625,8 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/compositor/infos/compositor_screen_lens_distortion_info.hh
   shaders/compositor/infos/compositor_set_alpha_info.hh
   shaders/compositor/infos/compositor_split_viewer_info.hh
+  shaders/compositor/infos/compositor_symmetric_blur_info.hh
+  shaders/compositor/infos/compositor_symmetric_separable_blur_info.hh
 )
 
 set(SRC_SHADER_CREATE_INFOS_MTL
