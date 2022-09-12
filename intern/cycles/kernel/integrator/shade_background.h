@@ -191,7 +191,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
           const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
           ls.pdf *= distant_lights_pdf(kg, ray_P, N, lamp);
         }
-        const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
+        mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
       }
 
       /* Write to render buffer. */

@@ -134,7 +134,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
       uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
       pdf *= light_tree_pdf(kg, state, ray_P, N, sd->prim - prim_offset + lookup_offset);
     }
-    float mis_weight = light_sample_mis_weight_forward(kg, bsdf_pdf, pdf);
+    mis_weight = light_sample_mis_weight_forward(kg, bsdf_pdf, pdf);
   }
 
   film_write_surface_emission(
