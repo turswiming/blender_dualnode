@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright 2011-2022 Blender Foundation */
 
+#include "scene/light_tree.h"
 #include "scene/mesh.h"
 #include "scene/object.h"
-#include "scene/light_tree.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -18,8 +18,7 @@ float OrientationBounds::calculate_measure() const
                      2 * theta_o * sin_theta_o + cos_theta_o);
 }
 
-OrientationBounds merge(const OrientationBounds& cone_a, 
-						const OrientationBounds& cone_b)
+OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds &cone_b)
 {
   if (is_zero(cone_a.axis)) {
     return cone_b;
@@ -67,7 +66,7 @@ BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
 
   if (prim_id >= 0) {
     Object *object = scene->objects[object_id];
-    Mesh *mesh = static_cast<Mesh*>(object->get_geometry());
+    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
     Mesh::Triangle triangle = mesh->get_triangle(prim_id);
 
     float3 p[3] = {mesh->get_verts()[triangle.v[0]],
@@ -102,7 +101,7 @@ BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
     }
     else if (type == LIGHT_AREA) {
       /* For an area light, sizeu and sizev determine the 2 dimensions of the area light,
-       * while axisu and axisv determine the orientation of the 2 dimensions. 
+       * while axisu and axisv determine the orientation of the 2 dimensions.
        * We want to add all 4 corners to our bounding box. */
       const float3 half_extentu = 0.5 * lamp->get_sizeu() * lamp->get_axisu() * size;
       const float3 half_extentv = 0.5 * lamp->get_sizev() * lamp->get_axisv() * size;
@@ -153,8 +152,9 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
 
     bcone.axis = normal;
 
-    /* to-do: is there a better way to handle this case where both sides of the triangle are visible? 
-     * Right now, we assume that the normal axis is within pi radians of the triangle normal. */
+    /* to-do: is there a better way to handle this case where both sides of the triangle are
+     * visible? Right now, we assume that the normal axis is within pi radians of the triangle
+     * normal. */
     bcone.theta_o = M_PI_F;
     bcone.theta_e = M_PI_2_F;
   }
@@ -181,7 +181,7 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
       assert(false);
     }
   }
-  
+
   return bcone;
 }
 
@@ -193,14 +193,14 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
     Object *object = scene->objects[object_id];
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
     Mesh::Triangle triangle = mesh->get_triangle(prim_id);
-    Shader *shader = static_cast<Shader*>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
+    Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
 
     /* to-do: need a better way to handle this when textures are used. */
     if (!shader->is_constant_emission(&strength)) {
       strength = make_float3(1.0f);
     }
 
-     float3 p[3] = {mesh->get_verts()[triangle.v[0]],
+    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
                    mesh->get_verts()[triangle.v[1]],
                    mesh->get_verts()[triangle.v[2]]};
 
@@ -225,8 +225,13 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
   return fabsf(scene->shader_manager->linear_rgb_to_gray(strength));
 }
 
-void LightTreeBuildNode::init_leaf(
-    uint offset, uint n, const BoundBox &b, const OrientationBounds &c, float e, float e_var, uint bits)
+void LightTreeBuildNode::init_leaf(uint offset,
+                                   uint n,
+                                   const BoundBox &b,
+                                   const OrientationBounds &c,
+                                   float e,
+                                   float e_var,
+                                   uint bits)
 {
   bbox = b;
   bcone = c;
@@ -254,7 +259,9 @@ void LightTreeBuildNode::init_interior(LightTreeBuildNode *c0, LightTreeBuildNod
   is_leaf = false;
 }
 
-LightTree::LightTree(const vector<LightTreePrimitive> &prims, Scene *scene, uint max_lights_in_leaf)
+LightTree::LightTree(const vector<LightTreePrimitive> &prims,
+                     Scene *scene,
+                     uint max_lights_in_leaf)
 {
   if (prims.size() == 0) {
     return;
@@ -277,7 +284,8 @@ LightTree::LightTree(const vector<LightTreePrimitive> &prims, Scene *scene, uint
 
   int total_nodes = 0;
   vector<LightTreePrimitive> ordered_prims;
-  LightTreeBuildNode *root = recursive_build(build_data, 0, prims.size(), total_nodes, ordered_prims, 0, 0);
+  LightTreeBuildNode *root = recursive_build(
+      build_data, 0, prims.size(), total_nodes, ordered_prims, 0, 0);
   prims_ = ordered_prims;
 
   int offset = 0;
@@ -323,17 +331,24 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
   }
 
   /* Var(X) = E[X^2] - E[X]^2 */
-  float energy_variance = (energy_squared_total / num_prims) - (energy_total / num_prims) * (energy_total / num_prims);
+  float energy_variance = (energy_squared_total / num_prims) -
+                          (energy_total / num_prims) * (energy_total / num_prims);
   if (num_prims == 1 || len(centroid_bounds.size()) == 0.0f) {
     int first_prim_offset = ordered_prims.size();
     for (int i = start; i < end; i++) {
       int prim_num = primitive_info[i].prim_num;
       ordered_prims.push_back(prims_[prim_num]);
     }
-    node->init_leaf(first_prim_offset, num_prims, node_bbox, node_bcone, energy_total, energy_variance, bit_trail);
+    node->init_leaf(first_prim_offset,
+                    num_prims,
+                    node_bbox,
+                    node_bcone,
+                    energy_total,
+                    energy_variance,
+                    bit_trail);
   }
   else {
-    /* Find the best place to split the primitives into 2 nodes. 
+    /* Find the best place to split the primitives into 2 nodes.
      * If the best split cost is no better than making a leaf node, make a leaf instead.*/
     float min_cost;
     int min_dim, min_bucket;
@@ -348,12 +363,12 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
                min_bucket);
     if (num_prims > max_lights_in_leaf_ || min_cost < energy_total) {
       /* Partition the primitives between start and end into the appropriate split,
-       * based on the minimum dimension and minimum bucket returned from split_saoh. 
+       * based on the minimum dimension and minimum bucket returned from split_saoh.
        * This is an O(n) algorithm where we iterate from the left and right side,
        * and swaps the appropriate left and right elements until complete. */
       int left = start, right = end - 1;
       float bounding_dimension = (min_bucket + 1) * (centroid_bounds.size()[min_dim] /
-                                               LightTreeBucketInfo::num_buckets) +
+                                                     LightTreeBucketInfo::num_buckets) +
                                  centroid_bounds.min[min_dim];
       while (left < right) {
         while (primitive_info[left].centroid[min_dim] <= bounding_dimension && left < end) {
@@ -375,8 +390,13 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
        * where left points to the first element that belongs to the right node. */
       LightTreeBuildNode *left_node = recursive_build(
           primitive_info, start, left, total_nodes, ordered_prims, bit_trail, depth + 1);
-      LightTreeBuildNode *right_node = recursive_build(
-          primitive_info, left, end, total_nodes, ordered_prims, bit_trail | (1u << bit_trail), depth + 1);
+      LightTreeBuildNode *right_node = recursive_build(primitive_info,
+                                                       left,
+                                                       end,
+                                                       total_nodes,
+                                                       ordered_prims,
+                                                       bit_trail | (1u << bit_trail),
+                                                       depth + 1);
       node->init_interior(left_node, right_node);
     }
     else {
@@ -385,7 +405,13 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
         int prim_num = primitive_info[i].prim_num;
         ordered_prims.push_back(prims_[prim_num]);
       }
-      node->init_leaf(first_prim_offset, num_prims, node_bbox, node_bcone, energy_total, energy_variance, bit_trail);
+      node->init_leaf(first_prim_offset,
+                      num_prims,
+                      node_bbox,
+                      node_bcone,
+                      energy_total,
+                      energy_variance,
+                      bit_trail);
     }
   }
 
@@ -398,9 +424,9 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
                            int end,
                            const BoundBox &bbox,
                            const OrientationBounds &bcone,
-                           float& min_cost,
-                           int& min_dim,
-                           int& min_bucket)
+                           float &min_cost,
+                           int &min_dim,
+                           int &min_bucket)
 {
   /* Even though this factor is used for every bucket, we use it to compare
    * the min_cost and total_energy (when deciding between creating a leaf or interior node. */
@@ -417,7 +443,7 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
     }
 
     const float inv_extent = 1 / (centroid_bbox.size()[dim]);
-    
+
     /* Fill in buckets with primitives. */
     vector<LightTreeBucketInfo> buckets(LightTreeBucketInfo::num_buckets);
     for (int i = start; i < end; i++) {
@@ -427,8 +453,7 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
        * where the centroid box is split into equal partitions. */
       int bucket_idx = LightTreeBucketInfo::num_buckets *
                        (primitive.centroid[dim] - centroid_bbox.min[dim]) * inv_extent;
-      if (bucket_idx == LightTreeBucketInfo::num_buckets)
-      {
+      if (bucket_idx == LightTreeBucketInfo::num_buckets) {
         bucket_idx = LightTreeBucketInfo::num_buckets - 1;
       }
 
@@ -466,10 +491,12 @@ void LightTree::split_saoh(const BoundBox &centroid_bbox,
           bcone_R = merge(bcone_R, buckets[right].bcone);
         }
       }
-      
+
       /* Calculate the cost of splitting using the heuristic as described in the paper. */
-      float left = (bbox_L.valid()) ? energy_L * bbox_L.area() * bcone_L.calculate_measure() : 0.0f;
-      float right = (bbox_R.valid()) ? energy_R * bbox_R.area() * bcone_R.calculate_measure() : 0.0f;
+      float left = (bbox_L.valid()) ? energy_L * bbox_L.area() * bcone_L.calculate_measure() :
+                                      0.0f;
+      float right = (bbox_R.valid()) ? energy_R * bbox_R.area() * bcone_R.calculate_measure() :
+                                       0.0f;
       float regularization = max_extent * inv_extent;
       bucket_costs[split] = regularization * (left + right) * inv_total_cost;
 

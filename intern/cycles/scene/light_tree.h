@@ -18,7 +18,7 @@ CCL_NAMESPACE_BEGIN
  * Bounds the normal axis of the lights,
  * along with their emission profiles */
 struct OrientationBounds {
-  float3 axis; /* normal axis of the light */
+  float3 axis;   /* normal axis of the light */
   float theta_o; /* angle bounding the normals */
   float theta_e; /* angle bounding the light emissions */
 
@@ -87,7 +87,8 @@ struct LightTreePrimitive {
 struct LightTreeBucketInfo {
   LightTreeBucketInfo()
       : energy(0.0f), bbox(BoundBox::empty), bcone(OrientationBounds::empty), count(0)
-  {}
+  {
+  }
 
   float energy; /* Total energy in the partition */
   BoundBox bbox;
@@ -111,8 +112,14 @@ struct LightTreeBuildNode {
   uint bit_trail;
   bool is_leaf;
 
-  void init_leaf(uint offset, uint n, const BoundBox& b, const OrientationBounds& c, float e, float e_var, uint bits);
-  void init_interior(LightTreeBuildNode* c0, LightTreeBuildNode* c1);
+  void init_leaf(uint offset,
+                 uint n,
+                 const BoundBox &b,
+                 const OrientationBounds &c,
+                 float e,
+                 float e_var,
+                 uint bits);
+  void init_interior(LightTreeBuildNode *c0, LightTreeBuildNode *c1);
 };
 
 /* Packed Light Tree Node
@@ -132,7 +139,7 @@ struct PackedLightTreeNode {
 
   /* The bit trail traces the traversal from the root to a leaf node.
    * A value of 0 denotes traversing left while a value of 1 denotes traversing right. */
-  uint bit_trail; 
+  uint bit_trail;
 };
 
 /* Light BVH
@@ -145,16 +152,29 @@ class LightTree {
   Scene *scene_;
   uint max_lights_in_leaf_;
 
-public:
+ public:
   LightTree(const vector<LightTreePrimitive> &prims, Scene *scene, uint max_lights_in_leaf);
 
   const vector<LightTreePrimitive> &get_prims() const;
   const vector<PackedLightTreeNode> &get_nodes() const;
 
-private:
-  LightTreeBuildNode* recursive_build(vector<LightTreePrimitiveInfo> &primitive_info, int start, int end, int &total_nodes, vector<LightTreePrimitive> &ordered_prims, uint bit_trail, int depth);
+ private:
+  LightTreeBuildNode *recursive_build(vector<LightTreePrimitiveInfo> &primitive_info,
+                                      int start,
+                                      int end,
+                                      int &total_nodes,
+                                      vector<LightTreePrimitive> &ordered_prims,
+                                      uint bit_trail,
+                                      int depth);
   void split_saoh(const BoundBox &centroid_bounds,
-                  const vector<LightTreePrimitiveInfo> &primitive_info, int start, int end, const BoundBox &bbox, const OrientationBounds &bcone, float& min_cost, int& min_dim, int& min_bucket);
+                  const vector<LightTreePrimitiveInfo> &primitive_info,
+                  int start,
+                  int end,
+                  const BoundBox &bbox,
+                  const OrientationBounds &bcone,
+                  float &min_cost,
+                  int &min_dim,
+                  int &min_bucket);
   int flatten_tree(const LightTreeBuildNode *node, int &offset, int parent);
 };
 

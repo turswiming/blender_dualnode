@@ -80,11 +80,8 @@ static void shade_background_pixels(Device *device,
       });
 }
 
-static float average_background_energy(Device *device,
-                                       DeviceScene *dscene,
-                                       Progress &progress,
-                                       Scene *scene,
-                                       Light *light)
+static float average_background_energy(
+    Device *device, DeviceScene *dscene, Progress &progress, Scene *scene, Light *light)
 {
   if (light->get_light_type() != LIGHT_BACKGROUND) {
     assert(false);
@@ -100,7 +97,7 @@ static float average_background_energy(Device *device,
 
   vector<float3> pixels;
   shade_background_pixels(device, dscene, res.x, res.y, pixels, progress);
-  
+
   float total_energy = 0.0f;
   for (int i = 0; i < pixels.size(); i++) {
     total_energy += scene->shader_manager->linear_rgb_to_gray(pixels[i]);
@@ -309,7 +306,8 @@ void LightManager::device_update_distribution(Device *device,
 
   bool background_mis = false;
 
-  /* We want to add both lights and emissive triangles to this vector for light tree construction. */
+  /* We want to add both lights and emissive triangles to this vector for light tree construction.
+   */
   bool light_tree_enabled = scene->integrator->get_use_light_tree();
   vector<LightTreePrimitive> light_prims;
   vector<LightTreePrimitive> distant_lights;
@@ -382,7 +380,7 @@ void LightManager::device_update_distribution(Device *device,
           light_prim.object_id = object_id;
           light_prims.push_back(light_prim);
         }
-        
+
         num_triangles++;
       }
     }
@@ -413,7 +411,8 @@ void LightManager::device_update_distribution(Device *device,
     /* First initialize the light tree's nodes. */
     const vector<PackedLightTreeNode> &linearized_bvh = light_tree.get_nodes();
     KernelLightTreeNode *light_tree_nodes = dscene->light_tree_nodes.alloc(linearized_bvh.size());
-    KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(light_prims.size());
+    KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(
+        light_prims.size());
     float max_light_tree_energy = 0.0f;
     for (int index = 0; index < linearized_bvh.size(); index++) {
       const PackedLightTreeNode &node = linearized_bvh[index];
@@ -518,7 +517,7 @@ void LightManager::device_update_distribution(Device *device,
       LightTreePrimitive prim = distant_lights[index];
       Light *light = scene->lights[prim.lamp_id];
       OrientationBounds light_bounds;
-      
+
       /* Lights in this group are either a background or distant light. */
       light_tree_distant_group[index].prim_id = ~prim.prim_id;
 
@@ -550,11 +549,11 @@ void LightManager::device_update_distribution(Device *device,
 
       light_tree_distant_group[index].energy = energy;
       light_array[~prim.prim_id] = index;
-      
+
       if (energy > max_distant_light_energy) {
         max_distant_light_energy = energy;
       }
-    } 
+    }
 
     /* The net OrientationBounds contain bounding information about all the distant lights. */
     light_tree_distant_group[num_distant_lights].prim_id = -1;

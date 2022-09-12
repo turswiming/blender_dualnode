@@ -322,6 +322,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
                 layout.row().prop(cscene, "use_layer_samples")
                 break
 
+
 class CYCLES_RENDER_PT_sampling_light_tree(CyclesButtonsPanel, Panel):
     bl_label = "Many Lights Sampling"
     bl_parent_id = "CYCLES_RENDER_PT_sampling"

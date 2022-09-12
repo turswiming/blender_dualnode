@@ -1313,7 +1313,8 @@ typedef struct KernelLightTreeNode {
   int child_index;
   union {
     int num_prims; /* leaf nodes need to know the number of primitives stored. */
-    float energy_variance; /* interior nodes use the energy variance for the splitting heuristic. */
+    float
+        energy_variance; /* interior nodes use the energy variance for the splitting heuristic. */
   };
 
   /* Bit trail. */
