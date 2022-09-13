@@ -572,7 +572,7 @@ ccl_device float light_tree_pdf(
       }
       else {
         float light_probability = 1.0f;
-        const int selected_light = light_tree_cluster_select_emitter(
+        selected_light = light_tree_cluster_select_emitter(
             kg, &randu, P, N, knode, &light_probability);
         light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
       }
