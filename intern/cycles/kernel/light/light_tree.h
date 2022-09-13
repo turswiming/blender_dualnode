@@ -561,6 +561,7 @@ ccl_device float light_tree_pdf(
           const int leaf_emitter = -knode->child_index + i;
           float light_importance = light_tree_emitter_importance(kg, P, N, leaf_emitter);
           if (leaf_emitter == emitter) {
+            selected_light = leaf_emitter;
             light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
             target_weight = light_weight;
             target_emitter_importance = light_importance;
