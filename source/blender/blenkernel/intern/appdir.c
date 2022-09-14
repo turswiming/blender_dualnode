@@ -371,14 +371,16 @@ static bool get_path_local_ex(char *targetpath,
     relfolder[0] = '\0';
   }
 
-  /* Try `{g_app.program_dirname}/2.xx/{folder_name}` the default directory
+  /* Try `{g_app.program_dirname}/3.xx/{folder_name}` the default directory
    * for a portable distribution. See `WITH_INSTALL_PORTABLE` build-option. */
   const char *path_base = g_app.program_dirname;
 #if defined(__APPLE__) && !defined(WITH_PYTHON_MODULE)
   /* Due new code-sign situation in OSX > 10.9.5
-   * we must move the blender_version dir with contents to Resources. */
-  char osx_resourses[FILE_MAX];
-  BLI_snprintf(osx_resourses, sizeof(osx_resourses), "%s../Resources", g_app.program_dirname);
+   * we must move the blender_version dir with contents to Resources.
+   * Add 4 + 9 for the temporary `/../` path & `Resources`. */
+  char osx_resourses[FILE_MAX + 4 + 9];
+  BLI_path_join(
+      osx_resourses, sizeof(osx_resourses), g_app.program_dirname, "..", "Resources", NULL);
   /* Remove the '/../' added above. */
   BLI_path_normalize(NULL, osx_resourses);
   path_base = osx_resourses;
@@ -734,6 +736,7 @@ const char *BKE_appdir_folder_id_create(const int folder_id, const char *subfold
             BLENDER_USER_CONFIG,
             BLENDER_USER_SCRIPTS,
             BLENDER_USER_AUTOSAVE)) {
+    BLI_assert_unreachable();
     return NULL;
   }
 
@@ -811,7 +814,7 @@ static void where_am_i(char *fullname, const size_t maxlen, const char *name)
 #  endif
 
 #  ifdef _WIN32
-  if (!strict) {
+  {
     wchar_t *fullname_16 = MEM_mallocN(maxlen * sizeof(wchar_t), "ProgramPath");
     if (GetModuleFileNameW(0, fullname_16, maxlen)) {
       conv_utf_16_to_8(fullname_16, fullname, maxlen);
@@ -835,18 +838,14 @@ static void where_am_i(char *fullname, const size_t maxlen, const char *name)
     if (name[0] == '.') {
       BLI_path_abs_from_cwd(fullname, maxlen);
 #  ifdef _WIN32
-      if (!strict) {
-        BLI_path_program_extensions_add_win32(fullname, maxlen);
-      }
+      BLI_path_program_extensions_add_win32(fullname, maxlen);
 #  endif
     }
     else if (BLI_path_slash_rfind(name)) {
       /* Full path. */
       BLI_strncpy(fullname, name, maxlen);
 #  ifdef _WIN32
-      if (!strict) {
-        BLI_path_program_extensions_add_win32(fullname, maxlen);
-      }
+      BLI_path_program_extensions_add_win32(fullname, maxlen);
 #  endif
     }
     else {

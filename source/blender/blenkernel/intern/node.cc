@@ -71,6 +71,7 @@
 #include "NOD_composite.h"
 #include "NOD_function.h"
 #include "NOD_geometry.h"
+#include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_shader.h"
 #include "NOD_socket.h"
@@ -1931,6 +1932,9 @@ static void node_socket_free(bNodeSocket *sock, const bool do_id_user)
     }
     MEM_freeN(sock->default_value);
   }
+  if (sock->default_attribute_name) {
+    MEM_freeN(sock->default_attribute_name);
+  }
   MEM_delete(sock->runtime);
 }
 
@@ -3014,6 +3018,9 @@ static void node_socket_interface_free(bNodeTree *UNUSED(ntree),
       socket_id_user_decrement(sock);
     }
     MEM_freeN(sock->default_value);
+  }
+  if (sock->default_attribute_name) {
+    MEM_freeN(sock->default_attribute_name);
   }
   MEM_delete(sock->runtime);
 }
