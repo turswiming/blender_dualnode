@@ -2675,11 +2675,11 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
         }
 
         /* Move shared pointers from deprecated location to current location */
-        sb->shared->pointcache = sb->pointcache;
-        sb->shared->ptcaches = sb->ptcaches;
+        // sb->shared->pointcache = sb->pointcache;
+        // sb->shared->ptcaches = sb->ptcaches;
 
-        sb->pointcache = NULL;
-        BLI_listbase_clear(&sb->ptcaches);
+        // sb->pointcache = NULL;
+        // BLI_listbase_clear(&sb->ptcaches);
       }
     }
 

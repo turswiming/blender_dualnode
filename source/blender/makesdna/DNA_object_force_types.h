@@ -188,120 +188,148 @@ typedef struct SoftBody_Shared {
   struct ListBase ptcaches;
 } SoftBody_Shared;
 
-typedef struct SoftBody {
-  /* dynamic data */
-  int totpoint, totspring;
+typedef struct SoftBody{
+  int totpoint, totedge, tottet, tot_surface_point, tot_surface_tet;
+  char _pad1[4];
   /** Not saved in file. */
   struct BodyPoint *bpoint;
-  /** Not saved in file. */
-  struct BodySpring *bspring;
-  char _pad;
-  char msg_lock;
-  short msg_value;
+  struct BodyEdge *bedge;
+  struct BodyTet *btet;
 
-  /* part of UI: */
+  int *surface_points;
+  int *surface_tets;
 
-  /* general options */
-  /** Softbody mass of *vertex*. */
-  float nodemass;
-  /**
-   * Along with it introduce mass painting
-   * starting to fix old bug .. nastiness that VG are indexes
-   * rather find them by name tag to find it -> jow20090613.
-   * MAX_VGROUP_NAME */
-  char namedVG_Mass[64];
-  /** Softbody amount of gravitation to apply. */
   float grav;
-  /** Friction to env. */
-  float mediafrict;
-  /** Error limit for ODE solver. */
-  float rklimit;
-  /** User control over simulation speed. */
-  float physics_speed;
+  float substep_count;
+  float alpha_vol; //stiffness coefficient
+  float alpha_edge;
+  float dt;
+  
+  int last_frame;
 
-  /* goal */
-  /** Softbody goal springs. */
-  float goalspring;
-  /** Softbody goal springs friction. */
-  float goalfrict;
-  /** Quick limits for goal. */
-  float mingoal;
-  float maxgoal;
-  /** Default goal for vertices without vgroup. */
-  float defgoal;
-  /** Index starting at 1. */
   short vertgroup;
-  /**
-   * Starting to fix old bug .. nastiness that VG are indexes
-   * rather find them by name tag to find it -> jow20090613.
-   * MAX_VGROUP_NAME */
-  char namedVG_Softgoal[64];
-
-  short fuzzyness;
-
-  /* springs */
-  /** Softbody inner springs. */
-  float inspring;
-  /** Softbody inner springs friction. */
-  float infrict;
-  /**
-   * Along with it introduce Spring_K painting
-   * starting to fix old bug .. nastiness that VG are indexes
-   * rather find them by name tag to find it -> jow20090613.
-   * MAX_VGROUP_NAME
-   */
-  char namedVG_Spring_K[64];
-
-  /* baking */
-  char _pad1[6];
-  /** Local==1: use local coords for baking. */
-  char local, solverflags;
-
-  /* -- these must be kept for backwards compatibility -- */
-  /** Array of size totpointkey. */
-  SBVertex **keys;
-  /** If totpointkey != totpoint or totkey!- (efra-sfra)/interval -> free keys. */
-  int totpointkey, totkey;
-  /* ---------------------------------------------------- */
-  float secondspring;
-
-  /* Self collision. */
-  /** Fixed collision ball size if > 0. */
-  float colball;
-  /** Cooling down collision response. */
-  float balldamp;
-  /** Pressure the ball is loaded with. */
-  float ballstiff;
-  short sbc_mode;
-  short aeroedge;
-  short minloops;
-  short maxloops;
-  short choke;
-  short solver_ID;
-  short plastic;
-  short springpreload;
-
-  /** Scratchpad/cache on live time not saved in file. */
-  struct SBScratch *scratch;
-  float shearstiff;
-  float inpush;
+  char _pad[6];
 
   struct SoftBody_Shared *shared;
-  /** Moved to SoftBody_Shared. */
-  struct PointCache *pointcache DNA_DEPRECATED;
-  /** Moved to SoftBody_Shared. */
-  struct ListBase ptcaches DNA_DEPRECATED;
 
-  struct Collection *collision_group;
-
-  struct EffectorWeights *effector_weights;
-  /* Reverse estimated object-matrix (run-time data, no need to store in the file). */
-  float lcom[3];
-  float lrot[3][3];
-  float lscale[3][3];
-
-  int last_frame;
+  // char _pad[4];
 } SoftBody;
+
+
+// typedef struct SoftBody {
+//   /* dynamic data */
+//   int totpoint, tottet;
+//   /** Not saved in file. */
+//   struct BodyPoint *bpoint;
+//   /** Not saved in file. */
+//   struct BodyTet *btet;
+//   char _pad;
+//   char msg_lock;
+//   short msg_value;
+
+//   /* part of UI: */
+
+//   /* general options */
+//   /** Softbody mass of *vertex*. */
+//   float nodemass;
+//   /**
+//    * Along with it introduce mass painting
+//    * starting to fix old bug .. nastiness that VG are indexes
+//    * rather find them by name tag to find it -> jow20090613.
+//    * MAX_VGROUP_NAME */
+//   char namedVG_Mass[64];
+//   /** Softbody amount of gravitation to apply. */
+//   float grav;
+//   /** Friction to env. */
+//   float mediafrict;
+//   /** Error limit for ODE solver. */
+//   float rklimit;
+//   /** User control over simulation speed. */
+//   float physics_speed;
+
+//   /* goal */
+//   /** Softbody goal springs. */
+//   float goalspring;
+//   /** Softbody goal springs friction. */
+//   float goalfrict;
+//   /** Quick limits for goal. */
+//   float mingoal;
+//   float maxgoal;
+//   /** Default goal for vertices without vgroup. */
+//   float defgoal;
+//   /** Index starting at 1. */
+//   short vertgroup;
+//   /**
+//    * Starting to fix old bug .. nastiness that VG are indexes
+//    * rather find them by name tag to find it -> jow20090613.
+//    * MAX_VGROUP_NAME */
+//   char namedVG_Softgoal[64];
+
+//   short fuzzyness;
+
+//   /* springs */
+//   /** Softbody inner springs. */
+//   float inspring;
+//   /** Softbody inner springs friction. */
+//   float infrict;
+//   /**
+//    * Along with it introduce Spring_K painting
+//    * starting to fix old bug .. nastiness that VG are indexes
+//    * rather find them by name tag to find it -> jow20090613.
+//    * MAX_VGROUP_NAME
+//    */
+//   char namedVG_Spring_K[64];
+
+//   /* baking */
+//   char _pad1[6];
+//   /** Local==1: use local coords for baking. */
+//   char local, solverflags;
+
+//   /* -- these must be kept for backwards compatibility -- */
+//   /** Array of size totpointkey. */
+//   SBVertex **keys;
+//   /** If totpointkey != totpoint or totkey!- (efra-sfra)/interval -> free keys. */
+//   int totpointkey, totkey;
+//   /* ---------------------------------------------------- */
+//   float secondspring;
+
+//   /* Self collision. */
+//   /** Fixed collision ball size if > 0. */
+//   float colball;
+//   /** Cooling down collision response. */
+//   float balldamp;
+//   /** Pressure the ball is loaded with. */
+//   float ballstiff;
+//   short sbc_mode;
+//   short aeroedge;
+//   short minloops;
+//   short maxloops;
+//   short choke;
+//   short solver_ID;
+//   short plastic;
+//   short springpreload;
+
+//   /** Scratchpad/cache on live time not saved in file. */
+//   struct SBScratch *scratch;
+//   float shearstiff;
+//   float inpush;
+
+//   struct SoftBody_Shared *shared;
+//   /** Moved to SoftBody_Shared. */
+//   struct PointCache *pointcache DNA_DEPRECATED;
+//   /** Moved to SoftBody_Shared. */
+//   struct ListBase ptcaches DNA_DEPRECATED;
+
+//   struct Collection *collision_group;
+
+//   struct EffectorWeights *effector_weights;
+//   /* Reverse estimated object-matrix (run-time data, no need to store in the file). */
+//   float lcom[3];
+//   float lrot[3][3];
+//   float lscale[3][3];
+
+//   int last_frame;
+// } SoftBody;
 
 /* pd->flag: various settings */
 #define PFIELD_USEMAX (1 << 0)

@@ -444,14 +444,14 @@ static void object_foreach_id(ID *id, LibraryForeachIDData *data)
         data, BKE_particlesystem_id_loop(psys, library_foreach_particlesystemsObjectLooper, data));
   }
 
-  if (object->soft) {
-    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, object->soft->collision_group, IDWALK_CB_NOP);
+  // if (object->soft) {
+  //   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, object->soft->collision_group, IDWALK_CB_NOP);
 
-    if (object->soft->effector_weights) {
-      BKE_LIB_FOREACHID_PROCESS_IDSUPER(
-          data, object->soft->effector_weights->group, IDWALK_CB_NOP);
-    }
-  }
+  //   if (object->soft->effector_weights) {
+  //     BKE_LIB_FOREACHID_PROCESS_IDSUPER(
+  //         data, object->soft->effector_weights->group, IDWALK_CB_NOP);
+  //   }
+  // }
 }
 
 static void object_foreach_path_pointcache(ListBase *ptcache_list,
@@ -562,12 +562,12 @@ static void object_blend_write(BlendWriter *writer, ID *id, const void *id_addre
   BLO_write_struct(writer, PartDeflect, ob->pd);
   if (ob->soft) {
     /* Set deprecated pointers to prevent crashes of older Blenders */
-    ob->soft->pointcache = ob->soft->shared->pointcache;
-    ob->soft->ptcaches = ob->soft->shared->ptcaches;
+    // ob->soft->pointcache = ob->soft->shared->pointcache;
+    // ob->soft->ptcaches = ob->soft->shared->ptcaches;
     BLO_write_struct(writer, SoftBody, ob->soft);
     BLO_write_struct(writer, SoftBody_Shared, ob->soft->shared);
     BKE_ptcache_blend_write(writer, &(ob->soft->shared->ptcaches));
-    BLO_write_struct(writer, EffectorWeights, ob->soft->effector_weights);
+    // BLO_write_struct(writer, EffectorWeights, ob->soft->effector_weights);
   }
 
   if (ob->rigidbody_object) {
@@ -715,21 +715,21 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
     SoftBody *sb = ob->soft;
 
     sb->bpoint = nullptr; /* init pointers so it gets rebuilt nicely */
-    sb->bspring = nullptr;
-    sb->scratch = nullptr;
-    /* although not used anymore */
-    /* still have to be loaded to be compatible with old files */
-    BLO_read_pointer_array(reader, (void **)&sb->keys);
-    if (sb->keys) {
-      for (int a = 0; a < sb->totkey; a++) {
-        BLO_read_data_address(reader, &sb->keys[a]);
-      }
-    }
+    // sb->bspring = nullptr;
+    // sb->scratch = nullptr;
+    // /* although not used anymore */
+    // /* still have to be loaded to be compatible with old files */
+    // BLO_read_pointer_array(reader, (void **)&sb->keys);
+    // if (sb->keys) {
+    //   for (int a = 0; a < sb->totkey; a++) {
+    //     BLO_read_data_address(reader, &sb->keys[a]);
+    //   }
+    // }
 
-    BLO_read_data_address(reader, &sb->effector_weights);
-    if (!sb->effector_weights) {
-      sb->effector_weights = BKE_effector_add_weights(nullptr);
-    }
+    // BLO_read_data_address(reader, &sb->effector_weights);
+    // if (!sb->effector_weights) {
+    //   sb->effector_weights = BKE_effector_add_weights(nullptr);
+    // }
 
     BLO_read_data_address(reader, &sb->shared);
     if (sb->shared == nullptr) {
@@ -737,7 +737,7 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
        * We should only do this when sb->shared == nullptr, because those pointers
        * are always set (for compatibility with older Blenders). We mustn't link
        * the same pointcache twice. */
-      BKE_ptcache_blend_read_data(reader, &sb->ptcaches, &sb->pointcache, false);
+      // BKE_ptcache_blend_read_data(reader, &sb->ptcaches, &sb->pointcache, false);
     }
     else {
       /* link caches */
@@ -989,11 +989,11 @@ static void object_blend_read_lib(BlendLibReader *reader, ID *id)
     BKE_particle_partdeflect_blend_read_lib(reader, &ob->id, ob->pd);
   }
 
-  if (ob->soft) {
-    BLO_read_id_address(reader, ob->id.lib, &ob->soft->collision_group);
+  // if (ob->soft) {
+  //   BLO_read_id_address(reader, ob->id.lib, &ob->soft->collision_group);
 
-    BLO_read_id_address(reader, ob->id.lib, &ob->soft->effector_weights->group);
-  }
+  //   BLO_read_id_address(reader, ob->id.lib, &ob->soft->effector_weights->group);
+  // }
 
   BKE_particle_system_blend_read_lib(reader, ob, &ob->id, &ob->particlesystem);
   BKE_modifier_blend_read_lib(reader, ob);
@@ -1108,13 +1108,13 @@ static void object_blend_read_expand(BlendExpander *expander, ID *id)
     BLO_expand(expander, ob->pd->f_source);
   }
 
-  if (ob->soft) {
-    BLO_expand(expander, ob->soft->collision_group);
+  // if (ob->soft) {
+  //   BLO_expand(expander, ob->soft->collision_group);
 
-    if (ob->soft->effector_weights) {
-      BLO_expand(expander, ob->soft->effector_weights->group);
-    }
-  }
+  //   if (ob->soft->effector_weights) {
+  //     BLO_expand(expander, ob->soft->effector_weights->group);
+  //   }
+  // }
 
   if (ob->rigidbody_constraint) {
     BLO_expand(expander, ob->rigidbody_constraint->ob1);
@@ -2332,12 +2332,13 @@ void BKE_object_copy_softbody(Object *ob_dst, const Object *ob_src, const int fl
   SoftBody *sbn = (SoftBody *)MEM_dupallocN(sb);
 
   if ((flag & LIB_ID_COPY_CACHES) == 0) {
-    sbn->totspring = sbn->totpoint = 0;
+    // sbn->totspring = sbn->totpoint = 0;
+    sbn->totpoint = 0;
     sbn->bpoint = nullptr;
-    sbn->bspring = nullptr;
+    // sbn->bspring = nullptr;
   }
   else {
-    sbn->totspring = sb->totspring;
+    // sbn->totspring = sb->totspring;
     sbn->totpoint = sb->totpoint;
 
     if (sbn->bpoint) {
@@ -2345,22 +2346,22 @@ void BKE_object_copy_softbody(Object *ob_dst, const Object *ob_src, const int fl
 
       sbn->bpoint = (BodyPoint *)MEM_dupallocN(sbn->bpoint);
 
-      for (i = 0; i < sbn->totpoint; i++) {
-        if (sbn->bpoint[i].springs) {
-          sbn->bpoint[i].springs = (int *)MEM_dupallocN(sbn->bpoint[i].springs);
-        }
-      }
+      // for (i = 0; i < sbn->totpoint; i++) {
+      //   if (sbn->bpoint[i].springs) {
+      //     sbn->bpoint[i].springs = (int *)MEM_dupallocN(sbn->bpoint[i].springs);
+      //   }
+      // }
     }
 
-    if (sb->bspring) {
-      sbn->bspring = (struct BodySpring *)MEM_dupallocN(sb->bspring);
-    }
+    // if (sb->bspring) {
+    //   sbn->bspring = (struct BodySpring *)MEM_dupallocN(sb->bspring);
+    // }
   }
 
-  sbn->keys = nullptr;
-  sbn->totkey = sbn->totpointkey = 0;
+  // sbn->keys = nullptr;
+  // sbn->totkey = sbn->totpointkey = 0;
 
-  sbn->scratch = nullptr;
+  // sbn->scratch = nullptr;
 
   if (is_orig) {
     sbn->shared = (SoftBody_Shared *)MEM_dupallocN(sb->shared);
@@ -2368,9 +2369,9 @@ void BKE_object_copy_softbody(Object *ob_dst, const Object *ob_src, const int fl
         &sbn->shared->ptcaches, &sb->shared->ptcaches, flag);
   }
 
-  if (sb->effector_weights) {
-    sbn->effector_weights = (EffectorWeights *)MEM_dupallocN(sb->effector_weights);
-  }
+  // if (sb->effector_weights) {
+  //   sbn->effector_weights = (EffectorWeights *)MEM_dupallocN(sb->effector_weights);
+  // }
 
   ob_dst->soft = sbn;
 }

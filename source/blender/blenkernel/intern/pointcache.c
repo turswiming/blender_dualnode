@@ -178,8 +178,11 @@ static int ptcache_softbody_write(int index, void *soft_v, void **data, int UNUS
   SoftBody *soft = soft_v;
   BodyPoint *bp = soft->bpoint + index;
 
-  PTCACHE_DATA_FROM(data, BPHYS_DATA_LOCATION, bp->pos);
-  PTCACHE_DATA_FROM(data, BPHYS_DATA_VELOCITY, bp->vec);
+  // PTCACHE_DATA_FROM(data, BPHYS_DATA_LOCATION, bp->pos);
+  // PTCACHE_DATA_FROM(data, BPHYS_DATA_VELOCITY, bp->vec);
+
+  PTCACHE_DATA_FROM(data, BPHYS_DATA_LOCATION, bp->x);
+  PTCACHE_DATA_FROM(data, BPHYS_DATA_VELOCITY, bp->v);
 
   return 1;
 }
@@ -189,13 +192,22 @@ static void ptcache_softbody_read(
   SoftBody *soft = soft_v;
   BodyPoint *bp = soft->bpoint + index;
 
+  // if (old_data) {
+  //   memcpy(bp->pos, data, sizeof(float[3]));
+  //   memcpy(bp->vec, data + 3, sizeof(float[3]));
+  // }
+  // else {
+  //   PTCACHE_DATA_TO(data, BPHYS_DATA_LOCATION, 0, bp->pos);
+  //   PTCACHE_DATA_TO(data, BPHYS_DATA_VELOCITY, 0, bp->vec);
+  // }
+
   if (old_data) {
-    memcpy(bp->pos, data, sizeof(float[3]));
-    memcpy(bp->vec, data + 3, sizeof(float[3]));
+    memcpy(bp->x, data, sizeof(float[3]));
+    memcpy(bp->v, data + 3, sizeof(float[3]));
   }
   else {
-    PTCACHE_DATA_TO(data, BPHYS_DATA_LOCATION, 0, bp->pos);
-    PTCACHE_DATA_TO(data, BPHYS_DATA_VELOCITY, 0, bp->vec);
+    PTCACHE_DATA_TO(data, BPHYS_DATA_LOCATION, 0, bp->x);
+    PTCACHE_DATA_TO(data, BPHYS_DATA_VELOCITY, 0, bp->v);
   }
 }
 static void ptcache_softbody_interpolate(int index,
@@ -204,7 +216,7 @@ static void ptcache_softbody_interpolate(int index,
                                          float cfra,
                                          float cfra1,
                                          float cfra2,
-                                         const float *old_data)
+                                         const float *old_data) 
 {
   SoftBody *soft = soft_v;
   BodyPoint *bp = soft->bpoint + index;
@@ -215,8 +227,10 @@ static void ptcache_softbody_interpolate(int index,
     return;
   }
 
-  copy_v3_v3(keys[1].co, bp->pos);
-  copy_v3_v3(keys[1].vel, bp->vec);
+  // copy_v3_v3(keys[1].co, bp->pos);
+  // copy_v3_v3(keys[1].vel, bp->vec);
+  copy_v3_v3(keys[1].co, bp->x);
+  copy_v3_v3(keys[1].vel, bp->v);
 
   if (old_data) {
     memcpy(keys[2].co, old_data, sizeof(float[3]));
@@ -235,8 +249,10 @@ static void ptcache_softbody_interpolate(int index,
 
   mul_v3_fl(keys->vel, 1.0f / dfra);
 
-  copy_v3_v3(bp->pos, keys->co);
-  copy_v3_v3(bp->vec, keys->vel);
+  // copy_v3_v3(bp->pos, keys->co);
+  // copy_v3_v3(bp->vec, keys->vel);
+  copy_v3_v3(bp->x, keys->co);
+  copy_v3_v3(bp->v, keys->vel);
 }
 static int ptcache_softbody_totpoint(void *soft_v, int UNUSED(cfra))
 {
@@ -2907,7 +2923,8 @@ int BKE_ptcache_id_reset(Scene *scene, PTCacheID *pid, int mode)
       cloth_free_modifier(pid->calldata);
     }
     else if (pid->type == PTCACHE_TYPE_SOFTBODY) {
-      sbFreeSimulation(pid->calldata);
+      // sbFreeSimulation(pid->calldata);
+      free_softbody_intern(pid->calldata);
     }
     else if (pid->type == PTCACHE_TYPE_PARTICLES) {
       psys_reset(pid->calldata, PSYS_RESET_DEPSGRAPH);

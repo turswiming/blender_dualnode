@@ -29,6 +29,9 @@ set(SRC
   intern/eigen_utils.h
   intern/implicit.h
 
+  intern/xpbd.h
+  intern/xpbd.cc
+
   SIM_mass_spring.h
 )
 

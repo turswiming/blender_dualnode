@@ -934,9 +934,9 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
           }
         }
 
-        if (ob->soft) {
-          ob->soft->effector_weights->global_gravity = ob->soft->grav / 9.81f;
-        }
+        // if (ob->soft) {
+        //   ob->soft->effector_weights->global_gravity = ob->soft->grav / 9.81f;
+        // }
       }
 
       /* Normal wind shape is plane */

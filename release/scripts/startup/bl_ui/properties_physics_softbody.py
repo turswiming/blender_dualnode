@@ -37,7 +37,8 @@ class PHYSICS_PT_softbody(PhysicButtonsPanel, Panel):
         md = context.soft_body
         softbody = md.settings
 
-        layout.prop(softbody, "collision_collection")
+        # layout.prop(softbody, "collision_collection")
+
 
 
 class PHYSICS_PT_softbody_object(PhysicButtonsPanel, Panel):
@@ -80,10 +81,24 @@ class PHYSICS_PT_softbody_simulation(PhysicButtonsPanel, Panel):
 
         md = context.soft_body
         softbody = md.settings
+        ob = context.object
 
         layout.enabled = softbody_panel_enabled(md)
+        flow = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=True)
 
-        layout.prop(softbody, "speed")
+        col = flow.column()
+        col.prop(softbody, "dt")
+
+        col = flow.column()
+        col.prop(softbody, "substep_count")
+
+        col = flow.column()
+        col.prop(softbody, "alpha_vol")
+
+        col = flow.column()
+        col.prop(softbody, "alpha_edge")
+
+        # layout.prop(softbody, "speed")
 
 
 class PHYSICS_PT_softbody_cache(PhysicButtonsPanel, Panel):
@@ -382,20 +397,20 @@ class PHYSICS_PT_softbody_field_weights(PhysicButtonsPanel, Panel):
 
 classes = (
     PHYSICS_PT_softbody,
-    PHYSICS_PT_softbody_object,
+    # PHYSICS_PT_softbody_object,
     PHYSICS_PT_softbody_simulation,
-    PHYSICS_PT_softbody_cache,
-    PHYSICS_PT_softbody_goal,
-    PHYSICS_PT_softbody_goal_settings,
-    PHYSICS_PT_softbody_goal_strengths,
-    PHYSICS_PT_softbody_edge,
-    PHYSICS_PT_softbody_edge_aerodynamics,
-    PHYSICS_PT_softbody_edge_stiffness,
-    PHYSICS_PT_softbody_collision,
-    PHYSICS_PT_softbody_solver,
-    PHYSICS_PT_softbody_solver_diagnostics,
-    PHYSICS_PT_softbody_solver_helpers,
-    PHYSICS_PT_softbody_field_weights,
+    # PHYSICS_PT_softbody_cache,
+    # PHYSICS_PT_softbody_goal,
+    # PHYSICS_PT_softbody_goal_settings,
+    # PHYSICS_PT_softbody_goal_strengths,
+    # PHYSICS_PT_softbody_edge,
+    # PHYSICS_PT_softbody_edge_aerodynamics,
+    # PHYSICS_PT_softbody_edge_stiffness,
+    # PHYSICS_PT_softbody_collision,
+    # PHYSICS_PT_softbody_solver,
+    # PHYSICS_PT_softbody_solver_diagnostics,
+    # PHYSICS_PT_softbody_solver_helpers,
+    # PHYSICS_PT_softbody_field_weights,
 )
 
 

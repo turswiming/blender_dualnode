@@ -1259,21 +1259,21 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
     /* softbody init new vars */
     for (ob = bmain->objects.first; ob; ob = ob->id.next) {
-      if (ob->soft) {
-        if (ob->soft->defgoal == 0.0f) {
-          ob->soft->defgoal = 0.7f;
-        }
-        if (ob->soft->physics_speed == 0.0f) {
-          ob->soft->physics_speed = 1.0f;
-        }
-      }
-      if (ob->soft && ob->soft->vertgroup == 0) {
-        bDeformGroup *locGroup = BKE_object_defgroup_find_name(ob, "SOFTGOAL");
-        if (locGroup) {
-          /* retrieve index for that group */
-          ob->soft->vertgroup = 1 + BLI_findindex(&ob->defbase, locGroup);
-        }
-      }
+      // if (ob->soft) {
+      //   if (ob->soft->defgoal == 0.0f) {
+      //     ob->soft->defgoal = 0.7f;
+      //   }
+      //   if (ob->soft->physics_speed == 0.0f) {
+      //     ob->soft->physics_speed = 1.0f;
+      //   }
+      // }
+      // if (ob->soft && ob->soft->vertgroup == 0) {
+      //   bDeformGroup *locGroup = BKE_object_defgroup_find_name(ob, "SOFTGOAL");
+      //   if (locGroup) {
+      //     /* retrieve index for that group */
+      //     ob->soft->vertgroup = 1 + BLI_findindex(&ob->defbase, locGroup);
+      //   }
+      // }
     }
   }
 
@@ -2018,9 +2018,9 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
 
     /* add point caches */
     for (ob = bmain->objects.first; ob; ob = ob->id.next) {
-      if (ob->soft && !ob->soft->pointcache) {
-        ob->soft->pointcache = BKE_ptcache_add(&ob->soft->ptcaches);
-      }
+      // if (ob->soft && !ob->soft->pointcache) {
+      //   ob->soft->pointcache = BKE_ptcache_add(&ob->soft->ptcaches);
+      // }
 
       for (psys = ob->particlesystem.first; psys; psys = psys->next) {
         if (psys->pointcache) {
@@ -2164,21 +2164,21 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
       }
       do_version_constraints_245(&ob->constraints);
 
-      if (ob->soft && ob->soft->keys) {
-        SoftBody *sb = ob->soft;
-        int k;
+      // if (ob->soft && ob->soft->keys) {
+      //   SoftBody *sb = ob->soft;
+      //   int k;
 
-        for (k = 0; k < sb->totkey; k++) {
-          if (sb->keys[k]) {
-            MEM_freeN(sb->keys[k]);
-          }
-        }
+      //   for (k = 0; k < sb->totkey; k++) {
+      //     if (sb->keys[k]) {
+      //       MEM_freeN(sb->keys[k]);
+      //     }
+      //   }
 
-        MEM_freeN(sb->keys);
+      //   MEM_freeN(sb->keys);
 
-        sb->keys = NULL;
-        sb->totkey = 0;
-      }
+      //   sb->keys = NULL;
+      //   sb->totkey = 0;
+      // }
     }
   }
 
@@ -2188,21 +2188,21 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     PartEff *paf = NULL;
 
     for (ob = bmain->objects.first; ob; ob = ob->id.next) {
-      if (ob->soft && ob->soft->keys) {
-        SoftBody *sb = ob->soft;
-        int k;
+      // if (ob->soft && ob->soft->keys) {
+      //   SoftBody *sb = ob->soft;
+      //   int k;
 
-        for (k = 0; k < sb->totkey; k++) {
-          if (sb->keys[k]) {
-            MEM_freeN(sb->keys[k]);
-          }
-        }
+      //   for (k = 0; k < sb->totkey; k++) {
+      //     if (sb->keys[k]) {
+      //       MEM_freeN(sb->keys[k]);
+      //     }
+      //   }
 
-        MEM_freeN(sb->keys);
+      //   MEM_freeN(sb->keys);
 
-        sb->keys = NULL;
-        sb->totkey = 0;
-      }
+      //   sb->keys = NULL;
+      //   sb->totkey = 0;
+      // }
 
       /* convert old particles to new system */
       if ((paf = BKE_object_do_version_give_parteff_245(ob))) {
@@ -2385,10 +2385,10 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
           strip->scale = 1.0f;
         }
       }
-      if (ob->soft) {
-        ob->soft->inpush = ob->soft->inspring;
-        ob->soft->shearstiff = 1.0f;
-      }
+      // if (ob->soft) {
+      //   ob->soft->inpush = ob->soft->inspring;
+      //   ob->soft->shearstiff = 1.0f;
+      // }
     }
   }
 
