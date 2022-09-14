@@ -287,7 +287,7 @@ static void build_mesh_leaf_node(PBVH *pbvh, PBVHNode *node)
     }
 
     if (has_visible == false) {
-      if (!paint_is_face_hidden(lt, pbvh->hide_vert, pbvh->mloop)) {
+      if (!paint_is_face_hidden(lt, pbvh->hide_poly)) {
         has_visible = true;
       }
     }
@@ -540,6 +540,10 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
 {
   memset((void *)args, 0, sizeof(*args));
 
+  if (!node->prim_indices) {
+    printf("error! %s\n", __func__);
+  }
+
   args->pbvh_type = pbvh->header.type;
   args->mesh_verts_num = pbvh->totvert;
   args->mesh_grids_num = pbvh->totgrid;
@@ -555,6 +559,12 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
   args->mpoly = pbvh->mpoly;
   args->mlooptri = pbvh->looptri;
 
+  if (ELEM(pbvh->header.type, PBVH_FACES, PBVH_GRIDS)) {
+    args->hide_poly = pbvh->pdata ?
+                          CustomData_get_layer_named(pbvh->pdata, CD_PROP_BOOL, ".hide_poly") :
+                          NULL;
+  }
+
   switch (pbvh->header.type) {
     case PBVH_FACES:
       args->mesh_faces_num = pbvh->mesh->totpoly;
@@ -563,9 +573,10 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
       args->pdata = pbvh->pdata;
       args->totprim = node->totprim;
       args->me = pbvh->mesh;
+      args->mpoly = pbvh->mpoly;
       args->vert_normals = pbvh->vert_normals;
 
-      args->prim_indicies = node->prim_indices;
+      args->prim_indices = node->prim_indices;
       break;
     case PBVH_GRIDS:
       args->vdata = pbvh->vdata;
@@ -577,6 +588,7 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
       args->grid_indices = node->prim_indices;
       args->subdiv_ccg = pbvh->subdiv_ccg;
       args->face_sets = pbvh->face_sets;
+      args->mpoly = pbvh->mpoly;
 
       args->mesh_grids_num = pbvh->totgrid;
       args->grids = pbvh->grids;
@@ -615,6 +627,7 @@ void BKE_pbvh_build_mesh(PBVH *pbvh,
   pbvh->mesh = mesh;
   pbvh->header.type = PBVH_FACES;
   pbvh->mpoly = mpoly;
+  pbvh->hide_poly = (bool *)CustomData_get_layer_named(&mesh->pdata, CD_PROP_BOOL, ".hide_poly");
   pbvh->material_indices = (const int *)CustomData_get_layer_named(
       &mesh->pdata, CD_PROP_INT32, "material_index");
   pbvh->mloop = mloop;
@@ -1779,7 +1792,7 @@ BLI_bitmap **BKE_pbvh_get_grid_visibility(const PBVH *pbvh)
   return pbvh->grid_hidden;
 }
 
-int BKE_pbvh_get_grid_num_vertices(const PBVH *pbvh)
+int BKE_pbvh_get_grid_num_verts(const PBVH *pbvh)
 {
   BLI_assert(pbvh->header.type == PBVH_GRIDS);
   return pbvh->totgrid * pbvh->gridkey.grid_area;
@@ -2241,7 +2254,7 @@ static bool pbvh_faces_node_raycast(PBVH *pbvh,
     const MLoopTri *lt = &pbvh->looptri[faces[i]];
     const int *face_verts = node->face_vert_indices[i];
 
-    if (pbvh->respect_hide && paint_is_face_hidden(lt, pbvh->hide_vert, mloop)) {
+    if (pbvh->respect_hide && paint_is_face_hidden(lt, pbvh->hide_poly)) {
       continue;
     }
 
@@ -2550,7 +2563,7 @@ static bool pbvh_faces_node_nearest_to_ray(PBVH *pbvh,
     const MLoopTri *lt = &pbvh->looptri[faces[i]];
     const int *face_verts = node->face_vert_indices[i];
 
-    if (pbvh->respect_hide && paint_is_face_hidden(lt, pbvh->hide_vert, mloop)) {
+    if (pbvh->respect_hide && paint_is_face_hidden(lt, pbvh->hide_poly)) {
       continue;
     }
 
@@ -3176,6 +3189,12 @@ const bool *BKE_pbvh_get_vert_hide(const PBVH *pbvh)
   return pbvh->hide_vert;
 }
 
+const bool *BKE_pbvh_get_poly_hide(const PBVH *pbvh)
+{
+  BLI_assert(pbvh->header.type == PBVH_FACES);
+  return pbvh->hide_poly;
+}
+
 bool *BKE_pbvh_get_vert_hide_for_write(PBVH *pbvh)
 {
   BLI_assert(pbvh->header.type == PBVH_FACES);
@@ -3199,6 +3218,14 @@ void BKE_pbvh_subdiv_cgg_set(PBVH *pbvh, SubdivCCG *subdiv_ccg)
 void BKE_pbvh_face_sets_set(PBVH *pbvh, int *face_sets)
 {
   pbvh->face_sets = face_sets;
+}
+
+void BKE_pbvh_update_hide_attributes_from_mesh(PBVH *pbvh)
+{
+  if (pbvh->header.type == PBVH_FACES) {
+    pbvh->hide_vert = CustomData_get_layer_named(&pbvh->mesh->vdata, CD_PROP_BOOL, ".hide_vert");
+    pbvh->hide_poly = CustomData_get_layer_named(&pbvh->mesh->pdata, CD_PROP_BOOL, ".hide_poly");
+  }
 }
 
 void BKE_pbvh_respect_hide_set(PBVH *pbvh, bool respect_hide)

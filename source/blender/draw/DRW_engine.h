@@ -267,8 +267,10 @@ typedef struct PBVH_GPU_Args {
   void **gridfaces;
   BLI_bitmap **grid_hidden;
 
-  int *prim_indicies;
+  int *prim_indices;
   int totprim;
+
+  bool *hide_poly;
 
   int node_verts_num;
 

@@ -472,6 +472,11 @@ void ntreeSetTypes(const struct bContext *C, struct bNodeTree *ntree);
 
 struct bNodeTree *ntreeAddTree(struct Main *bmain, const char *name, const char *idname);
 
+struct bNodeTree *ntreeAddTreeEmbedded(struct Main *bmain,
+                                       struct ID *owner_id,
+                                       const char *name,
+                                       const char *idname);
+
 /* copy/free funcs, need to manage ID users */
 
 /**
@@ -540,7 +545,9 @@ void ntreeBlendWrite(struct BlendWriter *writer, struct bNodeTree *ntree);
 /**
  * \note `ntree` itself has been read!
  */
-void ntreeBlendReadData(struct BlendDataReader *reader, struct bNodeTree *ntree);
+void ntreeBlendReadData(struct BlendDataReader *reader,
+                        struct ID *owner_id,
+                        struct bNodeTree *ntree);
 void ntreeBlendReadLib(struct BlendLibReader *reader, struct bNodeTree *ntree);
 void ntreeBlendReadExpand(struct BlendExpander *expander, struct bNodeTree *ntree);
 
@@ -1329,15 +1336,6 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 /* channel toggles */
 #define CMP_CHAN_RGB 1
 #define CMP_CHAN_A 2
-
-/* scale node type, in custom1 */
-#define CMP_SCALE_RELATIVE 0
-#define CMP_SCALE_ABSOLUTE 1
-#define CMP_SCALE_SCENEPERCENT 2
-#define CMP_SCALE_RENDERPERCENT 3
-/* custom2 */
-#define CMP_SCALE_RENDERSIZE_FRAME_ASPECT (1 << 0)
-#define CMP_SCALE_RENDERSIZE_FRAME_CROP (1 << 1)
 
 /* track position node, in custom1 */
 #define CMP_TRACKPOS_ABSOLUTE 0

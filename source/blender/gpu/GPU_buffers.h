@@ -46,7 +46,6 @@ struct GPUBatch;
  */
 GPU_PBVH_Buffers *GPU_pbvh_mesh_buffers_build(const struct Mesh *mesh,
                                               const struct MLoopTri *looptri,
-                                              const int *sculpt_face_sets,
                                               const int *face_indices,
                                               int face_indices_len);
 

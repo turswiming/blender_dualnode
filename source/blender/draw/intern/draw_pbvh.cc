@@ -149,7 +149,7 @@ struct PBVHBatches {
   GPUIndexBuf *tri_index = nullptr;
   GPUIndexBuf *lines_index = nullptr;
   int tris_count = 0, lines_count = 0;
-  bool smooth = false;  // XXX
+  bool needs_tri_index = false;  // XXX
 
   int material_index = 0;
 
@@ -275,41 +275,16 @@ struct PBVHBatches {
       ;
   }
 
-  ATTR_NO_OPT void fill_vbo_grids_smooth(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  ATTR_NO_OPT void fill_vbo_grids_intern(
+      PBVHVbo &vbo,
+      PBVH_GPU_Args *args,
+      std::function<
+          void(std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)>
+                   func)> foreach)
   {
-  }
-
-  ATTR_NO_OPT void fill_vbo_grids_solid(PBVHVbo &vbo, PBVH_GPU_Args *args)
-  {
-    int gridsize = args->ccg_key.grid_size;
-
     uint totgrid = args->totprim;
     uint vert_per_grid = square_i(args->ccg_key.grid_size - 1) * 4;
     uint vert_count = totgrid * vert_per_grid;
-
-    auto foreach =
-        [&](std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)> func) {
-          for (int i = 0; i < totgrid; i++) {
-            const int grid_index = args->grid_indices[i];
-            CCGElem *grid = args->grids[grid_index];
-
-            for (int y = 0; y < gridsize - 1; y++) {
-              for (int x = 0; x < gridsize - 1; x++) {
-                CCGElem *elems[4] = {
-                    CCG_grid_elem(&args->ccg_key, grid, x, y),
-                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y),
-                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y + 1),
-                    CCG_grid_elem(&args->ccg_key, grid, x, y + 1),
-                };
-
-                func(x, y, grid_index, elems, 0);
-                func(x + 1, y, grid_index, elems, 1);
-                func(x + 1, y + 1, grid_index, elems, 2);
-                func(x, y + 1, grid_index, elems, 3);
-              }
-            }
-          }
-        };
 
     int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
     void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
@@ -369,16 +344,19 @@ struct PBVHBatches {
     }
 
     if (vbo.type == CD_PBVH_FSET_TYPE) {
-      int *sculpt_face_sets = args->face_sets;
+      int *face_sets = args->face_sets;
 
       foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
         uchar face_set_color[4] = {UCHAR_MAX, UCHAR_MAX, UCHAR_MAX, UCHAR_MAX};
-        const int face_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, grid_index);
-        const int fset = abs(sculpt_face_sets[face_index]);
 
-        /* Skip for the default color Face Set to render it white. */
-        if (fset != args->face_sets_color_default) {
-          BKE_paint_face_set_overlay_color_get(fset, args->face_sets_color_seed, face_set_color);
+        if (face_sets) {
+          const int face_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, grid_index);
+          const int fset = abs(face_sets[face_index]);
+
+          /* Skip for the default color Face Set to render it white. */
+          if (fset != args->face_sets_color_default) {
+            BKE_paint_face_set_overlay_color_get(fset, args->face_sets_color_seed, face_set_color);
+          }
         }
 
         *static_cast<uchar4 *>(GPU_vertbuf_raw_step(&access)) = face_set_color;
@@ -387,13 +365,69 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT void fill_vbo_grids(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  ATTR_NO_OPT
+  void fill_vbo_grids(PBVHVbo &vbo, PBVH_GPU_Args *args)
   {
-    if (smooth) {
-      fill_vbo_grids_smooth(vbo, args);
+    int gridsize = args->ccg_key.grid_size;
+
+    uint totgrid = args->totprim;
+    uint vert_per_grid = square_i(args->ccg_key.grid_size - 1) * 4;
+    uint vert_count = totgrid * vert_per_grid;
+
+    auto foreach_solid =
+        [&](std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)> func) {
+          for (int i = 0; i < totgrid; i++) {
+            const int grid_index = args->grid_indices[i];
+
+            CCGElem *grid = args->grids[grid_index];
+
+            for (int y = 0; y < gridsize - 1; y++) {
+              for (int x = 0; x < gridsize - 1; x++) {
+                CCGElem *elems[4] = {
+                    CCG_grid_elem(&args->ccg_key, grid, x, y),
+                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y),
+                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y + 1),
+                    CCG_grid_elem(&args->ccg_key, grid, x, y + 1),
+                };
+
+                func(x, y, grid_index, elems, 0);
+                func(x + 1, y, grid_index, elems, 1);
+                func(x + 1, y + 1, grid_index, elems, 2);
+                func(x, y + 1, grid_index, elems, 3);
+              }
+            }
+          }
+        };
+
+    auto foreach_indexed =
+        [&](std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)> func) {
+          for (int i = 0; i < totgrid; i++) {
+            const int grid_index = args->grid_indices[i];
+            const int grid_vert_len = gridsize * gridsize;
+
+            CCGElem *grid = args->grids[grid_index];
+            const int offset = grid_index * grid_vert_len;
+
+            for (int y = 0; y < gridsize - 1; y++) {
+              for (int x = 0; x < gridsize - 1; x++) {
+                CCGElem *elems[4] = {
+                    CCG_grid_elem(&args->ccg_key, grid, x, y),
+                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y),
+                    CCG_grid_elem(&args->ccg_key, grid, x + 1, y + 1),
+                    CCG_grid_elem(&args->ccg_key, grid, x, y + 1),
+                };
+
+                func(x, y, grid_index, elems, 0);
+              }
+            }
+          }
+        };
+
+    if (needs_tri_index) {
+      fill_vbo_grids_intern(vbo, args, foreach_indexed);
     }
     else {
-      fill_vbo_grids_solid(vbo, args);
+      fill_vbo_grids_intern(vbo, args, foreach_solid);
     }
   }
 
@@ -407,7 +441,11 @@ struct PBVHBatches {
           const MLoop *mloop = args->mloop;
 
           for (int i : IndexRange(args->totprim)) {
-            const MLoopTri *tri = args->mlooptri + args->prim_indicies[i];
+            if (args->hide_poly && args->hide_poly[args->prim_indices[i]]) {
+              continue;
+            }
+
+            const MLoopTri *tri = args->mlooptri + args->prim_indices[i];
 
             for (int j : IndexRange(3)) {
               func(buffer_i, j, mloop[tri->tri[j]].v, tri);
@@ -461,7 +499,7 @@ struct PBVHBatches {
       uchar fset_color[4] = {255, 255, 255, 255};
 
       foreach ([&](int buffer_i, int tri_i, int vertex_i, const MLoopTri *tri) {
-        if (1 || last_poly != tri->poly) {
+        if (last_poly != tri->poly && args->face_sets) {
           last_poly = tri->poly;
 
           const int fset = abs(face_sets[tri->poly]);
@@ -653,6 +691,20 @@ struct PBVHBatches {
 
   ATTR_NO_OPT void create_index_grids(PBVH_GPU_Args *args)
   {
+    needs_tri_index = true;
+
+    for (int i : IndexRange(args->totprim)) {
+      int grid_index = args->grid_indices[i];
+      int face_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, grid_index);
+
+      const bool smooth = args->grid_flag_mats[args->grid_indices[0]].flag & ME_SMOOTH;
+
+      if (smooth) {
+        needs_tri_index = false;
+        break;
+      }
+    }
+
     GPUIndexBufBuilder elb, elb_lines;
     // GPUIndexBufBuilder elb_fast, elb_lines_fast;
 
@@ -660,19 +712,15 @@ struct PBVHBatches {
     int totgrid = args->totprim;
 
     uint gridsize = args->ccg_key.grid_size;
-    // uint vert_per_grid = smooth ? key->grid_area : (square_i(gridsize - 1) * 4);
-    // uint vert_count = totgrid * vert_per_grid;
 
     uint visible_quad_len = BKE_pbvh_count_grid_quads(
         (BLI_bitmap **)args->grid_hidden, args->grid_indices, totgrid, key->grid_size);
 
     GPU_indexbuf_init(&elb, GPU_PRIM_TRIS, 2 * visible_quad_len, INT_MAX);
-    // GPU_indexbuf_init(&elb_fast, GPU_PRIM_TRIS, 2 * totgrid, INT_MAX);
     GPU_indexbuf_init(
         &elb_lines, GPU_PRIM_LINES, 2 * totgrid * gridsize * (gridsize - 1), INT_MAX);
-    // GPU_indexbuf_init(&elb_lines_fast, GPU_PRIM_LINES, 4 * totgrid, INT_MAX);
 
-    if (smooth) {
+    if (needs_tri_index) {
       uint offset = 0;
       const uint grid_vert_len = gridsize * gridsize;
       for (int i = 0; i < totgrid; i++, offset += grid_vert_len) {
@@ -708,22 +756,6 @@ struct PBVHBatches {
           if (grid_visible) {
             GPU_indexbuf_add_line_verts(&elb_lines, v1, v2);
           }
-        }
-
-        if (grid_visible) {
-          /* Grid corners */
-          v0 = offset;
-          v1 = offset + gridsize - 1;
-          v2 = offset + grid_vert_len - 1;
-          v3 = offset + grid_vert_len - gridsize;
-
-          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v2, v1);
-          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v3, v2);
-
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v0, v1);
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v1, v2);
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v2, v3);
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v3, v0);
         }
       }
     }
@@ -762,22 +794,6 @@ struct PBVHBatches {
           if (grid_visible) {
             GPU_indexbuf_add_line_verts(&elb_lines, v1, v2);
           }
-        }
-
-        if (grid_visible) {
-          /* Grid corners */
-          v0 = offset;
-          v1 = offset + (gridsize - 1) * 4 - 3;
-          v2 = offset + grid_vert_len - 2;
-          v3 = offset + grid_vert_len - (gridsize - 1) * 4 + 3;
-
-          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v2, v1);
-          // GPU_indexbuf_add_tri_verts(&elb_fast, v0, v3, v2);
-
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v0, v1);
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v1, v2);
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v2, v3);
-          // GPU_indexbuf_add_line_verts(&elb_lines_fast, v3, v0);
         }
       }
     }

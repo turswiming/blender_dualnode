@@ -82,21 +82,24 @@
 #define RBUFS_EMISSION_SLOT 4
 #define RBUFS_AOV_COLOR_SLOT 5
 #define RBUFS_AOV_VALUE_SLOT 6
+#define RBUFS_CRYPTOMATTE_SLOT 7
 
-/* Uniform Bufs. */
+/* Uniform Buffers. */
 /* Only during prepass. */
 #define VELOCITY_CAMERA_PREV_BUF 3
 #define VELOCITY_CAMERA_CURR_BUF 4
 #define VELOCITY_CAMERA_NEXT_BUF 5
 
-/* Storage Bufs. */
+/* Storage Buffers. */
 #define LIGHT_CULL_BUF_SLOT 0
 #define LIGHT_BUF_SLOT 1
 #define LIGHT_ZBIN_BUF_SLOT 2
 #define LIGHT_TILE_BUF_SLOT 3
 #define RBUFS_AOV_BUF_SLOT 5
 #define SAMPLING_BUF_SLOT 6
-/* Only during prepass. */
+#define CRYPTOMATTE_BUF_SLOT 7
+
+/* Only during pre-pass. */
 #define VELOCITY_OBJ_PREV_BUF_SLOT 0
 #define VELOCITY_OBJ_NEXT_BUF_SLOT 1
 #define VELOCITY_GEO_PREV_BUF_SLOT 2
