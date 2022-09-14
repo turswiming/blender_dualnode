@@ -1171,10 +1171,16 @@ ATTR_NO_OPT static void sculpt_draw_cb(DRWSculptCallbackData *scd,
     return;
   }
 
-  //GPUBatch *geom2 = GPU_pbvh_buffers_batch_get(buffers, scd->fast_mode, scd->use_wire);
+  // GPUBatch *geom2 = GPU_pbvh_buffers_batch_get(buffers, scd->fast_mode, scd->use_wire);
   int primcount;
-  GPUBatch *geom = DRW_pbvh_tris_get(
-      batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount);
+  GPUBatch *geom;
+
+  if (!scd->use_wire) {
+    geom = DRW_pbvh_tris_get(batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount);
+  }
+  else {
+    geom = DRW_pbvh_lines_get(batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount);
+  }
 
   short index = 0;
 
@@ -1299,16 +1305,15 @@ ATTR_NO_OPT static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   Mesh *mesh = scd->ob->data;
   BKE_pbvh_update_normals(pbvh, mesh->runtime.subdiv_ccg);
 
-  BKE_pbvh_draw_cb(
-      pbvh,
-      update_only_visible,
-      &update_frustum,
-      &draw_frustum,
-      (void (*)(void *, PBVHBatches *, PBVH_GPU_Args *))sculpt_draw_cb,
-      scd,
-      scd->use_mats,
-      scd->attrs,
-      scd->attrs_num);
+  BKE_pbvh_draw_cb(pbvh,
+                   update_only_visible,
+                   &update_frustum,
+                   &draw_frustum,
+                   (void (*)(void *, PBVHBatches *, PBVH_GPU_Args *))sculpt_draw_cb,
+                   scd,
+                   scd->use_mats,
+                   scd->attrs,
+                   scd->attrs_num);
 
   if (SCULPT_DEBUG_BUFFERS) {
     int debug_node_nr = 0;

@@ -540,10 +540,6 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
 {
   memset((void *)args, 0, sizeof(*args));
 
-  if (!node->prim_indices) {
-    printf("error! %s\n", __func__);
-  }
-
   args->pbvh_type = pbvh->header.type;
   args->mesh_verts_num = pbvh->totvert;
   args->mesh_grids_num = pbvh->totgrid;

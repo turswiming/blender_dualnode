@@ -148,10 +148,47 @@ struct PBVHBatches {
   Map<string, PBVHBatch> batches;
   GPUIndexBuf *tri_index = nullptr;
   GPUIndexBuf *lines_index = nullptr;
+  int faces_count = 0; /* Used by PBVH_BMESH and PBVH_GRIDS */
   int tris_count = 0, lines_count = 0;
-  bool needs_tri_index = false;  // XXX
+  bool needs_tri_index = false;
 
   int material_index = 0;
+
+  PBVHBatches(PBVH_GPU_Args *args)
+  {
+    switch (args->pbvh_type) {
+      case PBVH_FACES: {
+        for (int i = 0; i < args->totprim; i++) {
+          int face_index = args->mlooptri[args->prim_indices[i]].poly;
+
+          if (args->hide_poly && args->hide_poly[face_index]) {
+            continue;
+          }
+
+          faces_count++;
+        }
+        break;
+      }
+      case PBVH_GRIDS: {
+        faces_count = BKE_pbvh_count_grid_quads((BLI_bitmap **)args->grid_hidden,
+                                                args->grid_indices,
+                                                args->totprim,
+                                                args->ccg_key.grid_size);
+
+        break;
+      }
+      case PBVH_BMESH: {
+        GSET_FOREACH_BEGIN (BMFace *, f, args->bm_faces) {
+          if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+            faces_count++;
+          }
+        }
+        GSET_FOREACH_END();
+
+        tris_count = faces_count;
+      }
+    }
+  }
 
   ATTR_NO_OPT ~PBVHBatches()
   {
@@ -282,9 +319,8 @@ struct PBVHBatches {
           void(std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)>
                    func)> foreach)
   {
-    uint totgrid = args->totprim;
     uint vert_per_grid = square_i(args->ccg_key.grid_size - 1) * 4;
-    uint vert_count = totgrid * vert_per_grid;
+    uint vert_count = args->totprim * vert_per_grid;
 
     int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
     void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
@@ -378,8 +414,6 @@ struct PBVHBatches {
     int gridsize = args->ccg_key.grid_size;
 
     uint totgrid = args->totprim;
-    uint vert_per_grid = square_i(args->ccg_key.grid_size - 1) * 4;
-    uint vert_count = totgrid * vert_per_grid;
 
     auto foreach_solid =
         [&](std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)> func) {
@@ -410,10 +444,8 @@ struct PBVHBatches {
         [&](std::function<void(int x, int y, int grid_index, CCGElem *elems[4], int i)> func) {
           for (int i = 0; i < totgrid; i++) {
             const int grid_index = args->grid_indices[i];
-            const int grid_vert_len = gridsize * gridsize;
 
             CCGElem *grid = args->grids[grid_index];
-            const int offset = grid_index * grid_vert_len;
 
             for (int y = 0; y < gridsize; y++) {
               for (int x = 0; x < gridsize; x++) {
@@ -448,7 +480,9 @@ struct PBVHBatches {
           const MLoop *mloop = args->mloop;
 
           for (int i : IndexRange(args->totprim)) {
-            if (args->hide_poly && args->hide_poly[args->prim_indices[i]]) {
+            int face_index = args->mlooptri[args->prim_indices[i]].poly;
+
+            if (args->hide_poly && args->hide_poly[face_index]) {
               continue;
             }
 
@@ -574,6 +608,70 @@ struct PBVHBatches {
 
   void fill_vbo_bmesh(PBVHVbo &vbo, PBVH_GPU_Args *args)
   {
+    auto foreach = [&](std::function<void(BMLoop * l)> callback) {
+      GSET_FOREACH_BEGIN (BMFace *, f, args->bm_faces) {
+        if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+          continue;
+        }
+
+        BMLoop *l = f->l_first;
+        do {
+          callback(l);
+        } while ((l = l->next) != f->l_first);
+      }
+      GSET_FOREACH_END();
+    };
+
+    faces_count = 0;
+    GSET_FOREACH_BEGIN (BMFace *, f, args->bm_faces) {
+      if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+        continue;
+      }
+
+      BMLoop *l = f->l_first;
+      do {
+        faces_count++;
+      } while ((l = l->next) != f->l_first);
+    }
+    GSET_FOREACH_END();
+    tris_count = faces_count;
+
+    int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
+    void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
+
+    printf("%p:%p: vbo.vert_buf: %p\n", args->node, this, vbo.vert_buf);
+
+    int vert_count = tris_count * 3;
+
+    if (existing_data == nullptr || existing_num != vert_count) {
+      /* Allocate buffer if not allocated yet or size changed. */
+      GPU_vertbuf_data_alloc(vbo.vert_buf, vert_count);
+    }
+
+    void *gpu_data = GPU_vertbuf_get_data(vbo.vert_buf);
+    GPUVertBufRaw access;
+    GPU_vertbuf_attr_get_raw_data(vbo.vert_buf, 0, &access);
+
+    if (!gpu_data || !args->totprim) {
+      printf("%s: eek!\n", __func__);
+    }
+
+    if (vbo.type == CD_PBVH_CO_TYPE) {
+      foreach (
+          [&](BMLoop *l) { *static_cast<float3 *>(GPU_vertbuf_raw_step(&access)) = l->v->co; })
+        ;
+    }
+
+    if (vbo.type == CD_PBVH_NO_TYPE) {
+      foreach ([&](BMLoop *l) {
+        short no[3];
+        bool smooth = BM_elem_flag_test(l->f, BM_ELEM_SMOOTH);
+
+        normal_float_to_short_v3(no, smooth ? l->f->no : l->v->no);
+        *static_cast<short3 *>(GPU_vertbuf_raw_step(&access)) = no;
+      })
+        ;
+    }
   }
 
   void fill_vbo(PBVHVbo &vbo, PBVH_GPU_Args *args)
@@ -698,15 +796,53 @@ struct PBVHBatches {
   {
   }
 
+  ATTR_NO_OPT void create_index_bmesh(PBVH_GPU_Args *args)
+  {
+    GPUIndexBufBuilder elb_lines;
+    GPU_indexbuf_init(&elb_lines, GPU_PRIM_LINES, tris_count * 3 * 2, INT_MAX);
+
+    int v_index = 0;
+    lines_count = 0;
+
+    GSET_FOREACH_BEGIN (BMFace *, f, args->bm_faces) {
+      if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+        continue;
+      }
+
+      GPU_indexbuf_add_line_verts(&elb_lines, v_index, v_index + 1);
+      GPU_indexbuf_add_line_verts(&elb_lines, v_index + 1, v_index + 2);
+      GPU_indexbuf_add_line_verts(&elb_lines, v_index + 2, v_index);
+
+      lines_count += 3;
+      v_index += 3;
+    }
+    GSET_FOREACH_END();
+
+    lines_index = GPU_indexbuf_build(&elb_lines);
+  }
+
   ATTR_NO_OPT void create_index_grids(PBVH_GPU_Args *args)
   {
     needs_tri_index = true;
+    int gridsize = args->ccg_key.grid_size;
+    int totgrid = args->totprim;
 
     for (int i : IndexRange(args->totprim)) {
       int grid_index = args->grid_indices[i];
-      int face_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, grid_index);
+      bool smooth = args->grid_flag_mats[grid_index].flag & ME_SMOOTH;
+      BLI_bitmap *gh = args->grid_hidden[grid_index];
 
-      const bool smooth = args->grid_flag_mats[args->grid_indices[0]].flag & ME_SMOOTH;
+      for (int y = 0; y < gridsize - 1; y++) {
+        for (int x = 0; x < gridsize - 1; x++) {
+          if (gh && paint_is_grid_face_hidden(gh, gridsize, x, y)) {
+            /* Skip hidden faces by just setting smooth to true. */
+            smooth = true;
+            goto outer_loop_break;
+          }
+        }
+      }
+
+    outer_loop_break:
 
       if (!smooth) {
         needs_tri_index = false;
@@ -718,9 +854,6 @@ struct PBVHBatches {
     // GPUIndexBufBuilder elb_fast, elb_lines_fast;
 
     CCGKey *key = &args->ccg_key;
-    int totgrid = args->totprim;
-
-    uint gridsize = args->ccg_key.grid_size;
 
     uint visible_quad_len = BKE_pbvh_count_grid_quads(
         (BLI_bitmap **)args->grid_hidden, args->grid_indices, totgrid, key->grid_size);
@@ -817,6 +950,9 @@ struct PBVHBatches {
       case PBVH_FACES:
         /* tri_index should be nullptr in this case. */
         break;
+      case PBVH_BMESH:
+        create_index_bmesh(args);
+        break;
       case PBVH_GRIDS:
         create_index_grids(args);
         break;
@@ -825,7 +961,7 @@ struct PBVHBatches {
 
   void check_index_buffers(PBVH_GPU_Args *args)
   {
-    if (!tri_index && !lines_index) {
+    if (!lines_index) {
       create_index(args);
     }
   }
@@ -836,13 +972,16 @@ struct PBVHBatches {
 
     PBVHBatch batch;
 
-    batch.tris_count = tris_count;
-    batch.lines_count = lines_count;
-
     batch.tris = GPU_batch_create(GPU_PRIM_TRIS,
                                   nullptr,
                                   /* can be NULL if buffer is empty */
                                   tri_index);
+    batch.tris_count = tris_count;
+
+    if (lines_index) {
+      batch.lines = GPU_batch_create(GPU_PRIM_LINES, nullptr, lines_index);
+      batch.lines_count = lines_count;
+    }
 
     for (int i : IndexRange(attrs_num)) {
       PBVHAttrReq *attr = attrs + i;
@@ -875,7 +1014,7 @@ void DRW_pbvh_node_gpu_flush(PBVHBatches *batches)
 
 PBVHBatches *DRW_pbvh_node_create(PBVH_GPU_Args *args)
 {
-  PBVHBatches *batches = new PBVHBatches();
+  PBVHBatches *batches = new PBVHBatches(args);
   return batches;
 }
 
@@ -907,7 +1046,7 @@ GPUBatch *DRW_pbvh_lines_get(PBVHBatches *batches,
 
   *r_prim_count = batch.lines_count;
 
-  return batch.tris;
+  return batch.lines;
 }
 
 void DRW_pbvh_update_pre(struct PBVHBatches *batches, struct PBVH_GPU_Args *args)

@@ -274,7 +274,7 @@ typedef struct PBVH_GPU_Args {
 
   int node_verts_num;
 
-  const struct GSet *bm_unique_vert, *bm_other_verts, *bm_faces;
+  struct GSet *bm_unique_vert, *bm_other_verts, *bm_faces;
   const struct MLoopTri *mlooptri;
   struct PBVHNode *node;
 } PBVH_GPU_Args;
