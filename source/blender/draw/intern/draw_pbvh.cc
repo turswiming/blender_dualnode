@@ -319,8 +319,15 @@ struct PBVHBatches {
       foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
         float3 no(0.0f, 0.0f, 0.0f);
 
-        for (int j = 0; j < 4; j++) {
-          no += CCG_elem_no(&args->ccg_key, elems[j]);
+        const bool smooth = args->grid_flag_mats[grid_index].flag & ME_SMOOTH;
+
+        if (smooth) {
+          no = CCG_elem_no(&args->ccg_key, elems[0]);
+        }
+        else {
+          for (int j = 0; j < 4; j++) {
+            no += CCG_elem_no(&args->ccg_key, elems[j]);
+          }
         }
 
         normalize_v3(no);
@@ -408,8 +415,8 @@ struct PBVHBatches {
             CCGElem *grid = args->grids[grid_index];
             const int offset = grid_index * grid_vert_len;
 
-            for (int y = 0; y < gridsize - 1; y++) {
-              for (int x = 0; x < gridsize - 1; x++) {
+            for (int y = 0; y < gridsize; y++) {
+              for (int x = 0; x < gridsize; x++) {
                 CCGElem *elems[4] = {
                     CCG_grid_elem(&args->ccg_key, grid, x, y),
                     CCG_grid_elem(&args->ccg_key, grid, x + 1, y),
@@ -558,6 +565,8 @@ struct PBVHBatches {
   {
     printf("vbos size: %d\n", (int)vbos.size());
 
+    check_index_buffers(args);
+
     for (PBVHVbo &vbo : vbos) {
       fill_vbo(vbo, args);
     }
@@ -699,7 +708,7 @@ struct PBVHBatches {
 
       const bool smooth = args->grid_flag_mats[args->grid_indices[0]].flag & ME_SMOOTH;
 
-      if (smooth) {
+      if (!smooth) {
         needs_tri_index = false;
         break;
       }
@@ -814,11 +823,16 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT void create_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  void check_index_buffers(PBVH_GPU_Args *args)
   {
-    if (!tri_index) {
+    if (!tri_index && !lines_index) {
       create_index(args);
     }
+  }
+
+  ATTR_NO_OPT void create_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  {
+    check_index_buffers(args);
 
     PBVHBatch batch;
 
