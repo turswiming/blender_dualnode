@@ -17,7 +17,6 @@
 #include "BKE_ccg.h"
 #include "BKE_pbvh.h"
 
-#include "GPU_buffers.h"
 #include "DRW_engine.h"
 
 #include "bmesh.h"

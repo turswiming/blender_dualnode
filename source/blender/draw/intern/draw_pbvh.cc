@@ -32,7 +32,6 @@
 #include "BKE_subdiv_ccg.h"
 
 #include "GPU_batch.h"
-#include "GPU_buffers.h"
 
 #include "DRW_engine.h"
 #include "draw_pbvh.h"

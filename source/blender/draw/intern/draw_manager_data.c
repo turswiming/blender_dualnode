@@ -39,7 +39,6 @@
 #  include "BLI_math_bits.h"
 #endif
 
-#include "GPU_buffers.h"
 #include "GPU_capabilities.h"
 #include "GPU_material.h"
 #include "GPU_uniform_buffer.h"
