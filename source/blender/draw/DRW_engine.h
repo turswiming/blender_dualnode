@@ -274,9 +274,12 @@ typedef struct PBVH_GPU_Args {
 
   int node_verts_num;
 
-  struct GSet *bm_unique_vert, *bm_other_verts, *bm_faces;
   const struct MLoopTri *mlooptri;
   struct PBVHNode *node;
+
+  /* BMesh. */
+  struct GSet *bm_unique_vert, *bm_other_verts, *bm_faces;
+  int cd_mask_layer;
 } PBVH_GPU_Args;
 
 typedef struct PBVHGPUFormat PBVHGPUFormat;

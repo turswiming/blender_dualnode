@@ -573,6 +573,7 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
       args->vert_normals = pbvh->vert_normals;
 
       args->prim_indices = node->prim_indices;
+      args->face_sets = pbvh->face_sets;
       break;
     case PBVH_GRIDS:
       args->vdata = pbvh->vdata;
@@ -591,6 +592,8 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
       args->gridfaces = pbvh->gridfaces;
       args->grid_flag_mats = pbvh->grid_flag_mats;
       args->vert_normals = pbvh->vert_normals;
+
+      args->face_sets = pbvh->face_sets;
       break;
     case PBVH_BMESH:
       args->bm = pbvh->header.bm;
@@ -601,6 +604,8 @@ static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
       args->bm_other_verts = node->bm_other_verts;
       args->bm_unique_vert = node->bm_unique_verts;
       args->totprim = BLI_gset_len(node->bm_faces);
+      args->cd_mask_layer = CustomData_get_offset(&pbvh->header.bm->vdata, CD_PAINT_MASK);
+
       break;
   }
 }

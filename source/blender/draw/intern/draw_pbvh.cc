@@ -288,7 +288,7 @@ struct PBVHBatches {
       if (tri->poly != last_poly) {
         last_poly = tri->poly;
 
-        if (mp->flag & ME_SMOOTH) {
+        if (!(mp->flag & ME_SMOOTH)) {
           smooth = true;
           BKE_mesh_calc_poly_normal(mp, args->mloop + mp->loopstart, args->mvert, fno);
           normal_float_to_short_v3(no, fno);
@@ -389,22 +389,33 @@ struct PBVHBatches {
     if (vbo.type == CD_PBVH_FSET_TYPE) {
       int *face_sets = args->face_sets;
 
-      foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
-        uchar face_set_color[4] = {UCHAR_MAX, UCHAR_MAX, UCHAR_MAX, UCHAR_MAX};
+      if (!face_sets) {
+        uchar white[3] = {UCHAR_MAX, UCHAR_MAX, UCHAR_MAX};
 
-        if (face_sets) {
-          const int face_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, grid_index);
-          const int fset = abs(face_sets[face_index]);
+        foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
+          *static_cast<uchar4 *>(GPU_vertbuf_raw_step(&access)) = white;
+        })
+          ;
+      }
+      else {
+        foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
+          uchar face_set_color[3] = {UCHAR_MAX, UCHAR_MAX, UCHAR_MAX};
 
-          /* Skip for the default color Face Set to render it white. */
-          if (fset != args->face_sets_color_default) {
-            BKE_paint_face_set_overlay_color_get(fset, args->face_sets_color_seed, face_set_color);
+          if (face_sets) {
+            const int face_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, grid_index);
+            const int fset = face_sets[face_index];
+
+            /* Skip for the default color Face Set to render it white. */
+            if (fset != args->face_sets_color_default) {
+              BKE_paint_face_set_overlay_color_get(
+                  fset, args->face_sets_color_seed, face_set_color);
+            }
           }
-        }
 
-        *static_cast<uchar4 *>(GPU_vertbuf_raw_step(&access)) = face_set_color;
-      })
-        ;
+          *static_cast<uchar3 *>(GPU_vertbuf_raw_step(&access)) = face_set_color;
+        })
+          ;
+      }
     }
   }
 
@@ -537,7 +548,7 @@ struct PBVHBatches {
     else if (vbo.type == CD_PBVH_FSET_TYPE) {
       int *face_sets = static_cast<int *>(CustomData_get_layer(args->pdata, CD_SCULPT_FACE_SETS));
       int last_poly = -1;
-      uchar fset_color[4] = {255, 255, 255, 255};
+      uchar fset_color[3] = {255, 255, 255};
 
       foreach ([&](int buffer_i, int tri_i, int vertex_i, const MLoopTri *tri) {
         if (last_poly != tri->poly && args->face_sets) {
@@ -545,11 +556,11 @@ struct PBVHBatches {
 
           const int fset = abs(face_sets[tri->poly]);
 
-          /* Skip for the default color Face Set to render it white. */
           if (fset != args->face_sets_color_default) {
             BKE_paint_face_set_overlay_color_get(fset, args->face_sets_color_seed, fset_color);
           }
           else {
+            /* Skip for the default color face set to render it white. */
             fset_color[0] = fset_color[1] = fset_color[2] = 255;
           }
         }
@@ -656,21 +667,47 @@ struct PBVHBatches {
       printf("%s: eek!\n", __func__);
     }
 
-    if (vbo.type == CD_PBVH_CO_TYPE) {
-      foreach (
-          [&](BMLoop *l) { *static_cast<float3 *>(GPU_vertbuf_raw_step(&access)) = l->v->co; })
-        ;
-    }
+    switch (vbo.type) {
+      case CD_PBVH_CO_TYPE:
+        foreach (
+            [&](BMLoop *l) { *static_cast<float3 *>(GPU_vertbuf_raw_step(&access)) = l->v->co; })
+          ;
+        break;
 
-    if (vbo.type == CD_PBVH_NO_TYPE) {
-      foreach ([&](BMLoop *l) {
-        short no[3];
-        bool smooth = BM_elem_flag_test(l->f, BM_ELEM_SMOOTH);
+      case CD_PBVH_NO_TYPE:
+        foreach ([&](BMLoop *l) {
+          short no[3];
+          bool smooth = BM_elem_flag_test(l->f, BM_ELEM_SMOOTH);
 
-        normal_float_to_short_v3(no, smooth ? l->f->no : l->v->no);
-        *static_cast<short3 *>(GPU_vertbuf_raw_step(&access)) = no;
-      })
-        ;
+          normal_float_to_short_v3(no, smooth ? l->v->no : l->f->no);
+          *static_cast<short3 *>(GPU_vertbuf_raw_step(&access)) = no;
+        })
+          ;
+        break;
+
+      case CD_PBVH_MASK_TYPE: {
+        int cd_mask = args->cd_mask_layer;
+
+        if (cd_mask == -1) {
+          foreach ([&](BMLoop *l) { *static_cast<float *>(GPU_vertbuf_raw_step(&access)) = 255; })
+            ;
+        }
+        else {
+          foreach ([&](BMLoop *l) {
+            float mask = BM_ELEM_CD_GET_FLOAT(l->v, cd_mask);
+
+            *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = (uchar)(mask * 255.0f);
+          })
+            ;
+        }
+        break;
+      }
+      case CD_PBVH_FSET_TYPE: {
+        uchar3 white(255, 255, 255);
+
+        foreach ([&](BMLoop *l) { *static_cast<uchar3 *>(GPU_vertbuf_raw_step(&access)) = white; })
+          ;
+      }
     }
   }
 
@@ -794,6 +831,60 @@ struct PBVHBatches {
 
   ATTR_NO_OPT void update_pre(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
   {
+  }
+
+  ATTR_NO_OPT void create_index_faces(PBVH_GPU_Args *args)
+  {
+    /* Calculate number of edges*/
+    int edge_count = 0;
+    for (int i = 0; i < args->totprim; i++) {
+      const MLoopTri *lt = args->mlooptri + args->prim_indices[i];
+
+      if (args->hide_poly && args->hide_poly[lt->poly]) {
+        continue;
+      }
+      int r_edges[3];
+      BKE_mesh_looptri_get_real_edges(args->me, lt, r_edges);
+
+      if (r_edges[0] != -1) {
+        edge_count++;
+      }
+      if (r_edges[1] != -1) {
+        edge_count++;
+      }
+      if (r_edges[2] != -1) {
+        edge_count++;
+      }
+    }
+
+    GPUIndexBufBuilder elb_lines;
+    GPU_indexbuf_init(&elb_lines, GPU_PRIM_LINES, edge_count * 2, INT_MAX);
+
+    int vertex_i = 0;
+    for (int i = 0; i < args->totprim; i++) {
+      const MLoopTri *lt = args->mlooptri + args->prim_indices[i];
+
+      if (args->hide_poly && args->hide_poly[lt->poly]) {
+        continue;
+      }
+
+      int r_edges[3];
+      BKE_mesh_looptri_get_real_edges(args->me, lt, r_edges);
+
+      if (r_edges[0] != -1) {
+        GPU_indexbuf_add_line_verts(&elb_lines, vertex_i, vertex_i + 1);
+      }
+      if (r_edges[1] != -1) {
+        GPU_indexbuf_add_line_verts(&elb_lines, vertex_i + 1, vertex_i + 2);
+      }
+      if (r_edges[2] != -1) {
+        GPU_indexbuf_add_line_verts(&elb_lines, vertex_i + 2, vertex_i);
+      }
+
+      vertex_i += 3;
+    }
+
+    lines_index = GPU_indexbuf_build(&elb_lines);
   }
 
   ATTR_NO_OPT void create_index_bmesh(PBVH_GPU_Args *args)
@@ -948,7 +1039,7 @@ struct PBVHBatches {
   {
     switch (args->pbvh_type) {
       case PBVH_FACES:
-        /* tri_index should be nullptr in this case. */
+        create_index_faces(args);
         break;
       case PBVH_BMESH:
         create_index_bmesh(args);
@@ -995,6 +1086,10 @@ struct PBVHBatches {
 
       batch.vbos.append(vbo_i);
       GPU_batch_vertbuf_add_ex(batch.tris, vbo->vert_buf, false);
+
+      if (batch.lines) {
+        GPU_batch_vertbuf_add_ex(batch.lines, vbo->vert_buf, false);
+      }
     }
 
     batch.build_key(vbos);
