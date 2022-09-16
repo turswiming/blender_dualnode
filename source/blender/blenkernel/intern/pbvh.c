@@ -2787,17 +2787,15 @@ static bool pbvh_draw_search_cb(PBVHNode *node, void *data_v)
   return true;
 }
 
-ATTR_NO_OPT void BKE_pbvh_draw_cb(PBVH *pbvh,
-                                  bool update_only_visible,
-                                  PBVHFrustumPlanes *update_frustum,
-                                  PBVHFrustumPlanes *draw_frustum,
-                                  void (*draw_fn)(void *user_data,
-                                                  PBVHBatches *batches,
-                                                  PBVH_GPU_Args *args),
-                                  void *user_data,
-                                  bool UNUSED(full_render),
-                                  PBVHAttrReq *attrs,
-                                  int attrs_num)
+void BKE_pbvh_draw_cb(PBVH *pbvh,
+                      bool update_only_visible,
+                      PBVHFrustumPlanes *update_frustum,
+                      PBVHFrustumPlanes *draw_frustum,
+                      void (*draw_fn)(void *user_data, PBVHBatches *batches, PBVH_GPU_Args *args),
+                      void *user_data,
+                      bool UNUSED(full_render),
+                      PBVHAttrReq *attrs,
+                      int attrs_num)
 {
   PBVHNode **nodes;
   int totnode;

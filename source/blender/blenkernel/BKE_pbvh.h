@@ -737,14 +737,3 @@ int BKE_pbvh_debug_draw_gen_get(PBVHNode *node);
 #ifdef __cplusplus
 }
 #endif
-
-/* Disable optimization for a function (for debugging use only!)*/
-#ifdef __clang__
-#  define ATTR_NO_OPT __attribute__((optnone))
-#elif defined(_MSC_VER)
-#  define ATTR_NO_OPT __pragma(optimize("", off))
-#elif defined(__GNUC__)
-#  define ATTR_NO_OPT __attribute__((optimize("O0")))
-#else
-#  define ATTR_NO_OPT
-#endif

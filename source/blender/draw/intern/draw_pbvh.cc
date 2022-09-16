@@ -79,6 +79,11 @@ struct PBVHVbo {
   {
   }
 
+  void clear_data()
+  {
+    GPU_vertbuf_clear(vert_buf);
+  }
+
   string build_key()
   {
     char buf[512];
@@ -114,7 +119,7 @@ struct PBVHBatch {
     std::sort(vbos.begin(), vbos.end(), cmp(master_vbos));
   }
 
-  ATTR_NO_OPT string build_key(Vector<PBVHVbo> &master_vbos)
+  string build_key(Vector<PBVHVbo> &master_vbos)
   {
     key = "";
 
@@ -153,8 +158,10 @@ struct PBVHBatches {
 
   int material_index = 0;
 
-  PBVHBatches(PBVH_GPU_Args *args)
+  int count_faces(PBVH_GPU_Args *args)
   {
+    int count = 0;
+
     switch (args->pbvh_type) {
       case PBVH_FACES: {
         for (int i = 0; i < args->totprim; i++) {
@@ -164,32 +171,41 @@ struct PBVHBatches {
             continue;
           }
 
-          faces_count++;
+          count++;
         }
         break;
       }
       case PBVH_GRIDS: {
-        faces_count = BKE_pbvh_count_grid_quads((BLI_bitmap **)args->grid_hidden,
-                                                args->grid_indices,
-                                                args->totprim,
-                                                args->ccg_key.grid_size);
+        count = BKE_pbvh_count_grid_quads((BLI_bitmap **)args->grid_hidden,
+                                          args->grid_indices,
+                                          args->totprim,
+                                          args->ccg_key.grid_size);
 
         break;
       }
       case PBVH_BMESH: {
         GSET_FOREACH_BEGIN (BMFace *, f, args->bm_faces) {
           if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
-            faces_count++;
+            count++;
           }
         }
         GSET_FOREACH_END();
-
-        tris_count = faces_count;
       }
+    }
+
+    return count;
+  }
+
+  PBVHBatches(PBVH_GPU_Args *args)
+  {
+    faces_count = count_faces(args);
+
+    if (args->pbvh_type == PBVH_BMESH) {
+      tris_count = faces_count;
     }
   }
 
-  ATTR_NO_OPT ~PBVHBatches()
+  ~PBVHBatches()
   {
     for (PBVHBatch &batch : batches.values()) {
       GPU_BATCH_DISCARD_SAFE(batch.tris);
@@ -201,9 +217,10 @@ struct PBVHBatches {
     }
 
     GPU_INDEXBUF_DISCARD_SAFE(tri_index);
+    GPU_INDEXBUF_DISCARD_SAFE(lines_index);
   }
 
-  ATTR_NO_OPT string build_key(PBVHAttrReq *attrs, int attrs_num)
+  string build_key(PBVHAttrReq *attrs, int attrs_num)
   {
     string key;
     PBVHBatch batch;
@@ -223,7 +240,7 @@ struct PBVHBatches {
     return batch.key;
   }
 
-  ATTR_NO_OPT bool has_vbo(eAttrDomain domain, int type, string name)
+  bool has_vbo(eAttrDomain domain, int type, string name)
   {
     for (PBVHVbo &vbo : vbos) {
       if (vbo.domain == domain && vbo.type == type && vbo.name == name) {
@@ -245,7 +262,7 @@ struct PBVHBatches {
     return -1;
   }
 
-  ATTR_NO_OPT PBVHVbo *get_vbo(eAttrDomain domain, int type, string name)
+  PBVHVbo *get_vbo(eAttrDomain domain, int type, string name)
   {
     for (PBVHVbo &vbo : vbos) {
       if (vbo.domain == domain && vbo.type == type && vbo.name == name) {
@@ -261,7 +278,7 @@ struct PBVHBatches {
     return batches.contains(build_key(attrs, attrs_num));
   }
 
-  ATTR_NO_OPT PBVHBatch &ensure_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  PBVHBatch &ensure_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
   {
     if (!has_batch(attrs, attrs_num)) {
       create_batch(attrs, attrs_num, args);
@@ -311,7 +328,7 @@ struct PBVHBatches {
       ;
   }
 
-  ATTR_NO_OPT void fill_vbo_grids_intern(
+  void fill_vbo_grids_intern(
       PBVHVbo &vbo,
       PBVH_GPU_Args *args,
       std::function<
@@ -409,7 +426,6 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT
   void fill_vbo_grids(PBVHVbo &vbo, PBVH_GPU_Args *args)
   {
     int gridsize = args->ccg_key.grid_size;
@@ -471,7 +487,7 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT void fill_vbo_faces(PBVHVbo &vbo, PBVH_GPU_Args *args)
+  void fill_vbo_faces(PBVHVbo &vbo, PBVH_GPU_Args *args)
   {
     int totvert = args->totprim * 3;
 
@@ -580,7 +596,7 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT void gpu_flush()
+  void gpu_flush()
   {
     for (PBVHVbo &vbo : vbos) {
       if (vbo.vert_buf && GPU_vertbuf_get_data(vbo.vert_buf)) {
@@ -589,7 +605,7 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT void update(PBVH_GPU_Args *args)
+  void update(PBVH_GPU_Args *args)
   {
     check_index_buffers(args);
 
@@ -700,10 +716,7 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT void create_vbo(eAttrDomain domain,
-                              const uint32_t type,
-                              string name,
-                              PBVH_GPU_Args *args)
+  void create_vbo(eAttrDomain domain, const uint32_t type, string name, PBVH_GPU_Args *args)
   {
     PBVHVbo vbo(domain, type, name);
     GPUVertFormat format;
@@ -803,11 +816,26 @@ struct PBVHBatches {
     vbos.append(vbo);
   }
 
-  ATTR_NO_OPT void update_pre(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  void update_pre(PBVH_GPU_Args *args)
   {
+    if (args->pbvh_type == PBVH_BMESH) {
+      int count = count_faces(args);
+
+      if (faces_count != count) {
+        for (PBVHVbo &vbo : vbos) {
+          vbo.clear_data();
+        }
+
+        GPU_INDEXBUF_DISCARD_SAFE(tri_index);
+        GPU_INDEXBUF_DISCARD_SAFE(lines_index);
+
+        tri_index = lines_index = nullptr;
+        faces_count = tris_count = count;
+      }
+    }
   }
 
-  ATTR_NO_OPT void create_index_faces(PBVH_GPU_Args *args)
+  void create_index_faces(PBVH_GPU_Args *args)
   {
     /* Calculate number of edges*/
     int edge_count = 0;
@@ -861,7 +889,7 @@ struct PBVHBatches {
     lines_index = GPU_indexbuf_build(&elb_lines);
   }
 
-  ATTR_NO_OPT void create_index_bmesh(PBVH_GPU_Args *args)
+  void create_index_bmesh(PBVH_GPU_Args *args)
   {
     GPUIndexBufBuilder elb_lines;
     GPU_indexbuf_init(&elb_lines, GPU_PRIM_LINES, tris_count * 3 * 2, INT_MAX);
@@ -886,7 +914,7 @@ struct PBVHBatches {
     lines_index = GPU_indexbuf_build(&elb_lines);
   }
 
-  ATTR_NO_OPT void create_index_grids(PBVH_GPU_Args *args)
+  void create_index_grids(PBVH_GPU_Args *args)
   {
     needs_tri_index = true;
     int gridsize = args->ccg_key.grid_size;
@@ -1009,7 +1037,7 @@ struct PBVHBatches {
     lines_index = GPU_indexbuf_build(&elb_lines);
   }
 
-  ATTR_NO_OPT void create_index(PBVH_GPU_Args *args)
+  void create_index(PBVH_GPU_Args *args)
   {
     switch (args->pbvh_type) {
       case PBVH_FACES:
@@ -1022,6 +1050,11 @@ struct PBVHBatches {
         create_index_grids(args);
         break;
     }
+
+    for (PBVHBatch &batch : batches.values()) {
+      GPU_batch_elembuf_set(batch.tris, tri_index, false);
+      GPU_batch_elembuf_set(batch.lines, lines_index, false);
+    }
   }
 
   void check_index_buffers(PBVH_GPU_Args *args)
@@ -1031,7 +1064,7 @@ struct PBVHBatches {
     }
   }
 
-  ATTR_NO_OPT void create_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
+  void create_batch(PBVHAttrReq *attrs, int attrs_num, PBVH_GPU_Args *args)
   {
     check_index_buffers(args);
 
@@ -1087,7 +1120,7 @@ PBVHBatches *DRW_pbvh_node_create(PBVH_GPU_Args *args)
   return batches;
 }
 
-ATTR_NO_OPT void DRW_pbvh_node_free(PBVHBatches *batches)
+void DRW_pbvh_node_free(PBVHBatches *batches)
 {
   delete batches;
 }
@@ -1120,6 +1153,7 @@ GPUBatch *DRW_pbvh_lines_get(PBVHBatches *batches,
 
 void DRW_pbvh_update_pre(struct PBVHBatches *batches, struct PBVH_GPU_Args *args)
 {
+  batches->update_pre(args);
 }
 
 int drw_pbvh_material_index_get(struct PBVHBatches *batches)

@@ -1162,9 +1162,9 @@ static float sculpt_debug_colors[9][4] = {
     {0.7f, 0.2f, 1.0f, 1.0f},
 };
 
-ATTR_NO_OPT static void sculpt_draw_cb(DRWSculptCallbackData *scd,
-                                       PBVHBatches *batches,
-                                       PBVH_GPU_Args *pbvh_draw_args)
+static void sculpt_draw_cb(DRWSculptCallbackData *scd,
+                           PBVHBatches *batches,
+                           PBVH_GPU_Args *pbvh_draw_args)
 {
   if (!batches) {
     return;
@@ -1244,7 +1244,7 @@ static void drw_sculpt_get_frustum_planes(Object *ob, float planes[6][4])
   }
 }
 
-ATTR_NO_OPT static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
+static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
 {
   /* PBVH should always exist for non-empty meshes, created by depsgraph eval. */
   PBVH *pbvh = (scd->ob->sculpt) ? scd->ob->sculpt->pbvh : NULL;
@@ -1325,13 +1325,13 @@ ATTR_NO_OPT static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   }
 }
 
-ATTR_NO_OPT void DRW_shgroup_call_sculpt(DRWShadingGroup *shgroup,
-                                         Object *ob,
-                                         bool use_wire,
-                                         bool use_mask,
-                                         bool use_fset,
-                                         bool use_color,
-                                         bool use_uv)
+void DRW_shgroup_call_sculpt(DRWShadingGroup *shgroup,
+                             Object *ob,
+                             bool use_wire,
+                             bool use_mask,
+                             bool use_fset,
+                             bool use_color,
+                             bool use_uv)
 {
   DRWSculptCallbackData scd = {
       .ob = ob,
