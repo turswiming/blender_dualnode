@@ -414,7 +414,6 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, float min_u
   UVVertex *uv_vertex = corner.second->get_uv_vertex(0);
   Fan fan(*(uv_vertex->vertex));
   if (!fan.flags.full) {
-    printf("TODO: Unknown how to handle non-manifold meshes.\n");
     return;
   }
   fan.init_uv_coordinates(*uv_vertex);
@@ -882,10 +881,7 @@ void UVIslands::extend_borders(const UVIslandsMask &islands_mask)
 
 static ushort2 mask_resolution_from_tile_resolution(ushort2 tile_resolution)
 {
-  return ushort2(
-    max_ii(tile_resolution.x >> 2, 256),
-    max_ii(tile_resolution.y >> 2, 256)
-  );
+  return ushort2(max_ii(tile_resolution.x >> 2, 256), max_ii(tile_resolution.y >> 2, 256));
 }
 
 UVIslandsMask::Tile::Tile(float2 udim_offset, ushort2 tile_resolution)
