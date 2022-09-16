@@ -325,23 +325,14 @@ struct PBVHBatches {
     int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
     void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
 
-    printf("%p:%p: vbo.vert_buf: %p\n", args->node, this, vbo.vert_buf);
-
     if (existing_data == NULL || existing_num != vert_count) {
       /* Allocate buffer if not allocated yet or size changed. */
       GPU_vertbuf_data_alloc(vbo.vert_buf, vert_count);
     }
 
-    void *gpu_data = GPU_vertbuf_get_data(vbo.vert_buf);
     GPUVertBufRaw access;
     GPU_vertbuf_attr_get_raw_data(vbo.vert_buf, 0, &access);
 
-    if (!gpu_data || !args->totprim) {
-      printf("%s: eek!\n", __func__);
-    }
-
-    //        [&](std::function<void(int x, int y, CCGElem *grid, CCGElem *elems[4], int i)> func)
-    //        {
     if (vbo.type == CD_PBVH_CO_TYPE) {
       foreach ([&](int x, int y, int grid_index, CCGElem *elems[4], int i) {
         float *co = CCG_elem_co(&args->ccg_key, elems[i]);
@@ -509,20 +500,13 @@ struct PBVHBatches {
     int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
     void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
 
-    printf("%p:%p: vbo.vert_buf: %p\n", args->node, this, vbo.vert_buf);
-
     if (existing_data == NULL || existing_num != totvert) {
       /* Allocate buffer if not allocated yet or size changed. */
       GPU_vertbuf_data_alloc(vbo.vert_buf, totvert);
     }
 
-    void *gpu_data = GPU_vertbuf_get_data(vbo.vert_buf);
     GPUVertBufRaw access;
     GPU_vertbuf_attr_get_raw_data(vbo.vert_buf, 0, &access);
-
-    if (!gpu_data || !args->totprim) {
-      printf("%s: eek!\n", __func__);
-    }
 
     if (vbo.type == CD_PBVH_CO_TYPE) {
       foreach ([&](int buffer_i, int tri_i, int vertex_i, const MLoopTri *tri) {
@@ -608,8 +592,6 @@ struct PBVHBatches {
 
   ATTR_NO_OPT void update(PBVH_GPU_Args *args)
   {
-    printf("vbos size: %d\n", (int)vbos.size());
-
     check_index_buffers(args);
 
     for (PBVHVbo &vbo : vbos) {
@@ -650,8 +632,6 @@ struct PBVHBatches {
     int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
     void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
 
-    printf("%p:%p: vbo.vert_buf: %p\n", args->node, this, vbo.vert_buf);
-
     int vert_count = tris_count * 3;
 
     if (existing_data == nullptr || existing_num != vert_count) {
@@ -659,13 +639,8 @@ struct PBVHBatches {
       GPU_vertbuf_data_alloc(vbo.vert_buf, vert_count);
     }
 
-    void *gpu_data = GPU_vertbuf_get_data(vbo.vert_buf);
     GPUVertBufRaw access;
     GPU_vertbuf_attr_get_raw_data(vbo.vert_buf, 0, &access);
-
-    if (!gpu_data || !args->totprim) {
-      printf("%s: eek!\n", __func__);
-    }
 
     switch (vbo.type) {
       case CD_PBVH_CO_TYPE:
