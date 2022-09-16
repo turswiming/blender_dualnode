@@ -41,9 +41,9 @@ typedef enum CurveTypeMask {
  * Create a cyclical iterator for all control points within the interval [start_point, end_point]
  * including any control point at the start or end point.
  *
- * \param start_point Point on the curve that define the starting point of the interval.
- * \param end_point Point on the curve that define the end point of the interval (included).
- * \param points IndexRange for the curve points.
+ * \param start_point: Point on the curve that define the starting point of the interval.
+ * \param end_point: Point on the curve that define the end point of the interval (included).
+ * \param points: #IndexRange for the curve points.
  */
 static bke::curves::IndexRangeCyclic get_range_between_endpoints(
     const bke::curves::CurvePoint start_point,
@@ -81,8 +81,8 @@ static bke::curves::IndexRangeCyclic get_range_between_endpoints(
  * constant for all curve segments and evaluated curve points are uniformly spaced between the
  * segment endpoints in relation to the curve parameter.
  *
- * \param lengths: Accumulated lenght for the evaluated curve.
- * \param sample_length: Distance along the curve to determine the CurvePoint for.
+ * \param lengths: Accumulated length for the evaluated curve.
+ * \param sample_length: Distance along the curve to determine the #CurvePoint for.
  * \param cyclic: If curve is cyclic.
  * \param resolution: Curve resolution (number of evaluated points per segment).
  * \param num_curve_points: Total number of control points in the curve.
@@ -97,11 +97,11 @@ static bke::curves::CurvePoint lookup_curve_point(const Span<float> lengths,
   BLI_assert(!cyclic || lengths.size() / resolution >= 2);
   const int last_index = num_curve_points - 1;
   if (sample_length <= 0.0f) {
-    return {0, 1, 0.0f};
+    return {{0, 1}, 0.0f};
   }
   if (sample_length >= lengths.last()) {
-    return cyclic ? bke::curves::CurvePoint{last_index, 0, 1.0} :
-                    bke::curves::CurvePoint{last_index - 1, last_index, 1.0};
+    return cyclic ? bke::curves::CurvePoint{{last_index, 0}, 1.0} :
+                    bke::curves::CurvePoint{{last_index - 1, last_index}, 1.0};
   }
   int eval_index;
   float eval_factor;
@@ -111,7 +111,7 @@ static bke::curves::CurvePoint lookup_curve_point(const Span<float> lengths,
   const int next_index = (index == last_index) ? 0 : index + 1;
   const float parameter = (eval_factor + eval_index) / resolution - index;
 
-  return bke::curves::CurvePoint{index, next_index, parameter};
+  return bke::curves::CurvePoint{{index, next_index}, parameter};
 }
 
 /**
@@ -124,11 +124,11 @@ static bke::curves::CurvePoint lookup_evaluated_point(const Span<float> lengths,
 {
   const int last_index = evaluated_size - 1;
   if (sample_length <= 0.0f) {
-    return {0, 1, 0.0f};
+    return {{0, 1}, 0.0f};
   }
   if (sample_length >= lengths.last()) {
-    return cyclic ? bke::curves::CurvePoint{last_index, 0, 1.0} :
-                    bke::curves::CurvePoint{last_index - 1, last_index, 1.0};
+    return cyclic ? bke::curves::CurvePoint{{last_index, 0}, 1.0} :
+                    bke::curves::CurvePoint{{last_index - 1, last_index}, 1.0};
   }
 
   int eval_index;
@@ -136,7 +136,7 @@ static bke::curves::CurvePoint lookup_evaluated_point(const Span<float> lengths,
   length_parameterize::sample_at_length(lengths, sample_length, eval_index, eval_factor);
 
   const int next_eval_index = (eval_index == last_index) ? 0 : eval_index + 1;
-  return bke::curves::CurvePoint{eval_index, next_eval_index, eval_factor};
+  return bke::curves::CurvePoint{{eval_index, next_eval_index}, eval_factor};
 }
 
 /**
@@ -150,11 +150,11 @@ static bke::curves::CurvePoint lookup_bezier_point(const Span<int> bezier_offset
 {
   const int last_index = num_curve_points - 1;
   if (sample_length <= 0.0f) {
-    return {0, 1, 0.0f};
+    return {{0, 1}, 0.0f};
   }
   if (sample_length >= lengths.last()) {
-    return cyclic ? bke::curves::CurvePoint{last_index, 0, 1.0} :
-                    bke::curves::CurvePoint{last_index - 1, last_index, 1.0};
+    return cyclic ? bke::curves::CurvePoint{{last_index, 0}, 1.0} :
+                    bke::curves::CurvePoint{{last_index - 1, last_index}, 1.0};
   }
   int eval_index;
   float eval_factor;
@@ -170,7 +170,7 @@ static bke::curves::CurvePoint lookup_bezier_point(const Span<int> bezier_offset
   const int segment_resolution = bezier_offsets[left] - prev_offset;
   const float parameter = std::clamp(offset_in_segment / segment_resolution, 0.0f, 1.0f);
 
-  return {left, right, parameter};
+  return {{left, right}, parameter};
 }
 
 Array<bke::curves::CurvePoint, 12> lookup_curve_points(const bke::CurvesGeometry &curves,
@@ -185,7 +185,7 @@ Array<bke::curves::CurvePoint, 12> lookup_curve_points(const bke::CurvesGeometry
   const VArray<int> resolution = curves.resolution();
   const VArray<int8_t> curve_types = curves.curve_types();
 
-  /* Compute curve lenghts! */
+  /* Compute curve lengths! */
   curves.ensure_evaluated_lengths();
   curves.ensure_evaluated_offsets();
 
@@ -197,7 +197,7 @@ Array<bke::curves::CurvePoint, 12> lookup_curve_points(const bke::CurvesGeometry
 
       const int point_count = curves.points_num_for_curve(curve_i);
       if (curve_i < 0 || point_count == 1) {
-        lookups[lookup_index] = {0, 0, 0.0f};
+        lookups[lookup_index] = {{0, 0}, 0.0f};
         continue;
       }
 
@@ -294,7 +294,7 @@ static void determine_copyable_curve_types(const bke::CurvesGeometry &src_curves
 }
 
 /**
- * Determine if a curve is treated as an evaluated curve. Curves which inheretly do not support
+ * Determine if a curve is treated as an evaluated curve. Curves which inherently do not support
  * trimming are discretized (e.g. NURBS).
  */
 static bool copy_as_evaluated_curve(const int8_t src_type, const int8_t dst_type)
@@ -359,9 +359,11 @@ static void compute_trim_result_offsets(const bke::CurvesGeometry &src_curves,
   bke::curves::accumulate_counts_to_offsets(dst_curve_offsets);
 }
 
-/* --------------------------------------------------------------------
- * Utility functions.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Utility Functions
+ * \{ */
 
 static void fill_bezier_data(bke::CurvesGeometry &dst_curves, const IndexMask selection)
 {
@@ -415,9 +417,11 @@ static int64_t copy_point_data_between_endpoints(const Span<T> src_data,
   return dst_index;
 }
 
-/* --------------------------------------------------------------------
- * Sampling utilities.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Sampling Utilities
+ * \{ */
 
 template<typename T>
 static T interpolate_catmull_rom(const Span<T> src_data,
@@ -459,9 +463,11 @@ static bke::curves::bezier::Insertion knot_insert_bezier(
                                      insertion_point.parameter);
 }
 
-/* --------------------------------------------------------------------
- * Sample single point.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Sample Single Point
+ * \{ */
 
 template<typename T>
 static void sample_linear(const Span<T> src_data,
@@ -533,9 +539,11 @@ static void sample_bezier(const Span<float3> src_positions,
   }
 }
 
-/* --------------------------------------------------------------------
- * Sample curve interval (trim).
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Sample Curve Interval (Trim)
+ * \{ */
 
 /**
  * Sample source curve data in the interval defined by the points [start_point, end_point].
@@ -735,7 +743,7 @@ static void sample_interval_bezier(const Span<float3> src_positions,
           dst_positions,
           dst_handles_l,
           dst_handles_r,
-          {(int)dst_range.first(), (int)(dst_range.first() + 1), parameter});
+          {{(int)dst_range.first(), (int)(dst_range.first() + 1)}, parameter});
     }
     else {
       /* General case, compute the insertion point.  */
@@ -758,9 +766,11 @@ static void sample_interval_bezier(const Span<float3> src_positions,
   BLI_assert(dst_index == dst_range.one_after_last());
 }
 
-/* --------------------------------------------------------------------
- * Convert to point curves.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Convert to Point Curves
+ * \{ */
 
 static void convert_point_polygonal_curves(
     const bke::CurvesGeometry &src_curves,
@@ -924,9 +934,11 @@ static void convert_point_evaluated_curves(
   fill_nurbs_data(dst_curves, selection);
 }
 
-/* --------------------------------------------------------------------
- * Trim curves.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Trim Curves
+ * \{ */
 
 static void trim_attribute_linear(const bke::CurvesGeometry &src_curves,
                                   bke::CurvesGeometry &dst_curves,
@@ -1281,5 +1293,7 @@ bke::CurvesGeometry trim_curves(const bke::CurvesGeometry &src_curves,
   dst_curves.tag_topology_changed();
   return dst_curves;
 }
+
+/** \} */
 
 }  // namespace blender::geometry

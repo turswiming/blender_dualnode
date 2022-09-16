@@ -4102,7 +4102,7 @@ static void knifetool_init(ViewContext *vc,
   kcd->region = vc->region;
 
   kcd->objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      vc->view_layer, vc->v3d, &kcd->objects_len);
+      vc->scene, vc->view_layer, vc->v3d, &kcd->objects_len);
 
   Object *ob;
   BMEditMesh *em;
@@ -4893,12 +4893,13 @@ void MESH_OT_knife_tool(wmOperatorType *ot)
                KNF_MEASUREMENT_NONE,
                "Measurements",
                "Visible distance and angle measurements");
-  RNA_def_enum(ot->srna,
+  prop = RNA_def_enum(ot->srna,
                "angle_snapping",
                angle_snapping_items,
                KNF_CONSTRAIN_ANGLE_MODE_NONE,
                "Angle Snapping",
                "Angle snapping mode");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MESH);
 
   prop = RNA_def_float(ot->srna,
                        "angle_snapping_increment",
