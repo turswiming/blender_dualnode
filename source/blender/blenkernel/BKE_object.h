@@ -69,9 +69,6 @@ void BKE_object_free_caches(struct Object *object);
 void BKE_object_modifier_hook_reset(struct Object *ob, struct HookModifierData *hmd);
 void BKE_object_modifier_gpencil_hook_reset(struct Object *ob,
                                             struct HookGpencilModifierData *hmd);
-bool BKE_object_modifier_gpencil_use_time(struct Object *ob, struct GpencilModifierData *md);
-
-bool BKE_object_shaderfx_use_time(struct Object *ob, struct ShaderFxData *fx);
 
 /**
  * \return True if the object's type supports regular modifiers (not grease pencil modifiers).
@@ -178,9 +175,10 @@ struct Object *BKE_object_add_only_object(struct Main *bmain,
  * \note Creates minimum required data, but without vertices etc.
  */
 struct Object *BKE_object_add(struct Main *bmain,
+                              struct Scene *scene,
                               struct ViewLayer *view_layer,
                               int type,
-                              const char *name) ATTR_NONNULL(1, 2) ATTR_RETURNS_NONNULL;
+                              const char *name) ATTR_NONNULL(1, 2, 3) ATTR_RETURNS_NONNULL;
 /**
  * Add a new object, using another one as a reference
  *
@@ -203,6 +201,7 @@ struct Object *BKE_object_add_from(struct Main *bmain,
  * assigning it to the object.
  */
 struct Object *BKE_object_add_for_data(struct Main *bmain,
+                                       const struct Scene *scene,
                                        struct ViewLayer *view_layer,
                                        int type,
                                        const char *name,
@@ -286,31 +285,38 @@ void BKE_object_matrix_local_get(struct Object *ob, float r_mat[4][4]);
 bool BKE_object_pose_context_check(const struct Object *ob);
 struct Object *BKE_object_pose_armature_get(struct Object *ob);
 struct Object *BKE_object_pose_armature_get_visible(struct Object *ob,
+                                                    const struct Scene *scene,
                                                     struct ViewLayer *view_layer,
                                                     struct View3D *v3d);
 
 /**
  * Access pose array with special check to get pose object when in weight paint mode.
  */
-struct Object **BKE_object_pose_array_get_ex(struct ViewLayer *view_layer,
+struct Object **BKE_object_pose_array_get_ex(const struct Scene *scene,
+                                             struct ViewLayer *view_layer,
                                              struct View3D *v3d,
                                              unsigned int *r_objects_len,
                                              bool unique);
-struct Object **BKE_object_pose_array_get_unique(struct ViewLayer *view_layer,
+struct Object **BKE_object_pose_array_get_unique(const struct Scene *scene,
+                                                 struct ViewLayer *view_layer,
                                                  struct View3D *v3d,
                                                  unsigned int *r_objects_len);
-struct Object **BKE_object_pose_array_get(struct ViewLayer *view_layer,
+struct Object **BKE_object_pose_array_get(const struct Scene *scene,
+                                          struct ViewLayer *view_layer,
                                           struct View3D *v3d,
                                           unsigned int *r_objects_len);
 
-struct Base **BKE_object_pose_base_array_get_ex(struct ViewLayer *view_layer,
+struct Base **BKE_object_pose_base_array_get_ex(const struct Scene *scene,
+                                                struct ViewLayer *view_layer,
                                                 struct View3D *v3d,
                                                 unsigned int *r_bases_len,
                                                 bool unique);
-struct Base **BKE_object_pose_base_array_get_unique(struct ViewLayer *view_layer,
+struct Base **BKE_object_pose_base_array_get_unique(const struct Scene *scene,
+                                                    struct ViewLayer *view_layer,
                                                     struct View3D *v3d,
                                                     unsigned int *r_bases_len);
-struct Base **BKE_object_pose_base_array_get(struct ViewLayer *view_layer,
+struct Base **BKE_object_pose_base_array_get(const struct Scene *scene,
+                                             struct ViewLayer *view_layer,
                                              struct View3D *v3d,
                                              unsigned int *r_bases_len);
 
@@ -376,6 +382,13 @@ bool BKE_object_minmax_dupli(struct Depsgraph *depsgraph,
                              float r_min[3],
                              float r_max[3],
                              bool use_hidden);
+/**
+ * Calculate visual bounds from an empty objects draw-type.
+ *
+ * \note This is not part of the calculation used by #BKE_object_boundbox_get
+ * as these bounds represent the extents of visual guides (use for viewport culling for e.g.)
+ */
+bool BKE_object_minmax_empty_drawtype(const struct Object *ob, float r_min[3], float r_max[3]);
 
 /**
  * Sometimes min-max isn't enough, we need to loop over each point.
@@ -470,8 +483,8 @@ void BKE_object_handle_data_update(struct Depsgraph *depsgraph,
  */
 void BKE_object_handle_update(struct Depsgraph *depsgraph, struct Scene *scene, struct Object *ob);
 /**
- * The main object update call, for object matrix, constraints, keys and #DispList (modifiers)
- * requires flags to be set!
+ * The main object update call, for object matrix, constraints, keys and modifiers.
+ * Requires flags to be set!
  *
  * Ideally we shouldn't have to pass the rigid body world,
  * but need bigger restructuring to avoid id.
@@ -582,7 +595,6 @@ void BKE_object_runtime_reset_on_copy(struct Object *object, int flag);
 void BKE_object_runtime_free_data(struct Object *object);
 
 void BKE_object_batch_cache_dirty_tag(struct Object *ob);
-void BKE_object_data_batch_cache_dirty_tag(struct ID *object_data);
 
 /* this function returns a superset of the scenes selection based on relationships */
 
@@ -609,7 +621,8 @@ typedef enum eObjectSet {
  * If #OB_SET_VISIBLE or#OB_SET_SELECTED are collected,
  * then also add related objects according to the given \a includeFilter.
  */
-struct LinkNode *BKE_object_relational_superset(struct ViewLayer *view_layer,
+struct LinkNode *BKE_object_relational_superset(const struct Scene *scene,
+                                                struct ViewLayer *view_layer,
                                                 eObjectSet objectSet,
                                                 eObRelationTypes includeFilter);
 /**
@@ -628,8 +641,6 @@ void BKE_object_groups_clear(struct Main *bmain, struct Scene *scene, struct Obj
  * \return The KD-tree or nullptr if it can't be created.
  */
 struct KDTree_3d *BKE_object_as_kdtree(struct Object *ob, int *r_tot);
-
-bool BKE_object_modifier_use_time(struct Scene *scene, struct Object *ob, struct ModifierData *md);
 
 /**
  * \note this function should eventually be replaced by depsgraph functionality.

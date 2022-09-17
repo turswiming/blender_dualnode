@@ -23,6 +23,8 @@
 #  include "util/types.h"
 #  include "util/windows.h"
 
+#  include "kernel/device/cuda/globals.h"
+
 CCL_NAMESPACE_BEGIN
 
 class CUDADevice;
@@ -51,7 +53,7 @@ void CUDADevice::set_error(const string &error)
 }
 
 CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
-    : Device(info, stats, profiler), texture_info(this, "__texture_info", MEM_GLOBAL)
+    : Device(info, stats, profiler), texture_info(this, "texture_info", MEM_GLOBAL)
 {
   first_error = true;
 
@@ -900,9 +902,19 @@ void CUDADevice::const_copy_to(const char *name, void *host, size_t size)
   CUdeviceptr mem;
   size_t bytes;
 
-  cuda_assert(cuModuleGetGlobal(&mem, &bytes, cuModule, name));
-  // assert(bytes == size);
-  cuda_assert(cuMemcpyHtoD(mem, host, size));
+  cuda_assert(cuModuleGetGlobal(&mem, &bytes, cuModule, "kernel_params"));
+  assert(bytes == sizeof(KernelParamsCUDA));
+
+  /* Update data storage pointers in launch parameters. */
+#  define KERNEL_DATA_ARRAY(data_type, data_name) \
+    if (strcmp(name, #data_name) == 0) { \
+      cuda_assert(cuMemcpyHtoD(mem + offsetof(KernelParamsCUDA, data_name), host, size)); \
+      return; \
+    }
+  KERNEL_DATA_ARRAY(KernelData, data)
+  KERNEL_DATA_ARRAY(IntegratorStateGPU, integrator_state)
+#  include "kernel/data_arrays.h"
+#  undef KERNEL_DATA_ARRAY
 }
 
 void CUDADevice::global_alloc(device_memory &mem)
@@ -926,7 +938,6 @@ void CUDADevice::tex_alloc(device_texture &mem)
 {
   CUDAContextScope scope(this);
 
-  string bind_name = mem.name;
   size_t dsize = datatype_size(mem.data_type);
   size_t size = mem.memory_size();
 
@@ -1191,11 +1202,11 @@ bool CUDADevice::should_use_graphics_interop()
   }
 
   vector<CUdevice> gl_devices(num_all_devices);
-  uint num_gl_devices;
+  uint num_gl_devices = 0;
   cuGLGetDevices(&num_gl_devices, gl_devices.data(), num_all_devices, CU_GL_DEVICE_LIST_ALL);
 
-  for (CUdevice gl_device : gl_devices) {
-    if (gl_device == cuDevice) {
+  for (uint i = 0; i < num_gl_devices; ++i) {
+    if (gl_devices[i] == cuDevice) {
       return true;
     }
   }

@@ -256,6 +256,7 @@ static void test_overlay_glsl_shaders()
     EXPECT_NE(OVERLAY_shader_uniform_color(), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass(false), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass(true), nullptr);
+    EXPECT_NE(OVERLAY_shader_outline_prepass_curves(), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass_gpencil(), nullptr);
     EXPECT_NE(OVERLAY_shader_outline_prepass_pointcloud(), nullptr);
     EXPECT_NE(OVERLAY_shader_extra_grid(), nullptr);
@@ -270,6 +271,7 @@ static void test_overlay_glsl_shaders()
     EXPECT_NE(OVERLAY_shader_particle_dot(), nullptr);
     EXPECT_NE(OVERLAY_shader_particle_shape(), nullptr);
     EXPECT_NE(OVERLAY_shader_sculpt_mask(), nullptr);
+    EXPECT_NE(OVERLAY_shader_sculpt_curves_selection(), nullptr);
     EXPECT_NE(OVERLAY_shader_volume_velocity(false, false), nullptr);
     EXPECT_NE(OVERLAY_shader_volume_velocity(false, true), nullptr);
     EXPECT_NE(OVERLAY_shader_volume_velocity(true, false), nullptr);
@@ -358,6 +360,8 @@ static void test_eevee_glsl_shaders_static()
   EXPECT_NE(EEVEE_shaders_volumes_integration_sh_get(), nullptr);
   EXPECT_NE(EEVEE_shaders_volumes_resolve_sh_get(false), nullptr);
   EXPECT_NE(EEVEE_shaders_volumes_resolve_sh_get(true), nullptr);
+  EXPECT_NE(EEVEE_shaders_volumes_resolve_comp_sh_get(false), nullptr);
+  EXPECT_NE(EEVEE_shaders_volumes_resolve_comp_sh_get(true), nullptr);
   EXPECT_NE(EEVEE_shaders_volumes_accum_sh_get(), nullptr);
   EXPECT_NE(EEVEE_shaders_studiolight_probe_sh_get(), nullptr);
   EXPECT_NE(EEVEE_shaders_studiolight_background_sh_get(), nullptr);
@@ -397,6 +401,7 @@ static void test_basic_glsl_shaders()
     eGPUShaderConfig sh_cfg = static_cast<eGPUShaderConfig>(i);
     BASIC_shaders_depth_sh_get(sh_cfg);
     BASIC_shaders_pointcloud_depth_sh_get(sh_cfg);
+    BASIC_shaders_curves_depth_sh_get(sh_cfg);
     BASIC_shaders_depth_conservative_sh_get(sh_cfg);
     BASIC_shaders_pointcloud_depth_conservative_sh_get(sh_cfg);
   }

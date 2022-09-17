@@ -16,9 +16,9 @@
 
 namespace blender::fn {
 
-/* --------------------------------------------------------------------
- * Field Evaluation.
- */
+/* -------------------------------------------------------------------- */
+/** \name Field Evaluation
+ * \{ */
 
 struct FieldTreeInfo {
   /**
@@ -571,16 +571,20 @@ bool IndexFieldInput::is_equal_to(const fn::FieldNode &other) const
   return dynamic_cast<const IndexFieldInput *>(&other) != nullptr;
 }
 
-/* --------------------------------------------------------------------
- * FieldNode.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Fieldnode
+ * \{ */
 
 /* Avoid generating the destructor in every translation unit. */
 FieldNode::~FieldNode() = default;
 
-/* --------------------------------------------------------------------
- * FieldOperation.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Fieldoperation
+ * \{ */
 
 FieldOperation::FieldOperation(std::shared_ptr<const MultiFunction> function,
                                Vector<GField> inputs)
@@ -653,9 +657,11 @@ FieldOperation::FieldOperation(const MultiFunction &function, Vector<GField> inp
   field_inputs_ = combine_field_inputs(inputs_);
 }
 
-/* --------------------------------------------------------------------
- * FieldInput.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Fieldinput
+ * \{ */
 
 FieldInput::FieldInput(const CPPType &type, std::string debug_name)
     : FieldNode(FieldNodeType::Input), type_(&type), debug_name_(std::move(debug_name))
@@ -669,9 +675,11 @@ FieldInput::FieldInput(const CPPType &type, std::string debug_name)
 /* Avoid generating the destructor in every translation unit. */
 FieldInput::~FieldInput() = default;
 
-/* --------------------------------------------------------------------
- * FieldConstant.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Fieldconstant
+ * \{ */
 
 FieldConstant::FieldConstant(const CPPType &type, const void *value)
     : FieldNode(FieldNodeType::Constant), type_(type)
@@ -703,25 +711,18 @@ GPointer FieldConstant::value() const
   return {type_, value_};
 }
 
-/* --------------------------------------------------------------------
- * FieldEvaluator.
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Fieldevaluator
+ * \{ */
 
 static IndexMask index_mask_from_selection(const IndexMask full_mask,
-                                           VArray<bool> &selection,
+                                           const VArray<bool> &selection,
                                            ResourceScope &scope)
 {
-  if (selection.is_span()) {
-    Span<bool> span = selection.get_internal_span();
-    return index_mask_ops::find_indices_based_on_predicate(
-        full_mask, 4096, scope.construct<Vector<int64_t>>(), [&](const int curve_index) {
-          return span[curve_index];
-        });
-  }
-  return index_mask_ops::find_indices_based_on_predicate(
-      full_mask, 1024, scope.construct<Vector<int64_t>>(), [&](const int curve_index) {
-        return selection[curve_index];
-      });
+  return index_mask_ops::find_indices_from_virtual_array(
+      full_mask, selection, 1024, scope.construct<Vector<int64_t>>());
 }
 
 int FieldEvaluator::add_with_destination(GField field, GVMutableArray dst)
@@ -764,12 +765,6 @@ static IndexMask evaluate_selection(const Field<bool> &selection_field,
   if (selection_field) {
     VArray<bool> selection =
         evaluate_fields(scope, {selection_field}, full_mask, context)[0].typed<bool>();
-    if (selection.is_single()) {
-      if (selection.get_internal_single()) {
-        return full_mask;
-      }
-      return IndexRange(0);
-    }
     return index_mask_from_selection(full_mask, selection, scope);
   }
   return full_mask;
@@ -814,5 +809,7 @@ IndexMask FieldEvaluator::get_evaluated_selection_as_mask()
   BLI_assert(is_evaluated_);
   return selection_mask_;
 }
+
+/** \} */
 
 }  // namespace blender::fn

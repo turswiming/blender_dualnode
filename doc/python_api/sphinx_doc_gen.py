@@ -142,6 +142,26 @@ def handle_args():
     )
 
     parser.add_argument(
+        "--api-changelog-generate",
+        dest="changelog",
+        default=False,
+        action='store_true',
+        help="Generate the API changelog RST file "
+        "(default=False, requires `--api-dump-index-path` parameter)",
+        required=False,
+    )
+
+    parser.add_argument(
+        "--api-dump-index-path",
+        dest="api_dump_index_path",
+        metavar='FILE',
+        default=None,
+        help="Path to the API dump index JSON file "
+        "(required when `--api-changelog-generate` is True)",
+        required=False,
+    )
+
+    parser.add_argument(
         "-o", "--output",
         dest="output_dir",
         type=str,
@@ -367,23 +387,35 @@ EXAMPLE_SET_USED = set()
 # RST files directory.
 RST_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "rst"))
 
-# extra info, not api reference docs
-# stored in ./rst/info_*
+# Extra info, not api reference docs stored in `./rst/info_*`.
+# Pairs of (file, description), the title makes from the RST files are displayed before the description.
 INFO_DOCS = (
     ("info_quickstart.rst",
-     "Quickstart: New to Blender or scripting and want to get your feet wet?"),
+     "New to Blender or scripting and want to get your feet wet?"),
     ("info_overview.rst",
-     "API Overview: A more complete explanation of Python integration"),
+     "A more complete explanation of Python integration."),
     ("info_api_reference.rst",
-     "API Reference Usage: examples of how to use the API reference docs"),
+     "Examples of how to use the API reference docs."),
     ("info_best_practice.rst",
-     "Best Practice: Conventions to follow for writing good scripts"),
+     "Conventions to follow for writing good scripts."),
     ("info_tips_and_tricks.rst",
-     "Tips and Tricks: Hints to help you while writing scripts for Blender"),
+     "Hints to help you while writing scripts for Blender."),
     ("info_gotcha.rst",
-     "Gotcha's: Some of the problems you may encounter when writing scripts"),
-    ("change_log.rst", "Change Log: List of changes since last Blender release"),
+     "Some of the problems you may encounter when writing scripts."),
+    ("info_advanced.rst",
+     "Topics which may not be required for typical usage."),
+    ("change_log.rst",
+     "List of changes since last Blender release"),
 )
+# Referenced indirectly.
+INFO_DOCS_OTHER = (
+    # Included by: `info_advanced.rst`.
+    "info_advanced_blender_as_bpy.rst",
+)
+
+# Hide the actual TOC, use a separate list that links to the items.
+# This is done so a short description can be included with each link.
+USE_INFO_DOCS_FANCY_INDEX = True
 
 # only support for properties atm.
 RNA_BLACKLIST = {
@@ -513,6 +545,42 @@ if ARGS.sphinx_build_pdf:
         ]
         sphinx_make_pdf_log = os.path.join(ARGS.output_dir, ".latex_make.log")
         SPHINX_MAKE_PDF_STDOUT = open(sphinx_make_pdf_log, "w", encoding="utf-8")
+
+
+# --------------------------------CHANGELOG GENERATION--------------------------------------
+
+def generate_changelog():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "sphinx_changelog_gen",
+        os.path.abspath(os.path.join(SCRIPT_DIR, "sphinx_changelog_gen.py")),
+    )
+    sphinx_changelog_gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sphinx_changelog_gen)
+
+    API_DUMP_INDEX_FILEPATH = ARGS.api_dump_index_path
+    API_DUMP_ROOT = os.path.dirname(API_DUMP_INDEX_FILEPATH)
+    API_DUMP_FILEPATH = os.path.abspath(os.path.join(API_DUMP_ROOT, BLENDER_VERSION_DOTS, "api_dump.json"))
+    API_CHANGELOG_FILEPATH = os.path.abspath(os.path.join(SPHINX_IN_TMP, "change_log.rst"))
+
+    sphinx_changelog_gen.main((
+        "--",
+        "--indexpath",
+        API_DUMP_INDEX_FILEPATH,
+        "dump",
+        "--filepath-out",
+        API_DUMP_FILEPATH,
+    ))
+
+    sphinx_changelog_gen.main((
+        "--",
+        "--indexpath",
+        API_DUMP_INDEX_FILEPATH,
+        "changelog",
+        "--filepath-out",
+        API_CHANGELOG_FILEPATH,
+    ))
+
 
 # --------------------------------API DUMP--------------------------------------
 
@@ -1075,6 +1143,7 @@ def pymodule2sphinx(basepath, module_name, module, title, module_all_extra):
 # Changes In Blender will force errors here.
 context_type_map = {
     # context_member: (RNA type, is_collection)
+    "active_action": ("Action", False),
     "active_annotation_layer": ("GPencilLayer", False),
     "active_bone": ("EditBone", False),
     "active_file": ("FileSelectEntry", False),
@@ -1413,7 +1482,7 @@ def pyrna2sphinx(basepath):
 
         struct_module_name = struct.module_name
         if USE_ONLY_BUILTIN_RNA_TYPES:
-            assert(struct_module_name == "bpy.types")
+            assert struct_module_name == "bpy.types"
         filepath = os.path.join(basepath, "%s.%s.rst" % (struct_module_name, struct.identifier))
         file = open(filepath, "w", encoding="utf-8")
         fw = file.write
@@ -1473,7 +1542,8 @@ def pyrna2sphinx(basepath):
         else:
             fw(".. class:: %s\n\n" % struct_id)
 
-        fw("   %s\n\n" % struct.description)
+        write_indented_lines("   ", fw, struct.description, False)
+        fw("\n")
 
         # Properties sorted in alphabetical order.
         sorted_struct_properties = struct.properties[:]
@@ -1846,7 +1916,7 @@ except ModuleNotFoundError:
     # fw("        'collapse_navigation': True,\n")
     fw("        'sticky_navigation': False,\n")
     fw("        'navigation_depth': 1,\n")
-    # fw("        'includehidden': True,\n")
+    fw("        'includehidden': False,\n")
     # fw("        'titles_only': False\n")
     fw("    }\n\n")
 
@@ -1918,11 +1988,20 @@ def write_rst_index(basepath):
 
     if not EXCLUDE_INFO_DOCS:
         fw(".. toctree::\n")
+        if USE_INFO_DOCS_FANCY_INDEX:
+            fw("   :hidden:\n")
         fw("   :maxdepth: 1\n")
         fw("   :caption: Documentation\n\n")
         for info, info_desc in INFO_DOCS:
-            fw("   %s <%s>\n" % (info_desc, info))
+            fw("   %s\n" % info)
         fw("\n")
+
+        if USE_INFO_DOCS_FANCY_INDEX:
+            # Show a fake TOC, allowing for an extra description to be shown as well as the title.
+            fw(title_string("Documentation", "="))
+            for info, info_desc in INFO_DOCS:
+                fw("- :doc:`%s`: %s\n" % (info.removesuffix(".rst"), info_desc))
+            fw("\n")
 
     fw(".. toctree::\n")
     fw("   :maxdepth: 1\n")
@@ -2256,6 +2335,8 @@ def copy_handwritten_rsts(basepath):
     if not EXCLUDE_INFO_DOCS:
         for info, _info_desc in INFO_DOCS:
             shutil.copy2(os.path.join(RST_DIR, info), basepath)
+        for info in INFO_DOCS_OTHER:
+            shutil.copy2(os.path.join(RST_DIR, info), basepath)
 
     # TODO: put this docs in Blender's code and use import as per modules above.
     handwritten_modules = [
@@ -2472,6 +2553,9 @@ def main():
         shutil.rmtree(SPHINX_IN_TMP, True)
 
     rna2sphinx(SPHINX_IN_TMP)
+
+    if ARGS.changelog:
+        generate_changelog()
 
     if ARGS.full_rebuild:
         # Only for full updates.
