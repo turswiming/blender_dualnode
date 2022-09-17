@@ -478,32 +478,35 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
     ///////
     bool is_transmission3 = surface_shader_is_transmission_sc(sc, *omega_in);
     int label2 = bsdf_label(kg, sc, is_transmission3);
-
-    if (*bsdf_pdf > 0.f && label != label2) {
-      std::cout << "LABEL ERROR: " << std::endl;
-      std::cout << "LABEL:  reflect = " << (label & LABEL_REFLECT)
-                << "\t transmit = " << (label & LABEL_TRANSMIT)
-                << "\t diffuse = " << (label & LABEL_DIFFUSE)
-                << "\t glossy = " << (label & LABEL_GLOSSY)
-                << "\t singular = " << (label & LABEL_SINGULAR) << std::endl;
-      std::cout << "LABEL2: reflect = " << (label2 & LABEL_REFLECT)
-                << "\t transmit = " << (label2 & LABEL_TRANSMIT)
-                << "\t diffuse = " << (label2 & LABEL_DIFFUSE)
-                << "\t glossy = " << (label2 & LABEL_GLOSSY)
-                << "\t singular = " << (label2 & LABEL_SINGULAR) << std::endl;
-      // int label2 = bsdf_label(kg, sc, is_transmission3);
-    }
-
+    /*
+        if (*bsdf_pdf > 0.f && label != label2) {
+          std::cout << "LABEL ERROR: " << std::endl;
+          std::cout << "LABEL:  reflect = " << (label & LABEL_REFLECT)
+                    << "\t transmit = " << (label & LABEL_TRANSMIT)
+                    << "\t diffuse = " << (label & LABEL_DIFFUSE)
+                    << "\t glossy = " << (label & LABEL_GLOSSY)
+                    << "\t singular = " << (label & LABEL_SINGULAR) << std::endl;
+          std::cout << "LABEL2: reflect = " << (label2 & LABEL_REFLECT)
+                    << "\t transmit = " << (label2 & LABEL_TRANSMIT)
+                    << "\t diffuse = " << (label2 & LABEL_DIFFUSE)
+                    << "\t glossy = " << (label2 & LABEL_GLOSSY)
+                    << "\t singular = " << (label2 & LABEL_SINGULAR) << std::endl;
+          // int label2 = bsdf_label(kg, sc, is_transmission3);
+        }
+    */
     float2 sampled_rougness2;
     float eta2;
     bsdf_roughness_eta(kg, sc, &sampled_rougness2, &eta2);
     if (*bsdf_pdf > 0.f && (*eta != eta2 || sampled_rougness->x != sampled_rougness2.x ||
                             sampled_rougness->y != sampled_rougness2.y)) {
-      std::cout << "ROUGHNESS ETA ERROR: " << std::endl;
-      std::cout << "ETA:  eta = " << *eta << "\t eta2 = " << eta2
-                << "\t rough.x = " << sampled_rougness->x << "\t rough.y = " << sampled_rougness->y
-                << "\t rough2.x = " << sampled_rougness2.x
-                << "\t rough2.y = " << sampled_rougness2.y << std::endl;
+      /*
+            std::cout << "ROUGHNESS ETA ERROR: " << std::endl;
+            std::cout << "ETA:  eta = " << *eta << "\t eta2 = " << eta2
+                      << "\t rough.x = " << sampled_rougness->x << "\t rough.y = " <<
+         sampled_rougness->y
+                      << "\t rough2.x = " << sampled_rougness2.x
+                      << "\t rough2.y = " << sampled_rougness2.y << std::endl;
+      */
       bsdf_roughness_eta(kg, sc, &sampled_rougness2, &eta2);
     }
 
