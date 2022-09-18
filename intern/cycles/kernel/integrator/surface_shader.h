@@ -14,6 +14,8 @@
 
 #include "kernel/svm/svm.h"
 
+#include "util/log.h"
+
 #ifdef __OSL__
 #  include "kernel/osl/shader.h"
 #endif
@@ -184,6 +186,49 @@ ccl_device_inline bool surface_shader_is_transmission_sc(const ShaderClosure *sc
                                                          const float3 omega_in)
 {
   return dot(sc->N, omega_in) < 0.0f;
+}
+
+ccl_device_inline bool surface_shader_validate_bsdf_label(const KernelGlobals kg,
+                                                          const ShaderClosure *sc,
+                                                          const float3 *omega_in,
+                                                          const int org_label)
+{
+  bool is_transmission = surface_shader_is_transmission_sc(sc, *omega_in);
+  int comp_label = bsdf_label(kg, sc, is_transmission);
+  if (org_label != comp_label) {
+    VLOG_DEBUG << "VALIDATE BSDF LABEL: False";
+    VLOG_DEBUG << "org_label:  reflect = " << (org_label & LABEL_REFLECT)
+               << "\t transmit = " << (org_label & LABEL_TRANSMIT)
+               << "\t diffuse = " << (org_label & LABEL_DIFFUSE)
+               << "\t glossy = " << (org_label & LABEL_GLOSSY)
+               << "\t singular = " << (org_label & LABEL_SINGULAR);
+    VLOG_DEBUG << "comp_label: reflect = " << (comp_label & LABEL_REFLECT)
+               << "\t transmit = " << (comp_label & LABEL_TRANSMIT)
+               << "\t diffuse = " << (comp_label & LABEL_DIFFUSE)
+               << "\t glossy = " << (comp_label & LABEL_GLOSSY)
+               << "\t singular = " << (comp_label & LABEL_SINGULAR);
+    return false;
+  }
+  return true;
+}
+
+ccl_device_inline bool surface_shader_validate_bsdf_roughness_eta(const KernelGlobals kg,
+                                                                  const ShaderClosure *sc,
+                                                                  const float2 org_roughness,
+                                                                  const float org_eta)
+{
+  float2 comp_roughness;
+  float comp_eta;
+  bsdf_roughness_eta(kg, sc, &comp_roughness, &comp_eta);
+  if ((org_eta != comp_eta) || (org_roughness.x != comp_roughness.x) ||
+      (org_roughness.y != comp_roughness.y)) {
+    VLOG_DEBUG << "VALIDATE ROUGHNESS ETA: FALSE";
+    VLOG_DEBUG << "org_eta = " << org_eta << "\t comp_eta = " << comp_eta << "\t org_roughness = ["
+               << org_roughness.x << "\t" << org_roughness.y << "]\t comp_roughness = ["
+               << comp_roughness.x << "\t" << comp_roughness.y << "]";
+    return false;
+  }
+  return true;
 }
 
 ccl_device_forceinline bool _surface_shader_exclude(ClosureType type, uint light_shader_flags)
@@ -472,45 +517,13 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
     *guided_bsdf_pdf = 0.0f;
     label = bsdf_sample(
         kg, sd, sc, rand_bsdf.x, rand_bsdf.y, &eval, omega_in, bsdf_pdf, sampled_rougness, eta);
-#  ifdef WITH_CYCLES_DEBUG
-    ///////
-    // validation code to test the bsdf_label function
-    ///////
-    bool is_transmission3 = surface_shader_is_transmission_sc(sc, *omega_in);
-    int label2 = bsdf_label(kg, sc, is_transmission3);
-    /*
-        if (*bsdf_pdf > 0.f && label != label2) {
-          std::cout << "LABEL ERROR: " << std::endl;
-          std::cout << "LABEL:  reflect = " << (label & LABEL_REFLECT)
-                    << "\t transmit = " << (label & LABEL_TRANSMIT)
-                    << "\t diffuse = " << (label & LABEL_DIFFUSE)
-                    << "\t glossy = " << (label & LABEL_GLOSSY)
-                    << "\t singular = " << (label & LABEL_SINGULAR) << std::endl;
-          std::cout << "LABEL2: reflect = " << (label2 & LABEL_REFLECT)
-                    << "\t transmit = " << (label2 & LABEL_TRANSMIT)
-                    << "\t diffuse = " << (label2 & LABEL_DIFFUSE)
-                    << "\t glossy = " << (label2 & LABEL_GLOSSY)
-                    << "\t singular = " << (label2 & LABEL_SINGULAR) << std::endl;
-          // int label2 = bsdf_label(kg, sc, is_transmission3);
-        }
-    */
-    float2 sampled_rougness2;
-    float eta2;
-    bsdf_roughness_eta(kg, sc, &sampled_rougness2, &eta2);
-    if (*bsdf_pdf > 0.f && (*eta != eta2 || sampled_rougness->x != sampled_rougness2.x ||
-                            sampled_rougness->y != sampled_rougness2.y)) {
-      /*
-            std::cout << "ROUGHNESS ETA ERROR: " << std::endl;
-            std::cout << "ETA:  eta = " << *eta << "\t eta2 = " << eta2
-                      << "\t rough.x = " << sampled_rougness->x << "\t rough.y = " <<
-         sampled_rougness->y
-                      << "\t rough2.x = " << sampled_rougness2.x
-                      << "\t rough2.y = " << sampled_rougness2.y << std::endl;
-      */
-      bsdf_roughness_eta(kg, sc, &sampled_rougness2, &eta2);
+#  if defined(WITH_CYCLES_DEBUG) && defined(__PATH_GUIDING__)
+    /* validate the the bsdf_label and bsdf_roughness_eta functions
+     * by estimating the values after a bsdf sample*/
+    if (*bsdf_pdf > 0.f) {
+      kernel_assert(surface_shader_validate_bsdf_label(kg, sc, oemga_in, label));
+      kernel_assert(surface_shader_validate_bsdf_roughness_eta(kg, sc, sampled_roughness, eta));
     }
-
-    ////////
 #  endif
 
     if (*bsdf_pdf != 0.0f) {

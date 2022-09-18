@@ -852,10 +852,6 @@ ccl_device_forceinline void integrate_volume_direct_light(
       state, path, transmission_bounce);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, throughput) = throughput_phase;
 
-#  ifdef __PATH_GUIDING__
-  // TODO add scattered contriubtion
-#  endif
-
   if (kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_PASS) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unshadowed_throughput) = throughput;
   }
