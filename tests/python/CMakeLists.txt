@@ -644,7 +644,6 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
       camera
       bsdf
       hair
-      guiding
       image_colorspace
       image_data_types
       image_mapping
@@ -676,6 +675,10 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
 
     if(WITH_OPENIMAGEDENOISE)
       list(APPEND render_tests denoise)
+    endif()
+
+    if(WITH_CYCLES_PATH_GUIDING)
+      list(APPEND render_tests guiding)
     endif()
 
     if(WITH_OPENGL_RENDER_TESTS)
