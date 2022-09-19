@@ -18,8 +18,6 @@
 
 #include "DNA_meshdata_types.h"
 
-#include "PIL_time_utildefines.h"
-
 namespace blender::bke::uv_islands {
 /*
  * When enabled various parts of the code would generate an SVG file to visual see how the
@@ -128,7 +126,6 @@ struct MeshData {
         mloop(mloop),
         mloopuv(mloopuv)
   {
-    TIMEIT_START(init_mesh_data);
     init_vertices();
     init_primitives();
     init_edges();
@@ -149,7 +146,6 @@ struct MeshData {
       }
     }
 #endif
-    TIMEIT_END(init_mesh_data);
   }
 
   void init_vertices()
