@@ -187,7 +187,7 @@ class RenderScheduler {
    * times, and so on. */
   string full_report() const;
 
-  void set_limit_spp_for_guiding(const bool limit_spp);
+  void set_limit_samples_per_update(const int limit_samples);
 
  protected:
   /* Check whether all work has been scheduled and time limit was not exceeded.
@@ -455,7 +455,7 @@ class RenderScheduler {
 
   /* If the number of samples per rendering progression should be limited because of path guiding
    * being activated or is still inside its training phase */
-  bool limit_spp_for_guiding_ = false;
+  int limit_samples_per_update_ = 0;
 };
 
 int calculate_resolution_divider_for_resolution(int width, int height, int resolution);

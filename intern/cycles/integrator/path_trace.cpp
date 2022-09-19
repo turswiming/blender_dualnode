@@ -1322,14 +1322,20 @@ void PathTrace::guiding_prepare_structures()
     path_trace_work->guiding_init_kernel_globals(guiding_field_.get(),
                                                  guiding_sample_data_storage_.get());
   }
+
   if ((guiding_params_.training_iterations == -1) ||
       (guiding_field_->GetIteration() < guiding_params_.training_iterations)) {
+    /* For training the guiding distribution we need to force the number of samples
+     * per update to be limited, for reproducible results and reasonable training size.
+     *
+     * Idea: we could stochastically discard samples with a probability of 1/num_samples_per_update
+     * we can then update only after the num_samples_per_update iterations are rendered.  */
     device_scene_->data.integrator.train_guiding = true;
-    render_scheduler_.set_limit_spp_for_guiding(true);
+    render_scheduler_.set_limit_samples_per_update(4);
   }
   else {
     device_scene_->data.integrator.train_guiding = false;
-    render_scheduler_.set_limit_spp_for_guiding(false);
+    render_scheduler_.set_limit_samples_per_update(0);
   }
 #endif
 }
