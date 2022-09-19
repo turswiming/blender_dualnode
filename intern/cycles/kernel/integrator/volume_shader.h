@@ -97,7 +97,7 @@ ccl_device_inline void volume_shader_prepare_guiding(KernelGlobals kg,
                                                      ccl_private const RNGState *rng_state,
                                                      const float3 P,
                                                      const float3 W,
-                                                     ccl_private const ShaderVolumePhases *phases,
+                                                     ccl_private ShaderVolumePhases *phases,
                                                      const VolumeSampleMethod direct_sample_method)
 {
   const bool guiding = kernel_data.integrator.use_guiding;
@@ -112,28 +112,60 @@ ccl_device_inline void volume_shader_prepare_guiding(KernelGlobals kg,
 
   int num_phases = phases->num_closure;
 
-  if (guiding && volume_guiding && (direct_sample_method == VOLUME_SAMPLE_DISTANCE)) {
+  if (guiding && volume_guiding /*&& (direct_sample_method == VOLUME_SAMPLE_DISTANCE)*/) {
 
-    if (num_phases == 1) {  // for now we only support a single phase function
-      ccl_private const ShaderVolumeClosure *svc = &phases->closure[0];
+    if (num_phases > 0) {
+
+      grand = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_PHASE_GUIDING);
+      int phaseId = 0;
+      float phaseSampleWeight = 1.0f;
+      /* if we have more than one ohase function we select one random
+       * based on its sampleweight to caclulate the product distribution
+       * for guiding */
+      if (num_phases > 1) {
+        /* pick a phase closure based on sample weights */
+        float sum = 0.0f;
+
+        for (phaseId = 0; phaseId < num_phases; phaseId++) {
+          ccl_private const ShaderVolumeClosure *svc = &phases->closure[phaseId];
+          sum += svc->sample_weight;
+        }
+
+        float r = grand * sum;
+        float partial_sum = 0.0f;
+
+        for (phaseId = 0; phaseId < num_phases; phaseId++) {
+          ccl_private const ShaderVolumeClosure *svc = &phases->closure[phaseId];
+          float next_sum = partial_sum + svc->sample_weight;
+
+          if (r <= next_sum) {
+            // Rescale to reuse
+            grand = (r - partial_sum) / svc->sample_weight;
+            phaseSampleWeight = svc->sample_weight / sum;
+            break;
+          }
+
+          partial_sum = next_sum;
+        }
+        /* adjust the sample weight of the component used for guiding */
+        phases->closure[phaseId].sample_weight *= volume_guiding_probability;
+      }
+
+      /* get the selected pahse function and apply its product with the
+       * guiding distriubtion*/
+      ccl_private const ShaderVolumeClosure *svc = &phases->closure[phaseId];
       const float mean_cosine = svc->g;
 
-      // if (fabsf(mean_cosine) < 0.1f ) { // for now we only support HG phase function with very
-      // low anisotropy
-      if (true) {
-        grand = path_state_rng_1D(kg, rng_state, PRNG_VOLUME_PHASE_GUIDING);
+      pgl_point3f pgl_P = openpgl::cpp::Point3(P[0], P[1], P[2]);
+      pgl_point3f pgl_W = openpgl::cpp::Vector3(W[0], W[1], W[2]);
 
-        pgl_point3f pgl_P = openpgl::cpp::Point3(P[0], P[1], P[2]);
-        pgl_point3f pgl_W = openpgl::cpp::Vector3(W[0], W[1], W[2]);
+      useGuiding = state->guiding.volume_sampling_distribution->Init(
+          kg->opgl_guiding_field, pgl_P, grand, true);
 
-        useGuiding = state->guiding.volume_sampling_distribution->Init(
-            kg->opgl_guiding_field, pgl_P, grand, true);
-
-        if (useGuiding) {
-          state->guiding.volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(
-              pgl_W, mean_cosine);
-          guiding_sampling_prob = volume_guiding_probability;
-        }
+      if (useGuiding) {
+        state->guiding.volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(
+            pgl_W, mean_cosine);
+        guiding_sampling_prob = volume_guiding_probability * phaseSampleWeight;
       }
     }
   }
