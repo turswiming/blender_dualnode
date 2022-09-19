@@ -57,10 +57,12 @@ void PathTraceWorkCPU::init_execution()
   device_->get_cpu_kernel_thread_globals(kernel_thread_globals_);
 }
 
-#if defined(WITH_PATH_GUIDING)
+#ifdef WITH_PATH_GUIDING
 /* Note: It seems that this is called before every rendering iteration/progression and not once per
  * rendering. May be we find a way to call it only once per rendering. */
-void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field, void *sample_data_storage)
+void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field,
+                                                   void *sample_data_storage,
+                                                   const bool train)
 {
   /* Linking the global guiding structures (e.g., Field and SampleStorage) to the per-thread
    * kernel globals. */
@@ -69,30 +71,29 @@ void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field, void *sa
 #  endif
   for (int thread_index = 0; thread_index < kernel_thread_globals_.size(); thread_index++) {
 #  if PATH_GUIDING_LEVEL >= 3
+    CPUKernelThreadGlobals &kg = kernel_thread_globals_[thread_index];
 
-    kernel_thread_globals_[thread_index].opgl_sample_data_storage = (openpgl::cpp::SampleStorage *)
-        sample_data_storage;
+    kg.opgl_sample_data_storage = (openpgl::cpp::SampleStorage *)sample_data_storage;
 #  endif
 
 #  if PATH_GUIDING_LEVEL >= 4
     if (field) {
-      kernel_thread_globals_[thread_index].opgl_guiding_field = field;
-      if (kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution)
-        delete kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution;
-      kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution =
-          new openpgl::cpp::SurfaceSamplingDistribution(field);
-      if (kernel_thread_globals_[thread_index].opgl_volume_sampling_distribution)
-        delete kernel_thread_globals_[thread_index].opgl_volume_sampling_distribution;
-      kernel_thread_globals_[thread_index].opgl_volume_sampling_distribution =
-          new openpgl::cpp::VolumeSamplingDistribution(field);
+      kg.opgl_guiding_field = field;
+      if (kg.opgl_surface_sampling_distribution)
+        delete kg.opgl_surface_sampling_distribution;
+      kg.opgl_surface_sampling_distribution = new openpgl::cpp::SurfaceSamplingDistribution(field);
+      if (kg.opgl_volume_sampling_distribution)
+        delete kg.opgl_volume_sampling_distribution;
+      kg.opgl_volume_sampling_distribution = new openpgl::cpp::VolumeSamplingDistribution(field);
     }
     else {
-      kernel_thread_globals_[thread_index].opgl_guiding_field = nullptr;
-      kernel_thread_globals_[thread_index].opgl_surface_sampling_distribution = nullptr;
-      kernel_thread_globals_[thread_index].opgl_volume_sampling_distribution = nullptr;
+      kg.opgl_guiding_field = nullptr;
+      kg.opgl_surface_sampling_distribution = nullptr;
+      kg.opgl_volume_sampling_distribution = nullptr;
     }
-
 #  endif
+
+    kg.data.integrator.train_guiding = train;
   }
 }
 #endif

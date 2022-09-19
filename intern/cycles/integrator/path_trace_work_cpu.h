@@ -66,7 +66,9 @@ class PathTraceWorkCPU : public PathTraceWork {
    * global guiding field and the sample data storage as well es initializes the per-thread
    * guided sampling distrubtions (e.g., SurfaceSamplingDistribution and
    * VolumeSamplingDistribution). */
-  void guiding_init_kernel_globals(void *guiding_field, void *sample_data_storage) override;
+  void guiding_init_kernel_globals(void *guiding_field,
+                                   void *sample_data_storage,
+                                   const bool train) override;
 #endif
 
  protected:
