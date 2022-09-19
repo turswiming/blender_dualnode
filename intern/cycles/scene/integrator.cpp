@@ -65,13 +65,13 @@ NODE_DEFINE(Integrator)
   guiding_ditribution_enum.insert("DIRECTIONAL_QUAD_TREE", GUIDING_TYPE_DIRECTIONAL_QUAD_TREE);
   guiding_ditribution_enum.insert("VMM", GUIDING_TYPE_VMM);
 
-  SOCKET_BOOLEAN(use_guiding, "Guiding", true);
-  SOCKET_BOOLEAN(deterministic_guiding, "Deterministic", false);
+  SOCKET_BOOLEAN(use_guiding, "Guiding", false);
+  SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
   SOCKET_BOOLEAN(use_surface_guiding, "Surface Guiding", true);
   SOCKET_FLOAT(surface_guiding_probability, "Surface Guiding Probability", 0.5f);
   SOCKET_BOOLEAN(use_volume_guiding, "Volume Guiding", true);
   SOCKET_FLOAT(volume_guiding_probability, "Volume Guiding Probability", 0.5f);
-  SOCKET_INT(training_iterations, "Training Iterations", 128);
+  SOCKET_INT(training_samples, "Training Samples", 128);
   SOCKET_BOOLEAN(use_guide_direct_light, "Guide Direct Light", true);
   SOCKET_BOOLEAN(use_mis_weights, "Use MIS Weights", true);
   SOCKET_ENUM(guiding_distribution_type,
@@ -395,7 +395,7 @@ GuidingParams Integrator::get_guiding_params(const Device *device) const
                                       volume_guiding_probability > 0.0f;
   guiding_params.use = guiding_params.use_surface_guiding || guiding_params.use_volume_guiding;
   guiding_params.type = guiding_distribution_type;
-  guiding_params.training_iterations = training_iterations;
+  guiding_params.training_samples = training_samples;
   guiding_params.deterministic = deterministic_guiding;
 
   return guiding_params;

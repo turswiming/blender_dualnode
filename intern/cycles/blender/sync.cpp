@@ -414,12 +414,12 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
 #endif
 
   integrator->set_use_guiding(get_boolean(cscene, "use_guiding"));
-  integrator->set_deterministic_guiding(get_boolean(cscene, "deterministic_guiding"));
   integrator->set_use_surface_guiding(get_boolean(cscene, "use_surface_guiding"));
   integrator->set_use_volume_guiding(get_boolean(cscene, "use_volume_guiding"));
-  integrator->set_training_iterations(get_int(cscene, "training_iterations"));
+  integrator->set_training_samples(get_int(cscene, "training_samples"));
 
   if (use_developer_ui) {
+    integrator->set_deterministic_guiding(get_boolean(cscene, "use_deterministic_guiding"));
     integrator->set_surface_guiding_probability(get_float(cscene, "surface_guiding_probability"));
     integrator->set_volume_guiding_probability(get_float(cscene, "volume_guiding_probability"));
     integrator->set_use_guide_direct_light(get_boolean(cscene, "use_guide_direct_light"));

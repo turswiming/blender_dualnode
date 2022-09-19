@@ -15,7 +15,7 @@ struct GuidingParams {
   bool use_volume_guiding = false;
 
   GuidingDistributionType type = GUIDING_TYPE_PARALLAX_AWARE_VMM;
-  int training_iterations = 128;
+  int training_samples = 128;
   bool deterministic = false;
 
   GuidingParams() = default;
@@ -24,7 +24,7 @@ struct GuidingParams {
   {
     return !((use == other.use) && (use_surface_guiding == other.use_surface_guiding) &&
              (use_volume_guiding == other.use_volume_guiding) && (type == other.type) &&
-             (training_iterations == other.training_iterations) &&
+             (training_samples == other.training_samples) &&
              (deterministic == other.deterministic));
   }
 };

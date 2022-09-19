@@ -1318,8 +1318,8 @@ void PathTrace::set_guiding_params(const GuidingParams &guiding_params, const bo
 void PathTrace::guiding_prepare_structures()
 {
 #ifdef WITH_PATH_GUIDING
-  const bool train = (guiding_params_.training_iterations == -1) ||
-                     (guiding_field_->GetIteration() < guiding_params_.training_iterations);
+  const bool train = (guiding_params_.training_samples == 0) ||
+                     (guiding_field_->GetIteration() < guiding_params_.training_samples);
 
   for (auto &&path_trace_work : path_trace_works_) {
     path_trace_work->guiding_init_kernel_globals(

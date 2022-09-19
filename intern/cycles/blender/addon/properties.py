@@ -364,7 +364,9 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     preview_samples: IntProperty(
         name="Viewport Samples",
         description="Number of samples to render in the viewport, unlimited if 0",
-        min=0, max=(1 << 24),
+        min=0,
+        soft_min=1,
+        max=(1 << 24),
         default=1024,
     )
 
@@ -521,12 +523,12 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=False,
     )
 
-    deterministic_guiding: BoolProperty(
+    use_deterministic_guiding: BoolProperty(
         name="Deterministic",
         description="Makes path guiding deterministic which means renderings will be"
-        "reproducable (i.e., same pixel noise/value). This feature increases the"
-        "compute time during training",
-        default=False,
+        "reproducible with the same pixel values every time. This feature slows down"
+        "training",
+        default=True,
     )
 
     guiding_distribution_type: EnumProperty(
@@ -555,13 +557,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
-    training_iterations: IntProperty(
-        name="Training Iterations",
-        description="The number of training iterations (i.e., SPPs) used for the guiding structures."
-        "If the this number is reached the guiding structure is used for sampling only which avoids the"
-        " computational over head of the training process."
-        "A value of -1 leads to continuous learning.",
-        min=-1,
+    training_samples: IntProperty(
+        name="Training Samples",
+        description="The maximum number of samples used for training path guiding. "
+        "Higher samples lead to more accurate guiding, however may also unnecessarily slow "
+        "down rendering once guiding is accurate enough. "
+        "A value 0 will continue training until the last sample",
+        min=0,
+        soft_min=1,
         default=128,
     )
 
