@@ -83,6 +83,10 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
                                                      const float3 N,
                                                      int emitter_index)
 {
+  if (emitter_index < 0) {
+    return 0.0f;
+  }
+
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter_index);
   const int prim = kemitter->prim_id;
@@ -235,7 +239,6 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
     total_emitter_importance += light_tree_emitter_importance(kg, P, N, prim_index);
   }
 
-  /* to-do: need to handle a case when total importance is 0. */
   if (total_emitter_importance == 0.0f) {
     return -1;
   }
