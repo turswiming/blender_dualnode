@@ -39,7 +39,7 @@ ccl_device_forceinline void guiding_record_surface_segment(KernelGlobals kg,
                                                            ccl_private const ShaderData *sd)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -69,7 +69,7 @@ ccl_device_forceinline void guiding_record_surface_bounce(KernelGlobals kg,
                                                           const float eta)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const float min_roughness = safe_sqrtf(fminf(roughness.x, roughness.y));
@@ -98,7 +98,7 @@ ccl_device_forceinline void guiding_record_surface_emission(KernelGlobals kg,
                                                             const float mis_weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const float3 Le_rgb = spectrum_to_rgb(Le);
@@ -120,7 +120,7 @@ ccl_device_forceinline void guiding_record_bssrdf_segment(KernelGlobals kg,
                                                           const float3 I)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const pgl_vec3f zero = guiding_vec3f(zero_float3());
@@ -144,7 +144,7 @@ ccl_device_forceinline void guiding_record_bssrdf_weight(KernelGlobals kg,
                                                          const Spectrum weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const float3 weight_rgb = spectrum_to_rgb(weight);
@@ -170,7 +170,7 @@ ccl_device_forceinline void guiding_record_bssrdf_bounce(KernelGlobals kg,
                                                          const float3 omega_in)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const float3 normal = clamp(N, -one_float3(), one_float3());
@@ -195,7 +195,7 @@ ccl_device_forceinline void guiding_record_volume_segment(KernelGlobals kg,
                                                           const float3 I)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const pgl_vec3f zero = guiding_vec3f(zero_float3());
@@ -223,7 +223,7 @@ ccl_device_forceinline void guiding_record_volume_bounce(KernelGlobals kg,
                                                          const float roughness)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const float3 weight_rgb = spectrum_to_rgb(weight);
@@ -250,7 +250,7 @@ ccl_device_forceinline void guiding_record_volume_transmission(KernelGlobals kg,
                                                                const float3 transmittance_weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -277,7 +277,7 @@ ccl_device_forceinline void guiding_record_volume_emission(KernelGlobals kg,
                                                            const Spectrum Le)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -298,7 +298,7 @@ ccl_device_forceinline void guiding_record_light_surface_segment(
     KernelGlobals kg, IntegratorState state, ccl_private const Intersection *ccl_restrict isect)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const pgl_vec3f zero = guiding_vec3f(zero_float3());
@@ -332,7 +332,7 @@ ccl_device_forceinline void guiding_record_background(KernelGlobals kg,
                                                       const float mis_weight)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -359,7 +359,7 @@ ccl_device_forceinline void guiding_record_direct_light(KernelGlobals kg,
                                                         IntegratorShadowState state)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
   if (state->shadow_path.path_segment) {
@@ -376,7 +376,7 @@ ccl_device_forceinline void guiding_record_continuation_probability(
     KernelGlobals kg, IntegratorState state, const float continuation_probability)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -398,7 +398,7 @@ ccl_device_forceinline void guiding_write_debug_passes(KernelGlobals kg,
                                                            render_buffer)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4 && defined(WITH_CYCLES_DEBUG)
-  if (!kernel_data.integrator.use_guiding || !kernel_data.integrator.train_guiding) {
+  if (!kernel_data.integrator.train_guiding) {
     return;
   }
 
@@ -433,6 +433,94 @@ ccl_device_forceinline void guiding_write_debug_passes(KernelGlobals kg,
 
     film_write_pass_float(buffer + kernel_data.film.pass_guiding_avg_roughness, avg_roughness);
   }
+#endif
+}
+
+/* Guided BSDFs */
+
+ccl_device_forceinline bool guiding_bsdf_init(KernelGlobals kg,
+                                              IntegratorState state,
+                                              const float3 P,
+                                              const float3 N,
+                                              ccl_private float &rand)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  if (state->guiding.surface_sampling_distribution->Init(
+          kg->opgl_guiding_field, guiding_point3f(P), rand, true)) {
+    state->guiding.surface_sampling_distribution->ApplyCosineProduct(guiding_point3f(N));
+    return true;
+  }
+#endif
+
+  return false;
+}
+
+ccl_device_forceinline float guiding_bsdf_sample(IntegratorState state,
+                                                 const float2 rand_bsdf,
+                                                 ccl_private float3 *omega_in)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  pgl_vec3f wo;
+  const pgl_point2f rand = openpgl::cpp::Point2(rand_bsdf.x, rand_bsdf.y);
+  const float pdf = state->guiding.surface_sampling_distribution->SamplePDF(rand, wo);
+  *omega_in = make_float3(wo.x, wo.y, wo.z);
+  return pdf;
+#else
+  return 0.0f;
+#endif
+}
+
+ccl_device_forceinline float guiding_bsdf_pdf(IntegratorState state, const float3 omega_in)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  return state->guiding.surface_sampling_distribution->PDF(guiding_vec3f(omega_in));
+#else
+  return 0.0f;
+#endif
+}
+
+/* Guided Volume Phases */
+
+ccl_device_forceinline bool guiding_phase_init(KernelGlobals kg,
+                                               IntegratorState state,
+                                               const float3 P,
+                                               const float3 D,
+                                               const float g,
+                                               ccl_private float &rand)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  if (state->guiding.volume_sampling_distribution->Init(
+          kg->opgl_guiding_field, guiding_point3f(P), rand, true)) {
+    state->guiding.volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(
+        guiding_vec3f(D), g);
+    return true;
+  }
+#endif
+
+  return false;
+}
+
+ccl_device_forceinline float guiding_phase_sample(IntegratorState state,
+                                                  const float2 rand_phase,
+                                                  ccl_private float3 *omega_in)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  pgl_vec3f wo;
+  const pgl_point2f rand = openpgl::cpp::Point2(rand_phase.x, rand_phase.y);
+  const float pdf = state->guiding.volume_sampling_distribution->SamplePDF(rand, wo);
+  *omega_in = make_float3(wo.x, wo.y, wo.z);
+  return pdf;
+#else
+  return 0.0f;
+#endif
+}
+
+ccl_device_forceinline float guiding_phase_pdf(IntegratorState state, const float3 omega_in)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+  return state->guiding.volume_sampling_distribution->PDF(guiding_vec3f(omega_in));
+#else
+  return 0.0f;
 #endif
 }
 

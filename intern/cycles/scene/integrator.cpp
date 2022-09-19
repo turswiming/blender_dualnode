@@ -230,10 +230,10 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
   GuidingParams guiding_params = get_guiding_params(device);
   kintegrator->use_guiding = guiding_params.use;
-  kintegrator->train_guiding = true;
-  kintegrator->use_surface_guiding = use_surface_guiding;
+  kintegrator->train_guiding = kintegrator->use_guiding;
+  kintegrator->use_surface_guiding = guiding_params.use_surface_guiding;
+  kintegrator->use_volume_guiding = guiding_params.use_volume_guiding;
   kintegrator->surface_guiding_probability = surface_guiding_probability;
-  kintegrator->use_volume_guiding = use_volume_guiding;
   kintegrator->volume_guiding_probability = volume_guiding_probability;
   kintegrator->use_guide_direct_light = use_guide_direct_light;
   kintegrator->use_mis_weights = use_mis_weights;
@@ -386,11 +386,18 @@ DenoiseParams Integrator::get_denoise_params() const
 
 GuidingParams Integrator::get_guiding_params(const Device *device) const
 {
+  const bool use = use_guiding && device->info.has_guiding;
+
   GuidingParams guiding_params;
-  guiding_params.use = use_guiding && device->info.has_guiding;
+  guiding_params.use_surface_guiding = use && use_surface_guiding &&
+                                       surface_guiding_probability > 0.0f;
+  guiding_params.use_volume_guiding = use && use_volume_guiding &&
+                                      volume_guiding_probability > 0.0f;
+  guiding_params.use = guiding_params.use_surface_guiding || guiding_params.use_volume_guiding;
   guiding_params.type = guiding_distribution_type;
   guiding_params.training_iterations = training_iterations;
   guiding_params.deterministic = deterministic_guiding;
+
   return guiding_params;
 }
 CCL_NAMESPACE_END

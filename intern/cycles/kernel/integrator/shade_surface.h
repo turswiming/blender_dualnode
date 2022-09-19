@@ -209,21 +209,8 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
     }
 
     /* Evaluate BSDF. */
-    float bsdf_pdf = surface_shader_bsdf_eval(
-        kg, sd, ls.D, is_transmission, &bsdf_eval, ls.shader);
-
-#ifdef __PATH_GUIDING__
-    if (kernel_data.integrator.use_guiding && state->guiding.use_surface_guiding) {
-      const float guiding_sampling_prob = state->guiding.surface_guiding_sampling_prob;
-      const float bssrdf_sampling_prob = state->guiding.bssrdf_sampling_prob;
-      if (guiding_sampling_prob > 0.f) {
-        const float guide_pdf = state->guiding.surface_sampling_distribution->PDF(
-            guiding_vec3f(ls.D));
-        bsdf_pdf = (guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob)) +
-                   (1.0f - guiding_sampling_prob) * bsdf_pdf;
-      }
-    }
-#endif
+    const float bsdf_pdf = surface_shader_bsdf_eval(
+        kg, state, sd, ls.D, is_transmission, &bsdf_eval, ls.shader);
     bsdf_eval_mul(&bsdf_eval, light_eval / ls.pdf);
 
     if (ls.shader & SHADER_USE_MIS) {
@@ -373,7 +360,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 #endif
 
   /* BSDF closure, sample direction. */
-  float bsdf_pdf = 0.0f, guided_bsdf_pdf = 0.0f;
+  float bsdf_pdf = 0.0f, unguided_bsdf_pdf = 0.0f;
   BsdfEval bsdf_eval ccl_optional_struct_init;
   float3 bsdf_omega_in ccl_optional_struct_init;
   int label;
@@ -382,7 +369,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   float bsdf_eta = 1.0f;
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if (kernel_data.integrator.use_guiding) {
+  if (kernel_data.integrator.use_surface_guiding) {
     label = surface_shader_bsdf_guided_sample_closure(kg,
                                                       state,
                                                       sd,
@@ -390,16 +377,16 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                                       rand_bsdf,
                                                       &bsdf_eval,
                                                       &bsdf_omega_in,
-                                                      &guided_bsdf_pdf,
                                                       &bsdf_pdf,
+                                                      &unguided_bsdf_pdf,
                                                       &bsdf_sampled_roughness,
                                                       &bsdf_eta);
 
-    if (guided_bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
+    if (bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
       return LABEL_NONE;
     }
 
-    INTEGRATOR_STATE_WRITE(state, path, guiding_throughput) *= guided_bsdf_pdf / bsdf_pdf;
+    INTEGRATOR_STATE_WRITE(state, path, unguided_throughput) *= bsdf_pdf / unguided_bsdf_pdf;
   }
   else
 #endif
@@ -418,7 +405,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
       return LABEL_NONE;
     }
 
-    guided_bsdf_pdf = bsdf_pdf;
+    unguided_bsdf_pdf = bsdf_pdf;
   }
 
   if (label & LABEL_TRANSPARENT) {
@@ -438,7 +425,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   }
 
   /* Update throughput. */
-  const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / guided_bsdf_pdf;
+  const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / bsdf_pdf;
   INTEGRATOR_STATE_WRITE(state, path, throughput) *= bsdf_weight;
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
@@ -452,9 +439,9 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
   /* Update path state */
   if (!(label & LABEL_TRANSPARENT)) {
-    INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = guided_bsdf_pdf;
+    INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = bsdf_pdf;
     INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = fminf(
-        bsdf_pdf, INTEGRATOR_STATE(state, path, min_ray_pdf));
+        unguided_bsdf_pdf, INTEGRATOR_STATE(state, path, min_ray_pdf));
   }
 
   path_state_next(kg, state, label);
@@ -463,7 +450,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                 state,
                                 sd,
                                 bsdf_weight,
-                                guided_bsdf_pdf,
+                                bsdf_pdf,
                                 sd->N,
                                 normalize(bsdf_omega_in),
                                 bsdf_sampled_roughness,
