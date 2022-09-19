@@ -375,13 +375,10 @@ static void updateDuplicateSubtarget(EditBone *dup_bone,
         /* does this constraint have a subtarget in
          * this armature?
          */
-        const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(curcon);
         ListBase targets = {NULL, NULL};
         bConstraintTarget *ct;
 
-        if (cti && cti->get_constraint_targets) {
-          cti->get_constraint_targets(curcon, &targets);
-
+        if (BKE_constraint_targets_get(curcon, &targets)) {
           for (ct = targets.first; ct; ct = ct->next) {
             if ((ct->tar == ob) && (ct->subtarget[0])) {
               oldtarget = get_named_editbone(editbones, ct->subtarget);
@@ -409,9 +406,7 @@ static void updateDuplicateSubtarget(EditBone *dup_bone,
             }
           }
 
-          if (cti->flush_constraint_targets) {
-            cti->flush_constraint_targets(curcon, &targets, 0);
-          }
+          BKE_constraint_targets_flush(curcon, &targets, 0);
         }
       }
     }
@@ -427,7 +422,7 @@ static void updateDuplicateActionConstraintSettings(
   float mat[4][4];
 
   bConstraintOb cob = {.depsgraph = NULL, .scene = NULL, .ob = ob, .pchan = pchan};
-  BKE_constraint_custom_object_space_get(cob.space_obj_world_matrix, curcon);
+  BKE_constraint_custom_object_space_init(&cob, curcon);
 
   unit_m4(mat);
   bPoseChannel *target_pchan = BKE_pose_channel_find_name(ob->pose, act_con->subtarget);
@@ -546,7 +541,7 @@ static void updateDuplicateActionConstraintSettings(
   }
   BLI_freelistN(&ani_curves);
 
-  /* Make deps graph aware of our changes */
+  /* Make depsgraph aware of our changes. */
   DEG_id_tag_update(&act->id, ID_RECALC_ANIMATION_NO_FLUSH);
 }
 
@@ -581,7 +576,7 @@ static void updateDuplicateLocRotConstraintSettings(Object *ob,
   unit_m4(local_mat);
 
   bConstraintOb cob = {.depsgraph = NULL, .scene = NULL, .ob = ob, .pchan = pchan};
-  BKE_constraint_custom_object_space_get(cob.space_obj_world_matrix, curcon);
+  BKE_constraint_custom_object_space_init(&cob, curcon);
 
   BKE_constraint_mat_convertspace(
       ob, pchan, &cob, local_mat, curcon->ownspace, CONSTRAINT_SPACE_LOCAL, false);
@@ -636,7 +631,7 @@ static void updateDuplicateTransformConstraintSettings(Object *ob,
   float target_mat[4][4], own_mat[4][4], imat[4][4];
 
   bConstraintOb cob = {.depsgraph = NULL, .scene = NULL, .ob = ob, .pchan = pchan};
-  BKE_constraint_custom_object_space_get(cob.space_obj_world_matrix, curcon);
+  BKE_constraint_custom_object_space_init(&cob, curcon);
 
   unit_m4(own_mat);
   BKE_constraint_mat_convertspace(
@@ -925,6 +920,7 @@ EditBone *duplicateEditBone(EditBone *cur_bone, const char *name, ListBase *edit
 
 static int armature_duplicate_selected_exec(bContext *C, wmOperator *op)
 {
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool do_flip_names = RNA_boolean_get(op->ptr, "do_flip_names");
 
@@ -935,7 +931,7 @@ static int armature_duplicate_selected_exec(bContext *C, wmOperator *op)
 
   uint objects_len = 0;
   Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      view_layer, CTX_wm_view3d(C), &objects_len);
+      scene, view_layer, CTX_wm_view3d(C), &objects_len);
   for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
     EditBone *ebone_iter;
     /* The beginning of the duplicated bones in the edbo list */
@@ -1099,6 +1095,7 @@ static EditBone *get_symmetrized_bone(bArmature *arm, EditBone *bone)
  */
 static int armature_symmetrize_exec(bContext *C, wmOperator *op)
 {
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const int direction = RNA_enum_get(op->ptr, "direction");
   const int axis = 0;
@@ -1110,7 +1107,7 @@ static int armature_symmetrize_exec(bContext *C, wmOperator *op)
 
   uint objects_len = 0;
   Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      view_layer, CTX_wm_view3d(C), &objects_len);
+      scene, view_layer, CTX_wm_view3d(C), &objects_len);
   for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
     Object *obedit = objects[ob_index];
     bArmature *arm = obedit->data;
@@ -1152,7 +1149,7 @@ static int armature_symmetrize_exec(bContext *C, wmOperator *op)
               }
 
               if (axis_delta == 0.0f) {
-                /* both mirrored bones exist and point to eachother and overlap exactly.
+                /* Both mirrored bones exist and point to each other and overlap exactly.
                  *
                  * in this case there's no well defined solution, so de-select both and skip.
                  */
@@ -1354,13 +1351,14 @@ void ARMATURE_OT_symmetrize(wmOperatorType *ot)
 /* if forked && mirror-edit: makes two bones with flipped names */
 static int armature_extrude_exec(bContext *C, wmOperator *op)
 {
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool forked = RNA_boolean_get(op->ptr, "forked");
   bool changed_multi = false;
 
   uint objects_len = 0;
   Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      view_layer, CTX_wm_view3d(C), &objects_len);
+      scene, view_layer, CTX_wm_view3d(C), &objects_len);
   for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
     Object *ob = objects[ob_index];
     bArmature *arm = ob->data;

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "DEG_depsgraph.h"
+#include "DNA_ID.h"
 #include "DNA_listBase.h"
 #include "DNA_vec_types.h"
 
@@ -74,10 +74,12 @@ typedef struct RenderPass {
   int pad;
 } RenderPass;
 
-/* a renderlayer is a full image, but with all passes and samples */
-/* size of the rects is defined in RenderResult */
-/* after render, the Combined pass is in combined,
- * for renderlayers read from files it is a real pass */
+/**
+ * - A render-layer is a full image, but with all passes and samples.
+ * - The size of the rects is defined in #RenderResult.
+ * - After render, the Combined pass is in combined,
+ *   for render-layers read from files it is a real pass.
+ */
 typedef struct RenderLayer {
   struct RenderLayer *next, *prev;
 
@@ -247,15 +249,15 @@ void RE_render_result_full_channel_name(char *fullname,
                                         const char *passname,
                                         const char *viewname,
                                         const char *chan_id,
-                                        const int channel);
+                                        int channel);
 
 struct ImBuf *RE_render_result_rect_to_ibuf(struct RenderResult *rr,
                                             const struct ImageFormatData *imf,
                                             const float dither,
-                                            const int view_id);
+                                            int view_id);
 void RE_render_result_rect_from_ibuf(struct RenderResult *rr,
                                      const struct ImBuf *ibuf,
-                                     const int view_id);
+                                     int view_id);
 
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
 float *RE_RenderLayerGetPass(struct RenderLayer *rl, const char *name, const char *viewname);
@@ -459,9 +461,9 @@ bool RE_allow_render_generic_object(struct Object *ob);
 
 /******* defined in render_result.c *********/
 
-bool RE_HasCombinedLayer(const RenderResult *res);
-bool RE_HasFloatPixels(const RenderResult *res);
-bool RE_RenderResult_is_stereo(const RenderResult *res);
+bool RE_HasCombinedLayer(const RenderResult *result);
+bool RE_HasFloatPixels(const RenderResult *result);
+bool RE_RenderResult_is_stereo(const RenderResult *result);
 struct RenderView *RE_RenderViewGetById(struct RenderResult *rr, int view_id);
 struct RenderView *RE_RenderViewGetByName(struct RenderResult *rr, const char *viewname);
 

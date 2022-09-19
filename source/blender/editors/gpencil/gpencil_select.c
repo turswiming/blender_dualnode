@@ -759,7 +759,7 @@ static bool gpencil_select_same_layer(bContext *C)
 
   bool changed = false;
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
-    bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, CFRA, GP_GETFRAME_USE_PREV);
+    bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, GP_GETFRAME_USE_PREV);
     bGPDstroke *gps;
     bool found = false;
 
@@ -826,7 +826,7 @@ static bool gpencil_select_same_material(bContext *C)
   bGPdata *gpd = ED_gpencil_data_get_active(C);
   const bool is_curve_edit = (bool)GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd);
   /* First, build set containing all the colors of selected strokes */
-  GSet *selected_colors = BLI_gset_str_new("GP Selected Colors");
+  GSet *selected_colors = BLI_gset_int_new("GP Selected Colors");
 
   bool changed = false;
 
@@ -835,7 +835,7 @@ static bool gpencil_select_same_material(bContext *C)
       /* add instead of insert here, otherwise the uniqueness check gets skipped,
        * and we get many duplicate entries...
        */
-      BLI_gset_add(selected_colors, &gps->mat_nr);
+      BLI_gset_add(selected_colors, POINTER_FROM_INT(gps->mat_nr));
     }
   }
   CTX_DATA_END;
@@ -843,7 +843,8 @@ static bool gpencil_select_same_material(bContext *C)
   /* Second, select any visible stroke that uses these colors */
   if (is_curve_edit) {
     CTX_DATA_BEGIN (C, bGPDstroke *, gps, editable_gpencil_strokes) {
-      if (gps->editcurve != NULL && BLI_gset_haskey(selected_colors, &gps->mat_nr)) {
+      if (gps->editcurve != NULL &&
+          BLI_gset_haskey(selected_colors, POINTER_FROM_INT(gps->mat_nr))) {
         bGPDcurve *gpc = gps->editcurve;
         for (int i = 0; i < gpc->tot_curve_points; i++) {
           bGPDcurve_point *gpc_pt = &gpc->curve_points[i];
@@ -861,7 +862,7 @@ static bool gpencil_select_same_material(bContext *C)
   }
   else {
     CTX_DATA_BEGIN (C, bGPDstroke *, gps, editable_gpencil_strokes) {
-      if (BLI_gset_haskey(selected_colors, &gps->mat_nr)) {
+      if (BLI_gset_haskey(selected_colors, POINTER_FROM_INT(gps->mat_nr))) {
         /* select this stroke */
         bGPDspoint *pt;
         int i;
@@ -1700,7 +1701,7 @@ static int gpencil_circle_select_exec(bContext *C, wmOperator *op)
   const bool select = (sel_op != SEL_OP_SUB);
 
   bool changed = false;
-  /* for bounding rect around circle (for quicky intersection testing) */
+  /* For bounding `rect` around circle (for quickly intersection testing). */
   rcti rect = {0};
   rect.xmin = mx - radius;
   rect.ymin = my - radius;
@@ -2070,7 +2071,7 @@ static bool gpencil_generic_stroke_select(bContext *C,
     for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
       bGPDspoint *pt_active = (pt->runtime.pt_orig) ? pt->runtime.pt_orig : pt;
 
-      /* convert point coords to screenspace */
+      /* Convert point coords to screen-space. */
       const bool is_inside = is_inside_fn(gsc.region, gpstroke_iter.diff_mat, &pt->x, user_data);
       if (strokemode == false) {
         const bool is_select = (pt_active->flag & GP_SPOINT_SELECT) != 0;
@@ -2680,6 +2681,7 @@ void GPENCIL_OT_select(wmOperatorType *ot)
   ot->invoke = gpencil_select_invoke;
   ot->exec = gpencil_select_exec;
   ot->poll = gpencil_select_poll;
+  ot->get_name = ED_select_pick_get_name;
 
   /* flag */
   ot->flag = OPTYPE_UNDO;

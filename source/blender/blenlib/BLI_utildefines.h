@@ -589,7 +589,7 @@ extern "C" {
 
 /** Performs `offsetof(typeof(data), member) + sizeof((data)->member)` for non-gcc compilers. */
 #define OFFSETOF_STRUCT_AFTER(_struct, _member) \
-  ((((const char *)&((_struct)->_member)) - ((const char *)(_struct))) + \
+  ((size_t)(((const char *)&((_struct)->_member)) - ((const char *)(_struct))) + \
    sizeof((_struct)->_member))
 
 /**
@@ -812,6 +812,16 @@ extern bool BLI_memory_is_zero(const void *arr, size_t arr_size);
 #  define ENUM_OPERATORS(_type, _max)
 #endif
 
+/**
+ * Utility so function declarations in C headers can use C++ default arguments. The default is then
+ * available when included in a C++ file, otherwise the argument has to be set explicitly.
+ */
+#ifdef __cplusplus
+#  define CPP_ARG_DEFAULT(default_value) = default_value
+#else
+#  define CPP_ARG_DEFAULT(default_value)
+#endif
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -832,6 +842,18 @@ extern bool BLI_memory_is_zero(const void *arr, size_t arr_size);
  * often contains a comma and angle brackets are not recognized as parenthesis by the preprocessor.
  */
 #define BLI_ENABLE_IF(condition) typename std::enable_if_t<(condition)> * = nullptr
+
+#if defined(_MSC_VER)
+#  define BLI_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#elif defined(__has_cpp_attribute)
+#  if __has_cpp_attribute(no_unique_address)
+#    define BLI_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#  else
+#    define BLI_NO_UNIQUE_ADDRESS
+#  endif
+#else
+#  define BLI_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#endif
 
 /** \} */
 

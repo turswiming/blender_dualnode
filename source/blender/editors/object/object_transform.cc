@@ -321,7 +321,7 @@ static int object_clear_transform_generic_exec(bContext *C,
     BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
     xcs = ED_object_xform_skip_child_container_create();
     ED_object_xform_skip_child_container_item_ensure_from_array(
-        xcs, view_layer, objects.data(), objects.size());
+        xcs, scene, view_layer, objects.data(), objects.size());
   }
   if (use_transform_data_origin) {
     BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
@@ -597,7 +597,7 @@ static bool apply_objects_internal_can_multiuser(bContext *C)
 {
   Object *obact = CTX_data_active_object(C);
 
-  if (ELEM(NULL, obact, obact->data)) {
+  if (ELEM(nullptr, obact, obact->data)) {
     return false;
   }
 
@@ -855,7 +855,7 @@ static int apply_objects_internal(bContext *C,
 
     /* calculate translation */
     if (apply_loc) {
-      copy_v3_v3(mat[3], ob->loc);
+      add_v3_v3v3(mat[3], ob->loc, ob->dloc);
 
       if (!(apply_scale && apply_rot)) {
         float tmat[3][3];
@@ -884,9 +884,6 @@ static int apply_objects_internal(bContext *C,
 
       /* adjust data */
       BKE_mesh_transform(me, mat, true);
-
-      /* If normal layers exist, they are now dirty. */
-      BKE_mesh_normals_tag_dirty(me);
     }
     else if (ob->type == OB_ARMATURE) {
       bArmature *arm = static_cast<bArmature *>(ob->data);
@@ -1026,14 +1023,19 @@ static int apply_objects_internal(bContext *C,
     else {
       if (apply_loc) {
         zero_v3(ob->loc);
+        zero_v3(ob->dloc);
       }
       if (apply_scale) {
-        ob->scale[0] = ob->scale[1] = ob->scale[2] = 1.0f;
+        copy_v3_fl(ob->scale, 1.0f);
+        copy_v3_fl(ob->dscale, 1.0f);
       }
       if (apply_rot) {
         zero_v3(ob->rot);
+        zero_v3(ob->drot);
         unit_qt(ob->quat);
+        unit_qt(ob->dquat);
         unit_axis_angle(ob->rotAxis, &ob->rotAngle);
+        unit_axis_angle(ob->drotAxis, &ob->drotAngle);
       }
     }
 
@@ -1128,7 +1130,7 @@ static int object_transform_apply_invoke(bContext *C, wmOperator *op, const wmEv
   bool can_handle_multiuser = apply_objects_internal_can_multiuser(C);
   bool need_single_user = can_handle_multiuser && apply_objects_internal_need_single_user(C);
 
-  if ((ob->data != nullptr) && need_single_user) {
+  if ((ob != nullptr) && (ob->data != nullptr) && need_single_user) {
     PropertyRNA *prop = RNA_struct_find_property(op->ptr, "isolate_users");
     if (!RNA_property_is_set(op->ptr, prop)) {
       RNA_property_boolean_set(op->ptr, prop, true);
@@ -1171,6 +1173,44 @@ void OBJECT_OT_transform_apply(wmOperatorType *ot)
                                       "Create new object-data users if needed");
   RNA_def_property_flag(prop, PROP_HIDDEN);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Apply Parent Inverse Operator
+ * \{ */
+
+static int object_parent_inverse_apply_exec(bContext *C, wmOperator *UNUSED(op))
+{
+  CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
+    if (ob->parent == nullptr) {
+      continue;
+    }
+
+    DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
+    BKE_object_apply_parent_inverse(ob);
+  }
+  CTX_DATA_END;
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_parent_inverse_apply(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Apply Parent Inverse";
+  ot->description = "Apply the object's parent inverse to its data";
+  ot->idname = "OBJECT_OT_parent_inverse_apply";
+
+  /* api callbacks */
+  ot->exec = object_parent_inverse_apply_exec;
+  ot->poll = ED_operator_objectmode;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */
@@ -1563,6 +1603,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
                     }
                   }
                 }
+                BKE_gpencil_stroke_geometry_update(gpd, gps);
               }
             }
           }
@@ -2184,7 +2225,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
 
   bool is_finished = false;
 
-  if (ISMOUSE(xfd->init_event)) {
+  if (ISMOUSE_BUTTON(xfd->init_event)) {
     if ((event->type == xfd->init_event) && (event->val == KM_RELEASE)) {
       is_finished = true;
     }

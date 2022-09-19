@@ -8,6 +8,10 @@
 #ifndef __PY_CAPI_UTILS_H__
 #define __PY_CAPI_UTILS_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "BLI_sys_types.h"
 #include "BLI_utildefines_variadic.h"
 
@@ -211,7 +215,6 @@ int PyC_CheckArgs_DeepCopy(PyObject *args);
 
 /* Integer parsing (with overflow checks), -1 on error. */
 /**
- *
  * Comparison with #PyObject_IsTrue
  * ================================
  *
@@ -273,3 +276,7 @@ bool PyC_StructFmt_type_is_byte(char format);
 bool PyC_StructFmt_type_is_bool(char format);
 
 #endif /* __PY_CAPI_UTILS_H__ */
+
+#ifdef __cplusplus
+}
+#endif

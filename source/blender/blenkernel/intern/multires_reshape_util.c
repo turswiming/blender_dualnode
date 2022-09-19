@@ -10,12 +10,14 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_mesh_types.h"
+#include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_task.h"
 
+#include "BKE_customdata.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_multires.h"
@@ -64,7 +66,7 @@ static void context_zero(MultiresReshapeContext *reshape_context)
 static void context_init_lookup(MultiresReshapeContext *reshape_context)
 {
   const Mesh *base_mesh = reshape_context->base_mesh;
-  const MPoly *mpoly = base_mesh->mpoly;
+  const MPoly *mpoly = reshape_context->base_polys;
   const int num_faces = base_mesh->totpoly;
 
   reshape_context->face_start_grid_index = MEM_malloc_arrayN(
@@ -150,6 +152,10 @@ bool multires_reshape_context_create_from_base_mesh(MultiresReshapeContext *resh
   reshape_context->mmd = mmd;
 
   reshape_context->base_mesh = base_mesh;
+  reshape_context->base_verts = BKE_mesh_verts(base_mesh);
+  reshape_context->base_edges = BKE_mesh_edges(base_mesh);
+  reshape_context->base_polys = BKE_mesh_polys(base_mesh);
+  reshape_context->base_loops = BKE_mesh_loops(base_mesh);
 
   reshape_context->subdiv = multires_reshape_create_subdiv(NULL, object, mmd);
   reshape_context->need_free_subdiv = true;
@@ -183,6 +189,10 @@ bool multires_reshape_context_create_from_object(MultiresReshapeContext *reshape
   reshape_context->mmd = mmd;
 
   reshape_context->base_mesh = base_mesh;
+  reshape_context->base_verts = BKE_mesh_verts(base_mesh);
+  reshape_context->base_edges = BKE_mesh_edges(base_mesh);
+  reshape_context->base_polys = BKE_mesh_polys(base_mesh);
+  reshape_context->base_loops = BKE_mesh_loops(base_mesh);
 
   reshape_context->subdiv = multires_reshape_create_subdiv(depsgraph, object, mmd);
   reshape_context->need_free_subdiv = true;
@@ -210,6 +220,10 @@ bool multires_reshape_context_create_from_ccg(MultiresReshapeContext *reshape_co
   context_zero(reshape_context);
 
   reshape_context->base_mesh = base_mesh;
+  reshape_context->base_verts = BKE_mesh_verts(base_mesh);
+  reshape_context->base_edges = BKE_mesh_edges(base_mesh);
+  reshape_context->base_polys = BKE_mesh_polys(base_mesh);
+  reshape_context->base_loops = BKE_mesh_loops(base_mesh);
 
   reshape_context->subdiv = subdiv_ccg->subdiv;
   reshape_context->need_free_subdiv = false;
@@ -253,6 +267,10 @@ bool multires_reshape_context_create_from_subdiv(MultiresReshapeContext *reshape
 
   reshape_context->mmd = mmd;
   reshape_context->base_mesh = base_mesh;
+  reshape_context->base_verts = BKE_mesh_verts(base_mesh);
+  reshape_context->base_edges = BKE_mesh_edges(base_mesh);
+  reshape_context->base_polys = BKE_mesh_polys(base_mesh);
+  reshape_context->base_loops = BKE_mesh_loops(base_mesh);
 
   reshape_context->subdiv = subdiv;
   reshape_context->need_free_subdiv = false;
@@ -342,7 +360,7 @@ int multires_reshape_grid_to_corner(const MultiresReshapeContext *reshape_contex
 
 bool multires_reshape_is_quad_face(const MultiresReshapeContext *reshape_context, int face_index)
 {
-  const MPoly *base_poly = &reshape_context->base_mesh->mpoly[face_index];
+  const MPoly *base_poly = &reshape_context->base_polys[face_index];
   return (base_poly->totloop == 4);
 }
 
@@ -634,8 +652,7 @@ static void foreach_grid_face_coordinate_task(void *__restrict userdata_v,
 
   const MultiresReshapeContext *reshape_context = data->reshape_context;
 
-  const Mesh *base_mesh = data->reshape_context->base_mesh;
-  const MPoly *mpoly = base_mesh->mpoly;
+  const MPoly *mpoly = reshape_context->base_polys;
   const int grid_size = data->grid_size;
   const float grid_size_1_inv = 1.0f / (((float)grid_size) - 1.0f);
 

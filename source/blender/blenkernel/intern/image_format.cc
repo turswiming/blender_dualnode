@@ -514,8 +514,9 @@ static bool do_add_image_extension(char *string,
 #endif
 #ifdef WITH_WEBP
   else if (imtype == R_IMF_IMTYPE_WEBP) {
-    if (!BLI_path_extension_check(string, extension_test = ".webp"))
+    if (!BLI_path_extension_check(string, extension_test = ".webp")) {
       extension = extension_test;
+    }
   }
 #endif
   else {  //   R_IMF_IMTYPE_AVIRAW, R_IMF_IMTYPE_AVIJPEG, R_IMF_IMTYPE_JPEG90 etc
@@ -908,6 +909,11 @@ void BKE_image_format_from_imbuf(ImageFormatData *im_format, const ImBuf *imbuf)
 
   /* planes */
   im_format->planes = imbuf->planes;
+}
+
+bool BKE_image_format_is_byte(const ImageFormatData *imf)
+{
+  return (imf->depth == R_IMF_CHAN_DEPTH_8) && (BKE_imtype_valid_depths(imf->imtype) & imf->depth);
 }
 
 /* Color Management */

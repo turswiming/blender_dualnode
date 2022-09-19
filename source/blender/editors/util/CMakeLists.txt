@@ -16,8 +16,9 @@ set(INC
   ../../sequencer
   ../../windowmanager
   ../../../../intern/clog
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
+  # RNA_prototypes.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 
@@ -81,7 +82,6 @@ set(SRC
   ../include/ED_transform.h
   ../include/ED_transform_snap_object_context.h
   ../include/ED_transverts.h
-  ../include/ED_types.h
   ../include/ED_undo.h
   ../include/ED_userpref.h
   ../include/ED_util.h
@@ -89,6 +89,8 @@ set(SRC
   ../include/ED_uvedit.h
   ../include/ED_view3d.h
   ../include/ED_view3d_offscreen.h
+  ../include/UI_abstract_view.hh
+  ../include/UI_grid_view.hh
   ../include/UI_icons.h
   ../include/UI_interface.h
   ../include/UI_interface.hh
@@ -110,3 +112,6 @@ if(WITH_PYTHON)
 endif()
 
 blender_add_lib(bf_editor_util "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+# RNA_prototypes.h
+add_dependencies(bf_editor_util bf_rna)

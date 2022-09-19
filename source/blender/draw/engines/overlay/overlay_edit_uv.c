@@ -115,7 +115,7 @@ void OVERLAY_edit_uv_init(OVERLAY_Data *vedata)
   const bool is_tiled_image = image && (image->source == IMA_SRC_TILED);
   const bool do_edges_only = (ts->uv_flag & UV_SYNC_SELECTION) ?
                                   /* NOTE: Ignore #SCE_SELECT_EDGE because a single selected edge
-                                   * on the mesh may cause singe UV vertices to be selected. */
+                                   * on the mesh may cause single UV vertices to be selected. */
                                   false :
                                   (ts->uv_selectmode == UV_SELECT_EDGE);
   const bool do_faces = ((sima->flag & SI_NO_DRAWFACES) == 0);
@@ -160,7 +160,6 @@ void OVERLAY_edit_uv_init(OVERLAY_Data *vedata)
   pd->edit_uv.draw_type = sima->dt_uvstretch;
   BLI_listbase_clear(&pd->edit_uv.totals);
   pd->edit_uv.total_area_ratio = 0.0f;
-  pd->edit_uv.total_area_ratio_inv = 0.0f;
 
   /* During engine initialization phase the `sima` isn't locked and
    * we are able to retrieve the needed data.
@@ -238,6 +237,10 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
       DRW_shgroup_uniform_float_copy(
           pd->edit_uv_verts_grp, "pointSize", (point_size + 1.5f) * M_SQRT2);
       DRW_shgroup_uniform_float_copy(pd->edit_uv_verts_grp, "outlineWidth", 0.75f);
+      float theme_color[4];
+      UI_GetThemeColor4fv(TH_VERTEX, theme_color);
+      srgb_to_linearrgb_v4(theme_color, theme_color);
+      DRW_shgroup_uniform_vec4_copy(pd->edit_uv_verts_grp, "color", theme_color);
     }
 
     /* uv faces */
@@ -276,8 +279,6 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
       DRW_shgroup_uniform_block(pd->edit_uv_stretching_grp, "globalsBlock", G_draw.block_ubo);
       DRW_shgroup_uniform_float(
           pd->edit_uv_stretching_grp, "totalAreaRatio", &pd->edit_uv.total_area_ratio, 1);
-      DRW_shgroup_uniform_float(
-          pd->edit_uv_stretching_grp, "totalAreaRatioInv", &pd->edit_uv.total_area_ratio_inv, 1);
     }
   }
 
@@ -407,7 +408,7 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
       draw_ctx->obact->type == OB_MESH) {
     uint objects_len = 0;
     Object **objects = BKE_view_layer_array_from_objects_in_mode_unique_data(
-        draw_ctx->view_layer, NULL, &objects_len, draw_ctx->object_mode);
+        draw_ctx->scene, draw_ctx->view_layer, NULL, &objects_len, draw_ctx->object_mode);
     for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
       Object *object_eval = DEG_get_evaluated_object(draw_ctx->depsgraph, objects[ob_index]);
       DRW_mesh_batch_cache_validate(object_eval, (Mesh *)object_eval->data);
@@ -506,7 +507,6 @@ static void edit_uv_stretching_update_ratios(OVERLAY_Data *vedata)
 
     if (total_area > FLT_EPSILON && total_area_uv > FLT_EPSILON) {
       pd->edit_uv.total_area_ratio = total_area / total_area_uv;
-      pd->edit_uv.total_area_ratio_inv = total_area_uv / total_area;
     }
   }
   BLI_freelistN(&pd->edit_uv.totals);

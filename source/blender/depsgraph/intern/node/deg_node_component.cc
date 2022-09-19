@@ -67,7 +67,10 @@ uint64_t ComponentNode::OperationIDKey::hash() const
 }
 
 ComponentNode::ComponentNode()
-    : entry_operation(nullptr), exit_operation(nullptr), affects_directly_visible(false)
+    : entry_operation(nullptr),
+      exit_operation(nullptr),
+      possibly_affects_visible_id(false),
+      affects_visible_id(false)
 {
   operations_map = new Map<ComponentNode::OperationIDKey, OperationNode *>();
 }
@@ -90,7 +93,7 @@ string ComponentNode::identifier() const
   const string idname = this->owner->name;
   const string typebuf = "" + to_string(static_cast<int>(type)) + ")";
   return typebuf + name + " : " + idname +
-         "( affects_directly_visible: " + (affects_directly_visible ? "true" : "false") + ")";
+         "( affects_visible_id: " + (affects_visible_id ? "true" : "false") + ")";
 }
 
 OperationNode *ComponentNode::find_operation(OperationIDKey key) const
@@ -215,10 +218,9 @@ void ComponentNode::clear_operations()
 
 void ComponentNode::tag_update(Depsgraph *graph, eUpdateSource source)
 {
-  OperationNode *entry_op = get_entry_operation();
-  if (entry_op != nullptr && entry_op->flag & DEPSOP_FLAG_NEEDS_UPDATE) {
-    return;
-  }
+  /* Note that the node might already be tagged for an update due invisible state of the node
+   * during previous dependency evaluation. Here the node gets re-tagged, so we need to give
+   * the evaluated clues that evaluation needs to happen again. */
   for (OperationNode *op_node : operations) {
     op_node->tag_update(graph, source);
   }
@@ -335,6 +337,7 @@ DEG_COMPONENT_NODE_DEFINE(GenericDatablock, GENERIC_DATABLOCK, 0);
 DEG_COMPONENT_NODE_DEFINE(Visibility, VISIBILITY, 0);
 DEG_COMPONENT_NODE_DEFINE(Simulation, SIMULATION, 0);
 DEG_COMPONENT_NODE_DEFINE(NTreeOutput, NTREE_OUTPUT, ID_RECALC_NTREE_OUTPUT);
+DEG_COMPONENT_NODE_DEFINE(NTreeGeometryPreprocess, NTREE_GEOMETRY_PREPROCESS, 0);
 
 /** \} */
 
@@ -369,6 +372,7 @@ void deg_register_component_depsnodes()
   register_node_typeinfo(&DNTI_VISIBILITY);
   register_node_typeinfo(&DNTI_SIMULATION);
   register_node_typeinfo(&DNTI_NTREE_OUTPUT);
+  register_node_typeinfo(&DNTI_NTREE_GEOMETRY_PREPROCESS);
 }
 
 /** \} */

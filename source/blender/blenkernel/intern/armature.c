@@ -97,7 +97,7 @@ static void armature_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src
   Bone *bone_src, *bone_dst;
   Bone *bone_dst_act = NULL;
 
-  /* We never handle usercount here for own data. */
+  /* We never handle user-count here for own data. */
   const int flag_subdata = flag | LIB_ID_CREATE_NO_USER_REFCOUNT;
 
   armature_dst->bonehash = NULL;
@@ -261,12 +261,12 @@ static void armature_blend_read_data(BlendDataReader *reader, ID *id)
   BKE_armature_bone_hash_make(arm);
 }
 
-static void lib_link_bones(BlendLibReader *reader, Bone *bone)
+static void lib_link_bones(BlendLibReader *reader, Library *lib, Bone *bone)
 {
-  IDP_BlendReadLib(reader, bone->prop);
+  IDP_BlendReadLib(reader, lib, bone->prop);
 
   LISTBASE_FOREACH (Bone *, curbone, &bone->childbase) {
-    lib_link_bones(reader, curbone);
+    lib_link_bones(reader, lib, curbone);
   }
 }
 
@@ -274,7 +274,7 @@ static void armature_blend_read_lib(BlendLibReader *reader, ID *id)
 {
   bArmature *arm = (bArmature *)id;
   LISTBASE_FOREACH (Bone *, curbone, &arm->bonebase) {
-    lib_link_bones(reader, curbone);
+    lib_link_bones(reader, id->lib, curbone);
   }
 }
 
@@ -313,7 +313,7 @@ IDTypeInfo IDType_ID_AR = {
     .foreach_id = armature_foreach_id,
     .foreach_cache = NULL,
     .foreach_path = NULL,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = armature_blend_write,
     .blend_read_data = armature_blend_read_data,
@@ -813,11 +813,9 @@ bool bone_autoside_name(
       }
     }
 
-    if ((MAXBONENAME - len) < strlen(extension) + 1) { /* add 1 for the '.' */
-      strncpy(name, basename, len - strlen(extension));
-    }
-
-    BLI_snprintf(name, MAXBONENAME, "%s.%s", basename, extension);
+    /* Subtract 1 from #MAXBONENAME for the null byte. Add 1 to the extension for the '.' */
+    const int basename_maxlen = (MAXBONENAME - 1) - (1 + strlen(extension));
+    BLI_snprintf(name, MAXBONENAME, "%.*s.%s", basename_maxlen, basename, extension);
 
     return true;
   }
@@ -2480,7 +2478,7 @@ void BKE_pose_where_is_bone(struct Depsgraph *depsgraph,
                             float ctime,
                             bool do_extra)
 {
-  /* This gives a chan_mat with actions (F-curve) results. */
+  /* This gives a chan_mat with actions (F-Curve) results. */
   if (do_extra) {
     BKE_pchan_calc_mat(pchan);
   }
@@ -2663,13 +2661,31 @@ BoundBox *BKE_armature_boundbox_get(Object *ob)
   return ob->runtime.bb;
 }
 
-void BKE_pchan_minmax(const Object *ob, const bPoseChannel *pchan, float r_min[3], float r_max[3])
+void BKE_pchan_minmax(const Object *ob,
+                      const bPoseChannel *pchan,
+                      const bool use_empty_drawtype,
+                      float r_min[3],
+                      float r_max[3])
 {
   const bArmature *arm = ob->data;
-  const bPoseChannel *pchan_tx = (pchan->custom && pchan->custom_tx) ? pchan->custom_tx : pchan;
-  const BoundBox *bb_custom = ((pchan->custom) && !(arm->flag & ARM_NO_CUSTOM)) ?
-                                  BKE_object_boundbox_get(pchan->custom) :
-                                  NULL;
+  Object *ob_custom = (arm->flag & ARM_NO_CUSTOM) ? NULL : pchan->custom;
+  const bPoseChannel *pchan_tx = (ob_custom && pchan->custom_tx) ? pchan->custom_tx : pchan;
+  const BoundBox *bb_custom = NULL;
+  BoundBox bb_custom_buf;
+
+  if (ob_custom) {
+    float min[3], max[3];
+    if (use_empty_drawtype && (ob_custom->type == OB_EMPTY) &&
+        BKE_object_minmax_empty_drawtype(ob_custom, min, max)) {
+      memset(&bb_custom_buf, 0x0, sizeof(bb_custom_buf));
+      BKE_boundbox_init_from_minmax(&bb_custom_buf, min, max);
+      bb_custom = &bb_custom_buf;
+    }
+    else {
+      bb_custom = BKE_object_boundbox_get(ob_custom);
+    }
+  }
+
   if (bb_custom) {
     float mat[4][4], smat[4][4], rmat[4][4], tmp[4][4];
     scale_m4_fl(smat, PCHAN_CUSTOM_BONE_LENGTH(pchan));
@@ -2706,7 +2722,7 @@ bool BKE_pose_minmax(Object *ob, float r_min[3], float r_max[3], bool use_hidden
       if (pchan->bone && (!((use_hidden == false) && (PBONE_VISIBLE(arm, pchan->bone) == false)) &&
                           !((use_select == true) && ((pchan->bone->flag & BONE_SELECTED) == 0)))) {
 
-        BKE_pchan_minmax(ob, pchan, r_min, r_max);
+        BKE_pchan_minmax(ob, pchan, false, r_min, r_max);
         changed = true;
       }
     }

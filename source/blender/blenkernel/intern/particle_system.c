@@ -47,6 +47,7 @@
 #include "BKE_effect.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
+#include "BKE_mesh_legacy_convert.h"
 #include "BKE_particle.h"
 
 #include "BKE_bvhutils.h"
@@ -321,8 +322,9 @@ void psys_calc_dmcache(Object *ob, Mesh *mesh_final, Mesh *mesh_original, Partic
   if (!mesh_final->runtime.deformed_only) {
     /* Will use later to speed up subsurf/evaluated mesh. */
     LinkNode *node, *nodedmelem, **nodearray;
-    int totdmelem, totelem, i, *origindex, *origindex_poly = NULL;
-
+    int totdmelem, totelem, i;
+    const int *origindex;
+    const int *origindex_poly = NULL;
     if (psys->part->from == PART_FROM_VERT) {
       totdmelem = mesh_final->totvert;
 
@@ -835,7 +837,7 @@ void psys_get_birth_coords(
     cross_v3_v3v3(mat[1], mat[2], mat[0]);
 
     /* apply rotation */
-    mat3_to_quat_is_ok(q, mat);
+    mat3_to_quat_legacy(q, mat);
     copy_qt_qt(state->rot, q);
   }
   else {
@@ -967,7 +969,7 @@ void psys_get_birth_coords(
           float tmat[3][3];
 
           /* NOTE: utan_local is not taken from 'utan', we calculate from rot_vec/vtan. */
-          /* NOTE(campbell): it looks like rotation phase may be applied twice
+          /* NOTE(@campbellbarton): it looks like rotation phase may be applied twice
            * (once with vtan, again below) however this isn't the case. */
           float *rot_vec_local = tmat[0];
           float *vtan_local = tmat[1];
@@ -3120,7 +3122,7 @@ static void collision_check(ParticleSimulationData *sim, int p, float dfra, floa
   col.cfra = cfra;
   col.old_cfra = sim->psys->cfra;
 
-  /* get acceleration (from gravity, forcefields etc. to be re-applied in collision response) */
+  /* Get acceleration (from gravity, force-fields etc. to be re-applied in collision response). */
   sub_v3_v3v3(col.acc, pa->state.vel, pa->prev_state.vel);
   mul_v3_fl(col.acc, 1.0f / col.total_time);
 
@@ -3320,12 +3322,10 @@ static void hair_create_input_mesh(ParticleSimulationData *sim,
   mesh = *r_mesh;
   if (!mesh) {
     *r_mesh = mesh = BKE_mesh_new_nomain(totpoint, totedge, 0, 0, 0);
-    CustomData_add_layer(&mesh->vdata, CD_MDEFORMVERT, CD_CALLOC, NULL, mesh->totvert);
-    BKE_mesh_update_customdata_pointers(mesh, false);
   }
-  mvert = mesh->mvert;
-  medge = mesh->medge;
-  dvert = mesh->dvert;
+  mvert = BKE_mesh_verts_for_write(mesh);
+  medge = BKE_mesh_edges_for_write(mesh);
+  dvert = BKE_mesh_deform_verts_for_write(mesh);
 
   if (psys->clmd->hairdata == NULL) {
     psys->clmd->hairdata = MEM_mallocN(sizeof(ClothHairData) * totpoint, "hair data");
@@ -4961,7 +4961,7 @@ void particle_system_update(struct Depsgraph *depsgraph,
   }
 
   /* Save matrix for duplicators,
-   * at rendertime the actual dupliobject's matrix is used so don't update! */
+   * at render-time the actual dupli-object's matrix is used so don't update! */
   invert_m4_m4(psys->imat, ob->obmat);
 
   BKE_particle_batch_cache_dirty_tag(psys, BKE_PARTICLE_BATCH_DIRTY_ALL);

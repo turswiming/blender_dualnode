@@ -20,6 +20,7 @@
 #include "BLI_string.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
+#include "BLI_vector.hh"
 
 #include "BKE_anim_data.h"
 #include "BKE_customdata.h"
@@ -44,6 +45,7 @@
 using blender::float3;
 using blender::IndexRange;
 using blender::Span;
+using blender::Vector;
 
 /* PointCloud datablock */
 
@@ -62,11 +64,10 @@ static void pointcloud_init_data(ID *id)
   CustomData_reset(&pointcloud->pdata);
   CustomData_add_layer_named(&pointcloud->pdata,
                              CD_PROP_FLOAT3,
-                             CD_CALLOC,
+                             CD_SET_DEFAULT,
                              nullptr,
                              pointcloud->totpoint,
                              POINTCLOUD_ATTR_POSITION);
-  BKE_pointcloud_update_customdata_pointers(pointcloud);
 }
 
 static void pointcloud_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, const int flag)
@@ -81,7 +82,6 @@ static void pointcloud_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_s
                   CD_MASK_ALL,
                   alloc_type,
                   pointcloud_dst->totpoint);
-  BKE_pointcloud_update_customdata_pointers(pointcloud_dst);
 
   pointcloud_dst->batch_cache = nullptr;
 }
@@ -107,26 +107,24 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
 {
   PointCloud *pointcloud = (PointCloud *)id;
 
-  CustomDataLayer *players = nullptr, players_buff[CD_TEMP_CHUNK_SIZE];
-  CustomData_blend_write_prepare(
-      &pointcloud->pdata, &players, players_buff, ARRAY_SIZE(players_buff));
+  Vector<CustomDataLayer, 16> point_layers;
+  CustomData_blend_write_prepare(pointcloud->pdata, point_layers);
 
   /* Write LibData */
   BLO_write_id_struct(writer, PointCloud, id_address, &pointcloud->id);
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */
-  CustomData_blend_write(
-      writer, &pointcloud->pdata, players, pointcloud->totpoint, CD_MASK_ALL, &pointcloud->id);
+  CustomData_blend_write(writer,
+                         &pointcloud->pdata,
+                         point_layers,
+                         pointcloud->totpoint,
+                         CD_MASK_ALL,
+                         &pointcloud->id);
 
   BLO_write_pointer_array(writer, pointcloud->totcol, pointcloud->mat);
   if (pointcloud->adt) {
     BKE_animdata_blend_write(writer, pointcloud->adt);
-  }
-
-  /* Remove temporary data. */
-  if (players && players != players_buff) {
-    MEM_freeN(players);
   }
 }
 
@@ -138,7 +136,6 @@ static void pointcloud_blend_read_data(BlendDataReader *reader, ID *id)
 
   /* Geometry */
   CustomData_blend_read(reader, &pointcloud->pdata, pointcloud->totpoint);
-  BKE_pointcloud_update_customdata_pointers(pointcloud);
 
   /* Materials */
   BLO_read_pointer_array(reader, (void **)&pointcloud->mat);
@@ -178,7 +175,7 @@ IDTypeInfo IDType_ID_PT = {
     /* foreach_id */ pointcloud_foreach_id,
     /* foreach_cache */ nullptr,
     /* foreach_path */ nullptr,
-    /* owner_get */ nullptr,
+    /* owner_pointer_get */ nullptr,
 
     /* blend_write */ pointcloud_blend_write,
     /* blend_read_data */ pointcloud_blend_read_data,
@@ -192,18 +189,29 @@ IDTypeInfo IDType_ID_PT = {
 
 static void pointcloud_random(PointCloud *pointcloud)
 {
+  BLI_assert(pointcloud->totpoint == 0);
   pointcloud->totpoint = 400;
-  CustomData_realloc(&pointcloud->pdata, pointcloud->totpoint);
-  BKE_pointcloud_update_customdata_pointers(pointcloud);
+  CustomData_realloc(&pointcloud->pdata, 0, pointcloud->totpoint);
 
   RNG *rng = BLI_rng_new(0);
 
-  for (int i = 0; i < pointcloud->totpoint; i++) {
-    pointcloud->co[i][0] = 2.0f * BLI_rng_get_float(rng) - 1.0f;
-    pointcloud->co[i][1] = 2.0f * BLI_rng_get_float(rng) - 1.0f;
-    pointcloud->co[i][2] = 2.0f * BLI_rng_get_float(rng) - 1.0f;
-    pointcloud->radius[i] = 0.05f * BLI_rng_get_float(rng);
+  blender::bke::MutableAttributeAccessor attributes = pointcloud->attributes_for_write();
+  blender::bke::SpanAttributeWriter positions =
+      attributes.lookup_or_add_for_write_only_span<float3>(POINTCLOUD_ATTR_POSITION,
+                                                           ATTR_DOMAIN_POINT);
+  blender::bke::SpanAttributeWriter<float> radii =
+      attributes.lookup_or_add_for_write_only_span<float>(POINTCLOUD_ATTR_RADIUS,
+                                                          ATTR_DOMAIN_POINT);
+
+  for (const int i : positions.span.index_range()) {
+    positions.span[i] =
+        float3(BLI_rng_get_float(rng), BLI_rng_get_float(rng), BLI_rng_get_float(rng)) * 2.0f -
+        1.0f;
+    radii.span[i] = 0.05f * BLI_rng_get_float(rng);
   }
+
+  positions.finish();
+  radii.finish();
 
   BLI_rng_free(rng);
 }
@@ -220,13 +228,6 @@ void *BKE_pointcloud_add_default(Main *bmain, const char *name)
   PointCloud *pointcloud = static_cast<PointCloud *>(BKE_libblock_alloc(bmain, ID_PT, name, 0));
 
   pointcloud_init_data(&pointcloud->id);
-
-  CustomData_add_layer_named(&pointcloud->pdata,
-                             CD_PROP_FLOAT,
-                             CD_CALLOC,
-                             nullptr,
-                             pointcloud->totpoint,
-                             POINTCLOUD_ATTR_RADIUS);
   pointcloud_random(pointcloud);
 
   return pointcloud;
@@ -238,30 +239,61 @@ PointCloud *BKE_pointcloud_new_nomain(const int totpoint)
       nullptr, ID_PT, BKE_idtype_idcode_to_name(ID_PT), LIB_ID_CREATE_LOCALIZE));
 
   pointcloud_init_data(&pointcloud->id);
-
-  pointcloud->totpoint = totpoint;
-
   CustomData_add_layer_named(&pointcloud->pdata,
                              CD_PROP_FLOAT,
-                             CD_CALLOC,
+                             CD_SET_DEFAULT,
                              nullptr,
                              pointcloud->totpoint,
                              POINTCLOUD_ATTR_RADIUS);
 
+  CustomData_realloc(&pointcloud->pdata, 0, totpoint);
   pointcloud->totpoint = totpoint;
-  CustomData_realloc(&pointcloud->pdata, pointcloud->totpoint);
-  BKE_pointcloud_update_customdata_pointers(pointcloud);
 
   return pointcloud;
+}
+
+void BKE_pointcloud_nomain_to_pointcloud(PointCloud *pointcloud_src,
+                                         PointCloud *pointcloud_dst,
+                                         bool take_ownership)
+{
+  BLI_assert(pointcloud_src->id.tag & LIB_TAG_NO_MAIN);
+
+  eCDAllocType alloctype = CD_DUPLICATE;
+
+  if (take_ownership) {
+    bool has_any_referenced_layers = CustomData_has_referenced(&pointcloud_src->pdata);
+
+    if (!has_any_referenced_layers) {
+      alloctype = CD_ASSIGN;
+    }
+  }
+
+  CustomData_free(&pointcloud_dst->pdata, pointcloud_dst->totpoint);
+
+  const int totpoint = pointcloud_dst->totpoint = pointcloud_src->totpoint;
+  CustomData_copy(
+      &pointcloud_src->pdata, &pointcloud_dst->pdata, CD_MASK_ALL, alloctype, totpoint);
+
+  if (take_ownership) {
+    if (alloctype == CD_ASSIGN) {
+      /* Free the CustomData but keep the layers. */
+      CustomData_free_typemask(&pointcloud_src->pdata, pointcloud_src->totpoint, 0);
+    }
+    BKE_id_free(nullptr, pointcloud_src);
+  }
 }
 
 static std::optional<blender::bounds::MinMaxResult<float3>> point_cloud_bounds(
     const PointCloud &pointcloud)
 {
-  Span<float3> positions{reinterpret_cast<float3 *>(pointcloud.co), pointcloud.totpoint};
-  if (pointcloud.radius) {
-    Span<float> radii{pointcloud.radius, pointcloud.totpoint};
-    return blender::bounds::min_max_with_radii(positions, radii);
+  blender::bke::AttributeAccessor attributes = pointcloud.attributes();
+  blender::VArraySpan<float3> positions = attributes.lookup_or_default<float3>(
+      POINTCLOUD_ATTR_POSITION, ATTR_DOMAIN_POINT, float3(0));
+  blender::VArray<float> radii = attributes.lookup_or_default<float>(
+      POINTCLOUD_ATTR_RADIUS, ATTR_DOMAIN_POINT, 0.0f);
+
+  if (!(radii.is_single() && radii.get_internal_single() == 0.0f)) {
+    return blender::bounds::min_max_with_radii(positions, radii.get_internal_span());
   }
   return blender::bounds::min_max(positions);
 }
@@ -307,37 +339,12 @@ BoundBox *BKE_pointcloud_boundbox_get(Object *ob)
   return ob->runtime.bb;
 }
 
-void BKE_pointcloud_update_customdata_pointers(PointCloud *pointcloud)
+bool BKE_pointcloud_attribute_required(const PointCloud *UNUSED(pointcloud), const char *name)
 {
-  pointcloud->co = static_cast<float(*)[3]>(
-      CustomData_get_layer_named(&pointcloud->pdata, CD_PROP_FLOAT3, POINTCLOUD_ATTR_POSITION));
-  pointcloud->radius = static_cast<float *>(
-      CustomData_get_layer_named(&pointcloud->pdata, CD_PROP_FLOAT, POINTCLOUD_ATTR_RADIUS));
-}
-
-bool BKE_pointcloud_customdata_required(PointCloud *UNUSED(pointcloud), CustomDataLayer *layer)
-{
-  return layer->type == CD_PROP_FLOAT3 && STREQ(layer->name, POINTCLOUD_ATTR_POSITION);
+  return STREQ(name, POINTCLOUD_ATTR_POSITION);
 }
 
 /* Dependency Graph */
-
-PointCloud *BKE_pointcloud_new_for_eval(const PointCloud *pointcloud_src, int totpoint)
-{
-  PointCloud *pointcloud_dst = static_cast<PointCloud *>(BKE_id_new_nomain(ID_PT, nullptr));
-  CustomData_free(&pointcloud_dst->pdata, pointcloud_dst->totpoint);
-
-  STRNCPY(pointcloud_dst->id.name, pointcloud_src->id.name);
-  pointcloud_dst->mat = static_cast<Material **>(MEM_dupallocN(pointcloud_src->mat));
-  pointcloud_dst->totcol = pointcloud_src->totcol;
-
-  pointcloud_dst->totpoint = totpoint;
-  CustomData_copy(
-      &pointcloud_src->pdata, &pointcloud_dst->pdata, CD_MASK_ALL, CD_CALLOC, totpoint);
-  BKE_pointcloud_update_customdata_pointers(pointcloud_dst);
-
-  return pointcloud_dst;
-}
 
 PointCloud *BKE_pointcloud_copy_for_eval(struct PointCloud *pointcloud_src, bool reference)
 {
@@ -361,6 +368,8 @@ static void pointcloud_evaluate_modifiers(struct Depsgraph *depsgraph,
   const int required_mode = use_render ? eModifierMode_Render : eModifierMode_Realtime;
   ModifierApplyFlag apply_flag = use_render ? MOD_APPLY_RENDER : MOD_APPLY_USECACHE;
   const ModifierEvalContext mectx = {depsgraph, object, apply_flag};
+
+  BKE_modifiers_clear_errors(object);
 
   /* Get effective list of modifiers to execute. Some effects like shape keys
    * are added as virtual modifiers before the user created modifiers. */

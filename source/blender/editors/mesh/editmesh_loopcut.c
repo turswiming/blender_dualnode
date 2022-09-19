@@ -208,12 +208,15 @@ static void ringsel_finish(bContext *C, wmOperator *op)
 
         EDBM_selectmode_flush_ex(lcd->em, SCE_SELECT_VERTEX);
       }
-      /* we can't slide multiple edges in vertex select mode */
+      /* We can't slide multiple edges in vertex select mode, force edge select mode. Do this for
+       * all meshes in multi-object editmode so their selectmode is in sync for following
+       * operators. */
       else if (is_macro && (cuts > 1) && (em->selectmode & SCE_SELECT_VERTEX)) {
-        EDBM_selectmode_disable(lcd->vc.scene, em, SCE_SELECT_VERTEX, SCE_SELECT_EDGE);
+        EDBM_selectmode_disable_multi(C, SCE_SELECT_VERTEX, SCE_SELECT_EDGE);
       }
-      /* Force edge slide to edge select mode in face select mode. */
-      else if (EDBM_selectmode_disable(lcd->vc.scene, em, SCE_SELECT_FACE, SCE_SELECT_EDGE)) {
+      /* Force edge slide to edge select mode in face select mode. Do this for all meshes in
+       * multi-object editmode so their selectmode is in sync for following operators. */
+      else if (EDBM_selectmode_disable_multi(C, SCE_SELECT_FACE, SCE_SELECT_EDGE)) {
         /* pass, the change will flush selection */
       }
       else {
@@ -373,11 +376,12 @@ static int loopcut_init(bContext *C, wmOperator *op, const wmEvent *event)
       .e_index = (uint)RNA_int_get(op->ptr, "edge_index"),
   };
 
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   uint bases_len;
   Base **bases = BKE_view_layer_array_from_bases_in_edit_mode(
-      view_layer, CTX_wm_view3d(C), &bases_len);
+      scene, view_layer, CTX_wm_view3d(C), &bases_len);
 
   if (is_interactive) {
     for (uint base_index = 0; base_index < bases_len; base_index++) {
@@ -443,7 +447,6 @@ static int loopcut_init(bContext *C, wmOperator *op, const wmEvent *event)
 #ifdef USE_LOOPSLIDE_HACK
   /* for use in macro so we can restore, HACK */
   {
-    Scene *scene = CTX_data_scene(C);
     ToolSettings *settings = scene->toolsettings;
     const bool mesh_select_mode[3] = {
         (settings->selectmode & SCE_SELECT_VERTEX) != 0,

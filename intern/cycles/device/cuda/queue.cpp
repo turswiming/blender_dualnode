@@ -39,12 +39,12 @@ int CUDADeviceQueue::num_concurrent_states(const size_t state_size) const
       num_states = max((int)(num_states * factor), 1024);
     }
     else {
-      VLOG(3) << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
+      VLOG_DEVICE_STATS << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
     }
   }
 
-  VLOG(3) << "GPU queue concurrent states: " << num_states << ", using up to "
-          << string_human_readable_size(num_states * state_size);
+  VLOG_DEVICE_STATS << "GPU queue concurrent states: " << num_states << ", using up to "
+                    << string_human_readable_size(num_states * state_size);
 
   return num_states;
 }
@@ -69,11 +69,6 @@ void CUDADeviceQueue::init_execution()
   cuda_device_assert(cuda_device_, cuCtxSynchronize());
 
   debug_init_execution();
-}
-
-bool CUDADeviceQueue::kernel_available(DeviceKernel kernel) const
-{
-  return cuda_device_->kernels.available(kernel);
 }
 
 bool CUDADeviceQueue::enqueue(DeviceKernel kernel,

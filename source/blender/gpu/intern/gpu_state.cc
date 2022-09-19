@@ -14,8 +14,6 @@
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_global.h"
-
 #include "GPU_state.h"
 
 #include "gpu_context_private.hh"
@@ -46,6 +44,12 @@ void GPU_blend(eGPUBlend blend)
 void GPU_face_culling(eGPUFaceCullTest culling)
 {
   SET_IMMUTABLE_STATE(culling_test, culling);
+}
+
+eGPUFaceCullTest GPU_face_culling_get()
+{
+  GPUState &state = Context::get()->state_manager->state;
+  return (eGPUFaceCullTest)state.culling_test;
 }
 
 void GPU_front_facing(bool invert)

@@ -90,7 +90,6 @@ static SpaceLink *action_create(const ScrArea *area, const Scene *scene)
   BLI_addtail(&saction->regionbase, region);
   region->regiontype = RGN_TYPE_UI;
   region->alignment = RGN_ALIGN_RIGHT;
-  region->flag = RGN_FLAG_HIDDEN;
 
   /* main region */
   region = MEM_callocN(sizeof(ARegion), "main region for action");
@@ -98,9 +97,9 @@ static SpaceLink *action_create(const ScrArea *area, const Scene *scene)
   BLI_addtail(&saction->regionbase, region);
   region->regiontype = RGN_TYPE_WINDOW;
 
-  region->v2d.tot.xmin = (float)(SFRA - 10);
+  region->v2d.tot.xmin = (float)(scene->r.sfra - 10);
   region->v2d.tot.ymin = (float)(-area->winy) / 3.0f;
-  region->v2d.tot.xmax = (float)(EFRA + 10);
+  region->v2d.tot.xmax = (float)(scene->r.efra + 10);
   region->v2d.tot.ymax = 0.0f;
 
   region->v2d.cur = region->v2d.tot;
@@ -225,6 +224,9 @@ static void action_main_region_draw(const bContext *C, ARegion *region)
   /* reset view matrix */
   UI_view2d_view_restore(C);
 
+  /* gizmos */
+  WM_gizmomap_draw(region->gizmo_map, C, WM_GIZMOMAP_DRAWSTEP_2D);
+
   /* scrubbing region */
   ED_time_scrub_draw(region, scene, saction->flag & SACTION_DRAWTIME, true);
 }
@@ -305,7 +307,7 @@ static void action_header_region_draw(const bContext *C, ARegion *region)
 static void action_channel_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -399,7 +401,7 @@ static void saction_channel_region_message_subscribe(const wmRegionMessageSubscr
 static void action_main_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -497,14 +499,14 @@ static void saction_main_region_message_subscribe(const wmRegionMessageSubscribe
 static void action_listener(const wmSpaceTypeListenerParams *params)
 {
   ScrArea *area = params->area;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
   SpaceAction *saction = (SpaceAction *)area->spacedata.first;
 
   /* context changes */
   switch (wmn->category) {
     case NC_GPENCIL:
-      /* only handle these events in GPencil mode for performance considerations */
-      if (saction->mode == SACTCONT_GPENCIL) {
+      /* only handle these events for containers in which GPencil frames are displayed */
+      if (ELEM(saction->mode, SACTCONT_GPENCIL, SACTCONT_DOPESHEET, SACTCONT_TIMELINE)) {
         if (wmn->action == NA_EDITED) {
           ED_area_tag_redraw(area);
         }
@@ -558,8 +560,8 @@ static void action_listener(const wmSpaceTypeListenerParams *params)
           LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
             if (region->regiontype == RGN_TYPE_WINDOW) {
               Scene *scene = wmn->reference;
-              region->v2d.tot.xmin = (float)(SFRA - 4);
-              region->v2d.tot.xmax = (float)(EFRA + 4);
+              region->v2d.tot.xmin = (float)(scene->r.sfra - 4);
+              region->v2d.tot.xmax = (float)(scene->r.efra + 4);
               break;
             }
           }
@@ -651,7 +653,7 @@ static void action_header_region_listener(const wmRegionListenerParams *params)
 {
   ScrArea *area = params->area;
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
   SpaceAction *saction = (SpaceAction *)area->spacedata.first;
 
   /* context changes */
@@ -726,7 +728,7 @@ static void action_buttons_area_draw(const bContext *C, ARegion *region)
 static void action_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -838,7 +840,7 @@ void ED_spacetype_action(void)
   ARegionType *art;
 
   st->spaceid = SPACE_ACTION;
-  strncpy(st->name, "Action", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "Action");
 
   st->create = action_create;
   st->free = action_free;
@@ -861,7 +863,7 @@ void ED_spacetype_action(void)
   art->draw_overlay = action_main_region_draw_overlay;
   art->listener = action_main_region_listener;
   art->message_subscribe = saction_main_region_message_subscribe;
-  art->keymapflag = ED_KEYMAP_VIEW2D | ED_KEYMAP_ANIMATION | ED_KEYMAP_FRAMES;
+  art->keymapflag = ED_KEYMAP_GIZMO | ED_KEYMAP_VIEW2D | ED_KEYMAP_ANIMATION | ED_KEYMAP_FRAMES;
 
   BLI_addhead(&st->regiontypes, art);
 

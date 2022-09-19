@@ -70,7 +70,7 @@ static bool checkbmp(const uchar *mem, const size_t size)
   BMPINFOHEADER bmi;
   uint u;
 
-  /* skip fileheader */
+  /* Skip file-header. */
   mem += BMP_FILEHEADER_SIZE;
 
   /* for systems where an int needs to be 4 bytes aligned */
@@ -178,7 +178,6 @@ ImBuf *imb_bmp_decode(const uchar *mem, size_t size, int flags, char colorspace[
       const char(*palette)[4] = (const char(*)[4])(mem + palette_offset);
       const int startmask = ((1 << depth) - 1) << 8;
       for (size_t i = y; i > 0; i--) {
-        int index;
         int bitoffs = 8;
         int bitmask = startmask;
         int nbytes = 0;
@@ -189,7 +188,7 @@ ImBuf *imb_bmp_decode(const uchar *mem, size_t size, int flags, char colorspace[
         for (size_t j = x; j > 0; j--) {
           bitoffs -= depth;
           bitmask >>= depth;
-          index = (bmp[0] & bitmask) >> bitoffs;
+          const int index = (bmp[0] & bitmask) >> bitoffs;
           pcol = palette[index];
           /* intentionally BGR -> RGB */
           rect[0] = pcol[2];

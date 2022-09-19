@@ -41,7 +41,7 @@ void IMB_thumb_ensure_translations(void)
   }
 }
 
-struct ImBuf *IMB_thumb_load_font(const char *filename, unsigned int x, unsigned int y)
+struct ImBuf *IMB_thumb_load_font(const char *filepath, uint x, uint y)
 {
   const int font_size = y / 4;
 
@@ -60,13 +60,13 @@ struct ImBuf *IMB_thumb_load_font(const char *filename, unsigned int x, unsigned
   /* draw with full alpha */
   font_color[3] = 1.0f;
 
-  BLF_thumb_preview(filename,
+  BLF_thumb_preview(filepath,
                     thumb_str,
                     i18n_thumb_str,
                     ARRAY_SIZE(thumb_str),
                     font_color,
                     font_size,
-                    (unsigned char *)ibuf->rect,
+                    (uchar *)ibuf->rect,
                     ibuf->x,
                     ibuf->y,
                     ibuf->channels);
@@ -83,7 +83,7 @@ bool IMB_thumb_load_font_get_hash(char *r_hash)
   int draw_str_lines = ARRAY_SIZE(thumb_str);
   int i;
 
-  unsigned char digest[16];
+  uchar digest[16];
 
   len += BLI_strncpy_rlen(str + len, THUMB_DEFAULT_HASH, sizeof(buf) - len);
 

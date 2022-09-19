@@ -29,7 +29,7 @@ class GHOST_Window : public GHOST_IWindow {
    * \param height: The height of the window.
    * \param state: The state the window is initially opened with.
    * \param wantStereoVisual: Stereo visual for quad buffered stereo.
-   * \param exclusive: Use to show the window ontop and ignore others (used full-screen).
+   * \param exclusive: Use to show the window on top and ignore others (used full-screen).
    */
   GHOST_Window(uint32_t width,
                uint32_t height,
@@ -117,6 +117,8 @@ class GHOST_Window : public GHOST_IWindow {
                                       int hotY,
                                       bool canInvertColor);
 
+  GHOST_TSuccess getCursorBitmap(GHOST_CursorBitmapRef *bitmap);
+
   /**
    * Returns the visibility state of the cursor.
    * \return The visibility state of the cursor.
@@ -151,6 +153,15 @@ class GHOST_Window : public GHOST_IWindow {
    * reset when grab is disabled.
    */
   GHOST_TSuccess getCursorGrabBounds(GHOST_Rect &bounds);
+
+  void getCursorGrabState(GHOST_TGrabCursorMode &mode,
+                          GHOST_TAxisFlag &axis_flag,
+                          GHOST_Rect &bounds,
+                          bool &use_software_cursor);
+  /**
+   * Return true when a software cursor should be used.
+   */
+  bool getCursorGrabUseSoftwareDisplay();
 
   /**
    * Sets the progress bar value displayed in the window/application icon

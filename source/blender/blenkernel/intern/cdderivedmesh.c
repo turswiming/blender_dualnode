@@ -65,18 +65,6 @@ static int cdDM_getNumEdges(DerivedMesh *dm)
   return dm->numEdgeData;
 }
 
-static int cdDM_getNumTessFaces(DerivedMesh *dm)
-{
-  /* uncomment and add a breakpoint on the printf()
-   * to help debug tessfaces issues since BMESH merge. */
-#if 0
-  if (dm->numTessFaceData == 0 && dm->numPolyData != 0) {
-    printf("%s: has no faces!\n");
-  }
-#endif
-  return dm->numTessFaceData;
-}
-
 static int cdDM_getNumLoops(DerivedMesh *dm)
 {
   return dm->numLoopData;
@@ -173,7 +161,6 @@ static CDDerivedMesh *cdDM_create(const char *desc)
 
   dm->getNumVerts = cdDM_getNumVerts;
   dm->getNumEdges = cdDM_getNumEdges;
-  dm->getNumTessFaces = cdDM_getNumTessFaces;
   dm->getNumLoops = cdDM_getNumLoops;
   dm->getNumPolys = cdDM_getNumPolys;
 
@@ -256,44 +243,4 @@ static DerivedMesh *cdDM_from_mesh_ex(Mesh *mesh,
 DerivedMesh *CDDM_from_mesh(Mesh *mesh)
 {
   return cdDM_from_mesh_ex(mesh, CD_REFERENCE, &CD_MASK_MESH);
-}
-
-DerivedMesh *CDDM_copy(DerivedMesh *source)
-{
-  CDDerivedMesh *cddm = cdDM_create("CDDM_copy cddm");
-  DerivedMesh *dm = &cddm->dm;
-  int numVerts = source->numVertData;
-  int numEdges = source->numEdgeData;
-  int numTessFaces = 0;
-  int numLoops = source->numLoopData;
-  int numPolys = source->numPolyData;
-
-  /* NOTE: Don't copy tessellation faces if not requested explicitly. */
-
-  /* ensure these are created if they are made on demand */
-  source->getVertDataArray(source, CD_ORIGINDEX);
-  source->getEdgeDataArray(source, CD_ORIGINDEX);
-  source->getPolyDataArray(source, CD_ORIGINDEX);
-
-  /* this initializes dm, and copies all non mvert/medge/mface layers */
-  DM_from_template(dm, source, DM_TYPE_CDDM, numVerts, numEdges, numTessFaces, numLoops, numPolys);
-  dm->deformedOnly = source->deformedOnly;
-  dm->cd_flag = source->cd_flag;
-
-  CustomData_copy_data(&source->vertData, &dm->vertData, 0, 0, numVerts);
-  CustomData_copy_data(&source->edgeData, &dm->edgeData, 0, 0, numEdges);
-
-  /* now add mvert/medge/mface layers */
-  cddm->mvert = source->dupVertArray(source);
-  cddm->medge = source->dupEdgeArray(source);
-
-  CustomData_add_layer(&dm->vertData, CD_MVERT, CD_ASSIGN, cddm->mvert, numVerts);
-  CustomData_add_layer(&dm->edgeData, CD_MEDGE, CD_ASSIGN, cddm->medge, numEdges);
-
-  DM_DupPolys(source, dm);
-
-  cddm->mloop = CustomData_get_layer(&dm->loopData, CD_MLOOP);
-  cddm->mpoly = CustomData_get_layer(&dm->polyData, CD_MPOLY);
-
-  return dm;
 }

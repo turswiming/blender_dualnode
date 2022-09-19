@@ -37,7 +37,7 @@ static void node_init(bNodeTree *UNUSED(tree), bNode *node)
 static void node_update(bNodeTree *ntree, bNode *node)
 {
   const NodeGeometryInputNamedAttribute &storage = node_storage(*node);
-  const CustomDataType data_type = static_cast<CustomDataType>(storage.data_type);
+  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
 
   bNodeSocket *socket_vector = (bNodeSocket *)node->outputs.first;
   bNodeSocket *socket_float = socket_vector->next;
@@ -54,14 +54,11 @@ static void node_update(bNodeTree *ntree, bNode *node)
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  if (U.experimental.use_named_attribute_nodes == 0) {
-    return;
-  }
   const NodeDeclaration &declaration = *params.node_type().fixed_declaration;
   search_link_ops_for_declarations(params, declaration.inputs());
 
   if (params.in_out() == SOCK_OUT) {
-    const std::optional<CustomDataType> type = node_data_type_to_custom_data_type(
+    const std::optional<eCustomDataType> type = node_data_type_to_custom_data_type(
         static_cast<eNodeSocketDatatype>(params.other_socket().type));
     if (type && *type != CD_PROP_STRING) {
       /* The input and output sockets have the same name. */
@@ -77,14 +74,21 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 static void node_geo_exec(GeoNodeExecParams params)
 {
   const NodeGeometryInputNamedAttribute &storage = node_storage(params.node());
-  const CustomDataType data_type = static_cast<CustomDataType>(storage.data_type);
+  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
 
   const std::string name = params.extract_input<std::string>("Name");
 
-  if (!U.experimental.use_named_attribute_nodes) {
+  if (name.empty()) {
     params.set_default_remaining_outputs();
     return;
   }
+  if (!bke::allow_procedural_attribute_access(name)) {
+    params.error_message_add(NodeWarningType::Info, TIP_(bke::no_procedural_access_message));
+    params.set_default_remaining_outputs();
+    return;
+  }
+
+  params.used_named_attribute(name, NamedAttributeUsage::Read);
 
   switch (data_type) {
     case CD_PROP_FLOAT:

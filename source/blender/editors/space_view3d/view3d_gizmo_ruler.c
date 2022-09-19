@@ -17,6 +17,7 @@
 #include "BKE_main.h"
 #include "BKE_report.h"
 
+#include "BKE_layer.h"
 #include "BKE_material.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
@@ -357,11 +358,12 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
                                                   depsgraph,
                                                   ruler_info->region,
                                                   v3d,
-                                                  SCE_SNAP_MODE_FACE,
+                                                  SCE_SNAP_MODE_FACE_RAYCAST,
                                                   &(const struct SnapObjectParams){
-                                                      .snap_select = SNAP_ALL,
+                                                      .snap_target_select = SCE_SNAP_TARGET_ALL,
                                                       .edit_mode_type = SNAP_GEOM_CAGE,
                                                   },
+                                                  NULL,
                                                   mval_fl,
                                                   NULL,
                                                   &dist_px,
@@ -374,7 +376,7 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
                                              depsgraph,
                                              v3d,
                                              &(const struct SnapObjectParams){
-                                                 .snap_select = SNAP_ALL,
+                                                 .snap_target_select = SCE_SNAP_TARGET_ALL,
                                                  .edit_mode_type = SNAP_GEOM_CAGE,
                                              },
                                              ray_start,
@@ -419,7 +421,8 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
         Scene *scene = DEG_get_input_scene(depsgraph);
         ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
         RegionView3D *rv3d = ruler_info->region->regiondata;
-        Object *ob = OBACT(view_layer);
+        BKE_view_layer_synced_ensure(scene, view_layer);
+        Object *ob = BKE_view_layer_active_object_get(view_layer);
         Object *obedit = OBEDIT_FROM_OBACT(ob);
 
         short orient_index = BKE_scene_orientation_get_index(scene, SCE_ORIENT_DEFAULT);
@@ -522,7 +525,7 @@ static bool view3d_ruler_to_gpencil(bContext *C, wmGizmoGroup *gzgroup)
     gpl->flag |= GP_LAYER_HIDE | GP_LAYER_IS_RULER;
   }
 
-  gpf = BKE_gpencil_layer_frame_get(gpl, CFRA, GP_GETFRAME_ADD_NEW);
+  gpf = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, GP_GETFRAME_ADD_NEW);
   BKE_gpencil_free_strokes(gpf);
 
   for (ruler_item = gzgroup_ruler_item_first_get(gzgroup); ruler_item;
@@ -576,7 +579,7 @@ static bool view3d_ruler_from_gpencil(const bContext *C, wmGizmoGroup *gzgroup)
     gpl = view3d_ruler_layer_get(scene->gpd);
     if (gpl) {
       bGPDframe *gpf;
-      gpf = BKE_gpencil_layer_frame_get(gpl, CFRA, GP_GETFRAME_USE_PREV);
+      gpf = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, GP_GETFRAME_USE_PREV);
       if (gpf) {
         bGPDstroke *gps;
         for (gps = gpf->strokes.first; gps; gps = gps->next) {
@@ -689,10 +692,8 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
 
     immUniform1i("colors_len", 2); /* "advanced" mode */
     const float *col = is_act ? color_act : color_base;
-    immUniformArray4fv(
-        "colors",
-        (float *)(float[][4]){{0.67f, 0.67f, 0.67f, 1.0f}, {col[0], col[1], col[2], col[3]}},
-        2);
+    immUniform4f("color", 0.67f, 0.67f, 0.67f, 1.0f);
+    immUniform4f("color2", col[0], col[1], col[2], col[3]);
     immUniform1f("dash_width", 6.0f);
     immUniform1f("dash_factor", 0.5f);
 
@@ -760,10 +761,8 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
 
     immUniform1i("colors_len", 2); /* "advanced" mode */
     const float *col = is_act ? color_act : color_base;
-    immUniformArray4fv(
-        "colors",
-        (float *)(float[][4]){{0.67f, 0.67f, 0.67f, 1.0f}, {col[0], col[1], col[2], col[3]}},
-        2);
+    immUniform4f("color", 0.67f, 0.67f, 0.67f, 1.0f);
+    immUniform4f("color2", col[0], col[1], col[2], col[3]);
     immUniform1f("dash_width", 6.0f);
     immUniform1f("dash_factor", 0.5f);
 
@@ -786,7 +785,7 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
       immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
   if (ruler_item->flag & RULERITEM_USE_ANGLE) {
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     /* capping */
     {
       float rot_90_vec_a[2];
@@ -888,7 +887,7 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
     }
   }
   else {
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     sub_v2_v2v2(dir_ruler, co_ss[0], co_ss[2]);
 
@@ -1232,11 +1231,7 @@ static void WIDGETGROUP_ruler_setup(const bContext *C, wmGizmoGroup *gzgroup)
     gzt_snap = WM_gizmotype_find("GIZMO_GT_snap_3d", true);
     gizmo = WM_gizmo_new_ptr(gzt_snap, gzgroup, NULL);
 
-    RNA_enum_set(gizmo->ptr,
-                 "snap_elements_force",
-                 (SCE_SNAP_MODE_VERTEX | SCE_SNAP_MODE_EDGE | SCE_SNAP_MODE_FACE |
-                  /* SCE_SNAP_MODE_VOLUME | SCE_SNAP_MODE_GRID | SCE_SNAP_MODE_INCREMENT | */
-                  SCE_SNAP_MODE_EDGE_PERPENDICULAR | SCE_SNAP_MODE_EDGE_MIDPOINT));
+    RNA_enum_set(gizmo->ptr, "snap_elements_force", SCE_SNAP_MODE_GEOM);
     ED_gizmotypes_snap_3d_flag_set(gizmo, V3D_SNAPCURSOR_SNAP_EDIT_GEOM_CAGE);
     WM_gizmo_set_color(gizmo, (float[4]){1.0f, 1.0f, 1.0f, 1.0f});
 

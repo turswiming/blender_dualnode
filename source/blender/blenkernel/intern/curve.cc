@@ -44,7 +44,6 @@
 #include "BKE_lib_query.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
-#include "BKE_spline.hh"
 #include "BKE_vfont.h"
 
 #include "DEG_depsgraph.h"
@@ -113,9 +112,12 @@ static void curve_free_data(ID *id)
   BKE_curve_batch_cache_free(curve);
 
   BKE_nurbList_free(&curve->nurb);
-  BKE_curve_editfont_free(curve);
 
-  BKE_curve_editNurb_free(curve);
+  if (!curve->edit_data_from_original) {
+    BKE_curve_editfont_free(curve);
+
+    BKE_curve_editNurb_free(curve);
+  }
 
   BKE_curveprofile_free(curve->bevel_profile);
 
@@ -123,8 +125,6 @@ static void curve_free_data(ID *id)
   MEM_SAFE_FREE(curve->str);
   MEM_SAFE_FREE(curve->strinfo);
   MEM_SAFE_FREE(curve->tb);
-
-  delete curve->curve_eval;
 }
 
 static void curve_foreach_id(ID *id, LibraryForeachIDData *data)
@@ -321,7 +321,7 @@ IDTypeInfo IDType_ID_CU_LEGACY = {
     /* foreach_id */ curve_foreach_id,
     /* foreach_cache */ nullptr,
     /* foreach_path */ nullptr,
-    /* owner_get */ nullptr,
+    /* owner_pointer_get */ nullptr,
 
     /* blend_write */ curve_blend_write,
     /* blend_read_data */ curve_blend_read_data,
@@ -667,7 +667,7 @@ Nurb *BKE_nurb_duplicate(const Nurb *nu)
   if (newnu == nullptr) {
     return nullptr;
   }
-  memcpy(newnu, nu, sizeof(Nurb));
+  *newnu = blender::dna::shallow_copy(*nu);
 
   if (nu->bezt) {
     newnu->bezt = (BezTriple *)MEM_malloc_arrayN(nu->pntsu, sizeof(BezTriple), "duplicateNurb2");
@@ -701,7 +701,7 @@ Nurb *BKE_nurb_duplicate(const Nurb *nu)
 Nurb *BKE_nurb_copy(Nurb *src, int pntsu, int pntsv)
 {
   Nurb *newnu = (Nurb *)MEM_mallocN(sizeof(Nurb), "copyNurb");
-  memcpy(newnu, src, sizeof(Nurb));
+  *newnu = blender::dna::shallow_copy(*src);
 
   if (pntsu == 1) {
     SWAP(int, pntsu, pntsv);
@@ -2247,7 +2247,7 @@ static void minimum_twist_between_two_points(BevPoint *current_point, BevPoint *
 
 static void make_bevel_list_3D_minimum_twist(BevList *bl)
 {
-  BevPoint *bevp2, *bevp1, *bevp0; /* standard for all make_bevel_list_3D_* funcs */
+  BevPoint *bevp2, *bevp1, *bevp0; /* Standard for all make_bevel_list_3D_* functions. */
   int nr;
   float q[4];
 
@@ -2358,7 +2358,7 @@ static void make_bevel_list_3D_minimum_twist(BevList *bl)
 
 static void make_bevel_list_3D_tangent(BevList *bl)
 {
-  BevPoint *bevp2, *bevp1, *bevp0; /* standard for all make_bevel_list_3D_* funcs */
+  BevPoint *bevp2, *bevp1, *bevp0; /* Standard for all make_bevel_list_3D_* functions. */
   int nr;
 
   float bevp0_tan[3];
@@ -2470,7 +2470,7 @@ static void make_bevel_list_segment_2D(BevList *bl)
 
 static void make_bevel_list_2D(BevList *bl)
 {
-  /* NOTE(campbell): `bevp->dir` and `bevp->quat` are not needed for beveling but are
+  /* NOTE(@campbellbarton): `bevp->dir` and `bevp->quat` are not needed for beveling but are
    * used when making a path from a 2D curve, therefore they need to be set. */
 
   BevPoint *bevp0, *bevp1, *bevp2;
@@ -3184,7 +3184,7 @@ static void calchandleNurb_intern(BezTriple *bezt,
     len *= 2.5614f;
 
     if (len != 0.0f) {
-      /* Only for F-curves. */
+      /* Only for F-Curves. */
       bool leftviolate = false, rightviolate = false;
 
       if (!is_fcurve || fcurve_smoothing == FCURVE_SMOOTH_NONE) {

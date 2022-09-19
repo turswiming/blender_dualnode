@@ -13,6 +13,7 @@
 
 #include "BKE_brush.h"
 #include "BKE_context.h"
+#include "BKE_layer.h"
 #include "BKE_paint.h"
 #include "BKE_undo_system.h"
 
@@ -33,6 +34,8 @@
 #include "WM_message.h"
 #include "WM_toolsystem.h"
 #include "WM_types.h"
+
+#include "ED_image.h"
 
 #include "paint_intern.h"
 
@@ -250,7 +253,7 @@ static void gradient_draw_line(bContext *UNUSED(C), int x, int y, void *customda
 
     ARegion *region = pop->vc.region;
 
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     GPU_line_width(4.0);
     immUniformColor4ub(0, 0, 0, 255);
@@ -291,7 +294,8 @@ static PaintOperation *texture_paint_init(bContext *C, wmOperator *op, const flo
   copy_v2_v2(pop->startmouse, mouse);
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   /* initialize from context */
   if (CTX_wm_region_view3d(C)) {
@@ -316,7 +320,7 @@ static PaintOperation *texture_paint_init(bContext *C, wmOperator *op, const flo
 
   if ((brush->imagepaint_tool == PAINT_TOOL_FILL) && (brush->flag & BRUSH_USE_GRADIENT)) {
     pop->cursor = WM_paint_cursor_activate(
-        SPACE_TYPE_ANY, RGN_TYPE_ANY, image_paint_poll, gradient_draw_line, pop);
+        SPACE_TYPE_ANY, RGN_TYPE_ANY, ED_image_tools_paint_poll, gradient_draw_line, pop);
   }
 
   settings->imapaint.flag |= IMAGEPAINT_DRAWING;
@@ -520,7 +524,7 @@ void PAINT_OT_image_paint(wmOperatorType *ot)
   ot->invoke = paint_invoke;
   ot->modal = paint_modal;
   ot->exec = paint_exec;
-  ot->poll = image_paint_poll;
+  ot->poll = ED_image_tools_paint_poll;
   ot->cancel = paint_cancel;
 
   /* flags */

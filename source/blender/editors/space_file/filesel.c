@@ -665,12 +665,17 @@ void ED_fileselect_params_to_userdef(SpaceFile *sfile,
   }
 }
 
-void fileselect_file_set(SpaceFile *sfile, const int index)
+void fileselect_file_set(struct bContext *C, SpaceFile *sfile, const int index)
 {
   const struct FileDirEntry *file = filelist_file(sfile->files, index);
   if (file && file->relpath && file->relpath[0] && !(file->typeflag & FILE_TYPE_DIR)) {
     FileSelectParams *params = ED_fileselect_get_active_params(sfile);
     BLI_strncpy(params->file, file->relpath, FILE_MAXFILE);
+    if (sfile->op) {
+      /* Update the filepath properties of the operator. */
+      Main *bmain = CTX_data_main(C);
+      file_sfile_to_operator(C, bmain, sfile->op, sfile);
+    }
   }
 }
 
@@ -983,6 +988,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
 
   if (params->display == FILE_IMGDISPLAY) {
     const float pad_fac = compact ? 0.15f : 0.3f;
+    /* Matches UI_preview_tile_size_x()/_y() by default. */
     layout->prv_w = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_X;
     layout->prv_h = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_Y;
     layout->tile_border_x = pad_fac * UI_UNIT_X;
@@ -1009,6 +1015,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
   else if (params->display == FILE_VERTICALDISPLAY) {
     int rowcount;
 
+    /* Matches UI_preview_tile_size_x()/_y() by default. */
     layout->prv_w = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_X;
     layout->prv_h = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_Y;
     layout->tile_border_x = 0.4f * UI_UNIT_X;
@@ -1030,6 +1037,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
     layout->flag = FILE_LAYOUT_VER;
   }
   else if (params->display == FILE_HORIZONTALDISPLAY) {
+    /* Matches UI_preview_tile_size_x()/_y() by default. */
     layout->prv_w = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_X;
     layout->prv_h = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_Y;
     layout->tile_border_x = 0.4f * UI_UNIT_X;
@@ -1038,7 +1046,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *region)
     layout->attribute_column_header_h = 0;
     layout->offset_top = layout->attribute_column_header_h;
     layout->height = (int)(BLI_rctf_size_y(&v2d->cur) - 2 * layout->tile_border_y);
-    /* Padding by full scrollbar H is too much, can overlap tile border Y. */
+    /* Padding by full scroll-bar H is too much, can overlap tile border Y. */
     layout->rows = (layout->height - V2D_SCROLL_HEIGHT + layout->tile_border_y) /
                    (layout->tile_h + 2 * layout->tile_border_y);
     layout->tile_w = VERTLIST_MAJORCOLUMN_WIDTH;
@@ -1363,4 +1371,43 @@ ScrArea *ED_fileselect_handler_area_find(const wmWindow *win, const wmOperator *
   }
 
   return NULL;
+}
+
+ScrArea *ED_fileselect_handler_area_find_any_with_op(const wmWindow *win)
+{
+  const bScreen *screen = WM_window_get_active_screen(win);
+
+  ED_screen_areas_iter (win, screen, area) {
+    if (area->spacetype != SPACE_FILE) {
+      continue;
+    }
+
+    const SpaceFile *sfile = area->spacedata.first;
+    if (sfile->op) {
+      return area;
+    }
+  }
+
+  return NULL;
+}
+
+void ED_fileselect_ensure_default_filepath(struct bContext *C,
+                                           struct wmOperator *op,
+                                           const char *extension)
+{
+  if (!RNA_struct_property_is_set_ex(op->ptr, "filepath", false)) {
+    struct Main *bmain = CTX_data_main(C);
+    char filepath[FILE_MAX];
+    const char *blendfile_path = BKE_main_blendfile_path(bmain);
+
+    if (blendfile_path[0] == '\0') {
+      BLI_strncpy(filepath, DATA_("untitled"), sizeof(filepath));
+    }
+    else {
+      BLI_strncpy(filepath, blendfile_path, sizeof(filepath));
+    }
+
+    BLI_path_extension_replace(filepath, sizeof(filepath), extension);
+    RNA_string_set(op->ptr, "filepath", filepath);
+  }
 }

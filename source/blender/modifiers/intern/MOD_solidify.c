@@ -53,9 +53,7 @@ static void initData(ModifierData *md)
 #  pragma GCC diagnostic error "-Wsign-conversion"
 #endif
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
+static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   SolidifyModifierData *smd = (SolidifyModifierData *)md;
 
@@ -75,7 +73,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
     case MOD_SOLIDIFY_MODE_NONMANIFOLD:
       return MOD_solidify_nonmanifold_modifyMesh(md, ctx, mesh);
     default:
-      BLI_assert(0);
+      BLI_assert_unreachable();
   }
   return mesh;
 }
@@ -241,7 +239,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_Solidify = {
-    /* name */ "Solidify",
+    /* name */ N_("Solidify"),
     /* structName */ "SolidifyModifierData",
     /* structSize */ sizeof(SolidifyModifierData),
     /* srna */ &RNA_SolidifyModifier,

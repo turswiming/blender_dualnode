@@ -298,6 +298,13 @@ TEST(path_util, JoinComplex)
   JOIN("1/2/3/", 100, "1", "////////", "", "2", "3\\");
 }
 
+TEST(path_util, JoinRelativePrefix)
+{
+  JOIN("//a/b/c", 100, "//a", "b", "c");
+  JOIN("//a/b/c", 100, "//", "//a//", "//b//", "//c");
+  JOIN("//a/b/c", 100, "//", "//", "a", "//", "b", "//", "c");
+}
+
 #undef JOIN
 
 /* BLI_path_frame */
@@ -663,7 +670,7 @@ TEST(path_util, PathContains)
   EXPECT_TRUE(BLI_path_contains("/some/path", "/some/path/inside"))
       << "A path contains its subdirectory";
   EXPECT_TRUE(BLI_path_contains("/some/path", "/some/path/../path/inside"))
-      << "Paths should be normalised";
+      << "Paths should be normalized";
   EXPECT_TRUE(BLI_path_contains("C:\\some\\path", "C:\\some\\path\\inside"))
       << "Windows paths should be supported as well";
 
@@ -672,7 +679,7 @@ TEST(path_util, PathContains)
   EXPECT_FALSE(BLI_path_contains("/some/path", "/"))
       << "Root directory not be contained in a subdirectory";
   EXPECT_FALSE(BLI_path_contains("/some/path", "/some/path/../outside"))
-      << "Paths should be normalised";
+      << "Paths should be normalized";
   EXPECT_FALSE(BLI_path_contains("/some/path", "/some/path_library"))
       << "Just sharing a suffix is not enough, path semantics should be followed";
   EXPECT_FALSE(BLI_path_contains("/some/path", "./contents"))

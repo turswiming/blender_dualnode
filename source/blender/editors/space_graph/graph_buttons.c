@@ -41,6 +41,7 @@
 #include "WM_types.h"
 
 #include "RNA_access.h"
+#include "RNA_path.h"
 #include "RNA_prototypes.h"
 
 #include "ED_anim_api.h"
@@ -225,15 +226,15 @@ static void graph_panel_properties(const bContext *C, Panel *panel)
 
   /* color settings */
   col = uiLayoutColumn(layout, true);
-  uiItemR(col, &fcu_ptr, "color_mode", 0, "Display Color", ICON_NONE);
+  uiItemR(col, &fcu_ptr, "color_mode", 0, IFACE_("Display Color"), ICON_NONE);
 
   if (fcu->color_mode == FCURVE_COLOR_CUSTOM) {
-    uiItemR(col, &fcu_ptr, "color", 0, "Color", ICON_NONE);
+    uiItemR(col, &fcu_ptr, "color", 0, IFACE_("Color"), ICON_NONE);
   }
 
   /* smoothing setting */
   col = uiLayoutColumn(layout, true);
-  uiItemR(col, &fcu_ptr, "auto_smoothing", 0, "Handle Smoothing", ICON_NONE);
+  uiItemR(col, &fcu_ptr, "auto_smoothing", 0, IFACE_("Handle Smoothing"), ICON_NONE);
 
   MEM_freeN(ale);
 }
@@ -277,7 +278,7 @@ static void graphedit_activekey_update_cb(bContext *UNUSED(C),
 
   /* make sure F-Curve and its handles are still valid after this editing */
   sort_time_fcurve(fcu);
-  calchandles_fcurve(fcu);
+  BKE_fcurve_handles_recalc(fcu);
 }
 
 /* update callback for active keyframe properties - handle-editing wrapper */
@@ -640,7 +641,7 @@ static void do_graph_region_driver_buttons(bContext *C, void *id_v, int event)
       ID *id = id_v;
       AnimData *adt = BKE_animdata_from_id(id);
 
-      /* rebuild depsgraph for the new deps, and ensure COW copies get flushed. */
+      /* Rebuild depsgraph for the new dependencies, and ensure COW copies get flushed. */
       DEG_relations_tag_update(bmain);
       DEG_id_tag_update_ex(bmain, id, ID_RECALC_COPY_ON_WRITE);
       if (adt != NULL) {

@@ -198,7 +198,7 @@ void BLI_str_cursor_step_utf8(const char *str,
     }
   }
   else {
-    BLI_assert(0);
+    BLI_assert_unreachable();
   }
 }
 
@@ -206,7 +206,7 @@ void BLI_str_cursor_step_utf8(const char *str,
  * less complex since it doesn't need to do multi-byte stepping.
  */
 
-/* helper funcs so we can match BLI_str_cursor_step_utf8 */
+/* Helper functions so we can match #BLI_str_cursor_step_utf8. */
 static bool cursor_step_next_utf32(const char32_t *UNUSED(str), size_t maxlen, int *pos)
 {
   if ((*pos) >= (int)maxlen) {
@@ -296,6 +296,6 @@ void BLI_str_cursor_step_utf32(const char32_t *str,
     }
   }
   else {
-    BLI_assert(0);
+    BLI_assert_unreachable();
   }
 }

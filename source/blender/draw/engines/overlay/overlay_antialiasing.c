@@ -34,8 +34,8 @@
  *  - Works without geometry shader.
  *  - Can inflate line thickness.
  *  - Coverage is very close to perfect and can even be filtered (Blackman-Harris, gaussian).
- *  - Wires can "bleed" / overlap non-line objects since the filter is in screenspace.
- *  - Only uses one additional lightweight fullscreen buffer (compared to MSAA/SMAA).
+ *  - Wires can "bleed" / overlap non-line objects since the filter is in screen-space.
+ *  - Only uses one additional lightweight full-screen buffer (compared to MSAA/SMAA).
  *  - No convergence time (compared to TAA).
  */
 
@@ -52,7 +52,7 @@ void OVERLAY_antialiasing_init(OVERLAY_Data *vedata)
   OVERLAY_PrivateData *pd = vedata->stl->pd;
   DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
 
-  /* Small texture which will have very small impact on rendertime. */
+  /* Small texture which will have very small impact on render-time. */
   if (txl->dummy_depth_tx == NULL) {
     const float pixel[1] = {1.0f};
     txl->dummy_depth_tx = DRW_texture_create_2d(1, 1, GPU_DEPTH_COMPONENT24, 0, pixel);
@@ -63,7 +63,7 @@ void OVERLAY_antialiasing_init(OVERLAY_Data *vedata)
     return;
   }
 
-  bool need_wire_expansion = (G_draw.block.sizePixel > 1.0f);
+  bool need_wire_expansion = (G_draw.block.size_pixel > 1.0f);
   pd->antialiasing.enabled = need_wire_expansion ||
                              ((U.gpu_flag & USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE) != 0);
 

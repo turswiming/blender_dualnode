@@ -116,6 +116,7 @@ class OBJMesh : NonCopyable {
   int tot_uv_vertices() const;
   int tot_normal_indices() const;
   int tot_edges() const;
+  int tot_deform_groups() const;
   bool is_mirrored_transform() const
   {
     return mirrored_transform_;
@@ -129,11 +130,6 @@ class OBJMesh : NonCopyable {
    * Return mat_nr-th material of the object. The given index should be zero-based.
    */
   const Material *get_object_material(int16_t mat_nr) const;
-  /**
-   * Returns a zero-based index of a polygon's material indexing into
-   * the Object's material slots.
-   */
-  int16_t ith_poly_matnr(int poly_index) const;
 
   void ensure_mesh_normals() const;
   void ensure_mesh_edges() const;
@@ -204,13 +200,15 @@ class OBJMesh : NonCopyable {
    */
   Vector<int> calc_poly_normal_indices(int poly_index) const;
   /**
-   * Find the index of the vertex group with the maximum number of vertices in a polygon.
-   * The index indices into the #Object.defbase.
+   * Find the most representative vertex group of a polygon.
    *
-   * If two or more groups have the same number of vertices (maximum), group name depends on the
-   * implementation of #std::max_element.
+   * This adds up vertex group weights, and the group with the largest
+   * weight sum across the polygon is the one returned.
+   *
+   * group_weights is temporary storage to avoid reallocations, it must
+   * be the size of amount of vertex groups in the object.
    */
-  int16_t get_poly_deform_group_index(int poly_index) const;
+  int16_t get_poly_deform_group_index(int poly_index, MutableSpan<float> group_weights) const;
   /**
    * Find the name of the vertex deform group at the given index.
    * The index indices into the #Object.defbase.
@@ -238,6 +236,11 @@ class OBJMesh : NonCopyable {
     return i < 0 || i >= poly_order_.size() ? i : poly_order_[i];
   }
 
+  Mesh *get_mesh() const
+  {
+    return export_mesh_eval_;
+  }
+
  private:
   /**
    * Free the mesh if _the exporter_ created it.
@@ -253,6 +256,6 @@ class OBJMesh : NonCopyable {
   /**
    * Set the final transform after applying axes settings and an Object's world transform.
    */
-  void set_world_axes_transform(eTransformAxisForward forward, eTransformAxisUp up);
+  void set_world_axes_transform(eIOAxis forward, eIOAxis up);
 };
 }  // namespace blender::io::obj

@@ -136,7 +136,7 @@ bool is_quad_convex_v2(const float v1[2], const float v2[2], const float v3[2], 
 bool is_poly_convex_v2(const float verts[][2], unsigned int nr);
 /**
  * Check if either of the diagonals along this quad create flipped triangles
- * (normals pointing away from eachother).
+ * (normals pointing away from each other).
  * - (1 << 0): (v1-v3) is flipped.
  * - (1 << 1): (v2-v4) is flipped.
  */
@@ -329,6 +329,24 @@ float closest_to_line_segment_v2(float r_close[2],
                                  const float p[2],
                                  const float l1[2],
                                  const float l2[2]);
+
+/**
+ * Finds the points where two line segments are closest to each other.
+ *
+ * `lambda_*` is a value between 0 and 1 for each segment that indicates where `r_closest_*` is on
+ * the corresponding segment.
+ *
+ * \return Squared distance between both segments.
+ */
+float closest_seg_seg_v2(float r_closest_a[2],
+                         float r_closest_b[2],
+                         float *r_lambda_a,
+                         float *r_lambda_b,
+                         const float a1[2],
+                         const float a2[2],
+                         const float b1[2],
+                         const float b2[2]);
+
 /**
  * Point closest to v1 on line v2-v3 in 3D.
  *
@@ -1252,8 +1270,8 @@ MINLINE void mul_sh_fl(float r[9], float f);
 MINLINE void add_sh_shsh(float r[9], const float a[9], const float b[9]);
 MINLINE float dot_shsh(const float a[9], const float b[9]);
 
-MINLINE float eval_shv3(float r[9], const float v[3]);
-MINLINE float diffuse_shv3(const float r[9], const float v[3]);
+MINLINE float eval_shv3(float sh[9], const float v[3]);
+MINLINE float diffuse_shv3(const float sh[9], const float v[3]);
 MINLINE void vec_fac_to_sh(float r[9], const float v[3], float f);
 MINLINE void madd_sh_shfl(float r[9], const float sh[9], float f);
 

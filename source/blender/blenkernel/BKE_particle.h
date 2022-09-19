@@ -391,12 +391,12 @@ void psys_cache_child_paths(struct ParticleSimulationData *sim,
                             float cfra,
                             bool editupdate,
                             bool use_render_params);
-int do_guides(struct Depsgraph *depsgraph,
-              struct ParticleSettings *part,
-              struct ListBase *effectors,
-              ParticleKey *state,
-              int index,
-              float time);
+bool do_guides(struct Depsgraph *depsgraph,
+               struct ParticleSettings *part,
+               struct ListBase *effectors,
+               ParticleKey *state,
+               int index,
+               float time);
 void precalc_guides(struct ParticleSimulationData *sim, struct ListBase *effectors);
 float psys_get_timestep(struct ParticleSimulationData *sim);
 float psys_get_child_time(struct ParticleSystem *psys,
@@ -579,11 +579,11 @@ void psys_get_texture(struct ParticleSimulationData *sim,
  * Interpolate a location on a face based on face coordinates.
  */
 void psys_interpolate_face(struct Mesh *mesh,
-                           struct MVert *mvert,
+                           const struct MVert *mvert,
                            const float (*vert_normals)[3],
                            struct MFace *mface,
                            struct MTFace *tface,
-                           float (*orcodata)[3],
+                           const float (*orcodata)[3],
                            float w[4],
                            float vec[3],
                            float nor[3],

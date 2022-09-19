@@ -1279,9 +1279,8 @@ static PyObject *BPy_IDGroup_pop(BPy_IDProperty *self, PyObject *args)
 
   pyform = BPy_IDGroup_MapDataToPy(idprop);
   if (pyform == NULL) {
-    /* ok something bad happened with the #PyObject,
-     * so don't remove the prop from the group.  if `pyform is
-     * NULL, then it already should have raised an exception. */
+    /* Ok something bad happened with the #PyObject, so don't remove the prop from the group.
+     * if `pyform` is NULL, then it already should have raised an exception. */
     return NULL;
   }
 
@@ -2120,7 +2119,7 @@ static struct PyModuleDef IDProp_types_module_def = {
     NULL,           /* m_doc */
     0,              /* m_size */
     NULL,           /* m_methods */
-    NULL,           /* m_reload */
+    NULL,           /* m_slots */
     NULL,           /* m_traverse */
     NULL,           /* m_clear */
     NULL,           /* m_free */
@@ -2169,7 +2168,7 @@ static struct PyModuleDef IDProp_module_def = {
     IDProp_module_doc, /* m_doc */
     0,                 /* m_size */
     IDProp_methods,    /* m_methods */
-    NULL,              /* m_reload */
+    NULL,              /* m_slots */
     NULL,              /* m_traverse */
     NULL,              /* m_clear */
     NULL,              /* m_free */

@@ -110,6 +110,9 @@ def svn_update(args, release_version):
                 if not make_utils.command_missing(args.svn_command):
                     call(svn_non_interactive + ["cleanup", lib_dirpath])
                 continue
+            elif dirname.startswith("."):
+                # Temporary paths such as ".mypy_cache" will report a warning, skip hidden directories.
+                continue
 
             svn_dirpath = os.path.join(dirpath, ".svn")
             svn_root_dirpath = os.path.join(lib_dirpath, ".svn")
@@ -128,6 +131,7 @@ def svn_update(args, release_version):
                 # Switch to appropriate branch and update.
                 call(svn_non_interactive + ["switch", svn_url + dirname, dirpath], exit_on_error=False)
                 call(svn_non_interactive + ["update", dirpath])
+
 
 # Test if git repo can be updated.
 def git_update_skip(args, check_remote_exists=True):

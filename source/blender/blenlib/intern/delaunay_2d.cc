@@ -2637,6 +2637,7 @@ void prepare_cdt_for_output(CDT_state<T> *cdt_state, const CDT_output_type outpu
     remove_faces_in_holes(cdt_state);
   }
   else if (output_type == CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES) {
+    remove_outer_edges_until_constraints(cdt_state);
     remove_non_constraint_edges_leave_valid_bmesh(cdt_state);
     remove_faces_in_holes(cdt_state);
   }
@@ -2807,7 +2808,7 @@ blender::meshintersect::CDT_result<mpq_class> delaunay_2d_calc(const CDT_input<m
 /* C interface. */
 
 /**
-   This function uses the double version of #CDT::delaunay_calc.
+ * This function uses the double version of #CDT::delaunay_calc.
  * Almost all of the work here is to convert between C++ #Arrays<Vector<int>>
  * and a C version that linearizes all the elements and uses a "start"
  * and "len" array to say where the individual vectors start and how

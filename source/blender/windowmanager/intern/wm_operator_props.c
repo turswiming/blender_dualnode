@@ -8,7 +8,11 @@
  * (`WM_operator_properties_*` functions).
  */
 
+#include "DNA_ID_enums.h"
 #include "DNA_space_types.h"
+
+#include "BKE_lib_id.h"
+#include "BKE_main.h"
 
 #include "BLI_math_base.h"
 #include "BLI_rect.h"
@@ -222,6 +226,74 @@ void WM_operator_properties_filesel(wmOperatorType *ot,
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
+void WM_operator_properties_id_lookup_set_from_id(PointerRNA *ptr, const ID *id)
+{
+  PropertyRNA *prop_session_uuid = RNA_struct_find_property(ptr, "session_uuid");
+  PropertyRNA *prop_name = RNA_struct_find_property(ptr, "name");
+
+  if (prop_session_uuid) {
+    RNA_int_set(ptr, "session_uuid", (int)id->session_uuid);
+  }
+  else if (prop_name) {
+    RNA_string_set(ptr, "name", id->name + 2);
+  }
+  else {
+    BLI_assert_unreachable();
+  }
+}
+
+ID *WM_operator_properties_id_lookup_from_name_or_session_uuid(Main *bmain,
+                                                               PointerRNA *ptr,
+                                                               const ID_Type type)
+{
+  PropertyRNA *prop_session_uuid = RNA_struct_find_property(ptr, "session_uuid");
+  if (prop_session_uuid && RNA_property_is_set(ptr, prop_session_uuid)) {
+    const uint32_t session_uuid = (uint32_t)RNA_property_int_get(ptr, prop_session_uuid);
+    return BKE_libblock_find_session_uuid(bmain, type, session_uuid);
+  }
+
+  PropertyRNA *prop_name = RNA_struct_find_property(ptr, "name");
+  if (prop_name && RNA_property_is_set(ptr, prop_name)) {
+    char name[MAX_ID_NAME - 2];
+    RNA_property_string_get(ptr, prop_name, name);
+    return BKE_libblock_find_name(bmain, type, name);
+  }
+
+  return NULL;
+}
+
+bool WM_operator_properties_id_lookup_is_set(PointerRNA *ptr)
+{
+  return RNA_struct_property_is_set(ptr, "session_uuid") ||
+         RNA_struct_property_is_set(ptr, "name");
+}
+
+void WM_operator_properties_id_lookup(wmOperatorType *ot, const bool add_name_prop)
+{
+  PropertyRNA *prop;
+
+  if (add_name_prop) {
+    prop = RNA_def_string(ot->srna,
+                          "name",
+                          NULL,
+                          MAX_ID_NAME - 2,
+                          "Name",
+                          "Name of the data-block to use by the operator");
+    RNA_def_property_flag(prop, (PropertyFlag)(PROP_SKIP_SAVE | PROP_HIDDEN));
+  }
+
+  prop = RNA_def_int(ot->srna,
+                     "session_uuid",
+                     0,
+                     INT32_MIN,
+                     INT32_MAX,
+                     "Session UUID",
+                     "Session UUID of the data-block to use by the operator",
+                     INT32_MIN,
+                     INT32_MAX);
+  RNA_def_property_flag(prop, (PropertyFlag)(PROP_SKIP_SAVE | PROP_HIDDEN));
+}
+
 static void wm_operator_properties_select_action_ex(wmOperatorType *ot,
                                                     int default_action,
                                                     const EnumPropertyItem *select_actions,
@@ -383,7 +455,7 @@ void WM_operator_properties_select_operation(wmOperatorType *ot)
       {SEL_OP_SET, "SET", ICON_SELECT_SET, "Set", "Set a new selection"},
       {SEL_OP_ADD, "ADD", ICON_SELECT_EXTEND, "Extend", "Extend existing selection"},
       {SEL_OP_SUB, "SUB", ICON_SELECT_SUBTRACT, "Subtract", "Subtract existing selection"},
-      {SEL_OP_XOR, "XOR", ICON_SELECT_DIFFERENCE, "Difference", "Inverts existing selection"},
+      {SEL_OP_XOR, "XOR", ICON_SELECT_DIFFERENCE, "Difference", "Invert existing selection"},
       {SEL_OP_AND, "AND", ICON_SELECT_INTERSECT, "Intersect", "Intersect existing selection"},
       {0, NULL, 0, NULL, NULL},
   };

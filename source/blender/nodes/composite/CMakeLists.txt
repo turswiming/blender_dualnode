@@ -10,11 +10,14 @@ set(INC
   ../../blenlib
   ../../blentranslation
   ../../depsgraph
+  ../../functions
+  ../../gpu
   ../../imbuf
   ../../makesdna
   ../../makesrna
   ../../render
   ../../windowmanager
+  ../../compositor/realtime_compositor
   ../../../../intern/guardedalloc
 
   # dna_type_offsets.h
@@ -91,6 +94,7 @@ set(SRC
   nodes/node_composite_rotate.cc
   nodes/node_composite_scale.cc
   nodes/node_composite_scene_time.cc
+  nodes/node_composite_sepcomb_color.cc
   nodes/node_composite_sepcomb_hsva.cc
   nodes/node_composite_sepcomb_rgba.cc
   nodes/node_composite_sepcomb_xyz.cc
@@ -119,15 +123,19 @@ set(SRC
   node_composite_util.hh
 )
 
+set(LIB
+  bf_realtime_compositor
+)
+
 if(WITH_IMAGE_OPENEXR)
   add_definitions(-DWITH_OPENEXR)
 endif()
 
-if(WITH_COMPOSITOR)
+if(WITH_COMPOSITOR_CPU)
   list(APPEND INC
     ../../compositor
   )
-  add_definitions(-DWITH_COMPOSITOR)
+  add_definitions(-DWITH_COMPOSITOR_CPU)
 endif()
 
 if(WITH_OPENIMAGEDENOISE)

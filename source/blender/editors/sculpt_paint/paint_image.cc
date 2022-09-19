@@ -125,7 +125,7 @@ void ED_imapaint_dirty_region(
 
   imapaint_region_tiles(ibuf, x, y, w, h, &tilex, &tiley, &tilew, &tileh);
 
-  ListBase *undo_tiles = ED_image_paint_tile_list_get();
+  PaintTileMap *undo_tiles = ED_image_paint_tile_map_get();
 
   for (ty = tiley; ty <= tileh; ty++) {
     for (tx = tilex; tx <= tilew; tx++) {
@@ -158,11 +158,21 @@ void imapaint_image_update(
                                             imapaintpartial.dirty_region.xmax,
                                             imapaintpartial.dirty_region.ymax);
 
+  /* When buffer is partial updated the planes should be set to a larger value than 8. This will
+   * make sure that partial updating is working but uses more GPU memory as the gpu texture will
+   * have 4 channels. When so the whole texture needs to be reuploaded to the GPU using the new
+   * texture format. */
+  if (ibuf != nullptr && ibuf->planes == 8) {
+    ibuf->planes = 32;
+    BKE_image_partial_update_mark_full_update(image);
+    return;
+  }
+
   /* TODO: should set_tpage create ->rect? */
   if (texpaint || (sima && sima->lock)) {
     const int w = BLI_rcti_size_x(&imapaintpartial.dirty_region);
     const int h = BLI_rcti_size_y(&imapaintpartial.dirty_region);
-    /* Testing with partial update in uv editor too */
+    /* Testing with partial update in uv editor too. */
     BKE_image_update_gputexture(
         image, iuser, imapaintpartial.dirty_region.xmin, imapaintpartial.dirty_region.ymin, w, h);
   }
@@ -276,10 +286,11 @@ static bool image_paint_poll_ex(bContext *C, bool check_tool)
           (ID_IS_LINKED(sima->image) || ID_IS_OVERRIDE_LIBRARY(sima->image))) {
         return false;
       }
-      ARegion *region = CTX_wm_region(C);
-
-      if ((sima->mode == SI_MODE_PAINT) && region->regiontype == RGN_TYPE_WINDOW) {
-        return true;
+      if (sima->mode == SI_MODE_PAINT) {
+        const ARegion *region = CTX_wm_region(C);
+        if (region->regiontype == RGN_TYPE_WINDOW) {
+          return true;
+        }
       }
     }
   }
@@ -287,7 +298,7 @@ static bool image_paint_poll_ex(bContext *C, bool check_tool)
   return false;
 }
 
-bool image_paint_poll(bContext *C)
+bool ED_image_tools_paint_poll(bContext *C)
 {
   return image_paint_poll_ex(C, true);
 }
@@ -301,7 +312,7 @@ static bool image_paint_2d_clone_poll(bContext *C)
 {
   Brush *brush = image_paint_brush(C);
 
-  if (!CTX_wm_region_view3d(C) && image_paint_poll(C)) {
+  if (!CTX_wm_region_view3d(C) && ED_image_tools_paint_poll(C)) {
     if (brush && (brush->imagepaint_tool == PAINT_TOOL_CLONE)) {
       if (brush->clone.image) {
         return true;
@@ -359,9 +370,7 @@ void paint_brush_color_get(struct Scene *scene,
       }
       /* Gradient / Color-band colors are not considered #PROP_COLOR_GAMMA.
        * Brush colors are expected to be in sRGB though. */
-      IMB_colormanagement_scene_linear_to_srgb_v3(color_gr);
-
-      copy_v3_v3(color, color_gr);
+      IMB_colormanagement_scene_linear_to_srgb_v3(color, color_gr);
     }
     else {
       copy_v3_v3(color, BKE_brush_color_get(scene, br));
@@ -432,7 +441,7 @@ static void toggle_paint_cursor(Scene *scene, bool enable)
     paint_cursor_delete_textures();
   }
   else if (enable) {
-    paint_cursor_start(p, image_paint_poll);
+    ED_paint_cursor_start(p, ED_image_tools_paint_poll);
   }
 }
 
@@ -457,7 +466,7 @@ void ED_space_image_paint_update(Main *bmain, wmWindowManager *wm, Scene *scene)
   if (enabled) {
     BKE_paint_init(bmain, scene, PAINT_MODE_TEXTURE_2D, PAINT_CURSOR_TEXTURE_PAINT);
 
-    paint_cursor_start(&imapaint->paint, image_paint_poll);
+    ED_paint_cursor_start(&imapaint->paint, ED_image_tools_paint_poll);
   }
   else {
     paint_cursor_delete_textures();
@@ -738,7 +747,7 @@ void PAINT_OT_sample_color(wmOperatorType *ot)
   ot->poll = sample_color_poll;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER;
 
   /* properties */
   PropertyRNA *prop;
@@ -927,7 +936,7 @@ static int brush_colors_flip_exec(bContext *C, wmOperator *UNUSED(op))
 
 static bool brush_colors_flip_poll(bContext *C)
 {
-  if (image_paint_poll(C)) {
+  if (ED_image_tools_paint_poll(C)) {
     Brush *br = image_paint_brush(C);
     if (ELEM(br->imagepaint_tool, PAINT_TOOL_DRAW, PAINT_TOOL_FILL)) {
       return true;
@@ -956,7 +965,7 @@ void PAINT_OT_brush_colors_flip(wmOperatorType *ot)
   ot->poll = brush_colors_flip_poll;
 
   /* flags */
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER;
 }
 
 void ED_imapaint_bucket_fill(struct bContext *C,
@@ -993,7 +1002,7 @@ static bool texture_paint_poll(bContext *C)
 
 bool image_texture_paint_poll(bContext *C)
 {
-  return (texture_paint_poll(C) || image_paint_poll(C));
+  return (texture_paint_poll(C) || ED_image_tools_paint_poll(C));
 }
 
 bool facemask_paint_poll(bContext *C)

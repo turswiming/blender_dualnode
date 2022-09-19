@@ -17,9 +17,16 @@
 #include "BKE_context.h"
 #include "BKE_cryptomatte.hh"
 #include "BKE_global.h"
+#include "BKE_image.h"
 #include "BKE_lib_id.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
+
+#include "MEM_guardedalloc.h"
+
+#include "RE_pipeline.h"
+
+#include "COM_node_operation.hh"
 
 #include <optional>
 
@@ -100,7 +107,6 @@ static blender::bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_no
   return session;
 }
 
-extern "C" {
 static CryptomatteEntry *cryptomatte_find(const NodeCryptomatte &n, float encoded_hash)
 {
   LISTBASE_FOREACH (CryptomatteEntry *, entry, &n.entries) {
@@ -249,6 +255,7 @@ static void node_free_cryptomatte(bNode *node)
   NodeCryptomatte *nc = static_cast<NodeCryptomatte *>(node->storage);
 
   if (nc) {
+    MEM_SAFE_FREE(nc->matte_id);
     BLI_freelistN(&nc->runtime.layers);
     BLI_freelistN(&nc->entries);
     MEM_freeN(nc);
@@ -264,6 +271,7 @@ static void node_copy_cryptomatte(bNodeTree *UNUSED(dest_ntree),
 
   BLI_duplicatelist(&dest_nc->entries, &src_nc->entries);
   BLI_listbase_clear(&dest_nc->runtime.layers);
+  dest_nc->matte_id = static_cast<char *>(MEM_dupallocN(src_nc->matte_id));
   dest_node->storage = dest_nc;
 }
 
@@ -292,6 +300,25 @@ static bool node_poll_cryptomatte(bNodeType *UNUSED(ntype),
   return false;
 }
 
+using namespace blender::realtime_compositor;
+
+class CryptoMatteOperation : public NodeOperation {
+ public:
+  using NodeOperation::NodeOperation;
+
+  void execute() override
+  {
+    get_input("Image").pass_through(get_result("Image"));
+    get_result("Matte").allocate_invalid();
+    get_result("Pick").allocate_invalid();
+  }
+};
+
+static NodeOperation *get_compositor_operation(Context &context, DNode node)
+{
+  return new CryptoMatteOperation(context, node);
+}
+
 }  // namespace blender::nodes::node_composite_cryptomatte_cc
 
 void register_node_type_cmp_cryptomatte()
@@ -309,6 +336,8 @@ void register_node_type_cmp_cryptomatte()
   ntype.poll = file_ns::node_poll_cryptomatte;
   node_type_storage(
       &ntype, "NodeCryptomatte", file_ns::node_free_cryptomatte, file_ns::node_copy_cryptomatte);
+  ntype.get_compositor_operation = file_ns::get_compositor_operation;
+
   nodeRegisterType(&ntype);
 }
 
@@ -343,7 +372,7 @@ int ntreeCompositCryptomatteRemoveSocket(bNodeTree *ntree, bNode *node)
   return 1;
 }
 
-namespace blender::nodes::node_composite_cryptomatte_cc {
+namespace blender::nodes::node_composite_legacy_cryptomatte_cc {
 
 static void node_init_cryptomatte_legacy(bNodeTree *ntree, bNode *node)
 {
@@ -358,22 +387,43 @@ static void node_init_cryptomatte_legacy(bNodeTree *ntree, bNode *node)
   ntreeCompositCryptomatteAddSocket(ntree, node);
 }
 
-}  // namespace blender::nodes::node_composite_cryptomatte_cc
+using namespace blender::realtime_compositor;
+
+class CryptoMatteOperation : public NodeOperation {
+ public:
+  using NodeOperation::NodeOperation;
+
+  void execute() override
+  {
+    get_input("image").pass_through(get_result("Image"));
+    get_result("Matte").allocate_invalid();
+    get_result("Pick").allocate_invalid();
+  }
+};
+
+static NodeOperation *get_compositor_operation(Context &context, DNode node)
+{
+  return new CryptoMatteOperation(context, node);
+}
+
+}  // namespace blender::nodes::node_composite_legacy_cryptomatte_cc
 
 void register_node_type_cmp_cryptomatte_legacy()
 {
-  namespace legacy_file_ns = blender::nodes::node_composite_cryptomatte_cc;
+  namespace legacy_file_ns = blender::nodes::node_composite_legacy_cryptomatte_cc;
   namespace file_ns = blender::nodes::node_composite_cryptomatte_cc;
 
   static bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_CRYPTOMATTE_LEGACY, "Cryptomatte", NODE_CLASS_MATTE);
   node_type_socket_templates(&ntype, nullptr, file_ns::cmp_node_cryptomatte_out);
-  node_type_init(&ntype, file_ns::node_init_cryptomatte_legacy);
+  node_type_init(&ntype, legacy_file_ns::node_init_cryptomatte_legacy);
   node_type_storage(
       &ntype, "NodeCryptomatte", file_ns::node_free_cryptomatte, file_ns::node_copy_cryptomatte);
+  ntype.gather_link_search_ops = nullptr;
+  ntype.get_compositor_operation = legacy_file_ns::get_compositor_operation;
+
   nodeRegisterType(&ntype);
 }
 
 /** \} */
-}

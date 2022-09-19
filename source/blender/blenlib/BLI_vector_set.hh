@@ -117,10 +117,10 @@ class VectorSet {
   uint64_t slot_mask_;
 
   /** This is called to hash incoming keys. */
-  Hash hash_;
+  BLI_NO_UNIQUE_ADDRESS Hash hash_;
 
   /** This is called to check equality of two keys. */
-  IsEqual is_equal_;
+  BLI_NO_UNIQUE_ADDRESS IsEqual is_equal_;
 
   /** The max load factor is 1/2 = 50% by default. */
 #define LOAD_FACTOR 1, 2
@@ -358,7 +358,7 @@ class VectorSet {
   }
 
   /**
-   * Return the location of the key in the vector. It is assumed, that the key is in the vector
+   * Return the location of the key in the vector. It is assumed that the key is in the vector
    * set. If this is not necessarily the case, use `index_of_try`.
    */
   int64_t index_of(const Key &key) const

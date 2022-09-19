@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8 compliant>
-
 import enchant
 import os
 import pickle
@@ -136,6 +134,7 @@ class SpellChecker:
         "inscatter", "inscattering",
         "libdata",
         "lightcache",
+        "lightgroup", "lightgroups",
         "lightprobe", "lightprobes",
         "lightless",
         "lineset",
@@ -394,9 +393,11 @@ class SpellChecker:
         "bitangent",
         "boid", "boids",
         "ceil",
+        "centum",  # From 'centum weight'
         "compressibility",
         "coplanar",
         "curvilinear",
+        "dekameter", "dekameters",
         "equiangular",
         "equisolid",
         "euler", "eulers",
@@ -414,8 +415,11 @@ class SpellChecker:
         "lambertian",
         "laplacian",
         "metadata",
+        "microwatt", "microwatts",
+        "milliwatt", "milliwatts",
         "msgfmt",
         "nand", "xnor",
+        "nanowatt", "nanowatts",
         "normals",
         "numpad",
         "octahedral",
@@ -429,6 +433,7 @@ class SpellChecker:
         "polyline", "polylines",
         "probabilistically",
         "pulldown", "pulldowns",
+        "quadratically",
         "quantized",
         "quartic",
         "quaternion", "quaternions",
@@ -497,6 +502,7 @@ class SpellChecker:
         "luminance",
         "mantaflow",
         "matcap",
+        "microfacet",
         "midtones",
         "mipmap", "mipmaps", "mip",
         "ngon", "ngons",
@@ -504,6 +510,7 @@ class SpellChecker:
         "nurb", "nurbs",
         "perlin",
         "phong",
+        "photorealistic",
         "pinlight",
         "posterize",
         "qi",
@@ -526,6 +533,7 @@ class SpellChecker:
         "tonemap",
         "toon",
         "transmissive",
+        "uvproject",
         "vividlight",
         "volumetrics",
         "voronoi",
@@ -662,6 +670,7 @@ class SpellChecker:
 
         # Acronyms
         "aa", "msaa",
+        "acescg",  # ACEScg color space.
         "ao",
         "aov", "aovs",
         "api",
@@ -670,7 +679,7 @@ class SpellChecker:
         "ascii",
         "atrac",
         "avx",
-        "bsdf",
+        "bsdf", "bsdfs",
         "bssrdf",
         "bw",
         "ccd",
@@ -703,14 +712,17 @@ class SpellChecker:
         "hdc",
         "hdr", "hdri", "hdris",
         "hh", "mm", "ss", "ff",  # hh:mm:ss:ff timecode
+        "hpg",  # Intel Xe-HPG architecture
         "hsv", "hsva", "hsl",
         "id",
         "ies",
         "ior",
         "itu",
         "jonswap",
+        "lfe",
         "lhs",
         "lmb", "mmb", "rmb",
+        "lscm",
         "kb",
         "mocap",
         "msgid", "msgids",
@@ -738,6 +750,7 @@ class SpellChecker:
         "unix",
         "uuid",
         "vbo", "vbos",
+        "vfx",
         "vr",
         "wxyz",
         "xr",

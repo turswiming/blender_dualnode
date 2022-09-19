@@ -30,6 +30,7 @@
 #include "UI_view2d.h"
 
 #include "RNA_access.h"
+#include "RNA_path.h"
 
 #include "text_format.h"
 #include "text_intern.h" /* own include */
@@ -108,7 +109,7 @@ static SpaceLink *text_duplicate(SpaceLink *sl)
 static void text_listener(const wmSpaceTypeListenerParams *params)
 {
   ScrArea *area = params->area;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
   SpaceText *st = area->spacedata.first;
 
   /* context changes */
@@ -308,7 +309,7 @@ static bool text_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNU
   return false;
 }
 
-static void text_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void text_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   /* copy drag path to properties */
   RNA_string_set(drop->ptr, "filepath", drag->path);
@@ -319,13 +320,13 @@ static bool text_drop_paste_poll(bContext *UNUSED(C), wmDrag *drag, const wmEven
   return (drag->type == WM_DRAG_ID);
 }
 
-static void text_drop_paste(wmDrag *drag, wmDropBox *drop)
+static void text_drop_paste(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   char *text;
   ID *id = WM_drag_get_local_ID(drag, 0);
 
   /* copy drag path to properties */
-  text = RNA_path_full_ID_py(G_MAIN, id);
+  text = RNA_path_full_ID_py(id);
   RNA_string_set(drop->ptr, "text", text);
   MEM_freeN(text);
 }
@@ -402,7 +403,7 @@ void ED_spacetype_text(void)
   ARegionType *art;
 
   st->spaceid = SPACE_TEXT;
-  strncpy(st->name, "Text", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "Text");
 
   st->create = text_create;
   st->free = text_free;

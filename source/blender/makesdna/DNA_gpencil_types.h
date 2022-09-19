@@ -245,7 +245,7 @@ typedef struct bGPDstroke_Runtime {
 
   /** Vertex offset in the VBO where this stroke starts. */
   int stroke_start;
-  /** Triangle offset in the ibo where this fill starts. */
+  /** Triangle offset in the IBO where this fill starts. */
   int fill_start;
   /** Curve Handles offset in the IBO where this handle starts. */
   int curve_start;
@@ -347,6 +347,8 @@ typedef enum eGPDstroke_Flag {
   /* Flag to indicated that the editcurve has been changed and the stroke needs to be updated with
    * the curve data */
   GP_STROKE_NEEDS_CURVE_UPDATE = (1 << 9),
+  /* Flag to indicate that a stroke is used only for help, and will not affect rendering or fill */
+  GP_STROKE_HELP = (1 << 10),
   /* only for use with stroke-buffer (while drawing arrows) */
   GP_STROKE_USE_ARROW_START = (1 << 12),
   /* only for use with stroke-buffer (while drawing arrows) */
@@ -579,7 +581,7 @@ typedef enum eGPDlayer_Flag {
   GP_LAYER_USE_MASK = (1 << 13), /* TODO: DEPRECATED */
   /* Ruler Layer */
   GP_LAYER_IS_RULER = (1 << 14),
-  /* Disable masks in viewlayer render */
+  /* Disable masks in view-layer render */
   GP_LAYER_DISABLE_MASKS_IN_VIEWLAYER = (1 << 15),
 } eGPDlayer_Flag;
 
@@ -814,10 +816,10 @@ typedef enum eGPdata_Flag {
   /* Vertex Paint Mode - Toggle paint mode */
   GP_DATA_STROKE_VERTEXMODE = (1 << 18),
 
-  /* Autolock not active layers */
+  /* Auto-lock not active layers. */
   GP_DATA_AUTOLOCK_LAYERS = (1 << 20),
 
-  /* Enable Bezier Editing Curve (a submode of Edit mode). */
+  /* Enable Bezier Editing Curve (a sub-mode of Edit mode). */
   GP_DATA_CURVE_EDIT_MODE = (1 << 21),
   /* Use adaptive curve resolution */
   GP_DATA_CURVE_ADAPTIVE_RESOLUTION = (1 << 22),

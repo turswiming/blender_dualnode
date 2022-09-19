@@ -5,7 +5,7 @@
  * \ingroup draw
  */
 
-#include "extract_mesh.h"
+#include "extract_mesh.hh"
 
 namespace blender::draw {
 
@@ -15,11 +15,11 @@ namespace blender::draw {
 
 struct MeshExtract_Orco_Data {
   float (*vbo_data)[4];
-  float (*orco)[3];
+  const float (*orco)[3];
 };
 
 static void extract_orco_init(const MeshRenderData *mr,
-                              struct MeshBatchCache *UNUSED(cache),
+                              MeshBatchCache *UNUSED(cache),
                               void *buf,
                               void *tls_data)
 {
@@ -40,7 +40,7 @@ static void extract_orco_init(const MeshRenderData *mr,
 
   MeshExtract_Orco_Data *data = static_cast<MeshExtract_Orco_Data *>(tls_data);
   data->vbo_data = (float(*)[4])GPU_vertbuf_get_data(vbo);
-  data->orco = static_cast<float(*)[3]>(CustomData_get_layer(cd_vdata, CD_ORCO));
+  data->orco = static_cast<const float(*)[3]>(CustomData_get_layer(cd_vdata, CD_ORCO));
   /* Make sure `orco` layer was requested only if needed! */
   BLI_assert(data->orco);
 }
@@ -94,6 +94,4 @@ constexpr MeshExtract create_extractor_orco()
 
 }  // namespace blender::draw
 
-extern "C" {
 const MeshExtract extract_orco = blender::draw::create_extractor_orco();
-}

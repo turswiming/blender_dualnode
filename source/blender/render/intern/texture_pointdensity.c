@@ -24,6 +24,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_texture_types.h"
 
 #include "BKE_colorband.h"
@@ -39,7 +40,6 @@
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
 
-#include "render_types.h"
 #include "texture_common.h"
 
 #include "RE_texture.h"
@@ -269,19 +269,19 @@ static void pointdensity_cache_vertex_color(PointDensity *pd,
                                             Mesh *mesh,
                                             float *data_color)
 {
-  const MLoop *mloop = mesh->mloop;
+  const MLoop *mloop = BKE_mesh_loops(mesh);
   const int totloop = mesh->totloop;
-  const MLoopCol *mcol;
   char layername[MAX_CUSTOMDATA_LAYER_NAME];
   int i;
 
   BLI_assert(data_color);
 
-  if (!CustomData_has_layer(&mesh->ldata, CD_MLOOPCOL)) {
+  if (!CustomData_has_layer(&mesh->ldata, CD_PROP_BYTE_COLOR)) {
     return;
   }
-  CustomData_validate_layer_name(&mesh->ldata, CD_MLOOPCOL, pd->vertex_attribute_name, layername);
-  mcol = CustomData_get_layer_named(&mesh->ldata, CD_MLOOPCOL, layername);
+  CustomData_validate_layer_name(
+      &mesh->ldata, CD_PROP_BYTE_COLOR, pd->vertex_attribute_name, layername);
+  const MLoopCol *mcol = CustomData_get_layer_named(&mesh->ldata, CD_PROP_BYTE_COLOR, layername);
   if (!mcol) {
     return;
   }
@@ -322,13 +322,12 @@ static void pointdensity_cache_vertex_weight(PointDensity *pd,
                                              float *data_color)
 {
   const int totvert = mesh->totvert;
-  const MDeformVert *mdef, *dv;
   int mdef_index;
   int i;
 
   BLI_assert(data_color);
 
-  mdef = CustomData_get_layer(&mesh->vdata, CD_MDEFORMVERT);
+  const MDeformVert *mdef = CustomData_get_layer(&mesh->vdata, CD_MDEFORMVERT);
   if (!mdef) {
     return;
   }
@@ -340,6 +339,7 @@ static void pointdensity_cache_vertex_weight(PointDensity *pd,
     return;
   }
 
+  const MDeformVert *dv;
   for (i = 0, dv = mdef; i < totvert; i++, dv++, data_color += 3) {
     MDeformWeight *dw;
     int j;
@@ -364,7 +364,7 @@ static void pointdensity_cache_object(PointDensity *pd, Object *ob)
 {
   float *data_color;
   int i;
-  MVert *mvert = NULL, *mv;
+  const MVert *mvert = NULL, *mv;
   Mesh *mesh = ob->data;
 
 #if 0 /* UNUSED */
@@ -372,7 +372,7 @@ static void pointdensity_cache_object(PointDensity *pd, Object *ob)
   mask.fmask |= CD_MASK_MTFACE | CD_MASK_MCOL;
   switch (pd->ob_color_source) {
     case TEX_PD_COLOR_VERTCOL:
-      mask.lmask |= CD_MASK_MLOOPCOL;
+      mask.lmask |= CD_MASK_PROP_BYTE_COLOR;
       break;
     case TEX_PD_COLOR_VERTWEIGHT:
       mask.vmask |= CD_MASK_MDEFORMVERT;
@@ -380,7 +380,7 @@ static void pointdensity_cache_object(PointDensity *pd, Object *ob)
   }
 #endif
 
-  mvert = mesh->mvert; /* local object space */
+  mvert = BKE_mesh_verts(mesh); /* local object space */
   pd->totpoints = mesh->totvert;
   if (pd->totpoints == 0) {
     return;

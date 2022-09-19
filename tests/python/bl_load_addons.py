@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8 compliant>
-
 # simple script to enable all addons, and disable
 
 """
@@ -59,7 +57,7 @@ def disable_addons():
     addons = bpy.context.preferences.addons
     for mod_name in list(addons.keys()):
         addon_utils.disable(mod_name, default_set=True)
-    assert(bool(addons) is False)
+    assert bool(addons) is False
 
 
 def test_load_addons():
@@ -99,13 +97,13 @@ def reload_addons(do_reload=True, do_reverse=True):
             mod_name = mod.__name__
             print("\tenabling:", mod_name)
             addon_utils.enable(mod_name, default_set=True)
-            assert(mod_name in addons)
+            assert mod_name in addons
 
         for mod in modules:
             mod_name = mod.__name__
             print("\tdisabling:", mod_name)
             addon_utils.disable(mod_name, default_set=True)
-            assert(not (mod_name in addons))
+            assert not (mod_name in addons)
 
             # now test reloading
             if do_reload:

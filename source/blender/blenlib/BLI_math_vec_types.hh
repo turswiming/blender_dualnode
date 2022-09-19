@@ -14,10 +14,6 @@
 
 #include "BLI_utildefines.h"
 
-#ifdef WITH_GMP
-#  include "BLI_math_mpq.hh"
-#endif
-
 namespace blender {
 
 /* clang-format off */
@@ -195,6 +191,14 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
   /** Conversion from pointers (from C-style vectors). */
 
   vec_base(const T *ptr)
+  {
+    for (int i = 0; i < Size; i++) {
+      (*this)[i] = ptr[i];
+    }
+  }
+
+  template<typename U, BLI_ENABLE_IF((std::is_convertible_v<U, T>))>
+  explicit vec_base(const U *ptr)
   {
     for (int i = 0; i < Size; i++) {
       (*this)[i] = ptr[i];

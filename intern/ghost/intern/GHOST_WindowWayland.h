@@ -10,14 +10,12 @@
 
 #include "GHOST_Window.h"
 
-#include <unordered_set>
 #include <vector>
 
 class GHOST_SystemWayland;
 
-struct output_t;
-struct window_t;
-struct wl_surface;
+struct GWL_Output;
+struct GWL_Window;
 
 class GHOST_WindowWayland : public GHOST_Window {
  public:
@@ -38,27 +36,10 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   ~GHOST_WindowWayland() override;
 
+  /* Ghost API */
+
   uint16_t getDPIHint() override;
 
-  GHOST_TSuccess close();
-
-  GHOST_TSuccess activate();
-
-  GHOST_TSuccess deactivate();
-
-  GHOST_TSuccess notify_size();
-
-  wl_surface *surface() const;
-
-  const std::vector<output_t *> &outputs() const;
-
-  std::unordered_set<const output_t *> &outputs_active();
-
-  uint16_t &dpi();
-
-  int &scale();
-
- protected:
   GHOST_TSuccess setWindowCursorGrab(GHOST_TGrabCursorMode mode) override;
 
   GHOST_TSuccess setWindowCursorShape(GHOST_TStandardCursor shape) override;
@@ -70,6 +51,9 @@ class GHOST_WindowWayland : public GHOST_Window {
                                             int hotX,
                                             int hotY,
                                             bool canInvertColor) override;
+  bool getCursorGrabUseSoftwareDisplay() override;
+
+  GHOST_TSuccess getCursorBitmap(GHOST_CursorBitmapRef *bitmap) override;
 
   void setTitle(const char *title) override;
 
@@ -109,9 +93,30 @@ class GHOST_WindowWayland : public GHOST_Window {
   void setOpaque() const;
 #endif
 
+  /* WAYLAND direct-data access. */
+
+  uint16_t dpi() const;
+  int scale() const;
+  struct wl_surface *wl_surface() const;
+  const std::vector<GWL_Output *> &outputs();
+
+  /* WAYLAND window-level functions. */
+
+  GHOST_TSuccess close();
+  GHOST_TSuccess activate();
+  GHOST_TSuccess deactivate();
+  GHOST_TSuccess notify_size();
+
+  /* WAYLAND utility functions. */
+
+  bool outputs_enter(GWL_Output *output);
+  bool outputs_leave(GWL_Output *output);
+
+  bool outputs_changed_update_scale();
+
  private:
   GHOST_SystemWayland *m_system;
-  struct window_t *w;
+  struct GWL_Window *w;
   std::string title;
 
   /**

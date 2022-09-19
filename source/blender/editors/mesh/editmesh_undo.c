@@ -72,7 +72,7 @@ static CLG_LogRef LOG = {"ed.undo.mesh"};
 /* Single linked list of layers stored per type */
 typedef struct BArrayCustomData {
   struct BArrayCustomData *next;
-  CustomDataType type;
+  eCustomDataType type;
   int states_len; /* number of layers for each type */
   BArrayState *states[0];
 } BArrayCustomData;
@@ -149,7 +149,7 @@ static void um_arraystore_cd_compact(struct CustomData *cdata,
   const BArrayCustomData *bcd_reference_current = bcd_reference;
   BArrayCustomData *bcd = NULL, *bcd_first = NULL, *bcd_prev = NULL;
   for (int layer_start = 0, layer_end; layer_start < cdata->totlayer; layer_start = layer_end) {
-    const CustomDataType type = cdata->layers[layer_start].type;
+    const eCustomDataType type = cdata->layers[layer_start].type;
 
     /* Perform a full copy on dynamic layers.
      *
@@ -361,8 +361,6 @@ static void um_arraystore_compact_ex(UndoMesh *um, const UndoMesh *um_ref, bool 
   if (create) {
     um_arraystore.users += 1;
   }
-
-  BKE_mesh_update_customdata_pointers(me, false);
 }
 
 /**
@@ -465,9 +463,6 @@ static void um_arraystore_expand(UndoMesh *um)
     BLI_assert(me->totselect == (state_len / stride));
     UNUSED_VARS_NDEBUG(stride);
   }
-
-  /* not essential, but prevents accidental dangling pointer access */
-  BKE_mesh_update_customdata_pointers(me, false);
 }
 
 static void um_arraystore_free(UndoMesh *um)
@@ -593,6 +588,10 @@ static void *undomesh_from_editmesh(UndoMesh *um, BMEditMesh *em, Key *key, Undo
 
   /* Uncomment for troubleshooting. */
   // BM_mesh_validate(em->bm);
+
+  /* Copy the ID name characters to the mesh so code that depends on accessing the ID type can work
+   * on it. Necessary to use the attribute API. */
+  strcpy(um->me.id.name, "MEundomesh_from_editmesh");
 
   BM_mesh_bm_to_me(
       NULL,
@@ -731,8 +730,10 @@ static void undomesh_free_data(UndoMesh *um)
 
 static Object *editmesh_object_from_context(bContext *C)
 {
+  Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *obedit = OBEDIT_FROM_VIEW_LAYER(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit && obedit->type == OB_MESH) {
     Mesh *me = obedit->data;
     if (me->edit_mesh != NULL) {
@@ -772,10 +773,11 @@ static bool mesh_undosys_step_encode(struct bContext *C, struct Main *bmain, Und
 
   /* Important not to use the 3D view when getting objects because all objects
    * outside of this list will be moved out of edit-mode when reading back undo steps. */
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
   uint objects_len = 0;
-  Object **objects = ED_undo_editmode_objects_from_view_layer(view_layer, &objects_len);
+  Object **objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer, &objects_len);
 
   us->elems = MEM_callocN(sizeof(*us->elems) * objects_len, __func__);
   us->elems_len = objects_len;

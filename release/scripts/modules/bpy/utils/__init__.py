@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8-80 compliant>
-
 """
 This module contains utility functions specific to blender but
 not associated with blenders internal data.
@@ -489,7 +487,7 @@ def is_path_builtin(path):
     :type path: str
     :rtype: bool
     """
-    # Note that this function is is not optimized for speed,
+    # Note that this function isn't optimized for speed,
     # it's intended to be used to check if it's OK to remove presets.
     #
     # If this is used in a draw-loop for example, we could cache some of the values.

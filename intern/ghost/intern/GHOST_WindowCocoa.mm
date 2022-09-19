@@ -426,8 +426,8 @@ GHOST_WindowCocoa::~GHOST_WindowCocoa()
     [m_window close];
   }
 
-  // Check for other blender opened windows and make the frontmost key
-  // Note: for some reason the closed window is still in the list
+  /* Check for other blender opened windows and make the front-most key
+   * NOTE: for some reason the closed window is still in the list. */
   NSArray *windowsList = [NSApp orderedWindows];
   for (int a = 0; a < [windowsList count]; a++) {
     if (m_window != (CocoaWindow *)[windowsList objectAtIndex:a]) {
@@ -719,7 +719,7 @@ void GHOST_WindowCocoa::setNativePixelSize(void)
 }
 
 /**
- * \note Fullscreen switch is not actual fullscreen with display capture.
+ * \note Full-screen switch is not actual fullscreen with display capture.
  * As this capture removes all OS X window manager features.
  *
  * Instead, the menu bar and the dock are hidden, and the window is made border-less and enlarged.

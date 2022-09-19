@@ -190,6 +190,22 @@ void CTX_store_set(bContext *C, bContextStore *store)
   C->wm.store = store;
 }
 
+const PointerRNA *CTX_store_ptr_lookup(const bContextStore *store,
+                                       const char *name,
+                                       const StructRNA *type)
+{
+  bContextStoreEntry *entry = BLI_rfindstring(
+      &store->entries, name, offsetof(bContextStoreEntry, name));
+  if (!entry) {
+    return NULL;
+  }
+
+  if (type && !RNA_struct_is_a(entry->ptr.type, type)) {
+    return NULL;
+  }
+  return &entry->ptr;
+}
+
 bContextStore *CTX_store_copy(bContextStore *store)
 {
   bContextStore *ctx = MEM_dupallocN(store);
@@ -324,11 +340,10 @@ static eContextResult ctx_data_get(bContext *C, const char *member, bContextData
   if (done != 1 && recursion < 1 && C->wm.store) {
     C->data.recursion = 1;
 
-    bContextStoreEntry *entry = BLI_rfindstring(
-        &C->wm.store->entries, member, offsetof(bContextStoreEntry, name));
+    const PointerRNA *ptr = CTX_store_ptr_lookup(C->wm.store, member, NULL);
 
-    if (entry) {
-      result->ptr = entry->ptr;
+    if (ptr) {
+      result->ptr = *ptr;
       done = 1;
     }
   }
@@ -425,6 +440,7 @@ static int ctx_data_base_collection_get(const bContext *C, const char *member, L
 
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
+  BKE_view_layer_synced_ensure(scene, view_layer);
 
   bool ok = false;
 
@@ -1347,8 +1363,9 @@ struct Base *CTX_data_active_base(const bContext *C)
   if (ob == NULL) {
     return NULL;
   }
-
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
+  BKE_view_layer_synced_ensure(scene, view_layer);
   return BKE_view_layer_base_find(view_layer, ob);
 }
 

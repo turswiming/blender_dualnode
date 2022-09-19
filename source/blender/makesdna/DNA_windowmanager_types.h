@@ -70,6 +70,8 @@ enum ReportListFlags {
   RPT_STORE = (1 << 1),
   RPT_FREE = (1 << 2),
   RPT_OP_HOLD = (1 << 3), /* don't move them into the operator global list (caller will use) */
+  /** Don't print (the owner of the #ReportList will handle printing to the `stdout`). */
+  RPT_PRINT_HANDLED_BY_OWNER = (1 << 4),
 };
 
 /* These two Lines with # tell makesdna this struct can be excluded. */
@@ -149,8 +151,18 @@ typedef struct wmWindowManager {
   /** Operator registry. */
   ListBase operators;
 
-  /** Refresh/redraw #wmNotifier structs. */
+  /**
+   * Refresh/redraw #wmNotifier structs.
+   * \note Once in the queue, notifiers should be considered read-only.
+   * With the exception of clearing notifiers for data which has been removed,
+   * see: #NOTE_CATEGORY_TAG_CLEARED.
+   */
   ListBase notifier_queue;
+  /**
+   * For duplicate detection.
+   * \note keep in sync with `notifier_queue` adding/removing elements must also update this set.
+   */
+  struct GSet *notifier_queue_set;
 
   /** Information and error reports. */
   struct ReportList reports;
@@ -239,6 +251,9 @@ typedef struct wmWindow {
   struct Scene *new_scene;
   /** Active view layer displayed in this window. */
   char view_layer_name[64];
+  /** The workspace may temporarily override the window's scene with scene pinning. This is the
+   * "overridden" or "default" scene to restore when entering a workspace with no scene pinned. */
+  struct Scene *unpinned_scene;
 
   struct WorkSpaceInstanceHook *workspace_hook;
 
@@ -364,7 +379,7 @@ typedef struct wmKeyMapItem {
   short type;
   /** KM_ANY, KM_PRESS, KM_NOTHING etc. */
   int8_t val;
-  /** Use when `val == KM_CLICK_DRAG`,  */
+  /** Use when `val == KM_CLICK_DRAG`. */
   int8_t direction;
   /** `oskey` also known as apple, windows-key or super. */
   short shift, ctrl, alt, oskey;
@@ -404,13 +419,13 @@ enum {
   KMI_USER_MODIFIED = (1 << 2),
   KMI_UPDATE = (1 << 3),
   /**
-   * When set, ignore events with #wmEvent.is_repeat enabled.
+   * When set, ignore events with `wmEvent.flag & WM_EVENT_IS_REPEAT` enabled.
    *
    * \note this flag isn't cleared when editing/loading the key-map items,
    * so it may be set in cases which don't make sense (modifier-keys or mouse-motion for example).
    *
    * Knowing if an event may repeat is something set at the operating-systems event handling level
-   * so rely on #wmEvent.is_repeat being false non keyboard events instead of checking if this
+   * so rely on #WM_EVENT_IS_REPEAT being false non keyboard events instead of checking if this
    * flag makes sense.
    *
    * Only used when: `ISKEYBOARD(kmi->type) || (kmi->type == KM_TEXTINPUT)`
@@ -463,14 +478,19 @@ typedef struct wmKeyMap {
 
 /** #wmKeyMap.flag */
 enum {
-  KEYMAP_MODAL = (1 << 0), /* modal map, not using operatornames */
-  KEYMAP_USER = (1 << 1),  /* user keymap */
+  /** Modal map, not using operator-names. */
+  KEYMAP_MODAL = (1 << 0),
+  /** User key-map. */
+  KEYMAP_USER = (1 << 1),
   KEYMAP_EXPANDED = (1 << 2),
   KEYMAP_CHILDREN_EXPANDED = (1 << 3),
-  KEYMAP_DIFF = (1 << 4),          /* diff keymap for user preferences */
-  KEYMAP_USER_MODIFIED = (1 << 5), /* keymap has user modifications */
+  /** Diff key-map for user preferences. */
+  KEYMAP_DIFF = (1 << 4),
+  /** Key-map has user modifications. */
+  KEYMAP_USER_MODIFIED = (1 << 5),
   KEYMAP_UPDATE = (1 << 6),
-  KEYMAP_TOOL = (1 << 7), /* keymap for active tool system */
+  /** key-map for active tool system. */
+  KEYMAP_TOOL = (1 << 7),
 };
 
 /**

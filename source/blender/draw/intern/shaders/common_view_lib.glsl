@@ -1,5 +1,10 @@
+
+/* WORKAROUND: to guard against double include in EEVEE. */
+#ifndef COMMON_VIEW_LIB_GLSL
+#define COMMON_VIEW_LIB_GLSL
+
 /* Temporary until we fully make the switch. */
-#ifndef USE_GPU_SHADER_CREATE_INFO
+#if !defined(USE_GPU_SHADER_CREATE_INFO)
 
 #  define DRW_RESOURCE_CHUNK_LEN 512
 
@@ -28,16 +33,22 @@ layout(std140) uniform viewBlock
 
 #ifdef USE_GPU_SHADER_CREATE_INFO
 #  ifndef DRW_RESOURCE_CHUNK_LEN
-#    error "Missing draw_view additional create info on shader create info"
+#    error Missing draw_view additional create info on shader create info
 #  endif
 #endif
+
+#define IS_DEBUG_MOUSE_FRAGMENT (ivec2(gl_FragCoord) == drw_view.mouse_pixel)
+#define IS_FIRST_INVOCATION (gl_GlobalInvocationID == uvec3(0))
 
 #define ViewNear (ViewVecs[0].w)
 #define ViewFar (ViewVecs[1].w)
 
 #define cameraForward ViewMatrixInverse[2].xyz
 #define cameraPos ViewMatrixInverse[3].xyz
-#define cameraVec(P) ((ProjectionMatrix[3][3] == 0.0) ? normalize(cameraPos - P) : cameraForward)
+vec3 cameraVec(vec3 P)
+{
+  return ((ProjectionMatrix[3][3] == 0.0) ? normalize(cameraPos - P) : cameraForward);
+}
 #define viewCameraVec(vP) ((ProjectionMatrix[3][3] == 0.0) ? normalize(-vP) : vec3(0.0, 0.0, 1.0))
 
 #ifdef world_clip_planes_calc_clip_distance
@@ -92,14 +103,14 @@ vec4 pack_line_data(vec2 frag_co, vec2 edge_start, vec2 edge_pos)
 }
 
 /* Temporary until we fully make the switch. */
-#ifndef DRW_SHADER_SHARED_H
+#ifndef USE_GPU_SHADER_CREATE_INFO
 uniform int drw_resourceChunk;
-#endif /* DRW_SHADER_SHARED_H */
+#endif /* USE_GPU_SHADER_CREATE_INFO */
 
 #ifdef GPU_VERTEX_SHADER
 
 /* Temporary until we fully make the switch. */
-#  ifndef DRW_SHADER_SHARED_H
+#  ifndef USE_GPU_SHADER_CREATE_INFO
 
 /* clang-format off */
 #    if defined(IN_PLACE_INSTANCES) || defined(INSTANCED_ATTR) || defined(DRW_LEGACY_MODEL_MATRIX) || defined(GPU_DEPRECATED_AMD_DRIVER)
@@ -121,7 +132,10 @@ uniform int drw_ResourceID;
 
 /* Use this to declare and pass the value if
  * the fragment shader uses the resource_id. */
-#    ifdef USE_GEOMETRY_SHADER
+#    if defined(EEVEE_GENERATED_INTERFACE)
+#      define RESOURCE_ID_VARYING
+#      define PASS_RESOURCE_ID resourceIDFrag = resource_id;
+#    elif defined(USE_GEOMETRY_SHADER)
 #      define RESOURCE_ID_VARYING flat out int resourceIDGeom;
 #      define PASS_RESOURCE_ID resourceIDGeom = resource_id;
 #    else
@@ -129,19 +143,23 @@ uniform int drw_ResourceID;
 #      define PASS_RESOURCE_ID resourceIDFrag = resource_id;
 #    endif
 
-#  endif /* DRW_SHADER_SHARED_H */
+#  endif /* USE_GPU_SHADER_CREATE_INFO */
 
 #endif /* GPU_VERTEX_SHADER */
 
 /* Temporary until we fully make the switch. */
-#ifdef DRW_SHADER_SHARED_H
+#ifdef USE_GPU_SHADER_CREATE_INFO
 /* TODO(fclem): Rename PASS_RESOURCE_ID to DRW_RESOURCE_ID_VARYING_SET */
 #  if defined(UNIFORM_RESOURCE_ID)
 #    define resource_id drw_ResourceID
 #    define PASS_RESOURCE_ID
 
 #  elif defined(GPU_VERTEX_SHADER)
-#    define resource_id gpu_InstanceIndex
+#    if defined(UNIFORM_RESOURCE_ID_NEW)
+#      define resource_id drw_ResourceID
+#    else
+#      define resource_id gpu_InstanceIndex
+#    endif
 #    define PASS_RESOURCE_ID drw_ResourceID_iface.resource_index = resource_id;
 
 #  elif defined(GPU_GEOMETRY_SHADER)
@@ -159,16 +177,23 @@ uniform int drw_ResourceID;
 /* If used in a fragment / geometry shader, we pass
  * resource_id as varying. */
 #  ifdef GPU_GEOMETRY_SHADER
-#    define RESOURCE_ID_VARYING \
-      flat out int resourceIDFrag; \
-      flat in int resourceIDGeom[];
+/* TODO(fclem): Remove. This is getting ridiculous. */
+#    if !defined(EEVEE_GENERATED_INTERFACE)
+#      define RESOURCE_ID_VARYING \
+        flat out int resourceIDFrag; \
+        flat in int resourceIDGeom[];
+#    else
+#      define RESOURCE_ID_VARYING
+#    endif
 
 #    define resource_id resourceIDGeom
 #    define PASS_RESOURCE_ID resourceIDFrag = resource_id[0];
 #  endif
 
-#  ifdef GPU_FRAGMENT_SHADER
+#  if defined(GPU_FRAGMENT_SHADER)
+#    if !defined(EEVEE_GENERATED_INTERFACE)
 flat in int resourceIDFrag;
+#    endif
 #    define resource_id resourceIDFrag
 #  endif
 #endif
@@ -182,35 +207,37 @@ flat in int resourceIDFrag;
 #  ifndef DRW_SHADER_SHARED_H
 
 struct ObjectMatrices {
-  mat4 drw_modelMatrix;
-  mat4 drw_modelMatrixInverse;
+  mat4 model;
+  mat4 model_inverse;
 };
+#  endif /* DRW_SHADER_SHARED_H */
 
+#  ifndef USE_GPU_SHADER_CREATE_INFO
 layout(std140) uniform modelBlock
 {
   ObjectMatrices drw_matrices[DRW_RESOURCE_CHUNK_LEN];
 };
 
-#    define ModelMatrix (drw_matrices[resource_id].drw_modelMatrix)
-#    define ModelMatrixInverse (drw_matrices[resource_id].drw_modelMatrixInverse)
-#  endif /* DRW_SHADER_SHARED_H */
+#    define ModelMatrix (drw_matrices[resource_id].model)
+#    define ModelMatrixInverse (drw_matrices[resource_id].model_inverse)
+#  endif /* USE_GPU_SHADER_CREATE_INFO */
 
 #else /* GPU_INTEL */
 
 /* Temporary until we fully make the switch. */
-#  ifndef DRW_SHADER_SHARED_H
+#  ifndef USE_GPU_SHADER_CREATE_INFO
 /* Intel GPU seems to suffer performance impact when the model matrix is in UBO storage.
  * So for now we just force using the legacy path. */
 /* Note that this is also a workaround of a problem on osx (amd or nvidia)
  * and older amd driver on windows. */
 uniform mat4 ModelMatrix;
 uniform mat4 ModelMatrixInverse;
-#  endif /* DRW_SHADER_SHARED_H */
+#  endif /* USE_GPU_SHADER_CREATE_INFO */
 
 #endif
 
 /* Temporary until we fully make the switch. */
-#ifndef DRW_SHADER_SHARED_H
+#ifndef USE_GPU_SHADER_CREATE_INFO
 #  define resource_handle (drw_resourceChunk * DRW_RESOURCE_CHUNK_LEN + resource_id)
 #endif
 
@@ -337,3 +364,5 @@ vec3 get_view_vector_from_screen_uv(vec2 uv)
     return vec3(0.0, 0.0, 1.0);
   }
 }
+
+#endif /* COMMON_VIEW_LIB_GLSL */

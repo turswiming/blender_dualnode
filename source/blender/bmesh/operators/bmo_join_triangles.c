@@ -22,7 +22,9 @@
 
 #include "intern/bmesh_operators_private.h" /* own include */
 
-/* assumes edges are validated before reaching this poin */
+/**
+ * \note Assumes edges are validated before reaching this point.
+ */
 static float quad_calc_error(const float v1[3],
                              const float v2[3],
                              const float v3[3],
@@ -145,7 +147,7 @@ static bool bm_edge_is_contiguous_loop_cd_all(const BMEdge *e,
 }
 
 static bool bm_edge_delimit_cdata(CustomData *ldata,
-                                  CustomDataType type,
+                                  eCustomDataType type,
                                   struct DelimitData_CD *r_delim_cd)
 {
   const int layer_len = CustomData_number_of_layers(ldata, type);
@@ -282,7 +284,7 @@ void bmo_join_triangles_exec(BMesh *bm, BMOperator *op)
   delimit_data.cdata[delimit_data.cdata_len].cd_offset = -1;
   if (BMO_slot_bool_get(op->slots_in, "cmp_vcols") &&
       bm_edge_delimit_cdata(
-          &bm->ldata, CD_MLOOPCOL, &delimit_data.cdata[delimit_data.cdata_len])) {
+          &bm->ldata, CD_PROP_BYTE_COLOR, &delimit_data.cdata[delimit_data.cdata_len])) {
     delimit_data.cdata_len += 1;
   }
 

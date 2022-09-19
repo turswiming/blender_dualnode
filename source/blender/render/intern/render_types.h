@@ -11,16 +11,13 @@
 /* exposed internal in render module only! */
 /* ------------------------------------------------------------------------- */
 
-#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_threads.h"
 
-#include "BKE_main.h"
-
 #include "RE_pipeline.h"
 
-struct GHash;
+struct Depsgraph;
 struct GSet;
 struct Main;
 struct Object;
@@ -91,7 +88,7 @@ struct Render {
 
   /* NOTE: This is a minimal dependency graph and evaluated scene which is enough to access view
    * layer visibility and use for postprocessing (compositor and sequencer). */
-  Depsgraph *pipeline_depsgraph;
+  struct Depsgraph *pipeline_depsgraph;
   Scene *pipeline_scene_eval;
 
   /* callbacks */
@@ -128,7 +125,7 @@ struct Render {
 
 /* **************** defines ********************* */
 
-/* R.flag */
+/** #R.flag */
 #define R_ANIMATION 1
 
 #ifdef __cplusplus

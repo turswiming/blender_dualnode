@@ -360,7 +360,7 @@ static void vicon_colorset_draw(int index, int x, int y, int w, int h, float UNU
 
   uint pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
-  immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* XXX: Include alpha into this... */
   /* normal */
@@ -505,7 +505,7 @@ static void vicon_gplayer_color_draw(Icon *icon, int x, int y, int w, int h)
    */
   uint pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
-  immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   immUniformColor3fv(gpl->color);
   immRecti(pos, x, y, x + w - 1, y + h - 1);
@@ -546,6 +546,7 @@ static void init_brush_icons(void)
   INIT_BRUSH_ICON(ICON_BRUSH_MASK, mask);
   INIT_BRUSH_ICON(ICON_BRUSH_MIX, mix);
   INIT_BRUSH_ICON(ICON_BRUSH_NUDGE, nudge);
+  INIT_BRUSH_ICON(ICON_BRUSH_PAINT_SELECT, paint_select);
   INIT_BRUSH_ICON(ICON_BRUSH_PINCH, pinch);
   INIT_BRUSH_ICON(ICON_BRUSH_SCRAPE, scrape);
   INIT_BRUSH_ICON(ICON_BRUSH_SMEAR, smear);
@@ -583,6 +584,19 @@ static void init_brush_icons(void)
   INIT_BRUSH_ICON(ICON_GPBRUSH_ERASE_SOFT, gp_brush_erase_soft);
   INIT_BRUSH_ICON(ICON_GPBRUSH_ERASE_HARD, gp_brush_erase_hard);
   INIT_BRUSH_ICON(ICON_GPBRUSH_ERASE_STROKE, gp_brush_erase_stroke);
+
+  /* Curves sculpt. */
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_ADD, curves_sculpt_add);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_COMB, curves_sculpt_comb);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_CUT, curves_sculpt_cut);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_DELETE, curves_sculpt_delete);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_DENSITY, curves_sculpt_density);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_GROW_SHRINK, curves_sculpt_grow_shrink);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_PINCH, curves_sculpt_pinch);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_PUFF, curves_sculpt_puff);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_SLIDE, curves_sculpt_slide);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_SMOOTH, curves_sculpt_smooth);
+  INIT_BRUSH_ICON(ICON_BRUSH_CURVES_SNAKE_HOOK, curves_sculpt_snake_hook);
 
 #  undef INIT_BRUSH_ICON
 }
@@ -1532,7 +1546,7 @@ static void icon_draw_rect(float x,
     shader = GPU_SHADER_2D_IMAGE_DESATURATE_COLOR;
   }
   else {
-    shader = GPU_SHADER_2D_IMAGE_COLOR;
+    shader = GPU_SHADER_3D_IMAGE_COLOR;
   }
   IMMDrawPixelsTexState state = immDrawPixelsTexSetup(shader);
 
@@ -1584,10 +1598,10 @@ static void icon_draw_cache_texture_flush_ex(GPUTexture *texture,
   GPUShader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_2D_IMAGE_MULTI_RECT_COLOR);
   GPU_shader_bind(shader);
 
-  const int data_loc = GPU_shader_get_uniform_block(shader, "multi_rect_data");
+  const int data_binding = GPU_shader_get_uniform_block_binding(shader, "multi_rect_data");
   GPUUniformBuf *ubo = GPU_uniformbuf_create_ex(
       sizeof(struct MultiRectCallData), texture_draw_calls->drawcall_cache, __func__);
-  GPU_uniformbuf_bind(ubo, data_loc);
+  GPU_uniformbuf_bind(ubo, data_binding);
 
   const int img_binding = GPU_shader_get_texture_binding(shader, "image");
   GPU_texture_bind_ex(texture, GPU_SAMPLER_ICON, img_binding, false);
@@ -1810,7 +1824,7 @@ static void icon_draw_size(float x,
   }
   else if (di->type == ICON_TYPE_GEOM) {
 #ifdef USE_UI_TOOLBAR_HACK
-    /* TODO(campbell): scale icons up for toolbar,
+    /* TODO(@campbellbarton): scale icons up for toolbar,
      * we need a way to detect larger buttons and do this automatic. */
     {
       float scale = (float)ICON_DEFAULT_HEIGHT_TOOLBAR / (float)ICON_DEFAULT_HEIGHT;
@@ -1825,7 +1839,7 @@ static void icon_draw_size(float x,
     const bool geom_inverted = di->data.geom.inverted;
 
     /* This could re-generate often if rendered at different sizes in the one interface.
-     * TODO(campbell): support caching multiple sizes. */
+     * TODO(@campbellbarton): support caching multiple sizes. */
     ImBuf *ibuf = di->data.geom.image_cache;
     if ((ibuf == NULL) || (ibuf->x != w) || (ibuf->y != h) || (invert != geom_inverted)) {
       if (ibuf) {
@@ -2033,6 +2047,9 @@ static int ui_id_brush_get_icon(const bContext *C, ID *id)
       }
       else if (ob->mode & OB_MODE_TEXTURE_PAINT) {
         paint_mode = PAINT_MODE_TEXTURE_3D;
+      }
+      else if (ob->mode & OB_MODE_SCULPT_CURVES) {
+        paint_mode = PAINT_MODE_SCULPT_CURVES;
       }
     }
     else if (space_type == SPACE_IMAGE) {

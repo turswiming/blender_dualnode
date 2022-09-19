@@ -49,7 +49,12 @@ typedef enum eGPUSamplerState {
  * #GPU_SAMPLER_MAX is not a valid enum value, but only a limit.
  * It also creates a bad mask for the `NOT` operator in #ENUM_OPERATORS.
  */
+#ifdef __cplusplus
+static constexpr eGPUSamplerState GPU_SAMPLER_MAX = eGPUSamplerState(GPU_SAMPLER_ICON + 1);
+#else
 static const int GPU_SAMPLER_MAX = (GPU_SAMPLER_ICON + 1);
+#endif
+
 ENUM_OPERATORS(eGPUSamplerState, GPU_SAMPLER_ICON)
 
 #ifdef __cplusplus
@@ -113,7 +118,7 @@ typedef enum eGPUTextureFormat {
   GPU_R16F,
   GPU_R16, /* Max texture buffer format. */
 
-  /* Special formats texture & renderbuffer */
+  /* Special formats texture & render-buffer. */
   GPU_RGB10_A2,
   GPU_R11F_G11F_B10F,
   GPU_DEPTH32F_STENCIL8,
@@ -175,7 +180,17 @@ typedef enum eGPUDataFormat {
   GPU_DATA_UINT_24_8,
   GPU_DATA_10_11_11_REV,
   GPU_DATA_2_10_10_10_REV,
+  GPU_DATA_HALF_FLOAT
 } eGPUDataFormat;
+
+typedef enum eGPUTextureUsage {
+  GPU_TEXTURE_USAGE_SHADER_READ = (1 << 0),
+  GPU_TEXTURE_USAGE_SHADER_WRITE = (1 << 1),
+  GPU_TEXTURE_USAGE_ATTACHMENT = (1 << 2),
+  GPU_TEXTURE_USAGE_GENERAL = 0xFF
+} eGPUTextureUsage;
+
+ENUM_OPERATORS(eGPUTextureUsage, GPU_TEXTURE_USAGE_GENERAL)
 
 unsigned int GPU_texture_memory_usage_get(void);
 
@@ -183,7 +198,7 @@ unsigned int GPU_texture_memory_usage_get(void);
  * \note \a data is expected to be float. If the \a format is not compatible with float data or if
  * the data is not in float format, use GPU_texture_update to upload the data with the right data
  * format.
- * \a mips is the number of mip level to allocate. It must be >= 1.
+ * \a mip_len is the number of mip level to allocate. It must be >= 1.
  */
 GPUTexture *GPU_texture_create_1d(
     const char *name, int w, int mip_len, eGPUTextureFormat format, const float *data);
@@ -270,9 +285,9 @@ void *GPU_texture_read(GPUTexture *tex, eGPUDataFormat data_format, int miplvl);
 /**
  * Fills the whole texture with the same data for all pixels.
  * \warning Only work for 2D texture for now.
- * \warning Only clears the mip 0 of the texture.
+ * \warning Only clears the MIP 0 of the texture.
  * \param data_format: data format of the pixel data.
- * \note The format is float for unorm textures.
+ * \note The format is float for UNORM textures.
  * \param data: 1 pixel worth of data to fill the texture with.
  */
 void GPU_texture_clear(GPUTexture *tex, eGPUDataFormat data_format, const void *data);
@@ -321,6 +336,7 @@ int GPU_texture_orig_width(const GPUTexture *tex);
 int GPU_texture_orig_height(const GPUTexture *tex);
 void GPU_texture_orig_size_set(GPUTexture *tex, int w, int h);
 eGPUTextureFormat GPU_texture_format(const GPUTexture *tex);
+const char *GPU_texture_format_description(eGPUTextureFormat texture_format);
 bool GPU_texture_array(const GPUTexture *tex);
 bool GPU_texture_cube(const GPUTexture *tex);
 bool GPU_texture_depth(const GPUTexture *tex);

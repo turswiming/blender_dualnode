@@ -7,8 +7,6 @@
 
 #include "BKE_global.h"
 
-#include "GPU_capabilities.h"
-
 #include "gl_backend.hh"
 #include "gl_debug.hh"
 #include "gl_state.hh"
@@ -208,6 +206,11 @@ void GLFrameBuffer::update_attachments()
     GPU_texture_get_mipmap_size(attach.tex, attach.mip, size);
     this->size_set(size[0], size[1]);
     srgb_ = (GPU_texture_format(attach.tex) == GPU_SRGB8_A8);
+  }
+  else {
+    /* Empty frame-buffer. */
+    glFramebufferParameteri(GL_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_WIDTH, width_);
+    glFramebufferParameteri(GL_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT_HEIGHT, height_);
   }
 
   dirty_attachments_ = false;

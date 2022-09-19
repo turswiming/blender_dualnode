@@ -48,20 +48,18 @@ static meshintersect::CDT_result<double> do_cdt(const bke::CurvesGeometry &curve
   input.vert.reinitialize(curves.evaluated_points_num());
   input.face.reinitialize(curves.curves_num());
 
-  VArray<bool> cyclic = curves.cyclic();
   Span<float3> positions = curves.evaluated_positions();
 
   for (const int i_curve : curves.curves_range()) {
     const IndexRange points = curves.evaluated_points_for_curve(i_curve);
-    const int segment_size = bke::curves::curve_segment_size(points.size(), cyclic[i_curve]);
 
     for (const int i : points) {
       input.vert[i] = double2(positions[i].x, positions[i].y);
     }
 
-    input.face[i_curve].resize(segment_size);
+    input.face[i_curve].resize(points.size());
     MutableSpan<int> face_verts = input.face[i_curve];
-    for (const int i : IndexRange(segment_size)) {
+    for (const int i : face_verts.index_range()) {
       face_verts[i] = points[i];
     }
   }
@@ -81,10 +79,10 @@ static Mesh *cdt_to_mesh(const meshintersect::CDT_result<double> &result)
   }
 
   Mesh *mesh = BKE_mesh_new_nomain(vert_len, edge_len, 0, loop_len, poly_len);
-  MutableSpan<MVert> verts{mesh->mvert, mesh->totvert};
-  MutableSpan<MEdge> edges{mesh->medge, mesh->totedge};
-  MutableSpan<MLoop> loops{mesh->mloop, mesh->totloop};
-  MutableSpan<MPoly> polys{mesh->mpoly, mesh->totpoly};
+  MutableSpan<MVert> verts = mesh->verts_for_write();
+  MutableSpan<MEdge> edges = mesh->edges_for_write();
+  MutableSpan<MPoly> polys = mesh->polys_for_write();
+  MutableSpan<MLoop> loops = mesh->loops_for_write();
 
   for (const int i : IndexRange(result.vert.size())) {
     copy_v3_v3(verts[i].co, float3((float)result.vert[i].x, (float)result.vert[i].y, 0.0f));

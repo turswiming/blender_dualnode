@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2011-2022 Blender Foundation
-
-# <pep8 compliant>
 from __future__ import annotations
 
 
@@ -98,6 +96,7 @@ def render_frame_finish(engine):
     import _cycles
     _cycles.render_frame_finish(engine.session)
 
+
 def draw(engine, depsgraph, space_image):
     if not engine.session:
         return
@@ -168,6 +167,9 @@ def list_render_passes(scene, srl):
     # Combined pass.
     yield ("Combined", "RGBA", 'COLOR')
 
+    # Keep alignment for readability.
+    # autopep8: off
+
     # Data passes.
     if srl.use_pass_z:                     yield ("Depth",         "Z",    'VALUE')
     if srl.use_pass_mist:                  yield ("Mist",          "Z",    'VALUE')
@@ -195,9 +197,11 @@ def list_render_passes(scene, srl):
     if srl.use_pass_shadow:                yield ("Shadow",        "RGB",  'COLOR')
     if srl.use_pass_ambient_occlusion:     yield ("AO",            "RGB",  'COLOR')
     if crl.use_pass_shadow_catcher:        yield ("Shadow Catcher",      "RGB",  'COLOR')
+    # autopep8: on
 
     # Debug passes.
-    if crl.pass_debug_sample_count:            yield ("Debug Sample Count",            "X",   'VALUE')
+    if crl.pass_debug_sample_count:
+        yield ("Debug Sample Count", "X", 'VALUE')
 
     # Cryptomatte passes.
     crypto_depth = (srl.pass_cryptomatte_depth + 1) // 2
@@ -217,16 +221,16 @@ def list_render_passes(scene, srl):
         if crl.use_pass_shadow_catcher:
             yield ("Noisy Shadow Catcher", "RGBA", 'COLOR')
     if crl.denoising_store_passes:
-        yield ("Denoising Normal",          "XYZ", 'VECTOR')
-        yield ("Denoising Albedo",          "RGB", 'COLOR')
-        yield ("Denoising Depth",           "Z", 'VALUE')
+        yield ("Denoising Normal", "XYZ", 'VECTOR')
+        yield ("Denoising Albedo", "RGB", 'COLOR')
+        yield ("Denoising Depth", "Z", 'VALUE')
 
     # Custom AOV passes.
     for aov in srl.aovs:
         if aov.type == 'VALUE':
             yield (aov.name, "X", 'VALUE')
         else:
-            yield (aov.name, "RGB", 'COLOR')
+            yield (aov.name, "RGBA", 'COLOR')
 
     # Light groups.
     for lightgroup in srl.lightgroups:

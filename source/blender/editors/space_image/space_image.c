@@ -20,6 +20,7 @@
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_remap.h"
 #include "BKE_screen.h"
@@ -100,10 +101,10 @@ static SpaceLink *image_create(const ScrArea *UNUSED(area), const Scene *UNUSED(
   simage->lock = true;
   simage->flag = SI_SHOW_GPENCIL | SI_USE_ALPHA | SI_COORDFLOATS;
   simage->uv_opacity = 1.0f;
-  simage->overlay.flag = SI_OVERLAY_SHOW_OVERLAYS;
+  simage->overlay.flag = SI_OVERLAY_SHOW_OVERLAYS | SI_OVERLAY_SHOW_GRID_BACKGROUND;
 
   BKE_imageuser_default(&simage->iuser);
-  simage->iuser.flag = IMA_SHOW_STEREO | IMA_ANIM_ALWAYS | IMA_SHOW_MAX_RESOLUTION;
+  simage->iuser.flag = IMA_SHOW_STEREO | IMA_ANIM_ALWAYS;
 
   BKE_scopes_new(&simage->scopes);
   simage->sample_line_hist.height = 100;
@@ -199,6 +200,7 @@ static void image_operatortypes(void)
 
   WM_operatortype_append(IMAGE_OT_new);
   WM_operatortype_append(IMAGE_OT_open);
+  WM_operatortype_append(IMAGE_OT_file_browse);
   WM_operatortype_append(IMAGE_OT_match_movie_length);
   WM_operatortype_append(IMAGE_OT_replace);
   WM_operatortype_append(IMAGE_OT_reload);
@@ -255,7 +257,7 @@ static bool image_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   return false;
 }
 
-static void image_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void image_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   /* copy drag path to properties */
   RNA_string_set(drop->ptr, "filepath", drag->path);
@@ -297,7 +299,7 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
 {
   wmWindow *win = params->window;
   ScrArea *area = params->area;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
   SpaceImage *sima = (SpaceImage *)area->spacedata.first;
 
   /* context changes */
@@ -315,6 +317,9 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
           ED_area_tag_redraw(area);
           break;
         case ND_MODE:
+          ED_paint_cursor_start(&params->scene->toolsettings->imapaint.paint,
+                                ED_image_tools_paint_poll);
+
           if (wmn->subtype == NS_EDITMODE_MESH) {
             ED_area_tag_refresh(area);
           }
@@ -346,8 +351,10 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
       }
       break;
     case NC_MASK: {
+      Scene *scene = WM_window_get_active_scene(win);
       ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-      Object *obedit = OBEDIT_FROM_VIEW_LAYER(view_layer);
+      BKE_view_layer_synced_ensure(scene, view_layer);
+      Object *obedit = BKE_view_layer_edit_object_get(view_layer);
       if (ED_space_image_check_show_maskedit(sima, obedit)) {
         switch (wmn->data) {
           case ND_SELECT:
@@ -388,8 +395,10 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
       switch (wmn->data) {
         case ND_TRANSFORM:
         case ND_MODIFIER: {
+          const Scene *scene = WM_window_get_active_scene(win);
           ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-          Object *ob = OBACT(view_layer);
+          BKE_view_layer_synced_ensure(scene, view_layer);
+          Object *ob = BKE_view_layer_active_object_get(view_layer);
           if (ob && (ob == wmn->reference) && (ob->mode & OB_MODE_EDIT)) {
             if (sima->lock && (sima->flag & SI_DRAWSHADOW)) {
               ED_area_tag_refresh(area);
@@ -690,6 +699,7 @@ static void image_main_region_draw(const bContext *C, ARegion *region)
                         sima->mask_info.draw_flag & ~MASK_DRAWFLAG_OVERLAY,
                         sima->mask_info.draw_type,
                         sima->mask_info.overlay_mode,
+                        sima->mask_info.blend_factor,
                         width,
                         height,
                         aspx,
@@ -708,7 +718,7 @@ static void image_main_region_listener(const wmRegionListenerParams *params)
 {
   ScrArea *area = params->area;
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -822,7 +832,7 @@ static void image_buttons_region_draw(const bContext *C, ARegion *region)
 static void image_buttons_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -884,7 +894,7 @@ static void image_tools_region_draw(const bContext *C, ARegion *region)
 static void image_tools_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -940,7 +950,7 @@ static void image_header_region_draw(const bContext *C, ARegion *region)
 static void image_header_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -1023,7 +1033,7 @@ void ED_spacetype_image(void)
   ARegionType *art;
 
   st->spaceid = SPACE_IMAGE;
-  strncpy(st->name, "Image", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "Image");
 
   st->create = image_create;
   st->free = image_free;

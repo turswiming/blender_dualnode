@@ -55,8 +55,6 @@
 
 #include "BLO_read_write.h"
 
-#include "BKE_gpencil.h"
-
 static CLG_LogRef LOG = {"bke.gpencil"};
 
 static void greasepencil_copy_data(Main *UNUSED(bmain),
@@ -273,7 +271,7 @@ static void greasepencil_blend_read_lib(BlendLibReader *reader, ID *id)
 {
   bGPdata *gpd = (bGPdata *)id;
 
-  /* Relink all data-lock linked by GP data-lock */
+  /* Relink all data-block linked by GP data-block. */
   /* Layers */
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     /* Layer -> Parent References */
@@ -316,7 +314,7 @@ IDTypeInfo IDType_ID_GD = {
     .foreach_id = greasepencil_foreach_id,
     .foreach_cache = NULL,
     .foreach_path = NULL,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = greasepencil_blend_write,
     .blend_read_data = greasepencil_blend_read_data,
@@ -677,7 +675,7 @@ bGPDlayer *BKE_gpencil_layer_addnew(bGPdata *gpd,
   }
 
   /* auto-name */
-  BLI_strncpy(gpl->info, name, sizeof(gpl->info));
+  BLI_strncpy(gpl->info, DATA_(name), sizeof(gpl->info));
   BLI_uniquename(&gpd->layers,
                  gpl,
                  (gpd->flag & GP_DATA_ANNOTATIONS) ? DATA_("Note") : DATA_("GP_Layer"),
@@ -2742,35 +2740,75 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     bool changed = false;
     unit_m4(cur_mat);
-    if (gpl->actframe != NULL) {
-      if (gpl->parent != NULL) {
-        Object *ob_parent = DEG_get_evaluated_object(depsgraph, gpl->parent);
-        /* calculate new matrix */
-        if (ELEM(gpl->partype, PAROBJECT, PARSKEL)) {
-          mul_m4_m4m4(cur_mat, ob->imat, ob_parent->obmat);
+
+    /* Skip non-visible layers. */
+    if (gpl->flag & GP_LAYER_HIDE || is_zero_v3(gpl->scale)) {
+      continue;
+    }
+
+    /* Skip empty layers. */
+    if (BLI_listbase_is_empty(&gpl->frames)) {
+      continue;
+    }
+
+    /* Determine frame range to transform. */
+    bGPDframe *gpf_start = NULL;
+    bGPDframe *gpf_end = NULL;
+
+    /* If onion skinning is activated, consider all frames. */
+    if (gpl->onion_flag & GP_LAYER_ONIONSKIN) {
+      gpf_start = gpl->frames.first;
+    }
+    /* Otherwise, consider only active frame. */
+    else {
+      /* Skip layer if it has no active frame to transform. */
+      if (gpl->actframe == NULL) {
+        continue;
+      }
+      gpf_start = gpl->actframe;
+      gpf_end = gpl->actframe->next;
+    }
+
+    if (gpl->parent != NULL) {
+      Object *ob_parent = DEG_get_evaluated_object(depsgraph, gpl->parent);
+      /* calculate new matrix */
+      if (ELEM(gpl->partype, PAROBJECT, PARSKEL)) {
+        mul_m4_m4m4(cur_mat, ob->imat, ob_parent->obmat);
+      }
+      else if (gpl->partype == PARBONE) {
+        bPoseChannel *pchan = BKE_pose_channel_find_name(ob_parent->pose, gpl->parsubstr);
+        if (pchan != NULL) {
+          mul_m4_series(cur_mat, ob->imat, ob_parent->obmat, pchan->pose_mat);
         }
-        else if (gpl->partype == PARBONE) {
-          bPoseChannel *pchan = BKE_pose_channel_find_name(ob_parent->pose, gpl->parsubstr);
-          if (pchan != NULL) {
-            mul_m4_series(cur_mat, ob->imat, ob_parent->obmat, pchan->pose_mat);
-          }
-          else {
-            unit_m4(cur_mat);
-          }
+        else {
+          unit_m4(cur_mat);
         }
-        changed = !equals_m4m4(gpl->inverse, cur_mat);
+      }
+      changed = !equals_m4m4(gpl->inverse, cur_mat);
+    }
+
+    /* Calc local layer transform. */
+    bool transformed = ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) ||
+                        (!is_one_v3(gpl->scale)));
+    if (transformed) {
+      loc_eul_size_to_mat4(gpl->layer_mat, gpl->location, gpl->rotation, gpl->scale);
+    }
+
+    /* Continue if no transformations are applied to this layer. */
+    if (!changed && !transformed) {
+      continue;
+    }
+
+    /* Iterate over frame range. */
+    for (bGPDframe *gpf = gpf_start; gpf != NULL && gpf != gpf_end; gpf = gpf->next) {
+      /* Skip frames without a valid onion skinning id (NOTE: active frame has one). */
+      if (gpf->runtime.onion_id == INT_MAX) {
+        continue;
       }
 
-      /* Calc local layer transform. */
-      bool transformed = ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) ||
-                          (!is_one_v3(gpl->scale)));
-      if (transformed) {
-        loc_eul_size_to_mat4(gpl->layer_mat, gpl->location, gpl->rotation, gpl->scale);
-      }
-
-      /* only redo if any change */
+      /* Apply transformations only if needed. */
       if (changed || transformed) {
-        LISTBASE_FOREACH (bGPDstroke *, gps, &gpl->actframe->strokes) {
+        LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
           bGPDspoint *pt;
           int i;
           for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {

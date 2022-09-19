@@ -20,7 +20,7 @@
  *     cost of longer compile time, a larger binary and the complexity that comes from using
  *     templates).
  *   - If the code is not performance sensitive, it usually makes sense to use #CPPType instead.
- * - Sometimes a combination can make sense. Optimized code can be be generated at compile-time for
+ * - Sometimes a combination can make sense. Optimized code can be generated at compile-time for
  *   some types, while there is a fallback code path using #CPPType for all other types.
  *   #CPPType::to_static_type allows dispatching between both versions based on the type.
  *
@@ -118,9 +118,11 @@ class CPPType : NonCopyable, NonMovable {
 
   void (*copy_assign_)(const void *src, void *dst) = nullptr;
   void (*copy_assign_indices_)(const void *src, void *dst, IndexMask mask) = nullptr;
+  void (*copy_assign_compressed_)(const void *src, void *dst, IndexMask mask) = nullptr;
 
   void (*copy_construct_)(const void *src, void *dst) = nullptr;
   void (*copy_construct_indices_)(const void *src, void *dst, IndexMask mask) = nullptr;
+  void (*copy_construct_compressed_)(const void *src, void *dst, IndexMask mask) = nullptr;
 
   void (*move_assign_)(void *src, void *dst) = nullptr;
   void (*move_assign_indices_)(void *src, void *dst, IndexMask mask) = nullptr;
@@ -170,7 +172,9 @@ class CPPType : NonCopyable, NonMovable {
    */
   template<typename T> static const CPPType &get()
   {
-    return CPPType::get_impl<std::remove_cv_t<T>>();
+    /* Store the #CPPType locally to avoid making the function call in most cases. */
+    static const CPPType &type = CPPType::get_impl<std::remove_cv_t<T>>();
+    return type;
   }
   template<typename T> static const CPPType &get_impl();
 
@@ -409,6 +413,18 @@ class CPPType : NonCopyable, NonMovable {
   }
 
   /**
+   * Similar to #copy_assign_indices, but does not leave gaps in the #dst array.
+   */
+  void copy_assign_compressed(const void *src, void *dst, IndexMask mask) const
+  {
+    BLI_assert(mask.size() == 0 || src != dst);
+    BLI_assert(mask.size() == 0 || this->pointer_can_point_to_instance(src));
+    BLI_assert(mask.size() == 0 || this->pointer_can_point_to_instance(dst));
+
+    copy_assign_compressed_(src, dst, mask);
+  }
+
+  /**
    * Copy an instance of this type from src to dst.
    *
    * The memory pointed to by dst should be uninitialized.
@@ -437,6 +453,18 @@ class CPPType : NonCopyable, NonMovable {
     BLI_assert(mask.size() == 0 || this->pointer_can_point_to_instance(dst));
 
     copy_construct_indices_(src, dst, mask);
+  }
+
+  /**
+   * Similar to #copy_construct_indices, but does not leave gaps in the #dst array.
+   */
+  void copy_construct_compressed(const void *src, void *dst, IndexMask mask) const
+  {
+    BLI_assert(mask.size() == 0 || src != dst);
+    BLI_assert(mask.size() == 0 || this->pointer_can_point_to_instance(src));
+    BLI_assert(mask.size() == 0 || this->pointer_can_point_to_instance(dst));
+
+    copy_construct_compressed_(src, dst, mask);
   }
 
   /**
@@ -596,6 +624,11 @@ class CPPType : NonCopyable, NonMovable {
     BLI_assert(mask.size() == 0 || this->pointer_can_point_to_instance(dst));
 
     fill_construct_indices_(value, dst, mask);
+  }
+
+  bool can_exist_in_buffer(const int64_t buffer_size, const int64_t buffer_alignment) const
+  {
+    return size_ <= buffer_size && alignment_ <= buffer_alignment;
   }
 
   void print(const void *value, std::stringstream &ss) const

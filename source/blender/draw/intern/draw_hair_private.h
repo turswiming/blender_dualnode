@@ -61,9 +61,9 @@ typedef struct ParticleHairCache {
   GPUTexture *uv_tex[MAX_MTFACE];
   char uv_layer_names[MAX_MTFACE][MAX_LAYER_NAME_CT][MAX_LAYER_NAME_LEN];
 
-  GPUVertBuf *proc_col_buf[MAX_MCOL];
-  GPUTexture *col_tex[MAX_MCOL];
-  char col_layer_names[MAX_MCOL][MAX_LAYER_NAME_CT][MAX_LAYER_NAME_LEN];
+  GPUVertBuf **proc_col_buf;
+  GPUTexture **col_tex;
+  char (*col_layer_names)[MAX_LAYER_NAME_CT][MAX_LAYER_NAME_LEN];
 
   int num_uv_layers;
   int num_col_layers;
@@ -75,8 +75,6 @@ typedef struct ParticleHairCache {
   int point_len;
 } ParticleHairCache;
 
-void particle_batch_cache_clear_hair(struct ParticleHairCache *hair_cache);
-
 /**
  * Ensure all textures and buffers needed for GPU accelerated drawing.
  */
@@ -87,15 +85,6 @@ bool particles_ensure_procedural_data(struct Object *object,
                                       struct GPUMaterial *gpu_material,
                                       int subdiv,
                                       int thickness_res);
-
-/**
- * Ensure all textures and buffers needed for GPU accelerated drawing.
- */
-bool curves_ensure_procedural_data(struct Object *object,
-                                   struct ParticleHairCache **r_hair_cache,
-                                   struct GPUMaterial *gpu_material,
-                                   int subdiv,
-                                   int thickness_res);
 
 #ifdef __cplusplus
 }

@@ -960,8 +960,8 @@ static void view_zoomdrag_apply(bContext *C, wmOperator *op)
     const double time = PIL_check_seconds_timer();
     const float time_step = (float)(time - vzd->timer_lastdraw);
 
-    dx *= time_step * 0.5f;
-    dy *= time_step * 0.5f;
+    dx *= time_step * 5.0f;
+    dy *= time_step * 5.0f;
 
     vzd->timer_lastdraw = time;
   }
@@ -1546,7 +1546,10 @@ static float smooth_view_rect_to_fac(const rctf *rect_a, const rctf *rect_b)
   return min_ff(fac_max, 1.0f);
 }
 
-void UI_view2d_smooth_view(bContext *C, ARegion *region, const rctf *cur, const int smooth_viewtx)
+void UI_view2d_smooth_view(const bContext *C,
+                           ARegion *region,
+                           const rctf *cur,
+                           const int smooth_viewtx)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = CTX_wm_window(C);
@@ -1818,11 +1821,11 @@ static bool scroller_activate_poll(bContext *C)
   View2D *v2d = &region->v2d;
   wmEvent *event = win->eventstate;
 
-  /* check if mouse in scrollbars, if they're enabled */
+  /* Check if mouse in scroll-bars, if they're enabled. */
   return (UI_view2d_mouse_in_scrollers(region, v2d, event->xy) != 0);
 }
 
-/* initialize customdata for scroller manipulation operator */
+/* Initialize #wmOperator.customdata for scroller manipulation operator. */
 static void scroller_activate_init(bContext *C,
                                    wmOperator *op,
                                    const wmEvent *event,
@@ -2062,7 +2065,7 @@ static int scroller_activate_invoke(bContext *C, wmOperator *op, const wmEvent *
   ARegion *region = CTX_wm_region(C);
   View2D *v2d = &region->v2d;
 
-  /* check if mouse in scrollbars, if they're enabled */
+  /* check if mouse in scroll-bars, if they're enabled */
   const char in_scroller = UI_view2d_mouse_in_scrollers(region, v2d, event->xy);
 
   /* if in a scroller, init customdata then set modal handler which will

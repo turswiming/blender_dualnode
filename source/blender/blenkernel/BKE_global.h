@@ -80,7 +80,8 @@ typedef struct Global {
    *   *     -1: Disable faster motion paths computation (since 08/2018).
    *   * 1 - 30: EEVEE debug/stats values (01/2018).
    *   *     31: Enable the Select Debug Engine. Only available with #WITH_DRAW_DEBUG (08/2021).
-   *   *    101: Enable UI debug drawing of fullscreen area's corner widget (10/2014).
+   *   *    101: Enable UI debug drawing of full-screen area's corner widget (10/2014).
+   *   *    102: Enable extra items in string search UI (05/2022).
    *   *    666: Use quicker batch delete for outliners' delete hierarchy (01/2019).
    *   *    777: Enable UI node panel's sockets polling (11/2011).
    *   *    799: Enable some mysterious new depsgraph behavior (05/2015).
@@ -195,12 +196,13 @@ enum {
   G_DEBUG_XR = (1 << 19),                    /* XR/OpenXR messages */
   G_DEBUG_XR_TIME = (1 << 20),               /* XR/OpenXR timing messages */
 
-  G_DEBUG_GHOST = (1 << 21), /* Debug GHOST module. */
+  G_DEBUG_GHOST = (1 << 21),  /* Debug GHOST module. */
+  G_DEBUG_WINTAB = (1 << 22), /* Debug Wintab. */
 };
 
 #define G_DEBUG_ALL \
   (G_DEBUG | G_DEBUG_FFMPEG | G_DEBUG_PYTHON | G_DEBUG_EVENTS | G_DEBUG_WM | G_DEBUG_JOBS | \
-   G_DEBUG_FREESTYLE | G_DEBUG_DEPSGRAPH | G_DEBUG_IO | G_DEBUG_GHOST)
+   G_DEBUG_FREESTYLE | G_DEBUG_DEPSGRAPH | G_DEBUG_IO | G_DEBUG_GHOST | G_DEBUG_WINTAB)
 
 /** #Global.fileflags */
 enum {

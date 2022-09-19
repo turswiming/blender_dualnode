@@ -59,7 +59,7 @@ typedef struct bToolRef {
   /** Use to avoid initializing the same tool multiple times. */
   short tag;
 
-  /** #bToolKey (spacetype, mode), used in 'WM_api.h' */
+  /** #bToolKey (space-type, mode), used in 'WM_api.h' */
   short space_type;
   /**
    * Value depends on the 'space_type', object mode for 3D view, image editor has own mode too.
@@ -122,6 +122,10 @@ typedef struct WorkSpace {
 
   /** List of #bToolRef */
   ListBase tools;
+
+  /** Optional, scene to switch to when enabling this workspace (NULL to disable). Cleared on
+   * link/append. */
+  struct Scene *pin_scene;
 
   char _pad[4];
 
@@ -195,6 +199,7 @@ typedef struct WorkSpaceInstanceHook {
 
 typedef enum eWorkSpaceFlags {
   WORKSPACE_USE_FILTER_BY_ORIGIN = (1 << 1),
+  WORKSPACE_USE_PIN_SCENE = (1 << 2),
 } eWorkSpaceFlags;
 
 #ifdef __cplusplus
