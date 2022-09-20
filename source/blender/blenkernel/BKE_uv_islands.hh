@@ -164,12 +164,16 @@ struct MeshData {
       for (int j = 0; j < 3; j++) {
         int v1 = mloop[tri.tri[j]].v;
         int v2 = mloop[tri.tri[(j + 1) % 3]].v;
-        /* TODO: Use lookup_ptr to be able to store edge 0. */
-        void *v = BLI_edgehash_lookup(eh, v1, v2);
+
+        void **edge_index_ptr;
         int64_t edge_index;
-        if (v == nullptr) {
+        if (BLI_edgehash_ensure_p(eh, v1, v2, &edge_index_ptr)) {
+          edge_index = POINTER_AS_INT(*edge_index_ptr) - 1;
+          *edge_index_ptr = POINTER_FROM_INT(edge_index);
+        }
+        else {
           edge_index = edges.size();
-          BLI_edgehash_insert(eh, v1, v2, POINTER_FROM_INT(edge_index + 1));
+          *edge_index_ptr = POINTER_FROM_INT(edge_index + 1);
           MeshEdge edge;
           edge.vert1 = &vertices[v1];
           edge.vert2 = &vertices[v2];
@@ -177,9 +181,6 @@ struct MeshData {
           MeshEdge *edge_ptr = &edges.last();
           vertices[v1].edges.append(edge_ptr);
           vertices[v2].edges.append(edge_ptr);
-        }
-        else {
-          edge_index = POINTER_AS_INT(v) - 1;
         }
 
         MeshEdge *edge = &edges[edge_index];
