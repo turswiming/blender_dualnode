@@ -204,9 +204,6 @@ struct Fan {
         }
       }
       if (stop == false) {
-#ifdef VALIDATE
-        printf("unknown how to create the fan for vert %lld\n", vertex.v);
-#endif
         flags.full = false;
         break;
       }
@@ -270,22 +267,6 @@ struct Fan {
   }
 };
 
-#ifdef VALIDATE
-static void print(const Fan &fan)
-{
-  for (const InnerEdge &fan_edge : fan.inner_edges) {
-    for (int i = 0; i < 3; i++) {
-      int vert_index = fan_edge.vert_order[i];
-      printf("%lld(%f,%f) ",
-             fan_edge.primitive->vertices[vert_index].vertex->v,
-             fan_edge.uvs[i].x,
-             fan_edge.uvs[i].y);
-    }
-    printf(" %d\n", fan_edge.flags.found);
-  }
-}
-#endif
-
 static void add_uv_primitive_shared_uv_edge(UVIsland &island,
                                             UVVertex *connected_vert_1,
                                             UVVertex *connected_vert_2,
@@ -324,38 +305,19 @@ static void add_uv_primitive_shared_uv_edge(UVIsland &island,
   prim1.append_to_uv_edges();
   prim1.append_to_uv_vertices();
   island.uv_primitives.append(prim1);
-#ifdef VALIDATE
-  island.validate_primitive(island.uv_primitives.last());
-#endif
 }
 
 static MeshPrimitive *find_fill_border(const MeshVertex &v1,
                                        const MeshVertex &v2,
                                        const MeshVertex &v3)
 {
-#ifdef VALIDATE
-  printf("find primitive containing (%lld,%lld,%lld)\n", v1.v, v2.v, v3.v);
-#endif
   for (MeshEdge *edge : v1.edges) {
     for (MeshPrimitive *primitive : edge->primitives) {
-#ifdef VALIDATE
-      printf("- try primitive %lld containing (%lld,%lld,%lld)\n",
-             primitive->index,
-             primitive->vertices[0].vertex->v,
-             primitive->vertices[1].vertex->v,
-             primitive->vertices[2].vertex->v);
-#endif
       if (has_vertex(*primitive, v1) && has_vertex(*primitive, v2) && has_vertex(*primitive, v3)) {
-#ifdef VALIDATE
-        printf("- found primitive\n");
-#endif
         return primitive;
       }
     }
   }
-#ifdef VALIDATE
-  printf("- No primitive found\n");
-#endif
   return nullptr;
 }
 /**
@@ -418,9 +380,6 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, float min_u
   }
   fan.init_uv_coordinates(*uv_vertex);
   fan.mark_already_added_segments(*uv_vertex);
-#ifdef VALIDATE
-  print(fan);
-#endif
 
   // tag them as being 'not fixed in uv space'. count them and determine a position in uv space.
   // add UV primitives for them.
@@ -593,16 +552,6 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
 {
   // Find sharpest corner that still inside the island mask and can be extended.
   // exit when no corner could be found.
-#ifdef DEBUG_SVG
-  int step = 0;
-  std::stringstream filename;
-  filename << "/tmp/extend." << island_index << ".svg";
-  std::ofstream of;
-  of.open(filename.str());
-  svg_header(of);
-  svg(of, *this, step++);
-#endif
-
   reset_extendability_flags(*this);
 
   int64_t border_index = 0;
@@ -611,9 +560,6 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
   }
 
   while (true) {
-#ifdef VALIDATE
-    validate_border();
-#endif
     std::optional<UVBorderCorner> extension_corner = sharpest_border_corner(*this);
     if (!extension_corner.has_value()) {
       break;
@@ -628,19 +574,7 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
     }
     /* Mark that the vert is extended. Unable to extend twice. */
     uv_vertex->flags.is_extended = true;
-
-#ifdef VALIDATE
-    validate_border();
-#endif
-
-#ifdef DEBUG_SVG
-    svg(of, *this, step++);
-#endif
   }
-#ifdef DEBUG_SVG
-  svg_footer(of);
-  of.close();
-#endif
 }
 
 /** \} */
@@ -736,24 +670,6 @@ void UVBorder::update_indexes(uint64_t border_index)
   }
 }
 
-#ifdef VALIDATE
-void UVBorder::validate() const
-{
-  for (const UVBorderEdge &edge : edges) {
-    float2 uv1 = edge.get_uv_vertex(0)->uv;
-    float2 uv2 = edge.get_uv_vertex(1)->uv;
-    std::cout << uv1;
-    std::cout << "->";
-    std::cout << uv2;
-    std::cout << "\n";
-  }
-  for (const UVBorderEdge &edge : edges) {
-    BLI_assert(edges[edge.prev_index].get_uv_vertex(1)->uv == edge.get_uv_vertex(0)->uv);
-    BLI_assert(edge.get_uv_vertex(1)->uv == edges[edge.next_index].get_uv_vertex(0)->uv);
-  }
-}
-#endif
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -810,15 +726,6 @@ UVIslands::UVIslands(MeshData &mesh_data)
       }
     }
   }
-
-#ifdef DEBUG_SVG
-  std::ofstream of;
-  of.open("/tmp/islands.svg");
-  svg_header(of);
-  svg(of, *this, 0);
-  svg_footer(of);
-  of.close();
-#endif
 }
 
 void UVIslands::extract_borders()
@@ -826,51 +733,14 @@ void UVIslands::extract_borders()
   for (UVIsland &island : islands) {
     island.extract_borders();
   }
-
-#ifdef DEBUG_SVG
-  std::ofstream of;
-  of.open("/tmp/borders.svg");
-  svg_header(of);
-  for (UVIsland &island : islands) {
-    int index = 0;
-    for (UVBorder &border : island.borders) {
-      border.update_indexes(index);
-      index++;
-      svg(of, border, 0);
-    }
-  }
-  svg_footer(of);
-  of.close();
-#endif
 }
 
 void UVIslands::extend_borders(const UVIslandsMask &islands_mask)
 {
-#ifdef VALIDATE
-  printf("Extending borders\n");
-  printf("=================\n");
-#endif
   ushort index = 0;
   for (UVIsland &island : islands) {
-#ifdef VALIDATE
-    printf("Island %d\n", index);
-    printf("---------\n");
-#endif
     island.extend_border(islands_mask, index++);
   }
-
-#ifdef DEBUG_SVG
-  std::ofstream of;
-  of.open("/tmp/borders.svg");
-  svg_header(of);
-  for (const UVIsland &island : islands) {
-    for (const UVBorder &border : island.borders) {
-      svg(of, border, 0);
-    }
-  }
-  svg_footer(of);
-  of.close();
-#endif
 }
 
 /** \} */
@@ -1058,269 +928,5 @@ bool UVIslandsMask::is_masked(const uint16_t island_index, const float2 uv) cons
 }
 
 /** \} */
-
-#ifdef DEBUG_SVG
-/* -------------------------------------------------------------------- */
-/** \name SVG export
- *
- * Debugging functions to export UV islands to SVG files.
- * \{ */
-static float svg_x(const float2 &uv)
-{
-  return uv.x * 1024;
-}
-
-static float svg_y(const float2 &uv)
-{
-  return 1024 - uv.y * 1024;
-}
-
-static float svg_x(const UVVertex &vertex)
-{
-  return svg_x(vertex.uv);
-}
-
-static float svg_y(const UVVertex &vertex)
-{
-  return svg_y(vertex.uv);
-}
-
-void svg_header(std::ostream &ss)
-{
-  ss << "<svg viewBox=\"0 0 1024 1024\" width=\"1024\" height=\"1024\" "
-        "xmlns=\"http://www.w3.org/2000/svg\">\n";
-}
-void svg_footer(std::ostream &ss)
-{
-  ss << "</svg>\n";
-}
-static void svg(std::ostream &ss, const UVEdge &edge)
-{
-  ss << "       <line x1=\"" << svg_x(*edge.vertices[0]) << "\" y1=\"" << svg_y(*edge.vertices[0])
-     << "\" x2=\"" << svg_x(*edge.vertices[1]) << "\" y2=\"" << svg_y(*edge.vertices[1])
-     << "\"/>\n";
-}
-
-void svg(std::ostream &ss, const UVIsland &island, int step)
-{
-  ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
-  ss << "  <g fill=\"none\">\n";
-
-  /* Inner edges */
-  ss << "    <g stroke=\"grey\" stroke-width=\"1\">\n";
-  for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
-    for (const UVPrimitive &primitive : uv_primitives) {
-      svg(ss, primitive);
-    }
-  }
-  ss << "     </g>\n";
-
-  /* Border */
-  ss << "    <g stroke=\"black\" stroke-width=\"2\">\n";
-  for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
-    for (const UVPrimitive &primitive : uv_primitives) {
-      for (int i = 0; i < 3; i++) {
-        const UVEdge &edge = *primitive.edges[i];
-        if (!edge.is_border_edge()) {
-          continue;
-        }
-        svg(ss, edge);
-      }
-    }
-  }
-  ss << "     </g>\n";
-
-  /* Mark Border corners that can be extended. */
-  ss << "    <g fill=\"green\">\n";
-  for (const VectorList<UVVertex>::UsedVector &uv_vertices : island.uv_vertices) {
-    for (const UVVertex &uv_vertex : uv_vertices) {
-      if (uv_vertex.flags.is_border && !uv_vertex.flags.is_extended) {
-        ss << "<circle cx=\"" << svg_x(uv_vertex) << "\"";
-        ss << " cy=\"" << svg_y(uv_vertex) << "\"";
-        ss << " r=\"3\" />\n";
-      }
-    }
-  }
-  ss << "     </g>\n";
-
-  /* Mark Border corners that can be extended. */
-  ss << "    <g fill=\"orange\">\n";
-  for (const VectorList<UVVertex>::UsedVector &uv_vertices : island.uv_vertices) {
-    for (const UVVertex &uv_vertex : uv_vertices) {
-      if (uv_vertex.flags.is_border && uv_vertex.flags.is_extended) {
-        ss << "<circle cx=\"" << svg_x(uv_vertex) << "\"";
-        ss << " cy=\"" << svg_y(uv_vertex) << "\"";
-        ss << " r=\"3\" />\n";
-      }
-    }
-  }
-  ss << "     </g>\n";
-
-  ss << "   </g>\n";
-
-  ss << "</g>\n";
-}
-
-void svg(std::ostream &ss, const UVIslands &islands, int step)
-{
-  ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
-  int island_index = 0;
-  for (const UVIsland &island : islands.islands) {
-    ss << "  <g fill=\"yellow\">\n";
-
-    /* Inner edges */
-    ss << "    <g stroke=\"grey\" stroke-dasharray=\"5 5\">\n";
-    for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
-      for (const UVPrimitive &primitive : uv_primitives) {
-        for (int i = 0; i < 3; i++) {
-          const UVEdge &edge = *primitive.edges[i];
-          if (edge.is_border_edge()) {
-            continue;
-          }
-          svg(ss, edge);
-        }
-      }
-    }
-    ss << "     </g>\n";
-
-    /* Border */
-    ss << "    <g stroke=\"black\" stroke-width=\"2\">\n";
-    for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : island.uv_primitives) {
-      for (const UVPrimitive &primitive : uv_primitives) {
-        for (int i = 0; i < 3; i++) {
-          const UVEdge &edge = *primitive.edges[i];
-          if (!edge.is_border_edge()) {
-            continue;
-          }
-          svg(ss, edge);
-        }
-      }
-    }
-    ss << "     </g>\n";
-
-    ss << "   </g>\n";
-    island_index++;
-  }
-
-  ss << "</g>\n";
-}
-
-void svg(std::ostream &ss, const UVIslandsMask &mask, int step)
-{
-  ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
-  ss << " <g fill=\"none\" stroke=\"black\">\n";
-  for (const UVIslandsMask::Tile &tile : mask.tiles) {
-
-    float2 resolution = float2(tile.resolution.x, tile.resolution.y);
-    for (int x = 0; x < tile.resolution.x; x++) {
-      for (int y = 0; y < tile.resolution.y; y++) {
-        int offset = y * tile.resolution.x + x;
-        int offset2 = offset - 1;
-        if (y == 0 && tile.mask[offset] == 0xffff) {
-          continue;
-        }
-        if (x > 0 && tile.mask[offset] == tile.mask[offset2]) {
-          continue;
-        }
-        float2 start = float2(float(x), float(y)) / resolution;
-        float2 end = float2(float(x), float(y + 1)) / resolution;
-        ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
-           << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
-      }
-    }
-
-    for (int x = 0; x < tile.resolution.x; x++) {
-      for (int y = 0; y < tile.resolution.y; y++) {
-        int offset = y * tile.resolution.x + x;
-        int offset2 = offset - tile.resolution.x;
-        if (x == 0 && tile.mask[offset] == 0xffff) {
-          continue;
-        }
-        if (y > 0 && tile.mask[offset] == tile.mask[offset2]) {
-          continue;
-        }
-        float2 start = float2(float(x), float(y)) / resolution;
-        float2 end = float2(float(x + 1), float(y)) / resolution;
-        ss << "       <line x1=\"" << svg_x(start) << "\" y1=\"" << svg_y(start) << "\" x2=\""
-           << svg_x(end) << "\" y2=\"" << svg_y(end) << "\"/>\n";
-      }
-    }
-    ss << " </g>\n";
-    ss << "</g>\n";
-  }
-}
-
-static void svg_coords(std::ostream &ss, const float2 &coords)
-{
-  ss << svg_x(coords) << "," << svg_y(coords);
-}
-
-void svg(std::ostream &ss, const UVPrimitive &primitive)
-{
-  const UVBorder border = primitive.extract_border();
-  ss << "       <polygon points=\"";
-  for (const UVBorderEdge &edge : border.edges) {
-    ss << " ";
-    svg_coords(ss, edge.get_uv_vertex(0)->uv);
-  }
-  ss << "\"/>\n";
-#  if 0
-
-  float2 center(0.0, 0.0);
-  for (const UVBorderEdge &edge : border.edges) {
-    center += edge.get_uv_vertex(0)->uv;
-  }
-  center /= 3;
-
-  ss << "<text x=\"" << svg_x(center) << "\"";
-  ss << " y=\"" << svg_y(center) << "\">";
-  ss << primitive.primitive->index;
-
-  ss << "</text>\n";
-  for (const UVBorderEdge &edge : border.edges) {
-    float2 co = (center + edge.get_uv_vertex(0)->uv) / 2.0;
-    ss << "<text x=\"" << svg_x(co) << "\"";
-    ss << " y=\"" << svg_y(co) << "\">";
-    ss << edge.get_uv_vertex(0)->vertex->v;
-    ss << "</text>\n";
-  }
-#  endif
-}
-
-void svg(std::ostream &ss, const UVPrimitive &primitive, int step)
-{
-  ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
-  ss << "  <g fill=\"red\">\n";
-  svg(ss, primitive);
-  ss << "  </g>";
-  ss << "</g>\n";
-}
-
-void svg(std::ostream &ss, const UVBorder &border, int step)
-{
-  ss << "<g transform=\"translate(" << step * 1024 << " 0)\">\n";
-
-  ss << " <g stroke=\"grey\">\n";
-  for (const UVBorderEdge &edge : border.edges) {
-    float2 v1 = edge.get_uv_vertex(0)->uv;
-    float2 v2 = edge.get_uv_vertex(1)->uv;
-    ss << "       <line x1=\"" << svg_x(v1) << "\" y1=\"" << svg_y(v1) << "\" x2=\"" << svg_x(v2)
-       << "\" y2=\"" << svg_y(v2) << "\"/>\n";
-  }
-  ss << " </g>\n";
-
-  ss << " <g fill=\"black\">\n";
-  for (const UVBorderEdge &edge : border.edges) {
-    float2 v1 = edge.get_uv_vertex(0)->uv;
-    ss << "       <text x=\"" << svg_x(v1) << "\" y=\"" << svg_y(v1) << "\">"
-       << (border.outside_angle(edge) / M_PI * 180) << "</text>\n";
-  }
-  ss << " </g>\n";
-
-  ss << "</g>\n";
-}
-
-/** \} */
-#endif
 
 }  // namespace blender::bke::uv_islands
