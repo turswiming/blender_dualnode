@@ -652,8 +652,6 @@ void UVBorder::flip()
 float UVBorder::outside_angle(const UVBorderEdge &edge) const
 {
   const UVBorderEdge &prev = edges[edge.prev_index];
-  // TODO: need detection if the result is inside or outside.
-  // return angle_v2v2v2(prev.uv, vert.uv, next.uv);
   return M_PI - angle_signed_v2v2(prev.get_uv_vertex(1)->uv - prev.get_uv_vertex(0)->uv,
                                   edge.get_uv_vertex(1)->uv - edge.get_uv_vertex(0)->uv);
 }

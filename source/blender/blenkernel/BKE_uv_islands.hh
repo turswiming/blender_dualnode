@@ -19,12 +19,6 @@
 #include "DNA_meshdata_types.h"
 
 namespace blender::bke::uv_islands {
-/*
- * When enabled various parts of the code would generate an SVG file to visual see how the
- * algorithm makes decisions.
- *
- * TODO: These will be removed before this patch will land in master.
- */
 
 struct MeshEdge;
 struct MeshPrimitive;
