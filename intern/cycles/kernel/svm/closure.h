@@ -1193,7 +1193,7 @@ ccl_device_inline void svm_node_closure_store_weight(ccl_private ShaderData *sd,
 
 ccl_device void svm_node_closure_set_weight(ccl_private ShaderData *sd, uint r, uint g, uint b)
 {
-  const Spectrum weight = rgb_to_spectrum(
+  Spectrum weight = rgb_to_spectrum(
       make_float3(__uint_as_float(r), __uint_as_float(g), __uint_as_float(b)));
   svm_node_closure_store_weight(sd, weight);
 }
@@ -1202,8 +1202,8 @@ ccl_device void svm_node_closure_weight(ccl_private ShaderData *sd,
                                         ccl_private float *stack,
                                         uint weight_offset)
 {
-  const float3 weight = max(stack_load_float3(stack, weight_offset), zero_float3());
-  svm_node_closure_store_weight(sd, rgb_to_spectrum(weight));
+  Spectrum weight = rgb_to_spectrum(stack_load_float3(stack, weight_offset));
+  svm_node_closure_store_weight(sd, weight);
 }
 
 ccl_device_noinline void svm_node_emission_weight(KernelGlobals kg,
