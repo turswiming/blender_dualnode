@@ -209,14 +209,6 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   subsurface_random_walk_coefficients(albedo, radius, anisotropy, &sigma_t, &alpha, &throughput);
   Spectrum sigma_s = sigma_t * alpha;
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  const bool use_guiding = kernel_data.integrator.use_guiding;
-  Spectrum initial_throughput = throughput;
-  if (use_guiding) {
-    guiding_record_bssrdf_bounce(kg, state, pdf, N, D);
-  }
-#endif
-
   /* Theoretically it should be better to use the exact alpha for the channel we're sampling at
    * each bounce, but in practice there doesn't seem to be a noticeable difference in exchange
    * for making the code significantly more complex and slower (if direction sampling depends on
@@ -444,17 +436,20 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
 
   if (hit) {
     kernel_assert(isfinite_safe(throughput));
+
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+    guiding_record_bssrdf_bounce(
+        kg,
+        state,
+        pdf,
+        N,
+        D,
+        safe_divide_color(throughput, INTEGRATOR_STATE(state, path, throughput)),
+        albedo);
+#endif
+
     INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
   }
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  if (use_guiding) {
-    // calculate the transmittance weight for the comple SSS-random walk
-    initial_throughput = safe_divide_color(throughput, initial_throughput);
-    openpgl::cpp::SetTransmittanceWeight(
-        state->guiding.path_segment,
-        openpgl::cpp::Vector3(initial_throughput.x, initial_throughput.y, initial_throughput.z));
-  }
-#endif
 
   return hit;
 }

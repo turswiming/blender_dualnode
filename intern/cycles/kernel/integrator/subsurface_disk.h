@@ -40,17 +40,6 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
   /* Read subsurface scattering parameters. */
   const Spectrum radius = INTEGRATOR_STATE(state, subsurface, radius);
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  const Spectrum albedo = INTEGRATOR_STATE(state, subsurface, albedo);
-  Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
-  throughput = safe_divide_color(throughput, albedo);
-  const bool use_guiding = kernel_data.integrator.use_guiding;
-  Spectrum initial_throughput = throughput;
-  if (use_guiding) {
-    guiding_record_bssrdf_bounce(kg, state, 1.f, Ng, -Ng);
-  }
-#endif
-
   /* Pick random axis in local frame and point on disk. */
   float3 disk_N, disk_T, disk_B;
   float pick_pdf_N, pick_pdf_T, pick_pdf_B;
@@ -186,7 +175,8 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
 
     if (r < next_sum) {
       /* Return exit point. */
-      INTEGRATOR_STATE_WRITE(state, path, throughput) *= weight * sum_weights / sample_weight;
+      const Spectrum resampled_weight = weight * sum_weights / sample_weight;
+      INTEGRATOR_STATE_WRITE(state, path, throughput) *= resampled_weight;
       ss_isect.hits[0] = ss_isect.hits[hit];
       ss_isect.Ng[0] = ss_isect.Ng[hit];
 
@@ -195,17 +185,8 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
       ray.tmin = 0.0f;
       ray.tmax = 1.0f;
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-      // calculate the transmittance weight for the comple SSS-random walk
-      if (use_guiding) {
-        throughput = INTEGRATOR_STATE(state, path, throughput);
-        initial_throughput = safe_divide_color(throughput, initial_throughput);
-        openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment,
-                                             openpgl::cpp::Vector3(initial_throughput.x,
-                                                                   initial_throughput.y,
-                                                                   initial_throughput.z));
-      }
-#endif
+      guiding_record_bssrdf_bounce(
+          kg, state, 1.0f, Ng, -Ng, resampled_weight, INTEGRATOR_STATE(state, subsurface, albedo));
       return true;
     }
 

@@ -141,13 +141,16 @@ ccl_device_forceinline void guiding_record_bssrdf_segment(KernelGlobals kg,
  * the surface boundary.*/
 ccl_device_forceinline void guiding_record_bssrdf_weight(KernelGlobals kg,
                                                          IntegratorState state,
-                                                         const Spectrum weight)
+                                                         const Spectrum weight,
+                                                         const Spectrum albedo)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   if (!kernel_data.integrator.train_guiding) {
     return;
   }
-  const float3 weight_rgb = spectrum_to_rgb(weight);
+
+  /* Note albedo left out here, will be included in guiding_record_bssrdf_bounce. */
+  const float3 weight_rgb = spectrum_to_rgb(safe_divide_color(weight, albedo));
 
   kernel_assert(state->guiding.path_segment != nullptr);
 
@@ -167,13 +170,16 @@ ccl_device_forceinline void guiding_record_bssrdf_bounce(KernelGlobals kg,
                                                          IntegratorState state,
                                                          const float pdf,
                                                          const float3 N,
-                                                         const float3 omega_in)
+                                                         const float3 omega_in,
+                                                         const Spectrum weight,
+                                                         const Spectrum albedo)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
   if (!kernel_data.integrator.train_guiding) {
     return;
   }
   const float3 normal = clamp(N, -one_float3(), one_float3());
+  const float3 weight_rgb = spectrum_to_rgb(weight * albedo);
 
   kernel_assert(state->guiding.path_segment != nullptr);
 
@@ -181,6 +187,7 @@ ccl_device_forceinline void guiding_record_bssrdf_bounce(KernelGlobals kg,
   openpgl::cpp::SetNormal(state->guiding.path_segment, guiding_vec3f(normal));
   openpgl::cpp::SetDirectionIn(state->guiding.path_segment, guiding_vec3f(omega_in));
   openpgl::cpp::SetPDFDirectionIn(state->guiding.path_segment, pdf);
+  openpgl::cpp::SetTransmittanceWeight(state->guiding.path_segment, guiding_vec3f(weight_rgb));
 #endif
 }
 
