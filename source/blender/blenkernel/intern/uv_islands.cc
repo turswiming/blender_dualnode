@@ -6,6 +6,27 @@
 
 namespace blender::bke::uv_islands {
 
+static void uv_edge_append_to_uv_vertices(UVEdge &uv_edge)
+{
+  for (UVVertex *vertex : uv_edge.vertices) {
+    vertex->uv_edges.append_non_duplicates(&uv_edge);
+  }
+}
+
+static void uv_primitive_append_to_uv_edges(UVPrimitive &uv_primitive)
+{
+  for (UVEdge *uv_edge : uv_primitive.edges) {
+    uv_edge->uv_primitives.append_non_duplicates(&uv_primitive);
+  }
+}
+
+static void uv_primitive_append_to_uv_vertices(UVPrimitive &uv_primitive)
+{
+  for (UVEdge *uv_edge : uv_primitive.edges) {
+    uv_edge_append_to_uv_vertices(*uv_edge);
+  }
+}
+
 /* -------------------------------------------------------------------- */
 /** \name MeshPrimitive
  * \{ */
@@ -211,10 +232,191 @@ MeshData::MeshData(const MLoopTri *looptri,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name UVIsland
+/** \name UVVertex
  * \{ */
 
-UVPrimitive *add_primitive(UVIsland &uv_island, MeshPrimitive &primitive)
+static void uv_vertex_init_flags(UVVertex &uv_vertex)
+{
+  uv_vertex.flags.is_border = false;
+  uv_vertex.flags.is_extended = false;
+}
+
+UVVertex::UVVertex()
+{
+  uv_vertex_init_flags(*this);
+}
+
+UVVertex::UVVertex(const MeshUVVert &vert) : vertex(vert.vertex), uv(vert.uv)
+{
+  uv_vertex_init_flags(*this);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name UVEdge
+ * \{ */
+
+bool UVEdge::has_shared_edge(const MeshUVVert &v1, const MeshUVVert &v2) const
+{
+  return (vertices[0]->uv == v1.uv && vertices[1]->uv == v2.uv) ||
+         (vertices[0]->uv == v2.uv && vertices[1]->uv == v1.uv);
+}
+
+bool UVEdge::has_shared_edge(const UVVertex &v1, const UVVertex &v2) const
+{
+  return (vertices[0]->uv == v1.uv && vertices[1]->uv == v2.uv) ||
+         (vertices[0]->uv == v2.uv && vertices[1]->uv == v1.uv);
+}
+
+bool UVEdge::has_shared_edge(const UVEdge &other) const
+{
+  return has_shared_edge(*other.vertices[0], *other.vertices[1]);
+}
+
+bool UVEdge::has_same_vertices(const MeshVertex &vert1, const MeshVertex &vert2) const
+{
+  return (vertices[0]->vertex == &vert1 && vertices[1]->vertex == &vert2) ||
+         (vertices[0]->vertex == &vert2 && vertices[1]->vertex == &vert1);
+}
+
+bool UVEdge::has_same_uv_vertices(const UVEdge &other) const
+{
+  return has_shared_edge(other) &&
+         has_same_vertices(*other.vertices[0]->vertex, *other.vertices[1]->vertex);
+  ;
+}
+
+bool UVEdge::has_same_vertices(const MeshEdge &edge) const
+{
+  return has_same_vertices(*edge.vert1, *edge.vert2);
+}
+
+bool UVEdge::is_border_edge() const
+{
+  return uv_primitives.size() == 1;
+}
+
+UVVertex *UVEdge::get_other_uv_vertex(const MeshVertex *vertex)
+{
+  if (vertices[0]->vertex == vertex) {
+    return vertices[1];
+  }
+  return vertices[0];
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name UVIsland
+ * \{ */
+UVVertex *UVIsland::lookup(const UVVertex &vertex)
+{
+  int64_t vert_index = vertex.vertex->v;
+  Vector<UVVertex *> &vertices = uv_vertex_lookup.lookup_or_add_default(vert_index);
+  for (UVVertex *v : vertices) {
+    if (v->uv == vertex.uv) {
+      return v;
+    }
+  }
+  return nullptr;
+}
+
+UVVertex *UVIsland::lookup_or_create(const UVVertex &vertex)
+{
+  UVVertex *found_vertex = lookup(vertex);
+  if (found_vertex != nullptr) {
+    return found_vertex;
+  }
+
+  uv_vertices.append(vertex);
+  UVVertex *result = &uv_vertices.last();
+  result->uv_edges.clear();
+  /* v is already a key. Ensured by UVIsland::lookup in this method. */
+  uv_vertex_lookup.lookup(vertex.vertex->v).append(result);
+  return result;
+}
+
+UVEdge *UVIsland::lookup(const UVEdge &edge)
+{
+  UVVertex *found_vertex = lookup(*edge.vertices[0]);
+  if (found_vertex == nullptr) {
+    return nullptr;
+  }
+  for (UVEdge *e : found_vertex->uv_edges) {
+    UVVertex *other_vertex = e->get_other_uv_vertex(found_vertex->vertex);
+    if (other_vertex->vertex == edge.vertices[1]->vertex &&
+        other_vertex->uv == edge.vertices[1]->uv) {
+      return e;
+    }
+  }
+  return nullptr;
+}
+
+UVEdge *UVIsland::lookup_or_create(const UVEdge &edge)
+{
+  UVEdge *found_edge = lookup(edge);
+  if (found_edge != nullptr) {
+    return found_edge;
+  }
+
+  uv_edges.append(edge);
+  UVEdge *result = &uv_edges.last();
+  result->uv_primitives.clear();
+  return result;
+}
+
+void UVIsland::append(const UVPrimitive &primitive)
+{
+  uv_primitives.append(primitive);
+  UVPrimitive *new_prim_ptr = &uv_primitives.last();
+  for (int i = 0; i < 3; i++) {
+    UVEdge *other_edge = primitive.edges[i];
+    UVEdge uv_edge_template;
+    uv_edge_template.vertices[0] = lookup_or_create(*other_edge->vertices[0]);
+    uv_edge_template.vertices[1] = lookup_or_create(*other_edge->vertices[1]);
+    new_prim_ptr->edges[i] = lookup_or_create(uv_edge_template);
+    uv_edge_append_to_uv_vertices(*new_prim_ptr->edges[i]);
+    new_prim_ptr->edges[i]->uv_primitives.append(new_prim_ptr);
+  }
+}
+
+bool UVIsland::has_shared_edge(const UVPrimitive &primitive) const
+{
+  for (const VectorList<UVPrimitive>::UsedVector &prims : uv_primitives) {
+    for (const UVPrimitive &prim : prims) {
+      if (prim.has_shared_edge(primitive)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool UVIsland::has_shared_edge(const MeshPrimitive &primitive) const
+{
+  for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
+    for (const UVPrimitive &prim : primitives) {
+      if (prim.has_shared_edge(primitive)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void UVIsland::extend_border(const UVPrimitive &primitive)
+{
+  for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
+    for (const UVPrimitive &prim : primitives) {
+      if (prim.has_shared_edge(primitive)) {
+        append(primitive);
+      }
+    }
+  }
+}
+
+static UVPrimitive *add_primitive(UVIsland &uv_island, MeshPrimitive &primitive)
 {
   UVPrimitive uv_primitive(&primitive);
   uv_island.uv_primitives.append(uv_primitive);
@@ -227,7 +429,7 @@ UVPrimitive *add_primitive(UVIsland &uv_island, MeshPrimitive &primitive)
     uv_edge_template.vertices[1] = uv_island.lookup_or_create(UVVertex(v2));
     UVEdge *uv_edge = uv_island.lookup_or_create(uv_edge_template);
     uv_primitive_ptr->edges.append(uv_edge);
-    uv_edge->append_to_uv_vertices();
+    uv_edge_append_to_uv_vertices(*uv_edge);
     uv_edge->uv_primitives.append(uv_primitive_ptr);
   }
   return uv_primitive_ptr;
@@ -469,8 +671,8 @@ static void add_uv_primitive_shared_uv_edge(UVIsland &island,
   edge_template.vertices[0] = vert_ptr;
   edge_template.vertices[1] = vert_1_ptr;
   prim1.edges.append(island.lookup_or_create(edge_template));
-  prim1.append_to_uv_edges();
-  prim1.append_to_uv_vertices();
+  uv_primitive_append_to_uv_edges(prim1);
+  uv_primitive_append_to_uv_vertices(prim1);
   island.uv_primitives.append(prim1);
 }
 
@@ -530,8 +732,8 @@ static void add_uv_primitive_fill(UVIsland &island,
   edge_template.vertices[0] = &uv_vertex3;
   edge_template.vertices[1] = &uv_vertex1;
   uv_primitive.edges.append(island.lookup_or_create(edge_template));
-  uv_primitive.append_to_uv_edges();
-  uv_primitive.append_to_uv_vertices();
+  uv_primitive_append_to_uv_edges(uv_primitive);
+  uv_primitive_append_to_uv_vertices(uv_primitive);
   island.uv_primitives.append(uv_primitive);
 }
 
@@ -835,11 +1037,26 @@ void UVBorder::update_indexes(uint64_t border_index)
   }
 }
 
+/** Remove edge from the border. updates the indexes. */
+void UVBorder::remove(int64_t index)
+{
+  /* Could read the border_index from any border edge as they are consistent. */
+  uint64_t border_index = edges[0].border_index;
+  edges.remove(index);
+  update_indexes(border_index);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name UVBorderCorner
  * \{ */
+
+  UVBorderCorner::UVBorderCorner(UVBorderEdge *first, UVBorderEdge *second, float angle)
+      : first(first), second(second), angle(angle)
+  {
+  }
+
 float2 UVBorderCorner::uv(float factor, float min_uv_distance)
 {
   float2 origin = first->get_uv_vertex(1)->uv;
@@ -861,6 +1078,124 @@ float2 UVBorderCorner::uv(float factor, float min_uv_distance)
 /** \name UVPrimitive
  * \{ */
 
+UVPrimitive::UVPrimitive(MeshPrimitive *primitive) : primitive(primitive)
+{
+}
+
+Vector<std::pair<UVEdge *, UVEdge *>> UVPrimitive::shared_edges(UVPrimitive &other)
+{
+  Vector<std::pair<UVEdge *, UVEdge *>> result;
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      if (edges[i]->has_shared_edge(*other.edges[j])) {
+        result.append(std::pair<UVEdge *, UVEdge *>(edges[i], other.edges[j]));
+      }
+    }
+  }
+  return result;
+}
+
+bool UVPrimitive::has_shared_edge(const UVPrimitive &other) const
+{
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      if (edges[i]->has_shared_edge(*other.edges[j])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool UVPrimitive::has_shared_edge(const MeshPrimitive &primitive) const
+{
+  for (const UVEdge *uv_edge : edges) {
+    const MeshUVVert *v1 = &primitive.vertices.last();
+    for (int i = 0; i < primitive.vertices.size(); i++) {
+      const MeshUVVert *v2 = &primitive.vertices[i];
+      if (uv_edge->has_shared_edge(*v1, *v2)) {
+        return true;
+      }
+      v1 = v2;
+    }
+  }
+  return false;
+}
+
+/**
+ * Get the UVVertex in the order that the verts are ordered in the MeshPrimitive.
+ */
+const UVVertex *UVPrimitive::get_uv_vertex(const uint8_t mesh_vert_index) const
+{
+  const MeshVertex *mesh_vertex = primitive->vertices[mesh_vert_index].vertex;
+  for (const UVEdge *uv_edge : edges) {
+    for (const UVVertex *uv_vert : uv_edge->vertices) {
+      if (uv_vert->vertex == mesh_vertex) {
+        return uv_vert;
+      }
+    }
+  }
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
+/**
+ * Get the UVEdge that share the given uv coordinates.
+ * Will assert when no UVEdge found.
+ */
+UVEdge *UVPrimitive::get_uv_edge(const float2 uv1, const float2 uv2) const
+{
+  for (UVEdge *uv_edge : edges) {
+    const float2 &e1 = uv_edge->vertices[0]->uv;
+    const float2 &e2 = uv_edge->vertices[1]->uv;
+    if ((e1 == uv1 && e2 == uv2) || (e1 == uv2 && e2 == uv1)) {
+      return uv_edge;
+    }
+  }
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
+UVEdge *UVPrimitive::get_uv_edge(const MeshVertex *v1, const MeshVertex *v2) const
+{
+  for (UVEdge *uv_edge : edges) {
+    const MeshVertex *e1 = uv_edge->vertices[0]->vertex;
+    const MeshVertex *e2 = uv_edge->vertices[1]->vertex;
+    if ((e1 == v1 && e2 == v2) || (e1 == v2 && e2 == v1)) {
+      return uv_edge;
+    }
+  }
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
+const bool UVPrimitive::contains_uv_vertex(const UVVertex *uv_vertex) const
+{
+  for (UVEdge *edge : edges) {
+    if (std::find(edge->vertices.begin(), edge->vertices.end(), uv_vertex) !=
+        edge->vertices.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const UVVertex *UVPrimitive::get_other_uv_vertex(const UVVertex *v1, const UVVertex *v2) const
+{
+  BLI_assert(contains_uv_vertex(v1));
+  BLI_assert(contains_uv_vertex(v2));
+
+  for (const UVEdge *edge : edges) {
+    for (const UVVertex *uv_vertex : edge->vertices) {
+      if (uv_vertex != v1 && uv_vertex != v2) {
+        return uv_vertex;
+      }
+    }
+  }
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
 UVBorder UVPrimitive::extract_border() const
 {
   Vector<UVBorderEdge> border_edges;
@@ -870,6 +1205,41 @@ UVBorder UVPrimitive::extract_border() const
     border_edges.append(border_edge);
   }
   return *UVBorder::extract_from_edges(border_edges);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name UVBorderEdge
+ * \{ */
+UVBorderEdge::UVBorderEdge(UVEdge *edge, UVPrimitive *uv_primitive)
+    : edge(edge), uv_primitive(uv_primitive)
+{
+}
+
+UVVertex *UVBorderEdge::get_uv_vertex(int index)
+{
+  int actual_index = reverse_order ? 1 - index : index;
+  return edge->vertices[actual_index];
+}
+
+const UVVertex *UVBorderEdge::get_uv_vertex(int index) const
+{
+  int actual_index = reverse_order ? 1 - index : index;
+  return edge->vertices[actual_index];
+}
+
+/**
+ * Get the uv vertex from the primitive that is not part of the edge.
+ */
+const UVVertex *UVBorderEdge::get_other_uv_vertex() const
+{
+  return uv_primitive->get_other_uv_vertex(edge->vertices[0], edge->vertices[1]);
+}
+
+float UVBorderEdge::length() const
+{
+  return len_v2v2(edge->vertices[0]->uv, edge->vertices[1]->uv);
 }
 
 /** \} */

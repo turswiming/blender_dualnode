@@ -118,77 +118,24 @@ struct UVVertex {
     bool is_extended : 1;
   } flags;
 
-  explicit UVVertex()
-  {
-    flags.is_border = false;
-    flags.is_extended = false;
-  }
-
-  explicit UVVertex(const MeshUVVert &vert) : vertex(vert.vertex), uv(vert.uv)
-  {
-    flags.is_border = false;
-    flags.is_extended = false;
-  }
+  explicit UVVertex();
+  explicit UVVertex(const MeshUVVert &vert);
 };
 
 struct UVEdge {
   std::array<UVVertex *, 2> vertices;
   Vector<UVPrimitive *, 2> uv_primitives;
 
-  bool has_shared_edge(const MeshUVVert &v1, const MeshUVVert &v2) const
-  {
-    return (vertices[0]->uv == v1.uv && vertices[1]->uv == v2.uv) ||
-           (vertices[0]->uv == v2.uv && vertices[1]->uv == v1.uv);
-  }
+  UVVertex *get_other_uv_vertex(const MeshVertex *vertex);
+  bool has_shared_edge(const MeshUVVert &v1, const MeshUVVert &v2) const;
+  bool has_shared_edge(const UVEdge &other) const;
+  bool has_same_vertices(const MeshEdge &edge) const;
+  bool is_border_edge() const;
 
-  bool has_shared_edge(const UVVertex &v1, const UVVertex &v2) const
-  {
-    return (vertices[0]->uv == v1.uv && vertices[1]->uv == v2.uv) ||
-           (vertices[0]->uv == v2.uv && vertices[1]->uv == v1.uv);
-  }
-
-  bool has_shared_edge(const UVEdge &other) const
-  {
-    return has_shared_edge(*other.vertices[0], *other.vertices[1]);
-  }
-
-  bool has_same_vertices(const MeshVertex &vert1, const MeshVertex &vert2) const
-  {
-    return (vertices[0]->vertex == &vert1 && vertices[1]->vertex == &vert2) ||
-           (vertices[0]->vertex == &vert2 && vertices[1]->vertex == &vert1);
-  }
-
-  bool has_same_uv_vertices(const UVEdge &other) const
-  {
-    return has_shared_edge(other) &&
-           has_same_vertices(*other.vertices[0]->vertex, *other.vertices[1]->vertex);
-    ;
-  }
-
-  bool has_same_vertices(const MeshEdge &edge) const
-  {
-    return has_same_vertices(*edge.vert1, *edge.vert2);
-  }
-
-  bool is_border_edge() const
-  {
-    return uv_primitives.size() == 1;
-  }
-
-  void append_to_uv_vertices()
-  {
-    for (UVVertex *vertex : vertices) {
-      vertex->uv_edges.append_non_duplicates(this);
-    }
-  }
-
-  UVVertex *get_other_uv_vertex(const MeshVertex *vertex)
-  {
-    if (vertices[0]->vertex == vertex) {
-      return vertices[1];
-    }
-    return vertices[0];
-  }
+ private:
+  bool has_shared_edge(const UVVertex &v1, const UVVertex &v2) const;
+  bool has_same_vertices(const MeshVertex &vert1, const MeshVertex &vert2) const;
+  bool has_same_uv_vertices(const UVEdge &other) const;
 };
 
 struct UVPrimitive {
@@ -198,136 +145,26 @@ struct UVPrimitive {
   MeshPrimitive *primitive;
   Vector<UVEdge *, 3> edges;
 
-  explicit UVPrimitive(MeshPrimitive *primitive) : primitive(primitive)
-  {
-  }
+  explicit UVPrimitive(MeshPrimitive *primitive);
 
-  void append_to_uv_edges()
-  {
-    for (UVEdge *uv_edge : edges) {
-      uv_edge->uv_primitives.append_non_duplicates(this);
-    }
-  }
-  void append_to_uv_vertices()
-  {
-    for (UVEdge *uv_edge : edges) {
-      uv_edge->append_to_uv_vertices();
-    }
-  }
-
-  Vector<std::pair<UVEdge *, UVEdge *>> shared_edges(UVPrimitive &other)
-  {
-    Vector<std::pair<UVEdge *, UVEdge *>> result;
-    for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 3; j++) {
-        if (edges[i]->has_shared_edge(*other.edges[j])) {
-          result.append(std::pair<UVEdge *, UVEdge *>(edges[i], other.edges[j]));
-        }
-      }
-    }
-    return result;
-  }
-
-  bool has_shared_edge(const UVPrimitive &other) const
-  {
-    for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 3; j++) {
-        if (edges[i]->has_shared_edge(*other.edges[j])) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  bool has_shared_edge(const MeshPrimitive &primitive) const
-  {
-    for (const UVEdge *uv_edge : edges) {
-      const MeshUVVert *v1 = &primitive.vertices.last();
-      for (int i = 0; i < primitive.vertices.size(); i++) {
-        const MeshUVVert *v2 = &primitive.vertices[i];
-        if (uv_edge->has_shared_edge(*v1, *v2)) {
-          return true;
-        }
-        v1 = v2;
-      }
-    }
-    return false;
-  }
+  Vector<std::pair<UVEdge *, UVEdge *>> shared_edges(UVPrimitive &other);
+  bool has_shared_edge(const UVPrimitive &other) const;
+  bool has_shared_edge(const MeshPrimitive &primitive) const;
 
   /**
    * Get the UVVertex in the order that the verts are ordered in the MeshPrimitive.
    */
-  const UVVertex *get_uv_vertex(const uint8_t mesh_vert_index) const
-  {
-    const MeshVertex *mesh_vertex = primitive->vertices[mesh_vert_index].vertex;
-    for (const UVEdge *uv_edge : edges) {
-      for (const UVVertex *uv_vert : uv_edge->vertices) {
-        if (uv_vert->vertex == mesh_vertex) {
-          return uv_vert;
-        }
-      }
-    }
-    BLI_assert_unreachable();
-    return nullptr;
-  }
+  const UVVertex *get_uv_vertex(const uint8_t mesh_vert_index) const;
 
   /**
    * Get the UVEdge that share the given uv coordinates.
    * Will assert when no UVEdge found.
    */
-  UVEdge *get_uv_edge(const float2 uv1, const float2 uv2) const
-  {
-    for (UVEdge *uv_edge : edges) {
-      const float2 &e1 = uv_edge->vertices[0]->uv;
-      const float2 &e2 = uv_edge->vertices[1]->uv;
-      if ((e1 == uv1 && e2 == uv2) || (e1 == uv2 && e2 == uv1)) {
-        return uv_edge;
-      }
-    }
-    BLI_assert_unreachable();
-    return nullptr;
-  }
+  UVEdge *get_uv_edge(const float2 uv1, const float2 uv2) const;
+  UVEdge *get_uv_edge(const MeshVertex *v1, const MeshVertex *v2) const;
 
-  UVEdge *get_uv_edge(const MeshVertex *v1, const MeshVertex *v2) const
-  {
-    for (UVEdge *uv_edge : edges) {
-      const MeshVertex *e1 = uv_edge->vertices[0]->vertex;
-      const MeshVertex *e2 = uv_edge->vertices[1]->vertex;
-      if ((e1 == v1 && e2 == v2) || (e1 == v2 && e2 == v1)) {
-        return uv_edge;
-      }
-    }
-    BLI_assert_unreachable();
-    return nullptr;
-  }
-
-  const bool contains_uv_vertex(const UVVertex *uv_vertex) const
-  {
-    for (UVEdge *edge : edges) {
-      if (std::find(edge->vertices.begin(), edge->vertices.end(), uv_vertex) !=
-          edge->vertices.end()) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  const UVVertex *get_other_uv_vertex(const UVVertex *v1, const UVVertex *v2) const
-  {
-    BLI_assert(contains_uv_vertex(v1));
-    BLI_assert(contains_uv_vertex(v2));
-
-    for (const UVEdge *edge : edges) {
-      for (const UVVertex *uv_vertex : edge->vertices) {
-        if (uv_vertex != v1 && uv_vertex != v2) {
-          return uv_vertex;
-        }
-      }
-    }
-    BLI_assert_unreachable();
-    return nullptr;
-  }
+  const bool contains_uv_vertex(const UVVertex *uv_vertex) const;
+  const UVVertex *get_other_uv_vertex(const UVVertex *v1, const UVVertex *v2) const;
 
   UVBorder extract_border() const;
 };
@@ -344,35 +181,17 @@ struct UVBorderEdge {
   int64_t next_index = -1;
   int64_t border_index = -1;
 
-  explicit UVBorderEdge(UVEdge *edge, UVPrimitive *uv_primitive)
-      : edge(edge), uv_primitive(uv_primitive)
-  {
-  }
+  explicit UVBorderEdge(UVEdge *edge, UVPrimitive *uv_primitive);
 
-  UVVertex *get_uv_vertex(int index)
-  {
-    int actual_index = reverse_order ? 1 - index : index;
-    return edge->vertices[actual_index];
-  }
-
-  const UVVertex *get_uv_vertex(int index) const
-  {
-    int actual_index = reverse_order ? 1 - index : index;
-    return edge->vertices[actual_index];
-  }
+  UVVertex *get_uv_vertex(int index);
+  const UVVertex *get_uv_vertex(int index) const;
 
   /**
    * Get the uv vertex from the primitive that is not part of the edge.
    */
-  const UVVertex *get_other_uv_vertex() const
-  {
-    return uv_primitive->get_other_uv_vertex(edge->vertices[0], edge->vertices[1]);
-  }
+  const UVVertex *get_other_uv_vertex() const;
 
-  float length() const
-  {
-    return len_v2v2(edge->vertices[0]->uv, edge->vertices[1]->uv);
-  }
+  float length() const;
 };
 
 struct UVBorderCorner {
@@ -380,10 +199,7 @@ struct UVBorderCorner {
   UVBorderEdge *second;
   float angle;
 
-  UVBorderCorner(UVBorderEdge *first, UVBorderEdge *second, float angle)
-      : first(first), second(second), angle(angle)
-  {
-  }
+  explicit UVBorderCorner(UVBorderEdge *first, UVBorderEdge *second, float angle);
 
   /**
    * Calculate a uv coordinate between the edges of the corner.
@@ -418,13 +234,7 @@ struct UVBorder {
   static std::optional<UVBorder> extract_from_edges(Vector<UVBorderEdge> &edges);
 
   /** Remove edge from the border. updates the indexes. */
-  void remove(int64_t index)
-  {
-    /* Could read the border_index from any border edge as they are consistent. */
-    uint64_t border_index = edges[0].border_index;
-    edges.remove(index);
-    update_indexes(border_index);
-  }
+  void remove(int64_t index);
 };
 
 struct UVIsland {
@@ -443,61 +253,10 @@ struct UVIsland {
    */
   Map<int64_t, Vector<UVVertex *>> uv_vertex_lookup;
 
-  UVVertex *lookup(const UVVertex &vertex)
-  {
-    int64_t vert_index = vertex.vertex->v;
-    Vector<UVVertex *> &vertices = uv_vertex_lookup.lookup_or_add_default(vert_index);
-    for (UVVertex *v : vertices) {
-      if (v->uv == vertex.uv) {
-        return v;
-      }
-    }
-    return nullptr;
-  }
-
-  UVVertex *lookup_or_create(const UVVertex &vertex)
-  {
-    UVVertex *found_vertex = lookup(vertex);
-    if (found_vertex != nullptr) {
-      return found_vertex;
-    }
-
-    uv_vertices.append(vertex);
-    UVVertex *result = &uv_vertices.last();
-    result->uv_edges.clear();
-    /* v is already a key. Ensured by UVIsland::lookup in this method. */
-    uv_vertex_lookup.lookup(vertex.vertex->v).append(result);
-    return result;
-  }
-
-  UVEdge *lookup(const UVEdge &edge)
-  {
-    UVVertex *found_vertex = lookup(*edge.vertices[0]);
-    if (found_vertex == nullptr) {
-      return nullptr;
-    }
-    for (UVEdge *e : found_vertex->uv_edges) {
-      UVVertex *other_vertex = e->get_other_uv_vertex(found_vertex->vertex);
-      if (other_vertex->vertex == edge.vertices[1]->vertex &&
-          other_vertex->uv == edge.vertices[1]->uv) {
-        return e;
-      }
-    }
-    return nullptr;
-  }
-
-  UVEdge *lookup_or_create(const UVEdge &edge)
-  {
-    UVEdge *found_edge = lookup(edge);
-    if (found_edge != nullptr) {
-      return found_edge;
-    }
-
-    uv_edges.append(edge);
-    UVEdge *result = &uv_edges.last();
-    result->uv_primitives.clear();
-    return result;
-  }
+  UVVertex *lookup(const UVVertex &vertex);
+  UVVertex *lookup_or_create(const UVVertex &vertex);
+  UVEdge *lookup(const UVEdge &edge);
+  UVEdge *lookup_or_create(const UVEdge &edge);
 
   /** Initialize the border attribute. */
   void extract_borders();
@@ -505,56 +264,12 @@ struct UVIsland {
   void extend_border(const UVIslandsMask &mask, const short island_index);
 
  private:
-  void append(const UVPrimitive &primitive)
-  {
-    uv_primitives.append(primitive);
-    UVPrimitive *new_prim_ptr = &uv_primitives.last();
-    for (int i = 0; i < 3; i++) {
-      UVEdge *other_edge = primitive.edges[i];
-      UVEdge uv_edge_template;
-      uv_edge_template.vertices[0] = lookup_or_create(*other_edge->vertices[0]);
-      uv_edge_template.vertices[1] = lookup_or_create(*other_edge->vertices[1]);
-      new_prim_ptr->edges[i] = lookup_or_create(uv_edge_template);
-      new_prim_ptr->edges[i]->append_to_uv_vertices();
-      new_prim_ptr->edges[i]->uv_primitives.append(new_prim_ptr);
-    }
-  }
+  void append(const UVPrimitive &primitive);
 
  public:
-  bool has_shared_edge(const UVPrimitive &primitive) const
-  {
-    for (const VectorList<UVPrimitive>::UsedVector &prims : uv_primitives) {
-      for (const UVPrimitive &prim : prims) {
-        if (prim.has_shared_edge(primitive)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  bool has_shared_edge(const MeshPrimitive &primitive) const
-  {
-    for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
-      for (const UVPrimitive &prim : primitives) {
-        if (prim.has_shared_edge(primitive)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  const void extend_border(const UVPrimitive &primitive)
-  {
-    for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
-      for (const UVPrimitive &prim : primitives) {
-        if (prim.has_shared_edge(primitive)) {
-          append(primitive);
-        }
-      }
-    }
-  }
+  bool has_shared_edge(const UVPrimitive &primitive) const;
+  bool has_shared_edge(const MeshPrimitive &primitive) const;
+  void extend_border(const UVPrimitive &primitive);
 };
 
 struct UVIslands {
