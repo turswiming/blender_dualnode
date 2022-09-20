@@ -1343,17 +1343,16 @@ void PathTrace::guiding_prepare_structures()
 void PathTrace::guiding_update_structures()
 {
 #ifdef WITH_PATH_GUIDING
-#  ifdef WITH_PATH_GUIDING_DEBUG_PRINT
-  VLOG_INFO << "Path Guiding: update guiding structures";
-  VLOG_INFO << "SampleDataStrorage: #surface samples = "
-            << guiding_sample_data_storage_->GetSizeSurface()
-            << "\t#volumesamples = " << guiding_sample_data_storage_->GetSizeVolume();
-#  endif
+  VLOG_WORK << "Update path guiding structures";
+
+  VLOG_DEBUG << "Number of surface samples: " << guiding_sample_data_storage_->GetSizeSurface();
+  VLOG_DEBUG << "Number of volume samples: " << guiding_sample_data_storage_->GetSizeVolume();
+
   const size_t num_valid_samples = guiding_sample_data_storage_->GetSizeSurface() +
                                    guiding_sample_data_storage_->GetSizeVolume();
+
   /* we wait until we have at least 1024 samples */
   if (num_valid_samples >= 1024) {
-
 #  if OPENPGL_VERSION_MINOR < 4
     const size_t num_samples = 1;
     guiding_field_->Update(*guiding_sample_data_storage_, num_samples);
@@ -1361,9 +1360,9 @@ void PathTrace::guiding_update_structures()
     guiding_field_->Update(*guiding_sample_data_storage_);
 #  endif
     guiding_update_count++;
-#  if defined(WITH_PATH_GUIDING_DEBUG_PRINT) && PATH_GUIDING_DEBUG_VALIDATE
-    VLOG_DEBUG << "Field: valid = " << guiding_field_->Validate();
-#  endif
+
+    VLOG_DEBUG << "Path guiding field valid: " << guiding_field_->Validate();
+
     guiding_sample_data_storage_->Clear();
   }
 #endif

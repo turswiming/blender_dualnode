@@ -359,12 +359,14 @@ void PathTraceWorkCPU::guiding_prepare_integrator_state(KernelGlobalsCPU *kg,
 void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
     KernelGlobalsCPU *kg, IntegratorStateCPU *state, ccl_global float *ccl_restrict render_buffer)
 {
-
-#    if defined(PATH_GUIDING_DEBUG_VALIDATE) && PATH_GUIDING_LEVEL >= 5
-  /* Checks if the generated path segments contain valid values */
-  bool validSegments = state->guiding.path_segment_storage->ValidateSegments();
-  if (!validSegments)
-    VLOG_WORK << "Guiding: Invalid path segments!" << std::endl;
+#    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
+  if (VLOG_DEBUG_IS_ON) {
+    /* Checks if the generated path segments contain valid values */
+    const bool validSegments = state->guiding.path_segment_storage->ValidateSegments();
+    if (!validSegments) {
+      VLOG_DEBUG << "Guiding: Invalid path segments!";
+    }
+  }
 #    endif
 
 #    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
@@ -389,13 +391,14 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
       false, nullptr, use_mis_weights, use_guide_direct_light, false);
 #    endif
 
-#    if defined(PATH_GUIDING_DEBUG_VALIDATE) && PATH_GUIDING_LEVEL >= 5
+#    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
   /* Checking if the training/radiance samples generated py the path segment storage are valid.*/
-  bool validSamples = state->guiding.path_segment_storage->ValidateSamples();
-  if (!validSamples)
-    VLOG_WORK
-        << "Guiding: Path segment storage generated/contains invalid radiance/training samples!"
-        << std::endl;
+  if (VLOG_DEBUG_IS_ON) {
+    const bool validSamples = state->guiding.path_segment_storage->ValidateSamples();
+    if (!validSamples)
+      VLOG_DEBUG
+          << "Guiding: Path segment storage generated/contains invalid radiance/training samples!";
+  }
 #    endif
 
 #    if PATH_GUIDING_LEVEL >= 3
