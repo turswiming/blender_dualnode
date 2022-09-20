@@ -9,6 +9,32 @@ namespace blender::bke::uv_islands {
 /* -------------------------------------------------------------------- */
 /** \name MeshPrimitive
  * \{ */
+
+MeshUVVert *MeshPrimitive::get_other_uv_vertex(const MeshVertex *v1, const MeshVertex *v2)
+{
+  BLI_assert(vertices[0].vertex == v1 || vertices[1].vertex == v1 || vertices[2].vertex == v1);
+  BLI_assert(vertices[0].vertex == v2 || vertices[1].vertex == v2 || vertices[2].vertex == v2);
+  for (MeshUVVert &uv_vertex : vertices) {
+    if (uv_vertex.vertex != v1 && uv_vertex.vertex != v2) {
+      return &uv_vertex;
+    }
+  }
+  return nullptr;
+}
+
+bool MeshPrimitive::has_shared_uv_edge(const MeshPrimitive *other) const
+{
+  int shared_uv_verts = 0;
+  for (const MeshUVVert &vert : vertices) {
+    for (const MeshUVVert &other_vert : other->vertices) {
+      if (vert.uv == other_vert.uv) {
+        shared_uv_verts += 1;
+      }
+    }
+  }
+  return shared_uv_verts >= 2;
+}
+
 static const MeshUVVert &get_uv_vert(const MeshPrimitive &mesh_primitive, const MeshVertex *vert)
 {
   for (const MeshUVVert &uv_vert : mesh_primitive.vertices) {
@@ -38,6 +64,148 @@ rctf MeshPrimitive::uv_bounds() const
     BLI_rctf_do_minmax_v(&result, uv_vertex.uv);
   }
   return result;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name MeshData
+ * \{ */
+
+static void mesh_data_init_vertices(MeshData &mesh_data)
+{
+  mesh_data.vertices.reserve(mesh_data.vert_len);
+  for (int64_t i = 0; i < mesh_data.vert_len; i++) {
+    MeshVertex vert;
+    vert.v = i;
+    mesh_data.vertices.append(vert);
+  }
+}
+
+static void mesh_data_init_primitives(MeshData &mesh_data)
+{
+  mesh_data.primitives.reserve(mesh_data.looptri_len);
+  for (int64_t i = 0; i < mesh_data.looptri_len; i++) {
+    const MLoopTri &tri = mesh_data.looptri[i];
+    MeshPrimitive primitive;
+    primitive.index = i;
+    primitive.poly = tri.poly;
+
+    for (int j = 0; j < 3; j++) {
+      MeshUVVert uv_vert;
+      uv_vert.loop = tri.tri[j];
+      uv_vert.vertex = &mesh_data.vertices[mesh_data.mloop[uv_vert.loop].v];
+      uv_vert.uv = mesh_data.mloopuv[uv_vert.loop].uv;
+      primitive.vertices.append(uv_vert);
+    }
+    mesh_data.primitives.append(primitive);
+  }
+}
+
+void mesh_data_init_edges(MeshData &mesh_data)
+{
+  mesh_data.edges.reserve(mesh_data.looptri_len * 2);
+  EdgeHash *eh = BLI_edgehash_new_ex(__func__, mesh_data.looptri_len * 3);
+  for (int64_t i = 0; i < mesh_data.looptri_len; i++) {
+    const MLoopTri &tri = mesh_data.looptri[i];
+    MeshPrimitive &primitive = mesh_data.primitives[i];
+    for (int j = 0; j < 3; j++) {
+      int v1 = mesh_data.mloop[tri.tri[j]].v;
+      int v2 = mesh_data.mloop[tri.tri[(j + 1) % 3]].v;
+
+      void **edge_index_ptr;
+      int64_t edge_index;
+      if (BLI_edgehash_ensure_p(eh, v1, v2, &edge_index_ptr)) {
+        edge_index = POINTER_AS_INT(*edge_index_ptr) - 1;
+        *edge_index_ptr = POINTER_FROM_INT(edge_index);
+      }
+      else {
+        edge_index = mesh_data.edges.size();
+        *edge_index_ptr = POINTER_FROM_INT(edge_index + 1);
+        MeshEdge edge;
+        edge.vert1 = &mesh_data.vertices[v1];
+        edge.vert2 = &mesh_data.vertices[v2];
+        mesh_data.edges.append(edge);
+        MeshEdge *edge_ptr = &mesh_data.edges.last();
+        mesh_data.vertices[v1].edges.append(edge_ptr);
+        mesh_data.vertices[v2].edges.append(edge_ptr);
+      }
+
+      MeshEdge *edge = &mesh_data.edges[edge_index];
+      edge->primitives.append(&primitive);
+      primitive.edges.append(edge);
+    }
+  }
+  BLI_edgehash_free(eh, nullptr);
+}
+static const int64_t INVALID_UV_ISLAND_ID = -1;
+/**
+ * NOTE: doesn't support weird topology where unconnected mesh primitives share the same uv
+ * island. For a accurate implementation we should use implement an uv_prim_lookup.
+ */
+static void extract_uv_neighbors(Vector<MeshPrimitive *> &prims_to_add, MeshPrimitive *primitive)
+{
+  for (MeshEdge *edge : primitive->edges) {
+    for (MeshPrimitive *other_primitive : edge->primitives) {
+      if (primitive == other_primitive) {
+        continue;
+      }
+      if (other_primitive->uv_island_id != INVALID_UV_ISLAND_ID) {
+        continue;
+      }
+
+      if (primitive->has_shared_uv_edge(other_primitive)) {
+        prims_to_add.append(other_primitive);
+      }
+    }
+  }
+}
+
+void mesh_data_init_primitive_uv_island_ids(MeshData &mesh_data)
+{
+  for (MeshPrimitive &primitive : mesh_data.primitives) {
+    primitive.uv_island_id = INVALID_UV_ISLAND_ID;
+  }
+
+  int64_t uv_island_id = 0;
+  Vector<MeshPrimitive *> prims_to_add;
+  for (MeshPrimitive &primitive : mesh_data.primitives) {
+    /* Early exit when uv island id is already extracted during uv neighbor extractions. */
+    if (primitive.uv_island_id != INVALID_UV_ISLAND_ID) {
+      continue;
+    }
+
+    prims_to_add.append(&primitive);
+    while (!prims_to_add.is_empty()) {
+      MeshPrimitive *primitive = prims_to_add.pop_last();
+      primitive->uv_island_id = uv_island_id;
+      extract_uv_neighbors(prims_to_add, primitive);
+    }
+    uv_island_id++;
+  }
+  mesh_data.uv_island_len = uv_island_id;
+}
+
+static void mesh_data_init(MeshData &mesh_data)
+{
+  mesh_data_init_vertices(mesh_data);
+  mesh_data_init_primitives(mesh_data);
+  mesh_data_init_edges(mesh_data);
+  mesh_data_init_primitive_uv_island_ids(mesh_data);
+}
+
+MeshData::MeshData(const MLoopTri *looptri,
+                   const int64_t looptri_len,
+                   const int64_t vert_len,
+                   const MLoop *mloop,
+                   const MLoopUV *mloopuv)
+    : looptri(looptri),
+      looptri_len(looptri_len),
+      vert_len(vert_len),
+      mloop(mloop),
+      mloopuv(mloopuv)
+{
+  mesh_data_init(*this);
 }
 
 /** \} */

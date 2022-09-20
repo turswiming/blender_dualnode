@@ -1,5 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ *
+ * UV Islands for PBVH Pixel extraction. When primitives share an edge they belong to the same UV
+ * Island.
+ *
+ * \note Similar to `uvedit_islands.cc`, but optimized for PBVH painting without using BMesh for
+ * performance reasons. Does not support manifold meshes or edges with more than 3 faces.
+ */
+
 #pragma once
 
 #include <fstream>
@@ -46,7 +56,7 @@ struct MeshEdge {
   Vector<MeshPrimitive *> primitives;
 };
 
-/** Represents a triangle in 3d space (MLoopTri) */
+/** Represents a triangle in 3d space (MLoopTri). */
 struct MeshPrimitive {
   int64_t index;
   int64_t poly;
@@ -55,36 +65,18 @@ struct MeshPrimitive {
 
   /**
    * UV island this primitive belongs to. This is used to speed up the initial uv island
-   * extraction, but should not be used when extending uv islands.
+   * extraction and should not be used afterwards.
    */
   int64_t uv_island_id;
 
-  MeshUVVert *get_other_uv_vertex(const MeshVertex *v1, const MeshVertex *v2)
-  {
-    BLI_assert(vertices[0].vertex == v1 || vertices[1].vertex == v1 || vertices[2].vertex == v1);
-    BLI_assert(vertices[0].vertex == v2 || vertices[1].vertex == v2 || vertices[2].vertex == v2);
-    for (MeshUVVert &uv_vertex : vertices) {
-      if (uv_vertex.vertex != v1 && uv_vertex.vertex != v2) {
-        return &uv_vertex;
-      }
-    }
-    return nullptr;
-  }
+  /** Get the vertex that is not given. Both given vertices must be part of the MeshPrimitive. */
+  MeshUVVert *get_other_uv_vertex(const MeshVertex *v1, const MeshVertex *v2);
 
+  /** Get the UV bounds for this MeshPrimitive. */
   rctf uv_bounds() const;
 
-  bool has_shared_uv_edge(const MeshPrimitive *other) const
-  {
-    int shared_uv_verts = 0;
-    for (const MeshUVVert &vert : vertices) {
-      for (const MeshUVVert &other_vert : other->vertices) {
-        if (vert.uv == other_vert.uv) {
-          shared_uv_verts += 1;
-        }
-      }
-    }
-    return shared_uv_verts >= 2;
-  }
+  /** Is the given MeshPrimitive sharing an edge. */
+  bool has_shared_uv_edge(const MeshPrimitive *other) const;
 };
 
 /**
@@ -99,144 +91,18 @@ struct MeshData {
   const MLoop *mloop;
   const MLoopUV *mloopuv;
 
- public:
   Vector<MeshPrimitive> primitives;
   Vector<MeshEdge> edges;
   Vector<MeshVertex> vertices;
-  /** Total number of uv islands detected. */
+  /** Total number of found uv islands. */
   int64_t uv_island_len;
 
+ public:
   explicit MeshData(const MLoopTri *looptri,
                     const int64_t looptri_len,
                     const int64_t vert_len,
                     const MLoop *mloop,
-                    const MLoopUV *mloopuv)
-      : looptri(looptri),
-        looptri_len(looptri_len),
-        vert_len(vert_len),
-        mloop(mloop),
-        mloopuv(mloopuv)
-  {
-    init_vertices();
-    init_primitives();
-    init_edges();
-    init_primitive_uv_island_ids();
-  }
-
-  void init_vertices()
-  {
-    vertices.reserve(vert_len);
-    for (int64_t i = 0; i < vert_len; i++) {
-      MeshVertex vert;
-      vert.v = i;
-      vertices.append(vert);
-    }
-  }
-
-  void init_primitives()
-  {
-    primitives.reserve(looptri_len);
-    for (int64_t i = 0; i < looptri_len; i++) {
-      const MLoopTri &tri = looptri[i];
-      MeshPrimitive primitive;
-      primitive.index = i;
-      primitive.poly = tri.poly;
-
-      for (int j = 0; j < 3; j++) {
-        MeshUVVert uv_vert;
-        uv_vert.loop = tri.tri[j];
-        uv_vert.vertex = &vertices[mloop[uv_vert.loop].v];
-        uv_vert.uv = mloopuv[uv_vert.loop].uv;
-        primitive.vertices.append(uv_vert);
-      }
-      primitives.append(primitive);
-    }
-  }
-
-  void init_edges()
-  {
-    edges.reserve(looptri_len * 2);
-    EdgeHash *eh = BLI_edgehash_new_ex(__func__, looptri_len * 3);
-    for (int64_t i = 0; i < looptri_len; i++) {
-      const MLoopTri &tri = looptri[i];
-      MeshPrimitive &primitive = primitives[i];
-      for (int j = 0; j < 3; j++) {
-        int v1 = mloop[tri.tri[j]].v;
-        int v2 = mloop[tri.tri[(j + 1) % 3]].v;
-
-        void **edge_index_ptr;
-        int64_t edge_index;
-        if (BLI_edgehash_ensure_p(eh, v1, v2, &edge_index_ptr)) {
-          edge_index = POINTER_AS_INT(*edge_index_ptr) - 1;
-          *edge_index_ptr = POINTER_FROM_INT(edge_index);
-        }
-        else {
-          edge_index = edges.size();
-          *edge_index_ptr = POINTER_FROM_INT(edge_index + 1);
-          MeshEdge edge;
-          edge.vert1 = &vertices[v1];
-          edge.vert2 = &vertices[v2];
-          edges.append(edge);
-          MeshEdge *edge_ptr = &edges.last();
-          vertices[v1].edges.append(edge_ptr);
-          vertices[v2].edges.append(edge_ptr);
-        }
-
-        MeshEdge *edge = &edges[edge_index];
-        edge->primitives.append(&primitive);
-        primitive.edges.append(edge);
-      }
-    }
-    BLI_edgehash_free(eh, nullptr);
-  }
-
-  static const int64_t INVALID_UV_ISLAND_ID = -1;
-  /**
-   * NOTE: doesn't support weird topology where unconnected mesh primitives share the same uv
-   * island. For a accurate implementation we should use implement an uv_prim_lookup.
-   */
-  static void extract_uv_neighbors(Vector<MeshPrimitive *> &prims_to_add, MeshPrimitive *primitive)
-  {
-    for (MeshEdge *edge : primitive->edges) {
-      for (MeshPrimitive *other_primitive : edge->primitives) {
-        if (primitive == other_primitive) {
-          continue;
-        }
-        if (other_primitive->uv_island_id != MeshData::INVALID_UV_ISLAND_ID) {
-          continue;
-        }
-
-        if (primitive->has_shared_uv_edge(other_primitive)) {
-          prims_to_add.append(other_primitive);
-        }
-      }
-    }
-  }
-
-  void init_primitive_uv_island_ids()
-  {
-    for (MeshPrimitive &primitive : primitives) {
-      primitive.uv_island_id = INVALID_UV_ISLAND_ID;
-    }
-
-    int64_t uv_island_id = 0;
-    Vector<MeshPrimitive *> prims_to_add;
-    for (MeshPrimitive &primitive : primitives) {
-      /* Early exit when uv island id is already extracted during uv neighbor extractions. */
-      if (primitive.uv_island_id != INVALID_UV_ISLAND_ID) {
-        continue;
-      }
-
-      prims_to_add.append(&primitive);
-      while (!prims_to_add.is_empty()) {
-        MeshPrimitive *primitive = prims_to_add.pop_last();
-        primitive->uv_island_id = uv_island_id;
-        extract_uv_neighbors(prims_to_add, primitive);
-      }
-      uv_island_id++;
-    }
-    uv_island_len = uv_island_id;
-  }
+                    const MLoopUV *mloopuv);
 };
 
 struct UVVertex {
