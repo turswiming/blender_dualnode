@@ -35,7 +35,6 @@ add_dependencies(
 )
 
 if(WIN32)
-
   if(BUILD_MODE STREQUAL Release)
     ExternalProject_Add_Step(external_openpgl after_install
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/openpgl ${HARVEST_TARGET}/openpgl
