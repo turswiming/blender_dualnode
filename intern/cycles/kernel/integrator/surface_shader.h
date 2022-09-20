@@ -12,12 +12,13 @@
 
 #include "kernel/integrator/guiding.h"
 
-#include "kernel/svm/svm.h"
-
 #include "util/log.h"
 
+#ifdef __SVM__
+#  include "kernel/svm/svm.h"
+#endif
 #ifdef __OSL__
-#  include "kernel/osl/shader.h"
+#  include "kernel/osl/osl.h"
 #endif
 
 CCL_NAMESPACE_BEGIN

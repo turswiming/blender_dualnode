@@ -442,7 +442,7 @@ constexpr IDTypeInfo get_type_info()
   info.foreach_id = nullptr;
   info.foreach_cache = image_foreach_cache;
   info.foreach_path = image_foreach_path;
-  info.owner_get = nullptr;
+  info.owner_pointer_get = nullptr;
 
   info.blend_write = image_blend_write;
   info.blend_read_data = image_blend_read_data;
@@ -2662,7 +2662,7 @@ Image *BKE_image_ensure_viewer(Main *bmain, int type, const char *name)
     ima = image_alloc(bmain, name, IMA_SRC_VIEWER, type);
   }
 
-  /* Happens on reload, imagewindow cannot be image user when hidden. */
+  /* Happens on reload, image-window cannot be image user when hidden. */
   if (ima->id.us == 0) {
     id_us_ensure_real(&ima->id);
   }
@@ -5567,15 +5567,14 @@ bool BKE_image_remove_renderslot(Image *ima, ImageUser *iuser, int slot)
       next_last_slot = current_slot;
     }
 
-    if (!iuser) {
+    if (iuser == nullptr || iuser->scene == nullptr) {
       return false;
     }
     Render *re = RE_GetSceneRender(iuser->scene);
-    if (!re) {
-      return false;
+    if (re != nullptr) {
+      RE_SwapResult(re, &current_last_slot->render);
+      RE_SwapResult(re, &next_last_slot->render);
     }
-    RE_SwapResult(re, &current_last_slot->render);
-    RE_SwapResult(re, &next_last_slot->render);
     current_last_slot = next_last_slot;
   }
 

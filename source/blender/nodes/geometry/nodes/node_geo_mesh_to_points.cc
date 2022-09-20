@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_array_utils.hh"
 #include "BLI_task.hh"
 
+#include "DNA_mesh_types.h"
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_attribute_math.hh"
@@ -43,17 +45,6 @@ static void node_init(bNodeTree *UNUSED(tree), bNode *node)
   node->storage = data;
 }
 
-static void materialize_compressed_to_uninitialized_threaded(const GVArray &src,
-                                                             const IndexMask mask,
-                                                             GMutableSpan dst)
-{
-  BLI_assert(src.type() == dst.type());
-  BLI_assert(mask.size() == dst.size());
-  threading::parallel_for(mask.index_range(), 4096, [&](IndexRange range) {
-    src.materialize_compressed_to_uninitialized(mask.slice(range), dst.slice(range).data());
-  });
-}
-
 static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
                                         Field<float3> &position_field,
                                         Field<float> &radius_field,
@@ -65,7 +56,7 @@ static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
     geometry_set.remove_geometry_during_modify();
     return;
   }
-  const int domain_size = bke::mesh_attributes(*mesh).domain_size(domain);
+  const int domain_size = mesh->attributes().domain_size(domain);
   if (domain_size == 0) {
     geometry_set.remove_geometry_during_modify();
     return;
@@ -83,18 +74,16 @@ static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
 
   PointCloud *pointcloud = BKE_pointcloud_new_nomain(selection.size());
   geometry_set.replace_pointcloud(pointcloud);
-  MutableAttributeAccessor dst_attributes = bke::pointcloud_attributes_for_write(*pointcloud);
+  MutableAttributeAccessor dst_attributes = pointcloud->attributes_for_write();
 
   GSpanAttributeWriter position = dst_attributes.lookup_or_add_for_write_only_span(
       "position", ATTR_DOMAIN_POINT, CD_PROP_FLOAT3);
-  materialize_compressed_to_uninitialized_threaded(
-      evaluator.get_evaluated(0), selection, position.span);
+  array_utils::gather(evaluator.get_evaluated(0), selection, position.span);
   position.finish();
 
   GSpanAttributeWriter radius = dst_attributes.lookup_or_add_for_write_only_span(
       "radius", ATTR_DOMAIN_POINT, CD_PROP_FLOAT);
-  materialize_compressed_to_uninitialized_threaded(
-      evaluator.get_evaluated(1), selection, radius.span);
+  array_utils::gather(evaluator.get_evaluated(1), selection, radius.span);
   radius.finish();
 
   Map<AttributeIDRef, AttributeKind> attributes;
@@ -102,7 +91,7 @@ static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
       {GEO_COMPONENT_TYPE_MESH}, GEO_COMPONENT_TYPE_POINT_CLOUD, false, attributes);
   attributes.remove("position");
 
-  const AttributeAccessor src_attributes = bke::mesh_attributes(*mesh);
+  const AttributeAccessor src_attributes = mesh->attributes();
 
   for (Map<AttributeIDRef, AttributeKind>::Item entry : attributes.items()) {
     const AttributeIDRef attribute_id = entry.key;
@@ -111,7 +100,7 @@ static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
     GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
         attribute_id, ATTR_DOMAIN_POINT, data_type);
     if (dst && src) {
-      materialize_compressed_to_uninitialized_threaded(src, selection, dst.span);
+      array_utils::gather(src, selection, dst.span);
       dst.finish();
     }
   }

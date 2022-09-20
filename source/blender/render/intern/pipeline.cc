@@ -5,12 +5,12 @@
  * \ingroup render
  */
 
-#include <errno.h>
-#include <limits.h>
-#include <math.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cerrno>
+#include <climits>
+#include <cmath>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
 
 #include "DNA_anim_types.h"
 #include "DNA_collection_types.h"
@@ -1037,7 +1037,7 @@ static void do_render_compositor_scene(Render *re, Scene *sce, int cfra)
   BKE_scene_camera_switch_update(sce);
 
   /* exception: scene uses own size (unfinished code) */
-  if (0) {
+  if (false) {
     BKE_render_resolution(&sce->r, false, &winx, &winy);
   }
 
@@ -1439,7 +1439,7 @@ static bool check_valid_compositing_camera(Scene *scene, Object *camera_override
       if (node->type == CMP_NODE_R_LAYERS && (node->flag & NODE_MUTED) == 0) {
         Scene *sce = node->id ? (Scene *)node->id : scene;
         if (sce->camera == nullptr) {
-          sce->camera = BKE_view_layer_camera_find(BKE_view_layer_default_render(sce));
+          sce->camera = BKE_view_layer_camera_find(sce, BKE_view_layer_default_render(sce));
         }
         if (sce->camera == nullptr) {
           /* all render layers nodes need camera */
@@ -1497,7 +1497,7 @@ static int check_valid_camera(Scene *scene, Object *camera_override, ReportList 
   const char *err_msg = "No camera found in scene \"%s\"";
 
   if (camera_override == nullptr && scene->camera == nullptr) {
-    scene->camera = BKE_view_layer_camera_find(BKE_view_layer_default_render(scene));
+    scene->camera = BKE_view_layer_camera_find(scene, BKE_view_layer_default_render(scene));
   }
 
   if (!check_valid_camera_multiview(scene, scene->camera, reports)) {
@@ -1511,7 +1511,8 @@ static int check_valid_camera(Scene *scene, Object *camera_override, ReportList 
             (seq->scene != nullptr)) {
           if (!seq->scene_camera) {
             if (!seq->scene->camera &&
-                !BKE_view_layer_camera_find(BKE_view_layer_default_render(seq->scene))) {
+                !BKE_view_layer_camera_find(seq->scene,
+                                            BKE_view_layer_default_render(seq->scene))) {
               /* camera could be unneeded due to composite nodes */
               Object *override = (seq->scene == scene) ? camera_override : nullptr;
 
@@ -1570,7 +1571,7 @@ bool RE_is_rendering_allowed(Scene *scene,
     if (scene->r.border.xmax <= scene->r.border.xmin ||
         scene->r.border.ymax <= scene->r.border.ymin) {
       BKE_report(reports, RPT_ERROR, "No border area selected");
-      return 0;
+      return false;
     }
   }
 
@@ -1585,28 +1586,28 @@ bool RE_is_rendering_allowed(Scene *scene,
     /* Compositor */
     if (!scene->nodetree) {
       BKE_report(reports, RPT_ERROR, "No node tree in scene");
-      return 0;
+      return false;
     }
 
     if (!check_compositor_output(scene)) {
       BKE_report(reports, RPT_ERROR, "No render output node in scene");
-      return 0;
+      return false;
     }
   }
   else {
     /* Regular Render */
     if (!render_scene_has_layers_to_render(scene, single_layer)) {
       BKE_report(reports, RPT_ERROR, "All render layers are disabled");
-      return 0;
+      return false;
     }
   }
 
   /* check valid camera, without camera render is OK (compo, seq) */
   if (!check_valid_camera(scene, camera_override, reports)) {
-    return 0;
+    return false;
   }
 
-  return 1;
+  return true;
 }
 
 static void update_physics_cache(Render *re,
@@ -1690,7 +1691,7 @@ static int render_init_from_main(Render *re,
    * can be later set as render profile option
    * and default for background render.
    */
-  if (0) {
+  if (false) {
     /* make sure dynamics are up to date */
     ViewLayer *view_layer = BKE_view_layer_context_active_PLACEHOLDER(scene);
     update_physics_cache(re, scene, view_layer, anim_init);
@@ -2534,13 +2535,13 @@ void RE_result_load_from_file(RenderResult *result, ReportList *reports, const c
   }
 }
 
-bool RE_layers_have_name(struct RenderResult *rr)
+bool RE_layers_have_name(struct RenderResult *result)
 {
-  switch (BLI_listbase_count_at_most(&rr->layers, 2)) {
+  switch (BLI_listbase_count_at_most(&result->layers, 2)) {
     case 0:
       return false;
     case 1:
-      return (((RenderLayer *)rr->layers.first)->name[0] != '\0');
+      return (((RenderLayer *)result->layers.first)->name[0] != '\0');
     default:
       return true;
   }

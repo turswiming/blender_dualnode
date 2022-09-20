@@ -145,6 +145,8 @@
 #include "atomic_ops.h"
 
 using blender::float3;
+using blender::MutableSpan;
+using blender::Span;
 
 static CLG_LogRef LOG = {"bke.object"};
 
@@ -186,7 +188,7 @@ static void object_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const in
   /* Do not copy runtime data. */
   BKE_object_runtime_reset_on_copy(ob_dst, flag);
 
-  /* We never handle usercount here for own data. */
+  /* We never handle user-count here for own data. */
   const int flag_subdata = flag | LIB_ID_CREATE_NO_USER_REFCOUNT;
 
   if (ob_src->totcol) {
@@ -1237,7 +1239,7 @@ IDTypeInfo IDType_ID_OB = {
     /* foreach_id */ object_foreach_id,
     /* foreach_cache */ nullptr,
     /* foreach_path */ object_foreach_path,
-    /* owner_get */ nullptr,
+    /* owner_pointer_get */ nullptr,
 
     /* blend_write */ object_blend_write,
     /* blend_read_data */ object_blend_read_data,
@@ -2038,7 +2040,7 @@ bool BKE_object_is_mode_compat(const struct Object *ob, eObjectMode object_mode)
 
 int BKE_object_visibility(const Object *ob, const int dag_eval_mode)
 {
-  if ((ob->base_flag & BASE_VISIBLE_DEPSGRAPH) == 0) {
+  if ((ob->base_flag & BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT) == 0) {
     return 0;
   }
 
@@ -2256,26 +2258,29 @@ Object *BKE_object_add_only_object(Main *bmain, int type, const char *name)
   return ob;
 }
 
-static Object *object_add_common(Main *bmain, ViewLayer *view_layer, int type, const char *name)
+static Object *object_add_common(
+    Main *bmain, const Scene *scene, ViewLayer *view_layer, int type, const char *name)
 {
   Object *ob = BKE_object_add_only_object(bmain, type, name);
   ob->data = BKE_object_obdata_add_from_type(bmain, type, name);
-  BKE_view_layer_base_deselect_all(view_layer);
+  BKE_view_layer_base_deselect_all(scene, view_layer);
 
   DEG_id_tag_update_ex(
       bmain, &ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
   return ob;
 }
 
-Object *BKE_object_add(Main *bmain, ViewLayer *view_layer, int type, const char *name)
+Object *BKE_object_add(
+    Main *bmain, Scene *scene, ViewLayer *view_layer, int type, const char *name)
 {
-  Object *ob = object_add_common(bmain, view_layer, type, name);
+  Object *ob = object_add_common(bmain, scene, view_layer, type, name);
 
   LayerCollection *layer_collection = BKE_layer_collection_get_active(view_layer);
   BKE_collection_viewlayer_object_add(bmain, view_layer, layer_collection->collection, ob);
 
   /* NOTE: There is no way to be sure that #BKE_collection_viewlayer_object_add will actually
    * manage to find a valid collection in given `view_layer` to add the new object to. */
+  BKE_view_layer_synced_ensure(scene, view_layer);
   Base *base = BKE_view_layer_base_find(view_layer, ob);
   if (base != nullptr) {
     BKE_view_layer_base_select_and_set_active(view_layer, base);
@@ -2287,17 +2292,23 @@ Object *BKE_object_add(Main *bmain, ViewLayer *view_layer, int type, const char 
 Object *BKE_object_add_from(
     Main *bmain, Scene *scene, ViewLayer *view_layer, int type, const char *name, Object *ob_src)
 {
-  Object *ob = object_add_common(bmain, view_layer, type, name);
+  Object *ob = object_add_common(bmain, scene, view_layer, type, name);
   BKE_collection_object_add_from(bmain, scene, ob_src, ob);
 
+  BKE_view_layer_synced_ensure(scene, view_layer);
   Base *base = BKE_view_layer_base_find(view_layer, ob);
   BKE_view_layer_base_select_and_set_active(view_layer, base);
 
   return ob;
 }
 
-Object *BKE_object_add_for_data(
-    Main *bmain, ViewLayer *view_layer, int type, const char *name, ID *data, bool do_id_user)
+Object *BKE_object_add_for_data(Main *bmain,
+                                const Scene *scene,
+                                ViewLayer *view_layer,
+                                int type,
+                                const char *name,
+                                ID *data,
+                                bool do_id_user)
 {
   /* same as object_add_common, except we don't create new ob->data */
   Object *ob = BKE_object_add_only_object(bmain, type, name);
@@ -2306,13 +2317,14 @@ Object *BKE_object_add_for_data(
     id_us_plus(data);
   }
 
-  BKE_view_layer_base_deselect_all(view_layer);
+  BKE_view_layer_base_deselect_all(scene, view_layer);
   DEG_id_tag_update_ex(
       bmain, &ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
 
   LayerCollection *layer_collection = BKE_layer_collection_get_active(view_layer);
   BKE_collection_object_add(bmain, layer_collection->collection, ob);
 
+  BKE_view_layer_synced_ensure(scene, view_layer);
   Base *base = BKE_view_layer_base_find(view_layer, ob);
   BKE_view_layer_base_select_and_set_active(view_layer, base);
 
@@ -2414,7 +2426,7 @@ ParticleSystem *BKE_object_copy_particlesystem(ParticleSystem *psys, const int f
   }
 
   /* XXX(@campbellbarton): from reading existing code this seems correct but intended usage of
-   * point-cache should /w cloth should be added in 'ParticleSystem'. */
+   * point-cache should with cloth should be added in 'ParticleSystem'. */
   if (psysn->clmd) {
     psysn->clmd->point_cache = psysn->pointcache;
   }
@@ -2528,10 +2540,14 @@ Object *BKE_object_pose_armature_get(Object *ob)
   return nullptr;
 }
 
-Object *BKE_object_pose_armature_get_visible(Object *ob, ViewLayer *view_layer, View3D *v3d)
+Object *BKE_object_pose_armature_get_visible(Object *ob,
+                                             const Scene *scene,
+                                             ViewLayer *view_layer,
+                                             View3D *v3d)
 {
   Object *ob_armature = BKE_object_pose_armature_get(ob);
   if (ob_armature) {
+    BKE_view_layer_synced_ensure(scene, view_layer);
     Base *base = BKE_view_layer_base_find(view_layer, ob_armature);
     if (base) {
       if (BASE_VISIBLE(v3d, base)) {
@@ -2542,11 +2558,10 @@ Object *BKE_object_pose_armature_get_visible(Object *ob, ViewLayer *view_layer, 
   return nullptr;
 }
 
-Object **BKE_object_pose_array_get_ex(ViewLayer *view_layer,
-                                      View3D *v3d,
-                                      uint *r_objects_len,
-                                      bool unique)
+Object **BKE_object_pose_array_get_ex(
+    const Scene *scene, ViewLayer *view_layer, View3D *v3d, uint *r_objects_len, bool unique)
 {
+  BKE_view_layer_synced_ensure(scene, view_layer);
   Object *ob_active = BKE_view_layer_active_object_get(view_layer);
   Object *ob_pose = BKE_object_pose_armature_get(ob_active);
   Object **objects = nullptr;
@@ -2556,7 +2571,7 @@ Object **BKE_object_pose_array_get_ex(ViewLayer *view_layer,
     ob_params.no_dup_data = unique;
 
     objects = BKE_view_layer_array_from_objects_in_mode_params(
-        view_layer, v3d, r_objects_len, &ob_params);
+        scene, view_layer, v3d, r_objects_len, &ob_params);
   }
   else if (ob_pose != nullptr) {
     *r_objects_len = 1;
@@ -2569,21 +2584,26 @@ Object **BKE_object_pose_array_get_ex(ViewLayer *view_layer,
   }
   return objects;
 }
-Object **BKE_object_pose_array_get_unique(ViewLayer *view_layer, View3D *v3d, uint *r_objects_len)
+Object **BKE_object_pose_array_get_unique(const Scene *scene,
+                                          ViewLayer *view_layer,
+                                          View3D *v3d,
+                                          uint *r_objects_len)
 {
-  return BKE_object_pose_array_get_ex(view_layer, v3d, r_objects_len, true);
+  return BKE_object_pose_array_get_ex(scene, view_layer, v3d, r_objects_len, true);
 }
-Object **BKE_object_pose_array_get(ViewLayer *view_layer, View3D *v3d, uint *r_objects_len)
+Object **BKE_object_pose_array_get(const Scene *scene,
+                                   ViewLayer *view_layer,
+                                   View3D *v3d,
+                                   uint *r_objects_len)
 {
-  return BKE_object_pose_array_get_ex(view_layer, v3d, r_objects_len, false);
+  return BKE_object_pose_array_get_ex(scene, view_layer, v3d, r_objects_len, false);
 }
 
-Base **BKE_object_pose_base_array_get_ex(ViewLayer *view_layer,
-                                         View3D *v3d,
-                                         uint *r_bases_len,
-                                         bool unique)
+Base **BKE_object_pose_base_array_get_ex(
+    const Scene *scene, ViewLayer *view_layer, View3D *v3d, uint *r_bases_len, bool unique)
 {
-  Base *base_active = view_layer->basact;
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Base *base_active = BKE_view_layer_active_base_get(view_layer);
   Object *ob_pose = base_active ? BKE_object_pose_armature_get(base_active->object) : nullptr;
   Base *base_pose = nullptr;
   Base **bases = nullptr;
@@ -2603,7 +2623,7 @@ Base **BKE_object_pose_base_array_get_ex(ViewLayer *view_layer,
     ob_params.no_dup_data = unique;
 
     bases = BKE_view_layer_array_from_bases_in_mode_params(
-        view_layer, v3d, r_bases_len, &ob_params);
+        scene, view_layer, v3d, r_bases_len, &ob_params);
   }
   else if (base_pose != nullptr) {
     *r_bases_len = 1;
@@ -2616,13 +2636,19 @@ Base **BKE_object_pose_base_array_get_ex(ViewLayer *view_layer,
   }
   return bases;
 }
-Base **BKE_object_pose_base_array_get_unique(ViewLayer *view_layer, View3D *v3d, uint *r_bases_len)
+Base **BKE_object_pose_base_array_get_unique(const Scene *scene,
+                                             ViewLayer *view_layer,
+                                             View3D *v3d,
+                                             uint *r_bases_len)
 {
-  return BKE_object_pose_base_array_get_ex(view_layer, v3d, r_bases_len, true);
+  return BKE_object_pose_base_array_get_ex(scene, view_layer, v3d, r_bases_len, true);
 }
-Base **BKE_object_pose_base_array_get(ViewLayer *view_layer, View3D *v3d, uint *r_bases_len)
+Base **BKE_object_pose_base_array_get(const Scene *scene,
+                                      ViewLayer *view_layer,
+                                      View3D *v3d,
+                                      uint *r_bases_len)
 {
-  return BKE_object_pose_base_array_get_ex(view_layer, v3d, r_bases_len, false);
+  return BKE_object_pose_base_array_get_ex(scene, view_layer, v3d, r_bases_len, false);
 }
 
 void BKE_object_transform_copy(Object *ob_tar, const Object *ob_src)
@@ -3189,6 +3215,7 @@ static void give_parvert(Object *par, int nr, float vec[3])
                            BKE_object_get_evaluated_mesh(par);
 
     if (me_eval) {
+      const MVert *verts = BKE_mesh_verts(me_eval);
       int count = 0;
       int numVerts = me_eval->totvert;
 
@@ -3222,14 +3249,14 @@ static void give_parvert(Object *par, int nr, float vec[3])
         /* Get the average of all verts with (original index == nr). */
         for (int i = 0; i < numVerts; i++) {
           if (index[i] == nr) {
-            add_v3_v3(vec, me_eval->mvert[i].co);
+            add_v3_v3(vec, verts[i].co);
             count++;
           }
         }
       }
       else {
         if (nr < numVerts) {
-          add_v3_v3(vec, me_eval->mvert[nr].co);
+          add_v3_v3(vec, verts[nr].co);
           count++;
         }
       }
@@ -3243,7 +3270,7 @@ static void give_parvert(Object *par, int nr, float vec[3])
       else {
         /* use first index if its out of range */
         if (me_eval->totvert) {
-          copy_v3_v3(vec, me_eval->mvert[0].co);
+          copy_v3_v3(vec, verts[0].co);
         }
       }
     }
@@ -4127,10 +4154,10 @@ void BKE_object_foreach_display_point(Object *ob,
   float3 co;
 
   if (mesh_eval != nullptr) {
-    const MVert *mv = mesh_eval->mvert;
+    const MVert *verts = BKE_mesh_verts(mesh_eval);
     const int totvert = mesh_eval->totvert;
-    for (int i = 0; i < totvert; i++, mv++) {
-      mul_v3_m4v3(co, obmat, mv->co);
+    for (int i = 0; i < totvert; i++) {
+      mul_v3_m4v3(co, obmat, verts[i].co);
       func_cb(co, user_data);
     }
   }
@@ -4754,7 +4781,8 @@ bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
       switch (ob->type) {
         case OB_MESH: {
           Mesh *mesh = (Mesh *)ob->data;
-          BKE_keyblock_convert_to_mesh(key->refkey, mesh->mvert, mesh->totvert);
+          MutableSpan<MVert> verts = mesh->verts_for_write();
+          BKE_keyblock_convert_to_mesh(key->refkey, verts.data(), mesh->totvert);
           break;
         }
         case OB_CURVES_LEGACY:
@@ -5132,19 +5160,21 @@ static void obrel_list_add(LinkNode **links, Object *ob)
   ob->id.tag |= LIB_TAG_DOIT;
 }
 
-LinkNode *BKE_object_relational_superset(struct ViewLayer *view_layer,
+LinkNode *BKE_object_relational_superset(const Scene *scene,
+                                         struct ViewLayer *view_layer,
                                          eObjectSet objectSet,
                                          eObRelationTypes includeFilter)
 {
   LinkNode *links = nullptr;
 
   /* Remove markers from all objects */
-  LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
     base->object->id.tag &= ~LIB_TAG_DOIT;
   }
 
   /* iterate over all selected and visible objects */
-  LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
+  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
     if (objectSet == OB_SET_ALL) {
       /* as we get all anyways just add it */
       Object *ob = base->object;
@@ -5180,7 +5210,7 @@ LinkNode *BKE_object_relational_superset(struct ViewLayer *view_layer,
 
         /* child relationship */
         if (includeFilter & (OB_REL_CHILDREN | OB_REL_CHILDREN_RECURSIVE)) {
-          LISTBASE_FOREACH (Base *, local_base, &view_layer->object_bases) {
+          LISTBASE_FOREACH (Base *, local_base, BKE_view_layer_object_bases_get(view_layer)) {
             if (BASE_EDITABLE(((View3D *)nullptr), local_base)) {
 
               Object *child = local_base->object;
@@ -5250,32 +5280,31 @@ KDTree_3d *BKE_object_as_kdtree(Object *ob, int *r_tot)
       const int *index;
 
       if (me_eval && (index = (const int *)CustomData_get_layer(&me_eval->vdata, CD_ORIGINDEX))) {
-        MVert *mvert = me_eval->mvert;
-        uint totvert = me_eval->totvert;
+        const Span<MVert> verts = me->verts();
 
         /* Tree over-allocates in case where some verts have #ORIGINDEX_NONE. */
         tot = 0;
-        tree = BLI_kdtree_3d_new(totvert);
+        tree = BLI_kdtree_3d_new(verts.size());
 
         /* We don't how many verts from the DM we can use. */
-        for (i = 0; i < totvert; i++) {
+        for (i = 0; i < verts.size(); i++) {
           if (index[i] != ORIGINDEX_NONE) {
             float co[3];
-            mul_v3_m4v3(co, ob->obmat, mvert[i].co);
+            mul_v3_m4v3(co, ob->obmat, verts[i].co);
             BLI_kdtree_3d_insert(tree, index[i], co);
             tot++;
           }
         }
       }
       else {
-        MVert *mvert = me->mvert;
+        const Span<MVert> verts = me->verts();
 
-        tot = me->totvert;
+        tot = verts.size();
         tree = BLI_kdtree_3d_new(tot);
 
         for (i = 0; i < tot; i++) {
           float co[3];
-          mul_v3_m4v3(co, ob->obmat, mvert[i].co);
+          mul_v3_m4v3(co, ob->obmat, verts[i].co);
           BLI_kdtree_3d_insert(tree, i, co);
         }
       }

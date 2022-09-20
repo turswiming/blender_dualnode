@@ -1447,7 +1447,6 @@ Mesh *BKE_mball_polygonize(Depsgraph *depsgraph, Scene *scene, Object *ob)
   MVert *mvert = CustomData_add_layer(&mesh->vdata, CD_MVERT, CD_CONSTRUCT, NULL, mesh->totvert);
   for (int i = 0; i < mesh->totvert; i++) {
     copy_v3_v3(mvert[i].co, process.co[i]);
-    mvert->bweight = 0;
     mvert->flag = 0;
   }
   MEM_freeN(process.co);
@@ -1484,8 +1483,6 @@ Mesh *BKE_mball_polygonize(Depsgraph *depsgraph, Scene *scene, Object *ob)
   BKE_mesh_vertex_normals_clear_dirty(mesh);
 
   mesh->totloop = loop_offset;
-
-  BKE_mesh_update_customdata_pointers(mesh, false);
 
   BKE_mesh_calc_edges(mesh, false, false);
 

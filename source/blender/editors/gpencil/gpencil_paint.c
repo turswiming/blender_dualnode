@@ -2410,7 +2410,7 @@ static void gpencil_draw_eraser(bContext *UNUSED(C), int x, int y, void *p_ptr)
   if (p->paintmode == GP_PAINTMODE_ERASER) {
     GPUVertFormat *format = immVertexFormat();
     const uint shdr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     GPU_line_smooth(true);
     GPU_blend(GPU_BLEND_ALPHA);
@@ -2420,7 +2420,7 @@ static void gpencil_draw_eraser(bContext *UNUSED(C), int x, int y, void *p_ptr)
 
     immUnbindProgram();
 
-    immBindBuiltinProgram(GPU_SHADER_2D_LINE_DASHED_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
     float viewport_size[4];
     GPU_viewport_size_get_f(viewport_size);
@@ -3331,7 +3331,7 @@ static int gpencil_draw_invoke(bContext *C, wmOperator *op, const wmEvent *event
   return OPERATOR_RUNNING_MODAL;
 }
 
-/* gpencil modal operator stores area, which can be removed while using it (like fullscreen) */
+/* gpencil modal operator stores area, which can be removed while using it (like full-screen). */
 static bool gpencil_area_exists(bContext *C, ScrArea *area_test)
 {
   bScreen *screen = CTX_wm_screen(C);
@@ -3888,7 +3888,7 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
     }
   }
 
-  /* gpencil modal operator stores area, which can be removed while using it (like fullscreen) */
+  /* gpencil modal operator stores area, which can be removed while using it (like full-screen). */
   if (0 == gpencil_area_exists(C, p->area)) {
     estate = OPERATOR_CANCELLED;
   }

@@ -1233,12 +1233,12 @@ static VertSeam *find_adjacent_seam(const ProjPaintState *ps,
     LISTBASE_CIRCULAR_BACKWARD_END(VertSeam *, vert_seams, adjacent, seam);
   }
   else {
-    LISTBASE_CIRCULAR_FORWARD_BEGIN (vert_seams, adjacent, seam) {
+    LISTBASE_CIRCULAR_FORWARD_BEGIN (VertSeam *, vert_seams, adjacent, seam) {
       if ((adjacent->normal_cw != seam->normal_cw) && cmp_uv(adjacent->uv, seam->uv)) {
         break;
       }
     }
-    LISTBASE_CIRCULAR_FORWARD_END(vert_seams, adjacent, seam);
+    LISTBASE_CIRCULAR_FORWARD_END(VertSeam *, vert_seams, adjacent, seam);
   }
 
   BLI_assert(adjacent);
@@ -1523,7 +1523,7 @@ static void project_face_seams_init(const ProjPaintState *ps,
 static void screen_px_from_ortho(const float uv[2],
                                  const float v1co[3],
                                  const float v2co[3],
-                                 const float v3co[3], /* Screenspace coords */
+                                 const float v3co[3], /* Screen-space coords */
                                  const float uv1co[2],
                                  const float uv2co[2],
                                  const float uv3co[2],
@@ -4055,13 +4055,13 @@ static bool proj_paint_state_mesh_eval_init(const bContext *C, ProjPaintState *p
   }
   ps->mat_array[totmat - 1] = NULL;
 
-  ps->mvert_eval = ps->me_eval->mvert;
+  ps->mvert_eval = BKE_mesh_verts(ps->me_eval);
   ps->vert_normals = BKE_mesh_vertex_normals_ensure(ps->me_eval);
   if (ps->do_mask_cavity) {
-    ps->medge_eval = ps->me_eval->medge;
+    ps->medge_eval = BKE_mesh_edges(ps->me_eval);
   }
-  ps->mloop_eval = ps->me_eval->mloop;
-  ps->mpoly_eval = ps->me_eval->mpoly;
+  ps->mloop_eval = BKE_mesh_loops(ps->me_eval);
+  ps->mpoly_eval = BKE_mesh_polys(ps->me_eval);
   ps->material_indices = (const int *)CustomData_get_layer_named(
       &ps->me_eval->pdata, CD_PROP_INT32, "material_index");
 
@@ -4155,7 +4155,7 @@ static void proj_paint_face_lookup_init(const ProjPaintState *ps, ProjPaintFaceL
   memset(face_lookup, 0, sizeof(*face_lookup));
   if (ps->do_face_sel) {
     face_lookup->index_mp_to_orig = CustomData_get_layer(&ps->me_eval->pdata, CD_ORIGINDEX);
-    face_lookup->mpoly_orig = ((Mesh *)ps->ob->data)->mpoly;
+    face_lookup->mpoly_orig = BKE_mesh_polys((Mesh *)ps->ob->data);
   }
 }
 
@@ -6042,6 +6042,7 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
   int orig_brush_size;
   IDProperty *idgroup;
   IDProperty *view_data = NULL;
+  BKE_view_layer_synced_ensure(scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   bool uvs, mat, tex;
 

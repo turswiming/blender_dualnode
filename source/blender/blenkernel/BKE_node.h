@@ -472,7 +472,12 @@ void ntreeSetTypes(const struct bContext *C, struct bNodeTree *ntree);
 
 struct bNodeTree *ntreeAddTree(struct Main *bmain, const char *name, const char *idname);
 
-/* copy/free funcs, need to manage ID users */
+struct bNodeTree *ntreeAddTreeEmbedded(struct Main *bmain,
+                                       struct ID *owner_id,
+                                       const char *name,
+                                       const char *idname);
+
+/* Copy/free functions, need to manage ID users. */
 
 /**
  * Free (or release) any data used by this node-tree.
@@ -540,7 +545,9 @@ void ntreeBlendWrite(struct BlendWriter *writer, struct bNodeTree *ntree);
 /**
  * \note `ntree` itself has been read!
  */
-void ntreeBlendReadData(struct BlendDataReader *reader, struct bNodeTree *ntree);
+void ntreeBlendReadData(struct BlendDataReader *reader,
+                        struct ID *owner_id,
+                        struct bNodeTree *ntree);
 void ntreeBlendReadLib(struct BlendLibReader *reader, struct bNodeTree *ntree);
 void ntreeBlendReadExpand(struct BlendExpander *expander, struct bNodeTree *ntree);
 
@@ -707,7 +714,10 @@ struct bNodeLink *nodeAddLink(struct bNodeTree *ntree,
                               struct bNodeSocket *tosock);
 void nodeRemLink(struct bNodeTree *ntree, struct bNodeLink *link);
 void nodeRemSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);
-void nodeMuteLinkToggle(struct bNodeTree *ntree, struct bNodeLink *link);
+/**
+ * Set the mute status of a single link.
+ */
+void nodeLinkSetMute(struct bNodeTree *ntree, struct bNodeLink *link, const bool muted);
 bool nodeLinkIsHidden(const struct bNodeLink *link);
 bool nodeLinkIsSelected(const struct bNodeLink *link);
 void nodeInternalRelink(struct bNodeTree *ntree, struct bNode *node);
@@ -1327,15 +1337,6 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 #define CMP_CHAN_RGB 1
 #define CMP_CHAN_A 2
 
-/* scale node type, in custom1 */
-#define CMP_SCALE_RELATIVE 0
-#define CMP_SCALE_ABSOLUTE 1
-#define CMP_SCALE_SCENEPERCENT 2
-#define CMP_SCALE_RENDERPERCENT 3
-/* custom2 */
-#define CMP_SCALE_RENDERSIZE_FRAME_ASPECT (1 << 0)
-#define CMP_SCALE_RENDERSIZE_FRAME_CROP (1 << 1)
-
 /* track position node, in custom1 */
 #define CMP_TRACKPOS_ABSOLUTE 0
 #define CMP_TRACKPOS_RELATIVE_START 1
@@ -1524,6 +1525,8 @@ struct TexResult;
 #define GEO_NODE_INPUT_SHORTEST_EDGE_PATHS 1168
 #define GEO_NODE_EDGE_PATHS_TO_CURVES 1169
 #define GEO_NODE_EDGE_PATHS_TO_SELECTION 1170
+#define GEO_NODE_MESH_FACE_SET_BOUNDARIES 1171
+#define GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME 1172
 
 /** \} */
 

@@ -413,7 +413,7 @@ IDTypeInfo IDType_ID_BR = {
     /* foreach_id */ brush_foreach_id,
     /* foreach_cache */ nullptr,
     /* foreach_path */ brush_foreach_path,
-    /* owner_get */ nullptr,
+    /* owner_pointer_get */ nullptr,
 
     /* blend_write */ brush_blend_write,
     /* blend_read_data */ brush_blend_read_data,
@@ -982,7 +982,6 @@ void BKE_gpencil_brush_preset_set(Main *bmain, Brush *brush, const short type)
     case GP_BRUSH_PRESET_FILL_AREA: {
       brush->size = 5.0f;
 
-      brush->gpencil_settings->fill_leak = 3;
       brush->gpencil_settings->fill_threshold = 0.1f;
       brush->gpencil_settings->fill_simplylvl = 1;
       brush->gpencil_settings->fill_factor = 1.0f;

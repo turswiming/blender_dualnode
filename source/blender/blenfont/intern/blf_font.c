@@ -223,7 +223,7 @@ void blf_batch_draw_begin(FontBLF *font)
     g_batch.ofs[1] = font->pos[1];
   }
   else {
-    /* Offset is baked in modelview mat. */
+    /* Offset is baked in model-view matrix. */
     zero_v2_int(g_batch.ofs);
   }
 
@@ -231,16 +231,16 @@ void blf_batch_draw_begin(FontBLF *font)
     float gpumat[4][4];
     GPU_matrix_model_view_get(gpumat);
 
-    bool mat_changed = (memcmp(gpumat, g_batch.mat, sizeof(g_batch.mat)) != 0);
+    bool mat_changed = equals_m4m4(gpumat, g_batch.mat) == false;
 
     if (mat_changed) {
-      /* Modelviewmat is no longer the same.
-       * Flush cache but with the previous mat. */
+      /* Model view matrix is no longer the same.
+       * Flush cache but with the previous matrix. */
       GPU_matrix_push();
       GPU_matrix_set(g_batch.mat);
     }
 
-    /* flush cache if config is not the same. */
+    /* Flush cache if configuration is not the same. */
     if (mat_changed || font_changed || shader_changed) {
       blf_batch_draw();
       g_batch.simple_shader = simple_shader;
@@ -253,7 +253,7 @@ void blf_batch_draw_begin(FontBLF *font)
 
     if (mat_changed) {
       GPU_matrix_pop();
-      /* Save for next memcmp. */
+      /* Save for next `memcmp`. */
       memcpy(g_batch.mat, gpumat, sizeof(g_batch.mat));
     }
   }
@@ -279,7 +279,7 @@ static GPUTexture *blf_batch_cache_texture_load(void)
     int offset_x = bitmap_len_landed % tex_width;
     int offset_y = bitmap_len_landed / tex_width;
 
-    /* TODO(germano): Update more than one row in a single call. */
+    /* TODO(@germano): Update more than one row in a single call. */
     while (remain) {
       int remain_row = tex_width - offset_x;
       int width = remain > remain_row ? remain_row : remain;
@@ -377,7 +377,7 @@ BLI_INLINE ft_pix blf_kerning(FontBLF *font, const GlyphBLF *g_prev, const Glyph
     FT_Vector delta = {KERNING_ENTRY_UNSET};
 
     /* Get unscaled kerning value from our cache if ASCII. */
-    if ((g_prev->c < KERNING_CACHE_TABLE_SIZE) && (g->c < GLYPH_ASCII_TABLE_SIZE)) {
+    if ((g_prev->c < KERNING_CACHE_TABLE_SIZE) && (g->c < KERNING_CACHE_TABLE_SIZE)) {
       delta.x = font->kerning_cache->ascii_table[g->c][g_prev->c];
     }
 
@@ -388,7 +388,7 @@ BLI_INLINE ft_pix blf_kerning(FontBLF *font, const GlyphBLF *g_prev, const Glyph
     }
 
     /* If ASCII we save this value to our cache for quicker access next time. */
-    if ((g_prev->c < KERNING_CACHE_TABLE_SIZE) && (g->c < GLYPH_ASCII_TABLE_SIZE)) {
+    if ((g_prev->c < KERNING_CACHE_TABLE_SIZE) && (g->c < KERNING_CACHE_TABLE_SIZE)) {
       font->kerning_cache->ascii_table[g->c][g_prev->c] = (int)delta.x;
     }
 
@@ -1361,6 +1361,11 @@ bool blf_ensure_face(FontBLF *font)
     return false;
   }
 
+  if (font->face && !(font->face->face_flags & FT_FACE_FLAG_SCALABLE)) {
+    printf("Font is not scalable\n");
+    return false;
+  }
+
   err = FT_Select_Charmap(font->face, FT_ENCODING_UNICODE);
   if (err) {
     err = FT_Select_Charmap(font->face, FT_ENCODING_APPLE_ROMAN);
@@ -1450,7 +1455,7 @@ static const struct FaceDetails static_face_details[] = {
     {"NotoSansGeorgian-VariableFont_wdth,wght.woff2", TT_UCR_GEORGIAN, 0, 0, 0},
     {"NotoSansGujarati-Regular.woff2", TT_UCR_GUJARATI, 0, 0, 0},
     {"NotoSansGurmukhi-VariableFont_wdth,wght.woff2", TT_UCR_GURMUKHI, 0, 0, 0},
-    {"NotoSansHebrew-VariableFont_wdth,wght.woff2", TT_UCR_HEBREW, 0, 0, 0},
+    {"NotoSansHebrew-Regular.woff2", TT_UCR_HEBREW, 0, 0, 0},
     {"NotoSansJavanese-Regular.woff2", 0x80000003L, 0x2000L, 0, 0},
     {"NotoSansKannada-VariableFont_wdth,wght.woff2", TT_UCR_KANNADA, 0, 0, 0},
     {"NotoSansMalayalam-VariableFont_wdth,wght.woff2", TT_UCR_MALAYALAM, 0, 0, 0},

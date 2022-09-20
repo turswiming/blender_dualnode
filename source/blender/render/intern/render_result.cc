@@ -5,10 +5,10 @@
  * \ingroup render
  */
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -929,7 +929,11 @@ int render_result_exr_file_read_path(RenderResult *rr,
   return 1;
 }
 
-static void render_result_exr_file_cache_path(Scene *sce, const char *root, char *r_path)
+#define FILE_CACHE_MAX (FILE_MAXFILE + FILE_MAXFILE + MAX_ID_NAME + 100)
+
+static void render_result_exr_file_cache_path(Scene *sce,
+                                              const char *root,
+                                              char r_path[FILE_CACHE_MAX])
 {
   char filename_full[FILE_MAX + MAX_ID_NAME + 100], filename[FILE_MAXFILE], dirname[FILE_MAXDIR];
   char path_digest[16] = {0};
@@ -948,7 +952,7 @@ static void render_result_exr_file_cache_path(Scene *sce, const char *root, char
   }
   BLI_hash_md5_to_hexdigest(path_digest, path_hexdigest);
 
-  /* Default to *non-volatile* tmp dir. */
+  /* Default to *non-volatile* temp dir. */
   if (*root == '\0') {
     root = BKE_tempdir_base();
   }
@@ -959,13 +963,17 @@ static void render_result_exr_file_cache_path(Scene *sce, const char *root, char
                filename,
                sce->id.name + 2,
                path_hexdigest);
-  BLI_make_file_string(dirname, r_path, root, filename_full);
+
+  BLI_join_dirfile(r_path, FILE_CACHE_MAX, root, filename_full);
+  if (BLI_path_is_rel(r_path)) {
+    BLI_path_abs(r_path, dirname);
+  }
 }
 
 void render_result_exr_file_cache_write(Render *re)
 {
   RenderResult *rr = re->result;
-  char str[FILE_MAXFILE + FILE_MAXFILE + MAX_ID_NAME + 100];
+  char str[FILE_CACHE_MAX];
   char *root = U.render_cachedir;
 
   render_result_passes_allocated_ensure(rr);
@@ -979,7 +987,7 @@ void render_result_exr_file_cache_write(Render *re)
 bool render_result_exr_file_cache_read(Render *re)
 {
   /* File path to cache. */
-  char filepath[FILE_MAXFILE + MAX_ID_NAME + MAX_ID_NAME + 100] = "";
+  char filepath[FILE_CACHE_MAX] = "";
   char *root = U.render_cachedir;
   render_result_exr_file_cache_path(re->scene, root, filepath);
 
@@ -1134,13 +1142,13 @@ void render_result_rect_get_pixels(RenderResult *rr,
 
 /*************************** multiview functions *****************************/
 
-bool RE_HasCombinedLayer(const RenderResult *rr)
+bool RE_HasCombinedLayer(const RenderResult *result)
 {
-  if (rr == nullptr) {
+  if (result == nullptr) {
     return false;
   }
 
-  const RenderView *rv = static_cast<RenderView *>(rr->views.first);
+  const RenderView *rv = static_cast<RenderView *>(result->views.first);
   if (rv == nullptr) {
     return false;
   }
@@ -1148,9 +1156,9 @@ bool RE_HasCombinedLayer(const RenderResult *rr)
   return (rv->rect32 || rv->rectf);
 }
 
-bool RE_HasFloatPixels(const RenderResult *rr)
+bool RE_HasFloatPixels(const RenderResult *result)
 {
-  LISTBASE_FOREACH (const RenderView *, rview, &rr->views) {
+  LISTBASE_FOREACH (const RenderView *, rview, &result->views) {
     if (rview->rect32 && !rview->rectf) {
       return false;
     }
@@ -1159,13 +1167,13 @@ bool RE_HasFloatPixels(const RenderResult *rr)
   return true;
 }
 
-bool RE_RenderResult_is_stereo(const RenderResult *rr)
+bool RE_RenderResult_is_stereo(const RenderResult *result)
 {
-  if (!BLI_findstring(&rr->views, STEREO_LEFT_NAME, offsetof(RenderView, name))) {
+  if (!BLI_findstring(&result->views, STEREO_LEFT_NAME, offsetof(RenderView, name))) {
     return false;
   }
 
-  if (!BLI_findstring(&rr->views, STEREO_RIGHT_NAME, offsetof(RenderView, name))) {
+  if (!BLI_findstring(&result->views, STEREO_RIGHT_NAME, offsetof(RenderView, name))) {
     return false;
   }
 

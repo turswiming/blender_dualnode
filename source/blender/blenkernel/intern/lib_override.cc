@@ -92,27 +92,22 @@ BLI_INLINE void lib_override_object_posemode_transfer(ID *id_dst, ID *id_src)
 }
 
 /** Get override data for a given ID. Needed because of our beloved shape keys snowflake. */
-BLI_INLINE const IDOverrideLibrary *BKE_lib_override_library_get(const Main *bmain,
+BLI_INLINE const IDOverrideLibrary *BKE_lib_override_library_get(const Main * /*bmain*/,
                                                                  const ID *id,
-                                                                 const ID *owner_id_hint,
+                                                                 const ID * /*owner_id_hint*/,
                                                                  const ID **r_owner_id)
 {
+  if (id->flag & LIB_EMBEDDED_DATA_LIB_OVERRIDE) {
+    const ID *owner_id = BKE_id_owner_get(const_cast<ID *>(id));
+    BLI_assert_msg(owner_id != nullptr, "Liboverride-embedded ID with no owner");
+    if (r_owner_id != nullptr) {
+      *r_owner_id = owner_id;
+    }
+    return owner_id->override_library;
+  }
+
   if (r_owner_id != nullptr) {
     *r_owner_id = id;
-  }
-  if (id->flag & LIB_EMBEDDED_DATA_LIB_OVERRIDE) {
-    const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
-    if (id_type->owner_get != nullptr) {
-      /* The #IDTypeInfo::owner_get callback should not modify the arguments, so casting away const
-       * is okay. */
-      const ID *owner_id = id_type->owner_get(
-          const_cast<Main *>(bmain), const_cast<ID *>(id), const_cast<ID *>(owner_id_hint));
-      if (r_owner_id != nullptr) {
-        *r_owner_id = owner_id;
-      }
-      return owner_id->override_library;
-    }
-    BLI_assert_msg(0, "IDTypeInfo of liboverride-embedded ID with no owner getter");
   }
   return id->override_library;
 }
@@ -1274,6 +1269,8 @@ static void lib_override_library_create_post_process(Main *bmain,
     }
   }
 
+  BKE_view_layer_synced_ensure(scene, view_layer);
+
   /* We need to ensure all new overrides of objects are properly instantiated. */
   Collection *default_instantiating_collection = residual_storage;
   LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
@@ -1382,7 +1379,7 @@ bool BKE_lib_override_library_create(Main *bmain,
   if (id_hierarchy_root_reference == nullptr) {
     id_hierarchy_root_reference = id_root_reference;
   }
-
+  BKE_view_layer_synced_ensure(scene, view_layer);
   const Object *old_active_object = BKE_view_layer_active_object_get(view_layer);
 
   const bool success = lib_override_library_create_do(bmain,
@@ -1721,6 +1718,7 @@ static bool lib_override_library_resync(Main *bmain,
 
   ID *id_root_reference = id_root->override_library->reference;
   ID *id;
+  BKE_view_layer_synced_ensure(scene, view_layer);
   const Object *old_active_object = BKE_view_layer_active_object_get(view_layer);
 
   if (id_root_reference->tag & LIB_TAG_MISSING) {
@@ -1848,8 +1846,8 @@ static bool lib_override_library_resync(Main *bmain,
         }
       }
       if (reference_id == nullptr) {
-        /* Can happen e.g. when there is a local override of a shapekey, but the matching linked
-         * obdata (mesh etc.) does not have any shapekey anymore. */
+        /* Can happen e.g. when there is a local override of a shape-key, but the matching linked
+         * obdata (mesh etc.) does not have any shape-key anymore. */
         continue;
       }
       BLI_assert(GS(reference_id->name) == GS(id->name));
@@ -2209,12 +2207,12 @@ static bool lib_override_resync_id_lib_level_is_valid(ID *id,
 }
 
 /* Find the root of the override hierarchy the given `id` belongs to. */
-static ID *lib_override_library_main_resync_root_get(Main *bmain, ID *id)
+static ID *lib_override_library_main_resync_root_get(Main * /*bmain*/, ID *id)
 {
   if (!ID_IS_OVERRIDE_LIBRARY_REAL(id)) {
-    const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
-    if (id_type->owner_get != nullptr) {
-      id = id_type->owner_get(bmain, id, nullptr);
+    ID *id_owner = BKE_id_owner_get(id);
+    if (id_owner != nullptr) {
+      id = id_owner;
     }
     BLI_assert(ID_IS_OVERRIDE_LIBRARY_REAL(id));
   }
@@ -2701,7 +2699,8 @@ void BKE_lib_override_library_main_resync(Main *bmain,
     /* Hide the collection from viewport and render. */
     override_resync_residual_storage->flag |= COLLECTION_HIDE_VIEWPORT | COLLECTION_HIDE_RENDER;
   }
-
+  /* BKE_collection_add above could have tagged the view_layer out of sync. */
+  BKE_view_layer_synced_ensure(scene, view_layer);
   const Object *old_active_object = BKE_view_layer_active_object_get(view_layer);
 
   /* Necessary to improve performances, and prevent layers matching override sub-collections to be
@@ -3952,7 +3951,7 @@ void BKE_lib_override_library_operations_store_end(
 void BKE_lib_override_library_operations_store_finalize(OverrideLibraryStorage *override_storage)
 {
   /* We cannot just call BKE_main_free(override_storage), not until we have option to make
-   * 'ghost' copies of IDs without increasing usercount of used data-blocks. */
+   * 'ghost' copies of IDs without increasing user-count of used data-blocks. */
   ID *id;
 
   FOREACH_MAIN_ID_BEGIN (override_storage, id) {

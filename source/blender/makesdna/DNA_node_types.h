@@ -210,6 +210,7 @@ typedef struct bNodeSocket {
   blender::Span<bNodeLink *> directly_linked_links();
   blender::Span<const bNodeLink *> directly_linked_links() const;
   /** Sockets which are connected to this socket with a link. */
+  blender::Span<bNodeSocket *> directly_linked_sockets();
   blender::Span<const bNodeSocket *> directly_linked_sockets() const;
   bool is_directly_linked() const;
   /**
@@ -409,6 +410,8 @@ typedef struct bNode {
   /** Lookup socket of this node by its identifier. */
   const bNodeSocket &input_by_identifier(blender::StringRef identifier) const;
   const bNodeSocket &output_by_identifier(blender::StringRef identifier) const;
+  /** Node tree this node belongs to. */
+  const bNodeTree &owner_tree() const;
 #endif
 } bNode;
 
@@ -502,6 +505,7 @@ typedef struct bNodeLink {
 
 #ifdef __cplusplus
   bool is_muted() const;
+  bool is_available() const;
 #endif
 
 } bNodeLink;
@@ -534,6 +538,9 @@ typedef struct bNodeTree {
   ID id;
   /** Animation data (must be immediately after id for utilities to use it). */
   struct AnimData *adt;
+
+  /** The ID owning this node tree, in case it is an embedded one. */
+  ID *owner_id;
 
   /** Runtime type information. */
   struct bNodeTreeType *typeinfo;
@@ -631,6 +638,9 @@ typedef struct bNodeTree {
   /** A span containing all nodes in the node tree. */
   blender::Span<bNode *> all_nodes();
   blender::Span<const bNode *> all_nodes() const;
+  /** A span containing all group nodes in the node tree. */
+  blender::Span<bNode *> group_nodes();
+  blender::Span<const bNode *> group_nodes() const;
   /** A span containing all input sockets in the node tree. */
   blender::Span<bNodeSocket *> all_input_sockets();
   blender::Span<const bNodeSocket *> all_input_sockets() const;
@@ -646,12 +656,12 @@ typedef struct bNodeTree {
   /**
    * Cached toposort of all nodes. If there are cycles, the returned array is not actually a
    * toposort. However, if a connected component does not contain a cycle, this component is sorted
-   * correctly. Use #has_link_cycle to check for cycles.
+   * correctly. Use #has_available_link_cycle to check for cycles.
    */
   blender::Span<const bNode *> toposort_left_to_right() const;
   blender::Span<const bNode *> toposort_right_to_left() const;
   /** True when there are any cycles in the node tree. */
-  bool has_link_cycle() const;
+  bool has_available_link_cycle() const;
   /**
    * True when there are nodes or sockets in the node tree that don't use a known type. This can
    * happen when nodes don't exist in the current Blender version that existed in the version where
@@ -983,7 +993,7 @@ typedef struct NodeGlare {
   char _pad1[4];
 } NodeGlare;
 
-/** Tonemap node. */
+/** Tone-map node. */
 typedef struct NodeTonemap {
   float key, offset, gamma;
   float f, m, a, c;
@@ -1586,6 +1596,11 @@ typedef struct NodeGeometryUVUnwrap {
   uint8_t method;
 } NodeGeometryUVUnwrap;
 
+typedef struct NodeGeometryDistributePointsInVolume {
+  /* GeometryNodePointDistributeVolumeMode. */
+  uint8_t mode;
+} NodeGeometryDistributePointsInVolume;
+
 typedef struct NodeFunctionCompare {
   /* NodeCompareOperation */
   int8_t operation;
@@ -2023,6 +2038,21 @@ typedef enum CMPNodeFlipMode {
   CMP_NODE_FLIP_X_Y = 2,
 } CMPNodeFlipMode;
 
+/* Scale Node. Stored in custom1. */
+typedef enum CMPNodeScaleMethod {
+  CMP_NODE_SCALE_RELATIVE = 0,
+  CMP_NODE_SCALE_ABSOLUTE = 1,
+  CMP_NODE_SCALE_RENDER_PERCENT = 2,
+  CMP_NODE_SCALE_RENDER_SIZE = 3,
+} CMPNodeScaleMethod;
+
+/* Scale Node. Stored in custom2. */
+typedef enum CMPNodeScaleRenderSizeMethod {
+  CMP_NODE_SCALE_RENDER_SIZE_STRETCH = 0,
+  CMP_NODE_SCALE_RENDER_SIZE_FIT = 1,
+  CMP_NODE_SCALE_RENDER_SIZE_CROP = 2,
+} CMPNodeScaleRenderSizeMethod;
+
 /* Filter Node. Stored in custom1. */
 typedef enum CMPNodeFilterMethod {
   CMP_NODE_FILTER_SOFT = 0,
@@ -2151,6 +2181,11 @@ typedef enum GeometryNodeTriangulateQuads {
   GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE = 3,
   GEO_NODE_TRIANGULATE_QUAD_LONGEDGE = 4,
 } GeometryNodeTriangulateQuads;
+
+typedef enum GeometryNodeDistributePointsInVolumeMode {
+  GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_RANDOM = 0,
+  GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME_DENSITY_GRID = 1,
+} GeometryNodeDistributePointsInVolumeMode;
 
 typedef enum GeometryNodeDistributePointsOnFacesMode {
   GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM = 0,
