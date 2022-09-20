@@ -86,7 +86,7 @@ void UVIsland::extract_borders()
       break;
     }
     if (!border->is_ccw()) {
-      border->flip();
+      border->flip_order();
     }
     borders.append(*border);
   }
@@ -639,7 +639,7 @@ bool UVBorder::is_ccw() const
   return ccw;
 }
 
-void UVBorder::flip()
+void UVBorder::flip_order()
 {
   uint64_t border_index = edges.first().border_index;
   for (UVBorderEdge &edge : edges) {

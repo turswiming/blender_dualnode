@@ -531,7 +531,6 @@ struct UVBorderCorner {
 
 struct UVBorder {
   /** Ordered list of UV Verts of the border of this island. */
-  // TODO: support multiple rings + order (CW, CCW)
   Vector<UVBorderEdge> edges;
 
   /**
@@ -542,7 +541,7 @@ struct UVBorder {
   /**
    * Flip the order of the verts, changing the order between CW and CCW.
    */
-  void flip();
+  void flip_order();
 
   /**
    * Calculate the outside angle of the given vert.
