@@ -840,7 +840,7 @@ void ED_spacetype_action(void)
   ARegionType *art;
 
   st->spaceid = SPACE_ACTION;
-  strncpy(st->name, "Action", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "Action");
 
   st->create = action_create;
   st->free = action_free;
@@ -904,6 +904,9 @@ void ED_spacetype_action(void)
   BLI_addhead(&st->regiontypes, art);
 
   action_buttons_register(art);
+
+  art = ED_area_type_hud(st->spaceid);
+  BLI_addhead(&st->regiontypes, art);
 
   BKE_spacetype_register(st);
 }
