@@ -1,26 +1,40 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright 2022 Blender Foundation */
 
-#ifndef __UTIL_GUIDING_H__
-#define __UTIL_GUIDING_H__
+#pragma once
+
+#ifdef WITH_PATH_GUIDING
+#  include <openpgl/version.h>
+#endif
 
 #include "util/system.h"
 
 CCL_NAMESPACE_BEGIN
 
-static inline bool guiding_supported()
+static int guiding_device_type()
 {
 #ifdef WITH_PATH_GUIDING
 #  if defined(__ARM_NEON)
-  return true;
+  return 8;
 #  else
-  return system_cpu_support_sse41();
+#    if OPENPGL_VERSION_MINOR >= 4
+  if (system_cpu_support_avx2()) {
+    return 8;
+  }
+#    endif
+  if (system_cpu_support_sse41()) {
+    return 4;
+  }
+  return 0;
 #  endif
 #else
-  return false;
+  return 0;
 #endif
 }
 
-CCL_NAMESPACE_END
+static inline bool guiding_supported()
+{
+  return guiding_device_type() != 0;
+}
 
-#endif /* __UTIL_GUIDING_H__ */
+CCL_NAMESPACE_END

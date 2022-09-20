@@ -42,6 +42,7 @@
 #include "util/debug.h"
 #include "util/foreach.h"
 #include "util/function.h"
+#include "util/guiding.h"
 #include "util/log.h"
 #include "util/map.h"
 #include "util/openimagedenoise.h"
@@ -286,19 +287,12 @@ void *CPUDevice::get_guiding_device() const
 {
 #ifdef WITH_PATH_GUIDING
   if (!guiding_device) {
-#  if defined(__ARM_NEON)
-    guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_8);
-#  else
-    if (system_cpu_support_avx2()) {
+    if (guiding_device_type() == 8) {
       guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_8);
     }
-    else if (system_cpu_support_sse41()) {
+    else if (guiding_device_type() == 4) {
       guiding_device = make_unique<openpgl::cpp::Device>(PGL_DEVICE_TYPE_CPU_4);
     }
-    else {
-      guiding_device = nullptr;
-    }
-#  endif
   }
   return guiding_device.get();
 #else
