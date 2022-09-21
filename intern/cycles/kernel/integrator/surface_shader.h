@@ -23,7 +23,7 @@ CCL_NAMESPACE_BEGIN
 
 /* Guiding */
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+#ifdef __PATH_GUIDING__
 ccl_device_inline void surface_shader_prepare_guiding(KernelGlobals kg,
                                                       IntegratorState state,
                                                       ccl_private ShaderData *sd,
@@ -335,11 +335,11 @@ ccl_device_inline
   float pdf = _surface_shader_bsdf_eval_mis(
       kg, sd, omega_in, is_transmission, NULL, bsdf_eval, 0.0f, 0.0f, light_shader_flags);
 
-#ifdef __PATH_GUIDING__
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (state->guiding.use_surface_guiding) {
     const float guiding_sampling_prob = state->guiding.surface_guiding_sampling_prob;
     const float bssrdf_sampling_prob = state->guiding.bssrdf_sampling_prob;
-    const float guide_pdf = guiding_bsdf_pdf(state, omega_in);
+    const float guide_pdf = guiding_bsdf_pdf(kg, state, omega_in);
     pdf = (guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob)) +
           (1.0f - guiding_sampling_prob) * pdf;
   }
@@ -413,7 +413,7 @@ surface_shader_bssrdf_sample_weight(ccl_private const ShaderData *ccl_restrict s
   return weight;
 }
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+#ifdef __PATH_GUIDING__
 /* Sample direction for picked BSDF, and return evaluation and pdf for all
  * BSDFs combined using MIS. */
 
@@ -459,7 +459,7 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
 
   if (sample_guiding) {
     /* Sample guiding distribution. */
-    guide_pdf = guiding_bsdf_sample(state, rand_bsdf, omega_in);
+    guide_pdf = guiding_bsdf_sample(kg, state, rand_bsdf, omega_in);
     *bsdf_pdf = 0.0f;
 
     if (guide_pdf != 0.0f) {
@@ -539,7 +539,7 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
       *bsdf_pdf = *unguided_bsdf_pdf;
 
       if (use_surface_guiding) {
-        guide_pdf = guiding_bsdf_pdf(state, *omega_in);
+        guide_pdf = guiding_bsdf_pdf(kg, state, *omega_in);
         *bsdf_pdf *= 1.0f - guiding_sampling_prob;
         *bsdf_pdf += guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob);
       }
@@ -553,7 +553,6 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
 
   return label;
 }
-
 #endif
 
 /* Sample direction for picked BSDF, and return evaluation and pdf for all

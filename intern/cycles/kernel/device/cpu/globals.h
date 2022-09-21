@@ -9,9 +9,7 @@
 #include "kernel/types.h"
 #include "kernel/util/profiling.h"
 
-#ifdef __PATH_GUIDING__
-#  include <openpgl/cpp/OpenPGL.h>
-#endif
+#include "util/guiding.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -47,25 +45,20 @@ typedef struct KernelGlobalsCPU {
 #ifdef __OSL__
   /* On the CPU, we also have the OSL globals here. Most data structures are shared
    * with SVM, the difference is in the shaders and object/mesh attributes. */
-  OSLGlobals *osl;
-  OSLShadingSystem *osl_ss;
-  OSLThreadData *osl_tdata;
+  OSLGlobals *osl = nullptr;
+  OSLShadingSystem *osl_ss = nullptr;
+  OSLThreadData *osl_tdata = nullptr;
 #endif
 
 #ifdef __PATH_GUIDING__
-  /* For guiding we need a set of pointer to some global and local data
-   * structures */
-#  if PATH_GUIDING_LEVEL >= 1
-  openpgl::cpp::PathSegmentStorage *opgl_path_segment_storage{nullptr};
-#  endif
-#  if PATH_GUIDING_LEVEL >= 3
-  openpgl::cpp::SampleStorage *opgl_sample_data_storage{nullptr};
-#  endif
-#  if PATH_GUIDING_LEVEL >= 4
-  openpgl::cpp::Field *opgl_guiding_field{nullptr};
-  openpgl::cpp::SurfaceSamplingDistribution *opgl_surface_sampling_distribution{nullptr};
-  openpgl::cpp::VolumeSamplingDistribution *opgl_volume_sampling_distribution{nullptr};
-#  endif
+  /* Pointers to global data structures. */
+  openpgl::cpp::SampleStorage *opgl_sample_data_storage = nullptr;
+  openpgl::cpp::Field *opgl_guiding_field = nullptr;
+
+  /* Local data structures owned by the thread. */
+  openpgl::cpp::PathSegmentStorage *opgl_path_segment_storage = nullptr;
+  openpgl::cpp::SurfaceSamplingDistribution *opgl_surface_sampling_distribution = nullptr;
+  openpgl::cpp::VolumeSamplingDistribution *opgl_volume_sampling_distribution = nullptr;
 #endif
 
   /* **** Run-time data ****  */

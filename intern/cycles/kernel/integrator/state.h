@@ -32,7 +32,7 @@
 #include "util/types.h"
 
 #ifdef __PATH_GUIDING__
-#  include <openpgl/cpp/OpenPGL.h>
+#  include "util/guiding.h"
 #endif
 
 #pragma once

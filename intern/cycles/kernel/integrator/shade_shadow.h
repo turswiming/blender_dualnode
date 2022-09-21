@@ -95,7 +95,7 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
 {
   /* Accumulate shadow for transparent surfaces. */
   const uint num_recorded_hits = min(num_hits, INTEGRATOR_SHADOW_ISECT_SIZE);
-#  if defined(__PATH_GUIDING__)
+#  ifdef __PATH_GUIDING__
   const bool use_guiding = kernel_data.integrator.use_guiding;
 #  endif
   for (uint hit = 0; hit < num_recorded_hits + 1; hit++) {
@@ -107,7 +107,7 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
         Spectrum transmittance = one_spectrum();
         integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &transmittance);
         throughput *= transmittance;
-#    if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
+#    ifdef __PATH_GUIDING__
         if (use_guiding) {
           INTEGRATOR_STATE_WRITE(state, shadow_path, scattered_contribution) =
               INTEGRATOR_STATE(state, shadow_path, scattered_contribution) * transmittance;

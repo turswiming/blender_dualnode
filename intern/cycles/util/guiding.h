@@ -4,6 +4,7 @@
 #pragma once
 
 #ifdef WITH_PATH_GUIDING
+#  include <openpgl/cpp/OpenPGL.h>
 #  include <openpgl/version.h>
 #endif
 

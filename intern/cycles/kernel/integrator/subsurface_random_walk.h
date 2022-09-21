@@ -420,9 +420,7 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
     /* Finally, we're applying MIS again to combine the three color channels.
      * Altogether, the MIS computation combines up to nine different estimators:
      * {classic, guided, backward_guided} x {r, g, b} */
-    const Spectrum transmittance_weight = (hit ? transmittance : sigma_s * transmittance) /
-                                          dot(channel_pdf, pdf);
-    throughput *= transmittance_weight;
+    throughput *= (hit ? transmittance : sigma_s * transmittance) / dot(channel_pdf, pdf);
 
     if (hit) {
       /* If we hit the surface, we are done. */
@@ -437,7 +435,6 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
   if (hit) {
     kernel_assert(isfinite_safe(throughput));
 
-#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
     guiding_record_bssrdf_bounce(
         kg,
         state,
@@ -446,7 +443,6 @@ ccl_device_inline bool subsurface_random_walk(KernelGlobals kg,
         D,
         safe_divide_color(throughput, INTEGRATOR_STATE(state, path, throughput)),
         albedo);
-#endif
 
     INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
   }

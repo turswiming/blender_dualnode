@@ -57,47 +57,6 @@ void PathTraceWorkCPU::init_execution()
   device_->get_cpu_kernel_thread_globals(kernel_thread_globals_);
 }
 
-#ifdef WITH_PATH_GUIDING
-/* Note: It seems that this is called before every rendering iteration/progression and not once per
- * rendering. May be we find a way to call it only once per rendering. */
-void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field,
-                                                   void *sample_data_storage,
-                                                   const bool train)
-{
-  /* Linking the global guiding structures (e.g., Field and SampleStorage) to the per-thread
-   * kernel globals. */
-#  if PATH_GUIDING_LEVEL >= 4
-  openpgl::cpp::Field *field = (openpgl::cpp::Field *)guiding_field;
-#  endif
-  for (int thread_index = 0; thread_index < kernel_thread_globals_.size(); thread_index++) {
-#  if PATH_GUIDING_LEVEL >= 3
-    CPUKernelThreadGlobals &kg = kernel_thread_globals_[thread_index];
-
-    kg.opgl_sample_data_storage = (openpgl::cpp::SampleStorage *)sample_data_storage;
-#  endif
-
-#  if PATH_GUIDING_LEVEL >= 4
-    if (field) {
-      kg.opgl_guiding_field = field;
-      if (kg.opgl_surface_sampling_distribution)
-        delete kg.opgl_surface_sampling_distribution;
-      kg.opgl_surface_sampling_distribution = new openpgl::cpp::SurfaceSamplingDistribution(field);
-      if (kg.opgl_volume_sampling_distribution)
-        delete kg.opgl_volume_sampling_distribution;
-      kg.opgl_volume_sampling_distribution = new openpgl::cpp::VolumeSamplingDistribution(field);
-    }
-    else {
-      kg.opgl_guiding_field = nullptr;
-      kg.opgl_surface_sampling_distribution = nullptr;
-      kg.opgl_volume_sampling_distribution = nullptr;
-    }
-#  endif
-
-    kg.data.integrator.train_guiding = train;
-  }
-}
-#endif
-
 void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
                                       int start_sample,
                                       int samples_num,
@@ -148,7 +107,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   statistics.occupancy = 1.0f;
 }
 
-void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kg,
+void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kernel_globals,
                                                     const KernelWorkTile &work_tile,
                                                     const int samples_num)
 {
@@ -173,35 +132,29 @@ void PathTraceWorkCPU::render_samples_full_pipeline(KernelGlobalsCPU *kg,
     }
 
     if (has_bake) {
-      if (!kernels_.integrator_init_from_bake(kg, state, &sample_work_tile, render_buffer)) {
+      if (!kernels_.integrator_init_from_bake(
+              kernel_globals, state, &sample_work_tile, render_buffer)) {
         break;
       }
     }
     else {
-      if (!kernels_.integrator_init_from_camera(kg, state, &sample_work_tile, render_buffer)) {
+      if (!kernels_.integrator_init_from_camera(
+              kernel_globals, state, &sample_work_tile, render_buffer)) {
         break;
       }
     }
 
+    kernels_.integrator_megakernel(kernel_globals, state, render_buffer);
+
 #ifdef WITH_PATH_GUIDING
-    const bool use_guiding = kernel_data.integrator.use_guiding;
-    if (use_guiding) {
-      /* Clear path segment storage. */
-      guiding_prepare_integrator_state(kg, state);
-    }
-#endif
-
-    kernels_.integrator_megakernel(kg, state, render_buffer);
-
-#if defined(WITH_PATH_GUIDING) && PATH_GUIDING_LEVEL >= 1
-    const bool train_guiding = kernel_data.integrator.use_guiding;
-    if (use_guiding && train_guiding) {
+    if (kernel_globals->data.integrator.train_guiding) {
       /* Push the generated sample data to the global sample data storage. */
-      guiding_push_sample_data_to_global_storage(kg, state, render_buffer);
+      guiding_push_sample_data_to_global_storage(kernel_globals, state, render_buffer);
     }
 #endif
+
     if (shadow_catcher_state) {
-      kernels_.integrator_megakernel(kg, shadow_catcher_state, render_buffer);
+      kernels_.integrator_megakernel(kernel_globals, shadow_catcher_state, render_buffer);
     }
 
     ++sample_work_tile.start_sample;
@@ -331,47 +284,64 @@ void PathTraceWorkCPU::cryptomatte_postproces()
   });
 }
 
-#if defined(WITH_PATH_GUIDING)
-void PathTraceWorkCPU::guiding_prepare_integrator_state(KernelGlobalsCPU *kg,
-                                                        IntegratorStateCPU *state)
+#ifdef WITH_PATH_GUIDING
+/* Note: It seems that this is called before every rendering iteration/progression and not once per
+ * rendering. May be we find a way to call it only once per rendering. */
+void PathTraceWorkCPU::guiding_init_kernel_globals(void *guiding_field,
+                                                   void *sample_data_storage,
+                                                   const bool train)
 {
-#  if PATH_GUIDING_LEVEL >= 1
-  /* Linking to the thread local instances of the path segment storage and the guided sampling
-   * distrubtion */
-  state->guiding.path_segment_storage = kg->opgl_path_segment_storage;
-  // TODO: find a better place to do this (once per rendering)
-  state->guiding.path_segment_storage->Reserve(kernel_data.integrator.transparent_max_bounce +
-                                               kernel_data.integrator.max_bounce + 3);
-  state->guiding.path_segment_storage->Clear();
-  /* Resetting the pointers to current path segment */
-  state->guiding.path_segment = nullptr;
-  state->ao.shadow_path.path_segment = nullptr;
-  state->shadow.shadow_path.path_segment = nullptr;
-#  endif
+  /* Linking the global guiding structures (e.g., Field and SampleStorage) to the per-thread
+   * kernel globals. */
+  for (int thread_index = 0; thread_index < kernel_thread_globals_.size(); thread_index++) {
+    CPUKernelThreadGlobals &kg = kernel_thread_globals_[thread_index];
+    openpgl::cpp::Field *field = (openpgl::cpp::Field *)guiding_field;
+
+    /* Allocate sampling distributions. */
+    kg.opgl_guiding_field = field;
 
 #  if PATH_GUIDING_LEVEL >= 4
-  state->guiding.surface_sampling_distribution = kg->opgl_surface_sampling_distribution;
-  state->guiding.volume_sampling_distribution = kg->opgl_volume_sampling_distribution;
+    if (kg.opgl_surface_sampling_distribution) {
+      delete kg.opgl_surface_sampling_distribution;
+      kg.opgl_surface_sampling_distribution = nullptr;
+    }
+    if (kg.opgl_volume_sampling_distribution) {
+      delete kg.opgl_volume_sampling_distribution;
+      kg.opgl_volume_sampling_distribution = nullptr;
+    }
+
+    if (field) {
+      kg.opgl_surface_sampling_distribution = new openpgl::cpp::SurfaceSamplingDistribution(field);
+      kg.opgl_volume_sampling_distribution = new openpgl::cpp::VolumeSamplingDistribution(field);
+    }
 #  endif
+
+    /* Reserve storage for training. */
+    kg.data.integrator.train_guiding = train;
+    kg.opgl_sample_data_storage = (openpgl::cpp::SampleStorage *)sample_data_storage;
+
+    if (train) {
+      kg.opgl_path_segment_storage->Reserve(kg.data.integrator.transparent_max_bounce +
+                                            kg.data.integrator.max_bounce + 3);
+      kg.opgl_path_segment_storage->Clear();
+    }
+  }
 }
 
-#  if PATH_GUIDING_LEVEL >= 1
 void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
     KernelGlobalsCPU *kg, IntegratorStateCPU *state, ccl_global float *ccl_restrict render_buffer)
 {
-#    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
-  if (VLOG_DEBUG_IS_ON) {
-    /* Checks if the generated path segments contain valid values */
-    const bool validSegments = state->guiding.path_segment_storage->ValidateSegments();
+#  ifdef WITH_CYCLES_DEBUG
+  if (VLOG_WORK_IS_ON) {
+    /* Check if the generated path segments contain valid values. */
+    const bool validSegments = kg->opgl_path_segment_storage->ValidateSegments();
     if (!validSegments) {
-      VLOG_DEBUG << "Guiding: Invalid path segments!";
+      VLOG_WORK << "Guiding: invalid path segments!";
     }
   }
-#    endif
 
-#    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
-
-  pgl_vec3f pgl_final_color = state->guiding.path_segment_storage->CalculatePixelEstimate(false);
+  /* Write debug render pass to validate it matches combined pass. */
+  pgl_vec3f pgl_final_color = kg->opgl_path_segment_storage->CalculatePixelEstimate(false);
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
   const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
                                         kernel_data.film.pass_stride;
@@ -380,45 +350,40 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
   if (kernel_data.film.pass_guiding_color != PASS_UNUSED) {
     film_write_pass_float3(buffer + kernel_data.film.pass_guiding_color, final_color);
   }
-#    else
+#  else
+  (void)state;
   (void)render_buffer;
-#    endif
-#    if PATH_GUIDING_LEVEL >= 2
-  /* Converting the path segment representation of the random walk into radiance samples. */
+#  endif
+
+  /* Convert the path segment representation of the random walk into radiance samples. */
+#  if PATH_GUIDING_LEVEL >= 2
   const bool use_direct_light = kernel_data.integrator.use_guiding_direct_light;
   const bool use_mis_weights = kernel_data.integrator.use_guiding_mis_weights;
-  state->guiding.path_segment_storage->PrepareSamples(
+  kg->opgl_path_segment_storage->PrepareSamples(
       false, nullptr, use_mis_weights, use_direct_light, false);
-#    endif
+#  endif
 
-#    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
-  /* Checking if the training/radiance samples generated py the path segment storage are valid.*/
-  if (VLOG_DEBUG_IS_ON) {
-    const bool validSamples = state->guiding.path_segment_storage->ValidateSamples();
+#  ifdef WITH_CYCLES_DEBUG
+  /* Check if the training/radiance samples generated py the path segment storage are valid.*/
+  if (VLOG_WORK_IS_ON) {
+    const bool validSamples = kg->opgl_path_segment_storage->ValidateSamples();
     if (!validSamples) {
-      VLOG_DEBUG
-          << "Guiding: Path segment storage generated/contains invalid radiance/training samples!";
+      VLOG_WORK
+          << "Guiding: path segment storage generated/contains invalid radiance/training samples!";
     }
   }
-#    endif
-
-#    if PATH_GUIDING_LEVEL >= 3
-  /* Pushing the radiance samples from the current random walk/path to the global sample
-   * stoarge. */
-  size_t nSamples = 0;
-  const openpgl::cpp::SampleData *samples = state->guiding.path_segment_storage->GetSamples(
-      nSamples);
-  kg->opgl_sample_data_storage->AddSamples(samples, nSamples);
-#    endif
-
-#    if PATH_GUIDING_LEVEL >= 1
-  /* Clearing the storage and the pointer to the current segment to be ready for the next random
-   * walk/path. */
-  state->guiding.path_segment_storage->Clear();
-  state->guiding.path_segment = nullptr;
-#    endif
-}
 #  endif
+
+#  if PATH_GUIDING_LEVEL >= 3
+  /* Push radiance samples from current random walk/path to the global sample storage. */
+  size_t num_samples = 0;
+  const openpgl::cpp::SampleData *samples = kg->opgl_path_segment_storage->GetSamples(num_samples);
+  kg->opgl_sample_data_storage->AddSamples(samples, num_samples);
+#  endif
+
+  /* Clear storage for the current path, to be ready for the next path. */
+  kg->opgl_path_segment_storage->Clear();
+}
 #endif
 
 CCL_NAMESPACE_END

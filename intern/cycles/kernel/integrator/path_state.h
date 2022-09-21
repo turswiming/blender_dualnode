@@ -58,6 +58,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
 
 #ifdef __PATH_GUIDING__
   INTEGRATOR_STATE_WRITE(state, path, unguided_throughput) = 1.0f;
+  INTEGRATOR_STATE_WRITE(state, guiding, path_segment) = nullptr;
 #endif
 
 #ifdef __MNEE__

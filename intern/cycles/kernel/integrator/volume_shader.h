@@ -91,7 +91,7 @@ ccl_device_inline void volume_shader_copy_phases(ccl_private ShaderVolumePhases 
 
 /* Guiding */
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+#  ifdef __PATH_GUIDING__
 ccl_device_inline void volume_shader_prepare_guiding(KernelGlobals kg,
                                                      IntegratorState state,
                                                      ccl_private ShaderData *sd,
@@ -259,7 +259,7 @@ ccl_device float volume_shader_phase_eval(KernelGlobals kg,
 #  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (state->guiding.use_volume_guiding) {
     const float guiding_sampling_prob = state->guiding.volume_guiding_sampling_prob;
-    const float guide_pdf = guiding_phase_pdf(state, omega_in);
+    const float guide_pdf = guiding_phase_pdf(kg, state, omega_in);
     pdf = (guiding_sampling_prob * guide_pdf) + (1.0f - guiding_sampling_prob) * pdf;
   }
 #  endif
@@ -267,7 +267,7 @@ ccl_device float volume_shader_phase_eval(KernelGlobals kg,
   return pdf;
 }
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+#  ifdef __PATH_GUIDING__
 ccl_device int volume_shader_phase_guided_sample(KernelGlobals kg,
                                                  IntegratorState state,
                                                  ccl_private const ShaderData *sd,
@@ -306,7 +306,7 @@ ccl_device int volume_shader_phase_guided_sample(KernelGlobals kg,
 
   if (sample_guiding) {
     /* Sample guiding distribution. */
-    guide_pdf = guiding_phase_sample(state, rand_phase, omega_in);
+    guide_pdf = guiding_phase_sample(kg, state, rand_phase, omega_in);
     *phase_pdf = 0.0f;
 
     if (guide_pdf != 0.0f) {
@@ -327,7 +327,7 @@ ccl_device int volume_shader_phase_guided_sample(KernelGlobals kg,
 
       *phase_pdf = *unguided_phase_pdf;
       if (use_volume_guiding) {
-        guide_pdf = guiding_phase_pdf(state, *omega_in);
+        guide_pdf = guiding_phase_pdf(kg, state, *omega_in);
         *phase_pdf *= 1.0f - guiding_sampling_prob;
         *phase_pdf += guiding_sampling_prob * guide_pdf;
       }

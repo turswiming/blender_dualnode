@@ -26,6 +26,7 @@
 #include "kernel/osl/globals.h"
 // clang-format on
 
+#include "util/guiding.h"
 #include "util/unique_ptr.h"
 
 CCL_NAMESPACE_BEGIN

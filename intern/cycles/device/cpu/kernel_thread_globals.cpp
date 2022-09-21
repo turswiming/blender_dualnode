@@ -14,7 +14,7 @@ CPUKernelThreadGlobals::CPUKernelThreadGlobals(const KernelGlobalsCPU &kernel_gl
                                                Profiler &cpu_profiler)
     : KernelGlobalsCPU(kernel_globals), cpu_profiler_(cpu_profiler)
 {
-  reset_runtime_memory();
+  clear_runtime_pointers();
 
 #ifdef WITH_OSL
   OSLGlobals::thread_init(this, static_cast<OSLGlobals *>(osl_globals_memory));
@@ -22,23 +22,15 @@ CPUKernelThreadGlobals::CPUKernelThreadGlobals(const KernelGlobalsCPU &kernel_gl
   (void)osl_globals_memory;
 #endif
 
-#if defined(WITH_PATH_GUIDING)
-#  if PATH_GUIDING_LEVEL >= 1
+#ifdef WITH_PATH_GUIDING
   opgl_path_segment_storage = new openpgl::cpp::PathSegmentStorage();
-#  endif
-#  if PATH_GUIDING_LEVEL >= 3
-  opgl_sample_data_storage = nullptr;
-#  endif
-#  if PATH_GUIDING_LEVEL >= 4
-  opgl_guiding_field = nullptr;
-#  endif
 #endif
 }
 
 CPUKernelThreadGlobals::CPUKernelThreadGlobals(CPUKernelThreadGlobals &&other) noexcept
     : KernelGlobalsCPU(std::move(other)), cpu_profiler_(other.cpu_profiler_)
 {
-  other.reset_runtime_memory();
+  other.clear_runtime_pointers();
 }
 
 CPUKernelThreadGlobals::~CPUKernelThreadGlobals()
@@ -47,8 +39,10 @@ CPUKernelThreadGlobals::~CPUKernelThreadGlobals()
   OSLGlobals::thread_free(this);
 #endif
 
-#if defined(WITH_PATH_GUIDING) && PATH_GUIDING_LEVEL >= 1
+#ifdef WITH_PATH_GUIDING
   delete opgl_path_segment_storage;
+  delete opgl_surface_sampling_distribution;
+  delete opgl_volume_sampling_distribution;
 #endif
 }
 
@@ -60,19 +54,24 @@ CPUKernelThreadGlobals &CPUKernelThreadGlobals::operator=(CPUKernelThreadGlobals
 
   *static_cast<KernelGlobalsCPU *>(this) = *static_cast<KernelGlobalsCPU *>(&other);
 
-  other.reset_runtime_memory();
+  other.clear_runtime_pointers();
 
   return *this;
 }
 
-void CPUKernelThreadGlobals::reset_runtime_memory()
+void CPUKernelThreadGlobals::clear_runtime_pointers()
 {
 #ifdef WITH_OSL
   osl = nullptr;
 #endif
 
-#if defined(WITH_PATH_GUIDING) && PATH_GUIDING_LEVEL >= 1
+#ifdef WITH_PATH_GUIDING
+  opgl_sample_data_storage = nullptr;
+  opgl_guiding_field = nullptr;
+
   opgl_path_segment_storage = nullptr;
+  opgl_surface_sampling_distribution = nullptr;
+  opgl_volume_sampling_distribution = nullptr;
 #endif
 }
 

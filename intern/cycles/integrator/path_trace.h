@@ -12,14 +12,10 @@
 #include "session/buffers.h"
 
 #include "util/function.h"
+#include "util/guiding.h"
 #include "util/thread.h"
 #include "util/unique_ptr.h"
 #include "util/vector.h"
-
-#ifdef WITH_PATH_GUIDING
-#  include <openpgl/cpp/OpenPGL.h>
-#  include <openpgl/version.h>
-#endif
 
 CCL_NAMESPACE_BEGIN
 

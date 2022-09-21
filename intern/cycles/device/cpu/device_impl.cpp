@@ -17,10 +17,6 @@
 #  include <embree3/rtcore.h>
 #endif
 
-#ifdef WITH_PATH_GUIDING
-#  include <openpgl/cpp/OpenPGL.h>
-#endif
-
 #include "device/cpu/kernel.h"
 #include "device/cpu/kernel_thread_globals.h"
 

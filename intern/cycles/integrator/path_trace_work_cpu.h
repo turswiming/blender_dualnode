@@ -16,6 +16,7 @@ CCL_NAMESPACE_BEGIN
 
 struct KernelWorkTile;
 struct KernelGlobalsCPU;
+struct IntegratorStateCPU;
 
 class CPUKernels;
 
@@ -51,17 +52,6 @@ class PathTraceWorkCPU : public PathTraceWork {
   virtual void cryptomatte_postproces() override;
 
 #ifdef WITH_PATH_GUIDING
-  /* Prepares all local guiding structures and connects the per-thread guiding structures
-   * to the current integrator state which is responsible for the upcomming random walk/path. */
-  void guiding_prepare_integrator_state(KernelGlobalsCPU *kernel_globals,
-                                        IntegratorStateCPU *state);
-
-  /* Pushes the collected training data/samples of a path to the global sample storage.
-   * This function is called at the end of a random walk/path generation. */
-  void guiding_push_sample_data_to_global_storage(KernelGlobalsCPU *kernel_globals,
-                                                  IntegratorStateCPU *state,
-                                                  ccl_global float *ccl_restrict render_buffer);
-
   /* Intializes the per-thread guiding kernel data. The function sets the pointers to the
    * global guiding field and the sample data storage as well es initializes the per-thread
    * guided sampling distrubtions (e.g., SurfaceSamplingDistribution and
@@ -69,6 +59,12 @@ class PathTraceWorkCPU : public PathTraceWork {
   void guiding_init_kernel_globals(void *guiding_field,
                                    void *sample_data_storage,
                                    const bool train) override;
+
+  /* Pushes the collected training data/samples of a path to the global sample storage.
+   * This function is called at the end of a random walk/path generation. */
+  void guiding_push_sample_data_to_global_storage(KernelGlobalsCPU *kernel_globals,
+                                                  IntegratorStateCPU *state,
+                                                  ccl_global float *ccl_restrict render_buffer);
 #endif
 
  protected:
