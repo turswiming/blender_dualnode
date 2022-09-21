@@ -305,6 +305,7 @@ void CPUDevice::get_cpu_kernel_thread_globals(
 {
   /* Ensure latest texture info is loaded into kernel globals before returning. */
   load_texture_info();
+
   kernel_thread_globals.clear();
   void *osl_memory = get_cpu_osl_memory();
   for (int i = 0; i < info.cpu_threads; i++) {

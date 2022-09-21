@@ -557,7 +557,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
-    training_samples: IntProperty(
+    guiding_training_samples: IntProperty(
         name="Training Samples",
         description="The maximum number of samples used for training path guiding. "
         "Higher samples lead to more accurate guiding, however may also unnecessarily slow "
@@ -575,13 +575,13 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=0.5,
     )
 
-    use_guide_direct_light: BoolProperty(
+    use_guiding_direct_light: BoolProperty(
         name="Guide Direct Light",
         description="Consider the contribution of directly visible light sources during guiding",
         default=True,
     )
 
-    use_mis_weights: BoolProperty(
+    use_guiding_mis_weights: BoolProperty(
         name="Use MIS Weights",
         description="Use the MIS weight to weight the contribution of directly visible light sources during guiding",
         default=True,

@@ -385,19 +385,20 @@ void PathTraceWorkCPU::guiding_push_sample_data_to_global_storage(
 #    endif
 #    if PATH_GUIDING_LEVEL >= 2
   /* Converting the path segment representation of the random walk into radiance samples. */
-  const bool use_guide_direct_light = kernel_data.integrator.use_guide_direct_light;
-  const bool use_mis_weights = kernel_data.integrator.use_mis_weights;
+  const bool use_direct_light = kernel_data.integrator.use_guiding_direct_light;
+  const bool use_mis_weights = kernel_data.integrator.use_guiding_mis_weights;
   state->guiding.path_segment_storage->PrepareSamples(
-      false, nullptr, use_mis_weights, use_guide_direct_light, false);
+      false, nullptr, use_mis_weights, use_direct_light, false);
 #    endif
 
 #    if defined(WITH_CYCLES_DEBUG) && PATH_GUIDING_LEVEL >= 5
   /* Checking if the training/radiance samples generated py the path segment storage are valid.*/
   if (VLOG_DEBUG_IS_ON) {
     const bool validSamples = state->guiding.path_segment_storage->ValidateSamples();
-    if (!validSamples)
+    if (!validSamples) {
       VLOG_DEBUG
           << "Guiding: Path segment storage generated/contains invalid radiance/training samples!";
+    }
   }
 #    endif
 

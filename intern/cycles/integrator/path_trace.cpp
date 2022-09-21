@@ -173,6 +173,7 @@ void PathTrace::render_pipeline(RenderWork render_work)
 {
   /* NOTE: Only check for "instant" cancel here. The user-requested cancel via progress is
    * checked in Session and the work in the event of cancel is to be finished here. */
+
   render_scheduler_.set_need_schedule_cryptomatte(device_scene_->data.film.cryptomatte_passes !=
                                                   0);
 
@@ -365,6 +366,7 @@ void PathTrace::init_render_buffers(const RenderWork &render_work)
     tile_buffer_read();
   }
 }
+
 void PathTrace::path_trace(RenderWork &render_work)
 {
   if (!render_work.path_trace.num_samples) {

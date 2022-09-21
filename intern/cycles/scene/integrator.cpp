@@ -71,9 +71,9 @@ NODE_DEFINE(Integrator)
   SOCKET_FLOAT(surface_guiding_probability, "Surface Guiding Probability", 0.5f);
   SOCKET_BOOLEAN(use_volume_guiding, "Volume Guiding", true);
   SOCKET_FLOAT(volume_guiding_probability, "Volume Guiding Probability", 0.5f);
-  SOCKET_INT(training_samples, "Training Samples", 128);
-  SOCKET_BOOLEAN(use_guide_direct_light, "Guide Direct Light", true);
-  SOCKET_BOOLEAN(use_mis_weights, "Use MIS Weights", true);
+  SOCKET_INT(guiding_training_samples, "Training Samples", 128);
+  SOCKET_BOOLEAN(use_guiding_direct_light, "Guide Direct Light", true);
+  SOCKET_BOOLEAN(use_guiding_mis_weights, "Use MIS Weights", true);
   SOCKET_ENUM(guiding_distribution_type,
               "Guiding Distribution Type",
               guiding_ditribution_enum,
@@ -235,8 +235,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->use_volume_guiding = guiding_params.use_volume_guiding;
   kintegrator->surface_guiding_probability = surface_guiding_probability;
   kintegrator->volume_guiding_probability = volume_guiding_probability;
-  kintegrator->use_guide_direct_light = use_guide_direct_light;
-  kintegrator->use_mis_weights = use_mis_weights;
+  kintegrator->use_guiding_direct_light = use_guiding_direct_light;
+  kintegrator->use_guiding_mis_weights = use_guiding_mis_weights;
   kintegrator->guiding_distribution_type = guiding_params.type;
 
   kintegrator->seed = seed;
@@ -395,7 +395,7 @@ GuidingParams Integrator::get_guiding_params(const Device *device) const
                                       volume_guiding_probability > 0.0f;
   guiding_params.use = guiding_params.use_surface_guiding || guiding_params.use_volume_guiding;
   guiding_params.type = guiding_distribution_type;
-  guiding_params.training_samples = training_samples;
+  guiding_params.training_samples = guiding_training_samples;
   guiding_params.deterministic = deterministic_guiding;
 
   return guiding_params;

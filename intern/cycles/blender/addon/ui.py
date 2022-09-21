@@ -306,7 +306,7 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
         col = layout.column(align=True)
         col.prop(cscene, "use_surface_guiding")
         col.prop(cscene, "use_volume_guiding")
-        col.prop(cscene, "training_samples")
+        col.prop(cscene, "guiding_training_samples")
 
 
 class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Panel):
@@ -331,8 +331,8 @@ class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Pane
 
         col = layout.column(align=True)
         col.prop(cscene, "use_deterministic_guiding")
-        col.prop(cscene, "use_guide_direct_light")
-        col.prop(cscene, "use_mis_weights")
+        col.prop(cscene, "use_guiding_direct_light")
+        col.prop(cscene, "use_guiding_mis_weights")
 
 
 class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):

@@ -50,9 +50,9 @@ class Integrator : public Node {
   NODE_SOCKET_API(float, surface_guiding_probability);
   NODE_SOCKET_API(bool, use_volume_guiding);
   NODE_SOCKET_API(float, volume_guiding_probability);
-  NODE_SOCKET_API(int, training_samples);
-  NODE_SOCKET_API(bool, use_guide_direct_light);
-  NODE_SOCKET_API(bool, use_mis_weights);
+  NODE_SOCKET_API(int, guiding_training_samples);
+  NODE_SOCKET_API(bool, use_guiding_direct_light);
+  NODE_SOCKET_API(bool, use_guiding_mis_weights);
   NODE_SOCKET_API(GuidingDistributionType, guiding_distribution_type);
 
   NODE_SOCKET_API(bool, caustics_reflective)
