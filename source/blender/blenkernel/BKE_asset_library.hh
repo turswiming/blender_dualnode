@@ -10,6 +10,9 @@
 #  error This is a C++-only header file. Use BKE_asset_library.h instead.
 #endif
 
+#include "BLI_string_ref.hh"
+#include "BLI_vector.hh"
+
 #include "BKE_asset_library.h"
 
 #include "BKE_asset_catalog.hh"
@@ -17,23 +20,45 @@
 
 #include <memory>
 
+struct AssetLibraryReference;
+struct Main;
+
 namespace blender::bke {
+
+struct AssetRepresentation;
+
+class AssetStorage {
+  Vector<std::unique_ptr<AssetRepresentation>> assets_;
+
+ public:
+  AssetRepresentation &append(std::unique_ptr<AssetRepresentation> asset);
+};
 
 /**
  * AssetLibrary provides access to an asset library's data.
- * For now this is only for catalogs, later this can be expanded to indexes/caches/more.
+ *
+ * The asset library contains catalogs and storage for asset representations. It could be extended
+ * to also include asset indexes and more.
  */
 struct AssetLibrary {
   /* Controlled by #ED_asset_catalogs_set_save_catalogs_when_file_is_saved,
    * for managing the "Save Catalog Changes" in the quit-confirmation dialog box. */
   static bool save_catalogs_when_file_is_saved;
 
+  /** The directory representing the root of this library. */
+  std::string root_path;
+
   std::unique_ptr<AssetCatalogService> catalog_service;
+  /** Container to store asset representations, managed by whatever manages this library, not by
+   * the library itself. So this really is arbitrary storage as far as #AssetLibrary is concerned
+   * (allowing the API user to manage partial library storage and partial loading, so only relevant
+   * parts of a library are kept in memory). */
+  AssetStorage asset_storage;
 
   AssetLibrary();
   ~AssetLibrary();
 
-  void load(StringRefNull library_root_directory);
+  void load_catalogs(StringRefNull library_root_directory);
 
   /** Load catalogs that have changed on disk. */
   void refresh();
@@ -56,6 +81,43 @@ struct AssetLibrary {
 };
 
 }  // namespace blender::bke
+
+blender::bke::AssetLibrary *BKE_asset_library_load(const Main *bmain,
+                                                   const AssetLibraryReference &library_reference);
+
+/**
+ * Try to find an appropriate location for an asset library root from a file or directory path.
+ * Does not check if \a input_path exists.
+ *
+ * The design is made to find an appropriate asset library path from a .blend file path, but
+ * technically works with any file or directory as \a input_path.
+ * Design is:
+ * * If \a input_path lies within a known asset library path (i.e. an asset library registered in
+ *   the Preferences), return the asset library path.
+ * * Otherwise, if \a input_path has a parent path, return the parent path (e.g. to use the
+ *   directory a .blend file is in as asset library root).
+ * * If \a input_path is empty or doesn't have a parent path (e.g. because a .blend wasn't saved
+ *   yet), there is no suitable path. The caller has to decide how to handle this case.
+ *
+ * \param r_library_path: The returned asset library path with a trailing slash, or an empty string
+ *                        if no suitable path is found. Assumed to be a buffer of at least
+ *                        #FILE_MAXDIR bytes.
+ *
+ * \return True if the function could find a valid, that is, a non-empty path to return in \a
+ *         r_library_path.
+ */
+std::string BKE_asset_library_find_suitable_root_path_from_path(blender::StringRefNull input_path);
+
+/**
+ * Uses the current location on disk of the file represented by \a bmain as input to
+ * #BKE_asset_library_find_suitable_root_path_from_path(). Refer to it for a design
+ * description.
+ *
+ * \return True if the function could find a valid, that is, a non-empty path to return in \a
+ *         r_library_path. If \a bmain wasn't saved into a file yet, the return value will be
+ *         false.
+ */
+std::string BKE_asset_library_find_suitable_root_path_from_main(const struct Main *bmain);
 
 blender::bke::AssetCatalogService *BKE_asset_library_get_catalog_service(
     const ::AssetLibrary *library);

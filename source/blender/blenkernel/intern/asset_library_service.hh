@@ -16,6 +16,8 @@
 
 #include <memory>
 
+struct AssetLibraryReference;
+
 namespace blender::bke {
 
 /**
@@ -33,6 +35,8 @@ namespace blender::bke {
  */
 class AssetLibraryService {
  public:
+  /** TODO use shared pointer to usage-count libraries? Avoids keeping unused libraries in memory.
+   */
   using AssetLibraryPtr = std::unique_ptr<AssetLibrary>;
 
   AssetLibraryService() = default;
@@ -43,6 +47,9 @@ class AssetLibraryService {
 
   /** Destroy the AssetLibraryService singleton. It will be reallocated by #get() if necessary. */
   static void destroy();
+
+  AssetLibrary *get_asset_library(const Main *bmain,
+                                  const AssetLibraryReference &library_reference);
 
   /**
    * Get the given asset library. Opens it (i.e. creates a new AssetLibrary instance) if necessary.
@@ -60,6 +67,9 @@ class AssetLibraryService {
 
   /* Mapping absolute path of the library's top-level directory to the AssetLibrary instance. */
   Map<std::string, AssetLibraryPtr> on_disk_libraries_;
+  /** Library without a known path, i.e. the "Current File" library if the file isn't saved yet. If
+   * the file was saved, a valid path for the library can be determined and #on_disk_libraries_
+   * above should be used. */
   AssetLibraryPtr current_file_library_;
 
   /* Handlers for managing the life cycle of the AssetLibraryService instance. */
