@@ -122,6 +122,7 @@ void ShadingView::render()
 
   /* TODO(fclem): Move it after the first prepass (and hiz update) once pipeline is stabilized. */
   inst_.lights.set_view(render_view_new_, extent_);
+  inst_.shadows.set_view(render_view_new_);
 
   // inst_.pipelines.deferred.render(
   //     render_view_, rt_buffer_opaque_, rt_buffer_refract_, depth_tx_, combined_tx_);
@@ -134,12 +135,11 @@ void ShadingView::render()
 
   inst_.lights.debug_draw(render_view_new_, combined_fb_);
   inst_.hiz_buffer.debug_draw(render_view_new_, combined_fb_);
+  inst_.shadows.debug_draw(render_view_new_, combined_fb_);
 
   GPUTexture *combined_final_tx = render_postfx(rbufs.combined_tx);
 
   inst_.film.accumulate(sub_view_, combined_final_tx);
-
-  // inst_.shadows.debug_draw();
 
   rbufs.release();
   postfx_tx_.release();

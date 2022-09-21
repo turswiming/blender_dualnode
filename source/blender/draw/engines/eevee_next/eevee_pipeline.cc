@@ -59,6 +59,30 @@ void WorldPipeline::render(View &view)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Shadow Pipeline
+ *
+ * \{ */
+
+void ShadowPipeline::sync()
+{
+  surface_ps_.init();
+  surface_ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_SHADOW_OFFSET);
+  surface_ps_.bind_image(SHADOW_ATLAS_SLOT, &inst_.shadows.atlas_tx_);
+}
+
+PassMain::Sub *ShadowPipeline::surface_material_add(GPUMaterial *gpumat)
+{
+  return &surface_ps_.sub(GPU_material_get_name(gpumat));
+}
+
+void ShadowPipeline::render(View &view)
+{
+  inst_.manager->submit(surface_ps_, view);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Forward Pass
  *
  * NPR materials (using Closure to RGBA) or material using ALPHA_BLEND.
@@ -119,6 +143,7 @@ void ForwardPipeline::sync()
       opaque_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
 
       inst_.lights.bind_resources(&opaque_ps_);
+      inst_.shadows.bind_resources(&opaque_ps_);
       inst_.sampling.bind_resources(&opaque_ps_);
       inst_.cryptomatte.bind_resources(&opaque_ps_);
     }
@@ -142,6 +167,7 @@ void ForwardPipeline::sync()
     sub.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
 
     inst_.lights.bind_resources(&sub);
+    inst_.shadows.bind_resources(&sub);
     inst_.sampling.bind_resources(&sub);
   }
 }

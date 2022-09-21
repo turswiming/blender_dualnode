@@ -142,6 +142,24 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_light_culling_tile";
     case LIGHT_CULLING_ZBIN:
       return "eevee_light_culling_zbin";
+    case SHADOW_DEBUG:
+      return "eevee_shadow_debug";
+    case SHADOW_PAGE_ALLOCATE:
+      return "eevee_shadow_page_allocate";
+    case SHADOW_PAGE_DEFRAG:
+      return "eevee_shadow_page_defrag";
+    case SHADOW_PAGE_FREE:
+      return "eevee_shadow_page_free";
+    case SHADOW_TILEMAP_FINALIZE:
+      return "eevee_shadow_tilemap_finalize";
+    case SHADOW_TILEMAP_INIT:
+      return "eevee_shadow_tilemap_init";
+    case SHADOW_TILEMAP_TAG_UPDATE:
+      return "eevee_shadow_tag_update";
+    case SHADOW_TILEMAP_TAG_USAGE_OPAQUE:
+      return "eevee_shadow_tag_usage_opaque";
+    case SHADOW_TILEMAP_TAG_USAGE_TRANSPARENT:
+      return "eevee_shadow_tag_usage_transparent";
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:
       return "";

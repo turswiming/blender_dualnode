@@ -148,6 +148,7 @@ set(SRC
   engines/eevee_next/eevee_renderbuffers.cc
   engines/eevee_next/eevee_sampling.cc
   engines/eevee_next/eevee_shader.cc
+  engines/eevee_next/eevee_shadow.cc
   engines/eevee_next/eevee_sync.cc
   engines/eevee_next/eevee_velocity.cc
   engines/eevee_next/eevee_view.cc
@@ -262,6 +263,7 @@ set(SRC
   engines/eevee_next/eevee_renderbuffers.hh
   engines/eevee_next/eevee_sampling.hh
   engines/eevee_next/eevee_shader.hh
+  engines/eevee_next/eevee_shadow.hh
   engines/eevee_next/eevee_sync.hh
   engines/eevee_next/eevee_velocity.hh
   engines/eevee_next/eevee_view.hh
@@ -437,6 +439,21 @@ set(GLSL_SRC
   engines/eevee_next/shaders/eevee_motion_blur_lib.glsl
   engines/eevee_next/shaders/eevee_nodetree_lib.glsl
   engines/eevee_next/shaders/eevee_sampling_lib.glsl
+  engines/eevee_next/shaders/eevee_shadow_debug_frag.glsl
+  engines/eevee_next/shaders/eevee_shadow_lib.glsl
+  engines/eevee_next/shaders/eevee_shadow_page_allocate_comp.glsl
+  engines/eevee_next/shaders/eevee_shadow_page_defrag_comp.glsl
+  engines/eevee_next/shaders/eevee_shadow_page_free_comp.glsl
+  engines/eevee_next/shaders/eevee_shadow_page_ops_lib.glsl
+  engines/eevee_next/shaders/eevee_shadow_render_clear_comp.glsl
+  engines/eevee_next/shaders/eevee_shadow_tilemap_lib.glsl
+  engines/eevee_next/shaders/eevee_shadow_tilemap_init_comp.glsl
+  engines/eevee_next/shaders/eevee_shadow_tag_update_comp.glsl
+  engines/eevee_next/shaders/eevee_shadow_tag_usage_comp.glsl
+  engines/eevee_next/shaders/eevee_shadow_tag_usage_frag.glsl
+  engines/eevee_next/shaders/eevee_shadow_tag_usage_lib.glsl
+  engines/eevee_next/shaders/eevee_shadow_tag_usage_vert.glsl
+  engines/eevee_next/shaders/eevee_shadow_tilemap_finalize_comp.glsl
   engines/eevee_next/shaders/eevee_surf_deferred_frag.glsl
   engines/eevee_next/shaders/eevee_surf_depth_frag.glsl
   engines/eevee_next/shaders/eevee_surf_forward_frag.glsl
@@ -728,6 +745,7 @@ if(WITH_GTESTS)
     set(TEST_SRC
       tests/draw_pass_test.cc
       tests/draw_testing.cc
+      tests/eevee_test.cc
       tests/shaders_test.cc
 
       tests/draw_testing.hh

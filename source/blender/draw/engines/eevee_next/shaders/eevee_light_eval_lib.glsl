@@ -35,7 +35,7 @@ void light_eval_ex(ClosureDiffuse diffuse,
   float visibility = light_attenuation(light, L, dist);
 
 #if 0 /* TODO(fclem): Shadows */
-  if ((light.shadow_id != LIGHT_NO_SHADOW) && (visibility > 0.0)) {
+  if (light.tilemap_index != LIGHT_NO_SHADOW && (visibility > 0.0)) {
     vec3 lL = light_world_to_local(light, -L) * dist;
 
     float shadow_delta = shadow_delta_get(

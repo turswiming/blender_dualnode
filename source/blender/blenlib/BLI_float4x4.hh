@@ -190,6 +190,11 @@ struct float4x4 {
     values[2][2] *= scale;
   }
 
+  void apply_translation(const float3 &translation)
+  {
+    *reinterpret_cast<float3 *>(&values[3][0]) += translation;
+  }
+
   float4x4 inverted() const
   {
     float4x4 result;

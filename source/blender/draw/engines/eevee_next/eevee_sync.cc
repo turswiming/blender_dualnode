@@ -41,6 +41,7 @@ ObjectHandle &SyncModule::sync_object(Object *ob)
   ObjectHandle &eevee_dd = *reinterpret_cast<ObjectHandle *>(dd);
 
   if (eevee_dd.object_key.ob == nullptr) {
+    ob = DEG_get_original_object(ob);
     eevee_dd.object_key = ObjectKey(ob);
   }
 
@@ -48,7 +49,6 @@ ObjectHandle &SyncModule::sync_object(Object *ob)
                            ID_RECALC_GEOMETRY;
   if ((eevee_dd.recalc & recalc_flags) != 0) {
     inst_.sampling.reset();
-    UNUSED_VARS(inst_);
   }
 
   return eevee_dd;
@@ -127,8 +127,9 @@ void SyncModule::sync_mesh(Object *ob,
   }
 
   inst_.manager->extract_object_attributes(res_handle, ob_ref, material_array.gpu_materials);
+
+  inst_.shadows.sync_object(ob_handle, res_handle, is_shadow_caster, is_alpha_blend);
   inst_.cryptomatte.sync_object(ob, res_handle);
-  // shadows.sync_object(ob, ob_handle, is_shadow_caster, is_alpha_blend);
 }
 
 /** \} */
@@ -266,9 +267,9 @@ void SyncModule::sync_gpencil(Object *ob, ObjectHandle &ob_handle, ResourceHandl
 
   gpencil_drawcall_flush(iter);
 
-  // bool is_caster = true;      /* TODO material.shadow.sub_pass. */
-  // bool is_alpha_blend = true; /* TODO material.is_alpha_blend. */
-  // shadows.sync_object(ob, ob_handle, is_caster, is_alpha_blend);
+  bool is_caster = true;      /* TODO material.shadow.sub_pass. */
+  bool is_alpha_blend = true; /* TODO material.is_alpha_blend. */
+  inst_.shadows.sync_object(ob_handle, res_handle, is_caster, is_alpha_blend);
 }
 
 /** \} */
@@ -333,9 +334,9 @@ void SyncModule::sync_curves(Object *ob,
   /* TODO(fclem) Hair velocity. */
   // shading_passes.velocity.gpencil_add(ob, ob_handle);
 
-  // bool is_caster = material.shadow.sub_pass != nullptr;
-  // bool is_alpha_blend = material.is_alpha_blend_transparent;
-  // shadows.sync_object(ob, ob_handle, is_caster, is_alpha_blend);
+  bool is_caster = material.shadow.sub_pass != nullptr;
+  bool is_alpha_blend = material.is_alpha_blend_transparent;
+  inst_.shadows.sync_object(ob_handle, res_handle, is_caster, is_alpha_blend);
 }
 
 /** \} */

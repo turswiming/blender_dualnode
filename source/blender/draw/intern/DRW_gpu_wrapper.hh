@@ -366,6 +366,14 @@ class StorageArrayBuffer : public detail::StorageCommon<T, len, device_only> {
   {
     return this->len_;
   }
+
+  static void swap(StorageArrayBuffer &a, StorageArrayBuffer &b)
+  {
+    SWAP(T *, a.data_, b.data_);
+    SWAP(GPUStorageBuf *, a.ssbo_, b.ssbo_);
+    SWAP(int64_t, a.len_, b.len_);
+    SWAP(const char *, a.name_, b.name_);
+  }
 };
 
 template<
@@ -426,6 +434,12 @@ class StorageVectorBuffer : public StorageArrayBuffer<T, len, false> {
 
   /* Avoid confusion with the other clear. */
   void clear_to_zero() = delete;
+
+  static void swap(StorageVectorBuffer &a, StorageVectorBuffer &b)
+  {
+    StorageArrayBuffer<T, len, false>::swap(a, b);
+    SWAP(int64_t, a.item_len_, b.item_len_);
+  }
 };
 
 template<

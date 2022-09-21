@@ -128,9 +128,8 @@ GPU_SHADER_CREATE_INFO(eevee_surf_forward)
     .additional_info("eevee_cryptomatte_out",
                      "eevee_light_data",
                      "eevee_utility_texture",
-                     "eevee_sampling_data"
-                     // "eevee_lightprobe_data",
-                     // "eevee_shadow_data"
+                     "eevee_sampling_data",
+                     "eevee_shadow_data"
                      /* Optionally added depending on the material. */
                      // "eevee_raytrace_data",
                      // "eevee_transmittance_data",

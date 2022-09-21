@@ -327,6 +327,50 @@ bool intersect(IsectPyramid i_pyramid, Box box)
   return intersects;
 }
 
+bool intersect(IsectPyramid i_pyramid, IsectBox i_box)
+{
+  bool intersects = true;
+
+  /* Do Box vertices vs Pyramid planes. */
+  for (int p = 0; p < 5; ++p) {
+    bool is_any_vertex_on_positive_side = false;
+    for (int v = 0; v < 8; ++v) {
+      float test = dot(i_pyramid.planes[p], vec4(i_box.corners[v], 1.0));
+      if (test > 0.0) {
+        is_any_vertex_on_positive_side = true;
+        break;
+      }
+    }
+    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
+    if (all_vertex_on_negative_side) {
+      intersects = false;
+      break;
+    }
+  }
+
+  if (!intersects) {
+    return intersects;
+  }
+
+  /* Now do Pyramid vertices vs Box planes. */
+  for (int p = 0; p < 6; ++p) {
+    bool is_any_vertex_on_positive_side = false;
+    for (int v = 0; v < 5; ++v) {
+      float test = dot(i_box.planes[p], vec4(i_pyramid.corners[v], 1.0));
+      if (test > 0.0) {
+        is_any_vertex_on_positive_side = true;
+        break;
+      }
+    }
+    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
+    if (all_vertex_on_negative_side) {
+      intersects = false;
+      break;
+    }
+  }
+  return intersects;
+}
+
 bool intersect(IsectFrustum i_frustum, Pyramid pyramid)
 {
   bool intersects = true;
