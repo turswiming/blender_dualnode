@@ -372,7 +372,9 @@ ccl_device_forceinline void guiding_record_direct_light(KernelGlobals kg,
     return;
   }
   if (state->shadow_path.path_segment) {
-    const Spectrum Lo = INTEGRATOR_STATE(state, shadow_path, scattered_contribution);
+    const Spectrum Lo = safe_divide_color(INTEGRATOR_STATE(state, shadow_path, throughput),
+                                          INTEGRATOR_STATE(state, shadow_path, unlit_throughput));
+
     const float3 Lo_rgb = spectrum_to_rgb(Lo);
     openpgl::cpp::AddScatteredContribution(state->shadow_path.path_segment, guiding_vec3f(Lo_rgb));
   }

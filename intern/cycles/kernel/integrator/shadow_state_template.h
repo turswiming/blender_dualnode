@@ -40,20 +40,14 @@ KERNEL_STRUCT_MEMBER(shadow_path, PackedSpectrum, pass_glossy_weight, KERNEL_FEA
 KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, num_hits, KERNEL_FEATURE_PATH_TRACING)
 /* Light group. */
 KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, lightgroup, KERNEL_FEATURE_PATH_TRACING)
+/* Path guiding. */
+KERNEL_STRUCT_MEMBER(shadow_path, PackedSpectrum, unlit_throughput, KERNEL_FEATURE_PATH_GUIDING)
 #ifdef __PATH_GUIDING__
-KERNEL_STRUCT_MEMBER(shadow_path,
-                     PackedSpectrum,
-                     scattered_contribution,
-                     KERNEL_FEATURE_PATH_GUIDING)
 KERNEL_STRUCT_MEMBER(shadow_path,
                      openpgl::cpp::PathSegment *,
                      path_segment,
                      KERNEL_FEATURE_PATH_GUIDING)
 #else
-KERNEL_STRUCT_MEMBER(shadow_path,
-                     PackedSpectrum,
-                     scattered_contribution,
-                     KERNEL_FEATURE_PATH_GUIDING)
 KERNEL_STRUCT_MEMBER(shadow_path, void *, path_segment, KERNEL_FEATURE_PATH_GUIDING)
 #endif
 KERNEL_STRUCT_END(shadow_path)

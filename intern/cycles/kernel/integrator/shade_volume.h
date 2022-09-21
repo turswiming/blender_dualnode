@@ -799,8 +799,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
   const uint16_t transparent_bounce = INTEGRATOR_STATE(state, path, transparent_bounce);
   uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
   shadow_flag |= (is_light) ? PATH_RAY_SHADOW_FOR_LIGHT : 0;
-  const Spectrum scattered_contribution = bsdf_eval_sum(&phase_eval);
-  const Spectrum throughput_phase = throughput * scattered_contribution;
+  const Spectrum throughput_phase = throughput * bsdf_eval_sum(&phase_eval);
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
     PackedSpectrum pass_diffuse_weight;
@@ -851,9 +850,8 @@ ccl_device_forceinline void integrate_volume_direct_light(
                                                    ls->group + 1 :
                                                    kernel_data.background.lightgroup + 1;
 
-#  if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 1
-  INTEGRATOR_STATE_WRITE(
-      shadow_state, shadow_path, scattered_contribution) = scattered_contribution;
+#  ifdef __PATH_GUIDING__
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unlit_throughput) = throughput;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = INTEGRATOR_STATE(
       state, guiding, path_segment);
 #  endif

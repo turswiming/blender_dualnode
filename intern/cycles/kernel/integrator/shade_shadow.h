@@ -95,27 +95,18 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
 {
   /* Accumulate shadow for transparent surfaces. */
   const uint num_recorded_hits = min(num_hits, INTEGRATOR_SHADOW_ISECT_SIZE);
-#  ifdef __PATH_GUIDING__
-  const bool use_guiding = kernel_data.integrator.use_guiding;
-#  endif
+
   for (uint hit = 0; hit < num_recorded_hits + 1; hit++) {
     /* Volume shaders. */
     if (hit < num_recorded_hits || !shadow_intersections_has_remaining(num_hits)) {
 #  ifdef __VOLUME__
       if (!integrator_state_shadow_volume_stack_is_empty(kg, state)) {
         Spectrum throughput = INTEGRATOR_STATE(state, shadow_path, throughput);
-        Spectrum transmittance = one_spectrum();
-        integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &transmittance);
-        throughput *= transmittance;
-#    ifdef __PATH_GUIDING__
-        if (use_guiding) {
-          INTEGRATOR_STATE_WRITE(state, shadow_path, scattered_contribution) =
-              INTEGRATOR_STATE(state, shadow_path, scattered_contribution) * transmittance;
-        }
-#    endif
+        integrate_transparent_volume_shadow(kg, state, hit, num_recorded_hits, &throughput);
         if (is_zero(throughput)) {
           return true;
         }
+
         INTEGRATOR_STATE_WRITE(state, shadow_path, throughput) = throughput;
       }
 #  endif
@@ -125,12 +116,6 @@ ccl_device_inline bool integrate_transparent_shadow(KernelGlobals kg,
     if (hit < num_recorded_hits) {
       const Spectrum shadow = integrate_transparent_surface_shadow(kg, state, hit);
       const Spectrum throughput = INTEGRATOR_STATE(state, shadow_path, throughput) * shadow;
-#  ifdef __PATH_GUIDING__
-      if (use_guiding) {
-        INTEGRATOR_STATE_WRITE(state, shadow_path, scattered_contribution) =
-            INTEGRATOR_STATE(state, shadow_path, scattered_contribution) * shadow;
-      }
-#  endif
       if (is_zero(throughput)) {
         return true;
       }

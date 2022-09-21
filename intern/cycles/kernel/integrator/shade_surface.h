@@ -258,8 +258,8 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
   /* Copy state from main path to shadow path. */
   uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
   shadow_flag |= (is_light) ? PATH_RAY_SHADOW_FOR_LIGHT : 0;
-  const Spectrum scattered_contribution = bsdf_eval_sum(&bsdf_eval);
-  const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput) * scattered_contribution;
+  const Spectrum unlit_throughput = INTEGRATOR_STATE(state, path, throughput);
+  const Spectrum throughput = unlit_throughput * bsdf_eval_sum(&bsdf_eval);
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
     PackedSpectrum pass_diffuse_weight;
@@ -330,8 +330,7 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
                                                    ls.group + 1 :
                                                    kernel_data.background.lightgroup + 1;
 #ifdef __PATH_GUIDING__
-  INTEGRATOR_STATE_WRITE(
-      shadow_state, shadow_path, scattered_contribution) = scattered_contribution;
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unlit_throughput) = unlit_throughput;
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, path_segment) = INTEGRATOR_STATE(
       state, guiding, path_segment);
 #endif
