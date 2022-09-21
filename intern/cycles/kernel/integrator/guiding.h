@@ -288,10 +288,12 @@ ccl_device_forceinline void guiding_record_volume_emission(KernelGlobals kg,
     return;
   }
 
-  const float3 Le_rgb = spectrum_to_rgb(Le);
+  if (state->guiding.path_segment) {
+    const float3 Le_rgb = spectrum_to_rgb(Le);
 
-  openpgl::cpp::SetDirectContribution(state->guiding.path_segment, guiding_vec3f(Le_rgb));
-  openpgl::cpp::SetMiWeight(state->guiding.path_segment, 1.0f);
+    openpgl::cpp::SetDirectContribution(state->guiding.path_segment, guiding_vec3f(Le_rgb));
+    openpgl::cpp::SetMiWeight(state->guiding.path_segment, 1.0f);
+  }
 #endif
 }
 
