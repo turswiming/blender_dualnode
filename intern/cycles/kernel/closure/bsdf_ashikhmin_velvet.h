@@ -31,10 +31,10 @@ ccl_device int bsdf_ashikhmin_velvet_setup(ccl_private VelvetBsdf *bsdf)
   return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
-ccl_device Spectrum bsdf_ashikhmin_velvet_eval_reflect(ccl_private const ShaderClosure *sc,
-                                                       const float3 I,
-                                                       const float3 omega_in,
-                                                       ccl_private float *pdf)
+ccl_device Spectrum bsdf_ashikhmin_velvet_eval(ccl_private const ShaderClosure *sc,
+                                               const float3 I,
+                                               const float3 omega_in,
+                                               ccl_private float *pdf)
 {
   ccl_private const VelvetBsdf *bsdf = (ccl_private const VelvetBsdf *)sc;
   float m_invsigma2 = bsdf->invsigma2;
@@ -71,15 +71,6 @@ ccl_device Spectrum bsdf_ashikhmin_velvet_eval_reflect(ccl_private const ShaderC
     return make_spectrum(out);
   }
 
-  *pdf = 0.0f;
-  return zero_spectrum();
-}
-
-ccl_device Spectrum bsdf_ashikhmin_velvet_eval_transmit(ccl_private const ShaderClosure *sc,
-                                                        const float3 I,
-                                                        const float3 omega_in,
-                                                        ccl_private float *pdf)
-{
   *pdf = 0.0f;
   return zero_spectrum();
 }

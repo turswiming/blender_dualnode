@@ -173,7 +173,8 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
 
   Ray ray ccl_optional_struct_init;
   BsdfEval bsdf_eval ccl_optional_struct_init;
-  const bool is_transmission = surface_shader_is_transmission_sd(sd, ls.D);
+
+  const bool is_transmission = dot(ls.D, sd->N) < 0.0f;
 
 #ifdef __MNEE__
   int mnee_vertex_count = 0;
@@ -184,13 +185,15 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
       const bool use_caustics = kernel_data_fetch(lights, ls.lamp).use_caustics;
       if (use_caustics) {
         /* Are we on a caustic caster? */
-        if (is_transmission && (sd->object_flag & SD_OBJECT_CAUSTICS_CASTER))
+        if (is_transmission && (sd->object_flag & SD_OBJECT_CAUSTICS_CASTER)) {
           return;
+        }
 
         /* Are we on a caustic receiver? */
-        if (!is_transmission && (sd->object_flag & SD_OBJECT_CAUSTICS_RECEIVER))
+        if (!is_transmission && (sd->object_flag & SD_OBJECT_CAUSTICS_RECEIVER)) {
           mnee_vertex_count = kernel_path_mnee_sample(
               kg, state, sd, emission_sd, rng_state, &ls, &bsdf_eval);
+        }
       }
     }
   }
@@ -209,8 +212,7 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
     }
 
     /* Evaluate BSDF. */
-    const float bsdf_pdf = surface_shader_bsdf_eval(
-        kg, state, sd, ls.D, is_transmission, &bsdf_eval, ls.shader);
+    const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls.D, &bsdf_eval, ls.shader);
     bsdf_eval_mul(&bsdf_eval, light_eval / ls.pdf);
 
     if (ls.shader & SHADER_USE_MIS) {

@@ -39,11 +39,10 @@ ccl_device_inline float bsdf_ashikhmin_shirley_roughness_to_exponent(float rough
   return 2.0f / (roughness * roughness) - 2.0f;
 }
 
-ccl_device_forceinline Spectrum
-bsdf_ashikhmin_shirley_eval_reflect(ccl_private const ShaderClosure *sc,
-                                    const float3 I,
-                                    const float3 omega_in,
-                                    ccl_private float *pdf)
+ccl_device_forceinline Spectrum bsdf_ashikhmin_shirley_eval(ccl_private const ShaderClosure *sc,
+                                                            const float3 I,
+                                                            const float3 omega_in,
+                                                            ccl_private float *pdf)
 {
   ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
   float3 N = bsdf->N;
@@ -106,15 +105,6 @@ bsdf_ashikhmin_shirley_eval_reflect(ccl_private const ShaderClosure *sc,
   }
 
   return make_spectrum(out);
-}
-
-ccl_device Spectrum bsdf_ashikhmin_shirley_eval_transmit(ccl_private const ShaderClosure *sc,
-                                                         const float3 I,
-                                                         const float3 omega_in,
-                                                         ccl_private float *pdf)
-{
-  *pdf = 0.0f;
-  return zero_spectrum();
 }
 
 ccl_device_inline void bsdf_ashikhmin_shirley_sample_first_quadrant(float n_x,
@@ -216,8 +206,8 @@ ccl_device int bsdf_ashikhmin_shirley_sample(ccl_private const ShaderClosure *sc
       label = LABEL_REFLECT | LABEL_SINGULAR;
     }
     else {
-      /* leave the rest to eval_reflect */
-      *eval = bsdf_ashikhmin_shirley_eval_reflect(sc, I, *omega_in, pdf);
+      /* leave the rest to eval */
+      *eval = bsdf_ashikhmin_shirley_eval(sc, I, *omega_in, pdf);
     }
   }
 
