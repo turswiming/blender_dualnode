@@ -953,13 +953,13 @@ def brush_settings_advanced(layout, context, brush, popover=False):
         if brush.use_automasking_start_normal:
             col.separator()
 
-            col.prop(brush, "use_automasking_view_occlusion", text="Occlusion")
             col.prop(sculpt, "automasking_start_normal_limit")
             col.prop(sculpt, "automasking_start_normal_falloff")
 
         if brush.use_automasking_view_normal:
             col.separator()
 
+            col.prop(brush, "use_automasking_view_occlusion", text="Occlusion")
             col.prop(sculpt, "automasking_view_normal_limit")
             col.prop(sculpt, "automasking_view_normal_falloff")
 

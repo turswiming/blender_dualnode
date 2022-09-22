@@ -4236,6 +4236,7 @@ static void sculpt_update_cache_invariants(
   int mode;
 
   ss->cache = cache;
+  ss->stroke_id++;
 
   /* Set scaling adjustment. */
   max_scale = 0.0f;
@@ -6061,6 +6062,18 @@ bool SCULPT_vertex_is_occluded(SculptSession *ss, PBVHVertRef vertex, bool origi
   BKE_pbvh_raycast(ss->pbvh, sculpt_raycast_cb, &srd, ray_start, ray_normal, srd.original);
 
   return srd.hit;
+}
+
+void SCULPT_stroke_id_ensure(Object *ob)
+{
+  SculptSession *ss = ob->sculpt;
+
+  if (!ss->attrs.stroke_id) {
+    SculptAttributeParams params = {0};
+    
+    ss->attrs.stroke_id = BKE_sculpt_attribute_ensure(
+        ob, ATTR_DOMAIN_POINT, CD_PROP_INT32, SCULPT_ATTRIBUTE_NAME(stroke_id), &params);
+  }
 }
 
 /** \} */

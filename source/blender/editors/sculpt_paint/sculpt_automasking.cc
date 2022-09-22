@@ -217,17 +217,28 @@ static float automasking_view_normal_factor(AutomaskingCache *automasking,
 static float automasking_view_occlusion_factor(AutomaskingCache *automasking,
                                                SculptSession *ss,
                                                PBVHVertRef vertex,
+                                               int stroke_id,
                                                AutomaskingNodeData *automask_data)
 {
-  int index = BKE_pbvh_vertex_to_index(ss->pbvh, vertex);
+  char f = *(char *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_occlusion);
 
-  char f = *(char *)SCULPT_vertex_attr_get(vertex, automasking->occlusion_attr);
-
-  if (!f) {
-    f = *(char *)SCULPT_vertex_attr_get(vertex, automasking->occlusion_attr) = SCULPT_vertex_is_occluded(ss, vertex, true) ? 2 : 1;
+  if (stroke_id != ss->stroke_id) {
+    f = *(char *)SCULPT_vertex_attr_get(
+        vertex,
+        ss->attrs.automasking_occlusion) = SCULPT_vertex_is_occluded(ss, vertex, true) ? 2 : 1;
   }
 
   return f == 2;
+}
+
+/* Updates vertex stroke id. */
+static float automasking_factor_end(SculptSession *ss, PBVHVertRef vertex, float value)
+{
+  if (ss->attrs.stroke_id) {
+    *(int *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = ss->stroke_id;
+  }
+
+  return value;
 }
 
 float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
@@ -246,28 +257,33 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
     return *(float *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_factor);
   }
 
+  int stroke_id = ss->attrs.stroke_id ?
+                      *(int *)(SCULPT_vertex_attr_get(vert, ss->attrs.stroke_id)) :
+                      -1;
+
   bool do_occlusion = (automasking->settings.flags &
                        (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL)) ==
                       (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL);
-  if (do_occlusion && automasking_view_occlusion_factor(automasking, ss, vert, automask_data)) {
-    return 0.0f;
+  if (do_occlusion &&
+      automasking_view_occlusion_factor(automasking, ss, vert, stroke_id, automask_data)) {
+    return automasking_factor_end(ss, vert, 0.0f);
   }
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
     if (!SCULPT_vertex_has_face_set(ss, vert, automasking->settings.initial_face_set)) {
-      return 0.0f;
+      return automasking_factor_end(ss, vert, 0.0f);
     }
   }
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_BOUNDARY_EDGES) {
     if (SCULPT_vertex_is_boundary(ss, vert)) {
-      return 0.0f;
+      return automasking_factor_end(ss, vert, 0.0f);
     }
   }
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS) {
     if (!SCULPT_vertex_has_unique_face_set(ss, vert)) {
-      return 0.0f;
+      return automasking_factor_end(ss, vert, 0.0f);
     }
   }
 
@@ -283,7 +299,7 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
     mask *= automasking_view_normal_factor(automasking, ss, vert, automask_data);
   }
 
-  return mask;
+  return automasking_factor_end(ss, vert, mask);
 }
 
 void SCULPT_automasking_cache_free(AutomaskingCache *automasking)
@@ -492,12 +508,13 @@ void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automasking,
     }
     if ((int)mode & BRUSH_AUTOMASKING_VIEW_NORMAL) {
       if ((int)mode & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
-        f *= automasking_view_occlusion_factor(automasking, ss, vertex, &nodedata);
+        f *= automasking_view_occlusion_factor(automasking, ss, vertex, -1, &nodedata);
       }
 
       f *= automasking_view_normal_factor(automasking, ss, vertex, &nodedata);
     }
 
+    *(int *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = ss->stroke_id;
     *(float *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_factor) = f;
   }
 }
@@ -517,11 +534,17 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   SCULPT_boundary_info_ensure(ob);
 
   if (sculpt_automasking_mode_effective_bits(sd, brush) & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
-    SculptAttributeParams params = {0};
+    SCULPT_stroke_id_ensure(ob);
 
-    params.stroke_only = true;
-    automasking->occlusion_attr = BKE_sculpt_attribute_ensure(
-        ob, ATTR_DOMAIN_POINT, CD_PROP_INT8, ".sculpt.automasking_occlusion", &params);
+    if (!ss->attrs.automasking_occlusion) {
+      SculptAttributeParams params = {0};
+      ss->attrs.automasking_occlusion = BKE_sculpt_attribute_ensure(
+          ob,
+          ATTR_DOMAIN_POINT,
+          CD_PROP_INT8,
+          SCULPT_ATTRIBUTE_NAME(automasking_occlusion),
+          &params);
+    }
   }
 
   if (!SCULPT_automasking_needs_factors_cache(sd, brush)) {
@@ -558,8 +581,7 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
                      BRUSH_AUTOMASKING_VIEW_OCCLUSION);
 
   if (normal_bits) {
-    sculpt_normal_occlusion_automasking_fill(
-        automasking, ob, (eAutomasking_flag)normal_bits);
+    sculpt_normal_occlusion_automasking_fill(automasking, ob, (eAutomasking_flag)normal_bits);
   }
 
   if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_BOUNDARY_EDGES)) {

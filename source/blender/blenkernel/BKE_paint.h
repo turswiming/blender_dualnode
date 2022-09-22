@@ -548,10 +548,13 @@ typedef struct SculptAttributePointers {
   /* Precomputed auto-mask factor indexed by vertex, owned by the auto-masking system and
    * initialized in #SCULPT_automasking_cache_init when needed. */
   SculptAttribute *automasking_factor;
+  SculptAttribute *automasking_occlusion; /* CD_PROP_INT8. */
 
   /* BMesh */
   SculptAttribute *dyntopo_node_id_vertex;
   SculptAttribute *dyntopo_node_id_face;
+
+  SculptAttribute *stroke_id;
 } SculptAttributePointers;
 
 typedef struct SculptSession {
@@ -744,6 +747,7 @@ typedef struct SculptSession {
   char *last_paint_canvas_key;
 
   float last_normal[3];
+  int stroke_id;
 } SculptSession;
 
 void BKE_sculptsession_free(struct Object *ob);

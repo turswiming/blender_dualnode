@@ -970,6 +970,7 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         col.prop(sculpt, "use_automasking_topology", text="Topology")
         col.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
         col.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
+        col.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
         col.prop(sculpt, "use_automasking_start_normal", text="Area Normal")
         col.prop(sculpt, "use_automasking_view_normal", text="View Normal")
         

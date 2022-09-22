@@ -295,6 +295,8 @@ static int sculpt_color_filter_modal(bContext *C, wmOperator *op, const wmEvent 
     return OPERATOR_RUNNING_MODAL;
   }
 
+  ss->stroke_id++;
+
   const float len = event->prev_press_xy[0] - event->xy[0];
   filter_strength = filter_strength * -len * 0.001f;
 
@@ -336,6 +338,8 @@ static int sculpt_color_filter_invoke(bContext *C, wmOperator *op, const wmEvent
   if (v3d->shading.type == OB_SOLID) {
     v3d->shading.color_type = V3D_SHADING_VERTEX_COLOR;
   }
+
+  ss->stroke_id++;
 
   const bool use_automasking = SCULPT_is_automasking_enabled(sd, ss, NULL);
   if (use_automasking) {

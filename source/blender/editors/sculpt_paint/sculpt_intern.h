@@ -405,7 +405,6 @@ typedef struct AutomaskingSettings {
 
 typedef struct AutomaskingCache {
   AutomaskingSettings settings;
-  SculptAttribute *occlusion_attr;
 } AutomaskingCache;
 
 typedef struct FilterCache {
@@ -1878,6 +1877,8 @@ BLI_INLINE bool SCULPT_tool_is_face_sets(int tool)
 {
   return ELEM(tool, SCULPT_TOOL_DRAW_FACE_SETS);
 }
+
+void SCULPT_stroke_id_ensure(struct Object *ob);
 
 #ifdef __cplusplus
 }
