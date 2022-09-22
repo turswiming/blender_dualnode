@@ -1086,6 +1086,7 @@ typedef enum eFileSel_File_Types {
   FILE_TYPE_DIR = (1 << 30),
   FILE_TYPE_BLENDERLIB = (1u << 31),
 } eFileSel_File_Types;
+ENUM_OPERATORS(eFileSel_File_Types, FILE_TYPE_BLENDERLIB);
 
 /** Selection Flags in filesel: struct direntry, unsigned char selflag. */
 typedef enum eDirEntry_SelectFlag {
@@ -1318,6 +1319,8 @@ typedef enum eSpaceImage_Flag {
   SI_SHOW_R = (1 << 27),
   SI_SHOW_G = (1 << 28),
   SI_SHOW_B = (1 << 29),
+
+  SI_GRID_OVER_IMAGE = (1 << 30),
 } eSpaceImage_Flag;
 
 typedef enum eSpaceImageOverlay_Flag {
