@@ -134,7 +134,7 @@ void seq_imbuf_to_sequencer_space(Scene *scene, ImBuf *ibuf, bool make_float)
       /* We perform conversion to a float buffer so we don't worry about
        * precision loss.
        */
-      imb_addrectfloatImBuf(ibuf);
+      imb_addrectfloatImBuf(ibuf, 4);
       IMB_colormanagement_transform_from_byte_threaded(ibuf->rect_float,
                                                        (unsigned char *)ibuf->rect,
                                                        ibuf->x,
@@ -1352,7 +1352,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
    * find render).
    * However, when called from within the UI (image preview in sequencer)
    * we do want to use scene Render, that way the render result is defined
-   * for display in render/imagewindow
+   * for display in render/image-window
    *
    * Hmm, don't see, why we can't do that all the time,
    * and since G.is_rendering is uhm, gone... (Peter)
@@ -1447,8 +1447,8 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
 
   if ((sequencer_view3d_fn && do_seq_gl && camera) && is_thread_main) {
     char err_out[256] = "unknown";
-    const int width = (scene->r.xsch * scene->r.size) / 100;
-    const int height = (scene->r.ysch * scene->r.size) / 100;
+    int width, height;
+    BKE_render_resolution(&scene->r, false, &width, &height);
     const char *viewname = BKE_scene_multiview_render_view_name_get(&scene->r, context->view_id);
 
     unsigned int draw_flags = V3D_OFSDRAW_NONE;
@@ -1506,8 +1506,16 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
         re = RE_NewSceneRender(scene);
       }
 
-      RE_RenderFrame(
-          re, context->bmain, scene, have_comp ? NULL : view_layer, camera, frame, 0.0f, false);
+      const float subframe = frame - floorf(frame);
+
+      RE_RenderFrame(re,
+                     context->bmain,
+                     scene,
+                     have_comp ? NULL : view_layer,
+                     camera,
+                     floorf(frame),
+                     subframe,
+                     false);
 
       /* restore previous state after it was toggled on & off by RE_RenderFrame */
       G.is_rendering = is_rendering;

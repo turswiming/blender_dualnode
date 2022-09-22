@@ -321,6 +321,7 @@ typedef struct wmNotifier {
 
 /* category */
 #define NOTE_CATEGORY 0xFF000000
+#define NOTE_CATEGORY_TAG_CLEARED NOTE_CATEGORY
 #define NC_WM (1 << 24)
 #define NC_WINDOW (2 << 24)
 #define NC_WORKSPACE (3 << 24)
@@ -415,8 +416,8 @@ typedef struct wmNotifier {
 #define ND_POINTCACHE (28 << 16)
 #define ND_PARENT (29 << 16)
 #define ND_LOD (30 << 16)
-#define ND_DRAW_RENDER_VIEWPORT \
-  (31 << 16) /* for camera & sequencer viewport update, also /w NC_SCENE */
+/** For camera & sequencer viewport update, also with #NC_SCENE. */
+#define ND_DRAW_RENDER_VIEWPORT (31 << 16)
 #define ND_SHADERFX (32 << 16)
 /* For updating motion paths in 3dview. */
 #define ND_DRAW_ANIMVIZ (33 << 16)
@@ -669,7 +670,6 @@ typedef struct wmTabletData {
  *
  * - Mouse-wheel events are excluded even though they generate #KM_PRESS
  *   as clicking and dragging don't make sense for mouse wheel events.
- *
  */
 typedef struct wmEvent {
   struct wmEvent *next, *prev;
@@ -683,13 +683,11 @@ typedef struct wmEvent {
   /** Region relative mouse position (name convention before Blender 2.5). */
   int mval[2];
   /**
-   * From, ghost if utf8 is enabled for the platform,
-   * #BLI_str_utf8_size() must _always_ be valid, check
-   * when assigning s we don't need to check on every access after.
+   * A single UTF8 encoded character.
+   * #BLI_str_utf8_size() must _always_ return a valid value,
+   * check when assigning so we don't need to check on every access after.
    */
   char utf8_buf[6];
-  /** From ghost, fallback if utf8 isn't set. */
-  char ascii;
 
   /** Modifier states: #KM_SHIFT, #KM_CTRL, #KM_ALT & #KM_OSKEY. */
   uint8_t modifier;

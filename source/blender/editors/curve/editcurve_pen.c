@@ -1532,7 +1532,7 @@ wmKeyMap *curve_pen_modal_keymap(wmKeyConfig *keyconf)
 
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "Curve Pen Modal Map");
 
-  /* This function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return NULL;
   }
@@ -1622,7 +1622,7 @@ static int curve_pen_modal(bContext *C, wmOperator *op, const wmEvent *event)
     }
   }
 
-  if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+  if (ISMOUSE_MOTION(event->type)) {
     /* Check if dragging */
     if (!cpd->dragging && WM_event_drag_test(event, event->prev_press_xy)) {
       cpd->dragging = true;

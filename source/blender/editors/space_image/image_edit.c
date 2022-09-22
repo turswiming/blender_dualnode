@@ -18,8 +18,10 @@
 #include "BKE_editmesh.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
+#include "BKE_scene.h"
 
 #include "IMB_imbuf_types.h"
 
@@ -212,13 +214,7 @@ void ED_space_image_get_size(SpaceImage *sima, int *r_width, int *r_height)
   }
   else if (sima->image && sima->image->type == IMA_TYPE_R_RESULT && scene) {
     /* not very important, just nice */
-    *r_width = (scene->r.xsch * scene->r.size) / 100;
-    *r_height = (scene->r.ysch * scene->r.size) / 100;
-
-    if ((scene->r.mode & R_BORDER) && (scene->r.mode & R_CROP)) {
-      *r_width *= BLI_rctf_size_x(&scene->r.border);
-      *r_height *= BLI_rctf_size_y(&scene->r.border);
-    }
+    BKE_render_resolution(&scene->r, true, r_width, r_height);
   }
   /* I know a bit weak... but preview uses not actual image size */
   // XXX else if (image_preview_active(sima, r_width, r_height));
@@ -475,8 +471,10 @@ bool ED_space_image_maskedit_poll(bContext *C)
   SpaceImage *sima = CTX_wm_space_image(C);
 
   if (sima) {
+    Scene *scene = CTX_data_scene(C);
     ViewLayer *view_layer = CTX_data_view_layer(C);
-    Object *obedit = OBEDIT_FROM_VIEW_LAYER(view_layer);
+    BKE_view_layer_synced_ensure(scene, view_layer);
+    Object *obedit = BKE_view_layer_edit_object_get(view_layer);
     return ED_space_image_check_show_maskedit(sima, obedit);
   }
 

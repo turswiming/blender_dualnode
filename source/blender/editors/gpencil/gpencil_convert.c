@@ -588,7 +588,7 @@ static void gpencil_stroke_path_animation(bContext *C,
   }
 
   /* As we used INSERTKEY_FAST mode, we need to recompute all curve's handles now */
-  calchandles_fcurve(fcu);
+  BKE_fcurve_handles_recalc(fcu);
 
   WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
 
@@ -1303,6 +1303,7 @@ static void gpencil_layer_to_curve(bContext *C,
   ob = BKE_object_add_only_object(bmain, OB_CURVES_LEGACY, gpl->info);
   cu = ob->data = BKE_curve_add(bmain, gpl->info, OB_CURVES_LEGACY);
   BKE_collection_object_add(bmain, collection, ob);
+  BKE_view_layer_synced_ensure(scene, view_layer);
   base_new = BKE_view_layer_base_find(view_layer, ob);
   DEG_relations_tag_update(bmain); /* added object */
 

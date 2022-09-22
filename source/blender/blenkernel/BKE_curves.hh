@@ -11,6 +11,7 @@
 
 #include <mutex>
 
+#include "BLI_float3x3.hh"
 #include "BLI_float4x4.hh"
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_index_mask.hh"
@@ -21,6 +22,7 @@
 #include "BLI_virtual_array.hh"
 
 #include "BKE_attribute.hh"
+#include "BKE_attribute_math.hh"
 
 namespace blender::bke {
 
@@ -96,7 +98,7 @@ class CurvesGeometryRuntime {
   mutable Span<float3> evaluated_positions_span;
 
   /**
-   * Cache of lengths along each evaluated curve for for each evaluated point. If a curve is
+   * Cache of lengths along each evaluated curve for each evaluated point. If a curve is
    * cyclic, it needs one more length value to correspond to the last segment, so in order to
    * make slicing this array for a curve fast, an extra float is stored for every curve.
    */
@@ -149,10 +151,21 @@ class CurvesGeometry : public ::CurvesGeometry {
    * Accessors.
    */
 
+  /**
+   * The total number of control points in all curves.
+   */
   int points_num() const;
+  /**
+   * The number of curves in the data-block.
+   */
   int curves_num() const;
   IndexRange points_range() const;
   IndexRange curves_range() const;
+
+  /**
+   * Number of control points in the indexed curve.
+   */
+  int points_num_for_curve(const int index) const;
 
   /**
    * The index of the first point in every curve. The size of this span is one larger than the
@@ -205,7 +218,7 @@ class CurvesGeometry : public ::CurvesGeometry {
 
   /**
    * How many evaluated points to create for each segment when evaluating Bezier,
-   * Catmull Rom, and NURBS curves. On the curve domain.
+   * Catmull Rom, and NURBS curves. On the curve domain. Values must be one or greater.
    */
   VArray<int> resolution() const;
   /** Mutable access to curve resolution. Call #tag_topology_changed after changes. */
@@ -337,12 +350,14 @@ class CurvesGeometry : public ::CurvesGeometry {
   /** Calculates the data described by #evaluated_lengths_for_curve if necessary. */
   void ensure_evaluated_lengths() const;
 
+  void ensure_can_interpolate_to_evaluated() const;
+
   /**
    * Evaluate a generic data to the standard evaluated points of a specific curve,
    * defined by the resolution attribute or other factors, depending on the curve type.
    *
    * \warning This function expects offsets to the evaluated points for each curve to be
-   * calculated. That can be ensured with #ensure_evaluated_offsets.
+   * calculated. That can be ensured with #ensure_can_interpolate_to_evaluated.
    */
   void interpolate_to_evaluated(int curve_index, GSpan src, GMutableSpan dst) const;
   /**
@@ -385,8 +400,6 @@ class CurvesGeometry : public ::CurvesGeometry {
 
   void calculate_bezier_auto_handles();
 
-  void update_customdata_pointers();
-
   void remove_points(IndexMask points_to_delete);
   void remove_curves(IndexMask curves_to_delete);
 
@@ -414,6 +427,38 @@ class CurvesGeometry : public ::CurvesGeometry {
   {
     return this->adapt_domain(GVArray(varray), from, to).typed<T>();
   }
+};
+
+/**
+ * Used to propagate deformation data through modifier evaluation so that sculpt tools can work on
+ * evaluated data.
+ */
+class CurvesEditHints {
+ public:
+  /**
+   * Original data that the edit hints below are meant to be used for.
+   */
+  const Curves &curves_id_orig;
+  /**
+   * Evaluated positions for the points in #curves_orig. If this is empty, the positions from the
+   * evaluated #Curves should be used if possible.
+   */
+  std::optional<Array<float3>> positions;
+  /**
+   * Matrices which transform point movement vectors from original data to corresponding movements
+   * of evaluated data.
+   */
+  std::optional<Array<float3x3>> deform_mats;
+
+  CurvesEditHints(const Curves &curves_id_orig) : curves_id_orig(curves_id_orig)
+  {
+  }
+
+  /**
+   * The edit hints have to correspond to the original curves, i.e. the number of deformed points
+   * is the same as the number of original points.
+   */
+  bool is_valid() const;
 };
 
 namespace curves {
@@ -493,6 +538,16 @@ bool segment_is_vector(Span<int8_t> handle_types_left,
                        int segment_index);
 
 /**
+ * True if the Bezier curve contains polygonal segments of HandleType::BEZIER_HANDLE_VECTOR.
+ *
+ * \param num_curve_points: Number of points in the curve.
+ * \param evaluated_size: Number of evaluated points in the curve.
+ * \param cyclic: If curve is cyclic.
+ * \param resolution: Curve resolution.
+ */
+bool has_vector_handles(int num_curve_points, int64_t evaluated_size, bool cyclic, int resolution);
+
+/**
  * Return true if the curve's last cyclic segment has a vector type.
  * This only makes a difference in the shape of cyclic curves.
  */
@@ -520,7 +575,7 @@ void calculate_evaluated_offsets(Span<int8_t> handle_types_left,
                                  int resolution,
                                  MutableSpan<int> evaluated_offsets);
 
-/** See #insert. */
+/** Knot insertion result, see #insert. */
 struct Insertion {
   float3 handle_prev;
   float3 left_handle;
@@ -530,8 +585,12 @@ struct Insertion {
 };
 
 /**
- * Compute the Bezier segment insertion for the given parameter on the segment, returning
- * the position and handles of the new point and the updated existing handle positions.
+ * Compute the insertion of a control point and handles in a Bezier segment without changing its
+ * shape.
+ * \param parameter: Factor in from 0 to 1 defining the insertion point within the segment.
+ * \return Inserted point parameters including position, and both new and updated handles for
+ * neighboring control points.
+ *
  * <pre>
  *           handle_prev         handle_next
  *                x-----------------x
@@ -650,6 +709,29 @@ void interpolate_to_evaluated(const GSpan src,
                               const Span<int> evaluated_offsets,
                               GMutableSpan dst);
 
+void calculate_basis(const float parameter, float4 &r_weights);
+
+/**
+ * Interpolate the control point values for the given parameter on the piecewise segment.
+ * \param a: Value associated with the first control point influencing the segment.
+ * \param d: Value associated with the fourth control point.
+ * \param parameter: Parameter in range [0, 1] to compute the interpolation for.
+ */
+template<typename T>
+T interpolate(const T &a, const T &b, const T &c, const T &d, const float parameter)
+{
+  BLI_assert(0.0f <= parameter && parameter <= 1.0f);
+  float4 n;
+  calculate_basis(parameter, n);
+  if constexpr (is_same_any_v<T, float, float2, float3>) {
+    /* Save multiplications by adjusting weights after mix. */
+    return 0.5f * attribute_math::mix4<T>(n, a, b, c, d);
+  }
+  else {
+    return attribute_math::mix4<T>(n * 0.5f, a, b, c, d);
+  }
+}
+
 }  // namespace catmull_rom
 
 /** \} */
@@ -735,6 +817,12 @@ Curves *curves_new_nomain(CurvesGeometry curves);
  */
 Curves *curves_new_nomain_single(int points_num, CurveType type);
 
+/**
+ * Copy data from #src to #dst, except the geometry data in #CurvesGeometry. Typically used to
+ * copy high-level parameters when a geometry-altering operation creates a new curves data-block.
+ */
+void curves_copy_parameters(const Curves &src, Curves &dst);
+
 std::array<int, CURVE_TYPES_NUM> calculate_type_counts(const VArray<int8_t> &types);
 
 /* -------------------------------------------------------------------- */
@@ -756,6 +844,16 @@ inline IndexRange CurvesGeometry::points_range() const
 inline IndexRange CurvesGeometry::curves_range() const
 {
   return IndexRange(this->curves_num());
+}
+
+inline int CurvesGeometry::points_num_for_curve(const int index) const
+{
+  BLI_assert(this->curve_num > 0);
+  BLI_assert(this->curve_num > index);
+  BLI_assert(this->curve_offsets != nullptr);
+  const int offset = this->curve_offsets[index];
+  const int offset_next = this->curve_offsets[index + 1];
+  return offset_next - offset;
 }
 
 inline bool CurvesGeometry::is_single_type(const CurveType type) const
@@ -784,6 +882,7 @@ inline IndexRange CurvesGeometry::points_for_curve(const int index) const
 {
   /* Offsets are not allocated when there are no curves. */
   BLI_assert(this->curve_num > 0);
+  BLI_assert(this->curve_num > index);
   BLI_assert(this->curve_offsets != nullptr);
   const int offset = this->curve_offsets[index];
   const int offset_next = this->curve_offsets[index + 1];
@@ -856,11 +955,13 @@ inline float CurvesGeometry::evaluated_length_total_for_curve(const int curve_in
 
 /** \} */
 
+namespace curves {
+
 /* -------------------------------------------------------------------- */
 /** \name Bezier Inline Methods
  * \{ */
 
-namespace curves::bezier {
+namespace bezier {
 
 inline bool point_is_sharp(const Span<int8_t> handle_types_left,
                            const Span<int8_t> handle_types_right,
@@ -880,14 +981,24 @@ inline bool segment_is_vector(const int8_t left, const int8_t right)
   return segment_is_vector(HandleType(left), HandleType(right));
 }
 
+inline bool has_vector_handles(const int num_curve_points,
+                               const int64_t evaluated_size,
+                               const bool cyclic,
+                               const int resolution)
+{
+  return evaluated_size - !cyclic != (int64_t)segments_num(num_curve_points, cyclic) * resolution;
+}
+
 inline float3 calculate_vector_handle(const float3 &point, const float3 &next_point)
 {
   return math::interpolate(point, next_point, 1.0f / 3.0f);
 }
 
+}  // namespace bezier
+
 /** \} */
 
-}  // namespace curves::bezier
+}  // namespace curves
 
 struct CurvesSurfaceTransforms {
   float4x4 curves_to_world;

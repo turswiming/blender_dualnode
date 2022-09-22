@@ -84,6 +84,33 @@ void fill_points(const CurvesGeometry &curves,
   });
 }
 
+void fill_points(const CurvesGeometry &curves,
+                 Span<IndexRange> curve_ranges,
+                 GPointer value,
+                 GMutableSpan dst)
+{
+  BLI_assert(*value.type() == dst.type());
+  const CPPType &type = dst.type();
+  threading::parallel_for(curve_ranges.index_range(), 512, [&](IndexRange range) {
+    for (const IndexRange range : curve_ranges.slice(range)) {
+      const IndexRange points = curves.points_for_curves(range);
+      type.fill_assign_n(value.get(), dst.slice(points).data(), points.size());
+    }
+  });
+}
+
+bke::CurvesGeometry copy_only_curve_domain(const bke::CurvesGeometry &src_curves)
+{
+  bke::CurvesGeometry dst_curves(0, src_curves.curves_num());
+  CustomData_copy(&src_curves.curve_data,
+                  &dst_curves.curve_data,
+                  CD_MASK_ALL,
+                  CD_DUPLICATE,
+                  src_curves.curves_num());
+  dst_curves.runtime->type_counts = src_curves.runtime->type_counts;
+  return dst_curves;
+}
+
 IndexMask indices_for_type(const VArray<int8_t> &types,
                            const std::array<int, CURVE_TYPES_NUM> &type_counts,
                            const CurveType type,

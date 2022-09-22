@@ -84,11 +84,13 @@ struct BMElem *EDBM_elem_from_selectmode(struct BMEditMesh *em,
 int EDBM_elem_to_index_any(struct BMEditMesh *em, struct BMElem *ele);
 struct BMElem *EDBM_elem_from_index_any(struct BMEditMesh *em, uint index);
 
-int EDBM_elem_to_index_any_multi(struct ViewLayer *view_layer,
+int EDBM_elem_to_index_any_multi(const struct Scene *scene,
+                                 struct ViewLayer *view_layer,
                                  struct BMEditMesh *em,
                                  struct BMElem *ele,
                                  int *r_object_index);
-struct BMElem *EDBM_elem_from_index_any_multi(struct ViewLayer *view_layer,
+struct BMElem *EDBM_elem_from_index_any_multi(const struct Scene *scene,
+                                              struct ViewLayer *view_layer,
                                               uint object_index,
                                               uint elem_index,
                                               struct Object **r_obedit);
@@ -308,15 +310,15 @@ void MESH_OT_mark_freestyle_face(struct wmOperatorType *ot);
 
 void MESH_OT_uv_texture_add(struct wmOperatorType *ot);
 void MESH_OT_uv_texture_remove(struct wmOperatorType *ot);
-void MESH_OT_vertex_color_add(struct wmOperatorType *ot);
-void MESH_OT_vertex_color_remove(struct wmOperatorType *ot);
-void MESH_OT_sculpt_vertex_color_add(struct wmOperatorType *ot);
-void MESH_OT_sculpt_vertex_color_remove(struct wmOperatorType *ot);
 void MESH_OT_customdata_mask_clear(struct wmOperatorType *ot);
 void MESH_OT_customdata_skin_add(struct wmOperatorType *ot);
 void MESH_OT_customdata_skin_clear(struct wmOperatorType *ot);
 void MESH_OT_customdata_custom_splitnormals_add(struct wmOperatorType *ot);
 void MESH_OT_customdata_custom_splitnormals_clear(struct wmOperatorType *ot);
+void MESH_OT_customdata_bevel_weight_vertex_add(struct wmOperatorType *ot);
+void MESH_OT_customdata_bevel_weight_vertex_clear(struct wmOperatorType *ot);
+void MESH_OT_customdata_bevel_weight_edge_add(struct wmOperatorType *ot);
+void MESH_OT_customdata_bevel_weight_edge_clear(struct wmOperatorType *ot);
 
 #ifdef __cplusplus
 }

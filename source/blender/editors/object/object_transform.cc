@@ -321,7 +321,7 @@ static int object_clear_transform_generic_exec(bContext *C,
     BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
     xcs = ED_object_xform_skip_child_container_create();
     ED_object_xform_skip_child_container_item_ensure_from_array(
-        xcs, view_layer, objects.data(), objects.size());
+        xcs, scene, view_layer, objects.data(), objects.size());
   }
   if (use_transform_data_origin) {
     BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
@@ -1033,7 +1033,9 @@ static int apply_objects_internal(bContext *C,
         zero_v3(ob->rot);
         zero_v3(ob->drot);
         unit_qt(ob->quat);
+        unit_qt(ob->dquat);
         unit_axis_angle(ob->rotAxis, &ob->rotAngle);
+        unit_axis_angle(ob->drotAxis, &ob->drotAngle);
       }
     }
 
@@ -1601,6 +1603,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
                     }
                   }
                 }
+                BKE_gpencil_stroke_geometry_update(gpd, gps);
               }
             }
           }
@@ -2222,7 +2225,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
 
   bool is_finished = false;
 
-  if (ISMOUSE(xfd->init_event)) {
+  if (ISMOUSE_BUTTON(xfd->init_event)) {
     if ((event->type == xfd->init_event) && (event->val == KM_RELEASE)) {
       is_finished = true;
     }

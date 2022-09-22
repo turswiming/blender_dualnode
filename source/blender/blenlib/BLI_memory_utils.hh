@@ -195,27 +195,6 @@ template<typename T> void initialized_move_n(T *src, int64_t n, T *dst)
 }
 
 /**
- * Move n values from src to dst starting with the last value.
- *
- * Exception Safety: Basic.
- *
- * Before:
- *  src: initialized
- *  dst: initialized
- * After:
- *  src: initialized, moved-from
- *  dst: initialized
- */
-template<typename T> void initialized_reversed_move_n(T *src, int64_t n, T *dst)
-{
-  BLI_assert(n >= 0);
-
-  for (int64_t i = n - 1; i >= 0; i--) {
-    dst[i] = std::move(src[i]);
-  }
-}
-
-/**
  * Move n values from src to dst.
  *
  * Exception Safety: Basic.
@@ -240,6 +219,27 @@ template<typename T> void uninitialized_move_n(T *src, int64_t n, T *dst)
   catch (...) {
     destruct_n(dst, current);
     throw;
+  }
+}
+
+/**
+ * Move n values from src to dst starting with the last value.
+ *
+ * Exception Safety: Basic.
+ *
+ * Before:
+ *  src: initialized
+ *  dst: initialized
+ * After:
+ *  src: initialized, moved-from
+ *  dst: initialized
+ */
+template<typename T> void initialized_reversed_move_n(T *src, int64_t n, T *dst)
+{
+  BLI_assert(n >= 0);
+
+  for (int64_t i = n - 1; i >= 0; i--) {
+    dst[i] = std::move(src[i]);
   }
 }
 
@@ -354,8 +354,7 @@ template<typename T> using destruct_ptr = std::unique_ptr<T, DestructValueAtAddr
  * not be initialized by the default constructor.
  */
 template<size_t Size, size_t Alignment> class AlignedBuffer {
-  struct Empty {
-  };
+  struct Empty {};
   struct alignas(Alignment) Sized {
     /* Don't create an empty array. This causes problems with some compilers. */
     std::byte buffer_[Size > 0 ? Size : 1];
@@ -485,8 +484,7 @@ class alignas(ReservedAlignment) DynamicStackBuffer {
  * This can be used by container constructors. A parameter of this type should be used to indicate
  * that the constructor does not construct the elements.
  */
-class NoInitialization {
-};
+class NoInitialization {};
 
 /**
  * This can be used to mark a constructor of an object that does not throw exceptions. Other
@@ -494,8 +492,7 @@ class NoInitialization {
  * With this, the destructor of the object will be called, even when the remaining constructor
  * throws.
  */
-class NoExceptConstructor {
-};
+class NoExceptConstructor {};
 
 /**
  * Helper variable that checks if a pointer type can be converted into another pointer type without

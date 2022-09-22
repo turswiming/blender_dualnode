@@ -3,6 +3,8 @@ import bpy
 from bpy.types import Menu, Panel, UIList
 from rna_prop_ui import PropertyPanel
 
+from bpy.app.translations import pgettext_tip as tip_
+
 
 class MESH_MT_vertex_group_context_menu(Menu):
     bl_label = "Vertex Group Specials"
@@ -58,7 +60,12 @@ class MESH_MT_shape_key_context_menu(Menu):
         layout.operator("object.join_shapes")
         layout.operator("object.shape_key_transfer")
         layout.separator()
-        layout.operator("object.shape_key_remove", icon='X', text="Delete All Shape Keys").all = True
+        op = layout.operator("object.shape_key_remove", icon='X', text="Delete All Shape Keys")
+        op.all = True
+        op.apply_mix = False
+        op = layout.operator("object.shape_key_remove", text="Apply All Shape Keys")
+        op.all = True
+        op.apply_mix = True
         layout.separator()
         layout.operator("object.shape_key_move", icon='TRIA_UP_BAR', text="Move to Top").type = 'TOP'
         layout.operator("object.shape_key_move", icon='TRIA_DOWN_BAR', text="Move to Bottom").type = 'BOTTOM'
@@ -486,11 +493,19 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
         else:
             col.operator("mesh.customdata_custom_splitnormals_add", icon='ADD')
 
+        if me.has_bevel_weight_edge:
+            col.operator("mesh.customdata_bevel_weight_edge_clear", icon='X')
+        else:
+            col.operator("mesh.customdata_bevel_weight_edge_add", icon='ADD')
+
+        if me.has_bevel_weight_vertex:
+            col.operator("mesh.customdata_bevel_weight_vertex_clear", icon='X')
+        else:
+            col.operator("mesh.customdata_bevel_weight_vertex_add", icon='ADD')
+
         col = layout.column(heading="Store")
 
         col.enabled = obj is not None and obj.mode != 'EDIT'
-        col.prop(me, "use_customdata_vertex_bevel", text="Vertex Bevel Weight")
-        col.prop(me, "use_customdata_edge_bevel", text="Edge Bevel Weight")
         col.prop(me, "use_customdata_vertex_crease", text="Vertex Crease")
         col.prop(me, "use_customdata_edge_crease", text="Edge Crease")
 
@@ -573,7 +588,7 @@ class DATA_PT_mesh_attributes(MeshButtonsPanel, Panel):
         colliding_names = []
         for collection in (
                 # Built-in names.
-                {"position": None, "material_index": None, "shade_smooth": None, "normal": None, "crease": None},
+                {"position": None, "shade_smooth": None, "normal": None, "crease": None},
                 mesh.attributes,
                 mesh.uv_layers,
                 ob.vertex_groups,
@@ -587,7 +602,7 @@ class DATA_PT_mesh_attributes(MeshButtonsPanel, Panel):
         if not colliding_names:
             return
 
-        layout.label(text="Name collisions: " + ", ".join(set(colliding_names)), icon='ERROR')
+        layout.label(text=tip_("Name collisions: ") + ", ".join(set(colliding_names)), icon='ERROR')
 
 
 class ColorAttributesListBase():

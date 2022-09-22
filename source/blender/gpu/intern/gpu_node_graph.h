@@ -35,6 +35,7 @@ typedef enum eGPUDataSource {
   GPU_SOURCE_TEX,
   GPU_SOURCE_TEX_TILED_MAPPING,
   GPU_SOURCE_FUNCTION_CALL,
+  GPU_SOURCE_CRYPTOMATTE,
 } eGPUDataSource;
 
 typedef enum {
@@ -46,6 +47,7 @@ typedef enum {
   GPU_NODE_LINK_IMAGE,
   GPU_NODE_LINK_IMAGE_TILED,
   GPU_NODE_LINK_IMAGE_TILED_MAPPING,
+  GPU_NODE_LINK_IMAGE_SKY,
   GPU_NODE_LINK_OUTPUT,
   GPU_NODE_LINK_UNIFORM,
   GPU_NODE_LINK_DIFFERENTIATE_FLOAT_FN,
@@ -59,6 +61,7 @@ typedef enum {
   GPU_NODE_TAG_THICKNESS = (1 << 3),
   GPU_NODE_TAG_AOV = (1 << 4),
   GPU_NODE_TAG_FUNCTION = (1 << 5),
+  GPU_NODE_TAG_COMPOSITOR = (1 << 6),
 } eGPUNodeTag;
 
 ENUM_OPERATORS(eGPUNodeTag, GPU_NODE_TAG_FUNCTION)
@@ -158,6 +161,8 @@ typedef struct GPUNodeGraph {
   ListBase outlink_aovs;
   /* List of GPUNodeGraphFunctionLink */
   ListBase material_functions;
+  /* List of GPUNodeGraphOutputLink */
+  ListBase outlink_compositor;
 
   /* Requested attributes and textures. */
   ListBase attributes;
@@ -193,6 +198,11 @@ struct GPUTexture **gpu_material_ramp_texture_row_set(struct GPUMaterial *mat,
                                                       int size,
                                                       float *pixels,
                                                       float *row);
+/**
+ * Returns the address of the future pointer to sky_tex
+ */
+struct GPUTexture **gpu_material_sky_texture_layer_set(
+    struct GPUMaterial *mat, int width, int height, const float *pixels, float *layer);
 
 #ifdef __cplusplus
 }

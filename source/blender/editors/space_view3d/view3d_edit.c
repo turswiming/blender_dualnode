@@ -413,7 +413,9 @@ static void view3d_set_1_to_1_viewborder(Scene *scene,
 {
   RegionView3D *rv3d = region->regiondata;
   float size[2];
-  int im_width = (scene->r.size * scene->r.xsch) / 100;
+
+  int im_width, im_height;
+  BKE_render_resolution(&scene->r, false, &im_width, &im_height);
 
   ED_view3d_calc_camera_border_size(scene, depsgraph, region, v3d, rv3d, size);
 
@@ -695,7 +697,7 @@ static int drop_world_exec(bContext *C, wmOperator *op)
   id_us_plus(&world->id);
   scene->world = world;
 
-  DEG_id_tag_update(&scene->id, 0);
+  DEG_id_tag_update(&scene->id, ID_RECALC_COPY_ON_WRITE);
   DEG_relations_tag_update(bmain);
 
   WM_event_add_notifier(C, NC_SCENE | ND_WORLD, scene);

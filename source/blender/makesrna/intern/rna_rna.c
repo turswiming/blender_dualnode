@@ -160,6 +160,7 @@ const EnumPropertyItem rna_enum_property_flag_items[] = {
      0,
      "Update on every keystroke in textedit 'mode'",
      ""},
+    {PROP_PATH_OUTPUT, "OUTPUT_PATH", 0, "Output Path", ""},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -729,6 +730,12 @@ static bool rna_Property_is_library_editable_flag_get(PointerRNA *ptr)
   return (prop->flag & PROP_LIB_EXCEPTION) != 0;
 }
 
+static bool rna_Property_is_path_output_flag_get(PointerRNA *ptr)
+{
+  PropertyRNA *prop = (PropertyRNA *)ptr->data;
+  return (prop->flag & PROP_PATH_OUTPUT) != 0;
+}
+
 static int rna_Property_tags_get(PointerRNA *ptr)
 {
   return RNA_property_tags(ptr->data);
@@ -1145,7 +1152,7 @@ static bool rna_Function_no_self_get(PointerRNA *ptr)
   return !(func->flag & FUNC_NO_SELF);
 }
 
-static int rna_Function_use_self_type_get(PointerRNA *ptr)
+static bool rna_Function_use_self_type_get(PointerRNA *ptr)
 {
   FunctionRNA *func = (FunctionRNA *)ptr->data;
   return 0 != (func->flag & FUNC_USE_SELF_TYPE);
@@ -1577,7 +1584,7 @@ static int rna_property_override_diff_propptr(Main *bmain,
                 RNA_property_##_typename##_set((_ptr), (_prop), (_value)))
 
 /**
- * /return `0` is matching, `-1` if `prop_a < prop_b`, `1` if `prop_a > prop_b`. Note that for
+ * \return `0` is matching, `-1` if `prop_a < prop_b`, `1` if `prop_a > prop_b`. Note that for
  * unquantifiable properties (e.g. pointers or collections), return value should be interpreted as
  * a boolean (false == matching, true == not matching).
  */
@@ -3022,6 +3029,12 @@ static void rna_def_property(BlenderRNA *brna)
   RNA_def_property_boolean_funcs(prop, "rna_Property_is_library_editable_flag_get", NULL);
   RNA_def_property_ui_text(
       prop, "Library Editable", "Property is editable from linked instances (changes not saved)");
+
+  prop = RNA_def_property(srna, "is_path_output", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_boolean_funcs(prop, "rna_Property_is_path_output_flag_get", NULL);
+  RNA_def_property_ui_text(
+      prop, "Path Output", "Property is a filename, filepath or directory output");
 
   prop = RNA_def_property(srna, "tags", PROP_ENUM, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);

@@ -166,7 +166,11 @@ void WM_init_opengl(void)
 
   if (G.background) {
     /* Ghost is still not initialized elsewhere in background mode. */
-    wm_ghost_init(NULL);
+    wm_ghost_init_background();
+  }
+
+  if (!GPU_backend_supported()) {
+    return;
   }
 
   /* Needs to be first to have an OpenGL context bound. */
@@ -536,7 +540,7 @@ void WM_exit_ex(bContext *C, const bool do_python)
   BKE_vfont_clipboard_free();
   BKE_node_clipboard_free();
 
-#ifdef WITH_COMPOSITOR
+#ifdef WITH_COMPOSITOR_CPU
   COM_deinitialize();
 #endif
 
@@ -572,14 +576,6 @@ void WM_exit_ex(bContext *C, const bool do_python)
 
   BLF_exit();
 
-  if (opengl_is_init) {
-    DRW_opengl_context_enable_ex(false);
-    GPU_pass_cache_free();
-    GPU_exit();
-    DRW_opengl_context_disable_ex(false);
-    DRW_opengl_context_destroy();
-  }
-
   BLT_lang_free();
 
   ANIM_keyingset_infos_exit();
@@ -604,12 +600,23 @@ void WM_exit_ex(bContext *C, const bool do_python)
 
   ED_file_exit(); /* for fsmenu */
 
-  UI_exit();
+  /* Delete GPU resources and context. The UI also uses GPU resources and so
+   * is also deleted with the context active. */
+  if (opengl_is_init) {
+    DRW_opengl_context_enable_ex(false);
+    UI_exit();
+    GPU_pass_cache_free();
+    GPU_exit();
+    DRW_opengl_context_disable_ex(false);
+    DRW_opengl_context_destroy();
+  }
+  else {
+    UI_exit();
+  }
+
   BKE_blender_userdef_data_free(&U, false);
 
   RNA_exit(); /* should be after BPY_python_end so struct python slots are cleared */
-
-  GPU_backend_exit();
 
   wm_ghost_exit();
 
@@ -627,13 +634,16 @@ void WM_exit_ex(bContext *C, const bool do_python)
   BKE_sound_exit();
 
   BKE_appdir_exit();
-  CLG_exit();
 
   BKE_blender_atexit();
 
   wm_autosave_delete();
 
   BKE_tempdir_session_purge();
+
+  /* Logging cannot be called after exiting (#CLOG_INFO, #CLOG_WARN etc will crash).
+   * So postpone exiting until other sub-systems that may use logging have shut down. */
+  CLG_exit();
 }
 
 void WM_exit(bContext *C)

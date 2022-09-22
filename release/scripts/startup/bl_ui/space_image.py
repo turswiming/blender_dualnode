@@ -29,7 +29,10 @@ from bl_ui.space_toolsystem_common import (
     ToolActivePanelHelper,
 )
 
-from bpy.app.translations import pgettext_iface as iface_
+from bpy.app.translations import (
+    contexts as i18n_contexts,
+    pgettext_iface as iface_,
+)
 
 
 class ImagePaintPanel:
@@ -187,7 +190,8 @@ class IMAGE_MT_image(Menu):
         ima = sima.image
         show_render = sima.show_render
 
-        layout.operator("image.new", text="New")
+        layout.operator("image.new", text="New",
+                        text_ctxt=i18n_contexts.id_image)
         layout.operator("image.open", text="Open...", icon='FILE_FOLDER')
 
         layout.operator("image.read_viewlayers")
@@ -288,6 +292,10 @@ class IMAGE_MT_uvs_transform(Menu):
 
         layout.operator("transform.shear")
 
+        layout.separator()
+
+        layout.operator("uv.randomize_uv_transform")
+
 
 class IMAGE_MT_uvs_snap(Menu):
     bl_label = "Snap"
@@ -306,6 +314,7 @@ class IMAGE_MT_uvs_snap(Menu):
 
         layout.operator("uv.snap_cursor", text="Cursor to Pixels").target = 'PIXELS'
         layout.operator("uv.snap_cursor", text="Cursor to Selected").target = 'SELECTED'
+        layout.operator("uv.snap_cursor", text="Cursor to Origin").target = 'ORIGIN'
 
 
 class IMAGE_MT_uvs_mirror(Menu):
@@ -393,7 +402,7 @@ class IMAGE_MT_uvs(Menu):
         layout.menu("IMAGE_MT_uvs_mirror")
         layout.menu("IMAGE_MT_uvs_snap")
 
-        layout.prop_menu_enum(uv, "pixel_snap_mode")
+        layout.prop_menu_enum(uv, "pixel_round_mode")
         layout.prop(uv, "lock_bounds")
 
         layout.separator()
@@ -427,6 +436,7 @@ class IMAGE_MT_uvs(Menu):
         layout.operator("uv.minimize_stretch")
         layout.operator("uv.stitch")
         layout.menu("IMAGE_MT_uvs_align")
+        layout.operator("uv.align_rotation")
 
         layout.separator()
 
@@ -572,6 +582,11 @@ class IMAGE_MT_uvs_snap_pie(Menu):
             text="Selected to Adjacent Unselected",
             icon='RESTRICT_SELECT_OFF',
         ).target = 'ADJACENT_UNSELECTED'
+        pie.operator(
+            "uv.snap_cursor",
+            text="Cursor to Origin",
+            icon='PIVOT_CURSOR',
+        ).target = 'ORIGIN'
 
 
 class IMAGE_MT_view_pie(Menu):
@@ -1516,15 +1531,26 @@ class IMAGE_PT_overlay_guides(Panel):
 
         if overlay.show_grid_background:
             layout.use_property_split = True
+
+            col = layout.column(align=False, heading="Grid Over Image")
+            col.use_property_decorate = False
+            row = col.row(align=True)
+            sub = row.row(align=True)
+            sub.prop(uvedit, "show_grid_over_image", text="")
+            sub.active = context.space_data.image is not None
+
             col = layout.column(align=False, heading="Fixed Subdivisions")
             col.use_property_decorate = False
 
             row = col.row(align=True)
             sub = row.row(align=True)
             sub.prop(uvedit, "use_custom_grid", text="")
-            sub = sub.row(align=True)
-            sub.active = uvedit.use_custom_grid
-            sub.prop(uvedit, "custom_grid_subdivisions", text="")
+            if uvedit.use_custom_grid:
+                row = layout.row()
+                row.use_property_split = True
+                row.use_property_decorate = False
+                sub = sub.row(align=True)
+                sub.prop(uvedit, "custom_grid_subdivisions", text="")
 
             row = layout.row()
             row.use_property_split = True

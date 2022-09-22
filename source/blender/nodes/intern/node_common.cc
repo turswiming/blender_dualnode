@@ -37,6 +37,7 @@ using blender::MultiValueMap;
 using blender::Set;
 using blender::Stack;
 using blender::StringRef;
+using blender::Vector;
 
 /* -------------------------------------------------------------------- */
 /** \name Node Group
@@ -81,7 +82,9 @@ bool node_group_poll_instance(bNode *node, bNodeTree *nodetree, const char **dis
   return false;
 }
 
-bool nodeGroupPoll(bNodeTree *nodetree, bNodeTree *grouptree, const char **r_disabled_hint)
+bool nodeGroupPoll(const bNodeTree *nodetree,
+                   const bNodeTree *grouptree,
+                   const char **r_disabled_hint)
 {
   bool valid = true;
 
@@ -93,13 +96,16 @@ bool nodeGroupPoll(bNodeTree *nodetree, bNodeTree *grouptree, const char **r_dis
   }
 
   if (nodetree == grouptree) {
-    *r_disabled_hint = TIP_("Nesting a node group inside of itself is not allowed");
+    if (r_disabled_hint) {
+      *r_disabled_hint = TIP_("Nesting a node group inside of itself is not allowed");
+    }
     return false;
   }
 
-  LISTBASE_FOREACH (bNode *, node, &grouptree->nodes) {
+  LISTBASE_FOREACH (const bNode *, node, &grouptree->nodes) {
     if (node->typeinfo->poll_instance &&
-        !node->typeinfo->poll_instance(node, nodetree, r_disabled_hint)) {
+        !node->typeinfo->poll_instance(
+            const_cast<bNode *>(node), const_cast<bNodeTree *>(nodetree), r_disabled_hint)) {
       valid = false;
       break;
     }
@@ -160,6 +166,7 @@ static void group_verify_socket_list(bNodeTree &node_tree,
                                      const bool ensure_extend_socket_exists)
 {
   ListBase old_sockets = verify_lb;
+  Vector<bNodeSocket *> ordered_old_sockets = old_sockets;
   BLI_listbase_clear(&verify_lb);
 
   LISTBASE_FOREACH (const bNodeSocket *, interface_socket, &interface_sockets) {
@@ -192,6 +199,19 @@ static void group_verify_socket_list(bNodeTree &node_tree,
   /* Remove leftover sockets that didn't match the node group's interface. */
   LISTBASE_FOREACH_MUTABLE (bNodeSocket *, unused_socket, &old_sockets) {
     nodeRemoveSocket(&node_tree, &node, unused_socket);
+  }
+
+  {
+    /* Check if new sockets match the old sockets. */
+    int index;
+    LISTBASE_FOREACH_INDEX (bNodeSocket *, new_socket, &verify_lb, index) {
+      if (index < ordered_old_sockets.size()) {
+        if (ordered_old_sockets[index] != new_socket) {
+          BKE_ntree_update_tag_interface(&node_tree);
+          break;
+        }
+      }
+    }
   }
 }
 

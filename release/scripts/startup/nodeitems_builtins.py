@@ -73,7 +73,7 @@ def curve_node_items(context):
     yield NodeItem("GeometryNodeCurveLength")
     yield NodeItem("GeometryNodeCurveToMesh")
     yield NodeItem("GeometryNodeCurveToPoints")
-    yield NodeItem("GeometryNodeDeformCurvesWithSurface")
+    yield NodeItem("GeometryNodeDeformCurvesOnSurface")
     yield NodeItem("GeometryNodeFillCurve")
     yield NodeItem("GeometryNodeFilletCurve")
     yield NodeItem("GeometryNodeResampleCurve")
@@ -109,26 +109,30 @@ def mesh_node_items(context):
     if not space:
         return
     yield NodeItem("GeometryNodeDualMesh")
+    yield NodeItem("GeometryNodeEdgePathsToCurves")
+    yield NodeItem("GeometryNodeEdgePathsToSelection")
     yield NodeItem("GeometryNodeExtrudeMesh")
     yield NodeItem("GeometryNodeFlipFaces")
     yield NodeItem("GeometryNodeMeshBoolean")
     yield NodeItem("GeometryNodeMeshToCurve")
     yield NodeItem("GeometryNodeMeshToPoints")
     yield NodeItem("GeometryNodeMeshToVolume")
+    yield NodeItem("GeometryNodeScaleElements")
     yield NodeItem("GeometryNodeSplitEdges")
     yield NodeItem("GeometryNodeSubdivideMesh")
     yield NodeItem("GeometryNodeSubdivisionSurface")
     yield NodeItem("GeometryNodeTriangulate")
-    yield NodeItem("GeometryNodeScaleElements")
     yield NodeItemCustom(draw=lambda self, layout, context: layout.separator())
     yield NodeItem("GeometryNodeInputMeshEdgeAngle")
     yield NodeItem("GeometryNodeInputMeshEdgeNeighbors")
     yield NodeItem("GeometryNodeInputMeshEdgeVertices")
     yield NodeItem("GeometryNodeInputMeshFaceArea")
     yield NodeItem("GeometryNodeInputMeshFaceNeighbors")
+    yield NodeItem("GeometryNodeMeshFaceSetBoundaries")
     yield NodeItem("GeometryNodeInputMeshFaceIsPlanar")
-    yield NodeItem("GeometryNodeInputMeshIsland")
     yield NodeItem("GeometryNodeInputShadeSmooth")
+    yield NodeItem("GeometryNodeInputMeshIsland")
+    yield NodeItem("GeometryNodeInputShortestEdgePaths")
     yield NodeItem("GeometryNodeInputMeshVertexNeighbors")
     yield NodeItemCustom(draw=lambda self, layout, context: layout.separator())
     yield NodeItem("GeometryNodeSetShadeSmooth")
@@ -237,6 +241,7 @@ def point_node_items(context):
     space = context.space_data
     if not space:
         return
+    yield NodeItem("GeometryNodeDistributePointsInVolume")
     yield NodeItem("GeometryNodeDistributePointsOnFaces")
     yield NodeItem("GeometryNodePoints")
     yield NodeItem("GeometryNodePointsToVertices")
@@ -256,8 +261,9 @@ def node_group_items(context):
 
     yield NodeItemCustom(draw=group_tools_draw)
 
-    yield NodeItem("NodeGroupInput", poll=group_input_output_item_poll)
-    yield NodeItem("NodeGroupOutput", poll=group_input_output_item_poll)
+    if group_input_output_item_poll(context):
+        yield NodeItem("NodeGroupInput")
+        yield NodeItem("NodeGroupOutput")
 
     ntree = space.edit_tree
     if not ntree:
@@ -421,7 +427,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeTexWhiteNoise"),
     ]),
     ShaderNodeCategory("SH_NEW_OP_COLOR", "Color", items=[
-        NodeItem("ShaderNodeMixRGB"),
+        NodeItem("ShaderNodeMix", label="Mix Color", settings={"data_type": "'RGBA'"}),
         NodeItem("ShaderNodeRGBCurve"),
         NodeItem("ShaderNodeInvert"),
         NodeItem("ShaderNodeLightFalloff"),
@@ -445,6 +451,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeFloatCurve"),
         NodeItem("ShaderNodeClamp"),
         NodeItem("ShaderNodeMath"),
+        NodeItem("ShaderNodeMix"),
         NodeItem("ShaderNodeValToRGB"),
         NodeItem("ShaderNodeRGBToBW"),
         NodeItem("ShaderNodeShaderToRGB", poll=object_eevee_shader_nodes_poll),
@@ -648,7 +655,7 @@ geometry_node_categories = [
         NodeItem("GeometryNodeStoreNamedAttribute"),
     ]),
     GeometryNodeCategory("GEO_COLOR", "Color", items=[
-        NodeItem("ShaderNodeMixRGB"),
+        NodeItem("ShaderNodeMix", label="Mix Color", settings={"data_type": "'RGBA'"}),
         NodeItem("ShaderNodeRGBCurve"),
         NodeItem("ShaderNodeValToRGB"),
         NodeItem("FunctionNodeSeparateColor"),
@@ -716,6 +723,7 @@ geometry_node_categories = [
         NodeItem("FunctionNodeBooleanMath"),
         NodeItem("FunctionNodeRotateEuler"),
         NodeItem("FunctionNodeCompare"),
+        NodeItem("ShaderNodeMix"),
         NodeItem("FunctionNodeFloatToInt"),
         NodeItem("GeometryNodeSwitch"),
         NodeItem("FunctionNodeRandomValue"),

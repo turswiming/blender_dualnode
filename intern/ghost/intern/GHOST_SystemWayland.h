@@ -31,15 +31,21 @@
 
 class GHOST_WindowWayland;
 
-struct display_t;
+struct GWL_Display;
 
-bool ghost_wl_output_own(const struct wl_output *output);
-void ghost_wl_output_tag(struct wl_output *output);
-struct output_t *ghost_wl_output_user_data(struct wl_output *output);
+bool ghost_wl_output_own(const struct wl_output *wl_output);
+void ghost_wl_output_tag(struct wl_output *wl_output);
+struct GWL_Output *ghost_wl_output_user_data(struct wl_output *wl_output);
 
 bool ghost_wl_surface_own(const struct wl_surface *surface);
 void ghost_wl_surface_tag(struct wl_surface *surface);
 GHOST_WindowWayland *ghost_wl_surface_user_data(struct wl_surface *surface);
+
+bool ghost_wl_surface_own_cursor_pointer(const struct wl_surface *surface);
+void ghost_wl_surface_tag_cursor_pointer(struct wl_surface *surface);
+
+bool ghost_wl_surface_own_cursor_tablet(const struct wl_surface *surface);
+void ghost_wl_surface_tag_cursor_tablet(struct wl_surface *surface);
 
 #ifdef WITH_GHOST_WAYLAND_DYNLOAD
 /**
@@ -49,7 +55,7 @@ GHOST_WindowWayland *ghost_wl_surface_user_data(struct wl_surface *surface);
 bool ghost_wl_dynload_libraries();
 #endif
 
-struct output_t {
+struct GWL_Output {
   struct wl_output *wl_output = nullptr;
   struct zxdg_output_v1 *xdg_output = nullptr;
   /** Dimensions in pixels. */
@@ -87,9 +93,11 @@ class GHOST_SystemWayland : public GHOST_System {
 
   ~GHOST_SystemWayland() override;
 
+  GHOST_TSuccess init();
+
   bool processEvents(bool waitForEvent) override;
 
-  int setConsoleWindowState(GHOST_TConsoleWindowState action) override;
+  bool setConsoleWindowState(GHOST_TConsoleWindowState action) override;
 
   GHOST_TSuccess getModifierKeys(GHOST_ModifierKeys &keys) const override;
 
@@ -165,7 +173,7 @@ class GHOST_SystemWayland : public GHOST_System {
   zxdg_decoration_manager_v1 *xdg_decoration_manager();
 #endif
 
-  const std::vector<output_t *> &outputs() const;
+  const std::vector<GWL_Output *> &outputs() const;
 
   wl_shm *shm() const;
 
@@ -174,17 +182,17 @@ class GHOST_SystemWayland : public GHOST_System {
   void selection_set(const std::string &selection);
 
   /** Clear all references to this surface to prevent accessing NULL pointers. */
-  void window_surface_unref(const wl_surface *surface);
+  void window_surface_unref(const wl_surface *wl_surface);
 
   bool window_cursor_grab_set(const GHOST_TGrabCursorMode mode,
                               const GHOST_TGrabCursorMode mode_current,
                               int32_t init_grab_xy[2],
                               const GHOST_Rect *wrap_bounds,
                               GHOST_TAxisFlag wrap_axis,
-                              wl_surface *surface,
+                              wl_surface *wl_surface,
                               int scale);
 
  private:
-  struct display_t *d;
+  struct GWL_Display *d;
   std::string selection;
 };

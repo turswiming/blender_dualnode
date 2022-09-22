@@ -177,14 +177,12 @@ static bool seq_proxy_get_fname(Scene *scene,
 
   BLI_snprintf(name,
                PROXY_MAXFILE,
-               "%s/images/%d/%s_proxy%s",
+               "%s/images/%d/%s_proxy%s.jpg",
                dir,
                proxy_size_number,
                SEQ_render_give_stripelem(scene, seq, timeline_frame)->name,
                suffix);
   BLI_path_abs(name, BKE_main_blendfile_path_from_global());
-  strcat(name, ".jpg");
-
   return true;
 }
 
@@ -511,15 +509,11 @@ void SEQ_proxy_rebuild(SeqIndexBuildContext *context,
   }
 
   /* fail safe code */
+  int width, height;
+  BKE_render_resolution(&scene->r, false, &width, &height);
 
-  SEQ_render_new_render_data(bmain,
-                             context->depsgraph,
-                             context->scene,
-                             roundf((scene->r.size * (float)scene->r.xsch) / 100.0f),
-                             roundf((scene->r.size * (float)scene->r.ysch) / 100.0f),
-                             100,
-                             false,
-                             &render_context);
+  SEQ_render_new_render_data(
+      bmain, context->depsgraph, context->scene, width, height, 100, false, &render_context);
 
   render_context.skip_cache = true;
   render_context.is_proxy_render = true;

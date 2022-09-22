@@ -45,6 +45,7 @@
 #include "BKE_main.h"
 #include "BKE_packedFile.h"
 #include "BKE_report.h"
+#include "BKE_scene.h"
 
 #include "DEG_depsgraph.h"
 
@@ -940,7 +941,7 @@ static int image_view_selected_exec(bContext *C, wmOperator *UNUSED(op))
   if (ED_space_image_show_uvedit(sima, obedit)) {
     uint objects_len = 0;
     Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-        view_layer, ((View3D *)NULL), &objects_len);
+        scene, view_layer, ((View3D *)NULL), &objects_len);
     bool success = ED_uvedit_minmax_multi(scene, objects, objects_len, min, max);
     MEM_freeN(objects);
     if (!success) {
@@ -1830,7 +1831,7 @@ static void image_save_options_from_op(Main *bmain, ImageSaveOptions *opts, wmOp
 }
 
 static bool save_image_op(
-    Main *bmain, Image *ima, ImageUser *iuser, wmOperator *op, ImageSaveOptions *opts)
+    Main *bmain, Image *ima, ImageUser *iuser, wmOperator *op, const ImageSaveOptions *opts)
 {
   WM_cursor_wait(true);
 
@@ -3732,38 +3733,52 @@ static int render_border_exec(bContext *C, wmOperator *op)
   ARegion *region = CTX_wm_region(C);
   Scene *scene = CTX_data_scene(C);
   Render *re = RE_GetSceneRender(scene);
-  RenderData *rd;
-  rctf border;
+  SpaceImage *sima = CTX_wm_space_image(C);
 
   if (re == NULL) {
     /* Shouldn't happen, but better be safe close to the release. */
     return OPERATOR_CANCELLED;
   }
 
-  rd = RE_engine_get_render_data(re);
-  if ((rd->mode & (R_BORDER | R_CROP)) == (R_BORDER | R_CROP)) {
-    BKE_report(op->reports, RPT_INFO, "Can not set border from a cropped render");
-    return OPERATOR_CANCELLED;
-  }
+  /* Get information about the previous render, or current scene if no render yet. */
+  int width, height;
+  BKE_render_resolution(&scene->r, false, &width, &height);
+  const RenderData *rd = ED_space_image_has_buffer(sima) ? RE_engine_get_render_data(re) :
+                                                           &scene->r;
 
-  /* get rectangle from operator */
+  /* Get rectangle from the operator. */
+  rctf border;
   WM_operator_properties_border_to_rctf(op, &border);
   UI_view2d_region_to_view_rctf(&region->v2d, &border, &border);
 
-  /* actually set border */
+  /* Adjust for cropping. */
+  if ((rd->mode & (R_BORDER | R_CROP)) == (R_BORDER | R_CROP)) {
+    border.xmin = rd->border.xmin + border.xmin * (rd->border.xmax - rd->border.xmin);
+    border.xmax = rd->border.xmin + border.xmax * (rd->border.xmax - rd->border.xmin);
+    border.ymin = rd->border.ymin + border.ymin * (rd->border.ymax - rd->border.ymin);
+    border.ymax = rd->border.ymin + border.ymax * (rd->border.ymax - rd->border.ymin);
+  }
+
   CLAMP(border.xmin, 0.0f, 1.0f);
   CLAMP(border.ymin, 0.0f, 1.0f);
   CLAMP(border.xmax, 0.0f, 1.0f);
   CLAMP(border.ymax, 0.0f, 1.0f);
-  scene->r.border = border;
 
-  /* drawing a border surrounding the entire camera view switches off border rendering
-   * or the border covers no pixels */
+  /* Drawing a border surrounding the entire camera view switches off border rendering
+   * or the border covers no pixels. */
   if ((border.xmin <= 0.0f && border.xmax >= 1.0f && border.ymin <= 0.0f && border.ymax >= 1.0f) ||
       (border.xmin == border.xmax || border.ymin == border.ymax)) {
     scene->r.mode &= ~R_BORDER;
   }
   else {
+    /* Snap border to pixel boundaries, so drawing a border within a pixel selects that pixel. */
+    border.xmin = floorf(border.xmin * width) / width;
+    border.xmax = ceilf(border.xmax * width) / width;
+    border.ymin = floorf(border.ymin * height) / height;
+    border.ymax = ceilf(border.ymax * height) / height;
+
+    /* Set border. */
+    scene->r.border = border;
     scene->r.mode |= R_BORDER;
   }
 
@@ -3832,15 +3847,16 @@ void IMAGE_OT_clear_render_border(wmOperatorType *ot)
 
 static bool do_fill_tile(PointerRNA *ptr, Image *ima, ImageTile *tile)
 {
-  float color[4];
-  RNA_float_get_array(ptr, "color", color);
-  int gen_type = RNA_enum_get(ptr, "generated_type");
-  int width = RNA_int_get(ptr, "width");
-  int height = RNA_int_get(ptr, "height");
+  RNA_float_get_array(ptr, "color", tile->gen_color);
+  tile->gen_type = RNA_enum_get(ptr, "generated_type");
+  tile->gen_x = RNA_int_get(ptr, "width");
+  tile->gen_y = RNA_int_get(ptr, "height");
   bool is_float = RNA_boolean_get(ptr, "float");
-  int planes = RNA_boolean_get(ptr, "alpha") ? 32 : 24;
 
-  return BKE_image_fill_tile(ima, tile, width, height, color, gen_type, planes, is_float);
+  tile->gen_flag = is_float ? IMA_GEN_FLOAT : 0;
+  tile->gen_depth = RNA_boolean_get(ptr, "alpha") ? 32 : 24;
+
+  return BKE_image_fill_tile(ima, tile);
 }
 
 static void draw_fill_tile(PointerRNA *ptr, uiLayout *layout)

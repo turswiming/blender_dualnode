@@ -14,6 +14,7 @@
 
 #include "BKE_context.h"
 #include "BKE_fcurve.h"
+#include "BKE_layer.h"
 #include "BKE_nla.h"
 #include "BKE_report.h"
 
@@ -199,7 +200,16 @@ static void graph_key_shortest_dist(
   }
 }
 
-void createTransGraphEditData(bContext *C, TransInfo *t)
+/**
+ * It is important to note that this doesn't always act on the selection (like it's usually done),
+ * it acts on a subset of it. E.g. the selection code may leave a hint that we just dragged on a
+ * left or right handle (SIPO_RUNTIME_FLAG_TWEAK_HANDLES_LEFT/RIGHT) and then we only transform the
+ * selected left or right handles accordingly.
+ * The points to be transformed are tagged with BEZT_FLAG_TEMP_TAG; some lower level curve
+ * functions may need to be made aware of this. It's ugly that these act based on selection state
+ * anyway.
+ */
+static void createTransGraphEditData(bContext *C, TransInfo *t)
 {
   SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
   Scene *scene = t->scene;
@@ -629,7 +639,7 @@ static bool fcu_test_selected(FCurve *fcu)
   return 0;
 }
 
-/* this function is called on recalcData to apply the transforms applied
+/* This function is called on recalcData to apply the transforms applied
  * to the transdata on to the actual keyframe data
  */
 static void flushTransGraphData(TransInfo *t)
@@ -886,7 +896,7 @@ static void remake_graph_transdata(TransInfo *t, ListBase *anim_data)
   }
 }
 
-void recalcData_graphedit(TransInfo *t)
+static void recalcData_graphedit(TransInfo *t)
 {
   SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
   ViewLayer *view_layer = t->view_layer;
@@ -898,12 +908,14 @@ void recalcData_graphedit(TransInfo *t)
   bAnimListElem *ale;
   int dosort = 0;
 
+  BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+
   /* initialize relevant anim-context 'context' data from TransInfo data */
   /* NOTE: sync this with the code in ANIM_animdata_get_context() */
   ac.bmain = CTX_data_main(t->context);
   ac.scene = t->scene;
   ac.view_layer = t->view_layer;
-  ac.obact = OBACT(view_layer);
+  ac.obact = BKE_view_layer_active_object_get(view_layer);
   ac.area = t->area;
   ac.region = t->region;
   ac.sl = (t->area) ? t->area->spacedata.first : NULL;
@@ -934,7 +946,7 @@ void recalcData_graphedit(TransInfo *t)
       dosort++;
     }
     else {
-      calchandles_fcurve_ex(fcu, BEZT_FLAG_TEMP_TAG);
+      BKE_fcurve_handles_recalc_ex(fcu, BEZT_FLAG_TEMP_TAG);
     }
 
     /* set refresh tags for objects using this animation,
@@ -960,7 +972,7 @@ void recalcData_graphedit(TransInfo *t)
 /** \name Special After Transform Graph
  * \{ */
 
-void special_aftertrans_update__graph(bContext *C, TransInfo *t)
+static void special_aftertrans_update__graph(bContext *C, TransInfo *t)
 {
   SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
   bAnimContext ac;
@@ -1021,3 +1033,10 @@ void special_aftertrans_update__graph(bContext *C, TransInfo *t)
 }
 
 /** \} */
+
+TransConvertTypeInfo TransConvertType_Graph = {
+    /* flags */ (T_POINTS | T_2D_EDIT),
+    /* createTransData */ createTransGraphEditData,
+    /* recalcData */ recalcData_graphedit,
+    /* special_aftertrans_update */ special_aftertrans_update__graph,
+};

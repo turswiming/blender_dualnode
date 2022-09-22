@@ -28,7 +28,6 @@
 #include "kernel/device/cpu/kernel.h"
 #include "kernel/types.h"
 
-#include "kernel/osl/shader.h"
 #include "kernel/osl/globals.h"
 // clang-format on
 
@@ -197,7 +196,7 @@ void CPUDevice::const_copy_to(const char *name, void *host, size_t size)
 
     // Update scene handle (since it is different for each device on multi devices)
     KernelData *const data = (KernelData *)host;
-    data->bvh.scene = embree_scene;
+    data->device_bvh = embree_scene;
   }
 #endif
   kernel_const_copy(&kernel_globals, name, host, size);
