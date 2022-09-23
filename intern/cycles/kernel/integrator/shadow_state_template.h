@@ -48,7 +48,7 @@ KERNEL_STRUCT_MEMBER(shadow_path,
                      path_segment,
                      KERNEL_FEATURE_PATH_GUIDING)
 #else
-KERNEL_STRUCT_MEMBER(shadow_path, void *, path_segment, KERNEL_FEATURE_PATH_GUIDING)
+KERNEL_STRUCT_MEMBER(shadow_path, uint64_t, path_segment, KERNEL_FEATURE_PATH_GUIDING)
 #endif
 KERNEL_STRUCT_END(shadow_path)
 

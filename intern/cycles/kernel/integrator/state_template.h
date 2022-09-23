@@ -130,11 +130,11 @@ KERNEL_STRUCT_END(guiding)
 #else
 KERNEL_STRUCT_BEGIN(guiding)
 /* Current path segment of the random walk/path. */
-KERNEL_STRUCT_MEMBER(guiding, void *, path_segment, KERNEL_FEATURE_PATH_GUIDING)
+KERNEL_STRUCT_MEMBER(guiding, uint64_t, path_segment, KERNEL_FEATURE_PATH_GUIDING)
 /* Guided sampling distribution for sampling new directions at a position on a surface. */
-KERNEL_STRUCT_MEMBER(guiding, void *, surface_sampling_distribution, KERNEL_FEATURE_PATH_GUIDING)
+KERNEL_STRUCT_MEMBER(guiding, uint64_t, surface_sampling_distribution, KERNEL_FEATURE_PATH_GUIDING)
 /* Guided sampling distribution for sampling new directions at position inside a volume. */
-KERNEL_STRUCT_MEMBER(guiding, void *, volume_sampling_distribution, KERNEL_FEATURE_PATH_GUIDING)
+KERNEL_STRUCT_MEMBER(guiding, uint64_t, volume_sampling_distribution, KERNEL_FEATURE_PATH_GUIDING)
 /* If surface guiding is enabled */
 KERNEL_STRUCT_MEMBER(guiding, bool, use_surface_guiding, KERNEL_FEATURE_PATH_GUIDING)
 /* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
