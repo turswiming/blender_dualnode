@@ -3528,6 +3528,17 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
     BKE_main_namemap_validate_and_fix(bmain);
   }
 
+  if (!MAIN_VERSION_ATLEAST(bmain, 304, 1)) {
+    /* Initialize brush curves sculpt settings. */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      if (brush->ob_mode != OB_MODE_SCULPT) {
+        continue;
+      }
+
+      brush->automasking_cavity_factor = 0.5f;
+    }
+  }
+
   /**
    * Versioning code until next subversion bump goes here.
    *
