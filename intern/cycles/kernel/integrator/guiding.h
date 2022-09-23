@@ -9,8 +9,6 @@
 #  include "kernel/film/write.h"
 #endif
 
-#include <iostream>
-
 CCL_NAMESPACE_BEGIN
 
 /* Utilities. */
