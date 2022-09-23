@@ -1078,6 +1078,9 @@ static int sculpt_bake_cavity_exec(bContext *C, wmOperator *op)
   BKE_sculpt_update_object_for_edit(depsgraph, ob, true, true, false);
   SCULPT_vertex_random_access_ensure(ss);
 
+  MultiresModifierData *mmd = BKE_sculpt_multires_active(CTX_data_scene(C), ob);
+  BKE_sculpt_mask_layers_ensure(ob, mmd);
+
   SCULPT_undo_push_begin(ob, op);
 
   CavityBakeMixMode mode = RNA_enum_get(op->ptr, "mix_mode");
@@ -1168,8 +1171,8 @@ static void cavity_bake_ui(bContext *C, wmOperator *op)
   if (!sd || !RNA_boolean_get(op->ptr, "use_automask_settings")) {
     uiItemR(layout, op->ptr, "mix_mode", 0, NULL, ICON_NONE);
     uiItemR(layout, op->ptr, "mix_factor", 0, NULL, ICON_NONE);
-    uiItemR(layout, op->ptr, "factor", 0, NULL, ICON_NONE);
     uiItemR(layout, op->ptr, "use_automask_settings", 0, NULL, ICON_NONE);
+    uiItemR(layout, op->ptr, "factor", 0, NULL, ICON_NONE);
     uiItemR(layout, op->ptr, "blur_steps", 0, NULL, ICON_NONE);
     uiItemR(layout, op->ptr, "invert", 0, NULL, ICON_NONE);
     uiItemR(layout, op->ptr, "use_curve", 0, NULL, ICON_NONE);
@@ -1182,11 +1185,7 @@ static void cavity_bake_ui(bContext *C, wmOperator *op)
     RNA_pointer_create(&scene->id, &RNA_Sculpt, sd, &sculpt_ptr);
     uiItemR(layout, op->ptr, "mix_mode", 0, NULL, ICON_NONE);
     uiItemR(layout, op->ptr, "mix_factor", 0, NULL, ICON_NONE);
-    uiItemR(layout, &sculpt_ptr, "automasking_cavity_factor", 0, NULL, ICON_NONE);
     uiItemR(layout, op->ptr, "use_automask_settings", 0, NULL, ICON_NONE);
-    uiItemR(layout, &sculpt_ptr, "automasking_cavity_blur_steps", 0, NULL, ICON_NONE);
-    uiItemR(layout, &sculpt_ptr, "use_automasking_cavity_inverted", 0, NULL, ICON_NONE);
-    uiItemR(layout, &sculpt_ptr, "use_automasking_custom_cavity_curve", 0, NULL, ICON_NONE);
 
     use_curve = RNA_boolean_get(&sculpt_ptr, "use_automasking_custom_cavity_curve");
   }

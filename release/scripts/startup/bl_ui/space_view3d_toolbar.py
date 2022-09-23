@@ -985,6 +985,9 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         col.separator()
 
         if sculpt.use_automasking_cavity or sculpt.use_automasking_cavity_inverted:
+            props = col.operator("sculpt.mask_from_cavity", text="Mask From Cavity")
+            props.use_automask_settings = True
+
             col2 = col.column()
             col2.enabled = not (sculpt.brush and sculpt.brush.use_automasking_cavity or sculpt.brush.use_automasking_cavity_inverted)
 
@@ -1025,53 +1028,6 @@ class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
         col.prop(sculpt, "gravity", slider=True, text="Factor")
         col.prop(sculpt, "gravity_object")
     
-class VIEW3D_PT_sculpt_cavity_bake(Panel, View3DPaintPanel):
-    bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)
-    bl_label = "Mask From Cavity"
-    bl_options = {'DEFAULT_CLOSED'}
-    bl_ui_units_x = 12
-    bl_parent_id = "VIEW3D_PT_sculpt_options"
-
-    @classmethod
-    def poll(cls, context):
-        return (context.sculpt_object and context.tool_settings.sculpt)
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        tool_settings = context.tool_settings
-        sculpt = tool_settings.sculpt
-
-        col = layout.column()
-
-        last = WindowManager.operator_properties_last("sculpt.mask_from_cavity")
-
-        col.prop(last, "mix_mode")
-        col.prop(last, "mix_factor")
-        col.prop(last, "use_automask_settings")
-
-        if not last.use_automask_settings:
-            col.prop(last, "factor", text="Factor")
-            col.prop(last, "blur_steps", text="Blur")
-            col.prop(last, "invert", text="Invert")
-            col.prop(last, "use_curve", text="Use Curve")
-
-            if last.use_curve:
-                col.template_curve_mapping(sculpt, "automasking_cavity_curve_op")
-        else:
-            col.prop(sculpt, "automasking_cavity_factor", text="Factor")
-            col.prop(sculpt, "automasking_cavity_blur_steps", text="Blur")
-            col.prop(sculpt, "use_automasking_cavity_inverted", text="Invert")
-            
-            col.prop(sculpt, "use_automasking_custom_cavity_curve", text="Use Curve")
-
-            if sculpt.use_automasking_custom_cavity_curve:
-                col.template_curve_mapping(sculpt, "automasking_cavity_curve")
-
-        layout.operator("sculpt.mask_from_cavity")
-
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
     bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)
@@ -2545,7 +2501,6 @@ classes = (
     VIEW3D_PT_tools_grease_pencil_brush_vertex_color,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_palette,
     VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff,
-    VIEW3D_PT_sculpt_cavity_bake,
 )
 
 if __name__ == "__main__":  # only for live edit.
