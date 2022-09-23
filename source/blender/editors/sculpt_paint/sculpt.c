@@ -5412,7 +5412,7 @@ static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const f
       SCULPT_undo_push_begin_ex(ob, sculpt_tool_name(sd));
     }
 
-    ss->stroke_id++;
+    SCULPT_stroke_id_inc(ob);
 
     return true;
   }
@@ -6012,6 +6012,14 @@ void SCULPT_fake_neighbors_free(Object *ob)
   sculpt_pose_fake_neighbors_free(ss);
 }
 
+void SCULPT_stroke_id_inc(Object *ob)
+{
+  /* Manually wrap in int32 space to avoid tripping up undefined behavior
+   * sanitizers.
+   */
+  ob->sculpt->stroke_id = (uchar)(((int)ob->sculpt->stroke_id + 1) & 255);
+}
+
 void SCULPT_stroke_id_ensure(Object *ob)
 {
   SculptSession *ss = ob->sculpt;
@@ -6020,7 +6028,7 @@ void SCULPT_stroke_id_ensure(Object *ob)
     SculptAttributeParams params = {0};
 
     ss->attrs.stroke_id = BKE_sculpt_attribute_ensure(
-        ob, ATTR_DOMAIN_POINT, CD_PROP_INT32, SCULPT_ATTRIBUTE_NAME(stroke_id), &params);
+        ob, ATTR_DOMAIN_POINT, CD_PROP_INT8, SCULPT_ATTRIBUTE_NAME(stroke_id), &params);
   }
 }
 

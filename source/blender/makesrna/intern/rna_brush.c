@@ -3236,7 +3236,7 @@ static void rna_def_brush(BlenderRNA *brna)
   
   prop = RNA_def_property(srna, "automasking_cavity_factor", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "automasking_cavity_factor");
-  RNA_def_property_ui_text(prop, "Cavity Factor", "Cavity mask factor");
+  RNA_def_property_ui_text(prop, "Cavity Factor", "The contrast of the cavity mask");
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 3);
   RNA_def_property_range(prop, 0.0f, 5.0f);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
@@ -3244,7 +3244,7 @@ static void rna_def_brush(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "automasking_cavity_blur_steps", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "automasking_cavity_blur_steps");
-  RNA_def_property_ui_text(prop, "Blur Steps", "Cavity blur steps");
+  RNA_def_property_ui_text(prop, "Blur Steps", "The number of times the cavity mask is blurred.");
   RNA_def_property_range(prop, 0.0f, 25.0f);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, 0, "rna_Brush_update");

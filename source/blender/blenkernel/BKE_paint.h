@@ -752,9 +752,9 @@ typedef struct SculptSession {
    */
   char *last_paint_canvas_key;
 
-  int stroke_id;
+  uchar stroke_id;
   int last_automasking_settings_hash;
-  int last_cavity_stroke_id;
+  uchar last_cavity_stroke_id;
 } SculptSession;
 
 void BKE_sculptsession_free(struct Object *ob);

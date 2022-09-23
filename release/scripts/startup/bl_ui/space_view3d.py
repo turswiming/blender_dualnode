@@ -5490,22 +5490,12 @@ class VIEW3D_MT_sculpt_automasking_pie(Menu):
         tool_settings = context.tool_settings
         sculpt = tool_settings.sculpt
 
-        def doprop(key, text):
-            if sculpt.brush and getattr(sculpt.brush, key):
-                pie.prop(sculpt, key, text=text + "(overridden by brush)")
-            else:
-                pie.prop(sculpt, key, text=text)
-
-        doprop("use_automasking_topology", "Topology")
-        doprop("use_automasking_topology", "Topology")
-        doprop("use_automasking_face_sets", "Face Sets")
-        doprop("use_automasking_boundary_edges", "Mesh Boundary")
-        doprop("use_automasking_boundary_face_sets", "Face Sets Boundary")
-
-        if sculpt.brush and (sculpt.brush.use_automasking_cavity or sculpt.brush.use_automasking_cavity_inverted):
-            pie.prop(sculpt, "use_automasking_cavity", text="Cavity (overridden by brush)")
-        else:
-            pie.prop(sculpt, "use_automasking_cavity", text="Cavity")
+        pie.prop(sculpt, "use_automasking_topology", text="Topology")
+        pie.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
+        pie.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
+        pie.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+        pie.prop(sculpt, "use_automasking_cavity", text="Cavity")
+        pie.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
 
 
 class VIEW3D_MT_sculpt_face_sets_edit_pie(Menu):

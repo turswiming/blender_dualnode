@@ -967,33 +967,22 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
 
         col = layout.column(heading="Auto-Masking", align=True)
 
-        def doprop(key, text):
-            col2 = col.column()
-            col2.enabled = not sculpt.brush or not getattr(sculpt.brush, key)
-
-            if not col2.enabled:
-                text += " - overridden by brush"
-            col2.prop(sculpt, key, text=text)
-
-        doprop("use_automasking_topology", "Topology")
-        doprop("use_automasking_face_sets", "Face Sets")
-        doprop("use_automasking_boundary_edges", "Mesh Boundary")
-        doprop("use_automasking_boundary_face_sets", "Face Sets Boundary")
-        doprop("use_automasking_cavity", "Cavity")
-        doprop("use_automasking_cavity_inverted", "Cavity (Inverted)")
+        col.prop(sculpt, "use_automasking_topology", text="Topology")
+        col.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
+        col.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
+        col.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+        col.prop(sculpt, "use_automasking_cavity", text="Cavity")
+        col.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
 
         col.separator()
 
         if sculpt.use_automasking_cavity or sculpt.use_automasking_cavity_inverted:
-            props = col.operator("sculpt.mask_from_cavity", text="Mask From Cavity")
+            col2 = col.column()
+            props = col2.operator("sculpt.mask_from_cavity", text="Mask From Cavity")
             props.use_automask_settings = True
 
             col2 = col.column()
-            col2.enabled = not (sculpt.brush and sculpt.brush.use_automasking_cavity or sculpt.brush.use_automasking_cavity_inverted)
-
-            if not col2.enabled:
-                col2.label(text="Overridden by brush")
-
+            
             col2.prop(sculpt, "automasking_cavity_factor", text="Cavity Factor")
             col2.prop(sculpt, "automasking_cavity_blur_steps", text="Cavity Blur")
             

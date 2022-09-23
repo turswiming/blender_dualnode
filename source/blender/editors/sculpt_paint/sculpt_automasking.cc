@@ -354,7 +354,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
   factor_sum = sculpt_cavity_calc_factor(ss, automasking, factor_sum);
 
   *(float *)SCULPT_vertex_attr_get(vertex, ss->attrs.cavity) = factor_sum;
-  *(int *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = automasking->cavity_stroke_id;
+  *(uchar *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = automasking->cavity_stroke_id;
 }
 
 int SCULPT_automasking_settings_hash(Object *ob, AutomaskingCache *automasking)
@@ -394,7 +394,7 @@ static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
                                               SculptSession *ss,
                                               PBVHVertRef vertex)
 {
-  int stroke_id = *(int *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id);
+  uchar stroke_id = *(uchar *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id);
 
   if (stroke_id != automasking->cavity_stroke_id) {
     sculpt_calc_blurred_cavity(ss, automasking, automasking->settings.cavity_blur_steps, vertex);
