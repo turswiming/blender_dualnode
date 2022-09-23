@@ -5154,6 +5154,7 @@ class VIEW3D_MT_edit_gpencil_stroke(Menu):
         layout.operator("gpencil.stroke_subdivide", text="Subdivide").only_selected = False
         layout.menu("VIEW3D_MT_gpencil_simplify")
         layout.operator("gpencil.stroke_trim", text="Trim")
+        layout.operator("gpencil.stroke_outline", text="Outline")
 
         layout.separator()
 
@@ -5175,17 +5176,15 @@ class VIEW3D_MT_edit_gpencil_stroke(Menu):
         layout.operator("gpencil.stroke_cyclical_set", text="Toggle Cyclic").type = 'TOGGLE'
         layout.operator_menu_enum("gpencil.stroke_caps_set", text="Toggle Caps", property="type")
         layout.operator("gpencil.stroke_flip", text="Switch Direction")
-        layout.prop(settings, "use_scale_thickness", text="Scale Thickness")
+        layout.operator("gpencil.stroke_start_set", text="Set Start Point")
 
         layout.separator()
         layout.operator("gpencil.stroke_normalize", text="Normalize Thickness").mode = 'THICKNESS'
         layout.operator("gpencil.stroke_normalize", text="Normalize Opacity").mode = 'OPACITY'
+        layout.prop(settings, "use_scale_thickness", text="Scale Thickness")
 
         layout.separator()
         layout.operator("gpencil.reset_transform_fill", text="Reset Fill Transform")
-
-        layout.separator()
-        layout.operator("gpencil.stroke_outline", text="Outline")
 
 
 class VIEW3D_MT_edit_gpencil_point(Menu):
@@ -5491,12 +5490,22 @@ class VIEW3D_MT_sculpt_automasking_pie(Menu):
         tool_settings = context.tool_settings
         sculpt = tool_settings.sculpt
 
-        pie.prop(sculpt, "use_automasking_topology", text="Topology")
-        pie.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
-        pie.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
-        pie.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
-        pie.prop(sculpt, "use_automasking_cavity", text="Cavity")
-        pie.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
+        def doprop(key, text):
+            if sculpt.brush and getattr(sculpt.brush, key):
+                pie.prop(sculpt, key, text=text + "(overridden by brush)")
+            else:
+                pie.prop(sculpt, key, text=text)
+
+        doprop("use_automasking_topology", "Topology")
+        doprop("use_automasking_topology", "Topology")
+        doprop("use_automasking_face_sets", "Face Sets")
+        doprop("use_automasking_boundary_edges", "Mesh Boundary")
+        doprop("use_automasking_boundary_face_sets", "Face Sets Boundary")
+
+        if sculpt.brush and (sculpt.brush.use_automasking_cavity or sculpt.brush.use_automasking_cavity_inverted):
+            pie.prop(sculpt, "use_automasking_cavity", text="Cavity (overridden by brush)")
+        else:
+            pie.prop(sculpt, "use_automasking_cavity", text="Cavity")
 
 
 class VIEW3D_MT_sculpt_face_sets_edit_pie(Menu):
@@ -7334,6 +7343,7 @@ class VIEW3D_MT_gpencil_edit_context_menu(Menu):
             col.operator("transform.shear", text="Shear")
             col.operator("transform.tosphere", text="To Sphere")
             col.operator("transform.transform", text="Shrink/Fatten").mode = 'GPENCIL_SHRINKFATTEN'
+            col.operator("gpencil.stroke_start_set", text="Set Start Point")
 
             col.separator()
 
@@ -7812,6 +7822,25 @@ class VIEW3D_PT_curves_sculpt_grow_shrink_scaling(Panel):
         layout.prop(brush.curves_sculpt_settings, "minimum_length")
 
 
+class VIEW3D_PT_viewport_debug(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_parent_id = 'VIEW3D_PT_overlay'
+    bl_label = "Viewport Debug"
+
+    @classmethod
+    def poll(cls, context):
+        prefs = context.preferences
+        return prefs.experimental.use_viewport_debug
+
+    def draw(self, context):
+        layout = self.layout
+        view = context.space_data
+        overlay = view.overlay
+
+        layout.prop(overlay, "use_debug_freeze_view_culling")
+
+
 classes = (
     VIEW3D_HT_header,
     VIEW3D_HT_tool_header,
@@ -8049,6 +8078,7 @@ classes = (
     TOPBAR_PT_annotation_layers,
     VIEW3D_PT_curves_sculpt_add_shape,
     VIEW3D_PT_curves_sculpt_grow_shrink_scaling,
+    VIEW3D_PT_viewport_debug,
 )
 
 

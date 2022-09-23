@@ -568,7 +568,7 @@ void ED_spacetype_nla(void)
   ARegionType *art;
 
   st->spaceid = SPACE_NLA;
-  strncpy(st->name, "NLA", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "NLA");
 
   st->create = nla_create;
   st->free = nla_free;
@@ -627,6 +627,9 @@ void ED_spacetype_nla(void)
   BLI_addhead(&st->regiontypes, art);
 
   nla_buttons_register(art);
+
+  art = ED_area_type_hud(st->spaceid);
+  BLI_addhead(&st->regiontypes, art);
 
   BKE_spacetype_register(st);
 }

@@ -133,10 +133,10 @@ static int copy_data_path_button_exec(bContext *C, wmOperator *op)
   if (ptr.owner_id != nullptr) {
     if (full_path) {
       if (prop) {
-        path = RNA_path_full_property_py_ex(bmain, &ptr, prop, index, true);
+        path = RNA_path_full_property_py_ex(&ptr, prop, index, true);
       }
       else {
-        path = RNA_path_full_struct_py(bmain, &ptr);
+        path = RNA_path_full_struct_py(&ptr);
       }
     }
     else {
@@ -939,7 +939,8 @@ static int override_idtemplate_clear_exec(bContext *C, wmOperator *UNUSED(op))
   if (BKE_lib_override_library_is_hierarchy_leaf(bmain, id)) {
     id_new = id->override_library->reference;
     bool do_remap_active = false;
-    if (OBACT(view_layer) == (Object *)id) {
+    BKE_view_layer_synced_ensure(scene, view_layer);
+    if (BKE_view_layer_active_object_get(view_layer) == (Object *)id) {
       BLI_assert(GS(id->name) == ID_OB);
       BLI_assert(GS(id_new->name) == ID_OB);
       do_remap_active = true;
@@ -1015,7 +1016,7 @@ static void override_idtemplate_menu_draw(const bContext *UNUSED(C), Menu *menu)
   uiItemO(layout, IFACE_("Clear"), ICON_NONE, "UI_OT_override_idtemplate_clear");
 }
 
-static void override_idtemplate_menu(void)
+static void override_idtemplate_menu()
 {
   MenuType *mt;
 
@@ -1502,14 +1503,16 @@ static bool jump_to_target_ptr(bContext *C, PointerRNA ptr, const bool poll)
   }
 
   /* Find the containing Object. */
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Base *base = nullptr;
   const short id_type = GS(ptr.owner_id->name);
   if (id_type == ID_OB) {
+    BKE_view_layer_synced_ensure(scene, view_layer);
     base = BKE_view_layer_base_find(view_layer, (Object *)ptr.owner_id);
   }
   else if (OB_DATA_SUPPORT_ID(id_type)) {
-    base = ED_object_find_first_by_data_id(view_layer, ptr.owner_id);
+    base = ED_object_find_first_by_data_id(scene, view_layer, ptr.owner_id);
   }
 
   bool ok = false;
@@ -1574,8 +1577,13 @@ static bool jump_to_target_button(bContext *C, bool poll)
         char *str_ptr = RNA_property_string_get_alloc(
             &ptr, prop, str_buf, sizeof(str_buf), nullptr);
 
-        int found = RNA_property_collection_lookup_string(
-            &coll_search->search_ptr, coll_search->search_prop, str_ptr, &target_ptr);
+        int found = 0;
+        /* Jump to target only works with search properties currently, not search callbacks yet.
+         * See ui_but_add_search. */
+        if (coll_search->search_prop != NULL) {
+          found = RNA_property_collection_lookup_string(
+              &coll_search->search_ptr, coll_search->search_prop, str_ptr, &target_ptr);
+        }
 
         if (str_ptr != str_buf) {
           MEM_freeN(str_ptr);
@@ -1627,7 +1635,7 @@ static void UI_OT_jump_to_target_button(wmOperatorType *ot)
 #ifdef WITH_PYTHON
 
 /* ------------------------------------------------------------------------- */
-/* EditSource Utility funcs and operator,
+/* EditSource Utility functions and operator,
  * NOTE: this includes utility functions and button matching checks. */
 
 struct uiEditSourceStore {
@@ -1839,7 +1847,7 @@ static void UI_OT_editsource(wmOperatorType *ot)
  * \{ */
 
 /**
- * EditTranslation utility funcs and operator,
+ * EditTranslation utility functions and operator.
  *
  * \note this includes utility functions and button matching checks.
  * this only works in conjunction with a Python operator!

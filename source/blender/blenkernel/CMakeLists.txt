@@ -98,6 +98,7 @@ set(SRC
   intern/collision.c
   intern/colorband.c
   intern/colortools.c
+  intern/compute_contexts.cc
   intern/constraint.c
   intern/context.c
   intern/crazyspace.cc
@@ -109,7 +110,6 @@ set(SRC
   intern/curve_convert.c
   intern/curve_decimate.c
   intern/curve_deform.c
-  intern/curve_eval.cc
   intern/curve_legacy_convert.cc
   intern/curve_nurbs.cc
   intern/curve_poly.cc
@@ -128,7 +128,7 @@ set(SRC
   intern/editmesh.c
   intern/editmesh_bvh.c
   intern/editmesh_cache.cc
-  intern/editmesh_tangent.c
+  intern/editmesh_tangent.cc
   intern/effect.c
   intern/fcurve.c
   intern/fcurve_cache.c
@@ -136,13 +136,13 @@ set(SRC
   intern/fluid.c
   intern/fmodifier.c
   intern/freestyle.c
-  intern/geometry_component_curve.cc
   intern/geometry_component_curves.cc
   intern/geometry_component_edit_data.cc
   intern/geometry_component_instances.cc
   intern/geometry_component_mesh.cc
   intern/geometry_component_pointcloud.cc
   intern/geometry_component_volume.cc
+  intern/geometry_fields.cc
   intern/geometry_set.cc
   intern/geometry_set_instances.cc
   intern/gpencil.c
@@ -201,7 +201,7 @@ set(SRC
   intern/mesh_fair.cc
   intern/mesh_iterators.c
   intern/mesh_legacy_convert.cc
-  intern/mesh_mapping.c
+  intern/mesh_mapping.cc
   intern/mesh_merge.c
   intern/mesh_merge_customdata.cc
   intern/mesh_mirror.c
@@ -210,7 +210,7 @@ set(SRC
   intern/mesh_remesh_voxel.cc
   intern/mesh_runtime.cc
   intern/mesh_sample.cc
-  intern/mesh_tangent.c
+  intern/mesh_tangent.cc
   intern/mesh_tessellate.cc
   intern/mesh_validate.cc
   intern/mesh_wrapper.cc
@@ -229,6 +229,7 @@ set(SRC
   intern/multires_versioning.c
   intern/nla.c
   intern/node.cc
+  intern/node_runtime.cc
   intern/node_tree_update.cc
   intern/object.cc
   intern/object_deform.c
@@ -263,10 +264,6 @@ set(SRC
   intern/softbody.c
   intern/sound.c
   intern/speaker.c
-  intern/spline_base.cc
-  intern/spline_bezier.cc
-  intern/spline_nurbs.cc
-  intern/spline_poly.cc
   intern/studiolight.c
   intern/subdiv.c
   intern/subdiv_ccg.c
@@ -303,7 +300,7 @@ set(SRC
   intern/volume.cc
   intern/volume_render.cc
   intern/volume_to_mesh.cc
-  intern/workspace.c
+  intern/workspace.cc
   intern/world.c
   intern/writeavi.c
 
@@ -350,6 +347,7 @@ set(SRC
   BKE_collision.h
   BKE_colorband.h
   BKE_colortools.h
+  BKE_compute_contexts.hh
   BKE_constraint.h
   BKE_context.h
   BKE_crazyspace.h
@@ -465,7 +463,6 @@ set(SRC
   BKE_softbody.h
   BKE_sound.h
   BKE_speaker.h
-  BKE_spline.hh
   BKE_studiolight.h
   BKE_subdiv.h
   BKE_subdiv_ccg.h
@@ -656,6 +653,10 @@ if(WITH_PYTHON)
     bf_python_bmesh
   )
   add_definitions(-DWITH_PYTHON)
+
+  if(WITH_PYTHON_MODULE)
+    add_definitions(-DWITH_PYTHON_MODULE)
+  endif()
 
   if(WITH_PYTHON_SAFETY)
     add_definitions(-DWITH_PYTHON_SAFETY)

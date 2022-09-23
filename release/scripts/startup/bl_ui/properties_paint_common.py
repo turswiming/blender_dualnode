@@ -949,14 +949,12 @@ def brush_settings_advanced(layout, context, brush, popover=False):
         col.separator()
 
         if brush.use_automasking_cavity or brush.use_automasking_cavity_inverted:
-            sculpt = context.tool_settings.sculpt
+            col.prop(brush, "automasking_cavity_factor", text="Cavity Factor")
+            col.prop(brush, "automasking_cavity_blur_steps", text="Cavity Blur")
+            col.prop(brush, "use_automasking_custom_cavity_curve", text="Use Curve")
 
-            col.prop(sculpt, "automasking_cavity_factor", text="Cavity Factor")
-            col.prop(sculpt, "automasking_cavity_blur_steps", text="Cavity Blur")
-            col.prop(sculpt, "use_automasking_custom_cavity_curve", text="Use Curve")
-
-            if sculpt.use_automasking_custom_cavity_curve:
-                col.template_curve_mapping(sculpt, "automasking_cavity_curve")
+            if brush.use_automasking_custom_cavity_curve:
+                col.template_curve_mapping(brush, "automasking_cavity_curve")
 
         col.prop(brush, "automasking_boundary_edges_propagation_steps")
 

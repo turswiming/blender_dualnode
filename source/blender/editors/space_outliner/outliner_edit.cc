@@ -29,6 +29,7 @@
 #include "BKE_blender_copybuffer.h"
 #include "BKE_context.h"
 #include "BKE_idtype.h"
+#include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_override.h"
 #include "BKE_lib_query.h"
@@ -148,7 +149,7 @@ void OUTLINER_OT_highlight_update(wmOperatorType *ot)
 
 void outliner_item_openclose(TreeElement *te, bool open, bool toggle_all)
 {
-  /* Only allow opening elements with children.  */
+  /* Only allow opening elements with children. */
   if (!(te->flag & TE_PRETEND_HAS_CHILDREN) && BLI_listbase_is_empty(&te->subtree)) {
     return;
   }
@@ -1261,11 +1262,13 @@ static int outliner_open_back(TreeElement *te)
 /* Return element representing the active base or bone in the outliner, or NULL if none exists */
 static TreeElement *outliner_show_active_get_element(bContext *C,
                                                      SpaceOutliner *space_outliner,
+                                                     const Scene *scene,
                                                      ViewLayer *view_layer)
 {
   TreeElement *te;
 
-  Object *obact = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *obact = BKE_view_layer_active_object_get(view_layer);
 
   if (!obact) {
     return nullptr;
@@ -1316,11 +1319,13 @@ static void outliner_show_active(SpaceOutliner *space_outliner,
 static int outliner_show_active_exec(bContext *C, wmOperator *UNUSED(op))
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   ARegion *region = CTX_wm_region(C);
   View2D *v2d = &region->v2d;
 
-  TreeElement *active_element = outliner_show_active_get_element(C, space_outliner, view_layer);
+  TreeElement *active_element = outliner_show_active_get_element(
+      C, space_outliner, scene, view_layer);
 
   if (active_element) {
     ID *id = TREESTORE(active_element)->id;

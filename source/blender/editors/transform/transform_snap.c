@@ -51,9 +51,6 @@
 
 static bool doForceIncrementSnap(const TransInfo *t);
 
-/* this should be passed as an arg for use in snap functions */
-#undef BASACT
-
 /* use half of flt-max so we can scale up without an exception */
 
 /* -------------------------------------------------------------------- */
@@ -128,15 +125,11 @@ bool activeSnap(const TransInfo *t)
 
 bool activeSnap_SnappingIndividual(const TransInfo *t)
 {
-  if (activeSnap(t) && t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST) {
-    return true;
-  }
-
-  if (!t->tsnap.project) {
+  if (!activeSnap(t) || (t->flag & T_NO_PROJECT)) {
     return false;
   }
 
-  if (!activeSnap(t) || (t->flag & T_NO_PROJECT)) {
+  if (!(t->tsnap.project || (t->tsnap.mode & SCE_SNAP_MODE_FACE_NEAREST))) {
     return false;
   }
 
@@ -286,7 +279,7 @@ void drawSnapping(const struct bContext *C, TransInfo *t)
     GPU_matrix_push_projection();
     wmOrtho2_region_pixelspace(t->region);
 
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformColor3ub(255, 255, 255);
     imm_draw_circle_wire_2d(pos, x, y, radius, 8);
     immUnbindProgram();
@@ -304,7 +297,7 @@ void drawSnapping(const struct bContext *C, TransInfo *t)
 
     uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     for (p = t->tsnap.points.first; p; p = p->next) {
       if (p == t->tsnap.selectedPoint) {
@@ -331,7 +324,7 @@ void drawSnapping(const struct bContext *C, TransInfo *t)
     const ARegion *region = CTX_wm_region(C);
     GPU_blend(GPU_BLEND_ALPHA);
     uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformColor4ubv(col);
     float pixelx = BLI_rctf_size_x(&region->v2d.cur) / BLI_rcti_size_x(&region->v2d.mask);
     immRectf(pos,
@@ -725,8 +718,8 @@ static eSnapMode snap_mode_from_spacetype(TransInfo *t)
 
 static eSnapTargetSelect snap_target_select_from_spacetype(TransInfo *t)
 {
-  ViewLayer *view_layer = t->view_layer;
-  Base *base_act = view_layer->basact;
+  BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+  Base *base_act = BKE_view_layer_active_base_get(t->view_layer);
 
   eSnapTargetSelect ret = SCE_SNAP_TARGET_ALL;
 
@@ -963,7 +956,8 @@ static void setSnappingCallback(TransInfo *t)
   }
   else if (t->spacetype == SPACE_IMAGE) {
     SpaceImage *sima = t->area->spacedata.first;
-    Object *obact = t->view_layer->basact ? t->view_layer->basact->object : NULL;
+    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    Object *obact = BKE_view_layer_active_object_get(t->view_layer);
 
     const bool is_uv_editor = sima->mode == SI_MODE_UV;
     const bool has_edit_object = obact && BKE_object_is_in_editmode(obact);
@@ -1148,7 +1142,7 @@ static void snap_calc_uv_fn(TransInfo *t, float *UNUSED(vec))
   if (t->tsnap.mode & SCE_SNAP_MODE_VERTEX) {
     uint objects_len = 0;
     Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-        t->view_layer, NULL, &objects_len);
+        t->scene, t->view_layer, NULL, &objects_len);
 
     float dist_sq = square_f((float)SNAP_MIN_DISTANCE);
     if (ED_uvedit_nearest_uv_multi(&t->region->v2d,

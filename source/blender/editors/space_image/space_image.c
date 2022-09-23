@@ -20,6 +20,7 @@
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_image.h"
+#include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_remap.h"
 #include "BKE_screen.h"
@@ -111,7 +112,8 @@ static SpaceLink *image_create(const ScrArea *UNUSED(area), const Scene *UNUSED(
   simage->tile_grid_shape[0] = 1;
   simage->tile_grid_shape[1] = 1;
 
-  simage->custom_grid_subdiv = 10;
+  simage->custom_grid_subdiv[0] = 10;
+  simage->custom_grid_subdiv[1] = 10;
 
   /* header */
   region = MEM_callocN(sizeof(ARegion), "header for image");
@@ -350,8 +352,10 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
       }
       break;
     case NC_MASK: {
+      Scene *scene = WM_window_get_active_scene(win);
       ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-      Object *obedit = OBEDIT_FROM_VIEW_LAYER(view_layer);
+      BKE_view_layer_synced_ensure(scene, view_layer);
+      Object *obedit = BKE_view_layer_edit_object_get(view_layer);
       if (ED_space_image_check_show_maskedit(sima, obedit)) {
         switch (wmn->data) {
           case ND_SELECT:
@@ -392,8 +396,10 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
       switch (wmn->data) {
         case ND_TRANSFORM:
         case ND_MODIFIER: {
+          const Scene *scene = WM_window_get_active_scene(win);
           ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-          Object *ob = OBACT(view_layer);
+          BKE_view_layer_synced_ensure(scene, view_layer);
+          Object *ob = BKE_view_layer_active_object_get(view_layer);
           if (ob && (ob == wmn->reference) && (ob->mode & OB_MODE_EDIT)) {
             if (sima->lock && (sima->flag & SI_DRAWSHADOW)) {
               ED_area_tag_refresh(area);
@@ -1028,7 +1034,7 @@ void ED_spacetype_image(void)
   ARegionType *art;
 
   st->spaceid = SPACE_IMAGE;
-  strncpy(st->name, "Image", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "Image");
 
   st->create = image_create;
   st->free = image_free;
