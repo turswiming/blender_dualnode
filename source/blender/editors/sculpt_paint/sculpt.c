@@ -6072,7 +6072,7 @@ void SCULPT_stroke_id_ensure(Object *ob)
     SculptAttributeParams params = {0};
     
     ss->attrs.stroke_id = BKE_sculpt_attribute_ensure(
-        ob, ATTR_DOMAIN_POINT, CD_PROP_INT32, SCULPT_ATTRIBUTE_NAME(stroke_id), &params);
+        ob, ATTR_DOMAIN_POINT, CD_PROP_INT8, SCULPT_ATTRIBUTE_NAME(stroke_id), &params);
   }
 }
 
