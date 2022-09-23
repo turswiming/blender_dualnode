@@ -114,6 +114,11 @@ static int sculpt_automasking_mode_effective_bits(const Sculpt *sculpt, const Br
                  BRUSH_AUTOMASKING_CAVITY_NORMAL);
       flags |= brush->automasking_flags;
     }
+    else if (sculpt->automasking_flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
+      flags &= ~(BRUSH_AUTOMASKING_CAVITY_ALL | BRUSH_AUTOMASKING_CAVITY_USE_CURVE |
+                 BRUSH_AUTOMASKING_CAVITY_NORMAL);
+      flags |= sculpt->automasking_flags;
+    }
 
     return flags;
   }
@@ -348,23 +353,54 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
 
   factor_sum = sculpt_cavity_calc_factor(ss, automasking, factor_sum);
 
-  int index = BKE_pbvh_vertex_to_index(ss->pbvh, vertex);
+  *(float *)SCULPT_vertex_attr_get(vertex, ss->attrs.cavity) = factor_sum;
+  *(int *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = automasking->cavity_stroke_id;
+}
 
-  ss->cavity[index].factor = factor_sum;
-  ss->cavity[index].stroke_id = ss->stroke_id;
+int SCULPT_automasking_settings_hash(Object *ob, AutomaskingCache *automasking)
+{
+  SculptSession *ss = ob->sculpt;
+
+  int hash;
+  int totvert = SCULPT_vertex_count_get(ss);
+
+  hash = BLI_hash_int(automasking->settings.flags);
+  hash = BLI_hash_int_2d(hash, totvert);
+
+  if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
+    hash = BLI_hash_int_2d(hash, automasking->settings.cavity_blur_steps);
+    hash = BLI_hash_int_2d(hash, (int)(automasking->settings.cavity_factor * 5000.0f));
+
+    if (automasking->settings.cavity_curve) {
+      CurveMap *cm = automasking->settings.cavity_curve->cm;
+
+      for (int i = 0; i < cm->totpoint; i++) {
+        hash = BLI_hash_int_2d(hash, (int)(cm->curve[i].x * 5000.0f));
+        hash = BLI_hash_int_2d(hash, (int)(cm->curve[i].y * 5000.0f));
+        hash = BLI_hash_int_2d(hash, (int)cm->curve[i].flag);
+        hash = BLI_hash_int_2d(hash, (int)cm->curve[i].shorty);
+      }
+    }
+  }
+
+  if (automasking->settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
+    hash = BLI_hash_int_2d(hash, automasking->settings.initial_face_set);
+  }
+
+  return hash;
 }
 
 static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
                                               SculptSession *ss,
                                               PBVHVertRef vertex)
 {
-  int index = BKE_pbvh_vertex_to_index(ss->pbvh, vertex);
+  int stroke_id = *(int *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id);
 
-  if (ss->cavity[index].stroke_id != ss->stroke_id) {
+  if (stroke_id != automasking->cavity_stroke_id) {
     sculpt_calc_blurred_cavity(ss, automasking, automasking->settings.cavity_blur_steps, vertex);
   }
 
-  float factor = ss->cavity[index].factor;
+  float factor = *(float *)SCULPT_vertex_attr_get(vertex, ss->attrs.cavity);
   bool inverted = automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_INVERTED;
 
   if ((automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) &&
@@ -540,17 +576,6 @@ static void sculpt_cavity_automasking_init(Sculpt *sd, Object *ob, AutomaskingCa
     BLI_assert_msg(0, "Cavity mask automasking: pmap missing");
     return;
   }
-
-  int tot_vert = SCULPT_vertex_count_get(ss);
-
-  if (!ss->cavity) {
-    ss->cavity = static_cast<CavityMaskData *>(
-        MEM_malloc_arrayN(tot_vert, sizeof(CavityMaskData), __func__));
-
-    for (int i = 0; i < tot_vert; i++) {
-      ss->cavity[i].stroke_id = -1;
-    }
-  }
 }
 
 #define EDGE_DISTANCE_INF -1
@@ -640,16 +665,19 @@ static void SCULPT_automasking_cache_settings_update(AutomaskingCache *automaski
   }
 }
 
+bool SCULPT_tool_can_reuse_cavity_mask(int sculpt_tool)
+{
+  return ELEM(sculpt_tool,
+              SCULPT_TOOL_PAINT,
+              SCULPT_TOOL_SMEAR,
+              SCULPT_TOOL_MASK,
+              SCULPT_TOOL_DRAW_FACE_SETS);
+}
+
 AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object *ob)
 {
   SculptSession *ss = ob->sculpt;
   const int totvert = SCULPT_vertex_count_get(ss);
-
-  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_ALL) &&
-      SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_USE_CURVE)) {
-    BKE_curvemapping_init(brush->automasking_cavity_curve);
-    BKE_curvemapping_init(sd->automasking_cavity_curve);
-  }
 
   if (!SCULPT_is_automasking_enabled(sd, ss, brush)) {
     return nullptr;
@@ -661,8 +689,32 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   SCULPT_boundary_info_ensure(ob);
 
   if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_ALL)) {
-    SCULPT_vertex_random_access_ensure(ss);
-    sculpt_cavity_automasking_init(sd, ob, automasking);
+    if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_USE_CURVE)) {
+      BKE_curvemapping_init(brush->automasking_cavity_curve);
+      BKE_curvemapping_init(sd->automasking_cavity_curve);
+    }
+
+    SCULPT_stroke_id_ensure(ob);
+    automasking->cavity_stroke_id = ss->stroke_id;
+
+    if (!ss->attrs.cavity) {
+      SculptAttributeParams params = {0};
+      ss->attrs.cavity = BKE_sculpt_attribute_ensure(
+          ob, ATTR_DOMAIN_POINT, CD_PROP_FLOAT, SCULPT_ATTRIBUTE_NAME(cavity), &params);
+    }
+    /* Can we reuse the previous stroke's cavity mask? */
+    else if (brush && SCULPT_tool_can_reuse_cavity_mask(brush->sculpt_tool)) {
+      int hash = SCULPT_automasking_settings_hash(ob, automasking);
+
+      if (hash == ss->last_automasking_settings_hash) {
+        automasking->cavity_stroke_id = ss->last_automasking_settings_hash;
+        automasking->can_reuse_cavity = true;
+      }
+    }
+
+    if (!automasking->can_reuse_cavity) {
+      ss->last_cavity_stroke_id = ss->stroke_id;
+    }
   }
 
   if (!SCULPT_automasking_needs_factors_cache(sd, brush)) {
@@ -702,6 +754,10 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
     SCULPT_vertex_random_access_ensure(ss);
     SCULPT_boundary_automasking_init(
         ob, AUTOMASK_INIT_BOUNDARY_FACE_SETS, boundary_propagation_steps);
+  }
+  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_ALL)) {
+    SCULPT_vertex_random_access_ensure(ss);
+    sculpt_cavity_automasking_init(sd, ob, automasking);
   }
 
   return automasking;

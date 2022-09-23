@@ -401,6 +401,9 @@ typedef struct AutomaskingSettings {
 
 typedef struct AutomaskingCache {
   AutomaskingSettings settings;
+
+  bool can_reuse_cavity;
+  int cavity_stroke_id;
 } AutomaskingCache;
 
 typedef struct FilterCache {
@@ -1298,8 +1301,9 @@ float *SCULPT_boundary_automasking_init(Object *ob,
                                         int propagation_steps,
                                         float *automask_factor);
 bool SCULPT_automasking_needs_original(const struct Sculpt *sd, const struct Brush *brush);
+int SCULPT_automasking_settings_hash(Object *ob, AutomaskingCache *automasking);
 
-/** \} */
+    /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Geodesic distances.
@@ -1843,6 +1847,9 @@ BLI_INLINE bool SCULPT_tool_is_face_sets(int tool)
 {
   return ELEM(tool, SCULPT_TOOL_DRAW_FACE_SETS);
 }
+
+void SCULPT_stroke_id_ensure(struct Object *ob);
+bool SCULPT_tool_can_reuse_cavity_mask(int sculpt_tool);
 
 #ifdef __cplusplus
 }

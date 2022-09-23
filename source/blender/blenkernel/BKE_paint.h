@@ -558,6 +558,9 @@ typedef struct SculptAttributePointers {
   /* BMesh */
   SculptAttribute *dyntopo_node_id_vertex;
   SculptAttribute *dyntopo_node_id_face;
+
+  SculptAttribute *stroke_id;
+  SculptAttribute *cavity;
 } SculptAttributePointers;
 
 typedef struct SculptSession {
@@ -750,8 +753,8 @@ typedef struct SculptSession {
   char *last_paint_canvas_key;
 
   int stroke_id;
-
-  CavityMaskData *cavity;
+  int last_automasking_settings_hash;
+  int last_cavity_stroke_id;
 } SculptSession;
 
 void BKE_sculptsession_free(struct Object *ob);

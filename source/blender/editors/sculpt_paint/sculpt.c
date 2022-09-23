@@ -3365,6 +3365,8 @@ static void do_brush_action(Sculpt *sd,
       /* Initialize auto-masking cache. */
       if (SCULPT_is_automasking_enabled(sd, ss, brush)) {
         ss->cache->automasking = SCULPT_automasking_cache_init(sd, brush, ob);
+        ss->last_automasking_settings_hash = SCULPT_automasking_settings_hash(
+            ob, ss->cache->automasking);
       }
       /* Initialize surface smooth cache. */
       if ((brush->sculpt_tool == SCULPT_TOOL_SMOOTH) &&
@@ -3545,6 +3547,11 @@ static void do_brush_action(Sculpt *sd,
 
   if (sculpt_brush_use_topology_rake(ss, brush)) {
     SCULPT_bmesh_topology_rake(sd, ob, nodes, totnode, brush->topology_rake_factor);
+  }
+
+  if (!SCULPT_tool_can_reuse_cavity_mask(brush->sculpt_tool) || (ss->cache->supports_gravity && sd->gravity_factor > 0.0f)) {
+    /* Clear cavity mask cache. */
+    ss->last_automasking_settings_hash = 0;
   }
 
   /* The cloth brush adds the gravity as a regular force and it is processed in the solver. */
@@ -6003,6 +6010,18 @@ void SCULPT_fake_neighbors_free(Object *ob)
 {
   SculptSession *ss = ob->sculpt;
   sculpt_pose_fake_neighbors_free(ss);
+}
+
+void SCULPT_stroke_id_ensure(Object *ob)
+{
+  SculptSession *ss = ob->sculpt;
+
+  if (!ss->attrs.stroke_id) {
+    SculptAttributeParams params = {0};
+
+    ss->attrs.stroke_id = BKE_sculpt_attribute_ensure(
+        ob, ATTR_DOMAIN_POINT, CD_PROP_INT32, SCULPT_ATTRIBUTE_NAME(stroke_id), &params);
+  }
 }
 
 /** \} */
