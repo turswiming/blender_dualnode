@@ -71,6 +71,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const NodeDeclaration &declaration = *params.node_type().fixed_declaration;
   search_link_ops_for_declarations(params, declaration.inputs().take_front(2));
+  search_link_ops_for_declarations(params, declaration.outputs().take_front(1));
 
   if (params.in_out() == SOCK_IN) {
     const std::optional<eCustomDataType> type = node_data_type_to_custom_data_type(
@@ -103,6 +104,7 @@ static void try_capture_field_on_geometry(GeometryComponent &component,
 
   const CPPType &type = field.cpp_type();
   const eCustomDataType data_type = bke::cpp_type_to_custom_data_type(type);
+  const bke::AttributeValidator validator = attributes.lookup_validator(name);
 
   /* Could avoid allocating a new buffer if:
    * - We are writing to an attribute that exists already with the correct domain and type.
@@ -110,7 +112,8 @@ static void try_capture_field_on_geometry(GeometryComponent &component,
   void *buffer = MEM_mallocN(type.size() * domain_size, __func__);
 
   fn::FieldEvaluator evaluator{field_context, &mask};
-  evaluator.add_with_destination(field, GMutableSpan{type, buffer, domain_size});
+  evaluator.add_with_destination(validator.validate_field_if_necessary(field),
+                                 GMutableSpan{type, buffer, domain_size});
   evaluator.evaluate();
 
   if (GAttributeWriter attribute = attributes.lookup_for_write(name)) {

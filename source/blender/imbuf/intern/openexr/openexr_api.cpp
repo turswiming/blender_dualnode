@@ -1442,7 +1442,7 @@ void IMB_exr_close(void *handle)
 
 /* ********* */
 
-/* get a substring from the end of the name, separated by '.' */
+/** Get a sub-string from the end of the name, separated by '.'. */
 static int imb_exr_split_token(const char *str, const char *end, const char **token)
 {
   const char delims[] = {'.', '\0'};
@@ -1498,7 +1498,7 @@ static int imb_exr_split_channel_name(ExrChannel *echan, char *layname, char *pa
     bool ok = false;
 
     if (len == 2) {
-      /* some multilayers are using two-letter channels name,
+      /* Some multi-layers are using two-letter channels name,
        * like, MX or NZ, which is basically has structure of
        *   <pass_prefix><component>
        *
