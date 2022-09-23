@@ -12,6 +12,7 @@
 #include "BLI_hash.h"
 #include "BLI_index_range.hh"
 #include "BLI_math.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_set.hh"
 #include "BLI_task.h"
 #include "BLI_vector.hh"
@@ -51,6 +52,7 @@
 #include <cmath>
 #include <cstdlib>
 
+using blender::float3;
 using blender::IndexRange;
 using blender::Set;
 using blender::Vector;
@@ -143,11 +145,9 @@ float SCULPT_calc_cavity(SculptSession *ss, const PBVHVertRef vertex)
 {
   SculptVertexNeighborIter ni;
   const float *co = SCULPT_vertex_co_get(ss, vertex);
-  float avg[3];
+  float3 avg(0.0f);
   float length_sum = 0.0f;
   int valence = 0;
-
-  zero_v3(avg);
 
   SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vertex, ni) {
     const float *co2 = SCULPT_vertex_co_get(ss, ni.vertex);
@@ -155,7 +155,7 @@ float SCULPT_calc_cavity(SculptSession *ss, const PBVHVertRef vertex)
     length_sum += len_v3v3(co, co2);
     valence++;
 
-    add_v3_v3(avg, co2);
+    avg += co2;
   }
   SCULPT_VERTEX_NEIGHBORS_ITER_END(ni);
 
@@ -163,14 +163,13 @@ float SCULPT_calc_cavity(SculptSession *ss, const PBVHVertRef vertex)
     return 0.0f;
   }
 
-  mul_v3_fl(avg, 1.0f / (float)valence);
+  avg /= (float)valence;
   length_sum /= (float)valence;
 
-  float no[3];
-
+  float3 no;
   SCULPT_vertex_normal_get(ss, vertex, no);
 
-  sub_v3_v3(avg, co);
+  avg -= co;
 
   /* Use distance to plane. */
   float factor = dot_v3v3(avg, no) / length_sum;
@@ -220,10 +219,10 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
                                        int steps,
                                        PBVHVertRef vertex)
 {
-  float sno1[3];
-  float sno2[3];
-  float sco1[3];
-  float sco2[3];
+  float3 sno1(0.0f);
+  float3 sno2(0.0f);
+  float3 sco1(0.0f);
+  float3 sco2(0.0f);
   float len1_sum = 0.0f, len2_sum = 0.0f;
   int sco1_len = 0, sco2_len = 0;
 
@@ -231,11 +230,6 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
    * are zero-based.
    */
   steps++;
-
-  zero_v3(sno1);
-  zero_v3(sno2);
-  zero_v3(sco1);
-  zero_v3(sco2);
 
   Vector<CavityBlurVert, 64> queue;
   Set<int64_t, 64> visit;
@@ -257,21 +251,21 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
     PBVHVertRef v = blurvert.vertex;
     start = (start + 1) % queue.size();
 
-    float no[3];
+    float3 no;
 
     const float *co = SCULPT_vertex_co_get(ss, v);
     SCULPT_vertex_normal_get(ss, v, no);
 
     float centdist = len_v3v3(co, co1);
 
-    add_v3_v3(sco1, co);
-    add_v3_v3(sno1, no);
+    sco1 += co;
+    sno1 += no;
     len1_sum += centdist;
     sco1_len++;
 
     if (blurvert.depth < steps) {
-      add_v3_v3(sco2, co);
-      add_v3_v3(sno2, no);
+      sco2 += co;
+      sno2 += no;
       len2_sum += centdist;
       sco2_len++;
     }
@@ -317,23 +311,21 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
     SCULPT_VERTEX_NEIGHBORS_ITER_END(ni);
   }
 
-  if (sco1_len == sco2_len) {
-    printf("error! %d %d\n", sco1_len, sco2_len);
-  }
+  BLI_assert(sco1_len != sco2_len);
 
   if (!sco1_len) {
-    copy_v3_v3(sco1, SCULPT_vertex_co_get(ss, vertex));
+    sco1 = SCULPT_vertex_co_get(ss, vertex);
   }
   else {
-    mul_v3_fl(sco1, 1.0f / (float)sco1_len);
+    sco1 /= (float)sco1_len;
     len1_sum /= sco1_len;
   }
 
   if (!sco2_len) {
-    copy_v3_v3(sco2, SCULPT_vertex_co_get(ss, vertex));
+    sco2 = SCULPT_vertex_co_get(ss, vertex);
   }
   else {
-    mul_v3_fl(sco2, 1.0f / (float)sco2_len);
+    sco2 /= (float)sco2_len;
     len2_sum /= sco2_len;
   }
 
@@ -347,8 +339,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
     SCULPT_vertex_normal_get(ss, vertex, sno2);
   }
 
-  float vec[3];
-  sub_v3_v3v3(vec, sco1, sco2);
+  float3 vec = sco1 - sco2;
   float factor_sum = dot_v3v3(vec, sno2) / len1_sum;
 
   factor_sum = sculpt_cavity_calc_factor(ss, automasking, factor_sum);
