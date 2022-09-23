@@ -1279,7 +1279,7 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
       }
 
       /* Active channels root pointer. */
-      if (ed->displayed_channels == old_displayed_channels || ed->displayed_channels == nullptr) {
+      if (ELEM(ed->displayed_channels, old_displayed_channels, nullptr)) {
         ed->displayed_channels = &ed->channels;
       }
       else {
@@ -1314,7 +1314,7 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
           }
         }
 
-        if (ms->old_channels == old_displayed_channels || ms->old_channels == nullptr) {
+        if (ELEM(ms->old_channels, old_displayed_channels, nullptr)) {
           ms->old_channels = &ed->channels;
         }
         else {
