@@ -56,7 +56,7 @@ ccl_device_inline float delta_phi(int p, float gamma_o, float gamma_t)
 /* Remaps the given angle to [-pi, pi]. */
 ccl_device_inline float wrap_angle(float a)
 {
-  return fmodf(a + M_PI_F, M_2PI_F) - M_PI_F;
+  return (a + M_PI_F) - M_2PI_F * floorf((a + M_PI_F) / M_2PI_F) - M_PI_F;
 }
 
 /* Logistic distribution function. */
