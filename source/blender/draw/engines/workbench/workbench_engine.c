@@ -29,6 +29,8 @@
 
 #include "ED_paint.h"
 
+#include "GPU_context.h"
+
 #include "workbench_engine.h"
 #include "workbench_private.h"
 
@@ -36,6 +38,7 @@
 
 void workbench_engine_init(void *ved)
 {
+  GPU_render_begin();
   WORKBENCH_Data *vedata = ved;
   WORKBENCH_StorageList *stl = vedata->stl;
   WORKBENCH_TextureList *txl = vedata->txl;
@@ -64,6 +67,7 @@ void workbench_engine_init(void *ved)
   workbench_dof_engine_init(vedata);
   workbench_antialiasing_engine_init(vedata);
   workbench_volume_engine_init(vedata);
+  GPU_render_end();
 }
 
 void workbench_cache_init(void *ved)
@@ -409,7 +413,7 @@ void workbench_cache_populate(void *ved, Object *ob)
     return;
   }
 
-  if (ELEM(ob->type, OB_MESH, OB_SURF, OB_MBALL, OB_POINTCLOUD)) {
+  if (ELEM(ob->type, OB_MESH, OB_POINTCLOUD)) {
     bool use_sculpt_pbvh, use_texpaint_mode, draw_shadow, has_transp_mat = false;
     eV3DShadingColorType color_type = workbench_color_type_get(
         wpd, ob, &use_sculpt_pbvh, &use_texpaint_mode, &draw_shadow);

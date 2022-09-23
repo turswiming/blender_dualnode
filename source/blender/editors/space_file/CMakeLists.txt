@@ -15,7 +15,6 @@ set(INC
   ../../render
   ../../windowmanager
   ../../../../intern/atomic
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -28,8 +27,9 @@ set(SRC
   file_ops.c
   file_panels.c
   file_utils.c
-  filelist.c
+  filelist.cc
   filesel.c
+  folder_history.cc
   fsmenu.c
   space_file.c
 

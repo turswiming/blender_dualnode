@@ -8,11 +8,12 @@
 #include "BKE_curve.h"
 #include "BKE_customdata.h"
 #include "BKE_main.h"
+#include "BKE_mesh.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_math_base.hh"
 #include "BLI_math_vec_types.hh"
 
 #include "BLO_readfile.h"
@@ -71,12 +72,13 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
 
     depsgraph_create(DAG_EVAL_VIEWPORT);
 
-    const int deg_objects_visibility_flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
-                                             DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET |
-                                             DEG_ITER_OBJECT_FLAG_VISIBLE |
-                                             DEG_ITER_OBJECT_FLAG_DUPLI;
+    DEGObjectIterSettings deg_iter_settings{};
+    deg_iter_settings.depsgraph = depsgraph;
+    deg_iter_settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
+                              DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET | DEG_ITER_OBJECT_FLAG_VISIBLE |
+                              DEG_ITER_OBJECT_FLAG_DUPLI;
     size_t object_index = 0;
-    DEG_OBJECT_ITER_BEGIN (depsgraph, object, deg_objects_visibility_flags) {
+    DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, object) {
       if (object_index >= expect_count) {
         ADD_FAILURE();
         break;
@@ -95,8 +97,9 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
         EXPECT_EQ(mesh->totedge, exp.mesh_totedge_or_curve_endp);
         EXPECT_EQ(mesh->totpoly, exp.mesh_totpoly_or_curve_order);
         EXPECT_EQ(mesh->totloop, exp.mesh_totloop_or_curve_cyclic);
-        EXPECT_V3_NEAR(mesh->mvert[0].co, exp.vert_first, 0.0001f);
-        EXPECT_V3_NEAR(mesh->mvert[mesh->totvert - 1].co, exp.vert_last, 0.0001f);
+        const Span<MVert> verts = mesh->verts();
+        EXPECT_V3_NEAR(verts.first().co, exp.vert_first, 0.0001f);
+        EXPECT_V3_NEAR(verts.last().co, exp.vert_last, 0.0001f);
         const float3 *lnors = (const float3 *)(CustomData_get_layer(&mesh->ldata, CD_NORMAL));
         float3 normal_first = lnors != nullptr ? lnors[0] : float3(0, 0, 0);
         EXPECT_V3_NEAR(normal_first, exp.normal_first, 0.0001f);
@@ -154,7 +157,7 @@ TEST_F(obj_importer_test, import_cube)
        12,
        6,
        24,
-       float3(1, -1, 1),
+       float3(-1, -1, 1),
        float3(1, -1, -1),
        float3(-0.57735f, 0.57735f, -0.57735f)},
   };
@@ -172,7 +175,7 @@ TEST_F(obj_importer_test, import_cube_o_after_verts)
           12,
           6,
           24,
-          float3(1, -1, 1),
+          float3(-1, -1, 1),
           float3(1, -1, -1),
           float3(0, 0, 1),
       },
@@ -183,8 +186,8 @@ TEST_F(obj_importer_test, import_cube_o_after_verts)
           3,
           1,
           3,
+          float3(1, -1, 1),
           float3(-2, -2, 2),
-          float3(-1, -1, -1),
           float3(-0.2357f, 0.9428f, 0.2357f),
       },
   };
@@ -201,8 +204,8 @@ TEST_F(obj_importer_test, import_suzanne_all_data)
        1005,
        500,
        1968,
-       float3(-0.5f, 0.09375f, 0.6875f),
-       float3(0.546875f, 0.054688f, 0.578125f),
+       float3(-0.4375f, 0.164062f, 0.765625f),
+       float3(0.4375f, 0.164062f, 0.765625f),
        float3(-0.6040f, -0.5102f, 0.6122f),
        float2(0.692094f, 0.40191f)},
   };
@@ -307,7 +310,7 @@ TEST_F(obj_importer_test, import_materials)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
-      {"OBmaterials", OB_MESH, 8, 12, 6, 24, float3(1, -1, 1), float3(1, -1, -1)},
+      {"OBmaterials", OB_MESH, 8, 12, 6, 24, float3(-1, -1, 1), float3(1, -1, -1)},
   };
   import_and_check("materials.obj", expect, std::size(expect), 4, 8);
 }
@@ -323,7 +326,7 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        6,
        24,
        float3(1, 1, -1),
-       float3(1, -1, -1),
+       float3(-1, -1, 1),
        float3(0, 1, 0),
        float2(0.9935f, 0.0020f)},
       {"OBCubeTexMul",
@@ -333,7 +336,7 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        6,
        24,
        float3(4, -2, -1),
-       float3(4, -4, -1),
+       float3(2, -4, 1),
        float3(0, 1, 0),
        float2(0.9935f, 0.0020f)},
       {"OBCubeTiledTex",
@@ -343,7 +346,7 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        6,
        24,
        float3(4, 1, -1),
-       float3(4, -1, -1),
+       float3(2, -1, 1),
        float3(0, 1, 0),
        float2(0.9935f, 0.0020f)},
       {"OBCubeTiledTexFromAnotherFolder",
@@ -353,7 +356,7 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        6,
        24,
        float3(7, 1, -1),
-       float3(7, -1, -1),
+       float3(5, -1, 1),
        float3(0, 1, 0),
        float2(0.9935f, 0.0020f)},
   };
@@ -444,15 +447,15 @@ TEST_F(obj_importer_test, import_all_objects)
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
       /* .obj file has empty EmptyText and EmptyMesh objects; these are ignored and skipped */
       {"OBBezierCurve", OB_MESH, 13, 12, 0, 0, float3(-1, -2, 0), float3(1, -2, 0)},
-      {"OBBlankCube", OB_MESH, 8, 13, 7, 26, float3(1, 1, 1), float3(-1, 1, -1), float3(0, 0, 1)},
+      {"OBBlankCube", OB_MESH, 8, 13, 7, 26, float3(1, 1, -1), float3(-1, 1, 1), float3(0, 0, 1)},
       {"OBMaterialCube",
        OB_MESH,
        8,
        13,
        7,
        26,
-       float3(26, -1, -1),
-       float3(28, -1, -1),
+       float3(28, 1, -1),
+       float3(26, 1, 1),
        float3(-1, 0, 0)},
       {"OBNurbsCircle",
        OB_MESH,
@@ -462,15 +465,15 @@ TEST_F(obj_importer_test, import_all_objects)
        0,
        float3(3.292893f, -2.707107f, 0),
        float3(3.369084f, -2.77607f, 0)},
-      {"OBNurbsCircle.001", OB_MESH, 4, 4, 0, 0, float3(3, -2, 0), float3(2, -1, 0)},
+      {"OBNurbsCircle.001", OB_MESH, 4, 4, 0, 0, float3(2, -3, 0), float3(3, -2, 0)},
       {"OBParticleCube",
        OB_MESH,
        8,
        13,
        7,
        26,
-       float3(22, 1, 1),
-       float3(20, 1, -1),
+       float3(22, 1, -1),
+       float3(20, 1, 1),
        float3(0, 0, 1)},
       {"OBShapeKeyCube",
        OB_MESH,
@@ -478,8 +481,8 @@ TEST_F(obj_importer_test, import_all_objects)
        13,
        7,
        26,
-       float3(19, 1, 2),
-       float3(17, 1, -1),
+       float3(19, 1, -1),
+       float3(17, 1, 1),
        float3(-0.4082f, -0.4082f, 0.8165f)},
       {"OBSmoothCube",
        OB_MESH,
@@ -487,8 +490,8 @@ TEST_F(obj_importer_test, import_all_objects)
        13,
        7,
        26,
-       float3(4, 1, 1),
-       float3(2, 1, -1),
+       float3(4, 1, -1),
+       float3(2, 1, 1),
        float3(0.5774f, 0.5773f, 0.5774f)},
       {"OBSurface",
        OB_MESH,
@@ -496,7 +499,7 @@ TEST_F(obj_importer_test, import_all_objects)
        480,
        224,
        896,
-       float3(7.292893f, -2.707107f, -0.714285f),
+       float3(7.292893f, -2.707107f, -1),
        float3(7.525872f, -2.883338f, 1),
        float3(-0.7071f, -0.7071f, 0),
        float2(0, 0.142857f)},
@@ -506,7 +509,7 @@ TEST_F(obj_importer_test, import_all_objects)
        480,
        225,
        900,
-       float3(12.56667f, -2.5f, 0.72037f),
+       float3(12.5f, -2.5f, 0.694444f),
        float3(13.5f, -1.5f, 0.694444f),
        float3(-0.3246f, -0.3531f, 0.8775f),
        float2(0, 0.066667f)},
@@ -527,7 +530,7 @@ TEST_F(obj_importer_test, import_all_objects)
        1024,
        4096,
        float3(5.34467f, -2.65533f, -0.176777f),
-       float3(5.158205f, -2.234695f, -0.220835f),
+       float3(5.232792f, -2.411795f, -0.220835f),
        float3(-0.5042f, -0.5042f, -0.7011f),
        float2(0, 1)},
       {"OBTaperCube",
@@ -536,8 +539,8 @@ TEST_F(obj_importer_test, import_all_objects)
        208,
        104,
        416,
-       float3(24.316156f, 0.345556f, 0.796778f),
-       float3(23.551804f, 0.389113f, -0.639607f),
+       float3(24.444445f, 0.502543f, -0.753814f),
+       float3(23.790743f, 0.460522f, -0.766546f),
        float3(-0.0546f, 0.1716f, 0.9837f)},
       {"OBText",
        OB_MESH,
@@ -545,8 +548,8 @@ TEST_F(obj_importer_test, import_all_objects)
        345,
        171,
        513,
-       float3(1.583f, -9.621f, 0),
-       float3(0.351f, -10.0f, 0),
+       float3(1.75f, -9.458f, 0),
+       float3(0.587f, -9.406f, 0),
        float3(0, 0, 1),
        float2(0.017544f, 0)},
       {"OBUVCube",
@@ -555,8 +558,8 @@ TEST_F(obj_importer_test, import_all_objects)
        13,
        7,
        26,
-       float3(7, 1, 1),
-       float3(5, 1, -1),
+       float3(7, 1, -1),
+       float3(5, 1, 1),
        float3(0, 0, 1),
        float2(0.654526f, 0.579873f)},
       {"OBUVImageCube",
@@ -565,8 +568,8 @@ TEST_F(obj_importer_test, import_all_objects)
        13,
        7,
        26,
-       float3(10, 1, 1),
-       float3(8, 1, -1),
+       float3(10, 1, -1),
+       float3(8, 1, 1),
        float3(0, 0, 1),
        float2(0.654526f, 0.579873f)},
       {"OBVColCube",
@@ -575,8 +578,8 @@ TEST_F(obj_importer_test, import_all_objects)
        13,
        7,
        26,
-       float3(13, 1, 1),
-       float3(11, 1, -1),
+       float3(13, 1, -1),
+       float3(11, 1, 1),
        float3(0, 0, 1),
        float2(0, 0),
        float4(0.0f, 0.002125f, 1.0f, 1.0f)},
@@ -586,8 +589,8 @@ TEST_F(obj_importer_test, import_all_objects)
        13,
        7,
        26,
-       float3(16, 1, 1),
-       float3(14, 1, -1),
+       float3(16, 1, -1),
+       float3(14, 1, 1),
        float3(0, 0, 1)},
   };
   import_and_check("all_objects.obj", expect, std::size(expect), 7);
@@ -604,7 +607,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors)
        6,
        24,
        float3(1.0f, 1.0f, -3.812445f),
-       float3(1.0f, -1.0f, -3.812445f),
+       float3(-1.0f, -1.0f, -1.812445f),
        float3(0, 0, 0),
        float2(0, 0),
        float4(0.89627f, 0.036889f, 0.47932f, 1.0f)},
@@ -615,7 +618,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors)
        6,
        24,
        float3(3.481967f, 1.0f, -3.812445f),
-       float3(3.481967f, -1.0f, -3.812445f),
+       float3(1.481967f, -1.0f, -1.812445f),
        float3(0, 0, 0),
        float2(0, 0),
        float4(1.564582f, 0.039217f, 0.664309f, 1.0f)},
@@ -626,7 +629,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors)
        6,
        24,
        float3(-4.725068f, -1.0f, 1.0f),
-       float3(-2.725068f, -1.0f, 1.0f),
+       float3(-2.725068f, 1.0f, -1.0f),
        float3(0, 0, 0),
        float2(0, 0),
        float4(0.270498f, 0.47932f, 0.262251f, 1.0f)},
@@ -637,7 +640,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors)
        6,
        24,
        float3(-4.550208f, -1.0f, -1.918042f),
-       float3(-2.550208f, -1.0f, -1.918042f)},
+       float3(-2.550208f, 1.0f, -3.918042f)},
       {"OBCubeVertexByte",
        OB_MESH,
        8,
@@ -645,7 +648,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors)
        6,
        24,
        float3(1.0f, 1.0f, -1.0f),
-       float3(1.0f, -1.0f, -1.0f),
+       float3(-1.0f, -1.0f, 1.0f),
        float3(0, 0, 0),
        float2(0, 0),
        float4(0.846873f, 0.027321f, 0.982123f, 1.0f)},
@@ -656,7 +659,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors)
        6,
        24,
        float3(3.392028f, 1.0f, -1.0f),
-       float3(3.392028f, -1.0f, -1.0f),
+       float3(1.392028f, -1.0f, 1.0f),
        float3(0, 0, 0),
        float2(0, 0),
        float4(49.99467f, 0.027321f, 0.982123f, 1.0f)},
@@ -675,7 +678,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors_mrgb)
        6,
        24,
        float3(4, 1, -1),
-       float3(4, -1, -1),
+       float3(2, -1, 1),
        float3(0, 0, 0),
        float2(0, 0),
        float4(0.8714f, 0.6308f, 0.5271f, 1.0f)},
@@ -686,7 +689,7 @@ TEST_F(obj_importer_test, import_cubes_vertex_colors_mrgb)
        6,
        24,
        float3(1, 1, -1),
-       float3(1, -1, -1),
+       float3(-1, -1, 1),
        float3(0, 0, 0),
        float2(0, 0),
        float4(0.6038f, 0.3185f, 0.1329f, 1.0f)},

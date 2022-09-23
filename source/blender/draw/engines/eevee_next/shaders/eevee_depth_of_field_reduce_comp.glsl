@@ -8,7 +8,7 @@
  * Inputs:
  * - Output of setup pass (halfres) and reduce downsample pass (quarter res).
  * Outputs:
- * - Halfres padded to avoid mipmap mis-alignment (so possibly not matching input size).
+ * - Halfres padded to avoid mipmap misalignment (so possibly not matching input size).
  * - Gather input color (whole mip chain), Scatter rect list, Signed CoC (whole mip chain).
  **/
 
@@ -98,7 +98,7 @@ void main()
   do_scatter[LOCAL_INDEX] *= dof_scatter_screen_border_rejection(coc_cache[LOCAL_INDEX], texel);
   /* Only scatter if neighborhood is different enough. */
   do_scatter[LOCAL_INDEX] *= dof_scatter_neighborhood_rejection(color_cache[LOCAL_INDEX].rgb);
-  /* For debuging. */
+  /* For debugging. */
   if (no_scatter_pass) {
     do_scatter[LOCAL_INDEX] = 0.0;
   }
@@ -133,9 +133,9 @@ void main()
       /* Issue a sprite for each field if any CoC matches. */
       if (any(lessThan(do_scatter4 * sign(coc4), vec4(0.0)))) {
         /* Same value for all threads. Not an issue if we don't sync access to it. */
-        scatter_fg_indirect_buf.v_count = 4u;
+        scatter_fg_indirect_buf.vertex_len = 4u;
         /* Issue 1 strip instance per sprite. */
-        uint rect_id = atomicAdd(scatter_fg_indirect_buf.i_count, 1u);
+        uint rect_id = atomicAdd(scatter_fg_indirect_buf.instance_len, 1u);
         if (rect_id < dof_buf.scatter_max_rect) {
 
           vec4 coc4_fg = max(vec4(0.0), -coc4);
@@ -166,9 +166,9 @@ void main()
       }
       if (any(greaterThan(do_scatter4 * sign(coc4), vec4(0.0)))) {
         /* Same value for all threads. Not an issue if we don't sync access to it. */
-        scatter_bg_indirect_buf.v_count = 4u;
+        scatter_bg_indirect_buf.vertex_len = 4u;
         /* Issue 1 strip instance per sprite. */
-        uint rect_id = atomicAdd(scatter_bg_indirect_buf.i_count, 1u);
+        uint rect_id = atomicAdd(scatter_bg_indirect_buf.instance_len, 1u);
         if (rect_id < dof_buf.scatter_max_rect) {
           vec4 coc4_bg = max(vec4(0.0), coc4);
           vec4 bg_weights = dof_layer_weight(coc4_bg) * dof_sample_weight(coc4_bg) * do_scatter4;

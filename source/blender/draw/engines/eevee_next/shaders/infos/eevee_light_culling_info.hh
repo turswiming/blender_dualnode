@@ -8,10 +8,10 @@
  * \{ */
 
 GPU_SHADER_CREATE_INFO(eevee_light_data)
-    .storage_buf(0, Qualifier::READ, "LightCullingData", "light_cull_buf")
-    .storage_buf(1, Qualifier::READ, "LightData", "light_buf[]")
-    .storage_buf(2, Qualifier::READ, "uint", "light_zbin_buf[]")
-    .storage_buf(3, Qualifier::READ, "uint", "light_tile_buf[]");
+    .storage_buf(LIGHT_CULL_BUF_SLOT, Qualifier::READ, "LightCullingData", "light_cull_buf")
+    .storage_buf(LIGHT_BUF_SLOT, Qualifier::READ, "LightData", "light_buf[]")
+    .storage_buf(LIGHT_ZBIN_BUF_SLOT, Qualifier::READ, "uint", "light_zbin_buf[]")
+    .storage_buf(LIGHT_TILE_BUF_SLOT, Qualifier::READ, "uint", "light_tile_buf[]");
 
 /** \} */
 
@@ -67,10 +67,10 @@ GPU_SHADER_CREATE_INFO(eevee_light_culling_tile)
 
 GPU_SHADER_CREATE_INFO(eevee_light_culling_debug)
     .do_static_compilation(true)
-    .sampler(0, ImageType::DEPTH_2D, "depth_tx")
-    .fragment_out(0, Type::VEC4, "out_debug_color")
-    .additional_info("eevee_shared", "draw_view")
+    .fragment_out(0, Type::VEC4, "out_debug_color_add", DualBlend::SRC_0)
+    .fragment_out(0, Type::VEC4, "out_debug_color_mul", DualBlend::SRC_1)
     .fragment_source("eevee_light_culling_debug_frag.glsl")
-    .additional_info("draw_fullscreen", "eevee_light_data");
+    .additional_info(
+        "eevee_shared", "draw_view", "draw_fullscreen", "eevee_light_data", "eevee_hiz_data");
 
 /** \} */

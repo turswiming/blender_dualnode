@@ -677,7 +677,7 @@ static void copy_frame_to_eval_cb(bGPDlayer *gpl,
    * - When the frame is the layer's active frame (already handled in
    * gpencil_copy_visible_frames_to_eval).
    */
-  if (gpf == NULL || gpf == gpl->actframe) {
+  if (ELEM(gpf, NULL, gpl->actframe)) {
     return;
   }
 
@@ -695,7 +695,7 @@ static void gpencil_copy_visible_frames_to_eval(Depsgraph *depsgraph, Scene *sce
       gpl_eval->actframe = BKE_gpencil_layer_frame_get(gpl_eval, remap_cfra, GP_GETFRAME_USE_PREV);
     }
     /* Always copy active frame to eval, because the modifiers always evaluate the active frame,
-     * even if it's not visible (e.g. the layer is hidden).*/
+     * even if it's not visible (e.g. the layer is hidden). */
     if (gpl_eval->actframe != NULL) {
       copy_frame_to_eval_ex(gpl_eval->actframe->runtime.gpf_orig, gpl_eval->actframe);
     }

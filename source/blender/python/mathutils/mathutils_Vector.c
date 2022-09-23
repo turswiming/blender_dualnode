@@ -3188,7 +3188,7 @@ PyDoc_STRVAR(vector_doc,
              "\n"
              "   This object gives access to Vectors in Blender.\n"
              "\n"
-             "   :param seq: Components of the vector, must be a sequence of at least two\n"
+             "   :arg seq: Components of the vector, must be a sequence of at least two\n"
              "   :type seq: sequence of numbers\n");
 PyTypeObject vector_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
@@ -3304,7 +3304,7 @@ PyObject *Vector_CreatePyObject(const float *vec, const int vec_num, PyTypeObjec
     self->vec = vec_alloc;
     self->vec_num = vec_num;
 
-    /* init callbacks as NULL */
+    /* Initialize callbacks as NULL. */
     self->cb_user = NULL;
     self->cb_type = self->cb_subtype = 0;
 
@@ -3339,7 +3339,7 @@ PyObject *Vector_CreatePyObject_wrap(float *vec, const int vec_num, PyTypeObject
   if (self) {
     self->vec_num = vec_num;
 
-    /* init callbacks as NULL */
+    /* Initialize callbacks as NULL. */
     self->cb_user = NULL;
     self->cb_type = self->cb_subtype = 0;
 

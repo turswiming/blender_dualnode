@@ -17,7 +17,6 @@ set(INC
   ../../nodes
   ../../render
   ../../windowmanager
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -25,6 +24,7 @@ set(INC
 
 
 set(SRC
+  add_node_search.cc
   drawnode.cc
   link_drag_search.cc
   node_add.cc

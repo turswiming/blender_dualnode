@@ -13,6 +13,8 @@
 #include "BLI_string.h"
 #include "BLI_vector.hh"
 
+#include "BLT_translation.h"
+
 #include "DNA_image_types.h"
 
 #include "MEM_guardedalloc.h"
@@ -173,12 +175,12 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
           BLI_strncpy(opts->filepath, G.ima, sizeof(opts->filepath));
         }
         else {
-          BLI_strncpy(opts->filepath, "//untitled", sizeof(opts->filepath));
+          BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", DATA_("untitled"), nullptr);
           BLI_path_abs(opts->filepath, BKE_main_blendfile_path(bmain));
         }
       }
       else {
-        BLI_snprintf(opts->filepath, sizeof(opts->filepath), "//%s", ima->id.name + 2);
+        BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", ima->id.name + 2, nullptr);
         BLI_path_make_safe(opts->filepath);
         BLI_path_abs(opts->filepath, is_prev_save ? G.ima : BKE_main_blendfile_path(bmain));
       }
@@ -821,7 +823,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
       const bool pass_RGBA = (STR_ELEM(rp->chan_id, "RGB", "RGBA", "R", "G", "B", "A"));
       const bool pass_half_float = half_float && pass_RGBA;
 
-      /* Colorspace conversion only happens on RGBA passes. */
+      /* Color-space conversion only happens on RGBA passes. */
       float *output_rect =
           (save_as_render && pass_RGBA) ?
               image_exr_from_scene_linear_to_output(

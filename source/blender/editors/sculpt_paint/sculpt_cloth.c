@@ -617,10 +617,11 @@ static void do_cloth_brush_apply_forces_task_cb_ex(void *__restrict userdata,
 static ListBase *cloth_brush_collider_cache_create(Object *object, Depsgraph *depsgraph)
 {
   ListBase *cache = NULL;
-  DEG_OBJECT_ITER_BEGIN (depsgraph,
-                         ob,
-                         DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY | DEG_ITER_OBJECT_FLAG_VISIBLE |
-                             DEG_ITER_OBJECT_FLAG_DUPLI) {
+  DEGObjectIterSettings deg_iter_settings = {0};
+  deg_iter_settings.depsgraph = depsgraph;
+  deg_iter_settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY | DEG_ITER_OBJECT_FLAG_VISIBLE |
+                            DEG_ITER_OBJECT_FLAG_DUPLI;
+  DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
     if (STREQ(object->id.name, ob->id.name)) {
       continue;
     }
@@ -1579,7 +1580,7 @@ static int sculpt_cloth_filter_invoke(bContext *C, wmOperator *op, const wmEvent
   /* Needs mask data to be available as it is used when solving the constraints. */
   BKE_sculpt_update_object_for_edit(depsgraph, ob, true, true, false);
 
-  SCULPT_undo_push_begin(ob, "Cloth filter");
+  SCULPT_undo_push_begin(ob, op);
   SCULPT_filter_cache_init(C, ob, sd, SCULPT_UNDO_COORDS);
 
   ss->filter_cache->automasking = SCULPT_automasking_cache_init(sd, NULL, ob);

@@ -201,7 +201,7 @@ static DupliObject *make_dupli(
   /* Meta-balls never draw in duplis, they are instead merged into one by the basis
    * meta-ball outside of the group. this does mean that if that meta-ball is not in the
    * scene, they will not show up at all, limitation that should be solved once. */
-  if (ob->type == OB_MBALL) {
+  if (object_data && GS(object_data->name) == ID_MB) {
     dob->no_draw = true;
   }
 
@@ -311,12 +311,13 @@ static void make_child_duplis(const DupliContext *ctx,
     /* FIXME: using a mere counter to generate a 'persistent' dupli id is very weak. One possible
      * better solution could be to use `session_uuid` of ID's instead? */
     int persistent_dupli_id = 0;
+    DEGObjectIterSettings deg_iter_settings{};
+    deg_iter_settings.depsgraph = ctx->depsgraph;
     /* NOTE: this set of flags ensure we only iterate over objects that have a base in either the
      * current scene, or the set (background) scene. */
-    int deg_objects_visibility_flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
-                                       DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET;
-
-    DEG_OBJECT_ITER_BEGIN (ctx->depsgraph, ob, deg_objects_visibility_flags) {
+    deg_iter_settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
+                              DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET;
+    DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
       if ((ob != ctx->obedit) && is_child(ob, parent)) {
         DupliContext pctx;
         if (copy_dupli_context(&pctx, ctx, ctx->object, nullptr, persistent_dupli_id)) {
@@ -628,7 +629,7 @@ static void make_duplis_verts(const DupliContext *ctx)
     VertexDupliData_Mesh vdd{};
     vdd.params = vdd_params;
     vdd.totvert = me_eval->totvert;
-    vdd.mvert = me_eval->mvert;
+    vdd.mvert = me_eval->verts().data();
     vdd.vert_normals = BKE_mesh_vertex_normals_ensure(me_eval);
     vdd.orco = (const float(*)[3])CustomData_get_layer(&me_eval->vdata, CD_ORCO);
 
@@ -1178,9 +1179,9 @@ static void make_duplis_faces(const DupliContext *ctx)
     FaceDupliData_Mesh fdd{};
     fdd.params = fdd_params;
     fdd.totface = me_eval->totpoly;
-    fdd.mpoly = me_eval->mpoly;
-    fdd.mloop = me_eval->mloop;
-    fdd.mvert = me_eval->mvert;
+    fdd.mpoly = me_eval->polys().data();
+    fdd.mloop = me_eval->loops().data();
+    fdd.mvert = me_eval->verts().data();
     fdd.mloopuv = (uv_idx != -1) ? (const MLoopUV *)CustomData_get_layer_n(
                                        &me_eval->ldata, CD_MLOOPUV, uv_idx) :
                                    nullptr;
@@ -1560,6 +1561,13 @@ static const DupliGenerator *get_dupli_generator(const DupliContext *ctx)
   int visibility_flag = ctx->object->visibility_flag;
 
   if ((transflag & OB_DUPLI) == 0 && ctx->object->runtime.geometry_set_eval == nullptr) {
+    return nullptr;
+  }
+
+  /* Metaball objects can't create instances, but the dupli system is used to "instance" their
+   * evaluated mesh to render engines. We need to exit early to avoid recursively instancing the
+   * evaluated metaball mesh on metaball instances that already contribute to the basis. */
+  if (ctx->object->type == OB_MBALL && ctx->level > 0) {
     return nullptr;
   }
 

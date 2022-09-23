@@ -25,6 +25,7 @@ struct CurveMapping;
 struct CurveProfile;
 struct ID;
 struct ImBuf;
+struct Main;
 struct Scene;
 struct bContext;
 struct bContextStore;
@@ -306,6 +307,8 @@ typedef struct uiButSearch {
 
   uiButSearchCreateFn popup_create_fn;
   uiButSearchUpdateFn items_update_fn;
+  uiButSearchListenFn listen_fn;
+
   void *item_active;
 
   void *arg;
@@ -1542,6 +1545,12 @@ uiButViewItem *ui_block_view_find_matching_view_item_but_in_old_block(
 /* interface_templates.c */
 
 struct uiListType *UI_UL_cache_file_layers(void);
+
+struct ID *ui_template_id_liboverride_hierarchy_make(struct bContext *C,
+                                                     struct Main *bmain,
+                                                     struct ID *owner_id,
+                                                     struct ID *id,
+                                                     const char **r_undo_push_label);
 
 #ifdef __cplusplus
 }

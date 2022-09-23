@@ -442,7 +442,7 @@ constexpr IDTypeInfo get_type_info()
   info.foreach_id = nullptr;
   info.foreach_cache = image_foreach_cache;
   info.foreach_path = image_foreach_path;
-  info.owner_get = nullptr;
+  info.owner_pointer_get = nullptr;
 
   info.blend_write = image_blend_write;
   info.blend_read_data = image_blend_read_data;
@@ -926,7 +926,7 @@ int BKE_image_find_nearest_tile_with_offset(const Image *image,
   zero_v2(r_uv_offset);
   int tile_number_best = -1;
 
-  if (image->source != IMA_SRC_TILED) {
+  if (!image || image->source != IMA_SRC_TILED) {
     return tile_number_best;
   }
 
@@ -1248,7 +1248,7 @@ Image *BKE_image_add_generated(Main *bmain,
 
 static void image_colorspace_from_imbuf(Image *image, const ImBuf *ibuf)
 {
-  const char *colorspace_name = NULL;
+  const char *colorspace_name = nullptr;
 
   if (ibuf->rect_float) {
     if (ibuf->float_colorspace) {
@@ -2662,7 +2662,7 @@ Image *BKE_image_ensure_viewer(Main *bmain, int type, const char *name)
     ima = image_alloc(bmain, name, IMA_SRC_VIEWER, type);
   }
 
-  /* Happens on reload, imagewindow cannot be image user when hidden. */
+  /* Happens on reload, image-window cannot be image user when hidden. */
   if (ima->id.us == 0) {
     id_us_ensure_real(&ima->id);
   }
@@ -5148,7 +5148,7 @@ bool BKE_image_has_alpha(Image *image)
   const int planes = (ibuf ? ibuf->planes : 0);
   BKE_image_release_ibuf(image, ibuf, lock);
 
-  if (planes == 32 || planes == 16) {
+  if (ELEM(planes, 32, 16)) {
     return true;
   }
 
@@ -5519,7 +5519,7 @@ RenderSlot *BKE_image_add_renderslot(Image *ima, const char *name)
   }
   else {
     int n = BLI_listbase_count(&ima->renderslots) + 1;
-    BLI_snprintf(slot->name, sizeof(slot->name), "Slot %d", n);
+    BLI_snprintf(slot->name, sizeof(slot->name), DATA_("Slot %d"), n);
   }
   BLI_addtail(&ima->renderslots, slot);
   return slot;
@@ -5567,15 +5567,14 @@ bool BKE_image_remove_renderslot(Image *ima, ImageUser *iuser, int slot)
       next_last_slot = current_slot;
     }
 
-    if (!iuser) {
+    if (iuser == nullptr || iuser->scene == nullptr) {
       return false;
     }
     Render *re = RE_GetSceneRender(iuser->scene);
-    if (!re) {
-      return false;
+    if (re != nullptr) {
+      RE_SwapResult(re, &current_last_slot->render);
+      RE_SwapResult(re, &next_last_slot->render);
     }
-    RE_SwapResult(re, &current_last_slot->render);
-    RE_SwapResult(re, &next_last_slot->render);
     current_last_slot = next_last_slot;
   }
 

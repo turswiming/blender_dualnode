@@ -166,7 +166,7 @@ void WM_init_opengl(void)
 
   if (G.background) {
     /* Ghost is still not initialized elsewhere in background mode. */
-    wm_ghost_init(NULL);
+    wm_ghost_init_background();
   }
 
   if (!GPU_backend_supported()) {
@@ -634,13 +634,16 @@ void WM_exit_ex(bContext *C, const bool do_python)
   BKE_sound_exit();
 
   BKE_appdir_exit();
-  CLG_exit();
 
   BKE_blender_atexit();
 
   wm_autosave_delete();
 
   BKE_tempdir_session_purge();
+
+  /* Logging cannot be called after exiting (#CLOG_INFO, #CLOG_WARN etc will crash).
+   * So postpone exiting until other sub-systems that may use logging have shut down. */
+  CLG_exit();
 }
 
 void WM_exit(bContext *C)

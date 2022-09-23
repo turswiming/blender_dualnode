@@ -230,7 +230,7 @@ typedef void (*BKE_pbvh_SearchNearestCallback)(PBVHNode *node, void *data, float
 
 /* Building */
 
-PBVH *BKE_pbvh_new(void);
+PBVH *BKE_pbvh_new(PBVHType type);
 /**
  * Do a full rebuild with on Mesh data structure.
  *
@@ -267,6 +267,8 @@ void BKE_pbvh_build_bmesh(PBVH *pbvh,
                           struct BMLog *log,
                           int cd_vert_node_offset,
                           int cd_face_node_offset);
+
+void BKE_pbvh_update_bmesh_offsets(PBVH *pbvh, int cd_vert_node_offset, int cd_face_node_offset);
 
 void BKE_pbvh_build_pixels(PBVH *pbvh,
                            struct Mesh *mesh,
@@ -350,10 +352,13 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
                       void *user_data,
                       bool full_render);
 
-void BKE_pbvh_draw_debug_cb(
-    PBVH *pbvh,
-    void (*draw_fn)(void *user_data, const float bmin[3], const float bmax[3], PBVHNodeFlags flag),
-    void *user_data);
+void BKE_pbvh_draw_debug_cb(PBVH *pbvh,
+                            void (*draw_fn)(PBVHNode *node,
+                                            void *user_data,
+                                            const float bmin[3],
+                                            const float bmax[3],
+                                            PBVHNodeFlags flag),
+                            void *user_data);
 
 /* PBVH Access */
 
@@ -377,8 +382,6 @@ int BKE_pbvh_count_grid_quads(BLI_bitmap **grid_hidden,
                               int totgrid,
                               int gridsize);
 
-void BKE_pbvh_sync_face_sets_to_grids(PBVH *pbvh);
-
 /**
  * Multi-res level, only valid for type == #PBVH_GRIDS.
  */
@@ -386,7 +389,7 @@ const struct CCGKey *BKE_pbvh_get_grid_key(const PBVH *pbvh);
 
 struct CCGElem **BKE_pbvh_get_grids(const PBVH *pbvh);
 BLI_bitmap **BKE_pbvh_get_grid_visibility(const PBVH *pbvh);
-int BKE_pbvh_get_grid_num_vertices(const PBVH *pbvh);
+int BKE_pbvh_get_grid_num_verts(const PBVH *pbvh);
 int BKE_pbvh_get_grid_num_faces(const PBVH *pbvh);
 
 /**
@@ -487,6 +490,12 @@ void BKE_pbvh_grids_update(PBVH *pbvh,
                            unsigned int **grid_hidden);
 void BKE_pbvh_subdiv_cgg_set(PBVH *pbvh, struct SubdivCCG *subdiv_ccg);
 void BKE_pbvh_face_sets_set(PBVH *pbvh, int *face_sets);
+
+/**
+ * If an operation causes the hide status stored in the mesh to change, this must be called
+ * to update the references to those attributes, since they are only added when necessary.
+ */
+void BKE_pbvh_update_hide_attributes_from_mesh(PBVH *pbvh);
 
 void BKE_pbvh_face_sets_color_set(PBVH *pbvh, int seed, int color_default);
 
@@ -671,6 +680,8 @@ const float (*BKE_pbvh_get_vert_normals(const PBVH *pbvh))[3];
 const bool *BKE_pbvh_get_vert_hide(const PBVH *pbvh);
 bool *BKE_pbvh_get_vert_hide_for_write(PBVH *pbvh);
 
+const bool *BKE_pbvh_get_poly_hide(const PBVH *pbvh);
+
 PBVHColorBufferNode *BKE_pbvh_node_color_buffer_get(PBVHNode *node);
 void BKE_pbvh_node_color_buffer_free(PBVH *pbvh);
 bool BKE_pbvh_get_color_layer(const struct Mesh *me,
@@ -711,6 +722,7 @@ void BKE_pbvh_vertex_color_get(const PBVH *pbvh, PBVHVertRef vertex, float r_col
 
 void BKE_pbvh_ensure_node_loops(PBVH *pbvh);
 bool BKE_pbvh_draw_cache_invalid(const PBVH *pbvh);
+int BKE_pbvh_debug_draw_gen_get(PBVHNode *node);
 
 #ifdef __cplusplus
 }

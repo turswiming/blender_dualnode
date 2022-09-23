@@ -15,7 +15,6 @@ set(INC
   ../../makesrna
   ../../render
   ../../windowmanager
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
   ../../../../intern/mantaflow/extern
 
@@ -28,7 +27,7 @@ set(INC
 
 set(SRC
   drawobject.c
-  space_view3d.c
+  space_view3d.cc
   view3d_buttons.c
   view3d_camera_control.c
   view3d_cursor_snap.c
@@ -61,7 +60,7 @@ set(SRC
   view3d_ops.c
   view3d_placement.c
   view3d_project.c
-  view3d_select.c
+  view3d_select.cc
   view3d_snap.c
   view3d_utils.c
   view3d_view.c
@@ -76,7 +75,7 @@ set(LIB
 )
 
 if(WITH_PYTHON)
-  blender_include_dirs(../../python)
+  list(APPEND INC ../../python)
   add_definitions(-DWITH_PYTHON)
 endif()
 

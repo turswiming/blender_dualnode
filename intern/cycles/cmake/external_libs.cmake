@@ -69,6 +69,7 @@ if(CYCLES_STANDALONE_REPOSITORY)
     _set_default(BOOST_ROOT "${_cycles_lib_dir}/boost")
     _set_default(BLOSC_ROOT_DIR "${_cycles_lib_dir}/blosc")
     _set_default(EMBREE_ROOT_DIR "${_cycles_lib_dir}/embree")
+    _set_default(EPOXY_ROOT_DIR "${_cycles_lib_dir}/epoxy")
     _set_default(IMATH_ROOT_DIR "${_cycles_lib_dir}/imath")
     _set_default(GLEW_ROOT_DIR "${_cycles_lib_dir}/glew")
     _set_default(JPEG_ROOT "${_cycles_lib_dir}/jpeg")
@@ -91,7 +92,11 @@ if(CYCLES_STANDALONE_REPOSITORY)
     _set_default(USD_ROOT_DIR "${_cycles_lib_dir}/usd")
     _set_default(WEBP_ROOT_DIR "${_cycles_lib_dir}/webp")
     _set_default(ZLIB_ROOT "${_cycles_lib_dir}/zlib")
-    _set_default(LEVEL_ZERO_ROOT_DIR "${_cycles_lib_dir}/level-zero")
+    if(WIN32)
+      set(LEVEL_ZERO_ROOT_DIR ${_cycles_lib_dir}/level_zero)
+    else()
+      set(LEVEL_ZERO_ROOT_DIR ${_cycles_lib_dir}/level-zero)
+    endif()
     _set_default(SYCL_ROOT_DIR "${_cycles_lib_dir}/dpcpp")
 
     # Ignore system libraries
@@ -197,17 +202,17 @@ endif()
 if(CYCLES_STANDALONE_REPOSITORY)
   if(MSVC AND EXISTS ${_cycles_lib_dir})
     set(OPENEXR_INCLUDE_DIR ${OPENEXR_ROOT_DIR}/include)
-    set(OPENEXR_INCLUDE_DIRS ${OPENEXR_INCLUDE_DIR} ${OPENEXR_ROOT_DIR}/include/OpenEXR)
+    set(OPENEXR_INCLUDE_DIRS ${OPENEXR_INCLUDE_DIR} ${OPENEXR_ROOT_DIR}/include/OpenEXR ${IMATH_ROOT_DIR}/include ${IMATH_ROOT_DIR}/include/Imath)
     set(OPENEXR_LIBRARIES
+      optimized ${OPENEXR_ROOT_DIR}/lib/OpenEXR_s.lib
+      optimized ${OPENEXR_ROOT_DIR}/lib/OpenEXRCore_s.lib
       optimized ${OPENEXR_ROOT_DIR}/lib/Iex_s.lib
-      optimized ${OPENEXR_ROOT_DIR}/lib/Half_s.lib
-      optimized ${OPENEXR_ROOT_DIR}/lib/IlmImf_s.lib
-      optimized ${OPENEXR_ROOT_DIR}/lib/Imath_s.lib
+      optimized ${IMATH_ROOT_DIR}/lib/Imath_s.lib
       optimized ${OPENEXR_ROOT_DIR}/lib/IlmThread_s.lib
+      debug ${OPENEXR_ROOT_DIR}/lib/OpenEXR_s_d.lib
+      debug ${OPENEXR_ROOT_DIR}/lib/OpenEXRCore_s_d.lib
       debug ${OPENEXR_ROOT_DIR}/lib/Iex_s_d.lib
-      debug ${OPENEXR_ROOT_DIR}/lib/Half_s_d.lib
-      debug ${OPENEXR_ROOT_DIR}/lib/IlmImf_s_d.lib
-      debug ${OPENEXR_ROOT_DIR}/lib/Imath_s_d.lib
+      debug ${IMATH_ROOT_DIR}/lib/Imath_s_d.lib
       debug ${OPENEXR_ROOT_DIR}/lib/IlmThread_s_d.lib
     )
   else()
@@ -319,8 +324,8 @@ if(CYCLES_STANDALONE_REPOSITORY)
     if(NOT BOOST_VERSION)
       message(FATAL_ERROR "Unable to determine Boost version")
     endif()
-    set(BOOST_POSTFIX "vc141-mt-x64-${BOOST_VERSION}.lib")
-    set(BOOST_DEBUG_POSTFIX "vc141-mt-gd-x64-${BOOST_VERSION}.lib")
+    set(BOOST_POSTFIX "vc142-mt-x64-${BOOST_VERSION}.lib")
+    set(BOOST_DEBUG_POSTFIX "vc142-mt-gd-x64-${BOOST_VERSION}.lib")
     set(BOOST_LIBRARIES
       optimized ${BOOST_ROOT}/lib/libboost_date_time-${BOOST_POSTFIX}
       optimized ${BOOST_ROOT}/lib/libboost_iostreams-${BOOST_POSTFIX}
@@ -459,6 +464,7 @@ if(CYCLES_STANDALONE_REPOSITORY AND WITH_CYCLES_NANOVDB)
 
   if(MSVC AND EXISTS ${_cycles_lib_dir})
     set(NANOVDB_INCLUDE_DIR ${NANOVDB_ROOT_DIR}/include)
+    set(NANOVDB_INCLUDE_DIRS ${NANOVDB_INCLUDE_DIR})
   else()
     find_package(NanoVDB REQUIRED)
   endif()
@@ -505,26 +511,19 @@ if(CYCLES_STANDALONE_REPOSITORY)
 endif()
 
 ###########################################################################
-# GLEW
+# Epoxy
 ###########################################################################
 
 if(CYCLES_STANDALONE_REPOSITORY)
   if((WITH_CYCLES_STANDALONE AND WITH_CYCLES_STANDALONE_GUI) OR
      WITH_CYCLES_HYDRA_RENDER_DELEGATE)
     if(MSVC AND EXISTS ${_cycles_lib_dir})
-      set(GLEW_LIBRARY "${_cycles_lib_dir}/opengl/lib/glew.lib")
-      set(GLEW_INCLUDE_DIR "${_cycles_lib_dir}/opengl/include")
-      add_definitions(-DGLEW_STATIC)
+      set(Epoxy_LIBRARIES "${_cycles_lib_dir}/epoxy/lib/epoxy.lib")
+      set(Epoxy_INCLUDE_DIRS "${_cycles_lib_dir}/epoxy/include")
     else()
-      find_package(GLEW REQUIRED)
+      find_package(Epoxy REQUIRED)
     endif()
-
-    set(CYCLES_GLEW_LIBRARIES ${GLEW_LIBRARY})
   endif()
-else()
-  # Workaround for unconventional variable name use in Blender.
-  set(GLEW_INCLUDE_DIR "${GLEW_INCLUDE_PATH}")
-  set(CYCLES_GLEW_LIBRARIES bf_intern_glew_mx ${BLENDER_GLEW_LIBRARIES})
 endif()
 
 ###########################################################################
@@ -554,25 +553,6 @@ endif()
 if(EXISTS ${_cycles_lib_dir})
   unset(CMAKE_IGNORE_PATH)
   unset(_cycles_lib_dir)
-endif()
-
-###########################################################################
-# OpenGL
-###########################################################################
-
-if((WITH_CYCLES_STANDALONE AND WITH_CYCLES_STANDALONE_GUI) OR
-   WITH_CYCLES_HYDRA_RENDER_DELEGATE)
-  if(CYCLES_STANDALONE_REPOSITORY)
-    if(NOT DEFINED OpenGL_GL_PREFERENCE)
-      set(OpenGL_GL_PREFERENCE "LEGACY")
-    endif()
-
-    find_package(OpenGL REQUIRED)
-
-    set(CYCLES_GL_LIBRARIES ${OPENGL_gl_LIBRARY})
-  else()
-    set(CYCLES_GL_LIBRARIES ${BLENDER_GL_LIBRARIES})
-  endif()
 endif()
 
 ###########################################################################
@@ -654,15 +634,29 @@ endif()
 # oneAPI
 ###########################################################################
 
-if (WITH_CYCLES_DEVICE_ONEAPI)
+if(WITH_CYCLES_DEVICE_ONEAPI)
   find_package(SYCL)
   find_package(LevelZero)
 
-  if (SYCL_FOUND AND LEVEL_ZERO_FOUND)
+  if(SYCL_FOUND AND LEVEL_ZERO_FOUND)
     message(STATUS "Found oneAPI: ${SYCL_LIBRARY}")
     message(STATUS "Found Level Zero: ${LEVEL_ZERO_LIBRARY}")
+
+    if(WITH_CYCLES_ONEAPI_BINARIES)
+      if(NOT OCLOC_INSTALL_DIR)
+        get_filename_component(_sycl_compiler_root ${SYCL_COMPILER} DIRECTORY)
+        get_filename_component(OCLOC_INSTALL_DIR "${_sycl_compiler_root}/../lib/ocloc" ABSOLUTE)
+        unset(_sycl_compiler_root)
+      endif()
+
+      if(NOT EXISTS ${OCLOC_INSTALL_DIR})
+        message(STATUS "oneAPI ocloc not found in ${OCLOC_INSTALL_DIR}, disabling WITH_CYCLES_ONEAPI_BINARIES."
+                       " A different ocloc directory can be set using OCLOC_INSTALL_DIR cmake variable.")
+        set(WITH_CYCLES_ONEAPI_BINARIES OFF)
+      endif()
+    endif()
   else()
-    message(STATUS "oneAPI or Level Zero not found, disabling oneAPI device from Cycles")
+    message(STATUS "oneAPI or Level Zero not found, disabling WITH_CYCLES_DEVICE_ONEAPI")
     set(WITH_CYCLES_DEVICE_ONEAPI OFF)
   endif()
 endif()

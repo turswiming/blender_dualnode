@@ -12,16 +12,16 @@
 #  include "BLI_memory_utils.hh"
 #  include "DRW_gpu_wrapper.hh"
 
+#  include "draw_manager.hh"
+#  include "draw_pass.hh"
+
 #  include "eevee_defines.hh"
 
 #  include "GPU_shader_shared.h"
 
 namespace blender::eevee {
 
-using draw::Framebuffer;
-using draw::SwapChain;
-using draw::Texture;
-using draw::TextureFromPool;
+using namespace draw;
 
 constexpr eGPUSamplerState no_filter = GPU_SAMPLER_DEFAULT;
 constexpr eGPUSamplerState with_filter = GPU_SAMPLER_FILTER;
@@ -38,40 +38,44 @@ constexpr eGPUSamplerState with_filter = GPU_SAMPLER_FILTER;
 enum eDebugMode : uint32_t {
   DEBUG_NONE = 0u,
   /**
-   * Gradient showing light evaluation hotspots.
+   * Gradient showing light evaluation hot-spots.
    */
   DEBUG_LIGHT_CULLING = 1u,
   /**
-   * Tilemaps to screen. Is also present in other modes.
+   * Show incorrectly downsample tiles in red.
+   */
+  DEBUG_HIZ_VALIDATION = 2u,
+  /**
+   * Tile-maps to screen. Is also present in other modes.
    * - Black pixels, no pages allocated.
    * - Green pixels, pages cached.
    * - Red pixels, pages allocated.
    */
-  DEBUG_SHADOW_TILEMAPS = 2u,
+  DEBUG_SHADOW_TILEMAPS = 10u,
   /**
    * Random color per pages. Validates page density allocation and sampling.
    */
-  DEBUG_SHADOW_PAGES = 3u,
+  DEBUG_SHADOW_PAGES = 11u,
   /**
-   * Outputs random color per tilemap (or tilemap level). Validates tilemaps coverage.
-   * Black means not covered by any tilemaps LOD of the shadow.
+   * Outputs random color per tile-map (or tile-map level). Validates tile-maps coverage.
+   * Black means not covered by any tile-maps LOD of the shadow.
    */
-  DEBUG_SHADOW_LOD = 4u,
+  DEBUG_SHADOW_LOD = 12u,
   /**
    * Outputs white pixels for pages allocated and black pixels for unused pages.
    * This needs DEBUG_SHADOW_PAGE_ALLOCATION_ENABLED defined in order to work.
    */
-  DEBUG_SHADOW_PAGE_ALLOCATION = 5u,
+  DEBUG_SHADOW_PAGE_ALLOCATION = 13u,
   /**
-   * Outputs the tilemap atlas. Default tilemap is too big for the usual screen resolution.
+   * Outputs the tile-map atlas. Default tile-map is too big for the usual screen resolution.
    * Try lowering SHADOW_TILEMAP_PER_ROW and SHADOW_MAX_TILEMAP before using this option.
    */
-  DEBUG_SHADOW_TILE_ALLOCATION = 6u,
+  DEBUG_SHADOW_TILE_ALLOCATION = 14u,
   /**
    * Visualize linear depth stored in the atlas regions of the active light.
    * This way, one can check if the rendering, the copying and the shadow sampling functions works.
    */
-  DEBUG_SHADOW_SHADOW_DEPTH = 7u
+  DEBUG_SHADOW_SHADOW_DEPTH = 15u
 };
 
 /** \} */
@@ -190,6 +194,17 @@ BLI_STATIC_ASSERT_ALIGN(CameraData, 16)
 
 #define FILM_PRECOMP_SAMPLE_MAX 16
 
+enum eFilmWeightLayerIndex : uint32_t {
+  FILM_WEIGHT_LAYER_ACCUMULATION = 0u,
+  FILM_WEIGHT_LAYER_DISTANCE = 1u,
+};
+
+enum ePassStorageType : uint32_t {
+  PASS_STORAGE_COLOR = 0u,
+  PASS_STORAGE_VALUE = 1u,
+  PASS_STORAGE_CRYPTOMATTE = 2u,
+};
+
 struct FilmSample {
   int2 texel;
   float weight;
@@ -246,13 +261,19 @@ struct FilmData {
   int combined_id;
   /** Id of the render-pass to be displayed. -1 for combined. */
   int display_id;
-  /** True if the render-pass to be displayed is from the value accum buffer. */
-  bool1 display_is_value;
+  /** Storage type of the render-pass to be displayed. */
+  ePassStorageType display_storage_type;
   /** True if we bypass the accumulation and directly output the accumulation buffer. */
   bool1 display_only;
   /** Start of AOVs and number of aov. */
   int aov_color_id, aov_color_len;
   int aov_value_id, aov_value_len;
+  /** Start of cryptomatte per layer (-1 if pass is not enabled). */
+  int cryptomatte_object_id;
+  int cryptomatte_asset_id;
+  int cryptomatte_material_id;
+  /** Max number of samples stored per layer (is even number). */
+  int cryptomatte_samples_len;
   /** Settings to render mist pass */
   float mist_scale, mist_bias, mist_exponent;
   /** Scene exposure used for better noise reduction. */
@@ -284,6 +305,17 @@ static inline float film_filter_weight(float filter_radius, float sample_distanc
 #endif
   return weight;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Render passes
+ * \{ */
+
+enum eRenderPassLayerIndex : uint32_t {
+  RENDER_PASS_LAYER_DIFFUSE_LIGHT = 0u,
+  RENDER_PASS_LAYER_SPECULAR_LIGHT = 1u,
+};
 
 /** \} */
 
@@ -613,6 +645,20 @@ BLI_STATIC_ASSERT_ALIGN(LightData, 16)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Hierarchical-Z Buffer
+ * \{ */
+
+struct HiZData {
+  /** Scale factor to remove HiZBuffer padding. */
+  float2 uv_scale;
+
+  float2 _pad0;
+};
+BLI_STATIC_ASSERT_ALIGN(HiZData, 16)
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Ray-Tracing
  * \{ */
 
@@ -699,22 +745,24 @@ float4 utility_tx_sample(sampler2DArray util_tx, float2 uv, float layer)
 
 using AOVsInfoDataBuf = draw::StorageBuffer<AOVsInfoData>;
 using CameraDataBuf = draw::UniformBuffer<CameraData>;
-using LightDataBuf = draw::StorageArrayBuffer<LightData, LIGHT_CHUNK>;
+using DepthOfFieldDataBuf = draw::UniformBuffer<DepthOfFieldData>;
+using DepthOfFieldScatterListBuf = draw::StorageArrayBuffer<ScatterRect, 16, true>;
+using DrawIndirectBuf = draw::StorageBuffer<DrawCommand, true>;
+using FilmDataBuf = draw::UniformBuffer<FilmData>;
+using HiZDataBuf = draw::UniformBuffer<HiZData>;
 using LightCullingDataBuf = draw::StorageBuffer<LightCullingData>;
 using LightCullingKeyBuf = draw::StorageArrayBuffer<uint, LIGHT_CHUNK, true>;
 using LightCullingTileBuf = draw::StorageArrayBuffer<uint, LIGHT_CHUNK, true>;
 using LightCullingZbinBuf = draw::StorageArrayBuffer<uint, CULLING_ZBIN_COUNT, true>;
 using LightCullingZdistBuf = draw::StorageArrayBuffer<float, LIGHT_CHUNK, true>;
-using DepthOfFieldDataBuf = draw::UniformBuffer<DepthOfFieldData>;
-using DepthOfFieldScatterListBuf = draw::StorageArrayBuffer<ScatterRect, 16, true>;
-using DrawIndirectBuf = draw::StorageBuffer<DrawCommand, true>;
-using FilmDataBuf = draw::UniformBuffer<FilmData>;
+using LightDataBuf = draw::StorageArrayBuffer<LightData, LIGHT_CHUNK>;
 using MotionBlurDataBuf = draw::UniformBuffer<MotionBlurData>;
 using MotionBlurTileIndirectionBuf = draw::StorageBuffer<MotionBlurTileIndirection, true>;
 using SamplingDataBuf = draw::StorageBuffer<SamplingData>;
 using VelocityGeometryBuf = draw::StorageArrayBuffer<float4, 16, true>;
 using VelocityIndexBuf = draw::StorageArrayBuffer<VelocityIndex, 16>;
 using VelocityObjectBuf = draw::StorageArrayBuffer<float4x4, 16>;
+using CryptomatteObjectBuf = draw::StorageArrayBuffer<float2, 16>;
 
 }  // namespace blender::eevee
 #endif

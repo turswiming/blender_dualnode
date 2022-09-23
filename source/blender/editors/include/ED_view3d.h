@@ -711,7 +711,7 @@ bool ED_view3d_win_to_segment_clipped(const struct Depsgraph *depsgraph,
                                       float r_ray_start[3],
                                       float r_ray_end[3],
                                       bool do_clip_planes);
-void ED_view3d_ob_project_mat_get(const struct RegionView3D *v3d,
+void ED_view3d_ob_project_mat_get(const struct RegionView3D *rv3d,
                                   const struct Object *ob,
                                   float r_pmat[4][4]);
 void ED_view3d_ob_project_mat_get_from_obmat(const struct RegionView3D *rv3d,
@@ -950,7 +950,7 @@ int view3d_opengl_select_with_id_filter(struct ViewContext *vc,
                                         eV3DSelectObjectFilter select_filter,
                                         uint select_id);
 
-/* view3d_select.c */
+/* view3d_select.cc */
 
 float ED_view3d_select_dist_px(void);
 void ED_view3d_viewcontext_init(struct bContext *C,
@@ -1319,7 +1319,7 @@ void ED_view3d_gizmo_mesh_preselect_get_active(struct bContext *C,
                                                struct BMElem **r_ele);
 void ED_view3d_gizmo_mesh_preselect_clear(struct wmGizmo *gz);
 
-/* space_view3d.c */
+/* space_view3d.cc */
 
 void ED_view3d_buttons_region_layout_ex(const struct bContext *C,
                                         struct ARegion *region,

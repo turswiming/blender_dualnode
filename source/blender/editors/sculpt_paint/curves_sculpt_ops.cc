@@ -914,7 +914,7 @@ static void SCULPT_CURVES_OT_select_grow(wmOperatorType *ot)
                        "Distance",
                        "By how much to grow the selection",
                        -10.0f,
-                       10.f);
+                       10.0f);
   RNA_def_property_subtype(prop, PROP_DISTANCE);
 }
 
@@ -1098,7 +1098,7 @@ static void min_distance_edit_draw(bContext *C, int UNUSED(x), int UNUSED(y), vo
   GPUVertFormat *format = immVertexFormat();
   uint pos2d = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
-  immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   immUniformColor3fvAlpha(circle_col, circle_alpha);
   imm_draw_circle_wire_2d(pos2d, 0.0f, 0.0f, brush_radius_re, 80);

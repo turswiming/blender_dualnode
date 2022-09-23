@@ -181,7 +181,7 @@ static void drw_task_graph_deinit(void)
 
 bool DRW_object_is_renderable(const Object *ob)
 {
-  BLI_assert((ob->base_flag & BASE_VISIBLE_DEPSGRAPH) != 0);
+  BLI_assert((ob->base_flag & BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT) != 0);
 
   if (ob->type == OB_MESH) {
     if ((ob == DST.draw_ctx.object_edit) || DRW_object_is_in_edit_mode(ob)) {
@@ -969,10 +969,13 @@ void DRW_cache_free_old_batches(Main *bmain)
 
       /* TODO(fclem): This is not optimal since it iter over all dupli instances.
        * In this case only the source object should be tagged. */
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
+      DEGObjectIterSettings deg_iter_settings = {0};
+      deg_iter_settings.depsgraph = depsgraph;
+      deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+      DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
         DRW_batch_cache_free_old(ob, ctime);
       }
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_END;
+      DEG_OBJECT_ITER_END;
     }
   }
 }
@@ -1001,6 +1004,8 @@ static void drw_engines_init(void)
 
 static void drw_engines_cache_init(void)
 {
+  DRW_manager_begin_sync();
+
   DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
     if (data->text_draw_cache) {
       DRW_text_cache_destroy(data->text_draw_cache);
@@ -1072,6 +1077,8 @@ static void drw_engines_cache_finish(void)
       engine->cache_finish(data);
     }
   }
+
+  DRW_manager_end_sync();
 }
 
 static void drw_engines_draw_scene(void)
@@ -1320,13 +1327,14 @@ void DRW_notify_view_update(const DRWUpdateContext *update_ctx)
   /* Reset before using it. */
   drw_state_prepare_clean_for_draw(&DST);
 
+  BKE_view_layer_synced_ensure(scene, view_layer);
   DST.draw_ctx = (DRWContextState){
       .region = region,
       .rv3d = rv3d,
       .v3d = v3d,
       .scene = scene,
       .view_layer = view_layer,
-      .obact = OBACT(view_layer),
+      .obact = BKE_view_layer_active_object_get(view_layer),
       .engine_type = engine_type,
       .depsgraph = depsgraph,
       .object_mode = OB_MODE_OBJECT,
@@ -1344,11 +1352,7 @@ void DRW_notify_view_update(const DRWUpdateContext *update_ctx)
     drw_engines_enable(view_layer, engine_type, gpencil_engine_needed);
     drw_engines_data_validate();
 
-    DRW_ENABLED_ENGINE_ITER (DST.view_data_active, draw_engine, data) {
-      if (draw_engine->view_update) {
-        draw_engine->view_update(data);
-      }
-    }
+    DRW_view_data_engines_view_update(DST.view_data_active);
 
     drw_engines_disable();
   }
@@ -1377,13 +1381,14 @@ static void drw_notify_view_update_offscreen(struct Depsgraph *depsgraph,
     /* Reset before using it. */
     drw_state_prepare_clean_for_draw(&DST);
 
+    BKE_view_layer_synced_ensure(scene, view_layer);
     DST.draw_ctx = (DRWContextState){
         .region = region,
         .rv3d = rv3d,
         .v3d = v3d,
         .scene = scene,
         .view_layer = view_layer,
-        .obact = OBACT(view_layer),
+        .obact = BKE_view_layer_active_object_get(view_layer),
         .engine_type = engine_type,
         .depsgraph = depsgraph,
     };
@@ -1400,11 +1405,7 @@ static void drw_notify_view_update_offscreen(struct Depsgraph *depsgraph,
       drw_engines_enable(view_layer, engine_type, gpencil_engine_needed);
       drw_engines_data_validate();
 
-      DRW_ENABLED_ENGINE_ITER (DST.view_data_active, draw_engine, data) {
-        if (draw_engine->view_update) {
-          draw_engine->view_update(data);
-        }
-      }
+      DRW_view_data_engines_view_update(DST.view_data_active);
 
       drw_engines_disable();
     }
@@ -1506,7 +1507,7 @@ void DRW_draw_callbacks_post_scene(void)
 
     DRW_draw_region_info();
 
-    /* annotations - temporary drawing buffer (screenspace) */
+    /* Annotations - temporary drawing buffer (screen-space). */
     /* XXX: Or should we use a proper draw/overlay engine for this case? */
     if (((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) && (do_annotations)) {
       GPU_depth_test(GPU_DEPTH_NONE);
@@ -1633,6 +1634,7 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
   ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
   RegionView3D *rv3d = region->regiondata;
 
+  BKE_view_layer_synced_ensure(scene, view_layer);
   DST.draw_ctx.evil_C = evil_C;
   DST.draw_ctx = (DRWContextState){
       .region = region,
@@ -1640,7 +1642,7 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
       .v3d = v3d,
       .scene = scene,
       .view_layer = view_layer,
-      .obact = OBACT(view_layer),
+      .obact = BKE_view_layer_active_object_get(view_layer),
       .engine_type = engine_type,
       .depsgraph = depsgraph,
 
@@ -1690,7 +1692,10 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
     if (do_populate_loop) {
       DST.dupli_origin = NULL;
       DST.dupli_origin_data = NULL;
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
+      DEGObjectIterSettings deg_iter_settings = {0};
+      deg_iter_settings.depsgraph = depsgraph;
+      deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+      DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
         if ((object_type_exclude_viewport & (1 << ob->type)) != 0) {
           continue;
         }
@@ -1702,7 +1707,7 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
         drw_duplidata_load(ob);
         drw_engines_cache_populate(ob);
       }
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_END;
+      DEG_OBJECT_ITER_END;
     }
 
     drw_duplidata_free();
@@ -1842,14 +1847,17 @@ bool DRW_render_check_grease_pencil(Depsgraph *depsgraph)
     return false;
   }
 
-  DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
+  DEGObjectIterSettings deg_iter_settings = {0};
+  deg_iter_settings.depsgraph = depsgraph;
+  deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+  DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
     if (ob->type == OB_GPENCIL) {
       if (DRW_object_visibility_in_active_context(ob) & OB_VISIBLE_SELF) {
         return true;
       }
     }
   }
-  DEG_OBJECT_ITER_FOR_RENDER_ENGINE_END;
+  DEG_OBJECT_ITER_END;
 
   return false;
 }
@@ -2052,7 +2060,10 @@ void DRW_render_object_iter(
                                                0;
   DST.dupli_origin = NULL;
   DST.dupli_origin_data = NULL;
-  DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
+  DEGObjectIterSettings deg_iter_settings = {0};
+  deg_iter_settings.depsgraph = depsgraph;
+  deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+  DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
     if ((object_type_exclude_viewport & (1 << ob->type)) == 0) {
       DST.dupli_parent = data_.dupli_parent;
       DST.dupli_source = data_.dupli_object_current;
@@ -2068,7 +2079,7 @@ void DRW_render_object_iter(
       }
     }
   }
-  DEG_OBJECT_ITER_FOR_RENDER_ENGINE_END;
+  DEG_OBJECT_ITER_END;
 
   drw_duplidata_free();
   drw_task_graph_deinit();
@@ -2147,12 +2158,13 @@ void DRW_draw_render_loop_2d_ex(struct Depsgraph *depsgraph,
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
   ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
 
+  BKE_view_layer_synced_ensure(scene, view_layer);
   DST.draw_ctx.evil_C = evil_C;
   DST.draw_ctx = (DRWContextState){
       .region = region,
       .scene = scene,
       .view_layer = view_layer,
-      .obact = OBACT(view_layer),
+      .obact = BKE_view_layer_active_object_get(view_layer),
       .depsgraph = depsgraph,
       .space_data = CTX_wm_space_data(evil_C),
 
@@ -2195,10 +2207,13 @@ void DRW_draw_render_loop_2d_ex(struct Depsgraph *depsgraph,
 
     /* Only iterate over objects when overlay uses object data. */
     if (do_populate_loop) {
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
+      DEGObjectIterSettings deg_iter_settings = {0};
+      deg_iter_settings.depsgraph = depsgraph;
+      deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+      DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
         drw_engines_cache_populate(ob);
       }
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_END;
+      DEG_OBJECT_ITER_END;
     }
 
     drw_engines_cache_finish();
@@ -2353,7 +2368,9 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
   RenderEngineType *engine_type = ED_view3d_engine_type(scene, v3d->shading.type);
   ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
-  Object *obact = OBACT(view_layer);
+
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *obact = BKE_view_layer_active_object_get(view_layer);
   Object *obedit = use_obedit_skip ? NULL : OBEDIT_FROM_OBACT(obact);
 #ifndef USE_GPU_SELECT
   UNUSED_VARS(scene, view_layer, v3d, region, rect);
@@ -2462,7 +2479,7 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
     drw_engines_world_update(scene);
 
     if (use_obedit) {
-      FOREACH_OBJECT_IN_MODE_BEGIN (view_layer, v3d, object_type, object_mode, ob_iter) {
+      FOREACH_OBJECT_IN_MODE_BEGIN (scene, view_layer, v3d, object_type, object_mode, ob_iter) {
         drw_engines_cache_populate(ob_iter);
       }
       FOREACH_OBJECT_IN_MODE_END;
@@ -2477,13 +2494,16 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
       bool filter_exclude = false;
       DST.dupli_origin = NULL;
       DST.dupli_origin_data = NULL;
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (depsgraph, ob) {
+      DEGObjectIterSettings deg_iter_settings = {0};
+      deg_iter_settings.depsgraph = depsgraph;
+      deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+      DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
         if (!BKE_object_is_visible_in_viewport(v3d, ob)) {
           continue;
         }
 
         if (use_pose_exception && (ob->mode & OB_MODE_POSE)) {
-          if ((ob->base_flag & BASE_VISIBLE_VIEWLAYER) == 0) {
+          if ((ob->base_flag & BASE_ENABLED_AND_VISIBLE_IN_DEFAULT_VIEWPORT) == 0) {
             continue;
           }
         }
@@ -2513,7 +2533,7 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
           drw_engines_cache_populate(ob);
         }
       }
-      DEG_OBJECT_ITER_FOR_RENDER_ENGINE_END;
+      DEG_OBJECT_ITER_END;
     }
 
     drw_duplidata_free();
@@ -2584,13 +2604,14 @@ static void drw_draw_depth_loop_impl(struct Depsgraph *depsgraph,
   DST.options.is_depth = true;
 
   /* Instead of 'DRW_context_state_init(C, &DST.draw_ctx)', assign from args */
+  BKE_view_layer_synced_ensure(scene, view_layer);
   DST.draw_ctx = (DRWContextState){
       .region = region,
       .rv3d = rv3d,
       .v3d = v3d,
       .scene = scene,
       .view_layer = view_layer,
-      .obact = OBACT(view_layer),
+      .obact = BKE_view_layer_active_object_get(view_layer),
       .engine_type = engine_type,
       .depsgraph = depsgraph,
   };
@@ -2638,7 +2659,10 @@ static void drw_draw_depth_loop_impl(struct Depsgraph *depsgraph,
     const int object_type_exclude_viewport = v3d->object_type_exclude_viewport;
     DST.dupli_origin = NULL;
     DST.dupli_origin_data = NULL;
-    DEG_OBJECT_ITER_FOR_RENDER_ENGINE_BEGIN (DST.draw_ctx.depsgraph, ob) {
+    DEGObjectIterSettings deg_iter_settings = {0};
+    deg_iter_settings.depsgraph = DST.draw_ctx.depsgraph;
+    deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+    DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
       if ((object_type_exclude_viewport & (1 << ob->type)) != 0) {
         continue;
       }
@@ -2650,7 +2674,7 @@ static void drw_draw_depth_loop_impl(struct Depsgraph *depsgraph,
       drw_duplidata_load(ob);
       drw_engines_cache_populate(ob);
     }
-    DEG_OBJECT_ITER_FOR_RENDER_ENGINE_END;
+    DEG_OBJECT_ITER_END;
 
     drw_duplidata_free();
     drw_engines_cache_finish();
@@ -2703,7 +2727,7 @@ void DRW_draw_select_id(Depsgraph *depsgraph, ARegion *region, View3D *v3d, cons
   GPUViewport *viewport = WM_draw_region_get_viewport(region);
   if (!viewport) {
     /* Selection engine requires a viewport.
-     * TODO(germano): This should be done internally in the engine. */
+     * TODO(@germano): This should be done internally in the engine. */
     sel_ctx->is_dirty = true;
     sel_ctx->objects_drawn_len = 0;
     sel_ctx->index_drawn_len = 1;
@@ -2717,13 +2741,14 @@ void DRW_draw_select_id(Depsgraph *depsgraph, ARegion *region, View3D *v3d, cons
   drw_state_prepare_clean_for_draw(&DST);
 
   /* Instead of 'DRW_context_state_init(C, &DST.draw_ctx)', assign from args */
+  BKE_view_layer_synced_ensure(scene, view_layer);
   DST.draw_ctx = (DRWContextState){
       .region = region,
       .rv3d = region->regiondata,
       .v3d = v3d,
       .scene = scene,
       .view_layer = view_layer,
-      .obact = OBACT(view_layer),
+      .obact = BKE_view_layer_active_object_get(view_layer),
       .depsgraph = depsgraph,
   };
   drw_task_graph_init();
@@ -2989,9 +3014,6 @@ void DRW_engines_register(void)
 
   /* setup callbacks */
   {
-    BKE_mball_batch_cache_dirty_tag_cb = DRW_mball_batch_cache_dirty_tag;
-    BKE_mball_batch_cache_free_cb = DRW_mball_batch_cache_free;
-
     BKE_curve_batch_cache_dirty_tag_cb = DRW_curve_batch_cache_dirty_tag;
     BKE_curve_batch_cache_free_cb = DRW_curve_batch_cache_free;
 
@@ -3138,7 +3160,7 @@ void DRW_opengl_context_create(void)
   DST.gl_context = WM_opengl_context_create();
   WM_opengl_context_activate(DST.gl_context);
   /* Be sure to create gpu_context too. */
-  DST.gpu_context = GPU_context_create(NULL);
+  DST.gpu_context = GPU_context_create(0, DST.gl_context);
   /* So we activate the window's one afterwards. */
   wm_window_reset_drawable();
 }

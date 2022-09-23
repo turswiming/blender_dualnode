@@ -101,11 +101,10 @@ static void extract_pos_nor_iter_poly_mesh(const MeshRenderData *mr,
     vert->nor = data->normals[ml->v].low;
     /* Flag for paint mode overlay. */
     if (poly_hidden || vert_hidden ||
-        ((mr->extract_type == MR_EXTRACT_MAPPED) && (mr->v_origindex) &&
-         (mr->v_origindex[ml->v] == ORIGINDEX_NONE))) {
+        ((mr->v_origindex) && (mr->v_origindex[ml->v] == ORIGINDEX_NONE))) {
       vert->nor.w = -1;
     }
-    else if (mv->flag & SELECT) {
+    else if (mr->select_vert && mr->select_vert[ml->v]) {
       vert->nor.w = 1;
     }
     else {
@@ -449,11 +448,10 @@ static void extract_pos_nor_hq_iter_poly_mesh(const MeshRenderData *mr,
 
     /* Flag for paint mode overlay. */
     if (poly_hidden || vert_hidden ||
-        ((mr->extract_type == MR_EXTRACT_MAPPED) && (mr->v_origindex) &&
-         (mr->v_origindex[ml->v] == ORIGINDEX_NONE))) {
+        ((mr->v_origindex) && (mr->v_origindex[ml->v] == ORIGINDEX_NONE))) {
       vert->nor[3] = -1;
     }
-    else if (mv->flag & SELECT) {
+    else if (mr->select_vert && mr->select_vert[ml->v]) {
       vert->nor[3] = 1;
     }
     else {

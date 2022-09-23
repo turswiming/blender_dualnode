@@ -26,7 +26,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang")
     set(OPENMP_FOUND ON)
     set(OpenMP_C_FLAGS "/clang:-fopenmp")
     set(OpenMP_CXX_FLAGS "/clang:-fopenmp")
-    GET_FILENAME_COMPONENT(LLVMROOT "[HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\LLVM\\LLVM;]" ABSOLUTE CACHE)
+    get_filename_component(LLVMROOT "[HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\LLVM\\LLVM;]" ABSOLUTE CACHE)
     set(CLANG_OPENMP_DLL "${LLVMROOT}/bin/libomp.dll")
     set(CLANG_OPENMP_LIB "${LLVMROOT}/lib/libomp.lib")
     if(NOT EXISTS "${CLANG_OPENMP_DLL}")
@@ -323,6 +323,13 @@ if(NOT JPEG_FOUND)
   set(JPEG_LIBRARIES ${LIBDIR}/jpeg/lib/libjpeg.lib)
 endif()
 
+set(EPOXY_ROOT_DIR ${LIBDIR}/epoxy)
+windows_find_package(Epoxy REQUIRED)
+if(NOT EPOXY_FOUND)
+  set(Epoxy_INCLUDE_DIRS ${LIBDIR}/epoxy/include)
+  set(Epoxy_LIBRARIES ${LIBDIR}/epoxy/lib/epoxy.lib)
+endif()
+
 set(PTHREADS_INCLUDE_DIRS ${LIBDIR}/pthreads/include)
 set(PTHREADS_LIBRARIES ${LIBDIR}/pthreads/lib/pthreadVC3.lib)
 
@@ -497,11 +504,15 @@ if(WITH_JACK)
 endif()
 
 if(WITH_PYTHON)
-  set(PYTHON_VERSION 3.10) # CACHE STRING)
+  # Cache version for make_bpy_wheel.py to detect.
+  unset(PYTHON_VERSION CACHE)
+  set(PYTHON_VERSION "3.10" CACHE STRING "Python version")
 
   string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
   set(PYTHON_LIBRARY ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/libs/python${_PYTHON_VERSION_NO_DOTS}.lib)
   set(PYTHON_LIBRARY_DEBUG ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/libs/python${_PYTHON_VERSION_NO_DOTS}_d.lib)
+
+  set(PYTHON_EXECUTABLE ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/bin/python$<$<CONFIG:Debug>:_d>.exe)
 
   set(PYTHON_INCLUDE_DIR ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/include)
   set(PYTHON_NUMPY_INCLUDE_DIRS ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/lib/site-packages/numpy/core/include)
@@ -756,7 +767,7 @@ if(WITH_TBB)
 endif()
 
 # used in many places so include globally, like OpenGL
-blender_include_dirs_sys("${PTHREADS_INCLUDE_DIRS}")
+include_directories(SYSTEM "${PTHREADS_INCLUDE_DIRS}")
 
 set(WINTAB_INC ${LIBDIR}/wintab/include)
 
@@ -863,8 +874,8 @@ endif()
 
 if(WINDOWS_PYTHON_DEBUG)
   # Include the system scripts in the blender_python_system_scripts project.
-  FILE(GLOB_RECURSE inFiles "${CMAKE_SOURCE_DIR}/release/scripts/*.*" )
-  ADD_CUSTOM_TARGET(blender_python_system_scripts SOURCES ${inFiles})
+  file(GLOB_RECURSE inFiles "${CMAKE_SOURCE_DIR}/release/scripts/*.*" )
+  add_custom_target(blender_python_system_scripts SOURCES ${inFiles})
   foreach(_source IN ITEMS ${inFiles})
     get_filename_component(_source_path "${_source}" PATH)
     string(REPLACE "${CMAKE_SOURCE_DIR}/release/scripts/" "" _source_path "${_source_path}")
@@ -884,8 +895,8 @@ if(WINDOWS_PYTHON_DEBUG)
   endif()
 
   file(TO_CMAKE_PATH ${USER_SCRIPTS_ROOT} USER_SCRIPTS_ROOT)
-  FILE(GLOB_RECURSE inFiles "${USER_SCRIPTS_ROOT}/*.*" )
-  ADD_CUSTOM_TARGET(blender_python_user_scripts SOURCES ${inFiles})
+  file(GLOB_RECURSE inFiles "${USER_SCRIPTS_ROOT}/*.*" )
+  add_custom_target(blender_python_user_scripts SOURCES ${inFiles})
   foreach(_source IN ITEMS ${inFiles})
     get_filename_component(_source_path "${_source}" PATH)
     string(REPLACE "${USER_SCRIPTS_ROOT}" "" _source_path "${_source_path}")

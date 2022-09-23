@@ -32,6 +32,7 @@
 #include "RNA_prototypes.h"
 
 #include "BKE_attribute.h"
+#include "BKE_attribute.hh"
 #include "BKE_brush.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
@@ -773,6 +774,8 @@ struct WeightPaintGroupData {
  * paint stroke update - campbell */
 struct WeightPaintInfo {
 
+  MutableSpan<MDeformVert> dvert;
+
   int defbase_tot;
 
   /* both must add up to 'defbase_tot' */
@@ -815,7 +818,7 @@ static void do_weight_paint_vertex_single(
     float paintweight)
 {
   Mesh *me = (Mesh *)ob->data;
-  MDeformVert *dv = &me->dvert[index];
+  MDeformVert *dv = &wpi->dvert[index];
   bool topology = (me->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
   MDeformWeight *dw;
@@ -875,7 +878,7 @@ static void do_weight_paint_vertex_single(
 
   /* get the mirror def vars */
   if (index_mirr != -1) {
-    dv_mirr = &me->dvert[index_mirr];
+    dv_mirr = &wpi->dvert[index_mirr];
     if (wp->flag & VP_FLAG_VGROUP_RESTRICT) {
       dw_mirr = BKE_defvert_find_index(dv_mirr, vgroup_mirr);
 
@@ -915,9 +918,9 @@ static void do_weight_paint_vertex_single(
 
   if (!brush_use_accumulate(wp)) {
     MDeformVert *dvert_prev = ob->sculpt->mode.wpaint.dvert_prev;
-    MDeformVert *dv_prev = defweight_prev_init(dvert_prev, me->dvert, index);
+    MDeformVert *dv_prev = defweight_prev_init(dvert_prev, wpi->dvert.data(), index);
     if (index_mirr != -1) {
-      defweight_prev_init(dvert_prev, me->dvert, index_mirr);
+      defweight_prev_init(dvert_prev, wpi->dvert.data(), index_mirr);
     }
 
     weight_prev = BKE_defvert_find_weight(dv_prev, wpi->active.index);
@@ -1028,7 +1031,7 @@ static void do_weight_paint_vertex_multi(
     float paintweight)
 {
   Mesh *me = (Mesh *)ob->data;
-  MDeformVert *dv = &me->dvert[index];
+  MDeformVert *dv = &wpi->dvert[index];
   bool topology = (me->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
   /* mirror vars */
@@ -1044,7 +1047,7 @@ static void do_weight_paint_vertex_multi(
     index_mirr = mesh_get_x_mirror_vert(ob, nullptr, index, topology);
 
     if (!ELEM(index_mirr, -1, index)) {
-      dv_mirr = &me->dvert[index_mirr];
+      dv_mirr = &wpi->dvert[index_mirr];
     }
     else {
       index_mirr = -1;
@@ -1071,9 +1074,9 @@ static void do_weight_paint_vertex_multi(
 
   if (!brush_use_accumulate(wp)) {
     MDeformVert *dvert_prev = ob->sculpt->mode.wpaint.dvert_prev;
-    MDeformVert *dv_prev = defweight_prev_init(dvert_prev, me->dvert, index);
+    MDeformVert *dv_prev = defweight_prev_init(dvert_prev, wpi->dvert.data(), index);
     if (index_mirr != -1) {
-      defweight_prev_init(dvert_prev, me->dvert, index_mirr);
+      defweight_prev_init(dvert_prev, wpi->dvert.data(), index_mirr);
     }
 
     oldw = BKE_defvert_multipaint_collective_weight(
@@ -1235,6 +1238,8 @@ static void vertex_paint_init_session_data(const ToolSettings *ts, Object *ob)
   }
 
   Mesh *me = (Mesh *)ob->data;
+  const Span<MPoly> polys = me->polys();
+  const Span<MLoop> loops = me->loops();
 
   if (gmap->vert_to_loop == nullptr) {
     gmap->vert_map_mem = nullptr;
@@ -1243,15 +1248,15 @@ static void vertex_paint_init_session_data(const ToolSettings *ts, Object *ob)
     gmap->vert_to_poly = nullptr;
     BKE_mesh_vert_loop_map_create(&gmap->vert_to_loop,
                                   &gmap->vert_map_mem,
-                                  me->mpoly,
-                                  me->mloop,
+                                  polys.data(),
+                                  loops.data(),
                                   me->totvert,
                                   me->totpoly,
                                   me->totloop);
     BKE_mesh_vert_poly_map_create(&gmap->vert_to_poly,
                                   &gmap->poly_map_mem,
-                                  me->mpoly,
-                                  me->mloop,
+                                  polys.data(),
+                                  loops.data(),
                                   me->totvert,
                                   me->totpoly,
                                   me->totloop);
@@ -1900,7 +1905,7 @@ static void do_wpaint_precompute_weight_cb_ex(void *__restrict userdata,
                                               const TaskParallelTLS *__restrict UNUSED(tls))
 {
   SculptThreadedTaskData *data = (SculptThreadedTaskData *)userdata;
-  const MDeformVert *dv = &data->me->dvert[n];
+  const MDeformVert *dv = &data->wpi->dvert[n];
 
   data->wpd->precomputed_weight[n] = wpaint_get_active_weight(dv, data->wpi);
 }
@@ -1954,6 +1959,10 @@ static void do_wpaint_brush_blur_task_cb_ex(void *__restrict userdata,
   const float *sculpt_normal_frontface = SCULPT_brush_frontface_normal_from_falloff_shape(
       ss, data->brush->falloff_shape);
 
+  const blender::bke::AttributeAccessor attributes = data->me->attributes();
+  const blender::VArray<bool> select_vert = attributes.lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+
   /* For each vertex */
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
@@ -1961,23 +1970,21 @@ static void do_wpaint_brush_blur_task_cb_ex(void *__restrict userdata,
     if (sculpt_brush_test_sq_fn(&test, vd.co)) {
       /* For grid based pbvh, take the vert whose loop corresponds to the current grid.
        * Otherwise, take the current vert. */
-      const int v_index = has_grids ? data->me->mloop[vd.grid_indices[vd.g]].v :
-                                      vd.vert_indices[vd.i];
+      const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v : vd.vert_indices[vd.i];
       const float grid_alpha = has_grids ? 1.0f / vd.gridsize : 1.0f;
-      const char v_flag = data->me->mvert[v_index].flag;
       /* If the vertex is selected */
-      if (!(use_face_sel || use_vert_sel) || v_flag & SELECT) {
+      if (!(use_face_sel || use_vert_sel) || select_vert[v_index]) {
         /* Get the average poly weight */
         int total_hit_loops = 0;
         float weight_final = 0.0f;
         for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
           const int p_index = gmap->vert_to_poly[v_index].indices[j];
-          const MPoly *mp = &data->me->mpoly[p_index];
+          const MPoly *mp = &ss->mpoly[p_index];
 
           total_hit_loops += mp->totloop;
           for (int k = 0; k < mp->totloop; k++) {
             const int l_index = mp->loopstart + k;
-            const MLoop *ml = &data->me->mloop[l_index];
+            const MLoop *ml = &ss->mloop[l_index];
             weight_final += data->wpd->precomputed_weight[ml->v];
           }
         }
@@ -2042,6 +2049,10 @@ static void do_wpaint_brush_smear_task_cb_ex(void *__restrict userdata,
   sub_v3_v3v3(brush_dir, cache->location, cache->last_location);
   project_plane_v3_v3v3(brush_dir, brush_dir, cache->view_normal);
 
+  const blender::bke::AttributeAccessor attributes = data->me->attributes();
+  const blender::VArray<bool> select_vert = attributes.lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+
   if (cache->is_last_valid && (normalize_v3(brush_dir) != 0.0f)) {
 
     SculptBrushTest test;
@@ -2057,13 +2068,12 @@ static void do_wpaint_brush_smear_task_cb_ex(void *__restrict userdata,
       if (sculpt_brush_test_sq_fn(&test, vd.co)) {
         /* For grid based pbvh, take the vert whose loop corresponds to the current grid.
          * Otherwise, take the current vert. */
-        const int v_index = has_grids ? data->me->mloop[vd.grid_indices[vd.g]].v :
-                                        vd.vert_indices[vd.i];
+        const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v : vd.vert_indices[vd.i];
         const float grid_alpha = has_grids ? 1.0f / vd.gridsize : 1.0f;
-        const MVert *mv_curr = &data->me->mvert[v_index];
+        const MVert *mv_curr = &ss->mvert[v_index];
 
         /* If the vertex is selected */
-        if (!(use_face_sel || use_vert_sel) || mv_curr->flag & SELECT) {
+        if (!(use_face_sel || use_vert_sel) || select_vert[v_index]) {
           float brush_strength = cache->bstrength;
           const float angle_cos = (use_normal && vd.no) ?
                                       dot_v3v3(sculpt_normal_frontface, vd.no) :
@@ -2082,12 +2092,12 @@ static void do_wpaint_brush_smear_task_cb_ex(void *__restrict userdata,
             float weight_final = 0.0;
             for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
               const int p_index = gmap->vert_to_poly[v_index].indices[j];
-              const MPoly *mp = &data->me->mpoly[p_index];
-              const MLoop *ml_other = &data->me->mloop[mp->loopstart];
+              const MPoly *mp = &ss->mpoly[p_index];
+              const MLoop *ml_other = &ss->mloop[mp->loopstart];
               for (int k = 0; k < mp->totloop; k++, ml_other++) {
                 const uint v_other_index = ml_other->v;
                 if (v_other_index != v_index) {
-                  const MVert *mv_other = &data->me->mvert[v_other_index];
+                  const MVert *mv_other = &ss->mvert[v_other_index];
 
                   /* Get the direction from the selected vert to the neighbor. */
                   float other_dir[3];
@@ -2156,6 +2166,10 @@ static void do_wpaint_brush_draw_task_cb_ex(void *__restrict userdata,
   const float *sculpt_normal_frontface = SCULPT_brush_frontface_normal_from_falloff_shape(
       ss, data->brush->falloff_shape);
 
+  const blender::bke::AttributeAccessor attributes = data->me->attributes();
+  const blender::VArray<bool> select_vert = attributes.lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+
   /* For each vertex */
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
@@ -2164,13 +2178,11 @@ static void do_wpaint_brush_draw_task_cb_ex(void *__restrict userdata,
       /* NOTE: grids are 1:1 with corners (aka loops).
        * For multires, take the vert whose loop corresponds to the current grid.
        * Otherwise, take the current vert. */
-      const int v_index = has_grids ? data->me->mloop[vd.grid_indices[vd.g]].v :
-                                      vd.vert_indices[vd.i];
+      const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v : vd.vert_indices[vd.i];
       const float grid_alpha = has_grids ? 1.0f / vd.gridsize : 1.0f;
 
-      const char v_flag = data->me->mvert[v_index].flag;
       /* If the vertex is selected */
-      if (!(use_face_sel || use_vert_sel) || v_flag & SELECT) {
+      if (!(use_face_sel || use_vert_sel) || select_vert[v_index]) {
         float brush_strength = cache->bstrength;
         const float angle_cos = (use_normal && vd.no) ? dot_v3v3(sculpt_normal_frontface, vd.no) :
                                                         1.0f;
@@ -2223,6 +2235,10 @@ static void do_wpaint_brush_calc_average_weight_cb_ex(
   const float *sculpt_normal_frontface = SCULPT_brush_frontface_normal_from_falloff_shape(
       ss, data->brush->falloff_shape);
 
+  const blender::bke::AttributeAccessor attributes = data->me->attributes();
+  const blender::VArray<bool> select_vert = attributes.lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+
   /* For each vertex */
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
@@ -2232,13 +2248,11 @@ static void do_wpaint_brush_calc_average_weight_cb_ex(
                                                       1.0f;
       if (angle_cos > 0.0 &&
           BKE_brush_curve_strength(data->brush, sqrtf(test.dist), cache->radius) > 0.0) {
-        const int v_index = has_grids ? data->me->mloop[vd.grid_indices[vd.g]].v :
-                                        vd.vert_indices[vd.i];
-        const char v_flag = data->me->mvert[v_index].flag;
+        const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v : vd.vert_indices[vd.i];
 
         /* If the vertex is selected. */
-        if (!(use_face_sel || use_vert_sel) || v_flag & SELECT) {
-          const MDeformVert *dv = &data->me->dvert[v_index];
+        if (!(use_face_sel || use_vert_sel) || select_vert[v_index]) {
+          const MDeformVert *dv = &data->wpi->dvert[v_index];
           accum->len += 1;
           accum->value += wpaint_get_active_weight(dv, data->wpi);
         }
@@ -2510,7 +2524,11 @@ static void wpaint_stroke_update_step(bContext *C,
   /* load projection matrix */
   mul_m4_m4m4(mat, vc->rv3d->persmat, ob->obmat);
 
+  Mesh *mesh = static_cast<Mesh *>(ob->data);
+
   /* *** setup WeightPaintInfo - pass onto do_weight_paint_vertex *** */
+  wpi.dvert = mesh->deform_verts_for_write();
+
   wpi.defbase_tot = wpd->defbase_tot;
   wpi.defbase_sel = wpd->defbase_sel;
   wpi.defbase_tot_sel = wpd->defbase_tot_sel;
@@ -2532,7 +2550,7 @@ static void wpaint_stroke_update_step(bContext *C,
   /* *** done setting up WeightPaintInfo *** */
 
   if (wpd->precomputed_weight) {
-    precompute_weight_values(C, ob, brush, wpd, &wpi, (Mesh *)ob->data);
+    precompute_weight_values(C, ob, brush, wpd, &wpi, mesh);
   }
 
   wpaint_do_symmetrical_brush_actions(C, ob, wp, sd, wpd, &wpi);
@@ -2545,9 +2563,9 @@ static void wpaint_stroke_update_step(bContext *C,
   mul_v3_m4v3(loc_world, ob->obmat, ss->cache->true_location);
   paint_last_stroke_update(scene, loc_world);
 
-  BKE_mesh_batch_cache_dirty_tag((Mesh *)ob->data, BKE_MESH_BATCH_DIRTY_ALL);
+  BKE_mesh_batch_cache_dirty_tag(mesh, BKE_MESH_BATCH_DIRTY_ALL);
 
-  DEG_id_tag_update((ID *)ob->data, 0);
+  DEG_id_tag_update(&mesh->id, 0);
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
   swap_m4m4(wpd->vc.rv3d->persmat, mat);
 
@@ -2952,6 +2970,11 @@ static void do_vpaint_brush_blur_loops(bContext *C,
 
   Color *previous_color = static_cast<Color *>(ss->cache->prev_colors_vpaint);
 
+  const blender::VArray<bool> select_vert = me->attributes().lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+  const blender::VArray<bool> select_poly = me->attributes().lookup_or_default<bool>(
+      ".select_poly", ATTR_DOMAIN_FACE, false);
+
   blender::threading::parallel_for(IndexRange(totnode), 1LL, [&](IndexRange range) {
     for (int n : range) {
       const PBVHType pbvh_type = BKE_pbvh_type(ss->pbvh);
@@ -2980,13 +3003,12 @@ static void do_vpaint_brush_blur_loops(bContext *C,
         if (sculpt_brush_test_sq_fn(&test, vd.co)) {
           /* For grid based pbvh, take the vert whose loop corresponds to the current grid.
            * Otherwise, take the current vert. */
-          const int v_index = has_grids ? me->mloop[vd.grid_indices[vd.g]].v :
+          const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v :
                                           vd.vert_indices[vd.i];
           const float grid_alpha = has_grids ? 1.0f / vd.gridsize : 1.0f;
-          const MVert *mv = &me->mvert[v_index];
 
           /* If the vertex is selected for painting. */
-          if (!use_vert_sel || mv->flag & SELECT) {
+          if (!use_vert_sel || select_vert[v_index]) {
             float brush_strength = cache->bstrength;
             const float angle_cos = (use_normal && vd.no) ?
                                         dot_v3v3(sculpt_normal_frontface, vd.no) :
@@ -3006,8 +3028,8 @@ static void do_vpaint_brush_blur_loops(bContext *C,
 
               for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
                 int p_index = gmap->vert_to_poly[v_index].indices[j];
-                const MPoly *mp = &me->mpoly[p_index];
-                if (!use_face_sel || mp->flag & ME_FACE_SEL) {
+                const MPoly *mp = &ss->mpoly[p_index];
+                if (!use_face_sel || select_poly[p_index]) {
                   total_hit_loops += mp->totloop;
                   for (int k = 0; k < mp->totloop; k++) {
                     const uint l_index = mp->loopstart + k;
@@ -3040,9 +3062,8 @@ static void do_vpaint_brush_blur_loops(bContext *C,
                 for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
                   const int p_index = gmap->vert_to_poly[v_index].indices[j];
                   const int l_index = gmap->vert_to_loop[v_index].indices[j];
-                  BLI_assert(me->mloop[l_index].v == v_index);
-                  const MPoly *mp = &me->mpoly[p_index];
-                  if (!use_face_sel || mp->flag & ME_FACE_SEL) {
+                  BLI_assert(ss->mloop[l_index].v == v_index);
+                  if (!use_face_sel || select_poly[p_index]) {
                     Color color_orig(0, 0, 0, 0); /* unused when array is nullptr */
 
                     if (previous_color != nullptr) {
@@ -3094,6 +3115,11 @@ static void do_vpaint_brush_blur_verts(bContext *C,
 
   Color *previous_color = static_cast<Color *>(ss->cache->prev_colors_vpaint);
 
+  const blender::VArray<bool> select_vert = me->attributes().lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+  const blender::VArray<bool> select_poly = me->attributes().lookup_or_default<bool>(
+      ".select_poly", ATTR_DOMAIN_FACE, false);
+
   blender::threading::parallel_for(IndexRange(totnode), 1LL, [&](IndexRange range) {
     for (int n : range) {
       const PBVHType pbvh_type = BKE_pbvh_type(ss->pbvh);
@@ -3122,13 +3148,12 @@ static void do_vpaint_brush_blur_verts(bContext *C,
         if (sculpt_brush_test_sq_fn(&test, vd.co)) {
           /* For grid based pbvh, take the vert whose loop corresponds to the current grid.
            * Otherwise, take the current vert. */
-          const int v_index = has_grids ? me->mloop[vd.grid_indices[vd.g]].v :
+          const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v :
                                           vd.vert_indices[vd.i];
           const float grid_alpha = has_grids ? 1.0f / vd.gridsize : 1.0f;
-          const MVert *mv = &me->mvert[v_index];
 
           /* If the vertex is selected for painting. */
-          if (!use_vert_sel || mv->flag & SELECT) {
+          if (!use_vert_sel || select_vert[v_index]) {
             float brush_strength = cache->bstrength;
             const float angle_cos = (use_normal && vd.no) ?
                                         dot_v3v3(sculpt_normal_frontface, vd.no) :
@@ -3148,12 +3173,12 @@ static void do_vpaint_brush_blur_verts(bContext *C,
 
               for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
                 int p_index = gmap->vert_to_poly[v_index].indices[j];
-                const MPoly *mp = &me->mpoly[p_index];
-                if (!use_face_sel || mp->flag & ME_FACE_SEL) {
+                const MPoly *mp = &ss->mpoly[p_index];
+                if (!use_face_sel || select_poly[p_index]) {
                   total_hit_loops += mp->totloop;
                   for (int k = 0; k < mp->totloop; k++) {
                     const uint l_index = mp->loopstart + k;
-                    const uint v_index = me->mloop[l_index].v;
+                    const uint v_index = ss->mloop[l_index].v;
 
                     Color *col = lcol + v_index;
 
@@ -3184,10 +3209,9 @@ static void do_vpaint_brush_blur_verts(bContext *C,
                 for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
                   const int p_index = gmap->vert_to_poly[v_index].indices[j];
 
-                  BLI_assert(me->mloop[gmap->vert_to_loop[v_index].indices[j]].v == v_index);
+                  BLI_assert(ss->mloop[gmap->vert_to_loop[v_index].indices[j]].v == v_index);
 
-                  const MPoly *mp = &me->mpoly[p_index];
-                  if (!use_face_sel || mp->flag & ME_FACE_SEL) {
+                  if (!use_face_sel || select_poly[p_index]) {
                     Color color_orig(0, 0, 0, 0); /* unused when array is nullptr */
 
                     if (previous_color != nullptr) {
@@ -3243,6 +3267,11 @@ static void do_vpaint_brush_smear(bContext *C,
   Color *color_prev_smear = static_cast<Color *>(vpd->smear.color_prev);
   Color *color_prev = reinterpret_cast<Color *>(ss->cache->prev_colors_vpaint);
 
+  const blender::VArray<bool> select_vert = me->attributes().lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+  const blender::VArray<bool> select_poly = me->attributes().lookup_or_default<bool>(
+      ".select_poly", ATTR_DOMAIN_FACE, false);
+
   blender::threading::parallel_for(IndexRange(totnode), 1LL, [&](IndexRange range) {
     for (int n : range) {
       float brush_size_pressure, brush_alpha_value, brush_alpha_pressure;
@@ -3273,13 +3302,13 @@ static void do_vpaint_brush_smear(bContext *C,
           if (sculpt_brush_test_sq_fn(&test, vd.co)) {
             /* For grid based pbvh, take the vert whose loop corresponds to the current grid.
              * Otherwise, take the current vert. */
-            const int v_index = has_grids ? me->mloop[vd.grid_indices[vd.g]].v :
+            const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v :
                                             vd.vert_indices[vd.i];
             const float grid_alpha = has_grids ? 1.0f / vd.gridsize : 1.0f;
-            const MVert *mv_curr = &me->mvert[v_index];
+            const MVert *mv_curr = &ss->mvert[v_index];
 
             /* if the vertex is selected for painting. */
-            if (!use_vert_sel || mv_curr->flag & SELECT) {
+            if (!use_vert_sel || select_vert[v_index]) {
               /* Calc the dot prod. between ray norm on surf and current vert
                * (ie splash prevention factor), and only paint front facing verts. */
               float brush_strength = cache->bstrength;
@@ -3305,15 +3334,15 @@ static void do_vpaint_brush_smear(bContext *C,
                 for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
                   const int p_index = gmap->vert_to_poly[v_index].indices[j];
                   const int l_index = gmap->vert_to_loop[v_index].indices[j];
-                  BLI_assert(me->mloop[l_index].v == v_index);
+                  BLI_assert(ss->mloop[l_index].v == v_index);
                   UNUSED_VARS_NDEBUG(l_index);
-                  const MPoly *mp = &me->mpoly[p_index];
-                  if (!use_face_sel || mp->flag & ME_FACE_SEL) {
-                    const MLoop *ml_other = &me->mloop[mp->loopstart];
+                  const MPoly *mp = &ss->mpoly[p_index];
+                  if (!use_face_sel || select_poly[p_index]) {
+                    const MLoop *ml_other = &ss->mloop[mp->loopstart];
                     for (int k = 0; k < mp->totloop; k++, ml_other++) {
                       const uint v_other_index = ml_other->v;
                       if (v_other_index != v_index) {
-                        const MVert *mv_other = &me->mvert[v_other_index];
+                        const MVert *mv_other = &ss->mvert[v_other_index];
 
                         /* Get the direction from the
                          * selected vert to the neighbor. */
@@ -3359,11 +3388,10 @@ static void do_vpaint_brush_smear(bContext *C,
                     else {
                       const int l_index = gmap->vert_to_loop[v_index].indices[j];
                       elem_index = l_index;
-                      BLI_assert(me->mloop[l_index].v == v_index);
+                      BLI_assert(ss->mloop[l_index].v == v_index);
                     }
 
-                    const MPoly *mp = &me->mpoly[p_index];
-                    if (!use_face_sel || mp->flag & ME_FACE_SEL) {
+                    if (!use_face_sel || select_poly[p_index]) {
                       /* Get the previous element color */
                       Color color_orig(0, 0, 0, 0); /* unused when array is nullptr */
 
@@ -3409,6 +3437,9 @@ static void calculate_average_color(VPaintData<Color, Traits, domain> *vpd,
 {
   using Blend = typename Traits::BlendType;
 
+  const blender::VArray<bool> select_vert = me->attributes().lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+
   VPaintAverageAccum<Blend> *accum = (VPaintAverageAccum<Blend> *)MEM_mallocN(
       sizeof(*accum) * totnode, __func__);
   blender::threading::parallel_for(IndexRange(totnode), 1LL, [&](IndexRange range) {
@@ -3435,12 +3466,11 @@ static void calculate_average_color(VPaintData<Color, Traits, domain> *vpd,
       BKE_pbvh_vertex_iter_begin (ss->pbvh, nodes[n], vd, PBVH_ITER_UNIQUE) {
         /* Test to see if the vertex coordinates are within the spherical brush region. */
         if (sculpt_brush_test_sq_fn(&test, vd.co)) {
-          const int v_index = has_grids ? me->mloop[vd.grid_indices[vd.g]].v :
+          const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v :
                                           vd.vert_indices[vd.i];
           if (BKE_brush_curve_strength(brush, 0.0, cache->radius) > 0.0) {
             /* If the vertex is selected for painting. */
-            const MVert *mv = &me->mvert[v_index];
-            if (!use_vert_sel || mv->flag & SELECT) {
+            if (!use_vert_sel || select_vert[v_index]) {
               accum2->len += gmap->vert_to_loop[v_index].count;
               /* if a vertex is within the brush region, then add its color to the blend. */
               for (int j = 0; j < gmap->vert_to_loop[v_index].count; j++) {
@@ -3525,6 +3555,11 @@ static void vpaint_do_draw(bContext *C,
 
   Color *previous_color = static_cast<Color *>(ss->cache->prev_colors_vpaint);
 
+  const blender::VArray<bool> select_vert = me->attributes().lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+  const blender::VArray<bool> select_poly = me->attributes().lookup_or_default<bool>(
+      ".select_poly", ATTR_DOMAIN_FACE, false);
+
   blender::threading::parallel_for(IndexRange(totnode), 1LL, [&](IndexRange range) {
     for (int n : range) {
       const bool has_grids = (pbvh_type == PBVH_GRIDS);
@@ -3555,13 +3590,12 @@ static void vpaint_do_draw(bContext *C,
           /* NOTE: Grids are 1:1 with corners (aka loops).
            * For grid based pbvh, take the vert whose loop corresponds to the current grid.
            * Otherwise, take the current vert. */
-          const int v_index = has_grids ? me->mloop[vd.grid_indices[vd.g]].v :
+          const int v_index = has_grids ? ss->mloop[vd.grid_indices[vd.g]].v :
                                           vd.vert_indices[vd.i];
           const float grid_alpha = has_grids ? 1.0f / vd.gridsize : 1.0f;
-          const MVert *mv = &me->mvert[v_index];
 
           /* If the vertex is selected for painting. */
-          if (!use_vert_sel || mv->flag & SELECT) {
+          if (!use_vert_sel || select_vert[v_index]) {
             /* Calc the dot prod. between ray norm on surf and current vert
              * (ie splash prevention factor), and only paint front facing verts. */
             float brush_strength = cache->bstrength;
@@ -3612,9 +3646,8 @@ static void vpaint_do_draw(bContext *C,
                 for (int j = 0; j < gmap->vert_to_poly[v_index].count; j++) {
                   const int p_index = gmap->vert_to_poly[v_index].indices[j];
                   const int l_index = gmap->vert_to_loop[v_index].indices[j];
-                  BLI_assert(me->mloop[l_index].v == v_index);
-                  const MPoly *mp = &me->mpoly[p_index];
-                  if (!use_face_sel || mp->flag & ME_FACE_SEL) {
+                  BLI_assert(ss->mloop[l_index].v == v_index);
+                  if (!use_face_sel || select_poly[p_index]) {
                     Color color_orig = Color(0, 0, 0, 0); /* unused when array is nullptr */
 
                     if (previous_color != nullptr) {
@@ -3957,7 +3990,7 @@ static int vpaint_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     BKE_pbvh_ensure_node_loops(ob->sculpt->pbvh);
   }
 
-  SCULPT_undo_push_begin(ob, "Vertex Paint");
+  SCULPT_undo_push_begin_ex(ob, "Vertex Paint");
 
   if ((retval = op->type->modal(C, op, event)) == OPERATOR_FINISHED) {
     paint_stroke_free(C, op, (PaintStroke *)op->customdata);
@@ -4041,6 +4074,11 @@ static bool vertex_color_set(Object *ob, ColorPaint4f paintcol_in, CustomDataLay
     return false;
   }
 
+  const blender::VArray<bool> select_vert = me->attributes().lookup_or_default<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT, false);
+  const blender::VArray<bool> select_poly = me->attributes().lookup_or_default<bool>(
+      ".select_poly", ATTR_DOMAIN_FACE, false);
+
   Color paintcol = fromFloat<Color>(paintcol_in);
 
   const bool use_face_sel = (me->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
@@ -4084,27 +4122,29 @@ static bool vertex_color_set(Object *ob, ColorPaint4f paintcol_in, CustomDataLay
   }
   else {
     Color *color_layer = static_cast<Color *>(layer->data);
+    const Span<MPoly> polys = me->polys();
+    const Span<MLoop> loops = me->loops();
 
-    const MPoly *mp = me->mpoly;
-    for (int i = 0; i < me->totpoly; i++, mp++) {
-      if (use_face_sel && !(mp->flag & ME_FACE_SEL)) {
+    for (const int i : polys.index_range()) {
+      if (use_face_sel && !select_poly[i]) {
         continue;
       }
+      const MPoly &poly = polys[i];
 
       int j = 0;
       do {
-        uint vidx = me->mloop[mp->loopstart + j].v;
+        uint vidx = loops[poly.loopstart + j].v;
 
-        if (!(use_vert_sel && !(me->mvert[vidx].flag & SELECT))) {
+        if (!(use_vert_sel && !(select_vert[vidx]))) {
           if constexpr (domain == ATTR_DOMAIN_CORNER) {
-            color_layer[mp->loopstart + j] = paintcol;
+            color_layer[poly.loopstart + j] = paintcol;
           }
           else {
             color_layer[vidx] = paintcol;
           }
         }
         j++;
-      } while (j < mp->totloop);
+      } while (j < poly.totloop);
     }
 
     /* remove stale me->mcol, will be added later */
@@ -4134,7 +4174,7 @@ static bool paint_object_attributes_active_color_fill_ex(Object *ob,
   if (!layer) {
     return false;
   }
-  /* Store original #Mesh.editflag.*/
+  /* Store original #Mesh.editflag. */
   const decltype(me->editflag) editflag = me->editflag;
   if (!only_selected) {
     me->editflag &= ~ME_EDIT_PAINT_FACE_SEL;

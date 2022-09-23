@@ -47,9 +47,11 @@
 #include "BKE_gpencil_modifier.h"
 #include "BKE_key.h"
 #include "BKE_lattice.h"
+#include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
+#include "BKE_mball.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_mesh_runtime.h"
@@ -92,6 +94,8 @@
 
 #include "object_intern.h"
 
+using blender::Span;
+
 static void modifier_skin_customdata_delete(struct Object *ob);
 
 /* ------------------------------------------------------------------- */
@@ -111,7 +115,7 @@ static void object_force_modifier_update_for_bind(Depsgraph *depsgraph, Object *
     BKE_lattice_modifiers_calc(depsgraph, scene_eval, ob_eval);
   }
   else if (ob->type == OB_MBALL) {
-    BKE_displist_make_mball(depsgraph, scene_eval, ob_eval);
+    BKE_mball_data_update(depsgraph, scene_eval, ob_eval);
   }
   else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF, OB_FONT)) {
     BKE_displist_make_curveTypes(depsgraph, scene_eval, ob_eval, false);
@@ -486,6 +490,9 @@ bool ED_object_modifier_move_to_index(ReportList *reports,
     }
   }
 
+  /* NOTE: Dependency graph only uses modifier nodes for visibility updates, and exact order of
+   * modifier nodes in the graph does not matter. */
+
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
 
@@ -518,10 +525,12 @@ void ED_object_modifier_copy_to_object(bContext *C,
 bool ED_object_modifier_convert_psys_to_mesh(ReportList *UNUSED(reports),
                                              Main *bmain,
                                              Depsgraph *depsgraph,
+                                             Scene *scene,
                                              ViewLayer *view_layer,
                                              Object *ob,
                                              ModifierData *md)
 {
+  using namespace blender;
   int cvert = 0;
 
   if (md->type != eModifierType_ParticleSystem) {
@@ -576,26 +585,33 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList *UNUSED(reports),
   }
 
   /* add new mesh */
-  Object *obn = BKE_object_add(bmain, view_layer, OB_MESH, nullptr);
+  Object *obn = BKE_object_add(bmain, scene, view_layer, OB_MESH, nullptr);
   Mesh *me = static_cast<Mesh *>(obn->data);
 
   me->totvert = verts_num;
   me->totedge = edges_num;
 
-  me->mvert = (MVert *)CustomData_add_layer(&me->vdata, CD_MVERT, CD_CALLOC, nullptr, verts_num);
-  me->medge = (MEdge *)CustomData_add_layer(&me->edata, CD_MEDGE, CD_CALLOC, nullptr, edges_num);
-  me->mface = (MFace *)CustomData_add_layer(&me->fdata, CD_MFACE, CD_CALLOC, nullptr, 0);
+  CustomData_add_layer(&me->vdata, CD_MVERT, CD_SET_DEFAULT, nullptr, verts_num);
+  CustomData_add_layer(&me->edata, CD_MEDGE, CD_SET_DEFAULT, nullptr, edges_num);
+  CustomData_add_layer(&me->fdata, CD_MFACE, CD_SET_DEFAULT, nullptr, 0);
 
-  MVert *mvert = me->mvert;
-  MEdge *medge = me->medge;
+  blender::MutableSpan<MVert> verts = me->verts_for_write();
+  blender::MutableSpan<MEdge> edges = me->edges_for_write();
+  MVert *mvert = verts.data();
+  MEdge *medge = edges.data();
+
+  bke::MutableAttributeAccessor attributes = me->attributes_for_write();
+  bke::SpanAttributeWriter<bool> select_vert = attributes.lookup_or_add_for_write_span<bool>(
+      ".select_vert", ATTR_DOMAIN_POINT);
 
   /* copy coordinates */
+  int vert_index = 0;
   cache = psys_eval->pathcache;
   for (int a = 0; a < part_num; a++) {
     ParticleCacheKey *key = cache[a];
     int kmax = key->segments;
-    for (int k = 0; k <= kmax; k++, key++, cvert++, mvert++) {
-      copy_v3_v3(mvert->co, key->co);
+    for (int k = 0; k <= kmax; k++, key++, cvert++, vert_index++) {
+      copy_v3_v3(mvert[vert_index].co, key->co);
       if (k) {
         medge->v1 = cvert - 1;
         medge->v2 = cvert;
@@ -604,7 +620,7 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList *UNUSED(reports),
       }
       else {
         /* cheap trick to select the roots */
-        mvert->flag |= SELECT;
+        select_vert.span[vert_index] = true;
       }
     }
   }
@@ -613,8 +629,8 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList *UNUSED(reports),
   for (int a = 0; a < child_num; a++) {
     ParticleCacheKey *key = cache[a];
     int kmax = key->segments;
-    for (int k = 0; k <= kmax; k++, key++, cvert++, mvert++) {
-      copy_v3_v3(mvert->co, key->co);
+    for (int k = 0; k <= kmax; k++, key++, cvert++, vert_index++) {
+      copy_v3_v3(mvert[vert_index].co, key->co);
       if (k) {
         medge->v1 = cvert - 1;
         medge->v2 = cvert;
@@ -623,10 +639,12 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList *UNUSED(reports),
       }
       else {
         /* cheap trick to select the roots */
-        mvert->flag |= SELECT;
+        select_vert.span[vert_index] = true;
       }
     }
   }
+
+  select_vert.finish();
 
   DEG_relations_tag_update(bmain);
 
@@ -754,10 +772,10 @@ static bool modifier_apply_obdata(
 
       Main *bmain = DEG_get_bmain(depsgraph);
       BKE_object_material_from_eval_data(bmain, ob, &mesh_applied->id);
-      BKE_mesh_nomain_to_mesh(mesh_applied, me, ob, &CD_MASK_MESH, true);
+      BKE_mesh_nomain_to_mesh(mesh_applied, me, ob);
 
       /* Anonymous attributes shouldn't be available on the applied geometry. */
-      blender::bke::mesh_attributes_for_write(*me).remove_anonymous();
+      me->attributes_for_write().remove_anonymous();
 
       if (md_eval->type == eModifierType_Multires) {
         multires_customdata_delete(me);
@@ -1223,7 +1241,8 @@ static int modifier_remove_exec(bContext *C, wmOperator *op)
   /* if cloth/softbody was removed, particle mode could be cleared */
   if (mode_orig & OB_MODE_PARTICLE_EDIT) {
     if ((ob->mode & OB_MODE_PARTICLE_EDIT) == 0) {
-      if (ob == OBACT(view_layer)) {
+      BKE_view_layer_synced_ensure(scene, view_layer);
+      if (ob == BKE_view_layer_active_object_get(view_layer)) {
         WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_MODE_OBJECT, nullptr);
       }
     }
@@ -1363,7 +1382,7 @@ static int modifier_move_to_index_exec(bContext *C, wmOperator *op)
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
   int index = RNA_int_get(op->ptr, "index");
 
-  if (!ED_object_modifier_move_to_index(op->reports, ob, md, index)) {
+  if (!(md && ED_object_modifier_move_to_index(op->reports, ob, md, index))) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1545,7 +1564,7 @@ void OBJECT_OT_modifier_apply(wmOperatorType *ot)
 /** \} */
 
 /* ------------------------------------------------------------------- */
-/** \name Apply Modifier As Shapekey Operator
+/** \name Apply Modifier As Shape-Key Operator
  * \{ */
 
 static bool modifier_apply_as_shapekey_poll(bContext *C)
@@ -1612,12 +1631,13 @@ static int modifier_convert_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *ob = ED_object_active_context(C);
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
 
   if (!md || !ED_object_modifier_convert_psys_to_mesh(
-                 op->reports, bmain, depsgraph, view_layer, ob, md)) {
+                 op->reports, bmain, depsgraph, scene, view_layer, ob, md)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1668,6 +1688,7 @@ static int modifier_copy_exec(bContext *C, wmOperator *op)
   }
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  DEG_relations_tag_update(bmain);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
 
   return OPERATOR_FINISHED;
@@ -2583,8 +2604,8 @@ void OBJECT_OT_skin_radii_equalize(wmOperatorType *ot)
 }
 
 static void skin_armature_bone_create(Object *skin_ob,
-                                      MVert *mvert,
-                                      MEdge *medge,
+                                      const MVert *mvert,
+                                      const MEdge *medge,
                                       bArmature *arm,
                                       BLI_bitmap *edges_visited,
                                       const MeshElemMap *emap,
@@ -2629,18 +2650,22 @@ static void skin_armature_bone_create(Object *skin_ob,
 static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, Object *skin_ob)
 {
   Mesh *me = static_cast<Mesh *>(skin_ob->data);
+  const Span<MVert> me_verts = me->verts();
+  const Span<MEdge> me_edges = me->edges();
 
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Object *ob_eval = DEG_get_evaluated_object(depsgraph, skin_ob);
 
-  Mesh *me_eval_deform = mesh_get_eval_deform(depsgraph, scene_eval, ob_eval, &CD_MASK_BAREMESH);
-  MVert *mvert = me_eval_deform->mvert;
+  const Mesh *me_eval_deform = mesh_get_eval_deform(
+      depsgraph, scene_eval, ob_eval, &CD_MASK_BAREMESH);
+  const Span<MVert> verts_eval = me_eval_deform->verts();
 
   /* add vertex weights to original mesh */
-  CustomData_add_layer(&me->vdata, CD_MDEFORMVERT, CD_CALLOC, nullptr, me->totvert);
+  CustomData_add_layer(&me->vdata, CD_MDEFORMVERT, CD_SET_DEFAULT, nullptr, me->totvert);
 
+  Scene *scene = DEG_get_input_scene(depsgraph);
   ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
-  Object *arm_ob = BKE_object_add(bmain, view_layer, OB_ARMATURE, nullptr);
+  Object *arm_ob = BKE_object_add(bmain, scene, view_layer, OB_ARMATURE, nullptr);
   BKE_object_transform_copy(arm_ob, skin_ob);
   bArmature *arm = static_cast<bArmature *>(arm_ob->data);
   arm->layer = 1;
@@ -2652,7 +2677,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
       CustomData_get_layer(&me->vdata, CD_MVERT_SKIN));
   int *emap_mem;
   MeshElemMap *emap;
-  BKE_mesh_vert_edge_map_create(&emap, &emap_mem, me->medge, me->totvert, me->totedge);
+  BKE_mesh_vert_edge_map_create(&emap, &emap_mem, me_edges.data(), me->totvert, me->totedge);
 
   BLI_bitmap *edges_visited = BLI_BITMAP_NEW(me->totedge, "edge_visited");
 
@@ -2668,15 +2693,16 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
       if (emap[v].count > 1) {
         bone = ED_armature_ebone_add(arm, "Bone");
 
-        copy_v3_v3(bone->head, me->mvert[v].co);
-        copy_v3_v3(bone->tail, me->mvert[v].co);
+        copy_v3_v3(bone->head, me_verts[v].co);
+        copy_v3_v3(bone->tail, me_verts[v].co);
 
         bone->head[1] = 1.0f;
         bone->rad_head = bone->rad_tail = 0.25;
       }
 
       if (emap[v].count >= 1) {
-        skin_armature_bone_create(skin_ob, mvert, me->medge, arm, edges_visited, emap, bone, v);
+        skin_armature_bone_create(
+            skin_ob, verts_eval.data(), me_edges.data(), arm, edges_visited, emap, bone, v);
       }
     }
   }
@@ -3344,6 +3370,7 @@ void OBJECT_OT_geometry_nodes_input_attribute_toggle(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_geometry_nodes_input_attribute_toggle";
 
   ot->exec = geometry_nodes_input_attribute_toggle_exec;
+  ot->poll = ED_operator_object_active;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
 
@@ -3361,9 +3388,8 @@ static int geometry_node_tree_copy_assign_exec(bContext *C, wmOperator *UNUSED(o
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = ED_object_active_context(C);
-
   ModifierData *md = BKE_object_active_modifier(ob);
-  if (md->type != eModifierType_Nodes) {
+  if (!(md && md->type == eModifierType_Nodes)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -3383,6 +3409,7 @@ static int geometry_node_tree_copy_assign_exec(bContext *C, wmOperator *UNUSED(o
   nmd->node_group = new_tree;
   id_us_min(&tree->id);
 
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   DEG_relations_tag_update(bmain);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
   return OPERATOR_FINISHED;
@@ -3395,6 +3422,7 @@ void OBJECT_OT_geometry_node_tree_copy_assign(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_geometry_node_tree_copy_assign";
 
   ot->exec = geometry_node_tree_copy_assign_exec;
+  ot->poll = ED_operator_object_active;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
