@@ -253,10 +253,10 @@ ccl_device_inline float _surface_shader_bsdf_eval_mis(KernelGlobals kg,
 }
 
 ccl_device_inline float surface_shader_bsdf_eval_pdfs(const KernelGlobals kg,
-                                                      ShaderData *sd,
+                                                      ccl_private ShaderData *sd,
                                                       const float3 omega_in,
-                                                      BsdfEval *result_eval,
-                                                      float *pdfs,
+                                                      ccl_private BsdfEval *result_eval,
+                                                      ccl_private float *pdfs,
                                                       const uint light_shader_flags)
 {
   /* This is the veach one-sample model with balance heuristic, some pdf
@@ -265,7 +265,7 @@ ccl_device_inline float surface_shader_bsdf_eval_pdfs(const KernelGlobals kg,
   float sum_sample_weight = 0.0f;
   bsdf_eval_init(result_eval, CLOSURE_NONE_ID, zero_spectrum());
   for (int i = 0; i < sd->num_closure; i++) {
-    const ShaderClosure *sc = &sd->closure[i];
+    ccl_private const ShaderClosure *sc = &sd->closure[i];
 
     if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
       if (CLOSURE_IS_BSDF(sc->type) && !_surface_shader_exclude(sc->type, light_shader_flags)) {
@@ -403,15 +403,15 @@ surface_shader_bssrdf_sample_weight(ccl_private const ShaderData *ccl_restrict s
 
 ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
                                                          IntegratorState state,
-                                                         ShaderData *sd,
-                                                         const ShaderClosure *sc,
+                                                         ccl_private ShaderData *sd,
+                                                         ccl_private const ShaderClosure *sc,
                                                          const float2 rand_bsdf,
-                                                         BsdfEval *bsdf_eval,
-                                                         float3 *omega_in,
-                                                         float *bsdf_pdf,
-                                                         float *unguided_bsdf_pdf,
-                                                         float2 *sampled_rougness,
-                                                         float *eta)
+                                                         ccl_private BsdfEval *bsdf_eval,
+                                                         ccl_private float3 *omega_in,
+                                                         ccl_private float *bsdf_pdf,
+                                                         ccl_private float *unguided_bsdf_pdf,
+                                                         ccl_private float2 *sampled_rougness,
+                                                         ccl_private float *eta)
 {
   /* BSSRDF should already have been handled elsewhere. */
   kernel_assert(CLOSURE_IS_BSDF(sc->type));

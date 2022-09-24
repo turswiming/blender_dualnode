@@ -293,11 +293,10 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
 }
 
 ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
-                                          const ShaderClosure *sc,
-                                          float2 *roughness,
-                                          float *eta)
+                                          ccl_private const ShaderClosure *sc,
+                                          ccl_private float2 *roughness,
+                                          ccl_private float *eta)
 {
-  const MicrofacetBsdf *bsdf;
   bool refractive = false;
   float alpha = 1.0f;
   switch (sc->type) {
@@ -325,17 +324,19 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
       *roughness = one_float2();
       *eta = 1.0f;
       break;
-    case CLOSURE_BSDF_REFLECTION_ID:
-      bsdf = (ccl_private const MicrofacetBsdf *)sc;
+    case CLOSURE_BSDF_REFLECTION_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = zero_float2();
       *eta = bsdf->ior;
       break;
-    case CLOSURE_BSDF_REFRACTION_ID:
-      bsdf = (ccl_private const MicrofacetBsdf *)sc;
+    }
+    case CLOSURE_BSDF_REFRACTION_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = zero_float2();
       // do we need to inverse eta??
       *eta = bsdf->ior;
       break;
+    }
     case CLOSURE_BSDF_TRANSPARENT_ID:
       *roughness = zero_float2();
       *eta = 1.0f;
@@ -343,36 +344,40 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
-    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
-      bsdf = (ccl_private const MicrofacetBsdf *)sc;
+    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
       refractive = bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID;
       *eta = refractive ? 1.0f / bsdf->ior : bsdf->ior;
       break;
+    }
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_FRESNEL_ID:
-      bsdf = (ccl_private const MicrofacetBsdf *)sc;
+    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_FRESNEL_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
       *eta = bsdf->ior;
       break;
+    }
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
-    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
-      bsdf = (ccl_private const MicrofacetBsdf *)sc;
+    case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
       *eta = bsdf->ior;
       break;
+    }
     case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
-    case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
-      bsdf = (ccl_private const MicrofacetBsdf *)sc;
+    case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
       refractive = bsdf->type == CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID;
       *eta = refractive ? 1.0f / bsdf->ior : bsdf->ior;
-      break;
-    case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID:
-      bsdf = (ccl_private const MicrofacetBsdf *)sc;
+    } break;
+    case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
       *eta = 1.0f;
       break;
+    }
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       *roughness = one_float2();
       *eta = 1.0f;
@@ -418,13 +423,12 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
 }
 
 ccl_device_inline int bsdf_label(const KernelGlobals kg,
-                                 const ShaderClosure *sc,
+                                 ccl_private const ShaderClosure *sc,
                                  const float3 omega_in)
 {
   /* For curves use the smooth normal, particularly for ribbons the geometric
    * normal gives too much darkening otherwise. */
   int label;
-  MicrofacetBsdf *bsdf;
   switch (sc->type) {
     case CLOSURE_BSDF_DIFFUSE_ID:
     case CLOSURE_BSSRDF_BURLEY_ID:
@@ -459,47 +463,25 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
-      bsdf = (MicrofacetBsdf *)sc;
-      if (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f)
-        label = LABEL_REFLECT | LABEL_SINGULAR;
-      else
-        label = LABEL_REFLECT | LABEL_GLOSSY;
-      break;
-    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
-      bsdf = (MicrofacetBsdf *)sc;
-      if (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f)
-        label = LABEL_TRANSMIT | LABEL_SINGULAR;
-      else
-        label = LABEL_TRANSMIT | LABEL_GLOSSY;
-      break;
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_FRESNEL_ID:
-      bsdf = (MicrofacetBsdf *)sc;
-      if (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f)
-        label = LABEL_REFLECT | LABEL_SINGULAR;
-      else
-        label = LABEL_REFLECT | LABEL_GLOSSY;
+    case CLOSURE_BSDF_MICROFACET_BECKMANN_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
+      label = (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f) ? LABEL_REFLECT | LABEL_SINGULAR :
+                                                         LABEL_REFLECT | LABEL_GLOSSY;
       break;
+    }
+    case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
+    case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID: {
+      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
+      label = (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f) ? LABEL_TRANSMIT | LABEL_SINGULAR :
+                                                         LABEL_TRANSMIT | LABEL_GLOSSY;
+      break;
+    }
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:
-      if (bsdf_is_transmission(sc, omega_in))
-        label = LABEL_TRANSMIT | LABEL_GLOSSY;
-      else
-        label = LABEL_REFLECT | LABEL_GLOSSY;
-      break;
-    case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
-      bsdf = (MicrofacetBsdf *)sc;
-      if (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f)
-        label = LABEL_REFLECT | LABEL_SINGULAR;
-      else
-        label = LABEL_REFLECT | LABEL_GLOSSY;
-      break;
-    case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
-      bsdf = (MicrofacetBsdf *)sc;
-      if (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f)
-        label = LABEL_TRANSMIT | LABEL_SINGULAR;
-      else
-        label = LABEL_TRANSMIT | LABEL_GLOSSY;
+      label = (bsdf_is_transmission(sc, omega_in)) ? LABEL_TRANSMIT | LABEL_GLOSSY :
+                                                     LABEL_REFLECT | LABEL_GLOSSY;
       break;
     case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID:
       label = LABEL_REFLECT | LABEL_GLOSSY;

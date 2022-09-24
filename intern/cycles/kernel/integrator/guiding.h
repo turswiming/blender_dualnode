@@ -3,11 +3,9 @@
 
 #pragma once
 
-#ifdef WITH_CYCLES_DEBUG
-#  include "kernel/closure/alloc.h"
-#  include "kernel/closure/bsdf.h"
-#  include "kernel/film/write.h"
-#endif
+#include "kernel/closure/alloc.h"
+#include "kernel/closure/bsdf.h"
+#include "kernel/film/write.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -401,7 +399,7 @@ ccl_device_forceinline void guiding_record_continuation_probability(
 /* Write a set of path guiding related debug information (e.g., guiding probability at first
  * bounce) into separate rendering passes.*/
 ccl_device_forceinline void guiding_write_debug_passes(KernelGlobals kg,
-                                                       IntegratorStateCPU *state,
+                                                       IntegratorState state,
                                                        ccl_private const ShaderData *sd,
                                                        ccl_global float *ccl_restrict
                                                            render_buffer)
