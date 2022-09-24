@@ -486,8 +486,8 @@ static bool sculpt_undo_restore_face_sets(bContext *C, SculptUndoNode *unode)
   BKE_view_layer_synced_ensure(scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   Mesh *me = BKE_object_get_original_mesh(ob);
-  int *face_sets = CustomData_add_layer(
-      &me->pdata, CD_SCULPT_FACE_SETS, CD_CONSTRUCT, NULL, me->totpoly);
+  int *face_sets = CustomData_add_layer_named(
+      &me->pdata, CD_PROP_INT32, CD_CONSTRUCT, NULL, me->totpoly, ".sculpt_face_set");
   for (int i = 0; i < me->totpoly; i++) {
     SWAP(int, face_sets[i], unode->face_sets[i]);
   }
@@ -547,7 +547,7 @@ static void sculpt_undo_bmesh_enable(Object *ob, SculptUndoNode *unode)
                               .use_toolflags = false,
                           }));
   BM_data_layer_add(ss->bm, &ss->bm->vdata, CD_PAINT_MASK);
-  SCULPT_dyntopo_node_layers_add(ss);
+
   me->flag |= ME_SCULPT_DYNAMIC_TOPOLOGY;
 
   /* Restore the BMLog using saved entries. */
@@ -1364,7 +1364,7 @@ static SculptUndoNode *sculpt_undo_face_sets_push(Object *ob, SculptUndoType typ
 
   unode->face_sets = MEM_callocN(me->totpoly * sizeof(int), "sculpt face sets");
 
-  const int *face_sets = CustomData_get_layer(&me->pdata, CD_SCULPT_FACE_SETS);
+  const int *face_sets = CustomData_get_layer_named(&me->pdata, CD_PROP_INT32, ".sculpt_face_set");
   if (face_sets) {
     for (int i = 0; i < me->totpoly; i++) {
       unode->face_sets[i] = face_sets[i];

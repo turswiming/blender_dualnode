@@ -137,7 +137,7 @@ void CustomData_data_add(int type, void *data1, const void *data2);
 
 /**
  * Initializes a CustomData object with the same layer setup as source.
- * mask is a bitfield where `(mask & (1 << (layer type)))` indicates
+ * mask is a bit-field where `(mask & (1 << (layer type)))` indicates
  * if a layer should be copied or not. alloctype must be one of the above.
  */
 void CustomData_copy(const struct CustomData *source,
@@ -635,8 +635,7 @@ enum {
                      CD_SHAPEKEY, /* Not available as real CD layer in non-bmesh context. */
 
   /* Edges. */
-  CD_FAKE_SEAM = CD_FAKE | 100,         /* UV seam flag for edges. */
-  CD_FAKE_CREASE = CD_FAKE | CD_CREASE, /* *sigh*. */
+  CD_FAKE_SEAM = CD_FAKE | 100, /* UV seam flag for edges. */
 
   /* Multiple types of mesh elements... */
   CD_FAKE_UV = CD_FAKE |
@@ -740,6 +739,8 @@ void CustomData_blend_write(BlendWriter *writer,
 #endif
 
 void CustomData_blend_read(struct BlendDataReader *reader, struct CustomData *data, int count);
+
+size_t CustomData_get_elem_size(struct CustomDataLayer *layer);
 
 #ifndef NDEBUG
 struct DynStr;

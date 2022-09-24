@@ -40,7 +40,6 @@ void BLF_thumb_preview(const char *filepath,
                        const int h,
                        const int channels)
 {
-  const uint dpi = 72;
   const int font_size_min = 6;
   int font_size_curr;
   /* shrink 1/th each line */
@@ -84,7 +83,7 @@ void BLF_thumb_preview(const char *filepath,
     int draw_str_i18_count = 0;
 
     CLAMP_MIN(font_size_curr, font_size_min);
-    if (!blf_font_size(font, (float)font_size_curr, dpi)) {
+    if (!blf_font_size(font, (float)font_size_curr)) {
       break;
     }
 
@@ -94,7 +93,7 @@ void BLF_thumb_preview(const char *filepath,
 
     font->pos[1] -= (int)((float)blf_font_ascender(font) * 1.1f);
 
-    /* We fallback to default english strings in case not enough chars are available in current
+    /* We fallback to default English strings in case not enough chars are available in current
      * font for given translated string (useful in non-Latin i18n context, like Chinese,
      * since many fonts will then show nothing but ugly 'missing char' in their preview).
      * Does not handle all cases, but much better than nothing.

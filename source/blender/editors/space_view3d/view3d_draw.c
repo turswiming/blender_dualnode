@@ -1353,7 +1353,7 @@ static void draw_selected_name(
       }
     }
     else if (ELEM(ob->type, OB_MESH, OB_LATTICE, OB_CURVES_LEGACY)) {
-      /* try to display active bone and active shapekey too (if they exist) */
+      /* Try to display active bone and active shape-key too (if they exist). */
 
       if (ob->type == OB_MESH && ob->mode & OB_MODE_WEIGHT_PAINT) {
         Object *armobj = BKE_object_pose_armature_get(ob);
@@ -2405,7 +2405,6 @@ void ED_view3d_datamask(const bContext *C,
   }
   if ((CTX_data_mode_enum(C) == CTX_MODE_SCULPT)) {
     r_cddata_masks->vmask |= CD_MASK_PAINT_MASK;
-    r_cddata_masks->pmask |= CD_MASK_SCULPT_FACE_SETS;
   }
 }
 

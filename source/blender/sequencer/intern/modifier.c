@@ -1008,7 +1008,7 @@ static void brightcontrast_apply_threaded(int width,
   /*
    * The algorithm is by Werner D. Streidt
    * (http://visca.com/ffactory/archives/5-99/msg00021.html)
-   * Extracted of OpenCV demhist.c
+   * Extracted of OpenCV `demhist.c`.
    */
   if (contrast > 0) {
     a = 1.0f - delta * 2.0f;
@@ -1177,7 +1177,7 @@ typedef struct AvgLogLum {
 static void tonemapmodifier_init_data(SequenceModifierData *smd)
 {
   SequencerTonemapModifierData *tmmd = (SequencerTonemapModifierData *)smd;
-  /* Same as tonemap compositor node. */
+  /* Same as tone-map compositor node. */
   tmmd->type = SEQ_TONEMAP_RD_PHOTORECEPTOR;
   tmmd->key = 0.18f;
   tmmd->offset = 1.0f;

@@ -1770,7 +1770,7 @@ struct NodeExtraInfoRow {
 };
 
 struct NamedAttributeTooltipArg {
-  Map<std::string, geo_log::NamedAttributeUsage> usage_by_attribute;
+  Map<StringRefNull, geo_log::NamedAttributeUsage> usage_by_attribute;
 };
 
 static char *named_attribute_tooltip(bContext *UNUSED(C), void *argN, const char *UNUSED(tip))
@@ -1824,7 +1824,7 @@ static char *named_attribute_tooltip(bContext *UNUSED(C), void *argN, const char
 }
 
 static NodeExtraInfoRow row_from_used_named_attribute(
-    const Map<std::string, geo_log::NamedAttributeUsage> &usage_by_attribute_name)
+    const Map<StringRefNull, geo_log::NamedAttributeUsage> &usage_by_attribute_name)
 {
   const int attributes_num = usage_by_attribute_name.size();
 
@@ -2714,7 +2714,7 @@ static void frame_node_draw_label(const bNodeTree &ntree,
   BLF_enable(fontid, BLF_ASPECT);
   BLF_aspect(fontid, aspect, aspect, 1.0f);
   /* clamp otherwise it can suck up a LOT of memory */
-  BLF_size(fontid, MIN2(24.0f, font_size) * U.pixelsize, U.dpi);
+  BLF_size(fontid, MIN2(24.0f, font_size) * U.dpi_fac);
 
   /* title color */
   int color_id = node_get_colorid(node);

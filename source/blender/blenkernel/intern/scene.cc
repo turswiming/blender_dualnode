@@ -235,7 +235,7 @@ static void scene_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const int
 {
   Scene *scene_dst = (Scene *)id_dst;
   const Scene *scene_src = (const Scene *)id_src;
-  /* We never handle usercount here for own data. */
+  /* We never handle user-count here for own data. */
   const int flag_subdata = flag | LIB_ID_CREATE_NO_USER_REFCOUNT;
   /* We always need allocation of our private ID data. */
   const int flag_private_id_data = flag & ~LIB_ID_CREATE_NO_ALLOCATE;
@@ -1228,7 +1228,7 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
       }
 
       /* Active channels root pointer. */
-      if (ed->displayed_channels == old_displayed_channels || ed->displayed_channels == nullptr) {
+      if (ELEM(ed->displayed_channels, old_displayed_channels, nullptr)) {
         ed->displayed_channels = &ed->channels;
       }
       else {
@@ -1263,7 +1263,7 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
           }
         }
 
-        if (ms->old_channels == old_displayed_channels || ms->old_channels == nullptr) {
+        if (ELEM(ms->old_channels, old_displayed_channels, nullptr)) {
           ms->old_channels = &ed->channels;
         }
         else {

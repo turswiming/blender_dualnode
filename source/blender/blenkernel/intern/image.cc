@@ -1999,7 +1999,7 @@ void BKE_image_stamp_buf(Scene *scene,
   }
 
   /* set before return */
-  BLF_size(mono, scene->r.stamp_font_id, 72);
+  BLF_size(mono, scene->r.stamp_font_id);
   BLF_wordwrap(mono, width - (BUFF_MARGIN_X * 2));
 
   BLF_buffer(mono, rectf, rect, width, height, channels, display);
@@ -2662,7 +2662,7 @@ Image *BKE_image_ensure_viewer(Main *bmain, int type, const char *name)
     ima = image_alloc(bmain, name, IMA_SRC_VIEWER, type);
   }
 
-  /* Happens on reload, imagewindow cannot be image user when hidden. */
+  /* Happens on reload, image-window cannot be image user when hidden. */
   if (ima->id.us == 0) {
     id_us_ensure_real(&ima->id);
   }
@@ -5148,7 +5148,7 @@ bool BKE_image_has_alpha(Image *image)
   const int planes = (ibuf ? ibuf->planes : 0);
   BKE_image_release_ibuf(image, ibuf, lock);
 
-  if (planes == 32 || planes == 16) {
+  if (ELEM(planes, 32, 16)) {
     return true;
   }
 
@@ -5567,15 +5567,14 @@ bool BKE_image_remove_renderslot(Image *ima, ImageUser *iuser, int slot)
       next_last_slot = current_slot;
     }
 
-    if (!iuser) {
+    if (iuser == nullptr || iuser->scene == nullptr) {
       return false;
     }
     Render *re = RE_GetSceneRender(iuser->scene);
-    if (!re) {
-      return false;
+    if (re != nullptr) {
+      RE_SwapResult(re, &current_last_slot->render);
+      RE_SwapResult(re, &next_last_slot->render);
     }
-    RE_SwapResult(re, &current_last_slot->render);
-    RE_SwapResult(re, &next_last_slot->render);
     current_last_slot = next_last_slot;
   }
 

@@ -1300,7 +1300,6 @@ static void blf_font_fill(FontBLF *font)
   font->clip_rec.ymin = 0;
   font->clip_rec.ymax = 0;
   font->flags = 0;
-  font->dpi = 0;
   font->size = 0;
   BLI_listbase_clear(&font->cache);
   font->kerning_cache = NULL;
@@ -1346,7 +1345,9 @@ bool blf_ensure_face(FontBLF *font)
     if (font->mem) {
       err = FT_New_Memory_Face(font->ft_lib, font->mem, (FT_Long)font->mem_size, 0, &font->face);
     }
-    font->face->generic.data = font;
+    if (!err) {
+      font->face->generic.data = font;
+    }
     BLI_mutex_unlock(&ft_lib_mutex);
   }
 
@@ -1611,8 +1612,8 @@ void blf_ensure_size(FontBLF *font)
   scaler.width = 0;
   scaler.height = round_fl_to_uint(font->size * 64.0f);
   scaler.pixel = 0;
-  scaler.x_res = font->dpi;
-  scaler.y_res = font->dpi;
+  scaler.x_res = BLF_DPI;
+  scaler.y_res = BLF_DPI;
   if (FTC_Manager_LookupSize(ftc_manager, &scaler, &font->ft_size) == FT_Err_Ok) {
     font->ft_size->generic.data = (void *)font;
     font->ft_size->generic.finalizer = blf_size_finalizer;
@@ -1622,7 +1623,7 @@ void blf_ensure_size(FontBLF *font)
   BLI_assert_unreachable();
 }
 
-bool blf_font_size(FontBLF *font, float size, uint dpi)
+bool blf_font_size(FontBLF *font, float size)
 {
   if (!blf_ensure_face(font)) {
     return false;
@@ -1633,15 +1634,15 @@ bool blf_font_size(FontBLF *font, float size, uint dpi)
   /* Adjust our new size to be on even 64ths. */
   size = (float)ft_size / 64.0f;
 
-  if (font->size != size || font->dpi != dpi) {
+  if (font->size != size) {
     if (font->flags & BLF_CACHED) {
       FTC_ScalerRec scaler = {0};
       scaler.face_id = font;
       scaler.width = 0;
       scaler.height = ft_size;
       scaler.pixel = 0;
-      scaler.x_res = dpi;
-      scaler.y_res = dpi;
+      scaler.x_res = BLF_DPI;
+      scaler.y_res = BLF_DPI;
       if (FTC_Manager_LookupSize(ftc_manager, &scaler, &font->ft_size) != FT_Err_Ok) {
         return false;
       }
@@ -1649,7 +1650,7 @@ bool blf_font_size(FontBLF *font, float size, uint dpi)
       font->ft_size->generic.finalizer = blf_size_finalizer;
     }
     else {
-      if (FT_Set_Char_Size(font->face, 0, ft_size, dpi, dpi) != FT_Err_Ok) {
+      if (FT_Set_Char_Size(font->face, 0, ft_size, BLF_DPI, BLF_DPI) != FT_Err_Ok) {
         return false;
       }
       font->ft_size = font->face->size;
@@ -1657,7 +1658,6 @@ bool blf_font_size(FontBLF *font, float size, uint dpi)
   }
 
   font->size = size;
-  font->dpi = dpi;
   return true;
 }
 

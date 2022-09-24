@@ -188,7 +188,7 @@ void DM_init_funcs(DerivedMesh *dm)
 
   dm->getLoopTriArray = dm_getLoopTriArray;
 
-  /* subtypes handle getting actual data */
+  /* Sub-types handle getting actual data. */
   dm->getNumLoopTri = dm_getNumLoopTri;
 
   dm->getVertDataArray = DM_get_vert_data_layer;
@@ -239,8 +239,6 @@ void DM_from_template(DerivedMesh *dm,
   CustomData_copy(&source->faceData, &dm->faceData, mask->fmask, CD_SET_DEFAULT, numTessFaces);
   CustomData_copy(&source->loopData, &dm->loopData, mask->lmask, CD_SET_DEFAULT, numLoops);
   CustomData_copy(&source->polyData, &dm->polyData, mask->pmask, CD_SET_DEFAULT, numPolys);
-
-  dm->cd_flag = source->cd_flag;
 
   dm->type = type;
   dm->numVertData = numVerts;

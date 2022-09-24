@@ -207,10 +207,6 @@ struct GPUShader *DRW_shader_create_with_lib_ex(const char *vert,
                                                 const char *lib,
                                                 const char *defines,
                                                 const char *name);
-struct GPUShader *DRW_shader_create_compute_with_shaderlib(const char *comp,
-                                                           const DRWShaderLibrary *lib,
-                                                           const char *defines,
-                                                           const char *name);
 struct GPUShader *DRW_shader_create_with_shaderlib_ex(const char *vert,
                                                       const char *geom,
                                                       const char *frag,
@@ -255,6 +251,7 @@ struct GPUMaterial *DRW_shader_from_material(struct Material *ma,
                                              bool deferred,
                                              GPUCodegenCallbackFn callback,
                                              void *thunk);
+void DRW_shader_queue_optimize_material(struct GPUMaterial *mat);
 void DRW_shader_free(struct GPUShader *shader);
 #define DRW_SHADER_FREE_SAFE(shader) \
   do { \
