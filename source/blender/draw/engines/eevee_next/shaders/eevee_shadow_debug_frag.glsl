@@ -58,6 +58,20 @@ vec3 debug_tile_state_color(ShadowTileData tile)
   return col;
 }
 
+ShadowTileData debug_tile_get(vec3 P, LightData light)
+{
+  vec2 uv;
+  if (light.type == LIGHT_SUN) {
+    /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
+    vec3 lP = transform_point(light.object_mat, P);
+    return shadow_directional_tile_get(shadow_tilemaps_tx, light, cameraPos, lP, P, uv);
+  }
+  else {
+    vec3 lL = light_world_to_local(light, P - light._position);
+    return shadow_punctual_tile_get(shadow_tilemaps_tx, light, lL, uv);
+  }
+}
+
 LightData debug_light_get()
 {
   LIGHT_FOREACH_BEGIN_LOCAL_NO_CULL(light_cull_buf, l_idx)
@@ -79,22 +93,19 @@ LightData debug_light_get()
   LIGHT_FOREACH_END
 }
 
+void debug_tile_state(vec3 P, LightData light)
+{
+  ShadowTileData tile = debug_tile_get(P, light);
+  out_color_add = vec4(debug_tile_state_color(tile), 0) * 0.5;
+  out_color_mul = vec4(0.5);
+}
+
 void main()
 {
   /* Default to no output. */
   gl_FragDepth = 1.0;
   out_color_add = vec4(0.0);
   out_color_mul = vec4(1.0);
-
-  // float mouse_depth = texelFetch(hiz_tx, drw_view.mouse_pixel, 0).r;
-  // vec3 mouse_P = get_world_space_from_depth(
-  //     vec2(drw_view.mouse_pixel) * drw_view.viewport_size_inverse, mouse_depth);
-  // ivec4 mouse_tile;
-  // debug_tile_index_from_position(mouse_P, mouse_tile);
-
-  // if (debug_tilemap(mouse_tile)) {
-  //   return;
-  // }
 
   float depth = texelFetch(hiz_tx, ivec2(gl_FragCoord.xy), 0).r;
   vec3 P = get_world_space_from_depth(uvcoordsvar.xy, depth);
@@ -103,25 +114,11 @@ void main()
 
   LightData light = debug_light_get();
 
-  ShadowTileData tile;
-  vec2 uv;
-  if (light.type == LIGHT_SUN) {
-    /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
-    vec3 lP = transform_point(light.object_mat, P);
-    tile = shadow_directional_tile_get(shadow_tilemaps_tx, light, cameraPos, lP, P, uv);
+  if (depth != 1.0) {
+    switch (eDebugMode(debug_mode)) {
+      case DEBUG_SHADOW_TILEMAPS:
+        debug_tile_state(P, light);
+        break;
+    }
   }
-  else {
-    vec3 lL = light_world_to_local(light, P - light._position);
-    tile = shadow_punctual_tile_get(shadow_tilemaps_tx, light, lL, uv);
-  }
-  out_color_add = vec4(debug_tile_state_color(tile), 0) * 0.5;
-  out_color_mul = vec4(0.5);
-
-  // if (depth != 1.0) {
-  //   switch (debug_mode) {
-  //     case SHADOW_DEBUG_TILEMAPS:
-  //       debug_tile_state(P, mouse_tile);
-  //       break;
-  //   }
-  // }
 }

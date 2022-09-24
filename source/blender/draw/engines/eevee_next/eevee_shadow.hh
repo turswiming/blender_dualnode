@@ -236,13 +236,18 @@ class ShadowModule {
   /** \name Tilemap Management
    * \{ */
 
-  /** Clear visibility, usage and request bits. Shifts the tilemap for sun shadow clip-maps. */
   PassSimple tilemap_setup_ps_ = {"TilemapSetup"};
+  PassMain tilemap_usage_ps_ = {"TagUsage"};
+  PassSimple tilemap_update_ps_ = {"TilemapUpdate"};
+
+  PassMain::Sub *tilemap_usage_transparent_ps_ = nullptr;
+  GPUBatch *box_batch_ = nullptr;
+
+  Framebuffer usage_tag_fb;
 
   /** List of Resource IDs (to get bounds) for tagging passes. */
   StorageVectorBuffer<uint, 128> past_casters_updated_ = {"PastCastersUpdated"};
   StorageVectorBuffer<uint, 128> curr_casters_updated_ = {"CurrCastersUpdated"};
-  StorageVectorBuffer<uint, 128> receivers_non_opaque_ = {"ReceiversNonOpaque"};
 
   int3 dispatch_depth_scan_size_;
   float tilemap_pixel_radius_;

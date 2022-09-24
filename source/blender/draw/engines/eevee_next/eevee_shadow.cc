@@ -486,7 +486,45 @@ void ShadowModule::begin_sync()
 {
   past_casters_updated_.clear();
   curr_casters_updated_.clear();
-  receivers_non_opaque_.clear();
+
+  {
+    Manager &manager = *inst_.manager;
+    RenderBuffers &render_buffers = inst_.render_buffers;
+
+    PassMain &pass = tilemap_usage_ps_;
+    pass.init();
+
+    {
+      /** Use depth buffer to tag needed shadow pages for opaque geometry. */
+      PassMain::Sub &sub = pass.sub("Opaque");
+      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_USAGE_OPAQUE));
+      sub.bind_ssbo("tilemaps_buf", &tilemap_pool.tilemaps_data);
+      sub.bind_ssbo("tiles_buf", &tilemap_pool.tiles_data);
+      sub.bind_texture("depth_tx", &render_buffers.depth_tx);
+      sub.push_constant("tilemap_pixel_radius", &tilemap_pixel_radius_);
+      sub.push_constant("screen_pixel_radius_inv", &screen_pixel_radius_inv_);
+      inst_.lights.bind_resources(&sub);
+      sub.dispatch(&dispatch_depth_scan_size_);
+    }
+    {
+      /** Use bounding boxes for transparent geometry. */
+      PassMain::Sub &sub = pass.sub("Transparent");
+      /* WORKAROUND: The DRW_STATE_WRITE_STENCIL is here only to avoid enabling the rasterizer
+       * discard inside draw manager. */
+      sub.state_set(DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_STENCIL);
+      sub.state_stencil(0, 0, 0);
+      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_USAGE_TRANSPARENT));
+      sub.bind_ssbo("tilemaps_buf", &tilemap_pool.tilemaps_data);
+      sub.bind_ssbo("tiles_buf", &tilemap_pool.tiles_data);
+      sub.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
+      sub.push_constant("tilemap_pixel_radius", &tilemap_pixel_radius_);
+      sub.push_constant("screen_pixel_radius_inv", &screen_pixel_radius_inv_);
+      inst_.lights.bind_resources(&sub);
+
+      box_batch_ = DRW_cache_cube_get();
+      tilemap_usage_transparent_ps_ = &sub;
+    }
+  }
 }
 
 void ShadowModule::sync_object(const ObjectHandle &handle,
@@ -513,7 +551,7 @@ void ShadowModule::sync_object(const ObjectHandle &handle,
   shadow_ob.resource_handle = resource_handle;
 
   if (is_alpha_blend) {
-    receivers_non_opaque_.append(resource_handle.raw);
+    tilemap_usage_transparent_ps_->draw(box_batch_, resource_handle);
   }
 }
 
@@ -566,7 +604,6 @@ void ShadowModule::end_sync()
   }
   past_casters_updated_.push_update();
   curr_casters_updated_.push_update();
-  receivers_non_opaque_.push_update();
 
   if (do_full_update) {
     do_full_update = false;
@@ -595,136 +632,115 @@ void ShadowModule::end_sync()
 
   {
     Manager &manager = *inst_.manager;
-    RenderBuffers &render_buffers = inst_.render_buffers;
-
-    PassSimple &pass = tilemap_setup_ps_;
-    pass.init();
 
     {
-      /** Clear usage bits. Tag update from the tilemap for sun shadow clip-maps shifting. */
-      PassSimple::Sub &sub = pass.sub("Init");
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_INIT));
-      sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
-      sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-      sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
-      /** Free unused tiles from tile-maps not used by any shadow. */
-      if (tilemap_pool.tilemaps_unused.size() > 0) {
-        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_unused);
-        sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_unused.size()));
+      PassSimple &pass = tilemap_setup_ps_;
+      pass.init();
+
+      {
+        /** Clear usage bits. Tag update from the tilemap for sun shadow clip-maps shifting. */
+        PassSimple::Sub &sub = pass.sub("Init");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_INIT));
+        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
+        /** Free unused tiles from tile-maps not used by any shadow. */
+        if (tilemap_pool.tilemaps_unused.size() > 0) {
+          sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_unused);
+          sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_unused.size()));
+        }
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      /** Mark for update all shadow pages touching an updated shadow caster. */
-      PassSimple::Sub &sub = pass.sub("TagUpdate");
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_UPDATE));
-      sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
-      sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-      /* Past caster transforms. */
-      if (past_casters_updated_.size() > 0) {
-        sub.bind_ssbo("bounds_buf", &manager.bounds_buf.previous());
-        sub.bind_ssbo("resource_ids_buf", past_casters_updated_);
-        sub.dispatch(int3(past_casters_updated_.size(), 1, tilemap_pool.tilemaps_data.size()));
+      {
+        /** Mark for update all shadow pages touching an updated shadow caster. */
+        PassSimple::Sub &sub = pass.sub("TagUpdate");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_UPDATE));
+        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        /* Past caster transforms. */
+        if (past_casters_updated_.size() > 0) {
+          sub.bind_ssbo("bounds_buf", &manager.bounds_buf.previous());
+          sub.bind_ssbo("resource_ids_buf", past_casters_updated_);
+          sub.dispatch(int3(past_casters_updated_.size(), 1, tilemap_pool.tilemaps_data.size()));
+        }
+        /* Current caster transforms. */
+        if (curr_casters_updated_.size() > 0) {
+          sub.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
+          sub.bind_ssbo("resource_ids_buf", curr_casters_updated_);
+          sub.dispatch(int3(curr_casters_updated_.size(), 1, tilemap_pool.tilemaps_data.size()));
+        }
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
-      /* Current caster transforms. */
-      if (curr_casters_updated_.size() > 0) {
-        sub.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
-        sub.bind_ssbo("resource_ids_buf", curr_casters_updated_);
-        sub.dispatch(int3(curr_casters_updated_.size(), 1, tilemap_pool.tilemaps_data.size()));
+    }
+
+    /* Usage tagging happens between these two steps. */
+
+    {
+      PassSimple &pass = tilemap_update_ps_;
+      pass.init();
+
+      {
+        /** Mark tiles that are redundant in the mipmap chain as unused. */
+        PassSimple::Sub &sub = pass.sub("MaskLod");
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      /** Use depth buffer to tag needed shadow pages for opaque geometry. */
-      PassSimple::Sub &sub = pass.sub("TagUsageOpaque");
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_USAGE_OPAQUE));
-      sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
-      sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-      sub.bind_texture("depth_tx", &render_buffers.depth_tx);
-      sub.push_constant("tilemap_pixel_radius", tilemap_pixel_radius_);
-      sub.push_constant("screen_pixel_radius_inv", screen_pixel_radius_inv_);
-      inst_.lights.bind_resources(&sub);
-      sub.dispatch(&dispatch_depth_scan_size_);
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      /** Use bounding boxes for transparent geometry. */
-      PassSimple::Sub &sub = pass.sub("TagUsageTransparent");
-      /* WORKAROUND: The DRW_STATE_WRITE_STENCIL is here only to avoid enabling the rasterizer
-       * discard inside draw manager. */
-      sub.state_set(DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_STENCIL);
-      sub.state_stencil(0, 0, 0);
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_USAGE_TRANSPARENT));
-      sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
-      sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-      sub.bind_ssbo("receiver_buf", receivers_non_opaque_);
-      sub.push_constant("tilemap_pixel_radius", tilemap_pixel_radius_);
-      sub.push_constant("screen_pixel_radius_inv", screen_pixel_radius_inv_);
-      inst_.lights.bind_resources(&sub);
-      sub.draw(DRW_cache_cube_get(), receivers_non_opaque_.size());
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      /** Mark tiles that are redundant in the mipmap chain as unused. */
-      PassSimple::Sub &sub = pass.sub("MaskLod");
-      UNUSED_VARS(sub);
-    }
-    {
-      /** Free unused pages & Reclaim cached pages. */
-      PassSimple::Sub &sub = pass.sub("Free");
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_FREE));
-      sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
-      sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-      sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
-      sub.bind_ssbo("pages_free_buf", pages_free_data_);
-      sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
-      sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
-      /** Free unused tiles from tile-maps not used by any shadow. */
-      if (tilemap_pool.tilemaps_unused.size() > 0) {
-        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_unused);
-        sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_unused.size()));
+      {
+        /** Free unused pages & Reclaim cached pages. */
+        PassSimple::Sub &sub = pass.sub("Free");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_FREE));
+        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
+        sub.bind_ssbo("pages_free_buf", pages_free_data_);
+        sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
+        sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
+        /** Free unused tiles from tile-maps not used by any shadow. */
+        if (tilemap_pool.tilemaps_unused.size() > 0) {
+          sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_unused);
+          sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_unused.size()));
+        }
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      /** De-fragment the free page heap after cache reuse phase which can leave hole. */
-      PassSimple::Sub &sub = pass.sub("Defrag");
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_DEFRAG));
-      sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
-      sub.bind_ssbo("pages_free_buf", pages_free_data_);
-      sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      /** Assign pages to tiles that have been marked as used but possess no page. */
-      PassSimple::Sub &sub = pass.sub("AllocatePages");
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_ALLOCATE));
-      sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
-      sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-      sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
-      sub.bind_ssbo("pages_free_buf", pages_free_data_);
-      sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
-      sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      /** Convert the unordered tiles into a texture used during shading. */
-      PassSimple::Sub &sub = pass.sub("Finalize");
-      sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_FINALIZE));
-      sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
-      sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-      sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
-      sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      PassSimple::Sub &sub = pass.sub("RenderCulling");
-      UNUSED_VARS(sub);
-    }
-    {
-      PassSimple::Sub &sub = pass.sub("RenderClear");
-      UNUSED_VARS(sub);
+      {
+        /** De-fragment the free page heap after cache reuse phase which can leave hole. */
+        PassSimple::Sub &sub = pass.sub("Defrag");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_DEFRAG));
+        sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
+        sub.bind_ssbo("pages_free_buf", pages_free_data_);
+        sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
+        sub.dispatch(int3(1, 1, 1));
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+      {
+        /** Assign pages to tiles that have been marked as used but possess no page. */
+        PassSimple::Sub &sub = pass.sub("AllocatePages");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_ALLOCATE));
+        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
+        sub.bind_ssbo("pages_free_buf", pages_free_data_);
+        sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
+        sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+      {
+        /** Convert the unordered tiles into a texture used during shading. */
+        PassSimple::Sub &sub = pass.sub("Finalize");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_FINALIZE));
+        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
+        sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+      {
+        PassSimple::Sub &sub = pass.sub("RenderCulling");
+        UNUSED_VARS(sub);
+      }
+      {
+        PassSimple::Sub &sub = pass.sub("RenderClear");
+        UNUSED_VARS(sub);
+      }
     }
   }
 
@@ -778,17 +794,18 @@ void ShadowModule::set_view(View &view)
 {
   GPUFrameBuffer *prev_fb = GPU_framebuffer_active_get();
 
-  dispatch_depth_scan_size_ = math::divide_ceil(inst_.render_buffers.depth_tx.size(),
-                                                int3(SHADOW_DEPTH_SCAN_GROUP_SIZE));
+  int3 target_size = inst_.render_buffers.depth_tx.size();
+  dispatch_depth_scan_size_ = math::divide_ceil(target_size, int3(SHADOW_DEPTH_SCAN_GROUP_SIZE));
 
   DRW_stats_group_start("Shadow");
   {
     inst_.manager->submit(tilemap_setup_ps_, view);
 
-#if 0 /* TODO */
-    GPU_framebuffer_bind_empty(16384, 16384);
-    inst_.manager->submit(shadow_render_ps_, view);
-#endif
+    usage_tag_fb.ensure(int2(target_size));
+    GPU_framebuffer_bind(usage_tag_fb);
+    inst_.manager->submit(tilemap_usage_ps_, view);
+
+    inst_.manager->submit(tilemap_update_ps_, view);
   }
   DRW_stats_group_end();
 
