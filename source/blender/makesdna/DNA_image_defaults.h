@@ -24,7 +24,7 @@
     .gpuframenr = INT_MAX, \
     .gpu_pass = SHRT_MAX, \
     .gpu_layer = SHRT_MAX, \
-    .seamfix_iter = 2, \
+    .seamfix_iter = 8, \
   }
 
 /** \} */
