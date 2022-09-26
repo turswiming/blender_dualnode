@@ -27,7 +27,7 @@
 
 #include "DNA_meshdata_types.h"
 
-namespace blender::bke::uv_islands {
+namespace blender::bke::pbvh::uv_islands {
 
 struct MeshEdge;
 struct MeshPrimitive;
@@ -324,4 +324,4 @@ struct UVIslandsMask {
   void dilate(int max_iterations);
 };
 
-}  // namespace blender::bke::uv_islands
+}  // namespace blender::bke::pbvh::uv_islands

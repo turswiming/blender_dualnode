@@ -251,6 +251,7 @@ set(SRC
   intern/pbvh.cc
   intern/pbvh_bmesh.c
   intern/pbvh_pixels.cc
+  intern/pbvh_uv_islands.cc
   intern/pointcache.c
   intern/pointcloud.cc
   intern/preferences.c
@@ -295,7 +296,6 @@ set(SRC
   intern/type_conversions.cc
   intern/undo_system.c
   intern/unit.c
-  intern/uv_islands.cc
   intern/vfont.c
   intern/vfontdata_freetype.c
   intern/volume.cc

@@ -16,11 +16,11 @@
 #include "BLI_task.h"
 
 #include "BKE_image_wrappers.hh"
-#include "BKE_uv_islands.hh"
 
 #include "bmesh.h"
 
 #include "pbvh_intern.h"
+#include "pbvh_uv_islands.hh"
 
 namespace blender::bke::pbvh::pixels {
 

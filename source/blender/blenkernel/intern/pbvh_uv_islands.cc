@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_uv_islands.hh"
+#include "pbvh_uv_islands.hh"
 
 #include <optional>
 
-namespace blender::bke::uv_islands {
+namespace blender::bke::pbvh::uv_islands {
 
 static void uv_edge_append_to_uv_vertices(UVEdge &uv_edge)
 {
@@ -1466,4 +1466,4 @@ bool UVIslandsMask::is_masked(const uint16_t island_index, const float2 uv) cons
 
 /** \} */
 
-}  // namespace blender::bke::uv_islands
+}  // namespace blender::bke::pbvh::uv_islands
