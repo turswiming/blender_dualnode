@@ -41,7 +41,7 @@ if(WIN32)
   else()
     set(JPEG_LIBRARY jpeg-staticd${LIBEXT})
   endif()
-else(WIN32)
+else()
   # cmake for unix
   set(JPEG_EXTRA_ARGS
     -DWITH_JPEG8=ON
