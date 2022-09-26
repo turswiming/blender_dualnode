@@ -3498,13 +3498,6 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
         }
       }
     }
-
-    /* UVSeam fixing distance. */
-    if (!DNA_struct_elem_find(fd->filesdna, "Image", "short", "seamfix_iter")) {
-      LISTBASE_FOREACH (Image *, image, &bmain->images) {
-        image->seamfix_iter = 8;
-      }
-    }
   }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 303, 6)) {
@@ -3593,5 +3586,12 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
    */
   {
     /* Keep this block, even when empty. */
+
+    /* UVSeam fixing distance. */
+    if (!DNA_struct_elem_find(fd->filesdna, "Image", "short", "seamfix_iter")) {
+      LISTBASE_FOREACH (Image *, image, &bmain->images) {
+        image->seamfix_iter = 8;
+      }
+    }
   }
 }
