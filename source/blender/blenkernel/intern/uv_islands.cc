@@ -860,26 +860,28 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, float min_u
           current_edge->get_other_uv_vertex(uv_vertex->vertex)->vertex;
       MeshPrimitive *fill_primitive = find_fill_border(
           *uv_vertex->vertex, *shared_edge_vertex, *corner.second->get_uv_vertex(1)->vertex);
-      BLI_assert(fill_primitive);
-      MeshVertex *other_prim_vertex =
-          fill_primitive->get_other_uv_vertex(uv_vertex->vertex, shared_edge_vertex)->vertex;
+      if (fill_primitive) {
+        MeshVertex *other_prim_vertex =
+            fill_primitive->get_other_uv_vertex(uv_vertex->vertex, shared_edge_vertex)->vertex;
 
-      UVVertex uv_vertex_template;
-      uv_vertex_template.vertex = uv_vertex->vertex;
-      uv_vertex_template.uv = uv_vertex->uv;
-      UVVertex *vertex_1_ptr = island.lookup_or_create(uv_vertex_template);
-      uv_vertex_template.vertex = shared_edge_vertex;
-      uv_vertex_template.uv = old_uv;
-      UVVertex *vertex_2_ptr = island.lookup_or_create(uv_vertex_template);
-      uv_vertex_template.vertex = other_prim_vertex;
-      uv_vertex_template.uv = corner.second->get_uv_vertex(1)->uv;
-      UVVertex *vertex_3_ptr = island.lookup_or_create(uv_vertex_template);
-      add_uv_primitive_fill(island, *vertex_1_ptr, *vertex_2_ptr, *vertex_3_ptr, *fill_primitive);
+        UVVertex uv_vertex_template;
+        uv_vertex_template.vertex = uv_vertex->vertex;
+        uv_vertex_template.uv = uv_vertex->uv;
+        UVVertex *vertex_1_ptr = island.lookup_or_create(uv_vertex_template);
+        uv_vertex_template.vertex = shared_edge_vertex;
+        uv_vertex_template.uv = old_uv;
+        UVVertex *vertex_2_ptr = island.lookup_or_create(uv_vertex_template);
+        uv_vertex_template.vertex = other_prim_vertex;
+        uv_vertex_template.uv = corner.second->get_uv_vertex(1)->uv;
+        UVVertex *vertex_3_ptr = island.lookup_or_create(uv_vertex_template);
+        add_uv_primitive_fill(
+            island, *vertex_1_ptr, *vertex_2_ptr, *vertex_3_ptr, *fill_primitive);
 
-      UVPrimitive &new_prim = island.uv_primitives.last();
-      UVBorderEdge new_border(new_prim.get_uv_edge(shared_edge_vertex, other_prim_vertex),
-                              &new_prim);
-      new_border_edges.append(new_border);
+        UVPrimitive &new_prim = island.uv_primitives.last();
+        UVBorderEdge new_border(new_prim.get_uv_edge(shared_edge_vertex, other_prim_vertex),
+                                &new_prim);
+        new_border_edges.append(new_border);
+      }
     }
 
     int border_insert = corner.first->index;
@@ -1052,10 +1054,10 @@ void UVBorder::remove(int64_t index)
 /** \name UVBorderCorner
  * \{ */
 
-  UVBorderCorner::UVBorderCorner(UVBorderEdge *first, UVBorderEdge *second, float angle)
-      : first(first), second(second), angle(angle)
-  {
-  }
+UVBorderCorner::UVBorderCorner(UVBorderEdge *first, UVBorderEdge *second, float angle)
+    : first(first), second(second), angle(angle)
+{
+}
 
 float2 UVBorderCorner::uv(float factor, float min_uv_distance)
 {
