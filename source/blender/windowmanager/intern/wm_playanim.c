@@ -659,7 +659,7 @@ static void build_pict_list_ex(
     int fp_framenr;
     struct {
       char head[FILE_MAX], tail[FILE_MAX];
-      unsigned short digits;
+      ushort digits;
     } fp_decoded;
 
     char filepath[FILE_MAX];
@@ -1549,14 +1549,14 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
   // GHOST_ActivateWindowDrawingContext(g_WS.ghost_window);
 
   /* initialize OpenGL immediate mode */
-  g_WS.gpu_context = GPU_context_create(g_WS.ghost_window);
+  g_WS.gpu_context = GPU_context_create(g_WS.ghost_window, NULL);
   GPU_init();
 
   /* initialize the font */
   BLF_init();
   BLF_load_font_stack();
   ps.fontid = BLF_load_mono_default(false);
-  BLF_size(ps.fontid, 11.0f, 72);
+  BLF_size(ps.fontid, 11.0f);
 
   ps.ibufx = ibuf->x;
   ps.ibufy = ibuf->y;

@@ -117,6 +117,7 @@ def mesh_node_items(context):
     yield NodeItem("GeometryNodeMeshToCurve")
     yield NodeItem("GeometryNodeMeshToPoints")
     yield NodeItem("GeometryNodeMeshToVolume")
+    yield NodeItem("GeometryNodeSampleNearestSurface")
     yield NodeItem("GeometryNodeScaleElements")
     yield NodeItem("GeometryNodeSplitEdges")
     yield NodeItem("GeometryNodeSubdivideMesh")
@@ -154,6 +155,8 @@ def geometry_node_items(context):
     yield NodeItem("GeometryNodeJoinGeometry")
     yield NodeItem("GeometryNodeMergeByDistance")
     yield NodeItem("GeometryNodeRaycast")
+    yield NodeItem("GeometryNodeSampleIndex")
+    yield NodeItem("GeometryNodeSampleNearest")
     yield NodeItem("GeometryNodeSeparateComponents")
     yield NodeItem("GeometryNodeSeparateGeometry")
     yield NodeItem("GeometryNodeTransform")
@@ -261,8 +264,9 @@ def node_group_items(context):
 
     yield NodeItemCustom(draw=group_tools_draw)
 
-    yield NodeItem("NodeGroupInput", poll=group_input_output_item_poll)
-    yield NodeItem("NodeGroupOutput", poll=group_input_output_item_poll)
+    if group_input_output_item_poll(context):
+        yield NodeItem("NodeGroupInput")
+        yield NodeItem("NodeGroupOutput")
 
     ntree = space.edit_tree
     if not ntree:
@@ -649,7 +653,6 @@ geometry_node_categories = [
         NodeItem("GeometryNodeCaptureAttribute"),
         NodeItem("GeometryNodeAttributeDomainSize"),
         NodeItem("GeometryNodeAttributeStatistic"),
-        NodeItem("GeometryNodeAttributeTransfer"),
         NodeItem("GeometryNodeRemoveAttribute"),
         NodeItem("GeometryNodeStoreNamedAttribute"),
     ]),

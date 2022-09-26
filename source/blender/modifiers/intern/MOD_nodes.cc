@@ -203,6 +203,9 @@ static bool node_needs_own_transform_relation(const bNode &node)
     return storage.transform_space == GEO_NODE_TRANSFORM_SPACE_RELATIVE;
   }
 
+  if (node.type == GEO_NODE_SELF_OBJECT) {
+    return true;
+  }
   if (node.type == GEO_NODE_DEFORM_CURVES_ON_SURFACE) {
     return true;
   }
@@ -440,8 +443,8 @@ id_property_create_from_socket(const bNodeSocket &socket)
       auto property = bke::idprop::create(socket.identifier, value->value);
       IDPropertyUIDataFloat *ui_data = (IDPropertyUIDataFloat *)IDP_ui_data_ensure(property.get());
       ui_data->base.rna_subtype = value->subtype;
-      ui_data->min = ui_data->soft_min = (double)value->min;
-      ui_data->max = ui_data->soft_max = (double)value->max;
+      ui_data->min = ui_data->soft_min = double(value->min);
+      ui_data->max = ui_data->soft_max = double(value->max);
       ui_data->default_value = value->value;
       return property;
     }
@@ -463,8 +466,8 @@ id_property_create_from_socket(const bNodeSocket &socket)
           socket.identifier, Span<float>{value->value[0], value->value[1], value->value[2]});
       IDPropertyUIDataFloat *ui_data = (IDPropertyUIDataFloat *)IDP_ui_data_ensure(property.get());
       ui_data->base.rna_subtype = value->subtype;
-      ui_data->min = ui_data->soft_min = (double)value->min;
-      ui_data->max = ui_data->soft_max = (double)value->max;
+      ui_data->min = ui_data->soft_min = double(value->min);
+      ui_data->max = ui_data->soft_max = double(value->max);
       ui_data->default_array = (double *)MEM_mallocN(sizeof(double[3]), "mod_prop_default");
       ui_data->default_array_len = 3;
       for (const int i : IndexRange(3)) {
@@ -576,7 +579,7 @@ static void init_socket_cpp_value_from_property(const IDProperty &property,
         value = IDP_Float(&property);
       }
       else if (property.type == IDP_DOUBLE) {
-        value = (float)IDP_Double(&property);
+        value = float(IDP_Double(&property));
       }
       new (r_value) ValueOrField<float>(value);
       break;

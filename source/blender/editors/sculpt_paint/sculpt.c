@@ -250,15 +250,16 @@ void SCULPT_vertex_persistent_normal_get(SculptSession *ss, PBVHVertRef vertex, 
 
 float SCULPT_vertex_mask_get(SculptSession *ss, PBVHVertRef vertex)
 {
-  BMVert *v;
-  float *mask;
   switch (BKE_pbvh_type(ss->pbvh)) {
     case PBVH_FACES:
       return ss->vmask ? ss->vmask[vertex.i] : 0.0f;
-    case PBVH_BMESH:
+    case PBVH_BMESH: {
+      BMVert *v;
+      int cd_mask = CustomData_get_offset(&ss->bm->vdata, CD_PAINT_MASK);
+
       v = (BMVert *)vertex.i;
-      mask = BM_ELEM_CD_GET_VOID_P(v, CustomData_get_offset(&ss->bm->vdata, CD_PAINT_MASK));
-      return mask ? *mask : 0.0f;
+      return cd_mask != -1 ? BM_ELEM_CD_GET_FLOAT(v, cd_mask) : 0.0f;
+    }
     case PBVH_GRIDS: {
       const CCGKey *key = BKE_pbvh_get_grid_key(ss->pbvh);
       const int grid_index = vertex.i / key->grid_area;
@@ -3028,7 +3029,7 @@ void SCULPT_calc_brush_plane(
 int SCULPT_plane_trim(const StrokeCache *cache, const Brush *brush, const float val[3])
 {
   return (!(brush->flag & BRUSH_PLANE_TRIM) ||
-          ((dot_v3v3(val, val) <= cache->radius_squared * cache->plane_trim_squared)));
+          (dot_v3v3(val, val) <= cache->radius_squared * cache->plane_trim_squared));
 }
 
 int SCULPT_plane_point_side(const float co[3], const float plane[4])
