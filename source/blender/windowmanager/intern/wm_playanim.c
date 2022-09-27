@@ -659,7 +659,7 @@ static void build_pict_list_ex(
     int fp_framenr;
     struct {
       char head[FILE_MAX], tail[FILE_MAX];
-      unsigned short digits;
+      ushort digits;
     } fp_decoded;
 
     char filepath[FILE_MAX];
@@ -1539,6 +1539,14 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
     GHOST_SetBacktraceHandler((GHOST_TBacktraceFn)BLI_system_backtrace);
 
     g_WS.ghost_system = GHOST_CreateSystem();
+
+    if (UNLIKELY(g_WS.ghost_system == NULL)) {
+      /* GHOST will have reported the back-ends that failed to load. */
+      fprintf(stderr, "GHOST: unable to initialize, exiting!\n");
+      /* This will leak memory, it's preferable to crashing. */
+      exit(1);
+    }
+
     GHOST_AddEventConsumer(g_WS.ghost_system, consumer);
 
     playanim_window_open("Blender Animation Player", start_x, start_y, ibuf->x, ibuf->y);
