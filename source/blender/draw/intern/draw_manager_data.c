@@ -34,6 +34,7 @@
 #include "BLI_listbase.h"
 #include "BLI_memblock.h"
 #include "BLI_mempool.h"
+#include "BLI_math_bits.h"
 
 #ifdef DRW_DEBUG_CULLING
 #  include "BLI_math_bits.h"
@@ -1170,7 +1171,6 @@ static void sculpt_draw_cb(DRWSculptCallbackData *scd,
     return;
   }
 
-  // GPUBatch *geom2 = GPU_pbvh_buffers_batch_get(buffers, scd->fast_mode, scd->use_wire);
   int primcount;
   GPUBatch *geom;
 
@@ -1412,11 +1412,7 @@ void DRW_shgroup_call_sculpt_with_materials(DRWShadingGroup **shgroups,
   int attrs_num = 2 + draw_attrs.num_requests;
 
   /* UV maps are not in attribute requests. */
-  for (uint i = 0; i < 32; i++) {
-    if (cd_needed.uv & (1 << i)) {
-      attrs_num++;
-    }
-  }
+  attrs_num += count_bits_i(cd_needed.uv);
 
   PBVHAttrReq *attrs = BLI_array_alloca(attrs, attrs_num);
 
@@ -1429,7 +1425,6 @@ void DRW_shgroup_call_sculpt_with_materials(DRWShadingGroup **shgroups,
   for (int i = 0; i < draw_attrs.num_requests; i++) {
     DRW_AttributeRequest *req = draw_attrs.requests + i;
 
-    printf("%d: %d: %s\n", req->domain, req->cd_type, req->attribute_name);
     attrs[attrs_i].type = req->cd_type;
     attrs[attrs_i].domain = req->domain;
     BLI_strncpy(attrs[attrs_i].name, req->attribute_name, sizeof(attrs->name));

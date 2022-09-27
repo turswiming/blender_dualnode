@@ -513,7 +513,7 @@ static void pbvh_build(PBVH *pbvh, BB *cb, BBC *prim_bbc, int totprim)
   build_sub(pbvh, 0, cb, prim_bbc, 0, totprim);
 }
 
-static void pbvh_draw_args(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
+static void pbvh_draw_args_init(PBVH *pbvh, PBVH_GPU_Args *args, PBVHNode *node)
 {
   memset((void *)args, 0, sizeof(*args));
 
@@ -1349,7 +1349,7 @@ static void pbvh_update_draw_buffer_cb(void *__restrict userdata,
 
   if (node->flag & PBVH_RebuildDrawBuffers) {
     PBVH_GPU_Args args;
-    pbvh_draw_args(pbvh, &args, node);
+    pbvh_draw_args_init(pbvh, &args, node);
 
     node->draw_batches = DRW_pbvh_node_create(&args);
   }
@@ -1360,7 +1360,7 @@ static void pbvh_update_draw_buffer_cb(void *__restrict userdata,
     if (node->draw_batches) {
       PBVH_GPU_Args args;
 
-      pbvh_draw_args(pbvh, &args, node);
+      pbvh_draw_args_init(pbvh, &args, node);
       DRW_pbvh_node_update(node->draw_batches, &args);
     }
   }
@@ -1406,7 +1406,7 @@ static void pbvh_update_draw_buffers(PBVH *pbvh, PBVHNode **nodes, int totnode, 
       else if ((node->flag & PBVH_UpdateDrawBuffers) && node->draw_batches) {
         PBVH_GPU_Args args;
 
-        pbvh_draw_args(pbvh, &args, node);
+        pbvh_draw_args_init(pbvh, &args, node);
         DRW_pbvh_update_pre(node->draw_batches, &args);
       }
     }
@@ -2834,7 +2834,7 @@ void BKE_pbvh_draw_cb(PBVH *pbvh,
   for (int i = 0; i < totnode; i++) {
     PBVHNode *node = nodes[i];
     if (!(node->flag & PBVH_FullyHidden)) {
-      pbvh_draw_args(pbvh, &args, node);
+      pbvh_draw_args_init(pbvh, &args, node);
 
       draw_fn(user_data, node->draw_batches, &args);
     }
