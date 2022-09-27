@@ -516,7 +516,10 @@ void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automasking,
       f *= automasking_view_normal_factor(automasking, ss, vertex, &nodedata);
     }
 
-    *(uchar *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = ss->stroke_id;
+    if (ss->attrs.stroke_id) {
+      *(uchar *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = ss->stroke_id;
+    }
+
     *(float *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_factor) = f;
   }
 }

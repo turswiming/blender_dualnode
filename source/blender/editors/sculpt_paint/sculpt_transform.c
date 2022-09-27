@@ -67,7 +67,6 @@ void ED_sculpt_init_transform(struct bContext *C, Object *ob, const int mval[2],
 
   SCULPT_vertex_random_access_ensure(ss);
 
-  /* TODO: make the area normal pixel radius user-configurable? */
   SCULPT_filter_cache_init(C, ob, sd, SCULPT_UNDO_COORDS, mval, 5.0);
 
   if (sd->transform_mode == SCULPT_TRANSFORM_MODE_RADIUS_ELASTIC) {

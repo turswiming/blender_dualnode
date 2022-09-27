@@ -938,7 +938,7 @@ static void rna_def_sculpt(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0001f, M_PI);  
   RNA_def_property_ui_text(prop,
                            "Area Normal Limit",
-                           "Angular range that will be affected.");            
+                           "The range of angles that will be affected");            
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
   prop = RNA_def_property(srna, "automasking_start_normal_falloff", PROP_FLOAT, PROP_FACTOR);
@@ -956,7 +956,7 @@ static void rna_def_sculpt(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0001f, M_PI);  
   RNA_def_property_ui_text(prop,
                            "View Normal Limit",
-                           "Angular range that will be affected.");            
+                           "The range of angles that will be affected");            
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
   prop = RNA_def_property(srna, "automasking_view_normal_falloff", PROP_FLOAT, PROP_FACTOR);
