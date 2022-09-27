@@ -479,6 +479,9 @@ set(GLSL_SRC
   shaders/gpu_shader_cfg_world_clip_lib.glsl
   shaders/gpu_shader_colorspace_lib.glsl
 
+  GPU_sculpt_shader_shared.h
+  shaders/sculpt_paint/sculpt_paint_image_comp.glsl
+
   GPU_shader_shared_utils.h
 )
 
@@ -634,6 +637,8 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/compositor/infos/compositor_split_viewer_info.hh
   shaders/compositor/infos/compositor_symmetric_blur_info.hh
   shaders/compositor/infos/compositor_symmetric_separable_blur_info.hh
+
+  shaders/sculpt_paint/infos/sculpt_paint_image_info.hh
 )
 
 set(SRC_SHADER_CREATE_INFOS_MTL

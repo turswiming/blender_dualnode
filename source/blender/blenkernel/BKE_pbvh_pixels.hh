@@ -16,28 +16,9 @@
 
 #include "IMB_imbuf_types.h"
 
+#include "GPU_sculpt_shader_shared.h"
+
 namespace blender::bke::pbvh::pixels {
-
-struct TrianglePaintInput {
-  int3 vert_indices;
-  /**
-   * Delta barycentric coordinates between 2 neighboring UV's in the U direction.
-   *
-   * Only the first two coordinates are stored. The third should be recalculated
-   */
-  float2 delta_barycentric_coord_u;
-
-  /**
-   * Initially only the vert indices are known.
-   *
-   * delta_barycentric_coord_u is initialized in a later stage as it requires image tile
-   * dimensions.
-   */
-  TrianglePaintInput(const int3 vert_indices)
-      : vert_indices(vert_indices), delta_barycentric_coord_u(0.0f, 0.0f)
-  {
-  }
-};
 
 /**
  * Data shared between pixels that belong to the same triangle.
@@ -52,7 +33,10 @@ struct Triangles {
  public:
   void append(const int3 vert_indices)
   {
-    this->paint_input.append(TrianglePaintInput(vert_indices));
+    TrianglePaintInput triangle;
+    triangle.vert_indices = int4(vert_indices.x, vert_indices.y, vert_indices.z, 0.0f);
+    triangle.delta_barycentric_coord_u = float2(0.0f);
+    this->paint_input.append(triangle);
   }
 
   TrianglePaintInput &get_paint_input(const int index)
