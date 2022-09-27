@@ -975,8 +975,11 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
         col.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
 
         col.separator()
+        col.prop(sculpt.brush, "automasking_boundary_edges_propagation_steps")
 
         if sculpt.use_automasking_cavity or sculpt.use_automasking_cavity_inverted:
+            col.separator()
+
             col2 = col.column()
             props = col2.operator("sculpt.mask_from_cavity", text="Mask From Cavity")
             props.use_automask_settings = True
@@ -990,8 +993,6 @@ class VIEW3D_PT_sculpt_options(Panel, View3DPaintPanel):
 
             if sculpt.use_automasking_custom_cavity_curve:
                 col2.template_curve_mapping(sculpt, "automasking_cavity_curve")
-
-        col2.prop(sculpt.brush, "automasking_boundary_edges_propagation_steps")
 
 
 class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
@@ -1016,7 +1017,7 @@ class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
         col.active = capabilities.has_gravity
         col.prop(sculpt, "gravity", slider=True, text="Factor")
         col.prop(sculpt, "gravity_object")
-    
+
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
     bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)

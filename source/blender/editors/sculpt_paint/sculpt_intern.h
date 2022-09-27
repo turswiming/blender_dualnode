@@ -1849,7 +1849,7 @@ BLI_INLINE bool SCULPT_tool_is_face_sets(int tool)
 }
 
 void SCULPT_stroke_id_ensure(struct Object *ob);
-void SCULPT_stroke_id_inc(struct Object *ob);
+void SCULPT_stroke_id_next(struct Object *ob);
 bool SCULPT_tool_can_reuse_cavity_mask(int sculpt_tool);
 
 #ifdef __cplusplus

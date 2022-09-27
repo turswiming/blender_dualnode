@@ -99,8 +99,8 @@ const EnumPropertyItem RNA_automasking_flags[] = {
   {BRUSH_AUTOMASKING_FACE_SETS, "use_automasking_face_sets", 0,"Face Sets", "Affect only vertices that share Face Sets with the active vertex"},
   {BRUSH_AUTOMASKING_BOUNDARY_EDGES, "use_automasking_boundary_edges", 0,"Mesh Boundary Auto-Masking", "Do not affect non manifold boundary edges"},
   {BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS, "use_automasking_boundary_face_sets", 0,"Face Sets Boundary Automasking", "Do not affect vertices that belong to a Face Set boundary"},
-  {BRUSH_AUTOMASKING_CAVITY_NORMAL, "use_automasking_cavity", 0,"Cavity Mask", ""},
-  {BRUSH_AUTOMASKING_CAVITY_INVERTED, "use_automasking_cavity_inverted", 0,"Inverted Cavity Mask", ""},
+  {BRUSH_AUTOMASKING_CAVITY_NORMAL, "use_automasking_cavity", 0,"Cavity Mask", "Do not affect vertices on peaks, based on the surface curvature"},
+  {BRUSH_AUTOMASKING_CAVITY_INVERTED, "use_automasking_cavity_inverted", 0,"Inverted Cavity Mask", "Do not affect vertices within crevices, based on the surface curvature"},
   {BRUSH_AUTOMASKING_CAVITY_USE_CURVE, "use_automasking_custom_cavity_curve", 0,"Custom Cavity Curve", "Use custom curve"},
   {0, NULL, 0, NULL, NULL}
 };

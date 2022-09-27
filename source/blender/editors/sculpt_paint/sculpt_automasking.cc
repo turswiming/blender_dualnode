@@ -360,16 +360,16 @@ int SCULPT_automasking_settings_hash(Object *ob, AutomaskingCache *automasking)
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
     hash = BLI_hash_int_2d(hash, automasking->settings.cavity_blur_steps);
-    hash = BLI_hash_int_2d(hash, (int)(automasking->settings.cavity_factor * 5000.0f));
+    hash = BLI_hash_int_2d(hash, *reinterpret_cast<uint*>(&automasking->settings.cavity_factor));
 
     if (automasking->settings.cavity_curve) {
       CurveMap *cm = automasking->settings.cavity_curve->cm;
 
       for (int i = 0; i < cm->totpoint; i++) {
-        hash = BLI_hash_int_2d(hash, (int)(cm->curve[i].x * 5000.0f));
-        hash = BLI_hash_int_2d(hash, (int)(cm->curve[i].y * 5000.0f));
-        hash = BLI_hash_int_2d(hash, (int)cm->curve[i].flag);
-        hash = BLI_hash_int_2d(hash, (int)cm->curve[i].shorty);
+        hash = BLI_hash_int_2d(hash, *reinterpret_cast<uint*>(&cm->curve[i].x));
+        hash = BLI_hash_int_2d(hash, *reinterpret_cast<uint*>(&cm->curve[i].y));
+        hash = BLI_hash_int_2d(hash, (uint)cm->curve[i].flag);
+        hash = BLI_hash_int_2d(hash, (uint)cm->curve[i].shorty);
       }
     }
   }
@@ -500,7 +500,7 @@ static void SCULPT_topology_automasking_init(Sculpt *sd, Object *ob)
   Brush *brush = BKE_paint_brush(&sd->paint);
 
   if (BKE_pbvh_type(ss->pbvh) == PBVH_FACES && !ss->pmap) {
-    BLI_assert_msg(0, "Topology masking: pmap missing");
+    BLI_assert_unreachable();
     return;
   }
 

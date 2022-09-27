@@ -682,7 +682,7 @@ static int sculpt_mesh_filter_invoke(bContext *C, wmOperator *op, const wmEvent 
 
   if (use_automasking) {
     /* Increment stroke id for automasking system. */
-    SCULPT_stroke_id_inc(ob);
+    SCULPT_stroke_id_next(ob);
 
     /* Update the active face set manually as the paint cursor is not enabled when using the Mesh
      * Filter Tool. */

@@ -1137,7 +1137,7 @@ static int sculpt_bake_cavity_exec(bContext *C, wmOperator *op)
   tdata.nodes = nodes;
   tdata.automasking = SCULPT_automasking_cache_init(&sd2, &brush2, ob);
 
-  SCULPT_stroke_id_inc(ob);
+  SCULPT_stroke_id_next(ob);
 
   TaskParallelSettings settings;
   BKE_pbvh_parallel_range_settings(&settings, true, totnode);
@@ -1208,8 +1208,6 @@ static void cavity_bake_ui(bContext *C, wmOperator *op)
       uiTemplateCurveMapping(layout, &sculpt_ptr, curve_prop, 'v', false, false, false, false);
     }
   }
-  // uiItemS(layout);
-  // row = uiLayoutRow(layout, false);
 }
 
 static void SCULPT_OT_mask_from_cavity(wmOperatorType *ot)

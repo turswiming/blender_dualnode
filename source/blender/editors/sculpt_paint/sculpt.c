@@ -5412,7 +5412,7 @@ static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const f
       SCULPT_undo_push_begin_ex(ob, sculpt_tool_name(sd));
     }
 
-    SCULPT_stroke_id_inc(ob);
+    SCULPT_stroke_id_next(ob);
 
     return true;
   }
@@ -6012,7 +6012,7 @@ void SCULPT_fake_neighbors_free(Object *ob)
   sculpt_pose_fake_neighbors_free(ss);
 }
 
-void SCULPT_stroke_id_inc(Object *ob)
+void SCULPT_stroke_id_next(Object *ob)
 {
   /* Manually wrap in int32 space to avoid tripping up undefined behavior
    * sanitizers.

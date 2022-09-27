@@ -905,7 +905,6 @@ eRNAOverrideStatus RNA_property_override_library_status(struct Main *bmainm,
 
 void RNA_struct_state_owner_set(const char *name);
 const char *RNA_struct_state_owner_get(void);
-extern const EnumPropertyItem RNA_automasking_flags[];
 
 #ifdef __cplusplus
 }
