@@ -7,7 +7,14 @@
  * Island.
  *
  * \note Similar to `uvedit_islands.cc`, but optimized for PBVH painting without using BMesh for
- * performance reasons. Does not support manifold meshes or edges with more than 3 faces.
+ * performance reasons. Does not support non-manifold meshes or edges with more than 2 faces.
+ *
+ * Polygons (face with more than 3 edges) are supported as they are split up to primitives.
+ *
+ * \note After the algorithm is stable the OO data structures should be converted back to use DOD
+ * principles to improve reusability. Currently this is not done (yet) as during implementation it
+ * was hard to follow when the algorithm evolved during several iterations. At that time we needed
+ * more flexibility.
  */
 
 #pragma once
