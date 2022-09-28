@@ -36,8 +36,8 @@ struct Triangles {
   void append(const int3 vert_indices)
   {
     TrianglePaintInput triangle;
-    triangle.vert_indices = int4(vert_indices.x, vert_indices.y, vert_indices.z, 0.0f);
-    triangle.delta_barycentric_coord_u = float2(0.0f);
+    triangle.vert_indices = int3(vert_indices.x, vert_indices.y, vert_indices.z);
+    triangle.delta_barycentric_coord = float2(0.0f);
     this->paint_input.append(triangle);
   }
 

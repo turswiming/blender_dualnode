@@ -206,7 +206,7 @@ static void do_encode_pixels(void *__restrict userdata,
       const int maxx = min_ii(ceil(maxu * image_buffer->x), image_buffer->x);
 
       TrianglePaintInput &triangle = triangles.get_paint_input(triangle_index);
-      triangle.delta_barycentric_coord_u = calc_barycentric_delta_x(image_buffer, uvs, minx, miny);
+      triangle.delta_barycentric_coord = calc_barycentric_delta_x(image_buffer, uvs, minx, miny);
       extract_barycentric_pixels(
           tile_data, image_buffer, triangle_index, uvs, minx, miny, maxx, maxy);
     }

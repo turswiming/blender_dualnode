@@ -10,14 +10,15 @@
 #endif
 
 struct TrianglePaintInput {
-  int4 vert_indices;
+  int3 vert_indices;
+  float _pad0;
   /**
    * Delta barycentric coordinates between 2 neighboring UV's in the U direction.
    *
    * Only the first two coordinates are stored. The third should be recalculated on the fly.
    */
-  float2 delta_barycentric_coord_u;
-  float2 _pad;
+  float2 delta_barycentric_coord;
+  float2 _pad1;
 };
 BLI_STATIC_ASSERT_ALIGN(TrianglePaintInput, 16)
 
@@ -28,15 +29,35 @@ struct PackedPixelRow {
   uint start_image_coordinate;
 
   /**
-   * 16 bits: Number of sequential pixels encoded in this package.
    * 16 bits: Reference to the pbvh triangle index.
+   * 16 bits: Number of sequential pixels encoded in this package.
    */
   uint encoded;
 };
+BLI_STATIC_ASSERT_ALIGN(TrianglePaintInput, 16)
 
 #define PIXEL_ROW_START_IMAGE_COORD(row) \
   ivec2(row.start_image_coordinate & 0xffff, (row.start_image_coordinate & 0xffff0000) >> 16)
 #define PIXEL_ROW_LEN(row) uint(row.encoded & 0xffff);
 #define PIXEL_ROW_PRIM_INDEX(row) uint((row.encoded & 0xffff0000) >> 16)
 
-BLI_STATIC_ASSERT_ALIGN(TrianglePaintInput, 16)
+struct PaintBrushTestData {
+  float4x4 symm_rot_mat_inv;
+  float4 location;
+  float radius;
+  int mirror_symmetry_pass;
+  float _pad0;
+  float _pad1;
+};
+BLI_STATIC_ASSERT_ALIGN(PaintBrushTestData, 16)
+
+struct PaintBrushData {
+  float4 color;
+  PaintBrushTestData test;
+  float strength;
+
+  float _pad0;
+  float _pad1;
+  float _pad2;
+};
+BLI_STATIC_ASSERT_ALIGN(PaintBrushData, 16)

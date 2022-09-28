@@ -18,6 +18,7 @@
 #include "GPU_compute.h"
 #include "GPU_debug.h"
 #include "GPU_shader.h"
+#include "GPU_uniform_buffer.h"
 
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
@@ -258,14 +259,14 @@ template<typename ImageBuffer> class PaintingKernel {
                              const float3 &start_pixel) const
   {
     float3 result = init_pixel_pos(
-        triangle, encoded_pixels.start_barycentric_coord + triangle.delta_barycentric_coord_u);
+        triangle, encoded_pixels.start_barycentric_coord + triangle.delta_barycentric_coord);
     return result - start_pixel;
   }
 
   float3 init_pixel_pos(const TrianglePaintInput &triangle,
                         const float2 &barycentric_weights) const
   {
-    const int4 &vert_indices = triangle.vert_indices;
+    const int3 &vert_indices = triangle.vert_indices;
     float3 result;
     const float3 barycentric(barycentric_weights.x,
                              barycentric_weights.y,
@@ -490,7 +491,9 @@ static void ensure_gpu_buffers(TexturePaintingUserData &data)
 static void gpu_painting_paint_step(TexturePaintingUserData &data,
                                     ImageTileWrapper &image_tile,
                                     ImBuf *image_buffer,
-                                    GPUTexture **tex_ptr)
+                                    GPUTexture **tex_ptr,
+                                    GPUUniformBuf *paint_brush_buf,
+                                    GPUStorageBuf *vert_coord_buf)
 {
   GPUShader *shader = SCULPT_shader_paint_image_get();
   bool texture_needs_clearing = true;
@@ -526,6 +529,9 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
 
       GPU_shader_bind(shader);
       GPU_texture_image_bind(tex, GPU_shader_get_texture_binding(shader, "out_img"));
+      GPU_uniformbuf_bind(paint_brush_buf,
+                          GPU_shader_get_uniform_block(shader, "paint_brush_buf"));
+      GPU_storagebuf_bind(vert_coord_buf, GPU_shader_get_ssbo(shader, "vert_coord_buf"));
       GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
                           GPU_shader_get_ssbo(shader, "paint_input"));
       GPU_storagebuf_bind(node_data.gpu_buffers.pixels,
@@ -552,10 +558,72 @@ static void gpu_painting_image_merge(TexturePaintingUserData &UNUSED(data),
   GPU_compute_dispatch(shader, image_buffer.x, image_buffer.y, 1);
 }
 
+static void init_paint_brush_color(const SculptSession &ss,
+                                   const Brush &brush,
+                                   PaintBrushData &r_paint_brush)
+{
+  if (ss.cache->invert) {
+    copy_v3_v3(r_paint_brush.color, BKE_brush_secondary_color_get(ss.scene, &brush));
+  }
+  else {
+    copy_v3_v3(r_paint_brush.color, BKE_brush_color_get(ss.scene, &brush));
+  }
+  /* NOTE: Brush colors are stored in sRGB. We use math color to follow other areas that use
+       brush colors. */
+  srgb_to_linearrgb_v3_v3(r_paint_brush.color, r_paint_brush.color);
+  r_paint_brush.color[3] = 1.0f;
+}
+
+static void init_paint_brush_strength(const SculptSession &ss, PaintBrushData &r_paint_brush)
+{
+  r_paint_brush.strength = ss.cache->bstrength;
+}
+
+/* TODO: Currently only spherical is supported. */
+static void init_paint_brush_test(const SculptSession &ss, PaintBrushData &r_paint_brush)
+{
+  r_paint_brush.test.radius = ss.cache->radius;
+  r_paint_brush.test.location = ss.cache->location;
+  r_paint_brush.test.mirror_symmetry_pass = ss.cache->mirror_symmetry_pass;
+  r_paint_brush.test.symm_rot_mat_inv = ss.cache->symm_rot_mat_inv;
+}
+
+static void init_paint_brush(const SculptSession &ss,
+                             const Brush &brush,
+                             PaintBrushData &r_paint_brush)
+{
+  init_paint_brush_color(ss, brush, r_paint_brush);
+  init_paint_brush_strength(ss, r_paint_brush);
+  init_paint_brush_test(ss, r_paint_brush);
+}
+
+static GPUStorageBuf *gpu_painting_vert_coord_create(SculptSession &ss)
+{
+  Vector<float4> vert_coords;
+
+  vert_coords.reserve(ss.totvert);
+  for (const MVert &mvert : Span<MVert>(ss.mvert, ss.totvert)) {
+    float3 co(mvert.co);
+    vert_coords.append(float4(co.x, co.y, co.z, 0.0f));
+  }
+  GPUStorageBuf *result = GPU_storagebuf_create_ex(
+      sizeof(float4) * ss.totvert, vert_coords.data(), GPU_USAGE_STATIC, __func__);
+  return result;
+}
+
 static void dispatch_gpu_painting(TexturePaintingUserData &data)
 {
+  SculptSession &ss = *data.ob->sculpt;
   ImageUser local_image_user = *data.image_data.image_user;
   GPUTexture *tex = nullptr;
+
+  PaintBrushData paint_brush;
+  init_paint_brush(ss, *data.brush, paint_brush);
+
+  GPUStorageBuf *vert_coord_buf = gpu_painting_vert_coord_create(ss);
+
+  GPUUniformBuf *paint_brush_buf = GPU_uniformbuf_create_ex(
+      sizeof(PaintBrushData), &paint_brush, "PaintBrushData");
 
   LISTBASE_FOREACH (ImageTile *, tile, &data.image_data.image->tiles) {
     ImageTileWrapper image_tile(tile);
@@ -567,16 +635,19 @@ static void dispatch_gpu_painting(TexturePaintingUserData &data)
       continue;
     }
 
-    gpu_painting_paint_step(data, image_tile, image_buffer, &tex);
+    gpu_painting_paint_step(data, image_tile, image_buffer, &tex, paint_brush_buf, vert_coord_buf);
     gpu_painting_image_merge(data, *data.image_data.image, local_image_user, *image_buffer, tex);
 
     BKE_image_release_ibuf(data.image_data.image, image_buffer, nullptr);
   }
 
+  /* Clean up temp values. */
+  GPU_uniformbuf_free(paint_brush_buf);
   if (tex) {
     GPU_texture_free(tex);
     tex = nullptr;
   }
+  GPU_storagebuf_free(vert_coord_buf);
 }
 
 /** \} */
