@@ -994,8 +994,6 @@ void DRW_mesh_get_attributes(Object *object,
   DRW_MeshCDMask cd_needed = mesh_cd_calc_used_gpu_layers(
       object, me, gpumat_array, gpumat_array_len, &attrs_needed);
 
-  BLI_assert(gpumat_array_len == cache->mat_len);
-
   if (r_attrs) {
     *r_attrs = attrs_needed;
   }
