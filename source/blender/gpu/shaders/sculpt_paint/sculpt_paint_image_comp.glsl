@@ -1,6 +1,6 @@
 void main()
 {
-  PackedPixelRow row = pixel_row_buf[gl_GlobalInvocationID.x];
+  PackedPixelRow row = pixel_row_buf[gl_GlobalInvocationID.x + pixel_row_offset];
   ivec2 image_coord = PIXEL_ROW_START_IMAGE_COORD(row);
 
   uint row_len = PIXEL_ROW_LEN(row);

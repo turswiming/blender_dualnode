@@ -34,6 +34,7 @@ struct Object;
 struct SculptUndoNode;
 struct bContext;
 struct PaintModeSettings;
+struct GPUShader;
 
 /* Updates */
 
@@ -1820,6 +1821,13 @@ void SCULPT_bmesh_topology_rake(
     struct Sculpt *sd, struct Object *ob, struct PBVHNode **nodes, int totnode, float bstrength);
 
 /* end sculpt_brush_types.c */
+
+/* sculpt_shaders.cc */
+
+struct GPUShader *SCULPT_shader_paint_image_get(void);
+void SCULPT_shader_free(void);
+
+/* end sculpt_shadders.cc */
 
 /* sculpt_ops.c */
 

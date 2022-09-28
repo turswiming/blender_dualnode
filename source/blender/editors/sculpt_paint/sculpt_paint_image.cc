@@ -14,6 +14,11 @@
 #include "BLI_math_color_blend.h"
 #include "BLI_task.h"
 
+#include "GPU_capabilities.h"
+#include "GPU_compute.h"
+#include "GPU_debug.h"
+#include "GPU_shader.h"
+
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
 
@@ -49,11 +54,16 @@ struct ImageData {
   }
 };
 
+/* -------------------------------------------------------------------- */
+/** \name CPU
+ * \{ */
+
 struct TexturePaintingUserData {
   Object *ob;
   Brush *brush;
   PBVHNode **nodes;
   ImageData image_data;
+  int32_t nodes_len;
 };
 
 /** Reading and writing to image buffer with 4 float channels. */
@@ -368,6 +378,12 @@ static void do_paint_pixels(void *__restrict userdata,
   node_data.flags.dirty |= pixels_updated;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Undo
+ * \{ */
+
 static void undo_region_tiles(
     ImBuf *ibuf, int x, int y, int w, int h, int *tx, int *ty, int *tw, int *th)
 {
@@ -457,6 +473,102 @@ static void do_mark_dirty_regions(void *__restrict userdata,
   BKE_pbvh_pixels_mark_image_dirty(*node, *data->image_data.image, *data->image_data.image_user);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name GPU
+ * \{ */
+
+static void ensure_gpu_buffers(TexturePaintingUserData &data)
+{
+  for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
+    NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
+    node_data.ensure_gpu_buffers();
+  }
+}
+
+static void dispatch_gpu_painting(TexturePaintingUserData &data)
+{
+  GPUShader *shader = SCULPT_shader_paint_image_get();
+  GPU_shader_bind(shader);
+
+  ImageUser local_image_user = *data.image_data.image_user;
+  GPUTexture *tex = nullptr;
+
+  LISTBASE_FOREACH (ImageTile *, tile, &data.image_data.image->tiles) {
+    ImageTileWrapper image_tile(tile);
+    local_image_user.tile = image_tile.get_tile_number();
+
+    ImBuf *image_buffer = BKE_image_acquire_ibuf(
+        data.image_data.image, &local_image_user, nullptr);
+    if (image_buffer == nullptr) {
+      continue;
+    }
+
+    bool texture_needs_clearing = true;
+
+    /* Ensure that texture size is same as tile size. */
+    if (tex == nullptr || GPU_texture_width(tex) != image_buffer->x ||
+        GPU_texture_height(tex) != image_buffer->y) {
+      if (tex) {
+        GPU_texture_free(tex);
+        tex = nullptr;
+      }
+      tex = GPU_texture_create_2d(
+          __func__, image_buffer->x, image_buffer->y, 1, GPU_RGBA32F, nullptr);
+    }
+
+    /* Dispatch all nodes that paint on the active tile. */
+    for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
+      NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
+
+      for (UDIMTilePixels &tile_pixels : node_data.tiles) {
+        if (tile_pixels.tile_number != image_tile.get_tile_number()) {
+          continue;
+        }
+
+        /* Only clear the texture when it is used for the first time. */
+        if (texture_needs_clearing) {
+          GPU_texture_clear(tex, GPU_DATA_FLOAT, float4(0.0f, 0.0f, 0.0f, 0.0f));
+          texture_needs_clearing = false;
+        }
+
+        GPU_shader_bind(shader);
+        GPU_texture_image_bind(tex, GPU_shader_get_texture_binding(shader, "out_img"));
+        GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
+                            GPU_shader_get_ssbo(shader, "paint_input"));
+        GPU_storagebuf_bind(node_data.gpu_buffers.pixels,
+                            GPU_shader_get_ssbo(shader, "pixel_row_buf"));
+        GPU_shader_uniform_1i(shader, "pixel_row_offset", tile_pixels.gpu_buffer_offset);
+
+        GPU_compute_dispatch(shader, tile_pixels.pixel_rows.size(), 1, 1);
+      }
+      node_data.ensure_gpu_buffers();
+    }
+
+#if 0
+    GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH);
+    float *tex_data = static_cast<float *>(GPU_texture_read(tex, GPU_DATA_FLOAT, 0));
+    for (int i = 0; i < 10; i++) {
+      printf("%f,", tex_data[i]);
+    }
+    printf("\n");
+    MEM_freeN(tex_data);
+#endif
+
+    /* Integrate active tile to draw engine texture. */
+
+    BKE_image_release_ibuf(data.image_data.image, image_buffer, nullptr);
+  }
+
+  if (tex) {
+    GPU_texture_free(tex);
+    tex = nullptr;
+  }
+}
+
+/** \} */
+
 }  // namespace blender::ed::sculpt_paint::paint::image
 
 extern "C" {
@@ -494,6 +606,13 @@ bool SCULPT_use_image_paint_brush(PaintModeSettings *settings, Object *ob)
   return BKE_paint_canvas_image_get(settings, ob, &image, &image_user);
 }
 
+/** Can the sculpt paint be performed on the GPU? */
+static bool SCULPT_use_image_paint_compute()
+{
+  return GPU_compute_shader_support() && GPU_shader_storage_buffer_objects_support() &&
+         GPU_shader_image_load_store_support();
+}
+
 void SCULPT_do_paint_brush_image(
     PaintModeSettings *paint_mode_settings, Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 {
@@ -503,18 +622,33 @@ void SCULPT_do_paint_brush_image(
   data.ob = ob;
   data.brush = brush;
   data.nodes = nodes;
+  data.nodes_len = totnode;
 
   if (!ImageData::init_active_image(ob, &data.image_data, paint_mode_settings)) {
     return;
   }
 
-  TaskParallelSettings settings;
-  BKE_pbvh_parallel_range_settings(&settings, true, totnode);
-  BLI_task_parallel_range(0, totnode, &data, do_push_undo_tile, &settings);
-  BLI_task_parallel_range(0, totnode, &data, do_paint_pixels, &settings);
+  if (SCULPT_use_image_paint_compute()) {
+    GPU_debug_group_begin("SCULPT_paint_image");
+    ensure_gpu_buffers(data);
+    // update GPU buffers when they don't exist.
+    // update Image when it doesn't exist.
+    // go over given nodes and dispatch those nodes.
+    dispatch_gpu_painting(data);
+    // Copy result to the image gpu buffer
+    // Copy back should happen at the end of the stroke, but for testing we could do it here and
+    // move it.
+    GPU_debug_group_end();
+  }
+  else {
+    TaskParallelSettings settings;
+    BKE_pbvh_parallel_range_settings(&settings, true, totnode);
+    BLI_task_parallel_range(0, totnode, &data, do_push_undo_tile, &settings);
+    BLI_task_parallel_range(0, totnode, &data, do_paint_pixels, &settings);
 
-  TaskParallelSettings settings_flush;
-  BKE_pbvh_parallel_range_settings(&settings_flush, false, totnode);
-  BLI_task_parallel_range(0, totnode, &data, do_mark_dirty_regions, &settings_flush);
+    TaskParallelSettings settings_flush;
+    BKE_pbvh_parallel_range_settings(&settings_flush, false, totnode);
+    BLI_task_parallel_range(0, totnode, &data, do_mark_dirty_regions, &settings_flush);
+  }
 }
 }

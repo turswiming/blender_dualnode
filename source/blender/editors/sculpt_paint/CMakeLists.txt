@@ -80,6 +80,7 @@ set(SRC
   sculpt_paint_color.c
   sculpt_paint_image.cc
   sculpt_pose.c
+  sculpt_shaders.cc
   sculpt_smooth.c
   sculpt_transform.c
   sculpt_undo.c
