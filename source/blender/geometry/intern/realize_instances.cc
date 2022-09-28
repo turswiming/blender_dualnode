@@ -495,10 +495,10 @@ static void gather_realize_tasks_for_instances(GatherTasksInfo &gather_info,
     uint32_t local_instance_id = 0;
     if (gather_info.create_id_attribute_on_any_component) {
       if (stored_instance_ids.is_empty()) {
-        local_instance_id = (uint32_t)i;
+        local_instance_id = uint32_t(i);
       }
       else {
-        local_instance_id = (uint32_t)stored_instance_ids[i];
+        local_instance_id = uint32_t(stored_instance_ids[i]);
       }
     }
     const uint32_t instance_id = noise::hash(base_instance_context.id, local_instance_id);
@@ -809,7 +809,6 @@ static OrderedAttributes gather_generic_mesh_attributes_to_propagate(
   attributes_to_propagate.remove("position");
   attributes_to_propagate.remove("normal");
   attributes_to_propagate.remove("shade_smooth");
-  attributes_to_propagate.remove("crease");
   r_create_id = attributes_to_propagate.pop_try("id").has_value();
   r_create_material_index = attributes_to_propagate.pop_try("material_index").has_value();
   OrderedAttributes ordered_attributes;

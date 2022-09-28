@@ -1402,15 +1402,15 @@ ModifierData *BKE_object_active_modifier(const Object *ob)
 
 bool BKE_object_supports_modifiers(const Object *ob)
 {
-  return (ELEM(ob->type,
-               OB_MESH,
-               OB_CURVES,
-               OB_CURVES_LEGACY,
-               OB_SURF,
-               OB_FONT,
-               OB_LATTICE,
-               OB_POINTCLOUD,
-               OB_VOLUME));
+  return ELEM(ob->type,
+              OB_MESH,
+              OB_CURVES,
+              OB_CURVES_LEGACY,
+              OB_SURF,
+              OB_FONT,
+              OB_LATTICE,
+              OB_POINTCLOUD,
+              OB_VOLUME);
 }
 
 bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
@@ -3012,7 +3012,7 @@ void BKE_object_tfm_protected_restore(Object *ob,
                                       const ObjectTfmProtectedChannels *obtfm,
                                       const short protectflag)
 {
-  unsigned int i;
+  uint i;
 
   for (i = 0; i < 3; i++) {
     if (protectflag & (OB_LOCK_LOCX << i)) {
@@ -4187,10 +4187,11 @@ void BKE_scene_foreach_display_point(Depsgraph *depsgraph,
                                      void (*func_cb)(const float[3], void *),
                                      void *user_data)
 {
-  DEG_OBJECT_ITER_BEGIN (depsgraph,
-                         ob,
-                         DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY | DEG_ITER_OBJECT_FLAG_VISIBLE |
-                             DEG_ITER_OBJECT_FLAG_DUPLI) {
+  DEGObjectIterSettings deg_iter_settings{};
+  deg_iter_settings.depsgraph = depsgraph;
+  deg_iter_settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY | DEG_ITER_OBJECT_FLAG_VISIBLE |
+                            DEG_ITER_OBJECT_FLAG_DUPLI;
+  DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
     if ((ob->base_flag & BASE_SELECTED) != 0) {
       BKE_object_foreach_display_point(ob, ob->obmat, func_cb, user_data);
     }
@@ -5267,12 +5268,12 @@ void BKE_object_groups_clear(Main *bmain, Scene *scene, Object *ob)
 KDTree_3d *BKE_object_as_kdtree(Object *ob, int *r_tot)
 {
   KDTree_3d *tree = nullptr;
-  unsigned int tot = 0;
+  uint tot = 0;
 
   switch (ob->type) {
     case OB_MESH: {
       Mesh *me = (Mesh *)ob->data;
-      unsigned int i;
+      uint i;
 
       Mesh *me_eval = ob->runtime.mesh_deform_eval ? ob->runtime.mesh_deform_eval :
                                                      BKE_object_get_evaluated_mesh(ob);
@@ -5315,7 +5316,7 @@ KDTree_3d *BKE_object_as_kdtree(Object *ob, int *r_tot)
     case OB_SURF: {
       /* TODO: take deformation into account */
       Curve *cu = (Curve *)ob->data;
-      unsigned int i, a;
+      uint i, a;
 
       Nurb *nu;
 
@@ -5359,7 +5360,7 @@ KDTree_3d *BKE_object_as_kdtree(Object *ob, int *r_tot)
       /* TODO: take deformation into account */
       Lattice *lt = (Lattice *)ob->data;
       BPoint *bp;
-      unsigned int i;
+      uint i;
 
       tot = lt->pntsu * lt->pntsv * lt->pntsw;
       tree = BLI_kdtree_3d_new(tot);
@@ -5449,7 +5450,7 @@ bool BKE_object_modifier_update_subframe(Depsgraph *depsgraph,
     }
 
     /* Skip sub-frame if object is parented to vertex of a dynamic paint canvas. */
-    if (no_update && (ELEM(ob->partype, PARVERT1, PARVERT3))) {
+    if (no_update && ELEM(ob->partype, PARVERT1, PARVERT3)) {
       return false;
     }
 

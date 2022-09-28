@@ -287,8 +287,8 @@ static EnumPropertyItem rna_enum_gpencil_fill_draw_modes_items[] = {
     {0, NULL, 0, NULL, NULL}};
 
 static EnumPropertyItem rna_enum_gpencil_fill_extend_modes_items[] = {
-    {GP_FILL_EMODE_RADIUS, "RADIUS", 0, "Radius", "Connect endpoints that are close together"},
     {GP_FILL_EMODE_EXTEND, "EXTEND", 0, "Extend", "Extend strokes in straight lines"},
+    {GP_FILL_EMODE_RADIUS, "RADIUS", 0, "Radius", "Connect endpoints that are close together"},
     {0, NULL, 0, NULL, NULL}};
 
 static EnumPropertyItem rna_enum_gpencil_fill_layers_modes_items[] = {
@@ -1928,6 +1928,20 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_FILL_SHOW_EXTENDLINES);
   RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Show Extend Lines", "Show help lines for stroke extension");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
+  prop = RNA_def_property(srna, "use_collide_strokes", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_FILL_STROKE_COLLIDE);
+  RNA_def_property_boolean_default(prop, false);
+  RNA_def_property_ui_text(
+      prop, "Strokes Collision", "Check if extend lines collide with strokes");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+
+  prop = RNA_def_property(srna, "use_collide_only", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BRUSH_FILL_COLLIDE_ONLY);
+  RNA_def_property_boolean_default(prop, false);
+  RNA_def_property_ui_text(
+      prop, "Only Collide Lines", "Use for closing gaps only if the extend strokes collide");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
   prop = RNA_def_property(srna, "show_fill", PROP_BOOLEAN, PROP_NONE);

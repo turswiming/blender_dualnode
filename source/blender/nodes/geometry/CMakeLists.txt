@@ -71,6 +71,7 @@ set(SRC
   nodes/node_geo_flip_faces.cc
   nodes/node_geo_geometry_to_instance.cc
   nodes/node_geo_image_texture.cc
+  nodes/node_geo_input_control_point_neighbors.cc
   nodes/node_geo_input_curve_handles.cc
   nodes/node_geo_input_curve_tilt.cc
   nodes/node_geo_input_id.cc
@@ -128,6 +129,9 @@ set(SRC
   nodes/node_geo_realize_instances.cc
   nodes/node_geo_remove_attribute.cc
   nodes/node_geo_rotate_instances.cc
+  nodes/node_geo_sample_index.cc
+  nodes/node_geo_sample_nearest_surface.cc
+  nodes/node_geo_sample_nearest.cc
   nodes/node_geo_scale_elements.cc
   nodes/node_geo_scale_instances.cc
   nodes/node_geo_separate_components.cc
@@ -149,7 +153,6 @@ set(SRC
   nodes/node_geo_string_to_curves.cc
   nodes/node_geo_subdivision_surface.cc
   nodes/node_geo_switch.cc
-  nodes/node_geo_transfer_attribute.cc
   nodes/node_geo_transform.cc
   nodes/node_geo_translate_instances.cc
   nodes/node_geo_triangulate.cc
