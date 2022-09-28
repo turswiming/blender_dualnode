@@ -46,10 +46,10 @@
 #include "GPU_batch.h"
 
 #include "DRW_engine.h"
+#include "DRW_pbvh.h"
+
 #include "draw_pbvh.h"
-
 #include "gpu_private.h"
-
 #include "bmesh.h"
 
 #define MAX_PBVH_BATCH_KEY 512

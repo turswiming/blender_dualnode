@@ -5,6 +5,8 @@
  * \ingroup draw
  */
 
+#include "DRW_pbvh.h"
+
 #include "draw_attributes.h"
 #include "draw_manager.h"
 #include "draw_pbvh.h"

@@ -208,6 +208,7 @@ set(SRC
 
   DRW_engine.h
   DRW_select_buffer.h
+  DRW_pbvh.h
   intern/DRW_gpu_wrapper.hh
   intern/DRW_render.h
   intern/draw_attributes.h
