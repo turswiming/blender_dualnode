@@ -1018,6 +1018,7 @@ class VIEW3D_PT_sculpt_options_gravity(Panel, View3DPaintPanel):
         col.prop(sculpt, "gravity", slider=True, text="Factor")
         col.prop(sculpt, "gravity_object")
 
+
 # TODO, move to space_view3d.py
 class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
     bl_context = ".sculpt_mode"  # dot on purpose (access from topbar)
