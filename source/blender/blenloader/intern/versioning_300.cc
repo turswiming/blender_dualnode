@@ -3529,13 +3529,6 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
   }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 304, 1)) {
-    /* Initialize brush curves sculpt settings. */
-    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
-      brush->automasking_cavity_factor = 0.5f;
-    }
-  }
-
-  if (!MAIN_VERSION_ATLEAST(bmain, 304, 1)) {
     /* Image generation information transferred to tiles. */
     if (!DNA_struct_elem_find(fd->filesdna, "ImageTile", "int", "gen_x")) {
       LISTBASE_FOREACH (Image *, ima, &bmain->images) {
@@ -3589,6 +3582,13 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
       }
     }
     FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 304, 2)) {
+    /* Initialize brush curves sculpt settings. */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      brush->automasking_cavity_factor = 0.5f;
+    }
   }
 
   /**
