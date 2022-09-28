@@ -913,7 +913,7 @@ bool BKE_paint_canvas_image_get(struct PaintModeSettings *settings,
 int BKE_paint_canvas_uvmap_layer_index_get(const struct PaintModeSettings *settings,
                                            struct Object *ob);
 void BKE_sculpt_check_cavity_curves(struct Sculpt *sd);
-struct CurveMapping *BKE_sculpt_default_cavity_curve();
+struct CurveMapping *BKE_sculpt_default_cavity_curve(void);
 
 #ifdef __cplusplus
 }

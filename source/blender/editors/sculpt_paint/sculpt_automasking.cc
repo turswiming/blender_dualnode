@@ -141,44 +141,7 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
   return false;
 }
 
-float SCULPT_calc_cavity(SculptSession *ss, const PBVHVertRef vertex)
-{
-  SculptVertexNeighborIter ni;
-  const float *co = SCULPT_vertex_co_get(ss, vertex);
-  float3 avg(0.0f);
-  float length_sum = 0.0f;
-  int valence = 0;
-
-  SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vertex, ni) {
-    const float *co2 = SCULPT_vertex_co_get(ss, ni.vertex);
-
-    length_sum += len_v3v3(co, co2);
-    valence++;
-
-    avg += co2;
-  }
-  SCULPT_VERTEX_NEIGHBORS_ITER_END(ni);
-
-  if (!valence) {
-    return 0.0f;
-  }
-
-  avg /= (float)valence;
-  length_sum /= (float)valence;
-
-  float3 no;
-  SCULPT_vertex_normal_get(ss, vertex, no);
-
-  avg -= co;
-
-  /* Use distance to plane. */
-  float factor = dot_v3v3(avg, no) / length_sum;
-
-  return factor;
-}
-
-static float sculpt_cavity_calc_factor(SculptSession *ss,
-                                       AutomaskingCache *automasking,
+static float sculpt_cavity_calc_factor(AutomaskingCache *automasking,
                                        float factor)
 {
   float sign = signf(factor);
@@ -342,7 +305,7 @@ static void sculpt_calc_blurred_cavity(SculptSession *ss,
   float3 vec = sco1 - sco2;
   float factor_sum = dot_v3v3(vec, sno2) / len1_sum;
 
-  factor_sum = sculpt_cavity_calc_factor(ss, automasking, factor_sum);
+  factor_sum = sculpt_cavity_calc_factor(automasking, factor_sum);
 
   *(float *)SCULPT_vertex_attr_get(vertex, ss->attrs.cavity) = factor_sum;
   *(uchar *)SCULPT_vertex_attr_get(vertex, ss->attrs.stroke_id) = automasking->cavity_stroke_id;
@@ -554,21 +517,6 @@ static void sculpt_face_sets_automasking_init(Sculpt *sd, Object *ob)
   }
 }
 
-static void sculpt_cavity_automasking_init(Sculpt *sd, Object *ob, AutomaskingCache *automasking)
-{
-  SculptSession *ss = ob->sculpt;
-  Brush *brush = BKE_paint_brush(&sd->paint);
-
-  if (!SCULPT_is_automasking_enabled(sd, ss, brush)) {
-    return;
-  }
-
-  if (BKE_pbvh_type(ss->pbvh) == PBVH_FACES && !ss->pmap) {
-    BLI_assert_msg(0, "Cavity mask automasking: pmap missing");
-    return;
-  }
-}
-
 #define EDGE_DISTANCE_INF -1
 
 static void SCULPT_boundary_automasking_init(Object *ob,
@@ -745,10 +693,6 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
     SCULPT_vertex_random_access_ensure(ss);
     SCULPT_boundary_automasking_init(
         ob, AUTOMASK_INIT_BOUNDARY_FACE_SETS, boundary_propagation_steps);
-  }
-  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_ALL)) {
-    SCULPT_vertex_random_access_ensure(ss);
-    sculpt_cavity_automasking_init(sd, ob, automasking);
   }
 
   return automasking;
