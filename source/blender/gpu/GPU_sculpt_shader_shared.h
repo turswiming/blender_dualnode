@@ -35,8 +35,8 @@ struct PackedPixelRow {
 };
 
 #define PIXEL_ROW_START_IMAGE_COORD(row) \
-  ivec2((row.start_image_coordinate & 0xffff0000) >> 16, row.start_image_coordinate & 0xffff)
-#define PIXEL_ROW_LEN(row) uint((row.encoded & 0xffff0000) >> 16)
-#define PIXEL_ROW_PRIM_INDEX(row) uint(row.encoded & 0xffff);
+  ivec2(row.start_image_coordinate & 0xffff, (row.start_image_coordinate & 0xffff0000) >> 16)
+#define PIXEL_ROW_LEN(row) uint(row.encoded & 0xffff);
+#define PIXEL_ROW_PRIM_INDEX(row) uint((row.encoded & 0xffff0000) >> 16)
 
 BLI_STATIC_ASSERT_ALIGN(TrianglePaintInput, 16)

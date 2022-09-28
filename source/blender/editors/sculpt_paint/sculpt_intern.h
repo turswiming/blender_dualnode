@@ -1825,6 +1825,7 @@ void SCULPT_bmesh_topology_rake(
 /* sculpt_shaders.cc */
 
 struct GPUShader *SCULPT_shader_paint_image_get(void);
+struct GPUShader *SCULPT_shader_paint_image_merge_get(void);
 void SCULPT_shader_free(void);
 
 /* end sculpt_shadders.cc */

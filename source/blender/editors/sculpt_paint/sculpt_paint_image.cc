@@ -487,11 +487,73 @@ static void ensure_gpu_buffers(TexturePaintingUserData &data)
   }
 }
 
-static void dispatch_gpu_painting(TexturePaintingUserData &data)
+static void gpu_painting_paint_step(TexturePaintingUserData &data,
+                                    ImageTileWrapper &image_tile,
+                                    ImBuf *image_buffer,
+                                    GPUTexture **tex_ptr)
 {
   GPUShader *shader = SCULPT_shader_paint_image_get();
-  GPU_shader_bind(shader);
+  bool texture_needs_clearing = true;
 
+  GPUTexture *tex = *tex_ptr;
+
+  /* Ensure that texture size is same as tile size. */
+  if (tex == nullptr || GPU_texture_width(tex) != image_buffer->x ||
+      GPU_texture_height(tex) != image_buffer->y) {
+    if (tex) {
+      GPU_texture_free(tex);
+      tex = nullptr;
+    }
+    tex = GPU_texture_create_2d(
+        __func__, image_buffer->x, image_buffer->y, 1, GPU_RGBA32F, nullptr);
+    *tex_ptr = tex;
+  }
+
+  /* Dispatch all nodes that paint on the active tile. */
+  for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
+    NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
+
+    for (UDIMTilePixels &tile_pixels : node_data.tiles) {
+      if (tile_pixels.tile_number != image_tile.get_tile_number()) {
+        continue;
+      }
+
+      /* Only clear the texture when it is used for the first time. */
+      if (texture_needs_clearing) {
+        GPU_texture_clear(tex, GPU_DATA_FLOAT, float4(0.0f, 0.0f, 0.0f, 0.0f));
+        texture_needs_clearing = false;
+      }
+
+      GPU_shader_bind(shader);
+      GPU_texture_image_bind(tex, GPU_shader_get_texture_binding(shader, "out_img"));
+      GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
+                          GPU_shader_get_ssbo(shader, "paint_input"));
+      GPU_storagebuf_bind(node_data.gpu_buffers.pixels,
+                          GPU_shader_get_ssbo(shader, "pixel_row_buf"));
+      GPU_shader_uniform_1i(shader, "pixel_row_offset", tile_pixels.gpu_buffer_offset);
+
+      GPU_compute_dispatch(shader, tile_pixels.pixel_rows.size(), 1, 1);
+    }
+    node_data.ensure_gpu_buffers();
+  }
+}
+
+static void gpu_painting_image_merge(TexturePaintingUserData &UNUSED(data),
+                                     Image &image,
+                                     ImageUser &image_user,
+                                     ImBuf &image_buffer,
+                                     GPUTexture *paint_tex)
+{
+  GPUTexture *canvas_tex = BKE_image_get_gpu_texture(&image, &image_user, &image_buffer);
+  GPUShader *shader = SCULPT_shader_paint_image_merge_get();
+  GPU_shader_bind(shader);
+  GPU_texture_image_bind(paint_tex, GPU_shader_get_texture_binding(shader, "in_paint_img"));
+  GPU_texture_image_bind(canvas_tex, GPU_shader_get_texture_binding(shader, "out_img"));
+  GPU_compute_dispatch(shader, image_buffer.x, image_buffer.y, 1);
+}
+
+static void dispatch_gpu_painting(TexturePaintingUserData &data)
+{
   ImageUser local_image_user = *data.image_data.image_user;
   GPUTexture *tex = nullptr;
 
@@ -505,58 +567,8 @@ static void dispatch_gpu_painting(TexturePaintingUserData &data)
       continue;
     }
 
-    bool texture_needs_clearing = true;
-
-    /* Ensure that texture size is same as tile size. */
-    if (tex == nullptr || GPU_texture_width(tex) != image_buffer->x ||
-        GPU_texture_height(tex) != image_buffer->y) {
-      if (tex) {
-        GPU_texture_free(tex);
-        tex = nullptr;
-      }
-      tex = GPU_texture_create_2d(
-          __func__, image_buffer->x, image_buffer->y, 1, GPU_RGBA32F, nullptr);
-    }
-
-    /* Dispatch all nodes that paint on the active tile. */
-    for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
-      NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
-
-      for (UDIMTilePixels &tile_pixels : node_data.tiles) {
-        if (tile_pixels.tile_number != image_tile.get_tile_number()) {
-          continue;
-        }
-
-        /* Only clear the texture when it is used for the first time. */
-        if (texture_needs_clearing) {
-          GPU_texture_clear(tex, GPU_DATA_FLOAT, float4(0.0f, 0.0f, 0.0f, 0.0f));
-          texture_needs_clearing = false;
-        }
-
-        GPU_shader_bind(shader);
-        GPU_texture_image_bind(tex, GPU_shader_get_texture_binding(shader, "out_img"));
-        GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
-                            GPU_shader_get_ssbo(shader, "paint_input"));
-        GPU_storagebuf_bind(node_data.gpu_buffers.pixels,
-                            GPU_shader_get_ssbo(shader, "pixel_row_buf"));
-        GPU_shader_uniform_1i(shader, "pixel_row_offset", tile_pixels.gpu_buffer_offset);
-
-        GPU_compute_dispatch(shader, tile_pixels.pixel_rows.size(), 1, 1);
-      }
-      node_data.ensure_gpu_buffers();
-    }
-
-#if 0
-    GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH);
-    float *tex_data = static_cast<float *>(GPU_texture_read(tex, GPU_DATA_FLOAT, 0));
-    for (int i = 0; i < 10; i++) {
-      printf("%f,", tex_data[i]);
-    }
-    printf("\n");
-    MEM_freeN(tex_data);
-#endif
-
-    /* Integrate active tile to draw engine texture. */
+    gpu_painting_paint_step(data, image_tile, image_buffer, &tex);
+    gpu_painting_image_merge(data, *data.image_data.image, local_image_user, *image_buffer, tex);
 
     BKE_image_release_ibuf(data.image_data.image, image_buffer, nullptr);
   }

@@ -11,6 +11,7 @@
 
 static struct SCULPT_Shaders {
   GPUShader *paint_image_comp_sh;
+  GPUShader *paint_image_merge_comp_sh;
 } sh_data;
 
 extern "C" {
@@ -20,6 +21,15 @@ GPUShader *SCULPT_shader_paint_image_get(void)
     sh_data.paint_image_comp_sh = GPU_shader_create_from_info_name("sculpt_paint_image_compute");
   }
   return sh_data.paint_image_comp_sh;
+}
+
+GPUShader *SCULPT_shader_paint_image_merge_get(void)
+{
+  if (sh_data.paint_image_merge_comp_sh == nullptr) {
+    sh_data.paint_image_merge_comp_sh = GPU_shader_create_from_info_name(
+        "sculpt_paint_image_merge_compute");
+  }
+  return sh_data.paint_image_merge_comp_sh;
 }
 
 void SCULPT_shader_free(void)
