@@ -133,7 +133,7 @@ static int sculpt_automasking_mode_effective_bits(const Sculpt *sculpt, const Br
   return sculpt->automasking_flags;
 }
 
-bool SCULPT_automasking_needs_normal(const SculptSession *ss,
+bool SCULPT_automasking_needs_normal(const SculptSession *UNUSED(ss),
                                      const Sculpt *sculpt,
                                      const Brush *brush)
 {
@@ -142,8 +142,7 @@ bool SCULPT_automasking_needs_normal(const SculptSession *ss,
   return flags & (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL);
 }
 
-static float sculpt_automasking_normal_calc(AutomaskingCache *automasking,
-                                            SculptSession *ss,
+static float sculpt_automasking_normal_calc(SculptSession *ss,
                                             PBVHVertRef vertex,
                                             float3 &normal,
                                             float limit_lower,
@@ -186,10 +185,9 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
     return true;
   }
 
-  if (automasking_flags & (BRUSH_AUTOMASKING_BOUNDARY_EDGES,
-                           BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS,
-                           BRUSH_AUTOMASKING_BRUSH_NORMAL,
-                           BRUSH_AUTOMASKING_VIEW_NORMAL)) {
+  if (automasking_flags &
+      (BRUSH_AUTOMASKING_BOUNDARY_EDGES | BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS |
+       BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL)) {
     return brush && brush->automasking_boundary_edges_propagation_steps != 1;
   }
   return false;
@@ -210,8 +208,7 @@ static float automasking_brush_normal_factor(AutomaskingCache *automasking,
     initial_normal = ss->filter_cache->initial_normal;
   }
 
-  return sculpt_automasking_normal_calc(automasking,
-                                        ss,
+  return sculpt_automasking_normal_calc(ss,
                                         vertex,
                                         initial_normal,
                                         automasking->settings.start_normal_limit - falloff * 0.5f,
@@ -235,8 +232,7 @@ static float automasking_view_normal_factor(AutomaskingCache *automasking,
     view_normal = ss->filter_cache->view_normal;
   }
 
-  return sculpt_automasking_normal_calc(automasking,
-                                        ss,
+  return sculpt_automasking_normal_calc(ss,
                                         vertex,
                                         view_normal,
                                         automasking->settings.view_normal_limit,
@@ -248,7 +244,7 @@ static float automasking_view_occlusion_factor(AutomaskingCache *automasking,
                                                SculptSession *ss,
                                                PBVHVertRef vertex,
                                                uchar stroke_id,
-                                               AutomaskingNodeData *automask_data)
+                                               AutomaskingNodeData *UNUSED(automask_data))
 {
   char f = *(char *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_occlusion);
 
@@ -771,9 +767,9 @@ static void SCULPT_automasking_cache_settings_update(AutomaskingCache *automaski
   }
 }
 
-void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automasking,
-                                              Object *ob,
-                                              eAutomasking_flag mode)
+static void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automasking,
+                                                     Object *ob,
+                                                     eAutomasking_flag mode)
 {
   SculptSession *ss = ob->sculpt;
   const int totvert = SCULPT_vertex_count_get(ss);

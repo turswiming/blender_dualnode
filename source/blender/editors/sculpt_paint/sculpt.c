@@ -6014,7 +6014,7 @@ void SCULPT_fake_neighbors_free(Object *ob)
 }
 
 void SCULPT_automasking_node_begin(Object *ob,
-                                   const SculptSession *ss,
+                                   const SculptSession *UNUSED(ss),
                                    AutomaskingCache *automasking,
                                    AutomaskingNodeData *node_data,
                                    PBVHNode *node)
@@ -6036,7 +6036,7 @@ void SCULPT_automasking_node_begin(Object *ob,
   }
 }
 
-void SCULPT_automasking_node_update(SculptSession *ss,
+void SCULPT_automasking_node_update(SculptSession *UNUSED(ss),
                                     AutomaskingNodeData *automask_data,
                                     PBVHVertexIter *vd)
 {
