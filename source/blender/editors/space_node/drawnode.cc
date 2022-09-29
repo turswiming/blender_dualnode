@@ -1588,7 +1588,7 @@ void draw_nodespace_back_pix(const bContext &C,
 static float2 socket_link_connection_location(const bNodeSocket &socket, const bNodeLink &link)
 {
   const float2 socket_location(socket.locx, socket.locy);
-  if (socket.flag & SOCK_MULTI_INPUT && socket.in_out == SOCK_IN) {
+  if (socket.is_multi_input() && socket.is_input() && !(socket.owner_node().flag & NODE_HIDDEN)) {
     return node_link_calculate_multi_input_position(
         socket_location, link.multi_input_socket_index, socket.total_inputs);
   }
@@ -1983,7 +1983,7 @@ static void node_draw_link_end_marker(const float2 center,
 
   UI_draw_roundbox_corner_set(UI_CNR_ALL);
   UI_draw_roundbox_4fv(&rect, true, radius, color);
-  /* Roundbox disables alpha. Reenable it for node links that are drawn after this one. */
+  /* Round-box disables alpha. Re-enable it for node links that are drawn after this one. */
   GPU_blend(GPU_BLEND_ALPHA);
 }
 
