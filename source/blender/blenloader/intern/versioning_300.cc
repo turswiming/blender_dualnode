@@ -169,7 +169,7 @@ static void version_idproperty_move_data_float(IDPropertyUIDataFloat *ui_data,
             MEM_malloc_arrayN(array_len, sizeof(double), __func__));
         const float *old_default_array = static_cast<const float *>(IDP_Array(default_value));
         for (int i = 0; i < ui_data->default_array_len; i++) {
-          ui_data->default_array[i] = (double)old_default_array[i];
+          ui_data->default_array[i] = double(old_default_array[i]);
         }
       }
       else if (default_value->subtype == IDP_DOUBLE) {
@@ -412,9 +412,9 @@ static void do_versions_sequencer_speed_effect_recursive(Scene *scene, const Lis
         else {
           v->speed_control_type = SEQ_SPEED_MULTIPLY;
           v->speed_fader = globalSpeed *
-                           ((float)seq->seq1->len /
-                            max_ff((float)(SEQ_time_right_handle_frame_get(scene, seq->seq1) -
-                                           seq->seq1->start),
+                           (float(seq->seq1->len) /
+                            max_ff(float(SEQ_time_right_handle_frame_get(scene, seq->seq1) -
+                                         seq->seq1->start),
                                    1.0f));
         }
       }
@@ -430,7 +430,7 @@ static void do_versions_sequencer_speed_effect_recursive(Scene *scene, const Lis
       }
       else {
         v->speed_control_type = SEQ_SPEED_FRAME_NUMBER;
-        v->speed_fader_frame_number = (int)(seq->speed_fader * globalSpeed);
+        v->speed_fader_frame_number = int(seq->speed_fader * globalSpeed);
         substr = "speed_frame_number";
       }
 
@@ -1926,7 +1926,7 @@ static void version_geometry_nodes_replace_transfer_attribute_node(bNodeTree *nt
         break;
       }
     }
-    /* The storage must be feeed manually because the node type isn't defined anymore. */
+    /* The storage must be freed manually because the node type isn't defined anymore. */
     MEM_freeN(node->storage);
     nodeRemoveNode(NULL, ntree, node, false);
   }
@@ -2184,7 +2184,7 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
             if (smd->bind_verts_num && smd->verts) {
               smd->mesh_verts_num = smd->bind_verts_num;
 
-              for (unsigned int i = 0; i < smd->bind_verts_num; i++) {
+              for (uint i = 0; i < smd->bind_verts_num; i++) {
                 smd->verts[i].vertex_idx = i;
               }
             }
@@ -3337,6 +3337,14 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
+  if (!DNA_struct_elem_find(fd->filesdna, "Sculpt", "float", "automasking_cavity_factor")) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      if (scene->toolsettings && scene->toolsettings->sculpt) {
+        scene->toolsettings->sculpt->automasking_cavity_factor = 0.5f;
+      }
+    }
+  }
+
   if (!MAIN_VERSION_ATLEAST(bmain, 302, 14)) {
     /* Compensate for previously wrong squared distance. */
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
@@ -3520,18 +3528,7 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
     BKE_main_namemap_validate_and_fix(bmain);
   }
 
-  /**
-   * Versioning code until next subversion bump goes here.
-   *
-   * \note Be sure to check when bumping the version:
-   * - "versioning_userdef.c", #blo_do_versions_userdef
-   * - "versioning_userdef.c", #do_versions_theme
-   *
-   * \note Keep this message at the bottom of the function.
-   */
-  {
-    /* Keep this block, even when empty. */
-
+  if (!MAIN_VERSION_ATLEAST(bmain, 304, 1)) {
     /* Image generation information transferred to tiles. */
     if (!DNA_struct_elem_find(fd->filesdna, "ImageTile", "int", "gen_x")) {
       LISTBASE_FOREACH (Image *, ima, &bmain->images) {
@@ -3585,5 +3582,38 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
       }
     }
     FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 304, 2)) {
+    /* Initialize brush curves sculpt settings. */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      brush->automasking_cavity_factor = 0.5f;
+    }
+  }
+
+  /**
+   * Versioning code until next subversion bump goes here.
+   *
+   * \note Be sure to check when bumping the version:
+   * - "versioning_userdef.c", #blo_do_versions_userdef
+   * - "versioning_userdef.c", #do_versions_theme
+   *
+   * \note Keep this message at the bottom of the function.
+   */
+  {
+    /* Keep this block, even when empty. */
+
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_VIEW3D) {
+            View3D *v3d = (View3D *)sl;
+            v3d->flag2 |= V3D_SHOW_VIEWER;
+            v3d->overlay.flag |= V3D_OVERLAY_VIEWER_ATTRIBUTE;
+            v3d->overlay.viewer_attribute_opacity = 0.8f;
+          }
+        }
+      }
+    }
   }
 }

@@ -2031,7 +2031,7 @@ int BKE_sculpt_mask_layers_ensure(Object *ob, MultiresModifierData *mmd)
           const MLoop *l = &loops[p->loopstart + j];
           avg += paint_mask[l->v];
         }
-        avg /= (float)p->totloop;
+        avg /= float(p->totloop);
 
         /* fill in multires mask corner */
         for (j = 0; j < p->totloop; j++) {
@@ -2079,6 +2079,14 @@ void BKE_sculpt_toolsettings_data_ensure(Scene *scene)
     sd->constant_detail = 3.0f;
   }
 
+  if (!sd->automasking_start_normal_limit) {
+    sd->automasking_start_normal_limit = 20.0f / 180.0f * M_PI;
+    sd->automasking_start_normal_falloff = 0.25f;
+
+    sd->automasking_view_normal_limit = 90.0f / 180.0f * M_PI;
+    sd->automasking_view_normal_falloff = 0.25f;
+  }
+
   /* Set sane default tiling offsets. */
   if (!sd->paint.tile_offset[0]) {
     sd->paint.tile_offset[0] = 1.0f;
@@ -2088,6 +2096,9 @@ void BKE_sculpt_toolsettings_data_ensure(Scene *scene)
   }
   if (!sd->paint.tile_offset[2]) {
     sd->paint.tile_offset[2] = 1.0f;
+  }
+  if (!sd->automasking_cavity_curve || !sd->automasking_cavity_curve_op) {
+    BKE_sculpt_check_cavity_curves(sd);
   }
 }
 
@@ -2553,12 +2564,10 @@ static bool sculpt_attr_update(Object *ob, SculptAttribute *attr)
 
     if (cdata) {
       int layer_index = CustomData_get_named_layer_index(cdata, attr->proptype, attr->name);
+      bad = layer_index == -1;
 
-      if (layer_index != -1 && attr->data_for_bmesh) {
+      if (ss->bm) {
         attr->bmesh_cd_offset = cdata->layers[layer_index].offset;
-      }
-      else {
-        bad = true;
       }
     }
   }
