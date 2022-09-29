@@ -381,4 +381,8 @@ void invoke_node_link_drag_add_menu(bContext &C,
 
 void invoke_add_node_search_menu(bContext &C, const float2 &cursor, bool use_transform);
 
+/* add_menu_assets.cc */
+
+extern MenuType NODE_MT_node_add_catalog_assets;
+
 }  // namespace blender::ed::space_node

@@ -546,6 +546,11 @@ AssetCatalogTree *AssetCatalogService::get_catalog_tree()
   return catalog_tree_.get();
 }
 
+const AssetCatalogTree *AssetCatalogService::get_catalog_tree() const
+{
+  return catalog_tree_.get();
+}
+
 std::unique_ptr<AssetCatalogTree> AssetCatalogService::read_into_tree()
 {
   auto tree = std::make_unique<AssetCatalogTree>();

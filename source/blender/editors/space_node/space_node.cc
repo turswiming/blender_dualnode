@@ -1172,5 +1172,7 @@ void ED_spacetype_node()
   art->draw = node_toolbar_region_draw;
   BLI_addhead(&st->regiontypes, art);
 
+  WM_menutype_add(&NODE_MT_node_add_catalog_assets);
+
   BKE_spacetype_register(st);
 }
