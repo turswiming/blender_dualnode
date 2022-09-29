@@ -857,7 +857,7 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
     }
   }
 
-  if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_ALL)) {
+  if (mode & BRUSH_AUTOMASKING_CAVITY_ALL) {
     use_stroke_id = true;
 
     if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_USE_CURVE)) {
@@ -868,14 +868,21 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
     if (!ss->attrs.automasking_cavity) {
       SculptAttributeParams params = {0};
       ss->attrs.automasking_cavity = BKE_sculpt_attribute_ensure(
-          ob, ATTR_DOMAIN_POINT, CD_PROP_FLOAT, SCULPT_ATTRIBUTE_NAME(automasking_cavity), &params);
+          ob,
+          ATTR_DOMAIN_POINT,
+          CD_PROP_FLOAT,
+          SCULPT_ATTRIBUTE_NAME(automasking_cavity),
+          &params);
     }
   }
 
   if (use_stroke_id) {
     SCULPT_stroke_id_ensure(ob);
 
-    if (brush && SCULPT_tool_can_reuse_automask(brush->sculpt_tool)) {
+    bool have_occlusion = (mode & BRUSH_AUTOMASKING_VIEW_OCCLUSION) &&
+                          (mode & BRUSH_AUTOMASKING_VIEW_NORMAL);
+
+    if (brush && SCULPT_tool_can_reuse_automask(brush->sculpt_tool) && !have_occlusion) {
       int hash = SCULPT_automasking_settings_hash(ob, automasking);
 
       if (hash == ss->last_automasking_settings_hash) {
@@ -883,7 +890,8 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
         automasking->can_reuse_mask = true;
       }
     }
-    else {
+
+    if (!automasking->can_reuse_mask) {
       ss->last_automask_stroke_id = ss->stroke_id;
     }
   }
