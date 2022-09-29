@@ -52,12 +52,6 @@ constexpr static const float shadow_clipmap_scale_mat[4][4] = {{SHADOW_TILEMAP_R
                                                                {0, 0, 0.5, 0},
                                                                {0, 0, 0.5, 1}};
 
-constexpr static const float tilemat_scale_bias_mat[4][4] = {
-    {SHADOW_TILEMAP_RES / 2, 0, 0, 0},
-    {0, SHADOW_TILEMAP_RES / 2, 0, 0},
-    {0, 0, 1, 0},
-    {SHADOW_TILEMAP_RES / 2, SHADOW_TILEMAP_RES / 2, 0, 1}};
-
 /* -------------------------------------------------------------------- */
 /** \name Tile-Map
  *
@@ -80,8 +74,6 @@ struct ShadowTileMap : public ShadowTileMapData {
   int level = INT_MAX;
   /** Cube face index. */
   eCubeFace cubeface = Z_NEG;
-  /** Cached, used for rendering. */
-  float4x4 viewmat, winmat;
   /** Cached, used for detecting updates. */
   float4x4 object_mat;
   /** Near and far clip distances. For clip-map they are updated after sync. */
@@ -273,6 +265,17 @@ class ShadowModule {
   int rendering_tilemap_;
   int rendering_lod_;
   bool do_full_update = true;
+
+  /** \} */
+
+  /* -------------------------------------------------------------------- */
+  /** \name Rendering
+   * \{ */
+
+  /** Per instance view index. */
+  ShadowViewIndexBuf view_index_buf_ = {"ViewIndexBuf"};
+  /** A view array used for rendering shadows. */
+  ShadowViewInfosBuf view_infos_buf_ = {"ViewInfosBuf"};
 
   /** \} */
 

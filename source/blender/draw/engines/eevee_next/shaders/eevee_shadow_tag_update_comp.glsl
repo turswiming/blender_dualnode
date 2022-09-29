@@ -13,9 +13,9 @@
 #pragma BLENDER_REQUIRE(common_aabb_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_shadow_tilemap_lib.glsl)
 
-vec3 safe_project(mat4 matrix, inout int clipped, vec3 v)
+vec3 safe_project(mat4 winmat, mat4 viewmat, inout int clipped, vec3 v)
 {
-  vec4 tmp = matrix * vec4(v, 1.0);
+  vec4 tmp = winmat * (viewmat * vec4(v, 1.0));
   /* Detect case when point is behind the camera. */
   clipped += int(tmp.w < 0.0);
   return tmp.xyz / tmp.w;
@@ -42,7 +42,7 @@ void main()
   /* NDC space post projection [-1..1] (unclamped). */
   AABB aabb_ndc = aabb_init_min_max();
   for (int v = 0; v < 8; v++) {
-    aabb_merge(aabb_ndc, safe_project(tilemap.tilemat, clipped, box.corners[v]));
+    aabb_merge(aabb_ndc, safe_project(tilemap.winmat, tilemap.viewmat, clipped, box.corners[v]));
   }
 
   if (tilemap.is_cubeface) {
@@ -54,8 +54,8 @@ void main()
       /* Not all verts are behind the near clip plane. */
       if (intersect(frustum, box)) {
         /* We cannot correctly handle this case so we fallback by covering the whole view. */
-        aabb_ndc.max = vec3(vec2(SHADOW_TILEMAP_RES), 1.0);
-        aabb_ndc.min = vec3(0.0, 0.0, -1.0);
+        aabb_ndc.max = vec3(1.0);
+        aabb_ndc.min = vec3(-1.0);
       }
       else {
         /* Still out of the frustum. Ignore. */
@@ -65,14 +65,14 @@ void main()
   }
 
   AABB aabb_tag;
-  AABB aabb_map = AABB(vec3(0.0, 0.0, -1.0), vec3(vec2(SHADOW_TILEMAP_RES) - 1e-6, 1.0));
+  AABB aabb_map = AABB(vec3(-0.99999), vec3(0.99999));
   if (!aabb_clip(aabb_map, aabb_ndc, aabb_tag)) {
     return;
   }
 
   /* Raster the bounding rectangle of the Box projection. */
-  ivec2 box_min = ivec2(aabb_tag.min.xy);
-  ivec2 box_max = ivec2(aabb_tag.max.xy);
+  ivec2 box_min = ivec2(aabb_tag.min.xy * float(SHADOW_TILEMAP_RES));
+  ivec2 box_max = ivec2(aabb_tag.max.xy * float(SHADOW_TILEMAP_RES));
 
   for (int lod = 0; lod <= SHADOW_TILEMAP_LOD; lod++, box_min >>= 1, box_max >>= 1) {
     for (int y = box_min.y; y <= box_max.y; y++) {

@@ -664,8 +664,8 @@ static inline float2 shadow_tile_coord_to_ndc(int2 tile)
  * Small descriptor used for the tile update phase.
  */
 struct ShadowTileMapData {
-  /** View Projection matrix (World > UV Tile [0..SHADOW_TILEMAP_RES]). */
-  float4x4 tilemat;
+  /** Cached, used for rendering. */
+  float4x4 viewmat, winmat;
   /** Corners of the frustum. */
   float4 corners[4];
   /** NDC depths to clip usage bbox. */
@@ -703,8 +703,8 @@ struct ShadowPagesInfoData {
   uint page_cached_end;
   /** Number of pages that needs to be rendered in the tilemap LOD being rendered. */
   int page_rendered;
-
-  int _pad0;
+  /** Number of views to be rendered during the shadow update pass. */
+  int view_count;
   int _pad1;
 };
 BLI_STATIC_ASSERT_ALIGN(ShadowPagesInfoData, 16)
@@ -893,6 +893,8 @@ using ShadowPageHeapBuf = draw::StorageVectorBuffer<uint, SHADOW_MAX_PAGE>;
 using ShadowPageCacheBuf = draw::StorageArrayBuffer<uint2, SHADOW_MAX_PAGE, true>;
 using ShadowTileMapDataBuf = draw::StorageVectorBuffer<ShadowTileMapData, SHADOW_MAX_TILEMAP>;
 using ShadowTileDataBuf = draw::StorageArrayBuffer<ShadowTileDataPacked, SHADOW_MAX_TILE, true>;
+using ShadowViewIndexBuf = draw::StorageArrayBuffer<uint, SHADOW_MAX_TILEMAP, true>;
+using ShadowViewInfosBuf = draw::StorageArrayBuffer<ViewInfos, SHADOW_MAX_TILEMAP, true>;
 using VelocityGeometryBuf = draw::StorageArrayBuffer<float4, 16, true>;
 using VelocityIndexBuf = draw::StorageArrayBuffer<VelocityIndex, 16>;
 using VelocityObjectBuf = draw::StorageArrayBuffer<float4x4, 16>;

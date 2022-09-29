@@ -80,7 +80,6 @@ void ShadowTileMap::sync_clipmap(const float3 &camera_position,
 
   viewmat = viewinv.inverted_affine();
   winmat = winmat_get();
-  tilemat = (tilemat_scale_bias_mat * winmat) * viewmat;
 }
 
 void ShadowTileMap::sync_cubeface(
@@ -109,7 +108,6 @@ void ShadowTileMap::sync_cubeface(
 
   winmat = winmat_get();
   viewmat = float4x4(shadow_face_mat[cubeface]) * object_mat.inverted_affine();
-  tilemat = (tilemat_scale_bias_mat * winmat) * viewmat;
 
   /* Update corners. */
   float4x4 viewinv = viewmat.inverted_affine();
@@ -729,6 +727,7 @@ void ShadowModule::end_sync()
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_FINALIZE));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.bind_ssbo("view_infos_buf", view_infos_buf_);
         sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
