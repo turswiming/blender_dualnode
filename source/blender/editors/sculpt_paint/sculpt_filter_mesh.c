@@ -712,7 +712,7 @@ static int sculpt_mesh_filter_modal(bContext *C, wmOperator *op, const wmEvent *
   const float len = event->prev_press_xy[0] - event->xy[0];
   filter_strength = filter_strength * -len * 0.001f * UI_DPI_FAC;
 
-  ss->stroke_id++;
+  SCULPT_stroke_id_next(ob);
   SCULPT_vertex_random_access_ensure(ss);
 
   bool needs_pmap = sculpt_mesh_filter_needs_pmap(filter_type);
@@ -771,9 +771,10 @@ static int sculpt_mesh_filter_invoke(bContext *C, wmOperator *op, const wmEvent 
     return OPERATOR_CANCELLED;
   }
 
-  ss->stroke_id++;
-
   if (use_automasking) {
+    /* Increment stroke id for automasking system. */
+    SCULPT_stroke_id_next(ob);
+
     /* Update the active face set manually as the paint cursor is not enabled when using the Mesh
      * Filter Tool. */
     float mval_fl[2] = {UNPACK2(event->mval)};

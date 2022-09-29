@@ -312,10 +312,6 @@ typedef struct SculptThreadedTaskData {
   float *cloth_sim_initial_location;
   float cloth_sim_radius;
 
-  float dirty_mask_min;
-  float dirty_mask_max;
-  bool dirty_mask_dirty_only;
-
   /* Mask By Color Tool */
 
   float mask_by_color_threshold;
@@ -399,12 +395,20 @@ typedef struct AutomaskingSettings {
   /* Flags from eAutomasking_flag. */
   int flags;
   int initial_face_set;
+
+  float cavity_factor;
+  int cavity_blur_steps;
+  struct CurveMapping *cavity_curve;
+
   float start_normal_limit, start_normal_falloff;
   float view_normal_limit, view_normal_falloff;
 } AutomaskingSettings;
 
 typedef struct AutomaskingCache {
   AutomaskingSettings settings;
+
+  bool can_reuse_mask;
+  uchar current_stroke_id;
 } AutomaskingCache;
 
 typedef struct FilterCache {
@@ -638,6 +642,7 @@ typedef struct StrokeCache {
   rcti previous_r; /* previous redraw rectangle */
   rcti current_r;  /* current redraw rectangle */
 
+  int stroke_id;
 } StrokeCache;
 
 /* -------------------------------------------------------------------- */
@@ -1326,11 +1331,11 @@ float *SCULPT_boundary_automasking_init(Object *ob,
                                         eBoundaryAutomaskMode mode,
                                         int propagation_steps,
                                         float *automask_factor);
-
 bool SCULPT_automasking_needs_normal(const SculptSession *ss,
                                      const Sculpt *sculpt,
                                      const Brush *brush);
-bool SCULPT_automasking_needs_origco(const SculptSession *ss, const Sculpt *sd, const Brush *br);
+bool SCULPT_automasking_needs_original(const struct Sculpt *sd, const struct Brush *brush);
+int SCULPT_automasking_settings_hash(Object *ob, AutomaskingCache *automasking);
 
 /** \} */
 
@@ -1628,7 +1633,6 @@ void SCULPT_OT_color_filter(struct wmOperatorType *ot);
 /* Mask filter and Dirty Mask. */
 
 void SCULPT_OT_mask_filter(struct wmOperatorType *ot);
-void SCULPT_OT_dirty_mask(struct wmOperatorType *ot);
 
 /* Mask and Face Sets Expand. */
 
@@ -1884,6 +1888,8 @@ BLI_INLINE bool SCULPT_tool_is_face_sets(int tool)
 }
 
 void SCULPT_stroke_id_ensure(struct Object *ob);
+void SCULPT_stroke_id_next(struct Object *ob);
+bool SCULPT_tool_can_reuse_automask(int sculpt_tool);
 
 #ifdef __cplusplus
 }
