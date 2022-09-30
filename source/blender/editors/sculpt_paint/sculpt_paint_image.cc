@@ -527,6 +527,10 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
 
   for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
     NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
+    /* TODO: Fix this! We should check for nodes that have been tagged. */
+    if (!node_data.triangles.gpu_buffer) {
+      continue;
+    }
 
     for (UDIMTilePixels &tile_pixels : node_data.tiles) {
       if (tile_pixels.tile_number != image_tile.get_tile_number()) {
@@ -644,8 +648,6 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
 {
   SculptSession &ss = *data.ob->sculpt;
   if (!ss.mode.texture_paint.gpu_data) {
-    /* Currently expected for final redraw. */
-    printf("%s: No batches found to draw\n", __func__);
     return;
   }
 
