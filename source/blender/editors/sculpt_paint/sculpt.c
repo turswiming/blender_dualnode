@@ -5492,6 +5492,44 @@ static void sculpt_brush_exit_tex(Sculpt *sd)
   }
 }
 
+static void sculpt_flush_batches(Sculpt *sd,
+                                 Object *ob,
+                                 Brush *brush,
+                                 PaintModeSettings *paint_mode_settings)
+{
+  if (!sculpt_needs_pbvh_pixels(paint_mode_settings, brush, ob)) {
+    return;
+  }
+  if (brush->sculpt_tool == SCULPT_TOOL_PAINT) {
+    SCULPT_paint_batches_flush(paint_mode_settings, sd, ob);
+  }
+}
+
+static void sculpt_stroke_redraw(const bContext *C,
+                                 struct PaintStroke *UNUSED(stroke),
+                                 bool is_final)
+{
+  /* TODO(jbakker): this function should not be called redraw as it doesn't do redrawing, but
+   * triggers batched step drawing and downloading of results and update undo steps for the paint
+   * brush with a canvas target.*/
+  printf("%s %d\n", __func__, is_final);
+
+  Object *ob = CTX_data_active_object(C);
+  SculptSession *ss = ob->sculpt;
+  Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
+  Brush *brush = BKE_paint_brush(&sd->paint);
+  ToolSettings *tool_settings = CTX_data_tool_settings(C);
+  sculpt_flush_batches(
+      sd, ob, brush, &tool_settings->paint_mode);
+
+  if (!ss->cache) {
+    return;
+  }
+
+  if (is_final) {
+  }
+}
+
 static void sculpt_stroke_done(const bContext *C, struct PaintStroke *UNUSED(stroke))
 {
   Object *ob = CTX_data_active_object(C);
@@ -5594,9 +5632,10 @@ static int sculpt_brush_stroke_invoke(bContext *C, wmOperator *op, const wmEvent
                             SCULPT_stroke_get_location,
                             sculpt_stroke_test_start,
                             sculpt_stroke_update_step,
-                            NULL,
+                            sculpt_stroke_redraw,
                             sculpt_stroke_done,
                             event->type);
+  printf("%s\n", __func__);
 
   op->customdata = stroke;
 

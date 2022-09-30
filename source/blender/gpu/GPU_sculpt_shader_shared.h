@@ -42,12 +42,8 @@ BLI_STATIC_ASSERT_ALIGN(TrianglePaintInput, 16)
 #define PIXEL_ROW_PRIM_INDEX(row) uint((row.encoded & 0xffff0000) >> 16)
 
 struct PaintBrushTestData {
+  /* world to local matrix for clipping plane tests. */
   float4x4 symm_rot_mat_inv;
-  float4 location;
-  float radius;
-  int mirror_symmetry_pass;
-  float _pad0;
-  float _pad1;
 };
 BLI_STATIC_ASSERT_ALIGN(PaintBrushTestData, 16)
 
@@ -61,3 +57,11 @@ struct PaintBrushData {
   float _pad2;
 };
 BLI_STATIC_ASSERT_ALIGN(PaintBrushData, 16)
+
+struct PaintStepData {
+  float3 location;
+  float radius;
+  int mirror_symmetry_pass;
+  int _pad0[3];
+};
+BLI_STATIC_ASSERT_ALIGN(PaintStepData, 16);

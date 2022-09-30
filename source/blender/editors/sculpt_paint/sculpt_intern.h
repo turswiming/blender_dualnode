@@ -1697,13 +1697,16 @@ void SCULPT_do_paint_brush(struct PaintModeSettings *paint_mode_settings,
                            Object *ob,
                            PBVHNode **nodes,
                            int totnode) ATTR_NONNULL();
+void SCULPT_paint_batches_flush(struct PaintModeSettings *paint_mode_settings,
+                                struct Sculpt *sd,
+                                struct Object *ob);
 
 /**
  * \brief Get the image canvas for painting on the given object.
  *
- * \return #true if an image is found. The #r_image and #r_image_user fields are filled with the
- * image and image user. Returns false when the image isn't found. In the later case the r_image
- * and r_image_user are set to NULL.
+ * \return #true if an image is found. The #r_image and #r_image_user fields are filled with
+ * the image and image user. Returns false when the image isn't found. In the later case the
+ * r_image and r_image_user are set to NULL.
  */
 bool SCULPT_paint_image_canvas_get(struct PaintModeSettings *paint_mode_settings,
                                    struct Object *ob,
@@ -1715,6 +1718,9 @@ void SCULPT_do_paint_brush_image(struct PaintModeSettings *paint_mode_settings,
                                  PBVHNode **nodes,
                                  int totnode) ATTR_NONNULL();
 bool SCULPT_use_image_paint_brush(struct PaintModeSettings *settings, Object *ob) ATTR_NONNULL();
+void SCULPT_paint_image_batches_flush(struct PaintModeSettings *paint_mode_settings,
+                                      struct Sculpt *sd,
+                                      struct Object *ob);
 
 /* Smear Brush. */
 void SCULPT_do_smear_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode);

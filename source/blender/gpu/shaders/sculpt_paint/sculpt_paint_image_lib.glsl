@@ -1,12 +1,10 @@
-bool SCULPT_brush_test_sphere(PaintBrushTestData test_data, vec3 co, out float dist)
+bool SCULPT_brush_test_sphere(PaintBrushTestData test_data,
+                              PaintStepData step_data,
+                              vec3 co,
+                              out float dist)
 {
-  dist = distance(vec3(test_data.location), co);
-  if (dist > test_data.radius) {
-    return false;
-  }
-
-  // TODO(jbakker): do clipping test.
-  return true;
+  dist = distance(vec3(step_data.location), co);
+  return dist <= step_data.radius;
 }
 
 void SCULPT_get_row_pos_and_delta(vec3 co1,

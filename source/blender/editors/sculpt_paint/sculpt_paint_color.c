@@ -377,6 +377,15 @@ void SCULPT_do_paint_brush(
   BLI_task_parallel_range(0, totnode, &data, do_paint_brush_task_cb_ex, &settings);
 }
 
+void SCULPT_paint_batches_flush(PaintModeSettings *paint_mode_settings, Sculpt *sd, Object *ob)
+{
+  if (!SCULPT_use_image_paint_brush(paint_mode_settings, ob)) {
+    return;
+  }
+
+  SCULPT_paint_image_batches_flush(paint_mode_settings, sd, ob);
+}
+
 static void do_smear_brush_task_cb_exec(void *__restrict userdata,
                                         const int n,
                                         const TaskParallelTLS *__restrict tls)
