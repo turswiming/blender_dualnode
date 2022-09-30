@@ -1056,6 +1056,7 @@ static Scene *gpencil_preview_scene_create(const struct ObjectPreviewData *previ
 
   /* Grease pencil draw engine needs an object to draw the datablock. */
   Object *ob_temp = BKE_object_add_for_data(preview_data->pr_main,
+                                            scene,
                                             view_layer,
                                             OB_GPENCIL,
                                             "preview_object",
@@ -1068,7 +1069,7 @@ static Scene *gpencil_preview_scene_create(const struct ObjectPreviewData *previ
     BKE_object_materials_test(preview_data->pr_main, ob_temp, preview_data->datablock);
   }
 
-  Object *camera_object = object_preview_camera_create(preview_data->pr_main, view_layer, ob_temp);
+  Object *camera_object = object_preview_camera_create(preview_data->pr_main, scene, view_layer, ob_temp);
 
   scene->camera = camera_object;
   scene->r.xsch = preview_data->sizex;
