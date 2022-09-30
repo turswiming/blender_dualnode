@@ -16,14 +16,14 @@ void main()
 
   SCULPT_get_row_pos_and_delta(co1, co2, co3, triangle, row, pos, delta);
 
-  for (int i = 0; i < row_len; i++) {
+  for (int x = 0; x < row_len; x++) {
     float distance;
     bool test_result = SCULPT_brush_test_sphere(paint_brush_buf.test, pos, distance);
-    // pos += delta;
+    pos += delta;
     if (!test_result) {
       continue;
     }
 
-    imageStore(out_img, image_coord + ivec2(i, 0), paint_brush_buf.color);
+    imageStore(out_img, image_coord + ivec2(x, 0), paint_brush_buf.color);
   }
 }
