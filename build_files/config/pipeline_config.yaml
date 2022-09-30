@@ -19,20 +19,21 @@ update-code:
             path: source/tools
     svn:
         libraries:
+            # Temporary branch names for testing, don't merge this into master.
             darwin-arm64:
-                branch: trunk
+                branch: branches/vfx-platform-2023
                 commit_id: HEAD
                 path: lib/darwin_arm64
             darwin-x86_64:
-                branch: trunk
+                branch: branches/vfx-platform-2023
                 commit_id: HEAD
                 path: lib/darwin
             linux-x86_64:
-                branch: trunk
+                branch: branches/vfx-platform-2023
                 commit_id: HEAD
                 path: lib/linux_centos7_x86_64
             windows-amd64:
-                branch: trunk
+                branch: branches/vfx-platform-2023
                 commit_id: HEAD
                 path: lib/win64_vc15
         tests:
