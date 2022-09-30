@@ -823,7 +823,7 @@ bool WM_operator_properties_id_lookup_is_set(PointerRNA *ptr);
  * with the same name and type may be present). The "name" property is only kept to not break
  * compatibility with old scripts using some previously existing operators.
  */
-void WM_operator_properties_id_lookup(wmOperatorType *ot, const bool add_name_prop);
+void WM_operator_properties_id_lookup(wmOperatorType *ot, bool add_name_prop);
 
 /**
  * Disable using cursor position,

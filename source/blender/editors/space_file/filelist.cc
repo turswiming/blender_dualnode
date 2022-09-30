@@ -41,7 +41,7 @@
 #endif
 
 #include "BKE_asset.h"
-#include "BKE_asset_library.h"
+#include "BKE_asset_library.hh"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_icons.h"
@@ -3600,17 +3600,15 @@ static void filelist_readjob_lib(FileListReadJob *job_params,
   filelist_readjob_do(true, job_params, stop, do_update, progress);
 }
 
-static void filelist_asset_library_path(const FileListReadJob *job_params,
-                                        char r_library_root_path[FILE_MAX])
+static std::string filelist_asset_library_path(const FileListReadJob *job_params)
 {
   if (job_params->filelist->type == FILE_MAIN_ASSET) {
     /* For the "Current File" library (#FILE_MAIN_ASSET) we get the asset library root path based
      * on main. */
-    BKE_asset_library_find_suitable_root_path_from_main(job_params->current_main,
-                                                        r_library_root_path);
+    return BKE_asset_library_find_suitable_root_path_from_main(job_params->current_main);
   }
   else {
-    BLI_strncpy(r_library_root_path, job_params->tmp_filelist->filelist.root, FILE_MAX);
+    return job_params->tmp_filelist->filelist.root;
   }
 }
 
@@ -3631,12 +3629,11 @@ static void filelist_readjob_load_asset_library_data(FileListReadJob *job_params
     return;
   }
 
-  char library_root_path[FILE_MAX];
-  filelist_asset_library_path(job_params, library_root_path);
+  const std::string library_root_path = filelist_asset_library_path(job_params);
 
   /* Load asset catalogs, into the temp filelist for thread-safety.
    * #filelist_readjob_endjob() will move it into the real filelist. */
-  tmp_filelist->asset_library = BKE_asset_library_load(library_root_path);
+  tmp_filelist->asset_library = BKE_asset_library_load(library_root_path.c_str());
   *do_update = true;
 }
 

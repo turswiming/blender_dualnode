@@ -124,7 +124,8 @@ class AssetCatalogService {
    *
    * \see #AssetCatalogFilter
    */
-  AssetCatalogFilter create_catalog_filter(CatalogID active_catalog_id) const;
+  AssetCatalogFilter create_catalog_filter(const AssetCatalogPath &path) const;
+  AssetCatalogFilter create_catalog_filter(CatalogID catalog_id) const;
 
   /** Create a catalog with some sensible auto-generated catalog ID.
    * The catalog will be saved to the default catalog file. */
@@ -346,10 +347,10 @@ class AssetCatalogTree {
   /** Ensure an item representing \a path is in the tree, adding it if necessary. */
   void insert_item(const AssetCatalog &catalog);
 
-  void foreach_item(const AssetCatalogTreeItem::ItemIterFn callback);
+  void foreach_item(ItemIterFn callback);
   /** Iterate over root items calling \a callback for each of them, but do not recurse into their
    * children. */
-  void foreach_root_item(const ItemIterFn callback);
+  void foreach_root_item(ItemIterFn callback);
 
  protected:
   /** Child tree items, ordered by their names. */

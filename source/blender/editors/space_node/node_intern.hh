@@ -253,6 +253,7 @@ bNode *add_static_node(const bContext &C, int type, const float2 &location);
 void NODE_OT_add_reroute(wmOperatorType *ot);
 void NODE_OT_add_search(wmOperatorType *ot);
 void NODE_OT_add_group(wmOperatorType *ot);
+void NODE_OT_add_group_asset(wmOperatorType *ot);
 void NODE_OT_add_object(wmOperatorType *ot);
 void NODE_OT_add_collection(wmOperatorType *ot);
 void NODE_OT_add_file(wmOperatorType *ot);
@@ -383,6 +384,7 @@ void invoke_add_node_search_menu(bContext &C, const float2 &cursor, bool use_tra
 
 /* add_menu_assets.cc */
 
-extern MenuType NODE_MT_node_add_catalog_assets;
+MenuType add_catalog_assets_menu_type();
+MenuType add_root_catalogs_menu_type();
 
 }  // namespace blender::ed::space_node

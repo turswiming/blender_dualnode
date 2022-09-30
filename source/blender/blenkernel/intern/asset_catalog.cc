@@ -9,6 +9,7 @@
 
 #include "BKE_asset_catalog.hh"
 #include "BKE_asset_library.h"
+#include "BKE_asset_library.hh"
 
 #include "BLI_fileops.hh"
 #include "BLI_path_util.h"
@@ -148,14 +149,10 @@ bool AssetCatalogService::is_catalog_known(CatalogID catalog_id) const
   return catalog_collection_->catalogs_.contains(catalog_id);
 }
 
-AssetCatalogFilter AssetCatalogService::create_catalog_filter(
-    const CatalogID active_catalog_id) const
+AssetCatalogFilter AssetCatalogService::create_catalog_filter(const AssetCatalogPath &path) const
 {
   Set<CatalogID> matching_catalog_ids;
   Set<CatalogID> known_catalog_ids;
-  matching_catalog_ids.add(active_catalog_id);
-
-  const AssetCatalog *active_catalog = find_catalog(active_catalog_id);
 
   /* This cannot just iterate over tree items to get all the required data, because tree items only
    * represent single UUIDs. It could be used to get the main UUIDs of the children, though, and
@@ -163,13 +160,23 @@ AssetCatalogFilter AssetCatalogService::create_catalog_filter(
    * call). Without an extra indexed-by-path acceleration structure, this is still going to require
    * a linear search, though. */
   for (const auto &catalog_uptr : catalog_collection_->catalogs_.values()) {
-    if (active_catalog && catalog_uptr->path.is_contained_in(active_catalog->path)) {
+    if (catalog_uptr->path.is_contained_in(path)) {
       matching_catalog_ids.add(catalog_uptr->catalog_id);
     }
     known_catalog_ids.add(catalog_uptr->catalog_id);
   }
 
   return AssetCatalogFilter(std::move(matching_catalog_ids), std::move(known_catalog_ids));
+}
+
+AssetCatalogFilter AssetCatalogService::create_catalog_filter(const CatalogID catalog_id) const
+{
+  const AssetCatalog *catalog = this->find_catalog(catalog_id);
+  if (!catalog) {
+    return AssetCatalogFilter({catalog_id}, {});
+  }
+
+  return this->create_catalog_filter(catalog->path);
 }
 
 void AssetCatalogService::delete_catalog_by_id_soft(const CatalogID catalog_id)
@@ -507,14 +514,13 @@ CatalogFilePath AssetCatalogService::find_suitable_cdf_path_for_writing(
                  "catalog definition file should be put");
 
   /* Ask the asset library API for an appropriate location. */
-  char suitable_root_path[PATH_MAX];
-  const bool asset_lib_root_found = BKE_asset_library_find_suitable_root_path_from_path(
-      blend_file_path.c_str(), suitable_root_path);
-  if (asset_lib_root_found) {
+  const std::string suitable_root_path = BKE_asset_library_find_suitable_root_path_from_path(
+      blend_file_path);
+  if (!suitable_root_path.empty()) {
     char asset_lib_cdf_path[PATH_MAX];
     BLI_path_join(asset_lib_cdf_path,
                   sizeof(asset_lib_cdf_path),
-                  suitable_root_path,
+                  suitable_root_path.c_str(),
                   DEFAULT_CATALOG_FILENAME.c_str(),
                   nullptr);
     return asset_lib_cdf_path;
