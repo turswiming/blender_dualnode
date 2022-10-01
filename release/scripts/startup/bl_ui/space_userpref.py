@@ -2307,6 +2307,7 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
                 ({"property": "use_sculpt_texture_paint"}, "T96225"),
                 ({"property": "use_full_frame_compositor"}, "T88150"),
                 ({"property": "enable_eevee_next"}, "T93220"),
+                ({"property": "enable_workbench_next"}, ""),
                 ({"property": "use_draw_manager_acquire_lock"}, "T98016"),
             ),
         )

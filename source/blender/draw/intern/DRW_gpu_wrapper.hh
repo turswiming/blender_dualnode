@@ -985,6 +985,16 @@ class Framebuffer : NonCopyable {
         &fb_, {depth, color1, color2, color3, color4, color5, color6, color7, color8});
   }
 
+  void bind()
+  {
+    GPU_framebuffer_bind(fb_);
+  }
+
+  void clear_depth(float depth)
+  {
+    GPU_framebuffer_clear_depth(fb_, depth);
+  }
+
   Framebuffer &operator=(Framebuffer &&a)
   {
     if (*this != a) {

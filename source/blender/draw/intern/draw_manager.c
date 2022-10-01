@@ -3002,6 +3002,9 @@ void DRW_engines_register_experimental(void)
   if (U.experimental.enable_eevee_next) {
     RE_engines_register(&DRW_engine_viewport_eevee_next_type);
   }
+  if (U.experimental.enable_workbench_next) {
+    RE_engines_register(&DRW_engine_viewport_workbench_next_type);
+  }
 }
 
 void DRW_engines_register(void)

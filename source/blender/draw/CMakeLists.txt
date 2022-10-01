@@ -159,6 +159,7 @@ set(SRC
   engines/workbench/workbench_effect_dof.c
   engines/workbench/workbench_effect_outline.c
   engines/workbench/workbench_engine.c
+  engines/workbench/workbench_engine.cc
   engines/workbench/workbench_materials.c
   engines/workbench/workbench_opaque.c
   engines/workbench/workbench_render.c
