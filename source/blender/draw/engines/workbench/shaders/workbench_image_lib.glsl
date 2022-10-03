@@ -27,10 +27,10 @@ bool node_tex_tile_lookup(inout vec3 co, sampler2DArray ima, sampler1DArray map)
 
 vec3 workbench_image_color(vec2 uvs)
 {
-#ifdef V3D_SHADING_TEXTURE_COLOR
+#ifdef WORKBENCH_COLOR_TEXTURE
   vec4 color;
 
-#  ifdef TEXTURE_IMAGE_ARRAY
+#  ifdef WORKBENCH_TEXTURE_IMAGE_ARRAY
   vec3 co = vec3(uvs, 0.0);
   if (node_tex_tile_lookup(co, imageTileArray, imageTileData)) {
     color = texture(imageTileArray, co);

@@ -27,6 +27,7 @@ set(INC
 
   # For *_info.hh includes.
   ../draw/engines/eevee_next
+  ../draw/engines/workbench
   ../draw/intern
 
   # For node muting stuff.

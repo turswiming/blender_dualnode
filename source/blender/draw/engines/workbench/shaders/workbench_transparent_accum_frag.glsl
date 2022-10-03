@@ -53,19 +53,19 @@ void main()
 
   vec3 color = color_interp;
 
-#ifdef V3D_SHADING_TEXTURE_COLOR
+#ifdef WORKBENCH_COLOR_TEXTURE
   color = workbench_image_color(uv_interp);
 #endif
 
-#ifdef V3D_LIGHTING_MATCAP
+#ifdef WORKBENCH_LIGHTING_MATCAP
   vec3 shaded_color = get_matcap_lighting(matcap_diffuse_tx, matcap_specular_tx, color, N, I);
 #endif
 
-#ifdef V3D_LIGHTING_STUDIO
+#ifdef WORKBENCH_LIGHTING_STUDIO
   vec3 shaded_color = get_world_lighting(color, _roughness, metallic, N, I);
 #endif
 
-#ifdef V3D_LIGHTING_FLAT
+#ifdef WORKBENCH_LIGHTING_FLAT
   vec3 shaded_color = color;
 #endif
 
@@ -73,8 +73,8 @@ void main()
 
   /* Listing 4 */
   float weight = calculate_transparent_weight() * alpha_interp;
-  transparentAccum = vec4(shaded_color * weight, alpha_interp);
-  revealageAccum = vec4(weight);
+  out_transparent_accum = vec4(shaded_color * weight, alpha_interp);
+  out_revealage_accum = vec4(weight);
 
-  objectId = uint(object_id);
+  out_object_id = uint(object_id);
 }

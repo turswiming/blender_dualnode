@@ -6,32 +6,34 @@
 
 void main()
 {
+  vec2 uv = vec2(gl_GlobalInvocationID.xy) / vec2(textureSize(normal_tx, 0));
+
   /* Normal and Incident vector are in viewspace. Lighting is evaluated in viewspace. */
-  vec3 I = get_view_vector_from_screen_uv(uvcoordsvar.st);
-  vec3 N = workbench_normal_decode(texture(normalBuffer, uvcoordsvar.st));
-  vec4 mat_data = texture(materialBuffer, uvcoordsvar.st);
+  vec3 I = get_view_vector_from_screen_uv(uv);
+  vec3 N = workbench_normal_decode(texture(normal_tx, uv));
+  vec4 mat_data = texture(material_tx, uv);
 
   vec3 base_color = mat_data.rgb;
 
   float roughness, metallic;
   workbench_float_pair_decode(mat_data.a, roughness, metallic);
 
+  vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+
 #ifdef WORKBENCH_LIGHTING_MATCAP
   /* When using matcaps, mat_data.a is the back-face sign. */
   N = (mat_data.a > 0.0) ? N : -N;
 
-  fragColor.rgb = get_matcap_lighting(matcap_diffuse_tx, matcap_specular_tx, base_color, N, I);
+  color.rgb = get_matcap_lighting(matcap_tx, base_color, N, I);
 #endif
 
 #ifdef WORKBENCH_LIGHTING_STUDIO
-  fragColor.rgb = get_world_lighting(base_color, roughness, metallic, N, I);
+  color.rgb = get_world_lighting(base_color, roughness, metallic, N, I);
 #endif
 
 #ifdef WORKBENCH_LIGHTING_FLAT
-  fragColor.rgb = base_color;
+  color.rgb = base_color;
 #endif
 
-  fragColor.rgb *= get_shadow(N, forceShadowing);
-
-  fragColor.a = 1.0;
+  imageStore(out_color_img, ivec2(gl_GlobalInvocationID.xy), color);
 }

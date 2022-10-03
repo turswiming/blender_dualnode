@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BKE_studiolight.h"
+#include "DEG_depsgraph_query.h"
 #include "DRW_render.h"
 #include "GPU_capabilities.h"
 
@@ -8,14 +10,12 @@
 #include "draw_manager.hh"
 #include "draw_pass.hh"
 
+#include "workbench_defines.h"
+#include "workbench_shader_shared.h"
+
 namespace blender::workbench {
 
 using namespace draw;
-
-#define WB_MATCAP_SLOT 0
-#define WB_TEXTURE_SLOT 1
-#define WB_TILEMAP_SLOT 2
-#define WB_MATERIAL_SLOT 0
 
 #define WB_RESOLVE_GROUP_SIZE 8
 
@@ -30,11 +30,11 @@ static inline const char *get_name(eGeometryType type)
 {
   switch (type) {
     case eGeometryType::MESH:
-      return "Curves";
-    case eGeometryType::CURVES:
-      return "PointCloud";
-    case eGeometryType::POINTCLOUD:
       return "Mesh";
+    case eGeometryType::CURVES:
+      return "Curves";
+    case eGeometryType::POINTCLOUD:
+      return "PointCloud";
     default:
       BLI_assert_unreachable();
       return "";
@@ -145,7 +145,7 @@ class ShaderCache {
     if (shader_ptr != nullptr) {
       return shader_ptr;
     }
-    std::string info_name = "workbench_next_";
+    std::string info_name = "workbench_next_prepass_";
     switch (geometry_type) {
       case eGeometryType::MESH:
         info_name += "mesh_";
@@ -154,7 +154,7 @@ class ShaderCache {
         info_name += "curves_";
         break;
       case eGeometryType::POINTCLOUD:
-        info_name += "pointcloud_";
+        info_name += "ptcloud_";
         break;
     }
     switch (pipeline_type) {
@@ -187,6 +187,8 @@ class ShaderCache {
         info_name += "texture";
         break;
     }
+    /* TODO Clipping */
+    info_name += "_no_clip";
     shader_ptr = GPU_shader_create_from_info_name(info_name.c_str());
     return shader_ptr;
   }
@@ -230,11 +232,56 @@ class ShaderCache {
 struct SceneResources {
   ShaderCache shader_cache;
 
-  Texture matcap_tx;
-  Texture depth_tx;
-  Texture depth_in_front_tx;
+  Texture matcap_tx = "matcap_tx";
 
-  StorageBuffer<workbench::Material> material_buf = {"material_buf"};
+  TextureFromPool color_tx = "wb_color_tx";
+  Texture depth_tx = "wb_depth_tx";
+  Texture depth_in_front_tx = "wb_depth_in_front_tx";
+
+  StorageVectorBuffer<workbench::Material> material_buf = {"material_buf"};
+  UniformBuffer<WorldData> world_buf;
+
+  void world_sync(StudioLight *studio_light)
+  {
+    float4x4 rot_matrix = float4x4::identity();
+
+    // if (USE_WORLD_ORIENTATION(wpd)) {
+    /* TODO */
+    // }
+
+    if (U.edit_studio_light) {
+      studio_light = BKE_studiolight_studio_edit_get();
+    }
+
+    /* Studio Lights. */
+    for (int i = 0; i < 4; i++) {
+      LightData &light = world_buf.lights[i];
+
+      SolidLight *sl = (studio_light) ? &studio_light->light[i] : nullptr;
+      if (sl && sl->flag) {
+        float3 direction = rot_matrix * float3(sl->vec);
+        light.direction = float4(UNPACK3(direction), 0.0f);
+        /* We should pre-divide the power by PI but that makes the lights really dim. */
+        light.specular_color = float4(UNPACK3(sl->spec), 0.0f);
+        light.diffuse_color_wrap = float4(UNPACK3(sl->col), sl->smooth);
+      }
+      else {
+        light.direction = float4(1.0f, 0.0f, 0.0f, 0.0f);
+        light.specular_color = float4(0.0f);
+        light.diffuse_color_wrap = float4(0.0f);
+      }
+    }
+
+    if (studio_light) {
+      world_buf.ambient_color = float4(UNPACK3(studio_light->light_ambient), 0.0f);
+    }
+    else {
+      world_buf.ambient_color = float4(1.0f, 1.0f, 1.0f, 0.0f);
+    }
+
+    /* TODO */
+    world_buf.use_specular = true;
+  }
 };
 
 class MeshPass : public PassMain {
@@ -260,25 +307,29 @@ class MeshPass : public PassMain {
             SceneResources &resources,
             DRWState state)
   {
+    ShaderCache &shaders = resources.shader_cache;
+
     this->PassMain::init();
     this->state_set(state);
     this->bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
     this->bind_ssbo(WB_MATERIAL_SLOT, resources.material_buf);
+    this->bind_ubo(WB_WORLD_SLOT, resources.world_buf);
 
     color_type_ = color_type;
     texture_subpass_map.clear();
 
     for (int geom = 0; geom < geometry_type_len; geom++) {
       eGeometryType geom_type = static_cast<eGeometryType>(geom);
-      GPUShader *sh = resources.shader_cache.prepass_shader_get(
-          pipeline, geom_type, color_type, shading);
+      GPUShader *sh = shaders.prepass_shader_get(pipeline, geom_type, color_type, shading);
       PassMain::Sub *pass = &this->sub(get_name(geom_type));
       pass->shader_set(sh);
       geometry_passes_[geom] = pass;
     }
   }
 
-  PassMain::Sub &sub_pass_get(eGeometryType geometry_type, ObjectRef &ref)
+  PassMain::Sub &sub_pass_get(eGeometryType geometry_type,
+                              ObjectRef & /*ref*/,
+                              ::Material * /*material*/)
   {
     if (color_type_ == eColorType::TEXTURE) {
       /* TODO(fclem): Always query a layered texture so we can use only a single shader. */
@@ -302,9 +353,9 @@ class MeshPass : public PassMain {
 
 class OpaquePass {
  public:
-  TextureFromPool gbuffer_normal_tx;
-  TextureFromPool gbuffer_albedo_tx;
-  TextureFromPool gbuffer_object_id_tx;
+  TextureFromPool gbuffer_normal_tx = {"gbuffer_normal_tx"};
+  TextureFromPool gbuffer_material_tx = {"gbuffer_material_tx"};
+  TextureFromPool gbuffer_object_id_tx = {"gbuffer_object_id_tx"};
   Framebuffer opaque_fb;
 
   MeshPass gbuffer_ps_ = {"Opaque.Gbuffer"};
@@ -317,31 +368,34 @@ class OpaquePass {
             SceneResources &resources)
   {
     Texture &depth_tx = resources.depth_tx;
+    TextureFromPool &color_tx = resources.color_tx;
+    ShaderCache &shaders = resources.shader_cache;
     DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                      cull_state | clip_state;
 
     gbuffer_ps_.init(ePipelineType::OPAQUE, color_type, shading_type, resources, state);
 
     deferred_ps_.init();
-    deferred_ps_.shader_set(
-        resources.shader_cache.resolve_shader_get(ePipelineType::OPAQUE, shading_type));
-    deferred_ps_.bind_texture("depth_tx", depth_tx);
-    deferred_ps_.bind_texture("stencil_tx", depth_tx.stencil_view());
-    deferred_ps_.bind_texture("normal_tx", gbuffer_normal_tx);
-    deferred_ps_.bind_texture("albedo_tx", gbuffer_albedo_tx);
-    deferred_ps_.bind_texture("object_id_tx", gbuffer_object_id_tx);
+    deferred_ps_.shader_set(shaders.resolve_shader_get(ePipelineType::OPAQUE, shading_type));
+    deferred_ps_.bind_ubo(WB_WORLD_SLOT, resources.world_buf);
+    deferred_ps_.bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
+    deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
+    deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
+    deferred_ps_.bind_texture("object_id_tx", &gbuffer_object_id_tx);
+    deferred_ps_.bind_image("out_color_img", &color_tx);
     deferred_ps_.dispatch(math::divide_ceil(depth_tx.size(), int3(WB_RESOLVE_GROUP_SIZE)));
+    deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
   }
 
   void draw_prepass(Manager &manager, View &view, Texture &depth_tx)
   {
     gbuffer_normal_tx.acquire(int2(depth_tx.size()), GPU_RG16F);
-    gbuffer_albedo_tx.acquire(int2(depth_tx.size()), GPU_RGBA8);
+    gbuffer_material_tx.acquire(int2(depth_tx.size()), GPU_RGBA8);
     gbuffer_object_id_tx.acquire(int2(depth_tx.size()), GPU_R16UI);
 
     opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(depth_tx),
                      GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
-                     GPU_ATTACHMENT_TEXTURE(gbuffer_albedo_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
                      GPU_ATTACHMENT_TEXTURE(gbuffer_object_id_tx));
     opaque_fb.bind();
     opaque_fb.clear_depth(1.0f);
@@ -354,7 +408,7 @@ class OpaquePass {
     manager.submit(deferred_ps_, view);
 
     gbuffer_normal_tx.release();
-    gbuffer_albedo_tx.release();
+    gbuffer_material_tx.release();
     gbuffer_object_id_tx.release();
   }
 
@@ -379,6 +433,7 @@ class TransparentPass {
             eColorType color_type,
             SceneResources &resources)
   {
+    ShaderCache &shaders = resources.shader_cache;
     Texture &depth_tx = resources.depth_tx;
     DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                      cull_state | clip_state;
@@ -387,7 +442,7 @@ class TransparentPass {
 
     resolve_ps_.init();
     resolve_ps_.shader_set(
-        resources.shader_cache.resolve_shader_get(ePipelineType::TRANSPARENT, eShadingType::FLAT));
+        shaders.resolve_shader_get(ePipelineType::TRANSPARENT, eShadingType::FLAT));
     resolve_ps_.bind_texture("accumulation_tx", accumulation_tx);
     resolve_ps_.bind_texture("reveal_tx", reveal_tx);
     resolve_ps_.dispatch(math::divide_ceil(depth_tx.size(), int3(WB_RESOLVE_GROUP_SIZE)));
@@ -422,8 +477,6 @@ class TransparentPass {
 
 class AntiAliasingPass {
  public:
-  Texture history_tx;
-
   Texture smaa_search_tx = {"smaa_search_tx"};
   Texture smaa_area_tx = {"smaa_area_tx"};
   TextureFromPool smaa_edge_tx = {"smaa_edge_tx"};
@@ -479,7 +532,7 @@ class AntiAliasingPass {
       smaa_edge_detect_ps_.init();
       smaa_edge_detect_ps_.state_set(DRW_STATE_WRITE_COLOR);
       smaa_edge_detect_ps_.shader_set(smaa_edge_detect_sh);
-      smaa_edge_detect_ps_.bind_texture("colorTex", history_tx);
+      smaa_edge_detect_ps_.bind_texture("colorTex", &resources.color_tx);
       smaa_edge_detect_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
       smaa_edge_detect_ps_.clear_color(float4(0.0f));
       smaa_edge_detect_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
@@ -499,8 +552,8 @@ class AntiAliasingPass {
       smaa_resolve_ps_.init();
       smaa_resolve_ps_.state_set(DRW_STATE_WRITE_COLOR);
       smaa_resolve_ps_.shader_set(smaa_resolve_sh);
-      smaa_resolve_ps_.bind_texture("blendTex", smaa_weight_tx);
-      smaa_resolve_ps_.bind_texture("colorTex", history_tx);
+      smaa_resolve_ps_.bind_texture("blendTex", &smaa_weight_tx);
+      smaa_resolve_ps_.bind_texture("colorTex", &resources.color_tx);
       smaa_resolve_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
       smaa_resolve_ps_.push_constant("mixFactor", &smaa_mix_factor, 1);
       smaa_resolve_ps_.push_constant("taaAccumulatedWeight", &taa_weight_accum, 1);
@@ -515,7 +568,7 @@ class AntiAliasingPass {
 
     taa_weight_accum = 1.0f; /* TODO */
 
-    smaa_viewport_metrics = {1.0f / size.x, 1.0f / size.y, size.x, size.y};
+    smaa_viewport_metrics = float4(1.0f / size.x, 1.0f / size.y, size.x, size.y);
     smaa_mix_factor = 1.0f; /* TODO */
 
     smaa_edge_tx.acquire(size, GPU_RG8);
@@ -541,99 +594,141 @@ class Instance {
   SceneResources resources;
 
   OpaquePass opaque_ps;
-  OpaquePass opaque_in_front_ps;
+  // OpaquePass opaque_in_front_ps;
 
-  TransparentPass transparent_ps;
-  TransparentPass transparent_in_front_ps;
+  // TransparentPass transparent_ps;
+  // TransparentPass transparent_in_front_ps;
 
   AntiAliasingPass anti_aliasing_ps;
 
   DRWState clip_state;
   DRWState cull_state;
 
-  bool use_per_material_batches;
-  eColorType color_type;
-  eShadingType shading_type;
+  bool use_per_material_batches = false;
+  bool use_single_color = false;
+  eColorType color_type = eColorType::MATERIAL;
+  eShadingType shading_type = eShadingType::STUDIO;
+  Material material_override = Material(float3(1.0f));
+  /** Chosen studiolight or matcap. */
+  StudioLight *studio_light;
 
   void init(const int2 &output_res,
-            const rcti *output_rect,
-            RenderEngine *render_,
-            Depsgraph *depsgraph_,
-            Object *camera_object_,
-            const RenderLayer *render_layer_,
-            const View3D *v3d_,
-            const RegionView3D *rv3d_)
+            const Depsgraph *depsgraph,
+            const Object * /*camera*/,
+            const View3D * /*v3d*/,
+            const RegionView3D * /*rv3d*/)
   {
     use_per_material_batches = false;  // ELEM(color_type, V3D_COLOR_TEXTURE, V3D_COLOR_MATERIAL);
     color_type = eColorType::MATERIAL;
     shading_type = eShadingType::STUDIO;
+
+    resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
+    resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
+
+    Scene *scene = DEG_get_evaluated_scene(depsgraph);
+    View3DShading &shading = scene->display.shading;
+    studio_light = nullptr;
+    if (shading.light == V3D_LIGHTING_MATCAP) {
+      studio_light = BKE_studiolight_find(shading.matcap, STUDIOLIGHT_TYPE_MATCAP);
+    }
+    /* If matcaps are missing, use this as fallback. */
+    if (studio_light == nullptr) {
+      studio_light = BKE_studiolight_find(shading.studio_light, STUDIOLIGHT_TYPE_STUDIO);
+    }
   }
 
-  void begin_sync(Manager &manager)
+  void begin_sync()
   {
+    resources.world_sync(studio_light);
+
     opaque_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
-    opaque_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
-    transparent_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
-    transparent_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
+    // opaque_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
+    // transparent_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
+    // transparent_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
     anti_aliasing_ps.sync(resources);
   }
 
-  void object_sync(Manager &manager, ObjectRef &ref)
+  void object_sync(Manager &manager, ObjectRef &ob_ref)
   {
-    ResourceHandle handle = manager.resource_handle(ref);
 
     if (use_per_material_batches) {
-      Span<::Material *> materials = materials_get(ref);
-      Span<GPUBatch *> batches = geometry_get(ref, materials);
+      Span<::Material *> materials = materials_get(ob_ref);
+      Span<GPUBatch *> batches = geometry_get(ob_ref, materials);
 
-      for (auto i : materials.index_range()) {
-        PassMain::Sub &pass = pipeline_get(ref, materials[i]);
-        pass.draw(batches[i], handle);
+      if (batches.size() == materials.size()) {
+        for (auto i : materials.index_range()) {
+          /* TODO(fclem): This create a cull-able instance for each sub-object. This is done for
+           * simplicity to reduce complexity. But this increase the overhead per object. Instead,
+           * we should use an indirection buffer to the material buffer. */
+          ResourceHandle handle = manager.resource_handle(ob_ref);
+
+          Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+          mat = Material(*materials[i]);
+
+          pipeline_get(ob_ref, materials[i]).draw(batches[i], handle);
+        }
       }
     }
     else {
-      GPUBatch *geom = geometry_get(ref);
+      ResourceHandle handle = manager.resource_handle(ob_ref);
 
-      PassMain::Sub &pass = pipeline_get(ref);
-      pass.draw(geom, handle);
+      Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+      mat = (use_single_color) ? material_override : Material(*ob_ref.object);
+
+      GPUBatch *batch = geometry_get(ob_ref);
+      if (batch) {
+        pipeline_get(ob_ref).draw(batch, handle);
+      }
     }
   }
 
-  PassMain::Sub &pipeline_get(ObjectRef &ref, ::Material *material = nullptr)
+  PassMain::Sub &pipeline_get(ObjectRef &ob_ref, ::Material *material = nullptr)
   {
-    return opaque_ps.gbuffer_ps_.sub_pass_get(geometry_type_from_object(ref.object), ref);
+    return opaque_ps.gbuffer_ps_.sub_pass_get(
+        geometry_type_from_object(ob_ref.object), ob_ref, material);
   }
 
-  Span<GPUBatch *> geometry_get(ObjectRef &ref, Span<::Material *> materials)
+  Span<::Material *> materials_get(ObjectRef & /*ob_ref*/)
   {
+    /* TODO */
     return {};
   }
 
-  GPUBatch *geometry_get(ObjectRef &ref)
+  Span<GPUBatch *> geometry_get(ObjectRef &ob_ref, Span<::Material *> materials)
   {
-    return {};
+    return {DRW_cache_object_surface_material_get(ob_ref.object, nullptr, materials.size()),
+            materials.size()};
   }
 
-  Span<::Material *> materials_get(ObjectRef &ref)
+  GPUBatch *geometry_get(ObjectRef &ob_ref)
   {
-    return {};
+    return DRW_cache_object_surface_get(ob_ref.object);
+  }
+
+  void end_sync()
+  {
+    resources.material_buf.push_update();
   }
 
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
+    resources.color_tx.acquire(int2(resources.depth_tx.size()), GPU_RGBA16F);
+
     opaque_ps.draw_prepass(manager, view, resources.depth_tx);
     // volume_ps.draw_prepass(manager, view, resources.depth_tx);
-    transparent_ps.draw_prepass(manager, view, resources.depth_tx);
+    // transparent_ps.draw_prepass(manager, view, resources.depth_tx);
 
-    if (opaque_in_front_ps.is_empty() == false || transparent_in_front_ps.is_empty() == false) {
-      opaque_in_front_ps.draw_prepass(manager, view, resources.depth_in_front_tx);
-      transparent_in_front_ps.draw_prepass(manager, view, resources.depth_in_front_tx);
-    }
+    // if (opaque_in_front_ps.is_empty() == false || transparent_in_front_ps.is_empty() == false) {
+    //   opaque_in_front_ps.draw_prepass(manager, view, resources.depth_in_front_tx);
+    //   transparent_in_front_ps.draw_prepass(manager, view, resources.depth_in_front_tx);
+    // }
 
     opaque_ps.draw_resolve(manager, view);
-    transparent_ps.draw_resolve(manager, view);
+    // transparent_ps.draw_resolve(manager, view);
 
     anti_aliasing_ps.draw(manager, view, depth_tx, color_tx);
+
+    resources.color_tx.release();
   }
 
   void draw_viewport(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
@@ -674,7 +769,6 @@ static void workbench_engine_init(void *vedata)
   }
 
   const DRWContextState *ctx_state = DRW_context_state_get();
-  Depsgraph *depsgraph = ctx_state->depsgraph;
   View3D *v3d = ctx_state->v3d;
   RegionView3D *rv3d = ctx_state->rv3d;
 
@@ -682,30 +776,13 @@ static void workbench_engine_init(void *vedata)
   int2 size = int2(GPU_texture_width(dtxl->color), GPU_texture_height(dtxl->color));
 
   Object *camera = nullptr;
-  /* Get render borders. */
-  rcti rect;
-  BLI_rcti_init(&rect, 0, size[0], 0, size[1]);
   if (v3d) {
     if (rv3d && (rv3d->persp == RV3D_CAMOB)) {
       camera = v3d->camera;
     }
   }
 
-  ved->instance->init(size, &rect, nullptr, depsgraph, camera, nullptr, v3d, rv3d);
-}
-
-static void workbench_draw_scene(void *vedata)
-{
-  WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    STRNCPY(ved->info, "Error: No shader storage buffer support");
-    return;
-  }
-  DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
-  const DRWView *default_view = DRW_view_default_get();
-  draw::Manager *manager = DRW_manager_get();
-  draw::View view("DefaultView", default_view);
-  ved->instance->draw_viewport(*manager, view, dtxl->depth, dtxl->color);
+  ved->instance->init(size, ctx_state->depsgraph, camera, v3d, rv3d);
 }
 
 static void workbench_cache_init(void *vedata)
@@ -713,8 +790,7 @@ static void workbench_cache_init(void *vedata)
   if (!GPU_shader_storage_buffer_objects_support()) {
     return;
   }
-  draw::Manager *manager = DRW_manager_get();
-  reinterpret_cast<WORKBENCH_Data *>(vedata)->instance->begin_sync(*manager);
+  reinterpret_cast<WORKBENCH_Data *>(vedata)->instance->begin_sync();
 }
 
 static void workbench_cache_populate(void *vedata, Object *object)
@@ -737,7 +813,21 @@ static void workbench_cache_finish(void *vedata)
   if (!GPU_shader_storage_buffer_objects_support()) {
     return;
   }
-  UNUSED_VARS(vedata);
+  reinterpret_cast<WORKBENCH_Data *>(vedata)->instance->end_sync();
+}
+
+static void workbench_draw_scene(void *vedata)
+{
+  WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
+  if (!GPU_shader_storage_buffer_objects_support()) {
+    STRNCPY(ved->info, "Error: No shader storage buffer support");
+    return;
+  }
+  DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
+  const DRWView *default_view = DRW_view_default_get();
+  draw::Manager *manager = DRW_manager_get();
+  draw::View view("DefaultView", default_view);
+  ved->instance->draw_viewport(*manager, view, dtxl->depth, dtxl->color);
 }
 
 static void workbench_instance_free(void *instance)
@@ -766,7 +856,9 @@ static void workbench_render_to_image(void *vedata,
   UNUSED_VARS(vedata, engine, layer);
 }
 
-void workbench_render_update_passes(RenderEngine *engine, Scene *scene, ViewLayer *view_layer)
+static void workbench_render_update_passes(RenderEngine *engine,
+                                           Scene *scene,
+                                           ViewLayer *view_layer)
 {
   RE_engine_register_pass(engine, scene, view_layer, RE_PASSNAME_COMBINED, 4, "RGBA", SOCK_RGBA);
 }
@@ -796,7 +888,7 @@ DrawEngineType draw_engine_workbench_next = {
 RenderEngineType DRW_engine_viewport_workbench_next_type = {
     nullptr,
     nullptr,
-    "BLENDER_WORKBENCH",
+    "BLENDER_WORKBENCH_NEXT",
     N_("Workbench Next"),
     RE_INTERNAL | RE_USE_STEREO_VIEWPORT | RE_USE_GPU_CONTEXT,
     nullptr,

@@ -454,6 +454,7 @@ set(GLSL_SRC
 
   engines/workbench/shaders/workbench_cavity_lib.glsl
   engines/workbench/shaders/workbench_common_lib.glsl
+  engines/workbench/shaders/workbench_composite_comp.glsl
   engines/workbench/shaders/workbench_composite_frag.glsl
   engines/workbench/shaders/workbench_curvature_lib.glsl
   engines/workbench/shaders/workbench_effect_cavity_frag.glsl
