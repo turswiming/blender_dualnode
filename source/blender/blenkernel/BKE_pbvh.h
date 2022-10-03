@@ -125,6 +125,7 @@ typedef enum {
   PBVH_UpdateTopology = 1 << 13,
   PBVH_UpdateColor = 1 << 14,
   PBVH_RebuildPixels = 1 << 15,
+  PBVH_FrameSelection = 1 << 16,
 
 } PBVHNodeFlags;
 
@@ -298,6 +299,10 @@ void BKE_pbvh_search_callback(PBVH *pbvh,
 void BKE_pbvh_search_gather(
     PBVH *pbvh, BKE_pbvh_SearchCallback scb, void *search_data, PBVHNode ***array, int *tot);
 
+void BKE_pbvh_search_gather_frame_selected(PBVH *pbvh,
+                                           PBVHNode ***r_found_nodes,
+                                           int *r_found_nodes_len);
+
 /* Ray-cast
  * the hit callback is called for all leaf nodes intersecting the ray;
  * it's up to the callback to find the primitive within the leaves that is
@@ -443,6 +448,8 @@ void BKE_pbvh_node_fully_unmasked_set(PBVHNode *node, int fully_masked);
 bool BKE_pbvh_node_fully_unmasked_get(PBVHNode *node);
 
 void BKE_pbvh_mark_rebuild_pixels(PBVH *pbvh);
+void BKE_pbvh_frame_selection_clear(PBVH *pbvh);
+void BKE_pbvh_node_frame_selection_mark(PBVHNode *node);
 void BKE_pbvh_vert_tag_update_normal(PBVH *pbvh, PBVHVertRef vertex);
 
 void BKE_pbvh_node_get_grids(PBVH *pbvh,

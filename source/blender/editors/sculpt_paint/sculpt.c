@@ -5525,18 +5525,16 @@ static void sculpt_stroke_redraw(const bContext *C,
                                  struct PaintStroke *UNUSED(stroke),
                                  bool is_final)
 {
-  /* TODO(jbakker): this function should not be called redraw as it doesn't do redrawing, but
-   * triggers batched step drawing and downloading of results and update undo steps for the paint
-   * brush with a canvas target.*/
-  printf("%s %d\n", __func__, is_final);
+  /* TODO(jbakker): this callback should not be named redraw as in this case it doesn't do
+   * redrawing, but triggers batched step drawing and downloading of results and update undo steps
+   * for the paint brush with a canvas target.*/
 
   Object *ob = CTX_data_active_object(C);
   SculptSession *ss = ob->sculpt;
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
   Brush *brush = BKE_paint_brush(&sd->paint);
   ToolSettings *tool_settings = CTX_data_tool_settings(C);
-  sculpt_flush_batches(
-      sd, ob, brush, &tool_settings->paint_mode);
+  sculpt_flush_batches(sd, ob, brush, &tool_settings->paint_mode);
 
   if (!ss->cache) {
     return;

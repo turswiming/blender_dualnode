@@ -499,6 +499,8 @@ static void ensure_gpu_buffers(TexturePaintingUserData &data)
   SculptSession &ss = *data.ob->sculpt;
   if (!ss.mode.texture_paint.gpu_data) {
     ss.mode.texture_paint.gpu_data = MEM_new<GPUSculptPaintData>(__func__);
+    PBVH *pbvh = ss.pbvh;
+    BKE_pbvh_frame_selection_clear(pbvh);
   }
 
   for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
@@ -508,7 +510,7 @@ static void ensure_gpu_buffers(TexturePaintingUserData &data)
 }
 
 static void gpu_painting_paint_step(TexturePaintingUserData &data,
-                                    ImageTileWrapper &image_tile,
+                                    TileNumber tile_number,
                                     ImBuf *image_buffer,
                                     GPUTexture **tex_ptr,
                                     GPUUniformBuf *paint_brush_buf,
@@ -543,7 +545,7 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
     }
 
     for (UDIMTilePixels &tile_pixels : node_data.tiles) {
-      if (tile_pixels.tile_number != image_tile.get_tile_number()) {
+      if (tile_pixels.tile_number != tile_number) {
         continue;
       }
 
@@ -558,7 +560,8 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
       GPU_texture_image_bind(tex, GPU_shader_get_texture_binding(shader, "out_img"));
       GPU_storagebuf_bind(paint_step_buf, GPU_shader_get_ssbo(shader, "paint_step_buf"));
       GPU_shader_uniform_2iv(shader, "paint_step_range", paint_step_range);
-      GPU_uniformbuf_bind(paint_brush_buf, GPU_shader_get_uniform_block(shader, "ren"));
+      GPU_uniformbuf_bind(paint_brush_buf,
+                          GPU_shader_get_uniform_block(shader, "paint_brush_buf"));
       GPU_storagebuf_bind(vert_coord_buf, GPU_shader_get_ssbo(shader, "vert_coord_buf"));
       GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
                           GPU_shader_get_ssbo(shader, "paint_input"));
@@ -654,6 +657,29 @@ static void dispatch_gpu_painting(TexturePaintingUserData &data)
   batches.steps.append(paint_step);
 }
 
+static void update_frame_selection(TexturePaintingUserData &data)
+{
+  for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
+    BKE_pbvh_node_frame_selection_mark(node);
+  }
+}
+
+using TileNumbers = Vector<TileNumber, 8>;
+
+/* Collect all tile numbers that the node selection is using. This will reduce the read misses
+ * when handling multiple Tiles. Most likely only a small amount of tiles are actually used. */
+static TileNumbers collect_active_tile_numbers(const TexturePaintingUserData &data)
+{
+  Vector<TileNumber, 8> result;
+  for (PBVHNode *node : Span<PBVHNode *>(data.nodes, data.nodes_len)) {
+    NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
+    for (const UDIMTilePixels &tile : node_data.tiles) {
+      result.append_non_duplicates(tile.tile_number);
+    }
+  }
+  return result;
+}
+
 static void dispatch_gpu_batches(TexturePaintingUserData &data)
 {
   SculptSession &ss = *data.ob->sculpt;
@@ -674,21 +700,23 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
   GPUUniformBuf *paint_brush_buf = GPU_uniformbuf_create_ex(
       sizeof(PaintBrushData), &paint_brush, "PaintBrushData");
 
-  GPUTexture *tex;
+  GPUTexture *tex = nullptr;
   Image &image = *data.image_data.image;
   ImageUser local_image_user = *data.image_data.image_user;
 
-  LISTBASE_FOREACH (ImageTile *, tile, &image.tiles) {
-    ImageTileWrapper image_tile(tile);
-    local_image_user.tile = image_tile.get_tile_number();
+  TileNumbers tile_numbers = collect_active_tile_numbers(data);
+  for (TileNumber tile_number : tile_numbers) {
+
+    local_image_user.tile = tile_number;
 
     ImBuf *image_buffer = BKE_image_acquire_ibuf(&image, &local_image_user, nullptr);
     if (image_buffer == nullptr) {
       continue;
     }
 
+    GPU_debug_group_begin("Paint tile");
     gpu_painting_paint_step(data,
-                            image_tile,
+                            tile_number,
                             image_buffer,
                             &tex,
                             paint_brush_buf,
@@ -696,6 +724,7 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
                             paint_step_range,
                             vert_coord_buf);
     gpu_painting_image_merge(data, *data.image_data.image, local_image_user, *image_buffer, tex);
+    GPU_debug_group_end();
 
     BKE_image_release_ibuf(data.image_data.image, image_buffer, nullptr);
   }
@@ -776,13 +805,8 @@ void SCULPT_do_paint_brush_image(
 
   if (SCULPT_use_image_paint_compute()) {
     ensure_gpu_buffers(data);
-    // update GPU buffers when they don't exist.
-    // update Image when it doesn't exist.
-    // go over given nodes and dispatch those nodes.
+    update_frame_selection(data);
     dispatch_gpu_painting(data);
-    // Copy result to the image gpu buffer
-    // Copy back should happen at the end of the stroke, but for testing we could do it here and
-    // move it.
   }
   else {
     TaskParallelSettings settings;
@@ -808,7 +832,10 @@ void SCULPT_paint_image_batches_flush(PaintModeSettings *paint_mode_settings,
   TexturePaintingUserData data = {nullptr};
   data.ob = ob;
   data.brush = brush;
-  BKE_pbvh_search_gather(ob->sculpt->pbvh, nullptr, nullptr, &data.nodes, &data.nodes_len);
+  BKE_pbvh_search_gather_frame_selected(ob->sculpt->pbvh, &data.nodes, &data.nodes_len);
+  if (data.nodes_len == 0) {
+    return;
+  }
 
   if (ImageData::init_active_image(ob, &data.image_data, paint_mode_settings)) {
     GPU_debug_group_begin("SCULPT_paint_brush");

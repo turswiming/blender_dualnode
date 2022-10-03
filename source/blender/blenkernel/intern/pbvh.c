@@ -926,6 +926,22 @@ void BKE_pbvh_search_gather(
   *r_tot = tot;
 }
 
+static bool pbvh_node_frame_selection_search_callback(PBVHNode *node, void *UNUSED(search_data))
+{
+  if ((node->flag & PBVH_Leaf) == 0) {
+    return true;
+  }
+  return node->flag & PBVH_FrameSelection;
+}
+
+void BKE_pbvh_search_gather_frame_selected(PBVH *pbvh,
+                                           PBVHNode ***r_found_nodes,
+                                           int *r_found_nodes_len)
+{
+  BKE_pbvh_search_gather(
+      pbvh, pbvh_node_frame_selection_search_callback, NULL, r_found_nodes, r_found_nodes_len);
+}
+
 void BKE_pbvh_search_callback(PBVH *pbvh,
                               BKE_pbvh_SearchCallback scb,
                               void *search_data,
@@ -1818,6 +1834,19 @@ void BKE_pbvh_mark_rebuild_pixels(PBVH *pbvh)
       node->flag |= PBVH_RebuildPixels;
     }
   }
+}
+
+void BKE_pbvh_frame_selection_clear(PBVH *pbvh)
+{
+  for (int n = 0; n < pbvh->totnode; n++) {
+    PBVHNode *node = &pbvh->nodes[n];
+    node->flag &= ~PBVH_FrameSelection;
+  }
+}
+
+void BKE_pbvh_node_frame_selection_mark(PBVHNode *node)
+{
+  node->flag |= PBVH_FrameSelection;
 }
 
 void BKE_pbvh_node_mark_update_visibility(PBVHNode *node)

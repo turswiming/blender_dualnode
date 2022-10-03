@@ -13,13 +13,15 @@
 
 namespace blender::bke::image {
 
+using TileNumber = int32_t;
+
 struct ImageTileWrapper {
   ImageTile *image_tile;
   ImageTileWrapper(ImageTile *image_tile) : image_tile(image_tile)
   {
   }
 
-  int get_tile_number() const
+  TileNumber get_tile_number() const
   {
     return image_tile->tile_number;
   }
