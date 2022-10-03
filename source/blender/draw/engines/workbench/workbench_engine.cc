@@ -3,6 +3,8 @@
 #include "DRW_render.h"
 #include "GPU_capabilities.h"
 
+#include "smaa_textures.h"
+
 #include "draw_manager.hh"
 #include "draw_pass.hh"
 
@@ -33,6 +35,9 @@ static inline const char *get_name(eGeometryType type)
       return "PointCloud";
     case eGeometryType::POINTCLOUD:
       return "Mesh";
+    default:
+      BLI_assert_unreachable();
+      return "";
   }
 }
 
@@ -223,7 +228,7 @@ class ShaderCache {
 };
 
 struct SceneResources {
-  ShaderCache *shader_cache;
+  ShaderCache shader_cache;
 
   Texture matcap_tx;
   Texture depth_tx;
@@ -265,7 +270,7 @@ class MeshPass : public PassMain {
 
     for (int geom = 0; geom < geometry_type_len; geom++) {
       eGeometryType geom_type = static_cast<eGeometryType>(geom);
-      GPUShader *sh = resources.shader_cache->prepass_shader_get(
+      GPUShader *sh = resources.shader_cache.prepass_shader_get(
           pipeline, geom_type, color_type, shading);
       PassMain::Sub *pass = &this->sub(get_name(geom_type));
       pass->shader_set(sh);
@@ -319,7 +324,7 @@ class OpaquePass {
 
     deferred_ps_.init();
     deferred_ps_.shader_set(
-        resources.shader_cache->resolve_shader_get(ePipelineType::OPAQUE, shading_type));
+        resources.shader_cache.resolve_shader_get(ePipelineType::OPAQUE, shading_type));
     deferred_ps_.bind_texture("depth_tx", depth_tx);
     deferred_ps_.bind_texture("stencil_tx", depth_tx.stencil_view());
     deferred_ps_.bind_texture("normal_tx", gbuffer_normal_tx);
@@ -381,8 +386,8 @@ class TransparentPass {
     accumulation_ps_.init(ePipelineType::TRANSPARENT, color_type, shading_type, resources, state);
 
     resolve_ps_.init();
-    resolve_ps_.shader_set(resources.shader_cache->resolve_shader_get(ePipelineType::TRANSPARENT,
-                                                                      eShadingType::FLAT));
+    resolve_ps_.shader_set(
+        resources.shader_cache.resolve_shader_get(ePipelineType::TRANSPARENT, eShadingType::FLAT));
     resolve_ps_.bind_texture("accumulation_tx", accumulation_tx);
     resolve_ps_.bind_texture("reveal_tx", reveal_tx);
     resolve_ps_.dispatch(math::divide_ceil(depth_tx.size(), int3(WB_RESOLVE_GROUP_SIZE)));
@@ -415,7 +420,124 @@ class TransparentPass {
   }
 };
 
-struct Instance {
+class AntiAliasingPass {
+ public:
+  Texture history_tx;
+
+  Texture smaa_search_tx = {"smaa_search_tx"};
+  Texture smaa_area_tx = {"smaa_area_tx"};
+  TextureFromPool smaa_edge_tx = {"smaa_edge_tx"};
+  TextureFromPool smaa_weight_tx = {"smaa_weight_tx"};
+
+  Framebuffer smaa_edge_fb = {"smaa_edge_fb"};
+  Framebuffer smaa_weight_fb = {"smaa_weight_fb"};
+  Framebuffer smaa_resolve_fb = {"smaa_resolve_fb"};
+
+  float4 smaa_viewport_metrics = {0.0f, 0.0f, 0.0f, 0.0f};
+  float smaa_mix_factor = 0.0f;
+  float taa_weight_accum = 1.0f;
+
+  GPUShader *smaa_edge_detect_sh = nullptr;
+  GPUShader *smaa_aa_weight_sh = nullptr;
+  GPUShader *smaa_resolve_sh = nullptr;
+
+  PassSimple smaa_edge_detect_ps_ = {"SMAA.EdgeDetect"};
+  PassSimple smaa_aa_weight_ps_ = {"SMAA.BlendWeights"};
+  PassSimple smaa_resolve_ps_ = {"SMAA.Resolve"};
+
+  AntiAliasingPass()
+  {
+    smaa_edge_detect_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_0");
+    smaa_aa_weight_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_1");
+    smaa_resolve_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_2");
+
+    smaa_search_tx.ensure_2d(GPU_R8, {SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT});
+    GPU_texture_update(smaa_search_tx, GPU_DATA_UBYTE, searchTexBytes);
+    GPU_texture_filter_mode(smaa_search_tx, true);
+
+    smaa_area_tx.ensure_2d(GPU_RG8, {AREATEX_WIDTH, AREATEX_HEIGHT});
+    GPU_texture_update(smaa_area_tx, GPU_DATA_UBYTE, areaTexBytes);
+    GPU_texture_filter_mode(smaa_area_tx, true);
+  }
+
+  ~AntiAliasingPass()
+  {
+    if (smaa_edge_detect_sh) {
+      GPU_shader_free(smaa_edge_detect_sh);
+    }
+    if (smaa_aa_weight_sh) {
+      GPU_shader_free(smaa_aa_weight_sh);
+    }
+    if (smaa_resolve_sh) {
+      GPU_shader_free(smaa_resolve_sh);
+    }
+  }
+
+  void sync(SceneResources &resources)
+  {
+    {
+      smaa_edge_detect_ps_.init();
+      smaa_edge_detect_ps_.state_set(DRW_STATE_WRITE_COLOR);
+      smaa_edge_detect_ps_.shader_set(smaa_edge_detect_sh);
+      smaa_edge_detect_ps_.bind_texture("colorTex", history_tx);
+      smaa_edge_detect_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+      smaa_edge_detect_ps_.clear_color(float4(0.0f));
+      smaa_edge_detect_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+    }
+    {
+      smaa_aa_weight_ps_.init();
+      smaa_aa_weight_ps_.state_set(DRW_STATE_WRITE_COLOR);
+      smaa_aa_weight_ps_.shader_set(smaa_aa_weight_sh);
+      smaa_aa_weight_ps_.bind_texture("edgesTex", &smaa_edge_tx);
+      smaa_aa_weight_ps_.bind_texture("areaTex", smaa_area_tx);
+      smaa_aa_weight_ps_.bind_texture("searchTex", smaa_search_tx);
+      smaa_aa_weight_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+      smaa_aa_weight_ps_.clear_color(float4(0.0f));
+      smaa_aa_weight_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+    }
+    {
+      smaa_resolve_ps_.init();
+      smaa_resolve_ps_.state_set(DRW_STATE_WRITE_COLOR);
+      smaa_resolve_ps_.shader_set(smaa_resolve_sh);
+      smaa_resolve_ps_.bind_texture("blendTex", smaa_weight_tx);
+      smaa_resolve_ps_.bind_texture("colorTex", history_tx);
+      smaa_resolve_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+      smaa_resolve_ps_.push_constant("mixFactor", &smaa_mix_factor, 1);
+      smaa_resolve_ps_.push_constant("taaAccumulatedWeight", &taa_weight_accum, 1);
+      smaa_resolve_ps_.clear_color(float4(0.0f));
+      smaa_resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+    }
+  }
+
+  void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
+  {
+    int2 size = {GPU_texture_width(depth_tx), GPU_texture_height(depth_tx)};
+
+    taa_weight_accum = 1.0f; /* TODO */
+
+    smaa_viewport_metrics = {1.0f / size.x, 1.0f / size.y, size.x, size.y};
+    smaa_mix_factor = 1.0f; /* TODO */
+
+    smaa_edge_tx.acquire(size, GPU_RG8);
+    smaa_edge_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_edge_tx));
+    smaa_edge_fb.bind();
+    manager.submit(smaa_edge_detect_ps_, view);
+
+    smaa_weight_tx.acquire(size, GPU_RGBA8);
+    smaa_weight_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_weight_tx));
+    smaa_weight_fb.bind();
+    manager.submit(smaa_aa_weight_ps_, view);
+    smaa_edge_tx.release();
+
+    smaa_resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_tx));
+    smaa_resolve_fb.bind();
+    manager.submit(smaa_resolve_ps_, view);
+    smaa_weight_tx.release();
+  }
+};
+
+class Instance {
+ public:
   SceneResources resources;
 
   OpaquePass opaque_ps;
@@ -423,6 +545,8 @@ struct Instance {
 
   TransparentPass transparent_ps;
   TransparentPass transparent_in_front_ps;
+
+  AntiAliasingPass anti_aliasing_ps;
 
   DRWState clip_state;
   DRWState cull_state;
@@ -451,6 +575,7 @@ struct Instance {
     opaque_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
     transparent_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
     transparent_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
+    anti_aliasing_ps.sync(resources);
   }
 
   void object_sync(Manager &manager, ObjectRef &ref)
@@ -494,7 +619,7 @@ struct Instance {
     return {};
   }
 
-  void draw(Manager &manager, View &view)
+  void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
     opaque_ps.draw_prepass(manager, view, resources.depth_tx);
     // volume_ps.draw_prepass(manager, view, resources.depth_tx);
@@ -507,13 +632,13 @@ struct Instance {
 
     opaque_ps.draw_resolve(manager, view);
     transparent_ps.draw_resolve(manager, view);
+
+    anti_aliasing_ps.draw(manager, view, depth_tx, color_tx);
   }
 
   void draw_viewport(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
-    this->draw(manager, view);
-
-    // anti_aliasing_ps.draw(manager, view, depth_tx, color_tx);
+    this->draw(manager, view, depth_tx, color_tx);
   }
 };
 
