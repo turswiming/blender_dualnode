@@ -5652,7 +5652,6 @@ static int sculpt_brush_stroke_invoke(bContext *C, wmOperator *op, const wmEvent
                             sculpt_stroke_redraw,
                             sculpt_stroke_done,
                             event->type);
-  printf("%s\n", __func__);
 
   op->customdata = stroke;
 

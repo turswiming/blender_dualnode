@@ -784,8 +784,12 @@ bool SCULPT_use_image_paint_brush(PaintModeSettings *settings, Object *ob)
 /** Can the sculpt paint be performed on the GPU? */
 static bool SCULPT_use_image_paint_compute()
 {
+#if 1
+  return false;
+#else
   return GPU_compute_shader_support() && GPU_shader_storage_buffer_objects_support() &&
          GPU_shader_image_load_store_support();
+#endif
 }
 
 void SCULPT_do_paint_brush_image(
