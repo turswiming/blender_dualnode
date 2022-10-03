@@ -371,40 +371,33 @@ void NODE_OT_add_group(wmOperatorType *ot)
 /** \name Add Node Group Asset Operator
  * \{ */
 
-static int node_add_group_asset_exec(bContext *C, wmOperator *op)
+static int add_node_group_asset(const bContext &C,
+                                const AssetLibraryReference &library_ref,
+                                const AssetHandle asset,
+                                ReportList &reports)
 {
-  Main &bmain = *CTX_data_main(C);
-  SpaceNode &snode = *CTX_wm_space_node(C);
+  Main &bmain = *CTX_data_main(&C);
+  SpaceNode &snode = *CTX_wm_space_node(&C);
   bNodeTree &edit_tree = *snode.edittree;
-  PointerRNA asset_ptr = RNA_pointer_get(op->ptr, "asset_handle");
-  if (RNA_pointer_is_null(&asset_ptr)) {
-    return OPERATOR_CANCELLED;
-  }
-  PointerRNA library_ptr = RNA_pointer_get(op->ptr, "library_reference");
-  if (RNA_pointer_is_null(&library_ptr)) {
-    return OPERATOR_CANCELLED;
-  }
-  const AssetHandle asset = *static_cast<AssetHandle *>(asset_ptr.data);
-  const AssetLibraryReference &library = *static_cast<AssetLibraryReference *>(library_ptr.data);
 
   bNodeTree *node_group = reinterpret_cast<bNodeTree *>(
-      asset::get_local_id_from_asset_or_append_and_reuse(bmain, library, asset));
+      asset::get_local_id_from_asset_or_append_and_reuse(bmain, library_ref, asset));
   if (!node_group) {
     return OPERATOR_CANCELLED;
   }
-  if (!node_group_add_poll(edit_tree, *node_group, *op->reports)) {
+  if (!node_group_add_poll(edit_tree, *node_group, reports)) {
     /* Remove the node group if it was newly appended but can't be added to the tree. */
     id_us_plus(&node_group->id);
     BKE_id_free_us(&bmain, node_group);
     return OPERATOR_CANCELLED;
   }
 
-  ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
+  ED_preview_kill_jobs(CTX_wm_manager(&C), CTX_data_main(&C));
 
   bNode *group_node = add_node(
-      *C, ntreeTypeFind(node_group->idname)->group_idname, snode.runtime->cursor);
+      C, ntreeTypeFind(node_group->idname)->group_idname, snode.runtime->cursor);
   if (!group_node) {
-    BKE_report(op->reports, RPT_WARNING, "Could not add node group");
+    BKE_report(&reports, RPT_WARNING, "Could not add node group");
     return OPERATOR_CANCELLED;
   }
 
@@ -413,15 +406,41 @@ static int node_add_group_asset_exec(bContext *C, wmOperator *op)
   BKE_ntree_update_tag_node_property(&edit_tree, group_node);
 
   nodeSetActive(&edit_tree, group_node);
-  ED_node_tree_propagate_change(C, &bmain, nullptr);
+  ED_node_tree_propagate_change(&C, &bmain, nullptr);
   DEG_relations_tag_update(&bmain);
   return OPERATOR_FINISHED;
 }
+
+// static int node_add_group_asset_exec(bContext *C, wmOperator *op)
+// {
+
+//   PointerRNA asset_ptr = RNA_pointer_get(op->ptr, "asset_handle");
+//   if (RNA_pointer_is_null(&asset_ptr)) {
+//     return OPERATOR_CANCELLED;
+//   }
+//   PointerRNA library_ptr = RNA_pointer_get(op->ptr, "library_reference");
+//   if (RNA_pointer_is_null(&library_ptr)) {
+//     return OPERATOR_CANCELLED;
+//   }
+//   const AssetHandle asset = *static_cast<AssetHandle *>(asset_ptr.data);
+//   const AssetLibraryReference &library = *static_cast<AssetLibraryReference
+//   *>(library_ptr.data);
+// }
 
 static int node_add_group_asset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   ARegion &region = *CTX_wm_region(C);
   SpaceNode &snode = *CTX_wm_space_node(C);
+
+  const AssetLibraryReference *library_ref = CTX_wm_asset_library_ref(C);
+  if (!library_ref) {
+    return OPERATOR_CANCELLED;
+  }
+  bool is_valid;
+  const AssetHandle handle = CTX_wm_asset_handle(C, &is_valid);
+  if (!is_valid) {
+    return OPERATOR_CANCELLED;
+  }
 
   /* Convert mouse coordinates to v2d space. */
   UI_view2d_region_to_view(&region.v2d,
@@ -432,7 +451,7 @@ static int node_add_group_asset_invoke(bContext *C, wmOperator *op, const wmEven
 
   snode.runtime->cursor /= UI_DPI_FAC;
 
-  return node_add_group_asset_exec(C, op);
+  return add_node_group_asset(*C, *library_ref, handle, *op->reports);
 }
 
 void NODE_OT_add_group_asset(wmOperatorType *ot)
@@ -441,19 +460,11 @@ void NODE_OT_add_group_asset(wmOperatorType *ot)
   ot->description = "Add a node group asset to the node editor";
   ot->idname = "NODE_OT_add_group_asset";
 
-  ot->exec = node_add_group_asset_exec;
+  // ot->exec = node_add_group_asset_exec;
   ot->invoke = node_add_group_asset_invoke;
   ot->poll = node_add_group_poll;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
-
-  RNA_def_pointer_runtime(
-      ot->srna, "asset_handle", &RNA_AssetHandle, "Asset", "The asset to add as a node group");
-  RNA_def_pointer_runtime(ot->srna,
-                          "library_reference",
-                          &RNA_AssetLibraryReference,
-                          "Asset Library",
-                          "The library the asset is part of");
 }
 
 /** \} */

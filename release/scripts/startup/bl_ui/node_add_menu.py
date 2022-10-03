@@ -62,7 +62,7 @@ def draw_assets_for_catalog(layout, catalog):
     layout.menu_contents("NODE_MT_node_add_catalog_assets")
 
 def draw_root_assets(layout):
-    layout.menu_contents("NODE_MT_node_add_catalog_assets")
+    layout.menu_contents("NODE_MT_node_add_root_catalogs")
 
 
 classes = (

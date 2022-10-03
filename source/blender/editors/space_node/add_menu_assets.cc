@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
 #include "BKE_asset.h"
@@ -22,12 +23,17 @@ static bool node_add_menu_poll(const bContext *C, MenuType * /*mt*/)
   return CTX_wm_space_node(C);
 }
 
+struct AssetItem {
+  AssetHandle handle;
+  const AssetLibraryReference &library_ref;
+};
+
 static void gather_items_for_asset_library(const bContext &C,
                                            const bNodeTree &node_tree,
                                            const AssetLibraryReference &library_ref,
                                            bke::AssetLibrary &library,
                                            const bke::AssetCatalogPath &path,
-                                           Vector<AssetHandle> &assets)
+                                           Vector<AssetItem> &assets)
 {
   const bke::AssetCatalogFilter filter = library.catalog_service->create_catalog_filter(path);
   AssetFilterSettings type_filter{};
@@ -49,7 +55,7 @@ static void gather_items_for_asset_library(const bContext &C,
     if (tree_type == nullptr || IDP_Int(tree_type) != node_tree.type) {
       return true;
     }
-    assets.append(asset);
+    assets.append({asset, library_ref});
     return true;
   });
 }
@@ -84,46 +90,48 @@ static void gather_root_catalogs(const bke::AssetLibrary &library,
 static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
 {
   const Main &bmain = *CTX_data_main(C);
+  bScreen &screen = *CTX_wm_screen(C);
   const SpaceNode &snode = *CTX_wm_space_node(C);
   const bNodeTree *edit_tree = snode.edittree;
   if (!edit_tree) {
     return;
   }
 
-  const bke::AssetCatalogPath menu_path("Test Catalog");
+  const PointerRNA menu_path_ptr = CTX_data_pointer_get(C, "asset_catalog_path");
+  if (RNA_pointer_is_null(&menu_path_ptr)) {
+    return;
+  }
+  const bke::AssetCatalogPath &menu_path = *static_cast<const bke::AssetCatalogPath *>(
+      menu_path_ptr.data);
 
-  Vector<AssetHandle> assets;
+  Vector<AssetItem> asset_item;
   Vector<bke::AssetCatalogPath> child_catalogs;
   for (const AssetLibraryReference &ref : bke::all_asset_library_refs()) {
     if (bke::AssetLibrary *library = BKE_asset_library_load(&bmain, ref)) {
-      gather_items_for_asset_library(*C, *edit_tree, ref, *library, menu_path, assets);
+      gather_items_for_asset_library(*C, *edit_tree, ref, *library, menu_path, asset_item);
       gather_child_catalogs(*library, menu_path, child_catalogs);
     }
   }
-  if (assets.is_empty() && child_catalogs.is_empty()) {
+  if (asset_item.is_empty() && child_catalogs.is_empty()) {
     return;
   }
   uiLayout *layout = menu->layout;
   uiItemS(layout);
-  for (AssetHandle asset : assets) {
-    PointerRNA props;
-    uiItemFullO(layout,
-                "NODE_OT_add_group_asset",
-                ED_asset_handle_get_name(&asset),
-                ICON_NONE,
-                nullptr,
-                WM_OP_INVOKE_DEFAULT,
-                0,
-                &props);
-    /* TODO: Really use null for PointerRNA.owner_id? */
-    /* TODO: Really use null for PointerRNA.owner_id? */
-    RNA_pointer_set(&props,
-                    "asset_handle",
-                    PointerRNA{
-                        nullptr,
-                        &RNA_AssetHandle,
-                        &asset  // AGH! NO! THIS DOES NOT WORK!
-                    });
+  for (AssetItem item : asset_item) {
+    uiLayout *row = uiLayoutRow(layout, false);
+    PointerRNA file_data_ptr{};
+    file_data_ptr.owner_id = &screen.id;
+    file_data_ptr.type = &RNA_FileSelectEntry;
+    file_data_ptr.data = const_cast<FileDirEntry *>(item.handle.file_data);
+    uiLayoutSetContextPointer(row, "active_file", &file_data_ptr);
+
+    PointerRNA library_ptr{};
+    library_ptr.owner_id = &screen.id;
+    library_ptr.type = &RNA_AssetLibraryReference;
+    library_ptr.data = const_cast<AssetLibraryReference *>(&item.library_ref);
+    uiLayoutSetContextPointer(row, "asset_library_ref", &library_ptr);
+
+    uiItemO(layout, ED_asset_handle_get_name(&item.handle), ICON_NONE, "NODE_OT_add_group_asset");
   }
   for (const bke::AssetCatalogPath &child_catalog : child_catalogs) {
     uiItemM(layout, "NODE_MT_node_add_catalog_assets", child_catalog.name().c_str(), ICON_NONE);
@@ -133,6 +141,7 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
 static void add_root_catalogs_draw(const bContext *C, Menu *menu)
 {
   const Main &bmain = *CTX_data_main(C);
+  bScreen &screen = *CTX_wm_screen(C);
 
   Vector<bke::AssetCatalogPath> catalogs;
   for (const AssetLibraryReference &ref : bke::all_asset_library_refs()) {
@@ -143,6 +152,14 @@ static void add_root_catalogs_draw(const bContext *C, Menu *menu)
 
   uiLayout *layout = menu->layout;
   for (const bke::AssetCatalogPath &path : catalogs) {
+    uiLayout *row = uiLayoutRow(layout, false);
+
+    PointerRNA catalog_path_ptr{};
+    catalog_path_ptr.owner_id = &screen.id;
+    catalog_path_ptr.type = &RNA_AssetCatalogPath;
+    catalog_path_ptr.data = new bke::AssetCatalogPath(path);  // Where should this memory live?
+
+    uiLayoutSetContextPointer(row, "asset_catalog_path", &catalog_path_ptr);
     uiItemM(layout, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
   }
 }
