@@ -1744,7 +1744,8 @@ void SCULPT_do_paint_brush(struct PaintModeSettings *paint_mode_settings,
                            int totnode) ATTR_NONNULL();
 void SCULPT_paint_batches_flush(struct PaintModeSettings *paint_mode_settings,
                                 struct Sculpt *sd,
-                                struct Object *ob);
+                                struct Object *ob,
+                                const bool is_final);
 
 /**
  * \brief Get the image canvas for painting on the given object.
@@ -1766,6 +1767,9 @@ bool SCULPT_use_image_paint_brush(struct PaintModeSettings *settings, Object *ob
 void SCULPT_paint_image_batches_flush(struct PaintModeSettings *paint_mode_settings,
                                       struct Sculpt *sd,
                                       struct Object *ob);
+void SCULPT_paint_image_batches_finalize(struct PaintModeSettings *paint_mode_settings,
+                                         struct Sculpt *sd,
+                                         struct Object *ob);
 
 /* Smear Brush. */
 void SCULPT_do_smear_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode);

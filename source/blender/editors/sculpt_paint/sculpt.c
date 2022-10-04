@@ -5511,13 +5511,13 @@ static void sculpt_brush_exit_tex(Sculpt *sd)
 static void sculpt_flush_batches(Sculpt *sd,
                                  Object *ob,
                                  Brush *brush,
-                                 PaintModeSettings *paint_mode_settings)
+                                 PaintModeSettings *paint_mode_settings, const bool is_final)
 {
   if (!sculpt_needs_pbvh_pixels(paint_mode_settings, brush, ob)) {
     return;
   }
   if (brush->sculpt_tool == SCULPT_TOOL_PAINT) {
-    SCULPT_paint_batches_flush(paint_mode_settings, sd, ob);
+    SCULPT_paint_batches_flush(paint_mode_settings, sd, ob, is_final);
   }
 }
 
@@ -5534,13 +5534,10 @@ static void sculpt_stroke_redraw(const bContext *C,
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
   Brush *brush = BKE_paint_brush(&sd->paint);
   ToolSettings *tool_settings = CTX_data_tool_settings(C);
-  sculpt_flush_batches(sd, ob, brush, &tool_settings->paint_mode);
+  sculpt_flush_batches(sd, ob, brush, &tool_settings->paint_mode, is_final);
 
   if (!ss->cache) {
     return;
-  }
-
-  if (is_final) {
   }
 }
 

@@ -31,7 +31,8 @@ void main()
 
   for (int x = 0; x < row_len; x++) {
     /* TODO: Do clipping test. */
-    vec4 color = imageLoad(out_img, image_coord);
+    vec4 color;
+    bool color_read = false;
 
     for (int step_index = paint_step_range[0]; step_index < paint_step_range[1]; step_index++) {
       PaintStepData step_data = paint_step_buf[step_index];
@@ -39,12 +40,17 @@ void main()
       float distance;
       bool test_result = SCULPT_brush_test(paint_brush_buf.test, step_data, pos, distance);
       if (test_result) {
+        if (!color_read) {
+          color = imageLoad(out_img, image_coord);
+          color_read = true;
+        }
         // TODO: blend with color...
         color = max(color, paint_brush_buf.color);
       }
     }
-
-    imageStore(out_img, image_coord, color);
+    if (color_read) {
+      imageStore(out_img, image_coord, color);
+    }
     image_coord.x += 1;
     pos += delta;
   }

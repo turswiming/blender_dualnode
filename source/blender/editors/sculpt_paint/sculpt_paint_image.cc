@@ -14,6 +14,8 @@
 #include "BLI_math_color_blend.h"
 #include "BLI_task.h"
 
+#include "PIL_time_utildefines.h"
+
 #include "GPU_capabilities.h"
 #include "GPU_compute.h"
 #include "GPU_debug.h"
@@ -489,104 +491,18 @@ static void do_mark_dirty_regions(void *__restrict userdata,
 /* -------------------------------------------------------------------- */
 /** \name GPU
  * \{ */
-
-struct GPUSculptPaintData {
-  Vector<PaintStepData> steps;
-};
-
-static void ensure_gpu_buffers(TexturePaintingUserData &data)
+static GPUStorageBuf *gpu_painting_vert_coord_create(SculptSession &ss)
 {
-  SculptSession &ss = *data.ob->sculpt;
-  if (!ss.mode.texture_paint.gpu_data) {
-    ss.mode.texture_paint.gpu_data = MEM_new<GPUSculptPaintData>(__func__);
-    PBVH *pbvh = ss.pbvh;
-    BKE_pbvh_frame_selection_clear(pbvh);
+  Vector<float4> vert_coords;
+
+  vert_coords.reserve(ss.totvert);
+  for (const MVert &mvert : Span<MVert>(ss.mvert, ss.totvert)) {
+    float3 co(mvert.co);
+    vert_coords.append(float4(co.x, co.y, co.z, 0.0f));
   }
-
-  for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
-    NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
-    node_data.ensure_gpu_buffers();
-  }
-}
-
-static void gpu_painting_paint_step(TexturePaintingUserData &data,
-                                    TileNumber tile_number,
-                                    ImBuf *image_buffer,
-                                    GPUTexture **tex_ptr,
-                                    GPUUniformBuf *paint_brush_buf,
-                                    GPUStorageBuf *paint_step_buf,
-                                    int2 paint_step_range,
-                                    GPUStorageBuf *vert_coord_buf)
-{
-  GPUShader *shader = SCULPT_shader_paint_image_get();
-  bool texture_needs_clearing = true;
-
-  GPUTexture *tex = *tex_ptr;
-
-  /* Ensure that texture size is same as tile size. */
-  if (tex == nullptr || GPU_texture_width(tex) != image_buffer->x ||
-      GPU_texture_height(tex) != image_buffer->y) {
-    if (tex) {
-      GPU_texture_free(tex);
-      tex = nullptr;
-    }
-    tex = GPU_texture_create_2d(
-        __func__, image_buffer->x, image_buffer->y, 1, GPU_RGBA32F, nullptr);
-    *tex_ptr = tex;
-  }
-
-  /* Dispatch all nodes that paint on the active tile. */
-
-  for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
-    NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
-    /* TODO: Fix this! We should check for nodes that have been tagged. */
-    if (!node_data.triangles.gpu_buffer) {
-      continue;
-    }
-
-    for (UDIMTilePixels &tile_pixels : node_data.tiles) {
-      if (tile_pixels.tile_number != tile_number) {
-        continue;
-      }
-
-      /* Only clear the texture when it is used for the first time. */
-      if (texture_needs_clearing) {
-        // Copy from image buffer?
-        GPU_texture_clear(tex, GPU_DATA_FLOAT, float4(0.0f, 0.0f, 0.0f, 0.0f));
-        texture_needs_clearing = false;
-      }
-
-      GPU_shader_bind(shader);
-      GPU_texture_image_bind(tex, GPU_shader_get_texture_binding(shader, "out_img"));
-      GPU_storagebuf_bind(paint_step_buf, GPU_shader_get_ssbo(shader, "paint_step_buf"));
-      GPU_shader_uniform_2iv(shader, "paint_step_range", paint_step_range);
-      GPU_uniformbuf_bind(paint_brush_buf,
-                          GPU_shader_get_uniform_block(shader, "paint_brush_buf"));
-      GPU_storagebuf_bind(vert_coord_buf, GPU_shader_get_ssbo(shader, "vert_coord_buf"));
-      GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
-                          GPU_shader_get_ssbo(shader, "paint_input"));
-      GPU_storagebuf_bind(node_data.gpu_buffers.pixels,
-                          GPU_shader_get_ssbo(shader, "pixel_row_buf"));
-      GPU_shader_uniform_1i(shader, "pixel_row_offset", tile_pixels.gpu_buffer_offset);
-
-      GPU_compute_dispatch(shader, tile_pixels.pixel_rows.size(), 1, 1);
-    }
-    node_data.ensure_gpu_buffers();
-  }
-}
-
-static void gpu_painting_image_merge(TexturePaintingUserData &UNUSED(data),
-                                     Image &image,
-                                     ImageUser &image_user,
-                                     ImBuf &image_buffer,
-                                     GPUTexture *paint_tex)
-{
-  GPUTexture *canvas_tex = BKE_image_get_gpu_texture(&image, &image_user, &image_buffer);
-  GPUShader *shader = SCULPT_shader_paint_image_merge_get();
-  GPU_shader_bind(shader);
-  GPU_texture_image_bind(paint_tex, GPU_shader_get_texture_binding(shader, "in_paint_img"));
-  GPU_texture_image_bind(canvas_tex, GPU_shader_get_texture_binding(shader, "out_img"));
-  GPU_compute_dispatch(shader, image_buffer.x, image_buffer.y, 1);
+  GPUStorageBuf *result = GPU_storagebuf_create_ex(
+      sizeof(float4) * ss.totvert, vert_coords.data(), GPU_USAGE_STATIC, __func__);
+  return result;
 }
 
 static void init_paint_brush_color(const SculptSession &ss,
@@ -625,25 +541,184 @@ static void init_paint_brush(const SculptSession &ss,
   init_paint_brush_test(ss, r_paint_brush);
 }
 
+struct GPUSculptPaintData {
+  Vector<PaintStepData> steps;
+  GPUStorageBuf *step_buf = nullptr;
+  size_t step_buf_alloc_size = 0;
+  GPUStorageBuf *vert_coord_buf = nullptr;
+  GPUUniformBuf *paint_brush_buf = nullptr;
+
+  GPUTexture *tile_texture = nullptr;
+
+  ~GPUSculptPaintData()
+  {
+    if (vert_coord_buf) {
+      GPU_storagebuf_free(vert_coord_buf);
+      vert_coord_buf = nullptr;
+    }
+
+    if (paint_brush_buf) {
+      GPU_uniformbuf_free(paint_brush_buf);
+      paint_brush_buf = nullptr;
+    }
+
+    if (step_buf) {
+      GPU_storagebuf_free(step_buf);
+      step_buf = nullptr;
+    }
+
+    if (tile_texture) {
+      GPU_texture_free(tile_texture);
+      tile_texture = nullptr;
+    }
+  }
+
+  void update_step_buf()
+  {
+    int requested_size = sizeof(PaintStepData) * steps.size();
+
+    if (step_buf && requested_size > step_buf_alloc_size) {
+      GPU_storagebuf_free(step_buf);
+      step_buf = nullptr;
+    }
+
+    if (step_buf == nullptr) {
+      step_buf = GPU_storagebuf_create_ex(
+          requested_size, nullptr, GPU_USAGE_STATIC, "PaintStepData");
+      step_buf_alloc_size = requested_size;
+    }
+
+    BLI_assert_msg(sizeof(PaintStepData) * steps.capacity() > step_buf_alloc_size,
+                   "Possible read from unallocated memory as storage buffer is larger than the "
+                   "step capacity.");
+    GPU_storagebuf_update(step_buf, steps.data());
+  }
+
+  void ensure_vert_coord_buf(SculptSession &ss)
+  {
+    if (!vert_coord_buf) {
+      vert_coord_buf = gpu_painting_vert_coord_create(ss);
+    }
+  }
+
+  void ensure_paint_brush_buf(SculptSession &ss, Brush &brush)
+  {
+    PaintBrushData paint_brush;
+    init_paint_brush(ss, brush, paint_brush);
+
+    if (!paint_brush_buf) {
+      paint_brush_buf = GPU_uniformbuf_create_ex(
+          sizeof(PaintBrushData), nullptr, "PaintBrushData");
+    }
+
+    GPU_uniformbuf_update(paint_brush_buf, &paint_brush);
+  }
+
+  void ensure_tile_texture(const int2 resolution)
+  {
+    if (tile_texture == nullptr || GPU_texture_width(tile_texture) != resolution.x ||
+        GPU_texture_height(tile_texture) != resolution.y) {
+      if (tile_texture) {
+        GPU_texture_free(tile_texture);
+        tile_texture = nullptr;
+      }
+      tile_texture = GPU_texture_create_2d(__func__, UNPACK2(resolution), 1, GPU_RGBA32F, nullptr);
+    }
+  }
+};
+
+static void ensure_gpu_buffers(TexturePaintingUserData &data)
+{
+  SculptSession &ss = *data.ob->sculpt;
+  if (!ss.mode.texture_paint.gpu_data) {
+    ss.mode.texture_paint.gpu_data = MEM_new<GPUSculptPaintData>(__func__);
+  }
+
+  GPUSculptPaintData &paint_data = *static_cast<GPUSculptPaintData *>(
+      ss.mode.texture_paint.gpu_data);
+  if (paint_data.steps.is_empty()) {
+    PBVH *pbvh = ss.pbvh;
+    BKE_pbvh_frame_selection_clear(pbvh);
+  }
+
+  for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
+    NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
+    node_data.ensure_gpu_buffers();
+  }
+}
+
+static void gpu_painting_paint_step(TexturePaintingUserData &data,
+                                    GPUSculptPaintData &batches,
+                                    TileNumber tile_number,
+                                    ImBuf *image_buffer,
+                                    int2 paint_step_range)
+{
+  GPUShader *shader = SCULPT_shader_paint_image_get();
+
+  batches.ensure_tile_texture(int2(image_buffer->x, image_buffer->y));
+  bool texture_needs_clearing = true;
+
+  /* Dispatch all nodes that paint on the active tile. */
+  for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
+    NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
+    for (UDIMTilePixels &tile_pixels : node_data.tiles) {
+      if (tile_pixels.tile_number != tile_number) {
+        continue;
+      }
+
+      /* Only clear the texture when it is used for the first time. */
+      if (texture_needs_clearing) {
+        // Copy from image buffer?
+        GPU_texture_clear(batches.tile_texture, GPU_DATA_FLOAT, float4(0.0f, 0.0f, 0.0f, 0.0f));
+        texture_needs_clearing = false;
+      }
+
+      GPU_shader_bind(shader);
+      GPU_texture_image_bind(batches.tile_texture,
+                             GPU_shader_get_texture_binding(shader, "out_img"));
+      GPU_storagebuf_bind(batches.step_buf, GPU_shader_get_ssbo(shader, "paint_step_buf"));
+      GPU_shader_uniform_2iv(shader, "paint_step_range", paint_step_range);
+      GPU_uniformbuf_bind(batches.paint_brush_buf,
+                          GPU_shader_get_uniform_block(shader, "paint_brush_buf"));
+      GPU_storagebuf_bind(batches.vert_coord_buf, GPU_shader_get_ssbo(shader, "vert_coord_buf"));
+      GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
+                          GPU_shader_get_ssbo(shader, "paint_input"));
+      GPU_storagebuf_bind(node_data.gpu_buffers.pixels,
+                          GPU_shader_get_ssbo(shader, "pixel_row_buf"));
+
+      int pixel_row_len = tile_pixels.pixel_rows.size();
+      const int compute_batch_size = GPU_max_work_group_count(0);
+      for (int batch_offset = 0; batch_offset != pixel_row_len;
+           batch_offset += min_ii(pixel_row_len, compute_batch_size)) {
+        const int batch_size = min_ii(pixel_row_len - batch_offset, compute_batch_size);
+        GPU_shader_uniform_1i(
+            shader, "pixel_row_offset", tile_pixels.gpu_buffer_offset + batch_offset);
+        GPU_compute_dispatch(shader, batch_size, 1, 1);
+      }
+    }
+    node_data.ensure_gpu_buffers();
+  }
+}
+
+static void gpu_painting_image_merge(TexturePaintingUserData &UNUSED(data),
+                                     Image &image,
+                                     ImageUser &image_user,
+                                     ImBuf &image_buffer,
+                                     GPUTexture *paint_tex)
+{
+  GPUTexture *canvas_tex = BKE_image_get_gpu_texture(&image, &image_user, &image_buffer);
+  GPUShader *shader = SCULPT_shader_paint_image_merge_get();
+  GPU_shader_bind(shader);
+  GPU_texture_image_bind(paint_tex, GPU_shader_get_texture_binding(shader, "in_paint_img"));
+  GPU_texture_image_bind(canvas_tex, GPU_shader_get_texture_binding(shader, "out_img"));
+  GPU_compute_dispatch(shader, image_buffer.x, image_buffer.y, 1);
+}
+
 static void init_paint_step(const SculptSession &ss, PaintStepData &r_paint_step)
 {
   r_paint_step.location = ss.cache->location;
   r_paint_step.radius = ss.cache->radius;
   r_paint_step.mirror_symmetry_pass = ss.cache->mirror_symmetry_pass;
-}
-
-static GPUStorageBuf *gpu_painting_vert_coord_create(SculptSession &ss)
-{
-  Vector<float4> vert_coords;
-
-  vert_coords.reserve(ss.totvert);
-  for (const MVert &mvert : Span<MVert>(ss.mvert, ss.totvert)) {
-    float3 co(mvert.co);
-    vert_coords.append(float4(co.x, co.y, co.z, 0.0f));
-  }
-  GPUStorageBuf *result = GPU_storagebuf_create_ex(
-      sizeof(float4) * ss.totvert, vert_coords.data(), GPU_USAGE_STATIC, __func__);
-  return result;
 }
 
 static void dispatch_gpu_painting(TexturePaintingUserData &data)
@@ -687,26 +762,18 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
     return;
   }
 
-  GPUSculptPaintData *batches = static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
-  const int64_t steps_len = batches->steps.size();
+  GPUSculptPaintData &batches = *static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
+  const int64_t steps_len = batches.steps.size();
   int2 paint_step_range(0, steps_len);
-  GPUStorageBuf *paint_step_buf = GPU_storagebuf_create_ex(
-      sizeof(PaintStepData) * steps_len, batches->steps.data(), GPU_USAGE_STATIC, "PaintStepData");
+  batches.update_step_buf();
+  batches.ensure_vert_coord_buf(ss);
+  batches.ensure_paint_brush_buf(ss, *data.brush);
 
-  GPUStorageBuf *vert_coord_buf = gpu_painting_vert_coord_create(ss);
-
-  PaintBrushData paint_brush;
-  init_paint_brush(ss, *data.brush, paint_brush);
-  GPUUniformBuf *paint_brush_buf = GPU_uniformbuf_create_ex(
-      sizeof(PaintBrushData), &paint_brush, "PaintBrushData");
-
-  GPUTexture *tex = nullptr;
   Image &image = *data.image_data.image;
   ImageUser local_image_user = *data.image_data.image_user;
 
   TileNumbers tile_numbers = collect_active_tile_numbers(data);
   for (TileNumber tile_number : tile_numbers) {
-
     local_image_user.tile = tile_number;
 
     ImBuf *image_buffer = BKE_image_acquire_ibuf(&image, &local_image_user, nullptr);
@@ -715,31 +782,16 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
     }
 
     GPU_debug_group_begin("Paint tile");
-    gpu_painting_paint_step(data,
-                            tile_number,
-                            image_buffer,
-                            &tex,
-                            paint_brush_buf,
-                            paint_step_buf,
-                            paint_step_range,
-                            vert_coord_buf);
-    gpu_painting_image_merge(data, *data.image_data.image, local_image_user, *image_buffer, tex);
+    gpu_painting_paint_step(data, batches, tile_number, image_buffer, paint_step_range);
+    gpu_painting_image_merge(
+        data, *data.image_data.image, local_image_user, *image_buffer, batches.tile_texture);
     GPU_debug_group_end();
 
     BKE_image_release_ibuf(data.image_data.image, image_buffer, nullptr);
   }
 
-  /* Clean up temp values. */
-  GPU_uniformbuf_free(paint_brush_buf);
-  GPU_storagebuf_free(paint_step_buf);
-  if (tex) {
-    GPU_texture_free(tex);
-    tex = nullptr;
-  }
-  GPU_storagebuf_free(vert_coord_buf);
-
-  MEM_delete(batches);
-  ss.mode.texture_paint.gpu_data = nullptr;
+  /* Reset GPU data for next frame. */
+  batches.steps.clear();
 }
 
 /** \} */
@@ -816,7 +868,9 @@ void SCULPT_do_paint_brush_image(
     TaskParallelSettings settings;
     BKE_pbvh_parallel_range_settings(&settings, true, totnode);
     BLI_task_parallel_range(0, totnode, &data, do_push_undo_tile, &settings);
+    TIMEIT_START(paint_image_cpu);
     BLI_task_parallel_range(0, totnode, &data, do_paint_pixels, &settings);
+    TIMEIT_END(paint_image_cpu);
 
     TaskParallelSettings settings_flush;
     BKE_pbvh_parallel_range_settings(&settings_flush, false, totnode);
@@ -842,11 +896,30 @@ void SCULPT_paint_image_batches_flush(PaintModeSettings *paint_mode_settings,
   }
 
   if (ImageData::init_active_image(ob, &data.image_data, paint_mode_settings)) {
+    TIMEIT_START(paint_image_gpu);
     GPU_debug_group_begin("SCULPT_paint_brush");
     dispatch_gpu_batches(data);
     GPU_debug_group_end();
+    TIMEIT_END(paint_image_gpu);
   }
 
   MEM_freeN(data.nodes);
+}
+
+void SCULPT_paint_image_batches_finalize(PaintModeSettings *UNUSED(paint_mode_settings),
+                                         Sculpt *UNUSED(sd),
+                                         Object *ob)
+{
+  if (!SCULPT_use_image_paint_compute()) {
+    return;
+  }
+
+  // TODO(jbakker): record undo steps.
+  // TODO(jbakker): download results and update the image data-block.
+
+  SculptSession &ss = *ob->sculpt;
+  GPUSculptPaintData *batches = static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
+  MEM_delete(batches);
+  ss.mode.texture_paint.gpu_data = nullptr;
 }
 }
