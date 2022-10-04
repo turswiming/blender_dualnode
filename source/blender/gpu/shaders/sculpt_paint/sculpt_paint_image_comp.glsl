@@ -47,7 +47,9 @@ void main()
           color_read = true;
         }
         // TODO: blend with color...
-        color = max(color, paint_brush_buf.color);
+        float factor = SCULPT_hardness_factor(distance, step_data.hardness, step_data.radius);
+        float curve_factor = SCULPT_curve_strength(factor, BRUSH_CURVE_PRESET);
+        color = max(color, paint_brush_buf.color * curve_factor);
       }
     }
     if (color_read) {

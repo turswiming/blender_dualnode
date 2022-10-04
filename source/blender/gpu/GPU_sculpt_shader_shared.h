@@ -63,7 +63,8 @@ struct PaintStepData {
   float radius;
   /* Circle falloff. */
   float4 plane_view;
+  float hardness;
   int mirror_symmetry_pass;
-  int _pad0[3];
+  int _pad0[2];
 };
 BLI_STATIC_ASSERT_ALIGN(PaintStepData, 16);

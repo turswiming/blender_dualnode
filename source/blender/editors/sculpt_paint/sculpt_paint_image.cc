@@ -653,6 +653,14 @@ static BrushVariationFlags determine_shader_variation_flags(const Brush &brush)
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
     result = static_cast<BrushVariationFlags>(result | BRUSH_TEST_CIRCLE);
   }
+
+  BrushVariationFlags curve = static_cast<BrushVariationFlags>(0);
+  switch (brush.curve_preset) {
+    case BRUSH_CURVE_SHARP:
+      curve = BRUSH_VARIATION_FALLOFF_SHARP;
+      break;
+  }
+  result = static_cast<BrushVariationFlags>(result | curve);
   return result;
 }
 
@@ -731,6 +739,7 @@ static void init_paint_step(const SculptSession &ss,
   r_paint_step.location = ss.cache->location;
   r_paint_step.radius = ss.cache->radius;
   r_paint_step.mirror_symmetry_pass = ss.cache->mirror_symmetry_pass;
+  r_paint_step.hardness = ss.cache->paint_brush.hardness;
 
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
     plane_from_point_normal_v3(
