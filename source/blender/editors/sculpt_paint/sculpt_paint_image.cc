@@ -576,8 +576,12 @@ struct GPUSculptPaintData {
   void update_step_buf()
   {
     int requested_size = sizeof(PaintStepData) * steps.size();
+    /* Reallocate buffer when it doesn't fit, or is to big to correct reading from uninitialized
+     * memory. */
+    const bool reallocate_buf = (requested_size > step_buf_alloc_size) ||
+                                (sizeof(PaintStepData) * steps.capacity() < step_buf_alloc_size);
 
-    if (step_buf && requested_size > step_buf_alloc_size) {
+    if (step_buf && reallocate_buf) {
       GPU_storagebuf_free(step_buf);
       step_buf = nullptr;
     }
@@ -588,7 +592,7 @@ struct GPUSculptPaintData {
       step_buf_alloc_size = requested_size;
     }
 
-    BLI_assert_msg(sizeof(PaintStepData) * steps.capacity() > step_buf_alloc_size,
+    BLI_assert_msg(sizeof(PaintStepData) * steps.capacity() >= step_buf_alloc_size,
                    "Possible read from unallocated memory as storage buffer is larger than the "
                    "step capacity.");
     GPU_storagebuf_update(step_buf, steps.data());
@@ -656,8 +660,35 @@ static BrushVariationFlags determine_shader_variation_flags(const Brush &brush)
 
   BrushVariationFlags curve = static_cast<BrushVariationFlags>(0);
   switch (brush.curve_preset) {
+    case BRUSH_CURVE_CUSTOM:
+      curve = BRUSH_VARIATION_FALLOFF_CUSTOM;
+      break;
+    case BRUSH_CURVE_SMOOTH:
+      curve = BRUSH_VARIATION_FALLOFF_SMOOTH;
+      break;
+    case BRUSH_CURVE_SPHERE:
+      curve = BRUSH_VARIATION_FALLOFF_SPHERE;
+      break;
+    case BRUSH_CURVE_ROOT:
+      curve = BRUSH_VARIATION_FALLOFF_ROOT;
+      break;
     case BRUSH_CURVE_SHARP:
       curve = BRUSH_VARIATION_FALLOFF_SHARP;
+      break;
+    case BRUSH_CURVE_LIN:
+      curve = BRUSH_VARIATION_FALLOFF_LIN;
+      break;
+    case BRUSH_CURVE_POW4:
+      curve = BRUSH_VARIATION_FALLOFF_POW4;
+      break;
+    case BRUSH_CURVE_INVSQUARE:
+      curve = BRUSH_VARIATION_FALLOFF_INVSQUARE;
+      break;
+    case BRUSH_CURVE_CONSTANT:
+      curve = BRUSH_VARIATION_FALLOFF_CONSTANT;
+      break;
+    case BRUSH_CURVE_SMOOTHER:
+      curve = BRUSH_VARIATION_FALLOFF_SMOOTHER;
       break;
   }
   result = static_cast<BrushVariationFlags>(result | curve);

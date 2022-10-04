@@ -52,7 +52,7 @@ float SCULPT_hardness_factor(float dist, float hardness, float radius)
   else if (hardness >= 1.0) {
     return 1.0;
   }
-  return (p - hardness / (1.0 - hardness));
+  return (p - hardness) / (1.0 - hardness);
 }
 
 /** \} */

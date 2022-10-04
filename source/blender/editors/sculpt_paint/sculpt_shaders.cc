@@ -53,6 +53,9 @@ GPUShader *SCULPT_shader_paint_image_get(BrushVariationFlags variation_flags)
       case BRUSH_VARIATION_FALLOFF_INVSQUARE:
         info_name << "_invsquare";
         break;
+      case BRUSH_VARIATION_FALLOFF_CONSTANT:
+        info_name << "_constant";
+        break;
       case BRUSH_VARIATION_FALLOFF_SMOOTHER:
         info_name << "_smoother";
         break;
