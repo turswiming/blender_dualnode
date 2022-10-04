@@ -48,7 +48,7 @@ void main()
         }
         // TODO: blend with color...
         float factor = SCULPT_hardness_factor(distance, step_data.hardness, step_data.radius);
-        float curve_factor = SCULPT_curve_strength(factor, BRUSH_CURVE_PRESET);
+        float curve_factor = SCULPT_curve_strength(factor, paint_brush_buf.falloff_shape);
         vec4 final_paint_color = SCULPT_blend_color(
             color, paint_brush_buf.color * curve_factor * step_data.strength);
         final_paint_color *= paint_brush_buf.alpha;

@@ -51,9 +51,8 @@ struct PaintBrushData {
   float4 color;
   PaintBrushTestData test;
   float alpha;
-  float _pad0;
-  float _pad1;
-  float _pad2;
+  int falloff_shape;
+  float _pad0[2];
 };
 BLI_STATIC_ASSERT_ALIGN(PaintBrushData, 16)
 

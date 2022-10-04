@@ -532,6 +532,11 @@ static void init_paint_brush_test(const SculptSession &ss, PaintBrushData &r_pai
   r_paint_brush.test.symm_rot_mat_inv = ss.cache->symm_rot_mat_inv;
 }
 
+static void init_paint_brush_falloff(const Brush &brush, PaintBrushData &r_paint_brush)
+{
+  r_paint_brush.falloff_shape = brush.curve_preset;
+}
+
 static void init_paint_brush(const SculptSession &ss,
                              const Brush &brush,
                              PaintBrushData &r_paint_brush)
@@ -539,6 +544,7 @@ static void init_paint_brush(const SculptSession &ss,
   init_paint_brush_color(ss, brush, r_paint_brush);
   init_paint_brush_alpha(brush, r_paint_brush);
   init_paint_brush_test(ss, r_paint_brush);
+  init_paint_brush_falloff(brush, r_paint_brush);
 }
 
 struct GPUSculptPaintData {
@@ -654,44 +660,11 @@ static void ensure_gpu_buffers(TexturePaintingUserData &data)
 static BrushVariationFlags determine_shader_variation_flags(const Brush &brush)
 {
   BrushVariationFlags result = static_cast<BrushVariationFlags>(0);
+
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
     result = static_cast<BrushVariationFlags>(result | BRUSH_TEST_CIRCLE);
   }
 
-  BrushVariationFlags curve = static_cast<BrushVariationFlags>(0);
-  switch (brush.curve_preset) {
-    case BRUSH_CURVE_CUSTOM:
-      curve = BRUSH_VARIATION_FALLOFF_CUSTOM;
-      break;
-    case BRUSH_CURVE_SMOOTH:
-      curve = BRUSH_VARIATION_FALLOFF_SMOOTH;
-      break;
-    case BRUSH_CURVE_SPHERE:
-      curve = BRUSH_VARIATION_FALLOFF_SPHERE;
-      break;
-    case BRUSH_CURVE_ROOT:
-      curve = BRUSH_VARIATION_FALLOFF_ROOT;
-      break;
-    case BRUSH_CURVE_SHARP:
-      curve = BRUSH_VARIATION_FALLOFF_SHARP;
-      break;
-    case BRUSH_CURVE_LIN:
-      curve = BRUSH_VARIATION_FALLOFF_LIN;
-      break;
-    case BRUSH_CURVE_POW4:
-      curve = BRUSH_VARIATION_FALLOFF_POW4;
-      break;
-    case BRUSH_CURVE_INVSQUARE:
-      curve = BRUSH_VARIATION_FALLOFF_INVSQUARE;
-      break;
-    case BRUSH_CURVE_CONSTANT:
-      curve = BRUSH_VARIATION_FALLOFF_CONSTANT;
-      break;
-    case BRUSH_CURVE_SMOOTHER:
-      curve = BRUSH_VARIATION_FALLOFF_SMOOTHER;
-      break;
-  }
-  result = static_cast<BrushVariationFlags>(result | curve);
   return result;
 }
 
