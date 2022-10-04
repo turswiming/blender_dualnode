@@ -148,9 +148,9 @@ void FrameBuffer::load_store_config_array(const GPULoadStore *load_store_actions
   }
 }
 
-unsigned int FrameBuffer::get_bits_per_pixel()
+uint FrameBuffer::get_bits_per_pixel()
 {
-  unsigned int total_bits = 0;
+  uint total_bits = 0;
   for (GPUAttachment &attachment : attachments_) {
     Texture *tex = reinterpret_cast<Texture *>(attachment.tex);
     if (tex != nullptr) {
@@ -366,6 +366,11 @@ void GPU_framebuffer_config_array(GPUFrameBuffer *gpu_fb,
     fb->attachment_set(type, attachment);
     ++type;
   }
+}
+
+void GPU_framebuffer_default_size(GPUFrameBuffer *gpu_fb, int width, int height)
+{
+  unwrap(gpu_fb)->size_set(width, height);
 }
 
 /* ---------- Viewport & Scissor Region ----------- */
@@ -668,7 +673,7 @@ void GPU_offscreen_bind(GPUOffScreen *ofs, bool save)
   unwrap(gpu_offscreen_fb_get(ofs))->bind(false);
 }
 
-void GPU_offscreen_unbind(GPUOffScreen *UNUSED(ofs), bool restore)
+void GPU_offscreen_unbind(GPUOffScreen * /*ofs*/, bool restore)
 {
   GPUFrameBuffer *fb = nullptr;
   if (restore) {

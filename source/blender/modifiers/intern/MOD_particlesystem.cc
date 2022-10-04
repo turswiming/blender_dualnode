@@ -87,9 +87,7 @@ static void copyData(const ModifierData *md, ModifierData *target, const int fla
   tpsmd->totdmvert = tpsmd->totdmedge = tpsmd->totdmface = 0;
 }
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
+static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   ParticleSystemModifierData *psmd = (ParticleSystemModifierData *)md;
 
@@ -125,7 +123,7 @@ static void deformVerts(ModifierData *md,
     }
   }
 
-  /* clear old dm */
+  /* Clear old evaluated mesh. */
   bool had_mesh_final = (psmd->mesh_final != nullptr);
   if (psmd->mesh_final) {
     BKE_id_free(nullptr, psmd->mesh_final);
@@ -251,7 +249,7 @@ static void deformVertsEM(ModifierData *md,
 }
 #endif
 
-static void panel_draw(const bContext *UNUSED(C), Panel *panel)
+static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
   uiLayout *layout = panel->layout;
 

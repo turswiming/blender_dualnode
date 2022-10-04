@@ -1140,7 +1140,7 @@ struct wmKeyMap *paint_stroke_modal_keymap(struct wmKeyConfig *keyconf)
 
   struct wmKeyMap *keymap = WM_modalkeymap_find(keyconf, name);
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (!keymap) {
     keymap = WM_modalkeymap_ensure(keyconf, name, modal_items);
   }
@@ -1672,6 +1672,11 @@ float paint_stroke_distance_get(struct PaintStroke *stroke)
 void paint_stroke_set_mode_data(PaintStroke *stroke, void *mode_data)
 {
   stroke->mode_data = mode_data;
+}
+
+bool paint_stroke_started(PaintStroke *stroke)
+{
+  return stroke->stroke_started;
 }
 
 bool PAINT_brush_tool_poll(bContext *C)

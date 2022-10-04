@@ -777,12 +777,14 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
     ED_node_tree_update(C);
   }
 
+  WM_event_add_notifier(C, NC_NODE | NA_ADDED, NULL);
+
   return OPERATOR_FINISHED;
 }
 
-static const EnumPropertyItem *new_node_tree_type_itemf(bContext *UNUSED(C),
-                                                        PointerRNA *UNUSED(ptr),
-                                                        PropertyRNA *UNUSED(prop),
+static const EnumPropertyItem *new_node_tree_type_itemf(bContext * /*C*/,
+                                                        PointerRNA * /*ptr*/,
+                                                        PropertyRNA * /*prop*/,
                                                         bool *r_free)
 {
   return rna_node_tree_type_itemf(nullptr, nullptr, r_free);
@@ -806,6 +808,39 @@ void NODE_OT_new_node_tree(wmOperatorType *ot)
   prop = RNA_def_enum(ot->srna, "type", DummyRNA_NULL_items, 0, "Tree Type", "");
   RNA_def_enum_funcs(prop, new_node_tree_type_itemf);
   RNA_def_string(ot->srna, "name", "NodeTree", MAX_ID_NAME - 2, "Name", "");
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add Node Search
+ * \{ */
+
+static int node_add_search_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const ARegion &region = *CTX_wm_region(C);
+
+  float2 cursor;
+  UI_view2d_region_to_view(&region.v2d, event->mval[0], event->mval[1], &cursor.x, &cursor.y);
+
+  invoke_add_node_search_menu(*C, cursor, RNA_boolean_get(op->ptr, "use_transform"));
+
+  return OPERATOR_FINISHED;
+}
+
+void NODE_OT_add_search(wmOperatorType *ot)
+{
+  ot->name = "Search and Add Node";
+  ot->idname = "NODE_OT_add_search";
+  ot->description = "Search for nodes and add one to the active tree";
+
+  ot->invoke = node_add_search_invoke;
+  ot->poll = ED_operator_node_editable;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_boolean(
+      ot->srna, "use_transform", true, "Use Transform", "Start moving the node after adding it");
 }
 
 /** \} */

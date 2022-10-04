@@ -134,6 +134,10 @@ KERNEL_STRUCT_MEMBER(film, int, pass_bake_primitive)
 KERNEL_STRUCT_MEMBER(film, int, pass_bake_differential)
 /* Shadow catcher. */
 KERNEL_STRUCT_MEMBER(film, int, use_approximate_shadow_catcher)
+/* Path Guiding */
+KERNEL_STRUCT_MEMBER(film, int, pass_guiding_color)
+KERNEL_STRUCT_MEMBER(film, int, pass_guiding_probability)
+KERNEL_STRUCT_MEMBER(film, int, pass_guiding_avg_roughness)
 /* Padding. */
 KERNEL_STRUCT_MEMBER(film, int, pad1)
 KERNEL_STRUCT_MEMBER(film, int, pad2)
@@ -195,9 +199,18 @@ KERNEL_STRUCT_MEMBER(integrator, int, direct_light_sampling_type)
 /* Light tree. */
 KERNEL_STRUCT_MEMBER(integrator, int, use_light_tree)
 KERNEL_STRUCT_MEMBER(integrator, float, splitting_threshold)
+/* Path Guiding */
+KERNEL_STRUCT_MEMBER(integrator, float, surface_guiding_probability)
+KERNEL_STRUCT_MEMBER(integrator, float, volume_guiding_probability)
+KERNEL_STRUCT_MEMBER(integrator, int, guiding_distribution_type)
+KERNEL_STRUCT_MEMBER(integrator, int, use_guiding)
+KERNEL_STRUCT_MEMBER(integrator, int, train_guiding)
+KERNEL_STRUCT_MEMBER(integrator, int, use_surface_guiding)
+KERNEL_STRUCT_MEMBER(integrator, int, use_volume_guiding)
+KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_direct_light)
+KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_mis_weights)
 /* Padding */
 KERNEL_STRUCT_MEMBER(integrator, int, pad1)
-KERNEL_STRUCT_MEMBER(integrator, int, pad2)
 KERNEL_STRUCT_END(KernelIntegrator)
 
 /* SVM. For shader specialization. */

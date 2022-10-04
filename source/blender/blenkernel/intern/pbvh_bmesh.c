@@ -17,7 +17,7 @@
 #include "BKE_ccg.h"
 #include "BKE_pbvh.h"
 
-#include "GPU_buffers.h"
+#include "DRW_pbvh.h"
 
 #include "bmesh.h"
 #include "pbvh_intern.h"
@@ -347,8 +347,8 @@ static void pbvh_bmesh_node_split(PBVH *pbvh, const BBC *bbc_array, int node_ind
   n->bm_other_verts = NULL;
   n->layer_disp = NULL;
 
-  if (n->draw_buffers) {
-    pbvh_free_draw_buffers(pbvh, n);
+  if (n->draw_batches) {
+    DRW_pbvh_node_free(n->draw_batches);
   }
   n->flag &= ~PBVH_Leaf;
 
@@ -730,7 +730,7 @@ typedef struct EdgeQueue {
 
   const float *view_normal;
 #ifdef USE_EDGEQUEUE_FRONTFACE
-  unsigned int use_view_normal : 1;
+  uint use_view_normal : 1;
 #endif
 } EdgeQueue;
 
@@ -883,7 +883,7 @@ static void long_edge_queue_edge_add_recursive(
     return;
   }
 
-  if ((l_edge->radial_next != l_edge)) {
+  if (l_edge->radial_next != l_edge) {
     /* How much longer we need to be to consider for subdividing
      * (avoids subdividing faces which are only *slightly* skinny) */
 #  define EVEN_EDGELEN_THRESHOLD 1.2f
@@ -1863,6 +1863,12 @@ static void pbvh_bmesh_create_nodes_fast_recursive(
 
 /***************************** Public API *****************************/
 
+void BKE_pbvh_update_bmesh_offsets(PBVH *pbvh, int cd_vert_node_offset, int cd_face_node_offset)
+{
+  pbvh->cd_vert_node_offset = cd_vert_node_offset;
+  pbvh->cd_face_node_offset = cd_face_node_offset;
+}
+
 void BKE_pbvh_build_bmesh(PBVH *pbvh,
                           BMesh *bm,
                           bool smooth_shading,
@@ -1870,8 +1876,6 @@ void BKE_pbvh_build_bmesh(PBVH *pbvh,
                           const int cd_vert_node_offset,
                           const int cd_face_node_offset)
 {
-  pbvh->cd_vert_node_offset = cd_vert_node_offset;
-  pbvh->cd_face_node_offset = cd_face_node_offset;
   pbvh->header.bm = bm;
 
   BKE_pbvh_bmesh_detail_size_set(pbvh, 0.75);
@@ -1881,6 +1885,8 @@ void BKE_pbvh_build_bmesh(PBVH *pbvh,
 
   /* TODO: choose leaf limit better */
   pbvh->leaf_limit = 100;
+
+  BKE_pbvh_update_bmesh_offsets(pbvh, cd_vert_node_offset, cd_face_node_offset);
 
   if (smooth_shading) {
     pbvh->flags |= PBVH_DYNTOPO_SMOOTH_SHADING;
@@ -1999,7 +2005,7 @@ bool BKE_pbvh_bmesh_update_topology(PBVH *pbvh,
     BLI_mempool_destroy(queue_pool);
   }
 
-  /* Unmark nodes */
+  /* Unmark nodes. */
   for (int n = 0; n < pbvh->totnode; n++) {
     PBVHNode *node = &pbvh->nodes[n];
 

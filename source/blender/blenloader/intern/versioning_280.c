@@ -512,12 +512,13 @@ static void do_version_layers_to_collections(Main *bmain, Scene *scene)
       }
     }
 
+    BKE_view_layer_synced_ensure(scene, view_layer);
     /* for convenience set the same active object in all the layers */
     if (scene->basact) {
       view_layer->basact = BKE_view_layer_base_find(view_layer, scene->basact->object);
     }
 
-    LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
+    LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
       if ((base->flag & BASE_SELECTABLE) && (base->object->flag & SELECT)) {
         base->flag |= BASE_SELECTED;
       }
@@ -537,13 +538,14 @@ static void do_version_layers_to_collections(Main *bmain, Scene *scene)
       view_layer->flag &= ~VIEW_LAYER_RENDER;
     }
 
+    BKE_view_layer_synced_ensure(scene, view_layer);
     /* convert active base */
     if (scene->basact) {
       view_layer->basact = BKE_view_layer_base_find(view_layer, scene->basact->object);
     }
 
     /* convert selected bases */
-    LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
+    LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
       if ((base->flag & BASE_SELECTABLE) && (base->object->flag & SELECT)) {
         base->flag |= BASE_SELECTED;
       }
@@ -3383,7 +3385,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
               View3D *v3d = (View3D *)sl;
               v3d->flag &= ~(V3D_LOCAL_COLLECTIONS | V3D_FLAG_UNUSED_1 | V3D_FLAG_UNUSED_10 |
                              V3D_FLAG_UNUSED_12);
-              v3d->flag2 &= ~(V3D_FLAG2_UNUSED_3 | V3D_FLAG2_UNUSED_6 | V3D_FLAG2_UNUSED_12 |
+              v3d->flag2 &= ~((1 << 3) | V3D_FLAG2_UNUSED_6 | V3D_FLAG2_UNUSED_12 |
                               V3D_FLAG2_UNUSED_13 | V3D_FLAG2_UNUSED_14 | V3D_FLAG2_UNUSED_15);
               break;
             }
