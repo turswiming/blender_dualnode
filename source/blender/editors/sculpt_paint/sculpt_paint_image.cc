@@ -632,7 +632,7 @@ struct GPUSculptPaintData {
         GPU_texture_free(tile_texture);
         tile_texture = nullptr;
       }
-      tile_texture = GPU_texture_create_2d(__func__, UNPACK2(resolution), 1, GPU_RGBA32F, nullptr);
+      tile_texture = GPU_texture_create_2d(__func__, UNPACK2(resolution), 1, GPU_RGBA16F, nullptr);
     }
   }
 };
@@ -668,6 +668,8 @@ static BrushVariationFlags determine_shader_variation_flags(const Brush &brush)
   return result;
 }
 
+// TODO: Currently only working on a copy of the actual data. In most use cases this isn't needed
+// and can we paint directly on the target gpu target.
 static void gpu_painting_paint_step(TexturePaintingUserData &data,
                                     GPUSculptPaintData &batches,
                                     TileNumber tile_number,
@@ -691,7 +693,7 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
       /* Only clear the texture when it is used for the first time. */
       if (texture_needs_clearing) {
         // Copy from image buffer?
-        GPU_texture_clear(batches.tile_texture, GPU_DATA_FLOAT, float4(0.0f, 0.0f, 0.0f, 0.0f));
+        GPU_texture_clear(batches.tile_texture, GPU_DATA_FLOAT, float4(0.0f, 0.0f, 0.0f, 1.0f));
         texture_needs_clearing = false;
       }
 

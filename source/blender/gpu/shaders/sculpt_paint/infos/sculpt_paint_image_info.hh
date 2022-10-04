@@ -9,7 +9,7 @@
 
 GPU_SHADER_CREATE_INFO(sculpt_paint_image_compute)
     .local_group_size(1, 1, 1)
-    .image(0, GPU_RGBA32F, Qualifier::READ_WRITE, ImageType::FLOAT_2D, "out_img")
+    .image(0, GPU_RGBA16F, Qualifier::READ_WRITE, ImageType::FLOAT_2D, "out_img")
     .storage_buf(0, Qualifier::READ, "PackedPixelRow", "pixel_row_buf[]")
     .storage_buf(1, Qualifier::READ, "TrianglePaintInput", "paint_input[]")
     .storage_buf(2, Qualifier::READ, "vec3", "vert_coord_buf[]")
@@ -22,7 +22,7 @@ GPU_SHADER_CREATE_INFO(sculpt_paint_image_compute)
 
 GPU_SHADER_CREATE_INFO(sculpt_paint_image_merge_compute)
     .local_group_size(1, 1, 1)
-    .image(0, GPU_RGBA32F, Qualifier::READ, ImageType::FLOAT_2D, "in_paint_img")
+    .image(0, GPU_RGBA16F, Qualifier::READ, ImageType::FLOAT_2D, "in_paint_img")
     .image(1, GPU_RGBA16F, Qualifier::READ_WRITE, ImageType::FLOAT_2D, "out_img")
     .compute_source("sculpt_paint_image_merge_comp.glsl")
     .typedef_source("GPU_sculpt_shader_shared.h")
