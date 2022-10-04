@@ -3,6 +3,17 @@
 /** \name Brush testing
  * \{ */
 
+vec4 SCULPT_blend_color(vec4 src1, vec4 src2)
+{
+  return src1 * (1.0 - src2.a) + src2;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Brush testing
+ * \{ */
+
 float SCULPT_curve_strength(float factor, int curve_type)
 {
   if (factor > 1.0) {

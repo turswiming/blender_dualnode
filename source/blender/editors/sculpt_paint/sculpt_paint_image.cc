@@ -521,9 +521,9 @@ static void init_paint_brush_color(const SculptSession &ss,
   r_paint_brush.color[3] = 1.0f;
 }
 
-static void init_paint_brush_strength(const SculptSession &ss, PaintBrushData &r_paint_brush)
+static void init_paint_brush_alpha(const Brush &brush, PaintBrushData &r_paint_brush)
 {
-  r_paint_brush.strength = ss.cache->bstrength;
+  r_paint_brush.alpha = brush.alpha;
 }
 
 /* TODO: Currently only spherical is supported. */
@@ -537,7 +537,7 @@ static void init_paint_brush(const SculptSession &ss,
                              PaintBrushData &r_paint_brush)
 {
   init_paint_brush_color(ss, brush, r_paint_brush);
-  init_paint_brush_strength(ss, r_paint_brush);
+  init_paint_brush_alpha(brush, r_paint_brush);
   init_paint_brush_test(ss, r_paint_brush);
 }
 
@@ -771,6 +771,7 @@ static void init_paint_step(const SculptSession &ss,
   r_paint_step.radius = ss.cache->radius;
   r_paint_step.mirror_symmetry_pass = ss.cache->mirror_symmetry_pass;
   r_paint_step.hardness = ss.cache->paint_brush.hardness;
+  r_paint_step.strength = ss.cache->bstrength;
 
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
     plane_from_point_normal_v3(

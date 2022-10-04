@@ -50,8 +50,7 @@ BLI_STATIC_ASSERT_ALIGN(PaintBrushTestData, 16)
 struct PaintBrushData {
   float4 color;
   PaintBrushTestData test;
-  float strength;
-
+  float alpha;
   float _pad0;
   float _pad1;
   float _pad2;
@@ -64,7 +63,8 @@ struct PaintStepData {
   /* Circle falloff. */
   float4 plane_view;
   float hardness;
+  float strength;
   int mirror_symmetry_pass;
-  int _pad0[2];
+  int _pad0[1];
 };
 BLI_STATIC_ASSERT_ALIGN(PaintStepData, 16);
