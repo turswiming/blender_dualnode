@@ -61,6 +61,8 @@ BLI_STATIC_ASSERT_ALIGN(PaintBrushData, 16)
 struct PaintStepData {
   float3 location;
   float radius;
+  /* Circle falloff. */
+  float4 plane_view;
   int mirror_symmetry_pass;
   int _pad0[3];
 };

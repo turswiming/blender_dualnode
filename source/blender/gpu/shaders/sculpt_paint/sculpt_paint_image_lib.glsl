@@ -7,6 +7,26 @@ bool SCULPT_brush_test_sphere(PaintBrushTestData test_data,
   return dist <= step_data.radius;
 }
 
+float plane_point_side_v3(vec4 plane, vec3 co)
+{
+  return dot(co, vec3(plane)) + plane.w;
+}
+
+vec3 closest_to_plane_normalized_v3(vec4 plane, vec3 co)
+{
+  float side = plane_point_side_v3(plane, co);
+  return (vec3(plane) * -side) + co;
+}
+
+bool SCULPT_brush_test_circle(PaintBrushTestData test_data,
+                              PaintStepData step_data,
+                              vec3 co,
+                              out float dist)
+{
+  vec3 proj = closest_to_plane_normalized_v3(step_data.plane_view, co);
+  return SCULPT_brush_test_sphere(test_data, step_data, proj, dist);
+}
+
 void SCULPT_get_row_pos_and_delta(vec3 co1,
                                   vec3 co2,
                                   vec3 co3,

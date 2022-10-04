@@ -5,8 +5,10 @@ bool SCULPT_brush_test(PaintBrushTestData test_data,
                        vec3 co,
                        out float dist)
 {
-#ifdef BRUSH_TEST_SPHERE
+#if defined(BRUSH_TEST_SPHERE)
   return SCULPT_brush_test_sphere(test_data, step_data, co, dist);
+#elif defined(BRUSH_TEST_CIRCLE)
+  return SCULPT_brush_test_circle(test_data, step_data, co, dist);
 #else
   dist = 0.0;
   return true;

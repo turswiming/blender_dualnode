@@ -653,7 +653,7 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
                                     ImBuf *image_buffer,
                                     int2 paint_step_range)
 {
-  GPUShader *shader = SCULPT_shader_paint_image_get();
+  GPUShader *shader = SCULPT_shader_paint_image_get(BRUSH_TEST_SPHERE);
 
   batches.ensure_tile_texture(int2(image_buffer->x, image_buffer->y));
   bool texture_needs_clearing = true;
@@ -714,11 +714,21 @@ static void gpu_painting_image_merge(TexturePaintingUserData &UNUSED(data),
   GPU_compute_dispatch(shader, image_buffer.x, image_buffer.y, 1);
 }
 
-static void init_paint_step(const SculptSession &ss, PaintStepData &r_paint_step)
+static void init_paint_step(const SculptSession &ss,
+                            const Brush &brush,
+                            PaintStepData &r_paint_step)
 {
   r_paint_step.location = ss.cache->location;
   r_paint_step.radius = ss.cache->radius;
   r_paint_step.mirror_symmetry_pass = ss.cache->mirror_symmetry_pass;
+
+  if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
+    plane_from_point_normal_v3(
+        r_paint_step.plane_view, r_paint_step.location, ss.cache->view_normal);
+  }
+  else {
+    r_paint_step.plane_view = float4(0.0f);
+  }
 }
 
 static void dispatch_gpu_painting(TexturePaintingUserData &data)
@@ -728,7 +738,7 @@ static void dispatch_gpu_painting(TexturePaintingUserData &data)
   GPUSculptPaintData &batches = *static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
 
   PaintStepData paint_step;
-  init_paint_step(ss, paint_step);
+  init_paint_step(ss, *data.brush, paint_step);
   batches.steps.append(paint_step);
 }
 

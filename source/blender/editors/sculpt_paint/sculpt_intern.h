@@ -1879,8 +1879,15 @@ void SCULPT_bmesh_topology_rake(
 
 /* sculpt_shaders.cc */
 
-struct GPUShader *SCULPT_shader_paint_image_get(void);
+typedef enum BrushVariationFlags {
+  BRUSH_TEST_SPHERE = (0 << 0),
+  BRUSH_TEST_CIRCLE = (1 << 1),
+  BRUSH_TEST_CLIPPING = (1 << 2),
+  BRUSH_MAX_VARIATIONS = (1 << 3),
+} BrushVariationFlags;
+struct GPUShader *SCULPT_shader_paint_image_get(BrushVariationFlags variation_flags);
 struct GPUShader *SCULPT_shader_paint_image_merge_get(void);
+
 void SCULPT_shader_free(void);
 
 /* end sculpt_shadders.cc */

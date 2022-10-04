@@ -18,9 +18,7 @@ GPU_SHADER_CREATE_INFO(sculpt_paint_image_compute)
     .push_constant(Type::INT, "pixel_row_offset")
     .push_constant(Type::IVEC2, "paint_step_range")
     .compute_source("sculpt_paint_image_comp.glsl")
-    .typedef_source("GPU_sculpt_shader_shared.h")
-    .define("BRUSH_TEST_SPHERE")
-    .do_static_compilation(true);
+    .typedef_source("GPU_sculpt_shader_shared.h");
 
 GPU_SHADER_CREATE_INFO(sculpt_paint_image_merge_compute)
     .local_group_size(1, 1, 1)
@@ -29,3 +27,21 @@ GPU_SHADER_CREATE_INFO(sculpt_paint_image_merge_compute)
     .compute_source("sculpt_paint_image_merge_comp.glsl")
     .typedef_source("GPU_sculpt_shader_shared.h")
     .do_static_compilation(true);
+
+/* -------------------------------------------------------------------- */
+/** \name Brush variations
+ * \{ */
+
+GPU_SHADER_CREATE_INFO(sculpt_paint_test_sphere).define("BRUSH_TEST_SPHERE");
+GPU_SHADER_CREATE_INFO(sculpt_paint_test_circle).define("BRUSH_TEST_CIRCLE");
+
+#define SCULPT_PAINT_FINAL_VARIATION(name, ...) \
+  GPU_SHADER_CREATE_INFO(name).additional_info(__VA_ARGS__).do_static_compilation(true);
+
+#define SCULPT_PAINT_TEST_VARIATIONS(name, ...) \
+  SCULPT_PAINT_FINAL_VARIATION(name##_sphere, "sculpt_paint_test_sphere", __VA_ARGS__) \
+  SCULPT_PAINT_FINAL_VARIATION(name##_circle, "sculpt_paint_test_circle", __VA_ARGS__)
+
+SCULPT_PAINT_TEST_VARIATIONS(sculpt_paint_image, "sculpt_paint_image_compute")
+
+/** \} */
