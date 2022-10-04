@@ -647,13 +647,23 @@ static void ensure_gpu_buffers(TexturePaintingUserData &data)
   }
 }
 
+static BrushVariationFlags determine_shader_variation_flags(const Brush &brush)
+{
+  BrushVariationFlags result = static_cast<BrushVariationFlags>(0);
+  if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
+    result = static_cast<BrushVariationFlags>(result | BRUSH_TEST_CIRCLE);
+  }
+  return result;
+}
+
 static void gpu_painting_paint_step(TexturePaintingUserData &data,
                                     GPUSculptPaintData &batches,
                                     TileNumber tile_number,
                                     ImBuf *image_buffer,
                                     int2 paint_step_range)
 {
-  GPUShader *shader = SCULPT_shader_paint_image_get(BRUSH_TEST_SPHERE);
+  BrushVariationFlags variation_flags = determine_shader_variation_flags(*data.brush);
+  GPUShader *shader = SCULPT_shader_paint_image_get(variation_flags);
 
   batches.ensure_tile_texture(int2(image_buffer->x, image_buffer->y));
   bool texture_needs_clearing = true;
