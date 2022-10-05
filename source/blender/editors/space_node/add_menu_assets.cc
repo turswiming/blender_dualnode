@@ -35,7 +35,7 @@ static void gather_items_for_asset_library(const bContext &C,
                                            const bke::AssetCatalogPath &path,
                                            Vector<AssetItem> &assets)
 {
-  const bke::AssetCatalogFilter filter = library.catalog_service->create_catalog_filter(path);
+  const Set<bke::CatalogID> catalog_ids = library.catalog_service->catalogs_for_path(path);
   AssetFilterSettings type_filter{};
   type_filter.id_types = FILTER_ID_NT;
 
@@ -47,7 +47,7 @@ static void gather_items_for_asset_library(const bContext &C,
       return true;
     }
     const AssetMetaData *meta_data = ED_asset_handle_get_metadata(&asset);
-    if (!filter.contains(meta_data->catalog_id)) {
+    if (!catalog_ids.contains(meta_data->catalog_id)) {
       return true;
     }
     const AssetMetaData &asset_data = *ED_asset_handle_get_metadata(&asset);
