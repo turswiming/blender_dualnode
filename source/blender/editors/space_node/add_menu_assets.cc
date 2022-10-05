@@ -134,7 +134,15 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
     uiItemO(layout, ED_asset_handle_get_name(&item.handle), ICON_NONE, "NODE_OT_add_group_asset");
   }
   for (const bke::AssetCatalogPath &child_catalog : child_catalogs) {
-    uiItemM(layout, "NODE_MT_node_add_catalog_assets", child_catalog.name().c_str(), ICON_NONE);
+    PointerRNA catalog_path_ptr{};
+    catalog_path_ptr.owner_id = &screen.id;
+    catalog_path_ptr.type = &RNA_AssetCatalogPath;
+    /* TODO: Where should this memory live? */
+    catalog_path_ptr.data = new bke::AssetCatalogPath(child_catalog);
+
+    uiLayout *row = uiLayoutRow(layout, false);
+    uiLayoutSetContextPointer(row, "asset_catalog_path", &catalog_path_ptr);
+    uiItemM(row, "NODE_MT_node_add_catalog_assets", child_catalog.name().c_str(), ICON_NONE);
   }
 }
 
@@ -152,15 +160,15 @@ static void add_root_catalogs_draw(const bContext *C, Menu *menu)
 
   uiLayout *layout = menu->layout;
   for (const bke::AssetCatalogPath &path : catalogs) {
-    uiLayout *row = uiLayoutRow(layout, false);
-
     PointerRNA catalog_path_ptr{};
     catalog_path_ptr.owner_id = &screen.id;
     catalog_path_ptr.type = &RNA_AssetCatalogPath;
-    catalog_path_ptr.data = new bke::AssetCatalogPath(path);  // Where should this memory live?
+    /* TODO: Where should this memory live? */
+    catalog_path_ptr.data = new bke::AssetCatalogPath(path);
 
+    uiLayout *row = uiLayoutRow(layout, false);
     uiLayoutSetContextPointer(row, "asset_catalog_path", &catalog_path_ptr);
-    uiItemM(layout, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
+    uiItemM(row, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
   }
 }
 
