@@ -272,7 +272,7 @@ struct SceneResources {
       }
     }
 
-    if (studio_light) {
+    if (studio_light != nullptr) {
       world_buf.ambient_color = float4(UNPACK3(studio_light->light_ambient), 0.0f);
     }
     else {
@@ -281,6 +281,8 @@ struct SceneResources {
 
     /* TODO */
     world_buf.use_specular = true;
+
+    world_buf.push_update();
   }
 };
 
@@ -368,6 +370,7 @@ class OpaquePass {
             SceneResources &resources)
   {
     Texture &depth_tx = resources.depth_tx;
+    Texture &depth_in_front_tx = resources.depth_in_front_tx;
     TextureFromPool &color_tx = resources.color_tx;
     ShaderCache &shaders = resources.shader_cache;
     DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
@@ -381,21 +384,21 @@ class OpaquePass {
     deferred_ps_.bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
     deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
     deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
-    deferred_ps_.bind_texture("object_id_tx", &gbuffer_object_id_tx);
+    deferred_ps_.bind_texture("depth_tx", &depth_tx);
     deferred_ps_.bind_image("out_color_img", &color_tx);
-    deferred_ps_.dispatch(math::divide_ceil(depth_tx.size(), int3(WB_RESOLVE_GROUP_SIZE)));
+    deferred_ps_.dispatch(math::divide_ceil(int2(depth_tx.size()), int2(WB_RESOLVE_GROUP_SIZE)));
     deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
   }
 
   void draw_prepass(Manager &manager, View &view, Texture &depth_tx)
   {
-    gbuffer_normal_tx.acquire(int2(depth_tx.size()), GPU_RG16F);
     gbuffer_material_tx.acquire(int2(depth_tx.size()), GPU_RGBA8);
+    gbuffer_normal_tx.acquire(int2(depth_tx.size()), GPU_RG16F);
     gbuffer_object_id_tx.acquire(int2(depth_tx.size()), GPU_R16UI);
 
     opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(depth_tx),
-                     GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
                      GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
                      GPU_ATTACHMENT_TEXTURE(gbuffer_object_id_tx));
     opaque_fb.bind();
     opaque_fb.clear_depth(1.0f);
