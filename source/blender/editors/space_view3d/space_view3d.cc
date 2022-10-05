@@ -8,8 +8,8 @@
 /* Allow using deprecated functionality for .blend file I/O. */
 #define DNA_DEPRECATED_ALLOW
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 #include "DNA_collection_types.h"
 #include "DNA_defaults.h"
@@ -894,7 +894,7 @@ static void view3d_lightcache_update(bContext *C)
 }
 
 /* region dropbox definition */
-static void view3d_dropboxes(void)
+static void view3d_dropboxes()
 {
   ListBase *lb = WM_dropboxmap_find("View3D", SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
@@ -980,7 +980,7 @@ static void view3d_dropboxes(void)
                  view3d_gpencil_data_drop_tooltip);
 }
 
-static void view3d_widgets(void)
+static void view3d_widgets()
 {
   wmGizmoMapType_Params params{SPACE_VIEW3D, RGN_TYPE_WINDOW};
   wmGizmoMapType *gzmap_type = WM_gizmomaptype_ensure(&params);
@@ -1388,7 +1388,7 @@ static void view3d_main_region_message_subscribe(const wmRegionMessageSubscribeP
    * accepting some redundant redraws.
    *
    * For other space types we might try avoid this, keep the 3D view as an exceptional case! */
-  wmMsgParams_RNA msg_key_params = {{0}};
+  wmMsgParams_RNA msg_key_params{};
 
   /* Only subscribe to types. */
   StructRNA *type_array[] = {
@@ -1584,7 +1584,7 @@ static void view3d_header_region_message_subscribe(const wmRegionMessageSubscrib
   struct wmMsgBus *mbus = params->message_bus;
   ARegion *region = params->region;
 
-  wmMsgParams_RNA msg_key_params = {{0}};
+  wmMsgParams_RNA msg_key_params{};
 
   /* Only subscribe to types. */
   StructRNA *type_array[] = {
@@ -2069,7 +2069,7 @@ static void view3d_blend_write(BlendWriter *writer, SpaceLink *sl)
   BKE_viewer_path_blend_write(writer, &v3d->viewer_path);
 }
 
-void ED_spacetype_view3d(void)
+void ED_spacetype_view3d()
 {
   SpaceType *st = MEM_cnew<SpaceType>("spacetype view3d");
   ARegionType *art;
