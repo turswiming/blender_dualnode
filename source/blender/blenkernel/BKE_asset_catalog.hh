@@ -127,6 +127,8 @@ class AssetCatalogService {
   AssetCatalogFilter create_catalog_filter(const AssetCatalogPath &path) const;
   AssetCatalogFilter create_catalog_filter(CatalogID catalog_id) const;
 
+  Set<CatalogID> catalogs_for_path(const AssetCatalogPath &path) const;
+
   /** Create a catalog with some sensible auto-generated catalog ID.
    * The catalog will be saved to the default catalog file. */
   AssetCatalog *create_catalog(const AssetCatalogPath &catalog_path);
@@ -309,7 +311,7 @@ class AssetCatalogTreeItem {
 
   /** Iterate over children calling \a callback for each of them, but do not recurse into their
    * children. */
-  void foreach_child(const ItemIterFn callback);
+  void foreach_child(ItemIterFn callback);
 
  protected:
   /** Child tree items, ordered by their names. */
@@ -351,6 +353,10 @@ class AssetCatalogTree {
   /** Iterate over root items calling \a callback for each of them, but do not recurse into their
    * children. */
   void foreach_root_item(ItemIterFn callback);
+
+  bool is_empty() const;
+
+  AssetCatalogTreeItem *find_item(const AssetCatalogPath &path);
 
  protected:
   /** Child tree items, ordered by their names. */

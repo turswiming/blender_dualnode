@@ -393,7 +393,6 @@ typedef struct MenuType {
 typedef struct Menu {
   struct MenuType *type;   /* runtime */
   struct uiLayout *layout; /* runtime for drawing */
-  // PointerRNA custom_data;
 } Menu;
 
 /* Space-types. */

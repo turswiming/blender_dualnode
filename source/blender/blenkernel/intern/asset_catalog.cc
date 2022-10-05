@@ -169,6 +169,17 @@ AssetCatalogFilter AssetCatalogService::create_catalog_filter(const AssetCatalog
   return AssetCatalogFilter(std::move(matching_catalog_ids), std::move(known_catalog_ids));
 }
 
+Set<CatalogID> AssetCatalogService::catalogs_for_path(const AssetCatalogPath &path) const
+{
+  Set<CatalogID> catalog_ids;
+  for (const auto &catalog_uptr : catalog_collection_->catalogs_.values()) {
+    if (catalog_uptr->path == path) {
+      catalog_ids.add(catalog_uptr->catalog_id);
+    }
+  }
+  return catalog_ids;
+}
+
 AssetCatalogFilter AssetCatalogService::create_catalog_filter(const CatalogID catalog_id) const
 {
   const AssetCatalog *catalog = this->find_catalog(catalog_id);
@@ -798,6 +809,26 @@ void AssetCatalogTree::foreach_root_item(const ItemIterFn callback)
   for (auto &[key, item] : root_items_) {
     callback(item);
   }
+}
+
+bool AssetCatalogTree::is_empty() const
+{
+  return root_items_.empty();
+}
+
+AssetCatalogTreeItem *AssetCatalogTree::find_item(const AssetCatalogPath &path)
+{
+  AssetCatalogTreeItem *result = nullptr;
+  this->foreach_item([&](AssetCatalogTreeItem &item) {
+    if (result) {
+      /* TODO: Add a way to stop iteration. */
+      return;
+    }
+    if (item.catalog_path() == path) {
+      result = &item;
+    }
+  });
+  return result;
 }
 
 /* ---------------------------------------------------------------------- */
