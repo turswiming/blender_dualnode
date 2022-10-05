@@ -514,13 +514,14 @@ CatalogFilePath AssetCatalogService::find_suitable_cdf_path_for_writing(
                  "catalog definition file should be put");
 
   /* Ask the asset library API for an appropriate location. */
-  const std::string suitable_root_path = BKE_asset_library_find_suitable_root_path_from_path(
-      blend_file_path);
-  if (!suitable_root_path.empty()) {
+  char suitable_root_path[PATH_MAX];
+  const bool asset_lib_root_found = BKE_asset_library_find_suitable_root_path_from_path(
+      blend_file_path.c_str(), suitable_root_path);
+  if (asset_lib_root_found) {
     char asset_lib_cdf_path[PATH_MAX];
     BLI_path_join(asset_lib_cdf_path,
                   sizeof(asset_lib_cdf_path),
-                  suitable_root_path.c_str(),
+                  suitable_root_path,
                   DEFAULT_CATALOG_FILENAME.c_str(),
                   nullptr);
     return asset_lib_cdf_path;

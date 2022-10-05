@@ -47,10 +47,15 @@ AssetLibrary *AssetLibraryService::get_asset_library(
 {
   if (library_reference.type == ASSET_LIBRARY_LOCAL) {
     /* For the "Current File" library  we get the asset library root path based on main. */
-    std::string root_path = bmain ? BKE_asset_library_find_suitable_root_path_from_main(bmain) :
-                                    "";
+    char root_path[FILE_MAX];
+    if (bmain) {
+      BKE_asset_library_find_suitable_root_path_from_main(bmain, root_path);
+    }
+    else {
+      root_path[0] = '\0';
+    }
 
-    if (root_path.empty()) {
+    if (root_path[0] == '\0') {
       /* File wasn't saved yet. */
       return get_asset_library_current_file();
     }

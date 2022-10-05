@@ -49,22 +49,22 @@ bool BKE_asset_library_has_any_unsaved_catalogs()
   return service->has_any_unsaved_catalogs();
 }
 
-std::string BKE_asset_library_find_suitable_root_path_from_path(
-    const blender::StringRefNull input_path)
+bool BKE_asset_library_find_suitable_root_path_from_path(const char *input_path,
+                                                         char *r_library_path)
 {
   if (bUserAssetLibrary *preferences_lib = BKE_preferences_asset_library_containing_path(
-          &U, input_path.c_str())) {
-    return preferences_lib->path;
+          &U, input_path)) {
+    BLI_strncpy(r_library_path, preferences_lib->path, FILE_MAXDIR);
+    return true;
   }
 
-  char buffer[FILE_MAXDIR];
-  BLI_split_dir_part(input_path.c_str(), buffer, FILE_MAXDIR);
-  return buffer;
+  BLI_split_dir_part(input_path, r_library_path, FILE_MAXDIR);
+  return r_library_path[0] != '\0';
 }
 
-std::string BKE_asset_library_find_suitable_root_path_from_main(const Main *bmain)
+bool BKE_asset_library_find_suitable_root_path_from_main(const Main *bmain, char *r_library_path)
 {
-  return BKE_asset_library_find_suitable_root_path_from_path(bmain->filepath);
+  return BKE_asset_library_find_suitable_root_path_from_path(bmain->filepath, r_library_path);
 }
 
 blender::bke::AssetCatalogService *BKE_asset_library_get_catalog_service(
