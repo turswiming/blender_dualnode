@@ -459,6 +459,12 @@ set(WL_PROTOCOLS_URI https://gitlab.freedesktop.org/wayland/wayland-protocols/-/
 set(WL_PROTOCOLS_HASH af5ca07e13517cdbab33504492cef54a)
 set(WL_PROTOCOLS_HASH_TYPE MD5)
 
+set(WAYLAND_VERSION 1.21.0)
+set(WAYLAND_FILE wayland-${WAYLAND_VERSION}.tar.xz)
+set(WAYLAND_URI https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.21.0/downloads/wayland-${WAYLAND_VERSION}.tar.xz)
+set(WAYLAND_HASH f2653a2293bcd882d756c6a83d278903)
+set(WAYLAND_HASH_TYPE MD5)
+
 set(ISPC_VERSION v1.17.0)
 set(ISPC_URI https://github.com/ispc/ispc/archive/${ISPC_VERSION}.tar.gz)
 set(ISPC_HASH 4f476a3109332a77fe839a9014c60ca9)
@@ -501,15 +507,22 @@ set(BROTLI_HASH f9e8d81d0405ba66d181529af42a3354f838c939095ff99930da6aa9cdf6fe46
 set(BROTLI_HASH_TYPE SHA256)
 set(BROTLI_FILE brotli-${BROTLI_VERSION}.tar.gz)
 
+set(OPENPGL_VERSION v0.3.1-beta)
+set(OPENPGL_SHORT_VERSION 0.3.1)
+set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/refs/tags/${OPENPGL_VERSION}.tar.gz)
+set(OPENPGL_HASH 3830098c485c962018932766199527aab453a8029528dbbc04d4454d82431e2c)
+set(OPENPGL_HASH_TYPE SHA256)
+set(OPENPGL_FILE openpgl-${OPENPGL_VERSION}.tar.gz)
+
 set(LEVEL_ZERO_VERSION v1.7.15)
 set(LEVEL_ZERO_URI https://github.com/oneapi-src/level-zero/archive/refs/tags/${LEVEL_ZERO_VERSION}.tar.gz)
 set(LEVEL_ZERO_HASH c39bb05a8e5898aa6c444e1704105b93d3f1888b9c333f8e7e73825ffbfb2617)
 set(LEVEL_ZERO_HASH_TYPE SHA256)
 set(LEVEL_ZERO_FILE level-zero-${LEVEL_ZERO_VERSION}.tar.gz)
 
-set(DPCPP_VERSION 20220620)
+set(DPCPP_VERSION 20220812)
 set(DPCPP_URI https://github.com/intel/llvm/archive/refs/tags/sycl-nightly/${DPCPP_VERSION}.tar.gz)
-set(DPCPP_HASH a5f41abd5229d28afa92cbd8a5d8d786ee698bf239f722929fd686276bad692c)
+set(DPCPP_HASH 0e3c95346c295f5cf80f3a42d80b1c49481955898530242636ddc002627248d6)
 set(DPCPP_HASH_TYPE SHA256)
 set(DPCPP_FILE DPCPP-${DPCPP_VERSION}.tar.gz)
 

@@ -25,7 +25,15 @@ extern "C" {
  */
 typedef struct MVert {
   float co[3];
-  char flag, bweight;
+  /**
+   * Deprecated flag for storing hide status and selection, which are now stored in separate
+   * generic attributes. Kept for file read and write.
+   */
+  char flag_legacy;
+  /**
+   * Deprecated bevel weight storage, now located in #CD_BWEIGHT, except for file read and write.
+   */
+  char bweight_legacy;
   char _pad[2];
 } MVert;
 
@@ -33,6 +41,7 @@ typedef struct MVert {
 
 #ifdef DNA_DEPRECATED_ALLOW
 enum {
+  /** Deprecated selection status. Now stored in ".select_vert" attribute. */
   /*  SELECT = (1 << 0), */
   /** Deprecated hide status. Now stored in ".hide_vert" attribute. */
   ME_HIDE = (1 << 4),
@@ -47,12 +56,18 @@ enum {
 typedef struct MEdge {
   /** Un-ordered vertex indices (cannot match). */
   unsigned int v1, v2;
-  char crease, bweight;
+  /** Deprecated edge crease, now located in #CD_CREASE, except for file read and write. */
+  char crease_legacy;
+  /**
+   * Deprecated bevel weight storage, now located in #CD_BWEIGHT, except for file read and write.
+   */
+  char bweight_legacy;
   short flag;
 } MEdge;
 
 /** #MEdge.flag */
 enum {
+  /** Deprecated selection status. Now stored in ".select_edge" attribute. */
   /*  SELECT = (1 << 0), */
   ME_EDGEDRAW = (1 << 1),
   ME_SEAM = (1 << 2),
@@ -74,14 +89,18 @@ typedef struct MPoly {
   int loopstart;
   /** Keep signed since we need to subtract when getting the previous loop. */
   int totloop;
-  short mat_nr;
+  /** Deprecated material index. Now stored in the "material_index" attribute, but kept for IO. */
+  short mat_nr_legacy;
   char flag, _pad;
 } MPoly;
 
 /** #MPoly.flag */
 enum {
   ME_SMOOTH = (1 << 0),
+#ifdef DNA_DEPRECATED_ALLOW
+  /** Deprecated selection status. Now stored in ".select_poly" attribute. */
   ME_FACE_SEL = (1 << 1),
+#endif
   /** Deprecated hide status. Now stored in ".hide_poly" attribute. */
   /* ME_HIDE = (1 << 4), */
 };
@@ -156,8 +175,8 @@ enum {
  *
  * Usage examples:
  * \code{.c}
- * // access original material.
- * short mat_nr = mpoly[lt->poly].mat_nr;
+ * // access polygon attribute value.
+ * T value = polygon_attribute[lt->poly];
  *
  * // access vertex locations.
  * float *vtri_co[3] = {

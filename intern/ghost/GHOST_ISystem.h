@@ -117,9 +117,10 @@ class GHOST_ISystem {
  public:
   /**
    * Creates the one and only system.
+   * \param verbose: report back-ends that were attempted no back-end could be loaded.
    * \return An indication of success.
    */
-  static GHOST_TSuccess createSystem();
+  static GHOST_TSuccess createSystem(bool verbose);
   static GHOST_TSuccess createSystemBackground();
 
   /**
@@ -281,7 +282,7 @@ class GHOST_ISystem {
                                          const bool stereoVisual) = 0;
 
   /**
-   * Updates the resolution while in fullscreen mode.
+   * Updates the resolution while in full-screen mode.
    * \param setting: The new setting of the display.
    * \param window: Window displayed in full screen.
    *
@@ -421,6 +422,12 @@ class GHOST_ISystem {
   virtual GHOST_TSuccess getButtonState(GHOST_TButton mask, bool &isDown) const = 0;
 
   /**
+   * Enable multi-touch gestures if supported.
+   * \param use: Enable or disable.
+   */
+  virtual void setMultitouchGestures(const bool use) = 0;
+
+  /**
    * Set which tablet API to use. Only affects Windows, other platforms have a single API.
    * \param api: Enum indicating which API to use.
    */
@@ -437,9 +444,9 @@ class GHOST_ISystem {
   /**
    * Set the Console State
    * \param action: console state
-   * \return current status (1 -visible, 0 - hidden)
+   * \return current status (true: visible, 0: hidden)
    */
-  virtual int setConsoleWindowState(GHOST_TConsoleWindowState action) = 0;
+  virtual bool setConsoleWindowState(GHOST_TConsoleWindowState action) = 0;
 
   /***************************************************************************************
    * Access to clipboard.

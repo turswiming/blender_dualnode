@@ -343,7 +343,7 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   integrator->set_light_sampling_threshold(get_float(cscene, "light_sampling_threshold"));
 
   SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
-      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_SOBOL);
+      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_PMJ);
   integrator->set_sampling_pattern(sampling_pattern);
 
   int samples = 1;
@@ -385,7 +385,8 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
 
   /* Only use scrambling distance in the viewport if user wants to. */
   bool preview_scrambling_distance = get_boolean(cscene, "preview_scrambling_distance");
-  if (preview && !preview_scrambling_distance) {
+  if ((preview && !preview_scrambling_distance) ||
+      sampling_pattern == SAMPLING_PATTERN_SOBOL_BURLEY) {
     scrambling_distance = 1.0f;
   }
 
@@ -411,6 +412,22 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
       cscene, "direct_light_sampling_type", DIRECT_LIGHT_SAMPLING_NUM, DIRECT_LIGHT_SAMPLING_MIS);
   integrator->set_direct_light_sampling_type(direct_light_sampling_type);
 #endif
+
+  integrator->set_use_guiding(get_boolean(cscene, "use_guiding"));
+  integrator->set_use_surface_guiding(get_boolean(cscene, "use_surface_guiding"));
+  integrator->set_use_volume_guiding(get_boolean(cscene, "use_volume_guiding"));
+  integrator->set_guiding_training_samples(get_int(cscene, "guiding_training_samples"));
+
+  if (use_developer_ui) {
+    integrator->set_deterministic_guiding(get_boolean(cscene, "use_deterministic_guiding"));
+    integrator->set_surface_guiding_probability(get_float(cscene, "surface_guiding_probability"));
+    integrator->set_volume_guiding_probability(get_float(cscene, "volume_guiding_probability"));
+    integrator->set_use_guiding_direct_light(get_boolean(cscene, "use_guiding_direct_light"));
+    integrator->set_use_guiding_mis_weights(get_boolean(cscene, "use_guiding_mis_weights"));
+    GuidingDistributionType guiding_distribution_type = (GuidingDistributionType)get_enum(
+        cscene, "guiding_distribution_type", GUIDING_NUM_TYPES, GUIDING_TYPE_PARALLAX_AWARE_VMM);
+    integrator->set_guiding_distribution_type(guiding_distribution_type);
+  }
 
   DenoiseParams denoise_params = get_denoise_params(b_scene, b_view_layer, background);
 
@@ -679,14 +696,18 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
   }
 
   /* Cryptomatte stores two ID/weight pairs per RGBA layer.
-   * User facing parameter is the number of pairs. */
+   * User facing parameter is the number of pairs.
+   *
+   * NOTE: Name channels lowercase RGBA so that compression rules check in OpenEXR DWA code uses
+   * lossless compression. Reportedly this naming is the only one which works good from the
+   * interoperability point of view. Using XYZW naming is not portable. */
   int crypto_depth = divide_up(min(16, b_view_layer.pass_cryptomatte_depth()), 2);
   scene->film->set_cryptomatte_depth(crypto_depth);
   CryptomatteType cryptomatte_passes = CRYPT_NONE;
   if (b_view_layer.use_pass_cryptomatte_object()) {
     for (int i = 0; i < crypto_depth; i++) {
       string passname = cryptomatte_prefix + string_printf("Object%02d", i);
-      b_engine.add_pass(passname.c_str(), 4, "RGBA", b_view_layer.name().c_str());
+      b_engine.add_pass(passname.c_str(), 4, "rgba", b_view_layer.name().c_str());
       pass_add(scene, PASS_CRYPTOMATTE, passname.c_str());
     }
     cryptomatte_passes = (CryptomatteType)(cryptomatte_passes | CRYPT_OBJECT);
@@ -694,7 +715,7 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
   if (b_view_layer.use_pass_cryptomatte_material()) {
     for (int i = 0; i < crypto_depth; i++) {
       string passname = cryptomatte_prefix + string_printf("Material%02d", i);
-      b_engine.add_pass(passname.c_str(), 4, "RGBA", b_view_layer.name().c_str());
+      b_engine.add_pass(passname.c_str(), 4, "rgba", b_view_layer.name().c_str());
       pass_add(scene, PASS_CRYPTOMATTE, passname.c_str());
     }
     cryptomatte_passes = (CryptomatteType)(cryptomatte_passes | CRYPT_MATERIAL);
@@ -702,7 +723,7 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
   if (b_view_layer.use_pass_cryptomatte_asset()) {
     for (int i = 0; i < crypto_depth; i++) {
       string passname = cryptomatte_prefix + string_printf("Asset%02d", i);
-      b_engine.add_pass(passname.c_str(), 4, "RGBA", b_view_layer.name().c_str());
+      b_engine.add_pass(passname.c_str(), 4, "rgba", b_view_layer.name().c_str());
       pass_add(scene, PASS_CRYPTOMATTE, passname.c_str());
     }
     cryptomatte_passes = (CryptomatteType)(cryptomatte_passes | CRYPT_ASSET);
@@ -731,6 +752,17 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
     b_engine.add_pass("Denoising Depth", 1, "Z", b_view_layer.name().c_str());
     pass_add(scene, PASS_DENOISING_DEPTH, "Denoising Depth", PassMode::NOISY);
   }
+
+#ifdef WITH_CYCLES_DEBUG
+  b_engine.add_pass("Guiding Color", 3, "RGB", b_view_layer.name().c_str());
+  pass_add(scene, PASS_GUIDING_COLOR, "Guiding Color", PassMode::NOISY);
+
+  b_engine.add_pass("Guiding Probability", 1, "X", b_view_layer.name().c_str());
+  pass_add(scene, PASS_GUIDING_PROBABILITY, "Guiding Probability", PassMode::NOISY);
+
+  b_engine.add_pass("Guiding Average Roughness", 1, "X", b_view_layer.name().c_str());
+  pass_add(scene, PASS_GUIDING_AVG_ROUGHNESS, "Guiding Average Roughness", PassMode::NOISY);
+#endif
 
   /* Custom AOV passes. */
   BL::ViewLayer::aovs_iterator b_aov_iter;

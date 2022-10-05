@@ -108,6 +108,7 @@ static void curves_batch_cache_clear_data(CurvesEvalCache &curves_cache)
   /* TODO: more granular update tagging. */
   GPU_VERTBUF_DISCARD_SAFE(curves_cache.proc_point_buf);
   GPU_VERTBUF_DISCARD_SAFE(curves_cache.proc_length_buf);
+  GPU_VERTBUF_DISCARD_SAFE(curves_cache.data_edit_points);
   DRW_TEXTURE_FREE_SAFE(curves_cache.point_tex);
   DRW_TEXTURE_FREE_SAFE(curves_cache.length_tex);
 
@@ -269,7 +270,8 @@ static void curves_batch_cache_ensure_procedural_pos(const Curves &curves,
     GPU_vertformat_attr_add(&format, "posTime", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
     GPU_vertformat_alias_add(&format, "pos");
 
-    cache.proc_point_buf = GPU_vertbuf_create_with_format(&format);
+    cache.proc_point_buf = GPU_vertbuf_create_with_format_ex(
+        &format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
     GPU_vertbuf_data_alloc(cache.proc_point_buf, cache.point_len);
 
     MutableSpan posTime_data{
@@ -279,7 +281,8 @@ static void curves_batch_cache_ensure_procedural_pos(const Curves &curves,
     GPUVertFormat length_format = {0};
     GPU_vertformat_attr_add(&length_format, "hairLength", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
 
-    cache.proc_length_buf = GPU_vertbuf_create_with_format(&length_format);
+    cache.proc_length_buf = GPU_vertbuf_create_with_format_ex(
+        &length_format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
     GPU_vertbuf_data_alloc(cache.proc_length_buf, cache.strands_len);
 
     MutableSpan hairLength_data{
@@ -304,6 +307,43 @@ static void curves_batch_cache_ensure_procedural_pos(const Curves &curves,
   }
 }
 
+static void curves_batch_cache_ensure_data_edit_points(const Curves &curves_id,
+                                                       CurvesEvalCache &cache)
+{
+  const blender::bke::CurvesGeometry &curves = blender::bke::CurvesGeometry::wrap(
+      curves_id.geometry);
+
+  static GPUVertFormat format_data = {0};
+  uint data = GPU_vertformat_attr_add(&format_data, "data", GPU_COMP_U8, 1, GPU_FETCH_INT);
+  GPU_vertbuf_init_with_format(cache.data_edit_points, &format_data);
+  GPU_vertbuf_data_alloc(cache.data_edit_points, curves.points_num());
+
+  blender::VArray<float> selection;
+  switch (curves_id.selection_domain) {
+    case ATTR_DOMAIN_POINT:
+      selection = curves.selection_point_float();
+      for (const int point_i : selection.index_range()) {
+        uint8_t vflag = 0;
+        const float point_selection = selection[point_i];
+        SET_FLAG_FROM_TEST(vflag, (point_selection > 0.0f), VFLAG_VERT_SELECTED);
+        GPU_vertbuf_attr_set(cache.data_edit_points, data, point_i, &vflag);
+      }
+      break;
+    case ATTR_DOMAIN_CURVE:
+      selection = curves.selection_curve_float();
+      for (const int curve_i : curves.curves_range()) {
+        uint8_t vflag = 0;
+        const float curve_selection = selection[curve_i];
+        SET_FLAG_FROM_TEST(vflag, (curve_selection > 0.0f), VFLAG_VERT_SELECTED);
+        const IndexRange points = curves.points_for_curve(curve_i);
+        for (const int point_i : points) {
+          GPU_vertbuf_attr_set(cache.data_edit_points, data, point_i, &vflag);
+        }
+      }
+      break;
+  }
+}
+
 void drw_curves_get_attribute_sampler_name(const char *layer_name, char r_sampler_name[32])
 {
   char attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
@@ -319,8 +359,8 @@ static void curves_batch_cache_ensure_procedural_final_attr(CurvesEvalCache &cac
                                                             const char *name)
 {
   CurvesEvalFinalCache &final_cache = cache.final[subdiv];
-  final_cache.attributes_buf[index] = GPU_vertbuf_create_with_format_ex(format,
-                                                                        GPU_USAGE_DEVICE_ONLY);
+  final_cache.attributes_buf[index] = GPU_vertbuf_create_with_format_ex(
+      format, GPU_USAGE_DEVICE_ONLY | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
 
   /* Create a destination buffer for the transform feedback. Sized appropriately */
   /* Those are points! not line segments. */
@@ -351,7 +391,8 @@ static void curves_batch_ensure_attribute(const Curves &curves,
   /* All attributes use vec4, see comment below. */
   GPU_vertformat_attr_add(&format, sampler_name, GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
-  cache.proc_attributes_buf[index] = GPU_vertbuf_create_with_format(&format);
+  cache.proc_attributes_buf[index] = GPU_vertbuf_create_with_format_ex(
+      &format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
   GPUVertBuf *attr_vbo = cache.proc_attributes_buf[index];
 
   GPU_vertbuf_data_alloc(attr_vbo,
@@ -397,10 +438,10 @@ static void curves_batch_cache_fill_strands_data(const Curves &curves_id,
       curves_id.geometry);
 
   for (const int i : IndexRange(curves.curves_num())) {
-    const IndexRange curve_range = curves.points_for_curve(i);
+    const IndexRange points = curves.points_for_curve(i);
 
-    *(uint *)GPU_vertbuf_raw_step(&data_step) = curve_range.start();
-    *(ushort *)GPU_vertbuf_raw_step(&seg_step) = curve_range.size() - 1;
+    *(uint *)GPU_vertbuf_raw_step(&data_step) = points.start();
+    *(ushort *)GPU_vertbuf_raw_step(&seg_step) = points.size() - 1;
   }
 }
 
@@ -416,11 +457,13 @@ static void curves_batch_cache_ensure_procedural_strand_data(Curves &curves,
   uint seg_id = GPU_vertformat_attr_add(&format_seg, "data", GPU_COMP_U16, 1, GPU_FETCH_INT);
 
   /* Curve Data. */
-  cache.proc_strand_buf = GPU_vertbuf_create_with_format(&format_data);
+  cache.proc_strand_buf = GPU_vertbuf_create_with_format_ex(
+      &format_data, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
   GPU_vertbuf_data_alloc(cache.proc_strand_buf, cache.strands_len);
   GPU_vertbuf_attr_get_raw_data(cache.proc_strand_buf, data_id, &data_step);
 
-  cache.proc_strand_seg_buf = GPU_vertbuf_create_with_format(&format_seg);
+  cache.proc_strand_seg_buf = GPU_vertbuf_create_with_format_ex(
+      &format_seg, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
   GPU_vertbuf_data_alloc(cache.proc_strand_seg_buf, cache.strands_len);
   GPU_vertbuf_attr_get_raw_data(cache.proc_strand_seg_buf, seg_id, &seg_step);
 
@@ -441,7 +484,8 @@ static void curves_batch_cache_ensure_procedural_final_points(CurvesEvalCache &c
   GPUVertFormat format = {0};
   GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
-  cache.final[subdiv].proc_buf = GPU_vertbuf_create_with_format_ex(&format, GPU_USAGE_DEVICE_ONLY);
+  cache.final[subdiv].proc_buf = GPU_vertbuf_create_with_format_ex(
+      &format, GPU_USAGE_DEVICE_ONLY | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
 
   /* Create a destination buffer for the transform feedback. Sized appropriately */
   /* Those are points! not line segments. */
@@ -691,9 +735,14 @@ void DRW_curves_batch_cache_create_requested(Object *ob)
 
   if (DRW_batch_requested(cache.edit_points, GPU_PRIM_POINTS)) {
     DRW_vbo_request(cache.edit_points, &cache.curves_cache.proc_point_buf);
+    DRW_vbo_request(cache.edit_points, &cache.curves_cache.data_edit_points);
   }
 
   if (DRW_vbo_requested(cache.curves_cache.proc_point_buf)) {
     curves_batch_cache_ensure_procedural_pos(*curves, cache.curves_cache, nullptr);
+  }
+
+  if (DRW_vbo_requested(cache.curves_cache.data_edit_points)) {
+    curves_batch_cache_ensure_data_edit_points(*curves, cache.curves_cache);
   }
 }

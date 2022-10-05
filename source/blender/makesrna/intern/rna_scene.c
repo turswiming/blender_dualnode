@@ -476,6 +476,20 @@ const EnumPropertyItem rna_enum_bake_save_mode_items[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
+const EnumPropertyItem rna_enum_bake_view_from_items[] = {
+    {R_BAKE_VIEW_FROM_ABOVE_SURFACE,
+     "ABOVE_SURFACE",
+     0,
+     "Above Surface",
+     "Cast rays from above the surface"},
+    {R_BAKE_VIEW_FROM_ACTIVE_CAMERA,
+     "ACTIVE_CAMERA",
+     0,
+     "Active Camera",
+     "Use the active camera's position to cast rays"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 #define R_IMF_VIEWS_ENUM_IND \
   {R_IMF_VIEWS_INDIVIDUAL, \
    "INDIVIDUAL", \
@@ -706,8 +720,10 @@ static void rna_GPencil_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UN
 static void rna_Gpencil_extend_selection(bContext *C, PointerRNA *UNUSED(ptr))
 {
   /* Extend selection to all points in all selected strokes. */
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
   if ((ob) && (ob->type == OB_GPENCIL)) {
     bGPdata *gpd = (bGPdata *)ob->data;
     CTX_DATA_BEGIN (C, bGPDstroke *, gps, editable_gpencil_strokes) {
@@ -1236,8 +1252,10 @@ static void rna_ImageFormatSettings_file_format_set(PointerRNA *ptr, int value)
                          (is_render ? IMA_CHAN_FLAG_BW : 0);
 
   /* ensure depth and color settings match */
-  if (((imf->planes == R_IMF_PLANES_BW) && !(chan_flag & IMA_CHAN_FLAG_BW)) ||
-      ((imf->planes == R_IMF_PLANES_RGBA) && !(chan_flag & IMA_CHAN_FLAG_ALPHA))) {
+  if ((imf->planes == R_IMF_PLANES_BW) && !(chan_flag & IMA_CHAN_FLAG_BW)) {
+    imf->planes = R_IMF_PLANES_RGBA;
+  }
+  if ((imf->planes == R_IMF_PLANES_RGBA) && !(chan_flag & IMA_CHAN_FLAG_RGBA)) {
     imf->planes = R_IMF_PLANES_RGB;
   }
 
@@ -1317,12 +1335,12 @@ static const EnumPropertyItem *rna_ImageFormatSettings_color_mode_itemf(bContext
     RenderData *rd = &scene->r;
 
     if (BKE_ffmpeg_alpha_channel_is_supported(rd)) {
-      chan_flag |= IMA_CHAN_FLAG_ALPHA;
+      chan_flag |= IMA_CHAN_FLAG_RGBA;
     }
   }
 #  endif
 
-  if (chan_flag == (IMA_CHAN_FLAG_BW | IMA_CHAN_FLAG_RGB | IMA_CHAN_FLAG_ALPHA)) {
+  if (chan_flag == (IMA_CHAN_FLAG_BW | IMA_CHAN_FLAG_RGB | IMA_CHAN_FLAG_RGBA)) {
     return rna_enum_image_color_mode_items;
   }
   else {
@@ -1335,7 +1353,7 @@ static const EnumPropertyItem *rna_ImageFormatSettings_color_mode_itemf(bContext
     if (chan_flag & IMA_CHAN_FLAG_RGB) {
       RNA_enum_item_add(&item, &totitem, &IMAGE_COLOR_MODE_RGB);
     }
-    if (chan_flag & IMA_CHAN_FLAG_ALPHA) {
+    if (chan_flag & IMA_CHAN_FLAG_RGBA) {
       RNA_enum_item_add(&item, &totitem, &IMAGE_COLOR_MODE_RGBA);
     }
 
@@ -1482,8 +1500,7 @@ static void rna_ImageFormatSettings_color_management_set(PointerRNA *ptr, int va
       ID *owner_id = ptr->owner_id;
       if (owner_id && GS(owner_id->name) == ID_NT) {
         /* For compositing nodes, find the corresponding scene. */
-        const IDTypeInfo *type_info = BKE_idtype_get_info_from_id(owner_id);
-        owner_id = type_info->owner_get(G_MAIN, owner_id, NULL);
+        owner_id = BKE_id_owner_get(owner_id);
       }
       if (owner_id && GS(owner_id->name) == ID_SCE) {
         BKE_image_format_color_management_copy_from_scene(imf, (Scene *)owner_id);
@@ -1863,13 +1880,17 @@ static void rna_Scene_editmesh_select_mode_set(PointerRNA *ptr, const bool *valu
     /* Update select mode in all the workspaces in mesh edit mode. */
     wmWindowManager *wm = G_MAIN->wm.first;
     LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
+      const Scene *scene = WM_window_get_active_scene(win);
       ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-
-      if (view_layer && view_layer->basact) {
-        Mesh *me = BKE_mesh_from_object(view_layer->basact->object);
-        if (me && me->edit_mesh && me->edit_mesh->selectmode != flag) {
-          me->edit_mesh->selectmode = flag;
-          EDBM_selectmode_set(me->edit_mesh);
+      if (view_layer) {
+        BKE_view_layer_synced_ensure(scene, view_layer);
+        Object *object = BKE_view_layer_active_object_get(view_layer);
+        if (object) {
+          Mesh *me = BKE_mesh_from_object(object);
+          if (me && me->edit_mesh && me->edit_mesh->selectmode != flag) {
+            me->edit_mesh->selectmode = flag;
+            EDBM_selectmode_set(me->edit_mesh);
+          }
         }
       }
     }
@@ -1878,11 +1899,14 @@ static void rna_Scene_editmesh_select_mode_set(PointerRNA *ptr, const bool *valu
 
 static void rna_Scene_editmesh_select_mode_update(bContext *C, PointerRNA *UNUSED(ptr))
 {
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Mesh *me = NULL;
 
-  if (view_layer->basact) {
-    me = BKE_mesh_from_object(view_layer->basact->object);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *object = BKE_view_layer_active_object_get(view_layer);
+  if (object) {
+    me = BKE_mesh_from_object(object);
     if (me && me->edit_mesh == NULL) {
       me = NULL;
     }
@@ -2221,11 +2245,14 @@ static char *rna_SequencerToolSettings_path(const PointerRNA *UNUSED(ptr))
 /* generic function to recalc geometry */
 static void rna_EditMesh_update(bContext *C, PointerRNA *UNUSED(ptr))
 {
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Mesh *me = NULL;
 
-  if (view_layer->basact) {
-    me = BKE_mesh_from_object(view_layer->basact->object);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *object = BKE_view_layer_active_object_get(view_layer);
+  if (object) {
+    me = BKE_mesh_from_object(object);
     if (me && me->edit_mesh == NULL) {
       me = NULL;
     }
@@ -2249,8 +2276,10 @@ static char *rna_MeshStatVis_path(const PointerRNA *UNUSED(ptr))
  * given its own notifier. */
 static void rna_Scene_update_active_object_data(bContext *C, PointerRNA *UNUSED(ptr))
 {
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob) {
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -5398,6 +5427,11 @@ static void rna_def_bake_data(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Save Mode", "Where to save baked image textures");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
+  prop = RNA_def_property(srna, "view_from", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_bake_view_from_items);
+  RNA_def_property_ui_text(prop, "View From", "Source of reflection ray directions");
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
   /* flags */
   prop = RNA_def_property(srna, "use_selected_to_active", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_TO_ACTIVE);
@@ -5817,19 +5851,19 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
   prop = RNA_def_property(srna, "cineon_black", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "cineon_black");
   RNA_def_property_range(prop, 0, 1024);
-  RNA_def_property_ui_text(prop, "B", "Log conversion reference blackpoint");
+  RNA_def_property_ui_text(prop, "Black", "Log conversion reference blackpoint");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
   prop = RNA_def_property(srna, "cineon_white", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "cineon_white");
   RNA_def_property_range(prop, 0, 1024);
-  RNA_def_property_ui_text(prop, "W", "Log conversion reference whitepoint");
+  RNA_def_property_ui_text(prop, "White", "Log conversion reference whitepoint");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
   prop = RNA_def_property(srna, "cineon_gamma", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "cineon_gamma");
   RNA_def_property_range(prop, 0.0f, 10.0f);
-  RNA_def_property_ui_text(prop, "G", "Log conversion gamma");
+  RNA_def_property_ui_text(prop, "Gamma", "Log conversion gamma");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
   /* multiview */
@@ -6540,6 +6574,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
                            "Output Path",
                            "Directory/name to save animations, # characters defines the position "
                            "and length of frame numbers");
+  RNA_def_property_flag(prop, PROP_PATH_OUTPUT);
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
   /* Render result EXR cache. */

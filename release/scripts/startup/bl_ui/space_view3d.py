@@ -1216,6 +1216,7 @@ class VIEW3D_MT_view(Menu):
         layout.operator("view3d.view_all").center = False
         layout.operator("view3d.view_persportho", text="Perspective/Orthographic")
         layout.menu("VIEW3D_MT_view_local")
+        layout.prop(view, "show_viewer", text="Viewer Node")
 
         layout.separator()
 
@@ -3297,7 +3298,8 @@ class VIEW3D_MT_mask(Menu):
 
         layout.separator()
 
-        props = layout.operator("sculpt.dirty_mask", text='Dirty Mask')
+        props = layout.operator("sculpt.mask_from_cavity", text="Mask From Cavity")
+        props.use_automask_settings = False
 
         layout.separator()
 
@@ -5153,6 +5155,7 @@ class VIEW3D_MT_edit_gpencil_stroke(Menu):
         layout.operator("gpencil.stroke_subdivide", text="Subdivide").only_selected = False
         layout.menu("VIEW3D_MT_gpencil_simplify")
         layout.operator("gpencil.stroke_trim", text="Trim")
+        layout.operator("gpencil.stroke_outline", text="Outline")
 
         layout.separator()
 
@@ -5174,17 +5177,15 @@ class VIEW3D_MT_edit_gpencil_stroke(Menu):
         layout.operator("gpencil.stroke_cyclical_set", text="Toggle Cyclic").type = 'TOGGLE'
         layout.operator_menu_enum("gpencil.stroke_caps_set", text="Toggle Caps", property="type")
         layout.operator("gpencil.stroke_flip", text="Switch Direction")
-        layout.prop(settings, "use_scale_thickness", text="Scale Thickness")
+        layout.operator("gpencil.stroke_start_set", text="Set Start Point")
 
         layout.separator()
         layout.operator("gpencil.stroke_normalize", text="Normalize Thickness").mode = 'THICKNESS'
         layout.operator("gpencil.stroke_normalize", text="Normalize Opacity").mode = 'OPACITY'
+        layout.prop(settings, "use_scale_thickness", text="Scale Thickness")
 
         layout.separator()
         layout.operator("gpencil.reset_transform_fill", text="Reset Fill Transform")
-
-        layout.separator()
-        layout.operator("gpencil.stroke_outline", text="Outline")
 
 
 class VIEW3D_MT_edit_gpencil_point(Menu):
@@ -5494,6 +5495,10 @@ class VIEW3D_MT_sculpt_automasking_pie(Menu):
         pie.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
         pie.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
         pie.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+        pie.prop(sculpt, "use_automasking_cavity", text="Cavity")
+        pie.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
+        pie.prop(sculpt, "use_automasking_start_normal", text="Area Normal")
+        pie.prop(sculpt, "use_automasking_view_normal", text="View Normal")
 
 
 class VIEW3D_MT_sculpt_face_sets_edit_pie(Menu):
@@ -6346,6 +6351,13 @@ class VIEW3D_PT_overlay_geometry(Panel):
         sub.active = overlay.show_wireframes or is_wireframes
         sub.prop(overlay, "wireframe_threshold", text="Wireframe")
         sub.prop(overlay, "wireframe_opacity", text="Opacity")
+
+        row = col.row(align=True)
+        row.active = view.show_viewer
+        row.prop(overlay, "show_viewer_attribute", text="")
+        subrow = row.row(align=True)
+        subrow.active = overlay.show_viewer_attribute
+        subrow.prop(overlay, "viewer_attribute_opacity", text="Viewer Node")
 
         row = col.row(align=True)
 
@@ -7331,6 +7343,7 @@ class VIEW3D_MT_gpencil_edit_context_menu(Menu):
             col.operator("transform.shear", text="Shear")
             col.operator("transform.tosphere", text="To Sphere")
             col.operator("transform.transform", text="Shrink/Fatten").mode = 'GPENCIL_SHRINKFATTEN'
+            col.operator("gpencil.stroke_start_set", text="Set Start Point")
 
             col.separator()
 
@@ -7809,6 +7822,25 @@ class VIEW3D_PT_curves_sculpt_grow_shrink_scaling(Panel):
         layout.prop(brush.curves_sculpt_settings, "minimum_length")
 
 
+class VIEW3D_PT_viewport_debug(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_parent_id = 'VIEW3D_PT_overlay'
+    bl_label = "Viewport Debug"
+
+    @classmethod
+    def poll(cls, context):
+        prefs = context.preferences
+        return prefs.experimental.use_viewport_debug
+
+    def draw(self, context):
+        layout = self.layout
+        view = context.space_data
+        overlay = view.overlay
+
+        layout.prop(overlay, "use_debug_freeze_view_culling")
+
+
 classes = (
     VIEW3D_HT_header,
     VIEW3D_HT_tool_header,
@@ -8046,6 +8078,7 @@ classes = (
     TOPBAR_PT_annotation_layers,
     VIEW3D_PT_curves_sculpt_add_shape,
     VIEW3D_PT_curves_sculpt_grow_shrink_scaling,
+    VIEW3D_PT_viewport_debug,
 )
 
 

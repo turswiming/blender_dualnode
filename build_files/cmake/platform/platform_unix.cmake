@@ -16,13 +16,15 @@ if(NOT DEFINED LIBDIR)
   # Choose the best suitable libraries.
   if(EXISTS ${LIBDIR_NATIVE_ABI})
     set(LIBDIR ${LIBDIR_NATIVE_ABI})
+    set(WITH_LIBC_MALLOC_HOOK_WORKAROUND True)
   elseif(EXISTS ${LIBDIR_CENTOS7_ABI})
     set(LIBDIR ${LIBDIR_CENTOS7_ABI})
     set(WITH_CXX11_ABI OFF)
-
-    if(CMAKE_COMPILER_IS_GNUCC AND
-       CMAKE_C_COMPILER_VERSION VERSION_LESS 9.3)
-      message(FATAL_ERROR "GCC version must be at least 9.3 for precompiled libraries, found ${CMAKE_C_COMPILER_VERSION}")
+    if(WITH_MEM_JEMALLOC)
+      # jemalloc provides malloc hooks.
+      set(WITH_LIBC_MALLOC_HOOK_WORKAROUND False)
+    else()
+      set(WITH_LIBC_MALLOC_HOOK_WORKAROUND True)
     endif()
   endif()
 
@@ -123,14 +125,38 @@ if(NOT WITH_SYSTEM_FREETYPE)
 endif()
 
 if(WITH_PYTHON)
-  # No way to set py35, remove for now.
-  # find_package(PythonLibs)
+  # This could be used, see: D14954 for details.
+  # `find_package(PythonLibs)`
 
-  # Use our own instead, since without py is such a rare case,
-  # require this package
-  # XXX Linking errors with debian static python :/
-#       find_package_wrapper(PythonLibsUnix REQUIRED)
+  # Use our own instead, since without Python is such a rare case,
+  # require this package.
+  # XXX: Linking errors with Debian static Python (sigh).
+  # find_package_wrapper(PythonLibsUnix REQUIRED)
   find_package(PythonLibsUnix REQUIRED)
+
+  if(WITH_PYTHON_MODULE AND NOT WITH_INSTALL_PORTABLE)
+    # Installing into `site-packages`, warn when installing into `./../lib/`
+    # which script authors almost certainly don't want.
+    if(EXISTS ${LIBDIR})
+      cmake_path(IS_PREFIX LIBDIR "${PYTHON_SITE_PACKAGES}" NORMALIZE _is_prefix)
+      if(_is_prefix)
+        message(WARNING "
+Building Blender with the following configuration:
+  - WITH_PYTHON_MODULE=ON
+  - WITH_INSTALL_PORTABLE=OFF
+  - LIBDIR=\"${LIBDIR}\"
+  - PYTHON_SITE_PACKAGES=\"${PYTHON_SITE_PACKAGES}\"
+In this case you may want to either:
+  - Use the system Python's site-packages, see:
+    python -c \"import site; print(site.getsitepackages()[0])\"
+  - Set WITH_INSTALL_PORTABLE=ON to create a stand-alone \"bpy\" module
+    which you will need to ensure is in Python's module search path.
+Proceeding with PYTHON_SITE_PACKAGES install target, you have been warned!"
+        )
+      endif()
+      unset(_is_prefix)
+    endif()
+  endif()
 endif()
 
 if(WITH_IMAGE_OPENEXR)
@@ -561,6 +587,18 @@ if(WITH_HARU)
   endif()
 endif()
 
+if(WITH_CYCLES_PATH_GUIDING)
+  find_package_wrapper(openpgl)
+  if(openpgl_FOUND)
+    get_target_property(OPENPGL_LIBRARIES openpgl::openpgl LOCATION)
+    get_target_property(OPENPGL_INCLUDE_DIR openpgl::openpgl INTERFACE_INCLUDE_DIRECTORIES)
+    message(STATUS "Found OpenPGL: ${OPENPGL_LIBRARIES}")
+  else()
+    set(WITH_CYCLES_PATH_GUIDING OFF)
+    message(STATUS "OpenPGL not found, disabling WITH_CYCLES_PATH_GUIDING")
+  endif()
+endif()
+
 if(EXISTS ${LIBDIR})
   without_system_libs_end()
 endif()
@@ -656,12 +694,55 @@ endif()
 
 if(WITH_GHOST_WAYLAND)
   find_package(PkgConfig)
-  pkg_check_modules(wayland-client REQUIRED wayland-client>=1.12)
-  pkg_check_modules(wayland-egl REQUIRED wayland-egl)
-  pkg_check_modules(wayland-scanner REQUIRED wayland-scanner)
-  pkg_check_modules(xkbcommon REQUIRED xkbcommon)
-  pkg_check_modules(wayland-cursor REQUIRED wayland-cursor)
+  pkg_check_modules(wayland-client wayland-client>=1.12)
+  pkg_check_modules(wayland-egl wayland-egl)
+  pkg_check_modules(wayland-scanner wayland-scanner)
+  pkg_check_modules(xkbcommon xkbcommon)
+  pkg_check_modules(wayland-cursor wayland-cursor)
+  pkg_check_modules(wayland-protocols wayland-protocols>=1.15)
 
+  if(${wayland-protocols_FOUND})
+    pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+  else()
+    # CentOS 7 packages have too old a version, a newer version exist in the
+    # precompiled libraries.
+    find_path(WAYLAND_PROTOCOLS_DIR
+      NAMES unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
+      PATH_SUFFIXES share/wayland-protocols
+      PATHS ${LIBDIR}/wayland-protocols
+    )
+
+    if(EXISTS ${WAYLAND_PROTOCOLS_DIR})
+      set(wayland-protocols_FOUND ON)
+    endif()
+  endif()
+
+  if (NOT ${wayland-client_FOUND})
+    message(STATUS "wayland-client not found, disabling WITH_GHOST_WAYLAND")
+    set(WITH_GHOST_WAYLAND OFF)
+  endif()
+  if (NOT ${wayland-egl_FOUND})
+    message(STATUS "wayland-egl not found, disabling WITH_GHOST_WAYLAND")
+    set(WITH_GHOST_WAYLAND OFF)
+  endif()
+  if (NOT ${wayland-scanner_FOUND})
+    message(STATUS "wayland-scanner not found, disabling WITH_GHOST_WAYLAND")
+    set(WITH_GHOST_WAYLAND OFF)
+  endif()
+  if (NOT ${wayland-cursor_FOUND})
+    message(STATUS "wayland-cursor not found, disabling WITH_GHOST_WAYLAND")
+    set(WITH_GHOST_WAYLAND OFF)
+  endif()
+  if (NOT ${wayland-protocols_FOUND})
+    message(STATUS "wayland-protocols not found, disabling WITH_GHOST_WAYLAND")
+    set(WITH_GHOST_WAYLAND OFF)
+  endif()
+  if (NOT ${xkbcommon_FOUND})
+    message(STATUS "xkbcommon not found, disabling WITH_GHOST_WAYLAND")
+    set(WITH_GHOST_WAYLAND OFF)
+  endif()
+
+  if(WITH_GHOST_WAYLAND)
   if(WITH_GHOST_WAYLAND_DBUS)
     pkg_check_modules(dbus REQUIRED dbus-1)
   endif()
@@ -696,6 +777,46 @@ if(WITH_GHOST_WAYLAND)
       )
     endif()
     add_definitions(-DWITH_GHOST_WAYLAND_LIBDECOR)
+  endif()
+
+    if(EXISTS "${LIBDIR}/wayland/bin/wayland-scanner")
+      set(WAYLAND_SCANNER "${LIBDIR}/wayland/bin/wayland-scanner")
+    else()
+      pkg_get_variable(WAYLAND_SCANNER wayland-scanner wayland_scanner)
+    endif()
+
+    # When using dynamic loading, headers generated
+    # from older versions of `wayland-scanner` aren't compatible.
+    if(WITH_GHOST_WAYLAND_DYNLOAD)
+      execute_process(
+        COMMAND ${WAYLAND_SCANNER} --version
+        # The version is written to the `stderr`.
+        ERROR_VARIABLE _wayland_scanner_out
+        ERROR_STRIP_TRAILING_WHITESPACE
+      )
+      if(NOT "${_wayland_scanner_out}" STREQUAL "")
+        string(
+          REGEX REPLACE
+          "^wayland-scanner[ \t]+([0-9]+)\.([0-9]+).*"
+          "\\1.\\2"
+          _wayland_scanner_ver
+          "${_wayland_scanner_out}"
+        )
+        if("${_wayland_scanner_ver}" VERSION_LESS "1.20")
+          message(
+            FATAL_ERROR
+            "Found ${WAYLAND_SCANNER} version \"${_wayland_scanner_ver}\", "
+            "the minimum version is 1.20!"
+          )
+        endif()
+        unset(_wayland_scanner_ver)
+      else()
+        message(WARNING "Unable to access the version from ${WAYLAND_SCANNER}, continuing.")
+      endif()
+      unset(_wayland_scanner_out)
+    endif()
+    # End wayland-scanner version check.
+
   endif()
 endif()
 
@@ -982,7 +1103,7 @@ function(CONFIGURE_ATOMIC_LIB_IF_NEEDED)
   endif()
 endfunction()
 
-CONFIGURE_ATOMIC_LIB_IF_NEEDED()
+configure_atomic_lib_if_needed()
 
 if(PLATFORM_BUNDLED_LIBRARIES)
   # For the installed Python module and installed Blender executable, we set the

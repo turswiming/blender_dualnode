@@ -94,7 +94,7 @@ void WM_init_state_maximized_set(void);
 void WM_init_state_start_with_console_set(bool value);
 void WM_init_window_focus_set(bool do_it);
 void WM_init_native_pixels(bool do_it);
-void WM_init_tablet_api(void);
+void WM_init_input_devices(void);
 
 /**
  * Initialize Blender and load the startup file & preferences
@@ -861,7 +861,7 @@ void WM_operator_properties_select_action(struct wmOperatorType *ot,
                                           int default_action,
                                           bool hide_gui);
 /**
- * Only #SELECT / #DESELECT.
+ * Only for select/de-select.
  */
 void WM_operator_properties_select_action_simple(struct wmOperatorType *ot,
                                                  int default_action,

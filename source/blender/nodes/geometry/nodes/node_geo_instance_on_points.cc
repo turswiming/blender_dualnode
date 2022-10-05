@@ -25,7 +25,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(N_("Choose instances from the \"Instance\" input at each point instead of "
                       "instancing the entire geometry"));
   b.add_input<decl::Int>(N_("Instance Index"))
-      .implicit_field()
+      .implicit_field(implicit_field_inputs::id_or_index)
       .description(N_(
           "Index of the instance that used for each point. This is only used when Pick Instances "
           "is on. By default the point index is used"));
@@ -57,7 +57,7 @@ static void add_instances_from_component(
   VArray<float3> rotations;
   VArray<float3> scales;
 
-  GeometryComponentFieldContext field_context{src_component, domain};
+  bke::GeometryFieldContext field_context{src_component, domain};
   const Field<bool> selection_field = params.get_input<Field<bool>>("Selection");
   fn::FieldEvaluator evaluator{field_context, domain_num};
   evaluator.set_selection(selection_field);

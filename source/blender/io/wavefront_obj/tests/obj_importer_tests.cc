@@ -8,11 +8,12 @@
 #include "BKE_curve.h"
 #include "BKE_customdata.h"
 #include "BKE_main.h"
+#include "BKE_mesh.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_math_base.hh"
 #include "BLI_math_vec_types.hh"
 
 #include "BLO_readfile.h"
@@ -71,12 +72,13 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
 
     depsgraph_create(DAG_EVAL_VIEWPORT);
 
-    const int deg_objects_visibility_flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
-                                             DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET |
-                                             DEG_ITER_OBJECT_FLAG_VISIBLE |
-                                             DEG_ITER_OBJECT_FLAG_DUPLI;
+    DEGObjectIterSettings deg_iter_settings{};
+    deg_iter_settings.depsgraph = depsgraph;
+    deg_iter_settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
+                              DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET | DEG_ITER_OBJECT_FLAG_VISIBLE |
+                              DEG_ITER_OBJECT_FLAG_DUPLI;
     size_t object_index = 0;
-    DEG_OBJECT_ITER_BEGIN (depsgraph, object, deg_objects_visibility_flags) {
+    DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, object) {
       if (object_index >= expect_count) {
         ADD_FAILURE();
         break;
@@ -85,7 +87,7 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
       ASSERT_STREQ(object->id.name, exp.name.c_str());
       EXPECT_EQ(object->type, exp.type);
       EXPECT_V3_NEAR(object->loc, float3(0, 0, 0), 0.0001f);
-      if (strcmp(object->id.name, "OBCube") != 0) {
+      if (!STREQ(object->id.name, "OBCube")) {
         EXPECT_V3_NEAR(object->rot, float3(M_PI_2, 0, 0), 0.0001f);
       }
       EXPECT_V3_NEAR(object->scale, float3(1, 1, 1), 0.0001f);
@@ -95,8 +97,9 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
         EXPECT_EQ(mesh->totedge, exp.mesh_totedge_or_curve_endp);
         EXPECT_EQ(mesh->totpoly, exp.mesh_totpoly_or_curve_order);
         EXPECT_EQ(mesh->totloop, exp.mesh_totloop_or_curve_cyclic);
-        EXPECT_V3_NEAR(mesh->mvert[0].co, exp.vert_first, 0.0001f);
-        EXPECT_V3_NEAR(mesh->mvert[mesh->totvert - 1].co, exp.vert_last, 0.0001f);
+        const Span<MVert> verts = mesh->verts();
+        EXPECT_V3_NEAR(verts.first().co, exp.vert_first, 0.0001f);
+        EXPECT_V3_NEAR(verts.last().co, exp.vert_last, 0.0001f);
         const float3 *lnors = (const float3 *)(CustomData_get_layer(&mesh->ldata, CD_NORMAL));
         float3 normal_first = lnors != nullptr ? lnors[0] : float3(0, 0, 0);
         EXPECT_V3_NEAR(normal_first, exp.normal_first, 0.0001f);

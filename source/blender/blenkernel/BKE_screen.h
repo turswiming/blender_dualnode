@@ -55,7 +55,7 @@ struct wmWindowManager;
 typedef struct wmSpaceTypeListenerParams {
   struct wmWindow *window;
   struct ScrArea *area;
-  struct wmNotifier *notifier;
+  const struct wmNotifier *notifier;
   const struct Scene *scene;
 } wmSpaceTypeListenerParams;
 
@@ -108,12 +108,29 @@ typedef struct SpaceType {
   void (*space_subtype_set)(struct ScrArea *area, int value);
   void (*space_subtype_item_extend)(struct bContext *C, EnumPropertyItem **item, int *totitem);
 
+  /**
+   * Update pointers for all structs directly owned by this space.
+   */
+  void (*blend_read_data)(struct BlendDataReader *reader, struct SpaceLink *space_link);
+
+  /**
+   * Update pointers to other id data blocks.
+   */
+  void (*blend_read_lib)(struct BlendLibReader *reader,
+                         struct ID *parent_id,
+                         struct SpaceLink *space_link);
+
+  /**
+   * Write all structs that should be saved in a .blend file.
+   */
+  void (*blend_write)(struct BlendWriter *writer, struct SpaceLink *space_link);
+
   /* region type definitions */
   ListBase regiontypes;
 
   /* read and write... */
 
-  /* default keymaps to add */
+  /** Default key-maps to add. */
   int keymapflag;
 
 } SpaceType;
@@ -124,7 +141,7 @@ typedef struct wmRegionListenerParams {
   struct wmWindow *window;
   struct ScrArea *area; /* Can be NULL when the region is not part of an area. */
   struct ARegion *region;
-  struct wmNotifier *notifier;
+  const struct wmNotifier *notifier;
   const struct Scene *scene;
 } wmRegionListenerParams;
 

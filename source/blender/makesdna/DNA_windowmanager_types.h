@@ -70,6 +70,8 @@ enum ReportListFlags {
   RPT_STORE = (1 << 1),
   RPT_FREE = (1 << 2),
   RPT_OP_HOLD = (1 << 3), /* don't move them into the operator global list (caller will use) */
+  /** Don't print (the owner of the #ReportList will handle printing to the `stdout`). */
+  RPT_PRINT_HANDLED_BY_OWNER = (1 << 4),
 };
 
 /* These two Lines with # tell makesdna this struct can be excluded. */
@@ -149,7 +151,12 @@ typedef struct wmWindowManager {
   /** Operator registry. */
   ListBase operators;
 
-  /** Refresh/redraw #wmNotifier structs. */
+  /**
+   * Refresh/redraw #wmNotifier structs.
+   * \note Once in the queue, notifiers should be considered read-only.
+   * With the exception of clearing notifiers for data which has been removed,
+   * see: #NOTE_CATEGORY_TAG_CLEARED.
+   */
   ListBase notifier_queue;
   /**
    * For duplicate detection.
@@ -300,7 +307,22 @@ typedef struct wmWindow {
    */
   short pie_event_type_last;
 
-  /** Storage for event system. */
+  /**
+   * Storage for event system.
+   *
+   * For the most part this is storage for `wmEvent.xy` & `wmEvent.modifiers`.
+   * newly added key/button events copy the cursor location and modifier state stored here.
+   *
+   * It's also convenient at times to be able to pass this as if it's a regular event.
+   *
+   * - This is not simply the current event being handled.
+   *   The type and value is always set to the last press/release events
+   *   otherwise cursor motion would always clear these values.
+   *
+   * - The value of `eventstate->modifiers` is set from the last pressed/released modifier key.
+   *   This has the down side that the modifier value will be incorrect if users hold both
+   *   left/right modifiers then release one. See note in #wm_event_add_ghostevent for details.
+   */
   struct wmEvent *eventstate;
   /** Keep the last handled event in `event_queue` here (owned and must be freed). */
   struct wmEvent *event_last_handled;

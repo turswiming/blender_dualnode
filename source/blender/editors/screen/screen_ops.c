@@ -723,15 +723,16 @@ typedef struct sActionzoneData {
 static bool actionzone_area_poll(bContext *C)
 {
   wmWindow *win = CTX_wm_window(C);
-  bScreen *screen = WM_window_get_active_screen(win);
+  if (win && win->eventstate) {
+    bScreen *screen = WM_window_get_active_screen(win);
+    if (screen) {
+      const int *xy = &win->eventstate->xy[0];
 
-  if (screen && win && win->eventstate) {
-    const int *xy = &win->eventstate->xy[0];
-
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      LISTBASE_FOREACH (AZone *, az, &area->actionzones) {
-        if (BLI_rcti_isect_pt_v(&az->rect, xy)) {
-          return true;
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (AZone *, az, &area->actionzones) {
+          if (BLI_rcti_isect_pt_v(&az->rect, xy)) {
+            return true;
+          }
         }
       }
     }
@@ -858,7 +859,7 @@ static AZone *area_actionzone_refresh_xy(ScrArea *area, const int xy[2], const b
         /* Check if we even have scroll bars. */
         if (((az->direction == AZ_SCROLL_HOR) && !(scroll_flag & V2D_SCROLL_HORIZONTAL)) ||
             ((az->direction == AZ_SCROLL_VERT) && !(scroll_flag & V2D_SCROLL_VERTICAL))) {
-          /* no scrollbars, do nothing. */
+          /* No scroll-bars, do nothing. */
         }
         else if (test_only) {
           if (isect_value != 0) {
@@ -1583,28 +1584,28 @@ static void area_move_set_limits(wmWindow *win,
 
       /* logic here is only tested for lower edge :) */
       /* left edge */
-      if ((area->v1->editflag && area->v2->editflag)) {
+      if (area->v1->editflag && area->v2->editflag) {
         *smaller = area->v4->vec.x - size_max;
         *bigger = area->v4->vec.x - size_min;
         *use_bigger_smaller_snap = true;
         return;
       }
       /* top edge */
-      if ((area->v2->editflag && area->v3->editflag)) {
+      if (area->v2->editflag && area->v3->editflag) {
         *smaller = area->v1->vec.y + size_min;
         *bigger = area->v1->vec.y + size_max;
         *use_bigger_smaller_snap = true;
         return;
       }
       /* right edge */
-      if ((area->v3->editflag && area->v4->editflag)) {
+      if (area->v3->editflag && area->v4->editflag) {
         *smaller = area->v1->vec.x + size_min;
         *bigger = area->v1->vec.x + size_max;
         *use_bigger_smaller_snap = true;
         return;
       }
       /* lower edge */
-      if ((area->v4->editflag && area->v1->editflag)) {
+      if (area->v4->editflag && area->v1->editflag) {
         *smaller = area->v2->vec.y - size_max;
         *bigger = area->v2->vec.y - size_min;
         *use_bigger_smaller_snap = true;
@@ -1638,7 +1639,7 @@ static void area_move_set_limits(wmWindow *win,
       }
     }
     else {
-      int areamin = AREAMINX;
+      int areamin = AREAMINX * U.dpi_fac;
 
       if (area->v1->vec.x > window_rect.xmin) {
         areamin += U.pixelsize;
@@ -2061,7 +2062,7 @@ static bool area_split_allowed(const ScrArea *area, const eScreenAxis dir_axis)
     return false;
   }
 
-  if ((dir_axis == SCREEN_AXIS_V && area->winx <= 2 * AREAMINX) ||
+  if ((dir_axis == SCREEN_AXIS_V && area->winx <= 2 * AREAMINX * U.dpi_fac) ||
       (dir_axis == SCREEN_AXIS_H && area->winy <= 2 * ED_area_headersize())) {
     /* Must be at least double minimum sizes to split into two. */
     return false;
@@ -3266,7 +3267,7 @@ static int screen_maximize_area_exec(bContext *C, wmOperator *op)
 
   BLI_assert(!screen->temp);
 
-  /* search current screen for 'fullscreen' areas */
+  /* search current screen for 'full-screen' areas */
   /* prevents restoring info header, when mouse is over it */
   LISTBASE_FOREACH (ScrArea *, area_iter, &screen->areabase) {
     if (area_iter->full) {
@@ -5741,7 +5742,7 @@ static void keymap_modal_set(wmKeyConfig *keyconf)
 static bool blend_file_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   if (drag->type == WM_DRAG_PATH) {
-    if (ELEM(drag->icon, ICON_FILE_BLEND, ICON_BLENDER)) {
+    if (ELEM(drag->icon, ICON_FILE_BLEND, ICON_FILE_BACKUP, ICON_BLENDER)) {
       return true;
     }
   }

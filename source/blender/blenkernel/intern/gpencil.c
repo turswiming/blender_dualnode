@@ -314,7 +314,7 @@ IDTypeInfo IDType_ID_GD = {
     .foreach_id = greasepencil_foreach_id,
     .foreach_cache = NULL,
     .foreach_path = NULL,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = greasepencil_blend_write,
     .blend_read_data = greasepencil_blend_read_data,
@@ -1953,9 +1953,7 @@ bool BKE_gpencil_material_index_used(bGPdata *gpd, int index)
   return false;
 }
 
-void BKE_gpencil_material_remap(struct bGPdata *gpd,
-                                const unsigned int *remap,
-                                unsigned int remap_len)
+void BKE_gpencil_material_remap(struct bGPdata *gpd, const uint *remap, uint remap_len)
 {
   const short remap_len_short = (short)remap_len;
 
@@ -2787,11 +2785,14 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
       changed = !equals_m4m4(gpl->inverse, cur_mat);
     }
 
-    /* Calc local layer transform. */
+    /* Calc local layer transform. Early out if we have non-animated zero transforms. */
     bool transformed = ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) ||
                         (!is_one_v3(gpl->scale)));
+    float tmp_mat[4][4];
+    loc_eul_size_to_mat4(tmp_mat, gpl->location, gpl->rotation, gpl->scale);
+    transformed |= !equals_m4m4(gpl->layer_mat, tmp_mat);
     if (transformed) {
-      loc_eul_size_to_mat4(gpl->layer_mat, gpl->location, gpl->rotation, gpl->scale);
+      copy_m4_m4(gpl->layer_mat, tmp_mat);
     }
 
     /* Continue if no transformations are applied to this layer. */
