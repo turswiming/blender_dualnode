@@ -64,6 +64,7 @@ class NODE_MT_geometry_node_GEO_CURVE(Menu):
         node_add_menu.add_node_type(layout, "GeometryNodeSplineParameter")
         node_add_menu.add_node_type(layout, "GeometryNodeInputSplineResolution")
         layout.separator()
+        node_add_menu.add_node_type(layout, "GeometryNodeSetCurveNormal")
         node_add_menu.add_node_type(layout, "GeometryNodeSetCurveRadius")
         node_add_menu.add_node_type(layout, "GeometryNodeSetCurveTilt")
         node_add_menu.add_node_type(layout, "GeometryNodeSetCurveHandlePositions")
@@ -97,7 +98,7 @@ class NODE_MT_geometry_node_curve_topology(Menu):
 
     def draw(self, _context):
         layout = self.layout
-        node_add_menu.add_node_type(layout, "GeometryNodeInputControlPointNeighbors")
+        node_add_menu.add_node_type(layout, "GeometryNodeOffsetPointInCurve")
         node_add_menu.add_node_type(layout, "GeometryNodeCurveOfPoint")
         node_add_menu.add_node_type(layout, "GeometryNodePointsOfCurve")
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
@@ -243,6 +244,7 @@ class NODE_MT_category_PRIMITIVES_MESH(Menu):
         node_add_menu.add_node_type(layout, "GeometryNodeMeshIcoSphere")
         node_add_menu.add_node_type(layout, "GeometryNodeMeshCircle")
         node_add_menu.add_node_type(layout, "GeometryNodeMeshLine")
+        node_add_menu.add_node_type(layout, "GeometryNodeMeshUVSphere")
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
 
