@@ -1428,8 +1428,9 @@ blender_target_include_dirs(blender ${INC})
 # These files are required at runtime.
 if(WITH_USD)
   add_definitions(-DWITH_USD)
-  blender_include_dirs(../blender/io/usd)
-  # On windows the usd library site in ./blender.shared copy the files
+  absolute_include_dirs(../blender/io/usd)
+
+  # On windows the usd library sits in ./blender.shared copy the files
   # relative to the location of the USD dll, if the dll does not exist
   # assume we are linking against the static 3.4 lib.
   if(WIN32 AND EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
