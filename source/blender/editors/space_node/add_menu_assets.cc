@@ -26,7 +26,7 @@ static bool node_add_menu_poll(const bContext *C, MenuType * /*mt*/)
 }
 
 struct LibraryAsset {
-  const AssetLibraryReference &library_ref;
+  AssetLibraryReference library_ref;
   AssetHandle handle;
 };
 
@@ -63,15 +63,15 @@ static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree &node
     }
   }
 
-  /* Find assets for every catalog path. */
+  /* Find all the matching node group assets for every catalog path. */
   MultiValueMap<bke::AssetCatalogPath, LibraryAsset> assets_per_path;
-  for (const AssetLibraryReference &library : all_libraries) {
+  for (const AssetLibraryReference &library_ref : all_libraries) {
     AssetFilterSettings type_filter{};
     type_filter.id_types = FILTER_ID_NT;
 
-    ED_assetlist_storage_fetch(&library, &C);
-    ED_assetlist_ensure_previews_job(&library, &C);
-    ED_assetlist_iterate(library, [&](AssetHandle asset) {
+    ED_assetlist_storage_fetch(&library_ref, &C);
+    ED_assetlist_ensure_previews_job(&library_ref, &C);
+    ED_assetlist_iterate(library_ref, [&](AssetHandle asset) {
       if (!ED_asset_filter_matches_asset(&type_filter, &asset)) {
         return true;
       }
@@ -84,7 +84,7 @@ static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree &node
         return true;
       }
       const LibraryCatalog &library_catalog = id_to_catalog_map.lookup(meta_data.catalog_id);
-      assets_per_path.add(library_catalog.catalog->path, LibraryAsset{library, asset});
+      assets_per_path.add(library_catalog.catalog->path, LibraryAsset{library_ref, asset});
       return true;
     });
   }
@@ -141,7 +141,7 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
         &screen.id, &RNA_AssetLibraryReference, new AssetLibraryReference(item.library_ref)};
     uiLayoutSetContextPointer(row, "asset_library_ref", &library_ptr);
 
-    uiItemO(layout, ED_asset_handle_get_name(&item.handle), ICON_NONE, "NODE_OT_add_group_asset");
+    uiItemO(row, ED_asset_handle_get_name(&item.handle), ICON_NONE, "NODE_OT_add_group_asset");
   }
 
   catalog_item->foreach_child([&](bke::AssetCatalogTreeItem &child_item) {

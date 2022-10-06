@@ -371,10 +371,10 @@ void NODE_OT_add_group(wmOperatorType *ot)
 /** \name Add Node Group Asset Operator
  * \{ */
 
-static int add_node_group_asset(const bContext &C,
-                                const AssetLibraryReference &library_ref,
-                                const AssetHandle asset,
-                                ReportList &reports)
+static bool add_node_group_asset(const bContext &C,
+                                 const AssetLibraryReference &library_ref,
+                                 const AssetHandle asset,
+                                 ReportList &reports)
 {
   Main &bmain = *CTX_data_main(&C);
   SpaceNode &snode = *CTX_wm_space_node(&C);
@@ -383,13 +383,13 @@ static int add_node_group_asset(const bContext &C,
   bNodeTree *node_group = reinterpret_cast<bNodeTree *>(
       asset::get_local_id_from_asset_or_append_and_reuse(bmain, library_ref, asset));
   if (!node_group) {
-    return OPERATOR_CANCELLED;
+    return false;
   }
   if (!node_group_add_poll(edit_tree, *node_group, reports)) {
     /* Remove the node group if it was newly appended but can't be added to the tree. */
     id_us_plus(&node_group->id);
     BKE_id_free_us(&bmain, node_group);
-    return OPERATOR_CANCELLED;
+    return false;
   }
 
   ED_preview_kill_jobs(CTX_wm_manager(&C), CTX_data_main(&C));
@@ -398,8 +398,9 @@ static int add_node_group_asset(const bContext &C,
       C, ntreeTypeFind(node_group->idname)->group_idname, snode.runtime->cursor);
   if (!group_node) {
     BKE_report(&reports, RPT_WARNING, "Could not add node group");
-    return OPERATOR_CANCELLED;
+    return false;
   }
+  group_node->flag &= ~NODE_OPTIONS;
 
   group_node->id = &node_group->id;
   id_us_plus(group_node->id);
@@ -408,24 +409,9 @@ static int add_node_group_asset(const bContext &C,
   nodeSetActive(&edit_tree, group_node);
   ED_node_tree_propagate_change(&C, &bmain, nullptr);
   DEG_relations_tag_update(&bmain);
-  return OPERATOR_FINISHED;
+
+  return true;
 }
-
-// static int node_add_group_asset_exec(bContext *C, wmOperator *op)
-// {
-
-//   PointerRNA asset_ptr = RNA_pointer_get(op->ptr, "asset_handle");
-//   if (RNA_pointer_is_null(&asset_ptr)) {
-//     return OPERATOR_CANCELLED;
-//   }
-//   PointerRNA library_ptr = RNA_pointer_get(op->ptr, "library_reference");
-//   if (RNA_pointer_is_null(&library_ptr)) {
-//     return OPERATOR_CANCELLED;
-//   }
-//   const AssetHandle asset = *static_cast<AssetHandle *>(asset_ptr.data);
-//   const AssetLibraryReference &library = *static_cast<AssetLibraryReference
-//   *>(library_ptr.data);
-// }
 
 static int node_add_group_asset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
@@ -451,7 +437,16 @@ static int node_add_group_asset_invoke(bContext *C, wmOperator *op, const wmEven
 
   snode.runtime->cursor /= UI_DPI_FAC;
 
-  return add_node_group_asset(*C, *library_ref, handle, *op->reports);
+  const bool success = add_node_group_asset(*C, *library_ref, handle, *op->reports);
+
+  wmOperatorType *ot = WM_operatortype_find("NODE_OT_translate_attach_remove_on_cancel", true);
+  BLI_assert(ot);
+  PointerRNA ptr;
+  WM_operator_properties_create_ptr(&ptr, ot);
+  WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &ptr, nullptr);
+  WM_operator_properties_free(&ptr);
+
+  return success ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 void NODE_OT_add_group_asset(wmOperatorType *ot)
@@ -460,7 +455,6 @@ void NODE_OT_add_group_asset(wmOperatorType *ot)
   ot->description = "Add a node group asset to the node editor";
   ot->idname = "NODE_OT_add_group_asset";
 
-  // ot->exec = node_add_group_asset_exec;
   ot->invoke = node_add_group_asset_invoke;
   ot->poll = node_add_group_poll;
 
