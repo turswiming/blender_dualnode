@@ -95,7 +95,7 @@ void BKE_gpencil_cache_data_init(Depsgraph *depsgraph, Object *ob)
           MEM_SAFE_FREE(mmd->cache_data);
         }
         Object *ob_target = DEG_get_evaluated_object(depsgraph, ob);
-        Mesh *target = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target, false);
+        Mesh *target = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target);
         mmd->cache_data = MEM_callocN(sizeof(ShrinkwrapTreeData), __func__);
         if (BKE_shrinkwrap_init_tree(
                 mmd->cache_data, target, mmd->shrink_type, mmd->shrink_mode, false)) {
@@ -221,6 +221,9 @@ GpencilLineartLimitInfo BKE_gpencil_get_lineart_modifier_limits(const Object *ob
         info.max_level = MAX2(info.max_level,
                               (lmd->use_multiple_levels ? lmd->level_end : lmd->level_start));
         info.edge_types |= lmd->edge_types;
+        info.shadow_selection = MAX2(lmd->shadow_selection, info.shadow_selection);
+        info.silhouette_selection = MAX2(lmd->silhouette_selection, info.silhouette_selection);
+        is_first = false;
       }
     }
   }
@@ -237,11 +240,15 @@ void BKE_gpencil_set_lineart_modifier_limits(GpencilModifierData *md,
     lmd->level_start_override = info->min_level;
     lmd->level_end_override = info->max_level;
     lmd->edge_types_override = info->edge_types;
+    lmd->shadow_selection_override = info->shadow_selection;
+    lmd->shadow_use_silhouette_override = info->silhouette_selection;
   }
   else {
     lmd->level_start_override = lmd->level_start;
     lmd->level_end_override = lmd->level_end;
     lmd->edge_types_override = lmd->edge_types;
+    lmd->shadow_selection_override = lmd->shadow_selection;
+    lmd->shadow_use_silhouette_override = lmd->silhouette_selection;
   }
 }
 
@@ -353,7 +360,8 @@ GpencilModifierData *BKE_gpencil_modifier_new(int type)
   md->type = type;
   md->mode = eGpencilModifierMode_Realtime | eGpencilModifierMode_Render;
   md->flag = eGpencilModifierFlag_OverrideLibrary_Local;
-  md->ui_expand_flag = 1; /* Only expand the parent panel at first. */
+  /* Only expand the parent panel at first. */
+  md->ui_expand_flag = UI_PANEL_DATA_EXPAND_ROOT;
 
   if (mti->flags & eGpencilModifierTypeFlag_EnableInEditmode) {
     md->mode |= eGpencilModifierMode_Editmode;
@@ -669,7 +677,7 @@ static void copy_frame_to_eval_cb(bGPDlayer *gpl,
    * - When the frame is the layer's active frame (already handled in
    * gpencil_copy_visible_frames_to_eval).
    */
-  if (gpf == NULL || gpf == gpl->actframe) {
+  if (ELEM(gpf, NULL, gpl->actframe)) {
     return;
   }
 
@@ -687,7 +695,7 @@ static void gpencil_copy_visible_frames_to_eval(Depsgraph *depsgraph, Scene *sce
       gpl_eval->actframe = BKE_gpencil_layer_frame_get(gpl_eval, remap_cfra, GP_GETFRAME_USE_PREV);
     }
     /* Always copy active frame to eval, because the modifiers always evaluate the active frame,
-     * even if it's not visible (e.g. the layer is hidden).*/
+     * even if it's not visible (e.g. the layer is hidden). */
     if (gpl_eval->actframe != NULL) {
       copy_frame_to_eval_ex(gpl_eval->actframe->runtime.gpf_orig, gpl_eval->actframe);
     }
@@ -712,7 +720,14 @@ void BKE_gpencil_prepare_eval_data(Depsgraph *depsgraph, Scene *scene, Object *o
       do_parent = true;
       break;
     }
-    if ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) || (!is_one_v3(gpl->scale))) {
+
+    /* Only do layer transformations for non-zero or animated transforms. */
+    bool transformed = ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) ||
+                        (!is_one_v3(gpl->scale)));
+    float tmp_mat[4][4];
+    loc_eul_size_to_mat4(tmp_mat, gpl->location, gpl->rotation, gpl->scale);
+    transformed |= !equals_m4m4(gpl->layer_mat, tmp_mat);
+    if (transformed) {
       do_transform = true;
       break;
     }
@@ -889,6 +904,11 @@ void BKE_gpencil_modifier_blend_write(BlendWriter *writer, ListBase *modbase)
       BLO_write_struct_array(
           writer, DashGpencilModifierSegment, gpmd->segments_len, gpmd->segments);
     }
+    else if (md->type == eGpencilModifierType_Time) {
+      TimeGpencilModifierData *gpmd = (TimeGpencilModifierData *)md;
+      BLO_write_struct_array(
+          writer, TimeGpencilModifierSegment, gpmd->segments_len, gpmd->segments);
+    }
   }
 }
 
@@ -973,6 +993,13 @@ void BKE_gpencil_modifier_blend_read_data(BlendDataReader *reader, ListBase *lb)
       BLO_read_data_address(reader, &gpmd->segments);
       for (int i = 0; i < gpmd->segments_len; i++) {
         gpmd->segments[i].dmd = gpmd;
+      }
+    }
+    else if (md->type == eGpencilModifierType_Time) {
+      TimeGpencilModifierData *gpmd = (TimeGpencilModifierData *)md;
+      BLO_read_data_address(reader, &gpmd->segments);
+      for (int i = 0; i < gpmd->segments_len; i++) {
+        gpmd->segments[i].gpmd = gpmd;
       }
     }
     if (md->type == eGpencilModifierType_Shrinkwrap) {

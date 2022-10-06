@@ -78,7 +78,7 @@ static float icon_width_get(const SeqChannelDrawContext *context)
 
 static float widget_y_offset(const SeqChannelDrawContext *context)
 {
-  return (((context->channel_height / context->scale) - icon_width_get(context))) / 2;
+  return ((context->channel_height / context->scale) - icon_width_get(context)) / 2;
 }
 
 static float channel_index_y_min(const SeqChannelDrawContext *context, const int index)
@@ -97,7 +97,7 @@ static void displayed_channel_range_get(const SeqChannelDrawContext *context,
 
   rctf strip_boundbox;
   BLI_rctf_init(&strip_boundbox, 0.0f, 0.0f, 1.0f, r_channel_range[1]);
-  SEQ_timeline_expand_boundbox(context->seqbase, &strip_boundbox);
+  SEQ_timeline_expand_boundbox(context->scene, context->seqbase, &strip_boundbox);
   CLAMP(r_channel_range[0], strip_boundbox.ymin, strip_boundbox.ymax);
   CLAMP(r_channel_range[1], strip_boundbox.ymin, MAXSEQ);
 }

@@ -37,7 +37,7 @@
 
 #pragma mark KeyMap, mouse converters
 
-static GHOST_TButtonMask convertButton(int button)
+static GHOST_TButton convertButton(int button)
 {
   switch (button) {
     case 0:
@@ -787,7 +787,7 @@ GHOST_IWindow *GHOST_SystemCocoa::getWindowUnderCursor(int32_t x, int32_t y)
 }
 
 /**
- * \note : returns coordinates in Cocoa screen coordinates
+ * \note returns coordinates in Cocoa screen coordinates.
  */
 GHOST_TSuccess GHOST_SystemCocoa::getCursorPosition(int32_t &x, int32_t &y) const
 {
@@ -800,7 +800,7 @@ GHOST_TSuccess GHOST_SystemCocoa::getCursorPosition(int32_t &x, int32_t &y) cons
 }
 
 /**
- * \note : expect Cocoa screen coordinates
+ * \note expect Cocoa screen coordinates.
  */
 GHOST_TSuccess GHOST_SystemCocoa::setCursorPosition(int32_t x, int32_t y)
 {
@@ -856,7 +856,7 @@ GHOST_TSuccess GHOST_SystemCocoa::setMouseCursorPosition(int32_t x, int32_t y)
 
 GHOST_TSuccess GHOST_SystemCocoa::getModifierKeys(GHOST_ModifierKeys &keys) const
 {
-  keys.set(GHOST_kModifierKeyOS, (m_modifierMask & NSEventModifierFlagCommand) ? true : false);
+  keys.set(GHOST_kModifierKeyLeftOS, (m_modifierMask & NSEventModifierFlagCommand) ? true : false);
   keys.set(GHOST_kModifierKeyLeftAlt, (m_modifierMask & NSEventModifierFlagOption) ? true : false);
   keys.set(GHOST_kModifierKeyLeftShift,
            (m_modifierMask & NSEventModifierFlagShift) ? true : false);
@@ -1020,7 +1020,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleApplicationBecomeActiveEvent()
                                  (modifiers & NSEventModifierFlagCommand) ? GHOST_kEventKeyDown :
                                                                             GHOST_kEventKeyUp,
                                  window,
-                                 GHOST_kKeyOS,
+                                 GHOST_kKeyLeftOS,
                                  false));
   }
 
@@ -1123,6 +1123,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
     case GHOST_kEventDraggingEntered:
     case GHOST_kEventDraggingUpdated:
     case GHOST_kEventDraggingExited:
+      window->clientToScreenIntern(mouseX, mouseY, mouseX, mouseY);
       pushEvent(new GHOST_EventDragnDrop(
           getMilliSeconds(), eventType, draggedObjectType, window, mouseX, mouseY, NULL));
       break;
@@ -1331,6 +1332,8 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
           return GHOST_kFailure;
           break;
       }
+
+      window->clientToScreenIntern(mouseX, mouseY, mouseX, mouseY);
       pushEvent(new GHOST_EventDragnDrop(
           getMilliSeconds(), eventType, draggedObjectType, window, mouseX, mouseY, eventData));
 
@@ -1678,7 +1681,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
       /* we assume phases are only set for gestures from trackpad or magic
        * mouse events. note that using tablet at the same time may not work
        * since this is a static variable */
-      if (phase == NSEventPhaseBegan)
+      if (phase == NSEventPhaseBegan && m_multitouchGestures)
         m_multiTouchScroll = true;
       else if (phase == NSEventPhaseEnded)
         m_multiTouchScroll = false;
@@ -1779,7 +1782,6 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
   NSString *characters;
   NSData *convertedCharacters;
   GHOST_TKey keyCode;
-  unsigned char ascii;
   NSString *charsIgnoringModifiers;
 
   window = m_windowManager->getWindowAssociatedWithOSWindow((void *)[event window]);
@@ -1789,7 +1791,6 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
   }
 
   char utf8_buf[6] = {'\0'};
-  ascii = 0;
 
   switch ([event type]) {
 
@@ -1809,7 +1810,6 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
                                                                   kUCKeyActionUp);
       }
 
-      /* handling both unicode or ascii */
       characters = [event characters];
       if ([characters length] > 0) {
         convertedCharacters = [characters dataUsingEncoding:NSUTF8StringEncoding];
@@ -1835,41 +1835,31 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
       if ((keyCode == GHOST_kKeyQ) && (m_modifierMask & NSEventModifierFlagCommand))
         break;  // Cmd-Q is directly handled by Cocoa
 
-      /* ascii is a subset of unicode */
-      if (utf8_buf[0] && !utf8_buf[1]) {
-        ascii = utf8_buf[0];
-      }
-
       if ([event type] == NSEventTypeKeyDown) {
         pushEvent(new GHOST_EventKey([event timestamp] * 1000,
                                      GHOST_kEventKeyDown,
                                      window,
                                      keyCode,
-                                     ascii,
-                                     utf8_buf,
-                                     [event isARepeat]));
+                                     [event isARepeat],
+                                     utf8_buf));
 #if 0
-        printf("Key down rawCode=0x%x charsIgnoringModifiers=%c keyCode=%u ascii=%i %c utf8=%s\n",
+        printf("Key down rawCode=0x%x charsIgnoringModifiers=%c keyCode=%u utf8=%s\n",
                [event keyCode],
                [charsIgnoringModifiers length] > 0 ? [charsIgnoringModifiers characterAtIndex:0] :
                                                      ' ',
                keyCode,
-               ascii,
-               ascii,
                utf8_buf);
 #endif
       }
       else {
         pushEvent(new GHOST_EventKey(
-            [event timestamp] * 1000, GHOST_kEventKeyUp, window, keyCode, 0, NULL, false));
+            [event timestamp] * 1000, GHOST_kEventKeyUp, window, keyCode, false, NULL));
 #if 0
-        printf("Key up rawCode=0x%x charsIgnoringModifiers=%c keyCode=%u ascii=%i %c utf8=%s\n",
+        printf("Key up rawCode=0x%x charsIgnoringModifiers=%c keyCode=%u utf8=%s\n",
                [event keyCode],
                [charsIgnoringModifiers length] > 0 ? [charsIgnoringModifiers characterAtIndex:0] :
                                                      ' ',
                keyCode,
-               ascii,
-               ascii,
                utf8_buf);
 #endif
       }
@@ -1911,7 +1901,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
             [event timestamp] * 1000,
             (modifiers & NSEventModifierFlagCommand) ? GHOST_kEventKeyDown : GHOST_kEventKeyUp,
             window,
-            GHOST_kKeyOS,
+            GHOST_kKeyLeftOS,
             false));
       }
 

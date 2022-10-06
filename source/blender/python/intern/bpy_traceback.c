@@ -20,11 +20,12 @@
 
 static const char *traceback_filepath(PyTracebackObject *tb, PyObject **coerce)
 {
-  *coerce = PyUnicode_EncodeFSDefault(tb->tb_frame->f_code->co_filename);
+  PyCodeObject *code = PyFrame_GetCode(tb->tb_frame);
+  *coerce = PyUnicode_EncodeFSDefault(code->co_filename);
   return PyBytes_AS_STRING(*coerce);
 }
 
-/* copied from pythonrun.c, 3.10.0 */
+/* Copied from `pythonrun.c`, 3.10.0 */
 _Py_static_string(PyId_string, "<string>");
 
 static int parse_syntax_error(PyObject *err,

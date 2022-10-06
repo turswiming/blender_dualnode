@@ -23,6 +23,9 @@
 #include "BKE_shrinkwrap.h"
 #include "BKE_subdiv_ccg.h"
 
+using blender::MutableSpan;
+using blender::Span;
+
 /* -------------------------------------------------------------------- */
 /** \name Mesh Runtime Struct Utils
  * \{ */
@@ -75,7 +78,7 @@ void BKE_mesh_runtime_free_data(Mesh *mesh)
   mesh_runtime_free_mutexes(mesh);
 }
 
-void BKE_mesh_runtime_reset_on_copy(Mesh *mesh, const int UNUSED(flag))
+void BKE_mesh_runtime_reset_on_copy(Mesh *mesh, const int /*flag*/)
 {
   Mesh_Runtime *runtime = &mesh->runtime;
 
@@ -107,6 +110,13 @@ void BKE_mesh_runtime_clear_cache(Mesh *mesh)
   BKE_mesh_batch_cache_free(mesh);
   BKE_mesh_runtime_clear_edit_data(mesh);
   BKE_mesh_clear_derived_normals(mesh);
+}
+
+blender::Span<MLoopTri> Mesh::looptris() const
+{
+  const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(this);
+  const int num_looptris = BKE_mesh_runtime_looptri_len(this);
+  return {looptris, num_looptris};
 }
 
 /**
@@ -147,13 +157,27 @@ void BKE_mesh_runtime_looptri_recalc(Mesh *mesh)
 {
   mesh_ensure_looptri_data(mesh);
   BLI_assert(mesh->totpoly == 0 || mesh->runtime.looptris.array_wip != nullptr);
+  const Span<MVert> verts = mesh->verts();
+  const Span<MPoly> polys = mesh->polys();
+  const Span<MLoop> loops = mesh->loops();
 
-  BKE_mesh_recalc_looptri(mesh->mloop,
-                          mesh->mpoly,
-                          mesh->mvert,
-                          mesh->totloop,
-                          mesh->totpoly,
-                          mesh->runtime.looptris.array_wip);
+  if (!BKE_mesh_poly_normals_are_dirty(mesh)) {
+    BKE_mesh_recalc_looptri_with_normals(loops.data(),
+                                         polys.data(),
+                                         verts.data(),
+                                         mesh->totloop,
+                                         mesh->totpoly,
+                                         mesh->runtime.looptris.array_wip,
+                                         BKE_mesh_poly_normals_ensure(mesh));
+  }
+  else {
+    BKE_mesh_recalc_looptri(loops.data(),
+                            polys.data(),
+                            verts.data(),
+                            mesh->totloop,
+                            mesh->totpoly,
+                            mesh->runtime.looptris.array_wip);
+  }
 
   BLI_assert(mesh->runtime.looptris.array == nullptr);
   atomic_cas_ptr((void **)&mesh->runtime.looptris.array,
@@ -244,11 +268,8 @@ bool BKE_mesh_runtime_clear_edit_data(Mesh *mesh)
 
 void BKE_mesh_runtime_clear_geometry(Mesh *mesh)
 {
-  if (mesh->runtime.bvh_cache) {
-    bvhcache_free(mesh->runtime.bvh_cache);
-    mesh->runtime.bvh_cache = nullptr;
-  }
-  MEM_SAFE_FREE(mesh->runtime.looptris.array);
+  BKE_mesh_tag_coords_changed(mesh);
+
   /* TODO(sergey): Does this really belong here? */
   if (mesh->runtime.subdiv_ccg != nullptr) {
     BKE_subdiv_ccg_destroy(mesh->runtime.subdiv_ccg);
@@ -257,6 +278,31 @@ void BKE_mesh_runtime_clear_geometry(Mesh *mesh)
   BKE_shrinkwrap_discard_boundary_data(mesh);
 
   MEM_SAFE_FREE(mesh->runtime.subsurf_face_dot_tags);
+}
+
+void BKE_mesh_tag_coords_changed(Mesh *mesh)
+{
+  BKE_mesh_normals_tag_dirty(mesh);
+  MEM_SAFE_FREE(mesh->runtime.looptris.array);
+  if (mesh->runtime.bvh_cache) {
+    bvhcache_free(mesh->runtime.bvh_cache);
+    mesh->runtime.bvh_cache = nullptr;
+  }
+}
+
+void BKE_mesh_tag_coords_changed_uniformly(Mesh *mesh)
+{
+  const bool vert_normals_were_dirty = BKE_mesh_vertex_normals_are_dirty(mesh);
+  const bool poly_normals_were_dirty = BKE_mesh_poly_normals_are_dirty(mesh);
+
+  BKE_mesh_tag_coords_changed(mesh);
+  /* The normals didn't change, since all verts moved by the same amount. */
+  if (!vert_normals_were_dirty) {
+    BKE_mesh_vertex_normals_clear_dirty(mesh);
+  }
+  if (!poly_normals_were_dirty) {
+    BKE_mesh_poly_normals_clear_dirty(mesh);
+  }
 }
 
 /** \} */
@@ -302,6 +348,11 @@ bool BKE_mesh_runtime_is_valid(Mesh *me_eval)
     printf("MESH: %s\n", me_eval->id.name + 2);
   }
 
+  MutableSpan<MVert> verts = me_eval->verts_for_write();
+  MutableSpan<MEdge> edges = me_eval->edges_for_write();
+  MutableSpan<MPoly> polys = me_eval->polys_for_write();
+  MutableSpan<MLoop> loops = me_eval->loops_for_write();
+
   is_valid &= BKE_mesh_validate_all_customdata(
       &me_eval->vdata,
       me_eval->totvert,
@@ -316,21 +367,22 @@ bool BKE_mesh_runtime_is_valid(Mesh *me_eval)
       do_fixes,
       &changed);
 
-  is_valid &= BKE_mesh_validate_arrays(me_eval,
-                                       me_eval->mvert,
-                                       me_eval->totvert,
-                                       me_eval->medge,
-                                       me_eval->totedge,
-                                       me_eval->mface,
-                                       me_eval->totface,
-                                       me_eval->mloop,
-                                       me_eval->totloop,
-                                       me_eval->mpoly,
-                                       me_eval->totpoly,
-                                       me_eval->dvert,
-                                       do_verbose,
-                                       do_fixes,
-                                       &changed);
+  is_valid &= BKE_mesh_validate_arrays(
+      me_eval,
+      verts.data(),
+      verts.size(),
+      edges.data(),
+      edges.size(),
+      static_cast<MFace *>(CustomData_get_layer(&me_eval->fdata, CD_MFACE)),
+      me_eval->totface,
+      loops.data(),
+      loops.size(),
+      polys.data(),
+      polys.size(),
+      me_eval->deform_verts_for_write().data(),
+      do_verbose,
+      do_fixes,
+      &changed);
 
   BLI_assert(changed == false);
 

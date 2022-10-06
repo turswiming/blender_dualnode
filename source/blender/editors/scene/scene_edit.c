@@ -229,7 +229,7 @@ bool ED_scene_view_layer_delete(Main *bmain, Scene *scene, ViewLayer *layer, Rep
 
   BKE_view_layer_free(layer);
 
-  DEG_id_tag_update(&scene->id, 0);
+  DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS);
   DEG_relations_tag_update(bmain);
   WM_main_add_notifier(NC_SCENE | ND_LAYER | NA_REMOVED, scene);
 
@@ -333,7 +333,7 @@ static const EnumPropertyItem *scene_new_sequencer_enum_itemf(bContext *C,
   else {
     Scene *scene = CTX_data_scene(C);
     Sequence *seq = SEQ_select_active_get(scene);
-    if ((seq && (seq->type == SEQ_TYPE_SCENE) && (seq->scene != NULL))) {
+    if (seq && (seq->type == SEQ_TYPE_SCENE) && (seq->scene != NULL)) {
       has_scene_or_no_context = true;
     }
   }

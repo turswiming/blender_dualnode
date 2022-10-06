@@ -270,9 +270,6 @@ static VFontData *objfnt_to_ftvfontdata(PackedFile *pf)
 {
   /* Variables */
   FT_Face face;
-  const FT_ULong charcode_reserve = 256;
-  FT_ULong charcode = 0, lcode;
-  FT_UInt glyph_index;
   VFontData *vfd;
 
   /* load the freetype font */
@@ -305,9 +302,6 @@ static VFontData *objfnt_to_ftvfontdata(PackedFile *pf)
     return NULL;
   }
 
-  /* Extract the first 256 character from TTF */
-  lcode = charcode = FT_Get_First_Char(face, &glyph_index);
-
   /* Blender default BFont is not "complete". */
   const bool complete_font = (face->ascender != 0) && (face->descender != 0) &&
                              (face->ascender != face->descender);
@@ -335,21 +329,19 @@ static VFontData *objfnt_to_ftvfontdata(PackedFile *pf)
     vfd->scale = 1.0f / 1000.0f;
   }
 
-  /* Load characters */
-  vfd->characters = BLI_ghash_int_new_ex(__func__, charcode_reserve);
+  /* Load the first 256 glyphs. */
 
-  while (charcode < charcode_reserve) {
-    /* Generate the font data */
-    freetypechar_to_vchar(face, charcode, vfd);
+  const FT_ULong preload_count = 256;
+  vfd->characters = BLI_ghash_int_new_ex(__func__, preload_count);
 
-    /* Next glyph */
+  FT_ULong charcode = 0;
+  FT_UInt glyph_index;
+  for (int i = 0; i < preload_count; i++) {
     charcode = FT_Get_Next_Char(face, charcode, &glyph_index);
-
-    /* Check that we won't start infinite loop */
-    if (charcode <= lcode) {
+    if (!charcode || !glyph_index) {
       break;
     }
-    lcode = charcode;
+    freetypechar_to_vchar(face, charcode, vfd);
   }
 
   return vfd;
@@ -418,7 +410,7 @@ VFontData *BKE_vfontdata_copy(const VFontData *vfont_src, const int UNUSED(flag)
   return vfont_dst;
 }
 
-VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, unsigned long character)
+VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, ulong character)
 {
   VChar *che = NULL;
 

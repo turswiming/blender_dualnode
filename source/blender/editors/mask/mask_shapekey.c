@@ -33,7 +33,7 @@
 static int mask_shape_key_insert_exec(bContext *C, wmOperator *UNUSED(op))
 {
   Scene *scene = CTX_data_scene(C);
-  const int frame = CFRA;
+  const int frame = scene->r.cfra;
   Mask *mask = CTX_data_edit_mask(C);
   bool changed = false;
 
@@ -76,7 +76,7 @@ void MASK_OT_shape_key_insert(wmOperatorType *ot)
 static int mask_shape_key_clear_exec(bContext *C, wmOperator *UNUSED(op))
 {
   Scene *scene = CTX_data_scene(C);
-  const int frame = CFRA;
+  const int frame = scene->r.cfra;
   Mask *mask = CTX_data_edit_mask(C);
   bool changed = false;
 
@@ -122,7 +122,7 @@ void MASK_OT_shape_key_clear(wmOperatorType *ot)
 static int mask_shape_key_feather_reset_exec(bContext *C, wmOperator *UNUSED(op))
 {
   Scene *scene = CTX_data_scene(C);
-  const int frame = CFRA;
+  const int frame = scene->r.cfra;
   Mask *mask = CTX_data_edit_mask(C);
   bool changed = false;
 
@@ -136,9 +136,9 @@ static int mask_shape_key_feather_reset_exec(bContext *C, wmOperator *UNUSED(op)
       MaskLayerShape *mask_layer_shape_reset;
       MaskLayerShape *mask_layer_shape;
 
-      /* get the shapekey of the current state */
+      /* Get the shape-key of the current state. */
       mask_layer_shape_reset = BKE_mask_layer_shape_alloc(mask_layer, frame);
-      /* initialize from mask - as if inseting a keyframe */
+      /* Initialize from mask - as if inserting a keyframe. */
       BKE_mask_layer_shape_from_mask(mask_layer, mask_layer_shape_reset);
 
       for (mask_layer_shape = mask_layer->splines_shapes.first; mask_layer_shape;
@@ -214,7 +214,7 @@ void MASK_OT_shape_key_feather_reset(wmOperatorType *ot)
 static int mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
-  const int frame = CFRA;
+  const int frame = scene->r.cfra;
   Mask *mask = CTX_data_edit_mask(C);
   bool changed = false;
 

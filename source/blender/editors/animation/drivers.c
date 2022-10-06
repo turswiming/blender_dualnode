@@ -39,6 +39,7 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_path.h"
 #include "RNA_prototypes.h"
 
 #include "anim_intern.h"
@@ -124,7 +125,7 @@ struct FCurve *alloc_driver_fcurve(const char rna_path[],
       insert_vert_fcurve(
           fcu, 1.0f, 1.0f, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST | INSERTKEY_NO_USERPREF);
       fcu->extend = FCURVE_EXTRAPOLATE_LINEAR;
-      calchandles_fcurve(fcu);
+      BKE_fcurve_handles_recalc(fcu);
     }
   }
 
@@ -1125,7 +1126,7 @@ void ANIM_OT_driver_button_remove(wmOperatorType *ot)
   ot->name = "Remove Driver";
   ot->idname = "ANIM_OT_driver_button_remove";
   ot->description =
-      "Remove the driver(s) for the property(s) connected represented by the highlighted button";
+      "Remove the driver(s) for the connected property(s) represented by the highlighted button";
 
   /* callbacks */
   ot->exec = remove_driver_button_exec;
@@ -1162,7 +1163,7 @@ void ANIM_OT_driver_button_edit(wmOperatorType *ot)
   ot->name = "Edit Driver";
   ot->idname = "ANIM_OT_driver_button_edit";
   ot->description =
-      "Edit the drivers for the property connected represented by the highlighted button";
+      "Edit the drivers for the connected property represented by the highlighted button";
 
   /* callbacks */
   ot->exec = edit_driver_button_exec;
@@ -1256,7 +1257,7 @@ void ANIM_OT_paste_driver_button(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Paste Driver";
   ot->idname = "ANIM_OT_paste_driver_button";
-  ot->description = "Paste the driver in the copy/paste buffer for the highlighted button";
+  ot->description = "Paste the driver in the clipboard to the highlighted button";
 
   /* callbacks */
   ot->exec = paste_driver_button_exec;

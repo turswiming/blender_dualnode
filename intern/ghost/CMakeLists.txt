@@ -3,13 +3,14 @@
 
 set(INC
   .
-  ../glew-mx
+  ../clog
+  ../../source/blender/blenlib
   ../../source/blender/imbuf
   ../../source/blender/makesdna
 )
 
 set(INC_SYS
-  ${GLEW_INCLUDE_PATH}
+  ${Epoxy_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -24,6 +25,7 @@ set(SRC
   intern/GHOST_ISystemPaths.cpp
   intern/GHOST_ModifierKeys.cpp
   intern/GHOST_Path-api.cpp
+  intern/GHOST_PathUtils.cpp
   intern/GHOST_Rect.cpp
   intern/GHOST_System.cpp
   intern/GHOST_TimerManager.cpp
@@ -58,6 +60,7 @@ set(SRC
   intern/GHOST_EventTrackpad.h
   intern/GHOST_EventWheel.h
   intern/GHOST_ModifierKeys.h
+  intern/GHOST_PathUtils.h
   intern/GHOST_System.h
   intern/GHOST_SystemPaths.h
   intern/GHOST_TimerManager.h
@@ -65,11 +68,12 @@ set(SRC
   intern/GHOST_Util.h
   intern/GHOST_Window.h
   intern/GHOST_WindowManager.h
+  intern/GHOST_utildefines.h
+  intern/GHOST_utildefines_variadic.h
 )
 
 set(LIB
-  bf_intern_glew_mx
-  ${GLEW_LIBRARY}
+  ${Epoxy_LIBRARIES}
 )
 
 if(WITH_GHOST_DEBUG)
@@ -99,42 +103,39 @@ if(WITH_INPUT_NDOF)
   )
 endif()
 
-if(WITH_HEADLESS OR WITH_GHOST_SDL)
-  if(WITH_HEADLESS)
-    list(APPEND SRC
-      intern/GHOST_DisplayManagerNULL.h
-      intern/GHOST_SystemNULL.h
-      intern/GHOST_WindowNULL.h
+list(APPEND SRC
+  intern/GHOST_DisplayManagerNULL.h
+  intern/GHOST_SystemHeadless.h
+  intern/GHOST_WindowNULL.h
+)
+
+if(WITH_HEADLESS)
+  add_definitions(-DWITH_HEADLESS)
+elseif (WITH_GHOST_SDL)
+  list(APPEND SRC
+    intern/GHOST_ContextSDL.cpp
+    intern/GHOST_DisplayManagerSDL.cpp
+    intern/GHOST_SystemSDL.cpp
+    intern/GHOST_WindowSDL.cpp
+
+    intern/GHOST_ContextSDL.h
+    intern/GHOST_DisplayManagerSDL.h
+    intern/GHOST_SystemSDL.h
+    intern/GHOST_WindowSDL.h
+  )
+  add_definitions(-DWITH_GHOST_SDL)
+
+  list(APPEND INC_SYS
+    ${SDL_INCLUDE_DIR}
+  )
+  if(WITH_SDL_DYNLOAD)
+    list(APPEND LIB
+      extern_sdlew
     )
-    add_definitions(-DWITH_HEADLESS)
   else()
-    list(APPEND SRC
-      intern/GHOST_ContextSDL.cpp
-      intern/GHOST_DisplayManagerSDL.cpp
-      intern/GHOST_SystemSDL.cpp
-      intern/GHOST_WindowSDL.cpp
-
-      intern/GHOST_ContextSDL.h
-      intern/GHOST_DisplayManagerSDL.h
-      intern/GHOST_SystemSDL.h
-      intern/GHOST_WindowSDL.h
+    list(APPEND LIB
+      ${SDL_LIBRARY}
     )
-    add_definitions(-DWITH_GHOST_SDL)
-  endif()
-
-  if(NOT WITH_HEADLESS)
-    list(APPEND INC_SYS
-      ${SDL_INCLUDE_DIR}
-    )
-    if(WITH_SDL_DYNLOAD)
-      list(APPEND LIB
-        extern_sdlew
-      )
-    else()
-      list(APPEND LIB
-        ${SDL_LIBRARY}
-      )
-    endif()
   endif()
 
 elseif(APPLE AND NOT WITH_GHOST_X11)
@@ -152,13 +153,11 @@ elseif(APPLE AND NOT WITH_GHOST_X11)
     intern/GHOST_WindowViewCocoa.h
   )
 
-  if(NOT WITH_GL_EGL)
-    list(APPEND SRC
-      intern/GHOST_ContextCGL.mm
+  list(APPEND SRC
+    intern/GHOST_ContextCGL.mm
 
-      intern/GHOST_ContextCGL.h
-    )
-  endif()
+    intern/GHOST_ContextCGL.h
+  )
 
   if(WITH_INPUT_NDOF)
     list(APPEND SRC
@@ -192,13 +191,11 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       intern/GHOST_WindowX11.h
     )
 
-    if(NOT WITH_GL_EGL)
-      list(APPEND SRC
-        intern/GHOST_ContextGLX.cpp
+    list(APPEND SRC
+      intern/GHOST_ContextGLX.cpp
 
-        intern/GHOST_ContextGLX.h
-      )
-    endif()
+      intern/GHOST_ContextGLX.h
+    )
 
     if(WITH_GHOST_XDND)
       add_definitions(-DWITH_XDND)
@@ -245,10 +242,6 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       )
     endif()
 
-    if(WITH_X11_ALPHA)
-      add_definitions(-DWITH_X11_ALPHA)
-    endif()
-
     if(WITH_X11_XINPUT)
       add_definitions(-DWITH_X11_XINPUT)
       list(APPEND INC_SYS
@@ -268,12 +261,34 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       ${wayland-egl_INCLUDE_DIRS}
       ${xkbcommon_INCLUDE_DIRS}
       ${wayland-cursor_INCLUDE_DIRS}
-      ${dbus_INCLUDE_DIRS}
     )
+
+    if(WITH_GHOST_WAYLAND_DYNLOAD)
+      list(APPEND INC_SYS
+        ../../intern/wayland_dynload/extern
+      )
+      list(APPEND LIB
+        bf_intern_wayland_dynload
+      )
+      add_definitions(-DWITH_GHOST_WAYLAND_DYNLOAD)
+    endif()
+
+    if(WITH_GHOST_WAYLAND_DBUS)
+      list(APPEND INC_SYS
+        ${dbus_INCLUDE_DIRS}
+      )
+    endif()
+
+    if(WITH_GHOST_WAYLAND_LIBDECOR)
+      list(APPEND INC_SYS
+        ${libdecor_INCLUDE_DIRS}
+      )
+    endif()
 
     include(CheckSymbolExists)
     set(CMAKE_REQUIRED_DEFINITIONS "-D_GNU_SOURCE")
     check_symbol_exists(memfd_create "sys/mman.h" HAVE_MEMFD_CREATE)
+    unset(CMAKE_REQUIRED_DEFINITIONS)
     if(HAVE_MEMFD_CREATE)
       add_definitions(-DHAVE_MEMFD_CREATE)
     endif()
@@ -284,24 +299,9 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
 
       intern/GHOST_SystemWayland.h
       intern/GHOST_WaylandCursorSettings.h
+      intern/GHOST_WaylandUtils.h
       intern/GHOST_WindowWayland.h
     )
-
-    pkg_get_variable(WAYLAND_SCANNER wayland-scanner wayland_scanner)
-
-    pkg_check_modules(wayland-protocols wayland-protocols>=1.15)
-    if(${wayland-protocols_FOUND})
-      pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
-    else()
-      find_path(WAYLAND_PROTOCOLS_DIR
-        NAMES unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
-        PATH_SUFFIXES share/wayland-protocols
-      )
-    endif()
-
-    if(NOT EXISTS ${WAYLAND_PROTOCOLS_DIR})
-      message(FATAL_ERROR "path to wayland-protocols not found")
-    endif()
 
     set(INC_DST ${CMAKE_CURRENT_BINARY_DIR}/libwayland)
 
@@ -332,14 +332,17 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       ${INC_DST}
     )
 
-    # `xdg-shell`.
-    generate_protocol_bindings(
-      "${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml"
-    )
-    # `xdg-decoration`.
-    generate_protocol_bindings(
-      "${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml"
-    )
+    if(NOT WITH_GHOST_WAYLAND_LIBDECOR)
+      # `xdg-shell`.
+      generate_protocol_bindings(
+        "${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml"
+      )
+      # `xdg-decoration`.
+      generate_protocol_bindings(
+        "${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml"
+      )
+    endif()
+
     # `xdg-output`.
     generate_protocol_bindings(
       "${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-output/xdg-output-unstable-v1.xml"
@@ -404,13 +407,11 @@ elseif(WIN32)
     intern/GHOST_Wintab.h
   )
 
-  if(NOT WITH_GL_EGL)
-    list(APPEND SRC
-      intern/GHOST_ContextWGL.cpp
+  list(APPEND SRC
+    intern/GHOST_ContextWGL.cpp
 
-      intern/GHOST_ContextWGL.h
-    )
-  endif()
+    intern/GHOST_ContextWGL.h
+  )
 
   if(WITH_INPUT_IME)
     add_definitions(-DWITH_INPUT_IME)
@@ -431,7 +432,7 @@ elseif(WIN32)
   endif()
 endif()
 
-if(WITH_GL_EGL AND NOT (WITH_HEADLESS OR WITH_GHOST_SDL))
+if(UNIX AND NOT APPLE)
   list(APPEND SRC
     intern/GHOST_ContextEGL.cpp
 
@@ -521,11 +522,8 @@ if(WITH_XR_OPENXR)
       list(APPEND XR_PLATFORM_DEFINES -DXR_USE_PLATFORM_WAYLAND)
     endif()
     if(WITH_GHOST_X11)
-      if(WITH_GL_EGL)
-        list(APPEND XR_PLATFORM_DEFINES -DXR_USE_PLATFORM_EGL)
-      else()
-        list(APPEND XR_PLATFORM_DEFINES -DXR_USE_PLATFORM_XLIB)
-      endif()
+      list(APPEND XR_PLATFORM_DEFINES -DXR_USE_PLATFORM_EGL)
+      list(APPEND XR_PLATFORM_DEFINES -DXR_USE_PLATFORM_XLIB)
     endif()
   endif()
 
@@ -533,7 +531,5 @@ if(WITH_XR_OPENXR)
 
   unset(XR_PLATFORM_DEFINES)
 endif()
-
-add_definitions(${GL_DEFINITIONS})
 
 blender_add_lib(bf_intern_ghost "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

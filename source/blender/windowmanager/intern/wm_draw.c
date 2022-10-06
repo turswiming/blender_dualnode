@@ -225,10 +225,9 @@ static void wm_software_cursor_draw_bitmap(const int event_xy[2],
       imm_format, "texCoord", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
   /* Use 3D image for correct display of planar tracked images. */
-  immBindBuiltinProgram(GPU_SHADER_3D_IMAGE_MODULATE_ALPHA);
+  immBindBuiltinProgram(GPU_SHADER_3D_IMAGE);
 
   immBindTexture("image", texture);
-  immUniform1f("alpha", 1.0f);
 
   immBegin(GPU_PRIM_TRI_FAN, 4);
 
@@ -263,7 +262,7 @@ static void wm_software_cursor_draw_crosshair(const int event_xy[2])
   const float unit = max_ff(U.dpi_fac, 1.0f);
   uint pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
-  immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   immUniformColor4f(1, 1, 1, 1);
   {
@@ -309,7 +308,7 @@ static void wm_software_cursor_draw(wmWindow *win, const struct GrabState *grab_
       event_xy[0] = mod_i(event_xy[0] - min, max - min) + min;
     }
   }
-  if (grab_state->wrap_axis & GHOST_kGrabAxisY) {
+  if (grab_state->wrap_axis & GHOST_kAxisY) {
     const int height = WM_window_pixels_y(win);
     const int min = height - grab_state->bounds[1];
     const int max = height - grab_state->bounds[3];
@@ -895,7 +894,8 @@ static void wm_draw_window_offscreen(bContext *C, wmWindow *win, bool stereo)
 
     if (area->flag & AREA_FLAG_ACTIVE_TOOL_UPDATE) {
       if ((1 << area->spacetype) & WM_TOOLSYSTEM_SPACE_MASK) {
-        WM_toolsystem_update_from_context(C, CTX_wm_workspace(C), CTX_data_view_layer(C), area);
+        WM_toolsystem_update_from_context(
+            C, CTX_wm_workspace(C), CTX_data_scene(C), CTX_data_view_layer(C), area);
       }
       area->flag &= ~AREA_FLAG_ACTIVE_TOOL_UPDATE;
     }
@@ -957,7 +957,7 @@ static void wm_draw_window_offscreen(bContext *C, wmWindow *win, bool stereo)
     GPU_debug_group_end();
   }
 
-  /* Draw menus into their own framebuffer. */
+  /* Draw menus into their own frame-buffer. */
   LISTBASE_FOREACH (ARegion *, region, &screen->regionbase) {
     if (!region->visible) {
       continue;
@@ -994,7 +994,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
 
   GPU_debug_group_begin("Window Redraw");
 
-  /* Draw into the window framebuffer, in full window coordinates. */
+  /* Draw into the window frame-buffer, in full window coordinates. */
   wmWindowViewport(win);
 
   /* We draw on all pixels of the windows so we don't need to clear them before.
@@ -1098,23 +1098,25 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
 
 static void wm_draw_window(bContext *C, wmWindow *win)
 {
+  GPU_context_begin_frame(win->gpuctx);
+
   bScreen *screen = WM_window_get_active_screen(win);
   bool stereo = WM_stereo3d_enabled(win, false);
 
   /* Avoid any BGL call issued before this to alter the window drawin. */
   GPU_bgl_end();
 
-  /* Draw area regions into their own framebuffer. This way we can redraw
-   * the areas that need it, and blit the rest from existing framebuffers. */
+  /* Draw area regions into their own frame-buffer. This way we can redraw
+   * the areas that need it, and blit the rest from existing frame-buffers. */
   wm_draw_window_offscreen(C, win, stereo);
 
-  /* Now we draw into the window framebuffer, in full window coordinates. */
+  /* Now we draw into the window frame-buffer, in full window coordinates. */
   if (!stereo) {
     /* Regular mono drawing. */
     wm_draw_window_onscreen(C, win, -1);
   }
   else if (win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
-    /* For pageflip we simply draw to both back buffers. */
+    /* For page-flip we simply draw to both back buffers. */
     GPU_backbuffer_bind(GPU_BACKBUFFER_RIGHT);
     wm_draw_window_onscreen(C, win, 1);
 
@@ -1123,12 +1125,12 @@ static void wm_draw_window(bContext *C, wmWindow *win)
   }
   else if (ELEM(win->stereo3d_format->display_mode, S3D_DISPLAY_ANAGLYPH, S3D_DISPLAY_INTERLACE)) {
     /* For anaglyph and interlace, we draw individual regions with
-     * stereo framebuffers using different shaders. */
+     * stereo frame-buffers using different shaders. */
     wm_draw_window_onscreen(C, win, -1);
   }
   else {
     /* For side-by-side and top-bottom, we need to render each view to an
-     * an offscreen texture and then draw it. This used to happen for all
+     * an off-screen texture and then draw it. This used to happen for all
      * stereo methods, but it's less efficient than drawing directly. */
     const int width = WM_window_pixels_x(win);
     const int height = WM_window_pixels_y(win);
@@ -1167,6 +1169,8 @@ static void wm_draw_window(bContext *C, wmWindow *win)
   }
 
   screen->do_draw = false;
+
+  GPU_context_end_frame(win->gpuctx);
 }
 
 /**
@@ -1177,10 +1181,47 @@ static void wm_draw_surface(bContext *C, wmSurface *surface)
   wm_window_clear_drawable(CTX_wm_manager(C));
   wm_surface_make_drawable(surface);
 
+  GPU_context_begin_frame(surface->gpu_ctx);
+
   surface->draw(C);
+
+  GPU_context_end_frame(surface->gpu_ctx);
 
   /* Avoid interference with window drawable */
   wm_surface_clear_drawable();
+}
+
+uint *WM_window_pixels_read_offscreen(bContext *C, wmWindow *win, int r_size[2])
+{
+  /* NOTE(@campbellbarton): There is a problem reading the windows front-buffer after redrawing
+   * the window in some cases (typically to clear UI elements such as menus or search popup).
+   * With EGL `eglSurfaceAttrib(..)` may support setting the `EGL_SWAP_BEHAVIOR` attribute to
+   * `EGL_BUFFER_PRESERVED` however not all implementations support this.
+   * Requesting the ability with `EGL_SWAP_BEHAVIOR_PRESERVED_BIT` can even cause the EGL context
+   * not to initialize at all.
+   * Confusingly there are some cases where this *does* work, depending on the state of the window
+   * and prior calls to swap-buffers, however ensuring the state exactly as needed to satisfy a
+   * particular GPU back-end is fragile, see T98462.
+   *
+   * So provide an alternative to #WM_window_pixels_read that avoids using the front-buffer. */
+
+  /* Draw into an off-screen buffer and read it's contents. */
+  r_size[0] = WM_window_pixels_x(win);
+  r_size[1] = WM_window_pixels_y(win);
+
+  GPUOffScreen *offscreen = GPU_offscreen_create(r_size[0], r_size[1], false, GPU_RGBA8, NULL);
+  if (UNLIKELY(!offscreen)) {
+    return NULL;
+  }
+
+  const uint rect_len = r_size[0] * r_size[1];
+  uint *rect = MEM_mallocN(sizeof(*rect) * rect_len, __func__);
+  GPU_offscreen_bind(offscreen, false);
+  wm_draw_window_onscreen(C, win, -1);
+  GPU_offscreen_unbind(offscreen, false);
+  GPU_offscreen_read_pixels(offscreen, GPU_DATA_UBYTE, rect);
+  GPU_offscreen_free(offscreen);
+  return rect;
 }
 
 /** \} */

@@ -18,12 +18,10 @@
 #include FT_GLYPH_H
 #include FT_OUTLINE_H
 #include FT_BITMAP_H
-#include FT_ADVANCES_H /* For FT_Get_Advance. */
+#include FT_ADVANCES_H         /* For FT_Get_Advance. */
+#include FT_MULTIPLE_MASTERS_H /* Variable font support. */
 
 #include "MEM_guardedalloc.h"
-
-#include "DNA_userdef_types.h"
-#include "DNA_vec_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_rect.h"
@@ -32,7 +30,6 @@
 #include "BLF_api.h"
 
 #include "GPU_capabilities.h"
-#include "GPU_immediate.h"
 
 #include "blf_internal.h"
 #include "blf_internal_types.h"
@@ -40,6 +37,13 @@
 #include "BLI_math_vector.h"
 #include "BLI_strict_flags.h"
 #include "BLI_string_utf8.h"
+
+/**
+ * Convert glyph coverage amounts to lightness values. Uses a LUT that perceptually improves
+ * anti-aliasing and results in text that looks a bit fuller and slightly brighter. This should
+ * be reconsidered in some - or all - cases when we transform the entire UI.
+ */
+#define BLF_GAMMA_CORRECT_GLYPHS
 
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
@@ -59,12 +63,14 @@ static FT_Fixed to_16dot16(double val)
 /** \name Glyph Cache
  * \{ */
 
-static GlyphCacheBLF *blf_glyph_cache_find(FontBLF *font, float size, unsigned int dpi)
+static GlyphCacheBLF *blf_glyph_cache_find(const FontBLF *font, const float size)
 {
   GlyphCacheBLF *gc = (GlyphCacheBLF *)font->cache.first;
   while (gc) {
-    if (gc->size == size && gc->dpi == dpi && (gc->bold == ((font->flags & BLF_BOLD) != 0)) &&
-        (gc->italic == ((font->flags & BLF_ITALIC) != 0))) {
+    if (gc->size == size && (gc->bold == ((font->flags & BLF_BOLD) != 0)) &&
+        (gc->italic == ((font->flags & BLF_ITALIC) != 0)) &&
+        (gc->char_weight == font->char_weight) && (gc->char_slant == font->char_slant) &&
+        (gc->char_width == font->char_width) && (gc->char_spacing == font->char_spacing)) {
       return gc;
     }
     gc = gc->next;
@@ -79,24 +85,29 @@ static GlyphCacheBLF *blf_glyph_cache_new(FontBLF *font)
   gc->next = NULL;
   gc->prev = NULL;
   gc->size = font->size;
-  gc->dpi = font->dpi;
   gc->bold = ((font->flags & BLF_BOLD) != 0);
   gc->italic = ((font->flags & BLF_ITALIC) != 0);
+  gc->char_weight = font->char_weight;
+  gc->char_slant = font->char_slant;
+  gc->char_width = font->char_width;
+  gc->char_spacing = font->char_spacing;
 
   memset(gc->glyph_ascii_table, 0, sizeof(gc->glyph_ascii_table));
   memset(gc->bucket, 0, sizeof(gc->bucket));
 
+  blf_ensure_size(font);
+
   /* Determine ideal fixed-width size for monospaced output. */
-  FT_UInt gindex = FT_Get_Char_Index(font->face, U'0');
-  if (gindex) {
+  FT_UInt gindex = blf_get_char_index(font, U'0');
+  if (gindex && font->face) {
     FT_Fixed advance = 0;
     FT_Get_Advance(font->face, gindex, FT_LOAD_NO_HINTING, &advance);
     /* Use CSS 'ch unit' width, advance of zero character. */
     gc->fixed_width = (int)(advance >> 16);
   }
   else {
-    /* Font does not contain "0" so use CSS fallback of 1/2 of em. */
-    gc->fixed_width = (int)((font->face->size->metrics.height / 2) >> 6);
+    /* Font does not have a face or does not contain "0" so use CSS fallback of 1/2 of em. */
+    gc->fixed_width = (int)((font->ft_size->metrics.height / 2) >> 6);
   }
   if (gc->fixed_width < 1) {
     gc->fixed_width = 1;
@@ -108,9 +119,9 @@ static GlyphCacheBLF *blf_glyph_cache_new(FontBLF *font)
 
 GlyphCacheBLF *blf_glyph_cache_acquire(FontBLF *font)
 {
-  BLI_spin_lock(font->glyph_cache_mutex);
+  BLI_mutex_lock(&font->glyph_cache_mutex);
 
-  GlyphCacheBLF *gc = blf_glyph_cache_find(font, font->size, font->dpi);
+  GlyphCacheBLF *gc = blf_glyph_cache_find(font, font->size);
 
   if (!gc) {
     gc = blf_glyph_cache_new(font);
@@ -121,7 +132,7 @@ GlyphCacheBLF *blf_glyph_cache_acquire(FontBLF *font)
 
 void blf_glyph_cache_release(FontBLF *font)
 {
-  BLI_spin_unlock(font->glyph_cache_mutex);
+  BLI_mutex_unlock(&font->glyph_cache_mutex);
 }
 
 static void blf_glyph_cache_free(GlyphCacheBLF *gc)
@@ -145,13 +156,13 @@ void blf_glyph_cache_clear(FontBLF *font)
 {
   GlyphCacheBLF *gc;
 
-  BLI_spin_lock(font->glyph_cache_mutex);
+  BLI_mutex_lock(&font->glyph_cache_mutex);
 
   while ((gc = BLI_pophead(&font->cache))) {
     blf_glyph_cache_free(gc);
   }
 
-  BLI_spin_unlock(font->glyph_cache_mutex);
+  BLI_mutex_unlock(&font->glyph_cache_mutex);
 }
 
 /**
@@ -159,7 +170,7 @@ void blf_glyph_cache_clear(FontBLF *font)
  *
  * \return NULL if not found.
  */
-static GlyphBLF *blf_glyph_cache_find_glyph(GlyphCacheBLF *gc, uint charcode)
+static GlyphBLF *blf_glyph_cache_find_glyph(const GlyphCacheBLF *gc, uint charcode)
 {
   if (charcode < GLYPH_ASCII_TABLE_SIZE) {
     return gc->glyph_ascii_table[charcode];
@@ -174,6 +185,43 @@ static GlyphBLF *blf_glyph_cache_find_glyph(GlyphCacheBLF *gc, uint charcode)
   }
   return NULL;
 }
+
+#ifdef BLF_GAMMA_CORRECT_GLYPHS
+
+/**
+ * Gamma correction of glyph coverage values with widely-recommended gamma of 1.43.
+ * "The reasons are historical. Because so many programmers have neglected gamma blending for so
+ * long, people who have created fonts have tried to work around the problem of fonts looking too
+ * thin by just making the fonts thicker! Obviously it doesn't help the jaggedness, but it does
+ * make them look the proper weight, as originally intended. The obvious problem with this is
+ * that if we want to gamma blend correctly many older fonts will look wrong. So we compromise,
+ * and use a lower gamma value, so we get a bit better anti-aliasing, but the fonts don't look too
+ * heavy."
+ * https://www.puredevsoftware.com/blog/2019/01/22/sub-pixel-gamma-correct-font-rendering/
+ */
+static uchar blf_glyph_gamma(uchar c)
+{
+  /* The following is `(char)(powf(c / 256.0f, 1.0f / 1.43f) * 256.0f)`. */
+  static const uchar gamma[256] = {
+      0,   5,   9,   11,  14,  16,  19,  21,  23,  25,  26,  28,  30,  32,  34,  35,  37,  38,
+      40,  41,  43,  44,  46,  47,  49,  50,  52,  53,  54,  56,  57,  58,  60,  61,  62,  64,
+      65,  66,  67,  69,  70,  71,  72,  73,  75,  76,  77,  78,  79,  80,  82,  83,  84,  85,
+      86,  87,  88,  89,  91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 104,
+      105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122,
+      123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 133, 134, 135, 136, 137, 138, 139,
+      140, 141, 142, 143, 143, 144, 145, 146, 147, 148, 149, 150, 151, 151, 152, 153, 154, 155,
+      156, 157, 157, 158, 159, 160, 161, 162, 163, 163, 164, 165, 166, 167, 168, 168, 169, 170,
+      171, 172, 173, 173, 174, 175, 176, 177, 178, 178, 179, 180, 181, 182, 182, 183, 184, 185,
+      186, 186, 187, 188, 189, 190, 190, 191, 192, 193, 194, 194, 195, 196, 197, 198, 198, 199,
+      200, 201, 201, 202, 203, 204, 205, 205, 206, 207, 208, 208, 209, 210, 211, 211, 212, 213,
+      214, 214, 215, 216, 217, 217, 218, 219, 220, 220, 221, 222, 223, 223, 224, 225, 226, 226,
+      227, 228, 229, 229, 230, 231, 231, 232, 233, 234, 234, 235, 236, 237, 237, 238, 239, 239,
+      240, 241, 242, 242, 243, 244, 244, 245, 246, 247, 247, 248, 249, 249, 250, 251, 251, 252,
+      253, 254, 254, 255};
+  return gamma[c];
+}
+
+#endif /* BLF_GAMMA_CORRECT_GLYPHS */
 
 /**
  * Add a rendered glyph to a cache.
@@ -210,11 +258,19 @@ static GlyphBLF *blf_glyph_cache_add_glyph(
         glyph->bitmap.buffer[i] = glyph->bitmap.buffer[i] ? 255 : 0;
       }
     }
+    else {
+#ifdef BLF_GAMMA_CORRECT_GLYPHS
+      /* Convert coverage amounts to perceptually-improved lightness values. */
+      for (int i = 0; i < buffer_size; i++) {
+        glyph->bitmap.buffer[i] = blf_glyph_gamma(glyph->bitmap.buffer[i]);
+      }
+#endif /* BLF_GAMMA_CORRECT_GLYPHS */
+    }
     g->bitmap = MEM_mallocN((size_t)buffer_size, "glyph bitmap");
     memcpy(g->bitmap, glyph->bitmap.buffer, (size_t)buffer_size);
   }
 
-  unsigned int key = blf_hash(g->c);
+  const uint key = blf_hash(g->c);
   BLI_addhead(&(gc->bucket[key]), g);
   if (charcode < GLYPH_ASCII_TABLE_SIZE) {
     gc->glyph_ascii_table[charcode] = g;
@@ -223,18 +279,24 @@ static GlyphBLF *blf_glyph_cache_add_glyph(
   return g;
 }
 
-/* This table can be used to find a coverage bit based on a charcode. later we can get default
- * language and script from codepoint.  */
+/** \} */
 
-typedef struct eUnicodeBlock {
-  unsigned int first;
-  unsigned int last;
+/* -------------------------------------------------------------------- */
+/** \name Glyph Unicode Block Lookup
+ *
+ * This table can be used to find a coverage bit based on a charcode.
+ * Later we can get default language and script from `codepoint`.
+ */
+
+struct UnicodeBlock {
+  uint first;
+  uint last;
   int coverage_bit; /* 0-122. -1 is N/A. */
   /* Later we add primary script and language for Harfbuzz, data from
    * https://en.wikipedia.org/wiki/Unicode_block */
-} eUnicodeBlock;
+};
 
-static eUnicodeBlock unicode_blocks[] = {
+static const struct UnicodeBlock unicode_blocks[] = {
     /* Must be in ascending order by start of range. */
     {0x0, 0x7F, 0},           /* Basic Latin. */
     {0x80, 0xFF, 1},          /* Latin-1 Supplement. */
@@ -378,7 +440,7 @@ static eUnicodeBlock unicode_blocks[] = {
     {0xFE30, 0xFE4F, 65},     /* CJK Compatibility Forms. */
     {0xFE50, 0xFE6F, 66},     /* Small Form Variants. */
     {0xFE70, 0xFEFF, 67},     /* Arabic Presentation Forms-B. */
-    {0xFF00, 0xFFEF, 68},     /* Halfwidth And Fullwidth Forms. */
+    {0xFF00, 0xFFEF, 68},     /* Half-width And Full-width Forms. */
     {0xFFF0, 0xFFFF, 69},     /* Specials. */
     {0x10000, 0x1013F, 101},  /* Linear B. */
     {0x10140, 0x1018F, 102},  /* Ancient Greek Numbers. */
@@ -493,8 +555,10 @@ static eUnicodeBlock unicode_blocks[] = {
     {0xE0100, 0xE01EF, 91},   /* Variation Selectors. */
     {0xF0000, 0x10FFFD, 90}}; /* Private Use Supplementary. */
 
-/* Find a unicode block that a charcode belongs to. */
-static eUnicodeBlock *blf_charcode_to_unicode_block(uint charcode)
+/**
+ * Find a unicode block that a `charcode` belongs to.
+ */
+static const struct UnicodeBlock *blf_charcode_to_unicode_block(const uint charcode)
 {
   if (charcode < 0x80) {
     /* Shortcut to Basic Latin. */
@@ -505,14 +569,13 @@ static eUnicodeBlock *blf_charcode_to_unicode_block(uint charcode)
 
   int min = 0;
   int max = ARRAY_SIZE(unicode_blocks) - 1;
-  int mid;
 
   if (charcode < unicode_blocks[0].first || charcode > unicode_blocks[max].last) {
     return NULL;
   }
 
   while (max >= min) {
-    mid = (min + max) / 2;
+    const int mid = (min + max) / 2;
     if (charcode > unicode_blocks[mid].last) {
       min = mid + 1;
     }
@@ -530,26 +593,26 @@ static eUnicodeBlock *blf_charcode_to_unicode_block(uint charcode)
 static int blf_charcode_to_coverage_bit(uint charcode)
 {
   int coverage_bit = -1;
-  eUnicodeBlock *block = blf_charcode_to_unicode_block(charcode);
+  const struct UnicodeBlock *block = blf_charcode_to_unicode_block(charcode);
   if (block) {
     coverage_bit = block->coverage_bit;
   }
 
   if (coverage_bit < 0 && charcode > 0xFFFF) {
     /* No coverage bit, but OpenType specs v.1.3+ says bit 57 implies that there
-     * are codepoints supported beyond the BMP, so only check fonts with this set. */
+     * are code-points supported beyond the BMP, so only check fonts with this set. */
     coverage_bit = 57;
   }
 
   return coverage_bit;
 }
 
-static bool blf_font_has_coverage_bit(FontBLF *font, int coverage_bit)
+static bool blf_font_has_coverage_bit(const FontBLF *font, int coverage_bit)
 {
   if (coverage_bit < 0) {
     return false;
   }
-  return (font->UnicodeRanges[(uint)coverage_bit >> 5] & (1u << ((uint)coverage_bit % 32)));
+  return (font->unicode_ranges[(uint)coverage_bit >> 5] & (1u << ((uint)coverage_bit % 32)));
 }
 
 /**
@@ -558,9 +621,14 @@ static bool blf_font_has_coverage_bit(FontBLF *font, int coverage_bit)
  */
 static FT_UInt blf_glyph_index_from_charcode(FontBLF **font, const uint charcode)
 {
-  FT_UInt glyph_index = FT_Get_Char_Index((*font)->face, charcode);
+  FT_UInt glyph_index = blf_get_char_index(*font, charcode);
   if (glyph_index) {
     return glyph_index;
+  }
+
+  /* Only fonts managed by the cache can fallback. */
+  if (!((*font)->flags & BLF_CACHED)) {
+    return 0;
   }
 
   /* Not found in main font, so look in the others. */
@@ -577,7 +645,7 @@ static FT_UInt blf_glyph_index_from_charcode(FontBLF **font, const uint charcode
       continue;
     }
     if (coverage_bit < 0 || blf_font_has_coverage_bit(f, coverage_bit)) {
-      glyph_index = FT_Get_Char_Index(f->face, charcode);
+      glyph_index = blf_get_char_index(f, charcode);
       if (glyph_index) {
         *font = f;
         return glyph_index;
@@ -585,9 +653,13 @@ static FT_UInt blf_glyph_index_from_charcode(FontBLF **font, const uint charcode
     }
   }
 
+#ifdef DEBUG
+  printf("Unicode character U+%04X not found in loaded fonts. \n", charcode);
+#endif
+
   /* Not found in the stack, return from Last Resort if there is one. */
   if (last_resort) {
-    glyph_index = FT_Get_Char_Index(last_resort->face, charcode);
+    glyph_index = blf_get_char_index(last_resort, charcode);
     if (glyph_index) {
       *font = last_resort;
       return glyph_index;
@@ -596,6 +668,12 @@ static FT_UInt blf_glyph_index_from_charcode(FontBLF **font, const uint charcode
 
   return 0;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Glyph Load
+ * \{ */
 
 /**
  * Load a glyph into the glyph slot of a font's face object.
@@ -631,19 +709,19 @@ static FT_GlyphSlot blf_glyph_load(FontBLF *font, FT_UInt glyph_index)
   return NULL;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Glyph Render
+ * \{ */
+
 /**
  * Convert a glyph from outlines to a bitmap that we can display.
  */
 static bool blf_glyph_render_bitmap(FontBLF *font, FT_GlyphSlot glyph)
 {
-  int render_mode;
-
-  if (font->flags & BLF_MONOCHROME) {
-    render_mode = FT_RENDER_MODE_MONO;
-  }
-  else {
-    render_mode = FT_RENDER_MODE_NORMAL;
-  }
+  const int render_mode = (font->flags & BLF_MONOCHROME) ? FT_RENDER_MODE_MONO :
+                                                           FT_RENDER_MODE_NORMAL;
 
   /* Render the glyph curves to a bitmap. */
   FT_Error err = FT_Render_Glyph(glyph, render_mode);
@@ -674,6 +752,98 @@ static bool blf_glyph_render_bitmap(FontBLF *font, FT_GlyphSlot glyph)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Variations (Multiple Masters) support
+ * \{ */
+
+/**
+ * Return a design axis that matches an identifying tag.
+ *
+ * \param variations: Variation descriptors from `FT_Get_MM_Var`.
+ * \param tag: Axis tag (4-character string as uint), like 'wght'
+ * \param r_axis_index: returns index of axis in variations array.
+ */
+static const FT_Var_Axis *blf_var_axis_by_tag(const FT_MM_Var *variations,
+                                              const uint tag,
+                                              int *r_axis_index)
+{
+  *r_axis_index = -1;
+  if (!variations) {
+    return NULL;
+  }
+  for (int i = 0; i < (int)variations->num_axis; i++) {
+    if (variations->axis[i].tag == tag) {
+      *r_axis_index = i;
+      return &(variations->axis)[i];
+      break;
+    }
+  }
+  return NULL;
+}
+
+/**
+ * Convert a float factor to a fixed-point design coordinate.
+ *
+ * \param axis: Pointer to a design space axis structure.
+ * \param factor: -1 to 1 with 0 meaning "default"
+ */
+static FT_Fixed blf_factor_to_coordinate(const FT_Var_Axis *axis, const float factor)
+{
+  FT_Fixed value = axis->def;
+  if (factor > 0) {
+    /* Map 0-1 to axis->def - axis->maximum */
+    value += (FT_Fixed)((double)(axis->maximum - axis->def) * factor);
+  }
+  else if (factor < 0) {
+    /* Map -1-0 to axis->minimum - axis->def */
+    value += (FT_Fixed)((double)(axis->def - axis->minimum) * factor);
+  }
+  return value;
+}
+
+/**
+ * Alter a face variation axis by a factor
+ *
+ * \param coords: array of design coordinates, per axis.
+ * \param tag: Axis tag (4-character string as uint), like 'wght'
+ * \param factor: -1 to 1 with 0 meaning "default"
+ */
+static bool blf_glyph_set_variation_normalized(const FontBLF *font,
+                                               FT_Fixed coords[],
+                                               const uint tag,
+                                               const float factor)
+{
+  int axis_index;
+  const FT_Var_Axis *axis = blf_var_axis_by_tag(font->variations, tag, &axis_index);
+  if (axis && (axis_index < BLF_VARIATIONS_MAX)) {
+    coords[axis_index] = blf_factor_to_coordinate(axis, factor);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Set a face variation axis to an exact float value
+ *
+ * \param coords: array of design coordinates, per axis.
+ * \param tag: Axis tag (4-character string as uint), like 'opsz'
+ * \param value: New float value. Converted to 16.16 and clamped within allowed range.
+ */
+static bool blf_glyph_set_variation_float(FontBLF *font, FT_Fixed coords[], uint tag, float value)
+{
+  int axis_index;
+  const FT_Var_Axis *axis = blf_var_axis_by_tag(font->variations, tag, &axis_index);
+  if (axis && (axis_index < BLF_VARIATIONS_MAX)) {
+    FT_Fixed int_value = to_16dot16(value);
+    CLAMP(int_value, axis->minimum, axis->maximum);
+    coords[axis_index] = int_value;
+    return true;
+  }
+  return false;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Glyph Transformations
  * \{ */
 
@@ -686,8 +856,8 @@ static bool blf_glyph_transform_weight(FT_GlyphSlot glyph, float factor, bool mo
 {
   if (glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
     /* Fake bold if the font does not have this variable axis. */
-    const FT_Pos average_width = FT_MulFix(glyph->face->units_per_EM,
-                                           glyph->face->size->metrics.x_scale);
+    const FontBLF *font = (FontBLF *)glyph->face->generic.data;
+    const FT_Pos average_width = font->ft_size->metrics.height;
     FT_Pos change = (FT_Pos)((float)average_width * factor * 0.1f);
     FT_Outline_EmboldenXY(&glyph->outline, change, change / 2);
     if (monospaced) {
@@ -726,13 +896,29 @@ static bool blf_glyph_transform_slant(FT_GlyphSlot glyph, float factor)
  *
  * \param factor: -1 (min width) <= 0 (normal) => 1 (max width).
  */
-static bool UNUSED_FUNCTION(blf_glyph_transform_width)(FT_GlyphSlot glyph, float factor)
+static bool blf_glyph_transform_width(FT_GlyphSlot glyph, float factor)
 {
   if (glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
     float scale = (factor * 0.4f) + 1.0f; /* 0.6f - 1.4f */
     FT_Matrix matrix = {to_16dot16(scale), 0, 0, to_16dot16(1)};
     FT_Outline_Transform(&glyph->outline, &matrix);
     glyph->advance.x = (FT_Pos)((double)glyph->advance.x * scale);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Change glyph advance to alter letter-spacing (tracking).
+ *
+ * \param factor: -1 (min tightness) <= 0 (normal) => 1 (max looseness).
+ */
+static bool blf_glyph_transform_spacing(FT_GlyphSlot glyph, float factor)
+{
+  if (glyph->advance.x > 0) {
+    const FontBLF *font = (FontBLF *)glyph->face->generic.data;
+    const long int size = font->ft_size->metrics.height;
+    glyph->advance.x += (FT_Pos)(factor * (float)size / 6.0f);
     return true;
   }
   return false;
@@ -780,13 +966,51 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
                                      int fixed_width)
 {
   if (glyph_font != settings_font) {
-    FT_Set_Char_Size(glyph_font->face,
-                     0,
-                     ((FT_F26Dot6)(settings_font->size)) * 64,
-                     settings_font->dpi,
-                     settings_font->dpi);
-    glyph_font->size = settings_font->size;
-    glyph_font->dpi = settings_font->dpi;
+    blf_font_size(glyph_font, settings_font->size);
+  }
+
+  blf_ensure_size(glyph_font);
+
+  /* We need to keep track if changes are still needed. */
+  bool weight_done = false;
+  bool slant_done = false;
+  bool width_done = false;
+  bool spacing_done = false;
+
+  /* 70% of maximum weight results in the same amount of boldness and horizontal
+   * expansion as the bold version `DejaVuSans-Bold.ttf` of our default font.
+   * Worth reevaluating if we change default font. */
+  float weight = (settings_font->flags & BLF_BOLD) ? 0.7f : settings_font->char_weight;
+
+  /* 37.5% of maximum rightward slant results in 6 degree slope, matching italic
+   * version `DejaVuSans-Oblique.ttf` of our current font. But a nice median when
+   * checking others. Worth reevaluating if we change default font. We could also
+   * narrow the glyph slightly as most italics do, but this one does not. */
+  float slant = (settings_font->flags & BLF_ITALIC) ? 0.375f : settings_font->char_slant;
+
+  float width = settings_font->char_width;
+  float spacing = settings_font->char_spacing;
+
+  /* Font variations need to be set before glyph loading. Even if new value is zero. */
+
+  if (glyph_font->variations) {
+    FT_Fixed coords[BLF_VARIATIONS_MAX];
+    /* Load current design coordinates. */
+    FT_Get_Var_Design_Coordinates(glyph_font->face, BLF_VARIATIONS_MAX, &coords[0]);
+    /* Update design coordinates with new values. */
+    weight_done = blf_glyph_set_variation_normalized(
+        glyph_font, coords, BLF_VARIATION_AXIS_WEIGHT, weight);
+    slant_done = blf_glyph_set_variation_normalized(
+        glyph_font, coords, BLF_VARIATION_AXIS_SLANT, slant);
+    width_done = blf_glyph_set_variation_normalized(
+        glyph_font, coords, BLF_VARIATION_AXIS_WIDTH, width);
+    spacing_done = blf_glyph_set_variation_normalized(
+        glyph_font, coords, BLF_VARIATION_AXIS_SPACING, spacing);
+    /* Optical size, if available, is set to current font size. */
+    blf_glyph_set_variation_float(
+        glyph_font, coords, BLF_VARIATION_AXIS_OPTSIZE, settings_font->size);
+    /* Save updated design coordinates. */
+    FT_Set_Var_Design_Coordinates(glyph_font->face, BLF_VARIATIONS_MAX, &coords[0]);
   }
 
   FT_GlyphSlot glyph = blf_glyph_load(glyph_font, glyph_index);
@@ -798,19 +1022,19 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
     blf_glyph_transform_monospace(glyph, BLI_wcwidth((char32_t)charcode) * fixed_width);
   }
 
-  if ((settings_font->flags & BLF_ITALIC) != 0) {
-    /* 37.5% of maximum rightward slant results in 6 degree slope, matching italic
-     * version (`DejaVuSans-Oblique.ttf`) of our current font. But a nice median when
-     * checking others. Worth reevaluating if we change default font. We could also
-     * narrow the glyph slightly as most italics do, but this one does not. */
-    blf_glyph_transform_slant(glyph, 0.375f);
-  }
+  /* Fallback glyph transforms, but only if required and not yet done. */
 
-  if ((settings_font->flags & BLF_BOLD) != 0) {
-    /* 70% of maximum weight results in the same amount of boldness and horizontal
-     * expansion as the bold version (`DejaVuSans-Bold.ttf`) of our default font.
-     * Worth reevaluating if we change default font. */
-    blf_glyph_transform_weight(glyph, 0.7f, glyph->face->face_flags & FT_FACE_FLAG_FIXED_WIDTH);
+  if (weight != 0.0f && !weight_done) {
+    blf_glyph_transform_weight(glyph, weight, FT_IS_FIXED_WIDTH(glyph_font));
+  }
+  if (slant != 0.0f && !slant_done) {
+    blf_glyph_transform_slant(glyph, slant);
+  }
+  if (width != 0.0f && !width_done) {
+    blf_glyph_transform_width(glyph, width);
+  }
+  if (spacing != 0.0f && !spacing_done) {
+    blf_glyph_transform_spacing(glyph, spacing);
   }
 
   if (blf_glyph_render_bitmap(glyph_font, glyph)) {
@@ -819,7 +1043,7 @@ static FT_GlyphSlot blf_glyph_render(FontBLF *settings_font,
   return NULL;
 }
 
-GlyphBLF *blf_glyph_ensure(FontBLF *font, GlyphCacheBLF *gc, uint charcode)
+GlyphBLF *blf_glyph_ensure(FontBLF *font, GlyphCacheBLF *gc, const uint charcode)
 {
   GlyphBLF *g = blf_glyph_cache_find_glyph(gc, charcode);
   if (g) {
@@ -830,11 +1054,9 @@ GlyphBLF *blf_glyph_ensure(FontBLF *font, GlyphCacheBLF *gc, uint charcode)
   FontBLF *font_with_glyph = font;
   FT_UInt glyph_index = blf_glyph_index_from_charcode(&font_with_glyph, charcode);
 
-  /* Glyphs are dynamically created as needed by font rendering. this means that
-   * to make font rendering thread safe we have to do locking here. note that this
-   * must be a lock for the whole library and not just per font, because the font
-   * renderer uses a shared buffer internally. */
-  BLI_spin_lock(font_with_glyph->ft_lib_mutex);
+  if (!blf_ensure_face(font_with_glyph)) {
+    return NULL;
+  }
 
   FT_GlyphSlot glyph = blf_glyph_render(
       font, font_with_glyph, glyph_index, charcode, gc->fixed_width);
@@ -844,7 +1066,6 @@ GlyphBLF *blf_glyph_ensure(FontBLF *font, GlyphCacheBLF *gc, uint charcode)
     g = blf_glyph_cache_add_glyph(font, gc, glyph, charcode, glyph_index);
   }
 
-  BLI_spin_unlock(font_with_glyph->ft_lib_mutex);
   return g;
 }
 
@@ -893,7 +1114,7 @@ static void blf_glyph_calc_rect_shadow(
 /** \name Glyph Drawing
  * \{ */
 
-static void blf_texture_draw(const unsigned char color[4],
+static void blf_texture_draw(const uchar color[4],
                              const int glyph_size[2],
                              const int offset,
                              const int x1,
@@ -919,7 +1140,7 @@ static void blf_texture_draw(const unsigned char color[4],
   }
 }
 
-static void blf_texture5_draw(const unsigned char color_in[4],
+static void blf_texture5_draw(const uchar color_in[4],
                               const int glyph_size[2],
                               const int offset,
                               const int x1,
@@ -935,7 +1156,7 @@ static void blf_texture5_draw(const unsigned char color_in[4],
   blf_texture_draw(color_in, glyph_size_flag, offset, x1, y1, x2, y2);
 }
 
-static void blf_texture3_draw(const unsigned char color_in[4],
+static void blf_texture3_draw(const uchar color_in[4],
                               const int glyph_size[2],
                               const int offset,
                               const int x1,

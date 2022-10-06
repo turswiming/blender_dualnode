@@ -41,6 +41,7 @@ void gpencil_modifier_type_init(GpencilModifierTypeInfo *types[])
   INIT_GP_TYPE(Array);
   INIT_GP_TYPE(Build);
   INIT_GP_TYPE(Opacity);
+  INIT_GP_TYPE(Outline);
   INIT_GP_TYPE(Lattice);
   INIT_GP_TYPE(Length);
   INIT_GP_TYPE(Mirror);
@@ -182,7 +183,7 @@ void generic_bake_deform_stroke(
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
       if (retime) {
-        CFRA = gpf->framenum;
+        scene->r.cfra = gpf->framenum;
         BKE_scene_graph_update_for_newframe(depsgraph);
       }
       LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
@@ -193,7 +194,7 @@ void generic_bake_deform_stroke(
 
   /* Return frame state and DB to original state. */
   if (retime) {
-    CFRA = oldframe;
+    scene->r.cfra = oldframe;
     BKE_scene_graph_update_for_newframe(depsgraph);
   }
 }

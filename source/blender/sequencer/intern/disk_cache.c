@@ -69,7 +69,7 @@
 #define COLORSPACE_NAME_MAX 64 /* XXX: defined in IMB intern. */
 
 typedef struct DiskCacheHeaderEntry {
-  unsigned char encoding;
+  uchar encoding;
   uint64_t frameno;
   uint64_t size_compressed;
   uint64_t size_raw;
@@ -412,8 +412,8 @@ void seq_disk_cache_invalidate(SeqDiskCache *disk_cache,
 
   BLI_mutex_lock(&disk_cache->read_write_mutex);
 
-  start = SEQ_time_left_handle_frame_get(seq_changed) - DCACHE_IMAGES_PER_FILE;
-  end = SEQ_time_right_handle_frame_get(seq_changed);
+  start = SEQ_time_left_handle_frame_get(scene, seq_changed) - DCACHE_IMAGES_PER_FILE;
+  end = SEQ_time_right_handle_frame_get(scene, seq_changed);
 
   seq_disk_cache_delete_invalid_files(disk_cache, scene, seq, invalidate_types, start, end);
 

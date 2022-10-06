@@ -101,13 +101,14 @@ class Texture {
   virtual ~Texture();
 
   /* Return true on success. */
-  bool init_1D(int w, int layers, int mips, eGPUTextureFormat format);
-  bool init_2D(int w, int h, int layers, int mips, eGPUTextureFormat format);
-  bool init_3D(int w, int h, int d, int mips, eGPUTextureFormat format);
-  bool init_cubemap(int w, int layers, int mips, eGPUTextureFormat format);
+  bool init_1D(int w, int layers, int mip_len, eGPUTextureFormat format);
+  bool init_2D(int w, int h, int layers, int mip_len, eGPUTextureFormat format);
+  bool init_3D(int w, int h, int d, int mip_len, eGPUTextureFormat format);
+  bool init_cubemap(int w, int layers, int mip_len, eGPUTextureFormat format);
   bool init_buffer(GPUVertBuf *vbo, eGPUTextureFormat format);
   bool init_view(const GPUTexture *src,
                  eGPUTextureFormat format,
+                 eGPUTextureType type,
                  int mip_start,
                  int mip_len,
                  int layer_start,

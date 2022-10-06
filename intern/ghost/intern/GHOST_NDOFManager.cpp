@@ -5,6 +5,7 @@
 #include "GHOST_EventKey.h"
 #include "GHOST_EventNDOF.h"
 #include "GHOST_WindowManager.h"
+#include "GHOST_utildefines.h"
 
 #include <climits>
 #include <cmath>
@@ -128,7 +129,7 @@ static const NDOF_ButtonT Generic_HID_map[] = {
     NDOF_BUTTON_C,
 };
 
-static const int genericButtonCount = sizeof(Generic_HID_map) / sizeof(NDOF_ButtonT);
+static const int genericButtonCount = ARRAY_SIZE(Generic_HID_map);
 
 GHOST_NDOFManager::GHOST_NDOFManager(GHOST_System &sys)
     : m_system(sys),
@@ -149,7 +150,7 @@ GHOST_NDOFManager::GHOST_NDOFManager(GHOST_System &sys)
   memset(m_rotation, 0, sizeof(m_rotation));
 }
 
-bool GHOST_NDOFManager::setDevice(unsigned short vendor_id, unsigned short product_id)
+bool GHOST_NDOFManager::setDevice(ushort vendor_id, ushort product_id)
 {
   /* Call this function until it returns true
    * it's a good idea to stop calling it after that, as it will "forget"
@@ -256,7 +257,7 @@ bool GHOST_NDOFManager::setDevice(unsigned short vendor_id, unsigned short produ
   }
 
   if (m_buttonMask == 0) {
-    m_buttonMask = (int)~(UINT_MAX << m_buttonCount);
+    m_buttonMask = int(~(UINT_MAX << m_buttonCount));
   }
 
 #ifdef DEBUG_NDOF_BUTTONS
@@ -410,8 +411,9 @@ static bool nearHomePosition(GHOST_TEventNDOFMotionData *ndof, float threshold)
 
 bool GHOST_NDOFManager::sendMotionEvent()
 {
-  if (!m_motionEventPending)
+  if (!m_motionEventPending) {
     return false;
+  }
 
   m_motionEventPending = false; /* Any pending motion is handled right now. */
 

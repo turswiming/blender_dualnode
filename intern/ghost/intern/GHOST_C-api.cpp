@@ -24,7 +24,15 @@
 
 GHOST_SystemHandle GHOST_CreateSystem(void)
 {
-  GHOST_ISystem::createSystem();
+  GHOST_ISystem::createSystem(true);
+  GHOST_ISystem *system = GHOST_ISystem::getSystem();
+
+  return (GHOST_SystemHandle)system;
+}
+
+GHOST_SystemHandle GHOST_CreateSystemBackground(void)
+{
+  GHOST_ISystem::createSystemBackground();
   GHOST_ISystem *system = GHOST_ISystem::getSystem();
 
   return (GHOST_SystemHandle)system;
@@ -348,18 +356,48 @@ GHOST_TSuccess GHOST_SetCursorVisibility(GHOST_WindowHandle windowhandle, bool v
   return window->setCursorVisibility(visible);
 }
 
-GHOST_TSuccess GHOST_GetCursorPosition(GHOST_SystemHandle systemhandle, int32_t *x, int32_t *y)
+/* Unused, can expose again if needed although WAYLAND
+ * can only properly use client relative coordinates, so leave disabled if possible. */
+#if 0
+GHOST_TSuccess GHOST_GetCursorPositionScreenCoords(GHOST_SystemHandle systemhandle,
+                                                   int32_t *x,
+                                                   int32_t *y)
 {
   GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
 
   return system->getCursorPosition(*x, *y);
 }
 
-GHOST_TSuccess GHOST_SetCursorPosition(GHOST_SystemHandle systemhandle, int32_t x, int32_t y)
+GHOST_TSuccess GHOST_SetCursorPositionScreenCoords(GHOST_SystemHandle systemhandle,
+                                                   int32_t x,
+                                                   int32_t y)
 {
   GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
 
   return system->setCursorPosition(x, y);
+}
+#endif
+
+GHOST_TSuccess GHOST_GetCursorPosition(const GHOST_SystemHandle systemhandle,
+                                       const GHOST_WindowHandle windowhandle,
+                                       int32_t *x,
+                                       int32_t *y)
+{
+  const GHOST_ISystem *system = (const GHOST_ISystem *)systemhandle;
+  const GHOST_IWindow *window = (const GHOST_IWindow *)windowhandle;
+
+  return system->getCursorPositionClientRelative(window, *x, *y);
+}
+
+GHOST_TSuccess GHOST_SetCursorPosition(GHOST_SystemHandle systemhandle,
+                                       GHOST_WindowHandle windowhandle,
+                                       int32_t x,
+                                       int32_t y)
+{
+  GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
+  GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
+
+  return system->setCursorPositionClientRelative(window, x, y);
 }
 
 GHOST_TSuccess GHOST_SetCursorGrab(GHOST_WindowHandle windowhandle,
@@ -402,7 +440,7 @@ void GHOST_GetCursorGrabState(GHOST_WindowHandle windowhandle,
 }
 
 GHOST_TSuccess GHOST_GetModifierKeyState(GHOST_SystemHandle systemhandle,
-                                         GHOST_TModifierKeyMask mask,
+                                         GHOST_TModifierKey mask,
                                          bool *r_is_down)
 {
   GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
@@ -416,7 +454,7 @@ GHOST_TSuccess GHOST_GetModifierKeyState(GHOST_SystemHandle systemhandle,
 }
 
 GHOST_TSuccess GHOST_GetButtonState(GHOST_SystemHandle systemhandle,
-                                    GHOST_TButtonMask mask,
+                                    GHOST_TButton mask,
                                     bool *r_is_down)
 {
   GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
@@ -684,14 +722,14 @@ GHOST_TSuccess GHOST_ReleaseOpenGLContext(GHOST_ContextHandle contexthandle)
   return context->releaseDrawingContext();
 }
 
-unsigned int GHOST_GetContextDefaultOpenGLFramebuffer(GHOST_ContextHandle contexthandle)
+uint GHOST_GetContextDefaultOpenGLFramebuffer(GHOST_ContextHandle contexthandle)
 {
   GHOST_IContext *context = (GHOST_IContext *)contexthandle;
 
   return context->getDefaultFramebuffer();
 }
 
-unsigned int GHOST_GetDefaultOpenGLFramebuffer(GHOST_WindowHandle windowhandle)
+uint GHOST_GetDefaultOpenGLFramebuffer(GHOST_WindowHandle windowhandle)
 {
   GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
 
@@ -703,6 +741,12 @@ GHOST_TSuccess GHOST_InvalidateWindow(GHOST_WindowHandle windowhandle)
   GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
 
   return window->invalidate();
+}
+
+void GHOST_SetMultitouchGestures(GHOST_SystemHandle systemhandle, const bool use)
+{
+  GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
+  return system->setMultitouchGestures(use);
 }
 
 void GHOST_SetTabletAPI(GHOST_SystemHandle systemhandle, GHOST_TTabletAPI api)
@@ -831,8 +875,7 @@ void GHOST_putClipboard(const char *buffer, bool selection)
 bool GHOST_setConsoleWindowState(GHOST_TConsoleWindowState action)
 {
   GHOST_ISystem *system = GHOST_ISystem::getSystem();
-  /* FIXME: use `bool` instead of int for this value. */
-  return (bool)system->setConsoleWindowState(action);
+  return system->setConsoleWindowState(action);
 }
 
 bool GHOST_UseNativePixels(void)
@@ -1088,8 +1131,7 @@ void *GHOST_XrGetActionCustomdata(GHOST_XrContextHandle xr_contexthandle,
   return 0;
 }
 
-unsigned int GHOST_XrGetActionCount(GHOST_XrContextHandle xr_contexthandle,
-                                    const char *action_set_name)
+uint GHOST_XrGetActionCount(GHOST_XrContextHandle xr_contexthandle, const char *action_set_name)
 {
   GHOST_IXrContext *xr_context = (GHOST_IXrContext *)xr_contexthandle;
   GHOST_XrSession *xr_session = xr_context->getSession();

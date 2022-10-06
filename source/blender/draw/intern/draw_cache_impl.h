@@ -36,10 +36,6 @@ extern "C" {
 /** \name Expose via BKE callbacks
  * \{ */
 
-void DRW_mball_batch_cache_dirty_tag(struct MetaBall *mb, int mode);
-void DRW_mball_batch_cache_validate(struct MetaBall *mb);
-void DRW_mball_batch_cache_free(struct MetaBall *mb);
-
 void DRW_curve_batch_cache_dirty_tag(struct Curve *cu, int mode);
 void DRW_curve_batch_cache_validate(struct Curve *cu);
 void DRW_curve_batch_cache_free(struct Curve *cu);
@@ -104,42 +100,10 @@ void DRW_curve_batch_cache_create_requested(struct Object *ob, const struct Scen
 int DRW_curve_material_count_get(struct Curve *cu);
 
 struct GPUBatch *DRW_curve_batch_cache_get_wire_edge(struct Curve *cu);
+struct GPUBatch *DRW_curve_batch_cache_get_wire_edge_viewer_attribute(struct Curve *cu);
 struct GPUBatch *DRW_curve_batch_cache_get_normal_edge(struct Curve *cu);
 struct GPUBatch *DRW_curve_batch_cache_get_edit_edges(struct Curve *cu);
 struct GPUBatch *DRW_curve_batch_cache_get_edit_verts(struct Curve *cu);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Metaball
- * \{ */
-
-int DRW_metaball_material_count_get(struct MetaBall *mb);
-
-struct GPUBatch *DRW_metaball_batch_cache_get_triangles_with_normals(struct Object *ob);
-struct GPUBatch **DRW_metaball_batch_cache_get_surface_shaded(struct Object *ob,
-                                                              struct MetaBall *mb,
-                                                              struct GPUMaterial **gpumat_array,
-                                                              uint gpumat_array_len);
-struct GPUBatch *DRW_metaball_batch_cache_get_wireframes_face(struct Object *ob);
-struct GPUBatch *DRW_metaball_batch_cache_get_edge_detection(struct Object *ob,
-                                                             bool *r_is_manifold);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name DispList
- * \{ */
-
-void DRW_displist_vertbuf_create_pos_and_nor(struct ListBase *lb,
-                                             struct GPUVertBuf *vbo,
-                                             const struct Scene *scene);
-void DRW_displist_vertbuf_create_wiredata(struct ListBase *lb, struct GPUVertBuf *vbo);
-void DRW_displist_indexbuf_create_lines_in_order(struct ListBase *lb, struct GPUIndexBuf *ibo);
-void DRW_displist_indexbuf_create_triangles_in_order(struct ListBase *lb, struct GPUIndexBuf *ibo);
-void DRW_displist_indexbuf_create_edges_adjacency_lines(struct ListBase *lb,
-                                                        struct GPUIndexBuf *ibo,
-                                                        bool *r_is_manifold);
 
 /** \} */
 
@@ -161,6 +125,16 @@ struct GPUBatch *DRW_lattice_batch_cache_get_edit_verts(struct Lattice *lt);
 
 int DRW_curves_material_count_get(struct Curves *curves);
 
+/**
+ * Provide GPU access to a specific evaluated attribute on curves.
+ *
+ * \return A pointer to location where the texture will be
+ * stored, which will be filled by #DRW_shgroup_curves_create_sub.
+ */
+struct GPUTexture **DRW_curves_texture_for_evaluated_attribute(struct Curves *curves,
+                                                               const char *name,
+                                                               bool *r_is_point_domain);
+
 struct GPUBatch *DRW_curves_batch_cache_get_edit_points(struct Curves *curves);
 
 void DRW_curves_batch_cache_create_requested(struct Object *ob);
@@ -175,6 +149,7 @@ int DRW_pointcloud_material_count_get(struct PointCloud *pointcloud);
 
 struct GPUBatch *DRW_pointcloud_batch_cache_get_dots(struct Object *ob);
 struct GPUBatch *DRW_pointcloud_batch_cache_get_surface(struct Object *ob);
+struct GPUBatch *DRW_pointcloud_batch_cache_get_surface_viewer_attribute(struct Object *ob);
 struct GPUBatch **DRW_cache_pointcloud_surface_shaded_get(struct Object *ob,
                                                           struct GPUMaterial **gpumat_array,
                                                           uint gpumat_array_len);
@@ -216,6 +191,7 @@ struct GPUBatch **DRW_mesh_batch_cache_get_surface_shaded(struct Object *object,
                                                           struct Mesh *me,
                                                           struct GPUMaterial **gpumat_array,
                                                           uint gpumat_array_len);
+
 struct GPUBatch **DRW_mesh_batch_cache_get_surface_texpaint(struct Object *object,
                                                             struct Mesh *me);
 struct GPUBatch *DRW_mesh_batch_cache_get_surface_texpaint_single(struct Object *object,
@@ -225,6 +201,7 @@ struct GPUBatch *DRW_mesh_batch_cache_get_surface_vertpaint(struct Object *objec
 struct GPUBatch *DRW_mesh_batch_cache_get_surface_sculpt(struct Object *object, struct Mesh *me);
 struct GPUBatch *DRW_mesh_batch_cache_get_surface_weights(struct Mesh *me);
 struct GPUBatch *DRW_mesh_batch_cache_get_sculpt_overlays(struct Mesh *me);
+struct GPUBatch *DRW_mesh_batch_cache_get_surface_viewer_attribute(struct Mesh *me);
 
 /** \} */
 
@@ -299,7 +276,6 @@ struct GPUBatch *DRW_mesh_batch_cache_get_edit_mesh_analysis(struct Mesh *me);
  * \{ */
 
 struct GPUVertBuf *DRW_mesh_batch_cache_pos_vertbuf_get(struct Mesh *me);
-struct GPUVertBuf *DRW_mball_batch_cache_pos_vertbuf_get(struct Object *ob);
 
 int DRW_mesh_material_count_get(const struct Object *object, const struct Mesh *me);
 

@@ -144,13 +144,14 @@ class ValueAllocator : NonCopyable, NonMovable {
    * The integer key is the size of one element (e.g. 4 for an integer buffer). All buffers are
    * aligned to #min_alignment bytes.
    */
-  Map<int, Stack<void *>> span_buffers_free_list_;
+  Stack<void *> small_span_buffers_free_list_;
+  Map<int, Stack<void *>> span_buffers_free_lists_;
 
   /** Cache buffers for single values of different types. */
+  static constexpr inline int small_value_max_size = 16;
+  static constexpr inline int small_value_max_alignment = 8;
+  Stack<void *> small_single_value_free_list_;
   Map<const CPPType *, Stack<void *>> single_value_free_lists_;
-
-  /** The cached memory buffers can hold #VariableState values. */
-  Stack<void *> variable_state_free_list_;
 
  public:
   ValueAllocator(LinearAllocator<> &linear_allocator) : linear_allocator_(linear_allocator)
@@ -184,9 +185,13 @@ class ValueAllocator : NonCopyable, NonMovable {
       buffer = linear_allocator_.allocate(element_size * size, alignment);
     }
     else {
-      Stack<void *> *stack = span_buffers_free_list_.lookup_ptr(element_size);
+      Stack<void *> *stack = type.can_exist_in_buffer(small_value_max_size,
+                                                      small_value_max_alignment) ?
+                                 &small_span_buffers_free_list_ :
+                                 span_buffers_free_lists_.lookup_ptr(element_size);
       if (stack == nullptr || stack->is_empty()) {
-        buffer = linear_allocator_.allocate(element_size * size, min_alignment);
+        buffer = linear_allocator_.allocate(
+            std::max<int64_t>(element_size, small_value_max_size) * size, min_alignment);
       }
       else {
         /* Reuse existing buffer. */
@@ -210,10 +215,15 @@ class ValueAllocator : NonCopyable, NonMovable {
 
   VariableValue_OneSingle *obtain_OneSingle(const CPPType &type)
   {
-    Stack<void *> &stack = single_value_free_lists_.lookup_or_add_default(&type);
+    const bool is_small = type.can_exist_in_buffer(small_value_max_size,
+                                                   small_value_max_alignment);
+    Stack<void *> &stack = is_small ? small_single_value_free_list_ :
+                                      single_value_free_lists_.lookup_or_add_default(&type);
     void *buffer;
     if (stack.is_empty()) {
-      buffer = linear_allocator_.allocate(type.size(), type.alignment());
+      buffer = linear_allocator_.allocate(
+          std::max<int>(small_value_max_size, type.size()),
+          std::max<int>(small_value_max_alignment, type.alignment()));
     }
     else {
       buffer = stack.pop();
@@ -238,7 +248,10 @@ class ValueAllocator : NonCopyable, NonMovable {
         if (value_typed->owned) {
           const CPPType &type = data_type.single_type();
           /* Assumes all values in the buffer are uninitialized already. */
-          Stack<void *> &buffers = span_buffers_free_list_.lookup_or_add_default(type.size());
+          Stack<void *> &buffers = type.can_exist_in_buffer(small_value_max_size,
+                                                            small_value_max_alignment) ?
+                                       small_span_buffers_free_list_ :
+                                       span_buffers_free_lists_.lookup_or_add_default(type.size());
           buffers.push(value_typed->data);
         }
         break;
@@ -259,7 +272,14 @@ class ValueAllocator : NonCopyable, NonMovable {
         if (value_typed->is_initialized) {
           type.destruct(value_typed->data);
         }
-        single_value_free_lists_.lookup_or_add_default(&type).push(value_typed->data);
+        const bool is_small = type.can_exist_in_buffer(small_value_max_size,
+                                                       small_value_max_alignment);
+        if (is_small) {
+          small_single_value_free_list_.push(value_typed->data);
+        }
+        else {
+          single_value_free_lists_.lookup_or_add_default(&type).push(value_typed->data);
+        }
         break;
       }
       case ValueType::OneVector: {
@@ -269,7 +289,7 @@ class ValueAllocator : NonCopyable, NonMovable {
       }
     }
 
-    Stack<VariableValue *> &stack = variable_value_free_lists_[(int)value->type];
+    Stack<VariableValue *> &stack = variable_value_free_lists_[int(value->type)];
     stack.push(value);
   }
 
@@ -277,7 +297,7 @@ class ValueAllocator : NonCopyable, NonMovable {
   template<typename T, typename... Args> T *obtain(Args &&...args)
   {
     static_assert(std::is_base_of_v<VariableValue, T>);
-    Stack<VariableValue *> &stack = variable_value_free_lists_[(int)T::static_type];
+    Stack<VariableValue *> &stack = variable_value_free_lists_[int(T::static_type)];
     if (stack.is_empty()) {
       void *buffer = linear_allocator_.allocate(sizeof(T), alignof(T));
       return new (buffer) T(std::forward<Args>(args)...);
@@ -429,7 +449,7 @@ class VariableState : NonCopyable, NonMovable {
         }
         else {
           new_value = value_allocator.obtain_GVectorArray_not_owned(
-              *(GVectorArray *)caller_provided_storage_);
+              *static_cast<GVectorArray *>(caller_provided_storage_));
         }
         if (value_ != nullptr) {
           if (value_->type == ValueType::GVVectorArray) {
@@ -760,8 +780,9 @@ class VariableState : NonCopyable, NonMovable {
         break;
       }
       case ValueType::Span: {
-        const Span<bool> span((bool *)this->value_as<VariableValue_Span>()->data,
-                              mask.min_array_size());
+        const Span<bool> span(
+            static_cast<const bool *>(this->value_as<VariableValue_Span>()->data),
+            mask.min_array_size());
         for (const int i : mask) {
           r_indices[span[i]].append(i);
         }
@@ -770,7 +791,7 @@ class VariableState : NonCopyable, NonMovable {
       case ValueType::OneSingle: {
         auto *value_typed = this->value_as<VariableValue_OneSingle>();
         BLI_assert(value_typed->is_initialized);
-        const bool condition = *(bool *)value_typed->data;
+        const bool condition = *static_cast<const bool *>(value_typed->data);
         r_indices[condition].extend(mask);
         break;
       }

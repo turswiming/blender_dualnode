@@ -55,6 +55,7 @@ typedef struct BASIC_PrivateData {
   DRWShadingGroup *depth_shgrp[2];
   DRWShadingGroup *depth_shgrp_cull[2];
   DRWShadingGroup *depth_hair_shgrp[2];
+  DRWShadingGroup *depth_curves_shgrp[2];
   DRWShadingGroup *depth_pointcloud_shgrp[2];
   bool use_material_slot_selection;
 } BASIC_PrivateData; /* Transient data */
@@ -100,6 +101,9 @@ static void basic_cache_init(void *vedata)
 
     stl->g_data->depth_hair_shgrp[i] = grp = DRW_shgroup_create(
         BASIC_shaders_depth_sh_get(draw_ctx->sh_cfg), psl->depth_pass[i]);
+
+    stl->g_data->depth_curves_shgrp[i] = grp = DRW_shgroup_create(
+        BASIC_shaders_curves_depth_sh_get(draw_ctx->sh_cfg), psl->depth_pass[i]);
 
     sh = DRW_state_is_select() ? BASIC_shaders_depth_conservative_sh_get(draw_ctx->sh_cfg) :
                                  BASIC_shaders_depth_sh_get(draw_ctx->sh_cfg);
@@ -158,8 +162,12 @@ static void basic_cache_populate(void *vedata, Object *ob)
     basic_cache_populate_particles(vedata, ob);
   }
 
-  /* Make flat object selectable in ortho view if wireframe is enabled. */
   const bool do_in_front = (ob->dtx & OB_DRAW_IN_FRONT) != 0;
+  if (ob->type == OB_CURVES) {
+    DRW_shgroup_curves_create_sub(ob, stl->g_data->depth_curves_shgrp[do_in_front], NULL);
+  }
+
+  /* Make flat object selectable in ortho view if wireframe is enabled. */
   if ((draw_ctx->v3d->overlay.flag & V3D_OVERLAY_WIREFRAMES) ||
       (draw_ctx->v3d->shading.type == OB_WIRE) || (ob->dtx & OB_DRAWWIRE) || (ob->dt == OB_WIRE)) {
     int flat_axis = 0;
@@ -193,7 +201,7 @@ static void basic_cache_populate(void *vedata, Object *ob)
   }
 
   if (use_sculpt_pbvh) {
-    DRW_shgroup_call_sculpt(shgrp, ob, false, false);
+    DRW_shgroup_call_sculpt(shgrp, ob, false, false, false, false, false);
   }
   else {
     if (stl->g_data->use_material_slot_selection && BKE_object_supports_material_slots(ob)) {

@@ -807,7 +807,7 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
                          !DRW_state_is_image_render();
 
   /* First get materials for this mesh. */
-  if (ELEM(ob->type, OB_MESH, OB_SURF, OB_MBALL)) {
+  if (ELEM(ob->type, OB_MESH, OB_SURF)) {
     const int materials_len = DRW_cache_object_material_count_get(ob);
 
     EeveeMaterialCache *matcache = BLI_array_alloca(matcache, materials_len);
@@ -825,14 +825,17 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
       if (use_sculpt_pbvh) {
         struct DRWShadingGroup **shgrps_array = BLI_array_alloca(shgrps_array, materials_len);
 
+        struct GPUMaterial **gpumat_array = BLI_array_alloca(gpumat_array, materials_len);
+        MATCACHE_AS_ARRAY(matcache, shading_gpumat, materials_len, gpumat_array);
+
         MATCACHE_AS_ARRAY(matcache, shading_grp, materials_len, shgrps_array);
-        DRW_shgroup_call_sculpt_with_materials(shgrps_array, materials_len, ob);
+        DRW_shgroup_call_sculpt_with_materials(shgrps_array, gpumat_array, materials_len, ob);
 
         MATCACHE_AS_ARRAY(matcache, depth_grp, materials_len, shgrps_array);
-        DRW_shgroup_call_sculpt_with_materials(shgrps_array, materials_len, ob);
+        DRW_shgroup_call_sculpt_with_materials(shgrps_array, gpumat_array, materials_len, ob);
 
         MATCACHE_AS_ARRAY(matcache, shadow_grp, materials_len, shgrps_array);
-        DRW_shgroup_call_sculpt_with_materials(shgrps_array, materials_len, ob);
+        DRW_shgroup_call_sculpt_with_materials(shgrps_array, gpumat_array, materials_len, ob);
       }
       else {
         struct GPUMaterial **gpumat_array = BLI_array_alloca(gpumat_array, materials_len);

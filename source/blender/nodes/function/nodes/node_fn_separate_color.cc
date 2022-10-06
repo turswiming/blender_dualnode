@@ -19,18 +19,18 @@ static void fn_node_separate_color_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>(N_("Alpha"));
 };
 
-static void fn_node_separate_color_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void fn_node_separate_color_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "mode", 0, "", ICON_NONE);
 }
 
-static void fn_node_separate_color_update(bNodeTree *UNUSED(ntree), bNode *node)
+static void fn_node_separate_color_update(bNodeTree * /*tree*/, bNode *node)
 {
   const NodeCombSepColor &storage = node_storage(*node);
   node_combsep_color_label(&node->outputs, (NodeCombSepColorMode)storage.mode);
 }
 
-static void fn_node_separate_color_init(bNodeTree *UNUSED(tree), bNode *node)
+static void fn_node_separate_color_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeCombSepColor *data = MEM_cnew<NodeCombSepColor>(__func__);
   data->mode = NODE_COMBSEP_COLOR_RGB;
@@ -56,26 +56,45 @@ class SeparateRGBAFunction : public fn::MultiFunction {
     return signature.build();
   }
 
-  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext /*context*/) const override
   {
     const VArray<ColorGeometry4f> &colors = params.readonly_single_input<ColorGeometry4f>(0,
                                                                                           "Color");
-    MutableSpan<float> red = params.uninitialized_single_output<float>(1, "Red");
-    MutableSpan<float> green = params.uninitialized_single_output<float>(2, "Green");
-    MutableSpan<float> blue = params.uninitialized_single_output<float>(3, "Blue");
+
+    MutableSpan<float> red = params.uninitialized_single_output_if_required<float>(1, "Red");
+    MutableSpan<float> green = params.uninitialized_single_output_if_required<float>(2, "Green");
+    MutableSpan<float> blue = params.uninitialized_single_output_if_required<float>(3, "Blue");
     MutableSpan<float> alpha = params.uninitialized_single_output_if_required<float>(4, "Alpha");
 
-    for (int64_t i : mask) {
-      red[i] = colors[i].r;
-      green[i] = colors[i].g;
-      blue[i] = colors[i].b;
+    std::array<MutableSpan<float>, 4> outputs = {red, green, blue, alpha};
+    Vector<int> used_outputs;
+    if (!red.is_empty()) {
+      used_outputs.append(0);
+    }
+    if (!green.is_empty()) {
+      used_outputs.append(1);
+    }
+    if (!blue.is_empty()) {
+      used_outputs.append(2);
+    }
+    if (!alpha.is_empty()) {
+      used_outputs.append(3);
     }
 
-    if (!alpha.is_empty()) {
-      for (int64_t i : mask) {
-        alpha[i] = colors[i].a;
-      }
-    }
+    devirtualize_varray(colors, [&](auto colors) {
+      mask.to_best_mask_type([&](auto mask) {
+        const int used_outputs_num = used_outputs.size();
+        const int *used_outputs_data = used_outputs.data();
+
+        for (const int64_t i : mask) {
+          const ColorGeometry4f &color = colors[i];
+          for (const int out_i : IndexRange(used_outputs_num)) {
+            const int channel = used_outputs_data[out_i];
+            outputs[channel][i] = color[channel];
+          }
+        }
+      });
+    });
   }
 };
 
@@ -98,7 +117,7 @@ class SeparateHSVAFunction : public fn::MultiFunction {
     return signature.build();
   }
 
-  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext /*context*/) const override
   {
     const VArray<ColorGeometry4f> &colors = params.readonly_single_input<ColorGeometry4f>(0,
                                                                                           "Color");
@@ -138,7 +157,7 @@ class SeparateHSLAFunction : public fn::MultiFunction {
     return signature.build();
   }
 
-  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext /*context*/) const override
   {
     const VArray<ColorGeometry4f> &colors = params.readonly_single_input<ColorGeometry4f>(0,
                                                                                           "Color");
