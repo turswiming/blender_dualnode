@@ -332,8 +332,8 @@ void USDStageReader::import_all_materials(Main *bmain)
       }
 
       /* Add the material now. */
-      if (blend_mtl = mtl_reader.add_material(usd_mtl)) {
-
+      blend_mtl = mtl_reader.add_material(usd_mtl);
+      if (blend_mtl) {
         if (params_.mtl_name_collision_mode == USD_MTL_NAME_COLLISION_MAKE_UNIQUE) {
           /* Record the name of the Blender material we created for the USD material
            * with the given path, so we don't import the material again if the

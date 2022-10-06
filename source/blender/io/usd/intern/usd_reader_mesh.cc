@@ -48,20 +48,6 @@ static const pxr::TfToken normalsPrimvar("normals", pxr::TfToken::Immortal);
 }  // namespace usdtokens
 
 namespace utils {
-/* Very similar to #blender::io::alembic::utils. */
-static void build_mat_map(const Main *bmain, std::map<std::string, Material *> *r_mat_map)
-{
-  if (r_mat_map == nullptr) {
-    return;
-  }
-
-  Material *material = static_cast<Material *>(bmain->materials.first);
-
-  for (; material; material = static_cast<Material *>(material->id.next)) {
-    /* We have to do this because the stored material name is coming directly from USD. */
-    (*r_mat_map)[pxr::TfMakeValidIdentifier(material->id.name + 2)] = material;
-  }
-}
 
 static pxr::UsdShadeMaterial compute_bound_material(const pxr::UsdPrim &prim)
 {
