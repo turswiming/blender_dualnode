@@ -21,8 +21,7 @@ void main()
   float roughness, metallic;
   workbench_float_pair_decode(mat_data.a, roughness, metallic);
 
-  /* TODO(fclem): Pass background color as uniform. */
-  vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+  vec4 color = world_data.background_color;
 
   /* Background pixels. */
   if (depth != 1.0) {

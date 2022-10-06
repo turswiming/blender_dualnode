@@ -263,6 +263,13 @@ struct SceneResources {
   StorageVectorBuffer<workbench::Material> material_buf = {"material_buf"};
   UniformBuffer<WorldData> world_buf;
 
+  void init(int2 output_res, float4 background_color)
+  {
+    world_buf.background_color = background_color;
+    matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
+    depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
+  }
+
   void world_sync(StudioLight *studio_light)
   {
     float4x4 rot_matrix = float4x4::identity();
@@ -642,14 +649,11 @@ class Instance {
   void init(const int2 &output_res,
             const Depsgraph *depsgraph,
             const Object * /*camera*/,
-            const View3D * /*v3d*/,
-            const RegionView3D * /*rv3d*/)
+            const View3D *v3d,
+            const RegionView3D *rv3d)
   {
     Scene *scene = DEG_get_evaluated_scene(depsgraph);
     View3DShading &shading = scene->display.shading;
-
-    resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
-    resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
 
     cull_state = DRW_STATE_NO_DRAW;
     if (shading.flag & V3D_SHADING_BACKFACE_CULLING) {
@@ -709,7 +713,24 @@ class Instance {
         break;
     }
 
-    // TODO(pragma37): Create resources.init() to store the relevant settings;
+    float4 background_color = float4(0.0f);
+
+    /*TODO(pragma37): Replace when Workbench next is complete*/
+    // bool is_workbench_render = BKE_scene_uses_blender_workbench(scene);
+    bool is_workbench_render = std::string(scene->r.engine) ==
+                               std::string("BLENDER_WORKBENCH_NEXT");
+
+    /* TODO(pragma37):
+     * Check why Workbench Next exposes OB_MATERIAL, and Workbench exposes OB_RENDER */
+    if (!v3d || (ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL) && is_workbench_render)) {
+      if (scene->r.alphamode != R_ALPHAPREMUL) {
+        World *w = scene->world;
+        background_color = w ? float4(w->horr, w->horg, w->horb, 1.0f) :
+                               float4(0.0f, 0.0f, 0.0f, 1.0f);
+      }
+    }
+
+    resources.init(output_res, background_color);
 
     studio_light = nullptr;
     if (shading_type == eShadingType::MATCAP) {

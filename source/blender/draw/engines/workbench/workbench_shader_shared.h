@@ -24,6 +24,9 @@ struct WorldData {
   LightData lights[4];
   float4 ambient_color;
 
+  /* TODO(pragma37): Check why this breaks Workbench rendering*/
+  float4 background_color;
+
   int cavity_sample_start;
   int cavity_sample_end;
   float cavity_sample_count_inv;
