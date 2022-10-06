@@ -21,7 +21,6 @@ function(print_found_status
   endif()
 endfunction()
 
-  endif()
 # ------------------------------------------------------------------------
 # Find system provided libraries.
 
