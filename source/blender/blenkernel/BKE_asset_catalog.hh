@@ -124,10 +124,7 @@ class AssetCatalogService {
    *
    * \see #AssetCatalogFilter
    */
-  AssetCatalogFilter create_catalog_filter(const AssetCatalogPath &path) const;
-  AssetCatalogFilter create_catalog_filter(CatalogID catalog_id) const;
-
-  Set<CatalogID> catalogs_for_path(const AssetCatalogPath &path) const;
+  AssetCatalogFilter create_catalog_filter(CatalogID active_catalog_id) const;
 
   /** Create a catalog with some sensible auto-generated catalog ID.
    * The catalog will be saved to the default catalog file. */
@@ -150,7 +147,6 @@ class AssetCatalogService {
   void update_catalog_path(CatalogID catalog_id, const AssetCatalogPath &new_catalog_path);
 
   AssetCatalogTree *get_catalog_tree();
-  const AssetCatalogTree *get_catalog_tree() const;
 
   /** Return true only if there are no catalogs known. */
   bool is_empty() const;

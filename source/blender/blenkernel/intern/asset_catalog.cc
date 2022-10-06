@@ -149,10 +149,14 @@ bool AssetCatalogService::is_catalog_known(CatalogID catalog_id) const
   return catalog_collection_->catalogs_.contains(catalog_id);
 }
 
-AssetCatalogFilter AssetCatalogService::create_catalog_filter(const AssetCatalogPath &path) const
+AssetCatalogFilter AssetCatalogService::create_catalog_filter(
+    const CatalogID active_catalog_id) const
 {
   Set<CatalogID> matching_catalog_ids;
   Set<CatalogID> known_catalog_ids;
+  matching_catalog_ids.add(active_catalog_id);
+
+  const AssetCatalog *active_catalog = find_catalog(active_catalog_id);
 
   /* This cannot just iterate over tree items to get all the required data, because tree items only
    * represent single UUIDs. It could be used to get the main UUIDs of the children, though, and
@@ -160,34 +164,13 @@ AssetCatalogFilter AssetCatalogService::create_catalog_filter(const AssetCatalog
    * call). Without an extra indexed-by-path acceleration structure, this is still going to require
    * a linear search, though. */
   for (const auto &catalog_uptr : catalog_collection_->catalogs_.values()) {
-    if (catalog_uptr->path.is_contained_in(path)) {
+    if (active_catalog && catalog_uptr->path.is_contained_in(active_catalog->path)) {
       matching_catalog_ids.add(catalog_uptr->catalog_id);
     }
     known_catalog_ids.add(catalog_uptr->catalog_id);
   }
 
   return AssetCatalogFilter(std::move(matching_catalog_ids), std::move(known_catalog_ids));
-}
-
-Set<CatalogID> AssetCatalogService::catalogs_for_path(const AssetCatalogPath &path) const
-{
-  Set<CatalogID> catalog_ids;
-  for (const auto &catalog_uptr : catalog_collection_->catalogs_.values()) {
-    if (catalog_uptr->path == path) {
-      catalog_ids.add(catalog_uptr->catalog_id);
-    }
-  }
-  return catalog_ids;
-}
-
-AssetCatalogFilter AssetCatalogService::create_catalog_filter(const CatalogID catalog_id) const
-{
-  const AssetCatalog *catalog = this->find_catalog(catalog_id);
-  if (!catalog) {
-    return AssetCatalogFilter({catalog_id}, {});
-  }
-
-  return this->create_catalog_filter(catalog->path);
 }
 
 void AssetCatalogService::delete_catalog_by_id_soft(const CatalogID catalog_id)
@@ -560,11 +543,6 @@ std::unique_ptr<AssetCatalogDefinitionFile> AssetCatalogService::construct_cdf_i
 }
 
 AssetCatalogTree *AssetCatalogService::get_catalog_tree()
-{
-  return catalog_tree_.get();
-}
-
-const AssetCatalogTree *AssetCatalogService::get_catalog_tree() const
 {
   return catalog_tree_.get();
 }
