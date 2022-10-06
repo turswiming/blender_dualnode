@@ -381,6 +381,8 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
   const bool import_proxy = RNA_boolean_get(op->ptr, "import_proxy");
   const bool import_render = RNA_boolean_get(op->ptr, "import_render");
 
+  const bool import_unbound_materials = RNA_boolean_get(op->ptr, "import_unbound_materials");
+
   const bool import_usd_preview = RNA_boolean_get(op->ptr, "import_usd_preview");
   const bool set_material_blend = RNA_boolean_get(op->ptr, "set_material_blend");
 
@@ -427,7 +429,8 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
                                    .import_usd_preview = import_usd_preview,
                                    .set_material_blend = set_material_blend,
                                    .light_intensity_scale = light_intensity_scale,
-                                   .mtl_name_collision_mode = mtl_name_collision_mode};
+                                   .mtl_name_collision_mode = mtl_name_collision_mode,
+                                   .import_unbound_materials = import_unbound_materials};
 
   STRNCPY(params.prim_path_mask, prim_path_mask);
 
@@ -471,6 +474,7 @@ static void wm_usd_import_draw(bContext *UNUSED(C), wmOperator *op)
   uiItemR(col, ptr, "import_guide", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "import_proxy", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "import_render", 0, NULL, ICON_NONE);
+  uiItemR(col, ptr, "import_unbound_materials", 0, NULL, ICON_NONE);
 
   col = uiLayoutColumnWithHeading(box, true, IFACE_("Options"));
   uiItemR(col, ptr, "set_frame_range", 0, NULL, ICON_NONE);
@@ -578,6 +582,9 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "import_proxy", true, "Proxy", "Import proxy geometry");
 
   RNA_def_boolean(ot->srna, "import_render", true, "Render", "Import final render geometry");
+
+  RNA_def_boolean(ot->srna, "import_unbound_materials", false,
+    "Unbound Materials", "Include materials not bound to any geometry");
 
   RNA_def_boolean(ot->srna,
                   "import_usd_preview",

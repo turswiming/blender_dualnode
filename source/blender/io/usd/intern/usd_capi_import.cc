@@ -225,7 +225,15 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
 
   data->archive = archive;
 
+  if (data->params.import_unbound_materials) {
+    archive->import_all_materials(data->bmain);
+  }
+
   archive->collect_readers(data->bmain);
+
+  if (data->params.import_unbound_materials) {
+    archive->fake_users_for_unbound_materials();
+  }
 
   *data->do_update = true;
   *data->progress = 0.2f;

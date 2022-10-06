@@ -40,6 +40,10 @@ class USDStageReader {
 
   void collect_readers(struct Main *bmain);
 
+  void import_all_materials(struct Main *bmain);
+
+  void fake_users_for_unbound_materials();
+
   bool valid() const;
 
   pxr::UsdStageRefPtr stage()
