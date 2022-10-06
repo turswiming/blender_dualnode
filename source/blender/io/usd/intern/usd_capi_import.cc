@@ -231,10 +231,6 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
 
   archive->collect_readers(data->bmain);
 
-  if (data->params.import_unbound_materials) {
-    archive->fake_users_for_unbound_materials();
-  }
-
   *data->do_update = true;
   *data->progress = 0.2f;
 
@@ -363,6 +359,10 @@ static void import_endjob(void *customdata)
 
     DEG_id_tag_update(&data->scene->id, ID_RECALC_BASE_FLAGS);
     DEG_relations_tag_update(data->bmain);
+
+    if (data->params.import_unbound_materials) {
+      data->archive->fake_users_for_unbound_materials();
+    }
   }
 
   WM_set_locked_interface(data->wm, false);
