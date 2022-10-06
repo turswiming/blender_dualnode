@@ -68,6 +68,8 @@
 
 #include "gpencil_intern.h"
 
+#define SEARCH_RADIUS_PIXEL 20
+
 /* ************************************************ */
 /* General Brush Editing Context */
 
@@ -78,6 +80,7 @@ typedef struct tGP_BrushEditData {
   Main *bmain;
   Scene *scene;
   Object *object;
+  Object *ob_eval;
 
   ScrArea *area;
   ARegion *region;
@@ -1181,6 +1184,8 @@ static bool gpencil_sculpt_brush_init(bContext *C, wmOperator *op)
     }
     /* Check if some modifier can transform the stroke. */
     gso->is_transformed = BKE_gpencil_has_transform_modifiers(ob);
+
+    gso->ob_eval = (Object *)DEG_get_evaluated_id(gso->depsgraph, &ob->id);
   }
   else {
     unit_m4(gso->inv_mat);
@@ -1196,9 +1201,12 @@ static bool gpencil_sculpt_brush_init(bContext *C, wmOperator *op)
   gso->brush = brush;
   BKE_curvemapping_init(gso->brush->curve);
 
-  const bool is_automasking = (ts->gp_sculpt.flag & (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE |
-                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER |
-                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL)) != 0;
+  const bool is_automasking = (ts->gp_sculpt.flag &
+                               (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_STROKE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_STROKE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_ACTIVE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_ACTIVE)) != 0;
   if (is_automasking) {
     gso->automasking_strokes = BLI_ghash_ptr_new(__func__);
   }
@@ -1602,9 +1610,12 @@ static bool gpencil_sculpt_brush_do_frame(bContext *C,
   Brush *brush = gso->brush;
   const int radius = (brush->flag & GP_BRUSH_USE_PRESSURE) ? gso->brush->size * gso->pressure :
                                                              gso->brush->size;
-  const bool is_automasking = (ts->gp_sculpt.flag & (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE |
-                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER |
-                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL)) != 0;
+  const bool is_automasking = (ts->gp_sculpt.flag &
+                               (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_STROKE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_STROKE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_ACTIVE |
+                                GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_ACTIVE)) != 0;
   /* Calc bound box matrix. */
   float bound_mat[4][4];
   BKE_gpencil_layer_transform_matrix_get(gso->depsgraph, gso->object, gpl, bound_mat);
@@ -1737,26 +1748,108 @@ static bool gpencil_sculpt_brush_do_frame(bContext *C,
   return changed;
 }
 
+/* Find the stroke nearer to the brush. */
+static void get_nearest_stroke_to_brush(tGP_BrushEditData *gso,
+                                        int mval_i[2],
+                                        bGPDlayer **r_gpl,
+                                        bGPDstroke **r_gps)
+{
+  const int radius = SEARCH_RADIUS_PIXEL;
+
+  Object *ob_eval = gso->ob_eval;
+  bGPdata *gpd = (bGPdata *)ob_eval->data;
+  GP_SpaceConversion *gsc = &gso->gsc;
+  const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
+  float dist = FLT_MAX;
+
+  LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
+    if (!BKE_gpencil_layer_is_editable(gpl) || (gpl->actframe == NULL)) {
+      continue;
+    }
+    /* Calculate bound box matrix. */
+    float bound_mat[4][4];
+    BKE_gpencil_layer_transform_matrix_get(gso->depsgraph, gso->object, gpl, bound_mat);
+
+    bGPDframe *init_gpf = (is_multiedit) ? gpl->frames.first : gpl->actframe;
+    for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
+      LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+        bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
+        if (gps->totpoints == 0) {
+          continue;
+        }
+        /* Check if the color is editable. */
+        if (ED_gpencil_stroke_material_editable(gso->object, gpl, gps) == false) {
+          continue;
+        }
+
+        /* Check if the stroke collide with brush. */
+        if (!ED_gpencil_stroke_check_collision(gsc, gps, gso->mval, radius, bound_mat)) {
+          continue;
+        }
+
+        bGPDspoint *pt;
+        int pc2D[2] = {0};
+        bGPDspoint npt;
+
+        for (int i = 0; i < gps->totpoints; i++) {
+          pt = gps->points + i;
+          gpencil_point_to_world_space(pt, bound_mat, &npt);
+          gpencil_point_to_xy(gsc, gps, &npt, &pc2D[0], &pc2D[1]);
+          float d = len_v2v2_int(mval_i, pc2D);
+          if (d < dist) {
+            dist = d;
+            *r_gpl = gpl;
+            *r_gps = gps_active;
+          }
+        }
+      }
+      /* If not multi-edit, exit loop. */
+      if (!is_multiedit) {
+        break;
+      }
+    }
+  }
+}
+
 /* Get list of Auto-Masking strokes. */
 static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
 {
-  bGPdata *gpd = gso->gpd;
+  Object *ob_eval = gso->ob_eval;
+  bGPdata *gpd = (bGPdata *)ob_eval->data;
   GP_SpaceConversion *gsc = &gso->gsc;
-  Brush *brush = gso->brush;
   ToolSettings *ts = gso->scene->toolsettings;
   Object *ob = gso->object;
-  Material *mat_active = BKE_gpencil_material(ob, ob->actcol);
+  const eGP_Sculpt_SettingsFlag flag = ts->gp_sculpt.flag;
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
-  const bool is_masking_stroke = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE) != 0;
-  const bool is_masking_layer = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER) != 0;
-  const bool is_masking_material = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL) !=
-                                   0;
+  const bool is_masking_stroke = (flag & GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE) != 0;
+  const bool is_masking_layer_stroke = (flag & GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_STROKE) != 0;
+  const bool is_masking_material_stroke = (flag & GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_STROKE) !=
+                                          0;
+  const bool is_masking_layer_active = (flag & GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_ACTIVE) != 0;
+  const bool is_masking_material_active = (flag & GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_ACTIVE) !=
+                                          0;
   int mval_i[2];
   round_v2i_v2fl(mval_i, gso->mval);
 
   /* Define a fix number of pixel as cursor radius. */
-  const int radius = 10;
+  const int radius = SEARCH_RADIUS_PIXEL;
   bGPDlayer *gpl_active = BKE_gpencil_layer_active_get(gpd);
+  Material *mat_active = BKE_gpencil_material(ob, ob->actcol);
+
+  /* Find nearest stroke to find the layer and material. */
+  if (is_masking_layer_stroke || is_masking_material_stroke) {
+    bGPDlayer *gpl_near = NULL;
+    bGPDstroke *gps_near = NULL;
+    get_nearest_stroke_to_brush(gso, mval_i, &gpl_near, &gps_near);
+    if (gps_near != NULL) {
+      if (is_masking_layer_stroke) {
+        gpl_active = gpl_near;
+      }
+      if (is_masking_material_stroke) {
+        mat_active = BKE_object_material_get(ob, gps_near->mat_nr + 1);
+      }
+    }
+  }
 
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     /* Only editable and visible layers are considered. */
@@ -1770,6 +1863,8 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
     bGPDframe *init_gpf = (is_multiedit) ? gpl->frames.first : gpl->actframe;
     for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
       LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
+        bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
+
         if (gps->totpoints == 0) {
           continue;
         }
@@ -1779,15 +1874,15 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
         }
 
         /* Layer Auto-Masking. */
-        if ((is_masking_layer) && (gpl == gpl_active)) {
-          BLI_ghash_insert(gso->automasking_strokes, gps, gps);
+        if ((is_masking_layer_stroke || is_masking_layer_active) && (gpl == gpl_active)) {
+          BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
           continue;
         }
         /* Material Auto-Masking. */
-        if (is_masking_material) {
+        if (is_masking_material_stroke || is_masking_material_active) {
           Material *mat = BKE_object_material_get(ob, gps->mat_nr + 1);
           if (mat == mat_active) {
-            BLI_ghash_insert(gso->automasking_strokes, gps, gps);
+            BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
             continue;
           }
         }
@@ -1813,7 +1908,7 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
 
           /* Only check if point is inside. */
           if (len_v2v2_int(mval_i, pc1) <= radius) {
-            BLI_ghash_insert(gso->automasking_strokes, gps, gps);
+            BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
           }
         }
         else {
@@ -1829,7 +1924,7 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
             gpencil_point_to_world_space(pt1, bound_mat, &npt);
             gpencil_point_to_xy(gsc, gps, &npt, &pc1[0], &pc1[1]);
             if (len_v2v2_int(mval_i, pc1) <= radius) {
-              BLI_ghash_insert(gso->automasking_strokes, gps, gps);
+              BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
               i = gps->totpoints;
               continue;
             }
@@ -1838,14 +1933,14 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
             gpencil_point_to_world_space(pt2, bound_mat, &npt);
             gpencil_point_to_xy(gsc, gps, &npt, &pc2[0], &pc2[1]);
             if (len_v2v2_int(mval_i, pc2) <= radius) {
-              BLI_ghash_insert(gso->automasking_strokes, gps, gps);
+              BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
               i = gps->totpoints;
               continue;
             }
 
             /* Check segment. */
             if (gpencil_stroke_inside_circle(gso->mval, radius, pc1[0], pc1[1], pc2[0], pc2[1])) {
-              BLI_ghash_insert(gso->automasking_strokes, gps, gps);
+              BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
               i = gps->totpoints;
               continue;
             }
@@ -1870,7 +1965,7 @@ static bool gpencil_sculpt_brush_apply_standard(bContext *C, tGP_BrushEditData *
   Object *obact = gso->object;
   bool changed = false;
 
-  Object *ob_eval = (Object *)DEG_get_evaluated_id(depsgraph, &obact->id);
+  Object *ob_eval = gso->ob_eval;
   bGPdata *gpd = (bGPdata *)ob_eval->data;
 
   /* Calculate brush-specific data which applies equally to all points */
@@ -2007,8 +2102,9 @@ static void gpencil_sculpt_brush_apply(bContext *C, wmOperator *op, PointerRNA *
   /* Get list of Auto-Masking strokes. */
   if ((!gso->automasking_ready) &&
       (ts->gp_sculpt.flag &
-       (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE | GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER |
-        GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL))) {
+       (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE | GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_STROKE |
+        GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_STROKE | GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_ACTIVE |
+        GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_ACTIVE))) {
     gso->automasking_ready = get_automasking_strokes_list(gso);
   }
 

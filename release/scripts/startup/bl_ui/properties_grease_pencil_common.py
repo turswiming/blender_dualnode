@@ -53,8 +53,10 @@ class GreasePencilSculptAdvancedPanel:
 
         col = layout.column(heading="Auto-Masking", align=True)
         col.prop(tool_settings.gpencil_sculpt, "use_automasking_stroke", text="Stroke")
-        col.prop(tool_settings.gpencil_sculpt, "use_automasking_layer", text="Layer")
-        col.prop(tool_settings.gpencil_sculpt, "use_automasking_material", text="Material")
+        col.prop(tool_settings.gpencil_sculpt, "use_automasking_layer_stroke", text="Layer")
+        col.prop(tool_settings.gpencil_sculpt, "use_automasking_material_stroke", text="Material")
+        col.prop(tool_settings.gpencil_sculpt, "use_automasking_layer_active", text="Layer Active")
+        col.prop(tool_settings.gpencil_sculpt, "use_automasking_material_active", text="Material Active")
 
         if tool in {'SMOOTH', 'RANDOMIZE'}:
             col = layout.column(heading="Affect", align=True)
