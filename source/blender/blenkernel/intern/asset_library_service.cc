@@ -62,7 +62,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
 
     return get_asset_library_on_disk(root_path);
   }
-  else if (library_reference.type == ASSET_LIBRARY_CUSTOM) {
+  if (library_reference.type == ASSET_LIBRARY_CUSTOM) {
     bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_from_index(
         &U, library_reference.custom_library_index);
 
