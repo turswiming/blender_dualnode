@@ -38,6 +38,7 @@ struct LibraryCatalog {
 struct AssetItemTree {
   bke::AssetCatalogTree catalogs;
   MultiValueMap<bke::AssetCatalogPath, LibraryAsset> assets_per_path;
+  Map<const bke::AssetCatalogTreeItem *, bke::AssetCatalogPath> full_catalog_per_tree_item;
 };
 
 static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree &node_tree)
@@ -100,13 +101,28 @@ static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree &node
     }
   });
 
-  return {std::move(catalogs_with_node_assets), std::move(assets_per_path)};
+  /* Build another map storing full asset paths for each tree item, in order to have stable
+   * pointers to asset catalog paths to use for context pointers. This is necessary because
+   * #bke::AssetCatalogTreeItem doesn't store its full path directly. */
+  Map<const bke::AssetCatalogTreeItem *, bke::AssetCatalogPath> full_catalog_per_tree_item;
+  catalogs_with_node_assets.foreach_item([&](bke::AssetCatalogTreeItem &item) {
+    full_catalog_per_tree_item.add_new(&item, item.catalog_path());
+  });
+
+  return {std::move(catalogs_with_node_assets),
+          std::move(assets_per_path),
+          std::move(full_catalog_per_tree_item)};
 }
 
 static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
 {
   bScreen &screen = *CTX_wm_screen(C);
   const SpaceNode &snode = *CTX_wm_space_node(C);
+  if (!snode.runtime->assets_for_menu) {
+    BLI_assert_unreachable();
+    return;
+  }
+  AssetItemTree &tree = *snode.runtime->assets_for_menu;
   const bNodeTree *edit_tree = snode.edittree;
   if (!edit_tree) {
     return;
@@ -119,7 +135,6 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
   const bke::AssetCatalogPath &menu_path = *static_cast<const bke::AssetCatalogPath *>(
       menu_path_ptr.data);
 
-  AssetItemTree tree = build_catalog_tree(*C, *edit_tree);
   const Span<LibraryAsset> asset_items = tree.assets_per_path.lookup(menu_path);
   bke::AssetCatalogTreeItem *catalog_item = tree.catalogs.find_item(menu_path);
   BLI_assert(catalog_item != nullptr);
@@ -137,18 +152,18 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
         &screen.id, &RNA_FileSelectEntry, const_cast<FileDirEntry *>(item.handle.file_data)};
     uiLayoutSetContextPointer(row, "active_file", &file);
 
-    PointerRNA library_ptr{
-        &screen.id, &RNA_AssetLibraryReference, new AssetLibraryReference(item.library_ref)};
+    PointerRNA library_ptr{&screen.id,
+                           &RNA_AssetLibraryReference,
+                           const_cast<AssetLibraryReference *>(&item.library_ref)};
     uiLayoutSetContextPointer(row, "asset_library_ref", &library_ptr);
 
     uiItemO(row, ED_asset_handle_get_name(&item.handle), ICON_NONE, "NODE_OT_add_group_asset");
   }
 
   catalog_item->foreach_child([&](bke::AssetCatalogTreeItem &child_item) {
-    const bke::AssetCatalogPath path = child_item.catalog_path();
-
-    /* TODO: Where should this memory live? */
-    PointerRNA path_ptr{&screen.id, &RNA_AssetCatalogPath, new bke::AssetCatalogPath(path)};
+    const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(&child_item);
+    PointerRNA path_ptr{
+        &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
     uiLayout *row = uiLayoutRow(layout, false);
     uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
     uiItemM(row, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
@@ -158,10 +173,13 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
 static void add_root_catalogs_draw(const bContext *C, Menu *menu)
 {
   bScreen &screen = *CTX_wm_screen(C);
-  const SpaceNode &snode = *CTX_wm_space_node(C);
+  SpaceNode &snode = *CTX_wm_space_node(C);
   const bNodeTree *edit_tree = snode.edittree;
 
-  AssetItemTree tree = build_catalog_tree(*C, *edit_tree);
+  snode.runtime->assets_for_menu.reset();
+  snode.runtime->assets_for_menu = std::make_shared<AssetItemTree>(
+      build_catalog_tree(*C, *edit_tree));
+  AssetItemTree &tree = *snode.runtime->assets_for_menu;
   if (tree.catalogs.is_empty()) {
     return;
   }
@@ -170,10 +188,9 @@ static void add_root_catalogs_draw(const bContext *C, Menu *menu)
   uiItemS(layout);
 
   tree.catalogs.foreach_root_item([&](bke::AssetCatalogTreeItem &item) {
-    const bke::AssetCatalogPath path = item.catalog_path();
-
-    /* TODO: Where should this memory live? */
-    PointerRNA path_ptr{&screen.id, &RNA_AssetCatalogPath, new bke::AssetCatalogPath(path)};
+    const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(&item);
+    PointerRNA path_ptr{
+        &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
     uiLayout *row = uiLayoutRow(layout, false);
     uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
     uiItemM(row, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
