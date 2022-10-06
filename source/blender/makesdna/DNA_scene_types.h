@@ -1153,13 +1153,13 @@ typedef enum eGP_Sculpt_SettingsFlag {
   /** Apply primitive curve. */
   GP_SCULPT_SETT_FLAG_PRIMITIVE_CURVE = (1 << 1),
   /** Scale thickness. */
-  GP_SCULPT_SETT_FLAG_SCALE_THICKNESS = (1 << 2),
+  GP_SCULPT_SETT_FLAG_SCALE_THICKNESS = (1 << 3),
   /* Stroke Auto-Masking for sculpt. */
-  GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE = (1 << 3),
+  GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE = (1 << 4),
   /* Layer Auto-Masking for sculpt. */
-  GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER = (1 << 4),
+  GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER = (1 << 5),
   /* Material Auto-Masking for sculpt. */
-  GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL = (1 << 5),
+  GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL = (1 << 6),
 
 } eGP_Sculpt_SettingsFlag;
 
