@@ -1196,9 +1196,10 @@ static bool gpencil_sculpt_brush_init(bContext *C, wmOperator *op)
   gso->brush = brush;
   BKE_curvemapping_init(gso->brush->curve);
 
-  if (brush->gpencil_settings->sculpt_mode_flag &
-      (GP_SCULPT_FLAGMODE_AUTOMASK_STROKE | GP_SCULPT_FLAGMODE_AUTOMASK_LAYER |
-       GP_SCULPT_FLAGMODE_AUTOMASK_MATERIAL)) {
+  const bool is_automasking = (ts->gp_sculpt.flag & (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE |
+                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER |
+                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL)) != 0;
+  if (is_automasking) {
     gso->automasking_strokes = BLI_ghash_ptr_new(__func__);
   }
   else {
@@ -1597,13 +1598,13 @@ static bool gpencil_sculpt_brush_do_frame(bContext *C,
   bGPdata *gpd = ob->data;
   const char tool = gso->brush->gpencil_sculpt_tool;
   GP_SpaceConversion *gsc = &gso->gsc;
+  ToolSettings *ts = gso->scene->toolsettings;
   Brush *brush = gso->brush;
   const int radius = (brush->flag & GP_BRUSH_USE_PRESSURE) ? gso->brush->size * gso->pressure :
                                                              gso->brush->size;
-  const bool is_automasking = (brush->gpencil_settings->sculpt_mode_flag &
-                               (GP_SCULPT_FLAGMODE_AUTOMASK_STROKE |
-                                GP_SCULPT_FLAGMODE_AUTOMASK_LAYER |
-                                GP_SCULPT_FLAGMODE_AUTOMASK_MATERIAL)) != 0;
+  const bool is_automasking = (ts->gp_sculpt.flag & (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE |
+                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER |
+                                                     GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL)) != 0;
   /* Calc bound box matrix. */
   float bound_mat[4][4];
   BKE_gpencil_layer_transform_matrix_get(gso->depsgraph, gso->object, gpl, bound_mat);
@@ -1742,15 +1743,14 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
   bGPdata *gpd = gso->gpd;
   GP_SpaceConversion *gsc = &gso->gsc;
   Brush *brush = gso->brush;
+  ToolSettings *ts = gso->scene->toolsettings;
   Object *ob = gso->object;
   Material *mat_active = BKE_gpencil_material(ob, ob->actcol);
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
-  const bool is_masking_stroke = (brush->gpencil_settings->sculpt_mode_flag &
-                                  GP_SCULPT_FLAGMODE_AUTOMASK_STROKE) != 0;
-  const bool is_masking_layer = (brush->gpencil_settings->sculpt_mode_flag &
-                                 GP_SCULPT_FLAGMODE_AUTOMASK_LAYER) != 0;
-  const bool is_masking_material = (brush->gpencil_settings->sculpt_mode_flag &
-                                    GP_SCULPT_FLAGMODE_AUTOMASK_MATERIAL) != 0;
+  const bool is_masking_stroke = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE) != 0;
+  const bool is_masking_layer = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER) != 0;
+  const bool is_masking_material = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL) !=
+                                   0;
   int mval_i[2];
   round_v2i_v2fl(mval_i, gso->mval);
 
@@ -1964,6 +1964,7 @@ static void gpencil_sculpt_brush_apply(bContext *C, wmOperator *op, PointerRNA *
 {
   tGP_BrushEditData *gso = op->customdata;
   Brush *brush = gso->brush;
+  ToolSettings *ts = gso->scene->toolsettings;
   const int radius = (brush->flag & GP_BRUSH_USE_PRESSURE) ? gso->brush->size * gso->pressure :
                                                              gso->brush->size;
   float mousef[2];
@@ -2005,9 +2006,9 @@ static void gpencil_sculpt_brush_apply(bContext *C, wmOperator *op, PointerRNA *
 
   /* Get list of Auto-Masking strokes. */
   if ((!gso->automasking_ready) &&
-      (brush->gpencil_settings->sculpt_mode_flag &
-       (GP_SCULPT_FLAGMODE_AUTOMASK_STROKE | GP_SCULPT_FLAGMODE_AUTOMASK_LAYER |
-        GP_SCULPT_FLAGMODE_AUTOMASK_MATERIAL))) {
+      (ts->gp_sculpt.flag &
+       (GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE | GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER |
+        GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL))) {
     gso->automasking_ready = get_automasking_strokes_list(gso);
   }
 
