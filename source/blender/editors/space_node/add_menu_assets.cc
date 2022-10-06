@@ -187,7 +187,44 @@ static void add_root_catalogs_draw(const bContext *C, Menu *menu)
   uiLayout *layout = menu->layout;
   uiItemS(layout);
 
+  /* Avoid adding a separate root catalog when the assets have already been added to one of the
+   * builtin menus.
+   * TODO: The need to define the builtin menu labels here is completely non-ideal. We don't have
+   * any UI introspection that can do this though. This can be solved in the near future by
+   * removing the need to define the add menu completely, instead using a per-node-type path which
+   * can be merged with catalog tree.
+   */
+  static Set<std::string> all_builtin_menus = []() {
+    Set<std::string> menus;
+    menus.add_new("Attribute");
+    menus.add_new("Color");
+    menus.add_new("Curve");
+    menus.add_new("Curve Primitives");
+    menus.add_new("Curve Topology");
+    menus.add_new("Geometry");
+    menus.add_new("Input");
+    menus.add_new("Instances");
+    menus.add_new("Material");
+    menus.add_new("Mesh");
+    menus.add_new("Mesh Primitives");
+    menus.add_new("Mesh Topology");
+    menus.add_new("Output");
+    menus.add_new("Point");
+    menus.add_new("Text");
+    menus.add_new("Texture");
+    menus.add_new("Utilities");
+    menus.add_new("UV");
+    menus.add_new("Vector");
+    menus.add_new("Volume");
+    menus.add_new("Group");
+    menus.add_new("Layout");
+    return menus;
+  }();
+
   tree.catalogs.foreach_root_item([&](bke::AssetCatalogTreeItem &item) {
+    if (all_builtin_menus.contains(item.get_name())) {
+      return;
+    }
     const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(&item);
     PointerRNA path_ptr{
         &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
