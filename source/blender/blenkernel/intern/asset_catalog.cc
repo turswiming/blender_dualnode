@@ -821,7 +821,22 @@ AssetCatalogTreeItem *AssetCatalogTree::find_item(const AssetCatalogPath &path)
   AssetCatalogTreeItem *result = nullptr;
   this->foreach_item([&](AssetCatalogTreeItem &item) {
     if (result) {
-      /* TODO: Add a way to stop iteration. */
+      /* There is no way to stop iteration. */
+      return;
+    }
+    if (item.catalog_path() == path) {
+      result = &item;
+    }
+  });
+  return result;
+}
+
+AssetCatalogTreeItem *AssetCatalogTree::find_root_item(const AssetCatalogPath &path)
+{
+  AssetCatalogTreeItem *result = nullptr;
+  this->foreach_root_item([&](AssetCatalogTreeItem &item) {
+    if (result) {
+      /* There is no way to stop iteration. */
       return;
     }
     if (item.catalog_path() == path) {

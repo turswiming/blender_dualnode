@@ -357,6 +357,7 @@ class AssetCatalogTree {
   bool is_empty() const;
 
   AssetCatalogTreeItem *find_item(const AssetCatalogPath &path);
+  AssetCatalogTreeItem *find_root_item(const AssetCatalogPath &path);
 
  protected:
   /** Child tree items, ordered by their names. */

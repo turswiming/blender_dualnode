@@ -216,3 +216,24 @@ MenuType add_root_catalogs_menu_type()
 }
 
 }  // namespace blender::ed::space_node
+
+/* Note: This is only necessary because Python can't set an asset catalog path context item. */
+void uiTemplateNodeAssetMenuItems(uiLayout *layout, bContext *C, const char *catalog_path)
+{
+  using namespace blender;
+  using namespace blender::ed::space_node;
+  bScreen &screen = *CTX_wm_screen(C);
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  AssetItemTree &tree = *snode.runtime->assets_for_menu;
+  const bke::AssetCatalogTreeItem *item = tree.catalogs.find_root_item(catalog_path);
+  if (!item) {
+    return;
+  }
+  const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(item);
+  PointerRNA path_ptr{
+      &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
+  uiItemS(layout);
+  uiLayout *row = uiLayoutRow(layout, false);
+  uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
+  uiItemMContents(row, "NODE_MT_node_add_catalog_assets");
+}
