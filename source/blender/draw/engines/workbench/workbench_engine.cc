@@ -73,6 +73,16 @@ enum class eColorType {
 };
 static constexpr int color_type_len = static_cast<int>(eColorType::TEXTURE) + 1;
 
+enum class eMaterialSubType {
+  NONE = 0,
+  MATERIAL,
+  RANDOM,
+  SINGLE,
+  OBJECT,
+  ATTRIBUTE,
+};
+static constexpr int material_subtype_len = static_cast<int>(eMaterialSubType::ATTRIBUTE) + 1;
+
 struct Material {
   float3 base_color;
   /* Packed data into a int. Decoded in the shader. */
@@ -85,9 +95,19 @@ struct Material {
     base_color = color;
     packed_data = Material::pack_data(0.0f, 0.4f, 1.0f);
   }
-  Material(::Object &ob)
+  Material(::Object &ob, bool random = false)
   {
-    base_color = ob.color;
+    if (random) {
+      uint hash = BLI_ghashutil_strhash_p_murmur(ob.id.name);
+      if (ob.id.lib) {
+        hash = (hash * 13) ^ BLI_ghashutil_strhash_p_murmur(ob.id.lib->filepath);
+      }
+      float3 hsv = float3(BLI_hash_int_01(hash), 0.5f, 0.8f);
+      hsv_to_rgb_v(hsv, base_color);
+    }
+    else {
+      base_color = ob.color;
+    }
     packed_data = Material::pack_data(0.0f, 0.4f, ob.color[3]);
   }
   Material(::Material &mat)
@@ -190,6 +210,8 @@ class ShaderCache {
     /* TODO Clipping */
     info_name += "_no_clip";
     shader_ptr = GPU_shader_create_from_info_name(info_name.c_str());
+    prepass_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(
+        geometry_type)][static_cast<int>(color_type)][static_cast<int>(shading_type)] = shader_ptr;
     return shader_ptr;
   }
 
@@ -608,10 +630,12 @@ class Instance {
   DRWState cull_state;
 
   bool use_per_material_batches = false;
-  bool use_single_color = false;
   eColorType color_type = eColorType::MATERIAL;
-  eShadingType shading_type = eShadingType::STUDIO;
+  eMaterialSubType material_subtype = eMaterialSubType::MATERIAL;
+  /** Used when material_subtype == eMaterialSubType::SINGLE */
   Material material_override = Material(float3(1.0f));
+
+  eShadingType shading_type = eShadingType::STUDIO;
   /** Chosen studiolight or matcap. */
   StudioLight *studio_light;
 
@@ -621,17 +645,74 @@ class Instance {
             const View3D * /*v3d*/,
             const RegionView3D * /*rv3d*/)
   {
-    use_per_material_batches = false;  // ELEM(color_type, V3D_COLOR_TEXTURE, V3D_COLOR_MATERIAL);
-    color_type = eColorType::MATERIAL;
-    shading_type = eShadingType::STUDIO;
+    Scene *scene = DEG_get_evaluated_scene(depsgraph);
+    View3DShading &shading = scene->display.shading;
 
     resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
     resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
 
-    Scene *scene = DEG_get_evaluated_scene(depsgraph);
-    View3DShading &shading = scene->display.shading;
+    cull_state = DRW_STATE_NO_DRAW;
+    if (shading.flag & V3D_SHADING_BACKFACE_CULLING) {
+      cull_state |= DRW_STATE_CULL_BACK;
+    }
+
+    use_per_material_batches = ELEM(
+        shading.color_type, V3D_SHADING_TEXTURE_COLOR, V3D_SHADING_MATERIAL_COLOR);
+
+    color_type = shading.color_type == V3D_SHADING_TEXTURE_COLOR ? eColorType::TEXTURE :
+                                                                   eColorType::MATERIAL;
+
+    if (color_type == eColorType::MATERIAL) {
+      switch (shading.color_type) {
+        case V3D_SHADING_MATERIAL_COLOR:
+          material_subtype = eMaterialSubType::MATERIAL;
+          break;
+        case V3D_SHADING_RANDOM_COLOR:
+          material_subtype = eMaterialSubType::RANDOM;
+          break;
+        case V3D_SHADING_SINGLE_COLOR:
+          material_subtype = eMaterialSubType::SINGLE;
+          break;
+        case V3D_SHADING_TEXTURE_COLOR:
+          BLI_assert_msg(false, "V3D_SHADING_TEXTURE_COLOR is not an eMaterialSubType");
+          break;
+        case V3D_SHADING_OBJECT_COLOR:
+          material_subtype = eMaterialSubType::OBJECT;
+          break;
+        case V3D_SHADING_VERTEX_COLOR:
+          material_subtype = eMaterialSubType::ATTRIBUTE;
+          break;
+        default:
+          BLI_assert_msg(false, "Unhandled V3D_SHADING type");
+      }
+    }
+    else {
+      material_subtype = eMaterialSubType::NONE;
+    }
+
+    if (material_subtype == eMaterialSubType::SINGLE) {
+      material_override = Material(shading.single_color);
+    }
+    else if (material_subtype == eMaterialSubType::ATTRIBUTE) {
+      // TODO(pragma37)
+    }
+
+    switch (shading.light) {
+      case V3D_LIGHTING_FLAT:
+        shading_type = eShadingType::FLAT;
+        break;
+      case V3D_LIGHTING_MATCAP:
+        shading_type = eShadingType::MATCAP;
+        break;
+      case V3D_LIGHTING_STUDIO:
+        shading_type = eShadingType::STUDIO;
+        break;
+    }
+
+    // TODO(pragma37): Create resources.init() to store the relevant settings;
+
     studio_light = nullptr;
-    if (shading.light == V3D_LIGHTING_MATCAP) {
+    if (shading_type == eShadingType::MATCAP) {
       studio_light = BKE_studiolight_find(shading.matcap, STUDIOLIGHT_TYPE_MATCAP);
     }
     /* If matcaps are missing, use this as fallback. */
@@ -653,10 +734,14 @@ class Instance {
 
   void object_sync(Manager &manager, ObjectRef &ob_ref)
   {
+    if (ob_ref.object->type != OB_MESH) {
+      // TODO(pragma37)
+      return;
+    }
 
     if (use_per_material_batches) {
-      Span<::Material *> materials = materials_get(ob_ref);
-      Span<GPUBatch *> batches = geometry_get(ob_ref, materials);
+      Vector<::Material *> materials = materials_get(ob_ref);
+      Span<GPUBatch *> batches = geometry_get(ob_ref, materials.size());
 
       if (batches.size() == materials.size()) {
         for (auto i : materials.index_range()) {
@@ -676,7 +761,16 @@ class Instance {
       ResourceHandle handle = manager.resource_handle(ob_ref);
 
       Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
-      mat = (use_single_color) ? material_override : Material(*ob_ref.object);
+
+      if (material_subtype == eMaterialSubType::OBJECT) {
+        mat = Material(*ob_ref.object);
+      }
+      else if (material_subtype == eMaterialSubType::RANDOM) {
+        mat = Material(*ob_ref.object, true);
+      }
+      else { /* SINGLE OR ATTRIBUTE */
+        mat = material_override;
+      }
 
       GPUBatch *batch = geometry_get(ob_ref);
       if (batch) {
@@ -691,16 +785,26 @@ class Instance {
         geometry_type_from_object(ob_ref.object), ob_ref, material);
   }
 
-  Span<::Material *> materials_get(ObjectRef & /*ob_ref*/)
+  Vector<::Material *> materials_get(ObjectRef &ob_ref)
   {
-    /* TODO */
-    return {};
+    const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
+    Vector<::Material *> materials(material_count);
+    for (auto i : IndexRange(material_count)) {
+      ::Material *mat = BKE_object_material_get_eval(ob_ref.object, i + 1);
+      if (mat == nullptr) {
+        mat = BKE_material_default_empty();
+      }
+      materials[i] = mat;
+    }
+    return materials;
   }
 
-  Span<GPUBatch *> geometry_get(ObjectRef &ob_ref, Span<::Material *> materials)
+  Span<GPUBatch *> geometry_get(ObjectRef &ob_ref, int material_count)
   {
-    return {DRW_cache_object_surface_material_get(ob_ref.object, nullptr, materials.size()),
-            materials.size()};
+    Vector<GPUMaterial *> gpu_materials(material_count, nullptr, {});
+    return {DRW_cache_object_surface_material_get(
+                ob_ref.object, gpu_materials.begin(), material_count),
+            material_count};
   }
 
   GPUBatch *geometry_get(ObjectRef &ob_ref)
