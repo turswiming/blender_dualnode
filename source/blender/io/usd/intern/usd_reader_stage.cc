@@ -353,7 +353,8 @@ void USDStageReader::import_all_materials(Main *bmain)
  * materials. */
 void USDStageReader::fake_users_for_unbound_materials()
 {
-  std::map<std::string, std::string>::const_iterator mat_name_it = settings_.usd_path_to_mat_name.begin();
+  std::map<std::string, std::string>::const_iterator mat_name_it =
+      settings_.usd_path_to_mat_name.begin();
   for (; mat_name_it != settings_.usd_path_to_mat_name.end(); ++mat_name_it) {
     std::map<std::string, Material *>::iterator mat_it = settings_.mat_name_to_mat.find(
         mat_name_it->second);

@@ -583,8 +583,11 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
 
   RNA_def_boolean(ot->srna, "import_render", true, "Render", "Import final render geometry");
 
-  RNA_def_boolean(ot->srna, "import_unbound_materials", false,
-    "Unbound Materials", "Include materials not bound to any geometry");
+  RNA_def_boolean(ot->srna,
+                  "import_unbound_materials",
+                  false,
+                  "Unbound Materials",
+                  "Include materials not bound to any geometry");
 
   RNA_def_boolean(ot->srna,
                   "import_usd_preview",

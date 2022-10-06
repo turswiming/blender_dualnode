@@ -757,7 +757,6 @@ void USDMaterialReader::convert_usd_primvar_reader_float2(
   link_nodes(ntree, uv_map, "UV", dest_node, dest_socket_name);
 }
 
-
 void build_material_map(const Main *bmain, std::map<std::string, Material *> *r_mat_map)
 {
   if (r_mat_map == nullptr) {
@@ -771,11 +770,10 @@ void build_material_map(const Main *bmain, std::map<std::string, Material *> *r_
   }
 }
 
-Material *find_existing_material(
-    const pxr::SdfPath &usd_mat_path,
-    const USDImportParams &params,
-    const std::map<std::string, Material *> &mat_map,
-    const std::map<std::string, std::string> &usd_path_to_mat_name)
+Material *find_existing_material(const pxr::SdfPath &usd_mat_path,
+                                 const USDImportParams &params,
+                                 const std::map<std::string, Material *> &mat_map,
+                                 const std::map<std::string, std::string> &usd_path_to_mat_name)
 {
   if (params.mtl_name_collision_mode == USD_MTL_NAME_COLLISION_MAKE_UNIQUE) {
     /* Check if we've already created the Blender material with a modified name. */

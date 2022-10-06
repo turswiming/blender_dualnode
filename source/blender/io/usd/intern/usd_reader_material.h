@@ -71,7 +71,6 @@ class USDMaterialReader {
   Main *bmain_;
 
  public:
-
   USDMaterialReader(const USDImportParams &params, Main *bmain);
 
   Material *add_material(const pxr::UsdShadeMaterial &usd_material) const;
