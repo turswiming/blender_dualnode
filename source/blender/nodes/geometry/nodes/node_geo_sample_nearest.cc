@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_task.hh"
-
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_bvhutils.h"
@@ -52,16 +50,16 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Geometry"))
       .supported_type({GEO_COMPONENT_TYPE_MESH, GEO_COMPONENT_TYPE_POINT_CLOUD});
-  b.add_input<decl::Vector>(N_("Sample Position")).implicit_field();
+  b.add_input<decl::Vector>(N_("Sample Position")).implicit_field(implicit_field_inputs::position);
   b.add_output<decl::Int>(N_("Index")).dependent_field({1});
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = CD_PROP_FLOAT;
   node->custom2 = ATTR_DOMAIN_POINT;
@@ -149,8 +147,7 @@ static void get_closest_mesh_polys(const Mesh &mesh,
   Array<int> looptri_indices(positions.size());
   get_closest_mesh_looptris(mesh, positions, mask, looptri_indices, r_distances_sq, r_positions);
 
-  const Span<MLoopTri> looptris{BKE_mesh_runtime_looptri_ensure(&mesh),
-                                BKE_mesh_runtime_looptri_len(&mesh)};
+  const Span<MLoopTri> looptris = mesh.looptris();
 
   for (const int i : mask) {
     const MLoopTri &looptri = looptris[looptri_indices[i]];
@@ -265,7 +262,7 @@ class SampleNearestFunction : public fn::MultiFunction {
     return signature.build();
   }
 
-  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext /*context*/) const override
   {
     const VArray<float3> &positions = params.readonly_single_input<float3>(0, "Position");
     MutableSpan<int> indices = params.uninitialized_single_output<int>(1, "Index");

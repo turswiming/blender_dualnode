@@ -252,7 +252,7 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
       BKE_mesh_legacy_convert_selection_layers_to_flags(mesh);
       BKE_mesh_legacy_convert_material_indices_to_mpoly(mesh);
       BKE_mesh_legacy_bevel_weight_from_layers(mesh);
-      BKE_mesh_legacy_face_set_from_generic(mesh);
+      BKE_mesh_legacy_face_set_from_generic(mesh, poly_layers);
       BKE_mesh_legacy_edge_crease_from_layers(mesh);
       /* When converting to the old mesh format, don't save redundant attributes. */
       names_to_skip.add_multiple_new({".hide_vert",
@@ -494,7 +494,7 @@ static int customdata_compare(
   }
 
   if (layer_count1 != layer_count2) {
-    /* TODO(@HooglyBoogly): Reenable after tests are updated for material index refactor. */
+    /* TODO(@HooglyBoogly): Re-enable after tests are updated for material index refactor. */
     // return MESHCMP_CDLAYERS_MISMATCH;
   }
 
@@ -1396,7 +1396,7 @@ void BKE_mesh_material_remap(Mesh *me, const uint *remap, uint remap_len)
 {
   using namespace blender;
   using namespace blender::bke;
-  const short remap_len_short = (short)remap_len;
+  const short remap_len_short = short(remap_len);
 
 #define MAT_NR_REMAP(n) \
   if (n < remap_len_short) { \
@@ -1459,7 +1459,7 @@ void BKE_mesh_auto_smooth_flag_set(Mesh *me,
   }
 }
 
-int poly_find_loop_from_vert(const MPoly *poly, const MLoop *loopstart, uint vert)
+int poly_find_loop_from_vert(const MPoly *poly, const MLoop *loopstart, int vert)
 {
   for (int j = 0; j < poly->totloop; j++, loopstart++) {
     if (loopstart->v == vert) {
@@ -1470,7 +1470,7 @@ int poly_find_loop_from_vert(const MPoly *poly, const MLoop *loopstart, uint ver
   return -1;
 }
 
-int poly_get_adj_loops_from_vert(const MPoly *poly, const MLoop *mloop, uint vert, uint r_adj[2])
+int poly_get_adj_loops_from_vert(const MPoly *poly, const MLoop *mloop, int vert, int r_adj[2])
 {
   int corner = poly_find_loop_from_vert(poly, &mloop[poly->loopstart], vert);
 
@@ -1832,7 +1832,7 @@ void BKE_mesh_calc_normals_split_ex(Mesh *mesh,
    * only in case auto-smooth is enabled. */
   const bool use_split_normals = (r_lnors_spacearr != nullptr) ||
                                  ((mesh->flag & ME_AUTOSMOOTH) != 0);
-  const float split_angle = (mesh->flag & ME_AUTOSMOOTH) != 0 ? mesh->smoothresh : (float)M_PI;
+  const float split_angle = (mesh->flag & ME_AUTOSMOOTH) != 0 ? mesh->smoothresh : float(M_PI);
 
   /* may be nullptr */
   clnors = (short(*)[2])CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);

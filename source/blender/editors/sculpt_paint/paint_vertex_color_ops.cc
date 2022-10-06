@@ -49,7 +49,7 @@ static bool vertex_weight_paint_mode_poll(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
   Mesh *me = BKE_mesh_from_object(ob);
-  return (ob && (ELEM(ob->mode, OB_MODE_VERTEX_PAINT, OB_MODE_WEIGHT_PAINT))) &&
+  return (ob && ELEM(ob->mode, OB_MODE_VERTEX_PAINT, OB_MODE_WEIGHT_PAINT)) &&
          (me && me->totpoly && !me->deform_verts().is_empty());
 }
 
@@ -73,8 +73,7 @@ static bool vertex_paint_from_weight(Object *ob)
   using namespace blender;
 
   Mesh *me;
-  if (((me = BKE_mesh_from_object(ob)) == nullptr ||
-       (ED_mesh_color_ensure(me, nullptr)) == false)) {
+  if ((me = BKE_mesh_from_object(ob)) == nullptr || (ED_mesh_color_ensure(me, nullptr)) == false) {
     return false;
   }
 
@@ -121,7 +120,7 @@ static bool vertex_paint_from_weight(Object *ob)
   return true;
 }
 
-static int vertex_paint_from_weight_exec(bContext *C, wmOperator *UNUSED(op))
+static int vertex_paint_from_weight_exec(bContext *C, wmOperator * /*op*/)
 {
   Object *obact = CTX_data_active_object(C);
   if (vertex_paint_from_weight(obact)) {
@@ -218,7 +217,7 @@ static bool vertex_color_smooth(Object *ob)
   return true;
 }
 
-static int vertex_color_smooth_exec(bContext *C, wmOperator *UNUSED(op))
+static int vertex_color_smooth_exec(bContext *C, wmOperator * /*op*/)
 {
   Object *obact = CTX_data_active_object(C);
   if (vertex_color_smooth(obact)) {
@@ -420,7 +419,7 @@ void PAINT_OT_vertex_color_hsv(wmOperatorType *ot)
   RNA_def_float(ot->srna, "v", 1.0f, 0.0f, 2.0f, "Value", "", 0.0f, 2.0f);
 }
 
-static int vertex_color_invert_exec(bContext *C, wmOperator *UNUSED(op))
+static int vertex_color_invert_exec(bContext *C, wmOperator * /*op*/)
 {
   Object *obact = CTX_data_active_object(C);
 

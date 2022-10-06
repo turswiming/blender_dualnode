@@ -38,6 +38,7 @@
 #include "BKE_pointcloud.h"
 #include "BKE_screen.h"
 #include "BKE_subdiv_modifier.h"
+#include "BKE_viewer_path.h"
 #include "BKE_volume.h"
 
 #include "DNA_camera_types.h"
@@ -1695,6 +1696,9 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
       DEGObjectIterSettings deg_iter_settings = {0};
       deg_iter_settings.depsgraph = depsgraph;
       deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+      if (v3d->flag2 & V3D_SHOW_VIEWER) {
+        deg_iter_settings.viewer_path = &v3d->viewer_path;
+      }
       DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
         if ((object_type_exclude_viewport & (1 << ob->type)) != 0) {
           continue;
@@ -2497,6 +2501,9 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
       DEGObjectIterSettings deg_iter_settings = {0};
       deg_iter_settings.depsgraph = depsgraph;
       deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+      if (v3d->flag2 & V3D_SHOW_VIEWER) {
+        deg_iter_settings.viewer_path = &v3d->viewer_path;
+      }
       DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
         if (!BKE_object_is_visible_in_viewport(v3d, ob)) {
           continue;
@@ -2662,6 +2669,9 @@ static void drw_draw_depth_loop_impl(struct Depsgraph *depsgraph,
     DEGObjectIterSettings deg_iter_settings = {0};
     deg_iter_settings.depsgraph = DST.draw_ctx.depsgraph;
     deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+    if (v3d->flag2 & V3D_SHOW_VIEWER) {
+      deg_iter_settings.viewer_path = &v3d->viewer_path;
+    }
     DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
       if ((object_type_exclude_viewport & (1 << ob->type)) != 0) {
         continue;
@@ -3103,6 +3113,8 @@ void DRW_render_context_enable(Render *render)
     WM_init_opengl();
   }
 
+  GPU_render_begin();
+
   if (GPU_use_main_context_workaround()) {
     GPU_context_main_lock();
     DRW_opengl_context_enable();
@@ -3126,6 +3138,8 @@ void DRW_render_context_enable(Render *render)
 
 void DRW_render_context_disable(Render *render)
 {
+  GPU_render_end();
+
   if (GPU_use_main_context_workaround()) {
     DRW_opengl_context_disable();
     GPU_context_main_unlock();

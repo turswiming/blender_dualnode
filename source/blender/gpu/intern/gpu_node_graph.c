@@ -263,7 +263,7 @@ static int uniform_attr_sort_cmp(const void *a, const void *b)
   return (attr_a->use_dupli && !attr_b->use_dupli);
 }
 
-static unsigned int uniform_attr_list_hash(const void *key)
+static uint uniform_attr_list_hash(const void *key)
 {
   const GPUUniformAttrList *attrs = key;
   return attrs->hash_code;
@@ -416,11 +416,6 @@ static GPUUniformAttr *gpu_node_graph_add_uniform_attribute(GPUNodeGraph *graph,
   if (attr == NULL && attrs->count < GPU_MAX_UNIFORM_ATTR) {
     attr = MEM_callocN(sizeof(*attr), __func__);
     STRNCPY(attr->name, name);
-    {
-      char attr_name_esc[sizeof(attr->name) * 2];
-      BLI_str_escape(attr_name_esc, attr->name, sizeof(attr_name_esc));
-      SNPRINTF(attr->name_id_prop, "[\"%s\"]", attr_name_esc);
-    }
     attr->use_dupli = use_dupli;
     attr->hash_code = BLI_ghashutil_strhash_p(attr->name) << 1 | (attr->use_dupli ? 0 : 1);
     attr->id = -1;
@@ -913,23 +908,4 @@ void gpu_node_graph_prune_unused(GPUNodeGraph *graph)
       uattrs->count--;
     }
   }
-}
-
-void gpu_node_graph_optimize(GPUNodeGraph *graph)
-{
-  /* Replace all uniform node links with constant. */
-  LISTBASE_FOREACH (GPUNode *, node, &graph->nodes) {
-    LISTBASE_FOREACH (GPUInput *, input, &node->inputs) {
-      if (input->link) {
-        if (input->link->link_type == GPU_NODE_LINK_UNIFORM) {
-          input->link->link_type = GPU_NODE_LINK_CONSTANT;
-        }
-      }
-      if (input->source == GPU_SOURCE_UNIFORM) {
-        input->source = (input->type == GPU_CLOSURE) ? GPU_SOURCE_STRUCT : GPU_SOURCE_CONSTANT;
-      }
-    }
-  }
-
-  /* TODO: Consider performing other node graph optimizations here. */
 }

@@ -63,7 +63,7 @@ bNodeSocket *node_group_find_output_socket(bNode *groupnode, const char *identif
   return find_matching_socket(groupnode->outputs, identifier);
 }
 
-void node_group_label(const bNodeTree *UNUSED(ntree), const bNode *node, char *label, int maxlen)
+void node_group_label(const bNodeTree * /*ntree*/, const bNode *node, char *label, int maxlen)
 {
   BLI_strncpy(label, (node->id) ? node->id->name + 2 : IFACE_("Missing Data-Block"), maxlen);
 }
@@ -221,7 +221,7 @@ void node_group_update(struct bNodeTree *ntree, struct bNode *node)
   if (node->id == nullptr) {
     nodeRemoveAllSockets(ntree, node);
   }
-  else if ((ID_IS_LINKED(node->id) && (node->id->tag & LIB_TAG_MISSING))) {
+  else if (ID_IS_LINKED(node->id) && (node->id->tag & LIB_TAG_MISSING)) {
     /* Missing data-block, leave sockets unchanged so that when it comes back
      * the links remain valid. */
   }
@@ -238,7 +238,7 @@ void node_group_update(struct bNodeTree *ntree, struct bNode *node)
 /** \name Node Frame
  * \{ */
 
-static void node_frame_init(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_frame_init(bNodeTree * /*ntree*/, bNode *node)
 {
   NodeFrame *data = MEM_cnew<NodeFrame>("frame node storage");
   node->storage = data;

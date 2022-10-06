@@ -87,6 +87,8 @@ typedef struct tStroke {
   bGPDframe *gpf;
   /** Referenced stroke. */
   bGPDstroke *gps;
+  /** Array of 2D points */
+  float (*points2d)[2];
   /** Extreme Stroke A. */
   bGPDstroke *gps_ext_a;
   /** Extreme Stroke B. */
@@ -199,6 +201,7 @@ typedef struct tGPDfill {
 
 bool skip_layer_check(short fill_layer_mode, int gpl_active_index, int gpl_index);
 static void gpencil_draw_boundary_lines(const struct bContext *UNUSED(C), struct tGPDfill *tgpf);
+static void gpencil_fill_status_indicators(struct tGPDfill *tgpf);
 
 /* Free temp stroke array. */
 static void stroke_array_free(tGPDfill *tgpf)
@@ -206,6 +209,7 @@ static void stroke_array_free(tGPDfill *tgpf)
   if (tgpf->stroke_array) {
     for (int i = 0; i < tgpf->stroke_array_num; i++) {
       tStroke *stroke = tgpf->stroke_array[i];
+      MEM_SAFE_FREE(stroke->points2d);
       MEM_freeN(stroke);
     }
     MEM_SAFE_FREE(tgpf->stroke_array);
@@ -353,7 +357,7 @@ static void gpencil_strokes_array_size(tGPDfill *tgpf)
   }
 }
 
-/* Load all strokes to be procesed by extend lines. */
+/** Load all strokes to be processed by extend lines. */
 static void gpencil_load_array_strokes(tGPDfill *tgpf)
 {
   Object *ob = tgpf->ob;
@@ -392,6 +396,9 @@ static void gpencil_load_array_strokes(tGPDfill *tgpf)
       continue;
     }
 
+    float diff_mat[4][4];
+    BKE_gpencil_layer_transform_matrix_get(tgpf->depsgraph, tgpf->ob, gpl, diff_mat);
+
     LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
       /* Check if stroke can be drawn. */
       if ((gps->points == NULL) || (gps->totpoints < 2)) {
@@ -407,15 +414,27 @@ static void gpencil_load_array_strokes(tGPDfill *tgpf)
         continue;
       }
 
-      tStroke *stroke = MEM_callocN(sizeof(tStroke), "temp stroke data");
+      tStroke *stroke = MEM_callocN(sizeof(tStroke), __func__);
       stroke->gpl = gpl;
       stroke->gpf = gpf;
       stroke->gps = gps;
 
       /* Create the extension strokes only for Lines. */
       if (tgpf->fill_extend_mode == GP_FILL_EMODE_EXTEND) {
+        /* Convert all points to 2D to speed up collision checks and avoid convert in each
+         * iteration. */
+        stroke->points2d = (float(*)[2])MEM_mallocN(sizeof(*stroke->points2d) * gps->totpoints,
+                                                    "GP Stroke temp 2d points");
+
+        for (int i = 0; i < gps->totpoints; i++) {
+          bGPDspoint *pt = &gps->points[i];
+          bGPDspoint pt2;
+          gpencil_point_to_world_space(pt, diff_mat, &pt2);
+          gpencil_point_to_xy_fl(
+              &tgpf->gsc, gps, &pt2, &stroke->points2d[i][0], &stroke->points2d[i][1]);
+        }
+
         /* Extend start. */
-        bGPDspoint *pt0 = &gps->points[1];
         bGPDspoint *pt1 = &gps->points[0];
         stroke->gps_ext_a = BKE_gpencil_stroke_new(gps->mat_nr, 2, gps->thickness);
         stroke->gps_ext_a->flag |= GP_STROKE_NOFILL | GP_STROKE_TAG;
@@ -432,7 +451,6 @@ static void gpencil_load_array_strokes(tGPDfill *tgpf)
         pt->pressure = 1.0f;
 
         /* Extend end. */
-        pt0 = &gps->points[gps->totpoints - 2];
         pt1 = &gps->points[gps->totpoints - 1];
         stroke->gps_ext_b = BKE_gpencil_stroke_new(gps->mat_nr, 2, gps->thickness);
         stroke->gps_ext_b->flag |= GP_STROKE_NOFILL | GP_STROKE_TAG;
@@ -471,12 +489,64 @@ static void set_stroke_collide(bGPDstroke *gps_a, bGPDstroke *gps_b, const float
    * temp strokes without adding new variables to the bGPStroke struct. */
   gps_a->fill_opacity_fac = connection_dist;
   gps_b->fill_opacity_fac = connection_dist;
+  BKE_gpencil_stroke_boundingbox_calc(gps_a);
+  BKE_gpencil_stroke_boundingbox_calc(gps_b);
+}
+
+static void gpencil_stroke_collision(
+    tGPDfill *tgpf, bGPDlayer *gpl, bGPDstroke *gps_a, float a1xy[2], float a2xy[2])
+{
+  const float connection_dist = tgpf->fill_extend_fac * 0.1f;
+  float diff_mat[4][4], inv_mat[4][4];
+
+  /* Transform matrix for original stroke.*/
+  BKE_gpencil_layer_transform_matrix_get(tgpf->depsgraph, tgpf->ob, gpl, diff_mat);
+  invert_m4_m4(inv_mat, diff_mat);
+
+  for (int idx = 0; idx < tgpf->stroke_array_num; idx++) {
+    tStroke *stroke = tgpf->stroke_array[idx];
+    bGPDstroke *gps_b = stroke->gps;
+
+    if (!extended_bbox_overlap(gps_a->boundbox_min,
+                               gps_a->boundbox_max,
+                               gps_b->boundbox_min,
+                               gps_b->boundbox_max,
+                               1.1f)) {
+      continue;
+    }
+
+    /* Loop all segments of the stroke. */
+    for (int i = 0; i < gps_b->totpoints - 1; i++) {
+      /* Skip segments over same pixel. */
+      if (((int)a1xy[0] == (int)stroke->points2d[i + 1][0]) &&
+          ((int)a1xy[1] == (int)stroke->points2d[i + 1][1])) {
+        continue;
+      }
+
+      /* Check if extensions cross. */
+      if (isect_seg_seg_v2_simple(a1xy, a2xy, stroke->points2d[i], stroke->points2d[i + 1])) {
+        bGPDspoint *extreme_a = &gps_a->points[1];
+        float intersection2D[2];
+        isect_line_line_v2_point(
+            a1xy, a2xy, stroke->points2d[i], stroke->points2d[i + 1], intersection2D);
+
+        gpencil_point_xy_to_3d(&tgpf->gsc, tgpf->scene, intersection2D, &extreme_a->x);
+        mul_m4_v3(inv_mat, &extreme_a->x);
+        BKE_gpencil_stroke_boundingbox_calc(gps_a);
+
+        gps_a->flag |= GP_STROKE_COLLIDE;
+        gps_a->fill_opacity_fac = connection_dist;
+        return;
+      }
+    }
+  }
 }
 
 /* Cut the extended lines if collide. */
 static void gpencil_cut_extensions(tGPDfill *tgpf)
 {
   const float connection_dist = tgpf->fill_extend_fac * 0.1f;
+  const bool use_stroke_collide = (tgpf->flag & GP_BRUSH_FILL_STROKE_COLLIDE) != 0;
 
   bGPDlayer *gpl_prev = NULL;
   bGPDframe *gpf_prev = NULL;
@@ -527,11 +597,11 @@ static void gpencil_cut_extensions(tGPDfill *tgpf)
 
       /* First stroke. */
       bGPDspoint *pt = &gps_a->points[0];
-      gpencil_point_to_parent_space(pt, diff_mat, &pt2);
+      gpencil_point_to_world_space(pt, diff_mat, &pt2);
       gpencil_point_to_xy_fl(&tgpf->gsc, gps_a, &pt2, &a1xy[0], &a1xy[1]);
 
       pt = &gps_a->points[1];
-      gpencil_point_to_parent_space(pt, diff_mat, &pt2);
+      gpencil_point_to_world_space(pt, diff_mat, &pt2);
       gpencil_point_to_xy_fl(&tgpf->gsc, gps_a, &pt2, &a2xy[0], &a2xy[1]);
       bGPDspoint *extreme_a = &gps_a->points[1];
 
@@ -549,21 +619,21 @@ static void gpencil_cut_extensions(tGPDfill *tgpf)
                                    gps_a->boundbox_max,
                                    gps_b->boundbox_min,
                                    gps_b->boundbox_max,
-                                   connection_dist)) {
+                                   1.1f)) {
           continue;
         }
 
         pt = &gps_b->points[0];
-        gpencil_point_to_parent_space(pt, diff_mat, &pt2);
+        gpencil_point_to_world_space(pt, diff_mat, &pt2);
         gpencil_point_to_xy_fl(&tgpf->gsc, gps_b, &pt2, &b1xy[0], &b1xy[1]);
 
         pt = &gps_b->points[1];
-        gpencil_point_to_parent_space(pt, diff_mat, &pt2);
+        gpencil_point_to_world_space(pt, diff_mat, &pt2);
         gpencil_point_to_xy_fl(&tgpf->gsc, gps_b, &pt2, &b2xy[0], &b2xy[1]);
         bGPDspoint *extreme_b = &gps_b->points[1];
 
         /* Check if extreme points are near. This case is when the
-         * extendend lines are colinear or parallel and close together. */
+         * extended lines are co-linear or parallel and close together. */
         const float gap_pixsize_sq = 25.0f;
         float intersection3D[3];
         if (len_squared_v2v2(a2xy, b2xy) <= gap_pixsize_sq) {
@@ -572,31 +642,38 @@ static void gpencil_cut_extensions(tGPDfill *tgpf)
           copy_v3_v3(&extreme_a->x, intersection3D);
           copy_v3_v3(&extreme_b->x, intersection3D);
           set_stroke_collide(gps_a, gps_b, connection_dist);
-          continue;
+          break;
         }
         /* Check if extensions cross. */
         if (isect_seg_seg_v2_simple(a1xy, a2xy, b1xy, b2xy)) {
-          float intersection[2];
-          isect_line_line_v2_point(a1xy, a2xy, b1xy, b2xy, intersection);
-          gpencil_point_xy_to_3d(&tgpf->gsc, tgpf->scene, intersection, intersection3D);
+          float intersection2D[2];
+          isect_line_line_v2_point(a1xy, a2xy, b1xy, b2xy, intersection2D);
+
+          gpencil_point_xy_to_3d(&tgpf->gsc, tgpf->scene, intersection2D, intersection3D);
           mul_m4_v3(inv_mat, intersection3D);
           copy_v3_v3(&extreme_a->x, intersection3D);
           copy_v3_v3(&extreme_b->x, intersection3D);
           set_stroke_collide(gps_a, gps_b, connection_dist);
-          continue;
+          break;
         }
         /* Check if extension extreme is near of the origin of any other extension. */
         if (len_squared_v2v2(a2xy, b1xy) <= gap_pixsize_sq) {
           gpencil_point_xy_to_3d(&tgpf->gsc, tgpf->scene, b1xy, &extreme_a->x);
           mul_m4_v3(inv_mat, &extreme_a->x);
           set_stroke_collide(gps_a, gps_b, connection_dist);
-          continue;
+          break;
         }
         if (len_squared_v2v2(a1xy, b2xy) <= gap_pixsize_sq) {
           gpencil_point_xy_to_3d(&tgpf->gsc, tgpf->scene, a1xy, &extreme_b->x);
           mul_m4_v3(inv_mat, &extreme_b->x);
           set_stroke_collide(gps_a, gps_b, connection_dist);
+          break;
         }
+      }
+
+      /* Check if collide with normal strokes. */
+      if (use_stroke_collide && (gps_a->flag & GP_STROKE_COLLIDE) == 0) {
+        gpencil_stroke_collision(tgpf, stroke->gpl, gps_a, a1xy, a2xy);
       }
     }
   }
@@ -771,28 +848,37 @@ static void gpencil_update_extend(tGPDfill *tgpf)
     gpencil_delete_temp_stroke_extension(tgpf, false);
     gpencil_create_extensions_radius(tgpf);
   }
+  gpencil_fill_status_indicators(tgpf);
   WM_event_add_notifier(tgpf->C, NC_GPENCIL | NA_EDITED, NULL);
 }
 
 static bool gpencil_stroke_is_drawable(tGPDfill *tgpf, bGPDstroke *gps)
 {
+  const bool is_line_mode = (tgpf->fill_extend_mode == GP_FILL_EMODE_EXTEND);
+  const bool show_help = (tgpf->flag & GP_BRUSH_FILL_SHOW_HELPLINES) != 0;
+  const bool show_extend = (tgpf->flag & GP_BRUSH_FILL_SHOW_EXTENDLINES) != 0;
+  const bool use_stroke_collide = (tgpf->flag & GP_BRUSH_FILL_STROKE_COLLIDE) != 0;
+  const bool is_extend_stroke = (gps->flag & GP_STROKE_NOFILL) && (gps->flag & GP_STROKE_TAG);
+  const bool is_help_stroke = (gps->flag & GP_STROKE_NOFILL) && (gps->flag & GP_STROKE_HELP);
+  const bool stroke_collide = (gps->flag & GP_STROKE_COLLIDE) != 0;
+
+  if (is_line_mode && is_extend_stroke && tgpf->is_render && use_stroke_collide &&
+      !stroke_collide) {
+    return false;
+  }
+
   if (tgpf->is_render) {
     return true;
   }
 
-  const bool show_help = (tgpf->flag & GP_BRUSH_FILL_SHOW_HELPLINES) != 0;
-  const bool show_extend = (tgpf->flag & GP_BRUSH_FILL_SHOW_EXTENDLINES) != 0;
-  const bool is_extend = (gps->flag & GP_STROKE_NOFILL) && (gps->flag & GP_STROKE_TAG);
-  const bool is_extend_help = (gps->flag & GP_STROKE_NOFILL) && (gps->flag & GP_STROKE_HELP);
-
   if ((!show_help) && (show_extend)) {
-    if (!is_extend && !is_extend_help) {
+    if (!is_extend_stroke && !is_help_stroke) {
       return false;
     }
   }
 
   if ((show_help) && (!show_extend)) {
-    if (is_extend || is_extend_help) {
+    if (is_extend_stroke || is_help_stroke) {
       return false;
     }
   }
@@ -823,6 +909,9 @@ static void gpencil_draw_basic_stroke(tGPDfill *tgpf,
   const bool is_extend = (gps->flag & GP_STROKE_NOFILL) && (gps->flag & GP_STROKE_TAG) &&
                          !(gps->flag & GP_STROKE_HELP);
   const bool is_help = gps->flag & GP_STROKE_HELP;
+  const bool is_line_mode = (tgpf->fill_extend_mode == GP_FILL_EMODE_EXTEND);
+  const bool use_stroke_collide = (tgpf->flag & GP_BRUSH_FILL_STROKE_COLLIDE) != 0;
+  const bool stroke_collide = (gps->flag & GP_STROKE_COLLIDE) != 0;
 
   if (!gpencil_stroke_is_drawable(tgpf, gps)) {
     return;
@@ -842,7 +931,12 @@ static void gpencil_draw_basic_stroke(tGPDfill *tgpf,
     col[3] = (gps->flag & GP_STROKE_TAG) ? 0.0f : 0.5f;
   }
   else if ((is_extend) && (!tgpf->is_render)) {
-    copy_v4_v4(col, extend_col);
+    if (stroke_collide || !use_stroke_collide || !is_line_mode) {
+      copy_v4_v4(col, extend_col);
+    }
+    else {
+      copy_v4_v4(col, help_col);
+    }
   }
   else {
     copy_v4_v4(col, ink);
@@ -2134,7 +2228,7 @@ static void gpencil_stroke_from_buffer(tGPDfill *tgpf)
   /* if parented change position relative to parent object */
   for (int a = 0; a < tgpf->sbuffer_used; a++) {
     pt = &gps->points[a];
-    gpencil_apply_parent_point(tgpf->depsgraph, tgpf->ob, tgpf->gpl, pt);
+    gpencil_world_to_object_space_point(tgpf->depsgraph, tgpf->ob, tgpf->gpl, pt);
   }
 
   /* If camera view or view projection, reproject flat to view to avoid perspective effect. */
@@ -2154,11 +2248,21 @@ static void gpencil_stroke_from_buffer(tGPDfill *tgpf)
 /* ----------------------- */
 /* Drawing                 */
 /* Helper: Draw status message while the user is running the operator */
-static void gpencil_fill_status_indicators(bContext *C)
+static void gpencil_fill_status_indicators(tGPDfill *tgpf)
 {
-  const char *status_str = TIP_(
-      "Fill: ESC/RMB cancel, LMB Fill, Shift Draw on Back, S: Switch Mode");
-  ED_workspace_status_text(C, status_str);
+  const bool is_extend = (tgpf->fill_extend_mode == GP_FILL_EMODE_EXTEND);
+  const bool use_stroke_collide = (tgpf->flag & GP_BRUSH_FILL_STROKE_COLLIDE) != 0;
+
+  char status_str[UI_MAX_DRAW_STR];
+  BLI_snprintf(status_str,
+               sizeof(status_str),
+               TIP_("Fill: ESC/RMB cancel, LMB Fill, Shift Draw on Back, S: Switch Mode, D: "
+                    "Stroke Collision | %s %s (%.3f)"),
+               (is_extend) ? TIP_("Extend") : TIP_("Radius"),
+               (is_extend && use_stroke_collide) ? TIP_("Stroke: ON") : TIP_("Stroke: OFF"),
+               tgpf->fill_extend_fac);
+
+  ED_workspace_status_text(tgpf->C, status_str);
 }
 
 /* draw boundary lines to see fill limits */
@@ -2425,7 +2529,7 @@ static int gpencil_fill_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSE
 
   WM_cursor_modal_set(CTX_wm_window(C), WM_CURSOR_PAINT_BRUSH);
 
-  gpencil_fill_status_indicators(C);
+  gpencil_fill_status_indicators(tgpf);
 
   DEG_id_tag_update(&tgpf->gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, NULL);
@@ -2557,9 +2661,12 @@ static bool gpencil_find_and_mark_empty_areas(tGPDfill *tgpf)
     get_pixel(ibuf, i, rgba);
     if (rgba[3] == 0.0f) {
       set_pixel(ibuf, i, blue_col);
+      BKE_image_release_ibuf(tgpf->ima, ibuf, NULL);
       return true;
     }
   }
+
+  BKE_image_release_ibuf(tgpf->ima, ibuf, NULL);
   return false;
 }
 
@@ -2585,6 +2692,9 @@ static bool gpencil_do_frame_fill(tGPDfill *tgpf, const bool is_inverted)
         gpencil_invert_image(tgpf);
         while (gpencil_find_and_mark_empty_areas(tgpf)) {
           gpencil_boundaryfill_area(tgpf);
+          if (FILL_DEBUG) {
+            break;
+          }
         }
       }
 
@@ -2665,8 +2775,10 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
   const bool is_inverted = (is_brush_inv && (event->modifier & KM_CTRL) == 0) ||
                            (!is_brush_inv && (event->modifier & KM_CTRL) != 0);
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(tgpf->gpd);
-  const bool do_extend = (tgpf->flag & GP_BRUSH_FILL_SHOW_EXTENDLINES);
-  const bool help_lines = ((tgpf->flag & GP_BRUSH_FILL_SHOW_HELPLINES) || (do_extend));
+  const bool extend_lines = (tgpf->fill_extend_fac > 0.0f);
+  const bool show_extend = ((tgpf->flag & GP_BRUSH_FILL_SHOW_EXTENDLINES) && !is_inverted);
+  const bool help_lines = (((tgpf->flag & GP_BRUSH_FILL_SHOW_HELPLINES) || show_extend) &&
+                           !is_inverted);
   int estate = OPERATOR_RUNNING_MODAL;
 
   switch (event->type) {
@@ -2735,7 +2847,7 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
               int step = ((float)i / (float)total) * 100.0f;
               WM_cursor_time(win, step);
 
-              if (do_extend) {
+              if (extend_lines) {
                 gpencil_update_extend(tgpf);
               }
 
@@ -2766,7 +2878,7 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
                 loop_limit++;
               }
 
-              if (do_extend) {
+              if (extend_lines) {
                 gpencil_delete_temp_stroke_extension(tgpf, true);
               }
 
@@ -2795,23 +2907,32 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
           estate = OPERATOR_CANCELLED;
         }
       }
-      else if (do_extend) {
+      else if (extend_lines) {
         gpencil_update_extend(tgpf);
       }
       tgpf->oldkey = event->type;
       break;
     case EVT_SKEY:
-      if ((do_extend) && (event->val == KM_PRESS)) {
+      if ((show_extend) && (event->val == KM_PRESS)) {
         /* Clean temp strokes. */
         stroke_array_free(tgpf);
 
-        /* Toogle mode */
+        /* Toggle mode. */
         if (tgpf->fill_extend_mode == GP_FILL_EMODE_EXTEND) {
           tgpf->fill_extend_mode = GP_FILL_EMODE_RADIUS;
         }
         else {
           tgpf->fill_extend_mode = GP_FILL_EMODE_EXTEND;
         }
+        gpencil_delete_temp_stroke_extension(tgpf, true);
+        gpencil_update_extend(tgpf);
+      }
+      break;
+    case EVT_DKEY:
+      if ((show_extend) && (event->val == KM_PRESS)) {
+        tgpf->flag ^= GP_BRUSH_FILL_STROKE_COLLIDE;
+        /* Clean temp strokes. */
+        stroke_array_free(tgpf);
         gpencil_delete_temp_stroke_extension(tgpf, true);
         gpencil_update_extend(tgpf);
       }

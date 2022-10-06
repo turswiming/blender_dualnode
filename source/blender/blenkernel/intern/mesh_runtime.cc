@@ -78,7 +78,7 @@ void BKE_mesh_runtime_free_data(Mesh *mesh)
   mesh_runtime_free_mutexes(mesh);
 }
 
-void BKE_mesh_runtime_reset_on_copy(Mesh *mesh, const int UNUSED(flag))
+void BKE_mesh_runtime_reset_on_copy(Mesh *mesh, const int /*flag*/)
 {
   Mesh_Runtime *runtime = &mesh->runtime;
 
@@ -110,6 +110,13 @@ void BKE_mesh_runtime_clear_cache(Mesh *mesh)
   BKE_mesh_batch_cache_free(mesh);
   BKE_mesh_runtime_clear_edit_data(mesh);
   BKE_mesh_clear_derived_normals(mesh);
+}
+
+blender::Span<MLoopTri> Mesh::looptris() const
+{
+  const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(this);
+  const int num_looptris = BKE_mesh_runtime_looptri_len(this);
+  return {looptris, num_looptris};
 }
 
 /**

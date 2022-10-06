@@ -321,7 +321,7 @@ static void object_free_data(ID *id)
 }
 
 static void library_foreach_modifiersForeachIDLink(void *user_data,
-                                                   Object *UNUSED(object),
+                                                   Object * /*object*/,
                                                    ID **id_pointer,
                                                    int cb_flag)
 {
@@ -331,7 +331,7 @@ static void library_foreach_modifiersForeachIDLink(void *user_data,
 }
 
 static void library_foreach_gpencil_modifiersForeachIDLink(void *user_data,
-                                                           Object *UNUSED(object),
+                                                           Object * /*object*/,
                                                            ID **id_pointer,
                                                            int cb_flag)
 {
@@ -341,7 +341,7 @@ static void library_foreach_gpencil_modifiersForeachIDLink(void *user_data,
 }
 
 static void library_foreach_shaderfxForeachIDLink(void *user_data,
-                                                  Object *UNUSED(object),
+                                                  Object * /*object*/,
                                                   ID **id_pointer,
                                                   int cb_flag)
 {
@@ -350,7 +350,7 @@ static void library_foreach_shaderfxForeachIDLink(void *user_data,
       data, BKE_lib_query_foreachid_process(data, id_pointer, cb_flag));
 }
 
-static void library_foreach_constraintObjectLooper(bConstraint *UNUSED(con),
+static void library_foreach_constraintObjectLooper(bConstraint * /*con*/,
                                                    ID **id_pointer,
                                                    bool is_reference,
                                                    void *user_data)
@@ -361,7 +361,7 @@ static void library_foreach_constraintObjectLooper(bConstraint *UNUSED(con),
       data, BKE_lib_query_foreachid_process(data, id_pointer, cb_flag));
 }
 
-static void library_foreach_particlesystemsObjectLooper(ParticleSystem *UNUSED(psys),
+static void library_foreach_particlesystemsObjectLooper(ParticleSystem * /*psys*/,
                                                         ID **id_pointer,
                                                         void *user_data,
                                                         int cb_flag)
@@ -1017,9 +1017,9 @@ static void expand_constraint_channels(BlendExpander *expander, ListBase *chanba
 }
 
 static void expand_object_expandModifiers(void *userData,
-                                          Object *UNUSED(ob),
+                                          Object * /*ob*/,
                                           ID **idpoin,
-                                          int UNUSED(cb_flag))
+                                          int /*cb_flag*/)
 {
   BlendExpander *expander = (BlendExpander *)userData;
   BLO_expand(expander, *idpoin);
@@ -1402,15 +1402,15 @@ ModifierData *BKE_object_active_modifier(const Object *ob)
 
 bool BKE_object_supports_modifiers(const Object *ob)
 {
-  return (ELEM(ob->type,
-               OB_MESH,
-               OB_CURVES,
-               OB_CURVES_LEGACY,
-               OB_SURF,
-               OB_FONT,
-               OB_LATTICE,
-               OB_POINTCLOUD,
-               OB_VOLUME));
+  return ELEM(ob->type,
+              OB_MESH,
+              OB_CURVES,
+              OB_CURVES_LEGACY,
+              OB_SURF,
+              OB_FONT,
+              OB_LATTICE,
+              OB_POINTCLOUD,
+              OB_VOLUME);
 }
 
 bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
@@ -3012,7 +3012,7 @@ void BKE_object_tfm_protected_restore(Object *ob,
                                       const ObjectTfmProtectedChannels *obtfm,
                                       const short protectflag)
 {
-  unsigned int i;
+  uint i;
 
   for (i = 0; i < 3; i++) {
     if (protectflag & (OB_LOCK_LOCX << i)) {
@@ -4126,8 +4126,8 @@ struct GPencilStrokePointIterData {
   void *user_data;
 };
 
-static void foreach_display_point_gpencil_stroke_fn(bGPDlayer *UNUSED(layer),
-                                                    bGPDframe *UNUSED(frame),
+static void foreach_display_point_gpencil_stroke_fn(bGPDlayer * /*layer*/,
+                                                    bGPDframe * /*frame*/,
                                                     bGPDstroke *stroke,
                                                     void *thunk)
 {
@@ -5098,7 +5098,7 @@ void BKE_object_runtime_reset(Object *object)
   memset(&object->runtime, 0, sizeof(object->runtime));
 }
 
-void BKE_object_runtime_reset_on_copy(Object *object, const int UNUSED(flag))
+void BKE_object_runtime_reset_on_copy(Object *object, const int /*flag*/)
 {
   Object_Runtime *runtime = &object->runtime;
   runtime->data_eval = nullptr;
@@ -5268,12 +5268,12 @@ void BKE_object_groups_clear(Main *bmain, Scene *scene, Object *ob)
 KDTree_3d *BKE_object_as_kdtree(Object *ob, int *r_tot)
 {
   KDTree_3d *tree = nullptr;
-  unsigned int tot = 0;
+  uint tot = 0;
 
   switch (ob->type) {
     case OB_MESH: {
       Mesh *me = (Mesh *)ob->data;
-      unsigned int i;
+      uint i;
 
       Mesh *me_eval = ob->runtime.mesh_deform_eval ? ob->runtime.mesh_deform_eval :
                                                      BKE_object_get_evaluated_mesh(ob);
@@ -5316,7 +5316,7 @@ KDTree_3d *BKE_object_as_kdtree(Object *ob, int *r_tot)
     case OB_SURF: {
       /* TODO: take deformation into account */
       Curve *cu = (Curve *)ob->data;
-      unsigned int i, a;
+      uint i, a;
 
       Nurb *nu;
 
@@ -5360,7 +5360,7 @@ KDTree_3d *BKE_object_as_kdtree(Object *ob, int *r_tot)
       /* TODO: take deformation into account */
       Lattice *lt = (Lattice *)ob->data;
       BPoint *bp;
-      unsigned int i;
+      uint i;
 
       tot = lt->pntsu * lt->pntsv * lt->pntsw;
       tree = BLI_kdtree_3d_new(tot);
@@ -5450,7 +5450,7 @@ bool BKE_object_modifier_update_subframe(Depsgraph *depsgraph,
     }
 
     /* Skip sub-frame if object is parented to vertex of a dynamic paint canvas. */
-    if (no_update && (ELEM(ob->partype, PARVERT1, PARVERT3))) {
+    if (no_update && ELEM(ob->partype, PARVERT1, PARVERT3)) {
       return false;
     }
 

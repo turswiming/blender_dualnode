@@ -27,6 +27,7 @@ struct ListBase;
 struct PointerRNA;
 struct Scene;
 struct ViewLayer;
+struct ViewerPath;
 
 #ifdef __cplusplus
 extern "C" {
@@ -145,13 +146,19 @@ ENUM_OPERATORS(DegIterFlag, DEG_ITER_OBJECT_FLAG_DUPLI)
 typedef struct DEGObjectIterSettings {
   struct Depsgraph *depsgraph;
   /**
-   * Bitfield of the #DegIterFlag.
+   * Bit-field of the #DegIterFlag.
    *
-   * NOTE: Be careful with DEG_ITER_OBJECT_FLAG_LINKED_INDIRECTLY objects.
+   * NOTE: Be careful with #DEG_ITER_OBJECT_FLAG_LINKED_INDIRECTLY objects.
    * Although they are available they have no overrides (collection_properties)
    * and will crash if you try to access it.
    */
   uint32_t flags;
+
+  /**
+   * When set, the final evaluated geometry of the corresponding object is omitted. Instead the
+   * geometry for the viewer path included in the iterator.
+   */
+  const struct ViewerPath *viewer_path;
 } DEGObjectIterSettings;
 
 /**
@@ -169,6 +176,9 @@ typedef struct DEGObjectIterData {
   struct Scene *scene;
 
   eEvaluationMode eval_mode;
+
+  /** Object whose preview instead of evaluated geometry should be part of the iterator. */
+  struct Object *object_orig_with_preview;
 
   struct Object *next_object;
 
