@@ -336,7 +336,7 @@ class MeshPass : public PassMain {
     this->PassMain::init();
     this->state_set(state);
     this->bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
-    this->bind_ssbo(WB_MATERIAL_SLOT, resources.material_buf);
+    this->bind_ssbo(WB_MATERIAL_SLOT, &resources.material_buf);
     this->bind_ubo(WB_WORLD_SLOT, resources.world_buf);
 
     color_type_ = color_type;
