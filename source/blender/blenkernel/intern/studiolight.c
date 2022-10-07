@@ -342,9 +342,7 @@ static void *studiolight_multilayer_addlayer(void *base, const char *UNUSED(laye
 /* Convert a multilayer pass to ImBuf channel 4 float buffer.
  * NOTE: Parameter rect will become invalid. Do not use rect after calling this
  * function */
-static float *studiolight_multilayer_convert_pass(ImBuf *ibuf,
-                                                  float *rect,
-                                                  const unsigned int channels)
+static float *studiolight_multilayer_convert_pass(ImBuf *ibuf, float *rect, const uint channels)
 {
   if (channels == 4) {
     return rect;
@@ -1166,19 +1164,21 @@ static void studiolight_add_files_from_datafolder(const int folder_id,
                                                   const char *subfolder,
                                                   int flag)
 {
-  struct direntry *dirs;
   const char *folder = BKE_appdir_folder_id(folder_id, subfolder);
-  if (folder) {
-    const uint dirs_num = BLI_filelist_dir_contents(folder, &dirs);
-    int i;
-    for (i = 0; i < dirs_num; i++) {
-      if (dirs[i].type & S_IFREG) {
-        studiolight_add_file(dirs[i].path, flag);
-      }
-    }
-    BLI_filelist_free(dirs, dirs_num);
-    dirs = NULL;
+  if (!folder) {
+    return;
   }
+
+  struct direntry *dirs;
+  const uint dirs_num = BLI_filelist_dir_contents(folder, &dirs);
+  int i;
+  for (i = 0; i < dirs_num; i++) {
+    if (dirs[i].type & S_IFREG) {
+      studiolight_add_file(dirs[i].path, flag);
+    }
+  }
+  BLI_filelist_free(dirs, dirs_num);
+  dirs = NULL;
 }
 
 static int studiolight_flag_cmp_order(const StudioLight *sl)

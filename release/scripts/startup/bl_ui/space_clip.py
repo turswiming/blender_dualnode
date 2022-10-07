@@ -277,7 +277,8 @@ class CLIP_HT_header(Header):
                 row = layout.row(align=True)
                 row.prop(dopesheet, "sort_method", text="")
                 row.prop(dopesheet, "use_invert_sort",
-                         text="Invert", toggle=True)
+                         text="", toggle=True,
+                         icon='SORT_DESC' if dopesheet.use_invert_sort else 'SORT_ASC')
 
     def _draw_masking(self, context):
         layout = self.layout
@@ -849,11 +850,12 @@ class CLIP_PT_plane_track(CLIP_PT_tracking_panel, Panel):
             row.label(text="No active plane track")
             return
 
-        row.prop(active_track, "name")
-        row.prop(active_track, "use_auto_keying", text="")
+        layout.prop(active_track, "name")
+        layout.prop(active_track, "use_auto_keying", text="")
         row = layout.row()
         row.template_ID(
             active_track, "image", new="image.new", open="image.open")
+        row.menu("CLIP_MT_plane_track_image_context_menu", icon='DOWNARROW_HLT', text="")
 
         row = layout.row()
         row.active = active_track.image is not None
@@ -1566,6 +1568,10 @@ class CLIP_MT_track(Menu):
         layout.operator("clip.detect_features")
 
         layout.separator()
+        layout.operator("clip.new_image_from_plane_marker")
+        layout.operator("clip.update_image_from_plane_marker")
+
+        layout.separator()
 
 
         layout.separator()
@@ -1736,6 +1742,16 @@ class CLIP_MT_tracking_context_menu(Menu):
         elif mode == 'MASK':
             from .properties_mask_common import draw_mask_context_menu
             draw_mask_context_menu(layout, context)
+
+
+class CLIP_MT_plane_track_image_context_menu(Menu):
+    bl_label = "Plane Track Image Specials"
+
+    def draw(self, _context):
+        layout = self.layout
+
+        layout.operator("clip.new_image_from_plane_marker")
+        layout.operator("clip.update_image_from_plane_marker")
 
 
 class CLIP_PT_camera_presets(PresetPanel, Panel):
@@ -2037,6 +2053,7 @@ classes = (
     CLIP_MT_select,
     CLIP_MT_select_grouped,
     CLIP_MT_tracking_context_menu,
+    CLIP_MT_plane_track_image_context_menu,
     CLIP_MT_stabilize_2d_context_menu,
     CLIP_MT_stabilize_2d_rotation_context_menu,
     CLIP_MT_pivot_pie,

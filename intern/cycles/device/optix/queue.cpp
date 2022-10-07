@@ -8,7 +8,6 @@
 
 #  include "util/time.h"
 
-#  undef __KERNEL_CPU__
 #  define __KERNEL_OPTIX__
 #  include "kernel/device/optix/globals.h"
 
@@ -47,7 +46,7 @@ bool OptiXDeviceQueue::enqueue(DeviceKernel kernel,
     return false;
   }
 
-  debug_enqueue(kernel, work_size);
+  debug_enqueue_begin(kernel, work_size);
 
   const CUDAContextScope scope(cuda_device_);
 
@@ -131,6 +130,8 @@ bool OptiXDeviceQueue::enqueue(DeviceKernel kernel,
                                   work_size,
                                   1,
                                   1));
+
+  debug_enqueue_end();
 
   return !(optix_device->have_error());
 }

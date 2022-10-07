@@ -58,10 +58,13 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(OBJECT_OT_track_set);
   WM_operatortype_append(OBJECT_OT_track_clear);
   WM_operatortype_append(OBJECT_OT_make_local);
-  WM_operatortype_append(OBJECT_OT_make_override_library);
   WM_operatortype_append(OBJECT_OT_make_single_user);
   WM_operatortype_append(OBJECT_OT_make_links_scene);
   WM_operatortype_append(OBJECT_OT_make_links_data);
+
+  WM_operatortype_append(OBJECT_OT_make_override_library);
+  WM_operatortype_append(OBJECT_OT_reset_override_library);
+  WM_operatortype_append(OBJECT_OT_clear_override_library);
 
   WM_operatortype_append(OBJECT_OT_select_random);
   WM_operatortype_append(OBJECT_OT_select_all);
@@ -147,6 +150,10 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(GPENCIL_OT_segment_add);
   WM_operatortype_append(GPENCIL_OT_segment_remove);
   WM_operatortype_append(GPENCIL_OT_segment_move);
+
+  WM_operatortype_append(GPENCIL_OT_time_segment_add);
+  WM_operatortype_append(GPENCIL_OT_time_segment_remove);
+  WM_operatortype_append(GPENCIL_OT_time_segment_move);
 
   /* grease pencil line art */
   WM_operatortypes_lineart();

@@ -25,7 +25,7 @@ namespace blender::draw {
  * \{ */
 
 static void extract_tan_init_common(const MeshRenderData *mr,
-                                    struct MeshBatchCache *cache,
+                                    MeshBatchCache *cache,
                                     GPUVertFormat *format,
                                     GPUVertCompType comp_type,
                                     GPUVertFetchMode fetch_mode,
@@ -161,7 +161,7 @@ static void extract_tan_init_common(const MeshRenderData *mr,
 }
 
 static void extract_tan_ex_init(const MeshRenderData *mr,
-                                struct MeshBatchCache *cache,
+                                MeshBatchCache *cache,
                                 GPUVertBuf *vbo,
                                 const bool do_hq)
 {
@@ -235,9 +235,9 @@ static void extract_tan_ex_init(const MeshRenderData *mr,
 }
 
 static void extract_tan_init(const MeshRenderData *mr,
-                             struct MeshBatchCache *cache,
+                             MeshBatchCache *cache,
                              void *buf,
-                             void *UNUSED(tls_data))
+                             void * /*tls_data*/)
 {
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
   extract_tan_ex_init(mr, cache, vbo, false);
@@ -254,9 +254,9 @@ static GPUVertFormat *get_coarse_tan_format()
 
 static void extract_tan_init_subdiv(const DRWSubdivCache *subdiv_cache,
                                     const MeshRenderData *mr,
-                                    struct MeshBatchCache *cache,
+                                    MeshBatchCache *cache,
                                     void *buffer,
-                                    void *UNUSED(data))
+                                    void * /*data*/)
 {
   GPUVertCompType comp_type = GPU_COMP_F32;
   GPUVertFetchMode fetch_mode = GPU_FETCH_FLOAT;
@@ -302,7 +302,7 @@ static void extract_tan_init_subdiv(const DRWSubdivCache *subdiv_cache,
     /* Ensure data is uploaded properly. */
     GPU_vertbuf_tag_dirty(coarse_vbo);
     /* Include stride in offset. */
-    const int dst_offset = (int)subdiv_cache->num_subdiv_loops * 4 * pack_layer_index++;
+    const int dst_offset = int(subdiv_cache->num_subdiv_loops) * 4 * pack_layer_index++;
     draw_subdiv_interp_custom_data(subdiv_cache, coarse_vbo, dst_buffer, 4, dst_offset, false);
   }
   if (use_orco_tan) {
@@ -317,7 +317,7 @@ static void extract_tan_init_subdiv(const DRWSubdivCache *subdiv_cache,
     /* Ensure data is uploaded properly. */
     GPU_vertbuf_tag_dirty(coarse_vbo);
     /* Include stride in offset. */
-    const int dst_offset = (int)subdiv_cache->num_subdiv_loops * 4 * pack_layer_index++;
+    const int dst_offset = int(subdiv_cache->num_subdiv_loops) * 4 * pack_layer_index++;
     draw_subdiv_interp_custom_data(subdiv_cache, coarse_vbo, dst_buffer, 4, dst_offset, false);
   }
 
@@ -344,9 +344,9 @@ constexpr MeshExtract create_extractor_tan()
  * \{ */
 
 static void extract_tan_hq_init(const MeshRenderData *mr,
-                                struct MeshBatchCache *cache,
+                                MeshBatchCache *cache,
                                 void *buf,
-                                void *UNUSED(tls_data))
+                                void * /*tls_data*/)
 {
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
   extract_tan_ex_init(mr, cache, vbo, true);

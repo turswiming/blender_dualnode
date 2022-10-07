@@ -39,12 +39,12 @@ int HIPDeviceQueue::num_concurrent_states(const size_t state_size) const
       num_states = max((int)(num_states * factor), 1024);
     }
     else {
-      VLOG(3) << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
+      VLOG_DEVICE_STATS << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
     }
   }
 
-  VLOG(3) << "GPU queue concurrent states: " << num_states << ", using up to "
-          << string_human_readable_size(num_states * state_size);
+  VLOG_DEVICE_STATS << "GPU queue concurrent states: " << num_states << ", using up to "
+                    << string_human_readable_size(num_states * state_size);
 
   return num_states;
 }
@@ -79,7 +79,7 @@ bool HIPDeviceQueue::enqueue(DeviceKernel kernel,
     return false;
   }
 
-  debug_enqueue(kernel, work_size);
+  debug_enqueue_begin(kernel, work_size);
 
   const HIPContextScope scope(hip_device_);
   const HIPDeviceKernel &hip_kernel = hip_device_->kernels.get(kernel);
@@ -119,6 +119,8 @@ bool HIPDeviceQueue::enqueue(DeviceKernel kernel,
                                        const_cast<void **>(args.values),
                                        0),
                  "enqueue");
+
+  debug_enqueue_end();
 
   return !(hip_device_->have_error());
 }

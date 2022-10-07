@@ -87,7 +87,6 @@ class _defs_view3d_generic:
             icon="ops.generic.cursor",
             keymap="3D View Tool: Cursor",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -126,7 +125,6 @@ class _defs_view3d_generic:
             icon="ops.view3d.ruler",
             widget="VIEW3D_GGT_ruler",
             keymap="3D View Tool: Measure",
-            options={'KEYMAP_FALLBACK'},
         )
 
 
@@ -533,7 +531,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -560,7 +557,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -586,7 +582,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -612,7 +607,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -637,7 +631,6 @@ class _defs_view3d_add:
             widget="VIEW3D_GGT_placement",
             keymap="3D View Tool: Object, Add Primitive",
             draw_settings=draw_settings,
-            options={'KEYMAP_FALLBACK'},
         )
 
 
@@ -1718,7 +1711,6 @@ class _defs_image_generic:
             ),
             icon="ops.generic.cursor",
             keymap=(),
-            options={'KEYMAP_FALLBACK'},
         )
 
     # Currently a place holder so we can switch away from the annotation tool.
@@ -1892,7 +1884,7 @@ class _defs_image_uv_sculpt:
                 if brush is None:
                     return
                 radius = brush.size
-            draw_circle_2d(xy, (1.0,) * 4, radius, segments=32)
+            draw_circle_2d(xy, (1.0,) * 4, radius)
 
         return generate_from_enum_ex(
             context,
@@ -2380,6 +2372,51 @@ class _defs_curves_sculpt:
             data_block='GROW_SHRINK'
         )
 
+    @ToolDef.from_fn
+    def pinch():
+        return dict(
+            idname="builtin_brush.pinch",
+            label="Pinch",
+            icon="ops.curves.sculpt_pinch",
+            data_block='PINCH'
+        )
+
+    @ToolDef.from_fn
+    def smooth():
+        return dict(
+            idname="builtin_brush.smooth",
+            label="Smooth",
+            icon="ops.curves.sculpt_smooth",
+            data_block='SMOOTH'
+        )
+
+    @ToolDef.from_fn
+    def puff():
+        return dict(
+            idname="builtin_brush.puff",
+            label="Puff",
+            icon="ops.curves.sculpt_puff",
+            data_block='PUFF'
+        )
+
+    @ToolDef.from_fn
+    def density():
+        return dict(
+            idname="builtin_brush.density",
+            label="Density",
+            icon="ops.curves.sculpt_density",
+            data_block="DENSITY"
+        )
+
+    @ToolDef.from_fn
+    def slide():
+        return dict(
+            idname="builtin_brush.slide",
+            label="Slide",
+            icon="ops.curves.sculpt_slide",
+            data_block="SLIDE"
+        )
+
 
 class _defs_gpencil_vertex:
 
@@ -2717,7 +2754,6 @@ class _defs_sequencer_generic:
             ),
             icon="ops.generic.cursor",
             keymap="Sequencer Tool: Cursor",
-            options={'KEYMAP_FALLBACK'},
         )
 
     @ToolDef.from_fn
@@ -3437,19 +3473,19 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             ),
         ],
         'SCULPT_CURVES': [
-            lambda context: (
-                (
-                    _defs_curves_sculpt.selection_paint,
-                    None,
-                )
-                if context is None or context.preferences.experimental.use_new_curves_tools
-                else ()
-            ),
-            _defs_curves_sculpt.comb,
+            _defs_curves_sculpt.selection_paint,
+            None,
             _defs_curves_sculpt.add,
             _defs_curves_sculpt.delete,
+            _defs_curves_sculpt.density,
+            None,
+            _defs_curves_sculpt.comb,
             _defs_curves_sculpt.snake_hook,
             _defs_curves_sculpt.grow_shrink,
+            _defs_curves_sculpt.pinch,
+            _defs_curves_sculpt.puff,
+            _defs_curves_sculpt.smooth,
+            _defs_curves_sculpt.slide,
             None,
             *_tools_annotate,
         ],

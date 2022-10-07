@@ -81,6 +81,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_path.h"
 #include "RNA_prototypes.h"
 
 #include "UI_interface.h"
@@ -638,7 +639,7 @@ char *WM_prop_pystring_assign(bContext *C, PointerRNA *ptr, PropertyRNA *prop, i
 
   if (lhs == NULL) {
     /* Fallback to `bpy.data.foo[id]` if we don't find in the context. */
-    lhs = RNA_path_full_property_py(CTX_data_main(C), ptr, prop, index);
+    lhs = RNA_path_full_property_py(ptr, prop, index);
   }
 
   if (!lhs) {
@@ -939,7 +940,7 @@ int WM_generic_select_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
     return ret_value | OPERATOR_PASS_THROUGH;
   }
-  if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+  if (ISMOUSE_MOTION(event->type)) {
     const int drag_delta[2] = {
         mval[0] - event->mval[0],
         mval[1] - event->mval[1],
@@ -1306,6 +1307,10 @@ ID *WM_operator_drop_load_path(struct bContext *C, wmOperator *op, const short i
     }
 
     return id;
+  }
+
+  if (!WM_operator_properties_id_lookup_is_set(op->ptr)) {
+    return NULL;
   }
 
   /* Lookup an already existing ID. */
@@ -2068,7 +2073,7 @@ static void WM_OT_quit_blender(wmOperatorType *ot)
 
 static int wm_console_toggle_exec(bContext *UNUSED(C), wmOperator *UNUSED(op))
 {
-  setConsoleWindowState(GHOST_kConsoleWindowStateToggle);
+  GHOST_setConsoleWindowState(GHOST_kConsoleWindowStateToggle);
   return OPERATOR_FINISHED;
 }
 
@@ -2323,7 +2328,7 @@ static void radial_control_paint_tex(RadialControl *rc, float radius, float alph
       GPU_matrix_rotate_2d(RAD2DEGF(rot));
     }
 
-    immBindBuiltinProgram(GPU_SHADER_2D_IMAGE_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_IMAGE_COLOR);
 
     immUniformColor3fvAlpha(col, alpha);
     immBindTexture("image", rc->texture);
@@ -2354,7 +2359,7 @@ static void radial_control_paint_tex(RadialControl *rc, float radius, float alph
   }
   else {
     /* flat color if no texture available */
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformColor3fvAlpha(col, alpha);
     imm_draw_circle_fill_2d(pos, 0.0f, 0.0f, radius, 40);
   }
@@ -2466,7 +2471,7 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
-  immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   if (rc->subtype == PROP_ANGLE) {
     GPU_matrix_push();
@@ -2516,7 +2521,7 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
 
   immUnbindProgram();
 
-  BLF_size(fontid, 1.75f * fstyle_points * U.pixelsize, U.dpi);
+  BLF_size(fontid, 1.75f * fstyle_points * U.dpi_fac);
   UI_GetThemeColor4fv(TH_TEXT_HI, text_color);
   BLF_color4fv(fontid, text_color);
 
@@ -2735,7 +2740,7 @@ static int radial_control_invoke(bContext *C, wmOperator *op, const wmEvent *eve
   }
 
   /* get type, initial, min, and max values of the property */
-  switch ((rc->type = RNA_property_type(rc->prop))) {
+  switch (rc->type = RNA_property_type(rc->prop)) {
     case PROP_INT: {
       int value, min, max, step;
 
@@ -3668,7 +3673,7 @@ static void WM_OT_doc_view_manual_ui_context(wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /** \name Toggle Stereo 3D Operator
  *
- * Turning it fullscreen if needed.
+ * Turning it full-screen if needed.
  * \{ */
 
 static void WM_OT_stereo3d_set(wmOperatorType *ot)
@@ -3800,7 +3805,7 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
   /* WARNING: Name is incorrect, use for non-3d views. */
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "View3D Gesture Circle");
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return;
   }
@@ -3833,7 +3838,7 @@ static void gesture_straightline_modal_keymap(wmKeyConfig *keyconf)
 
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "Gesture Straight Line");
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return;
   }
@@ -3862,7 +3867,7 @@ static void gesture_box_modal_keymap(wmKeyConfig *keyconf)
 
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "Gesture Box");
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return;
   }
@@ -3915,7 +3920,7 @@ static void gesture_lasso_modal_keymap(wmKeyConfig *keyconf)
 
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "Gesture Lasso");
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return;
   }
@@ -3950,7 +3955,7 @@ static void gesture_zoom_border_modal_keymap(wmKeyConfig *keyconf)
 
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "Gesture Zoom Border");
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return;
   }

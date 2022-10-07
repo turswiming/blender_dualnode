@@ -183,7 +183,7 @@ static int foreach_libblock_remap_callback(LibraryIDLinkCallbackData *cb_data)
 
   /* Better remap to NULL than not remapping at all,
    * then we can handle it as a regular remap-to-NULL case. */
-  if ((cb_flag & IDWALK_CB_NEVER_SELF)) {
+  if (cb_flag & IDWALK_CB_NEVER_SELF) {
     id_remapper_options |= ID_REMAP_APPLY_UNMAP_WHEN_REMAPPING_TO_SELF;
   }
 
@@ -428,10 +428,13 @@ static void libblock_remap_data_update_tags(ID *old_id, ID *new_id, void *user_d
 }
 
 static void libblock_remap_reset_remapping_status_callback(ID *old_id,
-                                                           ID *UNUSED(new_id),
+                                                           ID *new_id,
                                                            void *UNUSED(user_data))
 {
   BKE_libblock_runtime_reset_remapping_status(old_id);
+  if (new_id != NULL) {
+    BKE_libblock_runtime_reset_remapping_status(new_id);
+  }
 }
 
 /**
@@ -814,7 +817,7 @@ void BKE_libblock_relink_ex(
     Main *bmain, void *idv, void *old_idv, void *new_idv, const short remap_flags)
 {
 
-  /* Should be able to replace all _relink() funcs (constraints, rigidbody, etc.) ? */
+  /* Should be able to replace all _relink() functions (constraints, rigidbody, etc.) ? */
 
   ID *id = idv;
   ID *old_id = old_idv;

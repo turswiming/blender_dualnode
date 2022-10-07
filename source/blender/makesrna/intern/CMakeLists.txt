@@ -6,6 +6,11 @@ if(CMAKE_COMPILER_IS_GNUCC)
   string(APPEND CMAKE_C_FLAGS " -Werror=implicit-function-declaration")
 endif()
 
+# Needed for `mallocn.c`.
+if(HAVE_MALLOC_STATS_H)
+  add_definitions(-DHAVE_MALLOC_STATS_H)
+endif()
+
 # files rna_access.c rna_define.c makesrna.c intentionally excluded.
 set(DEFSRC
   rna_ID.c
@@ -26,6 +31,7 @@ set(DEFSRC
   rna_context.c
   rna_curve.c
   rna_curveprofile.c
+  rna_curves.c
   rna_depsgraph.c
   rna_dynamicpaint.c
   rna_fcurve.c
@@ -84,9 +90,7 @@ set(DEFSRC
 
 if(WITH_EXPERIMENTAL_FEATURES)
   add_definitions(-DWITH_SIMULATION_DATABLOCK)
-  add_definitions(-DWITH_NEW_CURVES_TYPE)
   list(APPEND DEFSRC
-    rna_curves.c
     rna_simulation.c
   )
 endif()
@@ -160,6 +164,7 @@ set(SRC_RNA_INC
   ../RNA_documentation.h
   ../RNA_enum_items.h
   ../RNA_enum_types.h
+  ../RNA_path.h
   ../RNA_types.h
 )
 
@@ -180,10 +185,33 @@ set(SRC
 )
 
 set(INC
-  ../../../../intern/clog
-
-  # Needed for defaults forward declarations.
+  .
+  ..
+  ../../blenfont
+  ../../blenkernel
+  ../../blenlib
   ../../blenloader
+  ../../blentranslation
+  ../../bmesh
+  ../../depsgraph
+  ../../draw
+  ../../gpu
+  ../../ikplugin
+  ../../imbuf
+  ../../makesdna
+  ../../modifiers
+  ../../nodes/
+  ../../sequencer
+  ../../simulation
+  ../../windowmanager
+  ../../editors/include
+  ../../render
+  ../../../../intern/clog
+  ../../../../intern/cycles/blender
+  ../../../../intern/atomic
+  ../../../../intern/guardedalloc
+  ../../../../intern/memutil
+  ../../../../intern/mantaflow/extern
 
   ${CMAKE_BINARY_DIR}/source/blender/makesdna/intern
 
@@ -364,39 +392,12 @@ if(WITH_GMP)
 endif()
 
 # Build makesrna executable
-blender_include_dirs(
-  .
-  ..
-  ../../blenfont
-  ../../blenkernel
-  ../../blenlib
-  ../../blentranslation
-  ../../bmesh
-  ../../depsgraph
-  ../../draw
-  ../../gpu
-  ../../ikplugin
-  ../../imbuf
-  ../../makesdna
-  ../../modifiers
-  ../../nodes/
-  ../../sequencer
-  ../../simulation
-  ../../windowmanager
-  ../../editors/include
-  ../../render
-  ../../../../intern/cycles/blender
-  ../../../../intern/atomic
-  ../../../../intern/glew-mx
-  ../../../../intern/guardedalloc
-  ../../../../intern/memutil
-  ../../../../intern/mantaflow/extern
-)
-
 add_cc_flags_custom_test(makesrna)
 
 add_executable(makesrna ${SRC} ${SRC_RNA_INC} ${SRC_DNA_INC})
 setup_platform_linker_flags(makesrna)
+blender_target_include_dirs(makesrna ${INC})
+blender_target_include_dirs_sys(makesrna ${INC_SYS})
 
 target_link_libraries(makesrna bf_dna)
 target_link_libraries(makesrna bf_dna_blenlib)
@@ -417,6 +418,7 @@ add_custom_command(
 set(SRC
   rna_access.c
   rna_access_compare_override.c
+  rna_path.cc
   ${GENSRC}
 
   ${SRC_RNA_INC}
@@ -448,8 +450,6 @@ set(LIB
   bf_editor_transform
   bf_editor_undo
 )
-
-add_definitions(${GL_DEFINITIONS})
 
 blender_add_lib(bf_rna "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

@@ -155,7 +155,8 @@ static bool buttons_context_path_collection(const bContext *C,
   /* if we have a view layer, use the view layer's active collection */
   if (buttons_context_path_view_layer(path, window)) {
     ViewLayer *view_layer = path->ptr[path->len - 1].data;
-    Collection *c = view_layer->active_collection->collection;
+    BKE_view_layer_synced_ensure(scene, view_layer);
+    Collection *c = BKE_view_layer_active_collection_get(view_layer)->collection;
 
     /* Do not show collection tab for master collection. */
     if (c == scene->master_collection) {
@@ -209,7 +210,7 @@ static bool buttons_context_path_object(ButsContextPath *path)
   }
 
   ViewLayer *view_layer = ptr->data;
-  Object *ob = (view_layer->basact) ? view_layer->basact->object : NULL;
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ob) {
     RNA_id_pointer_create(&ob->id, &path->ptr[path->len]);
@@ -258,11 +259,9 @@ static bool buttons_context_path_data(ButsContextPath *path, int type)
   if (RNA_struct_is_a(ptr->type, &RNA_GreasePencil) && (ELEM(type, -1, OB_GPENCIL))) {
     return true;
   }
-#ifdef WITH_NEW_CURVES_TYPE
   if (RNA_struct_is_a(ptr->type, &RNA_Curves) && (ELEM(type, -1, OB_CURVES))) {
     return true;
   }
-#endif
 #ifdef WITH_POINT_CLOUD
   if (RNA_struct_is_a(ptr->type, &RNA_PointCloud) && (ELEM(type, -1, OB_POINTCLOUD))) {
     return true;
@@ -644,8 +643,10 @@ static bool buttons_context_path(
 static bool buttons_shading_context(const bContext *C, int mainb)
 {
   wmWindow *window = CTX_wm_window(C);
+  const Scene *scene = WM_window_get_active_scene(window);
   ViewLayer *view_layer = WM_window_get_active_view_layer(window);
-  Object *ob = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (ELEM(mainb, BCONTEXT_MATERIAL, BCONTEXT_WORLD, BCONTEXT_TEXTURE)) {
     return true;
@@ -660,8 +661,10 @@ static bool buttons_shading_context(const bContext *C, int mainb)
 static int buttons_shading_new_context(const bContext *C, int flag)
 {
   wmWindow *window = CTX_wm_window(C);
+  const Scene *scene = WM_window_get_active_scene(window);
   ViewLayer *view_layer = WM_window_get_active_view_layer(window);
-  Object *ob = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   if (flag & (1 << BCONTEXT_MATERIAL)) {
     return BCONTEXT_MATERIAL;
@@ -830,9 +833,7 @@ const char *buttons_context_dir[] = {
     "line_style",
     "collection",
     "gpencil",
-#ifdef WITH_NEW_CURVES_TYPE
     "curves",
-#endif
 #ifdef WITH_POINT_CLOUD
     "pointcloud",
 #endif
@@ -926,12 +927,10 @@ int /*eContextResult*/ buttons_context(const bContext *C,
     set_pointer_type(path, result, &RNA_LightProbe);
     return CTX_RESULT_OK;
   }
-#ifdef WITH_NEW_CURVES_TYPE
   if (CTX_data_equals(member, "curves")) {
     set_pointer_type(path, result, &RNA_Curves);
     return CTX_RESULT_OK;
   }
-#endif
 #ifdef WITH_POINT_CLOUD
   if (CTX_data_equals(member, "pointcloud")) {
     set_pointer_type(path, result, &RNA_PointCloud);
@@ -1189,22 +1188,22 @@ static void buttons_panel_context_draw(const bContext *C, Panel *panel)
     PointerRNA *ptr = &path->ptr[i];
 
     /* Skip scene and view layer to save space. */
-    if ((!ELEM(sbuts->mainb,
-               BCONTEXT_RENDER,
-               BCONTEXT_OUTPUT,
-               BCONTEXT_SCENE,
-               BCONTEXT_VIEW_LAYER,
-               BCONTEXT_WORLD) &&
-         ptr->type == &RNA_Scene)) {
+    if (!ELEM(sbuts->mainb,
+              BCONTEXT_RENDER,
+              BCONTEXT_OUTPUT,
+              BCONTEXT_SCENE,
+              BCONTEXT_VIEW_LAYER,
+              BCONTEXT_WORLD) &&
+        ptr->type == &RNA_Scene) {
       continue;
     }
-    if ((!ELEM(sbuts->mainb,
-               BCONTEXT_RENDER,
-               BCONTEXT_OUTPUT,
-               BCONTEXT_SCENE,
-               BCONTEXT_VIEW_LAYER,
-               BCONTEXT_WORLD) &&
-         ptr->type == &RNA_ViewLayer)) {
+    if (!ELEM(sbuts->mainb,
+              BCONTEXT_RENDER,
+              BCONTEXT_OUTPUT,
+              BCONTEXT_SCENE,
+              BCONTEXT_VIEW_LAYER,
+              BCONTEXT_WORLD) &&
+        ptr->type == &RNA_ViewLayer) {
       continue;
     }
 

@@ -27,12 +27,6 @@
 
 #define SELECT 1
 
-/**
- * TODO
- * - 'DispList' is currently not used
- *   (we could avoid using since it will be removed)
- */
-
 static void lattice_batch_cache_clear(Lattice *lt);
 
 /* ---------------------------------------------------------------------- */
@@ -237,7 +231,7 @@ static bool lattice_batch_cache_valid(Lattice *lt)
 
   if ((cache->dims.u_len != lt->pntsu) || (cache->dims.v_len != lt->pntsv) ||
       (cache->dims.w_len != lt->pntsw) ||
-      ((cache->show_only_outside != ((lt->flag & LT_OUTSIDE) != 0)))) {
+      (cache->show_only_outside != ((lt->flag & LT_OUTSIDE) != 0))) {
     return false;
   }
 

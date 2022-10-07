@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import bpy
 from bpy.types import Header, Menu, Panel
-from bpy.app.translations import pgettext_iface as iface_
-from bpy.app.translations import contexts as i18n_contexts
+from bpy.app.translations import (
+    pgettext_iface as iface_,
+    contexts as i18n_contexts,
+)
 from bl_ui.utils import PresetPanel
 from bl_ui.properties_grease_pencil_common import (
     AnnotationDataPanel,
@@ -217,10 +219,14 @@ class NODE_MT_add(bpy.types.Menu):
         import nodeitems_utils
 
         layout = self.layout
-
         layout.operator_context = 'INVOKE_DEFAULT'
 
-        if nodeitems_utils.has_node_categories(context):
+        snode = context.space_data
+        if snode.tree_type == 'GeometryNodeTree':
+            props = layout.operator("node.add_search", text="Search...", icon='VIEWZOOM')
+            layout.separator()
+            layout.menu_contents("NODE_MT_geometry_node_add_all")
+        elif nodeitems_utils.has_node_categories(context):
             props = layout.operator("node.add_search", text="Search...", icon='VIEWZOOM')
             props.use_transform = True
 
@@ -375,8 +381,8 @@ class NODE_PT_material_slots(Panel):
     def draw_header(self, context):
         ob = context.object
         self.bl_label = (
-            "Slot " + str(ob.active_material_index + 1) if ob.material_slots else
-            "Slot"
+            iface_("Slot %d") % (ob.active_material_index + 1) if ob.material_slots else
+            iface_("Slot")
         )
 
     # Duplicate part of 'EEVEE_MATERIAL_PT_context_material'.

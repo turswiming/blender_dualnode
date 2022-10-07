@@ -32,14 +32,15 @@ struct wmWindowManager;
 
 float ED_space_image_zoom_level(const struct View2D *v2d, int grid_dimension);
 void ED_space_image_grid_steps(struct SpaceImage *sima,
-                               float grid_steps[SI_GRID_STEPS_LEN],
+                               float grid_steps_x[SI_GRID_STEPS_LEN],
+                               float grid_steps_y[SI_GRID_STEPS_LEN],
                                int grid_dimension);
 /**
  * Calculate the increment snapping value for UV/image editor based on the zoom factor
  * The code in here (except the offset part) is used in `grid_frag.glsl` (see `grid_res`) for
  * drawing the grid overlay for the UV/Image editor.
  */
-float ED_space_image_increment_snap_value(int grid_dimesnions,
+float ED_space_image_increment_snap_value(int grid_dimensions,
                                           const float grid_steps[SI_GRID_STEPS_LEN],
                                           float zoom_factor);
 
@@ -137,8 +138,39 @@ bool ED_space_image_paint_curve(const struct bContext *C);
  * Matches clip function.
  */
 bool ED_space_image_check_show_maskedit(struct SpaceImage *sima, struct Object *obedit);
+
+/* Returns true when the following conditions are met:
+ * - Current space is Image Editor.
+ * - The image editor is not a UV Editor.
+ * - It is set to Mask mode.
+ *
+ * It is not required to have mask opened for editing. */
 bool ED_space_image_maskedit_poll(struct bContext *C);
+
+/* Returns true when the following conditions are met:
+ * - Current space is Image Editor.
+ * - The image editor is not a UV Editor.
+ * - It is set to Mask mode.
+ * - Mask has visible and editable splines.
+ *
+ * It is not required to have mask opened for editing. */
+bool ED_space_image_maskedit_visible_splines_poll(struct bContext *C);
+
+/* Returns true when the following conditions are met:
+ * - Current space is Image Editor.
+ * - The image editor is not an UV Editor.
+ * - It is set to Mask mode.
+ * - The space has mask opened. */
 bool ED_space_image_maskedit_mask_poll(struct bContext *C);
+
+/* Returns true when the following conditions are met:
+ * - Current space is Image Editor.
+ * - The image editor is not an UV Editor.
+ * - It is set to Mask mode.
+ * - The space has mask opened.
+ * - Mask has visible and editable splines. */
+bool ED_space_image_maskedit_mask_visible_splines_poll(struct bContext *C);
+
 bool ED_space_image_cursor_poll(struct bContext *C);
 
 /**
