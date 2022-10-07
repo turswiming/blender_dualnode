@@ -383,7 +383,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     }
   }
 
-  if (total_weight == 0.0f) {
+  if (total_weight == 0.0f || current_light < 0) {
     return false;
   }
 
