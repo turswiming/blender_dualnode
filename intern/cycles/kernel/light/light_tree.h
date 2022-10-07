@@ -303,17 +303,17 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
   /* We keep track of the currently selected primitive and its weight,
    * as well as the total weight as part of the weighted reservoir sampling. */
   int current_light = -1;
-  float current_weight = -1.0f;
-  float total_weight = 0.0f;
-  float current_pdf = 1.0f;
+  float current_reservoir_weight = -1.0f;
+  float total_reservoir_weight = 0.0f;
+  float pdf_node_emitter_selection = 1.0f;
 
   /* We need a stack to substitute for recursion. */
   const int stack_size = 32;
   int stack[stack_size];
-  float pdfs[stack_size];
+  float pdfs_node_selection[stack_size];
   int stack_index = 0;
   stack[0] = 0;
-  pdfs[0] = 1.0f;
+  pdfs_node_selection[0] = 1.0f;
 
   /* For now, we arbitrarily limit splitting to 8 so that it doesn't continuously split. */
   int split_count = 0;
@@ -322,37 +322,42 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
    * Also keep track of the probability of traversing to a given node,
    * so that we can scale our PDF accordingly later. */
   while (stack_index >= 0) {
-    const float pdf = pdfs[stack_index];
+    const float pdf_node_selection = pdfs_node_selection[stack_index];
     const int index = stack[stack_index];
     const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
 
     /* If we're at a leaf node, we choose a primitive. Otherwise, we check if we should split
      * or traverse down the light tree. */
     if (knode->child_index <= 0) {
-      float light_probability = 1.0f;
+      float pdf_emitter_selection = 1.0f;
       const int selected_light = light_tree_cluster_select_emitter(
-          kg, randu, P, N, has_transmission, knode, &light_probability);
+          kg, randu, P, N, has_transmission, knode, &pdf_emitter_selection);
 
       if (selected_light < 0) {
         stack_index--;
         continue;
       }
 
-      const float light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
-      if (light_weight == 0.0f) {
+      const float light_reservoir_weight = light_tree_emitter_reservoir_weight(
+          kg, P, N, selected_light);
+
+      /* TODO: make pdf_node_emitter_selection part of the light_reservoir_weight, otherwise result
+       * is suboptimal. */
+
+      if (light_reservoir_weight == 0.0f) {
         stack_index--;
         continue;
       }
-      total_weight += light_weight;
+      total_reservoir_weight += light_reservoir_weight;
 
       /* We compute the probability of switching to the new candidate sample,
        * otherwise we stick with the old one. */
-      const float selection_probability = light_weight / total_weight;
+      const float selection_probability = light_reservoir_weight / total_reservoir_weight;
       if (*randu <= selection_probability) {
         *randu = *randu / selection_probability;
         current_light = selected_light;
-        current_weight = light_weight;
-        current_pdf = pdf * light_probability;
+        current_reservoir_weight = light_reservoir_weight;
+        pdf_node_emitter_selection = pdf_node_selection * pdf_emitter_selection;
       }
       else {
         *randu = (*randu - selection_probability) / (1.0f - selection_probability);
@@ -369,9 +374,9 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     const int right_index = knode->child_index;
     if (light_tree_should_split(kg, P, knode) && split_count < 8 && stack_index < stack_size - 1) {
       stack[stack_index] = left_index;
-      pdfs[stack_index] = pdf;
+      pdfs_node_selection[stack_index] = pdf_node_selection;
       stack[stack_index + 1] = right_index;
-      pdfs[stack_index + 1] = pdf;
+      pdfs_node_selection[stack_index + 1] = pdf_node_selection;
       stack_index++;
       split_count++;
       continue;
@@ -396,20 +401,21 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     if (*randu <= left_probability) {
       stack[stack_index] = left_index;
       *randu = *randu / left_probability;
-      pdfs[stack_index] = pdf * left_probability;
+      pdfs_node_selection[stack_index] = pdf_node_selection * left_probability;
     }
     else {
       stack[stack_index] = right_index;
       *randu = (*randu - left_probability) / (1.0f - left_probability);
-      pdfs[stack_index] = pdf * (1.0f - left_probability);
+      pdfs_node_selection[stack_index] = pdf_node_selection * (1.0f - left_probability);
     }
   }
 
-  if (total_weight == 0.0f || current_light < 0) {
+  if (total_reservoir_weight == 0.0f || current_light < 0) {
     return false;
   }
 
-  *pdf_factor *= current_pdf * current_weight / total_weight;
+  const float pdf_reservoir = current_reservoir_weight / total_reservoir_weight;
+  *pdf_factor *= pdf_node_emitter_selection * pdf_reservoir;
 
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          current_light);
