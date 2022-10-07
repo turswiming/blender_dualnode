@@ -421,7 +421,7 @@ class OpaquePass {
 
   void draw_prepass(Manager &manager, View &view, Texture &depth_tx)
   {
-    gbuffer_material_tx.acquire(int2(depth_tx.size()), GPU_RGBA8);
+    gbuffer_material_tx.acquire(int2(depth_tx.size()), GPU_RGBA16F);
     gbuffer_normal_tx.acquire(int2(depth_tx.size()), GPU_RG16F);
     gbuffer_object_id_tx.acquire(int2(depth_tx.size()), GPU_R16UI);
 
