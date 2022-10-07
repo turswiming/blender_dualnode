@@ -1250,7 +1250,7 @@ static void sculpt_draw_cb(DRWSculptCallbackData *scd,
   }
 }
 
-static void sculpt_debug_cb(
+void DRW_sculpt_debug_cb(
     PBVHNode *node, void *user_data, const float bmin[3], const float bmax[3], PBVHNodeFlags flag)
 {
   int *debug_node_nr = (int *)user_data;
@@ -1366,7 +1366,7 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
     BKE_pbvh_draw_debug_cb(
         pbvh,
         (void (*)(PBVHNode * n, void *d, const float min[3], const float max[3], PBVHNodeFlags f))
-            sculpt_debug_cb,
+            DRW_sculpt_debug_cb,
         &debug_node_nr);
   }
 }

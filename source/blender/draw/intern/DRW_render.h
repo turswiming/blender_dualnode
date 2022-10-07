@@ -953,6 +953,9 @@ void DRW_mesh_batch_cache_get_attributes(struct Object *object,
                                          struct DRW_Attributes **r_attrs,
                                          struct DRW_MeshCDMask **r_cd_needed);
 
+void DRW_sculpt_debug_cb(
+    PBVHNode *node, void *user_data, const float bmin[3], const float bmax[3], PBVHNodeFlags flag);
+
 #ifdef __cplusplus
 }
 #endif
