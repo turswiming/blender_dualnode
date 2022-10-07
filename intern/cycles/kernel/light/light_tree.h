@@ -315,9 +315,6 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
   stack[0] = 0;
   pdfs_node_selection[0] = 1.0f;
 
-  /* For now, we arbitrarily limit splitting to 8 so that it doesn't continuously split. */
-  int split_count = 0;
-
   /* First traverse the light tree until a leaf node is reached.
    * Also keep track of the probability of traversing to a given node,
    * so that we can scale our PDF accordingly later. */
@@ -372,13 +369,12 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
      * We adaptively split if the variance is high enough. */
     const int left_index = index + 1;
     const int right_index = knode->child_index;
-    if (light_tree_should_split(kg, P, knode) && split_count < 8 && stack_index < stack_size - 1) {
+    if (light_tree_should_split(kg, P, knode) && stack_index < stack_size - 1) {
       stack[stack_index] = left_index;
       pdfs_node_selection[stack_index] = pdf_node_selection;
       stack[stack_index + 1] = right_index;
       pdfs_node_selection[stack_index + 1] = pdf_node_selection;
       stack_index++;
-      split_count++;
       continue;
     }
 
@@ -579,22 +575,24 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
    * find the probability of selecting the target light. */
   const int stack_size = 32;
   int stack[stack_size];
+  int tree_depth[stack_size];
   float pdfs[stack_size];
   int stack_index = 0;
   stack[0] = 0;
+  tree_depth[0] = 0;
   pdfs[0] = 1.0f;
-
-  int split_count = 0;
 
   float light_tree_pdf = 0.0f;
   float light_leaf_pdf = 0.0f;
   float total_weight = 0.0f;
   float target_weight = 0.0f;
 
+  uint bit_trail_mask = 0;
   uint bit_trail = kleaf->bit_trail;
   while (stack_index >= 0) {
     const float pdf = pdfs[stack_index];
     const int index = stack[stack_index];
+    const int depth = tree_depth[stack_index];
     const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
 
     if (knode->child_index <= 0) {
@@ -651,17 +649,21 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
      * We adaptively split if the variance is high enough. */
     const int left_index = index + 1;
     const int right_index = knode->child_index;
-    if (light_tree_should_split(kg, P, knode) && split_count < 8 && stack_index < stack_size - 1) {
+    if (light_tree_should_split(kg, P, knode) && stack_index < stack_size - 1) {
       stack[stack_index] = left_index;
+      tree_depth[stack_index] = depth + 1;
       pdfs[stack_index] = pdf;
       stack[stack_index + 1] = right_index;
+      tree_depth[stack_index + 1] = depth + 1;
       pdfs[stack_index + 1] = pdf;
       stack_index++;
-      split_count++;
       continue;
     }
 
-    /* If we don't split, the bit trail determines whether we go left or right. */
+    /* If we don't split, and the bit trail to the current node is identical to the bit trail to
+       the target leaf up to the given depth, then we continue traversing down the path towards the
+       target leaf, otherwise we pick a random branch. */
+
     const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
     const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes,
                                                                      right_index);
@@ -677,15 +679,36 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
     }
     float left_probability = left_importance / (left_importance + right_importance);
 
-    if (bit_trail & 1) {
-      stack[stack_index] = right_index;
-      pdfs[stack_index] = pdf * (1.0f - left_probability);
+    /* TODO: using both the bit trail and an estimator for the pdf may be wrong,
+     * but so far seemed to converge to the correct result. Needs to be revisited. */
+    bit_trail_mask = 0;
+    for (int i = 0; i < depth; i++) {
+      bit_trail_mask = bit_trail_mask | (1U << i);
+    }
+
+    if (((bit_trail & bit_trail_mask) == knode->bit_trail)) {
+      if ((bit_trail >> depth) & 1) {
+        stack[stack_index] = right_index;
+        pdfs[stack_index] = pdf * (1.0f - left_probability);
+      }
+      else {
+        stack[stack_index] = left_index;
+        pdfs[stack_index] = pdf * left_probability;
+      }
     }
     else {
-      stack[stack_index] = left_index;
-      pdfs[stack_index] = pdf * left_probability;
+      if (randu <= left_probability) {
+        stack[stack_index] = left_index;
+        randu = randu / left_probability;
+        pdfs[stack_index] = pdf * left_probability;
+      }
+      else {
+        stack[stack_index] = right_index;
+        randu = (randu - left_probability) / (1.0f - left_probability);
+        pdfs[stack_index] = pdf * (1.0f - left_probability);
+      }
     }
-    bit_trail = bit_trail >> 1;
+    tree_depth[stack_index] = depth + 1;
   }
 
   pdf *= light_leaf_pdf * light_tree_pdf * target_weight / total_weight;

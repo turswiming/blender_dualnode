@@ -119,7 +119,7 @@ struct LightTreeBuildNode {
                  float e,
                  float e_var,
                  uint bits);
-  void init_interior(LightTreeBuildNode *c0, LightTreeBuildNode *c1);
+  void init_interior(LightTreeBuildNode *c0, LightTreeBuildNode *c1, uint bits);
 };
 
 /* Packed Light Tree Node
