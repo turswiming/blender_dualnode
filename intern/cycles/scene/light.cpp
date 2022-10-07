@@ -521,9 +521,9 @@ void LightManager::device_update_distribution(Device *device,
       /* Lights in this group are either a background or distant light. */
       light_tree_distant_group[index].prim_id = ~prim.prim_id;
 
-      float energy = 0.0f;
+      float strength = 0.0f;
       if (light->light_type == LIGHT_BACKGROUND) {
-        energy = average_background_energy(device, dscene, progress, scene, light);
+        strength = average_background_energy(device, dscene, progress, scene, light);
 
         /* We can set an arbitrary direction for the background light. */
         light_bounds.axis[0] = 0.0f;
@@ -534,7 +534,7 @@ void LightManager::device_update_distribution(Device *device,
         light_bounds.theta_o = M_PI_F;
       }
       else {
-        energy = prim.calculate_energy(scene);
+        strength = prim.calculate_energy(scene);
         for (int i = 0; i < 3; i++) {
           light_bounds.axis[i] = -light->dir[i];
         }
@@ -546,7 +546,10 @@ void LightManager::device_update_distribution(Device *device,
         light_tree_distant_group[index].direction[i] = light_bounds.axis[i];
       }
       light_tree_distant_group[index].bounding_radius = light_bounds.theta_o;
-
+      /* We multiply the strength of distance lights by 4pi so it more closely matches the
+       * energy output of other light types.
+       * TODO: validate if this is correct*/
+      float energy = strength * M_4PI_F;
       light_tree_distant_group[index].energy = energy;
       light_array[~prim.prim_id] = index;
 
