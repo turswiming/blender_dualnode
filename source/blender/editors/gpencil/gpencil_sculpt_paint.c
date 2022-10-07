@@ -1836,6 +1836,9 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
   bGPDlayer *gpl_active = BKE_gpencil_layer_active_get(gpd);
   Material *mat_active = BKE_gpencil_material(ob, ob->actcol);
 
+  /* By default use active values. */
+  bGPDlayer *gpl_active_stroke = gpl_active;
+  Material *mat_active_stroke = mat_active;
   /* Find nearest stroke to find the layer and material. */
   if (is_masking_layer_stroke || is_masking_material_stroke) {
     bGPDlayer *gpl_near = NULL;
@@ -1843,10 +1846,10 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
     get_nearest_stroke_to_brush(gso, mval_i, &gpl_near, &gps_near);
     if (gps_near != NULL) {
       if (is_masking_layer_stroke) {
-        gpl_active = gpl_near;
+        gpl_active_stroke = gpl_near;
       }
       if (is_masking_material_stroke) {
-        mat_active = BKE_object_material_get(ob, gps_near->mat_nr + 1);
+        mat_active_stroke = BKE_object_material_get(ob, gps_near->mat_nr + 1);
       }
     }
   }
@@ -1873,13 +1876,26 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
           continue;
         }
 
-        /* Layer Auto-Masking. */
-        if ((is_masking_layer_stroke || is_masking_layer_active) && (gpl == gpl_active)) {
+        /* Stroke Layer Auto-Masking. */
+        if (is_masking_layer_stroke && (gpl == gpl_active_stroke)) {
           BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
           continue;
         }
-        /* Material Auto-Masking. */
-        if (is_masking_material_stroke || is_masking_material_active) {
+        /* Active Layer Auto-Masking. */
+        if (is_masking_layer_active && (gpl == gpl_active)) {
+          BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
+          continue;
+        }
+        /* Stroke Material Auto-Masking. */
+        if (is_masking_material_stroke) {
+          Material *mat = BKE_object_material_get(ob, gps->mat_nr + 1);
+          if (mat == mat_active_stroke) {
+            BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
+            continue;
+          }
+        }
+        /* Active Material Auto-Masking. */
+        if (is_masking_material_active) {
           Material *mat = BKE_object_material_get(ob, gps->mat_nr + 1);
           if (mat == mat_active) {
             BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
