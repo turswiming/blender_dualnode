@@ -129,7 +129,6 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
     float pdf = triangle_light_pdf(kg, sd, t);
     if (kernel_data.integrator.use_light_tree) {
       float3 ray_P = INTEGRATOR_STATE(state, ray, P);
-      const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
       const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
       uint lookup_offset = kernel_data_fetch(object_lookup_offset, sd->object);
       uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
