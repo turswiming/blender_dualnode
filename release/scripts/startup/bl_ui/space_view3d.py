@@ -7473,8 +7473,9 @@ class VIEW3D_PT_gpencil_sculpt_automasking(Panel):
         col.prop(tool_settings.gpencil_sculpt, "use_automasking_stroke", text="Stroke")
         col.prop(tool_settings.gpencil_sculpt, "use_automasking_layer_stroke", text="Layer")
         col.prop(tool_settings.gpencil_sculpt, "use_automasking_material_stroke", text="Material")
-        col.prop(tool_settings.gpencil_sculpt, "use_automasking_layer_active", text="Layer Active")
-        col.prop(tool_settings.gpencil_sculpt, "use_automasking_material_active", text="Material Active")
+        col.separator()
+        col.prop(tool_settings.gpencil_sculpt, "use_automasking_layer_active", text="Active Layer")
+        col.prop(tool_settings.gpencil_sculpt, "use_automasking_material_active", text="Active Material")
 
 
 class VIEW3D_PT_gpencil_sculpt_context_menu(Panel):
