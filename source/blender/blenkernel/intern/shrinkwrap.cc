@@ -61,7 +61,8 @@ struct ShrinkwrapCalcData {
 
   MVert *vert; /* Array of verts being projected. */
   const float (*vert_normals)[3];
-  float (*vertexCos)[3]; /* vertexs being shrinkwraped */
+  /* Vertices being shrink-wrapped. */
+  float (*vertexCos)[3];
   int numVerts;
 
   const MDeformVert *dvert; /* Pointer to mdeform array */
@@ -198,7 +199,7 @@ static ShrinkwrapBoundaryData *shrinkwrap_build_boundary_data(Mesh *mesh)
 
   /* Count faces per edge (up to 2). */
   char *edge_mode = static_cast<char *>(
-      MEM_calloc_arrayN((size_t)mesh->totedge, sizeof(char), __func__));
+      MEM_calloc_arrayN(size_t(mesh->totedge), sizeof(char), __func__));
 
   for (int i = 0; i < mesh->totloop; i++) {
     uint eidx = mloop[i].e;
@@ -257,7 +258,7 @@ static ShrinkwrapBoundaryData *shrinkwrap_build_boundary_data(Mesh *mesh)
 
   /* Find boundary vertices and build a mapping table for compact storage of data. */
   int *vert_boundary_id = static_cast<int *>(
-      MEM_calloc_arrayN((size_t)mesh->totvert, sizeof(int), __func__));
+      MEM_calloc_arrayN(size_t(mesh->totvert), sizeof(int), __func__));
 
   for (int i = 0; i < mesh->totedge; i++) {
     if (edge_mode[i]) {
@@ -271,7 +272,7 @@ static ShrinkwrapBoundaryData *shrinkwrap_build_boundary_data(Mesh *mesh)
   uint num_boundary_verts = 0;
 
   for (int i = 0; i < mesh->totvert; i++) {
-    vert_boundary_id[i] = (vert_boundary_id[i] != 0) ? (int)num_boundary_verts++ : -1;
+    vert_boundary_id[i] = (vert_boundary_id[i] != 0) ? int(num_boundary_verts++) : -1;
   }
 
   data->vert_boundary_id = vert_boundary_id;
@@ -332,8 +333,8 @@ void BKE_shrinkwrap_compute_boundary_data(Mesh *mesh)
 /**
  * Shrink-wrap to the nearest vertex
  *
- * it builds a #BVHTree of vertices we can attach to and then
- * for each vertex performs a nearest vertex search on the tree
+ * it builds a BVH-tree of vertices we can attach to and then
+ * for each vertex performs a nearest vertex search on the tree.
  */
 static void shrinkwrap_calc_nearest_vertex_cb_ex(void *__restrict userdata,
                                                  const int i,
@@ -535,12 +536,12 @@ static void shrinkwrap_calc_normal_projection_cb_ex(void *__restrict userdata,
 
   hit->index = -1;
 
-  /* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
+  /* TODO: we should use FLT_MAX here, but sweep-sphere code isn't prepared for that. */
   hit->dist = BVH_RAYCAST_DIST_MAX;
 
   bool is_aux = false;
 
-  /* Project over positive direction of axis */
+  /* Project over positive direction of axis. */
   if (calc->smd->shrinkOpts & MOD_SHRINKWRAP_PROJECT_ALLOW_POS_DIR) {
     if (aux_tree) {
       if (BKE_shrinkwrap_project_normal(0, tmp_co, tmp_no, 0.0, local2aux, aux_tree, hit)) {
@@ -1091,10 +1092,10 @@ void BKE_shrinkwrap_find_nearest_surface(ShrinkwrapTreeData *tree,
   }
 }
 
-/*
- * Shrinkwrap moving vertexs to the nearest surface point on the target
+/**
+ * Shrink-wrap moving vertices to the nearest surface point on the target.
  *
- * it builds a BVHTree from the target mesh and then performs a
+ * It builds a #BVHTree from the target mesh and then performs a
  * NN matches for each vertex
  */
 static void shrinkwrap_calc_nearest_surface_point_cb_ex(void *__restrict userdata,
@@ -1408,11 +1409,11 @@ void shrinkwrapModifier_deform(ShrinkwrapModifierData *smd,
   calc.aux_target = DEG_get_evaluated_object(ctx->depsgraph, smd->auxTarget);
 
   if (mesh != nullptr && smd->shrinkType == MOD_SHRINKWRAP_PROJECT) {
-    /* Setup arrays to get vertexs positions, normals and deform weights */
+    /* Setup arrays to get vertices position, normals and deform weights. */
     calc.vert = BKE_mesh_verts_for_write(mesh);
     calc.vert_normals = BKE_mesh_vertex_normals_ensure(mesh);
 
-    /* Using vertexs positions/normals as if a subsurface was applied */
+    /* Using vertices positions/normals as if a subsurface was applied */
     if (smd->subsurfLevels) {
       SubsurfModifierData ssmd = {{nullptr}};
       ssmd.subdivType = ME_CC_SUBSURF;  /* catmull clark */
