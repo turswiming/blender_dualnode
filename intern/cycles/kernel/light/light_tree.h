@@ -233,6 +233,7 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  const ccl_global KernelLightTreeNode *knode,
                                                  ccl_private float *pdf_factor)
 {
+  /* TODO: use single loop over prims to avoid computing light_tree_emitter_importance twice? */
   float total_emitter_importance = 0.0f;
   for (int i = 0; i < knode->num_prims; i++) {
     const int prim_index = -knode->child_index + i;
@@ -244,13 +245,12 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   }
 
   /* Once we have the total importance, we can normalize the CDF and sample it. */
-  const float inv_total_importance = 1.0f / total_emitter_importance;
   float emitter_cdf = 0.0f;
   for (int i = 0; i < knode->num_prims; i++) {
     const int prim_index = -knode->child_index + i;
     /* to-do: is there any way to cache these values, so that recalculation isn't needed? */
-    const float emitter_pdf = light_tree_emitter_importance(kg, P, N, prim_index) *
-                              inv_total_importance;
+    const float emitter_pdf = light_tree_emitter_importance(kg, P, N, prim_index) /
+                              total_emitter_importance;
     if (*randu <= emitter_cdf + emitter_pdf) {
       *randu = (*randu - emitter_cdf) / emitter_pdf;
       *pdf_factor *= emitter_pdf;
@@ -259,8 +259,9 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
     emitter_cdf += emitter_pdf;
   }
 
-  /* This point should never be reached. */
-  assert(false);
+  /* TODO: change implementation so that even under precision issues, we always end
+   * up selecting a light and this can't happen? */
+  kernel_assert(false);
   return -1;
 }
 
@@ -464,16 +465,21 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
                                                  ccl_private LightSample *ls,
                                                  ccl_private float *pdf_factor)
 {
+  /* TODO: do single loop over lights to avoid computing importance twice? */
+
   const int num_distant_lights = kernel_data.integrator.num_distant_lights;
   float total_importance = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
     total_importance += light_tree_distant_light_importance(kg, N, i);
   }
-  const float inv_total_importance = 1.0f / total_importance;
+
+  if (total_importance == 0.0f) {
+    return -1;
+  }
 
   float light_cdf = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    const float light_pdf = light_tree_distant_light_importance(kg, N, i) * inv_total_importance;
+    const float light_pdf = light_tree_distant_light_importance(kg, N, i) / total_importance;
     if (*randu <= light_cdf + light_pdf) {
       *randu = (*randu - light_cdf) / light_pdf;
       *pdf_factor *= light_pdf;
@@ -483,7 +489,7 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
       const int lamp = kdistant->prim_id;
 
       if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
-        return false;
+        return -1;
       }
 
       return light_sample<in_volume_segment>(kg, lamp, *randu, randv, P, path_flag, ls);
@@ -491,8 +497,9 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
     light_cdf += light_pdf;
   }
 
-  /* We should never reach this point. */
-  assert(false);
+  /* TODO: change implementation so that even under precision issues, we always end
+   * up selecting a light and this can't happen? */
+  kernel_assert(false);
   return -1;
 }
 
@@ -508,7 +515,7 @@ ccl_device float light_tree_pdf(
     light_tree_importance = light_tree_cluster_importance(kg, P, N, kroot);
   }
   const float total_group_importance = light_tree_importance + distant_light_importance;
-  assert(total_group_importance != 0.0f);
+  kernel_assert(total_group_importance != 0.0f);
   float pdf = light_tree_importance / total_group_importance;
 
   const int emitter = (prim >= 0) ? kernel_data_fetch(triangle_to_tree, prim) :
@@ -652,7 +659,7 @@ ccl_device float distant_lights_pdf(KernelGlobals kg,
     light_tree_importance = light_tree_cluster_importance(kg, P, N, kroot);
   }
   const float total_group_importance = light_tree_importance + distant_light_importance;
-  assert(total_group_importance != 0.0f);
+  kernel_assert(total_group_importance != 0.0f);
   float pdf = distant_light_importance / total_group_importance;
 
   /* The light_to_tree array doubles as a lookup table for
