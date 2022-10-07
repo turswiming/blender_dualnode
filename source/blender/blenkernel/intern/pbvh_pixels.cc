@@ -174,6 +174,8 @@ static void split_pixel_node(PBVH *pbvh,
       continue;
     }
 
+    const MVert *mvert = BKE_pbvh_get_verts(pbvh);
+
     for (const PackedPixelRow &row : tile.pixel_rows) {
       UDIMTilePixels *tile1 = &data1->tiles[i];
       UDIMTilePixels *tile2 = &data2->tiles[i];
@@ -182,9 +184,9 @@ static void split_pixel_node(PBVH *pbvh,
 
       float verts[3][3];
 
-      copy_v3_v3(verts[0], mesh->mvert[tri.vert_indices[0]].co);
-      copy_v3_v3(verts[1], mesh->mvert[tri.vert_indices[1]].co);
-      copy_v3_v3(verts[2], mesh->mvert[tri.vert_indices[2]].co);
+      copy_v3_v3(verts[0], mvert[tri.vert_indices[0]].co);
+      copy_v3_v3(verts[1], mvert[tri.vert_indices[1]].co);
+      copy_v3_v3(verts[2], mvert[tri.vert_indices[2]].co);
 
       float2 delta = tri.delta_barycentric_coord_u;
       float2 uv1 = row.start_barycentric_coord;
