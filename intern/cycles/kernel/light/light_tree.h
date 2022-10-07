@@ -422,7 +422,6 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
 }
 
 ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
-                                                     const float3 P,
                                                      const float3 N,
                                                      const int index)
 {
@@ -468,13 +467,13 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
   const int num_distant_lights = kernel_data.integrator.num_distant_lights;
   float total_importance = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    total_importance += light_tree_distant_light_importance(kg, P, N, i);
+    total_importance += light_tree_distant_light_importance(kg, N, i);
   }
   const float inv_total_importance = 1.0f / total_importance;
 
   float light_cdf = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    const float light_pdf = light_tree_distant_light_importance(kg, P, N, i) *
+    const float light_pdf = light_tree_distant_light_importance(kg, N, i) *
                             inv_total_importance;
     if (*randu < light_cdf + light_pdf) {
       *randu = (*randu - light_cdf) / light_pdf;
@@ -503,7 +502,7 @@ ccl_device float light_tree_pdf(
     KernelGlobals kg, ConstIntegratorState state, const float3 P, const float3 N, const int prim)
 {
   float distant_light_importance = light_tree_distant_light_importance(
-      kg, P, N, kernel_data.integrator.num_distant_lights);
+      kg, N, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
@@ -647,7 +646,7 @@ ccl_device float distant_lights_pdf(KernelGlobals kg,
                                     const int prim)
 {
   float distant_light_importance = light_tree_distant_light_importance(
-      kg, P, N, kernel_data.integrator.num_distant_lights);
+      kg, N, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
@@ -665,7 +664,7 @@ ccl_device float distant_lights_pdf(KernelGlobals kg,
   float emitter_importance = 0.0f;
   float total_importance = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    float importance = light_tree_distant_light_importance(kg, P, N, i);
+    float importance = light_tree_distant_light_importance(kg, N, i);
     if (i == distant_light) {
       emitter_importance = importance;
     }
@@ -690,7 +689,7 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
   /* to-do: with weighted reservoir sampling, we can also try picking a sample from the distant
    * light group and compare it to the sample from the light tree. */
   float distant_light_importance = light_tree_distant_light_importance(
-      kg, P, N, kernel_data.integrator.num_distant_lights);
+      kg, N, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
