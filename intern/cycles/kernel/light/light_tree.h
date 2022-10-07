@@ -251,7 +251,7 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
     /* to-do: is there any way to cache these values, so that recalculation isn't needed? */
     const float emitter_pdf = light_tree_emitter_importance(kg, P, N, prim_index) *
                               inv_total_importance;
-    if (*randu < emitter_cdf + emitter_pdf) {
+    if (*randu <= emitter_cdf + emitter_pdf) {
       *randu = (*randu - emitter_cdf) / emitter_pdf;
       *pdf_factor *= emitter_pdf;
       return prim_index;
@@ -327,7 +327,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
       /* We compute the probability of switching to the new candidate sample,
        * otherwise we stick with the old one. */
       const float selection_probability = light_weight / total_weight;
-      if (*randu < selection_probability) {
+      if (*randu <= selection_probability) {
         *randu = *randu / selection_probability;
         current_light = selected_light;
         current_weight = light_weight;
@@ -371,7 +371,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     }
     float left_probability = left_importance / (left_importance + right_importance);
 
-    if (*randu < left_probability) {
+    if (*randu <= left_probability) {
       stack[stack_index] = left_index;
       *randu = *randu / left_probability;
       pdfs[stack_index] = pdf * left_probability;
@@ -473,9 +473,8 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
 
   float light_cdf = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    const float light_pdf = light_tree_distant_light_importance(kg, N, i) *
-                            inv_total_importance;
-    if (*randu < light_cdf + light_pdf) {
+    const float light_pdf = light_tree_distant_light_importance(kg, N, i) * inv_total_importance;
+    if (*randu <= light_cdf + light_pdf) {
       *randu = (*randu - light_cdf) / light_pdf;
       *pdf_factor *= light_pdf;
       ccl_global const KernelLightTreeDistantEmitter *kdistant = &kernel_data_fetch(
@@ -705,7 +704,7 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
 
   float pdf_factor = 1.0f;
   bool ret;
-  if (randu < light_tree_probability) {
+  if (randu <= light_tree_probability) {
     randu = randu / light_tree_probability;
     pdf_factor *= light_tree_probability;
     ret = light_tree_sample<false>(
