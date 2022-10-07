@@ -147,7 +147,7 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
   uiItemS(layout);
 
   for (const LibraryAsset &item : asset_items) {
-    uiLayout *row = uiLayoutRow(layout, false);
+    uiLayout *row = uiLayoutColumn(layout, false);
     PointerRNA file{
         &screen.id, &RNA_FileSelectEntry, const_cast<FileDirEntry *>(item.handle.file_data)};
     uiLayoutSetContextPointer(row, "active_file", &file);
@@ -164,7 +164,7 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
     const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(&child_item);
     PointerRNA path_ptr{
         &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
-    uiLayout *row = uiLayoutRow(layout, false);
+    uiLayout *row = uiLayoutColumn(layout, false);
     uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
     uiItemM(row, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
   });
@@ -228,7 +228,7 @@ static void add_root_catalogs_draw(const bContext *C, Menu *menu)
     const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(&item);
     PointerRNA path_ptr{
         &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
-    uiLayout *row = uiLayoutRow(layout, false);
+    uiLayout *row = uiLayoutColumn(layout, false);
     uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
     uiItemM(row, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
   });
@@ -270,7 +270,7 @@ void uiTemplateNodeAssetMenuItems(uiLayout *layout, bContext *C, const char *cat
   PointerRNA path_ptr{
       &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
   uiItemS(layout);
-  uiLayout *row = uiLayoutRow(layout, false);
+  uiLayout *row = uiLayoutColumn(layout, false);
   uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
   uiItemMContents(row, "NODE_MT_node_add_catalog_assets");
 }
