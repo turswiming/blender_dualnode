@@ -769,9 +769,11 @@ enum ShaderDataFlag {
   SD_TRANSPARENT = (1 << 9),
   /* BSDF requires LCG for evaluation. */
   SD_BSDF_NEEDS_LCG = (1 << 10),
+  /* BSDF has a transmissive component. */
+  SD_BSDF_HAS_TRANSMISSION = (1 << 11),
 
   SD_CLOSURE_FLAGS = (SD_EMISSION | SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSSRDF | SD_HOLDOUT |
-                      SD_EXTINCTION | SD_SCATTER | SD_BSDF_NEEDS_LCG),
+                      SD_EXTINCTION | SD_SCATTER | SD_BSDF_NEEDS_LCG | SD_BSDF_HAS_TRANSMISSION),
 
   /* Shader flags. */
 

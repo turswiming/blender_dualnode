@@ -35,6 +35,7 @@ ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
  * Both of the specialized functions obtain the necessary data before calling this function. */
 ccl_device float light_tree_node_importance(const float3 P,
                                             const float3 N,
+                                            const bool has_transmission,
                                             const float3 bbox_min,
                                             const float3 bbox_max,
                                             const float3 bcone_axis,
@@ -50,13 +51,8 @@ ccl_device float light_tree_node_importance(const float3 P,
   const float distance_squared = fmaxf(0.25f * len_squared(centroid - bbox_max),
                                        len_squared(centroid - P));
 
-  /* to-do: should there be a different importance calculations for different surfaces?
-   * opaque surfaces could just return 0 importance in this case. */
   const float theta = fast_acosf(dot(bcone_axis, -point_to_centroid));
   float theta_i = fast_acosf(dot(point_to_centroid, N));
-  if (theta_i > M_PI_2_F) {
-    theta_i = M_PI_F - theta_i;
-  }
   const float theta_u = light_tree_bounding_box_angle(bbox_min, bbox_max, P, point_to_centroid);
 
   /* Avoid using cosine until needed. */
@@ -64,8 +60,18 @@ ccl_device float light_tree_node_importance(const float3 P,
   if (theta_prime >= theta_e) {
     return 0.0f;
   }
-  const float cos_theta_prime = fast_cosf(theta_prime);
 
+  /* If the node is guaranteed to be behind the surface we're sampling, and the surface is opaque,
+   * then we can give the node an importance of 0 as it contributes nothing to the surface. */
+  if (!has_transmission && (theta_i - theta_u > M_PI_2_F)) {
+    return 0.0f;
+  }
+
+  if (theta_i > M_PI_2_F) {
+    theta_i = M_PI_F - theta_i;
+  }
+
+  const float cos_theta_prime = fast_cosf(theta_prime);
   float cos_theta_i_prime = 1.0f;
   if (theta_i - theta_u > 0.0f) {
     cos_theta_i_prime = fabsf(fast_cosf(theta_i - theta_u));
@@ -147,6 +153,7 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
 ccl_device float light_tree_emitter_importance(KernelGlobals kg,
                                                const float3 P,
                                                const float3 N,
+                                               const bool has_transmission,
                                                int emitter_index)
 {
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
@@ -162,6 +169,7 @@ ccl_device float light_tree_emitter_importance(KernelGlobals kg,
 
   return light_tree_node_importance(P,
                                     N,
+                                    has_transmission,
                                     bbox_min,
                                     bbox_max,
                                     bcone_axis,
@@ -213,6 +221,7 @@ ccl_device bool light_tree_should_split(KernelGlobals kg,
 ccl_device float light_tree_cluster_importance(KernelGlobals kg,
                                                const float3 P,
                                                const float3 N,
+                                               const bool has_transmission,
                                                const ccl_global KernelLightTreeNode *knode)
 {
   const float3 bbox_min = make_float3(
@@ -222,14 +231,22 @@ ccl_device float light_tree_cluster_importance(KernelGlobals kg,
   const float3 bcone_axis = make_float3(
       knode->bounding_cone_axis[0], knode->bounding_cone_axis[1], knode->bounding_cone_axis[2]);
 
-  return light_tree_node_importance(
-      P, N, bbox_min, bbox_max, bcone_axis, knode->theta_o, knode->theta_e, knode->energy);
+  return light_tree_node_importance(P,
+                                    N,
+                                    has_transmission,
+                                    bbox_min,
+                                    bbox_max,
+                                    bcone_axis,
+                                    knode->theta_o,
+                                    knode->theta_e,
+                                    knode->energy);
 }
 
 ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  ccl_private float *randu,
                                                  const float3 P,
                                                  const float3 N,
+                                                 const bool has_transmission,
                                                  const ccl_global KernelLightTreeNode *knode,
                                                  ccl_private float *pdf_factor)
 {
@@ -237,7 +254,8 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   float total_emitter_importance = 0.0f;
   for (int i = 0; i < knode->num_prims; i++) {
     const int prim_index = -knode->child_index + i;
-    total_emitter_importance += light_tree_emitter_importance(kg, P, N, prim_index);
+    total_emitter_importance += light_tree_emitter_importance(
+        kg, P, N, has_transmission, prim_index);
   }
 
   if (total_emitter_importance == 0.0f) {
@@ -249,7 +267,8 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   for (int i = 0; i < knode->num_prims; i++) {
     const int prim_index = -knode->child_index + i;
     /* to-do: is there any way to cache these values, so that recalculation isn't needed? */
-    const float emitter_pdf = light_tree_emitter_importance(kg, P, N, prim_index) /
+    const float emitter_pdf = light_tree_emitter_importance(
+                                  kg, P, N, has_transmission, prim_index) /
                               total_emitter_importance;
     if (*randu <= emitter_cdf + emitter_pdf) {
       *randu = (*randu - emitter_cdf) / emitter_pdf;
@@ -273,10 +292,11 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                   ccl_private float *randu,
                                   const float randv,
                                   const float time,
-                                  const float3 N,
                                   const float3 P,
+                                  const float3 N,
+                                  const bool has_transmission,
+                                  const int path_flag,
                                   const int bounce,
-                                  const uint32_t path_flag,
                                   ccl_private LightSample *ls,
                                   ccl_private float *pdf_factor)
 {
@@ -311,7 +331,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     if (knode->child_index <= 0) {
       float light_probability = 1.0f;
       const int selected_light = light_tree_cluster_select_emitter(
-          kg, randu, P, N, knode, &light_probability);
+          kg, randu, P, N, has_transmission, knode, &light_probability);
 
       if (selected_light < 0) {
         stack_index--;
@@ -362,8 +382,9 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes,
                                                                      right_index);
 
-    const float left_importance = light_tree_cluster_importance(kg, P, N, left);
-    const float right_importance = light_tree_cluster_importance(kg, P, N, right);
+    const float left_importance = light_tree_cluster_importance(kg, P, N, has_transmission, left);
+    const float right_importance = light_tree_cluster_importance(
+        kg, P, N, has_transmission, right);
     const float total_importance = left_importance + right_importance;
 
     if (total_importance == 0.0f) {
@@ -406,9 +427,9 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
       return false;
     }
 
-    const int shader_flag = kemitter->mesh_light.shader_flag;
+    const int mesh_shader_flag = kemitter->mesh_light.shader_flag;
     triangle_light_sample<in_volume_segment>(kg, prim, object, *randu, randv, time, ls, P);
-    ls->shader |= shader_flag;
+    ls->shader |= mesh_shader_flag;
 
     return (ls->pdf > 0.0f);
   }
@@ -424,6 +445,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
 
 ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
                                                      const float3 N,
+                                                     const bool has_transmission,
                                                      const int index)
 {
   ccl_global const KernelLightTreeDistantEmitter *kdistant = &kernel_data_fetch(
@@ -435,15 +457,22 @@ ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
 
   const float3 light_axis = make_float3(
       kdistant->direction[0], kdistant->direction[1], kdistant->direction[2]);
-  const float theta = fast_acosf(dot(N, light_axis));
-  const float theta_i_prime = theta - kdistant->bounding_radius;
+  float theta_i = fast_acosf(dot(N, light_axis));
 
-  float cos_theta_i_prime = 1.0f;
-  if (theta_i_prime > M_PI_2_F) {
+  /* If the light is guaranteed to be behind the surface we're sampling, and the surface is opaque,
+   * then we can give the light an importance of 0 as it contributes nothing to the surface. */
+  if (!has_transmission && (theta_i - kdistant->bounding_radius > M_PI_2_F)) {
     return 0.0f;
   }
-  else if (theta - kdistant->bounding_radius > 0.0f) {
-    cos_theta_i_prime = fast_cosf(theta - kdistant->bounding_radius);
+
+  if (theta_i > M_PI_2_F) {
+    theta_i = M_PI_F - theta_i;
+  }
+
+  float cos_theta_i_prime = 1.0f;
+  const float theta_i_prime = theta_i - kdistant->bounding_radius;
+  if (theta_i_prime > 0.0f) {
+    cos_theta_i_prime = fast_cosf(theta_i_prime);
   }
 
   /* to-do: find a good value for this. */
@@ -458,10 +487,11 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
                                                  ccl_private float *randu,
                                                  const float randv,
                                                  const float time,
-                                                 const float3 N,
                                                  const float3 P,
+                                                 const float3 N,
+                                                 const bool has_transmission,
+                                                 const int path_flag,
                                                  const int bounce,
-                                                 const uint32_t path_flag,
                                                  ccl_private LightSample *ls,
                                                  ccl_private float *pdf_factor)
 {
@@ -470,7 +500,7 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
   const int num_distant_lights = kernel_data.integrator.num_distant_lights;
   float total_importance = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    total_importance += light_tree_distant_light_importance(kg, N, i);
+    total_importance += light_tree_distant_light_importance(kg, N, has_transmission, i);
   }
 
   if (total_importance == 0.0f) {
@@ -479,7 +509,8 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
 
   float light_cdf = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    const float light_pdf = light_tree_distant_light_importance(kg, N, i) / total_importance;
+    const float light_pdf = light_tree_distant_light_importance(kg, N, has_transmission, i) /
+                            total_importance;
     if (*randu <= light_cdf + light_pdf) {
       *randu = (*randu - light_cdf) / light_pdf;
       *pdf_factor *= light_pdf;
@@ -504,15 +535,22 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
 }
 
 /* We need to be able to find the probability of selecting a given light for MIS. */
-ccl_device float light_tree_pdf(
-    KernelGlobals kg, ConstIntegratorState state, const float3 P, const float3 N, const int prim)
+ccl_device float light_tree_pdf(KernelGlobals kg,
+                                ConstIntegratorState state,
+                                const float3 P,
+                                const float3 N,
+                                const int path_flag,
+                                const int prim)
 {
+  /* TODO: this is wrong, needs to also be true if the previous bounce had a transmission BSDF but
+   * sampled a reflection BSDF. */
+  const bool has_transmission = (path_flag & PATH_RAY_TRANSMIT);
   float distant_light_importance = light_tree_distant_light_importance(
-      kg, N, kernel_data.integrator.num_distant_lights);
+      kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
-    light_tree_importance = light_tree_cluster_importance(kg, P, N, kroot);
+    light_tree_importance = light_tree_cluster_importance(kg, P, N, has_transmission, kroot);
   }
   const float total_group_importance = light_tree_importance + distant_light_importance;
   kernel_assert(total_group_importance != 0.0f);
@@ -567,7 +605,8 @@ ccl_device float light_tree_pdf(
         float total_emitter_importance = 0.0f;
         for (int i = 0; i < knode->num_prims; i++) {
           const int leaf_emitter = -knode->child_index + i;
-          float light_importance = light_tree_emitter_importance(kg, P, N, leaf_emitter);
+          float light_importance = light_tree_emitter_importance(
+              kg, P, N, has_transmission, leaf_emitter);
           if (leaf_emitter == emitter) {
             selected_light = leaf_emitter;
             light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
@@ -582,7 +621,7 @@ ccl_device float light_tree_pdf(
       else {
         float light_probability = 1.0f;
         selected_light = light_tree_cluster_select_emitter(
-            kg, &randu, P, N, knode, &light_probability);
+            kg, &randu, P, N, has_transmission, knode, &light_probability);
         light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
       }
 
@@ -621,8 +660,9 @@ ccl_device float light_tree_pdf(
     const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes,
                                                                      right_index);
 
-    const float left_importance = light_tree_cluster_importance(kg, P, N, left);
-    const float right_importance = light_tree_cluster_importance(kg, P, N, right);
+    const float left_importance = light_tree_cluster_importance(kg, P, N, has_transmission, left);
+    const float right_importance = light_tree_cluster_importance(
+        kg, P, N, has_transmission, right);
     const float total_importance = left_importance + right_importance;
 
     if (total_importance == 0.0f) {
@@ -646,17 +686,18 @@ ccl_device float light_tree_pdf(
   return pdf;
 }
 
-ccl_device float distant_lights_pdf(KernelGlobals kg,
-                                    const float3 P,
-                                    const float3 N,
-                                    const int prim)
+ccl_device float distant_lights_pdf(
+    KernelGlobals kg, const float3 P, const float3 N, const int path_flag, const int prim)
 {
+  /* TODO: this is wrong, needs to also be true if the previous bounce had a transmission BSDF but
+   * sampled a reflection BSDF. */
+  const bool has_transmission = (path_flag & PATH_RAY_TRANSMIT);
   float distant_light_importance = light_tree_distant_light_importance(
-      kg, N, kernel_data.integrator.num_distant_lights);
+      kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
-    light_tree_importance = light_tree_cluster_importance(kg, P, N, kroot);
+    light_tree_importance = light_tree_cluster_importance(kg, P, N, has_transmission, kroot);
   }
   const float total_group_importance = light_tree_importance + distant_light_importance;
   kernel_assert(total_group_importance != 0.0f);
@@ -670,7 +711,7 @@ ccl_device float distant_lights_pdf(KernelGlobals kg,
   float emitter_importance = 0.0f;
   float total_importance = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    float importance = light_tree_distant_light_importance(kg, N, i);
+    float importance = light_tree_distant_light_importance(kg, N, has_transmission, i);
     if (i == distant_light) {
       emitter_importance = importance;
     }
@@ -688,18 +729,20 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
                                                 const float time,
                                                 const float3 P,
                                                 const float3 N,
+                                                const int shader_flags,
                                                 const int bounce,
                                                 const uint32_t path_flag,
                                                 ccl_private LightSample *ls)
 {
+  const bool has_transmission = (shader_flags & SD_BSDF_HAS_TRANSMISSION);
   /* to-do: with weighted reservoir sampling, we can also try picking a sample from the distant
    * light group and compare it to the sample from the light tree. */
   float distant_light_importance = light_tree_distant_light_importance(
-      kg, N, kernel_data.integrator.num_distant_lights);
+      kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
-    light_tree_importance = light_tree_cluster_importance(kg, P, N, kroot);
+    light_tree_importance = light_tree_cluster_importance(kg, P, N, has_transmission, kroot);
   }
   const float total_importance = light_tree_importance + distant_light_importance;
 
@@ -714,14 +757,34 @@ ccl_device bool light_tree_sample_from_position(KernelGlobals kg,
   if (randu <= light_tree_probability) {
     randu = randu / light_tree_probability;
     pdf_factor *= light_tree_probability;
-    ret = light_tree_sample<false>(
-        kg, rng_state, &randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
+    ret = light_tree_sample<false>(kg,
+                                   rng_state,
+                                   &randu,
+                                   randv,
+                                   time,
+                                   P,
+                                   N,
+                                   has_transmission,
+                                   path_flag,
+                                   bounce,
+                                   ls,
+                                   &pdf_factor);
   }
   else {
     randu = (randu - light_tree_probability) / (1.0f - light_tree_probability);
     pdf_factor *= (1.0f - light_tree_probability);
-    ret = light_tree_sample_distant_lights<false>(
-        kg, rng_state, &randu, randv, time, N, P, bounce, path_flag, ls, &pdf_factor);
+    ret = light_tree_sample_distant_lights<false>(kg,
+                                                  rng_state,
+                                                  &randu,
+                                                  randv,
+                                                  time,
+                                                  P,
+                                                  N,
+                                                  has_transmission,
+                                                  path_flag,
+                                                  bounce,
+                                                  ls,
+                                                  &pdf_factor);
   }
 
   ls->pdf *= pdf_factor;

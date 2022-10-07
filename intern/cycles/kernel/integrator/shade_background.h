@@ -69,9 +69,9 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
   bool eval_background = true;
   float transparent = 0.0f;
 
+  int path_flag = INTEGRATOR_STATE(state, path, flag);
   const bool is_transparent_background_ray = kernel_data.background.transparent &&
-                                             (INTEGRATOR_STATE(state, path, flag) &
-                                              PATH_RAY_TRANSPARENT_BACKGROUND);
+                                             (path_flag & PATH_RAY_TRANSPARENT_BACKGROUND);
 
   if (is_transparent_background_ray) {
     transparent = average(INTEGRATOR_STATE(state, path, throughput));
@@ -125,7 +125,7 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
       float pdf = background_light_pdf(kg, ray_P, ray_D);
       if (kernel_data.integrator.use_light_tree) {
         const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-        pdf *= distant_lights_pdf(kg, ray_P, N, kernel_data.background.light_index);
+        pdf *= distant_lights_pdf(kg, ray_P, N, path_flag, kernel_data.background.light_index);
       }
       mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
     }
@@ -191,7 +191,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
         if (kernel_data.integrator.use_light_tree) {
           const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
           const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-          ls.pdf *= distant_lights_pdf(kg, ray_P, N, lamp);
+          ls.pdf *= distant_lights_pdf(kg, ray_P, N, path_flag, lamp);
         }
         mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
       }

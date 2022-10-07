@@ -132,7 +132,8 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
       const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
       uint lookup_offset = kernel_data_fetch(object_lookup_offset, sd->object);
       uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
-      pdf *= light_tree_pdf(kg, state, ray_P, N, sd->prim - prim_offset + lookup_offset);
+      pdf *= light_tree_pdf(
+          kg, state, ray_P, N, path_flag, sd->prim - prim_offset + lookup_offset);
     }
     mis_weight = light_sample_mis_weight_forward(kg, bsdf_pdf, pdf);
   }
@@ -170,6 +171,7 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
                                            sd->time,
                                            sd->P,
                                            sd->N,
+                                           sd->flag,
                                            bounce,
                                            path_flag,
                                            &ls)) {
