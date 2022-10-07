@@ -698,7 +698,9 @@ class Instance {
       material_override = Material(shading.single_color);
     }
     else if (material_subtype == eMaterialSubType::ATTRIBUTE) {
-      // TODO(pragma37)
+      /* TODO(pragma37): Don't use override, check per object if it has color attribute */
+      /* When r == -1.0 the shader uses the vertex color */
+      material_override = Material(float3(-1.0f, 1.0f, 1.0f));
     }
 
     switch (shading.light) {
@@ -830,6 +832,10 @@ class Instance {
 
   GPUBatch *geometry_get(ObjectRef &ob_ref)
   {
+    if (material_subtype == eMaterialSubType::ATTRIBUTE) {
+      /* TODO(pragma37): Should check for vertex paint mode as well */
+      return DRW_cache_mesh_surface_vertpaint_get(ob_ref.object);
+    }
     return DRW_cache_object_surface_get(ob_ref.object);
   }
 
