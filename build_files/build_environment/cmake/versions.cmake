@@ -16,11 +16,20 @@
 #
 # ***** END GPL LICENSE BLOCK *****
 
+# CPE's are used to identify dependencies, for more information on what they
+# are please see https://nvd.nist.gov/products/cpe
+#
+# We use them in combination with cve-bin-tool to scan for known security issues.
+#
+# Not all of our dependencies are currently in the nvd database so not all
+# dependencies have one assigned.
+
 set(ZLIB_VERSION 1.2.11)
 set(ZLIB_URI https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz)
 set(ZLIB_HASH 1c9f62f0778697a09d36121ead88e08e)
 set(ZLIB_HASH_TYPE MD5)
 set(ZLIB_FILE zlib-${ZLIB_VERSION}.tar.gz)
+set(ZLIB_CPE "cpe:2.3:a:zlib:zlib:${ZLIB_VERSION}:*:*:*:*:*:*:*")
 
 set(OPENAL_VERSION 1.20.1)
 set(OPENAL_URI http://openal-soft.org/openal-releases/openal-soft-${OPENAL_VERSION}.tar.bz2)
@@ -33,12 +42,14 @@ set(PNG_URI http://prdownloads.sourceforge.net/libpng/libpng-${PNG_VERSION}.tar.
 set(PNG_HASH 505e70834d35383537b6491e7ae8641f1a4bed1876dbfe361201fc80868d88ca)
 set(PNG_HASH_TYPE SHA256)
 set(PNG_FILE libpng-${PNG_VERSION}.tar.xz)
+set(PNG_CPE "cpe:2.3:a:libpng:libpng:${PNG_VERSION}:*:*:*:*:*:*:*")
 
 set(JPEG_VERSION 2.0.4)
 set(JPEG_URI https://github.com/libjpeg-turbo/libjpeg-turbo/archive/${JPEG_VERSION}.tar.gz)
 set(JPEG_HASH 44c43e4a9fb352f47090804529317c88)
 set(JPEG_HASH_TYPE MD5)
 set(JPEG_FILE libjpeg-turbo-${JPEG_VERSION}.tar.gz)
+set(JPEG_CPE "cpe:2.3:a:d.r.commander:libjpeg-turbo:${JPEG_VERSION}:*:*:*:*:*:*:*")
 
 set(BOOST_VERSION 1.73.0)
 set(BOOST_VERSION_NODOTS 1_73_0)
@@ -47,6 +58,7 @@ set(BOOST_URI https://dl.bintray.com/boostorg/release/${BOOST_VERSION}/source/bo
 set(BOOST_HASH 4036cd27ef7548b8d29c30ea10956196)
 set(BOOST_HASH_TYPE MD5)
 set(BOOST_FILE boost_${BOOST_VERSION_NODOTS}.tar.gz)
+set(BOOST_CPE "cpe:2.3:a:boost:boost:${BOOST_VERSION}:*:*:*:*:*:*:*")
 
 # Using old version as recommended by OpenVDB build documentation.
 set(BLOSC_VERSION 1.5.0)
@@ -54,6 +66,7 @@ set(BLOSC_URI https://github.com/Blosc/c-blosc/archive/v${BLOSC_VERSION}.tar.gz)
 set(BLOSC_HASH 6e4a49c8c06f05aa543f3312cfce3d55)
 set(BLOSC_HASH_TYPE MD5)
 set(BLOSC_FILE blosc-${BLOSC_VERSION}.tar.gz)
+set(BLOSC_CPE "cpe:2.3:a:c-blosc2_project:c-blosc2:${BLOSC_VERSION}:*:*:*:*:*:*:*")
 
 set(PTHREADS_VERSION 3.0.0)
 set(PTHREADS_URI http://prdownloads.sourceforge.net/pthreads4w/pthreads4w-code-v${PTHREADS_VERSION}.zip)
@@ -66,6 +79,7 @@ set(OPENEXR_URI https://github.com/AcademySoftwareFoundation/openexr/archive/v${
 set(OPENEXR_HASH 85e8a979092c9055d10ed103062d31a0)
 set(OPENEXR_HASH_TYPE MD5)
 set(OPENEXR_FILE openexr-${OPENEXR_VERSION}.tar.gz)
+set(OPENEXR_CPE "cpe:2.3:a:openexr:openexr:${OPENEXR_VERSION}:*:*:*:*:*:*:*")
 
 if(WIN32)
   # Openexr started appending _d on its own so now
@@ -88,6 +102,7 @@ set(FREETYPE_URI http://prdownloads.sourceforge.net/freetype/freetype-${FREETYPE
 set(FREETYPE_HASH b1cb620e4c875cd4d1bfa04945400945)
 set(FREETYPE_HASH_TYPE MD5)
 set(FREETYPE_FILE freetype-${FREETYPE_VERSION}.tar.gz)
+SET(FREETYPE_CPE "cpe:2.3:a:freetype:freetype:${FREETYPE_VERSION}:*:*:*:*:*:*:*")
 
 set(GLEW_VERSION 1.13.0)
 set(GLEW_URI http://prdownloads.sourceforge.net/glew/glew/${GLEW_VERSION}/glew-${GLEW_VERSION}.tgz)
@@ -106,6 +121,7 @@ set(ALEMBIC_URI https://github.com/alembic/alembic/archive/${ALEMBIC_VERSION}.ta
 set(ALEMBIC_HASH effcc86e42fe6605588e3de57bde6677)
 set(ALEMBIC_HASH_TYPE MD5)
 set(ALEMBIC_FILE alembic-${ALEMBIC_VERSION}.tar.gz)
+SET(FREETYPE_CPE "cpe:2.3:a:freetype:freetype:${FREETYPE_VERSION}:*:*:*:*:*:*:*")
 
 # hash is for 3.1.2
 set(GLFW_GIT_UID 30306e54705c3adae9fe082c816a3be71963485c)
@@ -139,6 +155,7 @@ set(SDL_URI https://www.libsdl.org/release/SDL2-${SDL_VERSION}.tar.gz)
 set(SDL_HASH 783b6f2df8ff02b19bb5ce492b99c8ff)
 set(SDL_HASH_TYPE MD5)
 set(SDL_FILE SDL2-${SDL_VERSION}.tar.gz)
+set(SDL_CPE "cpe:2.3:a:libsdl:sdl:${SDL_VERSION}:*:*:*:*:*:*:*")
 
 set(OPENCOLLADA_VERSION v1.6.68)
 set(OPENCOLLADA_URI https://github.com/KhronosGroup/OpenCOLLADA/archive/${OPENCOLLADA_VERSION}.tar.gz)
@@ -177,6 +194,7 @@ else()
   set(OPENMP_HASH_TYPE MD5)
   set(OPENMP_FILE openmp-${LLVM_VERSION}.src.tar.xz)
 endif()
+set(LLVM_CPE "cpe:2.3:a:llvm:compiler:${LLVM_VERSION}:*:*:*:*:*:*:*")
 
 set(OPENIMAGEIO_VERSION 2.1.15.0)
 set(OPENIMAGEIO_URI https://github.com/OpenImageIO/oiio/archive/Release-${OPENIMAGEIO_VERSION}.tar.gz)
@@ -189,6 +207,7 @@ set(TIFF_URI http://download.osgeo.org/libtiff/tiff-${TIFF_VERSION}.tar.gz)
 set(TIFF_HASH 2165e7aba557463acc0664e71a3ed424)
 set(TIFF_HASH_TYPE MD5)
 set(TIFF_FILE tiff-${TIFF_VERSION}.tar.gz)
+set(TIFF_CPE "cpe:2.3:a:libtiff:libtiff:${TIFF_VERSION}:*:*:*:*:*:*:*")
 
 set(OSL_VERSION 1.11.10.0)
 set(OSL_URI https://github.com/imageworks/OpenShadingLanguage/archive/Release-${OSL_VERSION}.tar.gz)
@@ -203,12 +222,15 @@ set(PYTHON_URI https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTH
 set(PYTHON_HASH f0dc9000312abeb16de4eccce9a870ab)
 set(PYTHON_HASH_TYPE MD5)
 set(PYTHON_FILE Python-${PYTHON_VERSION}.tar.xz)
+set(PYTHON_CPE "cpe:2.3:a:python:python:${PYTHON_VERSION}:-:*:*:*:*:*:*")
 
-set(TBB_VERSION 2020_U2)
+set(TBB_YEAR 2020)
+set(TBB_VERSION ${TBB_YEAR}_U2)
 set(TBB_URI https://github.com/oneapi-src/oneTBB/archive/${TBB_VERSION}.tar.gz)
 set(TBB_HASH 1b711ae956524855088df3bbf5ec65dc)
 set(TBB_HASH_TYPE MD5)
 set(TBB_FILE oneTBB-${TBB_VERSION}.tar.gz)
+set(TBB_CPE "cpe:2.3:a:intel:threading_building_blocks:${TBB_YEAR}:*:*:*:*:*:*:*")
 
 set(OPENVDB_VERSION 8.0.1)
 set(OPENVDB_URI https://github.com/AcademySoftwareFoundation/openvdb/archive/v${OPENVDB_VERSION}.tar.gz)
@@ -225,6 +247,7 @@ set(NANOVDB_FILE nano-vdb-${NANOVDB_GIT_UID}.tar.gz)
 set(IDNA_VERSION 2.10)
 set(CHARDET_VERSION 4.0.0)
 set(URLLIB3_VERSION 1.26.3)
+set(URLLIB3_CPE "cpe:2.3:a:urllib3:urllib3:${URLLIB3_VERSION}:*:*:*:*:*:*:*")
 set(CERTIFI_VERSION 2020.12.5)
 set(REQUESTS_VERSION 2.25.1)
 set(CYTHON_VERSION 0.29.21)
@@ -235,12 +258,14 @@ set(NUMPY_URI https://github.com/numpy/numpy/releases/download/v${NUMPY_VERSION}
 set(NUMPY_HASH f6a1b48717c552bbc18f1adc3cc1fe0e)
 set(NUMPY_HASH_TYPE MD5)
 set(NUMPY_FILE numpy-${NUMPY_VERSION}.zip)
+set(NUMPY_CPE "cpe:2.3:a:numpy:numpy:${NUMPY_VERSION}:*:*:*:*:*:*:*")
 
 set(LAME_VERSION 3.100)
 set(LAME_URI http://downloads.sourceforge.net/project/lame/lame/3.100/lame-${LAME_VERSION}.tar.gz)
 set(LAME_HASH 83e260acbe4389b54fe08e0bdbf7cddb)
 set(LAME_HASH_TYPE MD5)
 set(LAME_FILE lame-${LAME_VERSION}.tar.gz)
+set(LAME_CPE "cpe:2.3:a:lame_project:lame:${LAME_VERSION}:*:*:*:*:*:*:*")
 
 set(OGG_VERSION 1.3.4)
 set(OGG_URI http://downloads.xiph.org/releases/ogg/libogg-${OGG_VERSION}.tar.gz)
@@ -253,6 +278,7 @@ set(VORBIS_URI http://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERS
 set(VORBIS_HASH 6ed40e0241089a42c48604dc00e362beee00036af2d8b3f46338031c9e0351cb)
 set(VORBIS_HASH_TYPE SHA256)
 set(VORBIS_FILE libvorbis-${VORBIS_VERSION}.tar.gz)
+set(VORBIS_CPE "cpe:2.3:a:xiph.org:libvorbis:${VORBIS_VERSION}:*:*:*:*:*:*:*")
 
 set(THEORA_VERSION 1.1.1)
 set(THEORA_URI http://downloads.xiph.org/releases/theora/libtheora-${THEORA_VERSION}.tar.bz2)
@@ -265,12 +291,14 @@ set(FLAC_URI http://downloads.xiph.org/releases/flac/flac-${FLAC_VERSION}.tar.xz
 set(FLAC_HASH 213e82bd716c9de6db2f98bcadbc4c24c7e2efe8c75939a1a84e28539c4e1748)
 set(FLAC_HASH_TYPE SHA256)
 set(FLAC_FILE flac-${FLAC_VERSION}.tar.xz)
+set(FLAC_CPE "cpe:2.3:a:flac_project:flac:${FLAC_VERSION}:*:*:*:*:*:*:*")
 
 set(VPX_VERSION 1.8.2)
 set(VPX_URI https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}/libvpx-v${VPX_VERSION}.tar.gz)
 set(VPX_HASH 8735d9fcd1a781ae6917f28f239a8aa358ce4864ba113ea18af4bb2dc8b474ac)
 set(VPX_HASH_TYPE SHA256)
 set(VPX_FILE libvpx-v${VPX_VERSION}.tar.gz)
+set(VPX_CPE "cpe:2.3:a:webmproject:libvpx:${VPX_VERSION}:*:*:*:*:*:*:*")
 
 set(OPUS_VERSION 1.3.1)
 set(OPUS_URI https://archive.mozilla.org/pub/opus/opus-${OPUS_VERSION}.tar.gz)
@@ -296,12 +324,14 @@ set(OPENJPEG_URI https://github.com/uclouvain/openjpeg/archive/v${OPENJPEG_VERSI
 set(OPENJPEG_HASH 63f5a4713ecafc86de51bfad89cc07bb788e9bba24ebbf0c4ca637621aadb6a9)
 set(OPENJPEG_HASH_TYPE SHA256)
 set(OPENJPEG_FILE openjpeg-v${OPENJPEG_VERSION}.tar.gz)
+set(OPENJPEG_CPE "cpe:2.3:a:uclouvain:openjpeg:${OPENJPEG_VERSION}:*:*:*:*:*:*:*")
 
 set(FFMPEG_VERSION 4.2.3)
 set(FFMPEG_URI http://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2)
 set(FFMPEG_HASH 695fad11f3baf27784e24cb0e977b65a)
 set(FFMPEG_HASH_TYPE MD5)
 set(FFMPEG_FILE ffmpeg-${FFMPEG_VERSION}.tar.bz2)
+set(FFMPEG_CPE "cpe:2.3:a:ffmpeg:ffmpeg:${FFMPEG_VERSION}:*:*:*:*:*:*:*")
 
 set(FFTW_VERSION 3.3.8)
 set(FFTW_URI http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz)
@@ -320,12 +350,14 @@ set(SNDFILE_URI http://www.mega-nerd.com/libsndfile/files/libsndfile-${SNDFILE_V
 set(SNDFILE_HASH 646b5f98ce89ac60cdb060fcd398247c)
 set(SNDFILE_HASH_TYPE MD5)
 set(SNDFILE_FILE libsndfile-${SNDFILE_VERSION}.tar.gz)
+set(SNDFILE_CPE "cpe:2.3:a:libsndfile_project:libsndfile:${SNDFILE_VERSION}:*:*:*:*:*:*:*")
 
 set(WEBP_VERSION 0.6.1)
 set(WEBP_URI https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-${WEBP_VERSION}.tar.gz)
 set(WEBP_HASH b49ce9c3e3e9acae4d91bca44bb85a72)
 set(WEBP_HASH_TYPE MD5)
 set(WEBP_FILE libwebp-${WEBP_VERSION}.tar.gz)
+set(WEBP_CPE "cpe:2.3:a:webmproject:libwebp:${WEBP_VERSION}:*:*:*:*:*:*:*")
 
 set(SPNAV_VERSION 0.2.3)
 set(SPNAV_URI http://downloads.sourceforge.net/project/spacenav/spacenav%20library%20%28SDK%29/libspnav%20${SPNAV_VERSION}/libspnav-${SPNAV_VERSION}.tar.gz)
@@ -344,6 +376,7 @@ set(XML2_URI http://xmlsoft.org/sources/libxml2-${XML2_VERSION}.tar.gz)
 set(XML2_HASH 10942a1dc23137a8aa07f0639cbfece5)
 set(XML2_HASH_TYPE MD5)
 set(XML2_FILE libxml2-${XML2_VERSION}.tar.gz)
+set(XML2_CPE "cpe:2.3:a:xmlsoft:libxml2:${XML2_VERSION}:*:*:*:*:*:*:*")
 
 set(TINYXML_VERSION 2_6_2)
 set(TINYXML_VERSION_DOTS 2.6.2)
@@ -351,24 +384,29 @@ set(TINYXML_URI https://nchc.dl.sourceforge.net/project/tinyxml/tinyxml/${TINYXM
 set(TINYXML_HASH c1b864c96804a10526540c664ade67f0)
 set(TINYXML_HASH_TYPE MD5)
 set(TINYXML_FILE tinyxml_${TINYXML_VERSION}.tar.gz)
+set(TINYXML_CPE "cpe:2.3:a:tinyxml_project:tinyxml:${TINYXML_VERSION_DOTS}:*:*:*:*:*:*:*")
 
 set(YAMLCPP_VERSION 0.6.3)
 set(YAMLCPP_URI https://codeload.github.com/jbeder/yaml-cpp/tar.gz/yaml-cpp-${YAMLCPP_VERSION})
 set(YAMLCPP_HASH b45bf1089a382e81f6b661062c10d0c2)
 set(YAMLCPP_HASH_TYPE MD5)
 set(YAMLCPP_FILE yaml-cpp-${YAMLCPP_VERSION}.tar.gz)
+set(YAMLCPP "cpe:2.3:a:yaml-cpp_project:yaml-cpp:${YAMLCPP_VERSION}:*:*:*:*:*:*:*")
 
 set(EXPAT_VERSION 2_2_10)
+set(EXPAT_VERSION_DOTS 2.2.10)
 set(EXPAT_URI https://github.com/libexpat/libexpat/archive/R_${EXPAT_VERSION}.tar.gz)
 set(EXPAT_HASH 7ca5f09959fcb9a57618368deb627b9f)
 set(EXPAT_HASH_TYPE MD5)
 set(EXPAT_FILE libexpat-${EXPAT_VERSION}.tar.gz)
+set(EXPAT_CPE "cpe:2.3:a:libexpat_project:libexpat:${EXPAT_VERSION_DOTS}:*:*:*:*:*:*:*")
 
 set(PUGIXML_VERSION 1.10)
 set(PUGIXML_URI https://github.com/zeux/pugixml/archive/v${PUGIXML_VERSION}.tar.gz)
 set(PUGIXML_HASH 0c208b0664c7fb822bf1b49ad035e8fd)
 set(PUGIXML_HASH_TYPE MD5)
 set(PUGIXML_FILE pugixml-${PUGIXML_VERSION}.tar.gz)
+set(PUGIXML_CPE "cpe:2.3:a:pugixml_project:pugixml:${PUGIXML_VERSION}:*:*:*:*:*:*:*")
 
 set(FLEXBISON_VERSION 2.5.5)
 set(FLEXBISON_URI http://prdownloads.sourceforge.net/winflexbison/win_flex_bison-${FLEXBISON_VERSION}.zip)
@@ -385,12 +423,14 @@ set(BZIP2_URI http://http.debian.net/debian/pool/main/b/bzip2/bzip2_${BZIP2_VERS
 set(BZIP2_HASH ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269)
 set(BZIP2_HASH_TYPE SHA256)
 set(BZIP2_FILE bzip2_${BZIP2_VERSION}.orig.tar.gz)
+set(BZIP2_CPE "cpe:2.3:a:bzip:bzip2:${BZIP2_VERSION}:*:*:*:*:*:*:*")
 
 set(FFI_VERSION 3.3)
 set(FFI_URI https://sourceware.org/pub/libffi/libffi-${FFI_VERSION}.tar.gz)
 set(FFI_HASH 72fba7922703ddfa7a028d513ac15a85c8d54c8d67f55fa5a4802885dc652056)
 set(FFI_HASH_TYPE SHA256)
 set(FFI_FILE libffi-${FFI_VERSION}.tar.gz)
+set(FFI_CPE "cpe:2.3:a:libffi_project:libffi:${FFI_VERSION}:*:*:*:*:*:*:*")
 
 set(LZMA_VERSION 5.2.5)
 set(LZMA_URI https://tukaani.org/xz/xz-${LZMA_VERSION}.tar.bz2)
@@ -403,12 +443,14 @@ set(SSL_URI https://www.openssl.org/source/openssl-${SSL_VERSION}.tar.gz)
 set(SSL_HASH ddb04774f1e32f0c49751e21b67216ac87852ceb056b75209af2443400636d46)
 set(SSL_HASH_TYPE SHA256)
 set(SSL_FILE openssl-${SSL_VERSION}.tar.gz)
+set(SSL_CPE "cpe:2.3:a:openssl:openssl:${SSL_VERSION}:*:*:*:*:*:*:*")
 
 set(SQLITE_VERSION 3.31.1)
 set(SQLITE_URI https://www.sqlite.org/2018/sqlite-src-3240000.zip)
 set(SQLITE_HASH fb558c49ee21a837713c4f1e7e413309aabdd9c7)
 set(SQLITE_HASH_TYPE SHA1)
 set(SQLITE_FILE sqlite-src-3240000.zip)
+set(SQLITE_CPE "cpe:2.3:a:sqlite:sqlite:${SQLITE_VERSION}:*:*:*:*:*:*:*")
 
 set(EMBREE_VERSION 3.10.0)
 set(EMBREE_URI https://github.com/embree/embree/archive/v${EMBREE_VERSION}.zip)
@@ -440,12 +482,14 @@ set(MESA_URI ftp://ftp.freedesktop.org/pub/mesa/mesa-${MESA_VERSION}.tar.xz)
 set(MESA_HASH 556338446aef8ae947a789b3e0b5e056)
 set(MESA_HASH_TYPE MD5)
 set(MESA_FILE mesa-${MESA_VERSION}.tar.xz)
+set(MESA_CPE "cpe:2.3:a:mesa3d:mesa:${MESA_VERSION}:*:*:*:*:*:*:*")
 
 set(NASM_VERSION 2.15.02)
 set(NASM_URI https://github.com/netwide-assembler/nasm/archive/nasm-${NASM_VERSION}.tar.gz)
 set(NASM_HASH aded8b796c996a486a56e0515c83e414116decc3b184d88043480b32eb0a8589)
 set(NASM_HASH_TYPE SHA256)
 set(NASM_FILE nasm-${NASM_VERSION}.tar.gz)
+set(NASM_PCE "cpe:2.3:a:nasm:nasm:${NASM_VERSION}:*:*:*:*:*:*:*")
 
 set(XR_OPENXR_SDK_VERSION 1.0.14)
 set(XR_OPENXR_SDK_URI https://github.com/KhronosGroup/OpenXR-SDK/archive/release-${XR_OPENXR_SDK_VERSION}.tar.gz)
@@ -472,12 +516,14 @@ set(GMP_URI https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.xz)
 set(GMP_HASH a325e3f09e6d91e62101e59f9bda3ec1)
 set(GMP_HASH_TYPE MD5)
 set(GMP_FILE gmp-${GMP_VERSION}.tar.xz)
+set(GMP_CPE "cpe:2.3:a:gmplib:gmp:${GMP_VERSION}:*:*:*:*:*:*:*")
 
 set(POTRACE_VERSION 1.16)
 set(POTRACE_URI http://potrace.sourceforge.net/download/${POTRACE_VERSION}/potrace-${POTRACE_VERSION}.tar.gz)
 set(POTRACE_HASH 5f0bd87ddd9a620b0c4e65652ef93d69)
 set(POTRACE_HASH_TYPE MD5)
 set(POTRACE_FILE potrace-${POTRACE_VERSION}.tar.gz)
+set(POTRACE_CPE "cpe:2.3:a:icoasoft:potrace:${POTRACE_VERSION}:*:*:*:*:*:*:*")
 
 set(HARU_VERSION 2_3_0)
 set(HARU_URI https://github.com/libharu/libharu/archive/RELEASE_${HARU_VERSION}.tar.gz)

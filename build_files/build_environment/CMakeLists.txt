@@ -167,3 +167,4 @@ if(UNIX AND NOT APPLE)
 endif()
 
 include(cmake/harvest.cmake)
+include(cmake/cve_check.cmake)
