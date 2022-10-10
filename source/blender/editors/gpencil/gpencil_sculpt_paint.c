@@ -1948,7 +1948,7 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
               }
 
               /* Check segment. */
-              if (gpencil_stroke_inside_circle(
+              if (!pick_stroke && gpencil_stroke_inside_circle(
                       gso->mval, radius, pc1[0], pc1[1], pc2[0], pc2[1])) {
                 pick_stroke = true;
                 i = gps->totpoints;
