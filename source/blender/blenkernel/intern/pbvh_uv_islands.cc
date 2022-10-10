@@ -67,7 +67,7 @@ static const MeshUVVert &get_uv_vert(const MeshPrimitive &mesh_primitive, const 
   return mesh_primitive.vertices[0];
 }
 
-const bool has_vertex(const MeshPrimitive &mesh_primitive, const MeshVertex &mesh_vertex)
+static const bool has_vertex(const MeshPrimitive &mesh_primitive, const MeshVertex &mesh_vertex)
 {
   for (int i = 0; i < 3; i++) {
     if (mesh_primitive.vertices[i].vertex == &mesh_vertex) {
@@ -123,7 +123,7 @@ static void mesh_data_init_primitives(MeshData &mesh_data)
   }
 }
 
-void mesh_data_init_edges(MeshData &mesh_data)
+static void mesh_data_init_edges(MeshData &mesh_data)
 {
   mesh_data.edges.reserve(mesh_data.looptri_len * 2);
   EdgeHash *eh = BLI_edgehash_new_ex(__func__, mesh_data.looptri_len * 3);
@@ -182,7 +182,7 @@ static void extract_uv_neighbors(Vector<MeshPrimitive *> &prims_to_add, MeshPrim
   }
 }
 
-void mesh_data_init_primitive_uv_island_ids(MeshData &mesh_data)
+static void mesh_data_init_primitive_uv_island_ids(MeshData &mesh_data)
 {
   for (MeshPrimitive &primitive : mesh_data.primitives) {
     primitive.uv_island_id = INVALID_UV_ISLAND_ID;

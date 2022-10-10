@@ -114,6 +114,32 @@
 
 #include "bmesh.h"
 
+CurveMapping *BKE_sculpt_default_cavity_curve()
+
+{
+  CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
+
+  cumap->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
+  cumap->preset = CURVE_PRESET_LINE;
+
+  BKE_curvemap_reset(cumap->cm, &cumap->clipr, cumap->preset, CURVEMAP_SLOPE_POSITIVE);
+  BKE_curvemapping_changed(cumap, false);
+  BKE_curvemapping_init(cumap);
+
+  return cumap;
+}
+
+void BKE_sculpt_check_cavity_curves(Sculpt *sd)
+{
+  if (!sd->automasking_cavity_curve) {
+    sd->automasking_cavity_curve = BKE_sculpt_default_cavity_curve();
+  }
+
+  if (!sd->automasking_cavity_curve_op) {
+    sd->automasking_cavity_curve_op = BKE_sculpt_default_cavity_curve();
+  }
+}
+
 static void scene_init_data(ID *id)
 {
   Scene *scene = (Scene *)id;
@@ -431,7 +457,7 @@ static void scene_free_data(ID *id)
   BLI_assert(scene->layer_properties == nullptr);
 }
 
-static void scene_foreach_rigidbodyworldSceneLooper(struct RigidBodyWorld *UNUSED(rbw),
+static void scene_foreach_rigidbodyworldSceneLooper(struct RigidBodyWorld * /*rbw*/,
                                                     ID **id_pointer,
                                                     void *user_data,
                                                     int cb_flag)
@@ -940,6 +966,13 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   }
   if (tos->sculpt) {
     BLO_write_struct(writer, Sculpt, tos->sculpt);
+    if (tos->sculpt->automasking_cavity_curve) {
+      BKE_curvemapping_blend_write(writer, tos->sculpt->automasking_cavity_curve);
+    }
+    if (tos->sculpt->automasking_cavity_curve_op) {
+      BKE_curvemapping_blend_write(writer, tos->sculpt->automasking_cavity_curve_op);
+    }
+
     BKE_paint_blend_write(writer, &tos->sculpt->paint);
   }
   if (tos->uvsculpt) {
@@ -1152,6 +1185,24 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
     sce->toolsettings->particle.scene = nullptr;
     sce->toolsettings->particle.object = nullptr;
     sce->toolsettings->gp_sculpt.paintcursor = nullptr;
+
+    if (sce->toolsettings->sculpt) {
+      BLO_read_data_address(reader, &sce->toolsettings->sculpt->automasking_cavity_curve);
+      BLO_read_data_address(reader, &sce->toolsettings->sculpt->automasking_cavity_curve_op);
+
+      if (sce->toolsettings->sculpt->automasking_cavity_curve) {
+        BKE_curvemapping_blend_read(reader, sce->toolsettings->sculpt->automasking_cavity_curve);
+        BKE_curvemapping_init(sce->toolsettings->sculpt->automasking_cavity_curve);
+      }
+
+      if (sce->toolsettings->sculpt->automasking_cavity_curve_op) {
+        BKE_curvemapping_blend_read(reader,
+                                    sce->toolsettings->sculpt->automasking_cavity_curve_op);
+        BKE_curvemapping_init(sce->toolsettings->sculpt->automasking_cavity_curve_op);
+      }
+
+      BKE_sculpt_check_cavity_curves(sce->toolsettings->sculpt);
+    }
 
     /* Relink grease pencil interpolation curves. */
     BLO_read_data_address(reader, &sce->toolsettings->gp_interpolate.custom_ipo);
@@ -1640,7 +1691,7 @@ static void scene_undo_preserve(BlendLibReader *reader, ID *id_new, ID *id_old)
   }
 }
 
-static void scene_lib_override_apply_post(ID *id_dst, ID *UNUSED(id_src))
+static void scene_lib_override_apply_post(ID *id_dst, ID * /*id_src*/)
 {
   Scene *scene = (Scene *)id_dst;
 
@@ -1740,6 +1791,18 @@ ToolSettings *BKE_toolsettings_copy(ToolSettings *toolsettings, const int flag)
   if (ts->sculpt) {
     ts->sculpt = static_cast<Sculpt *>(MEM_dupallocN(ts->sculpt));
     BKE_paint_copy(&ts->sculpt->paint, &ts->sculpt->paint, flag);
+
+    if (ts->sculpt->automasking_cavity_curve) {
+      ts->sculpt->automasking_cavity_curve = BKE_curvemapping_copy(
+          ts->sculpt->automasking_cavity_curve);
+      BKE_curvemapping_init(ts->sculpt->automasking_cavity_curve);
+    }
+
+    if (ts->sculpt->automasking_cavity_curve_op) {
+      ts->sculpt->automasking_cavity_curve_op = BKE_curvemapping_copy(
+          ts->sculpt->automasking_cavity_curve_op);
+      BKE_curvemapping_init(ts->sculpt->automasking_cavity_curve_op);
+    }
   }
   if (ts->uvsculpt) {
     ts->uvsculpt = static_cast<UvSculpt *>(MEM_dupallocN(ts->uvsculpt));
@@ -1797,6 +1860,13 @@ void BKE_toolsettings_free(ToolSettings *toolsettings)
     MEM_freeN(toolsettings->wpaint);
   }
   if (toolsettings->sculpt) {
+    if (toolsettings->sculpt->automasking_cavity_curve) {
+      BKE_curvemapping_free(toolsettings->sculpt->automasking_cavity_curve);
+    }
+    if (toolsettings->sculpt->automasking_cavity_curve_op) {
+      BKE_curvemapping_free(toolsettings->sculpt->automasking_cavity_curve_op);
+    }
+
     BKE_paint_free(&toolsettings->sculpt->paint);
     MEM_freeN(toolsettings->sculpt);
   }
@@ -2261,7 +2331,7 @@ Object *BKE_scene_camera_switch_find(Scene *scene)
     return nullptr;
   }
 
-  const int ctime = (int)BKE_scene_ctime_get(scene);
+  const int ctime = int(BKE_scene_ctime_get(scene));
   int frame = -(MAXFRAME + 1);
   int min_frame = MAXFRAME + 1;
   Object *camera = nullptr;
@@ -2567,7 +2637,7 @@ void BKE_scene_update_sound(Depsgraph *depsgraph, Main *bmain)
   BKE_sound_update_scene(depsgraph, scene);
 }
 
-void BKE_scene_update_tag_audio_volume(Depsgraph *UNUSED(depsgraph), Scene *scene)
+void BKE_scene_update_tag_audio_volume(Depsgraph * /*depsgraph*/, Scene *scene)
 {
   BLI_assert(DEG_is_evaluated_id(&scene->id));
   /* The volume is actually updated in BKE_scene_update_sound(), from either
@@ -2802,10 +2872,10 @@ int get_render_child_particle_number(const RenderData *r, int child_num, bool fo
 {
   if (r->mode & R_SIMPLIFY) {
     if (for_render) {
-      return (int)(r->simplify_particles_render * child_num);
+      return int(r->simplify_particles_render * child_num);
     }
 
-    return (int)(r->simplify_particles * child_num);
+    return int(r->simplify_particles * child_num);
   }
 
   return child_num;

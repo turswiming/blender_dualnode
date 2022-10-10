@@ -91,6 +91,9 @@
 
 /* the global to talk to ghost */
 static GHOST_SystemHandle g_system = NULL;
+#if !(defined(WIN32) || defined(__APPLE__))
+static const char *g_system_backend_id = NULL;
+#endif
 
 typedef enum eWinOverrideFlag {
   WIN_OVERRIDE_GEOM = (1 << 0),
@@ -1546,6 +1549,16 @@ void wm_ghost_init(bContext *C)
 
   g_system = GHOST_CreateSystem();
 
+  if (UNLIKELY(g_system == NULL)) {
+    /* GHOST will have reported the back-ends that failed to load. */
+    fprintf(stderr, "GHOST: unable to initialize, exiting!\n");
+    /* This will leak memory, it's preferable to crashing. */
+    exit(1);
+  }
+#if !(defined(WIN32) || defined(__APPLE__))
+  g_system_backend_id = GHOST_SystemBackend();
+#endif
+
   GHOST_Debug debug = {0};
   if (G.debug & G_DEBUG_GHOST) {
     debug.flags |= GHOST_kDebugDefault;
@@ -1588,6 +1601,18 @@ void wm_ghost_exit(void)
     GHOST_DisposeSystem(g_system);
   }
   g_system = NULL;
+}
+
+const char *WM_ghost_backend(void)
+{
+#if !(defined(WIN32) || defined(__APPLE__))
+  return g_system_backend_id ? g_system_backend_id : "NONE";
+#else
+  /* While this could be supported, at the moment it's only needed with GHOST X11/WAYLAND
+   * to check which was selected and the API call may be removed after that's no longer needed.
+   * Use dummy values to prevent this being used on other systems. */
+  return g_system ? "DEFAULT" : "NONE";
+#endif
 }
 
 /** \} */
@@ -2006,11 +2031,13 @@ void WM_init_native_pixels(bool do_it)
 /** \name Cursor API
  * \{ */
 
-void WM_init_tablet_api(void)
+void WM_init_input_devices(void)
 {
   if (UNLIKELY(!g_system)) {
     return;
   }
+
+  GHOST_SetMultitouchGestures(g_system, (U.uiflag & USER_NO_MULTITOUCH_GESTURES) == 0);
 
   switch (U.tablet_api) {
     case USER_TABLET_NATIVE:

@@ -1076,6 +1076,13 @@ elseif(WIN32)
       DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
     )
   endif()
+
+  if(PLATFORM_BUNDLED_LIBRARIES)
+    install(
+      FILES ${PLATFORM_BUNDLED_LIBRARIES}
+      DESTINATION ${TARGETDIR_LIB}
+    )
+  endif()
 elseif(APPLE)
   if(NOT WITH_PYTHON_MODULE)
     # Uppercase name for app bundle.
@@ -1157,10 +1164,10 @@ elseif(APPLE)
   )
 
   if(WITH_BLENDER_THUMBNAILER)
-      install(
-        TARGETS blender-thumbnailer
-        DESTINATION Blender.app/Contents/MacOS/
-      )
+    install(
+      TARGETS blender-thumbnailer
+      DESTINATION Blender.app/Contents/MacOS/
+    )
   endif()
 
   if(PLATFORM_BUNDLED_LIBRARIES AND TARGETDIR_LIB)

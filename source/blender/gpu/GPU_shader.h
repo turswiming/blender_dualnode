@@ -64,7 +64,8 @@ struct GPU_ShaderCreateFromArray_Params {
 /**
  * Use via #GPU_shader_create_from_arrays macro (avoids passing in param).
  *
- * Similar to #DRW_shader_create_with_lib with the ability to include libs for each type of shader.
+ * Similar to #DRW_shader_create_with_lib with the ability to include libraries for each type of
+ * shader.
  *
  * It has the advantage that each item can be conditionally included
  * without having to build the string inline, then free it.
@@ -144,6 +145,7 @@ typedef enum {
   GPU_UNIFORM_BLOCK_DRW_VIEW,
   GPU_UNIFORM_BLOCK_DRW_MODEL,
   GPU_UNIFORM_BLOCK_DRW_INFOS,
+  GPU_UNIFORM_BLOCK_DRW_CLIPPING,
 
   GPU_NUM_UNIFORM_BLOCKS, /* Special value, denotes number of builtin uniforms block. */
 } GPUUniformBlockBuiltin;

@@ -5,8 +5,11 @@
  * \ingroup spview3d
  */
 
-#include <stdio.h>
-#include <string.h>
+/* Allow using deprecated functionality for .blend file I/O. */
+#define DNA_DEPRECATED_ALLOW
+
+#include <cstdio>
+#include <cstring>
 
 #include "DNA_collection_types.h"
 #include "DNA_defaults.h"
@@ -29,6 +32,7 @@
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_global.h"
+#include "BKE_gpencil.h"
 #include "BKE_icons.h"
 #include "BKE_idprop.h"
 #include "BKE_lattice.h"
@@ -40,6 +44,7 @@
 #include "BKE_object.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
+#include "BKE_viewer_path.h"
 #include "BKE_workspace.h"
 
 #include "ED_object.h"
@@ -49,6 +54,7 @@
 #include "ED_space_api.h"
 #include "ED_transform.h"
 #include "ED_undo.h"
+#include "ED_viewer_path.hh"
 
 #include "GPU_matrix.h"
 
@@ -66,6 +72,8 @@
 
 #include "UI_interface.h"
 #include "UI_resources.h"
+
+#include "BLO_read_write.h"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
@@ -238,7 +246,7 @@ void ED_view3d_shade_update(Main *bmain, View3D *v3d, ScrArea *area)
 
 /* ******************** default callbacks for view3d space ***************** */
 
-static SpaceLink *view3d_create(const ScrArea *UNUSED(area), const Scene *scene)
+static SpaceLink *view3d_create(const ScrArea * /*area*/, const Scene *scene)
 {
   ARegion *region;
   View3D *v3d;
@@ -316,14 +324,16 @@ static void view3d_free(SpaceLink *sl)
     IDP_FreeProperty(vd->shading.prop);
     vd->shading.prop = nullptr;
   }
+
+  BKE_viewer_path_clear(&vd->viewer_path);
 }
 
 /* spacetype; init callback */
-static void view3d_init(wmWindowManager *UNUSED(wm), ScrArea *UNUSED(area))
+static void view3d_init(wmWindowManager * /*wm*/, ScrArea * /*area*/)
 {
 }
 
-static void view3d_exit(wmWindowManager *UNUSED(wm), ScrArea *area)
+static void view3d_exit(wmWindowManager * /*wm*/, ScrArea *area)
 {
   BLI_assert(area->spacetype == SPACE_VIEW3D);
   View3D *v3d = static_cast<View3D *>(area->spacedata.first);
@@ -353,6 +363,8 @@ static SpaceLink *view3d_duplicate(SpaceLink *sl)
   if (v3dn->shading.prop) {
     v3dn->shading.prop = IDP_CopyProperty(v3do->shading.prop);
   }
+
+  BKE_viewer_path_copy(&v3dn->viewer_path, &v3do->viewer_path);
 
   /* copy or clear inside new stuff */
 
@@ -528,7 +540,7 @@ static void view3d_ob_drop_draw_activate(struct wmDropBox *drop, wmDrag *drag)
   }
 }
 
-static void view3d_ob_drop_draw_deactivate(struct wmDropBox *drop, wmDrag *UNUSED(drag))
+static void view3d_ob_drop_draw_deactivate(struct wmDropBox *drop, wmDrag * /*drag*/)
 {
   V3DSnapCursorState *state = static_cast<V3DSnapCursorState *>(drop->draw_data);
   if (state) {
@@ -592,7 +604,7 @@ static bool view3d_mat_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event
 static char *view3d_mat_drop_tooltip(bContext *C,
                                      wmDrag *drag,
                                      const int xy[2],
-                                     wmDropBox *UNUSED(drop))
+                                     wmDropBox * /*drop*/)
 {
   const char *name = WM_drag_get_item_name(drag);
   ARegion *region = CTX_wm_region(C);
@@ -617,10 +629,10 @@ static bool view3d_object_data_drop_poll(bContext *C, wmDrag *drag, const wmEven
   return false;
 }
 
-static char *view3d_object_data_drop_tooltip(bContext *UNUSED(C),
-                                             wmDrag *UNUSED(drag),
+static char *view3d_object_data_drop_tooltip(bContext * /*C*/,
+                                             wmDrag * /*drag*/,
                                              const int UNUSED(xy[2]),
-                                             wmDropBox *UNUSED(drop))
+                                             wmDropBox * /*drop*/)
 {
   return BLI_strdup(TIP_("Create object instance from object-data"));
 }
@@ -682,9 +694,7 @@ static bool view3d_ima_empty_drop_poll(bContext *C, wmDrag *drag, const wmEvent 
   return false;
 }
 
-static bool view3d_volume_drop_poll(bContext *UNUSED(C),
-                                    wmDrag *drag,
-                                    const wmEvent *UNUSED(event))
+static bool view3d_volume_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return (drag->type == WM_DRAG_PATH) && (drag->icon == ICON_FILE_VOLUME);
 }
@@ -713,7 +723,7 @@ static void view3d_ob_drop_matrix_from_snap(V3DSnapCursorState *snap_state,
   }
 }
 
-static void view3d_ob_drop_copy_local_id(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_ob_drop_copy_local_id(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID(drag, ID_OB);
 
@@ -731,7 +741,7 @@ static void view3d_ob_drop_copy_local_id(bContext *UNUSED(C), wmDrag *drag, wmDr
 
 /* Mostly the same logic as #view3d_collection_drop_copy_external_asset(), just different enough to
  * make sharing code a bit difficult. */
-static void view3d_ob_drop_copy_external_asset(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_ob_drop_copy_external_asset(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   /* NOTE(@campbellbarton): Selection is handled here, de-selecting objects before append,
    * using auto-select to ensure the new objects are selected.
@@ -773,9 +783,7 @@ static void view3d_ob_drop_copy_external_asset(bContext *UNUSED(C), wmDrag *drag
   }
 }
 
-static void view3d_collection_drop_copy_local_id(bContext *UNUSED(C),
-                                                 wmDrag *drag,
-                                                 wmDropBox *drop)
+static void view3d_collection_drop_copy_local_id(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID(drag, ID_GR);
   RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
@@ -783,7 +791,7 @@ static void view3d_collection_drop_copy_local_id(bContext *UNUSED(C),
 
 /* Mostly the same logic as #view3d_ob_drop_copy_external_asset(), just different enough to make
  * sharing code a bit difficult. */
-static void view3d_collection_drop_copy_external_asset(bContext *UNUSED(C),
+static void view3d_collection_drop_copy_external_asset(bContext * /*C*/,
                                                        wmDrag *drag,
                                                        wmDropBox *drop)
 {
@@ -822,14 +830,14 @@ static void view3d_collection_drop_copy_external_asset(bContext *UNUSED(C),
   ED_undo_push(C, "Collection_Drop");
 }
 
-static void view3d_id_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_id_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
   WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
 }
 
-static void view3d_id_drop_copy_with_type(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_id_drop_copy_with_type(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
@@ -837,7 +845,7 @@ static void view3d_id_drop_copy_with_type(bContext *UNUSED(C), wmDrag *drag, wmD
   WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
 }
 
-static void view3d_id_path_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_id_path_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
@@ -873,7 +881,7 @@ static void view3d_lightcache_update(bContext *C)
 }
 
 /* region dropbox definition */
-static void view3d_dropboxes(void)
+static void view3d_dropboxes()
 {
   ListBase *lb = WM_dropboxmap_find("View3D", SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
@@ -951,7 +959,7 @@ static void view3d_dropboxes(void)
                  nullptr);
 }
 
-static void view3d_widgets(void)
+static void view3d_widgets()
 {
   wmGizmoMapType_Params params{SPACE_VIEW3D, RGN_TYPE_WINDOW};
   wmGizmoMapType *gzmap_type = WM_gizmomaptype_ensure(&params);
@@ -1313,11 +1321,21 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
       /* In case the region displays workspace settings. */
       ED_region_tag_redraw(region);
       break;
+    case NC_VIEWER_PATH: {
+      if (v3d->flag2 & V3D_SHOW_VIEWER) {
+        ViewLayer *view_layer = WM_window_get_active_view_layer(window);
+        if (Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer)) {
+          ED_render_view3d_update(depsgraph, window, area, true);
+        }
+        ED_region_tag_redraw(region);
+      }
+      break;
+    }
   }
 }
 
 static void view3d_do_msg_notify_workbench_view_update(struct bContext *C,
-                                                       struct wmMsgSubscribeKey *UNUSED(msg_key),
+                                                       struct wmMsgSubscribeKey * /*msg_key*/,
                                                        struct wmMsgSubscribeValue *msg_val)
 {
   Scene *scene = CTX_data_scene(C);
@@ -1349,7 +1367,7 @@ static void view3d_main_region_message_subscribe(const wmRegionMessageSubscribeP
    * accepting some redundant redraws.
    *
    * For other space types we might try avoid this, keep the 3D view as an exceptional case! */
-  wmMsgParams_RNA msg_key_params = {{0}};
+  wmMsgParams_RNA msg_key_params{};
 
   /* Only subscribe to types. */
   StructRNA *type_array[] = {
@@ -1545,7 +1563,7 @@ static void view3d_header_region_message_subscribe(const wmRegionMessageSubscrib
   struct wmMsgBus *mbus = params->message_bus;
   ARegion *region = params->region;
 
-  wmMsgParams_RNA msg_key_params = {{0}};
+  wmMsgParams_RNA msg_key_params{};
 
   /* Only subscribe to types. */
   StructRNA *type_array[] = {
@@ -1974,9 +1992,63 @@ static void view3d_id_remap(ScrArea *area, SpaceLink *slink, const struct IDRema
     /* Object centers in local-view aren't used, see: T52663 */
     view3d_id_remap_v3d(area, slink, view3d->localvd, mappings, true);
   }
+  BKE_viewer_path_id_remap(&view3d->viewer_path, mappings);
 }
 
-void ED_spacetype_view3d(void)
+static void view3d_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
+{
+  View3D *v3d = (View3D *)sl;
+
+  memset(&v3d->runtime, 0x0, sizeof(v3d->runtime));
+
+  if (v3d->gpd) {
+    BLO_read_data_address(reader, &v3d->gpd);
+    BKE_gpencil_blend_read_data(reader, v3d->gpd);
+  }
+  BLO_read_data_address(reader, &v3d->localvd);
+
+  /* render can be quite heavy, set to solid on load */
+  if (v3d->shading.type == OB_RENDER) {
+    v3d->shading.type = OB_SOLID;
+  }
+  v3d->shading.prev_type = OB_SOLID;
+
+  BKE_screen_view3d_shading_blend_read_data(reader, &v3d->shading);
+
+  BKE_screen_view3d_do_versions_250(v3d, &sl->regionbase);
+
+  BKE_viewer_path_blend_read_data(reader, &v3d->viewer_path);
+}
+
+static void view3d_blend_read_lib(BlendLibReader *reader, ID *parent_id, SpaceLink *sl)
+{
+  View3D *v3d = (View3D *)sl;
+
+  BLO_read_id_address(reader, parent_id->lib, &v3d->camera);
+  BLO_read_id_address(reader, parent_id->lib, &v3d->ob_center);
+
+  if (v3d->localvd) {
+    BLO_read_id_address(reader, parent_id->lib, &v3d->localvd->camera);
+  }
+
+  BKE_viewer_path_blend_read_lib(reader, parent_id->lib, &v3d->viewer_path);
+}
+
+static void view3d_blend_write(BlendWriter *writer, SpaceLink *sl)
+{
+  View3D *v3d = (View3D *)sl;
+  BLO_write_struct(writer, View3D, v3d);
+
+  if (v3d->localvd) {
+    BLO_write_struct(writer, View3D, v3d->localvd);
+  }
+
+  BKE_screen_view3d_shading_blend_write(writer, &v3d->shading);
+
+  BKE_viewer_path_blend_write(writer, &v3d->viewer_path);
+}
+
+void ED_spacetype_view3d()
 {
   SpaceType *st = MEM_cnew<SpaceType>("spacetype view3d");
   ARegionType *art;
@@ -1997,6 +2069,9 @@ void ED_spacetype_view3d(void)
   st->gizmos = view3d_widgets;
   st->context = view3d_context;
   st->id_remap = view3d_id_remap;
+  st->blend_read_data = view3d_blend_read_data;
+  st->blend_read_lib = view3d_blend_read_lib;
+  st->blend_write = view3d_blend_write;
 
   /* regions: main window */
   art = MEM_cnew<ARegionType>("spacetype view3d main region");

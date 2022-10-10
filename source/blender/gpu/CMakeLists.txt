@@ -47,7 +47,6 @@ set(SRC
   intern/gpu_batch.cc
   intern/gpu_batch_presets.c
   intern/gpu_batch_utils.c
-  intern/gpu_buffers.c
   intern/gpu_capabilities.cc
   intern/gpu_codegen.cc
   intern/gpu_compute.cc
@@ -84,7 +83,6 @@ set(SRC
   GPU_batch.h
   GPU_batch_presets.h
   GPU_batch_utils.h
-  GPU_buffers.h
   GPU_capabilities.h
   GPU_common.h
   GPU_common_types.h
@@ -559,6 +557,7 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/overlay/shaders/infos/overlay_paint_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_sculpt_curves_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_sculpt_info.hh
+  ../draw/engines/overlay/shaders/infos/overlay_viewer_attribute_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_volume_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_wireframe_info.hh
   ../draw/engines/select/shaders/infos/select_id_info.hh

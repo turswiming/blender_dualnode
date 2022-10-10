@@ -17,7 +17,7 @@
 #include "BKE_ccg.h"
 #include "BKE_pbvh.h"
 
-#include "GPU_buffers.h"
+#include "DRW_pbvh.h"
 
 #include "bmesh.h"
 #include "pbvh_intern.h"
@@ -347,8 +347,8 @@ static void pbvh_bmesh_node_split(PBVH *pbvh, const BBC *bbc_array, int node_ind
   n->bm_other_verts = NULL;
   n->layer_disp = NULL;
 
-  if (n->draw_buffers) {
-    pbvh_free_draw_buffers(pbvh, n);
+  if (n->draw_batches) {
+    DRW_pbvh_node_free(n->draw_batches);
   }
   n->flag &= ~PBVH_Leaf;
 
@@ -1884,7 +1884,7 @@ void BKE_pbvh_build_bmesh(PBVH *pbvh,
   pbvh->bm_log = log;
 
   /* TODO: choose leaf limit better */
-  pbvh->leaf_limit = 100;
+  pbvh->leaf_limit = 400;
 
   BKE_pbvh_update_bmesh_offsets(pbvh, cd_vert_node_offset, cd_face_node_offset);
 

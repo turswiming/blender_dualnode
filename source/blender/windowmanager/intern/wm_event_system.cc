@@ -359,7 +359,7 @@ void WM_main_remove_notifier_reference(const void *reference)
   }
 }
 
-static void wm_main_remap_assetlist(ID *old_id, ID *new_id, void *UNUSED(user_data))
+static void wm_main_remap_assetlist(ID *old_id, ID *new_id, void * /*user_data*/)
 {
   ED_assetlist_storage_id_remap(old_id, new_id);
 }
@@ -632,6 +632,7 @@ void wm_event_do_notifiers(bContext *C)
                win->screen->id.name + 2,
                note->category);
 #  endif
+        ED_workspace_do_listen(C, note);
         ED_screen_do_listen(C, note);
 
         LISTBASE_FOREACH (ARegion *, region, &screen->regionbase) {
@@ -1225,7 +1226,7 @@ int WM_operator_repeat_last(bContext *C, wmOperator *op)
   op->flag &= ~op_flag;
   return ret;
 }
-bool WM_operator_repeat_check(const bContext *UNUSED(C), wmOperator *op)
+bool WM_operator_repeat_check(const bContext * /*C*/, wmOperator *op)
 {
   if (op->type->exec != nullptr) {
     return true;
@@ -2229,7 +2230,7 @@ static wmKeyMapItem *wm_eventmatch_modal_keymap_items(const wmKeyMap *keymap,
     /* Should already be handled by #wm_user_modal_keymap_set_items. */
     BLI_assert(kmi->propvalue_str[0] == '\0');
     if (wm_eventmatch(event, kmi)) {
-      if ((keymap->poll_modal_item == nullptr) || (keymap->poll_modal_item(op, kmi->propvalue))) {
+      if ((keymap->poll_modal_item == nullptr) || keymap->poll_modal_item(op, kmi->propvalue)) {
         return kmi;
       }
     }
@@ -4456,7 +4457,7 @@ wmEventHandler_Keymap *WM_event_add_keymap_handler_dynamic(
 
 wmEventHandler_Keymap *WM_event_add_keymap_handler_priority(ListBase *handlers,
                                                             wmKeyMap *keymap,
-                                                            int UNUSED(priority))
+                                                            int /*priority*/)
 {
   WM_event_remove_keymap_handler(handlers, keymap);
 

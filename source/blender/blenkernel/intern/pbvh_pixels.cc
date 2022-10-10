@@ -155,7 +155,7 @@ struct EncodePixelsUserData {
 
 static void do_encode_pixels(void *__restrict userdata,
                              const int n,
-                             const TaskParallelTLS *__restrict UNUSED(tls))
+                             const TaskParallelTLS *__restrict /*tls*/)
 {
   EncodePixelsUserData *data = static_cast<EncodePixelsUserData *>(userdata);
   Image *image = data->image;

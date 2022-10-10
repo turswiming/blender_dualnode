@@ -13,6 +13,7 @@
 
 #include "BLT_translation.h"
 
+#include "DNA_curves_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
@@ -827,21 +828,21 @@ static const EnumPropertyItem *rna_node_static_type_itemf(bContext *UNUSED(C),
 
   tmp.value = NODE_CUSTOM;
   tmp.identifier = "CUSTOM";
-  tmp.name = "Custom";
-  tmp.description = "Custom Node";
+  tmp.name = N_("Custom");
+  tmp.description = N_("Custom Node");
   tmp.icon = ICON_NONE;
   RNA_enum_item_add(&item, &totitem, &tmp);
 
   tmp.value = NODE_CUSTOM_GROUP;
   tmp.identifier = "CUSTOM GROUP";
-  tmp.name = "CustomGroup";
-  tmp.description = "Custom Group Node";
+  tmp.name = N_("CustomGroup");
+  tmp.description = N_("Custom Group Node");
   tmp.icon = ICON_NONE;
   RNA_enum_item_add(&item, &totitem, &tmp);
 
   tmp.value = NODE_UNDEFINED;
   tmp.identifier = "UNDEFINED";
-  tmp.name = "UNDEFINED";
+  tmp.name = N_("UNDEFINED");
   tmp.description = "";
   tmp.icon = ICON_NONE;
   RNA_enum_item_add(&item, &totitem, &tmp);
@@ -5241,6 +5242,11 @@ static void def_sh_attribute(StructRNA *srna)
        "The attribute is associated with the instancer particle system or object, "
        "falling back to the Object mode if the attribute isn't found, or the object "
        "is not instanced"},
+      {SHD_ATTRIBUTE_VIEW_LAYER,
+       "VIEW_LAYER",
+       0,
+       "View Layer",
+       "The attribute is associated with the View Layer, Scene or World that is being rendered"},
       {0, NULL, 0, NULL, NULL},
   };
   PropertyRNA *prop;
@@ -9698,6 +9704,17 @@ static void def_geo_curve_set_handle_positions(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
+static void def_geo_set_curve_normal(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_curve_normal_modes);
+  RNA_def_property_ui_text(prop, "Mode", "Mode for curve normal evaluation");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
 static void def_geo_curve_handle_type_selection(StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -10462,6 +10479,18 @@ static void def_geo_sample_nearest(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
+static void def_geo_sample_uv_surface(StructRNA *srna)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
+  RNA_def_property_enum_funcs(
+      prop, NULL, NULL, "rna_GeometryNodeAttributeType_type_with_socket_itemf");
+  RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
+  RNA_def_property_ui_text(prop, "Data Type", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+}
+
 static void def_geo_input_material(StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -10803,6 +10832,12 @@ static void def_geo_viewer(StructRNA *srna)
   RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
   RNA_def_property_ui_text(prop, "Data Type", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
+
+  prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_attribute_domain_with_auto_items);
+  RNA_def_property_enum_default(prop, ATTR_DOMAIN_POINT);
+  RNA_def_property_ui_text(prop, "Domain", "Domain to evaluate the field on");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
 static void def_geo_realize_instances(StructRNA *srna)
@@ -12663,6 +12698,7 @@ static void rna_def_nodetree(BlenderRNA *brna)
   RNA_def_property_int_funcs(
       prop, "rna_NodeTree_active_input_get", "rna_NodeTree_active_input_set", NULL);
   RNA_def_property_ui_text(prop, "Active Input", "Index of the active input");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_NODE, NULL);
 
   prop = RNA_def_property(srna, "outputs", PROP_COLLECTION, PROP_NONE);
@@ -12676,6 +12712,7 @@ static void rna_def_nodetree(BlenderRNA *brna)
   RNA_def_property_int_funcs(
       prop, "rna_NodeTree_active_output_get", "rna_NodeTree_active_output_set", NULL);
   RNA_def_property_ui_text(prop, "Active Output", "Index of the active output");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_NODE, NULL);
 
   /* exposed as a function for runtime interface type properties */

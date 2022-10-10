@@ -126,14 +126,10 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
 void DRW_draw_depth_loop(struct Depsgraph *depsgraph,
                          struct ARegion *region,
                          struct View3D *v3d,
-                         struct GPUViewport *viewport);
-/**
- * Converted from #ED_view3d_draw_depth_gpencil (legacy drawing).
- */
-void DRW_draw_depth_loop_gpencil(struct Depsgraph *depsgraph,
-                                 struct ARegion *region,
-                                 struct View3D *v3d,
-                                 struct GPUViewport *viewport);
+                         struct GPUViewport *viewport,
+                         const bool use_gpencil,
+                         const bool use_basic,
+                         const bool use_overlay);
 /**
  * Clears the Depth Buffer and draws only the specified object.
  */
@@ -201,7 +197,6 @@ void DRW_gpu_render_context_enable(void *re_gpu_context);
 void DRW_gpu_render_context_disable(void *re_gpu_context);
 
 void DRW_deferred_shader_remove(struct GPUMaterial *mat);
-void DRW_deferred_shader_optimize_remove(struct GPUMaterial *mat);
 
 /**
  * Get DrawData from the given ID-block. In order for this to work, we assume that

@@ -73,15 +73,6 @@
 
 #include "MEM_guardedalloc.h"
 
-extern "C" {
-
-/* The following prevents a linking error in debug mode for MSVC using the libs in SVN. */
-#if defined(WITH_OPENEXR) && defined(_WIN32) && defined(DEBUG) && _MSC_VER < 1900
-_CRTIMP void __cdecl _invalid_parameter_noinfo(void)
-{
-}
-#endif
-}
 #include "BLI_blenlib.h"
 #include "BLI_fileops.h"
 #include "BLI_math_color.h"
@@ -465,7 +456,7 @@ static void openexr_header_metadata(Header *header, struct ImBuf *ibuf)
 static void openexr_header_metadata_callback(void *data,
                                              const char *propname,
                                              char *prop,
-                                             int UNUSED(len))
+                                             int /*len*/)
 {
   Header *header = (Header *)data;
   header->insert(propname, StringAttribute(prop));
@@ -1868,7 +1859,7 @@ static bool imb_exr_is_multilayer_file(MultiPartInputFile &file)
    * channels without a layer name will be single layer. */
   channels.layers(layerNames);
 
-  return (!layerNames.empty());
+  return !layerNames.empty();
 }
 
 static void imb_exr_type_by_channels(ChannelList &channels,
@@ -2168,7 +2159,7 @@ struct ImBuf *imb_load_openexr(const uchar *mem,
 }
 
 struct ImBuf *imb_load_filepath_thumbnail_openexr(const char *filepath,
-                                                  const int UNUSED(flags),
+                                                  const int /*flags*/,
                                                   const size_t max_thumb_size,
                                                   char colorspace[],
                                                   size_t *r_width,

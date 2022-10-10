@@ -1598,6 +1598,8 @@ typedef struct NodeGeometryImageTexture {
 typedef struct NodeGeometryViewer {
   /* eCustomDataType. */
   int8_t data_type;
+  /* eAttrDomain. */
+  int8_t domain;
 } NodeGeometryViewer;
 
 typedef struct NodeGeometryUVUnwrap {
@@ -1684,6 +1686,7 @@ enum {
   SHD_ATTRIBUTE_GEOMETRY = 0,
   SHD_ATTRIBUTE_OBJECT = 1,
   SHD_ATTRIBUTE_INSTANCER = 2,
+  SHD_ATTRIBUTE_VIEW_LAYER = 3,
 };
 
 /* toon modes */

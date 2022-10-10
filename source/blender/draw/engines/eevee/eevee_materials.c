@@ -231,6 +231,13 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
     eevee_init_noise_texture();
   }
 
+  if (draw_ctx->rv3d) {
+    copy_v4_v4(sldata->common_data.camera_uv_scale, draw_ctx->rv3d->viewcamtexcofac);
+  }
+  else {
+    copy_v4_fl4(sldata->common_data.camera_uv_scale, 1.0f, 1.0f, 0.0f, 0.0f);
+  }
+
   if (!DRW_state_is_image_render() && ((stl->effects->enabled_effects & EFFECT_TAA) == 0)) {
     sldata->common_data.alpha_hash_offset = 0.0f;
     sldata->common_data.alpha_hash_scale = 1.0f;
@@ -824,14 +831,17 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
       if (use_sculpt_pbvh) {
         struct DRWShadingGroup **shgrps_array = BLI_array_alloca(shgrps_array, materials_len);
 
+        struct GPUMaterial **gpumat_array = BLI_array_alloca(gpumat_array, materials_len);
+        MATCACHE_AS_ARRAY(matcache, shading_gpumat, materials_len, gpumat_array);
+
         MATCACHE_AS_ARRAY(matcache, shading_grp, materials_len, shgrps_array);
-        DRW_shgroup_call_sculpt_with_materials(shgrps_array, materials_len, ob);
+        DRW_shgroup_call_sculpt_with_materials(shgrps_array, gpumat_array, materials_len, ob);
 
         MATCACHE_AS_ARRAY(matcache, depth_grp, materials_len, shgrps_array);
-        DRW_shgroup_call_sculpt_with_materials(shgrps_array, materials_len, ob);
+        DRW_shgroup_call_sculpt_with_materials(shgrps_array, gpumat_array, materials_len, ob);
 
         MATCACHE_AS_ARRAY(matcache, shadow_grp, materials_len, shgrps_array);
-        DRW_shgroup_call_sculpt_with_materials(shgrps_array, materials_len, ob);
+        DRW_shgroup_call_sculpt_with_materials(shgrps_array, gpumat_array, materials_len, ob);
       }
       else {
         struct GPUMaterial **gpumat_array = BLI_array_alloca(gpumat_array, materials_len);

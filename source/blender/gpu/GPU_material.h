@@ -162,6 +162,7 @@ GPUNodeLink *GPU_uniform_attribute(GPUMaterial *mat,
                                    const char *name,
                                    bool use_dupli,
                                    uint32_t *r_hash);
+GPUNodeLink *GPU_layer_attribute(GPUMaterial *mat, const char *name);
 GPUNodeLink *GPU_image(GPUMaterial *mat,
                        struct Image *ima,
                        struct ImageUser *iuser,
@@ -257,14 +258,6 @@ struct GPUShader *GPU_material_get_shader(GPUMaterial *material);
 const char *GPU_material_get_name(GPUMaterial *material);
 
 /**
- * Material Optimization.
- * \note Compiles optimal version of shader graph, populating mat->optimized_pass.
- * This operation should always be deferred until existing compilations have completed.
- * Default un-optimized materials will still exist for interactive material editing performance.
- */
-void GPU_material_optimize(GPUMaterial *mat);
-
-/**
  * Return can be NULL if it's a world material.
  */
 struct Material *GPU_material_get_material(GPUMaterial *material);
@@ -343,8 +336,6 @@ typedef struct GPUUniformAttr {
 
   /* Meaningful part of the attribute set key. */
   char name[64]; /* MAX_CUSTOMDATA_LAYER_NAME */
-  /** Escaped name with [""]. */
-  char name_id_prop[64 * 2 + 4];
   /** Hash of name[64] + use_dupli. */
   uint32_t hash_code;
   bool use_dupli;
@@ -366,6 +357,20 @@ const GPUUniformAttrList *GPU_material_uniform_attributes(const GPUMaterial *mat
 struct GHash *GPU_uniform_attr_list_hash_new(const char *info);
 void GPU_uniform_attr_list_copy(GPUUniformAttrList *dest, const GPUUniformAttrList *src);
 void GPU_uniform_attr_list_free(GPUUniformAttrList *set);
+
+typedef struct GPULayerAttr {
+  struct GPULayerAttr *next, *prev;
+
+  /* Meaningful part of the attribute set key. */
+  char name[64]; /* MAX_CUSTOMDATA_LAYER_NAME */
+  /** Hash of name[64]. */
+  uint32_t hash_code;
+
+  /* Helper fields used by code generation. */
+  int users;
+} GPULayerAttr;
+
+const ListBase *GPU_material_layer_attributes(const GPUMaterial *material);
 
 /* A callback passed to GPU_material_from_callbacks to construct the material graph by adding and
  * linking the necessary GPU material nodes. */

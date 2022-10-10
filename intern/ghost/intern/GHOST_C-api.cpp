@@ -24,7 +24,7 @@
 
 GHOST_SystemHandle GHOST_CreateSystem(void)
 {
-  GHOST_ISystem::createSystem();
+  GHOST_ISystem::createSystem(true);
   GHOST_ISystem *system = GHOST_ISystem::getSystem();
 
   return (GHOST_SystemHandle)system;
@@ -51,6 +51,13 @@ GHOST_TSuccess GHOST_DisposeSystem(GHOST_SystemHandle systemhandle)
 
   return system->disposeSystem();
 }
+
+#if !(defined(WIN32) || defined(__APPLE__))
+const char *GHOST_SystemBackend()
+{
+  return GHOST_ISystem::getSystemBackend();
+}
+#endif
 
 void GHOST_ShowMessageBox(GHOST_SystemHandle systemhandle,
                           const char *title,
@@ -741,6 +748,12 @@ GHOST_TSuccess GHOST_InvalidateWindow(GHOST_WindowHandle windowhandle)
   GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
 
   return window->invalidate();
+}
+
+void GHOST_SetMultitouchGestures(GHOST_SystemHandle systemhandle, const bool use)
+{
+  GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
+  return system->setMultitouchGestures(use);
 }
 
 void GHOST_SetTabletAPI(GHOST_SystemHandle systemhandle, GHOST_TTabletAPI api)

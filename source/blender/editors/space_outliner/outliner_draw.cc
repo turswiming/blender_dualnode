@@ -166,12 +166,12 @@ static void restrictbutton_recursive_bone(Bone *bone_parent, int flag, bool set_
   }
 }
 
-static void restrictbutton_r_lay_fn(bContext *C, void *poin, void *UNUSED(poin2))
+static void restrictbutton_r_lay_fn(bContext *C, void *poin, void * /*poin2*/)
 {
   WM_event_add_notifier(C, NC_SCENE | ND_RENDER_OPTIONS, poin);
 }
 
-static void restrictbutton_bone_visibility_fn(bContext *C, void *poin, void *UNUSED(poin2))
+static void restrictbutton_bone_visibility_fn(bContext *C, void *poin, void * /*poin2*/)
 {
   Bone *bone = (Bone *)poin;
 
@@ -180,7 +180,7 @@ static void restrictbutton_bone_visibility_fn(bContext *C, void *poin, void *UNU
   }
 }
 
-static void restrictbutton_bone_select_fn(bContext *C, void *UNUSED(poin), void *poin2)
+static void restrictbutton_bone_select_fn(bContext *C, void * /*poin*/, void *poin2)
 {
   Bone *bone = (Bone *)poin2;
   if (bone->flag & BONE_UNSELECTABLE) {
@@ -226,7 +226,7 @@ static void restrictbutton_ebone_visibility_fn(bContext *C, void *poin, void *po
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE, nullptr);
 }
 
-static void restrictbutton_gp_layer_flag_fn(bContext *C, void *poin, void *UNUSED(poin2))
+static void restrictbutton_gp_layer_flag_fn(bContext *C, void *poin, void * /*poin2*/)
 {
   ID *id = (ID *)poin;
 
@@ -234,7 +234,7 @@ static void restrictbutton_gp_layer_flag_fn(bContext *C, void *poin, void *UNUSE
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
 }
 
-static void restrictbutton_id_user_toggle(bContext *UNUSED(C), void *poin, void *UNUSED(poin2))
+static void restrictbutton_id_user_toggle(bContext * /*C*/, void *poin, void * /*poin2*/)
 {
   ID *id = (ID *)poin;
 
@@ -2108,7 +2108,7 @@ static void outliner_buttons(const bContext *C,
   }
 }
 
-static void outliner_mode_toggle_fn(bContext *C, void *tselem_poin, void *UNUSED(arg2))
+static void outliner_mode_toggle_fn(bContext *C, void *tselem_poin, void * /*arg2*/)
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   TreeStoreElem *tselem = (TreeStoreElem *)tselem_poin;
@@ -2985,7 +2985,7 @@ static void outliner_draw_iconrow_number(const uiFontStyle *fstyle,
                            number_text,
                            text_col);
   UI_fontstyle_set(fstyle);
-  GPU_blend(GPU_BLEND_ALPHA); /* Roundbox and text drawing disables. */
+  GPU_blend(GPU_BLEND_ALPHA); /* Round-box and text drawing disables. */
 }
 
 static void outliner_icon_background_colors(float icon_color[4], float icon_border[4])
@@ -3015,7 +3015,7 @@ static void outliner_draw_active_indicator(const float minx,
   UI_draw_roundbox_corner_set(UI_CNR_ALL);
   UI_draw_roundbox_aa(&rect, true, radius, icon_color);
   UI_draw_roundbox_aa(&rect, false, radius, icon_border);
-  GPU_blend(GPU_BLEND_ALPHA); /* Roundbox disables. */
+  GPU_blend(GPU_BLEND_ALPHA); /* Round-box disables. */
 }
 
 static void outliner_draw_iconrow_doit(uiBlock *block,
@@ -3362,7 +3362,7 @@ static void outliner_draw_tree_element(bContext *C,
     offsx += UI_UNIT_X;
 
     /* Data-type icon. */
-    if (!(ELEM(tselem->type, TSE_RNA_PROPERTY, TSE_RNA_ARRAY_ELEM, TSE_ID_BASE)) &&
+    if (!ELEM(tselem->type, TSE_RNA_PROPERTY, TSE_RNA_ARRAY_ELEM, TSE_ID_BASE) &&
         tselem_draw_icon(block,
                          xmax,
                          float(startx) + offsx,
@@ -3605,8 +3605,8 @@ static void outliner_draw_struct_marks(ARegion *region,
         immThemeColorShadeAlpha(TH_BACK, -15, -200);
 
         immBegin(GPU_PRIM_LINES, 2);
-        immVertex2f(pos, 0, (float)*starty + UI_UNIT_Y);
-        immVertex2f(pos, region->v2d.cur.xmax, (float)*starty + UI_UNIT_Y);
+        immVertex2f(pos, 0, float(*starty) + UI_UNIT_Y);
+        immVertex2f(pos, region->v2d.cur.xmax, float(*starty) + UI_UNIT_Y);
         immEnd();
 
         immUnbindProgram();

@@ -125,7 +125,7 @@ set(SRC
   intern/displist.cc
   intern/dynamicpaint.c
   intern/editlattice.c
-  intern/editmesh.c
+  intern/editmesh.cc
   intern/editmesh_bvh.c
   intern/editmesh_cache.cc
   intern/editmesh_tangent.cc
@@ -191,7 +191,7 @@ set(SRC
   intern/mask_rasterize.c
   intern/material.c
   intern/mball.cc
-  intern/mball_tessellate.c
+  intern/mball_tessellate.cc
   intern/mesh.cc
   intern/mesh_boolean_convert.cc
   intern/mesh_calc_edges.cc
@@ -199,7 +199,7 @@ set(SRC
   intern/mesh_debug.cc
   intern/mesh_evaluate.cc
   intern/mesh_fair.cc
-  intern/mesh_iterators.c
+  intern/mesh_iterators.cc
   intern/mesh_legacy_convert.cc
   intern/mesh_mapping.cc
   intern/mesh_merge.c
@@ -214,9 +214,9 @@ set(SRC
   intern/mesh_tessellate.cc
   intern/mesh_validate.cc
   intern/mesh_wrapper.cc
-  intern/modifier.c
+  intern/modifier.cc
   intern/movieclip.c
-  intern/multires.c
+  intern/multires.cc
   intern/multires_reshape.c
   intern/multires_reshape_apply_base.c
   intern/multires_reshape_ccg.c
@@ -235,7 +235,7 @@ set(SRC
   intern/object_deform.c
   intern/object_dupli.cc
   intern/object_facemap.c
-  intern/object_update.c
+  intern/object_update.cc
   intern/ocean.c
   intern/ocean_spectrum.c
   intern/outliner_treehash.cc
@@ -260,14 +260,14 @@ set(SRC
   intern/scene.cc
   intern/screen.c
   intern/shader_fx.c
-  intern/shrinkwrap.c
+  intern/shrinkwrap.cc
   intern/simulation.cc
   intern/softbody.c
   intern/sound.c
   intern/speaker.c
   intern/studiolight.c
   intern/subdiv.c
-  intern/subdiv_ccg.c
+  intern/subdiv_ccg.cc
   intern/subdiv_ccg_mask.c
   intern/subdiv_ccg_material.c
   intern/subdiv_converter.c
@@ -278,7 +278,7 @@ set(SRC
   intern/subdiv_eval.c
   intern/subdiv_foreach.c
   intern/subdiv_mesh.cc
-  intern/subdiv_modifier.c
+  intern/subdiv_modifier.cc
   intern/subdiv_stats.c
   intern/subdiv_topology.c
   intern/subsurf_ccg.c
@@ -298,6 +298,7 @@ set(SRC
   intern/unit.c
   intern/vfont.c
   intern/vfontdata_freetype.c
+  intern/viewer_path.cc
   intern/volume.cc
   intern/volume_render.cc
   intern/volume_to_mesh.cc
@@ -483,6 +484,7 @@ set(SRC
   BKE_unit.h
   BKE_vfont.h
   BKE_vfontdata.h
+  BKE_viewer_path.h
   BKE_volume.h
   BKE_volume_render.h
   BKE_volume_to_mesh.hh
