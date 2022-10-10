@@ -35,7 +35,6 @@ class Instance {
 
   DRWState cull_state;
   DRWState clip_state;
-  bool view_updated; /* TODO(pragma37): move to AntialiasingPass ? */
 
   eContextObjectMode ob_mode;
   eGPUShaderConfig clip_mode;
@@ -54,11 +53,11 @@ class Instance {
     /* TODO(pragma37):
      * Check why Workbench Next exposes OB_MATERIAL, and Workbench exposes OB_RENDER */
     bool is_render_mode = !v3d || ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL);
-    // const View3DShading &shading = is_render_mode ? scene->display.shading : v3d->shading;
     const View3DShading previous_shading = shading;
     shading = is_render_mode ? scene->display.shading : v3d->shading;
 
     ob_mode = CTX_data_mode_enum_ex(context->object_edit, context->obact, context->object_mode);
+    /* TODO(pragma37): Shouldn't clip_state be enough ? */
     clip_mode = context->sh_cfg;
 
     cull_state = shading.flag & V3D_SHADING_BACKFACE_CULLING ? DRW_STATE_CULL_BACK :
