@@ -155,15 +155,19 @@ set(SRC
   engines/eevee_next/eevee_world.cc
   engines/workbench/workbench_data.c
   engines/workbench/workbench_effect_antialiasing.c
+  engines/workbench/workbench_effect_antialiasing.cc
   engines/workbench/workbench_effect_cavity.c
   engines/workbench/workbench_effect_dof.c
   engines/workbench/workbench_effect_outline.c
   engines/workbench/workbench_engine.c
   engines/workbench/workbench_engine.cc
   engines/workbench/workbench_materials.c
+  engines/workbench/workbench_materials.cc
+  engines/workbench/workbench_mesh_passes.cc
   engines/workbench/workbench_opaque.c
   engines/workbench/workbench_render.c
   engines/workbench/workbench_shader.cc
+  engines/workbench/workbench_shader_cache.cc
   engines/workbench/workbench_shadow.c
   engines/workbench/workbench_transparent.c
   engines/workbench/workbench_volume.c
@@ -678,6 +682,7 @@ set(GLSL_SRC
 )
 
 set(GLSL_C)
+
 foreach(GLSL_FILE ${GLSL_SRC})
   data_to_c_simple(${GLSL_FILE} GLSL_C)
 endforeach()
@@ -689,6 +694,7 @@ list(APPEND LIB
 )
 
 set(GLSL_SOURCE_CONTENT "")
+
 foreach(GLSL_FILE ${GLSL_SRC})
   get_filename_component(GLSL_FILE_NAME ${GLSL_FILE} NAME)
   string(REPLACE "." "_" GLSL_FILE_NAME_UNDERSCORES ${GLSL_FILE_NAME})
@@ -732,7 +738,6 @@ if(WITH_GTESTS)
     add_definitions(-DWITH_OPENGL_DRAW_TESTS)
   endif()
 endif()
-
 
 blender_add_lib(bf_draw "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

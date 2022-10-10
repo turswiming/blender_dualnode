@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "gpu_shader_create_info.hh"
-#include "workbench_defines.h"
+#include "workbench_defines.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Object Type

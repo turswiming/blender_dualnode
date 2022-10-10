@@ -5,3 +5,5 @@
 #define WB_TILEMAP_SLOT 2
 #define WB_MATERIAL_SLOT 0
 #define WB_WORLD_SLOT 4
+
+#define WB_RESOLVE_GROUP_SIZE 8
