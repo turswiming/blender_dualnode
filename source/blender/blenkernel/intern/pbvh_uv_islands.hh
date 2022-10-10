@@ -7,7 +7,7 @@
  * Island.
  *
  * \note Similar to `uvedit_islands.cc`, but optimized for PBVH painting without using BMesh for
- * performance reasons. Does not support non-manifold meshes or edges with more than 2 faces.
+ * performance reasons. Non-manifold meshes only (i.e. edges must have less than 3 faces).
  *
  * Polygons (face with more than 3 edges) are supported as they are split up to primitives.
  *

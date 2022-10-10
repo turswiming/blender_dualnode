@@ -8,15 +8,27 @@
 
 namespace blender {
 
-template<typename T> class VectorList {
+/**
+ * A VectorList is a vector of vectors.
+ *
+ * VectorList can be used when:
+ *
+ * 1) Don't know up front the number of elements that will be added to the list. Use array or
+ * vector.reserve when known up front.
+ *
+ * 2) Number of reads/writes doesn't require sequential access
+ * of the whole list. A vector ensures memory is sequential which is fast when reading, writing can
+ * have overhead when the reserved memory is full.
+ *
+ * When a VectorList reserved memory is full it will allocate memory for the new items, breaking
+ * the sequential access. Within each allocated memory block the elements are ordered sequentially.
+ */
+template<typename T, int64_t CapacityStart = 32, int64_t CapacitySoftLimit = 4096>
+class VectorList {
  public:
   using UsedVector = Vector<T, 0>;
 
  private:
-  // TODO: Should be template variables.
-  static constexpr int64_t vector_capacity_start = 32;
-  static constexpr int64_t vector_capacity_soft_limit = 4096;
-
   /**
    * Contains the individual vectors. There must always be at least one vector
    */
@@ -99,9 +111,9 @@ template<typename T> class VectorList {
   int64_t get_next_vector_capacity()
   {
     if (vectors_.is_empty()) {
-      return vector_capacity_start;
+      return CapacityStart;
     }
-    return std::min(vectors_.last().capacity() * 2, vector_capacity_soft_limit);
+    return std::min(vectors_.last().capacity() * 2, CapacitySoftLimit);
   }
 };
 

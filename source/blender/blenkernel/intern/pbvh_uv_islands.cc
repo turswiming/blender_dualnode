@@ -531,7 +531,6 @@ struct InnerEdge {
   }
 };
 
-// TODO: should have InnerEdges and Primitives to reduce complexity in algorithm
 struct Fan {
   /* Blades of the fan. */
   Vector<InnerEdge> inner_edges;
@@ -749,10 +748,6 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, float min_u
   }
   fan.init_uv_coordinates(*uv_vertex);
   fan.mark_already_added_segments(*uv_vertex);
-
-  // tag them as being 'not fixed in uv space'. count them and determine a position in uv space.
-  // add UV primitives for them.
-  // recalc the border.
   int num_to_add = fan.count_num_to_add();
 
   if (num_to_add == 0) {
@@ -760,9 +755,12 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, float min_u
     MeshPrimitive *fill_primitive_2 = corner.first->uv_primitive->primitive;
 
     MeshPrimitive *fill_primitive = find_fill_border(corner);
-    // Although the fill_primitive can fill the missing segment it could lead to a squashed
-    // triangle when the corner angle is near 180 degrees. In order to fix this we will
-    // always add two segments both using the found fill primitive.
+
+    /*
+     * Although the fill_primitive can fill the missing segment it could lead to a squashed
+     * triangle when the corner angle is near 180 degrees. In order to fix this we will
+     * always add two segments both using the same fill primitive.
+     */
     if (fill_primitive) {
       fill_primitive_1 = fill_primitive;
       fill_primitive_2 = fill_primitive;
@@ -811,13 +809,13 @@ static void extend_at_vert(UVIsland &island, UVBorderCorner &corner, float min_u
       float factor = (i + 1.0f) / (num_to_add + 1.0f);
       float2 new_uv = corner.uv(factor, min_uv_distance);
 
-      // Find an segment that contains the 'current edge'.
+      /* Find an segment that contains the 'current edge'. */
       for (InnerEdge &segment : fan.inner_edges) {
         if (segment.flags.found) {
           continue;
         }
 
-        // Find primitive that shares the current edge and the segment edge.
+        /* Find primitive that shares the current edge and the segment edge. */
         MeshPrimitive *fill_primitive = find_fill_border(
             *uv_vertex->vertex,
             *shared_edge_vertex,
@@ -921,8 +919,6 @@ static void reset_extendability_flags(UVIsland &island)
 
 void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index)
 {
-  // Find sharpest corner that still inside the island mask and can be extended.
-  // exit when no corner could be found.
   reset_extendability_flags(*this);
 
   int64_t border_index = 0;
@@ -938,12 +934,12 @@ void UVIsland::extend_border(const UVIslandsMask &mask, const short island_index
 
     UVVertex *uv_vertex = extension_corner->second->get_uv_vertex(0);
 
-    /* When outside the mask, the uv should not be considered for extension. */
+    /* Found corner is outside the mask, the corner should not be considered for extension. */
     const UVIslandsMask::Tile *tile = mask.find_tile(uv_vertex->uv);
     if (tile && tile->is_masked(island_index, uv_vertex->uv)) {
       extend_at_vert(*this, *extension_corner, tile->get_pixel_size_in_uv_space() * 2.0f);
     }
-    /* Mark that the vert is extended. Unable to extend twice. */
+    /* Mark that the vert is extended. */
     uv_vertex->flags.is_extended = true;
   }
 }
