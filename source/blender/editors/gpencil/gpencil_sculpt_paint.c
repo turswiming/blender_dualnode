@@ -1867,101 +1867,112 @@ static bool get_automasking_strokes_list(tGP_BrushEditData *gso)
     for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
       LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
         bGPDstroke *gps_active = (gps->runtime.gps_orig) ? gps->runtime.gps_orig : gps;
+        bool pick_stroke = false;
+        bool pick_layer_stroke = false;
+        bool pick_material_stroke = false;
+        bool pick_layer_active = false;
+        bool pick_material_active = false;
 
         if (gps->totpoints == 0) {
           continue;
         }
-        /* Check if the color is editable. */
+        /* Check if the material is editable. */
         if (ED_gpencil_stroke_material_editable(gso->object, gpl, gps) == false) {
           continue;
         }
 
         /* Stroke Layer Auto-Masking. */
         if (is_masking_layer_stroke && (gpl == gpl_active_stroke)) {
-          BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-          continue;
+          pick_layer_stroke = true;
         }
         /* Active Layer Auto-Masking. */
         if (is_masking_layer_active && (gpl == gpl_active)) {
-          BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-          continue;
+          pick_layer_active = true;
         }
         /* Stroke Material Auto-Masking. */
         if (is_masking_material_stroke) {
           Material *mat = BKE_object_material_get(ob, gps->mat_nr + 1);
           if (mat == mat_active_stroke) {
-            BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-            continue;
+            pick_material_stroke = true;
           }
         }
         /* Active Material Auto-Masking. */
         if (is_masking_material_active) {
           Material *mat = BKE_object_material_get(ob, gps->mat_nr + 1);
           if (mat == mat_active) {
-            BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-            continue;
+            pick_material_active = true;
           }
-        }
-
-        /* If Stroke Auto-Masking is not enabled, nothing else to do. */
-        if (!is_masking_stroke) {
-          continue;
         }
 
         /* Check if the stroke collide with brush. */
-        if (!ED_gpencil_stroke_check_collision(gsc, gps, gso->mval, radius, bound_mat)) {
+        if ((is_masking_stroke) &&
+            ED_gpencil_stroke_check_collision(gsc, gps, gso->mval, radius, bound_mat)) {
+
+          bGPDspoint *pt1, *pt2;
+          int pc1[2] = {0};
+          int pc2[2] = {0};
+          bGPDspoint npt;
+
+          if (gps->totpoints == 1) {
+            gpencil_point_to_world_space(gps->points, bound_mat, &npt);
+            gpencil_point_to_xy(gsc, gps, &npt, &pc1[0], &pc1[1]);
+
+            /* Only check if point is inside. */
+            if (len_v2v2_int(mval_i, pc1) <= radius) {
+              pick_stroke = true;
+            }
+          }
+          else {
+            /* Loop over the points in the stroke, checking for intersections
+             * - an intersection means that we touched the stroke.
+             */
+            for (int i = 0; (i + 1) < gps->totpoints && !pick_stroke; i++) {
+              /* Get points to work with. */
+              pt1 = gps->points + i;
+              pt2 = gps->points + i + 1;
+
+              /* Check first point. */
+              gpencil_point_to_world_space(pt1, bound_mat, &npt);
+              gpencil_point_to_xy(gsc, gps, &npt, &pc1[0], &pc1[1]);
+              if (len_v2v2_int(mval_i, pc1) <= radius) {
+                pick_stroke = true;
+                i = gps->totpoints;
+              }
+
+              /* Check second point. */
+              gpencil_point_to_world_space(pt2, bound_mat, &npt);
+              gpencil_point_to_xy(gsc, gps, &npt, &pc2[0], &pc2[1]);
+              if (len_v2v2_int(mval_i, pc2) <= radius) {
+                pick_stroke = true;
+                i = gps->totpoints;
+              }
+
+              /* Check segment. */
+              if (gpencil_stroke_inside_circle(
+                      gso->mval, radius, pc1[0], pc1[1], pc2[0], pc2[1])) {
+                pick_stroke = true;
+                i = gps->totpoints;
+              }
+            }
+          }
+        }
+        /* if the stroke meets all the masking conditions, add to the hash table. */
+        if (is_masking_stroke && !pick_stroke) {
           continue;
         }
-
-        bGPDspoint *pt1, *pt2;
-        int pc1[2] = {0};
-        int pc2[2] = {0};
-        bGPDspoint npt;
-
-        if (gps->totpoints == 1) {
-          gpencil_point_to_world_space(gps->points, bound_mat, &npt);
-          gpencil_point_to_xy(gsc, gps, &npt, &pc1[0], &pc1[1]);
-
-          /* Only check if point is inside. */
-          if (len_v2v2_int(mval_i, pc1) <= radius) {
-            BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-          }
+        if (is_masking_layer_stroke && !pick_layer_stroke) {
+          continue;
         }
-        else {
-          /* Loop over the points in the stroke, checking for intersections
-           * - an intersection means that we touched the stroke.
-           */
-          for (int i = 0; (i + 1) < gps->totpoints; i++) {
-            /* Get points to work with. */
-            pt1 = gps->points + i;
-            pt2 = gps->points + i + 1;
-
-            /* Check first point. */
-            gpencil_point_to_world_space(pt1, bound_mat, &npt);
-            gpencil_point_to_xy(gsc, gps, &npt, &pc1[0], &pc1[1]);
-            if (len_v2v2_int(mval_i, pc1) <= radius) {
-              BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-              i = gps->totpoints;
-              continue;
-            }
-
-            /* Check second point. */
-            gpencil_point_to_world_space(pt2, bound_mat, &npt);
-            gpencil_point_to_xy(gsc, gps, &npt, &pc2[0], &pc2[1]);
-            if (len_v2v2_int(mval_i, pc2) <= radius) {
-              BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-              i = gps->totpoints;
-              continue;
-            }
-
-            /* Check segment. */
-            if (gpencil_stroke_inside_circle(gso->mval, radius, pc1[0], pc1[1], pc2[0], pc2[1])) {
-              BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
-              i = gps->totpoints;
-              continue;
-            }
-          }
+        if (is_masking_material_stroke && !pick_material_stroke) {
+          continue;
         }
+        if (is_masking_layer_active && !pick_layer_active) {
+          continue;
+        }
+        if (is_masking_material_active && !pick_material_active) {
+          continue;
+        }
+        BLI_ghash_insert(gso->automasking_strokes, gps_active, gps_active);
       }
       /* If not multi-edit, exit loop. */
       if (!is_multiedit) {
