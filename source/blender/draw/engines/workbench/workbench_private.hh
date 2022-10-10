@@ -125,6 +125,11 @@ class TransparentPass {
 };
 
 class AntiAliasingPass {
+ private:
+  bool is_playback;
+  bool is_navigating;
+  int taa_sample = 0;
+
  public:
   Texture smaa_search_tx = {"smaa_search_tx"};
   Texture smaa_area_tx = {"smaa_area_tx"};
@@ -151,6 +156,7 @@ class AntiAliasingPass {
 
   ~AntiAliasingPass();
 
+  void init(bool reset_taa);
   void sync(SceneResources &resources);
 
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx);

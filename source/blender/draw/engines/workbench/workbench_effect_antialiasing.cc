@@ -34,6 +34,16 @@ AntiAliasingPass::~AntiAliasingPass()
   }
 }
 
+void AntiAliasingPass::init(bool reset_taa)
+{
+  is_playback = DRW_state_is_playback();
+  is_navigating = DRW_state_is_navigating();
+
+  if (reset_taa || is_playback || is_navigating) {
+    taa_sample = 0;
+  }
+}
+
 void AntiAliasingPass::sync(SceneResources &resources)
 {
   {

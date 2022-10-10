@@ -2,6 +2,7 @@
 
 #include "BKE_studiolight.h"
 #include "DEG_depsgraph_query.h"
+#include "ED_view3d.h"
 #include "GPU_capabilities.h"
 
 #include "workbench_private.hh"
@@ -22,9 +23,6 @@ class Instance {
 
   AntiAliasingPass anti_aliasing_ps;
 
-  DRWState clip_state;
-  DRWState cull_state;
-
   bool use_per_material_batches = false;
   eColorType color_type = eColorType::MATERIAL;
   eMaterialSubType material_subtype = eMaterialSubType::MATERIAL;
@@ -35,6 +33,15 @@ class Instance {
   /* When r == -1.0 the shader uses the vertex color */
   Material material_attribute_color = Material(float3(-1.0f));
 
+  DRWState cull_state;
+  DRWState clip_state;
+  bool view_updated; /* TODO(pragma37): move to AntialiasingPass ? */
+
+  eContextObjectMode ob_mode;
+  eGPUShaderConfig clip_mode;
+
+  View3DShading shading;
+
   void init(const int2 &output_res,
             const Depsgraph *depsgraph,
             const Object * /*camera*/,
@@ -42,14 +49,59 @@ class Instance {
             const RegionView3D *rv3d)
   {
     Scene *scene = DEG_get_evaluated_scene(depsgraph);
+    const DRWContextState *context = DRW_context_state_get();
 
     /* TODO(pragma37):
      * Check why Workbench Next exposes OB_MATERIAL, and Workbench exposes OB_RENDER */
     bool is_render_mode = !v3d || ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL);
-    const View3DShading &shading = is_render_mode ? scene->display.shading : v3d->shading;
+    // const View3DShading &shading = is_render_mode ? scene->display.shading : v3d->shading;
+    const View3DShading previous_shading = shading;
+    shading = is_render_mode ? scene->display.shading : v3d->shading;
+
+    ob_mode = CTX_data_mode_enum_ex(context->object_edit, context->obact, context->object_mode);
+    clip_mode = context->sh_cfg;
 
     cull_state = shading.flag & V3D_SHADING_BACKFACE_CULLING ? DRW_STATE_CULL_BACK :
                                                                DRW_STATE_NO_DRAW;
+
+    bool reset_taa = false;
+
+    /* FIXME: This reproduce old behavior when workbench was separated in 2 engines.
+     * But this is a workaround for a missing update tagging. */
+    DRWState new_clip_state = RV3D_CLIPPING_ENABLED(v3d, rv3d) ? DRW_STATE_CLIP_PLANES :
+                                                                 DRW_STATE_NO_DRAW;
+    if (clip_state != new_clip_state) {
+      reset_taa = true;
+    }
+    clip_state = new_clip_state;
+
+    if (rv3d && rv3d->rflag & RV3D_GPULIGHT_UPDATE) {
+      reset_taa = true;
+    }
+
+    if (SHADING_XRAY_FLAG_ENABLED(shading)) {
+      /* Disable shading options that aren't supported in transparency mode. */
+      shading.flag &= ~(V3D_SHADING_SHADOW | V3D_SHADING_CAVITY | V3D_SHADING_DEPTH_OF_FIELD);
+    }
+    if (SHADING_XRAY_ENABLED(shading) != SHADING_XRAY_ENABLED(previous_shading) ||
+        shading.flag != previous_shading.flag) {
+      reset_taa = true;
+    }
+
+    if (!is_render_mode) {
+      if (shading.type < OB_SOLID) {
+        /* TODO(pragma37): Shouldn't we just skip any rendering at all ??? */
+        shading.light = V3D_LIGHTING_FLAT;
+        shading.color_type = V3D_SHADING_OBJECT_COLOR;
+        shading.xray_alpha = 0.0f;
+      }
+      else if (SHADING_XRAY_ENABLED(shading)) {
+        shading.xray_alpha = SHADING_XRAY_ALPHA(shading);
+      }
+      else {
+        shading.xray_alpha = 1.0f;
+      }
+    }
 
     material_override = Material(shading.single_color);
 
@@ -123,8 +175,18 @@ class Instance {
       }
     }
 
+    world_buf.object_outline_color = shading.object_outline_color;
+    world_buf.object_outline_color.w = 1.0f;
+    world_buf.ui_scale = DRW_state_is_image_render() ? 1.0f : G_draw.block.size_pixel;
+    world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
+
+    /* TODO(pragma37) volumes_do */
+
     resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
     resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
+
+    anti_aliasing_ps.init(reset_taa);
+    /* TODO(pragma37) taa_sample_len */
   }
 
   void begin_sync()
@@ -293,6 +355,10 @@ static void workbench_engine_init(void *vedata)
   }
 
   ved->instance->init(size, ctx_state->depsgraph, camera, v3d, rv3d);
+
+  /* FIXME: This reproduce old behavior when workbench was separated in 2 engines.
+   * But this is a workaround for a missing update tagging. */
+  rv3d->rflag &= ~RV3D_GPULIGHT_UPDATE;
 }
 
 static void workbench_cache_init(void *vedata)
