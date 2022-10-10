@@ -21,14 +21,6 @@
 #include "PIL_time_utildefines.h"
 
 namespace blender::bke::uv_islands {
-/*
- * When enabled various parts of the code would generate an SVG file to visual see how the
- * algorithm makes decisions.
- *
- * TODO: These will be removed before this patch will land in master.
- */
-//#define DEBUG_SVG
-//#define VALIDATE
 
 struct MeshEdge;
 struct MeshPrimitive;
@@ -133,22 +125,6 @@ struct MeshData {
     init_primitives();
     init_edges();
     init_primitive_uv_island_ids();
-
-#ifdef VALIDATE
-    for (const MeshVertex &v : vertices) {
-      printf("Vert {v%lld}\n", v.v);
-      for (const MeshEdge *e : v.edges) {
-        printf("-Edge {v%lld v%lld}\n", e->vert1->v, e->vert2->v);
-        for (const MeshPrimitive *p : e->primitives) {
-          printf(" -Prim {p%lld, v%lld v%lld v%lld}\n",
-                 p->index,
-                 p->vertices[0].vertex->v,
-                 p->vertices[1].vertex->v,
-                 p->vertices[2].vertex->v);
-        }
-      }
-    }
-#endif
     TIMEIT_END(init_mesh_data);
   }
 
@@ -580,10 +556,6 @@ struct UVBorder {
 
   static std::optional<UVBorder> extract_from_edges(Vector<UVBorderEdge> &edges);
 
-#ifdef VALIDATE
-  void validate() const;
-#endif
-
   /** Remove edge from the border. updates the indexes. */
   void remove(int64_t index)
   {
@@ -722,74 +694,7 @@ struct UVIsland {
       }
     }
   }
-
-#ifdef VALIDATE
-  void validate_primitives() const
-  {
-    /* Each UVPrimitive that points to the same mesh primitive should contain the same mesh
-     * vertices (and can be retrieved in the same order). */
-    for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
-      for (const UVPrimitive &prim_a : primitives) {
-        validate_primitive(prim_a);
-      }
-    }
-  }
-  void validate_primitive(const UVPrimitive &prim_a) const
-  {
-    /* Each UVPrimitive that points to the same mesh primitive should contain the same mesh
-     * vertices (and can be retrieved in the same order). */
-    for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
-      for (const UVPrimitive &prim_b : primitives) {
-        if (prim_a.primitive != prim_b.primitive) {
-          continue;
-        }
-        for (int i = 0; i < 3; i++) {
-          const UVVertex *v1 = prim_a.get_uv_vertex(i);
-          const UVVertex *v2 = prim_b.get_uv_vertex(i);
-          BLI_assert(v1->vertex->v == v2->vertex->v);
-        }
-      }
-    }
-  }
-
-  void validate_border() const
-  {
-    /* Each UVPrimitive that points to the same mesh primitive should contain the same mesh
-     * vertices (and can be retrieved in the same order). */
-    for (const VectorList<UVPrimitive>::UsedVector &primitives_a : uv_primitives) {
-      for (const UVPrimitive &prim_a : primitives_a) {
-        for (const VectorList<UVPrimitive>::UsedVector &primitives_b : uv_primitives) {
-          for (const UVPrimitive &prim_b : primitives_b) {
-            if (prim_a.primitive != prim_b.primitive) {
-              continue;
-            }
-            for (int i = 0; i < 3; i++) {
-              const UVVertex *v1 = prim_a.get_uv_vertex(i);
-              const UVVertex *v2 = prim_b.get_uv_vertex(i);
-              BLI_assert(v1->vertex->v == v2->vertex->v);
-            }
-          }
-        }
-      }
-    }
-    for (const UVBorder &border : borders) {
-      border.validate();
-    }
-  }
-#endif
 };
-
-#ifdef DEBUG_SVG
-/* Debug functions to export to a SVG file. */
-void svg_header(std::ostream &ss);
-void svg(std::ostream &ss, const UVIsland &islands, int step);
-void svg(std::ostream &ss, const UVIslands &islands, int step);
-void svg(std::ostream &ss, const UVPrimitive &primitive);
-void svg(std::ostream &ss, const UVPrimitive &primitive, int step);
-void svg(std::ostream &ss, const UVIslandsMask &mask, int step);
-void svg(std::ostream &ss, const UVBorder &border, int step);
-void svg_footer(std::ostream &ss);
-#endif
 
 struct UVIslands {
   Vector<UVIsland> islands;
@@ -798,27 +703,6 @@ struct UVIslands {
 
   void extract_borders();
   void extend_borders(const UVIslandsMask &islands_mask);
-
-#ifdef VALIDATE
- private:
-  bool validate() const
-  {
-    /* After operations it is not allowed that islands share any edges. In that case it should
-     * already be merged. */
-    for (int i = 0; i < islands.size() - 1; i++) {
-      for (int j = i + 1; j < islands.size(); j++) {
-        for (const VectorList<UVPrimitive>::UsedVector &primitives : islands[j].uv_primitives) {
-          for (const UVPrimitive &prim : primitives) {
-            if (islands[i].has_shared_edge(prim)) {
-              return false;
-            }
-          }
-        }
-      }
-    }
-    return true;
-  }
-#endif
 };
 
 /** Mask to find the index of the UVIsland for a given UV coordinate. */
