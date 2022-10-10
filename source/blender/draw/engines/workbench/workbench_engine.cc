@@ -64,7 +64,14 @@ class Instance {
 
     float4x4 rot_matrix = float4x4::identity();
     if (shading.flag & V3D_SHADING_WORLD_ORIENTATION) {
-      /* TODO(pragma37) */
+      /* TODO(pragma37) C++ API ? */
+      float V[4][4], R[4][4];
+      DRW_view_viewmat_get(nullptr, V, false);
+      axis_angle_to_mat4_single(R, 'Z', -shading.studiolight_rot_z);
+      mul_m4_m4m4(R, V, R);
+      swap_v3_v3(R[2], R[1]);
+      negate_v3(R[2]);
+      rot_matrix = float4x4(R);
     }
 
     StudioLight *studio_light = nullptr;
@@ -86,7 +93,7 @@ class Instance {
 
       SolidLight *sl = (studio_light) ? &studio_light->light[i] : nullptr;
       if (sl && sl->flag) {
-        float3 direction = rot_matrix * float3(sl->vec);
+        float3 direction = rot_matrix.ref_3x3() * float3(sl->vec);
         light.direction = float4(direction, 0.0f);
         /* We should pre-divide the power by PI but that makes the lights really dim. */
         light.specular_color = float4(float3(sl->spec), 0.0f);
