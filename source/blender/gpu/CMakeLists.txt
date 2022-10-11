@@ -481,6 +481,7 @@ set(GLSL_SRC
   shaders/sculpt_paint/sculpt_paint_image_comp.glsl
   shaders/sculpt_paint/sculpt_paint_image_merge_comp.glsl
   shaders/sculpt_paint/sculpt_paint_image_lib.glsl
+  shaders/sculpt_paint/sculpt_paint_tile_lib.glsl
 
   GPU_shader_shared_utils.h
 )

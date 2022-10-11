@@ -1,4 +1,5 @@
 #pragma BLENDER_REQUIRE(sculpt_paint_image_lib.glsl)
+#pragma BLENDER_REQUIRE(sculpt_paint_tile_lib.glsl)
 
 bool SCULPT_brush_test(PaintBrushTestData test_data,
                        PaintStepData step_data,
@@ -19,7 +20,9 @@ void main()
 {
   PackedPixelRow row = pixel_row_buf[gl_GlobalInvocationID.x + pixel_row_offset];
   TrianglePaintInput triangle = paint_input[PIXEL_ROW_PRIM_INDEX(row)];
-  ivec2 image_coord = PIXEL_ROW_START_IMAGE_COORD(row);
+  PaintTileData paint_tile;
+  ivec3 image_coord = paint_tile_coord_from_udim(
+      1001, PIXEL_ROW_START_IMAGE_COORD(row), paint_tile);
 
   uint row_len = PIXEL_ROW_LEN(row);
 
@@ -43,7 +46,7 @@ void main()
       bool test_result = SCULPT_brush_test(paint_brush_buf.test, step_data, pos, distance);
       if (test_result) {
         if (!color_read) {
-          color = imageLoad(out_img, image_coord);
+          color = imageLoad(paint_tiles_img, image_coord);
           color_read = true;
         }
         // TODO: blend with color...
@@ -56,7 +59,7 @@ void main()
       }
     }
     if (color_read) {
-      imageStore(out_img, image_coord, color);
+      imageStore(paint_tiles_img, image_coord, color);
     }
     image_coord.x += 1;
     pos += delta;

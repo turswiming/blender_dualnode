@@ -77,6 +77,26 @@ void NodeData::build_pixels_gpu_buffer()
       elem_len * sizeof(PackedPixelRow), elements.data(), GPU_USAGE_STATIC, __func__);
 }
 
+void UDIMTilePixels::init_gpu_sub_tiles()
+{
+  BLI_rcti_init_minmax(&gpu_sub_tiles);
+  for (const PackedPixelRow &elements : pixel_rows) {
+    int2 subtile_from = int2(elements.start_image_coordinate / TEXTURE_STREAMING_TILE_SIZE);
+    int2 coord_to = int2(elements.start_image_coordinate) + int2(elements.num_pixels + 1, 1);
+    int2 subtile_to = int2(coord_to / TEXTURE_STREAMING_TILE_SIZE);
+
+    BLI_rcti_do_minmax_v(&gpu_sub_tiles, subtile_from);
+    BLI_rcti_do_minmax_v(&gpu_sub_tiles, subtile_to);
+  }
+}
+
+void NodeData::init_gpu_sub_tiles()
+{
+  for (UDIMTilePixels &tile : tiles) {
+    tile.init_gpu_sub_tiles();
+  }
+}
+
 /**
  * During debugging this check could be enabled.
  * It will write to each image pixel that is covered by the PBVH.

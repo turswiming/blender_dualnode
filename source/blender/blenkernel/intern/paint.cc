@@ -1393,6 +1393,13 @@ void BKE_sculptsession_free_vwpaint_data(SculptSession *ss)
   MEM_SAFE_FREE(gmap->poly_map_mem);
 }
 
+/* TODO: We should move the gpu batches to BKE. */
+void SCULPT_paint_image_sculpt_data_free(SculptSession *ss);
+static void bke_sculptsession_free_texture_paint_data(SculptSession *UNUSED(ss))
+{
+  // SCULPT_paint_image_sculpt_data_free(ss);
+}
+
 /**
  * Write out the sculpt dynamic-topology #BMesh to the #Mesh.
  */
@@ -1533,6 +1540,7 @@ void BKE_sculptsession_free(Object *ob)
     }
 
     BKE_sculptsession_free_vwpaint_data(ob->sculpt);
+    bke_sculptsession_free_texture_paint_data(ob->sculpt);
 
     MEM_SAFE_FREE(ss->last_paint_canvas_key);
 

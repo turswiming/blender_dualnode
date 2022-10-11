@@ -1770,6 +1770,7 @@ void SCULPT_paint_image_batches_flush(struct PaintModeSettings *paint_mode_setti
 void SCULPT_paint_image_batches_finalize(struct PaintModeSettings *paint_mode_settings,
                                          struct Sculpt *sd,
                                          struct Object *ob);
+void SCULPT_paint_image_sculpt_data_free(SculptSession *ss);
 
 /* Smear Brush. */
 void SCULPT_do_smear_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode);

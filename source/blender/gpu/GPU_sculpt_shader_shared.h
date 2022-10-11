@@ -67,3 +67,10 @@ struct PaintStepData {
   int _pad0[1];
 };
 BLI_STATIC_ASSERT_ALIGN(PaintStepData, 16);
+
+struct PaintTileData {
+  int tile_number;
+  int layer_id;
+  int2 sub_tile_id;
+};
+BLI_STATIC_ASSERT_ALIGN(PaintTileData, 16);

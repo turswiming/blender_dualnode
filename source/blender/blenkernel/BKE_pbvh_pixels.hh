@@ -21,6 +21,10 @@
 
 namespace blender::bke::pbvh::pixels {
 
+/* During GPU painting the texture is spliced into sub-tiles. This constant contains the size of
+ * sub-tiles (width and height). */
+const int32_t TEXTURE_STREAMING_TILE_SIZE = 1024;
+
 /**
  * Data shared between pixels that belong to the same triangle.
  *
@@ -101,11 +105,15 @@ struct UDIMTilePixels {
 
   Vector<PackedPixelRow> pixel_rows;
   int64_t gpu_buffer_offset;
+  /* Region of the tile that can be painted on by this node. Size of a subtile is determined by  */
+  /* TODO: use list of sub_tile_ids to not overcommit texture usage. */
+  rcti gpu_sub_tiles;
 
   UDIMTilePixels()
   {
     flags.dirty = false;
     BLI_rcti_init_minmax(&dirty_region);
+    BLI_rcti_init_minmax(&gpu_sub_tiles);
   }
 
   void mark_dirty(const PackedPixelRow &pixel_row)
@@ -121,6 +129,8 @@ struct UDIMTilePixels {
     BLI_rcti_init_minmax(&dirty_region);
     flags.dirty = false;
   }
+
+  void init_gpu_sub_tiles();
 };
 
 struct UDIMTileUndo {
@@ -215,6 +225,7 @@ struct NodeData {
     triangles.ensure_gpu_buffer();
     if (gpu_buffers.pixels == nullptr) {
       build_pixels_gpu_buffer();
+      init_gpu_sub_tiles();
     }
   }
 
@@ -226,6 +237,7 @@ struct NodeData {
 
  private:
   void build_pixels_gpu_buffer();
+  void init_gpu_sub_tiles();
 };
 
 NodeData &BKE_pbvh_pixels_node_data_get(PBVHNode &node);
