@@ -1686,6 +1686,7 @@ enum {
   SHD_ATTRIBUTE_GEOMETRY = 0,
   SHD_ATTRIBUTE_OBJECT = 1,
   SHD_ATTRIBUTE_INSTANCER = 2,
+  SHD_ATTRIBUTE_VIEW_LAYER = 3,
 };
 
 /* toon modes */
@@ -2075,6 +2076,15 @@ typedef enum CMPNodeFilterMethod {
   CMP_NODE_FILTER_SHADOW = 6,
   CMP_NODE_FILTER_SHARP_DIAMOND = 7,
 } CMPNodeFilterMethod;
+
+/* Levels Node. Stored in custom1. */
+typedef enum CMPNodeLevelsChannel {
+  CMP_NODE_LEVLES_LUMINANCE = 1,
+  CMP_NODE_LEVLES_RED = 2,
+  CMP_NODE_LEVLES_GREEN = 3,
+  CMP_NODE_LEVLES_BLUE = 4,
+  CMP_NODE_LEVLES_LUMINANCE_BT709 = 5,
+} CMPNodeLevelsChannel;
 
 /* Plane track deform node. */
 

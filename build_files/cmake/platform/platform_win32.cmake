@@ -989,14 +989,23 @@ endif()
 set(ZSTD_INCLUDE_DIRS ${LIBDIR}/zstd/include)
 set(ZSTD_LIBRARIES ${LIBDIR}/zstd/lib/zstd_static.lib)
 
-set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
-set(SYCL_ROOT_DIR ${LIBDIR}/dpcpp)
+if(WITH_CYCLES_DEVICE_ONEAPI)
+  set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
+  set(CYCLES_SYCL ${LIBDIR}/dpcpp CACHE PATH "Path to oneAPI DPC++ compiler")
+  if(EXISTS ${CYCLES_SYCL} AND NOT SYCL_ROOT_DIR)
+    set(SYCL_ROOT_DIR ${CYCLES_SYCL})
+  endif()
+  file(GLOB _sycl_runtime_libraries_glob
+    ${SYCL_ROOT_DIR}/bin/sycl.dll
+    ${SYCL_ROOT_DIR}/bin/sycl[0-9].dll
+  )
+  foreach(sycl_runtime_library IN LISTS _sycl_runtime_libraries_glob)
+    string(REPLACE ".dll" "$<$<CONFIG:Debug>:d>.dll" sycl_runtime_library ${sycl_runtime_library})
+    list(APPEND _sycl_runtime_libraries ${sycl_runtime_library})
+  endforeach()
+  unset(_sycl_runtime_libraries_glob)
 
-# Environment variables to run precompiled executables that needed libraries.
-list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ";" _library_paths)
-set(PLATFORM_ENV_BUILD "PATH=${LIBDIR}/OpenImageIO/bin\;${LIBDIR}/boost/lib\;${LIBDIR}/openexr/bin\;${LIBDIR}/imath/bin\;${PATH}")
-# Install also needs some additional folders, since idiff requires the
-# release oiio dll's not available in the blender.shared folder when doing
-# a debug build.
-set(PLATFORM_ENV_INSTALL "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/;${PLATFORM_ENV_BUILD}")
-unset(_library_paths)
+  list(APPEND _sycl_runtime_libraries ${SYCL_ROOT_DIR}/bin/pi_level_zero.dll)
+  list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
+  unset(_sycl_runtime_libraries)
+endif()

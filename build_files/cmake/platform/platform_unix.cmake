@@ -325,10 +325,18 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
     set(LEVEL_ZERO_ROOT_DIR ${CYCLES_LEVEL_ZERO})
   endif()
 
-  set(CYCLES_SYCL ${LIBDIR}/dpcpp CACHE PATH "Path to DPC++ and SYCL installation")
+  set(CYCLES_SYCL ${LIBDIR}/dpcpp CACHE PATH "Path to oneAPI DPC++ compiler")
   if(EXISTS ${CYCLES_SYCL} AND NOT SYCL_ROOT_DIR)
     set(SYCL_ROOT_DIR ${CYCLES_SYCL})
   endif()
+  file(GLOB _sycl_runtime_libraries
+    ${SYCL_ROOT_DIR}/lib/libsycl.so
+    ${SYCL_ROOT_DIR}/lib/libsycl.so.[0-9]
+    ${SYCL_ROOT_DIR}/lib/libsycl.so.[0-9].[0-9].[0-9]-[0-9]
+    ${SYCL_ROOT_DIR}/lib/libpi_level_zero.so
+  )
+  list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
+  unset(_sycl_runtime_libraries)
 endif()
 
 if(WITH_OPENVDB)
@@ -694,14 +702,23 @@ endif()
 
 if(WITH_GHOST_WAYLAND)
   find_package(PkgConfig)
+  pkg_check_modules(xkbcommon xkbcommon)
+
+  # When dynamically linked WAYLAND is used and `${LIBDIR}/wayland` is present,
+  # there is no need to search for the libraries as they are not needed for building.
+  # Only the headers are needed which can reference the known paths.
+  if(EXISTS "${LIBDIR}/wayland" AND WITH_GHOST_WAYLAND_DYNLOAD)
+    set(_use_system_wayland OFF)
+  else()
+    set(_use_system_wayland ON)
+  endif()
+
+  if(_use_system_wayland)
   pkg_check_modules(wayland-client wayland-client>=1.12)
   pkg_check_modules(wayland-egl wayland-egl)
   pkg_check_modules(wayland-scanner wayland-scanner)
-  pkg_check_modules(xkbcommon xkbcommon)
   pkg_check_modules(wayland-cursor wayland-cursor)
   pkg_check_modules(wayland-protocols wayland-protocols>=1.15)
-
-  if(${wayland-protocols_FOUND})
     pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
   else()
     # CentOS 7 packages have too old a version, a newer version exist in the
@@ -715,6 +732,15 @@ if(WITH_GHOST_WAYLAND)
     if(EXISTS ${WAYLAND_PROTOCOLS_DIR})
       set(wayland-protocols_FOUND ON)
     endif()
+
+    set(wayland-client_INCLUDE_DIRS "${LIBDIR}/wayland/include")
+    set(wayland-egl_INCLUDE_DIRS "${LIBDIR}/wayland/include")
+    set(wayland-cursor_INCLUDE_DIRS "${LIBDIR}/wayland/include")
+
+    set(wayland-client_FOUND ON)
+    set(wayland-egl_FOUND ON)
+    set(wayland-scanner_FOUND ON)
+    set(wayland-cursor_FOUND ON)
   endif()
 
   if (NOT ${wayland-client_FOUND})
@@ -743,41 +769,25 @@ if(WITH_GHOST_WAYLAND)
   endif()
 
   if(WITH_GHOST_WAYLAND)
-  if(WITH_GHOST_WAYLAND_DBUS)
-    pkg_check_modules(dbus REQUIRED dbus-1)
-  endif()
-
-  if(WITH_GHOST_WAYLAND_LIBDECOR)
-    pkg_check_modules(libdecor REQUIRED libdecor-0>=0.1)
-  endif()
-
-  list(APPEND PLATFORM_LINKLIBS
-    ${xkbcommon_LINK_LIBRARIES}
-  )
-
-  if(NOT WITH_GHOST_WAYLAND_DYNLOAD)
-    list(APPEND PLATFORM_LINKLIBS
-      ${wayland-client_LINK_LIBRARIES}
-      ${wayland-egl_LINK_LIBRARIES}
-      ${wayland-cursor_LINK_LIBRARIES}
-    )
-  endif()
-
-  if(WITH_GHOST_WAYLAND_DBUS)
-    list(APPEND PLATFORM_LINKLIBS
-      ${dbus_LINK_LIBRARIES}
-    )
-    add_definitions(-DWITH_GHOST_WAYLAND_DBUS)
-  endif()
-
-  if(WITH_GHOST_WAYLAND_LIBDECOR)
-    if(NOT WITH_GHOST_WAYLAND_DYNLOAD)
-      list(APPEND PLATFORM_LINKLIBS
-        ${libdecor_LIBRARIES}
-      )
+    if(WITH_GHOST_WAYLAND_DBUS)
+      pkg_check_modules(dbus REQUIRED dbus-1)
     endif()
-    add_definitions(-DWITH_GHOST_WAYLAND_LIBDECOR)
-  endif()
+
+    if(WITH_GHOST_WAYLAND_LIBDECOR)
+      if(_use_system_wayland)
+        pkg_check_modules(libdecor REQUIRED libdecor-0>=0.1)
+      else()
+        set(libdecor_INCLUDE_DIRS "${LIBDIR}/wayland_libdecor/include/libdecor-0")
+      endif()
+    endif()
+
+    if(WITH_GHOST_WAYLAND_DBUS)
+      add_definitions(-DWITH_GHOST_WAYLAND_DBUS)
+    endif()
+
+    if(WITH_GHOST_WAYLAND_LIBDECOR)
+      add_definitions(-DWITH_GHOST_WAYLAND_LIBDECOR)
+    endif()
 
     if(EXISTS "${LIBDIR}/wayland/bin/wayland-scanner")
       set(WAYLAND_SCANNER "${LIBDIR}/wayland/bin/wayland-scanner")
@@ -818,6 +828,8 @@ if(WITH_GHOST_WAYLAND)
     # End wayland-scanner version check.
 
   endif()
+
+  unset(_use_system_wayland)
 endif()
 
 if(WITH_GHOST_X11)
@@ -826,12 +838,8 @@ if(WITH_GHOST_X11)
   find_path(X11_XF86keysym_INCLUDE_PATH X11/XF86keysym.h ${X11_INC_SEARCH_PATH})
   mark_as_advanced(X11_XF86keysym_INCLUDE_PATH)
 
-  list(APPEND PLATFORM_LINKLIBS ${X11_X11_LIB})
-
   if(WITH_X11_XINPUT)
-    if(X11_Xinput_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xinput_LIB})
-    else()
+    if(NOT X11_Xinput_LIB)
       message(FATAL_ERROR "LibXi not found. Disable WITH_X11_XINPUT if you
       want to build without tablet support")
     endif()
@@ -841,18 +849,14 @@ if(WITH_GHOST_X11)
     # XXX, why doesn't cmake make this available?
     find_library(X11_Xxf86vmode_LIB Xxf86vm   ${X11_LIB_SEARCH_PATH})
     mark_as_advanced(X11_Xxf86vmode_LIB)
-    if(X11_Xxf86vmode_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xxf86vmode_LIB})
-    else()
+    if(NOT X11_Xxf86vmode_LIB)
       message(FATAL_ERROR "libXxf86vm not found. Disable WITH_X11_XF86VMODE if you
       want to build without")
     endif()
   endif()
 
   if(WITH_X11_XFIXES)
-    if(X11_Xfixes_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xfixes_LIB})
-    else()
+    if(NOT X11_Xfixes_LIB)
       message(FATAL_ERROR "libXfixes not found. Disable WITH_X11_XFIXES if you
       want to build without")
     endif()
@@ -861,9 +865,7 @@ if(WITH_GHOST_X11)
   if(WITH_X11_ALPHA)
     find_library(X11_Xrender_LIB Xrender  ${X11_LIB_SEARCH_PATH})
     mark_as_advanced(X11_Xrender_LIB)
-    if(X11_Xrender_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xrender_LIB})
-    else()
+    if(NOT X11_Xrender_LIB)
       message(FATAL_ERROR "libXrender not found. Disable WITH_X11_ALPHA if you
       want to build without")
     endif()

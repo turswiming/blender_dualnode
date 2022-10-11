@@ -77,7 +77,7 @@ set(SRC
   intern/draw_cache_impl_particles.c
   intern/draw_cache_impl_pointcloud.cc
   intern/draw_cache_impl_subdivision.cc
-  intern/draw_cache_impl_volume.c
+  intern/draw_cache_impl_volume.cc
   intern/draw_color_management.cc
   intern/draw_command.cc
   intern/draw_common.c
@@ -490,7 +490,6 @@ set(GLSL_SRC
   intern/shaders/common_debug_shape_lib.glsl
   intern/shaders/common_fullscreen_vert.glsl
   intern/shaders/common_fxaa_lib.glsl
-  intern/shaders/common_globals_lib.glsl
   intern/shaders/common_gpencil_lib.glsl
   intern/shaders/common_hair_lib.glsl
   intern/shaders/common_hair_refine_comp.glsl
