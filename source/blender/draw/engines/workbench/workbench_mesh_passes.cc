@@ -2,6 +2,13 @@
 
 #include "workbench_private.hh"
 
+/* get_image */
+#include "DNA_node_types.h"
+#include "ED_uvedit.h"
+//#include "BKE_image.h"
+#include "BKE_node.h"
+/* get_image */
+
 namespace blender::workbench {
 
 MeshPass::MeshPass(const char *name) : PassMain(name){};
@@ -38,20 +45,77 @@ void MeshPass::init(ePipelineType pipeline,
   }
 }
 
+void get_image(Object *ob,
+               int material_index,
+               ::Image *&image,
+               GPUTexture *&texture,
+               GPUTexture *&tilemap,
+               eGPUSamplerState &sampler_state)
+{
+  ::bNode *node = nullptr;
+  ImageUser *user = nullptr;
+
+  ED_object_get_active_image(ob, material_index, &image, &user, &node, nullptr);
+  if (node && image) {
+    switch (node->type) {
+      case SH_NODE_TEX_IMAGE: {
+        NodeTexImage *storage = static_cast<NodeTexImage *>(node->storage);
+        const bool use_filter = (storage->interpolation != SHD_INTERP_CLOSEST);
+        const bool use_repeat = (storage->extension == SHD_IMAGE_EXTENSION_REPEAT);
+        const bool use_clip = (storage->extension == SHD_IMAGE_EXTENSION_CLIP);
+        SET_FLAG_FROM_TEST(sampler_state, use_filter, GPU_SAMPLER_FILTER);
+        SET_FLAG_FROM_TEST(sampler_state, use_repeat, GPU_SAMPLER_REPEAT);
+        SET_FLAG_FROM_TEST(sampler_state, use_clip, GPU_SAMPLER_CLAMP_BORDER);
+        break;
+      }
+      case SH_NODE_TEX_ENVIRONMENT: {
+        NodeTexEnvironment *storage = static_cast<NodeTexEnvironment *>(node->storage);
+        const bool use_filter = (storage->interpolation != SHD_INTERP_CLOSEST);
+        SET_FLAG_FROM_TEST(sampler_state, use_filter, GPU_SAMPLER_FILTER);
+        break;
+      }
+      default:
+        BLI_assert_msg(0, "Node type not supported by workbench");
+    }
+  }
+
+  if (image) {
+    if (image->source == IMA_SRC_TILED) {
+      texture = BKE_image_get_gpu_tiles(image, user, nullptr);
+      tilemap = BKE_image_get_gpu_tilemap(image, user, nullptr);
+    }
+    else {
+      texture = BKE_image_get_gpu_texture(image, user, nullptr);
+    }
+  }
+}
+
 PassMain::Sub &MeshPass::sub_pass_get(eGeometryType geometry_type,
-                                      ObjectRef & /*ref*/,
-                                      ::Material * /*material*/)
+                                      ObjectRef &ref,
+                                      ::Material * /*material*/,
+                                      int material_index)
 {
   if (color_type_ == eColorType::TEXTURE) {
     /* TODO(fclem): Always query a layered texture so we can use only a single shader. */
-    GPUTexture *texture = nullptr;  // ref.object->texture_get();
-    GPUTexture *tilemap = nullptr;  // ref.object->texture_get();
+    ::Image *image = nullptr;
+    GPUTexture *texture = nullptr;
+    GPUTexture *tilemap = nullptr;
+    eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT;
+    StringRefNull name = "Null Texture";
+    get_image(ref.object, material_index, image, texture, tilemap, sampler_state);
+    if (image) {
+      /* TODO(pragma37): Should be lib.name + name ??? */
+      name = image->id.name;
+    }
 
     auto add_cb = [&] {
       PassMain::Sub *sub_pass = geometry_passes_[static_cast<int>(geometry_type)];
-      sub_pass = &sub_pass->sub("Blender Texture Name" /* texture.name */);
-      sub_pass->bind_texture(WB_TEXTURE_SLOT, texture);
+      sub_pass = &sub_pass->sub(name.c_str());
+      sub_pass->bind_texture(WB_TEXTURE_SLOT, texture, sampler_state);
       sub_pass->bind_texture(WB_TILEMAP_SLOT, tilemap);
+      sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
+      /*TODO(pragma37): What's the point? This could be a constant in the shader. */
+      sub_pass->push_constant("imageTransparencyCutoff", 0.1f);
       return sub_pass;
     };
 

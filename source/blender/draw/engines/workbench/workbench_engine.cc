@@ -225,7 +225,7 @@ class Instance {
           }
           ResourceHandle handle = manager.resource_handle(ob_ref);
           resources.material_buf.get_or_resize(handle.resource_index()) = Material(*mat);
-          pipeline_get(ob_ref, mat).draw(batches[i], handle);
+          pipeline_get(ob_ref, mat, i + 1).draw(batches[i], handle);
         }
       }
     }
@@ -254,10 +254,12 @@ class Instance {
     }
   }
 
-  PassMain::Sub &pipeline_get(ObjectRef &ob_ref, ::Material *material = nullptr)
+  PassMain::Sub &pipeline_get(ObjectRef &ob_ref,
+                              ::Material *material = nullptr,
+                              int material_index = 0)
   {
     return opaque_ps.gbuffer_ps_.sub_pass_get(
-        geometry_type_from_object(ob_ref.object), ob_ref, material);
+        geometry_type_from_object(ob_ref.object), ob_ref, material, material_index);
   }
 
   Span<GPUBatch *> geometry_get(ObjectRef &ob_ref, int material_count)

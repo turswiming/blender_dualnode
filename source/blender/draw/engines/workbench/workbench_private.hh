@@ -76,7 +76,10 @@ class MeshPass : public PassMain {
             SceneResources &resources,
             DRWState state);
 
-  PassMain::Sub &sub_pass_get(eGeometryType geometry_type, ObjectRef &ref, ::Material *material);
+  PassMain::Sub &sub_pass_get(eGeometryType geometry_type,
+                              ObjectRef &ref,
+                              ::Material *material,
+                              int material_index = 0);
 };
 
 class OpaquePass {
