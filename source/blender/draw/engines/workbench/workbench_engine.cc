@@ -139,19 +139,21 @@ class Instance {
           ImBuf *matcap_specular = studio_light->matcap_specular.ibuf;
           if (matcap_diffuse && matcap_diffuse->rect_float) {
             current_matcap = studio_light->name;
-            int size = matcap_diffuse->x * matcap_diffuse->y * 4;
             int layers = 1;
-            Vector<float> load_buffer = {};
-            load_buffer.extend(matcap_diffuse->rect_float, size);
+            float *buffer = matcap_diffuse->rect_float;
+            Vector<float> combined_buffer = {};
             if (matcap_specular && matcap_specular->rect_float) {
-              load_buffer.extend(matcap_specular->rect_float, size);
+              int size = matcap_diffuse->x * matcap_diffuse->y * 4;
+              combined_buffer.extend(matcap_diffuse->rect_float, size);
+              combined_buffer.extend(matcap_specular->rect_float, size);
+              buffer = combined_buffer.begin();
               layers++;
             }
             resources.matcap_tx = Texture(current_matcap.c_str(),
                                           GPU_RGBA16F,
                                           int2(matcap_diffuse->x, matcap_diffuse->y),
                                           layers,
-                                          load_buffer.begin());
+                                          buffer);
           }
         }
       }
