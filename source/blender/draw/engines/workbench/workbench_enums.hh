@@ -80,6 +80,19 @@ static inline eColorType color_type_from_v3d_shading(char shading)
   return shading == V3D_SHADING_TEXTURE_COLOR ? eColorType::TEXTURE : eColorType::MATERIAL;
 }
 
+static inline const char *get_name(eColorType type)
+{
+  switch (type) {
+    case eColorType::MATERIAL:
+      return "Material";
+    case eColorType::TEXTURE:
+      return "Texture";
+    default:
+      BLI_assert_unreachable();
+      return "";
+  }
+}
+
 enum class eMaterialSubType {
   NONE = 0,
   MATERIAL,

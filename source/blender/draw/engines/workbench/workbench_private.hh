@@ -58,8 +58,7 @@ struct SceneResources {
 
 class MeshPass : public PassMain {
  private:
-  std::array<PassMain::Sub *, geometry_type_len> geometry_passes_;
-  eColorType color_type_;
+  PassMain::Sub *passes_[geometry_type_len][color_type_len];
 
   using TextureSubPassKey = std::pair<GPUTexture *, eGeometryType>;
   Map<TextureSubPassKey, PassMain::Sub *> texture_subpass_map;
@@ -71,12 +70,12 @@ class MeshPass : public PassMain {
   bool is_empty() const;
 
   void init(ePipelineType pipeline,
-            eColorType color_type,
             eShadingType shading,
             SceneResources &resources,
             DRWState state);
 
   PassMain::Sub &sub_pass_get(eGeometryType geometry_type,
+                              eColorType color_type,
                               ObjectRef &ref,
                               ::Material *material,
                               int material_index = 0);
@@ -95,7 +94,6 @@ class OpaquePass {
   void sync(DRWState cull_state,
             DRWState clip_state,
             eShadingType shading_type,
-            eColorType color_type,
             SceneResources &resources);
 
   void draw_prepass(Manager &manager, View &view, Texture &depth_tx);
@@ -117,7 +115,6 @@ class TransparentPass {
   void sync(DRWState cull_state,
             DRWState clip_state,
             eShadingType shading_type,
-            eColorType color_type,
             SceneResources &resources);
 
   void draw_prepass(Manager &manager, View &view, Texture &depth_tx);

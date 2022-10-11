@@ -20,7 +20,6 @@ bool MeshPass::is_empty() const
 }
 
 void MeshPass::init(ePipelineType pipeline,
-                    eColorType color_type,
                     eShadingType shading,
                     SceneResources &resources,
                     DRWState state)
@@ -33,15 +32,18 @@ void MeshPass::init(ePipelineType pipeline,
   this->bind_ssbo(WB_MATERIAL_SLOT, &resources.material_buf);
   this->bind_ubo(WB_WORLD_SLOT, resources.world_buf);
 
-  color_type_ = color_type;
   texture_subpass_map.clear();
 
-  for (int geom = 0; geom < geometry_type_len; geom++) {
-    eGeometryType geom_type = static_cast<eGeometryType>(geom);
-    GPUShader *sh = shaders.prepass_shader_get(pipeline, geom_type, color_type, shading);
-    PassMain::Sub *pass = &this->sub(get_name(geom_type));
-    pass->shader_set(sh);
-    geometry_passes_[geom] = pass;
+  for (auto geom : IndexRange(geometry_type_len)) {
+    for (auto color : IndexRange(color_type_len)) {
+      eGeometryType geom_type = static_cast<eGeometryType>(geom);
+      eColorType color_type = static_cast<eColorType>(color);
+      std::string name = std::string(get_name(geom_type)) + std::string(get_name(color_type));
+      GPUShader *sh = shaders.prepass_shader_get(pipeline, geom_type, color_type, shading);
+      PassMain::Sub *pass = &this->sub(name.c_str());
+      pass->shader_set(sh);
+      passes_[geom][color] = pass;
+    }
   }
 }
 
@@ -91,11 +93,12 @@ void get_image(Object *ob,
 }
 
 PassMain::Sub &MeshPass::sub_pass_get(eGeometryType geometry_type,
+                                      eColorType color_type,
                                       ObjectRef &ref,
                                       ::Material * /*material*/,
                                       int material_index)
 {
-  if (color_type_ == eColorType::TEXTURE) {
+  if (color_type == eColorType::TEXTURE) {
     /* TODO(fclem): Always query a layered texture so we can use only a single shader. */
     ::Image *image = nullptr;
     GPUTexture *texture = nullptr;
@@ -103,32 +106,32 @@ PassMain::Sub &MeshPass::sub_pass_get(eGeometryType geometry_type,
     eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT;
     StringRefNull name = "Null Texture";
     get_image(ref.object, material_index, image, texture, tilemap, sampler_state);
-    if (image) {
+    if (image && texture) {
       /* TODO(pragma37): Should be lib.name + name ??? */
       name = image->id.name;
+
+      auto add_cb = [&] {
+        PassMain::Sub *sub_pass =
+            passes_[static_cast<int>(geometry_type)][static_cast<int>(color_type)];
+        sub_pass = &sub_pass->sub(name.c_str());
+        sub_pass->bind_texture(WB_TEXTURE_SLOT, texture, sampler_state);
+        sub_pass->bind_texture(WB_TILEMAP_SLOT, tilemap);
+        sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
+        /*TODO(pragma37): What's the point? This could be a constant in the shader. */
+        sub_pass->push_constant("imageTransparencyCutoff", 0.1f);
+        return sub_pass;
+      };
+
+      return *texture_subpass_map.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type),
+                                                   add_cb);
     }
-
-    auto add_cb = [&] {
-      PassMain::Sub *sub_pass = geometry_passes_[static_cast<int>(geometry_type)];
-      sub_pass = &sub_pass->sub(name.c_str());
-      sub_pass->bind_texture(WB_TEXTURE_SLOT, texture, sampler_state);
-      sub_pass->bind_texture(WB_TILEMAP_SLOT, tilemap);
-      sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
-      /*TODO(pragma37): What's the point? This could be a constant in the shader. */
-      sub_pass->push_constant("imageTransparencyCutoff", 0.1f);
-      return sub_pass;
-    };
-
-    return *texture_subpass_map.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type),
-                                                 add_cb);
   }
-  return *geometry_passes_[static_cast<int>(geometry_type)];
+  return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::MATERIAL)];
 }
 
 void OpaquePass::sync(DRWState cull_state,
                       DRWState clip_state,
                       eShadingType shading_type,
-                      eColorType color_type,
                       SceneResources &resources)
 {
   Texture &depth_tx = resources.depth_tx;
@@ -138,7 +141,7 @@ void OpaquePass::sync(DRWState cull_state,
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                    cull_state | clip_state;
 
-  gbuffer_ps_.init(ePipelineType::OPAQUE, color_type, shading_type, resources, state);
+  gbuffer_ps_.init(ePipelineType::OPAQUE, shading_type, resources, state);
 
   deferred_ps_.init();
   deferred_ps_.shader_set(shaders.resolve_shader_get(ePipelineType::OPAQUE, shading_type));
@@ -185,7 +188,6 @@ bool OpaquePass::is_empty() const
 void TransparentPass::sync(DRWState cull_state,
                            DRWState clip_state,
                            eShadingType shading_type,
-                           eColorType color_type,
                            SceneResources &resources)
 {
   ShaderCache &shaders = resources.shader_cache;
@@ -193,7 +195,7 @@ void TransparentPass::sync(DRWState cull_state,
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                    cull_state | clip_state;
 
-  accumulation_ps_.init(ePipelineType::TRANSPARENT, color_type, shading_type, resources, state);
+  accumulation_ps_.init(ePipelineType::TRANSPARENT, shading_type, resources, state);
 
   resolve_ps_.init();
   resolve_ps_.shader_set(

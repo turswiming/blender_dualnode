@@ -1,7 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BKE_editmesh.h"
+#include "BKE_modifier.h"
+#include "BKE_object.h"
+#include "BKE_paint.h"
+#include "BKE_particle.h"
+#include "BKE_pbvh.h"
 #include "BKE_studiolight.h"
 #include "DEG_depsgraph_query.h"
+#include "DNA_fluid_types.h"
+#include "ED_paint.h"
 #include "ED_view3d.h"
 #include "GPU_capabilities.h"
 #include "IMB_imbuf_types.h"
@@ -24,9 +32,11 @@ class Instance {
 
   AntiAliasingPass anti_aliasing_ps;
 
+#if 0
   bool use_per_material_batches = false;
   eColorType color_type = eColorType::MATERIAL;
   eMaterialSubType material_subtype = eMaterialSubType::MATERIAL;
+#endif
   eShadingType shading_type = eShadingType::STUDIO;
 
   /** Used when material_subtype == eMaterialSubType::SINGLE */
@@ -43,13 +53,15 @@ class Instance {
   View3DShading shading;
 
   StringRefNull current_matcap;
+  Scene *scene;
+
   void init(const int2 &output_res,
             const Depsgraph *depsgraph,
             const Object * /*camera*/,
             const View3D *v3d,
             const RegionView3D *rv3d)
   {
-    Scene *scene = DEG_get_evaluated_scene(depsgraph);
+    scene = DEG_get_evaluated_scene(depsgraph);
     const DRWContextState *context = DRW_context_state_get();
 
     /* TODO(pragma37):
@@ -106,11 +118,13 @@ class Instance {
 
     material_override = Material(shading.single_color);
 
+#if 0
     use_per_material_batches = ELEM(
         shading.color_type, V3D_SHADING_TEXTURE_COLOR, V3D_SHADING_MATERIAL_COLOR);
 
     color_type = color_type_from_v3d_shading(shading.color_type);
     material_subtype = material_subtype_from_v3d_shading(shading.color_type);
+#endif
     shading_type = shading_type_from_v3d_lighting(shading.light);
 
     UniformBuffer<WorldData> &world_buf = resources.world_buf;
@@ -217,10 +231,10 @@ class Instance {
   void begin_sync()
   {
     resources.world_buf.push_update();
-    opaque_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
-    // opaque_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
-    // transparent_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
-    // transparent_in_front_ps.sync(cull_state, clip_state, shading_type, color_type, resources);
+    opaque_ps.sync(cull_state, clip_state, shading_type, resources);
+    // opaque_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
+    // transparent_ps.sync(cull_state, clip_state, shading_type, resources);
+    // transparent_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
     anti_aliasing_ps.sync(resources);
   }
 
@@ -229,16 +243,244 @@ class Instance {
     resources.material_buf.push_update();
   }
 
+  const CustomData *get_loop_custom_data(const Mesh *mesh)
+  {
+    if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+      BLI_assert(mesh->edit_mesh != nullptr);
+      BLI_assert(mesh->edit_mesh->bm != nullptr);
+      return &mesh->edit_mesh->bm->ldata;
+    }
+    return &mesh->ldata;
+  }
+
+  const CustomData *get_vert_custom_data(const Mesh *mesh)
+  {
+    if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+      BLI_assert(mesh->edit_mesh != nullptr);
+      BLI_assert(mesh->edit_mesh->bm != nullptr);
+      return &mesh->edit_mesh->bm->vdata;
+    }
+    return &mesh->vdata;
+  }
+
+  struct DrawModeInfo {
+    eV3DShadingColorType color_type;
+    bool sculpt_pbvh;
+    bool texture_paint_mode;
+    bool draw_shadow;
+
+    eColorType material_type;
+    eMaterialSubType material_subtype;
+    bool use_per_material_batches;
+    void compute_info()
+    {
+      material_type = color_type_from_v3d_shading(color_type);
+      material_subtype = material_subtype_from_v3d_shading(color_type);
+      use_per_material_batches = ELEM(
+          color_type, V3D_SHADING_TEXTURE_COLOR, V3D_SHADING_MATERIAL_COLOR);
+    }
+  };
+
+  DrawModeInfo get_draw_mode_info(Object *ob)
+  {
+    const DRWContextState *draw_ctx = DRW_context_state_get();
+    const Mesh *me = (ob->type == OB_MESH) ? static_cast<Mesh *>(ob->data) : nullptr;
+    const bool is_active = (ob == draw_ctx->obact);
+    /* TODO(pragma37) Is the double check needed?
+     * If it is, wouldn't be needed for sculpt_pbvh too?
+     */
+    const bool is_render = DRW_state_is_image_render() && (draw_ctx->v3d == nullptr);
+
+    DrawModeInfo dmi = {};
+    dmi.color_type = (eV3DShadingColorType)shading.color_type;
+    if (!(is_active && DRW_object_use_hide_faces(ob))) {
+      dmi.draw_shadow = (ob->dtx & OB_DRAW_NO_SHADOW_CAST) == 0 &&
+                        shading.flag & V3D_SHADING_SHADOW;
+    }
+    if (me == nullptr) {
+      if (dmi.color_type == V3D_SHADING_TEXTURE_COLOR) {
+        dmi.color_type = V3D_SHADING_MATERIAL_COLOR;
+      }
+      else if (dmi.color_type == V3D_SHADING_VERTEX_COLOR) {
+        dmi.color_type = V3D_SHADING_OBJECT_COLOR;
+      }
+      /* Early return */
+      dmi.compute_info();
+      return dmi;
+    }
+
+    dmi.sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) &&
+                      !DRW_state_is_image_render();
+
+    /* Needed for mesh cache validation, to prevent two copies of
+     * of vertex color arrays from being sent to the GPU (e.g.
+     * when switching from eevee to workbench).
+     */
+    if (ob->sculpt && ob->sculpt->pbvh) {
+      BKE_pbvh_is_drawing_set(ob->sculpt->pbvh, dmi.sculpt_pbvh);
+    }
+
+    if (dmi.sculpt_pbvh) {
+      /* Shadows are unsupported in sculpt mode. We could revert to the slow
+       * method in this case but I'm not sure if it's a good idea given that
+       * sculpted meshes are heavy to begin with. */
+      dmi.draw_shadow = false;
+
+      if (dmi.color_type == V3D_SHADING_TEXTURE_COLOR &&
+          BKE_pbvh_type(ob->sculpt->pbvh) != PBVH_FACES) {
+        /* Force use of material color for sculpt. */
+        dmi.color_type = V3D_SHADING_MATERIAL_COLOR;
+      }
+
+      /* Bad call C is required to access the tool system that is context aware. Cast to non-const
+       * due to current API. */
+      bContext *C = (bContext *)DRW_context_state_get()->evil_C;
+      if (C != NULL) {
+        dmi.color_type = ED_paint_shading_color_override(
+            C, &scene->toolsettings->paint_mode, ob, dmi.color_type);
+      }
+    }
+    else {
+      const CustomData *cd_vdata = get_vert_custom_data(me);
+      const CustomData *cd_ldata = get_loop_custom_data(me);
+
+      bool has_color = (CustomData_has_layer(cd_vdata, CD_PROP_COLOR) ||
+                        CustomData_has_layer(cd_vdata, CD_PROP_BYTE_COLOR) ||
+                        CustomData_has_layer(cd_ldata, CD_PROP_COLOR) ||
+                        CustomData_has_layer(cd_ldata, CD_PROP_BYTE_COLOR));
+
+      if (dmi.color_type == V3D_SHADING_TEXTURE_COLOR) {
+        if (ob->dt < OB_TEXTURE || !CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
+          dmi.color_type = V3D_SHADING_MATERIAL_COLOR;
+        }
+      }
+      else if (dmi.color_type == V3D_SHADING_VERTEX_COLOR && !has_color) {
+        dmi.color_type = V3D_SHADING_OBJECT_COLOR;
+      }
+
+      if (!is_render) {
+        /* Force texture or vertex mode if object is in paint mode. */
+        const bool is_texpaint_mode = is_active && (ob_mode == CTX_MODE_PAINT_TEXTURE);
+        const bool is_vertpaint_mode = is_active && (ob_mode == CTX_MODE_PAINT_VERTEX);
+        if (is_texpaint_mode && CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
+          dmi.color_type = V3D_SHADING_TEXTURE_COLOR;
+          dmi.texture_paint_mode = true;
+        }
+        else if (is_vertpaint_mode && has_color) {
+          dmi.color_type = V3D_SHADING_VERTEX_COLOR;
+        }
+      }
+    }
+
+    dmi.compute_info();
+    return dmi;
+  }
+
   void object_sync(Manager &manager, ObjectRef &ob_ref)
   {
+    Object *ob = ob_ref.object;
+    if (!DRW_object_is_renderable(ob)) {
+      return;
+    }
+
+    const DrawModeInfo dmi = get_draw_mode_info(ob);
+
+#if 0
+
+    if (ob->type == OB_MESH && ob->modifiers.first != nullptr) {
+
+      LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+        if (md->type != eModifierType_ParticleSystem) {
+          continue;
+        }
+        ParticleSystem *psys = ((ParticleSystemModifierData *)md)->psys;
+        if (!DRW_object_is_visible_psys_in_active_context(ob, psys)) {
+          continue;
+        }
+        ParticleSettings *part = psys->part;
+        const int draw_as = (part->draw_as == PART_DRAW_REND) ? part->ren_as : part->draw_as;
+
+        if (draw_as == PART_DRAW_PATH) {
+          /* TODO(pragma37):
+          workbench_cache_hair_populate(
+              wpd, ob, psys, md, dmi.color_type, dmi.texture_paint_mode, part->omat);
+          */
+        }
+      }
+    }
+
+    if (!(ob->base_flag & BASE_FROM_DUPLI)) {
+      ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_Fluid);
+      if (md && BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime)) {
+        FluidModifierData *fmd = (FluidModifierData *)md;
+        if (fmd->domain) {
+          /* TODO(pragma37):
+          workbench_volume_cache_populate(vedata, wpd->scene, ob, md, V3D_SHADING_SINGLE_COLOR);
+          */
+          if (fmd->domain->type == FLUID_DOMAIN_TYPE_GAS) {
+            return; /* Do not draw solid in this case. */
+          }
+        }
+      }
+    }
+
+    if (!(DRW_object_visibility_in_active_context(ob) & OB_VISIBLE_SELF)) {
+      return;
+    }
+
+    if ((ob->dt < OB_SOLID) && !DRW_state_is_scene_render()) {
+      return;
+    }
+
+    if (ELEM(ob->type, OB_MESH, OB_POINTCLOUD)) {
+      if (dmi.sculpt_pbvh) {
+        /* TODO(pragma37):
+        workbench_cache_sculpt_populate(wpd, ob, dmi.color_type);
+        */
+      }
+      else if (dmi.texture_paint_mode) {
+        /* TODO(pragma37):
+        workbench_cache_texpaint_populate(wpd, ob);
+        */
+      }
+      else {
+        /* TODO(pragma37):
+        workbench_cache_common_populate(wpd, ob, dmi.color_type, &has_transp_mat);
+        */
+      }
+
+      if (dmi.draw_shadow) {
+        /* TODO(pragma37):
+        workbench_shadow_cache_populate(vedata, ob, has_transp_mat);
+        */
+      }
+    }
+    else if (ob->type == OB_CURVES) {
+      /* TODO(pragma37):
+      DRWShadingGroup *grp = workbench_material_hair_setup(
+          wpd, ob, CURVES_MATERIAL_NR, dmi.color_type);
+      DRW_shgroup_curves_create_sub(ob, grp, NULL);
+      */
+    }
+    else if (ob->type == OB_VOLUME) {
+      if (shading.type != OB_WIRE) {
+        /* TODO(pragma37):
+        workbench_volume_cache_populate(vedata, wpd->scene, ob, NULL, dmi.color_type);
+        */
+      }
+    }
+
+#endif
+
     if (ob_ref.object->type != OB_MESH) {
       // TODO(pragma37)
       return;
     }
 
-    if (use_per_material_batches) {
+    if (dmi.use_per_material_batches) {
       const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
-      Span<GPUBatch *> batches = geometry_get(ob_ref, material_count);
+      Span<GPUBatch *> batches = geometry_get(
+          ob_ref, material_count, dmi.material_type, dmi.material_subtype);
       /* TODO(pragma37): Could this ever be false??? */
       if (batches.size() == material_count) {
         for (auto i : IndexRange(material_count)) {
@@ -251,7 +493,7 @@ class Instance {
           }
           ResourceHandle handle = manager.resource_handle(ob_ref);
           resources.material_buf.get_or_resize(handle.resource_index()) = Material(*mat);
-          pipeline_get(ob_ref, mat, i + 1).draw(batches[i], handle);
+          pipeline_get(ob_ref, dmi.material_type, mat, i + 1).draw(batches[i], handle);
         }
       }
     }
@@ -260,35 +502,39 @@ class Instance {
 
       Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
 
-      if (material_subtype == eMaterialSubType::OBJECT) {
+      if (dmi.material_subtype == eMaterialSubType::OBJECT) {
         mat = Material(*ob_ref.object);
       }
-      else if (material_subtype == eMaterialSubType::RANDOM) {
+      else if (dmi.material_subtype == eMaterialSubType::RANDOM) {
         mat = Material(*ob_ref.object, true);
       }
-      else if (material_subtype == eMaterialSubType::SINGLE) {
+      else if (dmi.material_subtype == eMaterialSubType::SINGLE) {
         mat = material_override;
       }
-      else if (material_subtype == eMaterialSubType::ATTRIBUTE) {
+      else if (dmi.material_subtype == eMaterialSubType::ATTRIBUTE) {
         mat = material_attribute_color;
       }
 
-      GPUBatch *batch = geometry_get(ob_ref);
+      GPUBatch *batch = geometry_get(ob_ref, dmi.material_type, dmi.material_subtype);
       if (batch) {
-        pipeline_get(ob_ref).draw(batch, handle);
+        pipeline_get(ob_ref, dmi.material_type).draw(batch, handle);
       }
     }
   }
 
   PassMain::Sub &pipeline_get(ObjectRef &ob_ref,
+                              eColorType color_type,
                               ::Material *material = nullptr,
                               int material_index = 0)
   {
     return opaque_ps.gbuffer_ps_.sub_pass_get(
-        geometry_type_from_object(ob_ref.object), ob_ref, material, material_index);
+        geometry_type_from_object(ob_ref.object), color_type, ob_ref, material, material_index);
   }
 
-  Span<GPUBatch *> geometry_get(ObjectRef &ob_ref, int material_count)
+  Span<GPUBatch *> geometry_get(ObjectRef &ob_ref,
+                                int material_count,
+                                eColorType color_type,
+                                eMaterialSubType material_subtype)
   {
     /* This is never used, but it's required by DRW_cache_object_surface_material_get */
     static Vector<GPUMaterial *> dummy_gpu_materials(1, nullptr, {});
@@ -300,7 +546,9 @@ class Instance {
             material_count};
   }
 
-  GPUBatch *geometry_get(ObjectRef &ob_ref)
+  GPUBatch *geometry_get(ObjectRef &ob_ref,
+                         eColorType color_type,
+                         eMaterialSubType material_subtype)
   {
     if (material_subtype == eMaterialSubType::ATTRIBUTE) {
       /* TODO(pragma37): Should check for vertex paint mode as well */
