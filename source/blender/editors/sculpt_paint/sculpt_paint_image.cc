@@ -126,9 +126,30 @@ static float paint_automasking_interp(SculptSession *ss,
     return 1.0f;
   }
 
-  float a = SCULPT_automasking_factor_get(ss->cache->automasking, ss, triangle.vert_indices[0]);
-  float b = SCULPT_automasking_factor_get(ss->cache->automasking, ss, triangle.vert_indices[1]);
-  float c = SCULPT_automasking_factor_get(ss->cache->automasking, ss, triangle.vert_indices[2]);
+  AutomaskingNodeData automask_data = {};
+  automask_data.have_orig_data = false;
+
+  PBVHVertRef v1, v2, v3;
+
+  /* Not sure we need to use BKE_pbvh_index_to_vertex if texture paint
+   * only works in PBVH_FACES, at least for now.
+   */
+
+  BLI_assert(BKE_pbvh_type(ss->pbvh) == PBVH_FACES);
+
+#if 0
+  v1 = BKE_pbvh_index_to_vertex(ss->pbvh, triangle.vert_indices[0]);
+  v2 = BKE_pbvh_index_to_vertex(ss->pbvh, triangle.vert_indices[1]);
+  v3 = BKE_pbvh_index_to_vertex(ss->pbvh, triangle.vert_indices[2]);
+#else
+  v1.i = triangle.vert_indices[0];
+  v2.i = triangle.vert_indices[1];
+  v3.i = triangle.vert_indices[2];
+#endif
+
+  float a = SCULPT_automasking_factor_get(ss->cache->automasking, ss, v1, &automask_data);
+  float b = SCULPT_automasking_factor_get(ss->cache->automasking, ss, v2, &automask_data);
+  float c = SCULPT_automasking_factor_get(ss->cache->automasking, ss, v3, &automask_data);
 
   return a * uv[0] + b * uv[1] + c * (1.0 - uv[0] - uv[1]);
 }
@@ -341,8 +362,8 @@ static void do_paint_pixels(void *__restrict userdata,
   PaintingKernel<ImageBufferFloat4> kernel_float4(ss, brush, thread_id, mvert);
   PaintingKernel<ImageBufferByte4> kernel_byte4(ss, brush, thread_id, mvert);
 
-  AutomaskingNodeData automask_data;
-  SCULPT_automasking_node_begin(ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
+  AutomaskingNodeData automask_data = {0};
+  automask_data.have_orig_data = false;
 
   ImageUser image_user = *data->image_data.image_user;
   bool pixels_updated = false;
@@ -533,7 +554,7 @@ void SCULPT_do_paint_brush_image(
     return;
   }
 
-  SCULPT_automasking_cache_check(ob->sculpt, ob->sculpt->cache->automasking, nodes, totnode);
+  SCULPT_automasking_cache_check(ob, ob->sculpt, ob->sculpt->cache->automasking, nodes, totnode);
 
   TaskParallelSettings settings;
   BKE_pbvh_parallel_range_settings(&settings, true, totnode);

@@ -1877,7 +1877,8 @@ void SCULPT_OT_brush_stroke(struct wmOperatorType *ot);
 
 /* end sculpt_ops.c */
 
-void SCULPT_automasking_cache_check(struct Objedct *ob,
+/* Update automasking factor cache incrementally; currently used only by texture paint. */
+void SCULPT_automasking_cache_check(struct Object *ob,
                                     struct SculptSession *ss,
                                     struct AutomaskingCache *automasking,
                                     struct PBVHNode **nodes,

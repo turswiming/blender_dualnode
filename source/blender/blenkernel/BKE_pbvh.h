@@ -561,7 +561,7 @@ typedef struct PBVHVertexIter {
   float (*vert_normals)[3];
 
   const bool *hide_vert;
-  int totvert, unique_verts;
+  int totvert, unique_verts_count;
   const int *vert_indices;
   float *vmask;
 

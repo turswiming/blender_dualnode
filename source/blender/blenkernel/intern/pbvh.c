@@ -3076,7 +3076,7 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
     vi->totvert = uniq_verts;
   }
 
-  vi->unique_verts = uniq_verts;
+  vi->unique_verts_count = uniq_verts;
 
   vi->vert_indices = vert_indices;
   vi->mverts = verts;

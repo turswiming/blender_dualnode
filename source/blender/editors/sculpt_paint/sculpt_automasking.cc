@@ -499,41 +499,6 @@ static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
   return factor;
 }
 
-float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
-                                    SculptSession *ss,
-                                    PBVHVertRef vert,
-                                    AutomaskingNodeData *automask_data)
-{
-  if (!automasking || vert.i == PBVH_REF_NONE) {
-    return 1.0f;
-  }
-
-  /* If the cache is initialized with valid info, use the cache. This is used when the
-   * automasking information can't be computed in real time per vertex and needs to be
-   * initialized for the whole mesh when the stroke starts. */
-  if (ss->attrs.automasking_factor) {
-    float factor = *(float *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_factor);
-
-    if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
-      factor *= sculpt_automasking_cavity_factor(automasking, ss, vert);
-    }
-
-    return factor;
-  }
-
-  uchar stroke_id = ss->attrs.automasking_stroke_id ?
-                        *(uchar *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_stroke_id) :
-                        -1;
-
-  bool do_occlusion = (automasking->settings.flags &
-                       (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL)) ==
-                      (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL);
-  if (do_occlusion &&
-      automasking_view_occlusion_factor(automasking, ss, vert, stroke_id, automask_data)) {
-    return automasking_factor_end(ss, automasking, vert, 0.0f);
-  }
-}
-
 float sculpt_automasking_factor_calc(AutomaskingCache *automasking,
                                      SculptSession *ss,
                                      PBVHVertRef vert,
@@ -581,14 +546,33 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking,
                                     PBVHVertRef vert,
                                     AutomaskingNodeData *automask_data)
 {
-  if (!automasking) {
+  if (!automasking || vert.i == PBVH_REF_NONE) {
     return 1.0f;
   }
+
   /* If the cache is initialized with valid info, use the cache. This is used when the
    * automasking information can't be computed in real time per vertex and needs to be
    * initialized for the whole mesh when the stroke starts. */
   if (automasking->has_full_factor_cache) {
-    return *(float *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_factor);
+    float factor = *(float *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_factor);
+
+    if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
+      factor *= sculpt_automasking_cavity_factor(automasking, ss, vert);
+    }
+
+    return factor;
+  }
+
+  uchar stroke_id = ss->attrs.automasking_stroke_id ?
+                        *(uchar *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_stroke_id) :
+                        -1;
+
+  bool do_occlusion = (automasking->settings.flags &
+                       (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL)) ==
+                      (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL);
+  if (do_occlusion &&
+      automasking_view_occlusion_factor(automasking, ss, vert, stroke_id, automask_data)) {
+    return automasking_factor_end(ss, automasking, vert, 0.0f);
   }
 
   return sculpt_automasking_factor_calc(automasking, ss, vert, automask_data);
@@ -845,18 +829,6 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   SCULPT_automasking_cache_settings_update(automasking, ss, sd, brush);
   SCULPT_boundary_info_ensure(ob);
 
-  if (!SCULPT_automasking_needs_factors_cache(sd, brush) && ss->cache && ss->cache->use_pixels) {
-    /*
-     * Allocate factor cache but don't initialize it.
-     * Will be filled in by SCULPT_automasking_cache_check.
-     */
-    ss->attrs.automasking_factor = BKE_sculpt_attribute_ensure(
-        ob, ATTR_DOMAIN_POINT, CD_PROP_FLOAT, SCULPT_ATTRIBUTE_NAME(automasking_factor), &params);
-    automasking->current_stroke_id = ss->stroke_id;
-
-    return automasking;
-  }
-
   automasking->current_stroke_id = ss->stroke_id;
 
   bool use_stroke_id = false;
@@ -913,6 +885,20 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
     if (!automasking->can_reuse_mask) {
       ss->last_automask_stroke_id = ss->stroke_id;
     }
+  }
+
+  if (!SCULPT_automasking_needs_factors_cache(sd, brush) && ss->cache && ss->cache->use_pixels) {
+    SculptAttributeParams params = {0};
+    params.stroke_only = true;
+
+    /*
+     * Allocate factor cache but don't initialize it.
+     * Will be filled in by SCULPT_automasking_cache_check.
+     */
+    ss->attrs.automasking_factor = BKE_sculpt_attribute_ensure(
+        ob, ATTR_DOMAIN_POINT, CD_PROP_FLOAT, SCULPT_ATTRIBUTE_NAME(automasking_factor), &params);
+
+    return automasking;
   }
 
   if (!SCULPT_automasking_needs_factors_cache(sd, brush)) {
@@ -1005,11 +991,12 @@ void SCULPT_automasking_cache_check(
       PBVHVertexIter vd;
       AutomaskingNodeData automask_data;
 
-      SCULPT_automasking_node_begin(ob, ss, automasking, &automask_data);
+      SCULPT_automasking_node_begin(ob, ss, automasking, &automask_data, nodes[i]);
+
       BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_ALL) {
         SCULPT_automasking_node_update(ss, &automask_data, &vd);
 
-        if (vd.i >= vd.unique_verts) {
+        if (vd.i >= vd.unique_verts_count) {
           node_other_verts[i].append(vd.vertex);
         }
         else {

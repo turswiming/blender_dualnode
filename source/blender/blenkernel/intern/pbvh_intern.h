@@ -96,7 +96,7 @@ struct PBVHNode {
 
   /* Indicates whether this node is a leaf or not; also used for
    * marking various updates that need to be applied. */
-  PBVHNodeFlags flag : 32;
+  PBVHNodeFlags flag;
 
   /* Used for raycasting: how close bb is to the ray point. */
   float tmin;
