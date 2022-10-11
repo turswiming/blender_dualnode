@@ -361,7 +361,6 @@ static int palette_color_add_exec(bContext *C, wmOperator *UNUSED(op))
 {
   Scene *scene = CTX_data_scene(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
-  Brush *brush = paint->brush;
   ePaintMode mode = BKE_paintmode_get_active_from_context(C);
   Palette *palette = paint->palette;
   PaletteColor *color;
@@ -369,17 +368,20 @@ static int palette_color_add_exec(bContext *C, wmOperator *UNUSED(op))
   color = BKE_palette_color_add(palette);
   palette->active_color = BLI_listbase_count(&palette->colors) - 1;
 
-  if (ELEM(mode,
-           PAINT_MODE_TEXTURE_3D,
-           PAINT_MODE_TEXTURE_2D,
-           PAINT_MODE_VERTEX,
-           PAINT_MODE_SCULPT)) {
-    copy_v3_v3(color->rgb, BKE_brush_color_get(scene, brush));
-    color->value = 0.0;
-  }
-  else if (mode == PAINT_MODE_WEIGHT) {
-    zero_v3(color->rgb);
-    color->value = brush->weight;
+  if (paint->brush) {
+    const Brush *brush = paint->brush;
+    if (ELEM(mode,
+             PAINT_MODE_TEXTURE_3D,
+             PAINT_MODE_TEXTURE_2D,
+             PAINT_MODE_VERTEX,
+             PAINT_MODE_SCULPT)) {
+      copy_v3_v3(color->rgb, BKE_brush_color_get(scene, brush));
+      color->value = 0.0;
+    }
+    else if (mode == PAINT_MODE_WEIGHT) {
+      zero_v3(color->rgb);
+      color->value = brush->weight;
+    }
   }
 
   return OPERATOR_FINISHED;
@@ -1454,6 +1456,7 @@ void ED_operatortypes_paint(void)
   /* vertex selection */
   WM_operatortype_append(PAINT_OT_vert_select_all);
   WM_operatortype_append(PAINT_OT_vert_select_ungrouped);
+  WM_operatortype_append(PAINT_OT_vert_select_hide);
 
   /* vertex */
   WM_operatortype_append(PAINT_OT_vertex_paint_toggle);
@@ -1472,7 +1475,8 @@ void ED_operatortypes_paint(void)
   WM_operatortype_append(PAINT_OT_face_select_linked_pick);
   WM_operatortype_append(PAINT_OT_face_select_all);
   WM_operatortype_append(PAINT_OT_face_select_hide);
-  WM_operatortype_append(PAINT_OT_face_select_reveal);
+
+  WM_operatortype_append(PAINT_OT_face_vert_reveal);
 
   /* partial visibility */
   WM_operatortype_append(PAINT_OT_hide_show);

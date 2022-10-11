@@ -33,7 +33,7 @@ struct MeshElemMap;
  * union'd structs */
 struct PBVHNode {
   /* Opaque handle for drawing code */
-  struct GPU_PBVH_Buffers *draw_buffers;
+  struct PBVHBatches *draw_batches;
 
   /* Voxel bounds */
   BB vb;
@@ -116,13 +116,21 @@ struct PBVHNode {
   GSet *bm_faces;
   GSet *bm_unique_verts;
   GSet *bm_other_verts;
+
+  /* Deprecated. Stores original coordinates of triangles. */
   float (*bm_orco)[3];
   int (*bm_ortri)[3];
+  BMVert **bm_orvert;
   int bm_tot_ortri;
 
   /* Used to store the brush color during a stroke and composite it over the original color */
   PBVHColorBufferNode color_buffer;
   PBVHPixelsNode pixels;
+
+  /* Used to flash colors of updated node bounding boxes in
+   * debug draw mode (when G.debug_value / bpy.app.debug_value is 889).
+   */
+  int debug_draw_gen;
 };
 
 typedef enum { PBVH_DYNTOPO_SMOOTH_SHADING = 1 } PBVHFlags;
@@ -130,7 +138,7 @@ typedef enum { PBVH_DYNTOPO_SMOOTH_SHADING = 1 } PBVHFlags;
 typedef struct PBVHBMeshLog PBVHBMeshLog;
 
 struct PBVH {
-  PBVHType type;
+  struct PBVHPublic header;
   PBVHFlags flags;
 
   PBVHNode *nodes;
@@ -144,12 +152,16 @@ struct PBVH {
   int leaf_limit;
 
   /* Mesh data */
-  const struct Mesh *mesh;
+  struct Mesh *mesh;
 
   /* NOTE: Normals are not `const` because they can be updated for drawing by sculpt code. */
   float (*vert_normals)[3];
+  bool *hide_vert;
   struct MVert *verts;
   const struct MPoly *mpoly;
+  bool *hide_poly;
+  /** Material indices. Only valid for polygon meshes. */
+  const int *material_indices;
   const struct MLoop *mloop;
   const struct MLoopTri *looptri;
   CustomData *vdata;
@@ -183,7 +195,6 @@ struct PBVH {
   bool respect_hide;
 
   /* Dynamic topology */
-  BMesh *bm;
   float bm_max_edge_len;
   float bm_min_edge_len;
   int cd_vert_node_offset;
@@ -265,7 +276,7 @@ bool pbvh_bmesh_node_raycast(PBVHNode *node,
                              struct IsectRayPrecalc *isect_precalc,
                              float *dist,
                              bool use_original,
-                             int *r_active_vertex_index,
+                             PBVHVertRef *r_active_vertex,
                              float *r_face_normal);
 bool pbvh_bmesh_node_nearest_to_ray(PBVHNode *node,
                                     const float ray_start[3],

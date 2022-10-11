@@ -23,6 +23,7 @@ GHOST_Window::GHOST_Window(uint32_t width,
     : m_drawingContextType(GHOST_kDrawingContextTypeNone),
       m_cursorVisible(true),
       m_cursorGrab(GHOST_kGrabDisable),
+      m_cursorGrabAxis(GHOST_kAxisNone),
       m_cursorShape(GHOST_kStandardCursorDefault),
       m_wantStereoVisual(wantStereoVisual),
       m_context(new GHOST_ContextNone(false))
@@ -91,7 +92,12 @@ GHOST_TSuccess GHOST_Window::getSwapInterval(int &intervalOut)
   return m_context->getSwapInterval(intervalOut);
 }
 
-unsigned int GHOST_Window::getDefaultFramebuffer()
+GHOST_Context *GHOST_Window::getContext()
+{
+  return m_context;
+}
+
+uint GHOST_Window::getDefaultFramebuffer()
 {
   return (m_context) ? m_context->getDefaultFramebuffer() : 0;
 }

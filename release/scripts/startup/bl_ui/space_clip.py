@@ -2,7 +2,10 @@
 
 import bpy
 from bpy.types import Panel, Header, Menu, UIList
-from bpy.app.translations import pgettext_iface as iface_
+from bpy.app.translations import (
+    pgettext_iface as iface_,
+    contexts as i18n_contexts,
+)
 from bl_ui.utils import PresetPanel
 from bl_ui.properties_grease_pencil_common import (
     AnnotationDrawingToolsPanel,
@@ -771,8 +774,10 @@ class CLIP_PT_plane_track(CLIP_PT_tracking_panel, Panel):
 
         layout.prop(active_track, "name")
         layout.prop(active_track, "use_auto_keying")
-        layout.template_ID(
+        row = layout.row()
+        row.template_ID(
             active_track, "image", new="image.new", open="image.open")
+        row.menu("CLIP_MT_plane_track_image_context_menu", icon='DOWNARROW_HLT', text="")
 
         row = layout.row()
         row.active = active_track.image is not None
@@ -1483,6 +1488,10 @@ class CLIP_MT_track(Menu):
         layout.operator("clip.create_plane_track")
 
         layout.separator()
+        layout.operator("clip.new_image_from_plane_marker")
+        layout.operator("clip.update_image_from_plane_marker")
+
+        layout.separator()
 
         layout.operator(
             "clip.solve_camera",
@@ -1634,6 +1643,16 @@ class CLIP_MT_tracking_context_menu(Menu):
             draw_mask_context_menu(layout, context)
 
 
+class CLIP_MT_plane_track_image_context_menu(Menu):
+    bl_label = "Plane Track Image Specials"
+
+    def draw(self, _context):
+        layout = self.layout
+
+        layout.operator("clip.new_image_from_plane_marker")
+        layout.operator("clip.update_image_from_plane_marker")
+
+
 class CLIP_PT_camera_presets(PresetPanel, Panel):
     """Predefined tracking camera intrinsics"""
     bl_label = "Camera Presets"
@@ -1735,6 +1754,7 @@ class CLIP_MT_marker_pie(Menu):
 class CLIP_MT_tracking_pie(Menu):
     # Tracking Operators
     bl_label = "Tracking"
+    bl_translation_context = i18n_contexts.id_movieclip
 
     @classmethod
     def poll(cls, context):
@@ -1935,6 +1955,7 @@ classes = (
     CLIP_MT_select,
     CLIP_MT_select_grouped,
     CLIP_MT_tracking_context_menu,
+    CLIP_MT_plane_track_image_context_menu,
     CLIP_PT_camera_presets,
     CLIP_PT_track_color_presets,
     CLIP_PT_tracking_settings_presets,

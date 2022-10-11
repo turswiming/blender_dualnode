@@ -32,7 +32,7 @@ void main()
   vec3 vert_N;
 
   gpMaterial gp_mat = materials[ma1.x + gpMaterialOffset];
-  gpMaterialFlag gp_flag = floatBitsToInt(gp_mat._flag);
+  gpMaterialFlag gp_flag = floatBitsToUint(gp_mat._flag);
 
   gl_Position = gpencil_vertex(ma,
                                ma1,
@@ -47,7 +47,7 @@ void main()
                                col1,
                                col2,
                                fcol1,
-                               vec4(drw_view.viewport_size, drw_view.viewport_size_inverse),
+                               vec4(viewportSize, 1.0 / viewportSize),
                                gp_flag,
                                gp_mat._alignment_rot,
                                gp_interp.pos,

@@ -86,7 +86,6 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
     ls->pdf = invarea / (costheta * costheta * costheta);
     ls->eval_fac = ls->pdf;
   }
-#ifdef __BACKGROUND_MIS__
   else if (type == LIGHT_BACKGROUND) {
     /* infinite area light (e.g. light dome or env light) */
     float3 D = -background_light_sample(kg, P, randu, randv, &ls->pdf);
@@ -97,7 +96,6 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
     ls->t = FLT_MAX;
     ls->eval_fac = 1.0f;
   }
-#endif
   else {
     ls->P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
 
@@ -202,8 +200,12 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
         inplane = ls->P - inplane;
       }
 
-      ls->u = dot(inplane, axisu) * (1.0f / dot(axisu, axisu)) + 0.5f;
-      ls->v = dot(inplane, axisv) * (1.0f / dot(axisv, axisv)) + 0.5f;
+      const float light_u = dot(inplane, axisu) * (1.0f / dot(axisu, axisu));
+      const float light_v = dot(inplane, axisv) * (1.0f / dot(axisv, axisv));
+
+      /* NOTE: Return barycentric coordinates in the same notation as Embree and OptiX. */
+      ls->u = light_v + 0.5f;
+      ls->v = -light_u - light_v;
 
       ls->Ng = Ng;
       ls->D = normalize_len(ls->P - P, &ls->t);
@@ -270,31 +272,26 @@ ccl_device bool lights_intersect(KernelGlobals kg,
 
     if (type == LIGHT_SPOT) {
       /* Spot/Disk light. */
-      const float mis_ray_t = INTEGRATOR_STATE(state, path, mis_ray_t);
-      const float3 ray_P = ray->P - ray->D * mis_ray_t;
-
       const float3 lightP = make_float3(klight->co[0], klight->co[1], klight->co[2]);
       const float radius = klight->spot.radius;
       if (radius == 0.0f) {
         continue;
       }
       /* disk oriented normal */
-      const float3 lightN = normalize(ray_P - lightP);
+      const float3 lightN = normalize(ray->P - lightP);
       /* One sided. */
       if (dot(ray->D, lightN) >= 0.0f) {
         continue;
       }
 
       float3 P;
-      if (!ray_disk_intersect(ray->P, ray->D, ray->t, lightP, lightN, radius, &P, &t)) {
+      if (!ray_disk_intersect(
+              ray->P, ray->D, ray->tmin, ray->tmax, lightP, lightN, radius, &P, &t)) {
         continue;
       }
     }
     else if (type == LIGHT_POINT) {
       /* Sphere light (aka, aligned disk light). */
-      const float mis_ray_t = INTEGRATOR_STATE(state, path, mis_ray_t);
-      const float3 ray_P = ray->P - ray->D * mis_ray_t;
-
       const float3 lightP = make_float3(klight->co[0], klight->co[1], klight->co[2]);
       const float radius = klight->spot.radius;
       if (radius == 0.0f) {
@@ -302,9 +299,10 @@ ccl_device bool lights_intersect(KernelGlobals kg,
       }
 
       /* disk oriented normal */
-      const float3 lightN = normalize(ray_P - lightP);
+      const float3 lightN = normalize(ray->P - lightP);
       float3 P;
-      if (!ray_disk_intersect(ray->P, ray->D, ray->t, lightP, lightN, radius, &P, &t)) {
+      if (!ray_disk_intersect(
+              ray->P, ray->D, ray->tmin, ray->tmax, lightP, lightN, radius, &P, &t)) {
         continue;
       }
     }
@@ -330,8 +328,19 @@ ccl_device bool lights_intersect(KernelGlobals kg,
       const float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
 
       float3 P;
-      if (!ray_quad_intersect(
-              ray->P, ray->D, 0.0f, ray->t, light_P, axisu, axisv, Ng, &P, &t, &u, &v, is_round)) {
+      if (!ray_quad_intersect(ray->P,
+                              ray->D,
+                              ray->tmin,
+                              ray->tmax,
+                              light_P,
+                              axisu,
+                              axisv,
+                              Ng,
+                              &P,
+                              &t,
+                              &u,
+                              &v,
+                              is_round)) {
         continue;
       }
     }
@@ -775,7 +784,8 @@ ccl_device_forceinline void triangle_light_sample(KernelGlobals kg,
     ls->D = z * B + safe_sqrtf(1.0f - z * z) * safe_normalize(C_ - dot(C_, B) * B);
 
     /* calculate intersection with the planar triangle */
-    if (!ray_triangle_intersect(P, ls->D, FLT_MAX, V[0], V[1], V[2], &ls->u, &ls->v, &ls->t)) {
+    if (!ray_triangle_intersect(
+            P, ls->D, 0.0f, FLT_MAX, V[0], V[1], V[2], &ls->u, &ls->v, &ls->t)) {
       ls->pdf = 0.0f;
       return;
     }

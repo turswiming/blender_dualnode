@@ -431,8 +431,7 @@ NlaStrip *BKE_nlastrip_new(bAction *act)
   BKE_action_get_frame_range(strip->act, &strip->actstart, &strip->actend);
 
   strip->start = strip->actstart;
-  strip->end = (IS_EQF(strip->actstart, strip->actend)) ? (strip->actstart + 1.0f) :
-                                                          (strip->actend);
+  strip->end = IS_EQF(strip->actstart, strip->actend) ? (strip->actstart + 1.0f) : strip->actend;
 
   /* strip should be referenced as-is */
   strip->scale = 1.0f;
@@ -1239,6 +1238,68 @@ static NlaStrip *nlastrip_find_active(ListBase /* NlaStrip */ *strips)
   return NULL;
 }
 
+float BKE_nlastrip_compute_frame_from_previous_strip(NlaStrip *strip)
+{
+  float limit_prev = MINAFRAMEF;
+
+  /* Find the previous end frame, with a special case if the previous strip was a transition : */
+  if (strip->prev) {
+    if (strip->prev->type == NLASTRIP_TYPE_TRANSITION) {
+      limit_prev = strip->prev->start + NLASTRIP_MIN_LEN_THRESH;
+    }
+    else {
+      limit_prev = strip->prev->end;
+    }
+  }
+
+  return limit_prev;
+}
+
+float BKE_nlastrip_compute_frame_to_next_strip(NlaStrip *strip)
+{
+  float limit_next = MAXFRAMEF;
+
+  /* Find the next begin frame, with a special case if the next strip's a transition : */
+  if (strip->next) {
+    if (strip->next->type == NLASTRIP_TYPE_TRANSITION) {
+      limit_next = strip->next->end - NLASTRIP_MIN_LEN_THRESH;
+    }
+    else {
+      limit_next = strip->next->start;
+    }
+  }
+
+  return limit_next;
+}
+
+NlaStrip *BKE_nlastrip_next_in_track(struct NlaStrip *strip, bool skip_transitions)
+{
+  NlaStrip *next = strip->next;
+  while (next != NULL) {
+    if (skip_transitions && (next->type & NLASTRIP_TYPE_TRANSITION)) {
+      next = next->next;
+    }
+    else {
+      return next;
+    }
+  }
+  return NULL;
+}
+
+NlaStrip *BKE_nlastrip_prev_in_track(struct NlaStrip *strip, bool skip_transitions)
+{
+  NlaStrip *prev = strip->prev;
+  while (prev != NULL) {
+    if (skip_transitions && (prev->type & NLASTRIP_TYPE_TRANSITION)) {
+      prev = prev->prev;
+    }
+    else {
+      return prev;
+    }
+  }
+  return NULL;
+}
+
 NlaStrip *BKE_nlastrip_find_active(NlaTrack *nlt)
 {
   if (nlt == NULL) {
@@ -2038,7 +2099,7 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
 
   /* handle AnimData level changes:
    * - 'real' active action to temp storage (no need to change user-counts).
-   * - Action of active strip set to be the 'active action', and have its usercount incremented.
+   * - Action of active strip set to be the 'active action', and have its user-count incremented.
    * - Editing-flag for this AnimData block should also get turned on
    *   (for more efficient restoring).
    * - Take note of the active strip for mapping-correction of keyframes
@@ -2102,7 +2163,8 @@ void BKE_nla_tweakmode_exit(AnimData *adt)
   }
 
   /* handle AnimData level changes:
-   * - 'temporary' active action needs its usercount decreased, since we're removing this reference
+   * - 'temporary' active action needs its user-count decreased,
+   *   since we're removing this reference
    * - 'real' active action is restored from storage
    * - storage pointer gets cleared (to avoid having bad notes hanging around)
    * - editing-flag for this AnimData block should also get turned off

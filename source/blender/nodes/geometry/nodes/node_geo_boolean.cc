@@ -2,6 +2,7 @@
 
 #include "DNA_mesh_types.h"
 
+#include "BKE_geometry_set_instances.hh"
 #include "BKE_mesh_boolean_convert.hh"
 
 #include "UI_interface.h"
@@ -23,7 +24,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Bool>(N_("Intersecting Edges")).field_source();
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "operation", 0, "", ICON_NONE);
 }
@@ -36,7 +37,7 @@ static void node_update(bNodeTree *ntree, bNode *node)
 {
   GeometryNodeBooleanOperation operation = (GeometryNodeBooleanOperation)node->custom1;
 
-  bNodeSocket *geometry_1_socket = (bNodeSocket *)node->inputs.first;
+  bNodeSocket *geometry_1_socket = static_cast<bNodeSocket *>(node->inputs.first);
   bNodeSocket *geometry_2_socket = geometry_1_socket->next;
 
   switch (operation) {
@@ -54,7 +55,7 @@ static void node_update(bNodeTree *ntree, bNode *node)
   }
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = GEO_NODE_BOOLEAN_DIFFERENCE;
 }
@@ -92,7 +93,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   /* The instance transform matrices are owned by the instance group, so we have to
    * keep all of them around for use during the boolean operation. */
   Vector<bke::GeometryInstanceGroup> set_groups;
-  Vector<GeometrySet> geometry_sets = params.extract_multi_input<GeometrySet>("Mesh 2");
+  Vector<GeometrySet> geometry_sets = params.extract_input<Vector<GeometrySet>>("Mesh 2");
   for (const GeometrySet &geometry_set : geometry_sets) {
     bke::geometry_set_gather_instances(geometry_set, set_groups);
   }
@@ -147,23 +148,22 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   MEM_SAFE_FREE(result->mat);
-  result->mat = (Material **)MEM_malloc_arrayN(materials.size(), sizeof(Material *), __func__);
+  result->mat = static_cast<Material **>(
+      MEM_malloc_arrayN(materials.size(), sizeof(Material *), __func__));
   result->totcol = materials.size();
   MutableSpan(result->mat, result->totcol).copy_from(materials);
 
   /* Store intersecting edges in attribute. */
   if (attribute_outputs.intersecting_edges_id) {
-    MeshComponent mesh_component;
-    mesh_component.replace(result, GeometryOwnershipType::Editable);
-    OutputAttribute_Typed<bool> attribute = mesh_component.attribute_try_get_for_output_only<bool>(
+    MutableAttributeAccessor attributes = result->attributes_for_write();
+    SpanAttributeWriter<bool> selection = attributes.lookup_or_add_for_write_only_span<bool>(
         attribute_outputs.intersecting_edges_id.get(), ATTR_DOMAIN_EDGE);
-    MutableSpan<bool> selection = attribute.as_span();
-    selection.fill(false);
-    for (const int i : intersecting_edges) {
-      selection[i] = true;
-    }
 
-    attribute.save();
+    selection.span.fill(false);
+    for (const int i : intersecting_edges) {
+      selection.span[i] = true;
+    }
+    selection.finish();
 
     params.set_output(
         "Intersecting Edges",

@@ -127,9 +127,10 @@ Sequence *SEQ_sequence_alloc(ListBase *lb, int timeline_frame, int machine, int 
   seq->mul = 1.0;
   seq->blend_opacity = 100.0;
   seq->volume = 1.0f;
-  seq->pitch = 1.0f;
   seq->scene_sound = NULL;
   seq->type = type;
+  seq->media_playback_rate = 0.0f;
+  seq->speed_factor = 1.0f;
 
   if (seq->type == SEQ_TYPE_ADJUSTMENT) {
     seq->blend_mode = SEQ_TYPE_CROSS;
@@ -170,7 +171,7 @@ static void seq_sequence_free_ex(Scene *scene,
   }
 
   if (seq->sound && do_id_user) {
-    id_us_min(((ID *)seq->sound));
+    id_us_min((ID *)seq->sound);
   }
 
   if (seq->stereo3d_format) {
@@ -411,8 +412,8 @@ static MetaStack *seq_meta_stack_alloc(const Scene *scene, Sequence *seq_meta)
   ms->oldbasep = higher_level_meta ? &higher_level_meta->seqbase : &ed->seqbase;
   ms->old_channels = higher_level_meta ? &higher_level_meta->channels : &ed->channels;
 
-  ms->disp_range[0] = SEQ_time_left_handle_frame_get(ms->parseq);
-  ms->disp_range[1] = SEQ_time_right_handle_frame_get(ms->parseq);
+  ms->disp_range[0] = SEQ_time_left_handle_frame_get(scene, ms->parseq);
+  ms->disp_range[1] = SEQ_time_right_handle_frame_get(scene, ms->parseq);
   return ms;
 }
 
@@ -425,22 +426,22 @@ MetaStack *SEQ_meta_stack_active_get(const Editing *ed)
   return ed->metastack.last;
 }
 
-void SEQ_meta_stack_set(const Scene *scene, Sequence *seqm)
+void SEQ_meta_stack_set(const Scene *scene, Sequence *dst_seq)
 {
   Editing *ed = SEQ_editing_get(scene);
   /* Clear metastack */
   BLI_freelistN(&ed->metastack);
 
-  if (seqm != NULL) {
+  if (dst_seq != NULL) {
     /* Allocate meta stack in a way, that represents meta hierarchy in timeline. */
-    seq_meta_stack_alloc(scene, seqm);
-    Sequence *meta_parent = seqm;
+    seq_meta_stack_alloc(scene, dst_seq);
+    Sequence *meta_parent = dst_seq;
     while ((meta_parent = seq_sequence_lookup_meta_by_seq(scene, meta_parent))) {
       seq_meta_stack_alloc(scene, meta_parent);
     }
 
-    SEQ_seqbase_active_set(ed, &seqm->seqbase);
-    SEQ_channels_displayed_set(ed, &seqm->channels);
+    SEQ_seqbase_active_set(ed, &dst_seq->seqbase);
+    SEQ_channels_displayed_set(ed, &dst_seq->channels);
   }
   else {
     /* Go to top level, exiting meta strip. */
@@ -835,7 +836,7 @@ static bool seq_read_lib_cb(Sequence *seq, void *user_data)
   BlendLibReader *reader = data->reader;
   Scene *sce = data->scene;
 
-  IDP_BlendReadLib(reader, seq->prop);
+  IDP_BlendReadLib(reader, sce->id.lib, seq->prop);
 
   if (seq->ipo) {
     /* XXX: deprecated - old animation system. */
@@ -965,8 +966,9 @@ static bool seq_update_seq_cb(Sequence *seq, void *user_data)
     }
     BKE_sound_set_scene_sound_volume(
         seq->scene_sound, seq->volume, (seq->flag & SEQ_AUDIO_VOLUME_ANIMATED) != 0);
-    BKE_sound_set_scene_sound_pitch(
-        seq->scene_sound, seq->pitch, (seq->flag & SEQ_AUDIO_PITCH_ANIMATED) != 0);
+    BKE_sound_set_scene_sound_pitch(seq->scene_sound,
+                                    SEQ_sound_pitch_get(scene, seq),
+                                    (seq->flag & SEQ_AUDIO_PITCH_ANIMATED) != 0);
     BKE_sound_set_scene_sound_pan(
         seq->scene_sound, seq->pan, (seq->flag & SEQ_AUDIO_PAN_ANIMATED) != 0);
   }

@@ -54,7 +54,7 @@ class GeometryDataSource : public DataSource {
                      GeometrySet geometry_set,
                      const GeometryComponentType component_type,
                      const eAttrDomain domain,
-                     ExtraColumns extra_columns)
+                     ExtraColumns extra_columns = {})
       : object_eval_(object_eval),
         geometry_set_(std::move(geometry_set)),
         component_(geometry_set_.get_component_for_read(component_type)),
@@ -68,10 +68,6 @@ class GeometryDataSource : public DataSource {
     return object_eval_;
   }
 
-  /**
-   * Only data sets corresponding to mesh objects in edit mode currently support selection
-   * filtering.
-   */
   bool has_selection_filter() const override;
   IndexMask apply_selection_filter(Vector<int64_t> &indices) const;
 

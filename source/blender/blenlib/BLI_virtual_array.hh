@@ -23,6 +23,8 @@
  * see of the increased compile time and binary size is worth it.
  */
 
+#include <optional>
+
 #include "BLI_any.hh"
 #include "BLI_array.hh"
 #include "BLI_index_mask.hh"
@@ -51,7 +53,10 @@ struct CommonVArrayInfo {
   /** True when the #data becomes a dangling pointer when the virtual array is destructed. */
   bool may_have_ownership = true;
 
-  /** Points either to nothing, a single value or array of values, depending on #type. */
+  /**
+   * Points either to nothing, a single value or array of values, depending on #type.
+   * If this is a span of a mutable virtual array, it is safe to cast away const.
+   */
   const void *data;
 
   CommonVArrayInfo() = default;
@@ -103,25 +108,7 @@ template<typename T> class VArrayImpl {
    */
   virtual void materialize(IndexMask mask, MutableSpan<T> r_span) const
   {
-    T *dst = r_span.data();
-    /* Optimize for a few different common cases. */
-    const CommonVArrayInfo info = this->common_info();
-    switch (info.type) {
-      case CommonVArrayInfo::Type::Any: {
-        mask.foreach_index([&](const int64_t i) { dst[i] = this->get(i); });
-        break;
-      }
-      case CommonVArrayInfo::Type::Span: {
-        const T *src = static_cast<const T *>(info.data);
-        mask.foreach_index([&](const int64_t i) { dst[i] = src[i]; });
-        break;
-      }
-      case CommonVArrayInfo::Type::Single: {
-        const T single = *static_cast<const T *>(info.data);
-        mask.foreach_index([&](const int64_t i) { dst[i] = single; });
-        break;
-      }
-    }
+    mask.foreach_index([&](const int64_t i) { r_span[i] = this->get(i); });
   }
 
   /**
@@ -130,24 +117,7 @@ template<typename T> class VArrayImpl {
   virtual void materialize_to_uninitialized(IndexMask mask, MutableSpan<T> r_span) const
   {
     T *dst = r_span.data();
-    /* Optimize for a few different common cases. */
-    const CommonVArrayInfo info = this->common_info();
-    switch (info.type) {
-      case CommonVArrayInfo::Type::Any: {
-        mask.foreach_index([&](const int64_t i) { new (dst + i) T(this->get(i)); });
-        break;
-      }
-      case CommonVArrayInfo::Type::Span: {
-        const T *src = static_cast<const T *>(info.data);
-        mask.foreach_index([&](const int64_t i) { new (dst + i) T(src[i]); });
-        break;
-      }
-      case CommonVArrayInfo::Type::Single: {
-        const T single = *static_cast<const T *>(info.data);
-        mask.foreach_index([&](const int64_t i) { new (dst + i) T(single); });
-        break;
-      }
-    }
+    mask.foreach_index([&](const int64_t i) { new (dst + i) T(this->get(i)); });
   }
 
   /**
@@ -185,7 +155,7 @@ template<typename T> class VArrayImpl {
    * arrays in all cases.
    * Return true when the virtual array was assigned and false when nothing was done.
    */
-  virtual bool try_assign_GVArray(GVArray &UNUSED(varray)) const
+  virtual bool try_assign_GVArray(GVArray & /*varray*/) const
   {
     return false;
   }
@@ -194,7 +164,7 @@ template<typename T> class VArrayImpl {
    * Return true when the other virtual array should be considered to be the same, e.g. because it
    * shares the same underlying memory.
    */
-  virtual bool is_same(const VArrayImpl<T> &UNUSED(other)) const
+  virtual bool is_same(const VArrayImpl<T> & /*other*/) const
   {
     return false;
   }
@@ -231,7 +201,7 @@ template<typename T> class VMutableArrayImpl : public VArrayImpl<T> {
   /**
    * Similar to #VArrayImpl::try_assign_GVArray but for mutable virtual arrays.
    */
-  virtual bool try_assign_GVMutableArray(GVMutableArray &UNUSED(varray)) const
+  virtual bool try_assign_GVMutableArray(GVMutableArray & /*varray*/) const
   {
     return false;
   }
@@ -283,8 +253,20 @@ template<typename T> class VArrayImpl_For_Span : public VMutableArrayImpl<T> {
     return data_ == static_cast<const T *>(other_info.data);
   }
 
+  void materialize(IndexMask mask, MutableSpan<T> r_span) const override
+  {
+    mask.foreach_index([&](const int64_t i) { r_span[i] = data_[i]; });
+  }
+
+  void materialize_to_uninitialized(IndexMask mask, MutableSpan<T> r_span) const override
+  {
+    T *dst = r_span.data();
+    mask.foreach_index([&](const int64_t i) { new (dst + i) T(data_[i]); });
+  }
+
   void materialize_compressed(IndexMask mask, MutableSpan<T> r_span) const override
   {
+    BLI_assert(mask.size() == r_span.size());
     mask.to_best_mask_type([&](auto best_mask) {
       for (const int64_t i : IndexRange(best_mask.size())) {
         r_span[i] = data_[best_mask[i]];
@@ -295,6 +277,7 @@ template<typename T> class VArrayImpl_For_Span : public VMutableArrayImpl<T> {
   void materialize_compressed_to_uninitialized(IndexMask mask,
                                                MutableSpan<T> r_span) const override
   {
+    BLI_assert(mask.size() == r_span.size());
     T *dst = r_span.data();
     mask.to_best_mask_type([&](auto best_mask) {
       for (const int64_t i : IndexRange(best_mask.size())) {
@@ -311,6 +294,12 @@ template<typename T> class VArrayImpl_For_Span : public VMutableArrayImpl<T> {
 template<typename T> class VArrayImpl_For_Span_final final : public VArrayImpl_For_Span<T> {
  public:
   using VArrayImpl_For_Span<T>::VArrayImpl_For_Span;
+
+  VArrayImpl_For_Span_final(const Span<T> data)
+      /* Cast const away, because the implementation for const and non const spans is shared. */
+      : VArrayImpl_For_Span<T>({const_cast<T *>(data.data()), data.size()})
+  {
+  }
 
  private:
   CommonVArrayInfo common_info() const final
@@ -335,7 +324,7 @@ class VArrayImpl_For_ArrayContainer : public VArrayImpl_For_Span<T> {
 
  public:
   VArrayImpl_For_ArrayContainer(Container container)
-      : VArrayImpl_For_Span<T>((int64_t)container.size()), container_(std::move(container))
+      : VArrayImpl_For_Span<T>(int64_t(container.size())), container_(std::move(container))
   {
     this->data_ = const_cast<T *>(container_.data());
   }
@@ -357,7 +346,7 @@ template<typename T> class VArrayImpl_For_Single final : public VArrayImpl<T> {
   }
 
  protected:
-  T get(const int64_t UNUSED(index)) const override
+  T get(const int64_t /*index*/) const override
   {
     return value_;
   }
@@ -365,6 +354,17 @@ template<typename T> class VArrayImpl_For_Single final : public VArrayImpl<T> {
   CommonVArrayInfo common_info() const override
   {
     return CommonVArrayInfo(CommonVArrayInfo::Type::Single, true, &value_);
+  }
+
+  void materialize(IndexMask mask, MutableSpan<T> r_span) const override
+  {
+    r_span.fill_indices(mask, value_);
+  }
+
+  void materialize_to_uninitialized(IndexMask mask, MutableSpan<T> r_span) const override
+  {
+    T *dst = r_span.data();
+    mask.foreach_index([&](const int64_t i) { new (dst + i) T(value_); });
   }
 
   void materialize_compressed(IndexMask mask, MutableSpan<T> r_span) const override
@@ -794,6 +794,18 @@ template<typename T> class VArrayCommon {
   }
 
   /**
+   * Return the value that is returned for every index, if the array is stored as a single value.
+   */
+  std::optional<T> get_if_single() const
+  {
+    const CommonVArrayInfo info = impl_->common_info();
+    if (info.type != CommonVArrayInfo::Type::Single) {
+      return std::nullopt;
+    }
+    return *static_cast<const T *>(info.data);
+  }
+
+  /**
    * Return true when the other virtual references the same underlying memory.
    */
   bool is_same(const VArrayCommon<T> &other) const
@@ -895,10 +907,7 @@ template<typename T> class VArray : public VArrayCommon<T> {
 
   VArray(varray_tag::span /* tag */, Span<T> span)
   {
-    /* Cast const away, because the virtual array implementation for const and non const spans is
-     * shared. */
-    MutableSpan<T> mutable_span{const_cast<T *>(span.data()), span.size()};
-    this->template emplace<VArrayImpl_For_Span_final<T>>(mutable_span);
+    this->template emplace<VArrayImpl_For_Span_final<T>>(span);
   }
 
   VArray(varray_tag::single /* tag */, T value, const int64_t size)
@@ -1117,16 +1126,19 @@ template<typename T> static constexpr bool is_VMutableArray_v<VMutableArray<T>> 
  *    from faster access.
  *  - An API is called, that does not accept virtual arrays, but only spans.
  */
-template<typename T> class VArray_Span final : public Span<T> {
+template<typename T> class VArraySpan final : public Span<T> {
  private:
   VArray<T> varray_;
   Array<T> owned_data_;
 
  public:
-  VArray_Span() = default;
+  VArraySpan() = default;
 
-  VArray_Span(VArray<T> varray) : Span<T>(), varray_(std::move(varray))
+  VArraySpan(VArray<T> varray) : Span<T>(), varray_(std::move(varray))
   {
+    if (!varray_) {
+      return;
+    }
     this->size_ = varray_.size();
     const CommonVArrayInfo info = varray_.common_info();
     if (info.type == CommonVArrayInfo::Type::Span) {
@@ -1140,9 +1152,12 @@ template<typename T> class VArray_Span final : public Span<T> {
     }
   }
 
-  VArray_Span(VArray_Span &&other)
+  VArraySpan(VArraySpan &&other)
       : varray_(std::move(other.varray_)), owned_data_(std::move(other.owned_data_))
   {
+    if (!varray_) {
+      return;
+    }
     this->size_ = varray_.size();
     const CommonVArrayInfo info = varray_.common_info();
     if (info.type == CommonVArrayInfo::Type::Span) {
@@ -1155,25 +1170,25 @@ template<typename T> class VArray_Span final : public Span<T> {
     other.size_ = 0;
   }
 
-  VArray_Span &operator=(VArray_Span &&other)
+  VArraySpan &operator=(VArraySpan &&other)
   {
     if (this == &other) {
       return *this;
     }
     std::destroy_at(this);
-    new (this) VArray_Span(std::move(other));
+    new (this) VArraySpan(std::move(other));
     return *this;
   }
 };
 
 /**
- * Same as #VArray_Span, but for a mutable span.
+ * Same as #VArraySpan, but for a mutable span.
  * The important thing to note is that when changing this span, the results might not be
  * immediately reflected in the underlying virtual array (only when the virtual array is a span
  * internally). The #save method can be used to write all changes to the underlying virtual array,
  * if necessary.
  */
-template<typename T> class VMutableArray_Span final : public MutableSpan<T> {
+template<typename T> class MutableVArraySpan final : public MutableSpan<T> {
  private:
   VMutableArray<T> varray_;
   Array<T> owned_data_;
@@ -1181,11 +1196,17 @@ template<typename T> class VMutableArray_Span final : public MutableSpan<T> {
   bool show_not_saved_warning_ = true;
 
  public:
+  MutableVArraySpan() = default;
+
   /* Create a span for any virtual array. This is cheap when the virtual array is a span itself. If
    * not, a new array has to be allocated as a wrapper for the underlying virtual array. */
-  VMutableArray_Span(VMutableArray<T> varray, const bool copy_values_to_span = true)
+  MutableVArraySpan(VMutableArray<T> varray, const bool copy_values_to_span = true)
       : MutableSpan<T>(), varray_(std::move(varray))
   {
+    if (!varray_) {
+      return;
+    }
+
     this->size_ = varray_.size();
     const CommonVArrayInfo info = varray_.common_info();
     if (info.type == CommonVArrayInfo::Type::Span) {
@@ -1204,13 +1225,51 @@ template<typename T> class VMutableArray_Span final : public MutableSpan<T> {
     }
   }
 
-  ~VMutableArray_Span()
+  MutableVArraySpan(MutableVArraySpan &&other)
+      : varray_(std::move(other.varray_)),
+        owned_data_(std::move(other.owned_data_)),
+        show_not_saved_warning_(other.show_not_saved_warning_)
   {
-    if (show_not_saved_warning_) {
-      if (!save_has_been_called_) {
-        std::cout << "Warning: Call `save()` to make sure that changes persist in all cases.\n";
+    if (!varray_) {
+      return;
+    }
+
+    this->size_ = varray_.size();
+    const CommonVArrayInfo info = varray_.common_info();
+    if (info.type == CommonVArrayInfo::Type::Span) {
+      this->data_ = static_cast<T *>(const_cast<void *>(info.data));
+    }
+    else {
+      this->data_ = owned_data_.data();
+    }
+    other.data_ = nullptr;
+    other.size_ = 0;
+  }
+
+  ~MutableVArraySpan()
+  {
+    if (varray_) {
+      if (show_not_saved_warning_) {
+        if (!save_has_been_called_) {
+          std::cout << "Warning: Call `save()` to make sure that changes persist in all cases.\n";
+        }
       }
     }
+  }
+
+  MutableVArraySpan &operator=(MutableVArraySpan &&other)
+  {
+    if (this == &other) {
+      return *this;
+    }
+    std::destroy_at(this);
+    new (this) MutableVArraySpan(std::move(other));
+    return *this;
+  }
+
+  const VMutableArray<T> &varray() const
+  {
+    return varray_;
   }
 
   /* Write back all values from a temporary allocated array to the underlying virtual array. */

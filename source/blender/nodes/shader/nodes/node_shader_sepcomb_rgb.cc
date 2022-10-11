@@ -20,7 +20,7 @@ static void sh_node_seprgb_declare(NodeDeclarationBuilder &b)
 
 static int gpu_shader_seprgb(GPUMaterial *mat,
                              bNode *node,
-                             bNodeExecData *UNUSED(execdata),
+                             bNodeExecData * /*execdata*/,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
@@ -45,7 +45,7 @@ class SeparateRGBFunction : public fn::MultiFunction {
     return signature.build();
   }
 
-  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext /*context*/) const override
   {
     const VArray<ColorGeometry4f> &colors = params.readonly_single_input<ColorGeometry4f>(0,
                                                                                           "Color");
@@ -80,6 +80,7 @@ void register_node_type_sh_seprgb()
   ntype.declare = file_ns::sh_node_seprgb_declare;
   node_type_gpu(&ntype, file_ns::gpu_shader_seprgb);
   ntype.build_multi_function = file_ns::sh_node_seprgb_build_multi_function;
+  ntype.gather_link_search_ops = nullptr;
 
   nodeRegisterType(&ntype);
 }
@@ -97,7 +98,7 @@ static void sh_node_combrgb_declare(NodeDeclarationBuilder &b)
 
 static int gpu_shader_combrgb(GPUMaterial *mat,
                               bNode *node,
-                              bNodeExecData *UNUSED(execdata),
+                              bNodeExecData * /*execdata*/,
                               GPUNodeStack *in,
                               GPUNodeStack *out)
 {
@@ -123,6 +124,7 @@ void register_node_type_sh_combrgb()
   ntype.declare = file_ns::sh_node_combrgb_declare;
   node_type_gpu(&ntype, file_ns::gpu_shader_combrgb);
   ntype.build_multi_function = file_ns::sh_node_combrgb_build_multi_function;
+  ntype.gather_link_search_ops = nullptr;
 
   nodeRegisterType(&ntype);
 }

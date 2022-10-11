@@ -73,7 +73,7 @@ void ViewMap::Clean()
   }
 }
 
-ViewShape *ViewMap::viewShape(unsigned id)
+ViewShape *ViewMap::viewShape(uint id)
 {
   int index = _shapeIdToIndex[id];
   return _VShapes[index];
@@ -398,7 +398,7 @@ void TVertex::setBackEdgeB(ViewEdge *iBackEdgeB, bool incoming)
 
 void TVertex::Replace(ViewEdge *iOld, ViewEdge *iNew)
 {
-  // theoritically, we only replace edges for which this
+  // theoretically, we only replace edges for which this
   // view vertex is the B vertex
   if ((iOld == _FrontEdgeA.first) && (_FrontEdgeA.first->B() == this)) {
     _FrontEdgeA.first = iNew;
@@ -770,7 +770,7 @@ ViewShape::~ViewShape()
 {
   _Vertices.clear();
 
-  if (!(_Edges.empty())) {
+  if (!_Edges.empty()) {
     for (vector<ViewEdge *>::iterator e = _Edges.begin(), eend = _Edges.end(); e != eend; e++) {
       delete (*e);
     }

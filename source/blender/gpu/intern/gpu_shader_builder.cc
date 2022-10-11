@@ -45,13 +45,12 @@ void ShaderBuilder::init()
   ghost_context_ = GHOST_CreateOpenGLContext(ghost_system_, glSettings);
   GHOST_ActivateOpenGLContext(ghost_context_);
 
-  gpu_context_ = GPU_context_create(nullptr);
+  gpu_context_ = GPU_context_create(nullptr, ghost_context_);
   GPU_init();
 }
 
 void ShaderBuilder::exit()
 {
-  GPU_backend_exit();
   GPU_exit();
 
   GPU_context_discard(gpu_context_);

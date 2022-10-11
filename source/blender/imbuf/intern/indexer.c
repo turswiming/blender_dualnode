@@ -215,7 +215,7 @@ struct anim_index *IMB_indexer_open(const char *name)
     return NULL;
   }
 
-  if (((ENDIAN_ORDER == B_ENDIAN) != (header[8] == 'V'))) {
+  if ((ENDIAN_ORDER == B_ENDIAN) != (header[8] == 'V')) {
     for (i = 0; i < idx->num_entries; i++) {
       BLI_endian_switch_int32(&idx->entries[i].frameno);
       BLI_endian_switch_uint64(&idx->entries[i].seek_pos);
@@ -1012,12 +1012,13 @@ static int index_rebuild_ffmpeg(FFmpegIndexBuilderContext *context,
 
   stream_size = avio_size(context->iFormatCtx->pb);
 
-  context->frame_rate = av_q2d(context->iStream->r_frame_rate);
+  context->frame_rate = av_q2d(av_guess_frame_rate(context->iFormatCtx, context->iStream, NULL));
   context->pts_time_base = av_q2d(context->iStream->time_base);
 
   while (av_read_frame(context->iFormatCtx, next_packet) >= 0) {
-    float next_progress =
-        (float)((int)floor(((double)next_packet->pos) * 100 / ((double)stream_size) + 0.5)) / 100;
+    float next_progress = (float)(int)floor(
+                              ((double)next_packet->pos) * 100 / ((double)stream_size) + 0.5) /
+                          100;
 
     if (*progress != next_progress) {
       *progress = next_progress;
@@ -1098,6 +1099,7 @@ static int indexer_performance_get_decode_rate(FFmpegIndexBuilderContext *contex
 
   while (av_read_frame(context->iFormatCtx, packet) >= 0) {
     if (packet->stream_index != context->videoStream) {
+      av_packet_unref(packet);
       continue;
     }
 
@@ -1121,6 +1123,7 @@ static int indexer_performance_get_decode_rate(FFmpegIndexBuilderContext *contex
     if (end > start + time_period) {
       break;
     }
+    av_packet_unref(packet);
   }
 
   av_packet_free(&packet);
@@ -1145,6 +1148,7 @@ static int indexer_performance_get_max_gop_size(FFmpegIndexBuilderContext *conte
 
   while (av_read_frame(context->iFormatCtx, packet) >= 0) {
     if (packet->stream_index != context->videoStream) {
+      av_packet_unref(packet);
       continue;
     }
     packet_index++;
@@ -1158,6 +1162,7 @@ static int indexer_performance_get_max_gop_size(FFmpegIndexBuilderContext *conte
     if (packet_index > packets_max) {
       break;
     }
+    av_packet_unref(packet);
   }
 
   av_packet_free(&packet);

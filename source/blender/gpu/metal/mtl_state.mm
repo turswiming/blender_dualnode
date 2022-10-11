@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 /** \file
  * \ingroup gpu
  */
@@ -9,6 +11,7 @@
 
 #include "mtl_context.hh"
 #include "mtl_framebuffer.hh"
+#include "mtl_shader_interface_type.hh"
 #include "mtl_state.hh"
 
 namespace blender::gpu {
@@ -17,7 +20,7 @@ namespace blender::gpu {
 /** \name MTLStateManager
  * \{ */
 
-void MTLStateManager::mtl_state_init(void)
+void MTLStateManager::mtl_state_init()
 {
   BLI_assert(context_);
   context_->pipeline_state_init();
@@ -36,7 +39,7 @@ MTLStateManager::MTLStateManager(MTLContext *ctx) : StateManager()
   set_mutable_state(mutable_state);
 }
 
-void MTLStateManager::apply_state(void)
+void MTLStateManager::apply_state()
 {
   this->set_state(this->state);
   this->set_mutable_state(this->mutable_state);
@@ -45,7 +48,7 @@ void MTLStateManager::apply_state(void)
   static_cast<MTLFrameBuffer *>(context_->active_fb)->apply_state();
 };
 
-void MTLStateManager::force_state(void)
+void MTLStateManager::force_state()
 {
   /* Little exception for clip distances since they need to keep the old count correct. */
   uint32_t clip_distances = current_.clip_distances;
@@ -199,7 +202,7 @@ static MTLCompareFunction gpu_stencil_func_to_metal(eGPUStencilTest stencil_func
     case GPU_STENCIL_ALWAYS:
       return MTLCompareFunctionAlways;
     default:
-      BLI_assert(false && "Unrecognised eGPUStencilTest function");
+      BLI_assert(false && "Unrecognized eGPUStencilTest function");
       break;
   }
   return MTLCompareFunctionAlways;
@@ -548,7 +551,7 @@ void MTLStateManager::issue_barrier(eGPUBarrier barrier_bits)
 
   /* Apple Silicon does not support memory barriers.
    * We do not currently need these due to implicit API guarantees.
-   * Note(Metal): MTLFence/MTLEvent may be required to synchronize work if
+   * NOTE(Metal): MTLFence/MTLEvent may be required to synchronize work if
    * untracked resources are ever used. */
   if ([ctx->device hasUnifiedMemory]) {
     return;
@@ -600,7 +603,7 @@ void MTLStateManager::texture_unbind(Texture *tex_)
   ctx->texture_unbind(mtl_tex);
 }
 
-void MTLStateManager::texture_unbind_all(void)
+void MTLStateManager::texture_unbind_all()
 {
   MTLContext *ctx = static_cast<MTLContext *>(unwrap(GPU_context_active_get()));
   BLI_assert(ctx);
@@ -623,7 +626,7 @@ void MTLStateManager::image_unbind(Texture *tex_)
   this->texture_unbind(tex_);
 }
 
-void MTLStateManager::image_unbind_all(void)
+void MTLStateManager::image_unbind_all()
 {
   this->texture_unbind_all();
 }

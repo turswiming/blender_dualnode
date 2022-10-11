@@ -81,51 +81,51 @@ typedef struct FluidJob {
 
 static inline bool fluid_is_bake_all(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_BAKE_ALL));
+  return STREQ(job->type, FLUID_JOB_BAKE_ALL);
 }
 static inline bool fluid_is_bake_data(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_BAKE_DATA));
+  return STREQ(job->type, FLUID_JOB_BAKE_DATA);
 }
 static inline bool fluid_is_bake_noise(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_BAKE_NOISE));
+  return STREQ(job->type, FLUID_JOB_BAKE_NOISE);
 }
 static inline bool fluid_is_bake_mesh(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_BAKE_MESH));
+  return STREQ(job->type, FLUID_JOB_BAKE_MESH);
 }
 static inline bool fluid_is_bake_particle(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_BAKE_PARTICLES));
+  return STREQ(job->type, FLUID_JOB_BAKE_PARTICLES);
 }
 static inline bool fluid_is_bake_guiding(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_BAKE_GUIDES));
+  return STREQ(job->type, FLUID_JOB_BAKE_GUIDES);
 }
 static inline bool fluid_is_free_all(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_FREE_ALL));
+  return STREQ(job->type, FLUID_JOB_FREE_ALL);
 }
 static inline bool fluid_is_free_data(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_FREE_DATA));
+  return STREQ(job->type, FLUID_JOB_FREE_DATA);
 }
 static inline bool fluid_is_free_noise(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_FREE_NOISE));
+  return STREQ(job->type, FLUID_JOB_FREE_NOISE);
 }
 static inline bool fluid_is_free_mesh(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_FREE_MESH));
+  return STREQ(job->type, FLUID_JOB_FREE_MESH);
 }
 static inline bool fluid_is_free_particles(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_FREE_PARTICLES));
+  return STREQ(job->type, FLUID_JOB_FREE_PARTICLES);
 }
 static inline bool fluid_is_free_guiding(FluidJob *job)
 {
-  return (STREQ(job->type, FLUID_JOB_FREE_GUIDES));
+  return STREQ(job->type, FLUID_JOB_FREE_GUIDES);
 }
 
 static bool fluid_initjob(
@@ -256,8 +256,8 @@ static void fluid_bake_sequence(FluidJob *job)
   frame = is_first_frame ? fds->cache_frame_start : (*pause_frame);
 
   /* Save orig frame and update scene frame. */
-  orig_frame = CFRA;
-  CFRA = frame;
+  orig_frame = scene->r.cfra;
+  scene->r.cfra = frame;
 
   /* Loop through selected frames. */
   for (; frame <= fds->cache_frame_end; frame++) {
@@ -280,7 +280,7 @@ static void fluid_bake_sequence(FluidJob *job)
       *(job->progress) = progress;
     }
 
-    CFRA = frame;
+    scene->r.cfra = frame;
 
     /* Update animation system. */
     ED_update_for_newframe(job->bmain, job->depsgraph);
@@ -293,7 +293,7 @@ static void fluid_bake_sequence(FluidJob *job)
   }
 
   /* Restore frame position that we were on before bake. */
-  CFRA = orig_frame;
+  scene->r.cfra = orig_frame;
 }
 
 static void fluid_bake_endjob(void *customdata)
@@ -502,6 +502,7 @@ static void fluid_free_startjob(void *customdata, short *stop, short *do_update,
   BKE_fluid_cache_free(fds, job->ob, cache_map);
 #else
   UNUSED_VARS(fds);
+  UNUSED_VARS(cache_map);
 #endif
 
   *do_update = true;

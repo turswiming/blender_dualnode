@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "DNA_userdef_types.h"
 
@@ -19,19 +20,18 @@ namespace blender::gpu {
  * dependencies not being honored for work submitted between
  * different GPUContext's. */
 id<MTLEvent> MTLCommandBufferManager::sync_event = nil;
-unsigned long long MTLCommandBufferManager::event_signal_val = 0;
+uint64_t MTLCommandBufferManager::event_signal_val = 0;
 
 /* Counter for active command buffers. */
 int MTLCommandBufferManager::num_active_cmd_bufs = 0;
 
 /* -------------------------------------------------------------------- */
-/** \name MTLCommandBuffer initialisation and render coordination.
+/** \name MTLCommandBuffer initialization and render coordination.
  * \{ */
 
-void MTLCommandBufferManager::prepare(MTLContext *ctx, bool supports_render)
+void MTLCommandBufferManager::prepare(bool supports_render)
 {
-  context_ = ctx;
-  render_pass_state_.prepare(this, ctx);
+  render_pass_state_.reset_state();
 }
 
 void MTLCommandBufferManager::register_encoder_counters()
@@ -54,10 +54,11 @@ id<MTLCommandBuffer> MTLCommandBufferManager::ensure_begin()
       MTLCommandBufferDescriptor *desc = [[MTLCommandBufferDescriptor alloc] init];
       desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
       desc.retainedReferences = YES;
-      active_command_buffer_ = [context_->queue commandBufferWithDescriptor:desc];
+      BLI_assert(context_.queue != nil);
+      active_command_buffer_ = [context_.queue commandBufferWithDescriptor:desc];
     }
     else {
-      active_command_buffer_ = [context_->queue commandBuffer];
+      active_command_buffer_ = [context_.queue commandBuffer];
     }
     [active_command_buffer_ retain];
     MTLCommandBufferManager::num_active_cmd_bufs++;
@@ -66,6 +67,10 @@ id<MTLCommandBuffer> MTLCommandBufferManager::ensure_begin()
     if (this->sync_event != nil) {
       [active_command_buffer_ encodeWaitForEvent:this->sync_event value:this->event_signal_val];
     }
+
+    /* Ensure we begin new Scratch Buffer if we are on a new frame. */
+    MTLScratchBufferManager &mem = context_.memory_manager;
+    mem.ensure_increment_scratch_buffer();
 
     /* Reset Command buffer heuristics. */
     this->reset_counters();
@@ -86,12 +91,15 @@ bool MTLCommandBufferManager::submit(bool wait)
   this->end_active_command_encoder();
   BLI_assert(active_command_encoder_type_ == MTL_NO_COMMAND_ENCODER);
 
+  /* Flush active ScratchBuffer associated with parent MTLContext. */
+  context_.memory_manager.flush_active_scratch_buffer();
+
   /*** Submit Command Buffer. ***/
   /* Strict ordering ensures command buffers are guaranteed to execute after a previous
    * one has completed. Resolves flickering when command buffers are submitted from
    * different MTLContext's. */
   if (MTLCommandBufferManager::sync_event == nil) {
-    MTLCommandBufferManager::sync_event = [context_->device newEvent];
+    MTLCommandBufferManager::sync_event = [context_.device newEvent];
     BLI_assert(MTLCommandBufferManager::sync_event);
     [MTLCommandBufferManager::sync_event retain];
   }
@@ -102,14 +110,27 @@ bool MTLCommandBufferManager::submit(bool wait)
                                       value:MTLCommandBufferManager::event_signal_val];
 
   /* Command buffer lifetime tracking. */
-  /* TODO(Metal): This routine will later be used to track released memory allocations within the
-   * lifetime of a command buffer such that memory is only released once no longer in use. */
-  id<MTLCommandBuffer> cmd_buffer_ref = [active_command_buffer_ retain];
+  /* Increment current MTLSafeFreeList reference counter to flag MTLBuffers freed within
+   * the current command buffer lifetime as used.
+   * This ensures that in-use resources are not prematurely de-referenced and returned to the
+   * available buffer pool while they are in-use by the GPU. */
+  MTLSafeFreeList *cmd_free_buffer_list =
+      MTLContext::get_global_memory_manager().get_current_safe_list();
+  BLI_assert(cmd_free_buffer_list);
+  cmd_free_buffer_list->increment_reference();
+
+  id<MTLCommandBuffer> cmd_buffer_ref = active_command_buffer_;
+  [cmd_buffer_ref retain];
+
   [cmd_buffer_ref addCompletedHandler:^(id<MTLCommandBuffer> cb) {
+    /* Upon command buffer completion, decrement MTLSafeFreeList reference count
+     * to allow buffers no longer in use by this CommandBuffer to be freed. */
+    cmd_free_buffer_list->decrement_reference();
+
     /* Release command buffer after completion callback handled. */
     [cmd_buffer_ref release];
 
-    /* Decrement active cmd buffer count. */
+    /* Decrement count. */
     MTLCommandBufferManager::num_active_cmd_bufs--;
   }];
 
@@ -222,7 +243,7 @@ bool MTLCommandBufferManager::end_active_command_encoder()
         active_render_command_encoder_ = nil;
         active_command_encoder_type_ = MTL_NO_COMMAND_ENCODER;
 
-        /* Reset associated framebuffer flag. */
+        /* Reset associated frame-buffer flag. */
         active_frame_buffer_ = nullptr;
         active_pass_descriptor_ = nullptr;
         return true;
@@ -266,7 +287,7 @@ bool MTLCommandBufferManager::end_active_command_encoder()
 id<MTLRenderCommandEncoder> MTLCommandBufferManager::ensure_begin_render_command_encoder(
     MTLFrameBuffer *ctx_framebuffer, bool force_begin, bool *new_pass)
 {
-  /* Ensure valid framebuffer. */
+  /* Ensure valid frame-buffer. */
   BLI_assert(ctx_framebuffer != nullptr);
 
   /* Ensure active command buffer. */
@@ -279,14 +300,20 @@ id<MTLRenderCommandEncoder> MTLCommandBufferManager::ensure_begin_render_command
       active_frame_buffer_ != ctx_framebuffer || force_begin) {
     this->end_active_command_encoder();
 
-    /* Determine if this is a re-bind of the same framebuffer. */
+    /* Determine if this is a re-bind of the same frame-buffer. */
     bool is_rebind = (active_frame_buffer_ == ctx_framebuffer);
 
-    /* Generate RenderPassDescriptor from bound framebuffer.  */
+    /* Generate RenderPassDescriptor from bound frame-buffer. */
     BLI_assert(ctx_framebuffer);
     active_frame_buffer_ = ctx_framebuffer;
     active_pass_descriptor_ = active_frame_buffer_->bake_render_pass_descriptor(
         is_rebind && (!active_frame_buffer_->get_pending_clear()));
+
+    /* Determine if there is a visibility buffer assigned to the context. */
+    gpu::MTLBuffer *visibility_buffer = context_.get_visibility_buffer();
+    this->active_pass_descriptor_.visibilityResultBuffer =
+        (visibility_buffer) ? visibility_buffer->get_metal_buffer() : nil;
+    context_.clear_visibility_dirty();
 
     /* Ensure we have already cleaned up our previous render command encoder. */
     BLI_assert(active_render_command_encoder_ == nil);
@@ -472,7 +499,7 @@ bool MTLCommandBufferManager::insert_memory_barrier(eGPUBarrier barrier_bits,
         /* Rendering. */
         case MTL_RENDER_COMMAND_ENCODER: {
           /* Currently flagging both stages -- can use bits above to filter on stage type --
-           * though full barrier is safe for now*/
+           * though full barrier is safe for now. */
           MTLRenderStages before_stage_flags = 0;
           MTLRenderStages after_stage_flags = 0;
           if (before_stages & GPU_BARRIER_STAGE_VERTEX &&
@@ -516,15 +543,6 @@ bool MTLCommandBufferManager::insert_memory_barrier(eGPUBarrier barrier_bits,
 /* -------------------------------------------------------------------- */
 /** \name Render Pass State for active RenderCommandEncoder
  * \{ */
-
-/* Metal Render Pass State. */
-void MTLRenderPassState::prepare(MTLCommandBufferManager *cmd, MTLContext *mtl_ctx)
-{
-  this->cmd = cmd;
-  this->ctx = mtl_ctx;
-  this->reset_state();
-}
-
 /* Reset binding state when a new RenderCommandEncoder is bound, to ensure
  * pipeline resources are re-applied to the new Encoder.
  * NOTE: In Metal, state is only persistent within an MTLCommandEncoder,
@@ -539,12 +557,12 @@ void MTLRenderPassState::reset_state()
   this->last_bound_shader_state.set(nullptr, 0);
 
   /* Other states. */
-  MTLFrameBuffer *fb = this->cmd->get_active_framebuffer();
+  MTLFrameBuffer *fb = this->cmd.get_active_framebuffer();
   this->last_used_stencil_ref_value = 0;
   this->last_scissor_rect = {0,
                              0,
-                             (unsigned long)((fb != nullptr) ? fb->get_width() : 0),
-                             (unsigned long)((fb != nullptr) ? fb->get_height() : 0)};
+                             (uint)((fb != nullptr) ? fb->get_width() : 0),
+                             (uint)((fb != nullptr) ? fb->get_height() : 0)};
 
   /* Reset cached resource binding state */
   for (int ubo = 0; ubo < MTL_MAX_UNIFORM_BUFFER_BINDINGS; ubo++) {
@@ -573,7 +591,7 @@ void MTLRenderPassState::reset_state()
 void MTLRenderPassState::bind_vertex_texture(id<MTLTexture> tex, uint slot)
 {
   if (this->cached_vertex_texture_bindings[slot].metal_texture != tex) {
-    id<MTLRenderCommandEncoder> rec = this->cmd->get_active_render_command_encoder();
+    id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
     BLI_assert(rec != nil);
     [rec setVertexTexture:tex atIndex:slot];
     this->cached_vertex_texture_bindings[slot].metal_texture = tex;
@@ -583,7 +601,7 @@ void MTLRenderPassState::bind_vertex_texture(id<MTLTexture> tex, uint slot)
 void MTLRenderPassState::bind_fragment_texture(id<MTLTexture> tex, uint slot)
 {
   if (this->cached_fragment_texture_bindings[slot].metal_texture != tex) {
-    id<MTLRenderCommandEncoder> rec = this->cmd->get_active_render_command_encoder();
+    id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
     BLI_assert(rec != nil);
     [rec setFragmentTexture:tex atIndex:slot];
     this->cached_fragment_texture_bindings[slot].metal_texture = tex;
@@ -594,40 +612,187 @@ void MTLRenderPassState::bind_vertex_sampler(MTLSamplerBinding &sampler_binding,
                                              bool use_argument_buffer_for_samplers,
                                              uint slot)
 {
-  /* TODO(Metal): Implement RenderCommandEncoder vertex sampler binding utility. This will be
-   * implemented alongside MTLShader. */
+  /* Range check. */
+  const MTLShaderInterface *shader_interface = ctx.pipeline_state.active_shader->get_interface();
+  BLI_assert(slot >= 0);
+  BLI_assert(slot <= shader_interface->get_max_texture_index());
+  BLI_assert(slot < MTL_MAX_TEXTURE_SLOTS);
+  UNUSED_VARS_NDEBUG(shader_interface);
+
+  /* If sampler state has not changed for the given slot, we do not need to fetch. */
+  if (this->cached_vertex_sampler_state_bindings[slot].sampler_state == nil ||
+      !(this->cached_vertex_sampler_state_bindings[slot].binding_state == sampler_binding.state) ||
+      use_argument_buffer_for_samplers) {
+
+    id<MTLSamplerState> sampler_state = (sampler_binding.state == DEFAULT_SAMPLER_STATE) ?
+                                            ctx.get_default_sampler_state() :
+                                            ctx.get_sampler_from_state(sampler_binding.state);
+    if (!use_argument_buffer_for_samplers) {
+      /* Update binding and cached state. */
+      id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
+      BLI_assert(rec != nil);
+      [rec setVertexSamplerState:sampler_state atIndex:slot];
+      this->cached_vertex_sampler_state_bindings[slot].binding_state = sampler_binding.state;
+      this->cached_vertex_sampler_state_bindings[slot].sampler_state = sampler_state;
+    }
+
+    /* Flag last binding type. */
+    this->cached_vertex_sampler_state_bindings[slot].is_arg_buffer_binding =
+        use_argument_buffer_for_samplers;
+
+    /* Always assign to argument buffer samplers binding array - Efficiently ensures the value in
+     * the samplers array is always up to date. */
+    ctx.samplers_.mtl_sampler[slot] = sampler_state;
+    ctx.samplers_.mtl_sampler_flags[slot] = sampler_binding.state;
+  }
 }
 
 void MTLRenderPassState::bind_fragment_sampler(MTLSamplerBinding &sampler_binding,
                                                bool use_argument_buffer_for_samplers,
                                                uint slot)
 {
-  /* TODO(Metal): Implement RenderCommandEncoder fragment sampler binding utility. This will be
-   * implemented alongside MTLShader. */
+  /* Range check. */
+  const MTLShaderInterface *shader_interface = ctx.pipeline_state.active_shader->get_interface();
+  BLI_assert(slot >= 0);
+  BLI_assert(slot <= shader_interface->get_max_texture_index());
+  BLI_assert(slot < MTL_MAX_TEXTURE_SLOTS);
+  UNUSED_VARS_NDEBUG(shader_interface);
+
+  /* If sampler state has not changed for the given slot, we do not need to fetch*/
+  if (this->cached_fragment_sampler_state_bindings[slot].sampler_state == nil ||
+      !(this->cached_fragment_sampler_state_bindings[slot].binding_state ==
+        sampler_binding.state) ||
+      use_argument_buffer_for_samplers) {
+
+    id<MTLSamplerState> sampler_state = (sampler_binding.state == DEFAULT_SAMPLER_STATE) ?
+                                            ctx.get_default_sampler_state() :
+                                            ctx.get_sampler_from_state(sampler_binding.state);
+    if (!use_argument_buffer_for_samplers) {
+      /* Update binding and cached state. */
+      id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
+      BLI_assert(rec != nil);
+      [rec setFragmentSamplerState:sampler_state atIndex:slot];
+      this->cached_fragment_sampler_state_bindings[slot].binding_state = sampler_binding.state;
+      this->cached_fragment_sampler_state_bindings[slot].sampler_state = sampler_state;
+    }
+
+    /* Flag last binding type */
+    this->cached_fragment_sampler_state_bindings[slot].is_arg_buffer_binding =
+        use_argument_buffer_for_samplers;
+
+    /* Always assign to argument buffer samplers binding array - Efficiently ensures the value in
+     * the samplers array is always up to date. */
+    ctx.samplers_.mtl_sampler[slot] = sampler_state;
+    ctx.samplers_.mtl_sampler_flags[slot] = sampler_binding.state;
+  }
 }
 
 void MTLRenderPassState::bind_vertex_buffer(id<MTLBuffer> buffer, uint buffer_offset, uint index)
 {
-  /* TODO(Metal): Implement RenderCommandEncoder vertex buffer binding utility. This will be
-   * implemented alongside the full MTLMemoryManager. */
+  BLI_assert(index >= 0);
+  BLI_assert(buffer_offset >= 0);
+  BLI_assert(buffer != nil);
+
+  BufferBindingCached &current_vert_ubo_binding = this->cached_vertex_buffer_bindings[index];
+  if (current_vert_ubo_binding.offset != buffer_offset ||
+      current_vert_ubo_binding.metal_buffer != buffer || current_vert_ubo_binding.is_bytes) {
+
+    id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
+    BLI_assert(rec != nil);
+
+    if (current_vert_ubo_binding.metal_buffer == buffer) {
+      /* If buffer is the same, but offset has changed. */
+      [rec setVertexBufferOffset:buffer_offset atIndex:index];
+    }
+    else {
+      /* Bind Vertex Buffer. */
+      [rec setVertexBuffer:buffer offset:buffer_offset atIndex:index];
+    }
+
+    /* Update Bind-state cache. */
+    this->cached_vertex_buffer_bindings[index].is_bytes = false;
+    this->cached_vertex_buffer_bindings[index].metal_buffer = buffer;
+    this->cached_vertex_buffer_bindings[index].offset = buffer_offset;
+  }
 }
 
 void MTLRenderPassState::bind_fragment_buffer(id<MTLBuffer> buffer, uint buffer_offset, uint index)
 {
-  /* TODO(Metal): Implement RenderCommandEncoder fragment buffer binding utility. This will be
-   * implemented alongside the full MTLMemoryManager. */
+  BLI_assert(index >= 0);
+  BLI_assert(buffer_offset >= 0);
+  BLI_assert(buffer != nil);
+
+  BufferBindingCached &current_frag_ubo_binding = this->cached_fragment_buffer_bindings[index];
+  if (current_frag_ubo_binding.offset != buffer_offset ||
+      current_frag_ubo_binding.metal_buffer != buffer || current_frag_ubo_binding.is_bytes) {
+
+    id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
+    BLI_assert(rec != nil);
+
+    if (current_frag_ubo_binding.metal_buffer == buffer) {
+      /* If buffer is the same, but offset has changed. */
+      [rec setFragmentBufferOffset:buffer_offset atIndex:index];
+    }
+    else {
+      /* Bind Fragment Buffer */
+      [rec setFragmentBuffer:buffer offset:buffer_offset atIndex:index];
+    }
+
+    /* Update Bind-state cache */
+    this->cached_fragment_buffer_bindings[index].is_bytes = false;
+    this->cached_fragment_buffer_bindings[index].metal_buffer = buffer;
+    this->cached_fragment_buffer_bindings[index].offset = buffer_offset;
+  }
 }
 
 void MTLRenderPassState::bind_vertex_bytes(void *bytes, uint length, uint index)
 {
-  /* TODO(Metal): Implement RenderCommandEncoder vertex bytes binding utility. This will be
-   * implemented alongside the full MTLMemoryManager. */
+  /* Bytes always updated as source data may have changed. */
+  BLI_assert(index >= 0 && index < MTL_MAX_UNIFORM_BUFFER_BINDINGS);
+  BLI_assert(length > 0);
+  BLI_assert(bytes != nullptr);
+
+  if (length < MTL_MAX_SET_BYTES_SIZE) {
+    id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
+    [rec setVertexBytes:bytes length:length atIndex:index];
+  }
+  else {
+    /* We have run over the setBytes limit, bind buffer instead. */
+    MTLTemporaryBuffer range =
+        ctx.get_scratchbuffer_manager().scratch_buffer_allocate_range_aligned(length, 256);
+    memcpy(range.data, bytes, length);
+    this->bind_vertex_buffer(range.metal_buffer, range.buffer_offset, index);
+  }
+
+  /* Update Bind-state cache */
+  this->cached_vertex_buffer_bindings[index].is_bytes = true;
+  this->cached_vertex_buffer_bindings[index].metal_buffer = nil;
+  this->cached_vertex_buffer_bindings[index].offset = -1;
 }
 
 void MTLRenderPassState::bind_fragment_bytes(void *bytes, uint length, uint index)
 {
-  /* TODO(Metal): Implement RenderCommandEncoder fragment bytes binding utility. This will be
-   * implemented alongside the full MTLMemoryManager. */
+  /* Bytes always updated as source data may have changed. */
+  BLI_assert(index >= 0 && index < MTL_MAX_UNIFORM_BUFFER_BINDINGS);
+  BLI_assert(length > 0);
+  BLI_assert(bytes != nullptr);
+
+  if (length < MTL_MAX_SET_BYTES_SIZE) {
+    id<MTLRenderCommandEncoder> rec = this->cmd.get_active_render_command_encoder();
+    [rec setFragmentBytes:bytes length:length atIndex:index];
+  }
+  else {
+    /* We have run over the setBytes limit, bind buffer instead. */
+    MTLTemporaryBuffer range =
+        ctx.get_scratchbuffer_manager().scratch_buffer_allocate_range_aligned(length, 256);
+    memcpy(range.data, bytes, length);
+    this->bind_fragment_buffer(range.metal_buffer, range.buffer_offset, index);
+  }
+
+  /* Update Bind-state cache. */
+  this->cached_fragment_buffer_bindings[index].is_bytes = true;
+  this->cached_fragment_buffer_bindings[index].metal_buffer = nil;
+  this->cached_fragment_buffer_bindings[index].offset = -1;
 }
 
 /** \} */

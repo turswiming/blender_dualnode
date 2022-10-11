@@ -12,6 +12,7 @@
 #include "GPU_batch_presets.h"
 #include "GPU_capabilities.h"
 #include "GPU_framebuffer.h"
+#include "GPU_immediate.h"
 #include "GPU_platform.h"
 #include "GPU_state.h"
 
@@ -20,6 +21,7 @@
 #include "mtl_context.hh"
 #include "mtl_debug.hh"
 #include "mtl_texture.hh"
+#include "mtl_vertex_buffer.hh"
 
 #include "GHOST_C-api.h"
 
@@ -50,7 +52,6 @@ void gpu::MTLTexture::mtl_texture_init()
   /* VBO. */
   vert_buffer_ = nullptr;
   vert_buffer_mtl_ = nil;
-  vert_buffer_offset_ = -1;
 
   /* Default Swizzle. */
   tex_swizzle_mask_[0] = 'r';
@@ -169,26 +170,39 @@ void gpu::MTLTexture::bake_mip_swizzle_view()
 id<MTLTexture> gpu::MTLTexture::get_metal_handle()
 {
 
-  /* ensure up to date and baked. */
-  this->ensure_baked();
-
   /* Verify VBO texture shares same buffer. */
   if (resource_mode_ == MTL_TEXTURE_MODE_VBO) {
-    int r_offset = -1;
+    id<MTLBuffer> buf = vert_buffer_->get_metal_buffer();
 
-    /* TODO(Metal): Fetch buffer from MTLVertBuf when implemented. */
-    id<MTLBuffer> buf = nil; /*vert_buffer_->get_metal_buffer(&r_offset);*/
+    /* Source vertex buffer has been re-generated, require re-initialization. */
+    if (buf != vert_buffer_mtl_) {
+      MTL_LOG_INFO(
+          "MTLTexture '%p' using MTL_TEXTURE_MODE_VBO requires re-generation due to updated "
+          "Vertex-Buffer.\n",
+          this);
+      /* Clear state. */
+      this->reset();
+
+      /* Re-initialize. */
+      this->init_internal(wrap(vert_buffer_));
+
+      /* Update for assertion check below. */
+      buf = vert_buffer_->get_metal_buffer();
+    }
+
+    /* Ensure buffer is valid.
+     * Fetch-vert buffer handle directly in-case it changed above. */
     BLI_assert(vert_buffer_mtl_ != nil);
-    BLI_assert(buf == vert_buffer_mtl_ && r_offset == vert_buffer_offset_);
-
-    UNUSED_VARS(buf);
-    UNUSED_VARS_NDEBUG(r_offset);
+    BLI_assert(vert_buffer_->get_metal_buffer() == vert_buffer_mtl_);
   }
+
+  /* ensure up to date and baked. */
+  this->ensure_baked();
 
   if (is_baked_) {
     /* For explicit texture views, ensure we always return the texture view. */
     if (resource_mode_ == MTL_TEXTURE_MODE_TEXTURE_VIEW) {
-      BLI_assert(mip_swizzle_view_ && "Texture view should always have a valid handle.");
+      BLI_assert_msg(mip_swizzle_view_, "Texture view should always have a valid handle.");
     }
 
     if (mip_swizzle_view_ != nil || texture_view_dirty_flags_) {
@@ -208,7 +222,7 @@ id<MTLTexture> gpu::MTLTexture::get_metal_handle_base()
 
   /* For explicit texture views, always return the texture view. */
   if (resource_mode_ == MTL_TEXTURE_MODE_TEXTURE_VIEW) {
-    BLI_assert(mip_swizzle_view_ && "Texture view should always have a valid handle.");
+    BLI_assert_msg(mip_swizzle_view_, "Texture view should always have a valid handle.");
     if (mip_swizzle_view_ != nil || texture_view_dirty_flags_) {
       bake_mip_swizzle_view();
     }
@@ -290,7 +304,6 @@ void gpu::MTLTexture::blit(gpu::MTLTexture *dst,
 
   /* Execute graphics draw call to perform the blit. */
   GPUBatch *quad = GPU_batch_preset_quad();
-
   GPU_batch_set_shader(quad, shader);
 
   float w = dst->width_get();
@@ -323,6 +336,20 @@ void gpu::MTLTexture::blit(gpu::MTLTexture *dst,
   GPU_depth_test(GPU_DEPTH_ALWAYS);
 
   GPU_batch_draw(quad);
+
+  /* TMP draw with IMM TODO(Metal): Remove this once GPUBatch is supported. */
+  GPUVertFormat *imm_format = immVertexFormat();
+  uint pos = GPU_vertformat_attr_add(imm_format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+
+  immBindShader(shader);
+  immBegin(GPU_PRIM_TRI_STRIP, 4);
+  immVertex2f(pos, 1, 0);
+  immVertex2f(pos, 0, 0);
+  immVertex2f(pos, 1, 1);
+  immVertex2f(pos, 0, 1);
+  immEnd();
+  immUnbindProgram();
+  /**********************/
 
   /* restoring old pipeline state. */
   GPU_depth_mask(depth_write_prev);
@@ -478,26 +505,9 @@ void gpu::MTLTexture::update_sub(
     MTLPixelFormat destination_format = gpu_texture_format_to_metal(format_);
     int expected_dst_bytes_per_pixel = get_mtl_format_bytesize(destination_format);
     int destination_num_channels = get_mtl_format_num_components(destination_format);
-    int destination_totalsize = 0;
-    switch (this->dimensions_count()) {
-      case 1:
-        destination_totalsize = expected_dst_bytes_per_pixel * max_ii(expected_update_w, 1);
-        break;
-      case 2:
-        destination_totalsize = expected_dst_bytes_per_pixel * max_ii(expected_update_w, 1) *
-                                max_ii(extent[1], 1);
-        break;
-      case 3:
-        destination_totalsize = expected_dst_bytes_per_pixel * max_ii(expected_update_w, 1) *
-                                max_ii(extent[1], 1) * max_ii(extent[2], 1);
-        break;
-      default:
-        BLI_assert(false);
-        break;
-    }
 
-    /* Prepare specialisation struct (For texture update routine). */
-    TextureUpdateRoutineSpecialisation compute_specialisation_kernel = {
+    /* Prepare specialization struct (For texture update routine). */
+    TextureUpdateRoutineSpecialisation compute_specialization_kernel = {
         tex_data_format_to_msl_type_str(type),              /* INPUT DATA FORMAT */
         tex_data_format_to_msl_texture_template_type(type), /* TEXTURE DATA FORMAT */
         num_channels,
@@ -568,12 +578,12 @@ void gpu::MTLTexture::update_sub(
 
     /* Prepare staging buffer for data. */
     id<MTLBuffer> staging_buffer = nil;
-    unsigned long long staging_buffer_offset = 0;
+    uint64_t staging_buffer_offset = 0;
 
     /* Fetch allocation from scratch buffer. */
-    MTLTemporaryBufferRange allocation; /* TODO(Metal): Metal Memory manager. */
-    /* = ctx->get_memory_manager().scratch_buffer_allocate_range_aligned(totalsize, 256);*/
-    memcpy(allocation.host_ptr, data, totalsize);
+    MTLTemporaryBuffer allocation =
+        ctx->get_scratchbuffer_manager().scratch_buffer_allocate_range_aligned(totalsize, 256);
+    memcpy(allocation.data, data, totalsize);
     staging_buffer = allocation.metal_buffer;
     staging_buffer_offset = allocation.buffer_offset;
 
@@ -637,7 +647,7 @@ void gpu::MTLTexture::update_sub(
           /* Use Compute Based update. */
           if (type_ == GPU_TEXTURE_1D) {
             id<MTLComputePipelineState> pso = texture_update_1d_get_kernel(
-                compute_specialisation_kernel);
+                compute_specialization_kernel);
             TextureUpdateParams params = {mip,
                                           {extent[0], 1, 1},
                                           {offset[0], 0, 0},
@@ -654,7 +664,7 @@ void gpu::MTLTexture::update_sub(
           }
           else if (type_ == GPU_TEXTURE_1D_ARRAY) {
             id<MTLComputePipelineState> pso = texture_update_1d_array_get_kernel(
-                compute_specialisation_kernel);
+                compute_specialization_kernel);
             TextureUpdateParams params = {mip,
                                           {extent[0], extent[1], 1},
                                           {offset[0], offset[1], 0},
@@ -711,7 +721,7 @@ void gpu::MTLTexture::update_sub(
           /* Use Compute texture update. */
           if (type_ == GPU_TEXTURE_2D) {
             id<MTLComputePipelineState> pso = texture_update_2d_get_kernel(
-                compute_specialisation_kernel);
+                compute_specialization_kernel);
             TextureUpdateParams params = {mip,
                                           {extent[0], extent[1], 1},
                                           {offset[0], offset[1], 0},
@@ -729,7 +739,7 @@ void gpu::MTLTexture::update_sub(
           }
           else if (type_ == GPU_TEXTURE_2D_ARRAY) {
             id<MTLComputePipelineState> pso = texture_update_2d_array_get_kernel(
-                compute_specialisation_kernel);
+                compute_specialization_kernel);
             TextureUpdateParams params = {mip,
                                           {extent[0], extent[1], extent[2]},
                                           {offset[0], offset[1], offset[2]},
@@ -769,7 +779,7 @@ void gpu::MTLTexture::update_sub(
         }
         else {
           id<MTLComputePipelineState> pso = texture_update_3d_get_kernel(
-              compute_specialisation_kernel);
+              compute_specialization_kernel);
           TextureUpdateParams params = {mip,
                                         {extent[0], extent[1], extent[2]},
                                         {offset[0], offset[1], offset[2]},
@@ -915,7 +925,7 @@ void gpu::MTLTexture::ensure_mipmaps(int miplvl)
   this->mip_range_set(0, mipmaps_);
 }
 
-void gpu::MTLTexture::generate_mipmap(void)
+void gpu::MTLTexture::generate_mipmap()
 {
   /* Fetch Active Context. */
   MTLContext *ctx = reinterpret_cast<MTLContext *>(GPU_context_active_get());
@@ -932,7 +942,7 @@ void gpu::MTLTexture::generate_mipmap(void)
 
   /* Ensure texture is baked. */
   this->ensure_baked();
-  BLI_assert(is_baked_ && texture_ && "MTLTexture is not valid");
+  BLI_assert_msg(is_baked_ && texture_, "MTLTexture is not valid");
 
   if (mipmaps_ == 1 || mtl_max_mips_ == 1) {
     MTL_LOG_WARNING("Call to generate mipmaps on texture with 'mipmaps_=1\n'");
@@ -1230,10 +1240,10 @@ void gpu::MTLTexture::read_internal(int mip,
   destination_buffer = [ctx->device newBufferWithLength:max_ii(total_bytes, 256)
                                                 options:bufferOptions];
   destination_offset = 0;
-  destination_buffer_host_ptr = (void *)((unsigned char *)([destination_buffer contents]) +
+  destination_buffer_host_ptr = (void *)((uint8_t *)([destination_buffer contents]) +
                                          destination_offset);
 
-  /* Prepare specialisation struct (For non-trivial texture read routine). */
+  /* Prepare specialization struct (For non-trivial texture read routine). */
   int depth_format_mode = 0;
   if (is_depth_format) {
     depth_format_mode = 1;
@@ -1248,12 +1258,12 @@ void gpu::MTLTexture::read_internal(int mip,
         depth_format_mode = 4;
         break;
       default:
-        BLI_assert(false && "Unhandled depth read format case");
+        BLI_assert_msg(false, "Unhandled depth read format case");
         break;
     }
   }
 
-  TextureReadRoutineSpecialisation compute_specialisation_kernel = {
+  TextureReadRoutineSpecialisation compute_specialization_kernel = {
       tex_data_format_to_msl_texture_template_type(data_format), /* TEXTURE DATA TYPE */
       tex_data_format_to_msl_type_str(desired_output_format),    /* OUTPUT DATA TYPE */
       num_channels,                                              /* TEXTURE COMPONENT COUNT */
@@ -1300,7 +1310,7 @@ void gpu::MTLTexture::read_internal(int mip,
           id<MTLComputeCommandEncoder> compute_encoder =
               ctx->main_command_buffer.ensure_begin_compute_encoder();
           id<MTLComputePipelineState> pso = texture_read_2d_get_kernel(
-              compute_specialisation_kernel);
+              compute_specialization_kernel);
           TextureReadParams params = {
               mip,
               {width, height, 1},
@@ -1356,7 +1366,7 @@ void gpu::MTLTexture::read_internal(int mip,
           id<MTLComputeCommandEncoder> compute_encoder =
               ctx->main_command_buffer.ensure_begin_compute_encoder();
           id<MTLComputePipelineState> pso = texture_read_2d_array_get_kernel(
-              compute_specialisation_kernel);
+              compute_specialization_kernel);
           TextureReadParams params = {
               mip,
               {width, height, depth},
@@ -1444,12 +1454,12 @@ void gpu::MTLTexture::read_internal(int mip,
 }
 
 /* Remove once no longer required -- will just return 0 for now in MTL path. */
-uint gpu::MTLTexture::gl_bindcode_get(void) const
+uint gpu::MTLTexture::gl_bindcode_get() const
 {
   return 0;
 }
 
-bool gpu::MTLTexture::init_internal(void)
+bool gpu::MTLTexture::init_internal()
 {
   if (format_ == GPU_DEPTH24_STENCIL8) {
     /* Apple Silicon requires GPU_DEPTH32F_STENCIL8 instead of GPU_DEPTH24_STENCIL8. */
@@ -1462,11 +1472,12 @@ bool gpu::MTLTexture::init_internal(void)
 
 bool gpu::MTLTexture::init_internal(GPUVertBuf *vbo)
 {
-  /* Zero initialize. */
-  this->prepare_internal();
+  /* Not a valid vertex buffer format, though verifying texture is not set as such
+   * as this is not supported on Apple Silicon. */
+  BLI_assert_msg(this->format_ != GPU_DEPTH24_STENCIL8,
+                 "Apple silicon does not support GPU_DEPTH24_S8");
 
-  /* TODO(Metal): Add implementation for GPU Vert buf. */
-  return false;
+  return true;
 }
 
 bool gpu::MTLTexture::init_internal(const GPUTexture *src, int mip_offset, int layer_offset)

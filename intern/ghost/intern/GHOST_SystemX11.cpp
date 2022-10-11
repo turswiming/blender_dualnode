@@ -25,6 +25,7 @@
 #ifdef WITH_INPUT_NDOF
 #  include "GHOST_NDOFManagerUnix.h"
 #endif
+#include "GHOST_utildefines.h"
 
 #ifdef WITH_XDND
 #  include "GHOST_DropTargetX11.h"
@@ -32,12 +33,8 @@
 
 #include "GHOST_Debug.h"
 
-#if defined(WITH_GL_EGL)
-#  include "GHOST_ContextEGL.h"
-#  include <EGL/eglext.h>
-#else
-#  include "GHOST_ContextGLX.h"
-#endif
+#include "GHOST_ContextEGL.h"
+#include "GHOST_ContextGLX.h"
 
 #ifdef WITH_XF86KEYSYM
 #  include <X11/XF86keysym.h>
@@ -104,8 +101,7 @@ GHOST_SystemX11::GHOST_SystemX11() : GHOST_System(), m_xkb_descr(nullptr), m_sta
   m_display = XOpenDisplay(nullptr);
 
   if (!m_display) {
-    std::cerr << "Unable to open a display" << std::endl;
-    abort(); /* was return before, but this would just mean it will crash later */
+    throw std::runtime_error("X11: Unable to open a display");
   }
 
 #ifdef USE_X11_ERROR_HANDLERS
@@ -234,10 +230,6 @@ GHOST_SystemX11::~GHOST_SystemX11()
   clearXInputDevices();
 #endif /* WITH_X11_XINPUT */
 
-#ifdef WITH_GL_EGL
-  ::eglTerminate(::eglGetDisplay(m_display));
-#endif
-
   if (m_xkb_descr) {
     XkbFreeKeyboard(m_xkb_descr, XkbAllComponentsMask, true);
   }
@@ -286,7 +278,7 @@ uint8_t GHOST_SystemX11::getNumDisplays() const
 void GHOST_SystemX11::getMainDisplayDimensions(uint32_t &width, uint32_t &height) const
 {
   if (m_display) {
-    /* NOTE(campbell): for this to work as documented,
+    /* NOTE(@campbellbarton): for this to work as documented,
      * we would need to use Xinerama check r54370 for code that did this,
      * we've since removed since its not worth the extra dependency. */
     getAllDisplayDimensions(width, height);
@@ -353,7 +345,6 @@ GHOST_IWindow *GHOST_SystemX11::createWindow(const char *title,
                                is_dialog,
                                ((glSettings.flags & GHOST_glStereoVisual) != 0),
                                exclusive,
-                               ((glSettings.flags & GHOST_glAlphaBackground) != 0),
                                (glSettings.flags & GHOST_glDebugContext) != 0);
 
   if (window) {
@@ -374,6 +365,56 @@ GHOST_IWindow *GHOST_SystemX11::createWindow(const char *title,
   return window;
 }
 
+#ifdef USE_EGL
+static GHOST_Context *create_egl_context(
+    GHOST_SystemX11 *system, Display *display, bool debug_context, int ver_major, int ver_minor)
+{
+  GHOST_Context *context;
+  context = new GHOST_ContextEGL(system,
+                                 false,
+                                 EGLNativeWindowType(nullptr),
+                                 EGLNativeDisplayType(display),
+                                 EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+                                 ver_major,
+                                 ver_minor,
+                                 GHOST_OPENGL_EGL_CONTEXT_FLAGS |
+                                     (debug_context ? EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR : 0),
+                                 GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
+                                 EGL_OPENGL_API);
+
+  if (context->initializeDrawingContext()) {
+    return context;
+  }
+  delete context;
+
+  return nullptr;
+}
+#endif
+
+static GHOST_Context *create_glx_context(Display *display,
+                                         bool debug_context,
+                                         int ver_major,
+                                         int ver_minor)
+{
+  GHOST_Context *context;
+  context = new GHOST_ContextGLX(false,
+                                 (Window) nullptr,
+                                 display,
+                                 (GLXFBConfig) nullptr,
+                                 GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+                                 ver_major,
+                                 ver_minor,
+                                 GHOST_OPENGL_GLX_CONTEXT_FLAGS |
+                                     (debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
+                                 GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
+
+  if (context->initializeDrawingContext()) {
+    return context;
+  }
+  delete context;
+
+  return nullptr;
+}
 /**
  * Create a new off-screen context.
  * Never explicitly delete the context, use #disposeContext() instead.
@@ -393,98 +434,33 @@ GHOST_IContext *GHOST_SystemX11::createOffscreenContext(GHOST_GLSettings glSetti
 
   const bool debug_context = (glSettings.flags & GHOST_glDebugContext) != 0;
 
-#if defined(WITH_GL_PROFILE_CORE)
-  {
-    const char *version_major = (char *)glewGetString(GLEW_VERSION_MAJOR);
-    if (version_major != nullptr && version_major[0] == '1') {
-      fprintf(stderr, "Error: GLEW version 2.0 and above is required.\n");
-      abort();
-    }
-  }
-#endif
-
-  const int profile_mask =
-#ifdef WITH_GL_EGL
-#  if defined(WITH_GL_PROFILE_CORE)
-      EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT;
-#  elif defined(WITH_GL_PROFILE_COMPAT)
-      EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT;
-#  else
-#    error  // must specify either core or compat at build time
-#  endif
-#else
-#  if defined(WITH_GL_PROFILE_CORE)
-      GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
-#  elif defined(WITH_GL_PROFILE_COMPAT)
-      GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-#  else
-#    error  // must specify either core or compat at build time
-#  endif
-#endif
-
   GHOST_Context *context;
 
+#ifdef USE_EGL
+  /* Try to initialize an EGL context. */
   for (int minor = 5; minor >= 0; --minor) {
-#if defined(WITH_GL_EGL)
-    context = new GHOST_ContextEGL(this,
-                                   false,
-                                   EGLNativeWindowType(nullptr),
-                                   EGLNativeDisplayType(m_display),
-                                   profile_mask,
-                                   4,
-                                   minor,
-                                   GHOST_OPENGL_EGL_CONTEXT_FLAGS |
-                                       (debug_context ? EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR : 0),
-                                   GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
-                                   EGL_OPENGL_API);
-#else
-    context = new GHOST_ContextGLX(false,
-                                   (Window) nullptr,
-                                   m_display,
-                                   (GLXFBConfig) nullptr,
-                                   profile_mask,
-                                   4,
-                                   minor,
-                                   GHOST_OPENGL_GLX_CONTEXT_FLAGS |
-                                       (debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
-                                   GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
-#endif
-
-    if (context->initializeDrawingContext()) {
+    context = create_egl_context(this, m_display, debug_context, 4, minor);
+    if (context != nullptr) {
       return context;
     }
-    delete context;
   }
-
-#if defined(WITH_GL_EGL)
-  context = new GHOST_ContextEGL(this,
-                                 false,
-                                 EGLNativeWindowType(nullptr),
-                                 EGLNativeDisplayType(m_display),
-                                 profile_mask,
-                                 3,
-                                 3,
-                                 GHOST_OPENGL_EGL_CONTEXT_FLAGS |
-                                     (debug_context ? EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR : 0),
-                                 GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
-                                 EGL_OPENGL_API);
-#else
-  context = new GHOST_ContextGLX(false,
-                                 (Window) nullptr,
-                                 m_display,
-                                 (GLXFBConfig) nullptr,
-                                 profile_mask,
-                                 3,
-                                 3,
-                                 GHOST_OPENGL_GLX_CONTEXT_FLAGS |
-                                     (debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
-                                 GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
-#endif
-
-  if (context->initializeDrawingContext()) {
+  context = create_egl_context(this, m_display, debug_context, 3, 3);
+  if (context != nullptr) {
     return context;
   }
-  delete context;
+
+  /* EGL initialization failed, try to fallback to a GLX context. */
+#endif
+  for (int minor = 5; minor >= 0; --minor) {
+    context = create_glx_context(m_display, debug_context, 4, minor);
+    if (context != nullptr) {
+      return context;
+    }
+  }
+  context = create_glx_context(m_display, debug_context, 3, 3);
+  if (context != nullptr) {
+    return context;
+  }
 
   return nullptr;
 }
@@ -513,8 +489,9 @@ static void destroyIMCallback(XIM /*xim*/, XPointer ptr, XPointer /*data*/)
 
 bool GHOST_SystemX11::openX11_IM()
 {
-  if (!m_display)
+  if (!m_display) {
     return false;
+  }
 
   /* set locale modifiers such as `@im=ibus` specified by XMODIFIERS. */
   XSetLocaleModifiers("");
@@ -584,7 +561,7 @@ struct init_timestamp_data {
   Time timestamp;
 };
 
-static Bool init_timestamp_scanner(Display *, XEvent *event, XPointer arg)
+static Bool init_timestamp_scanner(Display * /*display*/, XEvent *event, XPointer arg)
 {
   init_timestamp_data *data = reinterpret_cast<init_timestamp_data *>(arg);
   switch (event->type) {
@@ -663,7 +640,7 @@ bool GHOST_SystemX11::processEvents(bool waitForEvent)
       /* open connection to XIM server and create input context (XIC)
        * when receiving the first FocusIn or KeyPress event after startup,
        * or recover XIM and XIC when the XIM server has been restarted */
-      if (xevent.type == FocusIn || xevent.type == KeyPress) {
+      if (ELEM(xevent.type, FocusIn, KeyPress)) {
         if (!m_xim && openX11_IM()) {
           GHOST_PRINT("Connected to XIM server\n");
         }
@@ -672,17 +649,18 @@ bool GHOST_SystemX11::processEvents(bool waitForEvent)
           GHOST_WindowX11 *window = findGhostWindow(xevent.xany.window);
           if (window && !window->getX11_XIC() && window->createX11_XIC()) {
             GHOST_PRINT("XIM input context created\n");
-            if (xevent.type == KeyPress)
+            if (xevent.type == KeyPress) {
               /* we can assume the window has input focus
                * here, because key events are received only
                * when the window is focused. */
               XSetICFocus(window->getX11_XIC());
+            }
           }
         }
       }
 
       /* dispatch event to XIM server */
-      if ((XFilterEvent(&xevent, (Window) nullptr) == True)) {
+      if (XFilterEvent(&xevent, (Window) nullptr) == True) {
         /* do nothing now, the event is consumed by XIM. */
         continue;
       }
@@ -695,7 +673,7 @@ bool GHOST_SystemX11::processEvents(bool waitForEvent)
       }
       else if (xevent.type == KeyPress) {
         if ((xevent.xkey.keycode == m_last_release_keycode) &&
-            ((xevent.xkey.time <= m_last_release_time))) {
+            (xevent.xkey.time <= m_last_release_time)) {
           continue;
         }
       }
@@ -724,9 +702,9 @@ bool GHOST_SystemX11::processEvents(bool waitForEvent)
              * in order to confirm the window is active. */
             XPeekEvent(m_display, &xev_next);
 
-            if (xev_next.type == KeyPress || xev_next.type == KeyRelease) {
-              /* XK_Hyper_L/R currently unused */
-              const static KeySym modifiers[8] = {
+            if (ELEM(xev_next.type, KeyPress, KeyRelease)) {
+              /* XK_Hyper_L/R currently unused. */
+              const static KeySym modifiers[] = {
                   XK_Shift_L,
                   XK_Shift_R,
                   XK_Control_L,
@@ -737,16 +715,15 @@ bool GHOST_SystemX11::processEvents(bool waitForEvent)
                   XK_Super_R,
               };
 
-              for (int i = 0; i < (int)(sizeof(modifiers) / sizeof(*modifiers)); i++) {
+              for (int i = 0; i < int(ARRAY_SIZE(modifiers)); i++) {
                 KeyCode kc = XKeysymToKeycode(m_display, modifiers[i]);
                 if (kc != 0 && ((xevent.xkeymap.key_vector[kc >> 3] >> (kc & 7)) & 1) != 0) {
                   pushEvent(new GHOST_EventKey(getMilliSeconds(),
                                                GHOST_kEventKeyDown,
                                                window,
                                                ghost_key_from_keysym(modifiers[i]),
-                                               '\0',
-                                               nullptr,
-                                               false));
+                                               false,
+                                               nullptr));
                 }
               }
             }
@@ -822,7 +799,7 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
 
   /* Detect auto-repeat. */
   bool is_repeat = false;
-  if (xe->type == KeyPress || xe->type == KeyRelease) {
+  if (ELEM(xe->type, KeyPress, KeyRelease)) {
     XKeyEvent *xke = &(xe->xkey);
 
     /* Set to true if this key will repeat. */
@@ -868,14 +845,14 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
       }
       else {
         if (m_keycode_last_repeat_key == xke->keycode) {
-          m_keycode_last_repeat_key = (uint)-1;
+          m_keycode_last_repeat_key = uint(-1);
         }
       }
     }
   }
   else if (xe->type == EnterNotify) {
     /* We can't tell how the key state changed, clear it to avoid stuck keys. */
-    m_keycode_last_repeat_key = (uint)-1;
+    m_keycode_last_repeat_key = uint(-1);
   }
 
 #ifdef USE_XINPUT_HOTPLUG
@@ -889,9 +866,11 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
 
     if (xe->type == xi_presence) {
       XDevicePresenceNotifyEvent *notify_event = (XDevicePresenceNotifyEvent *)xe;
-      if ((notify_event->devchange == DeviceEnabled) ||
-          (notify_event->devchange == DeviceDisabled) ||
-          (notify_event->devchange == DeviceAdded) || (notify_event->devchange == DeviceRemoved)) {
+      if (ELEM(notify_event->devchange,
+               DeviceEnabled,
+               DeviceDisabled,
+               DeviceAdded,
+               DeviceRemoved)) {
         refreshXInputDevices();
 
         /* update all window events */
@@ -1014,7 +993,9 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
     case KeyRelease: {
       XKeyEvent *xke = &(xe->xkey);
       KeySym key_sym;
+      char *utf8_buf = nullptr;
       char ascii;
+
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
       /* utf8_array[] is initial buffer used for Xutf8LookupString().
        * if the length of the utf8 string exceeds this array, allocate
@@ -1023,12 +1004,10 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
        * at the end of this buffer when the constructor of GHOST_EventKey
        * reads 6 bytes regardless of the effective data length. */
       char utf8_array[16 * 6 + 5]; /* 16 utf8 characters */
-      char *utf8_buf = utf8_array;
-      int len = 1; /* at least one null character will be stored */
+      int len = 1;                 /* at least one null character will be stored */
 #else
-      char *utf8_buf = nullptr;
+      char utf8_array[sizeof(GHOST_TEventKeyData::utf8_buf)] = {'\0'};
 #endif
-
       GHOST_TEventType type = (xke->type == KeyPress) ? GHOST_kEventKeyDown : GHOST_kEventKeyUp;
 
       GHOST_TKey gkey;
@@ -1059,8 +1038,8 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
       KeySym key_sym_str;
       /* Mode_switch 'modifier' is `AltGr` - when this one or Shift are enabled,
        * we do not want to apply that 'forced number' hack. */
-      const unsigned int mode_switch_mask = XkbKeysymToModifiers(xke->display, XK_Mode_switch);
-      const unsigned int number_hack_forbidden_kmods_mask = mode_switch_mask | ShiftMask;
+      const uint mode_switch_mask = XkbKeysymToModifiers(xke->display, XK_Mode_switch);
+      const uint number_hack_forbidden_kmods_mask = mode_switch_mask | ShiftMask;
       if ((xke->keycode >= 10 && xke->keycode < 20) &&
           ((xke->state & number_hack_forbidden_kmods_mask) == 0)) {
         key_sym = XLookupKeysym(xke, ShiftMask);
@@ -1086,7 +1065,8 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
         case GHOST_kKeyLeftShift:
         case GHOST_kKeyRightControl:
         case GHOST_kKeyLeftControl:
-        case GHOST_kKeyOS:
+        case GHOST_kKeyLeftOS:
+        case GHOST_kKeyRightOS:
         case GHOST_kKey0:
         case GHOST_kKey1:
         case GHOST_kKey2:
@@ -1148,81 +1128,94 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
 #endif
 
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
-      /* Setting unicode on key-up events gives #XLookupNone status. */
-      XIC xic = window->getX11_XIC();
-      if (xic && xke->type == KeyPress) {
-        Status status;
-
-        /* Use utf8 because its not locale repentant, from XORG docs. */
-        if (!(len = Xutf8LookupString(
-                  xic, xke, utf8_buf, sizeof(utf8_array) - 5, &key_sym, &status))) {
-          utf8_buf[0] = '\0';
-        }
-
-        if (status == XBufferOverflow) {
-          utf8_buf = (char *)malloc(len + 5);
-          len = Xutf8LookupString(xic, xke, utf8_buf, len, &key_sym, &status);
-        }
-
-        if ((status == XLookupChars || status == XLookupBoth)) {
-          if ((unsigned char)utf8_buf[0] >= 32) { /* not an ascii control character */
-            /* do nothing for now, this is valid utf8 */
-          }
-          else {
-            utf8_buf[0] = '\0';
-          }
-        }
-        else if (status == XLookupKeySym) {
-          /* this key doesn't have a text representation, it is a command
-           * key of some sort */
-        }
-        else {
-          printf("Bad keycode lookup. Keysym 0x%x Status: %s\n",
-                 (unsigned int)key_sym,
-                 (status == XLookupNone   ? "XLookupNone" :
-                  status == XLookupKeySym ? "XLookupKeySym" :
-                                            "Unknown status"));
-
-          printf("'%.*s' %p %p\n", len, utf8_buf, xic, m_xim);
-        }
-      }
-      else {
-        utf8_buf[0] = '\0';
-      }
+      /* Only used for key-press. */
+      XIC xic = nullptr;
 #endif
 
-      g_event = new GHOST_EventKey(
-          getMilliSeconds(), type, window, gkey, ascii, utf8_buf, is_repeat);
+      if (xke->type == KeyPress) {
+        utf8_buf = utf8_array;
+#if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
+        /* Setting unicode on key-up events gives #XLookupNone status. */
+        xic = window->getX11_XIC();
+        if (xic) {
+          Status status;
+
+          /* Use utf8 because its not locale repentant, from XORG docs. */
+          if (!(len = Xutf8LookupString(
+                    xic, xke, utf8_buf, sizeof(utf8_array) - 5, &key_sym, &status))) {
+            utf8_buf[0] = '\0';
+          }
+
+          if (status == XBufferOverflow) {
+            utf8_buf = (char *)malloc(len + 5);
+            len = Xutf8LookupString(xic, xke, utf8_buf, len, &key_sym, &status);
+          }
+
+          if (ELEM(status, XLookupChars, XLookupBoth)) {
+            if (uchar(utf8_buf[0]) >= 32) { /* not an ascii control character */
+              /* do nothing for now, this is valid utf8 */
+            }
+            else {
+              utf8_buf[0] = '\0';
+            }
+          }
+          else if (status == XLookupKeySym) {
+            /* this key doesn't have a text representation, it is a command
+             * key of some sort */
+          }
+          else {
+            printf("Bad keycode lookup. Keysym 0x%x Status: %s\n",
+                   uint(key_sym),
+                   (status == XLookupNone   ? "XLookupNone" :
+                    status == XLookupKeySym ? "XLookupKeySym" :
+                                              "Unknown status"));
+
+            printf("'%.*s' %p %p\n", len, utf8_buf, xic, m_xim);
+          }
+        }
+        else {
+          utf8_buf[0] = '\0';
+        }
+#endif
+        if (!utf8_buf[0] && ascii) {
+          utf8_buf[0] = ascii;
+          utf8_buf[1] = '\0';
+        }
+      }
+
+      g_event = new GHOST_EventKey(getMilliSeconds(), type, window, gkey, is_repeat, utf8_buf);
 
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
       /* when using IM for some languages such as Japanese,
        * one event inserts multiple utf8 characters */
-      if (xic && xke->type == KeyPress) {
-        unsigned char c;
+      if (xke->type == KeyPress && xic) {
+        uchar c;
         int i = 0;
-        while (1) {
-          /* search character boundary */
-          if ((unsigned char)utf8_buf[i++] > 0x7f) {
+        while (true) {
+          /* Search character boundary. */
+          if (uchar(utf8_buf[i++]) > 0x7f) {
             for (; i < len; ++i) {
               c = utf8_buf[i];
-              if (c < 0x80 || c > 0xbf)
+              if (c < 0x80 || c > 0xbf) {
                 break;
+              }
             }
           }
 
-          if (i >= len)
+          if (i >= len) {
             break;
-
-          /* enqueue previous character */
+          }
+          /* Enqueue previous character. */
           pushEvent(g_event);
 
           g_event = new GHOST_EventKey(
-              getMilliSeconds(), type, window, gkey, '\0', &utf8_buf[i], is_repeat);
+              getMilliSeconds(), type, window, gkey, is_repeat, &utf8_buf[i]);
         }
       }
 
-      if (utf8_buf != utf8_array)
+      if (utf8_buf != utf8_array) {
         free(utf8_buf);
+      }
 #endif
 
       break;
@@ -1306,10 +1299,12 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
       XIC xic = window->getX11_XIC();
       if (xic) {
-        if (xe->type == FocusIn)
+        if (xe->type == FocusIn) {
           XSetICFocus(xic);
-        else
+        }
+        else {
           XUnsetICFocus(xic);
+        }
       }
 #endif
 
@@ -1449,8 +1444,7 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
       nxe.xselection.time = xse->time;
 
       /* Check to see if the requester is asking for String */
-      if (xse->target == utf8_string || xse->target == string || xse->target == compound_text ||
-          xse->target == c_string) {
+      if (ELEM(xse->target, utf8_string, string, compound_text, c_string)) {
         if (xse->selection == XInternAtom(m_display, "PRIMARY", False)) {
           XChangeProperty(m_display,
                           xse->requestor,
@@ -1458,7 +1452,7 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
                           xse->target,
                           8,
                           PropModeReplace,
-                          (unsigned char *)txt_select_buffer,
+                          (uchar *)txt_select_buffer,
                           strlen(txt_select_buffer));
         }
         else if (xse->selection == XInternAtom(m_display, "CLIPBOARD", False)) {
@@ -1468,7 +1462,7 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
                           xse->target,
                           8,
                           PropModeReplace,
-                          (unsigned char *)txt_cut_buffer,
+                          (uchar *)txt_cut_buffer,
                           strlen(txt_cut_buffer));
         }
       }
@@ -1485,7 +1479,7 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
                         xse->target,
                         32,
                         PropModeReplace,
-                        (unsigned char *)alist,
+                        (uchar *)alist,
                         5);
         XFlush(m_display);
       }
@@ -1503,14 +1497,14 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
     default: {
 #ifdef WITH_X11_XINPUT
       for (GHOST_TabletX11 &xtablet : m_xtablets) {
-        if (xe->type == xtablet.MotionEvent || xe->type == xtablet.PressEvent) {
+        if (ELEM(xe->type, xtablet.MotionEvent, xtablet.PressEvent)) {
           XDeviceMotionEvent *data = (XDeviceMotionEvent *)xe;
           if (data->deviceid != xtablet.ID) {
             continue;
           }
 
-          const unsigned char axis_first = data->first_axis;
-          const unsigned char axes_end = axis_first + data->axes_count; /* after the last */
+          const uchar axis_first = data->first_axis;
+          const uchar axes_end = axis_first + data->axes_count; /* after the last */
           int axis_value;
 
           /* stroke might begin without leading ProxyIn event,
@@ -1529,7 +1523,7 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
      ((void)(val = data->axis_data[axis - axis_first]), true))
 
           if (AXIS_VALUE_GET(2, axis_value)) {
-            window->GetTabletData().Pressure = axis_value / ((float)xtablet.PressureLevels);
+            window->GetTabletData().Pressure = axis_value / float(xtablet.PressureLevels);
           }
 
           /* NOTE(@broken): the (short) cast and the & 0xffff is bizarre and unexplained anywhere,
@@ -1541,12 +1535,12 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
            * I don't think we need to cast to short here, but do not have a device to check this.
            */
           if (AXIS_VALUE_GET(3, axis_value)) {
-            window->GetTabletData().Xtilt = (short)(axis_value & 0xffff) /
-                                            ((float)xtablet.XtiltLevels);
+            window->GetTabletData().Xtilt = short(axis_value & 0xffff) /
+                                            float(xtablet.XtiltLevels);
           }
           if (AXIS_VALUE_GET(4, axis_value)) {
-            window->GetTabletData().Ytilt = (short)(axis_value & 0xffff) /
-                                            ((float)xtablet.YtiltLevels);
+            window->GetTabletData().Ytilt = short(axis_value & 0xffff) /
+                                            float(xtablet.YtiltLevels);
           }
 
 #  undef AXIS_VALUE_GET
@@ -1607,9 +1601,10 @@ GHOST_TSuccess GHOST_SystemX11::getModifierKeys(GHOST_ModifierKeys &keys) const
   keys.set(GHOST_kModifierKeyLeftAlt, ((m_keyboard_vector[alt_l >> 3] >> (alt_l & 7)) & 1) != 0);
   keys.set(GHOST_kModifierKeyRightAlt, ((m_keyboard_vector[alt_r >> 3] >> (alt_r & 7)) & 1) != 0);
   /* super (windows) - only one GHOST-kModifierKeyOS, so mapping to either */
-  keys.set(GHOST_kModifierKeyOS,
-           (((m_keyboard_vector[super_l >> 3] >> (super_l & 7)) & 1) ||
-            ((m_keyboard_vector[super_r >> 3] >> (super_r & 7)) & 1)) != 0);
+  keys.set(GHOST_kModifierKeyLeftOS,
+           ((m_keyboard_vector[super_l >> 3] >> (super_l & 7)) & 1) != 0);
+  keys.set(GHOST_kModifierKeyRightOS,
+           ((m_keyboard_vector[super_r >> 3] >> (super_r & 7)) & 1) != 0);
 
   return GHOST_kSuccess;
 }
@@ -1618,7 +1613,7 @@ GHOST_TSuccess GHOST_SystemX11::getButtons(GHOST_Buttons &buttons) const
 {
   Window root_return, child_return;
   int rx, ry, wx, wy;
-  unsigned int mask_return;
+  uint mask_return;
 
   if (XQueryPointer(m_display,
                     RootWindow(m_display, DefaultScreen(m_display)),
@@ -1648,7 +1643,7 @@ static GHOST_TSuccess getCursorPosition_impl(Display *display,
                                              Window *child_return)
 {
   int rx, ry, wx, wy;
-  unsigned int mask_return;
+  uint mask_return;
   Window root_return;
 
   if (XQueryPointer(display,
@@ -1825,8 +1820,8 @@ static GHOST_TKey ghost_key_from_keysym(const KeySym key)
       GXMAP(type, XK_Control_R, GHOST_kKeyRightControl);
       GXMAP(type, XK_Alt_L, GHOST_kKeyLeftAlt);
       GXMAP(type, XK_Alt_R, GHOST_kKeyRightAlt);
-      GXMAP(type, XK_Super_L, GHOST_kKeyOS);
-      GXMAP(type, XK_Super_R, GHOST_kKeyOS);
+      GXMAP(type, XK_Super_L, GHOST_kKeyLeftOS);
+      GXMAP(type, XK_Super_R, GHOST_kKeyRightOS);
 
       GXMAP(type, XK_Insert, GHOST_kKeyInsert);
       GXMAP(type, XK_Delete, GHOST_kKeyDelete);
@@ -1902,7 +1897,7 @@ static GHOST_TKey ghost_key_from_keysym(const KeySym key)
 
 #undef GXMAP
 
-#define MAKE_ID(a, b, c, d) ((int)(d) << 24 | (int)(c) << 16 | (b) << 8 | (a))
+#define MAKE_ID(a, b, c, d) (int(d) << 24 | int(c) << 16 | (b) << 8 | (a))
 
 static GHOST_TKey ghost_key_from_keycode(const XkbDescPtr xkb_descr, const KeyCode keycode)
 {
@@ -1939,18 +1934,14 @@ static GHOST_TKey ghost_key_from_keycode(const XkbDescPtr xkb_descr, const KeyCo
 #define XCLIB_XCOUT_FALLBACK_TEXT 6
 
 /* Retrieves the contents of a selections. */
-void GHOST_SystemX11::getClipboard_xcout(const XEvent *evt,
-                                         Atom sel,
-                                         Atom target,
-                                         unsigned char **txt,
-                                         unsigned long *len,
-                                         unsigned int *context) const
+void GHOST_SystemX11::getClipboard_xcout(
+    const XEvent *evt, Atom sel, Atom target, uchar **txt, ulong *len, uint *context) const
 {
   Atom pty_type;
   int pty_format;
-  unsigned char *buffer;
-  unsigned long pty_size, pty_items;
-  unsigned char *ltxt = *txt;
+  uchar *buffer;
+  ulong pty_size, pty_items;
+  uchar *ltxt = *txt;
 
   const vector<GHOST_IWindow *> &win_vec = m_windowManager->getWindows();
   vector<GHOST_IWindow *>::const_iterator win_it = win_vec.begin();
@@ -2025,7 +2016,7 @@ void GHOST_SystemX11::getClipboard_xcout(const XEvent *evt,
                          win,
                          m_atom.XCLIP_OUT,
                          0,
-                         (long)pty_size,
+                         long(pty_size),
                          False,
                          AnyPropertyType,
                          &pty_type,
@@ -2038,7 +2029,7 @@ void GHOST_SystemX11::getClipboard_xcout(const XEvent *evt,
       XDeleteProperty(m_display, win, m_atom.XCLIP_OUT);
 
       /* copy the buffer to the pointer for returned data */
-      ltxt = (unsigned char *)malloc(pty_items);
+      ltxt = (uchar *)malloc(pty_items);
       memcpy(ltxt, buffer, pty_items);
 
       /* set the length of the returned data */
@@ -2111,7 +2102,7 @@ void GHOST_SystemX11::getClipboard_xcout(const XEvent *evt,
                          win,
                          m_atom.XCLIP_OUT,
                          0,
-                         (long)pty_size,
+                         long(pty_size),
                          False,
                          AnyPropertyType,
                          &pty_type,
@@ -2123,11 +2114,11 @@ void GHOST_SystemX11::getClipboard_xcout(const XEvent *evt,
       /* allocate memory to accommodate data in *txt */
       if (*len == 0) {
         *len = pty_items;
-        ltxt = (unsigned char *)malloc(*len);
+        ltxt = (uchar *)malloc(*len);
       }
       else {
         *len += pty_items;
-        ltxt = (unsigned char *)realloc(ltxt, *len);
+        ltxt = (uchar *)realloc(ltxt, *len);
       }
 
       /* add data to ltxt */
@@ -2151,9 +2142,9 @@ char *GHOST_SystemX11::getClipboard(bool selection) const
 
   /* from xclip.c doOut() v0.11 */
   char *sel_buf;
-  unsigned long sel_len = 0;
+  ulong sel_len = 0;
   XEvent evt;
-  unsigned int context = XCLIB_XCOUT_NONE;
+  uint context = XCLIB_XCOUT_NONE;
 
   if (selection == True) {
     sseln = m_atom.PRIMARY;
@@ -2195,7 +2186,7 @@ char *GHOST_SystemX11::getClipboard(bool selection) const
     }
 
     /* fetch the selection, or part of it */
-    getClipboard_xcout(&evt, sseln, target, (unsigned char **)&sel_buf, &sel_len, &context);
+    getClipboard_xcout(&evt, sseln, target, (uchar **)&sel_buf, &sel_len, &context);
 
     if (restore_this_event) {
       restore_events.push_back(evt);
@@ -2367,10 +2358,11 @@ class DialogData {
   /* Is the mouse inside the given button */
   bool isInsideButton(XEvent &e, uint button_num)
   {
-    return ((e.xmotion.y > height - padding_y - button_height) &&
-            (e.xmotion.y < height - padding_y) &&
-            (e.xmotion.x > width - (padding_x + button_width) * button_num) &&
-            (e.xmotion.x < width - padding_x - (padding_x + button_width) * (button_num - 1)));
+    return (
+        (e.xmotion.y > int(height - padding_y - button_height)) &&
+        (e.xmotion.y < int(height - padding_y)) &&
+        (e.xmotion.x > int(width - (padding_x + button_width) * button_num)) &&
+        (e.xmotion.x < int(width - padding_x - (padding_x + button_width) * (button_num - 1))));
   }
 };
 
@@ -2387,7 +2379,7 @@ static void split(const char *text, const char *seps, char ***str, int *count)
   free(data);
 
   data = strdup(text);
-  *str = (char **)malloc((size_t)(*count) * sizeof(char *));
+  *str = (char **)malloc(size_t(*count) * sizeof(char *));
   for (i = 0, tok = strtok(data, seps); tok != nullptr; tok = strtok(nullptr, seps), i++) {
     (*str)[i] = strdup(tok);
   }
@@ -2444,7 +2436,7 @@ GHOST_TSuccess GHOST_SystemX11::showMessageBox(const char *title,
                     8,
                     PropModeReplace,
                     (const unsigned char *)title,
-                    (int)strlen(title));
+                    int(strlen(title)));
 
     XChangeProperty(
         m_display, window, winType, XA_ATOM, 32, PropModeReplace, (unsigned char *)&typeDialog, 1);
@@ -2474,7 +2466,7 @@ GHOST_TSuccess GHOST_SystemX11::showMessageBox(const char *title,
                     dialog_data.padding_x,
                     dialog_data.padding_x + (i + 1) * dialog_data.line_height,
                     text_splitted[i],
-                    (int)strlen(text_splitted[i]));
+                    int(strlen(text_splitted[i])));
       }
       dialog_data.drawButton(m_display, window, buttonBorderGC, buttonGC, 1, continue_label);
       if (strlen(link)) {
@@ -2574,7 +2566,7 @@ int GHOST_X11_ApplicationIOErrorHandler(Display * /*display*/)
 
 static bool is_filler_char(char c)
 {
-  return isspace(c) || c == '_' || c == '-' || c == ';' || c == ':';
+  return isspace(c) || ELEM(c, '_', '-', ';', ':');
 }
 
 /* These C functions are copied from Wine 3.12's `wintab.c` */
@@ -2674,7 +2666,7 @@ void GHOST_SystemX11::refreshXInputDevices()
           XFree((void *)device_type);
         }
 
-        if (!(tablet_mode == GHOST_kTabletModeStylus || tablet_mode == GHOST_kTabletModeEraser)) {
+        if (!ELEM(tablet_mode, GHOST_kTabletModeStylus, GHOST_kTabletModeEraser)) {
           continue;
         }
 

@@ -562,7 +562,13 @@ MANTA::~MANTA()
   pythonCommands.push_back(finalString);
   result = runPythonString(pythonCommands);
 
+  /* WARNING: this causes crash on exit in the `cycles_volume_cpu/smoke_color` test,
+   * freeing a single modifier ends up clearing the shared module.
+   * For this to be handled properly there would need to be a initialize/free
+   * function for global data. */
+#if 0
   MANTA::terminateMantaflow();
+#endif
 
   BLI_assert(result);
   UNUSED_VARS(result);
@@ -620,7 +626,7 @@ static void manta_python_main_module_restore(PyObject *main_mod)
  * access these variables, the same __main__ module has to be used every time.
  *
  * Unfortunately, we also depend on the fact that mantaflow dumps variables into this module using
- * PyRun_SimpleString. So we can't easily create a separate module without changing mantaflow.
+ * #PyRun_String. So we can't easily create a separate module without changing mantaflow.
  */
 static PyObject *manta_main_module = nullptr;
 
@@ -1155,7 +1161,7 @@ string MANTA::parseScript(const string &setup_string, FluidModifierData *fmd)
   return res.str();
 }
 
-/* Dirty hack: Needed to format paths from python code that is run via PyRun_SimpleString */
+/** Dirty hack: Needed to format paths from python code that is run via #PyRun_String. */
 static string escapePath(string const &s)
 {
   string result = "";
