@@ -3126,6 +3126,9 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
   else {
     vi->totvert = uniq_verts;
   }
+
+  vi->unique_verts = uniq_verts;
+
   vi->vert_indices = vert_indices;
   vi->mverts = verts;
 
@@ -3319,4 +3322,28 @@ void BKE_pbvh_ensure_node_loops(PBVH *pbvh)
   }
 
   MEM_SAFE_FREE(visit);
+}
+
+void BKE_pbvh_node_automasking_mark(PBVH *pbvh, PBVHNode *node)
+{
+  node->flag |= PBVH_RebuildAutomasking;
+}
+
+void BKE_pbvh_node_automasking_unmark(PBVH *pbvh, PBVHNode *node)
+{
+  node->flag &= ~PBVH_RebuildAutomasking;
+}
+
+bool BKE_pbvh_node_needs_automasking(PBVH *pbvh, PBVHNode *node)
+{
+  return node->flag & PBVH_RebuildAutomasking;
+}
+
+void BKE_pbvh_node_automasking_mark_all(PBVH *pbvh)
+{
+  for (int i = 0; i < pbvh->totnode; i++) {
+    if (pbvh->nodes[i].flag & PBVH_Leaf) {
+      pbvh->nodes[i].flag |= PBVH_RebuildAutomasking;
+    }
+  }
 }

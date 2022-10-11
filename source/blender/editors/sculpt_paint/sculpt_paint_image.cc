@@ -125,6 +125,21 @@ class ImageBufferByte4 {
   }
 };
 
+static float paint_automasking_interp(SculptSession *ss,
+                                      const TrianglePaintInput &triangle,
+                                      const float2 uv)
+{
+  if (!ss->cache->automasking) {
+    return 1.0f;
+  }
+
+  float a = SCULPT_automasking_factor_get(ss->cache->automasking, ss, triangle.vert_indices[0]);
+  float b = SCULPT_automasking_factor_get(ss->cache->automasking, ss, triangle.vert_indices[1]);
+  float c = SCULPT_automasking_factor_get(ss->cache->automasking, ss, triangle.vert_indices[2]);
+
+  return a * uv[0] + b * uv[1] + c * (1.0 - uv[0] - uv[1]);
+}
+
 template<typename ImageBuffer> class PaintingKernel {
   ImageBuffer image_accessor;
 
@@ -160,9 +175,13 @@ template<typename ImageBuffer> class PaintingKernel {
     float3 pixel_pos = get_start_pixel_pos(triangle, pixel_row);
     const float3 delta_pixel_pos = get_delta_pixel_pos(triangle, pixel_row, pixel_pos);
     bool pixels_painted = false;
+
+    float2 uv = pixel_row.start_barycentric_coord;
+
     for (int x = 0; x < pixel_row.num_pixels; x++) {
       if (!brush_test_fn(&test, pixel_pos)) {
         pixel_pos += delta_pixel_pos;
+        uv += triangle.delta_barycentric_coord_u;
         image_accessor.next_pixel();
         continue;
       }
@@ -171,8 +190,11 @@ template<typename ImageBuffer> class PaintingKernel {
       const float3 normal(0.0f, 0.0f, 0.0f);
       const float3 face_normal(0.0f, 0.0f, 0.0f);
       const float mask = 0.0f;
-      const float falloff_strength = SCULPT_brush_strength_factor(
-          ss, brush, pixel_pos, sqrtf(test.dist), normal, face_normal, mask, 0, thread_id);
+      float falloff_strength = SCULPT_brush_strength_factor(
+          ss, brush, pixel_pos, sqrtf(test.dist), normal, face_normal, mask, -1, thread_id);
+
+      falloff_strength *= paint_automasking_interp(ss, triangle, uv);
+
       float4 paint_color = brush_color * falloff_strength * brush_strength;
       float4 buffer_color;
       blend_color_mix_float(buffer_color, color, paint_color);
@@ -183,6 +205,7 @@ template<typename ImageBuffer> class PaintingKernel {
 
       image_accessor.next_pixel();
       pixel_pos += delta_pixel_pos;
+      uv += triangle.delta_barycentric_coord_u;
     }
     return pixels_painted;
   }
@@ -499,6 +522,8 @@ void SCULPT_do_paint_brush_image(
   if (!ImageData::init_active_image(ob, &data.image_data, paint_mode_settings)) {
     return;
   }
+
+  SCULPT_automasking_cache_check(ob->sculpt, ob->sculpt->cache->automasking, nodes, totnode);
 
   TaskParallelSettings settings;
   BKE_pbvh_parallel_range_settings(&settings, true, totnode);

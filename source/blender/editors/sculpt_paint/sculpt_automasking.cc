@@ -11,7 +11,10 @@
 #include "BLI_hash.h"
 #include "BLI_index_range.hh"
 #include "BLI_math.h"
+#include "BLI_set.hh"
 #include "BLI_task.h"
+#include "BLI_task.hh"
+#include "BLI_vector.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_mesh_types.h"
@@ -48,6 +51,8 @@
 #include <cstdlib>
 
 using blender::IndexRange;
+using blender::Set;
+using blender::Vector;
 
 AutomaskingCache *SCULPT_automasking_active_cache_get(SculptSession *ss)
 {
@@ -114,18 +119,8 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
   return false;
 }
 
-float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession *ss, int vert)
+float sculpt_automasking_factor_calc(AutomaskingCache *automasking, SculptSession *ss, int vert)
 {
-  if (!automasking) {
-    return 1.0f;
-  }
-  /* If the cache is initialized with valid info, use the cache. This is used when the
-   * automasking information can't be computed in real time per vertex and needs to be
-   * initialized for the whole mesh when the stroke starts. */
-  if (automasking->factor) {
-    return automasking->factor[vert];
-  }
-
   if (automasking->settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
     if (!SCULPT_vertex_has_face_set(ss, vert, automasking->settings.initial_face_set)) {
       return 0.0f;
@@ -145,6 +140,21 @@ float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession
   }
 
   return 1.0f;
+}
+
+float SCULPT_automasking_factor_get(AutomaskingCache *automasking, SculptSession *ss, int vert)
+{
+  if (!automasking) {
+    return 1.0f;
+  }
+  /* If the cache is initialized with valid info, use the cache. This is used when the
+   * automasking information can't be computed in real time per vertex and needs to be
+   * initialized for the whole mesh when the stroke starts. */
+  if (automasking->factor) {
+    return automasking->factor[vert];
+  }
+
+  return sculpt_automasking_factor_calc(automasking, ss, vert);
 }
 
 void SCULPT_automasking_cache_free(AutomaskingCache *automasking)
@@ -335,11 +345,23 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   SCULPT_automasking_cache_settings_update(automasking, ss, sd, brush);
   SCULPT_boundary_info_ensure(ob);
 
+  if (!SCULPT_automasking_needs_factors_cache(sd, brush) && ss->cache && ss->cache->use_pixels) {
+    /*
+     * Allocate factor cache but don't initialize it.
+     * Will be filled in by SCULPT_automasking_cache_check.
+     */
+    automasking->factor = (float *)MEM_calloc_arrayN(totvert, sizeof(float), "automask_factor");
+
+    return automasking;
+  }
+
   if (!SCULPT_automasking_needs_factors_cache(sd, brush)) {
     return automasking;
   }
 
+  automasking->has_full_factor_cache = true;
   automasking->factor = (float *)MEM_malloc_arrayN(totvert, sizeof(float), "automask_factor");
+
   for (int i : IndexRange(totvert)) {
     automasking->factor[i] = 1.0f;
   }
@@ -369,4 +391,72 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
   }
 
   return automasking;
+}
+
+void SCULPT_automasking_cache_check(SculptSession *ss,
+                                    AutomaskingCache *automasking,
+                                    PBVHNode **nodes,
+                                    int totnode)
+{
+  if (!automasking || automasking->has_full_factor_cache) {
+    return;
+  }
+
+  auto cb = [&](PBVHNode *node) {
+    if (!BKE_pbvh_node_needs_automasking(ss->pbvh, node)) {
+      return;
+    }
+
+    BKE_pbvh_node_automasking_unmark(ss->pbvh, node);
+    PBVHVertexIter vi;
+
+    BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vi, PBVH_ITER_ALL) {
+      if (vi.i >= vi.unique_verts) {
+      }
+      else {
+        automasking->factor[vi.index] = SCULPT_automasking_factor_get(
+            automasking, ss, ss->active_face_index);
+      }
+    }
+    BKE_pbvh_vertex_iter_end;
+  };
+
+  Vector<Vector<int>> node_other_verts;
+  node_other_verts.resize(totnode);
+
+  blender::threading::parallel_for(IndexRange(totnode), 2, [&](IndexRange range) {
+    for (int i : range) {
+      PBVHNode *node = nodes[i];
+
+      if (!BKE_pbvh_node_needs_automasking(ss->pbvh, node)) {
+        return;
+      }
+
+      BKE_pbvh_node_automasking_unmark(ss->pbvh, node);
+      PBVHVertexIter vi;
+
+      BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vi, PBVH_ITER_ALL) {
+        if (vi.i >= vi.unique_verts) {
+          node_other_verts[i].append(vi.index);
+        }
+        else {
+          automasking->factor[vi.index] = sculpt_automasking_factor_calc(
+              automasking, ss, vi.index);
+        }
+      }
+      BKE_pbvh_vertex_iter_end;
+    }
+  });
+
+  Set<int> done_set;
+
+  for (int i : IndexRange(totnode)) {
+    for (int vertex : node_other_verts[i]) {
+      if (!done_set.contains(vertex)) {
+        done_set.add(vertex);
+
+        automasking->factor[vertex] = sculpt_automasking_factor_calc(automasking, ss, vertex);
+      }
+    }
+  }
 }
