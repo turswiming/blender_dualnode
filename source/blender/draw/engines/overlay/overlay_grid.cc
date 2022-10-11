@@ -17,6 +17,7 @@
 
 #include "UI_resources.h"
 
+#include "overlay_instance.hh"
 #include "overlay_private.hh"
 
 BLI_STATIC_ASSERT(SI_GRID_STEPS_LEN == OVERLAY_GRID_STEPS_LEN, "")

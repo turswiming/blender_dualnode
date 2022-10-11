@@ -27,6 +27,10 @@ extern "C" {
 /* Forward declarations */
 struct ImBuf;
 
+namespace blender::draw::overlay {
+class Instance;
+}
+
 typedef struct OVERLAY_FramebufferList {
   struct GPUFrameBuffer *overlay_default_fb;
   struct GPUFrameBuffer *overlay_line_fb;
@@ -428,10 +432,6 @@ typedef struct OVERLAY_StorageList {
   struct OVERLAY_PrivateData *pd;
 } OVERLAY_StorageList;
 
-typedef struct OVERLAY_Instance {
-  GPUUniformBuf *grid_ubo;
-} OVERLAY_Instance;
-
 typedef struct OVERLAY_Data {
   void *engine_type;
   OVERLAY_FramebufferList *fbl;
@@ -439,7 +439,7 @@ typedef struct OVERLAY_Data {
   OVERLAY_PassList *psl;
   OVERLAY_StorageList *stl;
 
-  OVERLAY_Instance *instance;
+  blender::draw::overlay::Instance *instance;
 } OVERLAY_Data;
 
 typedef struct OVERLAY_DupliData {
