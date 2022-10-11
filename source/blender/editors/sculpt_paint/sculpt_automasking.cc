@@ -245,14 +245,14 @@ static float automasking_view_occlusion_factor(AutomaskingCache *automasking,
                                                SculptSession *ss,
                                                PBVHVertRef vertex,
                                                uchar stroke_id,
-                                               AutomaskingNodeData * /*automask_data*/)
+                                               AutomaskingNodeData * automask_data)
 {
   char f = *(char *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_occlusion);
 
   if (stroke_id != automasking->current_stroke_id) {
     f = *(char *)SCULPT_vertex_attr_get(
-        vertex,
-        ss->attrs.automasking_occlusion) = SCULPT_vertex_is_occluded(ss, vertex, true) ? 2 : 1;
+        vertex, ss->attrs.automasking_occlusion) =
+        SCULPT_vertex_is_occluded(ss, vertex, automask_data->have_orig_data) ? 2 : 1;
   }
 
   return f == 2;
