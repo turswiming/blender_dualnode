@@ -4,6 +4,7 @@
 #include "DEG_depsgraph_query.h"
 #include "ED_view3d.h"
 #include "GPU_capabilities.h"
+#include "IMB_imbuf_types.h"
 
 #include "workbench_private.hh"
 
@@ -41,6 +42,7 @@ class Instance {
 
   View3DShading shading;
 
+  StringRefNull current_matcap;
   void init(const int2 &output_res,
             const Depsgraph *depsgraph,
             const Object * /*camera*/,
@@ -132,6 +134,26 @@ class Instance {
     else {
       if (shading_type == eShadingType::MATCAP) {
         studio_light = BKE_studiolight_find(shading.matcap, STUDIOLIGHT_TYPE_MATCAP);
+        if (studio_light && studio_light->name != current_matcap) {
+          ImBuf *matcap_diffuse = studio_light->matcap_diffuse.ibuf;
+          ImBuf *matcap_specular = studio_light->matcap_specular.ibuf;
+          if (matcap_diffuse && matcap_diffuse->rect_float) {
+            current_matcap = studio_light->name;
+            int size = matcap_diffuse->x * matcap_diffuse->y * 4;
+            int layers = 1;
+            Vector<float> load_buffer = {};
+            load_buffer.extend(matcap_diffuse->rect_float, size);
+            if (matcap_specular && matcap_specular->rect_float) {
+              load_buffer.extend(matcap_specular->rect_float, size);
+              layers++;
+            }
+            resources.matcap_tx = Texture(current_matcap.c_str(),
+                                          GPU_RGBA16F,
+                                          int2(matcap_diffuse->x, matcap_diffuse->y),
+                                          layers,
+                                          load_buffer.begin());
+          }
+        }
       }
       /* If matcaps are missing, use this as fallback. */
       if (studio_light == nullptr) {
@@ -181,7 +203,9 @@ class Instance {
 
     /* TODO(pragma37) volumes_do */
 
-    resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
+    if (!resources.matcap_tx.is_valid()) {
+      resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
+    }
     resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
 
     anti_aliasing_ps.init(reset_taa);
