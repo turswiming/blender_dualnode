@@ -103,7 +103,12 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 set StatusFile=%BUILD_DIR%\%1_%2.log
-set path=%BUILD_DIR%\downloads\mingw\mingw64\msys\1.0\bin\;%BUILD_DIR%\downloads\nasm-2.12.01\;%path%;%Staging%\%BuildDir%%ARCH%R\Release\boost\lib;%Staging%\%BuildDir%%ARCH%D\Debug\boost\lib;
+set original_path=%path%
+set oiio_paths=%Staging%\%BuildDir%%ARCH%R\Release\openimageio\bin;%Staging%\%BuildDir%%ARCH%D\Debug\openimageio\bin
+set boost_paths=%Staging%\%BuildDir%%ARCH%R\Release\boost\lib;%Staging%\%BuildDir%%ARCH%D\Debug\boost\lib
+set openexr_paths=%Staging%\%BuildDir%%ARCH%R\Release\openexr\bin;%Staging%\%BuildDir%%ARCH%D\Debug\openexr\bin
+set imath_paths=%Staging%\%BuildDir%%ARCH%R\Release\imath\bin;%Staging%\%BuildDir%%ARCH%D\Debug\imath\bin
+set path=%BUILD_DIR%\downloads\mingw\mingw64\msys\1.0\bin\;%BUILD_DIR%\downloads\nasm-2.12.01\;%path%;%boost_paths%;%oiio_paths%;%openexr_paths%;%imath_paths%
 mkdir %STAGING%\%BuildDir%%ARCH%R
 cd %Staging%\%BuildDir%%ARCH%R
 echo %DATE% %TIME% : Start > %StatusFile%
@@ -130,4 +135,5 @@ echo %DATE% %TIME% : Debug Harvest done >> %StatusFile%
 cd %BUILD_DIR%
 
 :exit
+set path=%original_path%
 Echo .
