@@ -1037,7 +1037,7 @@ static void gpu_painting_image_merge(GPUSculptPaintData &batches,
   batches.tile_texture.bind(shader);
   GPU_texture_image_bind(canvas_tex, GPU_shader_get_texture_binding(shader, "texture_img"));
   batches.tile_texture.foreach_in_frame([shader](PaintTileData &paint_tile) {
-    printf("%s: merging tile %d {tile:%d sub_tile:%d,%d} \n",
+    printf("%s: merging tile stored on layer %d {tile:%d sub_tile:%d,%d} \n",
            __func__,
            paint_tile.layer_id,
            paint_tile.tile_number,
