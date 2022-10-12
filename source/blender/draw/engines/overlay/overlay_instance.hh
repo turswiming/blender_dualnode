@@ -8,6 +8,7 @@
 
 #include "draw_manager.hh"
 
+#include "overlay_background.hh"
 #include "overlay_grid.hh"
 
 namespace blender::draw::overlay {
@@ -51,8 +52,12 @@ class Instance {
   /* WORKAROUND: Legacy. Move to grid pass. */
   GPUUniformBuf *grid_ubo = nullptr;
 
+  /** Global types. */
   Resources resources;
   State state;
+
+  /** Overlay types. */
+  Background background;
   Grid grid;
 
   ~Instance()

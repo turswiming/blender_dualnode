@@ -19,7 +19,6 @@
 namespace blender::draw::overlay {
 
 class Grid {
- public:
  private:
   UniformBuffer<OVERLAY_GridData> data_;
 
@@ -175,7 +174,6 @@ class Grid {
 
     grid_ps_.init();
     grid_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA);
-    grid_ps_.clear_color(float4(0.0f, 0.0f, 0.0f, 1.0f));
     grid_ps_.shader_set(OVERLAY_shader_grid());
     grid_ps_.bind_ubo("grid_buf", &data_);
     grid_ps_.bind_ubo("globalsBlock", &res.globals_buf);

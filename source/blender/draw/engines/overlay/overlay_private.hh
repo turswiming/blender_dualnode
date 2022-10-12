@@ -66,10 +66,14 @@ struct Resources {
 
   TextureFromPool line_tx = {"line_tx"};
 
+  /** TODO(fclem): Copy of G_data.block that should become theme colors only and managed by the
+   * engine. */
+  GlobalsUboStorage theme_settings;
   /* References, not owned. */
   GPUUniformBuf *globals_buf;
   TextureRef depth_tx;
-  TextureRef color_tx;
+  TextureRef color_overlay_tx;
+  TextureRef color_render_tx;
 };
 
 }  // namespace blender::draw::overlay

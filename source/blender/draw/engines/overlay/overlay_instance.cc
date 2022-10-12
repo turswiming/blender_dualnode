@@ -5,13 +5,15 @@
  */
 
 #include "overlay_instance.hh"
+#include "draw_debug.hh"
 
 namespace blender::draw::overlay {
 
 void Instance::init()
 {
   resources.depth_tx.wrap(DRW_viewport_texture_list_get()->depth);
-  resources.color_tx.wrap(DRW_viewport_texture_list_get()->color_overlay);
+  resources.color_overlay_tx.wrap(DRW_viewport_texture_list_get()->color_overlay);
+  resources.color_render_tx.wrap(DRW_viewport_texture_list_get()->color);
 
   /* TODO(fclem): Remove DRW global usage. */
   const DRWContextState *ctx = DRW_context_state_get();
@@ -53,6 +55,7 @@ void Instance::init()
 
   /* TODO(fclem): Remove DRW global usage. */
   resources.globals_buf = G_draw.block_ubo;
+  resources.theme_settings = G_draw.block;
 }
 
 void Instance::begin_sync()
@@ -60,6 +63,7 @@ void Instance::begin_sync()
   const DRWView *view_legacy = DRW_view_default_get();
   View view("OverlayView", view_legacy);
 
+  background.begin_sync(resources, state);
   grid.begin_sync(resources, state, view);
 }
 
@@ -74,19 +78,31 @@ void Instance::end_sync()
 
 void Instance::draw(Manager &manager)
 {
+  /* WORKAROUND: This is to prevent crashes when using depth picking or selection.
+   * The selection engine should handle theses cases instead. */
+  if (!DRW_state_is_fbo()) {
+    return;
+  }
+
   const DRWView *view_legacy = DRW_view_default_get();
   View view("OverlayView", view_legacy);
 
   resources.line_tx.acquire(int2(resources.depth_tx.size()), GPU_RGBA8);
 
   resources.overlay_color_only_fb.ensure(GPU_ATTACHMENT_NONE,
-                                         GPU_ATTACHMENT_TEXTURE(resources.color_tx));
+                                         GPU_ATTACHMENT_TEXTURE(resources.color_overlay_tx));
   resources.overlay_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
-                              GPU_ATTACHMENT_TEXTURE(resources.color_tx));
+                              GPU_ATTACHMENT_TEXTURE(resources.color_overlay_tx));
   resources.overlay_line_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
-                                   GPU_ATTACHMENT_TEXTURE(resources.color_tx),
+                                   GPU_ATTACHMENT_TEXTURE(resources.color_overlay_tx),
                                    GPU_ATTACHMENT_TEXTURE(resources.line_tx));
 
+  GPU_framebuffer_bind(resources.overlay_color_only_fb);
+
+  float4 clear_color(0.0f);
+  GPU_framebuffer_clear_color(resources.overlay_color_only_fb, clear_color);
+
+  background.draw(resources, manager);
   grid.draw(resources, manager, view);
 
   // anti_aliasing.draw(resources, manager, view);
