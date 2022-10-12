@@ -480,8 +480,8 @@ static void draw_compute_culling(DRWView *view)
       cull->mask = 0;
     }
     else {
-      bool culled = !draw_culling_sphere_test(
-          &view->frustum_bsphere, view->frustum_planes, &cull->bsphere);
+      bool culled = false;  //! draw_culling_sphere_test(
+                            //&view->frustum_bsphere, view->frustum_planes, &cull->bsphere);
 
 #ifdef DRW_DEBUG_CULLING
       if (G.debug_value != 0) {
@@ -496,9 +496,9 @@ static void draw_compute_culling(DRWView *view)
       }
 #endif
 
-      if (view->visibility_fn) {
-        culled = !view->visibility_fn(!culled, cull->user_data);
-      }
+      // if (view->visibility_fn) {
+      //   culled = !view->visibility_fn(!culled, cull->user_data);
+      // }
 
       SET_FLAG_FROM_TEST(cull->mask, culled, view->culling_mask);
     }

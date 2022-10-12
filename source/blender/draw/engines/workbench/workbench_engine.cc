@@ -5,6 +5,8 @@
 #include "ED_view3d.h"
 #include "GPU_capabilities.h"
 
+#include "BLI_rand.hh"
+
 #include "workbench_private.hh"
 
 namespace blender::workbench {
@@ -231,10 +233,11 @@ class Instance {
       }
     }
     else {
-      ResourceHandle handle = manager.resource_handle(ob_ref);
+      float4x4 model_matrix(ob_ref.object->obmat);
 
-      Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+      // ResourceHandle handle = manager.resource_handle(ob_ref);
 
+      Material mat;
       if (material_subtype == eMaterialSubType::OBJECT) {
         mat = Material(*ob_ref.object);
       }
@@ -250,7 +253,18 @@ class Instance {
 
       GPUBatch *batch = geometry_get(ob_ref);
       if (batch) {
-        pipeline_get(ob_ref).draw(batch, handle);
+        blender::RandomNumberGenerator rng(23423);
+        for (size_t y = 0; y < 1000; y++) {
+          for (size_t x = 0; x < 1000; x++) {
+            model_matrix[3][0] = x * 0.001f;
+            model_matrix[3][1] = y * 0.001f;
+            ResourceHandle handle = manager.resource_handle(model_matrix);
+
+            resources.material_buf.get_or_resize(handle.resource_index()) = mat;
+
+            pipeline_get(ob_ref).draw(batch, handle);
+          }
+        }
       }
     }
   }

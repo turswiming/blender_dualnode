@@ -180,7 +180,7 @@ inline ResourceHandle Manager::resource_handle(const ObjectRef ref)
   return ResourceHandle(resource_len_++, (ref.object->transflag & OB_NEG_SCALE) != 0);
 }
 
-inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix)
+BLI_NOINLINE inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix)
 {
   matrix_buf.get_or_resize(resource_len_).sync(model_matrix);
   bounds_buf.get_or_resize(resource_len_).sync();

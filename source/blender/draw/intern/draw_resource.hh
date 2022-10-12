@@ -38,7 +38,7 @@ inline void ObjectMatrices::sync(const Object &object)
 inline void ObjectMatrices::sync(const float4x4 &model_matrix)
 {
   model = model_matrix;
-  model_inverse = model_matrix.inverted();
+  // model_inverse = model_matrix.inverted();
 }
 
 inline std::ostream &operator<<(std::ostream &stream, const ObjectMatrices &matrices)
