@@ -11,6 +11,8 @@
 
 #include "UI_resources.h"
 
+#include "gpu_shader_create_info.hh"
+
 #include "overlay_private.hh"
 
 typedef struct OVERLAY_Shaders {
@@ -182,6 +184,17 @@ GPUShader *OVERLAY_shader_armature_sphere(bool use_outline)
   const DRWContextState *draw_ctx = DRW_context_state_get();
   OVERLAY_Shaders *sh_data = &e_data.sh_data[draw_ctx->sh_cfg];
   if (use_outline && !sh_data->armature_sphere_outline) {
+    using namespace blender::gpu::shader;
+    ShaderCreateInfo &info = const_cast<ShaderCreateInfo &>(
+        *reinterpret_cast<const ShaderCreateInfo *>(
+            GPU_shader_create_info_get("overlay_armature_sphere_outline")));
+
+    if (U.experimental.enable_overlay_next) {
+      info.storage_buf(0, Qualifier::READ, "mat4", "data_buf[]");
+      info.define("inst_obmat", "data_buf[gl_InstanceID]");
+      info.vertex_inputs_.pop_last();
+    }
+
     sh_data->armature_sphere_outline = GPU_shader_create_from_info_name(
         draw_ctx->sh_cfg ? "overlay_armature_sphere_outline_clipped" :
                            "overlay_armature_sphere_outline");

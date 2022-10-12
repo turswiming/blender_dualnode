@@ -33,6 +33,7 @@ class Instance;
 
 struct State {
   Depsgraph *depsgraph;
+  ViewLayer *view_layer;
   Scene *scene;
   View3D *v3d;
   RegionView3D *rv3d;
@@ -53,9 +54,11 @@ struct State {
 };
 
 using blender::draw::Framebuffer;
+using blender::draw::StorageVectorBuffer;
 using blender::draw::Texture;
 using blender::draw::TextureFromPool;
 using blender::draw::TextureRef;
+using ArmatureSphereBuf = StorageVectorBuffer<float4x4>;
 
 struct Resources {
   Framebuffer overlay_fb = {"overlay_fb"};
@@ -65,6 +68,7 @@ struct Resources {
   Framebuffer overlay_line_in_front_fb = {"overlay_line_in_front_fb"};
 
   TextureFromPool line_tx = {"line_tx"};
+  TextureFromPool depth_in_front_alloc_tx = {"overlay_depth_in_front_tx"};
 
   /** TODO(fclem): Copy of G_data.block that should become theme colors only and managed by the
    * engine. */
@@ -72,6 +76,7 @@ struct Resources {
   /* References, not owned. */
   GPUUniformBuf *globals_buf;
   TextureRef depth_tx;
+  TextureRef depth_in_front_tx;
   TextureRef color_overlay_tx;
   TextureRef color_render_tx;
 };

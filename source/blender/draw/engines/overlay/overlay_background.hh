@@ -74,7 +74,6 @@ class Background {
     }
 
     bg_ps_.init();
-    bg_ps_.clear_color(float4());
     bg_ps_.state_set(pass_state);
     bg_ps_.shader_set(OVERLAY_shader_background());
     bg_ps_.bind_ubo("globalsBlock", &res.globals_buf);
@@ -95,9 +94,7 @@ class Background {
 
   void draw(Resources &res, Manager &manager)
   {
-    if (DRW_state_is_fbo()) {
-      GPU_framebuffer_bind(res.overlay_color_only_fb);
-    }
+    GPU_framebuffer_bind(res.overlay_color_only_fb);
     manager.submit(bg_ps_);
   }
 };
