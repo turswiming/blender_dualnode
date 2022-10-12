@@ -1199,7 +1199,8 @@ static void drw_engines_enable_from_engine(const RenderEngineType *engine_type, 
 
 static void drw_engines_enable_overlays(void)
 {
-  use_drw_engine(&draw_engine_overlay_type);
+  use_drw_engine((U.experimental.enable_overlay_next) ? &draw_engine_overlay_next_type :
+                                                        &draw_engine_overlay_type);
 }
 /**
  * Use for select and depth-drawing.
@@ -1218,7 +1219,8 @@ static void drw_engine_enable_image_editor(void)
     use_drw_engine(&draw_engine_image_type);
   }
 
-  use_drw_engine(&draw_engine_overlay_type);
+  use_drw_engine((U.experimental.enable_overlay_next) ? &draw_engine_overlay_next_type :
+                                                        &draw_engine_overlay_type);
 }
 
 static void drw_engines_enable_editors(void)
@@ -1236,7 +1238,8 @@ static void drw_engines_enable_editors(void)
     SpaceNode *snode = (SpaceNode *)space_data;
     if ((snode->flag & SNODE_BACKDRAW) != 0) {
       use_drw_engine(&draw_engine_image_type);
-      use_drw_engine(&draw_engine_overlay_type);
+      use_drw_engine((U.experimental.enable_overlay_next) ? &draw_engine_overlay_next_type :
+                                                            &draw_engine_overlay_type);
     }
   }
 }
@@ -3012,6 +3015,7 @@ void DRW_engines_register(void)
   DRW_engine_register(&draw_engine_gpencil_type);
 
   DRW_engine_register(&draw_engine_overlay_type);
+  DRW_engine_register(&draw_engine_overlay_next_type);
   DRW_engine_register(&draw_engine_select_type);
   DRW_engine_register(&draw_engine_basic_type);
   DRW_engine_register(&draw_engine_compositor_type);
