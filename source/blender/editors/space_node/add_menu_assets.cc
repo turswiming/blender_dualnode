@@ -15,6 +15,7 @@
 #include "RNA_prototypes.h"
 
 #include "ED_asset.h"
+#include "ED_screen.h"
 
 #include "node_intern.hh"
 
@@ -40,6 +41,21 @@ struct AssetItemTree {
   MultiValueMap<bke::AssetCatalogPath, LibraryAsset> assets_per_path;
   Map<const bke::AssetCatalogTreeItem *, bke::AssetCatalogPath> full_catalog_per_tree_item;
 };
+
+static void search_listen_fn(const wmRegionListenerParams *params)
+{
+  const wmNotifier *wmn = params->notifier;
+
+  switch (wmn->category) {
+    case NC_ASSET:
+      if (wmn->data == ND_ASSET_LIST_READING) {
+        std::cout << "TAGGING FOR REDRAW\n";
+        ED_region_tag_redraw(params->region);
+        ED_region_tag_refresh_ui(params->region);
+      }
+      break;
+  }
+}
 
 static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree &node_tree)
 {
@@ -172,9 +188,12 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
 
 static void add_root_catalogs_draw(const bContext *C, Menu *menu)
 {
+  std::cout << __func__ << '\n';
   bScreen &screen = *CTX_wm_screen(C);
   SpaceNode &snode = *CTX_wm_space_node(C);
   const bNodeTree *edit_tree = snode.edittree;
+  ARegion *region = CTX_wm_region(C);
+  region->type->listener = search_listen_fn;
 
   snode.runtime->assets_for_menu.reset();
   snode.runtime->assets_for_menu = std::make_shared<AssetItemTree>(
