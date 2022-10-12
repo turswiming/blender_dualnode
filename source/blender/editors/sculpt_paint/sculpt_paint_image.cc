@@ -553,11 +553,11 @@ static void init_paint_brush(const SculptSession &ss,
  * - Only tiles that are painted on are loaded in memory, painted on and merged back to the actual
  * texture.
  */
-
 template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
   struct Info {
     struct {
-      bool in_use : 1;
+      bool in_use_stroke : 1;
+      bool in_use_frame : 1;
       /* Does this sub tile needs to be updated (CPU->GPU transfer).*/
       bool needs_update : 1;
       bool should_be_removed : 1;
@@ -578,10 +578,14 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
  public:
   GPUSubTileTexture()
   {
+    paint_tiles_.reserve(Depth);
+    infos_.reserve(Depth);
+
     for (int i = 0; i < Depth; i++) {
       layer_lookup_[i] = LayerIdUnused;
     }
   }
+
   ~GPUSubTileTexture()
   {
     if (gpu_texture_) {
@@ -603,26 +607,47 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
     }
   }
 
+  void reset_usage_stroke()
+  {
+    printf("%s\n", __func__);
+    for (Info &info : infos_) {
+      info.flags.in_use_stroke = false;
+    }
+  }
+
+  void reset_usage_frame()
+  {
+    printf("%s\n", __func__);
+    for (Info &info : infos_) {
+      info.flags.in_use_frame = false;
+    }
+  }
+
   void mark_usage(TileNumber tile_number, int2 sub_tile_id)
   {
+    validate();
     for (int index : paint_tiles_.index_range()) {
       PaintTileData &tile = paint_tiles_[index];
       if (tile.tile_number == tile_number && tile.sub_tile_id == sub_tile_id) {
         Info &info = infos_[index];
-        if (!info.flags.in_use) {
+        if (!info.flags.in_use_stroke) {
           printf("%s: mark existing {tile:%d, sub_tile:%d,%d}\n",
                  __func__,
                  tile_number,
                  UNPACK2(sub_tile_id));
         }
-        info.flags.in_use = true;
+        info.flags.in_use_stroke = true;
+        info.flags.in_use_frame = true;
+        info.flags.should_be_removed = false;
+        validate();
         return;
       }
     }
 
     /* Tile not yet added, add a new one.*/
     Info info;
-    info.flags.in_use = true;
+    info.flags.in_use_stroke = true;
+    info.flags.in_use_frame = true;
     info.flags.needs_update = true;
     info.flags.should_be_removed = false;
     infos_.append(info);
@@ -635,32 +660,69 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
 
     printf(
         "%s: mark new {tile:%d, sub_tile:%d,%d}\n", __func__, tile_number, UNPACK2(sub_tile_id));
+    validate();
   }
 
   /** Remove all sub tiles that are currently flagged not to be used (flags.in_use = false). */
   void remove_unused()
   {
-    for (int i = 0; i < layer_lookup_.size(); i++) {
-      int index = layer_lookup_[i];
+    validate();
+    Vector<int64_t> index_changes;
+    for (int layer_id = 0; layer_id < Depth; layer_id++) {
+      int index = layer_lookup_[layer_id];
       if (index == -1) {
         continue;
       }
       infos_[index].flags.should_be_removed = false;
-      if (infos_[index].flags.in_use == false) {
+      if (infos_[index].flags.in_use_stroke == false) {
         infos_[index].flags.should_be_removed = true;
-        paint_tiles_[index].layer_id = LayerIdMarkRemoval;
-        printf("%s: remove sub tile at layer %d\n", __func__, i);
-        layer_lookup_[i] = -1;
+        PaintTileData &paint_tile = paint_tiles_[index];
+        BLI_assert(paint_tile.layer_id == layer_id);
+        paint_tile.layer_id = LayerIdMarkRemoval;
+        printf("%s: remove sub tile at layer %d->%d {tile:%d, sub_tile:%d,%d}\n",
+               __func__,
+               layer_id,
+               index,
+               paint_tile.tile_number,
+               UNPACK2(paint_tile.sub_tile_id));
+        layer_lookup_[layer_id] = LayerIdUnused;
+        index_changes.append(index);
       }
+    }
+
+    /* Early exit when no removals where marked. */
+    if (index_changes.is_empty()) {
+      return;
+    }
+
+    for (int layer_id = 0; layer_id < Depth; layer_id++) {
+      int decrement = 0;
+      int index = layer_lookup_[layer_id];
+      if (index == LayerIdUnused) {
+        continue;
+      }
+      for (int64_t change : index_changes) {
+        if (index > change) {
+          decrement += 1;
+        }
+      }
+      if (decrement == 0) {
+        continue;
+      }
+      printf("%s: correct index of %d->%d to %d\n", __func__, layer_id, index, index - decrement);
+      int corrected_index = index - decrement;
+      layer_lookup_[layer_id] = corrected_index;
     }
 
     infos_.remove_if([&](Info &info) { return info.flags.should_be_removed; });
     paint_tiles_.remove_if(
         [&](PaintTileData &tile) { return tile.layer_id == LayerIdMarkRemoval; });
+    validate();
   }
 
   void assign_layer_ids()
   {
+    validate();
     for (int64_t index : paint_tiles_.index_range()) {
       PaintTileData &tile = paint_tiles_[index];
 
@@ -676,6 +738,7 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
              UNPACK2(tile.sub_tile_id),
              tile.layer_id);
     }
+    validate();
   }
 
   int first_empty_layer_id() const
@@ -720,8 +783,8 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
 
       /* TODO: Copy correct data from ImBuf.*/
 
-      GPU_texture_update_sub(
-          gpu_texture_, GPU_DATA_FLOAT, buffer, 0, 0, tile.layer_id, Size, Size, 1);
+      // GPU_texture_update_sub(
+      //    gpu_texture_, GPU_DATA_FLOAT, buffer, 0, 0, tile.layer_id, Size, Size, 1);
       info.flags.needs_update = false;
     }
 
@@ -774,6 +837,42 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
                            GPU_shader_get_texture_binding(shader, "paint_tiles_img"));
     GPU_storagebuf_bind(tile_buf_get(), GPU_shader_get_ssbo(shader, "paint_tile_buf"));
     GPU_shader_uniform_1i(shader, "paint_tile_buf_len", paint_tiles_len());
+  }
+
+  /* Go over each paint tile that is currently in use for the current frame.*/
+  template<typename Predicate> void foreach_in_frame(Predicate &&predicate)
+  {
+    for (int64_t index : infos_.index_range()) {
+      Info &info = infos_[index];
+      if (!info.flags.in_use_frame) {
+        continue;
+      }
+      predicate(paint_tiles_[index]);
+    }
+  }
+
+  /* Checks if the structure is still consistent.*/
+  void validate()
+  {
+    BLI_assert(paint_tiles_.size() == infos_.size());
+    int num_filled_layers = 0;
+    for (int index : paint_tiles_.index_range()) {
+      PaintTileData &paint_tile = paint_tiles_[index];
+      // Info &info = infos_[index];
+      BLI_assert(paint_tile.layer_id == LayerIdUnused ||
+                 layer_lookup_[paint_tile.layer_id] == index);
+      if (paint_tile.layer_id != LayerIdUnused) {
+        num_filled_layers += 1;
+      }
+    }
+
+    int num_filled_lookups = 0;
+    for (int index : IndexRange(Depth)) {
+      if (layer_lookup_[index] != LayerIdUnused) {
+        num_filled_lookups += 1;
+      }
+    }
+    BLI_assert(num_filled_layers == num_filled_lookups);
   }
 };
 
@@ -863,7 +962,6 @@ static void ensure_gpu_buffers(TexturePaintingUserData &data)
   if (paint_data.steps.is_empty()) {
     PBVH *pbvh = ss.pbvh;
     BKE_pbvh_frame_selection_clear(pbvh);
-    paint_data.tile_texture.reset_usage();
   }
 
   for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
@@ -927,6 +1025,7 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
   }
 }
 
+/** Merge the changes from the current frame into the GPU texture. */
 static void gpu_painting_image_merge(GPUSculptPaintData &batches,
                                      Image &image,
                                      ImageUser &image_user,
@@ -937,7 +1036,15 @@ static void gpu_painting_image_merge(GPUSculptPaintData &batches,
   GPU_shader_bind(shader);
   batches.tile_texture.bind(shader);
   GPU_texture_image_bind(canvas_tex, GPU_shader_get_texture_binding(shader, "texture_img"));
-  GPU_compute_dispatch(shader, image_buffer.x, image_buffer.y, 1);
+  batches.tile_texture.foreach_in_frame([shader](PaintTileData &paint_tile) {
+    printf("%s: merging tile %d {tile:%d sub_tile:%d,%d} \n",
+           __func__,
+           paint_tile.layer_id,
+           paint_tile.tile_number,
+           UNPACK2(paint_tile.sub_tile_id));
+    GPU_shader_uniform_1i(shader, "layer_id", paint_tile.layer_id);
+    GPU_compute_dispatch(shader, TEXTURE_STREAMING_TILE_SIZE, TEXTURE_STREAMING_TILE_SIZE, 1);
+  });
 }
 
 static void init_paint_step(const SculptSession &ss,
@@ -1055,9 +1162,20 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
 
     BKE_image_release_ibuf(data.image_data.image, image_buffer, nullptr);
   }
+}
+
+static void gpu_frame_end(TexturePaintingUserData &data)
+{
+  SculptSession &ss = *data.ob->sculpt;
+  if (!ss.mode.texture_paint.gpu_data) {
+    return;
+  }
+
+  GPUSculptPaintData &batches = *static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
 
   /* Reset GPU data for next frame. */
   batches.steps.clear();
+  batches.tile_texture.reset_usage_frame();
 }
 
 /** \} */
@@ -1166,6 +1284,7 @@ void SCULPT_paint_image_batches_flush(PaintModeSettings *paint_mode_settings,
     // TIMEIT_START(paint_image_gpu);
     GPU_debug_group_begin("SCULPT_paint_brush");
     dispatch_gpu_batches(data);
+    gpu_frame_end(data);
     GPU_debug_group_end();
     // TIMEIT_END(paint_image_gpu);
   }
@@ -1175,7 +1294,7 @@ void SCULPT_paint_image_batches_flush(PaintModeSettings *paint_mode_settings,
 
 void SCULPT_paint_image_batches_finalize(PaintModeSettings *UNUSED(paint_mode_settings),
                                          Sculpt *UNUSED(sd),
-                                         Object *UNUSED(ob))
+                                         Object *ob)
 {
   if (!SCULPT_use_image_paint_compute()) {
     return;
@@ -1186,6 +1305,9 @@ void SCULPT_paint_image_batches_finalize(PaintModeSettings *UNUSED(paint_mode_se
 
   /* TODO: move this to sculpt tool switch and sculpt session free. */
   // SCULPT_paint_image_sculpt_data_free(ob->sculpt);
+  SculptSession &ss = *ob->sculpt;
+  GPUSculptPaintData &batches = *static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
+  batches.tile_texture.reset_usage_stroke();
 }
 
 void SCULPT_paint_image_sculpt_data_free(SculptSession *ss)
