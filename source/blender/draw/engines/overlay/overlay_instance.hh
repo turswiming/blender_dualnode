@@ -51,8 +51,8 @@ class Instance {
   /* WORKAROUND: Legacy. Move to grid pass. */
   GPUUniformBuf *grid_ubo = nullptr;
 
-  Framebuffer overlay_fb = {"overlay_fb"};
-
+  Resources resources;
+  State state;
   Grid grid;
 
   ~Instance()

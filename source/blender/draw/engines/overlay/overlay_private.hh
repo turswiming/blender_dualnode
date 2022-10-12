@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "DRW_gpu_wrapper.hh"
 #include "DRW_render.h"
 
 #include "overlay_shader_shared.h"
@@ -29,7 +30,49 @@ struct ImBuf;
 
 namespace blender::draw::overlay {
 class Instance;
-}
+
+struct State {
+  Depsgraph *depsgraph;
+  Scene *scene;
+  View3D *v3d;
+  RegionView3D *rv3d;
+  View3DOverlay overlay;
+  float pixelsize;
+  enum eContextObjectMode ctx_mode;
+  bool clear_in_front;
+  bool use_in_front;
+  bool is_wireframe_mode;
+  bool hide_overlays;
+  bool xray_enabled;
+  bool xray_enabled_and_not_wire;
+  float xray_opacity;
+  short v3d_flag;     /* TODO: move to #View3DOverlay. */
+  short v3d_gridflag; /* TODO: move to #View3DOverlay. */
+  int cfra;
+  DRWState clipping_state;
+};
+
+using blender::draw::Framebuffer;
+using blender::draw::Texture;
+using blender::draw::TextureFromPool;
+using blender::draw::TextureRef;
+
+struct Resources {
+  Framebuffer overlay_fb = {"overlay_fb"};
+  Framebuffer overlay_in_front_fb = {"overlay_in_front_fb"};
+  Framebuffer overlay_color_only_fb = {"overlay_color_only_fb"};
+  Framebuffer overlay_line_fb = {"overlay_line_fb"};
+  Framebuffer overlay_line_in_front_fb = {"overlay_line_in_front_fb"};
+
+  TextureFromPool line_tx = {"line_tx"};
+
+  /* References, not owned. */
+  GPUUniformBuf *globals_buf;
+  TextureRef depth_tx;
+  TextureRef color_tx;
+};
+
+}  // namespace blender::draw::overlay
 
 typedef struct OVERLAY_FramebufferList {
   struct GPUFrameBuffer *overlay_default_fb;
