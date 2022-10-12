@@ -242,6 +242,7 @@ ccl_device float light_tree_cluster_importance(KernelGlobals kg,
                                     knode->energy);
 }
 
+/* pick an emitter from a leaf node using resevoir sampling */
 ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  ccl_private float *randu,
                                                  const float3 P,
@@ -250,38 +251,39 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  const ccl_global KernelLightTreeNode *knode,
                                                  ccl_private float *pdf_factor)
 {
-  /* TODO: use single loop over prims to avoid computing light_tree_emitter_importance twice? */
-  float total_emitter_importance = 0.0f;
-  for (int i = 0; i < knode->num_prims; i++) {
-    const int prim_index = -knode->child_index + i;
-    total_emitter_importance += light_tree_emitter_importance(
-        kg, P, N, has_transmission, prim_index);
+  /* the first emitter in the cluster */
+  int selected_prim_index = -knode->child_index;
+  float total_weight = light_tree_emitter_importance(
+      kg, P, N, has_transmission, selected_prim_index);
+  float selected_weight = total_weight;
+
+  for (int i = 1; i < knode->num_prims; i++) {
+    int current_prim_index = -knode->child_index + i;
+    float current_weight = light_tree_emitter_importance(
+        kg, P, N, has_transmission, current_prim_index);
+    total_weight += current_weight;
+
+    if (total_weight == 0.0f) {
+      continue;
+    }
+
+    float thresh = current_weight / total_weight;
+    if (*randu < thresh) {
+      selected_prim_index = current_prim_index;
+      selected_weight = current_weight;
+      *randu = *randu / thresh;
+    }
+    else {
+      *randu = (*randu - thresh) / (1.0f - thresh);
+    }
   }
 
-  if (total_emitter_importance == 0.0f) {
+  if (total_weight == 0.0f) {
     return -1;
   }
 
-  /* Once we have the total importance, we can normalize the CDF and sample it. */
-  float emitter_cdf = 0.0f;
-  for (int i = 0; i < knode->num_prims; i++) {
-    const int prim_index = -knode->child_index + i;
-    /* to-do: is there any way to cache these values, so that recalculation isn't needed? */
-    const float emitter_pdf = light_tree_emitter_importance(
-                                  kg, P, N, has_transmission, prim_index) /
-                              total_emitter_importance;
-    if (*randu <= emitter_cdf + emitter_pdf) {
-      *randu = (*randu - emitter_cdf) / emitter_pdf;
-      *pdf_factor *= emitter_pdf;
-      return prim_index;
-    }
-    emitter_cdf += emitter_pdf;
-  }
-
-  /* TODO: change implementation so that even under precision issues, we always end
-   * up selecting a light and this can't happen? */
-  kernel_assert(false);
-  return -1;
+  *pdf_factor = selected_weight / total_weight;
+  return selected_prim_index;
 }
 
 /* to-do: for now, we're not going to worry about being in a volume,
