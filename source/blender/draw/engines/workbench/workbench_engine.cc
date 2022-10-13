@@ -20,6 +20,18 @@ namespace blender::workbench {
 
 using namespace draw;
 
+// Utils
+
+bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light);
+float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z);
+LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
+                                                float4x4 world_shading_rotation);
+
+const CustomData *get_loop_custom_data(const Mesh *mesh);
+const CustomData *get_vert_custom_data(const Mesh *mesh);
+
+GPUMaterial **get_dummy_gpu_materials(int material_count);
+
 class Instance {
  public:
   SceneResources resources;
@@ -32,11 +44,6 @@ class Instance {
 
   AntiAliasingPass anti_aliasing_ps;
 
-#if 0
-  bool use_per_material_batches = false;
-  eColorType color_type = eColorType::MATERIAL;
-  eMaterialSubType material_subtype = eMaterialSubType::MATERIAL;
-#endif
   eShadingType shading_type = eShadingType::STUDIO;
 
   /** Used when material_subtype == eMaterialSubType::SINGLE */
@@ -61,8 +68,8 @@ class Instance {
             const View3D *v3d,
             const RegionView3D *rv3d)
   {
-    scene = DEG_get_evaluated_scene(depsgraph);
     const DRWContextState *context = DRW_context_state_get();
+    scene = DEG_get_evaluated_scene(depsgraph);
 
     /* TODO(pragma37):
      * Check why Workbench Next exposes OB_MATERIAL, and Workbench exposes OB_RENDER */
@@ -71,13 +78,11 @@ class Instance {
     shading = is_render_mode ? scene->display.shading : v3d->shading;
 
     ob_mode = CTX_data_mode_enum_ex(context->object_edit, context->obact, context->object_mode);
-    /* TODO(pragma37): Shouldn't clip_state be enough ? */
-    clip_mode = context->sh_cfg;
+
+    bool reset_taa = false;
 
     cull_state = shading.flag & V3D_SHADING_BACKFACE_CULLING ? DRW_STATE_CULL_BACK :
                                                                DRW_STATE_NO_DRAW;
-
-    bool reset_taa = false;
 
     /* FIXME: This reproduce old behavior when workbench was separated in 2 engines.
      * But this is a workaround for a missing update tagging. */
@@ -87,23 +92,15 @@ class Instance {
       reset_taa = true;
     }
     clip_state = new_clip_state;
+    /* TODO(pragma37): Shouldn't clip_state be enough ? */
+    clip_mode = context->sh_cfg;
 
     if (rv3d && rv3d->rflag & RV3D_GPULIGHT_UPDATE) {
       reset_taa = true;
     }
 
-    if (SHADING_XRAY_FLAG_ENABLED(shading)) {
-      /* Disable shading options that aren't supported in transparency mode. */
-      shading.flag &= ~(V3D_SHADING_SHADOW | V3D_SHADING_CAVITY | V3D_SHADING_DEPTH_OF_FIELD);
-    }
-    if (SHADING_XRAY_ENABLED(shading) != SHADING_XRAY_ENABLED(previous_shading) ||
-        shading.flag != previous_shading.flag) {
-      reset_taa = true;
-    }
-
     if (!is_render_mode) {
       if (shading.type < OB_SOLID) {
-        /* TODO(pragma37): Shouldn't we just skip any rendering at all ??? */
         shading.light = V3D_LIGHTING_FLAT;
         shading.color_type = V3D_SHADING_OBJECT_COLOR;
         shading.xray_alpha = 0.0f;
@@ -116,30 +113,19 @@ class Instance {
       }
     }
 
+    if (SHADING_XRAY_FLAG_ENABLED(shading)) {
+      /* Disable shading options that aren't supported in transparency mode. */
+      shading.flag &= ~(V3D_SHADING_SHADOW | V3D_SHADING_CAVITY | V3D_SHADING_DEPTH_OF_FIELD);
+    }
+    if (SHADING_XRAY_ENABLED(shading) != SHADING_XRAY_ENABLED(previous_shading) ||
+        shading.flag != previous_shading.flag) {
+      reset_taa = true;
+    }
+
+    shading_type = shading_type_from_v3d_lighting(shading.light);
     material_override = Material(shading.single_color);
 
-#if 0
-    use_per_material_batches = ELEM(
-        shading.color_type, V3D_SHADING_TEXTURE_COLOR, V3D_SHADING_MATERIAL_COLOR);
-
-    color_type = color_type_from_v3d_shading(shading.color_type);
-    material_subtype = material_subtype_from_v3d_shading(shading.color_type);
-#endif
-    shading_type = shading_type_from_v3d_lighting(shading.light);
-
     UniformBuffer<WorldData> &world_buf = resources.world_buf;
-
-    float4x4 rot_matrix = float4x4::identity();
-    if (shading.flag & V3D_SHADING_WORLD_ORIENTATION) {
-      /* TODO(pragma37) C++ API ? */
-      float V[4][4], R[4][4];
-      DRW_view_viewmat_get(nullptr, V, false);
-      axis_angle_to_mat4_single(R, 'Z', -shading.studiolight_rot_z);
-      mul_m4_m4m4(R, V, R);
-      swap_v3_v3(R[2], R[1]);
-      negate_v3(R[2]);
-      rot_matrix = float4x4(R);
-    }
 
     StudioLight *studio_light = nullptr;
     if (U.edit_studio_light) {
@@ -149,25 +135,8 @@ class Instance {
       if (shading_type == eShadingType::MATCAP) {
         studio_light = BKE_studiolight_find(shading.matcap, STUDIOLIGHT_TYPE_MATCAP);
         if (studio_light && studio_light->name != current_matcap) {
-          ImBuf *matcap_diffuse = studio_light->matcap_diffuse.ibuf;
-          ImBuf *matcap_specular = studio_light->matcap_specular.ibuf;
-          if (matcap_diffuse && matcap_diffuse->rect_float) {
+          if (get_matcap_tx(resources.matcap_tx, *studio_light)) {
             current_matcap = studio_light->name;
-            int layers = 1;
-            float *buffer = matcap_diffuse->rect_float;
-            Vector<float> combined_buffer = {};
-            if (matcap_specular && matcap_specular->rect_float) {
-              int size = matcap_diffuse->x * matcap_diffuse->y * 4;
-              combined_buffer.extend(matcap_diffuse->rect_float, size);
-              combined_buffer.extend(matcap_specular->rect_float, size);
-              buffer = combined_buffer.begin();
-              layers++;
-            }
-            resources.matcap_tx = Texture(current_matcap.c_str(),
-                                          GPU_RGBA16F,
-                                          int2(matcap_diffuse->x, matcap_diffuse->y),
-                                          layers,
-                                          buffer);
           }
         }
       }
@@ -176,52 +145,43 @@ class Instance {
         studio_light = BKE_studiolight_find(shading.studio_light, STUDIOLIGHT_TYPE_STUDIO);
       }
     }
-
-    for (int i = 0; i < 4; i++) {
-      LightData &light = world_buf.lights[i];
-
-      SolidLight *sl = (studio_light) ? &studio_light->light[i] : nullptr;
-      if (sl && sl->flag) {
-        float3 direction = rot_matrix.ref_3x3() * float3(sl->vec);
-        light.direction = float4(direction, 0.0f);
-        /* We should pre-divide the power by PI but that makes the lights really dim. */
-        light.specular_color = float4(float3(sl->spec), 0.0f);
-        light.diffuse_color_wrap = float4(float3(sl->col), sl->smooth);
-      }
-      else {
-        light.direction = float4(1.0f, 0.0f, 0.0f, 0.0f);
-        light.specular_color = float4(0.0f);
-        light.diffuse_color_wrap = float4(0.0f);
-      }
+    world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
+    if (!resources.matcap_tx.is_valid()) {
+      resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
     }
 
-    world_buf.ambient_color = float4(1.0f, 1.0f, 1.0f, 0.0f);
-    world_buf.use_specular = false;
+    float4x4 world_shading_rotation = float4x4::identity();
+    if (shading.flag & V3D_SHADING_WORLD_ORIENTATION) {
+      world_shading_rotation = get_world_shading_rotation_matrix(shading.studiolight_rot_z);
+    }
+
+    for (int i = 0; i < 4; i++) {
+      SolidLight *sl = (studio_light) ? &studio_light->light[i] : nullptr;
+      world_buf.lights[i] = get_light_data_from_studio_solidlight(sl, world_shading_rotation);
+    }
 
     if (studio_light != nullptr) {
       world_buf.ambient_color = float4(float3(studio_light->light_ambient), 0.0f);
       world_buf.use_specular = shading.flag & V3D_SHADING_SPECULAR_HIGHLIGHT &&
                                studio_light->flag & STUDIOLIGHT_SPECULAR_HIGHLIGHT_PASS;
     }
+    else {
+      world_buf.ambient_color = float4(1.0f, 1.0f, 1.0f, 0.0f);
+      world_buf.use_specular = false;
+    }
 
     world_buf.background_color = float4(0.0f);
-
     if (is_render_mode && scene->r.alphamode != R_ALPHAPREMUL) {
       if (World *w = scene->world) {
         world_buf.background_color = float4(w->horr, w->horg, w->horb, 1.0f);
       }
     }
 
-    world_buf.object_outline_color = shading.object_outline_color;
-    world_buf.object_outline_color.w = 1.0f;
+    world_buf.object_outline_color = float4(float3(shading.object_outline_color), 1.0f);
     world_buf.ui_scale = DRW_state_is_image_render() ? 1.0f : G_draw.block.size_pixel;
-    world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
 
     /* TODO(pragma37) volumes_do */
 
-    if (!resources.matcap_tx.is_valid()) {
-      resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
-    }
     resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
 
     anti_aliasing_ps.init(reset_taa);
@@ -241,26 +201,6 @@ class Instance {
   void end_sync()
   {
     resources.material_buf.push_update();
-  }
-
-  const CustomData *get_loop_custom_data(const Mesh *mesh)
-  {
-    if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
-      BLI_assert(mesh->edit_mesh != nullptr);
-      BLI_assert(mesh->edit_mesh->bm != nullptr);
-      return &mesh->edit_mesh->bm->ldata;
-    }
-    return &mesh->ldata;
-  }
-
-  const CustomData *get_vert_custom_data(const Mesh *mesh)
-  {
-    if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
-      BLI_assert(mesh->edit_mesh != nullptr);
-      BLI_assert(mesh->edit_mesh->bm != nullptr);
-      return &mesh->edit_mesh->bm->vdata;
-    }
-    return &mesh->vdata;
   }
 
   struct DrawModeInfo {
@@ -285,7 +225,7 @@ class Instance {
     }
   };
 
-  DrawModeInfo get_draw_mode_info(Object *ob)
+  const DrawModeInfo get_draw_mode_info(Object *ob)
   {
     const DRWContextState *draw_ctx = DRW_context_state_get();
     const Mesh *me = (ob->type == OB_MESH) ? static_cast<Mesh *>(ob->data) : nullptr;
@@ -315,14 +255,6 @@ class Instance {
 
     dmi.sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) &&
                       !DRW_state_is_image_render();
-
-    /* Needed for mesh cache validation, to prevent two copies of
-     * of vertex color arrays from being sent to the GPU (e.g.
-     * when switching from eevee to workbench).
-     */
-    if (ob->sculpt && ob->sculpt->pbvh) {
-      BKE_pbvh_is_drawing_set(ob->sculpt->pbvh, dmi.sculpt_pbvh);
-    }
 
     if (dmi.sculpt_pbvh) {
       /* Shadows are unsupported in sculpt mode. We could revert to the slow
@@ -364,11 +296,15 @@ class Instance {
 
       if (!is_render) {
         /* Force texture or vertex mode if object is in paint mode. */
-        const bool is_texpaint_mode = is_active && (ob_mode == CTX_MODE_PAINT_TEXTURE);
         const bool is_vertpaint_mode = is_active && (ob_mode == CTX_MODE_PAINT_VERTEX);
-        if (is_texpaint_mode && CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
+        const bool is_texpaint_mode = is_active && (ob_mode == CTX_MODE_PAINT_TEXTURE);
+        if (is_vertpaint_mode && has_color) {
+          dmi.color_type = V3D_SHADING_VERTEX_COLOR;
+        }
+        else if (is_texpaint_mode && CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
           dmi.color_type = V3D_SHADING_TEXTURE_COLOR;
           dmi.texture_paint_mode = true;
+
           const ImagePaintSettings *imapaint = &scene->toolsettings->imapaint;
           if (imapaint->mode == IMAGEPAINT_MODE_IMAGE) {
             dmi.image_paint_override = imapaint->canvas;
@@ -377,9 +313,6 @@ class Instance {
                                imapaint->interp == IMAGEPAINT_INTERP_LINEAR,
                                GPU_SAMPLER_FILTER);
           }
-        }
-        else if (is_vertpaint_mode && has_color) {
-          dmi.color_type = V3D_SHADING_VERTEX_COLOR;
         }
       }
     }
@@ -396,6 +329,14 @@ class Instance {
     }
 
     const DrawModeInfo dmi = get_draw_mode_info(ob);
+
+    /* Needed for mesh cache validation, to prevent two copies of
+     * of vertex color arrays from being sent to the GPU (e.g.
+     * when switching from eevee to workbench).
+     */
+    if (ob_ref.object->sculpt && ob_ref.object->sculpt->pbvh) {
+      BKE_pbvh_is_drawing_set(ob_ref.object->sculpt->pbvh, dmi.sculpt_pbvh);
+    }
 
     if (ob->type == OB_MESH && ob->modifiers.first != nullptr) {
 
@@ -469,7 +410,7 @@ class Instance {
       */
     }
     else {
-      /* workbench_cache_common_populate */
+      /* workbench_cache_common_populate && workbench_cache_texpaint_populate */
       if (dmi.use_per_material_batches) {
         const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
         struct GPUBatch **batches;
@@ -477,12 +418,8 @@ class Instance {
           batches = DRW_cache_mesh_surface_texpaint_get(ob_ref.object);
         }
         else {
-          static Vector<GPUMaterial *> dummy_gpu_materials(1, nullptr, {});
-          if (material_count > dummy_gpu_materials.size()) {
-            dummy_gpu_materials.resize(material_count, nullptr);
-          }
           batches = DRW_cache_object_surface_material_get(
-              ob_ref.object, dummy_gpu_materials.begin(), material_count);
+              ob_ref.object, get_dummy_gpu_materials(material_count), material_count);
         }
         if (batches) {
           for (auto i : IndexRange(material_count)) {
@@ -542,7 +479,7 @@ class Instance {
             mat = material_attribute_color;
           }
           else {
-            mat = Material(float3(1.0f));
+            mat = Material(*BKE_material_default_empty());
           }
 
           pipeline_get(ob_ref, dmi.image_paint_override, dmi.override_sampler_state)
@@ -591,6 +528,96 @@ class Instance {
   {
     this->draw(manager, view, depth_tx, color_tx);
   }
+};
+
+// Utils
+
+bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light)
+{
+  ImBuf *matcap_diffuse = studio_light.matcap_diffuse.ibuf;
+  ImBuf *matcap_specular = studio_light.matcap_specular.ibuf;
+  if (matcap_diffuse && matcap_diffuse->rect_float) {
+    int layers = 1;
+    float *buffer = matcap_diffuse->rect_float;
+    Vector<float> combined_buffer = {};
+    if (matcap_specular && matcap_specular->rect_float) {
+      int size = matcap_diffuse->x * matcap_diffuse->y * 4;
+      combined_buffer.extend(matcap_diffuse->rect_float, size);
+      combined_buffer.extend(matcap_specular->rect_float, size);
+      buffer = combined_buffer.begin();
+      layers++;
+    }
+    matcap_tx = Texture(studio_light.name,
+                        GPU_RGBA16F,
+                        int2(matcap_diffuse->x, matcap_diffuse->y),
+                        layers,
+                        buffer);
+    return true;
+  }
+  return false;
+}
+
+float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z)
+{
+  /* TODO(pragma37) C++ API ? */
+  float V[4][4], R[4][4];
+  DRW_view_viewmat_get(nullptr, V, false);
+  axis_angle_to_mat4_single(R, 'Z', -studiolight_rot_z);
+  mul_m4_m4m4(R, V, R);
+  swap_v3_v3(R[2], R[1]);
+  negate_v3(R[2]);
+  return float4x4(R);
+}
+
+LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
+                                                float4x4 world_shading_rotation)
+{
+  LightData light = {};
+  if (sl && sl->flag) {
+    float3 direction = world_shading_rotation.ref_3x3() * float3(sl->vec);
+    light.direction = float4(direction, 0.0f);
+    /* We should pre-divide the power by PI but that makes the lights really dim. */
+    light.specular_color = float4(float3(sl->spec), 0.0f);
+    light.diffuse_color_wrap = float4(float3(sl->col), sl->smooth);
+  }
+  else {
+    light.direction = float4(1.0f, 0.0f, 0.0f, 0.0f);
+    light.specular_color = float4(0.0f);
+    light.diffuse_color_wrap = float4(0.0f);
+  }
+  return light;
+}
+
+const CustomData *get_loop_custom_data(const Mesh *mesh)
+{
+  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+    BLI_assert(mesh->edit_mesh != nullptr);
+    BLI_assert(mesh->edit_mesh->bm != nullptr);
+    return &mesh->edit_mesh->bm->ldata;
+  }
+  return &mesh->ldata;
+}
+
+const CustomData *get_vert_custom_data(const Mesh *mesh)
+{
+  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+    BLI_assert(mesh->edit_mesh != nullptr);
+    BLI_assert(mesh->edit_mesh->bm != nullptr);
+    return &mesh->edit_mesh->bm->vdata;
+  }
+  return &mesh->vdata;
+}
+
+/* This returns an array of nullptr GPUMaterial pointers so we can call
+ * DRW_cache_object_surface_material_get. They never get actually used.
+ */
+GPUMaterial **get_dummy_gpu_materials(int material_count)
+{
+  static Vector<GPUMaterial *> dummy_gpu_materials(1, nullptr, {});
+  if (material_count > dummy_gpu_materials.size()) {
+    dummy_gpu_materials.resize(material_count, nullptr);
+  }
+  return dummy_gpu_materials.begin();
 };
 
 }  // namespace blender::workbench
