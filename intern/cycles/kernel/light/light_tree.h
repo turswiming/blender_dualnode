@@ -560,7 +560,8 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
   return -1;
 }
 
-/* We need to be able to find the probability of selecting a given light for MIS. */
+/* We need to be able to find the probability of selecting a given light for MIS.
+ * Returns a conditioned pdf which is consistent with the pdf computed in `light_tree_sample()` */
 ccl_device float light_tree_pdf(KernelGlobals kg,
                                 ConstIntegratorState state,
                                 const float3 P,
@@ -589,46 +590,44 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
   const int target_leaf = kemitter->parent_index;
   ccl_global const KernelLightTreeNode *kleaf = &kernel_data_fetch(light_tree_nodes, target_leaf);
 
+  uint bit_trail = kleaf->bit_trail;
+
   /* We generate a random number to use for selecting a light. */
   RNGState rng_state;
   path_state_rng_load(state, &rng_state);
   /* to-do: is this the correct macro to use? */
   float randu = path_state_rng_1D(kg, &rng_state, PRNG_LIGHT);
 
-  /* We traverse to the leaf node and
-   * find the probability of selecting the target light. */
+  /* Keep track of the currently selected primitive and its weight,
+   * as well as the total weight as part of the weighted reservoir sampling. */
+  int selected_light = -1;
+  float selected_reservoir_weight = -1.0f;
+  float total_reservoir_weight = 0.0f;
+
+  /* We need a stack to substitute for recursion. */
   const int stack_size = 32;
   int stack[stack_size];
-  int tree_depth[stack_size];
-  float pdfs[stack_size];
   int stack_index = 0;
   stack[0] = 0;
-  tree_depth[0] = 0;
-  pdfs[0] = 1.0f;
 
-  float light_tree_pdf = 0.0f;
-  float light_leaf_pdf = 0.0f;
-  float total_weight = 0.0f;
-  float target_weight = 0.0f;
-
-  uint bit_trail_mask = 0;
-  uint bit_trail = kleaf->bit_trail;
   while (stack_index >= 0) {
-    const float pdf = pdfs[stack_index];
+    const bool traversing_target_branch = stack_index == 0;
     const int index = stack[stack_index];
-    const int depth = tree_depth[stack_index];
     const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
 
-    if (knode->child_index <= 0) {
-      int selected_light = -1;
-      float light_weight = 0.0f;
+    /* TODO: interior nodes are processed before leaf nodes, but current implementation forces the
+     * reader to think about the leaf node first. Maybe switch the two if-branches for better
+     * understandability? */
 
-      /* If we're at the leaf node containing the light we need,
-       * then we iterate through the lights to find the target emitter.
+    /* Leaf node */
+    if (knode->child_index <= 0) {
+
+      float pdf_emitter_selection = 1.0f;
+
+      /* If the leaf node contains the target emitter, we are processing the last node.
+       * We then iterate through the lights to find the target emitter.
        * Otherwise, we randomly select one. */
       if (index == target_leaf) {
-        light_tree_pdf = pdf;
-
         float target_emitter_importance = 0.0f;
         float total_emitter_importance = 0.0f;
         for (int i = 0; i < knode->num_prims; i++) {
@@ -636,58 +635,47 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
           float light_importance = light_tree_emitter_importance(
               kg, P, N, has_transmission, leaf_emitter);
           if (leaf_emitter == emitter) {
-            selected_light = leaf_emitter;
-            light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
-            target_weight = light_weight;
             target_emitter_importance = light_importance;
+            selected_light = leaf_emitter;
+            selected_reservoir_weight = light_tree_emitter_reservoir_weight(
+                kg, P, N, selected_light);
+            total_reservoir_weight += selected_reservoir_weight;
           }
           total_emitter_importance += light_importance;
         }
-
-        light_leaf_pdf = target_emitter_importance / total_emitter_importance;
+        pdf_emitter_selection = target_emitter_importance / total_emitter_importance;
+        const float pdf_reservoir = selected_reservoir_weight / total_reservoir_weight;
+        pdf *= pdf_emitter_selection * pdf_reservoir;
       }
       else {
-        float light_probability = 1.0f;
         selected_light = light_tree_cluster_select_emitter(
-            kg, &randu, P, N, has_transmission, knode, &light_probability);
-        light_weight = light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
-      }
+            kg, &randu, P, N, has_transmission, knode, &pdf_emitter_selection);
 
-      if (selected_light < 0) {
-        stack_index--;
-        continue;
-      }
+        if (selected_light < 0) {
+          stack_index--;
+          continue;
+        }
 
-      if (light_weight == 0.0f) {
-        stack_index--;
-        continue;
+        total_reservoir_weight += light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
       }
-      total_weight += light_weight;
-
       stack_index--;
       continue;
     }
 
-    /* At an interior node, the left child is directly after the parent,
-     * while the right child is stored as the child index.
-     * We adaptively split if the variance is high enough. */
+    /* Interior node */
+    const bool go_left = (bit_trail & 1) == 0;
+    bit_trail >>= traversing_target_branch;
     const int left_index = index + 1;
     const int right_index = knode->child_index;
     if (light_tree_should_split(kg, P, knode) && stack_index < stack_size - 1) {
-      stack[stack_index] = left_index;
-      tree_depth[stack_index] = depth + 1;
-      pdfs[stack_index] = pdf;
-      stack[stack_index + 1] = right_index;
-      tree_depth[stack_index + 1] = depth + 1;
-      pdfs[stack_index + 1] = pdf;
+      /* Always store nodes on the target branch in stack[0] */
+      stack[stack_index] = go_left ? left_index : right_index;
       stack_index++;
+      stack[stack_index] = go_left ? right_index : left_index;
       continue;
     }
 
-    /* If we don't split, and the bit trail to the current node is identical to the bit trail to
-       the target leaf up to the given depth, then we continue traversing down the path towards the
-       target leaf, otherwise we pick a random branch. */
-
+    /* No splitting, choose between the left or the right child */
     const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
     const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes,
                                                                      right_index);
@@ -703,39 +691,21 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
     }
     float left_probability = left_importance / (left_importance + right_importance);
 
-    /* TODO: using both the bit trail and an estimator for the pdf may be wrong,
-     * but so far seemed to converge to the correct result. Needs to be revisited. */
-    bit_trail_mask = 0;
-    for (int i = 0; i < depth; i++) {
-      bit_trail_mask = bit_trail_mask | (1U << i);
-    }
-
-    if (((bit_trail & bit_trail_mask) == knode->bit_trail)) {
-      if ((bit_trail >> depth) & 1) {
-        stack[stack_index] = right_index;
-        pdfs[stack_index] = pdf * (1.0f - left_probability);
-      }
-      else {
-        stack[stack_index] = left_index;
-        pdfs[stack_index] = pdf * left_probability;
-      }
+    if (traversing_target_branch) {
+      pdf *= go_left ? left_probability : (1.0f - left_probability);
+      stack[stack_index] = go_left ? left_index : right_index;
     }
     else {
-      if (randu <= left_probability) {
+      if (randu <= left_probability) { /* traverse left */
         stack[stack_index] = left_index;
         randu = randu / left_probability;
-        pdfs[stack_index] = pdf * left_probability;
       }
-      else {
+      else { /* traverse right */
         stack[stack_index] = right_index;
         randu = (randu - left_probability) / (1.0f - left_probability);
-        pdfs[stack_index] = pdf * (1.0f - left_probability);
       }
     }
-    tree_depth[stack_index] = depth + 1;
   }
-
-  pdf *= light_leaf_pdf * light_tree_pdf * target_weight / total_weight;
   return pdf;
 }
 
