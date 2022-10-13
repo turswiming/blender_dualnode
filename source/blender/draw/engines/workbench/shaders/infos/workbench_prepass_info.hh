@@ -127,8 +127,10 @@ GPU_SHADER_CREATE_INFO(workbench_color_material)
 GPU_SHADER_CREATE_INFO(workbench_color_texture)
     .define("WORKBENCH_COLOR_TEXTURE")
     .define("WORKBENCH_TEXTURE_IMAGE_ARRAY")
+    .sampler(1, ImageType::FLOAT_2D, "imageTexture", Frequency::BATCH)
     .sampler(2, ImageType::FLOAT_2D_ARRAY, "imageTileArray", Frequency::BATCH)
     .sampler(3, ImageType::FLOAT_1D_ARRAY, "imageTileData", Frequency::BATCH)
+    .push_constant(Type::BOOL, "isImageTile")
     .push_constant(Type::BOOL, "imagePremult")
     .push_constant(Type::FLOAT, "imageTransparencyCutoff");
 

@@ -104,18 +104,23 @@ PassMain::Sub &MeshPass::sub_pass_get(eGeometryType geometry_type,
     GPUTexture *texture = nullptr;
     GPUTexture *tilemap = nullptr;
     eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT;
-    StringRefNull name = "Null Texture";
     get_image(ref.object, material_index, image, texture, tilemap, sampler_state);
     if (image && texture) {
       /* TODO(pragma37): Should be lib.name + name ??? */
-      name = image->id.name;
+      StringRefNull name = image->id.name;
 
       auto add_cb = [&] {
         PassMain::Sub *sub_pass =
             passes_[static_cast<int>(geometry_type)][static_cast<int>(color_type)];
         sub_pass = &sub_pass->sub(name.c_str());
-        sub_pass->bind_texture(WB_TEXTURE_SLOT, texture, sampler_state);
-        sub_pass->bind_texture(WB_TILEMAP_SLOT, tilemap);
+        if (tilemap) {
+          sub_pass->bind_texture(WB_TILE_ARRAY_SLOT, texture, sampler_state);
+          sub_pass->bind_texture(WB_TILE_DATA_SLOT, tilemap);
+        }
+        else {
+          sub_pass->bind_texture(WB_TEXTURE_SLOT, texture, sampler_state);
+        }
+        sub_pass->push_constant("isImageTile", tilemap != nullptr);
         sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
         /*TODO(pragma37): What's the point? This could be a constant in the shader. */
         sub_pass->push_constant("imageTransparencyCutoff", 0.1f);

@@ -2,7 +2,8 @@
 
 #define WB_MATCAP_SLOT 0
 #define WB_TEXTURE_SLOT 1
-#define WB_TILEMAP_SLOT 2
+#define WB_TILE_ARRAY_SLOT 2
+#define WB_TILE_DATA_SLOT 3
 #define WB_MATERIAL_SLOT 0
 #define WB_WORLD_SLOT 4
 
