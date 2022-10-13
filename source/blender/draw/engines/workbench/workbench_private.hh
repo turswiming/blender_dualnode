@@ -25,6 +25,12 @@ struct Material {
   static uint32_t pack_data(float metallic, float roughness, float alpha);
 };
 
+void get_material_image(Object *ob,
+                        int material_index,
+                        ::Image *&image,
+                        ImageUser *&iuser,
+                        eGPUSamplerState &sampler_state);
+
 class ShaderCache {
  private:
   /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
@@ -74,11 +80,11 @@ class MeshPass : public PassMain {
             SceneResources &resources,
             DRWState state);
 
-  PassMain::Sub &sub_pass_get(eGeometryType geometry_type,
-                              eColorType color_type,
-                              ObjectRef &ref,
-                              ::Material *material,
-                              int material_index = 0);
+  PassMain::Sub &sub_pass_get(
+      ObjectRef &ref,
+      ::Image *image = nullptr,
+      eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT,
+      ImageUser *iuser = nullptr);
 };
 
 class OpaquePass {

@@ -267,6 +267,8 @@ class Instance {
     eV3DShadingColorType color_type;
     bool sculpt_pbvh;
     bool texture_paint_mode;
+    ::Image *image_paint_override;
+    eGPUSamplerState override_sampler_state;
     bool draw_shadow;
 
     eColorType material_type;
@@ -276,8 +278,10 @@ class Instance {
     {
       material_type = color_type_from_v3d_shading(color_type);
       material_subtype = material_subtype_from_v3d_shading(color_type);
-      use_per_material_batches = ELEM(
-          color_type, V3D_SHADING_TEXTURE_COLOR, V3D_SHADING_MATERIAL_COLOR);
+      use_per_material_batches = image_paint_override == nullptr &&
+                                 ELEM(color_type,
+                                      V3D_SHADING_TEXTURE_COLOR,
+                                      V3D_SHADING_MATERIAL_COLOR);
     }
   };
 
@@ -365,6 +369,14 @@ class Instance {
         if (is_texpaint_mode && CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
           dmi.color_type = V3D_SHADING_TEXTURE_COLOR;
           dmi.texture_paint_mode = true;
+          const ImagePaintSettings *imapaint = &scene->toolsettings->imapaint;
+          if (imapaint->mode == IMAGEPAINT_MODE_IMAGE) {
+            dmi.image_paint_override = imapaint->canvas;
+            dmi.override_sampler_state = GPU_SAMPLER_REPEAT;
+            SET_FLAG_FROM_TEST(dmi.override_sampler_state,
+                               imapaint->interp == IMAGEPAINT_INTERP_LINEAR,
+                               GPU_SAMPLER_FILTER);
+          }
         }
         else if (is_vertpaint_mode && has_color) {
           dmi.color_type = V3D_SHADING_VERTEX_COLOR;
@@ -384,8 +396,6 @@ class Instance {
     }
 
     const DrawModeInfo dmi = get_draw_mode_info(ob);
-
-#if 0
 
     if (ob->type == OB_MESH && ob->modifiers.first != nullptr) {
 
@@ -433,27 +443,7 @@ class Instance {
     }
 
     if (ELEM(ob->type, OB_MESH, OB_POINTCLOUD)) {
-      if (dmi.sculpt_pbvh) {
-        /* TODO(pragma37):
-        workbench_cache_sculpt_populate(wpd, ob, dmi.color_type);
-        */
-      }
-      else if (dmi.texture_paint_mode) {
-        /* TODO(pragma37):
-        workbench_cache_texpaint_populate(wpd, ob);
-        */
-      }
-      else {
-        /* TODO(pragma37):
-        workbench_cache_common_populate(wpd, ob, dmi.color_type, &has_transp_mat);
-        */
-      }
-
-      if (dmi.draw_shadow) {
-        /* TODO(pragma37):
-        workbench_shadow_cache_populate(vedata, ob, has_transp_mat);
-        */
-      }
+      mesh_sync(manager, ob_ref, dmi);
     }
     else if (ob->type == OB_CURVES) {
       /* TODO(pragma37):
@@ -469,92 +459,111 @@ class Instance {
         */
       }
     }
+  }
 
-#endif
-
-    if (ob_ref.object->type != OB_MESH) {
-      // TODO(pragma37)
-      return;
+  void mesh_sync(Manager &manager, ObjectRef &ob_ref, const DrawModeInfo dmi)
+  {
+    if (dmi.sculpt_pbvh) {
+      /* TODO(pragma37):
+      workbench_cache_sculpt_populate(wpd, ob, dmi.color_type);
+      */
     }
-
-    if (dmi.use_per_material_batches) {
-      const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
-      Span<GPUBatch *> batches = geometry_get(
-          ob_ref, material_count, dmi.material_type, dmi.material_subtype);
-      /* TODO(pragma37): Could this ever be false??? */
-      if (batches.size() == material_count) {
-        for (auto i : IndexRange(material_count)) {
-          /* TODO(fclem): This create a cull-able instance for each sub-object. This is done for
-           * simplicity to reduce complexity. But this increase the overhead per object. Instead,
-           * we should use an indirection buffer to the material buffer. */
-          ::Material *mat = BKE_object_material_get_eval(ob_ref.object, i + 1);
-          if (mat == nullptr) {
-            mat = BKE_material_default_empty();
+    else {
+      /* workbench_cache_common_populate */
+      if (dmi.use_per_material_batches) {
+        const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
+        struct GPUBatch **batches;
+        if (dmi.material_type == eColorType::TEXTURE) {
+          batches = DRW_cache_mesh_surface_texpaint_get(ob_ref.object);
+        }
+        else {
+          static Vector<GPUMaterial *> dummy_gpu_materials(1, nullptr, {});
+          if (material_count > dummy_gpu_materials.size()) {
+            dummy_gpu_materials.resize(material_count, nullptr);
           }
+          batches = DRW_cache_object_surface_material_get(
+              ob_ref.object, dummy_gpu_materials.begin(), material_count);
+        }
+        if (batches) {
+          for (auto i : IndexRange(material_count)) {
+            if (batches[i] == nullptr) {
+              continue;
+            }
+            /* TODO(fclem): This create a cull-able instance for each sub-object. This is done
+             * for simplicity to reduce complexity. But this increase the overhead per object.
+             * Instead, we should use an indirection buffer to the material buffer. */
+            ::Material *mat = BKE_object_material_get_eval(ob_ref.object, i + 1);
+            if (mat == nullptr) {
+              mat = BKE_material_default_empty();
+            }
+            ::Image *image = nullptr;
+            ImageUser *iuser = nullptr;
+            eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT;
+            if (dmi.material_type == eColorType::TEXTURE) {
+              get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
+            }
+            ResourceHandle handle = manager.resource_handle(ob_ref);
+            resources.material_buf.get_or_resize(handle.resource_index()) = Material(*mat);
+            pipeline_get(ob_ref, image, sampler_state, iuser).draw(batches[i], handle);
+          }
+        }
+      }
+      else {
+        struct GPUBatch *batch;
+        if (dmi.material_type == eColorType::TEXTURE) {
+          batch = DRW_cache_mesh_surface_texpaint_single_get(ob_ref.object);
+        }
+        else if (dmi.material_subtype == eMaterialSubType::ATTRIBUTE) {
+          if (ob_ref.object->mode & OB_MODE_VERTEX_PAINT) {
+            batch = DRW_cache_mesh_surface_vertpaint_get(ob_ref.object);
+          }
+          else {
+            batch = DRW_cache_mesh_surface_sculptcolors_get(ob_ref.object);
+          }
+        }
+        else {
+          batch = DRW_cache_object_surface_get(ob_ref.object);
+        }
+
+        if (batch) {
           ResourceHandle handle = manager.resource_handle(ob_ref);
-          resources.material_buf.get_or_resize(handle.resource_index()) = Material(*mat);
-          pipeline_get(ob_ref, dmi.material_type, mat, i + 1).draw(batches[i], handle);
+          Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+
+          if (dmi.material_subtype == eMaterialSubType::OBJECT) {
+            mat = Material(*ob_ref.object);
+          }
+          else if (dmi.material_subtype == eMaterialSubType::RANDOM) {
+            mat = Material(*ob_ref.object, true);
+          }
+          else if (dmi.material_subtype == eMaterialSubType::SINGLE) {
+            mat = material_override;
+          }
+          else if (dmi.material_subtype == eMaterialSubType::ATTRIBUTE) {
+            mat = material_attribute_color;
+          }
+          else {
+            mat = Material(float3(1.0f));
+          }
+
+          pipeline_get(ob_ref, dmi.image_paint_override, dmi.override_sampler_state)
+              .draw(batch, handle);
         }
       }
     }
-    else {
-      ResourceHandle handle = manager.resource_handle(ob_ref);
 
-      Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
-
-      if (dmi.material_subtype == eMaterialSubType::OBJECT) {
-        mat = Material(*ob_ref.object);
-      }
-      else if (dmi.material_subtype == eMaterialSubType::RANDOM) {
-        mat = Material(*ob_ref.object, true);
-      }
-      else if (dmi.material_subtype == eMaterialSubType::SINGLE) {
-        mat = material_override;
-      }
-      else if (dmi.material_subtype == eMaterialSubType::ATTRIBUTE) {
-        mat = material_attribute_color;
-      }
-
-      GPUBatch *batch = geometry_get(ob_ref, dmi.material_type, dmi.material_subtype);
-      if (batch) {
-        pipeline_get(ob_ref, dmi.material_type).draw(batch, handle);
-      }
+    if (dmi.draw_shadow) {
+      /* TODO(pragma37):
+      workbench_shadow_cache_populate(vedata, ob, has_transp_mat);
+      */
     }
   }
 
   PassMain::Sub &pipeline_get(ObjectRef &ob_ref,
-                              eColorType color_type,
-                              ::Material *material = nullptr,
-                              int material_index = 0)
+                              ::Image *image = nullptr,
+                              eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT,
+                              ImageUser *iuser = nullptr)
   {
-    return opaque_ps.gbuffer_ps_.sub_pass_get(
-        geometry_type_from_object(ob_ref.object), color_type, ob_ref, material, material_index);
-  }
-
-  Span<GPUBatch *> geometry_get(ObjectRef &ob_ref,
-                                int material_count,
-                                eColorType color_type,
-                                eMaterialSubType material_subtype)
-  {
-    /* This is never used, but it's required by DRW_cache_object_surface_material_get */
-    static Vector<GPUMaterial *> dummy_gpu_materials(1, nullptr, {});
-    if (material_count > dummy_gpu_materials.size()) {
-      dummy_gpu_materials.resize(material_count, nullptr);
-    }
-    return {DRW_cache_object_surface_material_get(
-                ob_ref.object, dummy_gpu_materials.begin(), material_count),
-            material_count};
-  }
-
-  GPUBatch *geometry_get(ObjectRef &ob_ref,
-                         eColorType color_type,
-                         eMaterialSubType material_subtype)
-  {
-    if (material_subtype == eMaterialSubType::ATTRIBUTE) {
-      /* TODO(pragma37): Should check for vertex paint mode as well */
-      return DRW_cache_mesh_surface_vertpaint_get(ob_ref.object);
-    }
-    return DRW_cache_object_surface_get(ob_ref.object);
+    return opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
   }
 
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
