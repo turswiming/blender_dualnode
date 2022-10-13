@@ -4,16 +4,16 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* to-do: this seems like a relative expensive computation, and we can make it a lot cheaper
+/* TODO: this seems like a relative expensive computation, and we can make it a lot cheaper
  * by using a bounding sphere instead of a bounding box. This will be more inaccurate, but it
  * might be fine when used along with the adaptive splitting. */
-ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
-                                               const float3 bbox_max,
-                                               const float3 P,
-                                               const float3 point_to_centroid)
+ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
+                                                   const float3 bbox_max,
+                                                   const float3 P,
+                                                   const float3 point_to_centroid)
 {
   /* Iterate through all 8 possible points of the bounding box. */
-  float theta_u = 0;
+  float cos_theta_u = 1.0f;
   float3 corners[8];
   corners[0] = bbox_min;
   corners[1] = make_float3(bbox_min.x, bbox_min.y, bbox_max.z);
@@ -25,10 +25,9 @@ ccl_device float light_tree_bounding_box_angle(const float3 bbox_min,
   corners[7] = bbox_max;
   for (int i = 0; i < 8; ++i) {
     float3 point_to_corner = normalize(corners[i] - P);
-    const float cos_theta_u = dot(point_to_centroid, point_to_corner);
-    theta_u = fmaxf(fast_acosf(cos_theta_u), theta_u);
+    cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
   }
-  return theta_u;
+  return cos_theta_u;
 }
 
 /* This is the general function for calculating the importance of either a cluster or an emitter.
@@ -46,41 +45,64 @@ ccl_device float light_tree_node_importance(const float3 P,
   const float3 centroid = 0.5f * bbox_min + 0.5f * bbox_max;
   const float3 point_to_centroid = normalize(centroid - P);
 
-  /* Since we're not using the splitting heuristic, we clamp
-   * the distance to half the radius of the cluster. */
+  /* TODO: we're using the splitting heuristic now, do we still need te clamp the distance to half
+   * the radius of the cluster? */
   const float distance_squared = fmaxf(0.25f * len_squared(centroid - bbox_max),
                                        len_squared(centroid - P));
 
-  const float theta = fast_acosf(dot(bcone_axis, -point_to_centroid));
-  float theta_i = fast_acosf(dot(point_to_centroid, N));
-  const float theta_u = light_tree_bounding_box_angle(bbox_min, bbox_max, P, point_to_centroid);
+  const float cos_theta = dot(bcone_axis, -point_to_centroid);
+  const float cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) :
+                                               dot(point_to_centroid, N);
+  const float cos_theta_u = light_tree_cos_bounding_box_angle(
+      bbox_min, bbox_max, P, point_to_centroid);
 
-  /* Avoid using cosine until needed. */
-  const float theta_prime = fmaxf(theta - theta_o - theta_u, 0.0f);
-  if (theta_prime >= theta_e) {
-    return 0.0f;
+  const float sin_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_u));
+
+  /* cos_theta_i_prime = |cos(max{theta_i - theta_u, 0})| */
+  float cos_theta_i_prime;
+  if (cos_theta_i > cos_theta_u) {
+    cos_theta_i_prime = 1.0f;
+  }
+  else {
+    kernel_assert(fast_acosf(cos_theta_i) >= fast_acosf(cos_theta_u));
+    const float sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
+    cos_theta_i_prime = cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
   }
 
   /* If the node is guaranteed to be behind the surface we're sampling, and the surface is opaque,
    * then we can give the node an importance of 0 as it contributes nothing to the surface. */
-  if (!has_transmission && (theta_i - theta_u > M_PI_2_F)) {
+  if (!has_transmission && cos_theta_i_prime < 0) {
     return 0.0f;
   }
 
-  if (theta_i > M_PI_2_F) {
-    theta_i = M_PI_F - theta_i;
+  /* cos(theta - theta_u) */
+  const float sin_theta = safe_sqrtf(1.0f - sqr(cos_theta));
+  const float cos_theta_minus_theta_u = cos_theta * cos_theta_u + sin_theta * sin_theta_u;
+
+  float cos_theta_o, sin_theta_o;
+  fast_sincosf(theta_o, &sin_theta_o, &cos_theta_o);
+
+  float cos_theta_prime;
+  if ((cos_theta > cos_theta_u) || (cos_theta_minus_theta_u > cos_theta_o)) {
+    /* theta - theta_o - theta_u < 0 */
+    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u)) < 1e-4f);
+    cos_theta_prime = 1.0f;
+  }
+  else if ((cos_theta > cos_theta_u) || (theta_o + theta_e > M_PI_F) ||
+           (cos_theta_minus_theta_u > cos(theta_o + theta_e))) {
+    /* theta' = theta - theta_o - theta_u < theta_e */
+    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u) - theta_e) < 1e-4f);
+    const float sin_theta_minus_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_minus_theta_u));
+    cos_theta_prime = cos_theta_minus_theta_u * cos_theta_o +
+                      sin_theta_minus_theta_u * sin_theta_o;
+  }
+  else {
+    return 0.f;
   }
 
-  const float cos_theta_prime = fast_cosf(theta_prime);
-  float cos_theta_i_prime = 1.0f;
-  if (theta_i - theta_u > 0.0f) {
-    cos_theta_i_prime = fabsf(fast_cosf(theta_i - theta_u));
-  }
-
-  /* to-do: find a good approximation for this value. */
+  /* TODO: find a good approximation for this value. */
   const float f_a = 1.0f;
-  float importance = f_a * cos_theta_i_prime * energy / distance_squared * cos_theta_prime;
-  return importance;
+  return fabsf(f_a * cos_theta_i_prime * energy / distance_squared * cos_theta_prime);
 }
 
 /* This is uniformly sampling the reservoir for now. */
