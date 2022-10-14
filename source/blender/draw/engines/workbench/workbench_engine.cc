@@ -182,7 +182,6 @@ class Instance {
     /* TODO(pragma37) volumes_do */
 
     resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
-    resources.depth_in_front_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
 
     anti_aliasing_ps.init(reset_taa);
     /* TODO(pragma37) taa_sample_len */
@@ -517,7 +516,7 @@ class Instance {
   {
     resources.color_tx.acquire(int2(resources.depth_tx.size()), GPU_RGBA16F);
 
-    opaque_ps.draw_prepass(manager, view, resources.depth_tx, resources.depth_in_front_tx);
+    opaque_ps.draw_prepass(manager, view, resources.depth_tx);
     // transparent_ps.draw_prepass(manager, view, resources.depth_tx);
     // volume_ps.draw_prepass(manager, view, resources.depth_tx);
 

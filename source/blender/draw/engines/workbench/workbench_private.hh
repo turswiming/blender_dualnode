@@ -103,7 +103,7 @@ class OpaquePass {
             eShadingType shading_type,
             SceneResources &resources);
 
-  void draw_prepass(Manager &manager, View &view, Texture &depth_tx, Texture &depth_in_front_tx);
+  void draw_prepass(Manager &manager, View &view, Texture &depth_tx);
 
   void draw_resolve(Manager &manager, View &view);
 
