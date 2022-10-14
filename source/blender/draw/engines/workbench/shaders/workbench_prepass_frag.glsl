@@ -16,7 +16,7 @@ void main()
   out_material = vec4(color_interp, workbench_float_pair_encode(_roughness, metallic));
 #  endif
 
-#  ifdef WORKBENCH_SHADING_MATCAP
+#  ifdef WORKBENCH_LIGHTING_MATCAP
   /* For matcaps, save front facing in alpha channel. */
   out_material.a = float(gl_FrontFacing);
 #  endif
