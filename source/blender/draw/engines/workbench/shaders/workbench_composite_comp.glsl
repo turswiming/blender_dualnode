@@ -34,6 +34,7 @@ void main()
 #ifdef WORKBENCH_LIGHTING_FLAT
     color.rgb = base_color;
 #endif
+    color.a = 1.0f;
   }
 
   /* TODO(fclem): Port the TAA shader that does this tranformation. */
