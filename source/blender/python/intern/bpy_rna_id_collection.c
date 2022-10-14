@@ -479,8 +479,9 @@ static PyObject *bpy_link_multiple(PyObject *self, PyObject *args, PyObject *kwd
       objs[i] = obj;
     }
     Py_DECREF(objects_fast);
+
+    BKE_collection_object_add_multiple(bmain, collection, objs, objects_len);
     for (int j = 0; j < objects_len; j++) {
-      BKE_collection_object_add(bmain, collection, objs[j]);
       WM_main_add_notifier(NC_OBJECT | ND_DRAW, &objs[j]->id);
     }
     MEM_freeN(objs);

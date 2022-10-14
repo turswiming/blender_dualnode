@@ -1095,16 +1095,26 @@ static bool collection_object_add(Main *bmain,
       }
     }
 
-    if (collection_objects == NULL) {
-      collection_objects = BLI_gset_ptr_new(__func__);
-      LISTBASE_FOREACH (CollectionObject *, collection_object, &collection->gobject) {
-        BLI_gset_insert(collection_objects, collection_object->ob);
+    if (objects_len <= 10) {
+      /*
+       * Building a GSet adds overhead. When objects_len is small BLI_findptr is faster.
+       */
+      if (BLI_findptr(&collection->gobject, ob, offsetof(CollectionObject, ob))) {
+        continue;
       }
     }
-
-    if (!BLI_gset_add(collection_objects, ob)) {
-      result = false;
-      continue;
+    else {
+      if (collection_objects == NULL) {
+        int gobject_len = BLI_listbase_count(&collection->gobject);
+        collection_objects = BLI_gset_ptr_new_ex(__func__, gobject_len + objects_len);
+        LISTBASE_FOREACH (CollectionObject *, collection_object, &collection->gobject) {
+          BLI_gset_insert(collection_objects, collection_object->ob);
+        }
+      }
+      if (!BLI_gset_add(collection_objects, ob)) {
+        result = false;
+        continue;
+      }
     }
 
     CollectionObject *cob = MEM_callocN(sizeof(CollectionObject), __func__);
