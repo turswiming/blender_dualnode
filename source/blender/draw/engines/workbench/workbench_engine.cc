@@ -145,10 +145,10 @@ class Instance {
         studio_light = BKE_studiolight_find(shading.studio_light, STUDIOLIGHT_TYPE_STUDIO);
       }
     }
-    world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
     if (!resources.matcap_tx.is_valid()) {
       resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
     }
+    world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
 
     float4x4 world_shading_rotation = float4x4::identity();
     if (shading.flag & V3D_SHADING_WORLD_ORIENTATION) {
@@ -413,6 +413,7 @@ class Instance {
       /* workbench_cache_common_populate && workbench_cache_texpaint_populate */
       if (dmi.use_per_material_batches) {
         const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
+
         struct GPUBatch **batches;
         if (dmi.material_type == eColorType::TEXTURE) {
           batches = DRW_cache_mesh_surface_texpaint_get(ob_ref.object);
@@ -421,11 +422,13 @@ class Instance {
           batches = DRW_cache_object_surface_material_get(
               ob_ref.object, get_dummy_gpu_materials(material_count), material_count);
         }
+
         if (batches) {
           for (auto i : IndexRange(material_count)) {
             if (batches[i] == nullptr) {
               continue;
             }
+
             /* TODO(fclem): This create a cull-able instance for each sub-object. This is done
              * for simplicity to reduce complexity. But this increase the overhead per object.
              * Instead, we should use an indirection buffer to the material buffer. */
@@ -433,12 +436,14 @@ class Instance {
             if (mat == nullptr) {
               mat = BKE_material_default_empty();
             }
+
             ::Image *image = nullptr;
             ImageUser *iuser = nullptr;
             eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT;
             if (dmi.material_type == eColorType::TEXTURE) {
               get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
             }
+
             ResourceHandle handle = manager.resource_handle(ob_ref);
             resources.material_buf.get_or_resize(handle.resource_index()) = Material(*mat);
             pipeline_get(ob_ref, image, sampler_state, iuser).draw(batches[i], handle);
@@ -540,6 +545,7 @@ bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light)
     int layers = 1;
     float *buffer = matcap_diffuse->rect_float;
     Vector<float> combined_buffer = {};
+
     if (matcap_specular && matcap_specular->rect_float) {
       int size = matcap_diffuse->x * matcap_diffuse->y * 4;
       combined_buffer.extend(matcap_diffuse->rect_float, size);
@@ -547,6 +553,7 @@ bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light)
       buffer = combined_buffer.begin();
       layers++;
     }
+
     matcap_tx = Texture(studio_light.name,
                         GPU_RGBA16F,
                         int2(matcap_diffuse->x, matcap_diffuse->y),
