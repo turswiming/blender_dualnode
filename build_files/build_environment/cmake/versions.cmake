@@ -561,10 +561,10 @@ set(BROTLI_HASH_TYPE SHA256)
 set(BROTLI_FILE brotli-v${BROTLI_VERSION}.tar.gz)
 set(BROTLI_CPE "cpe:2.3:a:google:brotli:${BROTLI_VERSION}:*:*:*:*:*:*:*")
 
-set(OPENPGL_VERSION v0.4.0-beta)
+set(OPENPGL_VERSION 40fa9f4ae16d0a00d9afa8bfbe95276b37f931cd)
 set(OPENPGL_SHORT_VERSION 0.4.0)
-set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/refs/tags/${OPENPGL_VERSION}.tar.gz)
-set(OPENPGL_HASH 1842d289e9b0efb6889640cd16e253eefecc2c1d01eea1c6bdec6fbcf9f166ae)
+set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/${OPENPGL_VERSION}.tar.gz)
+set(OPENPGL_HASH 46895cce761fc56ee20bedaf9ca94c7337e1e12a947d29a7a3edce0cda731571)
 set(OPENPGL_HASH_TYPE SHA256)
 set(OPENPGL_FILE openpgl-${OPENPGL_VERSION}.tar.gz)
 
