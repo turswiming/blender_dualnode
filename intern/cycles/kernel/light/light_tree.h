@@ -569,9 +569,7 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
                                 const int path_flag,
                                 const int prim)
 {
-  /* TODO: this is wrong, needs to also be true if the previous bounce had a transmission BSDF but
-   * sampled a reflection BSDF. */
-  const bool has_transmission = (path_flag & PATH_RAY_TRANSMIT);
+  const bool has_transmission = (path_flag & PATH_RAY_MIS_HAD_TRANSMISSION);
   float distant_light_importance = light_tree_distant_light_importance(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
@@ -712,9 +710,7 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
 ccl_device float distant_lights_pdf(
     KernelGlobals kg, const float3 P, const float3 N, const int path_flag, const int prim)
 {
-  /* TODO: this is wrong, needs to also be true if the previous bounce had a transmission BSDF but
-   * sampled a reflection BSDF. */
-  const bool has_transmission = (path_flag & PATH_RAY_TRANSMIT);
+  const bool has_transmission = (path_flag & PATH_RAY_MIS_HAD_TRANSMISSION);
   float distant_light_importance = light_tree_distant_light_importance(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;

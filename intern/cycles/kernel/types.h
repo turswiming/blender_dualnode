@@ -204,20 +204,25 @@ enum PathRayFlag : uint32_t {
   PATH_RAY_SHADOW_TRANSPARENT = (1U << 9U),
   PATH_RAY_SHADOW = (PATH_RAY_SHADOW_OPAQUE | PATH_RAY_SHADOW_TRANSPARENT),
 
-  /* Special flag to tag unaligned BVH nodes.
-   * Only set and used in BVH nodes to distinguish how to interpret bounding box information stored
-   * in the node (either it should be intersected as AABB or as OBBU). */
-  PATH_RAY_NODE_UNALIGNED = (1U << 10U),
-
   /* Subset of flags used for ray visibility for intersection.
    *
    * NOTE: SHADOW_CATCHER macros below assume there are no more than
    * 16 visibility bits. */
-  PATH_RAY_ALL_VISIBILITY = ((1U << 11U) - 1U),
+  PATH_RAY_ALL_VISIBILITY = ((1U << 10U) - 1U),
+
+  /* Special flag to tag unaligned BVH nodes.
+   * Only set and used in BVH nodes to distinguish how to interpret bounding box information stored
+   * in the node (either it should be intersected as AABB or as OBBU).
+   * So this can overlap with path flags. */
+  PATH_RAY_NODE_UNALIGNED = (1U << 10U),
 
   /* --------------------------------------------------------------------
    * Path flags.
    */
+
+  /* Surface had transmission component at previous bounce. Used for light tree
+   * traversal and culling to be consistent with MIS pdf at the next bounce. */
+  PATH_RAY_MIS_HAD_TRANSMISSION = (1U << 10U),
 
   /* Don't apply multiple importance sampling weights to emission from
    * lamp or surface hits, because they were not direct light sampled. */

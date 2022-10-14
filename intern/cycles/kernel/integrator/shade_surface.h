@@ -472,7 +472,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
         unguided_bsdf_pdf, INTEGRATOR_STATE(state, path, min_ray_pdf));
   }
 
-  path_state_next(kg, state, label);
+  path_state_next(kg, state, label, sd->flag);
 
   guiding_record_surface_bounce(kg,
                                 state,
