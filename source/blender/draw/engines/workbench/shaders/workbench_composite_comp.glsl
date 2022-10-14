@@ -13,14 +13,9 @@ void main()
   vec3 N = workbench_normal_decode(texture(normal_tx, uv));
   vec4 mat_data = texture(material_tx, uv);
   float depth = texture(depth_tx, uv).r;
-
-  /* TODO(fclem): Merge in_front depth with main depth here instead of a separate shader. */
+  depth = min(depth, texture(depth_in_front_tx, uv).r);
 
   vec3 base_color = mat_data.rgb;
-
-  float roughness, metallic;
-  workbench_float_pair_decode(mat_data.a, roughness, metallic);
-
   vec4 color = world_data.background_color;
 
   /* Background pixels. */
@@ -28,11 +23,12 @@ void main()
 #ifdef WORKBENCH_LIGHTING_MATCAP
     /* When using matcaps, mat_data.a is the back-face sign. */
     N = (mat_data.a > 0.0) ? N : -N;
-
     color.rgb = get_matcap_lighting(matcap_tx, base_color, N, V);
 #endif
 
 #ifdef WORKBENCH_LIGHTING_STUDIO
+    float roughness, metallic;
+    workbench_float_pair_decode(mat_data.a, roughness, metallic);
     color.rgb = get_world_lighting(base_color, roughness, metallic, N, V);
 #endif
 

@@ -95,6 +95,7 @@ class OpaquePass {
   Framebuffer opaque_fb;
 
   MeshPass gbuffer_ps_ = {"Opaque.Gbuffer"};
+  MeshPass gbuffer_in_front_ps_ = {"Opaque.GbufferInFront"};
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
 
   void sync(DRWState cull_state,
@@ -102,7 +103,7 @@ class OpaquePass {
             eShadingType shading_type,
             SceneResources &resources);
 
-  void draw_prepass(Manager &manager, View &view, Texture &depth_tx);
+  void draw_prepass(Manager &manager, View &view, Texture &depth_tx, Texture &depth_in_front_tx);
 
   void draw_resolve(Manager &manager, View &view);
 

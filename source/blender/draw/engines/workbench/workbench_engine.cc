@@ -37,7 +37,6 @@ class Instance {
   SceneResources resources;
 
   OpaquePass opaque_ps;
-  // OpaquePass opaque_in_front_ps;
 
   // TransparentPass transparent_ps;
   // TransparentPass transparent_in_front_ps;
@@ -183,6 +182,7 @@ class Instance {
     /* TODO(pragma37) volumes_do */
 
     resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
+    resources.depth_in_front_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
 
     anti_aliasing_ps.init(reset_taa);
     /* TODO(pragma37) taa_sample_len */
@@ -192,9 +192,8 @@ class Instance {
   {
     resources.world_buf.push_update();
     opaque_ps.sync(cull_state, clip_state, shading_type, resources);
-    // opaque_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
-    // transparent_ps.sync(cull_state, clip_state, shading_type, resources);
-    // transparent_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
+    //  transparent_ps.sync(cull_state, clip_state, shading_type, resources);
+    //  transparent_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
     anti_aliasing_ps.sync(resources);
   }
 
@@ -505,21 +504,22 @@ class Instance {
                               eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT,
                               ImageUser *iuser = nullptr)
   {
-    return opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+    const bool in_front = (ob_ref.object->dtx & OB_DRAW_IN_FRONT) != 0;
+    if (in_front) {
+      return opaque_ps.gbuffer_in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+    }
+    else {
+      return opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+    }
   }
 
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
     resources.color_tx.acquire(int2(resources.depth_tx.size()), GPU_RGBA16F);
 
-    opaque_ps.draw_prepass(manager, view, resources.depth_tx);
-    // volume_ps.draw_prepass(manager, view, resources.depth_tx);
+    opaque_ps.draw_prepass(manager, view, resources.depth_tx, resources.depth_in_front_tx);
     // transparent_ps.draw_prepass(manager, view, resources.depth_tx);
-
-    // if (opaque_in_front_ps.is_empty() == false || transparent_in_front_ps.is_empty() == false) {
-    //   opaque_in_front_ps.draw_prepass(manager, view, resources.depth_in_front_tx);
-    //   transparent_in_front_ps.draw_prepass(manager, view, resources.depth_in_front_tx);
-    // }
+    // volume_ps.draw_prepass(manager, view, resources.depth_tx);
 
     opaque_ps.draw_resolve(manager, view);
     // transparent_ps.draw_resolve(manager, view);

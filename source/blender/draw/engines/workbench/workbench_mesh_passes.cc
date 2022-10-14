@@ -97,6 +97,7 @@ void OpaquePass::sync(DRWState cull_state,
                    cull_state | clip_state;
 
   gbuffer_ps_.init(ePipelineType::OPAQUE, shading_type, resources, state);
+  gbuffer_in_front_ps_.init(ePipelineType::OPAQUE, shading_type, resources, state);
 
   deferred_ps_.init();
   deferred_ps_.shader_set(shaders.resolve_shader_get(ePipelineType::OPAQUE, shading_type));
@@ -105,12 +106,16 @@ void OpaquePass::sync(DRWState cull_state,
   deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
   deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
   deferred_ps_.bind_texture("depth_tx", &depth_tx);
+  deferred_ps_.bind_texture("depth_in_front_tx", &depth_in_front_tx);
   deferred_ps_.bind_image("out_color_img", &color_tx);
   deferred_ps_.dispatch(math::divide_ceil(int2(depth_tx.size()), int2(WB_RESOLVE_GROUP_SIZE)));
   deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
 }
 
-void OpaquePass::draw_prepass(Manager &manager, View &view, Texture &depth_tx)
+void OpaquePass::draw_prepass(Manager &manager,
+                              View &view,
+                              Texture &depth_tx,
+                              Texture &depth_in_front_tx)
 {
   gbuffer_material_tx.acquire(int2(depth_tx.size()), GPU_RGBA16F);
   gbuffer_normal_tx.acquire(int2(depth_tx.size()), GPU_RG16F);
@@ -122,8 +127,18 @@ void OpaquePass::draw_prepass(Manager &manager, View &view, Texture &depth_tx)
                    GPU_ATTACHMENT_TEXTURE(gbuffer_object_id_tx));
   opaque_fb.bind();
   opaque_fb.clear_depth(1.0f);
-
   manager.submit(gbuffer_ps_, view);
+
+  /* TODO(pragma37): render in front first and setup stencil testing */
+  if (!gbuffer_in_front_ps_.is_empty()) {
+    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(depth_in_front_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_object_id_tx));
+    opaque_fb.bind();
+    opaque_fb.clear_depth(1.0f);
+    manager.submit(gbuffer_in_front_ps_, view);
+  }
 }
 
 void OpaquePass::draw_resolve(Manager &manager, View &view)
