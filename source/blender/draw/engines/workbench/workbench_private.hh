@@ -75,10 +75,9 @@ class MeshPass : public PassMain {
   /* Move to draw::Pass */
   bool is_empty() const;
 
-  void init(ePipelineType pipeline,
-            eShadingType shading,
-            SceneResources &resources,
-            DRWState state);
+  void init_pass(SceneResources &resources, DRWState state);
+
+  void init_subpasses(ePipelineType pipeline, eShadingType shading, ShaderCache &shaders);
 
   PassMain::Sub &sub_pass_get(
       ObjectRef &ref,
@@ -103,7 +102,7 @@ class OpaquePass {
             eShadingType shading_type,
             SceneResources &resources);
 
-  void draw_prepass(Manager &manager, View &view, Texture &depth_tx, Texture &depth_in_front_tx);
+  void draw_prepass(Manager &manager, View &view, Texture &depth_tx);
 
   void draw_resolve(Manager &manager, View &view);
 

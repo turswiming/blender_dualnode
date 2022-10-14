@@ -13,7 +13,6 @@ void main()
   vec3 N = workbench_normal_decode(texture(normal_tx, uv));
   vec4 mat_data = texture(material_tx, uv);
   float depth = texture(depth_tx, uv).r;
-  depth = min(depth, texture(depth_in_front_tx, uv).r);
 
   vec3 base_color = mat_data.rgb;
   vec4 color = world_data.background_color;

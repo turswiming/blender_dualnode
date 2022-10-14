@@ -12,19 +12,17 @@ bool MeshPass::is_empty() const
   return false; /* TODO */
 }
 
-void MeshPass::init(ePipelineType pipeline,
-                    eShadingType shading,
-                    SceneResources &resources,
-                    DRWState state)
+void MeshPass::init_pass(SceneResources &resources, DRWState state)
 {
-  ShaderCache &shaders = resources.shader_cache;
-
   this->PassMain::init();
   this->state_set(state);
   this->bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
   this->bind_ssbo(WB_MATERIAL_SLOT, &resources.material_buf);
   this->bind_ubo(WB_WORLD_SLOT, resources.world_buf);
+}
 
+void MeshPass::init_subpasses(ePipelineType pipeline, eShadingType shading, ShaderCache &shaders)
+{
   texture_subpass_map.clear();
 
   for (auto geom : IndexRange(geometry_type_len)) {
@@ -90,14 +88,21 @@ void OpaquePass::sync(DRWState cull_state,
                       SceneResources &resources)
 {
   Texture &depth_tx = resources.depth_tx;
-  Texture &depth_in_front_tx = resources.depth_in_front_tx;
   TextureFromPool &color_tx = resources.color_tx;
   ShaderCache &shaders = resources.shader_cache;
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                    cull_state | clip_state;
 
-  gbuffer_ps_.init(ePipelineType::OPAQUE, shading_type, resources, state);
-  gbuffer_in_front_ps_.init(ePipelineType::OPAQUE, shading_type, resources, state);
+  DRWState in_front_state = state | DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
+  gbuffer_in_front_ps_.init_pass(resources, in_front_state);
+  gbuffer_in_front_ps_.clear_depth_stencil(1.0, 0x00);
+  gbuffer_in_front_ps_.state_stencil(0xFF, 0xFF, 0x00);
+  gbuffer_in_front_ps_.init_subpasses(ePipelineType::OPAQUE, shading_type, resources.shader_cache);
+
+  state |= DRW_STATE_STENCIL_NEQUAL;
+  gbuffer_ps_.init_pass(resources, state);
+  gbuffer_ps_.state_stencil(0x00, 0xFF, 0xFF);
+  gbuffer_ps_.init_subpasses(ePipelineType::OPAQUE, shading_type, resources.shader_cache);
 
   deferred_ps_.init();
   deferred_ps_.shader_set(shaders.resolve_shader_get(ePipelineType::OPAQUE, shading_type));
@@ -106,16 +111,12 @@ void OpaquePass::sync(DRWState cull_state,
   deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
   deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
   deferred_ps_.bind_texture("depth_tx", &depth_tx);
-  deferred_ps_.bind_texture("depth_in_front_tx", &depth_in_front_tx);
   deferred_ps_.bind_image("out_color_img", &color_tx);
   deferred_ps_.dispatch(math::divide_ceil(int2(depth_tx.size()), int2(WB_RESOLVE_GROUP_SIZE)));
   deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
 }
 
-void OpaquePass::draw_prepass(Manager &manager,
-                              View &view,
-                              Texture &depth_tx,
-                              Texture &depth_in_front_tx)
+void OpaquePass::draw_prepass(Manager &manager, View &view, Texture &depth_tx)
 {
   gbuffer_material_tx.acquire(int2(depth_tx.size()), GPU_RGBA16F);
   gbuffer_normal_tx.acquire(int2(depth_tx.size()), GPU_RG16F);
@@ -126,19 +127,9 @@ void OpaquePass::draw_prepass(Manager &manager,
                    GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
                    GPU_ATTACHMENT_TEXTURE(gbuffer_object_id_tx));
   opaque_fb.bind();
-  opaque_fb.clear_depth(1.0f);
-  manager.submit(gbuffer_ps_, view);
 
-  /* TODO(pragma37): render in front first and setup stencil testing */
-  if (!gbuffer_in_front_ps_.is_empty()) {
-    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(depth_in_front_tx),
-                     GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
-                     GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
-                     GPU_ATTACHMENT_TEXTURE(gbuffer_object_id_tx));
-    opaque_fb.bind();
-    opaque_fb.clear_depth(1.0f);
-    manager.submit(gbuffer_in_front_ps_, view);
-  }
+  manager.submit(gbuffer_in_front_ps_, view);
+  manager.submit(gbuffer_ps_, view);
 }
 
 void OpaquePass::draw_resolve(Manager &manager, View &view)
@@ -165,7 +156,9 @@ void TransparentPass::sync(DRWState cull_state,
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                    cull_state | clip_state;
 
-  accumulation_ps_.init(ePipelineType::TRANSPARENT, shading_type, resources, state);
+  accumulation_ps_.init_pass(resources, state);
+  accumulation_ps_.init_subpasses(
+      ePipelineType::TRANSPARENT, shading_type, resources.shader_cache);
 
   resolve_ps_.init();
   resolve_ps_.shader_set(
