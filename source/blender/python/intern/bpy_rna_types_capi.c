@@ -101,6 +101,17 @@ static struct PyMethodDef pyrna_text_methods[] = {
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Collection Objects
+ * \{ */
+
+static struct PyMethodDef pyrna_collection_objects_methods[] = {
+    {NULL, NULL, 0, NULL}, /* #BPY_rna_id_collection_objects_link_multiple_method_def */
+    {NULL, NULL, 0, NULL},
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Window Manager Clipboard Property
  *
  * Avoid using the RNA API because this value may change between checking its length
@@ -275,6 +286,12 @@ void BPY_rna_types_extend_capi(void)
 
   ARRAY_SET_ITEMS(pyrna_context_methods, BPY_rna_context_temp_override_method_def);
   pyrna_struct_type_extend_capi(&RNA_Context, pyrna_context_methods, NULL);
+
+  /* Collection Objects */
+  ARRAY_SET_ITEMS(pyrna_collection_objects_methods,
+                  BPY_rna_id_collection_objects_link_multiple_method_def);
+  BLI_assert(ARRAY_SIZE(pyrna_collection_objects_methods) == 2);
+  pyrna_struct_type_extend_capi(&RNA_CollectionObjects, pyrna_collection_objects_methods, NULL);
 }
 
 /** \} */

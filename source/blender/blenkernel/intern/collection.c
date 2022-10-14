@@ -59,8 +59,12 @@ static bool collection_child_add(Collection *parent,
                                  const int flag,
                                  const bool add_us);
 static bool collection_child_remove(Collection *parent, Collection *collection);
-static bool collection_object_add(
-    Main *bmain, Collection *collection, Object *ob, int flag, const bool add_us);
+static bool collection_object_add(Main *bmain,
+                                  Collection *collection,
+                                  Object **objects,
+                                  int objects_len,
+                                  int flag,
+                                  const bool add_us);
 static bool collection_object_remove(Main *bmain,
                                      Collection *collection,
                                      Object *ob,
@@ -125,7 +129,7 @@ static void collection_copy_data(Main *bmain, ID *id_dst, const ID *id_src, cons
     collection_child_add(collection_dst, child->collection, flag, false);
   }
   LISTBASE_FOREACH (CollectionObject *, cob, &collection_src->gobject) {
-    collection_object_add(bmain, collection_dst, cob->ob, flag, false);
+    collection_object_add(bmain, collection_dst, &cob->ob, 1, flag, false);
   }
 }
 
@@ -554,7 +558,7 @@ bool BKE_collection_delete(Main *bmain, Collection *collection, bool hierarchy)
       /* Link child object into parent collections. */
       LISTBASE_FOREACH (CollectionParent *, cparent, &collection->parents) {
         Collection *parent = cparent->collection;
-        collection_object_add(bmain, parent, cob->ob, 0, true);
+        collection_object_add(bmain, parent, &cob->ob, 1, 0, true);
       }
 
       /* Remove child object. */
@@ -657,7 +661,7 @@ static Collection *collection_duplicate_recursive(Main *bmain,
         continue;
       }
 
-      collection_object_add(bmain, collection_new, ob_new, 0, true);
+      collection_object_add(bmain, collection_new, &ob_new, 1, 0, true);
       collection_object_remove(bmain, collection_new, ob_old, false);
     }
   }
@@ -1066,40 +1070,65 @@ static Collection *collection_parent_editable_find_recursive(const ViewLayer *vi
   return NULL;
 }
 
-static bool collection_object_add(
-    Main *bmain, Collection *collection, Object *ob, int flag, const bool add_us)
+static bool collection_object_add(Main *bmain,
+                                  Collection *collection,
+                                  Object **objects,
+                                  int objects_len,
+                                  int flag,
+                                  const bool add_us)
 {
-  if (ob->instance_collection) {
-    /* Cyclic dependency check. */
-    if (collection_find_child_recursive(ob->instance_collection, collection) ||
-        ob->instance_collection == collection) {
-      return false;
+  bool result = true;
+  GSet *collection_objects = NULL;
+
+  for (int i = 0; i < objects_len; i++) {
+    Object *ob = objects[i];
+    if (ob == NULL) {
+      result = false;
+      continue;
+    }
+    if (ob->instance_collection) {
+      /* Cyclic dependency check. */
+      if (collection_find_child_recursive(ob->instance_collection, collection) ||
+          ob->instance_collection == collection) {
+        result = false;
+        continue;
+      }
+    }
+
+    if (collection_objects == NULL) {
+      collection_objects = BLI_gset_ptr_new(__func__);
+      LISTBASE_FOREACH (CollectionObject *, collection_object, &collection->gobject) {
+        BLI_gset_insert(collection_objects, collection_object->ob);
+      }
+    }
+
+    if (!BLI_gset_add(collection_objects, ob)) {
+      result = false;
+      continue;
+    }
+
+    CollectionObject *cob = MEM_callocN(sizeof(CollectionObject), __func__);
+    cob->ob = ob;
+    BLI_addtail(&collection->gobject, cob);
+    BKE_collection_object_cache_free(collection);
+
+    if (add_us && (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
+      id_us_plus(&ob->id);
+    }
+
+    if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
+      collection_tag_update_parent_recursive(bmain, collection, ID_RECALC_COPY_ON_WRITE);
+    }
+
+    if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
+      BKE_rigidbody_main_collection_object_add(bmain, collection, ob);
     }
   }
 
-  CollectionObject *cob = BLI_findptr(&collection->gobject, ob, offsetof(CollectionObject, ob));
-  if (cob) {
-    return false;
+  if (collection_objects) {
+    BLI_gset_free(collection_objects, NULL);
   }
-
-  cob = MEM_callocN(sizeof(CollectionObject), __func__);
-  cob->ob = ob;
-  BLI_addtail(&collection->gobject, cob);
-  BKE_collection_object_cache_free(collection);
-
-  if (add_us && (flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
-    id_us_plus(&ob->id);
-  }
-
-  if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
-    collection_tag_update_parent_recursive(bmain, collection, ID_RECALC_COPY_ON_WRITE);
-  }
-
-  if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
-    BKE_rigidbody_main_collection_object_add(bmain, collection, ob);
-  }
-
-  return true;
+  return result;
 }
 
 static bool collection_object_remove(Main *bmain,
@@ -1127,9 +1156,12 @@ static bool collection_object_remove(Main *bmain,
   return true;
 }
 
-bool BKE_collection_object_add_notest(Main *bmain, Collection *collection, Object *ob)
+bool BKE_collection_object_add_notest(Main *bmain,
+                                      Collection *collection,
+                                      Object **objects,
+                                      int objects_len)
 {
-  if (ob == NULL) {
+  if (objects == NULL) {
     return false;
   }
 
@@ -1140,7 +1172,7 @@ bool BKE_collection_object_add_notest(Main *bmain, Collection *collection, Objec
     return false;
   }
 
-  if (!collection_object_add(bmain, collection, ob, 0, true)) {
+  if (!collection_object_add(bmain, collection, objects, objects_len, 0, true)) {
     return false;
   }
 
@@ -1155,13 +1187,22 @@ bool BKE_collection_object_add_notest(Main *bmain, Collection *collection, Objec
 
 bool BKE_collection_object_add(Main *bmain, Collection *collection, Object *ob)
 {
-  return BKE_collection_viewlayer_object_add(bmain, NULL, collection, ob);
+  return BKE_collection_object_add_multiple(bmain, collection, &ob, 1);
+}
+
+bool BKE_collection_object_add_multiple(Main *bmain,
+                                        Collection *collection,
+                                        Object **objects,
+                                        int objects_len)
+{
+  return BKE_collection_viewlayer_object_add(bmain, NULL, collection, objects, objects_len);
 }
 
 bool BKE_collection_viewlayer_object_add(Main *bmain,
                                          const ViewLayer *view_layer,
                                          Collection *collection,
-                                         Object *ob)
+                                         Object **objects,
+                                         int objects_len)
 {
   if (collection == NULL) {
     return false;
@@ -1173,7 +1214,7 @@ bool BKE_collection_viewlayer_object_add(Main *bmain,
     return false;
   }
 
-  return BKE_collection_object_add_notest(bmain, collection, ob);
+  return BKE_collection_object_add_notest(bmain, collection, objects, objects_len);
 }
 
 void BKE_collection_object_add_from(Main *bmain, Scene *scene, Object *ob_src, Object *ob_dst)
@@ -1183,7 +1224,7 @@ void BKE_collection_object_add_from(Main *bmain, Scene *scene, Object *ob_src, O
   FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
     if (!ID_IS_LINKED(collection) && !ID_IS_OVERRIDE_LIBRARY(collection) &&
         BKE_collection_has_object(collection, ob_src)) {
-      collection_object_add(bmain, collection, ob_dst, 0, true);
+      collection_object_add(bmain, collection, &ob_dst, 1, 0, true);
       is_instantiated = true;
     }
   }
@@ -1192,7 +1233,7 @@ void BKE_collection_object_add_from(Main *bmain, Scene *scene, Object *ob_src, O
   if (!is_instantiated) {
     /* In case we could not find any non-linked collections in which instantiate our ob_dst,
      * fallback to scene's master collection... */
-    collection_object_add(bmain, scene->master_collection, ob_dst, 0, true);
+    collection_object_add(bmain, scene->master_collection, &ob_dst, 1, 0, true);
   }
 
   BKE_main_collection_sync(bmain);

@@ -118,6 +118,15 @@ bool BKE_collection_object_add(struct Main *bmain,
                                struct Object *ob);
 
 /**
+ * Add multiple objects to given collection, ensuring this collection is 'editable' (i.e. local and
+ * not a liboverride), and finding a suitable parent one otherwise.
+ */
+bool BKE_collection_object_add_multiple(struct Main *bmain,
+                                        struct Collection *collection,
+                                        struct Object **objects,
+                                        int ob_len);
+
+/**
  * Add object to given collection, similar to #BKE_collection_object_add.
  *
  * However, it additionally ensures that the selected collection is also part of the given
@@ -126,7 +135,8 @@ bool BKE_collection_object_add(struct Main *bmain,
 bool BKE_collection_viewlayer_object_add(struct Main *bmain,
                                          const struct ViewLayer *view_layer,
                                          struct Collection *collection,
-                                         struct Object *ob);
+                                         struct Object **objects,
+                                         int objects_len);
 
 /**
  * Same as #BKE_collection_object_add, but unconditionally adds the object to the given collection.
@@ -135,7 +145,8 @@ bool BKE_collection_viewlayer_object_add(struct Main *bmain,
  */
 bool BKE_collection_object_add_notest(struct Main *bmain,
                                       struct Collection *collection,
-                                      struct Object *ob);
+                                      struct Object **objects,
+                                      int objects_len);
 /**
  * Add \a ob_dst to all scene collections that reference object \a ob_src is in.
  * Used for copying objects.

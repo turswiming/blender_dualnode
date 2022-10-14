@@ -14,14 +14,19 @@
 #include "BLI_bitmap.h"
 #include "BLI_utildefines.h"
 
+#include "BKE_collection.h"
 #include "BKE_global.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_main.h"
 
+#include "DEG_depsgraph.h"
+#include "DEG_depsgraph_build.h"
+
 #include "DNA_ID.h"
 /* Those following are only to support hack of not listing some internal
  * 'backward' pointers in generated user_map. */
+#include "DNA_collection_types.h"
 #include "DNA_key_types.h"
 #include "DNA_object_types.h"
 
@@ -413,6 +418,86 @@ static PyObject *bpy_orphans_purge(PyObject *UNUSED(self), PyObject *args, PyObj
   return PyLong_FromSize_t(num_datablocks_deleted);
 }
 
+PyDoc_STRVAR(bpy_link_multiple_doc,
+             ".. method:: link_multiple(objects)\n"
+             "\n"
+             "   Link multiple objects at once.\n"
+             "\n"
+             "   Note that this function is quicker than individual calls to :func:`link()` "
+             "(from :class:`bpy.types.CollectionObjects`)\n"
+             "\n"
+             "   :arg objects: Iterables of Objects.\n"
+             "   :type subset: sequence\n");
+static PyObject *bpy_link_multiple(PyObject *self, PyObject *args, PyObject *kwds)
+{
+  BPy_StructRNA *pyrna = (BPy_StructRNA *)self;
+  Collection *collection = pyrna->ptr.data;
+  Main *bmain = G_MAIN; /* XXX Ugly, but should work! */
+
+  PyObject *objects = NULL;
+  PyObject *ret = NULL;
+
+  static const char *_keywords[] = {"objects", NULL};
+  static _PyArg_Parser _parser = {
+      "O" /* `objects` */
+      ":link_multiple",
+      _keywords,
+      0,
+  };
+
+  if (!_PyArg_ParseTupleAndKeywordsFast(args, kwds, &_parser, &objects)) {
+    return ret;
+  }
+
+  if (objects) {
+    PyObject *objects_fast = PySequence_Fast(objects, "link_multiple");
+    if (objects_fast == NULL) {
+      goto error;
+    }
+
+    PyObject **objects_array = PySequence_Fast_ITEMS(objects_fast);
+    Py_ssize_t objects_len = PySequence_Fast_GET_SIZE(objects_fast);
+    Object **objs = MEM_malloc_arrayN(objects_len, sizeof(Object *), __func__);
+
+    for (int i = 0; i < objects_len; i++) {
+      ID *id;
+      if (!pyrna_id_FromPyObject(objects_array[i], &id)) {
+        PyErr_Format(PyExc_TypeError,
+                     "Expected an ID type, not %.200s",
+                     Py_TYPE(objects_array[i])->tp_name);
+        Py_DECREF(objects_fast);
+        MEM_freeN(objs);
+        goto error;
+      }
+      if (id == NULL || GS(id->name) != ID_OB) {
+        PyErr_Format(PyExc_TypeError, "Expected an Object type");
+        Py_DECREF(objects_fast);
+        MEM_freeN(objs);
+        goto error;
+      }
+      Object *obj = (Object *)id;
+      objs[i] = obj;
+    }
+    Py_DECREF(objects_fast);
+    for (int j = 0; j < objects_len; j++) {
+      BKE_collection_object_add(bmain, collection, objs[j]);
+      WM_main_add_notifier(NC_OBJECT | ND_DRAW, &objs[j]->id);
+    }
+    MEM_freeN(objs);
+  }
+  else {
+    goto error;
+  }
+  Py_INCREF(Py_None);
+  ret = Py_None;
+
+  DEG_id_tag_update(&collection->id, ID_RECALC_COPY_ON_WRITE);
+  DEG_relations_tag_update(bmain);
+
+error:
+  return ret;
+}
+
 PyMethodDef BPY_rna_id_collection_user_map_method_def = {
     "user_map",
     (PyCFunction)bpy_user_map,
@@ -430,4 +515,10 @@ PyMethodDef BPY_rna_id_collection_orphans_purge_method_def = {
     (PyCFunction)bpy_orphans_purge,
     METH_STATIC | METH_VARARGS | METH_KEYWORDS,
     bpy_orphans_purge_doc,
+};
+PyMethodDef BPY_rna_id_collection_objects_link_multiple_method_def = {
+    "link_multiple",
+    (PyCFunction)bpy_link_multiple,
+    METH_VARARGS | METH_KEYWORDS,
+    bpy_link_multiple_doc,
 };
