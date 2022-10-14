@@ -553,7 +553,7 @@ static void init_paint_brush(const SculptSession &ss,
  * - Only tiles that are painted on are loaded in memory, painted on and merged back to the actual
  * texture.
  */
-template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
+template<int32_t Size, int32_t Depth = 16> class GPUSubTileTexture {
   struct Info {
     struct {
       bool in_use_stroke : 1;
@@ -572,7 +572,7 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
   std::array<int32_t, Depth> layer_lookup_;
 
   GPUTexture *gpu_texture_ = nullptr;
-  GPUStorageBuf *tile_buf_ = nullptr;
+  GPUStorageBuf *paint_tile_buf_ = nullptr;
   int64_t tile_buf_size_ = 0;
 
  public:
@@ -593,17 +593,9 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
       gpu_texture_ = nullptr;
     }
 
-    if (tile_buf_) {
-      GPU_storagebuf_free(tile_buf_);
-      tile_buf_ = nullptr;
-    }
-  }
-
-  void reset_usage()
-  {
-    printf("%s\n", __func__);
-    for (Info &info : infos_) {
-      info.flags.in_use = false;
+    if (paint_tile_buf_) {
+      GPU_storagebuf_free(paint_tile_buf_);
+      paint_tile_buf_ = nullptr;
     }
   }
 
@@ -766,6 +758,7 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
   {
     BLI_assert(gpu_texture_);
     float *buffer = nullptr;
+    bool tiles_updated = false;
     for (int64_t index : infos_.index_range()) {
       Info &info = infos_[index];
       PaintTileData &tile = paint_tiles_[index];
@@ -781,11 +774,22 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
         buffer = static_cast<float *>(MEM_callocN(Size * Size * 4 * sizeof(float), __func__));
       }
 
+      printf("%s: initializing tile {tile:%d, sub_tile:%d,%d, layer_id:%d}\n",
+             __func__,
+             tile.tile_number,
+             UNPACK2(tile.sub_tile_id),
+             tile.layer_id);
+
       /* TODO: Copy correct data from ImBuf.*/
 
-      // GPU_texture_update_sub(
-      //    gpu_texture_, GPU_DATA_FLOAT, buffer, 0, 0, tile.layer_id, Size, Size, 1);
+      GPU_texture_update_sub(
+          gpu_texture_, GPU_DATA_FLOAT, buffer, 0, 0, tile.layer_id, Size, Size, 1);
       info.flags.needs_update = false;
+      tiles_updated = true;
+    }
+
+    if (tiles_updated) {
+      GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
     }
 
     if (buffer) {
@@ -798,32 +802,42 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
     return gpu_texture_;
   }
 
-  void ensure_tile_buf()
+  void ensure_paint_tile_buf()
   {
     int64_t needed_size = paint_tiles_.capacity() * sizeof(PaintTileData);
 
     /* Reuse previous buffer only when exact size, due to potentional read out of bound errors.*/
-    if (tile_buf_ && tile_buf_size_ == needed_size) {
+    if (paint_tile_buf_ && tile_buf_size_ == needed_size) {
       return;
     }
 
-    if (tile_buf_) {
-      GPU_storagebuf_free(tile_buf_);
-      tile_buf_ = nullptr;
+    if (paint_tile_buf_) {
+      GPU_storagebuf_free(paint_tile_buf_);
+      paint_tile_buf_ = nullptr;
     }
-    tile_buf_ = GPU_storagebuf_create(needed_size);
+    paint_tile_buf_ = GPU_storagebuf_create(needed_size);
   }
 
-  void update_tile_buf()
+  void update_paint_tile_buf()
   {
-    BLI_assert(tile_buf_);
-    GPU_storagebuf_update(tile_buf_, paint_tiles_.data());
+    BLI_assert(paint_tile_buf_);
+    for (PaintTileData &tile : paint_tiles_) {
+      tile.in_use_frame = false;
+    }
+    GPU_storagebuf_update(paint_tile_buf_, paint_tiles_.data());
   }
 
-  GPUStorageBuf *tile_buf_get()
+  void read_back_paint_tile_buf()
   {
-    BLI_assert(tile_buf_);
-    return tile_buf_;
+    BLI_assert(paint_tile_buf_);
+    // GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+    GPU_storagebuf_read(paint_tile_buf_, paint_tiles_.data());
+  }
+
+  GPUStorageBuf *paint_tile_buf_get()
+  {
+    BLI_assert(paint_tile_buf_);
+    return paint_tile_buf_;
   }
 
   int32_t paint_tiles_len()
@@ -835,7 +849,7 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
   {
     GPU_texture_image_bind(gpu_texture_get(),
                            GPU_shader_get_texture_binding(shader, "paint_tiles_img"));
-    GPU_storagebuf_bind(tile_buf_get(), GPU_shader_get_ssbo(shader, "paint_tile_buf"));
+    GPU_storagebuf_bind(paint_tile_buf_get(), GPU_shader_get_ssbo(shader, "paint_tile_buf"));
     GPU_shader_uniform_1i(shader, "paint_tile_buf_len", paint_tiles_len());
   }
 
@@ -847,6 +861,11 @@ template<int32_t Size, int32_t Depth = 512> class GPUSubTileTexture {
       if (!info.flags.in_use_frame) {
         continue;
       }
+      /*
+      PaintTileData &paint_tile = paint_tiles_[index];
+      if (!paint_tile.in_use_frame) {
+        continue;
+      }*/
       predicate(paint_tiles_[index]);
     }
   }
@@ -1029,19 +1048,15 @@ static void gpu_painting_image_merge(GPUSculptPaintData &batches,
                                      ImageUser &image_user,
                                      ImBuf &image_buffer)
 {
+  GPU_memory_barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
   GPUTexture *canvas_tex = BKE_image_get_gpu_texture(&image, &image_user, &image_buffer);
   GPUShader *shader = SCULPT_shader_paint_image_merge_get();
   GPU_shader_bind(shader);
   batches.tile_texture.bind(shader);
   GPU_texture_image_bind(canvas_tex, GPU_shader_get_texture_binding(shader, "texture_img"));
   batches.tile_texture.foreach_in_frame([shader](PaintTileData &paint_tile) {
-    printf("%s: merging tile stored on layer %d {tile:%d sub_tile:%d,%d} \n",
-           __func__,
-           paint_tile.layer_id,
-           paint_tile.tile_number,
-           UNPACK2(paint_tile.sub_tile_id));
     GPU_shader_uniform_1i(shader, "layer_id", paint_tile.layer_id);
-    GPU_compute_dispatch(shader, TEXTURE_STREAMING_TILE_SIZE, TEXTURE_STREAMING_TILE_SIZE, 1);
+    GPU_compute_dispatch(shader, TEXTURE_STREAMING_TILE_SIZE / 32, TEXTURE_STREAMING_TILE_SIZE, 1);
   });
 }
 
@@ -1064,7 +1079,7 @@ static void init_paint_step(const SculptSession &ss,
   }
 }
 
-static void dispatch_gpu_painting(TexturePaintingUserData &data)
+static void add_paint_step(TexturePaintingUserData &data)
 {
   SculptSession &ss = *data.ob->sculpt;
 
@@ -1073,6 +1088,7 @@ static void dispatch_gpu_painting(TexturePaintingUserData &data)
   PaintStepData paint_step;
   init_paint_step(ss, *data.brush, paint_step);
   batches.steps.append(paint_step);
+  PIL_sleep_ms(1);
 }
 
 /* This should be done based on the frame_selection nodes, otherwise we might be over
@@ -1086,11 +1102,8 @@ static void paint_tiles_mark_used(TexturePaintingUserData &data)
   for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
     NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
     for (UDIMTilePixels &tile : node_data.tiles) {
-      for (int x = tile.gpu_sub_tiles.xmin; x <= tile.gpu_sub_tiles.xmax; x++) {
-        for (int y = tile.gpu_sub_tiles.ymin; y <= tile.gpu_sub_tiles.ymax; y++) {
-          int2 sub_tile_id(x, y);
-          batches.tile_texture.mark_usage(tile.tile_number, sub_tile_id);
-        }
+      for (int2 &sub_tile_id : tile.gpu_sub_tiles) {
+        batches.tile_texture.mark_usage(tile.tile_number, sub_tile_id);
       }
     }
   }
@@ -1120,7 +1133,7 @@ static TileNumbers collect_active_tile_numbers(const TexturePaintingUserData &da
   return result;
 }
 
-static void dispatch_gpu_batches(TexturePaintingUserData &data)
+static void flush_gpu_batches(TexturePaintingUserData &data)
 {
   SculptSession &ss = *data.ob->sculpt;
   if (!ss.mode.texture_paint.gpu_data) {
@@ -1129,6 +1142,7 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
 
   GPUSculptPaintData &batches = *static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
   const int64_t steps_len = batches.steps.size();
+  printf("%s: flushing %ld steps\n", __func__, steps_len);
   int2 paint_step_range(0, steps_len);
   batches.update_step_buf();
   batches.ensure_vert_coord_buf(ss);
@@ -1136,8 +1150,8 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
   batches.tile_texture.ensure_gpu_texture();
   batches.tile_texture.remove_unused();
   batches.tile_texture.assign_layer_ids();
-  batches.tile_texture.ensure_tile_buf();
-  batches.tile_texture.update_tile_buf();
+  batches.tile_texture.ensure_paint_tile_buf();
+  batches.tile_texture.update_paint_tile_buf();
 
   Image &image = *data.image_data.image;
   ImageUser local_image_user = *data.image_data.image_user;
@@ -1153,17 +1167,14 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
 
     TIMEIT_START(upload);
     batches.tile_texture.update_gpu_texture(tile_number, *image_buffer);
-    GPU_flush();
     TIMEIT_END(upload);
 
     GPU_debug_group_begin("Paint tile");
     TIMEIT_START(paint_step);
     gpu_painting_paint_step(data, batches, tile_number, paint_step_range);
-    GPU_flush();
     TIMEIT_END(paint_step);
     TIMEIT_START(merge);
     gpu_painting_image_merge(batches, *data.image_data.image, local_image_user, *image_buffer);
-    GPU_flush();
     TIMEIT_END(merge);
     GPU_debug_group_end();
 
@@ -1183,6 +1194,17 @@ static void gpu_frame_end(TexturePaintingUserData &data)
   /* Reset GPU data for next frame. */
   batches.steps.clear();
   batches.tile_texture.reset_usage_frame();
+}
+
+static bool has_unflushed_batches(Object *ob)
+{
+  SculptSession &ss = *ob->sculpt;
+  if (!ss.mode.texture_paint.gpu_data) {
+    return false;
+  }
+
+  GPUSculptPaintData &batches = *static_cast<GPUSculptPaintData *>(ss.mode.texture_paint.gpu_data);
+  return batches.steps.size();
 }
 
 /** \} */
@@ -1253,7 +1275,7 @@ void SCULPT_do_paint_brush_image(
   if (SCULPT_use_image_paint_compute()) {
     ensure_gpu_buffers(data);
     update_frame_selection(data);
-    dispatch_gpu_painting(data);
+    add_paint_step(data);
     paint_tiles_mark_used(data);
   }
   else {
@@ -1278,6 +1300,10 @@ void SCULPT_paint_image_batches_flush(PaintModeSettings *paint_mode_settings,
     return;
   }
 
+  if (!has_unflushed_batches(ob)) {
+    return;
+  }
+
   Brush *brush = BKE_paint_brush(&sd->paint);
   TexturePaintingUserData data = {nullptr};
   data.ob = ob;
@@ -1290,7 +1316,7 @@ void SCULPT_paint_image_batches_flush(PaintModeSettings *paint_mode_settings,
   if (ImageData::init_active_image(ob, &data.image_data, paint_mode_settings)) {
     TIMEIT_START(paint_image_gpu);
     GPU_debug_group_begin("SCULPT_paint_brush");
-    dispatch_gpu_batches(data);
+    flush_gpu_batches(data);
     gpu_frame_end(data);
     GPU_debug_group_end();
     TIMEIT_END(paint_image_gpu);

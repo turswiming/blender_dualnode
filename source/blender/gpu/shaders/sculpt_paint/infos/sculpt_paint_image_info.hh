@@ -8,7 +8,7 @@
 #include "gpu_shader_create_info.hh"
 
 GPU_SHADER_CREATE_INFO(sculpt_paint_sub_tiles)
-    .storage_buf(0, Qualifier::READ, "PaintTileData", "paint_tile_buf[]")
+    .storage_buf(0, Qualifier::READ_WRITE, "PaintTileData", "paint_tile_buf[]")
     .push_constant(Type::INT, "paint_tile_buf_len")
     .define("SUB_TILE_SIZE", "1024");
 
@@ -28,7 +28,7 @@ GPU_SHADER_CREATE_INFO(sculpt_paint_image_compute)
     .typedef_source("GPU_sculpt_shader_shared.h");
 
 GPU_SHADER_CREATE_INFO(sculpt_paint_image_merge_compute)
-    .local_group_size(1, 1, 1)
+    .local_group_size(32, 1, 1)
     .image(0, GPU_RGBA16F, Qualifier::READ, ImageType::FLOAT_3D, "paint_tiles_img")
     .image(1, GPU_RGBA16F, Qualifier::READ_WRITE, ImageType::FLOAT_2D, "texture_img")
     .push_constant(Type::INT, "layer_id")

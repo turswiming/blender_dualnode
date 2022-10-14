@@ -15,6 +15,8 @@
 #include "BLI_math.h"
 #include "BLI_task.h"
 
+#include "PIL_time_utildefines.h"
+
 #include "BKE_image_wrappers.hh"
 
 #include "bmesh.h"
@@ -79,19 +81,37 @@ void NodeData::build_pixels_gpu_buffer()
 
 void UDIMTilePixels::init_gpu_sub_tiles()
 {
-  BLI_rcti_init_minmax(&gpu_sub_tiles);
+  BLI_assert(gpu_sub_tiles.is_empty());
+  const int max_sub_tiles = 16;
+  bool sub_tiles_hit[max_sub_tiles][max_sub_tiles];
+  for (int x = 0; x < max_sub_tiles; x++) {
+    for (int y = 0; y < max_sub_tiles; y++) {
+      sub_tiles_hit[x][y] = false;
+    }
+  }
+
+  int2 max_sub_tile_len(0, 0);
   for (const PackedPixelRow &elements : pixel_rows) {
     int2 subtile_from = int2(elements.start_image_coordinate / TEXTURE_STREAMING_TILE_SIZE);
     int2 coord_to = int2(elements.start_image_coordinate) + int2(elements.num_pixels + 1, 1);
     int2 subtile_to = int2(coord_to / TEXTURE_STREAMING_TILE_SIZE);
+    for (int x = subtile_from.x; x < subtile_to.x; x++) {
+      sub_tiles_hit[x][subtile_from.y] = true;
+    }
+  }
 
-    BLI_rcti_do_minmax_v(&gpu_sub_tiles, subtile_from);
-    BLI_rcti_do_minmax_v(&gpu_sub_tiles, subtile_to);
+  for (int x = 0; x < max_sub_tiles; x++) {
+    for (int y = 0; y < max_sub_tiles; y++) {
+      if (sub_tiles_hit[x][y]) {
+        gpu_sub_tiles.append(int2(x, y));
+      }
+    }
   }
 }
 
 void NodeData::init_gpu_sub_tiles()
 {
+  printf("%s\n", __func__);
   for (UDIMTilePixels &tile : tiles) {
     tile.init_gpu_sub_tiles();
   }

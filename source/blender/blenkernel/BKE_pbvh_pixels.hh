@@ -106,14 +106,12 @@ struct UDIMTilePixels {
   Vector<PackedPixelRow> pixel_rows;
   int64_t gpu_buffer_offset;
   /* Region of the tile that can be painted on by this node. Size of a subtile is determined by  */
-  /* TODO: use list of sub_tile_ids to not overcommit texture usage. */
-  rcti gpu_sub_tiles;
+  Vector<int2> gpu_sub_tiles;
 
   UDIMTilePixels()
   {
     flags.dirty = false;
     BLI_rcti_init_minmax(&dirty_region);
-    BLI_rcti_init_minmax(&gpu_sub_tiles);
   }
 
   void mark_dirty(const PackedPixelRow &pixel_row)
