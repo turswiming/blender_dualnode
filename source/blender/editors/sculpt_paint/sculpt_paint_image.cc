@@ -988,6 +988,13 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
 {
   BrushVariationFlags variation_flags = determine_shader_variation_flags(*data.brush);
   GPUShader *shader = SCULPT_shader_paint_image_get(variation_flags);
+  GPU_shader_bind(shader);
+  batches.tile_texture.bind(shader);
+  GPU_storagebuf_bind(batches.step_buf, GPU_shader_get_ssbo(shader, "paint_step_buf"));
+  GPU_shader_uniform_2iv(shader, "paint_step_range", paint_step_range);
+  GPU_uniformbuf_bind(batches.paint_brush_buf,
+                      GPU_shader_get_uniform_block(shader, "paint_brush_buf"));
+  GPU_storagebuf_bind(batches.vert_coord_buf, GPU_shader_get_ssbo(shader, "vert_coord_buf"));
 
   /* Dispatch all nodes that paint on the active tile. */
   for (PBVHNode *node : MutableSpan<PBVHNode *>(data.nodes, data.nodes_len)) {
@@ -997,15 +1004,6 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
         continue;
       }
 
-      GPU_shader_bind(shader);
-
-      batches.tile_texture.bind(shader);
-
-      GPU_storagebuf_bind(batches.step_buf, GPU_shader_get_ssbo(shader, "paint_step_buf"));
-      GPU_shader_uniform_2iv(shader, "paint_step_range", paint_step_range);
-      GPU_uniformbuf_bind(batches.paint_brush_buf,
-                          GPU_shader_get_uniform_block(shader, "paint_brush_buf"));
-      GPU_storagebuf_bind(batches.vert_coord_buf, GPU_shader_get_ssbo(shader, "vert_coord_buf"));
       GPU_storagebuf_bind(node_data.triangles.gpu_buffer,
                           GPU_shader_get_ssbo(shader, "paint_input"));
       GPU_storagebuf_bind(node_data.gpu_buffers.pixels,
@@ -1014,7 +1012,7 @@ static void gpu_painting_paint_step(TexturePaintingUserData &data,
       int pixel_row_len = tile_pixels.pixel_rows.size();
       const int compute_batch_size = GPU_max_work_group_count(0);
       for (int batch_offset = 0; batch_offset != pixel_row_len;
-           batch_offset += min_ii(pixel_row_len, compute_batch_size)) {
+           batch_offset += min_ii(pixel_row_len - batch_offset, compute_batch_size)) {
         const int batch_size = min_ii(pixel_row_len - batch_offset, compute_batch_size);
         GPU_shader_uniform_1i(
             shader, "pixel_row_offset", tile_pixels.gpu_buffer_offset + batch_offset);
@@ -1153,11 +1151,20 @@ static void dispatch_gpu_batches(TexturePaintingUserData &data)
       continue;
     }
 
+    TIMEIT_START(upload);
     batches.tile_texture.update_gpu_texture(tile_number, *image_buffer);
+    GPU_flush();
+    TIMEIT_END(upload);
 
     GPU_debug_group_begin("Paint tile");
+    TIMEIT_START(paint_step);
     gpu_painting_paint_step(data, batches, tile_number, paint_step_range);
+    GPU_flush();
+    TIMEIT_END(paint_step);
+    TIMEIT_START(merge);
     gpu_painting_image_merge(batches, *data.image_data.image, local_image_user, *image_buffer);
+    GPU_flush();
+    TIMEIT_END(merge);
     GPU_debug_group_end();
 
     BKE_image_release_ibuf(data.image_data.image, image_buffer, nullptr);
@@ -1281,12 +1288,12 @@ void SCULPT_paint_image_batches_flush(PaintModeSettings *paint_mode_settings,
   }
 
   if (ImageData::init_active_image(ob, &data.image_data, paint_mode_settings)) {
-    // TIMEIT_START(paint_image_gpu);
+    TIMEIT_START(paint_image_gpu);
     GPU_debug_group_begin("SCULPT_paint_brush");
     dispatch_gpu_batches(data);
     gpu_frame_end(data);
     GPU_debug_group_end();
-    // TIMEIT_END(paint_image_gpu);
+    TIMEIT_END(paint_image_gpu);
   }
 
   MEM_freeN(data.nodes);
