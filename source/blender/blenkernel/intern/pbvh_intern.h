@@ -116,8 +116,11 @@ struct PBVHNode {
   GSet *bm_faces;
   GSet *bm_unique_verts;
   GSet *bm_other_verts;
+
+  /* Deprecated. Stores original coordinates of triangles. */
   float (*bm_orco)[3];
   int (*bm_ortri)[3];
+  BMVert **bm_orvert;
   int bm_tot_ortri;
 
   /* Used to store the brush color during a stroke and composite it over the original color */
