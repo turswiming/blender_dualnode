@@ -3368,6 +3368,7 @@ static void do_brush_action(Sculpt *sd,
 
   const bool use_original = sculpt_tool_needs_original(brush->sculpt_tool) ? true :
                                                                              ss->cache->original;
+  const bool use_pixels = sculpt_needs_pbvh_pixels(paint_mode_settings, brush, ob);
 
   if (sculpt_needs_pbvh_pixels(paint_mode_settings, brush, ob)) {
     sculpt_pbvh_update_pixels(paint_mode_settings, ss, ob);
@@ -3402,11 +3403,6 @@ static void do_brush_action(Sculpt *sd,
       radius_scale = 2.0f;
     }
     nodes = sculpt_pbvh_gather_generic(ob, sd, brush, use_original, radius_scale, &totnode);
-  }
-
-  const bool use_pixels = sculpt_needs_pbvh_pixels(paint_mode_settings, brush, ob);
-  if (use_pixels) {
-    sculpt_pbvh_update_pixels(paint_mode_settings, ss, ob);
   }
 
   /* Draw Face Sets in draw mode makes a single undo push, in alt-smooth mode deforms the

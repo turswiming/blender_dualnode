@@ -243,14 +243,14 @@ static void split_pixel_node(PBVH *pbvh,
     BKE_image_release_ibuf(image, image_buffer, nullptr);
   }
 
+  data.undo_regions.clear();
+
   if (node->flag & PBVH_Leaf) {
     data.clear_data();
   }
   else {
     pbvh_pixels_free(node);
   }
-
-  data.undo_regions.clear();
 
   BLI_thread_queue_push(tdata->new_nodes, static_cast<void *>(split1));
   BLI_thread_queue_push(tdata->new_nodes, static_cast<void *>(split2));
@@ -481,7 +481,7 @@ static void do_encode_pixels(void *__restrict userdata,
 
 static bool should_pixels_be_updated(PBVHNode *node)
 {
-  if ((node->flag & PBVH_Leaf) == 0) {
+  if ((node->flag & (PBVH_Leaf|PBVH_TexLeaf)) == 0) {
     return false;
   }
   if (node->children_offset != 0) {

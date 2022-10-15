@@ -3069,8 +3069,23 @@ void BKE_pbvh_draw_debug_cb(PBVH *pbvh,
                                             PBVHNodeFlags flag),
                             void *user_data)
 {
+  PBVHNodeFlags flag = PBVH_Leaf;
+
   for (int a = 0; a < pbvh->totnode; a++) {
     PBVHNode *node = &pbvh->nodes[a];
+
+    if (node->flag & PBVH_TexLeaf) {
+      flag = PBVH_TexLeaf;
+      break;
+    }
+  }
+
+  for (int a = 0; a < pbvh->totnode; a++) {
+    PBVHNode *node = &pbvh->nodes[a];
+
+    if (!(node->flag & flag)) {
+      continue;
+    }
 
     draw_fn(node, user_data, node->vb.bmin, node->vb.bmax, node->flag);
   }
