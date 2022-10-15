@@ -245,13 +245,12 @@ static float automasking_view_occlusion_factor(AutomaskingCache *automasking,
                                                SculptSession *ss,
                                                PBVHVertRef vertex,
                                                uchar stroke_id,
-                                               AutomaskingNodeData * automask_data)
+                                               AutomaskingNodeData *automask_data)
 {
   char f = *(char *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_occlusion);
 
   if (stroke_id != automasking->current_stroke_id) {
-    f = *(char *)SCULPT_vertex_attr_get(
-        vertex, ss->attrs.automasking_occlusion) =
+    f = *(char *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_occlusion) =
         SCULPT_vertex_is_occluded(ss, vertex, automask_data->have_orig_data) ? 2 : 1;
   }
 
@@ -996,7 +995,7 @@ void SCULPT_automasking_cache_check(
       BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_ALL) {
         SCULPT_automasking_node_update(ss, &automask_data, &vd);
 
-        if (vd.i >= vd.unique_verts_count) {
+        if (vd.i >= vd.unique_vert_len) {
           node_other_verts[i].append(vd.vertex);
         }
         else {

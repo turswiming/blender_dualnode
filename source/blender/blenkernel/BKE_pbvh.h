@@ -561,7 +561,8 @@ typedef struct PBVHVertexIter {
   float (*vert_normals)[3];
 
   const bool *hide_vert;
-  int totvert, unique_verts_count;
+  int totvert;
+  int unique_vert_len;
   const int *vert_indices;
   float *vmask;
 
@@ -747,18 +748,6 @@ void BKE_pbvh_node_automasking_mark(PBVH *pbvh, PBVHNode *node);
 void BKE_pbvh_node_automasking_unmark(PBVH *pbvh, PBVHNode *node);
 bool BKE_pbvh_node_needs_automasking(PBVH *pbvh, PBVHNode *node);
 void BKE_pbvh_node_automasking_mark_all(PBVH *pbvh);
-
-/* XXX Temporary attribute for patch development; remove for final patch! */
-#ifdef __clang__
-#  define ATTR_NO_OPT __attribute__((optnone))
-#elif defined(_MSC_VER)
-#  define ATTR_NO_OPT __pragma(optimize("", off))
-#elif defined(__GNUC__)
-#  define ATTR_NO_OPT __attribute__((optimize("O0")))
-#else
-#  define ATTR_NO_OPT
-#endif
-
 
 #ifdef __cplusplus
 }

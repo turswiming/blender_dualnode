@@ -137,15 +137,9 @@ static float paint_automasking_interp(SculptSession *ss,
 
   BLI_assert(BKE_pbvh_type(ss->pbvh) == PBVH_FACES);
 
-#if 0
-  v1 = BKE_pbvh_index_to_vertex(ss->pbvh, triangle.vert_indices[0]);
-  v2 = BKE_pbvh_index_to_vertex(ss->pbvh, triangle.vert_indices[1]);
-  v3 = BKE_pbvh_index_to_vertex(ss->pbvh, triangle.vert_indices[2]);
-#else
   v1.i = triangle.vert_indices[0];
   v2.i = triangle.vert_indices[1];
   v3.i = triangle.vert_indices[2];
-#endif
 
   float a = SCULPT_automasking_factor_get(ss->cache->automasking, ss, v1, &automask_data);
   float b = SCULPT_automasking_factor_get(ss->cache->automasking, ss, v2, &automask_data);
