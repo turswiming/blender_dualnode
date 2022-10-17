@@ -837,20 +837,18 @@ class VIEW3D_HT_header(Header):
                         panel="VIEW3D_PT_gpencil_guide",
                         text="Guides",
                     )
-
-        elif object_mode == 'SCULPT':
-            layout.popover(
-                panel="VIEW3D_PT_sculpt_automasking",
-                text="",
-                icon="MOD_MASK"
-            )
-
             if object_mode == 'SCULPT_GPENCIL':
                 layout.popover(
                        panel="VIEW3D_PT_gpencil_sculpt_automasking",
                        text="",
                        icon="MOD_MASK"
                 )
+        elif object_mode == 'SCULPT':
+            layout.popover(
+                panel="VIEW3D_PT_sculpt_automasking",
+                text="",
+                icon="MOD_MASK"
+            )
         else:
             # Transform settings depending on tool header visibility
             VIEW3D_HT_header.draw_xform_template(layout, context)
