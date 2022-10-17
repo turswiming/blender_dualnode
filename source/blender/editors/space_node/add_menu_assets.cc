@@ -11,11 +11,12 @@
 #include "BKE_idprop.h"
 #include "BKE_screen.h"
 
+#include "BLT_translation.h"
+
 #include "RNA_access.h"
 #include "RNA_prototypes.h"
 
 #include "ED_asset.h"
-#include "ED_screen.h"
 
 #include "node_intern.hh"
 
@@ -42,23 +43,21 @@ struct AssetItemTree {
   Map<const bke::AssetCatalogTreeItem *, bke::AssetCatalogPath> full_catalog_per_tree_item;
 };
 
-static void search_listen_fn(const wmRegionListenerParams *params)
+static bool all_loading_finished()
 {
-  const wmNotifier *wmn = params->notifier;
-
-  switch (wmn->category) {
-    case NC_ASSET:
-      if (wmn->data == ND_ASSET_LIST_READING) {
-        std::cout << "TAGGING FOR REDRAW\n";
-        ED_region_tag_redraw(params->region);
-        ED_region_tag_refresh_ui(params->region);
-      }
-      break;
+  for (const AssetLibraryReference &library : bke::all_asset_library_refs()) {
+    if (!ED_assetlist_is_loaded(&library)) {
+      return false;
+    }
   }
+  return true;
 }
 
-static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree &node_tree)
+static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree *node_tree)
 {
+  if (!node_tree) {
+    return {};
+  }
   const Main &bmain = *CTX_data_main(&C);
   const Vector<AssetLibraryReference> all_libraries = bke::all_asset_library_refs();
 
@@ -94,7 +93,7 @@ static AssetItemTree build_catalog_tree(const bContext &C, const bNodeTree &node
       }
       const AssetMetaData &meta_data = *ED_asset_handle_get_metadata(&asset);
       const IDProperty *tree_type = BKE_asset_metadata_idprop_find(&meta_data, "type");
-      if (tree_type == nullptr || IDP_Int(tree_type) != node_tree.type) {
+      if (tree_type == nullptr || IDP_Int(tree_type) != node_tree->type) {
         return true;
       }
       if (BLI_uuid_is_nil(meta_data.catalog_id)) {
@@ -163,48 +162,52 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
   uiItemS(layout);
 
   for (const LibraryAsset &item : asset_items) {
-    uiLayout *row = uiLayoutColumn(layout, false);
+    uiLayout *col = uiLayoutColumn(layout, false);
     PointerRNA file{
         &screen.id, &RNA_FileSelectEntry, const_cast<FileDirEntry *>(item.handle.file_data)};
-    uiLayoutSetContextPointer(row, "active_file", &file);
+    uiLayoutSetContextPointer(col, "active_file", &file);
 
     PointerRNA library_ptr{&screen.id,
                            &RNA_AssetLibraryReference,
                            const_cast<AssetLibraryReference *>(&item.library_ref)};
-    uiLayoutSetContextPointer(row, "asset_library_ref", &library_ptr);
+    uiLayoutSetContextPointer(col, "asset_library_ref", &library_ptr);
 
-    uiItemO(row, ED_asset_handle_get_name(&item.handle), ICON_NONE, "NODE_OT_add_group_asset");
+    uiItemO(col, ED_asset_handle_get_name(&item.handle), ICON_NONE, "NODE_OT_add_group_asset");
   }
 
   catalog_item->foreach_child([&](bke::AssetCatalogTreeItem &child_item) {
     const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(&child_item);
     PointerRNA path_ptr{
         &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
-    uiLayout *row = uiLayoutColumn(layout, false);
-    uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
-    uiItemM(row, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
+    uiLayout *col = uiLayoutColumn(layout, false);
+    uiLayoutSetContextPointer(col, "asset_catalog_path", &path_ptr);
+    uiItemM(col, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
   });
 }
 
 static void add_root_catalogs_draw(const bContext *C, Menu *menu)
 {
-  std::cout << __func__ << '\n';
   bScreen &screen = *CTX_wm_screen(C);
   SpaceNode &snode = *CTX_wm_space_node(C);
   const bNodeTree *edit_tree = snode.edittree;
-  ARegion *region = CTX_wm_region(C);
-  region->type->listener = search_listen_fn;
+  uiLayout *layout = menu->layout;
 
   snode.runtime->assets_for_menu.reset();
   snode.runtime->assets_for_menu = std::make_shared<AssetItemTree>(
-      build_catalog_tree(*C, *edit_tree));
+      build_catalog_tree(*C, edit_tree));
+
+  const bool loading_finished = all_loading_finished();
+
   AssetItemTree &tree = *snode.runtime->assets_for_menu;
-  if (tree.catalogs.is_empty()) {
+  if (tree.catalogs.is_empty() && loading_finished) {
     return;
   }
 
-  uiLayout *layout = menu->layout;
   uiItemS(layout);
+
+  if (!loading_finished) {
+    uiItemL(layout, IFACE_("Loading Asset Libraries"), ICON_INFO);
+  }
 
   /* Avoid adding a separate root catalog when the assets have already been added to one of the
    * builtin menus.
@@ -247,9 +250,9 @@ static void add_root_catalogs_draw(const bContext *C, Menu *menu)
     const bke::AssetCatalogPath &path = tree.full_catalog_per_tree_item.lookup(&item);
     PointerRNA path_ptr{
         &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
-    uiLayout *row = uiLayoutColumn(layout, false);
-    uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
-    uiItemM(row, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
+    uiLayout *col = uiLayoutColumn(layout, false);
+    uiLayoutSetContextPointer(col, "asset_catalog_path", &path_ptr);
+    uiItemM(col, "NODE_MT_node_add_catalog_assets", path.name().c_str(), ICON_NONE);
   });
 }
 
@@ -289,7 +292,7 @@ void uiTemplateNodeAssetMenuItems(uiLayout *layout, bContext *C, const char *cat
   PointerRNA path_ptr{
       &screen.id, &RNA_AssetCatalogPath, const_cast<bke::AssetCatalogPath *>(&path)};
   uiItemS(layout);
-  uiLayout *row = uiLayoutColumn(layout, false);
-  uiLayoutSetContextPointer(row, "asset_catalog_path", &path_ptr);
-  uiItemMContents(row, "NODE_MT_node_add_catalog_assets");
+  uiLayout *col = uiLayoutColumn(layout, false);
+  uiLayoutSetContextPointer(col, "asset_catalog_path", &path_ptr);
+  uiItemMContents(col, "NODE_MT_node_add_catalog_assets");
 }
