@@ -53,8 +53,9 @@ class Instance {
   DRWState cull_state;
   DRWState clip_state;
 
+  Vector<float4> clip_planes = {};
+
   eContextObjectMode ob_mode;
-  eGPUShaderConfig clip_mode;
 
   View3DShading shading;
 
@@ -91,8 +92,14 @@ class Instance {
       reset_taa = true;
     }
     clip_state = new_clip_state;
-    /* TODO(pragma37): Shouldn't clip_state be enough ? */
-    clip_mode = context->sh_cfg;
+
+    clip_planes.clear();
+    if (clip_state & DRW_STATE_CLIP_PLANES) {
+      int plane_len = (RV3D_LOCK_FLAGS(rv3d) & RV3D_BOXCLIP) ? 4 : 6;
+      for (auto i : IndexRange(plane_len)) {
+        clip_planes.append(rv3d->clip[i]);
+      }
+    }
 
     if (rv3d && rv3d->rflag & RV3D_GPULIGHT_UPDATE) {
       reset_taa = true;
@@ -515,6 +522,10 @@ class Instance {
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
     resources.color_tx.acquire(int2(resources.depth_tx.size()), GPU_RGBA16F);
+
+    if (!clip_planes.is_empty()) {
+      view.set_clip_planes(clip_planes);
+    }
 
     opaque_ps.draw_prepass(manager, view, resources.depth_tx);
     // transparent_ps.draw_prepass(manager, view, resources.depth_tx);
