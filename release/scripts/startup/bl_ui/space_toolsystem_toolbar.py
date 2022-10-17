@@ -2559,6 +2559,17 @@ class _defs_sequencer_generic:
         )
 
     @ToolDef.from_fn
+    def retime():
+        return dict(
+            idname="builtin.retime",
+            label="Retime",
+            icon="none",
+            widget="SEQUENCER_GGT_gizmo_retime",
+            operator="transform.translate",
+            keymap=None,
+        )
+
+    @ToolDef.from_fn
     def sample():
         return dict(
             idname="builtin.sample",
@@ -3248,6 +3259,7 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
         'SEQUENCER': [
             *_tools_select,
             _defs_sequencer_generic.blade,
+            _defs_sequencer_generic.retime,
         ],
         'SEQUENCER_PREVIEW': [
             *_tools_select,

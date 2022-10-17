@@ -136,6 +136,8 @@ void SEQ_time_start_frame_set(const struct Scene *scene, struct Sequence *seq, i
  * \note this function is currently only used internally and in versioning code.
  */
 void SEQ_time_update_meta_strip_range(const struct Scene *scene, struct Sequence *seq_meta);
+int SEQ_retiming_handles_count(const struct Sequence *seq);
+bool SEQ_retiming_is_active(const struct Scene *scene, const struct Sequence *seq);
 
 #ifdef __cplusplus
 }
