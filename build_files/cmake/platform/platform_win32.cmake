@@ -773,16 +773,20 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
   find_library(OSL_LIB_EXEC NAMES oslexec PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_COMP NAMES oslcomp PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_QUERY NAMES oslquery PATHS ${CYCLES_OSL}/lib)
+  find_library(OSL_LIB_NOISE NAMES oslnoise PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_EXEC_DEBUG NAMES oslexec_d PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_COMP_DEBUG NAMES oslcomp_d PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_QUERY_DEBUG NAMES oslquery_d PATHS ${CYCLES_OSL}/lib)
+  find_library(OSL_LIB_NOISE_DEBUG NAMES oslnoise_d PATHS ${CYCLES_OSL}/lib)
   list(APPEND OSL_LIBRARIES
     optimized ${OSL_LIB_COMP}
     optimized ${OSL_LIB_EXEC}
     optimized ${OSL_LIB_QUERY}
+    optimized ${OSL_LIB_NOISE}
     debug ${OSL_LIB_EXEC_DEBUG}
     debug ${OSL_LIB_COMP_DEBUG}
     debug ${OSL_LIB_QUERY_DEBUG}
+    debug ${OSL_LIB_NOISE_DEBUG}
     ${PUGIXML_LIBRARIES}
   )
   find_path(OSL_INCLUDE_DIR OSL/oslclosure.h PATHS ${CYCLES_OSL}/include)
