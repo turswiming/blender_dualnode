@@ -3604,6 +3604,13 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
             v3d->overlay.flag |= V3D_OVERLAY_VIEWER_ATTRIBUTE;
             v3d->overlay.viewer_attribute_opacity = 1.0f;
           }
+          if (sl->spacetype == SPACE_IMAGE) {
+            SpaceImage *sima = (SpaceImage *)sl;
+            if (sima->flag & SI_FLAG_UNUSED_18) { /* Was #SI_CUSTOM_GRID. */
+              sima->grid_shape_source = SI_GRID_SHAPE_FIXED;
+              sima->flag &= ~SI_FLAG_UNUSED_18;
+            }
+          }
         }
       }
     }
@@ -3613,6 +3620,13 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
         continue;
       }
       version_node_id(ntree, GEO_NODE_OFFSET_POINT_IN_CURVE, "GeometryNodeOffsetPointInCurve");
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 304, 4)) {
+    /* Update brush sculpt settings. */
+    LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
+      brush->automasking_cavity_factor = 1.0f;
     }
   }
 

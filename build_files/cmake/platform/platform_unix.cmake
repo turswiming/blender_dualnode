@@ -329,7 +329,7 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
   endif()
 endif()
 
-if(WITH_CYCLES_DEVICE_ONEAPI)
+if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
   set(CYCLES_LEVEL_ZERO ${LIBDIR}/level-zero CACHE PATH "Path to Level Zero installation")
   if(EXISTS ${CYCLES_LEVEL_ZERO} AND NOT LEVEL_ZERO_ROOT_DIR)
     set(LEVEL_ZERO_ROOT_DIR ${CYCLES_LEVEL_ZERO})
@@ -592,7 +592,7 @@ if(WITH_HARU)
   endif()
 endif()
 
-if(WITH_CYCLES_PATH_GUIDING)
+if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
   find_package_wrapper(openpgl)
   if(openpgl_FOUND)
     get_target_property(OPENPGL_LIBRARIES openpgl::openpgl LOCATION)
@@ -740,27 +740,27 @@ if(WITH_GHOST_WAYLAND)
     set(wayland-cursor_FOUND ON)
   endif()
 
-  if (NOT ${wayland-client_FOUND})
+  if (NOT wayland-client_FOUND)
     message(STATUS "wayland-client not found, disabling WITH_GHOST_WAYLAND")
     set(WITH_GHOST_WAYLAND OFF)
   endif()
-  if (NOT ${wayland-egl_FOUND})
+  if (NOT wayland-egl_FOUND)
     message(STATUS "wayland-egl not found, disabling WITH_GHOST_WAYLAND")
     set(WITH_GHOST_WAYLAND OFF)
   endif()
-  if (NOT ${wayland-scanner_FOUND})
+  if (NOT wayland-scanner_FOUND)
     message(STATUS "wayland-scanner not found, disabling WITH_GHOST_WAYLAND")
     set(WITH_GHOST_WAYLAND OFF)
   endif()
-  if (NOT ${wayland-cursor_FOUND})
+  if (NOT wayland-cursor_FOUND)
     message(STATUS "wayland-cursor not found, disabling WITH_GHOST_WAYLAND")
     set(WITH_GHOST_WAYLAND OFF)
   endif()
-  if (NOT ${wayland-protocols_FOUND})
+  if (NOT wayland-protocols_FOUND)
     message(STATUS "wayland-protocols not found, disabling WITH_GHOST_WAYLAND")
     set(WITH_GHOST_WAYLAND OFF)
   endif()
-  if (NOT ${xkbcommon_FOUND})
+  if (NOT xkbcommon_FOUND)
     message(STATUS "xkbcommon not found, disabling WITH_GHOST_WAYLAND")
     set(WITH_GHOST_WAYLAND OFF)
   endif()
@@ -778,31 +778,11 @@ if(WITH_GHOST_WAYLAND)
       endif()
     endif()
 
-    list(APPEND PLATFORM_LINKLIBS
-      ${xkbcommon_LINK_LIBRARIES}
-    )
-
-    if(NOT WITH_GHOST_WAYLAND_DYNLOAD)
-      list(APPEND PLATFORM_LINKLIBS
-        ${wayland-client_LINK_LIBRARIES}
-        ${wayland-egl_LINK_LIBRARIES}
-        ${wayland-cursor_LINK_LIBRARIES}
-      )
-    endif()
-
     if(WITH_GHOST_WAYLAND_DBUS)
-      list(APPEND PLATFORM_LINKLIBS
-        ${dbus_LINK_LIBRARIES}
-      )
       add_definitions(-DWITH_GHOST_WAYLAND_DBUS)
     endif()
 
     if(WITH_GHOST_WAYLAND_LIBDECOR)
-      if(NOT WITH_GHOST_WAYLAND_DYNLOAD)
-        list(APPEND PLATFORM_LINKLIBS
-          ${libdecor_LIBRARIES}
-        )
-      endif()
       add_definitions(-DWITH_GHOST_WAYLAND_LIBDECOR)
     endif()
 
@@ -855,12 +835,8 @@ if(WITH_GHOST_X11)
   find_path(X11_XF86keysym_INCLUDE_PATH X11/XF86keysym.h ${X11_INC_SEARCH_PATH})
   mark_as_advanced(X11_XF86keysym_INCLUDE_PATH)
 
-  list(APPEND PLATFORM_LINKLIBS ${X11_X11_LIB})
-
   if(WITH_X11_XINPUT)
-    if(X11_Xinput_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xinput_LIB})
-    else()
+    if(NOT X11_Xinput_LIB)
       message(FATAL_ERROR "LibXi not found. Disable WITH_X11_XINPUT if you
       want to build without tablet support")
     endif()
@@ -870,18 +846,14 @@ if(WITH_GHOST_X11)
     # XXX, why doesn't cmake make this available?
     find_library(X11_Xxf86vmode_LIB Xxf86vm   ${X11_LIB_SEARCH_PATH})
     mark_as_advanced(X11_Xxf86vmode_LIB)
-    if(X11_Xxf86vmode_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xxf86vmode_LIB})
-    else()
+    if(NOT X11_Xxf86vmode_LIB)
       message(FATAL_ERROR "libXxf86vm not found. Disable WITH_X11_XF86VMODE if you
       want to build without")
     endif()
   endif()
 
   if(WITH_X11_XFIXES)
-    if(X11_Xfixes_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xfixes_LIB})
-    else()
+    if(NOT X11_Xfixes_LIB)
       message(FATAL_ERROR "libXfixes not found. Disable WITH_X11_XFIXES if you
       want to build without")
     endif()
@@ -890,9 +862,7 @@ if(WITH_GHOST_X11)
   if(WITH_X11_ALPHA)
     find_library(X11_Xrender_LIB Xrender  ${X11_LIB_SEARCH_PATH})
     mark_as_advanced(X11_Xrender_LIB)
-    if(X11_Xrender_LIB)
-      list(APPEND PLATFORM_LINKLIBS ${X11_Xrender_LIB})
-    else()
+    if(NOT X11_Xrender_LIB)
       message(FATAL_ERROR "libXrender not found. Disable WITH_X11_ALPHA if you
       want to build without")
     endif()

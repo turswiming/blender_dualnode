@@ -759,7 +759,8 @@ BLI_INLINE Material *eevee_object_material_get(Object *ob, int slot, bool holdou
 BLI_INLINE EeveeMaterialCache eevee_material_cache_get(
     EEVEE_Data *vedata, EEVEE_ViewLayerData *sldata, Object *ob, int slot, bool is_hair)
 {
-  const bool holdout = (ob->base_flag & BASE_HOLDOUT) != 0;
+  const bool holdout = ((ob->base_flag & BASE_HOLDOUT) != 0) ||
+                       ((ob->visibility_flag & OB_HOLDOUT) != 0);
   EeveeMaterialCache matcache;
   Material *ma = eevee_object_material_get(ob, slot, holdout);
   switch (ma->blend_method) {
@@ -811,6 +812,10 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
 
   bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) &&
                          !DRW_state_is_image_render();
+
+  if (ob->sculpt && ob->sculpt->pbvh) {
+    BKE_pbvh_is_drawing_set(ob->sculpt->pbvh, use_sculpt_pbvh);
+  }
 
   /* First get materials for this mesh. */
   if (ELEM(ob->type, OB_MESH, OB_SURF)) {
