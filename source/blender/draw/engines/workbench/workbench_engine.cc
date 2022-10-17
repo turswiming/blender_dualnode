@@ -81,6 +81,11 @@ class Instance {
 
     bool reset_taa = false;
 
+    UniformBuffer<WorldData> &world_buf = resources.world_buf;
+
+    world_buf.viewport_size = DRW_viewport_size_get();
+    world_buf.viewport_size_inv = DRW_viewport_invert_size_get();
+
     cull_state = shading.flag & V3D_SHADING_BACKFACE_CULLING ? DRW_STATE_CULL_BACK :
                                                                DRW_STATE_NO_DRAW;
 

@@ -13,7 +13,8 @@ struct LightData {
 };
 
 struct WorldData {
-  float4 viewport_size;
+  float2 viewport_size;
+  float2 viewport_size_inv;
   float4 object_outline_color;
   float4 shadow_direction_vs;
   float shadow_focus;
@@ -46,5 +47,3 @@ struct WorldData {
 
   float4 background_color;
 };
-
-#define viewport_size_inv viewport_size.zw
