@@ -196,21 +196,6 @@ template<typename T> class RetimingHandlesIterator {
   SeqRetimingHandle *handles_array_;
 };
 
-class Test {
-  Test(const SeqRetimingHandle *handle)
-  {
-    xxx = handle;
-  }
-
- private:
-  const SeqRetimingHandle *xxx;
-};
-
-static void test(Sequence *seq)
-{
-  RetimingHandlesIterator xx = RetimingHandlesIterator<Test>(seq);
-}
-
 static float pixels_to_view_width(const bContext *C, const float width)
 {
   const View2D *v2d = UI_view2d_fromcontext(C);
