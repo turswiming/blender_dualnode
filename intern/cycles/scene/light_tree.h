@@ -112,14 +112,20 @@ struct LightTreeBuildNode {
   uint bit_trail;
   bool is_leaf;
 
-  void init_leaf(uint offset,
-                 uint n,
+  void init_leaf(const uint &offset,
+                 const uint &n,
                  const BoundBox &b,
                  const OrientationBounds &c,
-                 float e,
-                 float e_var,
-                 uint bits);
-  void init_interior(LightTreeBuildNode *c0, LightTreeBuildNode *c1, uint bits);
+                 const float &e,
+                 const float &e_var,
+                 const uint &bits);
+  void init_interior(LightTreeBuildNode *c0,
+                     LightTreeBuildNode *c1,
+                     const BoundBox &b,
+                     const OrientationBounds &c,
+                     const float &e,
+                     const float &e_var,
+                     const uint &bits);
 };
 
 /* Packed Light Tree Node
@@ -166,15 +172,14 @@ class LightTree {
                                       vector<LightTreePrimitive> &ordered_prims,
                                       uint bit_trail,
                                       int depth);
-  void split_saoh(const BoundBox &centroid_bounds,
-                  const vector<LightTreePrimitiveInfo> &primitive_info,
-                  int start,
-                  int end,
-                  const BoundBox &bbox,
-                  const OrientationBounds &bcone,
-                  float &min_cost,
-                  int &min_dim,
-                  int &min_bucket);
+  float min_split_saoh(const BoundBox &centroid_bounds,
+                       const vector<LightTreePrimitiveInfo> &primitive_info,
+                       int start,
+                       int end,
+                       const BoundBox &bbox,
+                       const OrientationBounds &bcone,
+                       int &min_dim,
+                       int &min_bucket);
   int flatten_tree(const LightTreeBuildNode *node, int &offset, int parent);
 };
 
