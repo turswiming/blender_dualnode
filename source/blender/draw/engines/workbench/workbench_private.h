@@ -200,7 +200,7 @@ typedef struct WORKBENCH_UBO_World {
 
   int matcap_orientation;
   int use_specular; /* Bools are 32bit ints in GLSL. */
-  int _pad1;
+  float xray_alpha; /* Workbench Next */
   int _pad2;
 
   /* Workbench Next data

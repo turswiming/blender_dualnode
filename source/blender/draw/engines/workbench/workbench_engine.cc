@@ -36,10 +36,11 @@ class Instance {
  public:
   SceneResources resources;
 
-  OpaquePass opaque_ps;
-
-  // TransparentPass transparent_ps;
-  // TransparentPass transparent_in_front_ps;
+  OpaquePass opaque_ps = OpaquePass(resources.color_tx, resources.depth_tx);
+  OpaquePass opaque_in_front_ps = OpaquePass(resources.color_tx, resources.depth_in_front_tx);
+  TransparentPass transparent_ps = TransparentPass(resources.color_tx, resources.depth_tx);
+  TransparentPass transparent_in_front_ps = TransparentPass(resources.color_tx,
+                                                            resources.depth_in_front_tx);
 
   AntiAliasingPass anti_aliasing_ps;
 
@@ -58,6 +59,7 @@ class Instance {
   eContextObjectMode ob_mode;
 
   View3DShading shading;
+  bool xray_mode;
 
   StringRefNull current_matcap;
   Scene *scene;
@@ -123,6 +125,9 @@ class Instance {
         shading.xray_alpha = 1.0f;
       }
     }
+    world_buf.xray_alpha = shading.xray_alpha;
+
+    xray_mode = !is_render_mode && shading.xray_alpha != 1.0f;
 
     if (SHADING_XRAY_FLAG_ENABLED(shading)) {
       /* Disable shading options that aren't supported in transparency mode. */
@@ -135,8 +140,6 @@ class Instance {
 
     shading_type = shading_type_from_v3d_lighting(shading.light);
     material_override = Material(shading.single_color);
-
-    UniformBuffer<WorldData> &world_buf = resources.world_buf;
 
     StudioLight *studio_light = nullptr;
     if (U.edit_studio_light) {
@@ -194,6 +197,7 @@ class Instance {
     /* TODO(pragma37) volumes_do */
 
     resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
+    resources.depth_in_front_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
 
     anti_aliasing_ps.init(reset_taa);
     /* TODO(pragma37) taa_sample_len */
@@ -202,9 +206,13 @@ class Instance {
   void begin_sync()
   {
     resources.world_buf.push_update();
+
     opaque_ps.sync(cull_state, clip_state, shading_type, resources);
-    //  transparent_ps.sync(cull_state, clip_state, shading_type, resources);
-    //  transparent_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
+    opaque_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
+
+    transparent_ps.sync(cull_state, clip_state, shading_type, resources);
+    transparent_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
+
     anti_aliasing_ps.sync(resources);
   }
 
@@ -438,13 +446,18 @@ class Instance {
             if (batches[i] == nullptr) {
               continue;
             }
-
             /* TODO(fclem): This create a cull-able instance for each sub-object. This is done
              * for simplicity to reduce complexity. But this increase the overhead per object.
              * Instead, we should use an indirection buffer to the material buffer. */
-            ::Material *mat = BKE_object_material_get_eval(ob_ref.object, i + 1);
-            if (mat == nullptr) {
-              mat = BKE_material_default_empty();
+
+            ResourceHandle handle = manager.resource_handle(ob_ref);
+            Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+
+            if (::Material *_mat = BKE_object_material_get_eval(ob_ref.object, i + 1)) {
+              mat = Material(*_mat);
+            }
+            else {
+              mat = Material(*BKE_material_default_empty());
             }
 
             ::Image *image = nullptr;
@@ -454,9 +467,7 @@ class Instance {
               get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
             }
 
-            ResourceHandle handle = manager.resource_handle(ob_ref);
-            resources.material_buf.get_or_resize(handle.resource_index()) = Material(*mat);
-            pipeline_get(ob_ref, image, sampler_state, iuser).draw(batches[i], handle);
+            pipeline_get(ob_ref, mat, image, sampler_state, iuser).draw(batches[i], handle);
           }
         }
       }
@@ -497,7 +508,7 @@ class Instance {
             mat = Material(*BKE_material_default_empty());
           }
 
-          pipeline_get(ob_ref, dmi.image_paint_override, dmi.override_sampler_state)
+          pipeline_get(ob_ref, mat, dmi.image_paint_override, dmi.override_sampler_state)
               .draw(batch, handle);
         }
       }
@@ -511,16 +522,28 @@ class Instance {
   }
 
   PassMain::Sub &pipeline_get(ObjectRef &ob_ref,
+                              Material &material,
                               ::Image *image = nullptr,
                               eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT,
                               ImageUser *iuser = nullptr)
   {
     const bool in_front = (ob_ref.object->dtx & OB_DRAW_IN_FRONT) != 0;
-    if (in_front) {
-      return opaque_ps.gbuffer_in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+    if (xray_mode || material.is_transparent()) {
+      if (in_front) {
+        return transparent_in_front_ps.accumulation_ps_.sub_pass_get(
+            ob_ref, image, sampler_state, iuser);
+      }
+      else {
+        return transparent_ps.accumulation_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+      }
     }
     else {
-      return opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+      if (in_front) {
+        return opaque_in_front_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+      }
+      else {
+        return opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+      }
     }
   }
 
@@ -532,12 +555,31 @@ class Instance {
       view.set_clip_planes(clip_planes);
     }
 
-    opaque_ps.draw_prepass(manager, view, resources.depth_tx);
-    // transparent_ps.draw_prepass(manager, view, resources.depth_tx);
-    // volume_ps.draw_prepass(manager, view, resources.depth_tx);
+    PassSimple clear_ps = PassSimple("Workbench.Clear");
+    clear_ps.init();
+    clear_ps.clear_color(resources.world_buf.background_color);
+    Framebuffer fb = Framebuffer("Workbench.Clear");
+    fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
+    fb.bind();
+    manager.submit(clear_ps);
 
-    opaque_ps.draw_resolve(manager, view);
-    // transparent_ps.draw_resolve(manager, view);
+    if (!opaque_ps.is_empty() || !transparent_ps.is_empty()) {
+      fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
+      fb.bind();
+      fb.clear_depth(1.0f);
+    }
+    if (!opaque_in_front_ps.is_empty() || !transparent_in_front_ps.is_empty()) {
+      fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx));
+      fb.bind();
+      fb.clear_depth(1.0f);
+    }
+
+    opaque_ps.draw(manager, view);
+    transparent_ps.draw(manager, view);
+    opaque_in_front_ps.draw(manager, view);
+    transparent_in_front_ps.draw(manager, view);
+
+    // volume_ps.draw_prepass(manager, view, resources.depth_tx);
 
     anti_aliasing_ps.draw(manager, view, depth_tx, color_tx);
 

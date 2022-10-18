@@ -86,7 +86,7 @@ GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
 GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type, eShadingType shading_type)
 {
   GPUShader *&shader_ptr =
-      resolve_shader_cache_[static_cast<int>(shading_type)][static_cast<int>(pipeline_type)];
+      resolve_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(shading_type)];
 
   if (shader_ptr != nullptr) {
     return shader_ptr;
@@ -115,6 +115,8 @@ GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type, eShading
       break;
   }
   shader_ptr = GPU_shader_create_from_info_name(info_name.c_str());
+  resolve_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(shading_type)] =
+      shader_ptr;
   return shader_ptr;
 }
 

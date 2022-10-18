@@ -35,11 +35,12 @@ void main()
     color.rgb = base_color;
 #endif
     color.a = 1.0f;
+
+    /* TODO(fclem): Port the TAA shader that does this tranformation. */
+    /* Use log2 space to avoid highlights creating too much aliasing. */
+    /* TODO(pragma37): Re-enable */
+    // color.rgb = log2(color.rgb + 0.5);
+
+    imageStore(out_color_img, texel, color);
   }
-
-  /* TODO(fclem): Port the TAA shader that does this tranformation. */
-  /* Use log2 space to avoid highlights creating too much aliasing. */
-  color = log2(color + 0.5);
-
-  imageStore(out_color_img, texel, color);
 }

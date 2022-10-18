@@ -42,8 +42,8 @@ struct WorldData {
 
   int matcap_orientation;
   bool use_specular;
+  float xray_alpha;
   int _pad1;
-  int _pad2;
 
   float4 background_color;
 };

@@ -16,4 +16,9 @@ void main()
   /* Listing 4 */
   fragColor.rgb = trans_accum.rgb / clamp(trans_weight, 1e-4, 5e4);
   fragColor.a = 1.0 - trans_reveal;
+
+  /* TODO(fclem): Port the TAA shader that does this tranformation. */
+  /* Use log2 space to avoid highlights creating too much aliasing. */
+  /* TODO(pragma37): Re-enable */
+  // fragColor.rgb = log2(fragColor.rgb + 0.5);
 }

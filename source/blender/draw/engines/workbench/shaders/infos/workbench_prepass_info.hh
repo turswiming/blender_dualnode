@@ -86,6 +86,10 @@ GPU_SHADER_CREATE_INFO(workbench_lighting_matcap)
     .sampler(4, ImageType::FLOAT_2D, "matcap_diffuse_tx", Frequency::PASS)
     .sampler(5, ImageType::FLOAT_2D, "matcap_specular_tx", Frequency::PASS);
 
+GPU_SHADER_CREATE_INFO(workbench_next_lighting_matcap)
+    .define("WORKBENCH_LIGHTING_MATCAP")
+    .sampler(WB_MATCAP_SLOT, ImageType::FLOAT_2D_ARRAY, "matcap_tx", Frequency::PASS);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -232,7 +236,7 @@ GPU_SHADER_CREATE_INFO(workbench_matcap).define("WORKBENCH_SHADING_MATCAP");
 #define WORKBENCH_SHADING_VARIATIONS(prefix, ...) \
   WORKBENCH_COLOR_VARIATIONS(prefix##_flat, "workbench_lighting_flat", __VA_ARGS__) \
   WORKBENCH_COLOR_VARIATIONS(prefix##_studio, "workbench_lighting_studio", __VA_ARGS__) \
-  WORKBENCH_COLOR_VARIATIONS(prefix##_matcap, "workbench_lighting_matcap", __VA_ARGS__)
+  WORKBENCH_COLOR_VARIATIONS(prefix##_matcap, "workbench_next_lighting_matcap", __VA_ARGS__)
 
 #define WORKBENCH_PIPELINE_VARIATIONS(prefix, ...) \
   WORKBENCH_SHADING_VARIATIONS(prefix##_transparent, "workbench_transparent_accum", __VA_ARGS__) \

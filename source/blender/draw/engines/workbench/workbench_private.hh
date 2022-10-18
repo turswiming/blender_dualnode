@@ -22,6 +22,8 @@ struct Material {
   Material(::Object &ob, bool random = false);
   Material(::Material &mat);
 
+  bool is_transparent();
+
   static uint32_t pack_data(float metallic, float roughness, float alpha);
 };
 
@@ -34,9 +36,9 @@ void get_material_image(Object *ob,
 class ShaderCache {
  private:
   /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
-  GPUShader *prepass_shader_cache_[shading_type_len][color_type_len][geometry_type_len]
-                                  [pipeline_type_len] = {{{{nullptr}}}};
-  GPUShader *resolve_shader_cache_[shading_type_len][pipeline_type_len] = {{nullptr}};
+  GPUShader *prepass_shader_cache_[pipeline_type_len][geometry_type_len][color_type_len]
+                                  [shading_type_len] = {{{{nullptr}}}};
+  GPUShader *resolve_shader_cache_[pipeline_type_len][shading_type_len] = {{nullptr}};
 
  public:
   ~ShaderCache();
@@ -69,6 +71,8 @@ class MeshPass : public PassMain {
   using TextureSubPassKey = std::pair<GPUTexture *, eGeometryType>;
   Map<TextureSubPassKey, PassMain::Sub *> texture_subpass_map;
 
+  bool _is_empty;
+
  public:
   MeshPass(const char *name);
 
@@ -76,7 +80,6 @@ class MeshPass : public PassMain {
   bool is_empty() const;
 
   void init_pass(SceneResources &resources, DRWState state);
-
   void init_subpasses(ePipelineType pipeline, eShadingType shading, ShaderCache &shaders);
 
   PassMain::Sub &sub_pass_get(
@@ -88,44 +91,51 @@ class MeshPass : public PassMain {
 
 class OpaquePass {
  public:
+  Texture &color_tx;
+  Texture &depth_tx;
+
   TextureFromPool gbuffer_normal_tx = {"gbuffer_normal_tx"};
   TextureFromPool gbuffer_material_tx = {"gbuffer_material_tx"};
   TextureFromPool gbuffer_object_id_tx = {"gbuffer_object_id_tx"};
   Framebuffer opaque_fb;
 
   MeshPass gbuffer_ps_ = {"Opaque.Gbuffer"};
-  MeshPass gbuffer_in_front_ps_ = {"Opaque.GbufferInFront"};
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
+
+  OpaquePass(Texture &color_tx, Texture &depth_tx);
 
   void sync(DRWState cull_state,
             DRWState clip_state,
             eShadingType shading_type,
             SceneResources &resources);
 
-  void draw_prepass(Manager &manager, View &view, Texture &depth_tx);
-
-  void draw_resolve(Manager &manager, View &view);
+  void draw(Manager &manager, View &view);
 
   bool is_empty() const;
 };
 
 class TransparentPass {
  public:
-  TextureFromPool accumulation_tx;
-  TextureFromPool reveal_tx;
+  Texture &color_tx;
+  Texture &depth_tx;
+
+  TextureFromPool accumulation_tx = {"accumulation_accumulation_tx"};
+  TextureFromPool reveal_tx = {"accumulation_reveal_tx"};
+  TextureFromPool object_id_tx = {"accumulation_gbuffer_object_id_tx"};
   Framebuffer transparent_fb;
 
   MeshPass accumulation_ps_ = {"Transparent.Accumulation"};
   PassSimple resolve_ps_ = {"Transparent.Resolve"};
+  Framebuffer resolve_fb;
+
+  TransparentPass(Texture &color_tx, Texture &depth_tx);
 
   void sync(DRWState cull_state,
             DRWState clip_state,
             eShadingType shading_type,
             SceneResources &resources);
 
-  void draw_prepass(Manager &manager, View &view, Texture &depth_tx);
-
-  void draw_resolve(Manager &manager, View &view);
+  void draw(Manager &manager, View &view);
 
   bool is_empty() const;
 };

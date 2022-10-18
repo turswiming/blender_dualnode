@@ -42,6 +42,12 @@ Material::Material(::Material &mat)
   packed_data = Material::pack_data(mat.metallic, mat.roughness, mat.a);
 }
 
+bool Material::is_transparent()
+{
+  uint32_t full_alpha_ref = 0x00ff0000;
+  return (packed_data & full_alpha_ref) != full_alpha_ref;
+}
+
 uint32_t Material::pack_data(float metallic, float roughness, float alpha)
 {
   /* Remap to Disney roughness. */
