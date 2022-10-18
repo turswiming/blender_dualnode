@@ -42,6 +42,8 @@
 #  include "BKE_scene.h"
 #  include "BKE_sound.h"
 
+#  include "GPU_context.h"
+
 #  ifdef WITH_FFMPEG
 #    include "IMB_imbuf.h"
 #  endif
@@ -1111,6 +1113,42 @@ static int arg_handle_debug_gpu_set(int UNUSED(argc),
   return 0;
 }
 
+static const char arg_handle_gpu_backend_set_doc[] =
+    "\n"
+    "\tForce to use a specific GPU backend. Valid options are "
+#  ifdef WITH_METAL_BACKEND
+    "'metal', "
+#  endif
+    "'opengl' and 'default'.";
+static int arg_handle_gpu_backend_set(int argc, const char **argv, void *UNUSED(data))
+{
+  if (argc == 0) {
+    printf("\nError: GPU backend must follow '--gpu-backend'.\n");
+    return 0;
+  }
+
+  eGPUBackendType gpu_backend = GPU_BACKEND_NONE;
+
+  if (STREQ(argv[1], "default")) {
+    gpu_backend = GPU_BACKEND_NONE;
+  }
+  else if (STREQ(argv[1], "opengl")) {
+    gpu_backend = GPU_BACKEND_OPENGL;
+  }
+#  ifdef WITH_METAL_BACKEND
+  else if (STREQ(argv[1], "metal")) {
+    gpu_backend = GPU_BACKEND_METAL;
+  }
+#  endif
+  else {
+    printf("\nError: Unrecognized GPU backend for '--gpu-backend'.\n");
+    return 0;
+  }
+  GPU_backend_type_set(gpu_backend);
+
+  return 1;
+}
+
 static const char arg_handle_debug_fpe_set_doc[] =
     "\n\t"
     "Enable floating-point exceptions.";
@@ -2094,6 +2132,8 @@ void main_args_setup(bContext *C, bArgs *ba)
   BLI_args_add(ba, "-b", "--background", CB(arg_handle_background_mode_set), NULL);
 
   BLI_args_add(ba, "-a", NULL, CB(arg_handle_playback_mode), NULL);
+
+  BLI_args_add(ba, NULL, "--gpu-backend", CB(arg_handle_gpu_backend_set), NULL);
 
   BLI_args_add(ba, "-d", "--debug", CB(arg_handle_debug_mode_set), ba);
 

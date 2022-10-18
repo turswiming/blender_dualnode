@@ -21,6 +21,7 @@ extern "C" {
  * automatically initializes the back-end, and #GPU_context_discard frees it when there
  * are no more contexts. */
 bool GPU_backend_supported(void);
+void GPU_backend_type_set(const eGPUBackendType backend);
 eGPUBackendType GPU_backend_get_type(void);
 
 /** Opaque type hiding blender::gpu::Context. */
