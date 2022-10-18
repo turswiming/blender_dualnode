@@ -444,10 +444,10 @@ set(SSL_CPE "cpe:2.3:a:openssl:openssl:${SSL_VERSION}:*:*:*:*:*:*:*")
 # can be no exceptions to this. 
 set(SQLITE_VERSION 3.37.2)
 set(SQLLITE_LONG_VERSION 3370200)
-set(SQLITE_URI https://www.sqlite.org/2022/sqlite-amalgamation-${SQLLITE_LONG_VERSION}.zip)
-set(SQLITE_HASH a3e4928ee0f0b101408799b3b07af8e92875b278)
+set(SQLITE_URI https://www.sqlite.org/2022/sqlite-autoconf-${SQLLITE_LONG_VERSION}.tar.gz)
+set(SQLITE_HASH e56faacadfb4154f8fbd0f2a3f827d13706b70a1)
 set(SQLITE_HASH_TYPE SHA1)
-set(SQLITE_FILE sqlite-amalgamation-${SQLLITE_LONG_VERSION}.zip)
+set(SQLITE_FILE sqlite-autoconf-${SQLLITE_LONG_VERSION}.tar.gz)
 set(SQLITE_CPE "cpe:2.3:a:sqlite:sqlite:${SQLITE_VERSION}:*:*:*:*:*:*:*")
 
 set(EMBREE_VERSION 3.13.4)

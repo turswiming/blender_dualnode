@@ -88,3 +88,24 @@ diff -Naur OpenShadingLanguage-1.12.6.2/src/liboslexec/llvm_util.cpp external_os
  
  LLVM_Util::ScopedJitMemoryUser::~ScopedJitMemoryUser()
  {
+diff --git a/src/include/OSL/mask.h b/src/include/OSL/mask.h
+index 24197af..b9275f6 100644
+--- a/src/include/OSL/mask.h
++++ b/src/include/OSL/mask.h
+@@ -4,7 +4,6 @@
+ 
+ #pragma once
+ 
+-#include <immintrin.h>
+ #include <type_traits>
+ 
+ #include <OSL/oslconfig.h>
+@@ -23,6 +22,8 @@ using std::countr_zero;
+ 
+ #elif OSL_INTEL_CLASSIC_COMPILER_VERSION
+ 
++#include <immintrin.h>
++
+ OSL_FORCEINLINE int popcount(uint32_t x) noexcept { return _mm_popcnt_u32(x);}
+ OSL_FORCEINLINE int popcount(uint64_t x) noexcept { return _mm_popcnt_u64(x); }
+ OSL_FORCEINLINE int countr_zero(uint32_t x) noexcept { return _bit_scan_forward(x); }
