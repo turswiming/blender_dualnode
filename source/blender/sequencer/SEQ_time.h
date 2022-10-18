@@ -15,6 +15,7 @@ struct ListBase;
 struct Scene;
 struct Sequence;
 struct rctf;
+struct SeqRetimingHandle;
 
 /**
  * Initialize given rectangle with the Scene's timeline boundaries.
@@ -138,6 +139,18 @@ void SEQ_time_start_frame_set(const struct Scene *scene, struct Sequence *seq, i
 void SEQ_time_update_meta_strip_range(const struct Scene *scene, struct Sequence *seq_meta);
 int SEQ_retiming_handles_count(const struct Sequence *seq);
 bool SEQ_retiming_is_active(const struct Scene *scene, const struct Sequence *seq);
+void SEQ_retiming_data_ensure(const struct Scene *scene, struct Sequence *seq);
+void SEQ_retiming_data_clear(struct Sequence *seq);
+bool SEQ_retiming_is_allowed(const struct Sequence *seq);
+struct SeqRetimingHandle *SEQ_retiming_add_handle(struct Sequence *seq, const int timeline_frame);
+void SEQ_retiming_remove_handle(struct Sequence *seq, struct SeqRetimingHandle *handle);
+void SEQ_retiming_offset_handle(const struct Scene *scene,
+                                struct Sequence *seq,
+                                struct SeqRetimingHandle *handle,
+                                const int offset);
+float SEQ_retiming_handle_speed_get(const struct Scene *scene,
+                                    const struct Sequence *seq,
+                                    const int point_index);
 
 #ifdef __cplusplus
 }

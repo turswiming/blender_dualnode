@@ -140,7 +140,7 @@ float seq_retiming_evaluate(const Sequence *seq, const int frame_index)
   return previous_handle->retiming_factor + (target_diff * segment_fac);
 }
 
-void SEQ_retiming_add_handle(Sequence *seq, const int timeline_frame)
+SeqRetimingHandle *SEQ_retiming_add_handle(Sequence *seq, const int timeline_frame)
 {
   float frame_index = timeline_frame - SEQ_time_start_frame_get(seq);
   float value = seq_retiming_evaluate(seq, frame_index);
@@ -148,7 +148,7 @@ void SEQ_retiming_add_handle(Sequence *seq, const int timeline_frame)
   const SeqRetimingHandle *closest_handle = retiming_find_closest_handle_up_to_frame(seq,
                                                                                      frame_index);
   if (closest_handle->strip_frame_index == frame_index) {
-    return; /* Retiming handle already exists. */
+    return NULL; /* Retiming handle already exists. */
   }
 
   SeqRetimingHandle *handles = seq->retiming_handles;
@@ -174,6 +174,8 @@ void SEQ_retiming_add_handle(Sequence *seq, const int timeline_frame)
   SeqRetimingHandle *added_handle = (new_handles + new_handle_index);
   added_handle->strip_frame_index = frame_index;
   added_handle->retiming_factor = value;
+
+  return added_handle;
 }
 
 void SEQ_retiming_offset_handle(const Scene *scene,
@@ -181,7 +183,14 @@ void SEQ_retiming_offset_handle(const Scene *scene,
                                 SeqRetimingHandle *handle,
                                 const int offset)
 {
-  handle->strip_frame_index += offset;
+  if (handle->strip_frame_index == 0) {
+    return; /* First handle can not be moved. */
+  }
+
+  MutableSpan handles = SEQ_retiming_handles_get(seq);
+  for (; handle < handles.end(); handle++) {
+    handle->strip_frame_index += offset;
+  }
 
   SEQ_time_update_meta_strip_range(scene, seq_sequence_lookup_meta_by_seq(scene, seq));
   seq_time_update_effects_strip_range(scene, seq_sequence_lookup_effects_by_seq(scene, seq));
@@ -189,6 +198,10 @@ void SEQ_retiming_offset_handle(const Scene *scene,
 
 void SEQ_retiming_remove_handle(Sequence *seq, SeqRetimingHandle *handle)
 {
+  SeqRetimingHandle *last_handle = seq->retiming_handles + seq->retiming_handle_count - 1;
+  if (handle->strip_frame_index == 0 || handle == last_handle) {
+    return; /* First and last handle can not be removed. */
+  }
 
   size_t handle_count = SEQ_retiming_handles_count(seq);
   SeqRetimingHandle *handles = (SeqRetimingHandle *)MEM_callocN(

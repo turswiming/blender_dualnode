@@ -177,12 +177,9 @@ static int sequencer_retiming_handle_move_modal(bContext *C, wmOperator *op, con
       mouse_x = max_ff(xmin, mouse_x);
       offset = mouse_x - (SEQ_time_start_frame_get(seq) + handle->strip_frame_index);
 
-      MutableSpan handles = SEQ_retiming_handles_get(seq);
-      for (; handle < handles.end(); handle++) {
         SEQ_retiming_offset_handle(scene, seq, handle, offset);
-        SEQ_relations_invalidate_cache_raw(scene, seq);
-      }
 
+      SEQ_relations_invalidate_cache_raw(scene, seq);
       WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
       return OPERATOR_RUNNING_MODAL;
     }

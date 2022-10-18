@@ -25,6 +25,7 @@
 
 #include "SEQ_iterator.h"
 #include "SEQ_retiming.hh"
+#include "SEQ_time.h"
 #include "SEQ_sequencer.h"
 
 /* Own include. */
