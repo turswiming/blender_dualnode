@@ -159,9 +159,9 @@ set(OPENMP_URI https://github.com/llvm/llvm-project/releases/download/llvmorg-${
 set(OPENMP_HASH_TYPE MD5)
 set(OPENMP_FILE openmp-${OPENMP_VERSION}.src.tar.xz)
 
-set(OPENIMAGEIO_VERSION v2.4.4.2)
+set(OPENIMAGEIO_VERSION v2.3.20.0)
 set(OPENIMAGEIO_URI https://github.com/OpenImageIO/oiio/archive/refs/tags/${OPENIMAGEIO_VERSION}.tar.gz)
-set(OPENIMAGEIO_HASH c0b4b67e4e81b21e56be66e14ebce52f)
+set(OPENIMAGEIO_HASH defb1fe7c8e64bac60eb3cacaf5c3736)
 set(OPENIMAGEIO_HASH_TYPE MD5)
 set(OPENIMAGEIO_FILE OpenImageIO-${OPENIMAGEIO_VERSION}.tar.gz)
 
@@ -558,10 +558,10 @@ set(BROTLI_HASH_TYPE SHA256)
 set(BROTLI_FILE brotli-v${BROTLI_VERSION}.tar.gz)
 set(BROTLI_CPE "cpe:2.3:a:google:brotli:${BROTLI_VERSION}:*:*:*:*:*:*:*")
 
-set(OPENPGL_VERSION 40fa9f4ae16d0a00d9afa8bfbe95276b37f931cd)
+set(OPENPGL_VERSION v0.4.0-beta)
 set(OPENPGL_SHORT_VERSION 0.4.0)
-set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/${OPENPGL_VERSION}.tar.gz)
-set(OPENPGL_HASH 46895cce761fc56ee20bedaf9ca94c7337e1e12a947d29a7a3edce0cda731571)
+set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/refs/tags/${OPENPGL_VERSION}.tar.gz)
+set(OPENPGL_HASH 1f090f88ab2bad028e8b3619aa926f4f97cf7b2c175b904704d2fec8593dd3cd)
 set(OPENPGL_HASH_TYPE SHA256)
 set(OPENPGL_FILE openpgl-${OPENPGL_VERSION}.tar.gz)
 
