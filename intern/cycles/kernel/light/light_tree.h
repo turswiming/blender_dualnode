@@ -4,32 +4,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* TODO: this seems like a relative expensive computation, and we can make it a lot cheaper
- * by using a bounding sphere instead of a bounding box. This will be more inaccurate, but it
- * might be fine when used along with the adaptive splitting. */
-ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
-                                                   const float3 bbox_max,
-                                                   const float3 P,
-                                                   const float3 point_to_centroid)
-{
-  /* Iterate through all 8 possible points of the bounding box. */
-  float cos_theta_u = 1.0f;
-  float3 corners[8];
-  corners[0] = bbox_min;
-  corners[1] = make_float3(bbox_min.x, bbox_min.y, bbox_max.z);
-  corners[2] = make_float3(bbox_min.x, bbox_max.y, bbox_min.z);
-  corners[3] = make_float3(bbox_min.x, bbox_max.y, bbox_max.z);
-  corners[4] = make_float3(bbox_max.x, bbox_min.y, bbox_min.z);
-  corners[5] = make_float3(bbox_max.x, bbox_min.y, bbox_max.z);
-  corners[6] = make_float3(bbox_max.x, bbox_max.y, bbox_min.z);
-  corners[7] = bbox_max;
-  for (int i = 0; i < 8; ++i) {
-    float3 point_to_corner = normalize(corners[i] - P);
-    cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
-  }
-  return cos_theta_u;
-}
-
 /* This is the general function for calculating the importance of either a cluster or an emitter.
  * Both of the specialized functions obtain the necessary data before calling this function. */
 ccl_device float light_tree_node_importance(const float3 P,
@@ -45,7 +19,7 @@ ccl_device float light_tree_node_importance(const float3 P,
   const float3 centroid = 0.5f * bbox_min + 0.5f * bbox_max;
   const float3 point_to_centroid = normalize(centroid - P);
 
-  /* TODO: we're using the splitting heuristic now, do we still need te clamp the distance to half
+  /* TODO: we're using the splitting heuristic now, do we still need to clamp the distance to half
    * the radius of the cluster? */
   const float distance_squared = fmaxf(0.25f * len_squared(centroid - bbox_max),
                                        len_squared(centroid - P));
@@ -53,27 +27,37 @@ ccl_device float light_tree_node_importance(const float3 P,
   const float cos_theta = dot(bcone_axis, -point_to_centroid);
   const float cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) :
                                                dot(point_to_centroid, N);
-  const float cos_theta_u = light_tree_cos_bounding_box_angle(
-      bbox_min, bbox_max, P, point_to_centroid);
 
-  const float sin_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_u));
+  bool bbox_is_behind_surface = !has_transmission && (cos_theta_i < 0);
 
-  /* cos_theta_i_prime = |cos(max{theta_i - theta_u, 0})| */
-  float cos_theta_i_prime;
-  if (cos_theta_i > cos_theta_u) {
-    cos_theta_i_prime = 1.0f;
-  }
-  else {
-    kernel_assert(fast_acosf(cos_theta_i) >= fast_acosf(cos_theta_u));
-    const float sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
-    cos_theta_i_prime = cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
+  /* TODO: this seems like a relative expensive computation, and we can make it a lot cheaper
+   * by using a bounding sphere instead of a bounding box. This will be more inaccurate, but it
+   * might be fine when used along with the adaptive splitting. */
+  float cos_theta_u = 1.0f;
+
+  /* Iterate through all 8 possible points of the bounding box. */
+  for (int i = 0; i < 8; ++i) {
+    const float3 corner = make_float3((i & 1) ? bbox_max.x : bbox_min.x,
+                                      (i & 2) ? bbox_max.y : bbox_min.y,
+                                      (i & 4) ? bbox_max.z : bbox_min.z);
+
+    /* Caculate the bounding box angle. */
+    float3 point_to_corner = normalize(corner - P);
+    cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
+
+    /* Figure out whether or not the bounding box is in front or behind the shading point. */
+    if (bbox_is_behind_surface && dot(point_to_corner, N) >= 0) {
+      bbox_is_behind_surface = false;
+    }
   }
 
   /* If the node is guaranteed to be behind the surface we're sampling, and the surface is opaque,
    * then we can give the node an importance of 0 as it contributes nothing to the surface. */
-  if (!has_transmission && cos_theta_i_prime < 0) {
+  if (bbox_is_behind_surface) {
     return 0.0f;
   }
+
+  const float sin_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_u));
 
   /* cos(theta - theta_u) */
   const float sin_theta = safe_sqrtf(1.0f - sqr(cos_theta));
@@ -98,6 +82,17 @@ ccl_device float light_tree_node_importance(const float3 P,
   }
   else {
     return 0.f;
+  }
+
+  /* cos_theta_i_prime = |cos(max{theta_i - theta_u, 0})| */
+  float cos_theta_i_prime;
+  if (cos_theta_i > cos_theta_u) {
+    cos_theta_i_prime = 1.0f;
+  }
+  else {
+    kernel_assert(fast_acosf(cos_theta_i) >= fast_acosf(cos_theta_u));
+    const float sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
+    cos_theta_i_prime = cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
   }
 
   /* TODO: find a good approximation for this value. */
