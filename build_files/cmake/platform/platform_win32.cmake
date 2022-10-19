@@ -683,7 +683,7 @@ if(WITH_IMAGE_OPENJPEG)
   if(NOT EXISTS "${OPENJPEG_INCLUDE_DIRS}")
     # when not found, could be an older lib folder with openjpeg 2.4
     # to ease the transition period, fall back if 2.5 is not found.
-    set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.3)
+    set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.4)
   endif()
   set(OPENJPEG_LIBRARIES ${OPENJPEG}/lib/openjp2.lib)
 endif()
