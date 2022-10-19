@@ -679,10 +679,10 @@ endif()
 
 if(WITH_IMAGE_OPENJPEG)
   set(OPENJPEG ${LIBDIR}/openjpeg)
-  set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.4)
+  set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.5)
   if(NOT EXISTS "${OPENJPEG_INCLUDE_DIRS}")
-    # when not found, could be an older lib folder with openjpeg 2.3
-    # to ease the transition period, fall back if 2.4 is not found.
+    # when not found, could be an older lib folder with openjpeg 2.4
+    # to ease the transition period, fall back if 2.5 is not found.
     set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.3)
   endif()
   set(OPENJPEG_LIBRARIES ${OPENJPEG}/lib/openjp2.lib)
@@ -782,13 +782,17 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
     optimized ${OSL_LIB_COMP}
     optimized ${OSL_LIB_EXEC}
     optimized ${OSL_LIB_QUERY}
-    optimized ${OSL_LIB_NOISE}
     debug ${OSL_LIB_EXEC_DEBUG}
     debug ${OSL_LIB_COMP_DEBUG}
     debug ${OSL_LIB_QUERY_DEBUG}
-    debug ${OSL_LIB_NOISE_DEBUG}
     ${PUGIXML_LIBRARIES}
   )
+  if(OSL_LIB_NOISE)
+    list(APPEND OSL_LIBRARIES optimized ${OSL_LIB_NOISE})
+  endif()
+  if(OSL_LIB_NOISE_DEBUG)
+    list(APPEND OSL_LIBRARIES debug ${OSL_LIB_NOISE_DEBUG})
+  endif()
   find_path(OSL_INCLUDE_DIR OSL/oslclosure.h PATHS ${CYCLES_OSL}/include)
   find_program(OSL_COMPILER NAMES oslc PATHS ${CYCLES_OSL}/bin)
 
