@@ -1141,7 +1141,12 @@ static int arg_handle_gpu_backend_set(int argc, const char **argv, void *UNUSED(
     printf("\nError: Unrecognized GPU backend for '--gpu-backend'.\n");
     return 0;
   }
+
   GPU_backend_type_selection_set(gpu_backend);
+  if (!GPU_backend_supported()) {
+    printf("\nError: GPU backend not supported.\n");
+    return 0;
+  }
 
   return 1;
 }
