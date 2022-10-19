@@ -15,6 +15,8 @@
 #include "GPU_init_exit.h"
 #include "gpu_shader_create_info_private.hh"
 
+#include "BLI_vector.hh"
+
 #include "CLG_log.h"
 
 namespace blender::gpu::shader_builder {
@@ -41,8 +43,22 @@ void ShaderBuilder::init()
   CLG_init();
 
   GHOST_GLSettings glSettings = {0};
-  // TODO(jbakker): should be based on a startup option(s).
-  glSettings.context_type = GHOST_kDrawingContextTypeOpenGL;
+  switch (GPU_backend_type_selection_get()) {
+    case GPU_BACKEND_OPENGL:
+      glSettings.context_type = GHOST_kDrawingContextTypeOpenGL;
+      break;
+
+#ifdef WITH_METAL_BACKEND
+    case GPU_BACKEND_METAL:
+      glSettings.context_type = GHOST_kDrawingContextTypeMetal;
+      break;
+#endif
+
+    default:
+      BLI_assert_unreachable();
+      break;
+  }
+
   ghost_system_ = GHOST_CreateSystem();
   ghost_context_ = GHOST_CreateOpenGLContext(ghost_system_, glSettings);
   GHOST_ActivateOpenGLContext(ghost_context_);
@@ -75,13 +91,21 @@ int main(int argc, const char *argv[])
 
   int exit_code = 0;
 
-  blender::gpu::shader_builder::ShaderBuilder builder;
-  builder.init();
-  if (!builder.bake_create_infos()) {
-    exit_code = 1;
+  blender::Vector<eGPUBackendType> backends_to_validate;
+  backends_to_validate.append(GPU_BACKEND_OPENGL);
+#ifdef WITH_METAL_BACKEND
+  backends_to_validate.append(GPU_BACKEND_METAL);
+#endif
+  for (eGPUBackendType backend : backends_to_validate) {
+    GPU_backend_type_selection_set(backend);
+    blender::gpu::shader_builder::ShaderBuilder builder;
+    builder.init();
+    if (!builder.bake_create_infos()) {
+      exit_code = 1;
+    }
+    builder.exit();
+    exit(exit_code);
   }
-  builder.exit();
-  exit(exit_code);
 
   return exit_code;
 }
