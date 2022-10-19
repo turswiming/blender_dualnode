@@ -38,7 +38,10 @@ if(WIN32)
     BUILD_COMMAND cd ${BUILD_DIR}/python/src/external_python/pcbuild/ && set IncludeTkinter=false && call build.bat -e -p x64 -c ${BUILD_MODE}
     INSTALL_COMMAND ${PYTHON_BINARY_INTERNAL} ${PYTHON_SRC}/PC/layout/main.py -b ${PYTHON_SRC}/PCbuild/amd64 -s ${PYTHON_SRC} -t ${PYTHON_SRC}/tmp/ --include-stable --include-pip --include-dev --include-launchers  --include-venv --include-symbols ${PYTHON_EXTRA_INSTLAL_FLAGS} --copy ${LIBDIR}/python
   )
-
+  add_dependencies(
+    external_python
+    external_zlib
+  )
 else()
   if(APPLE)
     # Disable functions that can be in 10.13 sdk but aren't available on 10.9 target.
