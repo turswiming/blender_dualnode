@@ -6,13 +6,11 @@
 #include "BKE_paint.h"
 #include "BKE_particle.h"
 #include "BKE_pbvh.h"
-#include "BKE_studiolight.h"
 #include "DEG_depsgraph_query.h"
 #include "DNA_fluid_types.h"
 #include "ED_paint.h"
 #include "ED_view3d.h"
 #include "GPU_capabilities.h"
-#include "IMB_imbuf_types.h"
 
 #include "workbench_private.hh"
 
@@ -22,47 +20,39 @@ using namespace draw;
 
 // Utils
 
-bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light);
-float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z);
-LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
-                                                float4x4 world_shading_rotation);
-
 const CustomData *get_loop_custom_data(const Mesh *mesh);
 const CustomData *get_vert_custom_data(const Mesh *mesh);
-
 GPUMaterial **get_dummy_gpu_materials(int material_count);
 
 class Instance {
  public:
+  Scene *scene;
+  eContextObjectMode object_mode;
+  View3DShading shading;
+  eShadingType shading_type = eShadingType::STUDIO;
+  bool xray_mode;
+  bool draw_outline;
+  bool draw_dof;
+  bool draw_object_id;
+  bool draw_transparent_depth;
+
+  int2 resolution;
   SceneResources resources;
 
-  OpaquePass opaque_ps = OpaquePass(resources.color_tx, resources.depth_tx);
-  OpaquePass opaque_in_front_ps = OpaquePass(resources.color_tx, resources.depth_in_front_tx);
-  TransparentPass transparent_ps = TransparentPass(resources.color_tx, resources.depth_tx);
-  TransparentPass transparent_in_front_ps = TransparentPass(resources.color_tx,
-                                                            resources.depth_in_front_tx);
+  DRWState cull_state;
+  DRWState clip_state;
+  Vector<float4> clip_planes = {};
 
-  AntiAliasingPass anti_aliasing_ps;
-
-  eShadingType shading_type = eShadingType::STUDIO;
+  OpaquePass opaque_ps;
+  TransparentPass transparent_ps;
+  TransparentDepthPass transparent_depth_ps;
 
   /** Used when material_subtype == eMaterialSubType::SINGLE */
   Material material_override = Material(float3(1.0f));
   /* When r == -1.0 the shader uses the vertex color */
   Material material_attribute_color = Material(float3(-1.0f));
 
-  DRWState cull_state;
-  DRWState clip_state;
-
-  Vector<float4> clip_planes = {};
-
-  eContextObjectMode ob_mode;
-
-  View3DShading shading;
-  bool xray_mode;
-
-  StringRefNull current_matcap;
-  Scene *scene;
+  AntiAliasingPass anti_aliasing_ps;
 
   void init(const int2 &output_res,
             const Depsgraph *depsgraph,
@@ -72,21 +62,16 @@ class Instance {
   {
     const DRWContextState *context = DRW_context_state_get();
     scene = DEG_get_evaluated_scene(depsgraph);
-
+    object_mode = CTX_data_mode_enum_ex(
+        context->object_edit, context->obact, context->object_mode);
+    resolution = output_res;
     /* TODO(pragma37):
      * Check why Workbench Next exposes OB_MATERIAL, and Workbench exposes OB_RENDER */
     bool is_render_mode = !v3d || ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL);
     const View3DShading previous_shading = shading;
     shading = is_render_mode ? scene->display.shading : v3d->shading;
 
-    ob_mode = CTX_data_mode_enum_ex(context->object_edit, context->obact, context->object_mode);
-
     bool reset_taa = false;
-
-    UniformBuffer<WorldData> &world_buf = resources.world_buf;
-
-    world_buf.viewport_size = DRW_viewport_size_get();
-    world_buf.viewport_size_inv = DRW_viewport_invert_size_get();
 
     cull_state = shading.flag & V3D_SHADING_BACKFACE_CULLING ? DRW_STATE_CULL_BACK :
                                                                DRW_STATE_NO_DRAW;
@@ -96,20 +81,15 @@ class Instance {
     DRWState new_clip_state = RV3D_CLIPPING_ENABLED(v3d, rv3d) ? DRW_STATE_CLIP_PLANES :
                                                                  DRW_STATE_NO_DRAW;
     if (clip_state != new_clip_state) {
+      clip_state = new_clip_state;
       reset_taa = true;
     }
-    clip_state = new_clip_state;
-
     clip_planes.clear();
     if (clip_state & DRW_STATE_CLIP_PLANES) {
       int plane_len = (RV3D_LOCK_FLAGS(rv3d) & RV3D_BOXCLIP) ? 4 : 6;
       for (auto i : IndexRange(plane_len)) {
         clip_planes.append(rv3d->clip[i]);
       }
-    }
-
-    if (rv3d && rv3d->rflag & RV3D_GPULIGHT_UPDATE) {
-      reset_taa = true;
     }
 
     if (!is_render_mode) {
@@ -125,8 +105,6 @@ class Instance {
         shading.xray_alpha = 1.0f;
       }
     }
-    world_buf.xray_alpha = shading.xray_alpha;
-
     xray_mode = !is_render_mode && shading.xray_alpha != 1.0f;
 
     if (SHADING_XRAY_FLAG_ENABLED(shading)) {
@@ -138,80 +116,37 @@ class Instance {
       reset_taa = true;
     }
 
+    if (rv3d && rv3d->rflag & RV3D_GPULIGHT_UPDATE) {
+      reset_taa = true;
+    }
+
     shading_type = shading_type_from_v3d_lighting(shading.light);
     material_override = Material(shading.single_color);
 
-    StudioLight *studio_light = nullptr;
-    if (U.edit_studio_light) {
-      studio_light = BKE_studiolight_studio_edit_get();
-    }
-    else {
-      if (shading_type == eShadingType::MATCAP) {
-        studio_light = BKE_studiolight_find(shading.matcap, STUDIOLIGHT_TYPE_MATCAP);
-        if (studio_light && studio_light->name != current_matcap) {
-          if (get_matcap_tx(resources.matcap_tx, *studio_light)) {
-            current_matcap = studio_light->name;
-          }
-        }
-      }
-      /* If matcaps are missing, use this as fallback. */
-      if (studio_light == nullptr) {
-        studio_light = BKE_studiolight_find(shading.studio_light, STUDIOLIGHT_TYPE_STUDIO);
-      }
-    }
-    if (!resources.matcap_tx.is_valid()) {
-      resources.matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1);
-    }
-    world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
-
-    float4x4 world_shading_rotation = float4x4::identity();
-    if (shading.flag & V3D_SHADING_WORLD_ORIENTATION) {
-      world_shading_rotation = get_world_shading_rotation_matrix(shading.studiolight_rot_z);
-    }
-
-    for (int i = 0; i < 4; i++) {
-      SolidLight *sl = (studio_light) ? &studio_light->light[i] : nullptr;
-      world_buf.lights[i] = get_light_data_from_studio_solidlight(sl, world_shading_rotation);
-    }
-
-    if (studio_light != nullptr) {
-      world_buf.ambient_color = float4(float3(studio_light->light_ambient), 0.0f);
-      world_buf.use_specular = shading.flag & V3D_SHADING_SPECULAR_HIGHLIGHT &&
-                               studio_light->flag & STUDIOLIGHT_SPECULAR_HIGHLIGHT_PASS;
-    }
-    else {
-      world_buf.ambient_color = float4(1.0f, 1.0f, 1.0f, 0.0f);
-      world_buf.use_specular = false;
-    }
-
-    world_buf.background_color = float4(0.0f);
+    float4 background_color = float4(0.0f);
     if (is_render_mode && scene->r.alphamode != R_ALPHAPREMUL) {
       if (World *w = scene->world) {
-        world_buf.background_color = float4(w->horr, w->horg, w->horb, 1.0f);
+        background_color = float4(w->horr, w->horg, w->horb, 1.0f);
       }
     }
-
-    world_buf.object_outline_color = float4(float3(shading.object_outline_color), 1.0f);
-    world_buf.ui_scale = DRW_state_is_image_render() ? 1.0f : G_draw.block.size_pixel;
 
     /* TODO(pragma37) volumes_do */
 
-    resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
-    resources.depth_in_front_tx.ensure_2d(GPU_DEPTH24_STENCIL8, output_res);
-
+    resources.init(shading, scene->display, output_res, background_color);
     anti_aliasing_ps.init(reset_taa);
     /* TODO(pragma37) taa_sample_len */
+
+    draw_outline = shading.flag & V3D_SHADING_OBJECT_OUTLINE;
+    draw_dof = false; /*TODO(pragma37)*/
+    draw_transparent_depth = draw_outline || draw_dof;
+    draw_object_id = draw_outline || resources.cavity.curvature_enabled;
   }
 
   void begin_sync()
   {
-    resources.world_buf.push_update();
-
-    opaque_ps.sync(cull_state, clip_state, shading_type, resources);
-    opaque_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
-
+    opaque_ps.sync(cull_state, clip_state, shading_type, resources, resolution);
     transparent_ps.sync(cull_state, clip_state, shading_type, resources);
-    transparent_in_front_ps.sync(cull_state, clip_state, shading_type, resources);
+    transparent_depth_ps.sync(cull_state, clip_state, resources);
 
     anti_aliasing_ps.sync(resources);
   }
@@ -314,8 +249,8 @@ class Instance {
 
       if (!is_render) {
         /* Force texture or vertex mode if object is in paint mode. */
-        const bool is_vertpaint_mode = is_active && (ob_mode == CTX_MODE_PAINT_VERTEX);
-        const bool is_texpaint_mode = is_active && (ob_mode == CTX_MODE_PAINT_TEXTURE);
+        const bool is_vertpaint_mode = is_active && (object_mode == CTX_MODE_PAINT_VERTEX);
+        const bool is_texpaint_mode = is_active && (object_mode == CTX_MODE_PAINT_TEXTURE);
         if (is_vertpaint_mode && has_color) {
           dmi.color_type = V3D_SHADING_VERTEX_COLOR;
         }
@@ -467,7 +402,7 @@ class Instance {
               get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
             }
 
-            pipeline_get(ob_ref, mat, image, sampler_state, iuser).draw(batches[i], handle);
+            draw_mesh(ob_ref, mat, batches[i], handle, image, sampler_state, iuser);
           }
         }
       }
@@ -508,8 +443,8 @@ class Instance {
             mat = Material(*BKE_material_default_empty());
           }
 
-          pipeline_get(ob_ref, mat, dmi.image_paint_override, dmi.override_sampler_state)
-              .draw(batch, handle);
+          draw_mesh(
+              ob_ref, mat, batch, handle, dmi.image_paint_override, dmi.override_sampler_state);
         }
       }
     }
@@ -521,69 +456,101 @@ class Instance {
     }
   }
 
-  PassMain::Sub &pipeline_get(ObjectRef &ob_ref,
-                              Material &material,
-                              ::Image *image = nullptr,
-                              eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT,
-                              ImageUser *iuser = nullptr)
+  void draw_mesh(ObjectRef &ob_ref,
+                 Material &material,
+                 GPUBatch *batch,
+                 ResourceHandle handle,
+                 ::Image *image = nullptr,
+                 eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT,
+                 ImageUser *iuser = nullptr)
   {
     const bool in_front = (ob_ref.object->dtx & OB_DRAW_IN_FRONT) != 0;
     if (xray_mode || material.is_transparent()) {
       if (in_front) {
-        return transparent_in_front_ps.accumulation_ps_.sub_pass_get(
-            ob_ref, image, sampler_state, iuser);
+        transparent_ps.accumulation_in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
+            .draw(batch, handle);
+        if (draw_transparent_depth) {
+          transparent_depth_ps.in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
+              .draw(batch, handle);
+        }
       }
       else {
-        return transparent_ps.accumulation_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+        transparent_ps.accumulation_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
+            .draw(batch, handle);
+        if (draw_transparent_depth) {
+          transparent_depth_ps.main_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
+              .draw(batch, handle);
+        }
       }
     }
     else {
       if (in_front) {
-        return opaque_in_front_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+        opaque_ps.gbuffer_in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
+            .draw(batch, handle);
       }
       else {
-        return opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser);
+        opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
+            .draw(batch, handle);
       }
     }
   }
 
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
-    resources.color_tx.acquire(int2(resources.depth_tx.size()), GPU_RGBA16F);
-
     if (!clip_planes.is_empty()) {
       view.set_clip_planes(clip_planes);
     }
 
-    PassSimple clear_ps = PassSimple("Workbench.Clear");
-    clear_ps.init();
-    clear_ps.clear_color(resources.world_buf.background_color);
-    Framebuffer fb = Framebuffer("Workbench.Clear");
-    fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
-    fb.bind();
-    manager.submit(clear_ps);
-
-    if (!opaque_ps.is_empty() || !transparent_ps.is_empty()) {
-      fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
-      fb.bind();
-      fb.clear_depth(1.0f);
+    resources.color_tx.acquire(resolution, GPU_RGBA16F);
+    resources.color_tx.clear(resources.world_buf.background_color);
+    if (draw_object_id) {
+      resources.object_id_tx.acquire(resolution, GPU_R16UI);
+      resources.object_id_tx.clear(uint4(0));
     }
-    if (!opaque_in_front_ps.is_empty() || !transparent_in_front_ps.is_empty()) {
+
+    resources.depth_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
+    Framebuffer fb = Framebuffer("Workbench.Clear");
+    fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
+    fb.bind();
+    GPU_framebuffer_clear_depth_stencil(fb, 1.0f, 0x00);
+
+    if (!opaque_ps.gbuffer_in_front_ps_.is_empty() ||
+        !transparent_ps.accumulation_in_front_ps_.is_empty()) {
+      resources.depth_in_front_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
+      Framebuffer fb = Framebuffer("Workbench.Clear");
       fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx));
       fb.bind();
-      fb.clear_depth(1.0f);
+      GPU_framebuffer_clear_depth_stencil(fb, 1.0f, 0x00);
     }
 
-    opaque_ps.draw(manager, view);
-    transparent_ps.draw(manager, view);
-    opaque_in_front_ps.draw(manager, view);
-    transparent_in_front_ps.draw(manager, view);
+    opaque_ps.draw(manager, view, resources, resolution);
+    transparent_ps.draw(manager, view, resources, resolution);
+    transparent_depth_ps.draw(manager, view, resources, resolution);
+
+    if (draw_outline) {
+      PassSimple outline_ps = PassSimple("Workbench.Outline");
+      outline_ps.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_PREMUL);
+      static GPUShader *outline_shader = GPU_shader_create_from_info_name(
+          "workbench_effect_outline");
+      outline_ps.shader_set(outline_shader);
+      outline_ps.bind_ubo("world_data", resources.world_buf);
+      outline_ps.bind_texture("objectIdBuffer", &resources.object_id_tx);
+      outline_ps.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
+      Framebuffer fb = Framebuffer("Workbench.Outline");
+      fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
+      fb.bind();
+      manager.submit(outline_ps);
+    }
 
     // volume_ps.draw_prepass(manager, view, resources.depth_tx);
 
     anti_aliasing_ps.draw(manager, view, depth_tx, color_tx);
 
     resources.color_tx.release();
+    resources.object_id_tx.release();
+    resources.depth_tx.release();
+    resources.depth_in_front_tx.release();
   }
 
   void draw_viewport(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
@@ -593,64 +560,6 @@ class Instance {
 };
 
 // Utils
-
-bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light)
-{
-  ImBuf *matcap_diffuse = studio_light.matcap_diffuse.ibuf;
-  ImBuf *matcap_specular = studio_light.matcap_specular.ibuf;
-  if (matcap_diffuse && matcap_diffuse->rect_float) {
-    int layers = 1;
-    float *buffer = matcap_diffuse->rect_float;
-    Vector<float> combined_buffer = {};
-
-    if (matcap_specular && matcap_specular->rect_float) {
-      int size = matcap_diffuse->x * matcap_diffuse->y * 4;
-      combined_buffer.extend(matcap_diffuse->rect_float, size);
-      combined_buffer.extend(matcap_specular->rect_float, size);
-      buffer = combined_buffer.begin();
-      layers++;
-    }
-
-    matcap_tx = Texture(studio_light.name,
-                        GPU_RGBA16F,
-                        int2(matcap_diffuse->x, matcap_diffuse->y),
-                        layers,
-                        buffer);
-    return true;
-  }
-  return false;
-}
-
-float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z)
-{
-  /* TODO(pragma37) C++ API ? */
-  float V[4][4], R[4][4];
-  DRW_view_viewmat_get(nullptr, V, false);
-  axis_angle_to_mat4_single(R, 'Z', -studiolight_rot_z);
-  mul_m4_m4m4(R, V, R);
-  swap_v3_v3(R[2], R[1]);
-  negate_v3(R[2]);
-  return float4x4(R);
-}
-
-LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
-                                                float4x4 world_shading_rotation)
-{
-  LightData light = {};
-  if (sl && sl->flag) {
-    float3 direction = world_shading_rotation.ref_3x3() * float3(sl->vec);
-    light.direction = float4(direction, 0.0f);
-    /* We should pre-divide the power by PI but that makes the lights really dim. */
-    light.specular_color = float4(float3(sl->spec), 0.0f);
-    light.diffuse_color_wrap = float4(float3(sl->col), sl->smooth);
-  }
-  else {
-    light.direction = float4(1.0f, 0.0f, 0.0f, 0.0f);
-    light.specular_color = float4(0.0f);
-    light.diffuse_color_wrap = float4(0.0f);
-  }
-  return light;
-}
 
 const CustomData *get_loop_custom_data(const Mesh *mesh)
 {

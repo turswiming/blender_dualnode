@@ -38,7 +38,7 @@ class ShaderCache {
   /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
   GPUShader *prepass_shader_cache_[pipeline_type_len][geometry_type_len][color_type_len]
                                   [shading_type_len] = {{{{nullptr}}}};
-  GPUShader *resolve_shader_cache_[pipeline_type_len][shading_type_len] = {{nullptr}};
+  GPUShader *resolve_shader_cache_[pipeline_type_len][shading_type_len][2][2] = {{{{nullptr}}}};
 
  public:
   ~ShaderCache();
@@ -48,20 +48,55 @@ class ShaderCache {
                                 eColorType color_type,
                                 eShadingType shading_type);
 
-  GPUShader *resolve_shader_get(ePipelineType pipeline_type, eShadingType shading_type);
+  GPUShader *resolve_shader_get(ePipelineType pipeline_type,
+                                eShadingType shading_type,
+                                bool cavity = false,
+                                bool curvature = false);
+};
+
+class CavityEffect {
+  static const int JITTER_TEX_SIZE = 64;
+  static const int MAX_SAMPLES = MAX_CAVITY_SAMPLES;
+
+  UniformBuffer<CavitySamples> samples_buf;
+  int sample_count;
+  Texture jitter_tx;
+
+  void setup_resources(int sample_count);
+
+ public:
+  bool curvature_enabled;
+  bool cavity_enabled;
+
+  void init(const View3DShading &shading,
+            const SceneDisplay &display,
+            UniformBuffer<WorldData> &world_buf,
+            int taa_sample,
+            int taa_sample_len);
+
+  void setup_resolve_pass(PassSimple &pass, Texture &object_id_tx);
 };
 
 struct SceneResources {
   ShaderCache shader_cache;
 
+  StringRefNull current_matcap;
   Texture matcap_tx = "matcap_tx";
 
   TextureFromPool color_tx = "wb_color_tx";
-  Texture depth_tx = "wb_depth_tx";
-  Texture depth_in_front_tx = "wb_depth_in_front_tx";
+  TextureFromPool object_id_tx = "wb_object_id_tx";
+  TextureFromPool depth_tx = "wb_depth_tx";
+  TextureFromPool depth_in_front_tx = "wb_depth_in_front_tx";
 
   StorageVectorBuffer<Material> material_buf = {"material_buf"};
   UniformBuffer<WorldData> world_buf;
+
+  CavityEffect cavity;
+
+  void init(const View3DShading &shading,
+            const SceneDisplay &display,
+            int2 resolution,
+            float4 background_color);
 };
 
 class MeshPass : public PassMain {
@@ -91,51 +126,58 @@ class MeshPass : public PassMain {
 
 class OpaquePass {
  public:
-  Texture &color_tx;
-  Texture &depth_tx;
-
   TextureFromPool gbuffer_normal_tx = {"gbuffer_normal_tx"};
   TextureFromPool gbuffer_material_tx = {"gbuffer_material_tx"};
-  TextureFromPool gbuffer_object_id_tx = {"gbuffer_object_id_tx"};
   Framebuffer opaque_fb;
 
   MeshPass gbuffer_ps_ = {"Opaque.Gbuffer"};
+  MeshPass gbuffer_in_front_ps_ = {"Opaque.GbufferInFront"};
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
-
-  OpaquePass(Texture &color_tx, Texture &depth_tx);
 
   void sync(DRWState cull_state,
             DRWState clip_state,
             eShadingType shading_type,
-            SceneResources &resources);
+            SceneResources &resources,
+            int2 resolution);
 
-  void draw(Manager &manager, View &view);
+  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
   bool is_empty() const;
 };
 
 class TransparentPass {
  public:
-  Texture &color_tx;
-  Texture &depth_tx;
-
   TextureFromPool accumulation_tx = {"accumulation_accumulation_tx"};
   TextureFromPool reveal_tx = {"accumulation_reveal_tx"};
-  TextureFromPool object_id_tx = {"accumulation_gbuffer_object_id_tx"};
   Framebuffer transparent_fb;
 
   MeshPass accumulation_ps_ = {"Transparent.Accumulation"};
+  MeshPass accumulation_in_front_ps_ = {"Transparent.AccumulationInFront"};
   PassSimple resolve_ps_ = {"Transparent.Resolve"};
   Framebuffer resolve_fb;
-
-  TransparentPass(Texture &color_tx, Texture &depth_tx);
 
   void sync(DRWState cull_state,
             DRWState clip_state,
             eShadingType shading_type,
             SceneResources &resources);
 
-  void draw(Manager &manager, View &view);
+  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+
+  bool is_empty() const;
+};
+
+class TransparentDepthPass {
+ public:
+  MeshPass main_ps_ = {"TransparentDepth.Main"};
+  Framebuffer main_fb = {"TransparentDepth.Main"};
+  MeshPass in_front_ps_ = {"TransparentDepth.InFront"};
+  Framebuffer in_front_fb = {"TransparentDepth.InFront"};
+  PassSimple merge_ps_ = {"TransparentDepth.Merge"};
+  Framebuffer merge_fb = {"TransparentDepth.Merge"};
+
+  void sync(DRWState cull_state, DRWState clip_state, SceneResources &resources);
+
+  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
   bool is_empty() const;
 };

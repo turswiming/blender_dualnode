@@ -17,7 +17,11 @@ ShaderCache::~ShaderCache()
   }
   for (auto i : IndexRange(shading_type_len)) {
     for (auto j : IndexRange(pipeline_type_len)) {
-      DRW_SHADER_FREE_SAFE(resolve_shader_cache_[i][j]);
+      for (auto k : IndexRange(2)) {
+        for (auto l : IndexRange(2)) {
+          DRW_SHADER_FREE_SAFE(resolve_shader_cache_[i][j][k][l]);
+        }
+      }
     }
   }
 }
@@ -78,15 +82,16 @@ GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
   /* TODO Clipping */
   info_name += "_no_clip";
   shader_ptr = GPU_shader_create_from_info_name(info_name.c_str());
-  prepass_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(geometry_type)]
-                       [static_cast<int>(color_type)][static_cast<int>(shading_type)] = shader_ptr;
   return shader_ptr;
 }
 
-GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type, eShadingType shading_type)
+GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type,
+                                           eShadingType shading_type,
+                                           bool cavity,
+                                           bool curvature)
 {
-  GPUShader *&shader_ptr =
-      resolve_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(shading_type)];
+  GPUShader *&shader_ptr = resolve_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(
+      shading_type)][cavity][curvature];
 
   if (shader_ptr != nullptr) {
     return shader_ptr;
@@ -114,9 +119,10 @@ GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type, eShading
       info_name += "matcap";
       break;
   }
+  info_name += cavity ? "_cavity" : "_no_cavity";
+  info_name += curvature ? "_curvature" : "_no_curvature";
+
   shader_ptr = GPU_shader_create_from_info_name(info_name.c_str());
-  resolve_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(shading_type)] =
-      shader_ptr;
   return shader_ptr;
 }
 

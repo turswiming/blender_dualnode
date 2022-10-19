@@ -86,66 +86,86 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
   return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::MATERIAL)];
 }
 
-OpaquePass::OpaquePass(Texture &color_tx, Texture &depth_tx)
-    : color_tx(color_tx), depth_tx(depth_tx){};
-
 void OpaquePass::sync(DRWState cull_state,
                       DRWState clip_state,
                       eShadingType shading_type,
-                      SceneResources &resources)
+                      SceneResources &resources,
+                      int2 resolution)
 {
-  TextureFromPool &color_tx = resources.color_tx;
-  ShaderCache &shaders = resources.shader_cache;
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                    cull_state | clip_state;
 
+  DRWState in_front_state = state | DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
+  gbuffer_in_front_ps_.init_pass(resources, in_front_state);
+  gbuffer_in_front_ps_.state_stencil(0xFF, 0xFF, 0x00);
+  gbuffer_in_front_ps_.init_subpasses(ePipelineType::OPAQUE, shading_type, resources.shader_cache);
+
+  state |= DRW_STATE_STENCIL_NEQUAL;
   gbuffer_ps_.init_pass(resources, state);
+  gbuffer_ps_.state_stencil(0x00, 0xFF, 0xFF);
   gbuffer_ps_.init_subpasses(ePipelineType::OPAQUE, shading_type, resources.shader_cache);
 
+  bool cavity = resources.cavity.cavity_enabled;
+  bool curvature = resources.cavity.curvature_enabled;
+
   deferred_ps_.init();
-  deferred_ps_.shader_set(shaders.resolve_shader_get(ePipelineType::OPAQUE, shading_type));
+  deferred_ps_.shader_set(resources.shader_cache.resolve_shader_get(
+      ePipelineType::OPAQUE, shading_type, cavity, curvature));
   deferred_ps_.bind_ubo(WB_WORLD_SLOT, resources.world_buf);
   deferred_ps_.bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
   deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
   deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
-  deferred_ps_.bind_texture("depth_tx", &depth_tx);
-  deferred_ps_.bind_image("out_color_img", &color_tx);
-  deferred_ps_.dispatch(math::divide_ceil(int2(depth_tx.size()), int2(WB_RESOLVE_GROUP_SIZE)));
+  deferred_ps_.bind_texture("depth_tx", &resources.depth_tx);
+  deferred_ps_.bind_image("out_color_img", &resources.color_tx);
+  resources.cavity.setup_resolve_pass(deferred_ps_, resources.object_id_tx);
+  deferred_ps_.dispatch(math::divide_ceil(resolution, int2(WB_RESOLVE_GROUP_SIZE)));
   deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
 }
 
-void OpaquePass::draw(Manager &manager, View &view)
+void OpaquePass::draw(Manager &manager, View &view, SceneResources &resources, int2 resolution)
 {
   if (is_empty()) {
     return;
   }
+  gbuffer_material_tx.acquire(resolution, GPU_RGBA16F);
+  gbuffer_normal_tx.acquire(resolution, GPU_RG16F);
 
-  gbuffer_material_tx.acquire(int2(depth_tx.size()), GPU_RGBA16F);
-  gbuffer_normal_tx.acquire(int2(depth_tx.size()), GPU_RG16F);
-  gbuffer_object_id_tx.acquire(int2(depth_tx.size()), GPU_R16UI);
+  GPUAttachment object_id_attachment = GPU_ATTACHMENT_NONE;
+  if (resources.object_id_tx.is_valid()) {
+    object_id_attachment = GPU_ATTACHMENT_TEXTURE(resources.object_id_tx);
+  }
 
-  opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(depth_tx),
-                   GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
-                   GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
-                   GPU_ATTACHMENT_TEXTURE(gbuffer_object_id_tx));
-  opaque_fb.bind();
+  if (!gbuffer_in_front_ps_.is_empty()) {
+    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
+                     object_id_attachment);
+    opaque_fb.bind();
 
-  manager.submit(gbuffer_ps_, view);
+    manager.submit(gbuffer_in_front_ps_, view);
+    GPU_texture_copy(resources.depth_tx, resources.depth_in_front_tx);
+  }
+
+  if (!gbuffer_ps_.is_empty()) {
+    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
+                     GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
+                     object_id_attachment);
+    opaque_fb.bind();
+
+    manager.submit(gbuffer_ps_, view);
+  }
 
   manager.submit(deferred_ps_, view);
 
   gbuffer_normal_tx.release();
   gbuffer_material_tx.release();
-  gbuffer_object_id_tx.release();
 }
 
 bool OpaquePass::is_empty() const
 {
-  return gbuffer_ps_.is_empty();
+  return gbuffer_ps_.is_empty() && gbuffer_in_front_ps_.is_empty();
 }
-
-TransparentPass::TransparentPass(Texture &color_tx, Texture &depth_tx)
-    : color_tx(color_tx), depth_tx(depth_tx){};
 
 void TransparentPass::sync(DRWState cull_state,
                            DRWState clip_state,
@@ -155,9 +175,15 @@ void TransparentPass::sync(DRWState cull_state,
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_OIT |
                    cull_state | clip_state;
 
-  accumulation_ps_.init_pass(resources, state);
+  accumulation_ps_.init_pass(resources, state | DRW_STATE_STENCIL_NEQUAL);
+  accumulation_ps_.state_stencil(0x00, 0xFF, 0xFF);
   accumulation_ps_.clear_color(float4(0.0f, 0.0f, 0.0f, 1.0f));
   accumulation_ps_.init_subpasses(
+      ePipelineType::TRANSPARENT, shading_type, resources.shader_cache);
+
+  accumulation_in_front_ps_.init_pass(resources, state);
+  accumulation_in_front_ps_.clear_color(float4(0.0f, 0.0f, 0.0f, 1.0f));
+  accumulation_in_front_ps_.init_subpasses(
       ePipelineType::TRANSPARENT, shading_type, resources.shader_cache);
 
   resolve_ps_.init();
@@ -171,37 +197,115 @@ void TransparentPass::sync(DRWState cull_state,
   resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
-void TransparentPass::draw(Manager &manager, View &view)
+void TransparentPass::draw(Manager &manager,
+                           View &view,
+                           SceneResources &resources,
+                           int2 resolution)
+{
+  if (is_empty()) {
+    return;
+  }
+  accumulation_tx.acquire(resolution, GPU_RGBA16F);
+  reveal_tx.acquire(resolution, GPU_R16F);
+
+  resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
+
+  if (!accumulation_ps_.is_empty()) {
+    transparent_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
+                          GPU_ATTACHMENT_TEXTURE(accumulation_tx),
+                          GPU_ATTACHMENT_TEXTURE(reveal_tx));
+    transparent_fb.bind();
+    manager.submit(accumulation_ps_, view);
+    resolve_fb.bind();
+    manager.submit(resolve_ps_, view);
+  }
+  if (!accumulation_in_front_ps_.is_empty()) {
+    transparent_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx),
+                          GPU_ATTACHMENT_TEXTURE(accumulation_tx),
+                          GPU_ATTACHMENT_TEXTURE(reveal_tx));
+    transparent_fb.bind();
+    manager.submit(accumulation_in_front_ps_, view);
+    resolve_fb.bind();
+    manager.submit(resolve_ps_, view);
+  }
+
+  accumulation_tx.release();
+  reveal_tx.release();
+}
+
+bool TransparentPass::is_empty() const
+{
+  return accumulation_ps_.is_empty() && accumulation_in_front_ps_.is_empty();
+}
+
+void TransparentDepthPass::sync(DRWState cull_state,
+                                DRWState clip_state,
+                                SceneResources &resources)
+{
+  DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
+                   cull_state | clip_state;
+
+  DRWState in_front_state = state | DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
+  in_front_ps_.init_pass(resources, in_front_state);
+  in_front_ps_.state_stencil(0xFF, 0xFF, 0x00);
+  in_front_ps_.init_subpasses(ePipelineType::OPAQUE, eShadingType::FLAT, resources.shader_cache);
+
+  merge_ps_.init();
+  /*TODO(pragma37): Use ShaderCache*/
+  static GPUShader *merge_shader = GPU_shader_create_from_info_name("workbench_next_merge_depth");
+  merge_ps_.shader_set(merge_shader);
+  merge_ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_ALWAYS | DRW_STATE_WRITE_STENCIL |
+                      DRW_STATE_STENCIL_ALWAYS);
+  merge_ps_.state_stencil(0xFF, 0xFF, 0x00);
+  merge_ps_.bind_texture("depth_tx", &resources.depth_in_front_tx);
+  merge_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
+  state |= DRW_STATE_STENCIL_NEQUAL;
+  main_ps_.init_pass(resources, state);
+  main_ps_.state_stencil(0x00, 0xFF, 0xFF);
+  main_ps_.init_subpasses(ePipelineType::OPAQUE, eShadingType::FLAT, resources.shader_cache);
+}
+
+void TransparentDepthPass::draw(Manager &manager,
+                                View &view,
+                                SceneResources &resources,
+                                int2 resolution)
 {
   if (is_empty()) {
     return;
   }
 
-  accumulation_tx.acquire(int2(depth_tx.size()), GPU_RGBA16F);
-  reveal_tx.acquire(int2(depth_tx.size()), GPU_R16F);
-  object_id_tx.acquire(int2(depth_tx.size()), GPU_R16UI);
+  GPUAttachment object_id_attachment = GPU_ATTACHMENT_NONE;
+  if (resources.object_id_tx.is_valid()) {
+    object_id_attachment = GPU_ATTACHMENT_TEXTURE(resources.object_id_tx);
+  }
 
-  transparent_fb.ensure(GPU_ATTACHMENT_TEXTURE(depth_tx),
-                        GPU_ATTACHMENT_TEXTURE(accumulation_tx),
-                        GPU_ATTACHMENT_TEXTURE(reveal_tx),
-                        GPU_ATTACHMENT_TEXTURE(object_id_tx));
-  transparent_fb.bind();
+  if (!in_front_ps_.is_empty()) {
+    in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx),
+                       GPU_ATTACHMENT_NONE,
+                       GPU_ATTACHMENT_NONE,
+                       object_id_attachment);
+    in_front_fb.bind();
+    manager.submit(in_front_ps_, view);
 
-  manager.submit(accumulation_ps_, view);
+    merge_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
+    merge_fb.bind();
+    manager.submit(merge_ps_, view);
+  }
 
-  resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_tx));
-  resolve_fb.bind();
-
-  manager.submit(resolve_ps_, view);
-
-  accumulation_tx.release();
-  reveal_tx.release();
-  object_id_tx.release();
+  if (!main_ps_.is_empty()) {
+    main_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
+                   GPU_ATTACHMENT_NONE,
+                   GPU_ATTACHMENT_NONE,
+                   object_id_attachment);
+    main_fb.bind();
+    manager.submit(main_ps_, view);
+  }
 }
 
-bool TransparentPass::is_empty() const
+bool TransparentDepthPass::is_empty() const
 {
-  return accumulation_ps_.is_empty();
+  return main_ps_.is_empty() && in_front_ps_.is_empty();
 }
 
 }  // namespace blender::workbench

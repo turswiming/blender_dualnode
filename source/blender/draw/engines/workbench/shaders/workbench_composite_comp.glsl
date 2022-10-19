@@ -3,6 +3,8 @@
 #pragma BLENDER_REQUIRE(workbench_common_lib.glsl)
 #pragma BLENDER_REQUIRE(workbench_matcap_lib.glsl)
 #pragma BLENDER_REQUIRE(workbench_world_light_lib.glsl)
+#pragma BLENDER_REQUIRE(workbench_cavity_lib.glsl)
+#pragma BLENDER_REQUIRE(workbench_curvature_lib.glsl)
 
 void main()
 {
@@ -34,13 +36,49 @@ void main()
 #ifdef WORKBENCH_LIGHTING_FLAT
     color.rgb = base_color;
 #endif
-    color.a = 1.0f;
 
+#if defined(WORKBENCH_CAVITY) || defined(WORKBENCH_CURVATURE)
+    float cavity = 0.0, edges = 0.0, curvature = 0.0;
+
+#  ifdef WORKBENCH_CAVITY
+    cavity_compute(uv, depth_tx, normal_tx, cavity, edges);
+    // color.rgb = vec3(cavity, edges, 0);
+#  endif
+
+#  ifdef WORKBENCH_CURVATURE
+    curvature_compute(uv, object_id_tx, normal_tx, curvature);
+    // color.rgb = vec3(curvature);
+#  endif
+
+    float final_cavity_factor = clamp(
+        (1.0 - cavity) * (1.0 + edges) * (1.0 + curvature), 0.0, 4.0);
+
+    color.rgb *= final_cavity_factor;
+    // color.rgb *= vec3(0, 1, 0);
+
+#endif
+
+    color.a = 1.0f;
+  }
+
+#ifdef WORKBENCH_OUTLINE
+  vec3 offset = vec3(world_data.viewport_size_inv, 0.0) * world_data.ui_scale;
+
+  uint center_id = texture(object_id_tx, uv).r;
+  uvec4 adjacent_ids = uvec4(texture(object_id_tx, uv + offset.zy).r,
+                             texture(object_id_tx, uv - offset.zy).r,
+                             texture(object_id_tx, uv + offset.xz).r,
+                             texture(object_id_tx, uv - offset.xz).r);
+
+  float outline_opacity = 1.0 - dot(vec4(equal(uvec4(center_id), adjacent_ids)), vec4(0.25));
+  color = mix(color, world_data.object_outline_color, outline_opacity);
+#endif
+
+  if (color != world_data.background_color) {
     /* TODO(fclem): Port the TAA shader that does this tranformation. */
     /* Use log2 space to avoid highlights creating too much aliasing. */
     /* TODO(pragma37): Re-enable */
     // color.rgb = log2(color.rgb + 0.5);
-
     imageStore(out_color_img, texel, color);
   }
 }

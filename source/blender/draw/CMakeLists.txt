@@ -157,6 +157,7 @@ set(SRC
   engines/workbench/workbench_effect_antialiasing.c
   engines/workbench/workbench_effect_antialiasing.cc
   engines/workbench/workbench_effect_cavity.c
+  engines/workbench/workbench_effect_cavity.cc
   engines/workbench/workbench_effect_dof.c
   engines/workbench/workbench_effect_outline.c
   engines/workbench/workbench_engine.c
@@ -166,6 +167,7 @@ set(SRC
   engines/workbench/workbench_mesh_passes.cc
   engines/workbench/workbench_opaque.c
   engines/workbench/workbench_render.c
+  engines/workbench/workbench_resources.cc
   engines/workbench/workbench_shader.cc
   engines/workbench/workbench_shader_cache.cc
   engines/workbench/workbench_shadow.c
@@ -471,6 +473,7 @@ set(GLSL_SRC
   engines/workbench/shaders/workbench_matcap_lib.glsl
   engines/workbench/shaders/workbench_material_lib.glsl
   engines/workbench/shaders/workbench_merge_infront_frag.glsl
+  engines/workbench/shaders/workbench_next_merge_depth_frag.glsl
   engines/workbench/shaders/workbench_prepass_frag.glsl
   engines/workbench/shaders/workbench_prepass_hair_vert.glsl
   engines/workbench/shaders/workbench_prepass_pointcloud_vert.glsl
