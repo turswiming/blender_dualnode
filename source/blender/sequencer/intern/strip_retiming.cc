@@ -39,6 +39,7 @@
 #include "strip_time.h"
 #include "utils.h"
 
+
 using blender::MutableSpan;
 
 MutableSpan<SeqRetimingHandle> SEQ_retiming_handles_get(const Sequence *seq)
@@ -46,6 +47,16 @@ MutableSpan<SeqRetimingHandle> SEQ_retiming_handles_get(const Sequence *seq)
   blender::MutableSpan<SeqRetimingHandle> handles(seq->retiming_handles,
                                                   seq->retiming_handle_count);
   return handles;
+}
+
+struct SeqRetimingHandle *SEQ_retiming_last_handle_get(const struct Sequence *seq)
+{
+  return seq->retiming_handles + seq->retiming_handle_count - 1;
+}
+
+int SEQ_retiming_handle_index_get(const Sequence *seq, const SeqRetimingHandle *handle)
+{
+  return handle - seq->retiming_handles;
 }
 
 static const SeqRetimingHandle *retiming_find_closest_handle_up_to_frame(const Sequence *seq,
@@ -102,9 +113,9 @@ bool SEQ_retiming_is_active(const Scene *scene, const Sequence *seq)
     return true;
   }
 
-  SeqRetimingHandle *last_handle = seq->retiming_handles + 1;
+  SeqRetimingHandle *last_handle = SEQ_retiming_last_handle_get(seq);
   const int last_frame_index = seq->len / seq_time_media_playback_rate_factor_get(scene, seq);
-  if (last_handle->strip_frame_index != last_frame_index - 1)  {
+  if (last_handle->strip_frame_index != last_frame_index - 1) {
     return true;
   }
 
@@ -198,7 +209,7 @@ void SEQ_retiming_offset_handle(const Scene *scene,
 
 void SEQ_retiming_remove_handle(Sequence *seq, SeqRetimingHandle *handle)
 {
-  SeqRetimingHandle *last_handle = seq->retiming_handles + seq->retiming_handle_count - 1;
+  SeqRetimingHandle *last_handle = SEQ_retiming_last_handle_get(seq);
   if (handle->strip_frame_index == 0 || handle == last_handle) {
     return; /* First and last handle can not be removed. */
   }

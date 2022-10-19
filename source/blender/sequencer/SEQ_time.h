@@ -143,6 +143,7 @@ void SEQ_retiming_data_ensure(const struct Scene *scene, struct Sequence *seq);
 void SEQ_retiming_data_clear(struct Sequence *seq);
 bool SEQ_retiming_is_allowed(const struct Sequence *seq);
 struct SeqRetimingHandle *SEQ_retiming_add_handle(struct Sequence *seq, const int timeline_frame);
+struct SeqRetimingHandle *SEQ_retiming_last_handle_get(const struct Sequence *seq);
 void SEQ_retiming_remove_handle(struct Sequence *seq, struct SeqRetimingHandle *handle);
 void SEQ_retiming_offset_handle(const struct Scene *scene,
                                 struct Sequence *seq,
@@ -151,7 +152,7 @@ void SEQ_retiming_offset_handle(const struct Scene *scene,
 float SEQ_retiming_handle_speed_get(const struct Scene *scene,
                                     const struct Sequence *seq,
                                     const int point_index);
-
+int SEQ_retiming_handle_index_get(const struct Sequence *seq, const struct SeqRetimingHandle *handle);
 #ifdef __cplusplus
 }
 #endif

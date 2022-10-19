@@ -9,8 +9,11 @@
 
 #include "BLI_span.hh"
 
+#include "DNA_sequence_types.h"
+
+#include "SEQ_time.h"
+
 struct Sequence;
 struct SeqRetimingHandle;
 
 blender::MutableSpan<SeqRetimingHandle> SEQ_retiming_handles_get(const Sequence *seq);
-

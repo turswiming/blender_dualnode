@@ -50,7 +50,9 @@
 /* Own include. */
 #include "sequencer_intern.h"
 
-#define REMOVE_GIZMO_HEIGHT 12.0f * U.dpi_fac;        /* Pixels from bottom of strip.  */
+using blender::MutableSpan;
+
+#define REMOVE_GIZMO_HEIGHT 12.0f * U.dpi_fac        /* Pixels from bottom of strip.  */
 #define RETIME_HANDLE_TRIANGLE_SIZE 10.0f * U.dpi_fac /* Also used for mouseover test. */
 #define RETIME_BUTTON_SIZE 0.6f                       /* Factor based on icon size. */
 
@@ -60,141 +62,40 @@ static float strip_y_rescale(const Sequence *seq, const float y_value)
   return (y_value * y_range) + seq->machine + SEQ_STRIP_OFSBOTTOM;
 }
 
-class RetimingHandle {
- public:
-  int index;
-  bool is_last_handle;
+static float handle_x_get(const Sequence *seq, const SeqRetimingHandle *handle)
+{
 
-  RetimingHandle(const Sequence *seq, const SeqRetimingHandle *handle, const int handle_index)
-  {
-    seq_ = seq;
-    handle_ = handle;
-    index = handle_index;
+  const SeqRetimingHandle *last_handle = SEQ_retiming_last_handle_get(seq);
+  const bool is_last_handle = (handle == last_handle);
 
-    const int handle_count = SEQ_retiming_handles_count(seq);
-    is_last_handle = (handle_index == handle_count - 1);
-  }
+  return SEQ_time_start_frame_get(seq) + handle->strip_frame_index +
+         (is_last_handle ? 1 : 0);
+}
 
-  float x()
-  {
-    return SEQ_time_start_frame_get(seq_) + handle_->strip_frame_index + (is_last_handle ? 1 : 0);
-  }
+static float handle_y_get(const Sequence *seq, const SeqRetimingHandle *handle)
+{
+  return strip_y_rescale(seq, handle->retiming_factor);
+}
 
-  float y()
-  {
-    return strip_y_rescale(seq_, handle_->retiming_factor);
-  }
+static const SeqRetimingHandle *mouse_over_handle_get(const Sequence *seq,
+                                                 const View2D *v2d,
+                                                 const int mval[2])
+{
+  int best_distance = INT_MAX;
+  const SeqRetimingHandle *best_handle = NULL;
 
-  RetimingHandle next_handle_get()
-  {
-    const int handle_count = SEQ_retiming_handles_count(seq_);
-    BLI_assert(index < handle_count - 1);
-    const SeqRetimingHandle *next = handle_ + 1;
-    return RetimingHandle(seq_, next, index + 1);
-  }
+  MutableSpan handles = SEQ_retiming_handles_get(seq);
+  for (const SeqRetimingHandle& handle : handles) {
+    int distance = round_fl_to_int(fabsf(UI_view2d_view_to_region_x(v2d, handle_x_get(seq, &handle)) - mval[0]));
 
- private:
-  const Sequence *seq_;
-  const SeqRetimingHandle *handle_;
-};
-
-template<typename T> class RetimingHandlesIterator {
- public:
-  using value_type = SeqRetimingHandle;
-  using pointer = value_type *;
-  using reference = T;
-
-  struct Iterator {
-    Iterator(const Sequence *seq, pointer ptr, int handle_index)
-    {
-      ptr_ = ptr;
-      seq_ = seq;
-      handle_index_ = handle_index;
+    if (distance < RETIME_HANDLE_TRIANGLE_SIZE && distance < best_distance) {
+      best_distance = distance;
+      best_handle = &handle;
     }
-
-    reference operator*() const
-    {
-      return reference(seq_, ptr_, handle_index_);
-    }
-    pointer operator->()
-    {
-      return ptr_;
-    }
-    Iterator &operator++()
-    {
-      ptr_++;
-      handle_index_++;
-      return *this;
-    }
-    Iterator operator++(int)
-    {
-      Iterator tmp = *this;
-      ++(*this);
-      return tmp;
-    }
-    friend bool operator==(const Iterator &a, const Iterator &b)
-    {
-      return a.ptr_ == b.ptr_;
-    };
-    friend bool operator!=(const Iterator &a, const Iterator &b)
-    {
-      return a.ptr_ != b.ptr_;
-    };
-
-   private:
-    pointer ptr_;
-    int handle_index_;
-    const Sequence *seq_;
-  };
-
-  Iterator begin()
-  {
-    return Iterator(seq_, handles_array_, 0);
-  }
-  Iterator end()
-  {
-    const int count = this->count();
-    return Iterator(seq_, handles_array_ + count, count - 1);
   }
 
- public:
-  RetimingHandlesIterator(const Sequence *seq)
-  {
-    handles_array_ = seq->retiming_handles;
-    seq_ = seq;
-  }
-
-  reference *mouse_over_handle_get(const View2D *v2d, const int mval[2])
-  {
-    int best_distance = INT_MAX;
-    int best_handle_index = -1;
-
-    RetimingHandlesIterator handles = RetimingHandlesIterator(seq_);
-    for (auto handle : handles) {
-      int distance = round_fl_to_int(fabsf(UI_view2d_view_to_region_x(v2d, handle.x()) - mval[0]));
-
-      if (distance < RETIME_HANDLE_TRIANGLE_SIZE && distance < best_distance) {
-        best_distance = distance;
-        best_handle_index = handle.index;
-      }
-    }
-
-    if (best_handle_index == -1) {
-      return nullptr;
-    }
-
-    return new reference(seq_, handles_array_ + best_handle_index, best_handle_index);
-  }
-
-  int count()
-  {
-    return SEQ_retiming_handles_count(seq_);
-  }
-
- private:
-  const Sequence *seq_;
-  SeqRetimingHandle *handles_array_;
-};
+  return best_handle;
+}
 
 static float pixels_to_view_width(const bContext *C, const float width)
 {
@@ -413,18 +314,17 @@ static void retime_handle_draw(const bContext *C,
                                const RetimeHandleMoveGizmo *gizmo,
                                uint pos,
                                const Sequence *seq,
-                               RetimingHandle *handle)
+                               const SeqRetimingHandle *handle)
 {
   const Scene *scene = CTX_data_scene(C);
-  if (handle->x() == SEQ_time_left_handle_frame_get(scene, seq) ||
-      handle->index == 0) {  // xxx .is first_handle?
-    return;                  /* Ignore first handle. */
+  if (handle_x_get(seq, handle) == SEQ_time_left_handle_frame_get(scene, seq)) {
+    return;                  
   }
 
   const View2D *v2d = UI_view2d_fromcontext(C);
   const rctf strip_box = strip_box_get(C, seq);
   if (!BLI_rctf_isect_x(&strip_box,
-                        UI_view2d_view_to_region_x(v2d, handle->x()))) {  // xxx .is_visible
+                        UI_view2d_view_to_region_x(v2d, handle_x_get(seq, handle)))) {  // xxx .is_visible
     return; /* Handle out of strip bounds. */
   }
 
@@ -432,10 +332,10 @@ static void retime_handle_draw(const bContext *C,
   const float bottom = UI_view2d_view_to_region_y(v2d, strip_y_rescale(seq, 0.0f)) + 2;
   const float middle = UI_view2d_view_to_region_y(v2d, strip_y_rescale(seq, 0.5f));
   const float top = UI_view2d_view_to_region_y(v2d, strip_y_rescale(seq, 1.0f)) - 2;
-  const float handle_position = UI_view2d_view_to_region_x(v2d, handle->x());
+  const float handle_position = UI_view2d_view_to_region_x(v2d, handle_x_get(seq, handle));
   const int right_handle_frame = SEQ_time_right_handle_frame_get(scene, seq);
 
-  if (seq == gizmo->mouse_over_seq && handle->x() == gizmo->mouse_over_handle_x) {
+  if (seq == gizmo->mouse_over_seq && handle_x_get(seq, handle) == gizmo->mouse_over_handle_x) {
     immUniformColor4f(1.0f, 1.0f, 1.0f, 1.0f);
   }
   else {
@@ -443,7 +343,7 @@ static void retime_handle_draw(const bContext *C,
   }
 
   immBegin(GPU_PRIM_TRI_FAN, 3);
-  if (handle->x() == right_handle_frame) {
+  if (handle_x_get(seq, handle) == right_handle_frame) {
     /* Offset handle position by 1 frame, so it does not look out of place. */  // xxx hmmm could
                                                                                 // this be part of
                                                                                 // .x() function?
@@ -466,9 +366,12 @@ static void retime_handle_draw(const bContext *C,
   immEnd();
 }
 
-static void retime_speed_text_draw(const bContext *C, const Sequence *seq, RetimingHandle *handle)
+static void retime_speed_text_draw(const bContext *C,
+                                   const Sequence *seq,
+                                   const SeqRetimingHandle *handle)
 {
-  if (handle->is_last_handle) {
+  SeqRetimingHandle *last_handle = SEQ_retiming_last_handle_get(seq);
+  if (handle == last_handle) {
     return;
   }
 
@@ -476,12 +379,13 @@ static void retime_speed_text_draw(const bContext *C, const Sequence *seq, Retim
   const int start_frame = SEQ_time_left_handle_frame_get(scene, seq);
   const int end_frame = SEQ_time_right_handle_frame_get(scene, seq);
 
-  RetimingHandle next_handle = handle->next_handle_get();
-  if (next_handle.x() < start_frame || handle->x() > end_frame) {
+  int next_handle_index = SEQ_retiming_handle_index_get(seq, handle) + 1;
+  SeqRetimingHandle *next_handle = &SEQ_retiming_handles_get(seq)[next_handle_index];
+  if (handle_x_get(seq, next_handle) < start_frame || handle_x_get(seq, handle) > end_frame) {
     return; /* Label out of strip bounds. */
   }
 
-  const float speed = SEQ_retiming_handle_speed_get(scene, seq, next_handle.index);
+  const float speed = SEQ_retiming_handle_speed_get(scene, seq, next_handle_index);
 
   char label_str[20];
   const size_t label_len = BLI_snprintf_rlen(
@@ -489,8 +393,9 @@ static void retime_speed_text_draw(const bContext *C, const Sequence *seq, Retim
 
   const float width = pixels_to_view_width(C, BLF_width(BLF_default(), label_str, label_len));
 
-  const float xmin = max_ff(SEQ_time_left_handle_frame_get(scene, seq), handle->x());
-  const float xmax = min_ff(SEQ_time_right_handle_frame_get(scene, seq), next_handle.x());
+  const float xmin = max_ff(SEQ_time_left_handle_frame_get(scene, seq), handle_x_get(seq, handle));
+  const float xmax = min_ff(SEQ_time_right_handle_frame_get(scene, seq),
+                            handle_x_get(seq, next_handle));
 
   const float text_x = (xmin + xmax - width) / 2;
   const float text_y = strip_y_rescale(seq, 0) + pixels_to_view_height(C, 5);
@@ -515,11 +420,15 @@ static void gizmo_retime_handle_draw(const bContext *C, wmGizmo *gz)
 
   Sequence *seq = active_seq_from_context(C);
   SEQ_retiming_data_ensure(CTX_data_scene(C), seq);
-  RetimingHandlesIterator handles = RetimingHandlesIterator<RetimingHandle>(seq);
+  MutableSpan handles = SEQ_retiming_handles_get(seq);
 
-  for (auto handle : handles) {
-    retime_handle_draw(C, gizmo, pos, seq, &handle);
+  for (const SeqRetimingHandle& handle : handles) {
     retime_speed_text_draw(C, seq, &handle);
+
+    if (&handle == handles.begin()) {
+      continue; /* Ignore first handle. */
+    }
+    retime_handle_draw(C, gizmo, pos, seq, &handle);
   }
 
   immUnbindProgram();
@@ -538,14 +447,15 @@ static int gizmo_retime_handle_test_select(bContext *C, wmGizmo *gz, const int m
 
   Sequence *seq = active_seq_from_context(C);
   SEQ_retiming_data_ensure(CTX_data_scene(C), seq);
-  RetimingHandlesIterator handles = RetimingHandlesIterator<RetimingHandle>(seq);
-  RetimingHandle *handle = handles.mouse_over_handle_get(UI_view2d_fromcontext(C), mval);
+  const SeqRetimingHandle *handle = mouse_over_handle_get(seq, UI_view2d_fromcontext(C), mval);
+  const int handle_index = SEQ_retiming_handle_index_get(seq, handle);
 
   if (handle == NULL) {
     return -1;
   }
 
-  if (handle->x() == SEQ_time_left_handle_frame_get(scene, seq) || handle->index == 0) {
+  if (handle_x_get(seq, handle) == SEQ_time_left_handle_frame_get(scene, seq) ||
+      handle_index == 0) {
     return -1;
   }
 
@@ -556,10 +466,10 @@ static int gizmo_retime_handle_test_select(bContext *C, wmGizmo *gz, const int m
   }
 
   gizmo->mouse_over_seq = seq;
-  gizmo->mouse_over_handle_x = handle->x();
+  gizmo->mouse_over_handle_x = handle_x_get(seq, handle);
 
   wmGizmoOpElem *op_elem = WM_gizmo_operator_get(gz, 0);
-  RNA_int_set(&op_elem->ptr, "handle_index", handle->index);
+  RNA_int_set(&op_elem->ptr, "handle_index", handle_index);
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   return 0;
@@ -611,18 +521,20 @@ static int gizmo_retime_remove_test_select(bContext *C, wmGizmo *gz, const int m
   Sequence *seq = active_seq_from_context(C);
 
   SEQ_retiming_data_ensure(CTX_data_scene(C), seq);
-  RetimingHandlesIterator handles = RetimingHandlesIterator<RetimingHandle>(seq);
-  RetimingHandle *handle = handles.mouse_over_handle_get(UI_view2d_fromcontext(C), mval);
+  const SeqRetimingHandle *handle = mouse_over_handle_get(seq, UI_view2d_fromcontext(C), mval);
+  const int handle_index = SEQ_retiming_handle_index_get(seq, handle);
 
   if (handle == NULL) {
     return -1;
   }
 
-  if (handle->x() == SEQ_time_left_handle_frame_get(scene, seq) || handle->index == 0) {
+  if (handle_x_get(seq, handle) == SEQ_time_left_handle_frame_get(scene, seq) ||
+      handle_index == 0) {
     return -1; /* Ignore first handle. */
   }
 
-  if (handle->is_last_handle) {
+  SeqRetimingHandle *last_handle = SEQ_retiming_last_handle_get(seq);
+  if (handle == last_handle) {
     return -1; /* Last handle can not be removed. */
   }
 
@@ -634,7 +546,7 @@ static int gizmo_retime_remove_test_select(bContext *C, wmGizmo *gz, const int m
   }
 
   wmGizmoOpElem *op_elem = WM_gizmo_operator_get(gz, 0);
-  RNA_int_set(&op_elem->ptr, "handle_index", handle->index);
+  RNA_int_set(&op_elem->ptr, "handle_index", handle_index);
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   return 0;
