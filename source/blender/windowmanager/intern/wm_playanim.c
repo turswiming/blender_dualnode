@@ -1342,7 +1342,6 @@ static bool ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 static void playanim_window_open(const char *title, int posx, int posy, int sizex, int sizey)
 {
   GHOST_GLSettings glsettings = {0};
-  /* TODO selection should be done based on the GPU backend. Same as wm_window_*/
   const eGPUBackendType gpu_backend = GPU_backend_type_selection_get();
   glsettings.context_type = wm_ghost_drawing_context_type(gpu_backend);
   uint32_t scr_w, scr_h;

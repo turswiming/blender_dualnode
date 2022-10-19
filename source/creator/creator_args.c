@@ -2109,6 +2109,10 @@ void main_args_setup(bContext *C, bArgs *ba)
   BLI_args_add(ba, NULL, "--log-show-timestamp", CB(arg_handle_log_show_timestamp_set), ba);
   BLI_args_add(ba, NULL, "--log-file", CB(arg_handle_log_file_set), ba);
 
+  /* GPU backend selection should be part of ARG_PASS_ENVIRONMENT for correct GPU context selection
+   * for anim player. */
+  BLI_args_add(ba, NULL, "--gpu-backend", CB(arg_handle_gpu_backend_set), NULL);
+
   /* Pass: Background Mode & Settings
    *
    * Also and commands that exit after usage. */
@@ -2281,7 +2285,6 @@ void main_args_setup(bContext *C, bArgs *ba)
   BLI_args_add(ba, "-R", NULL, CB(arg_handle_register_extension), NULL);
   BLI_args_add(ba, "-r", NULL, CB_EX(arg_handle_register_extension, silent), ba);
   BLI_args_add(ba, NULL, "--no-native-pixels", CB(arg_handle_native_pixels_set), ba);
-  BLI_args_add(ba, NULL, "--gpu-backend", CB(arg_handle_gpu_backend_set), NULL);
 
   /* Pass: Disabling Things & Forcing Settings. */
   BLI_args_pass_set(ba, ARG_PASS_SETTINGS_FORCE);
