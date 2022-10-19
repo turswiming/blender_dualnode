@@ -3635,7 +3635,7 @@ GHOST_IWindow *GHOST_SystemWayland::createWindow(const char *title,
       height,
       state,
       parentWindow,
-      type,
+      glSettings.context_type,
       is_dialog,
       ((glSettings.flags & GHOST_glStereoVisual) != 0),
       exclusive);
