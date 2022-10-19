@@ -1115,11 +1115,11 @@ static int arg_handle_debug_gpu_set(int UNUSED(argc),
 
 static const char arg_handle_gpu_backend_set_doc[] =
     "\n"
-    "\tForce to use a specific GPU backend. Valid options are "
+    "\tForce to use a specific GPU backend. Valid options: "
 #  ifdef WITH_METAL_BACKEND
-    "'metal', "
+    "'metal',  "
 #  endif
-    "'opengl' and 'default'.";
+    "'opengl').";
 static int arg_handle_gpu_backend_set(int argc, const char **argv, void *UNUSED(data))
 {
   if (argc == 0) {
@@ -1129,10 +1129,7 @@ static int arg_handle_gpu_backend_set(int argc, const char **argv, void *UNUSED(
 
   eGPUBackendType gpu_backend = GPU_BACKEND_NONE;
 
-  if (STREQ(argv[1], "default")) {
-    gpu_backend = GPU_BACKEND_NONE;
-  }
-  else if (STREQ(argv[1], "opengl")) {
+  if (STREQ(argv[1], "opengl")) {
     gpu_backend = GPU_BACKEND_OPENGL;
   }
 #  ifdef WITH_METAL_BACKEND
@@ -1144,7 +1141,7 @@ static int arg_handle_gpu_backend_set(int argc, const char **argv, void *UNUSED(
     printf("\nError: Unrecognized GPU backend for '--gpu-backend'.\n");
     return 0;
   }
-  GPU_backend_type_set(gpu_backend);
+  GPU_backend_type_selection_set(gpu_backend);
 
   return 1;
 }
@@ -2133,8 +2130,6 @@ void main_args_setup(bContext *C, bArgs *ba)
 
   BLI_args_add(ba, "-a", NULL, CB(arg_handle_playback_mode), NULL);
 
-  BLI_args_add(ba, NULL, "--gpu-backend", CB(arg_handle_gpu_backend_set), NULL);
-
   BLI_args_add(ba, "-d", "--debug", CB(arg_handle_debug_mode_set), ba);
 
 #  ifdef WITH_FFMPEG
@@ -2286,6 +2281,7 @@ void main_args_setup(bContext *C, bArgs *ba)
   BLI_args_add(ba, "-R", NULL, CB(arg_handle_register_extension), NULL);
   BLI_args_add(ba, "-r", NULL, CB_EX(arg_handle_register_extension, silent), ba);
   BLI_args_add(ba, NULL, "--no-native-pixels", CB(arg_handle_native_pixels_set), ba);
+  BLI_args_add(ba, NULL, "--gpu-backend", CB(arg_handle_gpu_backend_set), NULL);
 
   /* Pass: Disabling Things & Forcing Settings. */
   BLI_args_pass_set(ba, ARG_PASS_SETTINGS_FORCE);

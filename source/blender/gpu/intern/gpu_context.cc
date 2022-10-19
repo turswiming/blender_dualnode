@@ -226,10 +226,16 @@ void GPU_render_step()
 static eGPUBackendType g_backend_type = GPU_BACKEND_OPENGL;
 static GPUBackend *g_backend = nullptr;
 
-void GPU_backend_type_set(const eGPUBackendType backend)
+void GPU_backend_type_selection_set(const eGPUBackendType backend)
 {
   g_backend_type = backend;
 }
+
+eGPUBackendType GPU_backend_type_selection_get()
+{
+  return g_backend_type;
+}
+
 bool GPU_backend_supported(void)
 {
   switch (g_backend_type) {

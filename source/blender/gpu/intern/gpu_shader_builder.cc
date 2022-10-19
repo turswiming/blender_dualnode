@@ -41,6 +41,8 @@ void ShaderBuilder::init()
   CLG_init();
 
   GHOST_GLSettings glSettings = {0};
+  // TODO(jbakker): should be based on a startup option(s).
+  glSettings.context_type = GHOST_kDrawingContextTypeOpenGL;
   ghost_system_ = GHOST_CreateSystem();
   ghost_context_ = GHOST_CreateOpenGLContext(ghost_system_, glSettings);
   GHOST_ActivateOpenGLContext(ghost_context_);
