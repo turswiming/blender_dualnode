@@ -56,7 +56,7 @@ GHOST_IWindow *GHOST_SystemSDL::createWindow(const char *title,
                                width,
                                height,
                                state,
-                               type,
+                               glSettings.context_type,
                                ((glSettings.flags & GHOST_glStereoVisual) != 0),
                                exclusive,
                                parentWindow);
