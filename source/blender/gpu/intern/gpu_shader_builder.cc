@@ -91,16 +91,27 @@ int main(int argc, const char *argv[])
 
   int exit_code = 0;
 
-  blender::Vector<eGPUBackendType> backends_to_validate;
-  backends_to_validate.append(GPU_BACKEND_OPENGL);
+  struct NamedBackend {
+    std::string name;
+    eGPUBackendType backend;
+  };
+
+  blender::Vector<NamedBackend> backends_to_validate;
+  backends_to_validate.append({"OpenGL", GPU_BACKEND_OPENGL});
 #ifdef WITH_METAL_BACKEND
-  backends_to_validate.append(GPU_BACKEND_METAL);
+  backends_to_validate.append({"Metal", GPU_BACKEND_METAL});
 #endif
-  for (eGPUBackendType backend : backends_to_validate) {
-    GPU_backend_type_selection_set(backend);
+  for (NamedBackend &backend : backends_to_validate) {
+    GPU_backend_type_selection_set(backend.backend);
+    if (!GPU_backend_supported()) {
+      printf("%s isn't supported on this platform. Shader compilation is skipped\n",
+             backend.name.c_str());
+      continue;
+    }
     blender::gpu::shader_builder::ShaderBuilder builder;
     builder.init();
     if (!builder.bake_create_infos()) {
+      printf("Shader compilation failed for %s backend\n", backend.name.c_str());
       exit_code = 1;
     }
     builder.exit();
