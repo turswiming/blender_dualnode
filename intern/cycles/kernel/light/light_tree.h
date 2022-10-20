@@ -69,13 +69,13 @@ ccl_device float light_tree_node_importance(const float3 P,
   float cos_theta_prime;
   if ((cos_theta > cos_theta_u) || (cos_theta_minus_theta_u > cos_theta_o)) {
     /* theta - theta_o - theta_u < 0 */
-    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u)) < 1e-4f);
+    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u)) < 5e-4f);
     cos_theta_prime = 1.0f;
   }
   else if ((cos_theta > cos_theta_u) || (theta_o + theta_e > M_PI_F) ||
            (cos_theta_minus_theta_u > cos(theta_o + theta_e))) {
     /* theta' = theta - theta_o - theta_u < theta_e */
-    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u) - theta_e) < 1e-4f);
+    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u) - theta_e) < 5e-4f);
     const float sin_theta_minus_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_minus_theta_u));
     cos_theta_prime = cos_theta_minus_theta_u * cos_theta_o +
                       sin_theta_minus_theta_u * sin_theta_o;
