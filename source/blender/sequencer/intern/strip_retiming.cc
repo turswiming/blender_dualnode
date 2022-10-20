@@ -125,6 +125,7 @@ bool SEQ_retiming_is_active(const Scene *scene, const Sequence *seq)
 bool SEQ_retiming_is_allowed(const Sequence *seq)
 {
   return ELEM(seq->type,
+              SEQ_TYPE_SOUND_RAM,
               SEQ_TYPE_IMAGE,
               SEQ_TYPE_META,
               SEQ_TYPE_SCENE,
@@ -249,4 +250,21 @@ float SEQ_retiming_handle_speed_get(const Scene *scene,
 
   const float speed = (float)fragment_length_retimed / (float)fragment_length_original;
   return speed;
+}
+
+#include <BKE_sound.h>
+void SEQ_retiming_sound_animation_data_set(const Scene scene, const Sequence *seq)
+{
+  MutableSpan handles = SEQ_retiming_handles_get(seq);
+
+  for (const SeqRetimingHandle &handle : handles) {
+    if (handle.strip_frame_index == 0) {
+      continue;
+    }
+
+    float pitch = SEQ_retiming_handle_speed_get(scene, seq, handle);
+
+    BKE_sound_set_scene_sound_pitch(
+        seq->scene_sound, pitch, (seq->flag & SEQ_AUDIO_PITCH_ANIMATED) != 0);
+  }
 }
