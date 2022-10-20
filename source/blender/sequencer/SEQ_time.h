@@ -151,7 +151,7 @@ void SEQ_retiming_offset_handle(const struct Scene *scene,
                                 const int offset);
 float SEQ_retiming_handle_speed_get(const struct Scene *scene,
                                     const struct Sequence *seq,
-                                    const int point_index);
+                                    const struct SeqRetimingHandle *handle);
 int SEQ_retiming_handle_index_get(const struct Sequence *seq, const struct SeqRetimingHandle *handle);
 #ifdef __cplusplus
 }

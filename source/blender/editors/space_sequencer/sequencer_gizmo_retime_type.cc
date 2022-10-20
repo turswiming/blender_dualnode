@@ -380,7 +380,7 @@ static void retime_speed_text_draw(const bContext *C,
   const int end_frame = SEQ_time_right_handle_frame_get(scene, seq);
 
   int next_handle_index = SEQ_retiming_handle_index_get(seq, handle) + 1;
-  SeqRetimingHandle *next_handle = &SEQ_retiming_handles_get(seq)[next_handle_index];
+  const SeqRetimingHandle *next_handle = &SEQ_retiming_handles_get(seq)[next_handle_index];
   if (handle_x_get(seq, next_handle) < start_frame || handle_x_get(seq, handle) > end_frame) {
     return; /* Label out of strip bounds. */
   }
