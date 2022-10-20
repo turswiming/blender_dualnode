@@ -228,14 +228,15 @@ void SEQ_retiming_remove_handle(Sequence *seq, SeqRetimingHandle *handle)
   seq->retiming_handle_count--;
 }
 
-float SEQ_retiming_handle_speed_get(const Scene *scene, const Sequence *seq, const int point_index)
+float SEQ_retiming_handle_speed_get(const Scene *scene,
+                                    const Sequence *seq,
+                                    const SeqRetimingHandle *handle)
 {
-  if (point_index == 0) {
+  if (handle->strip_frame_index == 0) {
     return 1.0f;
   }
 
-  SeqRetimingHandle *handle = seq->retiming_handles + point_index;
-  SeqRetimingHandle *handle_prev = handle - 1;
+  const SeqRetimingHandle *handle_prev = handle - 1;
 
   const int frame_index_max = seq_time_strip_original_content_length_get(scene, seq) - 1;
   const int frame_retimed_prev = round_fl_to_int(handle_prev->retiming_factor * frame_index_max);

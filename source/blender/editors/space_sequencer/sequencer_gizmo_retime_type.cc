@@ -385,7 +385,7 @@ static void retime_speed_text_draw(const bContext *C,
     return; /* Label out of strip bounds. */
   }
 
-  const float speed = SEQ_retiming_handle_speed_get(scene, seq, next_handle_index);
+  const float speed = SEQ_retiming_handle_speed_get(scene, seq, next_handle);
 
   char label_str[20];
   const size_t label_len = BLI_snprintf_rlen(
