@@ -241,10 +241,28 @@ bool SequenceHandle::seek(double position)
 		return false;
 
 	std::lock_guard<ILockable> lock(*m_entry);
-	double seekpos = position - m_entry->m_begin;
-	if(seekpos < 0)
-		seekpos = 0;
-	seekpos += m_entry->m_skip;
+	float seek_frame = (position - m_entry->m_begin) * m_entry->m_fps;
+	if(seek_frame < 0)
+		seek_frame = 0;
+	seek_frame += m_entry->m_skip * m_entry->m_fps;
+
+	AnimateableProperty *pitch_property = m_entry->getAnimProperty(AP_PITCH);
+	
+	float target_frame = 0;
+
+	// XXX this can be optimized if there is only 1 point
+	if (pitch_property != nullptr){
+		for (int i = 0; i < seek_frame; i++){
+			float pitch;
+			pitch_property->read(i, &pitch);
+			target_frame += pitch;
+		}
+	} else {
+		target_frame = seek_frame;
+	}
+
+	double seekpos = target_frame / m_entry->m_fps; 
+
 	m_handle->setPitch(1.0f);
 	m_handle->seek(seekpos);
 

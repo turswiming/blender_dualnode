@@ -63,6 +63,9 @@ private:
 	/// How many seconds are skipped at the beginning.
 	double m_skip;
 
+    /// The FPS of the scene.
+    float m_fps;
+
 	/// Whether the entry is muted.
 	bool m_muted;
 
@@ -124,7 +127,7 @@ public:
 	 * \param skip How much seconds should be skipped at the beginning.
 	 * \param id The ID of the entry.
 	 */
-	SequenceEntry(std::shared_ptr<ISound> sound, double begin, double end, double skip, int id);
+	SequenceEntry(std::shared_ptr<ISound> sound, double begin, double end, double skip, float fps, int id);
 	virtual ~SequenceEntry();
 
 	/**

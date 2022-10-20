@@ -253,18 +253,25 @@ float SEQ_retiming_handle_speed_get(const Scene *scene,
 }
 
 #include <BKE_sound.h>
-void SEQ_retiming_sound_animation_data_set(const Scene scene, const Sequence *seq)
+void SEQ_retiming_sound_animation_data_set(const Scene *scene, const Sequence *seq)
 {
   MutableSpan handles = SEQ_retiming_handles_get(seq);
+
+  //XXX hack to reset data
+  BKE_sound_set_scene_sound_pitch(seq->scene_sound, 1, 0);
 
   for (const SeqRetimingHandle &handle : handles) {
     if (handle.strip_frame_index == 0) {
       continue;
     }
 
-    float pitch = SEQ_retiming_handle_speed_get(scene, seq, handle);
+    const SeqRetimingHandle *handle_prev = &handle - 1;
+    float pitch = SEQ_retiming_handle_speed_get(scene, seq, &handle);
 
-    BKE_sound_set_scene_sound_pitch(
-        seq->scene_sound, pitch, (seq->flag & SEQ_AUDIO_PITCH_ANIMATED) != 0);
+    int frame_start = SEQ_time_start_frame_get(seq) + handle_prev->strip_frame_index;
+    int frame_end = SEQ_time_start_frame_get(seq) + handle.strip_frame_index;
+
+    BKE_sound_set_scene_sound_pitch_constant_range(
+        seq->scene_sound, frame_start, frame_end, pitch);
   }
 }
