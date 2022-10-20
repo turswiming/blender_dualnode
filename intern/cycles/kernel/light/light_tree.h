@@ -525,7 +525,7 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
   }
 
   if (total_importance == 0.0f) {
-    return -1;
+    return false;
   }
 
   float light_cdf = 0.0f;
@@ -541,7 +541,7 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
       const int lamp = kdistant->prim_id;
 
       if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
-        return -1;
+        return false;
       }
 
       return light_sample<in_volume_segment>(kg, lamp, *randu, randv, P, path_flag, ls);
@@ -552,7 +552,7 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
   /* TODO: change implementation so that even under precision issues, we always end
    * up selecting a light and this can't happen? */
   kernel_assert(false);
-  return -1;
+  return false;
 }
 
 /* We need to be able to find the probability of selecting a given light for MIS.
