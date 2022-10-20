@@ -216,7 +216,7 @@ ccl_device bool light_tree_should_split(KernelGlobals kg,
   const float radius = len(bbox_max - centroid);
   const float distance = len(P - centroid);
 
-  if (distance < radius) {
+  if (distance <= radius) {
     return true;
   }
 
@@ -615,8 +615,6 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
     /* Leaf node */
     if (knode->child_index <= 0) {
 
-      float pdf_emitter_selection = 1.0f;
-
       /* If the leaf node contains the target emitter, we are processing the last node.
        * We then iterate through the lights to find the target emitter.
        * Otherwise, we randomly select one. */
@@ -636,11 +634,18 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
           }
           total_emitter_importance += light_importance;
         }
-        pdf_emitter_selection = target_emitter_importance / total_emitter_importance;
-        const float pdf_reservoir = selected_reservoir_weight / total_reservoir_weight;
-        pdf *= pdf_emitter_selection * pdf_reservoir;
+
+        if (total_emitter_importance > 0.0f) {
+          const float pdf_emitter_selection = target_emitter_importance / total_emitter_importance;
+          const float pdf_reservoir = selected_reservoir_weight / total_reservoir_weight;
+          pdf *= pdf_emitter_selection * pdf_reservoir;
+        }
+        else {
+          pdf = 0.0f;
+        }
       }
       else {
+        float pdf_emitter_selection = 1.0f;
         selected_light = light_tree_cluster_select_emitter(
             kg, &randu, P, N, has_transmission, knode, &pdf_emitter_selection);
 
