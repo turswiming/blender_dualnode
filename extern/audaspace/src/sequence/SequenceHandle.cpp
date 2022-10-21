@@ -250,7 +250,7 @@ bool SequenceHandle::seek(double position)
 	
 	float target_frame = 0;
 
-	// XXX this can be optimized if there is only 1 point
+	// XXX this can be optimized for constant interpolation
 	if (pitch_property != nullptr){
 		for (int i = 0; i < seek_frame; i++){
 			float pitch;

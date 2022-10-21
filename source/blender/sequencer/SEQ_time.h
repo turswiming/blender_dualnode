@@ -77,6 +77,11 @@ bool SEQ_time_strip_intersects_frame(const struct Scene *scene,
 /**
  * Returns true if strip has frames without content to render.
  */
+float SEQ_give_frame_index(const struct Scene *scene, struct Sequence *seq, float timeline_frame);
+
+/**
+ * Returns true if strip has frames without content to render.
+ */
 bool SEQ_time_has_still_frames(const struct Scene *scene, const struct Sequence *seq);
 /**
  * Returns true if at beginning of strip there is no content to be rendered.

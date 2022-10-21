@@ -77,7 +77,7 @@ int seq_time_strip_original_content_length_get(const Scene *scene, const Sequenc
   return seq->len / seq_time_playback_rate_factor_get(scene, seq);
 }
 
-float seq_give_frame_index(const Scene *scene, Sequence *seq, float timeline_frame)
+float SEQ_give_frame_index(const Scene *scene, Sequence *seq, float timeline_frame)
 {
   float frame_index;
   float sta = SEQ_time_start_frame_get(seq);
