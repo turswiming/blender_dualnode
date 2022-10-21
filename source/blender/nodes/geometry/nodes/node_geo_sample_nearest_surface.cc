@@ -1,17 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_generic_array.hh"
-#include "BLI_kdopbvh.h"
-#include "BLI_task.hh"
-
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
-#include "DNA_pointcloud_types.h"
 
 #include "BKE_attribute_math.hh"
 #include "BKE_bvhutils.h"
 #include "BKE_mesh.h"
-#include "BKE_mesh_runtime.h"
 #include "BKE_mesh_sample.hh"
 
 #include "UI_interface.h"
@@ -246,7 +240,11 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_default_remaining_outputs();
     return;
   }
-  if (mesh->totpoly == 0 && mesh->totvert != 0) {
+  if (mesh->totvert == 0) {
+    params.set_default_remaining_outputs();
+    return;
+  }
+  if (mesh->totpoly == 0) {
     params.error_message_add(NodeWarningType::Error, TIP_("The source mesh must have faces"));
     params.set_default_remaining_outputs();
     return;

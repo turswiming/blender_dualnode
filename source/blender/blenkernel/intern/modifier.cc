@@ -406,7 +406,7 @@ bool BKE_modifier_supports_cage(struct Scene *scene, ModifierData *md)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
-  return ((!mti->isDisabled || !mti->isDisabled(scene, md, 0)) &&
+  return ((!mti->isDisabled || !mti->isDisabled(scene, md, false)) &&
           (mti->flags & eModifierTypeFlag_SupportsEditmode) && BKE_modifier_supports_mapping(md));
 }
 
@@ -415,7 +415,7 @@ bool BKE_modifier_couldbe_cage(struct Scene *scene, ModifierData *md)
   const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
   return ((md->mode & eModifierMode_Realtime) && (md->mode & eModifierMode_Editmode) &&
-          (!mti->isDisabled || !mti->isDisabled(scene, md, 0)) &&
+          (!mti->isDisabled || !mti->isDisabled(scene, md, false)) &&
           BKE_modifier_supports_mapping(md));
 }
 
@@ -513,7 +513,7 @@ int BKE_modifiers_get_cage_index(const Scene *scene,
     const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
     bool supports_mapping;
 
-    if (mti->isDisabled && mti->isDisabled(scene, md, 0)) {
+    if (mti->isDisabled && mti->isDisabled(scene, md, false)) {
       continue;
     }
     if (!(mti->flags & eModifierTypeFlag_SupportsEditmode)) {
@@ -955,7 +955,7 @@ const char *BKE_modifier_path_relbase_from_global(Object *ob)
 void BKE_modifier_path_init(char *path, int path_maxlen, const char *name)
 {
   const char *blendfile_path = BKE_main_blendfile_path_from_global();
-  BLI_join_dirfile(path, path_maxlen, blendfile_path[0] ? "//" : BKE_tempdir_session(), name);
+  BLI_path_join(path, path_maxlen, blendfile_path[0] ? "//" : BKE_tempdir_session(), name);
 }
 
 /**
@@ -963,9 +963,9 @@ void BKE_modifier_path_init(char *path, int path_maxlen, const char *name)
  */
 static void modwrap_dependsOnNormals(Mesh *me)
 {
-  switch ((eMeshWrapperType)me->runtime.wrapper_type) {
+  switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_BMESH: {
-      EditMeshData *edit_data = me->runtime.edit_data;
+      EditMeshData *edit_data = me->runtime->edit_data;
       if (edit_data->vertexCos) {
         /* Note that 'ensure' is acceptable here since these values aren't modified in-place.
          * If that changes we'll need to recalculate. */
@@ -993,7 +993,7 @@ struct Mesh *BKE_modifier_modify_mesh(ModifierData *md,
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
-  if (me->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+  if (me->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     if ((mti->flags & eModifierTypeFlag_AcceptsBMesh) == 0) {
       BKE_mesh_wrapper_ensure_mdata(me);
     }

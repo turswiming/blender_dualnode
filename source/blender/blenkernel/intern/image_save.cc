@@ -175,12 +175,12 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
           BLI_strncpy(opts->filepath, G.ima, sizeof(opts->filepath));
         }
         else {
-          BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", DATA_("untitled"), nullptr);
+          BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", DATA_("untitled"));
           BLI_path_abs(opts->filepath, BKE_main_blendfile_path(bmain));
         }
       }
       else {
-        BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", ima->id.name + 2, nullptr);
+        BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", ima->id.name + 2);
         BLI_path_make_safe(opts->filepath);
         BLI_path_abs(opts->filepath, is_prev_save ? G.ima : BKE_main_blendfile_path(bmain));
       }
@@ -824,7 +824,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
 
       /* We only store RGBA passes as half float, for
        * others precision loss can be problematic. */
-      const bool pass_RGBA = (STR_ELEM(rp->chan_id, "RGB", "RGBA", "R", "G", "B", "A"));
+      const bool pass_RGBA = STR_ELEM(rp->chan_id, "RGB", "RGBA", "R", "G", "B", "A");
       const bool pass_half_float = half_float && pass_RGBA;
 
       /* Color-space conversion only happens on RGBA passes. */

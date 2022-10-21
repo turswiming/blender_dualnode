@@ -9,11 +9,8 @@
 #include <stdlib.h>
 
 #include "DNA_armature_types.h"
-#include "DNA_brush_types.h"
-#include "DNA_cachefile_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_gpencil_types.h"
-#include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
@@ -21,20 +18,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
-#include "BLI_rand.h"
+#include "BLI_math_base.h"
+#include "BLI_math_rotation.h"
 #include "BLI_string_utils.h"
 
 #include "BLT_translation.h"
 
 #include "BKE_animsys.h"
-#include "BKE_data_transfer.h"
-#include "BKE_dynamicpaint.h"
-#include "BKE_effect.h"
-#include "BKE_fluid.h" /* For BKE_fluid_modifier_free & BKE_fluid_modifier_create_type_data */
-#include "BKE_mesh_mapping.h"
-#include "BKE_mesh_remap.h"
-#include "BKE_multires.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -82,7 +72,7 @@ const EnumPropertyItem rna_enum_object_greasepencil_modifier_type_items[] = {
      "Generate dot-dash styled strokes"},
     {eGpencilModifierType_Envelope,
      "GP_ENVELOPE",
-     ICON_MOD_SKIN,
+     ICON_MOD_ENVELOPE,
      "Envelope",
      "Create an envelope shape"},
     {eGpencilModifierType_Length,
@@ -107,7 +97,7 @@ const EnumPropertyItem rna_enum_object_greasepencil_modifier_type_items[] = {
      "Produce multiple strokes along one stroke"},
     {eGpencilModifierType_Outline,
      "GP_OUTLINE",
-     ICON_MOD_SKIN,
+     ICON_MOD_OUTLINE,
      "Outline",
      "Convert stroke to perimeter"},
     {eGpencilModifierType_Simplify,
@@ -2139,8 +2129,7 @@ static void rna_def_modifier_gpenciloutline(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "OutlineGpencilModifier", "GpencilModifier");
   RNA_def_struct_ui_text(srna, "Outline Modifier", "Outline of Strokes modifier from camera view");
   RNA_def_struct_sdna(srna, "OutlineGpencilModifierData");
-  // TODO: add new icon
-  RNA_def_struct_ui_icon(srna, ICON_MOD_SKIN);
+  RNA_def_struct_ui_icon(srna, ICON_MOD_OUTLINE);
 
   RNA_define_lib_overridable(true);
 
@@ -4431,7 +4420,7 @@ static void rna_def_modifier_gpencilenvelope(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "EnvelopeGpencilModifier", "GpencilModifier");
   RNA_def_struct_ui_text(srna, "Envelope Modifier", "Envelope stroke effect modifier");
   RNA_def_struct_sdna(srna, "EnvelopeGpencilModifierData");
-  RNA_def_struct_ui_icon(srna, ICON_MOD_SKIN);
+  RNA_def_struct_ui_icon(srna, ICON_MOD_ENVELOPE);
 
   RNA_define_lib_overridable(true);
 

@@ -447,14 +447,14 @@ void WM_exit_ex(bContext *C, const bool do_python)
         bool has_edited;
         const int fileflags = G.fileflags & ~G_FILE_COMPRESS;
 
-        BLI_join_dirfile(filepath, sizeof(filepath), BKE_tempdir_base(), BLENDER_QUIT_FILE);
+        BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), BLENDER_QUIT_FILE);
 
         has_edited = ED_editors_flush_edits(bmain);
 
         if ((has_edited &&
              BLO_write_file(
                  bmain, filepath, fileflags, &(const struct BlendFileWriteParams){0}, NULL)) ||
-            (BLO_memfile_write_file(undo_memfile, filepath))) {
+            BLO_memfile_write_file(undo_memfile, filepath)) {
           printf("Saved session recovery to '%s'\n", filepath);
         }
       }

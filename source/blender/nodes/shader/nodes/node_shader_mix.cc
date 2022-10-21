@@ -23,11 +23,13 @@ static void sh_node_mix_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
   b.add_input<decl::Float>(N_("Factor"), "Factor_Float")
+      .no_muted_links()
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>(N_("Factor"), "Factor_Vector")
+      .no_muted_links()
       .default_value(float3(0.5f))
       .subtype(PROP_FACTOR);
 
@@ -121,6 +123,19 @@ static void sh_node_mix_update(bNodeTree *ntree, bNode *node)
   nodeSetSocketAvailability(ntree, sock_factor_vec, use_vector_factor);
 }
 
+class SocketSearchOp {
+ public:
+  std::string socket_name;
+  int type = MA_RAMP_BLEND;
+  void operator()(LinkSearchOpParams &params)
+  {
+    bNode &node = params.add_node("ShaderNodeMix");
+    node_storage(node).data_type = SOCK_RGBA;
+    node_storage(node).blend_type = type;
+    params.update_and_connect_available_socket(node, socket_name);
+  }
+};
+
 static void node_mix_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const eNodeSocketDatatype sock_type = static_cast<eNodeSocketDatatype>(
@@ -129,6 +144,17 @@ static void node_mix_gather_link_searches(GatherLinkSearchOpParams &params)
   if (ELEM(sock_type, SOCK_BOOLEAN, SOCK_FLOAT, SOCK_RGBA, SOCK_VECTOR, SOCK_INT)) {
     const eNodeSocketDatatype type = ELEM(sock_type, SOCK_BOOLEAN, SOCK_INT) ? SOCK_FLOAT :
                                                                                sock_type;
+
+    const int weight = ELEM(params.other_socket().type, SOCK_RGBA) ? 0 : -1;
+    const std::string socket_name = params.in_out() == SOCK_IN ? "A" : "Result";
+    for (const EnumPropertyItem *item = rna_enum_ramp_blend_items; item->identifier != nullptr;
+         item++) {
+      if (item->name != nullptr && item->identifier[0] != '\0') {
+        params.add_item(CTX_IFACE_(BLT_I18NCONTEXT_ID_NODETREE, item->name),
+                        SocketSearchOp{socket_name, item->value},
+                        weight);
+      }
+    }
 
     if (params.in_out() == SOCK_OUT) {
       params.add_item(IFACE_("Result"), [type](LinkSearchOpParams &params) {

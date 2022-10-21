@@ -52,6 +52,13 @@ GHOST_TSuccess GHOST_DisposeSystem(GHOST_SystemHandle systemhandle)
   return system->disposeSystem();
 }
 
+#if !(defined(WIN32) || defined(__APPLE__))
+const char *GHOST_SystemBackend()
+{
+  return GHOST_ISystem::getSystemBackend();
+}
+#endif
+
 void GHOST_ShowMessageBox(GHOST_SystemHandle systemhandle,
                           const char *title,
                           const char *message,
@@ -154,7 +161,6 @@ GHOST_WindowHandle GHOST_CreateWindow(GHOST_SystemHandle systemhandle,
                                       uint32_t height,
                                       GHOST_TWindowState state,
                                       bool is_dialog,
-                                      GHOST_TDrawingContextType type,
                                       GHOST_GLSettings glSettings)
 {
   GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
@@ -165,7 +171,6 @@ GHOST_WindowHandle GHOST_CreateWindow(GHOST_SystemHandle systemhandle,
                                                   width,
                                                   height,
                                                   state,
-                                                  type,
                                                   glSettings,
                                                   false,
                                                   is_dialog,

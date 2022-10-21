@@ -528,9 +528,9 @@ static bool subdiv_mesh_topology_info(const SubdivForeachContext *foreach_contex
       subdiv_context->coarse_mesh, num_vertices, num_edges, 0, num_loops, num_polygons, mask);
   subdiv_mesh_ctx_cache_custom_data_layers(subdiv_context);
   subdiv_mesh_prepare_accumulator(subdiv_context, num_vertices);
-  MEM_SAFE_FREE(subdiv_context->subdiv_mesh->runtime.subsurf_face_dot_tags);
-  subdiv_context->subdiv_mesh->runtime.subsurf_face_dot_tags = BLI_BITMAP_NEW(num_vertices,
-                                                                              __func__);
+  MEM_SAFE_FREE(subdiv_context->subdiv_mesh->runtime->subsurf_face_dot_tags);
+  subdiv_context->subdiv_mesh->runtime->subsurf_face_dot_tags = BLI_BITMAP_NEW(num_vertices,
+                                                                               __func__);
   return true;
 }
 
@@ -595,7 +595,7 @@ static void evaluate_vertex_and_apply_displacement_copy(const SubdivMeshContext 
   /* Evaluate undeformed texture coordinate. */
   subdiv_vertex_orco_evaluate(ctx, ptex_face_index, u, v, subdiv_vertex_index);
   /* Remove face-dot flag. This can happen if there is more than one subsurf modifier. */
-  BLI_BITMAP_DISABLE(ctx->subdiv_mesh->runtime.subsurf_face_dot_tags, subdiv_vertex_index);
+  BLI_BITMAP_DISABLE(ctx->subdiv_mesh->runtime->subsurf_face_dot_tags, subdiv_vertex_index);
 }
 
 static void evaluate_vertex_and_apply_displacement_interpolate(
@@ -753,7 +753,7 @@ static void subdiv_mesh_tag_center_vertex(const MPoly *coarse_poly,
                                           Mesh *subdiv_mesh)
 {
   if (subdiv_mesh_is_center_vertex(coarse_poly, u, v)) {
-    BLI_BITMAP_ENABLE(subdiv_mesh->runtime.subsurf_face_dot_tags, subdiv_vertex_index);
+    BLI_BITMAP_ENABLE(subdiv_mesh->runtime->subsurf_face_dot_tags, subdiv_vertex_index);
   }
 }
 
@@ -1110,9 +1110,9 @@ static void subdiv_mesh_vertex_of_loose_edge(const SubdivForeachContext *foreach
 
   /* Lazily initialize a vertex to edge map to avoid quadratic runtime when subdividing loose
    * edges. Do this here to avoid the cost in common cases when there are no loose edges at all. */
-  if (ctx->vert_to_edge_map == NULL) {
+  if (ctx->vert_to_edge_map == nullptr) {
     std::lock_guard lock{ctx->vert_to_edge_map_mutex};
-    if (ctx->vert_to_edge_map == NULL) {
+    if (ctx->vert_to_edge_map == nullptr) {
       BKE_mesh_vert_edge_map_create(&ctx->vert_to_edge_map,
                                     &ctx->vert_to_edge_buffer,
                                     ctx->coarse_edges,
@@ -1191,7 +1191,7 @@ Mesh *BKE_subdiv_to_mesh(Subdiv *subdiv,
     }
   }
   /* Initialize subdivision mesh creation context. */
-  SubdivMeshContext subdiv_context = {0};
+  SubdivMeshContext subdiv_context{};
   subdiv_context.settings = settings;
 
   subdiv_context.coarse_mesh = coarse_mesh;
@@ -1206,7 +1206,7 @@ Mesh *BKE_subdiv_to_mesh(Subdiv *subdiv,
   BKE_subdiv_stats_begin(&subdiv->stats, SUBDIV_STATS_SUBDIV_TO_MESH_GEOMETRY);
   SubdivForeachContext foreach_context;
   setup_foreach_callbacks(&subdiv_context, &foreach_context);
-  SubdivMeshTLS tls = {0};
+  SubdivMeshTLS tls{};
   foreach_context.user_data = &subdiv_context;
   foreach_context.user_data_tls_size = sizeof(SubdivMeshTLS);
   foreach_context.user_data_tls = &tls;

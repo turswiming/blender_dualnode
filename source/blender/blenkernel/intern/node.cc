@@ -84,8 +84,6 @@
 
 #include "BLO_read_write.h"
 
-#include "MOD_nodes.h"
-
 #define NODE_DEFAULT_MAX_WIDTH 700
 
 using blender::Array;
@@ -407,13 +405,13 @@ static void node_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 static ID **node_owner_pointer_get(ID *id)
 {
   if ((id->flag & LIB_EMBEDDED_DATA) == 0) {
-    return NULL;
+    return nullptr;
   }
   /* TODO: Sort this NO_MAIN or not for embedded node trees. See T86119. */
   // BLI_assert((id->tag & LIB_TAG_NO_MAIN) == 0);
 
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
-  BLI_assert(ntree->owner_id != NULL);
+  BLI_assert(ntree->owner_id != nullptr);
   BLI_assert(ntreeFromID(ntree->owner_id) == ntree);
 
   return &ntree->owner_id;
@@ -662,7 +660,7 @@ void ntreeBlendReadData(BlendDataReader *reader, ID *owner_id, bNodeTree *ntree)
   if (BLO_read_fileversion_get(reader) > 300) {
     BLI_assert((ntree->id.flag & LIB_EMBEDDED_DATA) != 0 || owner_id == nullptr);
   }
-  BLI_assert(owner_id == NULL || owner_id->lib == ntree->id.lib);
+  BLI_assert(owner_id == nullptr || owner_id->lib == ntree->id.lib);
   if (owner_id != nullptr && (ntree->id.flag & LIB_EMBEDDED_DATA) == 0) {
     /* This is unfortunate, but currently a lot of existing files (including startup ones) have
      * missing `LIB_EMBEDDED_DATA` flag.
@@ -2159,6 +2157,38 @@ void nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userd
   }
 }
 
+bool nodeIsDanglingReroute(const bNodeTree *ntree, const bNode *node)
+{
+  ntree->ensure_topology_cache();
+  BLI_assert(blender::bke::node_tree_runtime::topology_cache_is_available(*ntree));
+  BLI_assert(!ntree->has_available_link_cycle());
+
+  const bNode *iter_node = node;
+  if (!iter_node->is_reroute()) {
+    return false;
+  }
+
+  while (true) {
+    const blender::Span<const bNodeLink *> links =
+        iter_node->input_socket(0).directly_linked_links();
+    BLI_assert(links.size() <= 1);
+    if (links.is_empty()) {
+      return true;
+    }
+    const bNodeLink &link = *links[0];
+    if (!link.is_available()) {
+      return false;
+    }
+    if (link.is_muted()) {
+      return false;
+    }
+    iter_node = link.fromnode;
+    if (!iter_node->is_reroute()) {
+      return false;
+    }
+  }
+}
+
 /* ************** Add stuff ********** */
 
 void nodeUniqueName(bNodeTree *ntree, bNode *node)
@@ -2630,15 +2660,15 @@ static bNodeTree *ntreeAddTree_do(
   bNodeTree *ntree = (bNodeTree *)BKE_libblock_alloc(bmain, ID_NT, name, flag);
   BKE_libblock_init_empty(&ntree->id);
   if (is_embedded) {
-    BLI_assert(owner_id != NULL);
+    BLI_assert(owner_id != nullptr);
     ntree->id.flag |= LIB_EMBEDDED_DATA;
     ntree->owner_id = owner_id;
     bNodeTree **ntree_owner_ptr = BKE_ntree_ptr_from_id(owner_id);
-    BLI_assert(ntree_owner_ptr != NULL);
+    BLI_assert(ntree_owner_ptr != nullptr);
     *ntree_owner_ptr = ntree;
   }
   else {
-    BLI_assert(owner_id == NULL);
+    BLI_assert(owner_id == nullptr);
   }
 
   BLI_strncpy(ntree->idname, idname, sizeof(ntree->idname));

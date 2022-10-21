@@ -6452,6 +6452,11 @@ void UI_but_hint_drawstr_set(uiBut *but, const char *string)
   ui_but_add_shortcut(but, string, false);
 }
 
+void UI_but_icon_indicator_number_set(uiBut *but, const int indicator_number)
+{
+  UI_icon_text_overlay_init_from_count(&but->icon_overlay_text, indicator_number);
+}
+
 void UI_but_node_link_set(uiBut *but, bNodeSocket *socket, const float draw_color[4])
 {
   but->flag |= UI_BUT_NODE_LINK;
@@ -6663,8 +6668,8 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
         /* enum property */
         ptr = &but->rnapoin;
         prop = but->rnaprop;
-        value = (ELEM(but->type, UI_BTYPE_ROW, UI_BTYPE_TAB)) ? int(but->hardmax) :
-                                                                int(ui_but_value_get(but));
+        value = ELEM(but->type, UI_BTYPE_ROW, UI_BTYPE_TAB) ? int(but->hardmax) :
+                                                              int(ui_but_value_get(but));
       }
       else if (but->optype) {
         PointerRNA *opptr = UI_but_operator_ptr_get(but);

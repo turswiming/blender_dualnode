@@ -41,6 +41,7 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
+#include "BKE_instances.hh"
 #include "BKE_lattice.h"
 #include "BKE_main.h"
 #include "BKE_mesh.h"
@@ -57,10 +58,12 @@
 #include "DEG_depsgraph_query.h"
 
 #include "BLI_hash.h"
+#include "DNA_world_types.h"
 
 #include "NOD_geometry_nodes_log.hh"
 #include "RNA_access.h"
 #include "RNA_path.h"
+#include "RNA_prototypes.h"
 #include "RNA_types.h"
 
 using blender::Array;
@@ -68,6 +71,8 @@ using blender::float3;
 using blender::float4x4;
 using blender::Span;
 using blender::Vector;
+using blender::bke::InstanceReference;
+using blender::bke::Instances;
 namespace geo_log = blender::nodes::geo_eval_log;
 
 /* -------------------------------------------------------------------- */
@@ -421,8 +426,8 @@ static const Mesh *mesh_data_from_duplicator_object(Object *ob,
     /* Note that this will only show deformation if #eModifierMode_OnCage is enabled.
      * We could change this but it matches 2.7x behavior. */
     me_eval = BKE_object_get_editmesh_eval_cage(ob);
-    if ((me_eval == nullptr) || (me_eval->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH)) {
-      EditMeshData *emd = me_eval ? me_eval->runtime.edit_data : nullptr;
+    if ((me_eval == nullptr) || (me_eval->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH)) {
+      EditMeshData *emd = me_eval ? me_eval->runtime->edit_data : nullptr;
 
       /* Only assign edit-mesh in the case we can't use `me_eval`. */
       *r_em = em;
@@ -872,8 +877,8 @@ static void make_duplis_geometry_set_impl(const DupliContext *ctx,
   }
   const bool creates_duplis_for_components = component_index >= 1;
 
-  const InstancesComponent *component = geometry_set.get_component_for_read<InstancesComponent>();
-  if (component == nullptr) {
+  const Instances *instances = geometry_set.get_instances_for_read();
+  if (instances == nullptr) {
     return;
   }
 
@@ -888,13 +893,13 @@ static void make_duplis_geometry_set_impl(const DupliContext *ctx,
     instances_ctx = &new_instances_ctx;
   }
 
-  Span<float4x4> instance_offset_matrices = component->instance_transforms();
-  Span<int> instance_reference_handles = component->instance_reference_handles();
-  Span<int> almost_unique_ids = component->almost_unique_ids();
-  Span<InstanceReference> references = component->references();
+  Span<float4x4> instance_offset_matrices = instances->transforms();
+  Span<int> reference_handles = instances->reference_handles();
+  Span<int> almost_unique_ids = instances->almost_unique_ids();
+  Span<InstanceReference> references = instances->references();
 
   for (int64_t i : instance_offset_matrices.index_range()) {
-    const InstanceReference &reference = references[instance_reference_handles[i]];
+    const InstanceReference &reference = references[reference_handles[i]];
     const int id = almost_unique_ids[i];
 
     const DupliContext *ctx_for_instance = instances_ctx;
@@ -1840,7 +1845,7 @@ static bool find_rna_property_rgba(PointerRNA *id_ptr, const char *name, float r
       value = RNA_property_float_get(&ptr, prop);
     }
     else if (type == PROP_INT) {
-      value = static_cast<float>(RNA_property_int_get(&ptr, prop));
+      value = float(RNA_property_int_get(&ptr, prop));
     }
     else if (type == PROP_BOOLEAN) {
       value = RNA_property_boolean_get(&ptr, prop) ? 1.0f : 0.0f;
@@ -1863,7 +1868,7 @@ static bool find_rna_property_rgba(PointerRNA *id_ptr, const char *name, float r
     int tmp[4] = {0, 0, 0, 1};
     RNA_property_int_get_array(&ptr, prop, tmp);
     for (int i = 0; i < 4; i++) {
-      r_data[i] = static_cast<float>(tmp[i]);
+      r_data[i] = float(tmp[i]);
     }
     return true;
   }
@@ -1910,6 +1915,32 @@ bool BKE_object_dupli_find_rgba_attribute(
     if (ob->data && find_rna_property_rgba((ID *)ob->data, name, r_value)) {
       return true;
     }
+  }
+
+  copy_v4_fl(r_value, 0.0f);
+  return false;
+}
+
+bool BKE_view_layer_find_rgba_attribute(struct Scene *scene,
+                                        struct ViewLayer *layer,
+                                        const char *name,
+                                        float r_value[4])
+{
+  if (layer) {
+    PointerRNA layer_ptr;
+    RNA_pointer_create(&scene->id, &RNA_ViewLayer, layer, &layer_ptr);
+
+    if (find_rna_property_rgba(&layer_ptr, name, r_value)) {
+      return true;
+    }
+  }
+
+  if (find_rna_property_rgba(&scene->id, name, r_value)) {
+    return true;
+  }
+
+  if (scene->world && find_rna_property_rgba(&scene->world->id, name, r_value)) {
+    return true;
   }
 
   copy_v4_fl(r_value, 0.0f);

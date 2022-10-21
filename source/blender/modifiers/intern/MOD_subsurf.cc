@@ -5,9 +5,9 @@
  * \ingroup modifiers
  */
 
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h>
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -208,7 +208,7 @@ static void subdiv_cache_mesh_wrapper_settings(const ModifierEvalContext *ctx,
   runtime_data->calc_loop_normals = false; /* Set at the end of modifier stack evaluation. */
   runtime_data->use_loop_normals = (smd->flags & eSubsurfModifierFlag_UseCustomNormals);
 
-  mesh->runtime.subsurf_runtime_data = runtime_data;
+  mesh->runtime->subsurf_runtime_data = runtime_data;
 }
 
 /* Modifier itself. */

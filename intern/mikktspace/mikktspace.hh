@@ -178,24 +178,30 @@ template<typename Mesh> class Mikktspace {
     // put the degenerate triangles last.
     degenPrologue();
 
-    // evaluate triangle level attributes and neighbor list
-    initTriangle();
+    if (nrTriangles == 0) {
+      // No point in building tangents if there are no non-degenerate triangles, so just zero them
+      tSpaces.resize(nrTSpaces);
+    }
+    else {
+      // evaluate triangle level attributes and neighbor list
+      initTriangle();
 
-    // match up edge pairs
-    buildNeighbors();
+      // match up edge pairs
+      buildNeighbors();
 
-    // based on the 4 rules, identify groups based on connectivity
-    build4RuleGroups();
+      // based on the 4 rules, identify groups based on connectivity
+      build4RuleGroups();
 
-    // make tspaces, each group is split up into subgroups.
-    // Finally a tangent space is made for every resulting subgroup
-    generateTSpaces();
+      // make tspaces, each group is split up into subgroups.
+      // Finally a tangent space is made for every resulting subgroup
+      generateTSpaces();
 
-    // degenerate quads with one good triangle will be fixed by copying a space from
-    // the good triangle to the coinciding vertex.
-    // all other degenerate triangles will just copy a space from any good triangle
-    // with the same welded index in vertices[].
-    degenEpilogue();
+      // degenerate quads with one good triangle will be fixed by copying a space from
+      // the good triangle to the coinciding vertex.
+      // all other degenerate triangles will just copy a space from any good triangle
+      // with the same welded index in vertices[].
+      degenEpilogue();
+    }
 
     uint index = 0;
     for (uint f = 0; f < nrFaces; f++) {
@@ -717,12 +723,11 @@ template<typename Mesh> class Mikktspace {
 
   void build4RuleGroups()
   {
-    /* Note: This could be parallelized by grouping all [t, i] pairs into
+    /* NOTE: This could be parallelized by grouping all [t, i] pairs into
      * shards by hash(triangles[t].vertices[i]). This way, each shard can be processed
      * independently and in parallel.
-     * However, the groupWithAny logic needs special handling (e.g. lock a mutex when
-     * encountering a groupWithAny triangle, then sort it out, then unlock and proceed).
-     */
+     * However, the `groupWithAny` logic needs special handling (e.g. lock a mutex when
+     * encountering a `groupWithAny` triangle, then sort it out, then unlock and proceed). */
     for (uint t = 0; t < nrTriangles; t++) {
       Triangle &triangle = triangles[t];
       for (uint i = 0; i < 3; i++) {

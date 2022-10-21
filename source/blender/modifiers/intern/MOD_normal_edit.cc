@@ -4,7 +4,7 @@
  * \ingroup modifiers
  */
 
-#include <string.h>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -623,7 +623,7 @@ static Mesh *normalEditModifier_do(NormalEditModifierData *enmd,
 
   MEM_SAFE_FREE(loopnors);
 
-  result->runtime.is_original_bmesh = false;
+  result->runtime->is_original_bmesh = false;
 
   return result;
 }

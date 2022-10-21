@@ -2112,11 +2112,11 @@ void uiItemFullR(uiLayout *layout,
             icon = ICON_CHECKBOX_DEHLT; /* but->iconadd will set to correct icon */
           }
           else if (is_array) {
-            icon = (RNA_property_boolean_get_index(ptr, prop, index)) ? ICON_CHECKBOX_HLT :
-                                                                        ICON_CHECKBOX_DEHLT;
+            icon = RNA_property_boolean_get_index(ptr, prop, index) ? ICON_CHECKBOX_HLT :
+                                                                      ICON_CHECKBOX_DEHLT;
           }
           else {
-            icon = (RNA_property_boolean_get(ptr, prop)) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT;
+            icon = RNA_property_boolean_get(ptr, prop) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT;
           }
         }
       }
@@ -3235,7 +3235,7 @@ static uiBut *uiItemL_(uiLayout *layout, const char *name, int icon)
   return but;
 }
 
-void uiItemL_ex(
+uiBut *uiItemL_ex(
     uiLayout *layout, const char *name, int icon, const bool highlight, const bool redalert)
 {
   uiBut *but = uiItemL_(layout, name, icon);
@@ -3248,6 +3248,8 @@ void uiItemL_ex(
   if (redalert) {
     UI_but_flag_enable(but, UI_BUT_REDALERT);
   }
+
+  return but;
 }
 
 void uiItemL(uiLayout *layout, const char *name, int icon)

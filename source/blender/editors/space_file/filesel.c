@@ -695,14 +695,14 @@ int ED_fileselect_layout_numfiles(FileLayout *layout, ARegion *region)
    */
   if (layout->flag & FILE_LAYOUT_HOR) {
     const int x_item = layout->tile_w + (2 * layout->tile_border_x);
-    const int x_view = (int)(BLI_rctf_size_x(&region->v2d.cur));
+    const int x_view = (int)BLI_rctf_size_x(&region->v2d.cur);
     const int x_over = x_item - (x_view % x_item);
     numfiles = (int)((float)(x_view + x_over) / (float)(x_item));
     return numfiles * layout->rows;
   }
 
   const int y_item = layout->tile_h + (2 * layout->tile_border_y);
-  const int y_view = (int)(BLI_rctf_size_y(&region->v2d.cur)) - layout->offset_top;
+  const int y_view = (int)BLI_rctf_size_y(&region->v2d.cur) - layout->offset_top;
   const int y_over = y_item - (y_view % y_item);
   numfiles = (int)((float)(y_view + y_over) / (float)(y_item));
   return numfiles * layout->flow_columns;
@@ -1174,7 +1174,7 @@ int autocomplete_directory(struct bContext *C, char *str, void *UNUSED(arg_v))
           char path[FILE_MAX];
           BLI_stat_t status;
 
-          BLI_join_dirfile(path, sizeof(path), dirname, de->d_name);
+          BLI_path_join(path, sizeof(path), dirname, de->d_name);
 
           if (BLI_stat(path, &status) == 0) {
             if (S_ISDIR(status.st_mode)) { /* is subdir */

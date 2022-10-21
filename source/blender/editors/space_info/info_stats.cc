@@ -40,6 +40,7 @@
 #include "BKE_key.h"
 #include "BKE_layer.h"
 #include "BKE_main.h"
+#include "BKE_mesh.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_particle.h"
@@ -94,8 +95,8 @@ static bool stats_mesheval(const Mesh *me_eval, bool is_selected, SceneStats *st
 
   int totvert, totedge, totface, totloop;
 
-  const SubdivCCG *subdiv_ccg = me_eval->runtime.subdiv_ccg;
-  const SubsurfRuntimeData *subsurf_runtime_data = me_eval->runtime.subsurf_runtime_data;
+  const SubdivCCG *subdiv_ccg = me_eval->runtime->subdiv_ccg;
+  const SubsurfRuntimeData *subsurf_runtime_data = me_eval->runtime->subsurf_runtime_data;
 
   if (subdiv_ccg != nullptr) {
     BKE_subdiv_ccg_topology_counters(subdiv_ccg, &totvert, &totedge, &totface, &totloop);
@@ -410,7 +411,7 @@ static void stats_update(Depsgraph *depsgraph,
   else {
     /* Objects. */
     GSet *objects_gset = BLI_gset_new(BLI_ghashutil_ptrhash, BLI_ghashutil_ptrcmp, __func__);
-    DEGObjectIterSettings deg_iter_settings = {0};
+    DEGObjectIterSettings deg_iter_settings{};
     deg_iter_settings.depsgraph = depsgraph;
     deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
     DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob_iter) {
@@ -624,7 +625,7 @@ static const char *info_statusbar_string(Main *bmain,
   }
 
   /* GPU VRAM status. */
-  if ((statusbar_flag & STATUSBAR_SHOW_VRAM) && (GPU_mem_stats_supported())) {
+  if ((statusbar_flag & STATUSBAR_SHOW_VRAM) && GPU_mem_stats_supported()) {
     int gpu_free_mem_kb, gpu_tot_mem_kb;
     GPU_mem_stats_get(&gpu_tot_mem_kb, &gpu_free_mem_kb);
     float gpu_total_gb = gpu_tot_mem_kb / 1048576.0f;

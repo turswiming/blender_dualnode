@@ -888,7 +888,7 @@ static bool datastack_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 
 static char *datastack_drop_tooltip(bContext * /*C*/,
                                     wmDrag *drag,
-                                    const int UNUSED(xy[2]),
+                                    const int /*xy*/[2],
                                     struct wmDropBox * /*drop*/)
 {
   StackDropData *drop_data = static_cast<StackDropData *>(drag->poin);
@@ -1571,7 +1571,7 @@ void OUTLINER_OT_item_drag_drop(wmOperatorType *ot)
 /** \name Drop Boxes
  * \{ */
 
-void outliner_dropboxes(void)
+void outliner_dropboxes()
 {
   ListBase *lb = WM_dropboxmap_find("Outliner", SPACE_OUTLINER, RGN_TYPE_WINDOW);
 

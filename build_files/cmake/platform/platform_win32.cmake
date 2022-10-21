@@ -679,11 +679,11 @@ endif()
 
 if(WITH_IMAGE_OPENJPEG)
   set(OPENJPEG ${LIBDIR}/openjpeg)
-  set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.4)
+  set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.5)
   if(NOT EXISTS "${OPENJPEG_INCLUDE_DIRS}")
-    # when not found, could be an older lib folder with openjpeg 2.3
-    # to ease the transition period, fall back if 2.4 is not found.
-    set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.3)
+    # when not found, could be an older lib folder with openjpeg 2.4
+    # to ease the transition period, fall back if 2.5 is not found.
+    set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.4)
   endif()
   set(OPENJPEG_LIBRARIES ${OPENJPEG}/lib/openjp2.lib)
 endif()
@@ -773,9 +773,11 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
   find_library(OSL_LIB_EXEC NAMES oslexec PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_COMP NAMES oslcomp PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_QUERY NAMES oslquery PATHS ${CYCLES_OSL}/lib)
+  find_library(OSL_LIB_NOISE NAMES oslnoise PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_EXEC_DEBUG NAMES oslexec_d PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_COMP_DEBUG NAMES oslcomp_d PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_QUERY_DEBUG NAMES oslquery_d PATHS ${CYCLES_OSL}/lib)
+  find_library(OSL_LIB_NOISE_DEBUG NAMES oslnoise_d PATHS ${CYCLES_OSL}/lib)
   list(APPEND OSL_LIBRARIES
     optimized ${OSL_LIB_COMP}
     optimized ${OSL_LIB_EXEC}
@@ -785,6 +787,12 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
     debug ${OSL_LIB_QUERY_DEBUG}
     ${PUGIXML_LIBRARIES}
   )
+  if(OSL_LIB_NOISE)
+    list(APPEND OSL_LIBRARIES optimized ${OSL_LIB_NOISE})
+  endif()
+  if(OSL_LIB_NOISE_DEBUG)
+    list(APPEND OSL_LIBRARIES debug ${OSL_LIB_NOISE_DEBUG})
+  endif()
   find_path(OSL_INCLUDE_DIR OSL/oslclosure.h PATHS ${CYCLES_OSL}/include)
   find_program(OSL_COMPILER NAMES oslc PATHS ${CYCLES_OSL}/bin)
 
@@ -936,8 +944,39 @@ if(WITH_HARU)
   endif()
 endif()
 
+if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
+  find_package(openpgl QUIET)
+  if(openpgl_FOUND)
+    get_target_property(OPENPGL_LIBRARIES_RELEASE openpgl::openpgl LOCATION_RELEASE)
+    get_target_property(OPENPGL_LIBRARIES_DEBUG openpgl::openpgl LOCATION_DEBUG)
+    set(OPENPGL_LIBRARIES optimized ${OPENPGL_LIBRARIES_RELEASE} debug ${OPENPGL_LIBRARIES_DEBUG})
+    get_target_property(OPENPGL_INCLUDE_DIR openpgl::openpgl INTERFACE_INCLUDE_DIRECTORIES)
+  else()
+    set(WITH_CYCLES_PATH_GUIDING OFF)
+    message(STATUS "OpenPGL not found, disabling WITH_CYCLES_PATH_GUIDING")
+  endif()
+endif()
+
 set(ZSTD_INCLUDE_DIRS ${LIBDIR}/zstd/include)
 set(ZSTD_LIBRARIES ${LIBDIR}/zstd/lib/zstd_static.lib)
 
-set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
-set(SYCL_ROOT_DIR ${LIBDIR}/dpcpp)
+if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
+  set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
+  set(CYCLES_SYCL ${LIBDIR}/dpcpp CACHE PATH "Path to oneAPI DPC++ compiler")
+  if(EXISTS ${CYCLES_SYCL} AND NOT SYCL_ROOT_DIR)
+    set(SYCL_ROOT_DIR ${CYCLES_SYCL})
+  endif()
+  file(GLOB _sycl_runtime_libraries_glob
+    ${SYCL_ROOT_DIR}/bin/sycl.dll
+    ${SYCL_ROOT_DIR}/bin/sycl[0-9].dll
+  )
+  foreach(sycl_runtime_library IN LISTS _sycl_runtime_libraries_glob)
+    string(REPLACE ".dll" "$<$<CONFIG:Debug>:d>.dll" sycl_runtime_library ${sycl_runtime_library})
+    list(APPEND _sycl_runtime_libraries ${sycl_runtime_library})
+  endforeach()
+  unset(_sycl_runtime_libraries_glob)
+
+  list(APPEND _sycl_runtime_libraries ${SYCL_ROOT_DIR}/bin/pi_level_zero.dll)
+  list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
+  unset(_sycl_runtime_libraries)
+endif()
