@@ -27,7 +27,6 @@
 #include "BKE_context.h"
 #include "BKE_curve.h"
 #include "BKE_image.h"
-#include "BKE_node.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
 
@@ -629,7 +628,7 @@ static bool paint_draw_tex_overlay(Scene *scene,
     /* Premultiplied alpha blending. */
     GPU_blend(GPU_BLEND_ALPHA_PREMULT);
 
-    immBindBuiltinProgram(GPU_SHADER_2D_IMAGE_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_IMAGE_COLOR);
 
     float final_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     if (!col) {
@@ -726,7 +725,7 @@ static bool paint_draw_cursor_overlay(Scene *scene,
 
     GPU_blend(GPU_BLEND_ALPHA_PREMULT);
 
-    immBindBuiltinProgram(GPU_SHADER_2D_IMAGE_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_IMAGE_COLOR);
 
     float final_color[4] = {UNPACK3(U.sculpt_paint_overlay_col), 1.0f};
     mul_v4_fl(final_color, brush->cursor_overlay_alpha * 0.01f);
@@ -924,7 +923,7 @@ static void paint_draw_curve_cursor(Brush *brush, ViewContext *vc)
     /* Draw the bezier handles and the curve segment between the current and next point. */
     uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
-    immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     float selec_col[4], handle_col[4], pivot_col[4];
     UI_GetThemeColorType4fv(TH_VERTEX_SELECT, SPACE_VIEW3D, selec_col);
@@ -1098,7 +1097,7 @@ static void cursor_draw_point_with_symmetry(const uint gpuattr,
   float location[3], symm_rot_mat[4][4];
 
   for (int i = 0; i <= symm; i++) {
-    if (i == 0 || (symm & i && (symm != 5 || i != 3) && (symm != 6 || (!ELEM(i, 3, 5))))) {
+    if (i == 0 || (symm & i && (symm != 5 || i != 3) && (symm != 6 || !ELEM(i, 3, 5)))) {
 
       /* Axis Symmetry. */
       flip_v3_v3(location, true_location, (char)i);
@@ -1879,7 +1878,7 @@ static void paint_cursor_setup_2D_drawing(PaintCursorContext *pcontext)
   GPU_line_smooth(true);
   pcontext->pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 }
 
 static void paint_cursor_setup_3D_drawing(PaintCursorContext *pcontext)

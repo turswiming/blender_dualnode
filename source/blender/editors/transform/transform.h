@@ -19,6 +19,10 @@
 
 #include "transform_data.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* use node center for transform instead of upper-left corner.
  * disabled since it makes absolute snapping not work so nicely
  */
@@ -141,6 +145,7 @@ typedef enum {
   /** No cursor wrapping on region bounds */
   T_NO_CURSOR_WRAP = 1 << 23,
 } eTFlag;
+ENUM_OPERATORS(eTFlag, T_NO_CURSOR_WRAP);
 
 #define T_ALL_RESTRICTIONS (T_NO_CONSTRAINT | T_NULL_ONE)
 #define T_PROP_EDIT_ALL (T_PROP_EDIT | T_PROP_CONNECTED | T_PROP_PROJECTED)
@@ -355,10 +360,12 @@ typedef struct MouseInput {
 
   /** Initial mouse position. */
   int imval[2];
-  bool precision;
-  float precision_factor;
+  float imval_unproj[3];
   float center[2];
   float factor;
+  float precision_factor;
+  bool precision;
+
   /** Additional data, if needed by the particular function. */
   void *data;
 
@@ -548,7 +555,9 @@ typedef struct TransInfo {
   /** Snapping Gears. */
   float snap[2];
   /** Spatial snapping gears(even when rotating, scaling... etc). */
-  float snap_spatial[2];
+  float snap_spatial_x[2];
+  /** Spatial snapping in the Y coordinate, for non-uniform grid in UV Editor. */
+  float snap_spatial_y[2];
   /** Mouse side of the current frame, 'L', 'R' or 'B' */
   char frame_side;
 
@@ -617,6 +626,9 @@ typedef struct TransInfo {
    * If the operator is executed directly (not modal), this value is usually the
    * value of the input parameter, except when a constrain is entered. */
   float values_final[4];
+
+  /** Cache safe value for constraints that require iteration or are slow to calculate. */
+  float values_inside_constraints[4];
 
   /* Axis members for modes that use an axis separate from the orientation (rotate & shear). */
 
@@ -758,6 +770,7 @@ void applyMouseInput(struct TransInfo *t,
                      struct MouseInput *mi,
                      const int mval[2],
                      float output[3]);
+void transform_input_update(TransInfo *t, const float fac);
 
 void setCustomPoints(TransInfo *t, MouseInput *mi, const int start[2], const int end[2]);
 void setCustomPointsFromDirection(TransInfo *t, MouseInput *mi, const float dir[2]);
@@ -806,6 +819,7 @@ void calculateCenter2D(TransInfo *t);
 void calculateCenterLocal(TransInfo *t, const float center_global[3]);
 
 void calculateCenter(TransInfo *t);
+void tranformViewUpdate(TransInfo *t);
 
 /* API functions for getting center points */
 void calculateCenterBound(TransInfo *t, float r_center[3]);
@@ -857,3 +871,7 @@ bool checkUseAxisMatrix(TransInfo *t);
        th++, i++)
 
 /** \} */
+
+#ifdef __cplusplus
+}
+#endif

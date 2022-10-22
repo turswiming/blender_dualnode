@@ -1,6 +1,6 @@
 
 /**
- * Debug Shader outputing a gradient of orange - white - blue to mark culling hotspots.
+ * Debug Shader outputting a gradient of orange - white - blue to mark culling hotspots.
  * Green pixels are error pixels that are missing lights from the culling pass (i.e: when culling
  * pass is not conservative enough).
  */
@@ -36,7 +36,7 @@ void main()
     vec3 L;
     float dist;
     light_vector_get(light, P, L, dist);
-    if (light_attenuation(light_buf[l_idx], L, dist) > 0.0) {
+    if (light_attenuation(light, L, dist) > 0.0) {
       light_nocull |= 1u << l_idx;
     }
   }

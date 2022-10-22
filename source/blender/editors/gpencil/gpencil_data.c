@@ -623,6 +623,7 @@ void GPENCIL_OT_layer_duplicate_object(wmOperatorType *ot)
                          true,
                          "Only Active",
                          "Copy only active Layer, uncheck to append all layers");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_GPENCIL);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
@@ -2076,6 +2077,9 @@ static void gpencil_brush_delete_mode_brushes(Main *bmain,
     }
 
     BKE_brush_delete(bmain, brush);
+    if (brush == brush_active) {
+      brush_active = NULL;
+    }
   }
 }
 
@@ -2109,8 +2113,8 @@ static int gpencil_brush_reset_all_exec(bContext *C, wmOperator *UNUSED(op))
 
   char tool = '0';
   if (paint) {
-    Brush *brush_active = paint->brush;
-    if (brush_active) {
+    if (paint->brush) {
+      Brush *brush_active = paint->brush;
       switch (mode) {
         case CTX_MODE_PAINT_GPENCIL: {
           tool = brush_active->gpencil_tool;
@@ -3683,6 +3687,7 @@ void GPENCIL_OT_materials_copy_to_object(wmOperatorType *ot)
                          true,
                          "Only Active",
                          "Append only active material, uncheck to append all materials");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_GPENCIL);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 

@@ -1081,10 +1081,7 @@ static float *visualkey_get_values(
   }
 
   if (strstr(identifier, "rotation_quaternion")) {
-    float mat3[3][3];
-
-    copy_m3_m4(mat3, tmat);
-    mat3_to_quat_is_ok(buffer, mat3);
+    mat4_to_quat(buffer, tmat);
 
     *r_count = 4;
     return buffer;
@@ -1183,7 +1180,7 @@ static float *get_keyframe_values(ReportList *reports,
 {
   float *values;
 
-  if ((flag & INSERTKEY_MATRIX) && (visualkey_can_use(&ptr, prop))) {
+  if ((flag & INSERTKEY_MATRIX) && visualkey_can_use(&ptr, prop)) {
     /* visual-keying is only available for object and pchan datablocks, as
      * it works by keyframing using a value extracted from the final matrix
      * instead of using the kt system to extract a value.

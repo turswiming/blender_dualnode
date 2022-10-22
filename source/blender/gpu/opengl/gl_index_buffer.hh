@@ -35,9 +35,9 @@ class GLIndexBuf : public IndexBuf {
   {
     additional_vertex_offset += index_start_;
     if (index_type_ == GPU_INDEX_U32) {
-      return (GLuint *)0 + additional_vertex_offset;
+      return reinterpret_cast<void *>(intptr_t(additional_vertex_offset) * sizeof(GLuint));
     }
-    return (GLushort *)0 + additional_vertex_offset;
+    return reinterpret_cast<void *>(intptr_t(additional_vertex_offset) * sizeof(GLushort));
   }
 
   GLuint restart_index() const
@@ -51,6 +51,10 @@ class GLIndexBuf : public IndexBuf {
 
  private:
   bool is_active() const;
+  void strip_restart_indices() override
+  {
+    /* No-op. */
+  }
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GLIndexBuf")
 };

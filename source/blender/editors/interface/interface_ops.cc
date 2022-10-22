@@ -133,10 +133,10 @@ static int copy_data_path_button_exec(bContext *C, wmOperator *op)
   if (ptr.owner_id != nullptr) {
     if (full_path) {
       if (prop) {
-        path = RNA_path_full_property_py_ex(bmain, &ptr, prop, index, true);
+        path = RNA_path_full_property_py_ex(&ptr, prop, index, true);
       }
       else {
-        path = RNA_path_full_struct_py(bmain, &ptr);
+        path = RNA_path_full_struct_py(&ptr);
       }
     }
     else {
@@ -270,7 +270,7 @@ static bool copy_python_command_button_poll(bContext *C)
   return false;
 }
 
-static int copy_python_command_button_exec(bContext *C, wmOperator *UNUSED(op))
+static int copy_python_command_button_exec(bContext *C, wmOperator * /*op*/)
 {
   uiBut *but = UI_context_active_but_get(C);
 
@@ -421,7 +421,7 @@ static bool assign_default_button_poll(bContext *C)
   return false;
 }
 
-static int assign_default_button_exec(bContext *C, wmOperator *UNUSED(op))
+static int assign_default_button_exec(bContext *C, wmOperator * /*op*/)
 {
   PointerRNA ptr;
   PropertyRNA *prop;
@@ -461,7 +461,7 @@ static void UI_OT_assign_default_button(wmOperatorType *ot)
 /** \name Unset Property Button Operator
  * \{ */
 
-static int unset_property_button_exec(bContext *C, wmOperator *UNUSED(op))
+static int unset_property_button_exec(bContext *C, wmOperator * /*op*/)
 {
   PointerRNA ptr;
   PropertyRNA *prop;
@@ -609,9 +609,7 @@ static int override_type_set_button_exec(bContext *C, wmOperator *op)
   return operator_button_property_finish(C, &ptr, prop);
 }
 
-static int override_type_set_button_invoke(bContext *C,
-                                           wmOperator *op,
-                                           const wmEvent *UNUSED(event))
+static int override_type_set_button_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
 #if 0 /* Disabled for now */
   return WM_menu_invoke_ex(C, op, WM_OP_INVOKE_DEFAULT);
@@ -756,13 +754,13 @@ static void override_idtemplate_ids_get(
   PropertyRNA *prop;
   UI_context_active_but_prop_get_templateID(C, &owner_ptr, &prop);
 
-  if (owner_ptr.data == NULL || prop == NULL) {
-    *r_owner_id = *r_id = NULL;
-    if (r_owner_ptr != NULL) {
+  if (owner_ptr.data == nullptr || prop == nullptr) {
+    *r_owner_id = *r_id = nullptr;
+    if (r_owner_ptr != nullptr) {
       *r_owner_ptr = PointerRNA_NULL;
     }
-    if (r_prop != NULL) {
-      *r_prop = NULL;
+    if (r_prop != nullptr) {
+      *r_prop = nullptr;
     }
     return;
   }
@@ -770,10 +768,10 @@ static void override_idtemplate_ids_get(
   *r_owner_id = owner_ptr.owner_id;
   PointerRNA idptr = RNA_property_pointer_get(&owner_ptr, prop);
   *r_id = static_cast<ID *>(idptr.data);
-  if (r_owner_ptr != NULL) {
+  if (r_owner_ptr != nullptr) {
     *r_owner_ptr = owner_ptr;
   }
-  if (r_prop != NULL) {
+  if (r_prop != nullptr) {
     *r_prop = prop;
   }
 }
@@ -781,9 +779,9 @@ static void override_idtemplate_ids_get(
 static bool override_idtemplate_poll(bContext *C, const bool is_create_op)
 {
   ID *owner_id, *id;
-  override_idtemplate_ids_get(C, &owner_id, &id, NULL, NULL);
+  override_idtemplate_ids_get(C, &owner_id, &id, nullptr, nullptr);
 
-  if (owner_id == NULL || id == NULL) {
+  if (owner_id == nullptr || id == nullptr) {
     return false;
   }
 
@@ -801,51 +799,64 @@ static bool override_idtemplate_poll(bContext *C, const bool is_create_op)
   return true;
 }
 
-static bool override_idtemplate_create_poll(bContext *C)
+static bool override_idtemplate_make_poll(bContext *C)
 {
   return override_idtemplate_poll(C, true);
 }
 
-static int override_idtemplate_create_exec(bContext *C, wmOperator *UNUSED(op))
+static int override_idtemplate_make_exec(bContext *C, wmOperator * /*op*/)
 {
   ID *owner_id, *id;
   PointerRNA owner_ptr;
   PropertyRNA *prop;
   override_idtemplate_ids_get(C, &owner_id, &id, &owner_ptr, &prop);
-  if (ELEM(NULL, owner_id, id)) {
+  if (ELEM(nullptr, owner_id, id)) {
     return OPERATOR_CANCELLED;
   }
 
-  ID *id_override = ui_template_id_liboverride_hierarchy_create(
-      C, CTX_data_main(C), owner_id, id, NULL);
+  ID *id_override = ui_template_id_liboverride_hierarchy_make(
+      C, CTX_data_main(C), owner_id, id, nullptr);
 
-  if (id_override == NULL) {
+  if (id_override == nullptr) {
     return OPERATOR_CANCELLED;
   }
 
   PointerRNA idptr;
-  /* `idptr` is re-assigned to owner property to ensure proper updates etc. Here we also use it to
-   * ensure remapping of the owner property from the linked data to the newly created liboverride
-   * (note that in theory this remapping has already been done by code above). */
-  RNA_id_pointer_create(id_override, &idptr);
-  RNA_property_pointer_set(&owner_ptr, prop, idptr, NULL);
+  /* `idptr` is re-assigned to owner property to ensure proper updates etc. Here we also use it
+   * to ensure remapping of the owner property from the linked data to the newly created
+   * liboverride (note that in theory this remapping has already been done by code above), but
+   * only in case owner ID was already local ID (override or pure local data).
+   *
+   * Otherwise, owner ID will also have been overridden, and remapped already to use it's
+   * override of the data too. */
+  if (!ID_IS_LINKED(owner_id)) {
+    RNA_id_pointer_create(id_override, &idptr);
+    RNA_property_pointer_set(&owner_ptr, prop, idptr, nullptr);
+  }
   RNA_property_update(C, &owner_ptr, prop);
+
+  /* 'Security' extra tagging, since this process may also affect the owner ID and not only the
+   * used ID, relying on the property update code only is not always enough. */
+  DEG_id_tag_update(&CTX_data_scene(C)->id, ID_RECALC_BASE_FLAGS | ID_RECALC_COPY_ON_WRITE);
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  WM_event_add_notifier(C, NC_WM | ND_LIB_OVERRIDE_CHANGED, nullptr);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
   return OPERATOR_FINISHED;
 }
 
-static void UI_OT_override_idtemplate_create(wmOperatorType *ot)
+static void UI_OT_override_idtemplate_make(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Create Library Override";
-  ot->idname = "UI_OT_override_idtemplate_create";
+  ot->name = "Make Library Override";
+  ot->idname = "UI_OT_override_idtemplate_make";
   ot->description =
       "Create a local override of the selected linked data-block, and its hierarchy of "
       "dependencies";
 
   /* callbacks */
-  ot->poll = override_idtemplate_create_poll;
-  ot->exec = override_idtemplate_create_exec;
+  ot->poll = override_idtemplate_make_poll;
+  ot->exec = override_idtemplate_make_exec;
 
   /* flags */
   ot->flag = OPTYPE_UNDO;
@@ -856,13 +867,13 @@ static bool override_idtemplate_reset_poll(bContext *C)
   return override_idtemplate_poll(C, false);
 }
 
-static int override_idtemplate_reset_exec(bContext *C, wmOperator *UNUSED(op))
+static int override_idtemplate_reset_exec(bContext *C, wmOperator * /*op*/)
 {
   ID *owner_id, *id;
   PointerRNA owner_ptr;
   PropertyRNA *prop;
   override_idtemplate_ids_get(C, &owner_id, &id, &owner_ptr, &prop);
-  if (ELEM(NULL, owner_id, id)) {
+  if (ELEM(nullptr, owner_id, id)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -875,8 +886,11 @@ static int override_idtemplate_reset_exec(bContext *C, wmOperator *UNUSED(op))
   PointerRNA idptr;
   /* `idptr` is re-assigned to owner property to ensure proper updates etc. */
   RNA_id_pointer_create(id, &idptr);
-  RNA_property_pointer_set(&owner_ptr, prop, idptr, NULL);
+  RNA_property_pointer_set(&owner_ptr, prop, idptr, nullptr);
   RNA_property_update(C, &owner_ptr, prop);
+
+  /* No need for 'security' extra tagging here, since this process will never affect the owner ID.
+   */
 
   return OPERATOR_FINISHED;
 }
@@ -901,13 +915,13 @@ static bool override_idtemplate_clear_poll(bContext *C)
   return override_idtemplate_poll(C, false);
 }
 
-static int override_idtemplate_clear_exec(bContext *C, wmOperator *UNUSED(op))
+static int override_idtemplate_clear_exec(bContext *C, wmOperator * /*op*/)
 {
   ID *owner_id, *id;
   PointerRNA owner_ptr;
   PropertyRNA *prop;
   override_idtemplate_ids_get(C, &owner_id, &id, &owner_ptr, &prop);
-  if (ELEM(NULL, owner_id, id)) {
+  if (ELEM(nullptr, owner_id, id)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -916,23 +930,45 @@ static int override_idtemplate_clear_exec(bContext *C, wmOperator *UNUSED(op))
   }
 
   Main *bmain = CTX_data_main(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  Scene *scene = CTX_data_scene(C);
   ID *id_new = id;
+
   if (BKE_lib_override_library_is_hierarchy_leaf(bmain, id)) {
     id_new = id->override_library->reference;
+    bool do_remap_active = false;
+    BKE_view_layer_synced_ensure(scene, view_layer);
+    if (BKE_view_layer_active_object_get(view_layer) == (Object *)id) {
+      BLI_assert(GS(id->name) == ID_OB);
+      BLI_assert(GS(id_new->name) == ID_OB);
+      do_remap_active = true;
+    }
     BKE_libblock_remap(bmain, id, id_new, ID_REMAP_SKIP_INDIRECT_USAGE);
+    if (do_remap_active) {
+      Object *ref_object = (Object *)id_new;
+      Base *basact = BKE_view_layer_base_find(view_layer, ref_object);
+      if (basact != nullptr) {
+        view_layer->basact = basact;
+      }
+      DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
+    }
     BKE_id_delete(bmain, id);
   }
   else {
     BKE_lib_override_library_id_reset(bmain, id, true);
   }
 
-  PointerRNA idptr;
-  /* `idptr` is re-assigned to owner property to ensure proper updates etc. Here we also use it to
-   * ensure remapping of the owner property from the linked data to the newly created liboverride
-   * (note that in theory this remapping has already been done by code above). */
-  RNA_id_pointer_create(id_new, &idptr);
-  RNA_property_pointer_set(&owner_ptr, prop, idptr, NULL);
+  /* Here the affected ID may remain the same, or be replaced by its linked reference. In either
+   * case, the owner ID remains unchanged, and remapping is already handled by internal code, so
+   * calling `RNA_property_update` on it is enough to ensure proper notifiers are sent. */
   RNA_property_update(C, &owner_ptr, prop);
+
+  /* 'Security' extra tagging, since this process may also affect the owner ID and not only the
+   * used ID, relying on the property update code only is not always enough. */
+  DEG_id_tag_update(&scene->id, ID_RECALC_BASE_FLAGS | ID_RECALC_COPY_ON_WRITE);
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  WM_event_add_notifier(C, NC_WM | ND_LIB_OVERRIDE_CHANGED, nullptr);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
   return OPERATOR_FINISHED;
 }
@@ -954,13 +990,13 @@ static void UI_OT_override_idtemplate_clear(wmOperatorType *ot)
   ot->flag = OPTYPE_UNDO;
 }
 
-static bool override_idtemplate_menu_poll(const bContext *C_const, MenuType *UNUSED(mt))
+static bool override_idtemplate_menu_poll(const bContext *C_const, MenuType * /*mt*/)
 {
   bContext *C = (bContext *)C_const;
   ID *owner_id, *id;
-  override_idtemplate_ids_get(C, &owner_id, &id, NULL, NULL);
+  override_idtemplate_ids_get(C, &owner_id, &id, nullptr, nullptr);
 
-  if (owner_id == NULL || id == NULL) {
+  if (owner_id == nullptr || id == nullptr) {
     return false;
   }
 
@@ -970,15 +1006,15 @@ static bool override_idtemplate_menu_poll(const bContext *C_const, MenuType *UNU
   return true;
 }
 
-static void override_idtemplate_menu_draw(const bContext *UNUSED(C), Menu *menu)
+static void override_idtemplate_menu_draw(const bContext * /*C*/, Menu *menu)
 {
   uiLayout *layout = menu->layout;
-  uiItemO(layout, IFACE_("Make"), ICON_NONE, "UI_OT_override_idtemplate_create");
+  uiItemO(layout, IFACE_("Make"), ICON_NONE, "UI_OT_override_idtemplate_make");
   uiItemO(layout, IFACE_("Reset"), ICON_NONE, "UI_OT_override_idtemplate_reset");
   uiItemO(layout, IFACE_("Clear"), ICON_NONE, "UI_OT_override_idtemplate_clear");
 }
 
-static void override_idtemplate_menu(void)
+static void override_idtemplate_menu()
 {
   MenuType *mt;
 
@@ -1465,14 +1501,16 @@ static bool jump_to_target_ptr(bContext *C, PointerRNA ptr, const bool poll)
   }
 
   /* Find the containing Object. */
+  const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Base *base = nullptr;
   const short id_type = GS(ptr.owner_id->name);
   if (id_type == ID_OB) {
+    BKE_view_layer_synced_ensure(scene, view_layer);
     base = BKE_view_layer_base_find(view_layer, (Object *)ptr.owner_id);
   }
   else if (OB_DATA_SUPPORT_ID(id_type)) {
-    base = ED_object_find_first_by_data_id(view_layer, ptr.owner_id);
+    base = ED_object_find_first_by_data_id(scene, view_layer, ptr.owner_id);
   }
 
   bool ok = false;
@@ -1537,8 +1575,13 @@ static bool jump_to_target_button(bContext *C, bool poll)
         char *str_ptr = RNA_property_string_get_alloc(
             &ptr, prop, str_buf, sizeof(str_buf), nullptr);
 
-        int found = RNA_property_collection_lookup_string(
-            &coll_search->search_ptr, coll_search->search_prop, str_ptr, &target_ptr);
+        int found = 0;
+        /* Jump to target only works with search properties currently, not search callbacks yet.
+         * See ui_but_add_search. */
+        if (coll_search->search_prop != nullptr) {
+          found = RNA_property_collection_lookup_string(
+              &coll_search->search_ptr, coll_search->search_prop, str_ptr, &target_ptr);
+        }
 
         if (str_ptr != str_buf) {
           MEM_freeN(str_ptr);
@@ -1559,7 +1602,7 @@ bool ui_jump_to_target_button_poll(bContext *C)
   return jump_to_target_button(C, true);
 }
 
-static int jump_to_target_button_exec(bContext *C, wmOperator *UNUSED(op))
+static int jump_to_target_button_exec(bContext *C, wmOperator * /*op*/)
 {
   const bool success = jump_to_target_button(C, false);
 
@@ -1590,7 +1633,7 @@ static void UI_OT_jump_to_target_button(wmOperatorType *ot)
 #ifdef WITH_PYTHON
 
 /* ------------------------------------------------------------------------- */
-/* EditSource Utility funcs and operator,
+/* EditSource Utility functions and operator,
  * NOTE: this includes utility functions and button matching checks. */
 
 struct uiEditSourceStore {
@@ -1802,7 +1845,7 @@ static void UI_OT_editsource(wmOperatorType *ot)
  * \{ */
 
 /**
- * EditTranslation utility funcs and operator,
+ * EditTranslation utility functions and operator.
  *
  * \note this includes utility functions and button matching checks.
  * this only works in conjunction with a Python operator!
@@ -1816,7 +1859,7 @@ static void edittranslation_find_po_file(const char *root,
 
   /* First, full lang code. */
   BLI_snprintf(tstr, sizeof(tstr), "%s.po", uilng);
-  BLI_join_dirfile(path, maxlen, root, uilng);
+  BLI_path_join(path, maxlen, root, uilng);
   BLI_path_append(path, maxlen, tstr);
   if (BLI_is_file(path)) {
     return;
@@ -1842,7 +1885,7 @@ static void edittranslation_find_po_file(const char *root,
         BLI_strncpy(tstr + szt, tc, sizeof(tstr) - szt);
       }
 
-      BLI_join_dirfile(path, maxlen, root, tstr);
+      BLI_path_join(path, maxlen, root, tstr);
       strcat(tstr, ".po");
       BLI_path_append(path, maxlen, tstr);
       if (BLI_is_file(path)) {
@@ -1988,7 +2031,7 @@ static void UI_OT_edittranslation_init(wmOperatorType *ot)
 /** \name Reload Translation Operator
  * \{ */
 
-static int reloadtranslation_exec(bContext *UNUSED(C), wmOperator *UNUSED(op))
+static int reloadtranslation_exec(bContext * /*C*/, wmOperator * /*op*/)
 {
   BLT_lang_init();
   BLF_cache_clear();
@@ -2071,7 +2114,7 @@ static void UI_OT_button_execute(wmOperatorType *ot)
 /** \name Text Button Clear Operator
  * \{ */
 
-static int button_string_clear_exec(bContext *C, wmOperator *UNUSED(op))
+static int button_string_clear_exec(bContext *C, wmOperator * /*op*/)
 {
   uiBut *but = UI_context_active_but_get_respect_menu(C);
 
@@ -2099,7 +2142,7 @@ static void UI_OT_button_string_clear(wmOperatorType *ot)
 /** \name Drop Color Operator
  * \{ */
 
-bool UI_drop_color_poll(struct bContext *C, wmDrag *drag, const wmEvent *UNUSED(event))
+bool UI_drop_color_poll(struct bContext *C, wmDrag *drag, const wmEvent * /*event*/)
 {
   /* should only return true for regions that include buttons, for now
    * return true always */
@@ -2120,7 +2163,7 @@ bool UI_drop_color_poll(struct bContext *C, wmDrag *drag, const wmEvent *UNUSED(
   return false;
 }
 
-void UI_drop_color_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+void UI_drop_color_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   uiDragColorHandle *drag_info = static_cast<uiDragColorHandle *>(drag->poin);
 
@@ -2218,7 +2261,7 @@ static bool drop_name_poll(bContext *C)
   return true;
 }
 
-static int drop_name_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+static int drop_name_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   uiBut *but = UI_but_active_drop_name_button(C);
   char *str = RNA_string_get_alloc(op->ptr, "string", nullptr, 0, nullptr);
@@ -2278,7 +2321,7 @@ static bool ui_list_unhide_filter_options(uiList *list)
   return true;
 }
 
-static int ui_list_start_filter_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+static int ui_list_start_filter_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
 {
   ARegion *region = CTX_wm_region(C);
   uiList *list = UI_list_find_mouse_over(region, event);
@@ -2316,12 +2359,15 @@ static bool ui_view_drop_poll(bContext *C)
 {
   const wmWindow *win = CTX_wm_window(C);
   const ARegion *region = CTX_wm_region(C);
+  if (region == nullptr) {
+    return false;
+  }
   const uiViewItemHandle *hovered_item = UI_region_views_find_item_at(region, win->eventstate->xy);
 
   return hovered_item != nullptr;
 }
 
-static int ui_view_drop_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+static int ui_view_drop_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
 {
   if (event->custom != EVT_DATA_DRAGDROP) {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
@@ -2364,11 +2410,14 @@ static void UI_OT_view_drop(wmOperatorType *ot)
 static bool ui_view_item_rename_poll(bContext *C)
 {
   const ARegion *region = CTX_wm_region(C);
+  if (region == nullptr) {
+    return false;
+  }
   const uiViewItemHandle *active_item = UI_region_views_find_active_item(region);
   return active_item != nullptr && UI_view_item_can_rename(active_item);
 }
 
-static int ui_view_item_rename_exec(bContext *C, wmOperator *UNUSED(op))
+static int ui_view_item_rename_exec(bContext *C, wmOperator * /*op*/)
 {
   ARegion *region = CTX_wm_region(C);
   uiViewItemHandle *active_item = UI_region_views_find_active_item(region);
@@ -2495,7 +2544,7 @@ void ED_operatortypes_ui(void)
 
   WM_operatortype_append(UI_OT_override_type_set_button);
   WM_operatortype_append(UI_OT_override_remove_button);
-  WM_operatortype_append(UI_OT_override_idtemplate_create);
+  WM_operatortype_append(UI_OT_override_idtemplate_make);
   WM_operatortype_append(UI_OT_override_idtemplate_reset);
   WM_operatortype_append(UI_OT_override_idtemplate_clear);
   override_idtemplate_menu();

@@ -167,20 +167,20 @@ static bool gpencil_stroke_need_flip(Depsgraph *depsgraph,
 
   /* Line from start of strokes. */
   pt = &gps_from->points[0];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_from_start[0], &v_from_start[1]);
 
   pt = &gps_to->points[0];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_to_start[0], &v_to_start[1]);
 
   /* Line from end of strokes. */
   pt = &gps_from->points[gps_from->totpoints - 1];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_from_end[0], &v_from_end[1]);
 
   pt = &gps_to->points[gps_to->totpoints - 1];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_to_end[0], &v_to_end[1]);
 
   const bool isect_lines = (isect_seg_seg_v2(v_from_start, v_to_start, v_from_end, v_to_end) ==
@@ -690,7 +690,7 @@ static bool gpencil_interpolate_set_init_values(bContext *C, wmOperator *op, tGP
       tgpi->flag, (RNA_enum_get(op->ptr, "layers") == 1), GP_TOOLFLAG_INTERPOLATE_ALL_LAYERS);
   SET_FLAG_FROM_TEST(
       tgpi->flag,
-      (GPENCIL_EDIT_MODE(tgpi->gpd) && (RNA_boolean_get(op->ptr, "interpolate_selected_only"))),
+      (GPENCIL_EDIT_MODE(tgpi->gpd) && RNA_boolean_get(op->ptr, "interpolate_selected_only")),
       GP_TOOLFLAG_INTERPOLATE_ONLY_SELECTED);
 
   tgpi->flipmode = RNA_enum_get(op->ptr, "flip");
@@ -1483,7 +1483,8 @@ void GPENCIL_OT_interpolate_sequence(wmOperatorType *ot)
    */
   static const EnumPropertyItem gpencil_interpolation_type_items[] = {
       /* Interpolation. */
-      RNA_ENUM_ITEM_HEADING(N_("Interpolation"), "Standard transitions between keyframes"),
+      RNA_ENUM_ITEM_HEADING(CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Interpolation"),
+                            N_("Standard transitions between keyframes")),
       {GP_IPO_LINEAR,
        "LINEAR",
        ICON_IPO_LINEAR,
@@ -1496,9 +1497,9 @@ void GPENCIL_OT_interpolate_sequence(wmOperatorType *ot)
        "Custom interpolation defined using a curve map"},
 
       /* Easing. */
-      RNA_ENUM_ITEM_HEADING(N_("Easing (by strength)"),
-                            "Predefined inertial transitions, useful for motion graphics "
-                            "(from least to most \"dramatic\")"),
+      RNA_ENUM_ITEM_HEADING(CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Easing (by strength)"),
+                            N_("Predefined inertial transitions, useful for motion graphics "
+                               "(from least to most \"dramatic\")")),
       {GP_IPO_SINE,
        "SINE",
        ICON_IPO_SINE,
@@ -1515,7 +1516,8 @@ void GPENCIL_OT_interpolate_sequence(wmOperatorType *ot)
        "Circular",
        "Circular easing (strongest and most dynamic)"},
 
-      RNA_ENUM_ITEM_HEADING(N_("Dynamic Effects"), "Simple physics-inspired easing effects"),
+      RNA_ENUM_ITEM_HEADING(CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Dynamic Effects"),
+                            N_("Simple physics-inspired easing effects")),
       {GP_IPO_BACK, "BACK", ICON_IPO_BACK, "Back", "Cubic easing with overshoot and settle"},
       {GP_IPO_BOUNCE,
        "BOUNCE",
@@ -1569,6 +1571,7 @@ void GPENCIL_OT_interpolate_sequence(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Interpolate Sequence";
   ot->idname = "GPENCIL_OT_interpolate_sequence";
+  ot->translation_context = BLT_I18NCONTEXT_ID_GPENCIL;
   ot->description = "Generate 'in-betweens' to smoothly interpolate between Grease Pencil frames";
 
   /* api callbacks */

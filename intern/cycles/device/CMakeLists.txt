@@ -19,6 +19,8 @@ if(WITH_CYCLES_DEVICE_OPTIX OR WITH_CYCLES_DEVICE_CUDA)
     )
     add_definitions(-DCYCLES_CUDA_NVCC_EXECUTABLE="${CUDA_NVCC_EXECUTABLE}")
   endif()
+
+  add_definitions(-DCYCLES_RUNTIME_OPTIX_ROOT_DIR="${CYCLES_RUNTIME_OPTIX_ROOT_DIR}")
 endif()
 
 if(WITH_CYCLES_DEVICE_HIP AND WITH_HIP_DYNLOAD)
@@ -140,7 +142,6 @@ set(SRC
   ${SRC_DUMMY}
   ${SRC_MULTI}
   ${SRC_OPTIX}
-  ${SRC_ONEAPI}
   ${SRC_HEADERS}
 )
 
@@ -186,7 +187,25 @@ if(WITH_CYCLES_DEVICE_METAL)
   )
 endif()
 if (WITH_CYCLES_DEVICE_ONEAPI)
+  if(WIN32)
+    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/cycles_kernel_oneapi.lib)
+  else()
+    set(cycles_kernel_oneapi_lib ${CMAKE_CURRENT_BINARY_DIR}/../kernel/libcycles_kernel_oneapi.so)
+  endif()
+  list(APPEND LIB
+    ${cycles_kernel_oneapi_lib}
+    "$<$<CONFIG:Debug>:${SYCL_LIBRARY_DEBUG}>"
+    "$<$<CONFIG:Release>:${SYCL_LIBRARY}>"
+    "$<$<CONFIG:RelWithDebInfo>:${SYCL_LIBRARY}>"
+    "$<$<CONFIG:MinSizeRel>:${SYCL_LIBRARY}>"
+  )
   add_definitions(-DWITH_ONEAPI)
+  list(APPEND SRC
+    ${SRC_ONEAPI}
+  )
+  list(APPEND INC_SYS
+    ${SYCL_INCLUDE_DIR}
+  )
 endif()
 
 if(WITH_OPENIMAGEDENOISE)

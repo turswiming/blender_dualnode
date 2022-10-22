@@ -271,8 +271,8 @@ void ED_view3d_clipping_calc(
   /* four clipping planes and bounding volume */
   /* first do the bounding volume */
   for (int val = 0; val < 4; val++) {
-    float xs = (ELEM(val, 0, 3)) ? rect->xmin : rect->xmax;
-    float ys = (ELEM(val, 0, 1)) ? rect->ymin : rect->ymax;
+    float xs = ELEM(val, 0, 3) ? rect->xmin : rect->xmax;
+    float ys = ELEM(val, 0, 1) ? rect->ymin : rect->ymax;
 
     ED_view3d_unproject_v3(region, xs, ys, 0.0, bb->vec[val]);
     ED_view3d_unproject_v3(region, xs, ys, 1.0, bb->vec[4 + val]);
@@ -544,7 +544,7 @@ bool ED_view3d_camera_view_pan(ARegion *region, const float event_ofs[2])
 
 bool ED_view3d_camera_lock_check(const View3D *v3d, const RegionView3D *rv3d)
 {
-  return ((v3d->camera) && (!ID_IS_LINKED(v3d->camera)) && (v3d->flag2 & V3D_LOCK_CAMERA) &&
+  return ((v3d->camera) && !ID_IS_LINKED(v3d->camera) && (v3d->flag2 & V3D_LOCK_CAMERA) &&
           (rv3d->persp == RV3D_CAMOB));
 }
 
@@ -705,8 +705,9 @@ bool ED_view3d_camera_lock_undo_test(const View3D *v3d,
  * Create a MEMFILE undo-step for locked camera movement when transforming the view.
  * Edit and texture paint mode don't use MEMFILE undo so undo push is skipped for them.
  * NDOF and track-pad navigation would create an undo step on every gesture and we may end up with
- * unnecessary undo steps so undo push for them is not supported for now. Also operators that uses
- * smooth view for navigation are excluded too, but they can be supported, see: D15345.
+ * unnecessary undo steps so undo push for them is not supported for now.
+ * Operators that use smooth view for navigation are supported via an optional parameter field,
+ * see: #V3D_SmoothParams.undo_str.
  */
 static bool view3d_camera_lock_undo_ex(const char *str,
                                        const View3D *v3d,

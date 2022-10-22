@@ -571,8 +571,11 @@ static uiBlock *id_search_menu(bContext *C, ARegion *region, void *arg_litem)
 /** \name ID Template
  * \{ */
 
-/* This is for browsing and editing the ID-blocks used */
+static void template_id_cb(bContext *C, void *arg_litem, void *arg_event);
 
+/**
+ * This is for browsing and editing the ID-blocks used.
+ */
 void UI_context_active_but_prop_get_templateID(bContext *C,
                                                PointerRNA *r_ptr,
                                                PropertyRNA **r_prop)
@@ -582,7 +585,7 @@ void UI_context_active_but_prop_get_templateID(bContext *C,
   memset(r_ptr, 0, sizeof(*r_ptr));
   *r_prop = NULL;
 
-  if (but && but->func_argN) {
+  if (but && (but->funcN == template_id_cb) && but->func_argN) {
     TemplateID *template_ui = but->func_argN;
     *r_ptr = template_ui->ptr;
     *r_prop = template_ui->prop;
@@ -650,7 +653,7 @@ static void template_id_liboverride_hierarchy_collections_tag_recursive(
   }
 }
 
-ID *ui_template_id_liboverride_hierarchy_create(
+ID *ui_template_id_liboverride_hierarchy_make(
     bContext *C, Main *bmain, ID *owner_id, ID *id, const char **r_undo_push_label)
 {
   const char *undo_push_label;
@@ -683,7 +686,7 @@ ID *ui_template_id_liboverride_hierarchy_create(
    * NOTE: do not attempt to perform such hierarchy override at all cost, if there is not enough
    * context, better to abort than create random overrides all over the place. */
   if (!ID_IS_OVERRIDABLE_LIBRARY_HIERARCHY(id)) {
-    RNA_warning("The data-block %s is not direclty overridable", id->name);
+    RNA_warning("The data-block %s is not overridable", id->name);
     return NULL;
   }
 
@@ -762,15 +765,8 @@ ID *ui_template_id_liboverride_hierarchy_create(
         if (object_active != NULL) {
           object_active->id.tag |= LIB_TAG_DOIT;
         }
-        BKE_lib_override_library_create(bmain,
-                                        scene,
-                                        view_layer,
-                                        NULL,
-                                        id,
-                                        &collection_active->id,
-                                        NULL,
-                                        &id_override,
-                                        U.experimental.use_override_new_fully_editable);
+        BKE_lib_override_library_create(
+            bmain, scene, view_layer, NULL, id, &collection_active->id, NULL, &id_override, false);
       }
       else if (object_active != NULL && !ID_IS_LINKED(object_active) &&
                &object_active->instance_collection->id == id) {
@@ -783,7 +779,7 @@ ID *ui_template_id_liboverride_hierarchy_create(
                                         &object_active->id,
                                         &object_active->id,
                                         &id_override,
-                                        U.experimental.use_override_new_fully_editable);
+                                        false);
       }
       break;
     case ID_OB:
@@ -793,15 +789,17 @@ ID *ui_template_id_liboverride_hierarchy_create(
         if (object_active != NULL) {
           object_active->id.tag |= LIB_TAG_DOIT;
         }
-        BKE_lib_override_library_create(bmain,
-                                        scene,
-                                        view_layer,
-                                        NULL,
-                                        id,
-                                        &collection_active->id,
-                                        NULL,
-                                        &id_override,
-                                        U.experimental.use_override_new_fully_editable);
+        BKE_lib_override_library_create(
+            bmain, scene, view_layer, NULL, id, &collection_active->id, NULL, &id_override, false);
+      }
+      else {
+        if (object_active != NULL) {
+          object_active->id.tag |= LIB_TAG_DOIT;
+        }
+        BKE_lib_override_library_create(
+            bmain, scene, view_layer, NULL, id, NULL, NULL, &id_override, false);
+        BKE_scene_collections_object_remove(bmain, scene, (Object *)id, true);
+        WM_event_add_notifier(C, NC_ID | NA_REMOVED, NULL);
       }
       break;
     case ID_ME:
@@ -832,19 +830,12 @@ ID *ui_template_id_liboverride_hierarchy_create(
                                           &collection_active->id,
                                           NULL,
                                           &id_override,
-                                          U.experimental.use_override_new_fully_editable);
+                                          false);
         }
         else {
           object_active->id.tag |= LIB_TAG_DOIT;
-          BKE_lib_override_library_create(bmain,
-                                          scene,
-                                          view_layer,
-                                          NULL,
-                                          id,
-                                          &object_active->id,
-                                          NULL,
-                                          &id_override,
-                                          U.experimental.use_override_new_fully_editable);
+          BKE_lib_override_library_create(
+              bmain, scene, view_layer, NULL, id, &object_active->id, NULL, &id_override, false);
         }
       }
       break;
@@ -866,28 +857,44 @@ ID *ui_template_id_liboverride_hierarchy_create(
   if (id_override != NULL) {
     id_override->override_library->flag &= ~IDOVERRIDE_LIBRARY_FLAG_SYSTEM_DEFINED;
     *r_undo_push_label = "Make Library Override Hierarchy";
+
+    /* In theory we could rely on setting/updating the RNA ID pointer property (as done by calling
+     * code) to be enough.
+     *
+     * However, some rare ID pointers properties (like the 'active object in viewlayer' one used
+     * for the Object templateID in the Object properties) use notifiers that do not enforce a
+     * rebuild of outliner trees, leading to crashes.
+     *
+     * So for now, add some extra notifiers here. */
+    WM_event_add_notifier(C, NC_ID | NA_ADDED, NULL);
+    WM_event_add_notifier(C, NC_SPACE | ND_SPACE_OUTLINER, NULL);
   }
   return id_override;
 }
 
-static void template_id_liboverride_hierarchy_create(bContext *C,
-                                                     Main *bmain,
-                                                     TemplateID *template_ui,
-                                                     PointerRNA *idptr,
-                                                     const char **r_undo_push_label)
+static void template_id_liboverride_hierarchy_make(bContext *C,
+                                                   Main *bmain,
+                                                   TemplateID *template_ui,
+                                                   PointerRNA *idptr,
+                                                   const char **r_undo_push_label)
 {
   ID *id = idptr->data;
   ID *owner_id = template_ui->ptr.owner_id;
 
-  ID *id_override = ui_template_id_liboverride_hierarchy_create(
+  ID *id_override = ui_template_id_liboverride_hierarchy_make(
       C, bmain, owner_id, id, r_undo_push_label);
 
   if (id_override != NULL) {
-    /* Given `idptr` is re-assigned to owner property by caller to ensure proper updates etc. Here
-     * we also use it to ensure remapping of the owner property from the linked data to the newly
-     * created liboverride (note that in theory this remapping has already been done by code
-     * above). */
-    RNA_id_pointer_create(id_override, idptr);
+    /* `idptr` is re-assigned to owner property to ensure proper updates etc. Here we also use it
+     * to ensure remapping of the owner property from the linked data to the newly created
+     * liboverride (note that in theory this remapping has already been done by code above), but
+     * only in case owner ID was already local ID (override or pure local data).
+     *
+     * Otherwise, owner ID will also have been overridden, and remapped already to use it's
+     * override of the data too. */
+    if (!ID_IS_LINKED(owner_id)) {
+      RNA_id_pointer_create(id_override, idptr);
+    }
   }
   else {
     RNA_warning("The data-block %s could not be overridden", id->name);
@@ -903,6 +910,11 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
   const char *undo_push_label = NULL;
 
   switch (event) {
+    case UI_ID_NOP:
+      /* Don't do anything, typically set for buttons that execute an operator instead. They may
+       * still assign the callback so the button can be identified as part of an ID-template. See
+       * #UI_context_active_but_prop_get_templateID(). */
+      break;
     case UI_ID_BROWSE:
     case UI_ID_PIN:
       RNA_warning("warning, id event %d shouldn't come here", event);
@@ -943,8 +955,7 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
       if (id) {
         Main *bmain = CTX_data_main(C);
         if (CTX_wm_window(C)->eventstate->modifier & KM_SHIFT) {
-          template_id_liboverride_hierarchy_create(
-              C, bmain, template_ui, &idptr, &undo_push_label);
+          template_id_liboverride_hierarchy_make(C, bmain, template_ui, &idptr, &undo_push_label);
         }
         else {
           if (BKE_lib_id_make_local(bmain, id, 0)) {
@@ -965,8 +976,7 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
       if (id && ID_IS_OVERRIDE_LIBRARY(id)) {
         Main *bmain = CTX_data_main(C);
         if (CTX_wm_window(C)->eventstate->modifier & KM_SHIFT) {
-          template_id_liboverride_hierarchy_create(
-              C, bmain, template_ui, &idptr, &undo_push_label);
+          template_id_liboverride_hierarchy_make(C, bmain, template_ui, &idptr, &undo_push_label);
         }
         else {
           BKE_lib_override_library_make_local(id);
@@ -1360,20 +1370,22 @@ static void template_ID(const bContext *C,
       }
     }
     else if (ID_IS_OVERRIDE_LIBRARY(id)) {
-      but = uiDefIconBut(block,
-                         UI_BTYPE_BUT,
-                         0,
-                         ICON_LIBRARY_DATA_OVERRIDE,
-                         0,
-                         0,
-                         UI_UNIT_X,
-                         UI_UNIT_Y,
-                         NULL,
-                         0,
-                         0,
-                         0,
-                         0,
-                         TIP_("Library override of linked data-block, click to make fully local"));
+      but = uiDefIconBut(
+          block,
+          UI_BTYPE_BUT,
+          0,
+          ICON_LIBRARY_DATA_OVERRIDE,
+          0,
+          0,
+          UI_UNIT_X,
+          UI_UNIT_Y,
+          NULL,
+          0,
+          0,
+          0,
+          0,
+          TIP_("Library override of linked data-block, click to make fully local, "
+               "Shift + Click to clear the library override and toggle if it can be edited"));
       UI_but_funcN_set(
           but, template_id_cb, MEM_dupallocN(template_ui), POINTER_FROM_INT(UI_ID_OVERRIDE));
     }
@@ -1403,7 +1415,7 @@ static void template_ID(const bContext *C,
 
       UI_but_funcN_set(
           but, template_id_cb, MEM_dupallocN(template_ui), POINTER_FROM_INT(UI_ID_ALONE));
-      if ((!BKE_id_copy_is_allowed(id)) || (idfrom && idfrom->lib) || (!editable) ||
+      if (!BKE_id_copy_is_allowed(id) || (idfrom && idfrom->lib) || (!editable) ||
           /* object in editmode - don't change data */
           (idfrom && GS(idfrom->name) == ID_OB && (((Object *)idfrom)->mode & OB_MODE_EDIT))) {
         UI_but_flag_enable(but, UI_BUT_DISABLED);
@@ -1430,7 +1442,7 @@ static void template_ID(const bContext *C,
                       UI_UNIT_Y,
                       NULL);
       }
-      else if (!(ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS)) &&
+      else if (!ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS) &&
                (hide_buttons == false)) {
         uiDefIconButR(block,
                       UI_BTYPE_ICON_TOGGLE,
@@ -1536,7 +1548,8 @@ static void template_ID(const bContext *C,
                           UI_UNIT_Y,
                           NULL);
       /* so we can access the template from operators, font unlinking needs this */
-      UI_but_funcN_set(but, NULL, MEM_dupallocN(template_ui), NULL);
+      UI_but_funcN_set(
+          but, template_id_cb, MEM_dupallocN(template_ui), POINTER_FROM_INT(UI_ID_NOP));
     }
     else {
       if ((RNA_property_flag(template_ui->prop) & PROP_NEVER_UNLINK) == 0) {
@@ -3256,7 +3269,7 @@ void uiTemplatePreview(uiLayout *layout,
         uiDefButS(block,
                   UI_BTYPE_ROW,
                   B_MATPRV,
-                  IFACE_("World"),
+                  CTX_IFACE_(BLT_I18NCONTEXT_ID_WORLD, "World"),
                   0,
                   0,
                   UI_UNIT_X * 10,
@@ -3652,7 +3665,7 @@ static void colorband_buttons_layout(uiLayout *layout,
                      UI_UNIT_Y,
                      &coba->cur,
                      0.0,
-                     (float)(MAX2(0, coba->tot - 1)),
+                     (float)MAX2(0, coba->tot - 1),
                      0,
                      0,
                      TIP_("Choose active color stop"));
@@ -3683,7 +3696,7 @@ static void colorband_buttons_layout(uiLayout *layout,
                      UI_UNIT_Y,
                      &coba->cur,
                      0.0,
-                     (float)(MAX2(0, coba->tot - 1)),
+                     (float)MAX2(0, coba->tot - 1),
                      0,
                      0,
                      TIP_("Choose active color stop"));
@@ -5199,7 +5212,7 @@ static void CurveProfile_buttons_layout(uiLayout *layout, PointerRNA *ptr, RNAUp
                             0.0,
                             0.0,
                             0.0,
-                            "Reapply and update the preset, removing changes");
+                            TIP_("Reapply and update the preset, removing changes"));
       UI_but_funcN_set(bt, CurveProfile_buttons_reset, MEM_dupallocN(cb), profile);
     }
   }
@@ -6324,7 +6337,7 @@ void uiTemplateReportsBanner(uiLayout *layout, bContext *C)
                   0,
                   width + UI_UNIT_X,
                   UI_UNIT_Y,
-                  "Show in Info Log");
+                  TIP_("Show in Info Log"));
 
   UI_block_emboss_set(block, previous_emboss);
 }
@@ -6351,8 +6364,10 @@ void uiTemplateInputStatus(uiLayout *layout, struct bContext *C)
     uiLayout *row = uiLayoutRow(col, true);
     uiLayoutSetAlignment(row, UI_LAYOUT_ALIGN_LEFT);
 
-    const char *msg = TIP_(WM_window_cursor_keymap_status_get(win, i, 0));
-    const char *msg_drag = TIP_(WM_window_cursor_keymap_status_get(win, i, 1));
+    const char *msg = CTX_TIP_(BLT_I18NCONTEXT_OPERATOR_DEFAULT,
+                               WM_window_cursor_keymap_status_get(win, i, 0));
+    const char *msg_drag = CTX_TIP_(BLT_I18NCONTEXT_OPERATOR_DEFAULT,
+                                    WM_window_cursor_keymap_status_get(win, i, 1));
 
     if (msg || (msg_drag == NULL)) {
       uiItemL(row, msg ? msg : "", (ICON_MOUSE_LMB + i));
