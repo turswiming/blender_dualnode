@@ -159,6 +159,7 @@ set(SRC
   engines/workbench/workbench_effect_cavity.c
   engines/workbench/workbench_effect_cavity.cc
   engines/workbench/workbench_effect_dof.c
+  engines/workbench/workbench_effect_dof.cc
   engines/workbench/workbench_effect_outline.c
   engines/workbench/workbench_engine.c
   engines/workbench/workbench_engine.cc

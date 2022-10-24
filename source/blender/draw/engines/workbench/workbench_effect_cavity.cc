@@ -50,7 +50,7 @@ void CavityEffect::init(const View3DShading &shading,
   world_buf.curvature_ridge = 0.5f / max_ff(square_f(shading.curvature_ridge_factor), 1e-4f);
   world_buf.curvature_valley = 0.7f / max_ff(square_f(shading.curvature_valley_factor), 1e-4f);
 
-  if (cavity_enabled) {
+  if (cavity_enabled || true /*TODO(Miguel Pozo): Remove this (needed for DoF)*/) {
     setup_resources(sample_count);
   }
 }

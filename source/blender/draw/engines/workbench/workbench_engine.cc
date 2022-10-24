@@ -52,6 +52,7 @@ class Instance {
   /* When r == -1.0 the shader uses the vertex color */
   Material material_attribute_color = Material(float3(-1.0f));
 
+  DofPass dof_ps;
   AntiAliasingPass anti_aliasing_ps;
 
   void init(const int2 &output_res,
@@ -132,12 +133,13 @@ class Instance {
 
     /* TODO(Miguel Pozo) volumes_do */
 
-    resources.init(shading, scene->display, output_res, background_color);
+    resources.init(shading, scene->display, resolution, background_color);
+    dof_ps.init(shading, resolution);
     anti_aliasing_ps.init(reset_taa);
     /* TODO(Miguel Pozo) taa_sample_len */
 
     draw_outline = shading.flag & V3D_SHADING_OBJECT_OUTLINE;
-    draw_dof = false; /*TODO(Miguel Pozo)*/
+    draw_dof = dof_ps.is_enabled();
     draw_transparent_depth = draw_outline || draw_dof;
     draw_object_id = draw_outline || resources.cavity.curvature_enabled;
   }
@@ -148,6 +150,7 @@ class Instance {
     transparent_ps.sync(cull_state, clip_state, shading_type, resources);
     transparent_depth_ps.sync(cull_state, clip_state, resources);
 
+    dof_ps.sync(resources);
     anti_aliasing_ps.sync(resources);
   }
 
@@ -544,6 +547,7 @@ class Instance {
 
     // volume_ps.draw_prepass(manager, view, resources.depth_tx);
 
+    dof_ps.draw(manager, view, resources, resolution);
     anti_aliasing_ps.draw(manager, view, depth_tx, color_tx);
 
     resources.color_tx.release();

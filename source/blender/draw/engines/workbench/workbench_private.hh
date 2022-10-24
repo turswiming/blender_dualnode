@@ -55,17 +55,18 @@ class ShaderCache {
 };
 
 class CavityEffect {
+ public:
   static const int JITTER_TEX_SIZE = 64;
   static const int MAX_SAMPLES = 512;  // This value must be kept in sync with the one declared at
                                        // workbench_composite_info.hh (cavity_samples)
 
+  /*TODO(Miguel Pozo): Move to SceneResources (Used by DoF too)*/
   UniformArrayBuffer<float4, MAX_SAMPLES> samples_buf;
   int sample_count;
   Texture jitter_tx;
 
   void setup_resources(int sample_count);
 
- public:
   bool curvature_enabled;
   bool cavity_enabled;
 
@@ -181,6 +182,46 @@ class TransparentDepthPass {
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
   bool is_empty() const;
+};
+
+class DofPass {
+  bool enabled = false;
+
+  static const int KERNEL_RADIUS = 3;
+  static const int SAMPLES_LEN = (KERNEL_RADIUS * 2 + 1) * (KERNEL_RADIUS * 2 + 1);
+
+  UniformArrayBuffer<float4, SAMPLES_LEN> samples_buf;
+
+  Texture source_tx;
+  Texture coc_halfres_tx;
+  TextureFromPool blur_tx;
+
+  Framebuffer downsample_fb, blur1_fb, blur2_fb, resolve_fb;
+
+  GPUShader *prepare_sh, *downsample_sh, *blur1_sh, *blur2_sh, *resolve_sh;
+
+  PassSimple down_ps = {"Workbench.DoF.DownSample"};
+  PassSimple down2_ps = {"Workbench.DoF.DownSample2"};
+  PassSimple blur_ps = {"Workbench.DoF.Blur"};
+  PassSimple blur2_ps = {"Workbench.DoF.Blur2"};
+  PassSimple resolve_ps = {"Workbench.DoF.Resolve"};
+
+  float aperture_size;
+  float distance;
+  float invsensor_size;
+  float near;
+  float far;
+  float blades;
+  float rotation;
+  float ratio;
+
+  void setup_samples();
+
+ public:
+  void init(const View3DShading &shading, int2 resolution);
+  void sync(SceneResources &resources);
+  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+  bool is_enabled();
 };
 
 class AntiAliasingPass {
