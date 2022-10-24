@@ -91,24 +91,24 @@ typedef struct tGPDasset {
 /** \name Create Grease Pencil data block Asset operator
  * \{ */
 
-typedef enum eGP_AssetModes {
+typedef enum eGP_AssetSource {
   /* Active Layer. */
-  GP_ASSET_MODE_ACTIVE_LAYER = 0,
+  GP_ASSET_SOURCE_ACTIVE_LAYER = 0,
   /* All Layers. */
-  GP_ASSET_MODE_ALL_LAYERS,
+  GP_ASSET_SOURCE_ALL_LAYERS,
   /* All Layers in separated assets. */
-  GP_ASSET_MODE_ALL_LAYERS_SPLIT,
+  GP_ASSET_SOURCE_ALL_LAYERS_SPLIT,
   /* Active Frame. */
-  GP_ASSET_MODE_ACTIVE_FRAME,
+  GP_ASSET_SOURCE_ACTIVE_KEYFRAME,
   /* Active Frame All Layers. */
-  GP_ASSET_MODE_ACTIVE_FRAME_ALL_LAYERS,
+  GP_ASSET_SOURCE_ACTIVE_KEYFRAME_ALL_LAYERS,
   /* Selected Frames. */
-  GP_ASSET_MODE_SELECTED_FRAMES,
+  GP_ASSET_SOURCE_SELECTED_KEYFRAMES,
   /* Selected Strokes. */
-  GP_ASSET_MODE_SELECTED_STROKES,
+  GP_ASSET_SOURCE_SELECTED_STROKES,
   /* Selected Strokes. */
-  GP_ASSET_MODE_SELECTED_POINTS,
-} eGP_AssetModes;
+  GP_ASSET_SOURCE_SELECTED_POINTS,
+} eGP_AssetSource;
 
 /* Helper: Apply layer settings. */
 static void apply_layer_settings(bGPDlayer *gpl)
@@ -146,7 +146,7 @@ static bool gpencil_asset_create(const bContext *C,
                                  const wmOperator *op,
                                  const bGPdata *gpd_src,
                                  const bGPDlayer *gpl_filter,
-                                 const eGP_AssetModes mode,
+                                 const eGP_AssetSource mode,
                                  const bool reset_origin,
                                  const bool flatten_layers)
 {
@@ -173,14 +173,14 @@ static bool gpencil_asset_create(const bContext *C,
     }
 
     /* If Active Layer or Active Frame mode, delete non active layers. */
-    if ((ELEM(mode, GP_ASSET_MODE_ACTIVE_LAYER, GP_ASSET_MODE_ACTIVE_FRAME)) &&
+    if ((ELEM(mode, GP_ASSET_SOURCE_ACTIVE_LAYER, GP_ASSET_SOURCE_ACTIVE_KEYFRAME)) &&
         (gpl != gpl_active)) {
       BKE_gpencil_layer_delete(gpd, gpl);
       continue;
     }
 
     /* For splitting, remove if layer is not equals to filter parameter. */
-    if (mode == GP_ASSET_MODE_ALL_LAYERS_SPLIT) {
+    if (mode == GP_ASSET_SOURCE_ALL_LAYERS_SPLIT) {
       if (!STREQ(gpl_filter->info, gpl->info)) {
         BKE_gpencil_layer_delete(gpd, gpl);
         continue;
@@ -213,7 +213,7 @@ static bool gpencil_asset_create(const bContext *C,
     LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
       /* If Active Frame mode, delete non active frames or if multi frame edition is not enabled.
        */
-      if ((ELEM(mode, GP_ASSET_MODE_ACTIVE_FRAME, GP_ASSET_MODE_ACTIVE_FRAME_ALL_LAYERS) ||
+      if ((ELEM(mode, GP_ASSET_SOURCE_ACTIVE_KEYFRAME, GP_ASSET_SOURCE_ACTIVE_KEYFRAME_ALL_LAYERS) ||
            !is_multiedit) &&
           (gpf != gpf_active)) {
         BKE_gpencil_layer_frame_delete(gpl, gpf);
@@ -221,13 +221,13 @@ static bool gpencil_asset_create(const bContext *C,
       }
 
       /* Remove if Selected frames mode and frame is not selected. */
-      if ((mode == GP_ASSET_MODE_SELECTED_FRAMES) && ((gpf->flag & GP_FRAME_SELECT) == 0)) {
+      if ((mode == GP_ASSET_SOURCE_SELECTED_KEYFRAMES) && ((gpf->flag & GP_FRAME_SELECT) == 0)) {
         BKE_gpencil_layer_frame_delete(gpl, gpf);
         continue;
       }
 
       /* Remove any unselected stroke if selected strokes mode. */
-      if (ELEM(mode, GP_ASSET_MODE_SELECTED_STROKES, GP_ASSET_MODE_SELECTED_POINTS)) {
+      if (ELEM(mode, GP_ASSET_SOURCE_SELECTED_STROKES, GP_ASSET_SOURCE_SELECTED_POINTS)) {
         LISTBASE_FOREACH_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
           if ((gps->flag & GP_STROKE_SELECT) == 0) {
             BLI_remlink(&gpf->strokes, gps);
@@ -237,7 +237,7 @@ static bool gpencil_asset_create(const bContext *C,
         }
       }
       /* Remove any unselected point if selected point mode. */
-      if (mode == GP_ASSET_MODE_SELECTED_POINTS) {
+      if (mode == GP_ASSET_SOURCE_SELECTED_POINTS) {
         LISTBASE_FOREACH_MUTABLE (bGPDstroke *, gps, &gpf->strokes) {
           if (gps->flag & GP_STROKE_SELECT) {
             /* Mark the points to dissolve */
@@ -362,25 +362,25 @@ static bool gpencil_asset_edit_poll(bContext *C)
   return ED_operator_view3d_active(C);
 }
 
-static int gpencil_asset_create_exec(const bContext *C, const wmOperator *op)
+static int gpencil_asset_create_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
   bGPdata *gpd_src = ob->data;
 
-  const eGP_AssetModes mode = RNA_enum_get(op->ptr, "mode");
+  const eGP_AssetSource source = RNA_enum_get(op->ptr, "source");
   const bool reset_origin = RNA_boolean_get(op->ptr, "reset_origin");
   const bool flatten_layers = RNA_boolean_get(op->ptr, "flatten_layers");
 
   bool non_supported_feature = false;
-  if (mode == GP_ASSET_MODE_ALL_LAYERS_SPLIT) {
+  if (source == GP_ASSET_SOURCE_ALL_LAYERS_SPLIT) {
     LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd_src->layers) {
       non_supported_feature |= gpencil_asset_create(
-          C, op, gpd_src, gpl, mode, reset_origin, flatten_layers);
+          C, op, gpd_src, gpl, source, reset_origin, flatten_layers);
     }
   }
   else {
     non_supported_feature = gpencil_asset_create(
-        C, op, gpd_src, NULL, mode, reset_origin, flatten_layers);
+        C, op, gpd_src, NULL, source, reset_origin, flatten_layers);
   }
 
   /* Warnings for non supported features in the created asset. */
@@ -400,20 +400,40 @@ static int gpencil_asset_create_exec(const bContext *C, const wmOperator *op)
 void GPENCIL_OT_asset_create(wmOperatorType *ot)
 {
   static const EnumPropertyItem mode_types[] = {
-      {GP_ASSET_MODE_ACTIVE_LAYER, "LAYER", 0, "Active Layer", ""},
-      {GP_ASSET_MODE_ALL_LAYERS, "LAYERS_ALL", 0, "All Layers", ""},
-      {GP_ASSET_MODE_ALL_LAYERS_SPLIT,
+      {GP_ASSET_SOURCE_ACTIVE_LAYER, "LAYER", 0, "Active Layer", "Create asset using active layer"},
+      {GP_ASSET_SOURCE_ALL_LAYERS, "LAYERS_ALL", 0, "All Layers", "Create asset using all layers"},
+      {GP_ASSET_SOURCE_ALL_LAYERS_SPLIT,
        "LAYERS_SPLIT",
        0,
        "All Layers Separated",
        "Create an asset by layer."},
       RNA_ENUM_ITEM_SEPR,
-      {GP_ASSET_MODE_ACTIVE_FRAME, "FRAME", 0, "Active Keyframe (Active Layer)", ""},
-      {GP_ASSET_MODE_ACTIVE_FRAME_ALL_LAYERS, "FRAME_ALL", 0, "Active Keyframe (All Layers)", ""},
-      {GP_ASSET_MODE_SELECTED_FRAMES, "FRAME_SELECTED", 0, "Selected Keyframes", ""},
+      {GP_ASSET_SOURCE_ACTIVE_KEYFRAME,
+       "KEYFRAME",
+       0,
+       "Active Keyframe (Active Layer)",
+       "Create asset using active keyframe for active layer"},
+      {GP_ASSET_SOURCE_ACTIVE_KEYFRAME_ALL_LAYERS,
+       "KEYFRAME_ALL",
+       0,
+       "Active Keyframe (All Layers)",
+       "Create asset using active keyframe for all layers"},
+      {GP_ASSET_SOURCE_SELECTED_KEYFRAMES,
+       "KEYFRAME_SELECTED",
+       0,
+       "Selected Keyframes",
+       "Create asset using selected keyframes"},
       RNA_ENUM_ITEM_SEPR,
-      {GP_ASSET_MODE_SELECTED_STROKES, "SELECTED", 0, "Selected Strokes", ""},
-      {GP_ASSET_MODE_SELECTED_POINTS, "POINT", 0, "Selected Points", ""},
+      {GP_ASSET_SOURCE_SELECTED_STROKES,
+       "SELECTED",
+       0,
+       "Selected Strokes",
+       "Create asset using all selected strokes"},
+      {GP_ASSET_SOURCE_SELECTED_POINTS,
+       "POINT",
+       0,
+       "Selected Points",
+       "Create asset using all selected points"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -432,7 +452,7 @@ void GPENCIL_OT_asset_create(wmOperatorType *ot)
 
   /* properties */
   ot->prop = RNA_def_enum(
-      ot->srna, "mode", mode_types, GP_ASSET_MODE_SELECTED_STROKES, "Mode", "");
+      ot->srna, "source", mode_types, GP_ASSET_SOURCE_SELECTED_STROKES, "Create From", "");
   RNA_def_boolean(ot->srna,
                   "reset_origin",
                   true,

@@ -5224,18 +5224,18 @@ class VIEW3D_MT_edit_gpencil_asset(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("gpencil.asset_create", text="Active Layer").mode = 'LAYER'
-        layout.operator("gpencil.asset_create", text="All Layers").mode = 'LAYERS_ALL'
-        layout.operator("gpencil.asset_create", text="All Layers Separated").mode = 'LAYERS_SPLIT'
+        layout.operator("gpencil.asset_create", text="Active Layer").source = 'LAYER'
+        layout.operator("gpencil.asset_create", text="All Layers").source = 'LAYERS_ALL'
+        layout.operator("gpencil.asset_create", text="All Layers Separated").source = 'LAYERS_SPLIT'
         layout.separator()
 
-        layout.operator("gpencil.asset_create", text="Active Keyframe (Active Layer)").mode = 'FRAME'
-        layout.operator("gpencil.asset_create", text="Active Keyframe (All Layers)").mode = 'FRAME_ALL'
-        layout.operator("gpencil.asset_create", text="Selected Keyframes").mode = 'FRAME_SELECTED'
+        layout.operator("gpencil.asset_create", text="Active Keyframe (Active Layer)").source = 'KEYFRAME'
+        layout.operator("gpencil.asset_create", text="Active Keyframe (All Layers)").source = 'KEYFRAME_ALL'
+        layout.operator("gpencil.asset_create", text="Selected Keyframes").source = 'KEYFRAME_SELECTED'
         layout.separator()
 
-        layout.operator("gpencil.asset_create", text="Selected Strokes").mode = 'SELECTED'
-        layout.operator("gpencil.asset_create", text="Selected Points").mode = 'POINT'
+        layout.operator("gpencil.asset_create", text="Selected Strokes").source = 'SELECTED'
+        layout.operator("gpencil.asset_create", text="Selected Points").source = 'POINT'
 
 
 class VIEW3D_MT_weight_gpencil(Menu):
@@ -7454,7 +7454,7 @@ class VIEW3D_MT_gpencil_edit_context_menu(Menu):
 
         # Assets
         col.separator()
-        col.operator_menu_enum("gpencil.asset_create", "mode", text="Create Asset")
+        col.operator_menu_enum("gpencil.asset_create", "source", text="Create Asset")
 
 
 def draw_gpencil_layer_active(context, layout):
