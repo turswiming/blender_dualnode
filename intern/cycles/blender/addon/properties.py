@@ -483,7 +483,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     use_light_tree: BoolProperty(
         name="Light Tree",
         description="Samples many lights more efficiently",
-        default=False,
+        default=True,
     )
 
     splitting_threshold: FloatProperty(

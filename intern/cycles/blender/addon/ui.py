@@ -385,10 +385,6 @@ class CYCLES_RENDER_PT_sampling_light_tree(CyclesButtonsPanel, Panel):
     bl_parent_id = "CYCLES_RENDER_PT_sampling"
     bl_options = {'DEFAULT_CLOSED'}
 
-    @classmethod
-    def poll(cls, context):
-        return (context.scene.cycles.feature_set == 'EXPERIMENTAL')
-
     def draw_header(self, context):
         layout = self.layout
         scene = context.scene
