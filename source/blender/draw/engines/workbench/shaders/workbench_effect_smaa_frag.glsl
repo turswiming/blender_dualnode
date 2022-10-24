@@ -25,7 +25,7 @@ void main()
   }
   out_color /= taaAccumulatedWeight;
   /* Exit log2 space used for Antialiasing. */
-  /* TODO(pragma37): Re-enable */
+  /* TODO(Miguel Pozo): Re-enable */
   // out_color = exp2(out_color) - 0.5;
 
   /* Avoid float precision issue. */

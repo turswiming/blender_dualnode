@@ -44,7 +44,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
                                       eGPUSamplerState sampler_state /* = GPU_SAMPLER_DEFAULT */,
                                       ImageUser *iuser /* = nullptr */)
 {
-  /*TODO(pragma37): For now we assume retrieving a subpass means it's not empty anymore*/
+  /*TODO(Miguel Pozo): For now we assume retrieving a subpass means it's not empty anymore*/
   _is_empty = false;
 
   eGeometryType geometry_type = geometry_type_from_object(ref.object);
@@ -58,7 +58,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
     else {
       texture = BKE_image_get_gpu_texture(image, iuser, nullptr);
     }
-    /* TODO(pragma37): Should be lib.name + name ??? */
+    /* TODO(Miguel Pozo): Should be lib.name + name ??? */
     StringRefNull name = image->id.name;
     if (texture) {
       auto add_cb = [&] {
@@ -74,7 +74,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
         }
         sub_pass->push_constant("isImageTile", tilemap != nullptr);
         sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
-        /*TODO(pragma37): What's the point? This could be a constant in the shader. */
+        /*TODO(Miguel Pozo): What's the point? This could be a constant in the shader. */
         sub_pass->push_constant("imageTransparencyCutoff", 0.1f);
         return sub_pass;
       };
@@ -187,7 +187,7 @@ void TransparentPass::sync(DRWState cull_state,
       ePipelineType::TRANSPARENT, shading_type, resources.shader_cache);
 
   resolve_ps_.init();
-  /*TODO(pragma37): Use shaders.resolve_shader_get()*/
+  /*TODO(Miguel Pozo): Use shaders.resolve_shader_get()*/
   static GPUShader *resolve_shader = GPU_shader_create_from_info_name(
       "workbench_transparent_resolve");
   resolve_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA);
@@ -251,7 +251,7 @@ void TransparentDepthPass::sync(DRWState cull_state,
   in_front_ps_.init_subpasses(ePipelineType::OPAQUE, eShadingType::FLAT, resources.shader_cache);
 
   merge_ps_.init();
-  /*TODO(pragma37): Use ShaderCache*/
+  /*TODO(Miguel Pozo): Use ShaderCache*/
   static GPUShader *merge_shader = GPU_shader_create_from_info_name("workbench_next_merge_depth");
   merge_ps_.shader_set(merge_shader);
   merge_ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_ALWAYS | DRW_STATE_WRITE_STENCIL |

@@ -77,7 +77,7 @@ void main()
   if (color != world_data.background_color) {
     /* TODO(fclem): Port the TAA shader that does this tranformation. */
     /* Use log2 space to avoid highlights creating too much aliasing. */
-    /* TODO(pragma37): Re-enable */
+    /* TODO(Miguel Pozo): Re-enable */
     // color.rgb = log2(color.rgb + 0.5);
     imageStore(out_color_img, texel, color);
   }

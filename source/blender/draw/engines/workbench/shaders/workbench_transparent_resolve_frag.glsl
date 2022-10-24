@@ -19,6 +19,6 @@ void main()
 
   /* TODO(fclem): Port the TAA shader that does this tranformation. */
   /* Use log2 space to avoid highlights creating too much aliasing. */
-  /* TODO(pragma37): Re-enable */
+  /* TODO(Miguel Pozo): Re-enable */
   // fragColor.rgb = log2(fragColor.rgb + 0.5);
 }

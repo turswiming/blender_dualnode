@@ -65,7 +65,7 @@ class Instance {
     object_mode = CTX_data_mode_enum_ex(
         context->object_edit, context->obact, context->object_mode);
     resolution = output_res;
-    /* TODO(pragma37):
+    /* TODO(Miguel Pozo):
      * Check why Workbench Next exposes OB_MATERIAL, and Workbench exposes OB_RENDER */
     bool is_render_mode = !v3d || ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL);
     const View3DShading previous_shading = shading;
@@ -130,14 +130,14 @@ class Instance {
       }
     }
 
-    /* TODO(pragma37) volumes_do */
+    /* TODO(Miguel Pozo) volumes_do */
 
     resources.init(shading, scene->display, output_res, background_color);
     anti_aliasing_ps.init(reset_taa);
-    /* TODO(pragma37) taa_sample_len */
+    /* TODO(Miguel Pozo) taa_sample_len */
 
     draw_outline = shading.flag & V3D_SHADING_OBJECT_OUTLINE;
-    draw_dof = false; /*TODO(pragma37)*/
+    draw_dof = false; /*TODO(Miguel Pozo)*/
     draw_transparent_depth = draw_outline || draw_dof;
     draw_object_id = draw_outline || resources.cavity.curvature_enabled;
   }
@@ -183,7 +183,7 @@ class Instance {
     const DRWContextState *draw_ctx = DRW_context_state_get();
     const Mesh *me = (ob->type == OB_MESH) ? static_cast<Mesh *>(ob->data) : nullptr;
     const bool is_active = (ob == draw_ctx->obact);
-    /* TODO(pragma37) Is the double check needed?
+    /* TODO(Miguel Pozo) Is the double check needed?
      * If it is, wouldn't be needed for sculpt_pbvh too?
      */
     const bool is_render = DRW_state_is_image_render() && (draw_ctx->v3d == nullptr);
@@ -305,7 +305,7 @@ class Instance {
         const int draw_as = (part->draw_as == PART_DRAW_REND) ? part->ren_as : part->draw_as;
 
         if (draw_as == PART_DRAW_PATH) {
-          /* TODO(pragma37):
+          /* TODO(Miguel Pozo):
           workbench_cache_hair_populate(
               wpd, ob, psys, md, dmi.color_type, dmi.texture_paint_mode, part->omat);
           */
@@ -318,7 +318,7 @@ class Instance {
       if (md && BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime)) {
         FluidModifierData *fmd = (FluidModifierData *)md;
         if (fmd->domain) {
-          /* TODO(pragma37):
+          /* TODO(Miguel Pozo):
           workbench_volume_cache_populate(vedata, wpd->scene, ob, md, V3D_SHADING_SINGLE_COLOR);
           */
           if (fmd->domain->type == FLUID_DOMAIN_TYPE_GAS) {
@@ -340,7 +340,7 @@ class Instance {
       mesh_sync(manager, ob_ref, dmi);
     }
     else if (ob->type == OB_CURVES) {
-      /* TODO(pragma37):
+      /* TODO(Miguel Pozo):
       DRWShadingGroup *grp = workbench_material_hair_setup(
           wpd, ob, CURVES_MATERIAL_NR, dmi.color_type);
       DRW_shgroup_curves_create_sub(ob, grp, NULL);
@@ -348,7 +348,7 @@ class Instance {
     }
     else if (ob->type == OB_VOLUME) {
       if (shading.type != OB_WIRE) {
-        /* TODO(pragma37):
+        /* TODO(Miguel Pozo):
         workbench_volume_cache_populate(vedata, wpd->scene, ob, NULL, dmi.color_type);
         */
       }
@@ -358,7 +358,7 @@ class Instance {
   void mesh_sync(Manager &manager, ObjectRef &ob_ref, const DrawModeInfo dmi)
   {
     if (dmi.sculpt_pbvh) {
-      /* TODO(pragma37):
+      /* TODO(Miguel Pozo):
       workbench_cache_sculpt_populate(wpd, ob, dmi.color_type);
       */
     }
@@ -450,7 +450,7 @@ class Instance {
     }
 
     if (dmi.draw_shadow) {
-      /* TODO(pragma37):
+      /* TODO(Miguel Pozo):
       workbench_shadow_cache_populate(vedata, ob, has_transp_mat);
       */
     }

@@ -37,7 +37,7 @@ bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light)
 
 float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z)
 {
-  /* TODO(pragma37) C++ API ? */
+  /* TODO(Miguel Pozo) C++ API ? */
   float V[4][4], R[4][4];
   DRW_view_viewmat_get(nullptr, V, false);
   axis_angle_to_mat4_single(R, 'Z', -studiolight_rot_z);
@@ -121,7 +121,7 @@ void SceneResources::init(const View3DShading &shading,
     world_buf.use_specular = false;
   }
 
-  /* TODO(pragma37) volumes_do */
+  /* TODO(Miguel Pozo) volumes_do */
 
   cavity.init(shading, display, world_buf, 0, 1);
 
