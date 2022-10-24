@@ -465,32 +465,31 @@ class Instance {
                  ImageUser *iuser = nullptr)
   {
     const bool in_front = (ob_ref.object->dtx & OB_DRAW_IN_FRONT) != 0;
+
+    auto draw = [&](MeshPass &pass) {
+      pass.sub_pass_get(ob_ref, image, sampler_state, iuser).draw(batch, handle);
+    };
+
     if (xray_mode || material.is_transparent()) {
       if (in_front) {
-        transparent_ps.accumulation_in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
-            .draw(batch, handle);
+        draw(transparent_ps.accumulation_in_front_ps_);
         if (draw_transparent_depth) {
-          transparent_depth_ps.in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
-              .draw(batch, handle);
+          draw(transparent_depth_ps.in_front_ps_);
         }
       }
       else {
-        transparent_ps.accumulation_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
-            .draw(batch, handle);
+        draw(transparent_ps.accumulation_ps_);
         if (draw_transparent_depth) {
-          transparent_depth_ps.main_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
-              .draw(batch, handle);
+          draw(transparent_depth_ps.main_ps_);
         }
       }
     }
     else {
       if (in_front) {
-        opaque_ps.gbuffer_in_front_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
-            .draw(batch, handle);
+        draw(opaque_ps.gbuffer_in_front_ps_);
       }
       else {
-        opaque_ps.gbuffer_ps_.sub_pass_get(ob_ref, image, sampler_state, iuser)
-            .draw(batch, handle);
+        draw(opaque_ps.gbuffer_ps_);
       }
     }
   }
