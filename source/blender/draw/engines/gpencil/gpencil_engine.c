@@ -377,11 +377,12 @@ static void gpencil_drawcall_add(
   else {
     DRW_shgroup_call_range(iter->grp, iter->ob, geom, v_first, v_count);
   }
+  return;
 #endif
 
   int last = iter->vfirst + iter->vcount;
   /* Interrupt draw-call grouping if the sequence is not consecutive. */
-  if ((geom != iter->geom) || (v_first - last > 3)) {
+  if ((geom != iter->geom) || (v_first - last > 0)) {
     gpencil_drawcall_flush(iter);
   }
   iter->geom = geom;
@@ -516,22 +517,32 @@ static void gpencil_stroke_cache_populate(bGPDlayer *gpl,
 
   bool do_sbuffer = (iter->do_sbuffer_call == DRAW_NOW);
 
+  GPUBatch *geom = do_sbuffer ? DRW_cache_gpencil_sbuffer_get(iter->ob) :
+                                DRW_cache_gpencil_get(iter->ob, iter->pd->cfra);
+  if (geom != iter->geom) {
+    gpencil_drawcall_flush(iter);
+
+    GPUVertBuf *position_tx = do_sbuffer ?
+                                  DRW_cache_gpencil_sbuffer_position_buffer_get(iter->ob) :
+                                  DRW_cache_gpencil_position_buffer_get(iter->ob, iter->pd->cfra);
+    GPUVertBuf *color_tx = do_sbuffer ?
+                               DRW_cache_gpencil_sbuffer_color_buffer_get(iter->ob) :
+                               DRW_cache_gpencil_color_buffer_get(iter->ob, iter->pd->cfra);
+    DRW_shgroup_buffer_texture(iter->grp, "gp_pos_tx", position_tx);
+    DRW_shgroup_buffer_texture(iter->grp, "gp_col_tx", color_tx);
+  }
+
   if (show_fill) {
-    GPUBatch *geom = do_sbuffer ? DRW_cache_gpencil_sbuffer_fill_get(iter->ob) :
-                                  DRW_cache_gpencil_fills_get(iter->ob, iter->pd->cfra);
     int vfirst = gps->runtime.fill_start * 3;
     int vcount = gps->tot_triangles * 3;
     gpencil_drawcall_add(iter, geom, false, vfirst, vcount);
   }
 
   if (show_stroke) {
-    GPUBatch *geom = do_sbuffer ? DRW_cache_gpencil_sbuffer_stroke_get(iter->ob) :
-                                  DRW_cache_gpencil_strokes_get(iter->ob, iter->pd->cfra);
-    /* Start one vert before to have gl_InstanceID > 0 (see shader). */
-    int vfirst = gps->runtime.stroke_start - 1;
-    /* Include "potential" cyclic vertex and start adj vertex (see shader). */
-    int vcount = gps->totpoints + 1 + 1;
-    gpencil_drawcall_add(iter, geom, true, vfirst, vcount);
+    int vfirst = gps->runtime.stroke_start * 3;
+    bool is_cyclic = ((gps->flag & GP_STROKE_CYCLIC) != 0) && (gps->totpoints > 2);
+    int vcount = (gps->totpoints + (int)is_cyclic) * 2 * 3;
+    gpencil_drawcall_add(iter, geom, false, vfirst, vcount);
   }
 
   iter->stroke_index_last = gps->runtime.stroke_start + gps->totpoints + 1;
