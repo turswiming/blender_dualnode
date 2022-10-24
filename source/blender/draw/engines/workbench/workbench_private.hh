@@ -56,9 +56,10 @@ class ShaderCache {
 
 class CavityEffect {
   static const int JITTER_TEX_SIZE = 64;
-  static const int MAX_SAMPLES = MAX_CAVITY_SAMPLES;
+  static const int MAX_SAMPLES = 512;  // This value must be kept in sync with the one declared at
+                                       // workbench_composite_info.hh (cavity_samples)
 
-  UniformBuffer<CavitySamples> samples_buf;
+  UniformArrayBuffer<float4, MAX_SAMPLES> samples_buf;
   int sample_count;
   Texture jitter_tx;
 

@@ -69,11 +69,11 @@ void CavityEffect::setup_resources(int sample_count)
       BLI_hammersley_1d(i, &dphi);
 
       float phi = (float)dphi * 2.0f * M_PI + it_add;
-      samples_buf.samples[i].x = cosf(phi);
-      samples_buf.samples[i].y = sinf(phi);
+      samples_buf[i].x = cosf(phi);
+      samples_buf[i].y = sinf(phi);
       /* This deliberately distribute more samples
        * at the center of the disk (and thus the shadow). */
-      samples_buf.samples[i].z = r;
+      samples_buf[i].z = r;
     }
 
     samples_buf.push_update();

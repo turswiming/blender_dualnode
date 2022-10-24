@@ -47,8 +47,3 @@ struct WorldData {
 
   float4 background_color;
 };
-
-static const int MAX_CAVITY_SAMPLES = 512;
-struct CavitySamples {
-  float4 samples[MAX_CAVITY_SAMPLES];
-};

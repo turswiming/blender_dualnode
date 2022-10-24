@@ -8,7 +8,7 @@
 #ifdef WORKBENCH_CAVITY
 #  define USE_CAVITY
 #  define cavityJitter jitter_tx
-#  define samples_coords cavity_samples.samples
+#  define samples_coords cavity_samples
 #endif
 
 #ifdef USE_CAVITY
