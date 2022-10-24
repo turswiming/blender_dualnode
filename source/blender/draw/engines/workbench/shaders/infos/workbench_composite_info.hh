@@ -8,9 +8,9 @@
  * \{ */
 
 GPU_SHADER_CREATE_INFO(workbench_composite)
-    .sampler(0, ImageType::FLOAT_2D, "normalBuffer", Frequency::PASS)
-    .sampler(1, ImageType::FLOAT_2D, "materialBuffer", Frequency::PASS)
-    .uniform_buf(WB_WORLD_SLOT, "WorldData", "world_data", Frequency::PASS)
+    .sampler(0, ImageType::FLOAT_2D, "normalBuffer")
+    .sampler(1, ImageType::FLOAT_2D, "materialBuffer")
+    .uniform_buf(WB_WORLD_SLOT, "WorldData", "world_data")
     .push_constant(Type::BOOL, "forceShadowing")
     .fragment_out(0, Type::VEC4, "fragColor")
     .typedef_source("workbench_shader_shared.h")
@@ -30,8 +30,8 @@ GPU_SHADER_CREATE_INFO(workbench_composite_studio)
 
 GPU_SHADER_CREATE_INFO(workbench_composite_matcap)
     .define("WORKBENCH_LIGHTING_MATCAP")
-    .sampler(2, ImageType::FLOAT_2D, "matcap_diffuse_tx", Frequency::PASS)
-    .sampler(3, ImageType::FLOAT_2D, "matcap_specular_tx", Frequency::PASS)
+    .sampler(2, ImageType::FLOAT_2D, "matcap_diffuse_tx")
+    .sampler(3, ImageType::FLOAT_2D, "matcap_specular_tx")
     .additional_info("workbench_composite")
     .do_static_compilation(true);
 
@@ -78,7 +78,7 @@ GPU_SHADER_CREATE_INFO(workbench_next_resolve_cavity)
     .define("WORKBENCH_CAVITY")
     .sampler(7, ImageType::FLOAT_2D, "jitter_tx") /* TODO(Miguel Pozo): GPU_SAMPLER_REPEAT is set
                                                      in CavityEffect, it doesn't work here ? */
-    .uniform_buf(5, "float4", "cavity_samples[512]", Frequency::PASS);
+    .uniform_buf(5, "float4", "cavity_samples[512]");
 
 // Variations
 

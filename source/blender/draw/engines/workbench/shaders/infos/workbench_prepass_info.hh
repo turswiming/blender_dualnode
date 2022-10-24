@@ -83,12 +83,12 @@ GPU_SHADER_CREATE_INFO(workbench_lighting_flat).define("WORKBENCH_LIGHTING_FLAT"
 GPU_SHADER_CREATE_INFO(workbench_lighting_studio).define("WORKBENCH_LIGHTING_STUDIO");
 GPU_SHADER_CREATE_INFO(workbench_lighting_matcap)
     .define("WORKBENCH_LIGHTING_MATCAP")
-    .sampler(4, ImageType::FLOAT_2D, "matcap_diffuse_tx", Frequency::PASS)
-    .sampler(5, ImageType::FLOAT_2D, "matcap_specular_tx", Frequency::PASS);
+    .sampler(4, ImageType::FLOAT_2D, "matcap_diffuse_tx")
+    .sampler(5, ImageType::FLOAT_2D, "matcap_specular_tx");
 
 GPU_SHADER_CREATE_INFO(workbench_next_lighting_matcap)
     .define("WORKBENCH_LIGHTING_MATCAP")
-    .sampler(WB_MATCAP_SLOT, ImageType::FLOAT_2D_ARRAY, "matcap_tx", Frequency::PASS);
+    .sampler(WB_MATCAP_SLOT, ImageType::FLOAT_2D_ARRAY, "matcap_tx");
 
 /** \} */
 
@@ -106,8 +106,8 @@ GPU_SHADER_INTERFACE_INFO(workbench_material_iface, "")
     .flat(Type::FLOAT, "metallic");
 
 GPU_SHADER_CREATE_INFO(workbench_material)
-    .uniform_buf(WB_WORLD_SLOT, "WorldData", "world_data", Frequency::PASS)
-    .uniform_buf(5, "vec4", "materials_data[4096]", Frequency::PASS)
+    .uniform_buf(WB_WORLD_SLOT, "WorldData", "world_data")
+    .uniform_buf(5, "vec4", "materials_data[4096]")
     .push_constant(Type::INT, "materialIndex")
     .push_constant(Type::BOOL, "useMatcap")
     .vertex_out(workbench_material_iface);
