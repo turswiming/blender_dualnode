@@ -516,13 +516,15 @@ class Instance {
     fb.bind();
     GPU_framebuffer_clear_depth_stencil(fb, 1.0f, 0x00);
 
-    if (!opaque_ps.gbuffer_in_front_ps_.is_empty() ||
-        !transparent_ps.accumulation_in_front_ps_.is_empty()) {
+    if (!transparent_ps.accumulation_in_front_ps_.is_empty()) {
       resources.depth_in_front_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
-      Framebuffer fb = Framebuffer("Workbench.Clear");
-      fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx));
-      fb.bind();
-      GPU_framebuffer_clear_depth_stencil(fb, 1.0f, 0x00);
+      if (opaque_ps.gbuffer_in_front_ps_.is_empty()) {
+        /* Clear only if it wont be overwitten by opaque_ps */
+        Framebuffer fb = Framebuffer("Workbench.Clear");
+        fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx));
+        fb.bind();
+        GPU_framebuffer_clear_depth_stencil(fb, 1.0f, 0x00);
+      }
     }
 
     opaque_ps.draw(manager, view, resources, resolution);

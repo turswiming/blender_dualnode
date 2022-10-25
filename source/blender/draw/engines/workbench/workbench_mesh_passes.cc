@@ -136,14 +136,17 @@ void OpaquePass::draw(Manager &manager, View &view, SceneResources &resources, i
   }
 
   if (!gbuffer_in_front_ps_.is_empty()) {
-    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_in_front_tx),
+    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
                      GPU_ATTACHMENT_TEXTURE(gbuffer_material_tx),
                      GPU_ATTACHMENT_TEXTURE(gbuffer_normal_tx),
                      object_id_attachment);
     opaque_fb.bind();
 
     manager.submit(gbuffer_in_front_ps_, view);
-    GPU_texture_copy(resources.depth_tx, resources.depth_in_front_tx);
+    if (resources.depth_in_front_tx.is_valid()) {
+      /* Only needed when transparent infront is needed */
+      GPU_texture_copy(resources.depth_in_front_tx, resources.depth_tx);
+    }
   }
 
   if (!gbuffer_ps_.is_empty()) {
