@@ -11,9 +11,9 @@
 #include "kernel/integrator/path_state.h"
 #include "kernel/integrator/shadow_catcher.h"
 
-#include "kernel/light/light.h"
-
 #include "kernel/geom/geom.h"
+
+#include "kernel/light/light.h"
 
 #include "kernel/bvh/bvh.h"
 

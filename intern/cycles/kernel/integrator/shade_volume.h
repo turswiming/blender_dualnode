@@ -684,6 +684,7 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 ccl_device_forceinline bool integrate_volume_sample_light(
     KernelGlobals kg,
     IntegratorState state,
+    ccl_private const Ray *ccl_restrict ray,
     ccl_private const ShaderData *ccl_restrict sd,
     ccl_private const RNGState *ccl_restrict rng_state,
     ccl_private LightSample *ccl_restrict ls)
@@ -696,10 +697,19 @@ ccl_device_forceinline bool integrate_volume_sample_light(
   /* Sample position on a light. */
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
-  const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
+  const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SEGMENT_LIGHT);
 
-  if (!light_distribution_sample_from_volume_segment(
-          kg, rand_light.x, rand_light.y, sd->time, sd->P, bounce, path_flag, ls)) {
+  if (!light_sample_from_volume_segment(kg,
+                                        rng_state,
+                                        rand_light.x,
+                                        rand_light.y,
+                                        sd->time,
+                                        sd->P,
+                                        ray->D,
+                                        ray->tmax - ray->tmin,
+                                        bounce,
+                                        path_flag,
+                                        ls)) {
     return false;
   }
 
@@ -738,8 +748,17 @@ ccl_device_forceinline void integrate_volume_direct_light(
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
     const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
 
-    if (!light_distribution_sample_from_position(
-            kg, rand_light.x, rand_light.y, sd->time, P, bounce, path_flag, ls)) {
+    if (!light_sample_from_position(kg,
+                                    rng_state,
+                                    rand_light.x,
+                                    rand_light.y,
+                                    sd->time,
+                                    P,
+                                    one_float3(), /* TODO: ensure light tree ignores normal. */
+                                    SD_BSDF_HAS_TRANSMISSION,
+                                    bounce,
+                                    path_flag,
+                                    ls)) {
       return;
     }
   }
@@ -978,7 +997,7 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
   const bool need_light_sample = !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_TERMINATE);
   const bool have_equiangular_sample = need_light_sample &&
                                        integrate_volume_sample_light(
-                                           kg, state, &sd, &rng_state, &ls) &&
+                                           kg, state, ray, &sd, &rng_state, &ls) &&
                                        (ls.t != FLT_MAX);
 
   VolumeSampleMethod direct_sample_method = (have_equiangular_sample) ?

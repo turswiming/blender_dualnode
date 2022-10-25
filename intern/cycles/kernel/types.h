@@ -157,6 +157,7 @@ enum PathTraceDimension {
   PRNG_VOLUME_OFFSET = 6,
   PRNG_VOLUME_SHADE_OFFSET = 7,
   PRNG_VOLUME_PHASE_GUIDING = 8,
+  PRNG_VOLUME_SEGMENT_LIGHT = 9,
 
   /* Subsurface random walk bounces */
   PRNG_SUBSURFACE_BSDF = 0,

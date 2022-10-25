@@ -713,33 +713,25 @@ void LightManager::device_update_distribution(Device *device,
     kintegrator->num_distribution = num_distribution;
 
     /* precompute pdfs */
-    kintegrator->pdf_triangles = 0.0f;
-    kintegrator->pdf_lights = 0.0f;
+    kintegrator->distribution_pdf_triangles = 0.0f;
+    kintegrator->distribution_pdf_lights = 0.0f;
 
     /* sample one, with 0.5 probability of light or triangle */
     /* to-do: this pdf is probably going to need adjustment if a light tree is used. */
     kintegrator->num_all_lights = num_lights;
     kintegrator->num_distant_lights = num_distant_lights;
 
-    /* pdf_lights is used when sampling lights, and assumes that
-     * the light has been sampled through the light distribution.
-     * Therefore, we override it for now and adjust the pdf manually in the light tree.*/
-    if (light_tree_enabled) {
-      kintegrator->pdf_triangles = 1.0f;
-      kintegrator->pdf_lights = 1.0f;
+    /* distribution_pdf_lights is used when sampling lights from a flat distribution. */
+    if (trianglearea > 0.0f) {
+      kintegrator->distribution_pdf_triangles = 1.0f / trianglearea;
+      if (num_lights)
+        kintegrator->distribution_pdf_triangles *= 0.5f;
     }
-    else {
-      if (trianglearea > 0.0f) {
-        kintegrator->pdf_triangles = 1.0f / trianglearea;
-        if (num_lights)
-          kintegrator->pdf_triangles *= 0.5f;
-      }
 
-      if (num_lights) {
-        kintegrator->pdf_lights = 1.0f / num_lights;
-        if (trianglearea > 0.0f)
-          kintegrator->pdf_lights *= 0.5f;
-      }
+    if (num_lights) {
+      kintegrator->distribution_pdf_lights = 1.0f / num_lights;
+      if (trianglearea > 0.0f)
+        kintegrator->distribution_pdf_lights *= 0.5f;
     }
 
     kintegrator->use_lamp_mis = use_lamp_mis;
@@ -748,7 +740,8 @@ void LightManager::device_update_distribution(Device *device,
      * amount of samples we get for this pass */
     kfilm->pass_shadow_scale = 1.0f;
 
-    if (kintegrator->pdf_triangles != 0.0f)
+    /* TODO: this won't work for light tree. */
+    if (kintegrator->distribution_pdf_triangles != 0.0f)
       kfilm->pass_shadow_scale /= 0.5f;
 
     if (num_background_lights < num_lights)
@@ -785,8 +778,8 @@ void LightManager::device_update_distribution(Device *device,
 
     kintegrator->num_distribution = 0;
     kintegrator->num_all_lights = 0;
-    kintegrator->pdf_triangles = 0.0f;
-    kintegrator->pdf_lights = 0.0f;
+    kintegrator->distribution_pdf_triangles = 0.0f;
+    kintegrator->distribution_pdf_lights = 0.0f;
     kintegrator->use_lamp_mis = false;
 
     kbackground->num_portals = 0;

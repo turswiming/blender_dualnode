@@ -128,7 +128,7 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
 #ifdef __VOLUME__
   if (label & LABEL_VOLUME_SCATTER) {
     /* volume scatter */
-    flag |= PATH_RAY_VOLUME_SCATTER;
+    flag |= PATH_RAY_VOLUME_SCATTER | PATH_RAY_MIS_HAD_TRANSMISSION;
     flag &= ~PATH_RAY_TRANSPARENT_BACKGROUND;
     if (!(flag & PATH_RAY_ANY_PASS)) {
       flag |= PATH_RAY_VOLUME_PASS;

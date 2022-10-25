@@ -9,7 +9,6 @@
 #include "kernel/integrator/surface_shader.h"
 
 #include "kernel/light/light.h"
-#include "kernel/light/light_tree.h"
 #include "kernel/light/sample.h"
 
 CCL_NAMESPACE_BEGIN
@@ -116,18 +115,7 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
     /* Check if background light exists or if we should skip pdf. */
     if (!(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_MIS_SKIP) &&
         kernel_data.background.use_mis) {
-      const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
-      const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
-      const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-
-      /* multiple importance sampling, get background light pdf for ray
-       * direction, and compute weight with respect to BSDF pdf */
-      float pdf = background_light_pdf(kg, ray_P, ray_D);
-      if (kernel_data.integrator.use_light_tree) {
-        const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-        pdf *= distant_lights_pdf(kg, ray_P, N, path_flag, kernel_data.background.light_index);
-      }
-      mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
+      mis_weight = light_sample_mis_weight_forward_background(kg, state, path_flag);
     }
 
     guiding_record_background(kg, state, L, mis_weight);
@@ -146,7 +134,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
   const float ray_time = INTEGRATOR_STATE(state, ray, time);
   LightSample ls ccl_optional_struct_init;
   for (int lamp = 0; lamp < kernel_data.integrator.num_all_lights; lamp++) {
-    if (light_sample_from_distant_ray(kg, ray_D, lamp, &ls)) {
+    if (distant_light_sample_from_intersection(kg, ray_D, lamp, &ls)) {
       /* Use visibility flag to skip lights. */
 #ifdef __PASSES__
       const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
@@ -185,15 +173,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
       /* MIS weighting. */
       float mis_weight = 1.0f;
       if (!(path_flag & PATH_RAY_MIS_SKIP)) {
-        /* multiple importance sampling, get regular light pdf,
-         * and compute weight with respect to BSDF pdf */
-        const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-        if (kernel_data.integrator.use_light_tree) {
-          const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
-          const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-          ls.pdf *= distant_lights_pdf(kg, ray_P, N, path_flag, lamp);
-        }
-        mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
+        mis_weight = light_sample_mis_weight_forward_distant(kg, state, path_flag, &ls);
       }
 
       /* Write to render buffer. */

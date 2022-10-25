@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "kernel/light/area.h"
 #include "kernel/light/common.h"
 
 CCL_NAMESPACE_BEGIN
@@ -189,10 +190,10 @@ ccl_device_inline float background_portal_pdf(
     if (is_round) {
       float t;
       float3 D = normalize_len(lightpos - P, &t);
-      portal_pdf += fabsf(klight->area.invarea) * lamp_light_pdf(kg, dir, -D, t);
+      portal_pdf += fabsf(klight->area.invarea) * lamp_light_pdf(dir, -D, t);
     }
     else {
-      portal_pdf += rect_light_sample(P, &lightpos, axisu, axisv, 0.0f, 0.0f, false);
+      portal_pdf += area_light_rect_sample(P, &lightpos, axisu, axisv, 0.0f, 0.0f, false);
     }
   }
 
@@ -252,10 +253,10 @@ ccl_device float3 background_portal_sample(KernelGlobals kg,
         lightpos += ellipse_sample(axisu * 0.5f, axisv * 0.5f, randu, randv);
         float t;
         D = normalize_len(lightpos - P, &t);
-        *pdf = fabsf(klight->area.invarea) * lamp_light_pdf(kg, dir, -D, t);
+        *pdf = fabsf(klight->area.invarea) * lamp_light_pdf(dir, -D, t);
       }
       else {
-        *pdf = rect_light_sample(P, &lightpos, axisu, axisv, randu, randv, true);
+        *pdf = area_light_rect_sample(P, &lightpos, axisu, axisv, randu, randv, true);
         D = normalize(lightpos - P);
       }
 
@@ -414,7 +415,7 @@ ccl_device float background_light_pdf(KernelGlobals kg, float3 P, float3 directi
   float pdf_fac = (portal_method_pdf + sun_method_pdf + map_method_pdf);
   if (pdf_fac == 0.0f) {
     /* Use uniform as a fallback if we can't use any strategy. */
-    return kernel_data.integrator.pdf_lights / M_4PI_F;
+    return 1.0f / M_4PI_F;
   }
 
   pdf_fac = 1.0f / pdf_fac;
@@ -430,7 +431,7 @@ ccl_device float background_light_pdf(KernelGlobals kg, float3 P, float3 directi
     pdf += background_map_pdf(kg, direction) * map_method_pdf;
   }
 
-  return pdf * kernel_data.integrator.pdf_lights;
+  return pdf;
 }
 
 CCL_NAMESPACE_END

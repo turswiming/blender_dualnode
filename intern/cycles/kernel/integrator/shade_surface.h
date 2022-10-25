@@ -15,8 +15,6 @@
 #include "kernel/integrator/surface_shader.h"
 #include "kernel/integrator/volume_stack.h"
 
-#include "kernel/light/light.h"
-#include "kernel/light/light_tree.h"
 #include "kernel/light/sample.h"
 
 CCL_NAMESPACE_BEGIN
@@ -121,21 +119,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
   if (!(path_flag & PATH_RAY_MIS_SKIP) && (sd->flag & SD_USE_MIS))
 #endif
   {
-    const float bsdf_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-    const float t = sd->ray_length;
-
-    /* Multiple importance sampling, get triangle light pdf,
-     * and compute weight with respect to BSDF pdf. */
-    float pdf = triangle_light_pdf(kg, sd, t);
-    if (kernel_data.integrator.use_light_tree) {
-      float3 ray_P = INTEGRATOR_STATE(state, ray, P);
-      const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-      uint lookup_offset = kernel_data_fetch(object_lookup_offset, sd->object);
-      uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
-      pdf *= light_tree_pdf(
-          kg, state, ray_P, N, path_flag, sd->prim - prim_offset + lookup_offset);
-    }
-    mis_weight = light_sample_mis_weight_forward(kg, bsdf_pdf, pdf);
+    mis_weight = light_sample_mis_weight_forward_surface(kg, state, path_flag, sd);
   }
 
   guiding_record_surface_emission(kg, state, L, mis_weight);
@@ -163,26 +147,18 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
     const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
 
-    if (kernel_data.integrator.use_light_tree) {
-      if (!light_tree_sample_from_position(kg,
-                                           rng_state,
-                                           rand_light.x,
-                                           rand_light.y,
-                                           sd->time,
-                                           sd->P,
-                                           sd->N,
-                                           sd->flag,
-                                           bounce,
-                                           path_flag,
-                                           &ls)) {
-        return;
-      }
-    }
-    else {
-      if (!light_distribution_sample_from_position(
-              kg, rand_light.x, rand_light.y, sd->time, sd->P, bounce, path_flag, &ls)) {
-        return;
-      }
+    if (!light_sample_from_position(kg,
+                                    rng_state,
+                                    rand_light.x,
+                                    rand_light.y,
+                                    sd->time,
+                                    sd->P,
+                                    sd->N,
+                                    sd->flag,
+                                    bounce,
+                                    path_flag,
+                                    &ls)) {
+      return;
     }
   }
 
