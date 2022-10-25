@@ -69,11 +69,10 @@ else()
       set(PYTHON_FUNC_CONFIGS ${PYTHON_FUNC_CONFIGS} && export PYTHON_DECIMAL_WITH_MACHINE=ansi64)
     endif()
     set(PYTHON_CONFIGURE_ENV ${CONFIGURE_ENV} && ${PYTHON_FUNC_CONFIGS})
-    set(PYTHON_BINARY ${BUILD_DIR}/python/src/external_python/python.exe)
   else()
     set(PYTHON_CONFIGURE_ENV ${CONFIGURE_ENV})
-    set(PYTHON_BINARY ${BUILD_DIR}/python/src/external_python/python)
   endif()
+  set(PYTHON_BINARY ${LIBDIR}/python/bin/python${PYTHON_SHORT_VERSION})
   # Link against zlib statically (Unix). Avoid rpath issues (macOS).
   set(PYTHON_PATCH ${PATCH_CMD} --verbose -p1 -d ${BUILD_DIR}/python/src/external_python < ${PATCH_DIR}/python_unix.diff)
   set(PYTHON_CONFIGURE_EXTRA_ARGS "--with-openssl=${LIBDIR}/ssl")
@@ -107,4 +106,18 @@ if(UNIX)
     external_sqlite
     external_zlib
   )
+endif()
+
+if(WIN32)
+  if(BUILD_MODE STREQUAL Debug)
+    ExternalProject_Add_Step(external_python after_install
+      # Boost can't keep it self from linking release python
+      # in a debug configuration even if all options are set
+      # correctly to instruct it to use the debug version
+      # of python. So just copy the debug imports file over
+      # and call it a day...
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/python/libs/python${PYTHON_SHORT_VERSION_NO_DOTS}${PYTHON_POSTFIX}.lib ${LIBDIR}/python/libs/python${PYTHON_SHORT_VERSION_NO_DOTS}.lib
+      DEPENDEES install
+    )
+  endif()
 endif()

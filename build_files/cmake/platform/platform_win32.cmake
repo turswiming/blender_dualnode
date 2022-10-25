@@ -110,7 +110,41 @@ remove_cc_flag("/GR")
 
 # Make the Windows 8.1 API available for use.
 add_definitions(-D_WIN32_WINNT=0x603)
-include(build_files/cmake/platform/platform_win32_bundle_crt.cmake)
+
+# First generate the manifest for tests since it will not need the dependency on the CRT.
+configure_file(${CMAKE_SOURCE_DIR}/release/windows/manifest/blender.exe.manifest.in ${CMAKE_CURRENT_BINARY_DIR}/tests.exe.manifest @ONLY)
+
+if(WITH_WINDOWS_BUNDLE_CRT)
+  set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+  set(CMAKE_INSTALL_UCRT_LIBRARIES TRUE)
+  set(CMAKE_INSTALL_OPENMP_LIBRARIES ${WITH_OPENMP})
+  include(InstallRequiredSystemLibraries)
+
+  # ucrtbase(d).dll cannot be in the manifest, due to the way windows 10 handles
+  # redirects for this dll, for details see T88813.
+  foreach(lib ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
+    string(FIND ${lib} "ucrtbase" pos)
+    if(NOT pos EQUAL -1)
+      list(REMOVE_ITEM CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS ${lib})
+      install(FILES ${lib} DESTINATION . COMPONENT Libraries)
+    endif()
+  endforeach()
+  # Install the CRT to the blender.crt Sub folder.
+  install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION ./blender.crt COMPONENT Libraries)
+
+  windows_generate_manifest(
+    FILES "${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}"
+    OUTPUT "${CMAKE_BINARY_DIR}/blender.crt.manifest"
+    NAME "blender.crt"
+  )
+
+  install(FILES ${CMAKE_BINARY_DIR}/blender.crt.manifest DESTINATION ./blender.crt)
+  set(BUNDLECRT "<dependency><dependentAssembly><assemblyIdentity type=\"win32\" name=\"blender.crt\" version=\"1.0.0.0\" /></dependentAssembly></dependency>")
+  set(BUNDLECRT "${BUNDLECRT}<dependency><dependentAssembly><assemblyIdentity type=\"win32\" name=\"blender.shared\" version=\"1.0.0.0\" /></dependentAssembly></dependency>")
+endif()
+configure_file(${CMAKE_SOURCE_DIR}/release/windows/manifest/blender.exe.manifest.in ${CMAKE_CURRENT_BINARY_DIR}/blender.exe.manifest @ONLY)
+
+
 remove_cc_flag("/MDd" "/MD" "/Zi")
 
 if(MSVC_CLANG) # Clangs version of cl doesn't support all flags
@@ -406,9 +440,12 @@ if(WITH_IMAGE_OPENEXR)
     set(IMATH_INCLUDE_DIR ${IMATH}/include)
     set(IMATH_INCLUDE_DIRS ${IMATH_INCLUDE_DIR} ${IMATH}/include/Imath)
     set(IMATH_LIBPATH ${IMATH}/lib)
+    if(EXISTS ${IMATH_LIBPATH}/Imath_s.lib)
+      set(IMATH_POSTFIX _s)
+    endif()
     set(IMATH_LIBRARIES
-      optimized ${IMATH_LIBPATH}/Imath_s.lib
-      debug ${IMATH_LIBPATH}/Imath_s_d.lib
+      optimized ${IMATH_LIBPATH}/Imath${IMATH_POSTFIX}.lib
+      debug ${IMATH_LIBPATH}/Imath${IMATH_POSTFIX}_d.lib
     )
   endif()
   set(OPENEXR_ROOT_DIR ${LIBDIR}/openexr)
@@ -420,36 +457,24 @@ if(WITH_IMAGE_OPENEXR)
     set(OPENEXR_INCLUDE_DIR ${OPENEXR}/include)
     set(OPENEXR_INCLUDE_DIRS ${OPENEXR_INCLUDE_DIR} ${IMATH_INCLUDE_DIRS} ${OPENEXR}/include/OpenEXR)
     set(OPENEXR_LIBPATH ${OPENEXR}/lib)
-    # Check if the 3.x library name exists
-    # if not assume this is a 2.x library folder
+    # Check if the blender 3.3 lib static library eixts
+    # if not assume this is a 3.4+ dynamic version.
     if(EXISTS "${OPENEXR_LIBPATH}/OpenEXR_s.lib")
-      set(OPENEXR_LIBRARIES
-        optimized ${OPENEXR_LIBPATH}/Iex_s.lib
-        optimized ${OPENEXR_LIBPATH}/IlmThread_s.lib
-        optimized ${OPENEXR_LIBPATH}/OpenEXR_s.lib
-        optimized ${OPENEXR_LIBPATH}/OpenEXRCore_s.lib
-        optimized ${OPENEXR_LIBPATH}/OpenEXRUtil_s.lib
-        debug ${OPENEXR_LIBPATH}/Iex_s_d.lib
-        debug ${OPENEXR_LIBPATH}/IlmThread_s_d.lib
-        debug ${OPENEXR_LIBPATH}/OpenEXR_s_d.lib
-        debug ${OPENEXR_LIBPATH}/OpenEXRCore_s_d.lib
-        debug ${OPENEXR_LIBPATH}/OpenEXRUtil_s_d.lib
-        ${IMATH_LIBRARIES}
-      )
-    else()
-      set(OPENEXR_LIBRARIES
-        optimized ${OPENEXR_LIBPATH}/Iex_s.lib
-        optimized ${OPENEXR_LIBPATH}/Half_s.lib
-        optimized ${OPENEXR_LIBPATH}/IlmImf_s.lib
-        optimized ${OPENEXR_LIBPATH}/Imath_s.lib
-        optimized ${OPENEXR_LIBPATH}/IlmThread_s.lib
-        debug ${OPENEXR_LIBPATH}/Iex_s_d.lib
-        debug ${OPENEXR_LIBPATH}/Half_s_d.lib
-        debug ${OPENEXR_LIBPATH}/IlmImf_s_d.lib
-        debug ${OPENEXR_LIBPATH}/Imath_s_d.lib
-        debug ${OPENEXR_LIBPATH}/IlmThread_s_d.lib
-      )
+      set(OPENEXR_POSTFIX _s)
     endif()
+    set(OPENEXR_LIBRARIES
+      optimized ${OPENEXR_LIBPATH}/Iex${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/IlmThread${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/OpenEXR${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/OpenEXRCore${OPENEXR_POSTFIX}.lib
+      optimized ${OPENEXR_LIBPATH}/OpenEXRUtil${OPENEXR_POSTFIX}.lib
+      debug ${OPENEXR_LIBPATH}/Iex${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/IlmThread${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/OpenEXR${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/OpenEXRCore${OPENEXR_POSTFIX}_d.lib
+      debug ${OPENEXR_LIBPATH}/OpenEXRUtil${OPENEXR_POSTFIX}_d.lib
+      ${IMATH_LIBRARIES}
+    )
   endif()
 endif()
 
@@ -519,38 +544,47 @@ if(WITH_BOOST)
     if(NOT BOOST_VERSION)
       message(FATAL_ERROR "Unable to determine Boost version")
     endif()
-    set(BOOST_POSTFIX "vc142-mt-x64-${BOOST_VERSION}.lib")
-    set(BOOST_DEBUG_POSTFIX "vc142-mt-gd-x64-${BOOST_VERSION}.lib")
-    if(NOT EXISTS ${BOOST_LIBPATH}/libboost_date_time-${BOOST_POSTFIX})
-      # If the new library names do not exist fall back to the old ones
-      # to ease the transition period between the libs.
-      set(BOOST_POSTFIX "vc141-mt-x64-${BOOST_VERSION}.lib")
-      set(BOOST_DEBUG_POSTFIX "vc141-mt-gd-x64-${BOOST_VERSION}.lib")
+    set(BOOST_POSTFIX "vc142-mt-x64-${BOOST_VERSION}")
+    set(BOOST_DEBUG_POSTFIX "vc142-mt-gyd-x64-${BOOST_VERSION}")
+    set(BOOST_PREFIX "")
+    # This is file new in 3.4 if it does not exist, assume we are building against 3.3 libs
+    set(BOOST_34_TRIGGER_FILE ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_python310-${BOOST_DEBUG_POSTFIX}.lib)
+    if (NOT EXISTS ${BOOST_34_TRIGGER_FILE})
+      set(BOOST_DEBUG_POSTFIX "vc142-mt-gd-x64-${BOOST_VERSION}")
+      set(BOOST_PREFIX "lib")
     endif()
     set(BOOST_LIBRARIES
-      optimized ${BOOST_LIBPATH}/libboost_date_time-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_filesystem-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_regex-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_system-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_thread-${BOOST_POSTFIX}
-      optimized ${BOOST_LIBPATH}/libboost_chrono-${BOOST_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_date_time-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_filesystem-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_regex-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_system-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_thread-${BOOST_DEBUG_POSTFIX}
-      debug ${BOOST_LIBPATH}/libboost_chrono-${BOOST_DEBUG_POSTFIX}
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_date_time-${BOOST_POSTFIX}.lib
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_filesystem-${BOOST_POSTFIX}.lib
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_regex-${BOOST_POSTFIX}.lib
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_system-${BOOST_POSTFIX}.lib
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_thread-${BOOST_POSTFIX}.lib
+      optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_chrono-${BOOST_POSTFIX}.lib
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_date_time-${BOOST_DEBUG_POSTFIX}.lib
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_filesystem-${BOOST_DEBUG_POSTFIX}.lib
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_regex-${BOOST_DEBUG_POSTFIX}.lib
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_system-${BOOST_DEBUG_POSTFIX}.lib
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_thread-${BOOST_DEBUG_POSTFIX}.lib
+      debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_chrono-${BOOST_DEBUG_POSTFIX}.lib
     )
+    if (EXISTS ${BOOST_34_TRIGGER_FILE})
+      if(WITH_USD)
+        set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
+          debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_python310-${BOOST_DEBUG_POSTFIX}.lib
+          optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_python310-${BOOST_POSTFIX}.lib
+        )
+      endif()
+    endif()
     if(WITH_CYCLES AND WITH_CYCLES_OSL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
-        optimized ${BOOST_LIBPATH}/libboost_wave-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/libboost_wave-${BOOST_DEBUG_POSTFIX}
+        optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_wave-${BOOST_POSTFIX}.lib
+        debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_wave-${BOOST_DEBUG_POSTFIX}.lib
       )
     endif()
     if(WITH_INTERNATIONAL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
-        optimized ${BOOST_LIBPATH}/libboost_locale-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/libboost_locale-${BOOST_DEBUG_POSTFIX}
+        optimized ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_locale-${BOOST_POSTFIX}.lib
+        debug ${BOOST_LIBPATH}/${BOOST_PREFIX}boost_locale-${BOOST_DEBUG_POSTFIX}.lib
       )
     endif()
   else() # we found boost using find_package
@@ -574,7 +608,10 @@ if(WITH_OPENIMAGEIO)
   endif()
   set(OPENIMAGEIO_DEFINITIONS "-DUSE_TBB=0")
   set(OPENIMAGEIO_IDIFF "${OPENIMAGEIO}/bin/idiff.exe")
-  add_definitions(-DOIIO_STATIC_DEFINE)
+  # If the .dll does not exist, assume it is a static OIIO
+  if(NOT EXISTS ${OPENIMAGEIO}/bin/OpenImageIO.dll)
+    add_definitions(-DOIIO_STATIC_DEFINE)
+  endif()
   add_definitions(-DOIIO_NO_SSE=1)
 endif()
 
@@ -818,15 +855,15 @@ if(WITH_USD)
   windows_find_package(USD)
   if(NOT USD_FOUND)
     set(USD_INCLUDE_DIRS ${LIBDIR}/usd/include)
-    set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_m.lib)
-    set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_m_d.lib)
+    set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_ms.lib)
+    set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_ms_d.lib)
     set(USD_LIBRARY_DIR ${LIBDIR}/usd/lib)
     # Older USD had different filenames, if the new ones are
     # not found see if the older ones exist, to ease the
     # transition period while landing libs.
     if(NOT EXISTS "${USD_RELEASE_LIB}")
-      set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/libusd_m.lib)
-      set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/libusd_m_d.lib)
+      set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_m.lib)
+      set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_m_d.lib)
     endif()
     set(USD_LIBRARIES
       debug ${USD_DEBUG_LIB}
@@ -952,3 +989,10 @@ if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
   unset(_sycl_runtime_libraries)
 endif()
+
+
+# Environment variables to run precompiled executables that needed libraries.
+list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ";" _library_paths)
+set(PLATFORM_ENV_BUILD "PATH=${LIBDIR}/OpenImageIO/bin\;${LIBDIR}/boost/lib\;${LIBDIR}/openexr/bin\;${LIBDIR}/imath/bin\;${PATH}")
+set(PLATFORM_ENV_INSTALL "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/;$ENV{PATH}")
+unset(_library_paths)

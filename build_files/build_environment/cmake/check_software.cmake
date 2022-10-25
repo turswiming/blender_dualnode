@@ -19,6 +19,10 @@ if(UNIX)
     yasm
   )
 
+  if(NOT APPLE)
+    list(APPEND _required_software patchelf)
+  endif()
+
   foreach(_software ${_required_software})
     find_program(_software_find NAMES ${_software})
     if(NOT _software_find)
@@ -46,7 +50,7 @@ if(UNIX)
       "  ${_software_missing}\n"
       "\n"
       "On Debian and Ubuntu:\n"
-      "  apt install autoconf automake bison libtool yasm tcl ninja-build meson python3-mako\n"
+      "  apt install autoconf automake bison libtool yasm tcl ninja-build meson python3-mako patchelf\n"
       "\n"
       "On macOS (with homebrew):\n"
       "  brew install autoconf automake bison flex libtool meson ninja pkg-config yasm\n"
