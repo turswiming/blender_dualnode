@@ -45,7 +45,7 @@ typedef struct GpencilBatchCache {
   GPUVertBuf *vbo_col;
   /** Indices in material order, then stroke order with fill first.
    * Strokes can be individually rendered using `gps->runtime.stroke_start` and
-   * `gps->runtime.stroke_start`. */
+   * `gps->runtime.fill_start`. */
   GPUIndexBuf *ibo;
   /** Batches */
   GPUBatch *geom_batch;
@@ -619,19 +619,19 @@ static void gpencil_sbuffer_stroke_ensure(bGPdata *gpd, bool do_fill)
     /* Calc uv data along the stroke. */
     BKE_gpencil_stroke_uv_update(gps);
 
-    int vert_len = gps->tot_triangles + (gps->totpoints + gpencil_stroke_is_cyclic(gps)) * 2;
+    int tri_len = gps->tot_triangles + (gps->totpoints + gpencil_stroke_is_cyclic(gps)) * 2;
     /* Create IBO. */
     GPUIndexBufBuilder ibo_builder;
-    GPU_indexbuf_init(&ibo_builder, GPU_PRIM_TRIS, vert_len, 0xFFFFFFFFu);
+    GPU_indexbuf_init(&ibo_builder, GPU_PRIM_TRIS, tri_len, 0xFFFFFFFFu);
     /* Create VBO. */
     GPUUsageType vbo_flag = GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY;
     GPUVertFormat *format = gpencil_stroke_format();
     GPUVertFormat *format_color = gpencil_color_format();
     GPUVertBuf *vbo = GPU_vertbuf_create_with_format_ex(format, vbo_flag);
     GPUVertBuf *vbo_col = GPU_vertbuf_create_with_format_ex(format_color, vbo_flag);
-    /* Add extra space at the end the buffer because of quad load and cyclic. */
-    GPU_vertbuf_data_alloc(vbo, vert_len + 2);
-    GPU_vertbuf_data_alloc(vbo_col, vert_len + 2);
+    /* Add extra space at the start and end the buffer because of quad load and cyclic. */
+    GPU_vertbuf_data_alloc(vbo, 1 + vert_len + 1 + 2);
+    GPU_vertbuf_data_alloc(vbo_col, 1 + vert_len + 1 + 2);
     gpStrokeVert *verts = (gpStrokeVert *)GPU_vertbuf_get_data(vbo);
     gpColorVert *cols = (gpColorVert *)GPU_vertbuf_get_data(vbo_col);
 
@@ -652,6 +652,9 @@ static void gpencil_sbuffer_stroke_ensure(bGPdata *gpd, bool do_fill)
       /* HACK since we didn't use the builder API to avoid another malloc and copy,
        * we need to set the number of indices manually. */
       ibo_builder.index_len = gps->tot_triangles * 3;
+      ibo_builder.index_min = 0;
+      /* For this case, do not allow index compaction to avoid yet another preprocessing step. */
+      ibo_builder.index_max = 0xFFFFFFFFu - 1u;
 
       gps->runtime.stroke_start = gps->tot_triangles;
 
@@ -758,7 +761,7 @@ static void gpencil_edit_stroke_iter_cb(bGPDlayer *gpl,
 {
   gpEditIterData *iter = (gpEditIterData *)thunk;
   const int v_len = gps->totpoints;
-  const int v = gps->runtime.stroke_start + 1;
+  const int v = gps->runtime.vertex_start + 1;
   MDeformVert *dvert = ((iter->vgindex > -1) && gps->dvert) ? gps->dvert : NULL;
   gpEditVert *vert_ptr = iter->verts + v;
 
@@ -773,9 +776,12 @@ static void gpencil_edit_stroke_iter_cb(bGPDlayer *gpl,
     vert_ptr->weight = gpencil_point_edit_weight(dvert, i, iter->vgindex);
     vert_ptr++;
   }
-  /* Draw line to first point to complete the loop for cyclic strokes. */
-  vert_ptr->vflag = sflag | gpencil_point_edit_flag(layer_lock, &gps->points[0], 0, v_len);
-  vert_ptr->weight = gpencil_point_edit_weight(dvert, 0, iter->vgindex);
+
+  if (gpencil_stroke_is_cyclic(gps)) {
+    /* Draw line to first point to complete the loop for cyclic strokes. */
+    vert_ptr->vflag = sflag | gpencil_point_edit_flag(layer_lock, &gps->points[0], 0, v_len);
+    vert_ptr->weight = gpencil_point_edit_weight(dvert, 0, iter->vgindex);
+  }
 }
 
 static void gpencil_edit_curve_stroke_count_cb(bGPDlayer *gpl,
