@@ -19,7 +19,6 @@ class TaaSamples {
 
     for (int i : samples.index_range()) {
       float2 sample = samples[i];
-      printf("%f : %f", sample.x, sample.y);
       const float squared_dist = len_squared_v2(sample);
       if (squared_dist < closest_squared_distance) {
         closest_squared_distance = squared_dist;
@@ -77,8 +76,37 @@ class TaaSamples {
 
 static TaaSamples TAA_SAMPLES = TaaSamples();
 
+static float filter_blackman_harris(float x, const float width)
+{
+  if (x > width * 0.5f) {
+    return 0.0f;
+  }
+  x = 2.0f * M_PI * clamp_f((x / width + 0.5f), 0.0f, 1.0f);
+  return 0.35875f - 0.48829f * cosf(x) + 0.14128f * cosf(2.0f * x) - 0.01168f * cosf(3.0f * x);
+}
+
+/* Compute weights for the 3x3 neighborhood using a 1.5px filter. */
+static void setup_taa_weights(const float2 offset, float r_weights[9], float &r_weight_sum)
+{
+  /* NOTE: If filter width is bigger than 2.0f, then we need to sample more neighborhood. */
+  const float filter_width = 2.0f;
+  r_weight_sum = 0.0f;
+  int i = 0;
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++, i++) {
+      float2 sample_co = float2(x, y) - offset;
+      float r = len_v2(sample_co);
+      /* fclem: is radial distance ok here? */
+      float weight = filter_blackman_harris(r, filter_width);
+      r_weight_sum += weight;
+      r_weights[i] = weight;
+    }
+  }
+}
+
 AntiAliasingPass::AntiAliasingPass()
 {
+  taa_accumulation_sh = GPU_shader_create_from_info_name("workbench_taa");
   smaa_edge_detect_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_0");
   smaa_aa_weight_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_1");
   smaa_resolve_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_2");
@@ -94,90 +122,254 @@ AntiAliasingPass::AntiAliasingPass()
 
 AntiAliasingPass::~AntiAliasingPass()
 {
-  if (smaa_edge_detect_sh) {
-    GPU_shader_free(smaa_edge_detect_sh);
-  }
-  if (smaa_aa_weight_sh) {
-    GPU_shader_free(smaa_aa_weight_sh);
-  }
-  if (smaa_resolve_sh) {
-    GPU_shader_free(smaa_resolve_sh);
-  }
+  DRW_SHADER_FREE_SAFE(taa_accumulation_sh);
+  DRW_SHADER_FREE_SAFE(smaa_edge_detect_sh);
+  DRW_SHADER_FREE_SAFE(smaa_aa_weight_sh);
+  DRW_SHADER_FREE_SAFE(smaa_resolve_sh);
 }
 
-void AntiAliasingPass::init(bool reset_taa)
+void AntiAliasingPass::reset_taa()
+{
+  reset_next_sample = true;
+}
+
+void AntiAliasingPass::init()
 {
   is_playback = DRW_state_is_playback();
   is_navigating = DRW_state_is_navigating();
 
-  if (reset_taa || is_playback || is_navigating) {
-    taa_sample = 0;
+  {
+    /*TODO(Miguel Pozo): Move to Draw Settings */
+    const DRWContextState *draw_ctx = DRW_context_state_get();
+    const View3D *v3d = draw_ctx->v3d;
+    const SceneDisplay &display = draw_ctx->scene->display;
+
+    sample_len = U.viewport_aa;
+    if (is_navigating || is_playback) {
+      /* Only draw using SMAA or no AA when navigating. */
+      sample_len = min_ii(sample_len, 1);
+    }
+    else if (v3d && ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL)) {
+      sample_len = display.viewport_aa;
+    }
+    else if (DRW_state_is_image_render()) {
+      sample_len = display.render_aa;
+    }
+  }
+
+  /* Reset complete drawing when navigating or during viewport playback or when
+   * leaving one of those states. In case of multires modifier the navigation
+   * mesh differs from the viewport mesh, so we need to be sure to restart. */
+  if (reset_next_sample || is_playback || is_navigating) {
+    sample = 0;
+  }
+  reset_next_sample = is_playback || is_navigating;
+
+  /* Reset the TAA when we have already draw a sample, but the sample count differs from previous
+   * time. This removes render artifacts when the viewport anti-aliasing in the user preferences
+   * is set to a lower value. */
+  if (sample_len != sample_len_previous) {
+    sample = 0;
+    sample_len_previous = sample_len;
+  }
+
+  /*TODO(Miguel Pozo): This can probably removed.*/
+  /*
+  if (sample_len > 0 && valid_history == false) {
+    sample = 0;
+  }
+  */
+
+  /*TODO(Miguel Pozo): Move all the reset taa logic to the same place (DrawSettings?)*/
+  {
+    float4x4 matrix;
+    /*TODO(Miguel Pozo): New API ?*/
+    DRW_view_persmat_get(nullptr, matrix.ptr(), false);
+    if (matrix != last_matrix) {
+      last_matrix = matrix;
+      sample = 0;
+    }
   }
 }
 
-void AntiAliasingPass::sync(SceneResources &resources)
+void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
 {
-  {
-    smaa_edge_detect_ps_.init();
-    smaa_edge_detect_ps_.state_set(DRW_STATE_WRITE_COLOR);
-    smaa_edge_detect_ps_.shader_set(smaa_edge_detect_sh);
-    smaa_edge_detect_ps_.bind_texture("colorTex", &resources.color_tx);
-    smaa_edge_detect_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
-    smaa_edge_detect_ps_.clear_color(float4(0.0f));
-    smaa_edge_detect_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  if (sample_len > 0) {
+    taa_accumulation_tx.ensure_2d(GPU_RGBA16F, resolution);
+    sample0_depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
   }
-  {
-    smaa_aa_weight_ps_.init();
-    smaa_aa_weight_ps_.state_set(DRW_STATE_WRITE_COLOR);
-    smaa_aa_weight_ps_.shader_set(smaa_aa_weight_sh);
-    smaa_aa_weight_ps_.bind_texture("edgesTex", &smaa_edge_tx);
-    smaa_aa_weight_ps_.bind_texture("areaTex", smaa_area_tx);
-    smaa_aa_weight_ps_.bind_texture("searchTex", smaa_search_tx);
-    smaa_aa_weight_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
-    smaa_aa_weight_ps_.clear_color(float4(0.0f));
-    smaa_aa_weight_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  else {
+    taa_accumulation_tx.free();
+    sample0_depth_tx.free();
   }
-  {
-    smaa_resolve_ps_.init();
-    smaa_resolve_ps_.state_set(DRW_STATE_WRITE_COLOR);
-    smaa_resolve_ps_.shader_set(smaa_resolve_sh);
-    smaa_resolve_ps_.bind_texture("blendTex", &smaa_weight_tx);
-    smaa_resolve_ps_.bind_texture("colorTex", &resources.color_tx);
-    smaa_resolve_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
-    smaa_resolve_ps_.push_constant("mixFactor", &smaa_mix_factor, 1);
-    smaa_resolve_ps_.push_constant("taaAccumulatedWeight", &taa_weight_accum, 1);
-    smaa_resolve_ps_.clear_color(float4(0.0f));
-    smaa_resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
+  taa_accumulation_ps_.init();
+  taa_accumulation_ps_.state_set(sample == 0 ? DRW_STATE_WRITE_COLOR :
+                                               DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
+  taa_accumulation_ps_.shader_set(taa_accumulation_sh);
+  taa_accumulation_ps_.bind_texture("colorBuffer", &resources.color_tx);
+  taa_accumulation_ps_.push_constant("samplesWeights", weights, 9);
+  taa_accumulation_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
+  smaa_edge_detect_ps_.init();
+  smaa_edge_detect_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  smaa_edge_detect_ps_.shader_set(smaa_edge_detect_sh);
+  smaa_edge_detect_ps_.bind_texture("colorTex", &taa_accumulation_tx);
+  smaa_edge_detect_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+  smaa_edge_detect_ps_.clear_color(float4(0.0f));
+  smaa_edge_detect_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
+  smaa_aa_weight_ps_.init();
+  smaa_aa_weight_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  smaa_aa_weight_ps_.shader_set(smaa_aa_weight_sh);
+  smaa_aa_weight_ps_.bind_texture("edgesTex", &smaa_edge_tx);
+  smaa_aa_weight_ps_.bind_texture("areaTex", smaa_area_tx);
+  smaa_aa_weight_ps_.bind_texture("searchTex", smaa_search_tx);
+  smaa_aa_weight_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+  smaa_aa_weight_ps_.clear_color(float4(0.0f));
+  smaa_aa_weight_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
+  smaa_resolve_ps_.init();
+  smaa_resolve_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  smaa_resolve_ps_.shader_set(smaa_resolve_sh);
+  smaa_resolve_ps_.bind_texture("blendTex", &smaa_weight_tx);
+  smaa_resolve_ps_.bind_texture("colorTex", &taa_accumulation_tx);
+  smaa_resolve_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+  smaa_resolve_ps_.push_constant("mixFactor", &smaa_mix_factor, 1);
+  smaa_resolve_ps_.push_constant("taaAccumulatedWeight", &weight_accum, 1);
+  smaa_resolve_ps_.clear_color(float4(0.0f));
+  smaa_resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+}
+
+bool AntiAliasingPass::setup_view(View &view, int2 resolution)
+{
+  if (sample_len == 0) {
+    /* AA disabled. */
+    return true;
   }
+
+  if (sample >= sample_len) {
+    /* TAA accumulation has finished. Just copy the result back */
+    return false;
+  }
+
+  float2 sample_offset;
+  switch (sample_len) {
+    default:
+    case 5:
+      sample_offset = TAA_SAMPLES.x5[sample];
+      break;
+    case 8:
+      sample_offset = TAA_SAMPLES.x8[sample];
+      break;
+    case 11:
+      sample_offset = TAA_SAMPLES.x11[sample];
+      break;
+    case 16:
+      sample_offset = TAA_SAMPLES.x16[sample];
+      break;
+    case 32:
+      sample_offset = TAA_SAMPLES.x32[sample];
+      break;
+  }
+
+  setup_taa_weights(sample_offset, weights, weights_sum);
+
+  /* TODO(Miguel Pozo): New API equivalent? */
+  const DRWView *default_view = DRW_view_default_get();
+  float4x4 winmat, viewmat, persmat;
+  /* construct new matrices from transform delta */
+  DRW_view_winmat_get(default_view, winmat.ptr(), false);
+  DRW_view_viewmat_get(default_view, viewmat.ptr(), false);
+  DRW_view_persmat_get(default_view, persmat.ptr(), false);
+
+  window_translate_m4(
+      winmat.ptr(), persmat.ptr(), sample_offset.x / resolution.x, sample_offset.y / resolution.y);
+
+  view.sync(viewmat, winmat);
+
+  return true;
 }
 
 void AntiAliasingPass::draw(Manager &manager,
                             View &view,
+                            SceneResources &resources,
+                            int2 resolution,
                             GPUTexture *depth_tx,
                             GPUTexture *color_tx)
 {
-  int2 size = {GPU_texture_width(depth_tx), GPU_texture_height(depth_tx)};
+  if (sample_len == 0) {
+    /* AA disabled. */
+    // valid_history = false;
+    /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place */
+    GPU_texture_copy(color_tx, resources.color_tx);
+    GPU_texture_copy(depth_tx, resources.depth_tx);
+    return;
+  }
+  // valid_history = true;
 
-  taa_weight_accum = 1.0f; /* TODO */
+  /**
+   * We always do SMAA on top of TAA accumulation, unless the number of samples of TAA is already
+   * high. This ensure a smoother transition.
+   * If TAA accumulation is finished, we only blit the result.
+   */
+  const bool last_sample = sample + 1 == sample_len;
+  const bool taa_finished = sample >= sample_len; /* TODO(Miguel Pozo): Why is this ever true ? */
 
-  smaa_viewport_metrics = float4(1.0f / size.x, 1.0f / size.y, size.x, size.y);
-  smaa_mix_factor = 1.0f; /* TODO */
+  if (!taa_finished) {
+    if (sample == 0) {
+      weight_accum = 0;
+    }
+    /* Accumulate result to the TAA buffer. */
+    taa_accumulation_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(taa_accumulation_tx));
+    taa_accumulation_fb.bind();
+    manager.submit(taa_accumulation_ps_, view);
+    weight_accum += weights_sum;
+  }
 
-  smaa_edge_tx.acquire(size, GPU_RG8);
-  smaa_edge_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_edge_tx));
-  smaa_edge_fb.bind();
-  manager.submit(smaa_edge_detect_ps_, view);
+  if (sample == 0) {
+    if (sample0_depth_tx.is_valid()) {
+      GPU_texture_copy(sample0_depth_tx, resources.depth_tx);
+    }
+    /* TODO(Miguel Pozo): Should render to the input depth_tx in the first place */
+    /* Copy back the saved depth buffer for correct overlays. */
+    GPU_texture_copy(depth_tx, resources.depth_tx);
+  }
+  else {
+    /* Copy back the saved depth buffer for correct overlays. */
+    GPU_texture_copy(depth_tx, sample0_depth_tx);
+  }
 
-  smaa_weight_tx.acquire(size, GPU_RGBA8);
-  smaa_weight_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_weight_tx));
-  smaa_weight_fb.bind();
-  manager.submit(smaa_aa_weight_ps_, view);
-  smaa_edge_tx.release();
+  if (!DRW_state_is_image_render() || last_sample) {
+    smaa_weight_tx.acquire(resolution, GPU_RGBA8);
+    smaa_mix_factor = 1.0f - clamp_f(sample / 4.0f, 0.0f, 1.0f);
+    smaa_viewport_metrics = float4(float2(1.0f / float2(resolution)), resolution);
 
-  smaa_resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_tx));
-  smaa_resolve_fb.bind();
-  manager.submit(smaa_resolve_ps_, view);
-  smaa_weight_tx.release();
+    /* After a certain point SMAA is no longer necessary. */
+    if (smaa_mix_factor > 0.0f) {
+      smaa_edge_tx.acquire(resolution, GPU_RG8);
+      smaa_edge_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_edge_tx));
+      smaa_edge_fb.bind();
+      manager.submit(smaa_edge_detect_ps_, view);
+
+      smaa_weight_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_weight_tx));
+      smaa_weight_fb.bind();
+      manager.submit(smaa_aa_weight_ps_, view);
+      smaa_edge_tx.release();
+    }
+    smaa_resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_tx));
+    smaa_resolve_fb.bind();
+    manager.submit(smaa_resolve_ps_, view);
+    smaa_weight_tx.release();
+  }
+
+  if (!taa_finished) {
+    sample++;
+  }
+
+  if (!DRW_state_is_image_render() && sample < sample_len) {
+    DRW_viewport_request_redraw();
+  }
 }
 
 }  // namespace blender::workbench

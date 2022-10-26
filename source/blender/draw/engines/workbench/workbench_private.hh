@@ -226,40 +226,69 @@ class DofPass {
 
 class AntiAliasingPass {
  private:
-  bool is_playback;
-  bool is_navigating;
-  int taa_sample = 0;
+  /** Total number of samples to after which TAA stops accumulating samples. */
+  int sample_len;
+  /** Total number of samples of the previous TAA. When changed TAA will be reset. */
+  int sample_len_previous;
+  /** Current TAA sample index in [0..sample_len] range. */
+  int sample;
+  /** Weight accumulated. */
+  float weight_accum;
+  /** Samples weight for this iteration. */
+  float weights[9];
+  /** Sum of weights. */
+  float weights_sum;
+  /** If the view has been updated and TAA needs to be reset. */
+  bool reset_next_sample;
+  /** True if the history buffer contains relevant data and false if it could contain garbage. */
+  // bool valid_history;
+  /** Last projection matrix to see if view is still valid. */
+  float4x4 last_matrix;
 
- public:
+  bool is_playback = true;
+  bool is_navigating = true;
+
+  Texture sample0_depth_tx = {"sample0_depth_tx"};
+
+  Texture taa_accumulation_tx = {"taa_accumulation_tx"};
   Texture smaa_search_tx = {"smaa_search_tx"};
   Texture smaa_area_tx = {"smaa_area_tx"};
   TextureFromPool smaa_edge_tx = {"smaa_edge_tx"};
   TextureFromPool smaa_weight_tx = {"smaa_weight_tx"};
 
+  Framebuffer taa_accumulation_fb = {"taa_accumulation_fb"};
   Framebuffer smaa_edge_fb = {"smaa_edge_fb"};
   Framebuffer smaa_weight_fb = {"smaa_weight_fb"};
   Framebuffer smaa_resolve_fb = {"smaa_resolve_fb"};
 
   float4 smaa_viewport_metrics = {0.0f, 0.0f, 0.0f, 0.0f};
   float smaa_mix_factor = 0.0f;
-  float taa_weight_accum = 1.0f;
 
+  GPUShader *taa_accumulation_sh = nullptr;
   GPUShader *smaa_edge_detect_sh = nullptr;
   GPUShader *smaa_aa_weight_sh = nullptr;
   GPUShader *smaa_resolve_sh = nullptr;
 
+  PassSimple taa_accumulation_ps_ = {"TAA.Accumulation"};
   PassSimple smaa_edge_detect_ps_ = {"SMAA.EdgeDetect"};
   PassSimple smaa_aa_weight_ps_ = {"SMAA.BlendWeights"};
   PassSimple smaa_resolve_ps_ = {"SMAA.Resolve"};
 
+ public:
   AntiAliasingPass();
 
   ~AntiAliasingPass();
 
-  void init(bool reset_taa);
-  void sync(SceneResources &resources);
-
-  void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx);
+  void reset_taa();
+  void init();
+  void sync(SceneResources &resources, int2 resolution);
+  bool setup_view(View &view, int2 resolution);
+  void draw(Manager &manager,
+            View &view,
+            SceneResources &resources,
+            int2 resolution,
+            GPUTexture *depth_tx,
+            GPUTexture *color_tx);
 };
 
 }  // namespace blender::workbench

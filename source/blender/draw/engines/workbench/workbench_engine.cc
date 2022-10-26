@@ -135,7 +135,10 @@ class Instance {
 
     resources.init(shading, scene->display, resolution, background_color);
     dof_ps.init(shading, resolution);
-    anti_aliasing_ps.init(reset_taa);
+    if (reset_taa) {
+      anti_aliasing_ps.reset_taa();
+    }
+    anti_aliasing_ps.init();
     /* TODO(Miguel Pozo) taa_sample_len */
 
     draw_outline = shading.flag & V3D_SHADING_OBJECT_OUTLINE;
@@ -151,7 +154,7 @@ class Instance {
     transparent_depth_ps.sync(cull_state, clip_state, resources);
 
     dof_ps.sync(resources);
-    anti_aliasing_ps.sync(resources);
+    anti_aliasing_ps.sync(resources, resolution);
   }
 
   void end_sync()
@@ -502,6 +505,7 @@ class Instance {
     if (!clip_planes.is_empty()) {
       view.set_clip_planes(clip_planes);
     }
+    anti_aliasing_ps.setup_view(view, resolution);
 
     resources.color_tx.acquire(resolution, GPU_RGBA16F);
     resources.color_tx.clear(resources.world_buf.background_color);
@@ -550,7 +554,7 @@ class Instance {
     // volume_ps.draw_prepass(manager, view, resources.depth_tx);
 
     dof_ps.draw(manager, view, resources, resolution);
-    anti_aliasing_ps.draw(manager, view, depth_tx, color_tx);
+    anti_aliasing_ps.draw(manager, view, resources, resolution, depth_tx, color_tx);
 
     resources.color_tx.release();
     resources.object_id_tx.release();
@@ -705,7 +709,7 @@ static void workbench_instance_free(void *instance)
 
 static void workbench_view_update(void *vedata)
 {
-  UNUSED_VARS(vedata);
+  reinterpret_cast<WORKBENCH_Data *>(vedata)->instance->anti_aliasing_ps.reset_taa();
 }
 
 static void workbench_id_update(void *vedata, struct ID *id)
