@@ -2,9 +2,80 @@
 
 #include "workbench_private.hh"
 
+#include "BLI_jitter_2d.h"
 #include "smaa_textures.h"
 
 namespace blender::workbench {
+
+class TaaSamples {
+  void init_samples(blender::Array<float2> &samples, const int size)
+  {
+    samples = blender::Array<float2>(size);
+    BLI_jitter_init((float(*)[2])samples.begin(), size);
+
+    /* find closest element to center */
+    int closest_index = 0;
+    float closest_squared_distance = 1.0f;
+
+    for (int i : samples.index_range()) {
+      float2 sample = samples[i];
+      printf("%f : %f", sample.x, sample.y);
+      const float squared_dist = len_squared_v2(sample);
+      if (squared_dist < closest_squared_distance) {
+        closest_squared_distance = squared_dist;
+        closest_index = i;
+      }
+    }
+
+    float2 closest_sample = samples[closest_index];
+
+    for (float2 &sample : samples) {
+      /* move jitter samples so that closest sample is in center */
+      sample -= closest_sample;
+      /* Avoid samples outside range (wrap around). */
+      sample = {fmodf(sample.x + 0.5f, 1.0f), fmodf(sample.y + 0.5f, 1.0f)};
+      /* Recenter the distribution[-1..1]. */
+      sample = (sample * 2.0f) - 1.0f;
+    }
+
+    /* swap center sample to the start of the array */
+    if (closest_index != 0) {
+      swap_v2_v2(samples[0], samples[closest_index]);
+    }
+
+    /* Sort list based on farthest distance with previous. */
+    for (int i = 0; i < size - 2; i++) {
+      float squared_dist = 0.0;
+      int index = i;
+      for (int j = i + 1; j < size; j++) {
+        const float _squared_dist = len_squared_v2(samples[i] - samples[j]);
+        if (_squared_dist > squared_dist) {
+          squared_dist = _squared_dist;
+          index = j;
+        }
+      }
+      swap_v2_v2(samples[i + 1], samples[index]);
+    }
+  }
+
+ public:
+  blender::Array<float2> x5;
+  blender::Array<float2> x8;
+  blender::Array<float2> x11;
+  blender::Array<float2> x16;
+  blender::Array<float2> x32;
+
+  TaaSamples()
+  {
+    init_samples(x5, 5);
+    init_samples(x8, 8);
+    init_samples(x11, 11);
+    init_samples(x16, 16);
+    init_samples(x32, 32);
+  }
+};
+
+static TaaSamples TAA_SAMPLES = TaaSamples();
 
 AntiAliasingPass::AntiAliasingPass()
 {
