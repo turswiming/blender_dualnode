@@ -96,6 +96,7 @@ static void gwl_registry_entry_remove_all(GWL_Display *display);
 
 struct GWL_RegistryHandler;
 static int gwl_registry_handler_interface_slot_max();
+static int gwl_registry_handler_interface_slot_from_string(const char *interface);
 static const struct GWL_RegistryHandler *gwl_registry_handler_from_interface_slot(
     int interface_slot);
 
@@ -140,6 +141,13 @@ static bool use_gnome_confine_hack = false;
 #define USE_GNOME_KEYBOARD_SUPPRESS_WARNING
 
 /**
+ * KDE (plasma 5.26.1) has a bug where the cursor surface needs to be committed
+ * (via `wl_surface_commit`) when it was hidden and is being set to visible again, see: T102048.
+ * See: https://bugs.kde.org/show_bug.cgi?id=461001
+ */
+#define USE_KDE_TABLET_HIDDEN_CURSOR_HACK
+
+/**
  * When GNOME is found, require `libdecor`.
  * This is a hack because it seems there is no way to check if the compositor supports
  * server side decorations when initializing WAYLAND.
@@ -174,9 +182,14 @@ static bool use_gnome_confine_hack = false;
 
 /**
  * Tablet events.
+ *
+ * \note Gnome/GTK swap middle/right, where the same application in X11 will swap the middle/right
+ * mouse button when running under WAYLAND. KDE doesn't do this, and according to artists
+ * at the Blender studio, having the button closest to the nib be MMB is preferable,
+ * so use this as a default. If needs be - swapping these could be a preference.
  */
-#define BTN_STYLUS 0x14b  /* Use as right-mouse. */
-#define BTN_STYLUS2 0x14c /* Use as middle-mouse. */
+#define BTN_STYLUS 0x14b  /* Use as middle-mouse. */
+#define BTN_STYLUS2 0x14c /* Use as right-mouse. */
 /* NOTE(@campbellbarton): Map to an additional button (not sure which hardware uses this). */
 #define BTN_STYLUS3 0x149
 
@@ -754,8 +767,16 @@ struct GWL_RegistryEntry;
 struct GWL_Display {
   GHOST_SystemWayland *system = nullptr;
 
+  /**
+   * True when initializing registration, while updating all other entries wont cause problems,
+   * it will preform many redundant update calls.
+   */
+  bool registry_skip_update_all = false;
+
+  /** Registry entries, kept to allow updating & removal at run-time. */
   struct GWL_RegistryEntry *registry_entry = nullptr;
 
+  struct wl_registry *wl_registry = nullptr;
   struct wl_display *wl_display = nullptr;
   struct wl_compositor *wl_compositor = nullptr;
 
@@ -785,6 +806,9 @@ struct GWL_Display {
 
 static void gwl_display_destroy(GWL_Display *display)
 {
+  wl_registry_destroy(display->wl_registry);
+  display->wl_registry = nullptr;
+
   /* Unregister items in reverse order. */
   gwl_registry_entry_remove_all(display);
 
@@ -828,21 +852,41 @@ static void gwl_display_destroy(GWL_Display *display)
  * \{ */
 
 struct GWL_RegisteryAdd_Params {
-  struct GWL_Display *display = nullptr;
-  struct wl_registry *wl_registry = nullptr;
   uint32_t name = 0;
-  uint32_t version = 0;
   /** Index within `gwl_registry_handlers`. */
   int interface_slot = 0;
+  uint32_t version = 0;
 };
 
 /**
  * Add callback for object registry.
+ * \note Any operations that depend on other interfaces being registered must be performed in the
+ * #GWL_RegistryHandler_UpdateFn callback as the order interfaces are added is out of our control.
+ *
  * \param display: The display which holes a reference to the global object.
  * \param params: Various arguments needed for registration.
  */
 using GWL_RegistryHandler_AddFn = void (*)(GWL_Display *display,
                                            const GWL_RegisteryAdd_Params *params);
+
+struct GWL_RegisteryUpdate_Params {
+  uint32_t name = 0;
+  /** Index within `gwl_registry_handlers`. */
+  int interface_slot = 0;
+  uint32_t version = 0;
+
+  /** Set to #GWL_RegistryEntry.user_data. */
+  void *user_data = nullptr;
+};
+
+/**
+ * Optional update callback to refresh internal data when another interface has been added/removed.
+ *
+ * \param display: The display which holes a reference to the global object.
+ * \param params: Various arguments needed for updating.
+ */
+using GWL_RegistryHandler_UpdateFn = void (*)(GWL_Display *display,
+                                              const GWL_RegisteryUpdate_Params *params);
 
 /**
  * Remove callback for object registry.
@@ -860,7 +904,11 @@ struct GWL_RegistryHandler {
   /** Pointer to the name (not the name it's self), needed as the values aren't set on startup. */
   const char *const *interface_p = nullptr;
 
+  /** Add the interface. */
   GWL_RegistryHandler_AddFn add_fn = nullptr;
+  /** Optional update the interface (when other interfaces have been added/removed). */
+  GWL_RegistryHandler_UpdateFn update_fn = nullptr;
+  /** Remove the interface. */
   GWL_RegistryEntry_RemoveFn remove_fn = nullptr;
 };
 
@@ -887,6 +935,10 @@ struct GWL_RegistryEntry {
    */
   uint32_t name = WL_NAME_UNSET;
   /**
+   * Version passed by the add callback.
+   */
+  uint32_t version;
+  /**
    * The index in `gwl_registry_handlers`,
    * useful for accessing the interface name (for logging for example).
    */
@@ -894,14 +946,14 @@ struct GWL_RegistryEntry {
 };
 
 static void gwl_registry_entry_add(GWL_Display *display,
-                                   const int interface_slot,
-                                   const uint32_t name,
+                                   const GWL_RegisteryAdd_Params *params,
                                    void *user_data)
 {
   GWL_RegistryEntry *reg = new GWL_RegistryEntry;
 
-  reg->interface_slot = interface_slot;
-  reg->name = name;
+  reg->interface_slot = params->interface_slot;
+  reg->name = params->name;
+  reg->version = params->version;
   reg->user_data = user_data;
 
   reg->next = display->registry_entry;
@@ -991,6 +1043,49 @@ static void gwl_registry_entry_remove_all(GWL_Display *display)
 
   GHOST_ASSERT(display->registry_entry == nullptr, "Failed to remove all entries!");
   display->registry_entry = nullptr;
+}
+
+/**
+ * Run GWL_RegistryHandler.update_fn an all registered interface instances.
+ * This is needed to refresh the state of interfaces that may reference other interfaces.
+ * Called when interfaces are added/removed.
+ *
+ * \param interface_slot_exclude: Skip updating slots of this type.
+ * Note that while harmless dependencies only exist between different types,
+ * so there is no reason to update all other outputs that an output was removed (for e.g.).
+ * Pass as -1 to update all slots.
+ *
+ * NOTE(@campbellbarton): Updating all other items on a single change is typically worth avoiding.
+ * In practice this isn't a problem as so there are so few elements in `display->registry_entry`,
+ * so few use update functions and adding/removal at runtime is rarely called (plugging/unplugging)
+ * hardware for e.g. So while it's possible to store dependency links to avoid unnecessary
+ * looping over data - so it ends up being a non issue.
+ */
+static void gwl_registry_entry_update_all(GWL_Display *display, const int interface_slot_exclude)
+{
+  GHOST_ASSERT(interface_slot_exclude == -1 || (uint(interface_slot_exclude) <
+                                                uint(gwl_registry_handler_interface_slot_max())),
+               "Invalid exclude slot");
+
+  for (GWL_RegistryEntry *reg = display->registry_entry; reg; reg = reg->next) {
+    if (reg->interface_slot == interface_slot_exclude) {
+      continue;
+    }
+    const GWL_RegistryHandler *handler = gwl_registry_handler_from_interface_slot(
+        reg->interface_slot);
+    if (handler->update_fn == nullptr) {
+      continue;
+    }
+
+    GWL_RegisteryUpdate_Params params = {
+        .name = reg->name,
+        .interface_slot = reg->interface_slot,
+        .version = reg->version,
+
+        .user_data = reg->user_data,
+    };
+    handler->update_fn(display, &params);
+  }
 }
 
 /** \} */
@@ -2629,8 +2724,9 @@ static const struct zwp_pointer_gesture_swipe_v1_listener gesture_swipe_listener
 /* -------------------------------------------------------------------- */
 /** \name Listener (Touch Seat), #wl_touch_listener
  *
- * TODO(@campbellbarton): Only setup the callbacks for now as I don't have
- * hardware that generates touch events.
+ * NOTE(@campbellbarton): It's not clear if this interface is used by popular compositors.
+ * It looks like GNOME/KDE only support `zwp_pointer_gestures_v1_interface`.
+ * If this isn't used anywhere, it could be removed.
  * \{ */
 
 static CLG_LogRef LOG_WL_TOUCH = {"ghost.wl.handle.touch"};
@@ -2969,10 +3065,10 @@ static void tablet_tool_handle_button(void *data,
   GHOST_TButton ebutton = GHOST_kButtonMaskLeft;
   switch (button) {
     case BTN_STYLUS:
-      ebutton = GHOST_kButtonMaskRight;
+      ebutton = GHOST_kButtonMaskMiddle;
       break;
     case BTN_STYLUS2:
-      ebutton = GHOST_kButtonMaskMiddle;
+      ebutton = GHOST_kButtonMaskRight;
       break;
     case BTN_STYLUS3:
       ebutton = GHOST_kButtonMaskButton4;
@@ -3826,22 +3922,6 @@ static void seat_handle_capabilities(void *data,
   else {
     gwl_seat_capability_touch_disable(seat);
   }
-
-  /* TODO(@campbellbarton): this could be moved out elsewhere. */
-  if (seat->system) {
-    zwp_primary_selection_device_manager_v1 *primary_selection_device_manager =
-        seat->system->wp_primary_selection_manager();
-    if (primary_selection_device_manager) {
-      if (seat->wp_primary_selection_device == nullptr) {
-        seat->wp_primary_selection_device = zwp_primary_selection_device_manager_v1_get_device(
-            primary_selection_device_manager, seat->wl_seat);
-
-        zwp_primary_selection_device_v1_add_listener(seat->wp_primary_selection_device,
-                                                     &primary_selection_device_listener,
-                                                     &seat->primary_selection);
-      }
-    }
-  }
 }
 
 static void seat_handle_name(void *data, struct wl_seat * /*wl_seat*/, const char *name)
@@ -4144,9 +4224,8 @@ static void gwl_registry_compositor_add(GWL_Display *display,
                                         const GWL_RegisteryAdd_Params *params)
 {
   display->wl_compositor = static_cast<wl_compositor *>(
-      wl_registry_bind(params->wl_registry, params->name, &wl_compositor_interface, 3));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+      wl_registry_bind(display->wl_registry, params->name, &wl_compositor_interface, 3));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_compositor_remove(GWL_Display *display,
                                            void * /*user_data*/,
@@ -4164,11 +4243,10 @@ static void gwl_registry_xdg_wm_base_add(GWL_Display *display,
 {
   GWL_XDG_Decor_System &decor = *display->xdg_decor;
   decor.shell = static_cast<xdg_wm_base *>(
-      wl_registry_bind(params->wl_registry, params->name, &xdg_wm_base_interface, 1));
+      wl_registry_bind(display->wl_registry, params->name, &xdg_wm_base_interface, 1));
   xdg_wm_base_add_listener(decor.shell, &shell_listener, nullptr);
   decor.shell_name = params->name;
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_xdg_wm_base_remove(GWL_Display *display,
                                             void * /*user_data*/,
@@ -4189,10 +4267,9 @@ static void gwl_registry_xdg_decoration_manager_add(GWL_Display *display,
 {
   GWL_XDG_Decor_System &decor = *display->xdg_decor;
   decor.manager = static_cast<zxdg_decoration_manager_v1 *>(wl_registry_bind(
-      params->wl_registry, params->name, &zxdg_decoration_manager_v1_interface, 1));
+      display->wl_registry, params->name, &zxdg_decoration_manager_v1_interface, 1));
   decor.manager_name = params->name;
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_xdg_decoration_manager_remove(GWL_Display *display,
                                                        void * /*user_data*/,
@@ -4212,14 +4289,8 @@ static void gwl_registry_xdg_output_manager_add(GWL_Display *display,
                                                 const GWL_RegisteryAdd_Params *params)
 {
   display->xdg_output_manager = static_cast<zxdg_output_manager_v1 *>(
-      wl_registry_bind(params->wl_registry, params->name, &zxdg_output_manager_v1_interface, 2));
-  for (GWL_Output *output : display->outputs) {
-    output->xdg_output = zxdg_output_manager_v1_get_xdg_output(display->xdg_output_manager,
-                                                               output->wl_output);
-    zxdg_output_v1_add_listener(output->xdg_output, &xdg_output_listener, output);
-  }
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+      wl_registry_bind(display->wl_registry, params->name, &zxdg_output_manager_v1_interface, 2));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_xdg_output_manager_remove(GWL_Display *display,
                                                    void * /*user_data*/,
@@ -4228,10 +4299,6 @@ static void gwl_registry_xdg_output_manager_remove(GWL_Display *display,
   struct zxdg_output_manager_v1 **value_p = &display->xdg_output_manager;
   zxdg_output_manager_v1_destroy(*value_p);
   *value_p = nullptr;
-
-  for (GWL_Output *output : display->outputs) {
-    output->xdg_output = nullptr;
-  }
 }
 
 /* #GWL_Display.wl_output */
@@ -4241,21 +4308,28 @@ static void gwl_registry_wl_output_add(GWL_Display *display, const GWL_Registery
   GWL_Output *output = new GWL_Output;
   output->system = display->system;
   output->wl_output = static_cast<wl_output *>(
-      wl_registry_bind(params->wl_registry, params->name, &wl_output_interface, 2));
+      wl_registry_bind(display->wl_registry, params->name, &wl_output_interface, 2));
   ghost_wl_output_tag(output->wl_output);
   wl_output_set_user_data(output->wl_output, output);
 
   display->outputs.push_back(output);
   wl_output_add_listener(output->wl_output, &output_listener, output);
-
+  gwl_registry_entry_add(display, params, static_cast<void *>(output));
+}
+static void gwl_registry_wl_output_update(GWL_Display *display,
+                                          const GWL_RegisteryUpdate_Params *params)
+{
+  GWL_Output *output = static_cast<GWL_Output *>(params->user_data);
   if (display->xdg_output_manager) {
-    output->xdg_output = zxdg_output_manager_v1_get_xdg_output(display->xdg_output_manager,
-                                                               output->wl_output);
-    zxdg_output_v1_add_listener(output->xdg_output, &xdg_output_listener, output);
+    if (output->xdg_output == nullptr) {
+      output->xdg_output = zxdg_output_manager_v1_get_xdg_output(display->xdg_output_manager,
+                                                                 output->wl_output);
+      zxdg_output_v1_add_listener(output->xdg_output, &xdg_output_listener, output);
+    }
   }
-
-  gwl_registry_entry_add(
-      display, params->interface_slot, params->name, static_cast<void *>(output));
+  else {
+    output->xdg_output = nullptr;
+  }
 }
 static void gwl_registry_wl_output_remove(GWL_Display *display,
                                           void *user_data,
@@ -4283,11 +4357,49 @@ static void gwl_registry_wl_seat_add(GWL_Display *display, const GWL_RegisteryAd
   seat->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
   seat->data_source = new GWL_DataSource;
   seat->wl_seat = static_cast<wl_seat *>(
-      wl_registry_bind(params->wl_registry, params->name, &wl_seat_interface, 5));
+      wl_registry_bind(display->wl_registry, params->name, &wl_seat_interface, 5));
   display->seats.push_back(seat);
   wl_seat_add_listener(seat->wl_seat, &seat_listener, seat);
+  gwl_registry_entry_add(display, params, static_cast<void *>(seat));
+}
+static void gwl_registry_wl_seat_update(GWL_Display *display,
+                                        const GWL_RegisteryUpdate_Params *params)
+{
+  GWL_Seat *seat = static_cast<GWL_Seat *>(params->user_data);
 
-  gwl_registry_entry_add(display, params->interface_slot, params->name, static_cast<void *>(seat));
+  /* Register data device per seat for IPC between WAYLAND clients. */
+  if (display->wl_data_device_manager) {
+    if (seat->wl_data_device == nullptr) {
+      seat->wl_data_device = wl_data_device_manager_get_data_device(
+          display->wl_data_device_manager, seat->wl_seat);
+      wl_data_device_add_listener(seat->wl_data_device, &data_device_listener, seat);
+    }
+  }
+  else {
+    seat->wl_data_device = nullptr;
+  }
+
+  if (display->wp_tablet_manager) {
+    if (seat->wp_tablet_seat == nullptr) {
+      seat->wp_tablet_seat = zwp_tablet_manager_v2_get_tablet_seat(display->wp_tablet_manager,
+                                                                   seat->wl_seat);
+      zwp_tablet_seat_v2_add_listener(seat->wp_tablet_seat, &tablet_seat_listener, seat);
+    }
+  }
+
+  if (display->wp_primary_selection_device_manager) {
+    if (seat->wp_primary_selection_device == nullptr) {
+      seat->wp_primary_selection_device = zwp_primary_selection_device_manager_v1_get_device(
+          display->wp_primary_selection_device_manager, seat->wl_seat);
+
+      zwp_primary_selection_device_v1_add_listener(seat->wp_primary_selection_device,
+                                                   &primary_selection_device_listener,
+                                                   &seat->primary_selection);
+    }
+  }
+  else {
+    seat->wp_primary_selection_device = nullptr;
+  }
 }
 static void gwl_registry_wl_seat_remove(GWL_Display *display, void *user_data, const bool on_exit)
 {
@@ -4382,9 +4494,8 @@ static void gwl_registry_wl_seat_remove(GWL_Display *display, void *user_data, c
 static void gwl_registry_wl_shm_add(GWL_Display *display, const GWL_RegisteryAdd_Params *params)
 {
   display->wl_shm = static_cast<wl_shm *>(
-      wl_registry_bind(params->wl_registry, params->name, &wl_shm_interface, 1));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+      wl_registry_bind(display->wl_registry, params->name, &wl_shm_interface, 1));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_wl_shm_remove(GWL_Display *display,
                                        void * /*user_data*/,
@@ -4401,9 +4512,8 @@ static void gwl_registry_wl_data_device_manager_add(GWL_Display *display,
                                                     const GWL_RegisteryAdd_Params *params)
 {
   display->wl_data_device_manager = static_cast<wl_data_device_manager *>(
-      wl_registry_bind(params->wl_registry, params->name, &wl_data_device_manager_interface, 3));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+      wl_registry_bind(display->wl_registry, params->name, &wl_data_device_manager_interface, 3));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_wl_data_device_manager_remove(GWL_Display *display,
                                                        void * /*user_data*/,
@@ -4420,9 +4530,8 @@ static void gwl_registry_wp_tablet_manager_add(GWL_Display *display,
                                                const GWL_RegisteryAdd_Params *params)
 {
   display->wp_tablet_manager = static_cast<zwp_tablet_manager_v2 *>(
-      wl_registry_bind(params->wl_registry, params->name, &zwp_tablet_manager_v2_interface, 1));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+      wl_registry_bind(display->wl_registry, params->name, &zwp_tablet_manager_v2_interface, 1));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_wp_tablet_manager_remove(GWL_Display *display,
                                                   void * /*user_data*/,
@@ -4440,9 +4549,8 @@ static void gwl_registry_wp_relative_pointer_manager_add(GWL_Display *display,
 {
   display->wp_relative_pointer_manager = static_cast<zwp_relative_pointer_manager_v1 *>(
       wl_registry_bind(
-          params->wl_registry, params->name, &zwp_relative_pointer_manager_v1_interface, 1));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+          display->wl_registry, params->name, &zwp_relative_pointer_manager_v1_interface, 1));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_wp_relative_pointer_manager_remove(GWL_Display *display,
                                                             void * /*user_data*/,
@@ -4459,9 +4567,8 @@ static void gwl_registry_wp_pointer_constraints_add(GWL_Display *display,
                                                     const GWL_RegisteryAdd_Params *params)
 {
   display->wp_pointer_constraints = static_cast<zwp_pointer_constraints_v1 *>(wl_registry_bind(
-      params->wl_registry, params->name, &zwp_pointer_constraints_v1_interface, 1));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+      display->wl_registry, params->name, &zwp_pointer_constraints_v1_interface, 1));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_wp_pointer_constraints_remove(GWL_Display *display,
                                                        void * /*user_data*/,
@@ -4478,9 +4585,8 @@ static void gwl_registry_wp_pointer_gestures_add(GWL_Display *display,
                                                  const GWL_RegisteryAdd_Params *params)
 {
   display->wp_pointer_gestures = static_cast<zwp_pointer_gestures_v1 *>(
-      wl_registry_bind(params->wl_registry, params->name, &zwp_pointer_gestures_v1_interface, 3));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+      wl_registry_bind(display->wl_registry, params->name, &zwp_pointer_gestures_v1_interface, 3));
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_wp_pointer_gestures_remove(GWL_Display *display,
                                                     void * /*user_data*/,
@@ -4498,12 +4604,11 @@ static void gwl_registry_wp_primary_selection_device_manager_add(
 {
   display->wp_primary_selection_device_manager =
       static_cast<zwp_primary_selection_device_manager_v1 *>(
-          wl_registry_bind(params->wl_registry,
+          wl_registry_bind(display->wl_registry,
                            params->name,
                            &zwp_primary_selection_device_manager_v1_interface,
                            1));
-
-  gwl_registry_entry_add(display, params->interface_slot, params->name, nullptr);
+  gwl_registry_entry_add(display, params, nullptr);
 }
 static void gwl_registry_wp_primary_selection_device_manager_remove(GWL_Display *display,
                                                                     void * /*user_data*/,
@@ -4516,76 +4621,100 @@ static void gwl_registry_wp_primary_selection_device_manager_remove(GWL_Display 
 }
 
 /**
- * Map interfaces to to initialization functions.
+ * Map interfaces to initialization functions.
  *
- * \note This list also defines the order interfaces are freed: from last to first,
- * so the most fundamental objects such as the compositor are freed last.
+ * \note This list also defines the order interfaces are removed.
+ * On exit interface removal runs from last to first to avoid potential bugs
+ * caused by undefined order of removal.
+ *
+ * In general fundamental, low level objects such as the compositor and shared memory
+ * should be declared earlier and other interfaces that may use them should be declared later.
  */
 static const GWL_RegistryHandler gwl_registry_handlers[] = {
+    /* Low level interfaces. */
     {
         &wl_compositor_interface.name,
         gwl_registry_compositor_add,
+        nullptr,
         gwl_registry_compositor_remove,
+    },
+    {
+        &wl_shm_interface.name,
+        gwl_registry_wl_shm_add,
+        nullptr,
+        gwl_registry_wl_shm_remove,
     },
     {
         &xdg_wm_base_interface.name,
         gwl_registry_xdg_wm_base_add,
+        nullptr,
         gwl_registry_xdg_wm_base_remove,
     },
+    /* Managers. */
     {
         &zxdg_decoration_manager_v1_interface.name,
         gwl_registry_xdg_decoration_manager_add,
+        nullptr,
         gwl_registry_xdg_decoration_manager_remove,
     },
     {
         &zxdg_output_manager_v1_interface.name,
         gwl_registry_xdg_output_manager_add,
+        nullptr,
         gwl_registry_xdg_output_manager_remove,
-    },
-    {
-        &wl_output_interface.name,
-        gwl_registry_wl_output_add,
-        gwl_registry_wl_output_remove,
-    },
-    {
-        &wl_seat_interface.name,
-        gwl_registry_wl_seat_add,
-        gwl_registry_wl_seat_remove,
-    },
-    {
-        &wl_shm_interface.name,
-        gwl_registry_wl_shm_add,
-        gwl_registry_wl_shm_remove,
     },
     {
         &wl_data_device_manager_interface.name,
         gwl_registry_wl_data_device_manager_add,
+        nullptr,
         gwl_registry_wl_data_device_manager_remove,
+    },
+    {
+        &zwp_primary_selection_device_manager_v1_interface.name,
+        gwl_registry_wp_primary_selection_device_manager_add,
+        nullptr,
+        gwl_registry_wp_primary_selection_device_manager_remove,
     },
     {
         &zwp_tablet_manager_v2_interface.name,
         gwl_registry_wp_tablet_manager_add,
+        nullptr,
         gwl_registry_wp_tablet_manager_remove,
     },
     {
         &zwp_relative_pointer_manager_v1_interface.name,
         gwl_registry_wp_relative_pointer_manager_add,
+        nullptr,
         gwl_registry_wp_relative_pointer_manager_remove,
     },
+    /* Higher level interfaces. */
     {
         &zwp_pointer_constraints_v1_interface.name,
         gwl_registry_wp_pointer_constraints_add,
+        nullptr,
         gwl_registry_wp_pointer_constraints_remove,
     },
     {
         &zwp_pointer_gestures_v1_interface.name,
         gwl_registry_wp_pointer_gestures_add,
+        nullptr,
         gwl_registry_wp_pointer_gestures_remove,
     },
+    /* Display outputs. */
     {
-        &zwp_primary_selection_device_manager_v1_interface.name,
-        gwl_registry_wp_primary_selection_device_manager_add,
-        gwl_registry_wp_primary_selection_device_manager_remove,
+        &wl_output_interface.name,
+        gwl_registry_wl_output_add,
+        gwl_registry_wl_output_update,
+        gwl_registry_wl_output_remove,
+    },
+    /* Seats.
+     * Keep the seat near the end to ensure other types are created first.
+     * as the seat creates data based on other interfaces. */
+    {
+        &wl_seat_interface.name,
+        gwl_registry_wl_seat_add,
+        gwl_registry_wl_seat_update,
+        gwl_registry_wl_seat_remove,
     },
     {nullptr, nullptr, nullptr},
 };
@@ -4599,6 +4728,17 @@ static int gwl_registry_handler_interface_slot_max()
   return ARRAY_SIZE(gwl_registry_handlers) - 1;
 }
 
+static int gwl_registry_handler_interface_slot_from_string(const char *interface)
+{
+  for (const GWL_RegistryHandler *handler = gwl_registry_handlers; handler->interface_p != nullptr;
+       handler++) {
+    if (STREQ(interface, *handler->interface_p)) {
+      return int(handler - gwl_registry_handlers);
+    }
+  }
+  return -1;
+}
+
 static const GWL_RegistryHandler *gwl_registry_handler_from_interface_slot(int interface_slot)
 {
   GHOST_ASSERT(uint32_t(interface_slot) < uint32_t(gwl_registry_handler_interface_slot_max()),
@@ -4607,40 +4747,35 @@ static const GWL_RegistryHandler *gwl_registry_handler_from_interface_slot(int i
 }
 
 static void global_handle_add(void *data,
-                              struct wl_registry *wl_registry,
+                              [[maybe_unused]] struct wl_registry *wl_registry,
                               const uint32_t name,
                               const char *interface,
                               const uint32_t version)
 {
   /* Log last since it's useful to know if the interface was handled or not. */
-
   GWL_Display *display = static_cast<GWL_Display *>(data);
-  /* The interface name that is ensured not to be freed. */
-  GWL_RegisteryAdd_Params params = {
-      .wl_registry = wl_registry,
-      .name = name,
-      .version = version,
-      .interface_slot = 0,
-  };
+  GHOST_ASSERT(display->wl_registry == wl_registry, "Registry argument must match!");
 
-  bool found = false, added = false;
-  for (const GWL_RegistryHandler *handler = gwl_registry_handlers; handler->interface_p != nullptr;
-       handler++) {
-    if (!STREQ(interface, *handler->interface_p)) {
-      continue;
-    }
+  const int interface_slot = gwl_registry_handler_interface_slot_from_string(interface);
+  bool added = false;
+
+  if (interface_slot != -1) {
+    const GWL_RegistryHandler *handler = &gwl_registry_handlers[interface_slot];
     const GWL_RegistryEntry *registry_entry_prev = display->registry_entry;
-    params.interface_slot = int(handler - gwl_registry_handlers);
+
+    /* The interface name that is ensured not to be freed. */
+    GWL_RegisteryAdd_Params params = {
+        .name = name,
+        .interface_slot = interface_slot,
+        .version = version,
+    };
 
     handler->add_fn(display, &params);
 
     added = display->registry_entry != registry_entry_prev;
-    found = true;
-    break;
   }
-
-  /* Not found. */
-  if (!found) {
+  else {
+    /* Not found. */
 #ifdef USE_GNOME_NEEDS_LIBDECOR_HACK
     if (STRPREFIX(interface, "gtk_shell")) { /* `gtk_shell1` at time of writing. */
       /* Only require `libdecor` when built with X11 support,
@@ -4653,10 +4788,18 @@ static void global_handle_add(void *data,
   CLOG_INFO(LOG,
             2,
             "add %s(interface=%s, version=%u, name=%u)",
-            found ? (added ? "" : "(found but not added)") : "(skipped), ",
+            (interface_slot != -1) ? (added ? "" : "(found but not added)") : "(skipped), ",
             interface,
             version,
             name);
+
+  /* Initialization avoids excessive calls by calling update after all have been initialized. */
+  if (added) {
+    if (display->registry_skip_update_all == false) {
+      /* See doc-string for rationale on updating all on add/removal. */
+      gwl_registry_entry_update_all(display, interface_slot);
+    }
+  }
 }
 
 /**
@@ -4669,18 +4812,27 @@ static void global_handle_add(void *data,
  * using the bind request, the client should now destroy that object.
  */
 static void global_handle_remove(void *data,
-                                 struct wl_registry * /*wl_registry*/,
+                                 [[maybe_unused]] struct wl_registry *wl_registry,
                                  const uint32_t name)
 {
   GWL_Display *display = static_cast<GWL_Display *>(data);
+  GHOST_ASSERT(display->wl_registry == wl_registry, "Registry argument must match!");
+
   int interface_slot = 0;
-  bool found = gwl_registry_entry_remove_by_name(display, name, &interface_slot);
+  const bool removed = gwl_registry_entry_remove_by_name(display, name, &interface_slot);
+
   CLOG_INFO(LOG,
             2,
-            "remove (name=%u, interface=%s), %s",
+            "remove (name=%u, interface=%s)",
             name,
-            *gwl_registry_handlers[interface_slot].interface_p,
-            found ? "(known)" : "(unknown)");
+            removed ? *gwl_registry_handlers[interface_slot].interface_p : "(unknown)");
+
+  if (removed) {
+    if (display->registry_skip_update_all == false) {
+      /* See doc-string for rationale on updating all on add/removal. */
+      gwl_registry_entry_update_all(display, interface_slot);
+    }
+  }
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -4715,13 +4867,21 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
   display_->xdg_decor = new GWL_XDG_Decor_System;
 
   /* Register interfaces. */
-  struct wl_registry *registry = wl_display_get_registry(display_->wl_display);
-  wl_registry_add_listener(registry, &registry_listener, display_);
-  /* Call callback for registry listener. */
-  wl_display_roundtrip(display_->wl_display);
-  /* Call callbacks for registered listeners. */
-  wl_display_roundtrip(display_->wl_display);
-  wl_registry_destroy(registry);
+  {
+    display_->registry_skip_update_all = true;
+    struct wl_registry *registry = wl_display_get_registry(display_->wl_display);
+    display_->wl_registry = registry;
+    wl_registry_add_listener(registry, &registry_listener, display_);
+    /* Call callback for registry listener. */
+    wl_display_roundtrip(display_->wl_display);
+    /* Call callbacks for registered listeners. */
+    wl_display_roundtrip(display_->wl_display);
+
+    /* Account for dependencies between interfaces. */
+    gwl_registry_entry_update_all(display_, -1);
+
+    display_->registry_skip_update_all = false;
+  }
 
 #ifdef WITH_GHOST_WAYLAND_LIBDECOR
   /* Ignore windowing requirements when running in background mode,
@@ -4771,23 +4931,6 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
     if (!decor.shell) {
       gwl_display_destroy(display_);
       throw std::runtime_error("Wayland: unable to access xdg_shell!");
-    }
-  }
-
-  /* Register data device per seat for IPC between Wayland clients. */
-  if (display_->wl_data_device_manager) {
-    for (GWL_Seat *seat : display_->seats) {
-      seat->wl_data_device = wl_data_device_manager_get_data_device(
-          display_->wl_data_device_manager, seat->wl_seat);
-      wl_data_device_add_listener(seat->wl_data_device, &data_device_listener, seat);
-    }
-  }
-
-  if (display_->wp_tablet_manager) {
-    for (GWL_Seat *seat : display_->seats) {
-      seat->wp_tablet_seat = zwp_tablet_manager_v2_get_tablet_seat(display_->wp_tablet_manager,
-                                                                   seat->wl_seat);
-      zwp_tablet_seat_v2_add_listener(seat->wp_tablet_seat, &tablet_seat_listener, seat);
     }
   }
 }
@@ -5292,6 +5435,9 @@ static void cursor_buffer_show(const GWL_Seat *seat)
                                     tablet_tool->wl_surface_cursor,
                                     hotspot_x,
                                     hotspot_y);
+#ifdef USE_KDE_TABLET_HIDDEN_CURSOR_HACK
+      wl_surface_commit(tablet_tool->wl_surface_cursor);
+#endif
     }
   }
 }
