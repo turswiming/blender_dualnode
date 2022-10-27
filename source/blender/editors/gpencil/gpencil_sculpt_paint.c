@@ -2206,20 +2206,6 @@ static void gpencil_sculpt_brush_apply_event(bContext *C, wmOperator *op, const 
     if (gso->brush == NULL) {
       gso->brush = gso->brush_prev;
     }
-    Brush *brush = gso->brush;
-    if (brush->gpencil_settings->sculpt_mode_flag &
-        (GP_SCULPT_FLAGMODE_AUTOMASK_STROKE | GP_SCULPT_FLAGMODE_AUTOMASK_LAYER |
-         GP_SCULPT_FLAGMODE_AUTOMASK_MATERIAL)) {
-      if (gso->automasking_strokes == NULL) {
-        gso->automasking_strokes = BLI_ghash_ptr_new(__func__);
-      }
-    }
-    else {
-      if (gso->automasking_strokes != NULL) {
-        BLI_ghash_free(gso->automasking_strokes, NULL, NULL);
-      }
-      gso->automasking_strokes = NULL;
-    }
   }
   else {
     if (gso->brush_prev != NULL) {
