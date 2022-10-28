@@ -1457,7 +1457,7 @@ if(WITH_USD)
     )
   endif()
   if(WIN32)
-    # If this file exists we are building against a 3.4 library folder
+    # If this file exists we are building against a 3.5 22.03 library folder
     # that needs these dll's installed.
     if(EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
       windows_install_shared_manifest(FILES
@@ -1466,6 +1466,18 @@ if(WITH_USD)
       )
       windows_install_shared_manifest(FILES
         ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
+        DEBUG
+      )
+    endif()
+    # If this file exists we are building against a 3.5 22.11 library folder
+    # that needs these dll's installed.
+    if(EXISTS ${LIBDIR}/usd/lib/usd_ms.dll)
+      windows_install_shared_manifest(FILES
+        ${LIBDIR}/usd/lib/usd_ms.dll
+        RELEASE
+      )
+      windows_install_shared_manifest(FILES
+        ${LIBDIR}/usd/lib/usd_ms_d.dll
         DEBUG
       )
     endif()

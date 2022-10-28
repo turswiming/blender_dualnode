@@ -854,14 +854,19 @@ endif()
 if(WITH_USD)
   windows_find_package(USD)
   if(NOT USD_FOUND)
+    # 3.5 22.03 libs
     set(USD_INCLUDE_DIRS ${LIBDIR}/usd/include)
     set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_ms.lib)
     set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_ms_d.lib)
     set(USD_LIBRARY_DIR ${LIBDIR}/usd/lib)
+    if(NOT EXISTS "${USD_RELEASE_LIB}") # 3.5 22.11 libs
+      set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_ms.lib)
+      set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_ms_d.lib)
+    endif()
     # Older USD had different filenames, if the new ones are
     # not found see if the older ones exist, to ease the
     # transition period while landing libs.
-    if(NOT EXISTS "${USD_RELEASE_LIB}")
+    if(NOT EXISTS "${USD_RELEASE_LIB}") # 3.3 static libs
       set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_m.lib)
       set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_m_d.lib)
     endif()
