@@ -451,7 +451,10 @@ static void workbench_instance_free(void *instance)
 
 static void workbench_view_update(void *vedata)
 {
-  reinterpret_cast<WORKBENCH_Data *>(vedata)->instance->config.reset_taa_next_sample = true;
+  WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
+  if (ved->instance) {
+    ved->instance->config.reset_taa_next_sample = true;
+  }
 }
 
 static void workbench_id_update(void *vedata, struct ID *id)
