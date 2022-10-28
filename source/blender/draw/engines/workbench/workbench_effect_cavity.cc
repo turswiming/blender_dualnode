@@ -18,39 +18,38 @@
 
 namespace blender::workbench {
 
-void CavityEffect::init(const View3DShading &shading,
-                        const SceneDisplay &display,
-                        UniformBuffer<WorldData> &world_buf,
-                        int taa_sample,
-                        int taa_sample_len)
+void CavityEffect::init(const DrawConfig &config, UniformBuffer<WorldData> &world_buf)
 {
-  cavity_enabled = shading.flag & V3D_SHADING_CAVITY &&
-                   ELEM(shading.cavity_type, V3D_SHADING_CAVITY_SSAO, V3D_SHADING_CAVITY_BOTH);
-  curvature_enabled = shading.flag & V3D_SHADING_CAVITY && ELEM(shading.cavity_type,
-                                                                V3D_SHADING_CAVITY_CURVATURE,
-                                                                V3D_SHADING_CAVITY_BOTH);
+  cavity_enabled = config.draw_cavity;
+  curvature_enabled = config.draw_curvature;
 
-  const int sample_count = min_ii(max_ii(1, taa_sample_len) * display.matcap_ssao_samples,
-                                  MAX_SAMPLES);
-  const int max_iter_count = max_ii(1, sample_count / display.matcap_ssao_samples);
+  const int ssao_samples = config.scene->display.matcap_ssao_samples;
+  const int sample_count = min_ii(max_ii(1, config.aa_samples) * ssao_samples, MAX_SAMPLES);
+  const int max_iter_count = max_ii(1, sample_count / ssao_samples);
 
-  int sample = taa_sample % max_iter_count;
-  world_buf.cavity_sample_start = display.matcap_ssao_samples * sample;
-  world_buf.cavity_sample_end = display.matcap_ssao_samples * (sample + 1);
+  if (config.reset_taa) {
+    sample = 0;
+  }
+  sample = sample++ % max_iter_count;
+
+  world_buf.cavity_sample_start = ssao_samples * sample;
+  world_buf.cavity_sample_end = ssao_samples * (sample + 1);
 
   world_buf.cavity_sample_count_inv = 1.0f / (world_buf.cavity_sample_end -
                                               world_buf.cavity_sample_start);
   world_buf.cavity_jitter_scale = 1.0f / 64.0f;
 
-  world_buf.cavity_valley_factor = shading.cavity_valley_factor;
-  world_buf.cavity_ridge_factor = shading.cavity_ridge_factor;
-  world_buf.cavity_attenuation = display.matcap_ssao_attenuation;
-  world_buf.cavity_distance = display.matcap_ssao_distance;
+  world_buf.cavity_valley_factor = config.shading.cavity_valley_factor;
+  world_buf.cavity_ridge_factor = config.shading.cavity_ridge_factor;
+  world_buf.cavity_attenuation = config.scene->display.matcap_ssao_attenuation;
+  world_buf.cavity_distance = config.scene->display.matcap_ssao_distance;
 
-  world_buf.curvature_ridge = 0.5f / max_ff(square_f(shading.curvature_ridge_factor), 1e-4f);
-  world_buf.curvature_valley = 0.7f / max_ff(square_f(shading.curvature_valley_factor), 1e-4f);
+  world_buf.curvature_ridge = 0.5f /
+                              max_ff(square_f(config.shading.curvature_ridge_factor), 1e-4f);
+  world_buf.curvature_valley = 0.7f /
+                               max_ff(square_f(config.shading.curvature_valley_factor), 1e-4f);
 
-  if (cavity_enabled || true /*TODO(Miguel Pozo): Remove this (needed for DoF)*/) {
+  if (cavity_enabled || config.draw_dof) {
     setup_resources(sample_count);
   }
 }

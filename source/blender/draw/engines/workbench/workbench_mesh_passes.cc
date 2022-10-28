@@ -86,31 +86,25 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
   return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::MATERIAL)];
 }
 
-void OpaquePass::sync(DRWState cull_state,
-                      DRWState clip_state,
-                      eShadingType shading_type,
-                      SceneResources &resources,
-                      int2 resolution)
+void OpaquePass::sync(const DrawConfig config, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
-                   cull_state | clip_state;
+                   config.cull_state | config.clip_state;
 
   DRWState in_front_state = state | DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
   gbuffer_in_front_ps_.init_pass(resources, in_front_state);
   gbuffer_in_front_ps_.state_stencil(0xFF, 0xFF, 0x00);
-  gbuffer_in_front_ps_.init_subpasses(ePipelineType::OPAQUE, shading_type, resources.shader_cache);
+  gbuffer_in_front_ps_.init_subpasses(
+      ePipelineType::OPAQUE, config.shading_type, resources.shader_cache);
 
   state |= DRW_STATE_STENCIL_NEQUAL;
   gbuffer_ps_.init_pass(resources, state);
   gbuffer_ps_.state_stencil(0x00, 0xFF, 0xFF);
-  gbuffer_ps_.init_subpasses(ePipelineType::OPAQUE, shading_type, resources.shader_cache);
-
-  bool cavity = resources.cavity.cavity_enabled;
-  bool curvature = resources.cavity.curvature_enabled;
+  gbuffer_ps_.init_subpasses(ePipelineType::OPAQUE, config.shading_type, resources.shader_cache);
 
   deferred_ps_.init();
   deferred_ps_.shader_set(resources.shader_cache.resolve_shader_get(
-      ePipelineType::OPAQUE, shading_type, cavity, curvature));
+      ePipelineType::OPAQUE, config.shading_type, config.draw_cavity, config.draw_curvature));
   deferred_ps_.bind_ubo(WB_WORLD_SLOT, resources.world_buf);
   deferred_ps_.bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
   deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
@@ -118,7 +112,7 @@ void OpaquePass::sync(DRWState cull_state,
   deferred_ps_.bind_texture("depth_tx", &resources.depth_tx);
   deferred_ps_.bind_image("out_color_img", &resources.color_tx);
   resources.cavity.setup_resolve_pass(deferred_ps_, resources.object_id_tx);
-  deferred_ps_.dispatch(math::divide_ceil(resolution, int2(WB_RESOLVE_GROUP_SIZE)));
+  deferred_ps_.dispatch(math::divide_ceil(config.resolution, int2(WB_RESOLVE_GROUP_SIZE)));
   deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
 }
 
@@ -170,24 +164,21 @@ bool OpaquePass::is_empty() const
   return gbuffer_ps_.is_empty() && gbuffer_in_front_ps_.is_empty();
 }
 
-void TransparentPass::sync(DRWState cull_state,
-                           DRWState clip_state,
-                           eShadingType shading_type,
-                           SceneResources &resources)
+void TransparentPass::sync(const DrawConfig config, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_OIT |
-                   cull_state | clip_state;
+                   config.cull_state | config.clip_state;
 
   accumulation_ps_.init_pass(resources, state | DRW_STATE_STENCIL_NEQUAL);
   accumulation_ps_.state_stencil(0x00, 0xFF, 0xFF);
   accumulation_ps_.clear_color(float4(0.0f, 0.0f, 0.0f, 1.0f));
   accumulation_ps_.init_subpasses(
-      ePipelineType::TRANSPARENT, shading_type, resources.shader_cache);
+      ePipelineType::TRANSPARENT, config.shading_type, resources.shader_cache);
 
   accumulation_in_front_ps_.init_pass(resources, state);
   accumulation_in_front_ps_.clear_color(float4(0.0f, 0.0f, 0.0f, 1.0f));
   accumulation_in_front_ps_.init_subpasses(
-      ePipelineType::TRANSPARENT, shading_type, resources.shader_cache);
+      ePipelineType::TRANSPARENT, config.shading_type, resources.shader_cache);
 
   resolve_ps_.init();
   /*TODO(Miguel Pozo): Use shaders.resolve_shader_get()*/
@@ -241,12 +232,10 @@ bool TransparentPass::is_empty() const
   return accumulation_ps_.is_empty() && accumulation_in_front_ps_.is_empty();
 }
 
-void TransparentDepthPass::sync(DRWState cull_state,
-                                DRWState clip_state,
-                                SceneResources &resources)
+void TransparentDepthPass::sync(const DrawConfig config, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
-                   cull_state | clip_state;
+                   config.cull_state | config.clip_state;
 
   DRWState in_front_state = state | DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
   in_front_ps_.init_pass(resources, in_front_state);

@@ -93,31 +93,18 @@ void DofPass::setup_samples()
   samples_buf.push_update();
 }
 
-void DofPass::init(const View3DShading &shading, int2 resolution)
+void DofPass::init(const DrawConfig &config)
 {
-  const DRWContextState *draw_ctx = DRW_context_state_get();
-  RegionView3D *rv3d = draw_ctx->rv3d;
-  View3D *v3d = draw_ctx->v3d;
+  enabled = config.draw_dof;
 
-  Object *camera = nullptr;
-  if (v3d && rv3d) {
-    camera = (rv3d->persp == RV3D_CAMOB) ? v3d->camera : nullptr;
-  }
-  else {
-    /*TODO(Miguel Pozo)*/
-    // camera = wpd->cam_original_ob;
-  }
-
-  Camera *cam = camera ? static_cast<Camera *>(camera->data) : nullptr;
-
-  enabled = cam && cam->dof.flag & CAM_DOF_ENABLED && shading.flag & V3D_SHADING_DEPTH_OF_FIELD;
   if (!enabled) {
     source_tx.free();
     coc_halfres_tx.free();
     return;
   }
 
-  int2 half_res = {max_ii(resolution.x / 2, 1), max_ii(resolution.y / 2, 1)};
+  int2 half_res = config.resolution / 2;
+  half_res = {max_ii(half_res.x, 1), max_ii(half_res.y, 1)};
 
   source_tx.ensure_2d(GPU_RGBA16F, half_res, nullptr, 3);
   source_tx.ensure_mip_views();
@@ -126,11 +113,13 @@ void DofPass::init(const View3DShading &shading, int2 resolution)
   coc_halfres_tx.ensure_mip_views();
   coc_halfres_tx.filter_mode(true);
 
+  Camera *camera = static_cast<Camera *>(config.camera_object->data);
+
   /* Parameters */
-  float fstop = cam->dof.aperture_fstop;
-  float sensor = BKE_camera_sensor_size(cam->sensor_fit, cam->sensor_x, cam->sensor_y);
-  float focus_dist = BKE_camera_object_dof_distance(camera);
-  float focal_len = cam->lens;
+  float fstop = camera->dof.aperture_fstop;
+  float sensor = BKE_camera_sensor_size(camera->sensor_fit, camera->sensor_x, camera->sensor_y);
+  float focus_dist = BKE_camera_object_dof_distance(config.camera_object);
+  float focal_len = camera->lens;
 
   /* TODO(fclem): de-duplicate with EEVEE. */
   const float scale_camera = 0.001f;
@@ -139,20 +128,20 @@ void DofPass::init(const View3DShading &shading, int2 resolution)
   float focal_len_scaled = scale_camera * focal_len;
   float sensor_scaled = scale_camera * sensor;
 
-  if (rv3d != nullptr) {
+  if (RegionView3D *rv3d = DRW_context_state_get()->rv3d) {
     sensor_scaled *= rv3d->viewcamtexcofac[0];
   }
 
   aperture_size = aperture * fabsf(focal_len_scaled / (focus_dist - focal_len_scaled));
   distance = -focus_dist;
-  invsensor_size = resolution.x / sensor_scaled;
+  invsensor_size = config.resolution.x / sensor_scaled;
 
-  near = -cam->clip_start;
-  far = -cam->clip_end;
+  near = -camera->clip_start;
+  far = -camera->clip_end;
 
-  float _blades = cam->dof.aperture_blades;
-  float _rotation = cam->dof.aperture_rotation;
-  float _ratio = 1.0f / cam->dof.aperture_ratio;
+  float _blades = camera->dof.aperture_blades;
+  float _rotation = camera->dof.aperture_rotation;
+  float _ratio = 1.0f / camera->dof.aperture_ratio;
 
   if (blades != _blades || rotation != _rotation || ratio != _ratio) {
     blades = _blades;

@@ -128,68 +128,19 @@ AntiAliasingPass::~AntiAliasingPass()
   DRW_SHADER_FREE_SAFE(smaa_resolve_sh);
 }
 
-void AntiAliasingPass::reset_taa()
+void AntiAliasingPass::init(const DrawConfig &config)
 {
-  reset_next_sample = true;
-}
-
-void AntiAliasingPass::init()
-{
-  is_playback = DRW_state_is_playback();
-  is_navigating = DRW_state_is_navigating();
-
-  {
-    /*TODO(Miguel Pozo): Move to Draw Settings */
-    const DRWContextState *draw_ctx = DRW_context_state_get();
-    const View3D *v3d = draw_ctx->v3d;
-    const SceneDisplay &display = draw_ctx->scene->display;
-
-    sample_len = U.viewport_aa;
-    if (is_navigating || is_playback) {
-      /* Only draw using SMAA or no AA when navigating. */
-      sample_len = min_ii(sample_len, 1);
-    }
-    else if (v3d && ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL)) {
-      sample_len = display.viewport_aa;
-    }
-    else if (DRW_state_is_image_render()) {
-      sample_len = display.render_aa;
-    }
-  }
-
-  /* Reset complete drawing when navigating or during viewport playback or when
-   * leaving one of those states. In case of multires modifier the navigation
-   * mesh differs from the viewport mesh, so we need to be sure to restart. */
-  if (reset_next_sample || is_playback || is_navigating) {
+  if (config.reset_taa) {
     sample = 0;
   }
-  reset_next_sample = is_playback || is_navigating;
+  sample_len = config.aa_samples;
 
-  /* Reset the TAA when we have already draw a sample, but the sample count differs from previous
-   * time. This removes render artifacts when the viewport anti-aliasing in the user preferences
-   * is set to a lower value. */
-  if (sample_len != sample_len_previous) {
-    sample = 0;
-    sample_len_previous = sample_len;
-  }
-
-  /*TODO(Miguel Pozo): This can probably removed.*/
+  /*TODO(Miguel Pozo): This can probably be removed.*/
   /*
   if (sample_len > 0 && valid_history == false) {
     sample = 0;
   }
   */
-
-  /*TODO(Miguel Pozo): Move all the reset taa logic to the same place (DrawSettings?)*/
-  {
-    float4x4 matrix;
-    /*TODO(Miguel Pozo): New API ?*/
-    DRW_view_persmat_get(nullptr, matrix.ptr(), false);
-    if (matrix != last_matrix) {
-      last_matrix = matrix;
-      sample = 0;
-    }
-  }
 }
 
 void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)

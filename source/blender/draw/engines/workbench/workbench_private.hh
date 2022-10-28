@@ -12,27 +12,6 @@ namespace blender::workbench {
 
 using namespace draw;
 
-struct Material {
-  float3 base_color;
-  /* Packed data into a int. Decoded in the shader. */
-  uint packed_data;
-
-  Material();
-  Material(float3 color);
-  Material(::Object &ob, bool random = false);
-  Material(::Material &mat);
-
-  bool is_transparent();
-
-  static uint32_t pack_data(float metallic, float roughness, float alpha);
-};
-
-void get_material_image(Object *ob,
-                        int material_index,
-                        ::Image *&image,
-                        ImageUser *&iuser,
-                        eGPUSamplerState &sampler_state);
-
 class ShaderCache {
  private:
   /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
@@ -54,27 +33,102 @@ class ShaderCache {
                                 bool curvature = false);
 };
 
+struct Material {
+  float3 base_color;
+  /* Packed data into a int. Decoded in the shader. */
+  uint packed_data;
+
+  Material();
+  Material(float3 color);
+  Material(::Object &ob, bool random = false);
+  Material(::Material &mat);
+
+  bool is_transparent();
+
+  static uint32_t pack_data(float metallic, float roughness, float alpha);
+};
+
+void get_material_image(Object *ob,
+                        int material_index,
+                        ::Image *&image,
+                        ImageUser *&iuser,
+                        eGPUSamplerState &sampler_state);
+
+struct DrawConfig {
+  Scene *scene;
+
+  Object *camera_object;
+  float4x4 view_projection_matrix;
+  int2 resolution;
+
+  eContextObjectMode object_mode;
+
+  View3DShading shading;
+  eShadingType shading_type = eShadingType::STUDIO;
+  bool xray_mode;
+
+  DRWState cull_state;
+  DRWState clip_state;
+  Vector<float4> clip_planes = {};
+
+  float4 background_color;
+
+  bool draw_cavity;
+  bool draw_curvature;
+  bool draw_outline;
+  bool draw_dof;
+
+  bool draw_object_id;
+  bool draw_transparent_depth;
+
+  int aa_samples;
+  bool reset_taa;
+  bool reset_taa_next_sample;
+
+  /** Used when material_subtype == eMaterialSubType::SINGLE */
+  Material material_override = Material(float3(1.0f));
+  /* When r == -1.0 the shader uses the vertex color */
+  Material material_attribute_color = Material(float3(-1.0f));
+
+  void init();
+
+  struct ObjectConfig {
+    eV3DShadingColorType color_type;
+    bool sculpt_pbvh;
+    bool texture_paint_mode;
+    ::Image *image_paint_override;
+    eGPUSamplerState override_sampler_state;
+    bool draw_shadow;
+
+    eColorType material_type;
+    eMaterialSubType material_subtype;
+    bool use_per_material_batches;
+
+    void compute_config();
+  };
+
+  const ObjectConfig get_object_config(Object *ob);
+};
+
 class CavityEffect {
+ private:
+  int sample;
+  int sample_count;
+  bool curvature_enabled;
+  bool cavity_enabled;
+
  public:
   static const int JITTER_TEX_SIZE = 64;
   static const int MAX_SAMPLES = 512;  // This value must be kept in sync with the one declared at
                                        // workbench_composite_info.hh (cavity_samples)
 
-  /*TODO(Miguel Pozo): Move to SceneResources (Used by DoF too)*/
   UniformArrayBuffer<float4, MAX_SAMPLES> samples_buf;
-  int sample_count;
+  /*TODO(Miguel Pozo): Move to SceneResources (Used by DoF too)*/
   Texture jitter_tx;
 
   void setup_resources(int sample_count);
 
-  bool curvature_enabled;
-  bool cavity_enabled;
-
-  void init(const View3DShading &shading,
-            const SceneDisplay &display,
-            UniformBuffer<WorldData> &world_buf,
-            int taa_sample,
-            int taa_sample_len);
+  void init(const DrawConfig &config, UniformBuffer<WorldData> &world_buf);
 
   void setup_resolve_pass(PassSimple &pass, Texture &object_id_tx);
 };
@@ -95,10 +149,7 @@ struct SceneResources {
 
   CavityEffect cavity;
 
-  void init(const View3DShading &shading,
-            const SceneDisplay &display,
-            int2 resolution,
-            float4 background_color);
+  void init(const DrawConfig &config);
 };
 
 class MeshPass : public PassMain {
@@ -136,11 +187,7 @@ class OpaquePass {
   MeshPass gbuffer_in_front_ps_ = {"Opaque.GbufferInFront"};
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
 
-  void sync(DRWState cull_state,
-            DRWState clip_state,
-            eShadingType shading_type,
-            SceneResources &resources,
-            int2 resolution);
+  void sync(const DrawConfig config, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -158,10 +205,7 @@ class TransparentPass {
   PassSimple resolve_ps_ = {"Transparent.Resolve"};
   Framebuffer resolve_fb;
 
-  void sync(DRWState cull_state,
-            DRWState clip_state,
-            eShadingType shading_type,
-            SceneResources &resources);
+  void sync(const DrawConfig config, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -177,7 +221,7 @@ class TransparentDepthPass {
   PassSimple merge_ps_ = {"TransparentDepth.Merge"};
   Framebuffer merge_fb = {"TransparentDepth.Merge"};
 
-  void sync(DRWState cull_state, DRWState clip_state, SceneResources &resources);
+  void sync(const DrawConfig config, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -218,7 +262,7 @@ class DofPass {
   void setup_samples();
 
  public:
-  void init(const View3DShading &shading, int2 resolution);
+  void init(const DrawConfig &config);
   void sync(SceneResources &resources);
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
   bool is_enabled();
@@ -228,8 +272,6 @@ class AntiAliasingPass {
  private:
   /** Total number of samples to after which TAA stops accumulating samples. */
   int sample_len;
-  /** Total number of samples of the previous TAA. When changed TAA will be reset. */
-  int sample_len_previous;
   /** Current TAA sample index in [0..sample_len] range. */
   int sample;
   /** Weight accumulated. */
@@ -238,15 +280,8 @@ class AntiAliasingPass {
   float weights[9];
   /** Sum of weights. */
   float weights_sum;
-  /** If the view has been updated and TAA needs to be reset. */
-  bool reset_next_sample;
   /** True if the history buffer contains relevant data and false if it could contain garbage. */
   // bool valid_history;
-  /** Last projection matrix to see if view is still valid. */
-  float4x4 last_matrix;
-
-  bool is_playback = true;
-  bool is_navigating = true;
 
   Texture sample0_depth_tx = {"sample0_depth_tx"};
 
@@ -279,8 +314,7 @@ class AntiAliasingPass {
 
   ~AntiAliasingPass();
 
-  void reset_taa();
-  void init();
+  void init(const DrawConfig &config);
   void sync(SceneResources &resources, int2 resolution);
   bool setup_view(View &view, int2 resolution);
   void draw(Manager &manager,
