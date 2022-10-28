@@ -24,16 +24,18 @@ void CavityEffect::init(const DrawConfig &config, UniformBuffer<WorldData> &worl
   curvature_enabled = config.draw_curvature;
 
   const int ssao_samples = config.scene->display.matcap_ssao_samples;
-  const int sample_count = min_ii(max_ii(1, config.aa_samples) * ssao_samples, MAX_SAMPLES);
-  const int max_iter_count = max_ii(1, sample_count / ssao_samples);
+  int sample_count = min_ii(max_ii(1, config.aa_samples) * ssao_samples, MAX_SAMPLES);
+  const int max_iter_count = sample_count / ssao_samples;
 
   if (config.reset_taa) {
     sample = 0;
   }
-  sample = sample++ % max_iter_count;
+  sample %= max_iter_count;
 
   world_buf.cavity_sample_start = ssao_samples * sample;
   world_buf.cavity_sample_end = ssao_samples * (sample + 1);
+
+  sample++;
 
   world_buf.cavity_sample_count_inv = 1.0f / (world_buf.cavity_sample_end -
                                               world_buf.cavity_sample_start);
@@ -50,20 +52,20 @@ void CavityEffect::init(const DrawConfig &config, UniformBuffer<WorldData> &worl
                                max_ff(square_f(config.shading.curvature_valley_factor), 1e-4f);
 
   if (cavity_enabled || config.draw_dof) {
-    setup_resources(sample_count);
+    setup_resources(ssao_samples, sample_count);
   }
 }
 
-void CavityEffect::setup_resources(int sample_count)
+void CavityEffect::setup_resources(int iteration_samples, int total_samples)
 {
-  if (this->sample_count != sample_count) {
-    this->sample_count = sample_count;
-    const float sample_count_inv = 1.0f / sample_count;
+  if (sample_count != total_samples) {
+    sample_count = total_samples;
+    const float iteration_samples_inv = 1.0f / iteration_samples;
 
     /* Create disk samples using Hammersley distribution */
     for (int i : IndexRange(sample_count)) {
-      float it_add = (i / sample_count) * 0.499f;
-      float r = fmodf((i + 0.5f + it_add) * sample_count_inv, 1.0f);
+      float it_add = (i / iteration_samples) * 0.499f;
+      float r = fmodf((i + 0.5f + it_add) * iteration_samples_inv, 1.0f);
       double dphi;
       BLI_hammersley_1d(i, &dphi);
 
@@ -77,6 +79,8 @@ void CavityEffect::setup_resources(int sample_count)
 
     samples_buf.push_update();
 
+    const float total_samples_inv = 1.0f / iteration_samples;
+
     /* Create blue noise jitter texture */
     const int jitter_texel_count = JITTER_TEX_SIZE * JITTER_TEX_SIZE;
     static float4 jitter[jitter_texel_count];
@@ -88,7 +92,7 @@ void CavityEffect::setup_resources(int sample_count)
       /* This offset the sample along its direction axis (reduce banding) */
       float bn = blue_noise[i][1] - 0.5f;
       bn = clamp_f(bn, -0.499f, 0.499f); /* fix fireflies */
-      jitter[i].z = bn * sample_count_inv;
+      jitter[i].z = bn * total_samples_inv;
       jitter[i].w = blue_noise[i][1];
     }
 

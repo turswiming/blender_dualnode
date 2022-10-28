@@ -126,7 +126,7 @@ class CavityEffect {
   /*TODO(Miguel Pozo): Move to SceneResources (Used by DoF too)*/
   Texture jitter_tx;
 
-  void setup_resources(int sample_count);
+  void setup_resources(int iteration_samples, int total_samples);
 
   void init(const DrawConfig &config, UniformBuffer<WorldData> &world_buf);
 
