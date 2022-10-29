@@ -203,7 +203,7 @@ static void fcm_generator_evaluate(
     case FCM_GENERATOR_POLYNOMIAL_FACTORISED: /* Factorized polynomial */
     {
       float value = 1.0f, *cp = NULL;
-      unsigned int i;
+      uint i;
 
       /* For each coefficient pair,
        * solve for that bracket before accumulating in value by multiplying. */
@@ -768,19 +768,19 @@ static void fcm_cycles_evaluate(FCurve *UNUSED(fcu),
 }
 
 static FModifierTypeInfo FMI_CYCLES = {
-    FMODIFIER_TYPE_CYCLES,      /* type */
-    sizeof(FMod_Cycles),        /* size */
-    FMI_TYPE_EXTRAPOLATION,     /* action type */
-    FMI_REQUIRES_ORIGINAL_DATA, /* requirements */
-    N_("Cycles"),               /* name */
-    "FMod_Cycles",              /* struct name */
-    sizeof(tFCMED_Cycles),      /* storage size */
-    NULL,                       /* free data */
-    NULL,                       /* copy data */
-    fcm_cycles_new_data,        /* new data */
-    NULL /*fcm_cycles_verify*/, /* verify */
-    fcm_cycles_time,            /* evaluate time */
-    fcm_cycles_evaluate,        /* evaluate */
+    FMODIFIER_TYPE_CYCLES,                       /* type */
+    sizeof(FMod_Cycles),                         /* size */
+    FMI_TYPE_EXTRAPOLATION,                      /* action type */
+    FMI_REQUIRES_ORIGINAL_DATA,                  /* requirements */
+    CTX_N_(BLT_I18NCONTEXT_ID_ACTION, "Cycles"), /* name */
+    "FMod_Cycles",                               /* struct name */
+    sizeof(tFCMED_Cycles),                       /* storage size */
+    NULL,                                        /* free data */
+    NULL,                                        /* copy data */
+    fcm_cycles_new_data,                         /* new data */
+    NULL /*fcm_cycles_verify*/,                  /* verify */
+    fcm_cycles_time,                             /* evaluate time */
+    fcm_cycles_evaluate,                         /* evaluate */
 };
 
 /* Noise F-Curve Modifier  --------------------------- */

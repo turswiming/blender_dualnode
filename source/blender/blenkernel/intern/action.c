@@ -53,6 +53,7 @@
 #include "BIK_api.h"
 
 #include "RNA_access.h"
+#include "RNA_path.h"
 #include "RNA_prototypes.h"
 
 #include "BLO_read_write.h"
@@ -112,7 +113,7 @@ static void action_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, 
 
     BLI_addtail(&action_dst->curves, fcurve_dst);
 
-    /* Fix group links (kindof bad list-in-list search, but this is the most reliable way). */
+    /* Fix group links (kind of bad list-in-list search, but this is the most reliable way). */
     for (group_dst = action_dst->groups.first, group_src = action_src->groups.first;
          group_dst && group_src;
          group_dst = group_dst->next, group_src = group_src->next) {
@@ -314,7 +315,7 @@ IDTypeInfo IDType_ID_AC = {
     .foreach_id = action_foreach_id,
     .foreach_cache = NULL,
     .foreach_path = NULL,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = action_blend_write,
     .blend_read_data = action_blend_read_data,
@@ -1950,7 +1951,7 @@ void BKE_pose_blend_read_lib(BlendLibReader *reader, Object *ob, bPose *pose)
 
     pchan->bone = BKE_armature_find_bone_name(arm, pchan->name);
 
-    IDP_BlendReadLib(reader, pchan->prop);
+    IDP_BlendReadLib(reader, ob->id.lib, pchan->prop);
 
     BLO_read_id_address(reader, ob->id.lib, &pchan->custom);
     if (UNLIKELY(pchan->bone == NULL)) {

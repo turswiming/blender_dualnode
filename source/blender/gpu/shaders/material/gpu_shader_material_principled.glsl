@@ -15,13 +15,13 @@ float principled_sheen(float NV)
 
 void node_bsdf_principled(vec4 base_color,
                           float subsurface,
-                          float subsurface_scale, //todo
+                          float subsurface_scale,  // todo
                           vec3 subsurface_radius,
                           vec4 subsurface_color,
                           float subsurface_ior,
                           float subsurface_anisotropy,
                           float metallic,
-                          vec4 metallic_edge, //todo
+                          vec4 metallic_edge,  // todo
                           float specular,
                           float specular_tint,
                           float roughness,
@@ -29,10 +29,10 @@ void node_bsdf_principled(vec4 base_color,
                           float anisotropic_rotation,
                           float sheen,
                           float sheen_tint,
-                          float sheen_roughness, //todo
+                          float sheen_roughness,  // todo
                           float clearcoat,
                           float clearcoat_roughness,
-                          vec4 clearcoat_tint, //todo
+                          vec4 clearcoat_tint,  // todo
                           float ior,
                           float transmission,
                           float transmission_roughness,
@@ -95,7 +95,7 @@ void node_bsdf_principled(vec4 base_color,
   diffuse_data.sss_id = uint(do_sss);
 
   /* NOTE(@fclem): We need to blend the reflection color but also need to avoid applying the
-   * weights so we compule the ratio. */
+   * weights so we compute the ratio. */
   float reflection_weight = specular_weight + glass_reflection_weight;
   float reflection_weight_inv = safe_rcp(reflection_weight);
   specular_weight *= reflection_weight_inv;
@@ -153,25 +153,37 @@ void node_bsdf_principled(vec4 base_color,
                                                        max(roughness, transmission_roughness);
   refraction_data.ior = ior;
 
+  /* Ref. T98190: Defines are optimizations for old compilers.
+   * Might become unnecessary with EEVEE-Next. */
   if (do_diffuse == 0.0 && do_refraction == 0.0 && do_clearcoat != 0.0) {
+#ifdef PRINCIPLED_CLEARCOAT
     /* Metallic & Clearcoat case. */
     result = closure_eval(reflection_data, clearcoat_data);
+#endif
   }
   else if (do_diffuse == 0.0 && do_refraction == 0.0 && do_clearcoat == 0.0) {
+#ifdef PRINCIPLED_METALLIC
     /* Metallic case. */
     result = closure_eval(reflection_data);
+#endif
   }
   else if (do_diffuse != 0.0 && do_refraction == 0.0 && do_clearcoat == 0.0) {
+#ifdef PRINCIPLED_DIELECTRIC
     /* Dielectric case. */
     result = closure_eval(diffuse_data, reflection_data);
+#endif
   }
   else if (do_diffuse == 0.0 && do_refraction != 0.0 && do_clearcoat == 0.0) {
+#ifdef PRINCIPLED_GLASS
     /* Glass case. */
     result = closure_eval(reflection_data, refraction_data);
+#endif
   }
   else {
+#ifdef PRINCIPLED_ANY
     /* Un-optimized case. */
     result = closure_eval(diffuse_data, reflection_data, clearcoat_data, refraction_data);
+#endif
   }
   Closure emission_cl = closure_eval(emission_data);
   Closure transparency_cl = closure_eval(transparency_data);

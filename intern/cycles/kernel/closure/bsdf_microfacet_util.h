@@ -92,7 +92,7 @@ ccl_device_forceinline float microfacet_ggx_glass_E(KernelGlobals kg,
                            kernel_data.tables.ggx_glass_E_offset;
 
   float x = mu, y = 1 - rough;
-  float z = sqrtf(0.5f * ((inv_table? 1.0f / ior : ior) - 1.0f));
+  float z = sqrtf(0.5f * ((inv_table ? 1.0f / ior : ior) - 1.0f));
   return lookup_table_read_3D(kg, x, y, z, offset, 16, 16, 16);
 }
 
@@ -109,7 +109,7 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(KernelGlobals kg,
   float F0 = fresnel_dielectric_cos(1.0f, ior);
   float x = mix(mu, inverse_lerp(1.0f, F0, macro_fresnel), 0.5f);
   float y = 1 - rough;
-  float z = sqrtf(0.5f * ((inv_table? 1.0f / ior : ior) - 1.0f));
+  float z = sqrtf(0.5f * ((inv_table ? 1.0f / ior : ior) - 1.0f));
 
   return lookup_table_read_3D(kg, x, y, z, offset, 16, 16, 16);
 }
@@ -131,14 +131,14 @@ ccl_device_forceinline float clearcoat_E(KernelGlobals kg, float mu, float rough
   return table * fresnel_dielectric_cos(mu, 1.5f);
 }
 
-ccl_device_inline float3 fresnel_metallic_Fss(float3 F0, float3 B)
+ccl_device_inline Spectrum fresnel_metallic_Fss(Spectrum F0, Spectrum B)
 {
-  return saturate(mix(F0, one_float3(), 1.0f / 21.0f) - B * (1.0f / 126.0f));
+  return saturate(mix(F0, one_spectrum(), 1.0f / 21.0f) - B * (1.0f / 126.0f));
 }
 
-ccl_device_inline float3 schlick_fresnel_Fss(float3 F0)
+ccl_device_inline Spectrum schlick_fresnel_Fss(Spectrum F0)
 {
-  return saturate(mix(F0, one_float3(), 1.0f / 21.0f));
+  return saturate(mix(F0, one_spectrum(), 1.0f / 21.0f));
 }
 
 /* TODO Imageworks source */

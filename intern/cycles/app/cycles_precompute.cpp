@@ -172,8 +172,7 @@ static float precompute_ggx_refract_E(float rough, float mu, float eta, float u1
   return 0.0f;
 }
 
-static float precompute_ggx_glass_E(
-    float rough, float mu, float eta, float u1, float u2)
+static float precompute_ggx_glass_E(float rough, float mu, float eta, float u1, float u2)
 {
   MicrofacetBsdf bsdf;
   bsdf.weight = one_float3();

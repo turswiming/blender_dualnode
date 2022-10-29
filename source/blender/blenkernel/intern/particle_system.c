@@ -48,6 +48,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_mesh_legacy_convert.h"
+#include "BKE_mesh_runtime.h"
 #include "BKE_particle.h"
 
 #include "BKE_bvhutils.h"
@@ -319,7 +320,7 @@ void psys_calc_dmcache(Object *ob, Mesh *mesh_final, Mesh *mesh_original, Partic
   PARTICLE_P;
 
   /* CACHE LOCATIONS */
-  if (!mesh_final->runtime.deformed_only) {
+  if (!BKE_mesh_is_deformed_only(mesh_final)) {
     /* Will use later to speed up subsurf/evaluated mesh. */
     LinkNode *node, *nodedmelem, **nodearray;
     int totdmelem, totelem, i;
@@ -603,7 +604,7 @@ static void initialize_all_particles(ParticleSimulationData *sim)
    * UNEXIST flag.
    */
   const bool emit_from_volume_grid = (part->distr == PART_DISTR_GRID) &&
-                                     (!ELEM(part->from, PART_FROM_VERT, PART_FROM_CHILD));
+                                     !ELEM(part->from, PART_FROM_VERT, PART_FROM_CHILD);
   PARTICLE_P;
   LOOP_PARTICLES
   {
@@ -837,7 +838,7 @@ void psys_get_birth_coords(
     cross_v3_v3v3(mat[1], mat[2], mat[0]);
 
     /* apply rotation */
-    mat3_to_quat_is_ok(q, mat);
+    mat3_to_quat_legacy(q, mat);
     copy_qt_qt(state->rot, q);
   }
   else {
@@ -969,7 +970,7 @@ void psys_get_birth_coords(
           float tmat[3][3];
 
           /* NOTE: utan_local is not taken from 'utan', we calculate from rot_vec/vtan. */
-          /* NOTE(campbell): it looks like rotation phase may be applied twice
+          /* NOTE(@campbellbarton): it looks like rotation phase may be applied twice
            * (once with vtan, again below) however this isn't the case. */
           float *rot_vec_local = tmat[0];
           float *vtan_local = tmat[1];
@@ -3322,12 +3323,10 @@ static void hair_create_input_mesh(ParticleSimulationData *sim,
   mesh = *r_mesh;
   if (!mesh) {
     *r_mesh = mesh = BKE_mesh_new_nomain(totpoint, totedge, 0, 0, 0);
-    CustomData_add_layer(&mesh->vdata, CD_MDEFORMVERT, CD_CALLOC, NULL, mesh->totvert);
-    BKE_mesh_update_customdata_pointers(mesh, false);
   }
-  mvert = mesh->mvert;
-  medge = mesh->medge;
-  dvert = mesh->dvert;
+  mvert = BKE_mesh_verts_for_write(mesh);
+  medge = BKE_mesh_edges_for_write(mesh);
+  dvert = BKE_mesh_deform_verts_for_write(mesh);
 
   if (psys->clmd->hairdata == NULL) {
     psys->clmd->hairdata = MEM_mallocN(sizeof(ClothHairData) * totpoint, "hair data");
@@ -4152,17 +4151,17 @@ static bool particles_has_tracer(short parttype)
 
 static bool particles_has_spray(short parttype)
 {
-  return (ELEM(parttype, PART_FLUID_SPRAY, PART_FLUID_SPRAYFOAM, PART_FLUID_SPRAYFOAMBUBBLE));
+  return ELEM(parttype, PART_FLUID_SPRAY, PART_FLUID_SPRAYFOAM, PART_FLUID_SPRAYFOAMBUBBLE);
 }
 
 static bool particles_has_bubble(short parttype)
 {
-  return (ELEM(parttype, PART_FLUID_BUBBLE, PART_FLUID_FOAMBUBBLE, PART_FLUID_SPRAYFOAMBUBBLE));
+  return ELEM(parttype, PART_FLUID_BUBBLE, PART_FLUID_FOAMBUBBLE, PART_FLUID_SPRAYFOAMBUBBLE);
 }
 
 static bool particles_has_foam(short parttype)
 {
-  return (ELEM(parttype, PART_FLUID_FOAM, PART_FLUID_SPRAYFOAM, PART_FLUID_SPRAYFOAMBUBBLE));
+  return ELEM(parttype, PART_FLUID_FOAM, PART_FLUID_SPRAYFOAM, PART_FLUID_SPRAYFOAMBUBBLE);
 }
 
 static void particles_fluid_step(ParticleSimulationData *sim,

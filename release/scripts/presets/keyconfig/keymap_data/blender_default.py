@@ -128,7 +128,7 @@ class Params:
         self.legacy = legacy
 
         if use_mouse_emulate_3_button:
-            assert(use_alt_tool_or_cursor is False)
+            assert use_alt_tool_or_cursor is False
 
         if select_mouse == 'RIGHT':
             # Right mouse select.
@@ -490,16 +490,13 @@ def _template_items_tool_select(
             ]
 
     if params.select_mouse == 'LEFTMOUSE':
-        # By default use 'PRESS' for immediate select without quick delay.
-        # Fallback key-maps 'CLICK' since 'PRESS' events passes through (allowing either click or drag).
-        #
-        # NOTE: When the active (non-fallback) tool uses a key-map that activates it's primary tool on drag,
-        # it's important that this key-map uses click and not press. Otherwise it becomes impossible to use
-        # the tool without selecting elements under the cursor.
+        # Use 'PRESS' for immediate select without delay.
+        # Tools that allow dragging anywhere should _NOT_ enable the fallback tool
+        # unless it is expected that the tool should operate on the selection (click-drag to rip for e.g.).
         return [
-            (operator, {"type": 'LEFTMOUSE', "value": 'CLICK' if fallback else 'PRESS'},
+            (operator, {"type": 'LEFTMOUSE', "value": 'PRESS'},
              {"properties": [("deselect_all", True), *operator_props]}),
-            (operator, {"type": 'LEFTMOUSE', "value": 'CLICK' if fallback else 'PRESS', "shift": True},
+            (operator, {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
              {"properties": [("toggle", True), *operator_props]}),
 
             # Fallback key-map must transform as the primary tool is expected
@@ -2076,6 +2073,8 @@ def km_node_editor(params):
         op_menu("NODE_MT_add", {"type": 'A', "value": 'PRESS', "shift": True}),
         ("node.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True},
          {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
+        ("node.duplicate_move_linked", {"type": 'D', "value": 'PRESS', "alt": True},
+         {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
         ("node.duplicate_move_keep_inputs", {"type": 'D', "value": 'PRESS', "shift": True, "ctrl": True},
          {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
         ("node.parent_set", {"type": 'P', "value": 'PRESS', "ctrl": True}, None),
@@ -2237,6 +2236,7 @@ def km_file_browser(params):
          {"properties": [("increment", -10)]}),
         ("file.filenum", {"type": 'NUMPAD_MINUS', "value": 'PRESS', "ctrl": True, "repeat": True},
          {"properties": [("increment", -100)]}),
+        op_menu_pie("FILEBROWSER_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
 
         # Select file under cursor before spawning the context menu.
         ("file.select", {"type": 'RIGHTMOUSE', "value": 'PRESS'},
@@ -5071,8 +5071,8 @@ def km_sculpt(params):
          {"properties": [("mode", 'TOGGLE')]}),
         ("sculpt.face_set_change_visibility", {"type": 'H', "value": 'PRESS', "shift": True},
          {"properties": [("mode", 'HIDE_ACTIVE')]}),
-        ("sculpt.face_set_change_visibility", {"type": 'H', "value": 'PRESS', "alt": True},
-         {"properties": [("mode", 'SHOW_ALL')]}),
+        ("sculpt.reveal_all", {"type": 'H', "value": 'PRESS', "alt": True},
+         {"properties": []}),
 
         ("sculpt.face_set_edit", {"type": 'W', "value": 'PRESS', "ctrl": True},
          {"properties": [("mode", 'GROW')]}),

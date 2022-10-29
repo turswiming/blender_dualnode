@@ -102,6 +102,7 @@ static void material_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const 
                      (ID **)&material_dst->nodetree,
                      flag_private_id_data);
     }
+    material_dst->nodetree->owner_id = &material_dst->id;
   }
 
   if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
@@ -255,7 +256,7 @@ IDTypeInfo IDType_ID_MA = {
     .foreach_id = material_foreach_id,
     .foreach_cache = NULL,
     .foreach_path = NULL,
-    .owner_get = NULL,
+    .owner_pointer_get = NULL,
 
     .blend_write = material_blend_write,
     .blend_read_data = material_blend_read_data,
@@ -852,7 +853,7 @@ void BKE_object_material_resize(Main *bmain, Object *ob, const short totcol, boo
     ob->mat = newmatar;
     ob->matbits = newmatbits;
   }
-  /* XXX(campbell): why not realloc on shrink? */
+  /* XXX(@campbellbarton): why not realloc on shrink? */
 
   ob->totcol = totcol;
   if (ob->totcol && ob->actcol == 0) {
@@ -899,9 +900,15 @@ void BKE_objects_materials_test_all(Main *bmain, ID *id)
   }
 
   BKE_main_lock(bmain);
+  int processed_objects = 0;
   for (ob = bmain->objects.first; ob; ob = ob->id.next) {
     if (ob->data == id) {
       BKE_object_material_resize(bmain, ob, *totcol, false);
+      processed_objects++;
+      BLI_assert(processed_objects <= id->us && processed_objects > 0);
+      if (processed_objects == id->us) {
+        break;
+      }
     }
   }
   BKE_main_unlock(bmain);
@@ -1062,7 +1069,7 @@ void BKE_object_material_assign_single_obdata(struct Main *bmain,
   object_material_assign(bmain, ob, ma, act, BKE_MAT_ASSIGN_OBDATA, false);
 }
 
-void BKE_object_material_remap(Object *ob, const unsigned int *remap)
+void BKE_object_material_remap(Object *ob, const uint *remap)
 {
   Material ***matar = BKE_object_material_array_p(ob);
   const short *totcol_p = BKE_object_material_len_p(ob);
@@ -1505,58 +1512,65 @@ static ePaintSlotFilter material_paint_slot_filter(const struct Object *ob)
 
 void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma, const struct Object *ob)
 {
-  int count = 0;
-
   if (!ma) {
     return;
   }
 
   const ePaintSlotFilter slot_filter = material_paint_slot_filter(ob);
 
-  /* COW needed when adding texture slot on an object with no materials. */
-  DEG_id_tag_update(&ma->id, ID_RECALC_SHADING | ID_RECALC_COPY_ON_WRITE);
+  const TexPaintSlot *prev_texpaintslot = ma->texpaintslot;
+  const int prev_paint_active_slot = ma->paint_active_slot;
+  const int prev_paint_clone_slot = ma->paint_clone_slot;
+  const int prev_tot_slots = ma->tot_slots;
 
-  if (ma->texpaintslot) {
-    MEM_freeN(ma->texpaintslot);
-    ma->tot_slots = 0;
-    ma->texpaintslot = NULL;
-  }
+  ma->texpaintslot = NULL;
+  ma->tot_slots = 0;
 
   if (scene->toolsettings->imapaint.mode == IMAGEPAINT_MODE_IMAGE) {
     ma->paint_active_slot = 0;
     ma->paint_clone_slot = 0;
-    return;
   }
-
-  if (!(ma->nodetree)) {
+  else if (!(ma->nodetree)) {
     ma->paint_active_slot = 0;
     ma->paint_clone_slot = 0;
-    return;
+  }
+  else {
+    int count = count_texture_nodes_recursive(ma->nodetree, slot_filter);
+
+    if (count == 0) {
+      ma->paint_active_slot = 0;
+      ma->paint_clone_slot = 0;
+    }
+    else {
+      ma->texpaintslot = MEM_callocN(sizeof(*ma->texpaintslot) * count, "texpaint_slots");
+
+      bNode *active_node = nodeGetActivePaintCanvas(ma->nodetree);
+
+      fill_texpaint_slots_recursive(ma->nodetree, active_node, ob, ma, count, slot_filter);
+
+      ma->tot_slots = count;
+
+      if (ma->paint_active_slot >= count) {
+        ma->paint_active_slot = count - 1;
+      }
+
+      if (ma->paint_clone_slot >= count) {
+        ma->paint_clone_slot = count - 1;
+      }
+    }
   }
 
-  count = count_texture_nodes_recursive(ma->nodetree, slot_filter);
-
-  if (count == 0) {
-    ma->paint_active_slot = 0;
-    ma->paint_clone_slot = 0;
-    return;
+  /* COW needed when adding texture slot on an object with no materials.
+   * But do it only when slots actually change to avoid continuous depsgrap updates. */
+  if (ma->tot_slots != prev_tot_slots || ma->paint_active_slot != prev_paint_active_slot ||
+      ma->paint_clone_slot != prev_paint_clone_slot ||
+      (ma->texpaintslot && prev_texpaintslot &&
+       memcmp(ma->texpaintslot, prev_texpaintslot, sizeof(*ma->texpaintslot) * ma->tot_slots) !=
+           0)) {
+    DEG_id_tag_update(&ma->id, ID_RECALC_SHADING | ID_RECALC_COPY_ON_WRITE);
   }
 
-  ma->texpaintslot = MEM_callocN(sizeof(*ma->texpaintslot) * count, "texpaint_slots");
-
-  bNode *active_node = nodeGetActivePaintCanvas(ma->nodetree);
-
-  fill_texpaint_slots_recursive(ma->nodetree, active_node, ob, ma, count, slot_filter);
-
-  ma->tot_slots = count;
-
-  if (ma->paint_active_slot >= count) {
-    ma->paint_active_slot = count - 1;
-  }
-
-  if (ma->paint_clone_slot >= count) {
-    ma->paint_clone_slot = count - 1;
-  }
+  MEM_SAFE_FREE(prev_texpaintslot);
 }
 
 void BKE_texpaint_slots_refresh_object(Scene *scene, struct Object *ob)
@@ -1962,8 +1976,8 @@ static void material_default_surface_init(Material *ma)
 {
   strcpy(ma->id.name, "MADefault Surface");
 
-  bNodeTree *ntree = ntreeAddTree(NULL, "Shader Nodetree", ntreeType_Shader->idname);
-  ma->nodetree = ntree;
+  bNodeTree *ntree = ntreeAddTreeEmbedded(
+      NULL, &ma->id, "Shader Nodetree", ntreeType_Shader->idname);
   ma->use_nodes = true;
 
   bNode *principled = nodeAddStaticNode(NULL, ntree, SH_NODE_BSDF_PRINCIPLED);
@@ -1990,8 +2004,8 @@ static void material_default_volume_init(Material *ma)
 {
   strcpy(ma->id.name, "MADefault Volume");
 
-  bNodeTree *ntree = ntreeAddTree(NULL, "Shader Nodetree", ntreeType_Shader->idname);
-  ma->nodetree = ntree;
+  bNodeTree *ntree = ntreeAddTreeEmbedded(
+      NULL, &ma->id, "Shader Nodetree", ntreeType_Shader->idname);
   ma->use_nodes = true;
 
   bNode *principled = nodeAddStaticNode(NULL, ntree, SH_NODE_VOLUME_PRINCIPLED);
@@ -2015,8 +2029,8 @@ static void material_default_holdout_init(Material *ma)
 {
   strcpy(ma->id.name, "MADefault Holdout");
 
-  bNodeTree *ntree = ntreeAddTree(NULL, "Shader Nodetree", ntreeType_Shader->idname);
-  ma->nodetree = ntree;
+  bNodeTree *ntree = ntreeAddTreeEmbedded(
+      NULL, &ma->id, "Shader Nodetree", ntreeType_Shader->idname);
   ma->use_nodes = true;
 
   bNode *holdout = nodeAddStaticNode(NULL, ntree, SH_NODE_HOLDOUT);

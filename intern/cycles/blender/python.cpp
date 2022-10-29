@@ -15,6 +15,7 @@
 
 #include "util/debug.h"
 #include "util/foreach.h"
+#include "util/guiding.h"
 #include "util/log.h"
 #include "util/md5.h"
 #include "util/opengl.h"
@@ -59,8 +60,6 @@ static void debug_flags_sync_from_scene(BL::Scene b_scene)
 {
   DebugFlagsRef flags = DebugFlags();
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
-  /* Synchronize shared flags. */
-  flags.viewport_static_bvh = get_enum(cscene, "debug_bvh_type");
   /* Synchronize CPU flags. */
   flags.cpu.avx2 = get_boolean(cscene, "debug_use_cpu_avx2");
   flags.cpu.avx = get_boolean(cscene, "debug_use_cpu_avx");
@@ -139,8 +138,6 @@ static PyObject *init_func(PyObject * /*self*/, PyObject *args)
   Py_XDECREF(user_path_coerce);
 
   BlenderSession::headless = headless;
-
-  DebugFlags().running_inside_blender = true;
 
   Py_RETURN_NONE;
 }
@@ -538,7 +535,7 @@ static PyObject *osl_update_node_func(PyObject * /*self*/, PyObject *args)
           socket_type = "NodeSocketBool";
           data_type = BL::NodeSocket::type_BOOLEAN;
           if (param->validdefault) {
-            default_boolean = (bool)param->idefault[0];
+            default_boolean = bool(param->idefault[0]);
           }
         }
         else {
@@ -1011,6 +1008,15 @@ void *CCL_python_module_init()
   PyModule_AddStringConstant(mod, "osl_version", "unknown");
   PyModule_AddStringConstant(mod, "osl_version_string", "unknown");
 #endif
+
+  if (ccl::guiding_supported()) {
+    PyModule_AddObject(mod, "with_path_guiding", Py_True);
+    Py_INCREF(Py_True);
+  }
+  else {
+    PyModule_AddObject(mod, "with_path_guiding", Py_False);
+    Py_INCREF(Py_False);
+  }
 
 #ifdef WITH_EMBREE
   PyModule_AddObject(mod, "with_embree", Py_True);

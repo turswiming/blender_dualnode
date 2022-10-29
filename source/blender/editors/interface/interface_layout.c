@@ -694,7 +694,7 @@ static void ui_item_array(uiLayout *layout,
     else {
       /* Even if 'expand' is false, we expand anyway. */
 
-      /* layout for known array subtypes */
+      /* Layout for known array sub-types. */
       char str[3] = {'\0'};
 
       if (!icon_only && show_text) {
@@ -2112,11 +2112,11 @@ void uiItemFullR(uiLayout *layout,
             icon = ICON_CHECKBOX_DEHLT; /* but->iconadd will set to correct icon */
           }
           else if (is_array) {
-            icon = (RNA_property_boolean_get_index(ptr, prop, index)) ? ICON_CHECKBOX_HLT :
-                                                                        ICON_CHECKBOX_DEHLT;
+            icon = RNA_property_boolean_get_index(ptr, prop, index) ? ICON_CHECKBOX_HLT :
+                                                                      ICON_CHECKBOX_DEHLT;
           }
           else {
-            icon = (RNA_property_boolean_get(ptr, prop)) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT;
+            icon = RNA_property_boolean_get(ptr, prop) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT;
           }
         }
       }
@@ -3028,7 +3028,14 @@ void uiItemMContents(uiLayout *layout, const char *menuname)
   if (WM_menutype_poll(C, mt) == false) {
     return;
   }
+
+  bContextStore *previous_ctx = CTX_store_get(C);
   UI_menutype_draw(C, mt, layout);
+
+  /* Restore context that was cleared by `UI_menutype_draw`. */
+  if (layout->context) {
+    CTX_store_set(C, previous_ctx);
+  }
 }
 
 void uiItemDecoratorR_prop(uiLayout *layout, PointerRNA *ptr, PropertyRNA *prop, int index)
@@ -3228,7 +3235,7 @@ static uiBut *uiItemL_(uiLayout *layout, const char *name, int icon)
   return but;
 }
 
-void uiItemL_ex(
+uiBut *uiItemL_ex(
     uiLayout *layout, const char *name, int icon, const bool highlight, const bool redalert)
 {
   uiBut *but = uiItemL_(layout, name, icon);
@@ -3241,6 +3248,8 @@ void uiItemL_ex(
   if (redalert) {
     UI_but_flag_enable(but, UI_BUT_REDALERT);
   }
+
+  return but;
 }
 
 void uiItemL(uiLayout *layout, const char *name, int icon)

@@ -15,14 +15,6 @@ ccl_device float fresnel_dielectric(float eta,
                                     const float3 I,
                                     ccl_private float3 *R,
                                     ccl_private float3 *T,
-#ifdef __RAY_DIFFERENTIALS__
-                                    const float3 dIdx,
-                                    const float3 dIdy,
-                                    ccl_private float3 *dRdx,
-                                    ccl_private float3 *dRdy,
-                                    ccl_private float3 *dTdx,
-                                    ccl_private float3 *dTdy,
-#endif
                                     ccl_private bool *is_inside)
 {
   float cos = dot(N, I), neta;
@@ -45,28 +37,16 @@ ccl_device float fresnel_dielectric(float eta,
 
   // compute reflection
   *R = (2 * cos) * Nn - I;
-#ifdef __RAY_DIFFERENTIALS__
-  *dRdx = (2 * dot(Nn, dIdx)) * Nn - dIdx;
-  *dRdy = (2 * dot(Nn, dIdy)) * Nn - dIdy;
-#endif
 
   float arg = 1 - (neta * neta * (1 - (cos * cos)));
   if (arg < 0) {
     *T = make_float3(0.0f, 0.0f, 0.0f);
-#ifdef __RAY_DIFFERENTIALS__
-    *dTdx = make_float3(0.0f, 0.0f, 0.0f);
-    *dTdy = make_float3(0.0f, 0.0f, 0.0f);
-#endif
     return 1;  // total internal reflection
   }
   else {
     float dnp = max(sqrtf(arg), 1e-7f);
     float nK = (neta * cos) - dnp;
     *T = -(neta * I) + (nK * Nn);
-#ifdef __RAY_DIFFERENTIALS__
-    *dTdx = -(neta * dIdx) + ((neta - neta * neta * cos / dnp) * dot(dIdx, Nn)) * Nn;
-    *dTdy = -(neta * dIdy) + ((neta - neta * neta * cos / dnp) * dot(dIdy, Nn)) * Nn;
-#endif
     // compute Fresnel terms
     float cosTheta1 = cos;  // N.R
     float cosTheta2 = -dot(Nn, *T);
@@ -91,14 +71,14 @@ ccl_device float fresnel_dielectric_cos(float cosi, float eta)
   return 1.0f;  // TIR(no refracted component)
 }
 
-ccl_device float3 fresnel_conductor(float cosi, const float3 eta, const float3 k)
+ccl_device Spectrum fresnel_conductor(float cosi, const Spectrum eta, const Spectrum k)
 {
-  float3 cosi2 = make_float3(cosi * cosi, cosi * cosi, cosi * cosi);
-  float3 one = make_float3(1.0f, 1.0f, 1.0f);
-  float3 tmp_f = eta * eta + k * k;
-  float3 tmp = tmp_f * cosi2;
-  float3 Rparl2 = (tmp - (2.0f * eta * cosi) + one) / (tmp + (2.0f * eta * cosi) + one);
-  float3 Rperp2 = (tmp_f - (2.0f * eta * cosi) + cosi2) / (tmp_f + (2.0f * eta * cosi) + cosi2);
+  Spectrum cosi2 = make_spectrum(sqr(cosi));
+  Spectrum one = make_spectrum(1.0f);
+  Spectrum tmp_f = eta * eta + k * k;
+  Spectrum tmp = tmp_f * cosi2;
+  Spectrum Rparl2 = (tmp - (2.0f * eta * cosi) + one) / (tmp + (2.0f * eta * cosi) + one);
+  Spectrum Rperp2 = (tmp_f - (2.0f * eta * cosi) + cosi2) / (tmp_f + (2.0f * eta * cosi) + cosi2);
   return (Rparl2 + Rperp2) * 0.5f;
 }
 
@@ -116,27 +96,31 @@ ccl_device float schlick_fresnel(float u)
  * Source:
  * https://substance3d.adobe.com/documentation/s3d/files/225969599/225969601/1/1647019577092/Adobe+Standard+Material+-+Technical+Documentation.pdf
  */
-ccl_device float3 metallic_edge_factor(float3 F0, float3 F82)
+ccl_device Spectrum metallic_edge_factor(Spectrum F0, Spectrum F82)
 {
-  if (F82 == one_float3()) {
-    return zero_float3();
+  if (F82 == one_spectrum()) {
+    return zero_spectrum();
   }
 
-  /* Precompute the B factor of the F82 model, which scales an additional term around cosI == 1/7. */
+  /* Precompute the B factor of the F82 model, which scales an additional term around cosI == 1/7.
+   */
   const float f = 6.0f / 7.0f; /* 1 - cosI_max */
   const float f5 = sqr(sqr(f)) * f;
-  return (7.0f / (f5 * f)) * mix(F0, one_float3(), f5) * (one_float3() - F82);
+  return (7.0f / (f5 * f)) * mix(F0, one_spectrum(), f5) * (one_spectrum() - F82);
 }
 
-ccl_device float3 fresnel_metallic(float3 F0, float3 B, float cosi)
+ccl_device Spectrum fresnel_metallic(Spectrum F0, Spectrum B, float cosi)
 {
   float s = saturatef(1.0f - cosi);
   float s5 = sqr(sqr(s)) * s;
-  return saturate(mix(F0, one_float3(), s5) - B * cosi * s5 * s);
+  return saturate(mix(F0, one_spectrum(), s5) - B * cosi * s5 * s);
 }
 
 /* Calculate the fresnel color which is a blend between white and the F0 color */
-ccl_device_forceinline float3 interpolate_fresnel_color(float3 L, float3 H, float ior, float3 F0)
+ccl_device_forceinline Spectrum interpolate_fresnel_color(Spectrum L,
+                                                          Spectrum H,
+                                                          float ior,
+                                                          Spectrum F0)
 {
   /* Compute the real Fresnel term and remap it from real_F0...1 to F0...1.
    * We could also just use actual Schlick fresnel (mix(F0, 1, (1-cosI)^5)) here. */
@@ -144,7 +128,7 @@ ccl_device_forceinline float3 interpolate_fresnel_color(float3 L, float3 H, floa
   float F0_norm = 1.0f / (1.0f - real_F0);
   float FH = (fresnel_dielectric_cos(dot(L, H), ior) - real_F0) * F0_norm;
 
-  return mix(F0, one_float3(), FH);
+  return mix(F0, one_spectrum(), FH);
 }
 
 ccl_device float3 ensure_valid_reflection(float3 Ng, float3 I, float3 N)

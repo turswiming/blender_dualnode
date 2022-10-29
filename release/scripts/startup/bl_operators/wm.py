@@ -178,10 +178,10 @@ def context_path_decompose(data_path):
         prop_item = "".join(path_split[i + 1:])
 
         if base_path:
-            assert(base_path.startswith("."))
+            assert base_path.startswith(".")
             base_path = base_path[1:]
         if prop_attr:
-            assert(prop_attr.startswith("."))
+            assert prop_attr.startswith(".")
             prop_attr = prop_attr[1:]
     else:
         # If there are no properties, everything is an item.
@@ -2483,8 +2483,8 @@ class BatchRenameAction(bpy.types.PropertyGroup):
     )
 
     # Weak, add/remove as properties.
-    op_add: BoolProperty()
-    op_remove: BoolProperty()
+    op_add: BoolProperty(name="Add")
+    op_remove: BoolProperty(name="Remove")
 
 
 class WM_OT_batch_rename(Operator):
@@ -2518,6 +2518,7 @@ class WM_OT_batch_rename(Operator):
             ('BONE', "Bones", ""),
             ('NODE', "Nodes", ""),
             ('SEQUENCE_STRIP', "Sequence Strips", ""),
+            ('ACTION_CLIP', "Action Clips", ""),
         ),
         description="Type of data to rename",
     )
@@ -2570,7 +2571,7 @@ class WM_OT_batch_rename(Operator):
                     if only_selected else
                     scene.sequence_editor.sequences_all,
                     "name",
-                    "Strip(s)",
+                    iface_("Strip(s)"),
                 )
         elif space_type == 'NODE_EDITOR':
             data_type_test = 'NODE'
@@ -2582,7 +2583,7 @@ class WM_OT_batch_rename(Operator):
                     if only_selected else
                     list(space.node_tree.nodes),
                     "name",
-                    "Node(s)",
+                    iface_("Node(s)"),
                 )
         elif space_type == 'OUTLINER':
             data_type_test = 'COLLECTION'
@@ -2594,7 +2595,7 @@ class WM_OT_batch_rename(Operator):
                     if only_selected else
                     scene.collection.children_recursive,
                     "name",
-                    "Collection(s)",
+                    iface_("Collection(s)"),
                 )
         else:
             if mode == 'POSE' or (mode == 'WEIGHT_PAINT' and context.pose_object):
@@ -2607,7 +2608,7 @@ class WM_OT_batch_rename(Operator):
                         if only_selected else
                         [pbone.bone for ob in context.objects_in_mode_unique_data for pbone in ob.pose.bones],
                         "name",
-                        "Bone(s)",
+                        iface_("Bone(s)"),
                     )
             elif mode == 'EDIT_ARMATURE':
                 data_type_test = 'BONE'
@@ -2619,24 +2620,24 @@ class WM_OT_batch_rename(Operator):
                         if only_selected else
                         [ebone for ob in context.objects_in_mode_unique_data for ebone in ob.data.edit_bones],
                         "name",
-                        "Edit Bone(s)",
+                        iface_("Edit Bone(s)"),
                     )
 
         if check_context:
             return 'OBJECT'
 
         object_data_type_attrs_map = {
-            'MESH': ("meshes", "Mesh(es)", bpy.types.Mesh),
-            'CURVE': ("curves", "Curve(s)", bpy.types.Curve),
-            'META': ("metaballs", "Metaball(s)", bpy.types.MetaBall),
-            'VOLUME': ("volumes", "Volume(s)", bpy.types.Volume),
-            'GPENCIL': ("grease_pencils", "Grease Pencil(s)", bpy.types.GreasePencil),
-            'ARMATURE': ("armatures", "Armature(s)", bpy.types.Armature),
-            'LATTICE': ("lattices", "Lattice(s)", bpy.types.Lattice),
-            'LIGHT': ("lights", "Light(s)", bpy.types.Light),
-            'LIGHT_PROBE': ("light_probes", "Light Probe(s)", bpy.types.LightProbe),
-            'CAMERA': ("cameras", "Camera(s)", bpy.types.Camera),
-            'SPEAKER': ("speakers", "Speaker(s)", bpy.types.Speaker),
+            'MESH': ("meshes", iface_("Mesh(es)"), bpy.types.Mesh),
+            'CURVE': ("curves", iface_("Curve(s)"), bpy.types.Curve),
+            'META': ("metaballs", iface_("Metaball(s)"), bpy.types.MetaBall),
+            'VOLUME': ("volumes", iface_("Volume(s)"), bpy.types.Volume),
+            'GPENCIL': ("grease_pencils", iface_("Grease Pencil(s)"), bpy.types.GreasePencil),
+            'ARMATURE': ("armatures", iface_("Armature(s)"), bpy.types.Armature),
+            'LATTICE': ("lattices", iface_("Lattice(s)"), bpy.types.Lattice),
+            'LIGHT': ("lights", iface_("Light(s)"), bpy.types.Light),
+            'LIGHT_PROBE': ("light_probes", iface_("Light Probe(s)"), bpy.types.LightProbe),
+            'CAMERA': ("cameras", iface_("Camera(s)"), bpy.types.Camera),
+            'SPEAKER': ("speakers", iface_("Speaker(s)"), bpy.types.Speaker),
         }
 
         # Finish with space types.
@@ -2654,7 +2655,7 @@ class WM_OT_batch_rename(Operator):
                     if only_selected else
                     [id for id in bpy.data.objects if id.library is None],
                     "name",
-                    "Object(s)",
+                    iface_("Object(s)"),
                 )
             elif data_type == 'COLLECTION':
                 data = (
@@ -2669,7 +2670,7 @@ class WM_OT_batch_rename(Operator):
                     if only_selected else
                     [id for id in bpy.data.collections if id.library is None],
                     "name",
-                    "Collection(s)",
+                    iface_("Collection(s)"),
                 )
             elif data_type == 'MATERIAL':
                 data = (
@@ -2688,7 +2689,31 @@ class WM_OT_batch_rename(Operator):
                     if only_selected else
                     [id for id in bpy.data.materials if id.library is None],
                     "name",
-                    "Material(s)",
+                    iface_("Material(s)"),
+                )
+            elif data_type == "ACTION_CLIP":
+                data = (
+                    (
+                        # Outliner.
+                        tuple(set(
+                            action for id in context.selected_ids
+                            if (((animation_data := id.animation_data) is not None) and
+                                ((action := animation_data.action) is not None) and
+                                (action.library is None))
+                        ))
+                        if space_type == 'OUTLINER' else
+                        # 3D View (default).
+                        tuple(set(
+                            action for ob in context.selected_objects
+                            if (((animation_data := ob.animation_data) is not None) and
+                                ((action := animation_data.action) is not None) and
+                                (action.library is None))
+                        ))
+                    )
+                    if only_selected else
+                    [id for id in bpy.data.actions if id.library is None],
+                    "name",
+                    iface_("Action(s)"),
                 )
             elif data_type in object_data_type_attrs_map.keys():
                 attr, descr, ty = object_data_type_attrs_map[data_type]
@@ -2730,7 +2755,7 @@ class WM_OT_batch_rename(Operator):
                 elif method == 'SUFFIX':
                     name = name + text
                 else:
-                    assert(0)
+                    assert 0
 
             elif ty == 'STRIP':
                 chars = action.strip_chars
@@ -2775,9 +2800,9 @@ class WM_OT_batch_rename(Operator):
                 elif method == 'TITLE':
                     name = name.title()
                 else:
-                    assert(0)
+                    assert 0
             else:
-                assert(0)
+                assert 0
         return name
 
     def _data_update(self, context):
@@ -2913,7 +2938,7 @@ class WM_OT_batch_rename(Operator):
             row.prop(action, "op_remove", text="", icon='REMOVE')
             row.prop(action, "op_add", text="", icon='ADD')
 
-        layout.label(text="Rename %d %s" % (len(self._data[0]), self._data[2]))
+        layout.label(text=iface_("Rename %d %s") % (len(self._data[0]), self._data[2]))
 
     def check(self, context):
         changed = False
@@ -2974,7 +2999,7 @@ class WM_OT_batch_rename(Operator):
                 change_len += 1
             total_len += 1
 
-        self.report({'INFO'}, "Renamed %d of %d %s" % (change_len, total_len, descr))
+        self.report({'INFO'}, tip_("Renamed %d of %d %s") % (change_len, total_len, descr))
 
         return {'FINISHED'}
 
@@ -3133,6 +3158,15 @@ class WM_MT_splash_about(Menu):
                                                 bpy.app.build_commit_time.decode('utf-8', 'replace')), translate=False)
         col.label(text=iface_("Hash: %s") % bpy.app.build_hash.decode('ascii'), translate=False)
         col.label(text=iface_("Branch: %s") % bpy.app.build_branch.decode('utf-8', 'replace'), translate=False)
+
+        # This isn't useful information on MS-Windows or Apple systems as dynamically switching
+        # between windowing systems is only supported between X11/WAYLAND.
+        from _bpy import _ghost_backend
+        ghost_backend = _ghost_backend()
+        if ghost_backend not in {'NONE', 'DEFAULT'}:
+            col.label(text=iface_("Windowing Environment: %s") % _ghost_backend(), translate=False)
+        del _ghost_backend, ghost_backend
+
         col.separator(factor=2.0)
         col.label(text="Blender is free software")
         col.label(text="Licensed under the GNU General Public License")
@@ -3152,7 +3186,10 @@ class WM_OT_drop_blend_file(Operator):
     bl_label = "Handle dropped .blend file"
     bl_options = {'INTERNAL'}
 
-    filepath: StringProperty()
+    filepath: StringProperty(
+        subtype='FILE_PATH',
+        options={'SKIP_SAVE'},
+    )
 
     def invoke(self, context, _event):
         context.window_manager.popup_menu(self.draw_menu, title=bpy.path.basename(self.filepath), icon='QUESTION')

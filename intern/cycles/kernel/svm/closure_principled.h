@@ -8,8 +8,8 @@ CCL_NAMESPACE_BEGIN
 /* Principled v1 components */
 
 ccl_device_inline void principled_v1_diffuse(ccl_private ShaderData *sd,
-                                             float3 weight,
-                                             float3 base_color,
+                                             Spectrum weight,
+                                             Spectrum base_color,
                                              float diffuse_weight,
                                              float3 N,
                                              float roughness)
@@ -34,11 +34,11 @@ ccl_device_inline void principled_v1_diffuse(ccl_private ShaderData *sd,
 
 ccl_device_inline void principled_v1_diffuse_sss(ccl_private ShaderData *sd,
                                                  ccl_private float *stack,
-                                                 float3 weight,
+                                                 Spectrum weight,
                                                  int path_flag,
                                                  uint data_1,
                                                  uint data_2,
-                                                 float3 base_color,
+                                                 Spectrum base_color,
                                                  float diffuse_weight,
                                                  float3 N,
                                                  float roughness)
@@ -52,10 +52,10 @@ ccl_device_inline void principled_v1_diffuse_sss(ccl_private ShaderData *sd,
   float subsurface = stack_load_float(stack, subsurface_offset);
   float subsurface_anisotropy = stack_load_float(stack, aniso_offset);
   float subsurface_ior = stack_load_float(stack, ior_offset);
-  float3 subsurface_color = stack_load_float3(stack, color_offset);
-  float3 subsurface_radius = stack_load_float3(stack, radius_offset);
+  Spectrum subsurface_color = rgb_to_spectrum(stack_load_float3(stack, color_offset));
+  Spectrum subsurface_radius = rgb_to_spectrum(stack_load_float3(stack, radius_offset));
 
-  float3 mixed_ss_base_color = mix(base_color, subsurface_color, subsurface);
+  Spectrum mixed_ss_base_color = mix(base_color, subsurface_color, subsurface);
 
   /* disable in case of diffuse ancestor, can't see it well then and
    * adds considerably noise due to probabilities of continuing path
@@ -67,7 +67,7 @@ ccl_device_inline void principled_v1_diffuse_sss(ccl_private ShaderData *sd,
   /* diffuse */
   if (fabsf(average(mixed_ss_base_color)) > CLOSURE_WEIGHT_CUTOFF) {
     if (subsurface > CLOSURE_WEIGHT_CUTOFF) {
-      float3 subsurf_weight = weight * mixed_ss_base_color * diffuse_weight;
+      Spectrum subsurf_weight = weight * mixed_ss_base_color * diffuse_weight;
       ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, subsurf_weight);
 
       if (bssrdf == NULL) {
@@ -99,11 +99,11 @@ ccl_device_inline void principled_v1_diffuse_sss(ccl_private ShaderData *sd,
 ccl_device_inline void principled_v1_specular(KernelGlobals kg,
                                               ccl_private ShaderData *sd,
                                               ccl_private float *stack,
-                                              float3 weight,
+                                              Spectrum weight,
                                               int path_flag,
                                               ClosureType distribution,
                                               uint data,
-                                              float3 base_color,
+                                              Spectrum base_color,
                                               float3 N,
                                               float specular_weight,
                                               float metallic,
@@ -156,8 +156,8 @@ ccl_device_inline void principled_v1_specular(KernelGlobals kg,
 
   // normalize lum. to isolate hue+sat
   float m_cdlum = linear_rgb_to_gray(kg, base_color);
-  float3 m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_float3();
-  float3 specular_color = mix(one_float3(), m_ctint, specular_tint);
+  Spectrum m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_spectrum();
+  Spectrum specular_color = mix(one_spectrum(), m_ctint, specular_tint);
 
   bsdf->extra->cspec0 = mix(specular * 0.08f * specular_color, base_color, metallic);
   bsdf->extra->color = base_color;
@@ -171,8 +171,8 @@ ccl_device_inline void principled_v1_specular(KernelGlobals kg,
 }
 
 ccl_device_inline void principled_v1_glass_refl(ccl_private ShaderData *sd,
-                                                float3 weight,
-                                                float3 base_color,
+                                                Spectrum weight,
+                                                Spectrum base_color,
                                                 float reflection_weight,
                                                 float3 N,
                                                 float roughness,
@@ -203,15 +203,15 @@ ccl_device_inline void principled_v1_glass_refl(ccl_private ShaderData *sd,
   bsdf->ior = ior;
 
   bsdf->extra->color = base_color;
-  bsdf->extra->cspec0 = mix(one_float3(), base_color, specular_tint);
+  bsdf->extra->cspec0 = mix(one_spectrum(), base_color, specular_tint);
 
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_ggx_fresnel_setup(bsdf, sd);
 }
 
 ccl_device_inline void principled_v1_glass_refr(ccl_private ShaderData *sd,
-                                                float3 weight,
-                                                float3 base_color,
+                                                Spectrum weight,
+                                                Spectrum base_color,
                                                 float refraction_weight,
                                                 float3 N,
                                                 float roughness,
@@ -241,11 +241,11 @@ ccl_device_inline void principled_v1_glass_refr(ccl_private ShaderData *sd,
 ccl_device_inline void principled_v1_glass_single(KernelGlobals kg,
                                                   ccl_private ShaderData *sd,
                                                   ccl_private float *stack,
-                                                  float3 weight,
+                                                  Spectrum weight,
                                                   int path_flag,
                                                   ClosureType distribution,
                                                   uint data,
-                                                  float3 base_color,
+                                                  Spectrum base_color,
                                                   float glass_weight,
                                                   float3 N,
                                                   float roughness,
@@ -295,10 +295,10 @@ ccl_device_inline void principled_v1_glass_single(KernelGlobals kg,
 ccl_device_inline void principled_v1_glass_multi(KernelGlobals kg,
                                                  ccl_private ShaderData *sd,
                                                  ccl_private float *stack,
-                                                 float3 weight,
+                                                 Spectrum weight,
                                                  int path_flag,
                                                  uint data,
-                                                 float3 base_color,
+                                                 Spectrum base_color,
                                                  float glass_weight,
                                                  float3 N,
                                                  float roughness,
@@ -338,7 +338,7 @@ ccl_device_inline void principled_v1_glass_multi(KernelGlobals kg,
   bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / eta : eta;
 
   bsdf->extra->color = base_color;
-  bsdf->extra->cspec0 = mix(one_float3(), base_color, specular_tint);
+  bsdf->extra->cspec0 = mix(one_spectrum(), base_color, specular_tint);
 
   /* setup bsdf */
   sd->flag |= bsdf_microfacet_multi_ggx_glass_fresnel_setup(kg, bsdf, sd);
@@ -347,9 +347,9 @@ ccl_device_inline void principled_v1_glass_multi(KernelGlobals kg,
 ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
                                            ccl_private float *stack,
-                                           float3 weight,
+                                           Spectrum weight,
                                            uint data,
-                                           float3 base_color,
+                                           Spectrum base_color,
                                            float diffuse_weight,
                                            float3 N)
 {
@@ -364,11 +364,11 @@ ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
 
   // normalize lum. to isolate hue+sat
   float m_cdlum = linear_rgb_to_gray(kg, base_color);
-  float3 m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_float3();
+  Spectrum m_ctint = m_cdlum > 0.0f ? base_color / m_cdlum : one_spectrum();
 
   /* color of the sheen component */
   float sheen_tint = stack_load_float(stack, sheen_tint_offset);
-  float3 sheen_color = mix(one_float3(), m_ctint, sheen_tint);
+  Spectrum sheen_color = mix(one_spectrum(), m_ctint, sheen_tint);
 
   ccl_private PrincipledSheenBsdf *bsdf = (ccl_private PrincipledSheenBsdf *)bsdf_alloc(
       sd, sizeof(PrincipledSheenBsdf), sheen_weight * sheen_color * weight);
@@ -386,7 +386,7 @@ ccl_device_inline void principled_v1_sheen(KernelGlobals kg,
 ccl_device_inline void principled_v1_clearcoat(KernelGlobals kg,
                                                ccl_private ShaderData *sd,
                                                ccl_private float *stack,
-                                               float3 weight,
+                                               Spectrum weight,
                                                int path_flag,
                                                uint data)
 {
@@ -432,10 +432,10 @@ ccl_device_inline void principled_v1_clearcoat(KernelGlobals kg,
 
 ccl_device_inline void principled_v2_diffuse_sss(ccl_private ShaderData *sd,
                                                  ccl_private float *stack,
-                                                 float3 weight,
+                                                 Spectrum weight,
                                                  int path_flag,
                                                  uint data,
-                                                 float3 base_color,
+                                                 Spectrum base_color,
                                                  float ior,
                                                  float3 N)
 {
@@ -448,7 +448,8 @@ ccl_device_inline void principled_v2_diffuse_sss(ccl_private ShaderData *sd,
   svm_unpack_node_uchar4(data, &scale_offset, &aniso_offset, &radius_offset, &method);
 
   float aniso = stack_load_float(stack, aniso_offset);
-  float3 radius = stack_load_float3(stack, radius_offset) * stack_load_float(stack, scale_offset);
+  Spectrum radius = rgb_to_spectrum(stack_load_float3(stack, radius_offset)) *
+                    stack_load_float(stack, scale_offset);
 
   /* Fall back to diffuse if there has been a diffuse bounce before or the radius is too small. */
   if ((path_flag & PATH_RAY_DIFFUSE_ANCESTOR) == 0 && reduce_max(radius) > 1e-7f) {
@@ -486,19 +487,19 @@ ccl_device_inline void principled_v2_diffuse_sss(ccl_private ShaderData *sd,
   sd->flag |= bsdf_diffuse_setup(bsdf);
 }
 
-ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
-                                                 ccl_private ShaderData *sd,
-                                                 ccl_private float *stack,
-                                                 float3 weight,
-                                                 int path_flag,
-                                                 uint data)
+ccl_device_inline Spectrum principled_v2_clearcoat(KernelGlobals kg,
+                                                   ccl_private ShaderData *sd,
+                                                   ccl_private float *stack,
+                                                   Spectrum weight,
+                                                   int path_flag,
+                                                   uint data)
 {
   uint clearcoat_offset, roughness_offset, tint_offset, normal_offset;
   svm_unpack_node_uchar4(data, &clearcoat_offset, &roughness_offset, &tint_offset, &normal_offset);
 
   float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
-  float3 tint = saturate(stack_load_float3(stack, tint_offset));
-  if (tint != one_float3()) {
+  Spectrum tint = saturate(rgb_to_spectrum(stack_load_float3(stack, tint_offset)));
+  if (tint != one_spectrum()) {
     /* Tint is normalized to perpendicular incidence.
      * Therefore, if we define the coating thickness as length 1, the length along the ray is
      * t = sqrt(1+tan^2(angle(N, I))) = sqrt(1+tan^2(acos(dotNI))) = 1 / dotNI.
@@ -565,8 +566,8 @@ ccl_device_inline float3 principled_v2_clearcoat(KernelGlobals kg,
 ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
                                             ccl_private ShaderData *sd,
                                             ccl_private float *stack,
-                                            float3 weight,
-                                            float3 N,
+                                            Spectrum weight,
+                                            Spectrum N,
                                             uint data)
 {
   uint sheen_offset, sheen_tint_offset, sheen_roughness_offset, dummy;
@@ -597,8 +598,8 @@ ccl_device_inline float principled_v2_sheen(KernelGlobals kg,
 ccl_device_inline float principled_v2_specular(KernelGlobals kg,
                                                ccl_private ShaderData *sd,
                                                ccl_private float *stack,
-                                               float3 weight,
-                                               float3 base_color,
+                                               Spectrum weight,
+                                               Spectrum base_color,
                                                float roughness,
                                                float metallic,
                                                float ior,
@@ -632,7 +633,7 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
     T = stack_load_float3(stack, tangent_offset);
     T = rotate_around_axis(T, N, stack_load_float(stack, rotation_offset) * M_2PI_F);
   }
-  float3 edge_color = stack_load_float3(stack, edge_offset);
+  Spectrum edge_color = rgb_to_spectrum(stack_load_float3(stack, edge_offset));
 
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
       sd, sizeof(MicrofacetBsdf), weight);
@@ -664,7 +665,7 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
 
 ccl_device_inline void principled_v2_glass(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
-                                           float3 weight,
+                                           Spectrum weight,
                                            float transmission,
                                            float roughness,
                                            float ior,
@@ -683,7 +684,7 @@ ccl_device_inline void principled_v2_glass(KernelGlobals kg,
   bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / ior : ior;
 
   /* setup bsdf */
-  sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(kg, bsdf, sd, one_float3());
+  sd->flag |= bsdf_microfacet_multi_ggx_glass_setup(kg, bsdf, sd, one_spectrum());
 }
 
 ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
@@ -695,7 +696,7 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                int path_flag,
                                                int *offset)
 {
-  float3 weight = sd->svm_closure_weight * mix_weight;
+  Spectrum weight = sd->svm_closure_weight * mix_weight;
 
   /* Load shared parameter data. */
   uint base_color_offset, normal_offset, dummy;
@@ -704,7 +705,7 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
   svm_unpack_node_uchar4(
       node_1.z, &roughness_offset, &metallic_offset, &ior_offset, &transmission_offset);
 
-  float3 base_color = stack_load_float3(stack, base_color_offset);
+  Spectrum base_color = rgb_to_spectrum(stack_load_float3(stack, base_color_offset));
   float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
   if (!(sd->type & PRIMITIVE_CURVE)) {
     N = ensure_valid_reflection(sd->Ng, sd->I, N);
@@ -764,7 +765,7 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
   svm_unpack_node_uchar4(
       node_1.z, &roughness_offset, &metallic_offset, &transmission_offset, &specular_tint_offset);
 
-  float3 base_color = stack_load_float3(stack, base_color_offset);
+  Spectrum base_color = rgb_to_spectrum(stack_load_float3(stack, base_color_offset));
   float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
   if (!(sd->type & PRIMITIVE_CURVE)) {
     N = ensure_valid_reflection(sd->Ng, sd->I, N);
@@ -782,7 +783,7 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
    * since it models both the metallic specular as well as the non-glass dielectric specular.
    * This only affects materials mixing diffuse, glass AND metal though. */
   float specular_weight = (1.0f - transmission);
-  float3 weight = sd->svm_closure_weight * mix_weight;
+  Spectrum weight = sd->svm_closure_weight * mix_weight;
 
   /* Diffuse and subsurface */
   principled_v1_diffuse_sss(

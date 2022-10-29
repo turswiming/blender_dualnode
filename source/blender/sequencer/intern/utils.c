@@ -224,7 +224,7 @@ void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
   /* reset all the previously created anims */
   SEQ_relations_sequence_free_anim(seq);
 
-  BLI_join_dirfile(name, sizeof(name), seq->strip->dir, seq->strip->stripdata->name);
+  BLI_path_join(name, sizeof(name), seq->strip->dir, seq->strip->stripdata->name);
   BLI_path_abs(name, BKE_main_blendfile_path_from_global());
 
   proxy = seq->strip->proxy;
@@ -338,13 +338,14 @@ void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
 const Sequence *SEQ_get_topmost_sequence(const Scene *scene, int frame)
 {
   Editing *ed = scene->ed;
-  ListBase *channels = SEQ_channels_displayed_get(ed);
-  const Sequence *seq, *best_seq = NULL;
-  int best_machine = -1;
 
   if (!ed) {
     return NULL;
   }
+
+  ListBase *channels = SEQ_channels_displayed_get(ed);
+  const Sequence *seq, *best_seq = NULL;
+  int best_machine = -1;
 
   for (seq = ed->seqbasep->first; seq; seq = seq->next) {
     if (SEQ_render_is_muted(channels, seq) ||
@@ -406,7 +407,7 @@ Sequence *SEQ_sequence_from_strip_elem(ListBase *seqbase, StripElem *se)
   for (iseq = seqbase->first; iseq; iseq = iseq->next) {
     Sequence *seq_found;
     if ((iseq->strip && iseq->strip->stripdata) &&
-        (ARRAY_HAS_ITEM(se, iseq->strip->stripdata, iseq->len))) {
+        ARRAY_HAS_ITEM(se, iseq->strip->stripdata, iseq->len)) {
       break;
     }
     if ((seq_found = SEQ_sequence_from_strip_elem(&iseq->seqbase, se))) {

@@ -416,7 +416,7 @@ ShaderManager *ShaderManager::create(int shadingsystem)
   return manager;
 }
 
-uint ShaderManager::get_attribute_id(ustring name)
+uint64_t ShaderManager::get_attribute_id(ustring name)
 {
   thread_scoped_spin_lock lock(attribute_lock_);
 
@@ -426,14 +426,14 @@ uint ShaderManager::get_attribute_id(ustring name)
   if (it != unique_attribute_id.end())
     return it->second;
 
-  uint id = (uint)ATTR_STD_NUM + unique_attribute_id.size();
+  uint64_t id = ATTR_STD_NUM + unique_attribute_id.size();
   unique_attribute_id[name] = id;
   return id;
 }
 
-uint ShaderManager::get_attribute_id(AttributeStandard std)
+uint64_t ShaderManager::get_attribute_id(AttributeStandard std)
 {
-  return (uint)std;
+  return (uint64_t)std;
 }
 
 int ShaderManager::get_shader_id(Shader *shader, bool smooth)
@@ -718,9 +718,6 @@ uint ShaderManager::get_graph_kernel_features(ShaderGraph *graph)
       if (CLOSURE_IS_VOLUME(bsdf_node->get_closure_type())) {
         kernel_features |= KERNEL_FEATURE_NODE_VOLUME;
       }
-      else if (CLOSURE_IS_PRINCIPLED(bsdf_node->get_closure_type())) {
-        kernel_features |= KERNEL_FEATURE_PRINCIPLED;
-      }
     }
     if (node->has_surface_bssrdf()) {
       kernel_features |= KERNEL_FEATURE_SUBSURFACE;
@@ -816,7 +813,7 @@ static bool to_scene_linear_transform(OCIO::ConstConfigRcPtr &config,
 {
   OCIO::ConstProcessorRcPtr processor;
   try {
-    processor = config->getProcessor(OCIO::ROLE_SCENE_LINEAR, colorspace);
+    processor = config->getProcessor("scene_linear", colorspace);
   }
   catch (OCIO::Exception &) {
     return false;
@@ -870,7 +867,7 @@ void ShaderManager::init_xyz_transforms()
 #ifdef WITH_OCIO
   /* Get from OpenColorO config if it has the required roles. */
   OCIO::ConstConfigRcPtr config = OCIO::GetCurrentConfig();
-  if (!(config && config->hasRole(OCIO::ROLE_SCENE_LINEAR))) {
+  if (!(config && config->hasRole("scene_linear"))) {
     return;
   }
 

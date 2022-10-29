@@ -1314,7 +1314,8 @@ void transform_convert_mesh_crazyspace_detect(TransInfo *t,
      * correction with \a quats, relative to the coordinates after
      * the modifiers that support deform matrices \a defcos. */
 
-#if 0 /* TODO(campbell): fix crazy-space & extrude so it can be enabled for general use. */
+#if 0 /* TODO(@campbellbarton): fix crazy-space & extrude so it can be enabled for general use. \
+       */
       if ((totleft > 0) || (totleft == -1))
 #else
     if (totleft > 0)
@@ -1422,8 +1423,7 @@ static void VertsToTransData(TransInfo *t,
   copy_v3_v3(td->iloc, td->loc);
 
   if ((t->mode == TFM_SHRINKFATTEN) && (em->selectmode & SCE_SELECT_FACE) &&
-      BM_elem_flag_test(eve, BM_ELEM_SELECT) &&
-      (BM_vert_calc_normal_ex(eve, BM_ELEM_SELECT, _no))) {
+      BM_elem_flag_test(eve, BM_ELEM_SELECT) && BM_vert_calc_normal_ex(eve, BM_ELEM_SELECT, _no)) {
     no = _no;
   }
   else {
@@ -2068,7 +2068,7 @@ static void recalcData_mesh(TransInfo *t)
 /** \name Special After Transform Mesh
  * \{ */
 
-void special_aftertrans_update__mesh(bContext *UNUSED(C), TransInfo *t)
+static void special_aftertrans_update__mesh(bContext *UNUSED(C), TransInfo *t)
 {
   const bool is_canceling = (t->state == TRANS_CANCEL);
   const bool use_automerge = !is_canceling && (t->flag & (T_AUTOMERGE | T_AUTOSPLIT)) != 0;
@@ -2123,7 +2123,7 @@ void special_aftertrans_update__mesh(bContext *UNUSED(C), TransInfo *t)
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     /* table needs to be created for each edit command, since vertices can move etc */
     ED_mesh_mirror_spatial_table_end(tc->obedit);
-    /* TODO(campbell): xform: We need support for many mirror objects at once! */
+    /* TODO(@campbellbarton): xform: We need support for many mirror objects at once! */
     break;
   }
 }

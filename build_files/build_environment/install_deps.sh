@@ -40,15 +40,15 @@ ver-ocio:,ver-oiio:,ver-llvm:,ver-osl:,ver-osd:,ver-openvdb:,ver-xr-openxr:,ver-
 force-all,force-python,force-boost,force-tbb,\
 force-ocio,force-imath,force-openexr,force-oiio,force-llvm,force-osl,force-osd,force-openvdb,\
 force-ffmpeg,force-opencollada,force-alembic,force-embree,force-oidn,force-usd,\
-force-xr-openxr,force-level-zero,\
+force-xr-openxr,force-level-zero, force-openpgl,\
 build-all,build-python,build-boost,build-tbb,\
 build-ocio,build-imath,build-openexr,build-oiio,build-llvm,build-osl,build-osd,build-openvdb,\
 build-ffmpeg,build-opencollada,build-alembic,build-embree,build-oidn,build-usd,\
-build-xr-openxr,build-level-zero,\
+build-xr-openxr,build-level-zero, build-openpgl,\
 skip-python,skip-boost,skip-tbb,\
 skip-ocio,skip-imath,skip-openexr,skip-oiio,skip-llvm,skip-osl,skip-osd,skip-openvdb,\
 skip-ffmpeg,skip-opencollada,skip-alembic,skip-embree,skip-oidn,skip-usd,\
-skip-xr-openxr,skip-level-zero \
+skip-xr-openxr,skip-level-zero, skip-openpgl \
 -- "$@" \
 )
 
@@ -232,6 +232,9 @@ ARGUMENTS_INFO="\"COMMAND LINE ARGUMENTS:
     --build-level-zero=<ver>
         Force the build of OneAPI Level Zero library.
 
+    --build-openpgl
+        Force the build of OpenPGL library.
+
     Note about the --build-foo options:
         * They force the script to prefer building dependencies rather than using available packages.
           This may make things simpler and allow working around some distribution bugs, but on the other hand it will
@@ -302,6 +305,9 @@ ARGUMENTS_INFO="\"COMMAND LINE ARGUMENTS:
     --force-level-zero=<ver>
         Force the rebuild of OneAPI Level Zero library.
 
+    --force-openpgl
+        Force the rebuild of OpenPGL library.
+
     Note about the --force-foo options:
         * They obviously only have an effect if those libraries are built by this script
           (i.e. if there is no available and satisfactory package)!
@@ -363,7 +369,10 @@ ARGUMENTS_INFO="\"COMMAND LINE ARGUMENTS:
         Unconditionally skip OpenXR-SDK installation/building.
 
     --skip-level-zero=<ver>
-        Unconditionally skip OneAPI Level Zero installation/building.\""
+        Unconditionally skip OneAPI Level Zero installation/building.
+
+    --skip-openpgl
+        Unconditionally skip OpenPGL installation/building.\""
 
 # ----------------------------------------------------------------------------
 # Main Vars
@@ -385,7 +394,7 @@ CLANG_FORMAT_VERSION="10.0"
 CLANG_FORMAT_VERSION_MIN="6.0"
 CLANG_FORMAT_VERSION_MEX="14.0"
 
-PYTHON_VERSION="3.10.2"
+PYTHON_VERSION="3.10.8"
 PYTHON_VERSION_SHORT="3.10"
 PYTHON_VERSION_MIN="3.10"
 PYTHON_VERSION_MEX="3.12"
@@ -478,7 +487,7 @@ OCIO_FORCE_BUILD=false
 OCIO_FORCE_REBUILD=false
 OCIO_SKIP=false
 
-IMATH_VERSION="3.1.4"
+IMATH_VERSION="3.1.5"
 IMATH_VERSION_SHORT="3.1"
 IMATH_VERSION_MIN="3.0"
 IMATH_VERSION_MEX="4.0"
@@ -487,7 +496,7 @@ IMATH_FORCE_REBUILD=false
 IMATH_SKIP=false
 _with_built_imath=false
 
-OPENEXR_VERSION="3.1.4"
+OPENEXR_VERSION="3.1.5"
 OPENEXR_VERSION_SHORT="3.1"
 OPENEXR_VERSION_MIN="3.0"
 OPENEXR_VERSION_MEX="4.0"
@@ -496,7 +505,7 @@ OPENEXR_FORCE_REBUILD=false
 OPENEXR_SKIP=false
 _with_built_openexr=false
 
-OIIO_VERSION="2.3.13.0"
+OIIO_VERSION="2.3.20.0"
 OIIO_VERSION_SHORT="2.3"
 OIIO_VERSION_MIN="2.1.12"
 OIIO_VERSION_MEX="2.4.0"
@@ -514,8 +523,8 @@ LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.11.17.0"
-OSL_VERSION_SHORT="1.11"
+OSL_VERSION="1.12.6.2"
+OSL_VERSION_SHORT="1.12"
 OSL_VERSION_MIN="1.11"
 OSL_VERSION_MEX="2.0"
 OSL_FORCE_BUILD=false
@@ -593,6 +602,14 @@ LEVEL_ZERO_FORCE_BUILD=false
 LEVEL_ZERO_FORCE_REBUILD=false
 LEVEL_ZERO_SKIP=false
 
+OPENPGL_VERSION="0.4.0"
+OPENPGL_VERSION_SHORT="0.4"
+OPENPGL_VERSION_MIN="0.3.1"
+OPENPGL_VERSION_MEX="0.5"
+OPENPGL_FORCE_BUILD=false
+OPENPGL_FORCE_REBUILD=false
+OPENPGL_SKIP=false
+
 XR_OPENXR_VERSION="1.0.22"
 XR_OPENXR_VERSION_SHORT="1.0"
 XR_OPENXR_VERSION_MIN="1.0.8"
@@ -601,8 +618,8 @@ XR_OPENXR_FORCE_BUILD=false
 XR_OPENXR_FORCE_REBUILD=false
 XR_OPENXR_SKIP=false
 
-FFMPEG_VERSION="5.0"
-FFMPEG_VERSION_SHORT="5.0"
+FFMPEG_VERSION="5.1.2"
+FFMPEG_VERSION_SHORT="5.1"
 FFMPEG_VERSION_MIN="4.0"
 FFMPEG_VERSION_MEX="6.0"
 FFMPEG_FORCE_BUILD=false
@@ -627,6 +644,9 @@ WEBP_DEV=""
 VPX_USE=false
 VPX_VERSION_MIN=0.9.7
 VPX_DEV=""
+AOM_USE=false
+AOM_VERSION_MIN=3.3.0
+AOM_DEV=""
 OPUS_USE=false
 OPUS_VERSION_MIN=1.1.1
 OPUS_DEV=""
@@ -824,6 +844,7 @@ while true; do
       USD_FORCE_BUILD=true
       XR_OPENXR_FORCE_BUILD=true
       LEVEL_ZERO_FORCE_BUILD=true
+      OPENPGL_FORCE_BUILD=true
       shift; continue
     ;;
     --build-python)
@@ -884,6 +905,9 @@ while true; do
     --build-level-zero)
       LEVEL_ZERO_FORCE_BUILD=true; shift; continue
     ;;
+    --build-openpgl)
+      OPENPGL_FORCE_BUILD=true; shift; continue
+    ;;
     --force-all)
       PYTHON_FORCE_REBUILD=true
       BOOST_FORCE_REBUILD=true
@@ -904,6 +928,7 @@ while true; do
       USD_FORCE_REBUILD=true
       XR_OPENXR_FORCE_REBUILD=true
       LEVEL_ZERO_FORCE_REBUILD=true
+      OPENPGL_FORCE_REBUILD=true
       shift; continue
     ;;
     --force-python)
@@ -964,6 +989,9 @@ while true; do
     --force-level-zero)
       LEVEL_ZERO_FORCE_REBUILD=true; shift; continue
     ;;
+    --force-openpgl)
+      OPENPGL_FORCE_REBUILD=true; shift; continue
+    ;;
     --skip-python)
       PYTHON_SKIP=true; shift; continue
     ;;
@@ -1020,6 +1048,9 @@ while true; do
     ;;
     --skip-level-zero)
       LEVEL_ZERO_SKIP=true; shift; continue
+    ;;
+    --skip-openpgl)
+      OPENPGL_SKIP=true; shift; continue
     ;;
     --)
       # no more arguments to parse
@@ -1108,7 +1139,7 @@ LLVM_SOURCE=( "$_LLVM_SOURCE_ROOT/llvm-$LLVM_VERSION.src.tar.xz" )
 LLVM_CLANG_SOURCE=( "$_LLVM_SOURCE_ROOT/clang-$LLVM_VERSION.src.tar.xz" "$_LLVM_SOURCE_ROOT/cfe-$LLVM_VERSION.src.tar.xz" )
 
 OSL_USE_REPO=false
-OSL_SOURCE=( "https://github.com/imageworks/OpenShadingLanguage/archive/Release-$OSL_VERSION.tar.gz" )
+OSL_SOURCE=( "https://github.com/imageworks/OpenShadingLanguage/archive/v$OSL_VERSION.tar.gz" )
 #~ OSL_SOURCE_REPO=( "https://github.com/imageworks/OpenShadingLanguage.git" )
 #~ OSL_SOURCE_REPO_BRANCH="master"
 #~ OSL_SOURCE_REPO_UID="85179714e1bc69cd25ecb6bb711c1a156685d395"
@@ -1170,6 +1201,9 @@ XR_OPENXR_REPO_BRANCH="master"
 
 LEVEL_ZERO_SOURCE=("https://github.com/oneapi-src/level-zero/archive/refs/tags/v${LEVEL_ZERO_VERSION}.tar.gz")
 
+OPENPGL_USE_REPO=false
+OPENPGL_SOURCE=( "https://github.com/OpenPathGuidingLibrary/openpgl/archive/refs/tags/v${OPENPGL_VERSION}-beta.tar.gz" )
+
 FFMPEG_SOURCE=( "http://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" )
 
 # C++11 is required now
@@ -1188,9 +1222,9 @@ Those libraries should be available as packages in all recent distributions (opt
     * Basics of dev environment (cmake, gcc, svn , git, ...).
     * libjpeg, libpng, libtiff, [openjpeg2], [libopenal].
     * libx11, libxcursor, libxi, libxrandr, libxinerama (and other libx... as needed).
-    * libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, libdbus-1-3, libegl1 (Wayland)
+    * libwayland-client0, libdecor, libwayland-cursor0, libwayland-egl1, libxkbcommon0, libdbus-1-3, libegl1 (Wayland)
     * libsqlite3, libzstd, libbz2, libssl, libfftw3, libxml2, libtinyxml, yasm, libyaml-cpp, flex.
-    * libsdl2, libglew, libpugixml, libpotrace, [libgmp], fontconfig, [libharu/libhpdf].\""
+    * libsdl2, libepoxy, libpugixml, libpotrace, [libgmp], fontconfig, [libharu/libhpdf].\""
 
 DEPS_SPECIFIC_INFO="\"BUILDABLE DEPENDENCIES:
 
@@ -1209,7 +1243,7 @@ You may also want to build them yourself (optional ones are [between brackets]):
     ** [NumPy $PYTHON_NUMPY_VERSION] (use pip).
     * Boost $BOOST_VERSION (from $BOOST_SOURCE, modules: $BOOST_BUILD_MODULES).
     * TBB $TBB_VERSION (from $TBB_SOURCE).
-    * [FFMpeg $FFMPEG_VERSION (needs libvorbis, libogg, libtheora, libx264, libmp3lame, libxvidcore, libvpx, libwebp, ...)] (from $FFMPEG_SOURCE).
+    * [FFMpeg $FFMPEG_VERSION (needs libvorbis, libogg, libtheora, libx264, libmp3lame, libxvidcore, libvpx, libaom, libwebp, ...)] (from $FFMPEG_SOURCE).
     * [OpenColorIO $OCIO_VERSION] (from $OCIO_SOURCE).
     * Imath $IMATH_VERSION (from $IMATH_SOURCE).
     * OpenEXR $OPENEXR_VERSION (from $OPENEXR_SOURCE).
@@ -1224,7 +1258,8 @@ You may also want to build them yourself (optional ones are [between brackets]):
     * [Alembic $ALEMBIC_VERSION] (from $ALEMBIC_SOURCE).
     * [Universal Scene Description $USD_VERSION] (from $USD_SOURCE).
     * [OpenXR-SDK $XR_OPENXR_VERSION] (from $XR_OPENXR_SOURCE).
-    * [OneAPI Level Zero $LEVEL_ZERO_VERSION] (from $LEVEL_ZERO_SOURCE).\""
+    * [OneAPI Level Zero $LEVEL_ZERO_VERSION] (from $LEVEL_ZERO_SOURCE).
+    * [OpenPGL $OPENPGL_VERSION] (from $OPENPGL_SOURCE).\""
 
 if [ "$DO_SHOW_DEPS" = true ]; then
   PRINT ""
@@ -1658,6 +1693,7 @@ _update_deps_tbb() {
     USD_FORCE_BUILD=true
     EMBREE_FORCE_BUILD=true
     OIDN_FORCE_BUILD=true
+    OPENPGL_FORCE_BUILD=true
   fi
   if [ "$2" = true ]; then
     OSD_FORCE_REBUILD=true
@@ -1665,6 +1701,7 @@ _update_deps_tbb() {
     USD_FORCE_REBUILD=true
     EMBREE_FORCE_REBUILD=true
     OIDN_FORCE_REBUILD=true
+    OPENPGL_FORCE_REBUILD=true
   fi
 }
 
@@ -3000,7 +3037,7 @@ compile_ALEMBIC() {
   fi
 
   # To be changed each time we make edits that would modify the compiled result!
-  alembic_magic=2
+  alembic_magic=3
   _init_alembic
 
   # Force having own builds for the dependencies.
@@ -3048,7 +3085,7 @@ compile_ALEMBIC() {
     fi
     if [ "$_with_built_openexr" = true ]; then
       cmake_d="$cmake_d -D USE_ARNOLD=OFF"
-      cmake_d="$cmake_d -D USE_BINARIES=OFF"
+      cmake_d="$cmake_d -D USE_BINARIES=ON"  # Tests use some Alembic binaries...
       cmake_d="$cmake_d -D USE_EXAMPLES=OFF"
       cmake_d="$cmake_d -D USE_HDF5=OFF"
       cmake_d="$cmake_d -D USE_MAYA=OFF"
@@ -3303,7 +3340,12 @@ _init_embree() {
 }
 
 _update_deps_embree() {
-  :
+  if [ "$1" = true ]; then
+    OPENPGL_FORCE_BUILD=true
+  fi
+  if [ "$2" = true ]; then
+    OPENPGL_FORCE_REBUILD=true
+  fi
 }
 
 clean_Embree() {
@@ -3322,7 +3364,7 @@ compile_Embree() {
   fi
 
   # To be changed each time we make edits that would modify the compiled results!
-  embree_magic=11
+  embree_magic=12
   _init_embree
 
   # Force having own builds for the dependencies.
@@ -3634,7 +3676,7 @@ compile_FFmpeg() {
   fi
 
   # To be changed each time we make edits that would modify the compiled result!
-  ffmpeg_magic=5
+  ffmpeg_magic=6
   _init_ffmpeg
 
   # Force having own builds for the dependencies.
@@ -3685,6 +3727,10 @@ compile_FFmpeg() {
 
     if [ "$VPX_USE" = true ]; then
       extra="$extra --enable-libvpx"
+    fi
+
+    if [ "$AOM_USE" = true ]; then
+      extra="$extra --enable-libaom"
     fi
 
     if [ "$WEBP_USE" = true ]; then
@@ -3956,6 +4002,112 @@ compile_Level_Zero() {
 
 
 # ----------------------------------------------------------------------------
+# Build OpenPGL
+
+_init_openpgl() {
+  _src=$SRC/openpgl-$OPENPGL_VERSION
+  _git=false
+  _inst=$INST/openpgl-$OPENPGL_VERSION_SHORT
+  _inst_shortcut=$INST/openpgl
+}
+
+_update_deps_openpgl() {
+  :
+}
+
+clean_OpenPGL() {
+  _init_openpgl
+  if [ -d $_inst ]; then
+    # Force rebuilding the dependencies if needed.
+    _update_deps_openpgl false true
+  fi
+  _clean
+}
+
+compile_OpenPGL() {
+  if [ "$NO_BUILD" = true ]; then
+    WARNING "--no-build enabled, OpenPGL will not be compiled!"
+    return
+  fi
+
+  # To be changed each time we make edits that would modify the compiled results!
+  openpgl_magic=1
+  _init_openpgl
+
+  # Force having own builds for the dependencies.
+  _update_deps_openpgl true false
+
+  # Clean install if needed!
+  magic_compile_check openpgl-$OPENPGL_VERSION $openpgl_magic
+  if [ $? -eq 1 -o "$OPENPGL_FORCE_REBUILD" = true ]; then
+    clean_OpenPGL
+  fi
+
+  if [ ! -d $_inst ]; then
+    INFO "Building OpenPGL-$OPENPGL_VERSION"
+
+    # Force rebuilding the dependencies.
+    _update_deps_openpgl true true
+
+    prepare_inst
+
+    if [ ! -d $_src ]; then
+      mkdir -p $SRC
+      download OPENPGL_SOURCE[@] "$_src.tar.gz"
+      INFO "Unpacking OpenPGL-$OPENPGL_VERSION"
+      tar -C $SRC --transform "s,(.*/?)openpgl-$OPENPGL_VERSION-beta[^/]*(.*),\1openpgl-$OPENPGL_VERSION\2,x" \
+          -xf $_src.tar.gz
+    fi
+
+    cd $_src
+
+    INFO "$_src"
+
+    # Always refresh the whole build!
+    if [ -d build ]; then
+      rm -rf build
+    fi
+    mkdir build
+    cd build
+
+    cmake_d="-D CMAKE_BUILD_TYPE=Release"
+    cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
+    cmake_d="$cmake_d -D OPENPGL_BUILD_STATIC=OFF"
+    cmake_d="$cmake_d -D OPENPGL_BUILD_PYTHON=OFF"
+    cmake_d="$cmake_d -D EMBREE_ISPC_SUPPORT=OFF"
+    if [ -d $INST/tbb ]; then
+      cmake_d="$cmake_d -D OPENPGL_TBB_ROOT=$INST/tbb"
+      cmake_d="$cmake_d -D TBB_ROOT=$INST/tbb"
+    fi
+
+    cmake $cmake_d ../
+
+    make -j$THREADS && make install
+    make clean
+
+    if [ ! -d $_inst ]; then
+      ERROR "OpenPGL-$OPENPGL_VERSION failed to compile, exiting"
+      exit 1
+    fi
+
+    magic_compile_set openpgl-$OPENPGL_VERSION $openpgl_magic
+
+    cd $CWD
+    INFO "Done compiling OpenPGL-$OPENPGL_VERSION!"
+  else
+    INFO "Own OpenPGL-$OPENPGL_VERSION is up to date, nothing to do!"
+    INFO "If you want to force rebuild of this lib, use the --force-openpgl option."
+  fi
+
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
+
+  run_ldconfig "openpgl"
+}
+
+
+# ----------------------------------------------------------------------------
 # Install on DEB-like
 
 get_package_version_DEB() {
@@ -4053,11 +4205,12 @@ install_DEB() {
   _packages="gawk cmake cmake-curses-gui build-essential libjpeg-dev libpng-dev libtiff-dev \
              git libfreetype6-dev libfontconfig-dev libx11-dev flex bison libxxf86vm-dev \
              libxcursor-dev libxi-dev wget libsqlite3-dev libxrandr-dev libxinerama-dev \
-             libwayland-dev wayland-protocols libegl-dev libxkbcommon-dev libdbus-1-dev linux-libc-dev \
+             libwayland-dev libdecor-0-dev wayland-protocols libegl-dev libxkbcommon-dev libdbus-1-dev linux-libc-dev \
              libbz2-dev libncurses5-dev libssl-dev liblzma-dev libreadline-dev \
-             libopenal-dev libglew-dev yasm \
+             libopenal-dev libepoxy-dev yasm \
              libsdl2-dev libfftw3-dev patch bzip2 libxml2-dev libtinyxml-dev libjemalloc-dev \
-             libgmp-dev libpugixml-dev libpotrace-dev libhpdf-dev libzstd-dev libpystring-dev"
+             libgmp-dev libpugixml-dev libpotrace-dev libhpdf-dev libzstd-dev libpystring-dev \
+             libglfw3-dev"
 
   VORBIS_USE=true
   OGG_USE=true
@@ -4140,30 +4293,34 @@ install_DEB() {
     WEBP_USE=true
   fi
 
-  if [ "$WITH_ALL" = true ]; then
-    XVID_DEV="libxvidcore-dev"
-    check_package_DEB $XVID_DEV
-    if [ $? -eq 0 ]; then
-      XVID_USE=true
-    fi
+  XVID_DEV="libxvidcore-dev"
+  check_package_DEB $XVID_DEV
+  if [ $? -eq 0 ]; then
+    XVID_USE=true
+  fi
 
-    MP3LAME_DEV="libmp3lame-dev"
-    check_package_DEB $MP3LAME_DEV
-    if [ $? -eq 0 ]; then
-      MP3LAME_USE=true
-    fi
+  MP3LAME_DEV="libmp3lame-dev"
+  check_package_DEB $MP3LAME_DEV
+  if [ $? -eq 0 ]; then
+    MP3LAME_USE=true
+  fi
 
-    VPX_DEV="libvpx-dev"
-    check_package_version_ge_DEB $VPX_DEV $VPX_VERSION_MIN
-    if [ $? -eq 0 ]; then
-      VPX_USE=true
-    fi
+  VPX_DEV="libvpx-dev"
+  check_package_version_ge_DEB $VPX_DEV $VPX_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    VPX_USE=true
+  fi
 
-    OPUS_DEV="libopus-dev"
-    check_package_version_ge_DEB $OPUS_DEV $OPUS_VERSION_MIN
-    if [ $? -eq 0 ]; then
-      OPUS_USE=true
-    fi
+  AOM_DEV="libaom-dev"
+  check_package_version_ge_DEB $AOM_DEV $AOM_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    AOM_USE=true
+  fi
+
+  OPUS_DEV="libopus-dev"
+  check_package_version_ge_DEB $OPUS_DEV $OPUS_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    OPUS_USE=true
   fi
 
   # Check cmake version and disable features for older distros.
@@ -4546,6 +4703,9 @@ install_DEB() {
     if [ "$VPX_USE" = true ]; then
       _packages="$_packages $VPX_DEV"
     fi
+    if [ "$AOM_USE" = true ]; then
+      _packages="$_packages $AOM_DEV"
+    fi
     if [ "$OPUS_USE" = true ]; then
       _packages="$_packages $OPUS_DEV"
     fi
@@ -4579,6 +4739,18 @@ install_DEB() {
     # No package currently!
     PRINT ""
     compile_Level_Zero
+  fi
+
+  PRINT ""
+  if [ "$OPENPGL_SKIP" = true ]; then
+    WARNING "Skipping OpenPGL installation, as requested..."
+  elif [ "$OPENPGL_FORCE_BUILD" = true ]; then
+    INFO "Forced OpenPGL building, as requested..."
+    compile_OpenPGL
+  else
+    # No package currently!
+    PRINT ""
+    compile_OpenPGL
   fi
 }
 
@@ -4756,9 +4928,9 @@ install_RPM() {
   _packages="gcc gcc-c++ git make cmake tar bzip2 xz findutils flex bison fontconfig-devel \
              libtiff-devel libjpeg-devel libpng-devel sqlite-devel fftw-devel SDL2-devel \
              libX11-devel libXi-devel libXcursor-devel libXrandr-devel libXinerama-devel \
-             wayland-devel wayland-protocols-devel mesa-libEGL-devel libxkbcommon-devel dbus-devel kernel-headers \
+             wayland-devel libdecor-devel wayland-protocols-devel mesa-libEGL-devel libxkbcommon-devel dbus-devel kernel-headers \
              wget ncurses-devel readline-devel $OPENJPEG_DEV openal-soft-devel \
-             glew-devel yasm patch \
+             libepoxy-devel yasm patch \
              libxml2-devel yaml-cpp-devel tinyxml-devel jemalloc-devel \
              gmp-devel pugixml-devel potrace-devel libharu-devel libzstd-devel pystring-devel"
 
@@ -4846,21 +5018,27 @@ install_RPM() {
     WEBP_USE=true
   fi
 
-  if [ "$WITH_ALL" = true ]; then
-    VPX_DEV="libvpx-devel"
-    check_package_version_ge_RPM $VPX_DEV $VPX_VERSION_MIN
-    if [ $? -eq 0 ]; then
-      VPX_USE=true
-    fi
+  VPX_DEV="libvpx-devel"
+  check_package_version_ge_RPM $VPX_DEV $VPX_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    VPX_USE=true
+  fi
 
+  AOM_DEV="libaom-devel"
+  check_package_version_ge_RPM $AOM_DEV $AOM_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    AOM_USE=true
+  fi
+
+  OPUS_DEV="libopus-devel"
+  check_package_version_ge_RPM $OPUS_DEV $OPUS_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    OPUS_USE=true
+  fi
+
+  if [ "$WITH_ALL" = true ]; then
     PRINT ""
     install_packages_RPM libspnav-devel
-
-    OPUS_DEV="libopus-devel"
-    check_package_version_ge_RPM $OPUS_DEV $OPUS_VERSION_MIN
-    if [ $? -eq 0 ]; then
-      OPUS_USE=true
-    fi
   fi
 
   PRINT ""
@@ -5245,6 +5423,9 @@ install_RPM() {
     if [ "$VPX_USE" = true ]; then
       _packages="$_packages $VPX_DEV"
     fi
+    if [ "$AOM_USE" = true ]; then
+      _packages="$_packages $AOM_DEV"
+    fi
     if [ "$OPUS_USE" = true ]; then
       _packages="$_packages $OPUS_DEV"
     fi
@@ -5277,6 +5458,18 @@ install_RPM() {
     # No package currently!
     PRINT ""
     compile_Level_Zero
+  fi
+
+  PRINT ""
+  if [ "$OPENPGL_SKIP" = true ]; then
+    WARNING "Skipping OpenPGL installation, as requested..."
+  elif [ "$OPENPGL_FORCE_BUILD" = true ]; then
+    INFO "Forced OpenPGL building, as requested..."
+    compile_OpenPGL
+  else
+    # No package currently!
+    PRINT ""
+    compile_OpenPGL
   fi
 }
 
@@ -5389,7 +5582,7 @@ install_ARCH() {
   fi
 
   _packages="$BASE_DEVEL git cmake fontconfig flex \
-             libxi libxcursor libxrandr libxinerama glew libpng libtiff wget openal \
+             libxi libxcursor libxrandr libxinerama libepoxy libdecor libpng libtiff wget openal \
              $OPENJPEG_DEV yasm sdl2 fftw \
              libxml2 yaml-cpp tinyxml python-requests jemalloc gmp potrace pugixml libharu \
              zstd pystring"
@@ -5434,30 +5627,34 @@ install_ARCH() {
     WEBP_USE=true
   fi
 
-  if [ "$WITH_ALL" = true ]; then
-    XVID_DEV="xvidcore"
-    check_package_ARCH $XVID_DEV
-    if [ $? -eq 0 ]; then
-      XVID_USE=true
-    fi
+  XVID_DEV="xvidcore"
+  check_package_ARCH $XVID_DEV
+  if [ $? -eq 0 ]; then
+    XVID_USE=true
+  fi
 
-    MP3LAME_DEV="lame"
-    check_package_ARCH $MP3LAME_DEV
-    if [ $? -eq 0 ]; then
-      MP3LAME_USE=true
-    fi
+  MP3LAME_DEV="lame"
+  check_package_ARCH $MP3LAME_DEV
+  if [ $? -eq 0 ]; then
+    MP3LAME_USE=true
+  fi
 
-    VPX_DEV="libvpx"
-    check_package_version_ge_ARCH $VPX_DEV $VPX_VERSION_MIN
-    if [ $? -eq 0 ]; then
-      VPX_USE=true
-    fi
+  VPX_DEV="libvpx"
+  check_package_version_ge_ARCH $VPX_DEV $VPX_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    VPX_USE=true
+  fi
 
-    OPUS_DEV="opus"
-    check_package_version_ge_ARCH $OPUS_DEV $OPUS_VERSION_MIN
-    if [ $? -eq 0 ]; then
-      OPUS_USE=true
-    fi
+  AOM_DEV="libaom"
+  check_package_version_ge_ARCH $AOM_DEV $AOM_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    AOM_USE=true
+  fi
+
+  OPUS_DEV="opus"
+  check_package_version_ge_ARCH $OPUS_DEV $OPUS_VERSION_MIN
+  if [ $? -eq 0 ]; then
+    OPUS_USE=true
   fi
 
 
@@ -5835,6 +6032,9 @@ install_ARCH() {
     if [ "$VPX_USE" = true ]; then
       _packages="$_packages $VPX_DEV"
     fi
+    if [ "$AOM_USE" = true ]; then
+      _packages="$_packages $AOM_DEV"
+    fi
     if [ "$OPUS_USE" = true ]; then
       _packages="$_packages $OPUS_DEV"
     fi
@@ -5866,6 +6066,18 @@ install_ARCH() {
     # No package currently!
     PRINT ""
     compile_Level_Zero
+  fi
+
+  PRINT ""
+  if [ "$OPENPGL_SKIP" = true ]; then
+    WARNING "Skipping OpenPGL installation, as requested..."
+  elif [ "$OPENPGL_FORCE_BUILD" = true ]; then
+    INFO "Forced OpenPGL building, as requested..."
+    compile_OpenPGL
+  else
+    # No package currently!
+    PRINT ""
+    compile_OpenPGL
   fi
 }
 
@@ -6049,6 +6261,14 @@ install_OTHER() {
     INFO "Forced Level Zero building, as requested..."
     compile_Level_Zero
   fi
+
+  PRINT ""
+  if [ "$OPENPGL_SKIP" = true ]; then
+    WARNING "Skipping OpenPGL installation, as requested..."
+  elif [ "$OPENPGL_FORCE_BUILD" = true ]; then
+    INFO "Forced OpenPGL building, as requested..."
+    compile_OpenPGL
+  fi
 }
 
 # ----------------------------------------------------------------------------
@@ -6066,7 +6286,7 @@ print_info() {
   _buildargs="-U *SNDFILE* -U PYTHON* -U *BOOST* -U *Boost* -U *TBB*"
   _buildargs="$_buildargs -U *OPENCOLORIO* -U *OPENEXR* -U *OPENIMAGEIO* -U *LLVM* -U *CLANG* -U *CYCLES*"
   _buildargs="$_buildargs -U *OPENSUBDIV* -U *OPENVDB*  -U *BLOSC* -U *COLLADA* -U *FFMPEG* -U *ALEMBIC* -U *USD*"
-  _buildargs="$_buildargs -U *EMBREE* -U *OPENIMAGEDENOISE* -U *OPENXR*"
+  _buildargs="$_buildargs -U *EMBREE* -U *OPENIMAGEDENOISE* -U *OPENXR* -U *OPENPGL*"
 
   _1="-D WITH_CODEC_SNDFILE=ON"
   PRINT "  $_1"
@@ -6296,6 +6516,16 @@ print_info() {
       #~ _buildargs="$_buildargs $_1"
     #~ fi
   #~ fi
+
+  if [ "$OPENPGL_SKIP" = false ]; then
+    if [ -d $INST/openpgl ]; then
+      _1="-D openpgl_DIR=$INST/openpgl/lib/cmake/openpgl-$OPENPGL_VERSION"
+      _2="-D WITH_CYCLES_PATH_GUIDING=ON"
+      PRINT "  $_1"
+      PRINT "  $_2"
+      _buildargs="$_buildargs $_1 $_2"
+    fi
+  fi
 
   PRINT ""
   PRINT "Or even simpler, just run (in your blender-source dir):"
