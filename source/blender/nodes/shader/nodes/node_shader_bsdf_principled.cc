@@ -234,8 +234,8 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
                         out,
                         GPU_constant(&use_diffuse_f),
                         GPU_constant(&use_clear_f),
-                        GPU_constant(&use_refract_f),
-                        GPU_constant(&use_multi_scatter),
+                        //GPU_constant(&use_refract_f),
+                        //GPU_constant(&use_multi_scatter),  // TODO: Disabled because of GLSL argument limit
                         GPU_uniform(&use_sss));
 }
 

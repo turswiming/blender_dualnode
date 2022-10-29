@@ -47,11 +47,15 @@ void node_bsdf_principled(vec4 base_color,
                           float weight,
                           const float do_diffuse,
                           const float do_clearcoat,
-                          const float do_refraction,
-                          const float do_multiscatter,
+                          //const float do_refraction,
+                          //const float do_multiscatter,
                           float do_sss,
                           out Closure result)
 {
+  // TODO: Disabled because of GLSL argument limit
+  float do_multiscatter = 0.0f;
+  float do_refraction = 0.0f;
+
   /* Match cycles. */
   metallic = clamp(metallic, 0.0, 1.0);
   transmission = clamp(transmission, 0.0, 1.0) * (1.0 - metallic);
