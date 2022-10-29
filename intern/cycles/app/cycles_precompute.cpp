@@ -15,9 +15,55 @@
 #include "kernel/closure/bsdf_microfacet_glass.h"
 #include "kernel/closure/bsdf_principled_sheen.h"
 
+#include "scene/shader.tables"
+
 #include <iostream>
 
 CCL_NAMESPACE_BEGIN
+
+/* TODO: Is there a way to not duplicate the regular microfacet_ggx_E
+ * without setting up an entire fake KernelGlobals? */
+static float lookup_table_read(const float *table, float x, int size)
+{
+  x = clamp(x * size - 0.5f, 0.0f, (float)size);
+
+  int index = min(float_to_int(x), size - 1);
+  int nindex = min(index + 1, size - 1);
+  float t = x - index;
+
+  float data0 = table[index];
+  if (t == 0.0f)
+    return data0;
+
+  float data1 = table[nindex];
+  return mix(data0, data1, t);
+}
+
+static float lookup_table_read_2D(const float *table, float x, float y, int xsize, int ysize)
+{
+  y = clamp(y * ysize - 0.5f, 0.0f, (float)ysize);
+
+  int index = min(float_to_int(y), ysize - 1);
+  int nindex = min(index + 1, ysize - 1);
+  float t = y - index;
+
+  float data0 = lookup_table_read(table + xsize * nindex, x, xsize);
+  if (t == 0.0f)
+    return data0;
+
+  float data1 = lookup_table_read(table + xsize * nindex, x, xsize);
+  return mix(data0, data1, t);
+}
+
+static float microfacet_ggx_E(float mu, float rough)
+{
+  return lookup_table_read_2D(&table_ggx_E[0][0], mu, 1 - rough, 32, 32);
+}
+
+static float microfacet_ggx_E_avg(float rough)
+{
+  return lookup_table_read(table_ggx_E_avg, 1 - rough, 32);
+}
 
 /* From PBRT: core/montecarlo.h */
 inline float VanDerCorput(uint32_t n, uint32_t scramble)
@@ -47,19 +93,16 @@ static float precompute_sheen_E(float rough, float mu, float u1, float u2)
   bsdf.N = make_float3(0.0f, 0.0f, 1.0f);
   bsdf.roughness = sqr(rough);
 
-  float3 eval, omega_in, domega_in_dx, domega_in_dy;
+  float3 omega_in;
+  Spectrum eval;
   float pdf = 0.0f;
   bsdf_principled_sheen_sample((ShaderClosure *)&bsdf,
                                make_float3(0.0f, 0.0f, 1.0f),
                                make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
-                               zero_float3(),
-                               zero_float3(),
                                u1,
                                u2,
                                &eval,
                                &omega_in,
-                               &domega_in_dx,
-                               &domega_in_dy,
                                &pdf);
   if (pdf != 0.0f) {
     return clamp(average(eval) / pdf, 0.0f, 1e5f);
@@ -86,20 +129,20 @@ static float precompute_clearcoat_E(float rough, float mu, float u1, float u2)
   float Fms = Fss * E_avg / (1.0f - Fss * (1.0f - E_avg));
   float albedo_scale = 1.0f + Fms * ((1.0f - E) / E);
 
-  float3 eval, omega_in, domega_in_dx, domega_in_dy;
-  float pdf = 0.0f;
+  float3 omega_in;
+  Spectrum eval;
+  float pdf = 0.0f, sampled_eta;
+  float2 sampled_roughness;
   bsdf_microfacet_ggx_sample((ShaderClosure *)&bsdf,
                              make_float3(0.0f, 0.0f, 1.0f),
                              make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
-                             zero_float3(),
-                             zero_float3(),
                              u1,
                              u2,
                              &eval,
                              &omega_in,
-                             &domega_in_dx,
-                             &domega_in_dy,
-                             &pdf);
+                             &pdf,
+                             &sampled_roughness,
+                             &sampled_eta);
   if (pdf != 0.0f) {
     /* Encode relative to macrosurface Fresnel, saves resolution.
      * TODO: Worth the extra evaluation? */
@@ -120,20 +163,20 @@ static float precompute_ggx_E(float rough, float mu, float u1, float u2)
   bsdf.extra = nullptr;
   bsdf.T = make_float3(1.0f, 0.0f, 0.0f);
 
-  float3 eval, omega_in, domega_in_dx, domega_in_dy;
-  float pdf = 0.0f;
+  float3 omega_in;
+  Spectrum eval;
+  float pdf = 0.0f, sampled_eta;
+  float2 sampled_roughness;
   bsdf_microfacet_ggx_sample((ShaderClosure *)&bsdf,
                              make_float3(0.0f, 0.0f, 1.0f),
                              make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
-                             zero_float3(),
-                             zero_float3(),
                              u1,
                              u2,
                              &eval,
                              &omega_in,
-                             &domega_in_dx,
-                             &domega_in_dy,
-                             &pdf);
+                             &pdf,
+                             &sampled_roughness,
+                             &sampled_eta);
   if (pdf != 0.0f) {
     return average(eval) / pdf;
   }
@@ -152,20 +195,20 @@ static float precompute_ggx_refract_E(float rough, float mu, float eta, float u1
   bsdf.extra = nullptr;
   bsdf.T = make_float3(1.0f, 0.0f, 0.0f);
 
-  float3 eval, omega_in, domega_in_dx, domega_in_dy;
-  float pdf = 0.0f;
+  float3 omega_in;
+  Spectrum eval;
+  float pdf = 0.0f, sampled_eta;
+  float2 sampled_roughness;
   bsdf_microfacet_ggx_sample((ShaderClosure *)&bsdf,
                              make_float3(0.0f, 0.0f, 1.0f),
                              make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
-                             zero_float3(),
-                             zero_float3(),
                              u1,
                              u2,
                              &eval,
                              &omega_in,
-                             &domega_in_dx,
-                             &domega_in_dy,
-                             &pdf);
+                             &pdf,
+                             &sampled_roughness,
+                             &sampled_eta);
   if (pdf != 0.0f) {
     return average(eval) / pdf;
   }
@@ -184,20 +227,20 @@ static float precompute_ggx_glass_E(float rough, float mu, float eta, float u1, 
   bsdf.extra = nullptr;
   bsdf.T = make_float3(1.0f, 0.0f, 0.0f);
 
-  float3 eval, omega_in, domega_in_dx, domega_in_dy;
-  float pdf = 0.0f;
+  float3 omega_in;
+  Spectrum eval;
+  float pdf = 0.0f, sampled_eta;
+  float2 sampled_roughness;
   bsdf_microfacet_ggx_glass_sample((ShaderClosure *)&bsdf,
                                    make_float3(0.0f, 0.0f, 1.0f),
                                    make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
-                                   zero_float3(),
-                                   zero_float3(),
                                    u1,
                                    u2,
                                    &eval,
                                    &omega_in,
-                                   &domega_in_dx,
-                                   &domega_in_dy,
-                                   &pdf);
+                                   &pdf,
+                                   &sampled_roughness,
+                                   &sampled_eta);
   if (pdf != 0.0f) {
     return average(eval) / pdf;
   }
@@ -249,20 +292,20 @@ static float precompute_ggx_dielectric_E(float rough, float mu, float eta, float
   float Fms = Fss * E_avg / (1.0f - Fss * (1.0f - E_avg));
   extra.dielectric = 1.0f + Fms * ((1.0f - E) / E);
 
-  float3 eval, omega_in, domega_in_dx, domega_in_dy;
-  float pdf = 0.0f;
+  float3 omega_in;
+  Spectrum eval;
+  float pdf = 0.0f, sampled_eta;
+  float2 sampled_roughness;
   bsdf_microfacet_ggx_sample((ShaderClosure *)&bsdf,
                              make_float3(0.0f, 0.0f, 1.0f),
                              make_float3(sqrtf(1.0f - sqr(mu)), 0.0f, mu),
-                             zero_float3(),
-                             zero_float3(),
                              u1,
                              u2,
                              &eval,
                              &omega_in,
-                             &domega_in_dx,
-                             &domega_in_dy,
-                             &pdf);
+                             &pdf,
+                             &sampled_roughness,
+                             &sampled_eta);
   if (pdf != 0.0f) {
     return average(eval) / pdf;
   }
