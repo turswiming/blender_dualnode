@@ -171,7 +171,6 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
-    case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
       label = bsdf_microfacet_ggx_sample(
           sc, Ng, sd->I, randu, randv, eval, omega_in, pdf, sampled_roughness, eta);
@@ -324,7 +323,6 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
-    case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID: {
       ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
@@ -439,7 +437,6 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
-    case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_ID: {
       ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
       label = (bsdf->alpha_x * bsdf->alpha_y <= 1e-7f) ? LABEL_REFLECT | LABEL_SINGULAR :
@@ -552,9 +549,7 @@ ccl_device_inline
       break;
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
-    case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
-    case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
       eval = bsdf_microfacet_ggx_eval(sc, sd->I, omega_in, pdf);
       break;
@@ -631,7 +626,6 @@ ccl_device void bsdf_blur(KernelGlobals kg, ccl_private ShaderClosure *sc, float
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
-    case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID:
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID:

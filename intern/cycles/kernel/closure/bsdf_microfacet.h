@@ -54,24 +54,25 @@ ccl_device_forceinline Spectrum reflection_color(ccl_private const MicrofacetBsd
     return interpolate_fresnel_color(L, H, bsdf->ior, bsdf->extra->cspec0);
   }
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
-    return interpolate_fresnel_color(L, H, bsdf->ior, make_spectrum(0.04f));
-  }
-  else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID) {
     float f = fresnel_dielectric_cos(dot(H, L), bsdf->ior);
     return make_spectrum(f);
   }
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID) {
     MicrofacetExtrav2 *extra = (MicrofacetExtrav2 *)bsdf->extra;
+    Spectrum F = zero_spectrum();
     float cosHL = dot(H, L);
-    /* Metallic Fresnel: Kinda Schlick-Fresnel-like with configurable F0 and F90
-     * as well as falloff control. F90=white and falloff=0.2 gives classic Schlick Fresnel.
-     * Metallic factor and albedo scaling is baked into the F0 and F90 parameters. */
-    Spectrum metallic = extra->metallic *
-                        fresnel_metallic(extra->metal_base, extra->metal_edge_factor, cosHL);
-    /* Dielectric Fresnel, just basic IOR control. */
-    float dielectric = extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior);
 
-    return metallic + make_spectrum(dielectric);
+    if (extra->dielectric > 0.0f) {
+      /* Dielectric Fresnel, just basic IOR control. */
+      F += make_spectrum(extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior));
+    }
+
+    if (extra->metallic != zero_spectrum()) {
+      /* Fresnel term with edge color control, see fresnel_metallic for details. */
+      F += extra->metallic * fresnel_metallic(extra->metal_base, extra->metal_edge_factor, cosHL);
+    }
+
+    return F;
   }
   else {
     return one_spectrum();
@@ -204,6 +205,7 @@ ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(KernelGlobals kg,
   return SD_BSDF | SD_BSDF_HAS_EVAL;
 }
 
+/* Legacy clearcoat model, doesn't use energy conservation. */
 ccl_device int bsdf_microfacet_ggx_clearcoat_setup(ccl_private MicrofacetBsdf *bsdf,
                                                    ccl_private const ShaderData *sd)
 {
@@ -211,6 +213,7 @@ ccl_device int bsdf_microfacet_ggx_clearcoat_setup(ccl_private MicrofacetBsdf *b
   bsdf->alpha_y = bsdf->alpha_x;
 
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID;
+  bsdf->ior = 1.5f;
 
   bsdf_microfacet_fresnel_color(sd, bsdf);
 
@@ -224,7 +227,7 @@ ccl_device int bsdf_microfacet_ggx_clearcoat_v2_setup(KernelGlobals kg,
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
   bsdf->alpha_y = bsdf->alpha_x;
 
-  bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID;
+  bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID;
 
   float Fss = dielectric_fresnel_Fss(bsdf->ior);
   bsdf->weight *= microfacet_ggx_albedo_scaling_float(kg, bsdf, sd, Fss);
@@ -283,6 +286,7 @@ ccl_device Spectrum bsdf_microfacet_ggx_eval_reflect(ccl_private const Microface
   if (alpha_x == alpha_y) {
     /* Isotropic case */
 
+    /* TODO: Should we just use regular GGX for clearcoat as well? */
     if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
       /* use GTR1 for clearcoat */
       D = microfacet_GTR1_D(dot(N, m), alpha2);
@@ -467,6 +471,7 @@ ccl_device int bsdf_microfacet_ggx_sample(ccl_private const ShaderClosure *sc,
     if (alpha_x == alpha_y) {
       /* Isotropic case */
 
+      /* TODO: Should we just use regular GGX for clearcoat as well? */
       if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID) {
         /* use GTR1 for clearcoat */
         D = microfacet_GTR1_D(cosThetaM, alpha2);

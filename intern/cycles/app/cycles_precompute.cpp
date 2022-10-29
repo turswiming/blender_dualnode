@@ -71,7 +71,7 @@ static float precompute_clearcoat_E(float rough, float mu, float u1, float u2)
 {
   MicrofacetBsdf bsdf;
   bsdf.weight = one_float3();
-  bsdf.type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_V2_ID;
+  bsdf.type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID;
   bsdf.sample_weight = 1.0f;
   bsdf.N = make_float3(0.0f, 0.0f, 1.0f);
   bsdf.alpha_x = bsdf.alpha_y = sqr(rough);
