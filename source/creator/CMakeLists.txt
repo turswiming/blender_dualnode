@@ -952,8 +952,8 @@ elseif(WIN32)
         DEBUG
       )
 
-      # This will not exist for 3.3 and earlier lib folders
-      # to ease the transition, support both 3.3 and 3.4 lib
+      # This will not exist for 3.4 and earlier lib folders
+      # to ease the transition, support both 3.4 and 3.5 lib
       # folders.
       if(EXISTS ${LIBDIR}/openvdb/python/pyopenvdb_d.pyd)
         install(
@@ -1050,8 +1050,8 @@ elseif(WIN32)
       )
 
       if(WITH_USD)
-        # This will not exist for 3.3 and earlier lib folders
-        # to ease the transition, support both 3.3 and 3.4 lib
+        # This will not exist for 3.4 and earlier lib folders
+        # to ease the transition, support both 3.4 and 3.5 lib
         # folders.
         if(EXISTS ${USD_LIBRARY_DIR}/python/)
           install(
@@ -1439,8 +1439,13 @@ if(WITH_USD)
 
   # On windows the usd library sits in ./blender.shared copy the files
   # relative to the location of the USD dll, if the dll does not exist
-  # assume we are linking against the static 3.4 lib.
-  if(WIN32 AND EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
+  # assume we are linking against the static 3.5 lib.
+  if(WIN32 AND
+      (
+        EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll OR  # USD 22.03
+        EXISTS ${LIBDIR}/usd/lib/usd_ms.dll         # USD 22.11
+      )
+    )
     install(DIRECTORY
       ${USD_LIBRARY_DIR}/usd
       DESTINATION "./blender.shared"
