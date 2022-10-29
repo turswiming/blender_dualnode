@@ -213,7 +213,7 @@ static float precompute_ggx_dielectric_E(float rough, float mu, float eta, float
      * is an issue since there are changes in that range at higher roughnesses.
      * Therefore, the remapping is blended with the identity function for a compromise.
      */
-    float F0 = fresnel_dielectric_cos(1.0f, eta);
+    float F0 = fresnel_dielectric_F0(eta);
     auto get_remap = [eta, F0](float x) {
       return mix(x, inverse_lerp(1.0f, F0, fresnel_dielectric_cos(x, eta)), 0.5f);
     };

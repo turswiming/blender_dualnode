@@ -106,7 +106,7 @@ ccl_device_forceinline float microfacet_ggx_dielectric_E(KernelGlobals kg,
                            kernel_data.tables.ggx_dielectric_E_offset;
 
   float macro_fresnel = fresnel_dielectric_cos(mu, ior);
-  float F0 = fresnel_dielectric_cos(1.0f, ior);
+  float F0 = fresnel_dielectric_F0(ior);
   float x = mix(mu, inverse_lerp(1.0f, F0, macro_fresnel), 0.5f);
   float y = 1 - rough;
   float z = sqrtf(0.5f * ((inv_table ? 1.0f / ior : ior) - 1.0f));

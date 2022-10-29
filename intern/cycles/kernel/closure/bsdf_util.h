@@ -71,6 +71,13 @@ ccl_device float fresnel_dielectric_cos(float cosi, float eta)
   return 1.0f;  // TIR(no refracted component)
 }
 
+/* Returns F0 (perpendicular) reflectivity for given eta,
+ * equivalent to fresnel_dielectric_cos(1.0f, eta). */
+ccl_device float fresnel_dielectric_F0(float eta)
+{
+  return sqr((eta - 1.0f) / (eta + 1.0f));
+}
+
 ccl_device Spectrum fresnel_conductor(float cosi, const Spectrum eta, const Spectrum k)
 {
   Spectrum cosi2 = make_spectrum(sqr(cosi));
@@ -124,11 +131,9 @@ ccl_device_forceinline Spectrum interpolate_fresnel_color(Spectrum L,
 {
   /* Compute the real Fresnel term and remap it from real_F0...1 to F0...1.
    * We could also just use actual Schlick fresnel (mix(F0, 1, (1-cosI)^5)) here. */
-  float real_F0 = fresnel_dielectric_cos(1.0f, ior);
-  float F0_norm = 1.0f / (1.0f - real_F0);
-  float FH = (fresnel_dielectric_cos(dot(L, H), ior) - real_F0) * F0_norm;
-
-  return mix(F0, one_spectrum(), FH);
+  float real_F0 = fresnel_dielectric_F0(ior);
+  float mixFactor = inverse_lerp(real_F0, 1.0f, fresnel_dielectric_cos(dot(L, H), ior));
+  return mix(F0, one_spectrum(), mixFactor);
 }
 
 ccl_device float3 ensure_valid_reflection(float3 Ng, float3 I, float3 N)
