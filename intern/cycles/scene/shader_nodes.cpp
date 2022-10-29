@@ -2760,6 +2760,8 @@ NODE_DEFINE(PrincipledBsdfNode)
   SOCKET_IN_FLOAT(clearcoat, "Clearcoat", 0.0f);
   SOCKET_IN_FLOAT(clearcoat_roughness, "Clearcoat Roughness", 0.03f);
   SOCKET_IN_COLOR(clearcoat_tint, "Clearcoat Tint", make_float3(1.0f, 1.0f, 1.0f));
+  SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
+  SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.5f);
   SOCKET_IN_FLOAT(ior, "IOR", 0.0f);
   SOCKET_IN_FLOAT(transmission, "Transmission", 0.0f);
   SOCKET_IN_FLOAT(transmission_roughness, "Transmission Roughness", 0.0f);
@@ -2929,9 +2931,9 @@ void PrincipledBsdfNode::compile_v2(SVMCompiler &compiler)
                                     compiler.stack_assign(input("Subsurface Anisotropy")),
                                     compiler.stack_assign(input("Subsurface Radius")),
                                     subsurface_method);
-  uint metallic = compiler.encode_uchar4(SVM_STACK_INVALID,
+  uint metallic = compiler.encode_uchar4(compiler.stack_assign(input("Thin Film Thickness")),
                                          compiler.stack_assign(input("Metallic Edge")),
-                                         SVM_STACK_INVALID,
+                                         compiler.stack_assign(input("Thin Film IOR")),
                                          distribution);
   uint specular = compiler.encode_uchar4(compiler.stack_assign(input("Anisotropic")),
                                          compiler.stack_assign(input("Anisotropic Rotation")),

@@ -290,7 +290,8 @@ static float precompute_ggx_dielectric_E(float rough, float mu, float eta, float
   float E = microfacet_ggx_E(mu, rough), E_avg = microfacet_ggx_E_avg(rough);
   float Fss = dielectric_fresnel_Fss(eta);
   float Fms = Fss * E_avg / (1.0f - Fss * (1.0f - E_avg));
-  extra.dielectric = 1.0f + Fms * ((1.0f - E) / E);
+  extra.dielectric = make_spectrum(1.0f + Fms * ((1.0f - E) / E));
+  extra.thin_film_thickness = 0.0f;
 
   float3 omega_in;
   Spectrum eval;

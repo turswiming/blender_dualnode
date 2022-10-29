@@ -20,8 +20,10 @@ typedef struct MicrofacetExtra {
 typedef struct MicrofacetExtrav2 {
   /* Metallic fresnel control */
   Spectrum metal_base, metal_edge_factor;
-  Spectrum metallic;
-  float dielectric;
+  /* Albedo scaling */
+  Spectrum metallic, dielectric;
+  /* Thin film controls */
+  float thin_film_thickness, thin_film_ior;
 } MicrofacetExtrav2;
 
 // TODO probably remove this for the final code
@@ -62,9 +64,16 @@ ccl_device_forceinline Spectrum reflection_color(ccl_private const MicrofacetBsd
     Spectrum F = zero_spectrum();
     float cosHL = dot(H, L);
 
-    if (extra->dielectric > 0.0f) {
-      /* Dielectric Fresnel, just basic IOR control. */
-      F += make_spectrum(extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior));
+    if (extra->dielectric != zero_spectrum()) {
+      if (extra->thin_film_thickness == 0.0f) {
+        /* Dielectric Fresnel, just basic IOR control. */
+        F += extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior);
+      }
+      else {
+        F += extra->dielectric *
+             fresnel_dielectric_thin_film(
+                 cosHL, bsdf->ior, extra->thin_film_ior, extra->thin_film_thickness);
+      }
     }
 
     if (extra->metallic != zero_spectrum()) {
@@ -108,19 +117,6 @@ ccl_device_inline Spectrum microfacet_ggx_albedo_scaling(KernelGlobals kg,
 
   return one_spectrum() + Fms * ((1.0f - E) / E);
   /* TODO: Ensure that increase in weight does not mess up glossy color, albedo etc. passes */
-}
-
-ccl_device_inline float microfacet_ggx_albedo_scaling_float(KernelGlobals kg,
-                                                            ccl_private const MicrofacetBsdf *bsdf,
-                                                            ccl_private const ShaderData *sd,
-                                                            const float Fss)
-{
-  // TOOD: Deduplicate somehow?
-  float mu = dot(sd->I, bsdf->N);
-  float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
-  float E = microfacet_ggx_E(kg, mu, rough), E_avg = microfacet_ggx_E_avg(kg, rough);
-  float Fms = Fss * E_avg / (1.0f - Fss * (1.0f - E_avg));
-  return 1.0f + Fms * ((1.0f - E) / E);
 }
 
 ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf)
@@ -190,12 +186,11 @@ ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(KernelGlobals kg,
   }
 
   if (dielectric > 0.0f) {
-    float dielectric_Fss = dielectric_fresnel_Fss(bsdf->ior);
-    extra->dielectric = dielectric *
-                        microfacet_ggx_albedo_scaling_float(kg, bsdf, sd, dielectric_Fss);
+    Spectrum dielectric_Fss = make_spectrum(dielectric_fresnel_Fss(bsdf->ior));  // TODO
+    extra->dielectric = dielectric * microfacet_ggx_albedo_scaling(kg, bsdf, sd, dielectric_Fss);
   }
   else {
-    extra->dielectric = 0.0f;
+    extra->dielectric = zero_spectrum();
   }
 
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID;
@@ -230,7 +225,8 @@ ccl_device int bsdf_microfacet_ggx_clearcoat_v2_setup(KernelGlobals kg,
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID;
 
   float Fss = dielectric_fresnel_Fss(bsdf->ior);
-  bsdf->weight *= microfacet_ggx_albedo_scaling_float(kg, bsdf, sd, Fss);
+  /* TODO: Keep non-Spectum version of albedo scaling for performance? */
+  bsdf->weight *= microfacet_ggx_albedo_scaling(kg, bsdf, sd, make_spectrum(Fss));
 
   bsdf_microfacet_fresnel_color(sd, bsdf);
 

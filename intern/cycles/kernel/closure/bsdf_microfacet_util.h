@@ -155,4 +155,88 @@ ccl_device_inline float dielectric_fresnel_Fss(float eta)
   return f;
 }
 
+/* Source for thin film iridescence model:
+ * "A Practical Extension to Microfacet Theory for the Modeling of Varying Iridescence"
+ * by Laurent Belcour and Pascal Barla (SIGGRAPH 2017)
+ * https://belcour.github.io/blog/research/publication/2017/05/01/brdf-thin-film.html
+ */
+
+ccl_device_inline void fresnel_dielectric_complex(
+    float cosTheta1, float eta1, float eta2, float2 *R, float2 *phi)
+{
+
+  float sinTheta1Sqr = 1.0f - sqr(cosTheta1);
+
+  float etaSqr = sqr(eta1 / eta2);
+
+  /* TODO: Simplify. */
+  if (etaSqr * sinTheta1Sqr > 1) {
+    phi->x = 2.0f * atanf(-etaSqr * sqrtf(sinTheta1Sqr - 1.0f / etaSqr) / cosTheta1);
+    phi->y = 2.0f * atanf(-sqrtf(sinTheta1Sqr - 1.0f / etaSqr) / cosTheta1);
+    *R = one_float2();
+  }
+  else {
+    float cosTheta2 = sqrtf(1.0f - etaSqr * sinTheta1Sqr);
+    float rx = (eta2 * cosTheta1 - eta1 * cosTheta2) / (eta2 * cosTheta1 + eta1 * cosTheta2);
+    float ry = (eta1 * cosTheta1 - eta2 * cosTheta2) / (eta1 * cosTheta1 + eta2 * cosTheta2);
+    phi->x = (rx < 0.0f) ? M_PI_F : 0.0f;
+    phi->y = (ry < 0.0f) ? M_PI_F : 0.0f;
+    *R = sqr(make_float2(rx, ry));
+  }
+}
+
+ccl_device_inline float thin_film_sensitivity_component(
+    float phase, float shift, float val, float pos, float var)
+{
+  return val * cosf(pos * phase + shift) * expf(-var * sqr(phase));
+}
+
+ccl_device_inline float3 thin_film_sensitivity(float opd, float shift)
+{
+  float phase = M_2PI_F * opd * 1.0e-9f;
+  return make_float3(
+      thin_film_sensitivity_component(phase, shift, 0.8465900f, 1.6810e+06f, 4.3278e+09f) +
+          thin_film_sensitivity_component(phase, shift, 0.1538683f, 2.2399e+06f, 4.5282e+09f),
+      thin_film_sensitivity_component(phase, shift, 1.0002218f, 1.7953e+06f, 9.3046e+09f),
+      thin_film_sensitivity_component(phase, shift, 1.0011225f, 2.2084e+06f, 6.6121e+09f));
+}
+
+ccl_device_inline float3 fresnel_dielectric_thin_film(float cosThetaOuter,
+                                                      float iorInner,
+                                                      float iorOuter,
+                                                      float thickness)
+{
+  float cosThetaInner = sqrtf(1.0f - sqr(1.0f / iorOuter) * (1.0f - sqr(cosThetaOuter)));
+
+  float2 R12, phi12;
+  fresnel_dielectric_complex(cosThetaOuter, 1.0f, iorOuter, &R12, &phi12);
+
+  float2 R23, phi23;
+  fresnel_dielectric_complex(cosThetaInner, iorOuter, iorInner, &R23, &phi23);
+
+  float2 T121 = one_float2() - R12;
+  float2 R123 = R12 * R23;
+  float2 Rs = sqr(T121) * R23 / (one_float2() - R123);
+  float2 Cm = Rs - T121;
+
+  float opd = thickness * cosThetaInner;
+  float2 phi2 = make_float2(M_PI_F, M_PI_F) - phi12 + phi23;
+  float2 r123 = sqrt(R123);
+
+  float3 I = average(R12 + Rs) * thin_film_sensitivity(0.0f, 0.0f);
+  for (int m = 1; m < 4; m++) {
+    Cm *= r123;
+    float3 SmSh = thin_film_sensitivity(m * opd, m * phi2.x);
+    float3 SmPh = thin_film_sensitivity(m * opd, m * phi2.y);
+    I += Cm.x * SmSh + Cm.y * SmPh;
+  }
+
+  /* CIE XYZ -> sRGB incl. whitepoint adaption E -> D65
+   * TODO: Somehow properly handle color management here?
+   * Does OCIO have anything for handling reflectances? */
+  return make_float3(3.17482107f, -0.98993255f, 0.06047909f) * I.x +
+         make_float3(-1.69745555f, 1.94998695f, -0.20891802f) * I.y +
+         make_float3(-0.47752224f, 0.04004475f, 1.14851336f) * I.z;
+}
+
 CCL_NAMESPACE_END

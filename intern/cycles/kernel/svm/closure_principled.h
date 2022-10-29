@@ -614,9 +614,9 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
     return 0.0f;
   }
 
-  uint edge_offset, dummy;
+  uint tf_thickness_offset, edge_offset, tf_ior_offset, dummy;
   uint aniso_offset, rotation_offset, tangent_offset;
-  svm_unpack_node_uchar4(data1, &dummy, &edge_offset, &dummy, &dummy);
+  svm_unpack_node_uchar4(data1, &tf_thickness_offset, &edge_offset, &tf_ior_offset, &dummy);
   svm_unpack_node_uchar4(data2, &aniso_offset, &rotation_offset, &tangent_offset, &dummy);
 
   /* This function handles two specular components:
@@ -656,6 +656,8 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
 
   extra->metal_base = base_color;
   extra->metal_edge_factor = metallic_edge_factor(base_color, edge_color);
+  extra->thin_film_thickness = max(0.0f, stack_load_float(stack, tf_thickness_offset));
+  extra->thin_film_ior = max(0.0f, stack_load_float(stack, tf_ior_offset));
 
   float dielectric = (1.0f - metallic) * (1.0f - transmission);
   sd->flag |= bsdf_microfacet_ggx_fresnel_v2_setup(kg, bsdf, sd, metallic, dielectric);
@@ -665,12 +667,17 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
 
 ccl_device_inline void principled_v2_glass(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
+                                           ccl_private float *stack,
                                            Spectrum weight,
                                            float transmission,
                                            float roughness,
                                            float ior,
-                                           float3 N)
+                                           float3 N,
+                                           uint data)
 {
+  uint tf_thickness_offset, tf_ior_offset, dummy;
+  svm_unpack_node_uchar4(data, &tf_thickness_offset, &dummy, &tf_ior_offset, &dummy);
+
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
       sd, sizeof(MicrofacetBsdf), transmission * weight);
   if (bsdf == NULL) {
@@ -678,7 +685,10 @@ ccl_device_inline void principled_v2_glass(KernelGlobals kg,
   }
 
   bsdf->N = N;
-  bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
+  /* Use tangent for storing thin-film options, glass doesn't use it otherwise. */
+  bsdf->T = make_float3(max(0.0f, stack_load_float(stack, tf_thickness_offset)),
+                        max(0.0f, stack_load_float(stack, tf_ior_offset)),
+                        0.0f);
 
   bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
   bsdf->ior = (sd->flag & SD_BACKFACING) ? 1.0f / ior : ior;
@@ -732,7 +742,7 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                    node_2.y);
   weight *= 1.0f - metallic;
 
-  principled_v2_glass(kg, sd, weight, transmission, roughness, ior, N);
+  principled_v2_glass(kg, sd, stack, weight, transmission, roughness, ior, N, node_2.x);
 
   weight *= (1.0f - transmission) * (1.0f - dielectric_albedo);
 
