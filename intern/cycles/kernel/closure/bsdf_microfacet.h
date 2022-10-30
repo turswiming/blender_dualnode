@@ -264,13 +264,8 @@ ccl_device Spectrum bsdf_microfacet_ggx_eval_reflect(ccl_private const Microface
                                                      const float cosNI)
 {
   float alpha2 = alpha_x * alpha_y;
-  if (!(cosNI > 0 && cosNO > 0)) {
-    *pdf = 0.0f;
-    return zero_spectrum();
-  }
-
   /* Ensure that both direction are in the upper hemisphere */
-  if (cosNI <= 0 || cosNO <= 0) {
+  if (!(cosNI > 0 && cosNO > 0)) {
     *pdf = 0.0f;
     return zero_spectrum();
   }
