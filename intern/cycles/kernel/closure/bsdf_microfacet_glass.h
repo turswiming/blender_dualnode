@@ -132,6 +132,12 @@ ccl_device Spectrum bsdf_microfacet_ggx_glass_eval_transmit(ccl_private const Mi
     return zero_spectrum();
   }
 
+  /* For IOR very close to 1.0, the transmission component becomes singular. */
+  if (fabsf(bsdf->ior - 1.0f) < 1e-5f) {
+    *pdf = 0.0f;
+    return zero_spectrum();
+  }
+
   float eta = bsdf->ior;
   float3 ht = -(eta * omega_in + I);
   float3 m = normalize(ht);
@@ -299,10 +305,13 @@ ccl_device int bsdf_microfacet_ggx_glass_sample(ccl_private const ShaderClosure 
       return LABEL_NONE;
     }
 
-    label = LABEL_TRANSMIT | LABEL_GLOSSY;
+    label = LABEL_TRANSMIT;
     *omega_in = T;
     *pdf = 1.0f - reflect_pdf;
     *eval = one_spectrum() - F;
+
+    /* For IOR very close to 1.0, the transmission component becomes singular. */
+    label |= (fabsf(bsdf->ior - 1.0f) < 1e-5f) ? LABEL_SINGULAR : LABEL_GLOSSY;
 
     /* Compute microfacet common term. */
     float cosMI = dot(m, *omega_in);
@@ -310,9 +319,16 @@ ccl_device int bsdf_microfacet_ggx_glass_sample(ccl_private const ShaderClosure 
     common = D * fabsf(cosMI * cosMO) * sqr(bsdf->ior) / (cosNO * Ht2);
   }
 
-  float lambdaI = microfacet_ggx_lambda(cosNI, alpha2);
-  *eval *= common / (1 + lambdaO + lambdaI);
-  *pdf *= common / (1 + lambdaO);
+  if (label & LABEL_GLOSSY) {
+    float lambdaI = microfacet_ggx_lambda(cosNI, alpha2);
+    *eval *= common / (1 + lambdaO + lambdaI);
+    *pdf *= common / (1 + lambdaO);
+  }
+  else {
+    /* Specular case, just return some high number for MIS */
+    *eval *= 1e6f;
+    *pdf *= 1e6f;
+  }
 
   if (bsdf->type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_FRESNEL_ID) {
     *eval *= do_reflect ? reflection_color(bsdf, *omega_in, m) : bsdf->extra->color;
