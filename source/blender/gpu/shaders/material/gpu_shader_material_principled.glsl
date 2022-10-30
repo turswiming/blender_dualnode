@@ -15,13 +15,11 @@ float principled_sheen(float NV)
 
 void node_bsdf_principled(vec4 base_color,
                           float subsurface,
-                          float subsurface_scale_TODO,
                           vec3 subsurface_radius,
                           vec4 subsurface_color,
                           float subsurface_ior,
                           float subsurface_anisotropy,
                           float metallic,
-                          vec4 metallic_edge_TODO,
                           float specular,
                           float specular_tint,
                           float roughness,
@@ -29,12 +27,8 @@ void node_bsdf_principled(vec4 base_color,
                           float anisotropic_rotation,
                           float sheen,
                           float sheen_tint,
-                          float sheen_roughness_TODO,
                           float clearcoat,
                           float clearcoat_roughness,
-                          vec4 clearcoat_tint_TODO,
-                          float thin_film_thickness_TODO,
-                          float thin_film_ior_TODO,
                           float ior,
                           float transmission,
                           float transmission_roughness,
@@ -47,15 +41,11 @@ void node_bsdf_principled(vec4 base_color,
                           float weight,
                           const float do_diffuse,
                           const float do_clearcoat,
-                          // const float do_refraction,
-                          // const float do_multiscatter,
+                          const float do_refraction,
+                          const float do_multiscatter,
                           float do_sss,
                           out Closure result)
 {
-  // TODO: Disabled because of GLSL argument limit
-  float do_multiscatter = 0.0f;
-  float do_refraction = 0.0f;
-
   /* Match cycles. */
   metallic = clamp(metallic, 0.0, 1.0);
   transmission = clamp(transmission, 0.0, 1.0) * (1.0 - metallic);

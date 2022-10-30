@@ -149,30 +149,37 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
                                            GPUNodeStack *in,
                                            GPUNodeStack *out)
 {
+  in[2].type = GPU_NONE;
+  in[8].type = GPU_NONE;
+  in[16].type = GPU_NONE;
+  in[19].type = GPU_NONE;
+  in[20].type = GPU_NONE;
+  in[21].type = GPU_NONE;
+
   /* Normals */
-  if (!in[22].link) {
-    GPU_link(mat, "world_normals_get", &in[22].link);
+  if (!in[28].link) {
+    GPU_link(mat, "world_normals_get", &in[28].link);
   }
 
   /* Clearcoat Normals */
-  if (!in[23].link) {
-    GPU_link(mat, "world_normals_get", &in[23].link);
+  if (!in[29].link) {
+    GPU_link(mat, "world_normals_get", &in[29].link);
   }
 
 #if 0 /* Not used at the moment. */
   /* Tangents */
-  if (!in[24].link) {
+  if (!in[30].link) {
     GPUNodeLink *orco = GPU_attribute(CD_ORCO, "");
-    GPU_link(mat, "tangent_orco_z", orco, &in[24].link);
-    GPU_link(mat, "node_tangent", in[24].link, &in[24].link);
+    GPU_link(mat, "tangent_orco_z", orco, &in[30].link);
+    GPU_link(mat, "node_tangent", in[30].link, &in[30].link);
   }
 #endif
 
-  bool use_diffuse = socket_not_one(6) && socket_not_one(17);
+  bool use_diffuse = socket_not_one(7) && socket_not_one(23);
   bool use_subsurf = socket_not_zero(1) && use_diffuse;
-  bool use_refract = socket_not_one(6) && socket_not_zero(17);
-  bool use_transparency = socket_not_one(21);
-  bool use_clear = socket_not_zero(14);
+  bool use_refract = socket_not_one(7) && socket_not_zero(23);
+  bool use_transparency = socket_not_one(27);
+  bool use_clear = socket_not_zero(17);
 
   eGPUMaterialFlag flag = GPU_MATFLAG_GLOSSY;
   if (use_diffuse) {
@@ -224,17 +231,16 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
 
   GPU_material_flag_set(mat, flag);
 
-  return GPU_stack_link(
-      mat,
-      node,
-      "node_bsdf_principled",
-      in,
-      out,
-      GPU_constant(&use_diffuse_f),
-      GPU_constant(&use_clear_f),
-      // GPU_constant(&use_refract_f),
-      // GPU_constant(&use_multi_scatter),  // TODO: Disabled because of GLSL argument limit
-      GPU_uniform(&use_sss));
+  return GPU_stack_link(mat,
+                        node,
+                        "node_bsdf_principled",
+                        in,
+                        out,
+                        GPU_constant(&use_diffuse_f),
+                        GPU_constant(&use_clear_f),
+                        GPU_constant(&use_refract_f),
+                        GPU_constant(&use_multi_scatter),
+                        GPU_uniform(&use_sss));
 }
 
 static void node_shader_update_principled(bNodeTree *ntree, bNode *node)
