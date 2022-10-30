@@ -138,6 +138,14 @@ ccl_device Spectrum bsdf_microfacet_ggx_glass_eval_transmit(ccl_private const Mi
   float cosMO = dot(m, I);
   float cosMI = dot(m, omega_in);
 
+  kernel_assert(dot(m, N) >= 0.0f);  // TODO: Is this assert to aggressive?
+  /* Avoid backfacing microfacets.
+   * TODO: Also check this in sample? */
+  if (cosMO < 0.0f || cosMI > 0.0f) {
+    *pdf = 0.0f;
+    return zero_spectrum();
+  }
+
   float reflect_pdf;
   Spectrum F = glass_fresnel(bsdf, cosMO, &reflect_pdf);
 

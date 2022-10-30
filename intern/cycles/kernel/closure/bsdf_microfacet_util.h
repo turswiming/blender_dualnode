@@ -231,12 +231,14 @@ ccl_device_inline float3 fresnel_dielectric_thin_film(float cosThetaOuter,
     I += Cm.x * SmSh + Cm.y * SmPh;
   }
 
+  kernel_assert(isfinite_safe(I));
+
   /* CIE XYZ -> sRGB incl. whitepoint adaption E -> D65
    * TODO: Somehow properly handle color management here?
    * Does OCIO have anything for handling reflectances? */
-  return make_float3(3.17482107f, -0.98993255f, 0.06047909f) * I.x +
-         make_float3(-1.69745555f, 1.94998695f, -0.20891802f) * I.y +
-         make_float3(-0.47752224f, 0.04004475f, 1.14851336f) * I.z;
+  return saturate(make_float3(3.17482107f, -0.98993255f, 0.06047909f) * I.x +
+                  make_float3(-1.69745555f, 1.94998695f, -0.20891802f) * I.y +
+                  make_float3(-0.47752224f, 0.04004475f, 1.14851336f) * I.z);
 }
 
 CCL_NAMESPACE_END
