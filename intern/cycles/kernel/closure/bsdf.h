@@ -549,6 +549,7 @@ ccl_device_inline
       break;
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_ID:
+    case CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_CLEARCOAT_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
       eval = bsdf_microfacet_ggx_eval(sc, sd->I, omega_in, pdf);
