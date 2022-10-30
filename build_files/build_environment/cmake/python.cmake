@@ -16,10 +16,12 @@ if(WIN32)
 
   set(PYTHON_EXTERNALS_FOLDER ${BUILD_DIR}/python/src/external_python/externals)
   set(ZLIB_SOURCE_FOLDER ${BUILD_DIR}/zlib/src/external_zlib)
+  set(SSL_SOURCE_FOLDER ${BUILD_DIR}/ssl/src/external_ssl)
   set(DOWNLOADS_EXTERNALS_FOLDER ${DOWNLOAD_DIR}/externals)
 
   cmake_to_dos_path(${PYTHON_EXTERNALS_FOLDER} PYTHON_EXTERNALS_FOLDER_DOS)
   cmake_to_dos_path(${ZLIB_SOURCE_FOLDER} ZLIB_SOURCE_FOLDER_DOS)
+  cmake_to_dos_path(${SSL_SOURCE_FOLDER} SSL_SOURCE_FOLDER_DOS)
   cmake_to_dos_path(${DOWNLOADS_EXTERNALS_FOLDER} DOWNLOADS_EXTERNALS_FOLDER_DOS)
 
   ExternalProject_Add(external_python
@@ -31,11 +33,14 @@ if(WIN32)
     # that beyond placing some code in their externals dir before it tries.
     # the foldernames *HAVE* to match the ones inside pythons get_externals.cmd.
     # python 3.10.8 still ships zlib 1.2.12, replace it with our 1.2.13
-    # copy until they update.
+    # copy until they update. Same rules apply to openssl foldernames HAVE to match
+    # regardless of the version actually in there. 
     CONFIGURE_COMMAND mkdir ${PYTHON_EXTERNALS_FOLDER_DOS} &&
       mklink /J ${PYTHON_EXTERNALS_FOLDER_DOS}\\zlib-1.2.12 ${ZLIB_SOURCE_FOLDER_DOS} &&
-      ${CMAKE_COMMAND} -E copy ${ZLIB_SOURCE_FOLDER}/../external_zlib-build/zconf.h ${PYTHON_EXTERNALS_FOLDER}/zlib-1.2.12/zconf.h
-    BUILD_COMMAND cd ${BUILD_DIR}/python/src/external_python/pcbuild/ && set IncludeTkinter=false && call build.bat -e -p x64 -c ${BUILD_MODE}
+      mklink /J ${PYTHON_EXTERNALS_FOLDER_DOS}\\openssl-1.1.1q ${SSL_SOURCE_FOLDER_DOS} &&
+      ${CMAKE_COMMAND} -E copy ${ZLIB_SOURCE_FOLDER}/../external_zlib-build/zconf.h ${PYTHON_EXTERNALS_FOLDER}/zlib-1.2.12/zconf.h &&
+      ${PATCH_CMD} --verbose -p1 -d ${BUILD_DIR}/python/src/external_python < ${PATCH_DIR}/python_windows.diff
+    BUILD_COMMAND ${CONFIGURE_ENV_MSVC} && cd ${BUILD_DIR}/python/src/external_python/pcbuild/ && set IncludeTkinter=false && set LDFLAGS=/DEBUG && call prepare_ssl.bat && call build.bat -e -p x64 -c ${BUILD_MODE}
     INSTALL_COMMAND ${PYTHON_BINARY_INTERNAL} ${PYTHON_SRC}/PC/layout/main.py -b ${PYTHON_SRC}/PCbuild/amd64 -s ${PYTHON_SRC} -t ${PYTHON_SRC}/tmp/ --include-stable --include-pip --include-dev --include-launchers  --include-venv --include-symbols ${PYTHON_EXTRA_INSTLAL_FLAGS} --copy ${LIBDIR}/python
   )
   add_dependencies(
@@ -96,15 +101,18 @@ else()
     INSTALL_DIR ${LIBDIR}/python)
 endif()
 
+add_dependencies(
+  external_python
+  external_ssl
+  external_zlib
+)
 if(UNIX)
   add_dependencies(
     external_python
     external_bzip2
     external_ffi
     external_lzma
-    external_ssl
     external_sqlite
-    external_zlib
   )
 endif()
 
