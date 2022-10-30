@@ -80,6 +80,7 @@ typedef enum PropertyUnit {
   PROP_UNIT_CAMERA = (10 << 16),       /* mm */
   PROP_UNIT_POWER = (11 << 16),        /* W */
   PROP_UNIT_TEMPERATURE = (12 << 16),  /* C */
+  PROP_UNIT_WAVELENGTH = (13 << 16),   /* nm */
 } PropertyUnit;
 
 /**
@@ -175,6 +176,9 @@ typedef enum PropertySubType {
 
   /* temperature */
   PROP_TEMPERATURE = 43 | PROP_UNIT_TEMPERATURE,
+
+  /* wavelength */
+  PROP_WAVELENGTH = 44 | PROP_UNIT_WAVELENGTH,
 } PropertySubType;
 
 /* Make sure enums are updated with these */

@@ -42,6 +42,7 @@
 #define UN_SC_CM    0.01f
 #define UN_SC_MM    0.001f
 #define UN_SC_UM    0.000001f
+#define UN_SC_NM    0.000000001f
 
 #define UN_SC_MI    1609.344f
 #define UN_SC_FUR   201.168f
@@ -332,6 +333,16 @@ static struct bUnitDef buImperialTempDef[] = {
 static struct bUnitCollection buImperialTempCollection = {
     buImperialTempDef, 1, 0, UNIT_COLLECTION_LENGTH(buImperialTempDef)};
 
+/* Wavelengths (separate from distance and Camera to be scene-independent and to have nm as base unit). */
+static struct bUnitDef buWavelengthLenDef[] = {
+  {"millimeter", "millimeters", "mm",  NULL, "Millimeters",    NULL, 1e6f,  0.0, B_UNIT_DEF_NONE},
+  {"micrometer", "micrometers", "µm",  "um", "Micrometers",    NULL, 1e3f,  0.0, B_UNIT_DEF_NONE},
+  {"nanometer",  "nanometers",  "nm",  NULL, "Nanometers",     NULL, 1.0f,  0.0, B_UNIT_DEF_NONE}, /* Base unit. */
+  {"picometer",  "picometers",  "pm",  NULL, "Picometers",     NULL, 1e-3f, 0.0, B_UNIT_DEF_NONE},
+  NULL_UNIT,
+};
+static const struct bUnitCollection buWavelengthLenCollection = {buWavelengthLenDef, 3, 0, UNIT_COLLECTION_LENGTH(buWavelengthLenDef)};
+
 /* clang-format on */
 
 #define UNIT_SYSTEM_TOT (((sizeof(bUnitSystems) / B_UNIT_TYPE_TOT) / sizeof(void *)) - 1)
@@ -363,7 +374,8 @@ static const struct bUnitCollection *bUnitSystems[][B_UNIT_TYPE_TOT] = {
      &buMetricAclCollection,
      &buCameraLenCollection,
      &buPowerCollection,
-     &buMetricTempCollection},
+     &buMetricTempCollection,
+     &buWavelengthLenCollection},
     /* Imperial. */
     {NULL,
      &buImperialLenCollection,
@@ -377,7 +389,8 @@ static const struct bUnitCollection *bUnitSystems[][B_UNIT_TYPE_TOT] = {
      &buImperialAclCollection,
      &buCameraLenCollection,
      &buPowerCollection,
-     &buImperialTempCollection},
+     &buImperialTempCollection,
+     &buWavelengthLenCollection},
     {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 };
 
@@ -523,7 +536,7 @@ static size_t unit_as_string(char *str,
 
 static bool unit_should_be_split(int type)
 {
-  return ELEM(type, B_UNIT_LENGTH, B_UNIT_MASS, B_UNIT_TIME, B_UNIT_CAMERA);
+  return ELEM(type, B_UNIT_LENGTH, B_UNIT_MASS, B_UNIT_TIME, B_UNIT_CAMERA, B_UNIT_WAVELENGTH);
 }
 
 typedef struct {

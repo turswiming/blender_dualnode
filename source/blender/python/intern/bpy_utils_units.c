@@ -49,6 +49,7 @@ static const char *bpyunits_ucategories_items[] = {
     "CAMERA",
     "POWER",
     "TEMPERATURE",
+    "WAVELENGTH",
     NULL,
 };
 
