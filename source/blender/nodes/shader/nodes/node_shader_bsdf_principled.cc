@@ -276,7 +276,9 @@ static void node_shader_update_principled(bNodeTree *ntree, bNode *node)
                  "Subsurface Scale",
                  "Clearcoat Tint",
                  "Sheen Roughness",
-                 "Metallic Edge")) {
+                 "Metallic Edge",
+                 "Thin Film Thickness",
+                 "Thin Film IOR")) {
       /* Sockets exclusive to Principled v2. */
       nodeSetSocketAvailability(ntree, sock, is_v2);
     }
