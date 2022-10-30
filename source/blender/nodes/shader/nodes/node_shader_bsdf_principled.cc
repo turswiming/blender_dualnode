@@ -98,10 +98,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_FACTOR);
   /* TODO: Also add support to Principled v1? Would remain compatible and reduce differences. */
   b.add_input<decl::Color>(N_("Clearcoat Tint")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Float>(N_("Thin Film Thickness"))
-      .default_value(0.0f)
-      .min(0.0f)
-      .max(10000.0f);
+  b.add_input<decl::Float>(N_("Thin Film Thickness")).default_value(0.0f).min(0.0f).max(10000.0f);
   b.add_input<decl::Float>(N_("Thin Film IOR")).default_value(1.5f).min(1.0f).max(10.0f);
   /* TODO: Restrict min/max (e.g. 0.1 to 10) */
   b.add_input<decl::Float>(N_("IOR")).default_value(1.45f).min(0.0f).max(1000.0f);
@@ -227,16 +224,17 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
 
   GPU_material_flag_set(mat, flag);
 
-  return GPU_stack_link(mat,
-                        node,
-                        "node_bsdf_principled",
-                        in,
-                        out,
-                        GPU_constant(&use_diffuse_f),
-                        GPU_constant(&use_clear_f),
-                        //GPU_constant(&use_refract_f),
-                        //GPU_constant(&use_multi_scatter),  // TODO: Disabled because of GLSL argument limit
-                        GPU_uniform(&use_sss));
+  return GPU_stack_link(
+      mat,
+      node,
+      "node_bsdf_principled",
+      in,
+      out,
+      GPU_constant(&use_diffuse_f),
+      GPU_constant(&use_clear_f),
+      // GPU_constant(&use_refract_f),
+      // GPU_constant(&use_multi_scatter),  // TODO: Disabled because of GLSL argument limit
+      GPU_uniform(&use_sss));
 }
 
 static void node_shader_update_principled(bNodeTree *ntree, bNode *node)

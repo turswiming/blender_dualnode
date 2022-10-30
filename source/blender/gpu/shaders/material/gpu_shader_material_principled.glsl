@@ -47,8 +47,8 @@ void node_bsdf_principled(vec4 base_color,
                           float weight,
                           const float do_diffuse,
                           const float do_clearcoat,
-                          //const float do_refraction,
-                          //const float do_multiscatter,
+                          // const float do_refraction,
+                          // const float do_multiscatter,
                           float do_sss,
                           out Closure result)
 {
