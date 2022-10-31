@@ -186,7 +186,7 @@ void SceneState::init()
   draw_object_id = draw_outline || draw_curvature;
 };
 
-void SceneState::ObjectState::compute_config()
+void ObjectState::setup_material_state()
 {
   material_type = color_type_from_v3d_shading(color_type);
   material_subtype = material_subtype_from_v3d_shading(color_type);
@@ -195,8 +195,14 @@ void SceneState::ObjectState::compute_config()
                                                                      V3D_SHADING_MATERIAL_COLOR);
 };
 
-const SceneState::ObjectState SceneState::get_object_config(Object *ob)
+ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
 {
+  sculpt_pbvh = false;
+  texture_paint_mode = false;
+  image_paint_override = nullptr;
+  override_sampler_state = GPU_SAMPLER_DEFAULT;
+  draw_shadow = false;
+
   const DRWContextState *draw_ctx = DRW_context_state_get();
   const Mesh *me = (ob->type == OB_MESH) ? static_cast<Mesh *>(ob->data) : nullptr;
   const bool is_active = (ob == draw_ctx->obact);
@@ -205,45 +211,42 @@ const SceneState::ObjectState SceneState::get_object_config(Object *ob)
    */
   const bool is_render = DRW_state_is_image_render() && (draw_ctx->v3d == nullptr);
 
-  SceneState::ObjectState object_state = {};
-  object_state.color_type = (eV3DShadingColorType)shading.color_type;
+  color_type = (eV3DShadingColorType)scene_state.shading.color_type;
   if (!(is_active && DRW_object_use_hide_faces(ob))) {
-    object_state.draw_shadow = (ob->dtx & OB_DRAW_NO_SHADOW_CAST) == 0 &&
-                               shading.flag & V3D_SHADING_SHADOW;
+    draw_shadow = (ob->dtx & OB_DRAW_NO_SHADOW_CAST) == 0 &&
+                  scene_state.shading.flag & V3D_SHADING_SHADOW;
   }
   if (me == nullptr) {
-    if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
-      object_state.color_type = V3D_SHADING_MATERIAL_COLOR;
+    if (color_type == V3D_SHADING_TEXTURE_COLOR) {
+      color_type = V3D_SHADING_MATERIAL_COLOR;
     }
-    else if (object_state.color_type == V3D_SHADING_VERTEX_COLOR) {
-      object_state.color_type = V3D_SHADING_OBJECT_COLOR;
+    else if (color_type == V3D_SHADING_VERTEX_COLOR) {
+      color_type = V3D_SHADING_OBJECT_COLOR;
     }
     /* Early return */
-    object_state.compute_config();
-    return object_state;
+    setup_material_state();
+    return;
   }
 
-  object_state.sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) &&
-                             !DRW_state_is_image_render();
+  sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) && !DRW_state_is_image_render();
 
-  if (object_state.sculpt_pbvh) {
+  if (sculpt_pbvh) {
     /* Shadows are unsupported in sculpt mode. We could revert to the slow
      * method in this case but I'm not sure if it's a good idea given that
      * sculpted meshes are heavy to begin with. */
-    object_state.draw_shadow = false;
+    draw_shadow = false;
 
-    if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR &&
-        BKE_pbvh_type(ob->sculpt->pbvh) != PBVH_FACES) {
+    if (color_type == V3D_SHADING_TEXTURE_COLOR && BKE_pbvh_type(ob->sculpt->pbvh) != PBVH_FACES) {
       /* Force use of material color for sculpt. */
-      object_state.color_type = V3D_SHADING_MATERIAL_COLOR;
+      color_type = V3D_SHADING_MATERIAL_COLOR;
     }
 
     /* Bad call C is required to access the tool system that is context aware. Cast to non-const
      * due to current API. */
     bContext *C = (bContext *)DRW_context_state_get()->evil_C;
     if (C != NULL) {
-      object_state.color_type = ED_paint_shading_color_override(
-          C, &scene->toolsettings->paint_mode, ob, object_state.color_type);
+      color_type = ED_paint_shading_color_override(
+          C, &scene_state.scene->toolsettings->paint_mode, ob, color_type);
     }
   }
   else {
@@ -255,31 +258,33 @@ const SceneState::ObjectState SceneState::get_object_config(Object *ob)
                       CustomData_has_layer(cd_ldata, CD_PROP_COLOR) ||
                       CustomData_has_layer(cd_ldata, CD_PROP_BYTE_COLOR));
 
-    if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
+    if (color_type == V3D_SHADING_TEXTURE_COLOR) {
       if (ob->dt < OB_TEXTURE || !CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
-        object_state.color_type = V3D_SHADING_MATERIAL_COLOR;
+        color_type = V3D_SHADING_MATERIAL_COLOR;
       }
     }
-    else if (object_state.color_type == V3D_SHADING_VERTEX_COLOR && !has_color) {
-      object_state.color_type = V3D_SHADING_OBJECT_COLOR;
+    else if (color_type == V3D_SHADING_VERTEX_COLOR && !has_color) {
+      color_type = V3D_SHADING_OBJECT_COLOR;
     }
 
     if (!is_render) {
       /* Force texture or vertex mode if object is in paint mode. */
-      const bool is_vertpaint_mode = is_active && (object_mode == CTX_MODE_PAINT_VERTEX);
-      const bool is_texpaint_mode = is_active && (object_mode == CTX_MODE_PAINT_TEXTURE);
+      const bool is_vertpaint_mode = is_active &&
+                                     (scene_state.object_mode == CTX_MODE_PAINT_VERTEX);
+      const bool is_texpaint_mode = is_active &&
+                                    (scene_state.object_mode == CTX_MODE_PAINT_TEXTURE);
       if (is_vertpaint_mode && has_color) {
-        object_state.color_type = V3D_SHADING_VERTEX_COLOR;
+        color_type = V3D_SHADING_VERTEX_COLOR;
       }
       else if (is_texpaint_mode && CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
-        object_state.color_type = V3D_SHADING_TEXTURE_COLOR;
-        object_state.texture_paint_mode = true;
+        color_type = V3D_SHADING_TEXTURE_COLOR;
+        texture_paint_mode = true;
 
-        const ImagePaintSettings *imapaint = &scene->toolsettings->imapaint;
+        const ImagePaintSettings *imapaint = &scene_state.scene->toolsettings->imapaint;
         if (imapaint->mode == IMAGEPAINT_MODE_IMAGE) {
-          object_state.image_paint_override = imapaint->canvas;
-          object_state.override_sampler_state = GPU_SAMPLER_REPEAT;
-          SET_FLAG_FROM_TEST(object_state.override_sampler_state,
+          image_paint_override = imapaint->canvas;
+          override_sampler_state = GPU_SAMPLER_REPEAT;
+          SET_FLAG_FROM_TEST(override_sampler_state,
                              imapaint->interp == IMAGEPAINT_INTERP_LINEAR,
                              GPU_SAMPLER_FILTER);
         }
@@ -287,8 +292,7 @@ const SceneState::ObjectState SceneState::get_object_config(Object *ob)
     }
   }
 
-  object_state.compute_config();
-  return object_state;
+  setup_material_state();
 }
 
 }  // namespace blender::workbench

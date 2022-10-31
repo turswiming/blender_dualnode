@@ -91,23 +91,25 @@ struct SceneState {
   Material material_attribute_color = Material(float3(-1.0f));
 
   void init();
+};
 
-  struct ObjectState {
-    eV3DShadingColorType color_type;
-    bool sculpt_pbvh;
-    bool texture_paint_mode;
-    ::Image *image_paint_override;
-    eGPUSamplerState override_sampler_state;
-    bool draw_shadow;
+class ObjectState {
+ private:
+  void setup_material_state();
 
-    eColorType material_type;
-    eMaterialSubType material_subtype;
-    bool use_per_material_batches;
+ public:
+  eV3DShadingColorType color_type;
+  bool sculpt_pbvh;
+  bool texture_paint_mode;
+  ::Image *image_paint_override;
+  eGPUSamplerState override_sampler_state;
+  bool draw_shadow;
 
-    void compute_config();
-  };
+  eColorType material_type;
+  eMaterialSubType material_subtype;
+  bool use_per_material_batches;
 
-  const ObjectState get_object_config(Object *ob);
+  ObjectState(const SceneState &scene_state, Object *ob);
 };
 
 class CavityEffect {

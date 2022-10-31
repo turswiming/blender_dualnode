@@ -64,7 +64,7 @@ class Instance {
       return;
     }
 
-    const SceneState::ObjectState object_state = scene_state.get_object_config(ob);
+    const ObjectState object_state = ObjectState(scene_state, ob);
 
     /* Needed for mesh cache validation, to prevent two copies of
      * of vertex color arrays from being sent to the GPU (e.g.
@@ -139,7 +139,7 @@ class Instance {
     }
   }
 
-  void mesh_sync(Manager &manager, ObjectRef &ob_ref, const SceneState::ObjectState &object_state)
+  void mesh_sync(Manager &manager, ObjectRef &ob_ref, const ObjectState &object_state)
   {
     if (object_state.sculpt_pbvh) {
       /* TODO(Miguel Pozo):
