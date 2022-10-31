@@ -23,7 +23,7 @@ GPUMaterial **get_dummy_gpu_materials(int material_count);
 
 class Instance {
  public:
-  DrawConfig config;
+  SceneState scene_state;
 
   SceneResources resources;
 
@@ -36,20 +36,20 @@ class Instance {
 
   void init()
   {
-    config.init();
-    resources.init(config);
-    dof_ps.init(config);
-    anti_aliasing_ps.init(config);
+    scene_state.init();
+    resources.init(scene_state);
+    dof_ps.init(scene_state);
+    anti_aliasing_ps.init(scene_state);
   }
 
   void begin_sync()
   {
-    opaque_ps.sync(config, resources);
-    transparent_ps.sync(config, resources);
-    transparent_depth_ps.sync(config, resources);
+    opaque_ps.sync(scene_state, resources);
+    transparent_ps.sync(scene_state, resources);
+    transparent_depth_ps.sync(scene_state, resources);
 
     dof_ps.sync(resources);
-    anti_aliasing_ps.sync(resources, config.resolution);
+    anti_aliasing_ps.sync(resources, scene_state.resolution);
   }
 
   void end_sync()
@@ -64,14 +64,14 @@ class Instance {
       return;
     }
 
-    const DrawConfig::ObjectConfig doc = config.get_object_config(ob);
+    const SceneState::ObjectState object_state = scene_state.get_object_config(ob);
 
     /* Needed for mesh cache validation, to prevent two copies of
      * of vertex color arrays from being sent to the GPU (e.g.
      * when switching from eevee to workbench).
      */
     if (ob_ref.object->sculpt && ob_ref.object->sculpt->pbvh) {
-      BKE_pbvh_is_drawing_set(ob_ref.object->sculpt->pbvh, doc.sculpt_pbvh);
+      BKE_pbvh_is_drawing_set(ob_ref.object->sculpt->pbvh, object_state.sculpt_pbvh);
     }
 
     if (ob->type == OB_MESH && ob->modifiers.first != nullptr) {
@@ -90,7 +90,8 @@ class Instance {
         if (draw_as == PART_DRAW_PATH) {
           /* TODO(Miguel Pozo):
           workbench_cache_hair_populate(
-              wpd, ob, psys, md, doc.color_type, doc.texture_paint_mode, part->omat);
+              wpd, ob, psys, md, object_state.color_type, object_state.texture_paint_mode,
+          part->omat);
           */
         }
       }
@@ -98,7 +99,7 @@ class Instance {
 
     if (!(ob->base_flag & BASE_FROM_DUPLI)) {
       ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_Fluid);
-      if (md && BKE_modifier_is_enabled(config.scene, md, eModifierMode_Realtime)) {
+      if (md && BKE_modifier_is_enabled(scene_state.scene, md, eModifierMode_Realtime)) {
         FluidModifierData *fmd = (FluidModifierData *)md;
         if (fmd->domain) {
           /* TODO(Miguel Pozo):
@@ -120,38 +121,38 @@ class Instance {
     }
 
     if (ELEM(ob->type, OB_MESH, OB_POINTCLOUD)) {
-      mesh_sync(manager, ob_ref, doc);
+      mesh_sync(manager, ob_ref, object_state);
     }
     else if (ob->type == OB_CURVES) {
       /* TODO(Miguel Pozo):
       DRWShadingGroup *grp = workbench_material_hair_setup(
-          wpd, ob, CURVES_MATERIAL_NR, doc.color_type);
+          wpd, ob, CURVES_MATERIAL_NR, object_state.color_type);
       DRW_shgroup_curves_create_sub(ob, grp, NULL);
       */
     }
     else if (ob->type == OB_VOLUME) {
-      if (config.shading.type != OB_WIRE) {
+      if (scene_state.shading.type != OB_WIRE) {
         /* TODO(Miguel Pozo):
-        workbench_volume_cache_populate(vedata, wpd->scene, ob, NULL, doc.color_type);
+        workbench_volume_cache_populate(vedata, wpd->scene, ob, NULL, object_state.color_type);
         */
       }
     }
   }
 
-  void mesh_sync(Manager &manager, ObjectRef &ob_ref, const DrawConfig::ObjectConfig &doc)
+  void mesh_sync(Manager &manager, ObjectRef &ob_ref, const SceneState::ObjectState &object_state)
   {
-    if (doc.sculpt_pbvh) {
+    if (object_state.sculpt_pbvh) {
       /* TODO(Miguel Pozo):
-      workbench_cache_sculpt_populate(wpd, ob, doc.color_type);
+      workbench_cache_sculpt_populate(wpd, ob, object_state.color_type);
       */
     }
     else {
       /* workbench_cache_common_populate && workbench_cache_texpaint_populate */
-      if (doc.use_per_material_batches) {
+      if (object_state.use_per_material_batches) {
         const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
 
         struct GPUBatch **batches;
-        if (doc.material_type == eColorType::TEXTURE) {
+        if (object_state.material_type == eColorType::TEXTURE) {
           batches = DRW_cache_mesh_surface_texpaint_get(ob_ref.object);
         }
         else {
@@ -181,7 +182,7 @@ class Instance {
             ::Image *image = nullptr;
             ImageUser *iuser = nullptr;
             eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT;
-            if (doc.material_type == eColorType::TEXTURE) {
+            if (object_state.material_type == eColorType::TEXTURE) {
               get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
             }
 
@@ -191,10 +192,10 @@ class Instance {
       }
       else {
         struct GPUBatch *batch;
-        if (doc.material_type == eColorType::TEXTURE) {
+        if (object_state.material_type == eColorType::TEXTURE) {
           batch = DRW_cache_mesh_surface_texpaint_single_get(ob_ref.object);
         }
-        else if (doc.material_subtype == eMaterialSubType::ATTRIBUTE) {
+        else if (object_state.material_subtype == eMaterialSubType::ATTRIBUTE) {
           if (ob_ref.object->mode & OB_MODE_VERTEX_PAINT) {
             batch = DRW_cache_mesh_surface_vertpaint_get(ob_ref.object);
           }
@@ -210,29 +211,33 @@ class Instance {
           ResourceHandle handle = manager.resource_handle(ob_ref);
           Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
 
-          if (doc.material_subtype == eMaterialSubType::OBJECT) {
+          if (object_state.material_subtype == eMaterialSubType::OBJECT) {
             mat = Material(*ob_ref.object);
           }
-          else if (doc.material_subtype == eMaterialSubType::RANDOM) {
+          else if (object_state.material_subtype == eMaterialSubType::RANDOM) {
             mat = Material(*ob_ref.object, true);
           }
-          else if (doc.material_subtype == eMaterialSubType::SINGLE) {
-            mat = config.material_override;
+          else if (object_state.material_subtype == eMaterialSubType::SINGLE) {
+            mat = scene_state.material_override;
           }
-          else if (doc.material_subtype == eMaterialSubType::ATTRIBUTE) {
-            mat = config.material_attribute_color;
+          else if (object_state.material_subtype == eMaterialSubType::ATTRIBUTE) {
+            mat = scene_state.material_attribute_color;
           }
           else {
             mat = Material(*BKE_material_default_empty());
           }
 
-          draw_mesh(
-              ob_ref, mat, batch, handle, doc.image_paint_override, doc.override_sampler_state);
+          draw_mesh(ob_ref,
+                    mat,
+                    batch,
+                    handle,
+                    object_state.image_paint_override,
+                    object_state.override_sampler_state);
         }
       }
     }
 
-    if (doc.draw_shadow) {
+    if (object_state.draw_shadow) {
       /* TODO(Miguel Pozo):
       workbench_shadow_cache_populate(vedata, ob, has_transp_mat);
       */
@@ -253,16 +258,16 @@ class Instance {
       pass.sub_pass_get(ob_ref, image, sampler_state, iuser).draw(batch, handle);
     };
 
-    if (config.xray_mode || material.is_transparent()) {
+    if (scene_state.xray_mode || material.is_transparent()) {
       if (in_front) {
         draw(transparent_ps.accumulation_in_front_ps_);
-        if (config.draw_transparent_depth) {
+        if (scene_state.draw_transparent_depth) {
           draw(transparent_depth_ps.in_front_ps_);
         }
       }
       else {
         draw(transparent_ps.accumulation_ps_);
-        if (config.draw_transparent_depth) {
+        if (scene_state.draw_transparent_depth) {
           draw(transparent_depth_ps.main_ps_);
         }
       }
@@ -279,17 +284,17 @@ class Instance {
 
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
-    int2 resolution = config.resolution;
+    int2 resolution = scene_state.resolution;
 
     anti_aliasing_ps.setup_view(view, resolution);
 
-    if (!config.clip_planes.is_empty()) {
-      view.set_clip_planes(config.clip_planes);
+    if (!scene_state.clip_planes.is_empty()) {
+      view.set_clip_planes(scene_state.clip_planes);
     }
 
     resources.color_tx.acquire(resolution, GPU_RGBA16F);
     resources.color_tx.clear(resources.world_buf.background_color);
-    if (config.draw_object_id) {
+    if (scene_state.draw_object_id) {
       resources.object_id_tx.acquire(resolution, GPU_R16UI);
       resources.object_id_tx.clear(uint4(0));
     }
@@ -315,7 +320,7 @@ class Instance {
     transparent_ps.draw(manager, view, resources, resolution);
     transparent_depth_ps.draw(manager, view, resources, resolution);
 
-    if (config.draw_outline) {
+    if (scene_state.draw_outline) {
       PassSimple outline_ps = PassSimple("Workbench.Outline");
       outline_ps.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_PREMUL);
       static GPUShader *outline_shader = GPU_shader_create_from_info_name(
@@ -453,7 +458,7 @@ static void workbench_view_update(void *vedata)
 {
   WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
   if (ved->instance) {
-    ved->instance->config.reset_taa_next_sample = true;
+    ved->instance->scene_state.reset_taa_next_sample = true;
   }
 }
 

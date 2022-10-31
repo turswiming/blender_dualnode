@@ -66,14 +66,14 @@ LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
   return light;
 }
 
-void SceneResources::init(const DrawConfig &config)
+void SceneResources::init(const SceneState &scene_state)
 {
-  const View3DShading &shading = config.shading;
+  const View3DShading &shading = scene_state.shading;
 
   world_buf.viewport_size = DRW_viewport_size_get();
   world_buf.viewport_size_inv = DRW_viewport_invert_size_get();
   world_buf.xray_alpha = shading.xray_alpha;
-  world_buf.background_color = config.background_color;
+  world_buf.background_color = scene_state.background_color;
   world_buf.object_outline_color = float4(float3(shading.object_outline_color), 1.0f);
   world_buf.ui_scale = DRW_state_is_image_render() ? 1.0f : G_draw.block.size_pixel;
   world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
@@ -122,7 +122,7 @@ void SceneResources::init(const DrawConfig &config)
 
   /* TODO(Miguel Pozo) volumes_do */
 
-  cavity.init(config, world_buf);
+  cavity.init(scene_state, world_buf);
 
   world_buf.push_update();
 }

@@ -54,7 +54,7 @@ void get_material_image(Object *ob,
                         ImageUser *&iuser,
                         eGPUSamplerState &sampler_state);
 
-struct DrawConfig {
+struct SceneState {
   Scene *scene;
 
   Object *camera_object;
@@ -92,7 +92,7 @@ struct DrawConfig {
 
   void init();
 
-  struct ObjectConfig {
+  struct ObjectState {
     eV3DShadingColorType color_type;
     bool sculpt_pbvh;
     bool texture_paint_mode;
@@ -107,7 +107,7 @@ struct DrawConfig {
     void compute_config();
   };
 
-  const ObjectConfig get_object_config(Object *ob);
+  const ObjectState get_object_config(Object *ob);
 };
 
 class CavityEffect {
@@ -128,7 +128,7 @@ class CavityEffect {
 
   void setup_resources(int iteration_samples, int total_samples);
 
-  void init(const DrawConfig &config, UniformBuffer<WorldData> &world_buf);
+  void init(const SceneState &scene_state, UniformBuffer<WorldData> &world_buf);
 
   void setup_resolve_pass(PassSimple &pass, Texture &object_id_tx);
 };
@@ -149,7 +149,7 @@ struct SceneResources {
 
   CavityEffect cavity;
 
-  void init(const DrawConfig &config);
+  void init(const SceneState &scene_state);
 };
 
 class MeshPass : public PassMain {
@@ -187,7 +187,7 @@ class OpaquePass {
   MeshPass gbuffer_in_front_ps_ = {"Opaque.GbufferInFront"};
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
 
-  void sync(const DrawConfig &config, SceneResources &resources);
+  void sync(const SceneState &scene_state, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -205,7 +205,7 @@ class TransparentPass {
   PassSimple resolve_ps_ = {"Transparent.Resolve"};
   Framebuffer resolve_fb;
 
-  void sync(const DrawConfig &config, SceneResources &resources);
+  void sync(const SceneState &scene_state, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -221,7 +221,7 @@ class TransparentDepthPass {
   PassSimple merge_ps_ = {"TransparentDepth.Merge"};
   Framebuffer merge_fb = {"TransparentDepth.Merge"};
 
-  void sync(const DrawConfig &config, SceneResources &resources);
+  void sync(const SceneState &scene_state, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -262,7 +262,7 @@ class DofPass {
   void setup_samples();
 
  public:
-  void init(const DrawConfig &config);
+  void init(const SceneState &scene_state);
   void sync(SceneResources &resources);
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
   bool is_enabled();
@@ -314,7 +314,7 @@ class AntiAliasingPass {
 
   ~AntiAliasingPass();
 
-  void init(const DrawConfig &config);
+  void init(const SceneState &scene_state);
   void sync(SceneResources &resources, int2 resolution);
   bool setup_view(View &view, int2 resolution);
   void draw(Manager &manager,

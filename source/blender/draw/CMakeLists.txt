@@ -153,7 +153,6 @@ set(SRC
   engines/eevee_next/eevee_velocity.cc
   engines/eevee_next/eevee_view.cc
   engines/eevee_next/eevee_world.cc
-  engines/workbench/workbench_config.cc
   engines/workbench/workbench_data.c
   engines/workbench/workbench_effect_antialiasing.c
   engines/workbench/workbench_effect_antialiasing.cc
@@ -173,6 +172,7 @@ set(SRC
   engines/workbench/workbench_shader.cc
   engines/workbench/workbench_shader_cache.cc
   engines/workbench/workbench_shadow.c
+  engines/workbench/workbench_state.cc
   engines/workbench/workbench_transparent.c
   engines/workbench/workbench_volume.c
   engines/external/external_engine.c

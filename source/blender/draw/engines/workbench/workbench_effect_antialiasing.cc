@@ -128,12 +128,12 @@ AntiAliasingPass::~AntiAliasingPass()
   DRW_SHADER_FREE_SAFE(smaa_resolve_sh);
 }
 
-void AntiAliasingPass::init(const DrawConfig &config)
+void AntiAliasingPass::init(const SceneState &scene_state)
 {
-  if (config.reset_taa) {
+  if (scene_state.reset_taa) {
     sample = 0;
   }
-  sample_len = config.aa_samples;
+  sample_len = scene_state.aa_samples;
 
   /*TODO(Miguel Pozo): This can probably be removed.*/
   /*

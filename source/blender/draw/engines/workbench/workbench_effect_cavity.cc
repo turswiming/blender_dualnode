@@ -18,16 +18,16 @@
 
 namespace blender::workbench {
 
-void CavityEffect::init(const DrawConfig &config, UniformBuffer<WorldData> &world_buf)
+void CavityEffect::init(const SceneState &scene_state, UniformBuffer<WorldData> &world_buf)
 {
-  cavity_enabled = config.draw_cavity;
-  curvature_enabled = config.draw_curvature;
+  cavity_enabled = scene_state.draw_cavity;
+  curvature_enabled = scene_state.draw_curvature;
 
-  const int ssao_samples = config.scene->display.matcap_ssao_samples;
-  int sample_count = min_ii(max_ii(1, config.aa_samples) * ssao_samples, MAX_SAMPLES);
+  const int ssao_samples = scene_state.scene->display.matcap_ssao_samples;
+  int sample_count = min_ii(max_ii(1, scene_state.aa_samples) * ssao_samples, MAX_SAMPLES);
   const int max_iter_count = sample_count / ssao_samples;
 
-  if (config.reset_taa) {
+  if (scene_state.reset_taa) {
     sample = 0;
   }
   sample %= max_iter_count;
@@ -41,17 +41,17 @@ void CavityEffect::init(const DrawConfig &config, UniformBuffer<WorldData> &worl
                                               world_buf.cavity_sample_start);
   world_buf.cavity_jitter_scale = 1.0f / 64.0f;
 
-  world_buf.cavity_valley_factor = config.shading.cavity_valley_factor;
-  world_buf.cavity_ridge_factor = config.shading.cavity_ridge_factor;
-  world_buf.cavity_attenuation = config.scene->display.matcap_ssao_attenuation;
-  world_buf.cavity_distance = config.scene->display.matcap_ssao_distance;
+  world_buf.cavity_valley_factor = scene_state.shading.cavity_valley_factor;
+  world_buf.cavity_ridge_factor = scene_state.shading.cavity_ridge_factor;
+  world_buf.cavity_attenuation = scene_state.scene->display.matcap_ssao_attenuation;
+  world_buf.cavity_distance = scene_state.scene->display.matcap_ssao_distance;
 
   world_buf.curvature_ridge = 0.5f /
-                              max_ff(square_f(config.shading.curvature_ridge_factor), 1e-4f);
-  world_buf.curvature_valley = 0.7f /
-                               max_ff(square_f(config.shading.curvature_valley_factor), 1e-4f);
+                              max_ff(square_f(scene_state.shading.curvature_ridge_factor), 1e-4f);
+  world_buf.curvature_valley = 0.7f / max_ff(square_f(scene_state.shading.curvature_valley_factor),
+                                             1e-4f);
 
-  if (cavity_enabled || config.draw_dof) {
+  if (cavity_enabled || scene_state.draw_dof) {
     setup_resources(ssao_samples, sample_count);
   }
 }

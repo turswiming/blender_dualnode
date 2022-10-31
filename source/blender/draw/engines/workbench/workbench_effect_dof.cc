@@ -93,9 +93,9 @@ void DofPass::setup_samples()
   samples_buf.push_update();
 }
 
-void DofPass::init(const DrawConfig &config)
+void DofPass::init(const SceneState &scene_state)
 {
-  enabled = config.draw_dof;
+  enabled = scene_state.draw_dof;
 
   if (!enabled) {
     source_tx.free();
@@ -103,7 +103,7 @@ void DofPass::init(const DrawConfig &config)
     return;
   }
 
-  int2 half_res = config.resolution / 2;
+  int2 half_res = scene_state.resolution / 2;
   half_res = {max_ii(half_res.x, 1), max_ii(half_res.y, 1)};
 
   source_tx.ensure_2d(GPU_RGBA16F, half_res, nullptr, 3);
@@ -113,12 +113,12 @@ void DofPass::init(const DrawConfig &config)
   coc_halfres_tx.ensure_mip_views();
   coc_halfres_tx.filter_mode(true);
 
-  Camera *camera = static_cast<Camera *>(config.camera_object->data);
+  Camera *camera = static_cast<Camera *>(scene_state.camera_object->data);
 
   /* Parameters */
   float fstop = camera->dof.aperture_fstop;
   float sensor = BKE_camera_sensor_size(camera->sensor_fit, camera->sensor_x, camera->sensor_y);
-  float focus_dist = BKE_camera_object_dof_distance(config.camera_object);
+  float focus_dist = BKE_camera_object_dof_distance(scene_state.camera_object);
   float focal_len = camera->lens;
 
   /* TODO(fclem): de-duplicate with EEVEE. */
@@ -134,7 +134,7 @@ void DofPass::init(const DrawConfig &config)
 
   aperture_size = aperture * fabsf(focal_len_scaled / (focus_dist - focal_len_scaled));
   distance = -focus_dist;
-  invsensor_size = config.resolution.x / sensor_scaled;
+  invsensor_size = scene_state.resolution.x / sensor_scaled;
 
   near = -camera->clip_start;
   far = -camera->clip_end;
