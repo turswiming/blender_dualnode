@@ -183,12 +183,12 @@ void TransparentPass::sync(const SceneState &scene_state, SceneResources &resour
   accumulation_in_front_ps_.init_subpasses(
       ePipelineType::TRANSPARENT, scene_state.shading_type, resources.shader_cache);
 
+  if (resolve_sh_ == nullptr) {
+    resolve_sh_ = GPU_shader_create_from_info_name("workbench_transparent_resolve");
+  }
   resolve_ps_.init();
-  /*TODO(Miguel Pozo): Use shaders.resolve_shader_get()*/
-  static GPUShader *resolve_shader = GPU_shader_create_from_info_name(
-      "workbench_transparent_resolve");
   resolve_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA);
-  resolve_ps_.shader_set(resolve_shader);
+  resolve_ps_.shader_set(resolve_sh_);
   resolve_ps_.bind_texture("transparentAccum", &accumulation_tx);
   resolve_ps_.bind_texture("transparentRevealage", &reveal_tx);
   resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
@@ -245,10 +245,11 @@ void TransparentDepthPass::sync(const SceneState &scene_state, SceneResources &r
   in_front_ps_.state_stencil(0xFF, 0xFF, 0x00);
   in_front_ps_.init_subpasses(ePipelineType::OPAQUE, eShadingType::FLAT, resources.shader_cache);
 
+  if (merge_sh_ == nullptr) {
+    merge_sh_ = GPU_shader_create_from_info_name("workbench_next_merge_depth");
+  }
   merge_ps_.init();
-  /*TODO(Miguel Pozo): Use ShaderCache*/
-  static GPUShader *merge_shader = GPU_shader_create_from_info_name("workbench_next_merge_depth");
-  merge_ps_.shader_set(merge_shader);
+  merge_ps_.shader_set(merge_sh_);
   merge_ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_ALWAYS | DRW_STATE_WRITE_STENCIL |
                       DRW_STATE_STENCIL_ALWAYS);
   merge_ps_.state_stencil(0xFF, 0xFF, 0x00);

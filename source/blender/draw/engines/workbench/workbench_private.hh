@@ -197,6 +197,9 @@ class OpaquePass {
 };
 
 class TransparentPass {
+ private:
+  GPUShader *resolve_sh_;
+
  public:
   TextureFromPool accumulation_tx = {"accumulation_accumulation_tx"};
   TextureFromPool reveal_tx = {"accumulation_reveal_tx"};
@@ -215,6 +218,9 @@ class TransparentPass {
 };
 
 class TransparentDepthPass {
+ private:
+  GPUShader *merge_sh_;
+
  public:
   MeshPass main_ps_ = {"TransparentDepth.Main"};
   Framebuffer main_fb = {"TransparentDepth.Main"};
