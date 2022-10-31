@@ -149,38 +149,6 @@ void DofPass::init(const SceneState &scene_state)
     ratio_ = _ratio;
     setup_samples();
   }
-
-#if 0 /* TODO(fclem): finish COC min_max optimization. */
-  const float *full_size = DRW_viewport_size_get();
-  const int size[2] = {max_ii(1, (int)full_size[0] / 2), max_ii(1, (int)full_size[1] / 2)};
-  
-  /* NOTE: We Ceil here in order to not miss any edge texel if using a NPO2 texture. */
-  int shrink_h_size[2] = {ceilf(size[0] / 8.0f), size[1]};
-  int shrink_w_size[2] = {shrink_h_size[0], ceilf(size[1] / 8.0f)};
-
-  wpd->coc_temp_tx = DRW_texture_pool_query_2d(
-      shrink_h_size[0], shrink_h_size[1], GPU_RG8, &draw_engine_workbench);
-  wpd->coc_tiles_tx[0] = DRW_texture_pool_query_2d(
-      shrink_w_size[0], shrink_w_size[1], GPU_RG8, &draw_engine_workbench);
-  wpd->coc_tiles_tx[1] = DRW_texture_pool_query_2d(
-      shrink_w_size[0], shrink_w_size[1], GPU_RG8, &draw_engine_workbench);
-
-  GPU_framebuffer_ensure_config(&fbl->dof_coc_tile_h_fb,
-                                {
-                                    GPU_ATTACHMENT_NONE,
-                                    GPU_ATTACHMENT_TEXTURE(wpd->coc_temp_tx),
-                                });
-  GPU_framebuffer_ensure_config(&fbl->dof_coc_tile_v_fb,
-                                {
-                                    GPU_ATTACHMENT_NONE,
-                                    GPU_ATTACHMENT_TEXTURE(wpd->coc_tiles_tx[0]),
-                                });
-  GPU_framebuffer_ensure_config(&fbl->dof_coc_dilate_fb,
-                                {
-                                    GPU_ATTACHMENT_NONE,
-                                    GPU_ATTACHMENT_TEXTURE(wpd->coc_tiles_tx[1]),
-                                });
-#endif
 }
 
 void DofPass::sync(SceneResources &resources)
@@ -195,12 +163,6 @@ void DofPass::sync(SceneResources &resources)
     blur1_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur1");
     blur2_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur2");
     resolve_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_resolve");
-#if 0 /* TODO(fclem): finish COC min_max optimization */
-      flatten_v_sh = GPU_shader_create_from_info_name("workbench_effect_dof_flatten_v");
-      flatten_h_sh = GPU_shader_create_from_info_name("workbench_effect_dof_flatten_h");
-      dilate_v_sh = GPU_shader_create_from_info_name("workbench_effect_dof_dilate_v");
-      dilate_h_sh = GPU_shader_create_from_info_name("workbench_effect_dof_dilate_h");
-#endif
   }
 
   eGPUSamplerState sampler_state = GPU_SAMPLER_FILTER | GPU_SAMPLER_MIPMAP;
@@ -221,37 +183,6 @@ void DofPass::sync(SceneResources &resources)
   down2_ps_.bind_texture("sceneColorTex", &source_tx_, sampler_state);
   down2_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
   down2_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
-
-#if 0 /* TODO(fclem): finish COC min_max optimization */
-    {
-      psl->dof_flatten_h_ps = DRW_pass_create("DoF Flatten Coc H", DRW_STATE_WRITE_COLOR);
-
-      DRWShadingGroup *grp = DRW_shgroup_create(flatten_h_sh, psl->dof_flatten_h_ps);
-      DRW_shgroup_uniform_texture(grp, "inputCocTex", txl->coc_halfres_tx);
-      DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
-    }
-    {
-      psl->dof_flatten_v_ps = DRW_pass_create("DoF Flatten Coc V", DRW_STATE_WRITE_COLOR);
-
-      DRWShadingGroup *grp = DRW_shgroup_create(flatten_v_sh, psl->dof_flatten_v_ps);
-      DRW_shgroup_uniform_texture(grp, "inputCocTex", wpd->coc_temp_tx);
-      DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
-    }
-    {
-      psl->dof_dilate_h_ps = DRW_pass_create("DoF Dilate Coc H", DRW_STATE_WRITE_COLOR);
-
-      DRWShadingGroup *grp = DRW_shgroup_create(dilate_v_sh, psl->dof_dilate_v_ps);
-      DRW_shgroup_uniform_texture(grp, "inputCocTex", wpd->coc_tiles_tx[0]);
-      DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
-    }
-    {
-      psl->dof_dilate_v_ps = DRW_pass_create("DoF Dilate Coc V", DRW_STATE_WRITE_COLOR);
-
-      DRWShadingGroup *grp = DRW_shgroup_create(dilate_h_sh, psl->dof_dilate_h_ps);
-      DRW_shgroup_uniform_texture(grp, "inputCocTex", wpd->coc_tiles_tx[1]);
-      DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
-    }
-#endif
 
   float offset = 0; /*TODO(Miguel Pozo)*/
   // float offset = wpd->taa_sample / (float)max_ii(1, wpd->taa_sample_len);
@@ -321,35 +252,6 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
 
   GPU_framebuffer_recursive_downsample(
       downsample_fb_, 2, downsample_level, static_cast<void *>(&callback_data));
-
-#if 0 /* TODO(fclem): finish COC min_max optimization */
-    GPU_framebuffer_ensure_config(&fbl->dof_coc_tile_h_fb,
-                                  {
-                                      GPU_ATTACHMENT_NONE,
-                                      GPU_ATTACHMENT_TEXTURE(wpd->coc_temp_tx),
-                                  });
-    GPU_framebuffer_ensure_config(&fbl->dof_coc_tile_v_fb,
-                                  {
-                                      GPU_ATTACHMENT_NONE,
-                                      GPU_ATTACHMENT_TEXTURE(wpd->coc_tiles_tx[0]),
-                                  });
-    GPU_framebuffer_ensure_config(&fbl->dof_coc_dilate_fb,
-                                  {
-                                      GPU_ATTACHMENT_NONE,
-                                      GPU_ATTACHMENT_TEXTURE(wpd->coc_tiles_tx[1]),
-                                  });
-    GPU_framebuffer_bind(fbl->dof_coc_tile_h_fb);
-    DRW_draw_pass(psl->dof_flatten_h_ps);
-
-    GPU_framebuffer_bind(fbl->dof_coc_tile_v_fb);
-    DRW_draw_pass(psl->dof_flatten_v_ps);
-
-    GPU_framebuffer_bind(fbl->dof_coc_dilate_fb);
-    DRW_draw_pass(psl->dof_dilate_v_ps);
-
-    GPU_framebuffer_bind(fbl->dof_coc_tile_v_fb);
-    DRW_draw_pass(psl->dof_dilate_h_ps);
-#endif
 
   blur1_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(blur_tx_));
   blur1_fb_.bind();
