@@ -36,7 +36,6 @@ ccl_device_inline bool operator==(const float2 &a, const float2 &b);
 ccl_device_inline bool operator!=(const float2 &a, const float2 &b);
 
 ccl_device_inline bool is_zero(const float2 &a);
-ccl_device_inline float average(const float2 &a);
 ccl_device_inline float distance(const float2 &a, const float2 &b);
 ccl_device_inline float dot(const float2 &a, const float2 &b);
 ccl_device_inline float cross(const float2 &a, const float2 &b);
@@ -52,11 +51,12 @@ ccl_device_inline float2 fabs(const float2 &a);
 ccl_device_inline float2 as_float2(const float4 &a);
 ccl_device_inline float2 interp(const float2 &a, const float2 &b, float t);
 ccl_device_inline float2 floor(const float2 &a);
-ccl_device_inline float2 sqr(const float2 &a);
 ccl_device_inline float2 sqrt(const float2 &a);
 #endif /* !__KERNEL_METAL__ */
 
 ccl_device_inline float2 safe_divide_float2_float(const float2 a, const float b);
+ccl_device_inline float2 sqr(const float2 &a);
+ccl_device_inline float average(const float2 &a);
 
 /*******************************************************************************
  * Definition.
@@ -170,11 +170,6 @@ ccl_device_inline bool is_zero(const float2 &a)
   return (a.x == 0.0f && a.y == 0.0f);
 }
 
-ccl_device_inline float average(const float2 &a)
-{
-  return (a.x + a.y) * (1.0f / 2.0f);
-}
-
 ccl_device_inline float distance(const float2 &a, const float2 &b)
 {
   return len(a - b);
@@ -232,11 +227,6 @@ ccl_device_inline float2 as_float2(const float4 &a)
   return make_float2(a.x, a.y);
 }
 
-ccl_device_inline float2 sqr(const float2 &a)
-{
-  return a * a;
-}
-
 ccl_device_inline float2 sqrt(const float2 &a)
 {
   return make_float2(sqrtf(a.x), sqrtf(a.y));
@@ -272,6 +262,16 @@ ccl_device_inline float len_squared(const float2 a)
 ccl_device_inline float2 safe_divide_float2_float(const float2 a, const float b)
 {
   return (b != 0.0f) ? a / b : zero_float2();
+}
+
+ccl_device_inline float average(const float2 &a)
+{
+  return (a.x + a.y) * (1.0f / 2.0f);
+}
+
+ccl_device_inline float2 sqr(const float2 &a)
+{
+  return a * a;
 }
 
 CCL_NAMESPACE_END

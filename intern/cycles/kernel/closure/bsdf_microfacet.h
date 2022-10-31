@@ -60,7 +60,7 @@ ccl_device_forceinline Spectrum reflection_color(ccl_private const MicrofacetBsd
     return make_spectrum(f);
   }
   else if (bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_FRESNEL_V2_ID) {
-    MicrofacetExtrav2 *extra = (MicrofacetExtrav2 *)bsdf->extra;
+    ccl_private MicrofacetExtrav2 *extra = (ccl_private MicrofacetExtrav2 *)bsdf->extra;
     Spectrum F = zero_spectrum();
     float cosHL = dot(H, L);
 
@@ -173,7 +173,7 @@ ccl_device int bsdf_microfacet_ggx_fresnel_v2_setup(KernelGlobals kg,
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
   bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
-  MicrofacetExtrav2 *extra = (MicrofacetExtrav2 *)bsdf->extra;
+  ccl_private MicrofacetExtrav2 *extra = (ccl_private MicrofacetExtrav2 *)bsdf->extra;
 
   if (metallic > 0.0f) {
     Spectrum metal_Fss = fresnel_metallic_Fss(extra->metal_base, extra->metal_edge_factor);

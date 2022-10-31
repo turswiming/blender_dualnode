@@ -499,7 +499,7 @@ ccl_device_inline Spectrum principled_v2_clearcoat(KernelGlobals kg,
 
   float3 N = stack_valid(normal_offset) ? stack_load_float3(stack, normal_offset) : sd->N;
   Spectrum tint = saturate(rgb_to_spectrum(stack_load_float3(stack, tint_offset)));
-  if (tint != one_spectrum()) {
+  if (!is_one(tint)) {
     /* Tint is normalized to perpendicular incidence.
      * Therefore, if we define the coating thickness as length 1, the length along the ray is
      * t = sqrt(1+tan^2(angle(N, I))) = sqrt(1+tan^2(acos(dotNI))) = 1 / dotNI.
@@ -649,7 +649,7 @@ ccl_device_inline float principled_v2_specular(KernelGlobals kg,
   bsdf->N = N;
   bsdf->ior = ior;
   bsdf->T = T;
-  bsdf->extra = (MicrofacetExtra *)extra;
+  bsdf->extra = (ccl_private MicrofacetExtra *)extra;
 
   bsdf->alpha_x = sqr(roughness) / aspect;
   bsdf->alpha_y = sqr(roughness) * aspect;
@@ -704,7 +704,7 @@ ccl_device void svm_node_closure_principled_v2(KernelGlobals kg,
                                                uint4 node_2,
                                                float mix_weight,
                                                int path_flag,
-                                               int *offset)
+                                               ccl_private int *offset)
 {
   Spectrum weight = sd->svm_closure_weight * mix_weight;
 
@@ -756,7 +756,7 @@ ccl_device void svm_node_closure_principled(KernelGlobals kg,
                                             uint4 node_2,
                                             float mix_weight,
                                             int path_flag,
-                                            int *offset)
+                                            ccl_private int *offset)
 {
   /* Load distribution type. */
   uint packed_distribution, dummy;

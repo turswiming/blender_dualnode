@@ -105,7 +105,7 @@ ccl_device float schlick_fresnel(float u)
  */
 ccl_device Spectrum metallic_edge_factor(Spectrum F0, Spectrum F82)
 {
-  if (F82 == one_spectrum()) {
+  if (is_one(F82)) {
     return zero_spectrum();
   }
 

@@ -68,7 +68,7 @@ ccl_device int bsdf_microfacet_multi_ggx_glass_fresnel_setup(KernelGlobals kg,
 
 ccl_device_inline Spectrum glass_fresnel(ccl_private const MicrofacetBsdf *bsdf,
                                          float cosTheta,
-                                         float *reflect_pdf)
+                                         ccl_private float *reflect_pdf)
 {
   if (bsdf->T.x > 0.0f) {
     Spectrum F = fresnel_dielectric_thin_film(cosTheta, bsdf->ior, bsdf->T.y, bsdf->T.x);
@@ -155,7 +155,7 @@ ccl_device Spectrum bsdf_microfacet_ggx_glass_eval_transmit(ccl_private const Mi
   float reflect_pdf;
   Spectrum F = glass_fresnel(bsdf, cosMO, &reflect_pdf);
 
-  if (F == one_spectrum()) {
+  if (is_one(F)) {
     /* TIR */
     *pdf = 0.0f;
     return zero_spectrum();

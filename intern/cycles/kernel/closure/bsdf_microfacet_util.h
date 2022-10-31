@@ -162,7 +162,7 @@ ccl_device_inline float dielectric_fresnel_Fss(float eta)
  */
 
 ccl_device_inline void fresnel_dielectric_complex(
-    float cosTheta1, float eta1, float eta2, float2 *R, float2 *phi)
+    float cosTheta1, float eta1, float eta2, ccl_private float2 *R, ccl_private float2 *phi)
 {
 
   float sinTheta1Sqr = 1.0f - sqr(cosTheta1);

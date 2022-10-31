@@ -73,7 +73,7 @@ ccl_device_inline float sheen_v2_lambda(float mu, float w)
 }
 
 ccl_device_inline Spectrum
-sheen_v2_eval(float3 N, float3 V, float3 L, float3 H, float r, float *pdf)
+sheen_v2_eval(float3 N, float3 V, float3 L, float3 H, float r, ccl_private float *pdf)
 {
   float cosNH = dot(N, H), cosNV = dot(N, V), cosNL = dot(N, L);
 

@@ -69,6 +69,7 @@ ccl_device_inline float3 interp(float3 a, float3 b, float t);
 ccl_device_inline float3 sqr(float3 a);
 
 ccl_device_inline bool is_zero(const float3 a);
+ccl_device_inline bool is_one(const float3 a);
 ccl_device_inline float reduce_add(const float3 a);
 ccl_device_inline float average(const float3 a);
 ccl_device_inline bool isequal(const float3 a, const float3 b);
@@ -502,6 +503,15 @@ ccl_device_inline bool is_zero(const float3 a)
   return a == make_float3(0.0f);
 #else
   return (a.x == 0.0f && a.y == 0.0f && a.z == 0.0f);
+#endif
+}
+
+ccl_device_inline bool is_one(const float3 a)
+{
+#ifdef __KERNEL_SSE__
+  return a == make_float3(1.0f);
+#else
+  return (a.x == 1.0f && a.y == 1.0f && a.z == 1.0f);
 #endif
 }
 
