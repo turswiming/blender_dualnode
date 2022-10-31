@@ -187,7 +187,7 @@ class OpaquePass {
   MeshPass gbuffer_in_front_ps_ = {"Opaque.GbufferInFront"};
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
 
-  void sync(const DrawConfig config, SceneResources &resources);
+  void sync(const DrawConfig &config, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -205,7 +205,7 @@ class TransparentPass {
   PassSimple resolve_ps_ = {"Transparent.Resolve"};
   Framebuffer resolve_fb;
 
-  void sync(const DrawConfig config, SceneResources &resources);
+  void sync(const DrawConfig &config, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 
@@ -221,7 +221,7 @@ class TransparentDepthPass {
   PassSimple merge_ps_ = {"TransparentDepth.Merge"};
   Framebuffer merge_fb = {"TransparentDepth.Merge"};
 
-  void sync(const DrawConfig config, SceneResources &resources);
+  void sync(const DrawConfig &config, SceneResources &resources);
 
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
 

@@ -86,7 +86,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
   return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::MATERIAL)];
 }
 
-void OpaquePass::sync(const DrawConfig config, SceneResources &resources)
+void OpaquePass::sync(const DrawConfig &config, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                    config.cull_state | config.clip_state;
@@ -164,7 +164,7 @@ bool OpaquePass::is_empty() const
   return gbuffer_ps_.is_empty() && gbuffer_in_front_ps_.is_empty();
 }
 
-void TransparentPass::sync(const DrawConfig config, SceneResources &resources)
+void TransparentPass::sync(const DrawConfig &config, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_OIT |
                    config.cull_state | config.clip_state;
@@ -232,7 +232,7 @@ bool TransparentPass::is_empty() const
   return accumulation_ps_.is_empty() && accumulation_in_front_ps_.is_empty();
 }
 
-void TransparentDepthPass::sync(const DrawConfig config, SceneResources &resources)
+void TransparentDepthPass::sync(const DrawConfig &config, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
                    config.cull_state | config.clip_state;
