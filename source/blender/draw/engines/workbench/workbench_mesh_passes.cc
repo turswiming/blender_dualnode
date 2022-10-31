@@ -58,13 +58,11 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
     else {
       texture = BKE_image_get_gpu_texture(image, iuser, nullptr);
     }
-    /* TODO(Miguel Pozo): Should be lib.name + name ??? */
-    StringRefNull name = image->id.name;
     if (texture) {
       auto add_cb = [&] {
         PassMain::Sub *sub_pass =
             passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::TEXTURE)];
-        sub_pass = &sub_pass->sub(name.c_str());
+        sub_pass = &sub_pass->sub(image->id.name);
         if (tilemap) {
           sub_pass->bind_texture(WB_TILE_ARRAY_SLOT, texture, sampler_state);
           sub_pass->bind_texture(WB_TILE_DATA_SLOT, tilemap);
@@ -74,7 +72,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
         }
         sub_pass->push_constant("isImageTile", tilemap != nullptr);
         sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
-        /*TODO(Miguel Pozo): What's the point? This could be a constant in the shader. */
+        /*TODO(Miguel Pozo): This setting should be set per Material. */
         sub_pass->push_constant("imageTransparencyCutoff", 0.1f);
         return sub_pass;
       };
