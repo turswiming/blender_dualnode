@@ -720,3 +720,43 @@ set(HARFBUZZ_URI https://github.com/harfbuzz/harfbuzz/archive/refs/tags/${HARFBU
 set(HARFBUZZ_HASH 5352ff2eec538ea9a63a485cf01ad8332a3f63aa79921c5a2e301cef185caea1)
 set(HARFBUZZ_HASH_TYPE SHA256)
 set(HARFBUZZ_FILE harfbuzz-${HARFBUZZ_VERSION}.tar.gz)
+
+set(SHADERC_VERSION v2022.3)
+set(SHADERC_URI https://github.com/google/shaderc/archive/${SHADERC_VERSION}.tar.gz)
+set(SHADERC_HASH 5cb762af57637caf997d5f46baa4e8a4)
+set(SHADERC_HASH_TYPE MD5)
+set(SHADERC_FILE shaderc-${SHADERC_VERSION}.tar.gz)
+
+# The versions of shaderc's dependencies can be found in the root of shaderc's
+# source in a file called DEPS.
+
+set(SHADERC_SPIRV_TOOLS_VERSION eb0a36633d2acf4de82588504f951ad0f2cecacb)
+set(SHADERC_SPIRV_TOOLS_URI https://github.com/KhronosGroup/SPIRV-Tools/archive/${SHADERC_SPIRV_TOOLS_VERSION}.tar.gz)
+set(SHADERC_SPIRV_TOOLS_HASH a4bdb8161f0e959c75d0d82d367c24f2)
+set(SHADERC_SPIRV_TOOLS_HASH_TYPE MD5)
+set(SHADERC_SPIRV_TOOLS_FILE SPIRV-Tools-${SHADERC_SPIRV_TOOLS_VERSION}.tar.gz)
+
+set(SHADERC_SPIRV_HEADERS_VERSION 85a1ed200d50660786c1a88d9166e871123cce39)
+set(SHADERC_SPIRV_HEADERS_URI https://github.com/KhronosGroup/SPIRV-Headers/archive/${SHADERC_SPIRV_HEADERS_VERSION}.tar.gz)
+set(SHADERC_SPIRV_HEADERS_HASH 10d5e8160f39344a641523810b075568)
+set(SHADERC_SPIRV_HEADERS_HASH_TYPE MD5)
+set(SHADERC_SPIRV_HEADERS_FILE SPIRV-Headers-${SHADERC_SPIRV_HEADERS_VERSION}.tar.gz)
+
+set(SHADERC_GLSLANG_VERSION 89db4e1caa273a057ea46deba709c6e50001b314)
+set(SHADERC_GLSLANG_URI https://github.com/KhronosGroup/glslang/archive/${SHADERC_GLSLANG_VERSION}.tar.gz)
+set(SHADERC_GLSLANG_HASH 3b3c79ad8e9132ffcb8b63cc29c532e2)
+set(SHADERC_GLSLANG_HASH_TYPE MD5)
+set(SHADERC_GLSLANG_FILE glslang-${SHADERC_GLSLANG_VERSION}.tar.gz)
+
+set(VULKAN_VERSION v1.2.198)
+
+set(VULKAN_HEADERS_URI https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/${VULKAN_VERSION}.tar.gz)
+set(VULKAN_HEADERS_HASH 64fe73e887c963ad546bfc7f9505fa1d)
+set(VULKAN_HEADERS_HASH_TYPE MD5)
+set(VULKAN_HEADERS_FILE Vulkan-Headers-${VULKAN_VERSION}.tar.gz)
+
+set(VULKAN_LOADER_URI https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/${VULKAN_VERSION}.tar.gz)
+set(VULKAN_LOADER_HASH 015170a74f648fd2b41e209b6bf1ebc4)
+set(VULKAN_LOADER_HASH_TYPE MD5)
+set(VULKAN_LOADER_FILE Vulkan-Loader-${VULKAN_VERSION}.tar.gz)
+
