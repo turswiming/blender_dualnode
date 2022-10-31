@@ -24,7 +24,7 @@ void CavityEffect::init(const SceneState &scene_state, UniformBuffer<WorldData> 
   curvature_enabled_ = scene_state.draw_curvature;
 
   const int ssao_samples = scene_state.scene->display.matcap_ssao_samples;
-  int sample_count = min_ii(max_ii(1, scene_state.aa_samples) * ssao_samples, MAX_SAMPLES);
+  int sample_count = min_ii(max_ii(1, scene_state.aa_samples) * ssao_samples, max_samples_);
   const int max_iter_count = sample_count / ssao_samples;
 
   if (scene_state.reset_taa) {
@@ -82,7 +82,7 @@ void CavityEffect::setup_resources(int iteration_samples, int total_samples)
     const float total_samples_inv = 1.0f / iteration_samples;
 
     /* Create blue noise jitter texture */
-    const int jitter_texel_count = JITTER_TEX_SIZE * JITTER_TEX_SIZE;
+    const int jitter_texel_count = jitter_tx_size_ * jitter_tx_size_;
     static float4 jitter[jitter_texel_count];
     for (int i = 0; i < jitter_texel_count; i++) {
       float phi = blue_noise[i][0] * 2.0f * M_PI;
@@ -96,7 +96,7 @@ void CavityEffect::setup_resources(int iteration_samples, int total_samples)
       jitter[i].w = blue_noise[i][1];
     }
 
-    jitter_tx.ensure_2d(GPU_RGBA16F, int2(JITTER_TEX_SIZE), jitter[0]);
+    jitter_tx.ensure_2d(GPU_RGBA16F, int2(jitter_tx_size_), jitter[0]);
   }
 }
 

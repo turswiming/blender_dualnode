@@ -59,9 +59,9 @@ static void square_to_circle(float x, float y, float &r, float &T)
 void DofPass::setup_samples()
 {
   float4 *sample = samples_buf_.begin();
-  for (int i = 0; i <= KERNEL_RADIUS; i++) {
-    for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; j++) {
-      for (int k = -KERNEL_RADIUS; k <= KERNEL_RADIUS; k++) {
+  for (int i = 0; i <= kernel_radius_; i++) {
+    for (int j = -kernel_radius_; j <= kernel_radius_; j++) {
+      for (int k = -kernel_radius_; k <= kernel_radius_; k++) {
         if (abs(j) > i || abs(k) > i) {
           continue;
         }
@@ -69,7 +69,7 @@ void DofPass::setup_samples()
           continue;
         }
 
-        float2 coord = float2(j, k) / float2(KERNEL_RADIUS);
+        float2 coord = float2(j, k) / float2(kernel_radius_);
         float r = 0;
         float T = 0;
         square_to_circle(coord.x, coord.y, r, T);
@@ -302,8 +302,8 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
   blur_tx_.acquire(half_res, GPU_RGBA16F);
 
   downsample_fb_.ensure(GPU_ATTACHMENT_NONE,
-                       GPU_ATTACHMENT_TEXTURE(source_tx_),
-                       GPU_ATTACHMENT_TEXTURE(coc_halfres_tx_));
+                        GPU_ATTACHMENT_TEXTURE(source_tx_),
+                        GPU_ATTACHMENT_TEXTURE(coc_halfres_tx_));
   downsample_fb_.bind();
   manager.submit(down_ps_, view);
 

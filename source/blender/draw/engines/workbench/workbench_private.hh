@@ -120,11 +120,11 @@ class CavityEffect {
   bool cavity_enabled_;
 
  public:
-  static const int JITTER_TEX_SIZE = 64;
-  static const int MAX_SAMPLES = 512;  // This value must be kept in sync with the one declared at
-                                       // workbench_composite_info.hh (cavity_samples)
+  static const int jitter_tx_size_ = 64;
+  static const int max_samples_ = 512;  // This value must be kept in sync with the one declared at
+                                        // workbench_composite_info.hh (cavity_samples)
 
-  UniformArrayBuffer<float4, MAX_SAMPLES> samples_buf;
+  UniformArrayBuffer<float4, max_samples_> samples_buf;
   /*TODO(Miguel Pozo): Move to SceneResources (Used by DoF too)*/
   Texture jitter_tx;
 
@@ -233,10 +233,10 @@ class TransparentDepthPass {
 class DofPass {
   bool enabled_ = false;
 
-  static const int KERNEL_RADIUS = 3;
-  static const int SAMPLES_LEN = (KERNEL_RADIUS * 2 + 1) * (KERNEL_RADIUS * 2 + 1);
+  static const int kernel_radius_ = 3;
+  static const int samples_len_ = (kernel_radius_ * 2 + 1) * (kernel_radius_ * 2 + 1);
 
-  UniformArrayBuffer<float4, SAMPLES_LEN> samples_buf_;
+  UniformArrayBuffer<float4, samples_len_> samples_buf_;
 
   Texture source_tx_;
   Texture coc_halfres_tx_;
