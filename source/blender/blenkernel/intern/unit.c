@@ -341,7 +341,7 @@ static struct bUnitDef buWavelengthLenDef[] = {
   {"picometer",  "picometers",  "pm",  NULL, "Picometers",     NULL, 1e-3f, 0.0, B_UNIT_DEF_NONE},
   NULL_UNIT,
 };
-static const struct bUnitCollection buWavelengthLenCollection = {buWavelengthLenDef, 3, 0, UNIT_COLLECTION_LENGTH(buWavelengthLenDef)};
+static const struct bUnitCollection buWavelengthLenCollection = {buWavelengthLenDef, 2, 0, UNIT_COLLECTION_LENGTH(buWavelengthLenDef)};
 
 /* clang-format on */
 
