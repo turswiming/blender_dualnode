@@ -139,14 +139,14 @@ void DofPass::init(const SceneState &scene_state)
   near_ = -camera->clip_start;
   far_ = -camera->clip_end;
 
-  float _blades = camera->dof.aperture_blades;
-  float _rotation = camera->dof.aperture_rotation;
-  float _ratio = 1.0f / camera->dof.aperture_ratio;
+  float blades = camera->dof.aperture_blades;
+  float rotation = camera->dof.aperture_rotation;
+  float ratio = 1.0f / camera->dof.aperture_ratio;
 
-  if (blades_ != _blades || rotation_ != _rotation || ratio_ != _ratio) {
-    blades_ = _blades;
-    rotation_ = _rotation;
-    ratio_ = _ratio;
+  if (blades_ != blades || rotation_ != rotation || ratio_ != ratio) {
+    blades_ = blades;
+    rotation_ = rotation;
+    ratio_ = ratio;
     setup_samples();
   }
 }
