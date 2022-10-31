@@ -106,34 +106,34 @@ static void setup_taa_weights(const float2 offset, float r_weights[9], float &r_
 
 AntiAliasingPass::AntiAliasingPass()
 {
-  taa_accumulation_sh = GPU_shader_create_from_info_name("workbench_taa");
-  smaa_edge_detect_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_0");
-  smaa_aa_weight_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_1");
-  smaa_resolve_sh = GPU_shader_create_from_info_name("workbench_smaa_stage_2");
+  taa_accumulation_sh_ = GPU_shader_create_from_info_name("workbench_taa");
+  smaa_edge_detect_sh_ = GPU_shader_create_from_info_name("workbench_smaa_stage_0");
+  smaa_aa_weight_sh_ = GPU_shader_create_from_info_name("workbench_smaa_stage_1");
+  smaa_resolve_sh_ = GPU_shader_create_from_info_name("workbench_smaa_stage_2");
 
-  smaa_search_tx.ensure_2d(GPU_R8, {SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT});
-  GPU_texture_update(smaa_search_tx, GPU_DATA_UBYTE, searchTexBytes);
-  GPU_texture_filter_mode(smaa_search_tx, true);
+  smaa_search_tx_.ensure_2d(GPU_R8, {SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT});
+  GPU_texture_update(smaa_search_tx_, GPU_DATA_UBYTE, searchTexBytes);
+  GPU_texture_filter_mode(smaa_search_tx_, true);
 
-  smaa_area_tx.ensure_2d(GPU_RG8, {AREATEX_WIDTH, AREATEX_HEIGHT});
-  GPU_texture_update(smaa_area_tx, GPU_DATA_UBYTE, areaTexBytes);
-  GPU_texture_filter_mode(smaa_area_tx, true);
+  smaa_area_tx_.ensure_2d(GPU_RG8, {AREATEX_WIDTH, AREATEX_HEIGHT});
+  GPU_texture_update(smaa_area_tx_, GPU_DATA_UBYTE, areaTexBytes);
+  GPU_texture_filter_mode(smaa_area_tx_, true);
 }
 
 AntiAliasingPass::~AntiAliasingPass()
 {
-  DRW_SHADER_FREE_SAFE(taa_accumulation_sh);
-  DRW_SHADER_FREE_SAFE(smaa_edge_detect_sh);
-  DRW_SHADER_FREE_SAFE(smaa_aa_weight_sh);
-  DRW_SHADER_FREE_SAFE(smaa_resolve_sh);
+  DRW_SHADER_FREE_SAFE(taa_accumulation_sh_);
+  DRW_SHADER_FREE_SAFE(smaa_edge_detect_sh_);
+  DRW_SHADER_FREE_SAFE(smaa_aa_weight_sh_);
+  DRW_SHADER_FREE_SAFE(smaa_resolve_sh_);
 }
 
 void AntiAliasingPass::init(const SceneState &scene_state)
 {
   if (scene_state.reset_taa) {
-    sample = 0;
+    sample_ = 0;
   }
-  sample_len = scene_state.aa_samples;
+  sample_len_ = scene_state.aa_samples;
 
   /*TODO(Miguel Pozo): This can probably be removed.*/
   /*
@@ -145,86 +145,86 @@ void AntiAliasingPass::init(const SceneState &scene_state)
 
 void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
 {
-  if (sample_len > 0) {
-    taa_accumulation_tx.ensure_2d(GPU_RGBA16F, resolution);
-    sample0_depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
+  if (sample_len_ > 0) {
+    taa_accumulation_tx_.ensure_2d(GPU_RGBA16F, resolution);
+    sample0_depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
   }
   else {
-    taa_accumulation_tx.free();
-    sample0_depth_tx.free();
+    taa_accumulation_tx_.free();
+    sample0_depth_tx_.free();
   }
 
   taa_accumulation_ps_.init();
-  taa_accumulation_ps_.state_set(sample == 0 ? DRW_STATE_WRITE_COLOR :
+  taa_accumulation_ps_.state_set(sample_ == 0 ? DRW_STATE_WRITE_COLOR :
                                                DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
-  taa_accumulation_ps_.shader_set(taa_accumulation_sh);
+  taa_accumulation_ps_.shader_set(taa_accumulation_sh_);
   taa_accumulation_ps_.bind_texture("colorBuffer", &resources.color_tx);
-  taa_accumulation_ps_.push_constant("samplesWeights", weights, 9);
+  taa_accumulation_ps_.push_constant("samplesWeights", weights_, 9);
   taa_accumulation_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   smaa_edge_detect_ps_.init();
   smaa_edge_detect_ps_.state_set(DRW_STATE_WRITE_COLOR);
-  smaa_edge_detect_ps_.shader_set(smaa_edge_detect_sh);
-  smaa_edge_detect_ps_.bind_texture("colorTex", &taa_accumulation_tx);
-  smaa_edge_detect_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+  smaa_edge_detect_ps_.shader_set(smaa_edge_detect_sh_);
+  smaa_edge_detect_ps_.bind_texture("colorTex", &taa_accumulation_tx_);
+  smaa_edge_detect_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics_, 1);
   smaa_edge_detect_ps_.clear_color(float4(0.0f));
   smaa_edge_detect_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   smaa_aa_weight_ps_.init();
   smaa_aa_weight_ps_.state_set(DRW_STATE_WRITE_COLOR);
-  smaa_aa_weight_ps_.shader_set(smaa_aa_weight_sh);
-  smaa_aa_weight_ps_.bind_texture("edgesTex", &smaa_edge_tx);
-  smaa_aa_weight_ps_.bind_texture("areaTex", smaa_area_tx);
-  smaa_aa_weight_ps_.bind_texture("searchTex", smaa_search_tx);
-  smaa_aa_weight_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
+  smaa_aa_weight_ps_.shader_set(smaa_aa_weight_sh_);
+  smaa_aa_weight_ps_.bind_texture("edgesTex", &smaa_edge_tx_);
+  smaa_aa_weight_ps_.bind_texture("areaTex", smaa_area_tx_);
+  smaa_aa_weight_ps_.bind_texture("searchTex", smaa_search_tx_);
+  smaa_aa_weight_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics_, 1);
   smaa_aa_weight_ps_.clear_color(float4(0.0f));
   smaa_aa_weight_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   smaa_resolve_ps_.init();
   smaa_resolve_ps_.state_set(DRW_STATE_WRITE_COLOR);
-  smaa_resolve_ps_.shader_set(smaa_resolve_sh);
-  smaa_resolve_ps_.bind_texture("blendTex", &smaa_weight_tx);
-  smaa_resolve_ps_.bind_texture("colorTex", &taa_accumulation_tx);
-  smaa_resolve_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics, 1);
-  smaa_resolve_ps_.push_constant("mixFactor", &smaa_mix_factor, 1);
-  smaa_resolve_ps_.push_constant("taaAccumulatedWeight", &weight_accum, 1);
+  smaa_resolve_ps_.shader_set(smaa_resolve_sh_);
+  smaa_resolve_ps_.bind_texture("blendTex", &smaa_weight_tx_);
+  smaa_resolve_ps_.bind_texture("colorTex", &taa_accumulation_tx_);
+  smaa_resolve_ps_.push_constant("viewportMetrics", &smaa_viewport_metrics_, 1);
+  smaa_resolve_ps_.push_constant("mixFactor", &smaa_mix_factor_, 1);
+  smaa_resolve_ps_.push_constant("taaAccumulatedWeight", &weight_accum_, 1);
   smaa_resolve_ps_.clear_color(float4(0.0f));
   smaa_resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
 bool AntiAliasingPass::setup_view(View &view, int2 resolution)
 {
-  if (sample_len == 0) {
+  if (sample_len_ == 0) {
     /* AA disabled. */
     return true;
   }
 
-  if (sample >= sample_len) {
+  if (sample_ >= sample_len_) {
     /* TAA accumulation has finished. Just copy the result back */
     return false;
   }
 
   float2 sample_offset;
-  switch (sample_len) {
+  switch (sample_len_) {
     default:
     case 5:
-      sample_offset = TAA_SAMPLES.x5[sample];
+      sample_offset = TAA_SAMPLES.x5[sample_];
       break;
     case 8:
-      sample_offset = TAA_SAMPLES.x8[sample];
+      sample_offset = TAA_SAMPLES.x8[sample_];
       break;
     case 11:
-      sample_offset = TAA_SAMPLES.x11[sample];
+      sample_offset = TAA_SAMPLES.x11[sample_];
       break;
     case 16:
-      sample_offset = TAA_SAMPLES.x16[sample];
+      sample_offset = TAA_SAMPLES.x16[sample_];
       break;
     case 32:
-      sample_offset = TAA_SAMPLES.x32[sample];
+      sample_offset = TAA_SAMPLES.x32[sample_];
       break;
   }
 
-  setup_taa_weights(sample_offset, weights, weights_sum);
+  setup_taa_weights(sample_offset, weights_, weights_sum_);
 
   /* TODO(Miguel Pozo): New API equivalent? */
   const DRWView *default_view = DRW_view_default_get();
@@ -249,7 +249,7 @@ void AntiAliasingPass::draw(Manager &manager,
                             GPUTexture *depth_tx,
                             GPUTexture *color_tx)
 {
-  if (sample_len == 0) {
+  if (sample_len_ == 0) {
     /* AA disabled. */
     // valid_history = false;
     /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place */
@@ -264,23 +264,23 @@ void AntiAliasingPass::draw(Manager &manager,
    * high. This ensure a smoother transition.
    * If TAA accumulation is finished, we only blit the result.
    */
-  const bool last_sample = sample + 1 == sample_len;
-  const bool taa_finished = sample >= sample_len; /* TODO(Miguel Pozo): Why is this ever true ? */
+  const bool last_sample = sample_ + 1 == sample_len_;
+  const bool taa_finished = sample_ >= sample_len_; /* TODO(Miguel Pozo): Why is this ever true ? */
 
   if (!taa_finished) {
-    if (sample == 0) {
-      weight_accum = 0;
+    if (sample_ == 0) {
+      weight_accum_ = 0;
     }
     /* Accumulate result to the TAA buffer. */
-    taa_accumulation_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(taa_accumulation_tx));
-    taa_accumulation_fb.bind();
+    taa_accumulation_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(taa_accumulation_tx_));
+    taa_accumulation_fb_.bind();
     manager.submit(taa_accumulation_ps_, view);
-    weight_accum += weights_sum;
+    weight_accum_ += weights_sum_;
   }
 
-  if (sample == 0) {
-    if (sample0_depth_tx.is_valid()) {
-      GPU_texture_copy(sample0_depth_tx, resources.depth_tx);
+  if (sample_ == 0) {
+    if (sample0_depth_tx_.is_valid()) {
+      GPU_texture_copy(sample0_depth_tx_, resources.depth_tx);
     }
     /* TODO(Miguel Pozo): Should render to the input depth_tx in the first place */
     /* Copy back the saved depth buffer for correct overlays. */
@@ -288,37 +288,37 @@ void AntiAliasingPass::draw(Manager &manager,
   }
   else {
     /* Copy back the saved depth buffer for correct overlays. */
-    GPU_texture_copy(depth_tx, sample0_depth_tx);
+    GPU_texture_copy(depth_tx, sample0_depth_tx_);
   }
 
   if (!DRW_state_is_image_render() || last_sample) {
-    smaa_weight_tx.acquire(resolution, GPU_RGBA8);
-    smaa_mix_factor = 1.0f - clamp_f(sample / 4.0f, 0.0f, 1.0f);
-    smaa_viewport_metrics = float4(float2(1.0f / float2(resolution)), resolution);
+    smaa_weight_tx_.acquire(resolution, GPU_RGBA8);
+    smaa_mix_factor_ = 1.0f - clamp_f(sample_ / 4.0f, 0.0f, 1.0f);
+    smaa_viewport_metrics_ = float4(float2(1.0f / float2(resolution)), resolution);
 
     /* After a certain point SMAA is no longer necessary. */
-    if (smaa_mix_factor > 0.0f) {
-      smaa_edge_tx.acquire(resolution, GPU_RG8);
-      smaa_edge_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_edge_tx));
-      smaa_edge_fb.bind();
+    if (smaa_mix_factor_ > 0.0f) {
+      smaa_edge_tx_.acquire(resolution, GPU_RG8);
+      smaa_edge_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_edge_tx_));
+      smaa_edge_fb_.bind();
       manager.submit(smaa_edge_detect_ps_, view);
 
-      smaa_weight_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_weight_tx));
-      smaa_weight_fb.bind();
+      smaa_weight_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_weight_tx_));
+      smaa_weight_fb_.bind();
       manager.submit(smaa_aa_weight_ps_, view);
-      smaa_edge_tx.release();
+      smaa_edge_tx_.release();
     }
-    smaa_resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_tx));
-    smaa_resolve_fb.bind();
+    smaa_resolve_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_tx));
+    smaa_resolve_fb_.bind();
     manager.submit(smaa_resolve_ps_, view);
-    smaa_weight_tx.release();
+    smaa_weight_tx_.release();
   }
 
   if (!taa_finished) {
-    sample++;
+    sample_++;
   }
 
-  if (!DRW_state_is_image_render() && sample < sample_len) {
+  if (!DRW_state_is_image_render() && sample_ < sample_len_) {
     DRW_viewport_request_redraw();
   }
 }

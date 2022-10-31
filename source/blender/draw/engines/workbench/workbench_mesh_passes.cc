@@ -9,12 +9,12 @@ MeshPass::MeshPass(const char *name) : PassMain(name){};
 /* Move to draw::Pass */
 bool MeshPass::is_empty() const
 {
-  return _is_empty;
+  return is_empty_;
 }
 
 void MeshPass::init_pass(SceneResources &resources, DRWState state)
 {
-  _is_empty = true;
+  is_empty_ = true;
   PassMain::init();
   state_set(state);
   bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
@@ -24,7 +24,7 @@ void MeshPass::init_pass(SceneResources &resources, DRWState state)
 
 void MeshPass::init_subpasses(ePipelineType pipeline, eShadingType shading, ShaderCache &shaders)
 {
-  texture_subpass_map.clear();
+  texture_subpass_map_.clear();
 
   for (auto geom : IndexRange(geometry_type_len)) {
     for (auto color : IndexRange(color_type_len)) {
@@ -45,7 +45,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
                                       ImageUser *iuser /* = nullptr */)
 {
   /*TODO(Miguel Pozo): For now we assume retrieving a subpass means it's not empty anymore*/
-  _is_empty = false;
+  is_empty_ = false;
 
   eGeometryType geometry_type = geometry_type_from_object(ref.object);
   if (image) {
@@ -79,8 +79,8 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
         return sub_pass;
       };
 
-      return *texture_subpass_map.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type),
-                                                   add_cb);
+      return *texture_subpass_map_.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type),
+                                                    add_cb);
     }
   }
   return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::MATERIAL)];

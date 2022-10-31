@@ -20,22 +20,22 @@ namespace blender::workbench {
 
 void CavityEffect::init(const SceneState &scene_state, UniformBuffer<WorldData> &world_buf)
 {
-  cavity_enabled = scene_state.draw_cavity;
-  curvature_enabled = scene_state.draw_curvature;
+  cavity_enabled_ = scene_state.draw_cavity;
+  curvature_enabled_ = scene_state.draw_curvature;
 
   const int ssao_samples = scene_state.scene->display.matcap_ssao_samples;
   int sample_count = min_ii(max_ii(1, scene_state.aa_samples) * ssao_samples, MAX_SAMPLES);
   const int max_iter_count = sample_count / ssao_samples;
 
   if (scene_state.reset_taa) {
-    sample = 0;
+    sample_ = 0;
   }
-  sample %= max_iter_count;
+  sample_ %= max_iter_count;
 
-  world_buf.cavity_sample_start = ssao_samples * sample;
-  world_buf.cavity_sample_end = ssao_samples * (sample + 1);
+  world_buf.cavity_sample_start = ssao_samples * sample_;
+  world_buf.cavity_sample_end = ssao_samples * (sample_ + 1);
 
-  sample++;
+  sample_++;
 
   world_buf.cavity_sample_count_inv = 1.0f / (world_buf.cavity_sample_end -
                                               world_buf.cavity_sample_start);
@@ -51,19 +51,19 @@ void CavityEffect::init(const SceneState &scene_state, UniformBuffer<WorldData> 
   world_buf.curvature_valley = 0.7f / max_ff(square_f(scene_state.shading.curvature_valley_factor),
                                              1e-4f);
 
-  if (cavity_enabled || scene_state.draw_dof) {
+  if (cavity_enabled_ || scene_state.draw_dof) {
     setup_resources(ssao_samples, sample_count);
   }
 }
 
 void CavityEffect::setup_resources(int iteration_samples, int total_samples)
 {
-  if (sample_count != total_samples) {
-    sample_count = total_samples;
+  if (sample_count_ != total_samples) {
+    sample_count_ = total_samples;
     const float iteration_samples_inv = 1.0f / iteration_samples;
 
     /* Create disk samples using Hammersley distribution */
-    for (int i : IndexRange(sample_count)) {
+    for (int i : IndexRange(sample_count_)) {
       float it_add = (i / iteration_samples) * 0.499f;
       float r = fmodf((i + 0.5f + it_add) * iteration_samples_inv, 1.0f);
       double dphi;
@@ -102,11 +102,11 @@ void CavityEffect::setup_resources(int iteration_samples, int total_samples)
 
 void CavityEffect::setup_resolve_pass(PassSimple &pass, Texture &object_id_tx)
 {
-  if (cavity_enabled) {
+  if (cavity_enabled_) {
     pass.bind_ubo("cavity_samples", samples_buf);
     pass.bind_texture("jitter_tx", &jitter_tx, eGPUSamplerState::GPU_SAMPLER_REPEAT);
   }
-  if (curvature_enabled) {
+  if (curvature_enabled_) {
     pass.bind_texture("object_id_tx", &object_id_tx);
   }
 }

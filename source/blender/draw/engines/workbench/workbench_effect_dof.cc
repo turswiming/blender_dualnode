@@ -58,7 +58,7 @@ static void square_to_circle(float x, float y, float &r, float &T)
 
 void DofPass::setup_samples()
 {
-  float4 *sample = samples_buf.begin();
+  float4 *sample = samples_buf_.begin();
   for (int i = 0; i <= KERNEL_RADIUS; i++) {
     for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; j++) {
       for (int k = -KERNEL_RADIUS; k <= KERNEL_RADIUS; k++) {
@@ -76,42 +76,42 @@ void DofPass::setup_samples()
         sample->z = r;
 
         /* Bokeh shape parameterization. */
-        if (blades > 1.0f) {
-          float denom = T - (2.0 * M_PI / blades) * floorf((blades * T + M_PI) / (2.0 * M_PI));
-          r *= cosf(M_PI / blades) / cosf(denom);
+        if (blades_ > 1.0f) {
+          float denom = T - (2.0 * M_PI / blades_) * floorf((blades_ * T + M_PI) / (2.0 * M_PI));
+          r *= cosf(M_PI / blades_) / cosf(denom);
         }
 
-        T += rotation;
+        T += rotation_;
 
-        sample->x = r * cosf(T) * ratio;
+        sample->x = r * cosf(T) * ratio_;
         sample->y = r * sinf(T);
         sample->w = 0;
         sample++;
       }
     }
   }
-  samples_buf.push_update();
+  samples_buf_.push_update();
 }
 
 void DofPass::init(const SceneState &scene_state)
 {
-  enabled = scene_state.draw_dof;
+  enabled_ = scene_state.draw_dof;
 
-  if (!enabled) {
-    source_tx.free();
-    coc_halfres_tx.free();
+  if (!enabled_) {
+    source_tx_.free();
+    coc_halfres_tx_.free();
     return;
   }
 
   int2 half_res = scene_state.resolution / 2;
   half_res = {max_ii(half_res.x, 1), max_ii(half_res.y, 1)};
 
-  source_tx.ensure_2d(GPU_RGBA16F, half_res, nullptr, 3);
-  source_tx.ensure_mip_views();
-  source_tx.filter_mode(true);
-  coc_halfres_tx.ensure_2d(GPU_RG8, half_res, nullptr, 3);
-  coc_halfres_tx.ensure_mip_views();
-  coc_halfres_tx.filter_mode(true);
+  source_tx_.ensure_2d(GPU_RGBA16F, half_res, nullptr, 3);
+  source_tx_.ensure_mip_views();
+  source_tx_.filter_mode(true);
+  coc_halfres_tx_.ensure_2d(GPU_RG8, half_res, nullptr, 3);
+  coc_halfres_tx_.ensure_mip_views();
+  coc_halfres_tx_.filter_mode(true);
 
   Camera *camera = static_cast<Camera *>(scene_state.camera_object->data);
 
@@ -132,21 +132,21 @@ void DofPass::init(const SceneState &scene_state)
     sensor_scaled *= rv3d->viewcamtexcofac[0];
   }
 
-  aperture_size = aperture * fabsf(focal_len_scaled / (focus_dist - focal_len_scaled));
-  distance = -focus_dist;
-  invsensor_size = scene_state.resolution.x / sensor_scaled;
+  aperture_size_ = aperture * fabsf(focal_len_scaled / (focus_dist - focal_len_scaled));
+  distance_ = -focus_dist;
+  invsensor_size_ = scene_state.resolution.x / sensor_scaled;
 
-  near = -camera->clip_start;
-  far = -camera->clip_end;
+  near_ = -camera->clip_start;
+  far_ = -camera->clip_end;
 
   float _blades = camera->dof.aperture_blades;
   float _rotation = camera->dof.aperture_rotation;
   float _ratio = 1.0f / camera->dof.aperture_ratio;
 
-  if (blades != _blades || rotation != _rotation || ratio != _ratio) {
-    blades = _blades;
-    rotation = _rotation;
-    ratio = _ratio;
+  if (blades_ != _blades || rotation_ != _rotation || ratio_ != _ratio) {
+    blades_ = _blades;
+    rotation_ = _rotation;
+    ratio_ = _ratio;
     setup_samples();
   }
 
@@ -185,16 +185,16 @@ void DofPass::init(const SceneState &scene_state)
 
 void DofPass::sync(SceneResources &resources)
 {
-  if (!enabled) {
+  if (!enabled_) {
     return;
   }
 
-  if (prepare_sh == nullptr) {
-    prepare_sh = GPU_shader_create_from_info_name("workbench_effect_dof_prepare");
-    downsample_sh = GPU_shader_create_from_info_name("workbench_effect_dof_downsample");
-    blur1_sh = GPU_shader_create_from_info_name("workbench_effect_dof_blur1");
-    blur2_sh = GPU_shader_create_from_info_name("workbench_effect_dof_blur2");
-    resolve_sh = GPU_shader_create_from_info_name("workbench_effect_dof_resolve");
+  if (prepare_sh_ == nullptr) {
+    prepare_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_prepare");
+    downsample_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_downsample");
+    blur1_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur1");
+    blur2_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur2");
+    resolve_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_resolve");
 #if 0 /* TODO(fclem): finish COC min_max optimization */
       flatten_v_sh = GPU_shader_create_from_info_name("workbench_effect_dof_flatten_v");
       flatten_h_sh = GPU_shader_create_from_info_name("workbench_effect_dof_flatten_h");
@@ -205,22 +205,22 @@ void DofPass::sync(SceneResources &resources)
 
   eGPUSamplerState sampler_state = GPU_SAMPLER_FILTER | GPU_SAMPLER_MIPMAP;
 
-  down_ps.init();
-  down_ps.state_set(DRW_STATE_WRITE_COLOR);
-  down_ps.shader_set(prepare_sh);
-  down_ps.bind_texture("sceneColorTex", &resources.color_tx);
-  down_ps.bind_texture("sceneDepthTex", &resources.depth_tx);
-  down_ps.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
-  down_ps.push_constant("dofParams", float3(aperture_size, distance, invsensor_size));
-  down_ps.push_constant("nearFar", float2(near, far));
-  down_ps.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  down_ps_.init();
+  down_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  down_ps_.shader_set(prepare_sh_);
+  down_ps_.bind_texture("sceneColorTex", &resources.color_tx);
+  down_ps_.bind_texture("sceneDepthTex", &resources.depth_tx);
+  down_ps_.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
+  down_ps_.push_constant("dofParams", float3(aperture_size_, distance_, invsensor_size_));
+  down_ps_.push_constant("nearFar", float2(near_, far_));
+  down_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
-  down2_ps.init();
-  down2_ps.state_set(DRW_STATE_WRITE_COLOR);
-  down2_ps.shader_set(downsample_sh);
-  down2_ps.bind_texture("sceneColorTex", &source_tx, sampler_state);
-  down2_ps.bind_texture("inputCocTex", &coc_halfres_tx, sampler_state);
-  down2_ps.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  down2_ps_.init();
+  down2_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  down2_ps_.shader_set(downsample_sh_);
+  down2_ps_.bind_texture("sceneColorTex", &source_tx_, sampler_state);
+  down2_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
+  down2_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
 #if 0 /* TODO(fclem): finish COC min_max optimization */
     {
@@ -260,59 +260,59 @@ void DofPass::sync(SceneResources &resources)
   /* We reuse the same noise texture. Ensure it is up to date. */
   // workbench_cavity_samples_ubo_ensure(wpd);
 
-  blur_ps.init();
-  blur_ps.state_set(DRW_STATE_WRITE_COLOR);
-  blur_ps.shader_set(blur1_sh);
-  blur_ps.bind_ubo("samples", samples_buf);
-  blur_ps.bind_texture("noiseTex", resources.cavity.jitter_tx);
-  blur_ps.bind_texture("inputCocTex", &coc_halfres_tx, sampler_state);
-  blur_ps.bind_texture("halfResColorTex", &source_tx, sampler_state);
-  blur_ps.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
-  blur_ps.push_constant("noiseOffset", offset);
-  blur_ps.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  blur_ps_.init();
+  blur_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  blur_ps_.shader_set(blur1_sh_);
+  blur_ps_.bind_ubo("samples", samples_buf_);
+  blur_ps_.bind_texture("noiseTex", resources.cavity.jitter_tx);
+  blur_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
+  blur_ps_.bind_texture("halfResColorTex", &source_tx_, sampler_state);
+  blur_ps_.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
+  blur_ps_.push_constant("noiseOffset", offset);
+  blur_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
-  blur2_ps.init();
-  blur2_ps.state_set(DRW_STATE_WRITE_COLOR);
-  blur2_ps.shader_set(blur2_sh);
-  blur2_ps.bind_texture("inputCocTex", &coc_halfres_tx, sampler_state);
-  blur2_ps.bind_texture("blurTex", &blur_tx);
-  blur2_ps.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
-  blur2_ps.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  blur2_ps_.init();
+  blur2_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  blur2_ps_.shader_set(blur2_sh_);
+  blur2_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
+  blur2_ps_.bind_texture("blurTex", &blur_tx_);
+  blur2_ps_.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
+  blur2_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
-  resolve_ps.init();
-  resolve_ps.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM);
-  resolve_ps.shader_set(resolve_sh);
-  resolve_ps.bind_texture("halfResColorTex", &source_tx, sampler_state);
-  resolve_ps.bind_texture("sceneDepthTex", &resources.depth_tx);
-  resolve_ps.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
-  resolve_ps.push_constant("dofParams", float3(aperture_size, distance, invsensor_size));
-  resolve_ps.push_constant("nearFar", float2(near, far));
-  resolve_ps.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  resolve_ps_.init();
+  resolve_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM);
+  resolve_ps_.shader_set(resolve_sh_);
+  resolve_ps_.bind_texture("halfResColorTex", &source_tx_, sampler_state);
+  resolve_ps_.bind_texture("sceneDepthTex", &resources.depth_tx);
+  resolve_ps_.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
+  resolve_ps_.push_constant("dofParams", float3(aperture_size_, distance_, invsensor_size_));
+  resolve_ps_.push_constant("nearFar", float2(near_, far_));
+  resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
 void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2 resolution)
 {
-  if (!enabled) {
+  if (!enabled_) {
     return;
   }
 
   DRW_stats_group_start("Depth Of Field");
 
   int2 half_res = {max_ii(resolution.x / 2, 1), max_ii(resolution.y / 2, 1)};
-  blur_tx.acquire(half_res, GPU_RGBA16F);
+  blur_tx_.acquire(half_res, GPU_RGBA16F);
 
-  downsample_fb.ensure(GPU_ATTACHMENT_NONE,
-                       GPU_ATTACHMENT_TEXTURE(source_tx),
-                       GPU_ATTACHMENT_TEXTURE(coc_halfres_tx));
-  downsample_fb.bind();
-  manager.submit(down_ps, view);
+  downsample_fb_.ensure(GPU_ATTACHMENT_NONE,
+                       GPU_ATTACHMENT_TEXTURE(source_tx_),
+                       GPU_ATTACHMENT_TEXTURE(coc_halfres_tx_));
+  downsample_fb_.bind();
+  manager.submit(down_ps_, view);
 
   struct CallbackData {
     Manager &manager;
     View &view;
     PassSimple &pass;
   };
-  CallbackData callback_data = {manager, view, down2_ps};
+  CallbackData callback_data = {manager, view, down2_ps_};
 
   auto downsample_level = [](void *callback_data, int UNUSED(level)) {
     CallbackData *cd = static_cast<CallbackData *>(callback_data);
@@ -320,7 +320,7 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
   };
 
   GPU_framebuffer_recursive_downsample(
-      downsample_fb, 2, downsample_level, static_cast<void *>(&callback_data));
+      downsample_fb_, 2, downsample_level, static_cast<void *>(&callback_data));
 
 #if 0 /* TODO(fclem): finish COC min_max optimization */
     GPU_framebuffer_ensure_config(&fbl->dof_coc_tile_h_fb,
@@ -351,26 +351,26 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
     DRW_draw_pass(psl->dof_dilate_h_ps);
 #endif
 
-  blur1_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(blur_tx));
-  blur1_fb.bind();
-  manager.submit(blur_ps, view);
+  blur1_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(blur_tx_));
+  blur1_fb_.bind();
+  manager.submit(blur_ps_, view);
 
-  blur2_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(source_tx));
-  blur2_fb.bind();
-  manager.submit(blur2_ps, view);
+  blur2_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(source_tx_));
+  blur2_fb_.bind();
+  manager.submit(blur2_ps_, view);
 
-  resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
-  resolve_fb.bind();
-  manager.submit(resolve_ps, view);
+  resolve_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
+  resolve_fb_.bind();
+  manager.submit(resolve_ps_, view);
 
-  blur_tx.release();
+  blur_tx_.release();
 
   DRW_stats_group_end();
 }
 
 bool DofPass::is_enabled()
 {
-  return enabled;
+  return enabled_;
 }
 
 }  // namespace blender::workbench

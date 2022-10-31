@@ -114,10 +114,10 @@ class ObjectState {
 
 class CavityEffect {
  private:
-  int sample;
-  int sample_count;
-  bool curvature_enabled;
-  bool cavity_enabled;
+  int sample_;
+  int sample_count_;
+  bool curvature_enabled_;
+  bool cavity_enabled_;
 
  public:
   static const int JITTER_TEX_SIZE = 64;
@@ -159,9 +159,9 @@ class MeshPass : public PassMain {
   PassMain::Sub *passes_[geometry_type_len][color_type_len];
 
   using TextureSubPassKey = std::pair<GPUTexture *, eGeometryType>;
-  Map<TextureSubPassKey, PassMain::Sub *> texture_subpass_map;
+  Map<TextureSubPassKey, PassMain::Sub *> texture_subpass_map_;
 
-  bool _is_empty;
+  bool is_empty_;
 
  public:
   MeshPass(const char *name);
@@ -231,35 +231,35 @@ class TransparentDepthPass {
 };
 
 class DofPass {
-  bool enabled = false;
+  bool enabled_ = false;
 
   static const int KERNEL_RADIUS = 3;
   static const int SAMPLES_LEN = (KERNEL_RADIUS * 2 + 1) * (KERNEL_RADIUS * 2 + 1);
 
-  UniformArrayBuffer<float4, SAMPLES_LEN> samples_buf;
+  UniformArrayBuffer<float4, SAMPLES_LEN> samples_buf_;
 
-  Texture source_tx;
-  Texture coc_halfres_tx;
-  TextureFromPool blur_tx;
+  Texture source_tx_;
+  Texture coc_halfres_tx_;
+  TextureFromPool blur_tx_;
 
-  Framebuffer downsample_fb, blur1_fb, blur2_fb, resolve_fb;
+  Framebuffer downsample_fb_, blur1_fb_, blur2_fb_, resolve_fb_;
 
-  GPUShader *prepare_sh, *downsample_sh, *blur1_sh, *blur2_sh, *resolve_sh;
+  GPUShader *prepare_sh_, *downsample_sh_, *blur1_sh_, *blur2_sh_, *resolve_sh_;
 
-  PassSimple down_ps = {"Workbench.DoF.DownSample"};
-  PassSimple down2_ps = {"Workbench.DoF.DownSample2"};
-  PassSimple blur_ps = {"Workbench.DoF.Blur"};
-  PassSimple blur2_ps = {"Workbench.DoF.Blur2"};
-  PassSimple resolve_ps = {"Workbench.DoF.Resolve"};
+  PassSimple down_ps_ = {"Workbench.DoF.DownSample"};
+  PassSimple down2_ps_ = {"Workbench.DoF.DownSample2"};
+  PassSimple blur_ps_ = {"Workbench.DoF.Blur"};
+  PassSimple blur2_ps_ = {"Workbench.DoF.Blur2"};
+  PassSimple resolve_ps_ = {"Workbench.DoF.Resolve"};
 
-  float aperture_size;
-  float distance;
-  float invsensor_size;
-  float near;
-  float far;
-  float blades;
-  float rotation;
-  float ratio;
+  float aperture_size_;
+  float distance_;
+  float invsensor_size_;
+  float near_;
+  float far_;
+  float blades_;
+  float rotation_;
+  float ratio_;
 
   void setup_samples();
 
@@ -273,38 +273,38 @@ class DofPass {
 class AntiAliasingPass {
  private:
   /** Total number of samples to after which TAA stops accumulating samples. */
-  int sample_len;
+  int sample_len_;
   /** Current TAA sample index in [0..sample_len] range. */
-  int sample;
+  int sample_;
   /** Weight accumulated. */
-  float weight_accum;
+  float weight_accum_;
   /** Samples weight for this iteration. */
-  float weights[9];
+  float weights_[9];
   /** Sum of weights. */
-  float weights_sum;
+  float weights_sum_;
   /** True if the history buffer contains relevant data and false if it could contain garbage. */
   // bool valid_history;
 
-  Texture sample0_depth_tx = {"sample0_depth_tx"};
+  Texture sample0_depth_tx_ = {"sample0_depth_tx"};
 
-  Texture taa_accumulation_tx = {"taa_accumulation_tx"};
-  Texture smaa_search_tx = {"smaa_search_tx"};
-  Texture smaa_area_tx = {"smaa_area_tx"};
-  TextureFromPool smaa_edge_tx = {"smaa_edge_tx"};
-  TextureFromPool smaa_weight_tx = {"smaa_weight_tx"};
+  Texture taa_accumulation_tx_ = {"taa_accumulation_tx"};
+  Texture smaa_search_tx_ = {"smaa_search_tx"};
+  Texture smaa_area_tx_ = {"smaa_area_tx"};
+  TextureFromPool smaa_edge_tx_ = {"smaa_edge_tx"};
+  TextureFromPool smaa_weight_tx_ = {"smaa_weight_tx"};
 
-  Framebuffer taa_accumulation_fb = {"taa_accumulation_fb"};
-  Framebuffer smaa_edge_fb = {"smaa_edge_fb"};
-  Framebuffer smaa_weight_fb = {"smaa_weight_fb"};
-  Framebuffer smaa_resolve_fb = {"smaa_resolve_fb"};
+  Framebuffer taa_accumulation_fb_ = {"taa_accumulation_fb"};
+  Framebuffer smaa_edge_fb_ = {"smaa_edge_fb"};
+  Framebuffer smaa_weight_fb_ = {"smaa_weight_fb"};
+  Framebuffer smaa_resolve_fb_ = {"smaa_resolve_fb"};
 
-  float4 smaa_viewport_metrics = {0.0f, 0.0f, 0.0f, 0.0f};
-  float smaa_mix_factor = 0.0f;
+  float4 smaa_viewport_metrics_ = {0.0f, 0.0f, 0.0f, 0.0f};
+  float smaa_mix_factor_ = 0.0f;
 
-  GPUShader *taa_accumulation_sh = nullptr;
-  GPUShader *smaa_edge_detect_sh = nullptr;
-  GPUShader *smaa_aa_weight_sh = nullptr;
-  GPUShader *smaa_resolve_sh = nullptr;
+  GPUShader *taa_accumulation_sh_ = nullptr;
+  GPUShader *smaa_edge_detect_sh_ = nullptr;
+  GPUShader *smaa_aa_weight_sh_ = nullptr;
+  GPUShader *smaa_resolve_sh_ = nullptr;
 
   PassSimple taa_accumulation_ps_ = {"TAA.Accumulation"};
   PassSimple smaa_edge_detect_ps_ = {"SMAA.EdgeDetect"};
