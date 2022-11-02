@@ -75,16 +75,3 @@ diff -Naur openvdb-8.0.0/openvdb/openvdb/version.rc.in openvdb/openvdb/openvdb/v
 +
 +    END
 +END
-diff -Naur orig/openvdb_ax/openvdb_ax/CMakeLists.txt openvdb/openvdb_ax/openvdb_ax/CMakeLists.txt
---- orig/openvdb_ax/openvdb_ax/CMakeLists.txt   2022-06-09 08:50:40 -0600
-+++ openvdb/openvdb_ax/openvdb_ax/CMakeLists.txt        2022-08-08 22:11:02 -0600
-@@ -305,6 +305,9 @@
- # Configure shared build
-
- if(OPENVDB_AX_SHARED)
-+  if(WIN32)
-+    list(APPEND OPENVDB_AX_PUBLIC_DEFINES -DOPENVDB_AX_DLL)
-+  endif()
-   target_compile_definitions(openvdb_ax_shared PUBLIC ${OPENVDB_AX_PUBLIC_DEFINES})
-   target_compile_definitions(openvdb_ax_shared PRIVATE ${OPENVDB_AX_PRIVATE_DEFINES})
-   target_compile_options(openvdb_ax_shared PUBLIC ${OPENVDB_AX_PUBLIC_OPTIONS})

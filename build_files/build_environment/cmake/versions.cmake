@@ -218,9 +218,9 @@ set(TBB_HASH_TYPE MD5)
 set(TBB_FILE oneTBB-${TBB_VERSION}.tar.gz)
 set(TBB_CPE "cpe:2.3:a:intel:threading_building_blocks:${TBB_YEAR}:*:*:*:*:*:*:*")
 
-set(OPENVDB_VERSION 9.1.0)
+set(OPENVDB_VERSION 10.0.0)
 set(OPENVDB_URI https://github.com/AcademySoftwareFoundation/openvdb/archive/v${OPENVDB_VERSION}.tar.gz)
-set(OPENVDB_HASH 8918de645a737734e577e16753325703)
+set(OPENVDB_HASH 64301c737e16b26c8f3085a31e6397e9)
 set(OPENVDB_HASH_TYPE MD5)
 set(OPENVDB_FILE openvdb-${OPENVDB_VERSION}.tar.gz)
 
