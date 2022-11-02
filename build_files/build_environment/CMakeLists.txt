@@ -120,6 +120,7 @@ endif()
 include(cmake/expat.cmake)
 include(cmake/pystring.cmake)
 include(cmake/yamlcpp.cmake)
+include(cmake/minizipng.cmake)
 include(cmake/opencolorio.cmake)
 
 if(BLENDER_PLATFORM_ARM)
