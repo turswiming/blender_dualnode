@@ -57,7 +57,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
 
     return get_asset_library_on_disk(root_path);
   }
-  else if (library_reference.type == ASSET_LIBRARY_CUSTOM) {
+  if (library_reference.type == ASSET_LIBRARY_CUSTOM) {
     bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_from_index(
         &U, library_reference.custom_library_index);
 
@@ -75,7 +75,7 @@ std::string normalize_directory_path(StringRefNull directory)
 
   char dir_normalized[PATH_MAX];
   STRNCPY(dir_normalized, directory.c_str());
-  BLI_path_normalize_dir(nullptr, dir_normalized);
+  BLI_path_normalize_dir(nullptr, dir_normalized, sizeof(dir_normalized));
   return std::string(dir_normalized);
 }
 }  // namespace

@@ -556,7 +556,7 @@ static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
 
     /* but we need a packed file then */
     if (pf) {
-      sound->handle = AUD_Sound_bufferFile((unsigned char *)pf->data, pf->size);
+      sound->handle = AUD_Sound_bufferFile((uchar *)pf->data, pf->size);
     }
     else {
       /* or else load it from disk */
@@ -1129,9 +1129,9 @@ static void sound_update_base(Scene *scene, Object *object, void *new_set)
         AUD_SequenceEntry_setConeAngleInner(strip->speaker_handle, speaker->cone_angle_inner);
         AUD_SequenceEntry_setConeVolumeOuter(strip->speaker_handle, speaker->cone_volume_outer);
 
-        mat4_to_quat(quat, object->obmat);
+        mat4_to_quat(quat, object->object_to_world);
         AUD_SequenceEntry_setAnimationData(
-            strip->speaker_handle, AUD_AP_LOCATION, scene->r.cfra, object->obmat[3], 1);
+            strip->speaker_handle, AUD_AP_LOCATION, scene->r.cfra, object->object_to_world[3], 1);
         AUD_SequenceEntry_setAnimationData(
             strip->speaker_handle, AUD_AP_ORIENTATION, scene->r.cfra, quat, 1);
         AUD_SequenceEntry_setAnimationData(
@@ -1155,11 +1155,12 @@ void BKE_sound_update_scene(Depsgraph *depsgraph, Scene *scene)
 
   /* cheap test to skip looping over all objects (no speakers is a common case) */
   if (DEG_id_type_any_exists(depsgraph, ID_SPK)) {
-    DEG_OBJECT_ITER_BEGIN (depsgraph,
-                           object,
-                           (DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
-                            DEG_ITER_OBJECT_FLAG_LINKED_INDIRECTLY |
-                            DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET)) {
+    DEGObjectIterSettings deg_iter_settings = {0};
+    deg_iter_settings.depsgraph = depsgraph;
+    deg_iter_settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
+                              DEG_ITER_OBJECT_FLAG_LINKED_INDIRECTLY |
+                              DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET;
+    DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, object) {
       sound_update_base(scene, object, new_set);
     }
     DEG_OBJECT_ITER_END;
@@ -1170,9 +1171,9 @@ void BKE_sound_update_scene(Depsgraph *depsgraph, Scene *scene)
   }
 
   if (scene->camera) {
-    mat4_to_quat(quat, scene->camera->obmat);
+    mat4_to_quat(quat, scene->camera->object_to_world);
     AUD_Sequence_setAnimationData(
-        scene->sound_scene, AUD_AP_LOCATION, scene->r.cfra, scene->camera->obmat[3], 1);
+        scene->sound_scene, AUD_AP_LOCATION, scene->r.cfra, scene->camera->object_to_world[3], 1);
     AUD_Sequence_setAnimationData(scene->sound_scene, AUD_AP_ORIENTATION, scene->r.cfra, quat, 1);
   }
 

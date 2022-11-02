@@ -13,6 +13,7 @@
 
 #include "BLT_translation.h"
 
+#include "DNA_curves_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
@@ -827,21 +828,21 @@ static const EnumPropertyItem *rna_node_static_type_itemf(bContext *UNUSED(C),
 
   tmp.value = NODE_CUSTOM;
   tmp.identifier = "CUSTOM";
-  tmp.name = "Custom";
-  tmp.description = "Custom Node";
+  tmp.name = N_("Custom");
+  tmp.description = N_("Custom Node");
   tmp.icon = ICON_NONE;
   RNA_enum_item_add(&item, &totitem, &tmp);
 
   tmp.value = NODE_CUSTOM_GROUP;
   tmp.identifier = "CUSTOM GROUP";
-  tmp.name = "CustomGroup";
-  tmp.description = "Custom Group Node";
+  tmp.name = N_("CustomGroup");
+  tmp.description = N_("Custom Group Node");
   tmp.icon = ICON_NONE;
   RNA_enum_item_add(&item, &totitem, &tmp);
 
   tmp.value = NODE_UNDEFINED;
   tmp.identifier = "UNDEFINED";
-  tmp.name = "UNDEFINED";
+  tmp.name = N_("UNDEFINED");
   tmp.description = "";
   tmp.icon = ICON_NONE;
   RNA_enum_item_add(&item, &totitem, &tmp);
@@ -2197,18 +2198,6 @@ static const EnumPropertyItem *rna_GeometryNodeAttributeType_type_with_socket_it
   *r_free = true;
   return itemf_function_check(rna_enum_attribute_type_items,
                               generic_attribute_type_supported_with_socket);
-}
-
-static bool transfer_attribute_type_supported(const EnumPropertyItem *item)
-{
-  return ELEM(
-      item->value, CD_PROP_FLOAT, CD_PROP_FLOAT3, CD_PROP_COLOR, CD_PROP_BOOL, CD_PROP_INT32);
-}
-static const EnumPropertyItem *rna_NodeGeometryTransferAttribute_type_itemf(
-    bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
-{
-  *r_free = true;
-  return itemf_function_check(rna_enum_attribute_type_items, transfer_attribute_type_supported);
 }
 
 static bool attribute_statistic_type_supported(const EnumPropertyItem *item)
@@ -5253,6 +5242,11 @@ static void def_sh_attribute(StructRNA *srna)
        "The attribute is associated with the instancer particle system or object, "
        "falling back to the Object mode if the attribute isn't found, or the object "
        "is not instanced"},
+      {SHD_ATTRIBUTE_VIEW_LAYER,
+       "VIEW_LAYER",
+       0,
+       "View Layer",
+       "The attribute is associated with the View Layer, Scene or World that is being rendered"},
       {0, NULL, 0, NULL, NULL},
   };
   PropertyRNA *prop;
@@ -5515,6 +5509,7 @@ static void def_sh_tex_image(StructRNA *srna)
   RNA_def_property_enum_items(prop, prop_image_extension);
   RNA_def_property_ui_text(
       prop, "Extension", "How the image is extrapolated past its original bounds");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_IMAGE);
   RNA_def_property_update(prop, 0, "rna_Node_update");
 
   prop = RNA_def_property(srna, "image_user", PROP_POINTER, PROP_NONE);
@@ -5579,6 +5574,7 @@ static void def_geo_image_texture(StructRNA *srna)
   RNA_def_property_enum_items(prop, prop_image_extension);
   RNA_def_property_ui_text(
       prop, "Extension", "How the image is extrapolated past its original bounds");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_IMAGE);
   RNA_def_property_update(prop, 0, "rna_Node_update");
 }
 
@@ -6817,11 +6813,11 @@ static void def_cmp_levels(StructRNA *srna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem channel_items[] = {
-      {1, "COMBINED_RGB", 0, "Combined", "Combined RGB"},
-      {2, "RED", 0, "Red", "Red Channel"},
-      {3, "GREEN", 0, "Green", "Green Channel"},
-      {4, "BLUE", 0, "Blue", "Blue Channel"},
-      {5, "LUMINANCE", 0, "Luminance", "Luminance Channel"},
+      {CMP_NODE_LEVLES_LUMINANCE, "COMBINED_RGB", 0, "Combined", "Combined RGB"},
+      {CMP_NODE_LEVLES_RED, "RED", 0, "Red", "Red Channel"},
+      {CMP_NODE_LEVLES_GREEN, "GREEN", 0, "Green", "Green Channel"},
+      {CMP_NODE_LEVLES_BLUE, "BLUE", 0, "Blue", "Blue Channel"},
+      {CMP_NODE_LEVLES_LUMINANCE_BT709, "LUMINANCE", 0, "Luminance", "Luminance Channel"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -9710,6 +9706,17 @@ static void def_geo_curve_set_handle_positions(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
+static void def_geo_set_curve_normal(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_curve_normal_modes);
+  RNA_def_property_ui_text(prop, "Mode", "Mode for curve normal evaluation");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
 static void def_geo_curve_handle_type_selection(StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -10424,51 +10431,66 @@ static void def_geo_curve_trim(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
-static void def_geo_transfer_attribute(StructRNA *srna)
+static void def_geo_sample_index(StructRNA *srna)
 {
-  static EnumPropertyItem mapping_items[] = {
-      {GEO_NODE_ATTRIBUTE_TRANSFER_NEAREST_FACE_INTERPOLATED,
-       "NEAREST_FACE_INTERPOLATED",
-       0,
-       "Nearest Face Interpolated",
-       "Transfer the attribute from the nearest face on a surface (loose points and edges are "
-       "ignored)"},
-      {GEO_NODE_ATTRIBUTE_TRANSFER_NEAREST,
-       "NEAREST",
-       0,
-       "Nearest",
-       "Transfer the element from the nearest element (using face and edge centers for the "
-       "distance computation)"},
-      {GEO_NODE_ATTRIBUTE_TRANSFER_INDEX,
-       "INDEX",
-       0,
-       "Index",
-       "Transfer the data from the element with the corresponding index in the target geometry"},
-      {0, NULL, 0, NULL, NULL},
-  };
-
   PropertyRNA *prop;
 
-  RNA_def_struct_sdna_from(srna, "NodeGeometryTransferAttribute", "storage");
-
-  prop = RNA_def_property(srna, "mapping", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, NULL, "mode");
-  RNA_def_property_enum_items(prop, mapping_items);
-  RNA_def_property_ui_text(prop, "Mapping", "Mapping between geometries");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+  RNA_def_struct_sdna_from(srna, "NodeGeometrySampleIndex", "storage");
 
   prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
-  RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_NodeGeometryTransferAttribute_type_itemf");
+  RNA_def_property_enum_funcs(
+      prop, NULL, NULL, "rna_GeometryNodeAttributeType_type_with_socket_itemf");
   RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
-  RNA_def_property_ui_text(prop, "Data Type", "The type for the source and result data");
+  RNA_def_property_ui_text(prop, "Data Type", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 
   prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_attribute_domain_items);
   RNA_def_property_enum_default(prop, ATTR_DOMAIN_POINT);
-  RNA_def_property_ui_text(prop, "Domain", "The domain to use on the target geometry");
+  RNA_def_property_ui_text(prop, "Domain", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "clamp", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Clamp",
+                           "Clamp the indices to the size of the attribute domain instead of "
+                           "outputting a default value for invalid indices");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_geo_sample_nearest_surface(StructRNA *srna)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
+  RNA_def_property_enum_funcs(
+      prop, NULL, NULL, "rna_GeometryNodeAttributeType_type_with_socket_itemf");
+  RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
+  RNA_def_property_ui_text(prop, "Data Type", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
+}
+
+static void def_geo_sample_nearest(StructRNA *srna)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom2");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_domain_only_mesh_items);
+  RNA_def_property_enum_default(prop, ATTR_DOMAIN_POINT);
+  RNA_def_property_ui_text(prop, "Domain", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_geo_sample_uv_surface(StructRNA *srna)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "custom1");
+  RNA_def_property_enum_items(prop, rna_enum_attribute_type_items);
+  RNA_def_property_enum_funcs(
+      prop, NULL, NULL, "rna_GeometryNodeAttributeType_type_with_socket_itemf");
+  RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
+  RNA_def_property_ui_text(prop, "Data Type", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 }
 
 static void def_geo_input_material(StructRNA *srna)
@@ -10812,6 +10834,12 @@ static void def_geo_viewer(StructRNA *srna)
   RNA_def_property_enum_default(prop, CD_PROP_FLOAT);
   RNA_def_property_ui_text(prop, "Data Type", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNode_socket_update");
+
+  prop = RNA_def_property(srna, "domain", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_attribute_domain_with_auto_items);
+  RNA_def_property_enum_default(prop, ATTR_DOMAIN_POINT);
+  RNA_def_property_ui_text(prop, "Domain", "Domain to evaluate the field on");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
 static void def_geo_realize_instances(StructRNA *srna)
@@ -12202,7 +12230,7 @@ static void rna_def_node(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Custom Color", "Use custom color for the node");
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, NULL);
 
-  prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR);
+  prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(prop, "Color", "Custom color of the node body");
@@ -12672,6 +12700,7 @@ static void rna_def_nodetree(BlenderRNA *brna)
   RNA_def_property_int_funcs(
       prop, "rna_NodeTree_active_input_get", "rna_NodeTree_active_input_set", NULL);
   RNA_def_property_ui_text(prop, "Active Input", "Index of the active input");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_NODE, NULL);
 
   prop = RNA_def_property(srna, "outputs", PROP_COLLECTION, PROP_NONE);
@@ -12685,6 +12714,7 @@ static void rna_def_nodetree(BlenderRNA *brna)
   RNA_def_property_int_funcs(
       prop, "rna_NodeTree_active_output_get", "rna_NodeTree_active_output_set", NULL);
   RNA_def_property_ui_text(prop, "Active Output", "Index of the active output");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_NODE, NULL);
 
   /* exposed as a function for runtime interface type properties */

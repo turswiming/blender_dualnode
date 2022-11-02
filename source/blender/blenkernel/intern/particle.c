@@ -60,6 +60,7 @@
 #include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_legacy_convert.h"
+#include "BKE_mesh_runtime.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_particle.h"
@@ -507,8 +508,8 @@ IDTypeInfo IDType_ID_PA = {
     .lib_override_apply_post = NULL,
 };
 
-unsigned int PSYS_FRAND_SEED_OFFSET[PSYS_FRAND_COUNT];
-unsigned int PSYS_FRAND_SEED_MULTIPLIER[PSYS_FRAND_COUNT];
+uint PSYS_FRAND_SEED_OFFSET[PSYS_FRAND_COUNT];
+uint PSYS_FRAND_SEED_MULTIPLIER[PSYS_FRAND_COUNT];
 float PSYS_FRAND_BASE[PSYS_FRAND_COUNT];
 
 void BKE_particle_init_rng(void)
@@ -516,8 +517,8 @@ void BKE_particle_init_rng(void)
   RNG *rng = BLI_rng_new_srandom(5831); /* arbitrary */
   for (int i = 0; i < PSYS_FRAND_COUNT; i++) {
     PSYS_FRAND_BASE[i] = BLI_rng_get_float(rng);
-    PSYS_FRAND_SEED_OFFSET[i] = (unsigned int)BLI_rng_get_int(rng);
-    PSYS_FRAND_SEED_MULTIPLIER[i] = (unsigned int)BLI_rng_get_int(rng);
+    PSYS_FRAND_SEED_OFFSET[i] = (uint)BLI_rng_get_int(rng);
+    PSYS_FRAND_SEED_MULTIPLIER[i] = (uint)BLI_rng_get_int(rng);
   }
   BLI_rng_free(rng);
 }
@@ -1933,7 +1934,7 @@ int psys_particle_dm_face_lookup(Mesh *mesh_final,
     index_mf_to_mpoly_deformed = CustomData_get_layer(&mesh_original->fdata, CD_ORIGINDEX);
   }
   else {
-    BLI_assert(mesh_final->runtime.deformed_only);
+    BLI_assert(BKE_mesh_is_deformed_only(mesh_final));
     index_mf_to_mpoly_deformed = index_mf_to_mpoly;
   }
   BLI_assert(index_mf_to_mpoly_deformed);
@@ -2023,7 +2024,7 @@ static int psys_map_index_on_dm(Mesh *mesh,
     return 0;
   }
 
-  if (mesh->runtime.deformed_only || index_dmcache == DMCACHE_ISCHILD) {
+  if (BKE_mesh_is_deformed_only(mesh) || index_dmcache == DMCACHE_ISCHILD) {
     /* for meshes that are either only deformed or for child particles, the
      * index and fw do not require any mapping, so we can directly use it */
     if (from == PART_FROM_VERT) {
@@ -2369,8 +2370,8 @@ void precalc_guides(ParticleSimulationData *sim, ListBase *effectors)
                              0,
                              0);
 
-    mul_m4_v3(sim->ob->obmat, state.co);
-    mul_mat3_m4_v3(sim->ob->obmat, state.vel);
+    mul_m4_v3(sim->ob->object_to_world, state.co);
+    mul_mat3_m4_v3(sim->ob->object_to_world, state.vel);
 
     pd_point_from_particle(sim, pa, &state, &point);
 
@@ -2453,8 +2454,8 @@ bool do_guides(Depsgraph *depsgraph,
         }
       }
 
-      mul_m4_v3(eff->ob->obmat, guidevec);
-      mul_mat3_m4_v3(eff->ob->obmat, guidedir);
+      mul_m4_v3(eff->ob->object_to_world, guidevec);
+      mul_mat3_m4_v3(eff->ob->object_to_world, guidedir);
 
       normalize_v3(guidedir);
 
@@ -2463,7 +2464,7 @@ bool do_guides(Depsgraph *depsgraph,
       if (guidetime != 0.0f) {
         /* curve direction */
         cross_v3_v3v3(temp, eff->guide_dir, guidedir);
-        angle = dot_v3v3(eff->guide_dir, guidedir) / (len_v3(eff->guide_dir));
+        angle = dot_v3v3(eff->guide_dir, guidedir) / len_v3(eff->guide_dir);
         angle = saacos(angle);
         axis_angle_to_quat(rot2, temp, angle);
         mul_qt_v3(rot2, vec_to_point);
@@ -2955,7 +2956,7 @@ static void psys_thread_create_path(ParticleTask *task,
     psys_particle_on_emitter(
         ctx->sim.psmd, cpa_from, cpa_num, DMCACHE_ISCHILD, cpa->fuv, foffset, co, 0, 0, 0, orco);
 
-    mul_m4_v3(ob->obmat, co);
+    mul_m4_v3(ob->object_to_world, co);
 
     for (w = 0; w < 4; w++) {
       sub_v3_v3v3(off1[w], co, key[w]->co);
@@ -2988,8 +2989,7 @@ static void psys_thread_create_path(ParticleTask *task,
      *        pa->num, pa->fuv,
      *        NULL);
      */
-    cpa_num = (ELEM(pa->num_dmcache, DMCACHE_ISCHILD, DMCACHE_NOTFOUND)) ? pa->num :
-                                                                           pa->num_dmcache;
+    cpa_num = ELEM(pa->num_dmcache, DMCACHE_ISCHILD, DMCACHE_NOTFOUND) ? pa->num : pa->num_dmcache;
 
     /* XXX hack to avoid messed up particle num and subsequent crash (T40733) */
     if (cpa_num > ctx->sim.psmd->mesh_final->totface) {
@@ -3419,7 +3419,7 @@ void psys_cache_paths(ParticleSimulationData *sim, float cfra, const bool use_re
       /* dynamic hair is in object space */
       /* keyed and baked are already in global space */
       if (hair_mesh) {
-        mul_m4_v3(sim->ob->obmat, ca->co);
+        mul_m4_v3(sim->ob->object_to_world, ca->co);
       }
       else if (!keyed && !baked && !(psys->flag & PSYS_GLOBAL_HAIR)) {
         mul_m4_v3(hairmat, ca->co);
@@ -3850,7 +3850,7 @@ static void psys_face_mat(Object *ob, Mesh *mesh, ParticleData *pa, float mat[4]
   MFace *mface;
   const float(*orcodata)[3];
 
-  int i = (ELEM(pa->num_dmcache, DMCACHE_ISCHILD, DMCACHE_NOTFOUND)) ? pa->num : pa->num_dmcache;
+  int i = ELEM(pa->num_dmcache, DMCACHE_ISCHILD, DMCACHE_NOTFOUND) ? pa->num : pa->num_dmcache;
   if (i == -1 || i >= mesh->totface) {
     unit_m4(mat);
     return;
@@ -3929,7 +3929,7 @@ void psys_mat_hair_to_global(
 
   psys_mat_hair_to_object(ob, mesh, from, pa, facemat);
 
-  mul_m4_m4m4(hairmat, ob->obmat, facemat);
+  mul_m4_m4m4(hairmat, ob->object_to_world, facemat);
 }
 
 /************************************************/
@@ -4661,8 +4661,8 @@ void psys_get_particle_on_path(ParticleSimulationData *sim,
       do_particle_interpolation(psys, p, pa, t, &pind, state);
 
       if (pind.mesh) {
-        mul_m4_v3(sim->ob->obmat, state->co);
-        mul_mat3_m4_v3(sim->ob->obmat, state->vel);
+        mul_m4_v3(sim->ob->object_to_world, state->co);
+        mul_mat3_m4_v3(sim->ob->object_to_world, state->vel);
       }
       else if (!keyed && !cached && !(psys->flag & PSYS_GLOBAL_HAIR)) {
         if ((pa->flag & PARS_REKEY) == 0) {
@@ -4685,7 +4685,7 @@ void psys_get_particle_on_path(ParticleSimulationData *sim,
     }
   }
   else if (totchild) {
-    // invert_m4_m4(imat, ob->obmat);
+    // invert_m4_m4(imat, ob->object_to_world);
 
     /* interpolate childcache directly if it exists */
     if (psys->childcache) {
@@ -4733,7 +4733,7 @@ void psys_get_particle_on_path(ParticleSimulationData *sim,
          * positioning it accurately to the surface of the emitter. */
         // copy_v3_v3(cpa_1st, co);
 
-        // mul_m4_v3(ob->obmat, cpa_1st);
+        // mul_m4_v3(ob->object_to_world, cpa_1st);
 
         pa = psys->particles + cpa->parent;
 

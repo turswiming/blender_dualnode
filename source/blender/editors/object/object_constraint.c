@@ -114,7 +114,7 @@ ListBase *ED_object_constraint_list_from_constraint(Object *ob,
   }
 
   /* try object constraints first */
-  if ((BLI_findindex(&ob->constraints, con) != -1)) {
+  if (BLI_findindex(&ob->constraints, con) != -1) {
     return &ob->constraints;
   }
 
@@ -126,7 +126,7 @@ ListBase *ED_object_constraint_list_from_constraint(Object *ob,
      * NOTE: it's not possible to directly look up the active bone yet, so this will have to do
      */
     for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
-      if ((BLI_findindex(&pchan->constraints, con) != -1)) {
+      if (BLI_findindex(&pchan->constraints, con) != -1) {
 
         if (r_pchan) {
           *r_pchan = pchan;
@@ -2327,14 +2327,14 @@ static bool get_new_constraint_target(
       /* Since by default, IK targets the tip of the last bone,
        * use the tip of the active PoseChannel if adding a target for an IK Constraint. */
       if (con_type == CONSTRAINT_TYPE_KINEMATIC) {
-        mul_v3_m4v3(obt->loc, obact->obmat, pchanact->pose_tail);
+        mul_v3_m4v3(obt->loc, obact->object_to_world, pchanact->pose_tail);
       }
       else {
-        mul_v3_m4v3(obt->loc, obact->obmat, pchanact->pose_head);
+        mul_v3_m4v3(obt->loc, obact->object_to_world, pchanact->pose_head);
       }
     }
     else {
-      copy_v3_v3(obt->loc, obact->obmat[3]);
+      copy_v3_v3(obt->loc, obact->object_to_world[3]);
     }
 
     /* restore, BKE_object_add sets active */

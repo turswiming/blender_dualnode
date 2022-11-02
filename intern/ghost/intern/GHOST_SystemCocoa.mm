@@ -689,7 +689,6 @@ GHOST_IWindow *GHOST_SystemCocoa::createWindow(const char *title,
                                                uint32_t width,
                                                uint32_t height,
                                                GHOST_TWindowState state,
-                                               GHOST_TDrawingContextType type,
                                                GHOST_GLSettings glSettings,
                                                const bool exclusive,
                                                const bool is_dialog,
@@ -719,7 +718,7 @@ GHOST_IWindow *GHOST_SystemCocoa::createWindow(const char *title,
                                    width,
                                    height,
                                    state,
-                                   type,
+                                   glSettings.context_type,
                                    glSettings.flags & GHOST_glStereoVisual,
                                    glSettings.flags & GHOST_glDebugContext,
                                    is_dialog,
@@ -751,7 +750,7 @@ GHOST_IWindow *GHOST_SystemCocoa::createWindow(const char *title,
  */
 GHOST_IContext *GHOST_SystemCocoa::createOffscreenContext(GHOST_GLSettings glSettings)
 {
-  GHOST_Context *context = new GHOST_ContextCGL(false, NULL, NULL, NULL);
+  GHOST_Context *context = new GHOST_ContextCGL(false, NULL, NULL, NULL, glSettings.context_type);
   if (context->initializeDrawingContext())
     return context;
   else
@@ -1681,7 +1680,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
       /* we assume phases are only set for gestures from trackpad or magic
        * mouse events. note that using tablet at the same time may not work
        * since this is a static variable */
-      if (phase == NSEventPhaseBegan)
+      if (phase == NSEventPhaseBegan && m_multitouchGestures)
         m_multiTouchScroll = true;
       else if (phase == NSEventPhaseEnded)
         m_multiTouchScroll = false;

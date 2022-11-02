@@ -456,7 +456,7 @@ static TriTessFace *mesh_calc_tri_tessface(Mesh *me, bool tangent, Mesh *me_eval
   TriTessFace *triangles;
 
   /* calculate normal for each polygon only once */
-  unsigned int mpoly_prev = UINT_MAX;
+  uint mpoly_prev = UINT_MAX;
   float no[3];
 
   const MVert *verts = BKE_mesh_verts(me);
@@ -590,7 +590,7 @@ bool RE_bake_pixels_populate_from_objects(struct Mesh *me_low,
     me_highpoly[i] = highpoly[i].me;
     BKE_mesh_runtime_looptri_ensure(me_highpoly[i]);
 
-    if (me_highpoly[i]->runtime.looptris.len != 0) {
+    if (BKE_mesh_runtime_looptri_len(me_highpoly[i]) != 0) {
       /* Create a BVH-tree for each `highpoly` object. */
       BKE_bvhtree_from_mesh_get(&treeData[i], me_highpoly[i], BVHTREE_FROM_LOOPTRI, 2);
 
@@ -967,7 +967,7 @@ void RE_bake_normal_world_to_object(const BakePixel pixel_array[],
   size_t i;
   float iobmat[4][4];
 
-  invert_m4_m4(iobmat, ob->obmat);
+  invert_m4_m4(iobmat, ob->object_to_world);
 
   for (i = 0; i < pixels_num; i++) {
     size_t offset;

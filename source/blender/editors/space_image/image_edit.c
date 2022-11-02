@@ -383,7 +383,7 @@ bool ED_image_slot_cycle(struct Image *image, int direction)
     image->render_slot = ((cur == 1) ? 0 : 1);
   }
 
-  if ((cur != image->render_slot)) {
+  if (cur != image->render_slot) {
     BKE_image_partial_update_mark_full_update(image);
   }
   return (cur != image->render_slot);
@@ -408,7 +408,7 @@ void ED_space_image_scopes_update(const struct bContext *C,
   /* We also don't update scopes of render result during render. */
   if (G.is_rendering) {
     const Image *image = sima->image;
-    if (image != NULL && (ELEM(image->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE))) {
+    if (image != NULL && ELEM(image->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE)) {
       return;
     }
   }

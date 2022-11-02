@@ -37,7 +37,7 @@ void OVERLAY_edit_text_cache_init(OVERLAY_Data *vedata)
 
     sh = OVERLAY_shader_uniform_color();
     pd->edit_text_wire_grp[i] = grp = DRW_shgroup_create(sh, psl->edit_text_wire_ps[i]);
-    DRW_shgroup_uniform_vec4_copy(grp, "color", G_draw.block.color_wire);
+    DRW_shgroup_uniform_vec4_copy(grp, "ucolor", G_draw.block.color_wire);
   }
   {
     /* Cursor (text caret). */
@@ -45,14 +45,14 @@ void OVERLAY_edit_text_cache_init(OVERLAY_Data *vedata)
     DRW_PASS_CREATE(psl->edit_text_cursor_ps, state | pd->clipping_state);
     sh = OVERLAY_shader_uniform_color();
     pd->edit_text_cursor_grp = grp = DRW_shgroup_create(sh, psl->edit_text_cursor_ps);
-    DRW_shgroup_uniform_vec4(grp, "color", pd->edit_text.cursor_color, 1);
+    DRW_shgroup_uniform_vec4(grp, "ucolor", pd->edit_text.cursor_color, 1);
 
     /* Selection boxes. */
     state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA;
     DRW_PASS_CREATE(psl->edit_text_selection_ps, state | pd->clipping_state);
     sh = OVERLAY_shader_uniform_color();
     pd->edit_text_selection_grp = grp = DRW_shgroup_create(sh, psl->edit_text_selection_ps);
-    DRW_shgroup_uniform_vec4(grp, "color", pd->edit_text.selection_color, 1);
+    DRW_shgroup_uniform_vec4(grp, "ucolor", pd->edit_text.selection_color, 1);
 
     /* Highlight text within selection boxes. */
     state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA | DRW_STATE_DEPTH_GREATER_EQUAL |
@@ -119,7 +119,7 @@ static void edit_text_cache_populate_select(OVERLAY_Data *vedata, Object *ob)
       add_v2_v2(box[3], &sb->x);
     }
     v2_quad_corners_to_mat4(box, final_mat);
-    mul_m4_m4m4(final_mat, ob->obmat, final_mat);
+    mul_m4_m4m4(final_mat, ob->object_to_world, final_mat);
 
     DRW_shgroup_call_obmat(pd->edit_text_selection_grp, geom, final_mat);
   }
@@ -134,7 +134,7 @@ static void edit_text_cache_populate_cursor(OVERLAY_Data *vedata, Object *ob)
   float mat[4][4];
 
   v2_quad_corners_to_mat4(cursor, mat);
-  mul_m4_m4m4(mat, ob->obmat, mat);
+  mul_m4_m4m4(mat, ob->object_to_world, mat);
 
   struct GPUBatch *geom = DRW_cache_quad_get();
   DRW_shgroup_call_obmat(pd->edit_text_cursor_grp, geom, mat);
@@ -162,7 +162,7 @@ static void edit_text_cache_populate_boxes(OVERLAY_Data *vedata, Object *ob)
       vecs[3][1] -= tb->h;
 
       for (int j = 0; j < 4; j++) {
-        mul_v3_m4v3(vecs[j], ob->obmat, vecs[j]);
+        mul_v3_m4v3(vecs[j], ob->object_to_world, vecs[j]);
       }
       for (int j = 0; j < 4; j++) {
         OVERLAY_extra_line_dashed(cb, vecs[j], vecs[(j + 1) % 4], color);

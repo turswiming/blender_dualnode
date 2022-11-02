@@ -12,6 +12,7 @@ endif()
 set(INC
   .
   intern
+  vulkan
   metal
   opengl
   ../blenkernel
@@ -47,7 +48,6 @@ set(SRC
   intern/gpu_batch.cc
   intern/gpu_batch_presets.c
   intern/gpu_batch_utils.c
-  intern/gpu_buffers.c
   intern/gpu_capabilities.cc
   intern/gpu_codegen.cc
   intern/gpu_compute.cc
@@ -84,7 +84,6 @@ set(SRC
   GPU_batch.h
   GPU_batch_presets.h
   GPU_batch_utils.h
-  GPU_buffers.h
   GPU_capabilities.h
   GPU_common.h
   GPU_common_types.h
@@ -186,12 +185,43 @@ set(OPENGL_SRC
   opengl/gl_vertex_buffer.hh
 )
 
+set(VULKAN_SRC
+  vulkan/vk_backend.cc
+  vulkan/vk_batch.cc
+  vulkan/vk_context.cc
+  vulkan/vk_drawlist.cc
+  vulkan/vk_framebuffer.cc
+  vulkan/vk_index_buffer.cc
+  vulkan/vk_query.cc
+  vulkan/vk_shader.cc
+  vulkan/vk_storage_buffer.cc
+  vulkan/vk_texture.cc
+  vulkan/vk_uniform_buffer.cc
+  vulkan/vk_vertex_buffer.cc
+
+  vulkan/vk_backend.hh
+  vulkan/vk_batch.hh
+  vulkan/vk_context.hh
+  vulkan/vk_drawlist.hh
+  vulkan/vk_framebuffer.hh
+  vulkan/vk_index_buffer.hh
+  vulkan/vk_query.hh
+  vulkan/vk_shader.hh
+  vulkan/vk_storage_buffer.hh
+  vulkan/vk_texture.hh
+  vulkan/vk_uniform_buffer.hh
+  vulkan/vk_vertex_buffer.hh
+)
+
 set(METAL_SRC
   metal/mtl_backend.mm
+  metal/mtl_batch.mm
   metal/mtl_command_buffer.mm
   metal/mtl_context.mm
   metal/mtl_debug.mm
+  metal/mtl_drawlist.mm
   metal/mtl_framebuffer.mm
+  metal/mtl_immediate.mm
   metal/mtl_index_buffer.mm
   metal/mtl_memory.mm
   metal/mtl_query.mm
@@ -202,13 +232,17 @@ set(METAL_SRC
   metal/mtl_texture.mm
   metal/mtl_texture_util.mm
   metal/mtl_uniform_buffer.mm
+  metal/mtl_vertex_buffer.mm
 
   metal/mtl_backend.hh
+  metal/mtl_batch.hh
   metal/mtl_capabilities.hh
   metal/mtl_common.hh
   metal/mtl_context.hh
   metal/mtl_debug.hh
+  metal/mtl_drawlist.hh
   metal/mtl_framebuffer.hh
+  metal/mtl_immediate.hh
   metal/mtl_index_buffer.hh
   metal/mtl_memory.hh
   metal/mtl_primitive.hh
@@ -222,11 +256,16 @@ set(METAL_SRC
   metal/mtl_state.hh
   metal/mtl_texture.hh
   metal/mtl_uniform_buffer.hh
+  metal/mtl_vertex_buffer.hh
 )
 
 # Select Backend source based on availability
 if(WITH_OPENGL)
   list(APPEND SRC ${OPENGL_SRC})
+endif()
+
+if(WITH_VULKAN_BACKEND)
+  list(APPEND SRC ${VULKAN_SRC})
 endif()
 
 if(WITH_METAL_BACKEND)
@@ -276,6 +315,8 @@ set(GLSL_SRC
   shaders/gpu_shader_2D_image_vert.glsl
   shaders/gpu_shader_2D_image_rect_vert.glsl
   shaders/gpu_shader_2D_image_multi_rect_vert.glsl
+  shaders/gpu_shader_icon_frag.glsl
+  shaders/gpu_shader_icon_vert.glsl
   shaders/gpu_shader_image_frag.glsl
   shaders/gpu_shader_image_desaturate_frag.glsl
   shaders/gpu_shader_image_overlays_merge_frag.glsl
@@ -291,6 +332,7 @@ set(GLSL_SRC
   shaders/gpu_shader_3D_polyline_frag.glsl
   shaders/gpu_shader_3D_polyline_geom.glsl
   shaders/gpu_shader_3D_polyline_vert.glsl
+  shaders/gpu_shader_3D_polyline_vert_no_geom.glsl
   shaders/gpu_shader_3D_smooth_color_vert.glsl
   shaders/gpu_shader_3D_smooth_color_frag.glsl
   shaders/gpu_shader_3D_passthrough_vert.glsl
@@ -327,6 +369,7 @@ set(GLSL_SRC
   shaders/compositor/compositor_alpha_crop.glsl
   shaders/compositor/compositor_bilateral_blur.glsl
   shaders/compositor/compositor_blur.glsl
+  shaders/compositor/compositor_blur_variable_size.glsl
   shaders/compositor/compositor_bokeh_image.glsl
   shaders/compositor/compositor_box_mask.glsl
   shaders/compositor/compositor_convert.glsl
@@ -341,6 +384,8 @@ set(GLSL_SRC
   shaders/compositor/compositor_morphological_distance_feather.glsl
   shaders/compositor/compositor_morphological_distance_threshold.glsl
   shaders/compositor/compositor_morphological_step.glsl
+  shaders/compositor/compositor_normalize.glsl
+  shaders/compositor/compositor_parallel_reduction.glsl
   shaders/compositor/compositor_projector_lens_distortion.glsl
   shaders/compositor/compositor_realize_on_domain.glsl
   shaders/compositor/compositor_screen_lens_distortion.glsl
@@ -348,6 +393,8 @@ set(GLSL_SRC
   shaders/compositor/compositor_split_viewer.glsl
   shaders/compositor/compositor_symmetric_blur.glsl
   shaders/compositor/compositor_symmetric_separable_blur.glsl
+  shaders/compositor/compositor_tone_map_photoreceptor.glsl
+  shaders/compositor/compositor_tone_map_simple.glsl
 
   shaders/compositor/library/gpu_shader_compositor_alpha_over.glsl
   shaders/compositor/library/gpu_shader_compositor_blur_common.glsl
@@ -552,6 +599,7 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/overlay/shaders/infos/overlay_paint_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_sculpt_curves_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_sculpt_info.hh
+  ../draw/engines/overlay/shaders/infos/overlay_viewer_attribute_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_volume_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_wireframe_info.hh
   ../draw/engines/select/shaders/infos/select_id_info.hh
@@ -596,6 +644,7 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/infos/gpu_shader_3D_smooth_color_info.hh
   shaders/infos/gpu_shader_3D_uniform_color_info.hh
   shaders/infos/gpu_shader_gpencil_stroke_info.hh
+  shaders/infos/gpu_shader_icon_info.hh
   shaders/infos/gpu_shader_instance_varying_color_varying_size_info.hh
   shaders/infos/gpu_shader_keyframe_shape_info.hh
   shaders/infos/gpu_shader_line_dashed_uniform_color_info.hh
@@ -606,6 +655,7 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/compositor/infos/compositor_alpha_crop_info.hh
   shaders/compositor/infos/compositor_bilateral_blur_info.hh
   shaders/compositor/infos/compositor_blur_info.hh
+  shaders/compositor/infos/compositor_blur_variable_size_info.hh
   shaders/compositor/infos/compositor_bokeh_image_info.hh
   shaders/compositor/infos/compositor_box_mask_info.hh
   shaders/compositor/infos/compositor_convert_info.hh
@@ -620,6 +670,8 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/compositor/infos/compositor_morphological_distance_info.hh
   shaders/compositor/infos/compositor_morphological_distance_threshold_info.hh
   shaders/compositor/infos/compositor_morphological_step_info.hh
+  shaders/compositor/infos/compositor_normalize_info.hh
+  shaders/compositor/infos/compositor_parallel_reduction_info.hh
   shaders/compositor/infos/compositor_projector_lens_distortion_info.hh
   shaders/compositor/infos/compositor_realize_on_domain_info.hh
   shaders/compositor/infos/compositor_screen_lens_distortion_info.hh
@@ -627,6 +679,8 @@ set(SRC_SHADER_CREATE_INFOS
   shaders/compositor/infos/compositor_split_viewer_info.hh
   shaders/compositor/infos/compositor_symmetric_blur_info.hh
   shaders/compositor/infos/compositor_symmetric_separable_blur_info.hh
+  shaders/compositor/infos/compositor_tone_map_photoreceptor_info.hh
+  shaders/compositor/infos/compositor_tone_map_simple_info.hh
 )
 
 set(SRC_SHADER_CREATE_INFOS_MTL

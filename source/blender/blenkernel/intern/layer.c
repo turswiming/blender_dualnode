@@ -614,7 +614,7 @@ static bool layer_collection_hidden(ViewLayer *view_layer, LayerCollection *lc)
     return true;
   }
 
-  /* Check visiblilty restriction flags */
+  /* Check visibility restriction flags */
   if (lc->flag & LAYER_COLLECTION_HIDE || lc->collection->flag & COLLECTION_HIDE_VIEWPORT) {
     return true;
   }
@@ -975,6 +975,23 @@ void BKE_view_layer_synced_ensure(const Scene *scene, struct ViewLayer *view_lay
   }
 }
 
+void BKE_scene_view_layers_synced_ensure(const Scene *scene)
+{
+  LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
+    BKE_view_layer_synced_ensure(scene, view_layer);
+  }
+}
+
+void BKE_main_view_layers_synced_ensure(const Main *bmain)
+{
+  for (const Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
+    BKE_scene_view_layers_synced_ensure(scene);
+  }
+
+  /* NOTE: This is not (yet?) covered by the dirty tag and differed re-sync system */
+  BKE_layer_collection_local_sync_all(bmain);
+}
+
 static void layer_collection_objects_sync(ViewLayer *view_layer,
                                           LayerCollection *layer,
                                           ListBase *r_lb_new_object_bases,
@@ -1022,7 +1039,7 @@ static void layer_collection_objects_sync(ViewLayer *view_layer,
       if ((layer_restrict & LAYER_COLLECTION_HIDE) == 0) {
         base->flag_from_collection |= BASE_ENABLED_AND_VISIBLE_IN_DEFAULT_VIEWPORT;
       }
-      if (((collection_restrict & COLLECTION_HIDE_SELECT) == 0)) {
+      if ((collection_restrict & COLLECTION_HIDE_SELECT) == 0) {
         base->flag_from_collection |= BASE_SELECTABLE;
       }
     }
@@ -1032,7 +1049,7 @@ static void layer_collection_objects_sync(ViewLayer *view_layer,
     }
 
     /* Holdout and indirect only */
-    if ((layer->flag & LAYER_COLLECTION_HOLDOUT) || (base->object->visibility_flag & OB_HOLDOUT)) {
+    if ((layer->flag & LAYER_COLLECTION_HOLDOUT)) {
       base->flag_from_collection |= BASE_HOLDOUT;
     }
     if (layer->flag & LAYER_COLLECTION_INDIRECT_ONLY) {
@@ -1686,7 +1703,7 @@ static void layer_collection_local_visibility_unset_recursive(LayerCollection *l
 static void layer_collection_local_sync(const Scene *scene,
                                         ViewLayer *view_layer,
                                         LayerCollection *layer_collection,
-                                        const unsigned short local_collections_uuid,
+                                        const ushort local_collections_uuid,
                                         bool visible)
 {
   if ((layer_collection->local_collections_bits & local_collections_uuid) == 0) {
@@ -1718,7 +1735,7 @@ void BKE_layer_collection_local_sync(const Scene *scene, ViewLayer *view_layer, 
     return;
   }
 
-  const unsigned short local_collections_uuid = v3d->local_collections_uuid;
+  const ushort local_collections_uuid = v3d->local_collections_uuid;
 
   /* Reset flags and set the bases visible by default. */
   BKE_view_layer_synced_ensure(scene, view_layer);

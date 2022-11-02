@@ -31,6 +31,7 @@
 #include "BKE_multires.h"
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
+#include "BKE_scene.h"
 #include "BKE_subsurf.h"
 
 #include "DEG_depsgraph.h"
@@ -41,12 +42,10 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "ED_screen.h"
 #include "ED_sculpt.h"
 #include "ED_view3d.h"
 
 #include "bmesh.h"
-#include "bmesh_tools.h"
 #include "tools/bmesh_boolean.h"
 
 #include "paint_intern.h"
@@ -148,7 +147,7 @@ static int mask_flood_fill_exec(bContext *C, wmOperator *op)
   value = RNA_float_get(op->ptr, "value");
 
   MultiresModifierData *mmd = BKE_sculpt_multires_active(scene, ob);
-  BKE_sculpt_mask_layers_ensure(ob, mmd);
+  BKE_sculpt_mask_layers_ensure(depsgraph, CTX_data_main(C), ob, mmd);
 
   BKE_sculpt_update_object_for_edit(depsgraph, ob, false, true, false);
   pbvh = ob->sculpt->pbvh;
@@ -863,7 +862,9 @@ static void sculpt_gesture_mask_end(bContext *C, SculptGestureContext *sgcontext
   BKE_pbvh_update_vertex_data(sgcontext->ss->pbvh, PBVH_UpdateMask);
 }
 
-static void sculpt_gesture_init_mask_properties(SculptGestureContext *sgcontext, wmOperator *op)
+static void sculpt_gesture_init_mask_properties(bContext *C,
+                                                SculptGestureContext *sgcontext,
+                                                wmOperator *op)
 {
   sgcontext->operation = MEM_callocN(sizeof(SculptGestureMaskOperation), "Mask Operation");
 
@@ -871,7 +872,8 @@ static void sculpt_gesture_init_mask_properties(SculptGestureContext *sgcontext,
 
   Object *object = sgcontext->vc.obact;
   MultiresModifierData *mmd = BKE_sculpt_multires_active(sgcontext->vc.scene, object);
-  BKE_sculpt_mask_layers_ensure(sgcontext->vc.obact, mmd);
+  BKE_sculpt_mask_layers_ensure(
+      CTX_data_depsgraph_pointer(C), CTX_data_main(C), sgcontext->vc.obact, mmd);
 
   mask_operation->op.sculpt_gesture_begin = sculpt_gesture_mask_begin;
   mask_operation->op.sculpt_gesture_apply_for_symmetry_pass =
@@ -1007,11 +1009,12 @@ static void sculpt_gesture_trim_shape_origin_normal_get(SculptGestureContext *sg
       copy_v3_v3(r_normal, sgcontext->world_space_view_normal);
       break;
     case SCULPT_GESTURE_TRIM_ORIENTATION_SURFACE:
-      mul_v3_m4v3(r_origin, sgcontext->vc.obact->obmat, sgcontext->ss->gesture_initial_location);
+      mul_v3_m4v3(
+          r_origin, sgcontext->vc.obact->object_to_world, sgcontext->ss->gesture_initial_location);
       /* Transforming the normal does not take non uniform scaling into account. Sculpt mode is not
        * expected to work on object with non uniform scaling. */
       copy_v3_v3(r_normal, sgcontext->ss->gesture_initial_normal);
-      mul_mat3_m4_v3(sgcontext->vc.obact->obmat, r_normal);
+      mul_mat3_m4_v3(sgcontext->vc.obact->object_to_world, r_normal);
       break;
   }
 }
@@ -1042,7 +1045,7 @@ static void sculpt_gesture_trim_calculate_depth(SculptGestureContext *sgcontext)
      * mesh, coordinates are first calculated in world space, then converted to object space to
      * store them. */
     float world_space_vco[3];
-    mul_v3_m4v3(world_space_vco, vc->obact->obmat, vco);
+    mul_v3_m4v3(world_space_vco, vc->obact->object_to_world, vco);
     const float dist = dist_signed_to_plane_v3(world_space_vco, shape_plane);
     trim_operation->depth_front = min_ff(dist, trim_operation->depth_front);
     trim_operation->depth_back = max_ff(dist, trim_operation->depth_back);
@@ -1050,8 +1053,9 @@ static void sculpt_gesture_trim_calculate_depth(SculptGestureContext *sgcontext)
 
   if (trim_operation->use_cursor_depth) {
     float world_space_gesture_initial_location[3];
-    mul_v3_m4v3(
-        world_space_gesture_initial_location, vc->obact->obmat, ss->gesture_initial_location);
+    mul_v3_m4v3(world_space_gesture_initial_location,
+                vc->obact->object_to_world,
+                ss->gesture_initial_location);
 
     float mid_point_depth;
     if (trim_operation->orientation == SCULPT_GESTURE_TRIM_ORIENTATION_VIEW) {
@@ -1354,7 +1358,9 @@ static void sculpt_gesture_trim_end(bContext *UNUSED(C), SculptGestureContext *s
 {
   Object *object = sgcontext->vc.obact;
   SculptSession *ss = object->sculpt;
-  ss->face_sets = CustomData_get_layer(&((Mesh *)object->data)->pdata, CD_SCULPT_FACE_SETS);
+
+  ss->face_sets = CustomData_get_layer_named(
+      &((Mesh *)object->data)->pdata, CD_PROP_INT32, ".sculpt_face_set");
   if (ss->face_sets) {
     /* Assign a new Face Set ID to the new faces created by the trim operation. */
     const int next_face_set_id = ED_sculpt_face_sets_find_next_available_id(object->data);
@@ -1514,7 +1520,7 @@ static int paint_mask_gesture_box_exec(bContext *C, wmOperator *op)
   if (!sgcontext) {
     return OPERATOR_CANCELLED;
   }
-  sculpt_gesture_init_mask_properties(sgcontext, op);
+  sculpt_gesture_init_mask_properties(C, sgcontext, op);
   sculpt_gesture_apply(C, sgcontext, op);
   sculpt_gesture_context_free(sgcontext);
   return OPERATOR_FINISHED;
@@ -1526,7 +1532,7 @@ static int paint_mask_gesture_lasso_exec(bContext *C, wmOperator *op)
   if (!sgcontext) {
     return OPERATOR_CANCELLED;
   }
-  sculpt_gesture_init_mask_properties(sgcontext, op);
+  sculpt_gesture_init_mask_properties(C, sgcontext, op);
   sculpt_gesture_apply(C, sgcontext, op);
   sculpt_gesture_context_free(sgcontext);
   return OPERATOR_FINISHED;
@@ -1538,7 +1544,7 @@ static int paint_mask_gesture_line_exec(bContext *C, wmOperator *op)
   if (!sgcontext) {
     return OPERATOR_CANCELLED;
   }
-  sculpt_gesture_init_mask_properties(sgcontext, op);
+  sculpt_gesture_init_mask_properties(C, sgcontext, op);
   sculpt_gesture_apply(C, sgcontext, op);
   sculpt_gesture_context_free(sgcontext);
   return OPERATOR_FINISHED;

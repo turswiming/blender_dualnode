@@ -9,6 +9,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
 #include "BLI_index_mask_ops.hh"
 #include "BLI_length_parameterize.hh"
@@ -557,6 +558,15 @@ IndexMask CurvesGeometry::indices_for_curve_type(const CurveType type,
       this->curve_types(), this->curve_type_counts(), type, selection, r_indices);
 }
 
+Array<int> CurvesGeometry::point_to_curve_map() const
+{
+  Array<int> map(this->points_num());
+  for (const int i : this->curves_range()) {
+    map.as_mutable_span().slice(this->points_for_curve(i)).fill(i);
+  }
+  return map;
+}
+
 void CurvesGeometry::ensure_nurbs_basis_cache() const
 {
   if (!this->runtime->nurbs_basis_cache_dirty) {
@@ -1102,21 +1112,11 @@ static void copy_between_buffers(const CPPType &type,
                         src_range.size());
 }
 
-template<typename T>
-static void copy_with_map(const Span<T> src, const Span<int> map, MutableSpan<T> dst)
-{
-  threading::parallel_for(map.index_range(), 1024, [&](const IndexRange range) {
-    for (const int i : range) {
-      dst[i] = src[map[i]];
-    }
-  });
-}
-
 static void copy_with_map(const GSpan src, const Span<int> map, GMutableSpan dst)
 {
   attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
     using T = decltype(dummy);
-    copy_with_map(src.typed<T>(), map, dst.typed<T>());
+    array_utils::gather(src.typed<T>(), map, dst.typed<T>());
   });
 }
 
@@ -1224,6 +1224,10 @@ static CurvesGeometry copy_with_removed_points(const CurvesGeometry &curves,
     attribute.dst.finish();
   }
 
+  if (new_curves.curves_num() != curves.curves_num()) {
+    new_curves.remove_attributes_based_on_types();
+  }
+
   return new_curves;
 }
 
@@ -1329,6 +1333,8 @@ static CurvesGeometry copy_with_removed_curves(const CurvesGeometry &curves,
     attribute.dst.finish();
   }
 
+  new_curves.remove_attributes_based_on_types();
+
   return new_curves;
 }
 
@@ -1391,6 +1397,9 @@ void CurvesGeometry::reverse_curves(const IndexMask curves_to_reverse)
 
   attributes.for_all([&](const AttributeIDRef &id, AttributeMetaData meta_data) {
     if (meta_data.domain != ATTR_DOMAIN_POINT) {
+      return true;
+    }
+    if (meta_data.data_type == CD_PROP_STRING) {
       return true;
     }
     if (id.is_named() && bezier_handle_names.contains(id.name())) {
@@ -1557,6 +1566,11 @@ GVArray CurvesGeometry::adapt_domain(const GVArray &varray,
   }
   if (from == to) {
     return varray;
+  }
+  if (varray.is_single()) {
+    BUFFER_FOR_CPP_TYPE_VALUE(varray.type(), value);
+    varray.get_internal_single(value);
+    return GVArray::ForSingle(varray.type(), this->attributes().domain_size(to), value);
   }
 
   if (from == ATTR_DOMAIN_POINT && to == ATTR_DOMAIN_CURVE) {

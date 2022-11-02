@@ -85,7 +85,7 @@ void OVERLAY_mode_transfer_cache_populate(OVERLAY_Data *vedata, Object *ob)
   }
 
   const DRWContextState *draw_ctx = DRW_context_state_get();
-  const bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) &&
+  const bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->rv3d) &&
                                !DRW_state_is_image_render();
   const bool is_xray = (ob->dtx & OB_DRAW_IN_FRONT) != 0;
 
@@ -100,7 +100,7 @@ void OVERLAY_mode_transfer_cache_populate(OVERLAY_Data *vedata, Object *ob)
     UI_GetThemeColor3fv(TH_VERTEX_SELECT, color);
     color[3] = mode_transfer_alpha_for_animation_time_get(animation_time);
     srgb_to_linearrgb_v4(color, color);
-    DRW_shgroup_uniform_vec4_copy(mode_transfer_grp[i], "color", color);
+    DRW_shgroup_uniform_vec4_copy(mode_transfer_grp[i], "ucolor", color);
   }
 
   if (!pd->use_in_front) {
@@ -110,7 +110,7 @@ void OVERLAY_mode_transfer_cache_populate(OVERLAY_Data *vedata, Object *ob)
   pd->mode_transfer.any_animated = true;
 
   if (use_sculpt_pbvh) {
-    DRW_shgroup_call_sculpt(mode_transfer_grp[is_xray], ob, false, false);
+    DRW_shgroup_call_sculpt(mode_transfer_grp[is_xray], ob, false, false, false, false, false);
   }
   else {
     struct GPUBatch *geom = DRW_cache_object_surface_get(ob);

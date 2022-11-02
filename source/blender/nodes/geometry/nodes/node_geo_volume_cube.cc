@@ -75,13 +75,12 @@ class Grid3DFieldContext : public FieldContext {
 
   int64_t points_num() const
   {
-    return static_cast<int64_t>(resolution_.x) * static_cast<int64_t>(resolution_.y) *
-           static_cast<int64_t>(resolution_.z);
+    return int64_t(resolution_.x) * int64_t(resolution_.y) * int64_t(resolution_.z);
   }
 
   GVArray get_varray_for_input(const FieldInput &field_input,
-                               const IndexMask UNUSED(mask),
-                               ResourceScope &UNUSED(scope)) const
+                               const IndexMask /*mask*/,
+                               ResourceScope & /*scope*/) const
   {
     const bke::AttributeFieldInput *attribute_field_input =
         dynamic_cast<const bke::AttributeFieldInput *>(&field_input);
@@ -169,7 +168,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   grid->transform().postTranslate(
       openvdb::math::Vec3<float>(bounds_min.x, bounds_min.y, bounds_min.z));
 
-  Volume *volume = (Volume *)BKE_id_new_nomain(ID_VO, nullptr);
+  Volume *volume = reinterpret_cast<Volume *>(BKE_id_new_nomain(ID_VO, nullptr));
   BKE_volume_init_grids(volume);
 
   BKE_volume_grid_add_vdb(*volume, "density", std::move(grid));

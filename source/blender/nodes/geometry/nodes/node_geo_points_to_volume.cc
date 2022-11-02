@@ -43,14 +43,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>(N_("Volume"));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
   uiItemR(layout, ptr, "resolution_mode", 0, IFACE_("Resolution"), ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryPointsToVolume *data = MEM_cnew<NodeGeometryPointsToVolume>(__func__);
   data->resolution_mode = GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT;
@@ -83,7 +83,7 @@ struct ParticleList {
 
   size_t size() const
   {
-    return (size_t)positions.size();
+    return size_t(positions.size());
   }
 
   void getPos(size_t n, openvdb::Vec3R &xyz) const
@@ -215,7 +215,7 @@ static void initialize_volume_component_from_points(GeoNodeExecParams &params,
     return;
   }
 
-  Volume *volume = (Volume *)BKE_id_new_nomain(ID_VO, nullptr);
+  Volume *volume = reinterpret_cast<Volume *>(BKE_id_new_nomain(ID_VO, nullptr));
   BKE_volume_init_grids(volume);
 
   const float density = params.get_input<float>("Density");

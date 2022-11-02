@@ -11,6 +11,12 @@
 
 #ifdef WITH_CXX_GUARDEDALLOC
 #  include "MEM_guardedalloc.h"
+#else
+/* Convenience unsigned abbreviations (#WITH_CXX_GUARDEDALLOC defines these). */
+typedef unsigned int uint;
+typedef unsigned short ushort;
+typedef unsigned long ulong;
+typedef unsigned char uchar;
 #endif
 
 #if defined(WITH_CXX_GUARDEDALLOC) && defined(__cplusplus)
@@ -53,10 +59,6 @@ typedef struct {
   int data_size[2];
   int hot_spot[2];
 } GHOST_CursorBitmapRef;
-
-typedef struct {
-  int flags;
-} GHOST_GLSettings;
 
 typedef enum {
   GHOST_glStereoVisual = (1 << 0),
@@ -150,6 +152,9 @@ typedef enum {
   GHOST_kDrawingContextTypeOpenGL,
 #ifdef WIN32
   GHOST_kDrawingContextTypeD3D,
+#endif
+#ifdef __APPLE__
+  GHOST_kDrawingContextTypeMetal,
 #endif
 } GHOST_TDrawingContextType;
 
@@ -520,7 +525,7 @@ typedef struct {
 } GHOST_TStringArray;
 
 typedef enum {
-  GHOST_kNotStarted,
+  GHOST_kNotStarted = 0,
   GHOST_kStarting,
   GHOST_kInProgress,
   GHOST_kFinishing,
@@ -591,6 +596,11 @@ typedef struct {
   /** Refresh rate (in Hertz). */
   uint32_t frequency;
 } GHOST_DisplaySetting;
+
+typedef struct {
+  int flags;
+  GHOST_TDrawingContextType context_type;
+} GHOST_GLSettings;
 
 typedef enum {
   /** Axis that cursor grab will wrap. */

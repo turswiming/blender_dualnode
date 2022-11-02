@@ -417,6 +417,11 @@ bool ANIM_animdata_get_context(const bContext *C, bAnimContext *ac)
   return ANIM_animdata_context_getdata(ac);
 }
 
+bool ANIM_animdata_can_have_greasepencil(const eAnimCont_Types type)
+{
+  return ELEM(type, ANIMCONT_GPENCIL, ANIMCONT_DOPESHEET, ANIMCONT_TIMELINE);
+}
+
 /* ************************************************************ */
 /* Blender Data <-- Filter --> Channels to be operated on */
 
@@ -1122,7 +1127,7 @@ static bool skip_fcurve_selected_data(bDopeSheet *ads, FCurve *fcu, ID *owner_id
 
     /* Check for selected nodes. */
     if (fcu->rna_path &&
-        (BLI_str_quoted_substr(fcu->rna_path, "nodes[", node_name, sizeof(node_name)))) {
+        BLI_str_quoted_substr(fcu->rna_path, "nodes[", node_name, sizeof(node_name))) {
       /* Get strip name, and check if this strip is selected. */
       node = nodeFindNodebyName(ntree, node_name);
 
@@ -1341,7 +1346,7 @@ static size_t animfilter_fcurves(ListBase *anim_data,
    *    Back to step 2 :)
    */
   for (fcu = first;
-       ((fcu = animfilter_fcurve_next(ads, fcu, fcurve_type, filter_mode, owner, owner_id)));
+       (fcu = animfilter_fcurve_next(ads, fcu, fcurve_type, filter_mode, owner, owner_id));
        fcu = fcu->next) {
     if (UNLIKELY(fcurve_type == ANIMTYPE_NLACURVE)) {
       /* NLA Control Curve - Basically the same as normal F-Curves,
@@ -1602,7 +1607,7 @@ static size_t animfilter_nla_controls(
 
   /* add control curves from each NLA strip... */
   /* NOTE: ANIMTYPE_FCURVES are created here, to avoid duplicating the code needed */
-  BEGIN_ANIMFILTER_SUBCHANNELS (((adt->flag & ADT_NLA_SKEYS_COLLAPSED) == 0)) {
+  BEGIN_ANIMFILTER_SUBCHANNELS ((adt->flag & ADT_NLA_SKEYS_COLLAPSED) == 0) {
     NlaTrack *nlt;
     NlaStrip *strip;
 
@@ -1892,7 +1897,7 @@ static size_t animdata_filter_gpencil(bAnimContext *ac,
       }
 
       /* check selection and object type filters */
-      if ((ads->filterflag & ADS_FILTER_ONLYSEL) && !((base->flag & BASE_SELECTED))) {
+      if ((ads->filterflag & ADS_FILTER_ONLYSEL) && !(base->flag & BASE_SELECTED)) {
         /* only selected should be shown */
         continue;
       }

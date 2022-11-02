@@ -11,6 +11,7 @@
 #include "BKE_main.h"
 #include "BKE_preferences.h"
 
+#include "BLI_fileops.h"
 #include "BLI_path_util.h"
 
 #include "DNA_asset_types.h"
@@ -179,6 +180,27 @@ void AssetLibrary::refresh_catalog_simplename(struct AssetMetaData *asset_data)
     return;
   }
   STRNCPY(asset_data->catalog_simple_name, catalog->simple_name.c_str());
+}
+
+Vector<AssetLibraryReference> all_valid_asset_library_refs()
+{
+  Vector<AssetLibraryReference> result;
+  int i;
+  LISTBASE_FOREACH_INDEX (const bUserAssetLibrary *, asset_library, &U.asset_libraries, i) {
+    if (!BLI_is_dir(asset_library->path)) {
+      continue;
+    }
+    AssetLibraryReference library_ref{};
+    library_ref.custom_library_index = i;
+    library_ref.type = ASSET_LIBRARY_CUSTOM;
+    result.append(library_ref);
+  }
+
+  AssetLibraryReference library_ref{};
+  library_ref.custom_library_index = -1;
+  library_ref.type = ASSET_LIBRARY_LOCAL;
+  result.append(library_ref);
+  return result;
 }
 
 AssetRepresentation &AssetStorage::append(std::unique_ptr<AssetRepresentation> asset)

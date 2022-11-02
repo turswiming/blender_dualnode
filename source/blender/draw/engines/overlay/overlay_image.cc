@@ -135,7 +135,7 @@ static struct GPUTexture *image_camera_background_texture_get(CameraBGImage *bgp
   Scene *scene = draw_ctx->scene;
   float aspect_x, aspect_y;
   int width, height;
-  int ctime = (int)DEG_get_ctime(draw_ctx->depsgraph);
+  int ctime = int(DEG_get_ctime(draw_ctx->depsgraph));
   *r_use_alpha_premult = false;
   *r_use_view_transform = false;
 
@@ -349,7 +349,7 @@ void OVERLAY_image_camera_cache_populate(OVERLAY_Data *vedata, Object *ob)
       DRW_shgroup_uniform_bool_copy(grp, "imgAlphaBlend", true);
       DRW_shgroup_uniform_bool_copy(grp, "isCameraBackground", true);
       DRW_shgroup_uniform_bool_copy(grp, "depthSet", true);
-      DRW_shgroup_uniform_vec4_copy(grp, "color", color_premult_alpha);
+      DRW_shgroup_uniform_vec4_copy(grp, "ucolor", color_premult_alpha);
       DRW_shgroup_call_obmat(grp, DRW_cache_quad_get(), mat);
     }
   }
@@ -392,7 +392,7 @@ void OVERLAY_image_empty_cache_populate(OVERLAY_Data *vedata, Object *ob)
     float image_aspect[2];
     overlay_image_calc_aspect(ima, size, image_aspect);
 
-    copy_m4_m4(mat, ob->obmat);
+    copy_m4_m4(mat, ob->object_to_world);
     mul_v3_fl(mat[0], image_aspect[0] * 0.5f * ob->empty_drawsize);
     mul_v3_fl(mat[1], image_aspect[1] * 0.5f * ob->empty_drawsize);
     madd_v3_v3fl(mat[3], mat[0], ob->ima_ofs[0] * 2.0f + 1.0f);
@@ -435,7 +435,7 @@ void OVERLAY_image_empty_cache_populate(OVERLAY_Data *vedata, Object *ob)
     DRW_shgroup_uniform_bool_copy(grp, "imgAlphaBlend", use_alpha_blend);
     DRW_shgroup_uniform_bool_copy(grp, "isCameraBackground", false);
     DRW_shgroup_uniform_bool_copy(grp, "depthSet", depth_mode != OB_EMPTY_IMAGE_DEPTH_DEFAULT);
-    DRW_shgroup_uniform_vec4_copy(grp, "color", ob->color);
+    DRW_shgroup_uniform_vec4_copy(grp, "ucolor", ob->color);
     DRW_shgroup_call_obmat(grp, DRW_cache_quad_get(), mat);
   }
 }

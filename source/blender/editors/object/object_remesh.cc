@@ -246,7 +246,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
                                            const float spacing)
 {
   const float total_len = len_v3v3(initial_co, end_co);
-  const int tot_lines = (int)(total_len / spacing);
+  const int tot_lines = int(total_len / spacing);
   const int tot_lines_half = (tot_lines / 2) + 1;
   float spacing_dir[3], lines_start[3];
   float line_dir[3];
@@ -261,7 +261,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
 
   mid_v3_v3v3(lines_start, initial_co, end_co);
 
-  immBegin(GPU_PRIM_LINES, (uint)tot_lines_half * 2);
+  immBegin(GPU_PRIM_LINES, uint(tot_lines_half) * 2);
   for (int i = 0; i < tot_lines_half; i++) {
     float line_start[3];
     float line_end[3];
@@ -274,7 +274,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
 
   mul_v3_fl(spacing_dir, -1.0f);
 
-  immBegin(GPU_PRIM_LINES, (uint)(tot_lines_half - 1) * 2);
+  immBegin(GPU_PRIM_LINES, uint(tot_lines_half - 1) * 2);
   for (int i = 1; i < tot_lines_half; i++) {
     float line_start[3];
     float line_end[3];
@@ -286,7 +286,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
   immEnd();
 }
 
-static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *arg)
+static void voxel_size_edit_draw(const bContext *C, ARegion * /*ar*/, void *arg)
 {
   VoxelSizeEditCustomData *cd = static_cast<VoxelSizeEditCustomData *>(arg);
 
@@ -296,7 +296,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
   uint pos3d = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   GPU_matrix_push();
-  GPU_matrix_mul(cd->active_object->obmat);
+  GPU_matrix_mul(cd->active_object->object_to_world);
 
   /* Draw Rect */
   immUniformColor4f(0.9f, 0.9f, 0.9f, 0.8f);
@@ -320,7 +320,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
   GPU_line_width(1.0f);
 
   const float total_len = len_v3v3(cd->preview_plane[0], cd->preview_plane[1]);
-  const int tot_lines = (int)(total_len / cd->voxel_size);
+  const int tot_lines = int(total_len / cd->voxel_size);
 
   /* Smooth-step to reduce the alpha of the grid as the line number increases. */
   const float a = VOXEL_SIZE_EDIT_MAX_GRIDS_LINES * 0.1f;
@@ -346,7 +346,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
   UnitSettings *unit = &scene->unit;
   BKE_unit_value_as_string(str,
                            VOXEL_SIZE_EDIT_MAX_STR_LEN,
-                           (double)(cd->voxel_size * unit->scale_length),
+                           double(cd->voxel_size * unit->scale_length),
                            -3,
                            B_UNIT_LENGTH,
                            unit,
@@ -357,7 +357,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
 
   GPU_matrix_push();
   GPU_matrix_mul(cd->text_mat);
-  BLF_size(fontid, 10.0f * fstyle_points, U.dpi);
+  BLF_size(fontid, 10.0f * fstyle_points * U.dpi_fac);
   BLF_color3f(fontid, 1.0f, 1.0f, 1.0f);
   BLF_width_and_height(fontid, str, strdrawlen, &strwidth, &strheight);
   BLF_position(fontid, -0.5f * strwidth, -0.5f * strheight, 0.0f);
@@ -494,7 +494,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   float view_normal[3] = {0.0f, 0.0f, 1.0f};
 
   /* Calculate the view normal. */
-  invert_m4_m4(active_object->imat, active_object->obmat);
+  invert_m4_m4(active_object->imat, active_object->object_to_world);
   copy_m3_m4(mat, rv3d->viewinv);
   mul_m3_v3(mat, view_normal);
   copy_m3_m4(mat, active_object->imat);
@@ -535,7 +535,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   /* Project the selected face in the previous step of the Bounding Box. */
   for (int i = 0; i < 4; i++) {
     float preview_plane_world_space[3];
-    mul_v3_m4v3(preview_plane_world_space, active_object->obmat, cd->preview_plane[i]);
+    mul_v3_m4v3(preview_plane_world_space, active_object->object_to_world, cd->preview_plane[i]);
     ED_view3d_project_v2(region, preview_plane_world_space, preview_plane_proj[i]);
   }
 
@@ -582,7 +582,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
 
   /* Invert object scale. */
   float scale[3];
-  mat4_to_size(scale, active_object->obmat);
+  mat4_to_size(scale, active_object->object_to_world);
   invert_v3(scale);
   size_to_mat4(scale_mat, scale);
 
@@ -593,7 +593,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
 
   /* Scale the text to constant viewport size. */
   float text_pos_word_space[3];
-  mul_v3_m4v3(text_pos_word_space, active_object->obmat, text_pos);
+  mul_v3_m4v3(text_pos_word_space, active_object->object_to_world, text_pos);
   const float pixelsize = ED_view3d_pixel_size(rv3d, text_pos_word_space);
   scale_m4_fl(scale_mat, pixelsize * 0.5f);
   mul_m4_m4_post(cd->text_mat, scale_mat);
