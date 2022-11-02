@@ -6,8 +6,8 @@ namespace blender::workbench {
 
 ShaderCache::~ShaderCache()
 {
-  for (auto i : IndexRange(shading_type_len)) {
-    for (auto j : IndexRange(color_type_len)) {
+  for (auto i : IndexRange(lighting_type_len)) {
+    for (auto j : IndexRange(shader_type_len)) {
       for (auto k : IndexRange(geometry_type_len)) {
         for (auto l : IndexRange(pipeline_type_len)) {
           DRW_SHADER_FREE_SAFE(prepass_shader_cache_[i][j][k][l]);
@@ -15,7 +15,7 @@ ShaderCache::~ShaderCache()
       }
     }
   }
-  for (auto i : IndexRange(shading_type_len)) {
+  for (auto i : IndexRange(lighting_type_len)) {
     for (auto j : IndexRange(pipeline_type_len)) {
       for (auto k : IndexRange(2)) {
         for (auto l : IndexRange(2)) {
@@ -28,11 +28,11 @@ ShaderCache::~ShaderCache()
 
 GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
                                            eGeometryType geometry_type,
-                                           eColorType color_type,
-                                           eShadingType shading_type)
+                                           eShaderType shader_type,
+                                           eLightingType lighting_type)
 {
   GPUShader *&shader_ptr = prepass_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(
-      geometry_type)][static_cast<int>(color_type)][static_cast<int>(shading_type)];
+      geometry_type)][static_cast<int>(shader_type)][static_cast<int>(lighting_type)];
 
   if (shader_ptr != nullptr) {
     return shader_ptr;
@@ -60,22 +60,22 @@ GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
       info_name += "shadow_";
       break;
   }
-  switch (shading_type) {
-    case eShadingType::FLAT:
+  switch (lighting_type) {
+    case eLightingType::FLAT:
       info_name += "flat_";
       break;
-    case eShadingType::STUDIO:
+    case eLightingType::STUDIO:
       info_name += "studio_";
       break;
-    case eShadingType::MATCAP:
+    case eLightingType::MATCAP:
       info_name += "matcap_";
       break;
   }
-  switch (color_type) {
-    case eColorType::MATERIAL:
+  switch (shader_type) {
+    case eShaderType::MATERIAL:
       info_name += "material";
       break;
-    case eColorType::TEXTURE:
+    case eShaderType::TEXTURE:
       info_name += "texture";
       break;
   }
@@ -86,12 +86,12 @@ GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
 }
 
 GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type,
-                                           eShadingType shading_type,
+                                           eLightingType lighting_type,
                                            bool cavity,
                                            bool curvature)
 {
   GPUShader *&shader_ptr = resolve_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(
-      shading_type)][cavity][curvature];
+      lighting_type)][cavity][curvature];
 
   if (shader_ptr != nullptr) {
     return shader_ptr;
@@ -108,14 +108,14 @@ GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type,
       BLI_assert_unreachable();
       break;
   }
-  switch (shading_type) {
-    case eShadingType::FLAT:
+  switch (lighting_type) {
+    case eLightingType::FLAT:
       info_name += "flat";
       break;
-    case eShadingType::STUDIO:
+    case eLightingType::STUDIO:
       info_name += "studio";
       break;
-    case eShadingType::MATCAP:
+    case eLightingType::MATCAP:
       info_name += "matcap";
       break;
   }

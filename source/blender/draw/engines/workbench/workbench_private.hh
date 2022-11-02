@@ -15,20 +15,20 @@ using namespace draw;
 class ShaderCache {
  private:
   /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
-  GPUShader *prepass_shader_cache_[pipeline_type_len][geometry_type_len][color_type_len]
-                                  [shading_type_len] = {{{{nullptr}}}};
-  GPUShader *resolve_shader_cache_[pipeline_type_len][shading_type_len][2][2] = {{{{nullptr}}}};
+  GPUShader *prepass_shader_cache_[pipeline_type_len][geometry_type_len][shader_type_len]
+                                  [lighting_type_len] = {{{{nullptr}}}};
+  GPUShader *resolve_shader_cache_[pipeline_type_len][lighting_type_len][2][2] = {{{{nullptr}}}};
 
  public:
   ~ShaderCache();
 
   GPUShader *prepass_shader_get(ePipelineType pipeline_type,
                                 eGeometryType geometry_type,
-                                eColorType color_type,
-                                eShadingType shading_type);
+                                eShaderType shader_type,
+                                eLightingType lighting_type);
 
   GPUShader *resolve_shader_get(ePipelineType pipeline_type,
-                                eShadingType shading_type,
+                                eLightingType lighting_type,
                                 bool cavity = false,
                                 bool curvature = false);
 };
@@ -64,7 +64,7 @@ struct SceneState {
   eContextObjectMode object_mode;
 
   View3DShading shading;
-  eShadingType shading_type = eShadingType::STUDIO;
+  eLightingType lighting_type = eLightingType::STUDIO;
   bool xray_mode;
 
   DRWState cull_state;
@@ -86,7 +86,7 @@ struct SceneState {
   bool reset_taa_next_sample;
   bool render_finished;
 
-  /** Used when material_subtype == eMaterialSubType::SINGLE */
+  /** Used when material_type == eMaterialType::SINGLE */
   Material material_override = Material(float3(1.0f));
   /* When r == -1.0 the shader uses the vertex color */
   Material material_attribute_color = Material(float3(-1.0f));
@@ -94,20 +94,13 @@ struct SceneState {
   void init();
 };
 
-class ObjectState {
- private:
-  void setup_material_state();
-
- public:
+struct ObjectState {
   eV3DShadingColorType color_type;
   bool sculpt_pbvh;
   bool texture_paint_mode;
   ::Image *image_paint_override;
   eGPUSamplerState override_sampler_state;
   bool draw_shadow;
-
-  eColorType material_type;
-  eMaterialSubType material_subtype;
   bool use_per_material_batches;
 
   ObjectState(const SceneState &scene_state, Object *ob);
@@ -157,7 +150,7 @@ struct SceneResources {
 
 class MeshPass : public PassMain {
  private:
-  PassMain::Sub *passes_[geometry_type_len][color_type_len];
+  PassMain::Sub *passes_[geometry_type_len][shader_type_len];
 
   using TextureSubPassKey = std::pair<GPUTexture *, eGeometryType>;
   Map<TextureSubPassKey, PassMain::Sub *> texture_subpass_map_;
@@ -171,7 +164,7 @@ class MeshPass : public PassMain {
   bool is_empty() const;
 
   void init_pass(SceneResources &resources, DRWState state);
-  void init_subpasses(ePipelineType pipeline, eShadingType shading, ShaderCache &shaders);
+  void init_subpasses(ePipelineType pipeline, eLightingType shading, ShaderCache &shaders);
 
   PassMain::Sub &sub_pass_get(
       ObjectRef &ref,

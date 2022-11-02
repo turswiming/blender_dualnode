@@ -19,26 +19,6 @@
 
 namespace blender::workbench {
 
-static const CustomData *get_loop_custom_data(const Mesh *mesh)
-{
-  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
-    BLI_assert(mesh->edit_mesh != nullptr);
-    BLI_assert(mesh->edit_mesh->bm != nullptr);
-    return &mesh->edit_mesh->bm->ldata;
-  }
-  return &mesh->ldata;
-}
-
-static const CustomData *get_vert_custom_data(const Mesh *mesh)
-{
-  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
-    BLI_assert(mesh->edit_mesh != nullptr);
-    BLI_assert(mesh->edit_mesh->bm != nullptr);
-    return &mesh->edit_mesh->bm->vdata;
-  }
-  return &mesh->vdata;
-}
-
 void SceneState::init()
 {
   bool reset_taa = reset_taa_next_sample;
@@ -115,7 +95,7 @@ void SceneState::init()
     reset_taa = true;
   }
 
-  shading_type = shading_type_from_v3d_lighting(shading.light);
+  lighting_type = lighting_type_from_v3d_lighting(shading.light);
   material_override = Material(shading.single_color);
 
   background_color = float4(0.0f);
@@ -194,14 +174,25 @@ void SceneState::init()
   draw_object_id = draw_outline || draw_curvature;
 };
 
-void ObjectState::setup_material_state()
+static const CustomData *get_loop_custom_data(const Mesh *mesh)
 {
-  material_type = color_type_from_v3d_shading(color_type);
-  material_subtype = material_subtype_from_v3d_shading(color_type);
-  use_per_material_batches = image_paint_override == nullptr && ELEM(color_type,
-                                                                     V3D_SHADING_TEXTURE_COLOR,
-                                                                     V3D_SHADING_MATERIAL_COLOR);
-};
+  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+    BLI_assert(mesh->edit_mesh != nullptr);
+    BLI_assert(mesh->edit_mesh->bm != nullptr);
+    return &mesh->edit_mesh->bm->ldata;
+  }
+  return &mesh->ldata;
+}
+
+static const CustomData *get_vert_custom_data(const Mesh *mesh)
+{
+  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+    BLI_assert(mesh->edit_mesh != nullptr);
+    BLI_assert(mesh->edit_mesh->bm != nullptr);
+    return &mesh->edit_mesh->bm->vdata;
+  }
+  return &mesh->vdata;
+}
 
 ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
 {
@@ -231,8 +222,8 @@ ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
     else if (color_type == V3D_SHADING_VERTEX_COLOR) {
       color_type = V3D_SHADING_OBJECT_COLOR;
     }
+    use_per_material_batches = color_type == V3D_SHADING_MATERIAL_COLOR;
     /* Early return */
-    setup_material_state();
     return;
   }
 
@@ -300,7 +291,9 @@ ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
     }
   }
 
-  setup_material_state();
+  use_per_material_batches = image_paint_override == nullptr && ELEM(color_type,
+                                                                     V3D_SHADING_TEXTURE_COLOR,
+                                                                     V3D_SHADING_MATERIAL_COLOR);
 }
 
 }  // namespace blender::workbench

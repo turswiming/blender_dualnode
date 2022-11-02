@@ -160,7 +160,7 @@ class Instance {
         const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
 
         struct GPUBatch **batches;
-        if (object_state.material_type == eColorType::TEXTURE) {
+        if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
           batches = DRW_cache_mesh_surface_texpaint_get(ob_ref.object);
         }
         else {
@@ -190,7 +190,7 @@ class Instance {
             ::Image *image = nullptr;
             ImageUser *iuser = nullptr;
             eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT;
-            if (object_state.material_type == eColorType::TEXTURE) {
+            if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
               get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
             }
 
@@ -200,10 +200,10 @@ class Instance {
       }
       else {
         struct GPUBatch *batch;
-        if (object_state.material_type == eColorType::TEXTURE) {
+        if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
           batch = DRW_cache_mesh_surface_texpaint_single_get(ob_ref.object);
         }
-        else if (object_state.material_subtype == eMaterialSubType::ATTRIBUTE) {
+        else if (object_state.color_type == V3D_SHADING_VERTEX_COLOR) {
           if (ob_ref.object->mode & OB_MODE_VERTEX_PAINT) {
             batch = DRW_cache_mesh_surface_vertpaint_get(ob_ref.object);
           }
@@ -219,16 +219,16 @@ class Instance {
           ResourceHandle handle = manager.resource_handle(ob_ref);
           Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
 
-          if (object_state.material_subtype == eMaterialSubType::OBJECT) {
+          if (object_state.color_type == V3D_SHADING_OBJECT_COLOR) {
             mat = Material(*ob_ref.object);
           }
-          else if (object_state.material_subtype == eMaterialSubType::RANDOM) {
+          else if (object_state.color_type == V3D_SHADING_RANDOM_COLOR) {
             mat = Material(*ob_ref.object, true);
           }
-          else if (object_state.material_subtype == eMaterialSubType::SINGLE) {
+          else if (object_state.color_type == V3D_SHADING_SINGLE_COLOR) {
             mat = scene_state.material_override;
           }
-          else if (object_state.material_subtype == eMaterialSubType::ATTRIBUTE) {
+          else if (object_state.color_type == V3D_SHADING_VERTEX_COLOR) {
             mat = scene_state.material_attribute_color;
           }
           else {

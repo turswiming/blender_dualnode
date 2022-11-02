@@ -47,80 +47,49 @@ enum class ePipelineType {
 };
 static constexpr int pipeline_type_len = static_cast<int>(ePipelineType::SHADOW) + 1;
 
-enum class eShadingType {
+enum class eLightingType {
   FLAT = 0,
   STUDIO,
   MATCAP,
 };
-static constexpr int shading_type_len = static_cast<int>(eShadingType::MATCAP) + 1;
+static constexpr int lighting_type_len = static_cast<int>(eLightingType::MATCAP) + 1;
 
-static inline eShadingType shading_type_from_v3d_lighting(char lighting)
+static inline eLightingType lighting_type_from_v3d_lighting(char lighting)
 {
   switch (lighting) {
     case V3D_LIGHTING_FLAT:
-      return eShadingType::FLAT;
+      return eLightingType::FLAT;
     case V3D_LIGHTING_MATCAP:
-      return eShadingType::MATCAP;
+      return eLightingType::MATCAP;
     case V3D_LIGHTING_STUDIO:
-      return eShadingType::STUDIO;
+      return eLightingType::STUDIO;
     default:
       BLI_assert_unreachable();
-      return static_cast<eShadingType>(-1);
+      return static_cast<eLightingType>(-1);
   }
 }
 
-enum class eColorType {
+enum class eShaderType {
   MATERIAL = 0,
   TEXTURE,
 };
-static constexpr int color_type_len = static_cast<int>(eColorType::TEXTURE) + 1;
+static constexpr int shader_type_len = static_cast<int>(eShaderType::TEXTURE) + 1;
 
-static inline eColorType color_type_from_v3d_shading(char shading)
+static inline eShaderType shader_type_from_v3d_shading(char shading)
 {
-  return shading == V3D_SHADING_TEXTURE_COLOR ? eColorType::TEXTURE : eColorType::MATERIAL;
+  return shading == V3D_SHADING_TEXTURE_COLOR ? eShaderType::TEXTURE : eShaderType::MATERIAL;
 }
 
-static inline const char *get_name(eColorType type)
+static inline const char *get_name(eShaderType type)
 {
   switch (type) {
-    case eColorType::MATERIAL:
+    case eShaderType::MATERIAL:
       return "Material";
-    case eColorType::TEXTURE:
+    case eShaderType::TEXTURE:
       return "Texture";
     default:
       BLI_assert_unreachable();
       return "";
-  }
-}
-
-enum class eMaterialSubType {
-  NONE = 0,
-  MATERIAL,
-  RANDOM,
-  SINGLE,
-  OBJECT,
-  ATTRIBUTE,
-};
-static constexpr int material_subtype_len = static_cast<int>(eMaterialSubType::ATTRIBUTE) + 1;
-
-static inline eMaterialSubType material_subtype_from_v3d_shading(char shading)
-{
-  switch (shading) {
-    case V3D_SHADING_MATERIAL_COLOR:
-      return eMaterialSubType::MATERIAL;
-    case V3D_SHADING_RANDOM_COLOR:
-      return eMaterialSubType::RANDOM;
-    case V3D_SHADING_SINGLE_COLOR:
-      return eMaterialSubType::SINGLE;
-    case V3D_SHADING_TEXTURE_COLOR:
-      return eMaterialSubType::NONE;
-    case V3D_SHADING_OBJECT_COLOR:
-      return eMaterialSubType::OBJECT;
-    case V3D_SHADING_VERTEX_COLOR:
-      return eMaterialSubType::ATTRIBUTE;
-    default:
-      BLI_assert_unreachable();
-      return static_cast<eMaterialSubType>(-1);
   }
 }
 

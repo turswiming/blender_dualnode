@@ -22,19 +22,19 @@ void MeshPass::init_pass(SceneResources &resources, DRWState state)
   bind_ubo(WB_WORLD_SLOT, resources.world_buf);
 }
 
-void MeshPass::init_subpasses(ePipelineType pipeline, eShadingType shading, ShaderCache &shaders)
+void MeshPass::init_subpasses(ePipelineType pipeline, eLightingType shading, ShaderCache &shaders)
 {
   texture_subpass_map_.clear();
 
   for (auto geom : IndexRange(geometry_type_len)) {
-    for (auto color : IndexRange(color_type_len)) {
+    for (auto shader : IndexRange(shader_type_len)) {
       eGeometryType geom_type = static_cast<eGeometryType>(geom);
-      eColorType color_type = static_cast<eColorType>(color);
-      std::string name = std::string(get_name(geom_type)) + std::string(get_name(color_type));
-      GPUShader *sh = shaders.prepass_shader_get(pipeline, geom_type, color_type, shading);
+      eShaderType shader_type = static_cast<eShaderType>(shader);
+      std::string name = std::string(get_name(geom_type)) + std::string(get_name(shader_type));
+      GPUShader *sh = shaders.prepass_shader_get(pipeline, geom_type, shader_type, shading);
       PassMain::Sub *pass = &sub(name.c_str());
       pass->shader_set(sh);
-      passes_[geom][color] = pass;
+      passes_[geom][shader] = pass;
     }
   }
 }
@@ -61,7 +61,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
     if (texture) {
       auto add_cb = [&] {
         PassMain::Sub *sub_pass =
-            passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::TEXTURE)];
+            passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::TEXTURE)];
         sub_pass = &sub_pass->sub(image->id.name);
         if (tilemap) {
           sub_pass->bind_texture(WB_TILE_ARRAY_SLOT, texture, sampler_state);
@@ -83,7 +83,7 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
                                                     add_cb);
     }
   }
-  return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eColorType::MATERIAL)];
+  return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)];
 }
 
 void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
@@ -95,17 +95,17 @@ void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
   gbuffer_in_front_ps_.init_pass(resources, in_front_state);
   gbuffer_in_front_ps_.state_stencil(0xFF, 0xFF, 0x00);
   gbuffer_in_front_ps_.init_subpasses(
-      ePipelineType::OPAQUE, scene_state.shading_type, resources.shader_cache);
+      ePipelineType::OPAQUE, scene_state.lighting_type, resources.shader_cache);
 
   state |= DRW_STATE_STENCIL_NEQUAL;
   gbuffer_ps_.init_pass(resources, state);
   gbuffer_ps_.state_stencil(0x00, 0xFF, 0xFF);
   gbuffer_ps_.init_subpasses(
-      ePipelineType::OPAQUE, scene_state.shading_type, resources.shader_cache);
+      ePipelineType::OPAQUE, scene_state.lighting_type, resources.shader_cache);
 
   deferred_ps_.init();
   deferred_ps_.shader_set(resources.shader_cache.resolve_shader_get(ePipelineType::OPAQUE,
-                                                                    scene_state.shading_type,
+                                                                    scene_state.lighting_type,
                                                                     scene_state.draw_cavity,
                                                                     scene_state.draw_curvature));
   deferred_ps_.bind_ubo(WB_WORLD_SLOT, resources.world_buf);
@@ -176,12 +176,12 @@ void TransparentPass::sync(const SceneState &scene_state, SceneResources &resour
   accumulation_ps_.state_stencil(0x00, 0xFF, 0xFF);
   accumulation_ps_.clear_color(float4(0.0f, 0.0f, 0.0f, 1.0f));
   accumulation_ps_.init_subpasses(
-      ePipelineType::TRANSPARENT, scene_state.shading_type, resources.shader_cache);
+      ePipelineType::TRANSPARENT, scene_state.lighting_type, resources.shader_cache);
 
   accumulation_in_front_ps_.init_pass(resources, state);
   accumulation_in_front_ps_.clear_color(float4(0.0f, 0.0f, 0.0f, 1.0f));
   accumulation_in_front_ps_.init_subpasses(
-      ePipelineType::TRANSPARENT, scene_state.shading_type, resources.shader_cache);
+      ePipelineType::TRANSPARENT, scene_state.lighting_type, resources.shader_cache);
 
   if (resolve_sh_ == nullptr) {
     resolve_sh_ = GPU_shader_create_from_info_name("workbench_transparent_resolve");
@@ -243,7 +243,7 @@ void TransparentDepthPass::sync(const SceneState &scene_state, SceneResources &r
   DRWState in_front_state = state | DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
   in_front_ps_.init_pass(resources, in_front_state);
   in_front_ps_.state_stencil(0xFF, 0xFF, 0x00);
-  in_front_ps_.init_subpasses(ePipelineType::OPAQUE, eShadingType::FLAT, resources.shader_cache);
+  in_front_ps_.init_subpasses(ePipelineType::OPAQUE, eLightingType::FLAT, resources.shader_cache);
 
   if (merge_sh_ == nullptr) {
     merge_sh_ = GPU_shader_create_from_info_name("workbench_next_merge_depth");
@@ -259,7 +259,7 @@ void TransparentDepthPass::sync(const SceneState &scene_state, SceneResources &r
   state |= DRW_STATE_STENCIL_NEQUAL;
   main_ps_.init_pass(resources, state);
   main_ps_.state_stencil(0x00, 0xFF, 0xFF);
-  main_ps_.init_subpasses(ePipelineType::OPAQUE, eShadingType::FLAT, resources.shader_cache);
+  main_ps_.init_subpasses(ePipelineType::OPAQUE, eLightingType::FLAT, resources.shader_cache);
 }
 
 void TransparentDepthPass::draw(Manager &manager,
