@@ -120,20 +120,16 @@ class CavityEffect {
   bool curvature_enabled_;
   bool cavity_enabled_;
 
- public:
-  static const int jitter_tx_size_ = 64;
   static const int max_samples_ = 512;  // This value must be kept in sync with the one declared at
                                         // workbench_composite_info.hh (cavity_samples)
-
   UniformArrayBuffer<float4, max_samples_> samples_buf;
-  /*TODO(Miguel Pozo): Move to SceneResources (Used by DoF too)*/
-  Texture jitter_tx;
 
-  void setup_resources(int iteration_samples, int total_samples);
+  void load_samples_buf(int ssao_samples);
 
-  void init(const SceneState &scene_state, UniformBuffer<WorldData> &world_buf);
+ public:
+  void init(const SceneState &scene_state, struct SceneResources &resources);
 
-  void setup_resolve_pass(PassSimple &pass, Texture &object_id_tx);
+  void setup_resolve_pass(PassSimple &pass, struct SceneResources &resources);
 };
 
 struct SceneResources {
@@ -149,6 +145,10 @@ struct SceneResources {
 
   StorageVectorBuffer<Material> material_buf = {"material_buf"};
   UniformBuffer<WorldData> world_buf;
+
+  static const int jitter_tx_size = 64;
+  Texture jitter_tx = "wb_jitter_tx";
+  void load_jitter_tx(int total_samples);
 
   CavityEffect cavity;
 

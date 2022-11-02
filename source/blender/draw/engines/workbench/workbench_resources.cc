@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2020 Blender Foundation. */
 
+#include "../eevee/eevee_lut.h" /* TODO: find somewhere to share blue noise Table. */
 #include "BKE_studiolight.h"
 #include "IMB_imbuf_types.h"
 
@@ -66,6 +67,31 @@ LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
   return light;
 }
 
+void SceneResources::load_jitter_tx(int total_samples)
+{
+  printf("Load jitter | total samples: %d\n", total_samples);
+  const int texel_count = jitter_tx_size * jitter_tx_size;
+  static float4 jitter[texel_count];
+
+  const float total_samples_inv = 1.0f / total_samples;
+
+  /* Create blue noise jitter texture */
+  for (int i = 0; i < texel_count; i++) {
+    float phi = blue_noise[i][0] * 2.0f * M_PI;
+    /* This rotate the sample per pixels */
+    jitter[i].x = cosf(phi);
+    jitter[i].y = sinf(phi);
+    /* This offset the sample along its direction axis (reduce banding) */
+    float bn = blue_noise[i][1] - 0.5f;
+    bn = clamp_f(bn, -0.499f, 0.499f); /* fix fireflies */
+    jitter[i].z = bn * total_samples_inv;
+    jitter[i].w = blue_noise[i][1];
+  }
+
+  jitter_tx.free();
+  jitter_tx.ensure_2d(GPU_RGBA16F, int2(jitter_tx_size), jitter[0]);
+}
+
 void SceneResources::init(const SceneState &scene_state)
 {
   const View3DShading &shading = scene_state.shading;
@@ -122,7 +148,12 @@ void SceneResources::init(const SceneState &scene_state)
 
   /* TODO(Miguel Pozo) volumes_do */
 
-  cavity.init(scene_state, world_buf);
+  cavity.init(scene_state, *this);
+
+  if (scene_state.draw_dof && !jitter_tx.is_valid()) {
+    /* We don't care about total_samples in this case */
+    load_jitter_tx(1);
+  }
 
   world_buf.push_update();
 }

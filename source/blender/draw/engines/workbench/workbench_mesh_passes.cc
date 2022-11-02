@@ -114,7 +114,7 @@ void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
   deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
   deferred_ps_.bind_texture("depth_tx", &resources.depth_tx);
   deferred_ps_.bind_image("out_color_img", &resources.color_tx);
-  resources.cavity.setup_resolve_pass(deferred_ps_, resources.object_id_tx);
+  resources.cavity.setup_resolve_pass(deferred_ps_, resources);
   deferred_ps_.dispatch(math::divide_ceil(scene_state.resolution, int2(WB_RESOLVE_GROUP_SIZE)));
   deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
 }

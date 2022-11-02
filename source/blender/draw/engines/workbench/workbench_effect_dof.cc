@@ -186,15 +186,11 @@ void DofPass::sync(SceneResources &resources)
   down2_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
   down2_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
-  /* TODO(Miguel Pozo): Move jitter_tx to SceneResources */
-  /* We reuse the same noise texture. Ensure it is up to date. */
-  // workbench_cavity_samples_ubo_ensure(wpd);
-
   blur_ps_.init();
   blur_ps_.state_set(DRW_STATE_WRITE_COLOR);
   blur_ps_.shader_set(blur1_sh_);
   blur_ps_.bind_ubo("samples", samples_buf_);
-  blur_ps_.bind_texture("noiseTex", resources.cavity.jitter_tx);
+  blur_ps_.bind_texture("noiseTex", resources.jitter_tx);
   blur_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
   blur_ps_.bind_texture("halfResColorTex", &source_tx_, sampler_state);
   blur_ps_.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
