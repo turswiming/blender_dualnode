@@ -63,6 +63,10 @@ class Instance {
 
   void object_sync(Manager &manager, ObjectRef &ob_ref)
   {
+    if (scene_state.render_finished) {
+      return;
+    }
+
     Object *ob = ob_ref.object;
     if (!DRW_object_is_renderable(ob)) {
       return;
@@ -290,6 +294,12 @@ class Instance {
   {
     int2 resolution = scene_state.resolution;
 
+    if (scene_state.render_finished) {
+      /* Just copy back the already rendered result */
+      anti_aliasing_ps.draw(manager, view, resources, resolution, depth_tx, color_tx);
+      return;
+    }
+
     anti_aliasing_ps.setup_view(view, resolution);
 
     if (!scene_state.clip_planes.is_empty()) {
@@ -339,6 +349,10 @@ class Instance {
   void draw_viewport(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
     this->draw(manager, view, depth_tx, color_tx);
+
+    if (scene_state.sample + 1 < scene_state.samples_len) {
+      DRW_viewport_request_redraw();
+    }
   }
 };
 

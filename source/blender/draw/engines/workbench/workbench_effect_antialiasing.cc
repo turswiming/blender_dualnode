@@ -130,22 +130,13 @@ AntiAliasingPass::~AntiAliasingPass()
 
 void AntiAliasingPass::init(const SceneState &scene_state)
 {
-  if (scene_state.reset_taa) {
-    sample_ = 0;
-  }
-  sample_len_ = scene_state.aa_samples;
-
-  /*TODO(Miguel Pozo): This can probably be removed.*/
-  /*
-  if (sample_len > 0 && valid_history == false) {
-    sample = 0;
-  }
-  */
+  sample_ = scene_state.sample;
+  samples_len_ = scene_state.samples_len;
 }
 
 void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
 {
-  if (sample_len_ > 0) {
+  if (samples_len_ > 0) {
     taa_accumulation_tx_.ensure_2d(GPU_RGBA16F, resolution);
     sample0_depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
   }
@@ -156,7 +147,7 @@ void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
 
   taa_accumulation_ps_.init();
   taa_accumulation_ps_.state_set(sample_ == 0 ? DRW_STATE_WRITE_COLOR :
-                                               DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
+                                                DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
   taa_accumulation_ps_.shader_set(taa_accumulation_sh_);
   taa_accumulation_ps_.bind_texture("colorBuffer", &resources.color_tx);
   taa_accumulation_ps_.push_constant("samplesWeights", weights_, 9);
@@ -194,18 +185,18 @@ void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
 
 bool AntiAliasingPass::setup_view(View &view, int2 resolution)
 {
-  if (sample_len_ == 0) {
+  if (samples_len_ == 0) {
     /* AA disabled. */
     return true;
   }
 
-  if (sample_ >= sample_len_) {
+  if (sample_ >= samples_len_) {
     /* TAA accumulation has finished. Just copy the result back */
     return false;
   }
 
   float2 sample_offset;
-  switch (sample_len_) {
+  switch (samples_len_) {
     default:
     case 5:
       sample_offset = TAA_SAMPLES.x5[sample_];
@@ -249,23 +240,20 @@ void AntiAliasingPass::draw(Manager &manager,
                             GPUTexture *depth_tx,
                             GPUTexture *color_tx)
 {
-  if (sample_len_ == 0) {
-    /* AA disabled. */
-    // valid_history = false;
+  if (samples_len_ == 0) {
     /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place */
     GPU_texture_copy(color_tx, resources.color_tx);
     GPU_texture_copy(depth_tx, resources.depth_tx);
     return;
   }
-  // valid_history = true;
 
   /**
    * We always do SMAA on top of TAA accumulation, unless the number of samples of TAA is already
    * high. This ensure a smoother transition.
    * If TAA accumulation is finished, we only blit the result.
    */
-  const bool last_sample = sample_ + 1 == sample_len_;
-  const bool taa_finished = sample_ >= sample_len_; /* TODO(Miguel Pozo): Why is this ever true ? */
+  const bool last_sample = sample_ + 1 == samples_len_;
+  const bool taa_finished = sample_ >= samples_len_;
 
   if (!taa_finished) {
     if (sample_ == 0) {
@@ -312,14 +300,6 @@ void AntiAliasingPass::draw(Manager &manager,
     smaa_resolve_fb_.bind();
     manager.submit(smaa_resolve_ps_, view);
     smaa_weight_tx_.release();
-  }
-
-  if (!taa_finished) {
-    sample_++;
-  }
-
-  if (!DRW_state_is_image_render() && sample_ < sample_len_) {
-    DRW_viewport_request_redraw();
   }
 }
 

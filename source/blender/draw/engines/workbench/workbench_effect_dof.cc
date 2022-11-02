@@ -103,6 +103,16 @@ void DofPass::init(const SceneState &scene_state)
     return;
   }
 
+  if (prepare_sh_ == nullptr) {
+    prepare_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_prepare");
+    downsample_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_downsample");
+    blur1_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur1");
+    blur2_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur2");
+    resolve_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_resolve");
+  }
+
+  offset_ = scene_state.sample / (float)max_ii(1, scene_state.samples_len);
+
   int2 half_res = scene_state.resolution / 2;
   half_res = {max_ii(half_res.x, 1), max_ii(half_res.y, 1)};
 
@@ -157,14 +167,6 @@ void DofPass::sync(SceneResources &resources)
     return;
   }
 
-  if (prepare_sh_ == nullptr) {
-    prepare_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_prepare");
-    downsample_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_downsample");
-    blur1_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur1");
-    blur2_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_blur2");
-    resolve_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_resolve");
-  }
-
   eGPUSamplerState sampler_state = GPU_SAMPLER_FILTER | GPU_SAMPLER_MIPMAP;
 
   down_ps_.init();
@@ -184,9 +186,6 @@ void DofPass::sync(SceneResources &resources)
   down2_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
   down2_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
-  float offset = 0; /*TODO(Miguel Pozo)*/
-  // float offset = wpd->taa_sample / (float)max_ii(1, wpd->taa_sample_len);
-
   /* TODO(Miguel Pozo): Move jitter_tx to SceneResources */
   /* We reuse the same noise texture. Ensure it is up to date. */
   // workbench_cavity_samples_ubo_ensure(wpd);
@@ -199,7 +198,7 @@ void DofPass::sync(SceneResources &resources)
   blur_ps_.bind_texture("inputCocTex", &coc_halfres_tx_, sampler_state);
   blur_ps_.bind_texture("halfResColorTex", &source_tx_, sampler_state);
   blur_ps_.push_constant("invertedViewportSize", float2(DRW_viewport_invert_size_get()));
-  blur_ps_.push_constant("noiseOffset", offset);
+  blur_ps_.push_constant("noiseOffset", offset_);
   blur_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   blur2_ps_.init();

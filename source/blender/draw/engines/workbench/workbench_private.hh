@@ -81,9 +81,10 @@ struct SceneState {
   bool draw_object_id;
   bool draw_transparent_depth;
 
-  int aa_samples;
-  bool reset_taa;
+  int sample;
+  int samples_len;
   bool reset_taa_next_sample;
+  bool render_finished;
 
   /** Used when material_subtype == eMaterialSubType::SINGLE */
   Material material_override = Material(float3(1.0f));
@@ -252,6 +253,8 @@ class OutlinePass {
 class DofPass {
   bool enabled_;
 
+  float offset_;
+
   static const int kernel_radius_ = 3;
   static const int samples_len_ = (kernel_radius_ * 2 + 1) * (kernel_radius_ * 2 + 1);
 
@@ -291,18 +294,16 @@ class DofPass {
 
 class AntiAliasingPass {
  private:
-  /** Total number of samples to after which TAA stops accumulating samples. */
-  int sample_len_;
-  /** Current TAA sample index in [0..sample_len] range. */
+  /** Current TAA sample index in [0..samples_len_] range. */
   int sample_;
+  /** Total number of samples to after which TAA stops accumulating samples. */
+  int samples_len_;
   /** Weight accumulated. */
   float weight_accum_;
   /** Samples weight for this iteration. */
   float weights_[9];
   /** Sum of weights. */
   float weights_sum_;
-  /** True if the history buffer contains relevant data and false if it could contain garbage. */
-  // bool valid_history;
 
   Texture sample0_depth_tx_ = {"sample0_depth_tx"};
 

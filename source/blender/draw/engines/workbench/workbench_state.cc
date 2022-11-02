@@ -41,7 +41,7 @@ static const CustomData *get_vert_custom_data(const Mesh *mesh)
 
 void SceneState::init()
 {
-  reset_taa = reset_taa_next_sample;
+  bool reset_taa = reset_taa_next_sample;
   reset_taa_next_sample = false;
 
   const DRWContextState *context = DRW_context_state_get();
@@ -151,25 +151,33 @@ void SceneState::init()
     reset_taa_next_sample = true;
   }
 
-  int _aa_samples = U.viewport_aa;
+  int _samples_len = U.viewport_aa;
   if (is_navigating || is_playback) {
     /* Only draw using SMAA or no AA when navigating. */
-    _aa_samples = min_ii(_aa_samples, 1);
+    _samples_len = min_ii(_samples_len, 1);
   }
   else if (v3d && ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL)) {
-    _aa_samples = scene->display.viewport_aa;
+    _samples_len = scene->display.viewport_aa;
   }
   else if (DRW_state_is_image_render()) {
-    _aa_samples = scene->display.render_aa;
+    _samples_len = scene->display.render_aa;
   }
 
   /* Reset the TAA when we have already draw a sample, but the sample count differs from previous
    * time. This removes render artifacts when the viewport anti-aliasing in the user preferences
    * is set to a lower value. */
-  if (aa_samples != _aa_samples) {
-    aa_samples = _aa_samples;
+  if (samples_len != _samples_len) {
+    samples_len = _samples_len;
     reset_taa = true;
   }
+
+  if (reset_taa || samples_len <= 1) {
+    sample = 0;
+  }
+  else {
+    sample++;
+  }
+  render_finished = sample >= samples_len && samples_len > 1;
 
   /* TODO(Miguel Pozo) volumes_do */
 

@@ -24,18 +24,13 @@ void CavityEffect::init(const SceneState &scene_state, UniformBuffer<WorldData> 
   curvature_enabled_ = scene_state.draw_curvature;
 
   const int ssao_samples = scene_state.scene->display.matcap_ssao_samples;
-  int sample_count = min_ii(max_ii(1, scene_state.aa_samples) * ssao_samples, max_samples_);
+  int sample_count = min_ii(max_ii(1, scene_state.samples_len) * ssao_samples, max_samples_);
   const int max_iter_count = sample_count / ssao_samples;
 
-  if (scene_state.reset_taa) {
-    sample_ = 0;
-  }
-  sample_ %= max_iter_count;
+  sample_ = scene_state.sample % max_iter_count;
 
   world_buf.cavity_sample_start = ssao_samples * sample_;
   world_buf.cavity_sample_end = ssao_samples * (sample_ + 1);
-
-  sample_++;
 
   world_buf.cavity_sample_count_inv = 1.0f / (world_buf.cavity_sample_end -
                                               world_buf.cavity_sample_start);
