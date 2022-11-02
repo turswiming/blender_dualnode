@@ -114,9 +114,9 @@ set(ALEMBIC_HASH_TYPE MD5)
 set(ALEMBIC_FILE alembic-${ALEMBIC_VERSION}.tar.gz)
 SET(FREETYPE_CPE "cpe:2.3:a:freetype:freetype:${FREETYPE_VERSION}:*:*:*:*:*:*:*")
 
-set(OPENSUBDIV_VERSION v3_4_4)
+set(OPENSUBDIV_VERSION v3_5_0)
 set(OPENSUBDIV_URI https://github.com/PixarAnimationStudios/OpenSubdiv/archive/${OPENSUBDIV_VERSION}.tar.gz)
-set(OPENSUBDIV_HASH 39ecc5caf0abebc943d1ce131855e76e)
+set(OPENSUBDIV_HASH 230f5cd2911d6240e58a3773b9c6e5e4)
 set(OPENSUBDIV_HASH_TYPE MD5)
 set(OPENSUBDIV_FILE opensubdiv-${OPENSUBDIV_VERSION}.tar.gz)
 
