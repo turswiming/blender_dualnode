@@ -83,7 +83,7 @@ string(APPEND CMAKE_MODULE_LINKER_FLAGS " /SAFESEH:NO /ignore:4099")
 list(APPEND PLATFORM_LINKLIBS
   ws2_32 vfw32 winmm kernel32 user32 gdi32 comdlg32 Comctl32 version
   advapi32 shfolder shell32 ole32 oleaut32 uuid psapi Dbghelp Shlwapi
-  pathcch Shcore Dwmapi
+  pathcch Shcore Dwmapi Crypt32
 )
 
 if(WITH_INPUT_IME)
@@ -649,14 +649,27 @@ if(WITH_OPENCOLORIO)
     set(OPENCOLORIO_LIBPATH ${OPENCOLORIO}/lib)
     set(OPENCOLORIO_LIBRARIES
       optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
-      optimized ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib
       optimized ${OPENCOLORIO_LIBPATH}/libexpatMD.lib
       optimized ${OPENCOLORIO_LIBPATH}/pystring.lib
       debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
-      debug ${OPENCOLORIO_LIBPATH}/libyaml-cpp_d.lib
       debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
       debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
     )
+    if(EXISTS ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib) # 3.4 name
+      list(APPEND OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib
+        debug ${OPENCOLORIO_LIBPATH}/libyaml-cpp_d.lib
+      )
+    elseif(EXISTS ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib) # 3.5 name
+      list(APPEND OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib
+        optimized ${OPENCOLORIO_LIBPATH}/libminizip.lib
+        debug ${OPENCOLORIO_LIBPATH}/yaml-cppd.lib
+        debug ${OPENCOLORIO_LIBPATH}/libminizip.lib
+      )
+    else()
+      message("FATAL YAML-CPP dependency not found")
+    endif()
   endif()
   set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
 endif()
