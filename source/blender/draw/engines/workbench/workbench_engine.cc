@@ -31,6 +31,7 @@ class Instance {
   TransparentPass transparent_ps;
   TransparentDepthPass transparent_depth_ps;
 
+  OutlinePass outline_ps;
   DofPass dof_ps;
   AntiAliasingPass anti_aliasing_ps;
 
@@ -38,6 +39,8 @@ class Instance {
   {
     scene_state.init();
     resources.init(scene_state);
+
+    outline_ps.init(scene_state);
     dof_ps.init(scene_state);
     anti_aliasing_ps.init(scene_state);
   }
@@ -48,6 +51,7 @@ class Instance {
     transparent_ps.sync(scene_state, resources);
     transparent_depth_ps.sync(scene_state, resources);
 
+    outline_ps.sync(resources);
     dof_ps.sync(resources);
     anti_aliasing_ps.sync(resources, scene_state.resolution);
   }
@@ -320,24 +324,9 @@ class Instance {
     transparent_ps.draw(manager, view, resources, resolution);
     transparent_depth_ps.draw(manager, view, resources, resolution);
 
-    if (scene_state.draw_outline) {
-      PassSimple outline_ps = PassSimple("Workbench.Outline");
-      outline_ps.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA_PREMUL);
-      static GPUShader *outline_shader = GPU_shader_create_from_info_name(
-          "workbench_effect_outline");
-      outline_ps.shader_set(outline_shader);
-      outline_ps.bind_ubo("world_data", resources.world_buf);
-      outline_ps.bind_texture("objectIdBuffer", &resources.object_id_tx);
-      outline_ps.draw_procedural(GPU_PRIM_TRIS, 1, 3);
-
-      Framebuffer fb = Framebuffer("Workbench.Outline");
-      fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
-      fb.bind();
-      manager.submit(outline_ps);
-    }
-
     // volume_ps.draw_prepass(manager, view, resources.depth_tx);
 
+    outline_ps.draw(manager, view, resources, resolution);
     dof_ps.draw(manager, view, resources, resolution);
     anti_aliasing_ps.draw(manager, view, resources, resolution, depth_tx, color_tx);
 

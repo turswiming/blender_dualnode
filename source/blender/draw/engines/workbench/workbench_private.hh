@@ -236,8 +236,21 @@ class TransparentDepthPass {
   bool is_empty() const;
 };
 
+class OutlinePass {
+  bool enabled_;
+
+  PassSimple ps_ = PassSimple("Workbench.Outline");
+  GPUShader *sh_;
+  Framebuffer fb_ = Framebuffer("Workbench.Outline");
+
+ public:
+  void init(const SceneState &scene_state);
+  void sync(SceneResources &resources);
+  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+};
+
 class DofPass {
-  bool enabled_ = false;
+  bool enabled_;
 
   static const int kernel_radius_ = 3;
   static const int samples_len_ = (kernel_radius_ * 2 + 1) * (kernel_radius_ * 2 + 1);
