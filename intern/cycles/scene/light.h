@@ -51,6 +51,7 @@ class Light : public Node {
   NODE_SOCKET_API(Transform, tfm)
 
   NODE_SOCKET_API(int, map_resolution)
+  NODE_SOCKET_API(float, average_radiance)
 
   NODE_SOCKET_API(float, spot_angle)
   NODE_SOCKET_API(float, spot_smooth)

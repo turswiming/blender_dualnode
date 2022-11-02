@@ -220,6 +220,13 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
   else {
     Light *lamp = scene->lights[lamp_id];
     strength = lamp->get_strength();
+    LightType type = lamp->get_light_type();
+    if (type == LIGHT_AREA) {
+      strength *= 0.25f; /* eval_fac scaling in `area.h` */
+    }
+    else if (type == LIGHT_SPOT || type == LIGHT_POINT) {
+      strength *= 0.25f * M_1_PI_F; /* eval_fac scaling in `spot.h` and `point.h` */
+    }
   }
 
   return fabsf(scene->shader_manager->linear_rgb_to_gray(strength));

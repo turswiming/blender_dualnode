@@ -80,32 +80,6 @@ static void shade_background_pixels(Device *device,
       });
 }
 
-static float average_background_energy(
-    Device *device, DeviceScene *dscene, Progress &progress, Scene *scene, Light *light)
-{
-  if (light->get_light_type() != LIGHT_BACKGROUND) {
-    assert(false);
-  }
-
-  /* get the resolution from the light's size (we stuff it in there) */
-  int2 res = make_int2(light->get_map_resolution(), light->get_map_resolution() / 2);
-  /* If it's still unknown, just use the default. */
-  if (res.x == 0 || res.y == 0) {
-    res = make_int2(1024, 512);
-    VLOG_INFO << "Setting World MIS resolution to default\n";
-  }
-
-  vector<float3> pixels;
-  shade_background_pixels(device, dscene, res.x, res.y, pixels, progress);
-
-  float total_energy = 0.0f;
-  for (int i = 0; i < pixels.size(); i++) {
-    total_energy += scene->shader_manager->linear_rgb_to_gray(pixels[i]);
-  }
-
-  return total_energy / pixels.size();
-}
-
 /* Light */
 
 NODE_DEFINE(Light)
@@ -136,6 +110,7 @@ NODE_DEFINE(Light)
   SOCKET_FLOAT(spread, "Spread", M_PI_F);
 
   SOCKET_INT(map_resolution, "Map Resolution", 0);
+  SOCKET_FLOAT(average_radiance, "Average Radiance", 0.0f);
 
   SOCKET_FLOAT(spot_angle, "Spot Angle", M_PI_4_F);
   SOCKET_FLOAT(spot_smooth, "Spot Smooth", 0.0f);
@@ -303,8 +278,6 @@ void LightManager::device_update_distribution(Device *device,
   size_t num_distant_lights = 0;
   size_t num_triangles = 0;
   size_t total_triangles = 0;
-
-  bool background_mis = false;
 
   /* We want to add both lights and emissive triangles to this vector for light tree construction.
    */
@@ -512,7 +485,7 @@ void LightManager::device_update_distribution(Device *device,
 
     /* We use OrientationBounds here to */
     OrientationBounds distant_light_bounds = OrientationBounds::empty;
-    float max_distant_light_energy = 0.0f;
+    light_tree_distant_group[num_distant_lights].energy = 0.f;
     for (int index = 0; index < num_distant_lights; index++) {
       LightTreePrimitive prim = distant_lights[index];
       Light *light = scene->lights[prim.lamp_id];
@@ -521,9 +494,10 @@ void LightManager::device_update_distribution(Device *device,
       /* Lights in this group are either a background or distant light. */
       light_tree_distant_group[index].prim_id = ~prim.prim_id;
 
-      float strength = 0.0f;
+      float energy = 0.0f;
       if (light->light_type == LIGHT_BACKGROUND) {
-        strength = average_background_energy(device, dscene, progress, scene, light);
+        /* integrate over cosine-weighted hemisphere */
+        energy = light->get_average_radiance() * M_PI_F;
 
         /* We can set an arbitrary direction for the background light. */
         light_bounds.axis[0] = 0.0f;
@@ -534,7 +508,8 @@ void LightManager::device_update_distribution(Device *device,
         light_bounds.theta_o = M_PI_F;
       }
       else {
-        strength = prim.calculate_energy(scene);
+        energy = prim.calculate_energy(scene);
+
         for (int i = 0; i < 3; i++) {
           light_bounds.axis[i] = -light->dir[i];
         }
@@ -546,21 +521,14 @@ void LightManager::device_update_distribution(Device *device,
         light_tree_distant_group[index].direction[i] = light_bounds.axis[i];
       }
       light_tree_distant_group[index].bounding_radius = light_bounds.theta_o;
-      /* We multiply the strength of distance lights by 4pi so it more closely matches the
-       * energy output of other light types.
-       * TODO: validate if this is correct*/
-      float energy = strength * M_4PI_F;
       light_tree_distant_group[index].energy = energy;
       light_array[~prim.prim_id] = index;
 
-      if (energy > max_distant_light_energy) {
-        max_distant_light_energy = energy;
-      }
+      light_tree_distant_group[num_distant_lights].energy += energy;
     }
 
     /* The net OrientationBounds contain bounding information about all the distant lights. */
     light_tree_distant_group[num_distant_lights].prim_id = -1;
-    light_tree_distant_group[num_distant_lights].energy = max_distant_light_energy;
     for (int i = 0; i < 3; i++) {
       light_tree_distant_group[num_distant_lights].direction[i] = distant_light_bounds.axis[i];
     }
@@ -679,7 +647,6 @@ void LightManager::device_update_distribution(Device *device,
       }
       else if (light->light_type == LIGHT_BACKGROUND) {
         num_background_lights++;
-        background_mis |= light->use_mis;
       }
 
       light_index++;
@@ -753,17 +720,7 @@ void LightManager::device_update_distribution(Device *device,
     /* Portals */
     if (num_portals > 0) {
       kbackground->portal_offset = light_index;
-      kbackground->num_portals = num_portals;
-      kbackground->portal_weight = 1.0f;
     }
-    else {
-      kbackground->num_portals = 0;
-      kbackground->portal_offset = 0;
-      kbackground->portal_weight = 0.0f;
-    }
-
-    /* Map */
-    kbackground->map_weight = background_mis ? 1.0f : 0.0f;
   }
   else {
     if (light_tree_enabled) {
@@ -781,12 +738,6 @@ void LightManager::device_update_distribution(Device *device,
     kintegrator->distribution_pdf_triangles = 0.0f;
     kintegrator->distribution_pdf_lights = 0.0f;
     kintegrator->use_lamp_mis = false;
-
-    kbackground->num_portals = 0;
-    kbackground->portal_offset = 0;
-    kbackground->portal_weight = 0.0f;
-    kbackground->sun_weight = 0.0f;
-    kbackground->map_weight = 0.0f;
 
     kfilm->pass_shadow_scale = 1.0f;
   }
@@ -840,20 +791,30 @@ void LightManager::device_update_background(Device *device,
   KernelBackground *kbackground = &dscene->data.background;
   Light *background_light = NULL;
 
+  bool background_mis = false;
+  size_t num_portals = 0;
+
   /* find background light */
   foreach (Light *light, scene->lights) {
-    if (light->light_type == LIGHT_BACKGROUND) {
+    if (light->light_type == LIGHT_BACKGROUND && light->is_enabled) {
       background_light = light;
-      break;
+      background_mis |= light->use_mis;
+    }
+    if (light->is_portal) {
+      num_portals++;
     }
   }
+
+  kbackground->num_portals = num_portals;
+  kbackground->portal_offset = 0;
+  kbackground->portal_weight = num_portals > 0 ? 1.0f : 0.0f;
+  kbackground->map_weight = background_mis ? 1.0f : 0.0f;
+  kbackground->sun_weight = 0.0f;
 
   /* no background light found, signal renderer to skip sampling */
   if (!background_light || !background_light->is_enabled) {
     kbackground->map_res_x = 0;
     kbackground->map_res_y = 0;
-    kbackground->map_weight = 0.0f;
-    kbackground->sun_weight = 0.0f;
     kbackground->use_mis = (kbackground->portal_weight > 0.0f);
     return;
   }
@@ -973,6 +934,8 @@ void LightManager::device_update_background(Device *device,
 
   float cdf_total = marg_cdf[res.y - 1].y + marg_cdf[res.y - 1].x / res.y;
   marg_cdf[res.y].x = cdf_total;
+
+  background_light->set_average_radiance(cdf_total * M_PI_2_F);
 
   if (cdf_total > 0.0f)
     for (int i = 1; i < res.y; i++)
@@ -1263,15 +1226,15 @@ void LightManager::device_update(Device *device,
   if (progress.get_cancel())
     return;
 
-  device_update_distribution(device, dscene, scene, progress);
-  if (progress.get_cancel())
-    return;
-
   if (need_update_background) {
     device_update_background(device, dscene, scene, progress);
     if (progress.get_cancel())
       return;
   }
+
+  device_update_distribution(device, dscene, scene, progress);
+  if (progress.get_cancel())
+    return;
 
   device_update_ies(dscene);
   if (progress.get_cancel())

@@ -945,8 +945,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                   ccl_private LightSample *ls)
 {
   const bool has_transmission = (shader_flags & SD_BSDF_HAS_TRANSMISSION);
-  /* to-do: with weighted reservoir sampling, we can also try picking a sample from the distant
-   * light group and compare it to the sample from the light tree. */
+  /* TODO: add distant lights to light tree (as one child node of the root node) */
   float distant_light_importance = light_tree_distant_light_importance(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
