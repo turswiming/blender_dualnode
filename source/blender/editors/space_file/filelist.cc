@@ -115,9 +115,6 @@ struct FileListInternEntry {
     PreviewImage *preview_image;
   } local_data;
 
-  /** When the file represents an asset read from another file, it is stored here.
-   * Owning pointer. */
-  AssetMetaData *imported_asset_data;
   /* References an asset in the asset library storage. */
   bke::AssetRepresentation *asset; /* Non-owning. */
 
@@ -781,8 +778,10 @@ static bool is_filtered_id_file_type(const FileListInternEntry *file,
  */
 static AssetMetaData *filelist_file_internal_get_asset_data(const FileListInternEntry *file)
 {
-  const ID *local_id = file->local_data.id;
-  return local_id ? local_id->asset_data : file->imported_asset_data;
+  if (!file->asset) {
+    return nullptr;
+  }
+  return &file->asset->get_metadata();
 }
 
 static void prepare_filter_asset_library(const FileList *filelist, FileListFilter *filter)
@@ -1415,10 +1414,6 @@ static void filelist_intern_entry_free(FileListInternEntry *entry)
   if (entry->name && entry->free_name) {
     MEM_freeN(entry->name);
   }
-  /* If we own the asset-data (it was generated from external file data), free it. */
-  if (entry->imported_asset_data) {
-    BKE_asset_metadata_free(&entry->imported_asset_data);
-  }
   MEM_freeN(entry);
 }
 
@@ -2047,10 +2042,7 @@ static FileDirEntry *filelist_file_create_entry(FileList *filelist, const int in
     ret->redirection_path = BLI_strdup(entry->redirection_path);
   }
   ret->id = entry->local_data.id;
-  ret->asset_data = entry->imported_asset_data ? entry->imported_asset_data : nullptr;
-  if (ret->id && (ret->asset_data == nullptr)) {
-    ret->asset_data = ret->id->asset_data;
-  }
+  ret->asset = reinterpret_cast<::AssetRepresentation *>(entry->asset);
   /* For some file types the preview is already available. */
   if (entry->local_data.preview_image &&
       BKE_previewimg_is_finished(entry->local_data.preview_image, ICON_SIZE_PREVIEW)) {
@@ -3021,13 +3013,10 @@ static void filelist_readjob_list_lib_add_datablock(FileList *filelist,
 
     if (datablock_info->asset_data) {
       entry->typeflag |= FILE_TYPE_ASSET;
-      /* Moves ownership! */
-      entry->imported_asset_data = datablock_info->asset_data;
 
       if (filelist->asset_library) {
-        /* TODO imported_asset_data points to moved from data */
-        /* TODO copying asset metadata like this does a shallow copy. E.g. custom properties are not
-         * duplicated properly. */
+        /* TODO copying asset metadata like this does a shallow copy. E.g. custom properties are
+         * not duplicated properly. */
         std::unique_ptr asset = std::make_unique<bke::AssetRepresentation>(
             std::move(*datablock_info->asset_data));
         entry->asset = &filelist->asset_library->asset_storage.append(std::move(asset));

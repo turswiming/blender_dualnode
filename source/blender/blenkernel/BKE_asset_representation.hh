@@ -36,9 +36,9 @@ class AssetRepresentation {
   /* TODO this doesn't make sense. Remove this. */
   explicit AssetRepresentation(AssetMetaData &&metadata);
 
-  AssetMetaData &get_metadata();
+  AssetMetaData &get_metadata() const;
   /** Returns if this asset is stored inside this current file, and as such fully editable. */
-  bool is_local();
+  bool is_local_id() const;
 };
 
 }  // namespace blender::bke
