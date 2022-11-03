@@ -386,7 +386,6 @@ void LightManager::device_update_distribution(Device *device,
     KernelLightTreeNode *light_tree_nodes = dscene->light_tree_nodes.alloc(linearized_bvh.size());
     KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(
         light_prims.size());
-    float max_light_tree_energy = 0.0f;
     for (int index = 0; index < linearized_bvh.size(); index++) {
       const PackedLightTreeNode &node = linearized_bvh[index];
 
@@ -415,9 +414,6 @@ void LightManager::device_update_distribution(Device *device,
           float energy = prim.calculate_energy(scene);
 
           light_tree_emitters[emitter_index].energy = energy;
-          if (energy > max_light_tree_energy) {
-            max_light_tree_energy = energy;
-          }
 
           for (int i = 0; i < 3; i++) {
             light_tree_emitters[emitter_index].bounding_box_min[i] = bbox.min[i];
@@ -471,12 +467,6 @@ void LightManager::device_update_distribution(Device *device,
         light_tree_nodes[index].energy_variance = node.energy_variance;
         light_tree_nodes[index].child_index = node.second_child_index;
       }
-    }
-
-    /* We set the parent node's energy to be the average energy,
-     * which is used for deciding between the tree and distant lights. */
-    if (max_light_tree_energy > 0.0f) {
-      light_tree_nodes[0].energy = max_light_tree_energy;
     }
 
     /* We also add distant lights to a separate group. */
