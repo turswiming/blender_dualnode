@@ -16,7 +16,7 @@ class ShaderCache {
  private:
   /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
   GPUShader *prepass_shader_cache_[pipeline_type_len][geometry_type_len][shader_type_len]
-                                  [lighting_type_len] = {{{{nullptr}}}};
+                                  [lighting_type_len][2] = {{{{{nullptr}}}}};
   GPUShader *resolve_shader_cache_[pipeline_type_len][lighting_type_len][2][2] = {{{{nullptr}}}};
 
  public:
@@ -25,7 +25,8 @@ class ShaderCache {
   GPUShader *prepass_shader_get(ePipelineType pipeline_type,
                                 eGeometryType geometry_type,
                                 eShaderType shader_type,
-                                eLightingType lighting_type);
+                                eLightingType lighting_type,
+                                bool clip);
 
   GPUShader *resolve_shader_get(ePipelineType pipeline_type,
                                 eLightingType lighting_type,
@@ -165,7 +166,10 @@ class MeshPass : public PassMain {
   bool is_empty() const;
 
   void init_pass(SceneResources &resources, DRWState state);
-  void init_subpasses(ePipelineType pipeline, eLightingType shading, ShaderCache &shaders);
+  void init_subpasses(ePipelineType pipeline,
+                      eLightingType lighting,
+                      bool clip,
+                      ShaderCache &shaders);
 
   PassMain::Sub &sub_pass_get(
       ObjectRef &ref,

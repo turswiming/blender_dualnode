@@ -10,7 +10,9 @@ ShaderCache::~ShaderCache()
     for (auto j : IndexRange(shader_type_len)) {
       for (auto k : IndexRange(geometry_type_len)) {
         for (auto l : IndexRange(pipeline_type_len)) {
-          DRW_SHADER_FREE_SAFE(prepass_shader_cache_[i][j][k][l]);
+          for (auto m : IndexRange(2)) {
+            DRW_SHADER_FREE_SAFE(prepass_shader_cache_[i][j][k][l][m]);
+          }
         }
       }
     }
@@ -29,10 +31,12 @@ ShaderCache::~ShaderCache()
 GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
                                            eGeometryType geometry_type,
                                            eShaderType shader_type,
-                                           eLightingType lighting_type)
+                                           eLightingType lighting_type,
+                                           bool clip)
 {
   GPUShader *&shader_ptr = prepass_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(
-      geometry_type)][static_cast<int>(shader_type)][static_cast<int>(lighting_type)];
+      geometry_type)][static_cast<int>(shader_type)][static_cast<int>(lighting_type)]
+                                                [clip ? 1 : 0];
 
   if (shader_ptr != nullptr) {
     return shader_ptr;
@@ -79,8 +83,7 @@ GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
       info_name += "texture";
       break;
   }
-  /* TODO Clipping */
-  info_name += "_no_clip";
+  info_name += clip ? "_clip" : "_no_clip";
   shader_ptr = GPU_shader_create_from_info_name(info_name.c_str());
   return shader_ptr;
 }
