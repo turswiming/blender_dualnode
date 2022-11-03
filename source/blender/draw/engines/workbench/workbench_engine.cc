@@ -303,7 +303,7 @@ class Instance {
     anti_aliasing_ps.setup_view(view, resolution);
 
     if (!scene_state.clip_planes.is_empty()) {
-      view.set_clip_planes(scene_state.clip_planes);
+      // view.set_clip_planes(scene_state.clip_planes);
     }
 
     resources.color_tx.acquire(resolution, GPU_RGBA16F);

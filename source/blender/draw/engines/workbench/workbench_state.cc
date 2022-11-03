@@ -179,7 +179,7 @@ void SceneState::init()
 
 static const CustomData *get_loop_custom_data(const Mesh *mesh)
 {
-  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+  if (mesh->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     BLI_assert(mesh->edit_mesh != nullptr);
     BLI_assert(mesh->edit_mesh->bm != nullptr);
     return &mesh->edit_mesh->bm->ldata;
@@ -189,7 +189,7 @@ static const CustomData *get_loop_custom_data(const Mesh *mesh)
 
 static const CustomData *get_vert_custom_data(const Mesh *mesh)
 {
-  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+  if (mesh->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     BLI_assert(mesh->edit_mesh != nullptr);
     BLI_assert(mesh->edit_mesh->bm != nullptr);
     return &mesh->edit_mesh->bm->vdata;
@@ -230,7 +230,8 @@ ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
     return;
   }
 
-  sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) && !DRW_state_is_image_render();
+  sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->rv3d) &&
+                !DRW_state_is_image_render();
 
   if (sculpt_pbvh) {
     /* Shadows are unsupported in sculpt mode. We could revert to the slow
