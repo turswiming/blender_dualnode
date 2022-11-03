@@ -69,7 +69,6 @@ LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
 
 void SceneResources::load_jitter_tx(int total_samples)
 {
-  printf("Load jitter | total samples: %d\n", total_samples);
   const int texel_count = jitter_tx_size * jitter_tx_size;
   static float4 jitter[texel_count];
 

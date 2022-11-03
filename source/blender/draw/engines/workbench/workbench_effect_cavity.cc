@@ -9,7 +9,7 @@
  * We use Screen Space Ambient Occlusion (SSAO) to enhance geometric details of the surfaces.
  * We also use a Curvature effect computed only using the surface normals.
  *
- * This is done after the opaque pass. It only affects the opaque surfaces.
+ * This is done as part of the opaque resolve pass. It only affects the opaque surfaces.
  */
 
 #include "BLI_rand.h"

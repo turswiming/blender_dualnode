@@ -87,7 +87,7 @@ struct SceneState {
   bool reset_taa_next_sample;
   bool render_finished;
 
-  /** Used when material_type == eMaterialType::SINGLE */
+  /* Used when material_type == eMaterialType::SINGLE */
   Material material_override = Material(float3(1.0f));
   /* When r == -1.0 the shader uses the vertex color */
   Material material_attribute_color = Material(float3(-1.0f));
@@ -122,7 +122,6 @@ class CavityEffect {
 
  public:
   void init(const SceneState &scene_state, struct SceneResources &resources);
-
   void setup_resolve_pass(PassSimple &pass, struct SceneResources &resources);
 };
 
@@ -189,9 +188,7 @@ class OpaquePass {
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
 
   void sync(const SceneState &scene_state, SceneResources &resources);
-
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
-
   bool is_empty() const;
 };
 
@@ -210,9 +207,7 @@ class TransparentPass {
   Framebuffer resolve_fb;
 
   void sync(const SceneState &scene_state, SceneResources &resources);
-
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
-
   bool is_empty() const;
 };
 
@@ -229,9 +224,7 @@ class TransparentDepthPass {
   Framebuffer merge_fb = {"TransparentDepth.Merge"};
 
   void sync(const SceneState &scene_state, SceneResources &resources);
-
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
-
   bool is_empty() const;
 };
 
@@ -293,15 +286,15 @@ class DofPass {
 class AntiAliasingPass {
  private:
   bool enabled_;
-  /** Current TAA sample index in [0..samples_len_] range. */
+  /* Current TAA sample index in [0..samples_len_] range. */
   int sample_;
-  /** Total number of samples to after which TAA stops accumulating samples. */
+  /* Total number of samples to after which TAA stops accumulating samples. */
   int samples_len_;
-  /** Weight accumulated. */
+  /* Weight accumulated. */
   float weight_accum_;
-  /** Samples weight for this iteration. */
+  /* Samples weight for this iteration. */
   float weights_[9];
-  /** Sum of weights. */
+  /* Sum of weights. */
   float weights_sum_;
 
   Texture sample0_depth_tx_ = {"sample0_depth_tx"};
@@ -332,7 +325,6 @@ class AntiAliasingPass {
 
  public:
   AntiAliasingPass();
-
   ~AntiAliasingPass();
 
   void init(const SceneState &scene_state);

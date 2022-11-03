@@ -18,7 +18,6 @@ namespace blender::workbench {
 
 using namespace draw;
 
-// Utils
 GPUMaterial **get_dummy_gpu_materials(int material_count);
 
 class Instance {
@@ -155,7 +154,6 @@ class Instance {
       */
     }
     else {
-      /* workbench_cache_common_populate && workbench_cache_texpaint_populate */
       if (object_state.use_per_material_batches) {
         const int material_count = DRW_cache_object_material_count_get(ob_ref.object);
 
@@ -351,8 +349,6 @@ class Instance {
     }
   }
 };
-
-// Utils
 
 /* This returns an array of nullptr GPUMaterial pointers so we can call
  * DRW_cache_object_surface_material_get. They never get actually used.
