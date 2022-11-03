@@ -130,20 +130,21 @@ AntiAliasingPass::~AntiAliasingPass()
 
 void AntiAliasingPass::init(const SceneState &scene_state)
 {
+  enabled_ = scene_state.draw_aa;
   sample_ = scene_state.sample;
   samples_len_ = scene_state.samples_len;
 }
 
 void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
 {
-  if (samples_len_ > 0) {
-    taa_accumulation_tx_.ensure_2d(GPU_RGBA16F, resolution);
-    sample0_depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
-  }
-  else {
+  if (!enabled_) {
     taa_accumulation_tx_.free();
     sample0_depth_tx_.free();
+    return;
   }
+
+  taa_accumulation_tx_.ensure_2d(GPU_RGBA16F, resolution);
+  sample0_depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
 
   taa_accumulation_ps_.init();
   taa_accumulation_ps_.state_set(sample_ == 0 ? DRW_STATE_WRITE_COLOR :
@@ -183,16 +184,10 @@ void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
   smaa_resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
-bool AntiAliasingPass::setup_view(View &view, int2 resolution)
+void AntiAliasingPass::setup_view(View &view, int2 resolution)
 {
-  if (samples_len_ == 0) {
-    /* AA disabled. */
-    return true;
-  }
-
-  if (sample_ >= samples_len_) {
-    /* TAA accumulation has finished. Just copy the result back */
-    return false;
+  if (!enabled_) {
+    return;
   }
 
   float2 sample_offset;
@@ -229,8 +224,6 @@ bool AntiAliasingPass::setup_view(View &view, int2 resolution)
       winmat.ptr(), persmat.ptr(), sample_offset.x / resolution.x, sample_offset.y / resolution.y);
 
   view.sync(viewmat, winmat);
-
-  return true;
 }
 
 void AntiAliasingPass::draw(Manager &manager,
@@ -240,7 +233,7 @@ void AntiAliasingPass::draw(Manager &manager,
                             GPUTexture *depth_tx,
                             GPUTexture *color_tx)
 {
-  if (samples_len_ == 0) {
+  if (!enabled_) {
     /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place */
     GPU_texture_copy(color_tx, resources.color_tx);
     GPU_texture_copy(depth_tx, resources.depth_tx);

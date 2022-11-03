@@ -132,16 +132,19 @@ void SceneState::init()
   }
 
   int _samples_len = U.viewport_aa;
-  if (is_navigating || is_playback) {
-    /* Only draw using SMAA or no AA when navigating. */
-    _samples_len = min_ii(_samples_len, 1);
-  }
-  else if (v3d && ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL)) {
+  if (v3d && ELEM(v3d->shading.type, OB_RENDER, OB_MATERIAL)) {
     _samples_len = scene->display.viewport_aa;
   }
   else if (DRW_state_is_image_render()) {
     _samples_len = scene->display.render_aa;
   }
+  if (is_navigating || is_playback) {
+    /* Only draw using SMAA or no AA when navigating. */
+    _samples_len = min_ii(_samples_len, 1);
+  }
+  /* 0 samples means no AA */
+  draw_aa = _samples_len > 0;
+  _samples_len = max_ii(_samples_len, 1);
 
   /* Reset the TAA when we have already draw a sample, but the sample count differs from previous
    * time. This removes render artifacts when the viewport anti-aliasing in the user preferences

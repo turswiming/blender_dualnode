@@ -77,6 +77,7 @@ struct SceneState {
   bool draw_curvature;
   bool draw_outline;
   bool draw_dof;
+  bool draw_aa;
 
   bool draw_object_id;
   bool draw_transparent_depth;
@@ -287,6 +288,7 @@ class DofPass {
 
 class AntiAliasingPass {
  private:
+  bool enabled_;
   /** Current TAA sample index in [0..samples_len_] range. */
   int sample_;
   /** Total number of samples to after which TAA stops accumulating samples. */
@@ -331,7 +333,7 @@ class AntiAliasingPass {
 
   void init(const SceneState &scene_state);
   void sync(SceneResources &resources, int2 resolution);
-  bool setup_view(View &view, int2 resolution);
+  void setup_view(View &view, int2 resolution);
   void draw(Manager &manager,
             View &view,
             SceneResources &resources,

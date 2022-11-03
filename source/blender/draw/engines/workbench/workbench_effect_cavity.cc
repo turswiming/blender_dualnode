@@ -23,7 +23,7 @@ void CavityEffect::init(const SceneState &scene_state, SceneResources &resources
   curvature_enabled_ = scene_state.draw_curvature;
 
   const int ssao_samples = scene_state.scene->display.matcap_ssao_samples;
-  int sample_count = min_ii(max_ii(1, scene_state.samples_len) * ssao_samples, max_samples_);
+  int sample_count = min_ii(scene_state.samples_len * ssao_samples, max_samples_);
   const int max_iter_count = sample_count / ssao_samples;
 
   sample_ = scene_state.sample % max_iter_count;
