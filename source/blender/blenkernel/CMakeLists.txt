@@ -163,6 +163,7 @@ set(SRC
   intern/image_gpu.cc
   intern/image_partial_update.cc
   intern/image_save.cc
+  intern/instances.cc
   intern/ipo.c
   intern/kelvinlet.c
   intern/key.c
@@ -191,7 +192,7 @@ set(SRC
   intern/mask_rasterize.c
   intern/material.c
   intern/mball.cc
-  intern/mball_tessellate.c
+  intern/mball_tessellate.cc
   intern/mesh.cc
   intern/mesh_boolean_convert.cc
   intern/mesh_calc_edges.cc
@@ -216,7 +217,7 @@ set(SRC
   intern/mesh_wrapper.cc
   intern/modifier.cc
   intern/movieclip.c
-  intern/multires.c
+  intern/multires.cc
   intern/multires_reshape.c
   intern/multires_reshape_apply_base.c
   intern/multires_reshape_ccg.c
@@ -259,14 +260,14 @@ set(SRC
   intern/scene.cc
   intern/screen.c
   intern/shader_fx.c
-  intern/shrinkwrap.c
+  intern/shrinkwrap.cc
   intern/simulation.cc
   intern/softbody.c
   intern/sound.c
   intern/speaker.c
   intern/studiolight.c
   intern/subdiv.c
-  intern/subdiv_ccg.c
+  intern/subdiv_ccg.cc
   intern/subdiv_ccg_mask.c
   intern/subdiv_ccg_material.c
   intern/subdiv_converter.c
@@ -277,7 +278,7 @@ set(SRC
   intern/subdiv_eval.c
   intern/subdiv_foreach.c
   intern/subdiv_mesh.cc
-  intern/subdiv_modifier.c
+  intern/subdiv_modifier.cc
   intern/subdiv_stats.c
   intern/subdiv_topology.c
   intern/subsurf_ccg.c
@@ -398,6 +399,7 @@ set(SRC
   BKE_image_partial_update.hh
   BKE_image_save.h
   BKE_image_wrappers.hh
+  BKE_instances.hh
   BKE_ipo.h
   BKE_kelvinlet.h
   BKE_key.h

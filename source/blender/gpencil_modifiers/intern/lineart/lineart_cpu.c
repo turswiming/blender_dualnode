@@ -1953,8 +1953,6 @@ static LineartEdgeNeighbor *lineart_build_edge_neighbor(Mesh *me, int total_edge
   LineartEdgeNeighbor *edge_nabr = MEM_mallocN(sizeof(LineartEdgeNeighbor) * total_edges,
                                                "LineartEdgeNeighbor arr");
 
-  MLoopTri *mlooptri = me->runtime.looptris.array;
-
   TaskParallelSettings en_settings;
   BLI_parallel_range_settings_defaults(&en_settings);
   /* Set the minimum amount of edges a thread has to process. */
@@ -1963,7 +1961,7 @@ static LineartEdgeNeighbor *lineart_build_edge_neighbor(Mesh *me, int total_edge
   EdgeNeighborData en_data;
   en_data.adj_e = adj_e;
   en_data.edge_nabr = edge_nabr;
-  en_data.mlooptri = mlooptri;
+  en_data.mlooptri = BKE_mesh_runtime_looptri_ensure(me);
   en_data.mloop = BKE_mesh_loops(me);
 
   BLI_task_parallel_range(0, total_edges, &en_data, lineart_edge_neighbor_init_task, &en_settings);
@@ -2635,7 +2633,7 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
                                           scene,
                                           eval_ob,
                                           eval_ob,
-                                          eval_ob->obmat,
+                                          eval_ob->object_to_world,
                                           is_render,
                                           olti,
                                           thread_count,
@@ -2891,7 +2889,7 @@ static bool lineart_triangle_edge_image_space_occlusion(const LineartTriangle *t
   if ((e->flags & LRT_EDGE_FLAG_PROJECTED_SHADOW) &&
       (e->target_reference == tri->target_reference)) {
     if (((dot_f > 0) && (e->flags & LRT_EDGE_FLAG_SHADOW_FACING_LIGHT)) ||
-        ((dot_f < 0) && (!(e->flags & LRT_EDGE_FLAG_SHADOW_FACING_LIGHT)))) {
+        ((dot_f < 0) && !(e->flags & LRT_EDGE_FLAG_SHADOW_FACING_LIGHT))) {
       *from = 0.0f;
       *to = 1.0f;
       return true;
@@ -3217,8 +3215,7 @@ static bool lineart_triangle_2v_intersection_math(
     return false;
   }
 
-  if (!(lineart_point_inside_triangle3d(
-          gloc, tri->v[0]->gloc, tri->v[1]->gloc, tri->v[2]->gloc))) {
+  if (!lineart_point_inside_triangle3d(gloc, tri->v[0]->gloc, tri->v[1]->gloc, tri->v[2]->gloc)) {
     return false;
   }
 
@@ -3425,7 +3422,7 @@ static void lineart_triangle_intersect_in_bounding_area(LineartTriangle *tri,
     tt->testing_e[th->thread_id] = (LineartEdge *)tri;
 
     if (!((testing_triangle->flags | tri->flags) & LRT_TRIANGLE_FORCE_INTERSECTION)) {
-      if ((testing_triangle->flags & LRT_TRIANGLE_NO_INTERSECTION) ||
+      if (((testing_triangle->flags | tri->flags) & LRT_TRIANGLE_NO_INTERSECTION) ||
           (testing_triangle->flags & tri->flags & LRT_TRIANGLE_INTERSECTION_ONLY)) {
         continue;
       }
@@ -3592,11 +3589,11 @@ static LineartData *lineart_create_render_buffer(Scene *scene,
     clipping_offset = 0.0001;
   }
 
-  copy_v3db_v3fl(ld->conf.camera_pos, camera->obmat[3]);
+  copy_v3db_v3fl(ld->conf.camera_pos, camera->object_to_world[3]);
   if (active_camera) {
-    copy_v3db_v3fl(ld->conf.active_camera_pos, active_camera->obmat[3]);
+    copy_v3db_v3fl(ld->conf.active_camera_pos, active_camera->object_to_world[3]);
   }
-  copy_m4_m4(ld->conf.cam_obmat, camera->obmat);
+  copy_m4_m4(ld->conf.cam_obmat, camera->object_to_world);
 
   ld->conf.cam_is_persp = (c->type == CAM_PERSP);
   ld->conf.near_clip = c->clip_start + clipping_offset;
@@ -3623,8 +3620,8 @@ static LineartData *lineart_create_render_buffer(Scene *scene,
 
   if (lmd->light_contour_object) {
     Object *light_obj = lmd->light_contour_object;
-    copy_v3db_v3fl(ld->conf.camera_pos_secondary, light_obj->obmat[3]);
-    copy_m4_m4(ld->conf.cam_obmat_secondary, light_obj->obmat);
+    copy_v3db_v3fl(ld->conf.camera_pos_secondary, light_obj->object_to_world[3]);
+    copy_m4_m4(ld->conf.cam_obmat_secondary, light_obj->object_to_world);
     ld->conf.light_reference_available = true;
     if (light_obj->type == OB_LAMP) {
       ld->conf.cam_is_persp_secondary = ((Light *)light_obj->data)->type != LA_SUN;
@@ -5256,11 +5253,11 @@ static void lineart_gpencil_generate(LineartCache *cache,
       if (ec->shadow_mask_bits != LRT_SHADOW_MASK_UNDEFINED) {
         /* TODO(@Yiming): Give a behavior option for how to display undefined shadow info. */
         if (shaodow_selection == LRT_SHADOW_FILTER_ILLUMINATED &&
-            (!(ec->shadow_mask_bits & LRT_SHADOW_MASK_ILLUMINATED))) {
+            !(ec->shadow_mask_bits & LRT_SHADOW_MASK_ILLUMINATED)) {
           continue;
         }
         if (shaodow_selection == LRT_SHADOW_FILTER_SHADED &&
-            (!(ec->shadow_mask_bits & LRT_SHADOW_MASK_SHADED))) {
+            !(ec->shadow_mask_bits & LRT_SHADOW_MASK_SHADED)) {
           continue;
         }
         if (shaodow_selection == LRT_SHADOW_FILTER_ILLUMINATED_ENCLOSED_SHAPES) {
@@ -5421,7 +5418,7 @@ void MOD_lineart_gpencil_generate(LineartCache *cache,
   }
 
   float gp_obmat_inverse[4][4];
-  invert_m4_m4(gp_obmat_inverse, ob->obmat);
+  invert_m4_m4(gp_obmat_inverse, ob->object_to_world);
   lineart_gpencil_generate(cache,
                            depsgraph,
                            ob,

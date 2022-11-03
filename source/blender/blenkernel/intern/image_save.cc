@@ -175,12 +175,12 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
           BLI_strncpy(opts->filepath, G.ima, sizeof(opts->filepath));
         }
         else {
-          BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", DATA_("untitled"), nullptr);
+          BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", DATA_("untitled"));
           BLI_path_abs(opts->filepath, BKE_main_blendfile_path(bmain));
         }
       }
       else {
-        BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", ima->id.name + 2, nullptr);
+        BLI_path_join(opts->filepath, sizeof(opts->filepath), "//", ima->id.name + 2);
         BLI_path_make_safe(opts->filepath);
         BLI_path_abs(opts->filepath, is_prev_save ? G.ima : BKE_main_blendfile_path(bmain));
       }
@@ -724,6 +724,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
   const bool half_float = (imf && imf->depth == R_IMF_CHAN_DEPTH_16);
   const bool multi_layer = !(imf && imf->imtype == R_IMF_IMTYPE_OPENEXR);
   const bool write_z = !multi_layer && (imf && (imf->flag & R_IMF_FLAG_ZBUF));
+  const int channels = (!multi_layer && imf && imf->planes == R_IMF_PLANES_RGB) ? 3 : 4;
   Vector<float *> tmp_output_rects;
 
   /* Write first layer if not multilayer and no layer was specified. */
@@ -767,9 +768,10 @@ bool BKE_image_render_write_exr(ReportList *reports,
                                    rview->rectf, rr->rectx, rr->recty, 4, imf, tmp_output_rects) :
                                rview->rectf;
 
-      for (int a = 0; a < 4; a++) {
+      for (int a = 0; a < channels; a++) {
         char passname[EXR_PASS_MAXNAME];
         char layname[EXR_PASS_MAXNAME];
+        /* "A" is not used if only "RGB" channels are output. */
         const char *chan_id = "RGBA";
 
         if (multi_layer) {
@@ -822,7 +824,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
 
       /* We only store RGBA passes as half float, for
        * others precision loss can be problematic. */
-      const bool pass_RGBA = (STR_ELEM(rp->chan_id, "RGB", "RGBA", "R", "G", "B", "A"));
+      const bool pass_RGBA = STR_ELEM(rp->chan_id, "RGB", "RGBA", "R", "G", "B", "A");
       const bool pass_half_float = half_float && pass_RGBA;
 
       /* Color-space conversion only happens on RGBA passes. */
@@ -832,8 +834,8 @@ bool BKE_image_render_write_exr(ReportList *reports,
                   rp->rect, rr->rectx, rr->recty, rp->channels, imf, tmp_output_rects) :
               rp->rect;
 
-      for (int a = 0; a < rp->channels; a++) {
-        /* Save Combined as RGBA if single layer save. */
+      for (int a = 0; a < std::min(channels, rp->channels); a++) {
+        /* Save Combined as RGBA or RGB if single layer save. */
         char passname[EXR_PASS_MAXNAME];
         char layname[EXR_PASS_MAXNAME];
 
@@ -966,6 +968,7 @@ bool BKE_image_render_write(ReportList *reports,
         /* optional preview images for exr */
         if (ok && (image_format.flag & R_IMF_FLAG_PREVIEW_JPG)) {
           image_format.imtype = R_IMF_IMTYPE_JPEG90;
+          image_format.depth = R_IMF_CHAN_DEPTH_8;
 
           if (BLI_path_extension_check(filepath, ".exr")) {
             filepath[strlen(filepath) - 4] = 0;
@@ -1023,6 +1026,7 @@ bool BKE_image_render_write(ReportList *reports,
       /* optional preview images for exr */
       if (ok && is_exr_rr && (image_format.flag & R_IMF_FLAG_PREVIEW_JPG)) {
         image_format.imtype = R_IMF_IMTYPE_JPEG90;
+        image_format.depth = R_IMF_CHAN_DEPTH_8;
 
         if (BLI_path_extension_check(filepath, ".exr")) {
           filepath[strlen(filepath) - 4] = 0;

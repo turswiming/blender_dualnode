@@ -338,7 +338,7 @@ static bool isPlaneProjectionViewAligned(const TransInfo *t, const float plane[4
 }
 
 static void planeProjection(const TransInfo *t,
-                            const float plane[3],
+                            const float plane[4],
                             const float in[3],
                             float out[3])
 {
@@ -404,9 +404,11 @@ static void applyAxisConstraintVec(const TransInfo *t,
       }
     }
 
+    /* Fallback for when axes are aligned. */
+    mul_m3_v3(t->con.pmtx, out);
+
     if (is_snap_to_point) {
-      /* With snap points, a projection is alright, no adjustments needed. */
-      mul_m3_v3(t->con.pmtx, out);
+      /* Pass. With snap points, a projection is alright, no adjustments needed. */
     }
     else {
       const int dims = getConstraintSpaceDimension(t);
@@ -422,14 +424,9 @@ static void applyAxisConstraintVec(const TransInfo *t,
             /* Disabled, as it has not proven to be really useful. (See T82386). */
             // constraint_snap_plane_to_face(t, plane, out);
           }
-          else {
+          else if (!isPlaneProjectionViewAligned(t, plane)) {
             /* View alignment correction. */
-            if (!isPlaneProjectionViewAligned(t, plane)) {
-              planeProjection(t, plane, in, out);
-            }
-            else {
-              mul_m3_v3(t->con.pmtx, out);
-            }
+            planeProjection(t, plane, in, out);
           }
         }
       }

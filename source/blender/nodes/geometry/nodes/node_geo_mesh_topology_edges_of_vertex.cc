@@ -24,12 +24,12 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0)
       .supports_field()
       .description(N_("Which of the sorted edges to output"));
-  b.add_output<decl::Int>(N_("Total"))
-      .dependent_field()
-      .description(N_("The number of edges connected to each vertex"));
   b.add_output<decl::Int>(N_("Edge Index"))
       .dependent_field()
       .description(N_("An edge connected to the face, chosen by the sort index"));
+  b.add_output<decl::Int>(N_("Total"))
+      .dependent_field()
+      .description(N_("The number of edges connected to each vertex"));
 }
 
 static void convert_span(const Span<int> src, MutableSpan<int64_t> dst)
@@ -60,8 +60,8 @@ class EdgesOfVertInput final : public bke::MeshFieldInput {
   {
     const IndexRange vert_range(mesh.totvert);
     const Span<MEdge> edges = mesh.edges();
-    Array<Vector<int>> vert_to_edge_map = mesh_topology::build_vert_to_edge_map(edges,
-                                                                                mesh.totvert);
+    Array<Vector<int>> vert_to_edge_map = bke::mesh_topology::build_vert_to_edge_map(edges,
+                                                                                     mesh.totvert);
 
     const bke::MeshFieldContext context{mesh, domain};
     fn::FieldEvaluator evaluator{context, &mask};
@@ -93,6 +93,10 @@ class EdgesOfVertInput final : public bke::MeshFieldInput {
         }
 
         const Span<int> edges = vert_to_edge_map[vert_i];
+        if (edges.is_empty()) {
+          edge_of_vertex[selection_i] = 0;
+          continue;
+        }
 
         /* Retrieve the connected edge indices as 64 bit integers for #materialize_compressed. */
         edge_indices.reinitialize(edges.size());

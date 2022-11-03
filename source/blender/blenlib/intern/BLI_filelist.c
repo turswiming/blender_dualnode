@@ -93,7 +93,7 @@ static int bli_compare(struct direntry *entry1, struct direntry *entry2)
     return 1;
   }
 
-  return (BLI_strcasecmp_natural(entry1->relname, entry2->relname));
+  return BLI_strcasecmp_natural(entry1->relname, entry2->relname);
 }
 
 struct BuildDirCtx {
@@ -174,7 +174,7 @@ static void bli_builddir(struct BuildDirCtx *dir_ctx, const char *dirname)
         struct direntry *file = &dir_ctx->files[dir_ctx->files_num];
         while (dlink) {
           char fullname[PATH_MAX];
-          BLI_join_dirfile(fullname, sizeof(fullname), dirname, dlink->name);
+          BLI_path_join(fullname, sizeof(fullname), dirname, dlink->name);
           memset(file, 0, sizeof(struct direntry));
           file->relname = dlink->name;
           file->path = BLI_strdup(fullname);

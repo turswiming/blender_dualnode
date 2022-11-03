@@ -269,7 +269,7 @@ static int do_step_cloth(
 
     /* Get the current position. */
     copy_v3_v3(verts->xconst, mvert[i].co);
-    mul_m4_v3(ob->obmat, verts->xconst);
+    mul_m4_v3(ob->object_to_world, verts->xconst);
 
     if (vert_mass_changed) {
       verts->mass = clmd->sim_parms->mass;
@@ -581,11 +581,11 @@ static void cloth_to_object(Object *ob, ClothModifierData *clmd, float (*vertexC
 
   if (clmd->clothObject) {
     /* Inverse matrix is not up to date. */
-    invert_m4_m4(ob->imat, ob->obmat);
+    invert_m4_m4(ob->world_to_object, ob->object_to_world);
 
     for (i = 0; i < cloth->mvert_num; i++) {
       copy_v3_v3(vertexCos[i], cloth->verts[i].x);
-      mul_m4_v3(ob->imat, vertexCos[i]); /* cloth is in global coords */
+      mul_m4_v3(ob->world_to_object, vertexCos[i]); /* cloth is in global coords */
     }
   }
 }
@@ -763,11 +763,11 @@ static bool cloth_from_object(
     if (first) {
       copy_v3_v3(verts->x, mvert[i].co);
 
-      mul_m4_v3(ob->obmat, verts->x);
+      mul_m4_v3(ob->object_to_world, verts->x);
 
       if (shapekey_rest) {
         copy_v3_v3(verts->xrest, shapekey_rest[i]);
-        mul_m4_v3(ob->obmat, verts->xrest);
+        mul_m4_v3(ob->object_to_world, verts->xrest);
       }
       else {
         copy_v3_v3(verts->xrest, verts->x);
@@ -826,7 +826,7 @@ static void cloth_from_mesh(ClothModifierData *clmd, const Object *ob, Mesh *mes
   const MLoop *mloop = BKE_mesh_loops(mesh);
   const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(mesh);
   const uint mvert_num = mesh->totvert;
-  const uint looptri_num = mesh->runtime.looptris.len;
+  const uint looptri_num = BKE_mesh_runtime_looptri_len(mesh);
 
   /* Allocate our vertices. */
   clmd->clothObject->mvert_num = mvert_num;
@@ -1130,7 +1130,7 @@ static void cloth_update_springs(ClothModifierData *clmd)
        * because implicit solver would need reset! */
 
       /* Activate / Deactivate existing springs */
-      if ((!(cloth->verts[spring->ij].flags & CLOTH_VERT_FLAG_PINNED)) &&
+      if (!(cloth->verts[spring->ij].flags & CLOTH_VERT_FLAG_PINNED) &&
           (cloth->verts[spring->ij].goal > ALMOST_ZERO)) {
         spring->flags &= ~CLOTH_SPRING_FLAG_DEACTIVATE;
       }
@@ -1155,7 +1155,7 @@ static void cloth_update_verts(Object *ob, ClothModifierData *clmd, Mesh *mesh)
   /* vertex count is already ensured to match */
   for (i = 0; i < mesh->totvert; i++, verts++) {
     copy_v3_v3(verts->xrest, mvert[i].co);
-    mul_m4_v3(ob->obmat, verts->xrest);
+    mul_m4_v3(ob->object_to_world, verts->xrest);
   }
 }
 
@@ -1167,7 +1167,7 @@ static Mesh *cloth_make_rest_mesh(ClothModifierData *clmd, Mesh *mesh)
   MVert *mvert = BKE_mesh_verts_for_write(mesh);
 
   /* vertex count is already ensured to match */
-  for (unsigned i = 0; i < mesh->totvert; i++, verts++) {
+  for (uint i = 0; i < mesh->totvert; i++, verts++) {
     copy_v3_v3(mvert[i].co, verts->xrest);
   }
   BKE_mesh_tag_coords_changed(new_mesh);

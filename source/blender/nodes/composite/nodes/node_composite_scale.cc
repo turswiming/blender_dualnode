@@ -54,7 +54,7 @@ static void node_composite_update_scale(bNodeTree *ntree, bNode *node)
   }
 }
 
-static void node_composit_buts_scale(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_composit_buts_scale(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "space", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 
@@ -88,7 +88,6 @@ class ScaleOperation : public NodeOperation {
         get_translation(), 0.0f, get_scale());
 
     result.transform(transformation);
-    result.get_realization_options().interpolation = Interpolation::Bilinear;
   }
 
   float2 get_scale()

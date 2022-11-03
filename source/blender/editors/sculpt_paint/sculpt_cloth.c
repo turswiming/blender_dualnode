@@ -7,22 +7,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
-#include "BLI_dial_2d.h"
 #include "BLI_edgehash.h"
 #include "BLI_gsqueue.h"
-#include "BLI_hash.h"
 #include "BLI_math.h"
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
-
 #include "DNA_brush_types.h"
 #include "DNA_customdata_types.h"
-#include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
-#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -32,41 +25,16 @@
 #include "BKE_collision.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
-#include "BKE_image.h"
-#include "BKE_kelvinlet.h"
-#include "BKE_key.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_mesh.h"
-#include "BKE_mesh_mapping.h"
-#include "BKE_mesh_mirror.h"
 #include "BKE_modifier.h"
-#include "BKE_multires.h"
-#include "BKE_node.h"
-#include "BKE_object.h"
 #include "BKE_paint.h"
-#include "BKE_particle.h"
 #include "BKE_pbvh.h"
-#include "BKE_pointcache.h"
-#include "BKE_report.h"
-#include "BKE_scene.h"
-#include "BKE_screen.h"
-#include "BKE_subdiv_ccg.h"
-#include "BKE_subsurf.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
 
 #include "WM_api.h"
-#include "WM_message.h"
-#include "WM_toolsystem.h"
 #include "WM_types.h"
 
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_sculpt.h"
-#include "ED_view3d.h"
-#include "paint_intern.h"
 #include "sculpt_intern.h"
 
 #include "RNA_access.h"
@@ -78,10 +46,8 @@
 #include "GPU_state.h"
 
 #include "UI_interface.h"
-#include "UI_resources.h"
 
 #include "bmesh.h"
-#include "bmesh_tools.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -701,15 +667,15 @@ static void cloth_brush_solve_collision(Object *object,
   BVHTreeRayHit hit;
 
   float obmat_inv[4][4];
-  invert_m4_m4(obmat_inv, object->obmat);
+  invert_m4_m4(obmat_inv, object->object_to_world);
 
   for (collider_cache = cloth_sim->collider_list->first; collider_cache;
        collider_cache = collider_cache->next) {
     float ray_start[3], ray_normal[3];
     float pos_world_space[3], prev_pos_world_space[3];
 
-    mul_v3_m4v3(pos_world_space, object->obmat, cloth_sim->pos[i]);
-    mul_v3_m4v3(prev_pos_world_space, object->obmat, cloth_sim->last_iteration_pos[i]);
+    mul_v3_m4v3(pos_world_space, object->object_to_world, cloth_sim->pos[i]);
+    mul_v3_m4v3(prev_pos_world_space, object->object_to_world, cloth_sim->last_iteration_pos[i]);
     sub_v3_v3v3(ray_normal, pos_world_space, prev_pos_world_space);
     copy_v3_v3(ray_start, prev_pos_world_space);
     hit.index = -1;
@@ -1453,7 +1419,7 @@ static void cloth_filter_apply_forces_task_cb(void *__restrict userdata,
 
   float sculpt_gravity[3] = {0.0f};
   if (sd->gravity_object) {
-    copy_v3_v3(sculpt_gravity, sd->gravity_object->obmat[2]);
+    copy_v3_v3(sculpt_gravity, sd->gravity_object->object_to_world[2]);
   }
   else {
     sculpt_gravity[2] = -1.0f;

@@ -8,17 +8,24 @@
  * Embeds GPU meshes inside of PBVH nodes, used by mesh sculpt mode.
  */
 
-#include <limits.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
+#include <algorithm>
+#include <climits>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_bitmap.h"
 #include "BLI_ghash.h"
+#include "BLI_index_range.hh"
+#include "BLI_map.hh"
 #include "BLI_math_color.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_utildefines.h"
+#include "BLI_vector.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -43,15 +50,6 @@
 
 #define MAX_PBVH_BATCH_KEY 512
 #define MAX_PBVH_VBOS 16
-
-#include "BLI_index_range.hh"
-#include "BLI_map.hh"
-#include "BLI_math_vec_types.hh"
-#include "BLI_vector.hh"
-#include <vector>
-
-#include <algorithm>
-#include <string>
 
 using blender::char3;
 using blender::float2;
@@ -391,12 +389,19 @@ struct PBVHBatches {
         break;
 
       case CD_PBVH_MASK_TYPE:
-        foreach_grids([&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem *elems[4], int i) {
-          float *mask = CCG_elem_mask(&args->ccg_key, elems[i]);
+        if (args->ccg_key.has_mask) {
+          foreach_grids([&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem *elems[4], int i) {
+            float *mask = CCG_elem_mask(&args->ccg_key, elems[i]);
 
-          *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = mask ? uchar(*mask * 255.0f) :
-                                                                        255;
-        });
+            *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = uchar(*mask * 255.0f);
+          });
+        }
+        else {
+          foreach_grids(
+              [&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem * /*elems*/[4], int /*i*/) {
+                *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = 0;
+              });
+        }
         break;
 
       case CD_PBVH_FSET_TYPE: {
@@ -709,26 +714,14 @@ struct PBVHBatches {
         }
 
         BMLoop *l = f->l_first;
-        do {
-          callback(l);
-        } while ((l = l->next) != f->l_first);
+        callback(l->prev);
+        callback(l);
+        callback(l->next);
       }
       GSET_FOREACH_END();
     };
 
-    faces_count = 0;
-    GSET_FOREACH_BEGIN (BMFace *, f, args->bm_faces) {
-      if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
-        continue;
-      }
-
-      BMLoop *l = f->l_first;
-      do {
-        faces_count++;
-      } while ((l = l->next) != f->l_first);
-    }
-    GSET_FOREACH_END();
-    tris_count = faces_count;
+    faces_count = tris_count = count_faces(args);
 
     int existing_num = GPU_vertbuf_get_vertex_len(vbo.vert_buf);
     void *existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
@@ -743,7 +736,24 @@ struct PBVHBatches {
     GPUVertBufRaw access;
     GPU_vertbuf_attr_get_raw_data(vbo.vert_buf, 0, &access);
 
+#if 0 /* Enable to fuzz GPU data (to check for over-allocation). */
+    existing_data = GPU_vertbuf_get_data(vbo.vert_buf);
+    uchar *c = static_cast<uchar *>(existing_data);
+    for (int i : IndexRange(vert_count * access.stride)) {
+      *c++ = i & 255;
+    }
+#endif
+
     switch (vbo.type) {
+      case CD_PROP_COLOR:
+      case CD_PROP_BYTE_COLOR: {
+        ushort4 white = {USHRT_MAX, USHRT_MAX, USHRT_MAX, USHRT_MAX};
+
+        foreach_bmesh([&](BMLoop * /*l*/) {
+          *static_cast<ushort4 *>(GPU_vertbuf_raw_step(&access)) = white;
+        });
+        break;
+      }
       case CD_PBVH_CO_TYPE:
         foreach_bmesh(
             [&](BMLoop *l) { *static_cast<float3 *>(GPU_vertbuf_raw_step(&access)) = l->v->co; });
@@ -862,10 +872,30 @@ struct PBVHBatches {
         const char *prefix = "a";
 
         if (ELEM(type, CD_PROP_COLOR, CD_PROP_BYTE_COLOR)) {
+          Mesh query_mesh;
+
+          /* Check if we have args->me; if not use get_cdata to build something we
+           * can query for color attributes.
+           */
+          if (args->me) {
+            memcpy(static_cast<void *>(&query_mesh),
+                   static_cast<const void *>(args->me),
+                   sizeof(Mesh));
+          }
+          else {
+            BKE_id_attribute_copy_domains_temp(ID_ME,
+                                               get_cdata(ATTR_DOMAIN_POINT, args),
+                                               nullptr,
+                                               get_cdata(ATTR_DOMAIN_CORNER, args),
+                                               nullptr,
+                                               nullptr,
+                                               &query_mesh.id);
+          }
+
           prefix = "c";
 
-          CustomDataLayer *render = BKE_id_attributes_render_color_get(&args->me->id);
-          CustomDataLayer *active = BKE_id_attributes_active_color_get(&args->me->id);
+          CustomDataLayer *render = BKE_id_attributes_render_color_get(&query_mesh.id);
+          CustomDataLayer *active = BKE_id_attributes_active_color_get(&query_mesh.id);
 
           is_render = render && layer && STREQ(render->name, layer->name);
           is_active = active && layer && STREQ(active->name, layer->name);
@@ -921,6 +951,14 @@ struct PBVHBatches {
 
   void create_index_faces(PBVH_GPU_Args *args)
   {
+    int *mat_index = static_cast<int *>(
+        CustomData_get_layer_named(args->pdata, CD_PROP_INT32, "material_index"));
+
+    if (mat_index && args->totprim) {
+      int poly_index = args->mlooptri[args->prim_indices[0]].poly;
+      material_index = mat_index[poly_index];
+    }
+
     /* Calculate number of edges*/
     int edge_count = 0;
     for (int i = 0; i < args->totprim; i++) {
@@ -929,6 +967,7 @@ struct PBVHBatches {
       if (args->hide_poly && args->hide_poly[lt->poly]) {
         continue;
       }
+
       int r_edges[3];
       BKE_mesh_looptri_get_real_edges(args->me, lt, r_edges);
 
@@ -1000,6 +1039,14 @@ struct PBVHBatches {
 
   void create_index_grids(PBVH_GPU_Args *args)
   {
+    int *mat_index = static_cast<int *>(
+        CustomData_get_layer_named(args->pdata, CD_PROP_INT32, "material_index"));
+
+    if (mat_index && args->totprim) {
+      int poly_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, args->grid_indices[0]);
+      material_index = mat_index[poly_index];
+    }
+
     needs_tri_index = true;
     int gridsize = args->ccg_key.grid_size;
     int totgrid = args->totprim;
@@ -1135,8 +1182,17 @@ struct PBVHBatches {
     }
 
     for (PBVHBatch &batch : batches.values()) {
-      GPU_batch_elembuf_set(batch.tris, tri_index, false);
-      GPU_batch_elembuf_set(batch.lines, lines_index, false);
+      if (tri_index) {
+        GPU_batch_elembuf_set(batch.tris, tri_index, false);
+      }
+      else {
+        /* Still flag the batch as dirty even if we're using the default index layout. */
+        batch.tris->flag |= GPU_BATCH_DIRTY;
+      }
+
+      if (lines_index) {
+        GPU_batch_elembuf_set(batch.lines, lines_index, false);
+      }
     }
   }
 

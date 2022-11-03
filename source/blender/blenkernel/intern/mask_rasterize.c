@@ -521,7 +521,7 @@ static void layer_bucket_init(MaskRasterLayer *layer, const float pixel_size)
     }
 
     if (1) {
-      /* now convert linknodes into arrays for faster per pixel access */
+      /* Now convert link-nodes into arrays for faster per pixel access. */
       uint **buckets_face = MEM_mallocN(bucket_tot * sizeof(*buckets_face), __func__);
       uint bucket_index;
 
@@ -1186,7 +1186,7 @@ void BKE_maskrasterize_handle_init(MaskRasterHandle *mr_handle,
       // printf("tris %d, feather tris %d\n", sf_tri_tot, tot_feather_quads);
     }
 
-    /* add trianges */
+    /* Add triangles. */
     BLI_scanfill_end_arena(&sf_ctx, sf_arena);
   }
 
@@ -1282,8 +1282,8 @@ BLI_INLINE uint layer_bucket_index_from_xy(MaskRasterLayer *layer, const float x
 {
   BLI_assert(BLI_rctf_isect_pt_v(&layer->bounds, xy));
 
-  return ((uint)((xy[0] - layer->bounds.xmin) * layer->buckets_xy_scalar[0])) +
-         (((uint)((xy[1] - layer->bounds.ymin) * layer->buckets_xy_scalar[1])) * layer->buckets_x);
+  return (uint)((xy[0] - layer->bounds.xmin) * layer->buckets_xy_scalar[0]) +
+         ((uint)((xy[1] - layer->bounds.ymin) * layer->buckets_xy_scalar[1]) * layer->buckets_x);
 }
 
 static float layer_bucket_depth_from_xy(MaskRasterLayer *layer, const float xy[2])

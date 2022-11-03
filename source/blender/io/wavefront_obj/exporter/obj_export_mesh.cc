@@ -124,10 +124,11 @@ void OBJMesh::set_world_axes_transform(const eIOAxis forward, const eIOAxis up)
   unit_m3(axes_transform);
   /* +Y-forward and +Z-up are the default Blender axis settings. */
   mat3_from_axis_conversion(forward, up, IO_AXIS_Y, IO_AXIS_Z, axes_transform);
-  mul_m4_m3m4(world_and_axes_transform_, axes_transform, export_object_eval_.obmat);
+  mul_m4_m3m4(world_and_axes_transform_, axes_transform, export_object_eval_.object_to_world);
   /* mul_m4_m3m4 does not transform last row of obmat, i.e. location data. */
-  mul_v3_m3v3(world_and_axes_transform_[3], axes_transform, export_object_eval_.obmat[3]);
-  world_and_axes_transform_[3][3] = export_object_eval_.obmat[3][3];
+  mul_v3_m3v3(
+      world_and_axes_transform_[3], axes_transform, export_object_eval_.object_to_world[3]);
+  world_and_axes_transform_[3][3] = export_object_eval_.object_to_world[3][3];
 
   /* Normals need inverse transpose of the regular matrix to handle non-uniform scale. */
   float normal_matrix[3][3];
@@ -265,13 +266,13 @@ const char *OBJMesh::get_object_material_name(const int16_t mat_nr) const
   return mat->id.name + 2;
 }
 
-float3 OBJMesh::calc_vertex_coords(const int vert_index, const float scaling_factor) const
+float3 OBJMesh::calc_vertex_coords(const int vert_index, const float global_scale) const
 {
   float3 r_coords;
   const Span<MVert> verts = export_mesh_eval_->verts();
   copy_v3_v3(r_coords, verts[vert_index].co);
   mul_m4_v3(world_and_axes_transform_, r_coords);
-  mul_v3_fl(r_coords, scaling_factor);
+  mul_v3_fl(r_coords, global_scale);
   return r_coords;
 }
 

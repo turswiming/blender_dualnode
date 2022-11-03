@@ -153,7 +153,7 @@ static void image_init_data(ID *id)
   }
 }
 
-static void image_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, const int flag)
+static void image_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, const int flag)
 {
   Image *image_dst = (Image *)id_dst;
   const Image *image_src = (const Image *)id_src;
@@ -297,7 +297,7 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
       /* Put the filepath back together using the new directory and the original file name. */
       char new_dir[FILE_MAXDIR];
       BLI_split_dir_part(temp_path, new_dir, sizeof(new_dir));
-      BLI_join_dirfile(ima->filepath, sizeof(ima->filepath), new_dir, orig_file);
+      BLI_path_join(ima->filepath, sizeof(ima->filepath), new_dir, orig_file);
     }
   }
   else {
@@ -410,7 +410,7 @@ static void image_blend_read_data(BlendDataReader *reader, ID *id)
   image_runtime_reset(ima);
 }
 
-static void image_blend_read_lib(BlendLibReader *UNUSED(reader), ID *id)
+static void image_blend_read_lib(BlendLibReader * /*reader*/, ID *id)
 {
   Image *ima = (Image *)id;
   /* Images have some kind of 'main' cache, when null we should also clear all others. */
@@ -1546,7 +1546,7 @@ void BKE_image_print_memlist(Main *bmain)
   }
 }
 
-static bool imagecache_check_dirty(ImBuf *ibuf, void *UNUSED(userkey), void *UNUSED(userdata))
+static bool imagecache_check_dirty(ImBuf *ibuf, void * /*userkey*/, void * /*userdata*/)
 {
   if (ibuf == nullptr) {
     return false;
@@ -1595,7 +1595,7 @@ void BKE_image_free_all_textures(Main *bmain)
 #endif
 }
 
-static bool imagecache_check_free_anim(ImBuf *ibuf, void *UNUSED(userkey), void *userdata)
+static bool imagecache_check_free_anim(ImBuf *ibuf, void * /*userkey*/, void *userdata)
 {
   if (ibuf == nullptr) {
     return true;
@@ -2470,7 +2470,7 @@ void BKE_stamp_data_free(StampData *stamp_data)
 }
 
 /* wrap for callback only */
-static void metadata_set_field(void *data, const char *propname, char *propvalue, int UNUSED(len))
+static void metadata_set_field(void *data, const char *propname, char *propvalue, int /*len*/)
 {
   /* We know it is an ImBuf* because that's what we pass to BKE_stamp_info_callback. */
   ImBuf *imbuf = static_cast<ImBuf *>(data);
@@ -3082,16 +3082,10 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
         /* Free all but the first tile. */
         image_remove_all_tiles(ima);
 
-        /* If the remaining tile is generated, we need to again ensure that we
-         * wouldn't continue to use the old filepath.
-         *
-         * Otherwise, if this used to be a UDIM image, get the concrete filepath associated
+        /* If this used to be a UDIM image, get the concrete filepath associated
          * with the remaining tile and use that as the new filepath. */
         ImageTile *base_tile = BKE_image_get_tile(ima, 0);
-        if ((base_tile->gen_flag & IMA_GEN_TILE) != 0) {
-          ima->filepath[0] = '\0';
-        }
-        else if (BKE_image_is_filename_tokenized(ima->filepath)) {
+        if (BKE_image_is_filename_tokenized(ima->filepath)) {
           const bool was_relative = BLI_path_is_rel(ima->filepath);
 
           eUDIM_TILE_FORMAT tile_format;
@@ -3183,10 +3177,14 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
            * left. */
           image_remove_all_tiles(ima);
 
-          int remaining_tile_number = ((ImageTile *)ima->tiles.first)->tile_number;
+          ImageTile *base_tile = BKE_image_get_tile(ima, 0);
+          int remaining_tile_number = base_tile->tile_number;
           bool needs_final_cleanup = true;
 
-          /* Add in all the new tiles. */
+          /* Add in all the new tiles. As the image is proven to be on disk at this point, remove
+           * the generation flag from the remaining tile in case this was previously a generated
+           * image. */
+          base_tile->gen_flag &= ~IMA_GEN_TILE;
           LISTBASE_FOREACH (LinkData *, new_tile, &new_tiles) {
             int new_tile_number = POINTER_AS_INT(new_tile->data);
             BKE_image_add_tile(ima, new_tile_number, nullptr);
@@ -3201,6 +3199,11 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
           }
         }
         BLI_freelistN(&new_tiles);
+      }
+      else if (ima->filepath[0] != '\0') {
+        /* If the filepath is set at this point remove the generation flag. */
+        ImageTile *base_tile = BKE_image_get_tile(ima, 0);
+        base_tile->gen_flag &= ~IMA_GEN_TILE;
       }
 
       if (iuser) {
@@ -3331,7 +3334,7 @@ bool BKE_image_get_tile_info(char *filepath, ListBase *tiles, int *r_tile_start,
   MEM_SAFE_FREE(udim_pattern);
 
   if (all_valid_udim && min_udim <= IMA_UDIM_MAX) {
-    BLI_join_dirfile(filepath, FILE_MAX, dirname, filename);
+    BLI_path_join(filepath, FILE_MAX, dirname, filename);
 
     *r_tile_start = min_udim;
     *r_tile_range = max_udim - min_udim + 1;
@@ -3876,7 +3879,7 @@ static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 #endif /* WITH_OPENEXR */
 
 /** Common stuff to do with images after loading. */
-static void image_init_after_load(Image *ima, ImageUser *iuser, ImBuf *UNUSED(ibuf))
+static void image_init_after_load(Image *ima, ImageUser *iuser, ImBuf * /*ibuf*/)
 {
   /* Preview is null when it has never been used as an icon before.
    * Never handle previews/icons outside of main thread. */
@@ -5024,7 +5027,7 @@ void BKE_image_user_frame_calc(Image *ima, ImageUser *iuser, int cfra)
 
 /* goes over all ImageUsers, and sets frame numbers if auto-refresh is set */
 static void image_editors_update_frame(Image *ima,
-                                       ID *UNUSED(iuser_id),
+                                       ID * /*iuser_id*/,
                                        ImageUser *iuser,
                                        void *customdata)
 {
@@ -5046,8 +5049,8 @@ void BKE_image_editors_update_frame(const Main *bmain, int cfra)
 }
 
 static void image_user_id_has_animation(Image *ima,
-                                        ID *UNUSED(iuser_id),
-                                        ImageUser *UNUSED(iuser),
+                                        ID * /*iuser_id*/,
+                                        ImageUser * /*iuser*/,
                                         void *customdata)
 {
   if (ima && BKE_image_is_animated(ima)) {
@@ -5066,7 +5069,7 @@ bool BKE_image_user_id_has_animation(ID *id)
 }
 
 static void image_user_id_eval_animation(Image *ima,
-                                         ID *UNUSED(iduser_id),
+                                         ID * /*iduser_id*/,
                                          ImageUser *iuser,
                                          void *customdata)
 {
@@ -5330,7 +5333,7 @@ bool BKE_image_is_dirty(Image *image)
   return BKE_image_is_dirty_writable(image, nullptr);
 }
 
-void BKE_image_mark_dirty(Image *UNUSED(image), ImBuf *ibuf)
+void BKE_image_mark_dirty(Image * /*image*/, ImBuf *ibuf)
 {
   ibuf->userflags |= IB_BITMAPDIRTY;
 }

@@ -614,7 +614,7 @@ static bool layer_collection_hidden(ViewLayer *view_layer, LayerCollection *lc)
     return true;
   }
 
-  /* Check visiblilty restriction flags */
+  /* Check visibility restriction flags */
   if (lc->flag & LAYER_COLLECTION_HIDE || lc->collection->flag & COLLECTION_HIDE_VIEWPORT) {
     return true;
   }
@@ -975,6 +975,23 @@ void BKE_view_layer_synced_ensure(const Scene *scene, struct ViewLayer *view_lay
   }
 }
 
+void BKE_scene_view_layers_synced_ensure(const Scene *scene)
+{
+  LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
+    BKE_view_layer_synced_ensure(scene, view_layer);
+  }
+}
+
+void BKE_main_view_layers_synced_ensure(const Main *bmain)
+{
+  for (const Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
+    BKE_scene_view_layers_synced_ensure(scene);
+  }
+
+  /* NOTE: This is not (yet?) covered by the dirty tag and differed re-sync system */
+  BKE_layer_collection_local_sync_all(bmain);
+}
+
 static void layer_collection_objects_sync(ViewLayer *view_layer,
                                           LayerCollection *layer,
                                           ListBase *r_lb_new_object_bases,
@@ -1032,7 +1049,7 @@ static void layer_collection_objects_sync(ViewLayer *view_layer,
     }
 
     /* Holdout and indirect only */
-    if ((layer->flag & LAYER_COLLECTION_HOLDOUT) || (base->object->visibility_flag & OB_HOLDOUT)) {
+    if ((layer->flag & LAYER_COLLECTION_HOLDOUT)) {
       base->flag_from_collection |= BASE_HOLDOUT;
     }
     if (layer->flag & LAYER_COLLECTION_INDIRECT_ONLY) {

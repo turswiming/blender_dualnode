@@ -55,7 +55,7 @@ class EdgeVertsInput final : public bke::MeshFieldInput {
 
   GVArray get_varray_for_context(const Mesh &mesh,
                                  const eAttrDomain domain,
-                                 IndexMask UNUSED(mask)) const final
+                                 const IndexMask /*mask*/) const final
   {
     return construct_edge_verts_gvarray(mesh, vertex_, domain);
   }
@@ -113,7 +113,7 @@ class EdgePositionFieldInput final : public bke::MeshFieldInput {
 
   GVArray get_varray_for_context(const Mesh &mesh,
                                  const eAttrDomain domain,
-                                 IndexMask UNUSED(mask)) const final
+                                 IndexMask /*mask*/) const final
   {
     return construct_edge_positions_gvarray(mesh, vertex_, domain);
   }

@@ -21,6 +21,7 @@
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_editmesh.h"
+#include "BKE_editmesh_cache.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_query.h"
 #include "BKE_mesh.h"
@@ -55,7 +56,7 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(wmd, DNA_struct_default_get(WaveModifierData), modifier);
 }
 
-static bool dependsOnTime(Scene *UNUSED(scene), ModifierData *UNUSED(md))
+static bool dependsOnTime(Scene * /*scene*/, ModifierData * /*md*/)
 {
   return true;
 }
@@ -151,8 +152,8 @@ static void waveModifier_do(WaveModifierData *md,
   if (wmd->objectcenter != nullptr) {
     float mat[4][4];
     /* get the control object's location in local coordinates */
-    invert_m4_m4(ob->imat, ob->obmat);
-    mul_m4_m4m4(mat, ob->imat, wmd->objectcenter->obmat);
+    invert_m4_m4(ob->world_to_object, ob->object_to_world);
+    mul_m4_m4m4(mat, ob->world_to_object, wmd->objectcenter->object_to_world);
 
     wmd->startx = mat[3][0];
     wmd->starty = mat[3][1];
@@ -337,7 +338,7 @@ static void deformVertsEM(ModifierData *md,
 
   if (!ELEM(mesh_src, nullptr, mesh)) {
     /* Important not to free `vertexCos` owned by the caller. */
-    EditMeshData *edit_data = mesh_src->runtime.edit_data;
+    EditMeshData *edit_data = mesh_src->runtime->edit_data;
     if (edit_data->vertexCos == vertexCos) {
       edit_data->vertexCos = nullptr;
     }
@@ -346,7 +347,7 @@ static void deformVertsEM(ModifierData *md,
   }
 }
 
-static void panel_draw(const bContext *UNUSED(C), Panel *panel)
+static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
   uiLayout *sub, *row, *col;
   uiLayout *layout = panel->layout;
@@ -383,7 +384,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   modifier_panel_end(layout, ptr);
 }
 
-static void position_panel_draw(const bContext *UNUSED(C), Panel *panel)
+static void position_panel_draw(const bContext * /*C*/, Panel *panel)
 {
   uiLayout *col;
   uiLayout *layout = panel->layout;
@@ -399,7 +400,7 @@ static void position_panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiItemR(col, ptr, "start_position_y", 0, "Y", ICON_NONE);
 }
 
-static void time_panel_draw(const bContext *UNUSED(C), Panel *panel)
+static void time_panel_draw(const bContext * /*C*/, Panel *panel)
 {
   uiLayout *col;
   uiLayout *layout = panel->layout;

@@ -135,16 +135,16 @@ typedef struct bNodeSocket {
   /** Default input value used for unlinked sockets. */
   void *default_value;
 
-  /* execution data */
-  /** Local stack index. */
+  /** Local stack index for "node_exec". */
   short stack_index;
-  /* XXX deprecated, kept for forward compatibility */
-  short stack_type DNA_DEPRECATED;
   char display_shape;
 
   /* #eAttrDomain used when the geometry nodes modifier creates an attribute for a group
    * output. */
   char attribute_domain;
+
+  char _pad[2];
+
   /* Runtime-only cache of the number of input links, for multi-input sockets. */
   short total_inputs;
 
@@ -170,9 +170,6 @@ typedef struct bNodeSocket {
   int own_index DNA_DEPRECATED;
   /* XXX deprecated, only used for restoring old group node links */
   int to_index DNA_DEPRECATED;
-  /* XXX deprecated, still forward compatible since verification
-   * restores pointer from matching own_index. */
-  struct bNodeSocket *groupsock DNA_DEPRECATED;
 
   /** A link pointer, set in #BKE_ntree_update_main. */
   struct bNodeLink *link;
@@ -934,7 +931,7 @@ typedef struct NodeImageMultiFileSocket {
   char path[1024];
   ImageFormatData format;
 
-  /* multilayer output */
+  /* Multi-layer output. */
   /** EXR_TOT_MAXNAME-2 ('.' and channel char are appended). */
   char layer[30];
   char _pad2[2];
@@ -1276,7 +1273,7 @@ typedef struct CryptomatteLayer {
 typedef struct NodeCryptomatte_Runtime {
   /* Contains `CryptomatteLayer`. */
   ListBase layers;
-  /* Temp storage for the cryptomatte picker. */
+  /* Temp storage for the crypto-matte picker. */
   float add[3];
   float remove[3];
 } NodeCryptomatte_Runtime;
@@ -1500,6 +1497,10 @@ typedef struct NodeGeometryCurveToPoints {
 typedef struct NodeGeometryCurveSample {
   /* GeometryNodeCurveSampleMode. */
   uint8_t mode;
+  int8_t use_all_curves;
+  /* eCustomDataType. */
+  int8_t data_type;
+  char _pad[1];
 } NodeGeometryCurveSample;
 
 typedef struct NodeGeometryTransferAttribute {
@@ -1686,6 +1687,7 @@ enum {
   SHD_ATTRIBUTE_GEOMETRY = 0,
   SHD_ATTRIBUTE_OBJECT = 1,
   SHD_ATTRIBUTE_INSTANCER = 2,
+  SHD_ATTRIBUTE_VIEW_LAYER = 3,
 };
 
 /* toon modes */
@@ -2075,6 +2077,21 @@ typedef enum CMPNodeFilterMethod {
   CMP_NODE_FILTER_SHADOW = 6,
   CMP_NODE_FILTER_SHARP_DIAMOND = 7,
 } CMPNodeFilterMethod;
+
+/* Levels Node. Stored in custom1. */
+typedef enum CMPNodeLevelsChannel {
+  CMP_NODE_LEVLES_LUMINANCE = 1,
+  CMP_NODE_LEVLES_RED = 2,
+  CMP_NODE_LEVLES_GREEN = 3,
+  CMP_NODE_LEVLES_BLUE = 4,
+  CMP_NODE_LEVLES_LUMINANCE_BT709 = 5,
+} CMPNodeLevelsChannel;
+
+/* Tone Map Node. Stored in NodeTonemap.type. */
+typedef enum CMPNodeToneMapType {
+  CMP_NODE_TONE_MAP_SIMPLE = 0,
+  CMP_NODE_TONE_MAP_PHOTORECEPTOR = 1,
+} CMPNodeToneMapType;
 
 /* Plane track deform node. */
 

@@ -14,6 +14,8 @@
 
 #include "../scene_graph/NodeShape.h"
 
+#include "BLI_sys_types.h"
+
 using namespace std;
 
 namespace Freestyle {
@@ -35,7 +37,7 @@ void WingedEdgeBuilder::visitIndexedFaceSet(IndexedFaceSet &ifs)
 void WingedEdgeBuilder::visitNodeShape(NodeShape &ns)
 {
   // Sets the current material to iShapeode->material:
-  _current_frs_material = &(ns.frs_material());
+  _current_frs_material = &ns.frs_material();
 }
 
 void WingedEdgeBuilder::visitNodeTransform(NodeTransform &tn)
@@ -50,7 +52,7 @@ void WingedEdgeBuilder::visitNodeTransform(NodeTransform &tn)
   _current_matrix = new_matrix;
 }
 
-void WingedEdgeBuilder::visitNodeTransformAfter(NodeTransform &UNUSED(transform))
+void WingedEdgeBuilder::visitNodeTransformAfter(NodeTransform & /*transform*/)
 {
   delete _current_matrix;
 

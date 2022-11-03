@@ -105,7 +105,7 @@ struct SnapData_EditMesh {
   /* Looptris. */
   BVHTreeFromEditMesh treedata_editmesh;
 
-  struct Mesh_Runtime *mesh_runtime;
+  blender::bke::MeshRuntime *mesh_runtime;
   float min[3], max[3];
 
   void clear()
@@ -189,14 +189,14 @@ static const Mesh *mesh_for_snap(Object *ob_eval, eSnapEditType edit_mode_type, 
     const Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob_eval);
 
     if ((edit_mode_type == SNAP_GEOM_FINAL) && editmesh_eval_final) {
-      if (editmesh_eval_final->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+      if (editmesh_eval_final->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
         return nullptr;
       }
       me_eval = editmesh_eval_final;
       use_hide = true;
     }
     else if ((edit_mode_type == SNAP_GEOM_CAGE) && editmesh_eval_cage) {
-      if (editmesh_eval_cage->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+      if (editmesh_eval_cage->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
         return nullptr;
       }
       me_eval = editmesh_eval_cage;
@@ -253,21 +253,21 @@ static SnapData_Mesh *snap_object_data_mesh_get(SnapObjectContext *sctx,
     sod = sod_p->get();
     bool is_dirty = false;
     if (sod->treedata_mesh.tree && sod->treedata_mesh.cached &&
-        !bvhcache_has_tree(me_eval->runtime.bvh_cache, sod->treedata_mesh.tree)) {
+        !bvhcache_has_tree(me_eval->runtime->bvh_cache, sod->treedata_mesh.tree)) {
       /* The tree is owned by the Mesh and may have been freed since we last used. */
       is_dirty = true;
     }
     else if (sod->bvhtree[0] && sod->cached[0] &&
-             !bvhcache_has_tree(me_eval->runtime.bvh_cache, sod->bvhtree[0])) {
+             !bvhcache_has_tree(me_eval->runtime->bvh_cache, sod->bvhtree[0])) {
       /* The tree is owned by the Mesh and may have been freed since we last used. */
       is_dirty = true;
     }
     else if (sod->bvhtree[1] && sod->cached[1] &&
-             !bvhcache_has_tree(me_eval->runtime.bvh_cache, sod->bvhtree[1])) {
+             !bvhcache_has_tree(me_eval->runtime->bvh_cache, sod->bvhtree[1])) {
       /* The tree is owned by the Mesh and may have been freed since we last used. */
       is_dirty = true;
     }
-    else if (sod->treedata_mesh.looptri != me_eval->runtime.looptris.array) {
+    else if (sod->treedata_mesh.looptri != me_eval->looptris().data()) {
       is_dirty = true;
     }
     else if (sod->treedata_mesh.vert != verts.data()) {
@@ -330,19 +330,19 @@ static SnapData_Mesh *snap_object_data_mesh_get(SnapObjectContext *sctx,
 
 /* Searches for the #Mesh_Runtime associated with the object that is most likely to be updated due
  * to changes in the `edit_mesh`. */
-static Mesh_Runtime *snap_object_data_editmesh_runtime_get(Object *ob_eval)
+static blender::bke::MeshRuntime *snap_object_data_editmesh_runtime_get(Object *ob_eval)
 {
   Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(ob_eval);
   if (editmesh_eval_final) {
-    return &editmesh_eval_final->runtime;
+    return editmesh_eval_final->runtime;
   }
 
   Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob_eval);
   if (editmesh_eval_cage) {
-    return &editmesh_eval_cage->runtime;
+    return editmesh_eval_cage->runtime;
   }
 
-  return &((Mesh *)ob_eval->data)->runtime;
+  return ((Mesh *)ob_eval->data)->runtime;
 }
 
 static SnapData_EditMesh *snap_object_data_editmesh_get(SnapObjectContext *sctx,
@@ -457,7 +457,7 @@ static BVHTreeFromEditMesh *snap_object_data_editmesh_treedata_get(SnapObjectCon
                                     4,
                                     BVHTREE_FROM_EM_LOOPTRI,
                                     &sod->mesh_runtime->bvh_cache,
-                                    static_cast<ThreadMutex *>(sod->mesh_runtime->eval_mutex));
+                                    &sod->mesh_runtime->eval_mutex);
     }
   }
   if (treedata == nullptr || treedata->tree == nullptr) {
@@ -565,7 +565,7 @@ static void iter_snap_objects(SnapObjectContext *sctx,
       free_object_duplilist(lb);
     }
 
-    sob_callback(sctx, params, obj_eval, obj_eval->obmat, is_object_active, data);
+    sob_callback(sctx, params, obj_eval, obj_eval->object_to_world, is_object_active, data);
   }
 }
 
@@ -1145,7 +1145,7 @@ static void raycast_obj_fn(SnapObjectContext *sctx,
  * \param r_index: Hit index or -1 when no valid index is found.
  * (currently only set to the polygon index when using `snap_to == SCE_SNAP_MODE_FACE_RAYCAST`).
  * \param r_ob: Hit object.
- * \param r_obmat: Object matrix (may not be #Object.obmat with dupli-instances).
+ * \param r_obmat: Object matrix (may not be #Object.object_to_world with dupli-instances).
  * \param r_hit_list: List of #SnapObjectHitDepth (caller must free).
  */
 static bool raycastObjects(SnapObjectContext *sctx,
@@ -1244,7 +1244,7 @@ static void nearest_world_tree_co(BVHTree *tree,
   }
 }
 
-static bool nearest_world_tree(SnapObjectContext *UNUSED(sctx),
+static bool nearest_world_tree(SnapObjectContext * /*sctx*/,
                                const struct SnapObjectParams *params,
                                BVHTree *tree,
                                BVHTree_NearestPointCallback nearest_cb,
@@ -1483,7 +1483,7 @@ static void nearest_world_object_fn(SnapObjectContext *sctx,
  * \param r_no: Normal of nearest point on target surface.
  * \param r_index: Index of nearest polygon on target surface.
  * \param r_ob: Nearest target object.
- * \param r_obmat: Nearest target matrix (may not be #Object.obmat with dupli-instances).
+ * \param r_obmat: Nearest target matrix (may not be #Object.object_to_world with dupli-instances).
  */
 static bool nearestWorldObjects(SnapObjectContext *sctx,
                                 const struct SnapObjectParams *params,
@@ -2200,7 +2200,7 @@ static eSnapMode snapArmature(SnapObjectContext *sctx,
                               float *dist_px,
                               /* return args */
                               float r_loc[3],
-                              float *UNUSED(r_no),
+                              float * /*r_no*/,
                               int *r_index)
 {
   eSnapMode retval = SCE_SNAP_MODE_NONE;
@@ -2367,7 +2367,7 @@ static eSnapMode snapCurve(SnapObjectContext *sctx,
                            float *dist_px,
                            /* return args */
                            float r_loc[3],
-                           float *UNUSED(r_no),
+                           float * /*r_no*/,
                            int *r_index)
 {
   bool has_snap = false;
@@ -2537,7 +2537,7 @@ static eSnapMode snap_object_center(const SnapObjectContext *sctx,
                                     float *dist_px,
                                     /* return args */
                                     float r_loc[3],
-                                    float *UNUSED(r_no),
+                                    float * /*r_no*/,
                                     int *r_index)
 {
   eSnapMode retval = SCE_SNAP_MODE_NONE;
@@ -2923,7 +2923,7 @@ static eSnapMode snapEditMesh(SnapObjectContext *sctx,
                                       2,
                                       BVHTREE_FROM_EM_VERTS,
                                       &sod->mesh_runtime->bvh_cache,
-                                      (ThreadMutex *)sod->mesh_runtime->eval_mutex);
+                                      &sod->mesh_runtime->eval_mutex);
       }
       sod->bvhtree[0] = treedata.tree;
       sod->cached[0] = treedata.cached;
@@ -2955,7 +2955,7 @@ static eSnapMode snapEditMesh(SnapObjectContext *sctx,
                                       2,
                                       BVHTREE_FROM_EM_EDGES,
                                       &sod->mesh_runtime->bvh_cache,
-                                      static_cast<ThreadMutex *>(sod->mesh_runtime->eval_mutex));
+                                      &sod->mesh_runtime->eval_mutex);
       }
       sod->bvhtree[1] = treedata.tree;
       sod->cached[1] = treedata.cached;
@@ -3177,7 +3177,7 @@ static void snap_obj_fn(SnapObjectContext *sctx,
  * \param r_index: Hit index or -1 when no valid index is found.
  * (currently only set to the polygon index when using `snap_to == SCE_SNAP_MODE_FACE_RAYCAST`).
  * \param r_ob: Hit object.
- * \param r_obmat: Object matrix (may not be #Object.obmat with dupli-instances).
+ * \param r_obmat: Object matrix (may not be #Object.object_to_world with dupli-instances).
  */
 static eSnapMode snapObjectsRay(SnapObjectContext *sctx,
                                 const SnapObjectParams *params,

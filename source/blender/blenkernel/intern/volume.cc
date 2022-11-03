@@ -363,7 +363,7 @@ struct VolumeGrid {
     is_loaded = false;
   }
 
-  void clear_reference(const char *UNUSED(volume_name))
+  void clear_reference(const char * /*volume_name*/)
   {
     /* Clear any reference to a grid in the file cache. */
     local_grid = grid()->copyGridWithNewTree();
@@ -445,7 +445,7 @@ struct VolumeGrid {
    * may actually be loaded by another user while this is false. But only after
    * calling load() and is_loaded changes to true is it safe to access.
    *
-   * Const write access to this must be protected by `entry->mutex`.
+   * `const` write access to this must be protected by `entry->mutex`.
    */
   mutable bool is_loaded;
 };
@@ -480,7 +480,7 @@ struct VolumeGridVector : public std::list<VolumeGrid> {
     metadata.reset();
   }
 
-  /* Mutex for file loading of grids list. Const write access to the fields after this must be
+  /* Mutex for file loading of grids list. `const` write access to the fields after this must be
    * protected by locking with this mutex. */
   mutable std::mutex mutex;
   /* Absolute file path that grids have been loaded from. */
@@ -515,10 +515,7 @@ static void volume_init_data(ID *id)
   BLI_strncpy(volume->velocity_grid, "velocity", sizeof(volume->velocity_grid));
 }
 
-static void volume_copy_data(Main *UNUSED(bmain),
-                             ID *id_dst,
-                             const ID *id_src,
-                             const int UNUSED(flag))
+static void volume_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, const int /*flag*/)
 {
   Volume *volume_dst = (Volume *)id_dst;
   const Volume *volume_src = (const Volume *)id_src;

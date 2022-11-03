@@ -3,7 +3,7 @@
 /** \file
  * \ingroup wm
  *
- * \name Preselection Gizmo
+ * \name Pre-selection Gizmo
  *
  * Use for tools to hover over data before activation.
  *
@@ -19,8 +19,10 @@
 
 #include "BKE_context.h"
 #include "BKE_editmesh.h"
+#include "BKE_editmesh_cache.h"
 #include "BKE_global.h"
 #include "BKE_layer.h"
+#include "BKE_mesh.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -95,7 +97,7 @@ static void gizmo_preselect_elem_draw(const bContext *C, wmGizmo *gz)
   MeshElemGizmo3D *gz_ele = (MeshElemGizmo3D *)gz;
   if (gz_ele->base_index != -1) {
     Object *ob = gz_ele->bases[gz_ele->base_index]->object;
-    EDBM_preselect_elem_draw(gz_ele->psel, ob->obmat);
+    EDBM_preselect_elem_draw(gz_ele->psel, ob->object_to_world);
   }
 }
 
@@ -183,7 +185,7 @@ static int gizmo_preselect_elem_test_select(bContext *C, wmGizmo *gz, const int 
         BMVert *vert = (BMVert *)eve_test;
         float vert_p_co[2], vert_co[3];
         const float mval_f[2] = {float(vc.mval[0]), float(vc.mval[1])};
-        mul_v3_m4v3(vert_co, gz_ele->bases[base_index_vert]->object->obmat, vert->co);
+        mul_v3_m4v3(vert_co, gz_ele->bases[base_index_vert]->object->object_to_world, vert->co);
         ED_view3d_project_v2(vc.region, vert_co, vert_p_co);
         float len = len_v2v2(vert_p_co, mval_f);
         if (len < 35) {
@@ -234,8 +236,8 @@ static int gizmo_preselect_elem_test_select(bContext *C, wmGizmo *gz, const int 
       Object *ob = gz_ele->bases[gz_ele->base_index]->object;
       Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
       Mesh *me_eval = (Mesh *)DEG_get_evaluated_id(depsgraph, static_cast<ID *>(ob->data));
-      if (me_eval->runtime.edit_data) {
-        coords = me_eval->runtime.edit_data->vertexCos;
+      if (me_eval->runtime->edit_data) {
+        coords = me_eval->runtime->edit_data->vertexCos;
       }
     }
     EDBM_preselect_elem_update_from_single(gz_ele->psel, bm, best.ele, coords);
@@ -277,9 +279,9 @@ static void gizmo_preselect_elem_free(wmGizmo *gz)
   MEM_SAFE_FREE(gz_ele->bases);
 }
 
-static int gizmo_preselect_elem_invoke(bContext *UNUSED(C),
-                                       wmGizmo *UNUSED(gz),
-                                       const wmEvent *UNUSED(event))
+static int gizmo_preselect_elem_invoke(bContext * /*C*/,
+                                       wmGizmo * /*gz*/,
+                                       const wmEvent * /*event*/)
 {
   return OPERATOR_PASS_THROUGH;
 }
@@ -328,7 +330,7 @@ static void gizmo_preselect_edgering_draw(const bContext *C, wmGizmo *gz)
   MeshEdgeRingGizmo3D *gz_ring = (MeshEdgeRingGizmo3D *)gz;
   if (gz_ring->base_index != -1) {
     Object *ob = gz_ring->bases[gz_ring->base_index]->object;
-    EDBM_preselect_edgering_draw(gz_ring->psel, ob->obmat);
+    EDBM_preselect_edgering_draw(gz_ring->psel, ob->object_to_world);
   }
 }
 
@@ -447,9 +449,9 @@ static void gizmo_preselect_edgering_free(wmGizmo *gz)
   MEM_SAFE_FREE(gz_ring->bases);
 }
 
-static int gizmo_preselect_edgering_invoke(bContext *UNUSED(C),
-                                           wmGizmo *UNUSED(gz),
-                                           const wmEvent *UNUSED(event))
+static int gizmo_preselect_edgering_invoke(bContext * /*C*/,
+                                           wmGizmo * /*gz*/,
+                                           const wmEvent * /*event*/)
 {
   return OPERATOR_PASS_THROUGH;
 }

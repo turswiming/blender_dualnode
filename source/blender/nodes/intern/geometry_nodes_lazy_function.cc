@@ -28,6 +28,8 @@
 #include "FN_field_cpp_type.hh"
 #include "FN_lazy_function_graph_executor.hh"
 
+#include "DEG_depsgraph_query.h"
+
 namespace blender::nodes {
 
 using fn::ValueOrField;
@@ -156,8 +158,9 @@ class LazyFunctionForMultiInput : public LazyFunction {
     base_type_ = get_socket_cpp_type(socket);
     BLI_assert(base_type_ != nullptr);
     BLI_assert(socket.is_multi_input());
+    const bNodeTree &btree = socket.owner_tree();
     for (const bNodeLink *link : socket.directly_linked_links()) {
-      if (!link->is_muted()) {
+      if (!(link->is_muted() || nodeIsDanglingReroute(&btree, link->fromnode))) {
         inputs_.append({"Input", *base_type_});
       }
     }
@@ -166,7 +169,7 @@ class LazyFunctionForMultiInput : public LazyFunction {
     outputs_.append({"Output", *vector_type});
   }
 
-  void execute_impl(lf::Params &params, const lf::Context &UNUSED(context)) const override
+  void execute_impl(lf::Params &params, const lf::Context & /*context*/) const override
   {
     /* Currently we only have multi-inputs for geometry and string sockets. This could be
      * generalized in the future. */
@@ -200,7 +203,7 @@ class LazyFunctionForRerouteNode : public LazyFunction {
     outputs_.append({"Output", type});
   }
 
-  void execute_impl(lf::Params &params, const lf::Context &UNUSED(context)) const override
+  void execute_impl(lf::Params &params, const lf::Context & /*context*/) const override
   {
     void *input_value = params.try_get_input_data_ptr(0);
     void *output_value = params.get_output_data_ptr(0);
@@ -228,7 +231,7 @@ class LazyFunctionForUndefinedNode : public LazyFunction {
         node, dummy_used_inputs, r_used_outputs, dummy_inputs, outputs_);
   }
 
-  void execute_impl(lf::Params &params, const lf::Context &UNUSED(context)) const override
+  void execute_impl(lf::Params &params, const lf::Context & /*context*/) const override
   {
     params.set_default_remaining_outputs();
   }
@@ -349,7 +352,7 @@ class LazyFunctionForMutedNode : public LazyFunction {
     }
   }
 
-  void execute_impl(lf::Params &params, const lf::Context &UNUSED(context)) const override
+  void execute_impl(lf::Params &params, const lf::Context & /*context*/) const override
   {
     for (const int output_i : outputs_.index_range()) {
       if (params.output_was_set(output_i)) {
@@ -421,7 +424,7 @@ class LazyFunctionForMultiFunctionConversion : public LazyFunction {
     outputs_.append({"To", to});
   }
 
-  void execute_impl(lf::Params &params, const lf::Context &UNUSED(context)) const override
+  void execute_impl(lf::Params &params, const lf::Context & /*context*/) const override
   {
     const void *from_value = params.try_get_input_data_ptr(0);
     void *to_value = params.get_output_data_ptr(0);
@@ -462,7 +465,7 @@ class LazyFunctionForMultiFunctionNode : public LazyFunction {
     }
   }
 
-  void execute_impl(lf::Params &params, const lf::Context &UNUSED(context)) const override
+  void execute_impl(lf::Params &params, const lf::Context & /*context*/) const override
   {
     Vector<const void *> input_values(inputs_.size());
     Vector<void *> output_values(outputs_.size());
@@ -499,7 +502,7 @@ class LazyFunctionForImplicitInput : public LazyFunction {
     outputs_.append({"Output", type});
   }
 
-  void execute_impl(lf::Params &params, const lf::Context &UNUSED(context)) const override
+  void execute_impl(lf::Params &params, const lf::Context & /*context*/) const override
   {
     void *value = params.get_output_data_ptr(0);
     init_fn_(value);
@@ -601,6 +604,7 @@ class LazyFunctionForGroupNode : public LazyFunction {
  private:
   const bNode &group_node_;
   bool has_many_nodes_ = false;
+  bool use_fallback_outputs_ = false;
   std::optional<GeometryNodesLazyFunctionLogger> lf_logger_;
   std::optional<GeometryNodesLazyFunctionSideEffectProvider> lf_side_effect_provider_;
   std::optional<lf::GraphExecutor> graph_executor_;
@@ -637,6 +641,9 @@ class LazyFunctionForGroupNode : public LazyFunction {
         }
       }
     }
+    else {
+      use_fallback_outputs_ = true;
+    }
 
     lf_logger_.emplace(lf_graph_info);
     lf_side_effect_provider_.emplace();
@@ -656,6 +663,11 @@ class LazyFunctionForGroupNode : public LazyFunction {
       /* If the called node group has many nodes, it's likely that executing it takes a while even
        * if every individual node is very small. */
       lazy_threading::send_hint();
+    }
+    if (use_fallback_outputs_) {
+      /* The node group itself does not have an output node, so use default values as outputs.
+       * The group should still be executed in case it has side effects. */
+      params.set_default_remaining_outputs();
     }
 
     /* The compute context changes when entering a node group. */
@@ -1071,9 +1083,7 @@ struct GeometryNodesLazyFunctionGraphBuilder {
 
   void insert_links_from_socket(const bNodeSocket &from_bsocket, lf::OutputSocket &from_lf_socket)
   {
-    const bNode &from_bnode = from_bsocket.owner_node();
-    if (this->is_dangling_reroute_input(from_bnode)) {
-      /* Dangling reroutes should not be used as source of values. */
+    if (nodeIsDanglingReroute(&btree_, &from_bsocket.owner_node())) {
       return;
     }
 
@@ -1143,7 +1153,8 @@ struct GeometryNodesLazyFunctionGraphBuilder {
             if (multi_input_link == link) {
               break;
             }
-            if (!multi_input_link->is_muted()) {
+            if (!(multi_input_link->is_muted() ||
+                  nodeIsDanglingReroute(&btree_, multi_input_link->fromnode))) {
               link_index++;
             }
           }
@@ -1168,33 +1179,6 @@ struct GeometryNodesLazyFunctionGraphBuilder {
             make_input_link_or_set_default(*to_lf_socket);
           }
         }
-      }
-    }
-  }
-
-  bool is_dangling_reroute_input(const bNode &node)
-  {
-    if (!node.is_reroute()) {
-      return false;
-    }
-    const bNode *iter_node = &node;
-    /* It is guaranteed at a higher level that there are no link cycles. */
-    while (true) {
-      const Span<const bNodeLink *> links = iter_node->input_socket(0).directly_linked_links();
-      BLI_assert(links.size() <= 1);
-      if (links.is_empty()) {
-        return true;
-      }
-      const bNodeLink &link = *links[0];
-      if (!link.is_available()) {
-        return false;
-      }
-      if (link.is_muted()) {
-        return false;
-      }
-      iter_node = link.fromnode;
-      if (!iter_node->is_reroute()) {
-        return false;
       }
     }
   }
@@ -1290,6 +1274,11 @@ const GeometryNodesLazyFunctionGraphInfo *ensure_geometry_nodes_lazy_function_gr
   btree.ensure_topology_cache();
   if (btree.has_available_link_cycle()) {
     return nullptr;
+  }
+  if (const ID *id_orig = DEG_get_original_id(const_cast<ID *>(&btree.id))) {
+    if (id_orig->tag & LIB_TAG_MISSING) {
+      return nullptr;
+    }
   }
 
   std::unique_ptr<GeometryNodesLazyFunctionGraphInfo> &lf_graph_info_ptr =
@@ -1441,7 +1430,7 @@ GeometryNodesLazyFunctionGraphInfo::~GeometryNodesLazyFunctionGraphInfo()
 }
 
 void GeometryNodesLazyFunctionLogger::log_before_node_execute(const lf::FunctionNode &node,
-                                                              const lf::Params &UNUSED(params),
+                                                              const lf::Params & /*params*/,
                                                               const lf::Context &context) const
 {
   /* Enable this to see the threads that invoked a node. */

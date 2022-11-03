@@ -8,8 +8,8 @@
 /* Allow using deprecated functionality for .blend file I/O. */
 #define DNA_DEPRECATED_ALLOW
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 #include "DNA_collection_types.h"
 #include "DNA_defaults.h"
@@ -175,11 +175,11 @@ bool ED_view3d_area_user_region(const ScrArea *area, const View3D *v3d, ARegion 
 void ED_view3d_init_mats_rv3d(const struct Object *ob, struct RegionView3D *rv3d)
 {
   /* local viewmat and persmat, to calculate projections */
-  mul_m4_m4m4(rv3d->viewmatob, rv3d->viewmat, ob->obmat);
-  mul_m4_m4m4(rv3d->persmatob, rv3d->persmat, ob->obmat);
+  mul_m4_m4m4(rv3d->viewmatob, rv3d->viewmat, ob->object_to_world);
+  mul_m4_m4m4(rv3d->persmatob, rv3d->persmat, ob->object_to_world);
 
   /* initializes object space clipping, speeds up clip tests */
-  ED_view3d_clipping_local(rv3d, ob->obmat);
+  ED_view3d_clipping_local(rv3d, ob->object_to_world);
 }
 
 void ED_view3d_init_mats_rv3d_gl(const struct Object *ob, struct RegionView3D *rv3d)
@@ -189,7 +189,7 @@ void ED_view3d_init_mats_rv3d_gl(const struct Object *ob, struct RegionView3D *r
   /* We have to multiply instead of loading `viewmatob` to make
    * it work with duplis using display-lists, otherwise it will
    * override the dupli-matrix. */
-  GPU_matrix_mul(ob->obmat);
+  GPU_matrix_mul(ob->object_to_world);
 }
 
 #ifdef DEBUG
@@ -246,7 +246,7 @@ void ED_view3d_shade_update(Main *bmain, View3D *v3d, ScrArea *area)
 
 /* ******************** default callbacks for view3d space ***************** */
 
-static SpaceLink *view3d_create(const ScrArea *UNUSED(area), const Scene *scene)
+static SpaceLink *view3d_create(const ScrArea * /*area*/, const Scene *scene)
 {
   ARegion *region;
   View3D *v3d;
@@ -329,11 +329,11 @@ static void view3d_free(SpaceLink *sl)
 }
 
 /* spacetype; init callback */
-static void view3d_init(wmWindowManager *UNUSED(wm), ScrArea *UNUSED(area))
+static void view3d_init(wmWindowManager * /*wm*/, ScrArea * /*area*/)
 {
 }
 
-static void view3d_exit(wmWindowManager *UNUSED(wm), ScrArea *area)
+static void view3d_exit(wmWindowManager * /*wm*/, ScrArea *area)
 {
   BLI_assert(area->spacetype == SPACE_VIEW3D);
   View3D *v3d = static_cast<View3D *>(area->spacedata.first);
@@ -540,7 +540,7 @@ static void view3d_ob_drop_draw_activate(struct wmDropBox *drop, wmDrag *drag)
   }
 }
 
-static void view3d_ob_drop_draw_deactivate(struct wmDropBox *drop, wmDrag *UNUSED(drag))
+static void view3d_ob_drop_draw_deactivate(struct wmDropBox *drop, wmDrag * /*drag*/)
 {
   V3DSnapCursorState *state = static_cast<V3DSnapCursorState *>(drop->draw_data);
   if (state) {
@@ -604,7 +604,7 @@ static bool view3d_mat_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event
 static char *view3d_mat_drop_tooltip(bContext *C,
                                      wmDrag *drag,
                                      const int xy[2],
-                                     wmDropBox *UNUSED(drop))
+                                     wmDropBox * /*drop*/)
 {
   const char *name = WM_drag_get_item_name(drag);
   ARegion *region = CTX_wm_region(C);
@@ -629,10 +629,10 @@ static bool view3d_object_data_drop_poll(bContext *C, wmDrag *drag, const wmEven
   return false;
 }
 
-static char *view3d_object_data_drop_tooltip(bContext *UNUSED(C),
-                                             wmDrag *UNUSED(drag),
-                                             const int UNUSED(xy[2]),
-                                             wmDropBox *UNUSED(drop))
+static char *view3d_object_data_drop_tooltip(bContext * /*C*/,
+                                             wmDrag * /*drag*/,
+                                             const int /*xy*/[2],
+                                             wmDropBox * /*drop*/)
 {
   return BLI_strdup(TIP_("Create object instance from object-data"));
 }
@@ -694,9 +694,7 @@ static bool view3d_ima_empty_drop_poll(bContext *C, wmDrag *drag, const wmEvent 
   return false;
 }
 
-static bool view3d_volume_drop_poll(bContext *UNUSED(C),
-                                    wmDrag *drag,
-                                    const wmEvent *UNUSED(event))
+static bool view3d_volume_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return (drag->type == WM_DRAG_PATH) && (drag->icon == ICON_FILE_VOLUME);
 }
@@ -712,7 +710,7 @@ static void view3d_ob_drop_matrix_from_snap(V3DSnapCursorState *snap_state,
   copy_v3_v3(obmat_final[3], snap_data->loc);
 
   float scale[3];
-  mat4_to_size(scale, ob->obmat);
+  mat4_to_size(scale, ob->object_to_world);
   rescale_m4(obmat_final, scale);
 
   const BoundBox *bb = BKE_object_boundbox_get(ob);
@@ -725,7 +723,7 @@ static void view3d_ob_drop_matrix_from_snap(V3DSnapCursorState *snap_state,
   }
 }
 
-static void view3d_ob_drop_copy_local_id(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_ob_drop_copy_local_id(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID(drag, ID_OB);
 
@@ -743,7 +741,7 @@ static void view3d_ob_drop_copy_local_id(bContext *UNUSED(C), wmDrag *drag, wmDr
 
 /* Mostly the same logic as #view3d_collection_drop_copy_external_asset(), just different enough to
  * make sharing code a bit difficult. */
-static void view3d_ob_drop_copy_external_asset(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_ob_drop_copy_external_asset(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   /* NOTE(@campbellbarton): Selection is handled here, de-selecting objects before append,
    * using auto-select to ensure the new objects are selected.
@@ -785,9 +783,7 @@ static void view3d_ob_drop_copy_external_asset(bContext *UNUSED(C), wmDrag *drag
   }
 }
 
-static void view3d_collection_drop_copy_local_id(bContext *UNUSED(C),
-                                                 wmDrag *drag,
-                                                 wmDropBox *drop)
+static void view3d_collection_drop_copy_local_id(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID(drag, ID_GR);
   RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
@@ -795,7 +791,7 @@ static void view3d_collection_drop_copy_local_id(bContext *UNUSED(C),
 
 /* Mostly the same logic as #view3d_ob_drop_copy_external_asset(), just different enough to make
  * sharing code a bit difficult. */
-static void view3d_collection_drop_copy_external_asset(bContext *UNUSED(C),
+static void view3d_collection_drop_copy_external_asset(bContext * /*C*/,
                                                        wmDrag *drag,
                                                        wmDropBox *drop)
 {
@@ -834,14 +830,14 @@ static void view3d_collection_drop_copy_external_asset(bContext *UNUSED(C),
   ED_undo_push(C, "Collection_Drop");
 }
 
-static void view3d_id_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_id_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
   WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
 }
 
-static void view3d_id_drop_copy_with_type(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_id_drop_copy_with_type(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
@@ -849,7 +845,7 @@ static void view3d_id_drop_copy_with_type(bContext *UNUSED(C), wmDrag *drag, wmD
   WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
 }
 
-static void view3d_id_path_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void view3d_id_path_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
@@ -885,7 +881,7 @@ static void view3d_lightcache_update(bContext *C)
 }
 
 /* region dropbox definition */
-static void view3d_dropboxes(void)
+static void view3d_dropboxes()
 {
   ListBase *lb = WM_dropboxmap_find("View3D", SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
@@ -963,7 +959,7 @@ static void view3d_dropboxes(void)
                  nullptr);
 }
 
-static void view3d_widgets(void)
+static void view3d_widgets()
 {
   wmGizmoMapType_Params params{SPACE_VIEW3D, RGN_TYPE_WINDOW};
   wmGizmoMapType *gzmap_type = WM_gizmomaptype_ensure(&params);
@@ -1339,7 +1335,7 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
 }
 
 static void view3d_do_msg_notify_workbench_view_update(struct bContext *C,
-                                                       struct wmMsgSubscribeKey *UNUSED(msg_key),
+                                                       struct wmMsgSubscribeKey * /*msg_key*/,
                                                        struct wmMsgSubscribeValue *msg_val)
 {
   Scene *scene = CTX_data_scene(C);
@@ -1371,7 +1367,7 @@ static void view3d_main_region_message_subscribe(const wmRegionMessageSubscribeP
    * accepting some redundant redraws.
    *
    * For other space types we might try avoid this, keep the 3D view as an exceptional case! */
-  wmMsgParams_RNA msg_key_params = {{0}};
+  wmMsgParams_RNA msg_key_params{};
 
   /* Only subscribe to types. */
   StructRNA *type_array[] = {
@@ -1567,7 +1563,7 @@ static void view3d_header_region_message_subscribe(const wmRegionMessageSubscrib
   struct wmMsgBus *mbus = params->message_bus;
   ARegion *region = params->region;
 
-  wmMsgParams_RNA msg_key_params = {{0}};
+  wmMsgParams_RNA msg_key_params{};
 
   /* Only subscribe to types. */
   StructRNA *type_array[] = {
@@ -2052,7 +2048,7 @@ static void view3d_blend_write(BlendWriter *writer, SpaceLink *sl)
   BKE_viewer_path_blend_write(writer, &v3d->viewer_path);
 }
 
-void ED_spacetype_view3d(void)
+void ED_spacetype_view3d()
 {
   SpaceType *st = MEM_cnew<SpaceType>("spacetype view3d");
   ARegionType *art;

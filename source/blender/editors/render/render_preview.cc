@@ -785,7 +785,7 @@ static Object *object_preview_camera_create(Main *preview_main,
 
   float rotmat[3][3];
   float dummyscale[3];
-  mat4_to_loc_rot_size(camera->loc, rotmat, dummyscale, preview_object->obmat);
+  mat4_to_loc_rot_size(camera->loc, rotmat, dummyscale, preview_object->object_to_world);
 
   /* Camera is Y up, so needs additional rotations to obliquely face the front. */
   float drotmat[3][3];
@@ -1039,7 +1039,7 @@ static void action_preview_render(IconPreview *preview, IconPreviewSize *preview
  * \{ */
 
 /* inside thread, called by renderer, sets job update value */
-static void shader_preview_update(void *spv, RenderResult *UNUSED(rr), struct rcti *UNUSED(rect))
+static void shader_preview_update(void *spv, RenderResult * /*rr*/, struct rcti * /*rect*/)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(spv);
 
@@ -1054,7 +1054,7 @@ static int shader_preview_break(void *spv)
   return *(sp->stop);
 }
 
-static void shader_preview_updatejob(void *UNUSED(spv))
+static void shader_preview_updatejob(void * /*spv*/)
 {
 }
 
@@ -1325,7 +1325,7 @@ static ImBuf *icon_preview_imbuf_from_brush(Brush *brush)
       const char *brushicons_dir = BKE_appdir_folder_id(BLENDER_DATAFILES, "brushicons");
       /* Expected to be found, but don't crash if it's not. */
       if (brushicons_dir) {
-        BLI_join_dirfile(filepath, sizeof(filepath), brushicons_dir, brush->icon_filepath);
+        BLI_path_join(filepath, sizeof(filepath), brushicons_dir, brush->icon_filepath);
 
         /* Use default color spaces. */
         brush->icon_imbuf = IMB_loadiffname(filepath, flags, nullptr);
@@ -1490,7 +1490,7 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
 static void common_preview_startjob(void *customdata,
                                     short *stop,
                                     short *do_update,
-                                    float *UNUSED(progress))
+                                    float * /*progress*/)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(customdata);
 
@@ -1798,10 +1798,7 @@ void PreviewLoadJob::push_load_request(PreviewImage *preview, const eIconSizes i
   BLI_thread_queue_push(todo_queue_, &requested_previews_.back());
 }
 
-void PreviewLoadJob::run_fn(void *customdata,
-                            short *stop,
-                            short *do_update,
-                            float *UNUSED(progress))
+void PreviewLoadJob::run_fn(void *customdata, short *stop, short *do_update, float * /*progress*/)
 {
   PreviewLoadJob *job_data = static_cast<PreviewLoadJob *>(customdata);
 
@@ -2109,7 +2106,7 @@ void ED_preview_shader_job(const bContext *C,
   WM_jobs_start(CTX_wm_manager(C), wm_job);
 }
 
-void ED_preview_kill_jobs(wmWindowManager *wm, Main *UNUSED(bmain))
+void ED_preview_kill_jobs(wmWindowManager *wm, Main * /*bmain*/)
 {
   if (wm) {
     /* This is called to stop all preview jobs before scene data changes, to

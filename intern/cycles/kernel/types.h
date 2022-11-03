@@ -85,9 +85,9 @@ CCL_NAMESPACE_BEGIN
 #  define __VOLUME_RECORD_ALL__
 #endif /* !__KERNEL_GPU__ */
 
-/* MNEE currently causes "Compute function exceeds available temporary registers"
- * on Metal, disabled for now. */
-#ifndef __KERNEL_METAL__
+/* MNEE caused "Compute function exceeds available temporary registers" in macOS < 13 due to a bug
+ * in spill buffer allocation sizing. */
+#if !defined(__KERNEL_METAL__) || (__KERNEL_METAL_MACOS__ >= 13)
 #  define __MNEE__
 #endif
 
@@ -490,6 +490,7 @@ enum PanoramaType {
   PANORAMA_FISHEYE_EQUISOLID = 2,
   PANORAMA_MIRRORBALL = 3,
   PANORAMA_FISHEYE_LENS_POLYNOMIAL = 4,
+  PANORAMA_EQUIANGULAR_CUBEMAP_FACE = 5,
 
   PANORAMA_NUM_TYPES,
 };
@@ -1160,7 +1161,7 @@ typedef struct KernelBake {
   int use;
   int object_index;
   int tri_offset;
-  int pad1;
+  int use_camera;
 } KernelBake;
 static_assert_align(KernelBake, 16);
 
