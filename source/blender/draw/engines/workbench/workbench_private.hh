@@ -69,7 +69,6 @@ struct SceneState {
   bool xray_mode;
 
   DRWState cull_state;
-  DRWState clip_state;
   Vector<float4> clip_planes = {};
 
   float4 background_color;
@@ -140,6 +139,7 @@ struct SceneResources {
 
   StorageVectorBuffer<Material> material_buf = {"material_buf"};
   UniformBuffer<WorldData> world_buf;
+  UniformArrayBuffer<float4, 6> clip_planes_buf;
 
   static const int jitter_tx_size = 64;
   Texture jitter_tx = "wb_jitter_tx";
@@ -165,7 +165,7 @@ class MeshPass : public PassMain {
   /* Move to draw::Pass */
   bool is_empty() const;
 
-  void init_pass(SceneResources &resources, DRWState state);
+  void init_pass(SceneResources &resources, DRWState state, int clip_planes);
   void init_subpasses(ePipelineType pipeline,
                       eLightingType lighting,
                       bool clip,

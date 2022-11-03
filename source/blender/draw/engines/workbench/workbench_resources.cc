@@ -156,6 +156,17 @@ void SceneResources::init(const SceneState &scene_state)
   }
 
   world_buf.push_update();
+
+  for (int i : IndexRange(6)) {
+    if (i < scene_state.clip_planes.size()) {
+      clip_planes_buf[i] = scene_state.clip_planes[i];
+    }
+    else {
+      clip_planes_buf[i] = float4(0);
+    }
+  }
+
+  clip_planes_buf.push_update();
 }
 
 }  // namespace blender::workbench

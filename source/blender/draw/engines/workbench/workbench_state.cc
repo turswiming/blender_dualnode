@@ -59,12 +59,12 @@ void SceneState::init()
    * But this is a workaround for a missing update tagging. */
   DRWState new_clip_state = RV3D_CLIPPING_ENABLED(v3d, rv3d) ? DRW_STATE_CLIP_PLANES :
                                                                DRW_STATE_NO_DRAW;
-  if (clip_state != new_clip_state) {
-    clip_state = new_clip_state;
+  DRWState old_clip_state = clip_planes.size() > 0 ? DRW_STATE_CLIP_PLANES : DRW_STATE_NO_DRAW;
+  if (new_clip_state != old_clip_state) {
     reset_taa = true;
   }
   clip_planes.clear();
-  if (clip_state & DRW_STATE_CLIP_PLANES) {
+  if (new_clip_state & DRW_STATE_CLIP_PLANES) {
     int plane_len = (RV3D_LOCK_FLAGS(rv3d) & RV3D_BOXCLIP) ? 4 : 6;
     for (auto i : IndexRange(plane_len)) {
       clip_planes.append(rv3d->clip[i]);
