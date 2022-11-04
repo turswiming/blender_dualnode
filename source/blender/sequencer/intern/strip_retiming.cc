@@ -39,7 +39,6 @@
 #include "strip_time.h"
 #include "utils.h"
 
-
 using blender::MutableSpan;
 
 MutableSpan<SeqRetimingHandle> SEQ_retiming_handles_get(const Sequence *seq)
@@ -256,7 +255,7 @@ using std::vector;
 
 class RetimingRange {
  public:
-  int start, end ;
+  int start, end;
   float speed;
 
   enum eIntersectType {
@@ -267,11 +266,12 @@ class RetimingRange {
     NONE,
   };
 
-  RetimingRange(int start_frame, int end_frame, float speed): start(start_frame), end(end_frame), speed(speed)
+  RetimingRange(int start_frame, int end_frame, float speed)
+      : start(start_frame), end(end_frame), speed(speed)
   {
   }
 
-  const eIntersectType intersect_type(const RetimingRange& other) const 
+  const eIntersectType intersect_type(const RetimingRange &other) const
   {
     if (other.start <= start && other.end >= end) {
       return FULL;
@@ -279,10 +279,10 @@ class RetimingRange {
     if (other.start > start && other.start < end && other.end > start && other.end < end) {
       return INSIDE;
     }
-    if (other.start > start && other.start < end){
+    if (other.start > start && other.start < end) {
       return PARTIAL_END;
     }
-    if (other.end > start && other.end < end){
+    if (other.end > start && other.end < end) {
       return PARTIAL_START;
     }
     return NONE;
@@ -309,11 +309,11 @@ class RetimingRangeData {
     }
   }
 
-  RetimingRangeData& operator*=(const RetimingRangeData rhs)
+  RetimingRangeData &operator*=(const RetimingRangeData rhs)
   {
     for (int i = 0; i < ranges.size(); i++) {
-      RetimingRange& range = ranges[i];
-      for (const RetimingRange& rhs_range : rhs.ranges) {
+      RetimingRange &range = ranges[i];
+      for (const RetimingRange &rhs_range : rhs.ranges) {
         if (range.intersect_type(rhs_range) == range.NONE) {
           continue;
         }
@@ -363,9 +363,6 @@ static RetimingRangeData seq_retiming_range_data_get(const Scene *scene, const S
 #include <BKE_sound.h>
 void SEQ_retiming_sound_animation_data_set(const Scene *scene, const Sequence *seq)
 {
-  //XXX hack to reset data
-  BKE_sound_set_scene_sound_pitch(seq->scene_sound, 1, 0);
-
   RetimingRangeData retiming_data = seq_retiming_range_data_get(scene, seq);
   for (const RetimingRange &range : retiming_data.ranges) {
     BKE_sound_set_scene_sound_pitch_constant_range(

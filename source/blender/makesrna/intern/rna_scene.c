@@ -33,7 +33,6 @@
 #include "BKE_idtype.h"
 #include "BKE_paint.h"
 #include "BKE_volume.h"
-#include "BKE_sound.h"
 
 #include "ED_gpencil.h"
 #include "ED_object.h"
@@ -889,10 +888,9 @@ static void rna_Scene_camera_update(Main *bmain, Scene *UNUSED(scene_unused), Po
   DEG_relations_tag_update(bmain);
 }
 
-static void rna_Scene_fps_update(Main *bmain, Scene *active_scene, PointerRNA *ptr)
+static void rna_Scene_fps_update(Main *bmain, Scene *UNUSED(active_scene), PointerRNA *ptr)
 {
   Scene *scene = (Scene *)ptr->owner_id;
-  BKE_sound_update_fps(bmain, active_scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_FPS | ID_RECALC_SEQUENCER_STRIPS);
   /* NOTE: Tag via dependency graph will take care of all the updates ion the evaluated domain,
    * however, changes in FPS actually modifies an original skip length,
