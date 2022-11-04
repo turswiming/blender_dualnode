@@ -40,7 +40,7 @@ bool test_acodec(const AVCodec *codec, AVSampleFormat fmt)
     if (ctx) {
       ctx->sample_fmt = fmt;
       ctx->sample_rate = 48000;
-      ctx->channel_layout = AV_CH_LAYOUT_MONO;
+      av_channel_layout_from_mask(&ctx->ch_layout, AV_CH_LAYOUT_MONO);
       ctx->bit_rate = 128000;
       int open = avcodec_open2(ctx, codec, NULL);
       if (open >= 0) {
@@ -130,6 +130,7 @@ FFMPEG_TEST_VCODEC_ID(AV_CODEC_ID_DVVIDEO, AV_PIX_FMT_YUV420P)
 FFMPEG_TEST_VCODEC_ID(AV_CODEC_ID_MPEG1VIDEO, AV_PIX_FMT_YUV420P)
 FFMPEG_TEST_VCODEC_ID(AV_CODEC_ID_MPEG2VIDEO, AV_PIX_FMT_YUV420P)
 FFMPEG_TEST_VCODEC_ID(AV_CODEC_ID_FLV1, AV_PIX_FMT_YUV420P)
+FFMPEG_TEST_VCODEC_ID(AV_CODEC_ID_AV1, AV_PIX_FMT_YUV420P)
 
 /* Audio codecs */
 
@@ -149,6 +150,12 @@ FFMPEG_TEST_VCODEC_NAME(libx264, AV_PIX_FMT_YUV420P)
 FFMPEG_TEST_VCODEC_NAME(libvpx, AV_PIX_FMT_YUV420P)
 FFMPEG_TEST_VCODEC_NAME(libopenjpeg, AV_PIX_FMT_YUV420P)
 FFMPEG_TEST_VCODEC_NAME(libxvid, AV_PIX_FMT_YUV420P)
+/* aom's AV1 encoder is "libaom-av1". FFMPEG_TEST_VCODEC_NAME(libaom-av1, ...)
+ * will not work because the dash will not work with the test macro. */
+TEST(ffmpeg, libaom_av1_AV_PIX_FMT_YUV420P)
+{
+  EXPECT_TRUE(test_codec_video_by_name("libaom-av1", AV_PIX_FMT_YUV420P));
+}
 FFMPEG_TEST_ACODEC_NAME(libvorbis, AV_SAMPLE_FMT_FLTP)
 FFMPEG_TEST_ACODEC_NAME(libopus, AV_SAMPLE_FMT_FLT)
 FFMPEG_TEST_ACODEC_NAME(libmp3lame, AV_SAMPLE_FMT_FLTP)
