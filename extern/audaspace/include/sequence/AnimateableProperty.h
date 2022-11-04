@@ -118,7 +118,7 @@ public:
 	 * \param position The start position in the animation in frames.
 	 * \param position The end position in the animation in frames.
 	 */
-    void write_range(const float* data, int position_start, int position_end);
+	void write_range(const float* data, int position_start, int position_end);
 
 	/**
 	 * Reads the properties value.

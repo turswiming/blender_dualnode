@@ -63,8 +63,8 @@ private:
 	/// How many seconds are skipped at the beginning.
 	double m_skip;
 
-    /// The FPS of the scene.
-    float m_fps;
+	/// The FPS of the scene.
+	float m_fps;
 
 	/// Whether the entry is muted.
 	bool m_muted;

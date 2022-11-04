@@ -246,20 +246,24 @@ bool SequenceHandle::seek(double position)
 		seek_frame = 0;
 	seek_frame += m_entry->m_skip * m_entry->m_fps;
 
-	AnimateableProperty *pitch_property = m_entry->getAnimProperty(AP_PITCH);
-	
+	AnimateableProperty* pitch_property = m_entry->getAnimProperty(AP_PITCH);
+
 	float target_frame = 0;
- 	if (pitch_property != nullptr){
-		for (int i = 0; i < seek_frame; i++){
+	if(pitch_property != nullptr)
+	{
+		for(int i = 0; i < seek_frame; i++)
+		{
 			float pitch;
 			pitch_property->read(i, &pitch);
 			target_frame += pitch;
 		}
-	} else {
+	}
+	else
+	{
 		target_frame = seek_frame;
 	}
 
-	double seekpos = target_frame / m_entry->m_fps; 
+	double seekpos = target_frame / m_entry->m_fps;
 
 	m_handle->setPitch(1.0f);
 	m_handle->seek(seekpos);
