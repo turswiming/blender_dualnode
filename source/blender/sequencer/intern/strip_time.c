@@ -105,10 +105,9 @@ float SEQ_give_frame_index(const Scene *scene, Sequence *seq, float timeline_fra
   }
   else {
     frame_index *= seq_time_playback_rate_factor_get(scene, seq);
+    /* Clamp frame index to strip frame range. */
+    frame_index = clamp_f(frame_index, 0, end - sta);
   }
-
-  /* Clamp frame index to strip frame range. */
-  frame_index = clamp_f(frame_index, 0, end - sta);
 
   if (seq->strobe < 1.0f) {
     seq->strobe = 1.0f;

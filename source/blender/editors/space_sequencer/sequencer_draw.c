@@ -446,6 +446,7 @@ static void draw_seq_waveform_overlay(
 
   for (int i = 0; i < pixels_to_draw; i++) {
     float timeline_frame = start_frame + i * frames_per_pixel;
+    /* TODO: Use linear interpolation between frames to avoid bad drawing quality. */
     float frame_index = SEQ_give_frame_index(scene, seq, timeline_frame);
     float sample = frame_index * samples_per_frame;
     int sample_index = round_fl_to_int(sample);

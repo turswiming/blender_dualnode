@@ -249,9 +249,7 @@ bool SequenceHandle::seek(double position)
 	AnimateableProperty *pitch_property = m_entry->getAnimProperty(AP_PITCH);
 	
 	float target_frame = 0;
-
-	// XXX this can be optimized for constant interpolation
-	if (pitch_property != nullptr){
+ 	if (pitch_property != nullptr){
 		for (int i = 0; i < seek_frame; i++){
 			float pitch;
 			pitch_property->read(i, &pitch);
