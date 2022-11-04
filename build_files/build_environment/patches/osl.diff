@@ -24,27 +24,6 @@ diff -Naur OpenShadingLanguage-1.12.6.2/src/cmake/externalpackages.cmake externa
  
  # IlmBase & OpenEXR
  checked_find_package (OpenEXR REQUIRED
-diff -Naur OpenShadingLanguage-1.12.6.2/src/include/OSL/llvm_util.h external_osl/src/include/OSL/llvm_util.h
---- OpenShadingLanguage-1.12.6.2/src/include/OSL/llvm_util.h	2022-09-30 17:43:53 -0600
-+++ external_osl/src/include/OSL/llvm_util.h	2022-10-15 15:37:24 -0600
-@@ -9,6 +9,8 @@
- #include <unordered_set>
- #include <vector>
- 
-+#define OSL_HAS_BLENDER_CLEANUP_FIX
-+
- #ifdef LLVM_NAMESPACE
- namespace llvm = LLVM_NAMESPACE;
- #endif
-@@ -455,7 +457,7 @@
-     llvm::BasicBlock* masked_return_block() const;
- 
-     bool is_masking_required() const { return m_is_masking_required; }
--
-+    static void Cleanup ();
-     struct ScopedMasking {
-         ScopedMasking() {}
- 
 diff -Naur OpenShadingLanguage-1.12.6.2/src/liboslcomp/oslcomp.cpp external_osl/src/liboslcomp/oslcomp.cpp
 --- OpenShadingLanguage-1.12.6.2/src/liboslcomp/oslcomp.cpp	2022-09-30 17:43:53 -0600
 +++ external_osl/src/liboslcomp/oslcomp.cpp	2022-10-15 14:49:26 -0600
