@@ -16,7 +16,16 @@
 #include "DNA_scene_types.h"
 
 #ifdef __cplusplus
+namespace blender {
+template<typename Float, int axes> class BezierSpline;
+}
+
+using BezierSpline2f = blender::BezierSpline<float, 2>;
+using BezierSpline3f = blender::BezierSpline<float, 3>;
 extern "C" {
+#else
+typedef struct BezierSpline2f BezierSpline2f;
+typedef struct BezierSpline3f BezierSpline3f;
 #endif
 
 struct ARegion;
@@ -510,6 +519,13 @@ void paint_delete_blur_kernel(BlurKernel *);
 
 /* paint curve defines */
 #define PAINT_CURVE_NUM_SEGMENTS 40
+
+void paint_stroke_spline_uv(struct PaintStroke *stroke,
+                            struct StrokeCache *cache,
+                            const float co[3],
+                            float r_out[3],
+                            float r_tan[3]);
+float paint_stroke_spline_length(struct PaintStroke *stroke);
 
 #ifdef __cplusplus
 }

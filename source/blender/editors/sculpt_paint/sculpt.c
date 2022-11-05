@@ -2509,6 +2509,35 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
 
       avg += br->texture_sample_bias;
     }
+    else if (mtex->brush_map_mode == MTEX_MAP_MODE_ROLL) {
+      float point_3d[3];
+      point_3d[2] = 0.0f;
+
+      float tan[3], curv[3];
+
+      paint_stroke_spline_uv(ss->cache->stroke, ss->cache, brush_point, point_3d, tan);
+
+#if 0
+      if (SCULPT_has_colors(ss)) {
+        float color[4] = {point_3d[0], point_3d[1], 0.0f, 1.0f};
+        mul_v3_fl(color, 0.25f / ss->cache->initial_radius);
+        color[0] -= floorf(color[0]);
+        color[1] -= floorf(color[1]);
+        color[2] -= floorf(color[2]);
+
+        SCULPT_vertex_color_set(ss, vertex, color);
+      }
+
+// avg = 0.0f;
+#endif
+
+      float pixel_radius = br->size;
+      mul_v3_fl(point_3d, 1.0f / ss->cache->initial_radius);
+
+      //avg = BKE_brush_sample_tex_3d(scene, br, mtex, point_3d, rgba, thread_id, ss->tex_pool);
+      avg = paint_get_tex_pixel(mtex, point_3d[0], point_3d[1], ss->tex_pool, thread_id);
+      avg += br->texture_sample_bias;
+    }
     else {
       const float point_3d[3] = {point_2d[0], point_2d[1], 0.0f};
       avg = BKE_brush_sample_tex_3d(scene, br, mtex, point_3d, rgba, 0, ss->tex_pool);
@@ -5505,7 +5534,9 @@ static void sculpt_stroke_update_step(bContext *C,
   const Brush *brush = BKE_paint_brush(&sd->paint);
   ToolSettings *tool_settings = CTX_data_tool_settings(C);
   StrokeCache *cache = ss->cache;
+
   cache->stroke_distance = paint_stroke_distance_get(stroke);
+  cache->stroke = stroke;
 
   SCULPT_stroke_modifiers_check(C, ob, brush);
   sculpt_update_cache_variants(C, sd, ob, itemptr);

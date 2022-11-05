@@ -7,8 +7,10 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_even_spline.hh"
 #include "BLI_listbase.h"
 #include "BLI_math.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
@@ -35,6 +37,7 @@
 #include "GPU_state.h"
 
 #include "ED_screen.h"
+#include "ED_space_api.h"
 #include "ED_view3d.h"
 
 #include "IMB_imbuf_types.h"
@@ -46,6 +49,10 @@
 #include <math.h>
 
 //#define DEBUG_TIME
+#define DRAW_DEBUG_VIS
+
+using blender::float2;
+using blender::float3;
 
 #ifdef DEBUG_TIME
 #  include "PIL_time_utildefines.h"
@@ -55,6 +62,14 @@ typedef struct PaintSample {
   float mouse[2];
   float pressure;
 } PaintSample;
+
+typedef struct PaintStrokePoint {
+  float mouse_in[2], mouse_out[2];
+  float location[3];
+  float pressure, x_tilt, y_tilt;
+  bool pen_flip;
+  float size;
+} PaintStrokePoint;
 
 typedef struct PaintStroke {
   void *mode_data;
@@ -70,12 +85,23 @@ typedef struct PaintStroke {
   /* used for lines and curves */
   ListBase line;
 
+  bool need_roll_mapping;
+  int stroke_sample_index;
+
   /* Paint stroke can use up to PAINT_MAX_INPUT_SAMPLES prior inputs
    * to smooth the stroke */
   PaintSample samples[PAINT_MAX_INPUT_SAMPLES];
   int num_samples;
   int cur_sample;
   int tot_samples;
+
+  PaintStrokePoint points[PAINT_MAX_INPUT_SAMPLES];
+  int num_points;
+  int cur_point;
+  int tot_points;
+
+  BezierSpline2f *spline;
+  BezierSpline3f *world_spline;
 
   float last_mouse_position[2];
   float last_world_space_position[3];
@@ -84,6 +110,7 @@ typedef struct PaintStroke {
   bool stroke_over_mesh;
   /* space distance covered so far */
   float stroke_distance;
+  float stroke_distance_world;
 
   /* Set whether any stroke step has yet occurred
    * e.g. in sculpt mode, stroke doesn't start until cursor
@@ -103,6 +130,8 @@ typedef struct PaintStroke {
   /* last pressure will store last pressure value for use in interpolation for space strokes */
   float last_pressure;
   int stroke_mode;
+
+  float spacing_raw;
 
   float last_tablet_event_pressure;
 
@@ -124,14 +153,233 @@ typedef struct PaintStroke {
   StrokeDone done;
 
   bool original; /* Ray-cast original mesh at start of stroke. */
+  void *debug_draw_handle;
 } PaintStroke;
+
+static int paint_stroke_max_points(const Paint *paint, PaintStroke *stroke)
+{
+  if (!stroke->need_roll_mapping) {
+    return 1;
+  }
+
+  float s = max_ff(stroke->spacing_raw, 0.05);
+
+  int tot = (int)ceilf(1.0f / s) + 2;
+  tot = max_ii(tot, 5);
+
+  return tot;
+}
+
+static void paint_stroke_add_point(const Paint *paint,
+                                   PaintStroke *stroke,
+                                   const float mouse_in[2],
+                                   const float mouse_out[2],
+                                   const float loc[3],
+                                   float size,
+                                   float pressure,
+                                   bool pen_flip,
+                                   float x_tilt,
+                                   float y_tilt)
+{
+  PaintStrokePoint *point = &stroke->points[stroke->cur_point];
+  int max_points = paint_stroke_max_points(paint, stroke);
+
+  point->size = size;
+  copy_v2_v2(point->mouse_in, mouse_in);
+  copy_v2_v2(point->mouse_out, mouse_out);
+  point->x_tilt = x_tilt;
+  point->y_tilt = y_tilt;
+  point->pen_flip = pen_flip;
+  copy_v3_v3(point->location, loc);
+  point->pressure = pressure;
+
+  stroke->cur_point++;
+  if (stroke->cur_point >= max_points) {
+    stroke->cur_point = 0;
+  }
+  if (stroke->num_points < max_points) {
+    stroke->num_points++;
+  }
+}
+
+static void paint_project_cubic(bContext *C,
+                                PaintStroke *stroke,
+                                blender::CubicBezier<float, 2> &bezier2d,
+                                blender::CubicBezier<float, 3> &bezier3d)
+{
+  float2 mvals[4];
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 2; j++) {
+      mvals[i][j] = bezier2d.ps[i][j];
+    }
+  }
+
+  for (int i = 0; i < 4; i++) {
+    if (!SCULPT_stroke_get_location(C, bezier3d.ps[i], mvals[i], true)) {
+      ED_view3d_win_to_3d(CTX_wm_view3d(C),
+                          CTX_wm_region(C),
+                          stroke->last_world_space_position,
+                          mvals[i],
+                          bezier3d.ps[i]);
+    }
+  }
+
+  bezier3d.update();
+}
+
+static void paint_brush_make_spline(bContext *C, PaintStroke *stroke)
+{
+  float a[2], b[2], c[2], d[2];
+
+  if (stroke->num_points < 4) {
+    return;
+  }
+
+  int cur = (stroke->cur_point - 1 + stroke->num_points) % stroke->num_points;
+
+  int ia = (cur - 2 + stroke->num_points) % stroke->num_points;
+  int id = (cur - 1 + stroke->num_points) % stroke->num_points;
+
+  int ib = (cur - 3 + stroke->num_points) % stroke->num_points;
+  int ic = (cur - 0 + stroke->num_points) % stroke->num_points;
+
+  copy_v2_v2(a, stroke->points[ia].mouse_out);
+  copy_v2_v2(b, stroke->points[ib].mouse_out);
+  copy_v2_v2(c, stroke->points[ic].mouse_out);
+  copy_v2_v2(d, stroke->points[id].mouse_out);
+
+  float scale = 1.0;
+  scale /= 3.0f;
+
+  float tmp1[2];
+  float tmp2[2];
+#if 1
+  sub_v2_v2v2(tmp1, d, a);
+  sub_v2_v2v2(tmp2, a, b);
+  interp_v2_v2v2(b, tmp1, tmp2, 0.5f);
+  mul_v2_fl(b, scale);
+#else
+  zero_v2(b);
+#endif
+
+  add_v2_v2(b, a);
+
+#if 1
+  sub_v2_v2v2(tmp1, a, d);
+  sub_v2_v2v2(tmp2, d, c);
+  interp_v2_v2v2(c, tmp1, tmp2, 0.5f);
+  mul_v2_fl(c, scale);
+#else
+  zero_v2(c);
+#endif
+
+  add_v2_v2(c, d);
+#if 0
+    printf("\n");
+    printf("a: %.2f: %.2f\n", a[0], a[1]);
+    printf("b: %.2f: %.2f\n", b[0], b[1]);
+    printf("c: %.2f: %.2f\n", c[0], c[1]);
+    printf("d: %.2f: %.2f\n", d[0], d[1]);
+#endif
+
+  blender::CubicBezier<float, 2> bez(a, b, c, d);
+  bez.update();
+  stroke->spline->add(bez);
+
+  blender::CubicBezier<float, 3> bez3d;
+  paint_project_cubic(C, stroke, bez, bez3d);
+  bez3d.update();
+
+  stroke->world_spline->add(bez3d);
+
+  while (stroke->spline->segments.size() > paint_stroke_max_points(nullptr, stroke) + 1) {
+    stroke->spline->pop_front();
+  }
+
+  while (stroke->world_spline->segments.size() > paint_stroke_max_points(nullptr, stroke) + 1) {
+    stroke->stroke_distance_world += stroke->world_spline->segments[0].bezier.length;
+    stroke->world_spline->pop_front();
+  }
+}
+
+#ifdef DRAW_DEBUG_VIS
+static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *userdata)
+{
+  PaintStroke *stroke = (PaintStroke *)userdata;
+  Object *ob = CTX_data_active_object(C);
+
+  if (!ob || !ob->sculpt || !ob->sculpt->cache || !stroke->world_spline) {
+    return;
+  }
+
+  GPU_line_smooth(false);
+  GPU_depth_test(GPU_DEPTH_NONE);
+  GPU_depth_mask(false);
+  GPU_blend(GPU_BLEND_ALPHA);
+
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);  // GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
+  immUniformColor4ub(255, 150, 0, 185);
+
+  int steps = 256;
+
+  immUniformColor4ub(45, 75, 255, 255);
+
+  immBegin(GPU_PRIM_LINE_STRIP, steps);
+
+  float s = 0.0f;
+  float ds = stroke->world_spline->length / (steps - 1);
+
+  for (int i = 0; i < steps; i++, s += ds) {
+    float3 co = stroke->world_spline->evaluate(s);
+
+    mul_v3_m4v3(co, ob->object_to_world, co);
+    immVertex3fv(pos, co);
+  }
+  immEnd();
+
+  s = 0.0f;
+  ds = 0.1f;
+  steps = (int)floorf(stroke->world_spline->length / ds + 0.5f);
+
+  immUniformColor4ub(255, 0, 0, 170);
+  immBegin(GPU_PRIM_POINTS, steps);
+  for (int i = 0; i < steps; i++, s += ds) {
+    float3 co = stroke->world_spline->evaluate(s);
+    mul_v3_m4v3(co, ob->object_to_world, co);
+
+    immVertex3fv(pos, co);
+  }
+
+  immEnd();
+
+  immUniformColor4ub(0, 255, 25, 55);
+  for (int is_points = 0; is_points < 2; is_points++) {
+    immBegin(is_points ? GPU_PRIM_POINTS : GPU_PRIM_LINE_STRIP, stroke->num_points);
+    for (int i = 0; i < stroke->num_points; i++) {
+      int idx = (i + stroke->cur_point) % stroke->num_points;
+      float3 co = stroke->points[idx].location;
+      mul_v3_m4v3(co, ob->object_to_world, co);
+
+      immVertex3fv(pos, co);
+    }
+    immEnd();
+  }
+
+  immUnbindProgram();
+
+  GPU_blend(GPU_BLEND_NONE);
+  GPU_line_smooth(false);
+}
+#endif
 
 /*** Cursors ***/
 static void paint_draw_smooth_cursor(bContext *C, int x, int y, void *customdata)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *brush = BKE_paint_brush(paint);
-  PaintStroke *stroke = customdata;
+  PaintStroke *stroke = (PaintStroke *)customdata;
 
   if (stroke && brush) {
     GPU_line_smooth(true);
@@ -161,7 +409,7 @@ static void paint_draw_smooth_cursor(bContext *C, int x, int y, void *customdata
 static void paint_draw_line_cursor(bContext *C, int x, int y, void *customdata)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
-  PaintStroke *stroke = customdata;
+  PaintStroke *stroke = (PaintStroke *)customdata;
 
   GPU_line_smooth(true);
 
@@ -616,17 +864,65 @@ static void paint_brush_stroke_add_step(
 
   /* Add to stroke */
   if (add_step) {
+    PaintStrokePoint *point;
+    PaintStrokePoint temp;
+
+    int n = 1;
+    int max_points = paint_stroke_max_points(paint, stroke);
+
+    if (stroke->num_points < max_points) {
+      // n = max_points - stroke->num_points;
+    }
+    for (int i = 0; i < n; i++) {
+      paint_stroke_add_point(paint,
+                             stroke,
+                             mval,
+                             mouse_out,
+                             location,
+                             ups->pixel_radius,
+                             pressure,
+                             stroke->pen_flip,
+                             stroke->x_tilt,
+                             stroke->y_tilt);
+      if (stroke->need_roll_mapping) {
+        paint_brush_make_spline(C, stroke);
+      }
+    }
+
+    if (stroke->need_roll_mapping) {
+      if (stroke->spline->segments.size() < paint_stroke_max_points(paint, stroke)) {
+        return;
+      }
+
+      int cur = stroke->cur_point - (paint_stroke_max_points(paint, stroke) >> 1) - 2;
+      cur = (cur + stroke->num_points) % stroke->num_points;
+
+      PaintStrokePoint *p1 = stroke->points + ((cur + stroke->num_points) % stroke->num_points);
+      PaintStrokePoint *p2 = stroke->points +
+                             ((cur - 1 + stroke->num_points) % stroke->num_points);
+
+      point = &temp;
+      temp = *p1;
+
+      interp_v3_v3v3(temp.location, p1->location, p2->location, 0.5f);
+      interp_v2_v2v2(temp.mouse_in, p1->mouse_in, p2->mouse_in, 0.5f);
+      interp_v2_v2v2(temp.mouse_out, p1->mouse_out, p2->mouse_out, 0.5f);
+    }
+    else {
+      point = stroke->points + ((stroke->cur_point - 1 + stroke->num_points) % stroke->num_points);
+    }
+
     RNA_collection_add(op->ptr, "stroke", &itemptr);
-    RNA_float_set(&itemptr, "size", ups->pixel_radius);
-    RNA_float_set_array(&itemptr, "location", location);
+    RNA_float_set(&itemptr, "size", point->size);
+    RNA_float_set_array(&itemptr, "location", point->location);
     /* Mouse coordinates modified by the stroke type options. */
-    RNA_float_set_array(&itemptr, "mouse", mouse_out);
+    RNA_float_set_array(&itemptr, "mouse", point->mouse_out);
     /* Original mouse coordinates. */
-    RNA_float_set_array(&itemptr, "mouse_event", mval);
-    RNA_boolean_set(&itemptr, "pen_flip", stroke->pen_flip);
-    RNA_float_set(&itemptr, "pressure", pressure);
-    RNA_float_set(&itemptr, "x_tilt", stroke->x_tilt);
-    RNA_float_set(&itemptr, "y_tilt", stroke->y_tilt);
+    RNA_float_set_array(&itemptr, "mouse_event", point->mouse_in);
+    RNA_boolean_set(&itemptr, "pen_flip", point->pen_flip);
+    RNA_float_set(&itemptr, "pressure", point->pressure);
+    RNA_float_set(&itemptr, "x_tilt", point->x_tilt);
+    RNA_float_set(&itemptr, "y_tilt", point->y_tilt);
 
     stroke->update_step(C, op, stroke, &itemptr);
 
@@ -702,6 +998,8 @@ static float paint_space_stroke_spacing(bContext *C,
   if (stroke->brush->flag & BRUSH_SPACING_PRESSURE) {
     spacing = spacing * (1.5f - spacing_pressure);
   }
+
+  stroke->spacing_raw = spacing * 0.01;
 
   if (SCULPT_is_cloth_deform_brush(brush)) {
     /* The spacing in tools that use the cloth solver should not be affected by the brush radius to
@@ -897,7 +1195,7 @@ PaintStroke *paint_stroke_new(bContext *C,
                               int event_type)
 {
   struct Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  PaintStroke *stroke = MEM_callocN(sizeof(PaintStroke), "PaintStroke");
+  PaintStroke *stroke = (PaintStroke *)MEM_callocN(sizeof(PaintStroke), "PaintStroke");
   ToolSettings *toolsettings = CTX_data_tool_settings(C);
   UnifiedPaintSettings *ups = &toolsettings->unified_paint_settings;
   Paint *p = BKE_paint_get_active_from_context(C);
@@ -906,6 +1204,13 @@ PaintStroke *paint_stroke_new(bContext *C,
   float zoomx, zoomy;
 
   ED_view3d_viewcontext_init(C, &stroke->vc, depsgraph);
+
+#ifdef DRAW_DEBUG_VIS
+  ARegion *region = CTX_wm_region(C);
+
+  stroke->debug_draw_handle = ED_region_draw_cb_activate(
+      region->type, paint_brush_cubic_vis, stroke, REGION_DRAW_POST_VIEW);
+#endif
 
   stroke->get_location = get_location;
   stroke->test_start = test_start;
@@ -920,6 +1225,18 @@ PaintStroke *paint_stroke_new(bContext *C,
 
   get_imapaint_zoom(C, &zoomx, &zoomy);
   stroke->zoom_2d = max_ff(zoomx, zoomy);
+
+  if (br->mtex.tex && br->mtex.brush_map_mode == MTEX_MAP_MODE_ROLL) {
+    stroke->need_roll_mapping = true;
+  }
+  if (br->mask_mtex.tex && br->mask_mtex.brush_map_mode == MTEX_MAP_MODE_ROLL) {
+    stroke->need_roll_mapping = true;
+  }
+
+  if (stroke->need_roll_mapping) {
+    stroke->spline = MEM_new<blender::BezierSpline2f>("BezierSpline2f");
+    stroke->world_spline = MEM_new<blender::BezierSpline3f>("BezierSpline3f");
+  }
 
   if (stroke->stroke_mode == BRUSH_STROKE_INVERT) {
     if (br->flag & BRUSH_CURVE) {
@@ -948,7 +1265,7 @@ PaintStroke *paint_stroke_new(bContext *C,
     BKE_curvemapping_init(p->cavity_curve);
   }
 
-  BKE_paint_set_overlay_override(br->overlay_flags);
+  BKE_paint_set_overlay_override((eOverlayFlags)br->overlay_flags);
 
   ups->start_pixel_radius = BKE_brush_size_get(CTX_data_scene(C), br);
 
@@ -962,7 +1279,7 @@ void paint_stroke_free(bContext *C, wmOperator *UNUSED(op), PaintStroke *stroke)
     rv3d->rflag &= ~RV3D_PAINTING;
   }
 
-  BKE_paint_set_overlay_override(0);
+  BKE_paint_set_overlay_override((eOverlayFlags)0);
 
   if (stroke == NULL) {
     return;
@@ -981,10 +1298,17 @@ void paint_stroke_free(bContext *C, wmOperator *UNUSED(op), PaintStroke *stroke)
   }
 
   if (stroke->stroke_cursor) {
-    WM_paint_cursor_end(stroke->stroke_cursor);
+    WM_paint_cursor_end((wmPaintCursor *)stroke->stroke_cursor);
   }
 
   BLI_freelistN(&stroke->line);
+
+#ifdef DRAW_DEBUG_VIS
+  ARegion *region = CTX_wm_region(C);
+
+  ED_region_draw_cb_exit(region->type, stroke->debug_draw_handle);
+  ED_region_tag_redraw(region);
+#endif
 
   MEM_SAFE_FREE(stroke);
 }
@@ -1035,7 +1359,7 @@ bool paint_space_stroke_enabled(Brush *br, ePaintMode mode)
   }
 
   if (mode == PAINT_MODE_SCULPT_CURVES &&
-      !curves_sculpt_brush_uses_spacing(br->curves_sculpt_tool)) {
+      !curves_sculpt_brush_uses_spacing((eBrushCurvesSculptTool)br->curves_sculpt_tool)) {
     return false;
   }
 
@@ -1451,8 +1775,22 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event, PaintS
     stroke->last_tablet_event_pressure = pressure;
   }
 
-  paint_stroke_add_sample(p, stroke, event->mval[0], event->mval[1], pressure);
-  paint_stroke_sample_average(stroke, &sample_average);
+  if (!stroke->need_roll_mapping) {
+    paint_stroke_add_sample(p, stroke, event->mval[0], event->mval[1], pressure);
+    paint_stroke_sample_average(stroke, &sample_average);
+  }
+  else {
+    sample_average.mouse[0] = (float)event->mval[0];
+    sample_average.mouse[1] = (float)event->mval[1];
+    sample_average.pressure = pressure;
+  }
+
+  if (stroke->stroke_sample_index == 0) {
+    stroke->last_mouse_position[0] = event->mval[0];
+    stroke->last_mouse_position[1] = event->mval[1];
+  }
+
+  stroke->stroke_sample_index++;
 
   /* Tilt. */
   if (WM_event_is_tablet(event)) {
@@ -1697,4 +2035,31 @@ bool PAINT_brush_tool_poll(bContext *C)
     }
   }
   return false;
+}
+
+void paint_stroke_spline_uv(
+    PaintStroke *stroke, StrokeCache *cache, const float co[3], float r_out[3], float r_tan[3])
+{
+  float3 tan;
+  float3 p = stroke->world_spline->closest_point(co, r_out[1], tan, r_out[0]);
+
+  r_tan = tan;
+  r_out[0] = len_v3v3(p, co);
+  r_out[2] = 0.0f;
+
+  float3 vec = p - float3(co);
+  float3 vec2;
+
+  cross_v3_v3v3(vec2, vec, tan);
+
+  if (dot_v3v3(vec2, cache->view_normal) < 0.0f) {
+    r_out[0] = -r_out[0];
+  }
+
+  r_out[1] += stroke->stroke_distance_world;
+}
+
+float paint_stroke_spline_length(PaintStroke *stroke)
+{
+  return stroke->world_spline->length;
 }
