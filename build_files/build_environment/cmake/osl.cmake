@@ -68,6 +68,8 @@ set(OSL_EXTRA_ARGS
   -DINSTALL_DOCS=OFF
   ${OSL_SIMD_FLAGS}
   -Dpugixml_ROOT=${LIBDIR}/pugixml
+  -DTIFF_ROOT=${LIBDIR}/tiff
+  -DJPEG_ROOT=${LIBDIR}/jpeg
   -DUSE_PYTHON=OFF
 )
 

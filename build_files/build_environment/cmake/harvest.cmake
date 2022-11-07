@@ -26,7 +26,6 @@ endif()
 message("HARVEST_TARGET = ${HARVEST_TARGET}")
 
 if(WIN32)
-
   if(BUILD_MODE STREQUAL Release)
     add_custom_target(Harvest_Release_Results
       COMMAND # jpeg rename libfile + copy include
@@ -48,7 +47,7 @@ if(WIN32)
     )
   endif()
 
-else(WIN32)
+else()
 
   function(harvest from to)
     set(pattern "")
@@ -74,6 +73,7 @@ else(WIN32)
         PATTERN "__pycache__" EXCLUDE
         PATTERN "tests" EXCLUDE)
     endif()
+  endfunction()
 
   harvest(alembic/include alembic/include "*.h")
   harvest(alembic/lib/libAlembic.a alembic/lib/libAlembic.a)
@@ -194,5 +194,4 @@ else(WIN32)
     harvest(libglu/lib mesa/lib "*.so*")
     harvest(mesa/lib64 mesa/lib "*.so*")
   endif()
-
 endif()

@@ -45,6 +45,7 @@ ExternalProject_Add(external_tiff
 add_dependencies(
   external_tiff
   external_zlib
+  external_jpeg
 )
 
 if(WIN32 AND BUILD_MODE STREQUAL Debug)
