@@ -101,7 +101,7 @@ static const struct GWL_RegistryHandler *gwl_registry_handler_from_interface_slo
     int interface_slot);
 
 /* -------------------------------------------------------------------- */
-/** \name Workaround Compositor Sprsific Bugs
+/** \name Workaround Compositor Specific Bugs
  * \{ */
 
 /**
@@ -4013,7 +4013,8 @@ static void gwl_seat_capability_touch_disable(GWL_Seat *seat)
 }
 
 static void seat_handle_capabilities(void *data,
-                                     struct wl_seat *wl_seat,
+                                     /* Only used in an assert. */
+                                     [[maybe_unused]] struct wl_seat *wl_seat,
                                      const uint32_t capabilities)
 {
   CLOG_INFO(LOG,

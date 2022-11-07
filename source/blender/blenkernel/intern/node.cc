@@ -3381,10 +3381,18 @@ struct bNodeSocket *ntreeAddSocketInterfaceFromSocket(bNodeTree *ntree,
                                                       bNode *from_node,
                                                       bNodeSocket *from_sock)
 {
-  bNodeSocket *iosock = ntreeAddSocketInterface(ntree,
-                                                static_cast<eNodeSocketInOut>(from_sock->in_out),
-                                                from_sock->idname,
-                                                DATA_(from_sock->name));
+  return ntreeAddSocketInterfaceFromSocketWithName(
+      ntree, from_node, from_sock, from_sock->idname, from_sock->name);
+}
+
+struct bNodeSocket *ntreeAddSocketInterfaceFromSocketWithName(bNodeTree *ntree,
+                                                              bNode *from_node,
+                                                              bNodeSocket *from_sock,
+                                                              const char *idname,
+                                                              const char *name)
+{
+  bNodeSocket *iosock = ntreeAddSocketInterface(
+      ntree, static_cast<eNodeSocketInOut>(from_sock->in_out), idname, DATA_(name));
   if (iosock) {
     if (iosock->typeinfo->interface_from_socket) {
       iosock->typeinfo->interface_from_socket(ntree, iosock, from_node, from_sock);
@@ -4338,12 +4346,6 @@ void node_type_socket_templates(struct bNodeType *ntype,
   }
 }
 
-void node_type_init(struct bNodeType *ntype,
-                    void (*initfunc)(struct bNodeTree *ntree, struct bNode *node))
-{
-  ntype->initfunc = initfunc;
-}
-
 void node_type_size(struct bNodeType *ntype, int width, int minwidth, int maxwidth)
 {
   ntype->width = width;
@@ -4389,33 +4391,6 @@ void node_type_storage(bNodeType *ntype,
   }
   ntype->copyfunc = copyfunc;
   ntype->freefunc = freefunc;
-}
-
-void node_type_update(struct bNodeType *ntype,
-                      void (*updatefunc)(struct bNodeTree *ntree, struct bNode *node))
-{
-  ntype->updatefunc = updatefunc;
-}
-
-void node_type_group_update(struct bNodeType *ntype,
-                            void (*group_update_func)(struct bNodeTree *ntree, struct bNode *node))
-{
-  ntype->group_update_func = group_update_func;
-}
-
-void node_type_exec(struct bNodeType *ntype,
-                    NodeInitExecFunction init_exec_fn,
-                    NodeFreeExecFunction free_exec_fn,
-                    NodeExecFunction exec_fn)
-{
-  ntype->init_exec_fn = init_exec_fn;
-  ntype->free_exec_fn = free_exec_fn;
-  ntype->exec_fn = exec_fn;
-}
-
-void node_type_gpu(struct bNodeType *ntype, NodeGPUExecFunction gpu_fn)
-{
-  ntype->gpu_fn = gpu_fn;
 }
 
 /* callbacks for undefined types */
