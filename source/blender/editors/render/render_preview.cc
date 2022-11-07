@@ -106,7 +106,7 @@ static void icon_copy_rect(ImBuf *ibuf, uint w, uint h, uint *rect);
 struct ShaderPreview {
   /* from wmJob */
   void *owner;
-  short *stop, *do_update;
+  bool *stop, *do_update;
 
   Scene *scene;
   ID *id, *id_copy;
@@ -790,7 +790,7 @@ static Object *object_preview_camera_create(Main *preview_main,
 
   float rotmat[3][3];
   float dummyscale[3];
-  mat4_to_loc_rot_size(camera->loc, rotmat, dummyscale, preview_object->obmat);
+  mat4_to_loc_rot_size(camera->loc, rotmat, dummyscale, preview_object->object_to_world);
 
   /* Camera is Y up, so needs additional rotations to obliquely face the front. */
   float drotmat[3][3];
@@ -1166,7 +1166,7 @@ static void shader_preview_update(void *spv, RenderResult * /*rr*/, struct rcti 
 }
 
 /* called by renderer, checks job value */
-static int shader_preview_break(void *spv)
+static bool shader_preview_break(void *spv)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(spv);
 
@@ -1342,7 +1342,7 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 }
 
 /* runs inside thread for material and icons */
-static void shader_preview_startjob(void *customdata, short *stop, short *do_update)
+static void shader_preview_startjob(void *customdata, bool *stop, bool *do_update)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(customdata);
 
@@ -1527,7 +1527,7 @@ static void set_alpha(char *cp, int sizex, int sizey, char alpha)
   }
 }
 
-static void icon_preview_startjob(void *customdata, short *stop, short *do_update)
+static void icon_preview_startjob(void *customdata, bool *stop, bool *do_update)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(customdata);
 
@@ -1607,8 +1607,8 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
  * does not run two of them at the same time. */
 
 static void common_preview_startjob(void *customdata,
-                                    short *stop,
-                                    short *do_update,
+                                    bool *stop,
+                                    bool *do_update,
                                     float * /*progress*/)
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(customdata);
@@ -1628,8 +1628,8 @@ static void common_preview_startjob(void *customdata,
 static void other_id_types_preview_render(IconPreview *ip,
                                           IconPreviewSize *cur_size,
                                           const ePreviewRenderMethod pr_method,
-                                          short *stop,
-                                          short *do_update,
+                                          bool *stop,
+                                          bool *do_update,
                                           float *progress)
 {
   ShaderPreview *sp = MEM_cnew<ShaderPreview>("Icon ShaderPreview");
@@ -1689,8 +1689,8 @@ static int icon_previewimg_size_index_get(const IconPreviewSize *icon_size,
 }
 
 static void icon_preview_startjob_all_sizes(void *customdata,
-                                            short *stop,
-                                            short *do_update,
+                                            bool *stop,
+                                            bool *do_update,
                                             float *progress)
 {
   IconPreview *ip = (IconPreview *)customdata;
@@ -1857,7 +1857,7 @@ class PreviewLoadJob {
   void push_load_request(PreviewImage *preview, eIconSizes icon_size);
 
  private:
-  static void run_fn(void *customdata, short *stop, short *do_update, float *progress);
+  static void run_fn(void *customdata, bool *stop, bool *do_update, float *progress);
   static void update_fn(void *customdata);
   static void end_fn(void *customdata);
   static void free_fn(void *customdata);
@@ -1877,7 +1877,8 @@ PreviewLoadJob::~PreviewLoadJob()
 
 PreviewLoadJob &PreviewLoadJob::ensure_job(wmWindowManager *wm, wmWindow *win)
 {
-  wmJob *wm_job = WM_jobs_get(wm, win, nullptr, "Load Previews", 0, WM_JOB_TYPE_LOAD_PREVIEW);
+  wmJob *wm_job = WM_jobs_get(
+      wm, win, nullptr, "Load Previews", eWM_JobFlag(0), WM_JOB_TYPE_LOAD_PREVIEW);
 
   if (!WM_jobs_is_running(wm_job)) {
     PreviewLoadJob *job_data = MEM_new<PreviewLoadJob>("PreviewLoadJobData");
@@ -1898,7 +1899,7 @@ void PreviewLoadJob::load_jobless(PreviewImage *preview, const eIconSizes icon_s
 
   job_data.push_load_request(preview, icon_size);
 
-  short stop = 0, do_update = 0;
+  bool stop = false, do_update = false;
   float progress = 0;
   run_fn(&job_data, &stop, &do_update, &progress);
   update_fn(&job_data);
@@ -1920,7 +1921,7 @@ void PreviewLoadJob::push_load_request(PreviewImage *preview, const eIconSizes i
   BLI_thread_queue_push(todo_queue_, &requested_previews_.back());
 }
 
-void PreviewLoadJob::run_fn(void *customdata, short *stop, short *do_update, float * /*progress*/)
+void PreviewLoadJob::run_fn(void *customdata, bool *stop, bool *do_update, float * /*progress*/)
 {
   PreviewLoadJob *job_data = static_cast<PreviewLoadJob *>(customdata);
 
@@ -2058,7 +2059,7 @@ void ED_preview_icon_render(
   }
 
   IconPreview ip = {nullptr};
-  short stop = false, update = false;
+  bool stop = false, update = false;
   float progress = 0.0f;
 
   ED_preview_ensure_dbase();
