@@ -3,8 +3,16 @@
 set(MINIZIPNG_EXTRA_ARGS
   -DMZ_FETCH_LIBS=OFF
   -DMZ_LIBCOMP=OFF
+  -DMZ_PKCRYPT=OFF
+  -DMZ_WZAES=OFF
+  -DMZ_OPENSSL=OFF
+  -DMZ_SIGNING=OFF
+  -DMZ_LZMA=OFF
+  -DMZ_ZSTD=OFF
   -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
   -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
+  -DBZIP2_LIBRARY=${LIBDIR}/bzip2/lib/${LIBPREFIX}bz2${LIBEXT}
+  -DBZIP2_INCLUDE_DIR=${LIBDIR}/bzip2/include/
   # Because OCIO hardcodes a non standard include path
   -DCMAKE_INSTALL_INCLUDEDIR=${LIBDIR}/minizipng/include/minizip-ng
 )
