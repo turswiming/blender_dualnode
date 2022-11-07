@@ -738,11 +738,16 @@ ccl_device_forceinline void integrate_volume_direct_light(
     return;
   }
 
-  /* Sample position on the same light again, now from the shading
-   * point where we scattered.
+  /* Sample position on the same light again, now from the shading point where we scattered.
    *
-   * TODO: decorrelate random numbers and use light_sample_new_position to
-   * avoid resampling the CDF. */
+   * Note that this means we sample the light three twice when equiangular sampling is used.
+   * We could consider sampling the light tree just once and use the same light position again.
+   *
+   * This would make the PDFs for MIS weights more complicated due to having to account for
+   * both distance/equiangular and direct/indirect light sampling, but could be more accurate.
+   * Additionally we could end up behind the light or outside a spot light cone, which might
+   * waste a sample. Though on the other hand it would be possible to prevent that with
+   * equiangular sampling restricted to a smaller sub-segment where the light has influence. */
   {
     const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
