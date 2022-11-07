@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "DNA_camera_types.h"
 #include "DRW_render.h"
 #include "draw_manager.hh"
 #include "draw_pass.hh"
@@ -59,6 +60,7 @@ struct SceneState {
   Scene *scene;
 
   Object *camera_object;
+  Camera *camera;
   float4x4 view_projection_matrix;
   int2 resolution;
 

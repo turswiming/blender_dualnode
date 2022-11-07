@@ -11,7 +11,6 @@
 #include "BKE_particle.h"
 #include "BKE_pbvh.h"
 #include "DEG_depsgraph_query.h"
-#include "DNA_camera_types.h"
 #include "DNA_fluid_types.h"
 #include "ED_paint.h"
 #include "ED_view3d.h"
@@ -41,7 +40,9 @@ void SceneState::init()
     /*TODO(Miguel Pozo)*/
     // camera = wpd->cam_original_ob;
   }
-  Camera *camera = camera_object ? static_cast<Camera *>(camera_object->data) : nullptr;
+  camera = camera_object && camera_object->type == OB_CAMERA ?
+               static_cast<Camera *>(camera_object->data) :
+               nullptr;
 
   object_mode = CTX_data_mode_enum_ex(context->object_edit, context->obact, context->object_mode);
 
