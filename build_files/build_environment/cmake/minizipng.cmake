@@ -2,6 +2,7 @@
 
 set(MINIZIPNG_EXTRA_ARGS
   -DMZ_FETCH_LIBS=OFF
+  -DMZ_LIBCOMP=OFF
   -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
   -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
   # Because OCIO hardcodes a non standard include path
@@ -16,4 +17,9 @@ ExternalProject_Add(external_minizipng
   CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${LIBDIR}/minizipng ${DEFAULT_CMAKE_FLAGS} ${MINIZIPNG_EXTRA_ARGS}
   INSTALL_DIR ${LIBDIR}/minizipng
+)
+
+add_dependencies(
+  external_minizipng
+  external_zlib
 )
