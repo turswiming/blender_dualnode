@@ -42,6 +42,10 @@ typedef struct AssetFilterSettings {
  *       more than that from the file. So pointers to other IDs or ID data are strictly forbidden.
  */
 typedef struct AssetMetaData {
+#ifdef __cplusplus
+  ~AssetMetaData();
+#endif
+
   /** Runtime type, to reference event callbacks. Only valid for local assets. */
   struct AssetTypeInfo *local_type_info;
 

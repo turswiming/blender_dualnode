@@ -124,6 +124,16 @@ void AssetLibrary::refresh()
   this->catalog_service->reload_catalogs();
 }
 
+AssetRepresentation &AssetLibrary::add_external_asset(std::unique_ptr<AssetMetaData> metadata)
+{
+  return asset_storage_.append(std::make_unique<AssetRepresentation>(std::move(metadata)));
+}
+
+AssetRepresentation &AssetLibrary::add_local_id_asset(const ID &id)
+{
+  return asset_storage_.append(std::make_unique<AssetRepresentation>(id));
+}
+
 namespace {
 void asset_library_on_save_post(struct Main *main,
                                 struct PointerRNA **pointers,

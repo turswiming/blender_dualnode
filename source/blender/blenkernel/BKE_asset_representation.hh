@@ -31,10 +31,7 @@ class AssetRepresentation {
   explicit AssetRepresentation(std::unique_ptr<AssetMetaData> metadata);
   /** Constructs an asset representation for an ID stored in the current file. This makes the asset
    * local and fully editable. */
-  explicit AssetRepresentation(ID &id);
-
-  /* TODO this doesn't make sense. Remove this. */
-  explicit AssetRepresentation(AssetMetaData &&metadata);
+  explicit AssetRepresentation(const ID &id);
 
   AssetMetaData &get_metadata() const;
   /** Returns if this asset is stored inside this current file, and as such fully editable. */

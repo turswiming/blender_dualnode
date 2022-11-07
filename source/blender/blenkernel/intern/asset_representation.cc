@@ -17,12 +17,7 @@ AssetRepresentation::AssetRepresentation(std::unique_ptr<AssetMetaData> metadata
 {
 }
 
-AssetRepresentation::AssetRepresentation(ID &id) : local_id_metadata_(id.asset_data)
-{
-}
-
-AssetRepresentation::AssetRepresentation(AssetMetaData &&metadata)
-    : metadata_(std::make_unique<AssetMetaData>(metadata))
+AssetRepresentation::AssetRepresentation(const ID &id) : local_id_metadata_(id.asset_data)
 {
 }
 

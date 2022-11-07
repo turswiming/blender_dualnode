@@ -51,11 +51,6 @@ struct AssetLibrary {
   std::string root_path;
 
   std::unique_ptr<AssetCatalogService> catalog_service;
-  /** Container to store asset representations, managed by whatever manages this library, not by
-   * the library itself. So this really is arbitrary storage as far as #AssetLibrary is concerned
-   * (allowing the API user to manage partial library storage and partial loading, so only relevant
-   * parts of a library are kept in memory). */
-  AssetStorage asset_storage;
 
   AssetLibrary();
   ~AssetLibrary();
@@ -64,6 +59,9 @@ struct AssetLibrary {
 
   /** Load catalogs that have changed on disk. */
   void refresh();
+
+  AssetRepresentation &add_external_asset(std::unique_ptr<AssetMetaData> metadata);
+  AssetRepresentation &add_local_id_asset(const ID &id);
 
   /**
    * Update `catalog_simple_name` by looking up the asset's catalog by its ID.
@@ -80,6 +78,14 @@ struct AssetLibrary {
 
  private:
   bCallbackFuncStore on_save_callback_store_{};
+
+  /** Container to store asset representations. Assets are not automatically loaded into this when
+   * loading an asset library. Assets have to be loaded externally and added to this storage via
+   * #add_external_asset() or #add_local_id_asset().
+   * So this really is arbitrary storage as far as #AssetLibrary is concerned (allowing the API
+   * user to manage partial library storage and partial loading, so only relevant parts of a
+   * library are kept in memory). */
+  AssetStorage asset_storage_;
 };
 
 Vector<AssetLibraryReference> all_valid_asset_library_refs();

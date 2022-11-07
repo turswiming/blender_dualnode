@@ -79,3 +79,12 @@ bool BKE_asset_representation_is_local_id(const AssetRepresentation *asset)
 #ifdef __cplusplus
 }
 #endif
+
+#ifdef __cplusplus
+
+#  include <memory>
+
+[[nodiscard]] std::unique_ptr<AssetMetaData> BKE_asset_metadata_move_to_unique_ptr(
+    AssetMetaData *asset_data);
+
+#endif

@@ -2993,9 +2993,13 @@ static FileListInternEntry *filelist_readjob_list_lib_group_create(const int idc
   return entry;
 }
 
+/**
+ * \warning: This "steals" the asset metadata from \a datablock_info. Not great design but fixing
+ *           this requires redesigning things on the caller side for proper ownership management.
+ */
 static void filelist_readjob_list_lib_add_datablock(FileList *filelist,
                                                     ListBase *entries,
-                                                    const BLODataBlockInfo *datablock_info,
+                                                    BLODataBlockInfo *datablock_info,
                                                     const bool prefix_relpath_with_group_name,
                                                     const int idcode,
                                                     const char *group_name)
@@ -3015,11 +3019,12 @@ static void filelist_readjob_list_lib_add_datablock(FileList *filelist,
       entry->typeflag |= FILE_TYPE_ASSET;
 
       if (filelist->asset_library) {
-        /* TODO copying asset metadata like this does a shallow copy. E.g. custom properties are
-         * not duplicated properly. */
-        std::unique_ptr asset = std::make_unique<bke::AssetRepresentation>(
-            std::move(*datablock_info->asset_data));
-        entry->asset = &filelist->asset_library->asset_storage.append(std::move(asset));
+        /** XXX Moving out the asset metadata like this isn't great. */
+        std::unique_ptr metadata = BKE_asset_metadata_move_to_unique_ptr(
+            datablock_info->asset_data);
+        BKE_asset_metadata_free(&datablock_info->asset_data);
+
+        entry->asset = &filelist->asset_library->add_external_asset(std::move(metadata));
       }
     }
   }
@@ -3048,7 +3053,7 @@ static void filelist_readjob_list_lib_add_from_indexer_entries(
     const bool prefix_relpath_with_group_name)
 {
   for (const LinkNode *ln = indexer_entries->entries; ln; ln = ln->next) {
-    const FileIndexerEntry *indexer_entry = (const FileIndexerEntry *)ln->link;
+    FileIndexerEntry *indexer_entry = static_cast<FileIndexerEntry *>(ln->link);
     const char *group_name = BKE_idtype_idcode_to_name(indexer_entry->idcode);
     filelist_readjob_list_lib_add_datablock(filelist,
                                             entries,
@@ -3691,8 +3696,7 @@ static void filelist_readjob_main_assets_add_items(FileListReadJob *job_params,
                                                                              id_iter);
     entry->local_data.id = id_iter;
     if (filelist->asset_library) {
-      std::unique_ptr asset = std::make_unique<bke::AssetRepresentation>(*id_iter);
-      entry->asset = &filelist->asset_library->asset_storage.append(std::move(asset));
+      entry->asset = &filelist->asset_library->add_local_id_asset(*id_iter);
     }
     entries_num++;
     BLI_addtail(&tmp_entries, entry);
