@@ -130,7 +130,7 @@ AssetRepresentation &AssetLibrary::add_external_asset(std::unique_ptr<AssetMetaD
   return *asset_storage_.last();
 }
 
-AssetRepresentation &AssetLibrary::add_local_id_asset(const ID &id)
+AssetRepresentation &AssetLibrary::add_local_id_asset(ID &id)
 {
   asset_storage_.append(std::make_unique<AssetRepresentation>(id));
   return *asset_storage_.last();

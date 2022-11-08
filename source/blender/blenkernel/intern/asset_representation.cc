@@ -4,6 +4,8 @@
  * \ingroup bke
  */
 
+#include <stdexcept>
+
 #include "DNA_ID.h"
 #include "DNA_asset_types.h"
 
@@ -17,18 +19,21 @@ AssetRepresentation::AssetRepresentation(std::unique_ptr<AssetMetaData> metadata
 {
 }
 
-AssetRepresentation::AssetRepresentation(const ID &id) : local_id_metadata_(id.asset_data)
+AssetRepresentation::AssetRepresentation(ID &id) : local_asset_id_(&id)
 {
+  if (!id.asset_data) {
+    throw std::invalid_argument("Passed ID is not an asset");
+  }
 }
 
 AssetMetaData &AssetRepresentation::get_metadata() const
 {
-  return local_id_metadata_ ? *local_id_metadata_ : *metadata_;
+  return local_asset_id_ ? *local_asset_id_->asset_data : *metadata_;
 }
 
 bool AssetRepresentation::is_local_id() const
 {
-  return local_id_metadata_ != nullptr;
+  return local_asset_id_ != nullptr;
 }
 
 }  // namespace blender::bke

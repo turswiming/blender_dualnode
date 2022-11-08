@@ -60,7 +60,7 @@ struct AssetLibrary {
    * loading a different file).
    */
   AssetRepresentation &add_external_asset(std::unique_ptr<AssetMetaData> metadata);
-  AssetRepresentation &add_local_id_asset(const ID &id);
+  AssetRepresentation &add_local_id_asset(ID &id);
   /** Remove an asset from the library that was added using #add_external_asset() or
    * #add_local_id_asset().
    * \return True on success, false if the asset couldn't be found inside the library. */
