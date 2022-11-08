@@ -22,10 +22,10 @@ namespace blender::bke {
  */
 class AssetRepresentation {
   /** Null if the asset represents a local ID, in which case the ID owns the metadata. */
-  std::unique_ptr<AssetMetaData> metadata_;
+  std::unique_ptr<AssetMetaData> metadata_ = nullptr;
   /** If the asset representation was constructed from a local ID, this points to the editable
    * asset metadata of the ID. */
-  AssetMetaData *local_id_metadata_; /* Non-owning. */
+  AssetMetaData *local_id_metadata_ = nullptr; /* Non-owning. */
 
  public:
   explicit AssetRepresentation(std::unique_ptr<AssetMetaData> metadata);
