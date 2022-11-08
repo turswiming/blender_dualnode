@@ -105,6 +105,7 @@ add_dependencies(
   external_boost
   external_opensubdiv
   external_python
+  external_openimageio
   openvdb
 )
 
