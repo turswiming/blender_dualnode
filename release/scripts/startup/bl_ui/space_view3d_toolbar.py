@@ -2039,7 +2039,7 @@ class VIEW3D_PT_tools_grease_pencil_sculpt_brush_advanced(GreasePencilSculptAdva
             return False
 
         tool = brush.gpencil_sculpt_tool
-        return tool != 'CLONE'
+        return tool in {'SMOOTH', 'RANDOMIZE'}
 
 
 class VIEW3D_PT_tools_grease_pencil_sculpt_brush_popover(GreasePencilSculptAdvancedPanel, View3DPanel, Panel):
@@ -2057,7 +2057,7 @@ class VIEW3D_PT_tools_grease_pencil_sculpt_brush_popover(GreasePencilSculptAdvan
             return False
 
         tool = brush.gpencil_sculpt_tool
-        return tool != 'CLONE'
+        return tool in {'SMOOTH', 'RANDOMIZE'}
 
 
 # Grease Pencil weight painting tools
