@@ -29,13 +29,6 @@ namespace blender::bke {
 
 struct AssetRepresentation;
 
-class AssetStorage {
-  Vector<std::unique_ptr<AssetRepresentation>> assets_;
-
- public:
-  AssetRepresentation &append(std::unique_ptr<AssetRepresentation> asset);
-};
-
 /**
  * AssetLibrary provides access to an asset library's data.
  *
@@ -85,7 +78,7 @@ struct AssetLibrary {
    * So this really is arbitrary storage as far as #AssetLibrary is concerned (allowing the API
    * user to manage partial library storage and partial loading, so only relevant parts of a
    * library are kept in memory). */
-  AssetStorage asset_storage_;
+  Vector<std::unique_ptr<AssetRepresentation>> asset_storage_;
 };
 
 Vector<AssetLibraryReference> all_valid_asset_library_refs();

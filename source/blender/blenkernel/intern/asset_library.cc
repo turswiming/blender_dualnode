@@ -126,12 +126,14 @@ void AssetLibrary::refresh()
 
 AssetRepresentation &AssetLibrary::add_external_asset(std::unique_ptr<AssetMetaData> metadata)
 {
-  return asset_storage_.append(std::make_unique<AssetRepresentation>(std::move(metadata)));
+  asset_storage_.append(std::make_unique<AssetRepresentation>(std::move(metadata)));
+  return *asset_storage_.last();
 }
 
 AssetRepresentation &AssetLibrary::add_local_id_asset(const ID &id)
 {
-  return asset_storage_.append(std::make_unique<AssetRepresentation>(id));
+  asset_storage_.append(std::make_unique<AssetRepresentation>(id));
+  return *asset_storage_.last();
 }
 
 namespace {
@@ -211,12 +213,6 @@ Vector<AssetLibraryReference> all_valid_asset_library_refs()
   library_ref.type = ASSET_LIBRARY_LOCAL;
   result.append(library_ref);
   return result;
-}
-
-AssetRepresentation &AssetStorage::append(std::unique_ptr<AssetRepresentation> asset)
-{
-  assets_.append(std::move(asset));
-  return *assets_.last();
 }
 
 }  // namespace blender::bke
