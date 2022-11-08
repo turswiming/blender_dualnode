@@ -213,7 +213,9 @@ static bool gpencil_asset_create(const bContext *C,
     LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
       /* If Active Frame mode, delete non active frames or if multi frame edition is not enabled.
        */
-      if ((ELEM(mode, GP_ASSET_SOURCE_ACTIVE_KEYFRAME, GP_ASSET_SOURCE_ACTIVE_KEYFRAME_ALL_LAYERS) ||
+      if ((ELEM(mode,
+                GP_ASSET_SOURCE_ACTIVE_KEYFRAME,
+                GP_ASSET_SOURCE_ACTIVE_KEYFRAME_ALL_LAYERS) ||
            !is_multiedit) &&
           (gpf != gpf_active)) {
         BKE_gpencil_layer_frame_delete(gpl, gpf);
@@ -400,8 +402,16 @@ static int gpencil_asset_create_exec(bContext *C, wmOperator *op)
 void GPENCIL_OT_asset_create(wmOperatorType *ot)
 {
   static const EnumPropertyItem mode_types[] = {
-      {GP_ASSET_SOURCE_ACTIVE_LAYER, "LAYER", 0, "Active Layer", "Create asset using active layer"},
-      {GP_ASSET_SOURCE_ALL_LAYERS, "LAYERS_ALL", 0, "All Layers", "Create asset using all layers"},
+      {GP_ASSET_SOURCE_ACTIVE_LAYER,
+       "LAYER",
+       0,
+       "Active Layer",
+       "Copy the strokes of the active layer into a new grease pencil asset."},
+      {GP_ASSET_SOURCE_ALL_LAYERS,
+       "LAYERS_ALL",
+       0,
+       "All Layers",
+       "Copy the strokes of all layers into a new grease pencil asset."},
       {GP_ASSET_SOURCE_ALL_LAYERS_SPLIT,
        "LAYERS_SPLIT",
        0,
@@ -706,17 +716,10 @@ static tGPDasset *gpencil_session_init_asset_import(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   ID *id = NULL;
 
-  PropertyRNA *prop_name = RNA_struct_find_property(op->ptr, "name");
   PropertyRNA *prop_type = RNA_struct_find_property(op->ptr, "type");
-
-  /* These shouldn't fail when created by outliner dropping as it checks the ID is valid. */
-  if (!RNA_property_is_set(op->ptr, prop_name) || !RNA_property_is_set(op->ptr, prop_type)) {
-    return NULL;
-  }
   const short id_type = RNA_property_enum_get(op->ptr, prop_type);
-  char name[MAX_ID_NAME - 2];
-  RNA_property_string_get(op->ptr, prop_name, name);
-  id = BKE_libblock_find_name(bmain, id_type, name);
+  id = WM_operator_properties_id_lookup_from_name_or_session_uuid(
+      bmain, op->ptr, (ID_Type)id_type);
   if (id == NULL) {
     return NULL;
   }
@@ -806,9 +809,6 @@ static int gpencil_asset_import_invoke(bContext *C, wmOperator *op, const wmEven
 
 void GPENCIL_OT_asset_import(wmOperatorType *ot)
 {
-
-  PropertyRNA *prop;
-
   /* identifiers */
   ot->name = "Grease Pencil Import Asset";
   ot->idname = "GPENCIL_OT_asset_import";
@@ -822,8 +822,8 @@ void GPENCIL_OT_asset_import(wmOperatorType *ot)
   ot->flag = OPTYPE_UNDO | OPTYPE_BLOCKING;
 
   /* Properties. */
-  RNA_def_string(ot->srna, "name", "Name", MAX_ID_NAME - 2, "Name", "ID name to add");
-  prop = RNA_def_enum(ot->srna, "type", rna_enum_id_type_items, 0, "Type", "");
+  WM_operator_properties_id_lookup(ot, true);
+  PropertyRNA *prop = RNA_def_enum(ot->srna, "type", rna_enum_id_type_items, 0, "Type", "");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_ID);
 }
 /** \} */

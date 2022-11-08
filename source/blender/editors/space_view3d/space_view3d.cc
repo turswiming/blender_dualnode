@@ -971,7 +971,6 @@ static void view3d_dropboxes()
                  WM_drag_free_imported_drag_ID,
                  NULL);
 
-  /* TODO(@antoniov): Change to use a temp copy using BLO_library_temp_load_id (). */
   WM_dropbox_add(lb,
                  "GPENCIL_OT_asset_import",
                  view3d_gpencil_drop_poll,

@@ -7486,7 +7486,7 @@ class VIEW3D_MT_gpencil_edit_context_menu(Menu):
 
         # Assets
         col.separator()
-        col.operator_menu_enum("gpencil.asset_create", "source", text="Create Asset")
+        col.operator_menu_enum("gpencil.asset_create", "source", text="Create Grease Pencil Asset")
 
 
 def draw_gpencil_layer_active(context, layout):
