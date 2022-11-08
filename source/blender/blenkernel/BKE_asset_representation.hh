@@ -21,6 +21,8 @@ namespace blender::bke {
  * interact with them. Think of it like a view on an asset.
  */
 class AssetRepresentation {
+  friend class AssetLibrary;
+
   /** Null if the asset represents a local ID, in which case the ID owns the metadata. */
   std::unique_ptr<AssetMetaData> metadata_ = nullptr;
   /** If this asset represents an ID in the current file, this references the ID directly. This

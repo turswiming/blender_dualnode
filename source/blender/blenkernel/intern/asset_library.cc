@@ -8,11 +8,13 @@
 
 #include "BKE_asset_library.hh"
 #include "BKE_asset_representation.hh"
+#include "BKE_lib_remap.h"
 #include "BKE_main.h"
 #include "BKE_preferences.h"
 
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
+#include "BLI_set.hh"
 
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
@@ -97,6 +99,13 @@ void BKE_asset_library_refresh_catalog_simplename(struct AssetLibrary *asset_lib
 {
   blender::bke::AssetLibrary *lib = reinterpret_cast<blender::bke::AssetLibrary *>(asset_library);
   lib->refresh_catalog_simplename(asset_data);
+}
+
+void BKE_asset_library_remap_ids(IDRemapper *mappings)
+{
+  blender::bke::AssetLibraryService *service = blender::bke::AssetLibraryService::get();
+  service->foreach_loaded_asset_library(
+      [mappings](blender::bke::AssetLibrary &library) { library.remap_ids(*mappings); });
 }
 
 namespace blender::bke {
@@ -201,6 +210,28 @@ void AssetLibrary::on_blend_save_post(struct Main *main,
 
   if (save_catalogs_when_file_is_saved) {
     this->catalog_service->write_to_disk(main->filepath);
+  }
+}
+
+void AssetLibrary::remap_ids(IDRemapper &mappings)
+{
+  Set<AssetRepresentation *> removed_id_assets;
+
+  for (auto &asset_uptr : asset_storage_) {
+    if (!asset_uptr->is_local_id()) {
+      continue;
+    }
+
+    IDRemapperApplyResult result = BKE_id_remapper_apply(
+        &mappings, &asset_uptr->local_asset_id_, ID_REMAP_APPLY_DEFAULT);
+    if (result == ID_REMAP_RESULT_SOURCE_UNASSIGNED) {
+      removed_id_assets.add(asset_uptr.get());
+    }
+  }
+
+  /* Remove the assets from storage. */
+  for (AssetRepresentation *asset : removed_id_assets) {
+    remove_asset(*asset);
   }
 }
 

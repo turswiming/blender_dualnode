@@ -6,6 +6,7 @@
 
 #pragma once
 
+struct IDRemapper;
 struct Main;
 
 #ifdef __cplusplus
@@ -30,6 +31,8 @@ void BKE_asset_library_refresh_catalog_simplename(struct AssetLibrary *asset_lib
 
 /** Return whether any loaded AssetLibrary has unsaved changes to its catalogs. */
 bool BKE_asset_library_has_any_unsaved_catalogs(void);
+
+void BKE_asset_library_remap_ids(struct IDRemapper *mappings);
 
 #ifdef __cplusplus
 }

@@ -12,6 +12,7 @@
 
 #include "BKE_asset_library.hh"
 
+#include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 
 #include <memory>
@@ -61,6 +62,8 @@ class AssetLibraryService {
 
   /** Returns whether there are any known asset libraries with unsaved catalog edits. */
   bool has_any_unsaved_catalogs() const;
+
+  void foreach_loaded_asset_library(FunctionRef<void(AssetLibrary &)> fn) const;
 
  protected:
   static std::unique_ptr<AssetLibraryService> instance_;

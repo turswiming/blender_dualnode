@@ -6,6 +6,7 @@
 
 #include "asset_library_service.hh"
 
+#include "BKE_asset_library.hh"
 #include "BKE_blender.h"
 #include "BKE_preferences.h"
 
@@ -173,6 +174,17 @@ bool AssetLibraryService::has_any_unsaved_catalogs() const
   }
 
   return false;
+}
+
+void AssetLibraryService::foreach_loaded_asset_library(FunctionRef<void(AssetLibrary &)> fn) const
+{
+  if (current_file_library_) {
+    fn(*current_file_library_);
+  }
+
+  for (const auto &asset_lib_uptr : on_disk_libraries_.values()) {
+    fn(*asset_lib_uptr);
+  }
 }
 
 }  // namespace blender::bke
