@@ -40,13 +40,16 @@ ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
 
 /* This is the general function for calculating the importance of either a cluster or an emitter.
  * Both of the specialized functions obtain the necessary data before calling this function. */
-ccl_device void light_tree_cluster_importance(const float3 N,
+template<bool in_volume_segment>
+ccl_device void light_tree_cluster_importance(const float3 N_or_D,
                                               const bool has_transmission,
                                               const float3 point_to_centroid,
+                                              /* point_to_centroid is unnormalized for volume */
                                               const float cos_theta_u,
                                               const float3 bcone_axis,
-                                              const float inv_max_distance_squared,
-                                              const float inv_min_distance_squared,
+                                              const float max_distance,
+                                              const float min_distance,
+                                              const float t,
                                               const float theta_o,
                                               const float theta_e,
                                               const float energy,
@@ -56,22 +59,48 @@ ccl_device void light_tree_cluster_importance(const float3 N,
   max_importance = 0.0f;
   min_importance = 0.0f;
 
-  const float cos_theta = dot(bcone_axis, -point_to_centroid);
-  const float cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) :
-                                               dot(point_to_centroid, N);
-  const float sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
+  float cos_theta, cos_theta_i, sin_theta_i;
+  float cos_min_outgoing_angle;         /* minimum angle an emitter’s axis would form with the
+                                       direction to the shading point, cos(theta') in the paper */
+  float cos_min_incidence_angle = 1.0f; /* cos(theta_i') in the paper, omitted for volume */
   const float sin_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_u));
 
-  /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}), also cos(theta_i') in the paper*/
-  const float cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
-                                            1.0f :
-                                            cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
-  /* If the node is guaranteed to be behind the surface we're sampling, and the surface is opaque,
-   * then we can give the node an importance of 0 as it contributes nothing to the surface.
-   * This is more accurate than the bbox test if we are calculating the importance of an emitter
-   * with radius */
-  if (!has_transmission && cos_min_incidence_angle < 0) {
-    return;
+  if (in_volume_segment) {
+    const float3 D = N_or_D;
+    const float3 v0 = -normalize(point_to_centroid);
+    const float3 v1 = normalize(-point_to_centroid + D * fminf(t, 1e12f));
+
+    const float3 o0 = v0;
+    float3 o1, o2;
+    make_orthonormals_tangent(o0, v1, &o1, &o2);
+
+    const float dot_o0_a = dot(o0, bcone_axis);
+    const float dot_o1_a = dot(o1, bcone_axis);
+    const float cos_phi0 = dot_o0_a / sqrtf(sqr(dot_o0_a) + sqr(dot_o1_a));
+
+    /* Eq. (6) */
+    cos_theta = (dot_o1_a < 0 || dot(v0, v1) > cos_phi0) ?
+                    fmaxf(dot_o0_a, dot(v1, bcone_axis)) : /* b_max */
+                    dot(bcone_axis, cos_phi0 * o0 + safe_sqrtf(1.0f - sqr(cos_phi0)) * o1);
+  }
+  else {
+    const float3 N = N_or_D;
+
+    cos_theta = dot(bcone_axis, -point_to_centroid);
+    cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) : dot(point_to_centroid, N);
+    sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
+
+    /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}), also cos(theta_i') in the paper*/
+    cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
+                                  1.0f :
+                                  cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
+    /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
+     * opaque, then we can give the node an importance of 0 as it contributes nothing to the
+     * surface. This is more accurate than the bbox test if we are calculating the importance of an
+     * emitter with radius */
+    if (!has_transmission && cos_min_incidence_angle < 0) {
+      return;
+    }
   }
 
   /* cos(theta - theta_u) */
@@ -80,9 +109,6 @@ ccl_device void light_tree_cluster_importance(const float3 N,
 
   float cos_theta_o, sin_theta_o;
   fast_sincosf(theta_o, &sin_theta_o, &cos_theta_o);
-
-  float cos_min_outgoing_angle; /* minimum angle an emitter’s normal would form with the direction
-                                 to the shading point, cos(theta') in the paper */
 
   if ((cos_theta > cos_theta_u) || (cos_theta_minus_theta_u > cos_theta_o)) {
     /* theta - theta_o - theta_u < 0 */
@@ -98,19 +124,23 @@ ccl_device void light_tree_cluster_importance(const float3 N,
                              sin_theta_minus_theta_u * sin_theta_o;
   }
   else {
+    /* cluster invisible */
     return;
   }
 
   /* TODO: find a good approximation for f_a. */
   const float f_a = 1.0f;
-  max_importance = fabsf(f_a * cos_min_incidence_angle * energy * inv_min_distance_squared *
-                         cos_min_outgoing_angle);
+  /* TODO: also consider t (or theta_a, theta_b) for volume */
+  max_importance = fabsf(f_a * cos_min_incidence_angle * energy * cos_min_outgoing_angle /
+                         (in_volume_segment ? min_distance : sqr(min_distance)));
 
-  if (inv_max_distance_squared == inv_min_distance_squared) {
+  /* TODO: also min importance for volume? */
+  if (max_distance == min_distance || in_volume_segment) {
     min_importance = max_importance;
     return;
   }
 
+  /* compute mininum importance */
   /* cos_max_incidence_angle = cos(min{theta_i + theta_u, pi}) */
   const float cos_max_incidence_angle = fmaxf(
       cos_theta_i * cos_theta_u - sin_theta_i * sin_theta_u, 0.0f);
@@ -120,14 +150,14 @@ ccl_device void light_tree_cluster_importance(const float3 N,
   const float cos_theta_plus_theta_u = cos_theta * cos_theta_u - sin_theta * sin_theta_u;
   if (theta_e - theta_o < 0 || cos_theta < 0 || cos_theta_u < 0 ||
       cos_theta_plus_theta_u < cos(theta_e - theta_o)) {
-    min_importance = 0.f;
+    min_importance = 0.0f;
   }
   else {
     const float sin_theta_plus_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_plus_theta_u));
     cos_max_outgoing_angle = cos_theta_plus_theta_u * cos_theta_o -
                              sin_theta_plus_theta_u * sin_theta_o;
-    min_importance = fabsf(f_a * cos_max_incidence_angle * energy * inv_max_distance_squared *
-                           cos_max_outgoing_angle);
+    min_importance = fabsf(f_a * cos_max_incidence_angle * energy * cos_max_outgoing_angle /
+                           sqr(max_distance));
   }
 }
 
@@ -140,6 +170,9 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
   if (emitter_index < 0) {
     return 0.0f;
   }
+
+  /* TODO: reservoir is disabled for now */
+  return 1.0f;
 
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter_index);
@@ -163,9 +196,11 @@ ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
   return 1.0f;
 }
 
+template<bool in_volume_segment>
 ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                               const float3 P,
-                                              const float3 N,
+                                              const float3 N_or_D,
+                                              const float t,
                                               const bool has_transmission,
                                               int emitter_index,
                                               ccl_private float &max_importance,
@@ -178,26 +213,24 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                   kemitter->bounding_cone_axis[1],
                                   kemitter->bounding_cone_axis[2]);
   float theta_o = kemitter->theta_o;
-  float cos_theta_u, inv_max_distance_squared, inv_min_distance_squared;
-  float3 point_to_centroid;
+  float cos_theta_u, max_distance, min_distance;
+  float3 centroid, point_to_centroid;
   bool bbox_is_visible = has_transmission;
 
   const int prim = kemitter->prim_id;
   if (prim < 0) {
     const int lamp = -prim - 1;
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
-    const float3 centroid = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+    centroid = make_float3(klight->co[0], klight->co[1], klight->co[2]);
 
     if (klight->type == LIGHT_SPOT || klight->type == LIGHT_POINT) {
       const float radius = klight->spot.radius;
-
       float distance;
       point_to_centroid = safe_normalize_len(centroid - P, &distance);
-
-      inv_min_distance_squared = 1.0f / sqr(distance);
-      inv_max_distance_squared = 1.0f / (sqr(radius) + sqr(distance));
-      const float inv_hypotenus = safe_sqrtf(inv_max_distance_squared);
-      cos_theta_u = distance * inv_hypotenus;
+      min_distance = distance;
+      max_distance = sqrtf(sqr(radius) + sqr(distance));
+      const float hypotenus = max_distance;
+      cos_theta_u = distance / hypotenus;
       bbox_is_visible = true; /* will be tested later */
     }
     else { /* TODO: support area light */
@@ -207,19 +240,17 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
       const float3 bbox_max = make_float3(kemitter->bounding_box_max[0],
                                           kemitter->bounding_box_max[1],
                                           kemitter->bounding_box_max[2]);
-      const float3 centroid = 0.5f * (bbox_min + bbox_max);
+      centroid = 0.5f * (bbox_min + bbox_max);
       float distance;
       point_to_centroid = normalize_len(centroid - P, &distance);
-      const float inv_distance_squared = 1.0f / fmaxf(0.25f * len_squared(centroid - bbox_max),
-                                                      sqr(distance));
-      inv_max_distance_squared = inv_distance_squared;
-      inv_min_distance_squared = inv_distance_squared;
+      max_distance = distance;
+      min_distance = distance;
       cos_theta_u = light_tree_cos_bounding_box_angle(
-          bbox_min, bbox_max, P, N, point_to_centroid, bbox_is_visible);
+          bbox_min, bbox_max, P, N_or_D, point_to_centroid, bbox_is_visible);
     }
     if (klight->type == LIGHT_POINT) {
       bcone_axis = -point_to_centroid; /* disk oriented normal */
-      theta_o = 0.f;
+      theta_o = 0.0f;
     }
   }
   else { /* TODO: support mesh light */
@@ -229,15 +260,13 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     const float3 bbox_max = make_float3(kemitter->bounding_box_max[0],
                                         kemitter->bounding_box_max[1],
                                         kemitter->bounding_box_max[2]);
-    const float3 centroid = 0.5f * (bbox_min + bbox_max);
+    centroid = 0.5f * (bbox_min + bbox_max);
     float distance;
     point_to_centroid = normalize_len(centroid - P, &distance);
-    const float inv_distance_squared = 1.0f / fmaxf(0.25f * len_squared(centroid - bbox_max),
-                                                    sqr(distance));
-    inv_max_distance_squared = inv_distance_squared;
-    inv_min_distance_squared = inv_distance_squared;
+    max_distance = distance;
+    min_distance = distance;
     cos_theta_u = light_tree_cos_bounding_box_angle(
-        bbox_min, bbox_max, P, N, point_to_centroid, bbox_is_visible);
+        bbox_min, bbox_max, P, N_or_D, point_to_centroid, bbox_is_visible);
   }
 
   if (!bbox_is_visible) {
@@ -246,18 +275,29 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     return;
   }
 
-  light_tree_cluster_importance(N,
-                                has_transmission,
-                                point_to_centroid,
-                                cos_theta_u,
-                                bcone_axis,
-                                inv_max_distance_squared,
-                                inv_min_distance_squared,
-                                theta_o,
-                                kemitter->theta_e,
-                                kemitter->energy,
-                                max_importance,
-                                min_importance);
+  /* TODO: better measure for single emitter */
+  if (in_volume_segment) {
+    const float3 D = N_or_D;
+    const float3 closest_point = P + D * dot(point_to_centroid, D);
+    /* minimal distance of the ray to the cluster */
+    min_distance = len(centroid - closest_point);
+    max_distance = min_distance;
+    point_to_centroid = centroid - P;
+  }
+
+  light_tree_cluster_importance<in_volume_segment>(N_or_D,
+                                                   has_transmission,
+                                                   point_to_centroid,
+                                                   cos_theta_u,
+                                                   bcone_axis,
+                                                   max_distance,
+                                                   min_distance,
+                                                   t,
+                                                   theta_o,
+                                                   kemitter->theta_e,
+                                                   kemitter->energy,
+                                                   max_importance,
+                                                   min_importance);
 }
 
 ccl_device bool light_tree_should_split(KernelGlobals kg,
@@ -304,9 +344,11 @@ ccl_device bool light_tree_should_split(KernelGlobals kg,
   return (normalized_variance < splitting_threshold);
 }
 
+template<bool in_volume_segment>
 ccl_device void light_tree_node_importance(KernelGlobals kg,
                                            const float3 P,
-                                           const float3 N,
+                                           const float3 N_or_D,
+                                           const float t,
                                            const bool has_transmission,
                                            const ccl_global KernelLightTreeNode *knode,
                                            ccl_private float &max_importance,
@@ -314,8 +356,8 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
 {
   if (knode->child_index <= 0 && knode->num_prims == 1) {
     /* at a leaf node and there is only one emitter */
-    light_tree_emitter_importance(
-        kg, P, N, has_transmission, -knode->child_index, max_importance, min_importance);
+    light_tree_emitter_importance<in_volume_segment>(
+        kg, P, N_or_D, t, has_transmission, -knode->child_index, max_importance, min_importance);
   }
   else {
     const float3 bbox_min = make_float3(
@@ -327,10 +369,10 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
 
     const float3 centroid = 0.5f * (bbox_min + bbox_max);
     float distance;
-    const float3 point_to_centroid = normalize_len(centroid - P, &distance);
+    float3 point_to_centroid = normalize_len(centroid - P, &distance);
     bool bbox_is_visible = has_transmission;
     float cos_theta_u = light_tree_cos_bounding_box_angle(
-        bbox_min, bbox_max, P, N, point_to_centroid, bbox_is_visible);
+        bbox_min, bbox_max, P, N_or_D, point_to_centroid, bbox_is_visible);
 
     /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
      * opaque, then we can give the node an importance of 0 as it contributes nothing to the
@@ -341,25 +383,31 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
       return;
     }
 
-    /* TODO: we're using the splitting heuristic now, do we still need to clamp the distance to
-     * half the radius of the cluster? */
-    const float inv_distance_squared = 1.0f / fmaxf(0.25f * len_squared(centroid - bbox_max),
-                                                    sqr(distance));
+    if (in_volume_segment) {
+      const float3 D = N_or_D;
+      const float3 closest_point = P + D * dot(point_to_centroid, D);
+      /* minimal distance of the ray to the cluster */
+      distance = len(centroid - closest_point);
+      point_to_centroid = centroid - P;
+    }
+    /* clamp distance to half the radius of the cluster when splitting is disabled */
+    distance = fmaxf(0.5f * len(centroid - bbox_max), distance);
 
     /* TODO: currently max_distance = min_distance, max_importance = min_importance for the nodes.
      * Do we need better weights for complex scenes? */
-    light_tree_cluster_importance(N,
-                                  has_transmission,
-                                  point_to_centroid,
-                                  cos_theta_u,
-                                  bcone_axis,
-                                  inv_distance_squared,
-                                  inv_distance_squared,
-                                  knode->theta_o,
-                                  knode->theta_e,
-                                  knode->energy,
-                                  max_importance,
-                                  min_importance);
+    light_tree_cluster_importance<in_volume_segment>(N_or_D,
+                                                     has_transmission,
+                                                     point_to_centroid,
+                                                     cos_theta_u,
+                                                     bcone_axis,
+                                                     distance,
+                                                     distance,
+                                                     t,
+                                                     knode->theta_o,
+                                                     knode->theta_e,
+                                                     knode->energy,
+                                                     max_importance,
+                                                     min_importance);
   }
 }
 
@@ -388,10 +436,12 @@ ccl_device_inline void sample_resevoir(const int current_index,
 
 /* pick an emitter from a leaf node using resevoir sampling, keep two reservoirs for upper and
 + * lower bounds */
+template<bool in_volume_segment>
 ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  ccl_private float *randu,
                                                  const float3 P,
-                                                 const float3 N,
+                                                 const float3 N_or_D,
+                                                 const float t,
                                                  const bool has_transmission,
                                                  const ccl_global KernelLightTreeNode *knode,
                                                  ccl_private float *pdf_factor)
@@ -399,8 +449,8 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   /* the first emitter in the cluster */
   int selected_prim_index_max = -knode->child_index;
   float max_importance, min_importance;
-  light_tree_emitter_importance(
-      kg, P, N, has_transmission, selected_prim_index_max, max_importance, min_importance);
+  light_tree_emitter_importance<in_volume_segment>(
+      kg, P, N_or_D, t, has_transmission, selected_prim_index_max, max_importance, min_importance);
   float selected_max_importance = max_importance;
   float total_max_importance = max_importance;
 
@@ -410,8 +460,8 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
 
   for (int i = 1; i < knode->num_prims; i++) {
     int current_prim_index = -knode->child_index + i;
-    light_tree_emitter_importance(
-        kg, P, N, has_transmission, current_prim_index, max_importance, min_importance);
+    light_tree_emitter_importance<in_volume_segment>(
+        kg, P, N_or_D, t, has_transmission, current_prim_index, max_importance, min_importance);
 
     /* resevoir sampling using the maximum weights */
     sample_resevoir(current_prim_index,
@@ -466,8 +516,6 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   return selected_prim_index;
 }
 
-/* to-do: for now, we're not going to worry about being in a volume,
- * but this is how the other function determines whether we're in a volume or not. */
 template<bool in_volume_segment>
 ccl_device bool light_tree_sample(KernelGlobals kg,
                                   ccl_private const RNGState *rng_state,
@@ -475,7 +523,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                   const float randv,
                                   const float time,
                                   const float3 P,
-                                  const float3 N,
+                                  const float3 N_or_D,
+                                  const float t,
                                   const bool has_transmission,
                                   const int path_flag,
                                   const int bounce,
@@ -509,8 +558,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
      * or traverse down the light tree. */
     if (knode->child_index <= 0) {
       float pdf_emitter_selection = 1.0f;
-      const int selected_light = light_tree_cluster_select_emitter(
-          kg, randu, P, N, has_transmission, knode, &pdf_emitter_selection);
+      const int selected_light = light_tree_cluster_select_emitter<in_volume_segment>(
+          kg, randu, P, N_or_D, t, has_transmission, knode, &pdf_emitter_selection);
 
       if (selected_light < 0) {
         stack_index--;
@@ -518,11 +567,10 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
       }
 
       const float light_reservoir_weight = light_tree_emitter_reservoir_weight(
-          kg, P, N, selected_light);
+          kg, P, N_or_D, selected_light);
 
       /* TODO: make pdf_node_emitter_selection part of the light_reservoir_weight, otherwise result
-       * is suboptimal. */
-
+       * is suboptimal, or disable splitting and remove reservoir-related code . */
       if (light_reservoir_weight == 0.0f) {
         stack_index--;
         continue;
@@ -566,10 +614,10 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                                                      right_index);
 
     float min_left_importance, max_left_importance, min_right_importance, max_right_importance;
-    light_tree_node_importance(
-        kg, P, N, has_transmission, left, max_left_importance, min_left_importance);
-    light_tree_node_importance(
-        kg, P, N, has_transmission, right, max_right_importance, min_right_importance);
+    light_tree_node_importance<in_volume_segment>(
+        kg, P, N_or_D, t, has_transmission, left, max_left_importance, min_left_importance);
+    light_tree_node_importance<in_volume_segment>(
+        kg, P, N_or_D, t, has_transmission, right, max_right_importance, min_right_importance);
 
     const float total_max_importance = max_left_importance + max_right_importance;
     const float total_min_importance = min_left_importance + min_right_importance;
@@ -635,11 +683,15 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
   return light_sample<in_volume_segment>(kg, lamp, *randu, randv, P, path_flag, ls);
 }
 
+template<bool in_volume_segment>
 ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
                                                      const float3 N,
                                                      const bool has_transmission,
                                                      const int index)
 {
+  if (in_volume_segment) {
+    return 0.0f;
+  }
   ccl_global const KernelLightTreeDistantEmitter *kdistant = &kernel_data_fetch(
       light_tree_distant_group, index);
 
@@ -682,18 +734,20 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
                                                  const float time,
                                                  const float3 P,
                                                  const float3 N,
+                                                 const float t,
                                                  const bool has_transmission,
                                                  const int path_flag,
                                                  const int bounce,
                                                  ccl_private LightSample *ls,
                                                  ccl_private float *pdf_factor)
 {
+  kernel_assert(!in_volume_segment);
   /* TODO: do single loop over lights to avoid computing importance twice? */
-
   const int num_distant_lights = kernel_data.integrator.num_distant_lights;
   float total_importance = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    total_importance += light_tree_distant_light_importance(kg, N, has_transmission, i);
+    total_importance += light_tree_distant_light_importance<in_volume_segment>(
+        kg, N, has_transmission, i);
   }
 
   if (total_importance == 0.0f) {
@@ -702,7 +756,8 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
 
   float light_cdf = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    const float light_pdf = light_tree_distant_light_importance(kg, N, has_transmission, i) /
+    const float light_pdf = light_tree_distant_light_importance<in_volume_segment>(
+                                kg, N, has_transmission, i) /
                             total_importance;
     if (*randu <= light_cdf + light_pdf) {
       *randu = (*randu - light_cdf) / light_pdf;
@@ -738,13 +793,14 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
                                 const int prim)
 {
   const bool has_transmission = (path_flag & PATH_RAY_MIS_HAD_TRANSMISSION);
-  float distant_light_importance = light_tree_distant_light_importance(
+  float distant_light_importance = light_tree_distant_light_importance<false>(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
     float discard;
-    light_tree_node_importance(kg, P, N, has_transmission, kroot, light_tree_importance, discard);
+    light_tree_node_importance<false>(
+        kg, P, N, 0, has_transmission, kroot, light_tree_importance, discard);
   }
   const float total_group_importance = light_tree_importance + distant_light_importance;
   kernel_assert(total_group_importance != 0.0f);
@@ -799,8 +855,8 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
         for (int i = 0; i < knode->num_prims; i++) {
           const int emitter = -knode->child_index + i;
           float max_importance, min_importance;
-          light_tree_emitter_importance(
-              kg, P, N, has_transmission, emitter, max_importance, min_importance);
+          light_tree_emitter_importance<false>(
+              kg, P, N, 0, has_transmission, emitter, max_importance, min_importance);
           if (emitter == target_emitter) {
             target_max_importance = max_importance;
             target_min_importance = min_importance;
@@ -827,8 +883,8 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
       else {
         int selected_light = -1;
         float pdf_emitter_selection = 1.0f;
-        selected_light = light_tree_cluster_select_emitter(
-            kg, &randu, P, N, has_transmission, knode, &pdf_emitter_selection);
+        selected_light = light_tree_cluster_select_emitter<false>(
+            kg, &randu, P, N, 0, has_transmission, knode, &pdf_emitter_selection);
 
         if (selected_light < 0) {
           stack_index--;
@@ -860,10 +916,10 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
                                                                      right_index);
 
     float min_left_importance, max_left_importance, min_right_importance, max_right_importance;
-    light_tree_node_importance(
-        kg, P, N, has_transmission, left, max_left_importance, min_left_importance);
-    light_tree_node_importance(
-        kg, P, N, has_transmission, right, max_right_importance, min_right_importance);
+    light_tree_node_importance<false>(
+        kg, P, N, 0, has_transmission, left, max_left_importance, min_left_importance);
+    light_tree_node_importance<false>(
+        kg, P, N, 0, has_transmission, right, max_right_importance, min_right_importance);
 
     const float total_max_importance = max_left_importance + max_right_importance;
     const float total_min_importance = min_left_importance + min_right_importance;
@@ -900,13 +956,14 @@ ccl_device float light_tree_pdf_distant(
     KernelGlobals kg, const float3 P, const float3 N, const int path_flag, const int prim)
 {
   const bool has_transmission = (path_flag & PATH_RAY_MIS_HAD_TRANSMISSION);
-  float distant_light_importance = light_tree_distant_light_importance(
+  float distant_light_importance = light_tree_distant_light_importance<false>(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
     float discard;
-    light_tree_node_importance(kg, P, N, has_transmission, kroot, light_tree_importance, discard);
+    light_tree_node_importance<false>(
+        kg, P, N, 0, has_transmission, kroot, light_tree_importance, discard);
   }
   const float total_group_importance = light_tree_importance + distant_light_importance;
   kernel_assert(total_group_importance != 0.0f);
@@ -920,7 +977,7 @@ ccl_device float light_tree_pdf_distant(
   float emitter_importance = 0.0f;
   float total_importance = 0.0f;
   for (int i = 0; i < num_distant_lights; i++) {
-    float importance = light_tree_distant_light_importance(kg, N, has_transmission, i);
+    float importance = light_tree_distant_light_importance<false>(kg, N, has_transmission, i);
     if (i == distant_light) {
       emitter_importance = importance;
     }
@@ -938,21 +995,24 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                   const float randv,
                                   const float time,
                                   const float3 P,
-                                  const float3 N,
+                                  const float3 N_or_D,
+                                  const float t,
                                   const int shader_flags,
                                   const int bounce,
                                   const uint32_t path_flag,
                                   ccl_private LightSample *ls)
 {
   const bool has_transmission = (shader_flags & SD_BSDF_HAS_TRANSMISSION);
+  kernel_assert(!in_volume_segment || (in_volume_segment && has_transmission));
   /* TODO: add distant lights to light tree (as one child node of the root node) */
-  float distant_light_importance = light_tree_distant_light_importance(
-      kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
+  float distant_light_importance = light_tree_distant_light_importance<in_volume_segment>(
+      kg, N_or_D, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
   if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
     float discard;
-    light_tree_node_importance(kg, P, N, has_transmission, kroot, light_tree_importance, discard);
+    light_tree_node_importance<in_volume_segment>(
+        kg, P, N_or_D, t, has_transmission, kroot, light_tree_importance, discard);
   }
   const float total_importance = light_tree_importance + distant_light_importance;
 
@@ -973,7 +1033,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                                randv,
                                                time,
                                                P,
-                                               N,
+                                               N_or_D,
+                                               t,
                                                has_transmission,
                                                path_flag,
                                                bounce,
@@ -989,7 +1050,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                                               randv,
                                                               time,
                                                               P,
-                                                              N,
+                                                              N_or_D,
+                                                              t,
                                                               has_transmission,
                                                               path_flag,
                                                               bounce,

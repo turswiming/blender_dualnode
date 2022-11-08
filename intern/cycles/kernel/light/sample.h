@@ -322,7 +322,7 @@ ccl_device_inline float light_sample_mis_weight_nee(KernelGlobals kg,
 
 ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
                                                         ccl_private const RNGState *rng_state,
-                                                        const float randu,
+                                                        float randu,
                                                         const float randv,
                                                         const float time,
                                                         const float3 P,
@@ -332,29 +332,23 @@ ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
                                                         const uint32_t path_flag,
                                                         ccl_private LightSample *ls)
 {
-  /* TODO: implement light tree support. */
-#if 0
   if (kernel_data.integrator.use_light_tree) {
-    return light_tree_sample<true>(
-        kg,
-        rng_state,
-        randu,
-        randv,
-        time,
-        P,
-        D,
-        t,
-        SD_BSDF_HAS_TRANSMISSION,
-        bounce,
-        path_flag,
-        ls);
+    return light_tree_sample<true>(kg,
+                                   rng_state,
+                                   randu,
+                                   randv,
+                                   time,
+                                   P,
+                                   D,
+                                   t,
+                                   SD_BSDF_HAS_TRANSMISSION,
+                                   bounce,
+                                   path_flag,
+                                   ls);
   }
   else {
-#endif
-  return light_distribution_sample<true>(kg, randu, randv, time, P, bounce, path_flag, ls);
-#if 0
+    return light_distribution_sample<true>(kg, randu, randv, time, P, bounce, path_flag, ls);
   }
-#endif
 }
 
 ccl_device bool light_sample_from_position(KernelGlobals kg,
@@ -371,7 +365,7 @@ ccl_device bool light_sample_from_position(KernelGlobals kg,
 {
   if (kernel_data.integrator.use_light_tree) {
     return light_tree_sample<false>(
-        kg, rng_state, randu, randv, time, P, N, shader_flags, bounce, path_flag, ls);
+        kg, rng_state, randu, randv, time, P, N, 0, shader_flags, bounce, path_flag, ls);
   }
   else {
     return light_distribution_sample<false>(kg, randu, randv, time, P, bounce, path_flag, ls);

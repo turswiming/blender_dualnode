@@ -697,7 +697,7 @@ ccl_device_forceinline bool integrate_volume_sample_light(
   /* Sample position on a light. */
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
-  const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SEGMENT_LIGHT);
+  float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SEGMENT_LIGHT);
 
   if (!light_sample_from_volume_segment(kg,
                                         rng_state,
@@ -740,7 +740,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
 
   /* Sample position on the same light again, now from the shading point where we scattered.
    *
-   * Note that this means we sample the light three twice when equiangular sampling is used.
+   * Note that this means we sample the light tree twice when equiangular sampling is used.
    * We could consider sampling the light tree just once and use the same light position again.
    *
    * This would make the PDFs for MIS weights more complicated due to having to account for
