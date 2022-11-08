@@ -136,6 +136,31 @@ AssetRepresentation &AssetLibrary::add_local_id_asset(const ID &id)
   return *asset_storage_.last();
 }
 
+std::optional<int> AssetLibrary::find_asset_index(const AssetRepresentation &asset)
+{
+  int index = 0;
+  /* Find index of asset. */
+  for (auto &asset_uptr : asset_storage_) {
+    if (&asset == asset_uptr.get()) {
+      return index;
+    }
+    index++;
+  }
+
+  return {};
+}
+
+bool AssetLibrary::remove_asset(AssetRepresentation &asset)
+{
+  std::optional<int> asset_index = find_asset_index(asset);
+  if (!asset_index) {
+    return false;
+  }
+
+  asset_storage_.remove_and_reorder(*asset_index);
+  return true;
+}
+
 namespace {
 void asset_library_on_save_post(struct Main *main,
                                 struct PointerRNA **pointers,

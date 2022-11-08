@@ -1404,8 +1404,13 @@ static void filelist_direntryarr_free(FileDirEntryArr *array)
   array->entries_filtered_num = FILEDIR_NBR_ENTRIES_UNSET;
 }
 
-static void filelist_intern_entry_free(FileListInternEntry *entry)
+static void filelist_intern_entry_free(FileList *filelist, FileListInternEntry *entry)
 {
+  if (entry->asset) {
+    BLI_assert(filelist->asset_library);
+    filelist->asset_library->remove_asset(*entry->asset);
+  }
+
   if (entry->relpath) {
     MEM_freeN(entry->relpath);
   }
@@ -1418,10 +1423,11 @@ static void filelist_intern_entry_free(FileListInternEntry *entry)
   MEM_freeN(entry);
 }
 
-static void filelist_intern_free(FileListIntern *filelist_intern)
+static void filelist_intern_free(FileList *filelist)
 {
+  FileListIntern *filelist_intern = &filelist->filelist_intern;
   LISTBASE_FOREACH_MUTABLE (FileListInternEntry *, entry, &filelist_intern->entries) {
-    filelist_intern_entry_free(entry);
+    filelist_intern_entry_free(filelist, entry);
   }
   BLI_listbase_clear(&filelist_intern->entries);
 
@@ -1431,8 +1437,9 @@ static void filelist_intern_free(FileListIntern *filelist_intern)
 /**
  * \return the number of main files removed.
  */
-static int filelist_intern_free_main_files(FileListIntern *filelist_intern)
+static int filelist_intern_free_main_files(FileList *filelist)
 {
+  FileListIntern *filelist_intern = &filelist->filelist_intern;
   int removed_counter = 0;
   LISTBASE_FOREACH_MUTABLE (FileListInternEntry *, entry, &filelist_intern->entries) {
     if (!filelist_intern_entry_is_main_file(entry)) {
@@ -1440,7 +1447,7 @@ static int filelist_intern_free_main_files(FileListIntern *filelist_intern)
     }
 
     BLI_remlink(&filelist_intern->entries, entry);
-    filelist_intern_entry_free(entry);
+    filelist_intern_entry_free(filelist, entry);
     removed_counter++;
   }
 
@@ -1795,7 +1802,7 @@ void filelist_clear_ex(struct FileList *filelist,
     filelist_cache_clear(&filelist->filelist_cache, filelist->filelist_cache.size);
   }
 
-  filelist_intern_free(&filelist->filelist_intern);
+  filelist_intern_free(filelist);
 
   filelist_direntryarr_free(&filelist->filelist);
 
@@ -1823,7 +1830,7 @@ static void filelist_clear_main_files(FileList *filelist,
     filelist_cache_clear(&filelist->filelist_cache, filelist->filelist_cache.size);
   }
 
-  const int removed_files = filelist_intern_free_main_files(&filelist->filelist_intern);
+  const int removed_files = filelist_intern_free_main_files(filelist);
 
   filelist->filelist.entries_num -= removed_files;
   filelist->filelist.entries_filtered_num = FILEDIR_NBR_ENTRIES_UNSET;

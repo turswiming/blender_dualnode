@@ -53,8 +53,18 @@ struct AssetLibrary {
   /** Load catalogs that have changed on disk. */
   void refresh();
 
+  /**
+   * Create a representation of an asset to be considered part of this library. Once the
+   * representation is not needed anymore, it must be freed using #remove_asset(), or there will be
+   * leaking that's only cleared when the library storage is destructed (typically on exit or
+   * loading a different file).
+   */
   AssetRepresentation &add_external_asset(std::unique_ptr<AssetMetaData> metadata);
   AssetRepresentation &add_local_id_asset(const ID &id);
+  /** Remove an asset from the library that was added using #add_external_asset() or
+   * #add_local_id_asset().
+   * \return True on success, false if the asset couldn't be found inside the library. */
+  bool remove_asset(AssetRepresentation &asset);
 
   /**
    * Update `catalog_simple_name` by looking up the asset's catalog by its ID.
@@ -72,13 +82,22 @@ struct AssetLibrary {
  private:
   bCallbackFuncStore on_save_callback_store_{};
 
-  /** Container to store asset representations. Assets are not automatically loaded into this when
-   * loading an asset library. Assets have to be loaded externally and added to this storage via
-   * #add_external_asset() or #add_local_id_asset().
-   * So this really is arbitrary storage as far as #AssetLibrary is concerned (allowing the API
-   * user to manage partial library storage and partial loading, so only relevant parts of a
-   * library are kept in memory). */
+  /** Storage for assets (better said their representations) that are considered to be part of this
+   * library. Assets are not automatically loaded into this when loading an asset library. Assets
+   * have to be loaded externally and added to this storage via #add_external_asset() or
+   * #add_local_id_asset(). So this really is arbitrary storage as far as #AssetLibrary is
+   * concerned (allowing the API user to manage partial library storage and partial loading, so
+   * only relevant parts of a library are kept in memory).
+   *
+   * For now, multiple parts of Blender just keep adding their own assets to this storage. E.g.
+   * multiple asset browsers might load multiple representations for the same asset into this.
+   * Currently there is just no way to properly identify assets, or keep track of which assets are
+   * already in memory and which not. Neither do we keep track of how many parts of Blender are
+   * using an asset or an asset library, which is needed to know when assets can be freed.
+   */
   Vector<std::unique_ptr<AssetRepresentation>> asset_storage_;
+
+  std::optional<int> find_asset_index(const AssetRepresentation &asset);
 };
 
 Vector<AssetLibraryReference> all_valid_asset_library_refs();
