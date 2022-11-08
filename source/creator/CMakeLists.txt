@@ -952,8 +952,8 @@ elseif(WIN32)
         DEBUG
       )
 
-      # This will not exist for 3.3 and earlier lib folders
-      # to ease the transition, support both 3.3 and 3.4 lib
+      # This will not exist for 3.4 and earlier lib folders
+      # to ease the transition, support both 3.4 and 3.5 lib
       # folders.
       if(EXISTS ${LIBDIR}/openvdb/python/pyopenvdb_d.pyd)
         install(
@@ -1050,8 +1050,8 @@ elseif(WIN32)
       )
 
       if(WITH_USD)
-        # This will not exist for 3.3 and earlier lib folders
-        # to ease the transition, support both 3.3 and 3.4 lib
+        # This will not exist for 3.4 and earlier lib folders
+        # to ease the transition, support both 3.4 and 3.5 lib
         # folders.
         if(EXISTS ${USD_LIBRARY_DIR}/python/)
           install(
@@ -1208,6 +1208,13 @@ elseif(WIN32)
     install(
       PROGRAMS $<TARGET_FILE:extern_draco>
       DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+    )
+  endif()
+
+  if(WITH_PYTHON_MODULE AND TARGETDIR_BPY)
+    install(
+      TARGETS blender
+      LIBRARY DESTINATION ${TARGETDIR_BPY}
     )
   endif()
 
@@ -1439,8 +1446,13 @@ if(WITH_USD)
 
   # On windows the usd library sits in ./blender.shared copy the files
   # relative to the location of the USD dll, if the dll does not exist
-  # assume we are linking against the static 3.4 lib.
-  if(WIN32 AND EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
+  # assume we are linking against the static 3.5 lib.
+  if(WIN32 AND
+      (
+        EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll OR  # USD 22.03
+        EXISTS ${LIBDIR}/usd/lib/usd_ms.dll         # USD 22.11
+      )
+    )
     install(DIRECTORY
       ${USD_LIBRARY_DIR}/usd
       DESTINATION "./blender.shared"
@@ -1457,7 +1469,7 @@ if(WITH_USD)
     )
   endif()
   if(WIN32)
-    # If this file exists we are building against a 3.4 library folder
+    # If this file exists we are building against a 3.5 22.03 library folder
     # that needs these dll's installed.
     if(EXISTS ${LIBDIR}/usd/lib/usd_usd_ms.dll)
       windows_install_shared_manifest(FILES
@@ -1466,6 +1478,18 @@ if(WITH_USD)
       )
       windows_install_shared_manifest(FILES
         ${LIBDIR}/usd/lib/usd_usd_ms_d.dll
+        DEBUG
+      )
+    endif()
+    # If this file exists we are building against a 3.5 22.11 library folder
+    # that needs these dll's installed.
+    if(EXISTS ${LIBDIR}/usd/lib/usd_ms.dll)
+      windows_install_shared_manifest(FILES
+        ${LIBDIR}/usd/lib/usd_ms.dll
+        RELEASE
+      )
+      windows_install_shared_manifest(FILES
+        ${LIBDIR}/usd/lib/usd_ms_d.dll
         DEBUG
       )
     endif()

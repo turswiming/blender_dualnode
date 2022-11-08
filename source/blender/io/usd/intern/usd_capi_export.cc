@@ -62,8 +62,8 @@ struct ExportJobData {
   bool is_usdz_export;
   USDExportParams params;
 
-  short *stop;
-  short *do_update;
+  bool *stop;
+  bool *do_update;
   float *progress;
 
   bool was_canceled;
@@ -223,7 +223,7 @@ static void process_usdz_textures(const ExportJobData *data, const char *path) {
   char texture_path[4096];
   BLI_strcpy_rlen(texture_path, path);
   BLI_path_append(texture_path, 4096, "textures");
-  BLI_path_slash_ensure(texture_path);
+  BLI_path_slash_ensure(texture_path, 4096);
 
   struct direntry *entries;
   unsigned int num_files = BLI_filelist_dir_contents(texture_path, &entries);
@@ -324,8 +324,8 @@ static bool perform_usdz_conversion(const ExportJobData *data)
 static void export_startjob(void *customdata,
                             /* Cannot be const, this function implements wm_jobs_start_callback.
                              * NOLINTNEXTLINE: readability-non-const-parameter. */
-                            short *stop,
-                            short *do_update,
+                            bool *stop,
+                            bool *do_update,
                             float *progress)
 {
   ExportJobData *data = static_cast<ExportJobData *>(customdata);
@@ -619,7 +619,7 @@ bool USD_export(bContext *C,
   }
   else {
     /* Fake a job context, so that we don't need NULL pointer checks while exporting. */
-    short stop = 0, do_update = 0;
+    bool stop = false, do_update = false;
     float progress = 0.0f;
 
     blender::io::usd::export_startjob(job, &stop, &do_update, &progress);

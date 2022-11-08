@@ -44,7 +44,7 @@ function(add_python_test testname testscript)
 
   add_test(
     NAME ${testname}
-    COMMAND ${TEST_PYTHON_EXE} ${testscript} ${ARGN}
+    COMMAND ${TEST_PYTHON_EXE} ${TEST_PYTHON_EXE_EXTRA_ARGS} ${testscript} ${ARGN}
     WORKING_DIRECTORY $<TARGET_FILE_DIR:blender>
   )
   set_tests_properties(${testname} PROPERTIES ENVIRONMENT

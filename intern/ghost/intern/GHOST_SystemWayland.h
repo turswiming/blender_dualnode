@@ -178,6 +178,9 @@ class GHOST_SystemWayland : public GHOST_System {
 
   /* WAYLAND utility functions. */
 
+  /** Set this seat to be active. */
+  void seat_active_set(const struct GWL_Seat *seat);
+
   /** Clear all references to this surface to prevent accessing NULL pointers. */
   void window_surface_unref(const wl_surface *wl_surface);
 
@@ -188,9 +191,6 @@ class GHOST_SystemWayland : public GHOST_System {
                               GHOST_TAxisFlag wrap_axis,
                               wl_surface *wl_surface,
                               int scale);
-
-  struct GWL_SimpleBuffer *clipboard_data(bool selection) const;
-  struct std::mutex &clipboard_mutex() const;
 
 #ifdef WITH_GHOST_WAYLAND_LIBDECOR
   static bool use_libdecor_runtime();

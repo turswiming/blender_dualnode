@@ -52,4 +52,5 @@ ExternalProject_Add(external_mesa
 add_dependencies(
   external_mesa
   ll
+  external_zlib
 )

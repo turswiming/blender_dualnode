@@ -114,9 +114,9 @@ set(ALEMBIC_HASH_TYPE MD5)
 set(ALEMBIC_FILE alembic-${ALEMBIC_VERSION}.tar.gz)
 SET(FREETYPE_CPE "cpe:2.3:a:freetype:freetype:${FREETYPE_VERSION}:*:*:*:*:*:*:*")
 
-set(OPENSUBDIV_VERSION v3_4_4)
+set(OPENSUBDIV_VERSION v3_5_0)
 set(OPENSUBDIV_URI https://github.com/PixarAnimationStudios/OpenSubdiv/archive/${OPENSUBDIV_VERSION}.tar.gz)
-set(OPENSUBDIV_HASH 39ecc5caf0abebc943d1ce131855e76e)
+set(OPENSUBDIV_HASH 230f5cd2911d6240e58a3773b9c6e5e4)
 set(OPENSUBDIV_HASH_TYPE MD5)
 set(OPENSUBDIV_FILE opensubdiv-${OPENSUBDIV_VERSION}.tar.gz)
 
@@ -133,11 +133,17 @@ set(OPENCOLLADA_HASH ee7dae874019fea7be11613d07567493)
 set(OPENCOLLADA_HASH_TYPE MD5)
 set(OPENCOLLADA_FILE opencollada-${OPENCOLLADA_VERSION}.tar.gz)
 
-set(OPENCOLORIO_VERSION 2.1.1)
+set(OPENCOLORIO_VERSION 2.2.0)
 set(OPENCOLORIO_URI https://github.com/AcademySoftwareFoundation/OpenColorIO/archive/v${OPENCOLORIO_VERSION}.tar.gz)
-set(OPENCOLORIO_HASH 604f562e073f23d88ce89ed4f7f709ba)
+set(OPENCOLORIO_HASH d58a5980adba2d89a363100a09daa5f3)
 set(OPENCOLORIO_HASH_TYPE MD5)
 set(OPENCOLORIO_FILE OpenColorIO-${OPENCOLORIO_VERSION}.tar.gz)
+
+set(MINIZIPNG_VERSION 3.0.7)
+set(MINIZIPNG_URI https://github.com/zlib-ng/minizip-ng/archive/${MINIZIPNG_VERSION}.tar.gz)
+set(MINIZIPNG_HASH 09dcc8a9def348e1be9659e384c2cd55)
+set(MINIZIPNG_HASH_TYPE MD5)
+set(MINIZIPNG_FILE minizip-ng-${MINIZIPNG_VERSION}.tar.gz)
 
 set(LLVM_VERSION 12.0.0)
 set(LLVM_URI https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/llvm-project-${LLVM_VERSION}.src.tar.xz)
@@ -212,9 +218,9 @@ set(TBB_HASH_TYPE MD5)
 set(TBB_FILE oneTBB-${TBB_VERSION}.tar.gz)
 set(TBB_CPE "cpe:2.3:a:intel:threading_building_blocks:${TBB_YEAR}:*:*:*:*:*:*:*")
 
-set(OPENVDB_VERSION 9.1.0)
+set(OPENVDB_VERSION 10.0.0)
 set(OPENVDB_URI https://github.com/AcademySoftwareFoundation/openvdb/archive/v${OPENVDB_VERSION}.tar.gz)
-set(OPENVDB_HASH 8918de645a737734e577e16753325703)
+set(OPENVDB_HASH 64301c737e16b26c8f3085a31e6397e9)
 set(OPENVDB_HASH_TYPE MD5)
 set(OPENVDB_FILE openvdb-${OPENVDB_VERSION}.tar.gz)
 
@@ -225,8 +231,9 @@ set(URLLIB3_CPE "cpe:2.3:a:urllib3:urllib3:${URLLIB3_VERSION}:*:*:*:*:*:*:*")
 set(CERTIFI_VERSION 2021.10.8)
 set(REQUESTS_VERSION 2.27.1)
 set(CYTHON_VERSION 0.29.30)
-# The version of the zstd library used to build the Python package should match ZSTD_VERSION defined below.
-# At this time of writing, 0.17.0 was already released, but built against zstd 1.5.1, while we use 1.5.0.
+# The version of the zstd library used to build the Python package should match ZSTD_VERSION
+# defined below. At this time of writing, 0.17.0 was already released,
+# but built against zstd 1.5.1, while we use 1.5.0.
 set(ZSTANDARD_VERSION 0.16.0)
 set(AUTOPEP8_VERSION 1.6.0)
 set(PYCODESTYLE_VERSION 2.8.0)
@@ -359,9 +366,9 @@ set(XML2_HASH_TYPE MD5)
 set(XML2_FILE libxml2-${XML2_VERSION}.tar.xz)
 set(XML2_CPE "cpe:2.3:a:xmlsoft:libxml2:${XML2_VERSION}:*:*:*:*:*:*:*")
 
-set(YAMLCPP_VERSION 0.6.3)
+set(YAMLCPP_VERSION 0.7.0)
 set(YAMLCPP_URI https://codeload.github.com/jbeder/yaml-cpp/tar.gz/yaml-cpp-${YAMLCPP_VERSION})
-set(YAMLCPP_HASH b45bf1089a382e81f6b661062c10d0c2)
+set(YAMLCPP_HASH 74d646a3cc1b5d519829441db96744f0)
 set(YAMLCPP_HASH_TYPE MD5)
 set(YAMLCPP_FILE yaml-cpp-${YAMLCPP_VERSION}.tar.gz)
 set(YAMLCPP "cpe:2.3:a:yaml-cpp_project:yaml-cpp:${YAMLCPP_VERSION}:*:*:*:*:*:*:*")
@@ -372,10 +379,10 @@ set(PYSTRING_HASH f2c68786b359f5e4e62bed53bc4fb86d)
 set(PYSTRING_HASH_TYPE MD5)
 set(PYSTRING_FILE pystring-${PYSTRING_VERSION}.tar.gz)
 
-set(EXPAT_VERSION 2_4_9)
-set(EXPAT_VERSION_DOTS 2.4.9)
+set(EXPAT_VERSION 2_5_0)
+set(EXPAT_VERSION_DOTS 2.5.0)
 set(EXPAT_URI https://github.com/libexpat/libexpat/archive/R_${EXPAT_VERSION}.tar.gz)
-set(EXPAT_HASH b59a2aa796be1ee177bbab3b7231dfa5)
+set(EXPAT_HASH d375fa3571c0abb945873f5061a8f2e2)
 set(EXPAT_HASH_TYPE MD5)
 set(EXPAT_FILE libexpat-${EXPAT_VERSION}.tar.gz)
 set(EXPAT_CPE "cpe:2.3:a:libexpat_project:libexpat:${EXPAT_VERSION_DOTS}:*:*:*:*:*:*:*")
@@ -457,9 +464,9 @@ set(EMBREE_HASH 52d0be294d6c88ba7a6c9e046796e7be)
 set(EMBREE_HASH_TYPE MD5)
 set(EMBREE_FILE embree-v${EMBREE_VERSION}.zip)
 
-set(USD_VERSION 22.03)
+set(USD_VERSION 22.11)
 set(USD_URI https://github.com/PixarAnimationStudios/USD/archive/v${USD_VERSION}.tar.gz)
-set(USD_HASH e0e441a05057692a83124a1195b09eed)
+set(USD_HASH 8c89459e48a2ef0e7ae9e7e490377507)
 set(USD_HASH_TYPE MD5)
 set(USD_FILE usd-v${USD_VERSION}.tar.gz)
 
@@ -559,10 +566,10 @@ set(BROTLI_HASH_TYPE SHA256)
 set(BROTLI_FILE brotli-v${BROTLI_VERSION}.tar.gz)
 set(BROTLI_CPE "cpe:2.3:a:google:brotli:${BROTLI_VERSION}:*:*:*:*:*:*:*")
 
-set(OPENPGL_VERSION v0.4.0-beta)
-set(OPENPGL_SHORT_VERSION 0.4.0)
+set(OPENPGL_VERSION v0.4.1-beta)
+set(OPENPGL_SHORT_VERSION 0.4.1)
 set(OPENPGL_URI https://github.com/OpenPathGuidingLibrary/openpgl/archive/refs/tags/${OPENPGL_VERSION}.tar.gz)
-set(OPENPGL_HASH 1f090f88ab2bad028e8b3619aa926f4f97cf7b2c175b904704d2fec8593dd3cd)
+set(OPENPGL_HASH db63f5dac5cfa8c110ede241f0c413f00db0c4748697381c4fa23e0f9e82a754)
 set(OPENPGL_HASH_TYPE SHA256)
 set(OPENPGL_FILE openpgl-${OPENPGL_VERSION}.tar.gz)
 
@@ -720,3 +727,43 @@ set(HARFBUZZ_URI https://github.com/harfbuzz/harfbuzz/archive/refs/tags/${HARFBU
 set(HARFBUZZ_HASH 5352ff2eec538ea9a63a485cf01ad8332a3f63aa79921c5a2e301cef185caea1)
 set(HARFBUZZ_HASH_TYPE SHA256)
 set(HARFBUZZ_FILE harfbuzz-${HARFBUZZ_VERSION}.tar.gz)
+
+set(SHADERC_VERSION v2022.3)
+set(SHADERC_URI https://github.com/google/shaderc/archive/${SHADERC_VERSION}.tar.gz)
+set(SHADERC_HASH 5cb762af57637caf997d5f46baa4e8a4)
+set(SHADERC_HASH_TYPE MD5)
+set(SHADERC_FILE shaderc-${SHADERC_VERSION}.tar.gz)
+
+# The versions of shaderc's dependencies can be found in the root of shaderc's
+# source in a file called DEPS.
+
+set(SHADERC_SPIRV_TOOLS_VERSION eb0a36633d2acf4de82588504f951ad0f2cecacb)
+set(SHADERC_SPIRV_TOOLS_URI https://github.com/KhronosGroup/SPIRV-Tools/archive/${SHADERC_SPIRV_TOOLS_VERSION}.tar.gz)
+set(SHADERC_SPIRV_TOOLS_HASH a4bdb8161f0e959c75d0d82d367c24f2)
+set(SHADERC_SPIRV_TOOLS_HASH_TYPE MD5)
+set(SHADERC_SPIRV_TOOLS_FILE SPIRV-Tools-${SHADERC_SPIRV_TOOLS_VERSION}.tar.gz)
+
+set(SHADERC_SPIRV_HEADERS_VERSION 85a1ed200d50660786c1a88d9166e871123cce39)
+set(SHADERC_SPIRV_HEADERS_URI https://github.com/KhronosGroup/SPIRV-Headers/archive/${SHADERC_SPIRV_HEADERS_VERSION}.tar.gz)
+set(SHADERC_SPIRV_HEADERS_HASH 10d5e8160f39344a641523810b075568)
+set(SHADERC_SPIRV_HEADERS_HASH_TYPE MD5)
+set(SHADERC_SPIRV_HEADERS_FILE SPIRV-Headers-${SHADERC_SPIRV_HEADERS_VERSION}.tar.gz)
+
+set(SHADERC_GLSLANG_VERSION 89db4e1caa273a057ea46deba709c6e50001b314)
+set(SHADERC_GLSLANG_URI https://github.com/KhronosGroup/glslang/archive/${SHADERC_GLSLANG_VERSION}.tar.gz)
+set(SHADERC_GLSLANG_HASH 3b3c79ad8e9132ffcb8b63cc29c532e2)
+set(SHADERC_GLSLANG_HASH_TYPE MD5)
+set(SHADERC_GLSLANG_FILE glslang-${SHADERC_GLSLANG_VERSION}.tar.gz)
+
+set(VULKAN_VERSION v1.2.198)
+
+set(VULKAN_HEADERS_URI https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/${VULKAN_VERSION}.tar.gz)
+set(VULKAN_HEADERS_HASH 64fe73e887c963ad546bfc7f9505fa1d)
+set(VULKAN_HEADERS_HASH_TYPE MD5)
+set(VULKAN_HEADERS_FILE Vulkan-Headers-${VULKAN_VERSION}.tar.gz)
+
+set(VULKAN_LOADER_URI https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/${VULKAN_VERSION}.tar.gz)
+set(VULKAN_LOADER_HASH 015170a74f648fd2b41e209b6bf1ebc4)
+set(VULKAN_LOADER_HASH_TYPE MD5)
+set(VULKAN_LOADER_FILE Vulkan-Loader-${VULKAN_VERSION}.tar.gz)
+

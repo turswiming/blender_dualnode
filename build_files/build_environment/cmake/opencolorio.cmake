@@ -15,8 +15,14 @@ set(OPENCOLORIO_EXTRA_ARGS
 
   -Dexpat_ROOT=${LIBDIR}/expat
   -Dyaml-cpp_ROOT=${LIBDIR}/yamlcpp
+  -Dyaml-cpp_VERSION=${YAMLCPP_VERSION}
   -Dpystring_ROOT=${LIBDIR}/pystring
   -DImath_ROOT=${LIBDIR}/imath
+  -Dminizip-ng_ROOT=${LIBDIR}/minizipng
+  -Dminizip-ng_INCLUDE_DIR=${LIBDIR}/minizipng/include
+  -Dminizip-ng_LIBRARY=${LIBDIR}/minizipng/lib/libminizip${LIBEXT}
+  -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
+  -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
 )
 
 if(BLENDER_PLATFORM_ARM)
@@ -30,7 +36,6 @@ if(WIN32)
   set(OPENCOLORIO_EXTRA_ARGS
     ${OPENCOLORIO_EXTRA_ARGS}
     -Dexpat_LIBRARY=${LIBDIR}/expat/lib/libexpatMD
-    -Dyaml-cpp_LIBRARY=${LIBDIR}/expat/lib/libyaml-cppmd.lib
     -DImath_LIBRARY=${LIBDIR}/imath/lib/imath${OPENEXR_VERSION_POSTFIX}
     -DCMAKE_CXX_FLAGS=-DIMATH_DLL
   )
@@ -57,6 +62,8 @@ add_dependencies(
   external_expat
   external_imath
   external_pystring
+  external_zlib
+  external_minizipng
 )
 
 if(WIN32)
@@ -64,16 +71,17 @@ if(WIN32)
     ExternalProject_Add_Step(external_opencolorio after_install
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/opencolorio/include ${HARVEST_TARGET}/opencolorio/include
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/opencolorio/lib ${HARVEST_TARGET}/opencolorio/lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/yamlcpp/lib/libyaml-cppmd.lib ${HARVEST_TARGET}/opencolorio/lib/libyaml-cpp.lib
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/yamlcpp/lib/yaml-cpp.lib ${HARVEST_TARGET}/opencolorio/lib/yaml-cpp.lib
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/expat/lib/libexpatMD.lib ${HARVEST_TARGET}/opencolorio/lib/libexpatMD.lib
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/pystring/lib/pystring.lib ${HARVEST_TARGET}/opencolorio/lib/pystring.lib
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/minizipng/lib/libminizip.lib ${HARVEST_TARGET}/opencolorio/lib/libminizip.lib
       DEPENDEES install
     )
   endif()
   if(BUILD_MODE STREQUAL Debug)
     ExternalProject_Add_Step(external_opencolorio after_install
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/opencolorio/lib/Opencolorio.lib ${HARVEST_TARGET}/opencolorio/lib/OpencolorIO_d.lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/yamlcpp/lib/libyaml-cppmdd.lib ${HARVEST_TARGET}/opencolorio/lib/libyaml-cpp_d.lib
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/yamlcpp/lib/yaml-cppd.lib ${HARVEST_TARGET}/opencolorio/lib/yaml-cppd.lib
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/expat/lib/libexpatdMD.lib ${HARVEST_TARGET}/opencolorio/lib/libexpatdMD.lib
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/pystring/lib/pystring.lib ${HARVEST_TARGET}/opencolorio/lib/pystring_d.lib
       DEPENDEES install

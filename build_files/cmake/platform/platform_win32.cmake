@@ -83,7 +83,7 @@ string(APPEND CMAKE_MODULE_LINKER_FLAGS " /SAFESEH:NO /ignore:4099")
 list(APPEND PLATFORM_LINKLIBS
   ws2_32 vfw32 winmm kernel32 user32 gdi32 comdlg32 Comctl32 version
   advapi32 shfolder shell32 ole32 oleaut32 uuid psapi Dbghelp Shlwapi
-  pathcch Shcore Dwmapi
+  pathcch Shcore Dwmapi Crypt32
 )
 
 if(WITH_INPUT_IME)
@@ -184,10 +184,11 @@ endif()
 
 # Debug Symbol format
 # sccache # MSVC_ASAN # format # why
-# ON      # ON        # Z7     # sccache will only play nice with Z7
-# ON      # OFF       # Z7     # sccache will only play nice with Z7
-# OFF     # ON        # Zi     # Asan will not play nice with Edit and Continue
-# OFF     # OFF       # ZI     # Neither asan nor sscache is enabled Edit and Continue is available
+# ON      # ON        # Z7     # sccache will only play nice with Z7.
+# ON      # OFF       # Z7     # sccache will only play nice with Z7.
+# OFF     # ON        # Zi     # Asan will not play nice with Edit and Continue.
+# OFF     # OFF       # ZI     # Neither ASAN nor sscache is enabled Edit and
+#                                Continue is available.
 
 # Release Symbol format
 # sccache # MSVC_ASAN # format # why
@@ -649,14 +650,27 @@ if(WITH_OPENCOLORIO)
     set(OPENCOLORIO_LIBPATH ${OPENCOLORIO}/lib)
     set(OPENCOLORIO_LIBRARIES
       optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
-      optimized ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib
       optimized ${OPENCOLORIO_LIBPATH}/libexpatMD.lib
       optimized ${OPENCOLORIO_LIBPATH}/pystring.lib
       debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
-      debug ${OPENCOLORIO_LIBPATH}/libyaml-cpp_d.lib
       debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
       debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
     )
+    if(EXISTS ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib) # 3.4 name
+      list(APPEND OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib
+        debug ${OPENCOLORIO_LIBPATH}/libyaml-cpp_d.lib
+      )
+    elseif(EXISTS ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib) # 3.5 name
+      list(APPEND OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib
+        optimized ${OPENCOLORIO_LIBPATH}/libminizip.lib
+        debug ${OPENCOLORIO_LIBPATH}/yaml-cppd.lib
+        debug ${OPENCOLORIO_LIBPATH}/libminizip.lib
+      )
+    else()
+      message("FATAL YAML-CPP dependency not found")
+    endif()
   endif()
   set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
 endif()
@@ -854,14 +868,19 @@ endif()
 if(WITH_USD)
   windows_find_package(USD)
   if(NOT USD_FOUND)
+    # 3.5 22.03 libs
     set(USD_INCLUDE_DIRS ${LIBDIR}/usd/include)
     set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_ms.lib)
     set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_ms_d.lib)
     set(USD_LIBRARY_DIR ${LIBDIR}/usd/lib)
+    if(NOT EXISTS "${USD_RELEASE_LIB}") # 3.5 22.11 libs
+      set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_ms.lib)
+      set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_ms_d.lib)
+    endif()
     # Older USD had different filenames, if the new ones are
     # not found see if the older ones exist, to ease the
     # transition period while landing libs.
-    if(NOT EXISTS "${USD_RELEASE_LIB}")
+    if(NOT EXISTS "${USD_RELEASE_LIB}") # 3.3 static libs
       set(USD_RELEASE_LIB ${LIBDIR}/usd/lib/usd_usd_m.lib)
       set(USD_DEBUG_LIB ${LIBDIR}/usd/lib/usd_usd_m_d.lib)
     endif()
@@ -993,6 +1012,8 @@ endif()
 
 # Environment variables to run precompiled executables that needed libraries.
 list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ";" _library_paths)
-set(PLATFORM_ENV_BUILD "PATH=${LIBDIR}/OpenImageIO/bin\;${LIBDIR}/boost/lib\;${LIBDIR}/openexr/bin\;${LIBDIR}/imath/bin\;${PATH}")
-set(PLATFORM_ENV_INSTALL "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/;$ENV{PATH}")
+set(PLATFORM_ENV_BUILD_DIRS "${LIBDIR}/OpenImageIO/bin\;${LIBDIR}/boost/lib\;${LIBDIR}/openexr/bin\;${LIBDIR}/imath/bin\;${PATH}")
+set(PLATFORM_ENV_BUILD "PATH=${PLATFORM_ENV_BUILD_DIRS}")
+# Install needs the additional folders from PLATFORM_ENV_BUILD_DIRS as well, as tools like idiff and abcls use the release mode dlls
+set(PLATFORM_ENV_INSTALL "PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/blender.shared/\;${PLATFORM_ENV_BUILD_DIRS}\;$ENV{PATH}")
 unset(_library_paths)

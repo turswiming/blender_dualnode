@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-####################################################################################################
+##################################################################################################
 #
 # This is a build system used by platform maintainers to build library dependencies on
 # Windows, macOS and Linux.
@@ -22,7 +22,7 @@
 #   Install compiler cmake autoconf automake libtool yasm tcl
 #   Run "make deps" from main Blender directory
 #
-####################################################################################################
+##################################################################################################
 
 project("BlenderDependencies")
 cmake_minimum_required(VERSION 3.5)
@@ -32,7 +32,8 @@ endif()
 include(ExternalProject)
 include(cmake/check_software.cmake)
 include(cmake/options.cmake)
-# versions.cmake needs to be included after options.cmake due to the BLENDER_PLATFORM_ARM variable being needed.
+# `versions.cmake` needs to be included after `options.cmake`
+# due to the `BLENDER_PLATFORM_ARM` variable being needed.
 include(cmake/versions.cmake)
 include(cmake/boost_build_options.cmake)
 include(cmake/download.cmake)
@@ -43,7 +44,7 @@ if(ENABLE_MINGW64)
 else()
   set(mingw_LIBDIR ${LIBDIR})
 endif()
-
+include(cmake/ssl.cmake)
 include(cmake/zlib.cmake)
 include(cmake/zstd.cmake)
 include(cmake/openal.cmake)
@@ -90,7 +91,7 @@ include(cmake/usd.cmake)
 include(cmake/openvdb.cmake)
 include(cmake/potrace.cmake)
 include(cmake/haru.cmake)
-# Boost needs to be included after python.cmake due to the PYTHON_BINARY variable being needed.
+# Boost needs to be included after `python.cmake` due to the PYTHON_BINARY variable being needed.
 include(cmake/boost.cmake)
 include(cmake/pugixml.cmake)
 include(cmake/ispc.cmake)
@@ -120,6 +121,7 @@ endif()
 include(cmake/expat.cmake)
 include(cmake/pystring.cmake)
 include(cmake/yamlcpp.cmake)
+include(cmake/minizipng.cmake)
 include(cmake/opencolorio.cmake)
 
 if(BLENDER_PLATFORM_ARM)
@@ -167,7 +169,6 @@ if(UNIX)
   include(cmake/bzip2.cmake)
   include(cmake/ffi.cmake)
   include(cmake/lzma.cmake)
-  include(cmake/ssl.cmake)
   include(cmake/sqlite.cmake)
 endif()
 
@@ -179,6 +180,8 @@ if(UNIX AND NOT APPLE)
   include(cmake/wayland.cmake)
   include(cmake/wayland_libdecor.cmake)
 endif()
-
+include(cmake/shaderc_deps.cmake)
+include(cmake/shaderc.cmake)
+include(cmake/vulkan.cmake)
 include(cmake/harvest.cmake)
 include(cmake/cve_check.cmake)
