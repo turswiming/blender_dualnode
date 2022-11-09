@@ -759,7 +759,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
                                     rand_light.y,
                                     sd->time,
                                     P,
-                                    one_float3(), /* TODO: ensure light tree ignores normal. */
+                                    zero_float3(),
                                     SD_BSDF_HAS_TRANSMISSION,
                                     bounce,
                                     path_flag,

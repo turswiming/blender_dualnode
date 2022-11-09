@@ -43,8 +43,8 @@ ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
 template<bool in_volume_segment>
 ccl_device void light_tree_cluster_importance(const float3 N_or_D,
                                               const bool has_transmission,
+                                              /* unnormalized if in_volume_segment */
                                               const float3 point_to_centroid,
-                                              /* point_to_centroid is unnormalized for volume */
                                               const float cos_theta_u,
                                               const float3 bcone_axis,
                                               const float max_distance,
@@ -59,11 +59,12 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   max_importance = 0.0f;
   min_importance = 0.0f;
 
-  float cos_theta, cos_theta_i, sin_theta_i;
-  float cos_min_outgoing_angle;         /* minimum angle an emitter’s axis would form with the
-                                       direction to the shading point, cos(theta') in the paper */
-  float cos_min_incidence_angle = 1.0f; /* cos(theta_i') in the paper, omitted for volume */
   const float sin_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_u));
+  float cos_theta, cos_theta_i, sin_theta_i;
+  /* cos(theta_i') in the paper, omitted for volume */
+  float cos_min_incidence_angle = 1.0f;
+  /* when sampling the light tree for the second time in `shade_volume.h`*/
+  const bool in_volume = (dot(N_or_D, N_or_D) == 0.0f);
 
   if (in_volume_segment) {
     const float3 D = N_or_D;
@@ -84,25 +85,30 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
                     dot(bcone_axis, cos_phi0 * o0 + safe_sqrtf(1.0f - sqr(cos_phi0)) * o1);
   }
   else {
-    const float3 N = N_or_D;
-
     cos_theta = dot(bcone_axis, -point_to_centroid);
-    cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) : dot(point_to_centroid, N);
-    sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
+    if (!in_volume) {
+      const float3 N = N_or_D;
+      cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) :
+                                       dot(point_to_centroid, N);
+      sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
 
-    /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}), also cos(theta_i') in the paper*/
-    cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
-                                  1.0f :
-                                  cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
-    /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
-     * opaque, then we can give the node an importance of 0 as it contributes nothing to the
-     * surface. This is more accurate than the bbox test if we are calculating the importance of an
-     * emitter with radius */
-    if (!has_transmission && cos_min_incidence_angle < 0) {
-      return;
+      /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}) = cos(theta_i') in the paper */
+      cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
+                                    1.0f :
+                                    cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
+      /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
+       * opaque, then we can give the node an importance of 0 as it contributes nothing to the
+       * surface. This is more accurate than the bbox test if we are calculating the importance of
+       * an emitter with radius */
+      if (!has_transmission && cos_min_incidence_angle < 0) {
+        return;
+      }
     }
   }
 
+  /* minimum angle an emitter’s axis would form with the direction to the shading point,
+   * cos(theta') in the paper */
+  float cos_min_outgoing_angle;
   /* cos(theta - theta_u) */
   const float sin_theta = safe_sqrtf(1.0f - sqr(cos_theta));
   const float cos_theta_minus_theta_u = cos_theta * cos_theta_u + sin_theta * sin_theta_u;
@@ -135,7 +141,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
                          (in_volume_segment ? min_distance : sqr(min_distance)));
 
   /* TODO: also min importance for volume? */
-  if (max_distance == min_distance || in_volume_segment) {
+  if (max_distance == min_distance || in_volume_segment || in_volume) {
     min_importance = max_importance;
     return;
   }
