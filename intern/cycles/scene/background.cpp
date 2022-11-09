@@ -104,19 +104,6 @@ void Background::device_update(Device *device, DeviceScene *dscene, Scene *scene
       kbackground->surface_shader |= SHADER_EXCLUDE_CAMERA;
   }
 
-  /* Find background index in lights. */
-  int device_light_index = 0;
-  int background_light_index = -1;
-  foreach (Light *light, scene->lights) {
-    if (light->get_is_enabled()) {
-      if (light->get_light_type() == LIGHT_BACKGROUND) {
-        background_light_index = device_light_index;
-      }
-      device_light_index++;
-    }
-  }
-  kbackground->light_index = background_light_index;
-
   /* Light group. */
   auto it = scene->lightgroups.find(lightgroup);
   if (it != scene->lightgroups.end()) {

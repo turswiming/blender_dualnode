@@ -811,8 +811,6 @@ void LightManager::device_update_background(Device *device,
 
   progress.set_status("Updating Lights", "Importance map");
 
-  assert(dscene->data.integrator.use_direct_light);
-
   int2 environment_res = make_int2(0, 0);
   Shader *shader = scene->background->get_shader(scene);
   int num_suns = 0;
@@ -856,6 +854,7 @@ void LightManager::device_update_background(Device *device,
         kbackground->sun = make_float4(
             sun_direction.x, sun_direction.y, sun_direction.z, half_angle);
 
+        /* empirical value */
         kbackground->sun_weight = 4.0f;
         environment_res.x = max(environment_res.x, 512);
         environment_res.y = max(environment_res.y, 256);
@@ -1039,6 +1038,8 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
     }
     else if (light->light_type == LIGHT_BACKGROUND) {
       uint visibility = scene->background->get_visibility();
+
+      dscene->data.background.light_index = light_index;
 
       shader_id &= ~SHADER_AREA_LIGHT;
       shader_id |= SHADER_USE_MIS;
