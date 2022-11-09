@@ -195,9 +195,12 @@ set(TIFF_HASH_TYPE MD5)
 set(TIFF_FILE tiff-${TIFF_VERSION}.tar.gz)
 set(TIFF_CPE "cpe:2.3:a:libtiff:libtiff:${TIFF_VERSION}:*:*:*:*:*:*:*")
 
-set(OSL_VERSION 1.12.6.2)
-set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/archive/refs/tags/v${OSL_VERSION}.tar.gz)
-set(OSL_HASH 6fef11548adfdd3e5b25c49d2dae96ee)
+# Commit c8dd33f5a37b6a6db0b6950d24f9a7cff5ceb799 breaks rendering in Cycles with OptiX, so this
+# is intentionally still a commit before that and therefore 1.13.0.1. To be updated to a newer
+# version before landing this in master.
+set(OSL_VERSION 1a7670600c8b08c2443a78d03c8c27e9a1149140)
+set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/archive/${OSL_VERSION}.tar.gz)
+set(OSL_HASH 7b6d6716b05d1addb92a8f47280bf77f)
 set(OSL_HASH_TYPE MD5)
 set(OSL_FILE OpenShadingLanguage-${OSL_VERSION}.tar.gz)
 
