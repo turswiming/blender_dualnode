@@ -2799,10 +2799,6 @@ static CustomDataLayer *customData_add_layer__internal(CustomData *data,
   const LayerTypeInfo *typeInfo = layerType_getInfo(type);
   int flag = 0;
 
-  if (!typeInfo->defaultname && CustomData_has_layer(data, type)) {
-    return &data->layers[CustomData_get_layer_index(data, type)];
-  }
-
   void *newlayerdata = nullptr;
   switch (alloctype) {
     case CD_SET_DEFAULT:
@@ -2853,6 +2849,21 @@ static CustomDataLayer *customData_add_layer__internal(CustomData *data,
         }
       }
       break;
+  }
+
+  /* Some layer types only support a single layer. */
+  const bool reuse_existing_layer = !typeInfo->defaultname && CustomData_has_layer(data, type);
+  if (reuse_existing_layer) {
+    CustomDataLayer &layer = data->layers[CustomData_get_layer_index(data, type)];
+    if (layer.data != nullptr) {
+      if (typeInfo->free) {
+        typeInfo->free(layer.data, totelem, typeInfo->size);
+      }
+      MEM_SAFE_FREE(layer.data);
+    }
+    layer.data = newlayerdata;
+    layer.flag = flag;
+    return &layer;
   }
 
   int index = data->totlayer;
@@ -3595,39 +3606,6 @@ const char *CustomData_get_layer_name(const CustomData *data, const int type, co
 }
 
 /* BMesh functions */
-
-void CustomData_bmesh_update_active_layers(CustomData *fdata, CustomData *ldata)
-{
-  int act;
-
-  if (CustomData_has_layer(ldata, CD_MLOOPUV)) {
-    act = CustomData_get_active_layer(ldata, CD_MLOOPUV);
-    CustomData_set_layer_active(fdata, CD_MTFACE, act);
-
-    act = CustomData_get_render_layer(ldata, CD_MLOOPUV);
-    CustomData_set_layer_render(fdata, CD_MTFACE, act);
-
-    act = CustomData_get_clone_layer(ldata, CD_MLOOPUV);
-    CustomData_set_layer_clone(fdata, CD_MTFACE, act);
-
-    act = CustomData_get_stencil_layer(ldata, CD_MLOOPUV);
-    CustomData_set_layer_stencil(fdata, CD_MTFACE, act);
-  }
-
-  if (CustomData_has_layer(ldata, CD_PROP_BYTE_COLOR)) {
-    act = CustomData_get_active_layer(ldata, CD_PROP_BYTE_COLOR);
-    CustomData_set_layer_active(fdata, CD_MCOL, act);
-
-    act = CustomData_get_render_layer(ldata, CD_PROP_BYTE_COLOR);
-    CustomData_set_layer_render(fdata, CD_MCOL, act);
-
-    act = CustomData_get_clone_layer(ldata, CD_PROP_BYTE_COLOR);
-    CustomData_set_layer_clone(fdata, CD_MCOL, act);
-
-    act = CustomData_get_stencil_layer(ldata, CD_PROP_BYTE_COLOR);
-    CustomData_set_layer_stencil(fdata, CD_MCOL, act);
-  }
-}
 
 void CustomData_bmesh_init_pool(CustomData *data, const int totelem, const char htype)
 {
