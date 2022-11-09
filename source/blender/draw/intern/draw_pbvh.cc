@@ -389,12 +389,19 @@ struct PBVHBatches {
         break;
 
       case CD_PBVH_MASK_TYPE:
-        foreach_grids([&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem *elems[4], int i) {
-          float *mask = CCG_elem_mask(&args->ccg_key, elems[i]);
+        if (args->ccg_key.has_mask) {
+          foreach_grids([&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem *elems[4], int i) {
+            float *mask = CCG_elem_mask(&args->ccg_key, elems[i]);
 
-          *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = mask ? uchar(*mask * 255.0f) :
-                                                                        255;
-        });
+            *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = uchar(*mask * 255.0f);
+          });
+        }
+        else {
+          foreach_grids(
+              [&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem * /*elems*/[4], int /*i*/) {
+                *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = 0;
+              });
+        }
         break;
 
       case CD_PBVH_FSET_TYPE: {
@@ -944,6 +951,14 @@ struct PBVHBatches {
 
   void create_index_faces(PBVH_GPU_Args *args)
   {
+    int *mat_index = static_cast<int *>(
+        CustomData_get_layer_named(args->pdata, CD_PROP_INT32, "material_index"));
+
+    if (mat_index && args->totprim) {
+      int poly_index = args->mlooptri[args->prim_indices[0]].poly;
+      material_index = mat_index[poly_index];
+    }
+
     /* Calculate number of edges*/
     int edge_count = 0;
     for (int i = 0; i < args->totprim; i++) {
@@ -952,6 +967,7 @@ struct PBVHBatches {
       if (args->hide_poly && args->hide_poly[lt->poly]) {
         continue;
       }
+
       int r_edges[3];
       BKE_mesh_looptri_get_real_edges(args->me, lt, r_edges);
 
@@ -1023,6 +1039,14 @@ struct PBVHBatches {
 
   void create_index_grids(PBVH_GPU_Args *args)
   {
+    int *mat_index = static_cast<int *>(
+        CustomData_get_layer_named(args->pdata, CD_PROP_INT32, "material_index"));
+
+    if (mat_index && args->totprim) {
+      int poly_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, args->grid_indices[0]);
+      material_index = mat_index[poly_index];
+    }
+
     needs_tri_index = true;
     int gridsize = args->ccg_key.grid_size;
     int totgrid = args->totprim;

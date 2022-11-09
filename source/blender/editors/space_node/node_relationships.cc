@@ -75,8 +75,6 @@ static void clear_picking_highlight(ListBase *links)
   }
 }
 
-void update_multi_input_indices_for_removed_links(bNode &node);
-
 /* -------------------------------------------------------------------- */
 /** \name Add Node
  * \{ */
@@ -817,7 +815,8 @@ static void draw_draglink_tooltip(const bContext * /*C*/, ARegion * /*region*/, 
                                               nldrag->cursor[0];
   const float y = nldrag->cursor[1] - 2.0f * UI_DPI_FAC;
 
-  UI_icon_draw_ex(x, y, ICON_ADD, U.inv_dpi_fac, 1.0f, 0.0f, text_col, false);
+  UI_icon_draw_ex(
+      x, y, ICON_ADD, U.inv_dpi_fac, 1.0f, 0.0f, text_col, false, UI_NO_ICON_OVERLAY_TEXT);
 }
 
 static void draw_draglink_tooltip_activate(const ARegion &region, bNodeLinkDrag &nldrag)
