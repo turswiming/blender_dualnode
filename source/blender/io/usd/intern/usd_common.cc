@@ -2,10 +2,17 @@
  * Copyright 2021 Blender Foundation. All rights reserved. */
 
 #include "usd_common.h"
+#include "usd.h"
 
+#include <pxr/usd/ar/resolver.h>
 #include <pxr/base/plug/registry.h>
 
 #include "BKE_appdir.h"
+#include "BLI_path_util.h"
+#include "BLI_string.h"
+
+#include "WM_api.h"
+#include "WM_types.h"
 
 namespace blender::io::usd {
 
@@ -30,3 +37,26 @@ void ensure_usd_plugin_path_registered()
 }
 
 }  // namespace blender::io::usd
+
+
+void USD_path_abs(char *path, const char *basepath, bool for_import)
+{
+  if (!BLI_path_is_rel(path)) {
+    pxr::ArResolvedPath resolved_path = for_import ? pxr::ArGetResolver().Resolve(path) :
+                                                     pxr::ArGetResolver().ResolveForNewAsset(path);
+
+    std::string path_str = resolved_path.GetPathString();
+
+    if (!path_str.empty()) {
+      if (path_str.length() < FILE_MAX) {
+        BLI_strncpy(path, path_str.c_str(), FILE_MAX);
+        return;
+      }
+      WM_reportf(RPT_ERROR, "In USD_path_abs: resolved path %s exceeds path buffer length.", path_str.c_str());
+    }
+  }
+
+  /* If we got here, the path couldn't be resolved by the ArResolver, so we
+   * fall back on the standard Blender absolute path resolution. */
+  BLI_path_abs(path, basepath);
+}
