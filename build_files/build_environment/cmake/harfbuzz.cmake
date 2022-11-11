@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 if(WIN32)
-  set(HARFBUZZ_CONFIGURE_ENV ${CONFIGURE_ENV_MSVC} && set FREETYPE_DIR=${LIBDIR}/freetype)
+  set(HARFBUZZ_CONFIGURE_ENV ${CONFIGURE_ENV_MSVC})
+  set(HARFBUZZ_PKG_ENV FREETYPE_DIR=${LIBDIR}/freetype)
 else()
-  set(HARFBUZZ_CONFIGURE_ENV ${CONFIGURE_ENV} && PKG_CONFIG_PATH=${LIBDIR}/freetype/lib/pkgconfig:${LIBDIR}/brotli/lib/pkgconfig)
+  set(HARFBUZZ_CONFIGURE_ENV ${CONFIGURE_ENV})
+  set(HARFBUZZ_PKG_ENV PKG_CONFIG_PATH=${LIBDIR}/freetype/lib/pkgconfig:${LIBDIR}/brotli/lib/pkgconfig:$PKG_CONFIG_PATH)
 endif()
 
 set(HARFBUZZ_EXTRA_OPTIONS
@@ -18,7 +20,8 @@ ExternalProject_Add(external_harfbuzz
   URL_HASH ${HARFBUZZ_HASH_TYPE}=${HARFBUZZ_HASH}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   PREFIX ${BUILD_DIR}/harfbuzz
-  CONFIGURE_COMMAND ${HARFBUZZ_CONFIGURE_ENV} && ${MESON} setup --prefix ${LIBDIR}/harfbuzz ${HARFBUZZ_EXTRA_OPTIONS} --default-library static --libdir lib ${BUILD_DIR}/harfbuzz/src/external_harfbuzz-build ${BUILD_DIR}/harfbuzz/src/external_harfbuzz
+  CONFIGURE_COMMAND ${HARFBUZZ_CONFIGURE_ENV} &&
+    ${CMAKE_COMMAND} -E env ${HARFBUZZ_PKG_ENV} ${MESON} setup --prefix ${LIBDIR}/harfbuzz ${HARFBUZZ_EXTRA_OPTIONS} --default-library static --libdir lib ${BUILD_DIR}/harfbuzz/src/external_harfbuzz-build ${BUILD_DIR}/harfbuzz/src/external_harfbuzz
   BUILD_COMMAND ninja
   INSTALL_COMMAND ninja install
   INSTALL_DIR ${LIBDIR}/harfbuzz
