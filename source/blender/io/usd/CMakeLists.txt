@@ -65,6 +65,7 @@ set(INC_SYS
 )
 
 set(SRC
+  intern/usd_asset_utils.cc
   intern/usd_capi_export.cc
   intern/usd_capi_import.cc
   intern/usd_common.cc
@@ -107,6 +108,7 @@ set(SRC
 
   usd.h
 
+  intern/usd_asset_utils.h
   intern/usd_common.h
   intern/usd_exporter_context.h
   intern/usd_hierarchy_iterator.h
