@@ -746,7 +746,14 @@ struct bNode *nodeFindNodebyName(struct bNodeTree *ntree, const char *name);
 /**
  * Finds a node based on given socket and returns true on success.
  */
-bool nodeFindNode(struct bNodeTree *ntree,
+bool nodeFindNodeTry(struct bNodeTree *ntree,
+                     struct bNodeSocket *sock,
+                     struct bNode **r_node,
+                     int *r_sockindex);
+/**
+ * Same as above but expects that the socket definitely is in the node tree.
+ */
+void nodeFindNode(struct bNodeTree *ntree,
                   struct bNodeSocket *sock,
                   struct bNode **r_node,
                   int *r_sockindex);
@@ -1005,7 +1012,7 @@ void node_type_storage(struct bNodeType *ntype,
 /** \name Node Generic Functions
  * \{ */
 
-bool BKE_node_is_connected_to_output(struct bNodeTree *ntree, struct bNode *node);
+bool BKE_node_is_connected_to_output(const struct bNodeTree *ntree, const struct bNode *node);
 
 /* ************** COMMON NODES *************** */
 
@@ -1019,8 +1026,6 @@ bool BKE_node_is_connected_to_output(struct bNodeTree *ntree, struct bNode *node
 #define NODE_GROUP_INPUT 7
 #define NODE_GROUP_OUTPUT 8
 #define NODE_CUSTOM_GROUP 9
-
-void BKE_node_tree_unlink_id(ID *id, struct bNodeTree *ntree);
 
 /** \} */
 
