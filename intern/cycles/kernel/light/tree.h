@@ -530,6 +530,42 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
 }
 
 template<bool in_volume_segment>
+ccl_device_inline bool get_left_probability(KernelGlobals kg,
+                                            const float3 P,
+                                            const float3 N_or_D,
+                                            const float t,
+                                            const bool has_transmission,
+                                            const int left_index,
+                                            const int right_index,
+                                            ccl_private float &left_probability)
+{
+  /* If we don't split, then we need to choose sampling between the left or right child. */
+  const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
+  const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes, right_index);
+
+  float min_left_importance, max_left_importance, min_right_importance, max_right_importance;
+  light_tree_node_importance<in_volume_segment>(
+      kg, P, N_or_D, t, has_transmission, left, max_left_importance, min_left_importance);
+  light_tree_node_importance<in_volume_segment>(
+      kg, P, N_or_D, t, has_transmission, right, max_right_importance, min_right_importance);
+
+  const float total_max_importance = max_left_importance + max_right_importance;
+  if (total_max_importance == 0.0f) {
+    return false;
+  }
+  const float total_min_importance = min_left_importance + min_right_importance;
+
+  /* average two probabilities of picking the left child node using lower and upper bounds */
+  const float probability_max = max_left_importance / total_max_importance;
+  const float probability_min = total_min_importance > 0 ?
+                                    min_left_importance / total_min_importance :
+                                    0.5f * (float(max_left_importance > 0) +
+                                            float(max_right_importance == 0.0f));
+  left_probability = 0.5f * (probability_max + probability_min);
+  return true;
+}
+
+template<bool in_volume_segment>
 ccl_device bool light_tree_sample(KernelGlobals kg,
                                   ccl_private const RNGState *rng_state,
                                   ccl_private float *randu,
@@ -621,32 +657,12 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
       continue;
     }
 
-    /* If we don't split, then we need to choose sampling between the left or right child. */
-    const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
-    const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes,
-                                                                     right_index);
-
-    float min_left_importance, max_left_importance, min_right_importance, max_right_importance;
-    light_tree_node_importance<in_volume_segment>(
-        kg, P, N_or_D, t, has_transmission, left, max_left_importance, min_left_importance);
-    light_tree_node_importance<in_volume_segment>(
-        kg, P, N_or_D, t, has_transmission, right, max_right_importance, min_right_importance);
-
-    const float total_max_importance = max_left_importance + max_right_importance;
-    const float total_min_importance = min_left_importance + min_right_importance;
-
-    if (total_max_importance == 0.0f) {
+    float left_probability;
+    if (!get_left_probability<in_volume_segment>(
+            kg, P, N_or_D, t, has_transmission, left_index, right_index, left_probability)) {
       stack_index--;
       continue;
     }
-
-    /* average two probabilities of picking the left child node using lower and upper bounds */
-    const float probability_max = max_left_importance / total_max_importance;
-    const float probability_min = total_min_importance > 0 ?
-                                      min_left_importance / total_min_importance :
-                                      0.5f * (float(max_left_importance > 0) +
-                                              float(max_right_importance == 0.0f));
-    const float left_probability = 0.5f * (probability_max + probability_min);
 
     if (*randu <= left_probability) {
       stack[stack_index] = left_index;
@@ -928,32 +944,12 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
       continue;
     }
 
-    /* No splitting, choose between the left or the right child */
-    const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
-    const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes,
-                                                                     right_index);
-
-    float min_left_importance, max_left_importance, min_right_importance, max_right_importance;
-    light_tree_node_importance<false>(
-        kg, P, N, 0, has_transmission, left, max_left_importance, min_left_importance);
-    light_tree_node_importance<false>(
-        kg, P, N, 0, has_transmission, right, max_right_importance, min_right_importance);
-
-    const float total_max_importance = max_left_importance + max_right_importance;
-    const float total_min_importance = min_left_importance + min_right_importance;
-
-    if (total_max_importance == 0.0f) {
+    float left_probability;
+    if (!get_left_probability<false>(
+            kg, P, N, 0, has_transmission, left_index, right_index, left_probability)) {
       stack_index--;
       continue;
     }
-
-    /* average two probabilities of picking the left child node using lower and upper bounds */
-    const float probability_max = max_left_importance / total_max_importance;
-    const float probability_min = total_min_importance > 0 ?
-                                      min_left_importance / total_min_importance :
-                                      0.5f * (float(max_left_importance > 0) +
-                                              float(max_right_importance == 0.0f));
-    const float left_probability = 0.5f * (probability_max + probability_min);
 
     if (traversing_target_branch) {
       pdf *= go_left ? left_probability : (1.0f - left_probability);
