@@ -1058,9 +1058,9 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
       }
     }
     else if (light->light_type == LIGHT_AREA) {
-      float3 axisu = light->axisu * (light->sizeu * light->size);
-      float3 axisv = light->axisv * (light->sizev * light->size);
-      float area = len(axisu) * len(axisv);
+      float3 extentu = light->axisu * (light->sizeu * light->size);
+      float3 extentv = light->axisv * (light->sizev * light->size);
+      float area = len(extentu) * len(extentv);
       if (light->round) {
         area *= -M_PI_4_F;
       }
@@ -1085,12 +1085,12 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
       klights[light_index].co[1] = co.y;
       klights[light_index].co[2] = co.z;
 
-      klights[light_index].area.axisu[0] = axisu.x;
-      klights[light_index].area.axisu[1] = axisu.y;
-      klights[light_index].area.axisu[2] = axisu.z;
-      klights[light_index].area.axisv[0] = axisv.x;
-      klights[light_index].area.axisv[1] = axisv.y;
-      klights[light_index].area.axisv[2] = axisv.z;
+      klights[light_index].area.extentu[0] = extentu.x;
+      klights[light_index].area.extentu[1] = extentu.y;
+      klights[light_index].area.extentu[2] = extentu.z;
+      klights[light_index].area.extentv[0] = extentv.x;
+      klights[light_index].area.extentv[1] = extentv.y;
+      klights[light_index].area.extentv[2] = extentv.z;
       klights[light_index].area.invarea = invarea;
       klights[light_index].area.dir[0] = dir.x;
       klights[light_index].area.dir[1] = dir.y;
@@ -1103,8 +1103,8 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
 
       float radius = light->size;
       float invarea = (radius > 0.0f) ? 1.0f / (M_PI_F * radius * radius) : 1.0f;
-      float spot_angle = cosf(light->spot_angle * 0.5f);
-      float spot_smooth = (1.0f - spot_angle) * light->spot_smooth;
+      float cos_half_spot_angle = cosf(light->spot_angle * 0.5f);
+      float spot_smooth = (1.0f - cos_half_spot_angle) * light->spot_smooth;
       float3 dir = light->dir;
 
       dir = safe_normalize(dir);
@@ -1118,7 +1118,7 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
 
       klights[light_index].spot.radius = radius;
       klights[light_index].spot.invarea = invarea;
-      klights[light_index].spot.spot_angle = spot_angle;
+      klights[light_index].spot.cos_half_spot_angle = cos_half_spot_angle;
       klights[light_index].spot.spot_smooth = spot_smooth;
       klights[light_index].spot.dir[0] = dir.x;
       klights[light_index].spot.dir[1] = dir.y;
@@ -1154,9 +1154,9 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
     assert(light->light_type == LIGHT_AREA);
 
     float3 co = light->co;
-    float3 axisu = light->axisu * (light->sizeu * light->size);
-    float3 axisv = light->axisv * (light->sizev * light->size);
-    float area = len(axisu) * len(axisv);
+    float3 extentu = light->axisu * (light->sizeu * light->size);
+    float3 extentv = light->axisv * (light->sizev * light->size);
+    float area = len(extentu) * len(extentv);
     if (light->round) {
       area *= -M_PI_4_F;
     }
@@ -1169,12 +1169,12 @@ void LightManager::device_update_points(Device *, DeviceScene *dscene, Scene *sc
     klights[light_index].co[1] = co.y;
     klights[light_index].co[2] = co.z;
 
-    klights[light_index].area.axisu[0] = axisu.x;
-    klights[light_index].area.axisu[1] = axisu.y;
-    klights[light_index].area.axisu[2] = axisu.z;
-    klights[light_index].area.axisv[0] = axisv.x;
-    klights[light_index].area.axisv[1] = axisv.y;
-    klights[light_index].area.axisv[2] = axisv.z;
+    klights[light_index].area.extentu[0] = extentu.x;
+    klights[light_index].area.extentu[1] = extentu.y;
+    klights[light_index].area.extentu[2] = extentu.z;
+    klights[light_index].area.extentv[0] = extentv.x;
+    klights[light_index].area.extentv[1] = extentv.y;
+    klights[light_index].area.extentv[2] = extentv.z;
     klights[light_index].area.invarea = invarea;
     klights[light_index].area.dir[0] = dir.x;
     klights[light_index].area.dir[1] = dir.y;

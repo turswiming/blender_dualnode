@@ -7,15 +7,18 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device float spot_light_attenuation(float3 dir, float spot_angle, float spot_smooth, float3 N)
+ccl_device float spot_light_attenuation(float3 dir,
+                                        float cos_half_spot_angle,
+                                        float spot_smooth,
+                                        float3 N)
 {
   float attenuation = dot(dir, N);
 
-  if (attenuation <= spot_angle) {
+  if (attenuation <= cos_half_spot_angle) {
     attenuation = 0.0f;
   }
   else {
-    float t = attenuation - spot_angle;
+    float t = attenuation - cos_half_spot_angle;
 
     if (t < spot_smooth && spot_smooth != 0.0f)
       attenuation *= smoothstepf(t / spot_smooth);
@@ -56,7 +59,7 @@ ccl_device_inline bool spot_light_sample(const ccl_global KernelLight *klight,
 
   /* spot light attenuation */
   ls->eval_fac *= spot_light_attenuation(
-      dir, klight->spot.spot_angle, klight->spot.spot_smooth, -ls->D);
+      dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, -ls->D);
   if (!in_volume_segment && ls->eval_fac == 0.0f) {
     return false;
   }
@@ -87,7 +90,7 @@ ccl_device_forceinline void spot_light_update_position(const ccl_global KernelLi
   /* spot light attenuation */
   float3 dir = make_float3(klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
   ls->eval_fac *= spot_light_attenuation(
-      dir, klight->spot.spot_angle, klight->spot.spot_smooth, ls->Ng);
+      dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, ls->Ng);
 }
 
 ccl_device_inline bool spot_light_intersect(const ccl_global KernelLight *klight,
@@ -131,7 +134,7 @@ ccl_device_inline bool spot_light_sample_from_intersection(
 
   /* spot light attenuation */
   ls->eval_fac *= spot_light_attenuation(
-      dir, klight->spot.spot_angle, klight->spot.spot_smooth, -ls->D);
+      dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, -ls->D);
 
   if (ls->eval_fac == 0.0f) {
     return false;
@@ -159,7 +162,7 @@ ccl_device_inline float spot_light_tree_weight(const ccl_global KernelLight *kli
   const float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
 
   const float radius = klight->spot.radius;
-  const float cos_theta = klight->spot.spot_angle;
+  const float cos_theta = klight->spot.cos_half_spot_angle;
   const float theta = fast_acosf(cos_theta);
   const float3 light_dir = make_float3(
       klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);

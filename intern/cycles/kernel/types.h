@@ -1275,7 +1275,7 @@ static_assert_align(KernelCurveSegment, 8);
 typedef struct KernelSpotLight {
   float radius;
   float invarea;
-  float spot_angle;
+  float cos_half_spot_angle;
   float spot_smooth;
   float dir[3];
   float pad;
@@ -1284,9 +1284,9 @@ typedef struct KernelSpotLight {
 /* PointLight is SpotLight with only radius and invarea being used. */
 
 typedef struct KernelAreaLight {
-  float axisu[3];
+  float extentu[3];
   float invarea;
-  float axisv[3];
+  float extentv[3];
   float tan_spread;
   float dir[3];
   float normalize_spread;
