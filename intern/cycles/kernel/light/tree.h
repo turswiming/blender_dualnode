@@ -502,10 +502,10 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
     selected_prim_index_min = -1;
     for (int i = 0; i < knode->num_prims; i++) {
       int current_prim_index = -knode->child_index + i;
-      selected_min_importance = float(has_importance & 1);
+      min_importance = float(has_importance & 1);
       has_importance >>= 1;
       sample_resevoir(current_prim_index,
-                      selected_min_importance,
+                      min_importance,
                       selected_prim_index_min,
                       selected_min_importance,
                       total_min_importance,
