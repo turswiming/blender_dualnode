@@ -63,8 +63,9 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   float cos_theta, cos_theta_i, sin_theta_i;
   /* cos(theta_i') in the paper, omitted for volume */
   float cos_min_incidence_angle = 1.0f;
-  /* when sampling the light tree for the second time in `shade_volume.h`*/
-  const bool in_volume = (dot(N_or_D, N_or_D) == 0.0f);
+  /* when sampling the light tree for the second time in `shade_volume.h` and when query the pdf in
+   * `sample.h` */
+  const bool in_volume = (dot(N_or_D, N_or_D) < 5e-4f);
 
   if (in_volume_segment) {
     const float3 D = N_or_D;
@@ -441,7 +442,7 @@ ccl_device_inline void sample_resevoir(const int current_index,
 }
 
 /* pick an emitter from a leaf node using resevoir sampling, keep two reservoirs for upper and
-+ * lower bounds */
+ * lower bounds */
 template<bool in_volume_segment>
 ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  ccl_private float *randu,
@@ -464,12 +465,18 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   float total_min_importance = min_importance;
   float selected_min_importance = min_importance;
 
+  /* Mark emitters with zero importance. Used for resevoir when total_min_importance = 0 */
+  kernel_assert(knode->num_prims <= sizeof(uint) * 8);
+  uint has_importance = max_importance > 0;
+
   for (int i = 1; i < knode->num_prims; i++) {
     int current_prim_index = -knode->child_index + i;
     light_tree_emitter_importance<in_volume_segment>(
         kg, P, N_or_D, t, has_transmission, current_prim_index, max_importance, min_importance);
 
-    /* resevoir sampling using the maximum weights */
+    has_importance |= ((max_importance > 0) << i);
+
+    /* resevoir sampling using the maximum importance */
     sample_resevoir(current_prim_index,
                     max_importance,
                     selected_prim_index_max,
@@ -477,7 +484,7 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                     total_max_importance,
                     randu);
 
-    /* resevoir sampling using the mininum weights */
+    /* resevoir sampling using the mininum importance */
     sample_resevoir(current_prim_index,
                     min_importance,
                     selected_prim_index_min,
@@ -491,12 +498,12 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   }
 
   if (total_min_importance == 0.0f) {
-    /* uniformly sample */
-    selected_min_importance = 1.0f;
-    total_min_importance = selected_min_importance;
-    selected_prim_index_min = -knode->child_index;
-    for (int i = 1; i < knode->num_prims; i++) {
+    /* uniformly sample emitters with positive max_importance */
+    selected_prim_index_min = -1;
+    for (int i = 0; i < knode->num_prims; i++) {
       int current_prim_index = -knode->child_index + i;
+      selected_min_importance = float(has_importance & 1);
+      has_importance >>= 1;
       sample_resevoir(current_prim_index,
                       selected_min_importance,
                       selected_prim_index_min,
@@ -633,10 +640,13 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
       continue;
     }
 
-    /* average two probabilities of picking child nodes using lower and upper bounds */
-    float left_probability =
-        0.5f * (max_left_importance / total_max_importance +
-                (total_min_importance > 0 ? min_left_importance / total_min_importance : 0.5f));
+    /* average two probabilities of picking the left child node using lower and upper bounds */
+    const float probability_max = max_left_importance / total_max_importance;
+    const float probability_min = total_min_importance > 0 ?
+                                      min_left_importance / total_min_importance :
+                                      0.5f * (float(max_left_importance > 0) +
+                                              float(max_right_importance == 0.0f));
+    const float left_probability = 0.5f * (probability_max + probability_min);
 
     if (*randu <= left_probability) {
       stack[stack_index] = left_index;
@@ -858,11 +868,13 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
         float target_min_importance = 0.0f;
         float total_max_importance = 0.0f;
         float total_min_importance = 0.0f;
+        int num_has_importance = 0;
         for (int i = 0; i < knode->num_prims; i++) {
           const int emitter = -knode->child_index + i;
           float max_importance, min_importance;
           light_tree_emitter_importance<false>(
               kg, P, N, 0, has_transmission, emitter, max_importance, min_importance);
+          num_has_importance += (max_importance > 0);
           if (emitter == target_emitter) {
             target_max_importance = max_importance;
             target_min_importance = min_importance;
@@ -873,12 +885,12 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
           total_min_importance += min_importance;
         }
 
-        if (total_max_importance > 0.0f) {
+        if (target_max_importance > 0.0f) {
           const float pdf_emitter_selection = 0.5f *
                                               (target_max_importance / total_max_importance +
                                                (total_min_importance > 0 ?
                                                     target_min_importance / total_min_importance :
-                                                    1.0f / knode->num_prims));
+                                                    1.0f / num_has_importance));
           const float pdf_reservoir = selected_reservoir_weight / total_reservoir_weight;
           pdf *= pdf_emitter_selection * pdf_reservoir;
         }
@@ -935,10 +947,13 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
       continue;
     }
 
-    /* average two probabilities of picking child nodes using lower and upper bounds */
-    float left_probability =
-        0.5f * (max_left_importance / total_max_importance +
-                (total_min_importance > 0 ? min_left_importance / total_min_importance : 0.5f));
+    /* average two probabilities of picking the left child node using lower and upper bounds */
+    const float probability_max = max_left_importance / total_max_importance;
+    const float probability_min = total_min_importance > 0 ?
+                                      min_left_importance / total_min_importance :
+                                      0.5f * (float(max_left_importance > 0) +
+                                              float(max_right_importance == 0.0f));
+    const float left_probability = 0.5f * (probability_max + probability_min);
 
     if (traversing_target_branch) {
       pdf *= go_left ? left_probability : (1.0f - left_probability);
