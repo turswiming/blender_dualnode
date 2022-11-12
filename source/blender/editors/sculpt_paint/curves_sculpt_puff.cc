@@ -112,11 +112,8 @@ struct PuffOperationExecutor {
 
     transforms_ = CurvesSurfaceTransforms(*object_, surface_ob_);
 
-    if (!CustomData_has_layer(&surface_->ldata, CD_NORMAL)) {
-      BKE_mesh_calc_normals_split(surface_);
-    }
     corner_normals_su_ = {
-        reinterpret_cast<const float3 *>(CustomData_get_layer(&surface_->ldata, CD_NORMAL)),
+        reinterpret_cast<const float3 *>(BKE_mesh_corner_normals_ensure(surface_)),
         surface_->totloop};
 
     surface_verts_ = surface_->verts();

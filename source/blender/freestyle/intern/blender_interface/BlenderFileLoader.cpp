@@ -412,12 +412,8 @@ void BlenderFileLoader::insertShapeNode(Object *ob, Mesh *me, int id)
       mesh_loops.data(), mesh_polys.data(), mesh_verts.data(), me->totloop, me->totpoly, mlooptri);
 
   // Compute loop normals
-  BKE_mesh_calc_normals_split(me);
-  const float(*lnors)[3] = nullptr;
-
-  if (CustomData_has_layer(&me->ldata, CD_NORMAL)) {
-    lnors = (float(*)[3])CustomData_get_layer(&me->ldata, CD_NORMAL);
-  }
+  /* TODO: Only retrieve loop normals when necessary. */
+  const float(*lnors)[3] = BKE_mesh_corner_normals_ensure(me);
 
   // Get other mesh data
   const FreestyleEdge *fed = (FreestyleEdge *)CustomData_get_layer(&me->edata, CD_FREESTYLE_EDGE);

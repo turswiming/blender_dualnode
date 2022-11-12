@@ -123,6 +123,18 @@ float (*BKE_mesh_poly_normals_for_write(Mesh *mesh))[3]
   return mesh->runtime->poly_normals;
 }
 
+float (*BKE_mesh_corner_normals_for_write(Mesh *mesh))[3]
+{
+  if (mesh->runtime->corner_normals == nullptr) {
+    mesh->runtime->corner_normals = (float(*)[3])MEM_malloc_arrayN(
+        mesh->totloop, sizeof(float[3]), __func__);
+  }
+
+  BLI_assert(MEM_allocN_len(mesh->runtime->corner_normals) >= sizeof(float[3]) * mesh->totloop);
+
+  return mesh->runtime->corner_normals;
+}
+
 void BKE_mesh_vertex_normals_clear_dirty(Mesh *mesh)
 {
   mesh->runtime->vert_normals_dirty = false;
@@ -132,6 +144,12 @@ void BKE_mesh_vertex_normals_clear_dirty(Mesh *mesh)
 void BKE_mesh_poly_normals_clear_dirty(Mesh *mesh)
 {
   mesh->runtime->poly_normals_dirty = false;
+  BKE_mesh_assert_normals_dirty_or_calculated(mesh);
+}
+
+void BKE_mesh_corner_normals_clear_dirty(Mesh *mesh)
+{
+  mesh->runtime->corner_normals_dirty = false;
   BKE_mesh_assert_normals_dirty_or_calculated(mesh);
 }
 
@@ -145,13 +163,20 @@ bool BKE_mesh_poly_normals_are_dirty(const Mesh *mesh)
   return mesh->runtime->poly_normals_dirty;
 }
 
+bool BKE_mesh_corner_normals_are_dirty(const Mesh *mesh)
+{
+  return mesh->runtime->corner_normals_dirty;
+}
+
 void BKE_mesh_clear_derived_normals(Mesh *mesh)
 {
   MEM_SAFE_FREE(mesh->runtime->vert_normals);
   MEM_SAFE_FREE(mesh->runtime->poly_normals);
+  MEM_SAFE_FREE(mesh->runtime->corner_normals);
 
   mesh->runtime->vert_normals_dirty = true;
   mesh->runtime->poly_normals_dirty = true;
+  mesh->runtime->corner_normals_dirty = true;
 }
 
 void BKE_mesh_assert_normals_dirty_or_calculated(const Mesh *mesh)
@@ -161,6 +186,9 @@ void BKE_mesh_assert_normals_dirty_or_calculated(const Mesh *mesh)
   }
   if (!mesh->runtime->poly_normals_dirty) {
     BLI_assert(mesh->runtime->poly_normals || mesh->totpoly == 0);
+  }
+  if (!mesh->runtime->corner_normals_dirty) {
+    BLI_assert(mesh->runtime->corner_normals || mesh->totloop == 0);
   }
 }
 
@@ -431,6 +459,60 @@ const float (*BKE_mesh_poly_normals_ensure(const Mesh *mesh))[3]
   });
 
   return poly_normals;
+}
+
+const float (*BKE_mesh_corner_normals_ensure(const Mesh *mesh))[3]
+{
+  if (!BKE_mesh_corner_normals_are_dirty(mesh)) {
+    BLI_assert(mesh->runtime->corner_normals != nullptr || mesh->totcorner == 0);
+    return mesh->runtime->corner_normals;
+  }
+
+  if (mesh->totpoly == 0) {
+    return nullptr;
+  }
+
+  const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(mesh);
+  const float(*poly_normals)[3] = BKE_mesh_poly_normals_ensure(mesh);
+
+  std::lock_guard lock{mesh->runtime->normals_mutex};
+  if (!BKE_mesh_corner_normals_are_dirty(mesh)) {
+    BLI_assert(mesh->runtime->corner_normals != nullptr);
+    return mesh->runtime->corner_normals;
+  }
+
+  float(*corner_normals)[3];
+
+  /* Isolate task because a mutex is locked and computing normals is multi-threaded. */
+  blender::threading::isolate_task([&]() {
+    Mesh &mesh_mutable = *const_cast<Mesh *>(mesh);
+    const Span<MVert> verts = mesh_mutable.verts();
+    const Span<MEdge> edges = mesh_mutable.edges();
+    const Span<MPoly> polys = mesh_mutable.polys();
+    const Span<MLoop> loops = mesh_mutable.loops();
+
+    corner_normals = BKE_mesh_corner_normals_for_write(&mesh_mutable);
+    const short(*custom_nors_dst)[2] = CustomData_get_layer(ldata_dst, CD_CUSTOMLOOPNORMAL);
+
+    BKE_mesh_normals_loop_split(verts.data(),
+                                vert_normals,
+                                verts.size(),
+                                edges.data(),
+                                edges.size(),
+                                loops.data(),
+                                corner_normals,
+                                loops.size(),
+                                polys.data(),
+                                poly_normals,
+                                polys.size(),
+                                use_split_normals,
+                                split_angle,
+                                r_lnors_spacearr,
+                                clnors,
+                                nullptr);
+
+    BKE_mesh_corner_normals_clear_dirty(&mesh_mutable);
+  });
 }
 
 void BKE_mesh_ensure_normals_for_display(Mesh *mesh)

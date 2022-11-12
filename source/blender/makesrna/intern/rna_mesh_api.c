@@ -44,15 +44,13 @@ static const char *rna_Mesh_unit_test_compare(struct Mesh *mesh,
 
 static void rna_Mesh_create_normals_split(Mesh *mesh)
 {
-  if (!CustomData_has_layer(&mesh->ldata, CD_NORMAL)) {
-    CustomData_add_layer(&mesh->ldata, CD_NORMAL, CD_SET_DEFAULT, NULL, mesh->totloop);
-    CustomData_set_layer_flag(&mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
-  }
+  /* TODO: Proper deprecation. */
 }
 
 static void rna_Mesh_free_normals_split(Mesh *mesh)
 {
-  CustomData_free_layers(&mesh->ldata, CD_NORMAL, mesh->totloop);
+  /* TODO: Deprecation? */
+  BKE_mesh_clear_derived_normals(mesh);
 }
 
 static void rna_Mesh_calc_tangents(Mesh *mesh, ReportList *reports, const char *uvmap)
@@ -67,11 +65,6 @@ static void rna_Mesh_calc_tangents(Mesh *mesh, ReportList *reports, const char *
     r_looptangents = CustomData_add_layer(
         &mesh->ldata, CD_MLOOPTANGENT, CD_SET_DEFAULT, NULL, mesh->totloop);
     CustomData_set_layer_flag(&mesh->ldata, CD_MLOOPTANGENT, CD_FLAG_TEMPORARY);
-  }
-
-  /* Compute loop normals if needed. */
-  if (!CustomData_has_layer(&mesh->ldata, CD_NORMAL)) {
-    BKE_mesh_calc_normals_split(mesh);
   }
 
   BKE_mesh_calc_loop_tangent_single(mesh, uvmap, r_looptangents, reports);
@@ -226,7 +219,7 @@ void RNA_api_mesh(StructRNA *srna)
   func = RNA_def_function(srna, "create_normals_split", "rna_Mesh_create_normals_split");
   RNA_def_function_ui_description(func, "Empty split vertex normals");
 
-  func = RNA_def_function(srna, "calc_normals_split", "BKE_mesh_calc_normals_split");
+  func = RNA_def_function(srna, "calc_normals_split", "rna_Mesh_create_normals_split");
   RNA_def_function_ui_description(func,
                                   "Calculate split vertex normals, which preserve sharp edges");
 

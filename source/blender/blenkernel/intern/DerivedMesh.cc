@@ -547,7 +547,7 @@ static void mesh_calc_modifier_final_normals(const Mesh *mesh_input,
     /* Compute loop normals (NOTE: will compute poly and vert normals as well, if needed!). In case
      * of deferred CPU subdivision, this will be computed when the wrapper is generated. */
     if (!subsurf_runtime_data || subsurf_runtime_data->resolution == 0) {
-      BKE_mesh_calc_normals_split(mesh_final);
+      BKE_mesh_corner_normals_ensure(mesh_final);
     }
   }
   else {
@@ -560,12 +560,7 @@ static void mesh_calc_modifier_final_normals(const Mesh *mesh_input,
       BKE_mesh_ensure_normals_for_display(mesh_final);
     }
 
-    /* Some modifiers, like data-transfer, may generate those data as temp layer,
-     * we do not want to keep them, as they are used by display code when available
-     * (i.e. even if auto-smooth is disabled). */
-    if (CustomData_has_layer(&mesh_final->ldata, CD_NORMAL)) {
-      CustomData_free_layers(&mesh_final->ldata, CD_NORMAL, mesh_final->totloop);
-    }
+
   }
 }
 
@@ -1216,18 +1211,12 @@ static void editbmesh_calc_modifier_final_normals(Mesh *mesh_final,
     /* Compute loop normals. In case of deferred CPU subdivision, this will be computed when the
      * wrapper is generated. */
     if (!subsurf_runtime_data || subsurf_runtime_data->resolution == 0) {
-      BKE_mesh_calc_normals_split(mesh_final);
+      BKE_mesh_corner_normals_ensure(mesh_final);
     }
   }
   else {
     /* Same as mesh_calc_modifiers. If using loop normals, poly nors have already been computed. */
     BKE_mesh_ensure_normals_for_display(mesh_final);
-
-    /* Some modifiers, like data-transfer, may generate those data, we do not want to keep them,
-     * as they are used by display code when available (i.e. even if autosmooth is disabled). */
-    if (CustomData_has_layer(&mesh_final->ldata, CD_NORMAL)) {
-      CustomData_free_layers(&mesh_final->ldata, CD_NORMAL, mesh_final->totloop);
-    }
   }
 }
 

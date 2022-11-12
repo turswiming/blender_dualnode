@@ -256,12 +256,8 @@ struct DensityAddOperationExecutor {
     }
     self_->new_deformed_root_positions_.extend(new_positions_cu);
 
-    /* Find normals. */
-    if (!CustomData_has_layer(&surface_orig_->ldata, CD_NORMAL)) {
-      BKE_mesh_calc_normals_split(surface_orig_);
-    }
     const Span<float3> corner_normals_su = {
-        reinterpret_cast<const float3 *>(CustomData_get_layer(&surface_orig_->ldata, CD_NORMAL)),
+        reinterpret_cast<const float3 *>(BKE_mesh_corner_normals_ensure(surface_orig_)),
         surface_orig_->totloop};
 
     const Span<MLoopTri> surface_looptris_orig = surface_orig_->looptris();

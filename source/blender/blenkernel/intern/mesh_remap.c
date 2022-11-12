@@ -1347,43 +1347,13 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
         poly_nors_dst = BKE_mesh_poly_normals_ensure(mesh_dst);
       }
       if (need_lnors_dst) {
-        short(*custom_nors_dst)[2] = CustomData_get_layer(ldata_dst, CD_CUSTOMLOOPNORMAL);
-
-        /* Cache loop normals into a temporary custom data layer. */
-        loop_nors_dst = CustomData_get_layer(ldata_dst, CD_NORMAL);
-        const bool do_loop_nors_dst = (loop_nors_dst == NULL);
-        if (!loop_nors_dst) {
-          loop_nors_dst = CustomData_add_layer(
-              ldata_dst, CD_NORMAL, CD_SET_DEFAULT, NULL, numloops_dst);
-          CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
-        }
-        if (dirty_nors_dst || do_loop_nors_dst) {
-          BKE_mesh_normals_loop_split(verts_dst,
-                                      BKE_mesh_vertex_normals_ensure(mesh_dst),
-                                      numverts_dst,
-                                      edges_dst,
-                                      numedges_dst,
-                                      loops_dst,
-                                      loop_nors_dst,
-                                      numloops_dst,
-                                      polys_dst,
-                                      poly_nors_dst,
-                                      numpolys_dst,
-                                      use_split_nors_dst,
-                                      split_angle_dst,
-                                      NULL,
-                                      custom_nors_dst,
-                                      NULL);
-        }
+        loop_nors_dst = BKE_mesh_corner_normals_ensure(mesh_dst);
       }
-      if (need_pnors_src || need_lnors_src) {
-        if (need_pnors_src) {
-          poly_nors_src = BKE_mesh_poly_normals_ensure(me_src);
-        }
-        if (need_lnors_src) {
-          loop_nors_src = CustomData_get_layer(&me_src->ldata, CD_NORMAL);
-          BLI_assert(loop_nors_src != NULL);
-        }
+      if (need_pnors_src) {
+        poly_nors_src = BKE_mesh_poly_normals_ensure(me_src);
+      }
+      if (need_lnors_src) {
+        loop_nors_src = BKE_mesh_corner_normals_ensure(me_src);
       }
     }
 

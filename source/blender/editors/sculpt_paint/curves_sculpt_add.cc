@@ -127,7 +127,7 @@ struct AddOperationExecutor {
     transforms_ = CurvesSurfaceTransforms(*curves_ob_orig_, curves_id_orig_->surface);
 
     Object &surface_ob_orig = *curves_id_orig_->surface;
-    Mesh &surface_orig = *static_cast<Mesh *>(surface_ob_orig.data);
+    const Mesh &surface_orig = *static_cast<Mesh *>(surface_ob_orig.data);
     if (surface_orig.totpoly == 0) {
       report_empty_original_surface(stroke_extension.reports);
       return;
@@ -206,13 +206,8 @@ struct AddOperationExecutor {
     }
 
     const Span<MLoopTri> surface_looptris_orig = surface_orig.looptris();
-
-    /* Find normals. */
-    if (!CustomData_has_layer(&surface_orig.ldata, CD_NORMAL)) {
-      BKE_mesh_calc_normals_split(&surface_orig);
-    }
     const Span<float3> corner_normals_su = {
-        reinterpret_cast<const float3 *>(CustomData_get_layer(&surface_orig.ldata, CD_NORMAL)),
+        reinterpret_cast<const float3 *>(BKE_mesh_corner_normals_ensure(&surface_orig)),
         surface_orig.totloop};
 
     const geometry::ReverseUVSampler reverse_uv_sampler{surface_uv_map, surface_looptris_orig};

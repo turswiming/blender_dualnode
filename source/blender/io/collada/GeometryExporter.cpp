@@ -619,14 +619,9 @@ void GeometryExporter::create_normals(std::vector<Normal> &normals,
   const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(me);
   const Span<MPoly> polys = me->polys();
   const Span<MLoop> loops = me->loops();
-  const float(*lnors)[3] = nullptr;
-  bool use_custom_normals = false;
-
-  BKE_mesh_calc_normals_split(me);
-  if (CustomData_has_layer(&me->ldata, CD_NORMAL)) {
-    lnors = (float(*)[3])CustomData_get_layer(&me->ldata, CD_NORMAL);
-    use_custom_normals = true;
-  }
+  /* TODO: Only retrieve when necessary. */
+  const float(*lnors)[3] = BKE_mesh_corner_normals_ensure(me);
+  bool use_custom_normals = true;
 
   for (const int poly_index : polys.index_range()) {
     const MPoly *mpoly = &polys[poly_index];

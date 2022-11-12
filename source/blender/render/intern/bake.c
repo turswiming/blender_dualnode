@@ -482,14 +482,12 @@ static TriTessFace *mesh_calc_tri_tessface(Mesh *me, bool tangent, Mesh *me_eval
   const TSpace *tspace = NULL;
   const float(*loop_normals)[3] = NULL;
   if (tangent) {
-    BKE_mesh_ensure_normals_for_display(me_eval);
-    BKE_mesh_calc_normals_split(me_eval);
     BKE_mesh_calc_loop_tangents(me_eval, true, NULL, 0);
 
     tspace = CustomData_get_layer(&me_eval->ldata, CD_TANGENT);
     BLI_assert(tspace);
 
-    loop_normals = CustomData_get_layer(&me_eval->ldata, CD_NORMAL);
+    loop_normals = BKE_mesh_corner_normals_ensure(me_eval);
   }
 
   const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(me);

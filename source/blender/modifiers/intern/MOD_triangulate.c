@@ -51,9 +51,11 @@ static Mesh *triangulate_mesh(Mesh *mesh,
   bool keep_clnors = (flag & MOD_TRIANGULATE_KEEP_CUSTOMLOOP_NORMALS) != 0;
 
   if (keep_clnors) {
-    BKE_mesh_calc_normals_split(mesh);
-    /* We need that one to 'survive' to/from BMesh conversions. */
-    CustomData_clear_layer_flag(&mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
+    CustomData_add_layer(&mesh->ldata,
+                         CD_NORMAL,
+                         CD_DUPLICATE,
+                         (float(*)[3])BKE_mesh_corner_normals_ensure(mesh),
+                         mesh->totloop);
     cd_mask_extra.lmask |= CD_MASK_NORMAL;
   }
 
@@ -71,14 +73,8 @@ static Mesh *triangulate_mesh(Mesh *mesh,
   BM_mesh_free(bm);
 
   if (keep_clnors) {
-    float(*lnors)[3] = CustomData_get_layer(&result->ldata, CD_NORMAL);
-    BLI_assert(lnors != NULL);
-
-    BKE_mesh_set_custom_normals(result, lnors);
-
-    /* Do some cleanup, we do not want those temp data to stay around. */
-    CustomData_set_layer_flag(&mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
-    CustomData_set_layer_flag(&result->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
+    BKE_mesh_set_custom_normals(result, CustomData_get_layer(&result->ldata, CD_NORMAL));
+    CustomData_free_layers(&result->ldata, CD_NORMAL, result->totloop);
   }
 
   edges_num = result->totedge;

@@ -176,11 +176,6 @@ int OBJMesh::ith_smooth_group(const int poly_index) const
   return poly_smooth_groups_[poly_index];
 }
 
-void OBJMesh::ensure_mesh_normals() const
-{
-  BKE_mesh_calc_normals_split(export_mesh_eval_);
-}
-
 void OBJMesh::ensure_mesh_edges() const
 {
   BKE_mesh_calc_edges_loose(export_mesh_eval_);
@@ -397,8 +392,8 @@ void OBJMesh::store_normal_coords_and_indices()
   normal_to_index.reserve(export_mesh_eval_->totpoly);
   loop_to_normal_index_.resize(export_mesh_eval_->totloop);
   loop_to_normal_index_.fill(-1);
-  const float(*lnors)[3] = static_cast<const float(*)[3]>(
-      CustomData_get_layer(&export_mesh_eval_->ldata, CD_NORMAL));
+  /* TODO: Only get loop normals when they're necessary. */
+  const float(*lnors)[3] = BKE_mesh_corner_normals_ensure(export_mesh_eval_);
   for (int poly_index = 0; poly_index < export_mesh_eval_->totpoly; ++poly_index) {
     const MPoly &mpoly = polys[poly_index];
     bool need_per_loop_normals = lnors != nullptr || (mpoly.flag & ME_SMOOTH);

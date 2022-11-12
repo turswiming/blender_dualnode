@@ -252,20 +252,19 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   }
   else {
     if (use_clnors) {
-      /* If custom normals are present and the option is turned on calculate the split
-       * normals and clear flag so the normals get interpolated to the result mesh. */
-      BKE_mesh_calc_normals_split(mesh);
-      CustomData_clear_layer_flag(&mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
+      CustomData_add_layer(&mesh->ldata,
+                           CD_NORMAL,
+                           CD_DUPLICATE,
+                           const_cast<float(*)[3]>(BKE_mesh_corner_normals_ensure(mesh)),
+                           mesh->totloop);
     }
 
     result = multires_as_mesh(mmd, ctx, mesh, subdiv);
 
     if (use_clnors) {
       float(*lnors)[3] = static_cast<float(*)[3]>(CustomData_get_layer(&result->ldata, CD_NORMAL));
-      BLI_assert(lnors != nullptr);
       BKE_mesh_set_custom_normals(result, lnors);
-      CustomData_set_layer_flag(&mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
-      CustomData_set_layer_flag(&result->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
+      CustomData_free_layers(&result->ldata, CD_NORMAL, result->totloop);
     }
     // BKE_subdiv_stats_print(&subdiv->stats);
     if (subdiv != runtime_data->subdiv) {

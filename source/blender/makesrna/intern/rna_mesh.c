@@ -554,25 +554,8 @@ static void rna_MeshLoop_normal_get(PointerRNA *ptr, float *values)
 {
   Mesh *me = rna_mesh(ptr);
   const int index = rna_MeshLoop_index_get(ptr);
-  const float(*vec)[3] = CustomData_get(&me->ldata, index, CD_NORMAL);
-
-  if (!vec) {
-    zero_v3(values);
-  }
-  else {
-    copy_v3_v3(values, (const float *)vec);
-  }
-}
-
-static void rna_MeshLoop_normal_set(PointerRNA *ptr, const float *values)
-{
-  Mesh *me = rna_mesh(ptr);
-  const int index = rna_MeshLoop_index_get(ptr);
-  float(*vec)[3] = CustomData_get(&me->ldata, index, CD_NORMAL);
-
-  if (vec) {
-    normalize_v3_v3(*vec, values);
-  }
+  const float(*loop_normals)[3] = BKE_mesh_corner_normals_ensure(me);
+  copy_v3_v3(values, loop_normals[index]);
 }
 
 static void rna_MeshLoop_tangent_get(PointerRNA *ptr, float *values)
@@ -602,7 +585,8 @@ static void rna_MeshLoop_bitangent_get(PointerRNA *ptr, float *values)
 {
   Mesh *me = rna_mesh(ptr);
   const int index = rna_MeshLoop_index_get(ptr);
-  const float(*nor)[3] = CustomData_get(&me->ldata, index, CD_NORMAL);
+  const float(*loop_normals)[3] = BKE_mesh_corner_normals_ensure(me);
+  const float(*nor)[3] = loop_normals[index];
   const float(*vec)[4] = CustomData_get(&me->ldata, index, CD_MLOOPTANGENT);
 
   if (nor && vec) {
@@ -745,19 +729,11 @@ static void rna_MeshLoopTriangle_normal_get(PointerRNA *ptr, float *values)
 static void rna_MeshLoopTriangle_split_normals_get(PointerRNA *ptr, float *values)
 {
   Mesh *me = rna_mesh(ptr);
-  const float(*lnors)[3] = CustomData_get_layer(&me->ldata, CD_NORMAL);
-
-  if (!lnors) {
-    zero_v3(values + 0);
-    zero_v3(values + 3);
-    zero_v3(values + 6);
-  }
-  else {
-    MLoopTri *lt = (MLoopTri *)ptr->data;
-    copy_v3_v3(values + 0, lnors[lt->tri[0]]);
-    copy_v3_v3(values + 3, lnors[lt->tri[1]]);
-    copy_v3_v3(values + 6, lnors[lt->tri[2]]);
-  }
+  const float(*loop_normals)[3] = BKE_mesh_corner_normals_ensure(me);
+  const MLoopTri *lt = (const MLoopTri *)ptr->data;
+  copy_v3_v3(values + 0, loop_normals[lt->tri[0]]);
+  copy_v3_v3(values + 3, loop_normals[lt->tri[1]]);
+  copy_v3_v3(values + 6, loop_normals[lt->tri[2]]);
 }
 
 static float rna_MeshLoopTriangle_area_get(PointerRNA *ptr)
@@ -2453,7 +2429,7 @@ static void rna_def_mloop(BlenderRNA *brna)
   prop = RNA_def_property(srna, "normal", PROP_FLOAT, PROP_DIRECTION);
   RNA_def_property_array(prop, 3);
   RNA_def_property_range(prop, -1.0f, 1.0f);
-  RNA_def_property_float_funcs(prop, "rna_MeshLoop_normal_get", "rna_MeshLoop_normal_set", NULL);
+  RNA_def_property_float_funcs(prop, "rna_MeshLoop_normal_get", NULL, NULL);
   RNA_def_property_ui_text(
       prop,
       "Normal",

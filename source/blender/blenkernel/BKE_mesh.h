@@ -372,6 +372,8 @@ const float (*BKE_mesh_vertex_normals_ensure(const struct Mesh *mesh))[3];
  */
 const float (*BKE_mesh_poly_normals_ensure(const struct Mesh *mesh))[3];
 
+const float (*BKE_mesh_corner_normals_ensure(const struct Mesh *mesh))[3];
+
 /**
  * Tag mesh vertex and face normals to be recalculated when/if they are needed later.
  *
@@ -434,6 +436,8 @@ void BKE_mesh_vertex_normals_clear_dirty(struct Mesh *mesh);
  */
 void BKE_mesh_poly_normals_clear_dirty(struct Mesh *mesh);
 
+void BKE_mesh_corner_normals_clear_dirty(struct Mesh *mesh);
+
 /**
  * Return true if the mesh vertex normals either are not stored or are dirty.
  * This can be used to help decide whether to transfer them when copying a mesh.
@@ -445,6 +449,8 @@ bool BKE_mesh_vertex_normals_are_dirty(const struct Mesh *mesh);
  * This can be used to help decide whether to transfer them when copying a mesh.
  */
 bool BKE_mesh_poly_normals_are_dirty(const struct Mesh *mesh);
+
+bool BKE_mesh_corner_normals_are_dirty(const struct Mesh *mesh);
 
 /**
  * Calculate face normals directly into a result array.
@@ -690,7 +696,6 @@ void BKE_mesh_normals_loop_to_vertex(int numVerts,
  */
 bool BKE_mesh_has_custom_loop_normals(struct Mesh *me);
 
-void BKE_mesh_calc_normals_split(struct Mesh *mesh);
 /**
  * Compute 'split' (aka loop, or per face corner's) normals.
  *

@@ -164,8 +164,7 @@ void BKE_mesh_foreach_mapped_loop(Mesh *mesh,
 
     /* XXX: investigate using EditMesh data. */
     const float(*lnors)[3] = (flag & MESH_FOREACH_USE_NORMAL) ?
-                                 static_cast<const float(*)[3]>(
-                                     CustomData_get_layer(&mesh->ldata, CD_NORMAL)) :
+                                 BKE_mesh_corner_normals_ensure(mesh) :
                                  nullptr;
 
     int f_idx;
@@ -186,8 +185,7 @@ void BKE_mesh_foreach_mapped_loop(Mesh *mesh,
   }
   else {
     const float(*lnors)[3] = (flag & MESH_FOREACH_USE_NORMAL) ?
-                                 static_cast<const float(*)[3]>(
-                                     CustomData_get_layer(&mesh->ldata, CD_NORMAL)) :
+                                 BKE_mesh_corner_normals_ensure(mesh) :
                                  nullptr;
 
     const MVert *mv = BKE_mesh_verts(mesh);

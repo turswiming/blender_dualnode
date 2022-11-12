@@ -131,7 +131,6 @@ class OBJMesh : NonCopyable {
    */
   const Material *get_object_material(int16_t mat_nr) const;
 
-  void ensure_mesh_normals() const;
   void ensure_mesh_edges() const;
 
   /**

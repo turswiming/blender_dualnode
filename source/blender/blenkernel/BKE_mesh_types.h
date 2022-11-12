@@ -141,8 +141,10 @@ struct MeshRuntime {
    */
   bool vert_normals_dirty = false;
   bool poly_normals_dirty = false;
+  bool corner_normals_dirty = false;
   float (*vert_normals)[3] = nullptr;
   float (*poly_normals)[3] = nullptr;
+  float (*corner_normals)[3] = nullptr;
 
   /**
    * A #BLI_bitmap containing tags for the center vertices of subdivided polygons, set by the

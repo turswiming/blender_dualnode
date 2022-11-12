@@ -133,19 +133,11 @@ void BKE_mesh_calc_loop_tangent_single(Mesh *mesh,
     return;
   }
 
-  const float(*loopnors)[3] = static_cast<const float(*)[3]>(
-      CustomData_get_layer(&mesh->ldata, CD_NORMAL));
-  if (!loopnors) {
-    BKE_report(
-        reports, RPT_ERROR, "Tangent space computation needs loop normals, none found, aborting");
-    return;
-  }
-
   BKE_mesh_calc_loop_tangent_single_ex(BKE_mesh_verts(mesh),
                                        mesh->totvert,
                                        BKE_mesh_loops(mesh),
                                        r_looptangents,
-                                       loopnors,
+                                       BKE_mesh_corner_normals_ensure(mesh),
                                        loopuvs,
                                        mesh->totloop,
                                        BKE_mesh_polys(mesh),
@@ -585,7 +577,7 @@ void BKE_mesh_calc_loop_tangents(Mesh *me_eval,
       tangent_names_len,
       BKE_mesh_vertex_normals_ensure(me_eval),
       BKE_mesh_poly_normals_ensure(me_eval),
-      static_cast<const float(*)[3]>(CustomData_get_layer(&me_eval->ldata, CD_NORMAL)),
+      BKE_mesh_corner_normals_ensure(me_eval),
       /* may be nullptr */
       static_cast<const float(*)[3]>(CustomData_get_layer(&me_eval->vdata, CD_ORCO)),
       /* result */

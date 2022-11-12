@@ -307,11 +307,7 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
     CustomData *ldata = &mesh->ldata;
 
     if (CustomData_has_layer(ldata, CD_CUSTOMLOOPNORMAL)) {
-      if (!CustomData_has_layer(ldata, CD_NORMAL)) {
-        BKE_mesh_calc_normals_split(mesh);
-      }
-
-      float(*clnors)[3] = CustomData_get_layer(ldata, CD_NORMAL);
+      const float(*clnors)[3] = BKE_mesh_corner_normals_ensure(mesh);
       vert_clnors = MEM_malloc_arrayN(verts_num, sizeof(*vert_clnors), __func__);
       BKE_mesh_normals_loop_to_vertex(
           verts_num, BKE_mesh_loops(mesh), mesh->totloop, (const float(*)[3])clnors, vert_clnors);

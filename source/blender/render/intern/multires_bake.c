@@ -499,6 +499,7 @@ static void do_multires_bake(MultiresBakeRender *bkr,
          temp_mesh->totloop * sizeof(MLoop));
   const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(temp_mesh);
   const float(*poly_normals)[3] = BKE_mesh_poly_normals_ensure(temp_mesh);
+  const float(*corner_normals)[3] = BKE_mesh_corner_normals_ensure(temp_mesh);
 
   if (require_tangent) {
     if (CustomData_get_layer_index(&dm->loopData, CD_TANGENT) == -1) {
@@ -515,7 +516,7 @@ static void do_multires_bake(MultiresBakeRender *bkr,
           0,
           vert_normals,
           poly_normals,
-          (const float(*)[3])dm->getLoopDataArray(dm, CD_NORMAL),
+          corner_normals,
           (const float(*)[3])dm->getVertDataArray(dm, CD_ORCO), /* may be nullptr */
           /* result */
           &dm->loopData,

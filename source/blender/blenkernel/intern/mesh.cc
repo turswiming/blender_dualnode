@@ -1567,20 +1567,6 @@ void BKE_mesh_transform(Mesh *me, const float mat[4][4], bool do_keys)
     }
   }
 
-  /* don't update normals, caller can do this explicitly.
-   * We do update loop normals though, those may not be auto-generated
-   * (see e.g. STL import script)! */
-  float(*lnors)[3] = (float(*)[3])CustomData_duplicate_referenced_layer(
-      &me->ldata, CD_NORMAL, me->totloop);
-  if (lnors) {
-    float m3[3][3];
-
-    copy_m3_m4(m3, mat);
-    normalize_m3(m3);
-    for (int i = 0; i < me->totloop; i++, lnors++) {
-      mul_m3_v3(m3, *lnors);
-    }
-  }
   BKE_mesh_tag_coords_changed(me);
 }
 
@@ -1836,10 +1822,6 @@ void BKE_mesh_calc_normals_split_ex(Mesh *mesh,
   BKE_mesh_assert_normals_dirty_or_calculated(mesh);
 }
 
-void BKE_mesh_calc_normals_split(Mesh *mesh)
-{
-  BKE_mesh_calc_normals_split_ex(mesh, nullptr, ensure_corner_normal_layer(*mesh));
-}
 
 /* Split faces helper functions. */
 
