@@ -1069,13 +1069,15 @@ static Scene *gpencil_preview_scene_create(const struct ObjectPreviewData *previ
     BKE_object_materials_test(preview_data->pr_main, ob_temp, preview_data->datablock);
   }
 
-  Object *camera_object = object_preview_camera_create(preview_data->pr_main, scene, view_layer, ob_temp);
+  Object *camera_object = object_preview_camera_create(
+      preview_data->pr_main, scene, view_layer, ob_temp);
 
   scene->camera = camera_object;
   scene->r.xsch = preview_data->sizex;
   scene->r.ysch = preview_data->sizey;
   scene->r.size = 100;
 
+  BKE_view_layer_synced_ensure(scene, view_layer);
   Base *preview_base = BKE_view_layer_base_find(view_layer, ob_temp);
   /* For 'view selected' below. */
   preview_base->flag |= BASE_SELECTED;
@@ -1083,7 +1085,8 @@ static Scene *gpencil_preview_scene_create(const struct ObjectPreviewData *previ
   DEG_graph_build_from_view_layer(depsgraph);
   DEG_evaluate_on_refresh(depsgraph);
 
-  ED_view3d_camera_to_view_selected(preview_data->pr_main, depsgraph, scene, camera_object);
+  ED_view3d_camera_to_view_selected_with_set_clipping(
+      preview_data->pr_main, depsgraph, scene, camera_object);
 
   BKE_scene_graph_update_tagged(depsgraph, preview_data->pr_main);
 
@@ -1096,7 +1099,6 @@ static Scene *gpencil_preview_scene_create(const struct ObjectPreviewData *previ
 static void gpencil_preview_render(IconPreview *preview, IconPreviewSize *preview_sized)
 {
   Main *preview_main = BKE_main_new();
-  const float pixelsize_old = U.pixelsize;
   char err_out[256] = "unknown";
 
   BLI_assert(preview->id_copy && (preview->id_copy != preview->id));
@@ -1121,10 +1123,13 @@ static void gpencil_preview_render(IconPreview *preview, IconPreviewSize *previe
   Depsgraph *depsgraph;
   Scene *scene = gpencil_preview_scene_create(&preview_data, &depsgraph);
 
-  U.pixelsize = 2.0f;
+  /* Ownership is now ours. */
+  preview->id_copy = nullptr;
 
   View3DShading shading;
   BKE_screen_view3d_shading_init(&shading);
+  /* Enable shadows, makes it a bit easier to see the shape. */
+  shading.flag |= V3D_SHADING_SHADOW;
 
   ImBuf *ibuf = ED_view3d_draw_offscreen_imbuf_simple(
       depsgraph,
@@ -1140,8 +1145,6 @@ static void gpencil_preview_render(IconPreview *preview, IconPreviewSize *previe
       nullptr,
       nullptr,
       err_out);
-
-  U.pixelsize = pixelsize_old;
 
   if (ibuf) {
     icon_copy_rect(ibuf, preview_sized->sizex, preview_sized->sizey, preview_sized->rect);
