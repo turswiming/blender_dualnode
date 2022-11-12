@@ -718,7 +718,7 @@ static void trim_evaluated_curves(const bke::CurvesGeometry &src_curves,
         for (const int64_t curve_i : selection.slice(range)) {
           /* Interpolate onto the evaluated point domain and sample the evaluated domain. */
           const IndexRange src_evaluated_points = src_curves.evaluated_points_for_curve(curve_i);
-          GArray evaluated_data(CPPType::get<T>(), src_evaluated_points.size());
+          GArray<> evaluated_data(CPPType::get<T>(), src_evaluated_points.size());
           GMutableSpan evaluated_span = evaluated_data.as_mutable_span();
           src_curves.interpolate_to_evaluated(
               curve_i, attribute.src.slice(src_curves.points_for_curve(curve_i)), evaluated_span);
@@ -785,8 +785,8 @@ static void compute_curve_trim_parameters(const bke::CurvesGeometry &curves,
         /* Single point. */
         dst_curve_size[curve_i] = 1;
         src_ranges[curve_i] = bke::curves::IndexRangeCyclic(0, 0, 1, 1);
-        start_points[curve_i] = {0, 0, 0.0f};
-        end_points[curve_i] = {0, 0, 0.0f};
+        start_points[curve_i] = {{0, 0}, 0.0f};
+        end_points[curve_i] = {{0, 0}, 0.0f};
         continue;
       }
 
