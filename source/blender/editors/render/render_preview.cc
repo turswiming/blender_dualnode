@@ -884,13 +884,32 @@ static void object_preview_render(IconPreview *preview, IconPreviewSize *preview
 
   BLI_assert(preview->id_copy && (preview->id_copy != preview->id));
 
+  const bool is_gpencil = GS(preview->id->name) == ID_GD;
+
   struct ObjectPreviewData preview_data = {};
   preview_data.pr_main = preview_main;
   /* Act on a copy. */
-  preview_data.object = (Object *)preview->id_copy;
-  preview_data.datablock = nullptr;
+  if (!is_gpencil) {
+    preview_data.object = (Object *)preview->id_copy;
+    preview_data.datablock = nullptr;
+  }
+  else {
+    preview_data.object = nullptr;
+    preview_data.datablock = (ID *)preview->id_copy;
+  }
   preview_data.sizex = preview_sized->sizex;
   preview_data.sizey = preview_sized->sizey;
+
+  /* Grease Pencil needs to find the frame number to make preview visible. */
+  if (is_gpencil) {
+    int f_min, f_max;
+    bGPdata *gpd = (bGPdata *)preview->id_copy;
+    BKE_gpencil_frame_min_max(gpd, &f_min, &f_max);
+    const int framenum = ((preview->scene->r.cfra < f_min) || (preview->scene->r.cfra > f_max)) ?
+                             f_min :
+                             preview->scene->r.cfra;
+    preview_data.cfra = framenum;
+  }
 
   Depsgraph *depsgraph;
   Scene *scene = object_preview_scene_create(&preview_data, &depsgraph);
@@ -1068,71 +1087,6 @@ static void action_preview_render(IconPreview *preview, IconPreviewSize *preview
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Grease Pencil Preview
- * \{ */
-
-/* Render a grease pencil datablock. As the Draw Engine needs an object, the datablock is assigned
- * to a temporary object, just for render. */
-static void gpencil_preview_render(IconPreview *preview, IconPreviewSize *preview_sized)
-{
-  Main *preview_main = BKE_main_new();
-  char err_out[256] = "unknown";
-
-  BLI_assert(preview->id_copy && (preview->id_copy != preview->id));
-
-  /* Find the frame number to make preview visible. */
-  int f_min, f_max;
-  bGPdata *gpd = (bGPdata *)preview->id_copy;
-  BKE_gpencil_frame_min_max(gpd, &f_min, &f_max);
-  const int framenum = ((preview->scene->r.cfra < f_min) || (preview->scene->r.cfra > f_max)) ?
-                           f_min :
-                           preview->scene->r.cfra;
-
-  struct ObjectPreviewData preview_data = {};
-  preview_data.pr_main = preview_main;
-  /* Act on a copy. */
-  preview_data.object = nullptr;
-  preview_data.datablock = (ID *)preview->id_copy;
-  preview_data.cfra = framenum;
-  preview_data.sizex = preview_sized->sizex;
-  preview_data.sizey = preview_sized->sizey;
-
-  Depsgraph *depsgraph;
-  Scene *scene = object_preview_scene_create(&preview_data, &depsgraph);
-
-  /* Ownership is now ours. */
-  preview->id_copy = nullptr;
-
-  View3DShading shading;
-  BKE_screen_view3d_shading_init(&shading);
-  /* Enable shadows, makes it a bit easier to see the shape. */
-  shading.flag |= V3D_SHADING_SHADOW;
-
-  ImBuf *ibuf = ED_view3d_draw_offscreen_imbuf_simple(
-      depsgraph,
-      DEG_get_evaluated_scene(depsgraph),
-      &shading,
-      OB_TEXTURE,
-      DEG_get_evaluated_object(depsgraph, scene->camera),
-      preview_sized->sizex,
-      preview_sized->sizey,
-      IB_rect,
-      V3D_OFSDRAW_OVERRIDE_SCENE_SETTINGS,
-      R_ALPHAPREMUL,
-      nullptr,
-      nullptr,
-      err_out);
-
-  if (ibuf) {
-    icon_copy_rect(ibuf, preview_sized->sizex, preview_sized->sizey, preview_sized->rect);
-    IMB_freeImBuf(ibuf);
-  }
-
-  DEG_graph_free(depsgraph);
-  BKE_main_free(preview_main);
-}
-/** \} */
-
 /* -------------------------------------------------------------------- */
 /** \name New Shader Preview System
  * \{ */
@@ -1730,7 +1684,7 @@ static void icon_preview_startjob_all_sizes(void *customdata,
           action_preview_render(ip, cur_size);
           continue;
         case ID_GD:
-          gpencil_preview_render(ip, cur_size);
+          object_preview_render(ip, cur_size);
           continue;
         default:
           /* Fall through to the same code as the `ip->id == nullptr` case. */
