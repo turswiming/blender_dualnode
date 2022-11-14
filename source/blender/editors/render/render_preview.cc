@@ -811,6 +811,11 @@ static Scene *object_preview_scene_create(const struct ObjectPreviewData *previe
                                           Depsgraph **r_depsgraph)
 {
   Scene *scene = BKE_scene_add(preview_data->pr_main, "Object preview scene");
+  const bool is_gpencil = (preview_data->object == nullptr ||
+                           (preview_data->object != nullptr &&
+                            preview_data->object->type == OB_GPENCIL));
+  Object *ob_gpencil_temp = nullptr;
+
   /* Preview need to be in the current frame to get a thumbnail similar of what
    * viewport displays. */
   scene->r.cfra = preview_data->cfra;
@@ -819,13 +824,35 @@ static Scene *object_preview_scene_create(const struct ObjectPreviewData *previe
   Depsgraph *depsgraph = DEG_graph_new(
       preview_data->pr_main, scene, view_layer, DAG_EVAL_VIEWPORT);
 
-  BLI_assert(preview_data->object != nullptr);
-  BLI_addtail(&preview_data->pr_main->objects, preview_data->object);
+  if (!is_gpencil) {
+    BLI_assert(preview_data->object != nullptr);
+    BLI_addtail(&preview_data->pr_main->objects, preview_data->object);
 
-  BKE_collection_object_add(preview_data->pr_main, scene->master_collection, preview_data->object);
+    BKE_collection_object_add(
+        preview_data->pr_main, scene->master_collection, preview_data->object);
+  }
+  else {
+    /* Grease pencil draw engine needs an object to draw the datablock. */
+    ob_gpencil_temp = BKE_object_add_for_data(preview_data->pr_main,
+                                              scene,
+                                              view_layer,
+                                              OB_GPENCIL,
+                                              "preview_object",
+                                              preview_data->datablock,
+                                              true);
+    BLI_assert(ob_gpencil_temp != nullptr);
+    /* Copy the materials to get full color previews. */
+    const short *materials_len_p = BKE_id_material_len_p(preview_data->datablock);
+    if (materials_len_p && *materials_len_p > 0) {
+      BKE_object_materials_test(preview_data->pr_main, ob_gpencil_temp, preview_data->datablock);
+    }
+  }
 
-  Object *camera_object = object_preview_camera_create(
-      preview_data->pr_main, scene, view_layer, preview_data->object);
+  Object *camera_object = object_preview_camera_create(preview_data->pr_main,
+                                                       scene,
+                                                       view_layer,
+                                                       is_gpencil ? ob_gpencil_temp :
+                                                                    preview_data->object);
 
   scene->camera = camera_object;
   scene->r.xsch = preview_data->sizex;
@@ -833,7 +860,8 @@ static Scene *object_preview_scene_create(const struct ObjectPreviewData *previe
   scene->r.size = 100;
 
   BKE_view_layer_synced_ensure(scene, view_layer);
-  Base *preview_base = BKE_view_layer_base_find(view_layer, preview_data->object);
+  Base *preview_base = BKE_view_layer_base_find(
+      view_layer, is_gpencil ? ob_gpencil_temp : preview_data->object);
   /* For 'view selected' below. */
   preview_base->flag |= BASE_SELECTED;
 
@@ -1043,57 +1071,6 @@ static void action_preview_render(IconPreview *preview, IconPreviewSize *preview
 /** \name Grease Pencil Preview
  * \{ */
 
-static Scene *gpencil_preview_scene_create(const struct ObjectPreviewData *preview_data,
-                                           Depsgraph **r_depsgraph)
-{
-  Scene *scene = BKE_scene_add(preview_data->pr_main, "Object preview scene");
-  /* Grease pencil needs to set the scene to the current frame or the strokes
-   * will not be visible in the preview.  */
-  scene->r.cfra = preview_data->cfra;
-  ViewLayer *view_layer = (ViewLayer *)scene->view_layers.first;
-  Depsgraph *depsgraph = DEG_graph_new(
-      preview_data->pr_main, scene, view_layer, DAG_EVAL_VIEWPORT);
-
-  /* Grease pencil draw engine needs an object to draw the datablock. */
-  Object *ob_temp = BKE_object_add_for_data(preview_data->pr_main,
-                                            scene,
-                                            view_layer,
-                                            OB_GPENCIL,
-                                            "preview_object",
-                                            preview_data->datablock,
-                                            true);
-  BLI_assert(ob_temp != nullptr);
-  /* Copy the materials to get full color previews. */
-  const short *materials_len_p = BKE_id_material_len_p(preview_data->datablock);
-  if (materials_len_p && *materials_len_p > 0) {
-    BKE_object_materials_test(preview_data->pr_main, ob_temp, preview_data->datablock);
-  }
-
-  Object *camera_object = object_preview_camera_create(
-      preview_data->pr_main, scene, view_layer, ob_temp);
-
-  scene->camera = camera_object;
-  scene->r.xsch = preview_data->sizex;
-  scene->r.ysch = preview_data->sizey;
-  scene->r.size = 100;
-
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  Base *preview_base = BKE_view_layer_base_find(view_layer, ob_temp);
-  /* For 'view selected' below. */
-  preview_base->flag |= BASE_SELECTED;
-
-  DEG_graph_build_from_view_layer(depsgraph);
-  DEG_evaluate_on_refresh(depsgraph);
-
-  ED_view3d_camera_to_view_selected_with_set_clipping(
-      preview_data->pr_main, depsgraph, scene, camera_object);
-
-  BKE_scene_graph_update_tagged(depsgraph, preview_data->pr_main);
-
-  *r_depsgraph = depsgraph;
-  return scene;
-}
-
 /* Render a grease pencil datablock. As the Draw Engine needs an object, the datablock is assigned
  * to a temporary object, just for render. */
 static void gpencil_preview_render(IconPreview *preview, IconPreviewSize *preview_sized)
@@ -1121,7 +1098,7 @@ static void gpencil_preview_render(IconPreview *preview, IconPreviewSize *previe
   preview_data.sizey = preview_sized->sizey;
 
   Depsgraph *depsgraph;
-  Scene *scene = gpencil_preview_scene_create(&preview_data, &depsgraph);
+  Scene *scene = object_preview_scene_create(&preview_data, &depsgraph);
 
   /* Ownership is now ours. */
   preview->id_copy = nullptr;
