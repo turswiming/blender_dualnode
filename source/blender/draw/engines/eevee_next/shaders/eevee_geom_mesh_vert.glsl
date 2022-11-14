@@ -7,6 +7,8 @@
 
 void main()
 {
+  DRW_VIEW_FROM_RESOURCE_ID;
+
   init_interface();
 
   interp.P = point_object_to_world(pos);

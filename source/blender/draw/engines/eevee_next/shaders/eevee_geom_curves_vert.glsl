@@ -9,6 +9,8 @@
 
 void main()
 {
+  DRW_VIEW_FROM_RESOURCE_ID;
+
   init_interface();
 
   vec3 T;

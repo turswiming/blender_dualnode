@@ -37,15 +37,22 @@ void main()
     Sphere inscribed_sphere = Sphere(bounds.bounding_sphere.xyz, bounds._inner_sphere_radius);
 
     for (drw_view_id = 0; drw_view_id < view_len; drw_view_id++) {
-      if (intersect_view(inscribed_sphere) == true) {
-        /* Visible. */
+      bool visible;
+      if (drw_view_culling.bound_sphere.w == -1.0) {
+        /* View disabled. */
+        visible = false;
+      }
+      else if (intersect_view(inscribed_sphere) == true) {
+        visible = true;
       }
       else if (intersect_view(bounding_sphere) == false) {
-        /* Not visible. */
-        mask_visibility_bit(drw_view_id);
+        visible = false;
       }
       else if (intersect_view(box) == false) {
-        /* Not visible. */
+        visible = false;
+      }
+
+      if (!visible) {
         mask_visibility_bit(drw_view_id);
       }
     }

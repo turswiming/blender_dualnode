@@ -587,6 +587,8 @@ void DrawMultiBuf::bind(RecordingState &state,
                         int visibility_word_per_draw,
                         int view_len)
 {
+  UNUSED_VARS(headers, commands);
+
   GPU_debug_group_begin("DrawMultiBuf.bind");
 
   resource_id_count_ = 0u;

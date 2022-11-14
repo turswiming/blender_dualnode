@@ -28,7 +28,7 @@ void ShadowTileMap::sync_clipmap(const float3 &camera_position,
                                  const float4x4 &object_mat_,
                                  float near_,
                                  float far_,
-                                 int2 new_offset,
+                                 int2 origin_offset,
                                  int clipmap_level)
 {
   if (is_cubeface || (level != clipmap_level) || (near != near_) || (far != far_)) {
@@ -43,9 +43,9 @@ void ShadowTileMap::sync_clipmap(const float3 &camera_position,
 
   if (grid_shift == int2(0)) {
     /* Only replace shift if it is not already dirty. */
-    grid_shift = new_offset - grid_offset;
+    grid_shift = origin_offset - grid_offset;
   }
-  grid_offset = new_offset;
+  grid_offset = origin_offset;
 
   if (!equals_m4m4(object_mat.ptr(), object_mat_.ptr())) {
     object_mat = object_mat_;
@@ -811,6 +811,18 @@ void ShadowModule::set_view(View &view)
   if (prev_fb) {
     GPU_framebuffer_bind(prev_fb);
   }
+
+  /* TEST */
+  float4x4 winmat;
+  perspective_m4(winmat.ptr(), -0.1f, 0.1f, -0.1f, 0.1f, 0.1f, 10.0f);
+  float4x4 viewmat;
+  for (int i = 0; i < 6; i++) {
+    viewmat = float4x4(shadow_face_mat[i]);
+    shadow_multi_view_.sync(viewmat, winmat, i);
+  }
+  shadow_multi_view_.disable(IndexRange(6, 58));
+
+  inst_.pipelines.shadow.render(shadow_multi_view_);
 }
 
 void ShadowModule::debug_draw(View &view, GPUFrameBuffer *view_fb)

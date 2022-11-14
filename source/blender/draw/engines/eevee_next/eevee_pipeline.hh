@@ -205,7 +205,7 @@ class PipelineModule {
   {
     // deferred.sync();
     forward.sync();
-    // shadow.sync();
+    shadow.sync();
     // velocity.sync();
   }
 

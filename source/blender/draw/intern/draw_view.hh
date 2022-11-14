@@ -56,7 +56,7 @@ class View {
   View(const char *name, int view_len = 1)
       : visibility_buf_(name), debug_name_(name), view_len_(view_len)
   {
-    BLI_assert(view_len < DRW_VIEW_MAX);
+    BLI_assert(view_len <= DRW_VIEW_MAX);
   }
 
   /* For compatibility with old system. Will be removed at some point. */
@@ -70,6 +70,10 @@ class View {
   }
 
   void sync(const float4x4 &view_mat, const float4x4 &win_mat, int view_id = 0);
+
+  void disable(IndexRange range);
+
+  void compute_procedural_bounds();
 
   bool is_persp(int view_id = 0) const
   {

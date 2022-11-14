@@ -407,8 +407,10 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
           break;
         case MAT_PIPE_FORWARD_PREPASS:
         case MAT_PIPE_DEFERRED_PREPASS:
-        case MAT_PIPE_SHADOW:
           info.additional_info("eevee_surf_depth");
+          break;
+        case MAT_PIPE_SHADOW:
+          info.additional_info("eevee_surf_shadow");
           break;
         case MAT_PIPE_DEFERRED:
           info.additional_info("eevee_surf_deferred");

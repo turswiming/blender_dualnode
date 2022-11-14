@@ -466,6 +466,7 @@ set(GLSL_SRC
   engines/eevee_next/shaders/eevee_surf_depth_frag.glsl
   engines/eevee_next/shaders/eevee_surf_forward_frag.glsl
   engines/eevee_next/shaders/eevee_surf_lib.glsl
+  engines/eevee_next/shaders/eevee_surf_shadow_frag.glsl
   engines/eevee_next/shaders/eevee_surf_world_frag.glsl
   engines/eevee_next/shaders/eevee_velocity_lib.glsl
 
@@ -541,6 +542,7 @@ set(GLSL_SRC
   intern/shaders/draw_debug_print_display_frag.glsl
   intern/shaders/draw_debug_print_display_vert.glsl
   intern/shaders/draw_resource_finalize_comp.glsl
+  intern/shaders/draw_view_finalize_comp.glsl
   intern/shaders/draw_visibility_comp.glsl
 
   intern/draw_command_shared.hh
@@ -792,4 +794,3 @@ if(WITH_GTESTS)
     blender_add_test_lib(bf_draw_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
   endif()
 endif()
-

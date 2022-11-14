@@ -272,6 +272,9 @@ class ShadowModule {
   /** \name Rendering
    * \{ */
 
+  /** Multi-View containing a maximum of 64 view to be rendered with the shadow pipeline. */
+  View shadow_multi_view_ = {"ShadowMultiView", 64};
+
   /** Per instance view index. */
   // ShadowViewIndexBuf view_index_buf_ = {"ViewIndexBuf"};
   /** A view array used for rendering shadows. */
@@ -300,6 +303,7 @@ class ShadowModule {
   void init();
 
   void begin_sync();
+  /** Register a shadow caster or receiver. */
   void sync_object(const ObjectHandle &handle,
                    const ResourceHandle &resource_handle,
                    bool is_shadow_caster,

@@ -7,6 +7,8 @@
 
 void main()
 {
+  DRW_VIEW_FROM_RESOURCE_ID;
+
   init_interface();
 
   /* TODO(fclem): Expose through a node? */
