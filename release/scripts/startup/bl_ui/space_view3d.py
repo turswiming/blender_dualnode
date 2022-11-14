@@ -851,9 +851,9 @@ class VIEW3D_HT_header(Header):
                     )
             if object_mode == 'SCULPT_GPENCIL':
                 layout.popover(
-                       panel="VIEW3D_PT_gpencil_sculpt_automasking",
-                       text="",
-                       icon="MOD_MASK"
+                    panel="VIEW3D_PT_gpencil_sculpt_automasking",
+                    text="",
+                    icon="MOD_MASK"
                 )
         elif object_mode == 'SCULPT':
             layout.popover(
@@ -3224,11 +3224,11 @@ class VIEW3D_MT_sculpt(Menu):
         props.action = 'SHOW'
         props.area = 'ALL'
 
-        props = layout.operator("paint.hide_show", text="Show Bounding Box")
+        props = layout.operator("paint.hide_show", text="Box Show")
         props.action = 'SHOW'
         props.area = 'INSIDE'
 
-        props = layout.operator("paint.hide_show", text="Hide Bounding Box")
+        props = layout.operator("paint.hide_show", text="Box Hide")
         props.action = 'HIDE'
         props.area = 'INSIDE'
 
@@ -3877,6 +3877,7 @@ class VIEW3D_MT_edit_mesh(Menu):
 
         layout.operator("mesh.bisect")
         layout.operator("mesh.knife_project")
+        layout.operator("mesh.knife_tool")
 
         if with_bullet:
             layout.operator("mesh.convex_hull")
