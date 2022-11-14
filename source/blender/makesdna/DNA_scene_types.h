@@ -472,6 +472,7 @@ typedef struct ImageFormatData {
 #define R_IMF_IMTYPE_THEORA 33
 #define R_IMF_IMTYPE_PSD 34
 #define R_IMF_IMTYPE_WEBP 35
+#define R_IMF_IMTYPE_AV1 36
 
 #define R_IMF_IMTYPE_INVALID 255
 
@@ -559,7 +560,8 @@ typedef struct BakeData {
   char target;
   char save_mode;
   char margin_type;
-  char _pad[5];
+  char view_from;
+  char _pad[4];
 
   struct Object *cage_object;
 } BakeData;
@@ -591,6 +593,12 @@ typedef enum eBakeSaveMode {
   R_BAKE_SAVE_INTERNAL = 0,
   R_BAKE_SAVE_EXTERNAL = 1,
 } eBakeSaveMode;
+
+/** #BakeData.view_from (char) */
+typedef enum eBakeViewFrom {
+  R_BAKE_VIEW_FROM_ABOVE_SURFACE = 0,
+  R_BAKE_VIEW_FROM_ACTIVE_CAMERA = 1,
+} eBakeViewFrom;
 
 /** #BakeData.pass_filter */
 typedef enum eBakePassFilter {
@@ -1147,6 +1155,16 @@ typedef enum eGP_Sculpt_SettingsFlag {
   GP_SCULPT_SETT_FLAG_PRIMITIVE_CURVE = (1 << 1),
   /** Scale thickness. */
   GP_SCULPT_SETT_FLAG_SCALE_THICKNESS = (1 << 3),
+  /* Stroke Auto-Masking for sculpt. */
+  GP_SCULPT_SETT_FLAG_AUTOMASK_STROKE = (1 << 4),
+  /* Stroke Layer Auto-Masking for sculpt. */
+  GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_STROKE = (1 << 5),
+  /* Stroke Material Auto-Masking for sculpt. */
+  GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_STROKE = (1 << 6),
+  /* Active Layer Auto-Masking for sculpt. */
+  GP_SCULPT_SETT_FLAG_AUTOMASK_LAYER_ACTIVE = (1 << 7),
+  /* Active Material Auto-Masking for sculpt. */
+  GP_SCULPT_SETT_FLAG_AUTOMASK_MATERIAL_ACTIVE = (1 << 8),
 } eGP_Sculpt_SettingsFlag;
 
 /** #GP_Sculpt_Settings.gpencil_selectmode_sculpt */
@@ -1754,6 +1772,8 @@ typedef struct Scene {
   ID id;
   /** Animation data (must be immediately after id for utilities to use it). */
   struct AnimData *adt;
+  /* runtime (must be immediately after id for utilities to use it). */
+  DrawDataList drawdata;
 
   struct Object *camera;
   struct World *world;
@@ -2282,6 +2302,7 @@ typedef enum ePaintSymmetryFlags {
   PAINT_TILE_Y = (1 << 5),
   PAINT_TILE_Z = (1 << 6),
 } ePaintSymmetryFlags;
+ENUM_OPERATORS(ePaintSymmetryFlags, PAINT_TILE_Z);
 
 #define PAINT_SYMM_AXIS_ALL (PAINT_SYMM_X | PAINT_SYMM_Y | PAINT_SYMM_Z)
 

@@ -142,7 +142,7 @@ struct CameraData {
   float4x4 viewinv;
   float4x4 winmat;
   float4x4 wininv;
-  /** Camera UV scale and bias. Also known as `viewcamtexcofac`. */
+  /** Camera UV scale and bias. */
   float2 uv_scale;
   float2 uv_bias;
   /** Panorama parameters. */
@@ -544,7 +544,7 @@ struct LightCullingData {
   uint local_lights_len;
   /** Items that are **NOT** processed by the 2.5D culling (i.e: Sun Lights). */
   uint sun_lights_len;
-  /** Number of items that passes the first culling test. */
+  /** Number of items that passes the first culling test. (local lights only) */
   uint visible_count;
   /** Extent of one square tile in pixels. */
   float tile_size;
@@ -893,8 +893,6 @@ using ShadowPageHeapBuf = draw::StorageVectorBuffer<uint, SHADOW_MAX_PAGE>;
 using ShadowPageCacheBuf = draw::StorageArrayBuffer<uint2, SHADOW_MAX_PAGE, true>;
 using ShadowTileMapDataBuf = draw::StorageVectorBuffer<ShadowTileMapData, SHADOW_MAX_TILEMAP>;
 using ShadowTileDataBuf = draw::StorageArrayBuffer<ShadowTileDataPacked, SHADOW_MAX_TILE, true>;
-using ShadowViewIndexBuf = draw::StorageArrayBuffer<uint, SHADOW_MAX_TILEMAP, true>;
-using ShadowViewInfosBuf = draw::StorageArrayBuffer<ViewInfos, SHADOW_MAX_TILEMAP, true>;
 using VelocityGeometryBuf = draw::StorageArrayBuffer<float4, 16, true>;
 using VelocityIndexBuf = draw::StorageArrayBuffer<VelocityIndex, 16>;
 using VelocityObjectBuf = draw::StorageArrayBuffer<float4x4, 16>;

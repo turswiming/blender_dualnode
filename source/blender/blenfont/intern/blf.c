@@ -98,7 +98,7 @@ static int blf_search(const char *name)
 {
   for (int i = 0; i < BLF_MAX_FONT; i++) {
     const FontBLF *font = global_font[i];
-    if (font && (STREQ(font->name, name))) {
+    if (font && STREQ(font->name, name)) {
       return i;
     }
   }
@@ -162,6 +162,14 @@ int BLF_load_unique(const char *name)
   }
 
   FontBLF *font = blf_font_new(name, filepath);
+
+  /* XXX: Temporarily disable kerning in our main font. Kerning had been accidentally removed from
+   * our font in 3.1. In 3.4 we disable kerning here in the new version to keep spacing the same
+   * (T101506). Enable again later with change of font, placement, or rendering - Harley. */
+  if (font && BLI_str_endswith(filepath, BLF_DEFAULT_PROPORTIONAL_FONT)) {
+    font->face_flags &= ~FT_FACE_FLAG_KERNING;
+  }
+
   MEM_freeN(filepath);
 
   if (!font) {
@@ -226,7 +234,7 @@ void BLF_unload(const char *name)
   for (int i = 0; i < BLF_MAX_FONT; i++) {
     FontBLF *font = global_font[i];
 
-    if (font && (STREQ(font->name, name))) {
+    if (font && STREQ(font->name, name)) {
       BLI_assert(font->reference_count > 0);
       font->reference_count--;
 

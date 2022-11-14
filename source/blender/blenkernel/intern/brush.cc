@@ -56,7 +56,7 @@ static void brush_init_data(ID *id)
   BKE_brush_curve_preset(brush, CURVE_PRESET_SMOOTH);
 }
 
-static void brush_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, const int flag)
+static void brush_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, const int flag)
 {
   Brush *brush_dst = (Brush *)id_dst;
   const Brush *brush_src = (const Brush *)id_src;
@@ -1974,19 +1974,37 @@ void BKE_brush_curve_preset(Brush *b, eCurveMappingPreset preset)
   BKE_curvemapping_changed(cumap, false);
 }
 
+const struct MTex *BKE_brush_mask_texture_get(const struct Brush *brush,
+                                              const eObjectMode object_mode)
+{
+  if (object_mode == OB_MODE_SCULPT) {
+    return &brush->mtex;
+  }
+  return &brush->mask_mtex;
+}
+
+const struct MTex *BKE_brush_color_texture_get(const struct Brush *brush,
+                                               const eObjectMode object_mode)
+{
+  if (object_mode == OB_MODE_SCULPT) {
+    return &brush->mask_mtex;
+  }
+  return &brush->mtex;
+}
+
 float BKE_brush_sample_tex_3d(const Scene *scene,
                               const Brush *br,
+                              const MTex *mtex,
                               const float point[3],
                               float rgba[4],
                               const int thread,
                               struct ImagePool *pool)
 {
   UnifiedPaintSettings *ups = &scene->toolsettings->unified_paint_settings;
-  const MTex *mtex = &br->mtex;
   float intensity = 1.0;
   bool hasrgb = false;
 
-  if (!mtex->tex) {
+  if (mtex == nullptr || mtex->tex == nullptr) {
     intensity = 1;
   }
   else if (mtex->brush_map_mode == MTEX_MAP_MODE_3D) {
@@ -2387,7 +2405,7 @@ void BKE_brush_scale_size(int *r_brush_size,
   if (old_unprojected_radius != 0) {
     scale /= new_unprojected_radius;
   }
-  (*r_brush_size) = (int)((float)(*r_brush_size) * scale);
+  (*r_brush_size) = int(float(*r_brush_size) * scale);
 }
 
 void BKE_brush_jitter_pos(const Scene *scene, Brush *brush, const float pos[2], float jitterpos[2])

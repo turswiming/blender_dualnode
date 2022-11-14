@@ -7,22 +7,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
-#include "BLI_dial_2d.h"
 #include "BLI_edgehash.h"
 #include "BLI_gsqueue.h"
-#include "BLI_hash.h"
 #include "BLI_math.h"
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
 
-#include "BLT_translation.h"
-
 #include "DNA_brush_types.h"
 #include "DNA_customdata_types.h"
-#include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
-#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -32,41 +25,16 @@
 #include "BKE_collision.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
-#include "BKE_image.h"
-#include "BKE_kelvinlet.h"
-#include "BKE_key.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_mesh.h"
-#include "BKE_mesh_mapping.h"
-#include "BKE_mesh_mirror.h"
 #include "BKE_modifier.h"
-#include "BKE_multires.h"
-#include "BKE_node.h"
-#include "BKE_object.h"
 #include "BKE_paint.h"
-#include "BKE_particle.h"
 #include "BKE_pbvh.h"
-#include "BKE_pointcache.h"
-#include "BKE_report.h"
-#include "BKE_scene.h"
-#include "BKE_screen.h"
-#include "BKE_subdiv_ccg.h"
-#include "BKE_subsurf.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
 
 #include "WM_api.h"
-#include "WM_message.h"
-#include "WM_toolsystem.h"
 #include "WM_types.h"
 
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_sculpt.h"
-#include "ED_view3d.h"
-#include "paint_intern.h"
 #include "sculpt_intern.h"
 
 #include "RNA_access.h"
@@ -78,10 +46,8 @@
 #include "GPU_state.h"
 
 #include "UI_interface.h"
-#include "UI_resources.h"
 
 #include "bmesh.h"
-#include "bmesh_tools.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -509,6 +475,8 @@ static void do_cloth_brush_apply_forces_task_cb_ex(void *__restrict userdata,
       data->ob, ss, SCULPT_automasking_active_cache_get(ss), &automask_data, data->nodes[n]);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     float force[3];
     float sim_location[3];
     cloth_brush_simulation_location_get(ss, brush, sim_location);
@@ -699,15 +667,15 @@ static void cloth_brush_solve_collision(Object *object,
   BVHTreeRayHit hit;
 
   float obmat_inv[4][4];
-  invert_m4_m4(obmat_inv, object->obmat);
+  invert_m4_m4(obmat_inv, object->object_to_world);
 
   for (collider_cache = cloth_sim->collider_list->first; collider_cache;
        collider_cache = collider_cache->next) {
     float ray_start[3], ray_normal[3];
     float pos_world_space[3], prev_pos_world_space[3];
 
-    mul_v3_m4v3(pos_world_space, object->obmat, cloth_sim->pos[i]);
-    mul_v3_m4v3(prev_pos_world_space, object->obmat, cloth_sim->last_iteration_pos[i]);
+    mul_v3_m4v3(pos_world_space, object->object_to_world, cloth_sim->pos[i]);
+    mul_v3_m4v3(prev_pos_world_space, object->object_to_world, cloth_sim->last_iteration_pos[i]);
     sub_v3_v3v3(ray_normal, pos_world_space, prev_pos_world_space);
     copy_v3_v3(ray_start, prev_pos_world_space);
     hit.index = -1;
@@ -775,6 +743,8 @@ static void do_cloth_brush_solve_simulation_task_cb_ex(
       data->ob, ss, SCULPT_automasking_active_cache_get(ss), &automask_data, data->nodes[n]);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     float sim_location[3];
     cloth_brush_simulation_location_get(ss, brush, sim_location);
     const float sim_factor =
@@ -870,9 +840,14 @@ static void cloth_brush_satisfy_constraints(SculptSession *ss,
       PBVHVertRef vertex1 = BKE_pbvh_index_to_vertex(ss->pbvh, v1);
       PBVHVertRef vertex2 = BKE_pbvh_index_to_vertex(ss->pbvh, v2);
 
+      automask_data.orig_data.co = cloth_sim->init_pos[v1];
+      automask_data.orig_data.no = cloth_sim->init_no[v1];
       const float mask_v1 = (1.0f - SCULPT_vertex_mask_get(ss, vertex1)) *
                             SCULPT_automasking_factor_get(
                                 automasking, ss, vertex1, &automask_data);
+
+      automask_data.orig_data.co = cloth_sim->init_pos[v2];
+      automask_data.orig_data.no = cloth_sim->init_no[v2];
       const float mask_v2 = (1.0f - SCULPT_vertex_mask_get(ss, vertex2)) *
                             SCULPT_automasking_factor_get(
                                 automasking, ss, vertex2, &automask_data);
@@ -1078,6 +1053,7 @@ SculptClothSimulation *SCULPT_cloth_brush_simulation_create(Object *ob,
   cloth_sim->last_iteration_pos = MEM_calloc_arrayN(
       totverts, sizeof(float[3]), "cloth sim last iteration pos");
   cloth_sim->init_pos = MEM_calloc_arrayN(totverts, sizeof(float[3]), "cloth sim init pos");
+  cloth_sim->init_no = MEM_calloc_arrayN(totverts, sizeof(float[3]), "cloth sim init normals");
   cloth_sim->length_constraint_tweak = MEM_calloc_arrayN(
       totverts, sizeof(float), "cloth sim length tweak");
 
@@ -1153,6 +1129,7 @@ void SCULPT_cloth_brush_simulation_init(SculptSession *ss, SculptClothSimulation
 
     copy_v3_v3(cloth_sim->last_iteration_pos[i], SCULPT_vertex_co_get(ss, vertex));
     copy_v3_v3(cloth_sim->init_pos[i], SCULPT_vertex_co_get(ss, vertex));
+    SCULPT_vertex_normal_get(ss, vertex, cloth_sim->init_no[i]);
     copy_v3_v3(cloth_sim->prev_pos[i], SCULPT_vertex_co_get(ss, vertex));
     if (has_deformation_pos) {
       copy_v3_v3(cloth_sim->deformation_pos[i], SCULPT_vertex_co_get(ss, vertex));
@@ -1266,6 +1243,7 @@ void SCULPT_cloth_simulation_free(struct SculptClothSimulation *cloth_sim)
   MEM_SAFE_FREE(cloth_sim->deformation_pos);
   MEM_SAFE_FREE(cloth_sim->softbody_pos);
   MEM_SAFE_FREE(cloth_sim->init_pos);
+  MEM_SAFE_FREE(cloth_sim->init_no);
   MEM_SAFE_FREE(cloth_sim->deformation_strength);
   MEM_SAFE_FREE(cloth_sim->node_state);
   BLI_ghash_free(cloth_sim->node_state_index, NULL, NULL);
@@ -1441,7 +1419,7 @@ static void cloth_filter_apply_forces_task_cb(void *__restrict userdata,
 
   float sculpt_gravity[3] = {0.0f};
   if (sd->gravity_object) {
-    copy_v3_v3(sculpt_gravity, sd->gravity_object->obmat[2]);
+    copy_v3_v3(sculpt_gravity, sd->gravity_object->object_to_world[2]);
   }
   else {
     sculpt_gravity[2] = -1.0f;
@@ -1453,6 +1431,8 @@ static void cloth_filter_apply_forces_task_cb(void *__restrict userdata,
 
   PBVHVertexIter vd;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
+    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+
     float fade = vd.mask ? *vd.mask : 0.0f;
     fade *= SCULPT_automasking_factor_get(
         ss->filter_cache->automasking, ss, vd.vertex, &automask_data);
@@ -1596,6 +1576,8 @@ static int sculpt_cloth_filter_invoke(bContext *C, wmOperator *op, const wmEvent
 
   /* Needs mask data to be available as it is used when solving the constraints. */
   BKE_sculpt_update_object_for_edit(depsgraph, ob, true, true, false);
+
+  SCULPT_stroke_id_next(ob);
 
   SCULPT_undo_push_begin(ob, op);
   SCULPT_filter_cache_init(

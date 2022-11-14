@@ -938,7 +938,7 @@ static ImBuf *seq_render_image_strip(const SeqRenderData *context,
     return NULL;
   }
 
-  BLI_join_dirfile(name, sizeof(name), seq->strip->dir, s_elem->name);
+  BLI_path_join(name, sizeof(name), seq->strip->dir, s_elem->name);
   BLI_path_abs(name, BKE_main_blendfile_path_from_global());
 
   /* Try to get a proxy image. */
@@ -1026,6 +1026,15 @@ static ImBuf *seq_render_movie_strip_custom_file_proxy(const SeqRenderData *cont
   return IMB_anim_absolute(proxy->anim, frameno, IMB_TC_NONE, IMB_PROXY_NONE);
 }
 
+static IMB_Timecode_Type seq_render_movie_strip_timecode_get(Sequence *seq)
+{
+  bool use_timecodes = (seq->flag & SEQ_USE_PROXY) != 0;
+  if (!use_timecodes) {
+    return IMB_TC_NONE;
+  }
+  return seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_NONE;
+}
+
 /**
  * Render individual view for multi-view or single (default view) for mono-view.
  */
@@ -1049,7 +1058,7 @@ static ImBuf *seq_render_movie_strip_view(const SeqRenderData *context,
     else {
       ibuf = IMB_anim_absolute(sanim->anim,
                                frame_index + seq->anim_startofs,
-                               seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+                               seq_render_movie_strip_timecode_get(seq),
                                psize);
     }
 
@@ -1062,7 +1071,7 @@ static ImBuf *seq_render_movie_strip_view(const SeqRenderData *context,
   if (ibuf == NULL) {
     ibuf = IMB_anim_absolute(sanim->anim,
                              frame_index + seq->anim_startofs,
-                             seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+                             seq_render_movie_strip_timecode_get(seq),
                              IMB_PROXY_NONE);
   }
   if (ibuf == NULL) {
@@ -2001,7 +2010,7 @@ ImBuf *SEQ_render_give_ibuf_direct(const SeqRenderData *context,
 float SEQ_render_thumbnail_first_frame_get(const Scene *scene,
                                            Sequence *seq,
                                            float frame_step,
-                                           rctf *view_area)
+                                           const rctf *view_area)
 {
   int first_drawable_frame = max_iii(
       SEQ_time_left_handle_frame_get(scene, seq), seq->start, view_area->xmin);
@@ -2093,8 +2102,8 @@ void SEQ_render_thumbnails(const SeqRenderData *context,
                            Sequence *seq,
                            Sequence *seq_orig,
                            float frame_step,
-                           rctf *view_area,
-                           const short *stop)
+                           const rctf *view_area,
+                           const bool *stop)
 {
   SeqRenderState state;
   seq_render_state_init(&state);
@@ -2103,7 +2112,7 @@ void SEQ_render_thumbnails(const SeqRenderData *context,
   /* Adding the hold offset value (seq->anim_startofs) to the start frame. Position of image not
    * affected, but frame loaded affected. */
   float upper_thumb_bound = SEQ_time_has_right_still_frames(scene, seq) ?
-                                (seq->start + seq->len) :
+                                SEQ_time_content_end_frame_get(scene, seq) :
                                 SEQ_time_right_handle_frame_get(scene, seq);
   upper_thumb_bound = (upper_thumb_bound > view_area->xmax) ? view_area->xmax + frame_step :
                                                               upper_thumb_bound;
@@ -2137,9 +2146,10 @@ void SEQ_render_thumbnails(const SeqRenderData *context,
 
 int SEQ_render_thumbnails_guaranteed_set_frame_step_get(const Scene *scene, const Sequence *seq)
 {
-  const int content_start = max_ii(SEQ_time_left_handle_frame_get(scene, seq), seq->start);
+  const int content_start = max_ii(SEQ_time_left_handle_frame_get(scene, seq),
+                                   SEQ_time_start_frame_get(seq));
   const int content_end = min_ii(SEQ_time_right_handle_frame_get(scene, seq),
-                                 seq->start + seq->len);
+                                 SEQ_time_content_end_frame_get(scene, seq));
   const int content_len = content_end - content_start;
 
   /* Arbitrary, but due to performance reasons should be as low as possible. */
@@ -2153,8 +2163,8 @@ int SEQ_render_thumbnails_guaranteed_set_frame_step_get(const Scene *scene, cons
 void SEQ_render_thumbnails_base_set(const SeqRenderData *context,
                                     Sequence *seq,
                                     Sequence *seq_orig,
-                                    rctf *view_area,
-                                    const short *stop)
+                                    const rctf *view_area,
+                                    const bool *stop)
 {
   SeqRenderState state;
   seq_render_state_init(&state);

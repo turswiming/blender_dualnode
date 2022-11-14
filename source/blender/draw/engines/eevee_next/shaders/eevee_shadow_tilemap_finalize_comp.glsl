@@ -73,21 +73,11 @@ void main()
 
   if (all(equal(gl_LocalInvocationID, uvec3(0)))) {
     if (update_min.x != 9999) {
-      int view_index = atomicAdd(pages_infos_buf.view_count, 4);
-      view_infos_buf[view_index].persmat = tilemap_data.winmat * tilemap_data.viewmat;
-      view_infos_buf[view_index].persinv = inverse(view_infos_buf[view_index].persmat);
-      view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
-      view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
-      view_infos_buf[view_index].winmat = tilemap_data.winmat;
-      view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
-      // view_infos_buf[view_index].clip_planes;
-      // view_infos_buf[view_index].viewvecs;
-      // view_infos_buf[view_index].viewcamtexcofac;
-      // view_infos_buf[view_index].viewport_size;
-      // view_infos_buf[view_index].viewport_size_inverse;
-      // view_infos_buf[view_index].frustum_corners;
-      // view_infos_buf[view_index].frustum_planes;
-      // view_infos_buf[view_index].frustum_bound_sphere;
+      int view_index = atomicAdd(pages_infos_buf.view_count, 1);
+      // view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
+      // view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
+      // view_infos_buf[view_index].winmat = tilemap_data.winmat;
+      // view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
     }
   }
 

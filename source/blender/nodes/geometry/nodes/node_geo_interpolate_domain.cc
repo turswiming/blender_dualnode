@@ -28,13 +28,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Bool>(N_("Value"), "Value_Bool").field_source();
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "data_type", 0, "", ICON_NONE);
   uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = ATTR_DOMAIN_POINT;
   node->custom2 = CD_PROP_FLOAT;
@@ -104,7 +104,7 @@ class InterpolateDomain final : public bke::GeometryFieldInput {
     const bke::GeometryFieldContext other_domain_context{
         context.geometry(), context.type(), src_domain_};
     const int64_t src_domain_size = attributes.domain_size(src_domain_);
-    GArray values(src_field_.cpp_type(), src_domain_size);
+    GArray<> values(src_field_.cpp_type(), src_domain_size);
     FieldEvaluator value_evaluator{other_domain_context, src_domain_size};
     value_evaluator.add_with_destination(src_field_, values.as_mutable_span());
     value_evaluator.evaluate();

@@ -266,7 +266,7 @@ CurveLengthFieldInput::CurveLengthFieldInput()
 
 GVArray CurveLengthFieldInput::get_varray_for_context(const CurvesGeometry &curves,
                                                       const eAttrDomain domain,
-                                                      IndexMask UNUSED(mask)) const
+                                                      const IndexMask /*mask*/) const
 {
   return construct_curve_length_gvarray(curves, domain);
 }
@@ -280,6 +280,12 @@ uint64_t CurveLengthFieldInput::hash() const
 bool CurveLengthFieldInput::is_equal_to(const fn::FieldNode &other) const
 {
   return dynamic_cast<const CurveLengthFieldInput *>(&other) != nullptr;
+}
+
+std::optional<eAttrDomain> CurveLengthFieldInput::preferred_domain(
+    const bke::CurvesGeometry & /*curves*/) const
+{
+  return ATTR_DOMAIN_CURVE;
 }
 
 /** \} */
@@ -617,7 +623,7 @@ static AttributeAccessorFunctions get_curves_accessor_functions()
         return 0;
     }
   };
-  fn.domain_supported = [](const void *UNUSED(owner), const eAttrDomain domain) {
+  fn.domain_supported = [](const void * /*owner*/, const eAttrDomain domain) {
     return ELEM(domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_CURVE);
   };
   fn.adapt_domain = [](const void *owner,

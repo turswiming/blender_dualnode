@@ -315,12 +315,6 @@ typedef enum eGP_Sculpt_Mode_Flag {
   GP_SCULPT_FLAGMODE_APPLY_THICKNESS = (1 << 2),
   /* apply brush to uv data */
   GP_SCULPT_FLAGMODE_APPLY_UV = (1 << 3),
-  /* Stroke Auto-Masking for sculpt. */
-  GP_SCULPT_FLAGMODE_AUTOMASK_STROKE = (1 << 4),
-  /* Layer Auto-Masking for sculpt. */
-  GP_SCULPT_FLAGMODE_AUTOMASK_LAYER = (1 << 5),
-  /* Material Auto-Masking for sculpt. */
-  GP_SCULPT_FLAGMODE_AUTOMASK_MATERIAL = (1 << 6),
 } eGP_Sculpt_Mode_Flag;
 
 typedef enum eAutomasking_flag {
@@ -330,9 +324,8 @@ typedef enum eAutomasking_flag {
   BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS = (1 << 3),
   BRUSH_AUTOMASKING_CAVITY_NORMAL = (1 << 4),
 
-  /* Note: normal and inverted are mutually exclusive,
-   * inverted has priority if both bits are set.
-   */
+  /* NOTE: normal and inverted are mutually exclusive,
+   * inverted has priority if both bits are set. */
   BRUSH_AUTOMASKING_CAVITY_INVERTED = (1 << 5),
   BRUSH_AUTOMASKING_CAVITY_ALL = (1 << 4) | (1 << 5),
   BRUSH_AUTOMASKING_CAVITY_USE_CURVE = (1 << 6),

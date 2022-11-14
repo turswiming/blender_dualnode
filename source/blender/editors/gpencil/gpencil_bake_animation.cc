@@ -65,8 +65,8 @@ const EnumPropertyItem rna_gpencil_reproject_type_items[] = {
 };
 
 /* Check frame_end is always > start frame! */
-static void gpencil_bake_set_frame_end(struct Main *UNUSED(main),
-                                       struct Scene *UNUSED(scene),
+static void gpencil_bake_set_frame_end(struct Main * /*main*/,
+                                       struct Scene * /*scene*/,
                                        struct PointerRNA *ptr)
 {
   int frame_start = RNA_int_get(ptr, "frame_start");
@@ -222,7 +222,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
   ushort local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uuid : 0;
   ob_gpencil = ED_gpencil_add_object(C, scene->cursor.location, local_view_bits);
   float invmat[4][4];
-  invert_m4_m4(invmat, ob_gpencil->obmat);
+  invert_m4_m4(invmat, ob_gpencil->object_to_world);
 
   bGPdata *gpd_dst = (bGPdata *)ob_gpencil->data;
   gpd_dst->draw_mode = GP_DRAWMODE_2D;
@@ -260,7 +260,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
     }
 
     /* Check if frame is in the list of frames to be exported. */
-    if ((only_selected) && (!BLI_ghash_haskey(keyframe_list, POINTER_FROM_INT(i)))) {
+    if ((only_selected) && !BLI_ghash_haskey(keyframe_list, POINTER_FROM_INT(i))) {
       continue;
     }
 
@@ -298,7 +298,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
         BLI_addtail(&gpl_dst->frames, gpf_dst);
 
         LISTBASE_FOREACH (bGPDstroke *, gps, &gpf_dst->strokes) {
-          gps->runtime.gps_orig = NULL;
+          gps->runtime.gps_orig = nullptr;
           /* Create material of the stroke. */
           Material *ma_src = BKE_object_material_get(elem->ob, gps->mat_nr + 1);
           bool found = false;
@@ -322,8 +322,8 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
           for (int j = 0; j < gps->totpoints; j++) {
             bGPDspoint *pt = &gps->points[j];
             pt->runtime.idx_orig = 0;
-            pt->runtime.pt_orig = NULL;
-            mul_m4_v3(ob_eval->obmat, &pt->x);
+            pt->runtime.pt_orig = nullptr;
+            mul_m4_v3(ob_eval->object_to_world, &pt->x);
             mul_m4_v3(invmat, &pt->x);
           }
 
@@ -369,7 +369,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
 
 static int gpencil_bake_grease_pencil_animation_invoke(bContext *C,
                                                        wmOperator *op,
-                                                       const wmEvent *UNUSED(event))
+                                                       const wmEvent * /*event*/)
 {
   PropertyRNA *prop;
   Scene *scene = CTX_data_scene(C);

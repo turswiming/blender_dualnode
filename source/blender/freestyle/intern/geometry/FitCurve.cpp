@@ -12,6 +12,8 @@
 
 #include "FitCurve.h"
 
+#include "BLI_sys_types.h"
+
 using namespace std;
 
 namespace Freestyle {
@@ -45,7 +47,7 @@ static double V2SquaredLength(Vector2 *a)
 /* returns length of input vector */
 static double V2Length(Vector2 *a)
 {
-  return (sqrt(V2SquaredLength(a)));
+  return sqrt(V2SquaredLength(a));
 }
 
 static Vector2 *V2Scale(Vector2 *v, double newlen)
@@ -69,7 +71,7 @@ static double V2DistanceBetween2Points(Vector2 *a, Vector2 *b)
 {
   double dx = (*a)[0] - (*b)[0];
   double dy = (*a)[1] - (*b)[1];
-  return (sqrt((dx * dx) + (dy * dy)));
+  return sqrt((dx * dx) + (dy * dy));
 }
 
 /* return vector sum c = a+b */

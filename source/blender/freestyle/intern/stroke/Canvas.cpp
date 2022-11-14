@@ -22,6 +22,8 @@
 
 #include "../view_map/SteerableViewMap.h"
 
+#include "BLI_sys_types.h"
+
 #include "BKE_global.h"
 
 // soc #include <qimage.h>
@@ -173,7 +175,7 @@ void Canvas::InsertStyleModule(uint index, StyleModule *iStyleModule)
 {
   uint size = _StyleModules.size();
   StrokeLayer *layer = new StrokeLayer();
-  if ((_StyleModules.empty()) || (index == size)) {
+  if (_StyleModules.empty() || (index == size)) {
     _StyleModules.push_back(iStyleModule);
     _Layers.push_back(layer);
     return;

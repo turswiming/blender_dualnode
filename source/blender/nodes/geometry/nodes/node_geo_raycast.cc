@@ -41,25 +41,25 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_DISTANCE)
       .supports_field();
 
-  b.add_output<decl::Bool>(N_("Is Hit")).dependent_field();
-  b.add_output<decl::Vector>(N_("Hit Position")).dependent_field();
-  b.add_output<decl::Vector>(N_("Hit Normal")).dependent_field();
-  b.add_output<decl::Float>(N_("Hit Distance")).dependent_field();
+  b.add_output<decl::Bool>(N_("Is Hit")).dependent_field({6, 7, 8});
+  b.add_output<decl::Vector>(N_("Hit Position")).dependent_field({6, 7, 8});
+  b.add_output<decl::Vector>(N_("Hit Normal")).dependent_field({6, 7, 8});
+  b.add_output<decl::Float>(N_("Hit Distance")).dependent_field({6, 7, 8});
 
-  b.add_output<decl::Vector>(N_("Attribute")).dependent_field({1, 2, 3, 4, 5, 6});
-  b.add_output<decl::Float>(N_("Attribute"), "Attribute_001").dependent_field({1, 2, 3, 4, 5, 6});
-  b.add_output<decl::Color>(N_("Attribute"), "Attribute_002").dependent_field({1, 2, 3, 4, 5, 6});
-  b.add_output<decl::Bool>(N_("Attribute"), "Attribute_003").dependent_field({1, 2, 3, 4, 5, 6});
-  b.add_output<decl::Int>(N_("Attribute"), "Attribute_004").dependent_field({1, 2, 3, 4, 5, 6});
+  b.add_output<decl::Vector>(N_("Attribute")).dependent_field({6, 7, 8});
+  b.add_output<decl::Float>(N_("Attribute"), "Attribute_001").dependent_field({6, 7, 8});
+  b.add_output<decl::Color>(N_("Attribute"), "Attribute_002").dependent_field({6, 7, 8});
+  b.add_output<decl::Bool>(N_("Attribute"), "Attribute_003").dependent_field({6, 7, 8});
+  b.add_output<decl::Int>(N_("Attribute"), "Attribute_004").dependent_field({6, 7, 8});
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "data_type", 0, "", ICON_NONE);
   uiItemR(layout, ptr, "mapping", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryRaycast *data = MEM_cnew<NodeGeometryRaycast>(__func__);
   data->mapping = GEO_NODE_RAYCAST_INTERPOLATED;
@@ -245,7 +245,7 @@ class RaycastFunction : public fn::MultiFunction {
     return signature.build();
   }
 
-  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext /*context*/) const override
   {
     /* Hit positions are always necessary for retrieving the attribute from the target if that
      * output is required, so always retrieve a span from the evaluator in that case (it's
@@ -435,8 +435,8 @@ void register_node_type_geo_raycast()
 
   geo_node_type_base(&ntype, GEO_NODE_RAYCAST, "Raycast", NODE_CLASS_GEOMETRY);
   node_type_size_preset(&ntype, NODE_SIZE_MIDDLE);
-  node_type_init(&ntype, file_ns::node_init);
-  node_type_update(&ntype, file_ns::node_update);
+  ntype.initfunc = file_ns::node_init;
+  ntype.updatefunc = file_ns::node_update;
   node_type_storage(
       &ntype, "NodeGeometryRaycast", node_free_standard_storage, node_copy_standard_storage);
   ntype.declare = file_ns::node_declare;

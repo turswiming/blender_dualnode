@@ -170,7 +170,7 @@ static void edbm_bevel_update_status_text(bContext *C, wmOperator *op)
                sizeof(status_text),
                TIP_("%s: Confirm, "
                     "%s: Cancel, "
-                    "%s: Mode (%s), "
+                    "%s: Width Type (%s), "
                     "%s: Width (%s), "
                     "%s: Segments (%d), "
                     "%s: Profile (%.3f), "
@@ -244,7 +244,7 @@ static bool edbm_bevel_init(bContext *C, wmOperator *op, const bool is_modal)
     opdata->ob_store = MEM_malloc_arrayN(ob_store_len, sizeof(*opdata->ob_store), __func__);
     for (uint ob_index = 0; ob_index < ob_store_len; ob_index++) {
       Object *obedit = objects[ob_index];
-      float scale = mat4_to_scale(obedit->obmat);
+      float scale = mat4_to_scale(obedit->object_to_world);
       opdata->max_obj_scale = max_ff(opdata->max_obj_scale, scale);
       BMEditMesh *em = BKE_editmesh_from_object(obedit);
       if (em->bm->totvertsel > 0) {
@@ -751,7 +751,7 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, const wmEvent *event)
         }
       }
         /* Update offset accordingly to new offset_type. */
-        if (!has_numinput && (ELEM(opdata->value_mode, OFFSET_VALUE, OFFSET_VALUE_PERCENT))) {
+        if (!has_numinput && ELEM(opdata->value_mode, OFFSET_VALUE, OFFSET_VALUE_PERCENT)) {
           edbm_bevel_mouse_set_value(op, event);
         }
         edbm_bevel_calc(op);

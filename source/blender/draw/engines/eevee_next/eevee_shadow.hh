@@ -273,9 +273,9 @@ class ShadowModule {
    * \{ */
 
   /** Per instance view index. */
-  ShadowViewIndexBuf view_index_buf_ = {"ViewIndexBuf"};
+  // ShadowViewIndexBuf view_index_buf_ = {"ViewIndexBuf"};
   /** A view array used for rendering shadows. */
-  ShadowViewInfosBuf view_infos_buf_ = {"ViewInfosBuf"};
+  // ShadowViewInfosBuf view_infos_buf_ = {"ViewInfosBuf"};
 
   /** \} */
 

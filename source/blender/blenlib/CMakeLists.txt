@@ -54,9 +54,10 @@ set(SRC
   intern/bitmap_draw_2d.c
   intern/boxpack_2d.c
   intern/buffer.c
+  intern/cache_mutex.cc
   intern/compute_context.cc
   intern/convexhull_2d.c
-  intern/cpp_type.cc
+  intern/cpp_types.cc
   intern/delaunay_2d.cc
   intern/dot_export.cc
   intern/dynlib.c
@@ -171,13 +172,14 @@ set(SRC
   BLI_asan.h
   BLI_assert.h
   BLI_astar.h
+  BLI_bit_vector.hh
   BLI_bitmap.h
   BLI_bitmap_draw_2d.h
-  BLI_bit_vector.hh
   BLI_blenlib.h
   BLI_bounds.hh
   BLI_boxpack_2d.h
   BLI_buffer.h
+  BLI_cache_mutex.hh
   BLI_color.hh
   BLI_color_mix.hh
   BLI_compiler_attrs.h
@@ -188,6 +190,8 @@ set(SRC
   BLI_convexhull_2d.h
   BLI_cpp_type.hh
   BLI_cpp_type_make.hh
+  BLI_cpp_types.hh
+  BLI_cpp_types_make.hh
   BLI_delaunay_2d.h
   BLI_devirtualize_parameters.hh
   BLI_dial_2d.h
@@ -239,6 +243,7 @@ set(SRC
   BLI_kdtree.h
   BLI_kdtree_impl.h
   BLI_lasso_2d.h
+  BLI_lazy_threading.hh
   BLI_length_parameterize.hh
   BLI_linear_allocator.hh
   BLI_link_utils.h

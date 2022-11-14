@@ -854,6 +854,11 @@ static void create_inspection_string_for_generic_value(const GPointer value, std
   else if (type.is<blender::float3>()) {
     ss << *(blender::float3 *)buffer << TIP_(" (Vector)");
   }
+  else if (type.is<blender::ColorGeometry4f>()) {
+    const blender::ColorGeometry4f &color = *(blender::ColorGeometry4f *)buffer;
+    ss << "(" << color.r << ", " << color.g << ", " << color.b << ", " << color.a << ")"
+       << TIP_(" (Color)");
+  }
   else if (type.is<bool>()) {
     ss << ((*(bool *)buffer) ? TIP_("True") : TIP_("False")) << TIP_(" (Boolean)");
   }
@@ -1079,7 +1084,7 @@ static bool node_socket_has_tooltip(const bNodeTree &ntree, const bNodeSocket &s
 
 static char *node_socket_get_tooltip(const bContext *C,
                                      const bNodeTree *ntree,
-                                     const bNode *UNUSED(node),
+                                     const bNode * /*node*/,
                                      const bNodeSocket *socket)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
@@ -1121,7 +1126,7 @@ static char *node_socket_get_tooltip(const bContext *C,
   return BLI_strdup(output.str().c_str());
 }
 
-static void node_socket_add_tooltip_in_node_editor(TreeDrawContext *UNUSED(tree_draw_ctx),
+static void node_socket_add_tooltip_in_node_editor(TreeDrawContext * /*tree_draw_ctx*/,
                                                    const bNodeTree *ntree,
                                                    const bNode *node,
                                                    const bNodeSocket *sock,
@@ -1138,7 +1143,7 @@ static void node_socket_add_tooltip_in_node_editor(TreeDrawContext *UNUSED(tree_
 
   uiLayoutSetTooltipFunc(
       layout,
-      [](bContext *C, void *argN, const char *UNUSED(tip)) {
+      [](bContext *C, void *argN, const char * /*tip*/) {
         SocketTooltipData *data = static_cast<SocketTooltipData *>(argN);
         return node_socket_get_tooltip(C, data->ntree, data->node, data->socket);
       },
@@ -1217,7 +1222,7 @@ static void node_socket_draw_nested(const bContext &C,
 
   UI_but_func_tooltip_set(
       but,
-      [](bContext *C, void *argN, const char *UNUSED(tip)) {
+      [](bContext *C, void *argN, const char * /*tip*/) {
         SocketTooltipData *data = (SocketTooltipData *)argN;
         return node_socket_get_tooltip(C, data->ntree, data->node, data->socket);
       },
@@ -1626,7 +1631,7 @@ struct NodeErrorsTooltipData {
   Span<geo_log::NodeWarning> warnings;
 };
 
-static char *node_errors_tooltip_fn(bContext *UNUSED(C), void *argN, const char *UNUSED(tip))
+static char *node_errors_tooltip_fn(bContext * /*C*/, void *argN, const char * /*tip*/)
 {
   NodeErrorsTooltipData &data = *(NodeErrorsTooltipData *)argN;
 
@@ -1786,7 +1791,7 @@ struct NamedAttributeTooltipArg {
   Map<StringRefNull, geo_log::NamedAttributeUsage> usage_by_attribute;
 };
 
-static char *named_attribute_tooltip(bContext *UNUSED(C), void *argN, const char *UNUSED(tip))
+static char *named_attribute_tooltip(bContext * /*C*/, void *argN, const char * /*tip*/)
 {
   NamedAttributeTooltipArg &arg = *static_cast<NamedAttributeTooltipArg *>(argN);
 
@@ -2145,6 +2150,9 @@ static void node_draw_basis(const bContext &C,
                               0,
                               "");
     UI_but_func_set(but, node_toggle_button_cb, &node, (void *)"NODE_OT_group_edit");
+    if (node.id) {
+      UI_but_icon_indicator_number_set(but, ID_REAL_USERS(node.id));
+    }
     UI_block_emboss_set(&block, UI_EMBOSS);
   }
   if (node.type == NODE_CUSTOM && node.typeinfo->ui_icon != ICON_NONE) {
@@ -3011,7 +3019,7 @@ static void node_draw_nodetree(const bContext &C,
   }
 }
 
-/* Draw the breadcrumb on the bottom of the editor. */
+/* Draw the breadcrumb on the top of the editor. */
 static void draw_tree_path(const bContext &C, ARegion &region)
 {
   using namespace blender;

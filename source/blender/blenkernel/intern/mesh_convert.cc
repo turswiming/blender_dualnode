@@ -119,7 +119,7 @@ static void make_edges_mdata_extend(Mesh &mesh)
       BLI_edgehashIterator_getKey(ehi, &medge->v1, &medge->v2);
       BLI_edgehashIterator_setValue(ehi, POINTER_FROM_UINT(e_index));
 
-      medge->flag = ME_EDGEDRAW | ME_EDGERENDER;
+      medge->flag = ME_EDGEDRAW;
     }
     BLI_edgehashIterator_free(ehi);
 
@@ -223,7 +223,7 @@ static Mesh *mesh_nurbs_displist_to_mesh(const Curve *cu, const ListBase *dispba
         for (b = 1; b < dl->nr; b++) {
           medge->v1 = startvert + ofs + b - 1;
           medge->v2 = startvert + ofs + b;
-          medge->flag = ME_LOOSEEDGE | ME_EDGERENDER | ME_EDGEDRAW;
+          medge->flag = ME_LOOSEEDGE | ME_EDGEDRAW;
 
           medge++;
         }
@@ -251,7 +251,7 @@ static Mesh *mesh_nurbs_displist_to_mesh(const Curve *cu, const ListBase *dispba
             else {
               medge->v2 = startvert + ofs + b + 1;
             }
-            medge->flag = ME_LOOSEEDGE | ME_EDGERENDER | ME_EDGEDRAW;
+            medge->flag = ME_LOOSEEDGE | ME_EDGEDRAW;
             medge++;
           }
         }
@@ -604,7 +604,7 @@ void BKE_mesh_to_curve_nurblist(const Mesh *me, ListBase *nurblist, const int ed
   }
 }
 
-void BKE_mesh_to_curve(Main *bmain, Depsgraph *depsgraph, Scene *UNUSED(scene), Object *ob)
+void BKE_mesh_to_curve(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/, Object *ob)
 {
   /* make new mesh data from the original copy */
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
@@ -654,7 +654,7 @@ void BKE_pointcloud_from_mesh(Mesh *me, PointCloud *pointcloud)
   point_positions.finish();
 }
 
-void BKE_mesh_to_pointcloud(Main *bmain, Depsgraph *depsgraph, Scene *UNUSED(scene), Object *ob)
+void BKE_mesh_to_pointcloud(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/, Object *ob)
 {
   BLI_assert(ob->type == OB_MESH);
 
@@ -706,11 +706,11 @@ void BKE_mesh_edges_set_draw_render(Mesh *mesh)
 {
   MutableSpan<MEdge> edges = mesh->edges_for_write();
   for (int i = 0; i < mesh->totedge; i++) {
-    edges[i].flag |= ME_EDGEDRAW | ME_EDGERENDER;
+    edges[i].flag |= ME_EDGEDRAW;
   }
 }
 
-void BKE_pointcloud_to_mesh(Main *bmain, Depsgraph *depsgraph, Scene *UNUSED(scene), Object *ob)
+void BKE_pointcloud_to_mesh(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/, Object *ob)
 {
   BLI_assert(ob->type == OB_POINTCLOUD);
 
@@ -903,7 +903,7 @@ static Mesh *mesh_new_from_mesh(Object *object, Mesh *mesh)
 {
   /* While we could copy this into the new mesh,
    * add the data to 'mesh' so future calls to this function don't need to re-convert the data. */
-  if (mesh->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+  if (mesh->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     BKE_mesh_wrapper_ensure_mdata(mesh);
   }
   else {
@@ -1260,12 +1260,15 @@ static int find_object_active_key_uid(const Key &key, const Object &object)
   return kb->uid;
 }
 
-static void move_shapekey_layers_to_keyblocks(Mesh &mesh, Key &key_dst, const int actshape_uid)
+static void move_shapekey_layers_to_keyblocks(const Mesh &mesh,
+                                              CustomData &custom_data,
+                                              Key &key_dst,
+                                              const int actshape_uid)
 {
   using namespace blender::bke;
-  for (const int i : IndexRange(CustomData_number_of_layers(&mesh.vdata, CD_SHAPEKEY))) {
-    const int layer_index = CustomData_get_layer_index_n(&mesh.vdata, CD_SHAPEKEY, i);
-    CustomDataLayer &layer = mesh.vdata.layers[layer_index];
+  for (const int i : IndexRange(CustomData_number_of_layers(&custom_data, CD_SHAPEKEY))) {
+    const int layer_index = CustomData_get_layer_index_n(&custom_data, CD_SHAPEKEY, i);
+    CustomDataLayer &layer = custom_data.layers[layer_index];
 
     KeyBlock *kb = keyblock_ensure_from_uid(key_dst, layer.uid, layer.name);
     MEM_SAFE_FREE(kb->data);
@@ -1286,10 +1289,10 @@ static void move_shapekey_layers_to_keyblocks(Mesh &mesh, Key &key_dst, const in
   LISTBASE_FOREACH (KeyBlock *, kb, &key_dst.block) {
     if (kb->totelem != mesh.totvert) {
       MEM_SAFE_FREE(kb->data);
+      kb->totelem = mesh.totvert;
+      kb->data = MEM_cnew_array<float3>(kb->totelem, __func__);
+      CLOG_ERROR(&LOG, "Data for shape key '%s' on mesh missing from evaluated mesh ", kb->name);
     }
-    kb->totelem = mesh.totvert;
-    kb->data = MEM_cnew_array<float3>(kb->totelem, __func__);
-    CLOG_ERROR(&LOG, "Data for shape key '%s' on mesh missing from evaluated mesh ", kb->name);
   }
 }
 
@@ -1310,6 +1313,7 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src, Mesh *mesh_dst, Object *ob)
   CustomData_duplicate_referenced_layers(&mesh_src->pdata, mesh_src->totpoly);
   CustomData_duplicate_referenced_layers(&mesh_src->ldata, mesh_src->totloop);
 
+  const bool verts_num_changed = mesh_dst->totvert != mesh_src->totvert;
   mesh_dst->totvert = mesh_src->totvert;
   mesh_dst->totedge = mesh_src->totedge;
   mesh_dst->totpoly = mesh_src->totpoly;
@@ -1334,13 +1338,12 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src, Mesh *mesh_dst, Object *ob)
     if (CustomData_has_layer(&mesh_src->vdata, CD_SHAPEKEY)) {
       /* If no object, set to -1 so we don't mess up any shapekey layers. */
       const int uid_active = ob ? find_object_active_key_uid(*key_dst, *ob) : -1;
-      move_shapekey_layers_to_keyblocks(*mesh_src, *key_dst, uid_active);
+      move_shapekey_layers_to_keyblocks(*mesh_dst, mesh_src->vdata, *key_dst, uid_active);
     }
-    else if (mesh_src->totvert != mesh_dst->totvert) {
-      CLOG_ERROR(&LOG, "Mesh in Main '%s' lost shape keys", mesh_src->id.name);
-      if (mesh_src->key) {
-        id_us_min(&mesh_src->key->id);
-      }
+    else if (verts_num_changed) {
+      CLOG_WARN(&LOG, "Shape key data lost when replacing mesh '%s' in Main", mesh_src->id.name);
+      id_us_min(&mesh_dst->key->id);
+      mesh_dst->key = nullptr;
     }
   }
 

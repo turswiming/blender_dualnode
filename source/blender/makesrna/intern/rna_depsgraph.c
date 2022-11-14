@@ -61,6 +61,14 @@ void **rna_DepsgraphIterator_instance(PointerRNA *ptr)
 }
 #  endif
 
+/* Temporary hack for Cycles until it is changed to work with the C API directly. */
+DupliObject *rna_hack_DepsgraphObjectInstance_dupli_object_get(PointerRNA *ptr)
+{
+  RNA_DepsgraphIterator *di = ptr->data;
+  DEGObjectIterData *deg_iter = (DEGObjectIterData *)di->iter.data;
+  return deg_iter->dupli_object_current;
+}
+
 static PointerRNA rna_DepsgraphObjectInstance_object_get(PointerRNA *ptr)
 {
   RNA_DepsgraphIterator *di = ptr->data;
@@ -160,7 +168,7 @@ static void rna_DepsgraphObjectInstance_matrix_world_get(PointerRNA *ptr, float 
     /* We can return actual object's matrix here, no reason to return identity matrix
      * when this is not actually an instance... */
     Object *ob = (Object *)di->iter.current;
-    copy_m4_m4((float(*)[4])mat, ob->obmat);
+    copy_m4_m4((float(*)[4])mat, ob->object_to_world);
   }
 }
 

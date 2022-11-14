@@ -23,13 +23,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>(N_("Mesh"));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "quad_method", 0, "", ICON_NONE);
   uiItemR(layout, ptr, "ngon_method", 0, "", ICON_NONE);
 }
 
-static void geo_triangulate_init(bNodeTree *UNUSED(ntree), bNode *node)
+static void geo_triangulate_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = GEO_NODE_TRIANGULATE_QUAD_SHORTEDGE;
   node->custom2 = GEO_NODE_TRIANGULATE_NGON_BEAUTY;
@@ -100,7 +100,7 @@ void register_node_type_geo_triangulate()
 
   geo_node_type_base(&ntype, GEO_NODE_TRIANGULATE, "Triangulate", NODE_CLASS_GEOMETRY);
   ntype.declare = file_ns::node_declare;
-  node_type_init(&ntype, file_ns::geo_triangulate_init);
+  ntype.initfunc = file_ns::geo_triangulate_init;
   ntype.geometry_node_execute = file_ns::node_geo_exec;
   ntype.draw_buttons = file_ns::node_layout;
   nodeRegisterType(&ntype);

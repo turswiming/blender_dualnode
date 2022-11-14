@@ -22,7 +22,7 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tag_update)
     .storage_buf(1, Qualifier::READ_WRITE, "ShadowTileDataPacked", "tiles_buf[]")
     .storage_buf(5, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
     .storage_buf(6, Qualifier::READ, "uint", "resource_ids_buf[]")
-    .additional_info("eevee_shared", "draw_view")
+    .additional_info("eevee_shared", "draw_view", "draw_view_culling")
     .compute_source("eevee_shadow_tag_update_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(eevee_shadow_tag_usage_opaque)
@@ -33,7 +33,7 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tag_usage_opaque)
     .storage_buf(6, Qualifier::READ_WRITE, "ShadowTileDataPacked", "tiles_buf[]")
     .push_constant(Type::FLOAT, "tilemap_pixel_radius")
     .push_constant(Type::FLOAT, "screen_pixel_radius_inv")
-    .additional_info("eevee_shared", "draw_view", "eevee_light_data")
+    .additional_info("eevee_shared", "draw_view", "draw_view_culling", "eevee_light_data")
     .compute_source("eevee_shadow_tag_usage_comp.glsl");
 
 GPU_SHADER_INTERFACE_INFO(eevee_shadow_tag_transparent_iface, "interp")
@@ -49,7 +49,8 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tag_usage_transparent)
     .push_constant(Type::FLOAT, "tilemap_pixel_radius")
     .push_constant(Type::FLOAT, "screen_pixel_radius_inv")
     .vertex_out(eevee_shadow_tag_transparent_iface)
-    .additional_info("eevee_shared", "draw_view", "draw_modelmat_new", "eevee_light_data")
+    .additional_info(
+        "eevee_shared", "draw_view", "draw_view_culling", "draw_modelmat_new", "eevee_light_data")
     .vertex_source("eevee_shadow_tag_usage_vert.glsl")
     .fragment_source("eevee_shadow_tag_usage_frag.glsl");
 
@@ -92,7 +93,7 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_finalize)
     .storage_buf(0, Qualifier::READ_WRITE, "ShadowTileMapData", "tilemaps_buf[]")
     .storage_buf(1, Qualifier::READ_WRITE, "ShadowTileDataPacked", "tiles_buf[]")
     .storage_buf(2, Qualifier::READ_WRITE, "ShadowPagesInfoData", "pages_infos_buf")
-    .storage_buf(3, Qualifier::READ_WRITE, "ViewInfos", "view_infos_buf[]")
+    // .storage_buf(3, Qualifier::READ_WRITE, "ViewInfos", "view_infos_buf[]")
     .image(0, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D, "tilemaps_img")
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_tilemap_finalize_comp.glsl");

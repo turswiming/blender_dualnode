@@ -5,6 +5,7 @@
  * \ingroup spnode
  */
 
+#include "DNA_ID.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
@@ -27,6 +28,8 @@
 
 #include "UI_resources.h"
 #include "UI_view2d.h"
+
+#include "DEG_depsgraph.h"
 
 #include "BLO_read_write.h"
 
@@ -181,7 +184,7 @@ void ED_node_tree_path_get(SpaceNode *snode, char *value)
       value += strlen(path->display_name);
     }
     else {
-      sprintf(value, "/%s", path->display_name);
+      BLI_sprintf(value, "/%s", path->display_name);
       value += strlen(path->display_name) + 1;
     }
   }
@@ -191,6 +194,13 @@ void ED_node_set_active_viewer_key(SpaceNode *snode)
 {
   bNodeTreePath *path = (bNodeTreePath *)snode->treepath.last;
   if (snode->nodetree && path) {
+    /* A change in active viewer may result in the change of the output node used by the
+     * compositor, so we need to get notified about such changes. */
+    if (snode->nodetree->active_viewer_key.value != path->parent_key.value) {
+      DEG_id_tag_update(&snode->nodetree->id, ID_RECALC_NTREE_OUTPUT);
+      WM_main_add_notifier(NC_NODE, nullptr);
+    }
+
     snode->nodetree->active_viewer_key = path->parent_key;
   }
 }
@@ -219,7 +229,7 @@ float2 space_node_group_offset(const SpaceNode &snode)
 
 /* ******************** default callbacks for node space ***************** */
 
-static SpaceLink *node_create(const ScrArea *UNUSED(area), const Scene *UNUSED(scene))
+static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 {
   SpaceNode *snode = MEM_cnew<SpaceNode>("initnode");
   snode->spacetype = SPACE_NODE;
@@ -300,12 +310,12 @@ static void node_free(SpaceLink *sl)
 
   if (snode->runtime) {
     snode->runtime->linkdrag.reset();
-    MEM_freeN(snode->runtime);
+    MEM_delete(snode->runtime);
   }
 }
 
 /* spacetype; init callback */
-static void node_init(wmWindowManager *UNUSED(wm), ScrArea *area)
+static void node_init(wmWindowManager * /*wm*/, ScrArea *area)
 {
   SpaceNode *snode = (SpaceNode *)area->spacedata.first;
 
@@ -640,24 +650,22 @@ static void node_main_region_draw(const bContext *C, ARegion *region)
 
 /* ************* dropboxes ************* */
 
-static bool node_group_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_group_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_NT);
 }
 
-static bool node_object_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_object_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_OB);
 }
 
-static bool node_collection_drop_poll(bContext *UNUSED(C),
-                                      wmDrag *drag,
-                                      const wmEvent *UNUSED(event))
+static bool node_collection_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_GR);
 }
 
-static bool node_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_ima_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   if (drag->type == WM_DRAG_PATH) {
     /* rule might not work? */
@@ -666,26 +674,26 @@ static bool node_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent 
   return WM_drag_is_ID_type(drag, ID_IM);
 }
 
-static bool node_mask_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
+static bool node_mask_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   return WM_drag_is_ID_type(drag, ID_MSK);
 }
 
-static void node_group_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void node_group_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
   RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
 }
 
-static void node_id_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void node_id_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
   RNA_int_set(drop->ptr, "session_uuid", int(id->session_uuid));
 }
 
-static void node_id_path_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+static void node_id_path_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
@@ -739,7 +747,7 @@ static void node_dropboxes()
 /* ************* end drop *********** */
 
 /* add handlers, stuff you only do once or on area/region changes */
-static void node_header_region_init(wmWindowManager *UNUSED(wm), ARegion *region)
+static void node_header_region_init(wmWindowManager * /*wm*/, ARegion *region)
 {
   ED_region_header_init(region);
 }
@@ -979,7 +987,7 @@ static void node_id_remap_cb(ID *old_id, ID *new_id, void *user_data)
   }
 }
 
-static void node_id_remap(ScrArea *UNUSED(area), SpaceLink *slink, const IDRemapper *mappings)
+static void node_id_remap(ScrArea * /*area*/, SpaceLink *slink, const IDRemapper *mappings)
 {
   /* Although we should be able to perform all the mappings in a single go this lead to issues when
    * running the python test cases. Somehow the nodetree/edittree weren't updated to the new
@@ -1171,6 +1179,9 @@ void ED_spacetype_node()
   art->init = node_toolbar_region_init;
   art->draw = node_toolbar_region_draw;
   BLI_addhead(&st->regiontypes, art);
+
+  WM_menutype_add(MEM_new<MenuType>(__func__, add_catalog_assets_menu_type()));
+  WM_menutype_add(MEM_new<MenuType>(__func__, add_root_catalogs_menu_type()));
 
   BKE_spacetype_register(st);
 }

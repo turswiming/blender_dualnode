@@ -126,8 +126,8 @@ struct ImportJobData {
 
   USDStageReader *archive;
 
-  short *stop;
-  short *do_update;
+  bool *stop;
+  bool *do_update;
   float *progress;
 
   char error_code;
@@ -144,7 +144,7 @@ static void report_job_duration(const ImportJobData *data)
   std::cout << '\n';
 }
 
-static void import_startjob(void *customdata, short *stop, short *do_update, float *progress)
+static void import_startjob(void *customdata, bool *stop, bool *do_update, float *progress)
 {
   ImportJobData *data = static_cast<ImportJobData *>(customdata);
 
@@ -317,8 +317,7 @@ static void import_endjob(void *customdata)
 
     lc = BKE_layer_collection_get_active(view_layer);
 
-    /* Add all objects to the collection (don't do sync for each object). */
-    BKE_layer_collection_resync_forbid();
+    /* Add all objects to the collection. */
     for (USDPrimReader *reader : data->archive->readers()) {
       if (!reader) {
         continue;
@@ -330,9 +329,7 @@ static void import_endjob(void *customdata)
       BKE_collection_object_add(data->bmain, lc->collection, ob);
     }
 
-    /* Sync the collection, and do view layer operations. */
-    BKE_layer_collection_resync_allow();
-    BKE_main_collection_sync(data->bmain);
+    /* Sync and do the view layer operations. */
     BKE_view_layer_synced_ensure(scene, view_layer);
     for (USDPrimReader *reader : data->archive->readers()) {
       if (!reader) {
@@ -433,7 +430,7 @@ bool USD_import(struct bContext *C,
   }
   else {
     /* Fake a job context, so that we don't need NULL pointer checks while importing. */
-    short stop = 0, do_update = 0;
+    bool stop = false, do_update = false;
     float progress = 0.0f;
 
     import_startjob(job, &stop, &do_update, &progress);

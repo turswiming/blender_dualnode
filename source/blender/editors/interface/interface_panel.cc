@@ -1112,7 +1112,8 @@ static void panel_draw_aligned_widgets(const uiStyle *style,
                     0.7f,
                     0.0f,
                     title_color,
-                    false);
+                    false,
+                    UI_NO_ICON_OVERLAY_TEXT);
     GPU_blend(GPU_BLEND_NONE);
   }
 
@@ -1140,7 +1141,8 @@ static void panel_draw_aligned_widgets(const uiStyle *style,
                     1.0f,
                     0.0f,
                     title_color,
-                    false);
+                    false,
+                    UI_NO_ICON_OVERLAY_TEXT);
     GPU_blend(GPU_BLEND_NONE);
   }
 
@@ -1804,7 +1806,7 @@ static void panels_layout_begin_clear_flags(ListBase *lb)
   }
 }
 
-void UI_panels_begin(const bContext *UNUSED(C), ARegion *region)
+void UI_panels_begin(const bContext * /*C*/, ARegion *region)
 {
   /* Set all panels as inactive, so that at the end we know which ones were used. Also
    * clear other flags so we know later that their values were set for the current redraw. */
@@ -1924,7 +1926,7 @@ struct uiPanelDragCollapseHandle {
   int xy_init[2];
 };
 
-static void ui_panel_drag_collapse_handler_remove(bContext *UNUSED(C), void *userdata)
+static void ui_panel_drag_collapse_handler_remove(bContext * /*C*/, void *userdata)
 {
   uiPanelDragCollapseHandle *dragcol_data = static_cast<uiPanelDragCollapseHandle *>(userdata);
   MEM_freeN(dragcol_data);
@@ -2024,7 +2026,7 @@ static void ui_panel_drag_collapse_handler_add(const bContext *C, const bool was
                           ui_panel_drag_collapse_handler,
                           ui_panel_drag_collapse_handler_remove,
                           dragcol_data,
-                          0);
+                          eWM_EventHandlerFlag(0));
 }
 
 /**
@@ -2508,8 +2510,12 @@ static void panel_handle_data_ensure(const bContext *C,
 {
   if (panel->activedata == nullptr) {
     panel->activedata = MEM_callocN(sizeof(uiHandlePanelData), __func__);
-    WM_event_add_ui_handler(
-        C, &win->modalhandlers, ui_handler_panel, ui_handler_remove_panel, panel, 0);
+    WM_event_add_ui_handler(C,
+                            &win->modalhandlers,
+                            ui_handler_panel,
+                            ui_handler_remove_panel,
+                            panel,
+                            eWM_EventHandlerFlag(0));
   }
 
   uiHandlePanelData *data = static_cast<uiHandlePanelData *>(panel->activedata);

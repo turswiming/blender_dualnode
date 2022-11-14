@@ -2042,13 +2042,14 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
             BLI_assert(v2 != MOD_SOLIDIFY_EMPTY_TAG);
             medge[insert].v1 = v1;
             medge[insert].v2 = v2;
-            medge[insert].flag = orig_medge[(*l)->old_edge].flag | ME_EDGEDRAW | ME_EDGERENDER;
+            medge[insert].flag = orig_medge[(*l)->old_edge].flag | ME_EDGEDRAW;
             if (result_edge_crease) {
               result_edge_crease[insert] = orig_edge_crease ? orig_edge_crease[(*l)->old_edge] :
                                                               0.0f;
             }
             if (result_edge_bweight) {
-              result_edge_bweight[insert] = orig_edge_bweight[(*l)->old_edge];
+              result_edge_bweight[insert] = orig_edge_bweight ? orig_edge_bweight[(*l)->old_edge] :
+                                                                0.0f;
             }
             if (bevel_convex != 0.0f && (*l)->faces[1] != NULL) {
               result_edge_bweight[insert] = clamp_f(
@@ -2205,8 +2206,7 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
               }
               medge[edge_index].v1 = last_g->new_vert;
               medge[edge_index].v2 = g->new_vert;
-              medge[edge_index].flag = ME_EDGEDRAW | ME_EDGERENDER |
-                                       ((last_flag | flag) & (ME_SEAM | ME_SHARP));
+              medge[edge_index].flag = ME_EDGEDRAW | ((last_flag | flag) & (ME_SEAM | ME_SHARP));
               if (result_edge_crease) {
                 result_edge_crease[edge_index] = max_ff(mv_crease,
                                                         min_ff(last_max_crease, max_crease));
@@ -2239,7 +2239,7 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
               last_g->open_face_edge = edge_index;
               medge[edge_index].v1 = last_g->new_vert;
               medge[edge_index].v2 = first_g->new_vert;
-              medge[edge_index].flag = ME_EDGEDRAW | ME_EDGERENDER |
+              medge[edge_index].flag = ME_EDGEDRAW |
                                        ((last_flag | first_flag) & (ME_SEAM | ME_SHARP));
               if (result_edge_crease) {
                 result_edge_crease[edge_index] = max_ff(mv_crease,

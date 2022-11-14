@@ -7,34 +7,24 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_hash.h"
 #include "BLI_math.h"
 #include "BLI_task.h"
 
-#include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
 #include "BKE_brush.h"
 #include "BKE_context.h"
-#include "BKE_mesh.h"
-#include "BKE_mesh_mapping.h"
-#include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
-#include "BKE_scene.h"
 
 #include "DEG_depsgraph.h"
 
 #include "WM_api.h"
-#include "WM_message.h"
-#include "WM_toolsystem.h"
 #include "WM_types.h"
 
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_sculpt.h"
 #include "ED_view3d.h"
+
 #include "paint_intern.h"
 #include "sculpt_intern.h"
 
@@ -156,8 +146,8 @@ void SCULPT_filter_cache_init(bContext *C,
       0, ss->filter_cache->totnode, &data, filter_cache_init_task_cb, &settings);
 
   /* Setup orientation matrices. */
-  copy_m4_m4(ss->filter_cache->obmat, ob->obmat);
-  invert_m4_m4(ss->filter_cache->obmat_inv, ob->obmat);
+  copy_m4_m4(ss->filter_cache->obmat, ob->object_to_world);
+  invert_m4_m4(ss->filter_cache->obmat_inv, ob->object_to_world);
 
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewContext vc;
@@ -213,7 +203,7 @@ void SCULPT_filter_cache_init(bContext *C,
 
     /* Update last stroke location */
 
-    mul_m4_v3(ob->obmat, co);
+    mul_m4_v3(ob->object_to_world, co);
 
     add_v3_v3(ups->average_stroke_accum, co);
     ups->average_stroke_counter++;
@@ -231,10 +221,10 @@ void SCULPT_filter_cache_init(bContext *C,
 
   ED_view3d_ob_project_mat_get(vc.rv3d, ob, projection_mat);
 
-  invert_m4_m4(ob->imat, ob->obmat);
+  invert_m4_m4(ob->world_to_object, ob->object_to_world);
   copy_m3_m4(mat, vc.rv3d->viewinv);
   mul_m3_v3(mat, viewDir);
-  copy_m3_m4(mat, ob->imat);
+  copy_m3_m4(mat, ob->world_to_object);
   mul_m3_v3(mat, viewDir);
   normalize_v3_v3(ss->filter_cache->view_normal, viewDir);
 }
@@ -712,7 +702,6 @@ static int sculpt_mesh_filter_modal(bContext *C, wmOperator *op, const wmEvent *
   const float len = event->prev_press_xy[0] - event->xy[0];
   filter_strength = filter_strength * -len * 0.001f * UI_DPI_FAC;
 
-  SCULPT_stroke_id_next(ob);
   SCULPT_vertex_random_access_ensure(ss);
 
   bool needs_pmap = sculpt_mesh_filter_needs_pmap(filter_type);

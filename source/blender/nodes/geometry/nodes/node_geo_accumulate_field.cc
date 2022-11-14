@@ -70,13 +70,13 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(N_(total_out_description));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "data_type", 0, "", ICON_NONE);
   uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeAccumulateField *data = MEM_cnew<NodeAccumulateField>(__func__);
   data->data_type = CD_PROP_FLOAT;
@@ -425,8 +425,8 @@ void register_node_type_geo_accumulate_field()
 
   geo_node_type_base(&ntype, GEO_NODE_ACCUMULATE_FIELD, "Accumulate Field", NODE_CLASS_CONVERTER);
   ntype.geometry_node_execute = file_ns::node_geo_exec;
-  node_type_init(&ntype, file_ns::node_init);
-  node_type_update(&ntype, file_ns::node_update);
+  ntype.initfunc = file_ns::node_init;
+  ntype.updatefunc = file_ns::node_update;
   ntype.draw_buttons = file_ns::node_layout;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = file_ns::node_gather_link_searches;

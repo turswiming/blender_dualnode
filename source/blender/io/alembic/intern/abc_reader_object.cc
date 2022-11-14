@@ -133,11 +133,11 @@ Imath::M44d get_matrix(const IXformSchema &schema, const chrono_t time)
 }
 
 struct Mesh *AbcObjectReader::read_mesh(struct Mesh *existing_mesh,
-                                        const Alembic::Abc::ISampleSelector &UNUSED(sample_sel),
-                                        int UNUSED(read_flag),
-                                        const char *UNUSED(velocity_name),
-                                        const float UNUSED(velocity_scale),
-                                        const char **UNUSED(err_str))
+                                        const Alembic::Abc::ISampleSelector & /*sample_sel*/,
+                                        int /*read_flag*/,
+                                        const char * /*velocity_name*/,
+                                        const float /*velocity_scale*/,
+                                        const char ** /*err_str*/)
 {
   return existing_mesh;
 }
@@ -165,7 +165,7 @@ void AbcObjectReader::setupObjectTransform(const chrono_t time)
 
   /* Apply the matrix to the object. */
   BKE_object_apply_mat4(m_object, transform_from_alembic, true, false);
-  BKE_object_to_mat4(m_object, m_object->obmat);
+  BKE_object_to_mat4(m_object, m_object->object_to_world);
 
   if (!is_constant || m_settings->always_add_cache_reader) {
     bConstraint *con = BKE_constraint_add_for_object(
