@@ -142,7 +142,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
                          (in_volume_segment ? min_distance : sqr(min_distance)));
 
   /* TODO: also min importance for volume? */
-  if (max_distance == min_distance || in_volume_segment || in_volume) {
+  if (in_volume_segment || in_volume) {
     min_importance = max_importance;
     return;
   }
@@ -220,7 +220,9 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                   kemitter->bounding_cone_axis[1],
                                   kemitter->bounding_cone_axis[2]);
   float theta_o = kemitter->theta_o;
-  float cos_theta_u, max_distance, min_distance;
+  float min_distance, distance;
+  float max_distance = 0.0f;
+  float cos_theta_u = 1.0f;
   float3 centroid, point_to_centroid;
   bool bbox_is_visible = has_transmission;
 
@@ -229,51 +231,55 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     const int lamp = -prim - 1;
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
     centroid = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+    point_to_centroid = safe_normalize_len(centroid - P, &distance);
 
     if (klight->type == LIGHT_SPOT || klight->type == LIGHT_POINT) {
       const float radius = klight->spot.radius;
-      float distance;
-      point_to_centroid = safe_normalize_len(centroid - P, &distance);
       min_distance = distance;
       max_distance = sqrtf(sqr(radius) + sqr(distance));
       const float hypotenus = max_distance;
       cos_theta_u = distance / hypotenus;
       bbox_is_visible = true; /* will be tested later */
     }
-    else { /* TODO: support area light */
-      const float3 bbox_min = make_float3(kemitter->bounding_box_min[0],
-                                          kemitter->bounding_box_min[1],
-                                          kemitter->bounding_box_min[2]);
-      const float3 bbox_max = make_float3(kemitter->bounding_box_max[0],
-                                          kemitter->bounding_box_max[1],
-                                          kemitter->bounding_box_max[2]);
-      centroid = 0.5f * (bbox_min + bbox_max);
-      float distance;
-      point_to_centroid = normalize_len(centroid - P, &distance);
-      max_distance = distance;
+    else { /* area light */
+      const float3 extentu = make_float3(
+          klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
+      const float3 extentv = make_float3(
+          klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
+      for (int i = 0; i < 4; i++) {
+        const float3 corner = ((i & 1) - 0.5f) * extentu + 0.5f * ((i & 2) - 1) * extentv +
+                              centroid;
+        float distance_point_to_corner;
+        const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
+        cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
+        bbox_is_visible |= dot(point_to_corner, N_or_D) > 0;
+        max_distance = fmaxf(max_distance, distance_point_to_corner);
+      }
+      /* TODO: a cheap substitute for minimal distance between point and primitive. Does it worth
+       * the overhead to compute the accurate minimal distance? */
       min_distance = distance;
-      cos_theta_u = light_tree_cos_bounding_box_angle(
-          bbox_min, bbox_max, P, N_or_D, point_to_centroid, bbox_is_visible);
     }
     if (klight->type == LIGHT_POINT) {
       bcone_axis = -point_to_centroid; /* disk oriented normal */
       theta_o = 0.0f;
     }
   }
-  else { /* TODO: support mesh light */
-    const float3 bbox_min = make_float3(kemitter->bounding_box_min[0],
-                                        kemitter->bounding_box_min[1],
-                                        kemitter->bounding_box_min[2]);
-    const float3 bbox_max = make_float3(kemitter->bounding_box_max[0],
-                                        kemitter->bounding_box_max[1],
-                                        kemitter->bounding_box_max[2]);
-    centroid = 0.5f * (bbox_min + bbox_max);
-    float distance;
-    point_to_centroid = normalize_len(centroid - P, &distance);
-    max_distance = distance;
+  else { /* mesh light */
+    const int object = kemitter->mesh_light.object_id;
+    float3 V[3];
+    triangle_world_space_vertices(kg, object, prim, -1.0f, V);
+    /* TODO: store in KernelLightTreeEmitter */
+    centroid = (V[0] + V[1] + V[2]) / 3.f;
+    point_to_centroid = safe_normalize_len(centroid - P, &distance);
+    for (int i = 0; i < 3; i++) {
+      const float3 corner = V[i];
+      float distance_point_to_corner;
+      const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
+      cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
+      bbox_is_visible |= dot(point_to_corner, N_or_D) > 0;
+      max_distance = fmaxf(max_distance, distance_point_to_corner);
+    }
     min_distance = distance;
-    cos_theta_u = light_tree_cos_bounding_box_angle(
-        bbox_min, bbox_max, P, N_or_D, point_to_centroid, bbox_is_visible);
   }
 
   if (!bbox_is_visible) {
