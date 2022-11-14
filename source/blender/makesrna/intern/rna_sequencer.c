@@ -272,7 +272,7 @@ static int rna_SequenceEditor_elements_length(PointerRNA *ptr)
   return (int)olen;
 }
 
-static void rna_SequenceEditor_elements_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+static void rna_Sequence_elements_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   Sequence *seq = (Sequence *)ptr->data;
   rna_iterator_array_begin(iter,
@@ -281,6 +281,75 @@ static void rna_SequenceEditor_elements_begin(CollectionPropertyIterator *iter, 
                            rna_SequenceEditor_elements_length(ptr),
                            0,
                            NULL);
+}
+
+static int rna_Sequence_retiming_handles_length(PointerRNA *ptr)
+{
+  return SEQ_retiming_handles_count((Sequence *)ptr->data);
+}
+
+static void rna_SequenceEditor_retiming_handles_begin(CollectionPropertyIterator *iter,
+                                                      PointerRNA *ptr)
+{
+  Sequence *seq = (Sequence *)ptr->data;
+  rna_iterator_array_begin(iter,
+                           (void *)seq->retiming_handles,
+                           sizeof(SeqRetimingHandle),
+                           SEQ_retiming_handles_count(seq),
+                           0,
+                           NULL);
+}
+
+static Sequence *strip_by_handle_find(Scene *scene, SeqRetimingHandle *handle)
+{
+  Editing *ed = SEQ_editing_get(scene);
+  SeqCollection *strips = SEQ_query_all_strips_recursive(&ed->seqbase);
+
+  Sequence *seq;
+  SEQ_ITERATOR_FOREACH (seq, strips) {
+    int retiming_handle_count = SEQ_retiming_handles_count(seq);
+    SeqRetimingHandle *first = seq->retiming_handles;
+    SeqRetimingHandle *last =  seq->retiming_handles + retiming_handle_count - 1;
+
+    /* TODO: If this can't be avoided, add lookup API function at least. */
+    if (handle >= first && handle <= last) {
+      return seq;
+    }
+  }
+
+  return NULL;
+}
+
+static void rna_Sequence_retiming_handles_offset(ID *id,
+                                              SeqRetimingHandle *handle,
+                                              int offset)
+{
+  Scene *scene = (Scene *)id;
+  Sequence *seq = strip_by_handle_find(scene, handle);
+
+  if (seq == NULL) {
+    return;
+  }
+
+  SEQ_retiming_offset_handle(scene, seq, handle, offset);
+
+  SEQ_relations_invalidate_cache_raw(scene, seq);
+  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, NULL);
+}
+
+static void rna_Sequence_retiming_handles_remove(ID *id, SeqRetimingHandle *handle)
+{
+  Scene *scene = (Scene *)id;
+  Sequence *seq = strip_by_handle_find(scene, handle);
+
+  if (seq == NULL) {
+    return;
+  }
+
+  SEQ_retiming_remove_handle(seq, handle);
+
+  SEQ_relations_invalidate_cache_raw(scene, seq);
+  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, NULL);
 }
 
 static void rna_Sequence_views_format_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -472,6 +541,13 @@ static void rna_Sequence_use_proxy_set(PointerRNA *ptr, bool value)
 {
   Sequence *seq = (Sequence *)ptr->data;
   SEQ_proxy_set(seq, value != 0);
+}
+
+static bool rna_Sequence_use_retiming_tool_get(PointerRNA *ptr)
+{
+  Scene *scene = (Scene *)ptr->owner_id;
+  Sequence *seq = (Sequence *)ptr->data;
+  return SEQ_retiming_is_active(scene, seq);
 }
 
 static bool transform_seq_cmp_fn(Sequence *seq, void *arg_pt)
@@ -1471,6 +1547,33 @@ static void rna_def_strip_element(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Orig FPS", "Original frames per second");
 }
 
+static void rna_def_retiming_handle(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "RetimingHandle", NULL);
+  RNA_def_struct_ui_text(
+      srna,
+      "Retiming Handle",
+      "Handle mapped to particular frame that can be moved to change playback speed");
+  RNA_def_struct_sdna(srna, "SeqRetimingHandle");
+
+  prop = RNA_def_property(srna, "frame_index", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "strip_frame_index");
+  RNA_def_property_ui_text(prop, "Frame Index", "Strip content frame index");
+
+  FunctionRNA *func = RNA_def_function(srna, "offset", "rna_Sequence_retiming_handles_offset");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+  RNA_def_int(func, "offset", 0, -MAXFRAME, MAXFRAME, "Offset", "", -MAXFRAME, MAXFRAME);
+  RNA_def_function_ui_description(func, "Offset retiming handle");
+
+
+  func = RNA_def_function(srna, "remove", "rna_Sequence_retiming_handles_remove");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+  RNA_def_function_ui_description(func, "Remove retiming handle");
+}
+
 static void rna_def_strip_crop(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -1962,6 +2065,12 @@ static void rna_def_sequence(BlenderRNA *brna)
   RNA_def_property_ui_icon(prop, ICON_UNLOCKED, true);
   RNA_def_property_ui_text(prop, "Lock", "Lock strip so that it cannot be transformed");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, NULL);
+
+  prop = RNA_def_property(srna, "use_retiming_tool", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE | PROP_EDITABLE);
+  RNA_def_property_boolean_funcs(prop, "rna_Sequence_use_retiming_tool_get", NULL);
+  RNA_def_property_ui_text(
+      prop, "Use Retiming Tool", "Strip playback speed is defined by retiming handles");
 
   /* strip positioning */
   /* Cache has to be invalidated before and after transformation. */
@@ -2536,7 +2645,7 @@ static void rna_def_image(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "SequenceElement");
   RNA_def_property_ui_text(prop, "Elements", "");
   RNA_def_property_collection_funcs(prop,
-                                    "rna_SequenceEditor_elements_begin",
+                                    "rna_Sequence_elements_begin",
                                     "rna_iterator_array_next",
                                     "rna_iterator_array_end",
                                     "rna_iterator_array_get",
@@ -2677,7 +2786,7 @@ static void rna_def_movie(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "SequenceElement");
   RNA_def_property_ui_text(prop, "Elements", "");
   RNA_def_property_collection_funcs(prop,
-                                    "rna_SequenceEditor_elements_begin",
+                                    "rna_Sequence_elements_begin",
                                     "rna_iterator_array_next",
                                     "rna_iterator_array_end",
                                     "rna_iterator_array_get",
@@ -2685,6 +2794,21 @@ static void rna_def_movie(BlenderRNA *brna)
                                     NULL,
                                     NULL,
                                     NULL);
+
+  prop = RNA_def_property(srna, "retiming_handles", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, NULL, "retiming_handles", NULL);
+  RNA_def_property_struct_type(prop, "RetimingHandle");
+  RNA_def_property_ui_text(prop, "Retiming Hndles", "");
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_SequenceEditor_retiming_handles_begin",
+                                    "rna_iterator_array_next",
+                                    "rna_iterator_array_end",
+                                    "rna_iterator_array_get",
+                                    "rna_Sequence_retiming_handles_length",
+                                    NULL,
+                                    NULL,
+                                    NULL);
+  RNA_api_sequence_retiming_handles(brna, prop);
 
   prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
   RNA_def_property_ui_text(prop, "File", "");
@@ -3583,6 +3707,7 @@ void RNA_def_sequencer(BlenderRNA *brna)
   rna_def_color_balance(brna);
 
   rna_def_strip_element(brna);
+  rna_def_retiming_handle(brna);
   rna_def_strip_proxy(brna);
   rna_def_strip_color_balance(brna);
   rna_def_strip_crop(brna);
