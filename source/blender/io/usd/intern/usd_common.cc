@@ -41,22 +41,27 @@ void ensure_usd_plugin_path_registered()
 
 void USD_path_abs(char *path, const char *basepath, bool for_import)
 {
-  if (!BLI_path_is_rel(path)) {
-    pxr::ArResolvedPath resolved_path = for_import ? pxr::ArGetResolver().Resolve(path) :
-                                                     pxr::ArGetResolver().ResolveForNewAsset(path);
-
-    std::string path_str = resolved_path.GetPathString();
-
-    if (!path_str.empty()) {
-      if (path_str.length() < FILE_MAX) {
-        BLI_strncpy(path, path_str.c_str(), FILE_MAX);
-        return;
-      }
-      WM_reportf(RPT_ERROR, "In USD_path_abs: resolved path %s exceeds path buffer length.", path_str.c_str());
-    }
+  if (BLI_path_is_rel(path)) {
+    /* The path is relative to the .blend file, so use Blender's
+     * standard absolute path resolution. */
+    BLI_path_abs(path, basepath);
+    /* Use forward slash separators, which is standard for USD. */
+    BLI_str_replace_char(path, SEP, ALTSEP);
   }
 
-  /* If we got here, the path couldn't be resolved by the ArResolver, so we
-   * fall back on the standard Blender absolute path resolution. */
-  BLI_path_abs(path, basepath);
+  pxr::ArResolvedPath resolved_path = for_import ? pxr::ArGetResolver().Resolve(path) :
+                                                   pxr::ArGetResolver().ResolveForNewAsset(path);
+
+  std::string path_str = resolved_path.GetPathString();
+
+  if (!path_str.empty()) {
+    if (path_str.length() < FILE_MAX) {
+      BLI_strncpy(path, path_str.c_str(), FILE_MAX);
+    }
+    else {
+      WM_reportf(RPT_ERROR,
+                 "USD_path_abs: resolved path %s exceeds path buffer length.",
+                 path_str.c_str());
+    }
+  }
 }
