@@ -311,34 +311,45 @@ class RetimingRangeData {
 
   RetimingRangeData &operator*=(const RetimingRangeData rhs)
   {
-    for (int i = 0; i < ranges.size(); i++) {
-      RetimingRange &range = ranges[i];
+    if (ranges.size() == 0) {
       for (const RetimingRange &rhs_range : rhs.ranges) {
-        if (range.intersect_type(rhs_range) == range.NONE) {
-          continue;
-        }
-        else if (range.intersect_type(rhs_range) == range.FULL) {
-          range.speed *= rhs_range.speed;
-        }
-        else if (range.intersect_type(rhs_range) == range.PARTIAL_START) {
-          RetimingRange range_left = RetimingRange(
-              range.start, rhs_range.end, range.speed * rhs_range.speed);
-          range.start = rhs_range.end + 1;
-          ranges.insert(ranges.begin() + i, range_left);
-        }
-        else if (range.intersect_type(rhs_range) == range.PARTIAL_END) {
-          RetimingRange range_left = RetimingRange(range.start, rhs_range.start - 1, range.speed);
-          range.start = rhs_range.start;
-          ranges.insert(ranges.begin() + i, range_left);
-        }
-        else if (range.intersect_type(rhs_range) == range.INSIDE) {
-          RetimingRange range_left = RetimingRange(range.start, rhs_range.start - 1, range.speed);
-          RetimingRange range_mid = RetimingRange(
-              rhs_range.start, rhs_range.start, rhs_range.speed * range.speed);
-          range.start = rhs_range.end + 1;
-          ranges.insert(ranges.begin() + i, range_left);
-          ranges.insert(ranges.begin() + i, range_mid);
-          break;
+        RetimingRange range = RetimingRange(
+            rhs_range.start, rhs_range.end, rhs_range.speed);
+        ranges.push_back(range);
+      }
+    }
+    else {
+      for (int i = 0; i < ranges.size(); i++) {
+        RetimingRange &range = ranges[i];
+        for (const RetimingRange &rhs_range : rhs.ranges) {
+          if (range.intersect_type(rhs_range) == range.NONE) {
+            continue;
+          }
+          else if (range.intersect_type(rhs_range) == range.FULL) {
+            range.speed *= rhs_range.speed;
+          }
+          else if (range.intersect_type(rhs_range) == range.PARTIAL_START) {
+            RetimingRange range_left = RetimingRange(
+                range.start, rhs_range.end, range.speed * rhs_range.speed);
+            range.start = rhs_range.end + 1;
+            ranges.insert(ranges.begin() + i, range_left);
+          }
+          else if (range.intersect_type(rhs_range) == range.PARTIAL_END) {
+            RetimingRange range_left = RetimingRange(
+                range.start, rhs_range.start - 1, range.speed);
+            range.start = rhs_range.start;
+            ranges.insert(ranges.begin() + i, range_left);
+          }
+          else if (range.intersect_type(rhs_range) == range.INSIDE) {
+            RetimingRange range_left = RetimingRange(
+                range.start, rhs_range.start - 1, range.speed);
+            RetimingRange range_mid = RetimingRange(
+                rhs_range.start, rhs_range.start, rhs_range.speed * range.speed);
+            range.start = rhs_range.end + 1;
+            ranges.insert(ranges.begin() + i, range_left);
+            ranges.insert(ranges.begin() + i, range_mid);
+            break;
+          }
         }
       }
     }
