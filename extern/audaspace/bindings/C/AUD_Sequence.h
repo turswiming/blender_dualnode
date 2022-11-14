@@ -177,6 +177,16 @@ extern AUD_API void AUD_SequenceEntry_move(AUD_SequenceEntry* entry, double begi
  * \param data The data to write.
  * \param animated Whether the attribute is animated.
  */
+AUD_API void AUD_SequenceEntry_setAnimationData_constant_range(AUD_SequenceEntry* entry, AUD_AnimateablePropertyType type, int frame_start, int frame_end, float* data);
+
+/**
+ * Writes animation data to a sequenced entry.
+ * \param entry The sequenced entry.
+ * \param type The type of animation data.
+ * \param frame The frame this data is for.
+ * \param data The data to write.
+ * \param animated Whether the attribute is animated.
+ */
 extern AUD_API void AUD_SequenceEntry_setAnimationData(AUD_SequenceEntry* entry, AUD_AnimateablePropertyType type, int frame, float* data, char animated);
 
 /**

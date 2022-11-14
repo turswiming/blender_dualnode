@@ -22,7 +22,7 @@
 
 AUD_NAMESPACE_BEGIN
 
-SequenceEntry::SequenceEntry(std::shared_ptr<ISound> sound, double begin, double end, double skip, int id) :
+SequenceEntry::SequenceEntry(std::shared_ptr<ISound> sound, double begin, double end, double skip, float fps, int id) :
 	m_status(0),
 	m_pos_status(1),
 	m_sound_status(0),
@@ -31,6 +31,7 @@ SequenceEntry::SequenceEntry(std::shared_ptr<ISound> sound, double begin, double
 	m_begin(begin),
 	m_end(end),
 	m_skip(skip),
+	m_fps(fps),
 	m_muted(false),
 	m_relative(true),
 	m_volume_max(1.0f),

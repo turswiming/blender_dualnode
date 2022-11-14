@@ -153,7 +153,7 @@ std::shared_ptr<SequenceEntry> SequenceData::add(std::shared_ptr<ISound> sound, 
 {
 	std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
-	std::shared_ptr<SequenceEntry> entry = std::shared_ptr<SequenceEntry>(new SequenceEntry(sound, begin, end, skip, m_id++));
+	std::shared_ptr<SequenceEntry> entry = std::shared_ptr<SequenceEntry>(new SequenceEntry(sound, begin, end, skip, m_fps, m_id++));
 
 	m_entries.push_back(entry);
 	m_entry_status++;

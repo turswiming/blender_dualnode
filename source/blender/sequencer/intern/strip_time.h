@@ -16,7 +16,6 @@ struct Scene;
 struct Sequence;
 struct SeqCollection;
 
-float seq_give_frame_index(const struct Scene *scene, struct Sequence *seq, float timeline_frame);
 void seq_update_sound_bounds_recursive(const struct Scene *scene, struct Sequence *metaseq);
 
 /* Describes gap between strips in timeline. */
