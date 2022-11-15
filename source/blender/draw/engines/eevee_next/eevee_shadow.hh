@@ -251,6 +251,7 @@ class ShadowModule {
   /** \name Page Management
    * \{ */
 
+  static constexpr eGPUTextureFormat atlas_type = GPU_R32UI;
   Texture atlas_tx_ = {"shadow_atlas_tx_"};
 
   /** Pool of unallocated pages waiting to be assigned to specific tiles in the tilemap atlas. */
@@ -274,9 +275,10 @@ class ShadowModule {
 
   /** Multi-View containing a maximum of 64 view to be rendered with the shadow pipeline. */
   View shadow_multi_view_ = {"ShadowMultiView", 64};
-
   /** An array mapping view index to tilemap index. */
   UniformArrayBuffer<int, 64> view_to_tilemap_buf_;
+  /** An empty frame-buffer (no attachment) the size of a whole tilemap. */
+  Framebuffer render_fb_;
 
   /** \} */
 

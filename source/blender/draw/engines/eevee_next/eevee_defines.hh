@@ -101,6 +101,7 @@
 #define VELOCITY_CAMERA_NEXT_BUF 5
 
 #define CAMERA_BUF_SLOT 6
+#define SHADOW_VIEW_MAP_SLOT 7
 
 /* Storage Buffers. */
 #define LIGHT_CULL_BUF_SLOT 0

@@ -467,11 +467,11 @@ void ShadowModule::init()
     do_full_update = true;
   }
 
-  atlas_tx_.ensure_2d(GPU_R32F, atlas_extent);
+  atlas_tx_.ensure_2d(atlas_type, atlas_extent);
 
   /* Make allocation safe. Avoids crash later on. */
   if (!atlas_tx_.is_valid()) {
-    atlas_tx_.ensure_2d(GPU_R32F, int2(1));
+    atlas_tx_.ensure_2d(atlas_type, int2(1));
     inst_.info = "Error: Could not allocate shadow atlas. Most likely out of GPU memory.";
   }
 
@@ -728,8 +728,8 @@ void ShadowModule::end_sync()
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_FINALIZE));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-        // sub.bind_ssbo("view_infos_buf", shadow_multi_view_.matrices_ubo_get());
-        // sub.bind_ssbo("view_to_tilemap_buf", view_to_tilemap_buf_);
+        sub.bind_ssbo("view_infos_buf", shadow_multi_view_.matrices_ubo_get());
+        sub.bind_ssbo("view_to_tilemap_buf", view_to_tilemap_buf_);
         sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM);
@@ -799,8 +799,9 @@ void ShadowModule::set_view(View &view)
   dispatch_depth_scan_size_ = math::divide_ceil(target_size, int3(SHADOW_DEPTH_SCAN_GROUP_SIZE));
 
   usage_tag_fb.ensure(int2(target_size));
+  render_fb_.ensure(int2(SHADOW_TILEMAP_RES * shadow_page_size_));
 
-  // GPU_uniformbuf_clear_to_zero(shadow_multi_view_.matrices_ubo_get());
+  GPU_uniformbuf_clear_to_zero(shadow_multi_view_.matrices_ubo_get());
 
   DRW_stats_group_start("Shadow");
   {

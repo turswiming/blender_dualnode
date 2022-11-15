@@ -46,6 +46,8 @@ void WorldPipeline::sync(GPUMaterial *gpumat)
   world_ps_.bind_image("rp_emission_img", &rbufs.emission_tx);
   world_ps_.bind_image("rp_cryptomatte_img", &rbufs.cryptomatte_tx);
 
+  world_ps_.bind_ubo(CAMERA_BUF_SLOT, inst_.camera.ubo_get());
+
   world_ps_.draw(DRW_cache_fullscreen_quad_get(), handle);
   /* To allow opaque pass rendering over it. */
   world_ps_.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
@@ -66,8 +68,14 @@ void WorldPipeline::render(View &view)
 void ShadowPipeline::sync()
 {
   surface_ps_.init();
-  surface_ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS | DRW_STATE_SHADOW_OFFSET);
+  /* TODO(fclem): Add state for rendering to empty framebuffer without depth test.
+   * For now this is only here for avoiding the rasterizer discard state. */
+  surface_ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
+  surface_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
   surface_ps_.bind_image(SHADOW_ATLAS_SLOT, &inst_.shadows.atlas_tx_);
+  surface_ps_.bind_ubo(CAMERA_BUF_SLOT, inst_.camera.ubo_get());
+  surface_ps_.bind_ubo(SHADOW_VIEW_MAP_SLOT, &inst_.shadows.view_to_tilemap_buf_);
+  surface_ps_.framebuffer_set(&inst_.shadows.render_fb_);
 }
 
 PassMain::Sub *ShadowPipeline::surface_material_add(GPUMaterial *gpumat)

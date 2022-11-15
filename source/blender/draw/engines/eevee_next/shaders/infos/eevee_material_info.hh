@@ -157,10 +157,18 @@ GPU_SHADER_CREATE_INFO(eevee_surf_world)
                      "eevee_camera",
                      "eevee_utility_texture");
 
+GPU_SHADER_INTERFACE_INFO(eevee_shadow_iface, "shadow_interp").flat(Type::INT, "view_id");
+
 GPU_SHADER_CREATE_INFO(eevee_surf_shadow)
     .define("DRW_VIEW_LEN", "64")
     .vertex_out(eevee_surf_iface)
-    .fragment_out(0, Type::VEC4, "out_color")
+    .vertex_out(eevee_shadow_iface)
+    .uniform_buf(SHADOW_VIEW_MAP_SLOT, "int", "shadow_view_map_buf")
+    .image(SHADOW_ATLAS_SLOT,
+           GPU_R32UI,
+           Qualifier::READ_WRITE,
+           ImageType::UINT_2D,
+           "shadow_atlas_img")
     .fragment_source("eevee_surf_shadow_frag.glsl")
     .additional_info("eevee_camera", "eevee_utility_texture");
 
