@@ -275,10 +275,8 @@ class ShadowModule {
   /** Multi-View containing a maximum of 64 view to be rendered with the shadow pipeline. */
   View shadow_multi_view_ = {"ShadowMultiView", 64};
 
-  /** Per instance view index. */
-  // ShadowViewIndexBuf view_index_buf_ = {"ViewIndexBuf"};
-  /** A view array used for rendering shadows. */
-  // ShadowViewInfosBuf view_infos_buf_ = {"ViewInfosBuf"};
+  /** An array mapping view index to tilemap index. */
+  UniformArrayBuffer<int, 64> view_to_tilemap_buf_;
 
   /** \} */
 

@@ -74,10 +74,11 @@ void main()
   if (all(equal(gl_LocalInvocationID, uvec3(0)))) {
     if (update_min.x != 9999) {
       int view_index = atomicAdd(pages_infos_buf.view_count, 1);
-      // view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
-      // view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
-      // view_infos_buf[view_index].winmat = tilemap_data.winmat;
-      // view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
+      view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
+      view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
+      view_infos_buf[view_index].winmat = tilemap_data.winmat;
+      view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
+      view_to_tilemap_buf[view_index] = tilemap_index;
     }
   }
 

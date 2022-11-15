@@ -511,6 +511,7 @@ void ShadowModule::begin_sync()
        * discard inside draw manager. */
       sub.state_set(DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_STENCIL);
       sub.state_stencil(0, 0, 0);
+      sub.framebuffer_set(&usage_tag_fb);
       sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_USAGE_TRANSPARENT));
       sub.bind_ssbo("tilemaps_buf", &tilemap_pool.tilemaps_data);
       sub.bind_ssbo("tiles_buf", &tilemap_pool.tiles_data);
@@ -722,15 +723,16 @@ void ShadowModule::end_sync()
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
       {
-        /** Convert the unordered tiles into a texture used during shading. */
+        /** Convert the unordered tiles into a texture used during shading. Creates views. */
         PassSimple::Sub &sub = pass.sub("Finalize");
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_FINALIZE));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-        // sub.bind_ssbo("view_infos_buf", view_infos_buf_);
+        // sub.bind_ssbo("view_infos_buf", shadow_multi_view_.matrices_ubo_get());
+        // sub.bind_ssbo("view_to_tilemap_buf", view_to_tilemap_buf_);
         sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM);
       }
       {
         PassSimple::Sub &sub = pass.sub("RenderCulling");
@@ -796,33 +798,27 @@ void ShadowModule::set_view(View &view)
   int3 target_size = inst_.render_buffers.depth_tx.size();
   dispatch_depth_scan_size_ = math::divide_ceil(target_size, int3(SHADOW_DEPTH_SCAN_GROUP_SIZE));
 
+  usage_tag_fb.ensure(int2(target_size));
+
+  // GPU_uniformbuf_clear_to_zero(shadow_multi_view_.matrices_ubo_get());
+
   DRW_stats_group_start("Shadow");
   {
     inst_.manager->submit(tilemap_setup_ps_, view);
 
-    usage_tag_fb.ensure(int2(target_size));
-    GPU_framebuffer_bind(usage_tag_fb);
     inst_.manager->submit(tilemap_usage_ps_, view);
 
     inst_.manager->submit(tilemap_update_ps_, view);
+
+    shadow_multi_view_.compute_procedural_bounds();
+
+    inst_.pipelines.shadow.render(shadow_multi_view_);
   }
   DRW_stats_group_end();
 
   if (prev_fb) {
     GPU_framebuffer_bind(prev_fb);
   }
-
-  /* TEST */
-  float4x4 winmat;
-  perspective_m4(winmat.ptr(), -0.1f, 0.1f, -0.1f, 0.1f, 0.1f, 10.0f);
-  float4x4 viewmat;
-  for (int i = 0; i < 6; i++) {
-    viewmat = float4x4(shadow_face_mat[i]);
-    shadow_multi_view_.sync(viewmat, winmat, i);
-  }
-  shadow_multi_view_.disable(IndexRange(6, 58));
-
-  inst_.pipelines.shadow.render(shadow_multi_view_);
 }
 
 void ShadowModule::debug_draw(View &view, GPUFrameBuffer *view_fb)

@@ -130,8 +130,10 @@ void main()
 {
   drw_view_id = int(gl_LocalInvocationID.x);
 
-  /* Views with negative radius are treated as disabled. */
-  if (view_culling_buf[drw_view_id].bound_sphere.w == -1.0) {
+  /* Invalid views are disabled. */
+  if (all(equal(drw_view.viewinv[2].xyz, vec3(0.0)))) {
+    /* Views with negative radius are treated as disabled. */
+    view_culling_buf[drw_view_id].bound_sphere = vec4(-1.0);
     return;
   }
 
