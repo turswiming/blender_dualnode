@@ -215,13 +215,30 @@ static void paint_project_cubic(bContext *C,
     }
   }
 
+  float last_z_pos[3];
+  bool have_last_z = false;
+
   for (int i = 0; i < 4; i++) {
     if (!SCULPT_stroke_get_location(C, bezier3d.ps[i], mvals[i], true)) {
-      ED_view3d_win_to_3d(CTX_wm_view3d(C),
-                          CTX_wm_region(C),
-                          stroke->last_world_space_position,
-                          mvals[i],
-                          bezier3d.ps[i]);
+      if (!have_last_z) {
+        if (stroke->world_spline->segments.size() > 0) {
+          copy_v3_v3(
+              last_z_pos,
+              stroke->world_spline->segments[stroke->world_spline->segments.size() - 1].bezier.ps[3]);
+        }
+        else {
+          copy_v3_v3(last_z_pos, stroke->last_world_space_position);
+        }
+
+        have_last_z = true;
+      }
+
+      ED_view3d_win_to_3d(
+          CTX_wm_view3d(C), CTX_wm_region(C), last_z_pos, mvals[i], bezier3d.ps[i]);
+    }
+    else {
+      copy_v3_v3(last_z_pos, bezier3d.ps[i]);
+      have_last_z = true;
     }
   }
 
