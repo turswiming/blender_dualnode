@@ -8,6 +8,7 @@
 #include <pxr/usd/ar/writableAsset.h>
 
 #include "BLI_path_util.h"
+#include "BLI_string.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -124,6 +125,24 @@ bool copy_usd_asset(const char *src, const char *dst, bool overwrite)
    BLI_split_dir_part(stage_path.c_str(), usd_dir_path, FILE_MAX);
 
    return std::string(usd_dir_path) + std::string("textures/");
+ }
+
+ bool usd_path_exists(const char *src)
+ {
+   return src && !pxr::ArGetResolver().Resolve(src).IsEmpty();
+ }
+
+ bool usd_paths_equal(const char *p1, const char *p2)
+ {
+   BLI_assert_msg(!BLI_path_is_rel(p1) && !BLI_path_is_rel(p2),
+                  "Paths arguments must be absolute");
+
+   pxr::ArResolver &ar = pxr::ArGetResolver();
+
+   std::string resolved_p1 = ar.ResolveForNewAsset(p1).GetPathString();
+   std::string resolved_p2 = ar.ResolveForNewAsset(p2).GetPathString();
+
+   return resolved_p1 == resolved_p2;
  }
 
 }  // namespace blender::io::usd

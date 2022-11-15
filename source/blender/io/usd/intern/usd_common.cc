@@ -57,6 +57,8 @@ void USD_path_abs(char *path, const char *basepath, bool for_import)
   if (!path_str.empty()) {
     if (path_str.length() < FILE_MAX) {
       BLI_strncpy(path, path_str.c_str(), FILE_MAX);
+      /* Use forward slash separators, which is standard for USD. */
+      BLI_str_replace_char(path, SEP, ALTSEP);
     }
     else {
       WM_reportf(RPT_ERROR,

@@ -15,4 +15,8 @@ namespace blender::io::usd {
    * stage's root layer path. */
   std::string get_textures_dir(const pxr::UsdStageRefPtr stage);
 
+  bool usd_path_exists(const char *src);
+
+  bool usd_paths_equal(const char *p1, const char *p2);
+
 }  // namespace blender::io::usd

@@ -445,8 +445,7 @@ static void get_absolute_path(Image *ima, char *r_path)
 {
   /* Make absolute source path. */
   BLI_strncpy(r_path, ima->filepath, FILE_MAX);
-  BLI_path_abs(r_path, ID_BLEND_PATH_FROM_GLOBAL(&ima->id));
-  BLI_path_normalize(nullptr, r_path);
+  USD_path_abs(r_path, ID_BLEND_PATH_FROM_GLOBAL(&ima->id), false /* Not for import */);
 }
 
 /* ===== Functions copied from inacessible source file
@@ -2358,20 +2357,19 @@ static void copy_single_file(Image *ima, const std::string &dest_dir, const bool
 
   char dest_path[FILE_MAX];
   BLI_path_join(dest_path, FILE_MAX, dest_dir.c_str(), file_name);
+  BLI_str_replace_char(dest_path, SEP, ALTSEP);
 
-  if (!allow_overwrite && BLI_exists(dest_path)) {
+  if (!allow_overwrite && usd_path_exists(dest_path)) {
     return;
   }
 
-  if (BLI_path_cmp_normalized(source_path, dest_path) == 0) {
+  if (usd_paths_equal(source_path, dest_path)) {
     /* Source and destination paths are the same, don't copy. */
     return;
   }
 
-  std::cout << "Copying texture from " << source_path << " to " << dest_path << std::endl;
-
   /* Copy the file. */
-  if (BLI_copy(source_path, dest_path) != 0) {
+  if (!copy_usd_asset(source_path, dest_path, allow_overwrite)) {
     WM_reportf(
         RPT_WARNING, "USD export:  couldn't copy texture from %s to %s", source_path, dest_path);
   }
