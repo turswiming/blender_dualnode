@@ -52,7 +52,7 @@
 
 using blender::MutableSpan;
 
-#define REMOVE_GIZMO_HEIGHT 12.0f * U.dpi_fac        /* Pixels from bottom of strip.  */
+#define REMOVE_GIZMO_HEIGHT 12.0f * U.dpi_fac         /* Pixels from bottom of strip.  */
 #define RETIME_HANDLE_TRIANGLE_SIZE 10.0f * U.dpi_fac /* Also used for mouseover test. */
 #define RETIME_BUTTON_SIZE 0.6f                       /* Factor based on icon size. */
 
@@ -68,8 +68,7 @@ static float handle_x_get(const Sequence *seq, const SeqRetimingHandle *handle)
   const SeqRetimingHandle *last_handle = SEQ_retiming_last_handle_get(seq);
   const bool is_last_handle = (handle == last_handle);
 
-  return SEQ_time_start_frame_get(seq) + handle->strip_frame_index +
-         (is_last_handle ? 1 : 0);
+  return SEQ_time_start_frame_get(seq) + handle->strip_frame_index + (is_last_handle ? 1 : 0);
 }
 
 static float handle_y_get(const Sequence *seq, const SeqRetimingHandle *handle)
@@ -78,15 +77,16 @@ static float handle_y_get(const Sequence *seq, const SeqRetimingHandle *handle)
 }
 
 static const SeqRetimingHandle *mouse_over_handle_get(const Sequence *seq,
-                                                 const View2D *v2d,
-                                                 const int mval[2])
+                                                      const View2D *v2d,
+                                                      const int mval[2])
 {
   int best_distance = INT_MAX;
   const SeqRetimingHandle *best_handle = NULL;
 
   MutableSpan handles = SEQ_retiming_handles_get(seq);
-  for (const SeqRetimingHandle& handle : handles) {
-    int distance = round_fl_to_int(fabsf(UI_view2d_view_to_region_x(v2d, handle_x_get(seq, &handle)) - mval[0]));
+  for (const SeqRetimingHandle &handle : handles) {
+    int distance = round_fl_to_int(
+        fabsf(UI_view2d_view_to_region_x(v2d, handle_x_get(seq, &handle)) - mval[0]));
 
     if (distance < RETIME_HANDLE_TRIANGLE_SIZE && distance < best_distance) {
       best_distance = distance;
@@ -177,7 +177,7 @@ static ButtonDimensions button_dimensions_get(const bContext *C, const RetimeBut
 {
   const Scene *scene = CTX_data_scene(C);
   const View2D *v2d = UI_view2d_fromcontext(C);
-  const Sequence *seq = gizmo->seq_under_mouse;
+  Sequence *seq = active_seq_from_context(C);
 
   const float icon_height = UI_icon_get_height(gizmo->icon_id) * U.dpi_fac;
   const float icon_width = UI_icon_get_width(gizmo->icon_id) * U.dpi_fac;
@@ -208,12 +208,14 @@ static rctf button_box_get(const bContext *C, const RetimeButtonGizmo *gizmo)
 static void gizmo_retime_handle_add_draw(const bContext *C, wmGizmo *gz)
 {
   RetimeButtonGizmo *gizmo = (RetimeButtonGizmo *)gz;
-  if (gizmo->seq_under_mouse == NULL) {
+
+  Sequence *seq = active_seq_from_context(C);
+  if (seq == NULL) {
     return;
   }
 
   const ButtonDimensions button = button_dimensions_get(C, gizmo);
-  const rctf strip_box = strip_box_get(C, gizmo->seq_under_mouse);
+  const rctf strip_box = strip_box_get(C, seq);
   if (!BLI_rctf_isect_pt(&strip_box, button.x, button.y)) {
     return;
   }
@@ -318,13 +320,14 @@ static void retime_handle_draw(const bContext *C,
 {
   const Scene *scene = CTX_data_scene(C);
   if (handle_x_get(seq, handle) == SEQ_time_left_handle_frame_get(scene, seq)) {
-    return;                  
+    return;
   }
 
   const View2D *v2d = UI_view2d_fromcontext(C);
   const rctf strip_box = strip_box_get(C, seq);
-  if (!BLI_rctf_isect_x(&strip_box,
-                        UI_view2d_view_to_region_x(v2d, handle_x_get(seq, handle)))) {  // xxx .is_visible
+  if (!BLI_rctf_isect_x(
+          &strip_box,
+          UI_view2d_view_to_region_x(v2d, handle_x_get(seq, handle)))) {  // xxx .is_visible
     return; /* Handle out of strip bounds. */
   }
 
@@ -422,7 +425,7 @@ static void gizmo_retime_handle_draw(const bContext *C, wmGizmo *gz)
   SEQ_retiming_data_ensure(CTX_data_scene(C), seq);
   MutableSpan handles = SEQ_retiming_handles_get(seq);
 
-  for (const SeqRetimingHandle& handle : handles) {
+  for (const SeqRetimingHandle &handle : handles) {
     retime_speed_text_draw(C, seq, &handle);
 
     if (&handle == handles.begin()) {
