@@ -3,6 +3,7 @@
 #include "usd_writer_material.h"
 
 #include "usd.h"
+#include "usd_asset_utils.h"
 #include "usd_exporter_context.h"
 #include "usd_umm.h"
 
@@ -2392,21 +2393,7 @@ void export_texture(bNode *node,
     return;
   }
 
-  pxr::SdfLayerHandle layer = stage->GetRootLayer();
-  std::string stage_path = layer->GetRealPath();
-  if (stage_path.empty()) {
-    return;
-  }
-
-  char usd_dir_path[FILE_MAX];
-  BLI_split_dir_part(stage_path.c_str(), usd_dir_path, FILE_MAX);
-
-  char tex_dir_path[FILE_MAX];
-  BLI_path_join(tex_dir_path, FILE_MAX, usd_dir_path, "textures", SEP_STR);
-
-  BLI_dir_create_recursive(tex_dir_path);
-
-  std::string dest_dir(tex_dir_path);
+  std::string dest_dir = get_textures_dir(stage);
 
   if (is_in_memory_texture(ima)) {
     export_in_memory_texture(ima, dest_dir, allow_overwrite);

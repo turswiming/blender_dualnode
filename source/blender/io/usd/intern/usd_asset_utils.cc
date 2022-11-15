@@ -7,6 +7,8 @@
 #include <pxr/usd/ar/resolver.h>
 #include <pxr/usd/ar/writableAsset.h>
 
+#include "BLI_path_util.h"
+
 #include "WM_api.h"
 #include "WM_types.h"
 
@@ -110,5 +112,18 @@ bool copy_usd_asset(const char *src, const char *dst, bool overwrite)
   return bytes_written > 0;
 }
 
+ std::string get_textures_dir(const pxr::UsdStageRefPtr stage)
+{
+   pxr::SdfLayerHandle layer = stage->GetRootLayer();
+   std::string stage_path = layer->GetRealPath();
+   if (stage_path.empty()) {
+     return "";
+   }
+
+   char usd_dir_path[FILE_MAX];
+   BLI_split_dir_part(stage_path.c_str(), usd_dir_path, FILE_MAX);
+
+   return std::string(usd_dir_path) + std::string("textures/");
+ }
 
 }  // namespace blender::io::usd
