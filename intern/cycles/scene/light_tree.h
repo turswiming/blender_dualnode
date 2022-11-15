@@ -53,33 +53,34 @@ OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds
  * which first uses build nodes before converting to a more compact structure.
  */
 
-/* Light Tree Primitive Info
- * Struct to keep track of primitives in a vector of primitives,
- * which is used when reordering the vector. */
-struct LightTreePrimitiveInfo {
-  BoundBox bbox;
-  OrientationBounds bcone;
-  float3 centroid;
-  float energy;
-  int prim_num;
-};
-
 /* Light Tree Primitive
  * Struct that indexes into the scene's triangle and light arrays. */
 struct LightTreePrimitive {
   /* prim_id >= 0 is an index into an object's local triangle index,
    * otherwise -prim_id-1 is an index into device lights array. */
   int prim_id;
+  int object_id;
 
-  /* The primitive is either a light or an emissive triangle. */
-  union {
-    int object_id;
-    int lamp_id;
+  /* Only used for emissive triangles */
+  float3 vertices[3];
+
+  float3 centroid;
+  BoundBox bbox;
+  OrientationBounds bcone;
+  float energy;
+  int prim_num;
+
+  LightTreePrimitive(Scene *scene, int prim_id, int object_id);
+  void calculate_triangle_vertices(Scene *scene);
+  void calculate_centroid(Scene *scene);
+  void calculate_bbox(Scene *scene);
+  void calculate_bcone(Scene *scene);
+  void calculate_energy(Scene *scene);
+
+  bool is_triangle() const
+  {
+    return prim_id >= 0;
   };
-
-  BoundBox calculate_bbox(Scene *scene) const;
-  OrientationBounds calculate_bcone(Scene *scene) const;
-  float calculate_energy(Scene *scene) const;
 };
 
 /* Light Tree Bucket Info
@@ -165,15 +166,13 @@ class LightTree {
   const vector<PackedLightTreeNode> &get_nodes() const;
 
  private:
-  LightTreeBuildNode *recursive_build(vector<LightTreePrimitiveInfo> &primitive_info,
-                                      int start,
+  LightTreeBuildNode *recursive_build(int start,
                                       int end,
                                       int &total_nodes,
                                       vector<LightTreePrimitive> &ordered_prims,
                                       uint bit_trail,
                                       int depth);
   float min_split_saoh(const BoundBox &centroid_bounds,
-                       const vector<LightTreePrimitiveInfo> &primitive_info,
                        int start,
                        int end,
                        const BoundBox &bbox,

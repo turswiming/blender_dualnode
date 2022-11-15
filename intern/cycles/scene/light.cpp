@@ -294,9 +294,8 @@ void LightManager::device_update_distribution(Device *device,
   foreach (Light *light, scene->lights) {
     if (light->is_enabled) {
       if (light_tree_enabled) {
-        LightTreePrimitive light_prim;
-        light_prim.prim_id = ~device_light_index; /* -prim_id - 1 is a light source index. */
-        light_prim.lamp_id = scene_light_index;
+        /* -prim_id - 1 is a light source index. */
+        LightTreePrimitive light_prim(scene, ~device_light_index, scene_light_index);
 
         /* Distant lights get added to a separate vector. */
         if (light->light_type == LIGHT_DISTANT || light->light_type == LIGHT_BACKGROUND) {
@@ -345,12 +344,8 @@ void LightManager::device_update_distribution(Device *device,
                            scene->default_surface;
 
       if (shader->get_use_mis() && shader->has_surface_emission) {
-        /* to-do: for the light tree implementation, we eventually want to include emissive
-         * triangles. Right now, point lights are the main concern. */
         if (light_tree_enabled) {
-          LightTreePrimitive light_prim;
-          light_prim.prim_id = i;
-          light_prim.object_id = object_id;
+          LightTreePrimitive light_prim(scene, i, object_id);
           light_prims.push_back(light_prim);
         }
 
@@ -409,21 +404,17 @@ void LightManager::device_update_distribution(Device *device,
         for (int i = 0; i < node.num_lights; i++) {
           int emitter_index = i + node.first_prim_index;
           LightTreePrimitive &prim = light_prims[emitter_index];
-          BoundBox bbox = prim.calculate_bbox(scene);
-          OrientationBounds bcone = prim.calculate_bcone(scene);
-          float energy = prim.calculate_energy(scene);
 
-          light_tree_emitters[emitter_index].energy = energy;
+          light_tree_emitters[emitter_index].energy = prim.energy;
 
           for (int i = 0; i < 3; i++) {
-            light_tree_emitters[emitter_index].bounding_box_min[i] = bbox.min[i];
-            light_tree_emitters[emitter_index].bounding_box_max[i] = bbox.max[i];
-            light_tree_emitters[emitter_index].bounding_cone_axis[i] = bcone.axis[i];
+            light_tree_emitters[emitter_index].centroid[i] = prim.centroid[i];
+            light_tree_emitters[emitter_index].bounding_cone_axis[i] = prim.bcone.axis[i];
           }
-          light_tree_emitters[emitter_index].theta_o = bcone.theta_o;
-          light_tree_emitters[emitter_index].theta_e = bcone.theta_e;
+          light_tree_emitters[emitter_index].theta_o = prim.bcone.theta_o;
+          light_tree_emitters[emitter_index].theta_e = prim.bcone.theta_e;
 
-          if (prim.prim_id >= 0) {
+          if (prim.is_triangle()) {
             light_tree_emitters[emitter_index].mesh_light.object_id = prim.object_id;
 
             int shader_flag = 0;
@@ -453,10 +444,9 @@ void LightManager::device_update_distribution(Device *device,
             triangle_array[prim.prim_id + object_lookup_offsets[prim.object_id]] = emitter_index;
           }
           else {
-            Light *lamp = scene->lights[prim.lamp_id];
+            Light *lamp = scene->lights[prim.object_id];
             light_tree_emitters[emitter_index].prim_id = prim.prim_id;
             light_tree_emitters[emitter_index].lamp.size = lamp->size;
-            light_tree_emitters[emitter_index].lamp.pad = 1.0f;
             light_array[~prim.prim_id] = emitter_index;
           }
 
@@ -478,43 +468,19 @@ void LightManager::device_update_distribution(Device *device,
     light_tree_distant_group[num_distant_lights].energy = 0.f;
     for (int index = 0; index < num_distant_lights; index++) {
       LightTreePrimitive prim = distant_lights[index];
-      Light *light = scene->lights[prim.lamp_id];
-      OrientationBounds light_bounds;
 
       /* Lights in this group are either a background or distant light. */
       light_tree_distant_group[index].prim_id = ~prim.prim_id;
 
-      float energy = 0.0f;
-      if (light->light_type == LIGHT_BACKGROUND) {
-        /* integrate over cosine-weighted hemisphere */
-        energy = light->get_average_radiance() * M_PI_F;
-
-        /* We can set an arbitrary direction for the background light. */
-        light_bounds.axis[0] = 0.0f;
-        light_bounds.axis[1] = 0.0f;
-        light_bounds.axis[2] = 1.0f;
-
-        /* to-do: this may depend on portal lights as well. */
-        light_bounds.theta_o = M_PI_F;
-      }
-      else {
-        energy = prim.calculate_energy(scene);
-
-        for (int i = 0; i < 3; i++) {
-          light_bounds.axis[i] = -light->dir[i];
-        }
-        light_bounds.theta_o = tanf(light->angle * 0.5f);
-      }
-
-      distant_light_bounds = merge(distant_light_bounds, light_bounds);
+      distant_light_bounds = merge(distant_light_bounds, prim.bcone);
       for (int i = 0; i < 3; i++) {
-        light_tree_distant_group[index].direction[i] = light_bounds.axis[i];
+        light_tree_distant_group[index].direction[i] = prim.bcone.axis[i];
       }
-      light_tree_distant_group[index].bounding_radius = light_bounds.theta_o;
-      light_tree_distant_group[index].energy = energy;
+      light_tree_distant_group[index].bounding_radius = prim.bcone.theta_o;
+      light_tree_distant_group[index].energy = prim.energy;
       light_array[~prim.prim_id] = index;
 
-      light_tree_distant_group[num_distant_lights].energy += energy;
+      light_tree_distant_group[num_distant_lights].energy += prim.energy;
     }
 
     /* The net OrientationBounds contain bounding information about all the distant lights. */

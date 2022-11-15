@@ -1366,9 +1366,7 @@ typedef struct KernelLightTreeNode {
 static_assert_align(KernelLightTreeNode, 16);
 
 typedef struct KernelLightTreeEmitter {
-  /* Bounding box. */
-  float bounding_box_min[3];
-  float bounding_box_max[3];
+  float centroid[3];
 
   /* Bounding cone. */
   float bounding_cone_axis[3];
@@ -1386,18 +1384,21 @@ typedef struct KernelLightTreeEmitter {
       int object_id;
     } mesh_light;
     struct {
-      float pad;
+      float pad1;
       float size;
     } lamp;
   };
 
   /* Parent. */
   int parent_index;
+
+  /* Padding */
+  float pad3[3];
 } KernelLightTreeEmitter;
 static_assert_align(KernelLightTreeEmitter, 16);
 
 typedef struct KernelLightTreeDistantEmitter {
-  /* Direction from world to light. */
+  /* Direction from light to world. */
   float direction[3];
 
   /* Size of light (in radians). */

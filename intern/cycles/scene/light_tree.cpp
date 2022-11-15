@@ -23,7 +23,7 @@ OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds
   if (is_zero(cone_a.axis)) {
     return cone_b;
   }
-  else if (is_zero(cone_b.axis)) {
+  if (is_zero(cone_b.axis)) {
     return cone_a;
   }
 
@@ -43,61 +43,87 @@ OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds
   if (a->theta_o >= fminf(M_PI_F, theta_d + b->theta_o)) {
     return OrientationBounds({a->axis, a->theta_o, theta_e});
   }
-  else {
-    /* Compute new theta_o that contains both a and b. */
-    float theta_o = (theta_d + a->theta_o + b->theta_o) * 0.5f;
 
-    if (theta_o >= M_PI_F) {
-      return OrientationBounds({a->axis, M_PI_F, theta_e});
+  /* Compute new theta_o that contains both a and b. */
+  float theta_o = (theta_d + a->theta_o + b->theta_o) * 0.5f;
+
+  if (theta_o >= M_PI_F) {
+    return OrientationBounds({a->axis, M_PI_F, theta_e});
+  }
+
+  /* Rotate new axis to be between a and b. */
+  float theta_r = theta_o - a->theta_o;
+  float3 new_axis = rotate_around_axis(a->axis, cross(a->axis, b->axis), theta_r);
+  new_axis = normalize(new_axis);
+
+  return OrientationBounds({new_axis, theta_o, theta_e});
+}
+
+LightTreePrimitive::LightTreePrimitive(Scene *scene, int prim_id, int object_id)
+    : prim_id(prim_id), object_id(object_id)
+{
+  if (is_triangle()) {
+    calculate_triangle_vertices(scene);
+  }
+  calculate_centroid(scene);
+  calculate_bbox(scene);
+  calculate_bcone(scene);
+  calculate_energy(scene);
+}
+
+void LightTreePrimitive::calculate_triangle_vertices(Scene *scene)
+{
+  assert(is_triangle());
+  Object *object = scene->objects[object_id];
+  Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+  Mesh::Triangle triangle = mesh->get_triangle(prim_id);
+
+  for (int i = 0; i < 3; i++) {
+    vertices[i] = mesh->get_verts()[triangle.v[i]];
+  }
+
+  /* instanced mesh lights have not applied their transform at this point.
+   * in this case, these points have to be transformed to get the proper
+   * spatial bound. */
+  if (!mesh->transform_applied) {
+    const Transform &tfm = object->get_tfm();
+    for (int i = 0; i < 3; i++) {
+      vertices[i] = transform_point(&tfm, vertices[i]);
     }
-
-    /* Rotate new axis to be between a and b. */
-    float theta_r = theta_o - a->theta_o;
-    float3 new_axis = rotate_around_axis(a->axis, cross(a->axis, b->axis), theta_r);
-    new_axis = normalize(new_axis);
-
-    return OrientationBounds({new_axis, theta_o, theta_e});
   }
 }
 
-BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
+void LightTreePrimitive::calculate_centroid(Scene *scene)
 {
-  BoundBox bbox = BoundBox::empty;
+  if (is_triangle()) {
+    /* NOTE: the original implementation used the bounding box centroid, but primitive centroid
+     * seems to work fine */
+    centroid = (vertices[0] + vertices[1] + vertices[2]) / 3.0f;
+  }
+  else {
+    centroid = scene->lights[object_id]->get_co();
+  }
+}
 
-  if (prim_id >= 0) {
-    Object *object = scene->objects[object_id];
-    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    Mesh::Triangle triangle = mesh->get_triangle(prim_id);
+void LightTreePrimitive::calculate_bbox(Scene *scene)
+{
+  bbox = BoundBox::empty;
 
-    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
-                   mesh->get_verts()[triangle.v[1]],
-                   mesh->get_verts()[triangle.v[2]]};
-
-    /* instanced mesh lights have not applied their transform at this point.
-     * in this case, these points have to be transformed to get the proper
-     * spatial bound. */
-    if (!mesh->transform_applied) {
-      const Transform &tfm = object->get_tfm();
-      for (int i = 0; i < 3; i++) {
-        p[i] = transform_point(&tfm, p[i]);
-      }
-    }
-
+  if (is_triangle()) {
     for (int i = 0; i < 3; i++) {
-      bbox.grow(p[i]);
+      bbox.grow(vertices[i]);
     }
   }
   else {
-    Light *lamp = scene->lights[lamp_id];
+    Light *lamp = scene->lights[object_id];
     LightType type = lamp->get_light_type();
-    const float3 center = lamp->get_co();
     const float size = lamp->get_size();
 
     if (type == LIGHT_POINT || type == LIGHT_SPOT) {
       /* Point and spot lights can emit light from any point within its radius. */
       const float3 radius = make_float3(size);
-      bbox.grow(center - radius);
-      bbox.grow(center + radius);
+      bbox.grow(centroid - radius);
+      bbox.grow(centroid + radius);
     }
     else if (type == LIGHT_AREA) {
       /* For an area light, sizeu and sizev determine the 2 dimensions of the area light,
@@ -106,60 +132,31 @@ BoundBox LightTreePrimitive::calculate_bbox(Scene *scene) const
       const float3 half_extentu = 0.5 * lamp->get_sizeu() * lamp->get_axisu() * size;
       const float3 half_extentv = 0.5 * lamp->get_sizev() * lamp->get_axisv() * size;
 
-      bbox.grow(center + half_extentu + half_extentv);
-      bbox.grow(center + half_extentu - half_extentv);
-      bbox.grow(center - half_extentu + half_extentv);
-      bbox.grow(center - half_extentu - half_extentv);
+      bbox.grow(centroid + half_extentu + half_extentv);
+      bbox.grow(centroid + half_extentu - half_extentv);
+      bbox.grow(centroid - half_extentu + half_extentv);
+      bbox.grow(centroid - half_extentu - half_extentv);
     }
     else {
-      /* This should never be reached during construction. */
-      assert(false);
+      /* No bounding box for distant lights */
     }
   }
-
-  return bbox;
 }
 
-OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
+void LightTreePrimitive::calculate_bcone(Scene *scene)
 {
-  OrientationBounds bcone = OrientationBounds::empty;
+  bcone = OrientationBounds::empty;
 
-  if (prim_id >= 0) {
-    Object *object = scene->objects[object_id];
-    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    Mesh::Triangle triangle = mesh->get_triangle(prim_id);
+  if (is_triangle()) {
+    bcone.axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
 
-    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
-                   mesh->get_verts()[triangle.v[1]],
-                   mesh->get_verts()[triangle.v[2]]};
-
-    /* instanced mesh lights have not applied their transform at this point.
-     * in this case, these points have to be transformed to get the proper
-     * spatial bound. */
-    if (!mesh->transform_applied) {
-      const Transform &tfm = object->get_tfm();
-      for (int i = 0; i < 3; i++) {
-        p[i] = transform_point(&tfm, p[i]);
-      }
-    }
-
-    float3 normal = cross(p[1] - p[0], p[2] - p[0]);
-    const float normlen = len(normal);
-    if (normlen == 0.0f) {
-      normal = make_float3(1.0f, 0.0f, 0.0f);
-    }
-    normal = normal / normlen;
-
-    bcone.axis = normal;
-
-    /* to-do: is there a better way to handle this case where both sides of the triangle are
-     * visible? Right now, we assume that the normal axis is within pi radians of the triangle
-     * normal. */
+    /* TODO: instance emissive triangle twice in the light tree when it is double-sided. Right now,
+     * we assume that the normal axis is within pi radians of the triangle normal. */
     bcone.theta_o = M_PI_F;
     bcone.theta_e = M_PI_2_F;
   }
   else {
-    Light *lamp = scene->lights[lamp_id];
+    Light *lamp = scene->lights[object_id];
     LightType type = lamp->get_light_type();
 
     bcone.axis = normalize(lamp->get_dir());
@@ -176,23 +173,27 @@ OrientationBounds LightTreePrimitive::calculate_bcone(Scene *scene) const
       bcone.theta_o = 0;
       bcone.theta_e = lamp->get_spread() * 0.5f;
     }
-    else {
-      /* This should never be reached during construction. */
-      assert(false);
+    else if (type == LIGHT_DISTANT) {
+      bcone.theta_o = tanf(0.5f * lamp->get_angle());
+      bcone.theta_e = 0;
+    }
+    else if (type == LIGHT_BACKGROUND) {
+      /* Set an arbitrary direction for the background light. */
+      bcone.axis = make_float3(0.0f, 0.0f, 1.0f);
+      /* TODO: this may depend on portal lights as well. */
+      bcone.theta_o = M_PI_F;
+      bcone.theta_e = 0;
     }
   }
-
-  return bcone;
 }
 
-float LightTreePrimitive::calculate_energy(Scene *scene) const
+void LightTreePrimitive::calculate_energy(Scene *scene)
 {
   float3 strength = make_float3(0.0f);
 
-  if (prim_id >= 0) {
+  if (is_triangle()) {
     Object *object = scene->objects[object_id];
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    Mesh::Triangle triangle = mesh->get_triangle(prim_id);
     Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
 
     /* to-do: need a better way to handle this when textures are used. */
@@ -200,25 +201,12 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
       strength = make_float3(1.0f);
     }
 
-    float3 p[3] = {mesh->get_verts()[triangle.v[0]],
-                   mesh->get_verts()[triangle.v[1]],
-                   mesh->get_verts()[triangle.v[2]]};
-
-    /* instanced mesh lights have not applied their transform at this point.
-     * in this case, these points have to be transformed to get the proper
-     * spatial bound. */
-    if (!mesh->transform_applied) {
-      const Transform &tfm = object->get_tfm();
-      for (int i = 0; i < 3; i++) {
-        p[i] = transform_point(&tfm, p[i]);
-      }
-    }
-
-    float area = triangle_area(p[0], p[1], p[2]);
+    float area = triangle_area(vertices[0], vertices[1], vertices[2]);
     strength *= area;
+    energy = scene->shader_manager->linear_rgb_to_gray(strength);
   }
   else {
-    Light *lamp = scene->lights[lamp_id];
+    Light *lamp = scene->lights[object_id];
     strength = lamp->get_strength();
     LightType type = lamp->get_light_type();
     if (type == LIGHT_AREA) {
@@ -227,9 +215,12 @@ float LightTreePrimitive::calculate_energy(Scene *scene) const
     else if (type == LIGHT_SPOT || type == LIGHT_POINT) {
       strength *= 0.25f * M_1_PI_F; /* eval_fac scaling in `spot.h` and `point.h` */
     }
+    energy = scene->shader_manager->linear_rgb_to_gray(strength);
+    if (type == LIGHT_BACKGROUND) {
+      /* integrate over cosine-weighted hemisphere */
+      energy = lamp->get_average_radiance() * M_PI_F;
+    }
   }
-
-  return fabsf(scene->shader_manager->linear_rgb_to_gray(strength));
 }
 
 void LightTreeBuildNode::init_leaf(const uint &offset,
@@ -277,7 +268,7 @@ LightTree::LightTree(const vector<LightTreePrimitive> &prims,
                      Scene *scene,
                      uint max_lights_in_leaf)
 {
-  if (prims.size() == 0) {
+  if (prims.empty()) {
     return;
   }
 
@@ -285,21 +276,13 @@ LightTree::LightTree(const vector<LightTreePrimitive> &prims,
   scene_ = scene;
   max_lights_in_leaf_ = max_lights_in_leaf;
 
-  vector<LightTreePrimitiveInfo> build_data;
   for (int i = 0; i < prims.size(); i++) {
-    LightTreePrimitiveInfo prim_info;
-    prim_info.bbox = prims[i].calculate_bbox(scene);
-    prim_info.bcone = prims[i].calculate_bcone(scene);
-    prim_info.energy = prims[i].calculate_energy(scene);
-    prim_info.centroid = prim_info.bbox.center();
-    prim_info.prim_num = i;
-    build_data.push_back(prim_info);
+    prims_[i].prim_num = i;
   }
 
   int total_nodes = 0;
   vector<LightTreePrimitive> ordered_prims;
-  LightTreeBuildNode *root = recursive_build(
-      build_data, 0, prims.size(), total_nodes, ordered_prims, 0, 0);
+  LightTreeBuildNode *root = recursive_build(0, prims.size(), total_nodes, ordered_prims, 0, 0);
   prims_ = ordered_prims;
 
   int offset = 0;
@@ -317,8 +300,7 @@ const vector<PackedLightTreeNode> &LightTree::get_nodes() const
   return nodes_;
 }
 
-LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &primitive_info,
-                                               int start,
+LightTreeBuildNode *LightTree::recursive_build(int start,
                                                int end,
                                                int &total_nodes,
                                                vector<LightTreePrimitive> &ordered_prims,
@@ -335,7 +317,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
   int num_prims = end - start;
 
   for (int i = start; i < end; i++) {
-    const LightTreePrimitiveInfo &prim = primitive_info.at(i);
+    const LightTreePrimitive &prim = prims_.at(i);
     node_bbox.grow(prim.bbox);
     node_bcone = merge(node_bcone, prim.bcone);
     centroid_bounds.grow(prim.centroid);
@@ -354,7 +336,7 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
     /* Find the best place to split the primitives into 2 nodes.
      * If the best split cost is no better than making a leaf node, make a leaf instead.*/
     float min_cost = min_split_saoh(
-        centroid_bounds, primitive_info, start, end, node_bbox, node_bcone, min_dim, min_bucket);
+        centroid_bounds, start, end, node_bbox, node_bcone, min_dim, min_bucket);
     should_split = num_prims > max_lights_in_leaf_ || min_cost < energy_total;
   }
   if (should_split) {
@@ -370,18 +352,17 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
                                                      LightTreeBucketInfo::num_buckets) +
                                  centroid_bounds.min[min_dim];
       while (left < right) {
-        while (primitive_info[left].centroid[min_dim] <= bounding_dimension && left < end) {
+        while (prims_[left].centroid[min_dim] <= bounding_dimension && left < end) {
           left++;
         }
 
-        while (primitive_info[right].centroid[min_dim] > bounding_dimension && right >= start) {
+        while (prims_[right].centroid[min_dim] > bounding_dimension && right >= start) {
           right--;
         }
 
         if (left < right) {
-          LightTreePrimitiveInfo temp = primitive_info[left];
-          primitive_info[left] = primitive_info[right];
-          primitive_info[right] = temp;
+          std::swap(prims_[left].prim_num, prims_[right].prim_num);
+          std::swap(prims_[left], prims_[right]);
         }
       }
 
@@ -395,21 +376,16 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
     /* At this point, we should expect right to be just past left,
      * where left points to the first element that belongs to the right node. */
     LightTreeBuildNode *left_node = recursive_build(
-        primitive_info, start, middle, total_nodes, ordered_prims, bit_trail, depth + 1);
-    LightTreeBuildNode *right_node = recursive_build(primitive_info,
-                                                     middle,
-                                                     end,
-                                                     total_nodes,
-                                                     ordered_prims,
-                                                     bit_trail | (1u << depth),
-                                                     depth + 1);
+        start, middle, total_nodes, ordered_prims, bit_trail, depth + 1);
+    LightTreeBuildNode *right_node = recursive_build(
+        middle, end, total_nodes, ordered_prims, bit_trail | (1u << depth), depth + 1);
     node->init_interior(
         left_node, right_node, node_bbox, node_bcone, energy_total, energy_variance, bit_trail);
   }
   else {
     int first_prim_offset = ordered_prims.size();
     for (int i = start; i < end; i++) {
-      int prim_num = primitive_info[i].prim_num;
+      int prim_num = prims_[i].prim_num;
       ordered_prims.push_back(prims_[prim_num]);
     }
     node->init_leaf(first_prim_offset,
@@ -424,7 +400,6 @@ LightTreeBuildNode *LightTree::recursive_build(vector<LightTreePrimitiveInfo> &p
 }
 
 float LightTree::min_split_saoh(const BoundBox &centroid_bbox,
-                                const vector<LightTreePrimitiveInfo> &primitive_info,
                                 int start,
                                 int end,
                                 const BoundBox &bbox,
@@ -459,20 +434,20 @@ float LightTree::min_split_saoh(const BoundBox &centroid_bbox,
     /* Fill in buckets with primitives. */
     vector<LightTreeBucketInfo> buckets(LightTreeBucketInfo::num_buckets);
     for (int i = start; i < end; i++) {
-      const LightTreePrimitiveInfo &primitive = primitive_info[i];
+      const LightTreePrimitive &prim = prims_[i];
 
       /* Place primitive into the appropriate bucket,
        * where the centroid box is split into equal partitions. */
       int bucket_idx = LightTreeBucketInfo::num_buckets *
-                       (primitive.centroid[dim] - centroid_bbox.min[dim]) * inv_extent;
+                       (prim.centroid[dim] - centroid_bbox.min[dim]) * inv_extent;
       if (bucket_idx == LightTreeBucketInfo::num_buckets) {
         bucket_idx = LightTreeBucketInfo::num_buckets - 1;
       }
 
       buckets[bucket_idx].count++;
-      buckets[bucket_idx].energy += primitive.energy;
-      buckets[bucket_idx].bbox.grow(primitive.bbox);
-      buckets[bucket_idx].bcone = merge(buckets[bucket_idx].bcone, primitive.bcone);
+      buckets[bucket_idx].energy += prim.energy;
+      buckets[bucket_idx].bbox.grow(prim.bbox);
+      buckets[bucket_idx].bcone = merge(buckets[bucket_idx].bcone, prim.bcone);
     }
 
     /* Calculate the cost of splitting at each point between partitions. */

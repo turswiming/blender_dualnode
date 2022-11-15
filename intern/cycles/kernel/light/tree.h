@@ -223,15 +223,15 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   float min_distance, distance;
   float max_distance = 0.0f;
   float cos_theta_u = 1.0f;
-  float3 centroid, point_to_centroid;
+  float3 centroid = make_float3(
+      kemitter->centroid[0], kemitter->centroid[1], kemitter->centroid[2]);
+  float3 point_to_centroid = safe_normalize_len(centroid - P, &distance);
   bool bbox_is_visible = has_transmission;
 
   const int prim = kemitter->prim_id;
   if (prim < 0) {
     const int lamp = -prim - 1;
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
-    centroid = make_float3(klight->co[0], klight->co[1], klight->co[2]);
-    point_to_centroid = safe_normalize_len(centroid - P, &distance);
 
     if (klight->type == LIGHT_SPOT || klight->type == LIGHT_POINT) {
       const float radius = klight->spot.radius;
@@ -268,9 +268,6 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     const int object = kemitter->mesh_light.object_id;
     float3 V[3];
     triangle_world_space_vertices(kg, object, prim, -1.0f, V);
-    /* TODO: store in KernelLightTreeEmitter */
-    centroid = (V[0] + V[1] + V[2]) / 3.f;
-    point_to_centroid = safe_normalize_len(centroid - P, &distance);
     for (int i = 0; i < 3; i++) {
       const float3 corner = V[i];
       float distance_point_to_corner;
@@ -739,7 +736,7 @@ ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
 
   const float3 light_axis = make_float3(
       kdistant->direction[0], kdistant->direction[1], kdistant->direction[2]);
-  float theta_i = fast_acosf(dot(N, light_axis));
+  float theta_i = fast_acosf(dot(N, -light_axis));
 
   /* If the light is guaranteed to be behind the surface we're sampling, and the surface is
    * opaque, then we can give the light an importance of 0 as it contributes nothing to the
