@@ -2517,34 +2517,35 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
       float point_3d[3];
       point_3d[2] = 0.0f;
 
-      float tan[3], curv[3];
-      float symm_point[3];
+      float tan[3];
+      float point_3d2[3];
 
       paint_stroke_spline_uv(ss->cache->stroke, ss->cache, brush_point, point_3d, tan);
 
       for (int i = 0; i < 3; i++) {
-        copy_v3_v3(symm_point, brush_point);
+        if (!(ss->cache->mirror_symmetry_pass & (1 << i))) {
+          continue;
+        }
 
-        if (ss->cache->mirror_symmetry_pass & (1 << i)) {
-          symm_point[i] = -symm_point[i];
+        float symm_point[3];
+        copy_v3_v3(symm_point, brush_point);
+        symm_point[i] = -symm_point[i];
+
+        paint_stroke_spline_uv(ss->cache->stroke, ss->cache, symm_point, point_3d2, tan);
+        if (point_3d2[0] < point_3d[0]) {
+          copy_v3_v3(point_3d, point_3d2);
         }
 
         for (int j = 0; j < 3; j++) {
-          if (j == i) {
+          if (j == i || !(ss->cache->mirror_symmetry_pass & (1 << j))) {
             continue;
           }
 
-          if (ss->cache->mirror_symmetry_pass & (1 << j)) {
-            symm_point[j] = -symm_point[j];
-          }
+          float symm_point2[3];
+          copy_v3_v3(symm_point2, symm_point);
+          symm_point2[j] = -symm_point2[j];
 
-          if (len_v3v3(symm_point, brush_point) == 0.0f) {
-            continue;
-          }
-
-          float point_3d2[3];
-
-          paint_stroke_spline_uv(ss->cache->stroke, ss->cache, brush_point, point_3d2, tan);
+          paint_stroke_spline_uv(ss->cache->stroke, ss->cache, symm_point2, point_3d2, tan);
 
           if (point_3d2[0] < point_3d[0]) {
             copy_v3_v3(point_3d, point_3d2);
@@ -2566,7 +2567,6 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
 // avg = 0.0f;
 #endif
 
-      float pixel_radius = br->size;
       mul_v3_fl(point_3d, 1.0f / ss->cache->initial_radius);
 
       // avg = BKE_brush_sample_tex_3d(scene, br, mtex, point_3d, rgba, thread_id, ss->tex_pool);
