@@ -94,4 +94,9 @@ void main()
     pages_infos_buf.page_cached_start -= max_page;
     pages_infos_buf.page_cached_end -= max_page;
   }
+
+  /* Reset clear command indirect buffer. */
+  clear_dispatch_buf.num_groups_x = pages_infos_buf.page_size / SHADOW_PAGE_CLEAR_GROUP_SIZE;
+  clear_dispatch_buf.num_groups_y = pages_infos_buf.page_size / SHADOW_PAGE_CLEAR_GROUP_SIZE;
+  clear_dispatch_buf.num_groups_z = 0;
 }

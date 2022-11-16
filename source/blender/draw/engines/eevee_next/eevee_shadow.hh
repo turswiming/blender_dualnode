@@ -241,6 +241,11 @@ class ShadowModule {
   StorageVectorBuffer<uint, 128> past_casters_updated_ = {"PastCastersUpdated"};
   StorageVectorBuffer<uint, 128> curr_casters_updated_ = {"CurrCastersUpdated"};
 
+  /** Indirect arguments for page clearing. */
+  StorageBuffer<DispatchCommand> clear_dispatch_buf_;
+  /** Pages to clear. */
+  StorageArrayBuffer<uint, SHADOW_MAX_PAGE> clear_page_buf_ = {"clear_page_buf"};
+
   int3 dispatch_depth_scan_size_;
   float tilemap_pixel_radius_;
   float screen_pixel_radius_inv_;
@@ -252,6 +257,7 @@ class ShadowModule {
    * \{ */
 
   static constexpr eGPUTextureFormat atlas_type = GPU_R32UI;
+  /** Atlas containing all physical pages. */
   Texture atlas_tx_ = {"shadow_atlas_tx_"};
 
   /** Pool of unallocated pages waiting to be assigned to specific tiles in the tilemap atlas. */

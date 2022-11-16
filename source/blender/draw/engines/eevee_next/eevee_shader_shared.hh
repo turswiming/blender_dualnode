@@ -705,7 +705,8 @@ struct ShadowPagesInfoData {
   int page_rendered;
   /** Number of views to be rendered during the shadow update pass. */
   int view_count;
-  int _pad1;
+  /** Physical page size in pixel. Pages are all squares. */
+  int page_size;
 };
 BLI_STATIC_ASSERT_ALIGN(ShadowPagesInfoData, 16)
 

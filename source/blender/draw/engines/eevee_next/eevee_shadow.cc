@@ -626,6 +626,7 @@ void ShadowModule::end_sync()
     pages_infos_data_.page_cached_next = 0u;
     pages_infos_data_.page_cached_start = 0u;
     pages_infos_data_.page_cached_end = 0u;
+    pages_infos_data_.page_size = shadow_page_size_;
     pages_infos_data_.push_update();
   }
 
@@ -707,6 +708,7 @@ void ShadowModule::end_sync()
         sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
         sub.bind_ssbo("pages_free_buf", pages_free_data_);
         sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
+        sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);
         sub.dispatch(int3(1, 1, 1));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
@@ -728,19 +730,24 @@ void ShadowModule::end_sync()
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_FINALIZE));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
-        sub.bind_ssbo("view_infos_buf", shadow_multi_view_.matrices_ubo_get());
+        sub.bind_ssbo("view_infos_buf", &shadow_multi_view_.matrices_ubo_get());
         sub.bind_ssbo("view_to_tilemap_buf", view_to_tilemap_buf_);
+        sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);
+        sub.bind_ssbo("clear_page_buf", clear_page_buf_);
         sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM |
+                    GPU_BARRIER_SHADER_IMAGE_ACCESS);
       }
       {
-        PassSimple::Sub &sub = pass.sub("RenderCulling");
-        UNUSED_VARS(sub);
-      }
-      {
+        /** Clear pages that need to be rendered. */
         PassSimple::Sub &sub = pass.sub("RenderClear");
-        UNUSED_VARS(sub);
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_CLEAR));
+        sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
+        sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);
+        sub.bind_image("atlas_img", atlas_tx_);
+        sub.dispatch(clear_dispatch_buf_);
+        sub.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
       }
     }
   }

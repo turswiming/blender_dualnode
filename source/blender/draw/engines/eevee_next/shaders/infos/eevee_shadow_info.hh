@@ -68,21 +68,26 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_page_free)
 GPU_SHADER_CREATE_INFO(eevee_shadow_page_defrag)
     .do_static_compilation(true)
     .local_group_size(1)
+    .typedef_source("draw_shader_shared.h")
     .storage_buf(1, Qualifier::READ_WRITE, "ShadowTileDataPacked", "tiles_buf[]")
     .storage_buf(2, Qualifier::READ_WRITE, "ShadowPagesInfoData", "pages_infos_buf")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "pages_free_buf[]")
     .storage_buf(4, Qualifier::READ_WRITE, "uvec2", "pages_cached_buf[]")
+    .storage_buf(5, Qualifier::WRITE, "DispatchCommand", "clear_dispatch_buf")
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_page_defrag_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(eevee_shadow_page_allocate)
     .do_static_compilation(true)
     .local_group_size(SHADOW_TILEDATA_PER_TILEMAP)
+    .typedef_source("draw_shader_shared.h")
     .storage_buf(0, Qualifier::READ_WRITE, "ShadowTileMapData", "tilemaps_buf[]")
     .storage_buf(1, Qualifier::READ_WRITE, "ShadowTileDataPacked", "tiles_buf[]")
     .storage_buf(2, Qualifier::READ_WRITE, "ShadowPagesInfoData", "pages_infos_buf")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "pages_free_buf[]")
     .storage_buf(4, Qualifier::READ_WRITE, "uvec2", "pages_cached_buf[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "DispatchCommand", "clear_dispatch_buf")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "clear_page_buf[]")
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_page_allocate_comp.glsl");
 
@@ -99,12 +104,14 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_finalize)
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_tilemap_finalize_comp.glsl");
 
-GPU_SHADER_CREATE_INFO(eevee_shadow_render_culling)
-    .local_group_size(64)
-    .sampler(0, ImageType::DEPTH_2D, "depth_tx")
-    .storage_buf(4, Qualifier::WRITE, "uint", "view_id_buf[]")
-    .additional_info("eevee_shared", "draw_view", "eevee_light_data")
-    .compute_source("eevee_shadow_tag_usage_comp.glsl");
+GPU_SHADER_CREATE_INFO(eevee_shadow_page_clear)
+    .do_static_compilation(true)
+    .local_group_size(SHADOW_PAGE_CLEAR_GROUP_SIZE, SHADOW_PAGE_CLEAR_GROUP_SIZE)
+    .storage_buf(2, Qualifier::READ, "ShadowPagesInfoData", "pages_infos_buf")
+    .storage_buf(6, Qualifier::READ, "uint", "clear_page_buf[]")
+    .image(0, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D, "atlas_img")
+    .additional_info("eevee_shared")
+    .compute_source("eevee_shadow_page_clear_comp.glsl");
 
 /** \} */
 
