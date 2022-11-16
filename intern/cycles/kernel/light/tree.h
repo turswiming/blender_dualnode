@@ -168,41 +168,6 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   }
 }
 
-/* This is uniformly sampling the reservoir for now. */
-ccl_device float light_tree_emitter_reservoir_weight(KernelGlobals kg,
-                                                     const float3 P,
-                                                     const float3 N,
-                                                     int emitter_index)
-{
-  if (emitter_index < 0) {
-    return 0.0f;
-  }
-
-  /* TODO: reservoir is disabled for now */
-  return 1.0f;
-
-  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
-                                                                         emitter_index);
-  const int prim = kemitter->prim_id;
-
-  /* Triangles are handled normally for now. */
-  if (prim < 0) {
-    const int lamp = -prim - 1;
-    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
-
-    /* We use a special calculation to check if a light is
-     * within the bounds of a spot or area light. */
-    if (klight->type == LIGHT_SPOT) {
-      return spot_light_tree_weight(klight, P, N);
-    }
-    else if (klight->type == LIGHT_AREA) {
-      return area_light_tree_weight(klight, P, N);
-    }
-  }
-
-  return 1.0f;
-}
-
 template<bool in_volume_segment>
 ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                               const float3 P,
@@ -308,50 +273,6 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                                    kemitter->energy,
                                                    max_importance,
                                                    min_importance);
-}
-
-ccl_device bool light_tree_should_split(KernelGlobals kg,
-                                        const float3 P,
-                                        const ccl_global KernelLightTreeNode *knode)
-{
-  /* TODO: don't split because it introduces variance. Maybe delete relevant field and functions
-   * later. */
-  return false;
-
-  const float splitting_threshold = 0.5f;
-  if (splitting_threshold == 0.0f) {
-    return false;
-  }
-  else if (splitting_threshold == 1.0f) {
-    return true;
-  }
-
-  const float3 bbox_min = make_float3(
-      knode->bounding_box_min[0], knode->bounding_box_min[1], knode->bounding_box_min[2]);
-  const float3 bbox_max = make_float3(
-      knode->bounding_box_max[0], knode->bounding_box_max[1], knode->bounding_box_max[2]);
-  const float3 centroid = 0.5f * bbox_min + 0.5f * bbox_max;
-
-  const float radius = len(bbox_max - centroid);
-  const float distance = len(P - centroid);
-
-  if (distance <= radius) {
-    return true;
-  }
-
-  const float a = distance - radius;
-  const float b = distance + radius;
-
-  const float E_g = 1.0f / (a * b);
-  const float E_e = knode->energy;
-
-  /* This is a simplified version of the expression given in the paper. */
-  const float V_g = (b - a) * (b - a) * E_g * E_g * E_g / 3.0f;
-  const float V_e = knode->energy_variance;
-
-  const float total_variance = V_e * V_g + V_e * E_g * E_g + E_e * E_e * V_g;
-  const float normalized_variance = sqrt(sqrt(1.0f / (1.0f + sqrt(total_variance))));
-  return (normalized_variance < splitting_threshold);
 }
 
 template<bool in_volume_segment>
@@ -561,7 +482,6 @@ ccl_device_inline bool get_left_probability(KernelGlobals kg,
 
 template<bool in_volume_segment>
 ccl_device bool light_tree_sample(KernelGlobals kg,
-                                  ccl_private const RNGState *rng_state,
                                   ccl_private float *randu,
                                   const float randv,
                                   const float time,
@@ -574,113 +494,56 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                   ccl_private LightSample *ls,
                                   ccl_private float *pdf_factor)
 {
-  /* We keep track of the currently selected primitive and its weight,
-   * as well as the total weight as part of the weighted reservoir sampling. */
-  int current_light = -1;
-  float current_reservoir_weight = -1.0f;
-  float total_reservoir_weight = 0.0f;
-  float pdf_node_emitter_selection = 1.0f;
+  int selected_light = -1;
+  float pdf_emitter_selection = 1.0f;
 
-  /* We need a stack to substitute for recursion. */
-  const int stack_size = 32;
-  int stack[stack_size];
-  float pdfs_node_selection[stack_size];
-  int stack_index = 0;
-  stack[0] = 0;
-  pdfs_node_selection[0] = 1.0f;
+  int node_index = 0; /* root node */
 
-  /* First traverse the light tree until a leaf node is reached.
-   * Also keep track of the probability of traversing to a given node,
-   * so that we can scale our PDF accordingly later. */
-  while (stack_index >= 0) {
-    const float pdf_node_selection = pdfs_node_selection[stack_index];
-    const int index = stack[stack_index];
-    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
+  /* Traverse the light tree until a leaf node is reached. */
+  while (true) {
+    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, node_index);
 
-    /* If we're at a leaf node, we choose a primitive. Otherwise, we check if we should split
-     * or traverse down the light tree. */
     if (knode->child_index <= 0) {
-      float pdf_emitter_selection = 1.0f;
-      const int selected_light = light_tree_cluster_select_emitter<in_volume_segment>(
+      /* At a leaf node, we pick an emitter */
+      selected_light = light_tree_cluster_select_emitter<in_volume_segment>(
           kg, randu, P, N_or_D, t, has_transmission, knode, &pdf_emitter_selection);
-
-      if (selected_light < 0) {
-        stack_index--;
-        continue;
-      }
-
-      const float light_reservoir_weight = light_tree_emitter_reservoir_weight(
-          kg, P, N_or_D, selected_light);
-
-      /* TODO: make pdf_node_emitter_selection part of the light_reservoir_weight, otherwise result
-       * is suboptimal, or disable splitting and remove reservoir-related code . */
-      if (light_reservoir_weight == 0.0f) {
-        stack_index--;
-        continue;
-      }
-      total_reservoir_weight += light_reservoir_weight;
-
-      /* We compute the probability of switching to the new candidate sample,
-       * otherwise we stick with the old one. */
-      const float selection_probability = light_reservoir_weight / total_reservoir_weight;
-      if (*randu <= selection_probability) {
-        *randu = *randu / selection_probability;
-        current_light = selected_light;
-        current_reservoir_weight = light_reservoir_weight;
-        pdf_node_emitter_selection = pdf_node_selection * pdf_emitter_selection;
-      }
-      else {
-        *randu = (*randu - selection_probability) / (1.0f - selection_probability);
-      }
-
-      stack_index--;
-      continue;
+      break;
     }
 
     /* At an interior node, the left child is directly after the parent,
-     * while the right child is stored as the child index.
-     * We adaptively split if the variance is high enough. */
-    const int left_index = index + 1;
+     * while the right child is stored as the child index. */
+    const int left_index = node_index + 1;
     const int right_index = knode->child_index;
-    if (light_tree_should_split(kg, P, knode) && stack_index < stack_size - 1) {
-      stack[stack_index] = left_index;
-      pdfs_node_selection[stack_index] = pdf_node_selection;
-      stack[stack_index + 1] = right_index;
-      pdfs_node_selection[stack_index + 1] = pdf_node_selection;
-      stack_index++;
-      continue;
-    }
 
     float left_probability;
     if (!get_left_probability<in_volume_segment>(
             kg, P, N_or_D, t, has_transmission, left_index, right_index, left_probability)) {
-      stack_index--;
-      continue;
+      return false; /* both child nodes have zero importance */
     }
 
-    if (*randu <= left_probability) {
-      stack[stack_index] = left_index;
-      *randu = *randu / left_probability;
-      pdfs_node_selection[stack_index] = pdf_node_selection * left_probability;
+    if (*randu <= left_probability) { /* go left */
+      node_index = left_index;
+      *randu /= left_probability;
+      *pdf_factor *= left_probability;
     }
     else {
-      stack[stack_index] = right_index;
+      node_index = right_index;
       *randu = (*randu - left_probability) / (1.0f - left_probability);
-      pdfs_node_selection[stack_index] = pdf_node_selection * (1.0f - left_probability);
+      *pdf_factor *= (1.0f - left_probability);
     }
   }
 
-  if (total_reservoir_weight == 0.0f || current_light < 0) {
+  /* TODO: check `spot_light_tree_weight()` and `area_light_tree_weight()` */
+  if (selected_light < 0) {
     return false;
   }
 
-  const float pdf_reservoir = current_reservoir_weight / total_reservoir_weight;
-  *pdf_factor *= pdf_node_emitter_selection * pdf_reservoir;
-
+  /* Sample a point on the chosen emitter */
+  *pdf_factor *= pdf_emitter_selection;
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
-                                                                         current_light);
+                                                                         selected_light);
 
-  /* to-do: this is the same code as light_distribution_sample, except the index is determined
+  /* TODO: this is the same code as light_distribution_sample, except the index is determined
    * differently. Would it be better to refactor this into a separate function? */
   const int prim = kemitter->prim_id;
   if (prim >= 0) {
@@ -746,7 +609,7 @@ ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
     cos_theta_i_prime = fast_cosf(theta_i_prime);
   }
 
-  /* to-do: find a good value for this. */
+  /* TODO: find a good value for this. */
   const float f_a = 1.0f;
   float importance = f_a * cos_theta_i_prime * kdistant->energy;
   return importance;
@@ -754,7 +617,6 @@ ccl_device float light_tree_distant_light_importance(KernelGlobals kg,
 
 template<bool in_volume_segment>
 ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
-                                                 ccl_private const RNGState *rng_state,
                                                  ccl_private float *randu,
                                                  const float randv,
                                                  const float time,
@@ -768,56 +630,39 @@ ccl_device bool light_tree_sample_distant_lights(KernelGlobals kg,
                                                  ccl_private float *pdf_factor)
 {
   kernel_assert(!in_volume_segment);
-  /* TODO: do single loop over lights to avoid computing importance twice? */
-  const int num_distant_lights = kernel_data.integrator.num_distant_lights;
+
+  float selected_importance = 0.0f;
   float total_importance = 0.0f;
-  for (int i = 0; i < num_distant_lights; i++) {
-    total_importance += light_tree_distant_light_importance<in_volume_segment>(
+  int selected_index = -1;
+
+  for (int i = 0; i < kernel_data.integrator.num_distant_lights; i++) {
+    float importance = light_tree_distant_light_importance<in_volume_segment>(
         kg, N, has_transmission, i);
+    sample_resevoir(i, importance, selected_index, selected_importance, total_importance, randu);
   }
 
-  if (total_importance == 0.0f) {
+  if (selected_index < 0) { /* TODO: check precision issue */
     return false;
   }
 
-  float light_cdf = 0.0f;
-  for (int i = 0; i < num_distant_lights; i++) {
-    const float light_pdf = light_tree_distant_light_importance<in_volume_segment>(
-                                kg, N, has_transmission, i) /
-                            total_importance;
-    if (*randu <= light_cdf + light_pdf) {
-      *randu = (*randu - light_cdf) / light_pdf;
-      *pdf_factor *= light_pdf;
-      ccl_global const KernelLightTreeDistantEmitter *kdistant = &kernel_data_fetch(
-          light_tree_distant_group, i);
+  ccl_global const KernelLightTreeDistantEmitter *kdistant = &kernel_data_fetch(
+      light_tree_distant_group, selected_index);
 
-      const int lamp = kdistant->prim_id;
+  const int lamp = kdistant->prim_id;
 
-      if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
-        return false;
-      }
-
-      return light_sample<in_volume_segment>(kg, lamp, *randu, randv, P, path_flag, ls);
-    }
-    light_cdf += light_pdf;
+  if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
+    return false;
   }
 
-  /* TODO: change implementation so that even under precision issues, we always end
-   * up selecting a light and this can't happen? */
-  kernel_assert(false);
-  return false;
+  *pdf_factor *= selected_importance / total_importance;
+  return light_sample<in_volume_segment>(kg, lamp, *randu, randv, P, path_flag, ls);
 }
 
-/* We need to be able to find the probability of selecting a given light for MIS.
- * Returns a conditioned pdf which is consistent with the pdf computed in `light_tree_sample()`
- */
-ccl_device float light_tree_pdf(KernelGlobals kg,
-                                ConstIntegratorState state,
-                                const float3 P,
-                                const float3 N,
-                                const int path_flag,
-                                const int prim)
+/* We need to be able to find the probability of selecting a given light for MIS. */
+ccl_device float light_tree_pdf(
+    KernelGlobals kg, const float3 P, const float3 N, const int path_flag, const int prim)
 {
+  /* The probability of choosing the local light group against the distant light group */
   const bool has_transmission = (path_flag & PATH_RAY_MIS_HAD_TRANSMISSION);
   float distant_light_importance = light_tree_distant_light_importance<false>(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
@@ -832,136 +677,74 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
   kernel_assert(total_group_importance != 0.0f);
   float pdf = light_tree_importance / total_group_importance;
 
+  /* Target emitter info */
   const int target_emitter = (prim >= 0) ? kernel_data_fetch(triangle_to_tree, prim) :
                                            kernel_data_fetch(light_to_tree, ~prim);
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          target_emitter);
   const int target_leaf = kemitter->parent_index;
   ccl_global const KernelLightTreeNode *kleaf = &kernel_data_fetch(light_tree_nodes, target_leaf);
-
   uint bit_trail = kleaf->bit_trail;
 
-  /* We generate a random number to use for selecting a light. */
-  RNGState rng_state;
-  path_state_rng_load(state, &rng_state);
-  /* to-do: is this the correct macro to use? */
-  float randu = path_state_rng_1D(kg, &rng_state, PRNG_LIGHT);
+  int node_index = 0; /* root node */
 
-  /* Keep track of the currently selected primitive weight,
-   * as well as the total weight as part of the weighted reservoir sampling. */
-  float selected_reservoir_weight = -1.0f;
-  float total_reservoir_weight = 0.0f;
+  /* Traverse the light tree until we reach the target leaf node */
+  while (true) {
+    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, node_index);
 
-  /* We need a stack to substitute for recursion. */
-  const int stack_size = 32;
-  int stack[stack_size];
-  int stack_index = 0;
-  stack[0] = 0;
-
-  while (stack_index >= 0) {
-    const bool traversing_target_branch = stack_index == 0;
-    const int index = stack[stack_index];
-    const ccl_global KernelLightTreeNode *knode = &kernel_data_fetch(light_tree_nodes, index);
-
-    /* TODO: interior nodes are processed before leaf nodes, but current implementation forces
-     * the reader to think about the leaf node first. Maybe switch the two if-branches for better
-     * understandability? */
-
-    /* Leaf node */
     if (knode->child_index <= 0) {
-
-      /* If the leaf node contains the target emitter, we are processing the last node.
-       * We then iterate through the lights to find the target emitter.
-       * Otherwise, we randomly select one. */
-      if (index == target_leaf) {
-        float target_max_importance = 0.0f;
-        float target_min_importance = 0.0f;
-        float total_max_importance = 0.0f;
-        float total_min_importance = 0.0f;
-        int num_has_importance = 0;
-        for (int i = 0; i < knode->num_prims; i++) {
-          const int emitter = -knode->child_index + i;
-          float max_importance, min_importance;
-          light_tree_emitter_importance<false>(
-              kg, P, N, 0, has_transmission, emitter, max_importance, min_importance);
-          num_has_importance += (max_importance > 0);
-          if (emitter == target_emitter) {
-            target_max_importance = max_importance;
-            target_min_importance = min_importance;
-            selected_reservoir_weight = light_tree_emitter_reservoir_weight(kg, P, N, emitter);
-            total_reservoir_weight += selected_reservoir_weight;
-          }
-          total_max_importance += max_importance;
-          total_min_importance += min_importance;
-        }
-
-        if (target_max_importance > 0.0f) {
-          const float pdf_emitter_selection = 0.5f *
-                                              (target_max_importance / total_max_importance +
-                                               (total_min_importance > 0 ?
-                                                    target_min_importance / total_min_importance :
-                                                    1.0f / num_has_importance));
-          const float pdf_reservoir = selected_reservoir_weight / total_reservoir_weight;
-          pdf *= pdf_emitter_selection * pdf_reservoir;
-        }
-        else {
-          pdf = 0.0f;
-        }
-      }
-      else {
-        int selected_light = -1;
-        float pdf_emitter_selection = 1.0f;
-        selected_light = light_tree_cluster_select_emitter<false>(
-            kg, &randu, P, N, 0, has_transmission, knode, &pdf_emitter_selection);
-
-        if (selected_light < 0) {
-          stack_index--;
-          continue;
-        }
-
-        total_reservoir_weight += light_tree_emitter_reservoir_weight(kg, P, N, selected_light);
-      }
-      stack_index--;
-      continue;
+      break;
     }
 
     /* Interior node */
-    const bool go_left = (bit_trail & 1) == 0;
-    bit_trail >>= traversing_target_branch;
-    const int left_index = index + 1;
+    const int left_index = node_index + 1;
     const int right_index = knode->child_index;
-    if (light_tree_should_split(kg, P, knode) && stack_index < stack_size - 1) {
-      /* Always store nodes on the target branch in stack[0] */
-      stack[stack_index] = go_left ? left_index : right_index;
-      stack_index++;
-      stack[stack_index] = go_left ? right_index : left_index;
-      continue;
-    }
 
     float left_probability;
     if (!get_left_probability<false>(
             kg, P, N, 0, has_transmission, left_index, right_index, left_probability)) {
-      pdf = 0.0f;
-      stack_index--;
-      continue;
+      return 0.0f;
     }
 
-    if (traversing_target_branch) {
-      pdf *= go_left ? left_probability : (1.0f - left_probability);
-      stack[stack_index] = go_left ? left_index : right_index;
-    }
-    else {
-      if (randu <= left_probability) { /* traverse left */
-        stack[stack_index] = left_index;
-        randu = randu / left_probability;
-      }
-      else { /* traverse right */
-        stack[stack_index] = right_index;
-        randu = (randu - left_probability) / (1.0f - left_probability);
-      }
+    const bool go_left = (bit_trail & 1) == 0;
+    bit_trail >>= 1;
+    pdf *= go_left ? left_probability : (1.0f - left_probability);
+    node_index = go_left ? left_index : right_index;
+
+    if (pdf == 0) {
+      return 0.0f;
     }
   }
-  return pdf;
+
+  kernel_assert(node_index == target_leaf);
+
+  /* Iterate through leaf node to find the probability of sampling the target emitter. */
+  float target_max_importance = 0.0f;
+  float target_min_importance = 0.0f;
+  float total_max_importance = 0.0f;
+  float total_min_importance = 0.0f;
+  int num_has_importance = 0;
+  for (int i = 0; i < kleaf->num_prims; i++) {
+    const int emitter = -kleaf->child_index + i;
+    float max_importance, min_importance;
+    light_tree_emitter_importance<false>(
+        kg, P, N, 0, has_transmission, emitter, max_importance, min_importance);
+    num_has_importance += (max_importance > 0);
+    if (emitter == target_emitter) {
+      target_max_importance = max_importance;
+      target_min_importance = min_importance;
+    }
+    total_max_importance += max_importance;
+    total_min_importance += min_importance;
+  }
+
+  if (target_max_importance > 0.0f) {
+    return pdf * 0.5f *
+           (target_max_importance / total_max_importance +
+            (total_min_importance > 0 ? target_min_importance / total_min_importance :
+                                        1.0f / num_has_importance));
+  }
+  return 0.0f;
 }
 
 ccl_device float light_tree_pdf_distant(
@@ -1002,7 +785,6 @@ ccl_device float light_tree_pdf_distant(
 
 template<bool in_volume_segment>
 ccl_device bool light_tree_sample(KernelGlobals kg,
-                                  ccl_private const RNGState *rng_state,
                                   float randu,
                                   const float randv,
                                   const float time,
@@ -1040,7 +822,6 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     randu = randu / light_tree_probability;
     pdf_factor *= light_tree_probability;
     ret = light_tree_sample<in_volume_segment>(kg,
-                                               rng_state,
                                                &randu,
                                                randv,
                                                time,
@@ -1057,7 +838,6 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     randu = (randu - light_tree_probability) / (1.0f - light_tree_probability);
     pdf_factor *= (1.0f - light_tree_probability);
     ret = light_tree_sample_distant_lights<in_volume_segment>(kg,
-                                                              rng_state,
                                                               &randu,
                                                               randv,
                                                               time,

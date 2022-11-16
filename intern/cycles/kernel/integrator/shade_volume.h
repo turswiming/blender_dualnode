@@ -700,7 +700,6 @@ ccl_device_forceinline bool integrate_volume_sample_light(
   float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_VOLUME_SEGMENT_LIGHT);
 
   if (!light_sample_from_volume_segment(kg,
-                                        rng_state,
                                         rand_light.x,
                                         rand_light.y,
                                         sd->time,

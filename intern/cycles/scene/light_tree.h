@@ -107,7 +107,6 @@ struct LightTreeBuildNode {
   BoundBox bbox;
   OrientationBounds bcone;
   float energy;
-  float energy_variance;
   LightTreeBuildNode *children[2];
   uint first_prim_index;
   uint num_lights;
@@ -119,14 +118,12 @@ struct LightTreeBuildNode {
                  const BoundBox &b,
                  const OrientationBounds &c,
                  const float &e,
-                 const float &e_var,
                  const uint &bits);
   void init_interior(LightTreeBuildNode *c0,
                      LightTreeBuildNode *c1,
                      const BoundBox &b,
                      const OrientationBounds &c,
                      const float &e,
-                     const float &e_var,
                      const uint &bits);
 };
 
@@ -137,7 +134,6 @@ struct PackedLightTreeNode {
   BoundBox bbox;
   OrientationBounds bcone;
   float energy;
-  float energy_variance;
   union {
     int first_prim_index;   /* leaf nodes contain an index to first primitive. */
     int second_child_index; /* interior nodes contain an index to second child. */

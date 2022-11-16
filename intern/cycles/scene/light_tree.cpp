@@ -240,13 +240,11 @@ void LightTreeBuildNode::init_leaf(const uint &offset,
                                    const BoundBox &b,
                                    const OrientationBounds &c,
                                    const float &e,
-                                   const float &e_var,
                                    const uint &bits)
 {
   bbox = b;
   bcone = c;
   energy = e;
-  energy_variance = e_var;
   first_prim_index = offset;
   num_lights = n;
 
@@ -260,13 +258,11 @@ void LightTreeBuildNode::init_interior(LightTreeBuildNode *c0,
                                        const BoundBox &b,
                                        const OrientationBounds &c,
                                        const float &e,
-                                       const float &e_var,
                                        const uint &bits)
 {
   bbox = b;
   bcone = c;
   energy = e;
-  energy_variance = e_var;
   first_prim_index = 0;
   num_lights = 0;
 
@@ -325,7 +321,6 @@ LightTreeBuildNode *LightTree::recursive_build(int start,
   OrientationBounds node_bcone = OrientationBounds::empty;
   BoundBox centroid_bounds = BoundBox::empty;
   float energy_total = 0.0;
-  float energy_squared_total = 0.0;
   int num_prims = end - start;
 
   for (int i = start; i < end; i++) {
@@ -335,11 +330,7 @@ LightTreeBuildNode *LightTree::recursive_build(int start,
     centroid_bounds.grow(prim.centroid);
 
     energy_total += prim.energy;
-    energy_squared_total += sqr(prim.energy);
   }
-
-  /* Var(X) = E[X^2] - E[X]^2 */
-  float energy_variance = (energy_squared_total / num_prims) - sqr(energy_total / num_prims);
 
   bool try_splitting = num_prims > 1 && len(centroid_bounds.size()) > 0.0f;
   int min_dim = -1, min_bucket = 0;
@@ -391,8 +382,7 @@ LightTreeBuildNode *LightTree::recursive_build(int start,
         start, middle, total_nodes, ordered_prims, bit_trail, depth + 1);
     LightTreeBuildNode *right_node = recursive_build(
         middle, end, total_nodes, ordered_prims, bit_trail | (1u << depth), depth + 1);
-    node->init_interior(
-        left_node, right_node, node_bbox, node_bcone, energy_total, energy_variance, bit_trail);
+    node->init_interior(left_node, right_node, node_bbox, node_bcone, energy_total, bit_trail);
   }
   else {
     int first_prim_offset = ordered_prims.size();
@@ -400,13 +390,7 @@ LightTreeBuildNode *LightTree::recursive_build(int start,
       int prim_num = prims_[i].prim_num;
       ordered_prims.push_back(prims_[prim_num]);
     }
-    node->init_leaf(first_prim_offset,
-                    num_prims,
-                    node_bbox,
-                    node_bcone,
-                    energy_total,
-                    energy_variance,
-                    bit_trail);
+    node->init_leaf(first_prim_offset, num_prims, node_bbox, node_bcone, energy_total, bit_trail);
   }
   return node;
 }
@@ -515,7 +499,6 @@ int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset, int par
   current_node->bbox = node->bbox;
   current_node->bcone = node->bcone;
   current_node->energy = node->energy;
-  current_node->energy_variance = node->energy_variance;
   current_node->bit_trail = node->bit_trail;
   int current_index = offset;
   offset++;

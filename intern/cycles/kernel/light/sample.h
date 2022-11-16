@@ -321,7 +321,6 @@ ccl_device_inline float light_sample_mis_weight_nee(KernelGlobals kg,
  * Uses either a flat distribution or light tree. */
 
 ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
-                                                        ccl_private const RNGState *rng_state,
                                                         float randu,
                                                         const float randv,
                                                         const float time,
@@ -333,18 +332,8 @@ ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
                                                         ccl_private LightSample *ls)
 {
   if (kernel_data.integrator.use_light_tree) {
-    return light_tree_sample<true>(kg,
-                                   rng_state,
-                                   randu,
-                                   randv,
-                                   time,
-                                   P,
-                                   D,
-                                   t,
-                                   SD_BSDF_HAS_TRANSMISSION,
-                                   bounce,
-                                   path_flag,
-                                   ls);
+    return light_tree_sample<true>(
+        kg, randu, randv, time, P, D, t, SD_BSDF_HAS_TRANSMISSION, bounce, path_flag, ls);
   }
   else {
     return light_distribution_sample<true>(kg, randu, randv, time, P, bounce, path_flag, ls);
@@ -365,7 +354,7 @@ ccl_device bool light_sample_from_position(KernelGlobals kg,
 {
   if (kernel_data.integrator.use_light_tree) {
     return light_tree_sample<false>(
-        kg, rng_state, randu, randv, time, P, N, 0, shader_flags, bounce, path_flag, ls);
+        kg, randu, randv, time, P, N, 0, shader_flags, bounce, path_flag, ls);
   }
   else {
     return light_distribution_sample<false>(kg, randu, randv, time, P, bounce, path_flag, ls);
@@ -439,7 +428,7 @@ ccl_device_inline float light_sample_mis_weight_forward_surface(KernelGlobals kg
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
     uint lookup_offset = kernel_data_fetch(object_lookup_offset, sd->object);
     uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
-    pdf *= light_tree_pdf(kg, state, ray_P, N, path_flag, sd->prim - prim_offset + lookup_offset);
+    pdf *= light_tree_pdf(kg, ray_P, N, path_flag, sd->prim - prim_offset + lookup_offset);
   }
   else {
     /* Handled in triangle_light_pdf for effeciency. */
@@ -460,7 +449,7 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(KernelGlobals kg,
   /* Light selection pdf. */
   if (kernel_data.integrator.use_light_tree) {
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-    pdf *= light_tree_pdf(kg, state, P, N, path_flag, ~ls->lamp);
+    pdf *= light_tree_pdf(kg, P, N, path_flag, ~ls->lamp);
   }
   else {
     pdf *= light_distribution_pdf_lamp(kg);

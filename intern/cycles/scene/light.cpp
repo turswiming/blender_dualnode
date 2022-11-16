@@ -456,7 +456,6 @@ void LightManager::device_update_distribution(Device *device,
         }
       }
       else {
-        light_tree_nodes[index].energy_variance = node.energy_variance;
         light_tree_nodes[index].child_index = node.second_child_index;
       }
     }
