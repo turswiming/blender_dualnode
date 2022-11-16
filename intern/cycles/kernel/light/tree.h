@@ -448,7 +448,7 @@ ccl_device_inline void sample_resevoir(const int current_index,
  * lower bounds */
 template<bool in_volume_segment>
 ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
-                                                 ccl_private float *randu,
+                                                 ccl_private float *rand,
                                                  const float3 P,
                                                  const float3 N_or_D,
                                                  const float t,
@@ -456,80 +456,74 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  const ccl_global KernelLightTreeNode *knode,
                                                  ccl_private float *pdf_factor)
 {
-  /* the first emitter in the cluster */
-  int selected_prim_index_max = -knode->child_index;
-  float max_importance, min_importance;
-  light_tree_emitter_importance<in_volume_segment>(
-      kg, P, N_or_D, t, has_transmission, selected_prim_index_max, max_importance, min_importance);
-  float selected_max_importance = max_importance;
-  float total_max_importance = max_importance;
+  float2 importance;
+  float2 selected_importance = zero_float2();
+  float2 total_importance = zero_float2();
+  int selected_index = -1;
 
-  int selected_prim_index_min = selected_prim_index_max;
-  float total_min_importance = min_importance;
-  float selected_min_importance = min_importance;
-
-  /* Mark emitters with zero importance. Used for resevoir when total_min_importance = 0 */
+  /* Mark emitters with zero importance. Used for resevoir when total minimum importance = 0 */
   kernel_assert(knode->num_prims <= sizeof(uint) * 8);
-  uint has_importance = max_importance > 0;
+  uint has_importance = 0;
 
-  for (int i = 1; i < knode->num_prims; i++) {
-    int current_prim_index = -knode->child_index + i;
+  bool sample_max = (*rand > 0.5f); /* sampling using the maximum importance */
+  *rand = *rand * 2.0f - float(sample_max);
+
+  for (int i = 0; i < knode->num_prims; i++) {
+    int current_index = -knode->child_index + i;
+    /* maximum importance = importance[0], mininum importance = importance[1] */
     light_tree_emitter_importance<in_volume_segment>(
-        kg, P, N_or_D, t, has_transmission, current_prim_index, max_importance, min_importance);
+        kg, P, N_or_D, t, has_transmission, current_index, importance[0], importance[1]);
 
-    has_importance |= ((max_importance > 0) << i);
+    sample_resevoir(current_index,
+                    importance[!sample_max],
+                    selected_index,
+                    selected_importance[!sample_max],
+                    total_importance[!sample_max],
+                    rand);
+    if (selected_index == current_index) {
+      selected_importance[sample_max] = importance[sample_max];
+    }
+    total_importance[sample_max] += importance[sample_max];
 
-    /* resevoir sampling using the maximum importance */
-    sample_resevoir(current_prim_index,
-                    max_importance,
-                    selected_prim_index_max,
-                    selected_max_importance,
-                    total_max_importance,
-                    randu);
-
-    /* resevoir sampling using the mininum importance */
-    sample_resevoir(current_prim_index,
-                    min_importance,
-                    selected_prim_index_min,
-                    selected_min_importance,
-                    total_min_importance,
-                    randu);
+    has_importance |= ((importance[0] > 0) << i);
   }
 
-  if (total_max_importance == 0.0f) {
+  if (total_importance[0] == 0.0f) {
     return -1;
   }
 
-  if (total_min_importance == 0.0f) {
-    /* uniformly sample emitters with positive max_importance */
-    selected_prim_index_min = -1;
-    for (int i = 0; i < knode->num_prims; i++) {
-      int current_prim_index = -knode->child_index + i;
-      min_importance = float(has_importance & 1);
-      has_importance >>= 1;
-      sample_resevoir(current_prim_index,
-                      min_importance,
-                      selected_prim_index_min,
-                      selected_min_importance,
-                      total_min_importance,
-                      randu);
+  if (total_importance[1] == 0.0f) {
+    /* uniformly sample emitters with positive maximum importance */
+    if (sample_max) {
+      selected_importance[1] = 1.0f;
+      total_importance[1] = float(popcount(has_importance));
+    }
+    else {
+      selected_index = -1;
+      for (int i = 0; i < knode->num_prims; i++) {
+        int current_index = -knode->child_index + i;
+        sample_resevoir(current_index,
+                        float(has_importance & 1),
+                        selected_index,
+                        selected_importance[1],
+                        total_importance[1],
+                        rand);
+        has_importance >>= 1;
+      }
+      light_tree_emitter_importance<in_volume_segment>(kg,
+                                                       P,
+                                                       N_or_D,
+                                                       t,
+                                                       has_transmission,
+                                                       selected_index,
+                                                       selected_importance[0],
+                                                       importance[1]);
     }
   }
 
-  int selected_prim_index;
-  if (*randu < 0.5f) {
-    selected_prim_index = selected_prim_index_max;
-    *randu = *randu * 2.0f;
-  }
-  else {
-    selected_prim_index = selected_prim_index_min;
-    *randu = *randu * 2.0f - 1.0f;
-  }
+  *pdf_factor = average(selected_importance / total_importance);
 
-  *pdf_factor = 0.5f * (selected_min_importance / total_min_importance +
-                        selected_max_importance / total_max_importance);
-
-  return selected_prim_index;
+  return selected_index;
 }
 
 template<bool in_volume_segment>
@@ -950,6 +944,7 @@ ccl_device float light_tree_pdf(KernelGlobals kg,
     float left_probability;
     if (!get_left_probability<false>(
             kg, P, N, 0, has_transmission, left_index, right_index, left_probability)) {
+      pdf = 0.0f;
       stack_index--;
       continue;
     }
