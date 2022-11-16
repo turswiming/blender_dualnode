@@ -197,37 +197,41 @@ void LightTreePrimitive::calculate_bcone(Scene *scene)
 
 void LightTreePrimitive::calculate_energy(Scene *scene)
 {
-  float3 strength = make_float3(0.0f);
-
   if (is_triangle()) {
     Object *object = scene->objects[object_id];
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
     Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
 
     /* to-do: need a better way to handle this when textures are used. */
-    if (!shader->is_constant_emission(&strength)) {
-      strength = make_float3(1.0f);
-    }
+    float3 shader_estimate;
+    shader->estimate_emission(shader_estimate);
 
     float area = triangle_area(vertices[0], vertices[1], vertices[2]);
-    strength *= area;
-    energy = scene->shader_manager->linear_rgb_to_gray(strength);
+    energy = area * scene->shader_manager->linear_rgb_to_gray(shader_estimate);
   }
   else {
     Light *lamp = scene->lights[object_id];
-    strength = lamp->get_strength();
     LightType type = lamp->get_light_type();
+
+    float3 strength = lamp->get_strength();
     if (type == LIGHT_AREA) {
       strength *= 0.25f; /* eval_fac scaling in `area.h` */
     }
     else if (type == LIGHT_SPOT || type == LIGHT_POINT) {
       strength *= 0.25f * M_1_PI_F; /* eval_fac scaling in `spot.h` and `point.h` */
     }
-    energy = scene->shader_manager->linear_rgb_to_gray(strength);
-    if (type == LIGHT_BACKGROUND) {
+    else if (type == LIGHT_BACKGROUND) {
       /* integrate over cosine-weighted hemisphere */
-      energy = lamp->get_average_radiance() * M_PI_F;
+      strength *= lamp->get_average_radiance() * M_PI_F;
     }
+
+    if (lamp->get_shader()) {
+      float3 shader_estimate;
+      lamp->get_shader()->estimate_emission(shader_estimate);
+      strength *= shader_estimate;
+    }
+
+    energy = scene->shader_manager->linear_rgb_to_gray(strength);
   }
 }
 

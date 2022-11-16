@@ -217,8 +217,10 @@ Shader::~Shader()
   delete graph;
 }
 
-bool Shader::is_constant_emission(float3 *emission)
+bool Shader::estimate_emission(float3 &estimate)
 {
+  estimate = one_float3();
+
   /* If the shader has AOVs, they need to be evaluated, so we can't skip the shader. */
   foreach (ShaderNode *node, graph->nodes) {
     if (node->special_type == SHADER_SPECIAL_TYPE_OUTPUT_AOV) {
@@ -232,35 +234,38 @@ bool Shader::is_constant_emission(float3 *emission)
     return false;
   }
 
-  if (surf->link->parent->type == EmissionNode::get_node_type()) {
-    EmissionNode *node = (EmissionNode *)surf->link->parent;
+  /* Only supports Emission/Background nodes with Light Fallof for now, not arbitrary
+   * shader graphs. */
+  ShaderNode *emission_node = surf->link->parent;
 
-    assert(node->input("Color"));
-    assert(node->input("Strength"));
-
-    if (node->input("Color")->link || node->input("Strength")->link) {
-      return false;
-    }
-
-    *emission = node->get_color() * node->get_strength();
-  }
-  else if (surf->link->parent->type == BackgroundNode::get_node_type()) {
-    BackgroundNode *node = (BackgroundNode *)surf->link->parent;
-
-    assert(node->input("Color"));
-    assert(node->input("Strength"));
-
-    if (node->input("Color")->link || node->input("Strength")->link) {
-      return false;
-    }
-
-    *emission = node->get_color() * node->get_strength();
-  }
-  else {
+  if (!(emission_node->type == EmissionNode::get_node_type() ||
+        emission_node->type == BackgroundNode::get_node_type())) {
     return false;
   }
 
-  return true;
+  ShaderInput *color_in = emission_node->input("Color");
+  ShaderInput *strength_in = emission_node->input("Strength");
+  assert(color_in);
+  assert(strength_in);
+
+  if (!color_in->link) {
+    estimate *= emission_node->get_float3(color_in->socket_type);
+  }
+  if (!strength_in->link) {
+    estimate *= emission_node->get_float(strength_in->socket_type);
+  }
+  else {
+    ShaderNode *falloff_node = strength_in->link->parent;
+    if (falloff_node->type == LightFalloffNode::get_node_type()) {
+      ShaderInput *falloff_strength_in = falloff_node->input("Strength");
+      if (!falloff_strength_in->link) {
+        estimate *= falloff_node->get_float(falloff_strength_in->socket_type);
+      }
+    }
+  }
+
+  const bool is_constant = !color_in->link && !strength_in->link;
+  return is_constant;
 }
 
 void Shader::set_graph(ShaderGraph *graph_)
@@ -532,7 +537,7 @@ void ShaderManager::device_update_common(Device * /*device*/,
 
     /* constant emission check */
     float3 constant_emission = zero_float3();
-    if (shader->is_constant_emission(&constant_emission))
+    if (shader->estimate_emission(constant_emission))
       flag |= SD_HAS_CONSTANT_EMISSION;
 
     uint32_t cryptomatte_id = util_murmur_hash3(shader->name.c_str(), shader->name.length(), 0);

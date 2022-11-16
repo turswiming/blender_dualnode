@@ -131,11 +131,12 @@ class Shader : public Node {
   Shader();
   ~Shader();
 
-  /* Checks whether the shader consists of just a emission node with fixed inputs that's connected
-   * directly to the output.
-   * If yes, it sets the content of emission to the constant value (color * strength), which is
-   * then used for speeding up light evaluation. */
-  bool is_constant_emission(float3 *emission);
+  /* Estimate emission of this shader based on the shader graph. This works only in very simple
+   * cases. But it helps improve light importance sampling in common cases.
+   *
+   * If the emission is fully constant, returns true, so that shader evaluation can be skipped
+   * entirely for a light. */
+  bool estimate_emission(float3 &estimate);
 
   void set_graph(ShaderGraph *graph);
   void tag_update(Scene *scene);
