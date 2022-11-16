@@ -456,9 +456,8 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                                                  const ccl_global KernelLightTreeNode *knode,
                                                  ccl_private float *pdf_factor)
 {
-  float2 importance;
-  float2 selected_importance = zero_float2();
-  float2 total_importance = zero_float2();
+  float selected_importance[2] = {0.0f, 0.0f};
+  float total_importance[2] = {0.0f, 0.0f};
   int selected_index = -1;
 
   /* Mark emitters with zero importance. Used for resevoir when total minimum importance = 0 */
@@ -471,6 +470,7 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   for (int i = 0; i < knode->num_prims; i++) {
     int current_index = -knode->child_index + i;
     /* maximum importance = importance[0], mininum importance = importance[1] */
+    float importance[2];
     light_tree_emitter_importance<in_volume_segment>(
         kg, P, N_or_D, t, has_transmission, current_index, importance[0], importance[1]);
 
@@ -510,18 +510,15 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                         rand);
         has_importance >>= 1;
       }
-      light_tree_emitter_importance<in_volume_segment>(kg,
-                                                       P,
-                                                       N_or_D,
-                                                       t,
-                                                       has_transmission,
-                                                       selected_index,
-                                                       selected_importance[0],
-                                                       importance[1]);
+
+      float discard;
+      light_tree_emitter_importance<in_volume_segment>(
+          kg, P, N_or_D, t, has_transmission, selected_index, selected_importance[0], discard);
     }
   }
 
-  *pdf_factor = average(selected_importance / total_importance);
+  *pdf_factor = 0.5f * (selected_importance[0] / total_importance[0] +
+                        selected_importance[1] / total_importance[1]);
 
   return selected_index;
 }
