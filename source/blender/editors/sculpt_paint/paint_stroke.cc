@@ -102,6 +102,9 @@ typedef struct PaintStroke {
 
   BezierSpline2f *spline;
   BezierSpline3f *world_spline;
+#ifdef QUAD_BEZ_SPLIT
+  QuadSpline3f *final_world_spline;
+#endif
 
   float last_mouse_position[2];
   float last_world_space_position[3];
@@ -218,13 +221,13 @@ static void paint_project_cubic(bContext *C,
   float last_z_pos[3];
   bool have_last_z = false;
 
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < stroke->world_spline->components(); i++) {
     if (!SCULPT_stroke_get_location(C, bezier3d.ps[i], mvals[i], true)) {
       if (!have_last_z) {
         if (stroke->world_spline->segments.size() > 0) {
-          copy_v3_v3(
-              last_z_pos,
-              stroke->world_spline->segments[stroke->world_spline->segments.size() - 1].bezier.ps[3]);
+          copy_v3_v3(last_z_pos,
+                     stroke->world_spline->segments[stroke->world_spline->segments.size() - 1]
+                         .bezier.ps[3]);
         }
         else {
           copy_v3_v3(last_z_pos, stroke->last_world_space_position);
@@ -318,6 +321,10 @@ static void paint_brush_make_spline(bContext *C, PaintStroke *stroke)
     stroke->stroke_distance_world += stroke->world_spline->segments[0].bezier.length;
     stroke->world_spline->pop_front();
   }
+
+#ifdef QUAD_BEZ_SPLIT
+  *stroke->final_world_spline = stroke->world_spline->split_to_quadratics();
+#endif
 }
 
 #ifdef DRAW_DEBUG_VIS
@@ -327,6 +334,14 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   Object *ob = CTX_data_active_object(C);
 
   if (!ob || !ob->sculpt || !ob->sculpt->cache || !stroke->world_spline) {
+    return;
+  }
+
+  // auto *spline = stroke->world_spline;
+  auto quadspline = stroke->world_spline->split_to_quadratics();
+  auto *spline = &quadspline;
+
+  if (spline->segments.size() == 0) {
     return;
   }
 
@@ -346,24 +361,43 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   immBegin(GPU_PRIM_LINE_STRIP, steps);
 
   float s = 0.0f;
-  float ds = stroke->world_spline->length / (steps - 1);
+  float ds = 0.999 * spline->length / (steps - 1);
 
   for (int i = 0; i < steps; i++, s += ds) {
-    float3 co = stroke->world_spline->evaluate(s);
+    float3 co = spline->evaluate(s);
 
     mul_v3_m4v3(co, ob->object_to_world, co);
     immVertex3fv(pos, co);
   }
   immEnd();
 
+#  if 1
+  immUniformColor4ub(255, 0, 0, 170);
+  int components = spline->components();
+
+  immBegin(GPU_PRIM_POINTS, spline->segments.size() * components);
+
+  for (auto &segment : spline->segments) {
+    for (size_t i = 0; i < components; i++) {
+      float3 co = segment.bezier.ps[i];
+
+      mul_v3_m4v3(co, ob->object_to_world, co);
+      immVertex3fv(pos, co);
+    }
+  }
+
+  immEnd();
+#  endif
+
+#  if 0
   s = 0.0f;
   ds = 0.1f;
-  steps = (int)floorf(stroke->world_spline->length / ds + 0.5f);
+  steps = (int)floorf(spline->length / ds + 0.5f);
 
   immUniformColor4ub(255, 0, 0, 170);
   immBegin(GPU_PRIM_POINTS, steps);
   for (int i = 0; i < steps; i++, s += ds) {
-    float3 co = stroke->world_spline->evaluate(s);
+    float3 co = spline->evaluate(s);
     mul_v3_m4v3(co, ob->object_to_world, co);
 
     immVertex3fv(pos, co);
@@ -383,6 +417,7 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
     }
     immEnd();
   }
+#  endif
 
   immUnbindProgram();
 
@@ -1251,8 +1286,11 @@ PaintStroke *paint_stroke_new(bContext *C,
   }
 
   if (stroke->need_roll_mapping) {
-    stroke->spline = MEM_new<blender::BezierSpline2f>("BezierSpline2f");
-    stroke->world_spline = MEM_new<blender::BezierSpline3f>("BezierSpline3f");
+    stroke->spline = MEM_new<BezierSpline2f>("BezierSpline2f");
+    stroke->world_spline = MEM_new<BezierSpline3f>("BezierSpline3f");
+#ifdef QUAD_BEZ_SPLIT
+    stroke->final_world_spline = MEM_new<QuadSpline3f>("QuadSpline3f");
+#endif
   }
 
   if (stroke->stroke_mode == BRUSH_STROKE_INVERT) {
@@ -1325,6 +1363,13 @@ void paint_stroke_free(bContext *C, wmOperator *UNUSED(op), PaintStroke *stroke)
 
   ED_region_draw_cb_exit(region->type, stroke->debug_draw_handle);
   ED_region_tag_redraw(region);
+#endif
+
+  MEM_delete<BezierSpline3f>(stroke->world_spline);
+  MEM_delete<BezierSpline2f>(stroke->spline);
+
+#ifdef QUAD_BEZ_SPLIT
+  MEM_delete<QuadSpline3f>(stroke->final_world_spline);
 #endif
 
   MEM_SAFE_FREE(stroke);
@@ -2058,7 +2103,12 @@ void paint_stroke_spline_uv(
     PaintStroke *stroke, StrokeCache *cache, const float co[3], float r_out[3], float r_tan[3])
 {
   float3 tan;
+
+#ifdef QUAD_BEZ_SPLIT
+  float3 p = stroke->final_world_spline->closest_point(co, r_out[1], tan, r_out[0]);
+#else
   float3 p = stroke->world_spline->closest_point(co, r_out[1], tan, r_out[0]);
+#endif
 
   r_tan = tan;
   r_out[0] = len_v3v3(p, co);
@@ -2078,5 +2128,9 @@ void paint_stroke_spline_uv(
 
 float paint_stroke_spline_length(PaintStroke *stroke)
 {
+#ifdef QUAD_BEZ_SPLIT
+  return stroke->final_world_spline->length;
+#else
   return stroke->world_spline->length;
+#endif
 }

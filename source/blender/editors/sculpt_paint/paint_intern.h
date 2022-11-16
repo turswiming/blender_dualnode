@@ -17,11 +17,19 @@
 
 #ifdef __cplusplus
 namespace blender {
-template<typename Float, int axes> class BezierSpline;
-}
+template<typename Float, int axes, int table_size> class QuadBezier;
+template<typename Float, int axes, int table_size> class CubicBezier;
+template<typename Float, int axes, typename BezierType> class EvenSpline;
+}  // namespace blender
 
-using BezierSpline2f = blender::BezierSpline<float, 2>;
-using BezierSpline3f = blender::BezierSpline<float, 3>;
+//#  define QUAD_BEZ_SPLIT
+
+using QuadSpline2f = blender::EvenSpline<float, 2, blender::QuadBezier<float, 2, 512>>;
+using QuadSpline3f = blender::EvenSpline<float, 3, blender::QuadBezier<float, 3, 512>>;
+
+using BezierSpline2f = blender::EvenSpline<float, 2, blender::CubicBezier<float, 2, 512>>;
+using BezierSpline3f = blender::EvenSpline<float, 3, blender::CubicBezier<float, 3, 512>>;
+
 extern "C" {
 #else
 typedef struct BezierSpline2f BezierSpline2f;
