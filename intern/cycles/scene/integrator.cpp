@@ -102,10 +102,8 @@ NODE_DEFINE(Integrator)
   SOCKET_FLOAT(adaptive_threshold, "Adaptive Threshold", 0.01f);
   SOCKET_INT(adaptive_min_samples, "Adaptive Min Samples", 0);
 
-  SOCKET_FLOAT(light_sampling_threshold, "Light Sampling Threshold", 0.01f);
-
-  SOCKET_BOOLEAN(use_light_tree, "Use light tree to optimize many light sampling", false);
-  SOCKET_FLOAT(splitting_threshold, "Splitting threshold", 0.85f);
+  SOCKET_BOOLEAN(use_light_tree, "Use light tree to optimize many light sampling", true);
+  SOCKET_FLOAT(light_sampling_threshold, "Light Sampling Threshold", 0.0f);
 
   static NodeEnum sampling_pattern_enum;
   sampling_pattern_enum.insert("sobol_burley", SAMPLING_PATTERN_SOBOL_BURLEY);
@@ -184,9 +182,6 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->direct_light_sampling_type = DIRECT_LIGHT_SAMPLING_MIS;
 #endif
 
-  kintegrator->use_light_tree = scene->integrator->use_light_tree;
-  kintegrator->splitting_threshold = scene->integrator->splitting_threshold;
-
   /* Transparent Shadows
    * We only need to enable transparent shadows, if we actually have
    * transparent shaders in the scene. Otherwise we can disable it
@@ -256,6 +251,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->sampling_pattern = sampling_pattern;
   kintegrator->scrambling_distance = scrambling_distance;
 
+  kintegrator->use_light_tree = scene->integrator->use_light_tree;
   if (light_sampling_threshold > 0.0f) {
     kintegrator->light_inv_rr_threshold = 1.0f / light_sampling_threshold;
   }

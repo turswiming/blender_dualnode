@@ -381,7 +381,6 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         col = layout.column(align=True)
         col.prop(cscene, "min_light_bounces")
         col.prop(cscene, "min_transparent_bounces")
-        col.prop(cscene, "light_sampling_threshold", text="Light Threshold")
 
         for view_layer in scene.view_layers:
             if view_layer.samples > 0:
@@ -390,8 +389,8 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
                 break
 
 
-class CYCLES_RENDER_PT_sampling_light_tree(CyclesButtonsPanel, Panel):
-    bl_label = "Many Lights Sampling"
+class CYCLES_RENDER_PT_sampling_lights(CyclesButtonsPanel, Panel):
+    bl_label = "Lights"
     bl_parent_id = "CYCLES_RENDER_PT_sampling"
     bl_options = {'DEFAULT_CLOSED'}
 
@@ -399,8 +398,6 @@ class CYCLES_RENDER_PT_sampling_light_tree(CyclesButtonsPanel, Panel):
         layout = self.layout
         scene = context.scene
         cscene = scene.cycles
-
-        layout.prop(cscene, "use_light_tree", text="")
 
     def draw(self, context):
         layout = self.layout
@@ -410,9 +407,11 @@ class CYCLES_RENDER_PT_sampling_light_tree(CyclesButtonsPanel, Panel):
         scene = context.scene
         cscene = scene.cycles
 
-        layout.active = cscene.use_light_tree
         col = layout.column(align=True)
-        col.prop(cscene, "splitting_threshold", text="Split Threshold")
+        col.prop(cscene, "use_light_tree")
+        sub = col.row()
+        sub.prop(cscene, "light_sampling_threshold", text="Light Threshold")
+        sub.active = not cscene.use_light_tree
 
 
 class CYCLES_RENDER_PT_subdivision(CyclesButtonsPanel, Panel):
@@ -2389,8 +2388,8 @@ classes = (
     CYCLES_RENDER_PT_sampling_render_denoise,
     CYCLES_RENDER_PT_sampling_path_guiding,
     CYCLES_RENDER_PT_sampling_path_guiding_debug,
+    CYCLES_RENDER_PT_sampling_lights,
     CYCLES_RENDER_PT_sampling_advanced,
-    CYCLES_RENDER_PT_sampling_light_tree,
     CYCLES_RENDER_PT_light_paths,
     CYCLES_RENDER_PT_light_paths_max_bounces,
     CYCLES_RENDER_PT_light_paths_clamping,

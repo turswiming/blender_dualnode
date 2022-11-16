@@ -318,7 +318,7 @@ ccl_device bool light_tree_should_split(KernelGlobals kg,
    * later. */
   return false;
 
-  const float splitting_threshold = kernel_data.integrator.splitting_threshold;
+  const float splitting_threshold = 0.5f;
   if (splitting_threshold == 0.0f) {
     return false;
   }

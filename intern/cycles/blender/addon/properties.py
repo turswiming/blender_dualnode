@@ -483,16 +483,8 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
 
     use_light_tree: BoolProperty(
         name="Light Tree",
-        description="Samples many lights more efficiently",
+        description="Sample multiple lights more efficiently based on estimated contribution at every shading point",
         default=True,
-    )
-
-    splitting_threshold: FloatProperty(
-        name="Splitting",
-        description="Amount of light tree emitters to consider at a time, from one light at 0.0, "
-        "to adaptively more lights as needed, to all branches at 1.0",
-        min=0.0, max=1.0,
-        default=0.85,
     )
 
     min_light_bounces: IntProperty(
