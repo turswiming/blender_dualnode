@@ -2322,21 +2322,19 @@ static void copy_tiled_textures(Image *ima,
 
     char dest_tile_path[FILE_MAX];
     BLI_path_join(dest_tile_path, FILE_MAX, dest_dir.c_str(), dest_filename);
+    BLI_str_replace_char(dest_tile_path, SEP, ALTSEP);
 
-    if (!allow_overwrite && BLI_exists(dest_tile_path)) {
+    if (!allow_overwrite && usd_path_exists(dest_tile_path)) {
       continue;
     }
 
-    if (BLI_path_cmp_normalized(src_tile_path, dest_tile_path) == 0) {
+    if (usd_paths_equal(src_tile_path, dest_tile_path)) {
       /* Source and destination paths are the same, don't copy. */
       continue;
     }
 
-    std::cout << "Copying texture tile from " << src_tile_path << " to " << dest_tile_path
-              << std::endl;
-
     /* Copy the file. */
-    if (BLI_copy(src_tile_path, dest_tile_path) != 0) {
+    if (!copy_usd_asset(src_tile_path, dest_tile_path, allow_overwrite)) {
       WM_reportf(RPT_WARNING,
                  "USD export:  couldn't copy texture tile from %s to %s",
                  src_tile_path,
