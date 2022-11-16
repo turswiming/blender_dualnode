@@ -371,7 +371,7 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   }
   immEnd();
 
-#  if 1
+#  if 0
   immUniformColor4ub(255, 0, 0, 170);
   int components = spline->components();
 
