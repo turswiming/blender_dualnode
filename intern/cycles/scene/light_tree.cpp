@@ -59,8 +59,11 @@ OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds
   return OrientationBounds({new_axis, theta_o, theta_e});
 }
 
-LightTreePrimitive::LightTreePrimitive(Scene *scene, int prim_id, int object_id)
-    : prim_id(prim_id), object_id(object_id)
+LightTreePrimitive::LightTreePrimitive(Scene *scene,
+                                       int prim_id,
+                                       int object_id,
+                                       bool is_double_sided)
+    : prim_id(prim_id), object_id(object_id), is_double_sided(is_double_sided)
 {
   if (is_triangle()) {
     calculate_triangle_vertices(scene);
@@ -148,11 +151,16 @@ void LightTreePrimitive::calculate_bcone(Scene *scene)
   bcone = OrientationBounds::empty;
 
   if (is_triangle()) {
-    bcone.axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+    if (is_double_sided) {
+      /* Any vector in the plane */
+      bcone.axis = safe_normalize(vertices[0] - vertices[1]);
+      bcone.theta_o = M_PI_2_F;
+    }
+    else {
+      bcone.axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+      bcone.theta_o = 0;
+    }
 
-    /* TODO: instance emissive triangle twice in the light tree when it is double-sided. Right now,
-     * we assume that the normal axis is within pi radians of the triangle normal. */
-    bcone.theta_o = M_PI_F;
     bcone.theta_e = M_PI_2_F;
   }
   else {

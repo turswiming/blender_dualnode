@@ -63,6 +63,7 @@ struct LightTreePrimitive {
 
   /* Only used for emissive triangles */
   float3 vertices[3];
+  bool is_double_sided;
 
   float3 centroid;
   BoundBox bbox;
@@ -70,7 +71,7 @@ struct LightTreePrimitive {
   float energy;
   int prim_num;
 
-  LightTreePrimitive(Scene *scene, int prim_id, int object_id);
+  LightTreePrimitive(Scene *scene, int prim_id, int object_id, bool is_double_sided);
   void calculate_triangle_vertices(Scene *scene);
   void calculate_centroid(Scene *scene);
   void calculate_bbox(Scene *scene);

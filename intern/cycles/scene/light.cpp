@@ -295,7 +295,7 @@ void LightManager::device_update_distribution(Device *device,
     if (light->is_enabled) {
       if (light_tree_enabled) {
         /* -prim_id - 1 is a light source index. */
-        LightTreePrimitive light_prim(scene, ~device_light_index, scene_light_index);
+        LightTreePrimitive light_prim(scene, ~device_light_index, scene_light_index, false);
 
         /* Distant lights get added to a separate vector. */
         if (light->light_type == LIGHT_DISTANT || light->light_type == LIGHT_BACKGROUND) {
@@ -320,6 +320,8 @@ void LightManager::device_update_distribution(Device *device,
 
   /* Similarly, we also want to keep track of the index of triangles that are emissive. */
   int object_id = 0;
+  /* TODO: add an option in the UI */
+  bool is_double_sided = true;
   foreach (Object *object, scene->objects) {
     if (progress.get_cancel())
       return;
@@ -345,7 +347,7 @@ void LightManager::device_update_distribution(Device *device,
 
       if (shader->get_use_mis() && shader->has_surface_emission) {
         if (light_tree_enabled) {
-          LightTreePrimitive light_prim(scene, i, object_id);
+          LightTreePrimitive light_prim(scene, i, object_id, is_double_sided);
           light_prims.push_back(light_prim);
         }
 
