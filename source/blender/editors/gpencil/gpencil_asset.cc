@@ -8,6 +8,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+#include "BLI_vector.hh"
 
 #include "BLT_translation.h"
 
@@ -79,11 +80,8 @@ typedef struct tGPDasset {
   /** Drop initial position. */
   int drop[2];
 
-  /* Data to keep a reference of the asset data inserted in the target object. */
-  /** Number of elements in data. */
-  int data_len;
-  /** Array of data with all strokes append. */
-  tGPDAssetStroke *data;
+  /* Keep a reference of the asset data inserted in the target object. */
+  blender::Vector<tGPDAssetStroke> asset_strokes;
 
 } tGPDasset;
 
@@ -499,10 +497,8 @@ static Material *gpencil_asset_material_get_from_id(ID *id, const int slot_index
 static void gpencil_asset_set_selection(tGPDasset *tgpa, const bool enable)
 {
 
-  for (int index = 0; index < tgpa->data_len; index++) {
-    tGPDAssetStroke *data = &tgpa->data[index];
-
-    bGPDframe *gpf = data->gpf;
+  for (tGPDAssetStroke &data : tgpa->asset_strokes) {
+    bGPDframe *gpf = data.gpf;
     if (enable) {
       gpf->flag |= GP_FRAME_SELECT;
     }
@@ -510,7 +506,7 @@ static void gpencil_asset_set_selection(tGPDasset *tgpa, const bool enable)
       gpf->flag &= ~GP_FRAME_SELECT;
     }
 
-    bGPDstroke *gps = data->gps;
+    bGPDstroke *gps = data.gps;
     if (enable) {
       gps->flag |= GP_STROKE_SELECT;
     }
@@ -557,23 +553,24 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
   float vec[3];
   sub_v3_v3v3(vec, dest_pt, tgpa->ob->loc);
 
-  /* Count total of strokes. */
-  tgpa->data_len = 0;
+  /* Verify something to do. */
+  int data_len = 0;
   LISTBASE_FOREACH (bGPDlayer *, gpl_asset, &gpd_asset->layers) {
+    if (data_len > 0) {
+      break;
+    }
     LISTBASE_FOREACH (bGPDframe *, gpf_asset, &gpl_asset->frames) {
-      tgpa->data_len += BLI_listbase_count(&gpf_asset->strokes);
+      data_len += BLI_listbase_count(&gpf_asset->strokes);
+      if (data_len > 0) {
+        break;
+      }
     }
   }
 
   /* If the asset is empty, exit. */
-  if (tgpa->data_len == 0) {
+  if (data_len == 0) {
     return false;
   }
-
-  /* Alloc array of strokes. */
-  tgpa->data = static_cast<tGPDAssetStroke *>(
-      MEM_calloc_arrayN(tgpa->data_len, sizeof(tGPDAssetStroke), __func__));
-  int data_index = 0;
 
   LISTBASE_FOREACH (bGPDlayer *, gpl_asset, &gpd_asset->layers) {
     /* Check if Layer is in target data block. */
@@ -657,15 +654,10 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
         BKE_gpencil_stroke_boundingbox_calc(gps_target);
 
         /* Add the reference to the stroke. */
-        tGPDAssetStroke *data = &tgpa->data[data_index];
-        data->gpl = gpl_target;
-        data->gpf = gpf_target;
-        data->gps = gps_target;
-        data->is_new_gpl = is_new_gpl;
-        data->is_new_gpf = is_new_gpf;
-        data->slot_index = (is_new_mat) ? gps_target->mat_nr + 1 : -1;
-        data_index++;
-
+        int matidx = is_new_mat ? (gps_target->mat_nr + 1) : -1;
+        tGPDAssetStroke data = {
+            gpl_target, gpf_target, gps_target, matidx, is_new_gpl, is_new_gpf};
+        tgpa->asset_strokes.append(data);
         /* Reset flags. */
         is_new_gpl = false;
         is_new_gpf = false;
@@ -700,9 +692,7 @@ static void gpencil_asset_import_exit(bContext *C, wmOperator *op)
     bGPdata *gpd = static_cast<bGPdata *>(tgpa->gpd);
 
     /* Free data. */
-    MEM_SAFE_FREE(tgpa->data);
-
-    MEM_SAFE_FREE(tgpa);
+    MEM_delete(tgpa);
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   }
 
@@ -730,8 +720,9 @@ static tGPDasset *gpencil_session_init_asset_import(bContext *C, wmOperator *op)
     return nullptr;
   }
 
-  tGPDasset *tgpa = static_cast<tGPDasset *>(
-      MEM_callocN(sizeof(tGPDasset), "GPencil Asset Import Data"));
+  tGPDasset *tgpa = MEM_new<tGPDasset>(__func__);
+
+  // MEM_callocN(sizeof(tGPDasset), "GPencil Asset Import Data"));
 
   /* Save current settings. */
   tgpa->bmain = CTX_data_main(C);
@@ -752,8 +743,7 @@ static tGPDasset *gpencil_session_init_asset_import(bContext *C, wmOperator *op)
   /* Asset GP data block. */
   tgpa->gpd_asset = (bGPdata *)id;
 
-  tgpa->data_len = 0;
-  tgpa->data = nullptr;
+  tgpa->asset_strokes.clear();
 
   return tgpa;
 }
@@ -784,7 +774,7 @@ static int gpencil_asset_import_invoke(bContext *C, wmOperator *op, const wmEven
   /* Try to initialize context data needed. */
   if (!gpencil_asset_import_init(C, op)) {
     if (op->customdata) {
-      MEM_freeN(op->customdata);
+      MEM_delete(op->customdata);
     }
     return OPERATOR_CANCELLED;
   }
