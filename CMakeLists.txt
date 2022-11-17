@@ -257,6 +257,12 @@ if(UNIX AND NOT (APPLE OR HAIKU))
 
     option(WITH_GHOST_WAYLAND_DYNLOAD  "Enable runtime dynamic WAYLAND libraries loading" ON)
     mark_as_advanced(WITH_GHOST_WAYLAND_DYNLOAD)
+
+    set(WITH_GHOST_WAYLAND_APP_ID "" CACHE STRING "\
+The application ID used for Blender (use default when an empty string), \
+this can be used to differentiate Blender instances by version or branch for example."
+    )
+    mark_as_advanced(WITH_GHOST_WAYLAND_APP_ID)
   endif()
 endif()
 
@@ -339,8 +345,12 @@ if(APPLE)
 else()
   set(WITH_COREAUDIO OFF)
 endif()
-if(UNIX AND NOT APPLE)
-  option(WITH_JACK          "Enable JACK Support (http://www.jackaudio.org)" ON)
+if(NOT WIN32)
+  if(APPLE)
+    option(WITH_JACK          "Enable JACK Support (http://www.jackaudio.org)" OFF)
+  else()
+    option(WITH_JACK          "Enable JACK Support (http://www.jackaudio.org)" ON)
+  endif()
   option(WITH_JACK_DYNLOAD  "Enable runtime dynamic JACK libraries loading" OFF)
 else()
   set(WITH_JACK OFF)
