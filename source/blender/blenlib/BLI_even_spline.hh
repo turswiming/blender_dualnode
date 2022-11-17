@@ -19,72 +19,44 @@
  */
 namespace blender {
 /*
- Abstract curve interface.
+ Abstract curve interface. Curves must be
+ arc length parameterized (evenly spaced,
+ length of first derivative vector is 1).
 
-template<typename Float> class Curve {
-  using Vector = vec_base<Float, 2>;
+ We get a nice set of properties by using
+ arc length parameterizion.
 
- public:
-  Float length;
+ * Even spacing.
+ * Second derivative is the curve normal multiplied by the curvature
+ * Easy to calculate torsion for space curves (though this hasn't been
+   implemented yet).
 
-  Vector evaluate(Float s);
-  Vector derivative(Float s);
-  Vector derivative2(Float s);
-  Float curvature(float s);
+ Look up the Frenet-Serret formulas for more info.
 
-  void update();
-};
+ Abstract class interface:
+
+    template<typename Float> class Curve {
+      using Vector = vec_base<Float, 2>;
+
+     public:
+      Float length;
+
+      Vector evaluate(Float s);
+      Vector derivative(Float s);
+      Vector derivative2(Float s);
+
+      Float curvature(float s);
+      Float dcurvature(float s); // Derivative of curvature.
+
+      void update();
+    };
+
 */
-
-/** Quadratic curves */
 
 /*
-comment: Reduce algebra script;
-
-on factor;
-off period;
-
-procedure bez(a, b);
-  a + (b - a) * t;
-
-lin := bez(k1, k2);
-quad := bez(lin, sub(k2=k3, k1=k2, lin));
-
-dquad := df(quad, t);
-iquad := int(quad, t);
-
-x1 := 0;
-y1 := 0;
-
-dx := sub(k1=x1, k2=x2, k3=x3, dquad);
-dy := sub(k1=y1, k2=y2, k3=y3, dquad);
-darc := sqrt(dx**2 + dy**2);
-
-arcstep := darc*dt + 0.5*df(darc, t)*dt*dt;
-
-d2x := df(dx / darc, t);
-d2y := df(dy / darc, t);
-
-gentran
-begin
-declare <<
-x1,x2,x3,x4 : float;
-y1,y2,y3,y4 : float;
-dt,t : float;
->>;
-return eval(arcstep)
-end;
-
-on fort;
-quad;
-dquad;
-iquad;
-arcstep;
-d2x;
-d2y;
-off fort;
-
+Quadratic curves. Not sure we need this.
 */
+
 template<typename Float, int axes = 2, int table_size = 512> class QuadBezier {
   using Vector = vec_base<Float, axes>;
 
