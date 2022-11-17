@@ -371,7 +371,7 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   }
   immEnd();
 
-#  if 0
+#  if 0  // control points
   immUniformColor4ub(255, 0, 0, 170);
   int components = spline->components();
 
@@ -384,6 +384,21 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
       mul_v3_m4v3(co, ob->object_to_world, co);
       immVertex3fv(pos, co);
     }
+  }
+
+  immEnd();
+#  endif
+
+#  if 1  // inflection points
+  immUniformColor4ub(0, 255, 0, 100);
+  int components = spline->components();
+
+  immBegin(GPU_PRIM_POINTS, spline->inflection_points.size());
+
+  for (float t : spline->inflection_points) {
+    float3 co = spline->evaluate(t);
+    mul_v3_m4v3(co, ob->object_to_world, co);
+    immVertex3fv(pos, co);
   }
 
   immEnd();

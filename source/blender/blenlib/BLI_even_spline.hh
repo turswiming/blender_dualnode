@@ -171,279 +171,6 @@ template<typename Float, int axes = 2, int table_size = 512> class QuadBezier {
     *this = b;
   }
 
-  Vector closest_point(const Vector p, Float &r_s, Vector &r_tan, Float &r_dis)
-  {
-#  if 0
-    r_dis = 0.01;
-    r_s = 0.0;
-    r_tan = Vector(0.0, 1.0, 0.0);
-
-    return p;
-#  endif
-
-#  if 0
-    const int steps = 16;
-    Float s = 0.0, ds = length / (steps - 1);
-    Vector retco;
-
-    r_dis = FLT_MAX;
-
-    for (int i = 0; i < steps; i++, s += ds) {
-      Vector co = evaluate(s);
-      Vector vec = co - p;
-
-      Float dist = _dot(vec, vec);
-
-      if (dist < r_dis) {
-        retco = co;
-        r_dis = dist;
-        r_s = s;
-        r_tan = derivative(s);
-      }
-    }
-
-    r_dis = std::sqrt(r_dis);
-
-    return retco;
-#elif 0
-    float weights[3];
-    float n[3];
-
-    //normal_tri_v3(ps[0], ps[1], ps[2]);
-    float p2[3];
-
-    closest_on_tri_to_point_v3(p2, p, ps[0], ps[1], ps[2]);
-
-    //barycentric_weights(ps[0], ps[1], ps[2], p, n, weights);
-    resolve_tri_uv_v3(weights, p2, ps[0], ps[1], ps[2]);
-
-    Float u = weights[0];
-    Float v = weights[1];
-
-    Float t1 = v / (2 * u + v);
-    Float t2 = (2 * (v - 1 + u)) / (2 * u + v - 2);
-
-    //v = min_ff(max_ff(v, 0.0f), 1.0f);
-
-    //v = std::sqrt(v);
-
-
-    t1 = min_ff(max_ff(t1, 0.0), 1.0);
-    t2 = min_ff(max_ff(t2, 0.0), 1.0);
-
-    // t1 = std::min(std::max(t1, 0.0), 1.0);
-    // t2 = std::min(std::max(t2, 0.0), 1.0);
-
-    //t1 = t2 = 0.5;
-
-    Float s1 = t_to_arc(t1);
-    Float s2 = t_to_arc(t2);
-
-    Vector a = evaluate(s1);
-    Vector b = evaluate(s2);
-
-    a -= p;
-    b -= p;
-
-    Float dis1 = _dot(a, a);
-    Float dis2 = _dot(b, b);
-
-    if (dis1 < dis2) {
-      r_s = s1;
-      r_dis = std::sqrt(dis1);
-      r_tan = derivative(s1);
-
-      return a + p;
-    }
-    else {
-      r_s = s2;
-      r_dis = std::sqrt(dis2);
-      r_tan = derivative(s2);
-
-      return b + p;
-    }
-    //r_dis = v;
-
-    //closest_on_tri_to_point_v3
-    //resolve_tri_uv_v3
-#  else
-    /*
-    on factor;
-    off period;
-
-    procedure bez(a, b);
-      a + (b - a) * t;
-
-    lin := bez(k1, k2);
-    quad := bez(lin, sub(k2=k3, k1=k2, lin));
-
-    x := sub(k1=x1, k2=x2, k3=x3, quad);
-    y := sub(k1=y1, k2=y2, k3=y3, quad);
-    z := sub(k1=z1, k2=z2, k3=z3, quad);
-
-    comment: origin is at x1, y1, z1;
-
-    x1 := 0;
-    y1 := 0;
-    z1 := 0;
-
-    comment: rotate to align with control triangle normal;
-    comment: z2 := 0;
-    comment: z3 := 0;
-
-    dx := df(x, t);
-    dy := df(y, t);
-    dz := df(z, t);
-
-    tx := x - px;
-    ty := y - py;
-    tz := z - pz;
-
-    x1 := 0.0;
-    y1 := 0.0;
-    z1 := 0.0;
-
-    x2 := 0.5;
-    y2 := 0.0;
-    z2 := 0.0;
-
-    x3 := 0.5;
-    y3 := 0.5;
-    z3 := 0.0;
-
-    f := df(tx**2 + ty**2 + tz**2, t, 1);
-    f := tx*dx + ty*dy + tz*dz;
-
-    ff := solve(f, t);
-
-    on fort;
-    part(ff, 1, 2);
-    part(ff, 2, 2);
-    off fort;
-
-    Computer Aided Geometric Design
-    Thomas W. Sederberg
-    page 203
-    https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1000&context=facpub
-
-    xs := {0.0, 1.0, 0.0};
-    ys := {0.0, 0.0, 1.0};
-
-    degree := 2;
-    procedure l(i, j, x, y);
-      binomial(degree, i)*binomial(degree, j)*(
-        det(mat(
-          (x, y, 1),
-          (part(xs, i+1), part(ys, i+1), 1),
-          (part(xs, j+1), part(ys, j+1), 1)
-        ))
-       );
-
-
-    det mat(
-      (l(2, 1, x, y), l(2, 0, x, y)),
-      (l(2, 0, x, y), l(1, 0, x, y))
-     );
-
-     t1 := l(2, 0, x, y) / (l(2, 0, x, y) - l(2, 1, x, y));
-     t2 := l(1, 0, x, y) / (l(1, 0, x, y) - l(2, 0, x, y));
-
-     t1 := sub(x=part(xs, 1)*u + part(xs, 2)*v + part(xs, 3)*(1.0 - u - v), t1);
-     t1 := sub(y=part(ys, 1)*u + part(ys, 2)*v + part(ys, 3)*(1.0 - u - v), t1);
-
-     t2 := sub(x=part(xs, 1)*u + part(xs, 2)*v + part(xs, 3)*(1.0 - u - v), t2);
-     t2 := sub(y=part(ys, 1)*u + part(ys, 2)*v + part(ys, 3)*(1.0 - u - v), t2);
-    */
-
-    
-    Float x1 = ps[0][0], y1 = ps[0][1], z1 = ps[0][2];
-
-    Float px = p[0] - x1;
-    Float py = p[1] - y1;
-    Float pz = p[2] - z1;
-
-    Float x2 = ps[1][0] - x1, y2 = ps[1][1] - y1, z2 = ps[1][2] - z1;
-    Float x3 = ps[2][0] - x1, y3 = ps[2][1] - y1, z3 = ps[2][2] - z1;
-
-    Float x22 = x2 * x2, y22 = y2 * y2, z22 = z2 * z2;
-    Float x32 = x3 * x3, y32 = y3 * y3, z32 = z3 * z3;
-
-    Float B =
-        (((2 * (4 * z22 - 2 * z2 * z3 - z32 - y32) + x32 + 4 * (2 * y2 - y3) * y2) * x2 -
-          2 * (((2 * y2 - 3 * y3) * y2 + (2 * z2 - 3 * z3) * z2) * x3 - 2 * (x2 - x3) * x22)) *
-             x2 -
-         (x32 + y32 + (2 * z2 - z3) * (2 * z2 - z3) + 4 * (y2 - y3) * y2 + 4 * (x2 - x3) * x2) *
-             ((2 * x2 - x3) * px + (2 * y2 - y3) * py) -
-         (x32 + y32 + (2 * z2 - z3) * (2 * z2 - z3) + 4 * (y2 - y3) * y2 + 4 * (x2 - x3) * x2) *
-             (2 * z2 - z3) * pz +
-         2 * (2 * (y2 - y3) * y22 - (2 * z2 - 3 * z3) * y3 * z2) * y2 +
-         (2 * (4 * z22 - 2 * z2 * z3 - z32) + y32) * y22 +
-         ((2 * z2 - z3) * (2 * z2 - z3) - 2 * y32) * z22 - 2 * (y22 + z22) * x32);
-
-    Float C = (3 * (x32 + y32 + (2 * z2 - z3) * (2 * z2 - z3) + 4 * (y2 - y3) * y2) +
-               12 * (x2 - x3) * x2);
-    const Float eps = 0.000001;
-
-    if (B < 0.0 && B > -eps) {
-      B = 0.0;
-    }
-
-    if (C == 0.0 || B < 0.0) {
-      Vector p2 = evaluate(0.0);
-      Vector vec = p2 - p;
-
-      r_dis = sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]);
-      r_tan = derivative(0.0);
-      r_s = 0.0;
-
-      return p2;
-    }
-
-    B = sqrt(B);
-
-    Float t1 = (3 * (2 * z2 - z3) * z2 + B * sqrt(3) + 3 * (2 * y2 - y3) * y2 +
-                3 * (2 * x2 - x3) * x2) /
-               C;
-
-    Float t2 = (3 * (2 * z2 - z3) * z2 - B * sqrt(3) + 3 * (2 * y2 - y3) * y2 +
-                3 * (2 * x2 - x3) * x2) /
-               C;
-
-    t1 = min_ff(max_ff(t1, 0.0), 1.0);
-    t2 = min_ff(max_ff(t2, 0.0), 1.0);
-
-    // t1 = std::min(std::max(t1, 0.0), 1.0);
-    // t2 = std::min(std::max(t2, 0.0), 1.0);
-
-    Float s1 = t_to_arc(t1);
-    Float s2 = t_to_arc(t2);
-
-    Vector a = evaluate(s1);
-    Vector b = evaluate(s2);
-
-    a -= p;
-    b -= p;
-
-    Float dis1 = _dot(a, a);
-    Float dis2 = _dot(b, b);
-
-    if (dis1 < dis2) {
-      r_s = s1;
-      r_dis = std::sqrt(dis1);
-      r_tan = derivative(s1);
-
-      return a + p;
-    }
-    else {
-      r_s = s2;
-      r_dis = std::sqrt(dis2);
-      r_tan = derivative(s2);
-
-      return b + p;
-    }
-#  endif
-  }
-
   QuadBezier &operator=(QuadBezier &&b)
   {
     ps[0] = b.ps[0];
@@ -694,6 +421,26 @@ template<typename Float, int axes = 2, int table_size = 512> class QuadBezier {
     }
 
     return sqrt(_dot(dv2, dv2));
+  }
+
+  Float dcurvature(Float s)
+  {
+    const Float ds = 0.0001;
+    Float s1, s2;
+
+    if (s > 1.0 - ds) {
+      s1 = s - ds;
+      s2 = s;
+    }
+    else {
+      s1 = s;
+      s2 = s + ds;
+    }
+
+    Float a = curvature(s1);
+    Float b = curvature(s2);
+
+    return (b - a) / ds;
   }
 
  private:
@@ -1149,6 +896,26 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     return sqrt(_dot(dv2, dv2));
   }
 
+  Float dcurvature(Float s)
+  {
+    const Float ds = 0.0001;
+    Float s1, s2;
+
+    if (s > 1.0 - ds) {
+      s1 = s - ds;
+      s2 = s;
+    }
+    else {
+      s1 = s;
+      s2 = s + ds;
+    }
+
+    Float a = curvature(s1);
+    Float b = curvature(s2);
+
+    return (b - a) / ds;
+  }
+
  private:
   Float *_arc_to_t;
   bool deleted = false;
@@ -1245,6 +1012,7 @@ class EvenSpline {
   Float length = 0.0;
   bool deleted = false;
   blender::Vector<Segment> segments;
+  blender::Vector<Float> inflection_points;
 
   void clear()
   {
@@ -1304,7 +1072,7 @@ class EvenSpline {
         points2.append(points[i]);
 
         if (i < points.size() - 1) {
-          //points2.append(points[i] * 0.5 + points[i + 1] * 0.5);
+          // points2.append(points[i] * 0.5 + points[i + 1] * 0.5);
         }
       }
       points = points2;
@@ -1374,6 +1142,33 @@ class EvenSpline {
       seg.start = length;
       length += seg.bezier.length;
     }
+
+    update_inflection_points();
+  }
+
+  void update_inflection_points()
+  {
+    inflection_points.clear();
+
+    inflection_points.append(0.0);
+
+    const int steps = segments.size() * 5;
+    Float s = 0.0, ds = length / (steps - 1);
+    Float dk, lastdk;
+
+    for (int i = 0; i < steps; i++, s += ds, lastdk = dk) {
+      dk = dcurvature(s);
+
+      if (i == 0) {
+        continue;
+      }
+
+      if (dk < 0.0 != lastdk < 0.0) {
+        inflection_points.append(s - ds * 0.5);
+      }
+    }
+
+    inflection_points.append(1.0);
   }
 
   int components() noexcept
@@ -1432,8 +1227,21 @@ class EvenSpline {
     return seg->bezier.curvature(s - seg->start);
   }
 
+  Float dcurvature(Float s)
+  {
+    if (segments.size() == 0) {
+      return 0.0;
+    }
+
+    s = clamp_s(s);
+    Segment *seg = get_segment(s);
+
+    return seg->bezier.dcurvature(s - seg->start);
+  }
+
   Vector closest_point(const Vector p, Float &r_s, Vector &r_tan, Float &r_dis)
   {
+#if 0
     if constexpr (std::is_same_v<BezierType, QuadBezier<Float, axes, BezierType::TableSize>>) {
       r_dis = FLT_MAX;
       Vector retco;
@@ -1456,6 +1264,10 @@ class EvenSpline {
     else {
       return closest_point_generic(p, r_s, r_tan, r_dis);
     }
+#else
+    return closest_point_generic(p, r_s, r_tan, r_dis);
+
+#endif
   }
 
   /* Find the closest point on the spline.  Uses a bisecting root finding approach.
@@ -1478,7 +1290,11 @@ class EvenSpline {
     Vector lastdv, lastp;
     Vector b, dvb;
 
-    for (int i = 0; i < steps + 1; i++, s += ds, lastp = b, lastdv = dvb) {
+    for (int i = 0; i < inflection_points.size(); i++, lastp = b, lastdv = dvb) {
+      Float s = inflection_points[i];
+      Float ds = s - inflection_points[i - 1];
+
+      // for (int i = 0; i < steps + 1; i++, s += ds, lastp = b, lastdv = dvb) {
       b = evaluate(s);
       dvb = derivative(s, false); /* We don't need real normalized derivative here. */
 
