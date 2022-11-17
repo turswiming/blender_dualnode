@@ -2,6 +2,7 @@
 
 set(INC
   ../include
+  ../../asset_system
   ../../blenfont
   ../../blenkernel
   ../../blenlib
@@ -28,7 +29,7 @@ set(SRC
   gpencil_add_monkey.c
   gpencil_add_stroke.c
   gpencil_armature.c
-  gpencil_asset.c
+  gpencil_asset.cc
   gpencil_bake_animation.cc
   gpencil_convert.c
   gpencil_data.c

@@ -155,7 +155,7 @@ static bool gpencil_asset_create(const bContext *C,
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd_src);
 
   /* Create a copy of selected data block. */
-  bGPdata *gpd = (bGPdata *)BKE_id_copy(bmain, &gpd_src->id);
+  bGPdata *gpd = reinterpret_cast<bGPdata *>(BKE_id_copy(bmain, &gpd_src->id));
   /* Enable fake user by default. */
   id_fake_user_set(&gpd->id);
   /* Disable Edit mode. */
@@ -188,8 +188,8 @@ static bool gpencil_asset_create(const bContext *C,
     }
 
     /* Remove parenting data (feature non supported in data block). */
-    if (gpl->parent != NULL) {
-      gpl->parent = NULL;
+    if (gpl->parent != nullptr) {
+      gpl->parent = nullptr;
       gpl->parsubstr[0] = 0;
       gpl->partype = 0;
       non_supported_feature = true;
@@ -198,12 +198,13 @@ static bool gpencil_asset_create(const bContext *C,
     /* Remove masking (feature non supported in data block). */
     if (gpl->mask_layers.first) {
       bGPDlayer_Mask *mask_next;
-      for (bGPDlayer_Mask *mask = gpl->mask_layers.first; mask; mask = mask_next) {
+      for (bGPDlayer_Mask *mask = static_cast<bGPDlayer_Mask *>(gpl->mask_layers.first); mask;
+           mask = mask_next) {
         mask_next = mask->next;
         BKE_gpencil_layer_mask_remove(gpl, mask);
       }
-      gpl->mask_layers.first = NULL;
-      gpl->mask_layers.last = NULL;
+      gpl->mask_layers.first = nullptr;
+      gpl->mask_layers.last = nullptr;
 
       non_supported_feature = true;
     }
@@ -318,7 +319,7 @@ static bool gpencil_asset_create(const bContext *C,
       apply_layer_settings(gpl);
     }
 
-    bGPDlayer *gpl_dst = gpd->layers.first;
+    bGPDlayer *gpl_dst = static_cast<bGPDlayer *>(gpd->layers.first);
     LISTBASE_FOREACH_BACKWARD_MUTABLE (bGPDlayer *, gpl, &gpd->layers) {
       if (gpl == gpl_dst) {
         break;
@@ -350,7 +351,7 @@ static bool gpencil_asset_edit_poll(bContext *C)
   const enum eContextObjectMode mode = CTX_data_mode_enum(C);
 
   Object *ob = CTX_data_active_object(C);
-  if ((ob == NULL) || (ob->type != OB_GPENCIL)) {
+  if ((ob == nullptr) || (ob->type != OB_GPENCIL)) {
     CTX_wm_operator_poll_msg_set(C, "Need a Grease Pencil object selected");
     return false;
   }
@@ -367,9 +368,9 @@ static bool gpencil_asset_edit_poll(bContext *C)
 static int gpencil_asset_create_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
-  bGPdata *gpd_src = ob->data;
+  bGPdata *gpd_src = static_cast<bGPdata *>(ob->data);
 
-  const eGP_AssetSource source = RNA_enum_get(op->ptr, "source");
+  const eGP_AssetSource source = static_cast<eGP_AssetSource>(RNA_enum_get(op->ptr, "source"));
   const bool reset_origin = RNA_boolean_get(op->ptr, "reset_origin");
   const bool flatten_layers = RNA_boolean_get(op->ptr, "flatten_layers");
 
@@ -382,7 +383,7 @@ static int gpencil_asset_create_exec(bContext *C, wmOperator *op)
   }
   else {
     non_supported_feature = gpencil_asset_create(
-        C, op, gpd_src, NULL, source, reset_origin, flatten_layers);
+        C, op, gpd_src, nullptr, source, reset_origin, flatten_layers);
   }
 
   /* Warnings for non supported features in the created asset. */
@@ -393,8 +394,8 @@ static int gpencil_asset_create_exec(bContext *C, wmOperator *op)
                "asset type. These features have been omitted in the asset.");
   }
 
-  WM_main_add_notifier(NC_ID | NA_EDITED, NULL);
-  WM_main_add_notifier(NC_ASSET | NA_ADDED, NULL);
+  WM_main_add_notifier(NC_ID | NA_EDITED, nullptr);
+  WM_main_add_notifier(NC_ASSET | NA_ADDED, nullptr);
 
   return OPERATOR_FINISHED;
 }
@@ -444,7 +445,7 @@ void GPENCIL_OT_asset_create(wmOperatorType *ot)
        0,
        "Selected Points",
        "Create asset using all selected points"},
-      {0, NULL, 0, NULL, NULL},
+      {0, nullptr, 0, nullptr, nullptr},
   };
 
   /* identifiers */
@@ -484,11 +485,11 @@ static Material *gpencil_asset_material_get_from_id(ID *id, const int slot_index
   const short *tot_slots_data_ptr = BKE_id_material_len_p(id);
   const int tot_slots_data = tot_slots_data_ptr ? *tot_slots_data_ptr : 0;
   if (slot_index >= tot_slots_data) {
-    return NULL;
+    return nullptr;
   }
 
   Material ***materials_data_ptr = BKE_id_material_array_p(id);
-  Material **materials_data = materials_data_ptr ? *materials_data_ptr : NULL;
+  Material **materials_data = materials_data_ptr ? *materials_data_ptr : nullptr;
   Material *material = materials_data[slot_index];
 
   return material;
@@ -570,7 +571,8 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
   }
 
   /* Alloc array of strokes. */
-  tgpa->data = MEM_calloc_arrayN(tgpa->data_len, sizeof(tGPDAssetStroke), __func__);
+  tgpa->data = static_cast<tGPDAssetStroke *>(
+      MEM_calloc_arrayN(tgpa->data_len, sizeof(tGPDAssetStroke), __func__));
   int data_index = 0;
 
   LISTBASE_FOREACH (bGPDlayer *, gpl_asset, &gpd_asset->layers) {
@@ -578,10 +580,10 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
     bGPDlayer *gpl_target = BKE_gpencil_layer_get_by_name(gpd_target, gpl_asset->info, false);
 
     bool is_new_gpl = false;
-    if (gpl_target == NULL) {
+    if (gpl_target == nullptr) {
       gpl_target = BKE_gpencil_layer_duplicate(gpl_asset, false, false);
-      BLI_assert(gpl_target != NULL);
-      gpl_target->actframe = NULL;
+      BLI_assert(gpl_target != nullptr);
+      gpl_target->actframe = nullptr;
       BLI_listbase_clear(&gpl_target->frames);
       BLI_addtail(&gpd_target->layers, gpl_target);
       is_new_gpl = true;
@@ -590,7 +592,7 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
     LISTBASE_FOREACH (bGPDframe *, gpf_asset, &gpl_asset->frames) {
       /* Check if frame is in target layer. */
       int fra = tgpa->cframe + (gpf_asset->framenum - 1);
-      bGPDframe *gpf_target = NULL;
+      bGPDframe *gpf_target = nullptr;
       /* Find a frame in same frame number. */
       LISTBASE_FOREACH (bGPDframe *, gpf_find, &gpl_target->frames) {
         if (gpf_find->framenum == fra) {
@@ -602,14 +604,14 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
       bool is_new_gpf = false;
       /* Check Rec button. If button is disabled, try to use active frame.
        * If no active keyframe, must create a new frame. */
-      if ((gpf_target == NULL) && (!IS_AUTOKEY_ON(tgpa->scene))) {
+      if ((gpf_target == nullptr) && (!IS_AUTOKEY_ON(tgpa->scene))) {
         gpf_target = BKE_gpencil_layer_frame_get(gpl_target, fra, GP_GETFRAME_USE_PREV);
       }
 
-      if (gpf_target == NULL) {
+      if (gpf_target == nullptr) {
         gpf_target = BKE_gpencil_frame_addnew(gpl_target, fra);
         gpl_target->actframe = gpf_target;
-        BLI_assert(gpf_target != NULL);
+        BLI_assert(gpf_target != nullptr);
         BLI_listbase_clear(&gpf_target->strokes);
         is_new_gpf = true;
       }
@@ -621,7 +623,7 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
         }
 
         bGPDstroke *gps_target = BKE_gpencil_stroke_duplicate(gps_asset, true, true);
-        gps_target->next = gps_target->prev = NULL;
+        gps_target->next = gps_target->prev = nullptr;
         gps_target->flag &= ~GP_STROKE_SELECT;
         BLI_addtail(&gpf_target->strokes, gps_target);
 
@@ -629,9 +631,9 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
         Material *ma_src = gpencil_asset_material_get_from_id(&tgpa->gpd_asset->id,
                                                               gps_asset->mat_nr);
 
-        int mat_index = (ma_src != NULL) ? BKE_gpencil_object_material_index_get_by_name(
-                                               tgpa->ob, ma_src->id.name + 2) :
-                                           -1;
+        int mat_index = (ma_src != nullptr) ? BKE_gpencil_object_material_index_get_by_name(
+                                                  tgpa->ob, ma_src->id.name + 2) :
+                                              -1;
         bool is_new_mat = false;
         if (mat_index == -1) {
           const int totcolors = tgpa->ob->totcol;
@@ -692,10 +694,10 @@ static bool gpencil_asset_append_strokes(tGPDasset *tgpa)
 /* Exit and free memory */
 static void gpencil_asset_import_exit(bContext *C, wmOperator *op)
 {
-  tGPDasset *tgpa = op->customdata;
+  tGPDasset *tgpa = static_cast<tGPDasset *>(op->customdata);
 
   if (tgpa) {
-    bGPdata *gpd = tgpa->gpd;
+    bGPdata *gpd = static_cast<bGPdata *>(tgpa->gpd);
 
     /* Free data. */
     MEM_SAFE_FREE(tgpa->data);
@@ -704,31 +706,32 @@ static void gpencil_asset_import_exit(bContext *C, wmOperator *op)
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   }
 
-  WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED | ND_DATA, NULL);
+  WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED | ND_DATA, nullptr);
 
   /* Clear pointer. */
-  op->customdata = NULL;
+  op->customdata = nullptr;
 }
 
 /* Allocate memory and initialize values */
 static tGPDasset *gpencil_session_init_asset_import(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  ID *id = NULL;
+  ID *id = nullptr;
 
   PropertyRNA *prop_type = RNA_struct_find_property(op->ptr, "type");
   const short id_type = RNA_property_enum_get(op->ptr, prop_type);
   id = WM_operator_properties_id_lookup_from_name_or_session_uuid(
       bmain, op->ptr, (ID_Type)id_type);
-  if (id == NULL) {
-    return NULL;
+  if (id == nullptr) {
+    return nullptr;
   }
   const int object_type = BKE_object_obdata_to_type(id);
   if (object_type != OB_GPENCIL) {
-    return NULL;
+    return nullptr;
   }
 
-  tGPDasset *tgpa = MEM_callocN(sizeof(tGPDasset), "GPencil Asset Import Data");
+  tGPDasset *tgpa = static_cast<tGPDasset *>(
+      MEM_callocN(sizeof(tGPDasset), "GPencil Asset Import Data"));
 
   /* Save current settings. */
   tgpa->bmain = CTX_data_main(C);
@@ -745,12 +748,12 @@ static tGPDasset *gpencil_session_init_asset_import(bContext *C, wmOperator *op)
   tgpa->cframe = tgpa->scene->r.cfra;
 
   /* Target GP data block. */
-  tgpa->gpd = tgpa->ob->data;
+  tgpa->gpd = static_cast<bGPdata *>(tgpa->ob->data);
   /* Asset GP data block. */
   tgpa->gpd_asset = (bGPdata *)id;
 
   tgpa->data_len = 0;
-  tgpa->data = NULL;
+  tgpa->data = nullptr;
 
   return tgpa;
 }
@@ -761,8 +764,9 @@ static bool gpencil_asset_import_init(bContext *C, wmOperator *op)
   tGPDasset *tgpa;
 
   /* check context */
-  tgpa = op->customdata = gpencil_session_init_asset_import(C, op);
-  if (tgpa == NULL) {
+  op->customdata = static_cast<tGPDasset *>(gpencil_session_init_asset_import(C, op));
+  tgpa = static_cast<tGPDasset *>(gpencil_session_init_asset_import(C, op));
+  if (tgpa == nullptr) {
     /* something wasn't set correctly in context */
     gpencil_asset_import_exit(C, op);
     return false;
@@ -775,7 +779,7 @@ static bool gpencil_asset_import_init(bContext *C, wmOperator *op)
 static int gpencil_asset_import_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   bGPdata *gpd = CTX_data_gpencil_data(C);
-  tGPDasset *tgpa = NULL;
+  tGPDasset *tgpa = nullptr;
 
   /* Try to initialize context data needed. */
   if (!gpencil_asset_import_init(C, op)) {
@@ -784,7 +788,7 @@ static int gpencil_asset_import_invoke(bContext *C, wmOperator *op, const wmEven
     }
     return OPERATOR_CANCELLED;
   }
-  tgpa = op->customdata;
+  tgpa = static_cast<tGPDasset *>(op->customdata);
 
   /* Save initial position of drop.  */
   tgpa->drop[0] = event->mval[0];
@@ -802,7 +806,7 @@ static int gpencil_asset_import_invoke(bContext *C, wmOperator *op, const wmEven
   gpencil_asset_import_exit(C, op);
 
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, NULL);
+  WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
 
   return OPERATOR_FINISHED;
 }
