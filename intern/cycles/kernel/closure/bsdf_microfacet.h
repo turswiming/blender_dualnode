@@ -64,7 +64,7 @@ ccl_device_forceinline Spectrum reflection_color(ccl_private const MicrofacetBsd
     Spectrum F = zero_spectrum();
     float cosHL = dot(H, L);
 
-    if (extra->dielectric != zero_spectrum()) {
+    if (!is_zero(extra->dielectric)) {
       if (extra->thin_film_thickness == 0.0f) {
         /* Dielectric Fresnel, just basic IOR control. */
         F += extra->dielectric * fresnel_dielectric_cos(cosHL, bsdf->ior);
@@ -76,7 +76,7 @@ ccl_device_forceinline Spectrum reflection_color(ccl_private const MicrofacetBsd
       }
     }
 
-    if (extra->metallic != zero_spectrum()) {
+    if (!is_zero(extra->metallic)) {
       /* Fresnel term with edge color control, see fresnel_metallic for details. */
       F += extra->metallic * fresnel_metallic(extra->metal_base, extra->metal_edge_factor, cosHL);
     }
