@@ -1533,6 +1533,11 @@ class OSLNode final : public ShaderNode {
 
   SHADER_NODE_NO_CLONE_CLASS(OSLNode)
 
+  bool has_surface_emission()
+  {
+    return has_emission;
+  }
+
   /* Ideally we could better detect this, but we can't query this now. */
   bool has_spatial_varying()
   {
@@ -1554,6 +1559,7 @@ class OSLNode final : public ShaderNode {
 
   string filepath;
   string bytecode_hash;
+  bool has_emission;
 };
 
 class NormalMapNode : public ShaderNode {

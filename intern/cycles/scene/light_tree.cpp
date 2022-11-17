@@ -59,11 +59,8 @@ OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds
   return OrientationBounds({new_axis, theta_o, theta_e});
 }
 
-LightTreePrimitive::LightTreePrimitive(Scene *scene,
-                                       int prim_id,
-                                       int object_id,
-                                       bool is_double_sided)
-    : prim_id(prim_id), object_id(object_id), is_double_sided(is_double_sided)
+LightTreePrimitive::LightTreePrimitive(Scene *scene, int prim_id, int object_id)
+    : prim_id(prim_id), object_id(object_id)
 {
   if (is_triangle()) {
     calculate_triangle_vertices(scene);
@@ -151,14 +148,24 @@ void LightTreePrimitive::calculate_bcone(Scene *scene)
   bcone = OrientationBounds::empty;
 
   if (is_triangle()) {
-    if (is_double_sided) {
-      /* Any vector in the plane */
-      bcone.axis = safe_normalize(vertices[0] - vertices[1]);
-      bcone.theta_o = M_PI_2_F;
-    }
-    else {
+    Object *object = scene->objects[object_id];
+    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+    Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
+
+    if (shader->emission_sampling == EMISSION_SAMPLING_FRONT) {
+      /* Front only. */
       bcone.axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
       bcone.theta_o = 0;
+    }
+    else if (shader->emission_sampling == EMISSION_SAMPLING_BACK) {
+      /* Back only. */
+      bcone.axis = -safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+      bcone.theta_o = 0;
+    }
+    else {
+      /* Double sided: any vector in the plane. */
+      bcone.axis = safe_normalize(vertices[0] - vertices[1]);
+      bcone.theta_o = M_PI_2_F;
     }
 
     bcone.theta_e = M_PI_2_F;
@@ -203,11 +210,8 @@ void LightTreePrimitive::calculate_energy(Scene *scene)
     Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
 
     /* to-do: need a better way to handle this when textures are used. */
-    float3 shader_estimate;
-    shader->estimate_emission(shader_estimate);
-
     float area = triangle_area(vertices[0], vertices[1], vertices[2]);
-    energy = area * scene->shader_manager->linear_rgb_to_gray(shader_estimate);
+    energy = area * scene->shader_manager->linear_rgb_to_gray(shader->emission_estimate);
   }
   else {
     Light *lamp = scene->lights[object_id];
@@ -226,9 +230,7 @@ void LightTreePrimitive::calculate_energy(Scene *scene)
     }
 
     if (lamp->get_shader()) {
-      float3 shader_estimate;
-      lamp->get_shader()->estimate_emission(shader_estimate);
-      strength *= shader_estimate;
+      strength *= lamp->get_shader()->emission_estimate;
     }
 
     energy = scene->shader_manager->linear_rgb_to_gray(strength);

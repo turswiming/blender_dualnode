@@ -147,7 +147,17 @@ NODE_DEFINE(Shader)
 {
   NodeType *type = NodeType::add("shader", create);
 
-  SOCKET_BOOLEAN(use_mis, "Use MIS", true);
+  static NodeEnum emission_sampling_method_enum;
+  emission_sampling_method_enum.insert("none", EMISSION_SAMPLING_NONE);
+  emission_sampling_method_enum.insert("auto", EMISSION_SAMPLING_AUTO);
+  emission_sampling_method_enum.insert("front", EMISSION_SAMPLING_FRONT);
+  emission_sampling_method_enum.insert("back", EMISSION_SAMPLING_BACK);
+  emission_sampling_method_enum.insert("front_back", EMISSION_SAMPLING_FRONT_BACK);
+  SOCKET_ENUM(emission_sampling_method,
+              "Emission Sampling Method",
+              emission_sampling_method_enum,
+              EMISSION_SAMPLING_AUTO);
+
   SOCKET_BOOLEAN(use_transparent_shadow, "Use Transparent Shadow", true);
   SOCKET_BOOLEAN(heterogeneous_volume, "Heterogeneous Volume", true);
 
@@ -189,7 +199,6 @@ Shader::Shader() : Node(get_node_type())
 
   has_surface = false;
   has_surface_transparent = false;
-  has_surface_emission = false;
   has_surface_raytrace = false;
   has_surface_bssrdf = false;
   has_volume = false;
@@ -202,6 +211,10 @@ Shader::Shader() : Node(get_node_type())
   has_integrator_dependency = false;
   has_volume_connected = false;
   prev_volume_step_rate = 0.0f;
+
+  emission_estimate = zero_float3();
+  emission_sampling = EMISSION_SAMPLING_NONE;
+  emission_is_constant = true;
 
   displacement_method = DISPLACE_BUMP;
 
@@ -217,55 +230,132 @@ Shader::~Shader()
   delete graph;
 }
 
-bool Shader::estimate_emission(float3 &estimate)
+static float3 output_estimate_emission(ShaderOutput *output, bool &is_constant)
 {
-  estimate = one_float3();
+  /* Only supports a few nodes for now, not arbitrary shader graphs. */
+  ShaderNode *node = (output) ? output->parent : nullptr;
 
+  if (node == nullptr) {
+    return zero_float3();
+  }
+  else if (node->type == EmissionNode::get_node_type() ||
+           node->type == BackgroundNode::get_node_type()) {
+    /* Emission and Background node. */
+    ShaderInput *color_in = node->input("Color");
+    ShaderInput *strength_in = node->input("Strength");
+
+    float3 estimate = one_float3();
+
+    if (color_in->link) {
+      is_constant = false;
+    }
+    else {
+      estimate *= node->get_float3(color_in->socket_type);
+    }
+
+    if (strength_in->link) {
+      is_constant = false;
+      estimate *= output_estimate_emission(strength_in->link, is_constant);
+    }
+    else {
+      estimate *= node->get_float(strength_in->socket_type);
+    }
+
+    return estimate;
+  }
+  else if (node->type == LightFalloffNode::get_node_type()) {
+    /* Light Falloff node. */
+    ShaderInput *strength_in = node->input("Strength");
+    is_constant = false;
+
+    return (strength_in->link) ? output_estimate_emission(strength_in->link, is_constant) :
+                                 make_float3(node->get_float(strength_in->socket_type));
+  }
+  else if (node->type == AddClosureNode::get_node_type()) {
+    /* Add Closure. */
+    ShaderInput *closure1_in = node->input("Closure1");
+    ShaderInput *closure2_in = node->input("Closure2");
+
+    const float3 estimate1 = (closure1_in->link) ?
+                                 output_estimate_emission(closure1_in->link, is_constant) :
+                                 zero_float3();
+    const float3 estimate2 = (closure2_in->link) ?
+                                 output_estimate_emission(closure2_in->link, is_constant) :
+                                 zero_float3();
+
+    return estimate1 + estimate2;
+  }
+  else if (node->type == MixClosureNode::get_node_type()) {
+    /* Mix Closure. */
+    ShaderInput *fac_in = node->input("Fac");
+    ShaderInput *closure1_in = node->input("Closure1");
+    ShaderInput *closure2_in = node->input("Closure2");
+
+    const float3 estimate1 = (closure1_in->link) ?
+                                 output_estimate_emission(closure1_in->link, is_constant) :
+                                 zero_float3();
+    const float3 estimate2 = (closure2_in->link) ?
+                                 output_estimate_emission(closure2_in->link, is_constant) :
+                                 zero_float3();
+
+    if (fac_in->link) {
+      return estimate1 + estimate2;
+    }
+    else {
+      const float fac = node->get_float(fac_in->socket_type);
+      return (1.0f - fac) * estimate1 + fac * estimate2;
+    }
+  }
+  else {
+    /* Other nodes, potentially OSL nodes with arbitrary code for which all we can
+     * determine is if it has emission or not. */
+    const bool has_emission = node->has_surface_emission();
+    float3 estimate = (has_emission) ? one_float3() : zero_float3();
+
+    if (output->type() == SocketType::CLOSURE) {
+      if (has_emission) {
+        is_constant = false;
+      }
+
+      foreach (const ShaderInput *in, node->inputs) {
+        if (in->type() == SocketType::CLOSURE && in->link) {
+          estimate += output_estimate_emission(in->link, is_constant);
+        }
+      }
+    }
+
+    return estimate;
+  }
+}
+
+void Shader::estimate_emission()
+{
   /* If the shader has AOVs, they need to be evaluated, so we can't skip the shader. */
+  emission_is_constant = true;
+
   foreach (ShaderNode *node, graph->nodes) {
     if (node->special_type == SHADER_SPECIAL_TYPE_OUTPUT_AOV) {
-      return false;
+      emission_is_constant = false;
     }
   }
 
   ShaderInput *surf = graph->output()->input("Surface");
+  emission_estimate = output_estimate_emission(surf->link, emission_is_constant);
 
-  if (surf->link == NULL) {
-    return false;
+  if (is_zero(emission_estimate)) {
+    emission_sampling = EMISSION_SAMPLING_NONE;
   }
-
-  /* Only supports Emission/Background nodes with Light Fallof for now, not arbitrary
-   * shader graphs. */
-  ShaderNode *emission_node = surf->link->parent;
-
-  if (!(emission_node->type == EmissionNode::get_node_type() ||
-        emission_node->type == BackgroundNode::get_node_type())) {
-    return false;
-  }
-
-  ShaderInput *color_in = emission_node->input("Color");
-  ShaderInput *strength_in = emission_node->input("Strength");
-  assert(color_in);
-  assert(strength_in);
-
-  if (!color_in->link) {
-    estimate *= emission_node->get_float3(color_in->socket_type);
-  }
-  if (!strength_in->link) {
-    estimate *= emission_node->get_float(strength_in->socket_type);
+  else if (emission_sampling_method == EMISSION_SAMPLING_AUTO) {
+    /* Automatically disable MIS when emission is low, to avoid weakly emitting
+     * using a lot of memory in the light tree and potentially wasting samples
+     * where indirect light samples are sufficient.
+     * Possible optimization: estimate front and back emission separately. */
+    emission_sampling = (average(emission_estimate) > 2.0f) ? EMISSION_SAMPLING_FRONT_BACK :
+                                                              EMISSION_SAMPLING_NONE;
   }
   else {
-    ShaderNode *falloff_node = strength_in->link->parent;
-    if (falloff_node->type == LightFalloffNode::get_node_type()) {
-      ShaderInput *falloff_strength_in = falloff_node->input("Strength");
-      if (!falloff_strength_in->link) {
-        estimate *= falloff_node->get_float(falloff_strength_in->socket_type);
-      }
-    }
+    emission_sampling = emission_sampling_method;
   }
-
-  const bool is_constant = !color_in->link && !strength_in->link;
-  return is_constant;
 }
 
 void Shader::set_graph(ShaderGraph *graph_)
@@ -310,7 +400,7 @@ void Shader::tag_update(Scene *scene)
   /* if the shader previously was emissive, update light distribution,
    * if the new shader is emissive, a light manager update tag will be
    * done in the shader manager device update. */
-  if (use_mis && has_surface_emission)
+  if (emission_sampling != EMISSION_SAMPLING_NONE)
     scene->light_manager->tag_update(scene, LightManager::SHADER_MODIFIED);
 
   /* Special handle of background MIS light for now: for some reason it
@@ -496,9 +586,17 @@ void ShaderManager::device_update_common(Device * /*device*/,
   foreach (Shader *shader, scene->shaders) {
     uint flag = 0;
 
-    if (shader->get_use_mis())
-      flag |= SD_USE_MIS;
-    if (shader->has_surface_emission)
+    if (shader->emission_sampling == EMISSION_SAMPLING_FRONT) {
+      flag |= SD_MIS_FRONT;
+    }
+    else if (shader->emission_sampling == EMISSION_SAMPLING_BACK) {
+      flag |= SD_MIS_BACK;
+    }
+    else if (shader->emission_sampling == EMISSION_SAMPLING_FRONT_BACK) {
+      flag |= SD_MIS_FRONT | SD_MIS_BACK;
+    }
+
+    if (!is_zero(shader->emission_estimate))
       flag |= SD_HAS_EMISSION;
     if (shader->has_surface_transparent && shader->get_use_transparent_shadow())
       flag |= SD_HAS_TRANSPARENT_SHADOW;
@@ -536,8 +634,7 @@ void ShaderManager::device_update_common(Device * /*device*/,
       flag |= SD_HAS_DISPLACEMENT;
 
     /* constant emission check */
-    float3 constant_emission = zero_float3();
-    if (shader->estimate_emission(constant_emission))
+    if (shader->emission_is_constant)
       flag |= SD_HAS_CONSTANT_EMISSION;
 
     uint32_t cryptomatte_id = util_murmur_hash3(shader->name.c_str(), shader->name.length(), 0);
@@ -545,9 +642,9 @@ void ShaderManager::device_update_common(Device * /*device*/,
     /* regular shader */
     kshader->flags = flag;
     kshader->pass_id = shader->get_pass_id();
-    kshader->constant_emission[0] = constant_emission.x;
-    kshader->constant_emission[1] = constant_emission.y;
-    kshader->constant_emission[2] = constant_emission.z;
+    kshader->constant_emission[0] = shader->emission_estimate.x;
+    kshader->constant_emission[1] = shader->emission_estimate.y;
+    kshader->constant_emission[2] = shader->emission_estimate.z;
     kshader->cryptomatte_id = util_hash_to_float(cryptomatte_id);
     kshader++;
 
@@ -632,8 +729,8 @@ void ShaderManager::add_default(Scene *scene)
     shader->set_graph(graph);
     scene->default_volume = shader;
     shader->tag_update(scene);
-    /* No default reference for the volume to avoid compiling volume kernels if there are no actual
-     * volumes in the scene */
+    /* No default reference for the volume to avoid compiling volume kernels if there are no
+     * actual volumes in the scene */
   }
 
   /* default light */

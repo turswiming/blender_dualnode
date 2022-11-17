@@ -163,7 +163,9 @@ bool Light::has_contribution(Scene *scene)
   if (light_type == LIGHT_BACKGROUND) {
     return true;
   }
-  return (shader) ? shader->has_surface_emission : scene->default_light->has_surface_emission;
+
+  const Shader *effective_shader = (shader) ? shader : scene->default_light;
+  return !is_zero(effective_shader->emission_estimate);
 }
 
 /* Light Manager */
@@ -257,7 +259,7 @@ bool LightManager::object_usable_as_light(Object *object)
    */
   foreach (Node *node, geom->get_used_shaders()) {
     Shader *shader = static_cast<Shader *>(node);
-    if (shader->get_use_mis() && shader->has_surface_emission) {
+    if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
       return true;
     }
   }
@@ -295,7 +297,7 @@ void LightManager::device_update_distribution(Device *device,
     if (light->is_enabled) {
       if (light_tree_enabled) {
         /* -prim_id - 1 is a light source index. */
-        LightTreePrimitive light_prim(scene, ~device_light_index, scene_light_index, false);
+        LightTreePrimitive light_prim(scene, ~device_light_index, scene_light_index);
 
         /* Distant lights get added to a separate vector. */
         if (light->light_type == LIGHT_DISTANT || light->light_type == LIGHT_BACKGROUND) {
@@ -320,8 +322,6 @@ void LightManager::device_update_distribution(Device *device,
 
   /* Similarly, we also want to keep track of the index of triangles that are emissive. */
   int object_id = 0;
-  /* TODO: add an option in the UI */
-  bool is_double_sided = true;
   foreach (Object *object, scene->objects) {
     if (progress.get_cancel())
       return;
@@ -345,9 +345,9 @@ void LightManager::device_update_distribution(Device *device,
                            static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
                            scene->default_surface;
 
-      if (shader->get_use_mis() && shader->has_surface_emission) {
+      if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
         if (light_tree_enabled) {
-          LightTreePrimitive light_prim(scene, i, object_id, is_double_sided);
+          LightTreePrimitive light_prim(scene, i, object_id);
           light_prims.push_back(light_prim);
         }
 
@@ -548,7 +548,7 @@ void LightManager::device_update_distribution(Device *device,
                            static_cast<Shader *>(mesh->get_used_shaders()[shader_index]) :
                            scene->default_surface;
 
-      if (shader->get_use_mis() && shader->has_surface_emission) {
+      if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
         distribution[offset].totarea = totarea;
         distribution[offset].prim = i + mesh->prim_offset;
         distribution[offset].mesh_light.shader_flag = shader_flag;

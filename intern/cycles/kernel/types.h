@@ -788,8 +788,8 @@ enum ShaderDataFlag {
 
   /* Shader flags. */
 
-  /* direct light sample */
-  SD_USE_MIS = (1 << 16),
+  /* Use front side for direct light sampling. */
+  SD_MIS_FRONT = (1 << 16),
   /* Has transparent shadow. */
   SD_HAS_TRANSPARENT_SHADOW = (1 << 17),
   /* Has volume shader. */
@@ -818,12 +818,14 @@ enum ShaderDataFlag {
   SD_HAS_EMISSION = (1 << 29),
   /* Shader has raytracing */
   SD_HAS_RAYTRACE = (1 << 30),
+  /* Use back side for direct light sampling. */
+  SD_MIS_BACK = (1 << 31),
 
-  SD_SHADER_FLAGS = (SD_USE_MIS | SD_HAS_TRANSPARENT_SHADOW | SD_HAS_VOLUME | SD_HAS_ONLY_VOLUME |
-                     SD_HETEROGENEOUS_VOLUME | SD_HAS_BSSRDF_BUMP | SD_VOLUME_EQUIANGULAR |
-                     SD_VOLUME_MIS | SD_VOLUME_CUBIC | SD_HAS_BUMP | SD_HAS_DISPLACEMENT |
-                     SD_HAS_CONSTANT_EMISSION | SD_NEED_VOLUME_ATTRIBUTES | SD_HAS_EMISSION |
-                     SD_HAS_RAYTRACE)
+  SD_SHADER_FLAGS = (SD_MIS_FRONT | SD_HAS_TRANSPARENT_SHADOW | SD_HAS_VOLUME |
+                     SD_HAS_ONLY_VOLUME | SD_HETEROGENEOUS_VOLUME | SD_HAS_BSSRDF_BUMP |
+                     SD_VOLUME_EQUIANGULAR | SD_VOLUME_MIS | SD_VOLUME_CUBIC | SD_HAS_BUMP |
+                     SD_HAS_DISPLACEMENT | SD_HAS_CONSTANT_EMISSION | SD_NEED_VOLUME_ATTRIBUTES |
+                     SD_HAS_EMISSION | SD_HAS_RAYTRACE | SD_MIS_BACK)
 };
 
 /* Object flags. */

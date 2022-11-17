@@ -34,6 +34,16 @@ struct float3;
 enum ShadingSystem { SHADINGSYSTEM_OSL, SHADINGSYSTEM_SVM };
 
 /* Keep those in sync with the python-defined enum. */
+enum EmissionSampling {
+  EMISSION_SAMPLING_NONE = 0,
+  EMISSION_SAMPLING_AUTO = 1,
+  EMISSION_SAMPLING_FRONT = 2,
+  EMISSION_SAMPLING_BACK = 3,
+  EMISSION_SAMPLING_FRONT_BACK = 4,
+
+  EMISSION_SAMPLING_NUM
+};
+
 enum VolumeSampling {
   VOLUME_SAMPLING_DISTANCE = 0,
   VOLUME_SAMPLING_EQUIANGULAR = 1,
@@ -73,7 +83,7 @@ class Shader : public Node {
   NODE_SOCKET_API(int, pass_id)
 
   /* sampling */
-  NODE_SOCKET_API(bool, use_mis)
+  NODE_SOCKET_API(EmissionSampling, emission_sampling_method)
   NODE_SOCKET_API(bool, use_transparent_shadow)
   NODE_SOCKET_API(bool, heterogeneous_volume)
   NODE_SOCKET_API(VolumeSampling, volume_sampling_method)
@@ -101,7 +111,6 @@ class Shader : public Node {
 
   /* information about shader after compiling */
   bool has_surface;
-  bool has_surface_emission;
   bool has_surface_transparent;
   bool has_surface_raytrace;
   bool has_volume;
@@ -113,6 +122,10 @@ class Shader : public Node {
   bool has_volume_spatial_varying;
   bool has_volume_attribute_dependency;
   bool has_integrator_dependency;
+
+  float3 emission_estimate;
+  bool emission_sampling;
+  bool emission_is_constant;
 
   /* requested mesh attributes */
   AttributeRequestSet attributes;
@@ -136,7 +149,7 @@ class Shader : public Node {
    *
    * If the emission is fully constant, returns true, so that shader evaluation can be skipped
    * entirely for a light. */
-  bool estimate_emission(float3 &estimate);
+  void estimate_emission();
 
   void set_graph(ShaderGraph *graph);
   void tag_update(Scene *scene);
