@@ -1360,6 +1360,17 @@ bool BKE_nlastrip_within_bounds(NlaStrip *strip, float min, float max)
   return true;
 }
 
+float BKE_nlastrip_distance_to_frame(const NlaStrip *strip, const float timeline_frame)
+{
+  if (timeline_frame < strip->start) {
+    return strip->start - timeline_frame;
+  }
+  if (strip->end < timeline_frame) {
+    return timeline_frame - strip->end;
+  }
+  return 0.0f;
+}
+
 /* Ensure that strip doesn't overlap those around it after resizing
  * by offsetting those which follow. */
 static void nlastrip_fix_resize_overlaps(NlaStrip *strip)
@@ -2055,7 +2066,7 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
   }
 
   /* If block is already in tweak-mode, just leave, but we should report
-   * that this block is in tweak-mode (as our returncode). */
+   * that this block is in tweak-mode (as our return-code). */
   if (adt->flag & ADT_NLA_EDIT_ON) {
     return true;
   }

@@ -893,7 +893,8 @@ static void wm_add_reports(ReportList *reports)
 void WM_report(eReportType type, const char *message)
 {
   ReportList reports;
-  BKE_reports_init(&reports, RPT_STORE);
+  BKE_reports_init(&reports, RPT_STORE | RPT_PRINT);
+  BKE_report_print_level_set(&reports, RPT_WARNING);
   BKE_report(&reports, type, message);
 
   wm_add_reports(&reports);
@@ -4535,7 +4536,7 @@ wmEventHandler_UI *WM_event_add_ui_handler(const bContext *C,
                                            wmUIHandlerFunc handle_fn,
                                            wmUIHandlerRemoveFunc remove_fn,
                                            void *user_data,
-                                           const char flag)
+                                           const eWM_EventHandlerFlag flag)
 {
   wmEventHandler_UI *handler = MEM_cnew<wmEventHandler_UI>(__func__);
   handler->head.type = WM_HANDLER_TYPE_UI;

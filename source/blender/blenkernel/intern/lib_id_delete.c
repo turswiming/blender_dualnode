@@ -19,6 +19,8 @@
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
 
+#include "AS_asset_library.h"
+
 #include "BKE_anim_data.h"
 #include "BKE_asset.h"
 #include "BKE_idprop.h"
@@ -137,16 +139,16 @@ void BKE_id_free_ex(Main *bmain, void *idv, int flag, const bool use_flag_from_i
     BKE_main_lock(bmain);
   }
 
+  struct IDRemapper *remapper = BKE_id_remapper_create();
+  BKE_id_remapper_add(remapper, id, NULL);
+
   if ((flag & LIB_ID_FREE_NO_UI_USER) == 0) {
     if (free_notifier_reference_cb) {
       free_notifier_reference_cb(id);
     }
 
     if (remap_editor_id_reference_cb) {
-      struct IDRemapper *remapper = BKE_id_remapper_create();
-      BKE_id_remapper_add(remapper, id, NULL);
       remap_editor_id_reference_cb(remapper);
-      BKE_id_remapper_free(remapper);
     }
   }
 
@@ -157,6 +159,9 @@ void BKE_id_free_ex(Main *bmain, void *idv, int flag, const bool use_flag_from_i
       BKE_main_namemap_remove_name(bmain, id, id->name + 2);
     }
   }
+
+  AS_asset_library_remap_ids(remapper);
+  BKE_id_remapper_free(remapper);
 
   BKE_libblock_free_data(id, (flag & LIB_ID_FREE_NO_USER_REFCOUNT) == 0);
 
@@ -293,14 +298,14 @@ static size_t id_delete(Main *bmain, const bool do_tagged_deletion)
      * is never affected). */
     for (ID *id = tagged_deleted_ids.first; id; id = id->next) {
       id->tag |= LIB_TAG_NO_MAIN;
-      /* Usercount needs to be reset artificially, since some usages may not be cleared in batch
+      /* User-count needs to be reset artificially, since some usages may not be cleared in batch
        * deletion (typically, if one deleted ID uses another deleted ID, this may not be cleared by
        * remapping code, depending on order in which these are handled). */
       id->us = ID_FAKE_USERS(id);
     }
   }
   else {
-    /* First tag all datablocks directly from target lib.
+    /* First tag all data-blocks directly from target lib.
      * Note that we go forward here, since we want to check dependencies before users
      * (e.g. meshes before objects).
      * Avoids to have to loop twice. */

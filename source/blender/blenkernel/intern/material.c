@@ -653,38 +653,29 @@ Material **BKE_object_material_get_p(Object *ob, short act)
 
   /* if object cannot have material, (totcolp == NULL) */
   totcolp = BKE_object_material_len_p(ob);
-  if (totcolp == NULL || ob->totcol == 0) {
+  if (totcolp == NULL || *totcolp == 0) {
     return NULL;
   }
 
-  /* return NULL for invalid 'act', can happen for mesh face indices */
-  if (act > ob->totcol) {
-    return NULL;
-  }
-  if (act <= 0) {
-    if (act < 0) {
-      CLOG_ERROR(&LOG, "Negative material index!");
-    }
-    return NULL;
+  /* Clamp to number of slots if index is out of range, same convention as used for rendering. */
+  const int slot_index = clamp_i(act - 1, 0, *totcolp - 1);
+
+  /* Fix inconsistency which may happen when library linked data reduces the number of
+   * slots but object was not updated. Ideally should be fixed elsewhere. */
+  if (*totcolp < ob->totcol) {
+    ob->totcol = *totcolp;
   }
 
-  if (ob->matbits && ob->matbits[act - 1]) { /* in object */
-    ma_p = &ob->mat[act - 1];
+  if (slot_index < ob->totcol && ob->matbits && ob->matbits[slot_index]) {
+    /* Use object material slot. */
+    ma_p = &ob->mat[slot_index];
   }
-  else { /* in data */
-
-    /* check for inconsistency */
-    if (*totcolp < ob->totcol) {
-      ob->totcol = *totcolp;
-    }
-    if (act > ob->totcol) {
-      act = ob->totcol;
-    }
-
+  else {
+    /* Use data material slot. */
     matarar = BKE_object_material_array_p(ob);
 
     if (matarar && *matarar) {
-      ma_p = &(*matarar)[act - 1];
+      ma_p = &(*matarar)[slot_index];
     }
     else {
       ma_p = NULL;
@@ -717,17 +708,17 @@ static ID *get_evaluated_object_data_with_materials(Object *ob)
 Material *BKE_object_material_get_eval(Object *ob, short act)
 {
   BLI_assert(DEG_is_evaluated_object(ob));
-  const int slot_index = act - 1;
 
-  if (slot_index < 0) {
-    return NULL;
-  }
   ID *data = get_evaluated_object_data_with_materials(ob);
   const short *tot_slots_data_ptr = BKE_id_material_len_p(data);
   const int tot_slots_data = tot_slots_data_ptr ? *tot_slots_data_ptr : 0;
-  if (slot_index >= tot_slots_data) {
+
+  if (tot_slots_data == 0) {
     return NULL;
   }
+
+  /* Clamp to number of slots if index is out of range, same convention as used for rendering. */
+  const int slot_index = clamp_i(act - 1, 0, tot_slots_data - 1);
   const int tot_slots_object = ob->totcol;
 
   Material ***materials_data_ptr = BKE_id_material_array_p(data);
@@ -1450,7 +1441,7 @@ static bool fill_texpaint_slots_cb(bNode *node, void *userdata)
       NodeTexImage *storage = (NodeTexImage *)node->storage;
       slot->interp = storage->interpolation;
       slot->image_user = &storage->iuser;
-      /* for new renderer, we need to traverse the treeback in search of a UV node */
+      /* For new renderer, we need to traverse the tree back in search of a UV node. */
       bNode *uvnode = nodetree_uv_node_recursive(node);
 
       if (uvnode) {
@@ -1561,7 +1552,7 @@ void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma, const struct Ob
   }
 
   /* COW needed when adding texture slot on an object with no materials.
-   * But do it only when slots actually change to avoid continuous depsgrap updates. */
+   * But do it only when slots actually change to avoid continuous depsgraph updates. */
   if (ma->tot_slots != prev_tot_slots || ma->paint_active_slot != prev_paint_active_slot ||
       ma->paint_clone_slot != prev_paint_clone_slot ||
       (ma->texpaintslot && prev_texpaintslot &&

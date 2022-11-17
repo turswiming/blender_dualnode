@@ -2023,24 +2023,38 @@ bNode *nodeFindNodebyName(bNodeTree *ntree, const char *name)
   return (bNode *)BLI_findstring(&ntree->nodes, name, offsetof(bNode, name));
 }
 
-bool nodeFindNode(bNodeTree *ntree, bNodeSocket *sock, bNode **r_node, int *r_sockindex)
+void nodeFindNode(bNodeTree *ntree, bNodeSocket *sock, bNode **r_node, int *r_sockindex)
 {
   *r_node = nullptr;
+  if (!ntree->runtime->topology_cache_is_dirty) {
+    bNode *node = &sock->owner_node();
+    *r_node = node;
+    if (r_sockindex) {
+      ListBase *sockets = (sock->in_out == SOCK_IN) ? &node->inputs : &node->outputs;
+      *r_sockindex = BLI_findindex(sockets, sock);
+    }
+    return;
+  }
+  const bool success = nodeFindNodeTry(ntree, sock, r_node, r_sockindex);
+  BLI_assert(success);
+  UNUSED_VARS_NDEBUG(success);
+}
 
+bool nodeFindNodeTry(bNodeTree *ntree, bNodeSocket *sock, bNode **r_node, int *r_sockindex)
+{
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
     ListBase *sockets = (sock->in_out == SOCK_IN) ? &node->inputs : &node->outputs;
-    int index = 0;
-    LISTBASE_FOREACH (bNodeSocket *, tsock, sockets) {
+    int i;
+    LISTBASE_FOREACH_INDEX (bNodeSocket *, tsock, sockets, i) {
       if (sock == tsock) {
         if (r_node != nullptr) {
           *r_node = node;
         }
         if (r_sockindex != nullptr) {
-          *r_sockindex = index;
+          *r_sockindex = i;
         }
         return true;
       }
-      index++;
     }
   }
   return false;
@@ -3377,10 +3391,18 @@ struct bNodeSocket *ntreeAddSocketInterfaceFromSocket(bNodeTree *ntree,
                                                       bNode *from_node,
                                                       bNodeSocket *from_sock)
 {
-  bNodeSocket *iosock = ntreeAddSocketInterface(ntree,
-                                                static_cast<eNodeSocketInOut>(from_sock->in_out),
-                                                from_sock->idname,
-                                                DATA_(from_sock->name));
+  return ntreeAddSocketInterfaceFromSocketWithName(
+      ntree, from_node, from_sock, from_sock->idname, from_sock->name);
+}
+
+struct bNodeSocket *ntreeAddSocketInterfaceFromSocketWithName(bNodeTree *ntree,
+                                                              bNode *from_node,
+                                                              bNodeSocket *from_sock,
+                                                              const char *idname,
+                                                              const char *name)
+{
+  bNodeSocket *iosock = ntreeAddSocketInterface(
+      ntree, static_cast<eNodeSocketInOut>(from_sock->in_out), idname, DATA_(name));
   if (iosock) {
     if (iosock->typeinfo->interface_from_socket) {
       iosock->typeinfo->interface_from_socket(ntree, iosock, from_node, from_sock);
@@ -3424,7 +3446,7 @@ void ntreeRemoveSocketInterface(bNodeTree *ntree, bNodeSocket *sock)
 static void ntree_interface_identifier_base(bNodeTree *ntree, char *base)
 {
   /* generate a valid RNA identifier */
-  sprintf(base, "NodeTreeInterface_%s", ntree->id.name + 2);
+  BLI_sprintf(base, "NodeTreeInterface_%s", ntree->id.name + 2);
   RNA_identifier_sanitize(base, false);
 }
 
@@ -3450,8 +3472,8 @@ static void ntree_interface_identifier(bNodeTree *ntree,
   BLI_uniquename_cb(
       ntree_interface_unique_identifier_check, nullptr, base, '_', identifier, maxlen);
 
-  sprintf(name, "Node Tree %s Interface", ntree->id.name + 2);
-  sprintf(description, "Interface properties of node group %s", ntree->id.name + 2);
+  BLI_sprintf(name, "Node Tree %s Interface", ntree->id.name + 2);
+  BLI_sprintf(description, "Interface properties of node group %s", ntree->id.name + 2);
 }
 
 static void ntree_interface_type_create(bNodeTree *ntree)
@@ -3761,15 +3783,9 @@ struct bNodeClipboard {
 #endif
 
   ListBase links;
-  int type;
 };
 
 static bNodeClipboard node_clipboard = {{nullptr}};
-
-void BKE_node_clipboard_init(const struct bNodeTree *ntree)
-{
-  node_clipboard.type = ntree->type;
-}
 
 void BKE_node_clipboard_clear()
 {
@@ -3874,11 +3890,6 @@ const ListBase *BKE_node_clipboard_get_nodes()
 const ListBase *BKE_node_clipboard_get_links()
 {
   return &node_clipboard.links;
-}
-
-int BKE_node_clipboard_get_type()
-{
-  return node_clipboard.type;
 }
 
 void BKE_node_clipboard_free()
@@ -4334,12 +4345,6 @@ void node_type_socket_templates(struct bNodeType *ntype,
   }
 }
 
-void node_type_init(struct bNodeType *ntype,
-                    void (*initfunc)(struct bNodeTree *ntree, struct bNode *node))
-{
-  ntype->initfunc = initfunc;
-}
-
 void node_type_size(struct bNodeType *ntype, int width, int minwidth, int maxwidth)
 {
   ntype->width = width;
@@ -4385,33 +4390,6 @@ void node_type_storage(bNodeType *ntype,
   }
   ntype->copyfunc = copyfunc;
   ntype->freefunc = freefunc;
-}
-
-void node_type_update(struct bNodeType *ntype,
-                      void (*updatefunc)(struct bNodeTree *ntree, struct bNode *node))
-{
-  ntype->updatefunc = updatefunc;
-}
-
-void node_type_group_update(struct bNodeType *ntype,
-                            void (*group_update_func)(struct bNodeTree *ntree, struct bNode *node))
-{
-  ntype->group_update_func = group_update_func;
-}
-
-void node_type_exec(struct bNodeType *ntype,
-                    NodeInitExecFunction init_exec_fn,
-                    NodeFreeExecFunction free_exec_fn,
-                    NodeExecFunction exec_fn)
-{
-  ntype->init_exec_fn = init_exec_fn;
-  ntype->free_exec_fn = free_exec_fn;
-  ntype->exec_fn = exec_fn;
-}
-
-void node_type_gpu(struct bNodeType *ntype, NodeGPUExecFunction gpu_fn)
-{
-  ntype->gpu_fn = gpu_fn;
 }
 
 /* callbacks for undefined types */
@@ -4768,6 +4746,7 @@ static void registerGeometryNodes()
   register_node_type_geo_field_at_index();
   register_node_type_geo_flip_faces();
   register_node_type_geo_geometry_to_instance();
+  register_node_type_geo_image_info();
   register_node_type_geo_image_texture();
   register_node_type_geo_input_curve_handles();
   register_node_type_geo_input_curve_tilt();
