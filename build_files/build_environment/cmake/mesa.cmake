@@ -43,7 +43,7 @@ ExternalProject_Add(external_mesa
   PREFIX ${BUILD_DIR}/mesa
   CONFIGURE_COMMAND ${CONFIGURE_ENV} &&
     cd ${BUILD_DIR}/mesa/src/external_mesa/ &&
-    meson ${BUILD_DIR}/mesa/src/external_mesa-build --prefix=${LIBDIR}/mesa ${MESA_EXTRA_FLAGS}
+    ${MESON} ${BUILD_DIR}/mesa/src/external_mesa-build --prefix=${LIBDIR}/mesa ${MESA_EXTRA_FLAGS}
   BUILD_COMMAND ${CONFIGURE_ENV} && cd ${BUILD_DIR}/mesa/src/external_mesa-build && ninja -j${MAKE_THREADS}
   INSTALL_COMMAND ${CONFIGURE_ENV} && cd ${BUILD_DIR}/mesa/src/external_mesa-build && ninja install
   INSTALL_DIR ${LIBDIR}/mesa
