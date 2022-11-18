@@ -524,7 +524,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
       return false; /* both child nodes have zero importance */
     }
 
-    if (*randu <= left_probability) { /* go left */
+    if (*randu < left_probability) { /* go left */
       node_index = left_index;
       *randu /= left_probability;
       *pdf_factor *= left_probability;
@@ -670,7 +670,7 @@ ccl_device float light_tree_pdf(
   float distant_light_importance = light_tree_distant_light_importance<false>(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
-  if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
+  if (kernel_data.integrator.num_tree_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
     float discard;
     light_tree_node_importance<false>(
@@ -757,7 +757,7 @@ ccl_device float light_tree_pdf_distant(
   float distant_light_importance = light_tree_distant_light_importance<false>(
       kg, N, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
-  if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
+  if (kernel_data.integrator.num_tree_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
     float discard;
     light_tree_node_importance<false>(
@@ -805,7 +805,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
   float distant_light_importance = light_tree_distant_light_importance<in_volume_segment>(
       kg, N_or_D, has_transmission, kernel_data.integrator.num_distant_lights);
   float light_tree_importance = 0.0f;
-  if (kernel_data.integrator.num_distribution > kernel_data.integrator.num_distant_lights) {
+  if (kernel_data.integrator.num_tree_lights) {
     const ccl_global KernelLightTreeNode *kroot = &kernel_data_fetch(light_tree_nodes, 0);
     float discard;
     light_tree_node_importance<in_volume_segment>(
@@ -821,7 +821,7 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
 
   float pdf_factor = 1.0f;
   bool ret;
-  if (randu <= light_tree_probability) {
+  if (randu < light_tree_probability) {
     randu = randu / light_tree_probability;
     pdf_factor *= light_tree_probability;
     ret = light_tree_sample<in_volume_segment>(kg,

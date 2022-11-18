@@ -131,7 +131,7 @@ ccl_device float background_map_pdf(KernelGlobals kg, float3 direction)
 ccl_device_inline bool background_portal_data_fetch_and_check_side(
     KernelGlobals kg, float3 P, int index, ccl_private float3 *lightpos, ccl_private float3 *dir)
 {
-  int portal = kernel_data.background.portal_offset + index;
+  int portal = kernel_data.integrator.portal_offset + index;
   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, portal);
 
   *lightpos = make_float3(klight->co[0], klight->co[1], klight->co[2]);
@@ -150,7 +150,7 @@ ccl_device_inline float background_portal_pdf(
   float portal_pdf = 0.0f;
 
   int num_possible = 0;
-  for (int p = 0; p < kernel_data.background.num_portals; p++) {
+  for (int p = 0; p < kernel_data.integrator.num_portals; p++) {
     if (p == ignore_portal)
       continue;
 
@@ -164,7 +164,7 @@ ccl_device_inline float background_portal_pdf(
     }
     num_possible++;
 
-    int portal = kernel_data.background.portal_offset + p;
+    int portal = kernel_data.integrator.portal_offset + p;
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, portal);
     float3 extentu = make_float3(
         klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
@@ -208,7 +208,7 @@ ccl_device_inline float background_portal_pdf(
 ccl_device int background_num_possible_portals(KernelGlobals kg, float3 P)
 {
   int num_possible_portals = 0;
-  for (int p = 0; p < kernel_data.background.num_portals; p++) {
+  for (int p = 0; p < kernel_data.integrator.num_portals; p++) {
     float3 lightpos, dir;
     if (background_portal_data_fetch_and_check_side(kg, P, p, &lightpos, &dir))
       num_possible_portals++;
@@ -232,7 +232,7 @@ ccl_device float3 background_portal_sample(KernelGlobals kg,
   /* TODO(sergey): Some smarter way of finding portal to sample
    * is welcome.
    */
-  for (int p = 0; p < kernel_data.background.num_portals; p++) {
+  for (int p = 0; p < kernel_data.integrator.num_portals; p++) {
     /* Search for the sampled portal. */
     float3 lightpos, dir;
     if (!background_portal_data_fetch_and_check_side(kg, P, p, &lightpos, &dir))
@@ -240,7 +240,7 @@ ccl_device float3 background_portal_sample(KernelGlobals kg,
 
     if (portal == 0) {
       /* p is the portal to be sampled. */
-      int portal = kernel_data.background.portal_offset + p;
+      int portal = kernel_data.integrator.portal_offset + p;
       const ccl_global KernelLight *klight = &kernel_data_fetch(lights, portal);
       float3 extentu = make_float3(
           klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);

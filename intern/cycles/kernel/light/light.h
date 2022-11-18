@@ -100,7 +100,7 @@ ccl_device bool lights_intersect(KernelGlobals kg,
                                  const int last_type,
                                  const uint32_t path_flag)
 {
-  for (int lamp = 0; lamp < kernel_data.integrator.num_all_lights; lamp++) {
+  for (int lamp = 0; lamp < kernel_data.integrator.num_lights; lamp++) {
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
 
     if (path_flag & PATH_RAY_CAMERA) {

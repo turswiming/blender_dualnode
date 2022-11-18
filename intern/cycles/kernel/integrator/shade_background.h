@@ -85,7 +85,7 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
 #ifdef __MNEE__
   if (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_CULL_LIGHT_CONNECTION) {
     if (kernel_data.background.use_mis) {
-      for (int lamp = 0; lamp < kernel_data.integrator.num_all_lights; lamp++) {
+      for (int lamp = 0; lamp < kernel_data.integrator.num_lights; lamp++) {
         /* This path should have been resolved with mnee, it will
          * generate a firefly for small lights since it is improbable. */
         const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
@@ -133,7 +133,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
   const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
   const float ray_time = INTEGRATOR_STATE(state, ray, time);
   LightSample ls ccl_optional_struct_init;
-  for (int lamp = 0; lamp < kernel_data.integrator.num_all_lights; lamp++) {
+  for (int lamp = 0; lamp < kernel_data.integrator.num_lights; lamp++) {
     if (distant_light_sample_from_intersection(kg, ray_D, lamp, &ls)) {
       /* Use visibility flag to skip lights. */
 #ifdef __PASSES__
