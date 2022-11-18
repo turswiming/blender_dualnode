@@ -92,6 +92,8 @@ if(WITH_VULKAN_BACKEND)
     ${VULKAN_LIBRARIES}
     ${MOLTENVK_LIBRARIES}
   )
+
+  add_definitions(-DWITH_VULKAN_BACKEND)
 endif()
 
 if(WITH_GHOST_DEBUG)

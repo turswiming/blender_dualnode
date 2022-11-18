@@ -1247,8 +1247,6 @@ if(WITH_VULKAN_BACKEND)
   if(APPLE)
     list(APPEND BLENDER_GL_LIBRARIES ${MOLTENVK_LIBRARIES})
   endif()
-
-  add_definitions(-DWITH_VULKAN_BACKEND)
 endif()
 
 # -----------------------------------------------------------------------------
