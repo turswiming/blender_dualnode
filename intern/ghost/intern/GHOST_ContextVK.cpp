@@ -624,7 +624,7 @@ GHOST_TSuccess GHOST_ContextVK::createCommandBuffers()
 
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  poolInfo.flags = 0;
+  poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
   poolInfo.queueFamilyIndex = m_queue_family_graphic;
 
   VK_CHECK(vkCreateCommandPool(m_device, &poolInfo, NULL, &m_command_pool));
