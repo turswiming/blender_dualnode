@@ -259,7 +259,7 @@ GHOST_TSuccess GHOST_ContextVK::swapBuffers()
 
   VK_CHECK(vkQueueWaitIdle(m_graphic_queue));
 
-  VkPresentInfoKHR present_info{};
+  VkPresentInfoKHR present_info = {};
   present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
   present_info.waitSemaphoreCount = 1;
   present_info.pWaitSemaphores = &m_render_finished_semaphores[m_currentFrame];
