@@ -7,6 +7,13 @@
 
 #include "vk_shader.hh"
 
+#ifdef __APPLE__
+#  include <MoltenVK/vk_mvk_moltenvk.h>
+#else
+#  include <vulkan/vulkan.h>
+#endif
+#include "shaderc/shaderc.hpp"
+
 namespace blender::gpu {
 void VKShader::vertex_shader_from_glsl(MutableSpan<const char *> /*sources*/)
 {

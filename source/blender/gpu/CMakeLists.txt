@@ -43,6 +43,8 @@ set(INC
 
 set(INC_SYS
   ${Epoxy_INCLUDE_DIRS}
+  ${VULKAN_INCLUDE_DIRS}
+  ${MOLTENVK_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -277,6 +279,8 @@ endif()
 
 set(LIB
   ${Epoxy_LIBRARIES}
+  ${VULKAN_LIBRARIES}
+  ${MOLTENVK_LIBRARIES}
 )
 
 set(MSL_SRC

@@ -9,6 +9,7 @@
 
 #include "gpu_backend.hh"
 
+
 namespace blender::gpu {
 
 class VKBackend : public GPUBackend {
