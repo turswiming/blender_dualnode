@@ -93,9 +93,9 @@ typedef struct {
 
 typedef struct PBVHPixels {
   /**
-   * Contains data constant for each UVPrimitive.
+   * Storage for texture painting on PBVH level.
    *
-   * #blender::bke::pbvh::pixels::PBVHData
+   * Contains #blender::bke::pbvh::pixels::PBVHData
    */
   void *data;
 } PBVHPixels;
