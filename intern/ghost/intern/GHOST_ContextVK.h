@@ -198,8 +198,8 @@ class GHOST_ContextVK : public GHOST_Context {
 
   const char *getPlatformSpecificSurfaceExtension() const;
   GHOST_TSuccess pickPhysicalDevice(std::vector<const char *> required_exts);
-  GHOST_TSuccess createSwapchain(void);
-  GHOST_TSuccess destroySwapchain(void);
-  GHOST_TSuccess createCommandBuffers(void);
-  GHOST_TSuccess recordCommandBuffers(void);
+  GHOST_TSuccess createSwapchain();
+  GHOST_TSuccess destroySwapchain();
+  GHOST_TSuccess createCommandBuffers();
+  GHOST_TSuccess recordCommandBuffers();
 };

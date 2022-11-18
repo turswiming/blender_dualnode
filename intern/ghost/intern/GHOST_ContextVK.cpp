@@ -169,7 +169,7 @@ GHOST_ContextVK::~GHOST_ContextVK()
   }
 }
 
-GHOST_TSuccess GHOST_ContextVK::destroySwapchain(void)
+GHOST_TSuccess GHOST_ContextVK::destroySwapchain()
 {
   if (m_device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(m_device);
@@ -613,7 +613,7 @@ static GHOST_TSuccess selectPresentMode(VkPhysicalDevice device,
   return GHOST_kFailure;
 }
 
-GHOST_TSuccess GHOST_ContextVK::createCommandBuffers(void)
+GHOST_TSuccess GHOST_ContextVK::createCommandBuffers()
 {
   m_command_buffers.resize(m_swapchain_image_views.size());
 
@@ -635,7 +635,7 @@ GHOST_TSuccess GHOST_ContextVK::createCommandBuffers(void)
   return GHOST_kSuccess;
 }
 
-GHOST_TSuccess GHOST_ContextVK::createSwapchain(void)
+GHOST_TSuccess GHOST_ContextVK::createSwapchain()
 {
   m_swapchain_id++;
 
