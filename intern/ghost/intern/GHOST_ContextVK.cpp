@@ -253,6 +253,11 @@ GHOST_TSuccess GHOST_ContextVK::swapBuffers()
   vkResetFences(m_device, 1, &m_in_flight_fences[m_currentFrame]);
 
   VK_CHECK(vkQueueSubmit(m_graphic_queue, 1, &submit_info, m_in_flight_fences[m_currentFrame]));
+  do {
+    result = vkWaitForFences(m_device, 1, &m_in_flight_fences[m_currentFrame], VK_TRUE, 10000);
+  } while (result == VK_TIMEOUT);
+
+  VK_CHECK(vkQueueWaitIdle(m_graphic_queue));
 
   VkPresentInfoKHR present_info{};
   present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
