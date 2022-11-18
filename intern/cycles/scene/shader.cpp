@@ -350,7 +350,7 @@ void Shader::estimate_emission()
      * using a lot of memory in the light tree and potentially wasting samples
      * where indirect light samples are sufficient.
      * Possible optimization: estimate front and back emission separately. */
-    emission_sampling = (average(emission_estimate) > 2.0f) ? EMISSION_SAMPLING_FRONT_BACK :
+    emission_sampling = (average(emission_estimate) > 0.5f) ? EMISSION_SAMPLING_FRONT_BACK :
                                                               EMISSION_SAMPLING_NONE;
   }
   else {

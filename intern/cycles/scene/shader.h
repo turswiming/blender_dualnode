@@ -124,7 +124,7 @@ class Shader : public Node {
   bool has_integrator_dependency;
 
   float3 emission_estimate;
-  bool emission_sampling;
+  EmissionSampling emission_sampling;
   bool emission_is_constant;
 
   /* requested mesh attributes */
