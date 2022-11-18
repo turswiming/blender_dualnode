@@ -18,7 +18,6 @@
 
 #include "DNA_meshdata_types.h"
 
-#include "PIL_time_utildefines.h"
 
 namespace blender::bke::uv_islands {
 
@@ -120,12 +119,10 @@ struct MeshData {
         mloop(mloop),
         mloopuv(mloopuv)
   {
-    TIMEIT_START(init_mesh_data);
     init_vertices();
     init_primitives();
     init_edges();
     init_primitive_uv_island_ids();
-    TIMEIT_END(init_mesh_data);
   }
 
   void init_vertices()
