@@ -17,6 +17,7 @@
 #include "BLI_task.hh"
 
 #include "BKE_bvhutils.h"
+#include "BKE_editmesh_cache.h"
 #include "BKE_lib_id.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
@@ -30,87 +31,83 @@ using blender::Span;
 /** \name Mesh Runtime Struct Utils
  * \{ */
 
-/**
- * \brief Initialize the runtime mutexes of the given mesh.
- *
- * Any existing mutexes will be overridden.
- */
-static void mesh_runtime_init_mutexes(Mesh *mesh)
+namespace blender::bke {
+
+static void edit_data_reset(EditMeshData &edit_data)
 {
-  mesh->runtime.eval_mutex = MEM_new<ThreadMutex>("mesh runtime eval_mutex");
-  BLI_mutex_init(static_cast<ThreadMutex *>(mesh->runtime.eval_mutex));
-  mesh->runtime.normals_mutex = MEM_new<ThreadMutex>("mesh runtime normals_mutex");
-  BLI_mutex_init(static_cast<ThreadMutex *>(mesh->runtime.normals_mutex));
-  mesh->runtime.render_mutex = MEM_new<ThreadMutex>("mesh runtime render_mutex");
-  BLI_mutex_init(static_cast<ThreadMutex *>(mesh->runtime.render_mutex));
+  MEM_SAFE_FREE(edit_data.polyCos);
+  MEM_SAFE_FREE(edit_data.polyNos);
+  MEM_SAFE_FREE(edit_data.vertexCos);
+  MEM_SAFE_FREE(edit_data.vertexNos);
 }
 
-/**
- * \brief free the mutexes of the given mesh runtime.
- */
-static void mesh_runtime_free_mutexes(Mesh *mesh)
+static void free_edit_data(MeshRuntime &mesh_runtime)
 {
-  if (mesh->runtime.eval_mutex != nullptr) {
-    BLI_mutex_end(static_cast<ThreadMutex *>(mesh->runtime.eval_mutex));
-    MEM_freeN(mesh->runtime.eval_mutex);
-    mesh->runtime.eval_mutex = nullptr;
-  }
-  if (mesh->runtime.normals_mutex != nullptr) {
-    BLI_mutex_end(static_cast<ThreadMutex *>(mesh->runtime.normals_mutex));
-    MEM_freeN(mesh->runtime.normals_mutex);
-    mesh->runtime.normals_mutex = nullptr;
-  }
-  if (mesh->runtime.render_mutex != nullptr) {
-    BLI_mutex_end(static_cast<ThreadMutex *>(mesh->runtime.render_mutex));
-    MEM_freeN(mesh->runtime.render_mutex);
-    mesh->runtime.render_mutex = nullptr;
+  if (mesh_runtime.edit_data) {
+    edit_data_reset(*mesh_runtime.edit_data);
+    MEM_freeN(mesh_runtime.edit_data);
+    mesh_runtime.edit_data = nullptr;
   }
 }
 
-void BKE_mesh_runtime_init_data(Mesh *mesh)
+static void free_mesh_eval(MeshRuntime &mesh_runtime)
 {
-  mesh_runtime_init_mutexes(mesh);
-}
-
-void BKE_mesh_runtime_free_data(Mesh *mesh)
-{
-  BKE_mesh_runtime_clear_cache(mesh);
-  mesh_runtime_free_mutexes(mesh);
-}
-
-void BKE_mesh_runtime_reset_on_copy(Mesh *mesh, const int /*flag*/)
-{
-  Mesh_Runtime *runtime = &mesh->runtime;
-
-  runtime->mesh_eval = nullptr;
-  runtime->edit_data = nullptr;
-  runtime->batch_cache = nullptr;
-  runtime->subdiv_ccg = nullptr;
-  runtime->looptris = blender::dna::shallow_zero_initialize();
-  runtime->bvh_cache = nullptr;
-  runtime->shrinkwrap_data = nullptr;
-  runtime->subsurf_face_dot_tags = nullptr;
-
-  runtime->vert_normals_dirty = true;
-  runtime->poly_normals_dirty = true;
-  runtime->vert_normals = nullptr;
-  runtime->poly_normals = nullptr;
-
-  mesh_runtime_init_mutexes(mesh);
-}
-
-void BKE_mesh_runtime_clear_cache(Mesh *mesh)
-{
-  if (mesh->runtime.mesh_eval != nullptr) {
-    mesh->runtime.mesh_eval->edit_mesh = nullptr;
-    BKE_id_free(nullptr, mesh->runtime.mesh_eval);
-    mesh->runtime.mesh_eval = nullptr;
+  if (mesh_runtime.mesh_eval != nullptr) {
+    mesh_runtime.mesh_eval->edit_mesh = nullptr;
+    BKE_id_free(nullptr, mesh_runtime.mesh_eval);
+    mesh_runtime.mesh_eval = nullptr;
   }
-  BKE_mesh_runtime_clear_geometry(mesh);
-  BKE_mesh_batch_cache_free(mesh);
-  BKE_mesh_runtime_clear_edit_data(mesh);
-  BKE_mesh_clear_derived_normals(mesh);
 }
+
+static void free_subdiv_ccg(MeshRuntime &mesh_runtime)
+{
+  /* TODO(sergey): Does this really belong here? */
+  if (mesh_runtime.subdiv_ccg != nullptr) {
+    BKE_subdiv_ccg_destroy(mesh_runtime.subdiv_ccg);
+    mesh_runtime.subdiv_ccg = nullptr;
+  }
+}
+
+static void free_bvh_cache(MeshRuntime &mesh_runtime)
+{
+  if (mesh_runtime.bvh_cache) {
+    bvhcache_free(mesh_runtime.bvh_cache);
+    mesh_runtime.bvh_cache = nullptr;
+  }
+}
+
+static void free_normals(MeshRuntime &mesh_runtime)
+{
+  MEM_SAFE_FREE(mesh_runtime.vert_normals);
+  MEM_SAFE_FREE(mesh_runtime.poly_normals);
+  mesh_runtime.vert_normals_dirty = true;
+  mesh_runtime.poly_normals_dirty = true;
+}
+
+static void free_batch_cache(MeshRuntime &mesh_runtime)
+{
+  if (mesh_runtime.batch_cache) {
+    BKE_mesh_batch_cache_free(mesh_runtime.batch_cache);
+    mesh_runtime.batch_cache = nullptr;
+  }
+}
+
+MeshRuntime::~MeshRuntime()
+{
+  free_mesh_eval(*this);
+  free_subdiv_ccg(*this);
+  free_bvh_cache(*this);
+  free_edit_data(*this);
+  free_batch_cache(*this);
+  free_normals(*this);
+  if (this->shrinkwrap_data) {
+    BKE_shrinkwrap_boundary_data_free(this->shrinkwrap_data);
+  }
+  MEM_SAFE_FREE(this->subsurf_face_dot_tags);
+  MEM_SAFE_FREE(this->looptris.array);
+}
+
+}  // namespace blender::bke
 
 blender::Span<MLoopTri> Mesh::looptris() const
 {
@@ -131,32 +128,32 @@ static void mesh_ensure_looptri_data(Mesh *mesh)
   const uint totpoly = mesh->totpoly;
   const int looptris_len = poly_to_tri_count(totpoly, mesh->totloop);
 
-  BLI_assert(mesh->runtime.looptris.array_wip == nullptr);
+  BLI_assert(mesh->runtime->looptris.array_wip == nullptr);
 
-  SWAP(MLoopTri *, mesh->runtime.looptris.array, mesh->runtime.looptris.array_wip);
+  SWAP(MLoopTri *, mesh->runtime->looptris.array, mesh->runtime->looptris.array_wip);
 
-  if ((looptris_len > mesh->runtime.looptris.len_alloc) ||
-      (looptris_len < mesh->runtime.looptris.len_alloc * 2) || (totpoly == 0)) {
-    MEM_SAFE_FREE(mesh->runtime.looptris.array_wip);
-    mesh->runtime.looptris.len_alloc = 0;
-    mesh->runtime.looptris.len = 0;
+  if ((looptris_len > mesh->runtime->looptris.len_alloc) ||
+      (looptris_len < mesh->runtime->looptris.len_alloc * 2) || (totpoly == 0)) {
+    MEM_SAFE_FREE(mesh->runtime->looptris.array_wip);
+    mesh->runtime->looptris.len_alloc = 0;
+    mesh->runtime->looptris.len = 0;
   }
 
   if (totpoly) {
-    if (mesh->runtime.looptris.array_wip == nullptr) {
-      mesh->runtime.looptris.array_wip = static_cast<MLoopTri *>(
-          MEM_malloc_arrayN(looptris_len, sizeof(*mesh->runtime.looptris.array_wip), __func__));
-      mesh->runtime.looptris.len_alloc = looptris_len;
+    if (mesh->runtime->looptris.array_wip == nullptr) {
+      mesh->runtime->looptris.array_wip = static_cast<MLoopTri *>(
+          MEM_malloc_arrayN(looptris_len, sizeof(*mesh->runtime->looptris.array_wip), __func__));
+      mesh->runtime->looptris.len_alloc = looptris_len;
     }
 
-    mesh->runtime.looptris.len = looptris_len;
+    mesh->runtime->looptris.len = looptris_len;
   }
 }
 
-void BKE_mesh_runtime_looptri_recalc(Mesh *mesh)
+static void recalc_loopris(Mesh *mesh)
 {
   mesh_ensure_looptri_data(mesh);
-  BLI_assert(mesh->totpoly == 0 || mesh->runtime.looptris.array_wip != nullptr);
+  BLI_assert(mesh->totpoly == 0 || mesh->runtime->looptris.array_wip != nullptr);
   const Span<MVert> verts = mesh->verts();
   const Span<MPoly> polys = mesh->polys();
   const Span<MLoop> loops = mesh->loops();
@@ -167,7 +164,7 @@ void BKE_mesh_runtime_looptri_recalc(Mesh *mesh)
                                          verts.data(),
                                          mesh->totloop,
                                          mesh->totpoly,
-                                         mesh->runtime.looptris.array_wip,
+                                         mesh->runtime->looptris.array_wip,
                                          BKE_mesh_poly_normals_ensure(mesh));
   }
   else {
@@ -176,42 +173,38 @@ void BKE_mesh_runtime_looptri_recalc(Mesh *mesh)
                             verts.data(),
                             mesh->totloop,
                             mesh->totpoly,
-                            mesh->runtime.looptris.array_wip);
+                            mesh->runtime->looptris.array_wip);
   }
 
-  BLI_assert(mesh->runtime.looptris.array == nullptr);
-  atomic_cas_ptr((void **)&mesh->runtime.looptris.array,
-                 mesh->runtime.looptris.array,
-                 mesh->runtime.looptris.array_wip);
-  mesh->runtime.looptris.array_wip = nullptr;
+  BLI_assert(mesh->runtime->looptris.array == nullptr);
+  atomic_cas_ptr((void **)&mesh->runtime->looptris.array,
+                 mesh->runtime->looptris.array,
+                 mesh->runtime->looptris.array_wip);
+  mesh->runtime->looptris.array_wip = nullptr;
 }
 
 int BKE_mesh_runtime_looptri_len(const Mesh *mesh)
 {
   /* This is a ported copy of `dm_getNumLoopTri(dm)`. */
   const int looptri_len = poly_to_tri_count(mesh->totpoly, mesh->totloop);
-  BLI_assert(ELEM(mesh->runtime.looptris.len, 0, looptri_len));
+  BLI_assert(ELEM(mesh->runtime->looptris.len, 0, looptri_len));
   return looptri_len;
 }
 
 const MLoopTri *BKE_mesh_runtime_looptri_ensure(const Mesh *mesh)
 {
-  ThreadMutex *mesh_eval_mutex = (ThreadMutex *)mesh->runtime.eval_mutex;
-  BLI_mutex_lock(mesh_eval_mutex);
+  std::lock_guard lock{mesh->runtime->eval_mutex};
 
-  MLoopTri *looptri = mesh->runtime.looptris.array;
+  MLoopTri *looptri = mesh->runtime->looptris.array;
 
   if (looptri != nullptr) {
-    BLI_assert(BKE_mesh_runtime_looptri_len(mesh) == mesh->runtime.looptris.len);
+    BLI_assert(BKE_mesh_runtime_looptri_len(mesh) == mesh->runtime->looptris.len);
   }
   else {
     /* Must isolate multithreaded tasks while holding a mutex lock. */
-    blender::threading::isolate_task(
-        [&]() { BKE_mesh_runtime_looptri_recalc(const_cast<Mesh *>(mesh)); });
-    looptri = mesh->runtime.looptris.array;
+    blender::threading::isolate_task([&]() { recalc_loopris(const_cast<Mesh *>(mesh)); });
+    looptri = mesh->runtime->looptris.array;
   }
-
-  BLI_mutex_unlock(mesh_eval_mutex);
 
   return looptri;
 }
@@ -230,79 +223,67 @@ void BKE_mesh_runtime_verttri_from_looptri(MVertTri *r_verttri,
 
 bool BKE_mesh_runtime_ensure_edit_data(struct Mesh *mesh)
 {
-  if (mesh->runtime.edit_data != nullptr) {
+  if (mesh->runtime->edit_data != nullptr) {
     return false;
   }
-
-  mesh->runtime.edit_data = MEM_cnew<EditMeshData>(__func__);
+  mesh->runtime->edit_data = MEM_cnew<EditMeshData>(__func__);
   return true;
 }
 
-bool BKE_mesh_runtime_reset_edit_data(Mesh *mesh)
+void BKE_mesh_runtime_reset_edit_data(Mesh *mesh)
 {
-  EditMeshData *edit_data = mesh->runtime.edit_data;
-  if (edit_data == nullptr) {
-    return false;
+  using namespace blender::bke;
+  if (EditMeshData *edit_data = mesh->runtime->edit_data) {
+    edit_data_reset(*edit_data);
   }
-
-  MEM_SAFE_FREE(edit_data->polyCos);
-  MEM_SAFE_FREE(edit_data->polyNos);
-  MEM_SAFE_FREE(edit_data->vertexCos);
-  MEM_SAFE_FREE(edit_data->vertexNos);
-
-  return true;
 }
 
-bool BKE_mesh_runtime_clear_edit_data(Mesh *mesh)
+void BKE_mesh_runtime_clear_cache(Mesh *mesh)
 {
-  if (mesh->runtime.edit_data == nullptr) {
-    return false;
-  }
-  BKE_mesh_runtime_reset_edit_data(mesh);
-
-  MEM_freeN(mesh->runtime.edit_data);
-  mesh->runtime.edit_data = nullptr;
-
-  return true;
+  using namespace blender::bke;
+  free_mesh_eval(*mesh->runtime);
+  free_batch_cache(*mesh->runtime);
+  free_edit_data(*mesh->runtime);
+  BKE_mesh_runtime_clear_geometry(mesh);
 }
 
 void BKE_mesh_runtime_clear_geometry(Mesh *mesh)
 {
-  BKE_mesh_tag_coords_changed(mesh);
-
-  /* TODO(sergey): Does this really belong here? */
-  if (mesh->runtime.subdiv_ccg != nullptr) {
-    BKE_subdiv_ccg_destroy(mesh->runtime.subdiv_ccg);
-    mesh->runtime.subdiv_ccg = nullptr;
+  /* Tagging shared caches dirty will free the allocated data if there is only one user. */
+  free_bvh_cache(*mesh->runtime);
+  free_normals(*mesh->runtime);
+  free_subdiv_ccg(*mesh->runtime);
+  mesh->runtime->bounds_cache.tag_dirty();
+  if (mesh->runtime->shrinkwrap_data) {
+    BKE_shrinkwrap_boundary_data_free(mesh->runtime->shrinkwrap_data);
   }
-  BKE_shrinkwrap_discard_boundary_data(mesh);
-
-  MEM_SAFE_FREE(mesh->runtime.subsurf_face_dot_tags);
+  MEM_SAFE_FREE(mesh->runtime->subsurf_face_dot_tags);
+  MEM_SAFE_FREE(mesh->runtime->looptris.array);
 }
 
 void BKE_mesh_tag_coords_changed(Mesh *mesh)
 {
   BKE_mesh_normals_tag_dirty(mesh);
-  MEM_SAFE_FREE(mesh->runtime.looptris.array);
-  if (mesh->runtime.bvh_cache) {
-    bvhcache_free(mesh->runtime.bvh_cache);
-    mesh->runtime.bvh_cache = nullptr;
-  }
+  free_bvh_cache(*mesh->runtime);
+  MEM_SAFE_FREE(mesh->runtime->looptris.array);
+  mesh->runtime->bounds_cache.tag_dirty();
 }
 
 void BKE_mesh_tag_coords_changed_uniformly(Mesh *mesh)
 {
-  const bool vert_normals_were_dirty = BKE_mesh_vertex_normals_are_dirty(mesh);
-  const bool poly_normals_were_dirty = BKE_mesh_poly_normals_are_dirty(mesh);
+  /* The normals and triangulation didn't change, since all verts moved by the same amount. */
+  free_bvh_cache(*mesh->runtime);
+  mesh->runtime->bounds_cache.tag_dirty();
+}
 
-  BKE_mesh_tag_coords_changed(mesh);
-  /* The normals didn't change, since all verts moved by the same amount. */
-  if (!vert_normals_were_dirty) {
-    BKE_mesh_vertex_normals_clear_dirty(mesh);
-  }
-  if (!poly_normals_were_dirty) {
-    BKE_mesh_poly_normals_clear_dirty(mesh);
-  }
+bool BKE_mesh_is_deformed_only(const Mesh *mesh)
+{
+  return mesh->runtime->deformed_only;
+}
+
+eMeshWrapperType BKE_mesh_wrapper_type(const struct Mesh *mesh)
+{
+  return mesh->runtime->wrapper_type;
 }
 
 /** \} */
@@ -313,19 +294,17 @@ void BKE_mesh_tag_coords_changed_uniformly(Mesh *mesh)
 
 /* Draw Engine */
 void (*BKE_mesh_batch_cache_dirty_tag_cb)(Mesh *me, eMeshBatchDirtyMode mode) = nullptr;
-void (*BKE_mesh_batch_cache_free_cb)(Mesh *me) = nullptr;
+void (*BKE_mesh_batch_cache_free_cb)(void *batch_cache) = nullptr;
 
 void BKE_mesh_batch_cache_dirty_tag(Mesh *me, eMeshBatchDirtyMode mode)
 {
-  if (me->runtime.batch_cache) {
+  if (me->runtime->batch_cache) {
     BKE_mesh_batch_cache_dirty_tag_cb(me, mode);
   }
 }
-void BKE_mesh_batch_cache_free(Mesh *me)
+void BKE_mesh_batch_cache_free(void *batch_cache)
 {
-  if (me->runtime.batch_cache) {
-    BKE_mesh_batch_cache_free_cb(me);
-  }
+  BKE_mesh_batch_cache_free_cb(batch_cache);
 }
 
 /** \} */

@@ -406,10 +406,37 @@ static int rna_MeshLoopTriangle_index_get(PointerRNA *ptr)
 {
   const Mesh *mesh = rna_mesh(ptr);
   const MLoopTri *ltri = (MLoopTri *)ptr->data;
-  const int index = (int)(ltri - mesh->runtime.looptris.array);
+  const int index = (int)(ltri - BKE_mesh_runtime_looptri_ensure(mesh));
   BLI_assert(index >= 0);
-  BLI_assert(index < mesh->runtime.looptris.len);
+  BLI_assert(index < BKE_mesh_runtime_looptri_len(mesh));
   return index;
+}
+
+static void rna_Mesh_loop_triangles_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+  const Mesh *mesh = rna_mesh(ptr);
+  const MLoopTri *looptris = BKE_mesh_runtime_looptri_ensure(mesh);
+  rna_iterator_array_begin(
+      iter, (void *)looptris, sizeof(MLoopTri), BKE_mesh_runtime_looptri_len(mesh), false, NULL);
+}
+
+static int rna_Mesh_loop_triangles_length(PointerRNA *ptr)
+{
+  const Mesh *mesh = rna_mesh(ptr);
+  return BKE_mesh_runtime_looptri_len(mesh);
+}
+
+int rna_Mesh_loop_triangles_lookup_int(PointerRNA *ptr, int index, PointerRNA *r_ptr)
+{
+  const Mesh *mesh = rna_mesh(ptr);
+  if (index < 0 || index >= BKE_mesh_runtime_looptri_len(mesh)) {
+    return false;
+  }
+  /* Casting away const is okay because this RNA type doesn't allow changing the value. */
+  r_ptr->owner_id = (ID *)&mesh->id;
+  r_ptr->type = &RNA_MeshLoopTriangle;
+  r_ptr->data = (void *)&BKE_mesh_runtime_looptri_ensure(mesh)[index];
+  return true;
 }
 
 static void rna_MeshVertex_normal_get(PointerRNA *ptr, float *value)
@@ -689,7 +716,6 @@ static void rna_MeshPolygon_flip(ID *id, MPoly *mp)
   BKE_mesh_polygon_flip(mp, loops, &me->ldata);
   BKE_mesh_tessface_clear(me);
   BKE_mesh_runtime_clear_geometry(me);
-  BKE_mesh_normals_tag_dirty(me);
 }
 
 static void rna_MeshLoopTriangle_verts_get(PointerRNA *ptr, int *values)
@@ -1502,8 +1528,9 @@ static char *rna_MeshPolygon_path(const PointerRNA *ptr)
 
 static char *rna_MeshLoopTriangle_path(const PointerRNA *ptr)
 {
-  return BLI_sprintfN("loop_triangles[%d]",
-                      (int)((MLoopTri *)ptr->data - rna_mesh(ptr)->runtime.looptris.array));
+  return BLI_sprintfN(
+      "loop_triangles[%d]",
+      (int)((MLoopTri *)ptr->data - BKE_mesh_runtime_looptri_ensure(rna_mesh(ptr))));
 }
 
 static char *rna_MeshEdge_path(const PointerRNA *ptr)
@@ -3684,7 +3711,15 @@ static void rna_def_mesh(BlenderRNA *brna)
                                     NULL);
 
   prop = RNA_def_property(srna, "loop_triangles", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_collection_sdna(prop, NULL, "runtime.looptris.array", "runtime.looptris.len");
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_Mesh_loop_triangles_begin",
+                                    "rna_iterator_array_next",
+                                    "rna_iterator_array_end",
+                                    "rna_iterator_array_get",
+                                    "rna_Mesh_loop_triangles_length",
+                                    "rna_Mesh_loop_triangles_lookup_int",
+                                    NULL,
+                                    NULL);
   RNA_def_property_struct_type(prop, "MeshLoopTriangle");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
   RNA_def_property_ui_text(prop, "Loop Triangles", "Tessellation of mesh polygons into triangles");
@@ -3988,6 +4023,7 @@ static void rna_def_mesh(BlenderRNA *brna)
                            "Size of the voxel in object space used for volume evaluation. Lower "
                            "values preserve finer details");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   prop = RNA_def_property(srna, "remesh_voxel_adaptivity", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_float_sdna(prop, NULL, "remesh_voxel_adaptivity");
@@ -3999,11 +4035,13 @@ static void rna_def_mesh(BlenderRNA *brna)
       "Reduces the final face count by simplifying geometry where detail is not needed, "
       "generating triangles. A value greater than 0 disables Fix Poles");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   prop = RNA_def_property(srna, "use_remesh_fix_poles", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", ME_REMESH_FIX_POLES);
   RNA_def_property_ui_text(prop, "Fix Poles", "Produces less poles and a better topology flow");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   prop = RNA_def_property(srna, "use_remesh_preserve_volume", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", ME_REMESH_REPROJECT_VOLUME);
@@ -4012,29 +4050,34 @@ static void rna_def_mesh(BlenderRNA *brna)
       "Preserve Volume",
       "Projects the mesh to preserve the volume and details of the original mesh");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   prop = RNA_def_property(srna, "use_remesh_preserve_paint_mask", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", ME_REMESH_REPROJECT_PAINT_MASK);
   RNA_def_property_ui_text(prop, "Preserve Paint Mask", "Keep the current mask on the new mesh");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   prop = RNA_def_property(srna, "use_remesh_preserve_sculpt_face_sets", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", ME_REMESH_REPROJECT_SCULPT_FACE_SETS);
   RNA_def_property_ui_text(
       prop, "Preserve Face Sets", "Keep the current Face Sets on the new mesh");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   prop = RNA_def_property(srna, "use_remesh_preserve_vertex_colors", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", ME_REMESH_REPROJECT_VERTEX_COLORS);
   RNA_def_property_ui_text(
       prop, "Preserve Vertex Colors", "Keep the current vertex colors on the new mesh");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   prop = RNA_def_property(srna, "remesh_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "remesh_mode");
   RNA_def_property_enum_items(prop, rna_enum_mesh_remesh_mode_items);
   RNA_def_property_ui_text(prop, "Remesh Mode", "");
   RNA_def_property_update(prop, 0, "rna_Mesh_update_draw");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
 
   /* End remesh */
 

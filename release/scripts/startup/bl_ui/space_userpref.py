@@ -114,7 +114,9 @@ class USERPREF_MT_save_load(Menu):
         if app_template:
             display_name = bpy.path.display_name(iface_(app_template))
             layout.operator("wm.read_factory_userpref", text="Load Factory Blender Preferences")
-            props = layout.operator("wm.read_factory_userpref", text="Load Factory %s Preferences" % display_name)
+            props = layout.operator("wm.read_factory_userpref",
+                                    text=iface_("Load Factory %s Preferences") % display_name,
+                                    translate=False)
             props.use_factory_startup_app_template_only = True
             del display_name
         else:
@@ -397,17 +399,18 @@ class USERPREF_PT_edit_objects_duplicate_data(EditingPanel, CenterAlignMixIn, Pa
         # col.prop(edit, "use_duplicate_fcurve", text="F-Curve")  # Not implemented.
         col.prop(edit, "use_duplicate_curves", text="Curves")
         col.prop(edit, "use_duplicate_grease_pencil", text="Grease Pencil")
+        col.prop(edit, "use_duplicate_lattice", text="Lattice")
 
         col = flow.column()
-        col.prop(edit, "use_duplicate_lattice", text="Lattice")
         col.prop(edit, "use_duplicate_light", text="Light")
         col.prop(edit, "use_duplicate_lightprobe", text="Light Probe")
         col.prop(edit, "use_duplicate_material", text="Material")
         col.prop(edit, "use_duplicate_mesh", text="Mesh")
         col.prop(edit, "use_duplicate_metaball", text="Metaball")
+        col.prop(edit, "use_duplicate_node_tree", text="Node Tree")
+        col.prop(edit, "use_duplicate_particle", text="Particle")
 
         col = flow.column()
-        col.prop(edit, "use_duplicate_particle", text="Particle")
         if hasattr(edit, "use_duplicate_pointcloud"):
             col.prop(edit, "use_duplicate_pointcloud", text="Point Cloud")
         col.prop(edit, "use_duplicate_speaker", text="Speaker")
@@ -2316,7 +2319,6 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
                 ({"property": "use_sculpt_texture_paint"}, "T96225"),
                 ({"property": "use_full_frame_compositor"}, "T88150"),
                 ({"property": "enable_eevee_next"}, "T93220"),
-                ({"property": "use_draw_manager_acquire_lock"}, "T98016"),
             ),
         )
 
