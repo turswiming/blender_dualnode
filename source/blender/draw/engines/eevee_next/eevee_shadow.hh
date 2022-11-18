@@ -281,8 +281,9 @@ class ShadowModule {
 
   /** Multi-View containing a maximum of 64 view to be rendered with the shadow pipeline. */
   View shadow_multi_view_ = {"ShadowMultiView", 64};
-  /** An array mapping view index to tilemap index. */
-  UniformArrayBuffer<int, 64> view_to_tilemap_buf_;
+  /** Tile to physical page mapping. This is an array texture with one layer per view. */
+  Texture render_map_tx_ = {
+      "ShadowRenderMap", GPU_R32UI, int2(SHADOW_TILEMAP_RES), 64, nullptr, SHADOW_TILEMAP_LOD + 1};
   /** An empty frame-buffer (no attachment) the size of a whole tilemap. */
   Framebuffer render_fb_;
 

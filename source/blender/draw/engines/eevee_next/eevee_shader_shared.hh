@@ -724,6 +724,8 @@ struct ShadowTileData {
   bool do_update;
   /** True if the tile owns the page (mutually exclusive with `is_cached`). */
   bool is_allocated;
+  /** True if the tile has been staged for rendering. This will remove the `do_update` flag. */
+  bool is_rendered;
   /** True if the tile is inside the pages_cached_buf (mutually exclusive with `is_allocated`). */
   bool is_cached;
 };
@@ -735,6 +737,7 @@ enum eShadowFlag : uint32_t {
   SHADOW_IS_CACHED = (1u << 27u),
   SHADOW_IS_ALLOCATED = (1u << 28u),
   SHADOW_DO_UPDATE = (1u << 29u),
+  SHADOW_IS_RENDERED = (1u << 30u),
   SHADOW_IS_USED = (1u << 31u)
 };
 
@@ -754,6 +757,7 @@ static inline ShadowTileData shadow_tile_unpack(ShadowTileDataPacked data)
   tile.is_used = (data & SHADOW_IS_USED) != 0;
   tile.is_cached = (data & SHADOW_IS_CACHED) != 0;
   tile.is_allocated = (data & SHADOW_IS_ALLOCATED) != 0;
+  tile.is_rendered = (data & SHADOW_IS_RENDERED) != 0;
   tile.do_update = (data & SHADOW_DO_UPDATE) != 0;
   return tile;
 }
@@ -768,6 +772,7 @@ static inline ShadowTileDataPacked shadow_tile_pack(ShadowTileData tile)
   data |= (tile.is_used ? SHADOW_IS_USED : 0);
   data |= (tile.is_allocated ? SHADOW_IS_ALLOCATED : 0);
   data |= (tile.is_cached ? SHADOW_IS_CACHED : 0);
+  data |= (tile.is_rendered ? SHADOW_IS_RENDERED : 0);
   data |= (tile.do_update ? SHADOW_DO_UPDATE : 0);
   return data;
 }

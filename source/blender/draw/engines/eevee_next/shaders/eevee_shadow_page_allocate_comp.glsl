@@ -21,10 +21,4 @@ void main()
     shadow_page_alloc(tile);
     tiles_buf[tile_index] = shadow_tile_pack(tile);
   }
-
-  /* Gather pages to clear here because we have a one thread per page dispatch for this compute. */
-  if (tile.is_used && tile.do_update) {
-    uint clear_page_index = atomicAdd(clear_dispatch_buf.num_groups_z, 1u);
-    clear_page_buf[clear_page_index] = packUvec2x16(tile.page);
-  }
 }

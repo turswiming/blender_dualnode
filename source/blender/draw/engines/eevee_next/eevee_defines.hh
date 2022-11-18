@@ -83,6 +83,8 @@
 #define SHADOW_TILEMAPS_TEX_SLOT 12
 #define SHADOW_ATLAS_TEX_SLOT 13
 #define RBUFS_UTILITY_TEX_SLOT 14
+/* Only during shadow rendering. */
+#define SHADOW_RENDER_MAP_SLOT 12
 
 /* Images. */
 #define RBUFS_NORMAL_SLOT 0
@@ -101,7 +103,6 @@
 #define VELOCITY_CAMERA_NEXT_BUF 5
 
 #define CAMERA_BUF_SLOT 6
-#define SHADOW_VIEW_MAP_SLOT 7
 
 /* Storage Buffers. */
 #define LIGHT_CULL_BUF_SLOT 0

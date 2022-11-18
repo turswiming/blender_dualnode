@@ -731,10 +731,14 @@ void ShadowModule::end_sync()
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
         sub.bind_ssbo("view_infos_buf", &shadow_multi_view_.matrices_ubo_get());
-        sub.bind_ssbo("view_to_tilemap_buf", view_to_tilemap_buf_);
         sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);
         sub.bind_ssbo("clear_page_buf", clear_page_buf_);
         sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
+        sub.bind_image("render_map_lod0_img", render_map_tx_.mip_view(0));
+        sub.bind_image("render_map_lod1_img", render_map_tx_.mip_view(1));
+        sub.bind_image("render_map_lod2_img", render_map_tx_.mip_view(2));
+        sub.bind_image("render_map_lod3_img", render_map_tx_.mip_view(3));
+        sub.bind_image("render_map_lod4_img", render_map_tx_.mip_view(4));
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM |
                     GPU_BARRIER_SHADER_IMAGE_ACCESS);

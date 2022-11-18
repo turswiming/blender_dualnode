@@ -163,7 +163,7 @@ GPU_SHADER_CREATE_INFO(eevee_surf_shadow)
     .define("DRW_VIEW_LEN", "64")
     .vertex_out(eevee_surf_iface)
     .vertex_out(eevee_shadow_iface)
-    .uniform_buf(SHADOW_VIEW_MAP_SLOT, "int", "shadow_view_map_buf")
+    .uniform_buf(SHADOW_RENDER_MAP_SLOT, "int", "shadow_view_map_buf")
     .image(SHADOW_ATLAS_SLOT,
            GPU_R32UI,
            Qualifier::READ_WRITE,

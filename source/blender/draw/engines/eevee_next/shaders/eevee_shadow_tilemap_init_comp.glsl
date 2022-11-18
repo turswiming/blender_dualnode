@@ -40,6 +40,10 @@ void main()
       if (do_update) {
         tile |= SHADOW_DO_UPDATE;
       }
+      else if (flag_test(tile, SHADOW_IS_RENDERED)) {
+        tile &= ~SHADOW_DO_UPDATE;
+        tile &= ~SHADOW_IS_RENDERED;
+      }
       tile &= ~SHADOW_IS_USED;
 
       tiles_buf[tile_index] = tile;

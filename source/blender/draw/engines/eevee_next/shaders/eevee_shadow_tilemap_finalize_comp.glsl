@@ -10,14 +10,25 @@
 #pragma BLENDER_REQUIRE(common_math_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_shadow_tilemap_lib.glsl)
 
-shared uvec2 update_min;
-shared uvec2 update_max;
+shared uint tile_updates_count;
+shared int view_index;
+
+void page_clear_buf_append(uint page_packed)
+{
+  uint clear_page_index = atomicAdd(clear_dispatch_buf.num_groups_z, 1u);
+  clear_page_buf[clear_page_index] = page_packed;
+}
+
+void page_tag_as_rendered(ivec2 tile_co, int tilemap_index, int lod)
+{
+  int tile_index = shadow_tile_offset(tile_co, tilemap_index, lod);
+  tiles_buf[tile_index] |= SHADOW_IS_RENDERED;
+}
 
 void main()
 {
   if (all(equal(gl_LocalInvocationID, uvec3(0)))) {
-    update_min = uvec2(9999);
-    update_max = uvec2(0);
+    tile_updates_count = uint(0);
   }
   barrier();
 
@@ -32,15 +43,24 @@ void main()
   int lod_max = tilemap_data.is_cubeface ? SHADOW_TILEMAP_LOD : 0;
 
   int lod_valid = 0;
-  bool do_update = false;
+  /* One bit per lod. */
+  int do_lod_update = 0;
+  uint updated_lod_page[SHADOW_TILEMAP_LOD + 1];
   uvec2 page_valid;
+  /* With all threads (LOD0 size dispatch) load each lod tile from the highest lod
+   * to the lowest, keeping track of the lowest one allocated which will be use for shadowing.
+   * Also save which page are to be updated. */
   for (int lod = lod_max; lod >= 0; lod--) {
     int tile_index = shadow_tile_offset(tile_co >> lod, tilemap_index, lod);
 
     ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
 
     if (tile.is_used && tile.do_update) {
-      do_update = true;
+      do_lod_update = 1 << lod;
+      updated_lod_page[lod] = packUvec2x16(tile.page);
+    }
+    else {
+      updated_lod_page[lod] = 0xFFFFFFFFu;
     }
 
     /* Save highest lod for this thread. */
@@ -62,23 +82,68 @@ void main()
     }
   }
 
-  if (do_update) {
-    atomicMin(update_min.x, gl_LocalInvocationID.x);
-    atomicMin(update_min.y, gl_LocalInvocationID.y);
-    atomicMax(update_max.x, gl_LocalInvocationID.x);
-    atomicMax(update_max.y, gl_LocalInvocationID.y);
+  if (do_lod_update > 0) {
+    atomicAdd(tile_updates_count, 1u);
   }
 
   barrier();
 
   if (all(equal(gl_LocalInvocationID, uvec3(0)))) {
-    if (update_min.x != 9999) {
-      int view_index = atomicAdd(pages_infos_buf.view_count, 1);
-      view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
-      view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
-      view_infos_buf[view_index].winmat = tilemap_data.winmat;
-      view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
-      view_to_tilemap_buf[view_index] = tilemap_index;
+    if (tile_updates_count > 0) {
+      view_index = atomicAdd(pages_infos_buf.view_count, 1);
+      if (view_index < 64) {
+        view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
+        view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
+        view_infos_buf[view_index].winmat = tilemap_data.winmat;
+        view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
+      }
+    }
+  }
+
+  barrier();
+
+  if (tile_updates_count > 0 && view_index < 64) {
+    ivec3 render_map_texel = ivec3(tile_co, view_index);
+
+    /* Store page indirection for rendering. Update every texel in the view array level. */
+    if (true) {
+      imageStore(render_map_lod0_img, render_map_texel, uvec4(updated_lod_page[0]));
+      if (updated_lod_page[0] != 0xFFFFFFFFu) {
+        page_clear_buf_append(updated_lod_page[0]);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 0);
+      }
+    }
+    render_map_texel.xy >>= 1;
+    if (all(equal(tile_co & ivec2((1 << 1) - 1), ivec2(0)))) {
+      imageStore(render_map_lod1_img, render_map_texel, uvec4(updated_lod_page[1]));
+      if (updated_lod_page[1] != 0xFFFFFFFFu) {
+        page_clear_buf_append(updated_lod_page[1]);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 1);
+      }
+    }
+    render_map_texel.xy >>= 1;
+    if (all(equal(tile_co & ivec2((1 << 2) - 1), ivec2(0)))) {
+      imageStore(render_map_lod2_img, render_map_texel, uvec4(updated_lod_page[2]));
+      if (updated_lod_page[2] != 0xFFFFFFFFu) {
+        page_clear_buf_append(updated_lod_page[2]);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 2);
+      }
+    }
+    render_map_texel.xy >>= 1;
+    if (all(equal(tile_co & ivec2((1 << 3) - 1), ivec2(0)))) {
+      imageStore(render_map_lod3_img, render_map_texel, uvec4(updated_lod_page[3]));
+      if (updated_lod_page[3] != 0xFFFFFFFFu) {
+        page_clear_buf_append(updated_lod_page[3]);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 3);
+      }
+    }
+    render_map_texel.xy >>= 1;
+    if (all(equal(tile_co & ivec2((1 << 4) - 1), ivec2(0)))) {
+      imageStore(render_map_lod4_img, render_map_texel, uvec4(updated_lod_page[4]));
+      if (updated_lod_page[4] != 0xFFFFFFFFu) {
+        page_clear_buf_append(updated_lod_page[4]);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 4);
+      }
     }
   }
 
