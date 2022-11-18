@@ -44,12 +44,12 @@ struct PaintGeometryPrimitives {
     vert_indices.clear();
   }
 
-  uint64_t size() const
+  int64_t size() const
   {
     return vert_indices.size();
   }
 
-  uint64_t mem_size() const
+  int64_t mem_size() const
   {
     return size() * sizeof(int3);
   }
