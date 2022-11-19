@@ -722,8 +722,6 @@ static tGPDasset *gpencil_session_init_asset_import(bContext *C, wmOperator *op)
 
   tGPDasset *tgpa = MEM_new<tGPDasset>(__func__);
 
-  // MEM_callocN(sizeof(tGPDasset), "GPencil Asset Import Data"));
-
   /* Save current settings. */
   tgpa->bmain = CTX_data_main(C);
   tgpa->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -754,8 +752,8 @@ static bool gpencil_asset_import_init(bContext *C, wmOperator *op)
   tGPDasset *tgpa;
 
   /* check context */
-  op->customdata = static_cast<tGPDasset *>(gpencil_session_init_asset_import(C, op));
-  tgpa = static_cast<tGPDasset *>(gpencil_session_init_asset_import(C, op));
+  op->customdata = tgpa = static_cast<tGPDasset *>(gpencil_session_init_asset_import(C, op));
+  op->customdata = tgpa;
   if (tgpa == nullptr) {
     /* something wasn't set correctly in context */
     gpencil_asset_import_exit(C, op);
