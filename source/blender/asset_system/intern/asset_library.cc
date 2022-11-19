@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.h"
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
@@ -26,6 +27,12 @@ using namespace blender;
 using namespace blender::asset_system;
 
 bool asset_system::AssetLibrary::save_catalogs_when_file_is_saved = true;
+
+/* Can probably removed once #WITH_DESTROY_VIA_LOAD_HANDLER gets enabled by default. */
+void AS_asset_libraries_exit()
+{
+  AssetLibraryService::destroy();
+}
 
 asset_system::AssetLibrary *AS_asset_library_load(const Main *bmain,
                                                   const AssetLibraryReference &library_reference)
@@ -114,8 +121,8 @@ void AS_asset_library_remap_ids(const IDRemapper *mappings)
 namespace blender::asset_system {
 
 AssetLibrary::AssetLibrary()
-    : catalog_service(std::make_unique<AssetCatalogService>()),
-      asset_storage_(std::make_unique<AssetStorage>())
+    : asset_storage_(std::make_unique<AssetStorage>()),
+      catalog_service(std::make_unique<AssetCatalogService>())
 {
 }
 
