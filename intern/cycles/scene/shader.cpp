@@ -310,11 +310,15 @@ static float3 output_estimate_emission(ShaderOutput *output, bool &is_constant)
     /* Other nodes, potentially OSL nodes with arbitrary code for which all we can
      * determine is if it has emission or not. */
     const bool has_emission = node->has_surface_emission();
-    float3 estimate = (has_emission) ? one_float3() : zero_float3();
+    float3 estimate;
 
     if (output->type() == SocketType::CLOSURE) {
       if (has_emission) {
+        estimate = one_float3();
         is_constant = false;
+      }
+      else {
+        estimate = zero_float3();
       }
 
       foreach (const ShaderInput *in, node->inputs) {
@@ -322,6 +326,9 @@ static float3 output_estimate_emission(ShaderOutput *output, bool &is_constant)
           estimate += output_estimate_emission(in->link, is_constant);
         }
       }
+    }
+    else {
+      estimate = one_float3();
     }
 
     return estimate;
