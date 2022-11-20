@@ -297,7 +297,7 @@ LightTree::LightTree(const vector<LightTreePrimitive> &prims,
 
   int offset = 0;
   nodes_.resize(total_nodes);
-  flatten_tree(root, offset, -1);
+  flatten_tree(root, offset);
 }
 
 const vector<LightTreePrimitive> &LightTree::get_prims() const
@@ -495,7 +495,7 @@ float LightTree::min_split_saoh(const BoundBox &centroid_bbox,
   return min_cost;
 }
 
-int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset, int parent)
+int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset)
 {
   PackedLightTreeNode *current_node = &nodes_[offset];
   current_node->bbox = node->bbox;
@@ -517,8 +517,8 @@ int LightTree::flatten_tree(const LightTreeBuildNode *node, int &offset, int par
     current_node->is_leaf_node = false;
 
     /* The first child is located directly to the right of the parent. */
-    flatten_tree(node->children[0], offset, current_index);
-    current_node->second_child_index = flatten_tree(node->children[1], offset, current_index);
+    flatten_tree(node->children[0], offset);
+    current_node->second_child_index = flatten_tree(node->children[1], offset);
   }
 
   return current_index;

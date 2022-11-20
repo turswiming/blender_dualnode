@@ -175,7 +175,7 @@ class LightTree {
                        const OrientationBounds &bcone,
                        int &min_dim,
                        int &min_bucket);
-  int flatten_tree(const LightTreeBuildNode *node, int &offset, int parent);
+  int flatten_tree(const LightTreeBuildNode *node, int &offset);
 };
 
 CCL_NAMESPACE_END
