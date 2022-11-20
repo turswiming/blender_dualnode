@@ -102,9 +102,6 @@ typedef struct PaintStroke {
 
   BezierSpline2f *spline;
   BezierSpline3f *world_spline;
-#ifdef QUAD_BEZ_SPLIT
-  QuadSpline3f *final_world_spline;
-#endif
 
   float last_mouse_position[2];
   float last_world_space_position[3];
@@ -321,10 +318,6 @@ static void paint_brush_make_spline(bContext *C, PaintStroke *stroke)
     stroke->stroke_distance_world += stroke->world_spline->segments[0].bezier.length;
     stroke->world_spline->pop_front();
   }
-
-#ifdef QUAD_BEZ_SPLIT
-  *stroke->final_world_spline = stroke->world_spline->split_to_quadratics();
-#endif
 }
 
 #ifdef DRAW_DEBUG_VIS
@@ -337,9 +330,7 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
     return;
   }
 
-  // auto *spline = stroke->world_spline;
-  auto quadspline = stroke->world_spline->split_to_quadratics();
-  auto *spline = &quadspline;
+  auto *spline = stroke->world_spline;
 
   if (spline->segments.size() == 0) {
     return;
@@ -391,7 +382,6 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
 
 #  if 1  // inflection points
   immUniformColor4ub(0, 255, 0, 100);
-  int components = spline->components();
 
   immBegin(GPU_PRIM_POINTS, spline->inflection_points.size());
 
@@ -1303,9 +1293,6 @@ PaintStroke *paint_stroke_new(bContext *C,
   if (stroke->need_roll_mapping) {
     stroke->spline = MEM_new<BezierSpline2f>("BezierSpline2f");
     stroke->world_spline = MEM_new<BezierSpline3f>("BezierSpline3f");
-#ifdef QUAD_BEZ_SPLIT
-    stroke->final_world_spline = MEM_new<QuadSpline3f>("QuadSpline3f");
-#endif
   }
 
   if (stroke->stroke_mode == BRUSH_STROKE_INVERT) {
@@ -1382,10 +1369,6 @@ void paint_stroke_free(bContext *C, wmOperator *UNUSED(op), PaintStroke *stroke)
 
   MEM_delete<BezierSpline3f>(stroke->world_spline);
   MEM_delete<BezierSpline2f>(stroke->spline);
-
-#ifdef QUAD_BEZ_SPLIT
-  MEM_delete<QuadSpline3f>(stroke->final_world_spline);
-#endif
 
   MEM_SAFE_FREE(stroke);
 }
@@ -2118,12 +2101,7 @@ void paint_stroke_spline_uv(
     PaintStroke *stroke, StrokeCache *cache, const float co[3], float r_out[3], float r_tan[3])
 {
   float3 tan;
-
-#ifdef QUAD_BEZ_SPLIT
-  float3 p = stroke->final_world_spline->closest_point(co, r_out[1], tan, r_out[0]);
-#else
   float3 p = stroke->world_spline->closest_point(co, r_out[1], tan, r_out[0]);
-#endif
 
   r_tan = tan;
   r_out[0] = len_v3v3(p, co);
@@ -2143,9 +2121,5 @@ void paint_stroke_spline_uv(
 
 float paint_stroke_spline_length(PaintStroke *stroke)
 {
-#ifdef QUAD_BEZ_SPLIT
-  return stroke->final_world_spline->length;
-#else
   return stroke->world_spline->length;
-#endif
 }

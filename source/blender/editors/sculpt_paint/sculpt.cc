@@ -16,7 +16,9 @@
 #include "BLI_dial_2d.h"
 #include "BLI_ghash.h"
 #include "BLI_gsqueue.h"
+#include "BLI_index_range.hh"
 #include "BLI_math.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_task.h"
 #include "BLI_task.hh"
 #include "BLI_timeit.hh"
@@ -71,8 +73,12 @@
 
 #include "bmesh.h"
 
-using blender::MutableSpan;
+#include <algorithm>
 
+using blender::float2;
+using blender::float3;
+using blender::IndexRange;
+using blender::MutableSpan;
 /* -------------------------------------------------------------------- */
 /** \name Sculpt PBVH Abstraction API
  *
@@ -2517,49 +2523,64 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
 
       avg += br->texture_sample_bias;
     }
-    else if (mtex->brush_map_mode == MTEX_MAP_MODE_ROLL) {
-      float point_3d[3];
+    else if (ss->cache && mtex->brush_map_mode == MTEX_MAP_MODE_ROLL) {
+      float3 point_3d;
       point_3d[2] = 0.0f;
 
-      float tan[3];
-      float point_3d2[3];
+      float3 tan;
+      float3 point_3d2;
+      float2 abs_point = brush_point, abs_start = ss->cache->true_location;
 
-      paint_stroke_spline_uv(ss->cache->stroke, ss->cache, brush_point, point_3d, tan);
+      float3 tile_point = brush_point;
 
+      /* Find position in root tile. */
       for (int i = 0; i < 3; i++) {
-        if (!(ss->cache->mirror_symmetry_pass & (1 << i))) {
+        if (ss->cache->symmetry_flags & (PAINT_TILE_X << i)) {
+          float offset = ss->cache->location[i] - ss->cache->true_location[i];
+          tile_point[i] -= offset;
+        }
+      }
+
+      /* Rotate into base radial slice. */
+      if (ss->cache->radial_symmetry_pass > 0) {
+        mul_m4_v3(ss->cache->symm_rot_mat_inv, tile_point);
+      }
+
+      /* First sample.*/
+      paint_stroke_spline_uv(ss->cache->stroke, ss->cache, tile_point, point_3d, tan);
+
+      /* Loop through each possible symmetry combination. */
+      for (int i = 0; i < 8; i++) {
+        if ((ss->cache->mirror_symmetry_pass & i) != i) {
           continue;
         }
 
         float symm_point[3];
-        copy_v3_v3(symm_point, brush_point);
-        symm_point[i] = -symm_point[i];
-
-        paint_stroke_spline_uv(ss->cache->stroke, ss->cache, symm_point, point_3d2, tan);
-        if (point_3d2[0] < point_3d[0]) {
-          copy_v3_v3(point_3d, point_3d2);
-        }
+        copy_v3_v3(symm_point, tile_point);
 
         for (int j = 0; j < 3; j++) {
-          if (j == i || !(ss->cache->mirror_symmetry_pass & (1 << j))) {
-            continue;
+          if (i & (1 << j) && i & (ss->cache->mirror_symmetry_pass)) {
+            symm_point[j] = -symm_point[j];
           }
+        }
 
-          float symm_point2[3];
-          copy_v3_v3(symm_point2, symm_point);
-          symm_point2[j] = -symm_point2[j];
+        paint_stroke_spline_uv(ss->cache->stroke, ss->cache, symm_point, point_3d2, tan);
 
-          paint_stroke_spline_uv(ss->cache->stroke, ss->cache, symm_point2, point_3d2, tan);
-
-          if (point_3d2[0] < point_3d[0]) {
-            copy_v3_v3(point_3d, point_3d2);
-          }
+        if (std::abs(point_3d2[0]) < std::abs(point_3d[0])) {
+          copy_v3_v3(point_3d, point_3d2);
         }
       }
 
-#if 0
+#if 0 /* Write texture UVs to color attribute*/
       if (SCULPT_has_colors(ss)) {
         float color[4] = {point_3d[0], point_3d[1], 0.0f, 1.0f};
+
+#  if 1
+        for (int i = 0; i < 3; i++) {
+          color[i] = tile_point[i] - std::floor(tile_point[i]);
+        }
+#  endif
+
         mul_v3_fl(color, 0.25f / ss->cache->initial_radius);
         color[0] -= floorf(color[0]);
         color[1] -= floorf(color[1]);
@@ -2567,13 +2588,13 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
 
         SCULPT_vertex_color_set(ss, vertex, color);
       }
-
-// avg = 0.0f;
 #endif
 
       mul_v3_fl(point_3d, 1.0f / ss->cache->initial_radius);
+      float angle = mtex->rot - cache->special_rotation;
+      rotate_v2_v2fl(point_3d, point_3d, angle);
 
-      // avg = BKE_brush_sample_tex_3d(scene, br, mtex, point_3d, rgba, thread_id, ss->tex_pool);
+
       avg = paint_get_tex_pixel(mtex, point_3d[0], point_3d[1], ss->tex_pool, thread_id);
       avg += br->texture_sample_bias;
     }
@@ -4023,12 +4044,16 @@ static void do_radial_symmetry(Sculpt *sd,
 {
   SculptSession *ss = ob->sculpt;
 
+  ss->cache->radial_symmetry_axis = axis;
+
   for (int i = 1; i < sd->radial_symm[axis - 'X']; i++) {
     const float angle = 2.0f * M_PI * i / sd->radial_symm[axis - 'X'];
     ss->cache->radial_symmetry_pass = i;
     SCULPT_cache_calc_brushdata_symm(ss->cache, symm, axis, angle);
     do_tiled(sd, ob, brush, ups, paint_mode_settings, action);
   }
+
+  ss->cache->radial_symmetry_axis = 0;
 }
 
 /**
@@ -4061,6 +4086,9 @@ static void do_symmetrical_brush_actions(Sculpt *sd,
 
   cache->bstrength = brush_strength(sd, cache, feather, ups, paint_mode_settings);
   cache->symmetry = symm;
+  cache->symmetry_flags = ePaintSymmetryFlags(sd->paint.symmetry_flags &
+                                              (PAINT_TILE_X | PAINT_TILE_Y | PAINT_TILE_Z));
+  copy_v3_v3(cache->tile_offset, sd->paint.tile_offset);
 
   /* `symm` is a bit combination of XYZ -
    * 1 is mirror X; 2 is Y; 3 is XY; 4 is Z; 5 is XZ; 6 is YZ; 7 is XYZ */

@@ -558,6 +558,11 @@ typedef struct StrokeCache {
   /* Symmetry index between 0 and 7 bit combo 0 is Brush only;
    * 1 is X mirror; 2 is Y mirror; 3 is XY; 4 is Z; 5 is XZ; 6 is YZ; 7 is XYZ */
   int symmetry;
+  ePaintSymmetryFlags symmetry_flags;
+  int radial_symm[3];
+  int radial_symmetry_axis;
+  float tile_offset[3];
+
   ePaintSymmetryFlags
       mirror_symmetry_pass; /* The symmetry pass we are currently on between 0 and 7. */
   float true_view_normal[3];

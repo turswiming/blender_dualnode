@@ -53,455 +53,6 @@ namespace blender {
 
 */
 
-/*
-Quadratic curves. Not sure we need this.
-*/
-
-template<typename Float, int axes = 2, int table_size = 512> class QuadBezier {
-  using Vector = vec_base<Float, axes>;
-
- public:
-  Vector ps[3];
-
-  static const int TableSize = table_size;
-
-  QuadBezier(Vector a, Vector b, Vector c)
-  {
-    ps[0] = a;
-    ps[1] = b;
-    ps[2] = c;
-
-    deleted = false;
-    _arc_to_t = new Float[table_size];
-    _t_to_arc = new Float[table_size];
-  }
-
-  ~QuadBezier()
-  {
-    deleted = true;
-
-    if (_arc_to_t) {
-      delete[] _arc_to_t;
-      _arc_to_t = nullptr;
-    }
-
-    if (_t_to_arc) {
-      delete[] _t_to_arc;
-      _t_to_arc = nullptr;
-    }
-  }
-
-  QuadBezier()
-  {
-    deleted = false;
-    _arc_to_t = new Float[table_size];
-    _t_to_arc = new Float[table_size];
-  }
-
-  QuadBezier(const QuadBezier &b)
-  {
-    _arc_to_t = new Float[table_size];
-    _t_to_arc = new Float[table_size];
-
-    *this = b;
-    deleted = false;
-  }
-
-  QuadBezier &operator=(const QuadBezier &b)
-  {
-    ps[0] = b.ps[0];
-    ps[1] = b.ps[1];
-    ps[2] = b.ps[2];
-
-    length = b.length;
-
-    if (!_arc_to_t) {
-      _arc_to_t = new Float[table_size];
-    }
-    if (!_arc_to_t) {
-      _t_to_arc = new Float[table_size];
-    }
-
-    if (b._arc_to_t) {
-      for (int i = 0; i < table_size; i++) {
-        _arc_to_t[i] = b._arc_to_t[i];
-      }
-    }
-
-    if (b._t_to_arc) {
-      for (int i = 0; i < table_size; i++) {
-        _t_to_arc[i] = b._t_to_arc[i];
-      }
-    }
-
-    return *this;
-  }
-
-#if 1
-  QuadBezier(QuadBezier &&b)
-  {
-    *this = b;
-  }
-
-  QuadBezier &operator=(QuadBezier &&b)
-  {
-    ps[0] = b.ps[0];
-    ps[1] = b.ps[1];
-    ps[2] = b.ps[2];
-
-    length = b.length;
-
-    if (b._arc_to_t) {
-      _arc_to_t = std::move(b._arc_to_t);
-      _t_to_arc = std::move(b._t_to_arc);
-
-      b._arc_to_t = nullptr;
-      b._t_to_arc = nullptr;
-    }
-    else {
-      _arc_to_t = new Float[table_size];
-      _t_to_arc = new Float[table_size];
-    }
-
-    return *this;
-  }
-#endif
-
-  Float length;
-
-  void update()
-  {
-    Float t = 0.0, dt = 1.0 / (Float)table_size;
-    Float s = 0.0;
-
-    if (!_arc_to_t) {
-      _arc_to_t = new Float[table_size];
-      _t_to_arc = new Float[table_size];
-    }
-
-    for (int i : IndexRange(table_size)) {
-      _arc_to_t[i] = -1.0;
-    }
-
-    length = 0.0;
-
-    for (int i = 0; i < table_size; i++, t += dt) {
-      Float dlen = 0.0;
-      for (int j = 0; j < axes; j++) {
-        float dv = dquad(ps[0][j], ps[1][j], ps[2][j], t);
-
-        dlen += dv * dv;
-      }
-
-      dlen = sqrt(dlen) * dt;
-
-      length += dlen;
-    }
-
-    t = 0.0;
-    s = 0.0;
-
-    for (int i = 0; i < table_size; i++, t += dt) {
-      Float dlen = 0.0;
-      for (int j = 0; j < axes; j++) {
-        float dv = dquad(ps[0][j], ps[1][j], ps[2][j], t);
-
-        dlen += dv * dv;
-      }
-
-      dlen = sqrt(dlen) * dt;
-
-      int j = (int)((s / length) * (Float)table_size * 0.999999);
-      j = min_ii(j, table_size - 1);
-
-      _t_to_arc[i] = s;
-      _arc_to_t[j] = t;
-
-      s += dlen;
-    }
-
-    _arc_to_t[0] = 0.0;
-    _arc_to_t[table_size - 1] = 1.0;
-
-#if 1
-    /* Interpolate gaps in table. */
-    for (int i = 0; i < table_size - 1; i++) {
-      if (_arc_to_t[i] == -1.0 || _arc_to_t[i + 1] != -1.0) {
-        continue;
-      }
-
-      int i1 = i;
-      int i2 = i + 1;
-
-      while (i2 < table_size - 1 && _arc_to_t[i2] == -1.0) {
-        i2++;
-      }
-
-      Float start = _arc_to_t[i1];
-      Float end = _arc_to_t[i2];
-      Float dt2 = 1.0 / (i2 - i1);
-
-      for (int j = i1 + 1; j < i2; j++) {
-        Float factor = (Float)(j - i1) * dt2;
-        _arc_to_t[j] = start + (end - start) * factor;
-      }
-
-      i = i2 - 1;
-    }
-
-#  if 0
-    for (int i = 0; i < table_size; i++) {
-      printf("%.3f ", _arc_to_t[i]);
-      if (_arc_to_t[i] == -1.0) {
-        printf("BLI_even_spline.hh: error!\n");
-      }
-    }
-
-    printf("\n\n");
-#  endif
-#endif
-  }
-
-  inline Vector evaluate(Float s)
-  {
-    Float t = arc_to_t(s);
-    Vector r;
-
-    for (int i = 0; i < axes; i++) {
-      r[i] = quad(ps[0][i], ps[1][i], ps[2][i], t);
-    }
-
-    return r;
-  }
-
-  Vector derivative(Float s, bool exact = true)
-  {
-    Float t = arc_to_t(s);
-    Vector r;
-
-    for (int i = 0; i < axes; i++) {
-      r[i] = dquad(ps[0][i], ps[1][i], ps[2][i], t) * length;
-    }
-
-    /* Real arc length parameterized tangent has unit length. */
-    if (exact) {
-      Float len = sqrt(_dot(r, r));
-
-      if (len > 0.00001) {
-        r = r / len;
-      }
-    }
-
-    return r;
-  }
-
-  Vector derivative2(Float s)
-  {
-#ifdef FINITE_DIFF
-    const Float df = 0.0005;
-    Float s1, s2;
-
-    if (s >= 1.0 - df) {
-      s1 = s - df;
-      s2 = s;
-    }
-    else {
-      s1 = s;
-      s2 = s + df;
-    }
-
-    Vector a = derivative(s1);
-    Vector b = derivative(s2);
-
-    return (b - a) / df;
-#else
-    Float t = arc_to_t(s);
-    Vector r;
-
-    Float dx = dquad(ps[0][0], ps[1][0], ps[2][0], t);
-    Float d2x = d2quad(ps[0][0], ps[1][0], ps[2][0], t);
-    Float dy = dquad(ps[0][1], ps[1][1], ps[2][1], t);
-    Float d2y = d2quad(ps[0][1], ps[1][1], ps[2][1], t);
-
-    /*
-    comment: arc length second derivative;
-
-    operator x, y, z, dx, dy, dz, d2x, d2y, d2z;
-    forall t let df(x(t), t) = dx(t);
-    forall t let df(y(t), t) = dy(t);
-    forall t let df(z(t), t) = dz(t);
-    forall t let df(dx(t), t) = d2x(t);
-    forall t let df(dy(t), t) = d2y(t);
-    forall t let df(dz(t), t) = d2z(t);
-
-    comment: arc length first derivative is just the normalized tangent;
-
-    comment: 2d case;
-
-    dlen := sqrt(df(x(t), t)**2 + df(y(t), t)**2);
-
-    df(df(x(t), t) / dlen, t);
-    df(df(y(t), t) / dlen, t);
-
-    comment: 3d case;
-
-    dlen := sqrt(df(x(t), t)**2 + df(y(t), t)**2 + df(z(t), t)**2);
-
-    comment: final derivatives;
-
-    df(df(x(t), t) / dlen, t);
-    df(df(y(t), t) / dlen, t);
-    df(df(z(t), t) / dlen, t);
-    */
-    if constexpr (axes == 2) {
-      /* Basically the 2d perpidicular normalized tangent multiplied by the curvature. */
-
-      Float div = sqrt(dx * dx + dy * dy) * (dx * dx + dy * dy);
-
-      r[0] = ((d2x * dy - d2y * dx) * dy) / div;
-      r[1] = (-(d2x * dy - d2y * dx) * dx) / div;
-    }
-    else if constexpr (axes == 3) {
-      Float dz = dquad(ps[0][2], ps[1][2], ps[2][2], t);
-      Float d2z = d2quad(ps[0][2], ps[1][2], ps[2][2], t);
-
-      Float div = sqrt(dx * dx + dy * dy + dz * dz) * (dy * dy + dz * dz + dx * dx);
-
-      r[0] = (d2x * dy * dy + d2x * dz * dz - d2y * dx * dy - d2z * dx * dz) / div;
-      r[1] = (-(d2x * dx * dy - d2y * dx * dx - d2y * dz * dz + d2z * dy * dz)) / div;
-      r[2] = (-(d2x * dx * dz + d2y * dy * dz - d2z * dx * dx - d2z * dy * dy)) / div;
-    }
-    else {
-      for (int i = 0; i < axes; i++) {
-        r[i] = d2quad(ps[0][i], ps[1][i], ps[2][i], t) * length;
-      }
-    }
-
-    return r;
-#endif
-  }
-
-  Float curvature(Float s)
-  {
-    Vector dv2 = derivative2(s);
-
-    if constexpr (axes == 2) {
-      Vector dv = derivative(s, true);
-
-      /* Calculate signed curvature. Remember that dv is normalized. */
-      return dv[0] * dv2[1] - dv[1] * dv2[0];
-    }
-
-    return sqrt(_dot(dv2, dv2));
-  }
-
-  Float dcurvature(Float s)
-  {
-    const Float ds = 0.0001;
-    Float s1, s2;
-
-    if (s > 1.0 - ds) {
-      s1 = s - ds;
-      s2 = s;
-    }
-    else {
-      s1 = s;
-      s2 = s + ds;
-    }
-
-    Float a = curvature(s1);
-    Float b = curvature(s2);
-
-    return (b - a) / ds;
-  }
-
- private:
-  Float *_arc_to_t;
-  Float *_t_to_arc;
-  bool deleted = false;
-
-  Float quad(Float k1, Float k2, Float k3, Float t)
-  {
-    return -((k1 - k2 + (k2 - k3) * t - (k1 - k2) * t) * t + (k1 - k2) * t - k1);
-  }
-
-  Float dquad(Float k1, Float k2, Float k3, Float t)
-  {
-    return -((k1 - k2 + (k2 - k3) * t - (k1 - k2) * t) * t + (k1 - k2) * t - k1);
-  }
-
-  Float d2quad(Float k1, Float k2, Float k3, Float t)
-  {
-    return -2 * (2 * k2 - k3 - k1);
-  }
-
-  Float _dot(Vector a, Vector b)
-  {
-    Float sum = 0.0;
-
-    for (int i = 0; i < axes; i++) {
-      sum += a[i] * b[i];
-    }
-
-    return sum;
-  }
-
-  Float clamp_s(Float s)
-  {
-    s = s < 0.0 ? 0.0 : s;
-    s = s >= length ? length * 0.999999 : s;
-
-    return s;
-  }
-
-  Float arc_to_t(Float s)
-  {
-    if (length == 0.0) {
-      return 0.0;
-    }
-
-    s = clamp_s(s);
-
-    Float t = s * (Float)(table_size - 1) / length;
-
-    int i1 = floorf(t);
-
-    i1 = max_ii(i1, 0);
-
-    int i2 = min_ii(i1 + 1, table_size - 1);
-
-    t -= (Float)i1;
-
-    Float s1 = _arc_to_t[i1];
-    Float s2 = _arc_to_t[i2];
-
-    return s1 + (s2 - s1) * t;
-  }
-
-  Float t_to_arc(Float s)
-  {
-    // return s * length; //XXX
-
-    if (length == 0.0) {
-      return 0.0;
-    }
-
-    s = clamp_s(s);
-
-    Float t = s * (Float)(table_size - 1) / length;
-
-    int i1 = floorf(t);
-    int i2 = min_ii(i1 + 1, table_size - 1);
-
-    t -= (Float)i1;
-
-    Float s1 = _t_to_arc[i1];
-    Float s2 = _t_to_arc[i2];
-
-    return s1 + (s2 - s1) * t;
-  }
-};
-
 /** Cubic curves */
 
 /*
@@ -515,40 +66,13 @@ procedure bez(a, b);
 
 lin := bez(k1, k2);
 quad := bez(lin, sub(k2=k3, k1=k2, lin));
-
 cubic := bez(quad, sub(k3=k4, k2=k3, k1=k2, quad));
+
 dcubic := df(cubic, t);
-icubic := int(cubic, t);
-
-x1 := 0;
-y1 := 0;
-
-dx := sub(k1=x1, k2=x2, k3=x3, k4=x4, dcubic);
-dy := sub(k1=y1, k2=y2, k3=y3, k4=y4, dcubic);
-darc := sqrt(dx**2 + dy**2);
-
-arcstep := darc*dt + 0.5*df(darc, t)*dt*dt;
-
-d2x := df(dx / darc, t);
-d2y := df(dy / darc, t);
-
-gentran
-begin
-declare <<
-x1,x2,x3,x4 : float;
-y1,y2,y3,y4 : float;
-dt,t : float;
->>;
-return eval(arcstep)
-end;
 
 on fort;
 cubic;
 dcubic;
-icubic;
-arcstep;
-d2x;
-d2y;
 off fort;
 
 */
@@ -700,7 +224,6 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     _arc_to_t[0] = 0.0;
     _arc_to_t[table_size - 1] = 1.0;
 
-#if 1
     /* Interpolate gaps in table. */
     for (int i = 0; i < table_size - 1; i++) {
       if (_arc_to_t[i] == -1.0 || _arc_to_t[i + 1] != -1.0) {
@@ -725,14 +248,6 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
 
       i = i2 - 1;
     }
-
-#  if 0
-    for (int i = 0; i < table_size; i++) {
-      printf("%.3f ", _arc_to_t[i]);
-    }
-    printf("\n\n");
-#  endif
-#endif
   }
 
   inline Vector evaluate(Float s)
@@ -799,6 +314,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     /*
     comment: arc length second derivative;
 
+    comment: build arc length version from abstract derivative operators;
     operator x, y, z, dx, dy, dz, d2x, d2y, d2z;
     forall t let df(x(t), t) = dx(t);
     forall t let df(y(t), t) = dy(t);
@@ -810,14 +326,12 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     comment: arc length first derivative is just the normalized tangent;
 
     comment: 2d case;
-
     dlen := sqrt(df(x(t), t)**2 + df(y(t), t)**2);
 
     df(df(x(t), t) / dlen, t);
     df(df(y(t), t) / dlen, t);
 
     comment: 3d case;
-
     dlen := sqrt(df(x(t), t)**2 + df(y(t), t)**2 + df(z(t), t)**2);
 
     comment: final derivatives;
@@ -825,6 +339,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     df(df(x(t), t) / dlen, t);
     df(df(y(t), t) / dlen, t);
     df(df(z(t), t) / dlen, t);
+
     */
     if constexpr (axes == 2) {
       /* Basically the 2d perpidicular normalized tangent multiplied by the curvature. */
@@ -1000,99 +515,6 @@ class EvenSpline {
     deleted = true;
   }
 
-  EvenSpline<Float, axes, QuadBezier<Float, axes>> split_to_quadratics()
-  {
-    EvenSpline<Float, axes, QuadBezier<Float, axes>> spline;
-
-    for (auto &seg : segments) {
-      if (seg.bezier.length == 0.0) {
-        continue;
-      }
-
-      const int steps = 32;
-      const Float df = 0.00001;
-      Float dt = seg.bezier.length / steps, t = dt;
-
-      blender::Vector<Float> points;
-
-      points.append(0.0);
-
-#if 1
-      /* Find local minima/maxima of second derivatives. */
-      for (int i = 1; i < steps - 1; i++, t += dt) {
-        Float k1 = seg.bezier.curvature(t);
-        Float k2 = seg.bezier.curvature(t + df);
-        Float dk1 = (k2 - k1) / df;
-
-        k1 = seg.bezier.curvature(t + dt);
-        k2 = seg.bezier.curvature(t + dt + df);
-        Float dk2 = (k2 - k1) / df;
-
-        if (dk1 <= 0.0 == dk2 <= 0.0) {
-          continue;
-        }
-
-        points.append(t);
-      }
-#endif
-
-      points.append(seg.bezier.length);
-
-      blender::Vector<Float> points2;
-
-      for (int i : IndexRange(points.size())) {
-        points2.append(points[i]);
-
-        if (i < points.size() - 1) {
-          // points2.append(points[i] * 0.5 + points[i + 1] * 0.5);
-        }
-      }
-      points = points2;
-
-      /*
-      on factor;
-      off period;
-
-      procedure bez(a, b);
-        a + (b - a) * t;
-
-      lin := bez(k1, k2);
-      quad := bez(lin, sub(k2=k3, k1=k2, lin));
-
-      dquad := df(quad, t);
-
-      f1 := sub(t=0.0, dquad) - dv1;
-      f2 := sub(t=1.0, dquad) - dv2;
-
-      k2new := part(solve(f1, k2), 1, 2)*0.5 + part(solve(f2, k2), 1, 2)*0.5;
-
-      */
-
-      Float tscale = 1.0 / (points.size() - 1);
-
-      for (int i : IndexRange(points.size() - 1)) {
-        Float t1 = points[i], t2 = points[i + 1] * 0.99999;
-
-        Vector dv1 = seg.bezier.derivative(t1) * seg.bezier.length * tscale;
-        Vector dv2 = seg.bezier.derivative(t2) * seg.bezier.length * tscale;
-        Vector p1 = seg.bezier.evaluate(t1);
-        Vector p2 = seg.bezier.evaluate(t2);
-
-        Vector b = (2.0 * (p1 + p2) - dv2 + dv1) / 4.0;
-
-        // b = (p1 + p2) * 0.5;
-
-        QuadBezier<Float, axes> quad(p1, b, p2);
-        quad.update();
-
-        spline.add(quad);
-      }
-    }
-
-    spline.update();
-    return spline;
-  }
-
   void add(BezierType &bez)
   {
     need_update = true;
@@ -1211,49 +633,16 @@ class EvenSpline {
     return seg->bezier.dcurvature(s - seg->start);
   }
 
-  Vector closest_point(const Vector p, Float &r_s, Vector &r_tan, Float &r_dis)
-  {
-#if 0
-    if constexpr (std::is_same_v<BezierType, QuadBezier<Float, axes, BezierType::TableSize>>) {
-      r_dis = FLT_MAX;
-      Vector retco;
-
-      for (auto &seg : segments) {
-        Float s, dis;
-        Vector tan;
-        Vector co = seg.bezier.closest_point(p, s, tan, dis);
-
-        if (dis < r_dis) {
-          r_dis = dis;
-          r_s = s + seg.start;
-          r_tan = tan;
-          retco = co;
-        }
-      }
-
-      return retco;
-    }
-    else {
-      return closest_point_generic(p, r_s, r_tan, r_dis);
-    }
-#else
-    return closest_point_generic(p, r_s, r_tan, r_dis);
-
-#endif
-  }
-
   /* Find the closest point on the spline.  Uses a bisecting root finding approach.
    * Note: in thoery we could split the spline into quadratic segments and solve
    * for the closest point directy.
    */
-  Vector closest_point_generic(const Vector p, Float &r_s, Vector &r_tan, Float &r_dis)
+  Vector closest_point(const Vector p, Float &r_s, Vector &r_tan, Float &r_dis)
   {
     if (segments.size() == 0) {
       return Vector();
     }
 
-    const int steps = 12;
-    Float s = 0.0, ds = length / steps;
     Float mindis = FLT_MAX;
     Vector minp;
     Float mins = 0.0;
@@ -1266,9 +655,8 @@ class EvenSpline {
       Float s = inflection_points[i];
       Float ds = s - inflection_points[i - 1];
 
-      // for (int i = 0; i < steps + 1; i++, s += ds, lastp = b, lastdv = dvb) {
       b = evaluate(s);
-      dvb = derivative(s, false); /* We don't need real normalized derivative here. */
+      dvb = derivative(s, false); /* False means we don't need fully normalized derivative. */
 
       if (i == 0) {
         continue;
@@ -1376,17 +764,11 @@ class EvenSpline {
 
   Segment *get_segment(Float s)
   {
-    // printf("\n");
-
     for (Segment &seg : segments) {
-      // printf("s: %f %f\n", seg.start, seg.start + seg.bezier.length);
-
       if (s >= seg.start && s < seg.start + seg.bezier.length) {
         return &seg;
       }
     }
-
-    // printf("\n");
 
     return nullptr;
   }
