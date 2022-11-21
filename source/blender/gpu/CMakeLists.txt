@@ -279,6 +279,12 @@ set(LIB
   ${Epoxy_LIBRARIES}
 )
 
+if(WITH_VULKAN)
+  list(APPEND LIB
+    extern_vulkan_memory_allocator
+  )
+endif()
+
 set(MSL_SRC
   shaders/metal/mtl_shader_defines.msl
   shaders/metal/mtl_shader_common.msl
