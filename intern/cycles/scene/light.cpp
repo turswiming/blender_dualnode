@@ -274,24 +274,17 @@ void LightManager::device_update_distribution(Device *device,
   KernelIntegrator *kintegrator = &dscene->data.integrator;
   KernelFilm *kfilm = &dscene->data.film;
 
-  if (kintegrator->use_light_tree) {
-    dscene->light_distribution.free();
-    return;
-  }
-
   /* Update CDF over lights. */
   progress.set_status("Updating Lights", "Computing distribution");
 
   /* Counts emissive triangles in the scene. */
   size_t num_triangles = 0;
-  int object_id = 0;
 
   foreach (Object *object, scene->objects) {
     if (progress.get_cancel())
       return;
 
     if (!object_usable_as_light(object)) {
-      object_id++;
       continue;
     }
 
@@ -309,14 +302,21 @@ void LightManager::device_update_distribution(Device *device,
         num_triangles++;
       }
     }
-
-    object_id++;
   }
 
   const size_t num_lights = kintegrator->num_lights;
   const size_t num_background_lights = kintegrator->num_background_lights;
   const size_t num_distribution = num_triangles + num_lights;
+
+  /* Distribution size. */
+  kintegrator->num_distribution = num_distribution;
+
   VLOG_INFO << "Total " << num_distribution << " of light distribution primitives.";
+
+  if (kintegrator->use_light_tree) {
+    dscene->light_distribution.free();
+    return;
+  }
 
   /* Emission area. */
   KernelLightDistribution *distribution = dscene->light_distribution.alloc(num_distribution + 1);
@@ -435,9 +435,6 @@ void LightManager::device_update_distribution(Device *device,
   /* Update integrator state. */
   kintegrator->use_direct_light = (totarea > 0.0f);
 
-  /* Distribution size. */
-  kintegrator->num_distribution = num_distribution;
-
   /* Precompute pdfs for distribution sampling.
    * Sample one, with 0.5 probability of light or triangle. */
   kintegrator->distribution_pdf_triangles = 0.0f;
@@ -496,7 +493,9 @@ void LightManager::device_update_tree(Device *device,
 
   /* Add both lights and emissive triangles to this vector for light tree construction. */
   vector<LightTreePrimitive> light_prims;
+  light_prims.reserve(kintegrator->num_distribution - kintegrator->num_distant_lights);
   vector<LightTreePrimitive> distant_lights;
+  distant_lights.reserve(kintegrator->num_distant_lights);
   vector<uint> object_lookup_offsets(scene->objects.size());
 
   /* When we keep track of the light index, only contributing lights will be added to the device.
@@ -506,15 +505,12 @@ void LightManager::device_update_tree(Device *device,
   int scene_light_index = 0;
   foreach (Light *light, scene->lights) {
     if (light->is_enabled) {
-      /* -prim_id - 1 is a light source index. */
-      LightTreePrimitive light_prim(scene, ~device_light_index, scene_light_index);
-
       /* Distant lights get added to a separate vector. */
       if (light->light_type == LIGHT_BACKGROUND || light->light_type == LIGHT_DISTANT) {
-        distant_lights.push_back(light_prim);
+        distant_lights.emplace_back(scene, ~device_light_index, scene_light_index);
       }
       else {
-        light_prims.push_back(light_prim);
+        light_prims.emplace_back(scene, ~device_light_index, scene_light_index);
       }
 
       device_light_index++;
@@ -524,7 +520,6 @@ void LightManager::device_update_tree(Device *device,
   }
 
   /* Similarly, we also want to keep track of the index of triangles that are emissive. */
-  size_t num_triangles = 0;
   size_t total_triangles = 0;
   int object_id = 0;
   foreach (Object *object, scene->objects) {
@@ -549,10 +544,7 @@ void LightManager::device_update_tree(Device *device,
                            scene->default_surface;
 
       if (shader->emission_sampling != EMISSION_SAMPLING_NONE) {
-        LightTreePrimitive light_prim(scene, i, object_id);
-        light_prims.push_back(light_prim);
-
-        num_triangles++;
+        light_prims.emplace_back(scene, i, object_id);
       }
     }
 
@@ -567,7 +559,7 @@ void LightManager::device_update_tree(Device *device,
   /* TODO: this shadow scale mechanism does not work for light tree. */
   kfilm->pass_shadow_scale = 1.0f;
 
-  /* For now, we'll start with a smaller number of max lights in a node.
+  /* TODO: For now, we'll start with a smaller number of max lights in a node.
    * More benchmarking is needed to determine what number works best. */
   LightTree light_tree(light_prims, 8);
 
@@ -1215,8 +1207,11 @@ void LightManager::device_update(Device *device,
       return;
   }
 
-  device_update_tree(device, dscene, scene, progress);
   device_update_distribution(device, dscene, scene, progress);
+  if (progress.get_cancel())
+    return;
+
+  device_update_tree(device, dscene, scene, progress);
   if (progress.get_cancel())
     return;
 
