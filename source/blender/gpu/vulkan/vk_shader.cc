@@ -7,14 +7,45 @@
 
 #include "vk_shader.hh"
 
-#ifdef __APPLE__
-#  include <MoltenVK/vk_mvk_moltenvk.h>
-#else
-#  include <vulkan/vulkan.h>
-#endif
-#include "shaderc/shaderc.hpp"
+#include "vk_backend.hh"
+
+#include "BLI_string_utils.h"
+#include "BLI_vector.hh"
 
 namespace blender::gpu {
+
+static std::string combine_sources(MutableSpan<const char *> sources)
+{
+  char *sources_combined = BLI_string_join_arrayN((const char **)sources.data(), sources.size());
+  return std::string(sources_combined);
+}
+
+Vector<uint32_t> VKShader::compile_glsl_to_spirv(StringRef source, shaderc_shader_kind kind)
+{
+  VKBackend &backend = static_cast<VKBackend &>(*VKBackend::get());
+  shaderc::Compiler &compiler = backend.get_shaderc_compiler();
+  shaderc::CompileOptions options;
+
+  shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, kind, name, options);
+
+  if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+    // TODO(jbakker): error handling.
+  }
+
+  return Vector<uint32_t>(module.cbegin(), module.cend());
+}
+
+void VKShader::build_shader_module(Span<uint32_t> spirv_module, VkShaderModule *r_shader_module)
+{
+  VkShaderModuleCreateInfo createInfo = {};
+  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  createInfo.codeSize = spirv_module.size() * sizeof(uint32_t);
+  createInfo.pCode = spirv_module.data();
+
+  // TODO(jbakker): retrieve allocator and device
+  // VkResult result = vkCreateShaderModule(*device, &create_info, nullptr, r_shader_module);
+}
+
 void VKShader::vertex_shader_from_glsl(MutableSpan<const char *> /*sources*/)
 {
 }
@@ -27,8 +58,12 @@ void VKShader::fragment_shader_from_glsl(MutableSpan<const char *> /*sources*/)
 {
 }
 
-void VKShader::compute_shader_from_glsl(MutableSpan<const char *> /*sources*/)
+void VKShader::compute_shader_from_glsl(MutableSpan<const char *> sources)
 {
+  std::string source = combine_sources(sources);
+
+  Vector<uint32_t> spirv_module = compile_glsl_to_spirv(StringRef(source), shaderc_compute_shader);
+  build_shader_module(spirv_module, &compute_module_);
 }
 
 bool VKShader::finalize(const shader::ShaderCreateInfo * /*info*/)

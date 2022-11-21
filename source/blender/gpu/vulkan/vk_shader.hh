@@ -9,9 +9,16 @@
 
 #include "gpu_shader_private.hh"
 
+#include "vk_backend.hh"
+
+#include "BLI_string_ref.hh"
+
 namespace blender::gpu {
 
 class VKShader : public Shader {
+ private:
+  VkShaderModule compute_module_ = nullptr;
+
  public:
   VKShader(const char *name) : Shader(name)
   {
@@ -43,6 +50,10 @@ class VKShader : public Shader {
 
   /* DEPRECATED: Kept only because of BGL API. */
   int program_handle_get() const override;
+
+ private:
+  Vector<uint32_t> compile_glsl_to_spirv(StringRef source, shaderc_shader_kind kind);
+  void build_shader_module(Span<uint32_t> spirv_module, VkShaderModule *r_shader_module);
 };
 
 }  // namespace blender::gpu
