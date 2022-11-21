@@ -285,6 +285,11 @@ if(CMAKE_GENERATOR MATCHES "^Visual Studio.+" AND WITH_CLANG_TIDY)
   set(VS_CLANG_TIDY ON)
 endif()
 
+# To support building against both 3.4 and 3.5 lib folders, disable materialX if it is not found
+set(MATERIALX_LIB_FOLDER_EXISTS EXISTS ${LIBDIR}/materialx)
+set_and_warn_library_found("MaterialX" MATERIALX_LIB_FOLDER_EXISTS WITH_MATERIALX)
+unset(MATERIALX_LIB_FOLDER_EXISTS)
+
 # Mark libdir as system headers with a lower warn level, to resolve some warnings
 # that we have very little control over
 if(NOT MSVC_CLANG                  AND # Available with MSVC 15.7+ but not for CLANG.
