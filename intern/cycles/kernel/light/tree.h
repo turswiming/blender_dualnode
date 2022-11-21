@@ -432,9 +432,6 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
                         rand);
         has_importance >>= 1;
       }
-      if (selected_index == -1) {
-        return -1;
-      }
 
       float discard;
       light_tree_emitter_importance<in_volume_segment>(
