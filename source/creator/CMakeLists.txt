@@ -413,13 +413,19 @@ if(WITH_PYTHON)
     PATTERN ".github" EXCLUDE
     PATTERN ".arcconfig" EXCLUDE
     PATTERN "__pycache__" EXCLUDE
+    PATTERN "site" EXCLUDE
     PATTERN "${ADDON_EXCLUDE_CONDITIONAL}" EXCLUDE
     PATTERN "${FREESTYLE_EXCLUDE_CONDITIONAL}" EXCLUDE
   )
   if(WIN32)
     install(
-      FILES ${CMAKE_SOURCE_DIR}/release/windows/python/usercustomize.py
+      FILES ${CMAKE_SOURCE_DIR}/release/scripts/site/usercustomize.py
       DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+    )
+  else()
+    install(
+      FILES ${CMAKE_SOURCE_DIR}/release/scripts/site/usercustomize.py
+      DESTINATION ${TARGETDIR_VER}/python/lib/python${PYTHON_VERSION}/site-packages
     )
   endif()
   unset(ADDON_EXCLUDE_CONDITIONAL)
@@ -969,6 +975,37 @@ elseif(WIN32)
       endif()
   endif()
 
+  if(WITH_MATERIALX)
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/materialx/bin/MaterialXCore.dll
+        ${LIBDIR}/materialx/bin/MaterialXFormat.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenGlsl.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenMdl.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenOsl.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenShader.dll
+        ${LIBDIR}/materialx/bin/MaterialXRenderGlsl.dll
+        ${LIBDIR}/materialx/bin/MaterialXRenderHw.dll
+        ${LIBDIR}/materialx/bin/MaterialXRenderOsl.dll
+        ${LIBDIR}/materialx/bin/MaterialXRender.dll
+      RELEASE
+    )
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/materialx/bin/MaterialXCore_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXFormat_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenGlsl_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenMdl_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenOsl_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXGenShader_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXRenderGlsl_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXRenderHw_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXRenderOsl_d.dll
+        ${LIBDIR}/materialx/bin/MaterialXRender_d.dll
+      DEBUG
+    )
+  endif()
+
   if(WITH_PYTHON)
     string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 
@@ -1075,6 +1112,29 @@ elseif(WIN32)
             PATTERN "*.pyo" EXCLUDE                 # * any cache *
           )
         endif()
+      endif()
+
+      if(WITH_MATERIALX)
+        # MaterialX python bindings
+
+        install(
+            DIRECTORY ${LIBDIR}/materialx/python/Release/MaterialX
+            DESTINATION ${TARGETDIR_VER}/python/lib/site-packages/
+            CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+            PATTERN ".svn" EXCLUDE
+            PATTERN "__pycache__" EXCLUDE           # * any cache *
+            PATTERN "*.pyc" EXCLUDE                 # * any cache *
+            PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+        install(
+            DIRECTORY ${LIBDIR}/materialx/python/Debug/MaterialX
+            DESTINATION ${TARGETDIR_VER}/python/lib/site-packages/
+            CONFIGURATIONS Debug
+            PATTERN ".svn" EXCLUDE
+            PATTERN "__pycache__" EXCLUDE           # * any cache *
+            PATTERN "*.pyc" EXCLUDE                 # * any cache *
+            PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
       endif()
 
       if(WINDOWS_PYTHON_DEBUG)
@@ -1494,6 +1554,13 @@ if(WITH_USD)
       )
     endif()
   endif()
+endif()
+
+if(WITH_MATERIALX)
+  install(
+    DIRECTORY ${LIBDIR}/materialx/libraries
+    DESTINATION "${TARGETDIR_VER}/datafiles/materialx"
+  )
 endif()
 
 if(WIN32 AND WITH_BOOST)

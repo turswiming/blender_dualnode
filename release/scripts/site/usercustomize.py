@@ -12,3 +12,8 @@ if sys.platform == 'win32':
         import_paths = os.getenv('PXR_USD_WINDOWS_DLL_PATH')
         if import_paths is None:
             os.environ["PXR_USD_WINDOWS_DLL_PATH"] = blender_dir
+
+        materialx_libs_dir = os.path.abspath(os.path.join(exe_dir, '..', '..', 'datafiles', 'materialx', 'libraries'))
+        materialx_libs_env = os.getenv('MATERIALX_SEARCH_PATH')
+        if materialx_libs_env is None:
+            os.environ["MATERIALX_SEARCH_PATH"] = materialx_libs_dir

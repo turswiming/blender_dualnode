@@ -241,6 +241,16 @@ harvest_rpath_lib(usd/lib usd/lib "libusd_ms${SHAREDLIBEXT}")
 harvest(usd/lib/usd usd/lib/usd "*")
 harvest_rpath_python(usd/lib/python/pxr python/lib/python${PYTHON_SHORT_VERSION}/site-packages/pxr "*")
 harvest(usd/plugin usd/plugin "*")
+harvest(materialx/include materialx/include "*.h")
+harvest(materialx/lib materialx/lib "*")
+harvest(materialx/libraries materialx/libraries "*")
+harvest(materialx/python materialx/python "*")
+harvest(materialx/lib/cmake/MaterialX materialx/lib/cmake/MaterialX "*.cmake")
+harvest_rpath_python(materialx/python/MaterialX python/lib/python${PYTHON_SHORT_VERSION}/site-packages/MaterialX "*")
+# We do not need anything from the resources folder, but the MaterialX config
+# file will complain if the folder does not exist, so just copy the readme.md
+# files to ensure the folder will exist.
+harvest(materialx/resources materialx/resources "README.md")
 harvest(potrace/include potrace/include "*.h")
 harvest(potrace/lib potrace/lib "*.a")
 harvest(haru/include haru/include "*.h")
