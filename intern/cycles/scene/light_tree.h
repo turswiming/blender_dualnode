@@ -91,50 +91,40 @@ struct LightTreeBucketInfo {
   static const int num_buckets = 12;
 };
 
-/* Light Tree Build Node
- * Temporary build node when constructing light tree,
- * and is later converted into a more compact representation for device. */
-struct LightTreeBuildNode {
+/* Light Tree Node */
+struct LightTreeNode {
   BoundBox bbox;
   OrientationBounds bcone;
   float energy;
-  LightTreeBuildNode *children[2];
-  uint first_prim_index;
-  uint num_lights;
   uint bit_trail;
-  bool is_leaf;
-
-  void init_leaf(const uint &offset,
-                 const uint &n,
-                 const BoundBox &b,
-                 const OrientationBounds &c,
-                 const float &e,
-                 const uint &bits);
-  void init_interior(LightTreeBuildNode *c0,
-                     LightTreeBuildNode *c1,
-                     const BoundBox &b,
-                     const OrientationBounds &c,
-                     const float &e,
-                     const uint &bits);
-};
-
-/* Packed Light Tree Node
- * Compact representation of light tree node
- * that's actually used in the device */
-struct PackedLightTreeNode {
-  BoundBox bbox;
-  OrientationBounds bcone;
-  float energy;
+  uint num_prims = 0;
   union {
-    int first_prim_index;   /* leaf nodes contain an index to first primitive. */
-    int second_child_index; /* interior nodes contain an index to second child. */
+    int first_prim_index;  /* leaf nodes contain an index to first primitive. */
+    int right_child_index; /* interior nodes contain an index to second child. */
   };
-  int num_lights;
-  bool is_leaf_node;
 
-  /* The bit trail traces the traversal from the root to a leaf node.
-   * A value of 0 denotes traversing left while a value of 1 denotes traversing right. */
-  uint bit_trail;
+  LightTreeNode(const BoundBox &bbox,
+                const OrientationBounds &bcone,
+                const float &energy,
+                const uint &bit_trial)
+      : bbox(bbox), bcone(bcone), energy(energy), bit_trail(bit_trial)
+  {
+  }
+
+  void make_leaf(const uint &first_prim_index, const uint &num_prims)
+  {
+    this->first_prim_index = first_prim_index;
+    this->num_prims = num_prims;
+  }
+  void make_interior(const int &right_child_index)
+  {
+    this->right_child_index = right_child_index;
+  }
+
+  inline bool is_leaf() const
+  {
+    return num_prims > 0;
+  }
 };
 
 /* Light BVH
@@ -142,32 +132,29 @@ struct PackedLightTreeNode {
  * BVH-like data structure that keeps track of lights
  * and considers additional orientation and energy information */
 class LightTree {
-  vector<LightTreePrimitive> prims_;
-  vector<PackedLightTreeNode> nodes_;
-  Scene *scene_;
+  vector<LightTreeNode> nodes_;
   uint max_lights_in_leaf_;
 
  public:
-  LightTree(const vector<LightTreePrimitive> &prims, Scene *scene, uint max_lights_in_leaf);
+  LightTree(vector<LightTreePrimitive> &prims, uint max_lights_in_leaf);
 
-  const vector<LightTreePrimitive> &get_prims() const;
-  const vector<PackedLightTreeNode> &get_nodes() const;
+  const vector<LightTreeNode> &get_nodes() const;
 
  private:
-  LightTreeBuildNode *recursive_build(int start,
-                                      int end,
-                                      int &total_nodes,
-                                      vector<LightTreePrimitive> &ordered_prims,
-                                      uint bit_trail,
-                                      int depth);
+  int recursive_build(int start,
+                      int end,
+                      vector<LightTreePrimitive> &prims,
+                      vector<LightTreePrimitive> &ordered_prims,
+                      uint bit_trail,
+                      int depth);
   float min_split_saoh(const BoundBox &centroid_bounds,
                        int start,
                        int end,
                        const BoundBox &bbox,
                        const OrientationBounds &bcone,
                        int &min_dim,
-                       int &min_bucket);
-  int flatten_tree(const LightTreeBuildNode *node, int &offset);
+                       int &min_bucket,
+                       const vector<LightTreePrimitive> &prims);
 };
 
 CCL_NAMESPACE_END

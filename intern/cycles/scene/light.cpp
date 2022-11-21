@@ -569,8 +569,7 @@ void LightManager::device_update_tree(Device *device,
 
   /* For now, we'll start with a smaller number of max lights in a node.
    * More benchmarking is needed to determine what number works best. */
-  LightTree light_tree(light_prims, scene, 8);
-  light_prims = light_tree.get_prims();
+  LightTree light_tree(light_prims, 8);
 
   /* We want to create separate arrays corresponding to triangles and lights,
    * which will be used to index back into the light tree for PDF calculations. */
@@ -584,12 +583,12 @@ void LightManager::device_update_tree(Device *device,
   }
 
   /* First initialize the light tree's nodes. */
-  const vector<PackedLightTreeNode> &linearized_bvh = light_tree.get_nodes();
+  const vector<LightTreeNode> &linearized_bvh = light_tree.get_nodes();
   KernelLightTreeNode *light_tree_nodes = dscene->light_tree_nodes.alloc(linearized_bvh.size());
   KernelLightTreeEmitter *light_tree_emitters = dscene->light_tree_emitters.alloc(
       light_prims.size());
   for (int index = 0; index < linearized_bvh.size(); index++) {
-    const PackedLightTreeNode &node = linearized_bvh[index];
+    const LightTreeNode &node = linearized_bvh[index];
 
     light_tree_nodes[index].energy = node.energy;
 
@@ -604,11 +603,11 @@ void LightManager::device_update_tree(Device *device,
     light_tree_nodes[index].bit_trail = node.bit_trail;
 
     /* Here we need to make a distinction between interior and leaf nodes. */
-    if (node.is_leaf_node) {
-      light_tree_nodes[index].num_prims = node.num_lights;
+    if (node.is_leaf()) {
+      light_tree_nodes[index].num_prims = node.num_prims;
       light_tree_nodes[index].child_index = -node.first_prim_index;
 
-      for (int i = 0; i < node.num_lights; i++) {
+      for (int i = 0; i < node.num_prims; i++) {
         int emitter_index = i + node.first_prim_index;
         LightTreePrimitive &prim = light_prims[emitter_index];
 
@@ -661,7 +660,7 @@ void LightManager::device_update_tree(Device *device,
       }
     }
     else {
-      light_tree_nodes[index].child_index = node.second_child_index;
+      light_tree_nodes[index].child_index = node.right_child_index;
     }
   }
 
