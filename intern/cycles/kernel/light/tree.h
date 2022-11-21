@@ -354,7 +354,7 @@ ccl_device_inline void sample_resevoir(const int current_index,
   }
   total_weight += current_weight;
   float thresh = current_weight / total_weight;
-  if (*rand < thresh) {
+  if (*rand <= thresh) {
     selected_index = current_index;
     selected_weight = current_weight;
     *rand = *rand / thresh;
@@ -362,6 +362,7 @@ ccl_device_inline void sample_resevoir(const int current_index,
   else {
     *rand = (*rand - thresh) / (1.0f - thresh);
   }
+  kernel_assert(*rand >= 0.0f && *rand <= 1.0f);
   return;
 }
 
@@ -525,11 +526,15 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     }
 
     if (*randu < left_probability) { /* go left */
+      kernel_assert(left_probability > 0.0f);
+
       node_index = left_index;
       *randu /= left_probability;
       *pdf_factor *= left_probability;
     }
     else {
+      kernel_assert((1.0f - left_probability) > 0.0f);
+
       node_index = right_index;
       *randu = (*randu - left_probability) / (1.0f - left_probability);
       *pdf_factor *= (1.0f - left_probability);
@@ -822,6 +827,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
   float pdf_factor = 1.0f;
   bool ret;
   if (randu < light_tree_probability) {
+    kernel_assert(light_tree_probability > 0.0f);
+
     randu = randu / light_tree_probability;
     pdf_factor *= light_tree_probability;
     ret = light_tree_sample<in_volume_segment>(kg,
@@ -838,6 +845,8 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
                                                &pdf_factor);
   }
   else {
+    kernel_assert((1.0f - light_tree_probability) > 0.0f);
+
     randu = (randu - light_tree_probability) / (1.0f - light_tree_probability);
     pdf_factor *= (1.0f - light_tree_probability);
     ret = light_tree_sample_distant_lights<in_volume_segment>(kg,
