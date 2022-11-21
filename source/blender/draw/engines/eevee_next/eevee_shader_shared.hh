@@ -50,9 +50,6 @@ enum eDebugMode : uint32_t {
   DEBUG_HIZ_VALIDATION = 2u,
   /**
    * Tile-maps to screen. Is also present in other modes.
-   * - Black pixels, no pages allocated.
-   * - Green pixels, pages cached.
-   * - Red pixels, pages allocated.
    */
   DEBUG_SHADOW_TILEMAPS = 10u,
 };

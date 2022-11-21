@@ -477,6 +477,8 @@ void ShadowModule::init()
 
   atlas_tx_.filter_mode(false);
 
+  render_map_tx_.ensure_mip_views();
+
   tilemap_pixel_radius_ = M_SQRT2 * 2.0f / (SHADOW_TILEMAP_RES * shadow_page_size_);
 }
 
@@ -653,7 +655,7 @@ void ShadowModule::end_sync()
       }
       {
         /** Mark for update all shadow pages touching an updated shadow caster. */
-        PassSimple::Sub &sub = pass.sub("TagUpdate");
+        PassSimple::Sub &sub = pass.sub("CasterUpdate");
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_UPDATE));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);

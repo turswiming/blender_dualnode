@@ -75,6 +75,7 @@ void ShadowPipeline::sync()
   surface_ps_.bind_texture(SHADOW_RENDER_MAP_SLOT, &inst_.shadows.render_map_tx_);
   surface_ps_.bind_image(SHADOW_ATLAS_SLOT, &inst_.shadows.atlas_tx_);
   surface_ps_.bind_ubo(CAMERA_BUF_SLOT, inst_.camera.ubo_get());
+  surface_ps_.bind_ssbo(SHADOW_PAGE_INFO_SLOT, &inst_.shadows.pages_infos_data_);
   surface_ps_.framebuffer_set(&inst_.shadows.render_fb_);
 }
 

@@ -81,10 +81,11 @@
 
 /* Texture. */
 #define SHADOW_TILEMAPS_TEX_SLOT 12
+/* Only during surface shading. */
 #define SHADOW_ATLAS_TEX_SLOT 13
-#define RBUFS_UTILITY_TEX_SLOT 14
 /* Only during shadow rendering. */
-#define SHADOW_RENDER_MAP_SLOT 12
+#define SHADOW_RENDER_MAP_SLOT 13
+#define RBUFS_UTILITY_TEX_SLOT 14
 
 /* Images. */
 #define RBUFS_NORMAL_SLOT 0
@@ -109,7 +110,10 @@
 #define LIGHT_BUF_SLOT 1
 #define LIGHT_ZBIN_BUF_SLOT 2
 #define LIGHT_TILE_BUF_SLOT 3
+/* Only during surface shading. */
 #define RBUFS_AOV_BUF_SLOT 5
+/* Only during shadow rendering. */
+#define SHADOW_PAGE_INFO_SLOT 5
 #define SAMPLING_BUF_SLOT 6
 #define CRYPTOMATTE_BUF_SLOT 7
 
