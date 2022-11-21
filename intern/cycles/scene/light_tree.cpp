@@ -62,95 +62,37 @@ OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds
 LightTreePrimitive::LightTreePrimitive(Scene *scene, int prim_id, int object_id)
     : prim_id(prim_id), object_id(object_id)
 {
-  if (is_triangle()) {
-    calculate_triangle_vertices(scene);
-  }
-  calculate_centroid(scene);
-  calculate_bbox(scene);
-  calculate_bcone(scene);
-  calculate_energy(scene);
-}
-
-void LightTreePrimitive::calculate_triangle_vertices(Scene *scene)
-{
-  assert(is_triangle());
-  Object *object = scene->objects[object_id];
-  Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-  Mesh::Triangle triangle = mesh->get_triangle(prim_id);
-
-  for (int i = 0; i < 3; i++) {
-    vertices[i] = mesh->get_verts()[triangle.v[i]];
-  }
-
-  /* instanced mesh lights have not applied their transform at this point.
-   * in this case, these points have to be transformed to get the proper
-   * spatial bound. */
-  if (!mesh->transform_applied) {
-    const Transform &tfm = object->get_tfm();
-    for (int i = 0; i < 3; i++) {
-      vertices[i] = transform_point(&tfm, vertices[i]);
-    }
-  }
-}
-
-void LightTreePrimitive::calculate_centroid(Scene *scene)
-{
-  if (is_triangle()) {
-    /* NOTE: the original implementation used the bounding box centroid, but primitive centroid
-     * seems to work fine */
-    centroid = (vertices[0] + vertices[1] + vertices[2]) / 3.0f;
-  }
-  else {
-    centroid = scene->lights[object_id]->get_co();
-  }
-}
-
-void LightTreePrimitive::calculate_bbox(Scene *scene)
-{
+  bcone = OrientationBounds::empty;
   bbox = BoundBox::empty;
 
   if (is_triangle()) {
-    for (int i = 0; i < 3; i++) {
-      bbox.grow(vertices[i]);
-    }
-  }
-  else {
-    Light *lamp = scene->lights[object_id];
-    LightType type = lamp->get_light_type();
-    const float size = lamp->get_size();
-
-    if (type == LIGHT_POINT || type == LIGHT_SPOT) {
-      /* Point and spot lights can emit light from any point within its radius. */
-      const float3 radius = make_float3(size);
-      bbox.grow(centroid - radius);
-      bbox.grow(centroid + radius);
-    }
-    else if (type == LIGHT_AREA) {
-      /* For an area light, sizeu and sizev determine the 2 dimensions of the area light,
-       * while axisu and axisv determine the orientation of the 2 dimensions.
-       * We want to add all 4 corners to our bounding box. */
-      const float3 half_extentu = 0.5 * lamp->get_sizeu() * lamp->get_axisu() * size;
-      const float3 half_extentv = 0.5 * lamp->get_sizev() * lamp->get_axisv() * size;
-
-      bbox.grow(centroid + half_extentu + half_extentv);
-      bbox.grow(centroid + half_extentu - half_extentv);
-      bbox.grow(centroid - half_extentu + half_extentv);
-      bbox.grow(centroid - half_extentu - half_extentv);
-    }
-    else {
-      /* No bounding box for distant lights */
-    }
-  }
-}
-
-void LightTreePrimitive::calculate_bcone(Scene *scene)
-{
-  bcone = OrientationBounds::empty;
-
-  if (is_triangle()) {
+    float3 vertices[3];
     Object *object = scene->objects[object_id];
     Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+    Mesh::Triangle triangle = mesh->get_triangle(prim_id);
     Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
+
+    for (int i = 0; i < 3; i++) {
+      vertices[i] = mesh->get_verts()[triangle.v[i]];
+    }
+
+    /* instanced mesh lights have not applied their transform at this point.
+     * in this case, these points have to be transformed to get the proper
+     * spatial bound. */
+    if (!mesh->transform_applied) {
+      const Transform &tfm = object->get_tfm();
+      for (int i = 0; i < 3; i++) {
+        vertices[i] = transform_point(&tfm, vertices[i]);
+      }
+    }
+
+    /* TODO: need a better way to handle this when textures are used. */
+    float area = triangle_area(vertices[0], vertices[1], vertices[2]);
+    energy = area * scene->shader_manager->linear_rgb_to_gray(shader->emission_estimate);
+
+    /* NOTE: the original implementation used the bounding box centroid, but primitive centroid
+     * seems to work fine */
+    centroid = (vertices[0] + vertices[1] + vertices[2]) / 3.0f;
 
     if (shader->emission_sampling == EMISSION_SAMPLING_FRONT) {
       /* Front only. */
@@ -167,30 +109,58 @@ void LightTreePrimitive::calculate_bcone(Scene *scene)
       bcone.axis = safe_normalize(vertices[0] - vertices[1]);
       bcone.theta_o = M_PI_2_F;
     }
-
     bcone.theta_e = M_PI_2_F;
+
+    for (int i = 0; i < 3; i++) {
+      bbox.grow(vertices[i]);
+    }
   }
   else {
     Light *lamp = scene->lights[object_id];
     LightType type = lamp->get_light_type();
+    const float size = lamp->get_size();
+    float3 strength = lamp->get_strength();
 
+    centroid = scene->lights[object_id]->get_co();
     bcone.axis = normalize(lamp->get_dir());
 
-    if (type == LIGHT_POINT) {
+    if (type == LIGHT_AREA) {
+      bcone.theta_o = 0;
+      bcone.theta_e = lamp->get_spread() * 0.5f;
+
+      /* For an area light, sizeu and sizev determine the 2 dimensions of the area light,
+       * while axisu and axisv determine the orientation of the 2 dimensions.
+       * We want to add all 4 corners to our bounding box. */
+      const float3 half_extentu = 0.5 * lamp->get_sizeu() * lamp->get_axisu() * size;
+      const float3 half_extentv = 0.5 * lamp->get_sizev() * lamp->get_axisv() * size;
+      bbox.grow(centroid + half_extentu + half_extentv);
+      bbox.grow(centroid + half_extentu - half_extentv);
+      bbox.grow(centroid - half_extentu + half_extentv);
+      bbox.grow(centroid - half_extentu - half_extentv);
+
+      strength *= 0.25f; /* eval_fac scaling in `area.h` */
+    }
+    else if (type == LIGHT_POINT) {
       bcone.theta_o = M_PI_F;
       bcone.theta_e = M_PI_2_F;
+
+      /* Point and spot lights can emit light from any point within its radius. */
+      const float3 radius = make_float3(size);
+      bbox.grow(centroid - radius);
+      bbox.grow(centroid + radius);
+
+      strength *= 0.25f * M_1_PI_F; /* eval_fac scaling in `spot.h` and `point.h` */
     }
     else if (type == LIGHT_SPOT) {
       bcone.theta_o = 0;
       bcone.theta_e = lamp->get_spot_angle() * 0.5f;
-    }
-    else if (type == LIGHT_AREA) {
-      bcone.theta_o = 0;
-      bcone.theta_e = lamp->get_spread() * 0.5f;
-    }
-    else if (type == LIGHT_DISTANT) {
-      bcone.theta_o = tanf(0.5f * lamp->get_angle());
-      bcone.theta_e = 0;
+
+      /* Point and spot lights can emit light from any point within its radius. */
+      const float3 radius = make_float3(size);
+      bbox.grow(centroid - radius);
+      bbox.grow(centroid + radius);
+
+      strength *= 0.25f * M_1_PI_F; /* eval_fac scaling in `spot.h` and `point.h` */
     }
     else if (type == LIGHT_BACKGROUND) {
       /* Set an arbitrary direction for the background light. */
@@ -198,35 +168,13 @@ void LightTreePrimitive::calculate_bcone(Scene *scene)
       /* TODO: this may depend on portal lights as well. */
       bcone.theta_o = M_PI_F;
       bcone.theta_e = 0;
-    }
-  }
-}
 
-void LightTreePrimitive::calculate_energy(Scene *scene)
-{
-  if (is_triangle()) {
-    Object *object = scene->objects[object_id];
-    Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
-    Shader *shader = static_cast<Shader *>(mesh->get_used_shaders()[mesh->get_shader()[prim_id]]);
-
-    /* to-do: need a better way to handle this when textures are used. */
-    float area = triangle_area(vertices[0], vertices[1], vertices[2]);
-    energy = area * scene->shader_manager->linear_rgb_to_gray(shader->emission_estimate);
-  }
-  else {
-    Light *lamp = scene->lights[object_id];
-    LightType type = lamp->get_light_type();
-
-    float3 strength = lamp->get_strength();
-    if (type == LIGHT_AREA) {
-      strength *= 0.25f; /* eval_fac scaling in `area.h` */
-    }
-    else if (type == LIGHT_SPOT || type == LIGHT_POINT) {
-      strength *= 0.25f * M_1_PI_F; /* eval_fac scaling in `spot.h` and `point.h` */
-    }
-    else if (type == LIGHT_BACKGROUND) {
       /* integrate over cosine-weighted hemisphere */
       strength *= lamp->get_average_radiance() * M_PI_F;
+    }
+    else if (type == LIGHT_DISTANT) {
+      bcone.theta_o = tanf(0.5f * lamp->get_angle());
+      bcone.theta_e = 0;
     }
 
     if (lamp->get_shader()) {
@@ -342,7 +290,8 @@ LightTreeBuildNode *LightTree::recursive_build(int start,
      * If the best split cost is no better than making a leaf node, make a leaf instead.*/
     float min_cost = min_split_saoh(
         centroid_bounds, start, end, node_bbox, node_bcone, min_dim, min_bucket);
-    should_split = num_prims > max_lights_in_leaf_ || min_cost < energy_total;
+    should_split = (num_prims > max_lights_in_leaf_ || min_cost < energy_total) &&
+                   energy_total > 1e-3f;
   }
   if (should_split) {
     int middle;

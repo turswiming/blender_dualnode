@@ -61,23 +61,15 @@ struct LightTreePrimitive {
   int prim_id;
   int object_id;
 
-  /* Only used for emissive triangles */
-  float3 vertices[3];
-
-  float3 centroid;
-  BoundBox bbox;
-  OrientationBounds bcone;
-  float energy;
   int prim_num;
+  float energy;
+  float3 centroid;
+  OrientationBounds bcone;
+  BoundBox bbox;
 
   LightTreePrimitive(Scene *scene, int prim_id, int object_id);
-  void calculate_triangle_vertices(Scene *scene);
-  void calculate_centroid(Scene *scene);
-  void calculate_bbox(Scene *scene);
-  void calculate_bcone(Scene *scene);
-  void calculate_energy(Scene *scene);
 
-  bool is_triangle() const
+  inline bool is_triangle() const
   {
     return prim_id >= 0;
   };
