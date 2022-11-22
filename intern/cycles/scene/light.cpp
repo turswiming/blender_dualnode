@@ -604,11 +604,6 @@ void LightManager::device_update_tree(Device *device,
         LightTreePrimitive &prim = light_prims[emitter_index];
 
         light_tree_emitters[emitter_index].energy = prim.energy;
-
-        for (int i = 0; i < 3; i++) {
-          light_tree_emitters[emitter_index].centroid[i] = prim.centroid[i];
-          light_tree_emitters[emitter_index].bounding_cone_axis[i] = prim.bcone.axis[i];
-        }
         light_tree_emitters[emitter_index].theta_o = prim.bcone.theta_o;
         light_tree_emitters[emitter_index].theta_e = prim.bcone.theta_e;
 
@@ -618,6 +613,9 @@ void LightManager::device_update_tree(Device *device,
           int shader_flag = 0;
           Object *object = scene->objects[prim.object_id];
           Mesh *mesh = static_cast<Mesh *>(object->get_geometry());
+          Shader *shader = static_cast<Shader *>(
+              mesh->get_used_shaders()[mesh->get_shader()[prim.prim_id]]);
+
           if (!(object->get_visibility() & PATH_RAY_CAMERA)) {
             shader_flag |= SHADER_EXCLUDE_CAMERA;
           }
@@ -639,12 +637,12 @@ void LightManager::device_update_tree(Device *device,
 
           light_tree_emitters[emitter_index].prim_id = prim.prim_id + mesh->prim_offset;
           light_tree_emitters[emitter_index].mesh_light.shader_flag = shader_flag;
+          light_tree_emitters[emitter_index].mesh_light.emission_sampling =
+              shader->emission_sampling;
           triangle_array[prim.prim_id + object_lookup_offsets[prim.object_id]] = emitter_index;
         }
         else {
-          Light *lamp = scene->lights[prim.object_id];
           light_tree_emitters[emitter_index].prim_id = prim.prim_id;
-          light_tree_emitters[emitter_index].lamp.size = lamp->size;
           light_array[~prim.prim_id] = emitter_index;
         }
 

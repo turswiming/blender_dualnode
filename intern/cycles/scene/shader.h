@@ -34,15 +34,6 @@ struct float3;
 enum ShadingSystem { SHADINGSYSTEM_OSL, SHADINGSYSTEM_SVM };
 
 /* Keep those in sync with the python-defined enum. */
-enum EmissionSampling {
-  EMISSION_SAMPLING_NONE = 0,
-  EMISSION_SAMPLING_AUTO = 1,
-  EMISSION_SAMPLING_FRONT = 2,
-  EMISSION_SAMPLING_BACK = 3,
-  EMISSION_SAMPLING_FRONT_BACK = 4,
-
-  EMISSION_SAMPLING_NUM
-};
 
 enum VolumeSampling {
   VOLUME_SAMPLING_DISTANCE = 0,

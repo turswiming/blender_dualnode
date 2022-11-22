@@ -467,6 +467,16 @@ typedef enum ShaderFlag {
                   SHADER_EXCLUDE_ANY)
 } ShaderFlag;
 
+enum EmissionSampling {
+  EMISSION_SAMPLING_NONE = 0,
+  EMISSION_SAMPLING_AUTO = 1,
+  EMISSION_SAMPLING_FRONT = 2,
+  EMISSION_SAMPLING_BACK = 3,
+  EMISSION_SAMPLING_FRONT_BACK = 4,
+
+  EMISSION_SAMPLING_NUM
+};
+
 /* Light Type */
 
 typedef enum LightType {
@@ -1364,10 +1374,7 @@ typedef struct KernelLightTreeNode {
 static_assert_align(KernelLightTreeNode, 16);
 
 typedef struct KernelLightTreeEmitter {
-  float centroid[3];
-
   /* Bounding cone. */
-  float bounding_cone_axis[3];
   float theta_o;
   float theta_e;
 
@@ -1376,22 +1383,14 @@ typedef struct KernelLightTreeEmitter {
 
   /* prim_id denotes the location in the lights or triangles array. */
   int prim_id;
-  union {
-    struct {
-      int shader_flag;
-      int object_id;
-    } mesh_light;
-    struct {
-      float pad1;
-      float size;
-    } lamp;
-  };
+  struct {
+    int shader_flag;
+    int object_id;
+    EmissionSampling emission_sampling;
+  } mesh_light;
 
   /* Parent. */
   int parent_index;
-
-  /* Padding */
-  float pad3[3];
 } KernelLightTreeEmitter;
 static_assert_align(KernelLightTreeEmitter, 16);
 

@@ -181,24 +181,23 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter_index);
 
-  float3 bcone_axis = make_float3(kemitter->bounding_cone_axis[0],
-                                  kemitter->bounding_cone_axis[1],
-                                  kemitter->bounding_cone_axis[2]);
   float theta_o = kemitter->theta_o;
   float min_distance, distance;
   float max_distance = 0.0f;
   float cos_theta_u = 1.0f;
-  float3 centroid = make_float3(
-      kemitter->centroid[0], kemitter->centroid[1], kemitter->centroid[2]);
-  float3 point_to_centroid = safe_normalize_len(centroid - P, &distance);
+  float3 bcone_axis, centroid, point_to_centroid;
   bool bbox_is_visible = has_transmission;
 
   const int prim = kemitter->prim_id;
+  /* TODO: pack in functions and move to header files for respective light types */
   if (prim < 0) {
     const int lamp = -prim - 1;
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
+    centroid = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+    point_to_centroid = safe_normalize_len(centroid - P, &distance);
 
     if (klight->type == LIGHT_SPOT || klight->type == LIGHT_POINT) {
+      bcone_axis = make_float3(klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
       const float radius = klight->spot.radius;
       min_distance = distance;
       max_distance = sqrtf(sqr(radius) + sqr(distance));
@@ -207,6 +206,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
       bbox_is_visible = true; /* will be tested later */
     }
     else { /* area light */
+      bcone_axis = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
       const float3 extentu = make_float3(
           klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
       const float3 extentv = make_float3(
@@ -231,10 +231,21 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   }
   else { /* mesh light */
     const int object = kemitter->mesh_light.object_id;
-    float3 V[3];
-    triangle_world_space_vertices(kg, object, prim, -1.0f, V);
+    float3 vertices[3];
+    triangle_world_space_vertices(kg, object, prim, -1.0f, vertices);
+    centroid = (vertices[0] + vertices[1] + vertices[2]) / 3.0f;
+    point_to_centroid = safe_normalize_len(centroid - P, &distance);
+    bcone_axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+    if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_BACK) {
+      bcone_axis = -bcone_axis;
+    }
+    else if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_FRONT_BACK) {
+      bcone_axis *= -signf(dot(bcone_axis, point_to_centroid));
+    }
+    theta_o = 0.0f;
+
     for (int i = 0; i < 3; i++) {
-      const float3 corner = V[i];
+      const float3 corner = vertices[i];
       float distance_point_to_corner;
       const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
       cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
