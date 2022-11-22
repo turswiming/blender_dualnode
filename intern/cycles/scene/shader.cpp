@@ -299,6 +299,7 @@ static float3 output_estimate_emission(ShaderOutput *output, bool &is_constant)
                                  zero_float3();
 
     if (fac_in->link) {
+      is_constant = false;
       return estimate1 + estimate2;
     }
     else {
@@ -329,6 +330,7 @@ static float3 output_estimate_emission(ShaderOutput *output, bool &is_constant)
     }
     else {
       estimate = one_float3();
+      is_constant = false;
     }
 
     return estimate;
