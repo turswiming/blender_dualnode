@@ -56,7 +56,7 @@ set(OPENIMAGEIO_EXTRA_ARGS
   -DUSE_OPENGL=OFF
   -DUSE_TBB=OFF
   -DUSE_QT=OFF
-  -DUSE_PYTHON=OFF
+  -DUSE_PYTHON=ON
   -DUSE_GIF=OFF
   -DUSE_OPENCV=OFF
   -DUSE_OPENJPEG=ON
@@ -94,6 +94,8 @@ set(OPENIMAGEIO_EXTRA_ARGS
   ${OIIO_SIMD_FLAGS}
   -DOpenEXR_ROOT=${LIBDIR}/openexr
   -DImath_ROOT=${LIBDIR}/imath
+  -Dpybind11_ROOT=${LIBDIR}/pybind11
+  -DPython_EXECUTABLE=${PYTHON_BINARY}
 )
 
 ExternalProject_Add(external_openimageio
@@ -121,6 +123,7 @@ add_dependencies(
   external_robinmap
   external_openjpeg${OPENJPEG_POSTFIX}
   external_webp
+  external_pybind11
 )
 
 if(WIN32)
@@ -140,6 +143,7 @@ if(WIN32)
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/openimageio/lib/OpenImageIO_Util_d.lib ${HARVEST_TARGET}/openimageio/lib/OpenImageIO_Util_d.lib
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/OpenImageIO/bin/OpenImageIO_d.dll ${HARVEST_TARGET}/OpenImageIO/bin/OpenImageIO_d.dll
       COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/OpenImageIO/bin/OpenImageIO_Util_d.dll ${HARVEST_TARGET}/OpenImageIO/bin/OpenImageIO_Util_d.dll
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/OpenImageIO/lib/python${PYTHON_SHORT_VERSION}/ ${HARVEST_TARGET}/OpenImageIO/lib/python${PYTHON_SHORT_VERSION}_debug/
       DEPENDEES install
     )
   endif()

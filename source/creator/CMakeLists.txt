@@ -1085,7 +1085,30 @@ elseif(WIN32)
         DESTINATION ${BLENDER_VERSION}/python/bin
         CONFIGURATIONS Debug
       )
-
+      if(WITH_OPENIMAGEIO)
+        if(EXISTS ${LIBDIR}/openimageio/lib/python${PYTHON_VERSION}/site-packages) #this will only exist for 3.5+
+           install(
+            DIRECTORY ${LIBDIR}/openimageio/lib/python${PYTHON_VERSION}/site-packages/
+            DESTINATION ${TARGETDIR_VER}/python/lib/site-packages/
+            CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+            PATTERN ".svn" EXCLUDE
+            PATTERN "__pycache__" EXCLUDE           # * any cache *
+            PATTERN "*.pyc" EXCLUDE                 # * any cache *
+            PATTERN "*.pyo" EXCLUDE                 # * any cache *
+          )
+        endif()
+        if(EXISTS ${LIBDIR}/openimageio/lib/python${PYTHON_VERSION}_debug/site-packages)
+          install(
+            DIRECTORY ${LIBDIR}/openimageio/lib/python${PYTHON_VERSION}_debug/site-packages/
+            DESTINATION ${TARGETDIR_VER}/python/lib/site-packages/
+            CONFIGURATIONS Debug
+            PATTERN ".svn" EXCLUDE
+            PATTERN "__pycache__" EXCLUDE           # * any cache *
+            PATTERN "*.pyc" EXCLUDE                 # * any cache *
+            PATTERN "*.pyo" EXCLUDE                 # * any cache *
+          )
+        endif()
+      endif()
       if(WITH_USD)
         # This will not exist for 3.4 and earlier lib folders
         # to ease the transition, support both 3.4 and 3.5 lib

@@ -776,3 +776,8 @@ set(VULKAN_LOADER_HASH 015170a74f648fd2b41e209b6bf1ebc4)
 set(VULKAN_LOADER_HASH_TYPE MD5)
 set(VULKAN_LOADER_FILE Vulkan-Loader-${VULKAN_VERSION}.tar.gz)
 
+set(PYBIND11_VERSION 2.10.1)
+set(PYBIND11_URI https://github.com/pybind/pybind11/archive/refs/tags/v${PYBIND11_VERSION}.tar.gz)
+set(PYBIND11_HASH ce07bfd5089245da7807b3faf6cbc878)
+set(PYBIND11_HASH_TYPE MD5)
+set(PYBIND11_FILE pybind-v${PYBIND11_VERSION}.tar.gz)
