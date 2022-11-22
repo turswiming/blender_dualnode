@@ -7,7 +7,33 @@
 
 #include "vk_context.hh"
 
+#include "GHOST_C-api.h"
+
 namespace blender::gpu {
+
+VKContext::VKContext(void *ghost_window, void *ghost_context)
+{
+  ghost_window_ = ghost_window;
+  if (ghost_window) {
+    ghost_context = GHOST_GetDrawingContext((GHOST_WindowHandle)ghost_window);
+  }
+
+  GHOST_GetVulkanHandles((GHOST_ContextHandle)ghost_context,
+                         &instance_,
+                         &physical_device_,
+                         &device_,
+                         &graphic_queue_familly_);
+
+  {
+    VmaAllocatorCreateInfo info = {};
+    /* TODO use same vulkan version as GHOST. */
+    info.vulkanApiVersion = VK_API_VERSION_1_1;
+    info.physicalDevice = physical_device_;
+    info.device = device_;
+    info.instance = instance_;
+    vmaCreateAllocator(&info, &mem_allocator_);
+  }
+}
 
 void VKContext::activate()
 {
