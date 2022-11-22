@@ -61,7 +61,6 @@ struct LightTreePrimitive {
   int prim_id;
   int object_id;
 
-  int prim_num;
   float energy;
   float3 centroid;
   OrientationBounds bcone;
@@ -144,7 +143,6 @@ class LightTree {
   int recursive_build(int start,
                       int end,
                       vector<LightTreePrimitive> &prims,
-                      vector<LightTreePrimitive> &ordered_prims,
                       uint bit_trail,
                       int depth);
   float min_split_saoh(const BoundBox &centroid_bounds,

@@ -192,18 +192,11 @@ LightTree::LightTree(vector<LightTreePrimitive> &prims, uint max_lights_in_leaf)
   }
 
   max_lights_in_leaf_ = max_lights_in_leaf;
-
-  for (int i = 0; i < prims.size(); i++) {
-    prims[i].prim_num = i;
-  }
-
-  vector<LightTreePrimitive> ordered_prims;
   int num_prims = prims.size();
-  ordered_prims.reserve(num_prims);
   /* The amount of nodes is estimated to be twice the amount of primitives */
   nodes_.reserve(2 * num_prims);
-  recursive_build(0, num_prims, prims, ordered_prims, 0, 0);
-  prims = std::move(ordered_prims);
+
+  recursive_build(0, num_prims, prims, 0, 0);
 
   nodes_.shrink_to_fit();
 }
@@ -213,12 +206,8 @@ const vector<LightTreeNode> &LightTree::get_nodes() const
   return nodes_;
 }
 
-int LightTree::recursive_build(int start,
-                               int end,
-                               vector<LightTreePrimitive> &prims,
-                               vector<LightTreePrimitive> &ordered_prims,
-                               uint bit_trail,
-                               int depth)
+int LightTree::recursive_build(
+    int start, int end, vector<LightTreePrimitive> &prims, uint bit_trail, int depth)
 {
   BoundBox bbox = BoundBox::empty;
   OrientationBounds bcone = OrientationBounds::empty;
@@ -270,7 +259,6 @@ int LightTree::recursive_build(int start,
         }
 
         if (left < right) {
-          std::swap(prims[left].prim_num, prims[right].prim_num);
           std::swap(prims[left], prims[right]);
         }
       }
@@ -282,19 +270,13 @@ int LightTree::recursive_build(int start,
       middle = (start + end) / 2;
     }
 
-    int left_index = recursive_build(start, middle, prims, ordered_prims, bit_trail, depth + 1);
-    int right_index = recursive_build(
-        middle, end, prims, ordered_prims, bit_trail | (1u << depth), depth + 1);
+    int left_index = recursive_build(start, middle, prims, bit_trail, depth + 1);
+    int right_index = recursive_build(middle, end, prims, bit_trail | (1u << depth), depth + 1);
     assert(left_index == current_index + 1);
     nodes_[current_index].make_interior(right_index);
   }
   else {
-    int first_prim_offset = ordered_prims.size();
-    for (int i = start; i < end; i++) {
-      int prim_num = prims[i].prim_num;
-      ordered_prims.push_back(prims[prim_num]);
-    }
-    nodes_[current_index].make_leaf(first_prim_offset, num_prims);
+    nodes_[current_index].make_leaf(start, num_prims);
   }
   return current_index;
 }
