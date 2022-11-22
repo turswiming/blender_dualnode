@@ -265,21 +265,6 @@ if(WITH_OPENGL)
   list(APPEND SRC ${OPENGL_SRC})
 endif()
 
-if(WITH_VULKAN_BACKEND)
-  list(APPEND SRC ${VULKAN_SRC})
-
-  list(APPEND INC_SYS
-    ${VULKAN_INCLUDE_DIRS}
-    ${MOLTENVK_INCLUDE_DIRS}
-  )
-
-  list(APPEND INC
-    ../../../extern/vulkan_memory_allocator/
-  )
-
-  add_definitions(-DWITH_VULKAN_BACKEND)
-endif()
-
 if(WITH_METAL_BACKEND)
   list(APPEND SRC ${METAL_SRC})
 endif()
@@ -289,6 +274,18 @@ set(LIB
 )
 
 if(WITH_VULKAN_BACKEND)
+  list(APPEND SRC ${VULKAN_SRC})
+
+  add_definitions(-DWITH_VULKAN_BACKEND)
+
+  list(APPEND INC_SYS
+    ${VULKAN_INCLUDE_DIRS}
+  )
+
+  list(APPEND INC
+    ../../../extern/vulkan_memory_allocator/
+  )
+
   list(APPEND LIB
     extern_vulkan_memory_allocator
   )
