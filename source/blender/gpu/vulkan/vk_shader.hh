@@ -10,6 +10,7 @@
 #include "gpu_shader_private.hh"
 
 #include "vk_backend.hh"
+#include "vk_context.hh"
 
 #include "BLI_string_ref.hh"
 
@@ -17,12 +18,12 @@ namespace blender::gpu {
 
 class VKShader : public Shader {
  private:
+  VKContext *context_ = nullptr;
   VkShaderModule compute_module_ = nullptr;
 
  public:
-  VKShader(const char *name) : Shader(name)
-  {
-  }
+  VKShader(const char *name);
+  virtual ~VKShader();
 
   void vertex_shader_from_glsl(MutableSpan<const char *> sources) override;
   void geometry_shader_from_glsl(MutableSpan<const char *> sources) override;

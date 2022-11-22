@@ -37,13 +37,31 @@ Vector<uint32_t> VKShader::compile_glsl_to_spirv(StringRef source, shaderc_shade
 
 void VKShader::build_shader_module(Span<uint32_t> spirv_module, VkShaderModule *r_shader_module)
 {
-  VkShaderModuleCreateInfo createInfo = {};
-  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  createInfo.codeSize = spirv_module.size() * sizeof(uint32_t);
-  createInfo.pCode = spirv_module.data();
+  VkShaderModuleCreateInfo create_info = {};
+  create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  create_info.codeSize = spirv_module.size() * sizeof(uint32_t);
+  create_info.pCode = spirv_module.data();
 
-  // TODO(jbakker): retrieve allocator and device
-  // VkResult result = vkCreateShaderModule(*device, &create_info, nullptr, r_shader_module);
+  VKContext &context = *static_cast<VKContext *>(VKContext::get());
+
+  VkResult result = vkCreateShaderModule(
+      context.device_get(), &create_info, nullptr, r_shader_module);
+  if (result != VK_SUCCESS) {
+    *r_shader_module = VK_NULL_HANDLE;
+  }
+}
+
+VKShader::VKShader(const char *name) : Shader(name)
+{
+  context_ = VKContext::get();
+}
+VKShader::~VKShader()
+{
+  VkDevice device = context_->device_get();
+  if (compute_module_ != VK_NULL_HANDLE) {
+    vkDestroyShaderModule(device, compute_module_, nullptr);
+    compute_module_ = VK_NULL_HANDLE;
+  }
 }
 
 void VKShader::vertex_shader_from_glsl(MutableSpan<const char *> /*sources*/)
