@@ -34,6 +34,11 @@ VKContext::VKContext(void *ghost_window, void *ghost_context)
   vmaCreateAllocator(&info, &mem_allocator_);
 }
 
+VKContext::~VKContext()
+{
+  vmaDestroyAllocator(mem_allocator_);
+}
+
 void VKContext::activate()
 {
 }
