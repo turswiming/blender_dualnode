@@ -26,8 +26,8 @@ VKContext::VKContext(void *ghost_window, void *ghost_context)
 
   {
     VmaAllocatorCreateInfo info = {};
-    /* TODO use same vulkan version as GHOST. */
-    info.vulkanApiVersion = VK_API_VERSION_1_1;
+    /* Should use same vulkan version as GHOST. */
+    info.vulkanApiVersion = VK_API_VERSION_1_2;
     info.physicalDevice = physical_device_;
     info.device = device_;
     info.instance = instance_;
