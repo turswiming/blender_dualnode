@@ -140,11 +140,8 @@ class LightTree {
   const vector<LightTreeNode> &get_nodes() const;
 
  private:
-  int recursive_build(int start,
-                      int end,
-                      vector<LightTreePrimitive> &prims,
-                      uint bit_trail,
-                      int depth);
+  int recursive_build(
+      int start, int end, vector<LightTreePrimitive> &prims, uint bit_trail, int depth);
   float min_split_saoh(const BoundBox &centroid_bounds,
                        int start,
                        int end,
@@ -152,6 +149,7 @@ class LightTree {
                        const OrientationBounds &bcone,
                        int &min_dim,
                        int &min_bucket,
+                       int &num_left_prims,
                        const vector<LightTreePrimitive> &prims);
 };
 
