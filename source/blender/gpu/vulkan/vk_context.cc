@@ -24,15 +24,14 @@ VKContext::VKContext(void *ghost_window, void *ghost_context)
                          &device_,
                          &graphic_queue_familly_);
 
-  {
-    VmaAllocatorCreateInfo info = {};
-    /* Should use same vulkan version as GHOST. */
-    info.vulkanApiVersion = VK_API_VERSION_1_2;
-    info.physicalDevice = physical_device_;
-    info.device = device_;
-    info.instance = instance_;
-    vmaCreateAllocator(&info, &mem_allocator_);
-  }
+  /* Initialize the memory allocator. */
+  VmaAllocatorCreateInfo info = {};
+  /* Should use same vulkan version as GHOST. */
+  info.vulkanApiVersion = VK_API_VERSION_1_2;
+  info.physicalDevice = physical_device_;
+  info.device = device_;
+  info.instance = instance_;
+  vmaCreateAllocator(&info, &mem_allocator_);
 }
 
 void VKContext::activate()
