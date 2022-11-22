@@ -228,33 +228,33 @@ int LightTree::recursive_build(
   nodes_.emplace_back(bbox, bcone, energy_total, bit_trail);
 
   bool try_splitting = num_prims > 1 && len(centroid_bounds.size()) > 0.0f;
-  int min_dim = -1, min_bucket = 0;
+  int split_dim = -1, split_bucket = 0;
   bool should_split = false;
   if (try_splitting) {
     /* Find the best place to split the primitives into 2 nodes.
      * If the best split cost is no better than making a leaf node, make a leaf instead.*/
     float min_cost = min_split_saoh(
-        centroid_bounds, start, end, bbox, bcone, min_dim, min_bucket, prims);
+        centroid_bounds, start, end, bbox, bcone, split_dim, split_bucket, prims);
     should_split = num_prims > max_lights_in_leaf_ || min_cost < energy_total;
   }
   if (should_split) {
     int middle;
 
-    if (min_dim != -1) {
+    if (split_dim != -1) {
       /* Partition the primitives between start and end into the appropriate split,
        * based on the minimum dimension and minimum bucket returned from split_saoh.
        * This is an O(n) algorithm where we iterate from the left and right side,
        * and swaps the appropriate left and right elements until complete. */
       int left = start, right = end - 1;
-      float bounding_dimension = (min_bucket + 1) * (centroid_bounds.size()[min_dim] /
-                                                     LightTreeBucketInfo::num_buckets) +
-                                 centroid_bounds.min[min_dim];
+      float bounding_dimension = (split_bucket + 1) * (centroid_bounds.size()[split_dim] /
+                                                       LightTreeBucketInfo::num_buckets) +
+                                 centroid_bounds.min[split_dim];
       while (left < right) {
-        while (prims[left].centroid[min_dim] <= bounding_dimension && left < end) {
+        while (prims[left].centroid[split_dim] <= bounding_dimension && left < end) {
           left++;
         }
 
-        while (prims[right].centroid[min_dim] > bounding_dimension && right >= start) {
+        while (prims[right].centroid[split_dim] > bounding_dimension && right >= start) {
           right--;
         }
 
@@ -286,8 +286,8 @@ float LightTree::min_split_saoh(const BoundBox &centroid_bbox,
                                 int end,
                                 const BoundBox &bbox,
                                 const OrientationBounds &bcone,
-                                int &min_dim,
-                                int &min_bucket,
+                                int &split_dim,
+                                int &split_bucket,
                                 const vector<LightTreePrimitive> &prims)
 {
   /* Even though this factor is used for every bucket, we use it to compare
@@ -372,8 +372,8 @@ float LightTree::min_split_saoh(const BoundBox &centroid_bbox,
 
       if (bucket_costs[split] < min_cost) {
         min_cost = bucket_costs[split];
-        min_dim = dim;
-        min_bucket = split;
+        split_dim = dim;
+        split_bucket = split;
       }
     }
   }
