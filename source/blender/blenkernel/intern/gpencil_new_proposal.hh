@@ -170,10 +170,7 @@ class GPDataRuntime {
   mutable Map<int, Vector<int64_t>> frame_index_masks_cache;
   mutable std::mutex frame_index_masks_cache_mutex;
 
-  IndexMask frame_index_masks_cache_for_layer(int layer_index)
-  {
-    return frame_index_masks_cache.lookup(layer_index).as_span();
-  }
+  IndexMask frame_index_masks_cache_for_layer(int layer_index);
 };
 
 /**

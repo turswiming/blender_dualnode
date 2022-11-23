@@ -48,6 +48,11 @@ IndexMask GPLayerGroup::layers_index_mask()
   return {reinterpret_cast<int64_t>(this->layer_indices), this->layer_indices_size};
 }
 
+IndexMask GPDataRuntime::frame_index_masks_cache_for_layer(int layer_index)
+{
+  return frame_index_masks_cache.lookup(layer_index).as_span();
+}
+
 Span<float3> GPStroke::points_positions() const
 {
   return {geometry_->positions().begin() + offset_, points_num_};
