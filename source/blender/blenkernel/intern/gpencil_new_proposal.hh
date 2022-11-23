@@ -246,17 +246,11 @@ class GPLayer : public ::GPLayer {
   {
   }
 
-  GPLayer(const StringRefNull name)
-  {
-    strcpy(this->name, name.c_str());
-  }
+  GPLayer(const StringRefNull name);
 
   ~GPLayer() = default;
 
-  bool operator==(const GPLayer &other) const
-  {
-    return STREQ(this->name, other.name);
-  }
+  bool operator==(const GPLayer &other) const;
 };
 
 class GPData : public ::GPData {

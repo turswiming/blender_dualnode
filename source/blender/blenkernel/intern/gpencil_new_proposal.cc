@@ -209,6 +209,17 @@ GPStroke GPFrame::add_new_stroke(int new_points_num)
   return {reinterpret_cast<CurvesGeometry *>(this->strokes), new_points_num, orig_last_offset};
 }
 
+/* GPLayer */
+GPLayer::GPLayer(const StringRefNull name)
+{
+  strcpy(this->name, name.c_str());
+}
+
+bool GPLayer::operator==(const GPLayer &other) const
+{
+  return STREQ(this->name, other.name);
+}
+
 /* GPData */
 GPData::GPData(const int layers_size, const int frame_size)
 {
