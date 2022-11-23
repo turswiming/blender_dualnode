@@ -1394,24 +1394,6 @@ typedef struct KernelLightTreeEmitter {
 } KernelLightTreeEmitter;
 static_assert_align(KernelLightTreeEmitter, 16);
 
-typedef struct KernelLightTreeDistantEmitter {
-  /* Direction from light to world. */
-  float direction[3];
-
-  /* Size of light (in radians). */
-  float bounding_radius;
-
-  /* Energy. */
-  float energy;
-
-  /* Prim ID. */
-  int prim_id;
-
-  /* Padding. */
-  int pad1, pad2;
-} KernelLightTreeDistantEmitter;
-static_assert_align(KernelLightTreeDistantEmitter, 16);
-
 typedef struct KernelParticle {
   int index;
   float age;

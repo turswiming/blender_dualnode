@@ -73,7 +73,6 @@ DeviceScene::DeviceScene(Device *device)
       light_background_conditional_cdf(device, "light_background_conditional_cdf", MEM_GLOBAL),
       light_tree_nodes(device, "light_tree_nodes", MEM_GLOBAL),
       light_tree_emitters(device, "light_tree_emitters", MEM_GLOBAL),
-      light_tree_distant_group(device, "light_tree_distant_group", MEM_GLOBAL),
       light_to_tree(device, "light_to_tree", MEM_GLOBAL),
       object_lookup_offset(device, "object_lookup_offset", MEM_GLOBAL),
       triangle_to_tree(device, "triangle_to_tree", MEM_GLOBAL),

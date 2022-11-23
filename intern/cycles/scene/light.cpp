@@ -481,7 +481,6 @@ void LightManager::device_update_tree(Device *device,
   if (!kintegrator->use_light_tree) {
     dscene->light_tree_nodes.free();
     dscene->light_tree_emitters.free();
-    dscene->light_tree_distant_group.free();
     dscene->light_to_tree.free();
     dscene->object_lookup_offset.free();
     dscene->triangle_to_tree.free();
@@ -493,7 +492,7 @@ void LightManager::device_update_tree(Device *device,
 
   /* Add both lights and emissive triangles to this vector for light tree construction. */
   vector<LightTreePrimitive> light_prims;
-  light_prims.reserve(kintegrator->num_distribution - kintegrator->num_distant_lights);
+  light_prims.reserve(kintegrator->num_distribution);
   vector<LightTreePrimitive> distant_lights;
   distant_lights.reserve(kintegrator->num_distant_lights);
   vector<uint> object_lookup_offsets(scene->objects.size());
@@ -505,7 +504,6 @@ void LightManager::device_update_tree(Device *device,
   int scene_light_index = 0;
   foreach (Light *light, scene->lights) {
     if (light->is_enabled) {
-      /* Distant lights get added to a separate vector. */
       if (light->light_type == LIGHT_BACKGROUND || light->light_type == LIGHT_DISTANT) {
         distant_lights.emplace_back(scene, ~device_light_index, scene_light_index);
       }
@@ -552,16 +550,18 @@ void LightManager::device_update_tree(Device *device,
     object_id++;
   }
 
+  /* Append distant lights to the end of `light_prims` */
+  std::move(distant_lights.begin(), distant_lights.end(), std::back_inserter(light_prims));
+
   /* Update integrator state. */
-  kintegrator->num_tree_lights = light_prims.size();
-  kintegrator->use_direct_light = light_prims.size() + distant_lights.size() > 0;
+  kintegrator->use_direct_light = !light_prims.empty();
 
   /* TODO: this shadow scale mechanism does not work for light tree. */
   kfilm->pass_shadow_scale = 1.0f;
 
   /* TODO: For now, we'll start with a smaller number of max lights in a node.
    * More benchmarking is needed to determine what number works best. */
-  LightTree light_tree(light_prims, 8);
+  LightTree light_tree(light_prims, kintegrator->num_distant_lights, 8);
 
   /* We want to create separate arrays corresponding to triangles and lights,
    * which will be used to index back into the light tree for PDF calculations. */
@@ -593,10 +593,10 @@ void LightManager::device_update_tree(Device *device,
     light_tree_nodes[index].theta_e = node.bcone.theta_e;
 
     light_tree_nodes[index].bit_trail = node.bit_trail;
+    light_tree_nodes[index].num_prims = node.num_prims;
 
     /* Here we need to make a distinction between interior and leaf nodes. */
     if (node.is_leaf()) {
-      light_tree_nodes[index].num_prims = node.num_prims;
       light_tree_nodes[index].child_index = -node.first_prim_index;
 
       for (int i = 0; i < node.num_prims; i++) {
@@ -654,42 +654,9 @@ void LightManager::device_update_tree(Device *device,
     }
   }
 
-  /* We also add distant lights to a separate group. */
-  const size_t num_distant_lights = kintegrator->num_distant_lights;
-  KernelLightTreeDistantEmitter *light_tree_distant_group = dscene->light_tree_distant_group.alloc(
-      num_distant_lights + 1);
-
-  /* We use OrientationBounds here to */
-  OrientationBounds distant_light_bounds = OrientationBounds::empty;
-  light_tree_distant_group[num_distant_lights].energy = 0.f;
-  for (int index = 0; index < num_distant_lights; index++) {
-    LightTreePrimitive prim = distant_lights[index];
-
-    /* Lights in this group are either a background or distant light. */
-    light_tree_distant_group[index].prim_id = ~prim.prim_id;
-
-    distant_light_bounds = merge(distant_light_bounds, prim.bcone);
-    for (int i = 0; i < 3; i++) {
-      light_tree_distant_group[index].direction[i] = prim.bcone.axis[i];
-    }
-    light_tree_distant_group[index].bounding_radius = prim.bcone.theta_o;
-    light_tree_distant_group[index].energy = prim.energy;
-    light_array[~prim.prim_id] = index;
-
-    light_tree_distant_group[num_distant_lights].energy += prim.energy;
-  }
-
-  /* The net OrientationBounds contain bounding information about all the distant lights. */
-  light_tree_distant_group[num_distant_lights].prim_id = -1;
-  for (int i = 0; i < 3; i++) {
-    light_tree_distant_group[num_distant_lights].direction[i] = distant_light_bounds.axis[i];
-  }
-  light_tree_distant_group[num_distant_lights].bounding_radius = distant_light_bounds.theta_o;
-
   /* Copy arrays to device. */
   dscene->light_tree_nodes.copy_to_device();
   dscene->light_tree_emitters.copy_to_device();
-  dscene->light_tree_distant_group.copy_to_device();
   dscene->light_to_tree.copy_to_device();
   dscene->object_lookup_offset.copy_to_device();
   dscene->triangle_to_tree.copy_to_device();
@@ -1226,7 +1193,6 @@ void LightManager::device_free(Device *, DeviceScene *dscene, const bool free_ba
   /* to-do: check if the light tree member variables need to be wrapped in a conditional too*/
   dscene->light_tree_nodes.free();
   dscene->light_tree_emitters.free();
-  dscene->light_tree_distant_group.free();
   dscene->light_to_tree.free();
   dscene->triangle_to_tree.free();
 

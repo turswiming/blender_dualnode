@@ -463,20 +463,8 @@ ccl_device_inline float light_sample_mis_weight_forward_distant(KernelGlobals kg
                                                                 const uint32_t path_flag,
                                                                 const ccl_private LightSample *ls)
 {
-  const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-  float pdf = ls->pdf;
-
-  /* Light selection pdf. */
-  if (kernel_data.integrator.use_light_tree) {
-    const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
-    const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-    pdf *= light_tree_pdf_distant(kg, ray_P, N, path_flag, ls->lamp);
-  }
-  else {
-    pdf *= light_distribution_pdf_lamp(kg);
-  }
-
-  return light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
+  const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
+  return light_sample_mis_weight_forward_lamp(kg, state, path_flag, ls, ray_P);
 }
 
 ccl_device_inline float light_sample_mis_weight_forward_background(KernelGlobals kg,
@@ -492,7 +480,7 @@ ccl_device_inline float light_sample_mis_weight_forward_background(KernelGlobals
   /* Light selection pdf. */
   if (kernel_data.integrator.use_light_tree) {
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
-    pdf *= light_tree_pdf_distant(kg, ray_P, N, path_flag, kernel_data.background.light_index);
+    pdf *= light_tree_pdf(kg, ray_P, N, path_flag, ~kernel_data.background.light_index);
   }
   else {
     pdf *= light_distribution_pdf_lamp(kg);

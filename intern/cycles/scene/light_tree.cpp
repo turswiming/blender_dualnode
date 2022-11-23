@@ -185,7 +185,9 @@ LightTreePrimitive::LightTreePrimitive(Scene *scene, int prim_id, int object_id)
   }
 }
 
-LightTree::LightTree(vector<LightTreePrimitive> &prims, uint max_lights_in_leaf)
+LightTree::LightTree(vector<LightTreePrimitive> &prims,
+                     const int &num_distant_lights,
+                     uint max_lights_in_leaf)
 {
   if (prims.empty()) {
     return;
@@ -193,10 +195,24 @@ LightTree::LightTree(vector<LightTreePrimitive> &prims, uint max_lights_in_leaf)
 
   max_lights_in_leaf_ = max_lights_in_leaf;
   int num_prims = prims.size();
+  int num_local_lights = num_prims - num_distant_lights;
   /* The amount of nodes is estimated to be twice the amount of primitives */
   nodes_.reserve(2 * num_prims);
 
-  recursive_build(0, num_prims, prims, 0, 0);
+  nodes_.emplace_back();                             /* root node */
+  recursive_build(0, num_local_lights, prims, 0, 1); /* build tree */
+  nodes_[0].make_interior(nodes_.size());
+
+  /* All distant lights are grouped to one node (right child of the root node) */
+  OrientationBounds bcone = OrientationBounds::empty;
+  float energy_total = 0.0;
+  for (int i = num_local_lights; i < num_prims; i++) {
+    const LightTreePrimitive &prim = prims.at(i);
+    bcone = merge(bcone, prim.bcone);
+    energy_total += prim.energy;
+  }
+  nodes_.emplace_back(BoundBox::empty, bcone, energy_total, 1);
+  nodes_.back().make_leaf(num_local_lights, num_distant_lights);
 
   nodes_.shrink_to_fit();
 }

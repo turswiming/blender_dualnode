@@ -155,8 +155,6 @@ KERNEL_STRUCT_MEMBER(integrator, int, num_distribution)
 KERNEL_STRUCT_MEMBER(integrator, float, distribution_pdf_triangles)
 KERNEL_STRUCT_MEMBER(integrator, float, distribution_pdf_lights)
 KERNEL_STRUCT_MEMBER(integrator, float, light_inv_rr_threshold)
-/* Light tree. */
-KERNEL_STRUCT_MEMBER(integrator, int, num_tree_lights)
 /* Bounces. */
 KERNEL_STRUCT_MEMBER(integrator, int, min_bounce)
 KERNEL_STRUCT_MEMBER(integrator, int, max_bounce)
@@ -210,6 +208,7 @@ KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_mis_weights)
 /* Padding */
 KERNEL_STRUCT_MEMBER(integrator, int, pad1)
 KERNEL_STRUCT_MEMBER(integrator, int, pad2)
+KERNEL_STRUCT_MEMBER(integrator, int, pad3)
 KERNEL_STRUCT_END(KernelIntegrator)
 
 /* SVM. For shader specialization. */

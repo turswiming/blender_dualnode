@@ -96,11 +96,12 @@ struct LightTreeNode {
   OrientationBounds bcone;
   float energy;
   uint bit_trail;
-  uint num_prims = 0;
+  int num_prims = -1;
   union {
     int first_prim_index;  /* leaf nodes contain an index to first primitive. */
     int right_child_index; /* interior nodes contain an index to second child. */
   };
+  LightTreeNode() = default;
 
   LightTreeNode(const BoundBox &bbox,
                 const OrientationBounds &bcone,
@@ -110,7 +111,7 @@ struct LightTreeNode {
   {
   }
 
-  void make_leaf(const uint &first_prim_index, const uint &num_prims)
+  void make_leaf(const uint &first_prim_index, const int &num_prims)
   {
     this->first_prim_index = first_prim_index;
     this->num_prims = num_prims;
@@ -122,7 +123,7 @@ struct LightTreeNode {
 
   inline bool is_leaf() const
   {
-    return num_prims > 0;
+    return num_prims >= 0;
   }
 };
 
@@ -135,7 +136,9 @@ class LightTree {
   uint max_lights_in_leaf_;
 
  public:
-  LightTree(vector<LightTreePrimitive> &prims, uint max_lights_in_leaf);
+  LightTree(vector<LightTreePrimitive> &prims,
+            const int &num_distant_lights,
+            uint max_lights_in_leaf);
 
   const vector<LightTreeNode> &get_nodes() const;
 
