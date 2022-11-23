@@ -641,8 +641,6 @@ static void direct_link_node_socket(BlendDataReader *reader, bNodeSocket *sock)
   BLO_read_data_address(reader, &sock->storage);
   BLO_read_data_address(reader, &sock->default_value);
   BLO_read_data_address(reader, &sock->default_attribute_name);
-  sock->total_inputs = 0; /* Clear runtime data set before drawing. */
-  sock->cache = nullptr;
   sock->runtime = MEM_new<bNodeSocketRuntime>(__func__);
 }
 
@@ -2262,7 +2260,7 @@ static void node_socket_copy(bNodeSocket *sock_dst, const bNodeSocket *sock_src,
   sock_dst->stack_index = 0;
   /* XXX some compositor nodes (e.g. image, render layers) still store
    * some persistent buffer data here, need to clear this to avoid dangling pointers. */
-  sock_dst->cache = nullptr;
+  sock_dst->runtime->cache = nullptr;
 }
 
 namespace blender::bke {
@@ -4076,88 +4074,6 @@ void BKE_node_instance_hash_remove_untagged(bNodeInstanceHash *hash,
   }
 
   MEM_freeN(untagged);
-}
-
-/* ************** dependency stuff *********** */
-
-/* node is guaranteed to be not checked before */
-static int node_get_deplist_recurs(bNodeTree *ntree, bNode *node, bNode ***nsort)
-{
-  int level = 0xFFF;
-
-  node->runtime->done = true;
-
-  /* check linked nodes */
-  LISTBASE_FOREACH (bNodeLink *, link, &ntree->links) {
-    if (link->tonode == node) {
-      bNode *fromnode = link->fromnode;
-      if (fromnode->runtime->done == 0) {
-        fromnode->runtime->level = node_get_deplist_recurs(ntree, fromnode, nsort);
-      }
-      if (fromnode->runtime->level <= level) {
-        level = fromnode->runtime->level - 1;
-      }
-    }
-  }
-
-  /* check parent node */
-  if (node->parent) {
-    if (node->parent->runtime->done == 0) {
-      node->parent->runtime->level = node_get_deplist_recurs(ntree, node->parent, nsort);
-    }
-    if (node->parent->runtime->level <= level) {
-      level = node->parent->runtime->level - 1;
-    }
-  }
-
-  if (nsort) {
-    **nsort = node;
-    (*nsort)++;
-  }
-
-  return level;
-}
-
-void ntreeGetDependencyList(struct bNodeTree *ntree, struct bNode ***r_deplist, int *r_deplist_len)
-{
-  *r_deplist_len = 0;
-
-  /* first clear data */
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-    node->runtime->done = false;
-    (*r_deplist_len)++;
-  }
-  if (*r_deplist_len == 0) {
-    *r_deplist = nullptr;
-    return;
-  }
-
-  bNode **nsort;
-  nsort = *r_deplist = (bNode **)MEM_callocN((*r_deplist_len) * sizeof(bNode *),
-                                             "sorted node array");
-
-  /* recursive check */
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-    if (node->runtime->done == 0) {
-      node->runtime->level = node_get_deplist_recurs(ntree, node, &nsort);
-    }
-  }
-}
-
-/* only updates node->level for detecting cycles links */
-void ntreeUpdateNodeLevels(bNodeTree *ntree)
-{
-  /* first clear tag */
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-    node->runtime->done = false;
-  }
-
-  /* recursive check */
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-    if (node->runtime->done == 0) {
-      node->runtime->level = node_get_deplist_recurs(ntree, node, nullptr);
-    }
-  }
 }
 
 void ntreeUpdateAllNew(Main *main)
