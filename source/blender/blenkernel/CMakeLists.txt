@@ -147,6 +147,8 @@ set(SRC
   intern/gpencil_curve.c
   intern/gpencil_geom.cc
   intern/gpencil_modifier.c
+  intern/gpencil_new_proposal.cc
+  intern/gpencil_new_proposal_conversion.cc
   intern/gpencil_update_cache.c
   intern/icons.cc
   intern/icons_rasterize.c
