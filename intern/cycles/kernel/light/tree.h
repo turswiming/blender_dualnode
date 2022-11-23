@@ -267,6 +267,10 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     }
     theta_o = 0.0f;
 
+    if (dot(bcone_axis, point_to_centroid) > 0) {
+      return;
+    }
+
     for (int i = 0; i < 3; i++) {
       const float3 corner = vertices[i];
       float distance_point_to_corner;
