@@ -125,8 +125,8 @@ typedef struct GPData {
 } GPData;
 
 /**
- * This would be the new Grease Pencil ID structure. This is where the animation data, materials, etc. are stored.
- * Layers, Frames, Groups and RuntimeData would be stored in GPData.
+ * This would be the new Grease Pencil ID structure. This is where the animation data, materials,
+ * etc. are stored. Layers, Frames, Groups and RuntimeData would be stored in GPData.
  */
 typedef struct GreasePencil {
   ID id;
@@ -244,138 +244,28 @@ class GPFrame : public ::GPFrame {
   {
   }
 
-  GPFrame(int start_frame, int end_frame)
-  {
-    this->start_time = start_frame;
-    this->end_time = end_frame;
-    this->strokes = nullptr;
-  }
+  GPFrame(int start_frame, int end_frame);
 
-  GPFrame(const GPFrame &other) : GPFrame(other.start_time, other.end_time)
-  {
-    if (other.strokes != nullptr) {
-      /* Make sure old strokes are freed before copying. */
-      MEM_SAFE_FREE(this->strokes);
-      this->strokes = MEM_new<CurvesGeometry>(__func__);
+  GPFrame(const GPFrame &other);
+  GPFrame &operator=(const GPFrame &other);
+  GPFrame(GPFrame &&other);
+  GPFrame &operator=(GPFrame &&other);
 
-      *reinterpret_cast<CurvesGeometry *>(this->strokes) = CurvesGeometry::wrap(*other.strokes);
-    }
-    this->layer_index = other.layer_index;
-  }
+  ~GPFrame();
 
-  GPFrame &operator=(const GPFrame &other)
-  {
-    if (this != &other && other.strokes != nullptr) {
-      /* Make sure old strokes are freed before copying. */
-      MEM_SAFE_FREE(this->strokes);
-      this->strokes = MEM_new<CurvesGeometry>(__func__);
-
-      *reinterpret_cast<CurvesGeometry *>(this->strokes) = CurvesGeometry::wrap(*other.strokes);
-    }
-    this->layer_index = other.layer_index;
-    this->start_time = other.start_time;
-    this->end_time = other.end_time;
-    return *this;
-  }
-
-  GPFrame(GPFrame &&other) : GPFrame(other.start_time, other.end_time)
-  {
-    if (this != &other) {
-      std::swap(this->strokes, other.strokes);
-      other.strokes = nullptr;
-    }
-    this->layer_index = other.layer_index;
-  }
-
-  GPFrame &operator=(GPFrame &&other)
-  {
-    if (this != &other) {
-      std::swap(this->strokes, other.strokes);
-      other.strokes = nullptr;
-    }
-    this->layer_index = other.layer_index;
-    this->start_time = other.start_time;
-    this->end_time = other.end_time;
-    return *this;
-  }
-
-  ~GPFrame()
-  {
-    MEM_delete(reinterpret_cast<CurvesGeometry *>(this->strokes));
-    this->strokes = nullptr;
-  }
-
-  bool operator<(const GPFrame &other) const
-  {
-    if (this->start_time == other.start_time) {
-      return this->layer_index < other.layer_index;
-    }
-    return this->start_time < other.start_time;
-  }
-
+  bool operator<(const GPFrame &other) const;
   /* Assumes that elem.first is the layer index and elem.second is the start time. */
-  bool operator<(const std::pair<int, int> elem) const
-  {
-    if (this->start_time == elem.second) {
-      return this->layer_index < elem.first;
-    }
-    return this->start_time < elem.second;
-  }
+  bool operator<(const std::pair<int, int> elem) const;
 
-  bool operator==(const GPFrame &other) const
-  {
-    return this->layer_index == other.layer_index && this->start_time == other.start_time;
-  }
+  bool operator==(const GPFrame &other) const;
 
-  CurvesGeometry &strokes_as_curves()
-  {
-    return CurvesGeometry::wrap(*this->strokes);
-  }
+  CurvesGeometry &strokes_as_curves();
 
-  int strokes_num() const
-  {
-    if (this->strokes == nullptr) {
-      return 0;
-    }
-    return this->strokes->curve_num;
-  }
+  int strokes_num() const;
+  int points_num() const;
 
-  int points_num() const
-  {
-    if (this->strokes == nullptr) {
-      return 0;
-    }
-    return this->strokes->point_num;
-  }
-
-  Vector<GPStroke> strokes_for_write()
-  {
-    Vector<GPStroke> strokes;
-    for (const int i : this->strokes_as_curves().offsets().drop_back(1).index_range()) {
-      int offset = this->strokes_as_curves().offsets()[i];
-      int length = this->strokes_as_curves().offsets()[i + 1] - offset;
-      strokes.append({reinterpret_cast<CurvesGeometry *>(this->strokes), length, offset});
-    }
-    return strokes;
-  }
-
-  GPStroke add_new_stroke(int new_points_num)
-  {
-    if (this->strokes == nullptr) {
-      this->strokes = MEM_new<CurvesGeometry>(__func__);
-    }
-    CurvesGeometry &strokes = this->strokes_as_curves();
-    int orig_last_offset = strokes.offsets().last();
-
-    strokes.resize(strokes.points_num() + new_points_num, strokes.curves_num() + 1);
-    strokes.offsets_for_write().last() = strokes.points_num();
-
-    /* Use poly type by default. */
-    strokes.curve_types_for_write().last() = CURVE_TYPE_POLY;
-
-    strokes.tag_topology_changed();
-    return {reinterpret_cast<CurvesGeometry *>(this->strokes), new_points_num, orig_last_offset};
-  }
+  Vector<GPStroke> strokes_for_write();
+  GPStroke add_new_stroke(int new_points_num);
 };
 
 class GPLayer : public ::GPLayer {
