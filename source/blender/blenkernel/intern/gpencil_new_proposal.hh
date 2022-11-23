@@ -224,25 +224,9 @@ class GPStroke {
     return offset_;
   }
 
-  Span<float3> points_positions() const
-  {
-    return {geometry_->positions().begin() + offset_, points_num_};
-  }
-
-  MutableSpan<float3> points_positions_for_write() const
-  {
-    return {geometry_->positions_for_write().begin() + offset_, points_num_};
-  }
-
-  void transform(float4x4 matrix)
-  {
-    threading::parallel_for(
-        points_positions_for_write().index_range(), 512, [&](const IndexRange range) {
-          for (float3 &position : points_positions_for_write().slice(range)) {
-            position = matrix * position;
-          }
-        });
-  }
+  Span<float3> points_positions() const;
+  MutableSpan<float3> points_positions_for_write() const;
+  void transform(float4x4 matrix);
 
  private:
   CurvesGeometry *geometry_ = nullptr;
