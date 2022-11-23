@@ -293,426 +293,63 @@ class GPData : public ::GPData {
   {
   }
 
-  GPData(const int layers_size, const int frame_size)
-  {
-    BLI_assert(layers_size >= 0);
-    BLI_assert(frame_size >= 0);
+  GPData(const int layers_size, const int frame_size);
 
-    this->frames_size = frame_size;
-    this->layers_size = layers_size;
+  GPData(const GPData &other);
+  GPData &operator=(const GPData &other);
+  GPData(GPData &&other);
+  GPData &operator=(GPData &&other);
 
-    if (this->frames_size > 0) {
-      this->frames_array = reinterpret_cast<::GPFrame *>(
-          MEM_malloc_arrayN(this->frames_size, sizeof(::GPFrame), __func__));
-      default_construct_n(reinterpret_cast<GPFrame *>(this->frames_array), this->frames_size);
-    }
-    else {
-      this->frames_array = nullptr;
-    }
-    CustomData_reset(&this->frame_data);
+  ~GPData();
 
-    if (this->layers_size > 0) {
-      this->layers_array = reinterpret_cast<::GPLayer *>(
-          MEM_malloc_arrayN(this->layers_size, sizeof(::GPLayer), __func__));
-      default_construct_n(reinterpret_cast<GPLayer *>(this->layers_array), this->layers_size);
-      this->active_layer_index = 0;
-    }
-    else {
-      this->layers_array = nullptr;
-      this->active_layer_index = -1;
-    }
+  Span<GPFrame> frames() const;
+  const GPFrame &frames(int index) const;
 
-    this->default_group = MEM_new<::GPLayerGroup>(__func__);
+  MutableSpan<GPFrame> frames_for_write();
+  GPFrame &frames_for_write(int index);
 
-    this->runtime = MEM_new<GPDataRuntime>(__func__);
-  }
+  IndexMask frames_on_layer(int layer_index) const;
+  IndexMask frames_on_layer(GPLayer &layer) const;
+  IndexMask frames_on_active_layer() const;
 
-  GPData(const GPData &other) : GPData(other.layers_size, other.frames_size)
-  {
-    copy_gpdata(*this, other);
-  }
+  Span<GPLayer> layers() const;
+  const GPLayer &layers(int index) const;
+  MutableSpan<GPLayer> layers_for_write();
+  GPLayer &layers_for_write(int index);
 
-  GPData &operator=(const GPData &other)
-  {
-    if (this != &other) {
-      copy_gpdata(*this, other);
-    }
-    return *this;
-  }
+  const GPLayer &active_layer();
+  GPLayer &active_layer_for_write();
 
-  GPData(GPData &&other) : GPData(other.layers_size, other.frames_size)
-  {
-    move_gpdata(*this, other);
-  }
+  int add_layer(StringRefNull name);
+  void add_layers(Array<StringRefNull> names);
 
-  GPData &operator=(GPData &&other)
-  {
-    if (this != &other) {
-      move_gpdata(*this, other);
-    }
-    return *this;
-  }
+  int find_layer_by_name(StringRefNull name);
 
-  ~GPData()
-  {
-    /* Free frames and frame custom data. */
-    destruct_n(reinterpret_cast<GPFrame *>(this->frames_array), this->frames_size);
-    MEM_SAFE_FREE(this->frames_array);
-    CustomData_free(&this->frame_data, this->frames_size);
+  int add_frame_on_layer(int layer_index, int frame_start);
+  int add_frame_on_layer(GPLayer &layer, int frame_start);
+  int add_frame_on_active_layer(int frame_start);
+  void add_frames_on_layer(int layer_index, Array<int> start_frames);
 
-    /* Free layer and layer groups. */
-    destruct_n(reinterpret_cast<GPLayer *>(this->layers_array), this->layers_size);
-    MEM_SAFE_FREE(this->layers_array);
-    MEM_delete(reinterpret_cast<GPLayerGroup *>(this->default_group));
-    this->default_group = nullptr;
+  int strokes_num() const;
+  int points_num() const;
 
-    /* Free the runtime structure. */
-    MEM_delete(this->runtime);
-    this->runtime = nullptr;
-  }
-
-  Span<GPFrame> frames() const
-  {
-    return {reinterpret_cast<const GPFrame *>(this->frames_array), this->frames_size};
-  }
-
-  const GPFrame &frames(int index) const
-  {
-    return this->frames()[index];
-  }
-
-  MutableSpan<GPFrame> frames_for_write()
-  {
-    return {reinterpret_cast<GPFrame *>(this->frames_array), this->frames_size};
-  }
-
-  GPFrame &frames_for_write(int index)
-  {
-    return this->frames_for_write()[index];
-  }
-
-  IndexMask frames_on_layer(int layer_index) const
-  {
-    if (layer_index < 0 || layer_index > this->layers_size) {
-      return IndexMask();
-    }
-
-    /* If the indices are cached for this layer, use the cache. */
-    if (this->runtime->frame_index_masks_cache.contains(layer_index)) {
-      return this->runtime->frame_index_masks_cache_for_layer(layer_index);
-    }
-
-    /* A double checked lock. */
-    std::scoped_lock{this->runtime->frame_index_masks_cache_mutex};
-    if (this->runtime->frame_index_masks_cache.contains(layer_index)) {
-      return this->runtime->frame_index_masks_cache_for_layer(layer_index);
-    }
-
-    Vector<int64_t> indices;
-    const IndexMask mask = index_mask_ops::find_indices_based_on_predicate(
-        IndexMask(this->frames_size), 1024, indices, [&](const int index) {
-          return this->frames()[index].layer_index == layer_index;
-        });
-
-    /* Cache the resulting index mask. */
-    this->runtime->frame_index_masks_cache.add(layer_index, std::move(indices));
-    return mask;
-  }
-
-  IndexMask frames_on_layer(GPLayer &layer) const
-  {
-    int index = this->layers().first_index_try(layer);
-    if (index == -1) {
-      return IndexMask();
-    }
-    return frames_on_layer(index);
-  }
-
-  IndexMask frames_on_active_layer() const
-  {
-    return frames_on_layer(this->active_layer_index);
-  }
-
-  Span<GPLayer> layers() const
-  {
-    return {reinterpret_cast<const GPLayer *>(this->layers_array), this->layers_size};
-  }
-
-  const GPLayer &layers(int index) const
-  {
-    return layers()[index];
-  }
-
-  MutableSpan<GPLayer> layers_for_write()
-  {
-    return {reinterpret_cast<GPLayer *>(this->layers_array), this->layers_size};
-  }
-
-  GPLayer &layers_for_write(int index)
-  {
-    return layers_for_write()[index];
-  }
-
-  const GPLayer &active_layer()
-  {
-    return this->layers()[this->active_layer_index];
-  }
-
-  GPLayer &active_layer_for_write()
-  {
-    return this->layers_for_write()[this->active_layer_index];
-  }
-
-  int add_layer(StringRefNull name)
-  {
-    /* Ensure that the layer array has enough space. */
-    if (!ensure_layers_array_has_size_at_least(this->layers_size + 1)) {
-      return -1;
-    }
-
-    GPLayer new_layer(name);
-    /* Move new_layer to the end in the array. */
-    this->layers_for_write().last() = std::move(new_layer);
-    return this->layers_size - 1;
-  }
-
-  void add_layers(Array<StringRefNull> names)
-  {
-    for (StringRefNull name : names) {
-      this->add_layer(name);
-    }
-  }
-
-  int find_layer_by_name(StringRefNull name)
-  {
-    for (const int i : this->layers().index_range()) {
-      if (STREQ(this->layers(i).name, name.c_str())) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  int add_frame_on_layer(int layer_index, int frame_start)
-  {
-    /* TODO: Check for collisions before resizing the array. */
-    if (!ensure_frames_array_has_size_at_least(this->frames_size + 1)) {
-      return -1;
-    }
-
-    return add_frame_on_layer_initialized(layer_index, frame_start, 1);
-  }
-
-  int add_frame_on_layer(GPLayer &layer, int frame_start)
-  {
-    int index = this->layers().first_index_try(layer);
-    if (index == -1) {
-      return -1;
-    }
-    return add_frame_on_layer(index, frame_start);
-  }
-
-  int add_frame_on_active_layer(int frame_start)
-  {
-    return add_frame_on_layer(active_layer_index, frame_start);
-  }
-
-  void add_frames_on_layer(int layer_index, Array<int> start_frames)
-  {
-    int new_frames_size = start_frames.size();
-    /* TODO: Check for collisions before resizing the array. */
-    if (!ensure_frames_array_has_size_at_least(this->frames_size + new_frames_size)) {
-      return;
-    }
-
-    int reserved = new_frames_size;
-    for (int start_frame : start_frames) {
-      add_frame_on_layer_initialized(layer_index, start_frame, reserved);
-      reserved--;
-    }
-  }
-
-  int strokes_num() const
-  {
-    /* TODO: could be done with parallel_for */
-    int count = 0;
-    for (const GPFrame &gpf : this->frames()) {
-      count += gpf.strokes_num();
-    }
-    return count;
-  }
-
-  int points_num() const
-  {
-    /* TODO: could be done with parallel_for */
-    int count = 0;
-    for (const GPFrame &gpf : this->frames()) {
-      count += gpf.points_num();
-    }
-    return count;
-  }
-
-  void set_active_layer(int layer_index)
-  {
-    if (layer_index < 0 || layer_index >= this->layers_size) {
-      return;
-    }
-    this->active_layer_index = layer_index;
-  }
+  void set_active_layer(int layer_index);
 
  private:
-  const void copy_gpdata(GPData &dst, const GPData &src)
-  {
-    /* Make sure previous frame data is freed. */
-    MEM_SAFE_FREE(dst.frames_array);
-    CustomData_free(&dst.frame_data, dst.frames_size);
+  const void copy_gpdata(GPData &dst, const GPData &src);
+  const void move_gpdata(GPData &dst, GPData &src);
 
-    /* Copy frame data. */
-    dst.frames_size = src.frames_size;
-    dst.frames_array = reinterpret_cast<::GPFrame *>(
-        MEM_malloc_arrayN(dst.frames_size, sizeof(::GPFrame), __func__));
-    uninitialized_copy_n(reinterpret_cast<GPFrame *>(src.frames_array),
-                         src.frames_size,
-                         reinterpret_cast<GPFrame *>(dst.frames_array));
-    CustomData_copy(&src.frame_data, &dst.frame_data, CD_MASK_ALL, CD_DUPLICATE, dst.frames_size);
-
-    /* Make sure layer data is freed then copy it over. */
-    MEM_SAFE_FREE(dst.layers_array);
-    dst.layers_size = src.layers_size;
-    dst.layers_array = reinterpret_cast<::GPLayer *>(
-        MEM_malloc_arrayN(dst.layers_size, sizeof(::GPLayer), __func__));
-    uninitialized_copy_n(reinterpret_cast<GPLayer *>(src.layers_array),
-                         src.layers_size,
-                         reinterpret_cast<GPLayer *>(dst.layers_array));
-    dst.active_layer_index = src.active_layer_index;
-
-    /* Copy layer default group. */
-    *dst.default_group = *src.default_group;
-  }
-
-  const void move_gpdata(GPData &dst, GPData &src)
-  {
-    /* Move frame data. */
-    dst.frames_size = src.frames_size;
-    std::swap(dst.frames_array, src.frames_array);
-    std::swap(dst.frame_data, src.frame_data);
-    MEM_SAFE_FREE(src.frames_array);
-    CustomData_free(&src.frame_data, src.frames_size);
-    src.frames_size = 0;
-
-    /* Move layer data. */
-    dst.layers_size = src.layers_size;
-    std::swap(dst.layers_array, src.layers_array);
-    dst.active_layer_index = src.active_layer_index;
-    MEM_SAFE_FREE(src.layers_array);
-    src.layers_size = 0;
-    src.active_layer_index = -1;
-
-    /* Move layer group and runtime pointers. */
-    std::swap(dst.default_group, src.default_group);
-    std::swap(dst.runtime, src.runtime);
-  }
-
-  const bool ensure_layers_array_has_size_at_least(int64_t size)
-  {
-    if (this->layers_size > size) {
-      return true;
-    }
-
-    int old_size = this->layers_size;
-    this->layers_size = size;
-
-    ::GPLayer *new_array = reinterpret_cast<::GPLayer *>(
-        MEM_calloc_arrayN(this->layers_size, sizeof(::GPLayer), __func__));
-    if (new_array == nullptr) {
-      return false;
-    }
-
-    if (this->layers_array != nullptr) {
-      /* Since the layers have default move constructors, we just use memcpy here. */
-      memcpy(new_array, this->layers_array, old_size * sizeof(::GPLayer));
-      MEM_SAFE_FREE(this->layers_array);
-    }
-    this->layers_array = new_array;
-
-    return true;
-  }
-
-  const bool ensure_frames_array_has_size_at_least(int64_t size)
-  {
-    if (this->frames_size > size) {
-      return true;
-    }
-
-    int old_size = this->frames_size;
-    this->frames_size = size;
-
-    ::GPFrame *new_array = reinterpret_cast<::GPFrame *>(
-        MEM_malloc_arrayN(this->frames_size, sizeof(::GPFrame), __func__));
-    if (new_array == nullptr) {
-      return false;
-    }
-
-    if (this->frames_array != nullptr) {
-      uninitialized_relocate_n(reinterpret_cast<GPFrame *>(this->frames_array),
-                               old_size,
-                               reinterpret_cast<GPFrame *>(new_array));
-      default_construct_n(reinterpret_cast<GPFrame *>(new_array + old_size),
-                          this->frames_size - old_size);
-      MEM_SAFE_FREE(this->frames_array);
-      this->frames_array = new_array;
-    }
-    else {
-      this->frames_array = new_array;
-      default_construct_n(reinterpret_cast<GPFrame *>(this->frames_array), this->frames_size);
-    }
-    return true;
-  }
+  const bool ensure_layers_array_has_size_at_least(int64_t size);
+  const bool ensure_frames_array_has_size_at_least(int64_t size);
 
   /**
    * Creates a new frame and inserts it into the  \a frames_array so that the ordering is kept.
    * Assumes that \a frames_array is sorted and that the array has been reallocated + expaned by \a
    * reserved.
    */
-  int add_frame_on_layer_initialized(int layer_index, int frame_start, int reserved)
-  {
-    /* Create the new frame. */
-    GPFrame new_frame(frame_start);
-    new_frame.layer_index = layer_index;
+  int add_frame_on_layer_initialized(int layer_index, int frame_start, int reserved);
 
-    int last_index = this->frames_size - reserved - 1;
-
-    /* Check if the frame can be appended at the end. */
-    if (this->frames_size == 0 || this->frames_size == reserved ||
-        this->frames(last_index) < std::pair<int, int>(layer_index, frame_start)) {
-      this->frames_for_write(last_index + 1) = std::move(new_frame);
-      return last_index + 1;
-    }
-
-    /* Look for the first frame that is equal or greater than the new frame. */
-    auto it = std::lower_bound(this->frames().begin(),
-                               this->frames().drop_back(reserved).end(),
-                               std::pair<int, int>(layer_index, frame_start));
-    /* Get the index of the frame. */
-    int index = std::distance(this->frames().begin(), it);
-    /* Move all the frames and make space at index. */
-    initialized_reversed_move_n(reinterpret_cast<GPFrame *>(this->frames_array + index),
-                                this->frames_size - index - 1,
-                                reinterpret_cast<GPFrame *>(this->frames_array + index + 1));
-    /* Move the new frame into the space at index. */
-    this->frames_for_write(index) = std::move(new_frame);
-
-    return index;
-  }
-
-  void update_frames_array()
-  {
-    /* Make sure frames are ordered chronologically and by layer order. */
-    std::sort(this->frames_for_write().begin(), this->frames_for_write().end());
-
-    /* Clear the cached indices since they are (probably) no longer valid. */
-    this->runtime->frame_index_masks_cache.clear();
-  }
+  void update_frames_array();
 };
 
 }  // namespace blender::bke
