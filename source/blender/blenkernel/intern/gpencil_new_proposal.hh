@@ -47,6 +47,13 @@ typedef struct GPLayerGroup {
   /* ... */
 } GPLayerGroup;
 
+/** GPLayer.flag */
+typedef enum eGPLayerFlag {
+  LAYER_SELECT = (1 << 0),
+  LAYER_HIDE = (1 << 1),
+  LAYER_LOCK = (1 << 2),
+} eGPLayerFlag;
+
 typedef struct GPLayer {
   /**
    * The name of the layer.
@@ -54,12 +61,17 @@ typedef struct GPLayer {
   char name[128];
 
   /**
-   * The layer flag.
+   * The layer flag (see `eGPLayerFlag`).
    */
   int flag;
 
   /* ... */
 } GPLayer;
+
+/** GPFrame.flag */
+typedef enum eGPFrameFlag {
+  FRAME_SELECT = (1 << 0),
+} eGPFrameFlag;
 
 typedef struct GPFrame {
   /**
@@ -69,7 +81,7 @@ typedef struct GPFrame {
   CurvesGeometry *strokes;
 
   /**
-   * The frame flag.
+   * The frame flag (see `eGPFrameFlag`). 
    */
   int flag;
 
