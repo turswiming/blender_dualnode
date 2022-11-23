@@ -8,8 +8,6 @@
 
 #include "BKE_curves.hh"
 
-#include "BLI_index_mask_ops.hh"
-
 #include "DNA_ID.h"
 #include "DNA_curves_types.h"
 #include "DNA_customdata_types.h"
