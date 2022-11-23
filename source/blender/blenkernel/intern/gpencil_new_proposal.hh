@@ -152,35 +152,12 @@ namespace blender::bke {
 
 class GPLayerGroup : ::GPLayerGroup { /* Unused for now. Placeholder class. */
  public:
-  GPLayerGroup()
-  {
-    this->children = nullptr;
-    this->children_size = 0;
-    this->layer_indices = nullptr;
-    this->layer_indices_size = 0;
-  }
+  GPLayerGroup();
+  GPLayerGroup(const StringRefNull name);
 
-  GPLayerGroup(const StringRefNull name) : GPLayerGroup()
-  {
-    BLI_assert(name.size() < 128);
-    strcpy(this->name, name.c_str());
-  }
+  ~GPLayerGroup();
 
-  ~GPLayerGroup()
-  {
-    /* Recursivly free the children of this layer group first. */
-    for (int i = 0; i < this->children_size; i++) {
-      MEM_delete(&this->children[i]);
-    }
-    /* Then free its data. */
-    MEM_SAFE_FREE(this->children);
-    MEM_SAFE_FREE(this->layer_indices);
-  }
-
-  IndexMask layers_index_mask()
-  {
-    return {reinterpret_cast<int64_t>(this->layer_indices), this->layer_indices_size};
-  }
+  IndexMask layers_index_mask();
 };
 
 class GPDataRuntime {

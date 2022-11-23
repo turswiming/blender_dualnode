@@ -18,6 +18,36 @@
 
 namespace blender::bke {
 
+GPLayerGroup::GPLayerGroup()
+{
+  this->children = nullptr;
+  this->children_size = 0;
+  this->layer_indices = nullptr;
+  this->layer_indices_size = 0;
+}
+
+GPLayerGroup::GPLayerGroup(const StringRefNull name) : GPLayerGroup()
+{
+  BLI_assert(name.size() < 128);
+  strcpy(this->name, name.c_str());
+}
+
+GPLayerGroup::~GPLayerGroup()
+{
+  /* Recursivly free the children of this layer group first. */
+  for (int i = 0; i < this->children_size; i++) {
+    MEM_delete(&this->children[i]);
+  }
+  /* Then free its data. */
+  MEM_SAFE_FREE(this->children);
+  MEM_SAFE_FREE(this->layer_indices);
+}
+
+IndexMask GPLayerGroup::layers_index_mask()
+{
+  return {reinterpret_cast<int64_t>(this->layer_indices), this->layer_indices_size};
+}
+
 Span<float3> GPStroke::points_positions() const
 {
   return {geometry_->positions().begin() + offset_, points_num_};
