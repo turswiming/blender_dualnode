@@ -18,6 +18,7 @@
 
 namespace blender::bke {
 
+/* GPLayerGroup */
 GPLayerGroup::GPLayerGroup()
 {
   this->children = nullptr;
@@ -48,11 +49,13 @@ IndexMask GPLayerGroup::layers_index_mask()
   return {reinterpret_cast<int64_t>(this->layer_indices), this->layer_indices_size};
 }
 
+/* GPDataRuntime */
 IndexMask GPDataRuntime::frame_index_masks_cache_for_layer(int layer_index)
 {
   return frame_index_masks_cache.lookup(layer_index).as_span();
 }
 
+/* GPStroke */
 Span<float3> GPStroke::points_positions() const
 {
   return {geometry_->positions().begin() + offset_, points_num_};
@@ -73,6 +76,7 @@ void GPStroke::transform(float4x4 matrix)
       });
 }
 
+/* GPFrame */
 GPFrame::GPFrame(int start_frame, int end_frame)
 {
   this->start_time = start_frame;
@@ -205,6 +209,7 @@ GPStroke GPFrame::add_new_stroke(int new_points_num)
   return {reinterpret_cast<CurvesGeometry *>(this->strokes), new_points_num, orig_last_offset};
 }
 
+/* GPData */
 GPData::GPData(const int layers_size, const int frame_size)
 {
   BLI_assert(layers_size >= 0);
