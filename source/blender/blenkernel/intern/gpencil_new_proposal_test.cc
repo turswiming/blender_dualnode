@@ -420,4 +420,15 @@ TEST(gpencil_proposal, TimeMultiFrameTransformStrokes)
   free_old_gpencil_data(old_data);
 }
 
+TEST(gpencil_proposal, Old2NewConversion)
+{
+  int layers_num = 10, frames_num = 20, strokes_num = 10, points_num = 100;
+
+  bGPdata *old_data = build_old_gpencil_data(layers_num, frames_num, strokes_num, points_num);
+
+  GreasePencil data = convert_old_to_new_gpencil_data(old_data);
+
+  free_old_gpencil_data(old_data);
+}
+
 }  // namespace blender::bke::gpencil::tests
