@@ -417,16 +417,19 @@ if(WITH_PYTHON)
     PATTERN "${ADDON_EXCLUDE_CONDITIONAL}" EXCLUDE
     PATTERN "${FREESTYLE_EXCLUDE_CONDITIONAL}" EXCLUDE
   )
-  if(WIN32)
-    install(
-      FILES ${CMAKE_SOURCE_DIR}/release/scripts/site/usercustomize.py
-      DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
-    )
-  else()
-    install(
-      FILES ${CMAKE_SOURCE_DIR}/release/scripts/site/usercustomize.py
-      DESTINATION ${TARGETDIR_VER}/python/lib/python${PYTHON_VERSION}/site-packages
-    )
+
+  if(WITH_PYTHON_INSTALL)
+    if(WIN32)
+      install(
+        FILES ${CMAKE_SOURCE_DIR}/release/scripts/site/sitecustomize.py
+        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+      )
+    else()
+      install(
+        FILES ${CMAKE_SOURCE_DIR}/release/scripts/site/sitecustomize.py
+        DESTINATION ${TARGETDIR_VER}/python/lib/python${PYTHON_VERSION}/site-packages
+      )
+    endif()
   endif()
   unset(ADDON_EXCLUDE_CONDITIONAL)
   unset(FREESTYLE_EXCLUDE_CONDITIONAL)
@@ -984,10 +987,6 @@ elseif(WIN32)
         ${LIBDIR}/materialx/bin/MaterialXGenMdl.dll
         ${LIBDIR}/materialx/bin/MaterialXGenOsl.dll
         ${LIBDIR}/materialx/bin/MaterialXGenShader.dll
-        ${LIBDIR}/materialx/bin/MaterialXRenderGlsl.dll
-        ${LIBDIR}/materialx/bin/MaterialXRenderHw.dll
-        ${LIBDIR}/materialx/bin/MaterialXRenderOsl.dll
-        ${LIBDIR}/materialx/bin/MaterialXRender.dll
       RELEASE
     )
     windows_install_shared_manifest(
@@ -998,10 +997,6 @@ elseif(WIN32)
         ${LIBDIR}/materialx/bin/MaterialXGenMdl_d.dll
         ${LIBDIR}/materialx/bin/MaterialXGenOsl_d.dll
         ${LIBDIR}/materialx/bin/MaterialXGenShader_d.dll
-        ${LIBDIR}/materialx/bin/MaterialXRenderGlsl_d.dll
-        ${LIBDIR}/materialx/bin/MaterialXRenderHw_d.dll
-        ${LIBDIR}/materialx/bin/MaterialXRenderOsl_d.dll
-        ${LIBDIR}/materialx/bin/MaterialXRender_d.dll
       DEBUG
     )
   endif()
@@ -1579,10 +1574,10 @@ if(WITH_USD)
   endif()
 endif()
 
-if(WITH_MATERIALX)
+if(WITH_MATERIALX AND TARGETDIR_LIB)
   install(
     DIRECTORY ${LIBDIR}/materialx/libraries
-    DESTINATION "${TARGETDIR_VER}/datafiles/materialx"
+    DESTINATION "${TARGETDIR_LIB}/materialx"
   )
 endif()
 
