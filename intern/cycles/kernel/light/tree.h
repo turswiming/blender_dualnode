@@ -290,7 +290,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   /* TODO: better measure for single emitter */
   if (in_volume_segment) {
     const float3 D = N_or_D;
-    const float3 closest_point = P + D * dot(point_to_centroid, D);
+    const float3 closest_point = P + distance * dot(point_to_centroid, D) * D;
     /* minimal distance of the ray to the cluster */
     min_distance = len(centroid - closest_point);
     max_distance = min_distance;
@@ -367,7 +367,7 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
 
       if (in_volume_segment) {
         const float3 D = N_or_D;
-        const float3 closest_point = P + D * dot(point_to_centroid, D);
+        const float3 closest_point = P + distance * dot(point_to_centroid, D) * D;
         /* minimal distance of the ray to the cluster */
         distance = len(centroid - closest_point);
         point_to_centroid = centroid - P;
