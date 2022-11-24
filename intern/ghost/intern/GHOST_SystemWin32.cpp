@@ -37,6 +37,9 @@
 #include "GHOST_WindowWin32.h"
 
 #include "GHOST_ContextWGL.h"
+#ifdef WITH_VULKAN_BACKEND
+#  include "GHOST_ContextVK.h"
+#endif
 
 #ifdef WITH_INPUT_NDOF
 #  include "GHOST_NDOFManagerWin32.h"
@@ -256,7 +259,20 @@ GHOST_IContext *GHOST_SystemWin32::createOffscreenContext(GHOST_GLSettings glSet
 {
   const bool debug_context = (glSettings.flags & GHOST_glDebugContext) != 0;
 
-  GHOST_Context *context;
+  GHOST_Context *context = nullptr;
+
+#ifdef WITH_VULKAN_BACKEND
+  /* Vulkan does not need a window. */
+  if (glSettings.context_type == GHOST_kDrawingContextTypeVulkan) {
+    context = new GHOST_ContextVK(false, (HWND)0, 1, 0, debug_context);
+
+    if (!context->initializeDrawingContext()) {
+      delete context;
+      return nullptr;
+    }
+    return context;
+  }
+#endif
 
   HWND wnd = CreateWindowA("STATIC",
                            "BlenderGLEW",
@@ -1069,10 +1085,10 @@ GHOST_EventCursor *GHOST_SystemWin32::processCursorEvent(GHOST_WindowWin32 *wind
          * so the box needs to small enough not to let the cursor escape the window but large
          * enough that the cursor isn't being warped every time.
          * If this was not the case it would be less trouble to simply warp the cursor to the
-         * center of the screen on every motion, see: T102346. */
+         * center of the screen on every motion, see: D16558 (alternative fix for T102346). */
         const int32_t subregion_div = 4; /* One quarter of the region. */
         const int32_t size[2] = {bounds.getWidth(), bounds.getHeight()};
-        const int center[2] = {(bounds.m_l + bounds.m_r) / 2, (bounds.m_t + bounds.m_b) / 2};
+        const int32_t center[2] = {(bounds.m_l + bounds.m_r) / 2, (bounds.m_t + bounds.m_b) / 2};
         /* Shrink the box to prevent the cursor escaping. */
         bounds.m_l = center[0] - (size[0] / (subregion_div * 2));
         bounds.m_r = center[0] + (size[0] / (subregion_div * 2));
