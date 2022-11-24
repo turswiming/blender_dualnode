@@ -55,6 +55,7 @@ static bGPdata *build_old_gpencil_data(int num_layers,
 {
   bGPdata *gpd = reinterpret_cast<bGPdata *>(MEM_mallocN(sizeof(bGPdata), __func__));
   BLI_listbase_clear(&gpd->layers);
+  gpd->totlayer = gpd->totframe = gpd->totstroke = 0;
   for (int i = 0; i < num_layers; i++) {
     bGPDlayer *gpl = reinterpret_cast<bGPDlayer *>(MEM_mallocN(sizeof(bGPDlayer), __func__));
     sprintf(gpl->info, "%s%d", "GPLayer", i);
@@ -85,10 +86,13 @@ static bGPdata *build_old_gpencil_data(int num_layers,
 
         BLI_addtail(&gpf->strokes, gps);
       }
+      gpd->totstroke += strokes_per_frame;
       BLI_addtail(&gpl->frames, gpf);
     }
+    gpd->totframe += frames_per_layer;
     BLI_addtail(&gpd->layers, gpl);
   }
+  gpd->totlayer += num_layers;
 
   return gpd;
 }
