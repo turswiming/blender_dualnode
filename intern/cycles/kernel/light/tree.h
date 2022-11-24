@@ -63,6 +63,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   float cos_theta, cos_theta_i, sin_theta_i;
   /* cos(theta_i') in the paper, omitted for volume */
   float cos_min_incidence_angle = 1.0f;
+  float cos_max_incidence_angle = 1.0f;
   /* when sampling the light tree for the second time in `shade_volume.h` and when query the pdf in
    * `sample.h` */
   const bool in_volume = (dot(N_or_D, N_or_D) < 5e-4f);
@@ -97,6 +98,10 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
       cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
                                     1.0f :
                                     cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
+
+      /* cos_max_incidence_angle = cos(min{theta_i + theta_u, pi}) */
+      cos_max_incidence_angle = fmaxf(cos_theta_i * cos_theta_u - sin_theta_i * sin_theta_u, 0.0f);
+
       /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
        * opaque, then we can give the node an importance of 0 as it contributes nothing to the
        * surface. This is more accurate than the bbox test if we are calculating the importance of
@@ -142,15 +147,10 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
                          (in_volume_segment ? min_distance : sqr(min_distance)));
 
   /* TODO: also min importance for volume? */
-  if (in_volume_segment || in_volume) {
+  if (in_volume_segment) {
     min_importance = max_importance;
     return;
   }
-
-  /* compute mininum importance */
-  /* cos_max_incidence_angle = cos(min{theta_i + theta_u, pi}) */
-  const float cos_max_incidence_angle = fmaxf(
-      cos_theta_i * cos_theta_u - sin_theta_i * sin_theta_u, 0.0f);
 
   /* cos(theta + theta_o + theta_u) if theta + theta_o + theta_u < theta_e, 0 otherwise */
   float cos_max_outgoing_angle;
