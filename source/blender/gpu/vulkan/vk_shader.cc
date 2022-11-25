@@ -18,6 +18,12 @@ namespace blender::gpu {
 static const std::string to_stage_name(shaderc_shader_kind stage)
 {
   switch (stage) {
+    case shaderc_vertex_shader:
+      return std::string("vertex");
+    case shaderc_geometry_shader:
+      return std::string("geometry");
+    case shaderc_fragment_shader:
+      return std::string("fragment");
     case shaderc_compute_shader:
       return std::string("compute");
 
@@ -98,6 +104,7 @@ VKShader::VKShader(const char *name) : Shader(name)
 {
   context_ = VKContext::get();
 }
+
 VKShader::~VKShader()
 {
   VkDevice device = context_->device_get();
@@ -111,23 +118,30 @@ void VKShader::build_shader_module(MutableSpan<const char *> sources,
                                    shaderc_shader_kind stage,
                                    VkShaderModule *r_shader_module)
 {
-  BLI_assert_msg(ELEM(stage, shaderc_compute_shader),
+  BLI_assert_msg(ELEM(stage,
+                      shaderc_vertex_shader,
+                      shaderc_geometry_shader,
+                      shaderc_fragment_shader,
+                      shaderc_compute_shader),
                  "Only forced ShaderC shader kinds are supported.");
   sources[0] = glsl_patch_get();
   Vector<uint32_t> spirv_module = compile_glsl_to_spirv(sources, shaderc_compute_shader);
   build_shader_module(spirv_module, &compute_module_);
 }
 
-void VKShader::vertex_shader_from_glsl(MutableSpan<const char *> /*sources*/)
+void VKShader::vertex_shader_from_glsl(MutableSpan<const char *> sources)
 {
+  build_shader_module(sources, shaderc_vertex_shader, &vertex_module_);
 }
 
-void VKShader::geometry_shader_from_glsl(MutableSpan<const char *> /*sources*/)
+void VKShader::geometry_shader_from_glsl(MutableSpan<const char *> sources)
 {
+  build_shader_module(sources, shaderc_geometry_shader, &geometry_module_);
 }
 
-void VKShader::fragment_shader_from_glsl(MutableSpan<const char *> /*sources*/)
+void VKShader::fragment_shader_from_glsl(MutableSpan<const char *> sources)
 {
+  build_shader_module(sources, shaderc_fragment_shader, &fragment_module_);
 }
 
 void VKShader::compute_shader_from_glsl(MutableSpan<const char *> sources)

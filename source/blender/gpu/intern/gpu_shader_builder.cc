@@ -103,9 +103,9 @@ int main(int argc, const char *argv[])
   };
 
   blender::Vector<NamedBackend> backends_to_validate;
-  backends_to_validate.append({"OpenGL", GPU_BACKEND_OPENGL});
+  //backends_to_validate.append({"OpenGL", GPU_BACKEND_OPENGL});
 #ifdef WITH_METAL_BACKEND
-  backends_to_validate.append({"Metal", GPU_BACKEND_METAL});
+  //backends_to_validate.append({"Metal", GPU_BACKEND_METAL});
 #endif
 #ifdef WITH_VULKAN_BACKEND
   backends_to_validate.append({"Vulkan", GPU_BACKEND_VULKAN});

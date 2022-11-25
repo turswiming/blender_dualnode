@@ -19,7 +19,10 @@ namespace blender::gpu {
 class VKShader : public Shader {
  private:
   VKContext *context_ = nullptr;
-  VkShaderModule compute_module_ = nullptr;
+  VkShaderModule vertex_module_ = VK_NULL_HANDLE;
+  VkShaderModule geometry_module_ = VK_NULL_HANDLE;
+  VkShaderModule fragment_module_ = VK_NULL_HANDLE;
+  VkShaderModule compute_module_ = VK_NULL_HANDLE;
 
  public:
   VKShader(const char *name);
