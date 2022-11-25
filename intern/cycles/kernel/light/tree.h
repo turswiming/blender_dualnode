@@ -38,6 +38,59 @@ ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
   return cos_theta_u;
 }
 
+ccl_device_inline float sin_from_cos(const float c)
+{
+  return safe_sqrtf(1.0f - sqr(c));
+}
+
+/* Compute vector v as in Fig .8. P_v is the corresponding point along the ray ccl_device float3 */
+ccl_device float3 compute_v(const float3 centroid,
+                            const float3 P,
+                            const float3 D,
+                            const float3 bcone_axis,
+                            float t,
+                            ccl_private float3 &P_v)
+{
+  t = fminf(t, 1e12f);
+
+  const float3 unnormalized_v0 = P - centroid;
+  float len_v0;
+  const float3 unnormalized_v1 = unnormalized_v0 + D * t;
+  const float3 v0 = normalize_len(unnormalized_v0, &len_v0);
+  const float3 v1 = normalize(unnormalized_v1);
+
+  const float3 o0 = v0;
+  float3 o1, o2;
+  make_orthonormals_tangent(o0, v1, &o1, &o2);
+
+  const float dot_o0_a = dot(o0, bcone_axis);
+  const float dot_o1_a = dot(o1, bcone_axis);
+  const float cos_phi0 = dot_o0_a / sqrtf(sqr(dot_o0_a) + sqr(dot_o1_a));
+
+  float3 v;
+  float t_v;
+  if (dot_o1_a < 0 || dot(v0, v1) > cos_phi0) {
+    if (dot_o0_a > dot(v1, bcone_axis)) {
+      v = v0;
+      t_v = 0.0f;
+    }
+    else {
+      v = v1;
+      t_v = t;
+    }
+  }
+  else {
+    const float sin_phi0 = sin_from_cos(cos_phi0);
+    v = cos_phi0 * o0 + sin_phi0 * o1;
+    const float cos_phi1 = dot(-v0, D);
+    const float sin_phi1 = sin_from_cos(cos_phi1);
+    /* sin(phi_0) / t_v = sin(phi_0 + phi_1) / len_v0 */
+    t_v = len_v0 / (cos_phi1 + cos_phi0 / sin_phi0 * sin_phi1);
+  }
+  P_v = P + D * t_v;
+  return v;
+}
+
 /* This is the general function for calculating the importance of either a cluster or an emitter.
  * Both of the specialized functions obtain the necessary data before calling this function. */
 template<bool in_volume_segment>
@@ -68,47 +121,26 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
    * `sample.h` */
   const bool in_volume = (dot(N_or_D, N_or_D) < 5e-4f);
 
-  if (in_volume_segment) {
-    const float3 D = N_or_D;
-    const float3 v0 = -normalize(point_to_centroid);
-    const float3 v1 = normalize(-point_to_centroid + D * fminf(t, 1e12f));
+  cos_theta = dot(bcone_axis, -point_to_centroid);
+  if (!in_volume_segment && !in_volume) {
+    const float3 N = N_or_D;
+    cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) : dot(point_to_centroid, N);
+    sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
 
-    const float3 o0 = v0;
-    float3 o1, o2;
-    make_orthonormals_tangent(o0, v1, &o1, &o2);
+    /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}) = cos(theta_i') in the paper */
+    cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
+                                  1.0f :
+                                  cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
 
-    const float dot_o0_a = dot(o0, bcone_axis);
-    const float dot_o1_a = dot(o1, bcone_axis);
-    const float cos_phi0 = dot_o0_a / sqrtf(sqr(dot_o0_a) + sqr(dot_o1_a));
+    /* cos_max_incidence_angle = cos(min{theta_i + theta_u, pi}) */
+    cos_max_incidence_angle = fmaxf(cos_theta_i * cos_theta_u - sin_theta_i * sin_theta_u, 0.0f);
 
-    /* Eq. (6) */
-    cos_theta = (dot_o1_a < 0 || dot(v0, v1) > cos_phi0) ?
-                    fmaxf(dot_o0_a, dot(v1, bcone_axis)) : /* b_max */
-                    dot(bcone_axis, cos_phi0 * o0 + safe_sqrtf(1.0f - sqr(cos_phi0)) * o1);
-  }
-  else {
-    cos_theta = dot(bcone_axis, -point_to_centroid);
-    if (!in_volume) {
-      const float3 N = N_or_D;
-      cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) :
-                                       dot(point_to_centroid, N);
-      sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
-
-      /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}) = cos(theta_i') in the paper */
-      cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
-                                    1.0f :
-                                    cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
-
-      /* cos_max_incidence_angle = cos(min{theta_i + theta_u, pi}) */
-      cos_max_incidence_angle = fmaxf(cos_theta_i * cos_theta_u - sin_theta_i * sin_theta_u, 0.0f);
-
-      /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
-       * opaque, then we can give the node an importance of 0 as it contributes nothing to the
-       * surface. This is more accurate than the bbox test if we are calculating the importance of
-       * an emitter with radius */
-      if (!has_transmission && cos_min_incidence_angle < 0) {
-        return;
-      }
+    /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
+     * opaque, then we can give the node an importance of 0 as it contributes nothing to the
+     * surface. This is more accurate than the bbox test if we are calculating the importance of
+     * an emitter with radius */
+    if (!has_transmission && cos_min_incidence_angle < 0) {
+      return;
     }
   }
 
@@ -290,11 +322,13 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   /* TODO: better measure for single emitter */
   if (in_volume_segment) {
     const float3 D = N_or_D;
-    const float3 closest_point = P + distance * dot(point_to_centroid, D) * D;
+    const float3 closest_point = P + dot(centroid - P, D) * D;
     /* minimal distance of the ray to the cluster */
     min_distance = len(centroid - closest_point);
     max_distance = min_distance;
-    point_to_centroid = centroid - P;
+    float3 P_v;
+    float t_v;
+    point_to_centroid = -compute_v(centroid, P, D, bcone_axis, t, P_v);
   }
 
   light_tree_cluster_importance<in_volume_segment>(N_or_D,
@@ -367,10 +401,14 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
 
       if (in_volume_segment) {
         const float3 D = N_or_D;
-        const float3 closest_point = P + distance * dot(point_to_centroid, D) * D;
+        const float3 closest_point = P + dot(centroid - P, D) * D;
         /* minimal distance of the ray to the cluster */
         distance = len(centroid - closest_point);
-        point_to_centroid = centroid - P;
+        float3 P_v;
+        float t_v;
+        point_to_centroid = -compute_v(centroid, P, D, bcone_axis, t, P_v);
+        cos_theta_u = light_tree_cos_bounding_box_angle(
+            bbox_min, bbox_max, P_v, D, point_to_centroid, bbox_is_visible);
       }
       /* clamp distance to half the radius of the cluster when splitting is disabled */
       distance = fmaxf(0.5f * len(centroid - bbox_max), distance);
