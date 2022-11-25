@@ -71,14 +71,28 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   /** Masking. */
 
-  template<typename U,
-           int OtherNumRow,
-           int OtherNumCol,
-           BLI_ENABLE_IF((OtherNumRow > NumRow) && (OtherNumCol > NumCol))>
-  explicit mat_base(const mat_base<U, OtherNumRow, OtherNumCol> &other)
+  template<typename U, int OtherNumCol, int OtherNumRow>
+  explicit mat_base(const mat_base<U, OtherNumCol, OtherNumRow> &other)
   {
-    /* TODO(fclem): Allow enlarging following GLSL standard (i.e: mat4(mat3())). */
-    unroll<NumCol>([&](auto i) { (*this)[i] = col_type(other[i]); });
+    if constexpr ((OtherNumRow >= NumRow) && (OtherNumCol >= NumCol)) {
+      unroll<NumCol>([&](auto i) { (*this)[i] = col_type(other[i]); });
+    }
+    else {
+      /* Allow enlarging following GLSL standard (i.e: mat4x4(mat3x3())). */
+      unroll<NumCol>([&](auto i) {
+        unroll<NumRow>([&](auto j) {
+          if (i < OtherNumCol && j < OtherNumRow) {
+            (*this)[i][j] = other[i][j];
+          }
+          else if (i == j) {
+            (*this)[i][j] = T(1);
+          }
+          else {
+            (*this)[i][j] = T(0);
+          }
+        });
+      });
+    }
   }
 
 #undef BLI_ENABLE_IF_MAT
@@ -213,6 +227,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
   {
     /** \note this is the reference implementation.
      * Subclass are free to overload it with vectorized / optimized code. */
+    /** \note Only tested for square matrices. Might still contain bugs. */
     mat_base result = mat_base(0);
     unroll<NumCol>([&](auto c) {
       unroll<NumRow>([&](auto r) {

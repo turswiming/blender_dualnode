@@ -33,6 +33,21 @@ TEST(math_mat_types, VectorConstructor)
   EXPECT_EQ(m[2][1], 6.0f);
 }
 
+TEST(math_mat_types, SmallerMatrixConstructor)
+{
+  float2x2 m2({1.0f, 2.0f}, {3.0f, 4.0f});
+  float3x3 m3(m2);
+  EXPECT_EQ(m3[0][0], 1.0f);
+  EXPECT_EQ(m3[0][1], 2.0f);
+  EXPECT_EQ(m3[0][2], 0.0f);
+  EXPECT_EQ(m3[1][0], 3.0f);
+  EXPECT_EQ(m3[1][1], 4.0f);
+  EXPECT_EQ(m3[1][2], 0.0f);
+  EXPECT_EQ(m3[2][0], 0.0f);
+  EXPECT_EQ(m3[2][1], 0.0f);
+  EXPECT_EQ(m3[2][2], 1.0f);
+}
+
 TEST(math_mat_types, ComponentMasking)
 {
   float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
