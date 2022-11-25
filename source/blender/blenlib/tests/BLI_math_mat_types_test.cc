@@ -215,6 +215,13 @@ TEST(math_mat_types, MatrixMultiplyOperator)
   EXPECT_EQ(result[0][1], b[0][0] * a[0][1] + b[0][1] * a[1][1]);
   EXPECT_EQ(result[1][0], b[1][0] * a[0][0] + b[1][1] * a[1][0]);
   EXPECT_EQ(result[1][1], b[1][0] * a[0][1] + b[1][1] * a[1][1]);
+
+  /* Test SSE2 implementation. */
+  float4x4 result2 = float4x4(2) * float4x4(6);
+  EXPECT_EQ(result2, float4x4(12));
+
+  float3x3 result3 = float3x3(2) * float3x3(6);
+  EXPECT_EQ(result3, float3x3(12));
 }
 
 TEST(math_mat_types, VectorMultiplyOperator)

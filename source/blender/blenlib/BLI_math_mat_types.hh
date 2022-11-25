@@ -17,6 +17,7 @@
 
 #include "BLI_math_vec_types.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_simd.h"
 #include "BLI_utildefines.h"
 
 namespace blender {
@@ -119,7 +120,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   /** Conversion from pointers (from C-style vectors). */
 
-  mat_base(const T *ptr)
+  explicit mat_base(const T *ptr)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] = reinterpret_cast<const col_type *>(ptr)[i]; });
   }
@@ -130,7 +131,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     unroll<NumCol>([&](auto i) { (*this)[i] = ptr[i]; });
   }
 
-  mat_base(const T (*ptr)[NumCol]) : mat_base(static_cast<const T *>(ptr[0]))
+  explicit mat_base(const T (*ptr)[NumCol]) : mat_base(static_cast<const T *>(ptr[0]))
   {
   }
 
@@ -258,24 +259,8 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return *this;
   }
 
-  /** IMPORTANT: This is matrix multiplication. Not per component. */
-  friend mat_base operator*(const mat_base &a, const mat_base &b)
-  {
-    /** \note this is the reference implementation.
-     * Subclass are free to overload it with vectorized / optimized code. */
-    /** \note Only tested for square matrices. Might still contain bugs. */
-    mat_base result = mat_base(0);
-    unroll<NumCol>([&](auto c) {
-      unroll<NumRow>([&](auto r) {
-        /** \note this is vector multiplication. */
-        result[c] += b[c][r] * a[r];
-      });
-    });
-    return result;
-  }
-
   /** IMPORTANT: This is per component multiplication. */
-  template<typename FactorT> friend mat_base operator*(const mat_base &a, FactorT b)
+  friend mat_base operator*(const mat_base &a, T b)
   {
     mat_base result;
     unroll<NumCol>([&](auto i) { result[i] = a[i] * b; });
@@ -283,7 +268,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
   }
 
   /** IMPORTANT: This is per component multiplication. */
-  template<typename FactorT> friend mat_base operator*(FactorT a, const mat_base &b)
+  friend mat_base operator*(T a, const mat_base &b)
   {
     return b * a;
   }
@@ -297,7 +282,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
   }
 
   /** IMPORTANT: This is per component multiplication. */
-  template<typename FactorT> mat_base &operator*=(FactorT b)
+  mat_base &operator*=(T b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] *= b; });
     return *this;
@@ -378,6 +363,31 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return stream;
   }
 };
+
+/** IMPORTANT: This is matrix multiplication. Not per component. */
+template<typename T, int NumCol, int NumRow>
+mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
+                                      const mat_base<T, NumCol, NumRow> &b)
+{
+  /** \note this is the reference implementation.
+   * Subclass are free to overload it with vectorized / optimized code. */
+  /** \note Only tested for square matrices. Might still contain bugs. */
+  mat_base<T, NumCol, NumRow> result = mat_base<T, NumCol, NumRow>(0);
+  unroll<NumCol>([&](auto c) {
+    unroll<NumRow>([&](auto r) {
+      /** \note this is vector multiplication. */
+      result[c] += b[c][r] * a[r];
+    });
+  });
+  return result;
+}
+
+#ifdef BLI_HAVE_SSE2
+template<>
+mat_base<float, 3, 3> operator*(const mat_base<float, 3, 3> &a, const mat_base<float, 3, 3> &b);
+template<>
+mat_base<float, 4, 4> operator*(const mat_base<float, 4, 4> &a, const mat_base<float, 4, 4> &b);
+#endif
 
 namespace math {
 
@@ -501,8 +511,6 @@ inline mat_base<T, NumCol, NumRow> normalize(const mat_base<T, NumCol, NumRow> &
 }
 
 }  // namespace math
-
-namespace experiment {
 
 template<typename T> struct RotationEuler : public vec_base<T, 3> {
   /** TODO(fclem): Maybe add rotation order enum here? or in type? */
@@ -711,5 +719,4 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
   }
 };
 
-}  // namespace experiment
 }  // namespace blender
