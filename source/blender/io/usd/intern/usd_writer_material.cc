@@ -7,6 +7,7 @@
 #include "usd_exporter_context.h"
 #include "usd_umm.h"
 
+#include "BKE_appdir.h"
 #include "BKE_colorband.h"
 #include "BKE_colortools.h"
 #include "BKE_curve.h"
@@ -394,6 +395,7 @@ static void export_in_memory_texture(Image *ima,
                                      const std::string &export_dir,
                                      const bool allow_overwrite)
 {
+  printf("allow_overwrite %d\n", allow_overwrite);
   char image_abs_path[FILE_MAX];
 
   char file_name[FILE_MAX];
@@ -422,21 +424,39 @@ static void export_in_memory_texture(Image *ima,
 
   char export_path[FILE_MAX];
   BLI_path_join(export_path, FILE_MAX, export_dir.c_str(), file_name);
+  BLI_str_replace_char(export_path, '\\', '/');
 
-  if (!allow_overwrite && BLI_exists(export_path)) {
+  if (!allow_overwrite && usd_path_exists(export_path)) {
     return;
   }
 
-  if ((BLI_path_cmp_normalized(export_path, image_abs_path) == 0) && BLI_exists(image_abs_path)) {
+  if (usd_paths_equal(export_path, image_abs_path) && usd_path_exists(image_abs_path)) {
     /* As a precaution, don't overwrite the original path. */
     return;
   }
 
   std::cout << "Exporting in-memory texture to " << export_path << std::endl;
 
-  if (BKE_imbuf_write_as(imbuf, export_path, &imageFormat, true) == 0) {
-    WM_reportf(RPT_WARNING, "USD export: couldn't export in-memory texture to %s", export_path);
+  /* We save the image to a temporary location on disk before copying
+   * it to its final destination. */
+  char temp_filepath[FILE_MAX];
+  BLI_path_join(temp_filepath, FILE_MAX, BKE_tempdir_session(), file_name);
+  BLI_str_replace_char(export_path, '\\', '/');
+
+  std::cout << "Saving in-memory texture to temporary location " << temp_filepath << std::endl;
+
+  if (BKE_imbuf_write_as(imbuf, temp_filepath, &imageFormat, true) == 0) {
+    WM_reportf(RPT_WARNING, "USD export: couldn't save in-memory texture to temporary location %s", temp_filepath);
   }
+
+  /* Copy to destination. */
+  if (!copy_usd_asset(temp_filepath, export_path, allow_overwrite)) {
+    WM_reportf(RPT_WARNING,
+               "USD export: couldn't export in-memory texture to %s",
+               temp_filepath);
+  }
+
+  BLI_delete(temp_filepath, false, false);
 }
 
 /* Get the absolute filepath of the given image.  Assumes
@@ -2404,7 +2424,7 @@ void export_texture(bNode *node,
 
 
 /* Export the texture of every texture image node in the given material's node tree. */
-void export_textures(const Material *material, const pxr::UsdStageRefPtr stage)
+void export_textures(const Material *material, const pxr::UsdStageRefPtr stage, const bool allow_overwrite)
 {
   if (!(material && material->use_nodes)) {
     return;
@@ -2416,7 +2436,7 @@ void export_textures(const Material *material, const pxr::UsdStageRefPtr stage)
 
   for (bNode *node = (bNode *)material->nodetree->nodes.first; node; node = node->next) {
     if (node->type == SH_NODE_TEX_IMAGE || SH_NODE_TEX_ENVIRONMENT) {
-      export_texture(node, stage);
+      export_texture(node, stage, allow_overwrite);
     }
   }
 }
