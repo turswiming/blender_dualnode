@@ -34,13 +34,13 @@ void GPU_init(void)
   gpu_shader_create_info_init();
 
   gpu_codegen_init();
-
-  gpu_batch_init();
+  // TODO(jbakker): this should never land in master.
+  // gpu_batch_init();
 }
 
 void GPU_exit(void)
 {
-  gpu_batch_exit();
+  // gpu_batch_exit();
 
   gpu_codegen_exit();
 
