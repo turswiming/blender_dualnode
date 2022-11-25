@@ -6,10 +6,14 @@
 
 namespace blender::tests {
 
-using float4x4 = mat_base<float, 4, 4>;
-using float3x3 = mat_base<float, 3, 3>;
 using float2x2 = mat_base<float, 2, 2>;
 using float3x2 = mat_base<float, 3, 2>;
+using float3x3 = mat_base<float, 3, 3>;
+using float4x4 = mat_base<float, 4, 4>;
+using double2x2 = mat_base<double, 2, 2>;
+using double3x2 = mat_base<double, 3, 2>;
+using double3x3 = mat_base<double, 3, 3>;
+using double4x4 = mat_base<double, 4, 4>;
 
 using namespace blender::math;
 
@@ -66,6 +70,25 @@ TEST(math_mat_types, PointerConversion)
   EXPECT_EQ(m2[0][1], 2.0f);
   EXPECT_EQ(m2[1][0], 3.0f);
   EXPECT_EQ(m2[1][1], 4.0f);
+}
+
+TEST(math_mat_types, TypeConversion)
+{
+  float3x2 m(double3x2({1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f}));
+  EXPECT_EQ(m[0][0], 1.0f);
+  EXPECT_EQ(m[0][1], 2.0f);
+  EXPECT_EQ(m[1][0], 3.0f);
+  EXPECT_EQ(m[1][1], 4.0f);
+  EXPECT_EQ(m[2][0], 5.0f);
+  EXPECT_EQ(m[2][1], 6.0f);
+
+  double3x2 d(m);
+  EXPECT_EQ(d[0][0], 1.0f);
+  EXPECT_EQ(d[0][1], 2.0f);
+  EXPECT_EQ(d[1][0], 3.0f);
+  EXPECT_EQ(d[1][1], 4.0f);
+  EXPECT_EQ(d[2][0], 5.0f);
+  EXPECT_EQ(d[2][1], 6.0f);
 }
 
 TEST(math_mat_types, PointerArrayConversion)
@@ -201,6 +224,34 @@ TEST(math_mat_types, VectorMultiplyOperator)
   float2 result = mat * float3(7, 8, 9);
   EXPECT_EQ(result[0], 1 * 7 + 3 * 8 + 5 * 9);
   EXPECT_EQ(result[1], 2 * 7 + 4 * 8 + 6 * 9);
+}
+
+TEST(math_mat_types, MatrixInverse)
+{
+  float3x3 mat(2);
+  float3x3 inv = inverse(mat);
+  EXPECT_NEAR(inv[0][0], 0.5f, 1e-8f);
+  EXPECT_NEAR(inv[0][1], 0.0f, 1e-8f);
+  EXPECT_NEAR(inv[0][2], 0.0f, 1e-8f);
+  EXPECT_NEAR(inv[1][0], 0.0f, 1e-8f);
+  EXPECT_NEAR(inv[1][1], 0.5f, 1e-8f);
+  EXPECT_NEAR(inv[1][2], 0.0f, 1e-8f);
+  EXPECT_NEAR(inv[2][0], 0.0f, 1e-8f);
+  EXPECT_NEAR(inv[2][1], 0.0f, 1e-8f);
+  EXPECT_NEAR(inv[2][2], 0.5f, 1e-8f);
+}
+
+TEST(math_mat_types, MatrixDeterminant)
+{
+  float2x2 m2({1, 2}, {3, 4});
+  float3x3 m3({1, 2, 3}, {-3, 4, -5}, {5, -6, 7});
+  float4x4 m4({1, 2, -3, 3}, {3, 4, -5, 3}, {5, 6, 7, -3}, {5, 6, 7, 1});
+  EXPECT_NEAR(determinant(m2), -2.0f, 1e-8f);
+  EXPECT_NEAR(determinant(m3), -16.0f, 1e-8f);
+  EXPECT_NEAR(determinant(m4), -112.0f, 1e-8f);
+  EXPECT_NEAR(determinant(double2x2(m2)), -2.0f, 1e-8f);
+  EXPECT_NEAR(determinant(double3x3(m3)), -16.0f, 1e-8f);
+  EXPECT_NEAR(determinant(double4x4(m4)), -112.0f, 1e-8f);
 }
 
 }  // namespace blender::tests

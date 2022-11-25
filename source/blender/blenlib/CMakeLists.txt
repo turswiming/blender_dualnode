@@ -18,6 +18,7 @@ set(INC
 )
 
 set(INC_SYS
+  ${EIGEN3_INCLUDE_DIRS}
   ${ZLIB_INCLUDE_DIRS}
   ${ZSTD_INCLUDE_DIRS}
   ${GMP_INCLUDE_DIRS}
@@ -101,6 +102,7 @@ set(SRC
   intern/math_geom_inline.c
   intern/math_interp.c
   intern/math_matrix.c
+  intern/math_matrix.cc
   intern/math_rotation.c
   intern/math_rotation.cc
   intern/math_solvers.c
