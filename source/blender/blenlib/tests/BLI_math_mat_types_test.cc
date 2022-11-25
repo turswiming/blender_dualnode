@@ -301,6 +301,12 @@ TEST(math_mat_types, Matrix4x4)
                     {-1.10289, 2.70714, -0.674535, 0},
                     {1, 2, 3, 1});
   EXPECT_TRUE(compare(m, expect, 0.00001f));
+
+  /** Methods. */
+  m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
+  EXPECT_TRUE(compare(m.to_euler(), RotationEuler<float>(0, 0, M_PI_2), 0.0002f));
+  EXPECT_EQ(m.to_scale(), float3(3, 2, 2));
+  EXPECT_TRUE(is_negative(m));
 }
 
 }  // namespace blender::tests

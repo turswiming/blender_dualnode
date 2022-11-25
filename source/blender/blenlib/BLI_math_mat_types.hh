@@ -16,6 +16,7 @@
 #include <type_traits>
 
 #include "BLI_math_vec_types.hh"
+#include "BLI_math_vector.h" /* For len_squared_v3 in BLI_ASSERT_UNIT_V3. */
 #include "BLI_math_vector.hh"
 #include "BLI_simd.h"
 #include "BLI_utildefines.h"
@@ -48,6 +49,8 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
   using col_type = vec_base<T, NumRow>;
   using row_type = vec_base<T, NumCol>;
   static constexpr int min_dim = (NumRow < NumCol) ? NumRow : NumCol;
+  static constexpr int col_len = NumCol;
+  static constexpr int row_len = NumRow;
 
   mat_base() = default;
 
@@ -421,10 +424,17 @@ inline mat_base<T, NumCol, NumRow> transpose(mat_base<T, NumRow, NumCol> &mat)
 }
 
 template<typename T, int Size> T determinant(const mat_base<T, Size, Size> &mat);
-template<> float determinant(const mat_base<float, 3, 3> &fmat);
-template<> float determinant(const mat_base<float, 4, 4> &fmat);
-template<> double determinant(const mat_base<double, 3, 3> &dmat);
-template<> double determinant(const mat_base<double, 4, 4> &dmat);
+template<> float determinant(const mat_base<float, 3, 3> &mat);
+template<> float determinant(const mat_base<float, 4, 4> &mat);
+template<> double determinant(const mat_base<double, 3, 3> &mat);
+template<> double determinant(const mat_base<double, 4, 4> &mat);
+
+template<typename T, int Size> bool is_negative(const mat_base<T, Size, Size> &mat)
+{
+  return determinant(mat) < T(0);
+}
+template<> bool is_negative(const mat_base<float, 4, 4> &mat);
+template<> bool is_negative(const mat_base<double, 4, 4> &mat);
 
 template<typename T>
 inline mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &a, const mat_base<T, 3, 3> &b, T t)
@@ -502,11 +512,10 @@ inline mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &a, const mat_base<
   return result;
 }
 
-template<typename T, int NumCol, int NumRow>
-inline mat_base<T, NumCol, NumRow> normalize(const mat_base<T, NumCol, NumRow> &a)
+template<typename T> inline T normalize(const T &a)
 {
-  mat_base<T, NumCol, NumRow> result;
-  unroll<NumCol>([&](auto i) { result[i] = math::normalize(a[i]); });
+  T result;
+  unroll<T::col_len>([&](auto i) { result[i] = math::normalize(a[i]); });
   return result;
 }
 
@@ -525,6 +534,18 @@ inline bool compare(const mat_base<T, NumCol, NumRow> &a,
   return true;
 }
 
+/* TODO(fclem): Move to vector math. */
+template<typename T, int Size>
+inline bool compare(const vec_base<T, Size> &a, const vec_base<T, Size> &b, const T limit)
+{
+  for (int i = 0; i < Size; i++) {
+    if (std::abs(a[i] - b[i]) > limit) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace math
 
 template<typename T> struct RotationEuler : public vec_base<T, 3> {
@@ -532,11 +553,21 @@ template<typename T> struct RotationEuler : public vec_base<T, 3> {
 
   /** Inherit constructors. */
   using vec_base<T, 3>::vec_base;
+
+  friend std::ostream &operator<<(std::ostream &stream, const RotationEuler &mat)
+  {
+    return stream << "RotationEuler" << static_cast<vec_base<T, 3>>(mat);
+  }
 };
 
 template<typename T> struct RotationQuaternion : public vec_base<T, 4> {
   /** Inherit constructors. */
   using vec_base<T, 4>::vec_base;
+
+  friend std::ostream &operator<<(std::ostream &stream, const RotationQuaternion &mat)
+  {
+    return stream << "RotationQuaternion" << static_cast<vec_base<T, 4>>(mat);
+  }
 };
 
 template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
@@ -620,25 +651,36 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
     return (*this)[2];
   }
 
+  const vec3_type &forward() const
+  {
+    return (*this)[0];
+  }
+
+  const vec3_type &right() const
+  {
+    return (*this)[1];
+  }
+
+  const vec3_type &up() const
+  {
+    return (*this)[2];
+  }
+
   /** Methods. */
 
   /* Assumes XYZ rotation order. */
-  vec3_type to_euler() const
+  RotationEuler<T> to_euler() const
   {
-    vec3_type eul1, eul2;
+    using namespace math;
+    RotationEuler<T> eul1, eul2;
     normalize(*this).normalized_to_eul2(eul1, eul2);
     /* Return best, which is just the one with lowest values it in. */
-    return (length_manhattan(eul1) > length_manhattan(eul2)) ? eul2 : eul1;
+    return (length_manhattan(vec3_type(eul1)) > length_manhattan(vec3_type(eul2))) ? eul2 : eul1;
   }
 
   vec3_type to_scale() const
   {
-    return {length(forward()), length(right()), length(up())};
-  }
-
-  bool is_negative() const
-  {
-    return determinant(*this) < 0.0f;
+    return {math::length(forward()), math::length(right()), math::length(up())};
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const mat_3x3 &mat)
@@ -651,7 +693,7 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
   {
     BLI_ASSERT_UNIT_M3(this->ptr());
 
-    const float cy = hypotf((*this)[0][0], (*this)[0][1]);
+    const float cy = std::hypot((*this)[0][0], (*this)[0][1]);
     if (cy > 16.0f * FLT_EPSILON) {
       eul1[0] = std::atan2((*this)[1][2], (*this)[2][2]);
       eul1[1] = std::atan2(-(*this)[0][2], cy);
@@ -750,10 +792,30 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
     return *reinterpret_cast<vec3_type *>(&(*this)[3]);
   }
 
+  const vec3_type &forward() const
+  {
+    return *reinterpret_cast<const vec3_type *>(&(*this)[0]);
+  }
+
+  const vec3_type &right() const
+  {
+    return *reinterpret_cast<const vec3_type *>(&(*this)[1]);
+  }
+
+  const vec3_type &up() const
+  {
+    return *reinterpret_cast<const vec3_type *>(&(*this)[2]);
+  }
+
+  const vec3_type &location() const
+  {
+    return *reinterpret_cast<const vec3_type *>(&(*this)[3]);
+  }
+
   /** Methods. */
 
   /* Assumes XYZ rotation order. */
-  vec3_type to_euler() const
+  RotationEuler<T> to_euler() const
   {
     /* TODO(fclem): Avoid the copy with 3x3 ref. */
     return mat_3x3(*this).to_euler();
@@ -763,14 +825,6 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
   {
     /* TODO(fclem): Avoid the copy with 3x3 ref. */
     return mat_3x3(*this).to_scale();
-  }
-
-  bool is_negative() const
-  {
-    /* Don't use determinant(float4x4) as only the 3x3 components are needed
-     * when the matrix is used as a transformation to represent location/scale/rotation. */
-    /* TODO(fclem): Avoid the copy with 3x3 ref. */
-    return determinant(mat_3x3(*this)) < 0.0f;
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const mat_4x4 &mat)
