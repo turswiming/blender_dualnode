@@ -18,6 +18,8 @@
 
 namespace blender::gpu {
 
+class VKContext;
+
 class VKBackend : public GPUBackend {
  private:
   shaderc::Compiler shaderc_compiler_;
@@ -59,6 +61,8 @@ class VKBackend : public GPUBackend {
   void render_step() override;
 
   shaderc::Compiler &get_shaderc_compiler();
+
+  static void capabilities_init(VKContext &context);
 
  private:
   static void init_platform();
