@@ -6,6 +6,7 @@
 
 namespace blender::tests {
 
+using float4x4 = mat_base<float, 4, 4>;
 using float3x3 = mat_base<float, 3, 3>;
 using float2x2 = mat_base<float, 2, 2>;
 using float3x2 = mat_base<float, 3, 2>;
@@ -37,9 +38,9 @@ TEST(math_mat_types, ComponentMasking)
   float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
   float2x2 m2(m3);
   EXPECT_EQ(m2[0][0], 1.1f);
-  EXPECT_EQ(m2[1][1], 1.2f);
-  EXPECT_EQ(m2[0][1], 2.1f);
-  EXPECT_EQ(m2[1][0], 2.2f);
+  EXPECT_EQ(m2[0][1], 1.2f);
+  EXPECT_EQ(m2[1][0], 2.1f);
+  EXPECT_EQ(m2[1][1], 2.2f);
 }
 
 TEST(math_mat_types, PointerConversion)
@@ -61,6 +62,130 @@ TEST(math_mat_types, PointerArrayConversion)
   EXPECT_EQ(m2[0][1], 2.0f);
   EXPECT_EQ(m2[1][0], 3.0f);
   EXPECT_EQ(m2[1][1], 4.0f);
+}
+
+TEST(math_mat_types, ComponentAccess)
+{
+  float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
+  EXPECT_EQ(m3.x.x, 1.1f);
+  EXPECT_EQ(m3.x.y, 1.2f);
+  EXPECT_EQ(m3.y.x, 2.1f);
+  EXPECT_EQ(m3.y.y, 2.2f);
+}
+
+TEST(math_mat_types, AddOperator)
+{
+  float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
+
+  m3 = m3 + float3x3(2);
+  EXPECT_EQ(m3[0][0], 3.1f);
+  EXPECT_EQ(m3[0][2], 1.3f);
+  EXPECT_EQ(m3[2][0], 3.1f);
+  EXPECT_EQ(m3[2][2], 5.3f);
+
+  m3 += float3x3(-1.0f);
+  EXPECT_EQ(m3[0][0], 2.1f);
+  EXPECT_EQ(m3[0][2], 1.3f);
+  EXPECT_EQ(m3[2][0], 3.1f);
+  EXPECT_EQ(m3[2][2], 4.3f);
+
+  m3 += 1.0f;
+  EXPECT_EQ(m3[0][0], 3.1f);
+  EXPECT_EQ(m3[0][2], 2.3f);
+  EXPECT_EQ(m3[2][0], 4.1f);
+  EXPECT_EQ(m3[2][2], 5.3f);
+
+  m3 = m3 + 1.0f;
+  EXPECT_EQ(m3[0][0], 4.1f);
+  EXPECT_EQ(m3[0][2], 3.3f);
+  EXPECT_EQ(m3[2][0], 5.1f);
+  EXPECT_EQ(m3[2][2], 6.3f);
+
+  m3 = 1.0f + m3;
+  EXPECT_EQ(m3[0][0], 5.1f);
+  EXPECT_EQ(m3[0][2], 4.3f);
+  EXPECT_EQ(m3[2][0], 6.1f);
+  EXPECT_EQ(m3[2][2], 7.3f);
+}
+
+TEST(math_mat_types, SubtractOperator)
+{
+  float3x3 m3({10.0f, 10.2f, 10.3f}, {20.1f, 20.2f, 20.3f}, {30.1f, 30.2f, 30.3f});
+
+  m3 = m3 - float3x3(2);
+  EXPECT_EQ(m3[0][0], 8.0f);
+  EXPECT_EQ(m3[0][2], 10.3f);
+  EXPECT_EQ(m3[2][0], 30.1f);
+  EXPECT_EQ(m3[2][2], 28.3f);
+
+  m3 -= float3x3(-1.0f);
+  EXPECT_EQ(m3[0][0], 9.0f);
+  EXPECT_EQ(m3[0][2], 10.3f);
+  EXPECT_EQ(m3[2][0], 30.1f);
+  EXPECT_EQ(m3[2][2], 29.3f);
+
+  m3 -= 1.0f;
+  EXPECT_EQ(m3[0][0], 8.0f);
+  EXPECT_EQ(m3[0][2], 9.3f);
+  EXPECT_EQ(m3[2][0], 29.1f);
+  EXPECT_EQ(m3[2][2], 28.3f);
+
+  m3 = m3 - 1.0f;
+  EXPECT_EQ(m3[0][0], 7.0f);
+  EXPECT_EQ(m3[0][2], 8.3f);
+  EXPECT_EQ(m3[2][0], 28.1f);
+  EXPECT_EQ(m3[2][2], 27.3f);
+
+  m3 = 1.0f - m3;
+  EXPECT_EQ(m3[0][0], -6.0f);
+  EXPECT_EQ(m3[0][2], -7.3f);
+  EXPECT_EQ(m3[2][0], -27.1f);
+  EXPECT_EQ(m3[2][2], -26.3f);
+}
+
+TEST(math_mat_types, MultiplyOperator)
+{
+  float3x3 m3(float3(1.0f), float3(2.0f), float3(2.0f));
+
+  m3 = m3 * 2;
+  EXPECT_EQ(m3[0][0], 2.0f);
+  EXPECT_EQ(m3[2][2], 4.0f);
+
+  m3 = 2 * m3;
+  EXPECT_EQ(m3[0][0], 4.0f);
+  EXPECT_EQ(m3[2][2], 8.0f);
+
+  m3 *= 2;
+  EXPECT_EQ(m3[0][0], 8.0f);
+  EXPECT_EQ(m3[2][2], 16.0f);
+}
+
+TEST(math_mat_types, MatrixMultiplyOperator)
+{
+  float2x2 a(float2(1, 2), float2(3, 4));
+  float2x2 b(float2(5, 6), float2(7, 8));
+
+  float2x2 result = a * b;
+  EXPECT_EQ(result[0][0], b[0][0] * a[0][0] + b[0][1] * a[1][0]);
+  EXPECT_EQ(result[0][1], b[0][0] * a[0][1] + b[0][1] * a[1][1]);
+  EXPECT_EQ(result[1][0], b[1][0] * a[0][0] + b[1][1] * a[1][0]);
+  EXPECT_EQ(result[1][1], b[1][0] * a[0][1] + b[1][1] * a[1][1]);
+
+  result = a;
+  result *= b;
+  EXPECT_EQ(result[0][0], b[0][0] * a[0][0] + b[0][1] * a[1][0]);
+  EXPECT_EQ(result[0][1], b[0][0] * a[0][1] + b[0][1] * a[1][1]);
+  EXPECT_EQ(result[1][0], b[1][0] * a[0][0] + b[1][1] * a[1][0]);
+  EXPECT_EQ(result[1][1], b[1][0] * a[0][1] + b[1][1] * a[1][1]);
+}
+
+TEST(math_mat_types, VectorMultiplyOperator)
+{
+  float3x2 mat(float2(1, 2), float2(3, 4), float2(5, 6));
+
+  float2 result = mat * float3(7, 8, 9);
+  EXPECT_EQ(result[0], 1 * 7 + 3 * 8 + 5 * 9);
+  EXPECT_EQ(result[1], 2 * 7 + 4 * 8 + 6 * 9);
 }
 
 }  // namespace blender::tests

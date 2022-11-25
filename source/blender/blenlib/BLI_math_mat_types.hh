@@ -26,6 +26,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   using base_type = T;
   using col_type = vec_base<T, NumRow>;
+  using row_type = vec_base<T, NumCol>;
 
   mat_base() = default;
 
@@ -133,7 +134,6 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     BLI_assert(index < NumCol);
     return reinterpret_cast<col_type *>(this)[index];
   }
-#if 0
 
   /** Matrix operators. */
 
@@ -144,15 +144,35 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return result;
   }
 
-  mat_base &operator+=(T b)
+  friend mat_base operator+(const mat_base &a, T b)
   {
-    unroll<NumCol>([&](auto i) { (*this)[i] += b; });
+    mat_base result;
+    unroll<NumCol>([&](auto i) { result[i] = a[i] + b; });
+    return result;
   }
 
-  mat_base &operator+=(mat_base b)
+  friend mat_base operator+(T a, const mat_base &b)
+  {
+    return b + a;
+  }
+
+  mat_base &operator+=(const mat_base &b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] += b[i]; });
     return *this;
+  }
+
+  mat_base &operator+=(T b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] += b; });
+    return *this;
+  }
+
+  friend mat_base operator-(const mat_base &a)
+  {
+    mat_base result;
+    unroll<NumCol>([&](auto i) { result[i] = -a[i]; });
+    return result;
   }
 
   friend mat_base operator-(const mat_base &a, const mat_base &b)
@@ -162,51 +182,85 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return result;
   }
 
+  friend mat_base operator-(const mat_base &a, T b)
+  {
+    mat_base result;
+    unroll<NumCol>([&](auto i) { result[i] = a[i] - b; });
+    return result;
+  }
+
+  friend mat_base operator-(T a, const mat_base &b)
+  {
+    mat_base result;
+    unroll<NumCol>([&](auto i) { result[i] = a - b[i]; });
+    return result;
+  }
+
+  mat_base &operator-=(const mat_base &b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] -= b[i]; });
+    return *this;
+  }
+
   mat_base &operator-=(T b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] -= b; });
-  }
-
-  mat_base &operator-=(mat_base b)
-  {
-    unroll<NumCol>([&](auto i) { (*this)[i] -= b[i]; });
     return *this;
   }
 
   /** IMPORTANT: This is matrix multiplication. Not per component. */
   friend mat_base operator*(const mat_base &a, const mat_base &b)
   {
-    mat_base result;
-    unroll<NumCol>([&](auto i) { result[i] = a[i] * b[i]; });
+    /** \note this is the reference implementation.
+     * Subclass are free to overload it with vectorized / optimized code. */
+    mat_base result = mat_base(0);
+    unroll<NumCol>([&](auto c) {
+      unroll<NumRow>([&](auto r) {
+        /** \note this is vector multiplication. */
+        result[c] += b[c][r] * a[r];
+      });
+    });
     return result;
   }
 
-  /** IMPORTANT: This is matrix multiplication. Not per component. */
-  mat_base &operator*=(mat_base b)
-  {
-    unroll<NumCol>([&](auto i) { (*this)[i] *= b[i]; });
-    return *this;
-  }
-
   /** IMPORTANT: This is per component multiplication. */
-  mat_base &operator*=(T b)
-  {
-    unroll<NumCol>([&](auto i) { (*this)[i] *= b; });
-  }
-
-  /** IMPORTANT: This is per component multiplication. */
-  friend mat_base operator*(const mat_base &a, T b)
+  template<typename FactorT> friend mat_base operator*(const mat_base &a, FactorT b)
   {
     mat_base result;
     unroll<NumCol>([&](auto i) { result[i] = a[i] * b; });
     return result;
   }
 
+  /** IMPORTANT: This is per component multiplication. */
+  template<typename FactorT> friend mat_base operator*(FactorT a, const mat_base &b)
+  {
+    return b * a;
+  }
+
+  /** IMPORTANT: This is matrix multiplication. Not per component. */
+  mat_base &operator*=(const mat_base &b)
+  {
+    const mat_base &a = *this;
+    *this = a * b;
+    return *this;
+  }
+
+  /** IMPORTANT: This is per component multiplication. */
+  template<typename FactorT> mat_base &operator*=(FactorT b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] *= b; });
+    return *this;
+  }
+
   /** Vector operators. */
 
-  friend col_type operator*(const mat_base &a, const col_type &b)
+  friend col_type operator*(const mat_base &a, const row_type &b)
   {
-    /* TODO */
+    /** \note this is the reference implementation.
+     * Subclass are free to overload it with vectorized / optimized code. */
+    col_type result(0);
+    unroll<NumCol>([&](auto c) { result += b[c] * a[c]; });
+    return result;
   }
 
   /** Compare. */
@@ -224,25 +278,6 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
   friend bool operator!=(const mat_base &a, const mat_base &b)
   {
     return !(a == b);
-  }
-
-  template<int OtherNumRow, int OtherNumCol> struct mat_sub_ref {
-    using mat_sub = mat_base<T, OtherNumRow, OtherNumCol>;
-
-    mat_base &data;
-
-    mat_sub_ref &operator+=(T b)
-    {
-      data.as_eigen().block(0, 0, OtherNumRow, OtherNumCol) += b;
-    }
-  };
-
-  template<int OtherNumRow,
-           int OtherNumCol,
-           BLI_ENABLE_IF((OtherNumRow <= NumRow) && (OtherNumCol <= NumCol))>
-  mat_sub_ref<OtherNumRow, OtherNumCol> &as()
-  {
-    return {*this};
   }
 
   /** Misc */
@@ -264,16 +299,12 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   friend std::ostream &operator<<(std::ostream &stream, const mat_base &mat)
   {
-    char fchar[16];
     stream << "(\n";
     for (int i = 0; i < NumCol; i++) {
       stream << "(";
       for (int j = 0; j < NumRow; j++) {
-        /* Print with the same precision so we have aligned numbers. */
         /** NOTE: j and i are swapped to follow mathematical convention. */
-        /** TODO(fclem): Use non float  */
-        snprintf(fchar, sizeof(fchar), "%11.6f", mat[j][i]);
-        stream << fchar;
+        stream << mat[j][i];
         if (j < NumRow - 1) {
           stream << ", ";
         }
@@ -287,7 +318,6 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     stream << ")\n";
     return stream;
   }
-#endif
 };
 #if 0
 namespace experiment {
