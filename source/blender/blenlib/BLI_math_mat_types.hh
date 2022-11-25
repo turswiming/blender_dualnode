@@ -510,14 +510,44 @@ inline mat_base<T, NumCol, NumRow> normalize(const mat_base<T, NumCol, NumRow> &
   return result;
 }
 
+template<typename T, int NumCol, int NumRow>
+inline bool compare(const mat_base<T, NumCol, NumRow> &a,
+                    const mat_base<T, NumCol, NumRow> &b,
+                    const T limit)
+{
+  for (int i = 0; i < NumCol; i++) {
+    for (int j = 0; j < NumRow; j++) {
+      if (std::abs(a[i][j] - b[i][j]) > limit) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 }  // namespace math
 
 template<typename T> struct RotationEuler : public vec_base<T, 3> {
-  /** TODO(fclem): Maybe add rotation order enum here? or in type? */
+  /** TODO(fclem): Maybe add rotation order enum here? or in typename? */
+
+  /** Inherit constructors. */
+  using vec_base<T, 3>::vec_base;
+};
+
+template<typename T> struct RotationQuaternion : public vec_base<T, 4> {
+  /** Inherit constructors. */
+  using vec_base<T, 4>::vec_base;
 };
 
 template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
   using vec3_type = vec_base<T, 3>;
+
+  /** Inherit constructors. */
+  using mat_base<T, 3, 3>::mat_base;
+
+  mat_3x3(const mat_base<T, 3, 3> &base) : mat_base<T, 3, 3>(base)
+  {
+  }
 
   /** Init Helpers. */
 
@@ -552,11 +582,6 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
     return mat_3x3::from_diagonal(scale);
   }
 
-  static mat_3x3 from_scale(T scale)
-  {
-    return mat_3x3(scale);
-  }
-
   static mat_3x3 from_rot_scale(const RotationEuler<T> rotation, const vec3_type scale)
   {
     return mat_3x3::from_rotation(rotation) * mat_3x3::from_scale(scale);
@@ -573,7 +598,7 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
      * Without the negation, the result would be a so called improper rotation. That means it
      * contains a reflection. Such an improper rotation matrix could not be converted to another
      * representation of a rotation such as euler angles. */
-    matrix.left() = -math::cross(forward, up);
+    matrix.right() = -math::cross(forward, up);
     matrix.up() = up;
     return matrix;
   }
@@ -585,7 +610,7 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
     return (*this)[0];
   }
 
-  vec3_type &left()
+  vec3_type &right()
   {
     return (*this)[1];
   }
@@ -608,12 +633,17 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
 
   vec3_type to_scale() const
   {
-    return {length(forward()), length(left()), length(up())};
+    return {length(forward()), length(right()), length(up())};
   }
 
   bool is_negative() const
   {
     return determinant(*this) < 0.0f;
+  }
+
+  friend std::ostream &operator<<(std::ostream &stream, const mat_3x3 &mat)
+  {
+    return stream << static_cast<mat_base<T, 3, 3>>(mat);
   }
 
  private:
@@ -642,24 +672,49 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
 };
 
 template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
-  using mat_3x3 = mat_base<T, 3, 3>;
+  using mat_3x3 = mat_3x3<T>;
   using vec3_type = vec_base<T, 3>;
 
+  /** Inherit constructors. */
+  using mat_base<T, 4, 4>::mat_base;
+
+  mat_4x4(const mat_base<T, 4, 4> &base) : mat_base<T, 4, 4>(base)
+  {
+  }
+
   /** Init Helpers. */
+
+  static mat_4x4 from_location(const vec3_type location)
+  {
+    mat_4x4 mat = mat_4x4::identity();
+    mat.location() = location;
+    return mat;
+  }
+
+  static mat_4x4 from_rotation(const RotationEuler<T> rotation)
+  {
+    mat_4x4 mat = mat_4x4(mat_3x3::from_rotation(rotation));
+    return mat;
+  }
+
+  static mat_4x4 from_scale(const vec3_type scale)
+  {
+    mat_4x4 mat = mat_4x4(mat_3x3::from_scale(scale));
+    return mat;
+  }
+
+  static mat_4x4 from_loc_rot(const vec3_type location, const RotationEuler<T> rotation)
+  {
+    mat_4x4 mat = mat_4x4(mat_3x3::from_rotation(rotation));
+    mat.location() = location;
+    return mat;
+  }
 
   static mat_4x4 from_loc_rot_scale(const vec3_type location,
                                     const RotationEuler<T> rotation,
                                     const vec3_type scale)
   {
-    mat_4x4 mat = mat_4x4(0);
-    mat.location() = location;
-    mat.as_3x3() = mat_3x3::from_rot_scale();
-    return mat;
-  }
-
-  static mat_4x4 from_location(const vec3_type location)
-  {
-    mat_4x4 mat(1.0f);
+    mat_4x4 mat = mat_4x4(mat_3x3::from_rot_scale(rotation, scale));
     mat.location() = location;
     return mat;
   }
@@ -677,22 +732,22 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
 
   vec3_type &forward()
   {
-    return *reinterpret_cast<vec3_type *>((*this)[0]);
+    return *reinterpret_cast<vec3_type *>(&(*this)[0]);
   }
 
-  vec3_type &left()
+  vec3_type &right()
   {
-    return *reinterpret_cast<vec3_type *>((*this)[1]);
+    return *reinterpret_cast<vec3_type *>(&(*this)[1]);
   }
 
   vec3_type &up()
   {
-    return *reinterpret_cast<vec3_type *>((*this)[2]);
+    return *reinterpret_cast<vec3_type *>(&(*this)[2]);
   }
 
   vec3_type &location()
   {
-    return *reinterpret_cast<vec3_type *>((*this)[3]);
+    return *reinterpret_cast<vec3_type *>(&(*this)[3]);
   }
 
   /** Methods. */
@@ -716,6 +771,11 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
      * when the matrix is used as a transformation to represent location/scale/rotation. */
     /* TODO(fclem): Avoid the copy with 3x3 ref. */
     return determinant(mat_3x3(*this)) < 0.0f;
+  }
+
+  friend std::ostream &operator<<(std::ostream &stream, const mat_4x4 &mat)
+  {
+    return stream << static_cast<mat_base<T, 4, 4>>(mat);
   }
 };
 

@@ -261,4 +261,46 @@ TEST(math_mat_types, MatrixDeterminant)
   EXPECT_NEAR(determinant(double4x4(m4)), -112.0f, 1e-8f);
 }
 
+TEST(math_mat_types, Matrix4x4)
+{
+  using float4x4 = mat_4x4<float>;
+  float4x4 expect;
+  float4x4 m({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 1, 2, 3}, {4, 5, 6, 7});
+  /** Access helpers. */
+  EXPECT_EQ(m.forward(), float3(1, 2, 3));
+  EXPECT_EQ(m.right(), float3(5, 6, 7));
+  EXPECT_EQ(m.up(), float3(9, 1, 2));
+  EXPECT_EQ(m.location(), float3(4, 5, 6));
+
+  /** Init Helpers. */
+  m = float4x4::from_location({1, 2, 3});
+  expect = float4x4({1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {1, 2, 3, 1});
+  EXPECT_TRUE(compare(m, expect, 0.00001f));
+
+  m = float4x4::from_rotation({1, 2, 3});
+  expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
+                    {-0.833738, -0.426918, -0.350175, 0},
+                    {-0.36763, 0.902382, -0.224845, 0},
+                    {0, 0, 0, 1});
+  EXPECT_TRUE(compare(m, expect, 0.00001f));
+
+  m = float4x4::from_scale({1, 2, 3});
+  expect = float4x4({1, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, 1});
+  EXPECT_TRUE(compare(m, expect, 0.00001f));
+
+  m = float4x4::from_loc_rot({1, 2, 3}, {1, 2, 3});
+  expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
+                    {-0.833738, -0.426918, -0.350175, 0},
+                    {-0.36763, 0.902382, -0.224845, 0},
+                    {1, 2, 3, 1});
+  EXPECT_TRUE(compare(m, expect, 0.00001f));
+
+  m = float4x4::from_loc_rot_scale({1, 2, 3}, {1, 2, 3}, {1, 2, 3});
+  expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
+                    {-1.66748, -0.853835, -0.700351, 0},
+                    {-1.10289, 2.70714, -0.674535, 0},
+                    {1, 2, 3, 1});
+  EXPECT_TRUE(compare(m, expect, 0.00001f));
+}
+
 }  // namespace blender::tests
