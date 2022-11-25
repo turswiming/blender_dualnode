@@ -391,18 +391,18 @@ mat_base<float, 4, 4> operator*(const mat_base<float, 4, 4> &a, const mat_base<f
 
 namespace math {
 
-template<typename T, int Size> mat_base<T, Size, Size> inverse(mat_base<T, Size, Size> &mat);
-template<> mat_base<float, 2, 2> inverse(mat_base<float, 2, 2> &mat);
-template<> mat_base<float, 3, 3> inverse(mat_base<float, 3, 3> &mat);
-template<> mat_base<float, 4, 4> inverse(mat_base<float, 4, 4> &mat);
-template<> mat_base<double, 2, 2> inverse(mat_base<double, 2, 2> &mat);
-template<> mat_base<double, 3, 3> inverse(mat_base<double, 3, 3> &mat);
-template<> mat_base<double, 4, 4> inverse(mat_base<double, 4, 4> &mat);
+template<typename T, int Size> mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat);
+template<> mat_base<float, 2, 2> inverse(const mat_base<float, 2, 2> &mat);
+template<> mat_base<float, 3, 3> inverse(const mat_base<float, 3, 3> &mat);
+template<> mat_base<float, 4, 4> inverse(const mat_base<float, 4, 4> &mat);
+template<> mat_base<double, 2, 2> inverse(const mat_base<double, 2, 2> &mat);
+template<> mat_base<double, 3, 3> inverse(const mat_base<double, 3, 3> &mat);
+template<> mat_base<double, 4, 4> inverse(const mat_base<double, 4, 4> &mat);
 
 /**
  * Matrix inversion can be implemented more efficiently for affine matrices.
  */
-template<typename T> inline mat_base<T, 4, 4> inverse_affine(mat_base<T, 4, 4> &mat)
+template<typename T> inline mat_base<T, 4, 4> inverse_affine(const mat_base<T, 4, 4> &mat)
 {
   BLI_assert(mat[0][3] == 0.0f && mat[1][3] == 0.0f && mat[2][3] == 0.0f && mat[3][3] == 1.0f);
   return inverse(mat);

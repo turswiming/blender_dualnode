@@ -68,10 +68,10 @@ template<> double determinant(const double4x4 &mat)
  * \{ */
 
 template<typename T, int Size>
-inline mat_base<T, Size, Size> inverse_impl(mat_base<T, Size, Size> &mat)
+inline mat_base<T, Size, Size> inverse_impl(const mat_base<T, Size, Size> &mat)
 {
   mat_base<T, Size, Size> result;
-  Map<Matrix<T, Size, Size>> M((T *)mat);
+  Map<const Matrix<T, Size, Size>> M((const T *)mat);
   Map<Matrix<T, Size, Size>> R((T *)result);
   bool is_invertible = true;
   M.computeInverseWithCheck(R, is_invertible, 0.0f);
@@ -81,32 +81,32 @@ inline mat_base<T, Size, Size> inverse_impl(mat_base<T, Size, Size> &mat)
   return result;
 }
 
-template<> float2x2 inverse(float2x2 &mat)
+template<> float2x2 inverse(const float2x2 &mat)
 {
   return inverse_impl(mat);
 }
 
-template<> float3x3 inverse(float3x3 &mat)
+template<> float3x3 inverse(const float3x3 &mat)
 {
   return inverse_impl(mat);
 }
 
-template<> float4x4 inverse(float4x4 &mat)
+template<> float4x4 inverse(const float4x4 &mat)
 {
   return inverse_impl(mat);
 }
 
-template<> double2x2 inverse(double2x2 &mat)
+template<> double2x2 inverse(const double2x2 &mat)
 {
   return inverse_impl(mat);
 }
 
-template<> double3x3 inverse(double3x3 &mat)
+template<> double3x3 inverse(const double3x3 &mat)
 {
   return inverse_impl(mat);
 }
 
-template<> double4x4 inverse(double4x4 &mat)
+template<> double4x4 inverse(const double4x4 &mat)
 {
   return inverse_impl(mat);
 }
