@@ -53,8 +53,11 @@ class VKShader : public Shader {
   int program_handle_get() const override;
 
  private:
-  Vector<uint32_t> compile_glsl_to_spirv(StringRef source, shaderc_shader_kind kind);
+  Vector<uint32_t> compile_glsl_to_spirv(Span<const char *> sources, shaderc_shader_kind kind);
   void build_shader_module(Span<uint32_t> spirv_module, VkShaderModule *r_shader_module);
+  void build_shader_module(MutableSpan<const char *> sources,
+                           shaderc_shader_kind stage,
+                           VkShaderModule *r_shader_module);
 };
 
 }  // namespace blender::gpu
