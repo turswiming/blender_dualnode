@@ -10,7 +10,7 @@ class VKLogParser : public GPULogParser {
   char *parse_line(char *log_line, GPULogItem &log_item) override;
 
  protected:
-  char *skip_name_and_stage(char *log_line);
+  char *skip_name(char *log_line);
   char *skip_severity_keyword(char *log_line, GPULogItem &log_item);
 };
 }  // namespace blender::gpu
