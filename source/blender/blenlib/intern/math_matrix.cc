@@ -14,6 +14,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
+#include <Eigen/Eigenvalues>
 
 using float2x2 = blender::mat_base<float, 2, 2>;
 using float3x3 = blender::mat_base<float, 3, 3>;
@@ -130,6 +131,115 @@ template<> double4x4 inverse(const double4x4 &mat)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Polar Decomposition
+ * \{ */
+
+/**
+ * Right polar decomposition:
+ *     M = UP
+ *
+ * U is the 'rotation'-like component, the closest orthogonal matrix to M.
+ * P is the 'scaling'-like component, defined in U space.
+ *
+ * See https://en.wikipedia.org/wiki/Polar_decomposition for more.
+ */
+template<typename T>
+static void polar_decompose(const mat_base<T, 3, 3> &mat3,
+                            mat_base<T, 3, 3> &r_U,
+                            mat_base<T, 3, 3> &r_P)
+{
+  /* From svd decomposition (M = WSV*), we have:
+   *     U = WV*
+   *     P = VSV*
+   */
+  mat_3x3<T> W, V;
+  vec_base<T, 3> S_val;
+
+  {
+    using namespace Eigen;
+    using MatrixT = Matrix<T, 3, 3>;
+    using VectorT = Matrix<T, 3, 1>;
+    /* Blender and Eigen matrices are both column-major.
+     * Since our matrix is squared, we can use thinU/V. */
+    /** WORKAROUND:
+     * (ComputeThinU | ComputeThinV) must be set as runtime parameters in Eigen < 3.4.0.
+     * But this requires the matrix type to be dynamic to avoid an assert.
+     */
+    using MatrixDynamicT = Matrix<T, Dynamic, Dynamic>;
+    JacobiSVD<MatrixDynamicT, NoQRPreconditioner> svd(
+        Map<const MatrixDynamicT>((const T *)mat3, 3, 3), ComputeThinU | ComputeThinV);
+
+    (Map<MatrixT>(W)) = svd.matrixU();
+    (Map<VectorT>(S_val)) = svd.singularValues();
+    (Map<MatrixT>(V)) = svd.matrixV();
+  }
+
+  mat_3x3<T> S = mat_3x3<T>::from_scale(S_val);
+  mat_3x3<T> Vt = transpose(V);
+
+  r_U = W * Vt;
+  r_P = (V * S) * Vt;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Interpolate
+ * \{ */
+
+template<typename T>
+mat_base<T, 3, 3> interpolate_impl(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3> &B, T t)
+{
+  /* 'Rotation' component ('U' part of polar decomposition,
+   * the closest orthogonal matrix to M3 rot/scale
+   * transformation matrix), spherically interpolated. */
+  mat_3x3<T> U_A, U_B;
+  /* 'Scaling' component ('P' part of polar decomposition, i.e. scaling in U-defined space),
+   * linearly interpolated. */
+  mat_3x3<T> P_A, P_B;
+
+  math::polar_decompose(A, U_A, P_A);
+  math::polar_decompose(B, U_B, P_B);
+
+  /* Quaternions cannot represent an axis flip. If such a singularity is detected, choose a
+   * different decomposition of the matrix that still satisfies A = U_A * P_A but which has a
+   * positive determinant and thus no axis flips. This resolves T77154.
+   *
+   * Note that a flip of two axes is just a rotation of 180 degrees around the third axis, and
+   * three flipped axes are just an 180 degree rotation + a single axis flip. It is thus sufficient
+   * to solve this problem for single axis flips. */
+  if (is_negative(U_A)) {
+    U_A = -U_A;
+    P_A = -P_A;
+  }
+  if (is_negative(U_B)) {
+    U_B = -U_B;
+    P_B = -P_B;
+  }
+
+  rotation::Quaternion<T> quat_A = U_A.to_quaternion();
+  rotation::Quaternion<T> quat_B = U_B.to_quaternion();
+  rotation::Quaternion<T> quat = math::interpolate(quat_A, quat_B, t);
+  mat_3x3<T> U = mat_3x3<T>::from_rotation(quat);
+
+  mat_3x3<T> P = math::interpolate_linear(P_A, P_B, t);
+  /* And we reconstruct rot/scale matrix from interpolated polar components */
+  return U * P;
+}
+
+float3x3 interpolate(const float3x3 &A, const float3x3 &B, float t)
+{
+  return interpolate_impl(A, B, t);
+}
+
+double3x3 interpolate(const double3x3 &A, const double3x3 &B, double t)
+{
+  return interpolate_impl(A, B, t);
+}
+
+/** \} */
+
 }  // namespace blender::math
 
 /* -------------------------------------------------------------------- */
@@ -193,6 +303,8 @@ template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
   return result;
 }
 #endif
+
+/** \} */
 
 }  // namespace blender
 

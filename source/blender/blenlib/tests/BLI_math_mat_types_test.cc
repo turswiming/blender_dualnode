@@ -233,6 +233,7 @@ TEST(math_mat_types, VectorMultiplyOperator)
   EXPECT_EQ(result[1], 2 * 7 + 4 * 8 + 6 * 9);
 }
 
+/* TODO split to its own test file. */
 TEST(math_mat_types, MatrixInverse)
 {
   float3x3 mat(2);
@@ -261,19 +262,23 @@ TEST(math_mat_types, MatrixDeterminant)
   EXPECT_NEAR(determinant(double4x4(m4)), -112.0f, 1e-8f);
 }
 
-TEST(math_mat_types, Matrix4x4)
+TEST(math_mat_types, MatrixAccess)
 {
   using float4x4 = mat_4x4<float>;
-  float4x4 expect;
   float4x4 m({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 1, 2, 3}, {4, 5, 6, 7});
   /** Access helpers. */
   EXPECT_EQ(m.forward(), float3(1, 2, 3));
   EXPECT_EQ(m.right(), float3(5, 6, 7));
   EXPECT_EQ(m.up(), float3(9, 1, 2));
   EXPECT_EQ(m.location(), float3(4, 5, 6));
+}
 
+TEST(math_mat_types, MatrixInit)
+{
+  using float4x4 = mat_4x4<float>;
+  float4x4 expect;
   /** Init Helpers. */
-  m = float4x4::from_location({1, 2, 3});
+  float4x4 m = float4x4::from_location({1, 2, 3});
   expect = float4x4({1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {1, 2, 3, 1});
   EXPECT_TRUE(compare(m, expect, 0.00001f));
 
@@ -301,12 +306,27 @@ TEST(math_mat_types, Matrix4x4)
                     {-1.10289, 2.70714, -0.674535, 0},
                     {1, 2, 3, 1});
   EXPECT_TRUE(compare(m, expect, 0.00001f));
+}
 
+TEST(math_mat_types, MatrixMethods)
+{
+  using float4x4 = mat_4x4<float>;
   /** Methods. */
-  m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
-  EXPECT_TRUE(compare(m.to_euler(), RotationEuler<float>(0, 0, M_PI_2), 0.0002f));
+  float4x4 m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
+  EXPECT_TRUE(compare(m.to_euler(), rotation::EulerXYZ<float>(0, 0, M_PI_2), 0.0002f));
   EXPECT_EQ(m.to_scale(), float3(3, 2, 2));
   EXPECT_TRUE(is_negative(m));
+  EXPECT_FALSE(is_unit_scale(m));
+}
+
+TEST(math_mat_types, MatrixInterpolation)
+{
+  using float4x4 = mat_4x4<float>;
+  float4x4 m1 = float4x4::from_loc_rot_scale({10, 5, 0}, {M_PI_2, 0, 0}, {1, 1, 1});
+  float4x4 m2 = float4x4::from_loc_rot_scale({0, 5, 10}, {0, 0, 0}, {3, 3, 7});
+  float4x4 expect = float4x4::from_loc_rot_scale({5, 5, 5}, {M_PI_2 * 0.5f, 0, 0}, {2, 2, 4});
+  float4x4 result = math::interpolate(m1, m2, 0.5f);
+  EXPECT_TRUE(compare(result, expect, 0.00001f));
 }
 
 }  // namespace blender::tests

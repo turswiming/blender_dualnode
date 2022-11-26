@@ -23,25 +23,6 @@
 
 namespace blender {
 
-#if 0
-template<typename T> struct mat_view {
-  T *data;
-  IndexRange col_range;
-  IndexRange row_range;
-
-  mat_view(T *src, IndexRange column_range, IndexRange row_range)
-  {
-    data = src;
-    col_range = column_range;
-    row_range = row_range;
-  }
-
-  friend operator=()
-  {
-  }
-};
-#endif
-
 template<typename T, int NumCol, int NumRow>
 struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
@@ -326,6 +307,11 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return mat_base(1);
   }
 
+  static mat_base zero()
+  {
+    return mat_base(0);
+  }
+
   /** Initialize the diagonal of the matrix with the given vector. */
   static mat_base from_diagonal(vec_base<T, min_dim> vec)
   {
@@ -436,55 +422,39 @@ template<typename T, int Size> bool is_negative(const mat_base<T, Size, Size> &m
 template<> bool is_negative(const mat_base<float, 4, 4> &mat);
 template<> bool is_negative(const mat_base<double, 4, 4> &mat);
 
-template<typename T>
-inline mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &a, const mat_base<T, 3, 3> &b, T t)
+/** \note linear interpolation for each component. */
+template<typename T, int NumCol, int NumRow>
+inline mat_base<T, NumCol, NumRow> interpolate_linear(const mat_base<T, NumCol, NumRow> &a,
+                                                      const mat_base<T, NumCol, NumRow> &b,
+                                                      T t)
 {
-#if 0
-  /* 'Rotation' component ('U' part of polar decomposition,
-   * the closest orthogonal matrix to M3 rot/scale
-   * transformation matrix), spherically interpolated. */
-  float U_A[3][3], U_B[3][3], U[3][3];
-  float quat_A[4], quat_B[4], quat[4];
-  /* 'Scaling' component ('P' part of polar decomposition, i.e. scaling in U-defined space),
-   * linearly interpolated. */
-  float P_A[3][3], P_B[3][3], P[3][3];
-
-  int i;
-
-  mat3_polar_decompose(A, U_A, P_A);
-  mat3_polar_decompose(B, U_B, P_B);
-
-  /* Quaternions cannot represent an axis flip. If such a singularity is detected, choose a
-   * different decomposition of the matrix that still satisfies A = U_A * P_A but which has a
-   * positive determinant and thus no axis flips. This resolves T77154.
-   *
-   * Note that a flip of two axes is just a rotation of 180 degrees around the third axis, and
-   * three flipped axes are just an 180 degree rotation + a single axis flip. It is thus sufficient
-   * to solve this problem for single axis flips. */
-  if (is_negative_m3(U_A)) {
-    mul_m3_fl(U_A, -1.0f);
-    mul_m3_fl(P_A, -1.0f);
-  }
-  if (is_negative_m3(U_B)) {
-    mul_m3_fl(U_B, -1.0f);
-    mul_m3_fl(P_B, -1.0f);
-  }
-
-  mat3_to_quat(quat_A, U_A);
-  mat3_to_quat(quat_B, U_B);
-  interp_qt_qtqt(quat, quat_A, quat_B, t);
-  quat_to_mat3(U, quat);
-
-  for (i = 0; i < 3; i++) {
-    interp_v3_v3v3(P[i], P_A[i], P_B[i], t);
-  }
-
-  /* And we reconstruct rot/scale matrix from interpolated polar components */
-  mul_m3_m3m3(R, U, P);
-#endif
-  /* TODO */
-  return mat_base<T, 3, 3>(0);
+  mat_base<T, NumCol, NumRow> result;
+  unroll<NumCol>([&](auto c) { result[c] = interpolate(a[c], b[c], t); });
+  return result;
 }
+
+/**
+ * A polar-decomposition-based interpolation between matrix A and matrix B.
+ *
+ * \note This code is about five times slower as the 'naive' interpolation done by #blend_m3_m3m3
+ * (it typically remains below 2 usec on an average i74700,
+ * while #blend_m3_m3m3 remains below 0.4 usec).
+ * However, it gives expected results even with non-uniformly scaled matrices,
+ * see T46418 for an example.
+ *
+ * Based on "Matrix Animation and Polar Decomposition", by Ken Shoemake & Tom Duff
+ *
+ * \param R: Resulting interpolated matrix.
+ * \param A: Input matrix which is totally effective with `t = 0.0`.
+ * \param B: Input matrix which is totally effective with `t = 1.0`.
+ * \param t: Interpolation factor.
+ */
+mat_base<float, 3, 3> interpolate(const mat_base<float, 3, 3> &A,
+                                  const mat_base<float, 3, 3> &B,
+                                  float t);
+mat_base<double, 3, 3> interpolate(const mat_base<double, 3, 3> &A,
+                                   const mat_base<double, 3, 3> &B,
+                                   double t);
 
 /**
  * Complete transform matrix interpolation,
@@ -497,6 +467,7 @@ inline mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &a, const mat_base<
 template<typename T>
 inline mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &a, const mat_base<T, 4, 4> &b, T t)
 {
+  /* TODO Move implementation out of header and use mat_3x3 types. */
   using mat_4x4 = mat_base<T, 4, 4>;
   using mat_3x3 = mat_base<T, 3, 3>;
   using vec_3 = vec_base<T, 3>;
@@ -504,10 +475,10 @@ inline mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &a, const mat_base<
   mat_4x4 result = mat_4x4(interpolate(mat_3x3(a), mat_3x3(b), t));
 
   /* Location component, linearly interpolated. */
-  vec_3 location = *reinterpret_cast<vec_3 *>(&result[3][0]);
-  vec_3 loc_a = *reinterpret_cast<vec_3 *>(&a[3][0]);
-  vec_3 loc_b = *reinterpret_cast<vec_3 *>(&b[3][0]);
-  location = mix(loc_a, loc_b, t);
+  vec_3 &location = *reinterpret_cast<vec_3 *>(&result[3][0]);
+  const vec_3 &loc_a = *reinterpret_cast<const vec_3 *>(&a[3][0]);
+  const vec_3 &loc_b = *reinterpret_cast<const vec_3 *>(&b[3][0]);
+  location = interpolate(loc_a, loc_b, t);
 
   return result;
 }
@@ -546,29 +517,122 @@ inline bool compare(const vec_base<T, Size> &a, const vec_base<T, Size> &b, cons
   return true;
 }
 
+template<typename T> struct AssertUnitEpsilon {
+  static constexpr T value = T(BLI_ASSERT_UNIT_EPSILON_DB);
+};
+
+/* TODO(fclem): Move to vector math. */
+template<typename T, int Size> inline bool is_unit_scale(const vec_base<T, Size> &v)
+{
+  /**
+   * \note Checks are flipped so NAN doesn't assert.
+   * This is done because we're making sure the value was normalized and in the case we
+   * don't want NAN to be raising asserts since there is nothing to be done in that case.
+   */
+  const T test_unit = math::length_squared(v);
+  return (!(std::abs(test_unit - T(1)) >= AssertUnitEpsilon<T>::value) ||
+          !(std::abs(test_unit) >= AssertUnitEpsilon<T>::value));
+}
+
+/* Returns true if each individual columns are unit scaled. Mainly for assert usage. */
+
+template<typename T, int NumCol, int NumRow>
+inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &v)
+{
+  for (int i = 0; i < NumCol; i++) {
+    if (!is_unit_scale(v[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace math
 
-template<typename T> struct RotationEuler : public vec_base<T, 3> {
+namespace rotation {
+
+template<typename T> struct EulerXYZ : public vec_base<T, 3> {
   /** TODO(fclem): Maybe add rotation order enum here? or in typename? */
 
   /** Inherit constructors. */
   using vec_base<T, 3>::vec_base;
 
-  friend std::ostream &operator<<(std::ostream &stream, const RotationEuler &mat)
+  friend std::ostream &operator<<(std::ostream &stream, const EulerXYZ &mat)
   {
-    return stream << "RotationEuler" << static_cast<vec_base<T, 3>>(mat);
+    return stream << "EulerXYZ" << static_cast<vec_base<T, 3>>(mat);
   }
 };
 
-template<typename T> struct RotationQuaternion : public vec_base<T, 4> {
+template<typename T> struct Quaternion : public vec_base<T, 4> {
   /** Inherit constructors. */
   using vec_base<T, 4>::vec_base;
 
-  friend std::ostream &operator<<(std::ostream &stream, const RotationQuaternion &mat)
+  static Quaternion<T> identity()
   {
-    return stream << "RotationQuaternion" << static_cast<vec_base<T, 4>>(mat);
+    return {1, 0, 0, 0};
+  }
+
+  friend std::ostream &operator<<(std::ostream &stream, const Quaternion &mat)
+  {
+    return stream << "Quaternion" << static_cast<vec_base<T, 4>>(mat);
   }
 };
+
+}  // namespace rotation
+
+namespace math {
+
+template<typename U> struct AssertUnitEpsilon<rotation::Quaternion<U>> {
+  static constexpr U value = AssertUnitEpsilon<U>::value * 10;
+};
+
+template<typename T> inline vec_base<T, 2> interp_dot_slerp(const T t, const T cosom)
+{
+  const T eps = 1e-4f;
+
+  BLI_assert(IN_RANGE_INCL(cosom, T(-1.0001), T(1.0001)));
+
+  vec_base<T, 2> w;
+  /* within [-1..1] range, avoid aligned axis */
+  if (LIKELY(std::abs(cosom) < (T(1.0) - eps))) {
+    float omega, sinom;
+
+    omega = std::acos(cosom);
+    sinom = std::sin(omega);
+
+    w[0] = std::sin((T(1.0) - t) * omega) / sinom;
+    w[1] = std::sin(t * omega) / sinom;
+  }
+  else {
+    /* fallback to lerp */
+    w[0] = 1.0f - t;
+    w[1] = t;
+  }
+  return w;
+}
+
+template<typename T>
+inline rotation::Quaternion<T> interpolate(const rotation::Quaternion<T> &a,
+                                           const rotation::Quaternion<T> &b,
+                                           T t)
+{
+  BLI_assert(is_unit_scale(a));
+  BLI_assert(is_unit_scale(b));
+
+  vec_base<T, 4> quat = a;
+  T cosom = dot(a, b);
+  /* Rotate around shortest angle. */
+  if (cosom < T(0)) {
+    cosom = -cosom;
+    quat = -quat;
+  }
+
+  vec_base<T, 2> w = interp_dot_slerp(t, cosom);
+
+  return rotation::Quaternion<T>(w[0] * quat + w[1] * b);
+}
+
+}  // namespace math
 
 template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
   using vec3_type = vec_base<T, 3>;
@@ -582,7 +646,7 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
 
   /** Init Helpers. */
 
-  static mat_3x3 from_rotation(const RotationEuler<T> rotation)
+  static mat_3x3 from_rotation(const rotation::EulerXYZ<T> rotation)
   {
     double ci = std::cos(rotation[0]);
     double cj = std::cos(rotation[1]);
@@ -599,12 +663,46 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
     mat[0][0] = T(cj * ch);
     mat[1][0] = T(sj * sc - cs);
     mat[2][0] = T(sj * cc + ss);
+
     mat[0][1] = T(cj * sh);
     mat[1][1] = T(sj * ss + cc);
     mat[2][1] = T(sj * cs - sc);
+
     mat[0][2] = T(-sj);
     mat[1][2] = T(cj * si);
     mat[2][2] = T(cj * ci);
+    return mat;
+  }
+
+  static mat_3x3 from_rotation(const rotation::Quaternion<T> rotation)
+  {
+    double q0 = M_SQRT2 * double(rotation[0]);
+    double q1 = M_SQRT2 * double(rotation[1]);
+    double q2 = M_SQRT2 * double(rotation[2]);
+    double q3 = M_SQRT2 * double(rotation[3]);
+
+    double qda = q0 * q1;
+    double qdb = q0 * q2;
+    double qdc = q0 * q3;
+    double qaa = q1 * q1;
+    double qab = q1 * q2;
+    double qac = q1 * q3;
+    double qbb = q2 * q2;
+    double qbc = q2 * q3;
+    double qcc = q3 * q3;
+
+    mat_3x3 mat;
+    mat[0][0] = T(1.0 - qbb - qcc);
+    mat[0][1] = T(qdc + qab);
+    mat[0][2] = T(-qdb + qac);
+
+    mat[1][0] = T(-qdc + qab);
+    mat[1][1] = T(1.0 - qaa - qcc);
+    mat[1][2] = T(qda + qbc);
+
+    mat[2][0] = T(qdb + qac);
+    mat[2][1] = T(-qda + qbc);
+    mat[2][2] = T(1.0 - qaa - qbb);
     return mat;
   }
 
@@ -613,7 +711,7 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
     return mat_3x3::from_diagonal(scale);
   }
 
-  static mat_3x3 from_rot_scale(const RotationEuler<T> rotation, const vec3_type scale)
+  static mat_3x3 from_rot_scale(const rotation::EulerXYZ<T> rotation, const vec3_type scale)
   {
     return mat_3x3::from_rotation(rotation) * mat_3x3::from_scale(scale);
   }
@@ -668,14 +766,29 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
 
   /** Methods. */
 
-  /* Assumes XYZ rotation order. */
-  RotationEuler<T> to_euler() const
+  template<bool Normalized = false> rotation::EulerXYZ<T> to_euler() const
   {
     using namespace math;
-    RotationEuler<T> eul1, eul2;
-    normalize(*this).normalized_to_eul2(eul1, eul2);
+    rotation::EulerXYZ<T> eul1, eul2;
+    if constexpr (Normalized) {
+      this->normalized_to_eul2(eul1, eul2);
+    }
+    else {
+      normalize(*this).normalized_to_eul2(eul1, eul2);
+    }
     /* Return best, which is just the one with lowest values it in. */
     return (length_manhattan(vec3_type(eul1)) > length_manhattan(vec3_type(eul2))) ? eul2 : eul1;
+  }
+
+  template<bool Normalized = false> rotation::Quaternion<T> to_quaternion() const
+  {
+    using namespace math;
+    if constexpr (Normalized) {
+      return this->normalized_to_quat_with_checks();
+    }
+    else {
+      return normalize(*this).normalized_to_quat_with_checks();
+    }
   }
 
   vec3_type to_scale() const
@@ -689,9 +802,9 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
   }
 
  private:
-  void normalized_to_eul2(RotationEuler<T> &eul1, RotationEuler<T> &eul2)
+  void normalized_to_eul2(rotation::EulerXYZ<T> &eul1, rotation::EulerXYZ<T> &eul2) const
   {
-    BLI_ASSERT_UNIT_M3(this->ptr());
+    BLI_assert(math::is_unit_scale(*this));
 
     const float cy = std::hypot((*this)[0][0], (*this)[0][1]);
     if (cy > 16.0f * FLT_EPSILON) {
@@ -710,6 +823,108 @@ template<typename T> struct mat_3x3 : public mat_base<T, 3, 3> {
 
       eul2 = eul1;
     }
+  }
+
+  rotation::Quaternion<T> normalized_to_quat_fast() const
+  {
+    BLI_assert(math::is_unit_scale(*this));
+    /* Caller must ensure matrices aren't negative for valid results, see: T24291, T94231. */
+    BLI_assert(!math::is_negative(*this));
+
+    const mat_3x3 &mat = *this;
+    rotation::Quaternion<T> q;
+
+    /* Method outlined by Mike Day, ref: https://math.stackexchange.com/a/3183435/220949
+     * with an additional `sqrtf(..)` for higher precision result.
+     * Removing the `sqrt` causes tests to fail unless the precision is set to 1e-6 or larger. */
+
+    if (mat[2][2] < 0.0f) {
+      if (mat[0][0] > mat[1][1]) {
+        const T trace = 1.0f + mat[0][0] - mat[1][1] - mat[2][2];
+        T s = 2.0f * std::sqrt(trace);
+        if (mat[1][2] < mat[2][1]) {
+          /* Ensure W is non-negative for a canonical result. */
+          s = -s;
+        }
+        q[1] = 0.25f * s;
+        s = 1.0f / s;
+        q[0] = (mat[1][2] - mat[2][1]) * s;
+        q[2] = (mat[0][1] + mat[1][0]) * s;
+        q[3] = (mat[2][0] + mat[0][2]) * s;
+        if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+          /* Avoids the need to normalize the degenerate case. */
+          q[1] = 1.0f;
+        }
+      }
+      else {
+        const T trace = 1.0f - mat[0][0] + mat[1][1] - mat[2][2];
+        T s = 2.0f * std::sqrt(trace);
+        if (mat[2][0] < mat[0][2]) {
+          /* Ensure W is non-negative for a canonical result. */
+          s = -s;
+        }
+        q[2] = 0.25f * s;
+        s = 1.0f / s;
+        q[0] = (mat[2][0] - mat[0][2]) * s;
+        q[1] = (mat[0][1] + mat[1][0]) * s;
+        q[3] = (mat[1][2] + mat[2][1]) * s;
+        if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[3] == 0.0f))) {
+          /* Avoids the need to normalize the degenerate case. */
+          q[2] = 1.0f;
+        }
+      }
+    }
+    else {
+      if (mat[0][0] < -mat[1][1]) {
+        const T trace = 1.0f - mat[0][0] - mat[1][1] + mat[2][2];
+        T s = 2.0f * std::sqrt(trace);
+        if (mat[0][1] < mat[1][0]) {
+          /* Ensure W is non-negative for a canonical result. */
+          s = -s;
+        }
+        q[3] = 0.25f * s;
+        s = 1.0f / s;
+        q[0] = (mat[0][1] - mat[1][0]) * s;
+        q[1] = (mat[2][0] + mat[0][2]) * s;
+        q[2] = (mat[1][2] + mat[2][1]) * s;
+        if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[2] == 0.0f))) {
+          /* Avoids the need to normalize the degenerate case. */
+          q[3] = 1.0f;
+        }
+      }
+      else {
+        /* NOTE(@campbellbarton): A zero matrix will fall through to this block,
+         * needed so a zero scaled matrices to return a quaternion without rotation, see: T101848.
+         */
+        const T trace = 1.0f + mat[0][0] + mat[1][1] + mat[2][2];
+        T s = 2.0f * std::sqrt(trace);
+        q[0] = 0.25f * s;
+        s = 1.0f / s;
+        q[1] = (mat[1][2] - mat[2][1]) * s;
+        q[2] = (mat[2][0] - mat[0][2]) * s;
+        q[3] = (mat[0][1] - mat[1][0]) * s;
+        if (UNLIKELY((trace == 1.0f) && (q[1] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+          /* Avoids the need to normalize the degenerate case. */
+          q[0] = 1.0f;
+        }
+      }
+    }
+
+    BLI_assert(!(q[0] < 0.0f));
+    BLI_assert(math::is_unit_scale(q));
+    return q;
+  }
+
+  rotation::Quaternion<T> normalized_to_quat_with_checks() const
+  {
+    const T det = math::determinant(*this);
+    if (UNLIKELY(!isfinite(det))) {
+      return rotation::Quaternion<T>::identity();
+    }
+    else if (UNLIKELY(det < T(0))) {
+      return mat_3x3(-(*this)).normalized_to_quat_fast();
+    }
+    return this->normalized_to_quat_fast();
   }
 };
 
@@ -733,7 +948,7 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
     return mat;
   }
 
-  static mat_4x4 from_rotation(const RotationEuler<T> rotation)
+  static mat_4x4 from_rotation(const rotation::EulerXYZ<T> rotation)
   {
     mat_4x4 mat = mat_4x4(mat_3x3::from_rotation(rotation));
     return mat;
@@ -745,7 +960,7 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
     return mat;
   }
 
-  static mat_4x4 from_loc_rot(const vec3_type location, const RotationEuler<T> rotation)
+  static mat_4x4 from_loc_rot(const vec3_type location, const rotation::EulerXYZ<T> rotation)
   {
     mat_4x4 mat = mat_4x4(mat_3x3::from_rotation(rotation));
     mat.location() = location;
@@ -753,7 +968,7 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
   }
 
   static mat_4x4 from_loc_rot_scale(const vec3_type location,
-                                    const RotationEuler<T> rotation,
+                                    const rotation::EulerXYZ<T> rotation,
                                     const vec3_type scale)
   {
     mat_4x4 mat = mat_4x4(mat_3x3::from_rot_scale(rotation, scale));
@@ -814,11 +1029,16 @@ template<typename T> struct mat_4x4 : public mat_base<T, 4, 4> {
 
   /** Methods. */
 
-  /* Assumes XYZ rotation order. */
-  RotationEuler<T> to_euler() const
+  template<bool Normalized = false> rotation::EulerXYZ<T> to_euler() const
   {
     /* TODO(fclem): Avoid the copy with 3x3 ref. */
-    return mat_3x3(*this).to_euler();
+    return mat_3x3(*this).template to_euler<Normalized>();
+  }
+
+  template<bool Normalized = false> rotation::Quaternion<T> to_quaternion() const
+  {
+    /* TODO(fclem): Avoid the copy with 3x3 ref. */
+    return mat_3x3(*this).template to_quaternion<Normalized>();
   }
 
   vec3_type to_scale() const
