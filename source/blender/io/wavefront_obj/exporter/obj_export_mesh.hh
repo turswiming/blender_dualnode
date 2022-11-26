@@ -116,6 +116,7 @@ class OBJMesh : NonCopyable {
   int tot_uv_vertices() const;
   int tot_normal_indices() const;
   int tot_edges() const;
+  int tot_deform_groups() const;
   bool is_mirrored_transform() const
   {
     return mirrored_transform_;
@@ -129,14 +130,8 @@ class OBJMesh : NonCopyable {
    * Return mat_nr-th material of the object. The given index should be zero-based.
    */
   const Material *get_object_material(int16_t mat_nr) const;
-  /**
-   * Returns a zero-based index of a polygon's material indexing into
-   * the Object's material slots.
-   */
-  int16_t ith_poly_matnr(int poly_index) const;
 
   void ensure_mesh_normals() const;
-  void ensure_mesh_edges() const;
 
   /**
    * Calculate smooth groups of a smooth-shaded object.
@@ -165,7 +160,7 @@ class OBJMesh : NonCopyable {
   /**
    * Calculate coordinates of the vertex at the given index.
    */
-  float3 calc_vertex_coords(int vert_index, float scaling_factor) const;
+  float3 calc_vertex_coords(int vert_index, float global_scale) const;
   /**
    * Calculate vertex indices of all vertices of the polygon at the given index.
    */
@@ -204,23 +199,20 @@ class OBJMesh : NonCopyable {
    */
   Vector<int> calc_poly_normal_indices(int poly_index) const;
   /**
-   * Find the index of the vertex group with the maximum number of vertices in a polygon.
-   * The index indices into the #Object.defbase.
+   * Find the most representative vertex group of a polygon.
    *
-   * If two or more groups have the same number of vertices (maximum), group name depends on the
-   * implementation of #std::max_element.
+   * This adds up vertex group weights, and the group with the largest
+   * weight sum across the polygon is the one returned.
+   *
+   * group_weights is temporary storage to avoid reallocations, it must
+   * be the size of amount of vertex groups in the object.
    */
-  int16_t get_poly_deform_group_index(int poly_index) const;
+  int16_t get_poly_deform_group_index(int poly_index, MutableSpan<float> group_weights) const;
   /**
    * Find the name of the vertex deform group at the given index.
    * The index indices into the #Object.defbase.
    */
   const char *get_poly_deform_group_name(int16_t def_group_index) const;
-
-  /**
-   * Calculate vertex indices of an edge's corners if it is a loose edge.
-   */
-  std::optional<std::array<int, 2>> calc_loose_edge_vert_indices(int edge_index) const;
 
   /**
    * Calculate the order in which the polygons should be written into the file (sorted by material
@@ -238,6 +230,11 @@ class OBJMesh : NonCopyable {
     return i < 0 || i >= poly_order_.size() ? i : poly_order_[i];
   }
 
+  Mesh *get_mesh() const
+  {
+    return export_mesh_eval_;
+  }
+
  private:
   /**
    * Free the mesh if _the exporter_ created it.
@@ -253,6 +250,6 @@ class OBJMesh : NonCopyable {
   /**
    * Set the final transform after applying axes settings and an Object's world transform.
    */
-  void set_world_axes_transform(eTransformAxisForward forward, eTransformAxisUp up);
+  void set_world_axes_transform(eIOAxis forward, eIOAxis up);
 };
 }  // namespace blender::io::obj

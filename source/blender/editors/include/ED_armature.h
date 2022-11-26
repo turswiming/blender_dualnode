@@ -282,6 +282,7 @@ void ED_armature_ebone_selectflag_enable(struct EditBone *ebone, int flag);
 void ED_armature_ebone_selectflag_disable(struct EditBone *ebone, int flag);
 
 /* pose_edit.c */
+
 struct Object *ED_pose_object_from_context(struct bContext *C);
 bool ED_object_posemode_exit_ex(struct Main *bmain, struct Object *ob);
 bool ED_object_posemode_exit(struct bContext *C, struct Object *ob);
@@ -311,7 +312,8 @@ void ED_pose_recalculate_paths(struct bContext *C,
 /**
  * \return True when pick finds an element or the selection changed.
  */
-bool ED_armature_pose_select_pick_bone(struct ViewLayer *view_layer,
+bool ED_armature_pose_select_pick_bone(const struct Scene *scene,
+                                       struct ViewLayer *view_layer,
                                        struct View3D *v3d,
                                        struct Object *ob,
                                        struct Bone *bone,
@@ -322,7 +324,8 @@ bool ED_armature_pose_select_pick_bone(struct ViewLayer *view_layer,
  *
  * \return True when pick finds an element or the selection changed.
  */
-bool ED_armature_pose_select_pick_with_buffer(struct ViewLayer *view_layer,
+bool ED_armature_pose_select_pick_with_buffer(const struct Scene *scene,
+                                              struct ViewLayer *view_layer,
                                               struct View3D *v3d,
                                               struct Base *base,
                                               const struct GPUSelectResult *buffer,
@@ -337,7 +340,8 @@ bool ED_armature_pose_select_pick_with_buffer(struct ViewLayer *view_layer,
  * It can't be set to the active object because we need
  * to keep this set to the weight paint object.
  */
-void ED_armature_pose_select_in_wpaint_mode(struct ViewLayer *view_layer,
+void ED_armature_pose_select_in_wpaint_mode(const struct Scene *scene,
+                                            struct ViewLayer *view_layer,
                                             struct Base *base_select);
 bool ED_pose_deselect_all_multi_ex(struct Base **bases,
                                    uint bases_len,
@@ -357,11 +361,12 @@ void ED_pose_bone_select_tag_update(struct Object *ob);
 void ED_pose_bone_select(struct Object *ob, struct bPoseChannel *pchan, bool select);
 
 /* meshlaplacian.c */
+
 void ED_mesh_deform_bind_callback(struct Object *object,
                                   struct MeshDeformModifierData *mmd,
                                   struct Mesh *cagemesh,
                                   float *vertexcos,
-                                  int totvert,
+                                  int verts_num,
                                   float cagemat[4][4]);
 
 /* Pose backups, pose_backup.c */

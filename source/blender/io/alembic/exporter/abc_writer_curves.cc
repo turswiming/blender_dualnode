@@ -142,7 +142,7 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
       }
     }
 
-    orders.push_back(nurbs->orderu);
+    orders.push_back(uint8_t(nurbs->orderu));
     vert_counts.push_back(verts.size() - current_point_count);
   }
 

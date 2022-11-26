@@ -31,9 +31,23 @@ typedef enum eGPUBarrier {
   GPU_BARRIER_TEXTURE_UPDATE = (1 << 5),
   GPU_BARRIER_VERTEX_ATTRIB_ARRAY = (1 << 6),
   GPU_BARRIER_ELEMENT_ARRAY = (1 << 7),
+  GPU_BARRIER_UNIFORM = (1 << 8),
 } eGPUBarrier;
 
-ENUM_OPERATORS(eGPUBarrier, GPU_BARRIER_ELEMENT_ARRAY)
+ENUM_OPERATORS(eGPUBarrier, GPU_BARRIER_UNIFORM)
+
+/* NOTE: For Metal and Vulkan only.
+ * TODO(Metal): Update barrier calls to use stage flags. */
+typedef enum eGPUStageBarrierBits {
+  GPU_BARRIER_STAGE_VERTEX = (1 << 0),
+  GPU_BARRIER_STAGE_FRAGMENT = (1 << 1),
+  GPU_BARRIER_STAGE_COMPUTE = (1 << 2),
+  GPU_BARRIER_STAGE_ANY_GRAPHICS = (GPU_BARRIER_STAGE_VERTEX | GPU_BARRIER_STAGE_FRAGMENT),
+  GPU_BARRIER_STAGE_ANY = (GPU_BARRIER_STAGE_VERTEX | GPU_BARRIER_STAGE_FRAGMENT |
+                           GPU_BARRIER_STAGE_COMPUTE),
+} eGPUStageBarrierBits;
+
+ENUM_OPERATORS(eGPUStageBarrierBits, GPU_BARRIER_STAGE_COMPUTE)
 
 /**
  * Defines the fixed pipeline blending equation.
@@ -157,6 +171,7 @@ void GPU_stencil_reference_set(uint reference);
 void GPU_stencil_write_mask_set(uint write_mask);
 void GPU_stencil_compare_mask_set(uint compare_mask);
 
+eGPUFaceCullTest GPU_face_culling_get(void);
 eGPUBlend GPU_blend_get(void);
 eGPUDepthTest GPU_depth_test_get(void);
 eGPUWriteMask GPU_write_mask_get(void);

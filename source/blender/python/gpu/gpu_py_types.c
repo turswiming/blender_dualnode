@@ -10,7 +10,6 @@
 #include <Python.h>
 
 #include "../generic/py_capi_utils.h"
-#include "../generic/python_utildefines.h"
 
 #include "gpu_py_types.h" /* own include */
 
@@ -20,7 +19,14 @@
 
 static struct PyModuleDef pygpu_types_module_def = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "gpu.types",
+    /*m_name*/ "gpu.types",
+    /*m_doc*/ NULL,
+    /*m_size*/ 0,
+    /*m_methods*/ NULL,
+    /*m_slots*/ NULL,
+    /*m_traverse*/ NULL,
+    /*m_clear*/ NULL,
+    /*m_free*/ NULL,
 };
 
 PyObject *bpygpu_types_init(void)
@@ -59,6 +65,12 @@ PyObject *bpygpu_types_init(void)
   if (PyType_Ready(&BPyGPUUniformBuf_Type) < 0) {
     return NULL;
   }
+  if (PyType_Ready(&BPyGPUShaderCreateInfo_Type) < 0) {
+    return NULL;
+  }
+  if (PyType_Ready(&BPyGPUStageInterfaceInfo_Type) < 0) {
+    return NULL;
+  }
 
   PyModule_AddType(submodule, &BPyGPU_BufferType);
   PyModule_AddType(submodule, &BPyGPUVertFormat_Type);
@@ -70,6 +82,8 @@ PyObject *bpygpu_types_init(void)
   PyModule_AddType(submodule, &BPyGPUTexture_Type);
   PyModule_AddType(submodule, &BPyGPUFrameBuffer_Type);
   PyModule_AddType(submodule, &BPyGPUUniformBuf_Type);
+  PyModule_AddType(submodule, &BPyGPUShaderCreateInfo_Type);
+  PyModule_AddType(submodule, &BPyGPUStageInterfaceInfo_Type);
 
   return submodule;
 }

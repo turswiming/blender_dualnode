@@ -11,7 +11,6 @@ set(INC
   ../../makesrna
   ../../windowmanager
   ../../../../intern/clog
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
   ../../../../extern/curve_fit_nd
   # RNA_prototypes.h
@@ -23,6 +22,7 @@ set(SRC
   editcurve.c
   editcurve_add.c
   editcurve_paint.c
+  editcurve_pen.c
   editcurve_query.c
   editcurve_select.c
   editcurve_undo.c

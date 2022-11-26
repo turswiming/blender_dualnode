@@ -14,8 +14,6 @@
 
 #include "BLI_utildefines.h"
 
-#include "../generic/python_utildefines.h"
-
 #include "gpu_py_capabilities.h"
 #include "gpu_py_matrix.h"
 #include "gpu_py_platform.h"
@@ -23,7 +21,7 @@
 #include "gpu_py_state.h"
 #include "gpu_py_types.h"
 
-#include "gpu_py_api.h" /* own include */
+#include "gpu_py_api.h" /* Own include. */
 
 /* -------------------------------------------------------------------- */
 /** \name GPU Module
@@ -34,8 +32,14 @@ PyDoc_STRVAR(pygpu_doc,
              "Some higher level functions can be found in the `gpu_extras` module.");
 static struct PyModuleDef pygpu_module_def = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "gpu",
-    .m_doc = pygpu_doc,
+    /*m_name*/ "gpu",
+    /*m_doc*/ pygpu_doc,
+    /*m_size*/ 0,
+    /*m_methods*/ NULL,
+    /*m_slots*/ NULL,
+    /*m_traverse*/ NULL,
+    /*m_clear*/ NULL,
+    /*m_free*/ NULL,
 };
 
 PyObject *BPyInit_gpu(void)

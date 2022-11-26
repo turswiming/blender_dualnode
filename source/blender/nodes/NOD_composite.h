@@ -126,6 +126,8 @@ void register_node_type_cmp_planetrackdeform(void);
 void register_node_type_cmp_cornerpin(void);
 void register_node_type_cmp_separate_xyz(void);
 void register_node_type_cmp_combine_xyz(void);
+void register_node_type_cmp_separate_color(void);
+void register_node_type_cmp_combine_color(void);
 
 void node_cmp_rlayers_outputs(struct bNodeTree *ntree, struct bNode *node);
 void node_cmp_rlayers_register_pass(struct bNodeTree *ntree,
@@ -151,6 +153,8 @@ void ntreeCompositExecTree(struct Scene *scene,
  */
 void ntreeCompositTagRender(struct Scene *scene);
 
+void ntreeCompositTagNeedExec(bNode *node);
+
 /**
  * Update the outputs of the render layer nodes.
  * Since the outputs depend on the render engine, this part is a bit complex:
@@ -167,7 +171,7 @@ void ntreeCompositClearTags(struct bNodeTree *ntree);
 struct bNodeSocket *ntreeCompositOutputFileAddSocket(struct bNodeTree *ntree,
                                                      struct bNode *node,
                                                      const char *name,
-                                                     struct ImageFormatData *im_format);
+                                                     const struct ImageFormatData *im_format);
 
 int ntreeCompositOutputFileRemoveActiveSocket(struct bNodeTree *ntree, struct bNode *node);
 void ntreeCompositOutputFileSetPath(struct bNode *node,

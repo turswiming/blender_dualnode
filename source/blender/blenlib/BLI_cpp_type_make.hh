@@ -51,6 +51,17 @@ template<typename T> void copy_assign_indices_cb(const void *src, void *dst, Ind
 
   mask.foreach_index([&](int64_t i) { dst_[i] = src_[i]; });
 }
+template<typename T> void copy_assign_compressed_cb(const void *src, void *dst, IndexMask mask)
+{
+  const T *src_ = static_cast<const T *>(src);
+  T *dst_ = static_cast<T *>(dst);
+
+  mask.to_best_mask_type([&](auto best_mask) {
+    for (const int64_t i : IndexRange(best_mask.size())) {
+      dst_[i] = src_[best_mask[i]];
+    }
+  });
+}
 
 template<typename T> void copy_construct_cb(const void *src, void *dst)
 {
@@ -62,6 +73,17 @@ template<typename T> void copy_construct_indices_cb(const void *src, void *dst, 
   T *dst_ = static_cast<T *>(dst);
 
   mask.foreach_index([&](int64_t i) { new (dst_ + i) T(src_[i]); });
+}
+template<typename T> void copy_construct_compressed_cb(const void *src, void *dst, IndexMask mask)
+{
+  const T *src_ = static_cast<const T *>(src);
+  T *dst_ = static_cast<T *>(dst);
+
+  mask.to_best_mask_type([&](auto best_mask) {
+    for (const int64_t i : IndexRange(best_mask.size())) {
+      new (dst_ + i) T(src_[best_mask[i]]);
+    }
+  });
 }
 
 template<typename T> void move_assign_cb(void *src, void *dst)
@@ -184,13 +206,15 @@ template<typename T> uint64_t hash_cb(const void *value)
 namespace blender {
 
 template<typename T, CPPTypeFlags Flags>
-CPPType::CPPType(CPPTypeParam<T, Flags> /* unused */, StringRef debug_name)
+CPPType::CPPType(TypeTag<T> /*type*/,
+                 TypeForValue<CPPTypeFlags, Flags> /*flags*/,
+                 const StringRef debug_name)
 {
   using namespace cpp_type_util;
 
   debug_name_ = debug_name;
-  size_ = (int64_t)sizeof(T);
-  alignment_ = (int64_t)alignof(T);
+  size_ = int64_t(sizeof(T));
+  alignment_ = int64_t(alignof(T));
   is_trivial_ = std::is_trivial_v<T>;
   is_trivially_destructible_ = std::is_trivially_destructible_v<T>;
   if constexpr (std::is_default_constructible_v<T>) {
@@ -199,7 +223,7 @@ CPPType::CPPType(CPPTypeParam<T, Flags> /* unused */, StringRef debug_name)
     value_initialize_ = value_initialize_cb<T>;
     value_initialize_indices_ = value_initialize_indices_cb<T>;
     static T default_value;
-    default_value_ = (void *)&default_value;
+    default_value_ = &default_value;
   }
   if constexpr (std::is_destructible_v<T>) {
     destruct_ = destruct_cb<T>;
@@ -208,10 +232,12 @@ CPPType::CPPType(CPPTypeParam<T, Flags> /* unused */, StringRef debug_name)
   if constexpr (std::is_copy_assignable_v<T>) {
     copy_assign_ = copy_assign_cb<T>;
     copy_assign_indices_ = copy_assign_indices_cb<T>;
+    copy_assign_compressed_ = copy_assign_compressed_cb<T>;
   }
   if constexpr (std::is_copy_constructible_v<T>) {
     copy_construct_ = copy_construct_cb<T>;
     copy_construct_indices_ = copy_construct_indices_cb<T>;
+    copy_construct_compressed_ = copy_construct_compressed_cb<T>;
   }
   if constexpr (std::is_move_assignable_v<T>) {
     move_assign_ = move_assign_cb<T>;
@@ -247,16 +273,22 @@ CPPType::CPPType(CPPTypeParam<T, Flags> /* unused */, StringRef debug_name)
     is_equal_ = is_equal_cb<T>;
   }
 
-  alignment_mask_ = (uintptr_t)alignment_ - (uintptr_t)1;
+  alignment_mask_ = uintptr_t(alignment_) - uintptr_t(1);
   has_special_member_functions_ = (default_construct_ && copy_construct_ && copy_assign_ &&
                                    move_construct_ && move_assign_ && destruct_);
 }
 
 }  // namespace blender
 
-#define BLI_CPP_TYPE_MAKE(IDENTIFIER, TYPE_NAME, FLAGS) \
+/** Create a new #CPPType that can be accessed through `CPPType::get<T>()`. */
+#define BLI_CPP_TYPE_MAKE(TYPE_NAME, FLAGS) \
   template<> const blender::CPPType &blender::CPPType::get_impl<TYPE_NAME>() \
   { \
-    static CPPType cpp_type{blender::CPPTypeParam<TYPE_NAME, FLAGS>(), STRINGIFY(IDENTIFIER)}; \
-    return cpp_type; \
+    static CPPType type{blender::TypeTag<TYPE_NAME>(), \
+                        TypeForValue<CPPTypeFlags, FLAGS>(), \
+                        STRINGIFY(TYPE_NAME)}; \
+    return type; \
   }
+
+/** Register a #CPPType created with #BLI_CPP_TYPE_MAKE. */
+#define BLI_CPP_TYPE_REGISTER(TYPE_NAME) blender::CPPType::get<TYPE_NAME>()

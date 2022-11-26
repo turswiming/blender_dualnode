@@ -41,12 +41,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>(N_("Curve"));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "mode", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryCurvePrimitiveBezierSegment *data =
       MEM_cnew<NodeGeometryCurvePrimitiveBezierSegment>(__func__);
@@ -64,17 +64,17 @@ static Curves *create_bezier_segment_curve(const float3 start,
 {
   Curves *curves_id = bke::curves_new_nomain_single(2, CURVE_TYPE_BEZIER);
   bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id->geometry);
-  curves.resolution().fill(resolution);
+  curves.resolution_for_write().fill(resolution);
 
-  MutableSpan<float3> positions = curves.positions();
-  curves.handle_types_left().fill(BEZIER_HANDLE_ALIGN);
-  curves.handle_types_right().fill(BEZIER_HANDLE_ALIGN);
+  MutableSpan<float3> positions = curves.positions_for_write();
+  curves.handle_types_left_for_write().fill(BEZIER_HANDLE_ALIGN);
+  curves.handle_types_right_for_write().fill(BEZIER_HANDLE_ALIGN);
 
   positions.first() = start;
   positions.last() = end;
 
-  MutableSpan<float3> handles_right = curves.handle_positions_right();
-  MutableSpan<float3> handles_left = curves.handle_positions_left();
+  MutableSpan<float3> handles_right = curves.handle_positions_right_for_write();
+  MutableSpan<float3> handles_left = curves.handle_positions_left_for_write();
 
   if (mode == GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT_POSITION) {
     handles_left.first() = 2.0f * start - start_handle_right;
@@ -119,7 +119,7 @@ void register_node_type_geo_curve_primitive_bezier_segment()
   static bNodeType ntype;
   geo_node_type_base(
       &ntype, GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT, "Bezier Segment", NODE_CLASS_GEOMETRY);
-  node_type_init(&ntype, file_ns::node_init);
+  ntype.initfunc = file_ns::node_init;
   node_type_storage(&ntype,
                     "NodeGeometryCurvePrimitiveBezierSegment",
                     node_free_standard_storage,

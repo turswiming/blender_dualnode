@@ -15,8 +15,10 @@
 
 #include "BKE_context.h"
 #include "BKE_global.h"
+#include "BKE_image.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.h"
 #include "BKE_tracking.h"
 
@@ -31,15 +33,12 @@
 #include "NOD_composite.h"
 #include "node_composite_util.hh"
 
-#ifdef WITH_COMPOSITOR
+#ifdef WITH_COMPOSITOR_CPU
 #  include "COM_compositor.h"
 #endif
 
-static void composite_get_from_context(const bContext *C,
-                                       bNodeTreeType *UNUSED(treetype),
-                                       bNodeTree **r_ntree,
-                                       ID **r_id,
-                                       ID **r_from)
+static void composite_get_from_context(
+    const bContext *C, bNodeTreeType * /*treetype*/, bNodeTree **r_ntree, ID **r_id, ID **r_from)
 {
   Scene *scene = CTX_data_scene(C);
 
@@ -48,7 +47,7 @@ static void composite_get_from_context(const bContext *C,
   *r_ntree = scene->nodetree;
 }
 
-static void foreach_nodeclass(Scene *UNUSED(scene), void *calldata, bNodeClassCallback func)
+static void foreach_nodeclass(Scene * /*scene*/, void *calldata, bNodeClassCallback func)
 {
   func(calldata, NODE_CLASS_INPUT, N_("Input"));
   func(calldata, NODE_CLASS_OUTPUT, N_("Output"));
@@ -63,11 +62,11 @@ static void foreach_nodeclass(Scene *UNUSED(scene), void *calldata, bNodeClassCa
   func(calldata, NODE_CLASS_LAYOUT, N_("Layout"));
 }
 
-static void free_node_cache(bNodeTree *UNUSED(ntree), bNode *node)
+static void free_node_cache(bNodeTree * /*ntree*/, bNode *node)
 {
   LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-    if (sock->cache) {
-      sock->cache = nullptr;
+    if (sock->runtime->cache) {
+      sock->runtime->cache = nullptr;
     }
   }
 }
@@ -88,8 +87,8 @@ static void localize(bNodeTree *localtree, bNodeTree *ntree)
   while (node != nullptr) {
 
     /* Ensure new user input gets handled ok. */
-    node->need_exec = 0;
-    local_node->original = node;
+    node->runtime->need_exec = 0;
+    local_node->runtime->original = node;
 
     /* move over the compbufs */
     /* right after #ntreeCopyTree() `oldsock` pointers are valid */
@@ -141,8 +140,8 @@ static void local_merge(Main *bmain, bNodeTree *localtree, bNodeTree *ntree)
 
       for (lsock = (bNodeSocket *)lnode->outputs.first; lsock; lsock = lsock->next) {
         if (bNodeSocket *orig_socket = nodeFindSocket(orig_node, SOCK_OUT, lsock->identifier)) {
-          orig_socket->cache = lsock->cache;
-          lsock->cache = nullptr;
+          orig_socket->runtime->cache = lsock->runtime->cache;
+          lsock->runtime->cache = nullptr;
           orig_socket = nullptr;
         }
       }
@@ -157,7 +156,7 @@ static void update(bNodeTree *ntree)
   ntree_update_reroute_nodes(ntree);
 }
 
-static void composite_node_add_init(bNodeTree *UNUSED(bnodetree), bNode *bnode)
+static void composite_node_add_init(bNodeTree * /*bnodetree*/, bNode *bnode)
 {
   /* Composite node will only show previews for input classes
    * by default, other will be hidden
@@ -167,7 +166,7 @@ static void composite_node_add_init(bNodeTree *UNUSED(bnodetree), bNode *bnode)
   }
 }
 
-static bool composite_node_tree_socket_type_valid(bNodeTreeType *UNUSED(ntreetype),
+static bool composite_node_tree_socket_type_valid(bNodeTreeType * /*ntreetype*/,
                                                   bNodeSocketType *socket_type)
 {
   return nodeIsStaticSocketType(socket_type) &&
@@ -182,6 +181,7 @@ void register_node_tree_type_cmp()
 
   tt->type = NTREE_COMPOSIT;
   strcpy(tt->idname, "CompositorNodeTree");
+  strcpy(tt->group_idname, "CompositorNodeGroup");
   strcpy(tt->ui_name, N_("Compositor"));
   tt->ui_icon = ICON_NODE_COMPOSITING;
   strcpy(tt->ui_description, N_("Compositing nodes"));
@@ -208,7 +208,7 @@ void ntreeCompositExecTree(Scene *scene,
                            int do_preview,
                            const char *view_name)
 {
-#ifdef WITH_COMPOSITOR
+#ifdef WITH_COMPOSITOR_CPU
   COM_execute(rd, scene, ntree, rendering, view_name);
 #else
   UNUSED_VARS(scene, ntree, rd, rendering, view_name);
@@ -263,9 +263,14 @@ void ntreeCompositClearTags(bNodeTree *ntree)
   }
 
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-    node->need_exec = 0;
+    node->runtime->need_exec = 0;
     if (node->type == NODE_GROUP) {
       ntreeCompositClearTags((bNodeTree *)node->id);
     }
   }
+}
+
+void ntreeCompositTagNeedExec(bNode *node)
+{
+  node->runtime->need_exec = true;
 }

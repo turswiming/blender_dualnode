@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "RE_pipeline.h"
+
 struct Depsgraph;
 struct ImBuf;
 struct MLoopUV;
@@ -19,9 +21,14 @@ extern "C" {
 
 typedef struct BakeImage {
   struct Image *image;
+  int tile_number;
+  float uv_offset[2];
   int width;
   int height;
   size_t offset;
+
+  /* For associating render result layer with image. */
+  char render_layer_name[RE_MAXNAME];
 } BakeImage;
 
 typedef struct BakeTargets {
@@ -30,7 +37,7 @@ typedef struct BakeTargets {
   int images_num;
 
   /* Lookup table from Material number to BakeImage. */
-  int *material_to_image;
+  struct Image **material_to_image;
   int materials_num;
 
   /* Pixel buffer to bake to. */
@@ -61,6 +68,7 @@ typedef struct BakeHighPolyData {
 } BakeHighPolyData;
 
 /* external_engine.c */
+
 bool RE_bake_has_engine(const struct Render *re);
 
 bool RE_bake_engine(struct Render *re,
@@ -74,6 +82,7 @@ bool RE_bake_engine(struct Render *re,
                     float result[]);
 
 /* bake.c */
+
 int RE_pass_depth(eScenePassType pass_type);
 
 bool RE_bake_pixels_populate_from_objects(struct Mesh *me_low,
@@ -102,7 +111,8 @@ void RE_bake_margin(struct ImBuf *ibuf,
                     int margin,
                     char margin_type,
                     struct Mesh const *me,
-                    char const *uv_layer);
+                    char const *uv_layer,
+                    const float uv_offset[2]);
 
 void RE_bake_normal_world_to_object(const BakePixel pixel_array[],
                                     size_t pixels_num,

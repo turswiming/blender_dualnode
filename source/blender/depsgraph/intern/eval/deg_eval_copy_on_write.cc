@@ -163,7 +163,7 @@ const ID *nested_id_hack_get_discarded_pointers(NestedIDHackTempStorage *storage
   switch (GS(id->name)) {
 #  define SPECIAL_CASE(id_type, dna_type, field, variable) \
     case id_type: { \
-      storage->variable = *(dna_type *)id; \
+      storage->variable = dna::shallow_copy(*(dna_type *)id); \
       storage->variable.field = nullptr; \
       return &storage->variable.id; \
     }
@@ -414,13 +414,16 @@ void scene_remove_all_bases(Scene *scene_cow)
 
 /* Makes it so given view layer only has bases corresponding to enabled
  * objects. */
-void view_layer_remove_disabled_bases(const Depsgraph *depsgraph, ViewLayer *view_layer)
+void view_layer_remove_disabled_bases(const Depsgraph *depsgraph,
+                                      const Scene *scene,
+                                      ViewLayer *view_layer)
 {
   if (view_layer == nullptr) {
     return;
   }
   ListBase enabled_bases = {nullptr, nullptr};
-  LISTBASE_FOREACH_MUTABLE (Base *, base, &view_layer->object_bases) {
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  LISTBASE_FOREACH_MUTABLE (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
     /* TODO(sergey): Would be cool to optimize this somehow, or make it so
      * builder tags bases.
      *
@@ -479,7 +482,7 @@ void scene_setup_view_layers_after_remap(const Depsgraph *depsgraph,
   const ViewLayer *view_layer_orig = get_original_view_layer(depsgraph, id_node);
   ViewLayer *view_layer_eval = reinterpret_cast<ViewLayer *>(scene_cow->view_layers.first);
   view_layer_update_orig_base_pointers(view_layer_orig, view_layer_eval);
-  view_layer_remove_disabled_bases(depsgraph, view_layer_eval);
+  view_layer_remove_disabled_bases(depsgraph, scene_cow, view_layer_eval);
   /* TODO(sergey): Remove objects from collections as well.
    * Not a HUGE deal for now, nobody is looking into those CURRENTLY.
    * Still not an excuse to have those. */
@@ -872,7 +875,9 @@ ID *deg_update_copy_on_write_datablock(const Depsgraph *depsgraph, const IDNode 
    * TODO: Investigate modes besides edit-mode. */
   if (check_datablock_expanded(id_cow) && !id_node->is_cow_explicitly_tagged) {
     const ID_Type id_type = GS(id_orig->name);
-    if (OB_DATA_SUPPORT_EDITMODE(id_type) && BKE_object_data_is_in_editmode(id_orig)) {
+    /* Pass nullptr as the object is only needed for Curves which do not have edit mode pointers.
+     */
+    if (OB_DATA_SUPPORT_EDITMODE(id_type) && BKE_object_data_is_in_editmode(nullptr, id_orig)) {
       /* Make sure pointers in the edit mode data are updated in the copy.
        * This allows depsgraph to pick up changes made in another context after it has been
        * evaluated. Consider the following scenario:
@@ -986,7 +991,7 @@ void discard_edit_mode_pointers(ID *id_cow)
 }  // namespace
 
 /**
-   Free content of the CoW data-block.
+ *  Free content of the CoW data-block.
  * Notes:
  * - Does not recurse into nested ID data-blocks.
  * - Does not free data-block itself.

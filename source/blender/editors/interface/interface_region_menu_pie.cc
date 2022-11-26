@@ -27,6 +27,7 @@
 #include "WM_types.h"
 
 #include "RNA_access.h"
+#include "RNA_path.h"
 #include "RNA_prototypes.h"
 
 #include "UI_interface.h"
@@ -35,8 +36,8 @@
 
 #include "ED_screen.h"
 
-#include "interface_intern.h"
-#include "interface_regions_intern.h"
+#include "interface_intern.hh"
+#include "interface_regions_intern.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Pie Menu
@@ -48,7 +49,7 @@ struct uiPieMenu {
   int mx, my;
 };
 
-static uiBlock *ui_block_func_PIE(bContext *UNUSED(C), uiPopupBlockHandle *handle, void *arg_pie)
+static uiBlock *ui_block_func_PIE(bContext * /*C*/, uiPopupBlockHandle *handle, void *arg_pie)
 {
   uiBlock *block;
   uiPieMenu *pie = static_cast<uiPieMenu *>(arg_pie);
@@ -221,7 +222,7 @@ int UI_pie_menu_invoke(struct bContext *C, const char *idname, const wmEvent *ev
     return (OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH);
   }
 
-  pie = UI_pie_menu_begin(C, IFACE_(mt->label), ICON_NONE, event);
+  pie = UI_pie_menu_begin(C, CTX_IFACE_(mt->translation_context, mt->label), ICON_NONE, event);
   layout = UI_pie_menu_layout(pie);
 
   UI_menutype_draw(C, mt, layout);
@@ -303,7 +304,7 @@ int UI_pie_menu_invoke_from_rna_enum(struct bContext *C,
  * - Julian (Feb 2016)
  * \{ */
 
- struct PieMenuLevelData {
+struct PieMenuLevelData {
   char title[UI_MAX_NAME_STR]; /* parent pie title, copied for level */
   int icon;                    /* parent pie icon, copied for level */
   int totitem;                 /* total count of *remaining* items */
@@ -313,7 +314,7 @@ int UI_pie_menu_invoke_from_rna_enum(struct bContext *C,
   const char *propname;
   IDProperty *properties;
   wmOperatorCallContext context, flag;
-} ;
+};
 
 /**
  * Invokes a new pie menu for a new level.
@@ -332,7 +333,7 @@ static void ui_pie_menu_level_invoke(bContext *C, void *argN, void *arg2)
   PointerRNA ptr;
 
   WM_operator_properties_create_ptr(&ptr, lvl->ot);
-  /* so the context is passed to itemf functions (some need it) */
+  /* So the context is passed to `itemf` functions (some need it). */
   WM_operator_properties_sanitize(&ptr, false);
   PropertyRNA *prop = RNA_struct_find_property(&ptr, lvl->propname);
 
@@ -371,7 +372,7 @@ void ui_pie_menu_level_create(uiBlock *block,
   EnumPropertyItem *remaining = static_cast<EnumPropertyItem *>(
       MEM_mallocN(array_size + sizeof(EnumPropertyItem), "pie_level_item_array"));
   memcpy(remaining, items + totitem_parent, array_size);
-  /* A nullptr terminating sentinel element is required. */
+  /* A null terminating sentinel element is required. */
   memset(&remaining[totitem_remain], 0, sizeof(EnumPropertyItem));
 
   /* yuk, static... issue is we can't reliably free this without doing dangerous changes */

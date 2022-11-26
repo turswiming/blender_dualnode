@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "BLI_utildefines.h"
+
 #include "DNA_asset_types.h"
 #include "DNA_color_types.h" /* for Histogram */
 #include "DNA_defs.h"
@@ -20,6 +22,7 @@
 #include "DNA_vec_types.h"
 /* Hum ... Not really nice... but needed for spacebuts. */
 #include "DNA_view2d_types.h"
+#include "DNA_viewer_path_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,14 +51,19 @@ struct wmTimer;
 /** Defined in `buttons_intern.h`. */
 typedef struct SpaceProperties_Runtime SpaceProperties_Runtime;
 
-/** Defined in `node_intern.hh`. */
 #ifdef __cplusplus
 namespace blender::ed::space_node {
 struct SpaceNode_Runtime;
 }  // namespace blender::ed::space_node
 using SpaceNode_Runtime = blender::ed::space_node::SpaceNode_Runtime;
+
+namespace blender::ed::outliner {
+struct SpaceOutliner_Runtime;
+}  // namespace blender::ed::outliner
+using SpaceOutliner_Runtime = blender::ed::outliner::SpaceOutliner_Runtime;
 #else
 typedef struct SpaceNode_Runtime SpaceNode_Runtime;
+typedef struct SpaceOutliner_Runtime SpaceOutliner_Runtime;
 #endif
 
 /** Defined in `file_intern.h`. */
@@ -173,7 +181,7 @@ typedef struct SpaceProperties {
 
 /* button defines (deprecated) */
 #ifdef DNA_DEPRECATED_ALLOW
-/* warning: the values of these defines are used in SpaceProperties.tabs[8] */
+/* WARNING: the values of these defines are used in SpaceProperties.tabs[8] */
 /* SpaceProperties.mainb new */
 #  define CONTEXT_SCENE 0
 #  define CONTEXT_OBJECT 1
@@ -250,9 +258,6 @@ typedef enum eSpaceButtons_OutlinerSync {
 /** \name Outliner
  * \{ */
 
-/** Defined in `outliner_intern.hh`. */
-typedef struct SpaceOutliner_Runtime SpaceOutliner_Runtime;
-
 /** Outliner */
 typedef struct SpaceOutliner {
   SpaceLink *next, *prev;
@@ -276,9 +281,7 @@ typedef struct SpaceOutliner {
    */
   struct BLI_mempool *treestore;
 
-  /* search stuff */
   char search_string[64];
-  struct TreeStoreElem search_tse;
 
   short flag;
   short outlinevis;
@@ -394,9 +397,9 @@ typedef enum eSpaceOutliner_Mode {
 
 /** #SpaceOutliner.outlinevis */
 typedef enum eSpaceOutliner_LibOverrideViewMode {
-  /* View all overrides with RNA buttons to edit the overridden values. */
+  /** View all overrides with RNA buttons to edit the overridden values. */
   SO_LIB_OVERRIDE_VIEW_PROPERTIES = 0,
-  /* View entire override hierarchies (relationships between overriden data-blocks). */
+  /** View entire override hierarchies (relationships between overridden data-blocks). */
   SO_LIB_OVERRIDE_VIEW_HIERARCHIES = 1,
 } eSpaceOutliner_LibOverrideViewMode;
 
@@ -405,8 +408,8 @@ typedef enum eSpaceOutliner_StoreFlag {
   /* cleanup tree */
   SO_TREESTORE_CLEANUP = (1 << 0),
   SO_TREESTORE_UNUSED_1 = (1 << 1), /* cleared */
-  /* rebuild the tree, similar to cleanup,
-   * but defer a call to BKE_outliner_treehash_rebuild_from_treestore instead */
+  /** Rebuild the tree, similar to cleanup, but defer a call to
+   * bke::outliner::treehash::rebuild_from_treestore instead. */
   SO_TREESTORE_REBUILD = (1 << 2),
 } eSpaceOutliner_StoreFlag;
 
@@ -517,7 +520,7 @@ typedef enum eGraphEdit_Mode {
 typedef enum eGraphEdit_Runtime_Flag {
   /** Temporary flag to force channel selections to be synced with main. */
   SIPO_RUNTIME_FLAG_NEED_CHAN_SYNC = (1 << 0),
-  /** Temporary flag to force fcurves to recalculate colors. */
+  /** Temporary flag to force F-Curves to recalculate colors. */
   SIPO_RUNTIME_FLAG_NEED_CHAN_SYNC_COLOR = (1 << 1),
 
   /**
@@ -617,6 +620,8 @@ typedef struct SpaceSeqRuntime {
   struct rctf last_thumbnail_area;
   /** Stores lists of most recently displayed thumbnails. */
   struct GHash *last_displayed_thumbnails;
+  int rename_channel_index;
+  float timeline_clamp_custom_range;
 } SpaceSeqRuntime;
 
 /** Sequencer. */
@@ -662,7 +667,7 @@ typedef struct SpaceSeq {
   struct SequencerPreviewOverlay preview_overlay;
   struct SequencerTimelineOverlay timeline_overlay;
 
-  /** Multiview current eye - for internal use. */
+  /** Multi-view current eye - for internal use. */
   char multiview_eye;
   char _pad2[7];
 
@@ -689,7 +694,7 @@ typedef enum eSpaceSeq_Flag {
   SEQ_DRAWFRAMES = (1 << 0),
   SEQ_MARKER_TRANS = (1 << 1),
   SEQ_DRAW_COLOR_SEPARATED = (1 << 2),
-  SPACE_SEQ_FLAG_UNUSED_3 = (1 << 3),
+  SEQ_CLAMP_VIEW = (1 << 3),
   SPACE_SEQ_FLAG_UNUSED_4 = (1 << 4),
   SPACE_SEQ_FLAG_UNUSED_5 = (1 << 5),
   SEQ_USE_ALPHA = (1 << 6), /* use RGBA display mode for preview */
@@ -730,7 +735,8 @@ typedef struct MaskSpaceInfo {
   char draw_flag;
   char draw_type;
   char overlay_mode;
-  char _pad3[5];
+  char _pad3[1];
+  float blend_factor;
 } MaskSpaceInfo;
 
 /** #SpaceSeq.gizmo_flag */
@@ -1025,6 +1031,7 @@ typedef enum eFileSel_Params_Flag {
   /** Enables filtering by asset catalog. */
   FILE_FILTER_ASSET_CATALOG = (1 << 15),
 } eFileSel_Params_Flag;
+ENUM_OPERATORS(eFileSel_Params_Flag, FILE_FILTER_ASSET_CATALOG);
 
 typedef enum eFileSel_Params_AssetCatalogVisibility {
   FILE_SHOW_ASSETS_ALL_CATALOGS,
@@ -1080,6 +1087,7 @@ typedef enum eFileSel_File_Types {
   FILE_TYPE_DIR = (1 << 30),
   FILE_TYPE_BLENDERLIB = (1u << 31),
 } eFileSel_File_Types;
+ENUM_OPERATORS(eFileSel_File_Types, FILE_TYPE_BLENDERLIB);
 
 /** Selection Flags in filesel: struct direntry, unsigned char selflag. */
 typedef enum eDirEntry_SelectFlag {
@@ -1099,7 +1107,7 @@ typedef struct FileDirEntry {
   uint32_t uid; /* FileUID */
   /* Name needs freeing if FILE_ENTRY_NAME_FREE is set. Otherwise this is a direct pointer to a
    * name buffer. */
-  char *name;
+  const char *name;
 
   uint64_t size;
   int64_t time;
@@ -1126,7 +1134,7 @@ typedef struct FileDirEntry {
   /** If this file represents an asset, its asset data is here. Note that we may show assets of
    * external files in which case this is set but not the id above.
    * Note comment for FileListInternEntry.local_data, the same applies here! */
-  struct AssetMetaData *asset_data;
+  struct AssetRepresentation *asset;
 
   /* The icon_id for the preview image. */
   int preview_icon_id;
@@ -1161,6 +1169,10 @@ enum {
   FILE_ENTRY_NAME_FREE = 1 << 1,
   /* The preview for this entry is being loaded on another thread. */
   FILE_ENTRY_PREVIEW_LOADING = 1 << 2,
+  /** For #FILE_TYPE_BLENDERLIB only: Denotes that the ID is known to not have a preview (none was
+   * found in the .blend). Stored so we don't keep trying to find non-existent previews every time
+   * we reload previews. When dealing with heavy files this can have quite an impact. */
+  FILE_ENTRY_BLENDERLIB_NO_PREVIEW = 1 << 3,
 };
 
 /** \} */
@@ -1175,6 +1187,12 @@ typedef struct SpaceImageOverlay {
   int flag;
   char _pad[4];
 } SpaceImageOverlay;
+
+typedef enum eSpaceImage_GridShapeSource {
+  SI_GRID_SHAPE_DYNAMIC = 0,
+  SI_GRID_SHAPE_FIXED = 1,
+  SI_GRID_SHAPE_PIXEL = 2,
+} eSpaceImage_GridShapeSource;
 
 typedef struct SpaceImage {
   SpaceLink *next, *prev;
@@ -1212,7 +1230,7 @@ typedef struct SpaceImage {
 
   char pin;
 
-  char pixel_snap_mode;
+  char pixel_round_mode;
 
   char lock;
   /** UV draw type. */
@@ -1221,7 +1239,10 @@ typedef struct SpaceImage {
   char dt_uvstretch;
   char around;
 
-  char _pad1[4];
+  char gizmo_flag;
+
+  char grid_shape_source;
+  char _pad1[2];
 
   int flag;
 
@@ -1229,11 +1250,10 @@ typedef struct SpaceImage {
 
   int tile_grid_shape[2];
   /**
-   * UV editor custom-grid. Value of `N` will produce `NxN` grid.
-   * Use when #SI_CUSTOM_GRID is set.
+   * UV editor custom-grid. Value of `{M,N}` will produce `MxN` grid.
+   * Use when `custom_grid_shape == SI_GRID_SHAPE_FIXED`.
    */
-  int custom_grid_subdiv;
-  char _pad3[4];
+  int custom_grid_subdiv[2];
 
   MaskSpaceInfo mask_info;
   SpaceImageOverlay overlay;
@@ -1253,12 +1273,12 @@ typedef enum eSpaceImage_UVDT_Stretch {
   SI_UVDT_STRETCH_AREA = 1,
 } eSpaceImage_UVDT_Stretch;
 
-/** #SpaceImage.pixel_snap_mode */
-typedef enum eSpaceImage_PixelSnapMode {
-  SI_PIXEL_SNAP_DISABLED = 0,
-  SI_PIXEL_SNAP_CENTER = 1,
-  SI_PIXEL_SNAP_CORNER = 2,
-} eSpaceImage_Snap_Mode;
+/** #SpaceImage.pixel_round_mode */
+typedef enum eSpaceImage_PixelRoundMode {
+  SI_PIXEL_ROUND_DISABLED = 0,
+  SI_PIXEL_ROUND_CENTER = 1,
+  SI_PIXEL_ROUND_CORNER = 2,
+} eSpaceImage_PixelRoundMode;
 
 /** #SpaceImage.mode */
 typedef enum eSpaceImage_Mode {
@@ -1292,7 +1312,7 @@ typedef enum eSpaceImage_Flag {
   SI_FULLWINDOW = (1 << 16),
 
   SI_FLAG_UNUSED_17 = (1 << 17),
-  SI_CUSTOM_GRID = (1 << 18),
+  SI_FLAG_UNUSED_18 = (1 << 18),
 
   /**
    * This means that the image is drawn until it reaches the view edge,
@@ -1312,11 +1332,21 @@ typedef enum eSpaceImage_Flag {
   SI_SHOW_R = (1 << 27),
   SI_SHOW_G = (1 << 28),
   SI_SHOW_B = (1 << 29),
+
+  SI_GRID_OVER_IMAGE = (1 << 30),
 } eSpaceImage_Flag;
 
 typedef enum eSpaceImageOverlay_Flag {
   SI_OVERLAY_SHOW_OVERLAYS = (1 << 0),
+  SI_OVERLAY_SHOW_GRID_BACKGROUND = (1 << 1),
 } eSpaceImageOverlay_Flag;
+
+/** #SpaceImage.gizmo_flag */
+enum {
+  /** All gizmos. */
+  SI_GIZMO_HIDE = (1 << 0),
+  SI_GIZMO_HIDE_NAVIGATE = (1 << 1),
+};
 
 /** Keep in sync with `STEPS_LEN` in `grid_frag.glsl`. */
 #define SI_GRID_STEPS_LEN 8
@@ -1329,7 +1359,7 @@ typedef enum eSpaceImageOverlay_Flag {
 
 typedef struct SpaceText_Runtime {
 
-  /** Actual line height, scaled by dpi. */
+  /** Actual line height, scaled by DPI. */
   int lheight_px;
 
   /** Runtime computed, character width. */
@@ -1510,6 +1540,7 @@ typedef enum eSpaceNodeOverlay_Flag {
   SN_OVERLAY_SHOW_WIRE_COLORS = (1 << 2),
   SN_OVERLAY_SHOW_TIMINGS = (1 << 3),
   SN_OVERLAY_SHOW_PATH = (1 << 4),
+  SN_OVERLAY_SHOW_NAMED_ATTRIBUTES = (1 << 5),
 } eSpaceNodeOverlay_Flag;
 
 typedef struct SpaceNode {
@@ -1620,7 +1651,7 @@ enum {
 typedef struct ConsoleLine {
   struct ConsoleLine *next, *prev;
 
-  /* keep these 3 vars so as to share free, realloc funcs */
+  /* Keep these 3 vars so as to share free, realloc functions. */
   /** Allocated length. */
   int len_alloc;
   /** Real len - strlen(). */
@@ -1704,7 +1735,8 @@ typedef struct SpaceClip {
   char _pad0[6];
   /* End 'SpaceLink' header. */
 
-  char _pad1[4];
+  char gizmo_flag;
+  char _pad1[3];
 
   /** User defined offset, image is centered. */
   float xof, yof;
@@ -1805,6 +1837,13 @@ typedef enum eSpaceClip_GPencil_Source {
   SC_GPENCIL_SRC_TRACK = 1,
 } eSpaceClip_GPencil_Source;
 
+/** #SpaceClip.gizmo_flag */
+enum {
+  /** All gizmos. */
+  SCLIP_GIZMO_HIDE = (1 << 0),
+  SCLIP_GIZMO_HIDE_NAVIGATE = (1 << 1),
+};
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1870,32 +1909,6 @@ typedef struct SpreadsheetColumn {
   char *display_name;
 } SpreadsheetColumn;
 
-/**
- * An item in SpaceSpreadsheet.context_path.
- * This is a bases struct for the structs below.
- */
-typedef struct SpreadsheetContext {
-  struct SpreadsheetContext *next, *prev;
-  /* eSpaceSpreadsheet_ContextType. */
-  int type;
-  char _pad[4];
-} SpreadsheetContext;
-
-typedef struct SpreadsheetContextObject {
-  SpreadsheetContext base;
-  struct Object *object;
-} SpreadsheetContextObject;
-
-typedef struct SpreadsheetContextModifier {
-  SpreadsheetContext base;
-  char *modifier_name;
-} SpreadsheetContextModifier;
-
-typedef struct SpreadsheetContextNode {
-  SpreadsheetContext base;
-  char *node_name;
-} SpreadsheetContextNode;
-
 typedef struct SpaceSpreadsheet {
   SpaceLink *next, *prev;
   /** Storage of regions for inactive spaces. */
@@ -1912,21 +1925,20 @@ typedef struct SpaceSpreadsheet {
   ListBase row_filters;
 
   /**
-   * List of #SpreadsheetContext.
-   * This is a path to the data that is displayed in the spreadsheet.
-   * It can be set explicitly by an action of the user (e.g. clicking the preview icon in a
-   * geometry node) or it can be derived from context automatically based on some heuristic.
+   * Context that is currently displayed in the editor. This is usually a either a single object
+   * (in original/evaluated mode) or path to a viewer node. This is retrieved from the workspace
+   * but can be pinned so that it stays constant even when the active node changes.
    */
-  ListBase context_path;
+  ViewerPath viewer_path;
 
   /* eSpaceSpreadsheet_FilterFlag. */
   uint8_t filter_flag;
 
   /* #GeometryComponentType. */
   uint8_t geometry_component_type;
-  /* #AttributeDomain. */
+  /* #eAttrDomain. */
   uint8_t attribute_domain;
-  /* eSpaceSpreadsheet_ObjectContext. */
+  /* eSpaceSpreadsheet_ObjectEvalState. */
   uint8_t object_eval_state;
 
   /* eSpaceSpreadsheet_Flag. */
@@ -1964,7 +1976,6 @@ typedef struct SpreadsheetRowFilter {
   float value_float2[2];
   float value_float3[3];
   float value_color[4];
-
   char _pad1[4];
 } SpreadsheetRowFilter;
 
@@ -2002,6 +2013,8 @@ typedef enum eSpreadsheetColumnValueType {
   SPREADSHEET_VALUE_TYPE_COLOR = 5,
   SPREADSHEET_VALUE_TYPE_INSTANCES = 6,
   SPREADSHEET_VALUE_TYPE_STRING = 7,
+  SPREADSHEET_VALUE_TYPE_BYTE_COLOR = 8,
+  SPREADSHEET_VALUE_TYPE_INT8 = 9,
 } eSpreadsheetColumnValueType;
 
 /**
@@ -2054,7 +2067,7 @@ typedef enum eSpace_Type {
   SPACE_STATUSBAR = 22,
   SPACE_SPREADSHEET = 23
 
-#define SPACE_TYPE_LAST SPACE_SPREADSHEET
+#define SPACE_TYPE_NUM (SPACE_SPREADSHEET + 1)
 } eSpace_Type;
 
 /* use for function args */
