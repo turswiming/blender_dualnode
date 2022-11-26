@@ -2,22 +2,18 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_mat_types.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_types.hh"
 
 namespace blender::tests {
 
 using float2x2 = mat_base<float, 2, 2>;
 using float3x2 = mat_base<float, 3, 2>;
-using float3x3 = mat_base<float, 3, 3>;
-using float4x4 = mat_base<float, 4, 4>;
-using double2x2 = mat_base<double, 2, 2>;
 using double3x2 = mat_base<double, 3, 2>;
-using double3x3 = mat_base<double, 3, 3>;
-using double4x4 = mat_base<double, 4, 4>;
 
 using namespace blender::math;
 
-TEST(math_mat_types, ScalarConstructor)
+TEST(math_matrix_types, ScalarConstructor)
 {
   float2x2 m(5.0f);
   EXPECT_EQ(m[0][0], 5.0f);
@@ -26,7 +22,7 @@ TEST(math_mat_types, ScalarConstructor)
   EXPECT_EQ(m[1][0], 0.0f);
 }
 
-TEST(math_mat_types, VectorConstructor)
+TEST(math_matrix_types, VectorConstructor)
 {
   float3x2 m({1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f});
   EXPECT_EQ(m[0][0], 1.0f);
@@ -37,7 +33,7 @@ TEST(math_mat_types, VectorConstructor)
   EXPECT_EQ(m[2][1], 6.0f);
 }
 
-TEST(math_mat_types, SmallerMatrixConstructor)
+TEST(math_matrix_types, SmallerMatrixConstructor)
 {
   float2x2 m2({1.0f, 2.0f}, {3.0f, 4.0f});
   float3x3 m3(m2);
@@ -52,7 +48,7 @@ TEST(math_mat_types, SmallerMatrixConstructor)
   EXPECT_EQ(m3[2][2], 1.0f);
 }
 
-TEST(math_mat_types, ComponentMasking)
+TEST(math_matrix_types, ComponentMasking)
 {
   float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
   float2x2 m2(m3);
@@ -62,7 +58,7 @@ TEST(math_mat_types, ComponentMasking)
   EXPECT_EQ(m2[1][1], 2.2f);
 }
 
-TEST(math_mat_types, PointerConversion)
+TEST(math_matrix_types, PointerConversion)
 {
   float array[4] = {1.0f, 2.0f, 3.0f, 4.0f};
   float2x2 m2(array);
@@ -72,7 +68,7 @@ TEST(math_mat_types, PointerConversion)
   EXPECT_EQ(m2[1][1], 4.0f);
 }
 
-TEST(math_mat_types, TypeConversion)
+TEST(math_matrix_types, TypeConversion)
 {
   float3x2 m(double3x2({1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f}));
   EXPECT_EQ(m[0][0], 1.0f);
@@ -91,7 +87,7 @@ TEST(math_mat_types, TypeConversion)
   EXPECT_EQ(d[2][1], 6.0f);
 }
 
-TEST(math_mat_types, PointerArrayConversion)
+TEST(math_matrix_types, PointerArrayConversion)
 {
   float array[2][2] = {{1.0f, 2.0f}, {3.0f, 4.0f}};
   float(*ptr)[2] = array;
@@ -102,7 +98,7 @@ TEST(math_mat_types, PointerArrayConversion)
   EXPECT_EQ(m2[1][1], 4.0f);
 }
 
-TEST(math_mat_types, ComponentAccess)
+TEST(math_matrix_types, ComponentAccess)
 {
   float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
   EXPECT_EQ(m3.x.x, 1.1f);
@@ -111,7 +107,7 @@ TEST(math_mat_types, ComponentAccess)
   EXPECT_EQ(m3.y.y, 2.2f);
 }
 
-TEST(math_mat_types, AddOperator)
+TEST(math_matrix_types, AddOperator)
 {
   float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
 
@@ -146,7 +142,7 @@ TEST(math_mat_types, AddOperator)
   EXPECT_EQ(m3[2][2], 7.3f);
 }
 
-TEST(math_mat_types, SubtractOperator)
+TEST(math_matrix_types, SubtractOperator)
 {
   float3x3 m3({10.0f, 10.2f, 10.3f}, {20.1f, 20.2f, 20.3f}, {30.1f, 30.2f, 30.3f});
 
@@ -181,7 +177,7 @@ TEST(math_mat_types, SubtractOperator)
   EXPECT_EQ(m3[2][2], -26.3f);
 }
 
-TEST(math_mat_types, MultiplyOperator)
+TEST(math_matrix_types, MultiplyOperator)
 {
   float3x3 m3(float3(1.0f), float3(2.0f), float3(2.0f));
 
@@ -198,7 +194,7 @@ TEST(math_mat_types, MultiplyOperator)
   EXPECT_EQ(m3[2][2], 16.0f);
 }
 
-TEST(math_mat_types, MatrixMultiplyOperator)
+TEST(math_matrix_types, MatrixMultiplyOperator)
 {
   float2x2 a(float2(1, 2), float2(3, 4));
   float2x2 b(float2(5, 6), float2(7, 8));
@@ -224,109 +220,13 @@ TEST(math_mat_types, MatrixMultiplyOperator)
   EXPECT_EQ(result3, float3x3(12));
 }
 
-TEST(math_mat_types, VectorMultiplyOperator)
+TEST(math_matrix_types, VectorMultiplyOperator)
 {
   float3x2 mat(float2(1, 2), float2(3, 4), float2(5, 6));
 
   float2 result = mat * float3(7, 8, 9);
   EXPECT_EQ(result[0], 1 * 7 + 3 * 8 + 5 * 9);
   EXPECT_EQ(result[1], 2 * 7 + 4 * 8 + 6 * 9);
-}
-
-/* TODO split to its own test file. */
-TEST(math_mat_types, MatrixInverse)
-{
-  float3x3 mat(2);
-  float3x3 inv = inverse(mat);
-  EXPECT_NEAR(inv[0][0], 0.5f, 1e-8f);
-  EXPECT_NEAR(inv[0][1], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[0][2], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[1][0], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[1][1], 0.5f, 1e-8f);
-  EXPECT_NEAR(inv[1][2], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[2][0], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[2][1], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[2][2], 0.5f, 1e-8f);
-}
-
-TEST(math_mat_types, MatrixDeterminant)
-{
-  float2x2 m2({1, 2}, {3, 4});
-  float3x3 m3({1, 2, 3}, {-3, 4, -5}, {5, -6, 7});
-  float4x4 m4({1, 2, -3, 3}, {3, 4, -5, 3}, {5, 6, 7, -3}, {5, 6, 7, 1});
-  EXPECT_NEAR(determinant(m2), -2.0f, 1e-8f);
-  EXPECT_NEAR(determinant(m3), -16.0f, 1e-8f);
-  EXPECT_NEAR(determinant(m4), -112.0f, 1e-8f);
-  EXPECT_NEAR(determinant(double2x2(m2)), -2.0f, 1e-8f);
-  EXPECT_NEAR(determinant(double3x3(m3)), -16.0f, 1e-8f);
-  EXPECT_NEAR(determinant(double4x4(m4)), -112.0f, 1e-8f);
-}
-
-TEST(math_mat_types, MatrixAccess)
-{
-  using float4x4 = mat_4x4<float>;
-  float4x4 m({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 1, 2, 3}, {4, 5, 6, 7});
-  /** Access helpers. */
-  EXPECT_EQ(m.forward(), float3(1, 2, 3));
-  EXPECT_EQ(m.right(), float3(5, 6, 7));
-  EXPECT_EQ(m.up(), float3(9, 1, 2));
-  EXPECT_EQ(m.location(), float3(4, 5, 6));
-}
-
-TEST(math_mat_types, MatrixInit)
-{
-  using float4x4 = mat_4x4<float>;
-  float4x4 expect;
-  /** Init Helpers. */
-  float4x4 m = float4x4::from_location({1, 2, 3});
-  expect = float4x4({1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {1, 2, 3, 1});
-  EXPECT_TRUE(compare(m, expect, 0.00001f));
-
-  m = float4x4::from_rotation({1, 2, 3});
-  expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
-                    {-0.833738, -0.426918, -0.350175, 0},
-                    {-0.36763, 0.902382, -0.224845, 0},
-                    {0, 0, 0, 1});
-  EXPECT_TRUE(compare(m, expect, 0.00001f));
-
-  m = float4x4::from_scale({1, 2, 3});
-  expect = float4x4({1, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, 1});
-  EXPECT_TRUE(compare(m, expect, 0.00001f));
-
-  m = float4x4::from_loc_rot({1, 2, 3}, {1, 2, 3});
-  expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
-                    {-0.833738, -0.426918, -0.350175, 0},
-                    {-0.36763, 0.902382, -0.224845, 0},
-                    {1, 2, 3, 1});
-  EXPECT_TRUE(compare(m, expect, 0.00001f));
-
-  m = float4x4::from_loc_rot_scale({1, 2, 3}, {1, 2, 3}, {1, 2, 3});
-  expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
-                    {-1.66748, -0.853835, -0.700351, 0},
-                    {-1.10289, 2.70714, -0.674535, 0},
-                    {1, 2, 3, 1});
-  EXPECT_TRUE(compare(m, expect, 0.00001f));
-}
-
-TEST(math_mat_types, MatrixMethods)
-{
-  using float4x4 = mat_4x4<float>;
-  /** Methods. */
-  float4x4 m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
-  EXPECT_TRUE(compare(m.to_euler(), rotation::EulerXYZ<float>(0, 0, M_PI_2), 0.0002f));
-  EXPECT_EQ(m.to_scale(), float3(3, 2, 2));
-  EXPECT_TRUE(is_negative(m));
-  EXPECT_FALSE(is_unit_scale(m));
-}
-
-TEST(math_mat_types, MatrixInterpolation)
-{
-  using float4x4 = mat_4x4<float>;
-  float4x4 m1 = float4x4::from_loc_rot_scale({10, 5, 0}, {M_PI_2, 0, 0}, {1, 1, 1});
-  float4x4 m2 = float4x4::from_loc_rot_scale({0, 5, 10}, {0, 0, 0}, {3, 3, 7});
-  float4x4 expect = float4x4::from_loc_rot_scale({5, 5, 5}, {M_PI_2 * 0.5f, 0, 0}, {2, 2, 4});
-  float4x4 result = math::interpolate(m1, m2, 0.5f);
-  EXPECT_TRUE(compare(result, expect, 0.00001f));
 }
 
 }  // namespace blender::tests
