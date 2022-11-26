@@ -23,45 +23,116 @@ using double2x2 = blender::mat_base<double, 2, 2>;
 using double3x3 = blender::mat_base<double, 3, 3>;
 using double4x4 = blender::mat_base<double, 4, 4>;
 
-namespace blender::math {
-
 using Eigen::Map;
 using Eigen::Matrix;
 using Eigen::Stride;
 
 /* -------------------------------------------------------------------- */
+/** \name Matrix multiplication
+ * \{ */
+
+namespace blender {
+
+template<typename T, int NumCol, int NumRow>
+mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
+                                      const mat_base<T, NumCol, NumRow> &b)
+{
+  /** \note this is the reference implementation.
+   * Subclass are free to overload it with vectorized / optimized code. */
+  /** \note Only tested for square matrices. Might still contain bugs. */
+  mat_base<T, NumCol, NumRow> result(0);
+  unroll<NumCol>([&](auto c) {
+    unroll<NumRow>([&](auto r) {
+      /** \note this is vector multiplication. */
+      result[c] += b[c][r] * a[r];
+    });
+  });
+  return result;
+}
+
+template float2x2 operator*(const float2x2 &a, const float2x2 &b);
+#ifndef BLI_HAVE_SSE2
+template float2x2 operator*(const float2x2 &a, const float2x2 &b);
+template float3x3 operator*(const float3x3 &a, const float3x3 &b);
+#endif
+template double2x2 operator*(const double2x2 &a, const double2x2 &b);
+template double3x3 operator*(const double3x3 &a, const double3x3 &b);
+template double4x4 operator*(const double4x4 &a, const double4x4 &b);
+
+#ifdef BLI_HAVE_SSE2
+template<> float3x3 operator*(const float3x3 &a, const float3x3 &b)
+{
+  union {
+    float3x3 result;
+    /* Protect from buffer overrun. */
+    mat_base<float, 3, 4> _pad0;
+  };
+
+  __m128 A0 = _mm_loadu_ps(a[0]);
+  __m128 A1 = _mm_loadu_ps(a[1]);
+  /** \note This will load one extra float after the end of \arg a. But result is discarded. */
+  __m128 A2 = _mm_loadu_ps(a[2]);
+
+  for (int i = 0; i < 3; i++) {
+    __m128 B0 = _mm_set1_ps(b[i][0]);
+    __m128 B1 = _mm_set1_ps(b[i][1]);
+    /** \note This will load one extra float after the end of \arg a. But result is discarded. */
+    __m128 B2 = _mm_set1_ps(b[i][2]);
+
+    __m128 sum = _mm_add_ps(_mm_add_ps(_mm_mul_ps(B0, A0), _mm_mul_ps(B1, A1)),
+                            _mm_mul_ps(B2, A2));
+
+    /** \note This will load one extra float after the end of `result`. */
+    _mm_storeu_ps(result[i], sum);
+  }
+  return result;
+}
+
+template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
+{
+  float4x4 result;
+
+  __m128 A0 = _mm_loadu_ps(a[0]);
+  __m128 A1 = _mm_loadu_ps(a[1]);
+  __m128 A2 = _mm_loadu_ps(a[2]);
+  __m128 A3 = _mm_loadu_ps(a[3]);
+
+  for (int i = 0; i < 4; i++) {
+    __m128 B0 = _mm_set1_ps(b[i][0]);
+    __m128 B1 = _mm_set1_ps(b[i][1]);
+    __m128 B2 = _mm_set1_ps(b[i][2]);
+    __m128 B3 = _mm_set1_ps(b[i][3]);
+
+    __m128 sum = _mm_add_ps(_mm_add_ps(_mm_mul_ps(B0, A0), _mm_mul_ps(B1, A1)),
+                            _mm_add_ps(_mm_mul_ps(B2, A2), _mm_mul_ps(B3, A3)));
+
+    _mm_storeu_ps(result[i], sum);
+  }
+  return result;
+}
+#endif
+
+}  // namespace blender
+
+/** \} */
+
+namespace blender::math {
+
+/* -------------------------------------------------------------------- */
 /** \name Determinant
  * \{ */
 
-template<> float determinant(const float2x2 &mat)
+template<typename T, int Size> T determinant(const mat_base<T, Size, Size> &mat)
 {
-  return Map<const Matrix<float, 2, 2>>((const float *)mat).determinant();
+  return Map<const Matrix<T, Size, Size>>((const T *)mat).determinant();
 }
 
-template<> float determinant(const float3x3 &mat)
-{
-  return Map<const Matrix<float, 3, 3>>((const float *)mat).determinant();
-}
-
-template<> float determinant(const float4x4 &mat)
-{
-  return Map<const Matrix<float, 4, 4>>((const float *)mat).determinant();
-}
-
-template<> double determinant(const double2x2 &mat)
-{
-  return Map<const Matrix<double, 2, 2>>((const double *)mat).determinant();
-}
-
-template<> double determinant(const double3x3 &mat)
-{
-  return Map<const Matrix<double, 3, 3>>((const double *)mat).determinant();
-}
-
-template<> double determinant(const double4x4 &mat)
-{
-  return Map<const Matrix<double, 4, 4>>((const double *)mat).determinant();
-}
+template float determinant(const float2x2 &mat);
+template float determinant(const float3x3 &mat);
+template float determinant(const float4x4 &mat);
+template double determinant(const double2x2 &mat);
+template double determinant(const double3x3 &mat);
+template double determinant(const double4x4 &mat);
 
 template<> bool is_negative(const float4x4 &mat)
 {
@@ -85,8 +156,7 @@ template<> bool is_negative(const double4x4 &mat)
 /** \name Inverse
  * \{ */
 
-template<typename T, int Size>
-inline mat_base<T, Size, Size> inverse_impl(const mat_base<T, Size, Size> &mat)
+template<typename T, int Size> mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat)
 {
   mat_base<T, Size, Size> result;
   Map<const Matrix<T, Size, Size>> M((const T *)mat);
@@ -99,35 +169,12 @@ inline mat_base<T, Size, Size> inverse_impl(const mat_base<T, Size, Size> &mat)
   return result;
 }
 
-template<> float2x2 inverse(const float2x2 &mat)
-{
-  return inverse_impl(mat);
-}
-
-template<> float3x3 inverse(const float3x3 &mat)
-{
-  return inverse_impl(mat);
-}
-
-template<> float4x4 inverse(const float4x4 &mat)
-{
-  return inverse_impl(mat);
-}
-
-template<> double2x2 inverse(const double2x2 &mat)
-{
-  return inverse_impl(mat);
-}
-
-template<> double3x3 inverse(const double3x3 &mat)
-{
-  return inverse_impl(mat);
-}
-
-template<> double4x4 inverse(const double4x4 &mat)
-{
-  return inverse_impl(mat);
-}
+template float2x2 inverse(const float2x2 &mat);
+template float3x3 inverse(const float3x3 &mat);
+template float4x4 inverse(const float4x4 &mat);
+template double2x2 inverse(const double2x2 &mat);
+template double3x3 inverse(const double3x3 &mat);
+template double4x4 inverse(const double4x4 &mat);
 
 /** \} */
 
@@ -189,7 +236,7 @@ static void polar_decompose(const mat_base<T, 3, 3> &mat3,
  * \{ */
 
 template<typename T>
-mat_base<T, 3, 3> interpolate_impl(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3> &B, T t)
+mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3> &B, T t)
 {
   /* 'Rotation' component ('U' part of polar decomposition,
    * the closest orthogonal matrix to M3 rot/scale
@@ -228,84 +275,25 @@ mat_base<T, 3, 3> interpolate_impl(const mat_base<T, 3, 3> &A, const mat_base<T,
   return U * P;
 }
 
-float3x3 interpolate(const float3x3 &A, const float3x3 &B, float t)
+template float3x3 interpolate(const float3x3 &A, const float3x3 &B, float t);
+template double3x3 interpolate(const double3x3 &A, const double3x3 &B, double t);
+
+template<typename T>
+mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &A, const mat_base<T, 4, 4> &B, T t)
 {
-  return interpolate_impl(A, B, t);
+  mat_4x4<T> result = mat_4x4<T>(interpolate(mat_3x3<T>(A), mat_3x3<T>(B), t));
+
+  /* Location component, linearly interpolated. */
+  const auto &loc_a = static_cast<const mat_4x4<T> &>(A).location();
+  const auto &loc_b = static_cast<const mat_4x4<T> &>(B).location();
+  result.location() = interpolate(loc_a, loc_b, t);
+
+  return result;
 }
 
-double3x3 interpolate(const double3x3 &A, const double3x3 &B, double t)
-{
-  return interpolate_impl(A, B, t);
-}
+template float4x4 interpolate(const float4x4 &A, const float4x4 &B, float t);
+template double4x4 interpolate(const double4x4 &A, const double4x4 &B, double t);
 
 /** \} */
 
 }  // namespace blender::math
-
-/* -------------------------------------------------------------------- */
-/** \name Matrix multiplication
- *
- * Manual optimization using SSE2.
- *
- * \{ */
-
-namespace blender {
-
-#ifdef BLI_HAVE_SSE2
-template<> float3x3 operator*(const float3x3 &a, const float3x3 &b)
-{
-  union {
-    float3x3 result;
-    /* Protect from buffer overrun. */
-    mat_base<float, 3, 4> _pad0;
-  };
-
-  __m128 A0 = _mm_loadu_ps(a[0]);
-  __m128 A1 = _mm_loadu_ps(a[1]);
-  /** \note This will load one extra float after the end of \arg a. But result is discarded. */
-  __m128 A2 = _mm_loadu_ps(a[2]);
-
-  for (int i = 0; i < 3; i++) {
-    __m128 B0 = _mm_set1_ps(b[i][0]);
-    __m128 B1 = _mm_set1_ps(b[i][1]);
-    /** \note This will load one extra float after the end of \arg a. But result is discarded. */
-    __m128 B2 = _mm_set1_ps(b[i][2]);
-
-    __m128 sum = _mm_add_ps(_mm_add_ps(_mm_mul_ps(B0, A0), _mm_mul_ps(B1, A1)),
-                            _mm_mul_ps(B2, A2));
-
-    /** \note This will load one extra float after the end of `result`. */
-    _mm_storeu_ps(result[i], sum);
-  }
-  return result;
-}
-
-template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
-{
-  float4x4 result;
-
-  __m128 A0 = _mm_loadu_ps(a[0]);
-  __m128 A1 = _mm_loadu_ps(a[1]);
-  __m128 A2 = _mm_loadu_ps(a[2]);
-  __m128 A3 = _mm_loadu_ps(a[3]);
-
-  for (int i = 0; i < 4; i++) {
-    __m128 B0 = _mm_set1_ps(b[i][0]);
-    __m128 B1 = _mm_set1_ps(b[i][1]);
-    __m128 B2 = _mm_set1_ps(b[i][2]);
-    __m128 B3 = _mm_set1_ps(b[i][3]);
-
-    __m128 sum = _mm_add_ps(_mm_add_ps(_mm_mul_ps(B0, A0), _mm_mul_ps(B1, A1)),
-                            _mm_add_ps(_mm_mul_ps(B2, A2), _mm_mul_ps(B3, A3)));
-
-    _mm_storeu_ps(result[i], sum);
-  }
-  return result;
-}
-#endif
-
-/** \} */
-
-}  // namespace blender
-
-/** \} */

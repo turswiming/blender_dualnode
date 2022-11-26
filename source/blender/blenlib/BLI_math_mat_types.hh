@@ -243,6 +243,10 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return *this;
   }
 
+  /** IMPORTANT: This is matrix multiplication. Not per component. */
+  /** \note defined outside of class. */
+  // friend mat_base operator*(const mat_base &a, const mat_base &b);
+
   /** IMPORTANT: This is per component multiplication. */
   friend mat_base operator*(const mat_base &a, T b)
   {
@@ -353,23 +357,9 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
   }
 };
 
-/** IMPORTANT: This is matrix multiplication. Not per component. */
 template<typename T, int NumCol, int NumRow>
 mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
-                                      const mat_base<T, NumCol, NumRow> &b)
-{
-  /** \note this is the reference implementation.
-   * Subclass are free to overload it with vectorized / optimized code. */
-  /** \note Only tested for square matrices. Might still contain bugs. */
-  mat_base<T, NumCol, NumRow> result = mat_base<T, NumCol, NumRow>(0);
-  unroll<NumCol>([&](auto c) {
-    unroll<NumRow>([&](auto r) {
-      /** \note this is vector multiplication. */
-      result[c] += b[c][r] * a[r];
-    });
-  });
-  return result;
-}
+                                      const mat_base<T, NumCol, NumRow> &b);
 
 #ifdef BLI_HAVE_SSE2
 template<>
@@ -381,12 +371,6 @@ mat_base<float, 4, 4> operator*(const mat_base<float, 4, 4> &a, const mat_base<f
 namespace math {
 
 template<typename T, int Size> mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat);
-template<> mat_base<float, 2, 2> inverse(const mat_base<float, 2, 2> &mat);
-template<> mat_base<float, 3, 3> inverse(const mat_base<float, 3, 3> &mat);
-template<> mat_base<float, 4, 4> inverse(const mat_base<float, 4, 4> &mat);
-template<> mat_base<double, 2, 2> inverse(const mat_base<double, 2, 2> &mat);
-template<> mat_base<double, 3, 3> inverse(const mat_base<double, 3, 3> &mat);
-template<> mat_base<double, 4, 4> inverse(const mat_base<double, 4, 4> &mat);
 
 /**
  * Matrix inversion can be implemented more efficiently for affine matrices.
@@ -410,10 +394,6 @@ inline mat_base<T, NumCol, NumRow> transpose(mat_base<T, NumRow, NumCol> &mat)
 }
 
 template<typename T, int Size> T determinant(const mat_base<T, Size, Size> &mat);
-template<> float determinant(const mat_base<float, 3, 3> &mat);
-template<> float determinant(const mat_base<float, 4, 4> &mat);
-template<> double determinant(const mat_base<double, 3, 3> &mat);
-template<> double determinant(const mat_base<double, 4, 4> &mat);
 
 template<typename T, int Size> bool is_negative(const mat_base<T, Size, Size> &mat)
 {
@@ -449,12 +429,8 @@ inline mat_base<T, NumCol, NumRow> interpolate_linear(const mat_base<T, NumCol, 
  * \param B: Input matrix which is totally effective with `t = 1.0`.
  * \param t: Interpolation factor.
  */
-mat_base<float, 3, 3> interpolate(const mat_base<float, 3, 3> &A,
-                                  const mat_base<float, 3, 3> &B,
-                                  float t);
-mat_base<double, 3, 3> interpolate(const mat_base<double, 3, 3> &A,
-                                   const mat_base<double, 3, 3> &B,
-                                   double t);
+template<typename T>
+mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3> &B, T t);
 
 /**
  * Complete transform matrix interpolation,
@@ -465,23 +441,7 @@ mat_base<double, 3, 3> interpolate(const mat_base<double, 3, 3> &A,
  * \param t: Interpolation factor.
  */
 template<typename T>
-inline mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &a, const mat_base<T, 4, 4> &b, T t)
-{
-  /* TODO Move implementation out of header and use mat_3x3 types. */
-  using mat_4x4 = mat_base<T, 4, 4>;
-  using mat_3x3 = mat_base<T, 3, 3>;
-  using vec_3 = vec_base<T, 3>;
-
-  mat_4x4 result = mat_4x4(interpolate(mat_3x3(a), mat_3x3(b), t));
-
-  /* Location component, linearly interpolated. */
-  vec_3 &location = *reinterpret_cast<vec_3 *>(&result[3][0]);
-  const vec_3 &loc_a = *reinterpret_cast<const vec_3 *>(&a[3][0]);
-  const vec_3 &loc_b = *reinterpret_cast<const vec_3 *>(&b[3][0]);
-  location = interpolate(loc_a, loc_b, t);
-
-  return result;
-}
+mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &A, const mat_base<T, 4, 4> &B, T t);
 
 template<typename T> inline T normalize(const T &a)
 {
