@@ -17,9 +17,7 @@ CCL_NAMESPACE_BEGIN
 ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
                                                    const float3 bbox_max,
                                                    const float3 P,
-                                                   const float3 N,
-                                                   const float3 point_to_centroid,
-                                                   ccl_private bool &bbox_is_visible)
+                                                   const float3 point_to_centroid)
 {
   float cos_theta_u = 1.0f;
   /* Iterate through all 8 possible points of the bounding box. */
@@ -31,9 +29,6 @@ ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
     /* Caculate the bounding box angle. */
     float3 point_to_corner = normalize(corner - P);
     cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
-
-    /* Figure out whether or not the bounding box is in front or behind the shading point. */
-    bbox_is_visible |= dot(point_to_corner, N) > 0;
   }
   return cos_theta_u;
 }
@@ -386,18 +381,6 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
 
       const float3 centroid = 0.5f * (bbox_min + bbox_max);
 
-      point_to_centroid = normalize_len(centroid - P, &distance);
-      bool bbox_is_visible = has_transmission;
-      cos_theta_u = light_tree_cos_bounding_box_angle(
-          bbox_min, bbox_max, P, N_or_D, point_to_centroid, bbox_is_visible);
-
-      /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
-       * opaque, then we can give the node an importance of 0 as it contributes nothing to the
-       * surface. */
-      if (!bbox_is_visible) {
-        return;
-      }
-
       if (in_volume_segment) {
         const float3 D = N_or_D;
         const float3 closest_point = P + dot(centroid - P, D) * D;
@@ -406,7 +389,23 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
         float3 P_v;
         point_to_centroid = -compute_v(centroid, P, D, bcone_axis, t, P_v);
         cos_theta_u = light_tree_cos_bounding_box_angle(
-            bbox_min, bbox_max, P_v, D, point_to_centroid, bbox_is_visible);
+            bbox_min, bbox_max, P_v, point_to_centroid);
+      }
+      else {
+        const float3 N = N_or_D;
+        const float3 bbox_extent = bbox_max - centroid;
+        const bool bbox_is_visible = has_transmission |
+                                     (dot(N, centroid - P) + dot(fabs(N), fabs(bbox_extent)) > 0);
+
+        /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
+         * opaque, then we can give the node an importance of 0 as it contributes nothing to the
+         * surface. */
+        if (!bbox_is_visible) {
+          return;
+        }
+
+        point_to_centroid = normalize_len(centroid - P, &distance);
+        cos_theta_u = light_tree_cos_bounding_box_angle(bbox_min, bbox_max, P, point_to_centroid);
       }
       /* clamp distance to half the radius of the cluster when splitting is disabled */
       distance = fmaxf(0.5f * len(centroid - bbox_max), distance);
