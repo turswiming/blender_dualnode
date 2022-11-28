@@ -129,20 +129,9 @@ template double determinant(const double2x2 &mat);
 template double determinant(const double3x3 &mat);
 template double determinant(const double4x4 &mat);
 
-template<> bool is_negative(const float4x4 &mat)
+template<typename T> bool is_negative(const mat_base<T, 4, 4> &mat)
 {
-  /* Don't use determinant(float4x4) as only the 3x3 components are needed
-   * when the matrix is used as a transformation to represent location/scale/rotation. */
-  return Map<const Matrix<float, 3, 3>, 0, Stride<4, 1>>((const float *)mat).determinant() <
-         float(0);
-}
-
-template<> bool is_negative(const double4x4 &mat)
-{
-  /* Don't use determinant(float4x4) as only the 3x3 components are needed
-   * when the matrix is used as a transformation to represent location/scale/rotation. */
-  return Map<const Matrix<double, 3, 3>, 0, Stride<4, 1>>((const double *)mat).determinant() <
-         double(0);
+  return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>((const T *)mat).determinant() < T(0);
 }
 
 /** \} */

@@ -45,6 +45,18 @@ template<typename T> struct Quaternion : public vec_base<T, 4> {
   }
 };
 
+/**
+ * Intermediate Types
+ *
+ * Some function need to have higher precision than standard floats.
+ */
+template<typename T> struct TypeTraits {
+  using IntermediateType = T;
+};
+template<> struct TypeTraits<float> {
+  using IntermediateType = double;
+};
+
 };  // namespace blender::rotation
 
 namespace blender {

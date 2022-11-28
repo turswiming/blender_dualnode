@@ -15,10 +15,10 @@ namespace blender::math {
 
 /* Returns true if each individual columns are unit scaled. Mainly for assert usage. */
 template<typename T, int NumCol, int NumRow>
-inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &v)
+inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &m)
 {
   for (int i = 0; i < NumCol; i++) {
-    if (!is_unit_scale(v[i])) {
+    if (!is_unit_scale(m[i])) {
       return false;
     }
   }
@@ -35,7 +35,7 @@ inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &v)
 template<typename T, int Size> mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat);
 
 /**
- * Flip the matrix around its diagonal.
+ * Flip the matrix around its diagonal. Also flips dimensions for non square matrices.
  */
 template<typename T, int NumCol, int NumRow>
 inline mat_base<T, NumCol, NumRow> transpose(const mat_base<T, NumRow, NumCol> &mat)
@@ -65,9 +65,9 @@ inline mat_base<T, NumCol, NumRow> interpolate_linear(const mat_base<T, NumCol, 
 /**
  * A polar-decomposition-based interpolation between matrix A and matrix B.
  *
- * \note This code is about five times slower as the 'naive' interpolation done by #blend_m3_m3m3
+ * \note This code is about five times slower as the 'naive' interpolation
  * (it typically remains below 2 usec on an average i74700,
- * while #blend_m3_m3m3 remains below 0.4 usec).
+ * while naive implementation remains below 0.4 usec).
  * However, it gives expected results even with non-uniformly scaled matrices,
  * see T46418 for an example.
  *
@@ -83,7 +83,7 @@ mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3
 
 /**
  * Complete transform matrix interpolation,
- * based on polar-decomposition-based interpolation from #interp_m3_m3m3.
+ * based on polar-decomposition-based interpolation from #interpolate<T, 3, 3>.
  *
  * \param A: Input matrix which is totally effective with `t = 0.0`.
  * \param B: Input matrix which is totally effective with `t = 1.0`.
@@ -110,13 +110,15 @@ template<typename T> inline T normalize(const T &a)
 
 /**
  * Returns true if matrix has inverted handedness.
+ *
+ * \note It doesn't use determinant(mat4x4) as only the 3x3 components are needed
+ * when the matrix is used as a transformation to represent location/scale/rotation.
  */
 template<typename T, int Size> bool is_negative(const mat_base<T, Size, Size> &mat)
 {
   return determinant(mat) < T(0);
 }
-template<> bool is_negative(const mat_base<float, 4, 4> &mat);
-template<> bool is_negative(const mat_base<double, 4, 4> &mat);
+template<typename T> bool is_negative(const mat_base<T, 4, 4> &mat);
 
 /**
  * Returns true if matrices are equal within the given limit.
@@ -128,7 +130,7 @@ inline bool compare(const mat_base<T, NumCol, NumRow> &a,
 {
   for (int i = 0; i < NumCol; i++) {
     for (int j = 0; j < NumRow; j++) {
-      if (std::abs(a[i][j] - b[i][j]) > limit) {
+      if (math::abs(a[i][j] - b[i][j]) > limit) {
         return false;
       }
     }
@@ -146,16 +148,17 @@ namespace mat3x3 {
 
 template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T> &rotation)
 {
-  double ci = std::cos(rotation[0]);
-  double cj = std::cos(rotation[1]);
-  double ch = std::cos(rotation[2]);
-  double si = std::sin(rotation[0]);
-  double sj = std::sin(rotation[1]);
-  double sh = std::sin(rotation[2]);
-  double cc = ci * ch;
-  double cs = ci * sh;
-  double sc = si * ch;
-  double ss = si * sh;
+  using IntermediateType = rotation::TypeTraits<T>::IntermediateType;
+  IntermediateType ci = math::cos(rotation[0]);
+  IntermediateType cj = math::cos(rotation[1]);
+  IntermediateType ch = math::cos(rotation[2]);
+  IntermediateType si = math::sin(rotation[0]);
+  IntermediateType sj = math::sin(rotation[1]);
+  IntermediateType sh = math::sin(rotation[2]);
+  IntermediateType cc = ci * ch;
+  IntermediateType cs = ci * sh;
+  IntermediateType sc = si * ch;
+  IntermediateType ss = si * sh;
 
   mat_base<T, 3, 3> mat;
   mat[0][0] = T(cj * ch);
@@ -174,20 +177,21 @@ template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T>
 
 template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<T> &rotation)
 {
-  double q0 = M_SQRT2 * double(rotation[0]);
-  double q1 = M_SQRT2 * double(rotation[1]);
-  double q2 = M_SQRT2 * double(rotation[2]);
-  double q3 = M_SQRT2 * double(rotation[3]);
+  using IntermediateType = rotation::TypeTraits<T>::IntermediateType;
+  IntermediateType q0 = M_SQRT2 * IntermediateType(rotation[0]);
+  IntermediateType q1 = M_SQRT2 * IntermediateType(rotation[1]);
+  IntermediateType q2 = M_SQRT2 * IntermediateType(rotation[2]);
+  IntermediateType q3 = M_SQRT2 * IntermediateType(rotation[3]);
 
-  double qda = q0 * q1;
-  double qdb = q0 * q2;
-  double qdc = q0 * q3;
-  double qaa = q1 * q1;
-  double qab = q1 * q2;
-  double qac = q1 * q3;
-  double qbb = q2 * q2;
-  double qbc = q2 * q3;
-  double qcc = q3 * q3;
+  IntermediateType qda = q0 * q1;
+  IntermediateType qdb = q0 * q2;
+  IntermediateType qdc = q0 * q3;
+  IntermediateType qaa = q1 * q1;
+  IntermediateType qab = q1 * q2;
+  IntermediateType qac = q1 * q3;
+  IntermediateType qbb = q2 * q2;
+  IntermediateType qbc = q2 * q3;
+  IntermediateType qcc = q3 * q3;
 
   mat_base<T, 3, 3> mat;
   mat[0][0] = T(1.0 - qbb - qcc);
