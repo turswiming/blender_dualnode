@@ -3691,7 +3691,6 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       }
     }
   }
-
   if (!MAIN_VERSION_ATLEAST(bmain, 305, 2)) {
     LISTBASE_FOREACH (MovieClip *, clip, &bmain->movieclips) {
       MovieTracking *tracking = &clip->tracking;
@@ -3707,6 +3706,8 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
                                             frame_center_y;
     }
   }
+
+  /* TODO: Automatically expand/collapse node sections based on existing connections. */
 
   /**
    * Versioning code until next subversion bump goes here.

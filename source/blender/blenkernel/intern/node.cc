@@ -113,7 +113,10 @@ bNodeSocketType NodeSocketTypeUndefined;
 static CLG_LogRef LOG = {"bke.node"};
 
 static void ntree_set_typeinfo(bNodeTree *ntree, bNodeTreeType *typeinfo);
-static void node_socket_copy(bNodeSocket *sock_dst, const bNodeSocket *sock_src, const int flag);
+static void node_socket_copy(bNodeSocket *sock_dst,
+                             const bNodeSocket *sock_src,
+                             const int flag,
+                             const Map<const bNodeSection *, bNodeSection *> &section_map);
 static void free_localized_node_groups(bNodeTree *ntree);
 static void node_free_node(bNodeTree *ntree, bNode *node);
 static void node_socket_interface_free(bNodeTree * /*ntree*/,
@@ -167,17 +170,27 @@ static void ntree_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, cons
     BLI_addtail(&ntree_dst->links, dst_link);
   }
 
+  /* copy interface sections */
+  Map<const bNodeSection *, bNodeSection *> section_map;
+  section_map.add_new(nullptr, nullptr);
+  BLI_listbase_clear(&ntree_dst->sections);
+  LISTBASE_FOREACH (const bNodeSection *, src_section, &ntree_src->sections) {
+    bNodeSection *dst_section = (bNodeSection *)MEM_dupallocN(src_section);
+    BLI_addtail(&ntree_dst->sections, dst_section);
+    section_map.add_new(src_section, dst_section);
+  }
+
   /* copy interface sockets */
   BLI_listbase_clear(&ntree_dst->inputs);
   LISTBASE_FOREACH (const bNodeSocket *, src_socket, &ntree_src->inputs) {
     bNodeSocket *dst_socket = (bNodeSocket *)MEM_dupallocN(src_socket);
-    node_socket_copy(dst_socket, src_socket, flag_subdata);
+    node_socket_copy(dst_socket, src_socket, flag_subdata, section_map);
     BLI_addtail(&ntree_dst->inputs, dst_socket);
   }
   BLI_listbase_clear(&ntree_dst->outputs);
   LISTBASE_FOREACH (const bNodeSocket *, src_socket, &ntree_src->outputs) {
     bNodeSocket *dst_socket = (bNodeSocket *)MEM_dupallocN(src_socket);
-    node_socket_copy(dst_socket, src_socket, flag_subdata);
+    node_socket_copy(dst_socket, src_socket, flag_subdata, section_map);
     BLI_addtail(&ntree_dst->outputs, dst_socket);
   }
 
@@ -255,6 +268,8 @@ static void ntree_free_data(ID *id)
     node_socket_interface_free(ntree, sock, false);
     MEM_freeN(sock);
   }
+
+  BLI_freelistN(&ntree->sections);
 
   /* free preview hash */
   if (ntree->previews) {
@@ -504,6 +519,10 @@ void ntreeBlendWrite(BlendWriter *writer, bNodeTree *ntree)
       IDP_BlendWrite(writer, node->prop);
     }
 
+    LISTBASE_FOREACH (bNodeSection *, section, &node->sections) {
+      BLO_write_struct(writer, bNodeSection, section);
+    }
+
     LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
       write_node_socket(writer, sock);
     }
@@ -600,6 +619,10 @@ void ntreeBlendWrite(BlendWriter *writer, bNodeTree *ntree)
     BLO_write_struct(writer, bNodeLink, link);
   }
 
+  LISTBASE_FOREACH (bNodeSection *, section, &ntree->sections) {
+    BLO_write_struct(writer, bNodeSection, section);
+  }
+
   LISTBASE_FOREACH (bNodeSocket *, sock, &ntree->inputs) {
     write_node_socket_interface(writer, sock);
   }
@@ -681,9 +704,17 @@ void ntreeBlendReadData(BlendDataReader *reader, ID *owner_id, bNodeTree *ntree)
 
     BLO_read_list(reader, &node->inputs);
     BLO_read_list(reader, &node->outputs);
+    BLO_read_list(reader, &node->sections);
 
     BLO_read_data_address(reader, &node->prop);
     IDP_BlendDataRead(reader, &node->prop);
+
+    LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
+      BLO_read_data_address(reader, &sock->section);
+    }
+    LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
+      BLO_read_data_address(reader, &sock->section);
+    }
 
     if (node->type == CMP_NODE_MOVIEDISTORTION) {
       /* Do nothing, this is runtime cache and hence handled by generic code using
@@ -788,10 +819,13 @@ void ntreeBlendReadData(BlendDataReader *reader, ID *owner_id, bNodeTree *ntree)
   /* interface socket lists */
   BLO_read_list(reader, &ntree->inputs);
   BLO_read_list(reader, &ntree->outputs);
+  BLO_read_list(reader, &ntree->sections);
   LISTBASE_FOREACH (bNodeSocket *, sock, &ntree->inputs) {
+    BLO_read_data_address(reader, &sock->section);
     direct_link_node_socket(reader, sock);
   }
   LISTBASE_FOREACH (bNodeSocket *, sock, &ntree->outputs) {
+    BLO_read_data_address(reader, &sock->section);
     direct_link_node_socket(reader, sock);
   }
 
@@ -2005,6 +2039,39 @@ void nodeRemoveAllSockets(bNodeTree *ntree, bNode *node)
   BKE_ntree_update_tag_socket_removed(ntree);
 }
 
+struct bNodeSection *nodeAddSection(struct bNode *node, const char *name)
+{
+  bNodeSection *section = MEM_cnew<bNodeSection>("section");
+  BLI_strncpy(section->name, name, NODE_MAXSTR);
+  section->flag = NODE_SECTION_CLOSED;
+
+  BLI_addtail(&node->sections, section);
+  BLI_uniquename(&node->sections,
+                 section,
+                 DATA_("Section"),
+                 '.',
+                 offsetof(bNodeSection, name),
+                 sizeof(section->name));
+  return section;
+}
+
+void nodeRemoveSection(struct bNode *node, struct bNodeSection *section)
+{
+  LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
+    if (sock->section == section) {
+      sock->section = nullptr;
+    }
+  }
+  LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
+    if (sock->section == section) {
+      sock->section = nullptr;
+    }
+  }
+
+  BLI_remlink(&node->sections, section);
+  MEM_freeN(section);
+}
+
 bNode *nodeFindNodebyName(bNodeTree *ntree, const char *name)
 {
   return (bNode *)BLI_findstring(&ntree->nodes, name, offsetof(bNode, name));
@@ -2231,7 +2298,10 @@ bNode *nodeAddStaticNode(const struct bContext *C, bNodeTree *ntree, int type)
   return nodeAddNode(C, ntree, idname);
 }
 
-static void node_socket_copy(bNodeSocket *sock_dst, const bNodeSocket *sock_src, const int flag)
+static void node_socket_copy(bNodeSocket *sock_dst,
+                             const bNodeSocket *sock_src,
+                             const int flag,
+                             const Map<const bNodeSection *, bNodeSection *> &section_map)
 {
   sock_dst->runtime = MEM_new<bNodeSocketRuntime>(__func__);
   if (sock_src->prop) {
@@ -2253,6 +2323,8 @@ static void node_socket_copy(bNodeSocket *sock_dst, const bNodeSocket *sock_src,
   /* XXX some compositor nodes (e.g. image, render layers) still store
    * some persistent buffer data here, need to clear this to avoid dangling pointers. */
   sock_dst->runtime->cache = nullptr;
+
+  sock_dst->section = section_map.lookup(sock_src->section);
 }
 
 namespace blender::bke {
@@ -2276,10 +2348,19 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
     BLI_addtail(&dst_tree->nodes, node_dst);
   }
 
+  Map<const bNodeSection *, bNodeSection *> section_map;
+  section_map.add_new(nullptr, nullptr);
+  BLI_listbase_clear(&node_dst->sections);
+  LISTBASE_FOREACH (const bNodeSection *, src_section, &node_src.sections) {
+    bNodeSection *dst_section = (bNodeSection *)MEM_dupallocN(src_section);
+    BLI_addtail(&node_dst->sections, dst_section);
+    section_map.add_new(src_section, dst_section);
+  }
+
   BLI_listbase_clear(&node_dst->inputs);
   LISTBASE_FOREACH (const bNodeSocket *, src_socket, &node_src.inputs) {
     bNodeSocket *dst_socket = (bNodeSocket *)MEM_dupallocN(src_socket);
-    node_socket_copy(dst_socket, src_socket, flag);
+    node_socket_copy(dst_socket, src_socket, flag, section_map);
     BLI_addtail(&node_dst->inputs, dst_socket);
     socket_map.add_new(src_socket, dst_socket);
   }
@@ -2287,7 +2368,7 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
   BLI_listbase_clear(&node_dst->outputs);
   LISTBASE_FOREACH (const bNodeSocket *, src_socket, &node_src.outputs) {
     bNodeSocket *dst_socket = (bNodeSocket *)MEM_dupallocN(src_socket);
-    node_socket_copy(dst_socket, src_socket, flag);
+    node_socket_copy(dst_socket, src_socket, flag, section_map);
     BLI_addtail(&node_dst->outputs, dst_socket);
     socket_map.add_new(src_socket, dst_socket);
   }
@@ -2434,7 +2515,13 @@ void nodeRemSocketLinks(bNodeTree *ntree, bNodeSocket *sock)
 
 bool nodeLinkIsHidden(const bNodeLink *link)
 {
-  return nodeSocketIsHidden(link->fromsock) || nodeSocketIsHidden(link->tosock);
+  if ((link->fromsock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0) {
+    return true;
+  }
+  if ((link->tosock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0) {
+    return true;
+  }
+  return false;
 }
 
 bool nodeLinkIsSelected(const bNodeLink *link)
@@ -2969,6 +3056,8 @@ static void node_free_node(bNodeTree *ntree, bNode *node)
     MEM_freeN(sock);
   }
 
+  BLI_freelistN(&node->sections);
+
   for (bNodeLink *link : node->runtime->internal_links) {
     MEM_freeN(link);
   }
@@ -3434,6 +3523,44 @@ void ntreeRemoveSocketInterface(bNodeTree *ntree, bNodeSocket *sock)
   BKE_ntree_update_tag_interface(ntree);
 }
 
+bNodeSection *ntreeAddSection(bNodeTree *ntree, const char *name)
+{
+  bNodeSection *section = MEM_cnew<bNodeSection>("section");
+  BLI_strncpy(section->name, name, NODE_MAXSTR);
+  section->flag = NODE_SECTION_CLOSED;
+
+  BLI_addtail(&ntree->sections, section);
+
+  BLI_uniquename(&ntree->sections,
+                 section,
+                 DATA_("Section"),
+                 '.',
+                 offsetof(bNodeSection, name),
+                 sizeof(section->name));
+
+  BKE_ntree_update_tag_interface(ntree);
+  return section;
+}
+
+void ntreeRemoveSection(bNodeTree *ntree, bNodeSection *section)
+{
+  LISTBASE_FOREACH (bNodeSocket *, sock, &ntree->inputs) {
+    if (sock->section == section) {
+      sock->section = nullptr;
+    }
+  }
+  LISTBASE_FOREACH (bNodeSocket *, sock, &ntree->outputs) {
+    if (sock->section == section) {
+      sock->section = nullptr;
+    }
+  }
+
+  BLI_remlink(&ntree->sections, section);
+  MEM_freeN(section);
+
+  BKE_ntree_update_tag_interface(ntree);
+}
+
 /* ************ find stuff *************** */
 
 bNode *ntreeFindType(const bNodeTree *ntree, int type)
@@ -3547,7 +3674,14 @@ void nodeSetActive(bNodeTree *ntree, bNode *node)
 
 int nodeSocketIsHidden(const bNodeSocket *sock)
 {
-  return ((sock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0);
+  if ((sock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0) {
+    return true;
+  }
+  if ((sock->section != nullptr) &&
+      ((sock->section->flag & (NODE_SECTION_CLOSED | NODE_SECTION_UNAVAIL)) != 0)) {
+    return true;
+  }
+  return false;
 }
 
 void nodeSetSocketAvailability(bNodeTree *ntree, bNodeSocket *sock, bool is_available)
@@ -3562,6 +3696,16 @@ void nodeSetSocketAvailability(bNodeTree *ntree, bNodeSocket *sock, bool is_avai
   }
   else {
     sock->flag |= SOCK_UNAVAIL;
+  }
+}
+
+void nodeSetSectionAvailability(bNodeSection *section, bool is_available)
+{
+  if (is_available) {
+    section->flag &= ~NODE_SECTION_UNAVAIL;
+  }
+  else {
+    section->flag |= NODE_SECTION_UNAVAIL;
   }
 }
 

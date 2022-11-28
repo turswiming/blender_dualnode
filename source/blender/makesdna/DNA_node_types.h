@@ -91,6 +91,24 @@ typedef struct bNodeStack {
 #define NS_CR_FIT 4
 #define NS_CR_STRETCH 5
 
+typedef struct bNodeSection {
+  struct bNodeSection *next, *prev;
+
+  char name[64];
+
+  /** #eNodeSectionFlag */
+  int flag;
+
+  float in_locy;  // TODO don't store here!
+} bNodeSection;
+
+/** #bNodeSection.flag. */
+typedef enum eNodeSectionFlag {
+  NODE_SECTION_CLOSED = (1 << 1),
+  NODE_SECTION_UNAVAIL = (1 << 2),
+  NODE_SECTION_SELECTED = (1 << 3),
+} eNodeSectionFlag;
+
 typedef struct bNodeSocket {
   struct bNodeSocket *next, *prev;
 
@@ -161,6 +179,9 @@ typedef struct bNodeSocket {
 
   /** A link pointer, set in #BKE_ntree_update_main. */
   struct bNodeLink *link;
+
+  /** The node section that the socket is in, may be null. */
+  struct bNodeSection *section;
 
   /* XXX deprecated, socket input values are stored in default_value now.
    * kept for forward compatibility */
@@ -309,6 +330,9 @@ typedef struct bNode {
   struct ID *id;
   /** Custom data, must be struct, for storage in file. */
   void *storage;
+
+  /** List of socket sections. */
+  ListBase sections;
 
   /** Root offset for drawing (parent space). */
   float locx, locy;
@@ -530,6 +554,9 @@ typedef struct bNodeTree {
    * These sockets are used only for generating external interfaces.
    */
   ListBase inputs, outputs;
+
+  /** List of socket sections. */
+  ListBase sections;
 
   /* Node preview hash table
    * Only available in base node trees (e.g. scene->node_tree)

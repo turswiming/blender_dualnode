@@ -40,6 +40,7 @@
 
 #include "ED_undo.h"
 
+using blender::Vector;
 using blender::nodes::NodeDeclaration;
 
 namespace blender::ed::space_node {
@@ -774,8 +775,49 @@ static void ui_node_draw_node(
     }
   }
 
+  uiLayout *column = uiLayoutColumn(&layout, false);
+
   LISTBASE_FOREACH (bNodeSocket *, input, &node.inputs) {
-    ui_node_draw_input(layout, C, ntree, node, *input, depth + 1);
+    if (input->section == nullptr) {
+      ui_node_draw_input(*column, C, ntree, node, *input, depth + 1);
+    }
+  }
+
+  column = uiLayoutColumn(&layout, true);
+
+  LISTBASE_FOREACH (bNodeSection *, section, &node.sections) {
+    if (section->flag & NODE_SECTION_UNAVAIL) {
+      continue;
+    }
+
+    /* Sections might only contain outputs, in which case we want to ignore them here. */
+    Vector<bNodeSocket *> sectionInputs;
+    LISTBASE_FOREACH (bNodeSocket *, input, &node.inputs) {
+      if (input->section == section) {
+        sectionInputs.append(input);
+      }
+    }
+    if (sectionInputs.is_empty()) {
+      continue;
+    }
+
+    /* Draw section enable/disable button. */
+    PointerRNA sectionptr;
+    RNA_pointer_create(&ntree.id, &RNA_NodeSection, section, &sectionptr);
+    uiItemR(column, &sectionptr, "opened", UI_ITEM_R_TOGGLE, section->name, ICON_NONE);
+
+    /* Draw inputs inside the section.*/
+    if (section->flag & NODE_SECTION_CLOSED) {
+      continue;
+    }
+
+    /* The buttons for closed sections are aligned together, but once we hit an open one
+     * we interrupt that and draw its inputs separately. */
+    uiLayout *sectionColumn = uiLayoutColumn(&layout, true);
+    for (bNodeSocket *input : sectionInputs) {
+      ui_node_draw_input(*sectionColumn, C, ntree, node, *input, depth + 1);
+    }
+    column = uiLayoutColumn(&layout, true);
   }
 }
 

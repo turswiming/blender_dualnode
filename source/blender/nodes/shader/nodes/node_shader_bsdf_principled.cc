@@ -12,38 +12,57 @@ namespace blender::nodes::node_shader_bsdf_principled_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  auto &subsurface = b.add_section(N_("Subsurface"));
+  auto &specular = b.add_section(N_("Specular"));
+  auto &sheen = b.add_section(N_("Sheen"));
+  auto &clearcoat = b.add_section(N_("Clearcoat"));
+  auto &emission = b.add_section(N_("Emission"));
+  auto &thin_film = b.add_section(N_("Thin Film"));
+
   /* TODO: Tooltips depending on old/new model. */
   b.add_input<decl::Color>(N_("Base Color")).default_value({0.8f, 0.8f, 0.8f, 1.0f});
   b.add_input<decl::Float>(N_("Subsurface"))
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(subsurface);
   /* TODO: Somehow merge with "Subsurface". Needs different subtype though... */
-  b.add_input<decl::Float>(N_("Subsurface Scale")).default_value(0.0f).min(0.0f).max(100.0f);
+  b.add_input<decl::Float>(N_("Subsurface Scale"))
+      .default_value(0.0f)
+      .min(0.0f)
+      .max(100.0f)
+      .section(subsurface);
   b.add_input<decl::Vector>(N_("Subsurface Radius"))
       .default_value({1.0f, 0.2f, 0.1f})
       .min(0.0f)
       .max(100.0f)
-      .compact();
-  b.add_input<decl::Color>(N_("Subsurface Color")).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+      .compact()
+      .section(subsurface);
+  b.add_input<decl::Color>(N_("Subsurface Color"))
+      .default_value({0.8f, 0.8f, 0.8f, 1.0f})
+      .section(subsurface);
   b.add_input<decl::Float>(N_("Subsurface IOR"))
       .default_value(1.4f)
       .min(1.01f)
       .max(3.8f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(subsurface);
   b.add_input<decl::Float>(N_("Subsurface Anisotropy"))
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(subsurface);
   b.add_input<decl::Float>(N_("Metallic"))
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
   /* TODO: Also add support to Principled v1? Would be compatible at defaults afaics. */
-  b.add_input<decl::Color>(N_("Metallic Edge")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Color>(N_("Metallic Edge"))
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .section(specular);
   b.add_input<decl::Float>(N_("Specular"))
       .default_value(0.5f)
       .min(0.0f)
@@ -55,7 +74,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(subsurface);
   b.add_input<decl::Float>(N_("Roughness"))
       .default_value(0.5f)
       .min(0.0f)
@@ -65,47 +85,61 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(specular);
   b.add_input<decl::Float>(N_("Anisotropic Rotation"))
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(specular);
   b.add_input<decl::Float>(N_("Sheen"))
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(sheen);
   /* TODO: Should be a color input in v2. Any way to keep compatibility?
    * Maybe change to color everywhere and detect special case when float is connected? */
   b.add_input<decl::Float>(N_("Sheen Tint"))
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(sheen);
   b.add_input<decl::Float>(N_("Sheen Roughness"))
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(sheen);
   b.add_input<decl::Float>(N_("Clearcoat"))
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(clearcoat);
   b.add_input<decl::Float>(N_("Clearcoat Roughness"))
       .default_value(0.03f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .section(clearcoat);
   /* TODO: Also add support to Principled v1? Would remain compatible and reduce differences. */
-  b.add_input<decl::Color>(N_("Clearcoat Tint")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Color>(N_("Clearcoat Tint"))
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .section(clearcoat);
   b.add_input<decl::Float>(N_("Thin Film Thickness"))
       .default_value(0.0f)
       .min(0.0f)
       .max(10000.0f)
-      .subtype(PROP_WAVELENGTH);
-  b.add_input<decl::Float>(N_("Thin Film IOR")).default_value(1.5f).min(1.0f).max(10.0f);
+      .subtype(PROP_WAVELENGTH)
+      .section(thin_film);
+  b.add_input<decl::Float>(N_("Thin Film IOR"))
+      .default_value(1.5f)
+      .min(1.0f)
+      .max(10.0f)
+      .section(thin_film);
   /* TODO: Restrict min/max (e.g. 0.1 to 10) */
   b.add_input<decl::Float>(N_("IOR")).default_value(1.45f).min(0.0f).max(1000.0f);
   b.add_input<decl::Float>(N_("Transmission"))
@@ -119,16 +153,22 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .subtype(PROP_FACTOR);
   /* TODO: Swap defaults (white, strength 0)? */
-  b.add_input<decl::Color>(N_("Emission")).default_value({0.0f, 0.0f, 0.0f, 1.0f});
-  b.add_input<decl::Float>(N_("Emission Strength")).default_value(1.0).min(0.0f).max(1000000.0f);
+  b.add_input<decl::Color>(N_("Emission"))
+      .default_value({0.0f, 0.0f, 0.0f, 1.0f})
+      .section(emission);
+  b.add_input<decl::Float>(N_("Emission Strength"))
+      .default_value(1.0)
+      .min(0.0f)
+      .max(1000000.0f)
+      .section(emission);
   b.add_input<decl::Float>(N_("Alpha"))
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>(N_("Normal")).hide_value();
-  b.add_input<decl::Vector>(N_("Clearcoat Normal")).hide_value();
-  b.add_input<decl::Vector>(N_("Tangent")).hide_value();
+  b.add_input<decl::Vector>(N_("Clearcoat Normal")).hide_value().section(clearcoat);
+  b.add_input<decl::Vector>(N_("Tangent")).hide_value().section(specular);
   b.add_input<decl::Float>(N_("Weight")).unavailable();
   b.add_output<decl::Shader>(N_("BSDF"));
 }
@@ -253,9 +293,9 @@ static void node_shader_update_principled(bNodeTree *ntree, bNode *node)
 {
   const int distribution = node->custom1;
   const int sss_method = node->custom2;
+  const bool is_v2 = (distribution == SHD_PRINCIPLED_V2);
 
   LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
-    const bool is_v2 = (distribution == SHD_PRINCIPLED_V2);
     if (STREQ(sock->name, "Transmission Roughness")) {
       /* Only supported by the old separable glass model. */
       nodeSetSocketAvailability(ntree, sock, distribution == SHD_PRINCIPLED_GGX);
@@ -291,6 +331,13 @@ static void node_shader_update_principled(bNodeTree *ntree, bNode *node)
                  "Thin Film IOR")) {
       /* Sockets exclusive to Principled v2. */
       nodeSetSocketAvailability(ntree, sock, is_v2);
+    }
+  }
+
+  LISTBASE_FOREACH (bNodeSection *, section, &node->sections) {
+    if (STREQ(section->name, "Thin Film")) {
+      /* Sections exclusive to Principled v2. */
+      nodeSetSectionAvailability(section, is_v2);
     }
   }
 }

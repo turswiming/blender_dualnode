@@ -363,6 +363,7 @@ static void node_update_basis(const bContext &C,
   loc.y = round(loc.y);
 
   int dy = loc.y;
+  bool add_output_space = false;
 
   /* Header. */
   dy -= NODE_DY;
@@ -372,17 +373,23 @@ static void node_update_basis(const bContext &C,
     dy -= NODE_DYS / 2;
   }
 
-  /* Output sockets. */
-  bool add_output_space = false;
-
-  int buty;
-  LISTBASE_FOREACH (bNodeSocket *, socket, &node.outputs) {
-    if (nodeSocketIsHidden(socket)) {
-      continue;
+  const auto update_sockets = [&](bNodeSocket &socket, bool is_output) {
+    if (nodeSocketIsHidden(&socket)) {
+      return;
     }
 
     PointerRNA sockptr;
-    RNA_pointer_create(&ntree.id, &RNA_NodeSocket, socket, &sockptr);
+    RNA_pointer_create(&ntree.id, &RNA_NodeSocket, &socket, &sockptr);
+
+    /* Add the half the height of a multi-input socket to cursor Y
+     * to account for the increased height of the taller sockets. */
+    float multi_input_socket_offset = 0.0f;
+    if (!is_output && (socket.flag & SOCK_MULTI_INPUT)) {
+      if (socket.runtime->total_inputs > 2) {
+        multi_input_socket_offset = (socket.runtime->total_inputs - 2) * NODE_MULTI_INPUT_LINK_GAP;
+      }
+    }
+    dy -= multi_input_socket_offset * 0.5f;
 
     uiLayout *layout = UI_block_layout(&block,
                                        UI_LAYOUT_VERTICAL,
@@ -402,14 +409,18 @@ static void node_update_basis(const bContext &C,
     uiLayoutSetContextPointer(layout, "node", &nodeptr);
     uiLayoutSetContextPointer(layout, "socket", &sockptr);
 
-    /* Align output buttons to the right. */
     uiLayout *row = uiLayoutRow(layout, true);
-    uiLayoutSetAlignment(row, UI_LAYOUT_ALIGN_RIGHT);
-    const char *socket_label = nodeSocketLabel(socket);
-    socket->typeinfo->draw((bContext *)&C, row, &sockptr, &nodeptr, IFACE_(socket_label));
+    if (is_output) {
+      /* Align output buttons to the right. */
+      uiLayoutSetAlignment(row, UI_LAYOUT_ALIGN_RIGHT);
+    }
 
-    node_socket_add_tooltip_in_node_editor(&tree_draw_ctx, &ntree, &node, socket, row);
+    const char *socket_label = nodeSocketLabel(&socket);
+    socket.typeinfo->draw((bContext *)&C, row, &sockptr, &nodeptr, IFACE_(socket_label));
 
+    node_socket_add_tooltip_in_node_editor(&tree_draw_ctx, &ntree, &node, &socket, row);
+
+    int buty;
     UI_block_align_end(&block);
     UI_block_layout_resolve(&block, nullptr, &buty);
 
@@ -417,15 +428,29 @@ static void node_update_basis(const bContext &C,
     buty = min_ii(buty, dy - NODE_DY);
 
     /* Round the socket location to stop it from jiggling. */
-    socket->runtime->locx = round(loc.x + NODE_WIDTH(node));
-    socket->runtime->locy = round(dy - NODE_DYS);
+    if (is_output) {
+      socket.runtime->locx = round(loc.x + NODE_WIDTH(node));
+    }
+    else {
+      socket.runtime->locx = loc.x;
+    }
+    socket.runtime->locy = round(dy - NODE_DYS);
 
-    dy = buty;
-    if (socket->next) {
+    dy = buty - multi_input_socket_offset * 0.5;
+    if (socket.next) {
       dy -= NODE_SOCKDY;
     }
 
-    add_output_space = true;
+    if (is_output) {
+      add_output_space = true;
+    }
+  };
+
+  /* Output sockets. */
+  LISTBASE_FOREACH (bNodeSocket *, socket, &node.outputs) {
+    if (socket->section == nullptr) {
+      update_sockets(*socket, true);
+    }
   }
 
   if (add_output_space) {
@@ -492,6 +517,7 @@ static void node_update_basis(const bContext &C,
 
     node.typeinfo->draw_buttons(layout, (bContext *)&C, &nodeptr);
 
+    int buty;
     UI_block_align_end(&block);
     UI_block_layout_resolve(&block, nullptr, &buty);
 
@@ -500,68 +526,56 @@ static void node_update_basis(const bContext &C,
 
   /* Input sockets. */
   LISTBASE_FOREACH (bNodeSocket *, socket, &node.inputs) {
-    if (nodeSocketIsHidden(socket)) {
-      continue;
-    }
-
-    PointerRNA sockptr;
-    RNA_pointer_create(&ntree.id, &RNA_NodeSocket, socket, &sockptr);
-
-    /* Add the half the height of a multi-input socket to cursor Y
-     * to account for the increased height of the taller sockets. */
-    float multi_input_socket_offset = 0.0f;
-    if (socket->flag & SOCK_MULTI_INPUT) {
-      if (socket->runtime->total_inputs > 2) {
-        multi_input_socket_offset = (socket->runtime->total_inputs - 2) *
-                                    NODE_MULTI_INPUT_LINK_GAP;
-      }
-    }
-    dy -= multi_input_socket_offset * 0.5f;
-
-    uiLayout *layout = UI_block_layout(&block,
-                                       UI_LAYOUT_VERTICAL,
-                                       UI_LAYOUT_PANEL,
-                                       loc.x + NODE_DYS,
-                                       dy,
-                                       NODE_WIDTH(node) - NODE_DY,
-                                       NODE_DY,
-                                       0,
-                                       UI_style_get_dpi());
-
-    if (node.flag & NODE_MUTED) {
-      uiLayoutSetActive(layout, false);
-    }
-
-    /* Context pointers for current node and socket. */
-    uiLayoutSetContextPointer(layout, "node", &nodeptr);
-    uiLayoutSetContextPointer(layout, "socket", &sockptr);
-
-    uiLayout *row = uiLayoutRow(layout, true);
-
-    const char *socket_label = nodeSocketLabel(socket);
-    socket->typeinfo->draw((bContext *)&C, row, &sockptr, &nodeptr, IFACE_(socket_label));
-
-    node_socket_add_tooltip_in_node_editor(&tree_draw_ctx, &ntree, &node, socket, row);
-
-    UI_block_align_end(&block);
-    UI_block_layout_resolve(&block, nullptr, &buty);
-
-    /* Ensure minimum socket height in case layout is empty. */
-    buty = min_ii(buty, dy - NODE_DY);
-
-    socket->runtime->locx = loc.x;
-    /* Round the socket vertical position to stop it from jiggling. */
-    socket->runtime->locy = round(dy - NODE_DYS);
-
-    dy = buty - multi_input_socket_offset * 0.5;
-    if (socket->next) {
-      dy -= NODE_SOCKDY;
+    if (socket->section == nullptr) {
+      update_sockets(*socket, false);
     }
   }
 
   /* Little bit of space in end. */
   if (node.inputs.first || (node.flag & (NODE_OPTIONS | NODE_PREVIEW)) == 0) {
     dy -= NODE_DYS / 2;
+  }
+
+  /* Sections. */
+  LISTBASE_FOREACH (bNodeSection *, section, &node.sections) {
+    if (section->flag & NODE_SECTION_UNAVAIL) {
+      continue;
+    }
+
+    const bool hidden = (section->flag & NODE_SECTION_CLOSED);
+    dy -= NODE_DY;
+    section->in_locy = dy + NODE_SOCKDY;
+
+    if (hidden) {
+      /* If the section is hidden, update socket positions so that links are
+       * drawn as expected. */
+      LISTBASE_FOREACH (bNodeSocket *, socket, &node.outputs) {
+        if (socket->section == section) {
+          socket->runtime->locx = round(loc.x + NODE_WIDTH(node));
+          socket->runtime->locy = round(section->in_locy + NODE_DYS);
+        }
+      }
+      LISTBASE_FOREACH (bNodeSocket *, socket, &node.inputs) {
+        if (socket->section == section) {
+          socket->runtime->locx = loc.x;
+          socket->runtime->locy = round(section->in_locy + NODE_DYS);
+        }
+      }
+    }
+    else {
+      dy -= NODE_DYS / 2;
+      LISTBASE_FOREACH (bNodeSocket *, socket, &node.outputs) {
+        if (socket->section == section) {
+          update_sockets(*socket, true);
+        }
+      }
+      LISTBASE_FOREACH (bNodeSocket *, socket, &node.inputs) {
+        if (socket->section == section) {
+          update_sockets(*socket, false);
+        }
+      }
+      dy -= NODE_DYS / 2;
+    }
   }
 
   node.runtime->totr.xmin = loc.x;
@@ -590,6 +604,9 @@ static void node_update_hidden(bNode &node, uiBlock &block)
   /* Round the node origin because text contents are always pixel-aligned. */
   loc.x = round(loc.x);
   loc.y = round(loc.y);
+
+  /* TODO: Update for sections.
+   * Need to account for draw order and need to figure out how to handle collapsed. */
 
   /* Calculate minimal radius. */
   LISTBASE_FOREACH (bNodeSocket *, socket, &node.inputs) {
@@ -1368,6 +1385,17 @@ static void node_toggle_button_cb(bContext *C, void *node_argv, void *op_argv)
   node_select_single(*C, *node);
 
   WM_operator_name_call(C, opname, WM_OP_INVOKE_DEFAULT, nullptr, nullptr);
+}
+
+static void node_section_toggle_button_cb(bContext *C, void *section_argv, void *ntree_argv)
+{
+  Main *bmain = CTX_data_main(C);
+  bNodeTree *ntree = (bNodeTree *)ntree_argv;
+  bNodeSection *section = (bNodeSection *)section_argv;
+
+  section->flag ^= NODE_SECTION_CLOSED;
+
+  ED_node_tree_propagate_change(C, bmain, ntree);
 }
 
 static void node_draw_shadow(const SpaceNode &snode,
@@ -2379,6 +2407,88 @@ static void node_draw_basis(const bContext &C,
   /* Skip slow socket drawing if zoom is small. */
   if (scale > 0.2f) {
     node_draw_sockets(v2d, C, ntree, node, block, true, false);
+  }
+
+  /* Sections. */
+  LISTBASE_FOREACH (bNodeSection *, section, &node.sections) {
+    if (section->flag & NODE_SECTION_UNAVAIL) {
+      continue;
+    }
+
+    const rctf rect = {
+        rct.xmin,
+        rct.xmax,
+        section->in_locy,
+        section->in_locy + NODE_DY,
+    };
+    UI_block_emboss_set(&block, UI_EMBOSS_NONE);
+
+    /* Section background. */
+    float color_section[4];
+    if (node.flag & NODE_MUTED) {
+      UI_GetThemeColorBlend4f(TH_BACK, color_id, 0.1f, color_section);
+    }
+    else {
+      UI_GetThemeColorBlend4f(TH_NODE, color_id, 0.2f, color_section);
+    }
+    UI_draw_roundbox_corner_set(UI_CNR_NONE);
+    UI_draw_roundbox_4fv(&rect, true, BASIS_RAD, color_section);
+
+    /* Collapse/expand icon. */
+    const int but_size = U.widget_unit * 0.8f;
+    const bool hidden = (section->flag & NODE_SECTION_CLOSED);
+    uiDefIconBut(&block,
+                 UI_BTYPE_BUT_TOGGLE,
+                 0,
+                 hidden ? ICON_RIGHTARROW : ICON_DOWNARROW_HLT,
+                 rct.xmin + (NODE_MARGIN_X / 3),
+                 section->in_locy + NODE_DY / 2 - but_size / 2,
+                 but_size,
+                 but_size,
+                 nullptr,
+                 0.0f,
+                 0.0f,
+                 0.0f,
+                 0.0f,
+                 "");
+
+    /* Section label. */
+    but = uiDefBut(&block,
+                   UI_BTYPE_LABEL,
+                   0,
+                   section->name,
+                   int(rct.xmin + NODE_MARGIN_X + 0.4f),
+                   int(section->in_locy),
+                   short(iconofs - rct.xmin - (18.0f * U.dpi_fac)),
+                   short(NODE_DY),
+                   nullptr,
+                   0,
+                   0,
+                   0,
+                   0,
+                   "");
+    if (node.flag & NODE_MUTED) {
+      UI_but_flag_enable(but, UI_BUT_INACTIVE);
+    }
+
+    /* Invisible button covering the entire header for collapsing/expanding. */
+    but = uiDefIconBut(&block,
+                       UI_BTYPE_BUT_TOGGLE,
+                       0,
+                       ICON_NONE,
+                       rect.xmin,
+                       rect.ymin,
+                       rect.xmax - rect.xmin,
+                       rect.ymax - rect.ymin,
+                       nullptr,
+                       0.0f,
+                       0.0f,
+                       0.0f,
+                       0.0f,
+                       "");
+    UI_but_func_set(but, node_section_toggle_button_cb, section, &ntree);
+
+    UI_block_emboss_set(&block, UI_EMBOSS);
   }
 
   /* Preview. */

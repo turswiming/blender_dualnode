@@ -132,6 +132,11 @@ static void add_new_socket_from_interface(bNodeTree &node_tree,
     interface_socket.typeinfo->interface_init_socket(
         &node_tree, &interface_socket, &node, socket, "interface");
   }
+
+  if (interface_socket.section) {
+    socket->section = (bNodeSection *)BLI_findstring(
+        &node.sections, interface_socket.section->name, offsetof(bNodeSection, name));
+  }
 }
 
 static void update_socket_to_match_interface(bNodeTree &node_tree,
@@ -152,6 +157,14 @@ static void update_socket_to_match_interface(bNodeTree &node_tree,
   if (interface_socket.typeinfo->interface_verify_socket) {
     interface_socket.typeinfo->interface_verify_socket(
         &node_tree, &interface_socket, &node, &socket_to_update, "interface");
+  }
+
+  if (interface_socket.section) {
+    socket_to_update.section = (bNodeSection *)BLI_findstring(
+        &node.sections, interface_socket.section->name, offsetof(bNodeSection, name));
+  }
+  else {
+    socket_to_update.section = nullptr;
   }
 }
 
@@ -218,6 +231,63 @@ static void group_verify_socket_list(bNodeTree &node_tree,
   }
 }
 
+static void group_verify_section_list(bNodeTree &node_tree,
+                                      bNode &node,
+                                      bNodeTree &group,
+                                      ListBase &verify_lb,
+                                      const eNodeSocketInOut direction)
+{
+  Set<const bNodeSection *> usedSections;
+  if (direction & SOCK_IN) {
+    LISTBASE_FOREACH (const bNodeSocket *, sock, &group.inputs) {
+      usedSections.add(sock->section);
+    }
+  }
+  if (direction & SOCK_OUT) {
+    LISTBASE_FOREACH (const bNodeSocket *, sock, &group.outputs) {
+      usedSections.add(sock->section);
+    }
+  }
+
+  ListBase old_sections = verify_lb;
+  Vector<bNodeSection *> ordered_old_sections = old_sections;
+  BLI_listbase_clear(&verify_lb);
+
+  LISTBASE_FOREACH (const bNodeSection *, interface_section, &group.sections) {
+    if (!usedSections.contains(interface_section)) {
+      continue;
+    }
+
+    bNodeSection *matching_section = (bNodeSection *)BLI_findstring(
+        &old_sections, interface_section->name, offsetof(bNodeSection, name));
+    if (matching_section) {
+      BLI_remlink(&old_sections, matching_section);
+      BLI_addtail(&verify_lb, matching_section);
+    }
+    else {
+      nodeAddSection(&node, interface_section->name);
+    }
+  }
+
+  /* Remove leftover sections that didn't match the node group's interface. */
+  LISTBASE_FOREACH_MUTABLE (bNodeSection *, unused_section, &old_sections) {
+    nodeRemoveSection(&node, unused_section);
+  }
+
+  {
+    /* Check if new sections match the old sections. */
+    int index;
+    LISTBASE_FOREACH_INDEX (bNodeSection *, new_section, &verify_lb, index) {
+      if (index < ordered_old_sections.size()) {
+        if (ordered_old_sections[index] != new_section) {
+          BKE_ntree_update_tag_interface(&node_tree);
+          break;
+        }
+      }
+    }
+  }
+}
+
 void node_group_update(struct bNodeTree *ntree, struct bNode *node)
 {
   /* check inputs and outputs, and remove or insert them */
@@ -230,6 +300,9 @@ void node_group_update(struct bNodeTree *ntree, struct bNode *node)
   }
   else {
     bNodeTree *ngroup = (bNodeTree *)node->id;
+
+    group_verify_section_list(
+        *ntree, *node, *ngroup, node->sections, (eNodeSocketInOut)(SOCK_IN | SOCK_OUT));
     group_verify_socket_list(*ntree, *node, ngroup->inputs, node->inputs, SOCK_IN, false);
     group_verify_socket_list(*ntree, *node, ngroup->outputs, node->outputs, SOCK_OUT, false);
   }
@@ -486,6 +559,7 @@ void node_group_input_update(bNodeTree *ntree, bNode *node)
     }
   }
 
+  group_verify_section_list(*ntree, *node, *ntree, node->sections, SOCK_IN);
   group_verify_socket_list(*ntree, *node, ntree->inputs, node->outputs, SOCK_OUT, true);
 }
 
@@ -567,6 +641,7 @@ void node_group_output_update(bNodeTree *ntree, bNode *node)
     }
   }
 
+  group_verify_section_list(*ntree, *node, *ntree, node->sections, SOCK_OUT);
   group_verify_socket_list(*ntree, *node, ntree->outputs, node->inputs, SOCK_IN, true);
 }
 

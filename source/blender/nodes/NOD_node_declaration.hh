@@ -68,6 +68,21 @@ struct FieldInferencingInterface {
 using ImplicitInputValueFn = std::function<void(const bNode &node, void *r_value)>;
 
 /**
+ * Describes a single node section.
+ */
+class SectionDeclaration {
+ protected:
+  std::string name_;
+
+  friend class NodeDeclarationBuilder;
+  friend class SectionDeclarationBuilder;
+
+ public:
+  StringRefNull name() const;
+  bNodeSection &build(bNode &node);
+};
+
+/**
  * Describes a single input or output socket. This is subclassed for different socket types.
  */
 class SocketDeclaration {
@@ -86,6 +101,7 @@ class SocketDeclaration {
   bool is_unavailable_ = false;
   bool is_attribute_name_ = false;
   bool is_default_link_socket_ = false;
+  const SectionDeclaration *section_ = nullptr;
 
   InputSocketFieldType input_field_type_ = InputSocketFieldType::None;
   OutputFieldDependency output_field_dependency_;
@@ -151,6 +167,8 @@ class SocketDeclaration {
     return implicit_input_fn_.get();
   }
 
+  const SectionDeclaration *section() const;
+
  protected:
   void set_common_flags(bNodeSocket &socket) const;
   bool matches_common_data(const bNodeSocket &socket) const;
@@ -159,6 +177,23 @@ class SocketDeclaration {
 class BaseSocketDeclarationBuilder {
  public:
   virtual ~BaseSocketDeclarationBuilder() = default;
+};
+
+template<typename SocketDecl> class SocketDeclarationBuilder;
+
+class SectionDeclarationBuilder {
+ protected:
+  SectionDeclaration *decl_;
+
+  friend class NodeDeclarationBuilder;
+  template<typename> friend class SocketDeclarationBuilder;
+
+ public:
+  SectionDeclarationBuilder &add_parent()
+  {
+    // TODO
+    return *this;
+  }
 };
 
 /**
@@ -301,14 +336,22 @@ class SocketDeclarationBuilder : public BaseSocketDeclarationBuilder {
     decl_->make_available_fn_ = std::move(fn);
     return *(Self *)this;
   }
+
+  Self &section(const SectionDeclarationBuilder &section)
+  {
+    decl_->section_ = section.decl_;
+    return *(Self *)this;
+  }
 };
 
 using SocketDeclarationPtr = std::unique_ptr<SocketDeclaration>;
+using SectionDeclarationPtr = std::unique_ptr<SectionDeclaration>;
 
 class NodeDeclaration {
  private:
   Vector<SocketDeclarationPtr> inputs_;
   Vector<SocketDeclarationPtr> outputs_;
+  Vector<SectionDeclarationPtr> sections_;
   bool is_function_node_ = false;
 
   friend NodeDeclarationBuilder;
@@ -319,6 +362,7 @@ class NodeDeclaration {
   Span<SocketDeclarationPtr> inputs() const;
   Span<SocketDeclarationPtr> outputs() const;
   Span<SocketDeclarationPtr> sockets(eNodeSocketInOut in_out) const;
+  Span<SectionDeclarationPtr> sections() const;
 
   bool is_function_node() const
   {
@@ -332,6 +376,7 @@ class NodeDeclarationBuilder {
  private:
   NodeDeclaration &declaration_;
   Vector<std::unique_ptr<BaseSocketDeclarationBuilder>> builders_;
+  Vector<std::unique_ptr<SectionDeclarationBuilder>> section_builders_;
 
  public:
   NodeDeclarationBuilder(NodeDeclaration &declaration);
@@ -352,6 +397,8 @@ class NodeDeclarationBuilder {
   typename DeclType::Builder &add_input(StringRef name, StringRef identifier = "");
   template<typename DeclType>
   typename DeclType::Builder &add_output(StringRef name, StringRef identifier = "");
+
+  SectionDeclarationBuilder &add_section(StringRef name);
 
  private:
   template<typename DeclType>
@@ -502,11 +549,27 @@ inline bool SocketDeclaration::compositor_expects_single_value() const
   return compositor_expects_single_value_;
 }
 
+inline const SectionDeclaration *SocketDeclaration::section() const
+{
+  return section_;
+}
+
 inline void SocketDeclaration::make_available(bNode &node) const
 {
   if (make_available_fn_) {
     make_available_fn_(node);
   }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #SectionDeclaration Inline Methods
+ * \{ */
+
+inline StringRefNull SectionDeclaration::name() const
+{
+  return name_;
 }
 
 /** \} */
@@ -561,6 +624,19 @@ inline typename DeclType::Builder &NodeDeclarationBuilder::add_socket(StringRef 
   return socket_decl_builder_ref;
 }
 
+inline SectionDeclarationBuilder &NodeDeclarationBuilder::add_section(StringRef name)
+{
+  std::unique_ptr<SectionDeclaration> section_decl = std::make_unique<SectionDeclaration>();
+  std::unique_ptr<SectionDeclarationBuilder> section_decl_builder =
+      std::make_unique<SectionDeclarationBuilder>();
+  section_decl_builder->decl_ = &*section_decl;
+  section_decl->name_ = name;
+  declaration_.sections_.append(std::move(section_decl));
+  SectionDeclarationBuilder &section_decl_builder_ref = *section_decl_builder;
+  section_builders_.append(std::move(section_decl_builder));
+  return section_decl_builder_ref;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -583,6 +659,11 @@ inline Span<SocketDeclarationPtr> NodeDeclaration::sockets(eNodeSocketInOut in_o
     return inputs_;
   }
   return outputs_;
+}
+
+inline Span<SectionDeclarationPtr> NodeDeclaration::sections() const
+{
+  return sections_;
 }
 
 /** \} */

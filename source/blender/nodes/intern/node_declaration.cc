@@ -82,6 +82,12 @@ bool SocketDeclaration::matches_common_data(const bNodeSocket &socket) const
   return true;
 }
 
+bNodeSection &SectionDeclaration::build(bNode &node)
+{
+  bNodeSection &section = *nodeAddSection(&node, name_.c_str());
+  return section;
+}
+
 namespace implicit_field_inputs {
 
 void position(const bNode & /*node*/, void *r_value)

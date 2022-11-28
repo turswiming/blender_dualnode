@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "BLI_math.h"
+#include "BLI_string_utils.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -1585,6 +1586,115 @@ static void rna_NodeTree_outputs_move(bNodeTree *ntree, Main *bmain, int from_in
   WM_main_add_notifier(NC_NODE | NA_EDITED, ntree);
 }
 
+static int rna_NodeTree_active_section_get(PointerRNA *ptr)
+{
+  bNodeTree *ntree = (bNodeTree *)ptr->data;
+  int index = 0;
+  LISTBASE_FOREACH_INDEX (bNodeSection *, section, &ntree->sections, index) {
+    if (section->flag & NODE_SECTION_SELECTED) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+static void rna_NodeTree_active_section_set(PointerRNA *ptr, int value)
+{
+  bNodeTree *ntree = (bNodeTree *)ptr->data;
+
+  int index = 0;
+  LISTBASE_FOREACH_INDEX (bNodeSection *, section, &ntree->sections, index) {
+    SET_FLAG_FROM_TEST(section->flag, index == value, NODE_SECTION_SELECTED);
+  }
+}
+
+static bNodeSection *rna_NodeTree_sections_new(bNodeTree *ntree,
+                                               Main *bmain,
+                                               ReportList *reports,
+                                               const char *name)
+{
+  if (!rna_NodeTree_check(ntree, reports)) {
+    return NULL;
+  }
+
+  bNodeSection *section = ntreeAddSection(ntree, name);
+
+  if (section == NULL) {
+    BKE_report(reports, RPT_ERROR, "Unable to create section");
+  }
+  else {
+    ED_node_tree_propagate_change(NULL, bmain, ntree);
+    WM_main_add_notifier(NC_NODE | NA_EDITED, ntree);
+  }
+
+  return section;
+}
+
+static void rna_NodeTree_section_remove(bNodeTree *ntree,
+                                        Main *bmain,
+                                        ReportList *reports,
+                                        bNodeSection *section)
+{
+  if (!rna_NodeTree_check(ntree, reports)) {
+    return;
+  }
+
+  if (BLI_findindex(&ntree->sections, section) == -1) {
+    BKE_reportf(reports, RPT_ERROR, "Unable to locate section '%s' in node", section->name);
+  }
+  else {
+    ntreeRemoveSection(ntree, section);
+
+    ED_node_tree_propagate_change(NULL, bmain, ntree);
+    WM_main_add_notifier(NC_NODE | NA_EDITED, ntree);
+  }
+}
+
+static void rna_NodeTree_sections_clear(bNodeTree *ntree, Main *bmain, ReportList *reports)
+{
+  if (!rna_NodeTree_check(ntree, reports)) {
+    return;
+  }
+
+  LISTBASE_FOREACH_MUTABLE (bNodeSection *, section, &ntree->sections) {
+    ntreeRemoveSection(ntree, section);
+  }
+
+  ED_node_tree_propagate_change(NULL, bmain, ntree);
+  WM_main_add_notifier(NC_NODE | NA_EDITED, ntree);
+}
+
+static void rna_NodeTree_sections_move(bNodeTree *ntree, Main *bmain, int from_index, int to_index)
+{
+  if (from_index == to_index) {
+    return;
+  }
+  if (from_index < 0 || to_index < 0) {
+    return;
+  }
+
+  bNodeSection *section = BLI_findlink(&ntree->sections, from_index);
+  if (to_index < from_index) {
+    bNodeSection *nextsection = BLI_findlink(&ntree->sections, to_index);
+    if (nextsection) {
+      BLI_remlink(&ntree->sections, section);
+      BLI_insertlinkbefore(&ntree->sections, nextsection, section);
+    }
+  }
+  else {
+    bNodeSection *prevsection = BLI_findlink(&ntree->sections, to_index);
+    if (prevsection) {
+      BLI_remlink(&ntree->sections, section);
+      BLI_insertlinkafter(&ntree->sections, prevsection, section);
+    }
+  }
+
+  BKE_ntree_update_tag_interface(ntree);
+
+  ED_node_tree_propagate_change(NULL, bmain, ntree);
+  WM_main_add_notifier(NC_NODE | NA_EDITED, ntree);
+}
+
 static void rna_NodeTree_interface_update(bNodeTree *ntree, bContext *C)
 {
   Main *bmain = CTX_data_main(C);
@@ -3118,6 +3228,64 @@ static void rna_NodeSocketInterface_update(Main *bmain, Scene *UNUSED(scene), Po
   if (!stemp->typeinfo) {
     return;
   }
+
+  BKE_ntree_update_tag_interface(ntree);
+  ED_node_tree_propagate_change(NULL, bmain, ntree);
+}
+
+static void rna_NodeSection_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *ptr)
+{
+  bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
+
+  ED_node_tree_propagate_change(NULL, bmain, ntree);
+}
+
+static char *rna_NodeSection_path(const PointerRNA *ptr)
+{
+  const bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
+  const bNodeSection *section = (bNodeSection *)ptr->data;
+
+  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    int sectionindex = BLI_findindex(&node->sections, section);
+    if (sectionindex != -1) {
+      char name_esc[sizeof(node->name) * 2];
+      BLI_str_escape(name_esc, node->name, sizeof(name_esc));
+      return BLI_sprintfN("nodes[\"%s\"].sections[%d]", name_esc, sectionindex);
+    }
+  }
+
+  return NULL;
+}
+
+static char *rna_NodeSectionInterface_path(const PointerRNA *ptr)
+{
+  const bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
+  const bNodeSection *section = (bNodeSection *)ptr->data;
+
+  int index = BLI_findindex(&ntree->sections, section);
+  if (index != -1) {
+    return BLI_sprintfN("sections[%d]", index);
+  }
+
+  return NULL;
+}
+
+static void rna_NodeSectionInterface_name_set(PointerRNA *ptr, const char *value)
+{
+  bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
+  bNodeSection *section = (bNodeSection *)ptr->data;
+  BLI_strncpy_utf8(section->name, value, sizeof(section->name));
+  BLI_uniquename(&ntree->sections,
+                 section,
+                 DATA_("Section"),
+                 '.',
+                 offsetof(bNodeSection, name),
+                 sizeof(section->name));
+}
+
+static void rna_NodeSectionInterface_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *ptr)
+{
+  bNodeTree *ntree = (bNodeTree *)ptr->owner_id;
 
   BKE_ntree_update_tag_interface(ntree);
   ED_node_tree_propagate_change(NULL, bmain, ntree);
@@ -11190,6 +11358,14 @@ static void rna_def_node_socket_interface(BlenderRNA *brna)
                            "geometry nodes modifier");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeSocketInterface_update");
 
+  prop = RNA_def_property(srna, "section", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "NodeSectionInterface");
+  RNA_def_property_pointer_sdna(prop, NULL, "section");
+  RNA_def_property_ui_text(prop, "Section", "The section that the socket is part of");
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeSocketInterface_update");
+
   /* registration */
   prop = RNA_def_property(srna, "bl_socket_idname", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, NULL, "typeinfo->idname");
@@ -11944,6 +12120,54 @@ static void rna_def_node_socket_standard_types(BlenderRNA *brna)
   rna_def_node_socket_material(brna, "NodeSocketMaterial", "NodeSocketInterfaceMaterial");
 }
 
+static void rna_def_node_section(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "NodeSection", NULL);
+  RNA_def_struct_ui_text(srna, "Node Section", "");
+  RNA_def_struct_sdna(srna, "bNodeSection");
+  RNA_def_struct_path_func(srna, "rna_NodeSection_path");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Section name");
+  RNA_def_struct_name_property(srna, prop);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "opened", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", NODE_SECTION_CLOSED);
+  RNA_def_property_ui_text(prop, "Opened", "Whether the section is expanded");
+  RNA_def_property_update(prop, NC_NODE | NA_SELECTED, "rna_NodeSection_update");
+
+  prop = RNA_def_property(srna, "enabled", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", NODE_SECTION_UNAVAIL);
+  RNA_def_property_ui_text(prop, "Enabled", "");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
+static void rna_def_node_section_interface(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "NodeSectionInterface", NULL);
+  RNA_def_struct_ui_text(srna, "Node Section", "");
+  RNA_def_struct_sdna(srna, "bNodeSection");
+  RNA_def_struct_path_func(srna, "rna_NodeSectionInterface_path");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Section name");
+  RNA_def_struct_name_property(srna, prop);
+  RNA_def_property_string_funcs(prop, NULL, NULL, "rna_NodeSectionInterface_name_set");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeSectionInterface_update");
+
+  prop = RNA_def_property(srna, "selected", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", NODE_SECTION_SELECTED);
+  RNA_def_property_ui_text(prop, "Selected", "");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, NULL);
+}
+
 static void rna_def_internal_node(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -12169,6 +12393,12 @@ static void rna_def_node(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Outputs", "");
   rna_def_node_sockets_api(brna, prop, SOCK_OUT);
+
+  prop = RNA_def_property(srna, "sections", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, NULL, "sections", NULL);
+  RNA_def_property_struct_type(prop, "NodeSection");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Sections", "");
 
   prop = RNA_def_property(srna, "internal_links", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_collection_funcs(prop,
@@ -12533,9 +12763,51 @@ static void rna_def_nodetree_link_api(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS);
 }
 
+static void rna_def_node_tree_section_api(BlenderRNA *brna, PropertyRNA *cprop)
+{
+  StructRNA *srna;
+  PropertyRNA *parm;
+  FunctionRNA *func;
+
+  RNA_def_property_srna(cprop, "NodeTreeSections");
+  srna = RNA_def_struct(brna, "NodeTreeSections", NULL);
+  RNA_def_struct_sdna(srna, "bNodeTree");
+  RNA_def_struct_ui_text(srna, "Node Tree Sections", "Collection of Node Tree Sections");
+
+  func = RNA_def_function(srna, "new", "rna_NodeTree_sections_new");
+  RNA_def_function_ui_description(func, "Add a section to this node tree");
+  RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS);
+  parm = RNA_def_string(func, "name", NULL, MAX_NAME, "Name", "");
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+  /* return value */
+  parm = RNA_def_pointer(func, "section", "NodeSectionInterface", "", "New section");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "remove", "rna_NodeTree_section_remove");
+  RNA_def_function_ui_description(func, "Remove a section from this node tree");
+  RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS);
+  parm = RNA_def_pointer(func, "section", "NodeSectionInterface", "", "The section to remove");
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+
+  func = RNA_def_function(srna, "clear", "rna_NodeTree_sections_clear");
+  RNA_def_function_ui_description(func, "Remove all sections from this node tree");
+  RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS);
+
+  func = RNA_def_function(srna, "move", "rna_NodeTree_sections_move");
+  RNA_def_function_ui_description(func, "Move a section to another position");
+  RNA_def_function_flag(func, FUNC_USE_MAIN);
+  parm = RNA_def_int(
+      func, "from_index", -1, 0, INT_MAX, "From Index", "Index of the section to move", 0, 10000);
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+  parm = RNA_def_int(
+      func, "to_index", -1, 0, INT_MAX, "To Index", "Target index for the section", 0, 10000);
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+}
+
 static void rna_def_node_tree_sockets_api(BlenderRNA *brna, PropertyRNA *cprop, int in_out)
 {
   StructRNA *srna;
+  PropertyRNA *prop;
   PropertyRNA *parm;
   FunctionRNA *func;
   const char *structtype = (in_out == SOCK_IN ? "NodeTreeInputs" : "NodeTreeOutputs");
@@ -12683,6 +12955,20 @@ static void rna_def_nodetree(BlenderRNA *brna)
   RNA_def_property_int_funcs(
       prop, "rna_NodeTree_active_output_get", "rna_NodeTree_active_output_set", NULL);
   RNA_def_property_ui_text(prop, "Active Output", "Index of the active output");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, NC_NODE, NULL);
+
+  prop = RNA_def_property(srna, "sections", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, NULL, "sections", NULL);
+  RNA_def_property_struct_type(prop, "NodeSectionInterface");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Sections", "Node tree sections");
+  rna_def_node_tree_section_api(brna, prop);
+
+  prop = RNA_def_property(srna, "active_section", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_funcs(
+      prop, "rna_NodeTree_active_section_get", "rna_NodeTree_active_section_set", NULL);
+  RNA_def_property_ui_text(prop, "Active Section", "Index of the active section");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_NODE, NULL);
 
@@ -12934,6 +13220,9 @@ void RNA_def_nodetree(BlenderRNA *brna)
 
   rna_def_node_socket(brna);
   rna_def_node_socket_interface(brna);
+
+  rna_def_node_section(brna);
+  rna_def_node_section_interface(brna);
 
   rna_def_node(brna);
   rna_def_node_link(brna);

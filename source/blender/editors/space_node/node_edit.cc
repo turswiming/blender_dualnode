@@ -2552,7 +2552,7 @@ void NODE_OT_tree_socket_remove(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Remove Node Tree Interface Socket";
-  ot->description = "Remove an input or output socket to the current node tree";
+  ot->description = "Remove an input or output socket from the current node tree";
   ot->idname = "NODE_OT_tree_socket_remove";
 
   /* api callbacks */
@@ -2744,6 +2744,186 @@ void NODE_OT_tree_socket_move(wmOperatorType *ot)
 
   RNA_def_enum(ot->srna, "direction", move_direction_items, 1, "Direction", "");
   RNA_def_enum(ot->srna, "in_out", rna_enum_node_socket_in_out_items, SOCK_IN, "Socket Type", "");
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Node-Tree Add Section Operator
+ * \{ */
+
+static bNodeSection *ntree_get_active_section(bNodeTree *ntree)
+{
+  LISTBASE_FOREACH (bNodeSection *, section, &ntree->sections) {
+    if (section->flag & NODE_SECTION_SELECTED) {
+      return section;
+    }
+  }
+  return nullptr;
+}
+
+static int ntree_section_add_exec(bContext *C, wmOperator * /*op*/)
+{
+  SpaceNode *snode = CTX_wm_space_node(C);
+  bNodeTree *ntree = snode->edittree;
+  ListBase *sections = &ntree->sections;
+
+  PointerRNA ntree_ptr;
+  RNA_id_pointer_create((ID *)ntree, &ntree_ptr);
+
+  bNodeSection *active_section = ntree_get_active_section(ntree);
+
+  const char *name = (active_section != nullptr) ? active_section->name : "Section";
+  bNodeSection *section = ntreeAddSection(ntree, name);
+
+  if (active_section != nullptr) {
+    BLI_remlink(sections, section);
+    BLI_insertlinkafter(sections, active_section, section);
+  }
+
+  /* Deactivate sections. */
+  LISTBASE_FOREACH (bNodeSection *, section_iter, sections) {
+    section_iter->flag &= ~NODE_SECTION_SELECTED;
+  }
+  /* make the new section active */
+  section->flag |= NODE_SECTION_SELECTED;
+
+  ED_node_tree_propagate_change(C, CTX_data_main(C), snode->edittree);
+
+  WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void NODE_OT_tree_section_add(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Add Node Tree Section";
+  ot->description = "Add a section to the current node tree";
+  ot->idname = "NODE_OT_tree_section_add";
+
+  /* api callbacks */
+  ot->exec = ntree_section_add_exec;
+  ot->poll = ED_operator_node_editable;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Node-Tree Remove Section Operator
+ * \{ */
+
+static int ntree_section_remove_exec(bContext *C, wmOperator * /*op*/)
+{
+  SpaceNode *snode = CTX_wm_space_node(C);
+  bNodeTree *ntree = snode->edittree;
+
+  bNodeSection *section = ntree_get_active_section(ntree);
+  if (section == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* preferably next section becomes active, otherwise try previous section */
+  bNodeSection *active_section = (section->next ? section->next : section->prev);
+  ntreeRemoveSection(ntree, section);
+
+  /* set active section */
+  if (active_section) {
+    active_section->flag |= NODE_SECTION_SELECTED;
+  }
+
+  ED_node_tree_propagate_change(C, CTX_data_main(C), ntree);
+
+  WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void NODE_OT_tree_section_remove(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Remove Node Tree Section";
+  ot->description = "Remove a section from the current node tree";
+  ot->idname = "NODE_OT_tree_section_remove";
+
+  /* api callbacks */
+  ot->exec = ntree_section_remove_exec;
+  ot->poll = ED_operator_node_editable;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Node-Tree Move Section Operator
+ * \{ */
+
+static int ntree_section_move_exec(bContext *C, wmOperator *op)
+{
+  SpaceNode *snode = CTX_wm_space_node(C);
+  bNodeTree *ntree = snode->edittree;
+  ListBase *sections = &ntree->sections;
+  int direction = RNA_enum_get(op->ptr, "direction");
+
+  bNodeSection *section = ntree_get_active_section(ntree);
+
+  if (section == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  switch (direction) {
+    case 1: { /* up */
+      bNodeSection *before = section->prev;
+      BLI_remlink(sections, section);
+      if (before) {
+        BLI_insertlinkbefore(sections, before, section);
+      }
+      else {
+        BLI_addhead(sections, section);
+      }
+      break;
+    }
+    case 2: { /* down */
+      bNodeSection *after = section->next;
+      BLI_remlink(sections, section);
+      if (after) {
+        BLI_insertlinkafter(sections, after, section);
+      }
+      else {
+        BLI_addtail(sections, section);
+      }
+      break;
+    }
+  }
+
+  BKE_ntree_update_tag_interface(ntree);
+  ED_node_tree_propagate_change(C, CTX_data_main(C), ntree);
+
+  WM_event_add_notifier(C, NC_NODE | ND_DISPLAY, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+void NODE_OT_tree_section_move(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Move Node Tree Section";
+  ot->description = "Move a section up or down in the current node tree's sections stack";
+  ot->idname = "NODE_OT_tree_section_move";
+
+  /* api callbacks */
+  ot->exec = ntree_section_move_exec;
+  ot->poll = ED_operator_node_editable;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_enum(ot->srna, "direction", move_direction_items, 1, "Direction", "");
 }
 
 /** \} */

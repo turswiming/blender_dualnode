@@ -813,6 +813,18 @@ class NODE_UL_interface_sockets(bpy.types.UIList):
             layout.template_node_socket(color=color)
 
 
+class NODE_UL_interface_sections(bpy.types.UIList):
+    def draw_item(self, context, layout, _data, item, icon, _active_data, _active_propname, _index):
+        socket = item
+
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            row = layout.row(align=True)
+
+            row.prop(item, "name", text="", emboss=False, icon_value=icon)
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+
+
 class NodeTreeInterfacePanel(Panel):
 
     @classmethod
@@ -881,6 +893,7 @@ class NodeTreeInterfacePanel(Panel):
             layout.use_property_split = True
             layout.use_property_decorate = False
 
+            layout.prop_search(active_socket, "section", tree, "sections")
             layout.prop(active_socket, "name")
             # Display descriptions only for Geometry Nodes, since it's only used in the modifier panel.
             if tree.type == 'GEOMETRY':
@@ -921,6 +934,37 @@ class NODE_PT_node_tree_interface_outputs(NodeTreeInterfacePanel):
 
     def draw(self, context):
         self.draw_socket_list(context, "OUT", "outputs", "active_output")
+
+
+class NODE_PT_node_tree_interface_sections(NodeTreeInterfacePanel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Group"
+    bl_label = "Sections"
+
+    def draw(self, context):
+        layout = self.layout
+
+        snode = context.space_data
+        tree = snode.edit_tree
+
+        split = layout.row()
+
+        split.template_list("NODE_UL_interface_sections", "", tree, "sections", tree, "active_section")
+
+        ops_col = split.column()
+
+        add_remove_col = ops_col.column(align=True)
+        props = add_remove_col.operator("node.tree_section_add", icon='ADD', text="")
+        props = add_remove_col.operator("node.tree_section_remove", icon='REMOVE', text="")
+
+        ops_col.separator()
+
+        up_down_col = ops_col.column(align=True)
+        props = up_down_col.operator("node.tree_section_move", icon='TRIA_UP', text="")
+        props.direction = 'UP'
+        props = up_down_col.operator("node.tree_section_move", icon='TRIA_DOWN', text="")
+        props.direction = 'DOWN'
 
 
 # Grease Pencil properties
@@ -985,8 +1029,10 @@ classes = (
     NODE_PT_annotation,
     NODE_PT_overlay,
     NODE_UL_interface_sockets,
+    NODE_UL_interface_sections,
     NODE_PT_node_tree_interface_inputs,
     NODE_PT_node_tree_interface_outputs,
+    NODE_PT_node_tree_interface_sections,
 
     node_panel(EEVEE_MATERIAL_PT_settings),
     node_panel(MATERIAL_PT_viewport),

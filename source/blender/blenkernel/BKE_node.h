@@ -580,6 +580,9 @@ struct bNodeSocket *ntreeInsertSocketInterfaceFromSocket(struct bNodeTree *ntree
                                                          struct bNodeSocket *from_sock);
 void ntreeRemoveSocketInterface(struct bNodeTree *ntree, struct bNodeSocket *sock);
 
+struct bNodeSection *ntreeAddSection(struct bNodeTree *ntree, const char *name);
+void ntreeRemoveSection(struct bNodeTree *ntree, struct bNodeSection *section);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -661,6 +664,9 @@ void nodeModifySocketType(struct bNodeTree *ntree,
                           const char *idname);
 void nodeModifySocketTypeStatic(
     struct bNodeTree *ntree, struct bNode *node, struct bNodeSocket *sock, int type, int subtype);
+
+struct bNodeSection *nodeAddSection(struct bNode *node, const char *name);
+void nodeRemoveSection(struct bNode *node, struct bNodeSection *section);
 
 struct bNode *nodeAddNode(const struct bContext *C, struct bNodeTree *ntree, const char *idname);
 struct bNode *nodeAddStaticNode(const struct bContext *C, struct bNodeTree *ntree, int type);
@@ -836,6 +842,8 @@ int nodeSocketIsHidden(const struct bNodeSocket *sock);
 void nodeSetSocketAvailability(struct bNodeTree *ntree,
                                struct bNodeSocket *sock,
                                bool is_available);
+
+void nodeSetSectionAvailability(struct bNodeSection *section, bool is_available);
 
 int nodeSocketLinkLimit(const struct bNodeSocket *sock);
 

@@ -35,6 +35,8 @@
 
 using namespace blender;
 using blender::fn::ValueOrField;
+using blender::nodes::SectionDeclaration;
+using blender::nodes::SectionDeclarationPtr;
 using blender::nodes::SocketDeclarationPtr;
 
 struct bNodeSocket *node_add_socket_from_template(struct bNodeTree *ntree,
@@ -171,10 +173,48 @@ static void verify_socket_template_list(bNodeTree *ntree,
   }
 }
 
+static Map<const SectionDeclaration *, bNodeSection *> refresh_sections_list(
+    bNode &node, Span<SectionDeclarationPtr> section_decls)
+{
+  Vector<bNodeSection *> old_sections = node.sections;
+  VectorSet<bNodeSection *> new_sections;
+  Map<const SectionDeclaration *, bNodeSection *> section_map;
+  for (const SectionDeclarationPtr &section_decl : section_decls) {
+    /* Try to find an existing section of the same name. */
+    bNodeSection *old_section = nullptr;
+    for (const int i : old_sections.index_range()) {
+      bNodeSection &section = *old_sections[i];
+      if (section.name == section_decl->name()) {
+        old_sections.remove_and_reorder(i);
+        old_section = &section;
+        break;
+      }
+    }
+    bNodeSection *new_section = old_section;
+    if (new_section == nullptr) {
+      /* Create a completely new socket. */
+      new_section = &section_decl->build(node);
+    }
+    section_map.add_new(section_decl.get(), new_section);
+    new_sections.add_new(new_section);
+  }
+  LISTBASE_FOREACH_MUTABLE (bNodeSection *, old_section, &node.sections) {
+    if (!new_sections.contains(old_section)) {
+      nodeRemoveSection(&node, old_section);
+    }
+  }
+  BLI_listbase_clear(&node.sections);
+  for (bNodeSection *section : new_sections) {
+    BLI_addtail(&node.sections, section);
+  }
+  return section_map;
+}
+
 static void refresh_socket_list(bNodeTree &ntree,
                                 bNode &node,
                                 ListBase &sockets,
                                 Span<SocketDeclarationPtr> socket_decls,
+                                const Map<const SectionDeclaration *, bNodeSection *> &section_map,
                                 const bool do_id_user)
 {
   Vector<bNodeSocket *> old_sockets = sockets;
@@ -231,6 +271,7 @@ static void refresh_socket_list(bNodeTree &ntree,
         }
       }
     }
+    new_socket->section = section_map.lookup_default(socket_decl->section(), nullptr);
     new_sockets.add_new(new_socket);
   }
   LISTBASE_FOREACH_MUTABLE (bNodeSocket *, old_socket, &sockets) {
@@ -249,8 +290,10 @@ static void refresh_node(bNodeTree &ntree,
                          blender::nodes::NodeDeclaration &node_decl,
                          bool do_id_user)
 {
-  refresh_socket_list(ntree, node, node.inputs, node_decl.inputs(), do_id_user);
-  refresh_socket_list(ntree, node, node.outputs, node_decl.outputs(), do_id_user);
+  Map<const SectionDeclaration *, bNodeSection *> section_map = refresh_sections_list(
+      node, node_decl.sections());
+  refresh_socket_list(ntree, node, node.inputs, node_decl.inputs(), section_map, do_id_user);
+  refresh_socket_list(ntree, node, node.outputs, node_decl.outputs(), section_map, do_id_user);
 }
 
 void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)
