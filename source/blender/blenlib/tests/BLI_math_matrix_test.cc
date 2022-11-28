@@ -149,12 +149,19 @@ TEST(math_matrix, MatrixInit)
   expect = float4x4({1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {1, 2, 3, 1});
   EXPECT_TRUE(compare(m, expect, 0.00001f));
 
-  m = mat4x4::from_rotation<float>({1, 2, 3});
-  expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
-                    {-0.833738, -0.426918, -0.350175, 0},
-                    {-0.36763, 0.902382, -0.224845, 0},
-                    {0, 0, 0, 1});
-  EXPECT_TRUE(compare(m, expect, 0.00001f));
+  expect = transpose(float4x4({0.411982, -0.833738, -0.36763, 0},
+                              {-0.0587266, -0.426918, 0.902382, 0},
+                              {-0.909297, -0.350175, -0.224845, 0},
+                              {0, 0, 0, 1}));
+  EulerXYZ euler({1, 2, 3});
+  Quaternion quat(euler);
+  AxisAngle axis_angle(euler);
+  m = mat4x4::from_rotation(euler);
+  EXPECT_M3_NEAR(m, expect, 1e-5);
+  m = mat4x4::from_rotation(quat);
+  EXPECT_M3_NEAR(m, expect, 1e-5);
+  m = mat4x4::from_rotation(axis_angle);
+  EXPECT_M3_NEAR(m, expect, 1e-5);
 
   m = mat4x4::from_scale<float>({1, 2, 3});
   expect = float4x4({1, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, 1});

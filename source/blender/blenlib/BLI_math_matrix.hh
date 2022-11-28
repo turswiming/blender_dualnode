@@ -208,6 +208,33 @@ template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<
   return mat;
 }
 
+template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::AxisAngle<T> &rotation)
+{
+  const T angle_sin = math::sin(rotation.angle());
+  const T angle_cos = math::cos(rotation.angle());
+
+  BLI_assert(is_unit_scale(axis));
+
+  vec_base<T, 3> &axis = rotation.axis();
+
+  T ico = (T(1) - angle_cos);
+  vec_base<T, 3> nsi = axis * angle_sin;
+
+  T n012 = (axis * axis) * ico;
+  T n_01 = (axis[0] * axis[1]) * ico;
+  T n_02 = (axis[0] * axis[2]) * ico;
+  T n_12 = (axis[1] * axis[2]) * ico;
+
+  mat_base<T, 3, 3> mat = mat_base<T, 3, 3>::from_diagonal(n012 + angle_cos);
+  mat[0][1] = n_01 + nsi[2];
+  mat[0][2] = n_02 - nsi[1];
+  mat[1][0] = n_01 - nsi[2];
+  mat[1][2] = n_12 + nsi[0];
+  mat[2][0] = n_02 + nsi[1];
+  mat[2][1] = n_12 - nsi[0];
+  return mat;
+}
+
 template<typename T> mat_base<T, 3, 3> from_scale(const vec_base<T, 3> &scale)
 {
   return mat_base<T, 3, 3>::from_diagonal(scale);
