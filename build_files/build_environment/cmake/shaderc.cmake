@@ -38,6 +38,7 @@ add_dependencies(
   external_shaderc_spirv_tools
   external_shaderc_spirv_headers
   external_shaderc_glslang
+  external_python
 )
 
 

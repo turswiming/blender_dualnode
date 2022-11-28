@@ -82,6 +82,9 @@ void BKE_mesh_legacy_convert_material_indices_to_mpoly(struct Mesh *mesh);
  */
 void BKE_mesh_legacy_convert_mpoly_to_material_indices(struct Mesh *mesh);
 
+/** Convert from runtime loose edge cache to legacy edge flag. */
+void BKE_mesh_legacy_convert_loose_edges_to_flag(struct Mesh *mesh);
+
 #endif
 
 /**
@@ -94,8 +97,6 @@ void BKE_mesh_legacy_convert_mpoly_to_material_indices(struct Mesh *mesh);
 void BKE_mesh_tessface_calc(struct Mesh *mesh);
 
 void BKE_mesh_tessface_ensure(struct Mesh *mesh);
-
-void BKE_mesh_add_mface_layers(struct CustomData *fdata, struct CustomData *ldata, int total);
 
 /**
  * Rotates the vertices of a face in case v[2] or v[3] (vertex index) is = 0.

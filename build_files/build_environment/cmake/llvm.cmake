@@ -13,8 +13,10 @@ if(APPLE)
   )
   set(LLVM_BUILD_CLANG_TOOLS_EXTRA ^^clang-tools-extra)
   set(BUILD_CLANG_TOOLS ON)
+else()
+  # NVIDIA PTX for OSL on Windows and Linux.
+  set(LLVM_TARGETS ${LLVM_TARGETS}$<SEMICOLON>NVPTX)
 endif()
-
 
 set(LLVM_EXTRA_ARGS
   -DLLVM_USE_CRT_RELEASE=MD

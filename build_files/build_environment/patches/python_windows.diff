@@ -8,7 +8,7 @@
 -if errorlevel 1 exit /b
 +REM Blender: we only need x64, ssl is kind of a long build, so just build what we need
 +REM %MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=Win32
-+REMif errorlevel 1 exit /b
++REM if errorlevel 1 exit /b
  %MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=x64
  if errorlevel 1 exit /b
 -%MSBUILD% "%PCBUILD%\openssl.vcxproj" /p:Configuration=Release /p:Platform=ARM

@@ -195,9 +195,12 @@ set(TIFF_HASH_TYPE MD5)
 set(TIFF_FILE tiff-${TIFF_VERSION}.tar.gz)
 set(TIFF_CPE "cpe:2.3:a:libtiff:libtiff:${TIFF_VERSION}:*:*:*:*:*:*:*")
 
-set(OSL_VERSION 1.12.6.2)
-set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/archive/refs/tags/v${OSL_VERSION}.tar.gz)
-set(OSL_HASH 6fef11548adfdd3e5b25c49d2dae96ee)
+# Commit c8dd33f5a37b6a6db0b6950d24f9a7cff5ceb799 breaks rendering in Cycles with OptiX, so this
+# is intentionally still a commit before that and therefore 1.13.0.1. To be updated to a newer
+# version before landing this in master.
+set(OSL_VERSION 1a7670600c8b08c2443a78d03c8c27e9a1149140)
+set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/archive/${OSL_VERSION}.tar.gz)
+set(OSL_HASH 7b6d6716b05d1addb92a8f47280bf77f)
 set(OSL_HASH_TYPE MD5)
 set(OSL_FILE OpenShadingLanguage-${OSL_VERSION}.tar.gz)
 
@@ -469,6 +472,12 @@ set(USD_URI https://github.com/PixarAnimationStudios/USD/archive/v${USD_VERSION}
 set(USD_HASH 8c89459e48a2ef0e7ae9e7e490377507)
 set(USD_HASH_TYPE MD5)
 set(USD_FILE usd-v${USD_VERSION}.tar.gz)
+
+set(MATERIALX_VERSION 1.38.6)
+set(MATERIALX_URI https://github.com/AcademySoftwareFoundation/MaterialX/archive/refs/tags/v${MATERIALX_VERSION}.tar.gz)
+set(MATERIALX_HASH d49c9fdef34b5702fc60058d3e1864f2)
+set(MATERIALX_HASH_TYPE MD5)
+set(MATERIALX_FILE materialx-v${MATERIALX_VERSION}.tar.gz)
 
 set(OIDN_VERSION 1.4.3)
 set(OIDN_URI https://github.com/OpenImageDenoise/oidn/releases/download/v${OIDN_VERSION}/oidn-${OIDN_VERSION}.src.tar.gz)
@@ -767,3 +776,8 @@ set(VULKAN_LOADER_HASH 015170a74f648fd2b41e209b6bf1ebc4)
 set(VULKAN_LOADER_HASH_TYPE MD5)
 set(VULKAN_LOADER_FILE Vulkan-Loader-${VULKAN_VERSION}.tar.gz)
 
+set(PYBIND11_VERSION 2.10.1)
+set(PYBIND11_URI https://github.com/pybind/pybind11/archive/refs/tags/v${PYBIND11_VERSION}.tar.gz)
+set(PYBIND11_HASH ce07bfd5089245da7807b3faf6cbc878)
+set(PYBIND11_HASH_TYPE MD5)
+set(PYBIND11_FILE pybind-v${PYBIND11_VERSION}.tar.gz)

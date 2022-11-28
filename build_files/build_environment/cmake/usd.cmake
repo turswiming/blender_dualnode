@@ -26,11 +26,16 @@ elseif(UNIX)
   # Workaround USD not linking correctly with static Python library, where it would embed
   # part of the interpret in the USD library. Allow undefined Python symbols and replace
   # Python library with TBB so it doesn't complain about missing library.
-  set(USD_SHARED_LINKER_FLAGS "-Xlinker -undefined -Xlinker dynamic_lookup")
   set(USD_PLATFORM_FLAGS
     -DPYTHON_INCLUDE_DIR=${LIBDIR}/python/include/python${PYTHON_SHORT_VERSION}/
     -DPYTHON_LIBRARY=${LIBDIR}/tbb/lib/${LIBPREFIX}${TBB_LIBRARY}${SHAREDLIBEXT}
    )
+
+  if(APPLE)
+    set(USD_SHARED_LINKER_FLAGS "-Xlinker -undefined -Xlinker dynamic_lookup")
+    list(APPEND USD_PLATFORM_FLAGS
+      -DCMAKE_SHARED_LINKER_FLAGS=${USD_SHARED_LINKER_FLAGS})
+  endif()
 endif()
 
 set(USD_EXTRA_ARGS
@@ -38,8 +43,9 @@ set(USD_EXTRA_ARGS
   ${USD_PLATFORM_FLAGS}
   -DOPENSUBDIV_ROOT_DIR=${LIBDIR}/opensubdiv
   -DOpenImageIO_ROOT=${LIBDIR}/openimageio
-  -DOPENEXR_LIBRARIES=${LIBDIR}/imath/lib/${LIBPREFIX}Imath${OPENEXR_VERSION_POSTFIX}${LIBEXT}
+  -DOPENEXR_LIBRARIES=${LIBDIR}/imath/lib/${LIBPREFIX}Imath${OPENEXR_VERSION_POSTFIX}${SHAREDLIBEXT}
   -DOPENEXR_INCLUDE_DIR=${LIBDIR}/imath/include
+  -DImath_DIR=${LIBDIR}/imath
   -DOPENVDB_LOCATION=${LIBDIR}/openvdb
   -DPXR_ENABLE_PYTHON_SUPPORT=ON
   -DPXR_USE_PYTHON_3=ON
@@ -99,6 +105,7 @@ add_dependencies(
   external_boost
   external_opensubdiv
   external_python
+  external_openimageio
   openvdb
 )
 
@@ -127,15 +134,4 @@ if(WIN32)
       DEPENDEES install
     )
   endif()
-else()
-  # USD has two build options. The default build creates lots of small libraries,
-  # whereas the 'monolithic' build produces only a single library. The latter
-  # makes linking simpler, so that's what we use in Blender. However, running
-  # 'make install' in the USD sources doesn't install the static library in that
-  # case (only the shared library). As a result, we need to grab the `libusd_m.a`
-  # file from the build directory instead of from the install directory.
-  ExternalProject_Add_Step(external_usd after_install
-    COMMAND ${CMAKE_COMMAND} -E copy ${BUILD_DIR}/usd/src/external_usd-build/pxr/lib${PXR_LIB_PREFIX}usd_m.a ${HARVEST_TARGET}/usd/lib/lib${PXR_LIB_PREFIX}usd_m.a
-    DEPENDEES install
-  )
 endif()

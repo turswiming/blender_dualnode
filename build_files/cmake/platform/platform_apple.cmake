@@ -89,6 +89,14 @@ if(WITH_USD)
   add_bundled_libraries(usd/lib)
 endif()
 
+if(WITH_MATERIALX)
+  find_package(MaterialX)
+  set_and_warn_library_found("MaterialX" MaterialX_FOUND WITH_MATERIALX)
+  if(WITH_MATERIALX)
+    add_bundled_libraries(materialx/lib)
+  endif()
+endif()
+
 if(WITH_OPENSUBDIV)
   find_package(OpenSubdiv)
   add_bundled_libraries(opensubdiv/lib)
@@ -470,7 +478,7 @@ if(PLATFORM_BUNDLED_LIBRARIES)
   # Environment variables to run precompiled executables that needed libraries.
   list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
   set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};${DYLD_LIBRARY_PATH}\"")
-  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib/;$DYLD_LIBRARY_PATH")
+  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}Blender.app/Contents/Resources/lib/;$DYLD_LIBRARY_PATH")
   unset(_library_paths)
 endif()
 

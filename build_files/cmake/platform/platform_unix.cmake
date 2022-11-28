@@ -68,6 +68,7 @@ if(EXISTS ${LIBDIR})
   set(Boost_NO_SYSTEM_PATHS ON)
   set(OPENEXR_ROOT_DIR ${LIBDIR}/openexr)
   set(CLANG_ROOT_DIR ${LIBDIR}/llvm)
+  set(MaterialX_DIR ${LIBDIR}/materialx/lib/cmake/MaterialX)
 endif()
 
 # Wrapper to prefer static libraries
@@ -351,6 +352,14 @@ if(WITH_USD)
  if(WITH_USD)
     add_bundled_libraries(usd/lib)
  endif()
+endif()
+
+if(WITH_MATERIALX)
+  find_package_wrapper(MaterialX)
+  set_and_warn_library_found("MaterialX" MaterialX_FOUND WITH_MATERIALX)
+  if(WITH_MATERIALX)
+    add_bundled_libraries(materialx/lib)
+  endif()
 endif()
 
 if(WITH_BOOST)
