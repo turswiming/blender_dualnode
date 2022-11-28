@@ -49,12 +49,6 @@ IndexMask GPLayerGroup::layers_index_mask()
   return {reinterpret_cast<int64_t>(this->layer_indices), this->layer_indices_size};
 }
 
-/* GPDataRuntime */
-IndexMask GPDataRuntime::frame_index_masks_cache_for_layer(int layer_index)
-{
-  return frame_index_masks_cache.lookup(layer_index).as_span();
-}
-
 /* GPStroke */
 Span<float3> GPStroke::points_positions() const
 {
@@ -140,15 +134,18 @@ GPFrame::~GPFrame()
 
 bool GPFrame::operator<(const GPFrameKey key) const
 {
-  if (this->start_time == key.start_time) {
-    return this->layer_index < key.layer_index;
+  if (this->layer_index == key.layer_index) {
+    return this->start_time < key.start_time;
   }
-  return this->start_time < key.start_time;
+  return this->layer_index < key.layer_index;
 }
 
 bool GPFrame::operator<(const GPFrame &other) const
 {
-  return *this < other.get_frame_key();
+  if (this->layer_index == other.layer_index) {
+    return this->start_time < other.start_time;
+  }
+  return this->layer_index < other.layer_index;
 }
 
 bool GPFrame::operator==(const GPFrame &other) const
@@ -316,44 +313,54 @@ GPFrame &GPData::frames_for_write(int index)
   return this->frames_for_write()[index];
 }
 
-IndexMask GPData::frames_on_layer(int layer_index) const
+IndexRange GPData::frames_on_layer(int layer_index) const
 {
   if (layer_index < 0 || layer_index > this->layers_size) {
-    return IndexMask();
+    return {};
   }
 
   /* If the indices are cached for this layer, use the cache. */
-  if (this->runtime->frame_index_masks_cache.contains(layer_index)) {
-    return this->runtime->frame_index_masks_cache_for_layer(layer_index);
+  if (this->runtime->frames_index_range_cache.contains(layer_index)) {
+    return this->runtime->frames_index_range_cache_for_layer(layer_index);
   }
 
   /* A double checked lock. */
-  std::scoped_lock{this->runtime->frame_index_masks_cache_mutex};
-  if (this->runtime->frame_index_masks_cache.contains(layer_index)) {
-    return this->runtime->frame_index_masks_cache_for_layer(layer_index);
+  std::scoped_lock{this->runtime->frames_index_range_cache_mutex};
+  if (this->runtime->frames_index_range_cache.contains(layer_index)) {
+    return this->runtime->frames_index_range_cache_for_layer(layer_index);
   }
 
-  Vector<int64_t> indices;
-  const IndexMask mask = index_mask_ops::find_indices_based_on_predicate(
-      IndexMask(this->frames_size), 1024, indices, [&](const int index) {
-        return this->frames()[index].layer_index == layer_index;
-      });
+  auto it_lower = std::lower_bound(
+      this->frames().begin(),
+      this->frames().end(),
+      layer_index,
+      [](const GPFrame &frame, const int index) { return frame.layer_index < index; });
+  auto it_upper = std::upper_bound(
+      this->frames().begin(),
+      this->frames().end(),
+      layer_index,
+      [](const int index, const GPFrame &frame) { return frame.layer_index < index; });
+
+  /* Get the index of the first frame. */
+  int start_idx = std::distance(this->frames().begin(), it_lower);
+  /* Calculate size of the layer. */
+  int frames_size = std::distance(it_lower, it_upper);
 
   /* Cache the resulting index mask. */
-  this->runtime->frame_index_masks_cache.add(layer_index, std::move(indices));
-  return mask;
+  this->runtime->frames_index_range_cache.add(layer_index, {start_idx, frames_size});
+  return {start_idx, frames_size};
 }
 
-IndexMask GPData::frames_on_layer(GPLayer &layer) const
+IndexRange GPData::frames_on_layer(GPLayer &layer) const
 {
   int index = this->layers().first_index_try(layer);
   if (index == -1) {
-    return IndexMask();
+    return {};
   }
   return frames_on_layer(index);
 }
 
-IndexMask GPData::frames_on_active_layer() const
+IndexRange GPData::frames_on_active_layer() const
 {
   return frames_on_layer(this->active_layer_index);
 }
@@ -625,11 +632,11 @@ int GPData::add_frame_on_layer_initialized(int layer_index, int frame_start, int
 
 void GPData::update_frames_array()
 {
-  /* Make sure frames are ordered chronologically and by layer order. */
+  /* Make sure frames are ordered by layers and chronologically. */
   std::sort(this->frames_for_write().begin(), this->frames_for_write().end());
 
-  /* Clear the cached indices since they are (probably) no longer valid. */
-  this->runtime->frame_index_masks_cache.clear();
+  /* Clear the cached reanges since they are (probably) no longer valid. */
+  this->runtime->frames_index_range_cache.clear();
 }
 
 }  // namespace blender::bke

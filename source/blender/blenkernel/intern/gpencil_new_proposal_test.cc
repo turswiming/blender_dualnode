@@ -222,7 +222,7 @@ TEST(gpencil_proposal, CheckFramesSorted2)
   const int frame_numbers_layer1[5] = {10, 5, 6, 1, 3};
   const int frame_numbers_layer2[5] = {8, 5, 7, 1, 4};
   const int frame_numbers_sorted2[10][2] = {
-      {0, 1}, {1, 1}, {0, 3}, {1, 4}, {0, 5}, {1, 5}, {0, 6}, {1, 7}, {1, 8}, {0, 10}};
+      {0, 1}, {0, 3}, {0, 5}, {0, 6}, {0, 10}, {1, 1}, {1, 4}, {1, 5}, {1, 7}, {1, 8}};
 
   const int layer1_index = data.add_layer("TestLayer1");
   const int layer2_index = data.add_layer("TestLayer2");
@@ -244,8 +244,7 @@ TEST(gpencil_proposal, IterateOverFramesOnLayer)
   const int frame_numbers_layer1[5] = {10, 5, 6, 1, 3};
   const int frame_numbers_layer2[5] = {8, 5, 7, 1, 4};
 
-  const int frame_numbers_sorted1[5] = {1, 3, 5, 6, 10};
-  const int frame_numbers_sorted2[5] = {1, 4, 5, 7, 8};
+  const int frame_numbers_sorted[10] = {1, 3, 5, 6, 10, 1, 4, 5, 7, 8};
 
   const int layer1_index = data.add_layer("TestLayer1");
   const int layer2_index = data.add_layer("TestLayer2");
@@ -254,16 +253,16 @@ TEST(gpencil_proposal, IterateOverFramesOnLayer)
     data.add_frame_on_layer(layer2_index, frame_numbers_layer2[i]);
   }
 
-  IndexMask indices_frames_layer1 = data.frames_on_layer(layer1_index);
-  EXPECT_TRUE(data.runtime->frame_index_masks_cache.contains(layer1_index));
-  for (const int i : indices_frames_layer1.index_range()) {
-    EXPECT_EQ(data.frames(indices_frames_layer1[i]).start_time, frame_numbers_sorted1[i]);
+  data.frames_on_layer(layer1_index);
+  EXPECT_TRUE(data.runtime->frames_index_range_cache.contains(layer1_index));
+  for (const int i : data.frames_on_layer(layer1_index)) {
+    EXPECT_EQ(data.frames(i).start_time, frame_numbers_sorted[i]);
   }
 
-  IndexMask indices_frames_layer2 = data.frames_on_layer(layer2_index);
-  EXPECT_TRUE(data.runtime->frame_index_masks_cache.contains(layer2_index));
-  for (const int i : indices_frames_layer2.index_range()) {
-    EXPECT_EQ(data.frames(indices_frames_layer2[i]).start_time, frame_numbers_sorted2[i]);
+  data.frames_on_layer(layer2_index);
+  EXPECT_TRUE(data.runtime->frames_index_range_cache.contains(layer2_index));
+  for (const int i : data.frames_on_layer(layer2_index)) {
+    EXPECT_EQ(data.frames(i).start_time, frame_numbers_sorted[i]);
   }
 }
 
@@ -387,8 +386,7 @@ TEST(gpencil_proposal, TimeMultiFrameTransformStrokes)
   float4x4 translate_mat = float4x4::from_location({1.0f, 2.0f, 3.0f});
   {
     SCOPED_TIMER("TimeMultiFrameTransformStrokes");
-    IndexMask indices_frames = data.frames_on_active_layer();
-    for (const int i : indices_frames) {
+    for (const int i : data.frames_on_active_layer()) {
       GPFrame &gpf = data.frames_for_write(i);
       Vector<GPStroke> gpf_strokes = gpf.strokes_for_write();
       MutableSpan<GPStroke> strokes_span = gpf_strokes.as_mutable_span();

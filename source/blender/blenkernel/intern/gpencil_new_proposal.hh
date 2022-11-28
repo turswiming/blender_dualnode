@@ -101,8 +101,13 @@ typedef struct GPFrame {
 
 typedef struct GPData {
   /**
-   * The array of grease pencil frames. This is kept in chronological order (tiebreaks for two
-   * frames on different layers are resloved by the order of the layers).
+   * The array of grease pencil frames.
+   *
+   * The array is always assumed to be sorted. First by the layer index of each frame, then in
+   * chronological order, like so:
+   *
+   *  `[ frame 1 on layer 1, frame 2 on layer 1, frame 3 on layer 1, ...
+   *     frame 1 on layer 2, frame 2 on layer 2, frame 3 on layer 2, ...]`
    */
   GPFrame *frames_array;
   int frames_size;
@@ -175,12 +180,15 @@ class GPDataRuntime {
   /* mutable void *sbuffer */
 
   /**
-   * Cache that maps the index of a layer to the index mask of the frames in that layer.
+   * Cache that maps the index of a layer to the index range of the frames in that layer.
    */
-  mutable Map<int, Vector<int64_t>> frame_index_masks_cache;
-  mutable std::mutex frame_index_masks_cache_mutex;
+  mutable Map<int, IndexRange> frames_index_range_cache;
+  mutable std::mutex frames_index_range_cache_mutex;
 
-  IndexMask frame_index_masks_cache_for_layer(int layer_index);
+  IndexRange frames_index_range_cache_for_layer(int layer_index)
+  {
+    return frames_index_range_cache.lookup(layer_index);
+  };
 };
 
 /**
@@ -297,9 +305,9 @@ class GPData : public ::GPData {
   MutableSpan<GPFrame> frames_for_write();
   GPFrame &frames_for_write(int index);
 
-  IndexMask frames_on_layer(int layer_index) const;
-  IndexMask frames_on_layer(GPLayer &layer) const;
-  IndexMask frames_on_active_layer() const;
+  IndexRange frames_on_layer(int layer_index) const;
+  IndexRange frames_on_layer(GPLayer &layer) const;
+  IndexRange frames_on_active_layer() const;
 
   Span<GPLayer> layers() const;
   const GPLayer &layers(int index) const;
