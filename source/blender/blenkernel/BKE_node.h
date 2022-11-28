@@ -171,9 +171,6 @@ typedef struct bNodeSocketType {
 
   void (*interface_draw)(struct bContext *C, struct uiLayout *layout, struct PointerRNA *ptr);
   void (*interface_draw_color)(struct bContext *C, struct PointerRNA *ptr, float *r_color);
-  void (*interface_register_properties)(struct bNodeTree *ntree,
-                                        struct bNodeSocket *interface_socket,
-                                        struct StructRNA *data_srna);
   void (*interface_init_socket)(struct bNodeTree *ntree,
                                 const struct bNodeSocket *interface_socket,
                                 struct bNode *node,
@@ -329,6 +326,11 @@ typedef struct bNodeType {
   /* Get an instance of this node's compositor shader node. Freeing the instance is the
    * responsibility of the caller. */
   NodeGetCompositorShaderNodeFunction get_compositor_shader_node;
+
+  /* A message to display in the node header for unsupported realtime compositor nodes. The message
+   * is assumed to be static and thus require no memory handling. This field is to be removed when
+   * all nodes are supported. */
+  const char *realtime_compositor_unsupported_message;
 
   /* Build a multi-function for this node. */
   NodeMultiFunctionBuildFunction build_multi_function;
@@ -577,10 +579,6 @@ struct bNodeSocket *ntreeInsertSocketInterfaceFromSocket(struct bNodeTree *ntree
                                                          struct bNode *from_node,
                                                          struct bNodeSocket *from_sock);
 void ntreeRemoveSocketInterface(struct bNodeTree *ntree, struct bNodeSocket *sock);
-
-struct StructRNA *ntreeInterfaceTypeGet(struct bNodeTree *ntree, bool create);
-void ntreeInterfaceTypeFree(struct bNodeTree *ntree);
-void ntreeInterfaceTypeUpdate(struct bNodeTree *ntree);
 
 /** \} */
 
@@ -1391,7 +1389,7 @@ struct TexResult;
  * \{ */
 
 #define GEO_NODE_TRIANGULATE 1000
-#define GEO_NODE_TRANSFORM 1002
+#define GEO_NODE_TRANSFORM_GEOMETRY 1002
 #define GEO_NODE_MESH_BOOLEAN 1003
 #define GEO_NODE_OBJECT_INFO 1007
 #define GEO_NODE_JOIN_GEOMETRY 1010
@@ -1570,6 +1568,7 @@ struct TexResult;
 void BKE_node_system_init(void);
 void BKE_node_system_exit(void);
 
+extern bNodeTreeType NodeTreeTypeUndefined;
 extern struct bNodeType NodeTypeUndefined;
 extern struct bNodeSocketType NodeSocketTypeUndefined;
 

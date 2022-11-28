@@ -170,6 +170,7 @@ typedef struct bNodeSocket {
   bNodeSocketRuntimeHandle *runtime;
 
 #ifdef __cplusplus
+  bool is_hidden() const;
   bool is_available() const;
   bool is_multi_input() const;
   bool is_input() const;
@@ -356,6 +357,8 @@ typedef struct bNode {
   /** Lookup socket of this node by its identifier. */
   const bNodeSocket &input_by_identifier(blender::StringRef identifier) const;
   const bNodeSocket &output_by_identifier(blender::StringRef identifier) const;
+  bNodeSocket &input_by_identifier(blender::StringRef identifier);
+  bNodeSocket &output_by_identifier(blender::StringRef identifier);
   /** If node is frame, will return all children nodes. */
   blender::Span<bNode *> direct_children_in_frame() const;
   /** Node tree this node belongs to. */
@@ -495,9 +498,6 @@ typedef struct bNodeTree {
   /** Runtime type identifier. */
   char idname[64];
 
-  /** Runtime RNA type of the group interface. */
-  struct StructRNA *interface_type;
-
   /** Grease pencil data. */
   struct bGPdata *gpd;
   /** Node tree stores own offset for consistent editor view. */
@@ -513,13 +513,6 @@ typedef struct bNodeTree {
    */
   int cur_index;
   int flag;
-  /** Flag to prevent re-entrant update calls. */
-  short is_updating;
-  /** Generic temporary flag for recursion check (DFS/BFS). */
-  short done;
-
-  /** Specific node type this tree is used for. */
-  int nodetype DNA_DEPRECATED;
 
   /** Quality setting when editing. */
   short edit_quality;
@@ -548,25 +541,6 @@ typedef struct bNodeTree {
   bNodeInstanceKey active_viewer_key;
 
   char _pad[4];
-
-  /** Execution data.
-   *
-   * XXX It would be preferable to completely move this data out of the underlying node tree,
-   * so node tree execution could finally run independent of the tree itself.
-   * This would allow node trees to be merely linked by other data (materials, textures, etc.),
-   * as ID data is supposed to.
-   * Execution data is generated from the tree once at execution start and can then be used
-   * as long as necessary, even while the tree is being modified.
-   */
-  struct bNodeTreeExec *execdata;
-
-  /* Callbacks. */
-  void (*progress)(void *, float progress);
-  /** \warning may be called by different threads */
-  void (*stats_draw)(void *, const char *str);
-  bool (*test_break)(void *);
-  void (*update_draw)(void *);
-  void *tbh, *prh, *sdh, *udh;
 
   /** Image representing what the node group does. */
   struct PreviewImage *preview;
@@ -1547,8 +1521,8 @@ typedef struct NodeGeometrySeparateGeometry {
 } NodeGeometrySeparateGeometry;
 
 typedef struct NodeGeometryImageTexture {
-  int interpolation;
-  int extension;
+  int8_t interpolation;
+  int8_t extension;
 } NodeGeometryImageTexture;
 
 typedef struct NodeGeometryViewer {
