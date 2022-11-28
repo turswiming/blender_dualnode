@@ -327,7 +327,6 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     min_distance = len(centroid - closest_point);
     max_distance = min_distance;
     float3 P_v;
-    float t_v;
     point_to_centroid = -compute_v(centroid, P, D, bcone_axis, t, P_v);
   }
 
@@ -405,7 +404,6 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
         /* minimal distance of the ray to the cluster */
         distance = len(centroid - closest_point);
         float3 P_v;
-        float t_v;
         point_to_centroid = -compute_v(centroid, P, D, bcone_axis, t, P_v);
         cos_theta_u = light_tree_cos_bounding_box_angle(
             bbox_min, bbox_max, P_v, D, point_to_centroid, bbox_is_visible);
