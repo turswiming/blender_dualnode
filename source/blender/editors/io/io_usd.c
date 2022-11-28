@@ -1103,6 +1103,13 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
 
   const bool validate_meshes = RNA_boolean_get(op->ptr, "validate_meshes");
 
+  const bool import_textures = RNA_boolean_get(op->ptr, "import_textures");
+
+  char import_textures_dir[FILE_MAX];
+  RNA_string_get(op->ptr, "import_textures_dir", import_textures_dir);
+
+  const bool overwrite_textures = RNA_boolean_get(op->ptr, "overwrite_textures");
+
   /* TODO(makowalski): Add support for sequences. */
   const bool is_sequence = false;
   int offset = 0;
@@ -1147,9 +1154,12 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
                                    .create_background_shader = create_background_shader,
                                    .mtl_name_collision_mode = mtl_name_collision_mode,
                                    .attr_import_mode = attr_import_mode,
-                                   .import_shapes = import_shapes};
+                                   .import_shapes = import_shapes,
+                                   .import_textures = import_textures,
+                                   .overwrite_textures = overwrite_textures};
 
   STRNCPY(params.prim_path_mask, prim_path_mask);
+  STRNCPY(params.import_textures_dir, import_textures_dir);
 
   const bool ok = USD_import(C, filename, &params, as_background_job);
 
@@ -1221,6 +1231,16 @@ static void wm_usd_import_draw(bContext *UNUSED(C), wmOperator *op)
   row = uiLayoutRow(col, true);
   uiItemR(row, ptr, "set_material_blend", 0, NULL, ICON_NONE);
   uiLayoutSetEnabled(row, import_mtls);
+  col = uiLayoutColumn(box, true);
+  uiItemR(col, ptr, "import_textures", 0, NULL, ICON_NONE);
+  bool import_textures = RNA_boolean_get(ptr, "import_textures");
+  row = uiLayoutRow(col, true);
+  uiItemR(row, ptr, "import_textures_dir", 0, NULL, ICON_NONE);
+  uiLayoutSetEnabled(row, import_textures);
+  row = uiLayoutRow(col, true);
+  uiItemR(row, ptr, "overwrite_textures", 0, NULL, ICON_NONE);
+  uiLayoutSetEnabled(row, import_textures);
+  uiLayoutSetEnabled(col, import_mtls);
 }
 
 void WM_OT_usd_import(struct wmOperatorType *ot)
@@ -1407,6 +1427,27 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
                   false,
                   "Validate Meshes",
                   "Validate meshes for degenerate geometry on import");
+
+   RNA_def_boolean(ot->srna,
+                  "import_textures",
+                  false,
+                  "Import Textures",
+                  "Copy textures which not on the local file system "
+                  "(e.g., textures in USDZ archives or referenced by custom URIs) "
+                  "to the directory given by the Import Textures Directory option");
+
+  RNA_def_string(ot->srna,
+                  "import_textures_dir",
+                  "//textures/",
+                  FILE_MAX,
+                  "Textures Directory",
+                  "Path to the directory where imported textures will be copied");
+
+  RNA_def_boolean(ot->srna,
+                  "overwrite_textures",
+                  false,
+                  "Overwrite Textures",
+                  "Allow overwriting existing files when copying imported textures");
 }
 
 #endif /* WITH_USD */

@@ -3,6 +3,7 @@
 
 #include "usd_reader_material.h"
 
+#include "usd_asset_utils.h"
 #include "usd_umm.h"
 
 #include "BKE_image.h"
@@ -791,6 +792,11 @@ void USDMaterialReader::load_tex_image(const pxr::UsdShadeShader &usd_shader,
     std::cerr << "WARNING: Couldn't resolve image asset '" << asset_path
               << "' for Texture Image node." << std::endl;
     return;
+  }
+
+  if (params_.import_textures) {
+    file_path = usd_import_texture(
+        file_path.c_str(), params_.import_textures_dir, params_.overwrite_textures);
   }
 
   /* If this is a UDIM texture, this will store the
