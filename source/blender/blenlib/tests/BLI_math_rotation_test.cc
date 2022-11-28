@@ -287,4 +287,15 @@ TEST(math_rotation, RotateDirectionAroundAxis)
   EXPECT_NEAR(c.z, 1.0f, FLT_EPSILON);
 }
 
+TEST(math_rotation, TypeConversion)
+{
+  EulerXYZ euler(0, 0, M_PI_2);
+
+  Quaternion quat(euler);
+  EXPECT_V4_NEAR(quat, Quaternion(0.0f, 0.0f, 0.0f, 0.0f));
+
+  AxisAngle axis_angle(euler);
+  EXPECT_V4_NEAR(axis_angle, AxisAngle({0.0f, 0.0f, 1.0f}, M_PI_2));
+}
+
 }  // namespace blender::math::tests

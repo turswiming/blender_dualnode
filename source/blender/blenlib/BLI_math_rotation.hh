@@ -7,6 +7,7 @@
  */
 
 #include "BLI_math_vec_types.hh"
+#include "BLI_math_vector.hh"
 
 namespace blender::rotation {
 /**
@@ -25,9 +26,9 @@ template<typename T> struct EulerXYZ : public vec_base<T, 3> {
     return {0, 0, 0};
   }
 
-  friend std::ostream &operator<<(std::ostream &stream, const EulerXYZ &mat)
+  friend std::ostream &operator<<(std::ostream &stream, const EulerXYZ &rot)
   {
-    return stream << "EulerXYZ" << static_cast<vec_base<T, 3>>(mat);
+    return stream << "EulerXYZ" << static_cast<vec_base<T, 3>>(rot);
   }
 };
 
@@ -39,11 +40,78 @@ template<typename T> struct Quaternion : public vec_base<T, 4> {
     return {1, 0, 0, 0};
   }
 
-  friend std::ostream &operator<<(std::ostream &stream, const Quaternion &mat)
+  friend std::ostream &operator<<(std::ostream &stream, const Quaternion &rot)
   {
-    return stream << "Quaternion" << static_cast<vec_base<T, 4>>(mat);
+    return stream << "Quaternion" << static_cast<vec_base<T, 4>>(rot);
   }
 };
+
+template<typename T> struct AxisAngle {
+  vec_base<T, 3> axis;
+  T angle;
+
+  AxisAngle(const vec_base<T, 3> &axis, T angle)
+  {
+    T length;
+    const vec_base<T, 3> normalized_axis = math::normalize_and_get_length(axis, length);
+    this->axis() = (length > 0.0f) ? normalized_axis : identity();
+    this->angle() = angle;
+  }
+
+  static AxisAngle<T> identity()
+  {
+    return {{0, 1, 0}, 0};
+  }
+
+  friend bool operator==(const AxisAngle &a, const AxisAngle &b)
+  {
+    return (a.axis == b.axis) && (a.angle == b.angle);
+  }
+
+  friend bool operator!=(const AxisAngle &a, const AxisAngle &b)
+  {
+    return (a != b);
+  }
+
+  friend std::ostream &operator<<(std::ostream &stream, const AxisAngle &rot)
+  {
+    return stream << "AxisAngle" << static_cast<vec_base<T, 4>>(rot);
+  }
+};
+
+#ifdef DEBUG
+#  define BLI_ASSERT_UNIT_QUATERNION(_q) \
+    { \
+      auto &rot_vec = static_cast<const vec_base<T, 4>>(_q); \
+      T quat_length = math::length_squared(rot_vec, rot_vec); \
+      if (!(quat_length == 0 || (math::abs(quat_length - 1) < 0.0001))) { \
+        std::cout << "Warning! " << __func__ << " called with non-normalized quaternion: size " \
+                  << quat_length << " *** report a bug ***\n"; \
+      } \
+    }
+#else
+#  define BLI_ASSERT_UNIT_QUATERNION(_q)
+#endif
+
+/**
+ * Conversion operators
+ */
+
+template<typename T> explicit EulerXYZ<T> &operator EulerXYZ<T>(const Quaternion<T> &rot);
+template<typename T> explicit Quaternion<T> &operator Quaternion<T>(const EulerXYZ<T> &rot);
+
+template<typename T> explicit AxisAngle<T> &operator AxisAngle<T>(const Quaternion<T> &rot);
+template<typename T> explicit Quaternion<T> &operator Quaternion<T>(const AxisAngle<T> &rot);
+
+/* Use quaternions as intermediate representation for now... */
+template<typename T> explicit AxisAngle<T> &operator AxisAngle<T>(const EulerXYZ<T> &rot)
+{
+  return AxisAngle<T>(Quaternion<T>());
+}
+template<typename T> explicit EulerXYZ<T> &operator EulerXYZ<T>(const AxisAngle<T> &rot)
+{
+  return EulerXYZ<T>(Quaternion<T>());
+}
 
 /**
  * Intermediate Types
@@ -63,6 +131,7 @@ namespace blender {
 /* Most common used types. */
 using EulerXYZ = rotation::EulerXYZ<float>;
 using Quaternion = rotation::Quaternion<float>;
+using AxisAngle = rotation::AxisAngle<float>;
 };  // namespace blender
 
 namespace blender::math {
