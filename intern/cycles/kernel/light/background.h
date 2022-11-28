@@ -134,8 +134,8 @@ ccl_device_inline bool background_portal_data_fetch_and_check_side(
   int portal = kernel_data.integrator.portal_offset + index;
   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, portal);
 
-  *lightpos = make_float3(klight->co[0], klight->co[1], klight->co[2]);
-  *dir = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
+  *lightpos = klight->co;
+  *dir = klight->area.dir;
 
   /* Check whether portal is on the right side. */
   if (dot(*dir, P - *lightpos) > 1e-4f)
@@ -166,10 +166,8 @@ ccl_device_inline float background_portal_pdf(
 
     int portal = kernel_data.integrator.portal_offset + p;
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, portal);
-    float3 extentu = make_float3(
-        klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
-    float3 extentv = make_float3(
-        klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
+    float3 extentu = klight->area.extentu;
+    float3 extentv = klight->area.extentv;
     bool is_round = (klight->area.invarea < 0.0f);
 
     if (!ray_quad_intersect(P,
@@ -242,10 +240,8 @@ ccl_device float3 background_portal_sample(KernelGlobals kg,
       /* p is the portal to be sampled. */
       int portal = kernel_data.integrator.portal_offset + p;
       const ccl_global KernelLight *klight = &kernel_data_fetch(lights, portal);
-      float3 extentu = make_float3(
-          klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
-      float3 extentv = make_float3(
-          klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
+      float3 extentu = klight->area.extentu;
+      float3 extentv = klight->area.extentv;
       bool is_round = (klight->area.invarea < 0.0f);
 
       float3 D;

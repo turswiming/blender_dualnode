@@ -584,13 +584,12 @@ void LightManager::device_update_tree(Device *device,
 
     light_tree_nodes[index].energy = node.energy;
 
-    for (int i = 0; i < 3; i++) {
-      light_tree_nodes[index].bounding_box_min[i] = node.bbox.min[i];
-      light_tree_nodes[index].bounding_box_max[i] = node.bbox.max[i];
-      light_tree_nodes[index].bounding_cone_axis[i] = node.bcone.axis[i];
-    }
-    light_tree_nodes[index].theta_o = node.bcone.theta_o;
-    light_tree_nodes[index].theta_e = node.bcone.theta_e;
+    light_tree_nodes[index].bbox.min = node.bbox.min;
+    light_tree_nodes[index].bbox.max = node.bbox.max;
+
+    light_tree_nodes[index].bcone.axis = node.bcone.axis;
+    light_tree_nodes[index].bcone.theta_o = node.bcone.theta_o;
+    light_tree_nodes[index].bcone.theta_e = node.bcone.theta_e;
 
     light_tree_nodes[index].bit_trail = node.bit_trail;
     light_tree_nodes[index].num_prims = node.num_prims;
@@ -918,7 +917,6 @@ void LightManager::device_update_lights(Device *, DeviceScene *dscene, Scene *sc
     if (light->is_portal) {
       assert(light->light_type == LIGHT_AREA);
 
-      float3 co = light->co;
       float3 extentu = light->axisu * (light->sizeu * light->size);
       float3 extentv = light->axisv * (light->sizev * light->size);
       float area = len(extentu) * len(extentv);
@@ -930,20 +928,11 @@ void LightManager::device_update_lights(Device *, DeviceScene *dscene, Scene *sc
 
       dir = safe_normalize(dir);
 
-      klights[portal_index].co[0] = co.x;
-      klights[portal_index].co[1] = co.y;
-      klights[portal_index].co[2] = co.z;
-
-      klights[portal_index].area.extentu[0] = extentu.x;
-      klights[portal_index].area.extentu[1] = extentu.y;
-      klights[portal_index].area.extentu[2] = extentu.z;
-      klights[portal_index].area.extentv[0] = extentv.x;
-      klights[portal_index].area.extentv[1] = extentv.y;
-      klights[portal_index].area.extentv[2] = extentv.z;
+      klights[portal_index].co = light->co;
+      klights[portal_index].area.extentu = extentu;
+      klights[portal_index].area.extentv = extentv;
       klights[portal_index].area.invarea = invarea;
-      klights[portal_index].area.dir[0] = dir.x;
-      klights[portal_index].area.dir[1] = dir.y;
-      klights[portal_index].area.dir[2] = dir.z;
+      klights[portal_index].area.dir = dir;
       klights[portal_index].tfm = light->tfm;
       klights[portal_index].itfm = transform_inverse(light->tfm);
 
@@ -997,10 +986,7 @@ void LightManager::device_update_lights(Device *, DeviceScene *dscene, Scene *sc
       if (light->use_mis && radius > 0.0f)
         shader_id |= SHADER_USE_MIS;
 
-      klights[light_index].co[0] = co.x;
-      klights[light_index].co[1] = co.y;
-      klights[light_index].co[2] = co.z;
-
+      klights[light_index].co = co;
       klights[light_index].spot.radius = radius;
       klights[light_index].spot.invarea = invarea;
     }
@@ -1019,10 +1005,7 @@ void LightManager::device_update_lights(Device *, DeviceScene *dscene, Scene *sc
       if (light->use_mis && area > 0.0f)
         shader_id |= SHADER_USE_MIS;
 
-      klights[light_index].co[0] = dir.x;
-      klights[light_index].co[1] = dir.y;
-      klights[light_index].co[2] = dir.z;
-
+      klights[light_index].co = dir;
       klights[light_index].distant.invarea = invarea;
       klights[light_index].distant.radius = radius;
       klights[light_index].distant.cosangle = cosangle;
@@ -1072,20 +1055,11 @@ void LightManager::device_update_lights(Device *, DeviceScene *dscene, Scene *sc
       if (light->use_mis && area != 0.0f)
         shader_id |= SHADER_USE_MIS;
 
-      klights[light_index].co[0] = co.x;
-      klights[light_index].co[1] = co.y;
-      klights[light_index].co[2] = co.z;
-
-      klights[light_index].area.extentu[0] = extentu.x;
-      klights[light_index].area.extentu[1] = extentu.y;
-      klights[light_index].area.extentu[2] = extentu.z;
-      klights[light_index].area.extentv[0] = extentv.x;
-      klights[light_index].area.extentv[1] = extentv.y;
-      klights[light_index].area.extentv[2] = extentv.z;
+      klights[light_index].co = co;
+      klights[light_index].area.extentu = extentu;
+      klights[light_index].area.extentv = extentv;
       klights[light_index].area.invarea = invarea;
-      klights[light_index].area.dir[0] = dir.x;
-      klights[light_index].area.dir[1] = dir.y;
-      klights[light_index].area.dir[2] = dir.z;
+      klights[light_index].area.dir = dir;
       klights[light_index].area.tan_spread = tan_spread;
       klights[light_index].area.normalize_spread = normalize_spread;
     }
@@ -1103,17 +1077,12 @@ void LightManager::device_update_lights(Device *, DeviceScene *dscene, Scene *sc
       if (light->use_mis && radius > 0.0f)
         shader_id |= SHADER_USE_MIS;
 
-      klights[light_index].co[0] = co.x;
-      klights[light_index].co[1] = co.y;
-      klights[light_index].co[2] = co.z;
-
+      klights[light_index].co = co;
       klights[light_index].spot.radius = radius;
       klights[light_index].spot.invarea = invarea;
       klights[light_index].spot.cos_half_spot_angle = cos_half_spot_angle;
       klights[light_index].spot.spot_smooth = spot_smooth;
-      klights[light_index].spot.dir[0] = dir.x;
-      klights[light_index].spot.dir[1] = dir.y;
-      klights[light_index].spot.dir[2] = dir.z;
+      klights[light_index].spot.dir = dir;
     }
 
     klights[light_index].shader_id = shader_id;

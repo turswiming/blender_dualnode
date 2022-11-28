@@ -14,9 +14,7 @@ ccl_device_inline bool point_light_sample(const ccl_global KernelLight *klight,
                                           const float3 P,
                                           ccl_private LightSample *ls)
 {
-  ls->P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
-
-  float3 center = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  float3 center = klight->co;
   float radius = klight->spot.radius;
   /* disk oriented normal */
   const float3 lightN = normalize(P - center);
@@ -64,7 +62,7 @@ ccl_device_inline bool point_light_intersect(const ccl_global KernelLight *kligh
                                              ccl_private float *t)
 {
   /* Sphere light (aka, aligned disk light). */
-  const float3 lightP = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  const float3 lightP = klight->co;
   const float radius = klight->spot.radius;
   if (radius == 0.0f) {
     return false;
@@ -83,8 +81,7 @@ ccl_device_inline bool point_light_sample_from_intersection(
     const float3 ray_D,
     ccl_private LightSample *ccl_restrict ls)
 {
-  const float3 center = make_float3(klight->co[0], klight->co[1], klight->co[2]);
-  const float3 lighN = normalize(ray_P - center);
+  const float3 lighN = normalize(ray_P - klight->co);
 
   /* We set the light normal to the outgoing direction to support texturing. */
   ls->Ng = -ls->D;

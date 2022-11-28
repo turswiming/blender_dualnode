@@ -34,11 +34,10 @@ ccl_device_inline bool spot_light_sample(const ccl_global KernelLight *klight,
                                          const float3 P,
                                          ccl_private LightSample *ls)
 {
-  ls->P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  ls->P = klight->co;
 
-  const float3 center = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  const float3 center = klight->co;
   const float radius = klight->spot.radius;
-  const float3 dir = make_float3(klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
   /* disk oriented normal */
   const float3 lightN = normalize(P - center);
   ls->P = center;
@@ -59,7 +58,7 @@ ccl_device_inline bool spot_light_sample(const ccl_global KernelLight *klight,
 
   /* spot light attenuation */
   ls->eval_fac *= spot_light_attenuation(
-      dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, -ls->D);
+      klight->spot.dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, -ls->D);
   if (!in_volume_segment && ls->eval_fac == 0.0f) {
     return false;
   }
@@ -88,9 +87,8 @@ ccl_device_forceinline void spot_light_update_position(const ccl_global KernelLi
   ls->pdf = invarea;
 
   /* spot light attenuation */
-  float3 dir = make_float3(klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
   ls->eval_fac *= spot_light_attenuation(
-      dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, ls->Ng);
+      klight->spot.dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, ls->Ng);
 }
 
 ccl_device_inline bool spot_light_intersect(const ccl_global KernelLight *klight,
@@ -98,7 +96,7 @@ ccl_device_inline bool spot_light_intersect(const ccl_global KernelLight *klight
                                             ccl_private float *t)
 {
   /* Spot/Disk light. */
-  const float3 lightP = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  const float3 lightP = klight->co;
   const float radius = klight->spot.radius;
   if (radius == 0.0f) {
     return false;
@@ -121,10 +119,8 @@ ccl_device_inline bool spot_light_sample_from_intersection(
     const float3 ray_D,
     ccl_private LightSample *ccl_restrict ls)
 {
-  const float3 center = make_float3(klight->co[0], klight->co[1], klight->co[2]);
-  const float3 dir = make_float3(klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
   /* the normal of the oriented disk */
-  const float3 lightN = normalize(ray_P - center);
+  const float3 lightN = normalize(ray_P - klight->co);
   /* We set the light normal to the outgoing direction to support texturing. */
   ls->Ng = -ls->D;
 
@@ -134,7 +130,7 @@ ccl_device_inline bool spot_light_sample_from_intersection(
 
   /* spot light attenuation */
   ls->eval_fac *= spot_light_attenuation(
-      dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, -ls->D);
+      klight->spot.dir, klight->spot.cos_half_spot_angle, klight->spot.spot_smooth, -ls->D);
 
   if (ls->eval_fac == 0.0f) {
     return false;
@@ -159,19 +155,16 @@ ccl_device_inline float spot_light_tree_weight(const ccl_global KernelLight *kli
                                                const float3 P,
                                                const float3 N)
 {
-  const float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
-
   const float radius = klight->spot.radius;
   const float cos_theta = klight->spot.cos_half_spot_angle;
   const float theta = fast_acosf(cos_theta);
-  const float3 light_dir = make_float3(
-      klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
+  const float3 light_dir = klight->spot.dir;
 
   const float h1 = radius * fast_sinf(theta);
   const float d1 = radius * cos_theta;
   const float h2 = d1 / fast_tanf(theta);
 
-  const float3 apex = light_P - (h1 + h2) * light_dir;
+  const float3 apex = klight->co - (h1 + h2) * light_dir;
   const float3 apex_to_point = normalize(P - apex);
 
   return (dot(apex_to_point, light_dir) < cos_theta) ? 0.0f : 1.0f;

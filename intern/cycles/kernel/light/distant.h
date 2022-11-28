@@ -15,7 +15,7 @@ ccl_device_inline bool distant_light_sample(const ccl_global KernelLight *klight
                                             ccl_private LightSample *ls)
 {
   /* distant light */
-  float3 lightD = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  float3 lightD = klight->co;
   float3 D = lightD;
   float radius = klight->distant.radius;
   float invarea = klight->distant.invarea;
@@ -71,7 +71,7 @@ ccl_device bool distant_light_sample_from_intersection(KernelGlobals kg,
    *             P
    */
 
-  float3 lightD = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  float3 lightD = klight->co;
   float costheta = dot(-lightD, ray_D);
   float cosangle = klight->distant.cosangle;
 

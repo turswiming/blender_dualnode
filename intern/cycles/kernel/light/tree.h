@@ -14,17 +14,16 @@ CCL_NAMESPACE_BEGIN
 /* TODO: this seems like a relative expensive computation, and we can make it a lot cheaper
  * by using a bounding sphere instead of a bounding box. This will be more inaccurate, but it
  * might be fine when used along with the adaptive splitting. */
-ccl_device float light_tree_cos_bounding_box_angle(const float3 bbox_min,
-                                                   const float3 bbox_max,
+ccl_device float light_tree_cos_bounding_box_angle(const BoundingBox bbox,
                                                    const float3 P,
                                                    const float3 point_to_centroid)
 {
   float cos_theta_u = 1.0f;
   /* Iterate through all 8 possible points of the bounding box. */
   for (int i = 0; i < 8; ++i) {
-    const float3 corner = make_float3((i & 1) ? bbox_max.x : bbox_min.x,
-                                      (i & 2) ? bbox_max.y : bbox_min.y,
-                                      (i & 4) ? bbox_max.z : bbox_min.z);
+    const float3 corner = make_float3((i & 1) ? bbox.max.x : bbox.min.x,
+                                      (i & 2) ? bbox.max.y : bbox.min.y,
+                                      (i & 4) ? bbox.max.z : bbox.min.z);
 
     /* Caculate the bounding box angle. */
     float3 point_to_corner = normalize(corner - P);
@@ -91,15 +90,12 @@ ccl_device float3 compute_v(const float3 centroid,
 template<bool in_volume_segment>
 ccl_device void light_tree_cluster_importance(const float3 N_or_D,
                                               const bool has_transmission,
-                                              /* unnormalized if in_volume_segment */
                                               const float3 point_to_centroid,
                                               const float cos_theta_u,
-                                              const float3 bcone_axis,
+                                              const BoundingCone bcone,
                                               const float max_distance,
                                               const float min_distance,
                                               const float t,
-                                              const float theta_o,
-                                              const float theta_e,
                                               const float energy,
                                               ccl_private float &max_importance,
                                               ccl_private float &min_importance)
@@ -116,7 +112,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
    * `sample.h` */
   const bool in_volume = (dot(N_or_D, N_or_D) < 5e-4f);
 
-  cos_theta = dot(bcone_axis, -point_to_centroid);
+  cos_theta = dot(bcone.axis, -point_to_centroid);
   if (!in_volume_segment && !in_volume) {
     const float3 N = N_or_D;
     cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) : dot(point_to_centroid, N);
@@ -147,17 +143,18 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   const float cos_theta_minus_theta_u = cos_theta * cos_theta_u + sin_theta * sin_theta_u;
 
   float cos_theta_o, sin_theta_o;
-  fast_sincosf(theta_o, &sin_theta_o, &cos_theta_o);
+  fast_sincosf(bcone.theta_o, &sin_theta_o, &cos_theta_o);
 
   if ((cos_theta > cos_theta_u) || (cos_theta_minus_theta_u > cos_theta_o)) {
     /* theta - theta_o - theta_u < 0 */
-    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u)) < 5e-4f);
+    kernel_assert((fast_acosf(cos_theta) - bcone.theta_o - fast_acosf(cos_theta_u)) < 5e-4f);
     cos_min_outgoing_angle = 1.0f;
   }
-  else if ((cos_theta > cos_theta_u) || (theta_o + theta_e > M_PI_F) ||
-           (cos_theta_minus_theta_u > cos(theta_o + theta_e))) {
+  else if ((cos_theta > cos_theta_u) || (bcone.theta_o + bcone.theta_e > M_PI_F) ||
+           (cos_theta_minus_theta_u > cos(bcone.theta_o + bcone.theta_e))) {
     /* theta' = theta - theta_o - theta_u < theta_e */
-    kernel_assert((fast_acosf(cos_theta) - theta_o - fast_acosf(cos_theta_u) - theta_e) < 5e-4f);
+    kernel_assert(
+        (fast_acosf(cos_theta) - bcone.theta_o - fast_acosf(cos_theta_u) - bcone.theta_e) < 5e-4f);
     const float sin_theta_minus_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_minus_theta_u));
     cos_min_outgoing_angle = cos_theta_minus_theta_u * cos_theta_o +
                              sin_theta_minus_theta_u * sin_theta_o;
@@ -182,8 +179,8 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   /* cos(theta + theta_o + theta_u) if theta + theta_o + theta_u < theta_e, 0 otherwise */
   float cos_max_outgoing_angle;
   const float cos_theta_plus_theta_u = cos_theta * cos_theta_u - sin_theta * sin_theta_u;
-  if (theta_e - theta_o < 0 || cos_theta < 0 || cos_theta_u < 0 ||
-      cos_theta_plus_theta_u < cos(theta_e - theta_o)) {
+  if (bcone.theta_e - bcone.theta_o < 0 || cos_theta < 0 || cos_theta_u < 0 ||
+      cos_theta_plus_theta_u < cos(bcone.theta_e - bcone.theta_o)) {
     min_importance = 0.0f;
   }
   else {
@@ -210,11 +207,13 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
 
   max_importance = 0.0f;
   min_importance = 0.0f;
-  float theta_o = kemitter->theta_o;
+  BoundingCone bcone;
+  bcone.theta_o = kemitter->theta_o;
+  bcone.theta_e = kemitter->theta_e;
   float min_distance, distance;
   float max_distance = 0.0f;
   float cos_theta_u = 1.0f;
-  float3 bcone_axis, centroid, point_to_centroid;
+  float3 centroid, point_to_centroid;
   bool bbox_is_visible = has_transmission;
 
   const int prim = kemitter->prim_id;
@@ -222,11 +221,11 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   if (prim < 0) {
     const int lamp = ~prim;
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
-    centroid = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+    centroid = klight->co;
     point_to_centroid = safe_normalize_len(centroid - P, &distance);
 
     if (klight->type == LIGHT_SPOT || klight->type == LIGHT_POINT) {
-      bcone_axis = make_float3(klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
+      bcone.axis = klight->spot.dir;
       const float radius = klight->spot.radius;
       min_distance = distance;
       max_distance = sqrtf(sqr(radius) + sqr(distance));
@@ -235,14 +234,10 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
       bbox_is_visible = true; /* will be tested when computing the importance */
     }
     else if (klight->type == LIGHT_AREA) {
-      bcone_axis = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
-      const float3 extentu = make_float3(
-          klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
-      const float3 extentv = make_float3(
-          klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
+      bcone.axis = klight->area.dir;
       for (int i = 0; i < 4; i++) {
-        const float3 corner = ((i & 1) - 0.5f) * extentu + 0.5f * ((i & 2) - 1) * extentv +
-                              centroid;
+        const float3 corner = ((i & 1) - 0.5f) * klight->area.extentu +
+                              0.5f * ((i & 2) - 1) * klight->area.extentv + centroid;
         float distance_point_to_corner;
         const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
         cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
@@ -268,14 +263,14 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
         cos_theta_u = -1.0f;
         max_distance = 1.0f;
       }
-      bcone_axis = centroid;
+      bcone.axis = centroid;
       point_to_centroid = -centroid;
       min_distance = 1.0f;
       bbox_is_visible = true; /* will be tested when computing the importance */
     }
     if (klight->type == LIGHT_POINT) {
-      bcone_axis = -point_to_centroid; /* disk oriented normal */
-      theta_o = 0.0f;
+      bcone.axis = -point_to_centroid; /* disk oriented normal */
+      bcone.theta_o = 0.0f;
     }
   }
   else { /* mesh light */
@@ -284,16 +279,16 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     triangle_world_space_vertices(kg, object, prim, -1.0f, vertices);
     centroid = (vertices[0] + vertices[1] + vertices[2]) / 3.0f;
     point_to_centroid = safe_normalize_len(centroid - P, &distance);
-    bcone_axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+    bcone.axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
     if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_BACK) {
-      bcone_axis = -bcone_axis;
+      bcone.axis = -bcone.axis;
     }
     else if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_FRONT_BACK) {
-      bcone_axis *= -signf(dot(bcone_axis, point_to_centroid));
+      bcone.axis *= -signf(dot(bcone.axis, point_to_centroid));
     }
-    theta_o = 0.0f;
+    bcone.theta_o = 0.0f;
 
-    if (dot(bcone_axis, point_to_centroid) > 0) {
+    if (dot(bcone.axis, point_to_centroid) > 0) {
       return;
     }
 
@@ -321,19 +316,17 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     min_distance = len(centroid - closest_point);
     max_distance = min_distance;
     float3 P_v;
-    point_to_centroid = -compute_v(centroid, P, D, bcone_axis, t, P_v);
+    point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t, P_v);
   }
 
   light_tree_cluster_importance<in_volume_segment>(N_or_D,
                                                    has_transmission,
                                                    point_to_centroid,
                                                    cos_theta_u,
-                                                   bcone_axis,
+                                                   bcone,
                                                    max_distance,
                                                    min_distance,
                                                    t,
-                                                   theta_o,
-                                                   kemitter->theta_e,
                                                    kemitter->energy,
                                                    max_importance,
                                                    min_importance);
@@ -357,8 +350,8 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
         kg, P, N_or_D, t, has_transmission, -knode->child_index, max_importance, min_importance);
   }
   else if (knode->num_prims != 0) {
-    const float3 bcone_axis = make_float3(
-        knode->bounding_cone_axis[0], knode->bounding_cone_axis[1], knode->bounding_cone_axis[2]);
+    const BoundingCone bcone = knode->bcone;
+    const BoundingBox bbox = knode->bbox;
 
     float3 point_to_centroid;
     float cos_theta_u;
@@ -368,17 +361,12 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
       if (in_volume_segment) {
         return;
       }
-      point_to_centroid = -bcone_axis;
-      cos_theta_u = fmaxf(fast_cosf(knode->theta_o), 0.0f);
+      point_to_centroid = -bcone.axis;
+      cos_theta_u = fmaxf(fast_cosf(bcone.theta_o), 0.0f);
       distance = 1.0f;
     }
     else {
-      const float3 bbox_min = make_float3(
-          knode->bounding_box_min[0], knode->bounding_box_min[1], knode->bounding_box_min[2]);
-      const float3 bbox_max = make_float3(
-          knode->bounding_box_max[0], knode->bounding_box_max[1], knode->bounding_box_max[2]);
-
-      const float3 centroid = 0.5f * (bbox_min + bbox_max);
+      const float3 centroid = 0.5f * (bbox.min + bbox.max);
 
       if (in_volume_segment) {
         const float3 D = N_or_D;
@@ -386,13 +374,12 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
         /* minimal distance of the ray to the cluster */
         distance = len(centroid - closest_point);
         float3 P_v;
-        point_to_centroid = -compute_v(centroid, P, D, bcone_axis, t, P_v);
-        cos_theta_u = light_tree_cos_bounding_box_angle(
-            bbox_min, bbox_max, P_v, point_to_centroid);
+        point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t, P_v);
+        cos_theta_u = light_tree_cos_bounding_box_angle(bbox, P_v, point_to_centroid);
       }
       else {
         const float3 N = N_or_D;
-        const float3 bbox_extent = bbox_max - centroid;
+        const float3 bbox_extent = bbox.max - centroid;
         const bool bbox_is_visible = has_transmission |
                                      (dot(N, centroid - P) + dot(fabs(N), fabs(bbox_extent)) > 0);
 
@@ -404,10 +391,10 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
         }
 
         point_to_centroid = normalize_len(centroid - P, &distance);
-        cos_theta_u = light_tree_cos_bounding_box_angle(bbox_min, bbox_max, P, point_to_centroid);
+        cos_theta_u = light_tree_cos_bounding_box_angle(bbox, P, point_to_centroid);
       }
       /* clamp distance to half the radius of the cluster when splitting is disabled */
-      distance = fmaxf(0.5f * len(centroid - bbox_max), distance);
+      distance = fmaxf(0.5f * len(centroid - bbox.max), distance);
     }
     /* TODO: currently max_distance = min_distance, max_importance = min_importance for the nodes.
      * Do we need better weights for complex scenes? */
@@ -415,12 +402,10 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
                                                      has_transmission,
                                                      point_to_centroid,
                                                      cos_theta_u,
-                                                     bcone_axis,
+                                                     bcone,
                                                      distance,
                                                      distance,
                                                      t,
-                                                     knode->theta_o,
-                                                     knode->theta_e,
                                                      knode->energy,
                                                      max_importance,
                                                      min_importance);

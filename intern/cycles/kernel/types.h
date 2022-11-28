@@ -1289,18 +1289,18 @@ typedef struct KernelSpotLight {
   float invarea;
   float cos_half_spot_angle;
   float spot_smooth;
-  float dir[3];
+  packed_float3 dir;
   float pad;
 } KernelSpotLight;
 
 /* PointLight is SpotLight with only radius and invarea being used. */
 
 typedef struct KernelAreaLight {
-  float extentu[3];
+  packed_float3 extentu;
   float invarea;
-  float extentv[3];
+  packed_float3 extentv;
   float tan_spread;
-  float dir[3];
+  packed_float3 dir;
   float normalize_spread;
 } KernelAreaLight;
 
@@ -1313,7 +1313,7 @@ typedef struct KernelDistantLight {
 
 typedef struct KernelLight {
   int type;
-  float co[3];
+  packed_float3 co;
   int shader_id;
   float max_bounces;
   float random;
@@ -1346,15 +1346,24 @@ typedef struct KernelLightDistribution {
 } KernelLightDistribution;
 static_assert_align(KernelLightDistribution, 16);
 
-typedef struct KernelLightTreeNode {
-  /* Bounding box. */
-  float bounding_box_min[3];
-  float bounding_box_max[3];
+/* Bounding box. */
+using BoundingBox = struct BoundingBox {
+  packed_float3 min;
+  packed_float3 max;
+};
 
-  /* Bounding cone. */
-  float bounding_cone_axis[3];
+using BoundingCone = struct BoundingCone {
+  packed_float3 axis;
   float theta_o;
   float theta_e;
+};
+
+typedef struct KernelLightTreeNode {
+  /* Bounding box. */
+  BoundingBox bbox;
+
+  /* Bounding cone. */
+  BoundingCone bcone;
 
   /* Energy. */
   float energy;

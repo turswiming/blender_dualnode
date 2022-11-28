@@ -162,13 +162,11 @@ ccl_device_inline bool area_light_sample(const ccl_global KernelLight *klight,
                                          const float3 P,
                                          ccl_private LightSample *ls)
 {
-  ls->P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  ls->P = klight->co;
 
-  float3 extentu = make_float3(
-      klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
-  float3 extentv = make_float3(
-      klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
-  float3 Ng = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
+  float3 extentu = klight->area.extentu;
+  float3 extentv = klight->area.extentv;
+  float3 Ng = klight->area.dir;
   float invarea = fabsf(klight->area.invarea);
   bool is_round = (klight->area.invarea < 0.0f);
 
@@ -256,18 +254,16 @@ ccl_device_inline bool area_light_intersect(const ccl_global KernelLight *klight
     return false;
   }
 
-  const float3 extentu = make_float3(
-      klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
-  const float3 extentv = make_float3(
-      klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
-  const float3 Ng = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
+  const float3 extentu = klight->area.extentu;
+  const float3 extentv = klight->area.extentv;
+  const float3 Ng = klight->area.dir;
 
   /* One sided. */
   if (dot(ray->D, Ng) >= 0.0f) {
     return false;
   }
 
-  const float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  const float3 light_P = klight->co;
 
   float3 P;
   return ray_quad_intersect(
@@ -285,12 +281,10 @@ ccl_device_inline bool area_light_sample_from_intersection(
   /* area light */
   float invarea = fabsf(klight->area.invarea);
 
-  float3 extentu = make_float3(
-      klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
-  float3 extentv = make_float3(
-      klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
-  float3 Ng = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
-  float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  float3 extentu = klight->area.extentu;
+  float3 extentv = klight->area.extentv;
+  float3 Ng = klight->area.dir;
+  float3 light_P = klight->co;
 
   ls->u = isect->u;
   ls->v = isect->v;
@@ -332,13 +326,11 @@ ccl_device_inline float area_light_tree_weight(const ccl_global KernelLight *kli
                                                const float3 P,
                                                const float3 N)
 {
-  float3 light_P = make_float3(klight->co[0], klight->co[1], klight->co[2]);
+  float3 light_P = klight->co;
 
-  float3 extentu = make_float3(
-      klight->area.extentu[0], klight->area.extentu[1], klight->area.extentu[2]);
-  float3 extentv = make_float3(
-      klight->area.extentv[0], klight->area.extentv[1], klight->area.extentv[2]);
-  float3 Ng = make_float3(klight->area.dir[0], klight->area.dir[1], klight->area.dir[2]);
+  float3 extentu = klight->area.extentu;
+  float3 extentv = klight->area.extentv;
+  float3 Ng = klight->area.dir;
   bool is_round = (klight->area.invarea < 0.0f);
 
   if (dot(light_P - P, Ng) > 0.0f) {
