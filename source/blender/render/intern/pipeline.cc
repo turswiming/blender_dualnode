@@ -53,6 +53,7 @@
 #include "BKE_mask.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
+#include "BKE_node_runtime.hh"
 #include "BKE_object.h"
 #include "BKE_pointcache.h"
 #include "BKE_report.h"
@@ -177,7 +178,7 @@ static void stats_nothing(void * /*arg*/, RenderStats * /*rs*/)
 static void float_nothing(void * /*arg*/, float /*val*/)
 {
 }
-static int default_break(void * /*arg*/)
+static bool default_break(void * /*arg*/)
 {
   return G.is_break == true;
 }
@@ -710,7 +711,7 @@ void render_copy_renderdata(RenderData *to, RenderData *from)
 void RE_InitState(Render *re,
                   Render *source,
                   RenderData *rd,
-                  ListBase *render_layers,
+                  ListBase * /*render_layers*/,
                   ViewLayer *single_layer,
                   int winx,
                   int winy,
@@ -748,7 +749,7 @@ void RE_InitState(Render *re,
   if (re->rectx < 1 || re->recty < 1 ||
       (BKE_imtype_is_movie(rd->im_format.imtype) && (re->rectx < 16 || re->recty < 16))) {
     BKE_report(re->reports, RPT_ERROR, "Image too small");
-    re->ok = 0;
+    re->ok = false;
     return;
   }
 
@@ -847,7 +848,7 @@ void RE_draw_lock_cb(Render *re, void *handle, void (*f)(void *handle, bool lock
   re->dlh = handle;
 }
 
-void RE_test_break_cb(Render *re, void *handle, int (*f)(void *handle))
+void RE_test_break_cb(Render *re, void *handle, bool (*f)(void *handle))
 {
   re->test_break = f;
   re->tbh = handle;
@@ -1161,12 +1162,12 @@ static void do_render_compositor(Render *re)
       }
 
       if (!re->test_break(re->tbh)) {
-        ntree->stats_draw = render_compositor_stats;
-        ntree->test_break = re->test_break;
-        ntree->progress = re->progress;
-        ntree->sdh = re;
-        ntree->tbh = re->tbh;
-        ntree->prh = re->prh;
+        ntree->runtime->stats_draw = render_compositor_stats;
+        ntree->runtime->test_break = re->test_break;
+        ntree->runtime->progress = re->progress;
+        ntree->runtime->sdh = re;
+        ntree->runtime->tbh = re->tbh;
+        ntree->runtime->prh = re->prh;
 
         if (update_newframe) {
           /* If we have consistent depsgraph now would be a time to update them. */
@@ -1177,10 +1178,10 @@ static void do_render_compositor(Render *re)
               re->pipeline_scene_eval, ntree, &re->r, true, G.background == 0, rv->name);
         }
 
-        ntree->stats_draw = nullptr;
-        ntree->test_break = nullptr;
-        ntree->progress = nullptr;
-        ntree->tbh = ntree->sdh = ntree->prh = nullptr;
+        ntree->runtime->stats_draw = nullptr;
+        ntree->runtime->test_break = nullptr;
+        ntree->runtime->progress = nullptr;
+        ntree->runtime->tbh = ntree->runtime->sdh = ntree->runtime->prh = nullptr;
       }
     }
   }
@@ -1397,7 +1398,9 @@ static void do_render_full_pipeline(Render *re)
   }
 }
 
-static bool check_valid_compositing_camera(Scene *scene, Object *camera_override)
+static bool check_valid_compositing_camera(Scene *scene,
+                                           Object *camera_override,
+                                           ReportList *reports)
 {
   if (scene->r.scemode & R_DOCOMP && scene->use_nodes) {
     LISTBASE_FOREACH (bNode *, node, &scene->nodetree->nodes) {
@@ -1408,6 +1411,11 @@ static bool check_valid_compositing_camera(Scene *scene, Object *camera_override
         }
         if (sce->camera == nullptr) {
           /* all render layers nodes need camera */
+          BKE_reportf(reports,
+                      RPT_ERROR,
+                      "No camera found in scene \"%s\" (used in compositing of scene \"%s\")",
+                      sce->id.name + 2,
+                      scene->id.name + 2);
           return false;
         }
       }
@@ -1416,7 +1424,12 @@ static bool check_valid_compositing_camera(Scene *scene, Object *camera_override
     return true;
   }
 
-  return (camera_override != nullptr || scene->camera != nullptr);
+  const bool ok = (camera_override != nullptr || scene->camera != nullptr);
+  if (!ok) {
+    BKE_reportf(reports, RPT_ERROR, "No camera found in scene \"%s\"", scene->id.name + 2);
+  }
+
+  return ok;
 }
 
 static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportList *reports)
@@ -1459,8 +1472,6 @@ static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportLis
 
 static int check_valid_camera(Scene *scene, Object *camera_override, ReportList *reports)
 {
-  const char *err_msg = "No camera found in scene \"%s\"";
-
   if (camera_override == nullptr && scene->camera == nullptr) {
     scene->camera = BKE_view_layer_camera_find(scene, BKE_view_layer_default_render(scene));
   }
@@ -1481,8 +1492,7 @@ static int check_valid_camera(Scene *scene, Object *camera_override, ReportList 
               /* camera could be unneeded due to composite nodes */
               Object *override = (seq->scene == scene) ? camera_override : nullptr;
 
-              if (!check_valid_compositing_camera(seq->scene, override)) {
-                BKE_reportf(reports, RPT_ERROR, err_msg, seq->scene->id.name + 2);
+              if (!check_valid_compositing_camera(seq->scene, override, reports)) {
                 return false;
               }
             }
@@ -1494,8 +1504,7 @@ static int check_valid_camera(Scene *scene, Object *camera_override, ReportList 
       }
     }
   }
-  else if (!check_valid_compositing_camera(scene, camera_override)) {
-    BKE_reportf(reports, RPT_ERROR, err_msg, scene->id.name + 2);
+  else if (!check_valid_compositing_camera(scene, camera_override, reports)) {
     return false;
   }
 
@@ -1605,15 +1614,15 @@ const char *RE_GetActiveRenderView(Render *re)
   return re->viewname;
 }
 
-/* evaluating scene options for general Blender render */
-static int render_init_from_main(Render *re,
-                                 const RenderData *rd,
-                                 Main *bmain,
-                                 Scene *scene,
-                                 ViewLayer *single_layer,
-                                 Object *camera_override,
-                                 int anim,
-                                 int anim_init)
+/** Evaluating scene options for general Blender render. */
+static bool render_init_from_main(Render *re,
+                                  const RenderData *rd,
+                                  Main *bmain,
+                                  Scene *scene,
+                                  ViewLayer *single_layer,
+                                  Object *camera_override,
+                                  int anim,
+                                  int anim_init)
 {
   int winx, winy;
   rcti disprect;
@@ -1647,7 +1656,7 @@ static int render_init_from_main(Render *re,
   /* not too nice, but it survives anim-border render */
   if (anim) {
     re->disprect = disprect;
-    return 1;
+    return true;
   }
 
   /*
@@ -1669,7 +1678,7 @@ static int render_init_from_main(Render *re,
 
   RE_InitState(re, nullptr, &scene->r, &scene->view_layers, single_layer, winx, winy, &disprect);
   if (!re->ok) { /* if an error was printed, abort */
-    return 0;
+    return false;
   }
 
   /* initstate makes new result, have to send changed tags around */
@@ -1678,7 +1687,7 @@ static int render_init_from_main(Render *re,
   re->display_init(re->dih, re->result);
   re->display_clear(re->dch, re->result);
 
-  return 1;
+  return true;
 }
 
 void RE_SetReports(Render *re, ReportList *reports)
@@ -1831,7 +1840,7 @@ static bool use_eevee_for_freestyle_render(Render *re)
 
 void RE_RenderFreestyleStrokes(Render *re, Main *bmain, Scene *scene, int render)
 {
-  re->result_ok = 0;
+  re->result_ok = false;
   if (render_init_from_main(re, &scene->r, bmain, scene, nullptr, nullptr, 0, 0)) {
     if (render) {
       char scene_engine[32];
@@ -1845,7 +1854,7 @@ void RE_RenderFreestyleStrokes(Render *re, Main *bmain, Scene *scene, int render
       change_renderdata_engine(re, scene_engine);
     }
   }
-  re->result_ok = 1;
+  re->result_ok = true;
 }
 
 void RE_RenderFreestyleExternal(Render *re)

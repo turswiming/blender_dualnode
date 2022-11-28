@@ -28,7 +28,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "interface_intern.h"
+#include "interface_intern.hh"
 
 struct AssetViewListData {
   AssetLibraryReference asset_library_ref;
@@ -57,7 +57,6 @@ static void asset_view_item_but_drag_set(uiBut *but,
     UI_but_drag_set_asset(but,
                           asset_handle,
                           BLI_strdup(blend_path),
-                          ED_asset_handle_get_metadata(asset_handle),
                           FILE_ASSET_IMPORT_APPEND,
                           ED_asset_handle_get_preview_icon_id(asset_handle),
                           imbuf,

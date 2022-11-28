@@ -24,6 +24,8 @@ set(INC
   ../render
   ../render/intern
   ../compositor/realtime_compositor
+  ../compositor/realtime_compositor/algorithms
+  ../compositor/realtime_compositor/cached_resources
   ../windowmanager
 
   ../../../intern/atomic
@@ -128,7 +130,7 @@ set(SRC
   engines/eevee/eevee_renderpasses.c
   engines/eevee/eevee_sampling.c
   engines/eevee/eevee_screen_raytrace.c
-  engines/eevee/eevee_shaders.c
+  engines/eevee/eevee_shaders.cc
   engines/eevee/eevee_shaders_extra.cc
   engines/eevee/eevee_shadows.c
   engines/eevee/eevee_shadows_cascade.c
@@ -165,8 +167,8 @@ set(SRC
   engines/workbench/workbench_effect_outline.cc
   engines/workbench/workbench_engine.c
   engines/workbench/workbench_engine.cc
-  engines/workbench/workbench_materials.c
   engines/workbench/workbench_materials.cc
+  engines/workbench/workbench_materials_next.cc
   engines/workbench/workbench_mesh_passes.cc
   engines/workbench/workbench_opaque.c
   engines/workbench/workbench_render.c

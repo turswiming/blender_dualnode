@@ -75,10 +75,14 @@ CCL_NAMESPACE_BEGIN
 #define __VOLUME__
 
 /* Device specific features */
-#ifndef __KERNEL_GPU__
-#  ifdef WITH_OSL
-#    define __OSL__
+#ifdef WITH_OSL
+#  define __OSL__
+#  ifdef __KERNEL_OPTIX__
+/* Kernels with OSL support are built separately in OptiX and don't need SVM. */
+#    undef __SVM__
 #  endif
+#endif
+#ifndef __KERNEL_GPU__
 #  ifdef WITH_PATH_GUIDING
 #    define __PATH_GUIDING__
 #  endif
@@ -156,7 +160,8 @@ enum PathTraceDimension {
   PRNG_VOLUME_SCATTER_DISTANCE = 5,
   PRNG_VOLUME_OFFSET = 6,
   PRNG_VOLUME_SHADE_OFFSET = 7,
-  PRNG_VOLUME_PHASE_GUIDING = 8,
+  PRNG_VOLUME_PHASE_GUIDING_DISTANCE = 8,
+  PRNG_VOLUME_PHASE_GUIDING_EQUIANGULAR = 9,
 
   /* Subsurface random walk bounces */
   PRNG_SUBSURFACE_BSDF = 0,
@@ -917,9 +922,13 @@ typedef struct ccl_align(16) ShaderData
   float ray_dP;
 
 #ifdef __OSL__
+#  ifdef __KERNEL_GPU__
+  ccl_private uint8_t *osl_closure_pool;
+#  else
   const struct KernelGlobalsCPU *osl_globals;
   const struct IntegratorStateCPU *osl_path_state;
   const struct IntegratorShadowStateCPU *osl_shadow_path_state;
+#  endif
 #endif
 
   /* LCG state for closures that require additional random numbers. */
@@ -1382,12 +1391,13 @@ static_assert_align(KernelShaderEvalInput, 16);
 
 /* Pre-computed sample table sizes for PMJ02 sampler.
  *
- * NOTE: divisions *must* be a power of two, and patterns
+ * NOTE: min and max samples *must* be a power of two, and patterns
  * ideally should be as well.
  */
-#define NUM_PMJ_DIVISIONS 32
-#define NUM_PMJ_SAMPLES ((NUM_PMJ_DIVISIONS) * (NUM_PMJ_DIVISIONS))
-#define NUM_PMJ_PATTERNS 64
+#define MIN_PMJ_SAMPLES 256
+#define MAX_PMJ_SAMPLES 8192
+#define NUM_PMJ_DIMENSIONS 2
+#define NUM_PMJ_PATTERNS 256
 
 /* Device kernels.
  *
@@ -1529,6 +1539,9 @@ enum KernelFeatureFlag : uint32_t {
 
   /* Path guiding. */
   KERNEL_FEATURE_PATH_GUIDING = (1U << 26U),
+
+  /* OSL. */
+  KERNEL_FEATURE_OSL = (1U << 27U),
 };
 
 /* Shader node feature mask, to specialize shader evaluation for kernels. */

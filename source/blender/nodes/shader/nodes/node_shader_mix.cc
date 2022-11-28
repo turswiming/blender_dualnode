@@ -22,6 +22,9 @@ NODE_STORAGE_FUNCS(NodeShaderMix)
 static void sh_node_mix_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
+  /** WARNING:
+   * Input socket indices must be kept in sync with ntree_shader_disconnect_inactive_mix_branches
+   */
   b.add_input<decl::Float>(N_("Factor"), "Factor_Float")
       .no_muted_links()
       .default_value(0.5f)
@@ -456,9 +459,9 @@ void register_node_type_sh_mix()
   sh_fn_node_type_base(&ntype, SH_NODE_MIX, "Mix", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::sh_node_mix_declare;
   ntype.ui_class = file_ns::sh_node_mix_ui_class;
-  node_type_gpu(&ntype, file_ns::gpu_shader_mix);
-  node_type_update(&ntype, file_ns::sh_node_mix_update);
-  node_type_init(&ntype, file_ns::node_mix_init);
+  ntype.gpu_fn = file_ns::gpu_shader_mix;
+  ntype.updatefunc = file_ns::sh_node_mix_update;
+  ntype.initfunc = file_ns::node_mix_init;
   node_type_storage(
       &ntype, "NodeShaderMix", node_free_standard_storage, node_copy_standard_storage);
   ntype.build_multi_function = file_ns::sh_node_mix_build_multi_function;

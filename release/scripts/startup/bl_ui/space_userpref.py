@@ -114,7 +114,9 @@ class USERPREF_MT_save_load(Menu):
         if app_template:
             display_name = bpy.path.display_name(iface_(app_template))
             layout.operator("wm.read_factory_userpref", text="Load Factory Blender Preferences")
-            props = layout.operator("wm.read_factory_userpref", text="Load Factory %s Preferences" % display_name)
+            props = layout.operator("wm.read_factory_userpref",
+                                    text=iface_("Load Factory %s Preferences") % display_name,
+                                    translate=False)
             props.use_factory_startup_app_template_only = True
             del display_name
         else:
@@ -2318,7 +2320,6 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
                 ({"property": "use_full_frame_compositor"}, "T88150"),
                 ({"property": "enable_eevee_next"}, "T93220"),
                 ({"property": "enable_workbench_next"}, ""),
-                ({"property": "use_draw_manager_acquire_lock"}, "T98016"),
             ),
         )
 

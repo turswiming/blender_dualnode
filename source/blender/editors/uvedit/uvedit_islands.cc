@@ -36,28 +36,47 @@
 
 #include "bmesh.h"
 
-/* -------------------------------------------------------------------- */
-/** \name UV Face Utilities
- * \{ */
-
-static void bm_face_uv_translate_and_scale_around_pivot(BMFace *f,
-                                                        const float offset[2],
-                                                        const float scale[2],
-                                                        const float pivot[2],
-                                                        const int cd_loop_uv_offset)
+static void mul_v2_m2_add_v2v2(float r[2],
+                               const float mat[2][2],
+                               const float a[2],
+                               const float b[2])
 {
-  BMLoop *l_iter;
-  BMLoop *l_first;
-  l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-  do {
-    MLoopUV *luv = static_cast<MLoopUV *>(BM_ELEM_CD_GET_VOID_P(l_iter, cd_loop_uv_offset));
-    for (int i = 0; i < 2; i++) {
-      luv->uv[i] = offset[i] + (((luv->uv[i] - pivot[i]) * scale[i]) + pivot[i]);
-    }
-  } while ((l_iter = l_iter->next) != l_first);
+  /* Compute `r = mat * (a + b)` with high precision. */
+  const double x = static_cast<double>(a[0]) + static_cast<double>(b[0]);
+  const double y = static_cast<double>(a[1]) + static_cast<double>(b[1]);
+
+  r[0] = static_cast<float>(mat[0][0] * x + mat[1][0] * y);
+  r[1] = static_cast<float>(mat[0][1] * x + mat[1][1] * y);
 }
 
-/** \} */
+static void island_uv_transform(FaceIsland *island,
+                                const float matrix[2][2],    /* Scale and rotation. */
+                                const float pre_translate[2] /* (pre) Translation. */
+)
+{
+  /* Use a pre-transform to compute `A * (x+b)`
+   *
+   * \note Ordinarily, we'd use a post_transform like `A * x + b`
+   * In general, post-transforms are easier to work with when using homogenous co-ordinates.
+   *
+   * When UV mapping into the unit square, post-transforms can lose precision on small islands.
+   * Instead we're using a pre-transform to maintain precision.
+   *
+   * To convert post-transform to pre-transform, use `A * x + b == A * (x + c), c = A^-1 * b`
+   */
+
+  const int cd_loop_uv_offset = island->cd_loop_uv_offset;
+  const int faces_len = island->faces_len;
+  for (int i = 0; i < faces_len; i++) {
+    BMFace *f = island->faces[i];
+    BMLoop *l;
+    BMIter iter;
+    BM_ITER_ELEM (l, &iter, f, BM_LOOPS_OF_FACE) {
+      MLoopUV *luv = (MLoopUV *)BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
+      mul_v2_m2_add_v2v2(luv->uv, matrix, luv->uv, pre_translate);
+    }
+  }
+}
 
 /* -------------------------------------------------------------------- */
 /** \name UV Face Array Utilities
@@ -198,13 +217,12 @@ static void face_island_uv_rotate_fit_aabb(FaceIsland *island)
   /* Apply rotation back to BMesh. */
   if (angle != 0.0f) {
     float matrix[2][2];
+    float pre_translate[2] = {0, 0};
     angle_to_mat2(matrix, angle);
     matrix[1][0] *= 1.0f / aspect_y;
     /* matrix[1][1] *= aspect_y / aspect_y; */
     matrix[0][1] *= aspect_y;
-    for (int i = 0; i < faces_len; i++) {
-      BM_face_uv_transform(faces[i], matrix, cd_loop_uv_offset);
-    }
+    island_uv_transform(island, matrix, pre_translate);
   }
 }
 
@@ -600,7 +618,7 @@ static BoxPack *pack_islands_params(const blender::Vector<FaceIsland *> &island_
   return box_array;
 }
 
-static bool island_has_pins(FaceIsland *island)
+static bool island_has_pins(const Scene *scene, FaceIsland *island, const bool pin_unselected)
 {
   BMLoop *l;
   BMIter iter;
@@ -609,6 +627,9 @@ static bool island_has_pins(FaceIsland *island)
     BM_ITER_ELEM (l, &iter, island->faces[i], BM_LOOPS_OF_FACE) {
       MLoopUV *luv = static_cast<MLoopUV *>(BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset));
       if (luv->flag & MLOOPUV_PINNED) {
+        return true;
+      }
+      if (pin_unselected && !uvedit_uv_select_test(scene, l, cd_loop_uv_offset)) {
         return true;
       }
     }
@@ -657,12 +678,18 @@ void ED_uvedit_pack_islands_multi(const Scene *scene,
       }
     }
 
+    bool only_selected_faces = params->only_selected_faces;
+    bool only_selected_uvs = params->only_selected_uvs;
+    if (params->ignore_pinned && params->pin_unselected) {
+      only_selected_faces = false;
+      only_selected_uvs = false;
+    }
     ListBase island_list = {nullptr};
     bm_mesh_calc_uv_islands(scene,
                             bm,
                             &island_list,
-                            params->only_selected_faces,
-                            params->only_selected_uvs,
+                            only_selected_faces,
+                            only_selected_uvs,
                             params->use_seams,
                             aspect_y,
                             cd_loop_uv_offset);
@@ -670,7 +697,7 @@ void ED_uvedit_pack_islands_multi(const Scene *scene,
     /* Remove from linked list and append to blender::Vector. */
     LISTBASE_FOREACH_MUTABLE (struct FaceIsland *, island, &island_list) {
       BLI_remlink(&island_list, island);
-      if (params->ignore_pinned && island_has_pins(island)) {
+      if (params->ignore_pinned && island_has_pins(scene, island, params->pin_unselected)) {
         MEM_freeN(island->faces);
         MEM_freeN(island);
         continue;
@@ -769,21 +796,24 @@ void ED_uvedit_pack_islands_multi(const Scene *scene,
     }
   }
 
+  float matrix[2][2];
+  float matrix_inverse[2][2];
+  float pre_translate[2];
   for (int i = 0; i < island_vector.size(); i++) {
     FaceIsland *island = island_vector[box_array[i].index];
-    const float pivot[2] = {
-        island->bounds_rect.xmin,
-        island->bounds_rect.ymin,
-    };
-    const float offset[2] = {
-        ((box_array[i].x * scale[0]) - island->bounds_rect.xmin) + base_offset[0],
-        ((box_array[i].y * scale[1]) - island->bounds_rect.ymin) + base_offset[1],
-    };
-    for (int j = 0; j < island->faces_len; j++) {
-      BMFace *efa = island->faces[j];
-      bm_face_uv_translate_and_scale_around_pivot(
-          efa, offset, scale, pivot, island->cd_loop_uv_offset);
-    }
+    matrix[0][0] = scale[0];
+    matrix[0][1] = 0.0f;
+    matrix[1][0] = 0.0f;
+    matrix[1][1] = scale[1];
+    invert_m2_m2(matrix_inverse, matrix);
+
+    /* Add base_offset, post transform. */
+    mul_v2_m2v2(pre_translate, matrix_inverse, base_offset);
+
+    /* Translate to box_array from bounds_rect. */
+    pre_translate[0] += box_array[i].x - island->bounds_rect.xmin;
+    pre_translate[1] += box_array[i].y - island->bounds_rect.ymin;
+    island_uv_transform(island, matrix, pre_translate);
   }
 
   for (uint ob_index = 0; ob_index < objects_len; ob_index++) {

@@ -907,8 +907,6 @@ class GeometryNode : public ShaderNode {
     return true;
   }
   int get_group();
-
-  NODE_SOCKET_API(float3, normal_osl)
 };
 
 class TextureCoordinateNode : public ShaderNode {
@@ -924,7 +922,6 @@ class TextureCoordinateNode : public ShaderNode {
     return true;
   }
 
-  NODE_SOCKET_API(float3, normal_osl)
   NODE_SOCKET_API(bool, from_dupli)
   NODE_SOCKET_API(bool, use_transform)
   NODE_SOCKET_API(Transform, ob_tfm)
@@ -1528,7 +1525,7 @@ class OSLNode final : public ShaderNode {
   ShaderNode *clone(ShaderGraph *graph) const;
 
   char *input_default_value();
-  void add_input(ustring name, SocketType::Type type);
+  void add_input(ustring name, SocketType::Type type, const int flags = 0);
   void add_output(ustring name, SocketType::Type type);
 
   SHADER_NODE_NO_CLONE_CLASS(OSLNode)
@@ -1541,6 +1538,10 @@ class OSLNode final : public ShaderNode {
   bool has_volume_support()
   {
     return true;
+  }
+  virtual int get_feature()
+  {
+    return ShaderNode::get_feature() | KERNEL_FEATURE_NODE_RAYTRACE;
   }
 
   virtual bool equals(const ShaderNode & /*other*/)
@@ -1569,7 +1570,6 @@ class NormalMapNode : public ShaderNode {
   NODE_SOCKET_API(ustring, attribute)
   NODE_SOCKET_API(float, strength)
   NODE_SOCKET_API(float3, color)
-  NODE_SOCKET_API(float3, normal_osl)
 };
 
 class TangentNode : public ShaderNode {
@@ -1588,7 +1588,6 @@ class TangentNode : public ShaderNode {
   NODE_SOCKET_API(NodeTangentDirectionType, direction_type)
   NODE_SOCKET_API(NodeTangentAxis, axis)
   NODE_SOCKET_API(ustring, attribute)
-  NODE_SOCKET_API(float3, normal_osl)
 };
 
 class BevelNode : public ShaderNode {

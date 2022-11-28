@@ -154,8 +154,9 @@ def use_mnee(context):
     # The MNEE kernel doesn't compile on macOS < 13.
     if use_metal(context):
         import platform
-        v, _, _ = platform.mac_ver()
-        if float(v) < 13.0:
+        version, _, _ = platform.mac_ver()
+        major_version = version.split(".")[0]
+        if int(major_version) < 13:
             return False
     return True
 
@@ -313,10 +314,11 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
         layout.use_property_decorate = False
         layout.active = cscene.use_guiding
 
+        layout.prop(cscene, "guiding_training_samples")
+
         col = layout.column(align=True)
-        col.prop(cscene, "use_surface_guiding")
-        col.prop(cscene, "use_volume_guiding")
-        col.prop(cscene, "guiding_training_samples")
+        col.prop(cscene, "use_surface_guiding", text="Surface")
+        col.prop(cscene, "use_volume_guiding", text="Volume")
 
 
 class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Panel):
@@ -2305,7 +2307,10 @@ def draw_device(self, context):
         col.prop(cscene, "device")
 
         from . import engine
-        if engine.with_osl() and use_cpu(context):
+        if engine.with_osl() and (
+                use_cpu(context) or
+                (use_optix(context) and (engine.osl_version()[1] >= 13 or engine.osl_version()[0] > 1))
+        ):
             col.prop(cscene, "shading_system")
 
 
