@@ -259,8 +259,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
       }
       if (klight->type == LIGHT_DISTANT) {
         /* Treating it as a disk light 1 unit away */
-        cos_theta_u = fast_cosf(theta_o);
-        theta_o = 0.0f;
+        cos_theta_u = fast_cosf(kemitter->theta_e);
         max_distance = 1.0f / cos_theta_u;
       }
       else {

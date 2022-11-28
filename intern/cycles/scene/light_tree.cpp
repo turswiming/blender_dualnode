@@ -173,8 +173,8 @@ LightTreePrimitive::LightTreePrimitive(Scene *scene, int prim_id, int object_id)
       strength *= lamp->get_average_radiance() * M_PI_F;
     }
     else if (type == LIGHT_DISTANT) {
-      bcone.theta_o = tanf(0.5f * lamp->get_angle());
-      bcone.theta_e = 0;
+      bcone.theta_o = 0;
+      bcone.theta_e = 0.5f * lamp->get_angle();
     }
 
     if (lamp->get_shader()) {
