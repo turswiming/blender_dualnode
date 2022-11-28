@@ -18,6 +18,11 @@ ccl_device float light_tree_cos_bounding_box_angle(const BoundingBox bbox,
                                                    const float3 P,
                                                    const float3 point_to_centroid)
 {
+  if (P.x > bbox.min.x && P.y > bbox.min.y && P.z > bbox.min.z && P.x < bbox.max.x &&
+      P.y < bbox.max.y && P.z < bbox.max.z) {
+    /* If P is inside the bbox, `theta_u` covers the whole sphere */
+    return -1.0f;
+  }
   float cos_theta_u = 1.0f;
   /* Iterate through all 8 possible points of the bounding box. */
   for (int i = 0; i < 8; ++i) {
@@ -362,7 +367,7 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
         return;
       }
       point_to_centroid = -bcone.axis;
-      cos_theta_u = fmaxf(fast_cosf(bcone.theta_o), 0.0f);
+      cos_theta_u = fast_cosf(bcone.theta_o);
       distance = 1.0f;
     }
     else {
