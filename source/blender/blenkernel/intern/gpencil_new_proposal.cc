@@ -138,20 +138,17 @@ GPFrame::~GPFrame()
   this->strokes = nullptr;
 }
 
-bool GPFrame::operator<(const GPFrame &other) const
+bool GPFrame::operator<(const GPFrameKey key) const
 {
-  if (this->start_time == other.start_time) {
-    return this->layer_index < other.layer_index;
+  if (this->start_time == key.start_time) {
+    return this->layer_index < key.layer_index;
   }
-  return this->start_time < other.start_time;
+  return this->start_time < key.start_time;
 }
 
-bool GPFrame::operator<(const std::pair<int, int> elem) const
+bool GPFrame::operator<(const GPFrame &other) const
 {
-  if (this->start_time == elem.second) {
-    return this->layer_index < elem.first;
-  }
-  return this->start_time < elem.second;
+  return *this < other.get_frame_key();
 }
 
 bool GPFrame::operator==(const GPFrame &other) const
@@ -606,15 +603,14 @@ int GPData::add_frame_on_layer_initialized(int layer_index, int frame_start, int
 
   /* Check if the frame can be appended at the end. */
   if (this->frames_size == 0 || this->frames_size == reserved ||
-      this->frames(last_index) < std::pair<int, int>(layer_index, frame_start)) {
+      this->frames(last_index) < new_frame.get_frame_key()) {
     this->frames_for_write(last_index + 1) = std::move(new_frame);
     return last_index + 1;
   }
 
   /* Look for the first frame that is equal or greater than the new frame. */
-  auto it = std::lower_bound(this->frames().begin(),
-                             this->frames().drop_back(reserved).end(),
-                             std::pair<int, int>(layer_index, frame_start));
+  auto it = std::lower_bound(
+      this->frames().begin(), this->frames().drop_back(reserved).end(), new_frame.get_frame_key());
   /* Get the index of the frame. */
   int index = std::distance(this->frames().begin(), it);
   /* Move all the frames and make space at index. */

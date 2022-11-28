@@ -81,7 +81,7 @@ typedef struct GPFrame {
   CurvesGeometry *strokes;
 
   /**
-   * The frame flag (see `eGPFrameFlag`). 
+   * The frame flag (see `eGPFrameFlag`).
    */
   int flag;
 
@@ -219,6 +219,13 @@ class GPStroke {
 };
 
 class GPFrame : public ::GPFrame {
+
+  /** Structure that defines a key for a frame. Used for ordering/sorting. */
+  struct GPFrameKey {
+    int layer_index;
+    int start_time;
+  };
+
  public:
   GPFrame() : GPFrame(-1, -1)
   {
@@ -237,9 +244,8 @@ class GPFrame : public ::GPFrame {
 
   ~GPFrame();
 
+  bool operator<(const GPFrameKey key) const;
   bool operator<(const GPFrame &other) const;
-  /* Assumes that elem.first is the layer index and elem.second is the start time. */
-  bool operator<(const std::pair<int, int> elem) const;
 
   bool operator==(const GPFrame &other) const;
 
@@ -250,6 +256,11 @@ class GPFrame : public ::GPFrame {
 
   Vector<GPStroke> strokes_for_write();
   GPStroke add_new_stroke(int new_points_num);
+
+  constexpr GPFrameKey get_frame_key() const
+  {
+    return {layer_index, start_time};
+  };
 };
 
 class GPLayer : public ::GPLayer {
