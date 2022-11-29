@@ -148,7 +148,7 @@ namespace mat3x3 {
 
 template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T> &rotation)
 {
-  using IntermediateType = rotation::TypeTraits<T>::IntermediateType;
+  using IntermediateType = typename rotation::TypeTraits<T>::IntermediateType;
   IntermediateType ci = math::cos(rotation[0]);
   IntermediateType cj = math::cos(rotation[1]);
   IntermediateType ch = math::cos(rotation[2]);
@@ -177,7 +177,7 @@ template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T>
 
 template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<T> &rotation)
 {
-  using IntermediateType = rotation::TypeTraits<T>::IntermediateType;
+  using IntermediateType = typename rotation::TypeTraits<T>::IntermediateType;
   IntermediateType q0 = M_SQRT2 * IntermediateType(rotation[0]);
   IntermediateType q1 = M_SQRT2 * IntermediateType(rotation[1]);
   IntermediateType q2 = M_SQRT2 * IntermediateType(rotation[2]);
@@ -210,17 +210,17 @@ template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<
 
 template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::AxisAngle<T> &rotation)
 {
-  const T angle_sin = math::sin(rotation.angle());
-  const T angle_cos = math::cos(rotation.angle());
+  const T angle_sin = math::sin(rotation.angle);
+  const T angle_cos = math::cos(rotation.angle);
 
-  BLI_assert(is_unit_scale(axis));
+  BLI_assert(is_unit_scale(rotation.axis));
 
-  vec_base<T, 3> &axis = rotation.axis();
+  const vec_base<T, 3> &axis = rotation.axis;
 
   T ico = (T(1) - angle_cos);
   vec_base<T, 3> nsi = axis * angle_sin;
 
-  T n012 = (axis * axis) * ico;
+  vec_base<T, 3> n012 = (axis * axis) * ico;
   T n_01 = (axis[0] * axis[1]) * ico;
   T n_02 = (axis[0] * axis[2]) * ico;
   T n_12 = (axis[1] * axis[2]) * ico;
@@ -282,6 +282,18 @@ template<typename T> mat_base<T, 4, 4> from_location(const vec_base<T, 3> locati
 }
 
 template<typename T> mat_base<T, 4, 4> from_rotation(const rotation::EulerXYZ<T> rotation)
+{
+  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
+  return mat;
+}
+
+template<typename T> mat_base<T, 4, 4> from_rotation(const rotation::Quaternion<T> rotation)
+{
+  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
+  return mat;
+}
+
+template<typename T> mat_base<T, 4, 4> from_rotation(const rotation::AxisAngle<T> rotation)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
   return mat;

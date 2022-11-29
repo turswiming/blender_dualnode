@@ -12,16 +12,31 @@
 
 namespace blender::rotation {
 
-template<typename T> explicit EulerXYZ<T> &operator EulerXYZ<T>(const Quaternion<T> &rot)
+#ifdef DEBUG
+#  define BLI_ASSERT_UNIT_QUATERNION(_q) \
+    { \
+      auto &rot_vec = static_cast<const vec_base<T, 4>>(_q); \
+      T quat_length = math::length_squared(rot_vec); \
+      if (!(quat_length == 0 || (math::abs(quat_length - 1) < 0.0001))) { \
+        std::cout << "Warning! " << __func__ << " called with non-normalized quaternion: size " \
+                  << quat_length << " *** report a bug ***\n"; \
+      } \
+    }
+#else
+#  define BLI_ASSERT_UNIT_QUATERNION(_q)
+#endif
+
+template<typename T> Quaternion<T>::operator EulerXYZ<T>()
 {
-  using namespace math::mat3x3;
-  BLI_ASSERT_UNIT_QUATERNION(rot)
-  mat_base<T, 3, 3> unit_mat = from_rotation(rot);
-  return to_euler<true>(unit_mat);
+  const Quaternion<T> &quat = *this;
+  BLI_ASSERT_UNIT_QUATERNION(quat)
+  mat_base<T, 3, 3> unit_mat = math::mat3x3::from_rotation(quat);
+  return math::to_euler<T, true>(unit_mat);
 }
 
-template<typename T> explicit Quaternion<T> &operator Quaternion<T>(const EulerXYZ<T> &rot)
+template<typename T> EulerXYZ<T>::operator Quaternion<T>()
 {
+  const EulerXYZ<T> &eul = *this;
   T ti = eul[0] * T(0.5);
   T tj = eul[1] * T(0.5);
   T th = eul[2] * T(0.5);
@@ -44,42 +59,71 @@ template<typename T> explicit Quaternion<T> &operator Quaternion<T>(const EulerX
   return quat;
 }
 
-template<typename T> explicit AxisAngle<T> &operator AxisAngle<T>(const Quaternion<T> &rot)
+template<typename T> Quaternion<T>::operator AxisAngle<T>()
 {
-  BLI_ASSERT_UNIT_QUATERNION(rot)
+  const Quaternion<T> &quat = *this;
+  BLI_ASSERT_UNIT_QUATERNION(quat)
 
   /* Calculate angle/2, and sin(angle/2). */
-  float ha = math::acos(q[0]);
+  float ha = math::acos(quat[0]);
   float si = math::sin(ha);
+
+  AxisAngle<T> rot;
   /* From half-angle to angle. */
-  *angle = ha * 2;
+  rot.angle = ha * 2;
   /* Prevent division by zero for axis conversion. */
-  if (fabsf(si) < 0.0005f) {
+  if (math::abs(si) < 0.0005) {
     si = 1.0f;
   }
 
-  axis[0] = q[1] / si;
-  axis[1] = q[2] / si;
-  axis[2] = q[3] / si;
-  if (is_zero_v3(axis)) {
-    axis[1] = 1.0f;
+  rot.axis = vec_base<T, 3>(quat[1], quat[2], quat[3]) / si;
+  if (math::is_zero(rot.axis)) {
+    rot.axis[1] = 1.0f;
   }
-  return;
+  return rot;
 }
 
-template<typename T> explicit Quaternion<T> &operator Quaternion<T>(const AxisAngle<T> &rot)
+template<typename T> AxisAngle<T>::operator Quaternion<T>()
 {
-  BLI_assert(math::is_unit_scale(rot.axis()));
-  const T phi = 0.5f * rot.angle();
+  const AxisAngle<T> &rot = *this;
+  BLI_assert(math::is_unit_scale(rot.axis));
+  const T phi = 0.5f * rot.angle;
   const T cosine = math::cos(phi);
   const T sine = math::sin(phi);
+
   Quaternion<T> quat;
   quat[0] = cosine;
-  for (int i = 1; i < 4; i++) {
-    quat[i] = axis[i] * sine;
-  }
-  return;
+  quat[1] = axis[1] * sine;
+  quat[2] = axis[2] * sine;
+  quat[3] = axis[3] * sine;
+  return quat;
 }
+
+template<typename T> EulerXYZ<T>::operator AxisAngle<T>()
+{
+  /* Use quaternions as intermediate representation for now... */
+  return AxisAngle<T>(Quaternion<T>(*this));
+}
+
+template<typename T> AxisAngle<T>::operator EulerXYZ<T>()
+{
+  /* Use quaternions as intermediate representation for now... */
+  return EulerXYZ<T>(Quaternion<T>(*this));
+}
+
+template Quaternion<float>::operator EulerXYZ<float>();
+template EulerXYZ<float>::operator Quaternion<float>();
+template Quaternion<float>::operator AxisAngle<float>();
+template AxisAngle<float>::operator Quaternion<float>();
+template EulerXYZ<float>::operator AxisAngle<float>();
+template AxisAngle<float>::operator EulerXYZ<float>();
+
+template Quaternion<double>::operator EulerXYZ<double>();
+template EulerXYZ<double>::operator Quaternion<double>();
+template Quaternion<double>::operator AxisAngle<double>();
+template AxisAngle<double>::operator Quaternion<double>();
+template EulerXYZ<double>::operator AxisAngle<double>();
+template AxisAngle<double>::operator EulerXYZ<double>();
 
 }  // namespace blender::rotation
 

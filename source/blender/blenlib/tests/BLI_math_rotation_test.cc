@@ -290,12 +290,17 @@ TEST(math_rotation, RotateDirectionAroundAxis)
 TEST(math_rotation, TypeConversion)
 {
   EulerXYZ euler(0, 0, M_PI_2);
+  Quaternion quat(0.0f, 0.0f, 0.0f, M_SQRT1_2);
+  AxisAngle axis_angle({0.0f, 0.0f, 1.0f}, M_PI_2);
 
-  Quaternion quat(euler);
-  EXPECT_V4_NEAR(quat, Quaternion(0.0f, 0.0f, 0.0f, 0.0f));
+  EXPECT_V4_NEAR(Quaternion(euler), quat, 1e-4);
+  EXPECT_EQ(AxisAngle(euler), axis_angle);
 
-  AxisAngle axis_angle(euler);
-  EXPECT_V4_NEAR(axis_angle, AxisAngle({0.0f, 0.0f, 1.0f}, M_PI_2));
+  EXPECT_V3_NEAR(EulerXYZ(quat), euler, 1e-4);
+  EXPECT_EQ(AxisAngle(quat), axis_angle);
+
+  EXPECT_V3_NEAR(EulerXYZ(axis_angle), euler, 1e-4);
+  EXPECT_V4_NEAR(Quaternion(axis_angle), quat, 1e-4);
 }
 
 }  // namespace blender::math::tests

@@ -134,6 +134,9 @@ template<typename T> bool is_negative(const mat_base<T, 4, 4> &mat)
   return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>((const T *)mat).determinant() < T(0);
 }
 
+template bool is_negative(const float4x4 &mat);
+template bool is_negative(const double4x4 &mat);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
