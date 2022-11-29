@@ -89,7 +89,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   float cos_max_incidence_angle = 1.0f;
   /* when sampling the light tree for the second time in `shade_volume.h` and when query the pdf in
    * `sample.h` */
-  const bool in_volume = (dot(N_or_D, N_or_D) < 5e-4f);
+  const bool in_volume = is_zero(N_or_D);
 
   cos_theta = dot(bcone.axis, -point_to_centroid);
   if (!in_volume_segment && !in_volume) {
@@ -98,7 +98,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
     sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
 
     /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}) = cos(theta_i') in the paper */
-    cos_min_incidence_angle = cos_theta_i > cos_theta_u ?
+    cos_min_incidence_angle = cos_theta_i >= cos_theta_u ?
                                   1.0f :
                                   cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
 
@@ -172,6 +172,62 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
 }
 
 template<bool in_volume_segment>
+ccl_device_inline bool compute_emitter_centroid_and_dir(
+    KernelGlobals kg,
+    ccl_global const KernelLightTreeEmitter *kemitter,
+    const float3 P,
+    ccl_private float3 &centroid,
+    ccl_private packed_float3 &dir)
+{
+  const int prim_id = kemitter->prim_id;
+  if (prim_id < 0) {
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ~prim_id);
+    centroid = klight->co;
+
+    switch (klight->type) {
+      case LIGHT_SPOT:
+        dir = klight->spot.dir;
+        break;
+      case LIGHT_POINT:
+        /* Disk-oriented normal */
+        dir = safe_normalize(P - centroid);
+        break;
+      case LIGHT_AREA:
+        dir = klight->area.dir;
+        break;
+      case LIGHT_BACKGROUND:
+        /* Aarbitrary centroid and direction */
+        centroid = make_float3(0.0f, 0.0f, 1.0f);
+        dir = make_float3(0.0f, 0.0f, -1.0f);
+        return !in_volume_segment;
+      case LIGHT_DISTANT:
+        dir = centroid;
+        return !in_volume_segment;
+      default:
+        return false;
+    }
+  }
+  else {
+    const int object = kemitter->mesh_light.object_id;
+    float3 vertices[3];
+    triangle_world_space_vertices(kg, object, prim_id, -1.0f, vertices);
+    centroid = (vertices[0] + vertices[1] + vertices[2]) / 3.0f;
+
+    if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_FRONT) {
+      dir = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+    }
+    else if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_BACK) {
+      dir = -safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
+    }
+    else {
+      /* Double sided: any vector in the plane. */
+      dir = safe_normalize(vertices[0] - vertices[1]);
+    }
+  }
+  return true;
+}
+
+template<bool in_volume_segment>
 ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                               const float3 P,
                                               const float3 N_or_D,
@@ -181,7 +237,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                               ccl_private float &max_importance,
                                               ccl_private float &min_importance)
 {
-  ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
+  const ccl_global KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          emitter_index);
 
   max_importance = 0.0f;
@@ -189,112 +245,68 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
   BoundingCone bcone;
   bcone.theta_o = kemitter->theta_o;
   bcone.theta_e = kemitter->theta_e;
-  float min_distance, distance;
-  float max_distance = 0.0f;
-  float cos_theta_u = 1.0f;
-  float3 centroid, point_to_centroid;
-  bool bbox_is_visible = has_transmission;
+  float cos_theta_u;
+  float2 distance; /* distance.x = max_distance, distance.y = mix_distance */
+  float3 centroid, point_to_centroid, P_c;
 
-  const int prim = kemitter->prim_id;
-  /* TODO: pack in functions and move to header files for respective light types */
-  if (prim < 0) {
-    const int lamp = ~prim;
-    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
-    centroid = klight->co;
-    point_to_centroid = safe_normalize_len(centroid - P, &distance);
-
-    if (klight->type == LIGHT_SPOT || klight->type == LIGHT_POINT) {
-      bcone.axis = klight->spot.dir;
-      const float radius = klight->spot.radius;
-      min_distance = distance;
-      max_distance = sqrtf(sqr(radius) + sqr(distance));
-      const float hypotenus = max_distance;
-      cos_theta_u = distance / hypotenus;
-      bbox_is_visible = true; /* will be tested when computing the importance */
-    }
-    else if (klight->type == LIGHT_AREA) {
-      bcone.axis = klight->area.dir;
-      for (int i = 0; i < 4; i++) {
-        const float3 corner = ((i & 1) - 0.5f) * klight->area.extentu +
-                              0.5f * ((i & 2) - 1) * klight->area.extentv + centroid;
-        float distance_point_to_corner;
-        const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
-        cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
-        bbox_is_visible |= dot(point_to_corner, N_or_D) > 0;
-        max_distance = fmaxf(max_distance, distance_point_to_corner);
-      }
-      /* TODO: a cheap substitute for minimal distance between point and primitive. Does it worth
-       * the overhead to compute the accurate minimal distance? */
-      min_distance = distance;
-    }
-    else { /* distant light */
-      if (in_volume_segment) {
-        return;
-      }
-      if (klight->type == LIGHT_DISTANT) {
-        /* Treating it as a disk light 1 unit away */
-        cos_theta_u = fast_cosf(kemitter->theta_e);
-        max_distance = 1.0f / cos_theta_u;
-      }
-      else {
-        /* Set an arbitrary direction for the background light. */
-        centroid = -N_or_D;
-        cos_theta_u = -1.0f;
-        max_distance = 1.0f;
-      }
-      bcone.axis = centroid;
-      point_to_centroid = -centroid;
-      min_distance = 1.0f;
-      bbox_is_visible = true; /* will be tested when computing the importance */
-    }
-    if (klight->type == LIGHT_POINT) {
-      bcone.axis = -point_to_centroid; /* disk oriented normal */
-      bcone.theta_o = 0.0f;
-    }
-  }
-  else { /* mesh light */
-    const int object = kemitter->mesh_light.object_id;
-    float3 vertices[3];
-    triangle_world_space_vertices(kg, object, prim, -1.0f, vertices);
-    centroid = (vertices[0] + vertices[1] + vertices[2]) / 3.0f;
-    point_to_centroid = safe_normalize_len(centroid - P, &distance);
-    bcone.axis = safe_normalize(cross(vertices[1] - vertices[0], vertices[2] - vertices[0]));
-    if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_BACK) {
-      bcone.axis = -bcone.axis;
-    }
-    else if (kemitter->mesh_light.emission_sampling == EMISSION_SAMPLING_FRONT_BACK) {
-      bcone.axis *= -signf(dot(bcone.axis, point_to_centroid));
-    }
-    bcone.theta_o = 0.0f;
-
-    if (dot(bcone.axis, point_to_centroid) > 0) {
-      return;
-    }
-
-    for (int i = 0; i < 3; i++) {
-      const float3 corner = vertices[i];
-      float distance_point_to_corner;
-      const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
-      cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
-      bbox_is_visible |= dot(point_to_corner, N_or_D) > 0;
-      max_distance = fmaxf(max_distance, distance_point_to_corner);
-    }
-    min_distance = distance;
-  }
-
-  /* TODO: rename `bbox_is_visible` to `is_visible`? */
-  if (!bbox_is_visible) {
+  if (!compute_emitter_centroid_and_dir<in_volume_segment>(
+          kg, kemitter, P, centroid, bcone.axis)) {
     return;
   }
 
-  /* TODO: better measure for single emitter */
+  const int prim_id = kemitter->prim_id;
+
   if (in_volume_segment) {
     const float3 D = N_or_D;
-    const float3 closest_point = P + dot(centroid - P, D) * D;
+    /* Closest point */
+    P_c = P + dot(centroid - P, D) * D;
     /* minimal distance of the ray to the cluster */
-    min_distance = len(centroid - closest_point);
-    max_distance = min_distance;
+    distance.x = len(centroid - P_c);
+    distance.y = distance.x;
     point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t);
+  }
+  else {
+    P_c = P;
+  }
+
+  bool is_visible;
+  if (prim_id < 0) {
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ~prim_id);
+    switch (klight->type) {
+      /* Function templates only modifies cos_theta_u when in_volume_segment = true */
+      case LIGHT_SPOT:
+        is_visible = spot_light_tree_parameters<in_volume_segment>(
+            klight, centroid, P_c, cos_theta_u, distance, point_to_centroid);
+        break;
+      case LIGHT_POINT:
+        is_visible = point_light_tree_parameters<in_volume_segment>(
+            klight, centroid, P_c, cos_theta_u, distance, point_to_centroid);
+        bcone.theta_o = 0.0f;
+        break;
+      case LIGHT_AREA:
+        is_visible = area_light_tree_parameters<in_volume_segment>(
+            klight, centroid, P_c, N_or_D, bcone.axis, cos_theta_u, distance, point_to_centroid);
+        break;
+      case LIGHT_BACKGROUND:
+        is_visible = background_light_tree_parameters(
+            centroid, cos_theta_u, distance, point_to_centroid);
+        break;
+      case LIGHT_DISTANT:
+        is_visible = distant_light_tree_parameters(
+            centroid, bcone.theta_e, cos_theta_u, distance, point_to_centroid);
+        break;
+      default:
+        return;
+    }
+  }
+  else { /* mesh light */
+    is_visible = triangle_light_tree_parameters<in_volume_segment>(
+        kg, kemitter, centroid, P_c, N_or_D, bcone, cos_theta_u, distance, point_to_centroid);
+  }
+
+  is_visible |= has_transmission;
+  if (!is_visible) {
+    return;
   }
 
   light_tree_cluster_importance<in_volume_segment>(N_or_D,
@@ -302,8 +314,8 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
                                                    point_to_centroid,
                                                    cos_theta_u,
                                                    bcone,
-                                                   max_distance,
-                                                   min_distance,
+                                                   distance.x,
+                                                   distance.y,
                                                    t,
                                                    kemitter->energy,
                                                    max_importance,
@@ -373,8 +385,8 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
       /* clamp distance to half the radius of the cluster when splitting is disabled */
       distance = fmaxf(0.5f * len(centroid - bbox.max), distance);
     }
-    /* TODO: currently max_distance = min_distance, max_importance = min_importance for the nodes.
-     * Do we need better weights for complex scenes? */
+    /* TODO: currently max_distance = min_distance, max_importance = min_importance for the
+     * nodes. Do we need better weights for complex scenes? */
     light_tree_cluster_importance<in_volume_segment>(N_or_D,
                                                      has_transmission,
                                                      point_to_centroid,

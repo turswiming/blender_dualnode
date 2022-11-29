@@ -151,23 +151,29 @@ ccl_device_inline bool spot_light_sample_from_intersection(
   return true;
 }
 
-ccl_device_inline float spot_light_tree_weight(const ccl_global KernelLight *klight,
-                                               const float3 P,
-                                               const float3 N)
+template<bool in_volume_segment>
+ccl_device_forceinline bool spot_light_tree_parameters(const ccl_global KernelLight *klight,
+                                                       const float3 centroid,
+                                                       const float3 P,
+                                                       ccl_private float &cos_theta_u,
+                                                       ccl_private float2 &distance,
+                                                       ccl_private float3 &point_to_centroid)
 {
+  float min_distance;
+  const float3 point_to_centroid_ = safe_normalize_len(centroid - P, &min_distance);
+
   const float radius = klight->spot.radius;
-  const float cos_theta = klight->spot.cos_half_spot_angle;
-  const float theta = fast_acosf(cos_theta);
-  const float3 light_dir = klight->spot.dir;
+  const float hypotenus = sqrtf(sqr(radius) + sqr(min_distance));
+  cos_theta_u = min_distance / hypotenus;
 
-  const float h1 = radius * fast_sinf(theta);
-  const float d1 = radius * cos_theta;
-  const float h2 = d1 / fast_tanf(theta);
+  if (in_volume_segment) {
+    return true;
+  }
 
-  const float3 apex = klight->co - (h1 + h2) * light_dir;
-  const float3 apex_to_point = normalize(P - apex);
+  distance = make_float2(hypotenus, min_distance);
+  point_to_centroid = point_to_centroid_;
 
-  return (dot(apex_to_point, light_dir) < cos_theta) ? 0.0f : 1.0f;
+  return true;
 }
 
 CCL_NAMESPACE_END

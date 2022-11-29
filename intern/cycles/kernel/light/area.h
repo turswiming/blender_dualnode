@@ -322,31 +322,42 @@ ccl_device_inline bool area_light_sample_from_intersection(
   return true;
 }
 
-ccl_device_inline float area_light_tree_weight(const ccl_global KernelLight *klight,
-                                               const float3 P,
-                                               const float3 N)
+template<bool in_volume_segment>
+ccl_device_forceinline bool area_light_tree_parameters(const ccl_global KernelLight *klight,
+                                                       const float3 centroid,
+                                                       const float3 P,
+                                                       const float3 N,
+                                                       const float3 bcone_axis,
+                                                       ccl_private float &cos_theta_u,
+                                                       ccl_private float2 &distance,
+                                                       ccl_private float3 &point_to_centroid)
 {
-  float3 light_P = klight->co;
-
-  float3 extentu = klight->area.extentu;
-  float3 extentv = klight->area.extentv;
-  float3 Ng = klight->area.dir;
-  bool is_round = (klight->area.invarea < 0.0f);
-
-  if (dot(light_P - P, Ng) > 0.0f) {
-    return 0.0f;
+  if (!in_volume_segment) {
+    /* TODO: a cheap substitute for minimal distance between point and primitive. Does it
+     * worth the overhead to compute the accurate minimal distance? */
+    point_to_centroid = safe_normalize_len(centroid - P, &distance.y);
+    distance.x = distance.y;
   }
 
-  if (!is_round) {
-    if (klight->area.tan_spread > 0.0f) {
-      if (!area_light_spread_clamp_area_light(
-              P, Ng, &light_P, &extentu, &extentv, klight->area.tan_spread)) {
-        return 0.0f;
-      }
+  const float3 extentu = klight->area.extentu;
+  const float3 extentv = klight->area.extentv;
+  for (int i = 0; i < 4; i++) {
+    const float3 corner = ((i & 1) - 0.5f) * extentu + 0.5f * ((i & 2) - 1) * extentv + centroid;
+    float distance_point_to_corner;
+    const float3 point_to_corner = safe_normalize_len(corner - P, &distance_point_to_corner);
+    cos_theta_u = fminf(cos_theta_u, dot(point_to_centroid, point_to_corner));
+    if (!in_volume_segment) {
+      distance.x = fmaxf(distance.x, distance_point_to_corner);
     }
   }
 
-  return 1.0f;
+  const bool front_facing = dot(bcone_axis, point_to_centroid) < 0;
+  const bool shape_above_surface = dot(N, centroid - P) + fabsf(dot(N, extentu)) +
+                                       fabsf(dot(N, extentv)) >
+                                   0;
+  const bool in_volume = is_zero(N);
+
+  return (front_facing && shape_above_surface) || in_volume;
 }
 
 CCL_NAMESPACE_END
