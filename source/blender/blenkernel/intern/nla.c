@@ -1001,6 +1001,9 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
        * then wait for second pass to flush scale properly. */
       strip->start = (p1 * nLen) + mstrip->start;
       strip->end = (p2 * nLen) + mstrip->start;
+
+      // This is wrong. - NATE
+      // strip->scale = (nLen / oLen) + mstrip->scale;
     }
     else {
       /* just apply the changes in offset to both ends of the strip */
@@ -1020,6 +1023,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
 
       RNA_float_set(&ptr, "frame_start", strip->start);
       RNA_float_set(&ptr, "frame_end", strip->end);
+      // RNA_float_set(&ptr, "scale", strip->scale);
     }
 
     /* finally, make sure the strip's children (if it is a meta-itself), get updated */

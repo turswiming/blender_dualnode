@@ -76,6 +76,12 @@ static void applyTransformNLA_translation(PointerRNA *strip_rna_ptr, const Trans
   RNA_float_set(strip_rna_ptr, "frame_end", transdata->h2[0]);
 }
 
+static void applyTransformNLA_timeScale(PointerRNA *strip_rna_ptr, float value)
+{
+  printf(" - Scale value: %f\n", value);
+  RNA_float_set(strip_rna_ptr, "scale", value);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -272,6 +278,19 @@ static void createTransNlaData(bContext *C, TransInfo *t)
   ANIM_animdata_freelist(&anim_data);
 }
 
+// The problem stems from the fact the function uses the frame_start and frame_end properties as
+// they were previously behaving. Furthermore, the code was actually modified to overcome a
+// limitation of the RNA properties of the NlaStrip that existed beforehand (see T33852 for the
+// original bug report and more discussion on this).
+
+// Create a second patch aimed at actually resolving the issue, with another function encapsulating
+// all RNA operations for the scale attribute. This needs to be performed in order to make the
+// function actually more readable (it's already at 200+ lines without any special handling for
+// different transform modes). This will also help with code review, as the recalcData_nla()
+// function will thus only serve as a dispatcher to dedicated transform functions for the NLA
+// structures, and the case-by-case nature of all different transform types will be handled in
+// separate functions.
+
 static void recalcData_nla(TransInfo *t)
 {
   SpaceNla *snla = (SpaceNla *)t->area->spacedata.first;
@@ -401,8 +420,16 @@ static void recalcData_nla(TransInfo *t)
 
     applyTransformNLA_translation(&strip_ptr, tdn);
 
+    BKE_nlastrip_recalculate_bounds_sync_action(strip);
+
     /* flush transforms to child strips (since this should be a meta) */
     BKE_nlameta_flush_transforms(strip);
+
+    // This should be the big IF for TFM_TIME_SCALE
+    if (t->mode == TFM_TIME_SCALE) {
+      printf("Strip is scaling");
+      applyTransformNLA_timeScale(&strip_ptr, t->values_final[0]);
+    }
 
     /* Now, check if we need to try and move track:
      * - we need to calculate both,
@@ -473,7 +500,7 @@ static void recalcData_nla(TransInfo *t)
 /** \name Special After Transform NLA
  * \{ */
 
-static void special_aftertrans_update__nla(bContext *C, TransInfo *UNUSED(t))
+static void special_aftertrans_update__nla(bContext *C, TransInfo *t)
 {
   bAnimContext ac;
 
@@ -492,6 +519,17 @@ static void special_aftertrans_update__nla(bContext *C, TransInfo *UNUSED(t))
 
     for (ale = anim_data.first; ale; ale = ale->next) {
       NlaTrack *nlt = (NlaTrack *)ale->data;
+      PointerRNA strip_ptr;
+      NlaStrip *strip;
+
+      // for (strip = nlt->strips.first; strip; strip = strip->next) {
+      //   RNA_pointer_create(NULL, &RNA_NlaStrip, strip, &strip_ptr);
+
+      //   if (t->mode == TFM_TIME_SCALE) {
+      //     printf("Strip is scaling");
+      //     applyTransformNLA_timeScale(&strip_ptr, t->values_final[0]);
+      //   }
+      // }
 
       /* make sure strips are in order again */
       BKE_nlatrack_sort_strips(nlt);
