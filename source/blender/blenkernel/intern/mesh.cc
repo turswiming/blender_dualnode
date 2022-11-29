@@ -1753,36 +1753,14 @@ void BKE_mesh_vert_coords_apply_with_mat4(Mesh *mesh,
   BKE_mesh_tag_coords_changed(mesh);
 }
 
-static float (*ensure_corner_normal_layer(Mesh &mesh))[3]
+static void calc_normals_split(Mesh *mesh,
+                               MLoopNorSpaceArray *r_lnors_spacearr,
+                               float (*r_corner_normals)[3])
 {
-  float(*r_loopnors)[3];
-  if (CustomData_has_layer(&mesh.ldata, CD_NORMAL)) {
-    r_loopnors = (float(*)[3])CustomData_get_layer(&mesh.ldata, CD_NORMAL);
-    memset(r_loopnors, 0, sizeof(float[3]) * mesh.totloop);
-  }
-  else {
-    r_loopnors = (float(*)[3])CustomData_add_layer(
-        &mesh.ldata, CD_NORMAL, CD_SET_DEFAULT, nullptr, mesh.totloop);
-    CustomData_set_layer_flag(&mesh.ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
-  }
-  return r_loopnors;
-}
-
-void BKE_mesh_calc_normals_split_ex(Mesh *mesh,
-                                    MLoopNorSpaceArray *r_lnors_spacearr,
-                                    float (*r_corner_normals)[3])
-{
-  short(*clnors)[2] = nullptr;
-
-  /* Note that we enforce computing clnors when the clnor space array is requested by caller here.
-   * However, we obviously only use the auto-smooth angle threshold
-   * only in case auto-smooth is enabled. */
-  const bool use_split_normals = (r_lnors_spacearr != nullptr) ||
-                                 ((mesh->flag & ME_AUTOSMOOTH) != 0);
   const float split_angle = (mesh->flag & ME_AUTOSMOOTH) != 0 ? mesh->smoothresh : float(M_PI);
 
   /* may be nullptr */
-  clnors = (short(*)[2])CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
+  short(*clnors)[2] = (short(*)[2])CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
 
   const Span<MVert> verts = mesh->verts();
   const Span<MEdge> edges = mesh->edges();
@@ -1800,13 +1778,12 @@ void BKE_mesh_calc_normals_split_ex(Mesh *mesh,
                               polys.data(),
                               BKE_mesh_poly_normals_ensure(mesh),
                               polys.size(),
-                              use_split_normals,
+                              true,
                               split_angle,
                               nullptr,
                               r_lnors_spacearr,
                               clnors);
 }
-
 
 /* Split faces helper functions. */
 
@@ -2018,7 +1995,7 @@ void BKE_mesh_split_faces(Mesh *mesh, bool free_loop_normals)
 
   MLoopNorSpaceArray lnors_spacearr = {nullptr};
   /* Compute loop normals and loop normal spaces (a.k.a. smooth fans of faces around vertices). */
-  BKE_mesh_calc_normals_split_ex(mesh, &lnors_spacearr, ensure_corner_normal_layer(*mesh));
+  calc_normals_split(mesh, &lnors_spacearr, BKE_mesh_corner_normals_for_write(mesh));
   /* Stealing memarena from loop normals space array. */
   MemArena *memarena = lnors_spacearr.mem;
 
