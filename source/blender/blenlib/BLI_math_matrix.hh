@@ -415,4 +415,34 @@ template<typename T, int NumCol, int NumRow>
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Transform function.
+ * \{ */
+
+template<typename T, int NumCol, int NumRow, int Dimensions>
+[[nodiscard]] vec_base<T, Dimensions> transform_point(const mat_base<T, NumCol, NumRow> &mat,
+                                                      const vec_base<T, Dimensions> &point);
+
+template<typename T, int NumCol, int NumRow, int Dimensions>
+[[nodiscard]] vec_base<T, Dimensions> transform_direction(
+    const mat_base<T, NumCol, NumRow> &mat, const vec_base<T, Dimensions> &direction);
+
+template<typename T>
+[[nodiscard]] vec_base<T, 3> transform_point(const mat_base<T, 3, 3> &mat,
+                                             const vec_base<T, 3> &point);
+
+template<typename T>
+[[nodiscard]] vec_base<T, 3> transform_point(const mat_base<T, 4, 4> &mat,
+                                             const vec_base<T, 3> &point);
+
+template<typename T>
+[[nodiscard]] vec_base<T, 3> transform_direction(const mat_base<T, 3, 3> &mat,
+                                                 const vec_base<T, 3> &direction);
+
+template<typename T>
+[[nodiscard]] vec_base<T, 3> transform_direction(const mat_base<T, 4, 4> &mat,
+                                                 const vec_base<T, 3> &direction);
+
+/** \} */
+
 }  // namespace blender::math

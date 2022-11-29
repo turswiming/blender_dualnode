@@ -275,4 +275,26 @@ TEST(math_matrix, MatrixInterpolationSingularity)
   EXPECT_M3_NEAR(result, expect, 1e-5);
 }
 
+TEST(math_matrix, MatrixTransform)
+{
+  float3 expect, result;
+  const float3 p(1, 2, 3);
+  float4x4 m4 = mat4x4::from_loc_rot({10, 0, 0}, EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
+  float3x3 m3 = mat3x3::from_rotation(EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
+
+  expect = {13, 2, -1};
+  result = transform_point(m4, p);
+  EXPECT_V3_NEAR(result, expect, 1e-2);
+
+  expect = {3, 2, -1};
+  result = transform_point(m3, p);
+  EXPECT_V3_NEAR(result, expect, 1e-5);
+
+  result = transform_direction(m4, p);
+  EXPECT_V3_NEAR(result, expect, 1e-5);
+
+  result = transform_direction(m3, p);
+  EXPECT_V3_NEAR(result, expect, 1e-5);
+}
+
 }  // namespace blender::tests

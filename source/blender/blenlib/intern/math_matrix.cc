@@ -402,4 +402,41 @@ template rotation::Quaternion<double> normalized_to_quat_with_checks(const doubl
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Transform function.
+ * \{ */
+
+template<typename T>
+vec_base<T, 3> transform_point(const mat_base<T, 3, 3> &mat, const vec_base<T, 3> &point)
+{
+  return mat * point;
+}
+
+template<typename T>
+vec_base<T, 3> transform_point(const mat_base<T, 4, 4> &mat, const vec_base<T, 3> &point)
+{
+  /* TODO(fclem): mat3 view. */
+  return vec_base<T, 3>(mat * vec_base<T, 4>(point, T(1)));
+}
+
+template<typename T>
+vec_base<T, 3> transform_direction(const mat_base<T, 3, 3> &mat, const vec_base<T, 3> &direction)
+{
+  return mat * direction;
+}
+
+template<typename T>
+vec_base<T, 3> transform_direction(const mat_base<T, 4, 4> &mat, const vec_base<T, 3> &direction)
+{
+  /* TODO(fclem): mat3 view. */
+  return vec_base<T, 3>(mat * vec_base<T, 4>(direction, T(0)));
+}
+
+template float3 transform_point(const float3x3 &mat, const float3 &point);
+template float3 transform_point(const float4x4 &mat, const float3 &point);
+template float3 transform_direction(const float3x3 &mat, const float3 &direction);
+template float3 transform_direction(const float4x4 &mat, const float3 &direction);
+
+/** \} */
+
 }  // namespace blender::math
