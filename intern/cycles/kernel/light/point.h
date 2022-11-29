@@ -121,13 +121,14 @@ ccl_device_forceinline bool point_light_tree_parameters(const ccl_global KernelL
     cos_theta_u = 1.0f; /* Any value in [-1, 1], irrelevant since theta = 0 */
     return true;
   }
-  point_to_centroid = safe_normalize_len(centroid - P, &distance.y);
+  float min_distance;
+  point_to_centroid = safe_normalize_len(centroid - P, &min_distance);
 
   const float radius = klight->spot.radius;
   const float hypotenus = sqrtf(sqr(radius) + sqr(distance.y));
   cos_theta_u = distance.y / hypotenus;
 
-  distance.x = hypotenus;
+  distance = make_float2(hypotenus, min_distance);
 
   return true;
 }

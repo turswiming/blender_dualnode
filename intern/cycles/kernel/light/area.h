@@ -335,8 +335,9 @@ ccl_device_forceinline bool area_light_tree_parameters(const ccl_global KernelLi
   if (!in_volume_segment) {
     /* TODO: a cheap substitute for minimal distance between point and primitive. Does it
      * worth the overhead to compute the accurate minimal distance? */
-    point_to_centroid = safe_normalize_len(centroid - P, &distance.y);
-    distance.x = distance.y;
+    float min_distance;
+    point_to_centroid = safe_normalize_len(centroid - P, &min_distance);
+    distance = make_float2(min_distance, min_distance);
   }
 
   const float3 extentu = klight->area.extentu;
