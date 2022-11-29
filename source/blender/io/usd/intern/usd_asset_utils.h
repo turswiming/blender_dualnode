@@ -19,6 +19,6 @@ namespace blender::io::usd {
 
   bool usd_paths_equal(const char *p1, const char *p2);
 
-  std::string usd_import_texture(const char *src, const char *basepath, bool overwrite);
+  std::string usd_import_texture(const char *src, const char *import_textures_dir, bool overwrite);
 
 }  // namespace blender::io::usd

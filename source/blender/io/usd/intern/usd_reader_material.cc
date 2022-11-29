@@ -390,7 +390,7 @@ Material *USDMaterialReader::add_material(const pxr::UsdShadeMaterial &usd_mater
     bool has_mdl = false;
 #ifdef WITH_PYTHON
     /* Invoke UMM to convert to MDL. */
-    bool mdl_imported = umm_import_mdl_material(mtl, usd_material, true /* Verbose */, &has_mdl);
+    bool mdl_imported = umm_import_mdl_material(params_, mtl, usd_material, true /* Verbose */, &has_mdl);
 #endif
     if (!(has_mdl && mdl_imported) && usd_preview) {
       /* The material has no MDL shader or we couldn't convert the MDL,

@@ -19,6 +19,7 @@
 
 #  include "usd_umm.h"
 #  include "usd.h"
+#  include "usd_asset_utils.h"
 #  include "usd_exporter_context.h"
 #  include "usd_writer_material.h"
 
@@ -380,7 +381,8 @@ static void test_python()
   PyGILState_Release(gilstate);
 }
 
-static PyObject *get_shader_source_data(const pxr::UsdShadeShader &usd_shader)
+static PyObject *get_shader_source_data(const USDImportParams &params,
+                                        const pxr::UsdShadeShader &usd_shader)
 {
   if (!usd_shader) {
     return nullptr;
@@ -463,6 +465,11 @@ static PyObject *get_shader_source_data(const pxr::UsdShadeShader &usd_shader)
                                              asset_path.GetAssetPath());
       }
 
+      if (params.import_textures) {
+        resolved_path = usd_import_texture(
+            resolved_path.c_str(), params.import_textures_dir, params.overwrite_textures);
+      }
+
       pxr::TfToken color_space_tok = usd_attr.GetColorSpace();
 
       if (color_space_tok.IsEmpty() && have_connected_source) {
@@ -527,7 +534,8 @@ static PyObject *get_shader_source_data(const pxr::UsdShadeShader &usd_shader)
   return ret;
 }
 
-static bool import_material(Material *mtl,
+static bool import_material(const USDImportParams &params,
+                            Material *mtl,
                             const pxr::UsdShadeShader &usd_shader,
                             const std::string &source_class)
 {
@@ -558,7 +566,7 @@ static bool import_material(Material *mtl,
     return false;
   }
 
-  PyObject *source_data = get_shader_source_data(usd_shader);
+  PyObject *source_data = get_shader_source_data(params, usd_shader);
 
   if (!source_data) {
     std::cout << "WARNING:  Couldn't get source data for shader " << usd_shader.GetPath()
@@ -747,7 +755,8 @@ bool umm_module_loaded()
   return loaded;
 }
 
-bool umm_import_mdl_material(Material *mtl,
+bool umm_import_mdl_material(const USDImportParams &params,
+                             Material *mtl,
                              const pxr::UsdShadeMaterial &usd_material,
                              bool verbose,
                              bool *r_has_mdl)
@@ -796,7 +805,7 @@ bool umm_import_mdl_material(Material *mtl,
     }
 
     std::string source_class = path + "|" + source_asset_sub_identifier.GetString();
-    return import_material(mtl, surf_shader, source_class);
+    return import_material(params, mtl, surf_shader, source_class);
   }
 
   return false;
