@@ -509,6 +509,9 @@ static char *glsl_patch_get()
   STR_CONCAT(patch, slen, "#define gpu_BaseInstance 0\n");
   STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceIndex + gpu_BaseInstance)\n");
 
+  // TODO: we should remove usage of gl_InstanceID/gl_VertexID.
+  STR_CONCAT(patch, slen, "#define gl_InstanceID gpu_InstanceIndex\n");
+
   /* GLSL Backend Lib. */
   STR_CONCAT(patch, slen, datatoc_glsl_shader_defines_glsl);
 
