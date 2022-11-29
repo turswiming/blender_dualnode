@@ -23,6 +23,8 @@ class VKShader : public Shader {
   VkShaderModule geometry_module_ = VK_NULL_HANDLE;
   VkShaderModule fragment_module_ = VK_NULL_HANDLE;
   VkShaderModule compute_module_ = VK_NULL_HANDLE;
+  bool compilation_failed_ = false;
+  Vector<VkPipelineShaderStageCreateInfo> pipeline_infos_;
 
  public:
   VKShader(const char *name);

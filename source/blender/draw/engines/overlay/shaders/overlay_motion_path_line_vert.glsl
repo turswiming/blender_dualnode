@@ -13,8 +13,13 @@ vec2 proj(vec4 pos)
   return (0.5 * (pos.xy / pos.w) + 0.5) * sizeViewport.xy;
 }
 
+#ifdef GPU_VULKAN
+// TODO(jbakker): Fix this macros.
+#define SET_INTENSITY(A, B, C, min, max) 0.0
+#else
 #define SET_INTENSITY(A, B, C, min, max) \
   (((1.0 - (float(C - B) / float(C - A))) * (max - min)) + min)
+#endif
 
 void main()
 {

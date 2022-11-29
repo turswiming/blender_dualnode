@@ -392,23 +392,6 @@ static void print_resource_alias(std::ostream &os, const ShaderCreateInfo::Resou
   }
 }
 
-enum class StageInterfaceDirection {
-  In,
-  Out,
-};
-
-static inline std::ostream &operator<<(std::ostream &stream,
-                                       const StageInterfaceDirection direction)
-{
-  switch (direction) {
-    case StageInterfaceDirection::In:
-      return stream << "in";
-    case StageInterfaceDirection::Out:
-      return stream << "out";
-  }
-  return stream;
-}
-
 inline int get_location_count(const Type &type)
 {
   if (type == shader::Type::MAT4) {
@@ -421,15 +404,43 @@ inline int get_location_count(const Type &type)
 }
 
 static void print_interface(std::ostream &os,
-                            const StageInterfaceDirection direction,
+                            const std::string &prefix,
                             const StageInterfaceInfo &iface,
                             const StringRefNull &suffix = "")
 {
-  int location = 0;
-  for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
-    os << "layout(location=" << location << ") " << direction << " " << to_string(inout.interp)
-       << " " << to_string(inout.type) << " " << inout.name << ";\n";
-    location += get_location_count(inout.type);
+  if (iface.instance_name.is_empty()) {
+    int location = 0;
+    for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
+      os << "layout(location=" << location << ") " << prefix << " " << to_string(inout.interp)
+         << " " << to_string(inout.type) << " " << inout.name << ";\n";
+      location += get_location_count(inout.type);
+    }
+  }
+  else {
+    std::string struct_name = prefix + iface.name;
+    std::string iface_attribute;
+    if (iface.instance_name.is_empty()) {
+      iface_attribute = "iface_";
+    }
+    else {
+      iface_attribute = iface.instance_name;
+    }
+    const bool add_defines = iface.instance_name.is_empty();
+
+    os << "struct " << struct_name << " {\n";
+    for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
+      os << "  " << /*to_string(inout.interp) <<*/ " " << to_string(inout.type) << " "
+         << inout.name << ";\n";
+    }
+    os << "};\n";
+    os << "layout(location=0) " << prefix << " flat " << struct_name << " " << iface_attribute
+       << suffix << ";\n";
+
+    if (add_defines) {
+      for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
+        os << "#define " << inout.name << " (" << iface_attribute << "." << inout.name << ")\n";
+      }
+    }
   }
 }
 
@@ -486,7 +497,12 @@ static char *glsl_patch_get()
 
   size_t slen = 0;
   /* Version need to go first. */
-  STR_CONCAT(patch, slen, "#version 430\n");
+  STR_CONCAT(patch, slen, "#version 450\n");
+  STR_CONCAT(patch, slen, "#define gl_VertexID gl_VertexIndex\n");
+  // TODO(jbakker): How does base instance work in vulkan. There seems to be a difference between
+  // OpenGL and Vulkan here. But I am not able to map the change to our code-base yet.
+  STR_CONCAT(patch, slen, "#define gpu_BaseInstance 0\n");
+  STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceIndex + gpu_BaseInstance)\n");
 
   BLI_assert(slen < sizeof(patch));
   return patch;
@@ -515,6 +531,7 @@ Vector<uint32_t> VKShader::compile_glsl_to_spirv(Span<const char *> sources,
   }
 
   if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+    compilation_failed_ = true;
     return Vector<uint32_t>();
   }
 
@@ -533,6 +550,7 @@ void VKShader::build_shader_module(Span<uint32_t> spirv_module, VkShaderModule *
   VkResult result = vkCreateShaderModule(
       context.device_get(), &create_info, nullptr, r_shader_module);
   if (result != VK_SUCCESS) {
+    compilation_failed_ = true;
     *r_shader_module = VK_NULL_HANDLE;
   }
 }
@@ -600,7 +618,51 @@ void VKShader::compute_shader_from_glsl(MutableSpan<const char *> sources)
 
 bool VKShader::finalize(const shader::ShaderCreateInfo * /*info*/)
 {
-  return false;
+  if (compilation_failed_) {
+    return false;
+  }
+
+  if (vertex_module_ != VK_NULL_HANDLE) {
+    BLI_assert(fragment_module_ != VK_NULL_HANDLE);
+    BLI_assert(compute_module_ == VK_NULL_HANDLE);
+
+    VkPipelineShaderStageCreateInfo vertex_stage_info = {};
+    vertex_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertex_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertex_stage_info.module = vertex_module_;
+    vertex_stage_info.pName = "main";
+    pipeline_infos_.append(vertex_stage_info);
+
+    if (geometry_module_ != VK_NULL_HANDLE) {
+      VkPipelineShaderStageCreateInfo geo_stage_info = {};
+      geo_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+      geo_stage_info.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+      geo_stage_info.module = geometry_module_;
+      geo_stage_info.pName = "main";
+      pipeline_infos_.append(geo_stage_info);
+    }
+    VkPipelineShaderStageCreateInfo fragment_stage_info = {};
+    fragment_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragment_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragment_stage_info.module = fragment_module_;
+    fragment_stage_info.pName = "main";
+    pipeline_infos_.append(fragment_stage_info);
+  }
+  else {
+    BLI_assert(vertex_module_ == VK_NULL_HANDLE);
+    BLI_assert(geometry_module_ == VK_NULL_HANDLE);
+    BLI_assert(fragment_module_ == VK_NULL_HANDLE);
+    BLI_assert(compute_module_ != VK_NULL_HANDLE);
+
+    VkPipelineShaderStageCreateInfo compute_stage_info = {};
+    compute_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    compute_stage_info.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+    compute_stage_info.module = geometry_module_;
+    compute_stage_info.pName = "main";
+    pipeline_infos_.append(compute_stage_info);
+  }
+
+  return true;
 }
 
 void VKShader::transform_feedback_names_set(Span<const char *> /*name_list*/,
@@ -658,20 +720,21 @@ std::string VKShader::resources_declare(const shader::ShaderCreateInfo &info) co
     print_resource_alias(ss, res);
   }
 
-  ss << "\n/* Push Constants. */\n";
-  ss << "layout(push_constant) uniform constants\n";
-  ss << "{\n";
-  // TODO(jbakker): push constants should be reordered from large to small.
-  for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    ss << "   " << to_string(uniform.type) << " " << uniform.name;
-    if (uniform.array_size > 0) {
-      ss << "[" << uniform.array_size << "]";
+  if (!info.push_constants_.is_empty()) {
+    ss << "\n/* Push Constants. */\n";
+    ss << "layout(push_constant) uniform constants\n";
+    ss << "{\n";
+    for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
+      ss << "  " << to_string(uniform.type) << " " << uniform.name;
+      if (uniform.array_size > 0) {
+        ss << "[" << uniform.array_size << "]";
+      }
+      ss << ";\n";
     }
-    ss << ";\n";
-  }
-  ss << "} PushConstants;\n";
-  for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    ss << "#define " << uniform.name << " (PushConstants." << uniform.name << ")\n";
+    ss << "} PushConstants;\n";
+    for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
+      ss << "#define " << uniform.name << " (PushConstants." << uniform.name << ")\n";
+    }
   }
 
   ss << "\n";
@@ -696,7 +759,7 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
   }
   ss << "\n/* Interfaces. */\n";
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
-    print_interface(ss, StageInterfaceDirection::Out, *iface);
+    print_interface(ss, "out", *iface);
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
     /* Need this for stable barycentric. */
@@ -724,7 +787,7 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
                                                           info.vertex_out_interfaces_ :
                                                           info.geometry_out_interfaces_;
   for (const StageInterfaceInfo *iface : in_interfaces) {
-    print_interface(ss, StageInterfaceDirection::In, *iface);
+    print_interface(ss, "in", *iface);
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
     std::cout << "native" << std::endl;
@@ -823,16 +886,18 @@ std::string VKShader::geometry_layout_declare(const shader::ShaderCreateInfo &in
     bool has_matching_output_iface = find_interface_by_name(info.geometry_out_interfaces_,
                                                             iface->instance_name) != nullptr;
     const char *suffix = (has_matching_output_iface) ? "_in[]" : "[]";
-    print_interface(ss, StageInterfaceDirection::In, *iface, suffix);
+    print_interface(ss, "in", *iface, suffix);
   }
   ss << "\n";
   for (const StageInterfaceInfo *iface : info.geometry_out_interfaces_) {
     bool has_matching_input_iface = find_interface_by_name(info.vertex_out_interfaces_,
                                                            iface->instance_name) != nullptr;
     const char *suffix = (has_matching_input_iface) ? "_out" : "";
-    print_interface(ss, StageInterfaceDirection::Out, *iface, suffix);
+    print_interface(ss, "out", *iface, suffix);
   }
   ss << "\n";
+  printf("%s %s %s\n", __func__, info.name_.c_str(), ss.str().c_str());
+
   return ss.str();
 }
 
