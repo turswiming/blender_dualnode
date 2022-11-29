@@ -43,18 +43,12 @@ ccl_device_inline float sin_from_cos(const float c)
 }
 
 /* Compute vector v as in Fig .8. P_v is the corresponding point along the ray ccl_device float3 */
-ccl_device float3 compute_v(const float3 centroid,
-                            const float3 P,
-                            const float3 D,
-                            const float3 bcone_axis,
-                            float t,
-                            ccl_private float3 &P_v)
+ccl_device float3 compute_v(
+    const float3 centroid, const float3 P, const float3 D, const float3 bcone_axis, const float t)
 {
-  t = fminf(t, 1e12f);
-
   const float3 unnormalized_v0 = P - centroid;
   float len_v0;
-  const float3 unnormalized_v1 = unnormalized_v0 + D * t;
+  const float3 unnormalized_v1 = unnormalized_v0 + D * fminf(t, 1e12f);
   const float3 v0 = normalize_len(unnormalized_v0, &len_v0);
   const float3 v1 = normalize(unnormalized_v1);
 
@@ -66,28 +60,8 @@ ccl_device float3 compute_v(const float3 centroid,
   const float dot_o1_a = dot(o1, bcone_axis);
   const float cos_phi0 = dot_o0_a / sqrtf(sqr(dot_o0_a) + sqr(dot_o1_a));
 
-  float3 v;
-  float t_v;
-  if (dot_o1_a < 0 || dot(v0, v1) > cos_phi0) {
-    if (dot_o0_a > dot(v1, bcone_axis)) {
-      v = v0;
-      t_v = 0.0f;
-    }
-    else {
-      v = v1;
-      t_v = t;
-    }
-  }
-  else {
-    const float sin_phi0 = sin_from_cos(cos_phi0);
-    v = cos_phi0 * o0 + sin_phi0 * o1;
-    const float cos_phi1 = dot(-v0, D);
-    const float sin_phi1 = sin_from_cos(cos_phi1);
-    /* sin(phi_0) / t_v = sin(phi_0 + phi_1) / len_v0 */
-    t_v = len_v0 / (cos_phi1 + cos_phi0 / sin_phi0 * sin_phi1);
-  }
-  P_v = P + D * t_v;
-  return v;
+  return (dot_o1_a < 0 || dot(v0, v1) > cos_phi0) ? (dot_o0_a > dot(v1, bcone_axis) ? v0 : v1) :
+                                                    cos_phi0 * o0 + sin_from_cos(cos_phi0) * o1;
 }
 
 /* This is the general function for calculating the importance of either a cluster or an emitter.
@@ -320,8 +294,7 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     /* minimal distance of the ray to the cluster */
     min_distance = len(centroid - closest_point);
     max_distance = min_distance;
-    float3 P_v;
-    point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t, P_v);
+    point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t);
   }
 
   light_tree_cluster_importance<in_volume_segment>(N_or_D,
@@ -378,9 +351,8 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
         const float3 closest_point = P + dot(centroid - P, D) * D;
         /* minimal distance of the ray to the cluster */
         distance = len(centroid - closest_point);
-        float3 P_v;
-        point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t, P_v);
-        cos_theta_u = light_tree_cos_bounding_box_angle(bbox, P_v, point_to_centroid);
+        point_to_centroid = -compute_v(centroid, P, D, bcone.axis, t);
+        cos_theta_u = light_tree_cos_bounding_box_angle(bbox, closest_point, point_to_centroid);
       }
       else {
         const float3 N = N_or_D;
