@@ -173,21 +173,21 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   /** Access helpers. Using Blender coordinate system. */
 
-  vec3_type &forward()
+  vec3_type &x_axis()
   {
     BLI_STATIC_ASSERT(NumCol >= 1, "Wrong Matrix dimension");
     BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");
     return *reinterpret_cast<vec3_type *>(&(*this)[0]);
   }
 
-  vec3_type &right()
+  vec3_type &y_axis()
   {
     BLI_STATIC_ASSERT(NumCol >= 2, "Wrong Matrix dimension");
     BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");
     return *reinterpret_cast<vec3_type *>(&(*this)[1]);
   }
 
-  vec3_type &up()
+  vec3_type &z_axis()
   {
     BLI_STATIC_ASSERT(NumCol >= 3, "Wrong Matrix dimension");
     BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");
@@ -201,21 +201,21 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return *reinterpret_cast<vec3_type *>(&(*this)[3]);
   }
 
-  const vec3_type &forward() const
+  const vec3_type &x_axis() const
   {
     BLI_STATIC_ASSERT(NumCol >= 1, "Wrong Matrix dimension");
     BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");
     return *reinterpret_cast<const vec3_type *>(&(*this)[0]);
   }
 
-  const vec3_type &right() const
+  const vec3_type &y_axis() const
   {
     BLI_STATIC_ASSERT(NumCol >= 2, "Wrong Matrix dimension");
     BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");
     return *reinterpret_cast<const vec3_type *>(&(*this)[1]);
   }
 
-  const vec3_type &up() const
+  const vec3_type &z_axis() const
   {
     BLI_STATIC_ASSERT(NumCol >= 3, "Wrong Matrix dimension");
     BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");

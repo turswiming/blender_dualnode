@@ -135,9 +135,9 @@ TEST(math_matrix, MatrixAccess)
 {
   float4x4 m({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 1, 2, 3}, {4, 5, 6, 7});
   /** Access helpers. */
-  EXPECT_EQ(m.forward(), float3(1, 2, 3));
-  EXPECT_EQ(m.right(), float3(5, 6, 7));
-  EXPECT_EQ(m.up(), float3(9, 1, 2));
+  EXPECT_EQ(m.x_axis(), float3(1, 2, 3));
+  EXPECT_EQ(m.y_axis(), float3(5, 6, 7));
+  EXPECT_EQ(m.z_axis(), float3(9, 1, 2));
   EXPECT_EQ(m.location(), float3(4, 5, 6));
 }
 

@@ -398,7 +398,7 @@ inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 4, 4> &mat)
 template<typename T, int NumCol, int NumRow>
 inline vec_base<T, 3> to_scale(const mat_base<T, NumCol, NumRow> &mat)
 {
-  return {length(mat.forward()), length(mat.right()), length(mat.up())};
+  return {length(mat.x_axis()), length(mat.y_axis()), length(mat.z_axis())};
 }
 
 /** \} */
