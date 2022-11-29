@@ -15,6 +15,8 @@
 
 using namespace blender::gpu::shader;
 
+extern "C" char datatoc_glsl_shader_defines_glsl[];
+
 namespace blender::gpu {
 
 /* -------------------------------------------------------------------- */
@@ -493,7 +495,7 @@ static std::string combine_sources(Span<const char *> sources)
 
 static char *glsl_patch_get()
 {
-  static char patch[512] = "\0";
+  static char patch[2048] = "\0";
   if (patch[0] != '\0') {
     return patch;
   }
@@ -506,6 +508,9 @@ static char *glsl_patch_get()
   // OpenGL and Vulkan here. But I am not able to map the change to our code-base yet.
   STR_CONCAT(patch, slen, "#define gpu_BaseInstance 0\n");
   STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceIndex + gpu_BaseInstance)\n");
+
+  /* GLSL Backend Lib. */
+  STR_CONCAT(patch, slen, datatoc_glsl_shader_defines_glsl);
 
   BLI_assert(slen < sizeof(patch));
   return patch;
