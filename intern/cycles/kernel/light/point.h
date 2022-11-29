@@ -125,8 +125,8 @@ ccl_device_forceinline bool point_light_tree_parameters(const ccl_global KernelL
   point_to_centroid = safe_normalize_len(centroid - P, &min_distance);
 
   const float radius = klight->spot.radius;
-  const float hypotenus = sqrtf(sqr(radius) + sqr(distance.y));
-  cos_theta_u = distance.y / hypotenus;
+  const float hypotenus = sqrtf(sqr(radius) + sqr(min_distance));
+  cos_theta_u = min_distance / hypotenus;
 
   distance = make_float2(hypotenus, min_distance);
 
