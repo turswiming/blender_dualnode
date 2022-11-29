@@ -176,11 +176,6 @@ int OBJMesh::ith_smooth_group(const int poly_index) const
   return poly_smooth_groups_[poly_index];
 }
 
-void OBJMesh::ensure_mesh_edges() const
-{
-  BKE_mesh_calc_edges_loose(export_mesh_eval_);
-}
-
 void OBJMesh::calc_smooth_groups(const bool use_bitflags)
 {
   const Span<MEdge> edges = export_mesh_eval_->edges();

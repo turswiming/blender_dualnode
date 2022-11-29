@@ -247,6 +247,65 @@ int BKE_object_data_transfer_dttype_to_srcdst_index(const int dtdata_type)
 
 /* ********** */
 
+/* Generic pre/post processing, only used by custom loop normals currently. */
+
+static void data_transfer_dtdata_type_preprocess(Mesh *me_src,
+                                                 Mesh *me_dst,
+                                                 const int dtdata_type,
+                                                 const bool dirty_nors_dst)
+{
+  if (dtdata_type == DT_TYPE_LNOR) {
+    /* Compute custom normals into regular loop normals, which will be used for the transfer. */
+
+    const MVert *verts_dst = BKE_mesh_verts(me_dst);
+    const int num_verts_dst = me_dst->totvert;
+    const MEdge *edges_dst = BKE_mesh_edges(me_dst);
+    const int num_edges_dst = me_dst->totedge;
+    const MPoly *polys_dst = BKE_mesh_polys(me_dst);
+    const int num_polys_dst = me_dst->totpoly;
+    const MLoop *loops_dst = BKE_mesh_loops(me_dst);
+    const int num_loops_dst = me_dst->totloop;
+    CustomData *ldata_dst = &me_dst->ldata;
+
+    const bool use_split_nors_dst = (me_dst->flag & ME_AUTOSMOOTH) != 0;
+    const float split_angle_dst = me_dst->smoothresh;
+
+    /* This should be ensured by cddata_masks we pass to code generating/giving us me_src now. */
+    BLI_assert(CustomData_get_layer(&me_src->ldata, CD_NORMAL) != NULL);
+    (void)me_src;
+
+    float(*loop_nors_dst)[3];
+    short(*custom_nors_dst)[2] = CustomData_get_layer(ldata_dst, CD_CUSTOMLOOPNORMAL);
+
+    /* Cache loop nors into a temp CDLayer. */
+    loop_nors_dst = CustomData_get_layer(ldata_dst, CD_NORMAL);
+    const bool do_loop_nors_dst = (loop_nors_dst == NULL);
+    if (do_loop_nors_dst) {
+      loop_nors_dst = CustomData_add_layer(
+          ldata_dst, CD_NORMAL, CD_SET_DEFAULT, NULL, num_loops_dst);
+      CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
+    }
+    if (dirty_nors_dst || do_loop_nors_dst) {
+      BKE_mesh_normals_loop_split(verts_dst,
+                                  BKE_mesh_vertex_normals_ensure(me_dst),
+                                  num_verts_dst,
+                                  edges_dst,
+                                  num_edges_dst,
+                                  loops_dst,
+                                  loop_nors_dst,
+                                  num_loops_dst,
+                                  polys_dst,
+                                  BKE_mesh_poly_normals_ensure(me_dst),
+                                  num_polys_dst,
+                                  use_split_nors_dst,
+                                  split_angle_dst,
+                                  NULL,
+                                  NULL,
+                                  custom_nors_dst);
+    }
+  }
+}
+
 static void data_transfer_dtdata_type_postprocess(Object *UNUSED(ob_src),
                                                   Object *UNUSED(ob_dst),
                                                   Mesh *UNUSED(me_src),
