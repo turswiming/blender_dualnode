@@ -422,8 +422,6 @@ mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
 
 #ifdef BLI_HAVE_SSE2
 template<>
-mat_base<float, 3, 3> operator*(const mat_base<float, 3, 3> &a, const mat_base<float, 3, 3> &b);
-template<>
 mat_base<float, 4, 4> operator*(const mat_base<float, 4, 4> &a, const mat_base<float, 4, 4> &b);
 #endif
 

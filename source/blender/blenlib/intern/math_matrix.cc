@@ -53,36 +53,6 @@ template double3x3 operator*(const double3x3 &a, const double3x3 &b);
 template double4x4 operator*(const double4x4 &a, const double4x4 &b);
 
 #ifdef BLI_HAVE_SSE2
-template<> float3x3 operator*(const float3x3 &a, const float3x3 &b)
-{
-  float3x3 result;
-  /* Without this, _mm_loadu_ps will load one extra float after the end of \arg a. */
-  float4 a2(a[2], 0.0f);
-
-  __m128 A0 = _mm_loadu_ps(a[0]);
-  __m128 A1 = _mm_loadu_ps(a[1]);
-  __m128 A2 = _mm_loadu_ps(a2);
-
-  for (int i = 0; i < 3; i++) {
-    __m128 B0 = _mm_set1_ps(b[i][0]);
-    __m128 B1 = _mm_set1_ps(b[i][1]);
-    __m128 B2 = _mm_set1_ps(b[i][2]);
-
-    __m128 sum = _mm_add_ps(_mm_add_ps(_mm_mul_ps(B0, A0), _mm_mul_ps(B1, A1)),
-                            _mm_mul_ps(B2, A2));
-
-    if (i < 2) {
-      _mm_storeu_ps(result[i], sum);
-    }
-    else {
-      /* Without this, _mm_storeu_ps will write one extra float after the end of \arg a. */
-      _mm_storeu_ps(a2, sum);
-      result[i] = float3(a2);
-    }
-  }
-  return result;
-}
-
 template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
 {
   float4x4 result;
