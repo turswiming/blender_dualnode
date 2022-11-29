@@ -139,12 +139,12 @@ static void compare_data_structures(const GPData &ngpd, const bGPdata *ogpd)
 
   // get plain list of frames
   std::vector<std::pair<int, int>> ogpd_frames;
-  offset = 0;
+  int layer_id{0};
   LISTBASE_FOREACH (bGPDlayer *, lay, &ogpd->layers) {
     LISTBASE_FOREACH (bGPDframe *, frm, &lay->frames) {
-      ogpd_frames.push_back({offset, frm->framenum});
+      ogpd_frames.emplace_back(layer_id, frm->framenum);
     }
-    ++offset;
+    ++layer_id;
   }
 
   for (int i = 0; i < ngpd.frames_size; i++) {
@@ -462,7 +462,7 @@ TEST(gpencil_proposal, TimeMultiFrameTransformStrokes)
 
 TEST(gpencil_proposal, Old2NewConversion)
 {
-  int layers_num = 2, frames_num = 2, strokes_num = 2, points_num = 2;
+  int layers_num = 2, frames_num = 3, strokes_num = 2, points_num = 2;
 
   bGPdata *old_data = build_old_gpencil_data(layers_num, frames_num, strokes_num, points_num);
 
