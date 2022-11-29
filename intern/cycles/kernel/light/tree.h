@@ -37,7 +37,7 @@ ccl_device float light_tree_cos_bounding_box_angle(const BoundingBox bbox,
   return cos_theta_u;
 }
 
-ccl_device_inline float sin_from_cos(const float c)
+ccl_device_forceinline float sin_from_cos(const float c)
 {
   return safe_sqrtf(1.0f - sqr(c));
 }
@@ -82,7 +82,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   max_importance = 0.0f;
   min_importance = 0.0f;
 
-  const float sin_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_u));
+  const float sin_theta_u = sin_from_cos(cos_theta_u);
   float cos_theta, cos_theta_i, sin_theta_i;
   /* cos(theta_i') in the paper, omitted for volume */
   float cos_min_incidence_angle = 1.0f;
@@ -95,7 +95,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
   if (!in_volume_segment && !in_volume) {
     const float3 N = N_or_D;
     cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) : dot(point_to_centroid, N);
-    sin_theta_i = safe_sqrtf(1.0f - sqr(cos_theta_i));
+    sin_theta_i = sin_from_cos(cos_theta_i);
 
     /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}) = cos(theta_i') in the paper */
     cos_min_incidence_angle = cos_theta_i >= cos_theta_u ?
@@ -118,7 +118,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
    * cos(theta') in the paper */
   float cos_min_outgoing_angle;
   /* cos(theta - theta_u) */
-  const float sin_theta = safe_sqrtf(1.0f - sqr(cos_theta));
+  const float sin_theta = sin_from_cos(cos_theta);
   const float cos_theta_minus_theta_u = cos_theta * cos_theta_u + sin_theta * sin_theta_u;
 
   float cos_theta_o, sin_theta_o;
@@ -134,7 +134,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
     /* theta' = theta - theta_o - theta_u < theta_e */
     kernel_assert(
         (fast_acosf(cos_theta) - bcone.theta_o - fast_acosf(cos_theta_u) - bcone.theta_e) < 5e-4f);
-    const float sin_theta_minus_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_minus_theta_u));
+    const float sin_theta_minus_theta_u = sin_from_cos(cos_theta_minus_theta_u);
     cos_min_outgoing_angle = cos_theta_minus_theta_u * cos_theta_o +
                              sin_theta_minus_theta_u * sin_theta_o;
   }
@@ -163,7 +163,7 @@ ccl_device void light_tree_cluster_importance(const float3 N_or_D,
     min_importance = 0.0f;
   }
   else {
-    const float sin_theta_plus_theta_u = safe_sqrtf(1.0f - sqr(cos_theta_plus_theta_u));
+    const float sin_theta_plus_theta_u = sin_from_cos(cos_theta_plus_theta_u);
     cos_max_outgoing_angle = cos_theta_plus_theta_u * cos_theta_o -
                              sin_theta_plus_theta_u * sin_theta_o;
     min_importance = fabsf(f_a * cos_max_incidence_angle * energy * cos_max_outgoing_angle /
@@ -580,26 +580,17 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     const int left_index = node_index + 1;
     const int right_index = knode->child_index;
 
-    float left_probability;
+    float left_prob;
     if (!get_left_probability<in_volume_segment>(
-            kg, P, N_or_D, t, has_transmission, left_index, right_index, left_probability)) {
+            kg, P, N_or_D, t, has_transmission, left_index, right_index, left_prob)) {
       return false; /* both child nodes have zero importance */
     }
 
-    if (randu < left_probability) { /* go left */
-      kernel_assert(left_probability > 0.0f);
-
-      node_index = left_index;
-      randu /= left_probability;
-      pdf_leaf *= left_probability;
-    }
-    else {
-      kernel_assert((1.0f - left_probability) > 0.0f);
-
-      node_index = right_index;
-      randu = (randu - left_probability) / (1.0f - left_probability);
-      pdf_leaf *= (1.0f - left_probability);
-    }
+    float discard;
+    float total_prob = left_prob;
+    node_index = left_index;
+    sample_resevoir(right_index, 1.0f - left_prob, node_index, discard, total_prob, randu);
+    pdf_leaf *= (node_index == left_index) ? left_prob : (1.0f - left_prob);
   }
 
   /* TODO: check `spot_light_tree_weight()` and `area_light_tree_weight()` */
@@ -675,15 +666,15 @@ ccl_device float light_tree_pdf(
     const int left_index = node_index + 1;
     const int right_index = knode->child_index;
 
-    float left_probability;
+    float left_prob;
     if (!get_left_probability<false>(
-            kg, P, N, 0, has_transmission, left_index, right_index, left_probability)) {
+            kg, P, N, 0, has_transmission, left_index, right_index, left_prob)) {
       return 0.0f;
     }
 
     const bool go_left = (bit_trail & 1) == 0;
     bit_trail >>= 1;
-    pdf *= go_left ? left_probability : (1.0f - left_probability);
+    pdf *= go_left ? left_prob : (1.0f - left_prob);
     node_index = go_left ? left_index : right_index;
 
     if (pdf == 0) {
