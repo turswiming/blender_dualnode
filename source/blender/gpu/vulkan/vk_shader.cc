@@ -425,15 +425,18 @@ static void print_interface(std::ostream &os,
     else {
       iface_attribute = iface.instance_name;
     }
+    std::string flat = "";
+    if (prefix == "in") {
+      flat = "flat ";
+    }
     const bool add_defines = iface.instance_name.is_empty();
 
     os << "struct " << struct_name << " {\n";
     for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
-      os << "  " << /*to_string(inout.interp) <<*/ " " << to_string(inout.type) << " "
-         << inout.name << ";\n";
+      os << "  " << to_string(inout.type) << " " << inout.name << ";\n";
     }
     os << "};\n";
-    os << "layout(location=0) " << prefix << " flat " << struct_name << " " << iface_attribute
+    os << "layout(location=0) " << prefix << " " << flat << struct_name << " " << iface_attribute
        << suffix << ";\n";
 
     if (add_defines) {
@@ -847,11 +850,8 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
 
 std::string VKShader::geometry_interface_declare(const shader::ShaderCreateInfo &info) const
 {
+  int max_verts = info.geometry_layout_.max_vertices;
   int invocations = info.geometry_layout_.invocations;
-
-  if (invocations != -1) {
-    invocations = -1;
-  }
 
   std::stringstream ss;
   ss << "\n/* Geometry Layout. */\n";
@@ -861,7 +861,8 @@ std::string VKShader::geometry_interface_declare(const shader::ShaderCreateInfo 
   }
   ss << ") in;\n";
 
-  ss << "layout(" << to_string(info.geometry_layout_.primitive_out);
+  ss << "layout(" << to_string(info.geometry_layout_.primitive_out)
+     << ", max_vertices = " << max_verts << ") out;\n";
   ss << "\n";
   return ss.str();
 }
