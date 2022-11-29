@@ -896,7 +896,6 @@ std::string VKShader::geometry_layout_declare(const shader::ShaderCreateInfo &in
     print_interface(ss, "out", *iface, suffix);
   }
   ss << "\n";
-  printf("%s %s %s\n", __func__, info.name_.c_str(), ss.str().c_str());
 
   return ss.str();
 }
