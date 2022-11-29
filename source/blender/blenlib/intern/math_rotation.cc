@@ -93,9 +93,9 @@ template<typename T> AxisAngle<T>::operator Quaternion<T>()
 
   Quaternion<T> quat;
   quat[0] = cosine;
-  quat[1] = axis[1] * sine;
-  quat[2] = axis[2] * sine;
-  quat[3] = axis[3] * sine;
+  quat[1] = axis[0] * sine;
+  quat[2] = axis[1] * sine;
+  quat[3] = axis[2] * sine;
   return quat;
 }
 

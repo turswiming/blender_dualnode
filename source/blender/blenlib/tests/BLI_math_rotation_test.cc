@@ -290,14 +290,16 @@ TEST(math_rotation, RotateDirectionAroundAxis)
 TEST(math_rotation, TypeConversion)
 {
   EulerXYZ euler(0, 0, M_PI_2);
-  Quaternion quat(0.0f, 0.0f, 0.0f, M_SQRT1_2);
+  Quaternion quat(M_SQRT1_2, 0.0f, 0.0f, M_SQRT1_2);
   AxisAngle axis_angle({0.0f, 0.0f, 1.0f}, M_PI_2);
 
   EXPECT_V4_NEAR(Quaternion(euler), quat, 1e-4);
-  EXPECT_EQ(AxisAngle(euler), axis_angle);
+  EXPECT_V3_NEAR(AxisAngle(euler).axis, axis_angle.axis, 1e-4);
+  EXPECT_NEAR(AxisAngle(euler).angle, axis_angle.angle, 1e-4);
 
   EXPECT_V3_NEAR(EulerXYZ(quat), euler, 1e-4);
-  EXPECT_EQ(AxisAngle(quat), axis_angle);
+  EXPECT_V3_NEAR(AxisAngle(quat).axis, axis_angle.axis, 1e-4);
+  EXPECT_NEAR(AxisAngle(quat).angle, axis_angle.angle, 1e-4);
 
   EXPECT_V3_NEAR(EulerXYZ(axis_angle), euler, 1e-4);
   EXPECT_V4_NEAR(Quaternion(axis_angle), quat, 1e-4);
