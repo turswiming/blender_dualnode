@@ -147,8 +147,6 @@ static void compare_data_structures(const GPData &ngpd, const bGPdata *ogpd)
     ++offset;
   }
 
-  // FIXME: this fails because in new data structure
-  // frames are sorted by frame_nb and then layer_index
   for (int i = 0; i < ngpd.frames_size; i++) {
     const ::GPFrame *nfrm = ngpd.frames_array + i;
     int ofrm_layer_index{ogpd_frames[i].first};
