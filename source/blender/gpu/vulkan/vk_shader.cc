@@ -408,10 +408,10 @@ inline int get_location_count(const Type &type)
 static void print_interface(std::ostream &os,
                             const std::string &prefix,
                             const StageInterfaceInfo &iface,
+                            int &location,
                             const StringRefNull &suffix = "")
 {
   if (iface.instance_name.is_empty()) {
-    int location = 0;
     for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
       os << "layout(location=" << location << ") " << prefix << " " << to_string(inout.interp)
          << " " << to_string(inout.type) << " " << inout.name << ";\n";
@@ -438,13 +438,17 @@ static void print_interface(std::ostream &os,
       os << "  " << to_string(inout.type) << " " << inout.name << ";\n";
     }
     os << "};\n";
-    os << "layout(location=0) " << prefix << " " << flat << struct_name << " " << iface_attribute
-       << suffix << ";\n";
+    os << "layout(location=" << location << ") " << prefix << " " << flat << struct_name << " "
+       << iface_attribute << suffix << ";\n";
 
     if (add_defines) {
       for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
         os << "#define " << inout.name << " (" << iface_attribute << "." << inout.name << ")\n";
       }
+    }
+
+    for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
+      location += get_location_count(inout.type);
     }
   }
 }
@@ -487,12 +491,6 @@ static const std::string to_stage_name(shaderc_shader_kind stage)
   return std::string("unknown stage");
 }
 
-static std::string combine_sources(Span<const char *> sources)
-{
-  char *sources_combined = BLI_string_join_arrayN((const char **)sources.data(), sources.size());
-  return std::string(sources_combined);
-}
-
 static char *glsl_patch_get()
 {
   static char patch[2048] = "\0";
@@ -519,6 +517,12 @@ static char *glsl_patch_get()
   return patch;
 }
 
+static std::string combine_sources(Span<const char *> sources)
+{
+  char *sources_combined = BLI_string_join_arrayN((const char **)sources.data(), sources.size());
+  return std::string(sources_combined);
+}
+
 Vector<uint32_t> VKShader::compile_glsl_to_spirv(Span<const char *> sources,
                                                  shaderc_shader_kind stage)
 {
@@ -530,6 +534,7 @@ Vector<uint32_t> VKShader::compile_glsl_to_spirv(Span<const char *> sources,
   shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
       combined_sources, stage, name, options);
   if (module.GetNumErrors() != 0 || module.GetNumWarnings() != 0) {
+    // printf("%s %s\n", __func__, combined_sources.c_str());
     std::string log = module.GetErrorMessage();
     Vector<char> logcstr(log.c_str(), log.c_str() + log.size() + 1);
 
@@ -769,8 +774,9 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
     ss << "in float gpu_dummy_workaround;\n";
   }
   ss << "\n/* Interfaces. */\n";
+  int location = 0;
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
-    print_interface(ss, "out", *iface);
+    print_interface(ss, "out", *iface, location);
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
     /* Need this for stable barycentric. */
@@ -797,8 +803,9 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   const Vector<StageInterfaceInfo *> &in_interfaces = info.geometry_source_.is_empty() ?
                                                           info.vertex_out_interfaces_ :
                                                           info.geometry_out_interfaces_;
+  int location = 0;
   for (const StageInterfaceInfo *iface : in_interfaces) {
-    print_interface(ss, "in", *iface);
+    print_interface(ss, "in", *iface, location);
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
     std::cout << "native" << std::endl;
@@ -891,18 +898,20 @@ std::string VKShader::geometry_layout_declare(const shader::ShaderCreateInfo &in
   std::stringstream ss;
 
   ss << "\n/* Interfaces. */\n";
+  int location = 0;
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
     bool has_matching_output_iface = find_interface_by_name(info.geometry_out_interfaces_,
                                                             iface->instance_name) != nullptr;
     const char *suffix = (has_matching_output_iface) ? "_in[]" : "[]";
-    print_interface(ss, "in", *iface, suffix);
+    print_interface(ss, "in", *iface, location, suffix);
   }
   ss << "\n";
+
   for (const StageInterfaceInfo *iface : info.geometry_out_interfaces_) {
     bool has_matching_input_iface = find_interface_by_name(info.vertex_out_interfaces_,
                                                            iface->instance_name) != nullptr;
     const char *suffix = (has_matching_input_iface) ? "_out" : "";
-    print_interface(ss, "out", *iface, suffix);
+    print_interface(ss, "out", *iface, location, suffix);
   }
   ss << "\n";
 
