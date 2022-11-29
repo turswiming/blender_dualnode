@@ -349,7 +349,7 @@ class GPData : public ::GPData {
   void update_frames_array();
 };
 
-GreasePencil convert_old_to_new_gpencil_data(const bGPdata *old_gpd);
+GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd);
 bGPdata *convert_new_to_old_gpencil_data(const GreasePencil &new_gpd);
 
 }  // namespace blender::bke
