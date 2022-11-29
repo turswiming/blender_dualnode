@@ -6,6 +6,7 @@
 #include "BKE_paint.h"
 #include "BKE_particle.h"
 #include "BKE_pbvh.h"
+#include "BKE_report.h"
 #include "DEG_depsgraph_query.h"
 #include "DNA_fluid_types.h"
 #include "ED_paint.h"
@@ -34,9 +35,9 @@ class Instance {
   DofPass dof_ps;
   AntiAliasingPass anti_aliasing_ps;
 
-  void init()
+  void init(Object *camera_ob = nullptr)
   {
-    scene_state.init();
+    scene_state.init(camera_ob);
     resources.init(scene_state);
 
     outline_ps.init(scene_state);
@@ -462,19 +463,201 @@ static void workbench_id_update(void *vedata, struct ID *id)
   UNUSED_VARS(vedata, id);
 }
 
+/* RENDER */
+
+static bool workbench_render_framebuffers_init(void)
+{
+  /* For image render, allocate own buffers because we don't have a viewport. */
+  const float2 viewport_size = DRW_viewport_size_get();
+  const int2 size = {int(viewport_size.x), int(viewport_size.y)};
+
+  DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
+
+  /* When doing a multi view rendering the first view will allocate the buffers
+   * the other views will reuse these buffers */
+  if (dtxl->color == nullptr) {
+    BLI_assert(dtxl->depth == nullptr);
+    dtxl->color = GPU_texture_create_2d("txl.color", size.x, size.y, 1, GPU_RGBA16F, nullptr);
+    dtxl->depth = GPU_texture_create_2d(
+        "txl.depth", size.x, size.y, 1, GPU_DEPTH24_STENCIL8, nullptr);
+  }
+
+  if (!(dtxl->depth && dtxl->color)) {
+    return false;
+  }
+
+  DefaultFramebufferList *dfbl = DRW_viewport_framebuffer_list_get();
+
+  GPU_framebuffer_ensure_config(
+      &dfbl->default_fb,
+      {GPU_ATTACHMENT_TEXTURE(dtxl->depth), GPU_ATTACHMENT_TEXTURE(dtxl->color)});
+
+  GPU_framebuffer_ensure_config(&dfbl->depth_only_fb,
+                                {GPU_ATTACHMENT_TEXTURE(dtxl->depth), GPU_ATTACHMENT_NONE});
+
+  GPU_framebuffer_ensure_config(&dfbl->color_only_fb,
+                                {GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(dtxl->color)});
+
+  return GPU_framebuffer_check_valid(dfbl->default_fb, nullptr) &&
+         GPU_framebuffer_check_valid(dfbl->color_only_fb, nullptr) &&
+         GPU_framebuffer_check_valid(dfbl->depth_only_fb, nullptr);
+}
+
+#ifdef DEBUG
+/* This is just to ease GPU debugging when the frame delimiter is set to Finish */
+#  define GPU_FINISH_DELIMITER() GPU_finish()
+#else
+#  define GPU_FINISH_DELIMITER()
+#endif
+
 static void workbench_render_to_image(void *vedata,
                                       struct RenderEngine *engine,
                                       struct RenderLayer *layer,
-                                      const struct rcti *UNUSED(rect))
+                                      const struct rcti *rect)
 {
-  UNUSED_VARS(vedata, engine, layer);
+  /* TODO(fclem): Remove once it is minimum required. */
+  if (!GPU_shader_storage_buffer_objects_support()) {
+    return;
+  }
+
+  if (!workbench_render_framebuffers_init()) {
+    RE_engine_report(engine, RPT_ERROR, "Failed to allocate GPU buffers");
+    return;
+  }
+
+  GPU_FINISH_DELIMITER();
+
+  /* Setup */
+
+  DefaultFramebufferList *dfbl = DRW_viewport_framebuffer_list_get();
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+  Depsgraph *depsgraph = draw_ctx->depsgraph;
+
+  WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
+  if (ved->instance == nullptr) {
+    ved->instance = new workbench::Instance();
+  }
+
+  /* TODO(sergey): Shall render hold pointer to an evaluated camera instead? */
+  Object *camera_ob = DEG_get_evaluated_object(depsgraph, RE_GetCamera(engine->re));
+
+  /* Set the perspective, view and window matrix. */
+  float4x4 winmat, viewmat, viewinv;
+  RE_GetCameraWindow(engine->re, camera_ob, winmat.ptr());
+  RE_GetCameraModelMatrix(engine->re, camera_ob, viewinv.ptr());
+  viewmat = viewinv.inverted();
+
+  DRWView *view = DRW_view_create(viewmat.ptr(), winmat.ptr(), nullptr, nullptr, nullptr);
+  DRW_view_default_set(view);
+  DRW_view_set_active(view);
+
+  /* Render */
+  do {
+    if (RE_engine_test_break(engine)) {
+      break;
+    }
+
+    ved->instance->init(camera_ob);
+
+    DRW_manager_get()->begin_sync();
+
+    workbench_cache_init(vedata);
+    auto workbench_render_cache = [](void *vedata,
+                                     struct Object *ob,
+                                     struct RenderEngine *UNUSED(engine),
+                                     struct Depsgraph *UNUSED(depsgraph)) {
+      workbench_cache_populate(vedata, ob);
+    };
+    DRW_render_object_iter(vedata, engine, depsgraph, workbench_render_cache);
+    workbench_cache_finish(vedata);
+
+    DRW_manager_get()->end_sync();
+
+    /* Also we weed to have a correct FBO bound for #DRW_curves_update */
+    // GPU_framebuffer_bind(dfbl->default_fb);
+    // DRW_curves_update(); /* TODO(Miguel Pozo): Check this once curves are implemented */
+
+    workbench_draw_scene(vedata);
+
+    /* Perform render step between samples to allow
+     * flushing of freed GPUBackend resources. */
+    GPU_render_step();
+    GPU_FINISH_DELIMITER();
+  } while (ved->instance->scene_state.sample + 1 < ved->instance->scene_state.samples_len);
+
+  const char *viewname = RE_GetActiveRenderView(engine->re);
+  /* Write render output. */
+  {
+    RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_COMBINED, viewname);
+    if (rp) {
+      GPU_framebuffer_bind(dfbl->default_fb);
+      GPU_framebuffer_read_color(dfbl->default_fb,
+                                 rect->xmin,
+                                 rect->ymin,
+                                 BLI_rcti_size_x(rect),
+                                 BLI_rcti_size_y(rect),
+                                 4,
+                                 0,
+                                 GPU_DATA_FLOAT,
+                                 rp->rect);
+    }
+  }
+  /* Write render Z output */
+  {
+    RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_Z, viewname);
+    if (rp) {
+      GPU_framebuffer_bind(dfbl->default_fb);
+      GPU_framebuffer_read_depth(dfbl->default_fb,
+                                 rect->xmin,
+                                 rect->ymin,
+                                 BLI_rcti_size_x(rect),
+                                 BLI_rcti_size_y(rect),
+                                 GPU_DATA_FLOAT,
+                                 rp->rect);
+
+      int pix_num = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
+
+      /* Convert ogl depth [0..1] to view Z [near..far] */
+      if (DRW_view_is_persp_get(nullptr)) {
+        for (float &z : MutableSpan(rp->rect, pix_num)) {
+          if (z == 1.0f) {
+            z = 1e10f; /* Background */
+          }
+          else {
+            z = z * 2.0f - 1.0f;
+            z = winmat[3][2] / (z + winmat[2][2]);
+          }
+        }
+      }
+      else {
+        /* Keep in mind, near and far distance are negatives. */
+        float near = DRW_view_near_distance_get(nullptr);
+        float far = DRW_view_far_distance_get(nullptr);
+        float range = fabsf(far - near);
+
+        for (float &z : MutableSpan(rp->rect, pix_num)) {
+          if (z == 1.0f) {
+            z = 1e10f; /* Background */
+          }
+          else {
+            z = z * range - near;
+          }
+        }
+      }
+    }
+  }
 }
 
 static void workbench_render_update_passes(RenderEngine *engine,
                                            Scene *scene,
                                            ViewLayer *view_layer)
 {
-  RE_engine_register_pass(engine, scene, view_layer, RE_PASSNAME_COMBINED, 4, "RGBA", SOCK_RGBA);
+  if (view_layer->passflag & SCE_PASS_COMBINED) {
+    RE_engine_register_pass(engine, scene, view_layer, RE_PASSNAME_COMBINED, 4, "RGBA", SOCK_RGBA);
+  }
+  if (view_layer->passflag & SCE_PASS_Z) {
+    RE_engine_register_pass(engine, scene, view_layer, RE_PASSNAME_Z, 1, "Z", SOCK_FLOAT);
+  }
 }
 
 extern "C" {

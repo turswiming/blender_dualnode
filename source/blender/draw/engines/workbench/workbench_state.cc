@@ -18,7 +18,7 @@
 
 namespace blender::workbench {
 
-void SceneState::init()
+void SceneState::init(Object *camera_ob /*= nullptr*/)
 {
   bool reset_taa = reset_taa_next_sample;
   reset_taa_next_sample = false;
@@ -32,13 +32,9 @@ void SceneState::init()
   GPUTexture *viewport_tx = DRW_viewport_texture_list_get()->color;
   resolution = int2(GPU_texture_width(viewport_tx), GPU_texture_height(viewport_tx));
 
-  camera_object = nullptr;
-  if (v3d && rv3d) {
+  camera_object = camera_ob;
+  if (camera_object == nullptr && v3d && rv3d) {
     camera_object = (rv3d->persp == RV3D_CAMOB) ? v3d->camera : nullptr;
-  }
-  else {
-    /*TODO(Miguel Pozo)*/
-    // camera = wpd->cam_original_ob;
   }
   camera = camera_object && camera_object->type == OB_CAMERA ?
                static_cast<Camera *>(camera_object->data) :
