@@ -15,7 +15,7 @@ namespace blender::math {
 
 /* Returns true if each individual columns are unit scaled. Mainly for assert usage. */
 template<typename T, int NumCol, int NumRow>
-inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &m)
+[[nodiscard]] inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &m)
 {
   for (int i = 0; i < NumCol; i++) {
     if (!is_unit_scale(m[i])) {
@@ -32,13 +32,14 @@ inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &m)
 /**
  * Returns the inverse of a square matrix.
  */
-template<typename T, int Size> mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat);
+template<typename T, int Size>
+[[nodiscard]] mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat);
 
 /**
  * Flip the matrix around its diagonal. Also flips dimensions for non square matrices.
  */
 template<typename T, int NumCol, int NumRow>
-inline mat_base<T, NumCol, NumRow> transpose(const mat_base<T, NumRow, NumCol> &mat)
+[[nodiscard]] inline mat_base<T, NumCol, NumRow> transpose(const mat_base<T, NumRow, NumCol> &mat)
 {
   mat_base<T, NumCol, NumRow> result;
   for (int i = 0; i < NumCol; i++) {
@@ -49,13 +50,12 @@ inline mat_base<T, NumCol, NumRow> transpose(const mat_base<T, NumRow, NumCol> &
   return result;
 }
 
-template<typename T, int Size> T determinant(const mat_base<T, Size, Size> &mat);
+template<typename T, int Size> [[nodiscard]] T determinant(const mat_base<T, Size, Size> &mat);
 
 /** \note linear interpolation for each component. */
 template<typename T, int NumCol, int NumRow>
-inline mat_base<T, NumCol, NumRow> interpolate_linear(const mat_base<T, NumCol, NumRow> &a,
-                                                      const mat_base<T, NumCol, NumRow> &b,
-                                                      T t)
+[[nodiscard]] inline mat_base<T, NumCol, NumRow> interpolate_linear(
+    const mat_base<T, NumCol, NumRow> &a, const mat_base<T, NumCol, NumRow> &b, T t)
 {
   mat_base<T, NumCol, NumRow> result;
   unroll<NumCol>([&](auto c) { result[c] = interpolate(a[c], b[c], t); });
@@ -79,7 +79,9 @@ inline mat_base<T, NumCol, NumRow> interpolate_linear(const mat_base<T, NumCol, 
  * \param t: Interpolation factor.
  */
 template<typename T>
-mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3> &B, T t);
+[[nodiscard]] mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A,
+                                            const mat_base<T, 3, 3> &B,
+                                            T t);
 
 /**
  * Complete transform matrix interpolation,
@@ -90,12 +92,14 @@ mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3
  * \param t: Interpolation factor.
  */
 template<typename T>
-mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &A, const mat_base<T, 4, 4> &B, T t);
+[[nodiscard]] mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &A,
+                                            const mat_base<T, 4, 4> &B,
+                                            T t);
 
 /**
  * Normalize individually each column of the matrix.
  */
-template<typename T> inline T normalize(const T &a)
+template<typename T> [[nodiscard]] inline T normalize(const T &a)
 {
   T result;
   unroll<T::col_len>([&](auto i) { result[i] = math::normalize(a[i]); });
@@ -114,19 +118,19 @@ template<typename T> inline T normalize(const T &a)
  * \note It doesn't use determinant(mat4x4) as only the 3x3 components are needed
  * when the matrix is used as a transformation to represent location/scale/rotation.
  */
-template<typename T, int Size> bool is_negative(const mat_base<T, Size, Size> &mat)
+template<typename T, int Size> [[nodiscard]] bool is_negative(const mat_base<T, Size, Size> &mat)
 {
   return determinant(mat) < T(0);
 }
-template<typename T> bool is_negative(const mat_base<T, 4, 4> &mat);
+template<typename T> [[nodiscard]] bool is_negative(const mat_base<T, 4, 4> &mat);
 
 /**
  * Returns true if matrices are equal within the given limit.
  */
 template<typename T, int NumCol, int NumRow>
-inline bool compare(const mat_base<T, NumCol, NumRow> &a,
-                    const mat_base<T, NumCol, NumRow> &b,
-                    const T limit)
+[[nodiscard]] inline bool compare(const mat_base<T, NumCol, NumRow> &a,
+                                  const mat_base<T, NumCol, NumRow> &b,
+                                  const T limit)
 {
   for (int i = 0; i < NumCol; i++) {
     for (int j = 0; j < NumRow; j++) {
@@ -146,7 +150,8 @@ inline bool compare(const mat_base<T, NumCol, NumRow> &a,
 
 namespace mat3x3 {
 
-template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T> &rotation)
+template<typename T>
+[[nodiscard]] mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T> &rotation)
 {
   using IntermediateType = typename rotation::TypeTraits<T>::IntermediateType;
   IntermediateType ci = math::cos(rotation[0]);
@@ -175,7 +180,8 @@ template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T>
   return mat;
 }
 
-template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<T> &rotation)
+template<typename T>
+[[nodiscard]] mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<T> &rotation)
 {
   using IntermediateType = typename rotation::TypeTraits<T>::IntermediateType;
   IntermediateType q0 = M_SQRT2 * IntermediateType(rotation[0]);
@@ -208,7 +214,8 @@ template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<
   return mat;
 }
 
-template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::AxisAngle<T> &rotation)
+template<typename T>
+[[nodiscard]] mat_base<T, 3, 3> from_rotation(const rotation::AxisAngle<T> &rotation)
 {
   const T angle_sin = math::sin(rotation.angle);
   const T angle_cos = math::cos(rotation.angle);
@@ -235,20 +242,21 @@ template<typename T> mat_base<T, 3, 3> from_rotation(const rotation::AxisAngle<T
   return mat;
 }
 
-template<typename T> mat_base<T, 3, 3> from_scale(const vec_base<T, 3> &scale)
+template<typename T> [[nodiscard]] mat_base<T, 3, 3> from_scale(const vec_base<T, 3> &scale)
 {
   return mat_base<T, 3, 3>::from_diagonal(scale);
 }
 
 template<typename T>
-mat_base<T, 3, 3> from_rot_scale(const rotation::EulerXYZ<T> &rotation,
-                                 const vec_base<T, 3> &scale)
+[[nodiscard]] mat_base<T, 3, 3> from_rot_scale(const rotation::EulerXYZ<T> &rotation,
+                                               const vec_base<T, 3> &scale)
 {
   return mat3x3::from_rotation(rotation) * mat3x3::from_scale(scale);
 }
 
 template<typename T>
-mat_base<T, 3, 3> from_normalized_axis_data(const vec_base<T, 3> forward, const vec_base<T, 3> up)
+[[nodiscard]] mat_base<T, 3, 3> from_normalized_axis_data(const vec_base<T, 3> forward,
+                                                          const vec_base<T, 3> up)
 {
   BLI_ASSERT_UNIT_V3(forward);
   BLI_ASSERT_UNIT_V3(up);
@@ -274,39 +282,43 @@ mat_base<T, 3, 3> from_normalized_axis_data(const vec_base<T, 3> forward, const 
 
 namespace mat4x4 {
 
-template<typename T> mat_base<T, 4, 4> from_location(const vec_base<T, 3> location)
+template<typename T> [[nodiscard]] mat_base<T, 4, 4> from_location(const vec_base<T, 3> location)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>::identity();
   mat.location() = location;
   return mat;
 }
 
-template<typename T> mat_base<T, 4, 4> from_rotation(const rotation::EulerXYZ<T> rotation)
+template<typename T>
+[[nodiscard]] mat_base<T, 4, 4> from_rotation(const rotation::EulerXYZ<T> rotation)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
   return mat;
 }
 
-template<typename T> mat_base<T, 4, 4> from_rotation(const rotation::Quaternion<T> rotation)
+template<typename T>
+[[nodiscard]] mat_base<T, 4, 4> from_rotation(const rotation::Quaternion<T> rotation)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
   return mat;
 }
 
-template<typename T> mat_base<T, 4, 4> from_rotation(const rotation::AxisAngle<T> rotation)
+template<typename T>
+[[nodiscard]] mat_base<T, 4, 4> from_rotation(const rotation::AxisAngle<T> rotation)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
   return mat;
 }
 
-template<typename T> mat_base<T, 4, 4> from_scale(const vec_base<T, 3> scale)
+template<typename T> [[nodiscard]] mat_base<T, 4, 4> from_scale(const vec_base<T, 3> scale)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_scale(scale));
   return mat;
 }
 
 template<typename T>
-mat_base<T, 4, 4> from_loc_rot(const vec_base<T, 3> location, const rotation::EulerXYZ<T> rotation)
+[[nodiscard]] mat_base<T, 4, 4> from_loc_rot(const vec_base<T, 3> location,
+                                             const rotation::EulerXYZ<T> rotation)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
   mat.location() = location;
@@ -314,9 +326,9 @@ mat_base<T, 4, 4> from_loc_rot(const vec_base<T, 3> location, const rotation::Eu
 }
 
 template<typename T>
-mat_base<T, 4, 4> from_loc_rot_scale(const vec_base<T, 3> location,
-                                     const rotation::EulerXYZ<T> rotation,
-                                     const vec_base<T, 3> scale)
+[[nodiscard]] mat_base<T, 4, 4> from_loc_rot_scale(const vec_base<T, 3> location,
+                                                   const rotation::EulerXYZ<T> rotation,
+                                                   const vec_base<T, 3> scale)
 {
   mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rot_scale(rotation, scale));
   mat.location() = location;
@@ -324,9 +336,9 @@ mat_base<T, 4, 4> from_loc_rot_scale(const vec_base<T, 3> location,
 }
 
 template<typename T>
-mat_base<T, 4, 4> from_normalized_axis_data(const vec_base<T, 3> location,
-                                            const vec_base<T, 3> forward,
-                                            const vec_base<T, 3> up)
+[[nodiscard]] mat_base<T, 4, 4> from_normalized_axis_data(const vec_base<T, 3> location,
+                                                          const vec_base<T, 3> forward,
+                                                          const vec_base<T, 3> up)
 {
   mat_base<T, 4, 4> matrix = mat_base<T, 4, 4>(mat3x3::from_normalized_axis_data(forward, up));
   matrix.location() = location;
@@ -350,12 +362,12 @@ void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
                         rotation::EulerXYZ<T> &eul2);
 
 template<typename T>
-rotation::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat);
+[[nodiscard]] rotation::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat);
 
 }  // namespace mat3x3
 
 template<typename T, bool Normalized = false>
-inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
+[[nodiscard]] inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
 {
   rotation::EulerXYZ<T> eul1, eul2;
   if constexpr (Normalized) {
@@ -370,14 +382,14 @@ inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
 }
 
 template<typename T, bool Normalized = false>
-inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 4, 4> &mat)
+[[nodiscard]] inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 4, 4> &mat)
 {
   /* TODO(fclem): Avoid the copy with 3x3 ref. */
   return to_euler<T, Normalized>(mat_base<T, 3, 3>(mat));
 }
 
 template<typename T, bool Normalized = false>
-inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 3, 3> &mat)
+[[nodiscard]] inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 3, 3> &mat)
 {
   using namespace math;
   if constexpr (Normalized) {
@@ -389,14 +401,14 @@ inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 3, 3> &mat)
 }
 
 template<typename T, bool Normalized = false>
-inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 4, 4> &mat)
+[[nodiscard]] inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 4, 4> &mat)
 {
   /* TODO(fclem): Avoid the copy with 3x3 ref. */
   return to_quaternion<T, Normalized>(mat_base<T, 3, 3>(mat));
 }
 
 template<typename T, int NumCol, int NumRow>
-inline vec_base<T, 3> to_scale(const mat_base<T, NumCol, NumRow> &mat)
+[[nodiscard]] inline vec_base<T, 3> to_scale(const mat_base<T, NumCol, NumRow> &mat)
 {
   return {length(mat.x_axis()), length(mat.y_axis()), length(mat.z_axis())};
 }
