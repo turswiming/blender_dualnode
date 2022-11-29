@@ -392,25 +392,47 @@ static void print_resource_alias(std::ostream &os, const ShaderCreateInfo::Resou
   }
 }
 
+enum class StageInterfaceDirection {
+  In,
+  Out,
+};
+
+static inline std::ostream &operator<<(std::ostream &stream,
+                                       const StageInterfaceDirection direction)
+{
+  switch (direction) {
+    case StageInterfaceDirection::In:
+      return stream << "in";
+    case StageInterfaceDirection::Out:
+      return stream << "out";
+  }
+  return stream;
+}
+
+inline int get_location_count(const Type &type)
+{
+  if (type == shader::Type::MAT4) {
+    return 4;
+  }
+  else if (type == shader::Type::MAT3) {
+    return 3;
+  }
+  return 1;
+}
+
 static void print_interface(std::ostream &os,
-                            const StringRefNull &prefix,
+                            const StageInterfaceDirection direction,
                             const StageInterfaceInfo &iface,
                             const StringRefNull &suffix = "")
 {
-  /* TODO(@fclem): Move that to interface check. */
-  // if (iface.instance_name.is_empty()) {
-  //   BLI_assert_msg(0, "Interfaces require an instance name for geometry shader.");
-  //   std::cout << iface.name << ": Interfaces require an instance name for geometry shader.\n";
-  //   continue;
-  // }
-  os << prefix << " " << iface.name << "{" << std::endl;
+  int location = 0;
   for (const StageInterfaceInfo::InOut &inout : iface.inouts) {
-    os << "  " << to_string(inout.interp) << " " << to_string(inout.type) << " " << inout.name
-       << ";\n";
+    os << "layout(location=" << location << ") " << direction << " " << to_string(inout.interp)
+       << " " << to_string(inout.type) << " " << inout.name << ";\n";
+    location += get_location_count(inout.type);
   }
-  os << "}";
-  os << (iface.instance_name.is_empty() ? "" : "\n") << iface.instance_name << suffix << ";\n";
 }
+
 /** \} */
 static std::string main_function_wrapper(std::string &pre_main, std::string &post_main)
 {
@@ -648,6 +670,9 @@ std::string VKShader::resources_declare(const shader::ShaderCreateInfo &info) co
     ss << ";\n";
   }
   ss << "} PushConstants;\n";
+  for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
+    ss << "#define " << uniform.name << " (PushConstants." << uniform.name << ")\n";
+  }
 
   ss << "\n";
   return ss.str();
@@ -663,14 +688,15 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
     ss << "layout(location = " << attr.index << ") ";
     ss << "in " << to_string(attr.type) << " " << attr.name << ";\n";
   }
-  /* NOTE(D4490): Fix a bug where shader without any vertex attributes do not behave correctly. */
+  /* NOTE(D4490): Fix a bug where shader without any vertex attributes do not behave correctly.
+   */
   if (GPU_type_matches_ex(GPU_DEVICE_APPLE, GPU_OS_MAC, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL) &&
       info.vertex_inputs_.is_empty()) {
     ss << "in float gpu_dummy_workaround;\n";
   }
   ss << "\n/* Interfaces. */\n";
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
-    print_interface(ss, "out", *iface);
+    print_interface(ss, StageInterfaceDirection::Out, *iface);
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
     /* Need this for stable barycentric. */
@@ -698,7 +724,7 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
                                                           info.vertex_out_interfaces_ :
                                                           info.geometry_out_interfaces_;
   for (const StageInterfaceInfo *iface : in_interfaces) {
-    print_interface(ss, "in", *iface);
+    print_interface(ss, StageInterfaceDirection::In, *iface);
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
     std::cout << "native" << std::endl;
@@ -758,11 +784,9 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
 
 std::string VKShader::geometry_interface_declare(const shader::ShaderCreateInfo &info) const
 {
-  int max_verts = info.geometry_layout_.max_vertices;
   int invocations = info.geometry_layout_.invocations;
 
   if (invocations != -1) {
-    max_verts *= invocations;
     invocations = -1;
   }
 
@@ -799,14 +823,14 @@ std::string VKShader::geometry_layout_declare(const shader::ShaderCreateInfo &in
     bool has_matching_output_iface = find_interface_by_name(info.geometry_out_interfaces_,
                                                             iface->instance_name) != nullptr;
     const char *suffix = (has_matching_output_iface) ? "_in[]" : "[]";
-    print_interface(ss, "in", *iface, suffix);
+    print_interface(ss, StageInterfaceDirection::In, *iface, suffix);
   }
   ss << "\n";
   for (const StageInterfaceInfo *iface : info.geometry_out_interfaces_) {
     bool has_matching_input_iface = find_interface_by_name(info.vertex_out_interfaces_,
                                                            iface->instance_name) != nullptr;
     const char *suffix = (has_matching_input_iface) ? "_out" : "";
-    print_interface(ss, "out", *iface, suffix);
+    print_interface(ss, StageInterfaceDirection::Out, *iface, suffix);
   }
   ss << "\n";
   return ss.str();
