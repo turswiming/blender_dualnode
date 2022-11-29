@@ -44,13 +44,14 @@ static const char *rna_Mesh_unit_test_compare(struct Mesh *mesh,
 
 static void rna_Mesh_create_normals_split(Mesh *mesh)
 {
-  /* TODO: Proper deprecation. */
+  /* TODO: Deprecation? */
+  BKE_mesh_corner_normals_ensure(mesh);
 }
 
 static void rna_Mesh_free_normals_split(Mesh *mesh)
 {
   /* TODO: Deprecation? */
-  BKE_mesh_clear_derived_normals(mesh);
+  BKE_mesh_normals_tag_dirty(mesh);
 }
 
 static void rna_Mesh_calc_tangents(Mesh *mesh, ReportList *reports, const char *uvmap)

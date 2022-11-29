@@ -1291,7 +1291,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
     const float(*poly_nors_src)[3] = nullptr;
     const float(*loop_nors_src)[3] = nullptr;
     const float(*poly_nors_dst)[3] = nullptr;
-    float(*loop_nors_dst)[3] = nullptr;
+    const float(*loop_nors_dst)[3] = nullptr;
 
     float(*poly_cents_src)[3] = nullptr;
 
