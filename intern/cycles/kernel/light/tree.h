@@ -446,7 +446,7 @@ ccl_device int light_tree_cluster_select_emitter(KernelGlobals kg,
   kernel_assert(knode->num_prims <= sizeof(uint) * 8);
   uint has_importance = 0;
 
-  bool sample_max = (rand > 0.5f); /* sampling using the maximum importance */
+  const bool sample_max = (rand > 0.5f); /* sampling using the maximum importance */
   rand = rand * 2.0f - float(sample_max);
 
   for (int i = 0; i < knode->num_prims; i++) {

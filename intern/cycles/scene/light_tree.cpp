@@ -131,8 +131,8 @@ LightTreePrimitive::LightTreePrimitive(Scene *scene, int prim_id, int object_id)
       /* For an area light, sizeu and sizev determine the 2 dimensions of the area light,
        * while axisu and axisv determine the orientation of the 2 dimensions.
        * We want to add all 4 corners to our bounding box. */
-      const float3 half_extentu = 0.5 * lamp->get_sizeu() * lamp->get_axisu() * size;
-      const float3 half_extentv = 0.5 * lamp->get_sizev() * lamp->get_axisv() * size;
+      const float3 half_extentu = 0.5f * lamp->get_sizeu() * lamp->get_axisu() * size;
+      const float3 half_extentv = 0.5f * lamp->get_sizev() * lamp->get_axisv() * size;
       bbox.grow(centroid + half_extentu + half_extentv);
       bbox.grow(centroid + half_extentu - half_extentv);
       bbox.grow(centroid - half_extentu + half_extentv);
@@ -272,7 +272,7 @@ int LightTree::recursive_build(
       middle = (start + end) / 2;
     }
 
-    int left_index = recursive_build(start, middle, prims, bit_trail, depth + 1);
+    [[maybe_unused]] int left_index = recursive_build(start, middle, prims, bit_trail, depth + 1);
     int right_index = recursive_build(middle, end, prims, bit_trail | (1u << depth), depth + 1);
     assert(left_index == current_index + 1);
     nodes_[current_index].make_interior(right_index);
