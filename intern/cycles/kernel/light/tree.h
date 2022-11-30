@@ -83,14 +83,14 @@ ccl_device void light_tree_importance(const float3 N_or_D,
   min_importance = 0.0f;
 
   const float sin_theta_u = sin_from_cos(cos_theta_u);
+
   /* cos(theta_i') in the paper, omitted for volume */
   float cos_min_incidence_angle = 1.0f;
   float cos_max_incidence_angle = 1.0f;
+
   /* when sampling the light tree for the second time in `shade_volume.h` and when query the pdf in
    * `sample.h` */
   const bool in_volume = is_zero(N_or_D);
-
-  const float cos_theta = dot(bcone.axis, -point_to_centroid);
   if (!in_volume_segment && !in_volume) {
     const float3 N = N_or_D;
     const float cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) :
@@ -102,9 +102,6 @@ ccl_device void light_tree_importance(const float3 N_or_D,
                                   1.0f :
                                   cos_theta_i * cos_theta_u + sin_theta_i * sin_theta_u;
 
-    /* cos_max_incidence_angle = cos(min{theta_i + theta_u, pi}) */
-    cos_max_incidence_angle = fmaxf(cos_theta_i * cos_theta_u - sin_theta_i * sin_theta_u, 0.0f);
-
     /* If the node is guaranteed to be behind the surface we're sampling, and the surface is
      * opaque, then we can give the node an importance of 0 as it contributes nothing to the
      * surface. This is more accurate than the bbox test if we are calculating the importance of
@@ -112,18 +109,22 @@ ccl_device void light_tree_importance(const float3 N_or_D,
     if (!has_transmission && cos_min_incidence_angle < 0) {
       return;
     }
+
+    /* cos_max_incidence_angle = cos(min{theta_i + theta_u, pi}) */
+    cos_max_incidence_angle = fmaxf(cos_theta_i * cos_theta_u - sin_theta_i * sin_theta_u, 0.0f);
   }
 
-  /* minimum angle an emitter’s axis would form with the direction to the shading point,
-   * cos(theta') in the paper */
-  float cos_min_outgoing_angle;
   /* cos(theta - theta_u) */
+  const float cos_theta = dot(bcone.axis, -point_to_centroid);
   const float sin_theta = sin_from_cos(cos_theta);
   const float cos_theta_minus_theta_u = cos_theta * cos_theta_u + sin_theta * sin_theta_u;
 
   float cos_theta_o, sin_theta_o;
   fast_sincosf(bcone.theta_o, &sin_theta_o, &cos_theta_o);
 
+  /* minimum angle an emitter’s axis would form with the direction to the shading point,
+   * cos(theta') in the paper */
+  float cos_min_outgoing_angle;
   if ((cos_theta > cos_theta_u) || (cos_theta_minus_theta_u > cos_theta_o)) {
     /* theta - theta_o - theta_u < 0 */
     kernel_assert((fast_acosf(cos_theta) - bcone.theta_o - fast_acosf(cos_theta_u)) < 5e-4f);
