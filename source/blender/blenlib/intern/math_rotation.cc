@@ -28,9 +28,10 @@ namespace blender::rotation {
 
 template<typename T> Quaternion<T>::operator EulerXYZ<T>()
 {
+  using Mat3T = mat_base<T, 3, 3>;
   const Quaternion<T> &quat = *this;
   BLI_ASSERT_UNIT_QUATERNION(quat)
-  mat_base<T, 3, 3> unit_mat = math::mat3x3::from_rotation(quat);
+  Mat3T unit_mat = math::from_rotation<Mat3T>(quat);
   return math::to_euler<T, true>(unit_mat);
 }
 

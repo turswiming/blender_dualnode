@@ -144,125 +144,86 @@ template<typename T, int NumCol, int NumRow>
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name 3x3 init helpers.
+/** \name Init helpers.
  * \{ */
 
-namespace mat3x3 {
+/* Implementation details. */
+namespace detail {
 
-template<typename T> [[nodiscard]] mat_base<T, 3, 3> from_scale(const vec_base<T, 3> &scale)
+template<typename T, int NumCol, int NumRow>
+[[nodiscard]] mat_base<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation);
+
+template<typename T, int NumCol, int NumRow>
+[[nodiscard]] mat_base<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation);
+
+template<typename T, int NumCol, int NumRow>
+[[nodiscard]] mat_base<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation);
+
+}  // namespace detail
+
+template<typename MatT>
+[[nodiscard]] MatT from_location(const vec_base<typename MatT::base_type, 3> &location)
 {
-  mat_base<T, 3, 3> result(0);
-  unroll<mat_base<T, 3, 3>::min_dim>([&](auto i) { result[i][i] = scale[i]; });
+  MatT mat = MatT::identity();
+  mat.location() = location;
+  return mat;
+}
+
+/**
+ * Create a matrix whose diagonal is defined by the given scale vector.
+ * If vector dimension is lower than matrix diagonal, the missing terms are filled with ones.
+ */
+template<typename MatT, int ScaleDim>
+[[nodiscard]] MatT from_scale(const vec_base<typename MatT::base_type, ScaleDim> &scale)
+{
+  BLI_STATIC_ASSERT(ScaleDim <= MatT::min_dim,
+                    "Scale dimension should fit the matrix diagonal length.");
+  MatT result(0);
+  unroll<MatT::min_dim>(
+      [&](auto i) { result[i][i] = (i < ScaleDim) ? scale[i] : typename MatT::base_type(1); });
   return result;
 }
 
-template<typename T>
-[[nodiscard]] mat_base<T, 3, 3> from_rotation(const rotation::EulerXYZ<T> &rotation)
+template<typename MatT, typename RotationT>
+[[nodiscard]] MatT from_rotation(const RotationT &rotation)
 {
-  using IntermediateType = typename rotation::TypeTraits<T>::IntermediateType;
-  IntermediateType ci = math::cos(rotation[0]);
-  IntermediateType cj = math::cos(rotation[1]);
-  IntermediateType ch = math::cos(rotation[2]);
-  IntermediateType si = math::sin(rotation[0]);
-  IntermediateType sj = math::sin(rotation[1]);
-  IntermediateType sh = math::sin(rotation[2]);
-  IntermediateType cc = ci * ch;
-  IntermediateType cs = ci * sh;
-  IntermediateType sc = si * ch;
-  IntermediateType ss = si * sh;
+  return detail::from_rotation<typename MatT::base_type, MatT::col_len, MatT::row_len>(rotation);
+}
 
-  mat_base<T, 3, 3> mat;
-  mat[0][0] = T(cj * ch);
-  mat[1][0] = T(sj * sc - cs);
-  mat[2][0] = T(sj * cc + ss);
+template<typename MatT, typename RotationT, typename VectorT>
+[[nodiscard]] MatT from_rot_scale(const RotationT &rotation, const VectorT &scale)
+{
+  return from_rotation<MatT>(rotation) * from_scale<MatT>(scale);
+}
 
-  mat[0][1] = T(cj * sh);
-  mat[1][1] = T(sj * ss + cc);
-  mat[2][1] = T(sj * cs - sc);
-
-  mat[0][2] = T(-sj);
-  mat[1][2] = T(cj * si);
-  mat[2][2] = T(cj * ci);
+template<typename MatT, typename RotationT, int ScaleDim>
+[[nodiscard]] MatT from_loc_rot_scale(const vec_base<typename MatT::base_type, 3> &location,
+                                      const RotationT &rotation,
+                                      const vec_base<typename MatT::base_type, ScaleDim> &scale)
+{
+  using Mat3x3 = mat_base<typename MatT::base_type, 3, 3>;
+  MatT mat = MatT(from_rot_scale<Mat3x3>(rotation, scale));
+  mat.location() = location;
   return mat;
 }
 
-template<typename T>
-[[nodiscard]] mat_base<T, 3, 3> from_rotation(const rotation::Quaternion<T> &rotation)
+template<typename MatT, typename RotationT>
+[[nodiscard]] MatT from_loc_rot(const vec_base<typename MatT::base_type, 3> &location,
+                                const RotationT &rotation)
 {
-  using IntermediateType = typename rotation::TypeTraits<T>::IntermediateType;
-  IntermediateType q0 = M_SQRT2 * IntermediateType(rotation[0]);
-  IntermediateType q1 = M_SQRT2 * IntermediateType(rotation[1]);
-  IntermediateType q2 = M_SQRT2 * IntermediateType(rotation[2]);
-  IntermediateType q3 = M_SQRT2 * IntermediateType(rotation[3]);
-
-  IntermediateType qda = q0 * q1;
-  IntermediateType qdb = q0 * q2;
-  IntermediateType qdc = q0 * q3;
-  IntermediateType qaa = q1 * q1;
-  IntermediateType qab = q1 * q2;
-  IntermediateType qac = q1 * q3;
-  IntermediateType qbb = q2 * q2;
-  IntermediateType qbc = q2 * q3;
-  IntermediateType qcc = q3 * q3;
-
-  mat_base<T, 3, 3> mat;
-  mat[0][0] = T(1.0 - qbb - qcc);
-  mat[0][1] = T(qdc + qab);
-  mat[0][2] = T(-qdb + qac);
-
-  mat[1][0] = T(-qdc + qab);
-  mat[1][1] = T(1.0 - qaa - qcc);
-  mat[1][2] = T(qda + qbc);
-
-  mat[2][0] = T(qdb + qac);
-  mat[2][1] = T(-qda + qbc);
-  mat[2][2] = T(1.0 - qaa - qbb);
+  using Mat3x3 = mat_base<typename MatT::base_type, 3, 3>;
+  MatT mat = MatT(from_rotation<Mat3x3>(rotation));
+  mat.location() = location;
   return mat;
 }
 
-template<typename T>
-[[nodiscard]] mat_base<T, 3, 3> from_rotation(const rotation::AxisAngle<T> &rotation)
-{
-  const T angle_sin = math::sin(rotation.angle);
-  const T angle_cos = math::cos(rotation.angle);
-
-  BLI_assert(is_unit_scale(rotation.axis));
-
-  const vec_base<T, 3> &axis = rotation.axis;
-
-  T ico = (T(1) - angle_cos);
-  vec_base<T, 3> nsi = axis * angle_sin;
-
-  vec_base<T, 3> n012 = (axis * axis) * ico;
-  T n_01 = (axis[0] * axis[1]) * ico;
-  T n_02 = (axis[0] * axis[2]) * ico;
-  T n_12 = (axis[1] * axis[2]) * ico;
-
-  mat_base<T, 3, 3> mat = mat3x3::from_scale(n012 + angle_cos);
-  mat[0][1] = n_01 + nsi[2];
-  mat[0][2] = n_02 - nsi[1];
-  mat[1][0] = n_01 - nsi[2];
-  mat[1][2] = n_12 + nsi[0];
-  mat[2][0] = n_02 + nsi[1];
-  mat[2][1] = n_12 - nsi[0];
-  return mat;
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 3, 3> from_rot_scale(const rotation::EulerXYZ<T> &rotation,
-                                               const vec_base<T, 3> &scale)
-{
-  return mat3x3::from_rotation(rotation) * mat3x3::from_scale(scale);
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 3, 3> from_normalized_axis_data(const vec_base<T, 3> forward,
-                                                          const vec_base<T, 3> up)
+template<typename MatT, typename VectorT>
+[[nodiscard]] MatT from_normalized_axis_data(const VectorT forward, const VectorT up)
 {
   BLI_ASSERT_UNIT_V3(forward);
   BLI_ASSERT_UNIT_V3(up);
 
-  mat_base<T, 3, 3> matrix;
+  MatT matrix;
   matrix.forward() = forward;
   /* Negate the cross product so that the resulting matrix has determinant 1 (instead of -1).
    * Without the negation, the result would be a so called improper rotation. That means it
@@ -273,80 +234,16 @@ template<typename T>
   return matrix;
 }
 
-}  // namespace mat3x3
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name 4x4 init helpers.
- * \{ */
-
-namespace mat4x4 {
-
-template<typename T> [[nodiscard]] mat_base<T, 4, 4> from_location(const vec_base<T, 3> location)
+template<typename MatT, typename VectorT>
+[[nodiscard]] MatT from_normalized_axis_data(const VectorT location,
+                                             const VectorT forward,
+                                             const VectorT up)
 {
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>::identity();
-  mat.location() = location;
-  return mat;
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> from_rotation(const rotation::EulerXYZ<T> rotation)
-{
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
-  return mat;
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> from_rotation(const rotation::Quaternion<T> rotation)
-{
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
-  return mat;
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> from_rotation(const rotation::AxisAngle<T> rotation)
-{
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
-  return mat;
-}
-
-template<typename T> [[nodiscard]] mat_base<T, 4, 4> from_scale(const vec_base<T, 3> scale)
-{
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_scale(scale));
-  return mat;
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> from_loc_rot(const vec_base<T, 3> location,
-                                             const rotation::EulerXYZ<T> rotation)
-{
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rotation(rotation));
-  mat.location() = location;
-  return mat;
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> from_loc_rot_scale(const vec_base<T, 3> location,
-                                                   const rotation::EulerXYZ<T> rotation,
-                                                   const vec_base<T, 3> scale)
-{
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>(mat3x3::from_rot_scale(rotation, scale));
-  mat.location() = location;
-  return mat;
-}
-
-template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> from_normalized_axis_data(const vec_base<T, 3> location,
-                                                          const vec_base<T, 3> forward,
-                                                          const vec_base<T, 3> up)
-{
-  mat_base<T, 4, 4> matrix = mat_base<T, 4, 4>(mat3x3::from_normalized_axis_data(forward, up));
+  using Mat3x3 = mat_base<typename MatT::base_type, 3, 3>;
+  MatT matrix = MatT(from_normalized_axis_data<Mat3x3>(forward, up));
   matrix.location() = location;
   return matrix;
 }
-
-}  // namespace mat4x4
 
 /** \} */
 
@@ -358,19 +255,17 @@ template<typename T>
 namespace detail {
 
 template<typename T>
-void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
-                        rotation::EulerXYZ<T> &eul1,
-                        rotation::EulerXYZ<T> &eul2);
+void normalized_to_eul2(const mat_base<T, 3, 3> &mat, EulerXYZ<T> &eul1, EulerXYZ<T> &eul2);
 
 template<typename T>
-[[nodiscard]] rotation::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat);
+[[nodiscard]] Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat);
 
 }  // namespace detail
 
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
+[[nodiscard]] inline EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
 {
-  rotation::EulerXYZ<T> eul1, eul2;
+  EulerXYZ<T> eul1, eul2;
   if constexpr (Normalized) {
     detail::normalized_to_eul2(mat, eul1, eul2);
   }

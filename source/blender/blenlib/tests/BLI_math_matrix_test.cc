@@ -138,7 +138,7 @@ TEST(math_matrix, MatrixInit)
 {
   float4x4 expect;
 
-  float4x4 m = mat4x4::from_location<float>({1, 2, 3});
+  float4x4 m = from_location<float4x4>({1, 2, 3});
   expect = float4x4({1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {1, 2, 3, 1});
   EXPECT_TRUE(compare(m, expect, 0.00001f));
 
@@ -149,25 +149,33 @@ TEST(math_matrix, MatrixInit)
   EulerXYZ euler({1, 2, 3});
   Quaternion quat(euler);
   AxisAngle axis_angle(euler);
-  m = mat4x4::from_rotation(euler);
+  m = from_rotation<float4x4>(euler);
   EXPECT_M3_NEAR(m, expect, 1e-5);
-  m = mat4x4::from_rotation(quat);
+  m = from_rotation<float4x4>(quat);
   EXPECT_M3_NEAR(m, expect, 1e-5);
-  m = mat4x4::from_rotation(axis_angle);
+  m = from_rotation<float4x4>(axis_angle);
   EXPECT_M3_NEAR(m, expect, 1e-5);
 
-  m = mat4x4::from_scale<float>({1, 2, 3});
+  m = from_scale<float4x4>(float4(1, 2, 3, 4));
+  expect = float4x4({1, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, 4});
+  EXPECT_TRUE(compare(m, expect, 0.00001f));
+
+  m = from_scale<float4x4>(float3(1, 2, 3));
   expect = float4x4({1, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 3, 0}, {0, 0, 0, 1});
   EXPECT_TRUE(compare(m, expect, 0.00001f));
 
-  m = mat4x4::from_loc_rot<float>({1, 2, 3}, {1, 2, 3});
+  m = from_scale<float4x4>(float2(1, 2));
+  expect = float4x4({1, 0, 0, 0}, {0, 2, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1});
+  EXPECT_TRUE(compare(m, expect, 0.00001f));
+
+  m = from_loc_rot<float4x4>({1, 2, 3}, EulerXYZ{1, 2, 3});
   expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
                     {-0.833738, -0.426918, -0.350175, 0},
                     {-0.36763, 0.902382, -0.224845, 0},
                     {1, 2, 3, 1});
   EXPECT_TRUE(compare(m, expect, 0.00001f));
 
-  m = mat4x4::from_loc_rot_scale<float>({1, 2, 3}, {1, 2, 3}, {1, 2, 3});
+  m = from_loc_rot_scale<float4x4>({1, 2, 3}, EulerXYZ{1, 2, 3}, float3{1, 2, 3});
   expect = float4x4({0.411982, -0.0587266, -0.909297, 0},
                     {-1.66748, -0.853835, -0.700351, 0},
                     {-1.10289, 2.70714, -0.674535, 0},
@@ -272,8 +280,8 @@ TEST(math_matrix, MatrixTransform)
 {
   float3 expect, result;
   const float3 p(1, 2, 3);
-  float4x4 m4 = mat4x4::from_loc_rot({10, 0, 0}, EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
-  float3x3 m3 = mat3x3::from_rotation(EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
+  float4x4 m4 = from_loc_rot<float4x4>({10, 0, 0}, EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
+  float3x3 m3 = from_rotation<float3x3>(EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
 
   expect = {13, 2, -1};
   result = transform_point(m4, p);

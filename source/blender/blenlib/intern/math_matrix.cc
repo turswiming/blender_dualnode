@@ -189,7 +189,7 @@ static void polar_decompose(const mat_base<T, 3, 3> &mat3,
     (Map<MatrixT>(V)) = svd.matrixV();
   }
 
-  mat_base<T, 3, 3> S = mat3x3::from_scale(S_val);
+  mat_base<T, 3, 3> S = from_scale<mat_base<T, 3, 3>>(S_val);
   mat_base<T, 3, 3> Vt = transpose(V);
 
   r_U = W * Vt;
@@ -213,8 +213,8 @@ mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3
    * linearly interpolated. */
   mat_base<T, 3, 3> P_A, P_B;
 
-  math::polar_decompose(A, U_A, P_A);
-  math::polar_decompose(B, U_B, P_B);
+  polar_decompose(A, U_A, P_A);
+  polar_decompose(B, U_B, P_B);
 
   /* Quaternions cannot represent an axis flip. If such a singularity is detected, choose a
    * different decomposition of the matrix that still satisfies A = U_A * P_A but which has a
@@ -236,8 +236,9 @@ mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3
   rotation::Quaternion<T> quat_B = to_quaternion(U_B);
   rotation::Quaternion<T> quat = math::interpolate(quat_A, quat_B, t);
   mat_base<T, 3, 3> U = mat3x3::from_rotation(quat);
+  mat_base<T, 3, 3> U = from_rotation<mat_base<T, 3, 3>>(quat);
 
-  mat_base<T, 3, 3> P = math::interpolate_linear(P_A, P_B, t);
+  mat_base<T, 3, 3> P = interpolate_linear(P_A, P_B, t);
   /* And we reconstruct rot/scale matrix from interpolated polar components */
   return U * P;
 }
@@ -405,8 +406,121 @@ rotation::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &
   return normalized_to_quat_fast(mat);
 }
 
-template rotation::Quaternion<float> normalized_to_quat_with_checks(const float3x3 &mat);
-template rotation::Quaternion<double> normalized_to_quat_with_checks(const double3x3 &mat);
+template Quaternion<float> normalized_to_quat_with_checks(const float3x3 &mat);
+template Quaternion<double> normalized_to_quat_with_checks(const double3x3 &mat);
+
+}  // namespace detail
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Init Helpers.
+ * \{ */
+
+namespace detail {
+
+template<typename T, int NumCol, int NumRow>
+mat_base<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
+{
+  using MatT = mat_base<T, NumCol, NumRow>;
+  using IntermediateType = typename TypeTraits<T>::IntermediateType;
+  IntermediateType ci = math::cos(rotation[0]);
+  IntermediateType cj = math::cos(rotation[1]);
+  IntermediateType ch = math::cos(rotation[2]);
+  IntermediateType si = math::sin(rotation[0]);
+  IntermediateType sj = math::sin(rotation[1]);
+  IntermediateType sh = math::sin(rotation[2]);
+  IntermediateType cc = ci * ch;
+  IntermediateType cs = ci * sh;
+  IntermediateType sc = si * ch;
+  IntermediateType ss = si * sh;
+
+  MatT mat;
+  mat[0][0] = T(cj * ch);
+  mat[1][0] = T(sj * sc - cs);
+  mat[2][0] = T(sj * cc + ss);
+
+  mat[0][1] = T(cj * sh);
+  mat[1][1] = T(sj * ss + cc);
+  mat[2][1] = T(sj * cs - sc);
+
+  mat[0][2] = T(-sj);
+  mat[1][2] = T(cj * si);
+  mat[2][2] = T(cj * ci);
+  return mat;
+}
+
+template<typename T, int NumCol, int NumRow>
+mat_base<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation)
+{
+  using MatT = mat_base<T, NumCol, NumRow>;
+  using IntermediateType = typename TypeTraits<T>::IntermediateType;
+  IntermediateType q0 = M_SQRT2 * IntermediateType(rotation[0]);
+  IntermediateType q1 = M_SQRT2 * IntermediateType(rotation[1]);
+  IntermediateType q2 = M_SQRT2 * IntermediateType(rotation[2]);
+  IntermediateType q3 = M_SQRT2 * IntermediateType(rotation[3]);
+
+  IntermediateType qda = q0 * q1;
+  IntermediateType qdb = q0 * q2;
+  IntermediateType qdc = q0 * q3;
+  IntermediateType qaa = q1 * q1;
+  IntermediateType qab = q1 * q2;
+  IntermediateType qac = q1 * q3;
+  IntermediateType qbb = q2 * q2;
+  IntermediateType qbc = q2 * q3;
+  IntermediateType qcc = q3 * q3;
+
+  MatT mat;
+  mat[0][0] = T(1.0 - qbb - qcc);
+  mat[0][1] = T(qdc + qab);
+  mat[0][2] = T(-qdb + qac);
+
+  mat[1][0] = T(-qdc + qab);
+  mat[1][1] = T(1.0 - qaa - qcc);
+  mat[1][2] = T(qda + qbc);
+
+  mat[2][0] = T(qdb + qac);
+  mat[2][1] = T(-qda + qbc);
+  mat[2][2] = T(1.0 - qaa - qbb);
+  return mat;
+}
+
+template<typename T, int NumCol, int NumRow>
+mat_base<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation)
+{
+  using MatT = mat_base<T, NumCol, NumRow>;
+  using Vec3T = typename MatT::vec3_type;
+  const T angle_sin = math::sin(rotation.angle);
+  const T angle_cos = math::cos(rotation.angle);
+
+  BLI_assert(is_unit_scale(rotation.axis));
+
+  const Vec3T &axis = rotation.axis;
+
+  T ico = (T(1) - angle_cos);
+  Vec3T nsi = axis * angle_sin;
+
+  Vec3T n012 = (axis * axis) * ico;
+  T n_01 = (axis[0] * axis[1]) * ico;
+  T n_02 = (axis[0] * axis[2]) * ico;
+  T n_12 = (axis[1] * axis[2]) * ico;
+
+  MatT mat = from_scale<MatT>(n012 + angle_cos);
+  mat[0][1] = n_01 + nsi[2];
+  mat[0][2] = n_02 - nsi[1];
+  mat[1][0] = n_01 - nsi[2];
+  mat[1][2] = n_12 + nsi[0];
+  mat[2][0] = n_02 + nsi[1];
+  mat[2][1] = n_12 - nsi[0];
+  return mat;
+}
+
+template mat_base<float, 3, 3> from_rotation(const EulerXYZ<float> &rotation);
+template mat_base<float, 4, 4> from_rotation(const EulerXYZ<float> &rotation);
+template mat_base<float, 3, 3> from_rotation(const Quaternion<float> &rotation);
+template mat_base<float, 4, 4> from_rotation(const Quaternion<float> &rotation);
+template mat_base<float, 3, 3> from_rotation(const AxisAngle<float> &rotation);
+template mat_base<float, 4, 4> from_rotation(const AxisAngle<float> &rotation);
 
 }  // namespace detail
 
