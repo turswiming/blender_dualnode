@@ -21,7 +21,7 @@
 namespace blender {
 
 template<typename T, int NumCol, int NumRow>
-struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
+struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   using base_type = T;
   using vec3_type = vec_base<T, 3>;

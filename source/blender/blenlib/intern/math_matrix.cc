@@ -54,10 +54,10 @@ template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
 {
   float4x4 result;
 
-  __m128 A0 = _mm_loadu_ps(a[0]);
-  __m128 A1 = _mm_loadu_ps(a[1]);
-  __m128 A2 = _mm_loadu_ps(a[2]);
-  __m128 A3 = _mm_loadu_ps(a[3]);
+  __m128 A0 = _mm_load_ps(a[0]);
+  __m128 A1 = _mm_load_ps(a[1]);
+  __m128 A2 = _mm_load_ps(a[2]);
+  __m128 A3 = _mm_load_ps(a[3]);
 
   for (int i = 0; i < 4; i++) {
     __m128 B0 = _mm_set1_ps(b[i][0]);
@@ -68,7 +68,7 @@ template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
     __m128 sum = _mm_add_ps(_mm_add_ps(_mm_mul_ps(B0, A0), _mm_mul_ps(B1, A1)),
                             _mm_add_ps(_mm_mul_ps(B2, A2), _mm_mul_ps(B3, A3)));
 
-    _mm_storeu_ps(result[i], sum);
+    _mm_store_ps(result[i], sum);
   }
   return result;
 }
