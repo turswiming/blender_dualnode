@@ -67,17 +67,17 @@ ccl_device float3 compute_v(
 /* This is the general function for calculating the importance of either a cluster or an emitter.
  * Both of the specialized functions obtain the necessary data before calling this function. */
 template<bool in_volume_segment>
-ccl_device void light_tree_cluster_importance(const float3 N_or_D,
-                                              const bool has_transmission,
-                                              const float3 point_to_centroid,
-                                              const float cos_theta_u,
-                                              const BoundingCone bcone,
-                                              const float max_distance,
-                                              const float min_distance,
-                                              const float t,
-                                              const float energy,
-                                              ccl_private float &max_importance,
-                                              ccl_private float &min_importance)
+ccl_device void light_tree_importance(const float3 N_or_D,
+                                      const bool has_transmission,
+                                      const float3 point_to_centroid,
+                                      const float cos_theta_u,
+                                      const BoundingCone bcone,
+                                      const float max_distance,
+                                      const float min_distance,
+                                      const float t,
+                                      const float energy,
+                                      ccl_private float &max_importance,
+                                      ccl_private float &min_importance)
 {
   max_importance = 0.0f;
   min_importance = 0.0f;
@@ -309,17 +309,17 @@ ccl_device void light_tree_emitter_importance(KernelGlobals kg,
     return;
   }
 
-  light_tree_cluster_importance<in_volume_segment>(N_or_D,
-                                                   has_transmission,
-                                                   point_to_centroid,
-                                                   cos_theta_u,
-                                                   bcone,
-                                                   distance.x,
-                                                   distance.y,
-                                                   t,
-                                                   kemitter->energy,
-                                                   max_importance,
-                                                   min_importance);
+  light_tree_importance<in_volume_segment>(N_or_D,
+                                           has_transmission,
+                                           point_to_centroid,
+                                           cos_theta_u,
+                                           bcone,
+                                           distance.x,
+                                           distance.y,
+                                           t,
+                                           kemitter->energy,
+                                           max_importance,
+                                           min_importance);
 }
 
 template<bool in_volume_segment>
@@ -387,17 +387,17 @@ ccl_device void light_tree_node_importance(KernelGlobals kg,
     }
     /* TODO: currently max_distance = min_distance, max_importance = min_importance for the
      * nodes. Do we need better weights for complex scenes? */
-    light_tree_cluster_importance<in_volume_segment>(N_or_D,
-                                                     has_transmission,
-                                                     point_to_centroid,
-                                                     cos_theta_u,
-                                                     bcone,
-                                                     distance,
-                                                     distance,
-                                                     t,
-                                                     knode->energy,
-                                                     max_importance,
-                                                     min_importance);
+    light_tree_importance<in_volume_segment>(N_or_D,
+                                             has_transmission,
+                                             point_to_centroid,
+                                             cos_theta_u,
+                                             bcone,
+                                             distance,
+                                             distance,
+                                             t,
+                                             knode->energy,
+                                             max_importance,
+                                             min_importance);
   }
 }
 
