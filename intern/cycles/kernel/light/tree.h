@@ -83,7 +83,6 @@ ccl_device void light_tree_importance(const float3 N_or_D,
   min_importance = 0.0f;
 
   const float sin_theta_u = sin_from_cos(cos_theta_u);
-  float cos_theta, cos_theta_i, sin_theta_i;
   /* cos(theta_i') in the paper, omitted for volume */
   float cos_min_incidence_angle = 1.0f;
   float cos_max_incidence_angle = 1.0f;
@@ -91,11 +90,12 @@ ccl_device void light_tree_importance(const float3 N_or_D,
    * `sample.h` */
   const bool in_volume = is_zero(N_or_D);
 
-  cos_theta = dot(bcone.axis, -point_to_centroid);
+  const float cos_theta = dot(bcone.axis, -point_to_centroid);
   if (!in_volume_segment && !in_volume) {
     const float3 N = N_or_D;
-    cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) : dot(point_to_centroid, N);
-    sin_theta_i = sin_from_cos(cos_theta_i);
+    const float cos_theta_i = has_transmission ? fabsf(dot(point_to_centroid, N)) :
+                                                 dot(point_to_centroid, N);
+    const float sin_theta_i = sin_from_cos(cos_theta_i);
 
     /* cos_min_incidence_angle = cos(max{theta_i - theta_u, 0}) = cos(theta_i') in the paper */
     cos_min_incidence_angle = cos_theta_i >= cos_theta_u ?
