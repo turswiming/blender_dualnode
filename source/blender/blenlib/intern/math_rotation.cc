@@ -15,7 +15,7 @@ namespace blender::math::detail {
 #ifdef DEBUG
 #  define BLI_ASSERT_UNIT_QUATERNION(_q) \
     { \
-      auto &rot_vec = static_cast<const vec_base<T, 4>>(_q); \
+      auto rot_vec = static_cast<vec_base<T, 4>>(_q); \
       T quat_length = math::length_squared(rot_vec); \
       if (!(quat_length == 0 || (math::abs(quat_length - 1) < 0.0001))) { \
         std::cout << "Warning! " << __func__ << " called with non-normalized quaternion: size " \
@@ -26,7 +26,7 @@ namespace blender::math::detail {
 #  define BLI_ASSERT_UNIT_QUATERNION(_q)
 #endif
 
-template<typename T> Quaternion<T>::operator EulerXYZ<T>()
+template<typename T> Quaternion<T>::operator EulerXYZ<T>() const
 {
   using Mat3T = mat_base<T, 3, 3>;
   const Quaternion<T> &quat = *this;
@@ -35,12 +35,12 @@ template<typename T> Quaternion<T>::operator EulerXYZ<T>()
   return math::to_euler<T, true>(unit_mat);
 }
 
-template<typename T> EulerXYZ<T>::operator Quaternion<T>()
+template<typename T> EulerXYZ<T>::operator Quaternion<T>() const
 {
   const EulerXYZ<T> &eul = *this;
-  const T ti = eul[0] * T(0.5);
-  const T tj = eul[1] * T(0.5);
-  const T th = eul[2] * T(0.5);
+  const T ti = eul.x * T(0.5);
+  const T tj = eul.y * T(0.5);
+  const T th = eul.z * T(0.5);
   const T ci = math::cos(ti);
   const T cj = math::cos(tj);
   const T ch = math::cos(th);
@@ -53,38 +53,37 @@ template<typename T> EulerXYZ<T>::operator Quaternion<T>()
   const T ss = si * sh;
 
   Quaternion<T> quat;
-  quat[0] = cj * cc + sj * ss;
-  quat[1] = cj * sc - sj * cs;
-  quat[2] = cj * ss + sj * cc;
-  quat[3] = cj * cs - sj * sc;
+  quat.x = cj * cc + sj * ss;
+  quat.y = cj * sc - sj * cs;
+  quat.z = cj * ss + sj * cc;
+  quat.w = cj * cs - sj * sc;
   return quat;
 }
 
-template<typename T> Quaternion<T>::operator AxisAngle<T>()
+template<typename T> Quaternion<T>::operator AxisAngle<T>() const
 {
   const Quaternion<T> &quat = *this;
   BLI_ASSERT_UNIT_QUATERNION(quat)
 
   /* Calculate angle/2, and sin(angle/2). */
-  float ha = math::acos(quat[0]);
-  float si = math::sin(ha);
+  T ha = math::acos(quat.x);
+  T si = math::sin(ha);
 
-  AxisAngle<T> rot;
   /* From half-angle to angle. */
-  rot.angle = ha * 2;
+  T angle = ha * 2;
   /* Prevent division by zero for axis conversion. */
   if (math::abs(si) < 0.0005) {
     si = 1.0f;
   }
 
-  rot.axis = vec_base<T, 3>(quat[1], quat[2], quat[3]) / si;
-  if (math::is_zero(rot.axis)) {
-    rot.axis[1] = 1.0f;
+  vec_base<T, 3> axis = vec_base<T, 3>(quat.y, quat.z, quat.w) / si;
+  if (math::is_zero(axis)) {
+    axis[1] = 1.0f;
   }
-  return rot;
+  return AxisAngleNormalized<T>(axis, angle);
 }
 
-template<typename T> AxisAngle<T>::operator Quaternion<T>()
+template<typename T> AxisAngle<T>::operator Quaternion<T>() const
 {
   const AxisAngle<T> &rot = *this;
   BLI_assert(math::is_unit_scale(rot.axis));
@@ -93,40 +92,40 @@ template<typename T> AxisAngle<T>::operator Quaternion<T>()
   const T sine = math::sin(phi);
 
   Quaternion<T> quat;
-  quat[0] = cosine;
-  quat[1] = axis[0] * sine;
-  quat[2] = axis[1] * sine;
-  quat[3] = axis[2] * sine;
+  quat.x = cosine;
+  quat.y = axis[0] * sine;
+  quat.z = axis[1] * sine;
+  quat.w = axis[2] * sine;
   return quat;
 }
 
-template<typename T> EulerXYZ<T>::operator AxisAngle<T>()
+template<typename T> EulerXYZ<T>::operator AxisAngle<T>() const
 {
   /* Use quaternions as intermediate representation for now... */
   return AxisAngle<T>(Quaternion<T>(*this));
 }
 
-template<typename T> AxisAngle<T>::operator EulerXYZ<T>()
+template<typename T> AxisAngle<T>::operator EulerXYZ<T>() const
 {
   /* Use quaternions as intermediate representation for now... */
   return EulerXYZ<T>(Quaternion<T>(*this));
 }
 
-template Quaternion<float>::operator EulerXYZ<float>();
-template EulerXYZ<float>::operator Quaternion<float>();
-template Quaternion<float>::operator AxisAngle<float>();
-template AxisAngle<float>::operator Quaternion<float>();
-template EulerXYZ<float>::operator AxisAngle<float>();
-template AxisAngle<float>::operator EulerXYZ<float>();
+template AxisAngle<float>::operator EulerXYZ<float>() const;
+template AxisAngle<float>::operator Quaternion<float>() const;
+template EulerXYZ<float>::operator AxisAngle<float>() const;
+template EulerXYZ<float>::operator Quaternion<float>() const;
+template Quaternion<float>::operator AxisAngle<float>() const;
+template Quaternion<float>::operator EulerXYZ<float>() const;
 
-template Quaternion<double>::operator EulerXYZ<double>();
-template EulerXYZ<double>::operator Quaternion<double>();
-template Quaternion<double>::operator AxisAngle<double>();
-template AxisAngle<double>::operator Quaternion<double>();
-template EulerXYZ<double>::operator AxisAngle<double>();
-template AxisAngle<double>::operator EulerXYZ<double>();
+template AxisAngle<double>::operator EulerXYZ<double>() const;
+template AxisAngle<double>::operator Quaternion<double>() const;
+template EulerXYZ<double>::operator AxisAngle<double>() const;
+template EulerXYZ<double>::operator Quaternion<double>() const;
+template Quaternion<double>::operator AxisAngle<double>() const;
+template Quaternion<double>::operator EulerXYZ<double>() const;
 
-}  // namespace blender::rotation
+}  // namespace blender::math::detail
 
 namespace blender::math {
 

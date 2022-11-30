@@ -280,18 +280,18 @@ void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
 
   const float cy = std::hypot(mat[0][0], mat[0][1]);
   if (cy > 16.0f * FLT_EPSILON) {
-    eul1[0] = std::atan2(mat[1][2], mat[2][2]);
-    eul1[1] = std::atan2(-mat[0][2], cy);
-    eul1[2] = std::atan2(mat[0][1], mat[0][0]);
+    eul1.x = std::atan2(mat[1][2], mat[2][2]);
+    eul1.y = std::atan2(-mat[0][2], cy);
+    eul1.z = std::atan2(mat[0][1], mat[0][0]);
 
-    eul2[0] = std::atan2(-mat[1][2], -mat[2][2]);
-    eul2[1] = std::atan2(-mat[0][2], -cy);
-    eul2[2] = std::atan2(-mat[0][1], -mat[0][0]);
+    eul2.x = std::atan2(-mat[1][2], -mat[2][2]);
+    eul2.y = std::atan2(-mat[0][2], -cy);
+    eul2.z = std::atan2(-mat[0][1], -mat[0][0]);
   }
   else {
-    eul1[0] = std::atan2(-mat[2][1], mat[1][1]);
-    eul1[1] = std::atan2(-mat[0][2], cy);
-    eul1[2] = 0.0f;
+    eul1.x = std::atan2(-mat[2][1], mat[1][1]);
+    eul1.y = std::atan2(-mat[0][2], cy);
+    eul1.z = 0.0f;
 
     eul2 = eul1;
   }
@@ -324,14 +324,14 @@ template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const mat_bas
         /* Ensure W is non-negative for a canonical result. */
         s = -s;
       }
-      q[1] = 0.25f * s;
+      q.y = 0.25f * s;
       s = 1.0f / s;
-      q[0] = (mat[1][2] - mat[2][1]) * s;
-      q[2] = (mat[0][1] + mat[1][0]) * s;
-      q[3] = (mat[2][0] + mat[0][2]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+      q.x = (mat[1][2] - mat[2][1]) * s;
+      q.z = (mat[0][1] + mat[1][0]) * s;
+      q.w = (mat[2][0] + mat[0][2]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q.x == 0.0f && q.z == 0.0f && q.w == 0.0f))) {
         /* Avoids the need to normalize the degenerate case. */
-        q[1] = 1.0f;
+        q.y = 1.0f;
       }
     }
     else {
@@ -341,14 +341,14 @@ template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const mat_bas
         /* Ensure W is non-negative for a canonical result. */
         s = -s;
       }
-      q[2] = 0.25f * s;
+      q.z = 0.25f * s;
       s = 1.0f / s;
-      q[0] = (mat[2][0] - mat[0][2]) * s;
-      q[1] = (mat[0][1] + mat[1][0]) * s;
-      q[3] = (mat[1][2] + mat[2][1]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[3] == 0.0f))) {
+      q.x = (mat[2][0] - mat[0][2]) * s;
+      q.y = (mat[0][1] + mat[1][0]) * s;
+      q.w = (mat[1][2] + mat[2][1]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q.x == 0.0f && q.y == 0.0f && q.w == 0.0f))) {
         /* Avoids the need to normalize the degenerate case. */
-        q[2] = 1.0f;
+        q.z = 1.0f;
       }
     }
   }
@@ -360,14 +360,14 @@ template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const mat_bas
         /* Ensure W is non-negative for a canonical result. */
         s = -s;
       }
-      q[3] = 0.25f * s;
+      q.w = 0.25f * s;
       s = 1.0f / s;
-      q[0] = (mat[0][1] - mat[1][0]) * s;
-      q[1] = (mat[2][0] + mat[0][2]) * s;
-      q[2] = (mat[1][2] + mat[2][1]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[2] == 0.0f))) {
+      q.x = (mat[0][1] - mat[1][0]) * s;
+      q.y = (mat[2][0] + mat[0][2]) * s;
+      q.z = (mat[1][2] + mat[2][1]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q.x == 0.0f && q.y == 0.0f && q.z == 0.0f))) {
         /* Avoids the need to normalize the degenerate case. */
-        q[3] = 1.0f;
+        q.w = 1.0f;
       }
     }
     else {
@@ -376,20 +376,20 @@ template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const mat_bas
        */
       const T trace = 1.0f + mat[0][0] + mat[1][1] + mat[2][2];
       T s = 2.0f * std::sqrt(trace);
-      q[0] = 0.25f * s;
+      q.x = 0.25f * s;
       s = 1.0f / s;
-      q[1] = (mat[1][2] - mat[2][1]) * s;
-      q[2] = (mat[2][0] - mat[0][2]) * s;
-      q[3] = (mat[0][1] - mat[1][0]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[1] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+      q.y = (mat[1][2] - mat[2][1]) * s;
+      q.z = (mat[2][0] - mat[0][2]) * s;
+      q.w = (mat[0][1] - mat[1][0]) * s;
+      if (UNLIKELY((trace == 1.0f) && (q.y == 0.0f && q.z == 0.0f && q.w == 0.0f))) {
         /* Avoids the need to normalize the degenerate case. */
-        q[0] = 1.0f;
+        q.x = 1.0f;
       }
     }
   }
 
-  BLI_assert(!(q[0] < 0.0f));
-  BLI_assert(math::is_unit_scale(q));
+  BLI_assert(!(q.x < 0.0f));
+  BLI_assert(math::is_unit_scale(vec_base<T, 4>(q)));
   return q;
 }
 
@@ -424,12 +424,12 @@ mat_base<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
 {
   using MatT = mat_base<T, NumCol, NumRow>;
   using IntermediateType = typename TypeTraits<T>::IntermediateType;
-  IntermediateType ci = math::cos(rotation[0]);
-  IntermediateType cj = math::cos(rotation[1]);
-  IntermediateType ch = math::cos(rotation[2]);
-  IntermediateType si = math::sin(rotation[0]);
-  IntermediateType sj = math::sin(rotation[1]);
-  IntermediateType sh = math::sin(rotation[2]);
+  IntermediateType ci = math::cos(rotation.x);
+  IntermediateType cj = math::cos(rotation.y);
+  IntermediateType ch = math::cos(rotation.z);
+  IntermediateType si = math::sin(rotation.x);
+  IntermediateType sj = math::sin(rotation.y);
+  IntermediateType sh = math::sin(rotation.z);
   IntermediateType cc = ci * ch;
   IntermediateType cs = ci * sh;
   IntermediateType sc = si * ch;
@@ -455,10 +455,10 @@ mat_base<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation)
 {
   using MatT = mat_base<T, NumCol, NumRow>;
   using IntermediateType = typename TypeTraits<T>::IntermediateType;
-  IntermediateType q0 = M_SQRT2 * IntermediateType(rotation[0]);
-  IntermediateType q1 = M_SQRT2 * IntermediateType(rotation[1]);
-  IntermediateType q2 = M_SQRT2 * IntermediateType(rotation[2]);
-  IntermediateType q3 = M_SQRT2 * IntermediateType(rotation[3]);
+  IntermediateType q0 = M_SQRT2 * IntermediateType(rotation.x);
+  IntermediateType q1 = M_SQRT2 * IntermediateType(rotation.y);
+  IntermediateType q2 = M_SQRT2 * IntermediateType(rotation.z);
+  IntermediateType q3 = M_SQRT2 * IntermediateType(rotation.w);
 
   IntermediateType qda = q0 * q1;
   IntermediateType qdb = q0 * q2;

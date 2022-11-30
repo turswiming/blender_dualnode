@@ -22,17 +22,33 @@ namespace blender::math::detail {
 template<typename T> struct AxisAngle;
 template<typename T> struct Quaternion;
 
-template<typename T> struct EulerXYZ : public vec_base<T, 3> {
-  using vec_base<T, 3>::vec_base;
+template<typename T> struct EulerXYZ {
+  T x, y, z;
 
-  static EulerXYZ<T> identity()
+  EulerXYZ() = default;
+
+  EulerXYZ(const T &x, const T &y, const T &z)
+  {
+    this->x = x;
+    this->y = y;
+    this->z = z;
+  }
+
+  EulerXYZ(const vec_base<T, 3> &vec) : EulerXYZ(UNPACK3(vec)){};
+
+  static EulerXYZ identity()
   {
     return {0, 0, 0};
   }
 
-  explicit operator AxisAngle<T>();
+  explicit operator vec_base<T, 3>() const
+  {
+    return {this->x, this->y, this->z};
+  }
 
-  explicit operator Quaternion<T>();
+  explicit operator AxisAngle<T>() const;
+
+  explicit operator Quaternion<T>() const;
 
   friend std::ostream &operator<<(std::ostream &stream, const EulerXYZ &rot)
   {
@@ -40,17 +56,34 @@ template<typename T> struct EulerXYZ : public vec_base<T, 3> {
   }
 };
 
-template<typename T> struct Quaternion : public vec_base<T, 4> {
-  using vec_base<T, 4>::vec_base;
+template<typename T> struct Quaternion {
+  T x, y, z, w;
 
-  static Quaternion<T> identity()
+  Quaternion() = default;
+
+  Quaternion(const T &x, const T &y, const T &z, const T &w)
+  {
+    this->x = x;
+    this->y = y;
+    this->z = z;
+    this->w = w;
+  }
+
+  Quaternion(const vec_base<T, 4> &vec) : Quaternion(UNPACK4(vec)){};
+
+  static Quaternion identity()
   {
     return {1, 0, 0, 0};
   }
 
-  explicit operator EulerXYZ<T>();
+  explicit operator vec_base<T, 4>() const
+  {
+    return {this->x, this->y, this->z, this->w};
+  }
 
-  explicit operator AxisAngle<T>();
+  explicit operator EulerXYZ<T>() const;
+
+  explicit operator AxisAngle<T>() const;
 
   friend std::ostream &operator<<(std::ostream &stream, const Quaternion &rot)
   {
@@ -62,7 +95,7 @@ template<typename T> struct AxisAngle {
   vec_base<T, 3> axis;
   T angle;
 
-  AxisAngle() = default;
+  explicit AxisAngle(){};
 
   AxisAngle(const vec_base<T, 3> &axis, T angle)
   {
@@ -82,9 +115,9 @@ template<typename T> struct AxisAngle {
     return {{0, 1, 0}, 0};
   }
 
-  explicit operator Quaternion<T>();
+  explicit operator Quaternion<T>() const;
 
-  explicit operator EulerXYZ<T>();
+  explicit operator EulerXYZ<T>() const;
 
   friend bool operator==(const AxisAngle &a, const AxisAngle &b)
   {
@@ -99,6 +132,24 @@ template<typename T> struct AxisAngle {
   friend std::ostream &operator<<(std::ostream &stream, const AxisAngle &rot)
   {
     return stream << "AxisAngle(axis=" << rot.axis << ", angle=" << rot.angle << ")";
+  }
+};
+
+/**
+ * A version of AxisAngle that expects axis to be already normalized.
+ * Implicitly cast back to AxisAngle.
+ */
+template<typename T> struct AxisAngleNormalized : public AxisAngle<T> {
+  AxisAngleNormalized(const vec_base<T, 3> &axis, T angle) : AxisAngle<T>()
+  {
+    BLI_assert(is_unit_scale(axis));
+    this->axis = axis;
+    this->angle = angle;
+  }
+
+  operator AxisAngle<T>() const
+  {
+    return *this;
   }
 };
 
@@ -121,6 +172,7 @@ namespace blender {
 using EulerXYZ = math::detail::EulerXYZ<float>;
 using Quaternion = math::detail::Quaternion<float>;
 using AxisAngle = math::detail::AxisAngle<float>;
+using AxisAngleNormalized = math::detail::AxisAngleNormalized<float>;
 };  // namespace blender
 
 namespace blender::math {
@@ -165,11 +217,12 @@ inline detail::Quaternion<T> interpolate(const detail::Quaternion<T> &a,
                                          const detail::Quaternion<T> &b,
                                          T t)
 {
-  BLI_assert(is_unit_scale(a));
-  BLI_assert(is_unit_scale(b));
+  using Vec4T = vec_base<T, 4>;
+  BLI_assert(is_unit_scale(Vec4T(a)));
+  BLI_assert(is_unit_scale(Vec4T(b)));
 
-  vec_base<T, 4> quat = a;
-  T cosom = dot(a, b);
+  Vec4T quat = Vec4T(a);
+  T cosom = dot(Vec4T(a), Vec4T(b));
   /* Rotate around shortest angle. */
   if (cosom < T(0)) {
     cosom = -cosom;
@@ -178,7 +231,7 @@ inline detail::Quaternion<T> interpolate(const detail::Quaternion<T> &a,
 
   vec_base<T, 2> w = interpolate_dot_slerp(t, cosom);
 
-  return detail::Quaternion<T>(w[0] * quat + w[1] * b);
+  return detail::Quaternion<T>(w[0] * quat + w[1] * Vec4T(b));
 }
 
 /**

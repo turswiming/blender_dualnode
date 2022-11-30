@@ -291,18 +291,21 @@ TEST(math_rotation, TypeConversion)
 {
   EulerXYZ euler(0, 0, M_PI_2);
   Quaternion quat(M_SQRT1_2, 0.0f, 0.0f, M_SQRT1_2);
-  AxisAngle axis_angle({0.0f, 0.0f, 1.0f}, M_PI_2);
+  AxisAngle axis_angle({0.0f, 0.0f, 2.0f}, M_PI_2);
+  const AxisAngleNormalized axis_angle_norm({0.0f, 0.0f, 1.0f}, M_PI_2);
 
-  EXPECT_V4_NEAR(Quaternion(euler), quat, 1e-4);
-  EXPECT_V3_NEAR(AxisAngle(euler).axis, axis_angle.axis, 1e-4);
-  EXPECT_NEAR(AxisAngle(euler).angle, axis_angle.angle, 1e-4);
+  EXPECT_V3_NEAR(axis_angle_norm.axis, axis_angle.axis, 1e-4);
 
-  EXPECT_V3_NEAR(EulerXYZ(quat), euler, 1e-4);
-  EXPECT_V3_NEAR(AxisAngle(quat).axis, axis_angle.axis, 1e-4);
-  EXPECT_NEAR(AxisAngle(quat).angle, axis_angle.angle, 1e-4);
+  EXPECT_V4_NEAR(float4(Quaternion(euler)), float4(quat), 1e-4);
+  EXPECT_V3_NEAR(AxisAngle(euler).axis, axis_angle_norm.axis, 1e-4);
+  EXPECT_NEAR(AxisAngle(euler).angle, axis_angle_norm.angle, 1e-4);
 
-  EXPECT_V3_NEAR(EulerXYZ(axis_angle), euler, 1e-4);
-  EXPECT_V4_NEAR(Quaternion(axis_angle), quat, 1e-4);
+  EXPECT_V3_NEAR(float3(EulerXYZ(quat)), float3(euler), 1e-4);
+  EXPECT_V3_NEAR(AxisAngle(quat).axis, axis_angle_norm.axis, 1e-4);
+  EXPECT_NEAR(AxisAngle(quat).angle, axis_angle_norm.angle, 1e-4);
+
+  EXPECT_V3_NEAR(float3(EulerXYZ(axis_angle_norm)), float3(euler), 1e-4);
+  EXPECT_V4_NEAR(float4(Quaternion(axis_angle_norm)), float4(quat), 1e-4);
 }
 
 }  // namespace blender::math::tests

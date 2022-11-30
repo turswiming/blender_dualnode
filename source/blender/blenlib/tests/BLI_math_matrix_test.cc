@@ -146,7 +146,7 @@ TEST(math_matrix, MatrixInit)
                               {-0.0587266, -0.426918, 0.902382, 0},
                               {-0.909297, -0.350175, -0.224845, 0},
                               {0, 0, 0, 1}));
-  EulerXYZ euler({1, 2, 3});
+  EulerXYZ euler(1, 2, 3);
   Quaternion quat(euler);
   AxisAngle axis_angle(euler);
   m = from_rotation<float4x4>(euler);
@@ -187,9 +187,9 @@ TEST(math_matrix, MatrixMethods)
 {
   float4x4 m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
   auto expect_eul = EulerXYZ(0, 0, M_PI_2);
-  EXPECT_V3_NEAR(to_euler(m), expect_eul, 0.0002f);
+  EXPECT_V3_NEAR(float3(to_euler(m)), float3(expect_eul), 0.0002f);
   auto expect_qt = Quaternion(0, -M_SQRT1_2, M_SQRT1_2, 0);
-  EXPECT_V4_NEAR(to_quaternion(m), expect_qt, 0.0002f);
+  EXPECT_V4_NEAR(float4(to_quaternion(m)), float4(expect_qt), 0.0002f);
   EXPECT_EQ(to_scale(m), float3(3, 2, 2));
   EXPECT_TRUE(is_negative(m));
   EXPECT_FALSE(is_unit_scale(m));
