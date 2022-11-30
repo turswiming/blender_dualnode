@@ -143,7 +143,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
   /** \note Prevent implicit cast to types that could fit other pointer constructor. */
   const c_style_mat &ptr() const
   {
-    return *reinterpret_cast<c_style_mat *>(this);
+    return *reinterpret_cast<const c_style_mat *>(this);
   }
 
   /** \note Prevent implicit cast to types that could fit other pointer constructor. */
