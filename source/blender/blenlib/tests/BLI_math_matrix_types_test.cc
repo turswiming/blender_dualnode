@@ -200,17 +200,17 @@ TEST(math_matrix_types, MatrixMultiplyOperator)
   float2x2 b(float2(5, 6), float2(7, 8));
 
   float2x2 result = a * b;
-  EXPECT_EQ(result[0][0], b[0][0] * a[0][0] + b[0][1] * a[1][0]);
-  EXPECT_EQ(result[0][1], b[0][0] * a[0][1] + b[0][1] * a[1][1]);
-  EXPECT_EQ(result[1][0], b[1][0] * a[0][0] + b[1][1] * a[1][0]);
-  EXPECT_EQ(result[1][1], b[1][0] * a[0][1] + b[1][1] * a[1][1]);
+  EXPECT_EQ(result[0][0], 23);
+  EXPECT_EQ(result[0][1], 34);
+  EXPECT_EQ(result[1][0], 31);
+  EXPECT_EQ(result[1][1], 46);
 
   result = a;
   result *= b;
-  EXPECT_EQ(result[0][0], b[0][0] * a[0][0] + b[0][1] * a[1][0]);
-  EXPECT_EQ(result[0][1], b[0][0] * a[0][1] + b[0][1] * a[1][1]);
-  EXPECT_EQ(result[1][0], b[1][0] * a[0][0] + b[1][1] * a[1][0]);
-  EXPECT_EQ(result[1][1], b[1][0] * a[0][1] + b[1][1] * a[1][1]);
+  EXPECT_EQ(result[0][0], 23);
+  EXPECT_EQ(result[0][1], 34);
+  EXPECT_EQ(result[1][0], 31);
+  EXPECT_EQ(result[1][1], 46);
 
   /* Test SSE2 implementation. */
   float4x4 result2 = float4x4(2) * float4x4(6);
@@ -225,8 +225,8 @@ TEST(math_matrix_types, VectorMultiplyOperator)
   float3x2 mat(float2(1, 2), float2(3, 4), float2(5, 6));
 
   float2 result = mat * float3(7, 8, 9);
-  EXPECT_EQ(result[0], 1 * 7 + 3 * 8 + 5 * 9);
-  EXPECT_EQ(result[1], 2 * 7 + 4 * 8 + 6 * 9);
+  EXPECT_EQ(result[0], 76);
+  EXPECT_EQ(result[1], 100);
 }
 
 }  // namespace blender::tests
