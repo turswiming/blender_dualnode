@@ -113,7 +113,7 @@ template bool is_negative(const double4x4 &mat);
 /** \name Inverse
  * \{ */
 
-template<typename T, int Size> mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat)
+template<typename T, int Size> mat_base<T, Size, Size> invert(const mat_base<T, Size, Size> &mat)
 {
   mat_base<T, Size, Size> result;
   Map<const Matrix<T, Size, Size>> M((const T *)mat);
@@ -126,12 +126,12 @@ template<typename T, int Size> mat_base<T, Size, Size> inverse(const mat_base<T,
   return result;
 }
 
-template float2x2 inverse(const float2x2 &mat);
-template float3x3 inverse(const float3x3 &mat);
-template float4x4 inverse(const float4x4 &mat);
-template double2x2 inverse(const double2x2 &mat);
-template double3x3 inverse(const double3x3 &mat);
-template double4x4 inverse(const double4x4 &mat);
+template float2x2 invert(const float2x2 &mat);
+template float3x3 invert(const float3x3 &mat);
+template float4x4 invert(const float4x4 &mat);
+template double2x2 invert(const double2x2 &mat);
+template double3x3 invert(const double3x3 &mat);
+template double4x4 invert(const double4x4 &mat);
 
 /** \} */
 

@@ -106,16 +106,9 @@ using namespace blender::math;
 TEST(math_matrix, MatrixInverse)
 {
   float3x3 mat(2);
-  float3x3 inv = inverse(mat);
-  EXPECT_NEAR(inv[0][0], 0.5f, 1e-8f);
-  EXPECT_NEAR(inv[0][1], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[0][2], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[1][0], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[1][1], 0.5f, 1e-8f);
-  EXPECT_NEAR(inv[1][2], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[2][0], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[2][1], 0.0f, 1e-8f);
-  EXPECT_NEAR(inv[2][2], 0.5f, 1e-8f);
+  float3x3 inv = invert(mat);
+  float3x3 expect = float3x3({0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f}, {0.0f, 0.0f, 0.5f});
+  EXPECT_M3_NEAR(inv, expect, 1e-5f);
 }
 
 TEST(math_matrix, MatrixDeterminant)

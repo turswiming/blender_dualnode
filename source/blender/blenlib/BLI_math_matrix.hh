@@ -33,7 +33,7 @@ template<typename T, int NumCol, int NumRow>
  * Returns the inverse of a square matrix.
  */
 template<typename T, int Size>
-[[nodiscard]] mat_base<T, Size, Size> inverse(const mat_base<T, Size, Size> &mat);
+[[nodiscard]] mat_base<T, Size, Size> invert(const mat_base<T, Size, Size> &mat);
 
 /**
  * Flip the matrix around its diagonal. Also flips dimensions for non square matrices.
