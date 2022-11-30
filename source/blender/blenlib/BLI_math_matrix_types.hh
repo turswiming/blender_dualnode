@@ -375,14 +375,6 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return mat_base(0);
   }
 
-  /** Initialize the diagonal of the matrix with the given vector. */
-  static mat_base from_diagonal(vec_base<T, min_dim> vec)
-  {
-    mat_base result(0);
-    unroll<min_dim>([&](auto i) { result[i][i] = vec[i]; });
-    return result;
-  }
-
   uint64_t hash() const
   {
     uint64_t h = 435109;
