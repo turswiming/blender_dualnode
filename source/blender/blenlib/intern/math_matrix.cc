@@ -432,10 +432,74 @@ vec_base<T, 3> transform_direction(const mat_base<T, 4, 4> &mat, const vec_base<
   return vec_base<T, 3>(mat * vec_base<T, 4>(direction, T(0)));
 }
 
+template<typename T>
+vec_base<T, 3> project_point(const mat_base<T, 4, 4> &mat, const vec_base<T, 3> &point)
+{
+  vec_base<T, 4> tmp(point, T(0));
+  tmp = mat * tmp;
+  tmp /= tmp.w;
+  return vec_base<T, 3>(tmp);
+}
+
 template float3 transform_point(const float3x3 &mat, const float3 &point);
 template float3 transform_point(const float4x4 &mat, const float3 &point);
 template float3 transform_direction(const float3x3 &mat, const float3 &direction);
 template float3 transform_direction(const float4x4 &mat, const float3 &direction);
+template float3 project_point(const float4x4 &mat, const float3 &direction);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Projection Matrices.
+ * \{ */
+
+namespace projection {
+
+template<typename T>
+mat_base<T, 4, 4> orthographic(T left, T right, T bottom, T top, T near_clip, T far_clip)
+{
+  const T x_delta = right - left;
+  const T y_delta = top - bottom;
+  const T z_delta = far_clip - near_clip;
+
+  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>::identity();
+  if (x_delta != 0 && y_delta != 0 && z_delta != 0) {
+    mat[0][0] = T(2.0) / x_delta;
+    mat[3][0] = -(right + left) / x_delta;
+    mat[1][1] = T(2.0) / y_delta;
+    mat[3][1] = -(top + bottom) / y_delta;
+    mat[2][2] = -T(2.0) / z_delta; /* NOTE: negate Z. */
+    mat[3][2] = -(far_clip + near_clip) / z_delta;
+  }
+  return mat;
+}
+
+template<typename T>
+mat_base<T, 4, 4> perspective(T left, T right, T bottom, T top, T near_clip, T far_clip)
+{
+  const T x_delta = right - left;
+  const T y_delta = top - bottom;
+  const T z_delta = far_clip - near_clip;
+
+  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>::identity();
+  if (x_delta != 0 && y_delta != 0 && z_delta != 0) {
+    mat[0][0] = near_clip * T(2.0) / x_delta;
+    mat[1][1] = near_clip * T(2.0) / y_delta;
+    mat[2][0] = (right + left) / x_delta; /* NOTE: negate Z. */
+    mat[2][1] = (top + bottom) / y_delta;
+    mat[2][2] = -(far_clip + near_clip) / z_delta;
+    mat[2][3] = -1.0f;
+    mat[3][2] = (-2.0f * near_clip * far_clip) / z_delta;
+  }
+  return mat;
+}
+
+template float4x4 orthographic(
+    float left, float right, float bottom, float top, float near_clip, float far_clip);
+template float4x4 perspective(
+    float left, float right, float bottom, float top, float near_clip, float far_clip);
+
+}  // namespace projection
 
 /** \} */
 

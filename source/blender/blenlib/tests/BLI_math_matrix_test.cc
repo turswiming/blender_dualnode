@@ -297,4 +297,32 @@ TEST(math_matrix, MatrixTransform)
   EXPECT_V3_NEAR(result, expect, 1e-5);
 }
 
+TEST(math_matrix, MatrixProjection)
+{
+  using namespace math::projection;
+  float4x4 expect;
+  float4x4 ortho = orthographic(-0.2f, 0.3f, -0.2f, 0.4f, -0.2f, -0.5f);
+  float4x4 pers1 = perspective(-0.2f, 0.3f, -0.2f, 0.4f, -0.2f, -0.5f);
+  float4x4 pers2 = perspective_fov(
+      math::atan(-0.2f), math::atan(0.3f), math::atan(-0.2f), math::atan(0.4f), -0.2f, -0.5f);
+
+  expect = transpose(float4x4({4.0f, 0.0f, 0.0f, -0.2f},
+                              {0.0f, 3.33333f, 0.0f, -0.333333f},
+                              {0.0f, 0.0f, 6.66667f, -2.33333f},
+                              {0.0f, 0.0f, 0.0f, 1.0f}));
+  EXPECT_M4_NEAR(ortho, expect, 1e-5);
+
+  expect = transpose(float4x4({-0.8f, 0.0f, 0.2f, 0.0f},
+                              {0.0f, -0.666667f, 0.333333f, 0.0f},
+                              {0.0f, 0.0f, -2.33333f, 0.666667f},
+                              {0.0f, 0.0f, -1.0f, 1.0f}));
+  EXPECT_M4_NEAR(pers1, expect, 1e-5);
+
+  expect = transpose(float4x4({4.0f, 0.0f, 0.2f, 0.0f},
+                              {0.0f, 3.33333f, 0.333333f, 0.0f},
+                              {0.0f, 0.0f, -2.33333f, 0.666667f},
+                              {0.0f, 0.0f, -1.0f, 1.0f}));
+  EXPECT_M4_NEAR(pers2, expect, 1e-5);
+}
+
 }  // namespace blender::tests

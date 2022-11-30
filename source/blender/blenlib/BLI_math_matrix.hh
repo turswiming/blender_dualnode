@@ -419,14 +419,6 @@ template<typename T, int NumCol, int NumRow>
 /** \name Transform function.
  * \{ */
 
-template<typename T, int NumCol, int NumRow, int Dimensions>
-[[nodiscard]] vec_base<T, Dimensions> transform_point(const mat_base<T, NumCol, NumRow> &mat,
-                                                      const vec_base<T, Dimensions> &point);
-
-template<typename T, int NumCol, int NumRow, int Dimensions>
-[[nodiscard]] vec_base<T, Dimensions> transform_direction(
-    const mat_base<T, NumCol, NumRow> &mat, const vec_base<T, Dimensions> &direction);
-
 template<typename T>
 [[nodiscard]] vec_base<T, 3> transform_point(const mat_base<T, 3, 3> &mat,
                                              const vec_base<T, 3> &point);
@@ -442,6 +434,60 @@ template<typename T>
 template<typename T>
 [[nodiscard]] vec_base<T, 3> transform_direction(const mat_base<T, 4, 4> &mat,
                                                  const vec_base<T, 3> &direction);
+
+template<typename T>
+[[nodiscard]] vec_base<T, 3> project_point(const mat_base<T, 4, 4> &mat,
+                                           const vec_base<T, 3> &point);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Projection Matrices.
+ * \{ */
+
+namespace projection {
+
+/**
+ * \brief Create an orthographic projection matrix using OpenGL coordinate convention:
+ * Maps each axis range to [-1..1] range for all axes.
+ * The resulting matrix can be used with either #project_point or #transform_point.
+ */
+template<typename T>
+[[nodiscard]] mat_base<T, 4, 4> orthographic(
+    T left, T right, T bottom, T top, T near_clip, T far_clip);
+
+/**
+ * \brief Create a perspective projection matrix using OpenGL coordinate convention:
+ * Maps each axis range to [-1..1] range for all axes.
+ * `left`, `right`, `bottom`, `top` are frustum side distances at `z=near_clip`.
+ * The resulting matrix can be used with #project_point.
+ */
+template<typename T>
+[[nodiscard]] mat_base<T, 4, 4> perspective(
+    T left, T right, T bottom, T top, T near_clip, T far_clip);
+
+/**
+ * \brief Create a perspective projection matrix using OpenGL coordinate convention:
+ * Maps each axis range to [-1..1] range for all axes.
+ * Uses field of view angles instead of plane distances.
+ * The resulting matrix can be used with #project_point.
+ */
+template<typename T>
+[[nodiscard]] mat_base<T, 4, 4> perspective_fov(
+    T angle_left, T angle_right, T angle_bottom, T angle_top, T near_clip, T far_clip)
+{
+  mat_base<T, 4, 4> mat = perspective(math::tan(angle_left),
+                                      math::tan(angle_right),
+                                      math::tan(angle_bottom),
+                                      math::tan(angle_top),
+                                      near_clip,
+                                      far_clip);
+  mat[0][0] /= near_clip;
+  mat[1][1] /= near_clip;
+  return mat;
+}
+
+}  // namespace projection
 
 /** \} */
 
