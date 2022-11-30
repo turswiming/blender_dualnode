@@ -125,18 +125,6 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   }
 
   /** C-style pointer dereference. */
-  /** TODO(fclem): Ideally, theses implicit conversion should be removed once all the functions are
-   * ported to the C++ API. */
-
-  operator const T *() const
-  {
-    return reinterpret_cast<const T *>(this);
-  }
-
-  operator T *()
-  {
-    return reinterpret_cast<T *>(this);
-  }
 
   using c_style_mat = T[NumCol][NumRow];
 

@@ -99,7 +99,7 @@ namespace blender::math {
 
 template<typename T, int Size> T determinant(const mat_base<T, Size, Size> &mat)
 {
-  return Map<const Matrix<T, Size, Size>>((const T *)mat).determinant();
+  return Map<const Matrix<T, Size, Size>>((const T *)mat.ptr()).determinant();
 }
 
 template float determinant(const float2x2 &mat);
@@ -111,7 +111,7 @@ template double determinant(const double4x4 &mat);
 
 template<typename T> bool is_negative(const mat_base<T, 4, 4> &mat)
 {
-  return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>((const T *)mat).determinant() < T(0);
+  return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>((const T *)mat.ptr()).determinant() < T(0);
 }
 
 template bool is_negative(const float4x4 &mat);
@@ -126,8 +126,8 @@ template bool is_negative(const double4x4 &mat);
 template<typename T, int Size> mat_base<T, Size, Size> invert(const mat_base<T, Size, Size> &mat)
 {
   mat_base<T, Size, Size> result;
-  Map<const Matrix<T, Size, Size>> M((const T *)mat);
-  Map<Matrix<T, Size, Size>> R((T *)result);
+  Map<const Matrix<T, Size, Size>> M((const T *)mat.ptr());
+  Map<Matrix<T, Size, Size>> R((T *)result.ptr());
   bool is_invertible = true;
   M.computeInverseWithCheck(R, is_invertible, 0.0f);
   if (!is_invertible) {
@@ -182,11 +182,11 @@ static void polar_decompose(const mat_base<T, 3, 3> &mat3,
      */
     using MatrixDynamicT = Matrix<T, Dynamic, Dynamic>;
     JacobiSVD<MatrixDynamicT, NoQRPreconditioner> svd(
-        Map<const MatrixDynamicT>((const T *)mat3, 3, 3), ComputeThinU | ComputeThinV);
+        Map<const MatrixDynamicT>((const T *)mat3.ptr(), 3, 3), ComputeThinU | ComputeThinV);
 
-    (Map<MatrixT>(W)) = svd.matrixU();
+    (Map<MatrixT>((T *)W.ptr())) = svd.matrixU();
     (Map<VectorT>(S_val)) = svd.singularValues();
-    (Map<MatrixT>(V)) = svd.matrixV();
+    (Map<MatrixT>((T *)V.ptr())) = svd.matrixV();
   }
 
   mat_base<T, 3, 3> S = from_scale<mat_base<T, 3, 3>>(S_val);
