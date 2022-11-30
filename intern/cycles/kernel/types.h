@@ -1333,16 +1333,10 @@ static_assert_align(KernelLight, 16);
 typedef struct KernelLightDistribution {
   float totarea;
   int prim;
-  union {
-    struct {
-      int shader_flag;
-      int object_id;
-    } mesh_light;
-    struct {
-      float pad;
-      float size;
-    } lamp;
-  };
+  struct {
+    int shader_flag;
+    int object_id;
+  } mesh_light;
 } KernelLightDistribution;
 static_assert_align(KernelLightDistribution, 16);
 

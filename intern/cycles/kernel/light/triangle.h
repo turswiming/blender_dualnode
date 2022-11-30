@@ -277,7 +277,6 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
     }
 
     ls->pdf_selection = distribution_area * kernel_data.integrator.distribution_pdf_triangles;
-    ls->pdf *= ls->pdf_selection;
   }
 
   return (ls->pdf > 0.0f);

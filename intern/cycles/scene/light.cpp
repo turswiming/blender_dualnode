@@ -408,8 +408,8 @@ void LightManager::device_update_distribution(Device *device,
 
       distribution[offset].totarea = totarea;
       distribution[offset].prim = ~light_index;
-      distribution[offset].lamp.pad = 1.0f;
-      distribution[offset].lamp.size = light->size;
+      distribution[offset].mesh_light.object_id = OBJECT_NONE;
+      distribution[offset].mesh_light.shader_flag = 0;
       totarea += lightarea;
 
       light_index++;
@@ -420,8 +420,8 @@ void LightManager::device_update_distribution(Device *device,
   /* normalize cumulative distribution functions */
   distribution[num_distribution].totarea = totarea;
   distribution[num_distribution].prim = 0.0f;
-  distribution[num_distribution].lamp.pad = 0.0f;
-  distribution[num_distribution].lamp.size = 0.0f;
+  distribution[num_distribution].mesh_light.object_id = OBJECT_NONE;
+  distribution[num_distribution].mesh_light.shader_flag = 0;
 
   if (totarea > 0.0f) {
     for (size_t i = 0; i < num_distribution; i++)
@@ -642,6 +642,10 @@ void LightManager::device_update_tree(Device *device,
         }
         else {
           light_tree_emitters[emitter_index].prim_id = prim.prim_id;
+          light_tree_emitters[emitter_index].mesh_light.shader_flag = 0;
+          light_tree_emitters[emitter_index].mesh_light.object_id = OBJECT_NONE;
+          light_tree_emitters[emitter_index].mesh_light.emission_sampling =
+              EMISSION_SAMPLING_FRONT_BACK;
           light_array[~prim.prim_id] = emitter_index;
         }
 

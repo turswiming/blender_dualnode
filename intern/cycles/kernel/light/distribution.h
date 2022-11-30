@@ -55,42 +55,20 @@ ccl_device_noinline bool light_distribution_sample(KernelGlobals kg,
                                                    const float3 P,
                                                    const int bounce,
                                                    const uint32_t path_flag,
-                                                   ccl_private LightSample *ls)
+                                                   ccl_private int *emitter_object,
+                                                   ccl_private int *emitter_prim,
+                                                   ccl_private int *emitter_shader_flag,
+                                                   ccl_private float *emitter_pdf_selection)
 {
   /* Sample light index from distribution. */
   const int index = light_distribution_sample(kg, &randu);
   ccl_global const KernelLightDistribution *kdistribution = &kernel_data_fetch(light_distribution,
                                                                                index);
-  const int prim = kdistribution->prim;
 
-  if (prim >= 0) {
-    /* Mesh light. */
-    const int object = kdistribution->mesh_light.object_id;
-
-    /* Exclude synthetic meshes from shadow catcher pass. */
-    if ((path_flag & PATH_RAY_SHADOW_CATCHER_PASS) &&
-        !(kernel_data_fetch(object_flag, object) & SD_OBJECT_SHADOW_CATCHER)) {
-      return false;
-    }
-
-    const int shader_flag = kdistribution->mesh_light.shader_flag;
-    triangle_light_sample<in_volume_segment>(kg, prim, object, randu, randv, time, ls, P);
-    ls->shader |= shader_flag;
-    return (ls->pdf > 0.0f);
-  }
-
-  const int lamp = -prim - 1;
-
-  if (UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
-    return false;
-  }
-
-  if (!light_sample<in_volume_segment>(kg, lamp, randu, randv, P, path_flag, ls)) {
-    return false;
-  }
-
-  ls->pdf_selection = kernel_data.integrator.distribution_pdf_lights;
-  ls->pdf *= ls->pdf_selection;
+  *emitter_object = kdistribution->mesh_light.object_id;
+  *emitter_prim = kdistribution->prim;
+  *emitter_shader_flag = kdistribution->mesh_light.shader_flag;
+  *emitter_pdf_selection = kernel_data.integrator.distribution_pdf_lights;
 
   return true;
 }
