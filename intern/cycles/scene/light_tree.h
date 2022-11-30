@@ -49,15 +49,14 @@ OrientationBounds merge(const OrientationBounds &cone_a, const OrientationBounds
 /* --------------------------------------------------------------------
  * Light Tree Construction
  *
- * The light tree construction is based off PBRT's BVH construction,
- * which first uses build nodes before converting to a more compact structure.
+ * The light tree construction is based on PBRT's BVH construction.
  */
 
 /* Light Tree Primitive
  * Struct that indexes into the scene's triangle and light arrays. */
 struct LightTreePrimitive {
-  /* prim_id >= 0 is an index into an object's local triangle index,
-   * otherwise -prim_id-1 is an index into device lights array. */
+  /* `prim_id >= 0` is an index into an object's local triangle index,
+   * otherwise `-prim_id-1`(`~prim`) is an index into device lights array. */
   int prim_id;
   int object_id;
 

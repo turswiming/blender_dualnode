@@ -515,7 +515,6 @@ ccl_device_inline bool get_left_probability(KernelGlobals kg,
                                             const int right_index,
                                             ccl_private float &left_probability)
 {
-  /* If we don't split, then we need to choose sampling between the left or right child. */
   const ccl_global KernelLightTreeNode *left = &kernel_data_fetch(light_tree_nodes, left_index);
   const ccl_global KernelLightTreeNode *right = &kernel_data_fetch(light_tree_nodes, right_index);
 
@@ -594,7 +593,6 @@ ccl_device bool light_tree_sample(KernelGlobals kg,
     pdf_leaf *= (node_index == left_index) ? left_prob : (1.0f - left_prob);
   }
 
-  /* TODO: check `spot_light_tree_weight()` and `area_light_tree_weight()` */
   if (selected_light < 0) {
     return false;
   }
