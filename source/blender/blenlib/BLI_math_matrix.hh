@@ -263,9 +263,9 @@ template<typename T>
 }  // namespace detail
 
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
+[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
 {
-  EulerXYZ<T> eul1, eul2;
+  detail::EulerXYZ<T> eul1, eul2;
   if constexpr (Normalized) {
     detail::normalized_to_eul2(mat, eul1, eul2);
   }
@@ -278,14 +278,14 @@ template<typename T, bool Normalized = false>
 }
 
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 4, 4> &mat)
+[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const mat_base<T, 4, 4> &mat)
 {
   /* TODO(fclem): Avoid the copy with 3x3 ref. */
   return to_euler<T, Normalized>(mat_base<T, 3, 3>(mat));
 }
 
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 3, 3> &mat)
+[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const mat_base<T, 3, 3> &mat)
 {
   using namespace math;
   if constexpr (Normalized) {
@@ -297,7 +297,7 @@ template<typename T, bool Normalized = false>
 }
 
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline rotation::Quaternion<T> to_quaternion(const mat_base<T, 4, 4> &mat)
+[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const mat_base<T, 4, 4> &mat)
 {
   /* TODO(fclem): Avoid the copy with 3x3 ref. */
   return to_quaternion<T, Normalized>(mat_base<T, 3, 3>(mat));

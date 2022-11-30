@@ -10,7 +10,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 
-namespace blender::rotation {
+namespace blender::math::detail {
 
 #ifdef DEBUG
 #  define BLI_ASSERT_UNIT_QUATERNION(_q) \

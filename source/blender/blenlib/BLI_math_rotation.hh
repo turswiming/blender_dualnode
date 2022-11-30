@@ -9,7 +9,7 @@
 #include "BLI_math_vec_types.hh"
 #include "BLI_math_vector.hh"
 
-namespace blender::rotation {
+namespace blender::math::detail {
 /**
  * Rotation Types
  *
@@ -114,18 +114,18 @@ template<> struct TypeTraits<float> {
   using IntermediateType = double;
 };
 
-};  // namespace blender::rotation
+};  // namespace blender::math::detail
 
 namespace blender {
 /* Most common used types. */
-using EulerXYZ = rotation::EulerXYZ<float>;
-using Quaternion = rotation::Quaternion<float>;
-using AxisAngle = rotation::AxisAngle<float>;
+using EulerXYZ = math::detail::EulerXYZ<float>;
+using Quaternion = math::detail::Quaternion<float>;
+using AxisAngle = math::detail::AxisAngle<float>;
 };  // namespace blender
 
 namespace blender::math {
 
-template<typename U> struct AssertUnitEpsilon<rotation::Quaternion<U>> {
+template<typename U> struct AssertUnitEpsilon<detail::Quaternion<U>> {
   static constexpr U value = AssertUnitEpsilon<U>::value * 10;
 };
 
@@ -161,9 +161,9 @@ template<typename T> inline vec_base<T, 2> interpolate_dot_slerp(const T t, cons
 }
 
 template<typename T>
-inline rotation::Quaternion<T> interpolate(const rotation::Quaternion<T> &a,
-                                           const rotation::Quaternion<T> &b,
-                                           T t)
+inline detail::Quaternion<T> interpolate(const detail::Quaternion<T> &a,
+                                         const detail::Quaternion<T> &b,
+                                         T t)
 {
   BLI_assert(is_unit_scale(a));
   BLI_assert(is_unit_scale(b));
@@ -178,7 +178,7 @@ inline rotation::Quaternion<T> interpolate(const rotation::Quaternion<T> &a,
 
   vec_base<T, 2> w = interpolate_dot_slerp(t, cosom);
 
-  return rotation::Quaternion<T>(w[0] * quat + w[1] * b);
+  return detail::Quaternion<T>(w[0] * quat + w[1] * b);
 }
 
 /**

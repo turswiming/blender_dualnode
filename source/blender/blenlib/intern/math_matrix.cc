@@ -205,13 +205,14 @@ static void polar_decompose(const mat_base<T, 3, 3> &mat3,
 template<typename T>
 mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3> &B, T t)
 {
+  using Mat3T = mat_base<T, 3, 3>;
   /* 'Rotation' component ('U' part of polar decomposition,
    * the closest orthogonal matrix to M3 rot/scale
    * transformation matrix), spherically interpolated. */
-  mat_base<T, 3, 3> U_A, U_B;
+  Mat3T U_A, U_B;
   /* 'Scaling' component ('P' part of polar decomposition, i.e. scaling in U-defined space),
    * linearly interpolated. */
-  mat_base<T, 3, 3> P_A, P_B;
+  Mat3T P_A, P_B;
 
   polar_decompose(A, U_A, P_A);
   polar_decompose(B, U_B, P_B);
@@ -232,13 +233,12 @@ mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3
     P_B = -P_B;
   }
 
-  rotation::Quaternion<T> quat_A = to_quaternion(U_A);
-  rotation::Quaternion<T> quat_B = to_quaternion(U_B);
-  rotation::Quaternion<T> quat = math::interpolate(quat_A, quat_B, t);
-  mat_base<T, 3, 3> U = mat3x3::from_rotation(quat);
-  mat_base<T, 3, 3> U = from_rotation<mat_base<T, 3, 3>>(quat);
+  detail::Quaternion<T> quat_A = math::to_quaternion(U_A);
+  detail::Quaternion<T> quat_B = math::to_quaternion(U_B);
+  detail::Quaternion<T> quat = math::interpolate(quat_A, quat_B, t);
+  Mat3T U = from_rotation<Mat3T>(quat);
 
-  mat_base<T, 3, 3> P = interpolate_linear(P_A, P_B, t);
+  Mat3T P = interpolate_linear(P_A, P_B, t);
   /* And we reconstruct rot/scale matrix from interpolated polar components */
   return U * P;
 }
@@ -273,8 +273,8 @@ namespace detail {
 
 template<typename T>
 void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
-                        rotation::EulerXYZ<T> &eul1,
-                        rotation::EulerXYZ<T> &eul2)
+                        detail::EulerXYZ<T> &eul1,
+                        detail::EulerXYZ<T> &eul2)
 {
   BLI_assert(math::is_unit_scale(mat));
 
@@ -298,19 +298,19 @@ void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
 }
 
 template void normalized_to_eul2(const float3x3 &mat,
-                                 rotation::EulerXYZ<float> &eul1,
-                                 rotation::EulerXYZ<float> &eul2);
+                                 detail::EulerXYZ<float> &eul1,
+                                 detail::EulerXYZ<float> &eul2);
 template void normalized_to_eul2(const double3x3 &mat,
-                                 rotation::EulerXYZ<double> &eul1,
-                                 rotation::EulerXYZ<double> &eul2);
+                                 detail::EulerXYZ<double> &eul1,
+                                 detail::EulerXYZ<double> &eul2);
 
-template<typename T> rotation::Quaternion<T> normalized_to_quat_fast(const mat_base<T, 3, 3> &mat)
+template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const mat_base<T, 3, 3> &mat)
 {
   BLI_assert(math::is_unit_scale(mat));
   /* Caller must ensure matrices aren't negative for valid results, see: T24291, T94231. */
   BLI_assert(!math::is_negative(mat));
 
-  rotation::Quaternion<T> q;
+  detail::Quaternion<T> q;
 
   /* Method outlined by Mike Day, ref: https://math.stackexchange.com/a/3183435/220949
    * with an additional `sqrtf(..)` for higher precision result.
@@ -394,11 +394,11 @@ template<typename T> rotation::Quaternion<T> normalized_to_quat_fast(const mat_b
 }
 
 template<typename T>
-rotation::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat)
+detail::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat)
 {
   const T det = math::determinant(mat);
   if (UNLIKELY(!isfinite(det))) {
-    return rotation::Quaternion<T>::identity();
+    return detail::Quaternion<T>::identity();
   }
   else if (UNLIKELY(det < T(0))) {
     return normalized_to_quat_fast(-mat);
