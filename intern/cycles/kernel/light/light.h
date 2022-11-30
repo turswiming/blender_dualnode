@@ -50,6 +50,7 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
     ls->Ng = zero_float3();
     ls->D = zero_float3();
     ls->pdf = 1.0f;
+    ls->eval_fac = 0.0f;
     ls->t = FLT_MAX;
     return true;
   }
