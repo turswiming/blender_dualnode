@@ -12,7 +12,6 @@
 #include <iostream>
 #include <type_traits>
 
-#include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
 namespace blender {
@@ -606,7 +605,8 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
 namespace math {
 
 template<typename T> struct AssertUnitEpsilon {
-  static constexpr T value = T(BLI_ASSERT_UNIT_EPSILON_DB);
+  /** \note Copy of BLI_ASSERT_UNIT_EPSILON_DB to avoid dragging the entire header. */
+  static constexpr T value = T(0.0002);
 };
 
 }  // namespace math

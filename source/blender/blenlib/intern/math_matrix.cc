@@ -30,13 +30,13 @@ template<typename T, int NumCol, int NumRow>
 mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
                                       const mat_base<T, NumCol, NumRow> &b)
 {
-  /** \note this is the reference implementation.
+  /* This is the reference implementation.
    * Subclass are free to overload it with vectorized / optimized code. */
-  /** \note Only tested for square matrices. Might still contain bugs. */
+  /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
   mat_base<T, NumCol, NumRow> result(0);
   unroll<NumCol>([&](auto c) {
     unroll<NumRow>([&](auto r) {
-      /** \note this is vector multiplication. */
+      /* This is vector multiplication. */
       result[c] += b[c][r] * a[r];
     });
   });
@@ -44,10 +44,7 @@ mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
 }
 
 template float2x2 operator*(const float2x2 &a, const float2x2 &b);
-#ifndef BLI_HAVE_SSE2
 template float3x3 operator*(const float3x3 &a, const float3x3 &b);
-template float4x4 operator*(const float4x4 &a, const float4x4 &b);
-#endif
 template double2x2 operator*(const double2x2 &a, const double2x2 &b);
 template double3x3 operator*(const double3x3 &a, const double3x3 &b);
 template double4x4 operator*(const double4x4 &a, const double4x4 &b);
@@ -74,6 +71,19 @@ template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
     _mm_storeu_ps(result[i], sum);
   }
   return result;
+}
+#else
+template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
+{
+  using namespace math;
+  float4x4 T = transpose(b);
+
+  float4x4 mat;
+  mat.x = float4(dot(a.x, T.x), dot(a.x, T.y), dot(a.x, T.z), dot(a.x, T.w));
+  mat.y = float4(dot(a.y, T.x), dot(a.y, T.y), dot(a.y, T.z), dot(a.y, T.w));
+  mat.z = float4(dot(a.z, T.x), dot(a.z, T.y), dot(a.z, T.z), dot(a.z, T.w));
+  mat.w = float4(dot(a.w, T.x), dot(a.w, T.y), dot(a.w, T.z), dot(a.w, T.w));
+  return mat;
 }
 #endif
 
@@ -258,7 +268,7 @@ template double4x4 interpolate(const double4x4 &A, const double4x4 &B, double t)
 /** \name Matrix to rotation
  * \{ */
 
-namespace mat3x3 {
+namespace detail {
 
 template<typename T>
 void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
@@ -398,7 +408,7 @@ rotation::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &
 template rotation::Quaternion<float> normalized_to_quat_with_checks(const float3x3 &mat);
 template rotation::Quaternion<double> normalized_to_quat_with_checks(const double3x3 &mat);
 
-}  // namespace mat3x3
+}  // namespace detail
 
 /** \} */
 

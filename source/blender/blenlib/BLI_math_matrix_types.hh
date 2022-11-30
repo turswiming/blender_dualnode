@@ -16,9 +16,6 @@
 #include <type_traits>
 
 #include "BLI_math_vec_types.hh"
-#include "BLI_math_vector.h" /* For len_squared_v3 in BLI_ASSERT_UNIT_V3. */
-#include "BLI_math_vector.hh"
-#include "BLI_simd.h"
 #include "BLI_utildefines.h"
 
 namespace blender {
@@ -302,11 +299,11 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return *this;
   }
 
-  /** IMPORTANT: This is matrix multiplication. Not per component. */
+  /** Multiply two matrices using matrix multiplication. */
   /** \note defined outside of class. */
   // friend mat_base operator*(const mat_base &a, const mat_base &b);
 
-  /** IMPORTANT: This is per component multiplication. */
+  /** Multiply each component by a scalar. */
   friend mat_base operator*(const mat_base &a, T b)
   {
     mat_base result;
@@ -314,13 +311,13 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return result;
   }
 
-  /** IMPORTANT: This is per component multiplication. */
+  /** Multiply each component by a scalar. */
   friend mat_base operator*(T a, const mat_base &b)
   {
     return b * a;
   }
 
-  /** IMPORTANT: This is matrix multiplication. Not per component. */
+  /** Multiply two matrices using matrix multiplication. */
   mat_base &operator*=(const mat_base &b)
   {
     const mat_base &a = *this;
@@ -328,7 +325,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
     return *this;
   }
 
-  /** IMPORTANT: This is per component multiplication. */
+  /** Multiply each component by a scalar. */
   mat_base &operator*=(T b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] *= b; });
@@ -339,7 +336,7 @@ struct mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   friend col_type operator*(const mat_base &a, const row_type &b)
   {
-    /** \note this is the reference implementation.
+    /* This is the reference implementation.
      * Subclass are free to overload it with vectorized / optimized code. */
     col_type result(0);
     unroll<NumCol>([&](auto c) { result += b[c] * a[c]; });
@@ -412,16 +409,14 @@ template<typename T, int NumCol, int NumRow>
 mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
                                       const mat_base<T, NumCol, NumRow> &b);
 
-#ifdef BLI_HAVE_SSE2
 template<>
 mat_base<float, 4, 4> operator*(const mat_base<float, 4, 4> &a, const mat_base<float, 4, 4> &b);
-#endif
 
-using float2x2 = blender::mat_base<float, 2, 2>;
-using float3x3 = blender::mat_base<float, 3, 3>;
-using float4x4 = blender::mat_base<float, 4, 4>;
-using double2x2 = blender::mat_base<double, 2, 2>;
-using double3x3 = blender::mat_base<double, 3, 3>;
-using double4x4 = blender::mat_base<double, 4, 4>;
+using float2x2 = mat_base<float, 2, 2>;
+using float3x3 = mat_base<float, 3, 3>;
+using float4x4 = mat_base<float, 4, 4>;
+using double2x2 = mat_base<double, 2, 2>;
+using double3x3 = mat_base<double, 3, 3>;
+using double4x4 = mat_base<double, 4, 4>;
 
 }  // namespace blender

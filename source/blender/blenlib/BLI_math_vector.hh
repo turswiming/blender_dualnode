@@ -268,11 +268,9 @@ inline T length(const vec_base<T, Size> &a)
 
 template<typename T, int Size> inline bool is_unit_scale(const vec_base<T, Size> &v)
 {
-  /**
-   * \note Checks are flipped so NAN doesn't assert.
-   * This is done because we're making sure the value was normalized and in the case we
-   * don't want NAN to be raising asserts since there is nothing to be done in that case.
-   */
+  /* Checks are flipped so NAN doesn't assert because we're making sure the value was
+   * normalized and in the case we don't want NAN to be raising asserts since there
+   * is nothing to be done in that case. */
   const T test_unit = math::length_squared(v);
   return (!(std::abs(test_unit - T(1)) >= AssertUnitEpsilon<T>::value) ||
           !(std::abs(test_unit) >= AssertUnitEpsilon<T>::value));

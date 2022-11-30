@@ -52,7 +52,7 @@ template<typename T, int NumCol, int NumRow>
 
 template<typename T, int Size> [[nodiscard]] T determinant(const mat_base<T, Size, Size> &mat);
 
-/** \note linear interpolation for each component. */
+/** Interpolate each component linearly. */
 template<typename T, int NumCol, int NumRow>
 [[nodiscard]] inline mat_base<T, NumCol, NumRow> interpolate_linear(
     const mat_base<T, NumCol, NumRow> &a, const mat_base<T, NumCol, NumRow> &b, T t)
@@ -65,7 +65,7 @@ template<typename T, int NumCol, int NumRow>
 /**
  * A polar-decomposition-based interpolation between matrix A and matrix B.
  *
- * \note This code is about five times slower as the 'naive' interpolation
+ * \note This code is about five times slower than the 'naive' interpolation
  * (it typically remains below 2 usec on an average i74700,
  * while naive implementation remains below 0.4 usec).
  * However, it gives expected results even with non-uniformly scaled matrices,
@@ -73,7 +73,6 @@ template<typename T, int NumCol, int NumRow>
  *
  * Based on "Matrix Animation and Polar Decomposition", by Ken Shoemake & Tom Duff
  *
- * \param R: Resulting interpolated matrix.
  * \param A: Input matrix which is totally effective with `t = 0.0`.
  * \param B: Input matrix which is totally effective with `t = 1.0`.
  * \param t: Interpolation factor.
@@ -125,16 +124,16 @@ template<typename T, int Size> [[nodiscard]] bool is_negative(const mat_base<T, 
 template<typename T> [[nodiscard]] bool is_negative(const mat_base<T, 4, 4> &mat);
 
 /**
- * Returns true if matrices are equal within the given limit.
+ * Returns true if matrices are equal within the given epsilon.
  */
 template<typename T, int NumCol, int NumRow>
 [[nodiscard]] inline bool compare(const mat_base<T, NumCol, NumRow> &a,
                                   const mat_base<T, NumCol, NumRow> &b,
-                                  const T limit)
+                                  const T epsilon)
 {
   for (int i = 0; i < NumCol; i++) {
     for (int j = 0; j < NumRow; j++) {
-      if (math::abs(a[i][j] - b[i][j]) > limit) {
+      if (math::abs(a[i][j] - b[i][j]) > epsilon) {
         return false;
       }
     }
@@ -356,7 +355,7 @@ template<typename T>
  * \{ */
 
 /* Implementation details. */
-namespace mat3x3 {
+namespace detail {
 
 template<typename T>
 void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
@@ -366,17 +365,17 @@ void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
 template<typename T>
 [[nodiscard]] rotation::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat);
 
-}  // namespace mat3x3
+}  // namespace detail
 
 template<typename T, bool Normalized = false>
 [[nodiscard]] inline rotation::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
 {
   rotation::EulerXYZ<T> eul1, eul2;
   if constexpr (Normalized) {
-    mat3x3::normalized_to_eul2(mat, eul1, eul2);
+    detail::normalized_to_eul2(mat, eul1, eul2);
   }
   else {
-    mat3x3::normalized_to_eul2(normalize(mat), eul1, eul2);
+    detail::normalized_to_eul2(normalize(mat), eul1, eul2);
   }
   /* Return best, which is just the one with lowest values it in. */
   return (length_manhattan(vec_base<T, 3>(eul1)) > length_manhattan(vec_base<T, 3>(eul2))) ? eul2 :
@@ -395,10 +394,10 @@ template<typename T, bool Normalized = false>
 {
   using namespace math;
   if constexpr (Normalized) {
-    return mat3x3::normalized_to_quat_with_checks(mat);
+    return detail::normalized_to_quat_with_checks(mat);
   }
   else {
-    return mat3x3::normalized_to_quat_with_checks(normalize(mat));
+    return detail::normalized_to_quat_with_checks(normalize(mat));
   }
 }
 

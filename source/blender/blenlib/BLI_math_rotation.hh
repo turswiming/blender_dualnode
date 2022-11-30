@@ -103,9 +103,9 @@ template<typename T> struct AxisAngle {
 };
 
 /**
- * Intermediate Types
+ * Intermediate Types.
  *
- * Some function need to have higher precision than standard floats.
+ * Some functions need to have higher precision than standard floats.
  */
 template<typename T> struct TypeTraits {
   using IntermediateType = T;
@@ -139,24 +139,22 @@ template<typename U> struct AssertUnitEpsilon<rotation::Quaternion<U>> {
  */
 template<typename T> inline vec_base<T, 2> interpolate_dot_slerp(const T t, const T cosom)
 {
-  const T eps = 1e-4f;
+  const T eps = T(1e-4);
 
   BLI_assert(IN_RANGE_INCL(cosom, T(-1.0001), T(1.0001)));
 
   vec_base<T, 2> w;
-  /* within [-1..1] range, avoid aligned axis */
-  if (LIKELY(std::abs(cosom) < (T(1.0) - eps))) {
-    float omega, sinom;
+  /* Within [-1..1] range, avoid aligned axis. */
+  if (LIKELY(math::abs(cosom) < (T(1) - eps))) {
+    const T omega = math::acos(cosom);
+    const T sinom = math::sin(omega);
 
-    omega = std::acos(cosom);
-    sinom = std::sin(omega);
-
-    w[0] = std::sin((T(1.0) - t) * omega) / sinom;
-    w[1] = std::sin(t * omega) / sinom;
+    w[0] = math::sin((T(1) - t) * omega) / sinom;
+    w[1] = math::sin(t * omega) / sinom;
   }
   else {
-    /* fallback to lerp */
-    w[0] = 1.0f - t;
+    /* Fallback to lerp */
+    w[0] = T(1) - t;
     w[1] = t;
   }
   return w;

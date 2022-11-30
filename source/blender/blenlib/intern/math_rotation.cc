@@ -37,19 +37,19 @@ template<typename T> Quaternion<T>::operator EulerXYZ<T>()
 template<typename T> EulerXYZ<T>::operator Quaternion<T>()
 {
   const EulerXYZ<T> &eul = *this;
-  T ti = eul[0] * T(0.5);
-  T tj = eul[1] * T(0.5);
-  T th = eul[2] * T(0.5);
-  T ci = math::cos(ti);
-  T cj = math::cos(tj);
-  T ch = math::cos(th);
-  T si = math::sin(ti);
-  T sj = math::sin(tj);
-  T sh = math::sin(th);
-  T cc = ci * ch;
-  T cs = ci * sh;
-  T sc = si * ch;
-  T ss = si * sh;
+  const T ti = eul[0] * T(0.5);
+  const T tj = eul[1] * T(0.5);
+  const T th = eul[2] * T(0.5);
+  const T ci = math::cos(ti);
+  const T cj = math::cos(tj);
+  const T ch = math::cos(th);
+  const T si = math::sin(ti);
+  const T sj = math::sin(tj);
+  const T sh = math::sin(th);
+  const T cc = ci * ch;
+  const T cs = ci * sh;
+  const T sc = si * ch;
+  const T ss = si * sh;
 
   Quaternion<T> quat;
   quat[0] = cj * cc + sj * ss;

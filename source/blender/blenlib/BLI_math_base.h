@@ -307,11 +307,10 @@ float ceil_power_of_10(float f);
 /* Asserts, some math functions expect normalized inputs
  * check the vector is unit length, or zero length (which can't be helped in some cases). */
 
-/** \note 0.0001 is too small because normals may be converted from short's: see T34322. */
-#define BLI_ASSERT_UNIT_EPSILON 0.0002f
-#define BLI_ASSERT_UNIT_EPSILON_DB 0.0002
-
 #ifndef NDEBUG
+/** \note 0.0001 is too small because normals may be converted from short's: see T34322. */
+#  define BLI_ASSERT_UNIT_EPSILON 0.0002f
+#  define BLI_ASSERT_UNIT_EPSILON_DB 0.0002
 /**
  * \note Checks are flipped so NAN doesn't assert.
  * This is done because we're making sure the value was normalized and in the case we
