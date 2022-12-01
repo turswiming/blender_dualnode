@@ -2434,6 +2434,7 @@ static void rna_def_mloop(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Index", "Index of this loop");
 
   prop = RNA_def_property(srna, "normal", PROP_FLOAT, PROP_DIRECTION);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_array(prop, 3);
   RNA_def_property_range(prop, -1.0f, 1.0f);
   RNA_def_property_float_funcs(prop, "rna_MeshLoop_normal_get", NULL, NULL);

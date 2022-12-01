@@ -525,7 +525,7 @@ const float (*BKE_mesh_poly_normals_ensure(const Mesh *mesh))[3]
 const float (*BKE_mesh_corner_normals_ensure(const Mesh *mesh))[3]
 {
   if (!BKE_mesh_corner_normals_are_dirty(mesh)) {
-    BLI_assert(mesh->runtime->corner_normals != nullptr || mesh->totcorner == 0);
+    BLI_assert(mesh->runtime->corner_normals != nullptr || mesh->totloop == 0);
     return mesh->runtime->corner_normals;
   }
 
