@@ -6,6 +6,7 @@
  */
 
 #include "BLI_math_matrix.hh"
+#include "BLI_math_rotation_new.hh"
 
 /* Eigen gives annoying huge amount of warnings here, silence them! */
 #if defined(__GNUC__) && !defined(__clang__)

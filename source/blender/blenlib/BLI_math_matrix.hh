@@ -8,7 +8,7 @@
  */
 
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_rotation.hh"
+#include "BLI_math_rotation_types.hh"
 #include "BLI_math_vector.hh"
 
 namespace blender::math {

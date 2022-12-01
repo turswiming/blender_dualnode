@@ -7,113 +7,11 @@
 #include "BLI_math_base.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_rotation.hh"
+#include "BLI_math_rotation_new.hh"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 
 namespace blender::math::detail {
-
-#ifdef DEBUG
-#  define BLI_ASSERT_UNIT_QUATERNION(_q) \
-    { \
-      auto rot_vec = static_cast<vec_base<T, 4>>(_q); \
-      T quat_length = math::length_squared(rot_vec); \
-      if (!(quat_length == 0 || (math::abs(quat_length - 1) < 0.0001))) { \
-        std::cout << "Warning! " << __func__ << " called with non-normalized quaternion: size " \
-                  << quat_length << " *** report a bug ***\n"; \
-      } \
-    }
-#else
-#  define BLI_ASSERT_UNIT_QUATERNION(_q)
-#endif
-
-template<typename T> Quaternion<T>::operator EulerXYZ<T>() const
-{
-  using Mat3T = mat_base<T, 3, 3>;
-  const Quaternion<T> &quat = *this;
-  BLI_ASSERT_UNIT_QUATERNION(quat)
-  Mat3T unit_mat = math::from_rotation<Mat3T>(quat);
-  return math::to_euler<T, true>(unit_mat);
-}
-
-template<typename T> EulerXYZ<T>::operator Quaternion<T>() const
-{
-  const EulerXYZ<T> &eul = *this;
-  const T ti = eul.x * T(0.5);
-  const T tj = eul.y * T(0.5);
-  const T th = eul.z * T(0.5);
-  const T ci = math::cos(ti);
-  const T cj = math::cos(tj);
-  const T ch = math::cos(th);
-  const T si = math::sin(ti);
-  const T sj = math::sin(tj);
-  const T sh = math::sin(th);
-  const T cc = ci * ch;
-  const T cs = ci * sh;
-  const T sc = si * ch;
-  const T ss = si * sh;
-
-  Quaternion<T> quat;
-  quat.x = cj * cc + sj * ss;
-  quat.y = cj * sc - sj * cs;
-  quat.z = cj * ss + sj * cc;
-  quat.w = cj * cs - sj * sc;
-  return quat;
-}
-
-template<typename T> Quaternion<T>::operator AxisAngle<T>() const
-{
-  const Quaternion<T> &quat = *this;
-  BLI_ASSERT_UNIT_QUATERNION(quat)
-
-  /* Calculate angle/2, and sin(angle/2). */
-  T ha = math::acos(quat.x);
-  T si = math::sin(ha);
-
-  /* From half-angle to angle. */
-  T angle = ha * 2;
-  /* Prevent division by zero for axis conversion. */
-  if (math::abs(si) < 0.0005) {
-    si = 1.0f;
-  }
-
-  vec_base<T, 3> axis = vec_base<T, 3>(quat.y, quat.z, quat.w) / si;
-  if (math::is_zero(axis)) {
-    axis[1] = 1.0f;
-  }
-  return AxisAngleNormalized<T>(axis, angle);
-}
-
-template<typename T> AxisAngle<T>::operator Quaternion<T>() const
-{
-  BLI_assert(math::is_unit_scale(axis_));
-
-  /** Using half angle identities: sin(angle / 2) = sqrt((1 - angle_cos) / 2) */
-  T sine = math::sqrt(T(0.5) - angle_cos_ * T(0.5));
-  const T cosine = math::sqrt(T(0.5) + angle_cos_ * T(0.5));
-
-  if (angle_sin_ < 0.0) {
-    sine = -sine;
-  }
-
-  Quaternion<T> quat;
-  quat.x = cosine;
-  quat.y = axis_.x * sine;
-  quat.z = axis_.y * sine;
-  quat.w = axis_.z * sine;
-  return quat;
-}
-
-template<typename T> EulerXYZ<T>::operator AxisAngle<T>() const
-{
-  /* Use quaternions as intermediate representation for now... */
-  return AxisAngle<T>(Quaternion<T>(*this));
-}
-
-template<typename T> AxisAngle<T>::operator EulerXYZ<T>() const
-{
-  /* Use quaternions as intermediate representation for now... */
-  return EulerXYZ<T>(Quaternion<T>(*this));
-}
 
 template AxisAngle<float>::operator EulerXYZ<float>() const;
 template AxisAngle<float>::operator Quaternion<float>() const;
