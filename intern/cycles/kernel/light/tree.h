@@ -125,12 +125,12 @@ ccl_device void light_tree_importance(const float3 N_or_D,
   /* minimum angle an emitter’s axis would form with the direction to the shading point,
    * cos(theta') in the paper */
   float cos_min_outgoing_angle;
-  if ((cos_theta > cos_theta_u) || (cos_theta_minus_theta_u > cos_theta_o)) {
-    /* theta - theta_o - theta_u < 0 */
+  if ((cos_theta >= cos_theta_u) || (cos_theta_minus_theta_u >= cos_theta_o)) {
+    /* theta - theta_o - theta_u <= 0 */
     kernel_assert((fast_acosf(cos_theta) - bcone.theta_o - fast_acosf(cos_theta_u)) < 5e-4f);
     cos_min_outgoing_angle = 1.0f;
   }
-  else if ((cos_theta > cos_theta_u) || (bcone.theta_o + bcone.theta_e > M_PI_F) ||
+  else if ((bcone.theta_o + bcone.theta_e > M_PI_F) ||
            (cos_theta_minus_theta_u > cos(bcone.theta_o + bcone.theta_e))) {
     /* theta' = theta - theta_o - theta_u < theta_e */
     kernel_assert(
