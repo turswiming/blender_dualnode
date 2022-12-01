@@ -19,7 +19,7 @@
 
 #include "RNA_access.h"
 
-#include "interface_intern.h"
+#include "interface_intern.hh"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -251,7 +251,7 @@ bool ui_but_contains_point_px_icon(const uiBut *but, ARegion *region, const wmEv
     /* use button size itself */
   }
   else if (but->drawflag & UI_BUT_ICON_LEFT) {
-    rect.xmax = rect.xmin + (BLI_rcti_size_y(&rect));
+    rect.xmax = rect.xmin + BLI_rcti_size_y(&rect);
   }
   else {
     const int delta = BLI_rcti_size_x(&rect) - BLI_rcti_size_y(&rect);

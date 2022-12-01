@@ -199,13 +199,15 @@ PointTrackPick ed_tracking_pick_point_track(const TrackPickOptions *options,
   }
 
   MovieClip *clip = ED_space_clip_get_clip(space_clip);
-  ListBase *tracks_base = BKE_tracking_get_active_tracks(&clip->tracking);
-  const int framenr = ED_space_clip_get_clip_frame_number(space_clip);
+  MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
 
   const float distance_tolerance_px_squared = (12.0f * 12.0f) / space_clip->zoom;
+  const bool are_disabled_markers_visible = (space_clip->flag & SC_HIDE_DISABLED) == 0;
+  const int framenr = ED_space_clip_get_clip_frame_number(space_clip);
+
   PointTrackPick pick = point_track_pick_make_null();
 
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, tracks_base) {
+  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
     const bool is_track_selected = TRACK_VIEW_SELECTED(space_clip, track);
 
     if (options->selected_only && !is_track_selected) {
@@ -216,8 +218,21 @@ PointTrackPick ed_tracking_pick_point_track(const TrackPickOptions *options,
     }
 
     MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
-    if (options->enabled_only && (marker->flag & MARKER_DISABLED)) {
-      continue;
+    const bool is_marker_enabled = ((marker->flag & MARKER_DISABLED) == 0);
+
+    if (!is_marker_enabled) {
+      if (options->enabled_only) {
+        /* Disabled marker is requested to not be in the pick result, so skip it. */
+        continue;
+      }
+
+      /* See whether the disabled marker is visible.
+       *
+       * If the clip editor is not hiding disabled markers, then all disabled markers are visible.
+       * Otherwise only disabled marker of the active track is visible. */
+      if (!are_disabled_markers_visible && track != tracking_object->active_track) {
+        continue;
+      }
     }
 
     float distance_squared;
@@ -372,14 +387,13 @@ PlaneTrackPick ed_tracking_pick_plane_track(const TrackPickOptions *options,
   }
 
   MovieClip *clip = ED_space_clip_get_clip(space_clip);
-  ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(&clip->tracking);
+  MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
   const int framenr = ED_space_clip_get_clip_frame_number(space_clip);
 
   const float distance_tolerance_px_squared = (12.0f * 12.0f) / space_clip->zoom;
   PlaneTrackPick pick = plane_track_pick_make_null();
 
-  for (MovieTrackingPlaneTrack *plane_track = plane_tracks_base->first; plane_track != NULL;
-       plane_track = plane_track->next) {
+  LISTBASE_FOREACH (MovieTrackingPlaneTrack *, plane_track, &tracking_object->plane_tracks) {
     if (options->selected_only && !PLANE_TRACK_VIEW_SELECTED(plane_track)) {
       continue;
     }
@@ -440,7 +454,7 @@ bool ed_tracking_plane_track_pick_can_slide(const PlaneTrackPick *pick)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Point closest point or plane track.
+/** \name Pick closest point or plane track.
  * \{ */
 
 BLI_INLINE TrackingPick tracking_pick_make_null(void)
@@ -541,9 +555,7 @@ static int select_exec(bContext *C, wmOperator *op)
   SpaceClip *sc = CTX_wm_space_clip(C);
   MovieClip *clip = ED_space_clip_get_clip(sc);
   MovieTracking *tracking = &clip->tracking;
-  ListBase *tracksbase = BKE_tracking_get_active_tracks(tracking);
-  ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
-  MovieTrackingTrack *act_track = BKE_tracking_track_get_active(tracking);
+  MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(tracking);
   const bool extend = RNA_boolean_get(op->ptr, "extend");
   const bool deselect_all = RNA_boolean_get(op->ptr, "deselect_all");
 
@@ -561,12 +573,12 @@ static int select_exec(bContext *C, wmOperator *op)
   const bool activate_selected = RNA_boolean_get(op->ptr, "activate_selected");
   if (activate_selected && ed_tracking_pick_can_slide(sc, &pick)) {
     if (pick.point_track_pick.track != NULL) {
-      clip->tracking.act_track = pick.point_track_pick.track;
-      clip->tracking.act_plane_track = NULL;
+      tracking_object->active_track = pick.point_track_pick.track;
+      tracking_object->active_plane_track = NULL;
     }
     else {
-      clip->tracking.act_track = NULL;
-      clip->tracking.act_plane_track = pick.plane_track_pick.plane_track;
+      tracking_object->active_track = NULL;
+      tracking_object->active_plane_track = pick.plane_track_pick.plane_track;
     }
 
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
@@ -580,7 +592,7 @@ static int select_exec(bContext *C, wmOperator *op)
 
   if (pick.point_track_pick.track != NULL) {
     if (!extend) {
-      ed_tracking_deselect_all_plane_tracks(plane_tracks_base);
+      ed_tracking_deselect_all_plane_tracks(&tracking_object->plane_tracks);
     }
 
     MovieTrackingTrack *track = pick.point_track_pick.track;
@@ -591,12 +603,12 @@ static int select_exec(bContext *C, wmOperator *op)
     }
 
     if (extend && TRACK_AREA_SELECTED(track, area)) {
-      if (track == act_track) {
+      if (track == tracking_object->active_track) {
         BKE_tracking_track_deselect(track, area);
       }
       else {
-        clip->tracking.act_track = track;
-        clip->tracking.act_plane_track = NULL;
+        tracking_object->active_track = track;
+        tracking_object->active_plane_track = NULL;
       }
     }
     else {
@@ -604,14 +616,14 @@ static int select_exec(bContext *C, wmOperator *op)
         area = TRACK_AREA_ALL;
       }
 
-      BKE_tracking_track_select(tracksbase, track, area, extend);
-      clip->tracking.act_track = track;
-      clip->tracking.act_plane_track = NULL;
+      BKE_tracking_track_select(&tracking_object->tracks, track, area, extend);
+      tracking_object->active_track = track;
+      tracking_object->active_plane_track = NULL;
     }
   }
   else if (pick.plane_track_pick.plane_track != NULL) {
     if (!extend) {
-      ed_tracking_deselect_all_tracks(tracksbase);
+      ed_tracking_deselect_all_tracks(&tracking_object->tracks);
     }
 
     MovieTrackingPlaneTrack *plane_track = pick.plane_track_pick.plane_track;
@@ -625,12 +637,12 @@ static int select_exec(bContext *C, wmOperator *op)
       plane_track->flag |= SELECT;
     }
 
-    clip->tracking.act_track = NULL;
-    clip->tracking.act_plane_track = plane_track;
+    tracking_object->active_track = NULL;
+    tracking_object->active_plane_track = plane_track;
   }
   else if (deselect_all) {
-    ed_tracking_deselect_all_tracks(tracksbase);
-    ed_tracking_deselect_all_plane_tracks(plane_tracks_base);
+    ed_tracking_deselect_all_tracks(&tracking_object->tracks);
+    ed_tracking_deselect_all_plane_tracks(&tracking_object->plane_tracks);
   }
 
   ED_clip_view_lock_state_restore_no_jump(C, &lock_state);
@@ -739,11 +751,7 @@ static int box_select_exec(bContext *C, wmOperator *op)
   ARegion *region = CTX_wm_region(C);
 
   MovieClip *clip = ED_space_clip_get_clip(sc);
-  MovieTracking *tracking = &clip->tracking;
-  MovieTrackingTrack *track;
-  MovieTrackingPlaneTrack *plane_track;
-  ListBase *tracksbase = BKE_tracking_get_active_tracks(tracking);
-  ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
+  const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
   rcti rect;
   rctf rectf;
   bool changed = false;
@@ -763,47 +771,49 @@ static int box_select_exec(bContext *C, wmOperator *op)
   }
 
   /* do actual selection */
-  track = tracksbase->first;
-  while (track) {
-    if ((track->flag & TRACK_HIDDEN) == 0) {
-      MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
-
-      if (MARKER_VISIBLE(sc, track, marker)) {
-        if (BLI_rctf_isect_pt_v(&rectf, marker->pos)) {
-          if (select) {
-            BKE_tracking_track_flag_set(track, TRACK_AREA_ALL, SELECT);
-          }
-          else {
-            BKE_tracking_track_flag_clear(track, TRACK_AREA_ALL, SELECT);
-          }
-        }
-        changed = true;
-      }
+  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
+    if (track->flag & TRACK_HIDDEN) {
+      continue;
     }
 
-    track = track->next;
-  }
+    const MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
 
-  for (plane_track = plane_tracks_base->first; plane_track; plane_track = plane_track->next) {
-    if ((plane_track->flag & PLANE_TRACK_HIDDEN) == 0) {
-      MovieTrackingPlaneMarker *plane_marker = BKE_tracking_plane_marker_get(plane_track, framenr);
-
-      for (int i = 0; i < 4; i++) {
-        if (BLI_rctf_isect_pt_v(&rectf, plane_marker->corners[i])) {
-          if (select) {
-            plane_track->flag |= SELECT;
-          }
-          else {
-            plane_track->flag &= ~SELECT;
-          }
+    if (ED_space_clip_marker_is_visible(sc, tracking_object, track, marker)) {
+      if (BLI_rctf_isect_pt_v(&rectf, marker->pos)) {
+        if (select) {
+          BKE_tracking_track_flag_set(track, TRACK_AREA_ALL, SELECT);
+        }
+        else {
+          BKE_tracking_track_flag_clear(track, TRACK_AREA_ALL, SELECT);
         }
       }
       changed = true;
     }
   }
 
+  LISTBASE_FOREACH (MovieTrackingPlaneTrack *, plane_track, &tracking_object->plane_tracks) {
+    if (plane_track->flag & PLANE_TRACK_HIDDEN) {
+      continue;
+    }
+
+    const MovieTrackingPlaneMarker *plane_marker = BKE_tracking_plane_marker_get(plane_track,
+                                                                                 framenr);
+
+    for (int i = 0; i < 4; i++) {
+      if (BLI_rctf_isect_pt_v(&rectf, plane_marker->corners[i])) {
+        if (select) {
+          plane_track->flag |= SELECT;
+        }
+        else {
+          plane_track->flag &= ~SELECT;
+        }
+      }
+    }
+    changed = true;
+  }
+
   if (changed) {
-    BKE_tracking_dopesheet_tag_update(tracking);
+    BKE_tracking_dopesheet_tag_update(&clip->tracking);
 
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
     DEG_id_tag_update(&clip->id, ID_RECALC_SELECT);
@@ -846,67 +856,36 @@ static int do_lasso_select_marker(bContext *C,
   ARegion *region = CTX_wm_region(C);
 
   MovieClip *clip = ED_space_clip_get_clip(sc);
-  MovieTracking *tracking = &clip->tracking;
-  MovieTrackingTrack *track;
-  MovieTrackingPlaneTrack *plane_track;
-  ListBase *tracksbase = BKE_tracking_get_active_tracks(tracking);
-  ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
+  const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
   rcti rect;
   bool changed = false;
-  int framenr = ED_space_clip_get_clip_frame_number(sc);
+  const int framenr = ED_space_clip_get_clip_frame_number(sc);
 
   /* get rectangle from operator */
   BLI_lasso_boundbox(&rect, mcoords, mcoords_len);
 
   /* do actual selection */
-  track = tracksbase->first;
-  while (track) {
-    if ((track->flag & TRACK_HIDDEN) == 0) {
-      MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
-
-      if (MARKER_VISIBLE(sc, track, marker)) {
-        float screen_co[2];
-
-        /* marker in screen coords */
-        ED_clip_point_stable_pos__reverse(sc, region, marker->pos, screen_co);
-
-        if (BLI_rcti_isect_pt(&rect, screen_co[0], screen_co[1]) &&
-            BLI_lasso_is_point_inside(
-                mcoords, mcoords_len, screen_co[0], screen_co[1], V2D_IS_CLIPPED)) {
-          if (select) {
-            BKE_tracking_track_flag_set(track, TRACK_AREA_ALL, SELECT);
-          }
-          else {
-            BKE_tracking_track_flag_clear(track, TRACK_AREA_ALL, SELECT);
-          }
-        }
-
-        changed = true;
-      }
+  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
+    if (track->flag & TRACK_HIDDEN) {
+      continue;
     }
 
-    track = track->next;
-  }
+    const MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
 
-  for (plane_track = plane_tracks_base->first; plane_track; plane_track = plane_track->next) {
-    if ((plane_track->flag & PLANE_TRACK_HIDDEN) == 0) {
-      MovieTrackingPlaneMarker *plane_marker = BKE_tracking_plane_marker_get(plane_track, framenr);
+    if (ED_space_clip_marker_is_visible(sc, tracking_object, track, marker)) {
+      float screen_co[2];
 
-      for (int i = 0; i < 4; i++) {
-        float screen_co[2];
+      /* marker in screen coords */
+      ED_clip_point_stable_pos__reverse(sc, region, marker->pos, screen_co);
 
-        /* marker in screen coords */
-        ED_clip_point_stable_pos__reverse(sc, region, plane_marker->corners[i], screen_co);
-
-        if (BLI_rcti_isect_pt(&rect, screen_co[0], screen_co[1]) &&
-            BLI_lasso_is_point_inside(
-                mcoords, mcoords_len, screen_co[0], screen_co[1], V2D_IS_CLIPPED)) {
-          if (select) {
-            plane_track->flag |= SELECT;
-          }
-          else {
-            plane_track->flag &= ~SELECT;
-          }
+      if (BLI_rcti_isect_pt(&rect, screen_co[0], screen_co[1]) &&
+          BLI_lasso_is_point_inside(
+              mcoords, mcoords_len, screen_co[0], screen_co[1], V2D_IS_CLIPPED)) {
+        if (select) {
+          BKE_tracking_track_flag_set(track, TRACK_AREA_ALL, SELECT);
+        }
+        else {
+          BKE_tracking_track_flag_clear(track, TRACK_AREA_ALL, SELECT);
         }
       }
 
@@ -914,8 +893,37 @@ static int do_lasso_select_marker(bContext *C,
     }
   }
 
+  LISTBASE_FOREACH (MovieTrackingPlaneTrack *, plane_track, &tracking_object->plane_tracks) {
+    if (plane_track->flag & PLANE_TRACK_HIDDEN) {
+      continue;
+    }
+
+    const MovieTrackingPlaneMarker *plane_marker = BKE_tracking_plane_marker_get(plane_track,
+                                                                                 framenr);
+
+    for (int i = 0; i < 4; i++) {
+      float screen_co[2];
+
+      /* marker in screen coords */
+      ED_clip_point_stable_pos__reverse(sc, region, plane_marker->corners[i], screen_co);
+
+      if (BLI_rcti_isect_pt(&rect, screen_co[0], screen_co[1]) &&
+          BLI_lasso_is_point_inside(
+              mcoords, mcoords_len, screen_co[0], screen_co[1], V2D_IS_CLIPPED)) {
+        if (select) {
+          plane_track->flag |= SELECT;
+        }
+        else {
+          plane_track->flag &= ~SELECT;
+        }
+      }
+    }
+
+    changed = true;
+  }
+
   if (changed) {
-    BKE_tracking_dopesheet_tag_update(tracking);
+    BKE_tracking_dopesheet_tag_update(&clip->tracking);
 
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
     DEG_id_tag_update(&clip->id, ID_RECALC_SELECT);
@@ -983,7 +991,7 @@ static int point_inside_ellipse(const float point[2],
   return x * x + y * y < 1.0f;
 }
 
-static int marker_inside_ellipse(MovieTrackingMarker *marker,
+static int marker_inside_ellipse(const MovieTrackingMarker *marker,
                                  const float offset[2],
                                  const float ellipse[2])
 {
@@ -996,11 +1004,7 @@ static int circle_select_exec(bContext *C, wmOperator *op)
   ARegion *region = CTX_wm_region(C);
 
   MovieClip *clip = ED_space_clip_get_clip(sc);
-  MovieTracking *tracking = &clip->tracking;
-  MovieTrackingTrack *track;
-  MovieTrackingPlaneTrack *plane_track;
-  ListBase *tracksbase = BKE_tracking_get_active_tracks(tracking);
-  ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
+  const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
   int width, height;
   bool changed = false;
   float zoomx, zoomy, offset[2], ellipse[2];
@@ -1029,46 +1033,49 @@ static int circle_select_exec(bContext *C, wmOperator *op)
   ED_clip_point_stable_pos(sc, region, x, y, &offset[0], &offset[1]);
 
   /* do selection */
-  track = tracksbase->first;
-  while (track) {
-    if ((track->flag & TRACK_HIDDEN) == 0) {
-      MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
-
-      if (MARKER_VISIBLE(sc, track, marker) && marker_inside_ellipse(marker, offset, ellipse)) {
-        if (select) {
-          BKE_tracking_track_flag_set(track, TRACK_AREA_ALL, SELECT);
-        }
-        else {
-          BKE_tracking_track_flag_clear(track, TRACK_AREA_ALL, SELECT);
-        }
-        changed = true;
-      }
+  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
+    if (track->flag & TRACK_HIDDEN) {
+      continue;
     }
 
-    track = track->next;
-  }
+    const MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
 
-  for (plane_track = plane_tracks_base->first; plane_track; plane_track = plane_track->next) {
-    if ((plane_track->flag & PLANE_TRACK_HIDDEN) == 0) {
-      MovieTrackingPlaneMarker *plane_marker = BKE_tracking_plane_marker_get(plane_track, framenr);
-
-      for (int i = 0; i < 4; i++) {
-        if (point_inside_ellipse(plane_marker->corners[i], offset, ellipse)) {
-          if (select) {
-            plane_track->flag |= SELECT;
-          }
-          else {
-            plane_track->flag &= ~SELECT;
-          }
-        }
+    if (ED_space_clip_marker_is_visible(sc, tracking_object, track, marker) &&
+        marker_inside_ellipse(marker, offset, ellipse)) {
+      if (select) {
+        BKE_tracking_track_flag_set(track, TRACK_AREA_ALL, SELECT);
       }
-
+      else {
+        BKE_tracking_track_flag_clear(track, TRACK_AREA_ALL, SELECT);
+      }
       changed = true;
     }
   }
 
+  LISTBASE_FOREACH (MovieTrackingPlaneTrack *, plane_track, &tracking_object->plane_tracks) {
+    if (plane_track->flag & PLANE_TRACK_HIDDEN) {
+      continue;
+    }
+
+    const MovieTrackingPlaneMarker *plane_marker = BKE_tracking_plane_marker_get(plane_track,
+                                                                                 framenr);
+
+    for (int i = 0; i < 4; i++) {
+      if (point_inside_ellipse(plane_marker->corners[i], offset, ellipse)) {
+        if (select) {
+          plane_track->flag |= SELECT;
+        }
+        else {
+          plane_track->flag &= ~SELECT;
+        }
+      }
+    }
+
+    changed = true;
+  }
+
   if (changed) {
-    BKE_tracking_dopesheet_tag_update(tracking);
+    BKE_tracking_dopesheet_tag_update(&clip->tracking);
 
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, NULL);
     DEG_id_tag_update(&clip->id, ID_RECALC_SELECT);
@@ -1152,18 +1159,14 @@ static int select_grouped_exec(bContext *C, wmOperator *op)
 {
   SpaceClip *sc = CTX_wm_space_clip(C);
   MovieClip *clip = ED_space_clip_get_clip(sc);
-  MovieTrackingTrack *track;
-  MovieTrackingMarker *marker;
-  MovieTracking *tracking = &clip->tracking;
-  ListBase *tracksbase = BKE_tracking_get_active_tracks(tracking);
-  int group = RNA_enum_get(op->ptr, "group");
-  int framenr = ED_space_clip_get_clip_frame_number(sc);
+  const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
+  const int group = RNA_enum_get(op->ptr, "group");
+  const int framenr = ED_space_clip_get_clip_frame_number(sc);
 
-  track = tracksbase->first;
-  while (track) {
+  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
     bool ok = false;
 
-    marker = BKE_tracking_marker_get(track, framenr);
+    MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
 
     if (group == 0) { /* Keyframed */
       ok = marker->framenr == framenr && (marker->flag & MARKER_TRACKED) == 0;
@@ -1181,7 +1184,7 @@ static int select_grouped_exec(bContext *C, wmOperator *op)
       ok = marker->flag & MARKER_DISABLED;
     }
     else if (group == 5) { /* color */
-      MovieTrackingTrack *act_track = BKE_tracking_track_get_active(tracking);
+      const MovieTrackingTrack *act_track = tracking_object->active_track;
 
       if (act_track) {
         ok = (track->flag & TRACK_CUSTOMCOLOR) == (act_track->flag & TRACK_CUSTOMCOLOR);
@@ -1204,11 +1207,9 @@ static int select_grouped_exec(bContext *C, wmOperator *op)
         track->search_flag |= SELECT;
       }
     }
-
-    track = track->next;
   }
 
-  BKE_tracking_dopesheet_tag_update(tracking);
+  BKE_tracking_dopesheet_tag_update(&clip->tracking);
 
   WM_event_add_notifier(C, NC_MOVIECLIP | ND_DISPLAY, clip);
   DEG_id_tag_update(&clip->id, ID_RECALC_SELECT);

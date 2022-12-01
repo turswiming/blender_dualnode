@@ -46,6 +46,15 @@ void IMB_freeImBuf(ImBuf * /*ibuf*/)
   BLI_assert_unreachable();
 }
 
+struct ImBuf *IMB_allocImBuf(unsigned int /*x*/,
+                             unsigned int /*y*/,
+                             unsigned char /*planes*/,
+                             unsigned int /*flags*/)
+{
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -168,7 +177,8 @@ void BKE_mesh_calc_poly_normal(const struct MPoly * /*mpoly*/,
   BLI_assert_unreachable();
 }
 
-void BKE_mesh_looptri_get_real_edges(const struct Mesh * /*mesh*/,
+void BKE_mesh_looptri_get_real_edges(const struct MEdge * /*edges*/,
+                                     const struct MLoop * /*loops*/,
                                      const struct MLoopTri * /*looptri*/,
                                      int UNUSED(r_edges[3]))
 {

@@ -24,7 +24,7 @@
 
 GHOST_SystemHandle GHOST_CreateSystem(void)
 {
-  GHOST_ISystem::createSystem(true);
+  GHOST_ISystem::createSystem(true, false);
   GHOST_ISystem *system = GHOST_ISystem::getSystem();
 
   return (GHOST_SystemHandle)system;
@@ -51,6 +51,13 @@ GHOST_TSuccess GHOST_DisposeSystem(GHOST_SystemHandle systemhandle)
 
   return system->disposeSystem();
 }
+
+#if !(defined(WIN32) || defined(__APPLE__))
+const char *GHOST_SystemBackend()
+{
+  return GHOST_ISystem::getSystemBackend();
+}
+#endif
 
 void GHOST_ShowMessageBox(GHOST_SystemHandle systemhandle,
                           const char *title,
@@ -154,7 +161,6 @@ GHOST_WindowHandle GHOST_CreateWindow(GHOST_SystemHandle systemhandle,
                                       uint32_t height,
                                       GHOST_TWindowState state,
                                       bool is_dialog,
-                                      GHOST_TDrawingContextType type,
                                       GHOST_GLSettings glSettings)
 {
   GHOST_ISystem *system = (GHOST_ISystem *)systemhandle;
@@ -165,7 +171,6 @@ GHOST_WindowHandle GHOST_CreateWindow(GHOST_SystemHandle systemhandle,
                                                   width,
                                                   height,
                                                   state,
-                                                  type,
                                                   glSettings,
                                                   false,
                                                   is_dialog,
@@ -558,6 +563,12 @@ GHOST_TSuccess GHOST_SetDrawingContextType(GHOST_WindowHandle windowhandle,
   GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
 
   return window->setDrawingContextType(type);
+}
+
+GHOST_ContextHandle GHOST_GetDrawingContext(GHOST_WindowHandle windowhandle)
+{
+  GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
+  return (GHOST_ContextHandle)window->getDrawingContext();
 }
 
 void GHOST_SetTitle(GHOST_WindowHandle windowhandle, const char *title)
@@ -1185,3 +1196,35 @@ int GHOST_XrGetControllerModelData(GHOST_XrContextHandle xr_contexthandle,
 }
 
 #endif /* WITH_XR_OPENXR */
+
+#ifdef WITH_VULKAN_BACKEND
+
+/**
+ * Return vulkan handles for the given context.
+ */
+void GHOST_GetVulkanHandles(GHOST_ContextHandle contexthandle,
+                            void *r_instance,
+                            void *r_physical_device,
+                            void *r_device,
+                            uint32_t *r_graphic_queue_familly)
+{
+  GHOST_IContext *context = (GHOST_IContext *)contexthandle;
+  context->getVulkanHandles(r_instance, r_physical_device, r_device, r_graphic_queue_familly);
+}
+
+/**
+ * Return vulkan backbuffer resources handles for the given window.
+ */
+void GHOST_GetVulkanBackbuffer(GHOST_WindowHandle windowhandle,
+                               void *image,
+                               void *framebuffer,
+                               void *command_buffer,
+                               void *render_pass,
+                               void *extent,
+                               uint32_t *fb_id)
+{
+  GHOST_IWindow *window = (GHOST_IWindow *)windowhandle;
+  window->getVulkanBackbuffer(image, framebuffer, command_buffer, render_pass, extent, fb_id);
+}
+
+#endif /* WITH_VULKAN */

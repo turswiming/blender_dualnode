@@ -397,7 +397,7 @@ void multires_mark_as_modified(Depsgraph *depsgraph, Object *object, MultiresMod
    * In a longer term maybe special dependency graph tag can help sanitizing this a bit. */
   Object *object_eval = DEG_get_evaluated_object(depsgraph, object);
   Mesh *mesh = static_cast<Mesh *>(object_eval->data);
-  SubdivCCG *subdiv_ccg = mesh->runtime.subdiv_ccg;
+  SubdivCCG *subdiv_ccg = mesh->runtime->subdiv_ccg;
   if (subdiv_ccg == nullptr) {
     return;
   }
@@ -1522,15 +1522,8 @@ void multiresModifier_ensure_external_read(struct Mesh *mesh, const MultiresModi
 
 /***************** Multires interpolation stuff *****************/
 
-int mdisp_rot_face_to_crn(struct MVert * /*mvert*/,
-                          struct MPoly *mpoly,
-                          struct MLoop * /*mloop*/,
-                          const struct MLoopTri * /*lt*/,
-                          const int face_side,
-                          const float u,
-                          const float v,
-                          float *x,
-                          float *y)
+int mdisp_rot_face_to_crn(
+    MPoly *mpoly, const int face_side, const float u, const float v, float *x, float *y)
 {
   const float offset = face_side * 0.5f - 0.5f;
   int S = 0;

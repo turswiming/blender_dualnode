@@ -367,9 +367,9 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "all and invert unselected",
     "and AMD driver version 22.10 or newer",
     "and AMD Radeon Pro 21.Q4 driver or newer",
-    "and Linux driver version xx.xx.23570 or newer",
+    "and Linux driver version xx.xx.23904 or newer",
     "and NVIDIA driver version 470 or newer",
-    "and Windows driver version 101.3268 or newer",
+    "and Windows driver version 101.3430 or newer",
     "available with",
     "brown fox",
     "can't save image while rendering",
@@ -548,6 +548,8 @@ CUSTOM_PY_UI_FILES = [
     os.path.join("scripts", "startup", "bl_ui"),
     os.path.join("scripts", "startup", "bl_operators"),
     os.path.join("scripts", "modules", "rna_prop_ui.py"),
+    os.path.join("scripts", "modules", "rna_keymap_ui.py"),
+    os.path.join("scripts", "modules", "bpy_types.py"),
     os.path.join("scripts", "presets", "keyconfig"),
 ]
 

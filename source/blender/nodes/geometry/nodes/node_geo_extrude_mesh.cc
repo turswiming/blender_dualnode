@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_array_utils.hh"
 #include "BLI_disjoint_set.hh"
 #include "BLI_task.hh"
 #include "BLI_vector_set.hh"
@@ -153,16 +154,7 @@ static MEdge new_edge(const int v1, const int v2)
   MEdge edge;
   edge.v1 = v1;
   edge.v2 = v2;
-  edge.flag = (ME_EDGEDRAW | ME_EDGERENDER);
-  return edge;
-}
-
-static MEdge new_loose_edge(const int v1, const int v2)
-{
-  MEdge edge;
-  edge.v1 = v1;
-  edge.v2 = v2;
-  edge.flag = ME_LOOSEEDGE;
+  edge.flag = ME_EDGEDRAW;
   return edge;
 }
 
@@ -173,24 +165,6 @@ static MPoly new_poly(const int loopstart, const int totloop)
   poly.totloop = totloop;
   poly.flag = 0;
   return poly;
-}
-
-template<typename T> void copy_with_indices(MutableSpan<T> dst, Span<T> src, Span<int> indices)
-{
-  BLI_assert(dst.size() == indices.size());
-  for (const int i : dst.index_range()) {
-    dst[i] = src[indices[i]];
-  }
-}
-
-template<typename T> void copy_with_mask(MutableSpan<T> dst, Span<T> src, IndexMask mask)
-{
-  BLI_assert(dst.size() == mask.size());
-  threading::parallel_for(mask.index_range(), 512, [&](const IndexRange range) {
-    for (const int i : range) {
-      dst[i] = src[mask[i]];
-    }
-  });
 }
 
 /**
@@ -251,7 +225,7 @@ static void extrude_mesh_vertices(Mesh &mesh,
   MutableSpan<MEdge> new_edges = mesh.edges_for_write().slice(new_edge_range);
 
   for (const int i_selection : selection.index_range()) {
-    new_edges[i_selection] = new_loose_edge(selection[i_selection], new_vert_range[i_selection]);
+    new_edges[i_selection] = new_edge(selection[i_selection], new_vert_range[i_selection]);
   }
 
   MutableAttributeAccessor attributes = mesh.attributes_for_write();
@@ -260,28 +234,29 @@ static void extrude_mesh_vertices(Mesh &mesh,
     if (!ELEM(meta_data.domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_EDGE)) {
       return true;
     }
+    if (meta_data.data_type == CD_PROP_STRING) {
+      return true;
+    }
     GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
-    attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
-      using T = decltype(dummy);
-      MutableSpan<T> data = attribute.span.typed<T>();
-      switch (attribute.domain) {
-        case ATTR_DOMAIN_POINT: {
-          /* New vertices copy the attribute values from their source vertex. */
-          copy_with_mask(data.slice(new_vert_range), data.as_span(), selection);
-          break;
-        }
-        case ATTR_DOMAIN_EDGE: {
+    switch (attribute.domain) {
+      case ATTR_DOMAIN_POINT:
+        /* New vertices copy the attribute values from their source vertex. */
+        array_utils::gather(attribute.span, selection, attribute.span.slice(new_vert_range));
+        break;
+      case ATTR_DOMAIN_EDGE:
+        attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
+          using T = decltype(dummy);
+          MutableSpan<T> data = attribute.span.typed<T>();
           /* New edge values are mixed from of all the edges connected to the source vertex. */
           copy_with_mixing(data.slice(new_edge_range), data.as_span(), [&](const int i) {
             return vert_to_edge_map[selection[i]].as_span();
           });
-          break;
-        }
-        default:
-          BLI_assert_unreachable();
-      }
-    });
+        });
+        break;
+      default:
+        BLI_assert_unreachable();
+    }
 
     attribute.finish();
     return true;
@@ -297,10 +272,10 @@ static void extrude_mesh_vertices(Mesh &mesh,
   });
 
   MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
-  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
+  vert_orig_indices.slice_safe(new_vert_range).fill(ORIGINDEX_NONE);
 
   MutableSpan<int> new_edge_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_EDGE);
-  new_edge_orig_indices.slice(new_edge_range).fill(ORIGINDEX_NONE);
+  new_edge_orig_indices.slice_safe(new_edge_range).fill(ORIGINDEX_NONE);
 
   if (attribute_outputs.top_id) {
     save_selection_as_attribute(
@@ -506,6 +481,9 @@ static void extrude_mesh_edges(Mesh &mesh,
   MutableAttributeAccessor attributes = mesh.attributes_for_write();
 
   attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+    if (meta_data.data_type == CD_PROP_STRING) {
+      return true;
+    }
     GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
     if (!attribute) {
@@ -518,13 +496,14 @@ static void extrude_mesh_edges(Mesh &mesh,
       switch (attribute.domain) {
         case ATTR_DOMAIN_POINT: {
           /* New vertices copy the attribute values from their source vertex. */
-          copy_with_indices(data.slice(new_vert_range), data.as_span(), new_vert_indices);
+          array_utils::gather(
+              data.as_span(), new_vert_indices.as_span(), data.slice(new_vert_range));
           break;
         }
         case ATTR_DOMAIN_EDGE: {
           /* Edges parallel to original edges copy the edge attributes from the original edges. */
           MutableSpan<T> duplicate_data = data.slice(duplicate_edge_range);
-          copy_with_mask(duplicate_data, data.as_span(), edge_selection);
+          array_utils::gather(data.as_span(), edge_selection, duplicate_data);
 
           /* Edges connected to original vertices mix values of selected connected edges. */
           MutableSpan<T> connect_data = data.slice(connect_edge_range);
@@ -629,14 +608,14 @@ static void extrude_mesh_edges(Mesh &mesh,
   }
 
   MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
-  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
+  vert_orig_indices.slice_safe(new_vert_range).fill(ORIGINDEX_NONE);
 
   MutableSpan<int> edge_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_EDGE);
-  edge_orig_indices.slice(connect_edge_range).fill(ORIGINDEX_NONE);
-  edge_orig_indices.slice(duplicate_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice_safe(connect_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice_safe(duplicate_edge_range).fill(ORIGINDEX_NONE);
 
   MutableSpan<int> poly_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_FACE);
-  poly_orig_indices.slice(new_poly_range).fill(ORIGINDEX_NONE);
+  poly_orig_indices.slice_safe(new_poly_range).fill(ORIGINDEX_NONE);
 
   if (attribute_outputs.top_id) {
     save_selection_as_attribute(
@@ -889,6 +868,9 @@ static void extrude_mesh_face_regions(Mesh &mesh,
   MutableAttributeAccessor attributes = mesh.attributes_for_write();
 
   attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+    if (meta_data.data_type == CD_PROP_STRING) {
+      return true;
+    }
     GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
     if (!attribute) {
@@ -901,17 +883,18 @@ static void extrude_mesh_face_regions(Mesh &mesh,
       switch (attribute.domain) {
         case ATTR_DOMAIN_POINT: {
           /* New vertices copy the attributes from their original vertices. */
-          copy_with_indices(data.slice(new_vert_range), data.as_span(), new_vert_indices);
+          array_utils::gather(
+              data.as_span(), new_vert_indices.as_span(), data.slice(new_vert_range));
           break;
         }
         case ATTR_DOMAIN_EDGE: {
           /* Edges parallel to original edges copy the edge attributes from the original edges. */
           MutableSpan<T> boundary_data = data.slice(boundary_edge_range);
-          copy_with_indices(boundary_data, data.as_span(), boundary_edge_indices);
+          array_utils::gather(data.as_span(), boundary_edge_indices.as_span(), boundary_data);
 
           /* Edges inside of face regions also just duplicate their source data. */
           MutableSpan<T> new_inner_data = data.slice(new_inner_edge_range);
-          copy_with_indices(new_inner_data, data.as_span(), new_inner_edge_indices);
+          array_utils::gather(data.as_span(), new_inner_edge_indices.as_span(), new_inner_data);
 
           /* Edges connected to original vertices mix values of selected connected edges. */
           MutableSpan<T> connect_data = data.slice(connect_edge_range);
@@ -923,8 +906,8 @@ static void extrude_mesh_face_regions(Mesh &mesh,
         case ATTR_DOMAIN_FACE: {
           /* New faces on the side of extrusions get the values from the corresponding selected
            * face. */
-          copy_with_indices(
-              data.slice(side_poly_range), data.as_span(), edge_extruded_face_indices);
+          array_utils::gather(
+              data.as_span(), edge_extruded_face_indices.as_span(), data.slice(side_poly_range));
           break;
         }
         case ATTR_DOMAIN_CORNER: {
@@ -1009,15 +992,15 @@ static void extrude_mesh_face_regions(Mesh &mesh,
   }
 
   MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
-  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
+  vert_orig_indices.slice_safe(new_vert_range).fill(ORIGINDEX_NONE);
 
   MutableSpan<int> edge_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_EDGE);
-  edge_orig_indices.slice(connect_edge_range).fill(ORIGINDEX_NONE);
-  edge_orig_indices.slice(new_inner_edge_range).fill(ORIGINDEX_NONE);
-  edge_orig_indices.slice(boundary_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice_safe(connect_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice_safe(new_inner_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice_safe(boundary_edge_range).fill(ORIGINDEX_NONE);
 
   MutableSpan<int> poly_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_FACE);
-  poly_orig_indices.slice(side_poly_range).fill(ORIGINDEX_NONE);
+  poly_orig_indices.slice_safe(side_poly_range).fill(ORIGINDEX_NONE);
 
   if (attribute_outputs.top_id) {
     save_selection_as_attribute(
@@ -1143,6 +1126,9 @@ static void extrude_individual_mesh_faces(Mesh &mesh,
   MutableAttributeAccessor attributes = mesh.attributes_for_write();
 
   attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+    if (meta_data.data_type == CD_PROP_STRING) {
+      return true;
+    }
     GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
     if (!attribute) {
@@ -1270,14 +1256,14 @@ static void extrude_individual_mesh_faces(Mesh &mesh,
   });
 
   MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
-  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
+  vert_orig_indices.slice_safe(new_vert_range).fill(ORIGINDEX_NONE);
 
   MutableSpan<int> edge_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_EDGE);
-  edge_orig_indices.slice(connect_edge_range).fill(ORIGINDEX_NONE);
-  edge_orig_indices.slice(duplicate_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice_safe(connect_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice_safe(duplicate_edge_range).fill(ORIGINDEX_NONE);
 
   MutableSpan<int> poly_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_FACE);
-  poly_orig_indices.slice(side_poly_range).fill(ORIGINDEX_NONE);
+  poly_orig_indices.slice_safe(side_poly_range).fill(ORIGINDEX_NONE);
 
   /* Finally update each extruded polygon's loops to point to the new edges and vertices.
    * This must be done last, because they were used to find original indices for attribute
@@ -1385,8 +1371,8 @@ void register_node_type_geo_extrude_mesh()
   static bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_EXTRUDE_MESH, "Extrude Mesh", NODE_CLASS_GEOMETRY);
   ntype.declare = file_ns::node_declare;
-  node_type_init(&ntype, file_ns::node_init);
-  node_type_update(&ntype, file_ns::node_update);
+  ntype.initfunc = file_ns::node_init;
+  ntype.updatefunc = file_ns::node_update;
   ntype.geometry_node_execute = file_ns::node_geo_exec;
   node_type_storage(
       &ntype, "NodeGeometryExtrudeMesh", node_free_standard_storage, node_copy_standard_storage);

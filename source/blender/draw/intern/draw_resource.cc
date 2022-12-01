@@ -32,9 +32,20 @@ bool ObjectAttribute::sync(const blender::draw::ObjectRef &ref, const GPUUniform
     return BKE_object_dupli_find_rgba_attribute(
         ref.object, ref.dupli_object, ref.dupli_parent, attr.name, &data_x);
   }
-  else {
-    return BKE_object_dupli_find_rgba_attribute(ref.object, nullptr, nullptr, attr.name, &data_x);
-  }
+  return BKE_object_dupli_find_rgba_attribute(ref.object, nullptr, nullptr, attr.name, &data_x);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name LayerAttributes
+ * \{ */
+
+bool LayerAttribute::sync(Scene *scene, ViewLayer *layer, const GPULayerAttr &attr)
+{
+  hash_code = attr.hash_code;
+
+  return BKE_view_layer_find_rgba_attribute(scene, layer, attr.name, &data.x);
 }
 
 /** \} */

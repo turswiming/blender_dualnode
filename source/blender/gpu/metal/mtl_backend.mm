@@ -47,14 +47,17 @@ Context *MTLBackend::context_alloc(void *ghost_window, void *ghost_context)
 
 Batch *MTLBackend::batch_alloc()
 {
-  /* TODO(Metal): Full MTLBatch implementation. */
   return new MTLBatch();
 };
 
 DrawList *MTLBackend::drawlist_alloc(int list_length)
 {
-  /* TODO(Metal): Full MTLDrawList implementation. */
   return new MTLDrawList(list_length);
+};
+
+Fence *MTLBackend::fence_alloc()
+{
+  return new MTLFence();
 };
 
 FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
@@ -67,6 +70,11 @@ FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
 IndexBuf *MTLBackend::indexbuf_alloc()
 {
   return new MTLIndexBuf();
+};
+
+PixelBuffer *MTLBackend::pixelbuf_alloc(uint size)
+{
+  return new MTLPixelBuffer(size);
 };
 
 QueryPool *MTLBackend::querypool_alloc()
@@ -420,6 +428,7 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   GCaps.depth_blitting_workaround = false;
   GCaps.use_main_context_workaround = false;
   GCaps.broken_amd_driver = false;
+  GCaps.clear_viewport_workaround = true;
 
   /* Metal related workarounds. */
   /* Minimum per-vertex stride is 4 bytes in Metal.

@@ -520,17 +520,19 @@ static bool subdiv_mesh_topology_info(const SubdivForeachContext *foreach_contex
    * so don't try to preserve it and use memory. Crease values should also not be interpolated. */
   CustomData_MeshMasks mask = CD_MASK_EVERYTHING;
   mask.lmask &= ~CD_MASK_MULTIRES_GRIDS;
+  /* Propagate edge creases so they can be used in another subdivision modifier (maintaining
+   * existing behavior), but don't propagate vertex creases to avoid extra work when the result
+   * isn't useful anyway. */
   mask.vmask &= ~CD_MASK_CREASE;
-  mask.emask &= ~CD_MASK_CREASE;
 
   SubdivMeshContext *subdiv_context = static_cast<SubdivMeshContext *>(foreach_context->user_data);
   subdiv_context->subdiv_mesh = BKE_mesh_new_nomain_from_template_ex(
       subdiv_context->coarse_mesh, num_vertices, num_edges, 0, num_loops, num_polygons, mask);
   subdiv_mesh_ctx_cache_custom_data_layers(subdiv_context);
   subdiv_mesh_prepare_accumulator(subdiv_context, num_vertices);
-  MEM_SAFE_FREE(subdiv_context->subdiv_mesh->runtime.subsurf_face_dot_tags);
-  subdiv_context->subdiv_mesh->runtime.subsurf_face_dot_tags = BLI_BITMAP_NEW(num_vertices,
-                                                                              __func__);
+  MEM_SAFE_FREE(subdiv_context->subdiv_mesh->runtime->subsurf_face_dot_tags);
+  subdiv_context->subdiv_mesh->runtime->subsurf_face_dot_tags = BLI_BITMAP_NEW(num_vertices,
+                                                                               __func__);
   return true;
 }
 
@@ -595,7 +597,7 @@ static void evaluate_vertex_and_apply_displacement_copy(const SubdivMeshContext 
   /* Evaluate undeformed texture coordinate. */
   subdiv_vertex_orco_evaluate(ctx, ptex_face_index, u, v, subdiv_vertex_index);
   /* Remove face-dot flag. This can happen if there is more than one subsurf modifier. */
-  BLI_BITMAP_DISABLE(ctx->subdiv_mesh->runtime.subsurf_face_dot_tags, subdiv_vertex_index);
+  BLI_BITMAP_DISABLE(ctx->subdiv_mesh->runtime->subsurf_face_dot_tags, subdiv_vertex_index);
 }
 
 static void evaluate_vertex_and_apply_displacement_interpolate(
@@ -753,7 +755,7 @@ static void subdiv_mesh_tag_center_vertex(const MPoly *coarse_poly,
                                           Mesh *subdiv_mesh)
 {
   if (subdiv_mesh_is_center_vertex(coarse_poly, u, v)) {
-    BLI_BITMAP_ENABLE(subdiv_mesh->runtime.subsurf_face_dot_tags, subdiv_vertex_index);
+    BLI_BITMAP_ENABLE(subdiv_mesh->runtime->subsurf_face_dot_tags, subdiv_vertex_index);
   }
 }
 
@@ -791,10 +793,9 @@ static void subdiv_copy_edge_data(SubdivMeshContext *ctx,
 {
   const int subdiv_edge_index = subdiv_edge - ctx->subdiv_edges;
   if (coarse_edge == nullptr) {
-    /* TODO: Ensure crease layer isn't copied to result. */
     subdiv_edge->flag = 0;
     if (!ctx->settings->use_optimal_display) {
-      subdiv_edge->flag |= ME_EDGERENDER;
+      subdiv_edge->flag |= ME_EDGEDRAW;
     }
     if (ctx->edge_origindex != nullptr) {
       ctx->edge_origindex[subdiv_edge_index] = ORIGINDEX_NONE;
@@ -804,7 +805,7 @@ static void subdiv_copy_edge_data(SubdivMeshContext *ctx,
   const int coarse_edge_index = coarse_edge - ctx->coarse_edges;
   CustomData_copy_data(
       &ctx->coarse_mesh->edata, &ctx->subdiv_mesh->edata, coarse_edge_index, subdiv_edge_index, 1);
-  subdiv_edge->flag |= ME_EDGERENDER;
+  subdiv_edge->flag |= ME_EDGEDRAW;
 }
 
 static void subdiv_mesh_edge(const SubdivForeachContext *foreach_context,

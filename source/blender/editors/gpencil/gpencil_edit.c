@@ -1618,7 +1618,7 @@ static bool gpencil_strokes_paste_poll(bContext *C)
    * 2) Copy buffer must at least have something (though it may be the wrong sort...).
    */
   return (ED_gpencil_data_get_active(C) != NULL) &&
-         (!BLI_listbase_is_empty(&gpencil_strokes_copypastebuf));
+         !BLI_listbase_is_empty(&gpencil_strokes_copypastebuf);
 }
 
 typedef enum eGP_PasteMode {
@@ -3848,7 +3848,12 @@ static int gpencil_stroke_start_set_exec(bContext *C, wmOperator *op)
             for (int i = 0; i < gps->totpoints; i++) {
               pt = &gps->points[i];
               if (pt->flag & GP_SPOINT_SELECT) {
-                BKE_gpencil_stroke_start_set(gps, i);
+                if (i == gps->totpoints - 1) {
+                  BKE_gpencil_stroke_flip(gps);
+                }
+                else {
+                  BKE_gpencil_stroke_start_set(gps, i);
+                }
                 BKE_gpencil_stroke_geometry_update(gpd, gps);
                 changed = true;
                 break;
@@ -4157,7 +4162,7 @@ static int gpencil_stroke_outline_exec(bContext *C, wmOperator *op)
       Scene *scene = CTX_data_scene(C);
       Object *cam_ob = scene->camera;
       if (cam_ob != NULL) {
-        invert_m4_m4(viewmat, cam_ob->obmat);
+        invert_m4_m4(viewmat, cam_ob->object_to_world);
       }
       break;
     }
@@ -4224,7 +4229,7 @@ static int gpencil_stroke_outline_exec(bContext *C, wmOperator *op)
           /* Apply layer thickness change. */
           gps_duplicate->thickness += gpl->line_change;
           /* Apply object scale to thickness. */
-          gps_duplicate->thickness *= mat4_to_scale(ob->obmat);
+          gps_duplicate->thickness *= mat4_to_scale(ob->object_to_world);
           CLAMP_MIN(gps_duplicate->thickness, 1.0f);
 
           /* Stroke. */
@@ -5014,7 +5019,7 @@ static int gpencil_stroke_separate_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if ((mode == GP_SEPARATE_LAYER) && (BLI_listbase_is_single(&gpd_src->layers))) {
+  if ((mode == GP_SEPARATE_LAYER) && BLI_listbase_is_single(&gpd_src->layers)) {
     BKE_report(op->reports, RPT_ERROR, "Cannot separate an object with one layer only");
     return OPERATOR_CANCELLED;
   }
@@ -5463,7 +5468,7 @@ static bool gpencil_test_lasso(bGPDstroke *gps,
   gpencil_point_to_world_space(pt, diff_mat, &pt2);
   gpencil_point_to_xy(gsc, gps, &pt2, &x0, &y0);
   /* test if in lasso */
-  return ((!ELEM(V2D_IS_CLIPPED, x0, y0)) && BLI_rcti_isect_pt(&data->rect, x0, y0) &&
+  return (!ELEM(V2D_IS_CLIPPED, x0, y0) && BLI_rcti_isect_pt(&data->rect, x0, y0) &&
           BLI_lasso_is_point_inside(data->mcoords, data->mcoords_len, x0, y0, INT_MAX));
 }
 

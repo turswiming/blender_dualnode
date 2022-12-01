@@ -879,7 +879,7 @@ static int new_world_exec(bContext *C, wmOperator * /*op*/)
     wo = new_wo;
   }
   else {
-    wo = BKE_world_add(bmain, DATA_("World"));
+    wo = BKE_world_add(bmain, CTX_DATA_(BLT_I18NCONTEXT_ID_WORLD, "World"));
     ED_node_shader_default(C, &wo->id);
     wo->use_nodes = true;
   }
@@ -1398,7 +1398,7 @@ static int light_cache_bake_exec(bContext *C, wmOperator *op)
 
   light_cache_bake_tag_cache(scene, op);
 
-  short stop = 0, do_update;
+  bool stop = false, do_update;
   float progress; /* Not actually used. */
   EEVEE_lightbake_job(rj, &stop, &do_update, &progress);
   EEVEE_lightbake_job_data_free(rj);

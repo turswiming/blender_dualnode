@@ -50,6 +50,10 @@ if(WITH_CYCLES)
   endif()
 endif()
 
+if(WITH_VULKAN_BACKEND)
+  add_definitions(-DWITH_VULKAN_BACKEND)
+endif()
+
 if(WITH_CODEC_FFMPEG)
   add_definitions(-DWITH_FFMPEG)
 endif()
@@ -1074,6 +1078,13 @@ elseif(WIN32)
     install(
       PROGRAMS $<TARGET_FILE:extern_draco>
       DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+    )
+  endif()
+
+  if(WITH_PYTHON_MODULE AND TARGETDIR_BPY)
+    install(
+      TARGETS blender
+      LIBRARY DESTINATION ${TARGETDIR_BPY}
     )
   endif()
 

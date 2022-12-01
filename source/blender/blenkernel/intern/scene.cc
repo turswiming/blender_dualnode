@@ -244,7 +244,7 @@ static void scene_init_data(ID *id)
   /* Master Collection */
   scene->master_collection = BKE_collection_master_add(scene);
 
-  BKE_view_layer_add(scene, "ViewLayer", nullptr, VIEWLAYER_ADD_NEW);
+  BKE_view_layer_add(scene, DATA_("ViewLayer"), nullptr, VIEWLAYER_ADD_NEW);
 }
 
 static void scene_copy_markers(Scene *scene_dst, const Scene *scene_src, const int flag)
@@ -280,6 +280,9 @@ static void scene_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const int
   }
 
   /* View Layers */
+  LISTBASE_FOREACH (ViewLayer *, view_layer, &scene_src->view_layers) {
+    BKE_view_layer_synced_ensure(scene_src, view_layer);
+  }
   BLI_duplicatelist(&scene_dst->view_layers, &scene_src->view_layers);
   for (ViewLayer *view_layer_src = static_cast<ViewLayer *>(scene_src->view_layers.first),
                  *view_layer_dst = static_cast<ViewLayer *>(scene_dst->view_layers.first);
@@ -758,7 +761,8 @@ static void scene_foreach_layer_collection(LibraryForeachIDData *data, ListBase 
                          (lc->collection->id.flag & LIB_EMBEDDED_DATA) != 0) ?
                             IDWALK_CB_EMBEDDED :
                             IDWALK_CB_NOP;
-    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, lc->collection, cb_flag);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(
+        data, lc->collection, cb_flag | IDWALK_CB_DIRECT_WEAK_LINK);
     scene_foreach_layer_collection(data, &lc->layer_collections);
   }
 }
@@ -831,8 +835,11 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, view_layer->mat_override, IDWALK_CB_USER);
     BKE_view_layer_synced_ensure(scene, view_layer);
     LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-      BKE_LIB_FOREACHID_PROCESS_IDSUPER(
-          data, base->object, IDWALK_CB_NOP | IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE);
+      BKE_LIB_FOREACHID_PROCESS_IDSUPER(data,
+                                        base->object,
+                                        IDWALK_CB_NOP |
+                                            IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE |
+                                            IDWALK_CB_DIRECT_WEAK_LINK);
     }
 
     BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
@@ -2275,13 +2282,13 @@ int BKE_scene_base_iter_next(
           if (iter->dupli_refob != *ob) {
             if (iter->dupli_refob) {
               /* Restore previous object's real matrix. */
-              copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+              copy_m4_m4(iter->dupli_refob->object_to_world, iter->omat);
             }
             /* Backup new object's real matrix. */
             iter->dupli_refob = *ob;
-            copy_m4_m4(iter->omat, iter->dupli_refob->obmat);
+            copy_m4_m4(iter->omat, iter->dupli_refob->object_to_world);
           }
-          copy_m4_m4((*ob)->obmat, iter->dupob->mat);
+          copy_m4_m4((*ob)->object_to_world, iter->dupob->mat);
 
           iter->dupob = iter->dupob->next;
         }
@@ -2291,7 +2298,7 @@ int BKE_scene_base_iter_next(
 
           if (iter->dupli_refob) {
             /* Restore last object's real matrix. */
-            copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+            copy_m4_m4(iter->dupli_refob->object_to_world, iter->omat);
             iter->dupli_refob = nullptr;
           }
 

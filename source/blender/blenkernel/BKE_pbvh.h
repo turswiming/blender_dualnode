@@ -69,14 +69,22 @@ struct PBVHPublic {
  * intptr_t's in structs.
  */
 
+/* A generic PBVH vertex.
+ *
+ * Note: in PBVH_GRIDS we consider the final grid points
+ * to be vertices.  This is not true of edges or faces which are pulled from
+ * the base mesh.
+ */
 typedef struct PBVHVertRef {
   intptr_t i;
 } PBVHVertRef;
 
+/* Note: edges in PBVH_GRIDS are always pulled from the base mesh.*/
 typedef struct PBVHEdgeRef {
   intptr_t i;
 } PBVHEdgeRef;
 
+/* Note: faces in PBVH_GRIDS are always puled from the base mesh.*/
 typedef struct PBVHFaceRef {
   intptr_t i;
 } PBVHFaceRef;
@@ -90,6 +98,15 @@ typedef struct {
 typedef struct {
   float (*color)[4];
 } PBVHColorBufferNode;
+
+typedef struct PBVHPixels {
+  /**
+   * Storage for texture painting on PBVH level.
+   *
+   * Contains #blender::bke::pbvh::pixels::PBVHData
+   */
+  void *data;
+} PBVHPixels;
 
 typedef struct PBVHPixelsNode {
   /**
@@ -125,6 +142,7 @@ typedef enum {
   PBVH_UpdateTopology = 1 << 13,
   PBVH_UpdateColor = 1 << 14,
   PBVH_RebuildPixels = 1 << 15,
+  PBVH_TopologyUpdated = 1 << 16, /* Used internally by pbvh_bmesh.c */
 
 } PBVHNodeFlags;
 
@@ -266,7 +284,8 @@ void BKE_pbvh_build_grids(PBVH *pbvh,
                           void **gridfaces,
                           struct DMFlagMat *flagmats,
                           unsigned int **grid_hidden,
-                          struct Mesh *me);
+                          struct Mesh *me,
+                          struct SubdivCCG *subdiv_ccg);
 /**
  * Build a PBVH from a BMesh.
  */
@@ -387,6 +406,8 @@ void BKE_pbvh_bounding_box(const PBVH *pbvh, float min[3], float max[3]);
  */
 unsigned int **BKE_pbvh_grid_hidden(const PBVH *pbvh);
 
+void BKE_pbvh_sync_visibility_from_verts(PBVH *pbvh, struct Mesh *me);
+
 /**
  * Returns the number of visible quads in the nodes' grids.
  */
@@ -414,6 +435,8 @@ typedef enum {
   PBVH_Subdivide = 1,
   PBVH_Collapse = 2,
 } PBVHTopologyUpdateMode;
+ENUM_OPERATORS(PBVHTopologyUpdateMode, PBVH_Collapse);
+
 /**
  * Collapse short edges, subdivide long edges.
  */
@@ -430,6 +453,7 @@ bool BKE_pbvh_bmesh_update_topology(PBVH *pbvh,
 void BKE_pbvh_node_mark_update(PBVHNode *node);
 void BKE_pbvh_node_mark_update_mask(PBVHNode *node);
 void BKE_pbvh_node_mark_update_color(PBVHNode *node);
+void BKE_pbvh_node_mark_update_face_sets(PBVHNode *node);
 void BKE_pbvh_node_mark_update_visibility(PBVHNode *node);
 void BKE_pbvh_node_mark_rebuild_draw(PBVHNode *node);
 void BKE_pbvh_node_mark_redraw(PBVHNode *node);
@@ -462,6 +486,11 @@ void BKE_pbvh_node_get_loops(PBVH *pbvh,
                              const int **r_loop_indices,
                              const struct MLoop **r_loops);
 
+/* Get number of faces in the mesh; for PBVH_GRIDS the
+ * number of base mesh faces is returned.
+ */
+int BKE_pbvh_num_faces(const PBVH *pbvh);
+
 void BKE_pbvh_node_get_BB(PBVHNode *node, float bb_min[3], float bb_max[3]);
 void BKE_pbvh_node_get_original_BB(PBVHNode *node, float bb_min[3], float bb_max[3]);
 
@@ -485,7 +514,10 @@ struct GSet *BKE_pbvh_bmesh_node_faces(PBVHNode *node);
  *
  * Skips triangles that are hidden.
  */
-void BKE_pbvh_bmesh_node_save_orig(struct BMesh *bm, PBVHNode *node);
+void BKE_pbvh_bmesh_node_save_orig(struct BMesh *bm,
+                                   struct BMLog *log,
+                                   PBVHNode *node,
+                                   bool use_original);
 void BKE_pbvh_bmesh_after_stroke(PBVH *pbvh);
 
 /* Update Bounding Box/Redraw and clear flags. */
@@ -500,7 +532,8 @@ void BKE_pbvh_grids_update(PBVH *pbvh,
                            struct CCGElem **grids,
                            void **gridfaces,
                            struct DMFlagMat *flagmats,
-                           unsigned int **grid_hidden);
+                           unsigned int **grid_hidden,
+                           struct CCGKey *key);
 void BKE_pbvh_subdiv_cgg_set(PBVH *pbvh, struct SubdivCCG *subdiv_ccg);
 void BKE_pbvh_face_sets_set(PBVH *pbvh, int *face_sets);
 
@@ -657,6 +690,53 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
   } \
   ((void)0)
 
+#define PBVH_FACE_ITER_VERTS_RESERVED 8
+
+typedef struct PBVHFaceIter {
+  PBVHFaceRef face;
+  int index;
+  bool *hide;
+  int *face_set;
+  int i;
+
+  PBVHVertRef *verts;
+  int verts_num;
+
+  PBVHVertRef verts_reserved_[PBVH_FACE_ITER_VERTS_RESERVED];
+  const PBVHNode *node_;
+  PBVHType pbvh_type_;
+  int verts_size_;
+  GSetIterator bm_faces_iter_;
+  int cd_hide_poly_, cd_face_set_;
+  bool *hide_poly_;
+  int *face_sets_;
+  const struct MPoly *mpoly_;
+  const struct MLoopTri *looptri_;
+  const struct MLoop *mloop_;
+  int prim_index_;
+  const struct SubdivCCG *subdiv_ccg_;
+  const struct BMesh *bm;
+  CCGKey subdiv_key_;
+
+  int last_face_index_;
+} PBVHFaceIter;
+
+void BKE_pbvh_face_iter_init(PBVH *pbvh, PBVHNode *node, PBVHFaceIter *fd);
+void BKE_pbvh_face_iter_step(PBVHFaceIter *fd);
+bool BKE_pbvh_face_iter_done(PBVHFaceIter *fd);
+void BKE_pbvh_face_iter_finish(PBVHFaceIter *fd);
+
+/** Iterate over faces inside a PBVHNode.  These are either base mesh faces
+ * (for PBVH_FACES and PBVH_GRIDS) or BMesh faces (for PBVH_BMESH).
+ */
+#define BKE_pbvh_face_iter_begin(pbvh, node, fd) \
+  BKE_pbvh_face_iter_init(pbvh, node, &fd); \
+  for (; !BKE_pbvh_face_iter_done(&fd); BKE_pbvh_face_iter_step(&fd)) {
+
+#define BKE_pbvh_face_iter_end(fd) \
+  } \
+  BKE_pbvh_face_iter_finish(&fd)
+
 void BKE_pbvh_node_get_proxies(PBVHNode *node, PBVHProxyNode **proxies, int *proxy_count);
 void BKE_pbvh_node_free_proxies(PBVHNode *node);
 PBVHProxyNode *BKE_pbvh_node_add_proxy(PBVH *pbvh, PBVHNode *node);
@@ -664,7 +744,8 @@ void BKE_pbvh_gather_proxies(PBVH *pbvh, PBVHNode ***r_array, int *r_tot);
 void BKE_pbvh_node_get_bm_orco_data(PBVHNode *node,
                                     int (**r_orco_tris)[3],
                                     int *r_orco_tris_num,
-                                    float (**r_orco_coords)[3]);
+                                    float (**r_orco_coords)[3],
+                                    struct BMVert ***r_orco_verts);
 
 /**
  * \note doing a full search on all vertices here seems expensive,

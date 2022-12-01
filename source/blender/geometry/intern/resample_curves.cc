@@ -139,6 +139,9 @@ static void gather_point_attributes_to_interpolate(
         if (meta_data.domain != ATTR_DOMAIN_POINT) {
           return true;
         }
+        if (meta_data.data_type == CD_PROP_STRING) {
+          return true;
+        }
         if (!interpolate_attribute_to_curves(id, dst_curves.curve_type_counts())) {
           return true;
         }
@@ -251,7 +254,7 @@ static CurvesGeometry resample_to_uniform(const CurvesGeometry &src_curves,
   bke::CurvesFieldContext field_context{src_curves, ATTR_DOMAIN_CURVE};
   fn::FieldEvaluator evaluator{field_context, src_curves.curves_num()};
   evaluator.set_selection(selection_field);
-  evaluator.add_with_destination(count_field, dst_offsets);
+  evaluator.add_with_destination(count_field, dst_offsets.drop_back(1));
   evaluator.evaluate();
   const IndexMask selection = evaluator.get_evaluated_selection_as_mask();
   const Vector<IndexRange> unselected_ranges = selection.extract_ranges_invert(

@@ -1147,7 +1147,7 @@ static char *get_rna_access(ID *id,
 
   /* 'buf' _must_ be initialized in this block */
   /* append preceding bits to path */
-  /* NOTE: strings are not escapted and they should be! */
+  /* NOTE: strings are not escaped and they should be! */
   if ((actname && actname[0]) && (constname && constname[0])) {
     /* Constraint in Pose-Channel */
     char actname_esc[sizeof(((bActionChannel *)NULL)->name) * 2];
@@ -1542,7 +1542,7 @@ static void icu_to_fcurves(ID *id,
           }
 
           /* correct values, by checking if the flag of interest is set */
-          if (((int)(dst->vec[1][1])) & (abp->bit)) {
+          if ((int)(dst->vec[1][1]) & (abp->bit)) {
             dst->vec[0][1] = dst->vec[1][1] = dst->vec[2][1] = 1.0f;
           }
           else {

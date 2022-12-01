@@ -60,13 +60,14 @@ enum_filter_types = (
 )
 
 enum_panorama_types = (
-    ('EQUIRECTANGULAR', "Equirectangular", "Render the scene with a spherical camera, also known as Lat Long panorama"),
-    ('FISHEYE_EQUIDISTANT', "Fisheye Equidistant", "Ideal for fulldomes, ignore the sensor dimensions"),
+    ('EQUIRECTANGULAR', "Equirectangular", "Spherical camera for environment maps, also known as Lat Long panorama", 0),
+    ('EQUIANGULAR_CUBEMAP_FACE', "Equiangular Cubemap Face", "Single face of an equiangular cubemap", 5),
+    ('MIRRORBALL', "Mirror Ball", "Mirror ball mapping for environment maps", 3),
+    ('FISHEYE_EQUIDISTANT', "Fisheye Equidistant", "Ideal for fulldomes, ignore the sensor dimensions", 1),
     ('FISHEYE_EQUISOLID', "Fisheye Equisolid",
-                          "Similar to most fisheye modern lens, takes sensor dimensions into consideration"),
-    ('MIRRORBALL', "Mirror Ball", "Uses the mirror ball mapping"),
+                          "Similar to most fisheye modern lens, takes sensor dimensions into consideration", 2),
     ('FISHEYE_LENS_POLYNOMIAL', "Fisheye Lens Polynomial",
-     "Defines the lens projection as polynomial to allow real world camera lenses to be mimicked"),
+     "Defines the lens projection as polynomial to allow real world camera lenses to be mimicked", 4),
 )
 
 enum_curve_shape = (
@@ -83,6 +84,14 @@ enum_use_layer_samples = (
 enum_sampling_pattern = (
     ('SOBOL', "Sobol-Burley", "Use Sobol-Burley random sampling pattern", 0),
     ('PROGRESSIVE_MULTI_JITTER', "Progressive Multi-Jitter", "Use Progressive Multi-Jitter random sampling pattern", 1),
+)
+
+enum_emission_sampling = (
+    ('NONE', 'None', "Do not use this surface as a light for sampling", 0),
+    ('AUTO', 'Auto', "Automatically determine if the surface should be treated as a light for sampling, based on estimated emission intensity", 1),
+    ('FRONT', 'Front', "Treat only front side of the surface as a light, usually for closed meshes whose interior is not visible", 2),
+    ('BACK', 'Back', "Treat only back side of the surface as a light for sampling", 3),
+    ('FRONT_BACK', 'Front and Back', "Treat surface as a light for sampling, emitting from both the front and back side", 4),
 )
 
 enum_volume_sampling = (
@@ -289,7 +298,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     )
     shading_system: BoolProperty(
         name="Open Shading Language",
-        description="Use Open Shading Language (CPU rendering only)",
+        description="Use Open Shading Language",
     )
 
     preview_pause: BoolProperty(
@@ -525,8 +534,8 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
 
     use_deterministic_guiding: BoolProperty(
         name="Deterministic",
-        description="Makes path guiding deterministic which means renderings will be"
-        "reproducible with the same pixel values every time. This feature slows down"
+        description="Makes path guiding deterministic which means renderings will be "
+        "reproducible with the same pixel values every time. This feature slows down "
         "training",
         default=True,
     )
@@ -562,7 +571,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         description="The maximum number of samples used for training path guiding. "
         "Higher samples lead to more accurate guiding, however may also unnecessarily slow "
         "down rendering once guiding is accurate enough. "
-        "A value 0 will continue training until the last sample",
+        "A value of 0 will continue training until the last sample",
         min=0,
         soft_min=1,
         default=128,
@@ -1042,13 +1051,13 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
 
 class CyclesMaterialSettings(bpy.types.PropertyGroup):
 
-    sample_as_light: BoolProperty(
-        name="Multiple Importance Sample",
-        description="Use multiple importance sampling for this material, "
-        "disabling may reduce overall noise for large "
-        "objects that emit little light compared to other light sources",
-        default=True,
+    emission_sampling: EnumProperty(
+        name="Emission Sampling",
+        description="Sampling strategy for emissive surfaces",
+        items=enum_emission_sampling,
+        default="AUTO",
     )
+
     use_transparent_shadow: BoolProperty(
         name="Transparent Shadows",
         description="Use transparent shadows for this material if it contains a Transparent BSDF, "
@@ -1636,11 +1645,13 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                     col.label(text="and AMD driver version 22.10 or newer", icon='BLANK1')
             elif device_type == 'ONEAPI':
                 import sys
-                col.label(text="Requires Intel GPU with Xe-HPG architecture", icon='BLANK1')
                 if sys.platform.startswith("win"):
+                    col.label(text="Requires Intel GPU with Xe-HPG architecture", icon='BLANK1')
                     col.label(text="and Windows driver version 101.3430 or newer", icon='BLANK1')
                 elif sys.platform.startswith("linux"):
-                    col.label(text="and Linux driver version xx.xx.23904 or newer", icon='BLANK1')
+                    col.label(text="Requires Intel GPU with Xe-HPG architecture and", icon='BLANK1')
+                    col.label(text="  - Linux driver version xx.xx.23904 or newer", icon='BLANK1')
+                    col.label(text="  - oneAPI Level-Zero Loader", icon='BLANK1')
             elif device_type == 'METAL':
                 col.label(text="Requires Apple Silicon with macOS 12.2 or newer", icon='BLANK1')
                 col.label(text="or AMD with macOS 12.3 or newer", icon='BLANK1')
@@ -1651,6 +1662,7 @@ class CyclesPreferences(bpy.types.AddonPreferences):
             box.prop(
                 device, "use", text=device.name
                 .replace('(TM)', unicodedata.lookup('TRADE MARK SIGN'))
+                .replace('(tm)', unicodedata.lookup('TRADE MARK SIGN'))
                 .replace('(R)', unicodedata.lookup('REGISTERED SIGN'))
                 .replace('(C)', unicodedata.lookup('COPYRIGHT SIGN'))
             )

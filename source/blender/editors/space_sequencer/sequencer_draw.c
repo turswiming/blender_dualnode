@@ -804,7 +804,7 @@ static void draw_seq_text_get_source(Sequence *seq, char *r_source, size_t sourc
   switch (seq->type) {
     case SEQ_TYPE_IMAGE:
     case SEQ_TYPE_MOVIE: {
-      BLI_join_dirfile(r_source, source_len, seq->strip->dir, seq->strip->stripdata->name);
+      BLI_path_join(r_source, source_len, seq->strip->dir, seq->strip->stripdata->name);
       break;
     }
     case SEQ_TYPE_SOUND_RAM: {
@@ -890,8 +890,7 @@ static size_t draw_seq_text_get_overlay_string(const Scene *scene,
 
   BLI_assert(i <= ARRAY_SIZE(text_array));
 
-  return BLI_string_join_array(r_overlay_string, overlay_string_len, text_array, i) -
-         r_overlay_string;
+  return BLI_string_join_array(r_overlay_string, overlay_string_len, text_array, i);
 }
 
 /* Draw info text on a sequence strip. */
@@ -1371,7 +1370,7 @@ static void draw_seq_strip(const bContext *C,
 
   if ((sseq->flag & SEQ_SHOW_OVERLAY) &&
       (sseq->timeline_overlay.flag & SEQ_TIMELINE_SHOW_THUMBNAILS) &&
-      (ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_IMAGE))) {
+      ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_IMAGE)) {
     draw_seq_strip_thumbnail(
         v2d, C, scene, seq, y1, y_threshold ? text_margin_y : y2, pixelx, pixely);
   }

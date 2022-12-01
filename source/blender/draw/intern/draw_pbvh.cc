@@ -24,6 +24,7 @@
 #include "BLI_map.hh"
 #include "BLI_math_color.h"
 #include "BLI_math_vec_types.hh"
+#include "BLI_timeit.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
@@ -86,7 +87,7 @@ struct PBVHVbo {
   {
     char buf[512];
 
-    sprintf(buf, "%d:%d:%s", int(type), int(domain), name.c_str());
+    BLI_snprintf(buf, sizeof(buf), "%d:%d:%s", int(type), int(domain), name.c_str());
 
     key = string(buf);
     return key;
@@ -374,12 +375,13 @@ struct PBVHBatches {
             no = CCG_elem_no(&args->ccg_key, elems[0]);
           }
           else {
-            for (int j = 0; j < 4; j++) {
-              no += CCG_elem_no(&args->ccg_key, elems[j]);
-            }
+            normal_quad_v3(no,
+                           CCG_elem_co(&args->ccg_key, elems[3]),
+                           CCG_elem_co(&args->ccg_key, elems[2]),
+                           CCG_elem_co(&args->ccg_key, elems[1]),
+                           CCG_elem_co(&args->ccg_key, elems[0]));
           }
 
-          normalize_v3(no);
           short sno[3];
 
           normal_float_to_short_v3(sno, no);
@@ -389,12 +391,19 @@ struct PBVHBatches {
         break;
 
       case CD_PBVH_MASK_TYPE:
-        foreach_grids([&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem *elems[4], int i) {
-          float *mask = CCG_elem_mask(&args->ccg_key, elems[i]);
+        if (args->ccg_key.has_mask) {
+          foreach_grids([&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem *elems[4], int i) {
+            float *mask = CCG_elem_mask(&args->ccg_key, elems[i]);
 
-          *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = mask ? uchar(*mask * 255.0f) :
-                                                                        255;
-        });
+            *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = uchar(*mask * 255.0f);
+          });
+        }
+        else {
+          foreach_grids(
+              [&](int /*x*/, int /*y*/, int /*grid_index*/, CCGElem * /*elems*/[4], int /*i*/) {
+                *static_cast<uchar *>(GPU_vertbuf_raw_step(&access)) = 0;
+              });
+        }
         break;
 
       case CD_PBVH_FSET_TYPE: {
@@ -944,6 +953,16 @@ struct PBVHBatches {
 
   void create_index_faces(PBVH_GPU_Args *args)
   {
+    int *mat_index = static_cast<int *>(
+        CustomData_get_layer_named(args->pdata, CD_PROP_INT32, "material_index"));
+
+    if (mat_index && args->totprim) {
+      int poly_index = args->mlooptri[args->prim_indices[0]].poly;
+      material_index = mat_index[poly_index];
+    }
+
+    const blender::Span<MEdge> edges = args->me->edges();
+
     /* Calculate number of edges*/
     int edge_count = 0;
     for (int i = 0; i < args->totprim; i++) {
@@ -952,8 +971,9 @@ struct PBVHBatches {
       if (args->hide_poly && args->hide_poly[lt->poly]) {
         continue;
       }
+
       int r_edges[3];
-      BKE_mesh_looptri_get_real_edges(args->me, lt, r_edges);
+      BKE_mesh_looptri_get_real_edges(edges.data(), args->mloop, lt, r_edges);
 
       if (r_edges[0] != -1) {
         edge_count++;
@@ -978,7 +998,7 @@ struct PBVHBatches {
       }
 
       int r_edges[3];
-      BKE_mesh_looptri_get_real_edges(args->me, lt, r_edges);
+      BKE_mesh_looptri_get_real_edges(edges.data(), args->mloop, lt, r_edges);
 
       if (r_edges[0] != -1) {
         GPU_indexbuf_add_line_verts(&elb_lines, vertex_i, vertex_i + 1);
@@ -1023,6 +1043,14 @@ struct PBVHBatches {
 
   void create_index_grids(PBVH_GPU_Args *args)
   {
+    int *mat_index = static_cast<int *>(
+        CustomData_get_layer_named(args->pdata, CD_PROP_INT32, "material_index"));
+
+    if (mat_index && args->totprim) {
+      int poly_index = BKE_subdiv_ccg_grid_to_face_index(args->subdiv_ccg, args->grid_indices[0]);
+      material_index = mat_index[poly_index];
+    }
+
     needs_tri_index = true;
     int gridsize = args->ccg_key.grid_size;
     int totgrid = args->totprim;
@@ -1158,8 +1186,17 @@ struct PBVHBatches {
     }
 
     for (PBVHBatch &batch : batches.values()) {
-      GPU_batch_elembuf_set(batch.tris, tri_index, false);
-      GPU_batch_elembuf_set(batch.lines, lines_index, false);
+      if (tri_index) {
+        GPU_batch_elembuf_set(batch.tris, tri_index, false);
+      }
+      else {
+        /* Still flag the batch as dirty even if we're using the default index layout. */
+        batch.tris->flag |= GPU_BATCH_DIRTY;
+      }
+
+      if (lines_index) {
+        GPU_batch_elembuf_set(batch.lines, lines_index, false);
+      }
     }
   }
 

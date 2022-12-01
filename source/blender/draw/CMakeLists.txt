@@ -24,6 +24,8 @@ set(INC
   ../render
   ../render/intern
   ../compositor/realtime_compositor
+  ../compositor/realtime_compositor/algorithms
+  ../compositor/realtime_compositor/cached_resources
   ../windowmanager
 
   ../../../intern/atomic
@@ -71,13 +73,13 @@ set(SRC
   intern/draw_attributes.cc
   intern/draw_cache_impl_curve.cc
   intern/draw_cache_impl_curves.cc
-  intern/draw_cache_impl_gpencil.c
+  intern/draw_cache_impl_gpencil.cc
   intern/draw_cache_impl_lattice.c
   intern/draw_cache_impl_mesh.cc
   intern/draw_cache_impl_particles.c
   intern/draw_cache_impl_pointcloud.cc
   intern/draw_cache_impl_subdivision.cc
-  intern/draw_cache_impl_volume.c
+  intern/draw_cache_impl_volume.cc
   intern/draw_color_management.cc
   intern/draw_command.cc
   intern/draw_common.c
@@ -95,6 +97,7 @@ set(SRC
   intern/draw_manager_text.cc
   intern/draw_manager_texture.c
   intern/draw_pbvh.cc
+  intern/draw_pointcloud.cc
   intern/draw_select_buffer.c
   intern/draw_shader.cc
   intern/draw_texture_pool.cc
@@ -127,7 +130,7 @@ set(SRC
   engines/eevee/eevee_renderpasses.c
   engines/eevee/eevee_sampling.c
   engines/eevee/eevee_screen_raytrace.c
-  engines/eevee/eevee_shaders.c
+  engines/eevee/eevee_shaders.cc
   engines/eevee/eevee_shaders_extra.cc
   engines/eevee/eevee_shadows.c
   engines/eevee/eevee_shadows_cascade.c
@@ -159,7 +162,7 @@ set(SRC
   engines/workbench/workbench_effect_dof.c
   engines/workbench/workbench_effect_outline.c
   engines/workbench/workbench_engine.c
-  engines/workbench/workbench_materials.c
+  engines/workbench/workbench_materials.cc
   engines/workbench/workbench_opaque.c
   engines/workbench/workbench_render.c
   engines/workbench/workbench_shader.cc
@@ -490,7 +493,6 @@ set(GLSL_SRC
   intern/shaders/common_debug_shape_lib.glsl
   intern/shaders/common_fullscreen_vert.glsl
   intern/shaders/common_fxaa_lib.glsl
-  intern/shaders/common_globals_lib.glsl
   intern/shaders/common_gpencil_lib.glsl
   intern/shaders/common_hair_lib.glsl
   intern/shaders/common_hair_refine_comp.glsl
@@ -732,6 +734,21 @@ if(WITH_GTESTS)
   endif()
 endif()
 
+if(WITH_TBB)
+  add_definitions(-DWITH_TBB)
+  if(WIN32)
+    # TBB includes Windows.h which will define min/max macros
+    # that will collide with the stl versions.
+    add_definitions(-DNOMINMAX)
+  endif()
+  list(APPEND INC_SYS
+    ${TBB_INCLUDE_DIRS}
+  )
+
+  list(APPEND LIB
+    ${TBB_LIBRARIES}
+  )
+endif()
 
 blender_add_lib(bf_draw "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

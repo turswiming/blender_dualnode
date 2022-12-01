@@ -222,7 +222,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
   ushort local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uuid : 0;
   ob_gpencil = ED_gpencil_add_object(C, scene->cursor.location, local_view_bits);
   float invmat[4][4];
-  invert_m4_m4(invmat, ob_gpencil->obmat);
+  invert_m4_m4(invmat, ob_gpencil->object_to_world);
 
   bGPdata *gpd_dst = (bGPdata *)ob_gpencil->data;
   gpd_dst->draw_mode = GP_DRAWMODE_2D;
@@ -260,7 +260,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
     }
 
     /* Check if frame is in the list of frames to be exported. */
-    if ((only_selected) && (!BLI_ghash_haskey(keyframe_list, POINTER_FROM_INT(i)))) {
+    if ((only_selected) && !BLI_ghash_haskey(keyframe_list, POINTER_FROM_INT(i))) {
       continue;
     }
 
@@ -323,7 +323,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
             bGPDspoint *pt = &gps->points[j];
             pt->runtime.idx_orig = 0;
             pt->runtime.pt_orig = nullptr;
-            mul_m4_v3(ob_eval->obmat, &pt->x);
+            mul_m4_v3(ob_eval->object_to_world, &pt->x);
             mul_m4_v3(invmat, &pt->x);
           }
 

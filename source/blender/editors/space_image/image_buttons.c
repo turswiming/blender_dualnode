@@ -654,7 +654,7 @@ static void uiblock_layer_pass_buttons(uiLayout *layout,
 
     /* view */
     if (BLI_listbase_count_at_most(&rr->views, 2) > 1 &&
-        ((!show_stereo) || (!RE_RenderResult_is_stereo(rr)))) {
+        ((!show_stereo) || !RE_RenderResult_is_stereo(rr))) {
       rview = BLI_findlink(&rr->views, iuser->view);
       display_name = rview ? rview->name : "";
 
@@ -952,6 +952,7 @@ void uiTemplateImage(uiLayout *layout,
       }
 
       uiItemR(col, &imaptr, "use_view_as_render", 0, NULL, ICON_NONE);
+      uiItemR(col, &imaptr, "seam_margin", 0, NULL, ICON_NONE);
     }
   }
 

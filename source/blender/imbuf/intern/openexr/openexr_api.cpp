@@ -811,7 +811,7 @@ static void imb_exr_get_views(MultiPartInputFile &file, StringVector &views)
   }
 }
 
-/* Multilayer Blender files have the view name in all the passes (even the default view one) */
+/* Multi-layer Blender files have the view name in all the passes (even the default view one). */
 static void imb_exr_insert_view_name(char *name_full, const char *passname, const char *viewname)
 {
   BLI_assert(!ELEM(name_full, passname, viewname));
@@ -1859,7 +1859,7 @@ static bool imb_exr_is_multilayer_file(MultiPartInputFile &file)
    * channels without a layer name will be single layer. */
   channels.layers(layerNames);
 
-  return (!layerNames.empty());
+  return !layerNames.empty();
 }
 
 static void imb_exr_type_by_channels(ChannelList &channels,

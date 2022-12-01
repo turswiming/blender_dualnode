@@ -278,7 +278,7 @@ static int gpencil_bake_mesh_animation_exec(bContext *C, wmOperator *op)
     }
 
     /* Check if frame is in the list of frames to be exported. */
-    if ((only_selected) && (!BLI_ghash_haskey(keyframe_list, POINTER_FROM_INT(i)))) {
+    if ((only_selected) && !BLI_ghash_haskey(keyframe_list, POINTER_FROM_INT(i))) {
       continue;
     }
 
@@ -299,7 +299,7 @@ static int gpencil_bake_mesh_animation_exec(bContext *C, wmOperator *op)
                                angle,
                                thickness,
                                offset,
-                               ob_eval->obmat,
+                               ob_eval->object_to_world,
                                frame_offset,
                                use_seams,
                                use_faces,

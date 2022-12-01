@@ -595,7 +595,7 @@ static void do_versions_fix_annotations(bGPdata *gpd)
 
         LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
           LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-            if ((gps->colorname[0] != '\0') && (STREQ(gps->colorname, palcolor->info))) {
+            if ((gps->colorname[0] != '\0') && STREQ(gps->colorname, palcolor->info)) {
               /* copy color settings */
               copy_v4_v4(gpl->color, palcolor->color);
             }
@@ -2959,12 +2959,6 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_ATLEAST(bmain, 280, 28)) {
-    for (Mesh *mesh = bmain->meshes.first; mesh; mesh = mesh->id.next) {
-      BKE_mesh_calc_edges_loose(mesh);
-    }
-  }
-
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 29)) {
     for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
       LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
@@ -3369,7 +3363,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
               SpaceImage *sima = (SpaceImage *)sl;
               sima->flag &= ~(SI_FLAG_UNUSED_0 | SI_FLAG_UNUSED_1 | SI_FLAG_UNUSED_3 |
                               SI_FLAG_UNUSED_6 | SI_FLAG_UNUSED_7 | SI_FLAG_UNUSED_8 |
-                              SI_FLAG_UNUSED_17 | SI_CUSTOM_GRID | SI_FLAG_UNUSED_23 |
+                              SI_FLAG_UNUSED_17 | SI_FLAG_UNUSED_18 | SI_FLAG_UNUSED_23 |
                               SI_FLAG_UNUSED_24);
               break;
             }

@@ -337,20 +337,6 @@ void gpu::MTLTexture::blit(gpu::MTLTexture *dst,
 
   GPU_batch_draw(quad);
 
-  /* TMP draw with IMM TODO(Metal): Remove this once GPUBatch is supported. */
-  GPUVertFormat *imm_format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(imm_format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-
-  immBindShader(shader);
-  immBegin(GPU_PRIM_TRI_STRIP, 4);
-  immVertex2f(pos, 1, 0);
-  immVertex2f(pos, 0, 0);
-  immVertex2f(pos, 1, 1);
-  immVertex2f(pos, 0, 1);
-  immEnd();
-  immUnbindProgram();
-  /**********************/
-
   /* restoring old pipeline state. */
   GPU_depth_mask(depth_write_prev);
   GPU_stencil_write_mask_set(stencil_mask_prev);
@@ -896,6 +882,61 @@ void gpu::MTLTexture::update_sub(
         [blit_encoder synchronizeResource:texture_buffer_];
       }
     }
+  }
+}
+
+void MTLTexture::update_sub(int offset[3],
+                            int extent[3],
+                            eGPUDataFormat format,
+                            GPUPixelBuffer *pixbuf)
+{
+  /* Update texture from pixel buffer. */
+  BLI_assert(validate_data_format(format_, format));
+  BLI_assert(pixbuf != nullptr);
+
+  /* Fetch pixel buffer metal buffer. */
+  MTLPixelBuffer *mtl_pix_buf = static_cast<MTLPixelBuffer *>(unwrap(pixbuf));
+  id<MTLBuffer> buffer = mtl_pix_buf->get_metal_buffer();
+  BLI_assert(buffer != nil);
+  if (buffer == nil) {
+    return;
+  }
+
+  /* Ensure texture is ready. */
+  this->ensure_baked();
+  BLI_assert(texture_ != nil);
+
+  /* Calculate dimensions. */
+  int num_image_channels = to_component_len(format_);
+
+  uint bits_per_pixel = num_image_channels * to_bytesize(format);
+  uint bytes_per_row = bits_per_pixel * extent[0];
+  uint bytes_per_image = bytes_per_row * extent[1];
+
+  /* Currently only required for 2D textures. */
+  if (type_ == GPU_TEXTURE_2D) {
+
+    /* Create blit command encoder to copy data. */
+    MTLContext *ctx = MTLContext::get();
+    BLI_assert(ctx);
+
+    id<MTLBlitCommandEncoder> blit_encoder = ctx->main_command_buffer.ensure_begin_blit_encoder();
+    [blit_encoder copyFromBuffer:buffer
+                    sourceOffset:0
+               sourceBytesPerRow:bytes_per_row
+             sourceBytesPerImage:bytes_per_image
+                      sourceSize:MTLSizeMake(extent[0], extent[1], 1)
+                       toTexture:texture_
+                destinationSlice:0
+                destinationLevel:0
+               destinationOrigin:MTLOriginMake(offset[0], offset[1], 0)];
+
+    if (texture_.storageMode == MTLStorageModeManaged) {
+      [blit_encoder synchronizeResource:texture_];
+    }
+  }
+  else {
+    BLI_assert(false);
   }
 }
 
@@ -1472,10 +1513,82 @@ bool gpu::MTLTexture::init_internal()
 
 bool gpu::MTLTexture::init_internal(GPUVertBuf *vbo)
 {
-  /* Not a valid vertex buffer format, though verifying texture is not set as such
-   * as this is not supported on Apple Silicon. */
-  BLI_assert_msg(this->format_ != GPU_DEPTH24_STENCIL8,
-                 "Apple silicon does not support GPU_DEPTH24_S8");
+  if (this->format_ == GPU_DEPTH24_STENCIL8) {
+    /* Apple Silicon requires GPU_DEPTH32F_STENCIL8 instead of GPU_DEPTH24_STENCIL8. */
+    this->format_ = GPU_DEPTH32F_STENCIL8;
+  }
+
+  MTLPixelFormat mtl_format = gpu_texture_format_to_metal(this->format_);
+  mtl_max_mips_ = 1;
+  mipmaps_ = 0;
+  this->mip_range_set(0, 0);
+
+  /* Create texture from GPUVertBuf's buffer. */
+  MTLVertBuf *mtl_vbo = static_cast<MTLVertBuf *>(unwrap(vbo));
+  mtl_vbo->bind();
+  mtl_vbo->flag_used();
+
+  /* Get Metal Buffer. */
+  id<MTLBuffer> source_buffer = mtl_vbo->get_metal_buffer();
+  BLI_assert(source_buffer);
+
+  /* Verify size. */
+  if (w_ <= 0) {
+    MTL_LOG_WARNING("Allocating texture buffer of width 0!\n");
+    w_ = 1;
+  }
+
+  /* Verify Texture and vertex buffer alignment. */
+  int bytes_per_pixel = get_mtl_format_bytesize(mtl_format);
+  int bytes_per_row = bytes_per_pixel * w_;
+
+  MTLContext *mtl_ctx = MTLContext::get();
+  uint32_t align_requirement = static_cast<uint32_t>(
+      [mtl_ctx->device minimumLinearTextureAlignmentForPixelFormat:mtl_format]);
+
+  /* Verify per-vertex size aligns with texture size. */
+  const GPUVertFormat *format = GPU_vertbuf_get_format(vbo);
+  BLI_assert(bytes_per_pixel == format->stride &&
+             "Pixel format stride MUST match the texture format stride -- These being different "
+             "is likely caused by Metal's VBO padding to a minimum of 4-bytes per-vertex");
+  UNUSED_VARS_NDEBUG(format);
+
+  /* Create texture descriptor. */
+  BLI_assert(type_ == GPU_TEXTURE_BUFFER);
+  texture_descriptor_ = [[MTLTextureDescriptor alloc] init];
+  texture_descriptor_.pixelFormat = mtl_format;
+  texture_descriptor_.textureType = MTLTextureTypeTextureBuffer;
+  texture_descriptor_.width = w_;
+  texture_descriptor_.height = 1;
+  texture_descriptor_.depth = 1;
+  texture_descriptor_.arrayLength = 1;
+  texture_descriptor_.mipmapLevelCount = mtl_max_mips_;
+  texture_descriptor_.usage =
+      MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite |
+      MTLTextureUsagePixelFormatView; /* TODO(Metal): Optimize usage flags. */
+  texture_descriptor_.storageMode = [source_buffer storageMode];
+  texture_descriptor_.sampleCount = 1;
+  texture_descriptor_.cpuCacheMode = [source_buffer cpuCacheMode];
+  texture_descriptor_.hazardTrackingMode = [source_buffer hazardTrackingMode];
+
+  texture_ = [source_buffer
+      newTextureWithDescriptor:texture_descriptor_
+                        offset:0
+                   bytesPerRow:ceil_to_multiple_u(bytes_per_row, align_requirement)];
+  aligned_w_ = bytes_per_row / bytes_per_pixel;
+
+  BLI_assert(texture_);
+  texture_.label = [NSString stringWithUTF8String:this->get_name()];
+  is_baked_ = true;
+  is_dirty_ = false;
+  resource_mode_ = MTL_TEXTURE_MODE_VBO;
+
+  /* Track Status. */
+  vert_buffer_ = mtl_vbo;
+  vert_buffer_mtl_ = source_buffer;
+  /* Cleanup. */
+  [texture_descriptor_ release];
+  texture_descriptor_ = nullptr;
 
   return true;
 }
@@ -1522,7 +1635,6 @@ bool gpu::MTLTexture::texture_is_baked()
 /* Prepare texture parameters after initialization, but before baking. */
 void gpu::MTLTexture::prepare_internal()
 {
-
   /* Derive implicit usage flags for Depth/Stencil attachments. */
   if (format_flag_ & GPU_FORMAT_DEPTH || format_flag_ & GPU_FORMAT_STENCIL) {
     gpu_image_usage_flags_ |= GPU_TEXTURE_USAGE_ATTACHMENT;
@@ -1687,7 +1799,7 @@ void gpu::MTLTexture::ensure_baked()
     /* Determine Resource Mode. */
     resource_mode_ = MTL_TEXTURE_MODE_DEFAULT;
 
-    /* Create texture. */
+    /* Standard texture allocation. */
     texture_ = [ctx->device newTextureWithDescriptor:texture_descriptor_];
 
     [texture_descriptor_ release];
@@ -1736,6 +1848,76 @@ void gpu::MTLTexture::reset()
 
   BLI_assert(texture_ == nil);
   BLI_assert(mip_swizzle_view_ == nil);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Pixel Buffer
+ * \{ */
+
+MTLPixelBuffer::MTLPixelBuffer(uint size) : PixelBuffer(size)
+{
+  MTLContext *ctx = MTLContext::get();
+  BLI_assert(ctx);
+  /* Ensure buffer satifies the alignment of 256 bytes for copying
+   * data between buffers and textures. As specified in:
+   * https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf */
+  BLI_assert(size >= 256);
+
+  MTLResourceOptions resource_options = ([ctx->device hasUnifiedMemory]) ?
+                                            MTLResourceStorageModeShared :
+                                            MTLResourceStorageModeManaged;
+  buffer_ = [ctx->device newBufferWithLength:size options:resource_options];
+  BLI_assert(buffer_ != nil);
+}
+
+MTLPixelBuffer::~MTLPixelBuffer()
+{
+  if (buffer_) {
+    [buffer_ release];
+    buffer_ = nil;
+  }
+}
+
+void *MTLPixelBuffer::map()
+{
+  if (buffer_ == nil) {
+    return nullptr;
+  }
+
+  return [buffer_ contents];
+}
+
+void MTLPixelBuffer::unmap()
+{
+  if (buffer_ == nil) {
+    return;
+  }
+
+  /* Ensure changes are synchronized. */
+  if (buffer_.resourceOptions & MTLResourceStorageModeManaged) {
+    [buffer_ didModifyRange:NSMakeRange(0, size_)];
+  }
+}
+
+int64_t MTLPixelBuffer::get_native_handle()
+{
+  if (buffer_ == nil) {
+    return 0;
+  }
+
+  return reinterpret_cast<int64_t>(buffer_);
+}
+
+uint MTLPixelBuffer::get_size()
+{
+  return size_;
+}
+
+id<MTLBuffer> MTLPixelBuffer::get_metal_buffer()
+{
+  return buffer_;
 }
 
 /** \} */

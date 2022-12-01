@@ -36,6 +36,10 @@
 #include "GHOST_ContextEGL.h"
 #include "GHOST_ContextGLX.h"
 
+#ifdef WITH_VULKAN_BACKEND
+#  include "GHOST_ContextVK.h"
+#endif
+
 #ifdef WITH_XF86KEYSYM
 #  include <X11/XF86keysym.h>
 #endif
@@ -308,7 +312,6 @@ void GHOST_SystemX11::getAllDisplayDimensions(uint32_t &width, uint32_t &height)
  * \param width: The width the window.
  * \param height: The height the window.
  * \param state: The state of the window when opened.
- * \param type: The type of drawing context installed in this window.
  * \param glSettings: Misc OpenGL settings.
  * \param exclusive: Use to show the window on top and ignore others (used full-screen).
  * \param parentWindow: Parent window.
@@ -320,7 +323,6 @@ GHOST_IWindow *GHOST_SystemX11::createWindow(const char *title,
                                              uint32_t width,
                                              uint32_t height,
                                              GHOST_TWindowState state,
-                                             GHOST_TDrawingContextType type,
                                              GHOST_GLSettings glSettings,
                                              const bool exclusive,
                                              const bool is_dialog,
@@ -341,7 +343,7 @@ GHOST_IWindow *GHOST_SystemX11::createWindow(const char *title,
                                height,
                                state,
                                (GHOST_WindowX11 *)parentWindow,
-                               type,
+                               glSettings.context_type,
                                is_dialog,
                                ((glSettings.flags & GHOST_glStereoVisual) != 0),
                                exclusive,
@@ -433,8 +435,20 @@ GHOST_IContext *GHOST_SystemX11::createOffscreenContext(GHOST_GLSettings glSetti
    *   no fall-backs. */
 
   const bool debug_context = (glSettings.flags & GHOST_glDebugContext) != 0;
+  GHOST_Context *context = nullptr;
 
-  GHOST_Context *context;
+#ifdef WITH_VULKAN_BACKEND
+  if (glSettings.context_type == GHOST_kDrawingContextTypeVulkan) {
+    context = new GHOST_ContextVK(
+        false, GHOST_kVulkanPlatformX11, 0, m_display, NULL, NULL, 1, 0, debug_context);
+
+    if (!context->initializeDrawingContext()) {
+      delete context;
+      return nullptr;
+    }
+    return context;
+  }
+#endif
 
 #ifdef USE_EGL
   /* Try to initialize an EGL context. */
@@ -936,16 +950,47 @@ void GHOST_SystemX11::processEvent(XEvent *xe)
         int32_t x_new = xme.x_root;
         int32_t y_new = xme.y_root;
         int32_t x_accum, y_accum;
-        GHOST_Rect bounds;
 
-        /* fallback to window bounds */
-        if (window->getCursorGrabBounds(bounds) == GHOST_kFailure) {
-          window->getClientBounds(bounds);
+        /* Warp within bounds. */
+        {
+          GHOST_Rect bounds;
+          int32_t bounds_margin = 0;
+          GHOST_TAxisFlag bounds_axis = GHOST_kAxisNone;
+
+          if (window->getCursorGrabMode() == GHOST_kGrabHide) {
+            window->getClientBounds(bounds);
+
+            /* TODO(@campbellbarton): warp the cursor to `window->getCursorGrabInitPos`,
+             * on every motion event, see: D16557 (alternative fix for T102346). */
+            const int32_t subregion_div = 4; /* One quarter of the region. */
+            const int32_t size[2] = {bounds.getWidth(), bounds.getHeight()};
+            const int32_t center[2] = {
+                (bounds.m_l + bounds.m_r) / 2,
+                (bounds.m_t + bounds.m_b) / 2,
+            };
+            /* Shrink the box to prevent the cursor escaping. */
+            bounds.m_l = center[0] - (size[0] / (subregion_div * 2));
+            bounds.m_r = center[0] + (size[0] / (subregion_div * 2));
+            bounds.m_t = center[1] - (size[1] / (subregion_div * 2));
+            bounds.m_b = center[1] + (size[1] / (subregion_div * 2));
+            bounds_margin = 0;
+            bounds_axis = GHOST_TAxisFlag(GHOST_kAxisX | GHOST_kAxisY);
+          }
+          else {
+            /* Fallback to window bounds. */
+            if (window->getCursorGrabBounds(bounds) == GHOST_kFailure) {
+              window->getClientBounds(bounds);
+            }
+            /* Could also clamp to screen bounds wrap with a window outside the view will
+             * fail at the moment. Use offset of 8 in case the window is at screen bounds. */
+            bounds_margin = 8;
+            bounds_axis = window->getCursorGrabAxis();
+          }
+
+          /* Could also clamp to screen bounds wrap with a window outside the view will
+           * fail at the moment. Use inset in case the window is at screen bounds. */
+          bounds.wrapPoint(x_new, y_new, bounds_margin, bounds_axis);
         }
-
-        /* Could also clamp to screen bounds wrap with a window outside the view will
-         * fail at the moment. Use offset of 8 in case the window is at screen bounds. */
-        bounds.wrapPoint(x_new, y_new, 8, window->getCursorGrabAxis());
 
         window->getCursorGrabAccum(x_accum, y_accum);
 
@@ -2435,11 +2480,11 @@ GHOST_TSuccess GHOST_SystemX11::showMessageBox(const char *title,
                     utf8Str,
                     8,
                     PropModeReplace,
-                    (const unsigned char *)title,
+                    (const uchar *)title,
                     int(strlen(title)));
 
     XChangeProperty(
-        m_display, window, winType, XA_ATOM, 32, PropModeReplace, (unsigned char *)&typeDialog, 1);
+        m_display, window, winType, XA_ATOM, 32, PropModeReplace, (uchar *)&typeDialog, 1);
   }
 
   /* Create buttons GC */

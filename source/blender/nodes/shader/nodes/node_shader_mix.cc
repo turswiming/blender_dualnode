@@ -22,6 +22,9 @@ NODE_STORAGE_FUNCS(NodeShaderMix)
 static void sh_node_mix_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
+  /** WARNING:
+   * Input socket indices must be kept in sync with ntree_shader_disconnect_inactive_mix_branches
+   */
   b.add_input<decl::Float>(N_("Factor"), "Factor_Float")
       .no_muted_links()
       .default_value(0.5f)
@@ -123,6 +126,19 @@ static void sh_node_mix_update(bNodeTree *ntree, bNode *node)
   nodeSetSocketAvailability(ntree, sock_factor_vec, use_vector_factor);
 }
 
+class SocketSearchOp {
+ public:
+  std::string socket_name;
+  int type = MA_RAMP_BLEND;
+  void operator()(LinkSearchOpParams &params)
+  {
+    bNode &node = params.add_node("ShaderNodeMix");
+    node_storage(node).data_type = SOCK_RGBA;
+    node_storage(node).blend_type = type;
+    params.update_and_connect_available_socket(node, socket_name);
+  }
+};
+
 static void node_mix_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const eNodeSocketDatatype sock_type = static_cast<eNodeSocketDatatype>(
@@ -131,6 +147,17 @@ static void node_mix_gather_link_searches(GatherLinkSearchOpParams &params)
   if (ELEM(sock_type, SOCK_BOOLEAN, SOCK_FLOAT, SOCK_RGBA, SOCK_VECTOR, SOCK_INT)) {
     const eNodeSocketDatatype type = ELEM(sock_type, SOCK_BOOLEAN, SOCK_INT) ? SOCK_FLOAT :
                                                                                sock_type;
+
+    const int weight = ELEM(params.other_socket().type, SOCK_RGBA) ? 0 : -1;
+    const std::string socket_name = params.in_out() == SOCK_IN ? "A" : "Result";
+    for (const EnumPropertyItem *item = rna_enum_ramp_blend_items; item->identifier != nullptr;
+         item++) {
+      if (item->name != nullptr && item->identifier[0] != '\0') {
+        params.add_item(CTX_IFACE_(BLT_I18NCONTEXT_ID_NODETREE, item->name),
+                        SocketSearchOp{socket_name, item->value},
+                        weight);
+      }
+    }
 
     if (params.in_out() == SOCK_OUT) {
       params.add_item(IFACE_("Result"), [type](LinkSearchOpParams &params) {
@@ -432,9 +459,9 @@ void register_node_type_sh_mix()
   sh_fn_node_type_base(&ntype, SH_NODE_MIX, "Mix", NODE_CLASS_CONVERTER);
   ntype.declare = file_ns::sh_node_mix_declare;
   ntype.ui_class = file_ns::sh_node_mix_ui_class;
-  node_type_gpu(&ntype, file_ns::gpu_shader_mix);
-  node_type_update(&ntype, file_ns::sh_node_mix_update);
-  node_type_init(&ntype, file_ns::node_mix_init);
+  ntype.gpu_fn = file_ns::gpu_shader_mix;
+  ntype.updatefunc = file_ns::sh_node_mix_update;
+  ntype.initfunc = file_ns::node_mix_init;
   node_type_storage(
       &ntype, "NodeShaderMix", node_free_standard_storage, node_copy_standard_storage);
   ntype.build_multi_function = file_ns::sh_node_mix_build_multi_function;

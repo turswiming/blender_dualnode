@@ -667,7 +667,7 @@ typedef struct SpaceSeq {
   struct SequencerPreviewOverlay preview_overlay;
   struct SequencerTimelineOverlay timeline_overlay;
 
-  /** Multiview current eye - for internal use. */
+  /** Multi-view current eye - for internal use. */
   char multiview_eye;
   char _pad2[7];
 
@@ -1107,7 +1107,7 @@ typedef struct FileDirEntry {
   uint32_t uid; /* FileUID */
   /* Name needs freeing if FILE_ENTRY_NAME_FREE is set. Otherwise this is a direct pointer to a
    * name buffer. */
-  char *name;
+  const char *name;
 
   uint64_t size;
   int64_t time;
@@ -1123,7 +1123,8 @@ typedef struct FileDirEntry {
   /** ID type, in case typeflag has FILE_TYPE_BLENDERLIB set. */
   int blentype;
 
-  /* Path to item that is relative to current folder root. */
+  /* Path to item that is relative to current folder root. To get the full path, use
+   * #filelist_file_get_full_path() */
   char *relpath;
   /** Optional argument for shortcuts, aliases etc. */
   char *redirection_path;
@@ -1134,7 +1135,7 @@ typedef struct FileDirEntry {
   /** If this file represents an asset, its asset data is here. Note that we may show assets of
    * external files in which case this is set but not the id above.
    * Note comment for FileListInternEntry.local_data, the same applies here! */
-  struct AssetMetaData *asset_data;
+  struct AssetRepresentation *asset;
 
   /* The icon_id for the preview image. */
   int preview_icon_id;
@@ -1169,6 +1170,10 @@ enum {
   FILE_ENTRY_NAME_FREE = 1 << 1,
   /* The preview for this entry is being loaded on another thread. */
   FILE_ENTRY_PREVIEW_LOADING = 1 << 2,
+  /** For #FILE_TYPE_BLENDERLIB only: Denotes that the ID is known to not have a preview (none was
+   * found in the .blend). Stored so we don't keep trying to find non-existent previews every time
+   * we reload previews. When dealing with heavy files this can have quite an impact. */
+  FILE_ENTRY_BLENDERLIB_NO_PREVIEW = 1 << 3,
 };
 
 /** \} */
@@ -1183,6 +1188,12 @@ typedef struct SpaceImageOverlay {
   int flag;
   char _pad[4];
 } SpaceImageOverlay;
+
+typedef enum eSpaceImage_GridShapeSource {
+  SI_GRID_SHAPE_DYNAMIC = 0,
+  SI_GRID_SHAPE_FIXED = 1,
+  SI_GRID_SHAPE_PIXEL = 2,
+} eSpaceImage_GridShapeSource;
 
 typedef struct SpaceImage {
   SpaceLink *next, *prev;
@@ -1230,7 +1241,9 @@ typedef struct SpaceImage {
   char around;
 
   char gizmo_flag;
-  char _pad1[3];
+
+  char grid_shape_source;
+  char _pad1[2];
 
   int flag;
 
@@ -1239,7 +1252,7 @@ typedef struct SpaceImage {
   int tile_grid_shape[2];
   /**
    * UV editor custom-grid. Value of `{M,N}` will produce `MxN` grid.
-   * Use when #SI_CUSTOM_GRID is set.
+   * Use when `custom_grid_shape == SI_GRID_SHAPE_FIXED`.
    */
   int custom_grid_subdiv[2];
 
@@ -1266,7 +1279,7 @@ typedef enum eSpaceImage_PixelRoundMode {
   SI_PIXEL_ROUND_DISABLED = 0,
   SI_PIXEL_ROUND_CENTER = 1,
   SI_PIXEL_ROUND_CORNER = 2,
-} eSpaceImage_Round_Mode;
+} eSpaceImage_PixelRoundMode;
 
 /** #SpaceImage.mode */
 typedef enum eSpaceImage_Mode {
@@ -1300,7 +1313,7 @@ typedef enum eSpaceImage_Flag {
   SI_FULLWINDOW = (1 << 16),
 
   SI_FLAG_UNUSED_17 = (1 << 17),
-  SI_CUSTOM_GRID = (1 << 18),
+  SI_FLAG_UNUSED_18 = (1 << 18),
 
   /**
    * This means that the image is drawn until it reaches the view edge,
@@ -1723,7 +1736,8 @@ typedef struct SpaceClip {
   char _pad0[6];
   /* End 'SpaceLink' header. */
 
-  char _pad1[4];
+  char gizmo_flag;
+  char _pad1[3];
 
   /** User defined offset, image is centered. */
   float xof, yof;
@@ -1823,6 +1837,13 @@ typedef enum eSpaceClip_GPencil_Source {
   SC_GPENCIL_SRC_CLIP = 0,
   SC_GPENCIL_SRC_TRACK = 1,
 } eSpaceClip_GPencil_Source;
+
+/** #SpaceClip.gizmo_flag */
+enum {
+  /** All gizmos. */
+  SCLIP_GIZMO_HIDE = (1 << 0),
+  SCLIP_GIZMO_HIDE_NAVIGATE = (1 << 1),
+};
 
 /** \} */
 

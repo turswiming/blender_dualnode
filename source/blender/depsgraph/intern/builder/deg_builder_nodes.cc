@@ -453,6 +453,11 @@ static int foreach_id_cow_detect_need_for_update_callback(LibraryIDLinkCallbackD
   if (id == nullptr) {
     return IDWALK_RET_NOP;
   }
+  if (!ID_TYPE_IS_COW(GS(id->name))) {
+    /* No need to go further if the id never had a cow copy in the depsgraph. This function is
+     * only concerned with keeping the mapping between original and COW ids intact. */
+    return IDWALK_RET_NOP;
+  }
 
   DepsgraphNodeBuilder *builder = static_cast<DepsgraphNodeBuilder *>(cb_data->user_data);
   ID *id_cow_self = cb_data->id_self;
@@ -1984,13 +1989,6 @@ void DepsgraphNodeBuilder::build_movieclip(MovieClip *clip)
                      OperationCode::MOVIECLIP_EVAL,
                      [bmain = bmain_, clip_cow](::Depsgraph *depsgraph) {
                        BKE_movieclip_eval_update(depsgraph, bmain, clip_cow);
-                     });
-
-  add_operation_node(clip_id,
-                     NodeType::BATCH_CACHE,
-                     OperationCode::MOVIECLIP_SELECT_UPDATE,
-                     [clip_cow](::Depsgraph *depsgraph) {
-                       BKE_movieclip_eval_selection_update(depsgraph, clip_cow);
                      });
 }
 

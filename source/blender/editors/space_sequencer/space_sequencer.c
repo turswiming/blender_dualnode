@@ -129,7 +129,6 @@ static SpaceLink *sequencer_create(const ScrArea *UNUSED(area), const Scene *sce
   region->regiontype = RGN_TYPE_TOOLS;
   region->alignment = RGN_ALIGN_LEFT;
   region->flag = RGN_FLAG_HIDDEN;
-  region->v2d.flag |= V2D_VIEWSYNC_AREA_VERTICAL;
 
   /* Channels. */
   region = MEM_callocN(sizeof(ARegion), "channels for sequencer");
@@ -137,6 +136,7 @@ static SpaceLink *sequencer_create(const ScrArea *UNUSED(area), const Scene *sce
   BLI_addtail(&sseq->regionbase, region);
   region->regiontype = RGN_TYPE_CHANNELS;
   region->alignment = RGN_ALIGN_LEFT;
+  region->v2d.flag |= V2D_VIEWSYNC_AREA_VERTICAL;
 
   /* Preview region. */
   /* NOTE: if you change values here, also change them in sequencer_init_preview_region. */
@@ -565,7 +565,7 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
 
   /* Initialize default view with 7 channels, that are visible even if empty. */
   rctf strip_boundbox;
-  BLI_rctf_init(&strip_boundbox, 0.0f, 0.0f, 1.0f, 7.0f);
+  BLI_rctf_init(&strip_boundbox, 0.0f, 0.0f, 1.0f, 6.0f);
   SEQ_timeline_expand_boundbox(scene, ed->seqbasep, &strip_boundbox);
 
   /* Clamp Y max. Scrubbing area height must be added, so strips aren't occluded. */
@@ -574,8 +574,8 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
   const float pixel_view_size_y = BLI_rctf_size_y(&v2d->cur) / BLI_rcti_size_y(&v2d->mask);
   const float scrub_bar_height = BLI_rcti_size_y(&scrub_rect) * pixel_view_size_y;
 
-  /* Channel n has range of <n, n+1>. */
-  strip_boundbox.ymax += 1.0f + scrub_bar_height;
+  /* Channel n has range of <n, n+1>, +1 for empty channel. */
+  strip_boundbox.ymax += 2.0f + scrub_bar_height;
 
   /* Clamp Y min. Scroller and marker area height must be added, so strips aren't occluded. */
   float scroll_bar_height = v2d->hor.ymax * pixel_view_size_y;
