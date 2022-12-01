@@ -92,27 +92,94 @@ template<typename T> struct Quaternion {
 };
 
 template<typename T> struct AxisAngle {
-  vec_base<T, 3> axis;
-  T angle;
+  using vec3_type = vec_base<T, 3>;
+
+ protected:
+  vec3_type axis_ = {0, 1, 0};
+  /** Store cosine and sine so rotation is cheaper and doesn't require atan2. */
+  T angle_cos_ = 1;
+  T angle_sin_ = 0;
+  /**
+   * Source angle for interpolation.
+   * It might not be computed on creation so the getter ensure it is updated.
+   */
+  T angle_ = 0;
 
   explicit AxisAngle(){};
 
-  AxisAngle(const vec_base<T, 3> &axis, T angle)
+ public:
+  /**
+   * Create a rotation from an axis and an angle.
+   * \note `axis` does not have to be normalized.
+   */
+  AxisAngle(const vec3_type &axis, T angle)
   {
     T length;
-    const vec_base<T, 3> normalized_axis = math::normalize_and_get_length(axis, length);
+    axis_ = math::normalize_and_get_length(axis, length);
     if (length > 0.0f) {
-      this->axis = normalized_axis;
-      this->angle = angle;
+      angle_cos_ = math::cos(angle);
+      angle_sin_ = math::sin(angle);
+      angle_ = angle;
     }
     else {
       *this = identity();
     }
   }
 
+  /**
+   * Create a rotation from 2 normalized vectors.
+   * \note `from` and `to` must be normalized.
+   */
+  AxisAngle(const vec3_type &from, const vec3_type &to)
+  {
+    BLI_assert(is_unit_scale(from));
+    BLI_assert(is_unit_scale(to));
+
+    /* Avoid calculating the angle. */
+    angle_cos_ = dot(from, to);
+    axis_ = normalize_and_get_length(cross(from, to), angle_sin_);
+
+    if (angle_sin_ <= FLT_EPSILON) {
+      if (angle_cos_ > T(0)) {
+        /* Same vectors, zero rotation... */
+        *this = identity();
+      }
+      else {
+        /* Colinear but opposed vectors, 180 rotation... */
+        axis_ = normalize(orthogonal(from));
+        angle_sin_ = T(0);
+        angle_cos_ = T(-1);
+      }
+    }
+  }
+
+  const vec3_type &axis() const
+  {
+    return axis_;
+  }
+
+  const T &angle() const
+  {
+    if (UNLIKELY(angle_ == T(0) && angle_cos_ != T(1))) {
+      /* Angle wasn't computed by constructor. */
+      const_cast<AxisAngle *>(this)->angle_ = math::atan2(angle_sin_, angle_cos_);
+    }
+    return angle_;
+  }
+
+  const T &angle_cos() const
+  {
+    return angle_cos_;
+  }
+
+  const T &angle_sin() const
+  {
+    return angle_sin_;
+  }
+
   static AxisAngle<T> identity()
   {
-    return {{0, 1, 0}, 0};
+    return AxisAngle<T>();
   }
 
   explicit operator Quaternion<T>() const;
@@ -143,8 +210,10 @@ template<typename T> struct AxisAngleNormalized : public AxisAngle<T> {
   AxisAngleNormalized(const vec_base<T, 3> &axis, T angle) : AxisAngle<T>()
   {
     BLI_assert(is_unit_scale(axis));
-    this->axis = axis;
-    this->angle = angle;
+    this->axis_ = axis;
+    this->angle_ = angle;
+    this->angle_cos_ = math::cos(angle);
+    this->angle_sin_ = math::sin(angle);
   }
 
   operator AxisAngle<T>() const

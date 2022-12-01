@@ -161,8 +161,7 @@ template<typename T, int NumCol, int NumRow>
 
 }  // namespace detail
 
-template<typename MatT>
-[[nodiscard]] MatT from_location(const vec_base<typename MatT::base_type, 3> &location)
+template<typename MatT> [[nodiscard]] MatT from_location(const typename MatT::vec3_type &location)
 {
   MatT mat = MatT::identity();
   mat.location() = location;
@@ -197,7 +196,7 @@ template<typename MatT, typename RotationT, typename VectorT>
 }
 
 template<typename MatT, typename RotationT, int ScaleDim>
-[[nodiscard]] MatT from_loc_rot_scale(const vec_base<typename MatT::base_type, 3> &location,
+[[nodiscard]] MatT from_loc_rot_scale(const typename MatT::vec3_type &location,
                                       const RotationT &rotation,
                                       const vec_base<typename MatT::base_type, ScaleDim> &scale)
 {
@@ -208,7 +207,7 @@ template<typename MatT, typename RotationT, int ScaleDim>
 }
 
 template<typename MatT, typename RotationT>
-[[nodiscard]] MatT from_loc_rot(const vec_base<typename MatT::base_type, 3> &location,
+[[nodiscard]] MatT from_loc_rot(const typename MatT::vec3_type &location,
                                 const RotationT &rotation)
 {
   using Mat3x3 = mat_base<typename MatT::base_type, 3, 3>;

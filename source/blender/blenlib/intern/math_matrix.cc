@@ -490,12 +490,11 @@ mat_base<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation)
 {
   using MatT = mat_base<T, NumCol, NumRow>;
   using Vec3T = typename MatT::vec3_type;
-  const T angle_sin = math::sin(rotation.angle);
-  const T angle_cos = math::cos(rotation.angle);
+  const T angle_sin = rotation.angle_sin();
+  const T angle_cos = rotation.angle_cos();
+  const Vec3T &axis = rotation.axis();
 
-  BLI_assert(is_unit_scale(rotation.axis));
-
-  const Vec3T &axis = rotation.axis;
+  BLI_assert(is_unit_scale(axis));
 
   T ico = (T(1) - angle_cos);
   Vec3T nsi = axis * angle_sin;

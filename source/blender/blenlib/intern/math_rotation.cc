@@ -85,17 +85,21 @@ template<typename T> Quaternion<T>::operator AxisAngle<T>() const
 
 template<typename T> AxisAngle<T>::operator Quaternion<T>() const
 {
-  const AxisAngle<T> &rot = *this;
-  BLI_assert(math::is_unit_scale(rot.axis));
-  const T phi = 0.5f * rot.angle;
-  const T cosine = math::cos(phi);
-  const T sine = math::sin(phi);
+  BLI_assert(math::is_unit_scale(axis_));
+
+  /** Using half angle identities: sin(angle / 2) = sqrt((1 - angle_cos) / 2) */
+  T sine = math::sqrt(T(0.5) - angle_cos_ * T(0.5));
+  const T cosine = math::sqrt(T(0.5) + angle_cos_ * T(0.5));
+
+  if (angle_sin_ < 0.0) {
+    sine = -sine;
+  }
 
   Quaternion<T> quat;
   quat.x = cosine;
-  quat.y = axis[0] * sine;
-  quat.z = axis[1] * sine;
-  quat.w = axis[2] * sine;
+  quat.y = axis_.x * sine;
+  quat.z = axis_.y * sine;
+  quat.w = axis_.z * sine;
   return quat;
 }
 
