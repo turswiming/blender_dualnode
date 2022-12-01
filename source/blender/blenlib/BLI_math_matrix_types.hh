@@ -288,8 +288,21 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   }
 
   /** Multiply two matrices using matrix multiplication. */
-  /** \note defined outside of class. */
-  // friend mat_base operator*(const mat_base &a, const mat_base &b);
+  mat_base operator*(const mat_base &b) const
+  {
+    const mat_base &a = *this;
+    /* This is the reference implementation.
+     * Subclass are free to overload it with vectorized / optimized code. */
+    /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
+    mat_base<T, NumCol, NumRow> result(0);
+    unroll<NumCol>([&](auto c) {
+      unroll<NumRow>([&](auto r) {
+        /* This is vector multiplication. */
+        result[c] += b[c][r] * a[r];
+      });
+    });
+    return result;
+  }
 
   /** Multiply each component by a scalar. */
   friend mat_base operator*(const mat_base &a, T b)
@@ -393,18 +406,20 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   }
 };
 
-template<typename T, int NumCol, int NumRow>
-mat_base<T, NumCol, NumRow> operator*(const mat_base<T, NumCol, NumRow> &a,
-                                      const mat_base<T, NumCol, NumRow> &b);
-
-template<>
-mat_base<float, 4, 4> operator*(const mat_base<float, 4, 4> &a, const mat_base<float, 4, 4> &b);
-
 using float2x2 = mat_base<float, 2, 2>;
 using float3x3 = mat_base<float, 3, 3>;
 using float4x4 = mat_base<float, 4, 4>;
 using double2x2 = mat_base<double, 2, 2>;
 using double3x3 = mat_base<double, 3, 3>;
 using double4x4 = mat_base<double, 4, 4>;
+
+/* Specialization for SSE optimization. */
+template<> float4x4 float4x4::operator*(const float4x4 &b) const;
+
+extern template float2x2 float2x2::operator*(const float2x2 &b) const;
+extern template float3x3 float3x3::operator*(const float3x3 &b) const;
+extern template double2x2 double2x2::operator*(const double2x2 &b) const;
+extern template double3x3 double3x3::operator*(const double3x3 &b) const;
+extern template double4x4 double4x4::operator*(const double4x4 &b) const;
 
 }  // namespace blender
