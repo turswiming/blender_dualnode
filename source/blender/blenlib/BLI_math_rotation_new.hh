@@ -135,7 +135,7 @@ AxisAngleNormalized<T>::AxisAngleNormalized(const vec_base<T, 3> &axis, T angle)
 
 template<typename T> Quaternion<T>::operator EulerXYZ<T>() const
 {
-  using Mat3T = mat_base<T, 3, 3>;
+  using Mat3T = MatBase<T, 3, 3>;
   const Quaternion<T> &quat = *this;
   BLI_ASSERT_UNIT_QUATERNION(quat)
   Mat3T unit_mat = math::from_rotation<Mat3T>(quat);

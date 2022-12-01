@@ -21,13 +21,13 @@ namespace blender::math {
  * Returns the inverse of a square matrix.
  */
 template<typename T, int Size>
-[[nodiscard]] mat_base<T, Size, Size> invert(const mat_base<T, Size, Size> &mat);
+[[nodiscard]] MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat);
 
 /**
  * Flip the matrix around its diagonal. Also flips dimensions for non square matrices.
  */
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] mat_base<T, NumCol, NumRow> transpose(const mat_base<T, NumRow, NumCol> &mat);
+[[nodiscard]] MatBase<T, NumCol, NumRow> transpose(const MatBase<T, NumRow, NumCol> &mat);
 
 /**
  * Normalize individually each column of the matrix.
@@ -37,15 +37,15 @@ template<typename T> [[nodiscard]] T normalize(const T &a);
 /**
  * Returns the determinant of the matrix.
  */
-template<typename T, int Size> [[nodiscard]] T determinant(const mat_base<T, Size, Size> &mat);
+template<typename T, int Size> [[nodiscard]] T determinant(const MatBase<T, Size, Size> &mat);
 
 /**
  * Interpolate each component linearly.
  */
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] mat_base<T, NumCol, NumRow> interpolate_linear(const mat_base<T, NumCol, NumRow> &a,
-                                                             const mat_base<T, NumCol, NumRow> &b,
-                                                             T t);
+[[nodiscard]] MatBase<T, NumCol, NumRow> interpolate_linear(const MatBase<T, NumCol, NumRow> &a,
+                                                            const MatBase<T, NumCol, NumRow> &b,
+                                                            T t);
 
 /**
  * A polar-decomposition-based interpolation between matrix A and matrix B.
@@ -63,9 +63,9 @@ template<typename T, int NumCol, int NumRow>
  * \param t: Interpolation factor.
  */
 template<typename T>
-[[nodiscard]] mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A,
-                                            const mat_base<T, 3, 3> &B,
-                                            T t);
+[[nodiscard]] MatBase<T, 3, 3> interpolate(const MatBase<T, 3, 3> &A,
+                                           const MatBase<T, 3, 3> &B,
+                                           T t);
 
 /**
  * Complete transform matrix interpolation,
@@ -76,9 +76,9 @@ template<typename T>
  * \param t: Interpolation factor.
  */
 template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &A,
-                                            const mat_base<T, 4, 4> &B,
-                                            T t);
+[[nodiscard]] MatBase<T, 4, 4> interpolate(const MatBase<T, 4, 4> &A,
+                                           const MatBase<T, 4, 4> &B,
+                                           T t);
 
 /** \} */
 
@@ -153,24 +153,24 @@ template<typename MatT, typename VectorT>
  * \return the rotation with the smallest values from the potential candidates.
  */
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat);
+[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const MatBase<T, 3, 3> &mat);
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const mat_base<T, 4, 4> &mat);
+[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const MatBase<T, 4, 4> &mat);
 
 /**
  * Extract quaternion rotation from transform matrix.
  */
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const mat_base<T, 3, 3> &mat);
+[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const MatBase<T, 3, 3> &mat);
 
 template<typename T, bool Normalized = false>
-[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const mat_base<T, 4, 4> &mat);
+[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const MatBase<T, 4, 4> &mat);
 
 /**
  * Extract 3d scale from a transform matrix.
  */
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] inline vec_base<T, 3> to_scale(const mat_base<T, NumCol, NumRow> &mat);
+[[nodiscard]] inline vec_base<T, 3> to_scale(const MatBase<T, NumCol, NumRow> &mat);
 
 /** \} */
 
@@ -182,35 +182,35 @@ template<typename T, int NumCol, int NumRow>
  * Transform a 3d point using a 3x3 matrix (rotation & scale).
  */
 template<typename T>
-[[nodiscard]] vec_base<T, 3> transform_point(const mat_base<T, 3, 3> &mat,
+[[nodiscard]] vec_base<T, 3> transform_point(const MatBase<T, 3, 3> &mat,
                                              const vec_base<T, 3> &point);
 
 /**
  * Transform a 3d point using a 4x4 matrix (location & rotation & scale).
  */
 template<typename T>
-[[nodiscard]] vec_base<T, 3> transform_point(const mat_base<T, 4, 4> &mat,
+[[nodiscard]] vec_base<T, 3> transform_point(const MatBase<T, 4, 4> &mat,
                                              const vec_base<T, 3> &point);
 
 /**
  * Transform a 3d direction vector using a 3x3 matrix (rotation & scale).
  */
 template<typename T>
-[[nodiscard]] vec_base<T, 3> transform_direction(const mat_base<T, 3, 3> &mat,
+[[nodiscard]] vec_base<T, 3> transform_direction(const MatBase<T, 3, 3> &mat,
                                                  const vec_base<T, 3> &direction);
 
 /**
  * Transform a 3d direction vector using a 4x4 matrix (rotation & scale).
  */
 template<typename T>
-[[nodiscard]] vec_base<T, 3> transform_direction(const mat_base<T, 4, 4> &mat,
+[[nodiscard]] vec_base<T, 3> transform_direction(const MatBase<T, 4, 4> &mat,
                                                  const vec_base<T, 3> &direction);
 
 /**
  * Project a 3d point using a 4x4 matrix (location & rotation & scale & perspective divide).
  */
 template<typename T>
-[[nodiscard]] vec_base<T, 3> project_point(const mat_base<T, 4, 4> &mat,
+[[nodiscard]] vec_base<T, 3> project_point(const MatBase<T, 4, 4> &mat,
                                            const vec_base<T, 3> &point);
 
 /** \} */
@@ -227,7 +227,7 @@ namespace projection {
  * The resulting matrix can be used with either #project_point or #transform_point.
  */
 template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> orthographic(
+[[nodiscard]] MatBase<T, 4, 4> orthographic(
     T left, T right, T bottom, T top, T near_clip, T far_clip);
 
 /**
@@ -237,7 +237,7 @@ template<typename T>
  * The resulting matrix can be used with #project_point.
  */
 template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> perspective(
+[[nodiscard]] MatBase<T, 4, 4> perspective(
     T left, T right, T bottom, T top, T near_clip, T far_clip);
 
 /**
@@ -247,7 +247,7 @@ template<typename T>
  * The resulting matrix can be used with #project_point.
  */
 template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> perspective_fov(
+[[nodiscard]] MatBase<T, 4, 4> perspective_fov(
     T angle_left, T angle_right, T angle_bottom, T angle_top, T near_clip, T far_clip);
 
 }  // namespace projection
@@ -264,18 +264,18 @@ template<typename T>
  * \note It doesn't use determinant(mat4x4) as only the 3x3 components are needed
  * when the matrix is used as a transformation to represent location/scale/rotation.
  */
-template<typename T, int Size> [[nodiscard]] bool is_negative(const mat_base<T, Size, Size> &mat)
+template<typename T, int Size> [[nodiscard]] bool is_negative(const MatBase<T, Size, Size> &mat)
 {
   return determinant(mat) < T(0);
 }
-template<typename T> [[nodiscard]] bool is_negative(const mat_base<T, 4, 4> &mat);
+template<typename T> [[nodiscard]] bool is_negative(const MatBase<T, 4, 4> &mat);
 
 /**
  * Returns true if matrices are equal within the given epsilon.
  */
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] inline bool compare(const mat_base<T, NumCol, NumRow> &a,
-                                  const mat_base<T, NumCol, NumRow> &b,
+[[nodiscard]] inline bool compare(const MatBase<T, NumCol, NumRow> &a,
+                                  const MatBase<T, NumCol, NumRow> &b,
                                   const T epsilon)
 {
   for (int i = 0; i < NumCol; i++) {
@@ -298,19 +298,19 @@ template<typename T, int NumCol, int NumRow>
 namespace detail {
 
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] mat_base<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation);
+[[nodiscard]] MatBase<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation);
 
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] mat_base<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation);
+[[nodiscard]] MatBase<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation);
 
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] mat_base<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation);
+[[nodiscard]] MatBase<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation);
 
 }  // namespace detail
 
 /* Returns true if each individual columns are unit scaled. Mainly for assert usage. */
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] inline bool is_unit_scale(const mat_base<T, NumCol, NumRow> &m)
+[[nodiscard]] inline bool is_unit_scale(const MatBase<T, NumCol, NumRow> &m)
 {
   for (int i = 0; i < NumCol; i++) {
     if (!is_unit_scale(m[i])) {
@@ -321,9 +321,9 @@ template<typename T, int NumCol, int NumRow>
 }
 
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] mat_base<T, NumCol, NumRow> transpose(const mat_base<T, NumRow, NumCol> &mat)
+[[nodiscard]] MatBase<T, NumCol, NumRow> transpose(const MatBase<T, NumRow, NumCol> &mat)
 {
-  mat_base<T, NumCol, NumRow> result;
+  MatBase<T, NumCol, NumRow> result;
   for (int i = 0; i < NumCol; i++) {
     for (int j = 0; j < NumRow; j++) {
       result[i][j] = mat[j][i];
@@ -333,11 +333,11 @@ template<typename T, int NumCol, int NumRow>
 }
 
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] mat_base<T, NumCol, NumRow> interpolate_linear(const mat_base<T, NumCol, NumRow> &a,
-                                                             const mat_base<T, NumCol, NumRow> &b,
-                                                             T t)
+[[nodiscard]] MatBase<T, NumCol, NumRow> interpolate_linear(const MatBase<T, NumCol, NumRow> &a,
+                                                            const MatBase<T, NumCol, NumRow> &b,
+                                                            T t)
 {
-  mat_base<T, NumCol, NumRow> result;
+  MatBase<T, NumCol, NumRow> result;
   unroll<NumCol>([&](auto c) { result[c] = interpolate(a[c], b[c], t); });
   return result;
 }
@@ -352,7 +352,7 @@ template<typename MatT> [[nodiscard]] MatT normalize(const MatT &a)
 namespace detail {
 
 template<typename T>
-void normalized_to_eul2(const mat_base<T, 3, 3> &mat,
+void normalized_to_eul2(const MatBase<T, 3, 3> &mat,
                         detail::EulerXYZ<T> &eul1,
                         detail::EulerXYZ<T> &eul2)
 {
@@ -384,7 +384,7 @@ template void normalized_to_eul2(const double3x3 &mat,
                                  detail::EulerXYZ<double> &eul1,
                                  detail::EulerXYZ<double> &eul2);
 
-template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const mat_base<T, 3, 3> &mat)
+template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const MatBase<T, 3, 3> &mat)
 {
   BLI_assert(math::is_unit_scale(mat));
   /* Caller must ensure matrices aren't negative for valid results, see: T24291, T94231. */
@@ -474,7 +474,7 @@ template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const mat_bas
 }
 
 template<typename T>
-detail::Quaternion<T> normalized_to_quat_with_checks(const mat_base<T, 3, 3> &mat)
+detail::Quaternion<T> normalized_to_quat_with_checks(const MatBase<T, 3, 3> &mat)
 {
   const T det = math::determinant(mat);
   if (UNLIKELY(!isfinite(det))) {
@@ -490,9 +490,9 @@ template Quaternion<float> normalized_to_quat_with_checks(const float3x3 &mat);
 template Quaternion<double> normalized_to_quat_with_checks(const double3x3 &mat);
 
 template<typename T, int NumCol, int NumRow>
-mat_base<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
+MatBase<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
 {
-  using MatT = mat_base<T, NumCol, NumRow>;
+  using MatT = MatBase<T, NumCol, NumRow>;
   using IntermediateType = typename TypeTraits<T>::IntermediateType;
   IntermediateType ci = math::cos(rotation.x);
   IntermediateType cj = math::cos(rotation.y);
@@ -521,9 +521,9 @@ mat_base<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
 }
 
 template<typename T, int NumCol, int NumRow>
-mat_base<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation)
+MatBase<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation)
 {
-  using MatT = mat_base<T, NumCol, NumRow>;
+  using MatT = MatBase<T, NumCol, NumRow>;
   using IntermediateType = typename TypeTraits<T>::IntermediateType;
   IntermediateType q0 = M_SQRT2 * IntermediateType(rotation.x);
   IntermediateType q1 = M_SQRT2 * IntermediateType(rotation.y);
@@ -556,9 +556,9 @@ mat_base<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation)
 }
 
 template<typename T, int NumCol, int NumRow>
-mat_base<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation)
+MatBase<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation)
 {
-  using MatT = mat_base<T, NumCol, NumRow>;
+  using MatT = MatBase<T, NumCol, NumRow>;
   using Vec3T = typename MatT::vec3_type;
   const T angle_sin = rotation.angle_sin();
   const T angle_cos = rotation.angle_cos();
@@ -584,17 +584,17 @@ mat_base<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation)
   return mat;
 }
 
-template mat_base<float, 3, 3> from_rotation(const EulerXYZ<float> &rotation);
-template mat_base<float, 4, 4> from_rotation(const EulerXYZ<float> &rotation);
-template mat_base<float, 3, 3> from_rotation(const Quaternion<float> &rotation);
-template mat_base<float, 4, 4> from_rotation(const Quaternion<float> &rotation);
-template mat_base<float, 3, 3> from_rotation(const AxisAngle<float> &rotation);
-template mat_base<float, 4, 4> from_rotation(const AxisAngle<float> &rotation);
+template MatBase<float, 3, 3> from_rotation(const EulerXYZ<float> &rotation);
+template MatBase<float, 4, 4> from_rotation(const EulerXYZ<float> &rotation);
+template MatBase<float, 3, 3> from_rotation(const Quaternion<float> &rotation);
+template MatBase<float, 4, 4> from_rotation(const Quaternion<float> &rotation);
+template MatBase<float, 3, 3> from_rotation(const AxisAngle<float> &rotation);
+template MatBase<float, 4, 4> from_rotation(const AxisAngle<float> &rotation);
 
 }  // namespace detail
 
 template<typename T, bool Normalized>
-[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const mat_base<T, 3, 3> &mat)
+[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const MatBase<T, 3, 3> &mat)
 {
   detail::EulerXYZ<T> eul1, eul2;
   if constexpr (Normalized) {
@@ -609,14 +609,14 @@ template<typename T, bool Normalized>
 }
 
 template<typename T, bool Normalized>
-[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const mat_base<T, 4, 4> &mat)
+[[nodiscard]] inline detail::EulerXYZ<T> to_euler(const MatBase<T, 4, 4> &mat)
 {
   /* TODO(fclem): Avoid the copy with 3x3 ref. */
-  return to_euler<T, Normalized>(mat_base<T, 3, 3>(mat));
+  return to_euler<T, Normalized>(MatBase<T, 3, 3>(mat));
 }
 
 template<typename T, bool Normalized>
-[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const mat_base<T, 3, 3> &mat)
+[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const MatBase<T, 3, 3> &mat)
 {
   using namespace math;
   if constexpr (Normalized) {
@@ -628,14 +628,14 @@ template<typename T, bool Normalized>
 }
 
 template<typename T, bool Normalized>
-[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const mat_base<T, 4, 4> &mat)
+[[nodiscard]] inline detail::Quaternion<T> to_quaternion(const MatBase<T, 4, 4> &mat)
 {
   /* TODO(fclem): Avoid the copy with 3x3 ref. */
-  return to_quaternion<T, Normalized>(mat_base<T, 3, 3>(mat));
+  return to_quaternion<T, Normalized>(MatBase<T, 3, 3>(mat));
 }
 
 template<typename T, int NumCol, int NumRow>
-[[nodiscard]] inline vec_base<T, 3> to_scale(const mat_base<T, NumCol, NumRow> &mat)
+[[nodiscard]] inline vec_base<T, 3> to_scale(const MatBase<T, NumCol, NumRow> &mat)
 {
   return {length(mat.x_axis()), length(mat.y_axis()), length(mat.z_axis())};
 }
@@ -675,7 +675,7 @@ template<typename MatT, typename RotationT, int ScaleDim>
                                       const RotationT &rotation,
                                       const vec_base<typename MatT::base_type, ScaleDim> &scale)
 {
-  using Mat3x3 = mat_base<typename MatT::base_type, 3, 3>;
+  using Mat3x3 = MatBase<typename MatT::base_type, 3, 3>;
   MatT mat = MatT(from_rot_scale<Mat3x3>(rotation, scale));
   mat.location() = location;
   return mat;
@@ -685,7 +685,7 @@ template<typename MatT, typename RotationT>
 [[nodiscard]] MatT from_loc_rot(const typename MatT::vec3_type &location,
                                 const RotationT &rotation)
 {
-  using Mat3x3 = mat_base<typename MatT::base_type, 3, 3>;
+  using Mat3x3 = MatBase<typename MatT::base_type, 3, 3>;
   MatT mat = MatT(from_rotation<Mat3x3>(rotation));
   mat.location() = location;
   return mat;
@@ -713,40 +713,40 @@ template<typename MatT, typename VectorT>
                                              const VectorT forward,
                                              const VectorT up)
 {
-  using Mat3x3 = mat_base<typename MatT::base_type, 3, 3>;
+  using Mat3x3 = MatBase<typename MatT::base_type, 3, 3>;
   MatT matrix = MatT(from_normalized_axis_data<Mat3x3>(forward, up));
   matrix.location() = location;
   return matrix;
 }
 
 template<typename T>
-vec_base<T, 3> transform_point(const mat_base<T, 3, 3> &mat, const vec_base<T, 3> &point)
+vec_base<T, 3> transform_point(const MatBase<T, 3, 3> &mat, const vec_base<T, 3> &point)
 {
   return mat * point;
 }
 
 template<typename T>
-vec_base<T, 3> transform_point(const mat_base<T, 4, 4> &mat, const vec_base<T, 3> &point)
+vec_base<T, 3> transform_point(const MatBase<T, 4, 4> &mat, const vec_base<T, 3> &point)
 {
   /* TODO(fclem): mat3 view. */
   return vec_base<T, 3>(mat * vec_base<T, 4>(point, T(1)));
 }
 
 template<typename T>
-vec_base<T, 3> transform_direction(const mat_base<T, 3, 3> &mat, const vec_base<T, 3> &direction)
+vec_base<T, 3> transform_direction(const MatBase<T, 3, 3> &mat, const vec_base<T, 3> &direction)
 {
   return mat * direction;
 }
 
 template<typename T>
-vec_base<T, 3> transform_direction(const mat_base<T, 4, 4> &mat, const vec_base<T, 3> &direction)
+vec_base<T, 3> transform_direction(const MatBase<T, 4, 4> &mat, const vec_base<T, 3> &direction)
 {
   /* TODO(fclem): mat3 view. */
   return vec_base<T, 3>(mat * vec_base<T, 4>(direction, T(0)));
 }
 
 template<typename T>
-vec_base<T, 3> project_point(const mat_base<T, 4, 4> &mat, const vec_base<T, 3> &point)
+vec_base<T, 3> project_point(const MatBase<T, 4, 4> &mat, const vec_base<T, 3> &point)
 {
   vec_base<T, 4> tmp(point, T(0));
   tmp = mat * tmp;
@@ -763,13 +763,13 @@ template float3 project_point(const float4x4 &mat, const float3 &direction);
 namespace projection {
 
 template<typename T>
-mat_base<T, 4, 4> orthographic(T left, T right, T bottom, T top, T near_clip, T far_clip)
+MatBase<T, 4, 4> orthographic(T left, T right, T bottom, T top, T near_clip, T far_clip)
 {
   const T x_delta = right - left;
   const T y_delta = top - bottom;
   const T z_delta = far_clip - near_clip;
 
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>::identity();
+  MatBase<T, 4, 4> mat = MatBase<T, 4, 4>::identity();
   if (x_delta != 0 && y_delta != 0 && z_delta != 0) {
     mat[0][0] = T(2.0) / x_delta;
     mat[3][0] = -(right + left) / x_delta;
@@ -782,13 +782,13 @@ mat_base<T, 4, 4> orthographic(T left, T right, T bottom, T top, T near_clip, T 
 }
 
 template<typename T>
-mat_base<T, 4, 4> perspective(T left, T right, T bottom, T top, T near_clip, T far_clip)
+MatBase<T, 4, 4> perspective(T left, T right, T bottom, T top, T near_clip, T far_clip)
 {
   const T x_delta = right - left;
   const T y_delta = top - bottom;
   const T z_delta = far_clip - near_clip;
 
-  mat_base<T, 4, 4> mat = mat_base<T, 4, 4>::identity();
+  MatBase<T, 4, 4> mat = MatBase<T, 4, 4>::identity();
   if (x_delta != 0 && y_delta != 0 && z_delta != 0) {
     mat[0][0] = near_clip * T(2.0) / x_delta;
     mat[1][1] = near_clip * T(2.0) / y_delta;
@@ -802,15 +802,15 @@ mat_base<T, 4, 4> perspective(T left, T right, T bottom, T top, T near_clip, T f
 }
 
 template<typename T>
-[[nodiscard]] mat_base<T, 4, 4> perspective_fov(
+[[nodiscard]] MatBase<T, 4, 4> perspective_fov(
     T angle_left, T angle_right, T angle_bottom, T angle_top, T near_clip, T far_clip)
 {
-  mat_base<T, 4, 4> mat = perspective(math::tan(angle_left),
-                                      math::tan(angle_right),
-                                      math::tan(angle_bottom),
-                                      math::tan(angle_top),
-                                      near_clip,
-                                      far_clip);
+  MatBase<T, 4, 4> mat = perspective(math::tan(angle_left),
+                                     math::tan(angle_right),
+                                     math::tan(angle_bottom),
+                                     math::tan(angle_top),
+                                     near_clip,
+                                     far_clip);
   mat[0][0] /= near_clip;
   mat[1][1] /= near_clip;
   return mat;

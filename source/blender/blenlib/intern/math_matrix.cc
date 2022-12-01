@@ -77,7 +77,7 @@ namespace blender::math {
 /** \name Determinant
  * \{ */
 
-template<typename T, int Size> T determinant(const mat_base<T, Size, Size> &mat)
+template<typename T, int Size> T determinant(const MatBase<T, Size, Size> &mat)
 {
   return Map<const Matrix<T, Size, Size>>((const T *)mat.ptr()).determinant();
 }
@@ -89,7 +89,7 @@ template double determinant(const double2x2 &mat);
 template double determinant(const double3x3 &mat);
 template double determinant(const double4x4 &mat);
 
-template<typename T> bool is_negative(const mat_base<T, 4, 4> &mat)
+template<typename T> bool is_negative(const MatBase<T, 4, 4> &mat)
 {
   return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>((const T *)mat.ptr()).determinant() < T(0);
 }
@@ -103,9 +103,9 @@ template bool is_negative(const double4x4 &mat);
 /** \name Inverse
  * \{ */
 
-template<typename T, int Size> mat_base<T, Size, Size> invert(const mat_base<T, Size, Size> &mat)
+template<typename T, int Size> MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat)
 {
-  mat_base<T, Size, Size> result;
+  MatBase<T, Size, Size> result;
   Map<const Matrix<T, Size, Size>> M((const T *)mat.ptr());
   Map<Matrix<T, Size, Size>> R((T *)result.ptr());
   bool is_invertible = true;
@@ -139,15 +139,15 @@ template double4x4 invert(const double4x4 &mat);
  * See https://en.wikipedia.org/wiki/Polar_decomposition for more.
  */
 template<typename T>
-static void polar_decompose(const mat_base<T, 3, 3> &mat3,
-                            mat_base<T, 3, 3> &r_U,
-                            mat_base<T, 3, 3> &r_P)
+static void polar_decompose(const MatBase<T, 3, 3> &mat3,
+                            MatBase<T, 3, 3> &r_U,
+                            MatBase<T, 3, 3> &r_P)
 {
   /* From svd decomposition (M = WSV*), we have:
    *     U = WV*
    *     P = VSV*
    */
-  mat_base<T, 3, 3> W, V;
+  MatBase<T, 3, 3> W, V;
   vec_base<T, 3> S_val;
 
   {
@@ -169,8 +169,8 @@ static void polar_decompose(const mat_base<T, 3, 3> &mat3,
     (Map<MatrixT>((T *)V.ptr())) = svd.matrixV();
   }
 
-  mat_base<T, 3, 3> S = from_scale<mat_base<T, 3, 3>>(S_val);
-  mat_base<T, 3, 3> Vt = transpose(V);
+  MatBase<T, 3, 3> S = from_scale<MatBase<T, 3, 3>>(S_val);
+  MatBase<T, 3, 3> Vt = transpose(V);
 
   r_U = W * Vt;
   r_P = (V * S) * Vt;
@@ -183,9 +183,9 @@ static void polar_decompose(const mat_base<T, 3, 3> &mat3,
  * \{ */
 
 template<typename T>
-mat_base<T, 3, 3> interpolate(const mat_base<T, 3, 3> &A, const mat_base<T, 3, 3> &B, T t)
+MatBase<T, 3, 3> interpolate(const MatBase<T, 3, 3> &A, const MatBase<T, 3, 3> &B, T t)
 {
-  using Mat3T = mat_base<T, 3, 3>;
+  using Mat3T = MatBase<T, 3, 3>;
   /* 'Rotation' component ('U' part of polar decomposition,
    * the closest orthogonal matrix to M3 rot/scale
    * transformation matrix), spherically interpolated. */
@@ -227,14 +227,14 @@ template float3x3 interpolate(const float3x3 &A, const float3x3 &B, float t);
 template double3x3 interpolate(const double3x3 &A, const double3x3 &B, double t);
 
 template<typename T>
-mat_base<T, 4, 4> interpolate(const mat_base<T, 4, 4> &A, const mat_base<T, 4, 4> &B, T t)
+MatBase<T, 4, 4> interpolate(const MatBase<T, 4, 4> &A, const MatBase<T, 4, 4> &B, T t)
 {
-  mat_base<T, 4, 4> result = mat_base<T, 4, 4>(
-      interpolate(mat_base<T, 3, 3>(A), mat_base<T, 3, 3>(B), t));
+  MatBase<T, 4, 4> result = MatBase<T, 4, 4>(
+      interpolate(MatBase<T, 3, 3>(A), MatBase<T, 3, 3>(B), t));
 
   /* Location component, linearly interpolated. */
-  const auto &loc_a = static_cast<const mat_base<T, 4, 4> &>(A).location();
-  const auto &loc_b = static_cast<const mat_base<T, 4, 4> &>(B).location();
+  const auto &loc_a = static_cast<const MatBase<T, 4, 4> &>(A).location();
+  const auto &loc_b = static_cast<const MatBase<T, 4, 4> &>(B).location();
   result.location() = interpolate(loc_a, loc_b, t);
 
   return result;

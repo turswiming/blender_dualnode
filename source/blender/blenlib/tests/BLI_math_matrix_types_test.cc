@@ -7,9 +7,9 @@
 
 namespace blender::tests {
 
-using float2x2 = mat_base<float, 2, 2>;
-using float3x2 = mat_base<float, 3, 2>;
-using double3x2 = mat_base<double, 3, 2>;
+using float2x2 = MatBase<float, 2, 2>;
+using float3x2 = MatBase<float, 3, 2>;
+using double3x2 = MatBase<double, 3, 2>;
 
 using namespace blender::math;
 

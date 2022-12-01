@@ -21,7 +21,7 @@
 namespace blender {
 
 template<typename T, int NumCol, int NumRow>
-struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
+struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
 
   using base_type = T;
   using vec3_type = vec_base<T, 3>;
@@ -31,10 +31,10 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   static constexpr int col_len = NumCol;
   static constexpr int row_len = NumRow;
 
-  mat_base() = default;
+  MatBase() = default;
 
   /** Initialize the diagonal of the matrix to this value and the rest with zero. Matches GLSL. */
-  explicit mat_base(T value)
+  explicit MatBase(T value)
   {
     unroll<NumCol>([&](auto i) {
       (*this)[i] = col_type(0);
@@ -43,20 +43,20 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   }
 
   template<typename U, BLI_ENABLE_IF((std::is_convertible_v<U, T>))>
-  explicit mat_base(U value) : mat_base(T(value))
+  explicit MatBase(U value) : MatBase(T(value))
   {
   }
 
 /* Workaround issue with template BLI_ENABLE_IF((Size == 2)) not working. */
 #define BLI_ENABLE_IF_MAT(_size, _test) int S = _size, BLI_ENABLE_IF((S _test))
 
-  template<BLI_ENABLE_IF_MAT(NumCol, == 2)> mat_base(col_type _x, col_type _y)
+  template<BLI_ENABLE_IF_MAT(NumCol, == 2)> MatBase(col_type _x, col_type _y)
   {
     (*this)[0] = _x;
     (*this)[1] = _y;
   }
 
-  template<BLI_ENABLE_IF_MAT(NumCol, == 3)> mat_base(col_type _x, col_type _y, col_type _z)
+  template<BLI_ENABLE_IF_MAT(NumCol, == 3)> MatBase(col_type _x, col_type _y, col_type _z)
   {
     (*this)[0] = _x;
     (*this)[1] = _y;
@@ -64,7 +64,7 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   }
 
   template<BLI_ENABLE_IF_MAT(NumCol, == 4)>
-  mat_base(col_type _x, col_type _y, col_type _z, col_type _w)
+  MatBase(col_type _x, col_type _y, col_type _z, col_type _w)
   {
     (*this)[0] = _x;
     (*this)[1] = _y;
@@ -75,7 +75,7 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   /** Masking. */
 
   template<typename U, int OtherNumCol, int OtherNumRow>
-  explicit mat_base(const mat_base<U, OtherNumCol, OtherNumRow> &other)
+  explicit MatBase(const MatBase<U, OtherNumCol, OtherNumRow> &other)
   {
     if constexpr ((OtherNumRow >= NumRow) && (OtherNumCol >= NumCol)) {
       unroll<NumCol>([&](auto i) { (*this)[i] = col_type(other[i]); });
@@ -102,24 +102,23 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
 
   /** Conversion from pointers (from C-style vectors). */
 
-  explicit mat_base(const T *ptr)
+  explicit MatBase(const T *ptr)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] = reinterpret_cast<const col_type *>(ptr)[i]; });
   }
 
-  template<typename U, BLI_ENABLE_IF((std::is_convertible_v<U, T>))>
-  explicit mat_base(const U *ptr)
+  template<typename U, BLI_ENABLE_IF((std::is_convertible_v<U, T>))> explicit MatBase(const U *ptr)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] = ptr[i]; });
   }
 
-  explicit mat_base(const T (*ptr)[NumCol]) : mat_base(static_cast<const T *>(ptr[0]))
+  explicit MatBase(const T (*ptr)[NumCol]) : MatBase(static_cast<const T *>(ptr[0]))
   {
   }
 
   /** Conversion from other matrix types. */
 
-  template<typename U> explicit mat_base(const mat_base<U, NumRow, NumCol> &vec)
+  template<typename U> explicit MatBase(const MatBase<U, NumRow, NumCol> &vec)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] = col_type(vec[i]); });
   }
@@ -216,85 +215,85 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
 
   /** Matrix operators. */
 
-  friend mat_base operator+(const mat_base &a, const mat_base &b)
+  friend MatBase operator+(const MatBase &a, const MatBase &b)
   {
-    mat_base result;
+    MatBase result;
     unroll<NumCol>([&](auto i) { result[i] = a[i] + b[i]; });
     return result;
   }
 
-  friend mat_base operator+(const mat_base &a, T b)
+  friend MatBase operator+(const MatBase &a, T b)
   {
-    mat_base result;
+    MatBase result;
     unroll<NumCol>([&](auto i) { result[i] = a[i] + b; });
     return result;
   }
 
-  friend mat_base operator+(T a, const mat_base &b)
+  friend MatBase operator+(T a, const MatBase &b)
   {
     return b + a;
   }
 
-  mat_base &operator+=(const mat_base &b)
+  MatBase &operator+=(const MatBase &b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] += b[i]; });
     return *this;
   }
 
-  mat_base &operator+=(T b)
+  MatBase &operator+=(T b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] += b; });
     return *this;
   }
 
-  friend mat_base operator-(const mat_base &a)
+  friend MatBase operator-(const MatBase &a)
   {
-    mat_base result;
+    MatBase result;
     unroll<NumCol>([&](auto i) { result[i] = -a[i]; });
     return result;
   }
 
-  friend mat_base operator-(const mat_base &a, const mat_base &b)
+  friend MatBase operator-(const MatBase &a, const MatBase &b)
   {
-    mat_base result;
+    MatBase result;
     unroll<NumCol>([&](auto i) { result[i] = a[i] - b[i]; });
     return result;
   }
 
-  friend mat_base operator-(const mat_base &a, T b)
+  friend MatBase operator-(const MatBase &a, T b)
   {
-    mat_base result;
+    MatBase result;
     unroll<NumCol>([&](auto i) { result[i] = a[i] - b; });
     return result;
   }
 
-  friend mat_base operator-(T a, const mat_base &b)
+  friend MatBase operator-(T a, const MatBase &b)
   {
-    mat_base result;
+    MatBase result;
     unroll<NumCol>([&](auto i) { result[i] = a - b[i]; });
     return result;
   }
 
-  mat_base &operator-=(const mat_base &b)
+  MatBase &operator-=(const MatBase &b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] -= b[i]; });
     return *this;
   }
 
-  mat_base &operator-=(T b)
+  MatBase &operator-=(T b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] -= b; });
     return *this;
   }
 
   /** Multiply two matrices using matrix multiplication. */
-  mat_base operator*(const mat_base &b) const
+  MatBase operator*(const MatBase &b) const
   {
-    const mat_base &a = *this;
+    const MatBase &a = *this;
     /* This is the reference implementation.
      * Subclass are free to overload it with vectorized / optimized code. */
     /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
-    mat_base<T, NumCol, NumRow> result(0);
+    MatBase<T, NumCol, NumRow> result(0);
     unroll<NumCol>([&](auto c) {
       unroll<NumRow>([&](auto r) {
         /* This is vector multiplication. */
@@ -305,29 +304,29 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   }
 
   /** Multiply each component by a scalar. */
-  friend mat_base operator*(const mat_base &a, T b)
+  friend MatBase operator*(const MatBase &a, T b)
   {
-    mat_base result;
+    MatBase result;
     unroll<NumCol>([&](auto i) { result[i] = a[i] * b; });
     return result;
   }
 
   /** Multiply each component by a scalar. */
-  friend mat_base operator*(T a, const mat_base &b)
+  friend MatBase operator*(T a, const MatBase &b)
   {
     return b * a;
   }
 
   /** Multiply two matrices using matrix multiplication. */
-  mat_base &operator*=(const mat_base &b)
+  MatBase &operator*=(const MatBase &b)
   {
-    const mat_base &a = *this;
+    const MatBase &a = *this;
     *this = a * b;
     return *this;
   }
 
   /** Multiply each component by a scalar. */
-  mat_base &operator*=(T b)
+  MatBase &operator*=(T b)
   {
     unroll<NumCol>([&](auto i) { (*this)[i] *= b; });
     return *this;
@@ -335,7 +334,7 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
 
   /** Vector operators. */
 
-  friend col_type operator*(const mat_base &a, const row_type &b)
+  friend col_type operator*(const MatBase &a, const row_type &b)
   {
     /* This is the reference implementation.
      * Subclass are free to overload it with vectorized / optimized code. */
@@ -346,7 +345,7 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
 
   /** Compare. */
 
-  friend bool operator==(const mat_base &a, const mat_base &b)
+  friend bool operator==(const MatBase &a, const MatBase &b)
   {
     for (int i = 0; i < NumCol; i++) {
       if (a[i] != b[i]) {
@@ -356,21 +355,21 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
     return true;
   }
 
-  friend bool operator!=(const mat_base &a, const mat_base &b)
+  friend bool operator!=(const MatBase &a, const MatBase &b)
   {
     return !(a == b);
   }
 
   /** Misc */
 
-  static mat_base identity()
+  static MatBase identity()
   {
-    return mat_base(1);
+    return MatBase(1);
   }
 
-  static mat_base zero()
+  static MatBase zero()
   {
-    return mat_base(0);
+    return MatBase(0);
   }
 
   uint64_t hash() const
@@ -383,7 +382,7 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
     return h;
   }
 
-  friend std::ostream &operator<<(std::ostream &stream, const mat_base &mat)
+  friend std::ostream &operator<<(std::ostream &stream, const MatBase &mat)
   {
     stream << "(\n";
     for (int i = 0; i < NumCol; i++) {
@@ -406,12 +405,12 @@ struct alignas(4 * sizeof(T)) mat_base : public vec_struct_base<vec_base<T, NumR
   }
 };
 
-using float2x2 = mat_base<float, 2, 2>;
-using float3x3 = mat_base<float, 3, 3>;
-using float4x4 = mat_base<float, 4, 4>;
-using double2x2 = mat_base<double, 2, 2>;
-using double3x3 = mat_base<double, 3, 3>;
-using double4x4 = mat_base<double, 4, 4>;
+using float2x2 = MatBase<float, 2, 2>;
+using float3x3 = MatBase<float, 3, 3>;
+using float4x4 = MatBase<float, 4, 4>;
+using double2x2 = MatBase<double, 2, 2>;
+using double3x3 = MatBase<double, 3, 3>;
+using double4x4 = MatBase<double, 4, 4>;
 
 /* Specialization for SSE optimization. */
 template<> float4x4 float4x4::operator*(const float4x4 &b) const;
