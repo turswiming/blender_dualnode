@@ -541,8 +541,8 @@ ccl_device bool get_left_probability(KernelGlobals kg,
 
 template<bool in_volume_segment>
 ccl_device_noinline bool light_tree_sample(KernelGlobals kg,
-                                           float randu,
-                                           float randv,
+                                           ccl_private float &randu,
+                                           ccl_private float &randv,
                                            const float time,
                                            const float3 P,
                                            const float3 N_or_D,
@@ -550,10 +550,10 @@ ccl_device_noinline bool light_tree_sample(KernelGlobals kg,
                                            const int shader_flags,
                                            const int bounce,
                                            const uint32_t path_flag,
-                                           ccl_private int *emitter_object,
-                                           ccl_private int *emitter_prim,
-                                           ccl_private int *emitter_shader_flag,
-                                           ccl_private float *emitter_pdf_selection)
+                                           ccl_private int &emitter_object,
+                                           ccl_private int &emitter_prim,
+                                           ccl_private int &emitter_shader_flag,
+                                           ccl_private float &emitter_pdf_selection)
 {
   if (!kernel_data.integrator.use_direct_light) {
     return false;
@@ -603,10 +603,10 @@ ccl_device_noinline bool light_tree_sample(KernelGlobals kg,
   ccl_global const KernelLightTreeEmitter *kemitter = &kernel_data_fetch(light_tree_emitters,
                                                                          selected_light);
 
-  *emitter_object = kemitter->mesh_light.object_id;
-  *emitter_prim = kemitter->prim_id;
-  *emitter_shader_flag = kemitter->mesh_light.shader_flag;
-  *emitter_pdf_selection = pdf_leaf * pdf_emitter_from_leaf;
+  emitter_object = kemitter->mesh_light.object_id;
+  emitter_prim = kemitter->prim_id;
+  emitter_shader_flag = kemitter->mesh_light.shader_flag;
+  emitter_pdf_selection = pdf_leaf * pdf_emitter_from_leaf;
 
   return true;
 }

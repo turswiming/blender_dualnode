@@ -419,7 +419,7 @@ void LightManager::device_update_distribution(Device *device,
 
   /* normalize cumulative distribution functions */
   distribution[num_distribution].totarea = totarea;
-  distribution[num_distribution].prim = 0.0f;
+  distribution[num_distribution].prim = 0;
   distribution[num_distribution].mesh_light.object_id = OBJECT_NONE;
   distribution[num_distribution].mesh_light.shader_flag = 0;
 

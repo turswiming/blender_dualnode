@@ -322,7 +322,7 @@ ccl_device_inline float light_sample_mis_weight_nee(KernelGlobals kg,
 
 ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
                                                         float randu,
-                                                        const float randv,
+                                                        float randv,
                                                         const float time,
                                                         const float3 P,
                                                         const float3 D,
@@ -348,25 +348,25 @@ ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
                                  SD_BSDF_HAS_TRANSMISSION,
                                  bounce,
                                  path_flag,
-                                 &emitter_object,
-                                 &emitter_prim,
-                                 &emitter_shader_flag,
-                                 &emitter_pdf_selection)) {
+                                 emitter_object,
+                                 emitter_prim,
+                                 emitter_shader_flag,
+                                 emitter_pdf_selection)) {
       return false;
     }
   }
   else {
-    if (!light_distribution_sample<true>(kg,
-                                         randu,
-                                         randv,
-                                         time,
-                                         P,
-                                         bounce,
-                                         path_flag,
-                                         &emitter_object,
-                                         &emitter_prim,
-                                         &emitter_shader_flag,
-                                         &emitter_pdf_selection)) {
+    if (!light_distribution_sample(kg,
+                                   randu,
+                                   randv,
+                                   time,
+                                   P,
+                                   bounce,
+                                   path_flag,
+                                   emitter_object,
+                                   emitter_prim,
+                                   emitter_shader_flag,
+                                   emitter_pdf_selection)) {
       return false;
     }
   }
@@ -409,8 +409,8 @@ ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
 
 ccl_device bool light_sample_from_position(KernelGlobals kg,
                                            ccl_private const RNGState *rng_state,
-                                           const float randu,
-                                           const float randv,
+                                           float randu,
+                                           float randv,
                                            const float time,
                                            const float3 P,
                                            const float3 N,
@@ -436,25 +436,25 @@ ccl_device bool light_sample_from_position(KernelGlobals kg,
                                   shader_flags,
                                   bounce,
                                   path_flag,
-                                  &emitter_object,
-                                  &emitter_prim,
-                                  &emitter_shader_flag,
-                                  &emitter_pdf_selection)) {
+                                  emitter_object,
+                                  emitter_prim,
+                                  emitter_shader_flag,
+                                  emitter_pdf_selection)) {
       return false;
     }
   }
   else {
-    if (!light_distribution_sample<false>(kg,
-                                          randu,
-                                          randv,
-                                          time,
-                                          P,
-                                          bounce,
-                                          path_flag,
-                                          &emitter_object,
-                                          &emitter_prim,
-                                          &emitter_shader_flag,
-                                          &emitter_pdf_selection)) {
+    if (!light_distribution_sample(kg,
+                                   randu,
+                                   randv,
+                                   time,
+                                   P,
+                                   bounce,
+                                   path_flag,
+                                   emitter_object,
+                                   emitter_prim,
+                                   emitter_shader_flag,
+                                   emitter_pdf_selection)) {
       return false;
     }
   }
