@@ -704,7 +704,7 @@ ccl_device_forceinline bool integrate_volume_equiangular_sample_light(
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
   const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
 
-  LightSample ls;
+  LightSample ls ccl_optional_struct_init;
   if (!light_sample_from_volume_segment(kg,
                                         rand_light.x,
                                         rand_light.y,
@@ -761,7 +761,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
    * Additionally we could end up behind the light or outside a spot light cone, which might
    * waste a sample. Though on the other hand it would be possible to prevent that with
    * equiangular sampling restricted to a smaller sub-segment where the light has influence. */
-  LightSample ls;
+  LightSample ls ccl_optional_struct_init;
   {
     const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
