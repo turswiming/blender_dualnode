@@ -26,7 +26,7 @@
 
 /* Set to 0 to allow devices that do not have the required features.
  * This allows development on OSX until we really needs these features. */
-#define STRICT_REQUIREMENTS 0
+#define STRICT_REQUIREMENTS 1
 
 using namespace std;
 
