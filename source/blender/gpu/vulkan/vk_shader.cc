@@ -534,7 +534,6 @@ Vector<uint32_t> VKShader::compile_glsl_to_spirv(Span<const char *> sources,
   shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
       combined_sources, stage, name, options);
   if (module.GetNumErrors() != 0 || module.GetNumWarnings() != 0) {
-    // printf("%s %s\n", __func__, combined_sources.c_str());
     std::string log = module.GetErrorMessage();
     Vector<char> logcstr(log.c_str(), log.c_str() + log.size() + 1);
 
@@ -547,6 +546,7 @@ Vector<uint32_t> VKShader::compile_glsl_to_spirv(Span<const char *> sources,
   }
 
   if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+    // printf("%s %s\n", __func__, combined_sources.c_str());
     compilation_failed_ = true;
     return Vector<uint32_t>();
   }
