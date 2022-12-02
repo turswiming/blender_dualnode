@@ -2942,7 +2942,7 @@ static char *current_relpath_append(const FileListReadJob *job_params, const cha
     return BLI_strdup(filename);
   }
 
-  BLI_assert(relbase[strlen(relbase) - 1] == SEP);
+  BLI_assert(ELEM(relbase[strlen(relbase) - 1], SEP, ALTSEP));
   BLI_assert(BLI_path_is_rel(relbase));
 
   char relpath[FILE_MAX_LIBEXTRA];
@@ -3105,10 +3105,14 @@ static void filelist_readjob_list_lib_add_datablock(FileListReadJob *job_params,
       entry->typeflag |= FILE_TYPE_ASSET;
 
       if (filelist->asset_library) {
-        /** XXX Moving out the asset metadata like this isn't great. */
-        std::unique_ptr metadata = BKE_asset_metadata_move_to_unique_ptr(
-            datablock_info->asset_data);
-        BKE_asset_metadata_free(&datablock_info->asset_data);
+        /* Take ownership over the asset data (shallow copies into unique_ptr managed memory) to
+         * pass it on to the asset system. */
+        std::unique_ptr metadata = std::make_unique<AssetMetaData>(*datablock_info->asset_data);
+        MEM_freeN(datablock_info->asset_data);
+        /* Give back a non-owning pointer, because the data-block info is still needed (e.g. to
+         * update the asset index). */
+        datablock_info->asset_data = metadata.get();
+        datablock_info->free_asset_data = false;
 
         entry->asset = &filelist->asset_library->add_external_asset(
             entry->relpath, datablock_info->name, std::move(metadata));
@@ -3267,7 +3271,7 @@ static std::optional<int> filelist_readjob_list_lib(FileListReadJob *job_params,
         libfiledata, idcode, options & LIST_LIB_ASSETS_ONLY, &datablock_len);
     filelist_readjob_list_lib_add_datablocks(
         job_params, entries, datablock_infos, false, idcode, group);
-    BLI_linklist_freeN(datablock_infos);
+    BLO_datablock_info_linklist_free(datablock_infos);
   }
   else {
     LinkNode *groups = BLO_blendhandle_get_linkable_groups(libfiledata);
@@ -3290,7 +3294,7 @@ static std::optional<int> filelist_readjob_list_lib(FileListReadJob *job_params,
           ED_file_indexer_entries_extend_from_datablock_infos(
               &indexer_entries, group_datablock_infos, idcode);
         }
-        BLI_linklist_freeN(group_datablock_infos);
+        BLO_datablock_info_linklist_free(group_datablock_infos);
         datablock_len += group_datablock_len;
       }
     }
@@ -3614,7 +3618,7 @@ static void filelist_readjob_recursive_dir_add_items(const bool do_lib,
       }
       /* Only load assets when browsing an asset library. For normal file browsing we return all
        * entries. `FLF_ASSETS_ONLY` filter can be enabled/disabled by the user. */
-      if (filelist->asset_library_ref) {
+      if (filelist->asset_library) {
         list_lib_options |= LIST_LIB_ASSETS_ONLY;
       }
       std::optional<int> lib_entries_num = filelist_readjob_list_lib(
