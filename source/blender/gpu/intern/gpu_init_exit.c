@@ -34,6 +34,7 @@ void GPU_init(void)
   gpu_shader_create_info_init();
 
   gpu_codegen_init();
+
   gpu_batch_init();
 }
 
