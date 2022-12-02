@@ -26,7 +26,11 @@ shared uint bg_min_coc;
 shared uint bg_max_coc;
 shared uint bg_min_intersectable_coc;
 
+#ifdef GPU_VULKAN
+uint dof_tile_large_coc_uint = floatBitsToUint(dof_tile_large_coc);
+#else
 const uint dof_tile_large_coc_uint = floatBitsToUint(dof_tile_large_coc);
+#endif
 
 void main()
 {
