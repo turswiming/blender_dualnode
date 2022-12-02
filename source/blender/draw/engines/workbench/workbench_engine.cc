@@ -31,6 +31,7 @@ class Instance {
   TransparentPass transparent_ps;
   TransparentDepthPass transparent_depth_ps;
 
+  ShadowPass shadow_ps;
   OutlinePass outline_ps;
   DofPass dof_ps;
   AntiAliasingPass anti_aliasing_ps;
@@ -38,6 +39,7 @@ class Instance {
   void init(Object *camera_ob = nullptr)
   {
     scene_state.init(camera_ob);
+    shadow_ps.init(scene_state, resources);
     resources.init(scene_state);
 
     outline_ps.init(scene_state);
@@ -47,10 +49,15 @@ class Instance {
 
   void begin_sync()
   {
+    const float2 viewport_size = DRW_viewport_size_get();
+    const int2 resolution = {int(viewport_size.x), int(viewport_size.y)};
+    resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
+
     opaque_ps.sync(scene_state, resources);
     transparent_ps.sync(scene_state, resources);
     transparent_depth_ps.sync(scene_state, resources);
 
+    shadow_ps.sync();
     outline_ps.sync(resources);
     dof_ps.sync(resources);
     anti_aliasing_ps.sync(resources, scene_state.resolution);
@@ -149,6 +156,8 @@ class Instance {
 
   void mesh_sync(Manager &manager, ObjectRef &ob_ref, const ObjectState &object_state)
   {
+    bool has_transparent_material = false;
+
     if (object_state.sculpt_pbvh) {
       /* TODO(Miguel Pozo):
       workbench_cache_sculpt_populate(wpd, ob, object_state.color_type);
@@ -185,6 +194,8 @@ class Instance {
             else {
               mat = Material(*BKE_material_default_empty());
             }
+
+            has_transparent_material = has_transparent_material || mat.is_transparent();
 
             ::Image *image = nullptr;
             ImageUser *iuser = nullptr;
@@ -234,6 +245,8 @@ class Instance {
             mat = Material(*BKE_material_default_empty());
           }
 
+          has_transparent_material = has_transparent_material || mat.is_transparent();
+
           draw_mesh(ob_ref,
                     mat,
                     batch,
@@ -245,9 +258,7 @@ class Instance {
     }
 
     if (object_state.draw_shadow) {
-      /* TODO(Miguel Pozo):
-      workbench_shadow_cache_populate(vedata, ob, has_transp_mat);
-      */
+      shadow_ps.object_sync(manager, ob_ref, scene_state, has_transparent_material);
     }
   }
 
@@ -308,7 +319,7 @@ class Instance {
       resources.object_id_tx.clear(uint4(0));
     }
 
-    resources.depth_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
+    // resources.depth_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
     Framebuffer fb = Framebuffer("Workbench.Clear");
     fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
     fb.bind();
@@ -325,7 +336,8 @@ class Instance {
       }
     }
 
-    opaque_ps.draw(manager, view, resources, resolution);
+    opaque_ps.draw(manager, view, resources, resolution, &shadow_ps);
+    // shadow_ps.draw(manager, view, resources, resolution);
     transparent_ps.draw(manager, view, resources, resolution);
     transparent_depth_ps.draw(manager, view, resources, resolution);
 
@@ -337,7 +349,7 @@ class Instance {
 
     resources.color_tx.release();
     resources.object_id_tx.release();
-    resources.depth_tx.release();
+    // resources.depth_tx.release();
     resources.depth_in_front_tx.release();
   }
 
@@ -350,6 +362,12 @@ class Instance {
     }
   }
 };
+
+void ObjectData::init(DrawData *dd)
+{
+  ObjectData *data = (ObjectData *)dd;
+  data->shadow_data.init();
+}
 
 /* This returns an array of nullptr GPUMaterial pointers so we can call
  * DRW_cache_object_surface_material_get. They never get actually used.

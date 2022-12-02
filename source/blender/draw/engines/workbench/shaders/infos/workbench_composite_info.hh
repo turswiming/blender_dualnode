@@ -51,6 +51,7 @@ GPU_SHADER_CREATE_INFO(workbench_next_composite)
     .sampler(3, ImageType::FLOAT_2D, "normal_tx")
     .sampler(4, ImageType::FLOAT_2D, "material_tx")
     .sampler(5, ImageType::DEPTH_2D, "depth_tx")
+    .sampler(6, ImageType::UINT_2D, "stencil_tx")
     .uniform_buf(WB_WORLD_SLOT, "WorldData", "world_data")
     .push_constant(Type::BOOL, "forceShadowing")
     .image(0, GPU_RGBA16F, Qualifier::WRITE, ImageType::FLOAT_2D, "out_color_img")
@@ -72,11 +73,11 @@ GPU_SHADER_CREATE_INFO(workbench_next_resolve_opaque_flat).define("WORKBENCH_LIG
 
 GPU_SHADER_CREATE_INFO(workbench_next_resolve_curvature)
     .define("WORKBENCH_CURVATURE")
-    .sampler(6, ImageType::UINT_2D, "object_id_tx");
+    .sampler(7, ImageType::UINT_2D, "object_id_tx");
 
 GPU_SHADER_CREATE_INFO(workbench_next_resolve_cavity)
     .define("WORKBENCH_CAVITY")
-    .sampler(7, ImageType::FLOAT_2D, "jitter_tx") /* TODO(Miguel Pozo): GPU_SAMPLER_REPEAT is set
+    .sampler(8, ImageType::FLOAT_2D, "jitter_tx") /* TODO(Miguel Pozo): GPU_SAMPLER_REPEAT is set
                                                      in CavityEffect, it doesn't work here ? */
     .uniform_buf(5, "float4", "cavity_samples[512]");
 

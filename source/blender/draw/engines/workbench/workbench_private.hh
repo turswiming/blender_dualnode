@@ -9,6 +9,8 @@
 #include "workbench_enums.hh"
 #include "workbench_shader_shared.h"
 
+extern DrawEngineType draw_engine_workbench_next;
+
 namespace blender::workbench {
 
 using namespace draw;
@@ -77,6 +79,7 @@ struct SceneState {
 
   bool draw_cavity;
   bool draw_curvature;
+  bool draw_shadows;
   bool draw_outline;
   bool draw_dof;
   bool draw_aa;
@@ -135,7 +138,7 @@ struct SceneResources {
 
   TextureFromPool color_tx = "wb_color_tx";
   TextureFromPool object_id_tx = "wb_object_id_tx";
-  TextureFromPool depth_tx = "wb_depth_tx";
+  Texture depth_tx = "wb_depth_tx";
   TextureFromPool depth_in_front_tx = "wb_depth_in_front_tx";
 
   StorageVectorBuffer<Material> material_buf = {"material_buf"};
@@ -190,7 +193,11 @@ class OpaquePass {
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
 
   void sync(const SceneState &scene_state, SceneResources &resources);
-  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+  void draw(Manager &manager,
+            View &view,
+            SceneResources &resources,
+            int2 resolution,
+            struct ShadowPass *shadow_pass);
   bool is_empty() const;
 };
 
@@ -228,6 +235,61 @@ class TransparentDepthPass {
   void sync(const SceneState &scene_state, SceneResources &resources);
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
   bool is_empty() const;
+};
+
+struct ShadowPass {
+
+  bool enabled_;
+
+  float3 direction_ws;
+  float3 direction_vs;
+  float3 cached_direction;
+  bool changed;
+
+  float4x4 matrix;
+  float4x4 matrix_inv;
+
+  /* Far plane of the view frustum. Used for shadow volume extrusion. */
+  float4 far_plane;
+  /* Min and max of shadow_near_corners. Speed up culling test. */
+  float3 near_min;
+  float3 near_max;
+  /* This is a parallelogram, so only 2 normal and distance to the edges. */
+  float2 near_sides[2][2];
+
+  PassMain pass_ps = {"Shadow.Pass"};
+  PassMain fail_ps = {"Shadow.Fail"};
+
+  PassMain::Sub *passes_[2][3];
+  PassMain::Sub *&get_pass_ptr(bool depth_pass, bool manifold, bool cap = false);
+
+  GPUShader *shaders[2][2][2] = {{{nullptr}}};
+  GPUShader *get_shader(bool depth_pass, bool manifold, bool cap = false);
+
+  void init(const SceneState &scene_state, SceneResources &resources);
+  void update();
+  void sync();
+  void object_sync(Manager &manager,
+                   ObjectRef &ob_ref,
+                   SceneState &scene_state,
+                   const bool has_transp_mat);
+  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+};
+
+struct ObjectShadowData {
+  /* Shadow direction in local object space. */
+  float3 direction;
+  float depth;
+  /* Min, max in shadow space */
+  float3 min, max;
+  BoundBox bbox;
+  bool bbox_dirty;
+
+  void init();
+  const BoundBox *get_bbox(Object *ob, ShadowPass &shadow_pass);
+  bool cast_visible_shadow(Object *ob, ShadowPass &shadow_pass);
+  float shadow_distance(Object *ob, ShadowPass &shadow_pass);
+  bool camera_in_object_shadow(Object *ob, ShadowPass &shadow_pass);
 };
 
 class OutlinePass {
@@ -338,6 +400,14 @@ class AntiAliasingPass {
             int2 resolution,
             GPUTexture *depth_tx,
             GPUTexture *color_tx);
+};
+
+struct ObjectData {
+  DrawData dd;
+
+  ObjectShadowData shadow_data;
+
+  static void init(DrawData *dd);
 };
 
 }  // namespace blender::workbench

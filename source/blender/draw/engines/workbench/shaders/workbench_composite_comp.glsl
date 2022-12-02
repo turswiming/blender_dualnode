@@ -58,6 +58,9 @@ void main()
 
 #endif
 
+    bool shadow = texture(stencil_tx, uv).r != 0;
+    color.rgb *= get_shadow(N, shadow);
+
     color.a = 1.0f;
   }
 

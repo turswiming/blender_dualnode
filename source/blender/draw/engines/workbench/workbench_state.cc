@@ -166,6 +166,7 @@ void SceneState::init(Object *camera_ob /*= nullptr*/)
   draw_curvature = shading.flag & V3D_SHADING_CAVITY && ELEM(shading.cavity_type,
                                                              V3D_SHADING_CAVITY_CURVATURE,
                                                              V3D_SHADING_CAVITY_BOTH);
+  draw_shadows = shading.flag & V3D_SHADING_SHADOW;
   draw_outline = shading.flag & V3D_SHADING_OBJECT_OUTLINE;
   draw_dof = camera && camera->dof.flag & CAM_DOF_ENABLED &&
              shading.flag & V3D_SHADING_DEPTH_OF_FIELD;
@@ -212,8 +213,7 @@ ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
 
   color_type = (eV3DShadingColorType)scene_state.shading.color_type;
   if (!(is_active && DRW_object_use_hide_faces(ob))) {
-    draw_shadow = (ob->dtx & OB_DRAW_NO_SHADOW_CAST) == 0 &&
-                  scene_state.shading.flag & V3D_SHADING_SHADOW;
+    draw_shadow = (ob->dtx & OB_DRAW_NO_SHADOW_CAST) == 0 && scene_state.draw_shadows;
   }
   if (me == nullptr) {
     if (color_type == V3D_SHADING_TEXTURE_COLOR) {

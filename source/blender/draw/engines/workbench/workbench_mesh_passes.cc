@@ -116,18 +116,24 @@ void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
                                                                     scene_state.lighting_type,
                                                                     scene_state.draw_cavity,
                                                                     scene_state.draw_curvature));
+  deferred_ps_.push_constant("forceShadowing", false);
   deferred_ps_.bind_ubo(WB_WORLD_SLOT, resources.world_buf);
   deferred_ps_.bind_texture(WB_MATCAP_SLOT, resources.matcap_tx);
   deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
   deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
   deferred_ps_.bind_texture("depth_tx", &resources.depth_tx);
+  deferred_ps_.bind_texture("stencil_tx", resources.depth_tx.stencil_view());
   deferred_ps_.bind_image("out_color_img", &resources.color_tx);
   resources.cavity.setup_resolve_pass(deferred_ps_, resources);
   deferred_ps_.dispatch(math::divide_ceil(scene_state.resolution, int2(WB_RESOLVE_GROUP_SIZE)));
   deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
 }
 
-void OpaquePass::draw(Manager &manager, View &view, SceneResources &resources, int2 resolution)
+void OpaquePass::draw(Manager &manager,
+                      View &view,
+                      SceneResources &resources,
+                      int2 resolution,
+                      ShadowPass *shadow_pass)
 {
   if (is_empty()) {
     return;
@@ -162,6 +168,10 @@ void OpaquePass::draw(Manager &manager, View &view, SceneResources &resources, i
     opaque_fb.bind();
 
     manager.submit(gbuffer_ps_, view);
+  }
+
+  if (shadow_pass) {
+    shadow_pass->draw(manager, view, resources, resolution);
   }
 
   manager.submit(deferred_ps_, view);
