@@ -387,7 +387,6 @@ bool gpu_shader_create_info_compile_all()
           reinterpret_cast<const GPUShaderCreateInfo *>(info));
       if (shader == nullptr) {
         printf("Compilation %s Failed\n", info->name_.c_str());
-        // return false;
       }
       else {
         success++;
