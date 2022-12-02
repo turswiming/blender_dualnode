@@ -13,6 +13,8 @@ void main()
   gl_Position = ModelViewProjectionMatrix * pos_4d;
   stipple_start = stipple_pos = viewport_size * 0.5 * (gl_Position.xy / gl_Position.w);
 #ifdef USE_WORLD_CLIP_PLANES
-  world_clip_planes_calc_clip_distance((ModelMatrix * pos_4d).xyz);
+  /* Spir-V GLSL pre-processors chokes when passed directly. */
+  vec3 wpos = (ModelMatrix * pos_4d).xyz;
+  world_clip_planes_calc_clip_distance(wpos);
 #endif
 }
