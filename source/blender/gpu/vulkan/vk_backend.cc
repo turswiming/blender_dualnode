@@ -11,8 +11,10 @@
 #include "vk_batch.hh"
 #include "vk_context.hh"
 #include "vk_drawlist.hh"
+#include "vk_fence.hh"
 #include "vk_framebuffer.hh"
 #include "vk_index_buffer.hh"
+#include "vk_pixel_buffer.hh"
 #include "vk_query.hh"
 #include "vk_shader.hh"
 #include "vk_storage_buffer.hh"
@@ -81,6 +83,11 @@ DrawList *VKBackend::drawlist_alloc(int /*list_length*/)
   return new VKDrawList();
 }
 
+Fence *VKBackend::fence_alloc()
+{
+  return new VKFence();
+}
+
 FrameBuffer *VKBackend::framebuffer_alloc(const char *name)
 {
   return new VKFrameBuffer(name);
@@ -89,6 +96,11 @@ FrameBuffer *VKBackend::framebuffer_alloc(const char *name)
 IndexBuf *VKBackend::indexbuf_alloc()
 {
   return new VKIndexBuffer();
+}
+
+PixelBuffer *VKBackend::pixelbuf_alloc(uint size)
+{
+  return new VKPixelBuffer(size);
 }
 
 QueryPool *VKBackend::querypool_alloc()
