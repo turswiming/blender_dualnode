@@ -502,10 +502,8 @@ static char *glsl_patch_get()
   /* Version need to go first. */
   STR_CONCAT(patch, slen, "#version 450\n");
   STR_CONCAT(patch, slen, "#define gl_VertexID gl_VertexIndex\n");
-  // TODO(jbakker): How does base instance work in vulkan. There seems to be a difference between
-  // OpenGL and Vulkan here. But I am not able to map the change to our code-base yet.
-  STR_CONCAT(patch, slen, "#define gpu_BaseInstance 0\n");
-  STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceIndex + gpu_BaseInstance)\n");
+  STR_CONCAT(patch, slen, "#define gpu_BaseInstance (0)\n");
+  STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceIndex)\n");
 
   // TODO: we should remove usage of gl_InstanceID/gl_VertexID.
   STR_CONCAT(patch, slen, "#define gl_InstanceID gpu_InstanceIndex\n");
