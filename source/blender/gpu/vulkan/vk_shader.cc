@@ -505,7 +505,6 @@ static char *glsl_patch_get()
   STR_CONCAT(patch, slen, "#define gpu_BaseInstance (0)\n");
   STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceIndex)\n");
 
-  // TODO: we should remove usage of gl_InstanceID/gl_VertexID.
   STR_CONCAT(patch, slen, "#define gl_InstanceID gpu_InstanceIndex\n");
 
   STR_CONCAT(patch, slen, "#define DFDX_SIGN 1.0\n");
@@ -547,7 +546,6 @@ Vector<uint32_t> VKShader::compile_glsl_to_spirv(Span<const char *> sources,
   }
 
   if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-    // printf("%s %s\n", __func__, combined_sources.c_str());
     compilation_failed_ = true;
     return Vector<uint32_t>();
   }
