@@ -156,6 +156,7 @@ void VKBackend::capabilities_init(VKContext &context)
   GCaps = {};
   GCaps.compute_shader_support = true;
   GCaps.shader_storage_buffer_objects_support = true;
+  GCaps.shader_image_load_store_support = true;
 }
 
 }  // namespace blender::gpu
