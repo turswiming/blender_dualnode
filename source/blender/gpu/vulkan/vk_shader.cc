@@ -510,6 +510,9 @@ static char *glsl_patch_get()
   // TODO: we should remove usage of gl_InstanceID/gl_VertexID.
   STR_CONCAT(patch, slen, "#define gl_InstanceID gpu_InstanceIndex\n");
 
+  STR_CONCAT(patch, slen, "#define DFDX_SIGN 1.0\n");
+  STR_CONCAT(patch, slen, "#define DFDY_SIGN 1.0\n");
+
   /* GLSL Backend Lib. */
   STR_CONCAT(patch, slen, datatoc_glsl_shader_defines_glsl);
 
