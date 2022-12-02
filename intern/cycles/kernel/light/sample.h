@@ -337,6 +337,7 @@ ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
   int emitter_shader_flag = 0;
   float emitter_pdf_selection = 0.0f;
 
+#ifdef __LIGHT_TREE__
   if (kernel_data.integrator.use_light_tree) {
     if (!light_tree_sample<true>(kg,
                                  randu,
@@ -355,7 +356,9 @@ ccl_device_inline bool light_sample_from_volume_segment(KernelGlobals kg,
       return false;
     }
   }
-  else {
+  else
+#endif
+  {
     if (!light_distribution_sample(kg,
                                    randu,
                                    randv,
@@ -425,6 +428,7 @@ ccl_device bool light_sample_from_position(KernelGlobals kg,
   int emitter_shader_flag = 0;
   float emitter_pdf_selection = 0.0f;
 
+#ifdef __LIGHT_TREE__
   if (kernel_data.integrator.use_light_tree) {
     if (!light_tree_sample<false>(kg,
                                   randu,
@@ -443,7 +447,9 @@ ccl_device bool light_sample_from_position(KernelGlobals kg,
       return false;
     }
   }
-  else {
+  else
+#endif
+  {
     if (!light_distribution_sample(kg,
                                    randu,
                                    randv,
@@ -509,10 +515,13 @@ ccl_device_inline bool light_sample_new_position(KernelGlobals kg,
       return false;
     }
 
+#ifdef __LIGHT_TREE__
     if (kernel_data.integrator.use_light_tree) {
       ls->pdf *= ls->pdf_selection;
     }
-    else {
+    else
+#endif
+    {
       /* Handled in triangle_light_sample for effeciency. */
     }
     return true;
@@ -558,6 +567,7 @@ ccl_device_inline float light_sample_mis_weight_forward_surface(KernelGlobals kg
   float pdf = triangle_light_pdf(kg, sd, t);
 
   /* Light selection pdf. */
+#ifdef __LIGHT_TREE__
   if (kernel_data.integrator.use_light_tree) {
     float3 ray_P = INTEGRATOR_STATE(state, ray, P);
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
@@ -565,7 +575,9 @@ ccl_device_inline float light_sample_mis_weight_forward_surface(KernelGlobals kg
     uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
     pdf *= light_tree_pdf(kg, ray_P, N, path_flag, sd->prim - prim_offset + lookup_offset);
   }
-  else {
+  else
+#endif
+  {
     /* Handled in triangle_light_pdf for effeciency. */
   }
 
@@ -582,11 +594,14 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(KernelGlobals kg,
   float pdf = ls->pdf;
 
   /* Light selection pdf. */
+#ifdef __LIGHT_TREE__
   if (kernel_data.integrator.use_light_tree) {
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
     pdf *= light_tree_pdf(kg, P, N, path_flag, ~ls->lamp);
   }
-  else {
+  else
+#endif
+  {
     pdf *= light_distribution_pdf_lamp(kg);
   }
 
@@ -613,11 +628,14 @@ ccl_device_inline float light_sample_mis_weight_forward_background(KernelGlobals
   float pdf = background_light_pdf(kg, ray_P, ray_D);
 
   /* Light selection pdf. */
+#ifdef __LIGHT_TREE__
   if (kernel_data.integrator.use_light_tree) {
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
     pdf *= light_tree_pdf(kg, ray_P, N, path_flag, ~kernel_data.background.light_index);
   }
-  else {
+  else
+#endif
+  {
     pdf *= light_distribution_pdf_lamp(kg);
   }
 

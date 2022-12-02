@@ -60,6 +60,7 @@ CCL_NAMESPACE_BEGIN
 #define __DENOISING_FEATURES__
 #define __DPDU__
 #define __HAIR__
+#define __LIGHT_TREE__
 #define __OBJECT_MOTION__
 #define __PASSES__
 #define __PATCH_EVAL__
@@ -73,6 +74,11 @@ CCL_NAMESPACE_BEGIN
 #define __TRANSPARENT_SHADOWS__
 #define __VISIBILITY_FLAG__
 #define __VOLUME__
+
+/* TODO: solve internal compiler errors and enable light tree on HIP. */
+#ifdef __KERNEL_HIP__
+#  undef __LIGHT_TREE__
+#endif
 
 /* Device specific features */
 #ifdef WITH_OSL
