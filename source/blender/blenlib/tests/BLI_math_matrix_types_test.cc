@@ -227,6 +227,11 @@ TEST(math_matrix_types, VectorMultiplyOperator)
   float2 result = mat * float3(7, 8, 9);
   EXPECT_EQ(result[0], 76);
   EXPECT_EQ(result[1], 100);
+
+  float3 result2 = float2(2, 3) * mat;
+  EXPECT_EQ(result2[0], 8);
+  EXPECT_EQ(result2[1], 18);
+  EXPECT_EQ(result2[2], 28);
 }
 
 }  // namespace blender::tests

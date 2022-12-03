@@ -343,6 +343,16 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
     return result;
   }
 
+  /** Multiply by the transposed. */
+  friend row_type operator*(const col_type &a, const MatBase &b)
+  {
+    /* This is the reference implementation.
+     * Subclass are free to overload it with vectorized / optimized code. */
+    row_type result(0);
+    unroll<NumCol>([&](auto c) { unroll<NumRow>([&](auto r) { result[c] += b[c][r] * a[r]; }); });
+    return result;
+  }
+
   /** Compare. */
 
   friend bool operator==(const MatBase &a, const MatBase &b)
