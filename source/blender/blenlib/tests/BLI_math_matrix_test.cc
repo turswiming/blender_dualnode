@@ -183,6 +183,58 @@ TEST(math_matrix, MatrixInit)
   EXPECT_TRUE(compare(m, expect, 0.00001f));
 }
 
+TEST(math_matrix, MatrixModify)
+{
+  const float epsilon = 1e-6;
+  float4x4 result, expect;
+  float4x4 m1 = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
+
+  expect = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {4, 9, 2, 1});
+  result = translate(m1, float3(3, 2, 1));
+  EXPECT_M4_NEAR(result, expect, epsilon);
+
+  expect = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {4, 0, 0, 1});
+  result = translate(m1, float2(0, 2));
+  EXPECT_M4_NEAR(result, expect, epsilon);
+
+  expect = float4x4({0, 0, -2, 0}, {2, 0, 0, 0}, {0, 3, 0, 0}, {0, 0, 0, 1});
+  result = rotate(m1, AxisAngle({0, 1, 0}, M_PI_2));
+  EXPECT_M4_NEAR(result, expect, epsilon);
+
+  expect = float4x4({0, 9, 0, 0}, {4, 0, 0, 0}, {0, 0, 8, 0}, {0, 0, 0, 1});
+  result = scale(m1, float3(3, 2, 4));
+  EXPECT_M4_NEAR(result, expect, epsilon);
+
+  expect = float4x4({0, 9, 0, 0}, {4, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
+  result = scale(m1, float2(3, 2));
+  EXPECT_M4_NEAR(result, expect, epsilon);
+}
+
+TEST(math_matrix, MatrixCompareTest)
+{
+  float4x4 m1 = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
+  float4x4 m2 = float4x4({0, 3.001, 0, 0}, {1.999, 0, 0, 0}, {0, 0, 2.001, 0}, {0, 0, 0, 1.001});
+  float4x4 m3 = float4x4({0, 3.001, 0, 0}, {1, 1, 0, 0}, {0, 0, 2.001, 0}, {0, 0, 0, 1.001});
+  float4x4 m4 = float4x4({0, 1, 0, 0}, {1, 0, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1});
+  float4x4 m5 = float4x4({0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0});
+  float4x4 m6 = float4x4({1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1});
+  EXPECT_TRUE(compare(m1, m2, 0.01f));
+  EXPECT_FALSE(compare(m1, m2, 0.0001f));
+  EXPECT_FALSE(compare(m1, m3, 0.01f));
+  EXPECT_TRUE(is_orthogonal(m1));
+  EXPECT_FALSE(is_orthogonal(m3));
+  EXPECT_TRUE(is_orthonormal(m4));
+  EXPECT_FALSE(is_orthonormal(m1));
+  EXPECT_FALSE(is_orthonormal(m3));
+  EXPECT_FALSE(is_uniformly_scaled(m1));
+  EXPECT_TRUE(is_uniformly_scaled(m4));
+  EXPECT_FALSE(is_zero(m4));
+  EXPECT_TRUE(is_zero(m5));
+  EXPECT_TRUE(is_negative(m4));
+  EXPECT_FALSE(is_negative(m5));
+  EXPECT_FALSE(is_negative(m6));
+}
+
 TEST(math_matrix, MatrixMethods)
 {
   float4x4 m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
@@ -191,10 +243,13 @@ TEST(math_matrix, MatrixMethods)
   auto expect_qt = Quaternion(0, -M_SQRT1_2, M_SQRT1_2, 0);
   EXPECT_V4_NEAR(float4(to_quaternion(m)), float4(expect_qt), 0.0002f);
   EXPECT_EQ(to_scale(m), float3(3, 2, 2));
-  EXPECT_TRUE(is_negative(m));
-  EXPECT_FALSE(is_unit_scale(m));
-  m = normalize(m);
-  EXPECT_TRUE(is_unit_scale(m));
+  float4 expect_sz = {3, 2, 2, 1};
+  float4 size;
+  float4x4 m1 = normalize_and_get_size(m, size);
+  EXPECT_TRUE(is_unit_scale(m1));
+  EXPECT_V4_NEAR(size, expect_sz, 0.0002f);
+  float4x4 m2 = normalize(m);
+  EXPECT_TRUE(is_unit_scale(m2));
 }
 
 TEST(math_matrix, MatrixTranspose)
@@ -282,6 +337,8 @@ TEST(math_matrix, MatrixTransform)
   const float3 p(1, 2, 3);
   float4x4 m4 = from_loc_rot<float4x4>({10, 0, 0}, EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
   float3x3 m3 = from_rotation<float3x3>(EulerXYZ(M_PI_2, M_PI_2, M_PI_2));
+  float4x4 pers4 = projection::perspective(-0.1f, 0.1f, -0.1f, 0.1f, -0.1f, -1.0f);
+  float3x3 pers3 = float3x3({1, 0, 0.1f}, {0, 1, 0.1f}, {0, 0.1f, 1});
 
   expect = {13, 2, -1};
   result = transform_point(m4, p);
@@ -296,6 +353,14 @@ TEST(math_matrix, MatrixTransform)
 
   result = transform_direction(m3, p);
   EXPECT_V3_NEAR(result, expect, 1e-5);
+
+  expect = {-0.5, -1, -1.7222222};
+  result = project_point(pers4, p);
+  EXPECT_V3_NEAR(result, expect, 1e-5);
+
+  float2 expect2 = {0.76923, 1.61538};
+  float2 result2 = project_point(pers3, float2(p));
+  EXPECT_V2_NEAR(result2, expect2, 1e-5);
 }
 
 TEST(math_matrix, MatrixProjection)

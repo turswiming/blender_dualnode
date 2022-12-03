@@ -32,12 +32,42 @@ template<typename T, int NumCol, int NumRow>
 /**
  * Normalize individually each column of the matrix.
  */
-template<typename T> [[nodiscard]] T normalize(const T &a);
+template<typename MatT> [[nodiscard]] MatT normalize(const MatT &a);
+
+/**
+ * Normalize individually each column of the matrix.
+ * Return the length of each column vector.
+ */
+template<typename MatT, typename VectorT>
+[[nodiscard]] MatT normalize_and_get_size(const MatT &a, VectorT &r_size);
 
 /**
  * Returns the determinant of the matrix.
+ * It can be interpreted as the signed volume (or area) of the unit cube after transformation.
  */
 template<typename T, int Size> [[nodiscard]] T determinant(const MatBase<T, Size, Size> &mat);
+
+/**
+ * Equivalent to `mat * from_location(translation)` but with fewer operation.
+ */
+template<typename T, int NumCol, int NumRow, typename VectorT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> translate(const MatBase<T, NumCol, NumRow> &mat,
+                                                   const VectorT &translation);
+
+/**
+ * Equivalent to `mat * from_rotation(rotation)` but with fewer operation.
+ * Optimized for AxisAngle rotation on basis vector (i.e: AxisAngle({1, 0, 0}, 0.2)).
+ */
+template<typename T, int NumCol, int NumRow, typename RotationT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> rotate(const MatBase<T, NumCol, NumRow> &mat,
+                                                const RotationT &rotation);
+
+/**
+ * Equivalent to `mat * from_scale(scale)` but with fewer operation.
+ */
+template<typename T, int NumCol, int NumRow, typename VectorT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> scale(const MatBase<T, NumCol, NumRow> &mat,
+                                               const VectorT &scale);
 
 /**
  * Interpolate each component linearly.
@@ -162,7 +192,6 @@ template<typename T, bool Normalized = false>
  */
 template<typename T, bool Normalized = false>
 [[nodiscard]] inline detail::Quaternion<T> to_quaternion(const MatBase<T, 3, 3> &mat);
-
 template<typename T, bool Normalized = false>
 [[nodiscard]] inline detail::Quaternion<T> to_quaternion(const MatBase<T, 4, 4> &mat);
 
@@ -207,11 +236,10 @@ template<typename T>
                                                  const vec_base<T, 3> &direction);
 
 /**
- * Project a 3d point using a 4x4 matrix (location & rotation & scale & perspective divide).
+ * Project a point using a matrix (location & rotation & scale & perspective divide).
  */
-template<typename T>
-[[nodiscard]] vec_base<T, 3> project_point(const MatBase<T, 4, 4> &mat,
-                                           const vec_base<T, 3> &point);
+template<typename MatT, typename VectorT>
+[[nodiscard]] VectorT project_point(const MatT &mat, const VectorT &point);
 
 /** \} */
 
@@ -288,6 +316,70 @@ template<typename T, int NumCol, int NumRow>
   return true;
 }
 
+/**
+ * Test if the X, Y and Z axes are perpendicular with each others.
+ */
+template<typename MatT> [[nodiscard]] inline bool is_orthogonal(const MatT &mat)
+{
+  if (math::abs(math::dot(mat.x_axis(), mat.y_axis())) > 1e-5f) {
+    return false;
+  }
+  if (math::abs(math::dot(mat.y_axis(), mat.z_axis())) > 1e-5f) {
+    return false;
+  }
+  if (math::abs(math::dot(mat.z_axis(), mat.x_axis())) > 1e-5f) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Test if the X, Y and Z axes are perpendicular with each others and unit length.
+ */
+template<typename MatT> [[nodiscard]] inline bool is_orthonormal(const MatT &mat)
+{
+  if (!is_orthogonal(mat)) {
+    return false;
+  }
+  if (math::abs(math::length_squared(mat.x_axis()) - 1) > 1e-5f) {
+    return false;
+  }
+  if (math::abs(math::length_squared(mat.y_axis()) - 1) > 1e-5f) {
+    return false;
+  }
+  if (math::abs(math::length_squared(mat.z_axis()) - 1) > 1e-5f) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Test if the X, Y and Z axes are perpendicular with each others and the same length.
+ */
+template<typename MatT> [[nodiscard]] inline bool is_uniformly_scaled(const MatT &mat)
+{
+  if (!is_orthogonal(mat)) {
+    return false;
+  }
+  using T = typename MatT::base_type;
+  const T eps = 1e-7;
+  const T x = math::length_squared(mat.x_axis());
+  const T y = math::length_squared(mat.y_axis());
+  const T z = math::length_squared(mat.z_axis());
+  return (math::abs(x - y) < eps) && math::abs(x - z) < eps;
+}
+
+template<typename T, int NumCol, int NumRow>
+inline bool is_zero(const MatBase<T, NumCol, NumRow> &mat)
+{
+  for (int i = 0; i < NumCol; i++) {
+    if (!is_zero(mat[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -332,6 +424,77 @@ template<typename T, int NumCol, int NumRow>
   return result;
 }
 
+template<typename T, int NumCol, int NumRow, typename VectorT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> translate(const MatBase<T, NumCol, NumRow> &mat,
+                                                   const VectorT &translation)
+{
+  using MatT = MatBase<T, NumCol, NumRow>;
+  BLI_STATIC_ASSERT(VectorT::type_length <= MatT::col_len - 1,
+                    "Translation should be at least 1 column less than the matrix.");
+  static constexpr int location_col = MatT::col_len - 1;
+  /* Avoid multiplying the last row if it exists.
+   * Allows using non square matrices like float3x2 and saves computation. */
+  using IntermediateVecT =
+      vec_base<typename MatT::base_type,
+               (MatT::row_len > MatT::col_len - 1) ? (MatT::col_len - 1) : MatT::row_len>;
+
+  MatT result = mat;
+  unroll<VectorT::type_length>([&](auto c) {
+    *reinterpret_cast<IntermediateVecT *>(
+        &result[location_col]) += translation[c] *
+                                  *reinterpret_cast<const IntermediateVecT *>(&mat[c]);
+  });
+  return result;
+}
+
+template<typename T, int NumCol, int NumRow>
+[[nodiscard]] MatBase<T, NumCol, NumRow> rotate(const MatBase<T, NumCol, NumRow> &mat,
+                                                const detail::AxisAngle<T> &rotation)
+{
+  using MatT = MatBase<T, NumCol, NumRow>;
+  using Vec3T = typename MatT::vec3_type;
+  const T &angle_sin = rotation.angle_sin();
+  const T &angle_cos = rotation.angle_cos();
+  const Vec3T &axis_vec = rotation.axis();
+
+  MatT result = mat;
+  /* axis_vec is given to be normalized. */
+  if (axis_vec.x == T(1)) {
+    unroll<MatT::row_len>([&](auto c) {
+      result[2][c] = -angle_sin * mat[1][c] + angle_cos * mat[2][c];
+      result[1][c] = angle_cos * mat[1][c] + angle_sin * mat[2][c];
+    });
+  }
+  else if (axis_vec.y == T(1)) {
+    unroll<MatT::row_len>([&](auto c) {
+      result[0][c] = angle_cos * mat[0][c] - angle_sin * mat[2][c];
+      result[2][c] = angle_sin * mat[0][c] + angle_cos * mat[2][c];
+    });
+  }
+  else if (axis_vec.z == T(1)) {
+    unroll<MatT::row_len>([&](auto c) {
+      result[0][c] = angle_cos * mat[0][c] + angle_sin * mat[1][c];
+      result[1][c] = -angle_sin * mat[0][c] + angle_cos * mat[1][c];
+    });
+  }
+  else {
+    /* Un-optimized case. Arbitrary */
+    result *= from_rotation<MatT>(rotation);
+  }
+  return result;
+}
+
+template<typename T, int NumCol, int NumRow, typename VectorT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> scale(const MatBase<T, NumCol, NumRow> &mat,
+                                               const VectorT &scale)
+{
+  BLI_STATIC_ASSERT(VectorT::type_length <= NumCol,
+                    "Scale should be less or equal to the matrix in column count.");
+  MatBase<T, NumCol, NumRow> result = mat;
+  unroll<VectorT::type_length>([&](auto c) { result[c] *= scale[c]; });
+  return result;
+}
+
 template<typename T, int NumCol, int NumRow>
 [[nodiscard]] MatBase<T, NumCol, NumRow> interpolate_linear(const MatBase<T, NumCol, NumRow> &a,
                                                             const MatBase<T, NumCol, NumRow> &b,
@@ -342,10 +505,22 @@ template<typename T, int NumCol, int NumRow>
   return result;
 }
 
-template<typename MatT> [[nodiscard]] MatT normalize(const MatT &a)
+template<typename T, int NumCol, int NumRow>
+[[nodiscard]] MatBase<T, NumCol, NumRow> normalize(const MatBase<T, NumCol, NumRow> &a)
 {
-  MatT result;
-  unroll<MatT::col_len>([&](auto i) { result[i] = math::normalize(a[i]); });
+  MatBase<T, NumCol, NumRow> result;
+  unroll<NumCol>([&](auto i) { result[i] = math::normalize(a[i]); });
+  return result;
+}
+
+template<typename T, int NumCol, int NumRow, typename VectorT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> normalize_and_get_size(
+    const MatBase<T, NumCol, NumRow> &a, VectorT &r_size)
+{
+  BLI_STATIC_ASSERT(VectorT::type_length == NumCol,
+                    "r_size dimension should be equal to matrix column count.");
+  MatBase<T, NumCol, NumRow> result;
+  unroll<NumCol>([&](auto i) { result[i] = math::normalize_and_get_length(a[i], r_size[i]); });
   return result;
 }
 
@@ -745,20 +920,21 @@ vec_base<T, 3> transform_direction(const MatBase<T, 4, 4> &mat, const vec_base<T
   return vec_base<T, 3>(mat * vec_base<T, 4>(direction, T(0)));
 }
 
-template<typename T>
-vec_base<T, 3> project_point(const MatBase<T, 4, 4> &mat, const vec_base<T, 3> &point)
+template<typename T, int N, int NumRow>
+vec_base<T, N> project_point(const MatBase<T, N + 1, NumRow> &mat, const vec_base<T, N> &point)
 {
-  vec_base<T, 4> tmp(point, T(0));
+  vec_base<T, N + 1> tmp(point, T(1));
   tmp = mat * tmp;
-  tmp /= tmp.w;
-  return vec_base<T, 3>(tmp);
+  /* Absolute value to not flip the frustum upside down behind the camera. */
+  return vec_base<T, N>(tmp) / math::abs(tmp[N]);
 }
 
 template float3 transform_point(const float3x3 &mat, const float3 &point);
 template float3 transform_point(const float4x4 &mat, const float3 &point);
 template float3 transform_direction(const float3x3 &mat, const float3 &direction);
 template float3 transform_direction(const float4x4 &mat, const float3 &direction);
-template float3 project_point(const float4x4 &mat, const float3 &direction);
+template float3 project_point(const float4x4 &mat, const float3 &point);
+template float2 project_point(const float3x3 &mat, const float2 &point);
 
 namespace projection {
 
