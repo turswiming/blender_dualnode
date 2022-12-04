@@ -196,10 +196,28 @@ template<typename T, bool Normalized = false>
 [[nodiscard]] inline detail::Quaternion<T> to_quaternion(const MatBase<T, 4, 4> &mat);
 
 /**
- * Extract 3d scale from a transform matrix.
+ * Extract the absolute 3d scale from a transform matrix.
+ * \tparam AllowNegativeScale if true, will compute determinant to know if matrix is negative.
+ * This is a costly operation so it is disabled by default.
  */
-template<typename T, int NumCol, int NumRow>
+template<bool AllowNegativeScale = false, typename T, int NumCol, int NumRow>
 [[nodiscard]] inline vec_base<T, 3> to_scale(const MatBase<T, NumCol, NumRow> &mat);
+
+/**
+ * Decompose a matrix into location, rotation, and scale components.
+ * \tparam AllowNegativeScale if true, will compute determinant to know if matrix is negative.
+ * Rotation and scale values will be flipped if it is negative.
+ * This is a costly operation so it is disabled by default.
+ */
+template<bool AllowNegativeScale = false, typename T, typename RotationT>
+inline void to_rot_scale(const MatBase<T, 3, 3> &mat,
+                         RotationT &r_rotation,
+                         vec_base<T, 3> &r_scale);
+template<bool AllowNegativeScale = false, typename T, typename RotationT>
+inline void to_loc_rot_scale(const MatBase<T, 4, 4> &mat,
+                             vec_base<T, 3> &r_location,
+                             RotationT &r_rotation,
+                             vec_base<T, 3> &r_scale);
 
 /** \} */
 
@@ -809,10 +827,58 @@ template<typename T, bool Normalized>
   return to_quaternion<T, Normalized>(MatBase<T, 3, 3>(mat));
 }
 
-template<typename T, int NumCol, int NumRow>
+template<bool AllowNegativeScale, typename T, int NumCol, int NumRow>
 [[nodiscard]] inline vec_base<T, 3> to_scale(const MatBase<T, NumCol, NumRow> &mat)
 {
-  return {length(mat.x_axis()), length(mat.y_axis()), length(mat.z_axis())};
+  vec_base<T, 3> result = {length(mat.x_axis()), length(mat.y_axis()), length(mat.z_axis())};
+  if constexpr (AllowNegativeScale) {
+    if (UNLIKELY(is_negative(mat))) {
+      result = -result;
+    }
+  }
+  return result;
+}
+
+/* Implementation details. Use `to_euler` and `to_quaternion` instead. */
+namespace detail {
+
+template<typename T, bool Normalized>
+inline void to_rotation(const MatBase<T, 3, 3> &mat, detail::Quaternion<T> &r_rotation)
+{
+  r_rotation = to_quaternion<T, Normalized>(mat);
+}
+
+template<typename T, bool Normalized>
+inline void to_rotation(const MatBase<T, 3, 3> &mat, detail::EulerXYZ<T> &r_rotation)
+{
+  r_rotation = to_euler<T, Normalized>(mat);
+}
+
+}  // namespace detail
+
+template<bool AllowNegativeScale, typename T, typename RotationT>
+inline void to_rot_scale(const MatBase<T, 3, 3> &mat,
+                         RotationT &r_rotation,
+                         vec_base<T, 3> &r_scale)
+{
+  MatBase<T, 3, 3> normalized_mat = normalize_and_get_size(mat, r_scale);
+  if constexpr (AllowNegativeScale) {
+    if (UNLIKELY(is_negative(normalized_mat))) {
+      normalized_mat = -normalized_mat;
+      r_scale = -r_scale;
+    }
+  }
+  detail::to_rotation<T, true>(normalized_mat, r_rotation);
+}
+
+template<bool AllowNegativeScale, typename T, typename RotationT>
+inline void to_loc_rot_scale(const MatBase<T, 4, 4> &mat,
+                             vec_base<T, 3> &r_location,
+                             RotationT &r_rotation,
+                             vec_base<T, 3> &r_scale)
+{
+  r_location = mat.location();
+  to_rot_scale<AllowNegativeScale>(MatBase<T, 3, 3>(mat), r_rotation, r_scale);
 }
 
 template<typename MatT> [[nodiscard]] MatT from_location(const typename MatT::vec3_type &location)

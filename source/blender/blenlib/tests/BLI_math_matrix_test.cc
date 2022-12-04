@@ -237,19 +237,41 @@ TEST(math_matrix, MatrixCompareTest)
 
 TEST(math_matrix, MatrixMethods)
 {
-  float4x4 m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 0, 0, 1});
+  float4x4 m = float4x4({0, 3, 0, 0}, {2, 0, 0, 0}, {0, 0, 2, 0}, {0, 1, 0, 1});
   auto expect_eul = EulerXYZ(0, 0, M_PI_2);
-  EXPECT_V3_NEAR(float3(to_euler(m)), float3(expect_eul), 0.0002f);
   auto expect_qt = Quaternion(0, -M_SQRT1_2, M_SQRT1_2, 0);
+  float3 expect_scale = float3(3, 2, 2);
+  float3 expect_location = float3(0, 1, 0);
+
+  EXPECT_V3_NEAR(float3(to_euler(m)), float3(expect_eul), 0.0002f);
   EXPECT_V4_NEAR(float4(to_quaternion(m)), float4(expect_qt), 0.0002f);
-  EXPECT_EQ(to_scale(m), float3(3, 2, 2));
-  float4 expect_sz = {3, 2, 2, 1};
+  EXPECT_EQ(to_scale(m), expect_scale);
+
+  float4 expect_sz = {3, 2, 2, M_SQRT2};
   float4 size;
   float4x4 m1 = normalize_and_get_size(m, size);
   EXPECT_TRUE(is_unit_scale(m1));
   EXPECT_V4_NEAR(size, expect_sz, 0.0002f);
+
   float4x4 m2 = normalize(m);
   EXPECT_TRUE(is_unit_scale(m2));
+
+  EulerXYZ eul;
+  Quaternion qt;
+  float3 scale;
+  to_rot_scale(float3x3(m), eul, scale);
+  to_rot_scale(float3x3(m), qt, scale);
+  EXPECT_V3_NEAR(scale, expect_scale, 0.00001f);
+  EXPECT_V4_NEAR(float4(qt), float4(expect_qt), 0.0002f);
+  EXPECT_V3_NEAR(float3(eul), float3(expect_eul), 0.0002f);
+
+  float3 loc;
+  to_loc_rot_scale(m, loc, eul, scale);
+  to_loc_rot_scale(m, loc, qt, scale);
+  EXPECT_V3_NEAR(scale, expect_scale, 0.00001f);
+  EXPECT_V3_NEAR(loc, expect_location, 0.00001f);
+  EXPECT_V4_NEAR(float4(qt), float4(expect_qt), 0.0002f);
+  EXPECT_V3_NEAR(float3(eul), float3(expect_eul), 0.0002f);
 }
 
 TEST(math_matrix, MatrixTranspose)
