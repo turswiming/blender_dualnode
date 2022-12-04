@@ -223,8 +223,8 @@ MatBase<T, 3, 3> interpolate(const MatBase<T, 3, 3> &A, const MatBase<T, 3, 3> &
   return U * P;
 }
 
-template float3x3 interpolate(const float3x3 &A, const float3x3 &B, float t);
-template double3x3 interpolate(const double3x3 &A, const double3x3 &B, double t);
+template float3x3 interpolate(const float3x3 &a, const float3x3 &b, float t);
+template double3x3 interpolate(const double3x3 &a, const double3x3 &b, double t);
 
 template<typename T>
 MatBase<T, 4, 4> interpolate(const MatBase<T, 4, 4> &A, const MatBase<T, 4, 4> &B, T t)
@@ -240,8 +240,48 @@ MatBase<T, 4, 4> interpolate(const MatBase<T, 4, 4> &A, const MatBase<T, 4, 4> &
   return result;
 }
 
-template float4x4 interpolate(const float4x4 &A, const float4x4 &B, float t);
-template double4x4 interpolate(const double4x4 &A, const double4x4 &B, double t);
+template float4x4 interpolate(const float4x4 &a, const float4x4 &b, float t);
+template double4x4 interpolate(const double4x4 &a, const double4x4 &b, double t);
+
+template<typename T>
+MatBase<T, 3, 3> interpolate_fast(const MatBase<T, 3, 3> &a, const MatBase<T, 3, 3> &b, T t)
+{
+  using QuaternionT = detail::Quaternion<T>;
+  using Vec3T = typename MatBase<T, 3, 3>::vec3_type;
+
+  Vec3T a_scale, b_scale;
+  QuaternionT a_quat, b_quat;
+  to_rot_scale<true>(a, a_quat, a_scale);
+  to_rot_scale<true>(b, b_quat, b_scale);
+
+  const Vec3T scale = interpolate(a_scale, b_scale, t);
+  const QuaternionT rotation = interpolate(a_quat, b_quat, t);
+  return from_rot_scale<MatBase<T, 3, 3>>(rotation, scale);
+}
+
+template float3x3 interpolate_fast(const float3x3 &a, const float3x3 &b, float t);
+template double3x3 interpolate_fast(const double3x3 &a, const double3x3 &b, double t);
+
+template<typename T>
+MatBase<T, 4, 4> interpolate_fast(const MatBase<T, 4, 4> &a, const MatBase<T, 4, 4> &b, T t)
+{
+  using QuaternionT = detail::Quaternion<T>;
+  using Vec3T = typename MatBase<T, 3, 3>::vec3_type;
+
+  Vec3T a_loc, b_loc;
+  Vec3T a_scale, b_scale;
+  QuaternionT a_quat, b_quat;
+  to_loc_rot_scale<true>(a, a_loc, a_quat, a_scale);
+  to_loc_rot_scale<true>(b, b_loc, b_quat, b_scale);
+
+  const Vec3T location = interpolate(a_loc, b_loc, t);
+  const Vec3T scale = interpolate(a_scale, b_scale, t);
+  const QuaternionT rotation = interpolate(a_quat, b_quat, t);
+  return from_loc_rot_scale<MatBase<T, 4, 4>>(location, rotation, scale);
+}
+
+template float4x4 interpolate_fast(const float4x4 &a, const float4x4 &b, float t);
+template double4x4 interpolate_fast(const double4x4 &a, const double4x4 &b, double t);
 
 /** \} */
 

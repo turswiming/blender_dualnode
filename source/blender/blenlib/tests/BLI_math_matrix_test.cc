@@ -63,7 +63,7 @@ TEST(math_matrix, interp_m3_m3m3_singularity)
   transpose_m3(matrix_a);
   EXPECT_NEAR(-1.0f, determinant_m3_array(matrix_a), 1e-6);
 
-  /* This matrix represents R=(0, 0, 0), S=(-1, 0, 0) */
+  /* This matrix represents R=(0, 0, 0), S=(-1, 1, 1) */
   float matrix_b[3][3] = {
       {-1.0f, 0.0f, 0.0f},
       {0.0f, 1.0f, 0.0f},
@@ -307,6 +307,9 @@ TEST(math_matrix, MatrixInterpolationRegular)
                                        {0.000000f, 0.000000f, 0.000000f, 1.000000f}));
   result = interpolate(m1, m2, 0.5f);
   EXPECT_M4_NEAR(result, expect, epsilon);
+
+  result = interpolate_fast(m1, m2, 0.5f);
+  EXPECT_M4_NEAR(result, expect, epsilon);
 }
 
 TEST(math_matrix, MatrixInterpolationSingularity)
@@ -325,7 +328,7 @@ TEST(math_matrix, MatrixInterpolationSingularity)
                                          {0.087156f, 0.069491f, 0.993768f}));
   EXPECT_NEAR(-1.0f, determinant(matrix_a), 1e-6);
 
-  /* This matrix represents R=(0, 0, 0), S=(-1, 0, 0) */
+  /* This matrix represents R=(0, 0, 0), S=(-1, 1 1) */
   float3x3 matrix_b = transpose(
       float3x3({-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}));
 
@@ -340,6 +343,9 @@ TEST(math_matrix, MatrixInterpolationSingularity)
   float3x3 expect = transpose(float3x3({-0.997681f, -0.049995f, 0.046186f},
                                        {-0.051473f, 0.998181f, -0.031385f},
                                        {0.044533f, 0.033689f, 0.998440f}));
+  EXPECT_M3_NEAR(result, expect, 1e-5);
+
+  result = interpolate_fast(matrix_a, matrix_b, 0.5f);
   EXPECT_M3_NEAR(result, expect, 1e-5);
 
   /* Interpolating between a matrix with and without axis flip can cause it to go through a zero

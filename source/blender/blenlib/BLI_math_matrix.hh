@@ -93,8 +93,8 @@ template<typename T, int NumCol, int NumRow>
  * \param t: Interpolation factor.
  */
 template<typename T>
-[[nodiscard]] MatBase<T, 3, 3> interpolate(const MatBase<T, 3, 3> &A,
-                                           const MatBase<T, 3, 3> &B,
+[[nodiscard]] MatBase<T, 3, 3> interpolate(const MatBase<T, 3, 3> &a,
+                                           const MatBase<T, 3, 3> &b,
                                            T t);
 
 /**
@@ -106,9 +106,42 @@ template<typename T>
  * \param t: Interpolation factor.
  */
 template<typename T>
-[[nodiscard]] MatBase<T, 4, 4> interpolate(const MatBase<T, 4, 4> &A,
-                                           const MatBase<T, 4, 4> &B,
+[[nodiscard]] MatBase<T, 4, 4> interpolate(const MatBase<T, 4, 4> &a,
+                                           const MatBase<T, 4, 4> &b,
                                            T t);
+
+/**
+ * Naive interpolation implementation, faster than polar decomposition
+ *
+ * \note This code is about five times faster than the polar decomposition.
+ * However, it gives un-expected results even with non-uniformly scaled matrices,
+ * see T46418 for an example.
+ *
+ * \param A: Input matrix which is totally effective with `t = 0.0`.
+ * \param B: Input matrix which is totally effective with `t = 1.0`.
+ * \param t: Interpolation factor.
+ */
+template<typename T>
+[[nodiscard]] MatBase<T, 3, 3> interpolate_fast(const MatBase<T, 3, 3> &a,
+                                                const MatBase<T, 3, 3> &b,
+                                                T t);
+
+/**
+ * Naive transform matrix interpolation,
+ * based on naive-decomposition-based interpolation from #interpolate_fast<T, 3, 3>.
+ *
+ * \note This code is about five times faster than the polar decomposition.
+ * However, it gives un-expected results even with non-uniformly scaled matrices,
+ * see T46418 for an example.
+ *
+ * \param A: Input matrix which is totally effective with `t = 0.0`.
+ * \param B: Input matrix which is totally effective with `t = 1.0`.
+ * \param t: Interpolation factor.
+ */
+template<typename T>
+[[nodiscard]] MatBase<T, 4, 4> interpolate_fast(const MatBase<T, 4, 4> &a,
+                                                const MatBase<T, 4, 4> &b,
+                                                T t);
 
 /** \} */
 
