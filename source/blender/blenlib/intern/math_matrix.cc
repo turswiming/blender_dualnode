@@ -100,6 +100,43 @@ template bool is_negative(const double4x4 &mat);
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Adjoint
+ * \{ */
+
+template<typename T, int Size> MatBase<T, Size, Size> adjoint(const MatBase<T, Size, Size> &mat)
+{
+  MatBase<T, Size, Size> adj;
+  unroll<Size>([&](auto c) {
+    unroll<Size>([&](auto r) {
+      /* Copy other cells except the "cross" to compute the determinant. */
+      MatBase<T, Size - 1, Size - 1> tmp;
+      unroll<Size>([&](auto m_c) {
+        unroll<Size>([&](auto m_r) {
+          if (m_c != c && m_r != r) {
+            int d_c = (m_c < c) ? m_c : (m_c - 1);
+            int d_r = (m_r < r) ? m_r : (m_r - 1);
+            tmp[d_c][d_r] = mat[m_c][m_r];
+          }
+        });
+      });
+      T minor = determinant(tmp);
+      /* Transpose directly to get the adjugate. Swap destination row and col. */
+      adj[r][c] = ((c + r) & 1) ? -minor : minor;
+    });
+  });
+  return adj;
+}
+
+template float2x2 adjoint(const float2x2 &mat);
+template float3x3 adjoint(const float3x3 &mat);
+template float4x4 adjoint(const float4x4 &mat);
+template double2x2 adjoint(const double2x2 &mat);
+template double3x3 adjoint(const double3x3 &mat);
+template double4x4 adjoint(const double4x4 &mat);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Inverse
  * \{ */
 

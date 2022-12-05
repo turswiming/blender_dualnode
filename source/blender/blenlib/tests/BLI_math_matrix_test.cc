@@ -124,6 +124,20 @@ TEST(math_matrix, MatrixDeterminant)
   EXPECT_NEAR(determinant(double4x4(m4)), -112.0f, 1e-8f);
 }
 
+TEST(math_matrix, MatrixAdjoint)
+{
+  float2x2 m2({1, 2}, {3, 4});
+  float3x3 m3({1, 2, 3}, {-3, 4, -5}, {5, -6, 7});
+  float4x4 m4({1, 2, -3, 3}, {3, 4, -5, 3}, {5, 6, 7, -3}, {5, 6, 7, 1});
+  float2x2 expect2 = transpose(float2x2({4, -3}, {-2, 1}));
+  float3x3 expect3 = transpose(float3x3({-2, -4, -2}, {-32, -8, 16}, {-22, -4, 10}));
+  float4x4 expect4 = transpose(
+      float4x4({232, -184, -8, -0}, {-128, 88, 16, 0}, {80, -76, 4, 28}, {-72, 60, -12, -28}));
+  EXPECT_M2_NEAR(adjoint(m2), expect2, 1e-8f);
+  EXPECT_M3_NEAR(adjoint(m3), expect3, 1e-8f);
+  EXPECT_M4_NEAR(adjoint(m4), expect4, 1e-8f);
+}
+
 TEST(math_matrix, MatrixAccess)
 {
   float4x4 m({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 1, 2, 3}, {4, 5, 6, 7});
