@@ -327,7 +327,7 @@ if(WITH_LLVM)
   if(WITH_CLANG)
     find_package(Clang)
     if(NOT CLANG_FOUND)
-       message(FATAL_ERROR "Clang not found.")
+      message(FATAL_ERROR "Clang not found.")
     endif()
   endif()
 
