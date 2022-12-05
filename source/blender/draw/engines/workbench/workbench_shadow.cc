@@ -221,6 +221,10 @@ void ShadowPass::object_sync(Manager &manager,
       use_shadow_pass_technique = false;
     }
 
+    /* TODO (Miguel Pozo):
+     * Disable use_shadow_pass_tecnique when there are "in front" objects in the scene.
+     */
+
     /* We cannot use Shadow Pass technique on non-manifold object (see T76168). */
     if (use_shadow_pass_technique && !is_manifold && (scene_state.cull_state != 0)) {
       use_shadow_pass_technique = false;
