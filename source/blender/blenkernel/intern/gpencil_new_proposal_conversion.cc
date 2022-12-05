@@ -42,7 +42,6 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
   gpd->totlayer = gpd->totframe = gpd->totstroke = 0;
 
   int frm_offset{0};
-  gpd->totlayer = new_gpd.layers_size;
   for (int lay_i = 0; lay_i < new_gpd.layers_size; lay_i++) {
     bGPDlayer *gpl = reinterpret_cast<bGPDlayer *>(MEM_mallocN(sizeof(bGPDlayer), __func__));
     const ::GPLayer *lay{new_gpd.layers_array + lay_i};
@@ -50,7 +49,6 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
 
     BLI_listbase_clear(&gpl->mask_layers);
     BLI_listbase_clear(&gpl->frames);
-    BLI_addtail(&gpd->layers, gpl);
 
     /* Add frames of correct layer index.
        Assumes that frames in new data structure are sorted by layer index.
@@ -63,10 +61,13 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
 
       BLI_listbase_clear(&gpf->strokes);
 
-      BLI_addtail(&gpl->frames, gpf);
       ++(gpd->totframe);
+      BLI_addtail(&gpl->frames, gpf);
       ++frm_offset;
     }
+
+    ++(gpd->totlayer);
+    BLI_addtail(&gpd->layers, gpl);
   }
 
   return gpd;
