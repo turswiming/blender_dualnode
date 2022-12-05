@@ -226,7 +226,7 @@ enum PathRayFlag : uint32_t {
    */
 
   /* Surface had transmission component at previous bounce. Used for light tree
-   * traversal and culling to be consistent with MIS pdf at the next bounce. */
+   * traversal and culling to be consistent with MIS PDF at the next bounce. */
   PATH_RAY_MIS_HAD_TRANSMISSION = (1U << 10U),
 
   /* Don't apply multiple importance sampling weights to emission from
@@ -1296,12 +1296,15 @@ typedef struct KernelSpotLight {
 /* PointLight is SpotLight with only radius and invarea being used. */
 
 typedef struct KernelAreaLight {
-  packed_float3 extentu;
-  float invarea;
-  packed_float3 extentv;
-  float tan_spread;
+  packed_float3 axis_u;
+  float len_u;
+  packed_float3 axis_v;
+  float len_v;
   packed_float3 dir;
+  float invarea;
+  float tan_spread;
   float normalize_spread;
+  float pad[2];
 } KernelAreaLight;
 
 typedef struct KernelDistantLight {
