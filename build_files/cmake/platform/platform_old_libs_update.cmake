@@ -53,6 +53,7 @@ if(UNIX AND
   message(STATUS "Auto updating CMake configuration for Blender 3.4 libraries")
   unset_cache_variables("^BLOSC")
   unset_cache_variables("^BOOST")
+  unset_cache_variables("^OPENCOLORIO")
   unset_cache_variables("^OPENEXR")
   unset_cache_variables("^OPENIMAGEIO")
   unset_cache_variables("^OPENSUBDIV")
