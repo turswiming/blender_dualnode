@@ -126,34 +126,38 @@ static void compare_data_structures(const GPData &ngpd, const bGPdata *ogpd)
   /* Compare Layers */
   EXPECT_EQ(ngpd.layers_size, ogpd->totlayer);
 
-  int offset{-1};
-  LISTBASE_FOREACH (bGPDlayer *, lay, &ogpd->layers) {
-    const ::GPLayer *nlay = &(ngpd.layers_array[++offset]);
+  if (ngpd.layers_size == ogpd->totlayer) {
+    int offset{-1};
+    LISTBASE_FOREACH (bGPDlayer *, lay, &ogpd->layers) {
+      const ::GPLayer *nlay = &(ngpd.layers_array[++offset]);
 
-    // Same name
-    EXPECT_EQ(std::strcmp(nlay->name, lay->info), 0);
+      // Same name
+      EXPECT_EQ(std::strcmp(nlay->name, lay->info), 0);
+    }
   }
 
   /* Compare Frames */
   EXPECT_EQ(ngpd.frames_size, ogpd->totframe);
 
-  // get plain list of frames
-  std::vector<std::pair<int, int>> ogpd_frames;
-  int layer_id{0};
-  LISTBASE_FOREACH (bGPDlayer *, lay, &ogpd->layers) {
-    LISTBASE_FOREACH (bGPDframe *, frm, &lay->frames) {
-      ogpd_frames.emplace_back(layer_id, frm->framenum);
+  if (ngpd.frames_size == ogpd->totframe) {
+    // get plain list of frames
+    std::vector<std::pair<int, int>> ogpd_frames;
+    int layer_id{0};
+    LISTBASE_FOREACH (bGPDlayer *, lay, &ogpd->layers) {
+      LISTBASE_FOREACH (bGPDframe *, frm, &lay->frames) {
+        ogpd_frames.emplace_back(layer_id, frm->framenum);
+      }
+      ++layer_id;
     }
-    ++layer_id;
-  }
 
-  for (int i = 0; i < ngpd.frames_size; i++) {
-    const ::GPFrame *nfrm = ngpd.frames_array + i;
-    int ofrm_layer_index{ogpd_frames[i].first};
-    int ofrm_frame_number{ogpd_frames[i].second};
+    for (int i = 0; i < ngpd.frames_size; i++) {
+      const ::GPFrame *nfrm = ngpd.frames_array + i;
+      int ofrm_layer_index{ogpd_frames[i].first};
+      int ofrm_frame_number{ogpd_frames[i].second};
 
-    EXPECT_EQ(nfrm->layer_index, ofrm_layer_index);
-    EXPECT_EQ(nfrm->start_time, ofrm_frame_number);
+      EXPECT_EQ(nfrm->layer_index, ofrm_layer_index);
+      EXPECT_EQ(nfrm->start_time, ofrm_frame_number);
+    }
   }
 }
 
