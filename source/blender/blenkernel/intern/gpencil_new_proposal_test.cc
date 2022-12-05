@@ -477,4 +477,17 @@ TEST(gpencil_proposal, Old2NewConversion)
   free_old_gpencil_data(old_data);
 }
 
+TEST(gpencil_proposal, New2OldConversion)
+{
+  int layers_num = 2, frames_num = 3, strokes_num = 2, points_num = 2;
+
+  GPData data = build_gpencil_data(layers_num, frames_num, strokes_num, points_num);
+
+  bGPdata *old_data = convert_new_to_old_gpencil_data(data);
+
+  compare_data_structures(data, old_data);
+
+  free_old_gpencil_data(old_data);
+}
+
 }  // namespace blender::bke::gpencil::tests

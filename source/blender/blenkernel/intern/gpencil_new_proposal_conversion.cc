@@ -34,11 +34,11 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
   return new_gpd;
 }
 
-bGPdata *convert_new_to_old_gpencil_data(/*const GreasePencil &new_gpd*/)
+bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
 {
-  bGPdata *old_gpd = reinterpret_cast<bGPdata *>(MEM_mallocN(sizeof(bGPdata), __func__));
+  bGPdata *gpd = reinterpret_cast<bGPdata *>(MEM_mallocN(sizeof(bGPdata), __func__));
 
-  return old_gpd;
+  return gpd;
 }
 
 }  // namespace blender::bke
