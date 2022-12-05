@@ -461,11 +461,12 @@ endif()
 if(WITH_OPENCOLORIO)
   find_package_wrapper(OpenColorIO 2.0.0)
 
-  set(OPENCOLORIO_LIBRARIES ${OPENCOLORIO_LIBRARIES})
-  set(OPENCOLORIO_LIBPATH)  # TODO, remove and reference the absolute path everywhere
   set(OPENCOLORIO_DEFINITIONS)
-
   set_and_warn_library_found("OpenColorIO" OPENCOLORIO_FOUND WITH_OPENCOLORIO)
+
+  if(WITH_OPENCOLORIO)
+    add_bundled_libraries(opencolorio/lib)
+  endif()
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)

@@ -14,3 +14,8 @@ ExternalProject_Add(external_pybind11
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${LIBDIR}/pybind11 ${DEFAULT_CMAKE_FLAGS} ${PYBIND11_EXTRA_ARGS}
   INSTALL_DIR ${LIBDIR}/pybind11
 )
+
+add_dependencies(
+  external_pybind11
+  external_python
+)

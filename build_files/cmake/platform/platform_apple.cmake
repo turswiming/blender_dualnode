@@ -296,6 +296,7 @@ endif()
 
 if(WITH_OPENCOLORIO)
   find_package(OpenColorIO 2.0.0 REQUIRED)
+  add_bundled_libraries(opencolorio/lib)
 endif()
 
 if(WITH_OPENVDB)

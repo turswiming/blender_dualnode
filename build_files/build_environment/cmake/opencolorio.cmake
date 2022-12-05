@@ -2,10 +2,10 @@
 
 set(OPENCOLORIO_EXTRA_ARGS
   -DOCIO_BUILD_APPS=OFF
-  -DOCIO_BUILD_PYTHON=OFF
+  -DOCIO_BUILD_PYTHON=ON
   -DOCIO_BUILD_NUKE=OFF
   -DOCIO_BUILD_JAVA=OFF
-  -DBUILD_SHARED_LIBS=OFF
+  -DBUILD_SHARED_LIBS=ON
   -DOCIO_BUILD_DOCS=OFF
   -DOCIO_BUILD_TESTS=OFF
   -DOCIO_BUILD_GPU_TESTS=OFF
@@ -23,7 +23,21 @@ set(OPENCOLORIO_EXTRA_ARGS
   -Dminizip-ng_LIBRARY=${LIBDIR}/minizipng/lib/libminizip${LIBEXT}
   -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
   -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
+  -DPython_EXECUTABLE=${PYTHON_BINARY}
+  -Dpybind11_ROOT=${LIBDIR}/pybind11
 )
+
+if(APPLE)
+  set(OPENCOLORIO_EXTRA_ARGS
+    ${OPENCOLORIO_EXTRA_ARGS}
+    "-DCMAKE_SHARED_LINKER_FLAGS=-liconv ${LIBDIR}/bzip2/lib/${LIBPREFIX}bz2${LIBEXT}"
+  )
+elseif(UNIX)
+  set(OPENCOLORIO_EXTRA_ARGS
+    ${OPENCOLORIO_EXTRA_ARGS}
+    "-DCMAKE_SHARED_LINKER_FLAGS=${LIBDIR}/bzip2/lib/${LIBPREFIX}bz2${LIBEXT}"
+  )
+endif()
 
 if(BLENDER_PLATFORM_ARM)
   set(OPENCOLORIO_EXTRA_ARGS
@@ -64,6 +78,8 @@ add_dependencies(
   external_pystring
   external_zlib
   external_minizipng
+  external_python
+  external_pybind11
 )
 
 if(WIN32)

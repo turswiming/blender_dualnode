@@ -123,6 +123,7 @@ add_dependencies(
   external_robinmap
   external_openjpeg${OPENJPEG_POSTFIX}
   external_webp
+  external_python
   external_pybind11
 )
 

@@ -23,3 +23,8 @@ if(BUILD_MODE STREQUAL Release AND WIN32)
     DEPENDEES install
   )
 endif()
+
+add_dependencies(
+  external_epoxy
+  external_python_site_packages
+)
