@@ -260,7 +260,7 @@ struct ShadowPass {
   PassMain pass_ps = {"Shadow.Pass"};
   PassMain fail_ps = {"Shadow.Fail"};
 
-  PassMain::Sub *passes_[2][3];
+  PassMain::Sub *passes_[2][2][2] = {{{nullptr}}};
   PassMain::Sub *&get_pass_ptr(bool depth_pass, bool manifold, bool cap = false);
 
   GPUShader *shaders[2][2][2] = {{{nullptr}}};

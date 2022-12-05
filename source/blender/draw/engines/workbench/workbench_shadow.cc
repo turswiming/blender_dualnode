@@ -44,7 +44,7 @@ static void compute_parallel_lines_nor_and_dist(const float2 v1,
 
 PassMain::Sub *&ShadowPass::get_pass_ptr(bool depth_pass, bool manifold, bool cap /*= false*/)
 {
-  return passes_[depth_pass][manifold ? 0 : (cap ? 1 : 2)];
+  return passes_[depth_pass][manifold][cap];
 }
 
 GPUShader *ShadowPass::get_shader(bool depth_pass, bool manifold, bool cap /*= false*/)
@@ -94,11 +94,11 @@ void ShadowPass::init(const SceneState &scene_state, SceneResources &resources)
 
 void ShadowPass::update()
 {
-  changed = compare_v3v3(direction_ws, cached_direction, 1e-5f);
+  changed = !compare_v3v3(direction_ws, cached_direction, 1e-5f);
 
   if (changed) {
     const float3 up = {0.0f, 0.0f, 1.0f};
-    matrix = float4x4();
+    matrix = float4x4::identity();
 
     /* TODO: fix singularity. */
     copy_v3_v3(matrix[2], direction_ws);
@@ -161,31 +161,30 @@ void ShadowPass::sync()
   /* TODO(fclem): Merge into one pass with sub-passes. */
   pass_ps.init();
   pass_ps.state_set(depth_pass_state);
+  pass_ps.state_stencil(0xFF, 0xFF, 0xFF);
 
   /* TODO(Miguel Pozo) */
   pass_ps.clear_stencil(0);
 
   fail_ps.init();
   fail_ps.state_set(depth_fail_state);
+  fail_ps.state_stencil(0xFF, 0xFF, 0xFF);
 
   /* Stencil Shadow passes. */
-  for (int manifold = 0; manifold < 2; manifold++) {
-    std::string start = manifold ? "Manifold " : "Non Manifold ";
+  for (bool manifold : {false, true}) {
     {
       PassMain::Sub *&ps = get_pass_ptr(true, manifold);
-      ps = &pass_ps.sub((start + "Pass").c_str());
+      ps = &pass_ps.sub(manifold ? "manifold" : "non_manifold");
       ps->shader_set(get_shader(true, manifold));
-      ps->state_stencil(0xFF, 0xFF, 0xFF);
     }
     {
       PassMain::Sub *&ps = get_pass_ptr(false, manifold, false);
-      ps = &fail_ps.sub((start + "Fail No Caps").c_str());
+      ps = &fail_ps.sub(manifold ? "NoCaps.manifold" : "NoCaps.non_manifold");
       ps->shader_set(get_shader(false, manifold, false));
-      ps->state_stencil(0xFF, 0xFF, 0xFF);
     }
     {
       PassMain::Sub *&ps = get_pass_ptr(false, manifold, true);
-      ps = &fail_ps.sub((start + "Fail Caps").c_str());
+      ps = &fail_ps.sub(manifold ? "Caps.manifold" : "Caps.non_manifold");
       ps->shader_set(get_shader(false, manifold, true));
     }
   }
@@ -227,8 +226,8 @@ void ShadowPass::object_sync(Manager &manager,
       use_shadow_pass_technique = false;
     }
 
-    if (true || use_shadow_pass_technique) {
-      PassMain::Sub &ps = get_pass_ptr(true, is_manifold)->sub(ob->id.name);
+    if (use_shadow_pass_technique) {
+      PassMain::Sub &ps = *get_pass_ptr(true, is_manifold);
       ps.push_constant("lightDirection", object_data.direction);
       ps.push_constant("lightDistance", 1e5f);
       ResourceHandle handle = manager.resource_handle(ob_ref);
@@ -243,14 +242,14 @@ void ShadowPass::object_sync(Manager &manager,
       /* TODO(fclem): only use caps if they are in the view frustum. */
       const bool need_caps = true;
       if (need_caps) {
-        PassMain::Sub &ps = get_pass_ptr(false, is_manifold, true)->sub(ob->id.name);
+        PassMain::Sub &ps = *get_pass_ptr(false, is_manifold, true);
         ps.push_constant("lightDirection", object_data.direction);
         ps.push_constant("lightDistance", extrude_distance);
         ResourceHandle handle = manager.resource_handle(ob_ref);
-        ps.draw(geom_shadow, handle);
+        ps.draw(DRW_cache_object_surface_get(ob), handle);
       }
 
-      PassMain::Sub &ps = get_pass_ptr(false, is_manifold, false)->sub(ob->id.name);
+      PassMain::Sub &ps = *get_pass_ptr(false, is_manifold, false);
       ps.push_constant("lightDirection", object_data.direction);
       ps.push_constant("lightDistance", extrude_distance);
       ResourceHandle handle = manager.resource_handle(ob_ref);
