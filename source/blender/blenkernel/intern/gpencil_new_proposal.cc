@@ -71,14 +71,21 @@ void GPStroke::transform(float4x4 matrix)
 }
 
 /* GPFrame */
-GPFrame::GPFrame(int start_frame, int end_frame)
+GPFrame::GPFrame(int layer_index)
 {
-  this->start_time = start_frame;
-  this->end_time = end_frame;
+  this->layer_index = layer_index;
   this->strokes = nullptr;
 }
 
-GPFrame::GPFrame(const GPFrame &other) : GPFrame(other.start_time, other.end_time)
+GPFrame::GPFrame(int layer_index, int start_time, int end_time)
+{
+  this->layer_index = layer_index;
+  this->start_time = start_time;
+  this->end_time = end_time;
+  this->strokes = nullptr;
+}
+
+GPFrame::GPFrame(const GPFrame &other) : GPFrame(other.layer_index)
 {
   if (other.strokes != nullptr) {
     /* Make sure old strokes are freed before copying. */
@@ -87,7 +94,8 @@ GPFrame::GPFrame(const GPFrame &other) : GPFrame(other.start_time, other.end_tim
 
     *reinterpret_cast<CurvesGeometry *>(this->strokes) = CurvesGeometry::wrap(*other.strokes);
   }
-  this->layer_index = other.layer_index;
+  this->start_time = other.start_time;
+  this->end_time = other.end_time;
 }
 
 GPFrame &GPFrame::operator=(const GPFrame &other)
@@ -105,13 +113,14 @@ GPFrame &GPFrame::operator=(const GPFrame &other)
   return *this;
 }
 
-GPFrame::GPFrame(GPFrame &&other) : GPFrame(other.start_time, other.end_time)
+GPFrame::GPFrame(GPFrame &&other) : GPFrame(other.layer_index)
 {
   if (this != &other) {
     std::swap(this->strokes, other.strokes);
     other.strokes = nullptr;
   }
-  this->layer_index = other.layer_index;
+  this->start_time = other.start_time;
+  this->end_time = other.end_time;
 }
 
 GPFrame &GPFrame::operator=(GPFrame &&other)
@@ -330,23 +339,32 @@ IndexRange GPData::frames_on_layer(int layer_index) const
     return this->runtime->frames_index_range_cache_for_layer(layer_index);
   }
 
-  auto it_lower = std::lower_bound(
-      this->frames().begin(),
-      this->frames().end(),
-      layer_index,
-      [](const GPFrame &frame, const int index) { return frame.layer_index < index; });
-  auto it_upper = std::upper_bound(
-      this->frames().begin(),
-      this->frames().end(),
-      layer_index,
-      [](const int index, const GPFrame &frame) { return frame.layer_index < index; });
+  GPFrame search_val{layer_index};
+
+  auto it_lower = std::lower_bound(this->frames().begin(),
+                                   this->frames().end(),
+                                   search_val,
+                                   [](const GPFrame &frame_A, const GPFrame &frame_B) {
+                                     return frame_A.layer_index < frame_B.layer_index;
+                                   });
+  auto it_upper = std::upper_bound(this->frames().begin(),
+                                   this->frames().end(),
+                                   search_val,
+                                   [](const GPFrame &frame_A, const GPFrame &frame_B) {
+                                     return frame_A.layer_index < frame_B.layer_index;
+                                   });
+
+  /* Could not find this layer. */
+  if (it_lower == this->frames().end()) {
+    return {};
+  }
 
   /* Get the index of the first frame. */
   int start_idx = std::distance(this->frames().begin(), it_lower);
   /* Calculate size of the layer. */
   int frames_size = std::distance(it_lower, it_upper);
 
-  /* Cache the resulting index mask. */
+  /* Cache the resulting index range. */
   this->runtime->frames_index_range_cache.add(layer_index, {start_idx, frames_size});
   return {start_idx, frames_size};
 }
@@ -446,7 +464,7 @@ int GPData::add_frame_on_layer(GPLayer &layer, int frame_start)
 
 int GPData::add_frame_on_active_layer(int frame_start)
 {
-  return add_frame_on_layer(active_layer_index, frame_start);
+  return add_frame_on_layer(this->active_layer_index, frame_start);
 }
 
 void GPData::add_frames_on_layer(int layer_index, Array<int> start_frames)
@@ -600,11 +618,11 @@ const bool GPData::ensure_frames_array_has_size_at_least(int64_t size)
   return true;
 }
 
-int GPData::add_frame_on_layer_initialized(int layer_index, int frame_start, int reserved)
+int GPData::add_frame_on_layer_initialized(int layer_index, int start_time, int reserved)
 {
   /* Create the new frame. */
-  GPFrame new_frame(frame_start);
-  new_frame.layer_index = layer_index;
+  GPFrame new_frame(layer_index);
+  new_frame.start_time = start_time;
 
   int last_index = this->frames_size - reserved - 1;
 

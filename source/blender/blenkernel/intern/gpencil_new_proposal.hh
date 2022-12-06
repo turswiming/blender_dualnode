@@ -235,15 +235,12 @@ class GPFrame : public ::GPFrame {
   };
 
  public:
-  GPFrame() : GPFrame(-1, -1)
+  GPFrame() : GPFrame(-1)
   {
   }
 
-  GPFrame(int start_frame) : GPFrame(start_frame, -1)
-  {
-  }
-
-  GPFrame(int start_frame, int end_frame);
+  GPFrame(int layer_index);
+  GPFrame(int layer_index, int start_frame, int end_frame);
 
   GPFrame(const GPFrame &other);
   GPFrame &operator=(const GPFrame &other);
