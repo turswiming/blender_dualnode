@@ -6,7 +6,7 @@ void main()
 {
   GPU_INTEL_VERTEX_SHADER_WORKAROUND
 
-  /* Spir-V GLSL pre-processors chokes when passed directly. */
+  /* Use local variable to workaround macro unrolling issue in shaderc. */
   vec3 pos = pPosition;
   gl_Position = point_world_to_ndc(pos);
   finalColor = pColor;
