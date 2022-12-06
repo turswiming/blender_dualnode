@@ -21,8 +21,12 @@
 
 /**
  * \brief max allowed textures to use by the ScreenSpaceDrawingMode.
+ *
+ * The image engine uses 4 full screen textures to draw the image. With 4 textures it is possible
+ * to pan the screen where only the texture needs to be updated when they are not visible on the
+ * screen.
  */
-constexpr int SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN = 1;
+constexpr int SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN = 4;
 
 struct IMAGE_InstanceData {
   struct Image *image;

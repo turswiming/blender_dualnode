@@ -24,51 +24,79 @@ constexpr float EPSILON_UV_BOUNDS = 0.00001f;
 /**
  * \brief Screen space method using a single texture spawning the whole screen.
  */
-struct OneTextureMethod {
+struct FullScreenTextures {
   IMAGE_InstanceData *instance_data;
 
-  OneTextureMethod(IMAGE_InstanceData *instance_data) : instance_data(instance_data)
+  FullScreenTextures(IMAGE_InstanceData *instance_data) : instance_data(instance_data)
   {
   }
 
-  /** \brief Update the texture slot uv and screen space bounds. */
+  /**
+   * \brief Update the texture slot uv and screen space bounds.
+   *
+   * Using 4 textures to cover the screen space.
+   */
   void update_screen_space_bounds(const ARegion *region)
   {
-    /* Create a single texture that covers the visible screen space. */
-    BLI_rctf_init(
-        &instance_data->texture_infos[0].clipping_bounds, 0, region->winx, 0, region->winy);
-    instance_data->texture_infos[0].visible = true;
+    // we should find the
+    int2 region_size(region->winx, region->winy);
+    int2 region_half_size = region_size / int2(2, 2);
+    int2 min_co = -region_half_size;
+    int2 mid_co = region_half_size;
+    int2 max_co = region_size + region_half_size;
 
-    /* Mark the other textures as invalid. */
-    for (int i = 1; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
-      BLI_rctf_init_minmax(&instance_data->texture_infos[i].clipping_bounds);
-      instance_data->texture_infos[i].visible = false;
-    }
+    BLI_rctf_init(
+        &instance_data->texture_infos[0].clipping_bounds, min_co.x, mid_co.x, min_co.y, mid_co.y);
+    instance_data->texture_infos[0].visible = true;
+    BLI_rctf_init(
+        &instance_data->texture_infos[1].clipping_bounds, mid_co.x, max_co.x, min_co.y, mid_co.y);
+    instance_data->texture_infos[1].visible = false;
+    BLI_rctf_init(
+        &instance_data->texture_infos[2].clipping_bounds, min_co.x, mid_co.x, mid_co.y, max_co.y);
+    instance_data->texture_infos[2].visible = false;
+    BLI_rctf_init(
+        &instance_data->texture_infos[3].clipping_bounds, mid_co.x, max_co.x, mid_co.y, max_co.y);
+    instance_data->texture_infos[3].visible = false;
   }
 
   void update_screen_uv_bounds()
   {
-    for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
-      update_screen_uv_bounds(instance_data->texture_infos[0]);
-    }
-  }
+    float3 screen_co(1.0f, 1.0f, 0.0f);
+    float3 screen_half = screen_co * float3(0.5f, 0.5f, 0.5f);
 
-  void update_screen_uv_bounds(TextureInfo &info)
-  {
-    /* Although this works, computing an inverted matrix adds some precision issues and leads to
-     * tearing artifacts. This should be modified to use the scaling and transformation from the
-     * not inverted matrix. */
     float4x4 mat(instance_data->ss_to_texture);
     float4x4 mat_inv = mat.inverted();
-    float3 min_uv = mat_inv * float3(0.0f, 0.0f, 0.0f);
-    float3 max_uv = mat_inv * float3(1.0f, 1.0f, 0.0f);
-    rctf new_clipping_bounds;
-    BLI_rctf_init(&new_clipping_bounds, min_uv[0], max_uv[0], min_uv[1], max_uv[1]);
 
-    if (!BLI_rctf_compare(&info.clipping_uv_bounds, &new_clipping_bounds, EPSILON_UV_BOUNDS)) {
-      info.clipping_uv_bounds = new_clipping_bounds;
-      info.dirty = true;
-    }
+    float3 min_co = mat_inv * -screen_half;
+    float3 mid_co = mat_inv * screen_half;
+    float3 max_co = mat_inv * (screen_co + screen_half);
+
+    BLI_rctf_init(&instance_data->texture_infos[0].clipping_uv_bounds,
+                  min_co.x,
+                  mid_co.x,
+                  min_co.y,
+                  mid_co.y);
+    BLI_rctf_init(&instance_data->texture_infos[1].clipping_uv_bounds,
+                  mid_co.x,
+                  max_co.x,
+                  min_co.y,
+                  mid_co.y);
+    BLI_rctf_init(&instance_data->texture_infos[2].clipping_uv_bounds,
+                  min_co.x,
+                  mid_co.x,
+                  mid_co.y,
+                  max_co.y);
+    BLI_rctf_init(&instance_data->texture_infos[3].clipping_uv_bounds,
+                  mid_co.x,
+                  max_co.x,
+                  mid_co.y,
+                  max_co.y);
+    instance_data->texture_infos[0].dirty = true;
+    instance_data->texture_infos[1].dirty = false;
+    instance_data->texture_infos[2].dirty = false;
+    instance_data->texture_infos[3].dirty = false;
+
+    instance_data->texture_infos[0].print_debug();
   }
 };
 
@@ -407,6 +435,10 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     return instance_data.float_buffers.ensure_float_buffer(image_buffer);
   }
 
+  /**
+   * texture_buffer is the image buffer belonging to the texture_info.
+   * tile_buffer is the image buffer of the tile.
+   */
   void do_full_update_texture_slot(IMAGE_InstanceData &instance_data,
                                    const TextureInfo &texture_info,
                                    ImBuf &texture_buffer,
@@ -420,19 +452,23 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     /* IMB_transform works in a non-consistent space. This should be documented or fixed!.
      * Construct a variant of the info_uv_to_texture that adds the texel space
      * transformation. */
-    float uv_to_texel[4][4];
-    copy_m4_m4(uv_to_texel, instance_data.ss_to_texture);
-    float scale[3] = {float(texture_width) / float(tile_buffer.x),
-                      float(texture_height) / float(tile_buffer.y),
-                      1.0f};
-    rescale_m4(uv_to_texel, scale);
-    uv_to_texel[3][0] += image_tile.get_tile_x_offset() /
-                         BLI_rctf_size_x(&texture_info.clipping_uv_bounds);
-    uv_to_texel[3][1] += image_tile.get_tile_y_offset() /
-                         BLI_rctf_size_y(&texture_info.clipping_uv_bounds);
-    uv_to_texel[3][0] *= texture_width;
-    uv_to_texel[3][1] *= texture_height;
-    invert_m4(uv_to_texel);
+    float4x4 uv_to_texel;
+    rctf texture_area;
+    rctf tile_area;
+
+    // TODO add tile size.
+    BLI_rctf_init(&texture_area, 0.0, texture_width, 0.0, texture_height);
+    BLI_rctf_init(&tile_area,
+                  tile_buffer.x * texture_info.clipping_uv_bounds.xmin,
+                  tile_buffer.x * texture_info.clipping_uv_bounds.xmax,
+                  tile_buffer.y * texture_info.clipping_uv_bounds.ymin,
+                  tile_buffer.y * texture_info.clipping_uv_bounds.ymax);
+    BLI_rctf_transform_calc_m4_pivot_min(&tile_area, &texture_area, uv_to_texel.ptr());
+    invert_m4(uv_to_texel.ptr());
+
+    print_rctf_id(&tile_area);
+    print_rctf_id(&texture_area);
+    print_m4_id(uv_to_texel.ptr());
 
     rctf crop_rect;
     rctf *crop_rect_ptr = nullptr;
@@ -446,11 +482,13 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
       transform_mode = IMB_TRANSFORM_MODE_CROP_SRC;
     }
 
+    // transform_mode = IMB_TRANSFORM_MODE_REGULAR;
+
     IMB_transform(float_tile_buffer,
                   &texture_buffer,
                   transform_mode,
                   IMB_FILTER_NEAREST,
-                  uv_to_texel,
+                  uv_to_texel.ptr(),
                   crop_rect_ptr);
   }
 
@@ -471,6 +509,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     instance_data->partial_update.ensure_image(image);
     instance_data->clear_dirty_flag();
     instance_data->float_buffers.reset_usage_flags();
+    printf("\n");
 
     /* Step: Find out which screen space textures are needed to draw on the screen. Remove the
      * screen space textures that aren't needed. */

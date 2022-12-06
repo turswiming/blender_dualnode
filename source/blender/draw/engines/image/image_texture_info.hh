@@ -60,4 +60,10 @@ struct TextureInfo {
       texture = nullptr;
     }
   }
+
+  void print_debug()
+  {
+    print_rctf_id(&clipping_bounds);
+    print_rctf_id(&clipping_uv_bounds);
+  }
 };
