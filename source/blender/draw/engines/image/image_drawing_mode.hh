@@ -50,13 +50,13 @@ struct FullScreenTextures {
     instance_data->texture_infos[0].visible = true;
     BLI_rctf_init(
         &instance_data->texture_infos[1].clipping_bounds, mid_co.x, max_co.x, min_co.y, mid_co.y);
-    instance_data->texture_infos[1].visible = false;
+    instance_data->texture_infos[1].visible = true;
     BLI_rctf_init(
         &instance_data->texture_infos[2].clipping_bounds, min_co.x, mid_co.x, mid_co.y, max_co.y);
-    instance_data->texture_infos[2].visible = false;
+    instance_data->texture_infos[2].visible = true;
     BLI_rctf_init(
         &instance_data->texture_infos[3].clipping_bounds, mid_co.x, max_co.x, mid_co.y, max_co.y);
-    instance_data->texture_infos[3].visible = false;
+    instance_data->texture_infos[3].visible = true;
   }
 
   void update_screen_uv_bounds()
@@ -92,9 +92,9 @@ struct FullScreenTextures {
                   mid_co.y,
                   max_co.y);
     instance_data->texture_infos[0].dirty = true;
-    instance_data->texture_infos[1].dirty = false;
-    instance_data->texture_infos[2].dirty = false;
-    instance_data->texture_infos[3].dirty = false;
+    instance_data->texture_infos[1].dirty = true;
+    instance_data->texture_infos[2].dirty = true;
+    instance_data->texture_infos[3].dirty = true;
 
     instance_data->texture_infos[0].print_debug();
   }
