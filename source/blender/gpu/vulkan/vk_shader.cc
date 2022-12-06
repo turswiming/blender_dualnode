@@ -530,6 +530,7 @@ Vector<uint32_t> VKShader::compile_glsl_to_spirv(Span<const char *> sources,
   VKBackend &backend = static_cast<VKBackend &>(*VKBackend::get());
   shaderc::Compiler &compiler = backend.get_shaderc_compiler();
   shaderc::CompileOptions options;
+  options.SetOptimizationLevel(shaderc_optimization_level_performance);
 
   shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
       combined_sources, stage, name, options);
