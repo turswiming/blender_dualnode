@@ -253,10 +253,7 @@ vec4 gpencil_vertex(vec4 viewport_size,
         x_axis = vec2(1.0, 0.0);
       }
       else { /* GP_STROKE_ALIGNMENT_OBJECT */
-
-        /* Use local variable to workaround macro unrolling issue in shaderc. */
-        vec3 wpos = wpos1 + ModelMatrix[0].xyz;
-        vec4 ndc_x = point_world_to_ndc(wpos);
+        vec4 ndc_x = point_world_to_ndc(wpos1 + ModelMatrix[0].xyz);
         vec2 ss_x = gpencil_project_to_screenspace(ndc_x, viewport_size);
         x_axis = safe_normalize(ss_x - ss1);
       }
