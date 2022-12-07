@@ -272,6 +272,20 @@ TEST(math_rotation, sin_cos_from_fraction_symmetry)
 
 namespace blender::math::tests {
 
+TEST(math_rotation, DefaultConstructor)
+{
+  Quaternion quat{};
+  EXPECT_EQ(quat.x, 0.0f);
+  EXPECT_EQ(quat.y, 0.0f);
+  EXPECT_EQ(quat.z, 0.0f);
+  EXPECT_EQ(quat.w, 0.0f);
+
+  EulerXYZ eul{};
+  EXPECT_EQ(eul.x, 0.0f);
+  EXPECT_EQ(eul.y, 0.0f);
+  EXPECT_EQ(eul.z, 0.0f);
+}
+
 TEST(math_rotation, RotateDirectionAroundAxis)
 {
   const float3 a = rotate_direction_around_axis({1, 0, 0}, {0, 0, 1}, M_PI_2);

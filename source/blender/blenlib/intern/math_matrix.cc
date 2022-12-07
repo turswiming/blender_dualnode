@@ -8,11 +8,6 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_rotation_new.hh"
 
-/* Eigen gives annoying huge amount of warnings here, silence them! */
-#if defined(__GNUC__) && !defined(__clang__)
-#  pragma GCC diagnostic ignored "-Wlogical-op"
-#endif
-
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
@@ -79,7 +74,7 @@ namespace blender::math {
 
 template<typename T, int Size> T determinant(const MatBase<T, Size, Size> &mat)
 {
-  return Map<const Matrix<T, Size, Size>>((const T *)mat.ptr()).determinant();
+  return Map<const Matrix<T, Size, Size>>(mat.base_ptr()).determinant();
 }
 
 template float determinant(const float2x2 &mat);
@@ -91,7 +86,7 @@ template double determinant(const double4x4 &mat);
 
 template<typename T> bool is_negative(const MatBase<T, 4, 4> &mat)
 {
-  return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>((const T *)mat.ptr()).determinant() < T(0);
+  return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>(mat.base_ptr()).determinant() < T(0);
 }
 
 template bool is_negative(const float4x4 &mat);
@@ -143,8 +138,8 @@ template double4x4 adjoint(const double4x4 &mat);
 template<typename T, int Size> MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat)
 {
   MatBase<T, Size, Size> result;
-  Map<const Matrix<T, Size, Size>> M((const T *)mat.ptr());
-  Map<Matrix<T, Size, Size>> R((T *)result.ptr());
+  Map<const Matrix<T, Size, Size>> M(mat.base_ptr());
+  Map<Matrix<T, Size, Size>> R(result.base_ptr());
   bool is_invertible = true;
   M.computeInverseWithCheck(R, is_invertible, 0.0f);
   if (!is_invertible) {
@@ -199,11 +194,11 @@ static void polar_decompose(const MatBase<T, 3, 3> &mat3,
      */
     using MatrixDynamicT = Matrix<T, Dynamic, Dynamic>;
     JacobiSVD<MatrixDynamicT, NoQRPreconditioner> svd(
-        Map<const MatrixDynamicT>((const T *)mat3.ptr(), 3, 3), ComputeThinU | ComputeThinV);
+        Map<const MatrixDynamicT>(mat3.base_ptr(), 3, 3), ComputeThinU | ComputeThinV);
 
-    (Map<MatrixT>((T *)W.ptr())) = svd.matrixU();
+    (Map<MatrixT>(W.base_ptr())) = svd.matrixU();
     (Map<VectorT>(S_val)) = svd.singularValues();
-    (Map<MatrixT>((T *)V.ptr())) = svd.matrixV();
+    (Map<MatrixT>(V.base_ptr())) = svd.matrixV();
   }
 
   MatBase<T, 3, 3> S = from_scale<MatBase<T, 3, 3>>(S_val);

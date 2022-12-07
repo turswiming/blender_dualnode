@@ -7,11 +7,16 @@
 
 namespace blender::tests {
 
-using float2x2 = MatBase<float, 2, 2>;
-using float3x2 = MatBase<float, 3, 2>;
-using double3x2 = MatBase<double, 3, 2>;
-
 using namespace blender::math;
+
+TEST(math_matrix_types, DefaultConstructor)
+{
+  float2x2 m{};
+  EXPECT_EQ(m[0][0], 0.0f);
+  EXPECT_EQ(m[1][1], 0.0f);
+  EXPECT_EQ(m[0][1], 0.0f);
+  EXPECT_EQ(m[1][0], 0.0f);
+}
 
 TEST(math_matrix_types, ScalarConstructor)
 {

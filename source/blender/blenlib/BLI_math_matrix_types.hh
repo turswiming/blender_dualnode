@@ -139,6 +139,18 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
     return *reinterpret_cast<c_style_mat *>(this);
   }
 
+  /** \note Prevent implicit cast to types that could fit other pointer constructor. */
+  const T *base_ptr() const
+  {
+    return reinterpret_cast<const T *>(this);
+  }
+
+  /** \note Prevent implicit cast to types that could fit other pointer constructor. */
+  T *base_ptr()
+  {
+    return reinterpret_cast<T *>(this);
+  }
+
   /** Array access. */
 
   const col_type &operator[](int index) const
@@ -291,7 +303,7 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
   {
     const MatBase &a = *this;
     /* This is the reference implementation.
-     * Subclass are free to overload it with vectorized / optimized code. */
+     * Might be overloaded with vectorized / optimized code. */
     /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
     MatBase<T, NumCol, NumRow> result(0);
     unroll<NumCol>([&](auto c) {
@@ -337,7 +349,7 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
   friend col_type operator*(const MatBase &a, const row_type &b)
   {
     /* This is the reference implementation.
-     * Subclass are free to overload it with vectorized / optimized code. */
+     * Might be overloaded with vectorized / optimized code. */
     col_type result(0);
     unroll<NumCol>([&](auto c) { result += b[c] * a[c]; });
     return result;
@@ -347,7 +359,7 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
   friend row_type operator*(const col_type &a, const MatBase &b)
   {
     /* This is the reference implementation.
-     * Subclass are free to overload it with vectorized / optimized code. */
+     * Might be overloaded with vectorized / optimized code. */
     row_type result(0);
     unroll<NumCol>([&](auto c) { unroll<NumRow>([&](auto r) { result[c] += b[c][r] * a[r]; }); });
     return result;
@@ -416,10 +428,23 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
 };
 
 using float2x2 = MatBase<float, 2, 2>;
+using float2x3 = MatBase<float, 2, 3>;
+using float2x4 = MatBase<float, 2, 4>;
+using float3x2 = MatBase<float, 3, 2>;
 using float3x3 = MatBase<float, 3, 3>;
+using float3x4 = MatBase<float, 3, 4>;
+using float4x2 = MatBase<float, 4, 2>;
+using float4x3 = MatBase<float, 4, 3>;
 using float4x4 = MatBase<float, 4, 4>;
+
 using double2x2 = MatBase<double, 2, 2>;
+using double2x3 = MatBase<double, 2, 3>;
+using double2x4 = MatBase<double, 2, 4>;
+using double3x2 = MatBase<double, 3, 2>;
 using double3x3 = MatBase<double, 3, 3>;
+using double3x4 = MatBase<double, 3, 4>;
+using double4x2 = MatBase<double, 4, 2>;
+using double4x3 = MatBase<double, 4, 3>;
 using double4x4 = MatBase<double, 4, 4>;
 
 /* Specialization for SSE optimization. */

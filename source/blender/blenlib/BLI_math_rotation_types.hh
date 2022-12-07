@@ -16,8 +16,7 @@ namespace detail {
 /**
  * Rotation Types
  *
- * These are wrappers around the vector types.
- * It gives more semantic informations allowing for overloaded functions depending on the rotation
+ * It gives more semantic informations allowing overloaded functions based on the rotation
  * type. It also prevent implicit cast from rotation to vector types.
  */
 
@@ -65,7 +64,7 @@ template<typename T> struct EulerXYZ {
   }
 };
 
-template<typename T> struct Quaternion {
+template<typename T = float> struct Quaternion {
   T x, y, z, w;
 
   Quaternion() = default;
@@ -122,10 +121,14 @@ template<typename T> struct AxisAngle {
   T angle_sin_ = 0;
   /**
    * Source angle for interpolation.
-   * It might not be computed on creation so the getter ensure it is updated.
+   * It might not be computed on creation, so the getter ensures it is updated.
    */
   T angle_ = 0;
 
+  /**
+   * A defaulted constructor would cause zero initialization instead of default initialization,
+   * and not call the default member initializers.
+   */
   explicit AxisAngle(){};
 
  public:
