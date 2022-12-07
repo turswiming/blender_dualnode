@@ -100,9 +100,6 @@ struct IMAGE_InstanceData {
   {
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
       TextureInfo &info = texture_infos[i];
-      if (!info.need_full_update) {
-        continue;
-      }
       BatchUpdater batch_updater(info);
       batch_updater.update_batch();
     }

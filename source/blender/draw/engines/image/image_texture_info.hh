@@ -66,9 +66,19 @@ struct TextureInfo {
     return int2(clipping_bounds.xmin, clipping_bounds.ymin);
   }
 
-  void print_debug()
+  /**
+   * \brief Update the region bounds from the uv bounds by applying the given transform matrix.
+   */
+  void calc_region_bounds_from_uv_bounds(const float4x4 &uv_to_region)
   {
-    print_rctf_id(&clipping_bounds);
-    print_rctf_id(&clipping_uv_bounds);
+    float3 bottom_left_uv = float3(clipping_uv_bounds.xmin, clipping_uv_bounds.ymin, 0.0f);
+    float3 top_right_uv = float3(clipping_uv_bounds.xmax, clipping_uv_bounds.ymax, 0.0f);
+    float3 bottom_left_region = uv_to_region * bottom_left_uv;
+    float3 top_right_region = uv_to_region * top_right_uv;
+    BLI_rctf_init(&clipping_bounds,
+                  bottom_left_region.x,
+                  top_right_region.x,
+                  bottom_left_region.y,
+                  top_right_region.y);
   }
 };
