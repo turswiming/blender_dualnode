@@ -15,13 +15,6 @@
 
 struct TextureInfo {
   /**
-   * \brief Is the texture clipped.
-   *
-   * Resources of clipped textures are freed and ignored when performing partial updates.
-   */
-  bool visible : 1;
-
-  /**
    * \brief does this texture need a full update.
    *
    * When set to false the texture can be updated using a partial update.

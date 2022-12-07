@@ -47,16 +47,12 @@ struct FullScreenTextures {
 
     BLI_rctf_init(
         &instance_data->texture_infos[0].clipping_bounds, min_co.x, mid_co.x, min_co.y, mid_co.y);
-    instance_data->texture_infos[0].visible = true;
     BLI_rctf_init(
         &instance_data->texture_infos[1].clipping_bounds, mid_co.x, max_co.x, min_co.y, mid_co.y);
-    instance_data->texture_infos[1].visible = true;
     BLI_rctf_init(
         &instance_data->texture_infos[2].clipping_bounds, min_co.x, mid_co.x, mid_co.y, max_co.y);
-    instance_data->texture_infos[2].visible = true;
     BLI_rctf_init(
         &instance_data->texture_infos[3].clipping_bounds, mid_co.x, max_co.x, mid_co.y, max_co.y);
-    instance_data->texture_infos[3].visible = true;
   }
 
   void update_screen_uv_bounds()
@@ -134,10 +130,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     unit_m4(image_mat);
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
       const TextureInfo &info = instance_data->texture_infos[i];
-      if (!info.visible) {
-        continue;
-      }
-
       DRWShadingGroup *shgrp_sub = DRW_shgroup_create_sub(shgrp);
       DRW_shgroup_uniform_ivec2_copy(shgrp_sub, "offset", info.offset());
       DRW_shgroup_uniform_texture_ex(shgrp_sub, "imageTexture", info.texture, GPU_SAMPLER_DEFAULT);
@@ -167,10 +159,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
 
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
       const TextureInfo &info = instance_data.texture_infos[i];
-      if (!info.visible) {
-        continue;
-      }
-
       LISTBASE_FOREACH (ImageTile *, image_tile_ptr, &image->tiles) {
         const ImageTileWrapper image_tile(image_tile_ptr);
         const int tile_x = image_tile.get_tile_x_offset();
@@ -280,9 +268,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
         if (info.need_full_update) {
           continue;
         }
-        if (!info.visible) {
-          continue;
-        }
         GPUTexture *texture = info.texture;
         const float texture_width = GPU_texture_width(texture);
         const float texture_height = GPU_texture_height(texture);
@@ -382,9 +367,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
       TextureInfo &info = instance_data.texture_infos[i];
       if (!info.need_full_update) {
-        continue;
-      }
-      if (!info.visible) {
         continue;
       }
       do_full_update_gpu_texture(info, instance_data, image_user);
