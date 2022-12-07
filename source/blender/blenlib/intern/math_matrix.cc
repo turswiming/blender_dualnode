@@ -6,7 +6,7 @@
  */
 
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation_new.hh"
+#include "BLI_math_rotation.hh"
 
 #include <Eigen/Core>
 #include <Eigen/Dense>

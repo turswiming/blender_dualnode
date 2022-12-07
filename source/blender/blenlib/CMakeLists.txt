@@ -51,6 +51,7 @@ set(SRC
   intern/array_utils.c
   intern/array_utils.cc
   intern/astar.c
+  intern/atomic_disjoint_set.cc
   intern/bitmap.c
   intern/bitmap_draw_2d.c
   intern/boxpack_2d.c
@@ -174,6 +175,7 @@ set(SRC
   BLI_asan.h
   BLI_assert.h
   BLI_astar.h
+  BLI_atomic_disjoint_set.hh
   BLI_bit_vector.hh
   BLI_bitmap.h
   BLI_bitmap_draw_2d.h
@@ -272,7 +274,7 @@ set(SRC
   BLI_math_matrix.h
   BLI_math_mpq.hh
   BLI_math_rotation.h
-  BLI_math_rotation.hh
+  BLI_math_rotation_legacy.hh
   BLI_math_solvers.h
   BLI_math_statistics.h
   BLI_math_time.h

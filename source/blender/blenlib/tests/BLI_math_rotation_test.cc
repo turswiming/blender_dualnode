@@ -6,7 +6,7 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_rotation.hh"
-#include "BLI_math_rotation_new.hh"
+#include "BLI_math_rotation_legacy.hh"
 #include "BLI_math_vector.hh"
 
 #include "BLI_vector.hh"

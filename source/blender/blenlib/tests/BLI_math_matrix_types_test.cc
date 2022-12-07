@@ -329,7 +329,7 @@ TEST(math_matrix_types, ViewMatrixMultiplyOperator)
 TEST(math_matrix_types, ViewMatrixNormalize)
 {
   float4x4 mat = float4x4({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 10, 11, 12}, {13, 14, 15, 16});
-  my_float4x4.view<3, 3>() = normalize(my_float4x4.view<3, 3>());
+  mat.view<3, 3>() = normalize(mat.view<3, 3>());
 
   float4x4 expect = float4x4({0.267261236, 0.534522473, 0.80178368, 4},
                              {0.476731300, 0.572077572, 0.66742378, 8},
