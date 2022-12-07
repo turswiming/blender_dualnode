@@ -96,6 +96,10 @@ find_package_wrapper(ZLIB REQUIRED)
 find_package_wrapper(Zstd REQUIRED)
 find_package_wrapper(Epoxy REQUIRED)
 
+if(WITH_VULKAN_BACKEND)
+  find_package_wrapper(Vulkan REQUIRED)
+endif()
+
 function(check_freetype_for_brotli)
   include(CheckSymbolExists)
   set(CMAKE_REQUIRED_INCLUDES ${FREETYPE_INCLUDE_DIRS})
@@ -206,7 +210,7 @@ if(WITH_SDL)
     )
     # unset(SDLMAIN_LIBRARY CACHE)
     set_and_warn_library_found("SDL" SDL_FOUND WITH_SDL)
-    endif()
+  endif()
 endif()
 
 # Codecs
@@ -314,9 +318,10 @@ if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
   file(GLOB _sycl_runtime_libraries
     ${SYCL_ROOT_DIR}/lib/libsycl.so
     ${SYCL_ROOT_DIR}/lib/libsycl.so.*
-    ${SYCL_ROOT_DIR}/lib/libpi_level_zero.so
+    ${SYCL_ROOT_DIR}/lib/libpi_*.so
   )
   list(FILTER _sycl_runtime_libraries EXCLUDE REGEX ".*\.py")
+  list(REMOVE_ITEM _sycl_runtime_libraries "${SYCL_ROOT_DIR}/lib/libpi_opencl.so")
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
   unset(_sycl_runtime_libraries)
 endif()
@@ -456,11 +461,12 @@ endif()
 if(WITH_OPENCOLORIO)
   find_package_wrapper(OpenColorIO 2.0.0)
 
-  set(OPENCOLORIO_LIBRARIES ${OPENCOLORIO_LIBRARIES})
-  set(OPENCOLORIO_LIBPATH)  # TODO, remove and reference the absolute path everywhere
   set(OPENCOLORIO_DEFINITIONS)
-
   set_and_warn_library_found("OpenColorIO" OPENCOLORIO_FOUND WITH_OPENCOLORIO)
+
+  if(WITH_OPENCOLORIO)
+    add_bundled_libraries(opencolorio/lib)
+  endif()
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
@@ -481,18 +487,18 @@ if(WITH_LLVM)
   set_and_warn_library_found("LLVM" LLVM_FOUND WITH_LLVM)
 
   if(LLVM_FOUND)
-  if(WITH_CLANG)
-    find_package_wrapper(Clang)
+    if(WITH_CLANG)
+      find_package_wrapper(Clang)
       set_and_warn_library_found("Clang" CLANG_FOUND WITH_CLANG)
-  endif()
+    endif()
 
-  # Symbol conflicts with same UTF library used by OpenCollada
-  if(EXISTS ${LIBDIR})
-    if(WITH_OPENCOLLADA AND (${LLVM_VERSION} VERSION_LESS "4.0.0"))
-      list(REMOVE_ITEM OPENCOLLADA_LIBRARIES ${OPENCOLLADA_UTF_LIBRARY})
+    # Symbol conflicts with same UTF library used by OpenCollada
+    if(EXISTS ${LIBDIR})
+      if(WITH_OPENCOLLADA AND (${LLVM_VERSION} VERSION_LESS "4.0.0"))
+        list(REMOVE_ITEM OPENCOLLADA_LIBRARIES ${OPENCOLLADA_UTF_LIBRARY})
+      endif()
     endif()
   endif()
-    endif()
 endif()
 
 if(WITH_OPENSUBDIV)
@@ -649,11 +655,11 @@ if(WITH_GHOST_WAYLAND)
   endif()
 
   if(_use_system_wayland)
-  pkg_check_modules(wayland-client wayland-client>=1.12)
-  pkg_check_modules(wayland-egl wayland-egl)
-  pkg_check_modules(wayland-scanner wayland-scanner)
-  pkg_check_modules(wayland-cursor wayland-cursor)
-  pkg_check_modules(wayland-protocols wayland-protocols>=1.15)
+    pkg_check_modules(wayland-client wayland-client>=1.12)
+    pkg_check_modules(wayland-egl wayland-egl)
+    pkg_check_modules(wayland-scanner wayland-scanner)
+    pkg_check_modules(wayland-cursor wayland-cursor)
+    pkg_check_modules(wayland-protocols wayland-protocols>=1.15)
     pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
   else()
     # CentOS 7 packages have too old a version, a newer version exist in the
@@ -982,16 +988,9 @@ if(WITH_COMPILER_CCACHE)
   endif()
 endif()
 
-# On some platforms certain atomic operations are not possible with assembly and/or intrinsics and
-# they are emulated in software with locks. For example, on armel there is no intrinsics to grant
-# 64 bit atomic operations and STL library uses libatomic to offload software emulation of atomics
-# to.
-# This function will check whether libatomic is required and if so will configure linker flags.
-# If atomic operations are possible without libatomic then linker flags are left as-is.
-function(CONFIGURE_ATOMIC_LIB_IF_NEEDED)
-  # Source which is used to enforce situation when software emulation of atomics is required.
-  # Assume that using 64bit integer gives a definitive answer (as in, if 64bit atomic operations
-  # are possible using assembly/intrinsics 8, 16, and 32 bit operations will also be possible.
+# Always link with libatomic if available, as it is required for data types
+# which don't have intrinsics.
+function(configure_atomic_lib_if_needed)
   set(_source
       "#include <atomic>
       #include <cstdint>
@@ -1002,25 +1001,12 @@ function(CONFIGURE_ATOMIC_LIB_IF_NEEDED)
   )
 
   include(CheckCXXSourceCompiles)
-  check_cxx_source_compiles("${_source}" ATOMIC_OPS_WITHOUT_LIBATOMIC)
+  set(CMAKE_REQUIRED_LIBRARIES atomic)
+  check_cxx_source_compiles("${_source}" ATOMIC_OPS_WITH_LIBATOMIC)
+  unset(CMAKE_REQUIRED_LIBRARIES)
 
-  if(NOT ATOMIC_OPS_WITHOUT_LIBATOMIC)
-    # Compilation of the test program has failed.
-    # Try it again with -latomic to see if this is what is needed, or whether something else is
-    # going on.
-
-    set(CMAKE_REQUIRED_LIBRARIES atomic)
-    check_cxx_source_compiles("${_source}" ATOMIC_OPS_WITH_LIBATOMIC)
-    unset(CMAKE_REQUIRED_LIBRARIES)
-
-    if(ATOMIC_OPS_WITH_LIBATOMIC)
-      set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -latomic" PARENT_SCOPE)
-    else()
-      # Atomic operations are required part of Blender and it is not possible to process forward.
-      # We expect that either standard library or libatomic will make atomics to work. If both
-      # cases has failed something fishy o na bigger scope is going on.
-      message(FATAL_ERROR "Failed to detect required configuration for atomic operations")
-    endif()
+  if(ATOMIC_OPS_WITH_LIBATOMIC)
+    set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -latomic" PARENT_SCOPE)
   endif()
 endfunction()
 

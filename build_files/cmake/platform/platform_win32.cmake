@@ -654,31 +654,25 @@ if(WITH_OPENCOLORIO)
     set(OPENCOLORIO ${LIBDIR}/OpenColorIO)
     set(OPENCOLORIO_INCLUDE_DIRS ${OPENCOLORIO}/include)
     set(OPENCOLORIO_LIBPATH ${OPENCOLORIO}/lib)
-    set(OPENCOLORIO_LIBRARIES
-      optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
-      optimized ${OPENCOLORIO_LIBPATH}/libexpatMD.lib
-      optimized ${OPENCOLORIO_LIBPATH}/pystring.lib
-      debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
-      debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
-      debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
-    )
-    if(EXISTS ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib) # 3.4 name
-      list(APPEND OPENCOLORIO_LIBRARIES
+    if(EXISTS ${OPENCOLORIO_LIBPATH}/libexpatMD.lib) # 3.4
+      set(OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
+        optimized ${OPENCOLORIO_LIBPATH}/libexpatMD.lib
+        optimized ${OPENCOLORIO_LIBPATH}/pystring.lib
         optimized ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib
-        debug ${OPENCOLORIO_LIBPATH}/libyaml-cpp_d.lib
-      )
-    elseif(EXISTS ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib) # 3.5 name
-      list(APPEND OPENCOLORIO_LIBRARIES
-        optimized ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib
-        optimized ${OPENCOLORIO_LIBPATH}/libminizip.lib
+        debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
+        debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
+        debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
         debug ${OPENCOLORIO_LIBPATH}/yaml-cppd.lib
-        debug ${OPENCOLORIO_LIBPATH}/libminizip.lib
       )
+      set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
     else()
-      message("FATAL YAML-CPP dependency not found")
+      set(OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
+        debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
+      )
     endif()
   endif()
-  set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
 endif()
 
 if(WITH_OPENVDB)
@@ -986,6 +980,20 @@ if(WITH_HARU)
   set(HARU_LIBRARIES ${HARU_ROOT_DIR}/lib/libhpdfs.lib)
 endif()
 
+if(WITH_VULKAN_BACKEND)
+  if(EXISTS ${LIBDIR}/vulkan)
+    set(VULKAN_FOUND On)
+    set(VULKAN_ROOT_DIR ${LIBDIR}/vulkan)
+    set(VULKAN_INCLUDE_DIR ${VULKAN_ROOT_DIR}/include)
+    set(VULKAN_INCLUDE_DIRS ${VULKAN_INCLUDE_DIR})
+    set(VULKAN_LIBRARY ${VULKAN_ROOT_DIR}/lib/vulkan-1.lib)
+    set(VULKAN_LIBRARIES ${VULKAN_LIBRARY})
+  else()
+    message(WARNING "Vulkan SDK was not found, disabling WITH_VULKAN_BACKEND")
+    set(WITH_VULKAN_BACKEND OFF)
+  endif()
+endif()
+
 if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
   find_package(openpgl QUIET)
   if(openpgl_FOUND)
@@ -1018,7 +1026,13 @@ if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
   endforeach()
   unset(_sycl_runtime_libraries_glob)
 
-  list(APPEND _sycl_runtime_libraries ${SYCL_ROOT_DIR}/bin/pi_level_zero.dll)
+  file(GLOB _sycl_pi_runtime_libraries_glob
+    ${SYCL_ROOT_DIR}/bin/pi_*.dll
+  )
+  list(REMOVE_ITEM _sycl_pi_runtime_libraries_glob "${SYCL_ROOT_DIR}/bin/pi_opencl.dll")
+  list (APPEND _sycl_runtime_libraries ${_sycl_pi_runtime_libraries_glob})
+  unset(_sycl_pi_runtime_libraries_glob)
+
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
   unset(_sycl_runtime_libraries)
 endif()

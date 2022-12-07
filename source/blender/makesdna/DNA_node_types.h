@@ -126,12 +126,6 @@ typedef struct bNodeSocket {
   /** Runtime type identifier. */
   char idname[64];
 
-  /**
-   * The location of the sockets, in the view-space of the node editor.
-   * \note These are runtime data-- only calculated when drawing, and could be removed from DNA.
-   */
-  float locx, locy;
-
   /** Default input value used for unlinked sockets. */
   void *default_value;
 
@@ -143,10 +137,7 @@ typedef struct bNodeSocket {
    * output. */
   char attribute_domain;
 
-  char _pad[2];
-
-  /* Runtime-only cache of the number of input links, for multi-input sockets. */
-  short total_inputs;
+  char _pad[4];
 
   /** Custom dynamic defined label, MAX_NAME. */
   char label[64];
@@ -159,9 +150,6 @@ typedef struct bNodeSocket {
    * declarations.
    */
   char *default_attribute_name;
-
-  /** Cached data from execution. */
-  void *cache;
 
   /* internal data to retrieve relations and groups
    * DEPRECATED, now uses the generic identifier string instead
@@ -182,6 +170,7 @@ typedef struct bNodeSocket {
   bNodeSocketRuntimeHandle *runtime;
 
 #ifdef __cplusplus
+  bool is_hidden() const;
   bool is_available() const;
   bool is_multi_input() const;
   bool is_input() const;
@@ -328,7 +317,14 @@ typedef struct bNode {
   /** Additional offset from loc. */
   float offsetx, offsety;
 
-  char _pad0[4];
+  /**
+   * A value that uniquely identifies a node in a node tree even when the name changes.
+   * This also allows referencing nodes more efficiently than with strings.
+   *
+   * Must be set whenever a node is added to a tree, besides a simple tree copy.
+   * Must always be positive.
+   */
+  int32_t identifier;
 
   /** Custom user-defined label, MAX_NAME. */
   char label[64];
@@ -368,6 +364,8 @@ typedef struct bNode {
   /** Lookup socket of this node by its identifier. */
   const bNodeSocket &input_by_identifier(blender::StringRef identifier) const;
   const bNodeSocket &output_by_identifier(blender::StringRef identifier) const;
+  bNodeSocket &input_by_identifier(blender::StringRef identifier);
+  bNodeSocket &output_by_identifier(blender::StringRef identifier);
   /** If node is frame, will return all children nodes. */
   blender::Span<bNode *> direct_children_in_frame() const;
   /** Node tree this node belongs to. */
@@ -507,9 +505,6 @@ typedef struct bNodeTree {
   /** Runtime type identifier. */
   char idname[64];
 
-  /** Runtime RNA type of the group interface. */
-  struct StructRNA *interface_type;
-
   /** Grease pencil data. */
   struct bGPdata *gpd;
   /** Node tree stores own offset for consistent editor view. */
@@ -525,13 +520,6 @@ typedef struct bNodeTree {
    */
   int cur_index;
   int flag;
-  /** Flag to prevent re-entrant update calls. */
-  short is_updating;
-  /** Generic temporary flag for recursion check (DFS/BFS). */
-  short done;
-
-  /** Specific node type this tree is used for. */
-  int nodetype DNA_DEPRECATED;
 
   /** Quality setting when editing. */
   short edit_quality;
@@ -561,31 +549,21 @@ typedef struct bNodeTree {
 
   char _pad[4];
 
-  /** Execution data.
-   *
-   * XXX It would be preferable to completely move this data out of the underlying node tree,
-   * so node tree execution could finally run independent of the tree itself.
-   * This would allow node trees to be merely linked by other data (materials, textures, etc.),
-   * as ID data is supposed to.
-   * Execution data is generated from the tree once at execution start and can then be used
-   * as long as necessary, even while the tree is being modified.
-   */
-  struct bNodeTreeExec *execdata;
-
-  /* Callbacks. */
-  void (*progress)(void *, float progress);
-  /** \warning may be called by different threads */
-  void (*stats_draw)(void *, const char *str);
-  bool (*test_break)(void *);
-  void (*update_draw)(void *);
-  void *tbh, *prh, *sdh, *udh;
-
   /** Image representing what the node group does. */
   struct PreviewImage *preview;
 
   bNodeTreeRuntimeHandle *runtime;
 
 #ifdef __cplusplus
+
+  /** A span containing all nodes in the node tree. */
+  blender::Span<bNode *> all_nodes();
+  blender::Span<const bNode *> all_nodes() const;
+
+  /** Retrieve a node based on its persistent integer identifier. */
+  struct bNode *node_by_id(int32_t identifier);
+  const struct bNode *node_by_id(int32_t identifier) const;
+
   /**
    * Update a run-time cache for the node tree based on it's current state. This makes many methods
    * available which allow efficient lookup for topology information (like neighboring sockets).
@@ -595,9 +573,6 @@ typedef struct bNodeTree {
   /* The following methods are only available when #bNodeTree.ensure_topology_cache has been
    * called. */
 
-  /** A span containing all nodes in the node tree. */
-  blender::Span<bNode *> all_nodes();
-  blender::Span<const bNode *> all_nodes() const;
   /** A span containing all group nodes in the node tree. */
   blender::Span<bNode *> group_nodes();
   blender::Span<const bNode *> group_nodes() const;
@@ -1559,8 +1534,8 @@ typedef struct NodeGeometrySeparateGeometry {
 } NodeGeometrySeparateGeometry;
 
 typedef struct NodeGeometryImageTexture {
-  int interpolation;
-  int extension;
+  int8_t interpolation;
+  int8_t extension;
 } NodeGeometryImageTexture;
 
 typedef struct NodeGeometryViewer {
@@ -2059,6 +2034,14 @@ typedef enum CMPNodeToneMapType {
   CMP_NODE_TONE_MAP_SIMPLE = 0,
   CMP_NODE_TONE_MAP_PHOTORECEPTOR = 1,
 } CMPNodeToneMapType;
+
+/* Track Position Node. Stored in custom1. */
+typedef enum CMPNodeTrackPositionMode {
+  CMP_NODE_TRACK_POSITION_ABSOLUTE = 0,
+  CMP_NODE_TRACK_POSITION_RELATIVE_START = 1,
+  CMP_NODE_TRACK_POSITION_RELATIVE_FRAME = 2,
+  CMP_NODE_TRACK_POSITION_ABSOLUTE_FRAME = 3,
+} CMPNodeTrackPositionMode;
 
 /* Plane track deform node. */
 

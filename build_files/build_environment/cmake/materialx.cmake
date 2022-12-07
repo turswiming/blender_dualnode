@@ -8,6 +8,8 @@ set(MATERIALX_EXTRA_ARGS
   -DMATERIALX_PYTHON_VERSION=${PYTHON_SHORT_VERSION}
   -DMATERIALX_BUILD_SHARED_LIBS=ON
   -DCMAKE_DEBUG_POSTFIX=_d
+  -Dpybind11_ROOT=${LIBDIR}/pybind11
+  -DPython_EXECUTABLE=${PYTHON_BINARY}
 )
 
 ExternalProject_Add(external_materialx
@@ -47,3 +49,9 @@ if(WIN32)
   unset(MATERIALX_PYTHON_TARGET)
   unset(MATERIALX_PYTHON_TARGET_DOS)
 endif()
+
+add_dependencies(
+  external_materialx
+  external_python
+  external_pybind11
+)

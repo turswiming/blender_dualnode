@@ -2,10 +2,10 @@
 
 set(OPENCOLORIO_EXTRA_ARGS
   -DOCIO_BUILD_APPS=OFF
-  -DOCIO_BUILD_PYTHON=OFF
+  -DOCIO_BUILD_PYTHON=ON
   -DOCIO_BUILD_NUKE=OFF
   -DOCIO_BUILD_JAVA=OFF
-  -DBUILD_SHARED_LIBS=OFF
+  -DBUILD_SHARED_LIBS=ON
   -DOCIO_BUILD_DOCS=OFF
   -DOCIO_BUILD_TESTS=OFF
   -DOCIO_BUILD_GPU_TESTS=OFF
@@ -23,7 +23,21 @@ set(OPENCOLORIO_EXTRA_ARGS
   -Dminizip-ng_LIBRARY=${LIBDIR}/minizipng/lib/libminizip${LIBEXT}
   -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
   -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
+  -DPython_EXECUTABLE=${PYTHON_BINARY}
+  -Dpybind11_ROOT=${LIBDIR}/pybind11
 )
+
+if(APPLE)
+  set(OPENCOLORIO_EXTRA_ARGS
+    ${OPENCOLORIO_EXTRA_ARGS}
+    "-DCMAKE_SHARED_LINKER_FLAGS=-liconv ${LIBDIR}/bzip2/lib/${LIBPREFIX}bz2${LIBEXT}"
+  )
+elseif(UNIX)
+  set(OPENCOLORIO_EXTRA_ARGS
+    ${OPENCOLORIO_EXTRA_ARGS}
+    "-DCMAKE_SHARED_LINKER_FLAGS=${LIBDIR}/bzip2/lib/${LIBPREFIX}bz2${LIBEXT}"
+  )
+endif()
 
 if(BLENDER_PLATFORM_ARM)
   set(OPENCOLORIO_EXTRA_ARGS
@@ -33,11 +47,16 @@ if(BLENDER_PLATFORM_ARM)
 endif()
 
 if(WIN32)
+  set(OPENCOLORIO_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DIMATH_DLL")
+  if(BUILD_MODE STREQUAL Debug)
+    set(OPENCOLORIO_CXX_FLAGS "${OPENCOLORIO_CXX_FLAGS} -DPy_DEBUG")
+  endif()
   set(OPENCOLORIO_EXTRA_ARGS
     ${OPENCOLORIO_EXTRA_ARGS}
-    -Dexpat_LIBRARY=${LIBDIR}/expat/lib/libexpatMD
-    -DImath_LIBRARY=${LIBDIR}/imath/lib/imath${OPENEXR_VERSION_POSTFIX}
-    -DCMAKE_CXX_FLAGS=-DIMATH_DLL
+    -DCMAKE_DEBUG_POSTFIX=_d
+    -Dexpat_LIBRARY=${LIBDIR}/expat/lib/libexpat$<$<STREQUAL:${BUILD_MODE},Debug>:d>MD${LIBEXT}
+    -DImath_LIBRARY=${LIBDIR}/imath/lib/imath${OPENEXR_VERSION_POSTFIX}${LIBEXT}
+    -DCMAKE_CXX_FLAGS=${OPENCOLORIO_CXX_FLAGS}
   )
 else()
   set(OPENCOLORIO_EXTRA_ARGS
@@ -64,26 +83,24 @@ add_dependencies(
   external_pystring
   external_zlib
   external_minizipng
+  external_python
+  external_pybind11
 )
 
 if(WIN32)
   if(BUILD_MODE STREQUAL Release)
     ExternalProject_Add_Step(external_opencolorio after_install
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/opencolorio/include ${HARVEST_TARGET}/opencolorio/include
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/opencolorio/bin/OpenColorIO_2_2.dll ${HARVEST_TARGET}/opencolorio/bin/OpenColorIO_2_2.dll
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/opencolorio/lib ${HARVEST_TARGET}/opencolorio/lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/yamlcpp/lib/yaml-cpp.lib ${HARVEST_TARGET}/opencolorio/lib/yaml-cpp.lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/expat/lib/libexpatMD.lib ${HARVEST_TARGET}/opencolorio/lib/libexpatMD.lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/pystring/lib/pystring.lib ${HARVEST_TARGET}/opencolorio/lib/pystring.lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/minizipng/lib/libminizip.lib ${HARVEST_TARGET}/opencolorio/lib/libminizip.lib
       DEPENDEES install
     )
   endif()
   if(BUILD_MODE STREQUAL Debug)
     ExternalProject_Add_Step(external_opencolorio after_install
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/opencolorio/lib/Opencolorio.lib ${HARVEST_TARGET}/opencolorio/lib/OpencolorIO_d.lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/yamlcpp/lib/yaml-cppd.lib ${HARVEST_TARGET}/opencolorio/lib/yaml-cppd.lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/expat/lib/libexpatdMD.lib ${HARVEST_TARGET}/opencolorio/lib/libexpatdMD.lib
-      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/pystring/lib/pystring.lib ${HARVEST_TARGET}/opencolorio/lib/pystring_d.lib
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/opencolorio/bin/OpenColorIO_d_2_2.dll ${HARVEST_TARGET}/opencolorio/bin/OpenColorIO_d_2_2.dll
+      COMMAND ${CMAKE_COMMAND} -E copy ${LIBDIR}/opencolorio/lib/Opencolorio_d.lib ${HARVEST_TARGET}/opencolorio/lib/OpenColorIO_d.lib
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${LIBDIR}/opencolorio/lib/site-packages ${HARVEST_TARGET}/opencolorio/lib/site-packages-debug
       DEPENDEES install
     )
   endif()

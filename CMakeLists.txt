@@ -331,7 +331,7 @@ option(WITH_ALEMBIC             "Enable Alembic Support" ON)
 option(WITH_USD                 "Enable Universal Scene Description (USD) Support" ON)
 
 # MaterialX
-option(WITH_MATERIALX           "Enable MaterialX Support" ON)
+option(WITH_MATERIALX           "Enable MaterialX Support" OFF)
 
 # 3D format support
 # Disable opencollada when we don't have precompiled libs
@@ -1242,12 +1242,11 @@ if(WITH_OPENGL)
   add_definitions(-DWITH_OPENGL)
 endif()
 
-
-# -----------------------------------------------------------------------------
+#-----------------------------------------------------------------------------
 # Configure Vulkan.
 
 if(WITH_VULKAN_BACKEND)
-  add_definitions(-DWITH_VULKAN_BACKEND)
+  list(APPEND BLENDER_GL_LIBRARIES ${VULKAN_LIBRARIES})
 endif()
 
 # -----------------------------------------------------------------------------

@@ -71,6 +71,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.h"
 #include "BKE_packedFile.h"
 #include "BKE_report.h"
@@ -2753,7 +2754,7 @@ static void image_walk_ntree_all_users(
 {
   switch (ntree->type) {
     case NTREE_SHADER:
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+      for (bNode *node : ntree->all_nodes()) {
         if (node->id) {
           if (node->type == SH_NODE_TEX_IMAGE) {
             NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
@@ -2769,7 +2770,7 @@ static void image_walk_ntree_all_users(
       }
       break;
     case NTREE_TEXTURE:
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+      for (bNode *node : ntree->all_nodes()) {
         if (node->id && node->type == TEX_NODE_IMAGE) {
           Image *ima = (Image *)node->id;
           ImageUser *iuser = static_cast<ImageUser *>(node->storage);
@@ -2778,7 +2779,7 @@ static void image_walk_ntree_all_users(
       }
       break;
     case NTREE_COMPOSIT:
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+      for (bNode *node : ntree->all_nodes()) {
         if (node->id && node->type == CMP_NODE_IMAGE) {
           Image *ima = (Image *)node->id;
           ImageUser *iuser = static_cast<ImageUser *>(node->storage);
