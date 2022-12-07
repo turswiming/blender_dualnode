@@ -179,6 +179,7 @@ struct USDImportParams {
   bool import_textures;
   char import_textures_dir[1024];
   bool overwrite_textures;
+  bool import_defined_only;
 };
 
 /* The USD_export takes a as_background_job parameter, and returns a boolean.

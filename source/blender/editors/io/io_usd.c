@@ -1084,6 +1084,8 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
 
   const bool import_visible_only = RNA_boolean_get(op->ptr, "import_visible_only");
 
+  const bool import_defined_only = RNA_boolean_get(op->ptr, "import_defined_only");
+
   const bool create_collection = RNA_boolean_get(op->ptr, "create_collection");
 
   char prim_path_mask[1024];
@@ -1171,7 +1173,8 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
                                    .attr_import_mode = attr_import_mode,
                                    .import_shapes = import_shapes,
                                    .import_textures = import_textures,
-                                   .overwrite_textures = overwrite_textures};
+                                   .overwrite_textures = overwrite_textures,
+                                   .import_defined_only = import_defined_only};
 
   STRNCPY(params.prim_path_mask, prim_path_mask);
   STRNCPY(params.import_textures_dir, import_textures_dir);
@@ -1221,6 +1224,7 @@ static void wm_usd_import_draw(bContext *UNUSED(C), wmOperator *op)
   uiItemR(col, ptr, "import_subdiv", 0, IFACE_("Subdivision"), ICON_NONE);
   uiItemR(col, ptr, "import_instance_proxies", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "import_visible_only", 0, NULL, ICON_NONE);
+  uiItemR(col, ptr, "import_defined_only", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "import_guide", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "import_proxy", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "import_render", 0, NULL, ICON_NONE);
@@ -1340,6 +1344,13 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
                   "Do not import invisible USD primitives. "
                   "Only applies to primitives with a non-animated visibility attribute. "
                   "Primitives with animated visibility will always be imported");
+
+   RNA_def_boolean(ot->srna,
+                  "import_defined_only",
+                  true,
+                  "Defined Primitives Only",
+                  "Turn this off to allow importing USD primitives which are not defined, "
+                  "for example, to load overrides with the Path Mask");
 
   RNA_def_boolean(ot->srna,
                   "create_collection",
