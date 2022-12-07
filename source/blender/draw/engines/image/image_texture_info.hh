@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "BLI_math_vec_types.hh"
 #include "BLI_rect.h"
 
 #include "GPU_batch.h"
@@ -59,6 +60,17 @@ struct TextureInfo {
       GPU_texture_free(texture);
       texture = nullptr;
     }
+  }
+
+  /**
+   * \brief return the offset of the texture with the area.
+   *
+   * A texture covers only a part of the area. The offset if the offset in screen coordinates
+   * between the area and the part that the texture covers.
+   */
+  int2 offset() const
+  {
+    return int2(clipping_bounds.xmin, clipping_bounds.ymin);
   }
 
   void print_debug()

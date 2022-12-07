@@ -95,8 +95,6 @@ struct FullScreenTextures {
     instance_data->texture_infos[1].dirty = true;
     instance_data->texture_infos[2].dirty = true;
     instance_data->texture_infos[3].dirty = true;
-
-    instance_data->texture_infos[0].print_debug();
   }
 };
 
@@ -141,6 +139,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
       }
 
       DRWShadingGroup *shgrp_sub = DRW_shgroup_create_sub(shgrp);
+      DRW_shgroup_uniform_ivec2_copy(shgrp_sub, "offset", info.offset());
       DRW_shgroup_uniform_texture_ex(shgrp_sub, "imageTexture", info.texture, GPU_SAMPLER_DEFAULT);
       DRW_shgroup_call_obmat(shgrp_sub, info.batch, image_mat);
     }
@@ -466,10 +465,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     BLI_rctf_transform_calc_m4_pivot_min(&tile_area, &texture_area, uv_to_texel.ptr());
     invert_m4(uv_to_texel.ptr());
 
-    print_rctf_id(&tile_area);
-    print_rctf_id(&texture_area);
-    print_m4_id(uv_to_texel.ptr());
-
     rctf crop_rect;
     rctf *crop_rect_ptr = nullptr;
     eIMBTransformMode transform_mode;
@@ -481,8 +476,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
       crop_rect_ptr = &crop_rect;
       transform_mode = IMB_TRANSFORM_MODE_CROP_SRC;
     }
-
-    // transform_mode = IMB_TRANSFORM_MODE_REGULAR;
 
     IMB_transform(float_tile_buffer,
                   &texture_buffer,
@@ -509,7 +502,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     instance_data->partial_update.ensure_image(image);
     instance_data->clear_dirty_flag();
     instance_data->float_buffers.reset_usage_flags();
-    printf("\n");
 
     /* Step: Find out which screen space textures are needed to draw on the screen. Remove the
      * screen space textures that aren't needed. */
