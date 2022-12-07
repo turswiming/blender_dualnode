@@ -33,10 +33,6 @@ struct FullScreenTextures {
 
   /**
    * \brief Update the uv and region bounds of all texture_infos of instance_data.
-   *
-   * - calculate the uv span of the area.
-   * - compare the uv span with the uv span of a single texture to determine if the textures should
-   * be regenerated.
    */
   void update_bounds(const ARegion *region)
   {
@@ -472,13 +468,12 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     rctf texture_area;
     rctf tile_area;
 
-    // TODO add tile size.
     BLI_rctf_init(&texture_area, 0.0, texture_width, 0.0, texture_height);
     BLI_rctf_init(&tile_area,
-                  tile_buffer.x * texture_info.clipping_uv_bounds.xmin,
-                  tile_buffer.x * texture_info.clipping_uv_bounds.xmax,
-                  tile_buffer.y * texture_info.clipping_uv_bounds.ymin,
-                  tile_buffer.y * texture_info.clipping_uv_bounds.ymax);
+                  tile_buffer.x * (texture_info.clipping_uv_bounds.xmin - image_tile.get_tile_x_offset()),
+                  tile_buffer.x * (texture_info.clipping_uv_bounds.xmax - image_tile.get_tile_x_offset()),
+                  tile_buffer.y * (texture_info.clipping_uv_bounds.ymin - image_tile.get_tile_y_offset()),
+                  tile_buffer.y * (texture_info.clipping_uv_bounds.ymax - image_tile.get_tile_y_offset()));
     BLI_rctf_transform_calc_m4_pivot_min(&tile_area, &texture_area, uv_to_texel.ptr());
     invert_m4(uv_to_texel.ptr());
 
