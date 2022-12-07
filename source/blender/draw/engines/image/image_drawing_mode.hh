@@ -265,7 +265,8 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
       if (iterator.tile_data.tile_buffer == nullptr) {
         continue;
       }
-      ImBuf *tile_buffer = ensure_float_buffer(instance_data, iterator.tile_data.tile_buffer);
+      ImBuf *tile_buffer = instance_data.float_buffers.cached_float_buffer(
+          iterator.tile_data.tile_buffer);
       if (tile_buffer != iterator.tile_data.tile_buffer) {
         do_partial_update_float_buffer(tile_buffer, iterator);
       }
@@ -422,19 +423,6 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
   }
 
   /**
-   * \brief Ensure that the float buffer of the given image buffer is available.
-   *
-   * Returns true when a float buffer was created. Somehow the sequencer cache increases the ref
-   * counter, but might use a different mechanism for destructing the image, that doesn't free the
-   * rect_float as the reference-counter isn't 0. To work around this we destruct any created local
-   * buffers ourself.
-   */
-  ImBuf *ensure_float_buffer(IMAGE_InstanceData &instance_data, ImBuf *image_buffer) const
-  {
-    return instance_data.float_buffers.ensure_float_buffer(image_buffer);
-  }
-
-  /**
    * texture_buffer is the image buffer belonging to the texture_info.
    * tile_buffer is the image buffer of the tile.
    */
@@ -446,7 +434,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
   {
     const int texture_width = texture_buffer.x;
     const int texture_height = texture_buffer.y;
-    ImBuf *float_tile_buffer = ensure_float_buffer(instance_data, &tile_buffer);
+    ImBuf *float_tile_buffer = instance_data.float_buffers.cached_float_buffer(&tile_buffer);
 
     /* IMB_transform works in a non-consistent space. This should be documented or fixed!.
      * Construct a variant of the info_uv_to_texture that adds the texel space
