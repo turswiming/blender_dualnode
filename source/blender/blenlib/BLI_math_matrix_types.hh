@@ -17,8 +17,18 @@
 
 #include "BLI_math_vec_types.hh"
 #include "BLI_utildefines.h"
+#include "BLI_utility_mixins.hh"
 
 namespace blender {
+
+template<typename T,
+         int NumCol,
+         int NumRow,
+         int SrcNumCol,
+         int SrcNumRow,
+         int SrcStartCol,
+         int SrcStartRow>
+struct MatView;
 
 template<typename T, int NumCol, int NumRow>
 struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRow>, NumCol> {
@@ -149,6 +159,27 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
   T *base_ptr()
   {
     return reinterpret_cast<T *>(this);
+  }
+
+  /** View creation. */
+
+  template<int ViewNumCol = NumCol,
+           int ViewNumRow = NumRow,
+           int SrcStartCol = 0,
+           int SrcStartRow = 0>
+  const MatView<T, ViewNumCol, ViewNumRow, NumCol, NumRow, SrcStartCol, SrcStartRow> view() const
+  {
+    return MatView<T, ViewNumCol, ViewNumRow, NumCol, NumRow, SrcStartCol, SrcStartRow>(
+        const_cast<MatBase &>(*this));
+  }
+
+  template<int ViewNumCol = NumCol,
+           int ViewNumRow = NumRow,
+           int SrcStartCol = 0,
+           int SrcStartRow = 0>
+  MatView<T, ViewNumCol, ViewNumRow, NumCol, NumRow, SrcStartCol, SrcStartRow> view()
+  {
+    return MatView<T, ViewNumCol, ViewNumRow, NumCol, NumRow, SrcStartCol, SrcStartRow>(*this);
   }
 
   /** Array access. */
@@ -382,7 +413,7 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
     return !(a == b);
   }
 
-  /** Misc */
+  /** Miscellaneous. */
 
   static MatBase identity()
   {
@@ -405,6 +436,336 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const MatBase &mat)
+  {
+    stream << "(\n";
+    for (int i = 0; i < NumCol; i++) {
+      stream << "(";
+      for (int j = 0; j < NumRow; j++) {
+        /** NOTE: j and i are swapped to follow mathematical convention. */
+        stream << mat[j][i];
+        if (j < NumRow - 1) {
+          stream << ", ";
+        }
+      }
+      stream << ")";
+      if (i < NumCol - 1) {
+        stream << ",";
+      }
+      stream << "\n";
+    }
+    stream << ")\n";
+    return stream;
+  }
+};
+
+template<typename T,
+         /** The view dimensions. */
+         int NumCol,
+         int NumRow,
+         /** The source matrix dimensions. */
+         int SrcNumCol,
+         int SrcNumRow,
+         /** The base offset inside the source matrix. */
+         int SrcStartCol,
+         int SrcStartRow>
+struct MatView : NonCopyable, NonMovable {
+  using MatT = MatBase<T, NumCol, NumRow>;
+  using SrcMatT = MatBase<T, SrcNumCol, SrcNumRow>;
+  using col_type = vec_base<T, NumRow>;
+  using row_type = vec_base<T, NumCol>;
+
+ private:
+  SrcMatT &src_;
+
+ public:
+  MatView() = delete;
+
+  MatView(SrcMatT &src) : src_(src)
+  {
+    BLI_STATIC_ASSERT(SrcStartCol < SrcNumCol, "View does not fit source matrix dimensions");
+    BLI_STATIC_ASSERT(SrcStartRow < SrcNumRow, "View does not fit source matrix dimensions");
+  }
+
+  /** Array access. */
+
+  const col_type &operator[](int index) const
+  {
+    BLI_assert(index >= 0);
+    BLI_assert(index < NumCol);
+    return *reinterpret_cast<const col_type *>(&src_[index + SrcStartCol][SrcStartRow]);
+  }
+
+  col_type &operator[](int index)
+  {
+    BLI_assert(index >= 0);
+    BLI_assert(index < NumCol);
+    return *reinterpret_cast<col_type *>(&src_[index + SrcStartCol][SrcStartRow]);
+  }
+
+  /** Conversion back to matrix. */
+
+  operator MatT() const
+  {
+    MatT mat;
+    unroll<NumCol>([&](auto c) { mat[c] = (*this)[c]; });
+    return mat;
+  }
+
+  /** Copy Assignment. */
+
+  template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
+  MatView &operator=(const MatView<T,
+                                   NumCol,
+                                   NumRow,
+                                   OtherSrcNumCol,
+                                   OtherSrcNumRow,
+                                   OtherSrcStartCol,
+                                   OtherSrcStartRow> &other)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] = other[i]; });
+    return *this;
+  }
+
+  MatView &operator=(const MatT &other)
+  {
+    *this = other.template view();
+    return *this;
+  }
+
+  /** Matrix operators. */
+
+  friend MatT operator+(const MatView &a, T b)
+  {
+    MatT result;
+    unroll<NumCol>([&](auto i) { result[i] = a[i] + b; });
+    return result;
+  }
+
+  friend MatT operator+(T a, const MatView &b)
+  {
+    return b + a;
+  }
+
+  template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
+  MatView &operator+=(const MatView<T,
+                                    NumCol,
+                                    NumRow,
+                                    OtherSrcNumCol,
+                                    OtherSrcNumRow,
+                                    OtherSrcStartCol,
+                                    OtherSrcStartRow> &b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] += b[i]; });
+    return *this;
+  }
+
+  MatView &operator+=(const MatT &b)
+  {
+    return *this += b.template view();
+  }
+
+  MatView &operator+=(T b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] += b; });
+    return *this;
+  }
+
+  friend MatT operator-(const MatView &a)
+  {
+    MatT result;
+    unroll<NumCol>([&](auto i) { result[i] = -a[i]; });
+    return result;
+  }
+
+  template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
+  friend MatT operator-(const MatView &a,
+                        const MatView<T,
+                                      NumCol,
+                                      NumRow,
+                                      OtherSrcNumCol,
+                                      OtherSrcNumRow,
+                                      OtherSrcStartCol,
+                                      OtherSrcStartRow> &b)
+  {
+    MatT result;
+    unroll<NumCol>([&](auto i) { result[i] = a[i] - b[i]; });
+    return result;
+  }
+
+  friend MatT operator-(const MatView &a, const MatT &b)
+  {
+    return a - b.template view();
+  }
+
+  template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
+  friend MatT operator-(const MatView<T,
+                                      NumCol,
+                                      NumRow,
+                                      OtherSrcNumCol,
+                                      OtherSrcNumRow,
+                                      OtherSrcStartCol,
+                                      OtherSrcStartRow> &a,
+                        const MatView &b)
+  {
+    MatT result;
+    unroll<NumCol>([&](auto i) { result[i] = a[i] - b[i]; });
+    return result;
+  }
+
+  friend MatT operator-(const MatT &a, const MatView &b)
+  {
+    return a.template view() - b;
+  }
+
+  friend MatT operator-(const MatView &a, T b)
+  {
+    MatT result;
+    unroll<NumCol>([&](auto i) { result[i] = a[i] - b; });
+    return result;
+  }
+
+  friend MatView operator-(T a, const MatView &b)
+  {
+    MatView result;
+    unroll<NumCol>([&](auto i) { result[i] = a - b[i]; });
+    return result;
+  }
+
+  template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
+  MatView &operator-=(const MatView<T,
+                                    NumCol,
+                                    NumRow,
+                                    OtherSrcNumCol,
+                                    OtherSrcNumRow,
+                                    OtherSrcStartCol,
+                                    OtherSrcStartRow> &b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] -= b[i]; });
+    return *this;
+  }
+
+  MatView &operator-=(const MatT &b)
+  {
+    return *this -= b.template view();
+  }
+
+  MatView &operator-=(T b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] -= b; });
+    return *this;
+  }
+
+  /** Multiply two matrices using matrix multiplication. */
+  template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
+  MatT operator*(const MatView<T,
+                               NumCol,
+                               NumRow,
+                               OtherSrcNumCol,
+                               OtherSrcNumRow,
+                               OtherSrcStartCol,
+                               OtherSrcStartRow> &b) const
+  {
+    const MatView &a = *this;
+    /* This is the reference implementation.
+     * Might be overloaded with vectorized / optimized code. */
+    /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
+    MatT result(0);
+    unroll<NumCol>([&](auto c) {
+      unroll<NumRow>([&](auto r) {
+        /* This is vector multiplication. */
+        result[c] += b[c][r] * a[r];
+      });
+    });
+    return result;
+  }
+
+  MatT operator*(const MatT &b) const
+  {
+    return *this * b.template view();
+  }
+
+  /** Multiply each component by a scalar. */
+  friend MatT operator*(const MatView &a, T b)
+  {
+    MatT result;
+    unroll<NumCol>([&](auto i) { result[i] = a[i] * b; });
+    return result;
+  }
+
+  /** Multiply each component by a scalar. */
+  friend MatT operator*(T a, const MatView &b)
+  {
+    return b * a;
+  }
+
+  /** Multiply two matrices using matrix multiplication. */
+  template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
+  MatView &operator*=(const MatView<T,
+                                    NumCol,
+                                    NumRow,
+                                    OtherSrcNumCol,
+                                    OtherSrcNumRow,
+                                    OtherSrcStartCol,
+                                    OtherSrcStartRow> &b)
+  {
+    const MatView &a = *this;
+    *this = a * b;
+    return *this;
+  }
+
+  MatView &operator*=(const MatT &b)
+  {
+    return *this *= b.template view();
+  }
+
+  /** Multiply each component by a scalar. */
+  MatView &operator*=(T b)
+  {
+    unroll<NumCol>([&](auto i) { (*this)[i] *= b; });
+    return *this;
+  }
+
+  /** Vector operators. */
+
+  friend col_type operator*(const MatView &a, const row_type &b)
+  {
+    /* This is the reference implementation.
+     * Might be overloaded with vectorized / optimized code. */
+    col_type result(0);
+    unroll<NumCol>([&](auto c) { result += b[c] * a[c]; });
+    return result;
+  }
+
+  /** Multiply by the transposed. */
+  friend row_type operator*(const col_type &a, const MatView &b)
+  {
+    /* This is the reference implementation.
+     * Might be overloaded with vectorized / optimized code. */
+    row_type result(0);
+    unroll<NumCol>([&](auto c) { unroll<NumRow>([&](auto r) { result[c] += b[c][r] * a[r]; }); });
+    return result;
+  }
+
+  /** Compare. */
+
+  friend bool operator==(const MatView &a, const MatView &b)
+  {
+    for (int i = 0; i < NumCol; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  friend bool operator!=(const MatView &a, const MatView &b)
+  {
+    return !(a == b);
+  }
+
+  /** Miscellaneous. */
+
+  friend std::ostream &operator<<(std::ostream &stream, const MatView &mat)
   {
     stream << "(\n";
     for (int i = 0; i < NumCol; i++) {

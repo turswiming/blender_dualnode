@@ -32,14 +32,16 @@ template<typename T, int NumCol, int NumRow>
 /**
  * Normalize individually each column of the matrix.
  */
-template<typename MatT> [[nodiscard]] MatT normalize(const MatT &a);
+template<typename T, int NumCol, int NumRow>
+[[nodiscard]] MatBase<T, NumCol, NumRow> normalize(const MatBase<T, NumCol, NumRow> &a);
 
 /**
  * Normalize individually each column of the matrix.
  * Return the length of each column vector.
  */
-template<typename MatT, typename VectorT>
-[[nodiscard]] MatT normalize_and_get_size(const MatT &a, VectorT &r_size);
+template<typename T, int NumCol, int NumRow, typename VectorT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> normalize_and_get_size(
+    const MatBase<T, NumCol, NumRow> &a, VectorT &r_size);
 
 /**
  * Returns the determinant of the matrix.
@@ -558,6 +560,40 @@ template<typename T, int NumCol, int NumRow>
 {
   MatBase<T, NumCol, NumRow> result;
   unroll<NumCol>([&](auto c) { result[c] = interpolate(a[c], b[c], t); });
+  return result;
+}
+
+template<typename T,
+         int NumCol,
+         int NumRow,
+         int SrcNumCol,
+         int SrcNumRow,
+         int SrcStartCol,
+         int SrcStartRow>
+[[nodiscard]] MatBase<T, NumCol, NumRow> normalize(
+    const MatView<T, NumCol, NumRow, SrcNumCol, SrcNumRow, SrcStartCol, SrcStartRow> &a)
+{
+  MatBase<T, NumCol, NumRow> result;
+  unroll<NumCol>([&](auto i) { result[i] = math::normalize(a[i]); });
+  return result;
+}
+
+template<typename T,
+         int NumCol,
+         int NumRow,
+         int SrcNumCol,
+         int SrcNumRow,
+         int SrcStartCol,
+         int SrcStartRow,
+         typename VectorT>
+[[nodiscard]] MatBase<T, NumCol, NumRow> normalize_and_get_size(
+    const MatView<T, NumCol, NumRow, SrcNumCol, SrcNumRow, SrcStartCol, SrcStartRow> &a,
+    VectorT &r_size)
+{
+  BLI_STATIC_ASSERT(VectorT::type_length == NumCol,
+                    "r_size dimension should be equal to matrix column count.");
+  MatBase<T, NumCol, NumRow> result;
+  unroll<NumCol>([&](auto i) { result[i] = math::normalize_and_get_length(a[i], r_size[i]); });
   return result;
 }
 

@@ -239,4 +239,103 @@ TEST(math_matrix_types, VectorMultiplyOperator)
   EXPECT_EQ(result2[2], 28);
 }
 
+TEST(math_matrix_types, ViewConstructor)
+{
+  float4x4 mat = float4x4(
+      float4(1, 2, 3, 4), float4(5, 6, 7, 8), float4(9, 10, 11, 12), float4(13, 14, 15, 16));
+
+  auto view = mat.view<2, 2, 1, 1>();
+  EXPECT_EQ(view[0][0], 6);
+  EXPECT_EQ(view[0][1], 7);
+  EXPECT_EQ(view[1][0], 10);
+  EXPECT_EQ(view[1][1], 11);
+
+  float2x2 center = view;
+  EXPECT_EQ(center[0][0], 6);
+  EXPECT_EQ(center[0][1], 7);
+  EXPECT_EQ(center[1][0], 10);
+  EXPECT_EQ(center[1][1], 11);
+}
+
+TEST(math_matrix_types, ViewAssignment)
+{
+  float4x4 mat = float4x4(
+      float4(1, 2, 3, 4), float4(5, 6, 7, 8), float4(9, 10, 11, 12), float4(13, 14, 15, 16));
+
+  mat.view<2, 2, 1, 1>() = float2x2({-1, -2}, {-3, -4});
+
+  float4x4 expect = float4x4({1, 2, 3, 4}, {5, -1, -2, 8}, {9, -3, -4, 12}, {13, 14, 15, 16});
+  EXPECT_M4_NEAR(expect, mat, 1e-8f);
+}
+
+TEST(math_matrix_types, ViewScalarOperators)
+{
+  float4x4 mat = float4x4({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 10, 11, 12}, {13, 14, 15, 16});
+
+  auto view = mat.view<2, 2, 1, 1>();
+  EXPECT_EQ(view[0][0], 6);
+  EXPECT_EQ(view[0][1], 7);
+  EXPECT_EQ(view[1][0], 10);
+  EXPECT_EQ(view[1][1], 11);
+
+  view += 1;
+  EXPECT_EQ(view[0][0], 7);
+  EXPECT_EQ(view[0][1], 8);
+  EXPECT_EQ(view[1][0], 11);
+  EXPECT_EQ(view[1][1], 12);
+
+  view -= 2;
+  EXPECT_EQ(view[0][0], 5);
+  EXPECT_EQ(view[0][1], 6);
+  EXPECT_EQ(view[1][0], 9);
+  EXPECT_EQ(view[1][1], 10);
+
+  view *= 4;
+  EXPECT_EQ(view[0][0], 20);
+  EXPECT_EQ(view[0][1], 24);
+  EXPECT_EQ(view[1][0], 36);
+  EXPECT_EQ(view[1][1], 40);
+
+  /* Since we modified the view, we expect the source to have changed. */
+  float4x4 expect = float4x4({1, 2, 3, 4}, {5, 20, 24, 8}, {9, 36, 40, 12}, {13, 14, 15, 16});
+  EXPECT_M4_NEAR(expect, mat, 1e-8f);
+
+  view = -view;
+  EXPECT_EQ(view[0][0], -20);
+  EXPECT_EQ(view[0][1], -24);
+  EXPECT_EQ(view[1][0], -36);
+  EXPECT_EQ(view[1][1], -40);
+}
+
+TEST(math_matrix_types, ViewMatrixMultiplyOperator)
+{
+  float4x4 mat = float4x4({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 10, 11, 12}, {13, 14, 15, 16});
+  auto view = mat.view<2, 2, 1, 1>();
+  view = float2x2({1, 2}, {3, 4});
+
+  float2x2 result = view * float2x2({5, 6}, {7, 8});
+  EXPECT_EQ(result[0][0], 23);
+  EXPECT_EQ(result[0][1], 34);
+  EXPECT_EQ(result[1][0], 31);
+  EXPECT_EQ(result[1][1], 46);
+
+  view *= float2x2({5, 6}, {7, 8});
+  EXPECT_EQ(view[0][0], 23);
+  EXPECT_EQ(view[0][1], 34);
+  EXPECT_EQ(view[1][0], 31);
+  EXPECT_EQ(view[1][1], 46);
+}
+
+TEST(math_matrix_types, ViewMatrixNormalize)
+{
+  float4x4 mat = float4x4({1, 2, 3, 4}, {5, 6, 7, 8}, {9, 10, 11, 12}, {13, 14, 15, 16});
+  my_float4x4.view<3, 3>() = normalize(my_float4x4.view<3, 3>());
+
+  float4x4 expect = float4x4({0.267261236, 0.534522473, 0.80178368, 4},
+                             {0.476731300, 0.572077572, 0.66742378, 8},
+                             {0.517891824, 0.575435340, 0.63297885, 12},
+                             {13, 14, 15, 16});
+  EXPECT_M4_NEAR(expect, mat, 1e-8f);
+}
+
 }  // namespace blender::tests
