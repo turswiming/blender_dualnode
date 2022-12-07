@@ -91,10 +91,10 @@ struct FullScreenTextures {
                   max_co.x,
                   mid_co.y,
                   max_co.y);
-    instance_data->texture_infos[0].dirty = true;
-    instance_data->texture_infos[1].dirty = true;
-    instance_data->texture_infos[2].dirty = true;
-    instance_data->texture_infos[3].dirty = true;
+    instance_data->texture_infos[0].need_full_update = true;
+    instance_data->texture_infos[1].need_full_update = true;
+    instance_data->texture_infos[2].need_full_update = true;
+    instance_data->texture_infos[3].need_full_update = true;
   }
 };
 
@@ -277,7 +277,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
       for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
         const TextureInfo &info = instance_data.texture_infos[i];
         /* Dirty images will receive a full update. No need to do a partial one now. */
-        if (info.dirty) {
+        if (info.need_full_update) {
           continue;
         }
         if (!info.visible) {
@@ -381,7 +381,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
   {
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
       TextureInfo &info = instance_data.texture_infos[i];
-      if (!info.dirty) {
+      if (!info.need_full_update) {
         continue;
       }
       if (!info.visible) {

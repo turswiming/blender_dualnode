@@ -93,7 +93,7 @@ struct IMAGE_InstanceData {
         DRW_texture_ensure_fullscreen_2d(
             &info.texture, GPU_RGBA16F, static_cast<DRWTextureFlag>(0));
       }
-      info.dirty |= should_be_created;
+      info.need_full_update |= should_be_created;
     }
   }
 
@@ -101,7 +101,7 @@ struct IMAGE_InstanceData {
   {
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
       TextureInfo &info = texture_infos[i];
-      if (!info.dirty) {
+      if (!info.need_full_update) {
         continue;
       }
       BatchUpdater batch_updater(info);
@@ -124,7 +124,7 @@ struct IMAGE_InstanceData {
   void reset_dirty_flag(bool new_value)
   {
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
-      texture_infos[i].dirty = new_value;
+      texture_infos[i].need_full_update = new_value;
     }
   }
 };

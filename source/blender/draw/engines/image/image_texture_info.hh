@@ -26,7 +26,7 @@ struct TextureInfo {
    *
    * When set to false the texture can be updated using a partial update.
    */
-  bool dirty : 1;
+  bool need_full_update : 1;
 
   /** \brief area of the texture in screen space. */
   rctf clipping_bounds;
