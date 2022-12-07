@@ -493,6 +493,28 @@ if(WITH_OPENCOLORIO)
     DIRECTORY ${CMAKE_SOURCE_DIR}/release/datafiles/colormanagement
     DESTINATION ${TARGETDIR_VER}/datafiles
   )
+  if(WIN32)
+    if(EXISTS ${LIBDIR}/opencolorio/bin/opencolorio_2_2.dll) # 3.5
+      windows_install_shared_manifest(
+        FILES ${LIBDIR}/opencolorio/bin/opencolorio_2_2.dll
+        RELEASE
+      )
+      windows_install_shared_manifest(
+        FILES ${LIBDIR}/opencolorio/bin/opencolorio_d_2_2.dll
+        DEBUG
+      )
+      install(
+        FILES ${LIBDIR}/opencolorio/lib/site-packages-debug/PyOpenColorIO_d.pyd
+        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+        CONFIGURATIONS Debug
+      )
+      install(
+        FILES ${LIBDIR}/opencolorio/lib/site-packages/PyOpenColorIO.pyd
+        DESTINATION ${TARGETDIR_VER}/python/lib/site-packages
+        CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+      )
+    endif()
+  endif()
 endif()
 
 # Helpful tip when using make.

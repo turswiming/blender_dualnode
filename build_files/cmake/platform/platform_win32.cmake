@@ -654,31 +654,25 @@ if(WITH_OPENCOLORIO)
     set(OPENCOLORIO ${LIBDIR}/OpenColorIO)
     set(OPENCOLORIO_INCLUDE_DIRS ${OPENCOLORIO}/include)
     set(OPENCOLORIO_LIBPATH ${OPENCOLORIO}/lib)
-    set(OPENCOLORIO_LIBRARIES
-      optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
-      optimized ${OPENCOLORIO_LIBPATH}/libexpatMD.lib
-      optimized ${OPENCOLORIO_LIBPATH}/pystring.lib
-      debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
-      debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
-      debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
-    )
-    if(EXISTS ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib) # 3.4 name
-      list(APPEND OPENCOLORIO_LIBRARIES
+    if(EXISTS ${OPENCOLORIO_LIBPATH}/libexpatMD.lib) # 3.4
+      set(OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
+        optimized ${OPENCOLORIO_LIBPATH}/libexpatMD.lib
+        optimized ${OPENCOLORIO_LIBPATH}/pystring.lib
         optimized ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib
-        debug ${OPENCOLORIO_LIBPATH}/libyaml-cpp_d.lib
-      )
-    elseif(EXISTS ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib) # 3.5 name
-      list(APPEND OPENCOLORIO_LIBRARIES
-        optimized ${OPENCOLORIO_LIBPATH}/yaml-cpp.lib
-        optimized ${OPENCOLORIO_LIBPATH}/libminizip.lib
+        debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
+        debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
+        debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
         debug ${OPENCOLORIO_LIBPATH}/yaml-cppd.lib
-        debug ${OPENCOLORIO_LIBPATH}/libminizip.lib
       )
+      set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
     else()
-      message("FATAL YAML-CPP dependency not found")
+      set(OPENCOLORIO_LIBRARIES
+        optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
+        debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
+      )
     endif()
   endif()
-  set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
 endif()
 
 if(WITH_OPENVDB)
