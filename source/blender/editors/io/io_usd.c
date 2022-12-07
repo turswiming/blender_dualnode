@@ -206,8 +206,13 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  /* If the file URI is not empty, use it for the file path. */
   char filename[FILE_MAX];
-  RNA_string_get(op->ptr, "filepath", filename);
+  RNA_string_get(op->ptr, "fileuri", filename);
+
+  if (strlen(filename) == 0) {
+    RNA_string_get(op->ptr, "filepath", filename);
+  }
 
   eUSDOperatorOptions *options = (eUSDOperatorOptions *)op->customdata;
   const bool as_background_job = (options != NULL && options->as_background_job);
@@ -413,6 +418,9 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
   }
 
   uiLayoutSetPropSep(layout, true);
+
+  box = uiLayoutBox(layout);
+  uiItemR(box, ptr, "fileuri", 0, NULL, ICON_NONE);
 
   box = uiLayoutBox(layout);
   uiItemL(box, IFACE_("USD Export"), ICON_NONE);
@@ -1010,6 +1018,8 @@ void WM_OT_usd_export(struct wmOperatorType *ot)
                MOD_TRIANGULATE_NGON_BEAUTY,
                "N-gon Method",
                "Method for splitting the n-gons into triangles");
+
+  RNA_def_string(ot->srna, "fileuri", NULL, FILE_MAX, "USD URI", "URI the USD file to import");
 }
 
 /* ====== USD Import ====== */
@@ -1030,8 +1040,13 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+   /* If the file URI is not empty, use it for the file path. */
   char filename[FILE_MAX];
-  RNA_string_get(op->ptr, "filepath", filename);
+  RNA_string_get(op->ptr, "fileuri", filename);
+
+  if (strlen(filename) == 0) {
+    RNA_string_get(op->ptr, "filepath", filename);
+  }
 
   eUSDOperatorOptions *options = (eUSDOperatorOptions *)op->customdata;
   const bool as_background_job = (options != NULL && options->as_background_job);
@@ -1180,6 +1195,9 @@ static void wm_usd_import_draw(bContext *UNUSED(C), wmOperator *op)
   uiLayoutSetPropDecorate(layout, false);
 
   uiLayout *box = uiLayoutBox(layout);
+  uiItemR(box, ptr, "fileuri", 0, NULL, ICON_NONE);
+
+  box = uiLayoutBox(layout);
   uiLayout *col = uiLayoutColumnWithHeading(box, true, IFACE_("Data Types"));
   uiItemR(col, ptr, "import_cameras", 0, NULL, ICON_NONE);
   uiItemR(col, ptr, "import_curves", 0, NULL, ICON_NONE);
@@ -1448,6 +1466,13 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
                   false,
                   "Overwrite Textures",
                   "Allow overwriting existing files when copying imported textures");
+
+  RNA_def_string(ot->srna,
+                 "fileuri",
+                 NULL,
+                 FILE_MAX,
+                 "USD URI",
+                 "URI the USD file to import");
 }
 
 #endif /* WITH_USD */
