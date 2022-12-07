@@ -469,11 +469,12 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     rctf tile_area;
 
     BLI_rctf_init(&texture_area, 0.0, texture_width, 0.0, texture_height);
-    BLI_rctf_init(&tile_area,
-                  tile_buffer.x * (texture_info.clipping_uv_bounds.xmin - image_tile.get_tile_x_offset()),
-                  tile_buffer.x * (texture_info.clipping_uv_bounds.xmax - image_tile.get_tile_x_offset()),
-                  tile_buffer.y * (texture_info.clipping_uv_bounds.ymin - image_tile.get_tile_y_offset()),
-                  tile_buffer.y * (texture_info.clipping_uv_bounds.ymax - image_tile.get_tile_y_offset()));
+    BLI_rctf_init(
+        &tile_area,
+        tile_buffer.x * (texture_info.clipping_uv_bounds.xmin - image_tile.get_tile_x_offset()),
+        tile_buffer.x * (texture_info.clipping_uv_bounds.xmax - image_tile.get_tile_x_offset()),
+        tile_buffer.y * (texture_info.clipping_uv_bounds.ymin - image_tile.get_tile_y_offset()),
+        tile_buffer.y * (texture_info.clipping_uv_bounds.ymax - image_tile.get_tile_y_offset()));
     BLI_rctf_transform_calc_m4_pivot_min(&tile_area, &texture_area, uv_to_texel.ptr());
     invert_m4(uv_to_texel.ptr());
 
@@ -512,7 +513,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
     TextureMethod method(instance_data);
 
     instance_data->partial_update.ensure_image(image);
-    instance_data->clear_dirty_flag();
+    instance_data->clear_need_full_update_flag();
     instance_data->float_buffers.reset_usage_flags();
 
     /* Step: Find out which screen space textures are needed to draw on the screen. Remove the

@@ -64,13 +64,13 @@ struct IMAGE_InstanceData {
  public:
   virtual ~IMAGE_InstanceData() = default;
 
-  void clear_dirty_flag()
+  void clear_need_full_update_flag()
   {
-    reset_dirty_flag(false);
+    reset_need_full_update(false);
   }
   void mark_all_texture_slots_dirty()
   {
-    reset_dirty_flag(true);
+    reset_need_full_update(true);
   }
 
   void update_gpu_texture_allocations()
@@ -110,14 +110,14 @@ struct IMAGE_InstanceData {
     ImageUsage usage(image, image_user, flags.do_tile_drawing);
     if (last_usage != usage) {
       last_usage = usage;
-      reset_dirty_flag(true);
+      reset_need_full_update(true);
       float_buffers.clear();
     }
   }
 
  private:
   /** \brief Set dirty flag of all texture slots to the given value. */
-  void reset_dirty_flag(bool new_value)
+  void reset_need_full_update(bool new_value)
   {
     for (int i = 0; i < SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN; i++) {
       texture_infos[i].need_full_update = new_value;
