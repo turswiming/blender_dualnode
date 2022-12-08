@@ -105,7 +105,7 @@ using namespace blender::math;
 
 TEST(math_matrix, MatrixInverse)
 {
-  float3x3 mat(2);
+  float3x3 mat = float3x3::diagonal(2);
   float3x3 inv = invert(mat);
   float3x3 expect = float3x3({0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f}, {0.0f, 0.0f, 0.5f});
   EXPECT_M3_NEAR(inv, expect, 1e-5f);

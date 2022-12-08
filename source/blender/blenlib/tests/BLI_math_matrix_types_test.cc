@@ -18,13 +18,31 @@ TEST(math_matrix_types, DefaultConstructor)
   EXPECT_EQ(m[1][0], 0.0f);
 }
 
-TEST(math_matrix_types, ScalarConstructor)
+TEST(math_matrix_types, StaticConstructor)
 {
-  float2x2 m(5.0f);
-  EXPECT_EQ(m[0][0], 5.0f);
-  EXPECT_EQ(m[1][1], 5.0f);
+  float2x2 m = float2x2::identity();
+  EXPECT_EQ(m[0][0], 1.0f);
+  EXPECT_EQ(m[1][1], 1.0f);
   EXPECT_EQ(m[0][1], 0.0f);
   EXPECT_EQ(m[1][0], 0.0f);
+
+  m = float2x2::zero();
+  EXPECT_EQ(m[0][0], 0.0f);
+  EXPECT_EQ(m[1][1], 0.0f);
+  EXPECT_EQ(m[0][1], 0.0f);
+  EXPECT_EQ(m[1][0], 0.0f);
+
+  m = float2x2::diagonal(2);
+  EXPECT_EQ(m[0][0], 2.0f);
+  EXPECT_EQ(m[1][1], 2.0f);
+  EXPECT_EQ(m[0][1], 0.0f);
+  EXPECT_EQ(m[1][0], 0.0f);
+
+  m = float2x2::all(1);
+  EXPECT_EQ(m[0][0], 1.0f);
+  EXPECT_EQ(m[1][1], 1.0f);
+  EXPECT_EQ(m[0][1], 1.0f);
+  EXPECT_EQ(m[1][0], 1.0f);
 }
 
 TEST(math_matrix_types, VectorConstructor)
@@ -116,13 +134,13 @@ TEST(math_matrix_types, AddOperator)
 {
   float3x3 m3({1.1f, 1.2f, 1.3f}, {2.1f, 2.2f, 2.3f}, {3.1f, 3.2f, 3.3f});
 
-  m3 = m3 + float3x3(2);
+  m3 = m3 + float3x3::diagonal(2);
   EXPECT_EQ(m3[0][0], 3.1f);
   EXPECT_EQ(m3[0][2], 1.3f);
   EXPECT_EQ(m3[2][0], 3.1f);
   EXPECT_EQ(m3[2][2], 5.3f);
 
-  m3 += float3x3(-1.0f);
+  m3 += float3x3::diagonal(-1.0f);
   EXPECT_EQ(m3[0][0], 2.1f);
   EXPECT_EQ(m3[0][2], 1.3f);
   EXPECT_EQ(m3[2][0], 3.1f);
@@ -151,13 +169,13 @@ TEST(math_matrix_types, SubtractOperator)
 {
   float3x3 m3({10.0f, 10.2f, 10.3f}, {20.1f, 20.2f, 20.3f}, {30.1f, 30.2f, 30.3f});
 
-  m3 = m3 - float3x3(2);
+  m3 = m3 - float3x3::diagonal(2);
   EXPECT_EQ(m3[0][0], 8.0f);
   EXPECT_EQ(m3[0][2], 10.3f);
   EXPECT_EQ(m3[2][0], 30.1f);
   EXPECT_EQ(m3[2][2], 28.3f);
 
-  m3 -= float3x3(-1.0f);
+  m3 -= float3x3::diagonal(-1.0f);
   EXPECT_EQ(m3[0][0], 9.0f);
   EXPECT_EQ(m3[0][2], 10.3f);
   EXPECT_EQ(m3[2][0], 30.1f);
@@ -218,11 +236,11 @@ TEST(math_matrix_types, MatrixMultiplyOperator)
   EXPECT_EQ(result[1][1], 46);
 
   /* Test SSE2 implementation. */
-  float4x4 result2 = float4x4(2) * float4x4(6);
-  EXPECT_EQ(result2, float4x4(12));
+  float4x4 result2 = float4x4::diagonal(2) * float4x4::diagonal(6);
+  EXPECT_EQ(result2, float4x4::diagonal(12));
 
-  float3x3 result3 = float3x3(2) * float3x3(6);
-  EXPECT_EQ(result3, float3x3(12));
+  float3x3 result3 = float3x3::diagonal(2) * float3x3::diagonal(6);
+  EXPECT_EQ(result3, float3x3::diagonal(12));
 }
 
 TEST(math_matrix_types, VectorMultiplyOperator)

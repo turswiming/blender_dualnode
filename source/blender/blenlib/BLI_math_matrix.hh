@@ -967,7 +967,7 @@ template<typename MatT, int ScaleDim>
 {
   BLI_STATIC_ASSERT(ScaleDim <= MatT::min_dim,
                     "Scale dimension should fit the matrix diagonal length.");
-  MatT result(0);
+  MatT result{};
   unroll<MatT::min_dim>(
       [&](auto i) { result[i][i] = (i < ScaleDim) ? scale[i] : typename MatT::base_type(1); });
   return result;

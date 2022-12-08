@@ -43,20 +43,6 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
 
   MatBase() = default;
 
-  /** Initialize the diagonal of the matrix to this value and the rest with zero. Matches GLSL. */
-  explicit MatBase(T value)
-  {
-    unroll<NumCol>([&](auto i) {
-      (*this)[i] = col_type(0);
-      (*this)[i][i] = value;
-    });
-  }
-
-  template<typename U, BLI_ENABLE_IF((std::is_convertible_v<U, T>))>
-  explicit MatBase(U value) : MatBase(T(value))
-  {
-  }
-
 /* Workaround issue with template BLI_ENABLE_IF((Size == 2)) not working. */
 #define BLI_ENABLE_IF_MAT(_size, _test) int S = _size, BLI_ENABLE_IF((S _test))
 
@@ -336,7 +322,7 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
     /* This is the reference implementation.
      * Might be overloaded with vectorized / optimized code. */
     /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
-    MatBase<T, NumCol, NumRow> result(0);
+    MatBase<T, NumCol, NumRow> result{};
     unroll<NumCol>([&](auto c) {
       unroll<NumRow>([&](auto r) {
         /* This is vector multiplication. */
@@ -415,14 +401,28 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
 
   /** Miscellaneous. */
 
+  static MatBase diagonal(T value)
+  {
+    MatBase result{};
+    unroll<NumCol>([&](auto i) { result[i][i] = value; });
+    return result;
+  }
+
+  static MatBase all(T value)
+  {
+    MatBase result;
+    unroll<NumCol>([&](auto i) { result[i] = col_type(value); });
+    return result;
+  }
+
   static MatBase identity()
   {
-    return MatBase(1);
+    return diagonal(1);
   }
 
   static MatBase zero()
   {
-    return MatBase(0);
+    return all(0);
   }
 
   uint64_t hash() const
@@ -669,7 +669,7 @@ struct MatView : NonCopyable, NonMovable {
     /* This is the reference implementation.
      * Might be overloaded with vectorized / optimized code. */
     /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
-    MatT result(0);
+    MatT result{};
     unroll<NumCol>([&](auto c) {
       unroll<NumRow>([&](auto r) {
         /* This is vector multiplication. */
