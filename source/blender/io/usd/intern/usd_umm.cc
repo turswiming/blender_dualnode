@@ -465,7 +465,7 @@ static PyObject *get_shader_source_data(const USDImportParams &params,
                                              asset_path.GetAssetPath());
       }
 
-      if (params.import_textures) {
+      if (params.import_textures && !resolved_path.empty()) {
         resolved_path = usd_import_texture(
             resolved_path.c_str(), params.import_textures_dir, params.overwrite_textures);
       }
