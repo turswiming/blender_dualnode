@@ -137,7 +137,7 @@ void OSLShaderManager::device_update_specific(Device *device,
           compiler.compile(og, shader);
         });
 
-    if (shader->get_use_mis() && shader->has_surface_emission)
+    if (shader->emission_sampling != EMISSION_SAMPLING_NONE)
       scene->light_manager->tag_update(scene, LightManager::SHADER_COMPILED);
   }
 
@@ -552,6 +552,7 @@ OSLNode *OSLShaderManager::osl_node(ShaderGraph *graph,
 
     SocketType::Type socket_type;
 
+    /* Read type and default value. */
     if (param->isclosure) {
       socket_type = SocketType::CLOSURE;
     }
@@ -606,7 +607,21 @@ OSLNode *OSLShaderManager::osl_node(ShaderGraph *graph,
       node->add_output(param->name, socket_type);
     }
     else {
-      node->add_input(param->name, socket_type);
+      /* Detect if we should leave parameter initialization to OSL, either though
+       * not constant default or widget metadata. */
+      int socket_flags = 0;
+      if (!param->validdefault) {
+        socket_flags |= SocketType::LINK_OSL_INITIALIZER;
+      }
+      for (const OSL::OSLQuery::Parameter &metadata : param->metadata) {
+        if (metadata.type == TypeDesc::STRING) {
+          if (metadata.name == "widget" && metadata.sdefault[0] == "null") {
+            socket_flags |= SocketType::LINK_OSL_INITIALIZER;
+          }
+        }
+      }
+
+      node->add_input(param->name, socket_type, socket_flags);
     }
   }
 
@@ -641,6 +656,8 @@ string OSLCompiler::id(ShaderNode *node)
 {
   /* assign layer unique name based on pointer address + bump mode */
   stringstream stream;
+  stream.imbue(std::locale("C")); /* Ensure that no grouping characters (e.g. commas with en_US
+                                     locale) are added to the pointer string */
   stream << "node_" << node->type->name << "_" << node;
 
   return stream.str();
@@ -729,8 +746,12 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
   foreach (ShaderInput *input, node->inputs) {
     if (!input->link) {
       /* checks to untangle graphs */
-      if (node_skip_input(node, input))
+      if (node_skip_input(node, input)) {
         continue;
+      }
+      if ((input->flags() & SocketType::LINK_OSL_INITIALIZER) && !(input->constant_folded_in)) {
+        continue;
+      }
 
       string param_name = compatible_name(node, input);
       const SocketType &socket = input->socket_type;
@@ -798,8 +819,11 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
 
   if (current_type == SHADER_TYPE_SURFACE) {
     if (info) {
-      if (info->has_surface_emission)
-        current_shader->has_surface_emission = true;
+      if (info->has_surface_emission && node->special_type == SHADER_SPECIAL_TYPE_OSL) {
+        /* Will be used by Shader::estimate_emission. */
+        OSLNode *oslnode = static_cast<OSLNode *>(node);
+        oslnode->has_emission = true;
+      }
       if (info->has_surface_transparent)
         current_shader->has_surface_transparent = true;
       if (info->has_surface_bssrdf) {
@@ -1099,8 +1123,6 @@ void OSLCompiler::generate_nodes(const ShaderNodeSet &nodes)
           done.insert(node);
 
           if (current_type == SHADER_TYPE_SURFACE) {
-            if (node->has_surface_emission())
-              current_shader->has_surface_emission = true;
             if (node->has_surface_transparent())
               current_shader->has_surface_transparent = true;
             if (node->get_feature() & KERNEL_FEATURE_NODE_RAYTRACE)
@@ -1132,12 +1154,12 @@ OSL::ShaderGroupRef OSLCompiler::compile_type(Shader *shader, ShaderGraph *graph
 {
   current_type = type;
 
-  string name = shader->name.string();
-  /* Replace invalid characters. */
-  for (size_t i; (i = name.find_first_of(" .,:;+-*/#")) != string::npos;)
-    name.replace(i, 1, "_");
+  /* Use name hash to identify shader group to avoid issues with non-alphanumeric characters */
+  stringstream name;
+  name.imbue(std::locale("C"));
+  name << "shader_" << shader->name.hash();
 
-  OSL::ShaderGroupRef group = ss->ShaderGroupBegin(name);
+  OSL::ShaderGroupRef group = ss->ShaderGroupBegin(name.str());
 
   ShaderNode *output = graph->output();
   ShaderNodeSet dependencies;
@@ -1192,7 +1214,6 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
     current_shader = shader;
 
     shader->has_surface = false;
-    shader->has_surface_emission = false;
     shader->has_surface_transparent = false;
     shader->has_surface_bssrdf = false;
     shader->has_bump = has_bump;
@@ -1235,6 +1256,9 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
     }
     else
       shader->osl_displacement_ref = OSL::ShaderGroupRef();
+
+    /* Estimate emission for MIS. */
+    shader->estimate_emission();
   }
 
   /* push state to array for lookup */

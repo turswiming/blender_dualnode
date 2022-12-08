@@ -50,6 +50,7 @@ set(SRC
   intern/array_utils.c
   intern/array_utils.cc
   intern/astar.c
+  intern/atomic_disjoint_set.cc
   intern/bitmap.c
   intern/bitmap_draw_2d.c
   intern/boxpack_2d.c
@@ -57,7 +58,7 @@ set(SRC
   intern/cache_mutex.cc
   intern/compute_context.cc
   intern/convexhull_2d.c
-  intern/cpp_type.cc
+  intern/cpp_types.cc
   intern/delaunay_2d.cc
   intern/dot_export.cc
   intern/dynlib.c
@@ -172,11 +173,13 @@ set(SRC
   BLI_asan.h
   BLI_assert.h
   BLI_astar.h
+  BLI_atomic_disjoint_set.hh
   BLI_bit_vector.hh
   BLI_bitmap.h
   BLI_bitmap_draw_2d.h
   BLI_blenlib.h
   BLI_bounds.hh
+  BLI_bounds_types.hh
   BLI_boxpack_2d.h
   BLI_buffer.h
   BLI_cache_mutex.hh
@@ -190,6 +193,8 @@ set(SRC
   BLI_convexhull_2d.h
   BLI_cpp_type.hh
   BLI_cpp_type_make.hh
+  BLI_cpp_types.hh
+  BLI_cpp_types_make.hh
   BLI_delaunay_2d.h
   BLI_devirtualize_parameters.hh
   BLI_dial_2d.h
@@ -304,6 +309,7 @@ set(SRC
   BLI_session_uuid.h
   BLI_set.hh
   BLI_set_slots.hh
+  BLI_shared_cache.hh
   BLI_simd.h
   BLI_smallhash.h
   BLI_sort.h
@@ -336,6 +342,7 @@ set(SRC
   BLI_uuid.h
   BLI_uvproject.h
   BLI_vector.hh
+  BLI_vector_list.hh
   BLI_vector_set.hh
   BLI_vector_set_slots.hh
   BLI_virtual_array.hh

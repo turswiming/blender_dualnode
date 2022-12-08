@@ -817,11 +817,10 @@ static void initialize_group_input(NodesModifierData &nmd,
     auto attribute_input = std::make_shared<blender::bke::AttributeFieldInput>(
         attribute_name, *socket_type.base_cpp_type);
     GField attribute_field{std::move(attribute_input), 0};
-    const blender::fn::ValueOrFieldCPPType *cpp_type =
-        dynamic_cast<const blender::fn::ValueOrFieldCPPType *>(
-            socket_type.geometry_nodes_cpp_type);
-    BLI_assert(cpp_type != nullptr);
-    cpp_type->construct_from_field(r_value, std::move(attribute_field));
+    const auto *value_or_field_cpp_type = ValueOrFieldCPPType::get_from_self(
+        *socket_type.geometry_nodes_cpp_type);
+    BLI_assert(value_or_field_cpp_type != nullptr);
+    value_or_field_cpp_type->construct_from_field(r_value, std::move(attribute_field));
   }
   else {
     init_socket_cpp_value_from_property(*property, socket_data_type, r_value);
@@ -862,14 +861,8 @@ static void find_side_effect_nodes_for_viewer_path(
 
   const bNodeTree *group = nmd.node_group;
   Stack<const bNode *> group_node_stack;
-  for (const StringRefNull group_node_name : parsed_path->group_node_names) {
-    const bNode *found_node = nullptr;
-    for (const bNode *node : group->group_nodes()) {
-      if (node->name == group_node_name) {
-        found_node = node;
-        break;
-      }
-    }
+  for (const int32_t group_node_id : parsed_path->group_node_ids) {
+    const bNode *found_node = group->node_by_id(group_node_id);
     if (found_node == nullptr) {
       return;
     }
@@ -881,16 +874,10 @@ static void find_side_effect_nodes_for_viewer_path(
     }
     group_node_stack.push(found_node);
     group = reinterpret_cast<bNodeTree *>(found_node->id);
-    compute_context_builder.push<blender::bke::NodeGroupComputeContext>(group_node_name);
+    compute_context_builder.push<blender::bke::NodeGroupComputeContext>(*found_node);
   }
 
-  const bNode *found_viewer_node = nullptr;
-  for (const bNode *viewer_node : group->nodes_by_type("GeometryNodeViewer")) {
-    if (viewer_node->name == parsed_path->viewer_node_name) {
-      found_viewer_node = viewer_node;
-      break;
-    }
-  }
+  const bNode *found_viewer_node = group->node_by_id(parsed_path->viewer_node_id);
   if (found_viewer_node == nullptr) {
     return;
   }
@@ -984,9 +971,9 @@ static MultiValueMap<eAttrDomain, OutputAttributeInfo> find_output_attributes_to
 
     const int index = socket->index();
     const GPointer value = output_values[index];
-    const ValueOrFieldCPPType *cpp_type = dynamic_cast<const ValueOrFieldCPPType *>(value.type());
-    BLI_assert(cpp_type != nullptr);
-    const GField field = cpp_type->as_field(value.get());
+    const auto *value_or_field_type = ValueOrFieldCPPType::get_from_self(*value.type());
+    BLI_assert(value_or_field_type != nullptr);
+    const GField field = value_or_field_type->as_field(value.get());
 
     const bNodeSocket *interface_socket = (const bNodeSocket *)BLI_findlink(
         &nmd.node_group->outputs, index);
@@ -1016,9 +1003,6 @@ static Vector<OutputAttributeToStore> compute_attributes_to_store(
       continue;
     }
     const GeometryComponent &component = *geometry.get_component_for_read(component_type);
-    if (component.is_empty()) {
-      continue;
-    }
     const blender::bke::AttributeAccessor attributes = *component.attributes();
     for (const auto item : outputs_by_domain.items()) {
       const eAttrDomain domain = item.key;

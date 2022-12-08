@@ -69,11 +69,11 @@ struct CurvePoint : public CurveSegment {
 /**
  * Cyclical index range. Allows iteration over a plain 'IndexRange' interval on form [start, end)
  * while also supporting treating the underlying array as a cyclic array where the last index is
- * followed by the first nidex in the 'cyclical' range. The cyclical index range can then be
+ * followed by the first index in the 'cyclical' range. The cyclical index range can then be
  * considered a combination of the intervals separated by the last index of the underlying array,
  * namely [start, range_size) and [0, end) where start/end is the indices iterated between and
  * range_size is the size of the underlying array. To cycle the underlying array the interval
- * [0, range_size) can be iterated over an arbitrary amount of times inbetween.
+ * [0, range_size) can be iterated over an arbitrary amount of times in between.
  */
 class IndexRangeCyclic {
   /* Index to the start and end of the iterated range.
@@ -543,12 +543,6 @@ IndexMask indices_for_type(const VArray<int8_t> &types,
                            const IndexMask selection,
                            Vector<int64_t> &r_indices);
 
-void indices_for_each_type(const VArray<int8_t> &types,
-                           const std::array<int, CURVE_TYPES_NUM> &counts,
-                           const IndexMask selection,
-                           std::array<IndexMask, CURVE_TYPES_NUM> &r_type_masks,
-                           std::array<Vector<int64_t>, CURVE_TYPES_NUM> &r_type_indices);
-
 void foreach_curve_by_type(const VArray<int8_t> &types,
                            const std::array<int, CURVE_TYPES_NUM> &type_counts,
                            IndexMask selection,
@@ -556,15 +550,6 @@ void foreach_curve_by_type(const VArray<int8_t> &types,
                            FunctionRef<void(IndexMask)> poly_fn,
                            FunctionRef<void(IndexMask)> bezier_fn,
                            FunctionRef<void(IndexMask)> nurbs_fn);
-
-/**
- * Same as 'by_type' but index mask for each curve type is pre-computed.
- */
-void foreach_curve_by_type_mask(const std::array<IndexMask, CURVE_TYPES_NUM> &curve_type_mask,
-                                FunctionRef<void(IndexMask)> catmull_rom_fn,
-                                FunctionRef<void(IndexMask)> poly_fn,
-                                FunctionRef<void(IndexMask)> bezier_fn,
-                                FunctionRef<void(IndexMask)> nurbs_fn);
 
 /** \} */
 

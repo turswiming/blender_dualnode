@@ -55,6 +55,11 @@ DrawList *MTLBackend::drawlist_alloc(int list_length)
   return new MTLDrawList(list_length);
 };
 
+Fence *MTLBackend::fence_alloc()
+{
+  return new MTLFence();
+};
+
 FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
 {
   MTLContext *mtl_context = static_cast<MTLContext *>(
@@ -65,6 +70,11 @@ FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
 IndexBuf *MTLBackend::indexbuf_alloc()
 {
   return new MTLIndexBuf();
+};
+
+PixelBuffer *MTLBackend::pixelbuf_alloc(uint size)
+{
+  return new MTLPixelBuffer(size);
 };
 
 QueryPool *MTLBackend::querypool_alloc()
@@ -386,6 +396,7 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   /* TODO(Metal): Add support? */
   GCaps.shader_draw_parameters_support = false;
   GCaps.compute_shader_support = false; /* TODO(Metal): Add compute support. */
+  GCaps.geometry_shader_support = false;
   GCaps.shader_storage_buffer_objects_support =
       false; /* TODO(Metal): implement Storage Buffer support. */
 
