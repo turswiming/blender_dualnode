@@ -121,43 +121,37 @@ static void free_old_gpencil_data(bGPdata *gpd)
   MEM_SAFE_FREE(gpd);
 }
 
-static void compare_data_structures(const GPData &ngpd, const bGPdata *ogpd)
+static void compare_gpencil_data_structures(const GPData &new_gpd, const bGPdata *old_gpd)
 {
   /* Compare Layers */
-  EXPECT_EQ(ngpd.layers_size, ogpd->totlayer);
+  EXPECT_EQ(new_gpd.layers_size, old_gpd->totlayer);
 
-  if (ngpd.layers_size == ogpd->totlayer) {
-    int offset{-1};
-    LISTBASE_FOREACH (bGPDlayer *, lay, &ogpd->layers) {
-      const ::GPLayer *nlay = &(ngpd.layers_array[++offset]);
-
-      // Same name
-      EXPECT_EQ(std::strcmp(nlay->name, lay->info), 0);
-    }
+  int index{-1};
+  LISTBASE_FOREACH (bGPDlayer *, old_gpl, &old_gpd->layers) {
+    const ::GPLayer *new_gpl = &(new_gpd.layers_array[++index]);
+    EXPECT_EQ(std::strcmp(new_gpl->name, old_gpl->info), 0);
   }
 
   /* Compare Frames */
-  EXPECT_EQ(ngpd.frames_size, ogpd->totframe);
+  EXPECT_EQ(new_gpd.frames_size, old_gpd->totframe);
 
-  if (ngpd.frames_size == ogpd->totframe) {
-    // get plain list of frames
-    std::vector<std::pair<int, int>> ogpd_frames;
-    int layer_id{0};
-    LISTBASE_FOREACH (bGPDlayer *, lay, &ogpd->layers) {
-      LISTBASE_FOREACH (bGPDframe *, frm, &lay->frames) {
-        ogpd_frames.emplace_back(layer_id, frm->framenum);
-      }
-      ++layer_id;
+  /* Get vector of frames. */
+  Vector<std::pair<int, int>> old_gpd_frames;
+  int layer_id{0};
+  LISTBASE_FOREACH (bGPDlayer *, old_gpl, &old_gpd->layers) {
+    LISTBASE_FOREACH (bGPDframe *, old_gpf, &old_gpl->frames) {
+      old_gpd_frames.append_as(layer_id, old_gpf->framenum);
     }
+    ++layer_id;
+  }
 
-    for (int i = 0; i < ngpd.frames_size; i++) {
-      const ::GPFrame *nfrm = ngpd.frames_array + i;
-      int ofrm_layer_index{ogpd_frames[i].first};
-      int ofrm_frame_number{ogpd_frames[i].second};
+  for (int i = 0; i < new_gpd.frames_size; i++) {
+    const ::GPFrame *new_gpf = new_gpd.frames_array + i;
+    int old_gpf_layer_index{old_gpd_frames[i].first};
+    int old_gpf_frame_number{old_gpd_frames[i].second};
 
-      EXPECT_EQ(nfrm->layer_index, ofrm_layer_index);
-      EXPECT_EQ(nfrm->start_time, ofrm_frame_number);
-    }
+    EXPECT_EQ(new_gpf->layer_index, old_gpf_layer_index);
+    EXPECT_EQ(new_gpf->start_time, old_gpf_frame_number);
   }
 }
 
@@ -464,7 +458,7 @@ TEST(gpencil_proposal, TimeMultiFrameTransformStrokes)
   free_old_gpencil_data(old_data);
 }
 
-TEST(gpencil_proposal, Old2NewConversion)
+TEST(gpencil_proposal, OldToNewConversion)
 {
   int layers_num = 2, frames_num = 3, strokes_num = 2, points_num = 2;
 
@@ -472,12 +466,12 @@ TEST(gpencil_proposal, Old2NewConversion)
 
   GPData data = convert_old_to_new_gpencil_data(old_data);
 
-  compare_data_structures(data, old_data);
+  compare_gpencil_data_structures(data, old_data);
 
   free_old_gpencil_data(old_data);
 }
 
-TEST(gpencil_proposal, New2OldConversion)
+TEST(gpencil_proposal, NewToOldConversion)
 {
   int layers_num = 2, frames_num = 3, strokes_num = 2, points_num = 2;
 
@@ -485,7 +479,7 @@ TEST(gpencil_proposal, New2OldConversion)
 
   bGPdata *old_data = convert_new_to_old_gpencil_data(data);
 
-  compare_data_structures(data, old_data);
+  compare_gpencil_data_structures(data, old_data);
 
   free_old_gpencil_data(old_data);
 }
