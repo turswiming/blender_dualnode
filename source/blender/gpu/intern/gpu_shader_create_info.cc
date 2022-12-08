@@ -68,7 +68,9 @@ void ShaderCreateInfo::finalize()
     if (info.early_fragment_test_) {
       early_fragment_test_ = true;
     }
-    if (info.depth_write_ != DepthWrite::ANY) {
+    /* Modify depth write if has been changed from default.
+     * `UNCHANGED` implies gl_FragDepth is not used at all. */
+    if (info.depth_write_ != DepthWrite::UNCHANGED) {
       depth_write_ = info.depth_write_;
     }
 
@@ -329,6 +331,13 @@ void gpu_shader_create_info_init()
     /* Overlay Motion Path Line. */
     overlay_motion_path_line = overlay_motion_path_line_no_geom;
     overlay_motion_path_line_clipped = overlay_motion_path_line_clipped_no_geom;
+
+    /* Workbench shadows.
+     * Note: Updates additional-info used by workbench shadow permutations.
+     * Must be prepared prior to permutation preparation. */
+    workbench_shadow_manifold = workbench_shadow_manifold_no_geom;
+    workbench_shadow_no_manifold = workbench_shadow_no_manifold_no_geom;
+    workbench_shadow_caps = workbench_shadow_caps_no_geom;
   }
 
   for (ShaderCreateInfo *info : g_create_infos->values()) {

@@ -17,19 +17,23 @@ GPU_SHADER_CREATE_INFO(depth_2d_update_info_base)
     .push_constant(Type::VEC2, "size")
     .push_constant(Type::INT, "mip")
     .sampler(0, ImageType::FLOAT_2D, "source_data", Frequency::PASS)
-    .vertex_source("depth_2d_update_vert.glsl");
+    .vertex_source("depth_2d_update_vert.glsl")
+    .depth_write(DepthWrite::ANY);
 
 GPU_SHADER_CREATE_INFO(depth_2d_update_float)
     .fragment_source("depth_2d_update_float_frag.glsl")
     .additional_info("depth_2d_update_info_base")
-    .do_static_compilation(true);
+    .do_static_compilation(true)
+    .depth_write(DepthWrite::ANY);
 
 GPU_SHADER_CREATE_INFO(depth_2d_update_int24)
     .fragment_source("depth_2d_update_int24_frag.glsl")
     .additional_info("depth_2d_update_info_base")
-    .do_static_compilation(true);
+    .do_static_compilation(true)
+    .depth_write(DepthWrite::ANY);
 
 GPU_SHADER_CREATE_INFO(depth_2d_update_int32)
     .fragment_source("depth_2d_update_int32_frag.glsl")
     .additional_info("depth_2d_update_info_base")
-    .do_static_compilation(true);
+    .do_static_compilation(true)
+    .depth_write(DepthWrite::ANY);
