@@ -252,7 +252,7 @@ static void curves_batch_cache_fill_segments_proc_pos(
 
 static void curves_batch_cache_ensure_procedural_pos(const Curves &curves,
                                                      CurvesEvalCache &cache,
-                                                     GPUMaterial *gpu_material)
+                                                     GPUMaterial *UNUSED(gpu_material))
 {
   if (cache.proc_point_buf == nullptr || DRW_vbo_requested(cache.proc_point_buf)) {
     /* Initialize vertex format. */
@@ -289,7 +289,11 @@ static void curves_batch_cache_ensure_data_edit_points(const Curves &curves_id,
   const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
 
   static GPUVertFormat format_data = {0};
-  uint data = GPU_vertformat_attr_add(&format_data, "data", GPU_COMP_U8, 1, GPU_FETCH_INT);
+  static uint data;
+  if (format_data.attr_len == 0) {
+    data = GPU_vertformat_attr_add(&format_data, "data", GPU_COMP_U8, 1, GPU_FETCH_INT);
+  }
+
   GPU_vertbuf_init_with_format(cache.data_edit_points, &format_data);
   GPU_vertbuf_data_alloc(cache.data_edit_points, curves.points_num());
 
@@ -331,7 +335,7 @@ static void curves_batch_cache_ensure_procedural_final_attr(CurvesEvalCache &cac
                                                             const GPUVertFormat *format,
                                                             const int subdiv,
                                                             const int index,
-                                                            const char *name)
+                                                            const char *UNUSED(name))
 {
   CurvesEvalFinalCache &final_cache = cache.final[subdiv];
   final_cache.attributes_buf[index] = GPU_vertbuf_create_with_format_ex(

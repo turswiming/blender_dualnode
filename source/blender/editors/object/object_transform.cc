@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <numeric>
 
 #include "DNA_anim_types.h"
@@ -745,8 +746,10 @@ static int apply_objects_internal(bContext *C,
 
     if (ob->type == OB_FONT) {
       if (apply_rot || apply_loc) {
-        BKE_reportf(
-            reports, RPT_ERROR, "Font's can only have scale applied: \"%s\"", ob->id.name + 2);
+        BKE_reportf(reports,
+                    RPT_ERROR,
+                    "Text objects can only have scale applied: \"%s\"",
+                    ob->id.name + 2);
         changed = false;
       }
     }
@@ -1274,8 +1277,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
       if (centermode == ORIGIN_TO_CURSOR) {
         copy_v3_v3(cent, cursor);
-        invert_m4_m4(obedit->imat, obedit->object_to_world);
-        mul_m4_v3(obedit->imat, cent);
+        invert_m4_m4(obedit->world_to_object, obedit->object_to_world);
+        mul_m4_v3(obedit->world_to_object, cent);
       }
       else {
         if (around == V3D_AROUND_CENTER_BOUNDS) {
@@ -1342,8 +1345,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
     if (centermode == ORIGIN_TO_CURSOR) {
       copy_v3_v3(cent, cursor);
-      invert_m4_m4(ob->imat, ob->object_to_world);
-      mul_m4_v3(ob->imat, cent);
+      invert_m4_m4(ob->world_to_object, ob->object_to_world);
+      mul_m4_v3(ob->world_to_object, cent);
     }
 
     if (ob->data == nullptr) {
@@ -1363,8 +1366,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
             INIT_MINMAX(min, max);
             BKE_object_minmax_dupli(depsgraph, scene, ob, min, max, true);
             mid_v3_v3v3(cent, min, max);
-            invert_m4_m4(ob->imat, ob->object_to_world);
-            mul_m4_v3(ob->imat, cent);
+            invert_m4_m4(ob->world_to_object, ob->object_to_world);
+            mul_m4_v3(ob->world_to_object, cent);
           }
 
           add_v3_v3(ob->instance_collection->instance_offset, cent);
@@ -1643,8 +1646,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         /* done */
       }
       else if (around == V3D_AROUND_CENTER_BOUNDS) {
-        float3 min;
-        float3 max;
+        float3 min(std::numeric_limits<float>::max());
+        float3 max(-std::numeric_limits<float>::max());
         if (curves.bounds_min_max(min, max)) {
           cent = math::midpoint(min, max);
         }

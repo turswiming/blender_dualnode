@@ -53,7 +53,7 @@ template<
      *
      * Useful during development to switch between drawing implementations.
      */
-    typename DrawingMode = ScreenSpaceDrawingMode<OneTextureMethod>>
+    typename DrawingMode = ScreenSpaceDrawingMode<FullScreenTextures>>
 class ImageEngine {
  private:
   const DRWContextState *draw_ctx;
@@ -128,7 +128,7 @@ class ImageEngine {
   {
     drawing_mode.draw_scene(vedata);
   }
-};  // namespace blender::draw::image_engine
+};
 
 /* -------------------------------------------------------------------- */
 /** \name Engine Callbacks
