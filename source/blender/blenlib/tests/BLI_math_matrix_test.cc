@@ -109,6 +109,39 @@ TEST(math_matrix, MatrixInverse)
   float3x3 inv = invert(mat);
   float3x3 expect = float3x3({0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f}, {0.0f, 0.0f, 0.5f});
   EXPECT_M3_NEAR(inv, expect, 1e-5f);
+
+  bool success;
+  float3x3 mat2 = float3x3::all(1);
+  float3x3 inv2 = invert(mat2, success);
+  float3x3 expect2 = float3x3::all(0);
+  EXPECT_M3_NEAR(inv2, expect2, 1e-5f);
+  EXPECT_FALSE(success);
+}
+
+TEST(math_matrix, MatrixPseudoInverse)
+{
+  float4x4 mat = transpose(float4x4({0.224976f, -0.333770f, 0.765074f, 0.100000f},
+                                    {0.389669f, 0.647565f, 0.168130f, 0.200000f},
+                                    {-0.536231f, 0.330541f, 0.443163f, 0.300000f},
+                                    {0.000000f, 0.000000f, 0.000000f, 1.000000f}));
+  float4x4 expect = transpose(float4x4({0.224976f, -0.333770f, 0.765074f, 0.100000f},
+                                       {0.389669f, 0.647565f, 0.168130f, 0.200000f},
+                                       {-0.536231f, 0.330541f, 0.443163f, 0.300000f},
+                                       {0.000000f, 0.000000f, 0.000000f, 1.000000f}));
+  float4x4 inv = pseudo_invert(mat);
+  pseudoinverse_m4_m4(expect.ptr(), mat.ptr(), 1e-8f);
+  EXPECT_M4_NEAR(inv, expect, 1e-5f);
+
+  float4x4 mat2 = transpose(float4x4({0.000000f, -0.333770f, 0.765074f, 0.100000f},
+                                     {0.000000f, 0.647565f, 0.168130f, 0.200000f},
+                                     {0.000000f, 0.330541f, 0.443163f, 0.300000f},
+                                     {0.000000f, 0.000000f, 0.000000f, 1.000000f}));
+  float4x4 expect2 = transpose(float4x4({0.000000f, 0.000000f, 0.000000f, 0.000000f},
+                                        {-0.51311f, 1.02638f, 0.496437f, -0.302896f},
+                                        {0.952803f, 0.221885f, 0.527413f, -0.297881f},
+                                        {-0.0275438f, -0.0477073f, 0.0656508f, 0.9926f}));
+  float4x4 inv2 = pseudo_invert(mat2);
+  EXPECT_M4_NEAR(inv2, expect2, 1e-5f);
 }
 
 TEST(math_matrix, MatrixDeterminant)

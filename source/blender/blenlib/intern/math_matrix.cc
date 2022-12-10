@@ -135,25 +135,78 @@ template double4x4 adjoint(const double4x4 &mat);
 /** \name Inverse
  * \{ */
 
-template<typename T, int Size> MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat)
+template<typename T, int Size>
+MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat, bool &r_success)
 {
   MatBase<T, Size, Size> result;
   Map<const Matrix<T, Size, Size>> M(mat.base_ptr());
   Map<Matrix<T, Size, Size>> R(result.base_ptr());
-  bool is_invertible = true;
-  M.computeInverseWithCheck(R, is_invertible, 0.0f);
-  if (!is_invertible) {
+  M.computeInverseWithCheck(R, r_success, 0.0f);
+  if (!r_success) {
     R = R.Zero();
   }
   return result;
 }
 
-template float2x2 invert(const float2x2 &mat);
-template float3x3 invert(const float3x3 &mat);
-template float4x4 invert(const float4x4 &mat);
-template double2x2 invert(const double2x2 &mat);
-template double3x3 invert(const double3x3 &mat);
-template double4x4 invert(const double4x4 &mat);
+template float2x2 invert(const float2x2 &mat, bool &r_success);
+template float3x3 invert(const float3x3 &mat, bool &r_success);
+template float4x4 invert(const float4x4 &mat, bool &r_success);
+template double2x2 invert(const double2x2 &mat, bool &r_success);
+template double3x3 invert(const double3x3 &mat, bool &r_success);
+template double4x4 invert(const double4x4 &mat, bool &r_success);
+
+template<typename T, int Size>
+MatBase<T, Size, Size> pseudo_invert(const MatBase<T, Size, Size> &mat, T epsilon)
+{
+  /* Start by trying normal inversion first. */
+  bool success;
+  MatBase<T, Size, Size> inv = invert(mat, success);
+  if (success) {
+    return inv;
+  }
+
+  /**
+   * Compute the Single Value Decomposition of an arbitrary matrix A
+   * That is compute the 3 matrices U,W,V with U column orthogonal (m,n)
+   * ,W a diagonal matrix and V an orthogonal square matrix `s.t.A = U.W.Vt`.
+   * From this decomposition it is trivial to compute the (pseudo-inverse)
+   * of `A` as `Ainv = V.Winv.transpose(U)`.
+   */
+  MatBase<T, Size, Size> U, W, V;
+  vec_base<T, Size> S_val;
+
+  {
+    using namespace Eigen;
+    using MatrixT = Matrix<T, Size, Size>;
+    using VectorT = Matrix<T, Size, 1>;
+    /* Blender and Eigen matrices are both column-major.
+     * Since our matrix is squared, we can use thinU/V. */
+    /** WORKAROUND:
+     * (ComputeThinU | ComputeThinV) must be set as runtime parameters in Eigen < 3.4.0.
+     * But this requires the matrix type to be dynamic to avoid an assert.
+     */
+    using MatrixDynamicT = Matrix<T, Dynamic, Dynamic>;
+    JacobiSVD<MatrixDynamicT, NoQRPreconditioner> svd(
+        Map<const MatrixDynamicT>(mat.base_ptr(), Size, Size), ComputeThinU | ComputeThinV);
+
+    (Map<MatrixT>(U.base_ptr())) = svd.matrixU();
+    (Map<VectorT>(S_val)) = svd.singularValues();
+    (Map<MatrixT>(V.base_ptr())) = svd.matrixV();
+  }
+
+  /* Invert or nullify component based on epsilon comparison. */
+  unroll<Size>([&](auto i) { S_val[i] = (S_val[i] < epsilon) ? T(0) : (T(1) / S_val[i]); });
+
+  W = from_scale<MatBase<T, Size, Size>>(S_val);
+  return (V * W) * transpose(U);
+}
+
+template float2x2 pseudo_invert(const float2x2 &mat, float epsilon);
+template float3x3 pseudo_invert(const float3x3 &mat, float epsilon);
+template float4x4 pseudo_invert(const float4x4 &mat, float epsilon);
+template double2x2 pseudo_invert(const double2x2 &mat, double epsilon);
+template double3x3 pseudo_invert(const double3x3 &mat, double epsilon);
+template double4x4 pseudo_invert(const double4x4 &mat, double epsilon);
 
 /** \} */
 

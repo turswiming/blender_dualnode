@@ -18,10 +18,11 @@ namespace blender::math {
  * \{ */
 
 /**
- * Returns the inverse of a square matrix.
+ * Returns the inverse of a square matrix or zero matrix on failure.
+ * \a r_success is optional and set to true if the matrix was inverted successfully.
  */
 template<typename T, int Size>
-[[nodiscard]] MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat);
+[[nodiscard]] MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat, bool &r_success);
 
 /**
  * Flip the matrix around its diagonal. Also flips dimensions for non square matrices.
@@ -149,6 +150,14 @@ template<typename T>
 [[nodiscard]] MatBase<T, 4, 4> interpolate_fast(const MatBase<T, 4, 4> &a,
                                                 const MatBase<T, 4, 4> &b,
                                                 T t);
+
+/**
+ * Compute Moore-Penrose pseudo inverse of matrix.
+ * Singular values below epsilon are ignored for stability (truncated SVD).
+ */
+template<typename T, int Size>
+[[nodiscard]] MatBase<T, Size, Size> pseudo_invert(const MatBase<T, Size, Size> &mat,
+                                                   T epsilon = 1e-8);
 
 /** \} */
 
@@ -468,6 +477,13 @@ template<typename T, int NumCol, int NumRow>
     }
   }
   return true;
+}
+
+template<typename T, int Size>
+[[nodiscard]] MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat)
+{
+  bool success;
+  return invert(mat, success);
 }
 
 template<typename T, int NumCol, int NumRow>
