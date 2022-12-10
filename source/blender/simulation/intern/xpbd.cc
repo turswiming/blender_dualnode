@@ -267,7 +267,23 @@ static int find_intersecting_face(BodyPoint *bpoint_arr, BodyPoint *curr_point, 
     // Checking which is the closest face
     // float min_dist = FLT_MAX;
     // float min_face = -1;
+
+    // for(int facenr = 0; facenr < 4; facenr++){
+    //     BodyPoint *face_point0 = &bpoint_arr[curr_tet->verts[tet_faces[facenr][0]]];
+    //     BodyPoint *face_point1 = &bpoint_arr[curr_tet->verts[tet_faces[facenr][1]]];
+    //     BodyPoint *face_point2 = &bpoint_arr[curr_tet->verts[tet_faces[facenr][2]]];
+        
+    //     float coeff[4];
+    //     float diff10[3], diff20[3];
+    //     sub_v3_v3v3(diff10, face_point1->x, face_point0->x);
+    //     sub_v3_v3v3(diff20, face_point2->x, face_point0->x);
+    //     cross_v3_v3v3(coeff, diff10, diff20);
+    //     coeff[3] = -dot_v3v3(coeff, face_point0->x);
+    // }
     
+    // Is the point inside tet getting detected correctly?
+    // Is the intersecting face getting detected correctly?
+    // Is the correction working as expected?
 }
 
 void xpbd_solve_self_collision(SoftBody *sb){
