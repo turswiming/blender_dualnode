@@ -28,10 +28,13 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
       }
 
       CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
+      MutableAttributeAccessor attributes = new_gps.attributes_for_write();
       new_gps.offsets_for_write().copy_from(offsets);
       new_gps.curve_types_for_write().fill(CURVE_TYPE_POLY);
 
       MutableSpan<float3> new_gps_positions{new_gps.positions_for_write()};
+      SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_only_span<float>(
+          "radius", ATTR_DOMAIN_POINT);
       int stroke_index;
       LISTBASE_FOREACH_INDEX (const bGPDstroke *, old_gps, &old_gpf->strokes, stroke_index) {
         IndexRange point_index_in_curve{new_gps.points_for_curve(stroke_index)};
@@ -39,8 +42,11 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
         for (int point_index = 0; point_index < old_gps->totpoints; point_index++) {
           bGPDspoint *old_pt{old_gps->points + point_index};
           new_gps_positions[point_index_in_curve[point_index]] = {old_pt->x, old_pt->y, old_pt->z};
+          radii.span[point_index_in_curve[point_index]] = old_pt->pressure;
         }
       }
+
+      radii.finish();
     }
   }
 
