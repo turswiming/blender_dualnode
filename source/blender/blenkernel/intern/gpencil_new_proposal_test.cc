@@ -514,13 +514,8 @@ TEST(gpencil_proposal, TimeMultiFrameTransformStrokes)
     SCOPED_TIMER("TimeMultiFrameTransformStrokes");
     for (const int i : data.frames_on_active_layer()) {
       GPFrame &gpf = data.frames_for_write(i);
-      Vector<GPStroke> gpf_strokes = gpf.strokes_for_write();
-      MutableSpan<GPStroke> strokes_span = gpf_strokes.as_mutable_span();
-      threading::parallel_for(strokes_span.index_range(), 256, [&](const IndexRange range) {
-        for (GPStroke &stroke : strokes_span.slice(range)) {
-          stroke.transform(translate_mat);
-        }
-      });
+      CurvesGeometry &curves = gpf.strokes_as_curves();
+      curves.transform(translate_mat);
     }
   }
 
