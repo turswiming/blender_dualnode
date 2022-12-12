@@ -29,6 +29,7 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
 
       CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
       MutableAttributeAccessor attributes = new_gps.attributes_for_write();
+      new_gps.resize(offsets.last(), offsets.size() - 1);
       new_gps.offsets_for_write().copy_from(offsets);
       new_gps.curve_types_for_write().fill(CURVE_TYPE_POLY);
 
