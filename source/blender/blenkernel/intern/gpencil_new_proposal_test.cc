@@ -145,6 +145,22 @@ static void insert_new_stroke_old_gpencil_data(bGPDframe *gpf,
   BLI_addtail(&gpf->strokes, gps);
 }
 
+static void insert_new_stroke_new_gpencil_data(GPFrame &gpf,
+                                               int point_num,
+                                               float *position,
+                                               float *pressure)
+{
+  gpf.add_new_stroke(point_num);
+  CurvesGeometry &curves = gpf.strokes_as_curves();
+  int point_index{0};
+  for (float3 &pos : curves.positions_for_write()) {
+    pos.x = position[3 * point_index];
+    pos.y = position[3 * point_index + 1];
+    pos.z = position[3 * point_index + 2];
+    ++point_index;
+  }
+}
+
 static void compare_gpencil_stroke_data(const CurvesGeometry &curves,
                                         int curve_index,
                                         const bGPDstroke *stk)
@@ -565,6 +581,24 @@ TEST(gpencil_proposal, OldToNewStrokeConversion)
   }
 
   GPData data = convert_old_to_new_gpencil_data(old_data);
+
+  compare_gpencil_data_structures(data, old_data);
+
+  free_old_gpencil_data(old_data);
+}
+
+TEST(gpencil_proposal, NewToOldStrokeConversion)
+{
+  int layers_num = 1, frames_num = 1, strokes_num = 0, points_num = 0;
+
+  GPData data = build_gpencil_data(layers_num, frames_num, strokes_num, points_num);
+
+  const int point_num{5};
+  float pos[point_num * 3] = {0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7};
+  float prs[point_num] = {0.5, 0.75, 1, 1.5, 1.75};
+  insert_new_stroke_new_gpencil_data(data.frames_for_write(0), point_num, pos, prs);
+
+  bGPdata *old_data = convert_new_to_old_gpencil_data(data);
 
   compare_gpencil_data_structures(data, old_data);
 
