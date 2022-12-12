@@ -53,7 +53,7 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
   old_gpd->totlayer = old_gpd->totframe = old_gpd->totstroke = 0;
 
   int frame_index{0};
-  for (int layer_index = 0; layer_index < new_gpd.layers_size; layer_index++) {
+  for (const int layer_index : IndexRange(new_gpd.layers_size)) {
     bGPDlayer *old_gpl = reinterpret_cast<bGPDlayer *>(MEM_mallocN(sizeof(bGPDlayer), __func__));
     const ::GPLayer *new_gpl{new_gpd.layers_array + layer_index};
 
