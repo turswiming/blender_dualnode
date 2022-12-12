@@ -149,14 +149,14 @@ static void compare_gpencil_stroke_data(const CurvesGeometry &curves,
                                         int curve_index,
                                         const bGPDstroke *stk)
 {
-  /* Stroke/Curve length */
+  // Stroke/Curve length
   int curve_point_num{curves.points_num_for_curve(curve_index)};
   EXPECT_EQ(curve_point_num, stk->totpoints);
   if (curve_point_num != stk->totpoints) {
     return;
   }
 
-  /* Get curve attributes */
+  // Get curve attributes
   Span<float3> curve_positions{curves.positions()};
 
   IndexRange curve_id{curves.points_for_curve(curve_index)};
@@ -165,7 +165,7 @@ static void compare_gpencil_stroke_data(const CurvesGeometry &curves,
     const bGPDspoint *stk_point{stk->points + stk_point_id};
     const float3 &curve_pos{curve_positions[curve_point_id]};
 
-    /* Point positions */
+    // Point positions
     EXPECT_EQ(curve_pos.x, stk_point->x);
     EXPECT_EQ(curve_pos.y, stk_point->y);
     EXPECT_EQ(curve_pos.z, stk_point->z);
@@ -176,49 +176,44 @@ static void compare_gpencil_stroke_data(const CurvesGeometry &curves,
 
 static void compare_gpencil_data_structures(const GPData &new_gpd, const bGPdata *old_gpd)
 {
-  /* Compare Layers */
   EXPECT_EQ(new_gpd.layers_size, old_gpd->totlayer);
-
-  int index{-1};
-  LISTBASE_FOREACH (bGPDlayer *, old_gpl, &old_gpd->layers) {
-    if (index >= new_gpd.layers_size) {
-      break;
-    }
-    const ::GPLayer *new_gpl = &(new_gpd.layers_array[++index]);
-    EXPECT_EQ(std::strcmp(new_gpl->name, old_gpl->info), 0);
-  }
-
-  /* Compare Frames */
   EXPECT_EQ(new_gpd.frames_size, old_gpd->totframe);
 
-  /* Get vector of frames. */
-  Vector<std::pair<int, const bGPDframe *>> old_gpd_frames;
   int layer_id{0};
+  int frame_id{0};
   LISTBASE_FOREACH (bGPDlayer *, old_gpl, &old_gpd->layers) {
-    LISTBASE_FOREACH (bGPDframe *, old_gpf, &old_gpl->frames) {
-      old_gpd_frames.append_as(layer_id, old_gpf);
+    if (layer_id >= new_gpd.layers_size) {
+      break;
     }
-    ++layer_id;
-  }
 
-  for (int i = 0; i < new_gpd.frames_size; i++) {
-    const GPFrame &new_gpf{new_gpd.frames(i)};
-    int old_gpf_layer_index{old_gpd_frames[i].first};
-    const bGPDframe *old_gpf{old_gpd_frames[i].second};
+    // Compare layer data
+    const ::GPLayer *new_gpl = &(new_gpd.layers_array[layer_id]);
+    EXPECT_EQ(std::strcmp(new_gpl->name, old_gpl->info), 0);
 
-    EXPECT_EQ(new_gpf.layer_index, old_gpf_layer_index);
-    EXPECT_EQ(new_gpf.start_time, old_gpf->framenum);
-
-    EXPECT_EQ(new_gpf.strokes_num(), BLI_listbase_count(&old_gpf->strokes));
-
-    int curve_index{0};
-    LISTBASE_FOREACH (const bGPDstroke *, stk, &old_gpf->strokes) {
-      if (curve_index >= new_gpf.strokes_num()) {
+    LISTBASE_FOREACH (bGPDframe *, old_gpf, &old_gpl->frames) {
+      if (frame_id >= new_gpd.frames_size) {
         break;
       }
-      compare_gpencil_stroke_data(new_gpf.strokes_as_curves(), curve_index, stk);
+      const GPFrame &new_gpf{new_gpd.frames(frame_id)};
 
-      ++curve_index;
+      // Compare frame data
+      EXPECT_EQ(new_gpf.layer_index, layer_id);
+      EXPECT_EQ(new_gpf.start_time, old_gpf->framenum);
+      EXPECT_EQ(new_gpf.strokes_num(), BLI_listbase_count(&old_gpf->strokes));
+
+      int curve_index{0};
+      LISTBASE_FOREACH (const bGPDstroke *, stk, &old_gpf->strokes) {
+        if (curve_index >= new_gpf.strokes_num()) {
+          break;
+        }
+
+        // Compare stroke data
+        compare_gpencil_stroke_data(new_gpf.strokes_as_curves(), curve_index, stk);
+
+        ++curve_index;
+      }
+
+      ++frame_id;
     }
   }
 }
