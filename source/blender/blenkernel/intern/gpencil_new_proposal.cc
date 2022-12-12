@@ -167,6 +167,11 @@ CurvesGeometry &GPFrame::strokes_as_curves()
   return CurvesGeometry::wrap(*this->strokes);
 }
 
+const CurvesGeometry &GPFrame::strokes_as_curves() const
+{
+  return CurvesGeometry::wrap(*this->strokes);
+}
+
 int GPFrame::strokes_num() const
 {
   if (this->strokes == nullptr) {
