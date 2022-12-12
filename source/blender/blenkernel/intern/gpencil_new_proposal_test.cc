@@ -215,6 +215,7 @@ static void compare_gpencil_data_structures(const GPData &new_gpd, const bGPdata
 
       ++frame_id;
     }
+    ++layer_id;
   }
 }
 
