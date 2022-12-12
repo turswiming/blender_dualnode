@@ -164,11 +164,15 @@ bool GPFrame::operator==(const GPFrame &other) const
 
 CurvesGeometry &GPFrame::strokes_as_curves()
 {
+  if (!this->strokes) {
+    this->strokes = MEM_new<CurvesGeometry>(__func__);
+  }
   return CurvesGeometry::wrap(*this->strokes);
 }
 
 const CurvesGeometry &GPFrame::strokes_as_curves() const
 {
+  BLI_assert(this->strokes != nullptr);
   return CurvesGeometry::wrap(*this->strokes);
 }
 
@@ -206,9 +210,6 @@ Vector<GPStroke> GPFrame::strokes_for_write()
 
 GPStroke GPFrame::add_new_stroke(int new_points_num)
 {
-  if (this->strokes == nullptr) {
-    this->strokes = MEM_new<CurvesGeometry>(__func__);
-  }
   CurvesGeometry &strokes = this->strokes_as_curves();
   int orig_last_offset = strokes.offsets().last();
 
