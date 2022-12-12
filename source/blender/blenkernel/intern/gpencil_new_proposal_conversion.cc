@@ -63,8 +63,8 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
     BLI_listbase_clear(&old_gpl->frames);
 
     /* Add frames of correct layer index.
-       Assumes that frames in new data structure are sorted by layer index.
-    */
+     * Assumes that frames in new data structure are sorted by layer index.
+     */
     while ((frame_index < new_gpd.frames_size) &&
            (new_gpd.frames_array[frame_index].layer_index == layer_index)) {
       bGPDframe *old_gpf = reinterpret_cast<bGPDframe *>(MEM_mallocN(sizeof(bGPDframe), __func__));
