@@ -419,14 +419,17 @@ TEST(gpencil_proposal, ChangeStrokePoints)
 
   const int frame_index = data.add_frame_on_layer(layer1_index, 0);
   EXPECT_NE(frame_index, -1);
-  GPStroke stroke = data.frames_for_write(frame_index).add_new_stroke(test_positions.size());
 
-  for (const int i : stroke.points_positions_for_write().index_range()) {
-    stroke.points_positions_for_write()[i] = test_positions[i];
-  }
+  CurvesGeometry &curves = data.frames_for_write(frame_index).strokes_as_curves();
+  curves.resize(curves.points_num() + test_positions.size(), curves.curves_num() + 1);
+  curves.offsets_for_write().last() = curves.offsets().last(1) + test_positions.size();
 
-  for (const int i : stroke.points_positions().index_range()) {
-    EXPECT_V3_NEAR(stroke.points_positions()[i], test_positions[i], 1e-5f);
+  const IndexRange new_points = curves.points_for_curve(curves.curves_range().last());
+  MutableSpan<float3> new_positions = curves.positions_for_write().slice(new_points);
+  new_positions.copy_from(test_positions);
+
+  for (const int i : curves.positions().index_range()) {
+    EXPECT_V3_NEAR(new_positions[i], test_positions[i], 1e-5f);
   }
 }
 
