@@ -15,10 +15,10 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
   GPData new_gpd;
 
   int layer_index;
-  LISTBASE_FOREACH_INDEX (bGPDlayer *, old_gpl, &old_gpd->layers, layer_index) {
+  LISTBASE_FOREACH_INDEX (const bGPDlayer *, old_gpl, &old_gpd->layers, layer_index) {
     new_gpd.add_layer(std::string(old_gpl->info));
 
-    LISTBASE_FOREACH (bGPDframe *, old_gpf, &old_gpl->frames) {
+    LISTBASE_FOREACH (const bGPDframe *, old_gpf, &old_gpl->frames) {
       int new_gpf_index{new_gpd.add_frame_on_layer(layer_index, old_gpf->framenum)};
       GPFrame &new_gpf{new_gpd.frames_for_write(new_gpf_index)};
 
@@ -37,10 +37,10 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
           "radius", ATTR_DOMAIN_POINT);
       int stroke_index;
       LISTBASE_FOREACH_INDEX (const bGPDstroke *, old_gps, &old_gpf->strokes, stroke_index) {
-        IndexRange point_index_in_curve{new_gps.points_for_curve(stroke_index)};
+        const IndexRange point_index_in_curve{new_gps.points_for_curve(stroke_index)};
 
         for (int point_index = 0; point_index < old_gps->totpoints; point_index++) {
-          bGPDspoint *old_pt{old_gps->points + point_index};
+          const bGPDspoint *old_pt{old_gps->points + point_index};
           new_gps_positions[point_index_in_curve[point_index]] = {old_pt->x, old_pt->y, old_pt->z};
           radii.span[point_index_in_curve[point_index]] = old_pt->pressure;
         }
