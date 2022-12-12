@@ -14,8 +14,8 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
 {
   GPData new_gpd;
 
-  int layer_index{0};
-  LISTBASE_FOREACH (bGPDlayer *, old_gpl, &old_gpd->layers) {
+  int layer_index;
+  LISTBASE_FOREACH_INDEX (bGPDlayer *, old_gpl, &old_gpd->layers, layer_index) {
     new_gpd.add_layer(std::string(old_gpl->info));
 
     LISTBASE_FOREACH (bGPDframe *, old_gpf, &old_gpl->frames) {
@@ -38,8 +38,6 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
         }
       }
     }
-
-    ++layer_index;
   }
 
   return new_gpd;
