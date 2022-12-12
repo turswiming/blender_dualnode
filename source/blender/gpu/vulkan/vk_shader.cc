@@ -741,7 +741,7 @@ std::string VKShader::resources_declare(const shader::ShaderCreateInfo &info) co
     ss << "layout(push_constant) uniform constants\n";
     ss << "{\n";
     for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-      ss << "  " << to_string(uniform.type) << " " << uniform.name;
+      ss << "  " << to_string(uniform.type) << " pc_" << uniform.name;
       if (uniform.array_size > 0) {
         ss << "[" << uniform.array_size << "]";
       }
@@ -749,7 +749,7 @@ std::string VKShader::resources_declare(const shader::ShaderCreateInfo &info) co
     }
     ss << "} PushConstants;\n";
     for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-      ss << "#define " << uniform.name << " (PushConstants." << uniform.name << ")\n";
+      ss << "#define " << uniform.name << " (PushConstants.pc_" << uniform.name << ")\n";
     }
   }
 
