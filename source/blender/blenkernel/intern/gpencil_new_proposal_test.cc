@@ -150,13 +150,16 @@ static void insert_new_stroke_new_gpencil_data(GPFrame &gpf,
                                                float *position,
                                                float *pressure)
 {
+  int stroke_index{gpf.strokes_num()};
   gpf.add_new_stroke(point_num);
   CurvesGeometry &curves = gpf.strokes_as_curves();
+
   int point_index{0};
-  for (float3 &pos : curves.positions_for_write()) {
-    pos.x = position[3 * point_index];
-    pos.y = position[3 * point_index + 1];
-    pos.z = position[3 * point_index + 2];
+  MutableSpan<float3> pos = curves.positions_for_write();
+  for (int point_index_in_curve : curves.points_for_curve(stroke_index)) {
+    pos[point_index_in_curve].x = position[3 * point_index];
+    pos[point_index_in_curve].y = position[3 * point_index + 1];
+    pos[point_index_in_curve].z = position[3 * point_index + 2];
     ++point_index;
   }
 }
