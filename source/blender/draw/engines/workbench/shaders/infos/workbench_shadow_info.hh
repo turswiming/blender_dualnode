@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "draw_defines.h"
+
 #include "gpu_shader_create_info.hh"
 
 /* -------------------------------------------------------------------- */
@@ -28,6 +30,20 @@ GPU_SHADER_CREATE_INFO(workbench_next_shadow_common)
     .additional_info("draw_view")
     .additional_info("draw_modelmat_new")
     .additional_info("draw_resource_handle_new");
+
+GPU_SHADER_CREATE_INFO(workbench_next_shadow_visibility_compute)
+    .do_static_compilation(true)
+    .local_group_size(DRW_VISIBILITY_GROUP_SIZE)
+    .define("DRW_VIEW_LEN", "64")
+    .storage_buf(0, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "visibility_buf[]")
+    .storage_buf(2, Qualifier::READ, "uint", "pass_technique_buf[]")
+    .push_constant(Type::INT, "resource_len")
+    .push_constant(Type::INT, "view_len")
+    .push_constant(Type::INT, "visibility_word_per_draw")
+    .push_constant(Type::VEC3, "shadow_direction")
+    .compute_source("draw_visibility_comp.glsl")
+    .additional_info("draw_view", "draw_view_culling");
 
 /** \} */
 

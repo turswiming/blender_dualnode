@@ -32,7 +32,7 @@ using VisibilityBuf = StorageArrayBuffer<uint, 4, true>;
 class View {
   friend Manager;
 
- private:
+ protected:
   /** TODO(fclem): Maybe try to reduce the minimum cost if the number of view is lower. */
 
   UniformArrayBuffer<ViewMatrices, DRW_VIEW_MAX> data_;
@@ -131,10 +131,10 @@ class View {
     return (view_len_ == 1) ? 0 : divide_ceil_u(view_len_, 32);
   }
 
- private:
+ protected:
   /** Called from draw manager. */
   void bind();
-  void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze);
+  virtual void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze);
 
   void update_viewport_size();
 

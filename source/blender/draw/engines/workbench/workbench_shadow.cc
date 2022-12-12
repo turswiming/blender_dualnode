@@ -17,12 +17,116 @@
 #include "BKE_object.h"
 #include "BLI_math.h"
 #include "DRW_render.h"
+#include "GPU_compute.h"
 
 #include "workbench_private.hh"
 
+#include "draw_shader.h"  //REMOVE!
+
 #define DEBUG_SHADOW_VOLUME 0
+#define GPU_CULLING 0
 
 namespace blender::workbench {
+
+class ShadowView : public View {
+  float3 direction_;
+
+ public:
+  ShadowView(const char *name, View &view, float3 direction) : View(name)
+  {
+    // TODO(Miguel Pozo): view_len_ ?
+    direction = direction_;
+    sync(view.viewmat(), view.winmat());
+  }
+
+ protected:
+  std::array<float3, 8> frustum_corners(float4x4 view_from_world_matrix, float near, float far)
+  {
+    float4x4 matrix = view_from_world_matrix.inverted();
+    std::array<float3, 8> corners = {};
+
+    int i = 0;
+    for (float x : {-1, 1}) {
+      for (float y : {-1, 1}) {
+        for (float z : {near, far}) {
+          float4 corner = float4(x, y, z, 1);
+          mul_m4_v4(matrix.ptr(), corner);
+          corner /= corner.w;
+          corners[i++] = float3(corner);
+        }
+      }
+    }
+
+    return corners;
+  }
+
+  float4x4 shadow_projection_matrix(float4x4 light_from_world_matrix,
+                                    float4x4 view_from_world_matrix,
+                                    float near,
+                                    float far)
+  {
+    /* WIP: Should be replaced with an extruded frustum */
+    float3 min, max;
+    INIT_MINMAX(min, max);
+
+    BoundBox frustum_corners;
+    DRW_culling_frustum_corners_get(nullptr, &frustum_corners);
+
+    for (float3 corner : frustum_corners.vec) {
+      corner = light_from_world_matrix * corner;
+      math::min_max(corner, min, max);
+    }
+
+    float4x4 world_from_light_space = light_from_world_matrix.inverted();
+
+    float3 size = max - min;
+    float3 scale = 1.0 / (size / 2.0);
+
+    float4x4 scale_matrix;
+    size_to_mat4(scale_matrix.ptr(), scale);
+
+    min = world_from_light_space * min;
+    max = world_from_light_space * max;
+    float3 center = (min + max) / 2.0;
+
+    float4x4 translate_matrix = float4x4::from_location(-center);
+
+    return scale_matrix * translate_matrix * light_from_world_matrix;
+  }
+
+  virtual void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze)
+  {
+    GPU_debug_group_begin("ShadowView.compute_visibility");
+
+    uint word_per_draw = this->visibility_word_per_draw();
+    /* Switch between tightly packed and set of whole word per instance. */
+    uint words_len = (view_len_ == 1) ? divide_ceil_u(resource_len, 32) :
+                                        resource_len * word_per_draw;
+    words_len = ceil_to_multiple_u(max_ii(1, words_len), 4);
+    /* TODO(fclem): Resize to nearest pow2 to reduce fragmentation. */
+    visibility_buf_.resize(words_len);
+
+    uint32_t data = 0xFFFFFFFFu;
+    GPU_storagebuf_clear(visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
+
+    if (do_visibility_) {
+      static GPUShader *shader = GPU_shader_create_from_info_name(
+          "workbench_next_shadow_visibility_compute");
+      GPU_shader_bind(shader);
+      GPU_shader_uniform_1i(shader, "resource_len", resource_len);
+      GPU_shader_uniform_1i(shader, "view_len", view_len_);
+      GPU_shader_uniform_1i(shader, "visibility_word_per_draw", word_per_draw);
+      GPU_shader_uniform_3fv(shader, "shadow_direction", direction_);
+      GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo(shader, "bounds_buf"));
+      GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo(shader, "visibility_buf"));
+      GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
+      GPU_compute_dispatch(shader, divide_ceil_u(resource_len, DRW_VISIBILITY_GROUP_SIZE), 1, 1);
+      GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+
+    GPU_debug_group_end();
+  }
+};
 
 static void compute_parallel_lines_nor_and_dist(const float2 v1,
                                                 const float2 v2,
@@ -206,6 +310,18 @@ void ShadowPass::object_sync(Manager &manager,
     return;
   }
 
+#if GPU_CULLING
+  /* WIP: Everything is drawn with the Pass method */
+  PassMain::Sub &ps = *get_pass_ptr(true, is_manifold);
+  ps.push_constant("lightDirection", float4x4(ob->world_to_object).ref_3x3() * direction_ws);
+  ps.push_constant("lightDistance", 1e5f);
+  ResourceHandle handle = manager.resource_handle(ob_ref);
+  ps.draw(geom_shadow, handle);
+#  if DEBUG_SHADOW_VOLUME
+  DRW_debug_bbox(&object_data.bbox, float4(1.0f, 0.0f, 0.0f, 1.0f));
+#  endif
+#else
+
   ObjectData *engine_object_data = (ObjectData *)DRW_drawdata_ensure(
       &ob->id, &draw_engine_workbench_next, sizeof(ObjectData), &ObjectData::init, nullptr);
 
@@ -236,9 +352,9 @@ void ShadowPass::object_sync(Manager &manager,
       ps.push_constant("lightDistance", 1e5f);
       ResourceHandle handle = manager.resource_handle(ob_ref);
       ps.draw(geom_shadow, handle);
-#if DEBUG_SHADOW_VOLUME
+#  if DEBUG_SHADOW_VOLUME
       DRW_debug_bbox(&object_data.bbox, float4(1.0f, 0.0f, 0.0f, 1.0f));
-#endif
+#  endif
     }
     else {
       float extrude_distance = object_data.shadow_distance(ob, *this);
@@ -258,11 +374,12 @@ void ShadowPass::object_sync(Manager &manager,
       ps.push_constant("lightDistance", extrude_distance);
       ResourceHandle handle = manager.resource_handle(ob_ref);
       ps.draw(geom_shadow, handle);
-#if DEBUG_SHADOW_VOLUME
+#  if DEBUG_SHADOW_VOLUME
       DRW_debug_bbox(&object_data.bbox, float4(1.0f, 0.0f, 0.0f, 1.0f));
-#endif
+#  endif
     }
   }
+#endif
 }
 
 void ShadowPass::draw(Manager &manager, View &view, SceneResources &resources, int2 resolution)
@@ -276,8 +393,15 @@ void ShadowPass::draw(Manager &manager, View &view, SceneResources &resources, i
             GPU_ATTACHMENT_TEXTURE(resources.color_tx));
   fb.bind();
 
+#if GPU_CULLING
+  ShadowView shadow_view = ShadowView("ShadowView", view, direction_ws);
+
+  manager.submit(pass_ps, shadow_view);
+  manager.submit(fail_ps, shadow_view);
+#else
   manager.submit(pass_ps, view);
   manager.submit(fail_ps, view);
+#endif
 }
 
 void ObjectShadowData::init()
