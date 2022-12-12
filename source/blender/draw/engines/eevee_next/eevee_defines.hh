@@ -9,7 +9,7 @@
  * dragging larger headers into the createInfo pipeline which would cause problems.
  */
 
-#ifndef GPU_VULKAN
+#ifndef GPU_SHADER
 #  pragma once
 #endif
 
