@@ -172,9 +172,14 @@ const CurvesGeometry &GPFrame::strokes_as_curves() const
   return CurvesGeometry::wrap(*this->strokes);
 }
 
+bool GPFrame::is_empty() const
+{
+  return (this->strokes == nullptr) || (this->strokes->curve_num == 0);
+}
+
 int GPFrame::strokes_num() const
 {
-  if (this->strokes == nullptr) {
+  if (this->is_empty()) {
     return 0;
   }
   return this->strokes->curve_num;

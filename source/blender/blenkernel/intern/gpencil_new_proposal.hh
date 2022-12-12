@@ -257,6 +257,7 @@ class GPFrame : public ::GPFrame {
   CurvesGeometry &strokes_as_curves();
   const CurvesGeometry &strokes_as_curves() const;
 
+  bool is_empty() const;
   int strokes_num() const;
   int points_num() const;
 
