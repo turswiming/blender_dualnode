@@ -10,6 +10,7 @@
 #include "BLI_math_vec_types.hh"
 
 #include "BKE_curves.hh"
+#include "BKE_curves_utils.hh"
 #include "BKE_gpencil.h"
 
 #include "DNA_gpencil_types.h"
@@ -36,12 +37,16 @@ static GPData build_gpencil_data(int num_layers,
     gpd.add_frames_on_layer(i, test_start_frames);
   }
 
-  for (const int i : gpd.frames().index_range()) {
-    for (const int j : IndexRange(strokes_per_frame)) {
-      GPStroke stroke = gpd.frames_for_write(i).add_new_stroke(points_per_stroke);
-      for (const int k : stroke.points_positions_for_write().index_range()) {
-        stroke.points_positions_for_write()[k] = {
-            float(k), float((k * j) % stroke.points_num()), float(k + j)};
+  for (const int frame_i : gpd.frames().index_range()) {
+    CurvesGeometry &strokes = gpd.frames_for_write(frame_i).strokes_as_curves();
+    strokes.resize(points_per_stroke * strokes_per_frame, strokes_per_frame);
+    strokes.offsets_for_write().drop_back(1).fill(points_per_stroke);
+    curves::accumulate_counts_to_offsets(strokes.offsets_for_write());
+    MutableSpan<float3> positions = strokes.positions_for_write();
+    for (const int curve_i : strokes.curves_range()) {
+      const IndexRange points = strokes.points_for_curve(curve_i);
+      for (const int i : IndexRange(points.size())) {
+        positions[points[i]] = {float(i), float(curve_i * i % points.size()), float(i + curve_i)};
       }
     }
   }
