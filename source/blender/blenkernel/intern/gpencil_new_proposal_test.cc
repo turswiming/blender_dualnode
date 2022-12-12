@@ -9,6 +9,7 @@
 #include "BLI_index_mask_ops.hh"
 #include "BLI_math_vec_types.hh"
 
+#include "BKE_curves.hh"
 #include "BKE_gpencil.h"
 
 #include "DNA_gpencil_types.h"
@@ -121,6 +122,58 @@ static void free_old_gpencil_data(bGPdata *gpd)
   MEM_SAFE_FREE(gpd);
 }
 
+static void insert_new_stroke_old_gpencil_data(bGPDframe *gpf,
+                                               int point_num,
+                                               float *position,
+                                               float *pressure)
+{
+
+  bGPDstroke *gps = reinterpret_cast<bGPDstroke *>(MEM_mallocN(sizeof(bGPDstroke), __func__));
+  gps->totpoints = point_num;
+  gps->points = reinterpret_cast<bGPDspoint *>(
+      MEM_calloc_arrayN(point_num, sizeof(bGPDspoint), __func__));
+  gps->triangles = nullptr;
+  gps->editcurve = nullptr;
+  gps->dvert = nullptr;
+
+  for (int pt_i = 0; pt_i < point_num; pt_i++) {
+    bGPDspoint *pt = &gps->points[pt_i];
+    copy_v3_v3(&pt->x, position + 3 * pt_i);
+    pt->pressure = pressure[pt_i];
+  }
+
+  BLI_addtail(&gpf->strokes, gps);
+}
+
+static void compare_gpencil_stroke_data(const CurvesGeometry &curves,
+                                        int curve_index,
+                                        const bGPDstroke *stk)
+{
+  /* Stroke/Curve length */
+  int curve_point_num{curves.points_num_for_curve(curve_index)};
+  EXPECT_EQ(curve_point_num, stk->totpoints);
+  if (curve_point_num != stk->totpoints) {
+    return;
+  }
+
+  /* Get curve attributes */
+  Span<float3> curve_positions{curves.positions()};
+
+  IndexRange curve_id{curves.points_for_curve(curve_index)};
+  int stk_point_id{0};
+  for (int curve_point_id : curve_id) {
+    const bGPDspoint *stk_point{stk->points + stk_point_id};
+    const float3 &curve_pos{curve_positions[curve_point_id]};
+
+    /* Point positions */
+    EXPECT_EQ(curve_pos.x, stk_point->x);
+    EXPECT_EQ(curve_pos.y, stk_point->y);
+    EXPECT_EQ(curve_pos.z, stk_point->z);
+
+    ++stk_point_id;
+  }
+}
+
 static void compare_gpencil_data_structures(const GPData &new_gpd, const bGPdata *old_gpd)
 {
   /* Compare Layers */
@@ -128,6 +181,9 @@ static void compare_gpencil_data_structures(const GPData &new_gpd, const bGPdata
 
   int index{-1};
   LISTBASE_FOREACH (bGPDlayer *, old_gpl, &old_gpd->layers) {
+    if (index >= new_gpd.layers_size) {
+      break;
+    }
     const ::GPLayer *new_gpl = &(new_gpd.layers_array[++index]);
     EXPECT_EQ(std::strcmp(new_gpl->name, old_gpl->info), 0);
   }
@@ -136,22 +192,34 @@ static void compare_gpencil_data_structures(const GPData &new_gpd, const bGPdata
   EXPECT_EQ(new_gpd.frames_size, old_gpd->totframe);
 
   /* Get vector of frames. */
-  Vector<std::pair<int, int>> old_gpd_frames;
+  Vector<std::pair<int, const bGPDframe *>> old_gpd_frames;
   int layer_id{0};
   LISTBASE_FOREACH (bGPDlayer *, old_gpl, &old_gpd->layers) {
     LISTBASE_FOREACH (bGPDframe *, old_gpf, &old_gpl->frames) {
-      old_gpd_frames.append_as(layer_id, old_gpf->framenum);
+      old_gpd_frames.append_as(layer_id, old_gpf);
     }
     ++layer_id;
   }
 
   for (int i = 0; i < new_gpd.frames_size; i++) {
-    const ::GPFrame *new_gpf = new_gpd.frames_array + i;
+    const GPFrame &new_gpf{new_gpd.frames(i)};
     int old_gpf_layer_index{old_gpd_frames[i].first};
-    int old_gpf_frame_number{old_gpd_frames[i].second};
+    const bGPDframe *old_gpf{old_gpd_frames[i].second};
 
-    EXPECT_EQ(new_gpf->layer_index, old_gpf_layer_index);
-    EXPECT_EQ(new_gpf->start_time, old_gpf_frame_number);
+    EXPECT_EQ(new_gpf.layer_index, old_gpf_layer_index);
+    EXPECT_EQ(new_gpf.start_time, old_gpf->framenum);
+
+    EXPECT_EQ(new_gpf.strokes_num(), BLI_listbase_count(&old_gpf->strokes));
+
+    int curve_index{0};
+    LISTBASE_FOREACH (const bGPDstroke *, stk, &old_gpf->strokes) {
+      if (curve_index >= new_gpf.strokes_num()) {
+        break;
+      }
+      compare_gpencil_stroke_data(new_gpf.strokes_as_curves(), curve_index, stk);
+
+      ++curve_index;
+    }
   }
 }
 
@@ -484,4 +552,26 @@ TEST(gpencil_proposal, NewToOldConversion)
   free_old_gpencil_data(old_data);
 }
 
+TEST(gpencil_proposal, OldToNewStrokeConversion)
+{
+  int layers_num = 1, frames_num = 1, strokes_num = 0, points_num = 0;
+
+  bGPdata *old_data = build_old_gpencil_data(layers_num, frames_num, strokes_num, points_num);
+
+  const int point_num{5};
+  float pos[point_num * 3] = {0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7};
+  float prs[point_num] = {0.5, 0.75, 1, 1.5, 1.75};
+
+  LISTBASE_FOREACH (bGPDlayer *, lay, &old_data->layers) {
+    LISTBASE_FOREACH (bGPDframe *, frm, &lay->frames) {
+      insert_new_stroke_old_gpencil_data(frm, point_num, pos, prs);
+    }
+  }
+
+  GPData data = convert_old_to_new_gpencil_data(old_data);
+
+  compare_gpencil_data_structures(data, old_data);
+
+  free_old_gpencil_data(old_data);
+}
 }  // namespace blender::bke::gpencil::tests
