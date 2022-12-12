@@ -22,13 +22,17 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
       int new_gpf_index{new_gpd.add_frame_on_layer(layer_index, old_gpf->framenum)};
       GPFrame &new_gpf{new_gpd.frames_for_write(new_gpf_index)};
 
-      int stroke_index;
-      LISTBASE_FOREACH_INDEX (const bGPDstroke *, old_gps, &old_gpf->strokes, stroke_index) {
-        new_gpf.add_new_stroke(old_gps->totpoints);
+      Vector<int> offsets({0});
+      LISTBASE_FOREACH (const bGPDstroke *, old_gps, &old_gpf->strokes) {
+        offsets.append(old_gps->totpoints + offsets.last());
       }
 
       CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
+      new_gps.offsets_for_write().copy_from(offsets);
+      new_gps.curve_types_for_write().fill(CURVE_TYPE_POLY);
+
       MutableSpan<float3> new_gps_positions{new_gps.positions_for_write()};
+      int stroke_index;
       LISTBASE_FOREACH_INDEX (const bGPDstroke *, old_gps, &old_gpf->strokes, stroke_index) {
         IndexRange point_index_in_curve{new_gps.points_for_curve(stroke_index)};
 
