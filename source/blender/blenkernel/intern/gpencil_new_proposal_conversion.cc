@@ -21,6 +21,10 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
     LISTBASE_FOREACH (bGPDframe *, old_gpf, &old_gpl->frames) {
       int new_gpf_index{new_gpd.add_frame_on_layer(layer_index, old_gpf->framenum)};
       GPFrame &new_gpf{new_gpd.frames_for_write(new_gpf_index)};
+
+      LISTBASE_FOREACH (const bGPDstroke *, old_gps, &old_gpf->strokes) {
+        new_gpf.add_new_stroke(old_gps->totpoints);
+      }
     }
 
     ++layer_index;
@@ -36,10 +40,10 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
   BLI_listbase_clear(&old_gpd->layers);
   old_gpd->totlayer = old_gpd->totframe = old_gpd->totstroke = 0;
 
-  int frm_offset{0};
-  for (int lay_i = 0; lay_i < new_gpd.layers_size; lay_i++) {
+  int frame_index{0};
+  for (int layer_index = 0; layer_index < new_gpd.layers_size; layer_index++) {
     bGPDlayer *old_gpl = reinterpret_cast<bGPDlayer *>(MEM_mallocN(sizeof(bGPDlayer), __func__));
-    const ::GPLayer *new_gpl{new_gpd.layers_array + lay_i};
+    const ::GPLayer *new_gpl{new_gpd.layers_array + layer_index};
 
     sprintf(old_gpl->info, "%s", new_gpl->name);
 
@@ -49,17 +53,32 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
     /* Add frames of correct layer index.
        Assumes that frames in new data structure are sorted by layer index.
     */
-    while ((frm_offset < new_gpd.frames_size) &&
-           (new_gpd.frames_array[frm_offset].layer_index == lay_i)) {
-      bGPDframe *gpf = reinterpret_cast<bGPDframe *>(MEM_mallocN(sizeof(bGPDframe), __func__));
-      const ::GPFrame *new_gpf{new_gpd.frames_array + frm_offset};
-      gpf->framenum = new_gpf->start_time;
+    while ((frame_index < new_gpd.frames_size) &&
+           (new_gpd.frames_array[frame_index].layer_index == layer_index)) {
+      bGPDframe *old_gpf = reinterpret_cast<bGPDframe *>(MEM_mallocN(sizeof(bGPDframe), __func__));
+      const GPFrame &new_gpf{new_gpd.frames(frame_index)};
+      old_gpf->framenum = new_gpf.start_time;
 
-      BLI_listbase_clear(&gpf->strokes);
+      BLI_listbase_clear(&old_gpf->strokes);
+      const CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
+      for (int stroke_index = 0; stroke_index < new_gpf.strokes_num(); stroke_index++) {
+        bGPDstroke *old_gps = reinterpret_cast<bGPDstroke *>(
+            MEM_mallocN(sizeof(bGPDstroke), __func__));
+
+        int point_num{new_gps.points_num_for_curve(stroke_index)};
+        old_gps->points = reinterpret_cast<bGPDspoint *>(
+            MEM_calloc_arrayN(point_num, sizeof(bGPDspoint), __func__));
+        old_gps->totpoints = point_num;
+        old_gps->triangles = nullptr;
+        old_gps->editcurve = nullptr;
+        old_gps->dvert = nullptr;
+
+        BLI_addtail(&old_gpf->strokes, old_gps);
+      }
 
       ++(old_gpd->totframe);
-      BLI_addtail(&old_gpl->frames, gpf);
-      ++frm_offset;
+      BLI_addtail(&old_gpl->frames, old_gpf);
+      ++frame_index;
     }
 
     ++(old_gpd->totlayer);
