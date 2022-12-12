@@ -10,15 +10,14 @@ uniform vec4 WorldClipPlanes[6];
 
 void world_clip_planes_calc_clip_distance(vec3 wpos)
 {
-  vec4 clip_planes[6] = WorldClipPlanes;
   vec4 pos = vec4(wpos, 1.0);
 
-  gl_ClipDistance[0] = dot(clip_planes[0], pos);
-  gl_ClipDistance[1] = dot(clip_planes[1], pos);
-  gl_ClipDistance[2] = dot(clip_planes[2], pos);
-  gl_ClipDistance[3] = dot(clip_planes[3], pos);
-  gl_ClipDistance[4] = dot(clip_planes[4], pos);
-  gl_ClipDistance[5] = dot(clip_planes[5], pos);
+  gl_ClipDistance[0] = dot(WorldClipPlanes[0], pos);
+  gl_ClipDistance[1] = dot(WorldClipPlanes[1], pos);
+  gl_ClipDistance[2] = dot(WorldClipPlanes[2], pos);
+  gl_ClipDistance[3] = dot(WorldClipPlanes[3], pos);
+  gl_ClipDistance[4] = dot(WorldClipPlanes[4], pos);
+  gl_ClipDistance[5] = dot(WorldClipPlanes[5], pos);
 }
 
 #  endif
