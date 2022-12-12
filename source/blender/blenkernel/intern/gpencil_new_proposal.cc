@@ -89,7 +89,7 @@ GPFrame::GPFrame(const GPFrame &other) : GPFrame(other.layer_index)
 {
   if (other.strokes != nullptr) {
     /* Make sure old strokes are freed before copying. */
-    MEM_SAFE_FREE(this->strokes);
+    MEM_delete(reinterpret_cast<CurvesGeometry *>(this->strokes));
     this->strokes = MEM_new<CurvesGeometry>(__func__);
 
     *reinterpret_cast<CurvesGeometry *>(this->strokes) = CurvesGeometry::wrap(*other.strokes);
@@ -102,7 +102,7 @@ GPFrame &GPFrame::operator=(const GPFrame &other)
 {
   if (this != &other && other.strokes != nullptr) {
     /* Make sure old strokes are freed before copying. */
-    MEM_SAFE_FREE(this->strokes);
+    MEM_delete(reinterpret_cast<CurvesGeometry *>(this->strokes));
     this->strokes = MEM_new<CurvesGeometry>(__func__);
 
     *reinterpret_cast<CurvesGeometry *>(this->strokes) = CurvesGeometry::wrap(*other.strokes);
