@@ -22,8 +22,24 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
       int new_gpf_index{new_gpd.add_frame_on_layer(layer_index, old_gpf->framenum)};
       GPFrame &new_gpf{new_gpd.frames_for_write(new_gpf_index)};
 
+      int stroke_index{0};
       LISTBASE_FOREACH (const bGPDstroke *, old_gps, &old_gpf->strokes) {
         new_gpf.add_new_stroke(old_gps->totpoints);
+        ++stroke_index;
+      }
+
+      CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
+      MutableSpan<float3> new_gps_positions{new_gps.positions_for_write()};
+      stroke_index = 0;
+      LISTBASE_FOREACH (const bGPDstroke *, old_gps, &old_gpf->strokes) {
+        IndexRange point_index_in_curve{new_gps.points_for_curve(stroke_index)};
+
+        for (int point_index = 0; point_index < old_gps->totpoints; point_index++) {
+          bGPDspoint *old_pt{old_gps->points + point_index};
+          new_gps_positions[point_index_in_curve[point_index]] = {old_pt->x, old_pt->y, old_pt->z};
+        }
+
+        ++stroke_index;
       }
     }
 
@@ -72,6 +88,15 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
         old_gps->triangles = nullptr;
         old_gps->editcurve = nullptr;
         old_gps->dvert = nullptr;
+
+        Span<float3> new_gps_positions = new_gps.positions();
+
+        int point_index{0};
+        for (int new_gps_point_index : new_gps.points_for_curve(stroke_index)) {
+          bGPDspoint *pt = &old_gps->points[point_index];
+          copy_v3_v3(&pt->x, new_gps_positions[new_gps_point_index]);
+          ++point_index;
+        }
 
         BLI_addtail(&old_gpf->strokes, old_gps);
       }
