@@ -504,6 +504,7 @@ static char *glsl_patch_get()
   STR_CONCAT(patch, slen, "#define gl_VertexID gl_VertexIndex\n");
   STR_CONCAT(patch, slen, "#define gpu_BaseInstance (0)\n");
   STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceIndex)\n");
+  STR_CONCAT(patch, slen, "#define GPU_ARB_texture_cube_map_array\n");
 
   STR_CONCAT(patch, slen, "#define gl_InstanceID gpu_InstanceIndex\n");
 
