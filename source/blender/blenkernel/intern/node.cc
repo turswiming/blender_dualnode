@@ -145,11 +145,13 @@ static void ntree_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, cons
 
   dst_runtime.nodes_by_id.reserve(ntree_src->all_nodes().size());
   BLI_listbase_clear(&ntree_dst->nodes);
-  LISTBASE_FOREACH (const bNode *, src_node, &ntree_src->nodes) {
+  int i;
+  LISTBASE_FOREACH_INDEX (const bNode *, src_node, &ntree_src->nodes, i) {
     /* Don't find a unique name for every node, since they should have valid names already. */
     bNode *new_node = blender::bke::node_copy_with_mapping(
         ntree_dst, *src_node, flag_subdata, false, socket_map);
     dst_runtime.nodes_by_id.add_new(new_node);
+    new_node->runtime->index_in_tree = i;
   }
 
   /* copy links */
@@ -166,9 +168,9 @@ static void ntree_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, cons
   }
 
   /* update node->parent pointers */
-  LISTBASE_FOREACH (bNode *, new_node, &ntree_dst->nodes) {
-    if (new_node->parent) {
-      new_node->parent = dst_runtime.nodes_by_id.lookup_key_as(new_node->parent->identifier);
+  for (bNode *node : ntree_dst->all_nodes()) {
+    if (node->parent) {
+      node->parent = dst_runtime.nodes_by_id.lookup_key_as(node->parent->identifier);
     }
   }
 
@@ -323,7 +325,7 @@ static void node_foreach_id(ID *id, LibraryForeachIDData *data)
 
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, ntree->gpd, IDWALK_CB_USER);
 
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     BKE_LIB_FOREACHID_PROCESS_ID(data, node->id, IDWALK_CB_USER);
 
     BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
@@ -363,7 +365,7 @@ static void node_foreach_cache(ID *id,
 #endif
 
   if (nodetree->type == NTREE_COMPOSIT) {
-    LISTBASE_FOREACH (bNode *, node, &nodetree->nodes) {
+    for (bNode *node : nodetree->all_nodes()) {
       if (node->type == CMP_NODE_MOVIEDISTORTION) {
         key.offset_in_ID = size_t(BLI_ghashutil_strhash_p(node->name));
         function_callback(id, &key, (void **)&node->storage, 0, user_data);
@@ -378,7 +380,7 @@ static void node_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 
   switch (ntree->type) {
     case NTREE_SHADER: {
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+      for (bNode *node : ntree->all_nodes()) {
         if (node->type == SH_NODE_SCRIPT) {
           NodeShaderScript *nss = reinterpret_cast<NodeShaderScript *>(node->storage);
           BKE_bpath_foreach_path_fixed_process(bpath_data, nss->filepath);
@@ -495,7 +497,7 @@ void ntreeBlendWrite(BlendWriter *writer, bNodeTree *ntree)
     BKE_animdata_blend_write(writer, ntree->adt);
   }
 
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     BLO_write_struct(writer, bNode, node);
 
     if (node->prop) {
@@ -673,13 +675,15 @@ void ntreeBlendReadData(BlendDataReader *reader, ID *owner_id, bNodeTree *ntree)
   BKE_animdata_blend_read_data(reader, ntree->adt);
 
   BLO_read_list(reader, &ntree->nodes);
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  int i;
+  LISTBASE_FOREACH_INDEX (bNode *, node, &ntree->nodes, i) {
     node->runtime = MEM_new<bNodeRuntime>(__func__);
     node->typeinfo = nullptr;
+    node->runtime->index_in_tree = i;
 
     /* Create the `nodes_by_id` cache eagerly so it can be expected to be valid. Because
      * we create it here we also have to check for zero identifiers from previous versions. */
-    if (ntree->runtime->nodes_by_id.contains_as(node->identifier)) {
+    if (node->identifier == 0 || ntree->runtime->nodes_by_id.contains_as(node->identifier)) {
       nodeUniqueID(ntree, node);
     }
     else {
@@ -1229,7 +1233,7 @@ static void update_typeinfo(Main *bmain,
     }
 
     /* initialize nodes */
-    LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    for (bNode *node : ntree->all_nodes()) {
       if (nodetype && STREQ(node->idname, nodetype->idname)) {
         node_set_typeinfo(C, ntree, node, unregister ? nullptr : nodetype);
       }
@@ -1266,7 +1270,7 @@ void ntreeSetTypes(const bContext *C, bNodeTree *ntree)
 {
   ntree_set_typeinfo(ntree, ntreeTypeFind(ntree->idname));
 
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     node_set_typeinfo(C, ntree, node, nodeTypeFind(node->idname));
 
     LISTBASE_FOREACH (bNodeSocket *, sock, &node->inputs) {
@@ -1373,8 +1377,7 @@ void nodeRegisterType(bNodeType *nt)
   if (nt->declare && !nt->declaration_is_dynamic) {
     if (nt->fixed_declaration == nullptr) {
       nt->fixed_declaration = new blender::nodes::NodeDeclaration();
-      blender::nodes::NodeDeclarationBuilder builder{*nt->fixed_declaration};
-      nt->declare(builder);
+      blender::nodes::build_node_declaration(*nt, *nt->fixed_declaration);
     }
   }
 
@@ -1455,7 +1458,7 @@ const char *nodeSocketTypeLabel(const bNodeSocketType *stype)
   return stype->label[0] != '\0' ? stype->label : RNA_struct_ui_name(stype->ext_socket.srna);
 }
 
-bNodeSocket *nodeFindSocket(const bNode *node, eNodeSocketInOut in_out, const char *identifier)
+bNodeSocket *nodeFindSocket(bNode *node, eNodeSocketInOut in_out, const char *identifier)
 {
   const ListBase *sockets = (in_out == SOCK_IN) ? &node->inputs : &node->outputs;
   LISTBASE_FOREACH (bNodeSocket *, sock, sockets) {
@@ -2023,7 +2026,7 @@ void nodeFindNode(bNodeTree *ntree, bNodeSocket *sock, bNode **r_node, int *r_so
 
 bool nodeFindNodeTry(bNodeTree *ntree, bNodeSocket *sock, bNode **r_node, int *r_sockindex)
 {
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     ListBase *sockets = (sock->in_out == SOCK_IN) ? &node->inputs : &node->outputs;
     int i;
     LISTBASE_FOREACH_INDEX (bNodeSocket *, tsock, sockets, i) {
@@ -2192,12 +2195,14 @@ void nodeUniqueID(bNodeTree *ntree, bNode *node)
 
   /* In the unlikely case that the random ID doesn't match, choose a new one until it does. */
   int32_t new_id = id_rng.get_int32();
-  while (ntree->runtime->nodes_by_id.contains_as(new_id)) {
+  while (ntree->runtime->nodes_by_id.contains_as(new_id) || new_id <= 0) {
     new_id = id_rng.get_int32();
   }
 
   node->identifier = new_id;
   ntree->runtime->nodes_by_id.add_new(node);
+  node->runtime->index_in_tree = ntree->runtime->nodes_by_id.index_range().last();
+  BLI_assert(node->runtime->index_in_tree == ntree->runtime->nodes_by_id.index_of(node));
 }
 
 bNode *nodeAddNode(const bContext *C, bNodeTree *ntree, const char *idname)
@@ -2778,7 +2783,7 @@ static void node_preview_init_tree_recursive(bNodeInstanceHash *previews,
                                              const int xsize,
                                              const int ysize)
 {
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     bNodeInstanceKey key = BKE_node_instance_key(parent_key, ntree, node);
 
     if (BKE_node_preview_used(node)) {
@@ -2811,7 +2816,7 @@ static void node_preview_tag_used_recursive(bNodeInstanceHash *previews,
                                             bNodeTree *ntree,
                                             bNodeInstanceKey parent_key)
 {
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     bNodeInstanceKey key = BKE_node_instance_key(parent_key, ntree, node);
 
     if (BKE_node_preview_used(node)) {
@@ -2926,19 +2931,21 @@ void nodeUnlinkNode(bNodeTree *ntree, bNode *node)
 
 static void node_unlink_attached(bNodeTree *ntree, bNode *parent)
 {
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     if (node->parent == parent) {
       nodeDetachNode(ntree, node);
     }
   }
 }
 
-static void rebuild_nodes_vector(bNodeTree &node_tree)
+void nodeRebuildIDVector(bNodeTree *node_tree)
 {
   /* Rebuild nodes #VectorSet which must have the same order as the list. */
-  node_tree.runtime->nodes_by_id.clear();
-  LISTBASE_FOREACH (bNode *, node, &node_tree.nodes) {
-    node_tree.runtime->nodes_by_id.add_new(node);
+  node_tree->runtime->nodes_by_id.clear();
+  int i;
+  LISTBASE_FOREACH_INDEX (bNode *, node, &node_tree->nodes, i) {
+    node_tree->runtime->nodes_by_id.add_new(node);
+    node->runtime->index_in_tree = i;
   }
 }
 
@@ -2955,7 +2962,7 @@ static void node_free_node(bNodeTree *ntree, bNode *node)
   if (ntree) {
     BLI_remlink(&ntree->nodes, node);
     /* Rebuild nodes #VectorSet which must have the same order as the list. */
-    rebuild_nodes_vector(*ntree);
+    nodeRebuildIDVector(ntree);
 
     /* texture node has bad habit of keeping exec data around */
     if (ntree->type == NTREE_TEXTURE && ntree->runtime->execdata) {
@@ -3013,7 +3020,7 @@ void ntreeFreeLocalNode(bNodeTree *ntree, bNode *node)
   node_unlink_attached(ntree, node);
 
   node_free_node(ntree, node);
-  rebuild_nodes_vector(*ntree);
+  nodeRebuildIDVector(ntree);
 }
 
 void nodeRemoveNode(Main *bmain, bNodeTree *ntree, bNode *node, bool do_id_user)
@@ -3073,7 +3080,7 @@ void nodeRemoveNode(Main *bmain, bNodeTree *ntree, bNode *node, bool do_id_user)
 
   /* Free node itself. */
   node_free_node(ntree, node);
-  rebuild_nodes_vector(*ntree);
+  nodeRebuildIDVector(ntree);
 }
 
 static void node_socket_interface_free(bNodeTree * /*ntree*/,
@@ -3437,7 +3444,7 @@ void ntreeRemoveSocketInterface(bNodeTree *ntree, bNodeSocket *sock)
 
 /* ************ find stuff *************** */
 
-bNode *ntreeFindType(const bNodeTree *ntree, int type)
+bNode *ntreeFindType(bNodeTree *ntree, int type)
 {
   if (ntree) {
     LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
@@ -3454,7 +3461,7 @@ bool ntreeHasTree(const bNodeTree *ntree, const bNodeTree *lookup)
   if (ntree == lookup) {
     return true;
   }
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (const bNode *node : ntree->all_nodes()) {
     if (ELEM(node->type, NODE_GROUP, NODE_CUSTOM_GROUP) && node->id) {
       if (ntreeHasTree((bNodeTree *)node->id, lookup)) {
         return true;
@@ -3494,7 +3501,7 @@ bNode *nodeGetActive(bNodeTree *ntree)
     return nullptr;
   }
 
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     if (node->flag & NODE_ACTIVE) {
       return node;
     }
@@ -3526,7 +3533,7 @@ void nodeClearActive(bNodeTree *ntree)
     return;
   }
 
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     node->flag &= ~NODE_ACTIVE;
   }
 }
@@ -3540,7 +3547,7 @@ void nodeSetActive(bNodeTree *ntree, bNode *node)
   SET_FLAG_FROM_TEST(flags_to_set, is_texture_class, NODE_ACTIVE_TEXTURE);
 
   /* Make sure only one node is active per node tree. */
-  LISTBASE_FOREACH (bNode *, tnode, &ntree->nodes) {
+  for (bNode *tnode : ntree->all_nodes()) {
     tnode->flag &= ~flags_to_set;
   }
   node->flag |= flags_to_set;
@@ -3607,8 +3614,7 @@ bool nodeDeclarationEnsureOnOutdatedNode(bNodeTree * /*ntree*/, bNode *node)
   }
   if (node->typeinfo->declaration_is_dynamic) {
     node->runtime->declaration = new blender::nodes::NodeDeclaration();
-    blender::nodes::NodeDeclarationBuilder builder{*node->runtime->declaration};
-    node->typeinfo->declare(builder);
+    blender::nodes::build_node_declaration(*node->typeinfo, *node->runtime->declaration);
   }
   else {
     /* Declaration should have been created in #nodeRegisterType. */
@@ -3974,7 +3980,7 @@ void ntreeUpdateAllUsers(Main *main, ID *id)
 
   /* Update all users of ngroup, to add/remove sockets as needed. */
   FOREACH_NODETREE_BEGIN (main, ntree, owner_id) {
-    LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    for (bNode *node : ntree->all_nodes()) {
       if (node->id == id) {
         BKE_ntree_update_tag_node_property(ntree, node);
         need_update = true;
@@ -4315,7 +4321,7 @@ bool BKE_node_tree_iter_step(NodeTreeIterStore *ntreeiter, bNodeTree **r_nodetre
 void BKE_nodetree_remove_layer_n(bNodeTree *ntree, Scene *scene, const int layer_index)
 {
   BLI_assert(layer_index != -1);
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     if (node->type == CMP_NODE_R_LAYERS && (Scene *)node->id == scene) {
       if (node->custom1 == layer_index) {
         node->custom1 = 0;
