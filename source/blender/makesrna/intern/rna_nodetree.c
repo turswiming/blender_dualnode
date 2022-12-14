@@ -2175,6 +2175,7 @@ static bool generic_attribute_type_supported(const EnumPropertyItem *item)
 {
   return ELEM(item->value,
               CD_PROP_FLOAT,
+              CD_PROP_FLOAT2,
               CD_PROP_FLOAT3,
               CD_PROP_COLOR,
               CD_PROP_BOOL,
@@ -2192,7 +2193,8 @@ static const EnumPropertyItem *rna_GeometryNodeAttributeType_type_itemf(bContext
 
 static bool generic_attribute_type_supported_with_socket(const EnumPropertyItem *item)
 {
-  return generic_attribute_type_supported(item) && !ELEM(item->value, CD_PROP_BYTE_COLOR);
+  return generic_attribute_type_supported(item) &&
+         !ELEM(item->value, CD_PROP_BYTE_COLOR, CD_PROP_FLOAT2);
 }
 static const EnumPropertyItem *rna_GeometryNodeAttributeType_type_with_socket_itemf(
     bContext *UNUSED(C), PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
@@ -4688,6 +4690,30 @@ static const EnumPropertyItem node_subsurface_method_items[] = {
      "automatically adjusted to match color textures"},
     {0, NULL, 0, NULL, NULL}};
 
+static const EnumPropertyItem prop_image_extension[] = {
+    {SHD_IMAGE_EXTENSION_REPEAT,
+     "REPEAT",
+     0,
+     "Repeat",
+     "Cause the image to repeat horizontally and vertically"},
+    {SHD_IMAGE_EXTENSION_EXTEND,
+     "EXTEND",
+     0,
+     "Extend",
+     "Extend by repeating edge pixels of the image"},
+    {SHD_IMAGE_EXTENSION_CLIP,
+     "CLIP",
+     0,
+     "Clip",
+     "Clip to image size and set exterior pixels as transparent"},
+    {SHD_IMAGE_EXTENSION_MIRROR,
+     "MIRROR",
+     0,
+     "Mirror",
+     "Repeatedly flip the image horizontally and vertically"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 /* -- Common nodes ---------------------------------------------------------- */
 
 static void def_group_input(StructRNA *UNUSED(srna))
@@ -5429,25 +5455,6 @@ static void def_sh_tex_image(StructRNA *srna)
       {0, NULL, 0, NULL, NULL},
   };
 
-  static const EnumPropertyItem prop_image_extension[] = {
-      {SHD_IMAGE_EXTENSION_REPEAT,
-       "REPEAT",
-       0,
-       "Repeat",
-       "Cause the image to repeat horizontally and vertically"},
-      {SHD_IMAGE_EXTENSION_EXTEND,
-       "EXTEND",
-       0,
-       "Extend",
-       "Extend by repeating edge pixels of the image"},
-      {SHD_IMAGE_EXTENSION_CLIP,
-       "CLIP",
-       0,
-       "Clip",
-       "Clip to image size and set exterior pixels as transparent"},
-      {0, NULL, 0, NULL, NULL},
-  };
-
   PropertyRNA *prop;
 
   prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
@@ -5511,25 +5518,6 @@ static void def_geo_image_texture(StructRNA *srna)
       {SHD_INTERP_LINEAR, "Linear", 0, "Linear", "Linear interpolation"},
       {SHD_INTERP_CLOSEST, "Closest", 0, "Closest", "No interpolation (sample closest texel)"},
       {SHD_INTERP_CUBIC, "Cubic", 0, "Cubic", "Cubic interpolation"},
-      {0, NULL, 0, NULL, NULL},
-  };
-
-  static const EnumPropertyItem prop_image_extension[] = {
-      {SHD_IMAGE_EXTENSION_REPEAT,
-       "REPEAT",
-       0,
-       "Repeat",
-       "Cause the image to repeat horizontally and vertically"},
-      {SHD_IMAGE_EXTENSION_EXTEND,
-       "EXTEND",
-       0,
-       "Extend",
-       "Extend by repeating edge pixels of the image"},
-      {SHD_IMAGE_EXTENSION_CLIP,
-       "CLIP",
-       0,
-       "Clip",
-       "Clip to image size and set exterior pixels as transparent"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -10015,7 +10003,10 @@ static void def_geo_collection_info(StructRNA *srna)
 
   prop = RNA_def_property(srna, "transform_space", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_node_geometry_collection_info_transform_space_items);
-  RNA_def_property_ui_text(prop, "Transform Space", "The transformation of the geometry output");
+  RNA_def_property_ui_text(
+      prop,
+      "Transform Space",
+      "The transformation of the instances output. Does not affect the internal geometry");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update_relations");
 }
 
@@ -10601,6 +10592,18 @@ static void def_geo_attribute_capture(StructRNA *srna)
   RNA_def_property_enum_items(prop, rna_enum_attribute_domain_items);
   RNA_def_property_enum_default(prop, ATTR_DOMAIN_POINT);
   RNA_def_property_ui_text(prop, "Domain", "Which domain to store the data in");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_geo_image(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_sdna(prop, NULL, "id");
+  RNA_def_property_struct_type(prop, "Image");
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+  RNA_def_property_ui_text(prop, "Image", "");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 

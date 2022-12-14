@@ -4,6 +4,7 @@
 
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_rotation.hh"
 
 TEST(math_matrix, interp_m4_m4m4_regular)
 {

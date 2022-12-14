@@ -6,7 +6,7 @@
  * \ingroup bli
  */
 
-#include "BLI_math_vector.hh"
+#include "BLI_math_vec_types.hh"
 
 namespace blender::math {
 

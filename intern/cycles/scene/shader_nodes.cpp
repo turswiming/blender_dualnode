@@ -226,6 +226,7 @@ NODE_DEFINE(ImageTextureNode)
   extension_enum.insert("periodic", EXTENSION_REPEAT);
   extension_enum.insert("clamp", EXTENSION_EXTEND);
   extension_enum.insert("black", EXTENSION_CLIP);
+  extension_enum.insert("mirror", EXTENSION_MIRROR);
   SOCKET_ENUM(extension, "Extension", extension_enum, EXTENSION_REPEAT);
 
   static NodeEnum projection_enum;
@@ -5132,6 +5133,9 @@ void MixFloatNode::constant_fold(const ConstantFolder &folder)
     }
     folder.make_constant(a * (1 - fac) + b * fac);
   }
+  else {
+    folder.fold_mix_float(use_clamp, false);
+  }
 }
 
 /* Mix Vector */
@@ -5184,6 +5188,9 @@ void MixVectorNode::constant_fold(const ConstantFolder &folder)
       fac = clamp(fac, 0.0f, 1.0f);
     }
     folder.make_constant(a * (one_float3() - fac) + b * fac);
+  }
+  else {
+    folder.fold_mix_color(NODE_MIX_BLEND, use_clamp, false);
   }
 }
 

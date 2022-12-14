@@ -616,18 +616,16 @@ void LightManager::device_update_tree(Device *,
             shader_flag |= SHADER_EXCLUDE_SHADOW_CATCHER;
           }
 
-          light_tree_emitters[emitter_index].prim_id = prim.prim_id + mesh->prim_offset;
+          light_tree_emitters[emitter_index].prim = prim.prim_id + mesh->prim_offset;
           light_tree_emitters[emitter_index].mesh_light.shader_flag = shader_flag;
-          light_tree_emitters[emitter_index].mesh_light.emission_sampling =
-              shader->emission_sampling;
+          light_tree_emitters[emitter_index].emission_sampling = shader->emission_sampling;
           triangle_array[prim.prim_id + object_lookup_offsets[prim.object_id]] = emitter_index;
         }
         else {
-          light_tree_emitters[emitter_index].prim_id = prim.prim_id;
+          light_tree_emitters[emitter_index].prim = prim.prim_id;
           light_tree_emitters[emitter_index].mesh_light.shader_flag = 0;
           light_tree_emitters[emitter_index].mesh_light.object_id = OBJECT_NONE;
-          light_tree_emitters[emitter_index].mesh_light.emission_sampling =
-              EMISSION_SAMPLING_FRONT_BACK;
+          light_tree_emitters[emitter_index].emission_sampling = EMISSION_SAMPLING_FRONT_BACK;
           light_array[~prim.prim_id] = emitter_index;
         }
 
@@ -726,7 +724,6 @@ void LightManager::device_update_background(Device *device,
   foreach (ShaderNode *node, shader->graph->nodes) {
     if (node->type == EnvironmentTextureNode::get_node_type()) {
       EnvironmentTextureNode *env = (EnvironmentTextureNode *)node;
-      ImageMetaData metadata;
       if (!env->handle.empty()) {
         ImageMetaData metadata = env->handle.metadata();
         environment_res.x = max(environment_res.x, (int)metadata.width);
@@ -1045,7 +1042,7 @@ void LightManager::device_update_lights(Device *device, DeviceScene *dscene, Sce
       const float tan_half_spread = light->spread == M_PI_F ? FLT_MAX : tanf(half_spread);
       /* Normalization computed using:
        * integrate cos(x) * (1 - tan(x) / tan(a)) * sin(x) from x = 0 to a, a being half_spread.
-       * Divided by tan_half_spread to simplify the attentuation computation in `area.h`. */
+       * Divided by tan_half_spread to simplify the attenuation computation in `area.h`. */
       const float normalize_spread = 1.0f / (tan_half_spread - half_spread);
 
       dir = safe_normalize(dir);
