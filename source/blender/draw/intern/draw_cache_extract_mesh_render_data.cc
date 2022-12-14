@@ -364,26 +364,7 @@ void mesh_render_data_update_normals(MeshRenderData *mr, const eMRDataType data_
       mr->poly_normals = BKE_mesh_poly_normals_ensure(mr->me);
     }
     if (((data_flag & MR_DATA_LOOP_NOR) && is_auto_smooth) || (data_flag & MR_DATA_TAN_LOOP_NOR)) {
-      mr->loop_normals = static_cast<float(*)[3]>(
-          MEM_mallocN(sizeof(*mr->loop_normals) * mr->loop_len, __func__));
-      short(*clnors)[2] = static_cast<short(*)[2]>(
-          CustomData_get_layer(&mr->me->ldata, CD_CUSTOMLOOPNORMAL));
-      BKE_mesh_normals_loop_split(mr->mvert,
-                                  mr->vert_normals,
-                                  mr->vert_len,
-                                  mr->medge,
-                                  mr->edge_len,
-                                  mr->mloop,
-                                  mr->loop_normals,
-                                  mr->loop_len,
-                                  mr->mpoly,
-                                  mr->poly_normals,
-                                  mr->poly_len,
-                                  is_auto_smooth,
-                                  split_angle,
-                                  nullptr,
-                                  nullptr,
-                                  clnors);
+      mr->loop_normals = BKE_mesh_corner_normals_ensure(mr->me);
     }
   }
   else {
@@ -403,8 +384,8 @@ void mesh_render_data_update_normals(MeshRenderData *mr, const eMRDataType data_
         poly_normals = mr->bm_poly_normals;
       }
 
-      mr->loop_normals = static_cast<float(*)[3]>(
-          MEM_mallocN(sizeof(*mr->loop_normals) * mr->loop_len, __func__));
+      mr->bm_loop_normals = static_cast<float(*)[3]>(
+          MEM_mallocN(sizeof(*mr->bm_loop_normals) * mr->loop_len, __func__));
       const int clnors_offset = CustomData_get_offset(&mr->bm->ldata, CD_CUSTOMLOOPNORMAL);
       BM_loops_calc_normal_vcos(mr->bm,
                                 vert_coords,
@@ -412,11 +393,12 @@ void mesh_render_data_update_normals(MeshRenderData *mr, const eMRDataType data_
                                 poly_normals,
                                 is_auto_smooth,
                                 split_angle,
-                                mr->loop_normals,
+                                mr->bm_loop_normals,
                                 nullptr,
                                 nullptr,
                                 clnors_offset,
                                 false);
+      mr->loop_normals = mr->bm_loop_normals;
     }
   }
 }
@@ -601,7 +583,7 @@ MeshRenderData *mesh_render_data_create(Object *object,
 
 void mesh_render_data_free(MeshRenderData *mr)
 {
-  MEM_SAFE_FREE(mr->loop_normals);
+  MEM_SAFE_FREE(mr->bm_loop_normals);
 
   /* Loose geometry are owned by #MeshBufferCache. */
   mr->ledges = nullptr;

@@ -128,18 +128,6 @@ float (*BKE_mesh_poly_normals_for_write(Mesh *mesh))[3]
   return mesh->runtime->poly_normals;
 }
 
-float (*BKE_mesh_corner_normals_for_write(Mesh *mesh))[3]
-{
-  if (mesh->runtime->corner_normals == nullptr) {
-    mesh->runtime->corner_normals = (float(*)[3])MEM_malloc_arrayN(
-        mesh->totloop, sizeof(float[3]), __func__);
-  }
-
-  BLI_assert(MEM_allocN_len(mesh->runtime->corner_normals) >= sizeof(float[3]) * mesh->totloop);
-
-  return mesh->runtime->corner_normals;
-}
-
 void BKE_mesh_vertex_normals_clear_dirty(Mesh *mesh)
 {
   mesh->runtime->vert_normals_dirty = false;
@@ -554,9 +542,13 @@ const float (*BKE_mesh_corner_normals_ensure(const Mesh *mesh))[3]
     const Span<MPoly> polys = mesh_mutable.polys();
     const Span<MLoop> loops = mesh_mutable.loops();
 
-    corner_normals = BKE_mesh_corner_normals_for_write(&mesh_mutable);
-    const short(*custom_nors_dst)[2] = (const short(*)[2])CustomData_get_layer(
-        &mesh->ldata, CD_CUSTOMLOOPNORMAL);
+    if (mesh_mutable.runtime->corner_normals == nullptr) {
+      mesh_mutable.runtime->corner_normals = (float(*)[3])MEM_malloc_arrayN(
+          mesh_mutable.totloop, sizeof(float[3]), __func__);
+    }
+
+    const short(*custom_normals)[2] = (const short(*)[2])CustomData_get_layer(&mesh->ldata,
+                                                                              CD_CUSTOMLOOPNORMAL);
 
     BKE_mesh_normals_loop_split(verts.data(),
                                 vert_normals,
@@ -569,10 +561,10 @@ const float (*BKE_mesh_corner_normals_ensure(const Mesh *mesh))[3]
                                 polys.data(),
                                 poly_normals,
                                 polys.size(),
-                                use_split_normals,
-                                split_angle,
-                                r_lnors_spacearr,
-                                clnors,
+                                true,
+                                mesh->smoothresh,
+                                nullptr,
+                                custom_normals,
                                 nullptr);
 
     BKE_mesh_corner_normals_clear_dirty(&mesh_mutable);

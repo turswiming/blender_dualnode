@@ -410,8 +410,6 @@ float (*BKE_mesh_vertex_normals_for_write(struct Mesh *mesh))[3];
  */
 float (*BKE_mesh_poly_normals_for_write(struct Mesh *mesh))[3];
 
-float (*BKE_mesh_corner_normals_for_write(struct Mesh *mesh))[3];
-
 /**
  * Mark the mesh's vertex normals non-dirty, for when they are calculated or assigned manually.
  */

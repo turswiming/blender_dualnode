@@ -379,10 +379,10 @@ void OBJMesh::store_normal_coords_and_indices()
   normal_to_index.reserve(export_mesh_->totpoly);
   loop_to_normal_index_.resize(export_mesh_->totloop);
   loop_to_normal_index_.fill(-1);
-  const float(*lnors)[3] = static_cast<const float(*)[3]>(
-      CustomData_get_layer(&export_mesh_eval_->ldata, CD_NORMAL));
-  for (int poly_index = 0; poly_index < export_mesh_eval_->totpoly; ++poly_index) {
-    const MPoly &mpoly = polys[poly_index];
+  /* TODO: Only retrieve when necessary. */
+  const float(*lnors)[3] = BKE_mesh_corner_normals_ensure(export_mesh_);
+  for (int poly_index = 0; poly_index < export_mesh_->totpoly; ++poly_index) {
+    const MPoly &mpoly = mesh_polys_[poly_index];
     bool need_per_loop_normals = lnors != nullptr || (mpoly.flag & ME_SMOOTH);
     if (need_per_loop_normals) {
       for (int loop_of_poly = 0; loop_of_poly < mpoly.totloop; ++loop_of_poly) {

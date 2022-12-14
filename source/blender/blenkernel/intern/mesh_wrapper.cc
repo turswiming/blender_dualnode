@@ -340,9 +340,6 @@ static Mesh *mesh_wrapper_ensure_subdivision(Mesh *me)
     const float(*lnors)[3] = BKE_mesh_corner_normals_ensure(subdiv_mesh);
     BKE_mesh_set_custom_normals(subdiv_mesh, lnors);
   }
-  else if (runtime_data->calc_loop_normals) {
-    BKE_mesh_corner_normals_ensure(subdiv_mesh);
-  }
 
   if (subdiv != runtime_data->subdiv) {
     BKE_subdiv_free(subdiv);

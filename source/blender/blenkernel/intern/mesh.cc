@@ -1763,43 +1763,6 @@ void BKE_mesh_vert_coords_apply_with_mat4(Mesh *mesh,
   BKE_mesh_tag_coords_changed(mesh);
 }
 
-static void calc_normals_split(Mesh *mesh,
-                               MLoopNorSpaceArray *r_lnors_spacearr,
-                               float (*r_corner_normals)[3])
-{
-  const float split_angle = (mesh->flag & ME_AUTOSMOOTH) != 0 ? mesh->smoothresh : float(M_PI);
-
-  /* may be nullptr */
-  short(*clnors)[2] = (short(*)[2])CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
-
-  const Span<MVert> verts = mesh->verts();
-  const Span<MEdge> edges = mesh->edges();
-  const Span<MPoly> polys = mesh->polys();
-  const Span<MLoop> loops = mesh->loops();
-
-  BKE_mesh_normals_loop_split(verts.data(),
-                              BKE_mesh_vertex_normals_ensure(mesh),
-                              verts.size(),
-                              edges.data(),
-                              edges.size(),
-                              loops.data(),
-                              r_corner_normals,
-                              loops.size(),
-                              polys.data(),
-                              BKE_mesh_poly_normals_ensure(mesh),
-                              polys.size(),
-                              true,
-                              split_angle,
-                              nullptr,
-                              r_lnors_spacearr,
-                              clnors);
-}
-
-void BKE_mesh_calc_normals_split(Mesh *mesh)
-{
-  BKE_mesh_calc_normals_split_ex(mesh, nullptr, ensure_corner_normal_layer(*mesh));
-}
-
 /* **** Depsgraph evaluation **** */
 
 void BKE_mesh_eval_geometry(Depsgraph *depsgraph, Mesh *mesh)

@@ -559,8 +559,6 @@ static void mesh_calc_modifier_final_normals(const Mesh *mesh_input,
        * which deals with drawing differently. */
       BKE_mesh_ensure_normals_for_display(mesh_final);
     }
-
-
   }
 }
 
