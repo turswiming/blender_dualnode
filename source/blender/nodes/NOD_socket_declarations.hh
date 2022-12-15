@@ -72,6 +72,7 @@ class IntBuilder : public SocketDeclarationBuilder<Int> {
 class VectorBuilder;
 
 class Vector : public SocketDeclaration {
+ public:
   float3 default_value_ = {0, 0, 0};
   float soft_min_value_ = -FLT_MAX;
   float soft_max_value_ = FLT_MAX;
@@ -101,6 +102,7 @@ class VectorBuilder : public SocketDeclarationBuilder<Vector> {
 class BoolBuilder;
 
 class Bool : public SocketDeclaration {
+ public:
   bool default_value_ = false;
 
  private:
@@ -122,6 +124,7 @@ class BoolBuilder : public SocketDeclarationBuilder<Bool> {
 class ColorBuilder;
 
 class Color : public SocketDeclaration {
+ public:
   ColorGeometry4f default_value_;
 
  private:
@@ -143,6 +146,7 @@ class ColorBuilder : public SocketDeclarationBuilder<Color> {
 class StringBuilder;
 
 class String : public SocketDeclaration {
+ public:
   std::string default_value_;
 
  private:

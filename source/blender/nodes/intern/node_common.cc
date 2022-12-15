@@ -123,17 +123,98 @@ bool nodeGroupPoll(const bNodeTree *nodetree,
 
 namespace blender::nodes {
 
+static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &io_socket)
+{
+  SocketDeclarationPtr dst;
+  switch (io_socket.type) {
+    case SOCK_FLOAT: {
+      const auto &value = *io_socket.default_value_typed<bNodeSocketValueFloat>();
+      std::unique_ptr<decl::Float> decl = std::make_unique<decl::Float>();
+      decl->default_value_ = value.value;
+      decl->soft_min_value_ = value.min;
+      decl->soft_max_value_ = value.max;
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_VECTOR: {
+      const auto &value = *io_socket.default_value_typed<bNodeSocketValueVector>();
+      std::unique_ptr<decl::Vector> decl = std::make_unique<decl::Vector>();
+      decl->default_value_ = value.value;
+      decl->soft_min_value_ = value.min;
+      decl->soft_max_value_ = value.max;
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_RGBA: {
+      const auto &value = *io_socket.default_value_typed<bNodeSocketValueRGBA>();
+      std::unique_ptr<decl::Color> decl = std::make_unique<decl::Color>();
+      decl->default_value_ = value.value;
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_SHADER: {
+      std::unique_ptr<decl::Color> decl = std::make_unique<decl::Color>();
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_BOOLEAN: {
+      const auto &value = *io_socket.default_value_typed<bNodeSocketValueBoolean>();
+      std::unique_ptr<decl::Bool> decl = std::make_unique<decl::Bool>();
+      decl->default_value_ = value.value;
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_INT: {
+      const auto &value = *io_socket.default_value_typed<bNodeSocketValueInt>();
+      std::unique_ptr<decl::Int> decl = std::make_unique<decl::Int>();
+      decl->default_value_ = value.value;
+      decl->soft_min_value_ = value.min;
+      decl->soft_max_value_ = value.max;
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_STRING: {
+      const auto &value = *io_socket.default_value_typed<bNodeSocketValueString>();
+      std::unique_ptr<decl::String> decl = std::make_unique<decl::String>();
+      decl->default_value_ = value.value;
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_OBJECT:
+      /* TODO: What happens to default values of data-block sockets? */
+      dst = std::make_unique<decl::Object>();
+      break;
+    case SOCK_IMAGE:
+      dst = std::make_unique<decl::Image>();
+      break;
+    case SOCK_GEOMETRY:
+      dst = std::make_unique<decl::Geometry>();
+      break;
+    case SOCK_COLLECTION:
+      dst = std::make_unique<decl::Collection>();
+      break;
+    case SOCK_TEXTURE:
+      dst = std::make_unique<decl::Texture>();
+      break;
+    case SOCK_MATERIAL:
+      dst = std::make_unique<decl::Material>();
+      break;
+  }
+  dst->name_ = io_socket.name;
+  dst->identifier_ = io_socket.identifier;
+  dst->in_out_ = eNodeSocketInOut(io_socket.in_out);
+  dst->description_ = io_socket.description;
+}
+
 bool node_group_declare_dynamic_fn(const bNodeTree & /*node_tree*/,
                                    const bNode &node,
                                    NodeDeclaration &r_declaration)
 {
-  /* TODO: Restore this behavior somehow:
-   * Missing data-block, leave sockets unchanged so that when it comes back
-   * the links remain valid. */
   if (!node.id) {
     return false;
   }
   else if (ID_IS_LINKED(node.id) && (node.id->tag & LIB_TAG_MISSING)) {
+    /* TODO: Restore the behavior that keeps the sockets until the ID is found. */
     return false;
   }
   const bNodeTree &group = *reinterpret_cast<const bNodeTree *>(node.id);
@@ -144,155 +225,15 @@ bool node_group_declare_dynamic_fn(const bNodeTree & /*node_tree*/,
   /* TODO: Specialize for geometry nodes and fields. */
   /* TODO: Figure out how this should work for custom node trees / #SOCK_CUSTOM. */
   LISTBASE_FOREACH (const bNodeSocket *, input, &group.inputs) {
-    switch (input->type) {
-      case SOCK_FLOAT: {
-        const auto &value = *input->default_value_typed<bNodeSocketValueFloat>();
-        std::unique_ptr<decl::Float> decl = std::make_unique<decl::Float>();
-        decl->soft_min_value_ = value.min;
-        decl->soft_max_value_ = value.max;
-        decl->description_ = input->description;
-        b.add_input<decl::Float>(input->name, input->identifier)
-            .default_value(value.value)
-            .min(value.min)
-            .max(value.max)
-            .description(input->description);
-        break;
-      }
-      case SOCK_VECTOR: {
-        const auto &value = *input->default_value_typed<bNodeSocketValueVector>();
-        b.add_input<decl::Vector>(input->name, input->identifier)
-            .default_value(value.value)
-            .min(value.min)
-            .max(value.max)
-            .description(input->description);
-        break;
-      }
-      case SOCK_RGBA: {
-        const auto &value = *input->default_value_typed<bNodeSocketValueRGBA>();
-        b.add_input<decl::Color>(input->name, input->identifier)
-            .default_value(value.value)
-            .description(input->description);
-        break;
-      }
-      case SOCK_SHADER: {
-        b.add_input<decl::Shader>(input->name, input->identifier).description(input->description);
-        break;
-      }
-      case SOCK_BOOLEAN: {
-        const auto &value = *input->default_value_typed<bNodeSocketValueBoolean>();
-        b.add_input<decl::Float>(input->name, input->identifier)
-            .default_value(value.value)
-            .description(input->description);
-        break;
-      }
-      case SOCK_INT: {
-        const auto &value = *input->default_value_typed<bNodeSocketValueInt>();
-        b.add_input<decl::Int>(input->name, input->identifier)
-            .default_value(value.value)
-            .min(value.min)
-            .max(value.max)
-            .description(input->description);
-        break;
-      }
-      case SOCK_STRING: {
-        const auto &value = *input->default_value_typed<bNodeSocketValueString>();
-        b.add_input<decl::String>(input->name, input->identifier)
-            .default_value(value.value)
-            .description(input->description);
-        break;
-      }
-      case SOCK_OBJECT: {
-        /* TODO: What happens to default values of data-block sockets? */
-        b.add_input<decl::Object>(input->name, input->identifier).description(input->description);
-        break;
-      }
-      case SOCK_IMAGE: {
-        b.add_input<decl::Image>(input->name, input->identifier).description(input->description);
-        break;
-      }
-      case SOCK_GEOMETRY: {
-        b.add_input<decl::Geometry>(input->name, input->identifier)
-            .description(input->description);
-        break;
-      }
-      case SOCK_COLLECTION: {
-        b.add_input<decl::Collection>(input->name, input->identifier)
-            .description(input->description);
-        break;
-      }
-      case SOCK_TEXTURE: {
-        b.add_input<decl::Texture>(input->name, input->identifier).description(input->description);
-        break;
-      }
-      case SOCK_MATERIAL: {
-        b.add_input<decl::Material>(input->name, input->identifier)
-            .description(input->description);
-        break;
-      }
-    }
+    inputs.append(declataion_for_interface_socket(*input));
   }
   LISTBASE_FOREACH (const bNodeSocket *, output, &group.outputs) {
-    switch (output->type) {
-      case SOCK_FLOAT:
-        b.add_output<decl::Float>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_VECTOR:
-        b.add_output<decl::Vector>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_RGBA:
-        b.add_output<decl::Color>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_SHADER:
-        b.add_output<decl::Shader>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_BOOLEAN:
-        const auto &value = *output->default_value_typed<bNodeSocketValueBoolean>();
-        b.add_output<decl::Float>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_INT:
-        b.add_output<decl::Int>(output->name, output->identifier).description(output->description);
-        break;
-      case SOCK_STRING:
-        const auto &value = *output->default_value_typed<bNodeSocketValueString>();
-        b.add_output<decl::String>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_OBJECT:
-        /* TODO: What happens to default values of data-block sockets? */
-        b.add_output<decl::Object>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_IMAGE:
-        b.add_output<decl::Image>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_GEOMETRY:
-        b.add_output<decl::Geometry>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_COLLECTION:
-        b.add_output<decl::Collection>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_TEXTURE:
-        b.add_output<decl::Texture>(output->name, output->identifier)
-            .description(output->description);
-        break;
-      case SOCK_MATERIAL:
-        b.add_output<decl::Material>(output->name, output->identifier)
-            .description(output->description);
-        break;
-    }
+    outputs.append(declataion_for_interface_socket(*output));
   }
 
   if (!ID_IS_LINKED(node.id)) {
-    /* TODO: A fun possibility, but maybe not worth it right now? */
-
+    /* TODO: The if statement is a fun possibility, but maybe not worth it right now? */
+    std::make_unique<decl::Extend>();
     b.add_input<decl::Extend>("__extend__");
     b.add_output<decl::Extend>("__extend__");
   }

@@ -72,10 +72,11 @@ using ImplicitInputValueFn = std::function<void(const bNode &node, void *r_value
  * Describes a single input or output socket. This is subclassed for different socket types.
  */
 class SocketDeclaration {
- protected:
+ public:
   std::string name_;
   std::string identifier_;
   std::string description_;
+
   /** Defined by whether the socket is part of the node's input or
    * output socket declaration list. Included here for convenience. */
   eNodeSocketInOut in_out_;
