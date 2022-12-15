@@ -135,6 +135,7 @@ class View {
   /** Called from draw manager. */
   void bind();
   virtual void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze);
+  virtual VisibilityBuf &get_visibility_buffer();
 
   void update_viewport_size();
 

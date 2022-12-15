@@ -197,7 +197,7 @@ class OpaquePass {
             View &view,
             SceneResources &resources,
             int2 resolution,
-            struct ShadowPass *shadow_pass);
+            class ShadowPass *shadow_pass);
   bool is_empty() const;
 };
 
@@ -237,35 +237,51 @@ class TransparentDepthPass {
   bool is_empty() const;
 };
 
-struct ShadowPass {
+class ShadowPass {
 
   bool enabled_;
 
-  float3 direction_ws;
-  float3 direction_vs;
-  float3 cached_direction;
-  bool changed;
+  enum PassType { Pass, Fail, ForcedFail, Length };
 
-  float4x4 matrix;
-  float4x4 matrix_inv;
+  class ShadowView : public View {
+    float3 light_direction_;
+    UniformBuffer<ExtrudedFrustum> extruded_frustum_;
+    ShadowPass::PassType current_pass_type_;
 
-  /* Far plane of the view frustum. Used for shadow volume extrusion. */
-  float4 far_plane;
-  /* Min and max of shadow_near_corners. Speed up culling test. */
-  float3 near_min;
-  float3 near_max;
-  /* This is a parallelogram, so only 2 normal and distance to the edges. */
-  float2 near_sides[2][2];
+    /* TODO(Miguel Pozo): Use multiple views? */
+    VisibilityBuf pass_visibility_buf_;
+    VisibilityBuf fail_visibility_buf_;
 
-  PassMain pass_ps = {"Shadow.Pass"};
-  PassMain fail_ps = {"Shadow.Fail"};
+   public:
+    void setup(View &view, float3 light_direction);
+    bool debug_object_culling(Object *ob);
+    void set_mode(PassType type);
 
-  PassMain::Sub *passes_[2][2][2] = {{{nullptr}}};
-  PassMain::Sub *&get_pass_ptr(bool depth_pass, bool manifold, bool cap = false);
+    ShadowView();
 
-  GPUShader *shaders[2][2][2] = {{{nullptr}}};
+   protected:
+    virtual void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze);
+    virtual VisibilityBuf &get_visibility_buffer();
+  } view_ = {};
+
+  UniformBuffer<ShadowPassData> pass_data_;
+
+  /* Draws are added to both passes and the visibily compute shader selects one of them */
+  PassMain pass_ps_ = {"Shadow.Pass"};
+  PassMain fail_ps_ = {"Shadow.Fail"};
+
+  /* In some cases, we know beforehand that we need to use the fail technique */
+  PassMain forced_fail_ps_ = {"Shadow.ForcedFail"};
+
+  PassMain::Sub *passes_[PassType::Length][2][2] = {{{nullptr}}};
+  PassMain::Sub *&get_pass_ptr(PassType type, bool manifold, bool cap = false);
+
+  GPUShader *shaders_[2][2][2] = {{{nullptr}}};
   GPUShader *get_shader(bool depth_pass, bool manifold, bool cap = false);
 
+  Framebuffer fb_;
+
+ public:
   void init(const SceneState &scene_state, SceneResources &resources);
   void update();
   void sync();
@@ -274,22 +290,6 @@ struct ShadowPass {
                    SceneState &scene_state,
                    const bool has_transp_mat);
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
-};
-
-struct ObjectShadowData {
-  /* Shadow direction in local object space. */
-  float3 direction;
-  float depth;
-  /* Min, max in shadow space */
-  float3 min, max;
-  BoundBox bbox;
-  bool bbox_dirty;
-
-  void init();
-  const BoundBox *get_bbox(Object *ob, ShadowPass &shadow_pass);
-  bool cast_visible_shadow(Object *ob, ShadowPass &shadow_pass);
-  float shadow_distance(Object *ob, ShadowPass &shadow_pass);
-  bool camera_in_object_shadow(Object *ob, ShadowPass &shadow_pass);
 };
 
 class OutlinePass {
@@ -400,14 +400,6 @@ class AntiAliasingPass {
             int2 resolution,
             GPUTexture *depth_tx,
             GPUTexture *color_tx);
-};
-
-struct ObjectData {
-  DrawData dd;
-
-  ObjectShadowData shadow_data;
-
-  static void init(DrawData *dd);
 };
 
 }  // namespace blender::workbench

@@ -299,8 +299,11 @@ set(SRC
   engines/image/image_space_node.hh
   engines/image/image_texture_info.hh
   engines/image/image_usage.hh
+  engines/workbench/workbench_defines.hh
   engines/workbench/workbench_engine.h
+  engines/workbench/workbench_enums.hh
   engines/workbench/workbench_private.h
+  engines/workbench/workbench_private.hh
   engines/workbench/workbench_shader_shared.h
   engines/select/select_engine.h
   engines/select/select_private.h
@@ -490,6 +493,7 @@ set(GLSL_SRC
   engines/workbench/shaders/workbench_shadow_debug_frag.glsl
   engines/workbench/shaders/workbench_shadow_geom.glsl
   engines/workbench/shaders/workbench_shadow_vert.glsl
+  engines/workbench/shaders/workbench_shadow_visibility_comp.glsl
   engines/workbench/shaders/workbench_transparent_accum_frag.glsl
   engines/workbench/shaders/workbench_transparent_resolve_frag.glsl
   engines/workbench/shaders/workbench_volume_frag.glsl

@@ -337,7 +337,6 @@ class Instance {
     }
 
     opaque_ps.draw(manager, view, resources, resolution, &shadow_ps);
-    // shadow_ps.draw(manager, view, resources, resolution);
     transparent_ps.draw(manager, view, resources, resolution);
     transparent_depth_ps.draw(manager, view, resources, resolution);
 
@@ -362,12 +361,6 @@ class Instance {
     }
   }
 };
-
-void ObjectData::init(DrawData *dd)
-{
-  ObjectData *data = (ObjectData *)dd;
-  data->shadow_data.init();
-}
 
 /* This returns an array of nullptr GPUMaterial pointers so we can call
  * DRW_cache_object_surface_material_get. They never get actually used.

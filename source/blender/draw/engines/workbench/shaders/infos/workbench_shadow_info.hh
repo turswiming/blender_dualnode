@@ -24,26 +24,40 @@ GPU_SHADER_CREATE_INFO(workbench_shadow_common)
 GPU_SHADER_CREATE_INFO(workbench_next_shadow_common)
     .vertex_in(0, Type::VEC3, "pos")
     .vertex_out(workbench_shadow_iface)
-    .push_constant(Type::FLOAT, "lightDistance")
+    .define("WORKBENCH_NEXT")
+    .uniform_buf(1, "ShadowPassData", "pass_data")
     .push_constant(Type::VEC3, "lightDirection")
+    .typedef_source("workbench_shader_shared.h")
     .vertex_source("workbench_shadow_vert.glsl")
     .additional_info("draw_view")
     .additional_info("draw_modelmat_new")
     .additional_info("draw_resource_handle_new");
 
-GPU_SHADER_CREATE_INFO(workbench_next_shadow_visibility_compute)
-    .do_static_compilation(true)
+GPU_SHADER_CREATE_INFO(workbench_next_shadow_visibility_compute_common)
     .local_group_size(DRW_VISIBILITY_GROUP_SIZE)
     .define("DRW_VIEW_LEN", "64")
     .storage_buf(0, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
-    .storage_buf(1, Qualifier::READ_WRITE, "uint", "visibility_buf[]")
-    .storage_buf(2, Qualifier::READ, "uint", "pass_technique_buf[]")
+    .uniform_buf(2, "ExtrudedFrustum", "extruded_frustum")
+    .push_constant(Type::BOOL, "forced_fail_pass")
     .push_constant(Type::INT, "resource_len")
     .push_constant(Type::INT, "view_len")
     .push_constant(Type::INT, "visibility_word_per_draw")
     .push_constant(Type::VEC3, "shadow_direction")
-    .compute_source("draw_visibility_comp.glsl")
+    .typedef_source("workbench_shader_shared.h")
+    .compute_source("workbench_shadow_visibility_comp.glsl")
     .additional_info("draw_view", "draw_view_culling");
+
+GPU_SHADER_CREATE_INFO(workbench_next_shadow_visibility_compute_dynamic_pass_type)
+    .additional_info("workbench_next_shadow_visibility_compute_common")
+    .define("DYNAMIC_PASS_SELECTION")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "pass_visibility_buf[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "fail_visibility_buf[]")
+    .do_static_compilation(true);
+
+GPU_SHADER_CREATE_INFO(workbench_next_shadow_visibility_compute_static_pass_type)
+    .additional_info("workbench_next_shadow_visibility_compute_common")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "visibility_buf[]")
+    .do_static_compilation(true);
 
 /** \} */
 

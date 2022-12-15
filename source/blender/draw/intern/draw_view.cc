@@ -267,4 +267,9 @@ void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool d
   GPU_debug_group_end();
 }
 
+VisibilityBuf &View::get_visibility_buffer()
+{
+  return visibility_buf_;
+}
+
 }  // namespace blender::draw

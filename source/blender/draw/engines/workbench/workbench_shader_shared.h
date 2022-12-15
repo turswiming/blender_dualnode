@@ -47,3 +47,18 @@ struct WorldData {
 
   float4 background_color;
 };
+
+struct ExtrudedFrustum {
+  /** \note vec3 array padded to vec4. */
+  float4 corners[16];
+  float4 planes[12];
+  int corners_count;
+  int planes_count;
+  int _padding[2];
+};
+
+struct ShadowPassData {
+  float4 far_plane;
+  float3 light_direction_ws;
+  int _padding;
+};
