@@ -438,21 +438,21 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
   friend std::ostream &operator<<(std::ostream &stream, const MatBase &mat)
   {
     stream << "(\n";
-    for (int i = 0; i < NumCol; i++) {
+    unroll<NumCol>([&](auto i) {
       stream << "(";
-      for (int j = 0; j < NumRow; j++) {
+      unroll<NumRow>([&](auto j) {
         /** NOTE: j and i are swapped to follow mathematical convention. */
         stream << mat[j][i];
         if (j < NumRow - 1) {
           stream << ", ";
         }
-      }
+      });
       stream << ")";
       if (i < NumCol - 1) {
         stream << ",";
       }
       stream << "\n";
-    }
+    });
     stream << ")\n";
     return stream;
   }
@@ -768,21 +768,21 @@ struct MatView : NonCopyable, NonMovable {
   friend std::ostream &operator<<(std::ostream &stream, const MatView &mat)
   {
     stream << "(\n";
-    for (int i = 0; i < NumCol; i++) {
+    unroll<NumCol>([&](auto i) {
       stream << "(";
-      for (int j = 0; j < NumRow; j++) {
+      unroll<NumRow>([&](auto j) {
         /** NOTE: j and i are swapped to follow mathematical convention. */
         stream << mat[j][i];
         if (j < NumRow - 1) {
           stream << ", ";
         }
-      }
+      });
       stream << ")";
       if (i < NumCol - 1) {
         stream << ",";
       }
       stream << "\n";
-    }
+    });
     stream << ")\n";
     return stream;
   }

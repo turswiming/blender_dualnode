@@ -490,11 +490,7 @@ template<typename T, int NumCol, int NumRow>
 [[nodiscard]] MatBase<T, NumCol, NumRow> transpose(const MatBase<T, NumRow, NumCol> &mat)
 {
   MatBase<T, NumCol, NumRow> result;
-  for (int i = 0; i < NumCol; i++) {
-    for (int j = 0; j < NumRow; j++) {
-      result[i][j] = mat[j][i];
-    }
-  }
+  unroll<NumCol>([&](auto i) { unroll<NumRow>([&](auto j) { result[i][j] = mat[j][i]; }); });
   return result;
 }
 
