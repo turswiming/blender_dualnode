@@ -64,7 +64,6 @@ struct FieldInferencingInterface {
   Vector<InputSocketFieldType> inputs;
   Vector<OutputFieldDependency> outputs;
 };
-FieldInferencingInterface calculate_field_inferencing(const bNodeTree &tree);
 
 using ImplicitInputValueFn = std::function<void(const bNode &node, void *r_value)>;
 

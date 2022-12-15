@@ -546,12 +546,12 @@ class NodeTreeMainUpdater {
         if (ntype.updatefunc) {
           ntype.updatefunc(&ntree, node);
         }
-        if (ntype.declare_dynamic) {
-          if (!node->runtime->declaration) {
-            node->runtime->declaration = new blender::nodes::NodeDeclaration();
-          }
-          build_node_declaration_dynamic(ntree, *node, *node->runtime->declaration);
-        }
+        // if (ntype.declare_dynamic) {
+        //   if (!node->runtime->declaration) {
+        //     node->runtime->declaration = new blender::nodes::NodeDeclaration();
+        //   }
+        //   build_node_declaration_dynamic(ntree, *node, *node->runtime->declaration);
+        // }
       }
       if (ELEM(node->type, NODE_GROUP_INPUT, NODE_GROUP_OUTPUT)) {
         group_inout_nodes.append(node);
@@ -563,7 +563,12 @@ class NodeTreeMainUpdater {
      * supposed to create the new interface socket. */
     if (ntree.runtime->changed_flag & NTREE_CHANGED_INTERFACE) {
       for (bNode *node : group_inout_nodes) {
-        node->typeinfo->updatefunc(&ntree, node);
+        if (node->typeinfo->declare_dynamic) {
+          if (!node->runtime->declaration) {
+            node->runtime->declaration = new blender::nodes::NodeDeclaration();
+          }
+          build_node_declaration_dynamic(ntree, *node, *node->runtime->declaration);
+        }
       }
     }
   }

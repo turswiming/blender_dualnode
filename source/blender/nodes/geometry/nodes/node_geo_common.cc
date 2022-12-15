@@ -20,8 +20,8 @@ static bool node_declare(const bNodeTree &node_tree,
   }
 
   const bNodeTree &group = reinterpret_cast<const bNodeTree &>(*node.id);
-  const FieldInferencingInterface field_interface = field_inferencing::calculate_field_inferencing(
-      group);
+  FieldInferencingInterface field_interface;
+  bke::node_field_inferencing::calculate_field_interface(group, field_interface);
   for (const int i : r_declaration.inputs_.index_range()) {
     r_declaration.inputs_[i]->input_field_type_ = field_interface.inputs[i];
   }
