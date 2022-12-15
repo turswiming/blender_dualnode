@@ -3,6 +3,7 @@
 #include "BKE_node.h"
 
 #include "NOD_geometry.h"
+#include "NOD_node_declaration.hh"
 
 #include "NOD_common.h"
 #include "node_common.h"
@@ -10,16 +11,25 @@
 
 namespace blender::nodes {
 
-static void node_declare(const bNodeTree &node_tree,
+static bool node_declare(const bNodeTree &node_tree,
                          const bNode &node,
                          NodeDeclaration &r_declaration)
 {
-  if (!node.id) {
-    return;
+  if (!node_group_declare_dynamic(node_tree, node, r_declaration)) {
+    return false;
   }
 
-  blender::nodes::node_group_declare_dynamic_fn(node_tree, node, r_declaration);
-  FieldInferencingInterface field_interface = calculate_field_inferencing()
+  const bNodeTree &group = reinterpret_cast<const bNodeTree &>(*node.id);
+  const FieldInferencingInterface field_interface = field_inferencing::calculate_field_inferencing(
+      group);
+  for (const int i : r_declaration.inputs_.index_range()) {
+    r_declaration.inputs_[i]->input_field_type_ = field_interface.inputs[i];
+  }
+  for (const int i : r_declaration.outputs_.index_range()) {
+    r_declaration.outputs_[i]->output_field_dependency_ = field_interface.outputs[i];
+  }
+
+  return true;
 }
 
 }  // namespace blender::nodes

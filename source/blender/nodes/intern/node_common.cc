@@ -204,31 +204,30 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
   dst->identifier_ = io_socket.identifier;
   dst->in_out_ = eNodeSocketInOut(io_socket.in_out);
   dst->description_ = io_socket.description;
+  dst->hide_value_ = io_socket.flag & SOCK_HIDE_VALUE;
+  return dst;
 }
 
-bool node_group_declare_dynamic_fn(const bNodeTree & /*node_tree*/,
-                                   const bNode &node,
-                                   NodeDeclaration &r_declaration)
+bool node_group_declare_dynamic(const bNodeTree & /*node_tree*/,
+                                const bNode &node,
+                                NodeDeclaration &r_declaration)
 {
-  if (!node.id) {
+  const bNodeTree *group = reinterpret_cast<const bNodeTree *>(node.id);
+  if (!group) {
     return false;
   }
-  else if (ID_IS_LINKED(node.id) && (node.id->tag & LIB_TAG_MISSING)) {
+  if (ID_IS_LINKED(&group->id) && (group->id.tag & LIB_TAG_MISSING)) {
     /* TODO: Restore the behavior that keeps the sockets until the ID is found. */
     return false;
   }
-  const bNodeTree &group = *reinterpret_cast<const bNodeTree *>(node.id);
-
-  Vector<SocketDeclarationPtr> inputs;
-  Vector<SocketDeclarationPtr> outputs;
 
   /* TODO: Specialize for geometry nodes and fields. */
   /* TODO: Figure out how this should work for custom node trees / #SOCK_CUSTOM. */
-  LISTBASE_FOREACH (const bNodeSocket *, input, &group.inputs) {
-    inputs.append(declataion_for_interface_socket(*input));
+  LISTBASE_FOREACH (const bNodeSocket *, input, &group->inputs) {
+    r_declaration.inputs_.append(declataion_for_interface_socket(*input));
   }
-  LISTBASE_FOREACH (const bNodeSocket *, output, &group.outputs) {
-    outputs.append(declataion_for_interface_socket(*output));
+  LISTBASE_FOREACH (const bNodeSocket *, output, &group->outputs) {
+    r_declaration.outputs_.append(declataion_for_interface_socket(*output));
   }
 
   return true;
@@ -438,9 +437,9 @@ static SocketDeclarationPtr extend_declaration(const eNodeSocketInOut in_out)
   return decl;
 }
 
-static bool group_input_declare_dynamic_fn(const bNodeTree &node_tree,
-                                           const bNode &node,
-                                           NodeDeclaration &r_declaration)
+static bool group_input_declare_dynamic(const bNodeTree &node_tree,
+                                        const bNode & /*node*/,
+                                        NodeDeclaration &r_declaration)
 {
   LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.inputs) {
     r_declaration.outputs_.append(declataion_for_interface_socket(*input));
@@ -449,11 +448,12 @@ static bool group_input_declare_dynamic_fn(const bNodeTree &node_tree,
   if (!ID_IS_LINKED(&node_tree.id)) {
     r_declaration.outputs_.append(extend_declaration(SOCK_OUT));
   }
+  return true;
 }
 
-static bool group_output_declare_dynamic_fn(const bNodeTree &node_tree,
-                                            const bNode &node,
-                                            NodeDeclaration &r_declaration)
+static bool group_output_declare_dynamic(const bNodeTree &node_tree,
+                                         const bNode & /*node*/,
+                                         NodeDeclaration &r_declaration)
 {
   LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.inputs) {
     r_declaration.inputs_.append(declataion_for_interface_socket(*input));
@@ -462,6 +462,7 @@ static bool group_output_declare_dynamic_fn(const bNodeTree &node_tree,
   if (!ID_IS_LINKED(&node_tree.id)) {
     r_declaration.inputs_.append(extend_declaration(SOCK_OUT));
   }
+  return true;
 }
 
 }  // namespace blender::nodes
@@ -475,7 +476,7 @@ void register_node_type_group_input()
   node_type_base(ntype, NODE_GROUP_INPUT, "Group Input", NODE_CLASS_INTERFACE);
   node_type_size(ntype, 140, 80, 400);
   /* TODO: Update declaration when linking to the extension sockets. */
-  ntype->declare_dynamic = blender::nodes::group_input_declare_dynamic_fn;
+  ntype->declare_dynamic = blender::nodes::group_input_declare_dynamic;
 
   nodeRegisterType(ntype);
 }
@@ -500,7 +501,7 @@ void register_node_type_group_output()
   node_type_base(ntype, NODE_GROUP_OUTPUT, "Group Output", NODE_CLASS_INTERFACE);
   node_type_size(ntype, 140, 80, 400);
   /* TODO: Update declaration when linking to the extension sockets. */
-  // ntype->declare_dynamic = //;
+  ntype->declare_dynamic = blender::nodes::group_output_declare_dynamic;
 
   ntype->no_muting = true;
 

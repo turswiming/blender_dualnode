@@ -529,7 +529,9 @@ bool Extend::can_connect(const bNodeSocket & /*socket*/) const
   return false;
 }
 
-bNodeSocket &Extend::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
+bNodeSocket &Extend::update_or_build(bNodeTree & /*ntree*/,
+                                     bNode & /*node*/,
+                                     bNodeSocket &socket) const
 {
   this->set_common_flags(socket);
   return socket;
