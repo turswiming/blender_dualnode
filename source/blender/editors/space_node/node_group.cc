@@ -780,8 +780,7 @@ static void node_group_make_redirect_incoming_link(
                                                                     socket_for_naming->name);
 
     /* Update the group node and interface sockets so the new interface socket can be linked. */
-    node_group_update(&ntree, gnode);
-    node_group_input_update(ngroup, input_node);
+    /* TODO: Update sockets based on declaration here. */
 
     /* Create new internal link. */
     bNodeSocket *input_sock = node_group_input_find_socket(input_node, iosock->identifier);
@@ -942,11 +941,7 @@ static void node_group_make_insert_selected(const bContext &C,
             &ntree.links, link->fromnode, link->fromsock, &link_node, &link_sock);
         bNodeSocket *iosock = ntreeAddSocketInterfaceFromSocket(ngroup, link_node, link_sock);
 
-        /* update the group node and interface node sockets,
-         * so the new interface socket can be linked.
-         */
-        node_group_update(&ntree, gnode);
-        node_group_output_update(ngroup, output_node);
+        /* TODO: Update sockets based on declaration here. */
 
         /* create new internal link */
         bNodeSocket *output_sock = node_group_output_find_socket(output_node, iosock->identifier);
@@ -998,7 +993,7 @@ static void node_group_make_insert_selected(const bContext &C,
 
         bNodeSocket *iosock = ntreeAddSocketInterfaceFromSocket(ngroup, node, sock);
 
-        node_group_input_update(ngroup, input_node);
+        /* TODO: Update sockets based on declaration here. */
 
         /* create new internal link */
         bNodeSocket *input_sock = node_group_input_find_socket(input_node, iosock->identifier);
@@ -1021,7 +1016,7 @@ static void node_group_make_insert_selected(const bContext &C,
 
         bNodeSocket *iosock = ntreeAddSocketInterfaceFromSocket(ngroup, node, sock);
 
-        node_group_output_update(ngroup, output_node);
+        /* TODO: Update sockets based on declaration here. */
 
         /* create new internal link */
         bNodeSocket *output_sock = node_group_output_find_socket(output_node, iosock->identifier);

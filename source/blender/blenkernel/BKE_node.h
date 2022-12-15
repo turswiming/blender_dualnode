@@ -104,6 +104,7 @@ namespace nodes {
 class DNode;
 class NodeMultiFunctionBuilder;
 class GeoNodeExecParams;
+class NodeDeclaration;
 class NodeDeclarationBuilder;
 class GatherLinkSearchOpParams;
 }  // namespace nodes
@@ -121,6 +122,9 @@ using CPPTypeHandle = blender::CPPType;
 using NodeMultiFunctionBuildFunction = void (*)(blender::nodes::NodeMultiFunctionBuilder &builder);
 using NodeGeometryExecFunction = void (*)(blender::nodes::GeoNodeExecParams params);
 using NodeDeclareFunction = void (*)(blender::nodes::NodeDeclarationBuilder &builder);
+using NodeDeclareDynamicFunction = bool (*)(const bNodeTree &tree,
+                                            const bNode &node,
+                                            blender::nodes::NodeDeclaration &r_declaration);
 using SocketGetCPPValueFunction = void (*)(const struct bNodeSocket &socket, void *r_value);
 using SocketGetGeometryNodesCPPValueFunction = void (*)(const struct bNodeSocket &socket,
                                                         void *r_value);
@@ -140,6 +144,7 @@ typedef void *NodeGetCompositorShaderNodeFunction;
 typedef void *NodeMultiFunctionBuildFunction;
 typedef void *NodeGeometryExecFunction;
 typedef void *NodeDeclareFunction;
+typedef void *NodeDeclareDynamicFunction;
 typedef void *NodeGatherSocketLinkOperationsFunction;
 typedef void *SocketGetCPPTypeFunction;
 typedef void *SocketGetGeometryNodesCPPTypeFunction;
@@ -176,11 +181,6 @@ typedef struct bNodeSocketType {
                                 struct bNode *node,
                                 struct bNodeSocket *sock,
                                 const char *data_path);
-  void (*interface_verify_socket)(struct bNodeTree *ntree,
-                                  const struct bNodeSocket *interface_socket,
-                                  struct bNode *node,
-                                  struct bNodeSocket *sock,
-                                  const char *data_path);
   void (*interface_from_socket)(struct bNodeTree *ntree,
                                 struct bNodeSocket *interface_socket,
                                 struct bNode *node,
@@ -345,8 +345,12 @@ typedef struct bNodeType {
 
   /* Declares which sockets the node has. */
   NodeDeclareFunction declare;
-  /* Different nodes of this type can have different declarations. */
-  bool declaration_is_dynamic;
+  /**
+   * Declare which sockets the node has, but isn't static per node type. In orther words,
+   * different nodes of this type can have different declarations and different sockets.
+   */
+  NodeDeclareDynamicFunction declare_dynamic;
+
   /* Declaration to be used when it is not dynamic. */
   NodeDeclarationHandle *fixed_declaration;
 

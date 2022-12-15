@@ -547,52 +547,6 @@ static void standard_node_socket_interface_init_socket(bNodeTree * /*ntree*/,
   node_socket_copy_default_value(sock, interface_socket);
 }
 
-/* copies settings that are not changed for each socket instance */
-static void standard_node_socket_interface_verify_socket(bNodeTree * /*ntree*/,
-                                                         const bNodeSocket *interface_socket,
-                                                         bNode * /*node*/,
-                                                         bNodeSocket *sock,
-                                                         const char * /*data_path*/)
-{
-  /* sanity check */
-  if (sock->type != interface_socket->typeinfo->type) {
-    return;
-  }
-
-  /* make sure both exist */
-  if (!interface_socket->default_value) {
-    return;
-  }
-  node_socket_init_default_value(sock);
-
-  switch (interface_socket->typeinfo->type) {
-    case SOCK_FLOAT: {
-      bNodeSocketValueFloat *toval = (bNodeSocketValueFloat *)sock->default_value;
-      const bNodeSocketValueFloat *fromval = (const bNodeSocketValueFloat *)
-                                                 interface_socket->default_value;
-      toval->min = fromval->min;
-      toval->max = fromval->max;
-      break;
-    }
-    case SOCK_INT: {
-      bNodeSocketValueInt *toval = (bNodeSocketValueInt *)sock->default_value;
-      const bNodeSocketValueInt *fromval = (const bNodeSocketValueInt *)
-                                               interface_socket->default_value;
-      toval->min = fromval->min;
-      toval->max = fromval->max;
-      break;
-    }
-    case SOCK_VECTOR: {
-      bNodeSocketValueVector *toval = (bNodeSocketValueVector *)sock->default_value;
-      const bNodeSocketValueVector *fromval = (const bNodeSocketValueVector *)
-                                                  interface_socket->default_value;
-      toval->min = fromval->min;
-      toval->max = fromval->max;
-      break;
-    }
-  }
-}
-
 static void standard_node_socket_interface_from_socket(bNodeTree * /*ntree*/,
                                                        bNodeSocket *stemp,
                                                        bNode * /*node*/,
@@ -640,7 +594,6 @@ static bNodeSocketType *make_standard_socket_type(int type, int subtype)
 
   stype->interface_init_socket = standard_node_socket_interface_init_socket;
   stype->interface_from_socket = standard_node_socket_interface_from_socket;
-  stype->interface_verify_socket = standard_node_socket_interface_verify_socket;
 
   stype->use_link_limits_of_type = true;
   stype->input_link_limit = 1;

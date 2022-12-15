@@ -30,7 +30,10 @@
 #include "MEM_guardedalloc.h"
 
 #include "NOD_common.h"
+#include "NOD_node_declaration.hh"
 #include "NOD_register.hh"
+#include "NOD_socket_declarations.hh"
+#include "NOD_socket_declarations_geometry.hh"
 #include "node_common.h"
 #include "node_util.h"
 
@@ -118,124 +121,186 @@ bool nodeGroupPoll(const bNodeTree *nodetree,
   return true;
 }
 
-static void add_new_socket_from_interface(bNodeTree &node_tree,
-                                          bNode &node,
-                                          const bNodeSocket &interface_socket,
-                                          const eNodeSocketInOut in_out)
+namespace blender::nodes {
+
+bool node_group_declare_dynamic_fn(const bNodeTree & /*node_tree*/,
+                                   const bNode &node,
+                                   NodeDeclaration &r_declaration)
 {
-  bNodeSocket *socket = nodeAddSocket(&node_tree,
-                                      &node,
-                                      in_out,
-                                      interface_socket.idname,
-                                      interface_socket.identifier,
-                                      interface_socket.name);
-
-  if (interface_socket.typeinfo->interface_init_socket) {
-    interface_socket.typeinfo->interface_init_socket(
-        &node_tree, &interface_socket, &node, socket, "interface");
+  /* TODO: Restore this behavior somehow:
+   * Missing data-block, leave sockets unchanged so that when it comes back
+   * the links remain valid. */
+  if (!node.id) {
+    return false;
   }
-}
-
-static void update_socket_to_match_interface(bNodeTree &node_tree,
-                                             bNode &node,
-                                             bNodeSocket &socket_to_update,
-                                             const bNodeSocket &interface_socket)
-{
-  strcpy(socket_to_update.name, interface_socket.name);
-
-  const int mask = SOCK_HIDE_VALUE;
-  socket_to_update.flag = (socket_to_update.flag & ~mask) | (interface_socket.flag & mask);
-
-  /* Update socket type if necessary */
-  if (socket_to_update.typeinfo != interface_socket.typeinfo) {
-    nodeModifySocketType(&node_tree, &node, &socket_to_update, interface_socket.idname);
+  else if (ID_IS_LINKED(node.id) && (node.id->tag & LIB_TAG_MISSING)) {
+    return false;
   }
+  const bNodeTree &group = *reinterpret_cast<const bNodeTree *>(node.id);
 
-  if (interface_socket.typeinfo->interface_verify_socket) {
-    interface_socket.typeinfo->interface_verify_socket(
-        &node_tree, &interface_socket, &node, &socket_to_update, "interface");
-  }
-}
+  Vector<SocketDeclarationPtr> inputs;
+  Vector<SocketDeclarationPtr> outputs;
 
-/**
- * Used for group nodes and group input/output nodes to update the list of input or output sockets
- * on a node to match the provided interface. Assumes that \a verify_lb is the node's matching
- * input or output socket list, depending on whether the node is a group input/output or a group
- * node.
- */
-static void group_verify_socket_list(bNodeTree &node_tree,
-                                     bNode &node,
-                                     const ListBase &interface_sockets,
-                                     ListBase &verify_lb,
-                                     const eNodeSocketInOut in_out,
-                                     const bool ensure_extend_socket_exists)
-{
-  ListBase old_sockets = verify_lb;
-  Vector<bNodeSocket *> ordered_old_sockets = old_sockets;
-  BLI_listbase_clear(&verify_lb);
-
-  LISTBASE_FOREACH (const bNodeSocket *, interface_socket, &interface_sockets) {
-    bNodeSocket *matching_socket = find_matching_socket(old_sockets, interface_socket->identifier);
-    if (matching_socket) {
-      /* If a socket with the same identifier exists in the previous socket list, update it
-       * with the correct name, type, etc. Then move it from the old list to the new one. */
-      update_socket_to_match_interface(node_tree, node, *matching_socket, *interface_socket);
-      BLI_remlink(&old_sockets, matching_socket);
-      BLI_addtail(&verify_lb, matching_socket);
-    }
-    else {
-      /* If there was no socket with the same identifier already, simply create a new socket
-       * based on the interface socket, which will already add it to the new list. */
-      add_new_socket_from_interface(node_tree, node, *interface_socket, in_out);
-    }
-  }
-
-  if (ensure_extend_socket_exists) {
-    bNodeSocket *last_socket = static_cast<bNodeSocket *>(old_sockets.last);
-    if (last_socket != nullptr && STREQ(last_socket->identifier, "__extend__")) {
-      BLI_remlink(&old_sockets, last_socket);
-      BLI_addtail(&verify_lb, last_socket);
-    }
-    else {
-      nodeAddSocket(&node_tree, &node, in_out, "NodeSocketVirtual", "__extend__", "");
-    }
-  }
-
-  /* Remove leftover sockets that didn't match the node group's interface. */
-  LISTBASE_FOREACH_MUTABLE (bNodeSocket *, unused_socket, &old_sockets) {
-    nodeRemoveSocket(&node_tree, &node, unused_socket);
-  }
-
-  {
-    /* Check if new sockets match the old sockets. */
-    int index;
-    LISTBASE_FOREACH_INDEX (bNodeSocket *, new_socket, &verify_lb, index) {
-      if (index < ordered_old_sockets.size()) {
-        if (ordered_old_sockets[index] != new_socket) {
-          BKE_ntree_update_tag_interface(&node_tree);
-          break;
-        }
+  /* TODO: Specialize for geometry nodes and fields. */
+  /* TODO: Figure out how this should work for custom node trees / #SOCK_CUSTOM. */
+  LISTBASE_FOREACH (const bNodeSocket *, input, &group.inputs) {
+    switch (input->type) {
+      case SOCK_FLOAT: {
+        const auto &value = *input->default_value_typed<bNodeSocketValueFloat>();
+        std::unique_ptr<decl::Float> decl = std::make_unique<decl::Float>();
+        decl->soft_min_value_ = value.min;
+        decl->soft_max_value_ = value.max;
+        decl->description_ = input->description;
+        b.add_input<decl::Float>(input->name, input->identifier)
+            .default_value(value.value)
+            .min(value.min)
+            .max(value.max)
+            .description(input->description);
+        break;
+      }
+      case SOCK_VECTOR: {
+        const auto &value = *input->default_value_typed<bNodeSocketValueVector>();
+        b.add_input<decl::Vector>(input->name, input->identifier)
+            .default_value(value.value)
+            .min(value.min)
+            .max(value.max)
+            .description(input->description);
+        break;
+      }
+      case SOCK_RGBA: {
+        const auto &value = *input->default_value_typed<bNodeSocketValueRGBA>();
+        b.add_input<decl::Color>(input->name, input->identifier)
+            .default_value(value.value)
+            .description(input->description);
+        break;
+      }
+      case SOCK_SHADER: {
+        b.add_input<decl::Shader>(input->name, input->identifier).description(input->description);
+        break;
+      }
+      case SOCK_BOOLEAN: {
+        const auto &value = *input->default_value_typed<bNodeSocketValueBoolean>();
+        b.add_input<decl::Float>(input->name, input->identifier)
+            .default_value(value.value)
+            .description(input->description);
+        break;
+      }
+      case SOCK_INT: {
+        const auto &value = *input->default_value_typed<bNodeSocketValueInt>();
+        b.add_input<decl::Int>(input->name, input->identifier)
+            .default_value(value.value)
+            .min(value.min)
+            .max(value.max)
+            .description(input->description);
+        break;
+      }
+      case SOCK_STRING: {
+        const auto &value = *input->default_value_typed<bNodeSocketValueString>();
+        b.add_input<decl::String>(input->name, input->identifier)
+            .default_value(value.value)
+            .description(input->description);
+        break;
+      }
+      case SOCK_OBJECT: {
+        /* TODO: What happens to default values of data-block sockets? */
+        b.add_input<decl::Object>(input->name, input->identifier).description(input->description);
+        break;
+      }
+      case SOCK_IMAGE: {
+        b.add_input<decl::Image>(input->name, input->identifier).description(input->description);
+        break;
+      }
+      case SOCK_GEOMETRY: {
+        b.add_input<decl::Geometry>(input->name, input->identifier)
+            .description(input->description);
+        break;
+      }
+      case SOCK_COLLECTION: {
+        b.add_input<decl::Collection>(input->name, input->identifier)
+            .description(input->description);
+        break;
+      }
+      case SOCK_TEXTURE: {
+        b.add_input<decl::Texture>(input->name, input->identifier).description(input->description);
+        break;
+      }
+      case SOCK_MATERIAL: {
+        b.add_input<decl::Material>(input->name, input->identifier)
+            .description(input->description);
+        break;
       }
     }
   }
+  LISTBASE_FOREACH (const bNodeSocket *, output, &group.outputs) {
+    switch (output->type) {
+      case SOCK_FLOAT:
+        b.add_output<decl::Float>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_VECTOR:
+        b.add_output<decl::Vector>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_RGBA:
+        b.add_output<decl::Color>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_SHADER:
+        b.add_output<decl::Shader>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_BOOLEAN:
+        const auto &value = *output->default_value_typed<bNodeSocketValueBoolean>();
+        b.add_output<decl::Float>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_INT:
+        b.add_output<decl::Int>(output->name, output->identifier).description(output->description);
+        break;
+      case SOCK_STRING:
+        const auto &value = *output->default_value_typed<bNodeSocketValueString>();
+        b.add_output<decl::String>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_OBJECT:
+        /* TODO: What happens to default values of data-block sockets? */
+        b.add_output<decl::Object>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_IMAGE:
+        b.add_output<decl::Image>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_GEOMETRY:
+        b.add_output<decl::Geometry>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_COLLECTION:
+        b.add_output<decl::Collection>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_TEXTURE:
+        b.add_output<decl::Texture>(output->name, output->identifier)
+            .description(output->description);
+        break;
+      case SOCK_MATERIAL:
+        b.add_output<decl::Material>(output->name, output->identifier)
+            .description(output->description);
+        break;
+    }
+  }
+
+  if (!ID_IS_LINKED(node.id)) {
+    /* TODO: A fun possibility, but maybe not worth it right now? */
+
+    b.add_input<decl::Extend>("__extend__");
+    b.add_output<decl::Extend>("__extend__");
+  }
+
+  return true;
 }
 
-void node_group_update(struct bNodeTree *ntree, struct bNode *node)
-{
-  /* check inputs and outputs, and remove or insert them */
-  if (node->id == nullptr) {
-    nodeRemoveAllSockets(ntree, node);
-  }
-  else if (ID_IS_LINKED(node->id) && (node->id->tag & LIB_TAG_MISSING)) {
-    /* Missing data-block, leave sockets unchanged so that when it comes back
-     * the links remain valid. */
-  }
-  else {
-    bNodeTree *ngroup = (bNodeTree *)node->id;
-    group_verify_socket_list(*ntree, *node, ngroup->inputs, node->inputs, SOCK_IN, false);
-    group_verify_socket_list(*ntree, *node, ngroup->outputs, node->outputs, SOCK_OUT, false);
-  }
-}
+}  // namespace blender::nodes
 
 /** \} */
 
@@ -417,16 +482,6 @@ bool BKE_node_is_connected_to_output(const bNodeTree *ntree, const bNode *node)
 /** \name Node #GROUP_INPUT / #GROUP_OUTPUT
  * \{ */
 
-static bool is_group_extension_socket(const bNode *node, const bNodeSocket *socket)
-{
-  return socket->type == SOCK_CUSTOM && ELEM(node->type, NODE_GROUP_OUTPUT, NODE_GROUP_INPUT);
-}
-
-static void node_group_input_init(bNodeTree *ntree, bNode *node)
-{
-  node_group_input_update(ntree, node);
-}
-
 bNodeSocket *node_group_input_find_socket(bNode *node, const char *identifier)
 {
   bNodeSocket *sock;
@@ -438,59 +493,6 @@ bNodeSocket *node_group_input_find_socket(bNode *node, const char *identifier)
   return nullptr;
 }
 
-void node_group_input_update(bNodeTree *ntree, bNode *node)
-{
-  bNodeSocket *extsock = (bNodeSocket *)node->outputs.last;
-  /* Adding a tree socket and verifying will remove the extension socket!
-   * This list caches the existing links from the extension socket
-   * so they can be recreated after verification. */
-  Vector<bNodeLink> temp_links;
-
-  /* find links from the extension socket and store them */
-  LISTBASE_FOREACH_MUTABLE (bNodeLink *, link, &ntree->links) {
-    if (nodeLinkIsHidden(link)) {
-      continue;
-    }
-
-    if (link->fromsock == extsock) {
-      temp_links.append(*link);
-      nodeRemLink(ntree, link);
-    }
-  }
-
-  /* find valid link to expose */
-  bNodeLink *exposelink = nullptr;
-  for (bNodeLink &link : temp_links) {
-    /* XXX Multiple sockets can be connected to the extension socket at once,
-     * in that case the arbitrary first link determines name and type.
-     * This could be improved by choosing the "best" type among all links,
-     * whatever that means.
-     */
-    if (!is_group_extension_socket(link.tonode, link.tosock)) {
-      exposelink = &link;
-      break;
-    }
-  }
-
-  if (exposelink) {
-    bNodeSocket *gsock = ntreeAddSocketInterfaceFromSocket(
-        ntree, exposelink->tonode, exposelink->tosock);
-
-    node_group_input_update(ntree, node);
-    bNodeSocket *newsock = node_group_input_find_socket(node, gsock->identifier);
-
-    /* redirect links from the extension socket */
-    for (bNodeLink &link : temp_links) {
-      bNodeLink *newlink = nodeAddLink(ntree, node, newsock, link.tonode, link.tosock);
-      if (newlink->tosock->flag & SOCK_MULTI_INPUT) {
-        newlink->multi_input_socket_index = link.multi_input_socket_index;
-      }
-    }
-  }
-
-  group_verify_socket_list(*ntree, *node, ntree->inputs, node->outputs, SOCK_OUT, true);
-}
-
 void register_node_type_group_input()
 {
   /* used for all tree types, needs dynamic allocation */
@@ -499,15 +501,10 @@ void register_node_type_group_input()
 
   node_type_base(ntype, NODE_GROUP_INPUT, "Group Input", NODE_CLASS_INTERFACE);
   node_type_size(ntype, 140, 80, 400);
-  ntype->initfunc = node_group_input_init;
-  ntype->updatefunc = node_group_input_update;
+  /* TODO: Update declaration when linking to the extension sockets. */
+  // ntype->declare_dynamic =
 
   nodeRegisterType(ntype);
-}
-
-static void node_group_output_init(bNodeTree *ntree, bNode *node)
-{
-  node_group_output_update(ntree, node);
 }
 
 bNodeSocket *node_group_output_find_socket(bNode *node, const char *identifier)
@@ -521,57 +518,6 @@ bNodeSocket *node_group_output_find_socket(bNode *node, const char *identifier)
   return nullptr;
 }
 
-void node_group_output_update(bNodeTree *ntree, bNode *node)
-{
-  bNodeSocket *extsock = (bNodeSocket *)node->inputs.last;
-  /* Adding a tree socket and verifying will remove the extension socket!
-   * This list caches the existing links to the extension socket
-   * so they can be recreated after verification. */
-  Vector<bNodeLink> temp_links;
-
-  /* find links to the extension socket and store them */
-  LISTBASE_FOREACH_MUTABLE (bNodeLink *, link, &ntree->links) {
-    if (nodeLinkIsHidden(link)) {
-      continue;
-    }
-
-    if (link->tosock == extsock) {
-      temp_links.append(*link);
-      nodeRemLink(ntree, link);
-    }
-  }
-
-  /* find valid link to expose */
-  bNodeLink *exposelink = nullptr;
-  for (bNodeLink &link : temp_links) {
-    /* XXX Multiple sockets can be connected to the extension socket at once,
-     * in that case the arbitrary first link determines name and type.
-     * This could be improved by choosing the "best" type among all links,
-     * whatever that means.
-     */
-    if (!is_group_extension_socket(link.fromnode, link.fromsock)) {
-      exposelink = &link;
-      break;
-    }
-  }
-
-  if (exposelink) {
-    /* XXX what if connecting virtual to virtual socket?? */
-    bNodeSocket *gsock = ntreeAddSocketInterfaceFromSocket(
-        ntree, exposelink->fromnode, exposelink->fromsock);
-
-    node_group_output_update(ntree, node);
-    bNodeSocket *newsock = node_group_output_find_socket(node, gsock->identifier);
-
-    /* redirect links to the extension socket */
-    for (bNodeLink &link : temp_links) {
-      nodeAddLink(ntree, link.fromnode, link.fromsock, node, newsock);
-    }
-  }
-
-  group_verify_socket_list(*ntree, *node, ntree->outputs, node->inputs, SOCK_IN, true);
-}
-
 void register_node_type_group_output()
 {
   /* used for all tree types, needs dynamic allocation */
@@ -580,8 +526,8 @@ void register_node_type_group_output()
 
   node_type_base(ntype, NODE_GROUP_OUTPUT, "Group Output", NODE_CLASS_INTERFACE);
   node_type_size(ntype, 140, 80, 400);
-  ntype->initfunc = node_group_output_init;
-  ntype->updatefunc = node_group_output_update;
+  /* TODO: Update declaration when linking to the extension sockets. */
+  // ntype->declare_dynamic = //;
 
   ntype->no_muting = true;
 

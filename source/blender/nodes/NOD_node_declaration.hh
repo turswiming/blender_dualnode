@@ -64,6 +64,7 @@ struct FieldInferencingInterface {
   Vector<InputSocketFieldType> inputs;
   Vector<OutputFieldDependency> outputs;
 };
+FieldInferencingInterface calculate_field_inferencing(const bNodeTree &tree);
 
 using ImplicitInputValueFn = std::function<void(const bNode &node, void *r_value)>;
 
@@ -313,6 +314,11 @@ class NodeDeclaration {
   friend NodeDeclarationBuilder;
 
  public:
+  NodeDeclaration() = default;
+  NodeDeclaration(Vector<SocketDeclarationPtr> inputs, Vector<SocketDeclarationPtr> outputs)
+      : inputs_(std::move(inputs)), outputs_(std::move(outputs))
+  {
+  }
   bool matches(const bNode &node) const;
 
   Span<SocketDeclarationPtr> inputs() const;
@@ -362,6 +368,9 @@ void id_or_index(const bNode &node, void *r_value);
 }  // namespace implicit_field_inputs
 
 void build_node_declaration(const bNodeType &typeinfo, NodeDeclaration &r_declaration);
+void build_node_declaration_dynamic(const bNodeTree &node_tree,
+                                    const bNode &node,
+                                    NodeDeclaration &r_declaration);
 
 /* -------------------------------------------------------------------- */
 /** \name #OutputFieldDependency Inline Methods

@@ -486,26 +486,33 @@ static void update_socket_shapes(const bNodeTree &tree,
   }
 }
 
-bool update_field_inferencing(const bNodeTree &tree)
+FieldInferencingInterface calculate_field_inferencing(const bNodeTree &tree)
 {
+  FieldInferencingInterface interface;
+
   tree.ensure_topology_cache();
 
-  /* Create new inferencing interface for this node group. */
-  std::unique_ptr<FieldInferencingInterface> new_inferencing_interface =
-      std::make_unique<FieldInferencingInterface>();
-  new_inferencing_interface->inputs.resize(BLI_listbase_count(&tree.inputs),
-                                           InputSocketFieldType::IsSupported);
-  new_inferencing_interface->outputs.resize(BLI_listbase_count(&tree.outputs),
-                                            OutputFieldDependency::ForDataSource());
+  interface.inputs.resize(BLI_listbase_count(&tree.inputs), InputSocketFieldType::IsSupported);
+  interface.outputs.resize(BLI_listbase_count(&tree.outputs),
+                           OutputFieldDependency::ForDataSource());
 
   /* Keep track of the state of all sockets. The index into this array is #SocketRef::id(). */
   Array<SocketFieldState> field_state_by_socket_id(tree.all_sockets().size());
 
   propagate_data_requirements_from_right_to_left(tree, field_state_by_socket_id);
-  determine_group_input_states(tree, *new_inferencing_interface, field_state_by_socket_id);
+  determine_group_input_states(tree, interface, field_state_by_socket_id);
   propagate_field_status_from_left_to_right(tree, field_state_by_socket_id);
-  determine_group_output_states(tree, *new_inferencing_interface, field_state_by_socket_id);
+  determine_group_output_states(tree, interface, field_state_by_socket_id);
   update_socket_shapes(tree, field_state_by_socket_id);
+
+  return interface;
+}
+
+bool update_field_inferencing(const bNodeTree &tree)
+{
+  /* Create new inferencing interface for this node group. */
+  std::unique_ptr<FieldInferencingInterface> new_inferencing_interface =
+      std::make_unique<FieldInferencingInterface>(calculate_field_inferencing(tree));
 
   /* Update the previous group interface. */
   const bool group_interface_changed = !tree.runtime->field_inferencing_interface ||

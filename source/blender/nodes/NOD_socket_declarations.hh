@@ -14,12 +14,13 @@ namespace blender::nodes::decl {
 class FloatBuilder;
 
 class Float : public SocketDeclaration {
- private:
+ public:
   float default_value_ = 0.0f;
   float soft_min_value_ = -FLT_MAX;
   float soft_max_value_ = FLT_MAX;
   PropertySubType subtype_ = PROP_NONE;
 
+ private:
   friend FloatBuilder;
 
  public:
@@ -42,12 +43,13 @@ class FloatBuilder : public SocketDeclarationBuilder<Float> {
 class IntBuilder;
 
 class Int : public SocketDeclaration {
- private:
+ public:
   int default_value_ = 0;
   int soft_min_value_ = INT32_MIN;
   int soft_max_value_ = INT32_MAX;
   PropertySubType subtype_ = PROP_NONE;
 
+ private:
   friend IntBuilder;
 
  public:
@@ -70,12 +72,12 @@ class IntBuilder : public SocketDeclarationBuilder<Int> {
 class VectorBuilder;
 
 class Vector : public SocketDeclaration {
- private:
   float3 default_value_ = {0, 0, 0};
   float soft_min_value_ = -FLT_MAX;
   float soft_max_value_ = FLT_MAX;
   PropertySubType subtype_ = PROP_NONE;
 
+ private:
   friend VectorBuilder;
 
  public:
@@ -99,8 +101,9 @@ class VectorBuilder : public SocketDeclarationBuilder<Vector> {
 class BoolBuilder;
 
 class Bool : public SocketDeclaration {
- private:
   bool default_value_ = false;
+
+ private:
   friend BoolBuilder;
 
  public:
@@ -119,9 +122,9 @@ class BoolBuilder : public SocketDeclarationBuilder<Bool> {
 class ColorBuilder;
 
 class Color : public SocketDeclaration {
- private:
   ColorGeometry4f default_value_;
 
+ private:
   friend ColorBuilder;
 
  public:
@@ -140,9 +143,9 @@ class ColorBuilder : public SocketDeclarationBuilder<Color> {
 class StringBuilder;
 
 class String : public SocketDeclaration {
- private:
   std::string default_value_;
 
+ private:
   friend StringBuilder;
 
  public:
@@ -221,6 +224,24 @@ class Shader : public SocketDeclaration {
 };
 
 class ShaderBuilder : public SocketDeclarationBuilder<Shader> {
+};
+
+class ExtendBuilder;
+
+class Extend : public SocketDeclaration {
+ private:
+  friend ExtendBuilder;
+
+ public:
+  using Builder = ExtendBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class ExtendBuilder : public SocketDeclarationBuilder<Extend> {
 };
 
 /* -------------------------------------------------------------------- */

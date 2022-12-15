@@ -1374,7 +1374,7 @@ void nodeRegisterType(bNodeType *nt)
   BLI_assert(nt->idname[0] != '\0');
   BLI_assert(nt->poll != nullptr);
 
-  if (nt->declare && !nt->declaration_is_dynamic) {
+  if (nt->declare && !nt->declare_dynamic) {
     if (nt->fixed_declaration == nullptr) {
       nt->fixed_declaration = new blender::nodes::NodeDeclaration();
       blender::nodes::build_node_declaration(*nt, *nt->fixed_declaration);
@@ -2997,7 +2997,7 @@ static void node_free_node(bNodeTree *ntree, bNode *node)
     MEM_freeN(node->prop);
   }
 
-  if (node->typeinfo->declaration_is_dynamic) {
+  if (node->typeinfo->declare_dynamic) {
     delete node->runtime->declaration;
   }
 
@@ -3612,7 +3612,7 @@ bool nodeDeclarationEnsureOnOutdatedNode(bNodeTree * /*ntree*/, bNode *node)
   if (node->typeinfo->declare == nullptr) {
     return false;
   }
-  if (node->typeinfo->declaration_is_dynamic) {
+  if (node->typeinfo->declare_dynamic) {
     node->runtime->declaration = new blender::nodes::NodeDeclaration();
     blender::nodes::build_node_declaration(*node->typeinfo, *node->runtime->declaration);
   }

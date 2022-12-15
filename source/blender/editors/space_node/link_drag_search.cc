@@ -198,7 +198,7 @@ static void search_link_ops_for_asset_metadata(const bNodeTree &node_tree,
            DEG_relations_tag_update(&bmain);
 
            /* Create the inputs and outputs on the new node. */
-           node.typeinfo->group_update_func(&params.node_tree, &node);
+           node.typeinfo->updatefunc(&params.node_tree, &node);
 
            bNodeSocket *new_node_socket = bke::node_find_enabled_socket(
                node, in_out, socket_property->name);
