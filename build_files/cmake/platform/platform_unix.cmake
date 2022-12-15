@@ -10,16 +10,15 @@ if(NOT DEFINED LIBDIR)
   string(TOLOWER ${LIBDIR_NAME} LIBDIR_NAME)
   set(LIBDIR_NATIVE_ABI ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_NAME})
 
-  # Path to precompiled libraries with known CentOS 7 ABI.
-  set(LIBDIR_CENTOS7_ABI ${CMAKE_SOURCE_DIR}/../lib/linux_centos7_x86_64)
+  # Path to precompiled libraries with known glibc 2.28 ABI.
+  set(LIBDIR_GLIBC228_ABI ${CMAKE_SOURCE_DIR}/../lib/linux_x86_64_glibc_228)
 
   # Choose the best suitable libraries.
   if(EXISTS ${LIBDIR_NATIVE_ABI})
     set(LIBDIR ${LIBDIR_NATIVE_ABI})
     set(WITH_LIBC_MALLOC_HOOK_WORKAROUND True)
-  elseif(EXISTS ${LIBDIR_CENTOS7_ABI})
-    set(LIBDIR ${LIBDIR_CENTOS7_ABI})
-    set(WITH_CXX11_ABI OFF)
+  elseif(EXISTS ${LIBDIR_GLIBC228_ABI})
+    set(LIBDIR ${LIBDIR_GLIBC228_ABI})
     if(WITH_MEM_JEMALLOC)
       # jemalloc provides malloc hooks.
       set(WITH_LIBC_MALLOC_HOOK_WORKAROUND False)
@@ -30,7 +29,7 @@ if(NOT DEFINED LIBDIR)
 
   # Avoid namespace pollustion.
   unset(LIBDIR_NATIVE_ABI)
-  unset(LIBDIR_CENTOS7_ABI)
+  unset(LIBDIR_GLIBC228_ABI)
 endif()
 
 # Support restoring this value once pre-compiled libraries have been handled.
@@ -330,10 +329,8 @@ if(WITH_OPENVDB)
   find_package(OpenVDB)
   set_and_warn_library_found("OpenVDB" OPENVDB_FOUND WITH_OPENVDB)
 
-  if(OPENVDB_FOUND)
-  add_bundled_libraries(openvdb/lib)
-  find_package_wrapper(Blosc)
-    set_and_warn_library_found("Blosc" BLOSC_FOUND WITH_OPENVDB_BLOSC)
+  if(WITH_OPENVDB)
+    add_bundled_libraries(openvdb/lib)
   endif()
 endif()
 
