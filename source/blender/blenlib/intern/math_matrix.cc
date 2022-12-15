@@ -370,4 +370,47 @@ template double4x4 interpolate_fast(const double4x4 &a, const double4x4 &b, doub
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Template instantiation
+ * \{ */
+
+namespace detail {
+
+template void normalized_to_eul2(const float3x3 &mat,
+                                 detail::EulerXYZ<float> &eul1,
+                                 detail::EulerXYZ<float> &eul2);
+template void normalized_to_eul2(const double3x3 &mat,
+                                 detail::EulerXYZ<double> &eul1,
+                                 detail::EulerXYZ<double> &eul2);
+
+template detail::Quaternion<float> normalized_to_quat_with_checks(const float3x3 &mat);
+template detail::Quaternion<double> normalized_to_quat_with_checks(const double3x3 &mat);
+
+template MatBase<float, 3, 3> from_rotation(const detail::EulerXYZ<float> &rotation);
+template MatBase<float, 4, 4> from_rotation(const detail::EulerXYZ<float> &rotation);
+template MatBase<float, 3, 3> from_rotation(const detail::Quaternion<float> &rotation);
+template MatBase<float, 4, 4> from_rotation(const detail::Quaternion<float> &rotation);
+template MatBase<float, 3, 3> from_rotation(const detail::AxisAngle<float> &rotation);
+template MatBase<float, 4, 4> from_rotation(const detail::AxisAngle<float> &rotation);
+
+}  // namespace detail
+
+template float3 transform_point(const float3x3 &mat, const float3 &point);
+template float3 transform_point(const float4x4 &mat, const float3 &point);
+template float3 transform_direction(const float3x3 &mat, const float3 &direction);
+template float3 transform_direction(const float4x4 &mat, const float3 &direction);
+template float3 project_point(const float4x4 &mat, const float3 &point);
+template float2 project_point(const float3x3 &mat, const float2 &point);
+
+namespace projection {
+
+template float4x4 orthographic(
+    float left, float right, float bottom, float top, float near_clip, float far_clip);
+template float4x4 perspective(
+    float left, float right, float bottom, float top, float near_clip, float far_clip);
+
+}  // namespace projection
+
+/** \} */
+
 }  // namespace blender::math

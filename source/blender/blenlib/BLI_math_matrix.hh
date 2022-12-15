@@ -660,12 +660,13 @@ void normalized_to_eul2(const MatBase<T, 3, 3> &mat,
   }
 }
 
-template void normalized_to_eul2(const float3x3 &mat,
-                                 detail::EulerXYZ<float> &eul1,
-                                 detail::EulerXYZ<float> &eul2);
-template void normalized_to_eul2(const double3x3 &mat,
-                                 detail::EulerXYZ<double> &eul1,
-                                 detail::EulerXYZ<double> &eul2);
+/* Using explicit template instantiations in order to reduce compilation time. */
+extern template void normalized_to_eul2(const float3x3 &mat,
+                                        detail::EulerXYZ<float> &eul1,
+                                        detail::EulerXYZ<float> &eul2);
+extern template void normalized_to_eul2(const double3x3 &mat,
+                                        detail::EulerXYZ<double> &eul1,
+                                        detail::EulerXYZ<double> &eul2);
 
 template<typename T> detail::Quaternion<T> normalized_to_quat_fast(const MatBase<T, 3, 3> &mat)
 {
@@ -769,8 +770,9 @@ detail::Quaternion<T> normalized_to_quat_with_checks(const MatBase<T, 3, 3> &mat
   return normalized_to_quat_fast(mat);
 }
 
-template Quaternion<float> normalized_to_quat_with_checks(const float3x3 &mat);
-template Quaternion<double> normalized_to_quat_with_checks(const double3x3 &mat);
+/* Using explicit template instantiations in order to reduce compilation time. */
+extern template Quaternion<float> normalized_to_quat_with_checks(const float3x3 &mat);
+extern template Quaternion<double> normalized_to_quat_with_checks(const double3x3 &mat);
 
 template<typename T, int NumCol, int NumRow>
 MatBase<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
@@ -867,12 +869,13 @@ MatBase<T, NumCol, NumRow> from_rotation(const AxisAngle<T> &rotation)
   return mat;
 }
 
-template MatBase<float, 3, 3> from_rotation(const EulerXYZ<float> &rotation);
-template MatBase<float, 4, 4> from_rotation(const EulerXYZ<float> &rotation);
-template MatBase<float, 3, 3> from_rotation(const Quaternion<float> &rotation);
-template MatBase<float, 4, 4> from_rotation(const Quaternion<float> &rotation);
-template MatBase<float, 3, 3> from_rotation(const AxisAngle<float> &rotation);
-template MatBase<float, 4, 4> from_rotation(const AxisAngle<float> &rotation);
+/* Using explicit template instantiations in order to reduce compilation time. */
+extern template MatBase<float, 3, 3> from_rotation(const EulerXYZ<float> &rotation);
+extern template MatBase<float, 4, 4> from_rotation(const EulerXYZ<float> &rotation);
+extern template MatBase<float, 3, 3> from_rotation(const Quaternion<float> &rotation);
+extern template MatBase<float, 4, 4> from_rotation(const Quaternion<float> &rotation);
+extern template MatBase<float, 3, 3> from_rotation(const AxisAngle<float> &rotation);
+extern template MatBase<float, 4, 4> from_rotation(const AxisAngle<float> &rotation);
 
 }  // namespace detail
 
@@ -1083,12 +1086,12 @@ vec_base<T, N> project_point(const MatBase<T, N + 1, NumRow> &mat, const vec_bas
   return vec_base<T, N>(tmp) / math::abs(tmp[N]);
 }
 
-template float3 transform_point(const float3x3 &mat, const float3 &point);
-template float3 transform_point(const float4x4 &mat, const float3 &point);
-template float3 transform_direction(const float3x3 &mat, const float3 &direction);
-template float3 transform_direction(const float4x4 &mat, const float3 &direction);
-template float3 project_point(const float4x4 &mat, const float3 &point);
-template float2 project_point(const float3x3 &mat, const float2 &point);
+extern template float3 transform_point(const float3x3 &mat, const float3 &point);
+extern template float3 transform_point(const float4x4 &mat, const float3 &point);
+extern template float3 transform_direction(const float3x3 &mat, const float3 &direction);
+extern template float3 transform_direction(const float4x4 &mat, const float3 &direction);
+extern template float3 project_point(const float4x4 &mat, const float3 &point);
+extern template float2 project_point(const float3x3 &mat, const float2 &point);
 
 namespace projection {
 
@@ -1146,9 +1149,9 @@ template<typename T>
   return mat;
 }
 
-template float4x4 orthographic(
+extern template float4x4 orthographic(
     float left, float right, float bottom, float top, float near_clip, float far_clip);
-template float4x4 perspective(
+extern template float4x4 perspective(
     float left, float right, float bottom, float top, float near_clip, float far_clip);
 
 }  // namespace projection
