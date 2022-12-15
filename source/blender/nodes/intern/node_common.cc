@@ -231,13 +231,6 @@ bool node_group_declare_dynamic_fn(const bNodeTree & /*node_tree*/,
     outputs.append(declataion_for_interface_socket(*output));
   }
 
-  if (!ID_IS_LINKED(node.id)) {
-    /* TODO: The if statement is a fun possibility, but maybe not worth it right now? */
-    std::make_unique<decl::Extend>();
-    b.add_input<decl::Extend>("__extend__");
-    b.add_output<decl::Extend>("__extend__");
-  }
-
   return true;
 }
 
@@ -434,6 +427,45 @@ bNodeSocket *node_group_input_find_socket(bNode *node, const char *identifier)
   return nullptr;
 }
 
+namespace blender::nodes {
+
+static SocketDeclarationPtr extend_declaration(const eNodeSocketInOut in_out)
+{
+  std::unique_ptr<decl::Extend> decl = std::make_unique<decl::Extend>();
+  decl->name_ = "";
+  decl->identifier_ = "__extend__";
+  decl->in_out_ = in_out;
+  return decl;
+}
+
+static bool group_input_declare_dynamic_fn(const bNodeTree &node_tree,
+                                           const bNode &node,
+                                           NodeDeclaration &r_declaration)
+{
+  LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.inputs) {
+    r_declaration.outputs_.append(declataion_for_interface_socket(*input));
+    r_declaration.outputs_.last()->in_out_ = SOCK_OUT;
+  }
+  if (!ID_IS_LINKED(&node_tree.id)) {
+    r_declaration.outputs_.append(extend_declaration(SOCK_OUT));
+  }
+}
+
+static bool group_output_declare_dynamic_fn(const bNodeTree &node_tree,
+                                            const bNode &node,
+                                            NodeDeclaration &r_declaration)
+{
+  LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.inputs) {
+    r_declaration.inputs_.append(declataion_for_interface_socket(*input));
+    r_declaration.inputs_.last()->in_out_ = SOCK_OUT;
+  }
+  if (!ID_IS_LINKED(&node_tree.id)) {
+    r_declaration.inputs_.append(extend_declaration(SOCK_OUT));
+  }
+}
+
+}  // namespace blender::nodes
+
 void register_node_type_group_input()
 {
   /* used for all tree types, needs dynamic allocation */
@@ -443,7 +475,7 @@ void register_node_type_group_input()
   node_type_base(ntype, NODE_GROUP_INPUT, "Group Input", NODE_CLASS_INTERFACE);
   node_type_size(ntype, 140, 80, 400);
   /* TODO: Update declaration when linking to the extension sockets. */
-  // ntype->declare_dynamic =
+  ntype->declare_dynamic = blender::nodes::group_input_declare_dynamic_fn;
 
   nodeRegisterType(ntype);
 }

@@ -308,7 +308,7 @@ class SocketDeclarationBuilder : public BaseSocketDeclarationBuilder {
 using SocketDeclarationPtr = std::unique_ptr<SocketDeclaration>;
 
 class NodeDeclaration {
- private:
+ public:
   Vector<SocketDeclarationPtr> inputs_;
   Vector<SocketDeclarationPtr> outputs_;
 

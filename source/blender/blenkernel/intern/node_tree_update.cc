@@ -540,6 +540,9 @@ class NodeTreeMainUpdater {
       nodeDeclarationEnsure(&ntree, node);
       if (this->should_update_individual_node(ntree, *node)) {
         bNodeType &ntype = *node->typeinfo;
+        if (ntype.group_update_func) {
+          ntype.group_update_func(&ntree, node);
+        }
         if (ntype.updatefunc) {
           ntype.updatefunc(&ntree, node);
         }
@@ -548,9 +551,6 @@ class NodeTreeMainUpdater {
             node->runtime->declaration = new blender::nodes::NodeDeclaration();
           }
           build_node_declaration_dynamic(ntree, *node, *node->runtime->declaration);
-        }
-        if (ntype.group_update_func) {
-          ntype.group_update_func(&ntree, node);
         }
       }
       if (ELEM(node->type, NODE_GROUP_INPUT, NODE_GROUP_OUTPUT)) {
