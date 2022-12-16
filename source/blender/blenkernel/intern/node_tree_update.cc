@@ -22,6 +22,7 @@
 #include "MOD_nodes.h"
 
 #include "NOD_node_declaration.hh"
+#include "NOD_socket.h"
 #include "NOD_texture.h"
 
 #include "DEG_depsgraph_query.h"
@@ -535,7 +536,6 @@ class NodeTreeMainUpdater {
 
   void update_individual_nodes(bNodeTree &ntree)
   {
-    Vector<bNode *> group_inout_nodes;
     for (bNode *node : ntree.all_nodes()) {
       nodeDeclarationEnsure(&ntree, node);
       if (this->should_update_individual_node(ntree, *node)) {
@@ -546,28 +546,14 @@ class NodeTreeMainUpdater {
         if (ntype.updatefunc) {
           ntype.updatefunc(&ntree, node);
         }
-        // if (ntype.declare_dynamic) {
-        //   if (!node->runtime->declaration) {
-        //     node->runtime->declaration = new blender::nodes::NodeDeclaration();
-        //   }
-        //   build_node_declaration_dynamic(ntree, *node, *node->runtime->declaration);
-        // }
-      }
-      if (ELEM(node->type, NODE_GROUP_INPUT, NODE_GROUP_OUTPUT)) {
-        group_inout_nodes.append(node);
-      }
-    }
-    /* The update function of group input/output nodes may add new interface sockets. When that
-     * happens, all the input/output nodes have to be updated again. In the future it would be
-     * better to move this functionality out of the node update function into the operator that's
-     * supposed to create the new interface socket. */
-    if (ntree.runtime->changed_flag & NTREE_CHANGED_INTERFACE) {
-      for (bNode *node : group_inout_nodes) {
-        if (node->typeinfo->declare_dynamic) {
+        if (ntype.declare_dynamic) {
           if (!node->runtime->declaration) {
             node->runtime->declaration = new blender::nodes::NodeDeclaration();
           }
           build_node_declaration_dynamic(ntree, *node, *node->runtime->declaration);
+          /* TODO: Move this to blenkernel or something. */
+          nodes::refresh_node_sockets_from_declaration(
+              ntree, *node, *node->runtime->declaration, true);
         }
       }
     }

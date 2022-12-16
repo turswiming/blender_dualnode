@@ -122,7 +122,7 @@ using CPPTypeHandle = blender::CPPType;
 using NodeMultiFunctionBuildFunction = void (*)(blender::nodes::NodeMultiFunctionBuilder &builder);
 using NodeGeometryExecFunction = void (*)(blender::nodes::GeoNodeExecParams params);
 using NodeDeclareFunction = void (*)(blender::nodes::NodeDeclarationBuilder &builder);
-using NodeDeclareDynamicFunction = bool (*)(const bNodeTree &tree,
+using NodeDeclareDynamicFunction = void (*)(const bNodeTree &tree,
                                             const bNode &node,
                                             blender::nodes::NodeDeclaration &r_declaration);
 using SocketGetCPPValueFunction = void (*)(const struct bNodeSocket &socket, void *r_value);

@@ -171,6 +171,8 @@ static void verify_socket_template_list(bNodeTree *ntree,
   }
 }
 
+namespace blender::nodes {
+
 static void refresh_socket_list(bNodeTree &ntree,
                                 bNode &node,
                                 ListBase &sockets,
@@ -244,14 +246,19 @@ static void refresh_socket_list(bNodeTree &ntree,
   }
 }
 
-static void refresh_node(bNodeTree &ntree,
-                         bNode &node,
-                         blender::nodes::NodeDeclaration &node_decl,
-                         bool do_id_user)
+void refresh_node_sockets_from_declaration(bNodeTree &ntree,
+                                           bNode &node,
+                                           const NodeDeclaration &node_decl,
+                                           const bool do_id_user)
 {
-  refresh_socket_list(ntree, node, node.inputs, node_decl.inputs(), do_id_user);
-  refresh_socket_list(ntree, node, node.outputs, node_decl.outputs(), do_id_user);
+  if (!node_decl.matches(node)) {
+    refresh_socket_list(ntree, node, node.inputs, node_decl.inputs(), do_id_user);
+    refresh_socket_list(ntree, node, node.outputs, node_decl.outputs(), do_id_user);
+  }
+  nodeSocketDeclarationsUpdate(&node);
 }
+
+}  // namespace blender::nodes
 
 void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)
 {
@@ -261,10 +268,7 @@ void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)
   }
   if (ntype->declare != nullptr) {
     nodeDeclarationEnsureOnOutdatedNode(ntree, node);
-    if (!node->runtime->declaration->matches(*node)) {
-      refresh_node(*ntree, *node, *node->runtime->declaration, do_id_user);
-    }
-    nodeSocketDeclarationsUpdate(node);
+    refresh_node_sockets_from_declaration(*ntree, *node, *node->runtime->declaration, do_id_user);
     return;
   }
   /* Don't try to match socket lists when there are no templates.

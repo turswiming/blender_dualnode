@@ -31,9 +31,9 @@ void node_internal_links_create(struct bNodeTree *ntree, struct bNode *node);
 
 namespace blender::nodes {
 
-bool node_group_declare_dynamic(const bNodeTree &node_tree,
-                                   const bNode &node,
-                                   NodeDeclaration &r_declaration);
+void node_group_declare_dynamic(const bNodeTree &node_tree,
+                                const bNode &node,
+                                NodeDeclaration &r_declaration);
 
 }  // namespace blender::nodes
 

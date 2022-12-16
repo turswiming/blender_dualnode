@@ -11,13 +11,15 @@
 
 namespace blender::nodes {
 
-static bool node_declare(const bNodeTree &node_tree,
+static void node_declare(const bNodeTree &node_tree,
                          const bNode &node,
                          NodeDeclaration &r_declaration)
 {
-  if (!node_group_declare_dynamic(node_tree, node, r_declaration)) {
-    return false;
+  node_group_declare_dynamic(node_tree, node, r_declaration);
+  if (!node.id) {
+    return;
   }
+  /* TODO: Other return early checks. */
 
   const bNodeTree &group = reinterpret_cast<const bNodeTree &>(*node.id);
   FieldInferencingInterface field_interface;
@@ -28,8 +30,6 @@ static bool node_declare(const bNodeTree &node_tree,
   for (const int i : r_declaration.outputs_.index_range()) {
     r_declaration.outputs_[i]->output_field_dependency_ = field_interface.outputs[i];
   }
-
-  return true;
 }
 
 }  // namespace blender::nodes

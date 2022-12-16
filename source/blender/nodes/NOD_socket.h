@@ -28,7 +28,6 @@ struct bNodeSocket *node_add_socket_from_template(struct bNodeTree *ntree,
                                                   eNodeSocketInOut in_out);
 
 void node_verify_sockets(struct bNodeTree *ntree, struct bNode *node, bool do_id_user);
-
 void node_socket_init_default_value(struct bNodeSocket *sock);
 void node_socket_copy_default_value(struct bNodeSocket *to, const struct bNodeSocket *from);
 void node_socket_skip_reroutes(struct ListBase *links,
@@ -40,4 +39,17 @@ void register_standard_node_socket_types(void);
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef __cplusplus
+
+namespace blender::nodes {
+
+void refresh_node_sockets_from_declaration(bNodeTree &ntree,
+                                           bNode &node,
+                                           const NodeDeclaration &node_decl,
+                                           bool do_id_user);
+
+}
+
 #endif

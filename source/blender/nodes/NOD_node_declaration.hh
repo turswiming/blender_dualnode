@@ -311,6 +311,8 @@ class NodeDeclaration {
   Vector<SocketDeclarationPtr> inputs_;
   Vector<SocketDeclarationPtr> outputs_;
 
+  bool skip_updating_sockets = false;
+
   friend NodeDeclarationBuilder;
 
  public:
