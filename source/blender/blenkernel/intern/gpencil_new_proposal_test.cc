@@ -399,11 +399,12 @@ TEST(gpencil_proposal, AddSingleStroke)
 
   const int frame_index = data.add_frame_on_layer(layer1_index, 0);
   EXPECT_NE(frame_index, -1);
-  GPStroke stroke = data.frames_for_write(frame_index).add_new_stroke(100);
+
+  IndexRange point_indices = data.frames_for_write(frame_index).add_new_stroke(100);
 
   EXPECT_EQ(data.strokes_num(), 1);
   EXPECT_EQ(data.frames(frame_index).strokes_num(), 1);
-  EXPECT_EQ(stroke.points_num(), 100);
+  EXPECT_EQ(point_indices.size(), 100);
 }
 
 TEST(gpencil_proposal, ChangeStrokePoints)

@@ -50,6 +50,7 @@ IndexMask GPLayerGroup::layers_index_mask()
 }
 
 /* GPStroke */
+#if 0
 Span<float3> GPStroke::points_positions() const
 {
   return {geometry_->positions().begin() + offset_, points_num_};
@@ -69,6 +70,7 @@ void GPStroke::transform(float4x4 matrix)
         }
       });
 }
+#endif
 
 /* GPFrame */
 GPFrame::GPFrame(int layer_index)
@@ -197,18 +199,7 @@ int GPFrame::points_num() const
   return this->strokes->point_num;
 }
 
-Vector<GPStroke> GPFrame::strokes_for_write()
-{
-  Vector<GPStroke> strokes;
-  for (const int i : this->strokes_as_curves().offsets().drop_back(1).index_range()) {
-    int offset = this->strokes_as_curves().offsets()[i];
-    int length = this->strokes_as_curves().offsets()[i + 1] - offset;
-    strokes.append({reinterpret_cast<CurvesGeometry *>(this->strokes), length, offset});
-  }
-  return strokes;
-}
-
-GPStroke GPFrame::add_new_stroke(int new_points_num)
+IndexRange GPFrame::add_new_stroke(int new_points_num)
 {
   CurvesGeometry &strokes = this->strokes_as_curves();
   int orig_last_offset = strokes.offsets().last();
@@ -220,7 +211,7 @@ GPStroke GPFrame::add_new_stroke(int new_points_num)
   strokes.curve_types_for_write().last() = CURVE_TYPE_POLY;
 
   strokes.tag_topology_changed();
-  return {reinterpret_cast<CurvesGeometry *>(this->strokes), new_points_num, orig_last_offset};
+  return {orig_last_offset, new_points_num};
 }
 
 /* GPLayer */

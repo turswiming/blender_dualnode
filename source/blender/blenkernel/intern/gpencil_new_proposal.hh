@@ -196,6 +196,7 @@ class GPDataRuntime {
  * of where to find the stroke in the frame and it's size.
  * This class is only meant to facilitate the handling of individual strokes.
  */
+#if 0
 class GPStroke {
  public:
   GPStroke(CurvesGeometry *geometry, int num_points, int offset)
@@ -225,6 +226,7 @@ class GPStroke {
   int points_num_ = 0;
   int offset_;
 };
+#endif
 
 class GPFrame : public ::GPFrame {
 
@@ -261,8 +263,7 @@ class GPFrame : public ::GPFrame {
   int strokes_num() const;
   int points_num() const;
 
-  Vector<GPStroke> strokes_for_write();
-  GPStroke add_new_stroke(int new_points_num);
+  IndexRange add_new_stroke(int new_points_num);
 
   constexpr GPFrameKey get_frame_key() const
   {
