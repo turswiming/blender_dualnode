@@ -165,6 +165,8 @@ typedef struct GreasePencil {
 
 namespace blender::bke {
 
+static const std::string ATTR_RADIUS = "radius";
+
 class GPLayerGroup : ::GPLayerGroup { /* Unused for now. Placeholder class. */
  public:
   GPLayerGroup();

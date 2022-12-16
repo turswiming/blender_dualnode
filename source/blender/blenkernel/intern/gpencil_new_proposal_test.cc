@@ -158,43 +158,56 @@ static void insert_new_stroke_new_gpencil_data(GPFrame &gpf,
   int stroke_index{gpf.strokes_num()};
   gpf.add_new_stroke(point_num);
   CurvesGeometry &curves = gpf.strokes_as_curves();
+  MutableAttributeAccessor attributes = curves.attributes_for_write();
 
   int point_index{0};
   MutableSpan<float3> pos = curves.positions_for_write();
+  SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_only_span<float>(
+      ATTR_RADIUS, ATTR_DOMAIN_POINT);
   for (int point_index_in_curve : curves.points_for_curve(stroke_index)) {
     pos[point_index_in_curve].x = position[3 * point_index];
     pos[point_index_in_curve].y = position[3 * point_index + 1];
     pos[point_index_in_curve].z = position[3 * point_index + 2];
+    radii.span[point_index_in_curve] = pressure[point_index];
     ++point_index;
   }
+
+  radii.finish();
 }
 
 static void compare_gpencil_stroke_data(const CurvesGeometry &curves,
                                         int curve_index,
-                                        const bGPDstroke *stk)
+                                        const bGPDstroke *gps)
 {
   // Stroke/Curve length
   int curve_point_num{curves.points_num_for_curve(curve_index)};
-  EXPECT_EQ(curve_point_num, stk->totpoints);
-  if (curve_point_num != stk->totpoints) {
+  EXPECT_EQ(curve_point_num, gps->totpoints);
+  if (curve_point_num != gps->totpoints) {
     return;
   }
 
+  AttributeAccessor attributes = curves.attributes();
+
   // Get curve attributes
   Span<float3> curve_positions{curves.positions()};
+  VArray<float> radii = attributes.lookup_or_default<float>(ATTR_RADIUS, ATTR_DOMAIN_POINT, 0);
 
   IndexRange curve_id{curves.points_for_curve(curve_index)};
-  int stk_point_id{0};
+  int point_index{0};
   for (int curve_point_id : curve_id) {
-    const bGPDspoint *stk_point{stk->points + stk_point_id};
-    const float3 &curve_pos{curve_positions[curve_point_id]};
+    const bGPDspoint *gps_point{gps->points + point_index};
+    const float3 &position{curve_positions[curve_point_id]};
+    const float radius = radii[curve_point_id];
 
     // Point positions
-    EXPECT_EQ(curve_pos.x, stk_point->x);
-    EXPECT_EQ(curve_pos.y, stk_point->y);
-    EXPECT_EQ(curve_pos.z, stk_point->z);
+    EXPECT_EQ(position.x, gps_point->x);
+    EXPECT_EQ(position.y, gps_point->y);
+    EXPECT_EQ(position.z, gps_point->z);
 
-    ++stk_point_id;
+    // Point radius
+    EXPECT_EQ(radius, gps_point->pressure);
+
+    ++point_index;
   }
 }
 

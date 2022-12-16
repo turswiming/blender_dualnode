@@ -35,7 +35,7 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
 
       MutableSpan<float3> new_gps_positions{new_gps.positions_for_write()};
       SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_only_span<float>(
-          "radius", ATTR_DOMAIN_POINT);
+          ATTR_RADIUS, ATTR_DOMAIN_POINT);
       int stroke_index;
       LISTBASE_FOREACH_INDEX (const bGPDstroke *, old_gps, &old_gpf->strokes, stroke_index) {
         const IndexRange point_index_in_curve{new_gps.points_for_curve(stroke_index)};
@@ -82,6 +82,11 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
 
       BLI_listbase_clear(&old_gpf->strokes);
       const CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
+      AttributeAccessor attributes = new_gps.attributes();
+
+      Span<float3> new_gps_positions = new_gps.positions();
+      VArray<float> new_gps_radii = attributes.lookup_or_default<float>(ATTR_RADIUS, ATTR_DOMAIN_POINT, 0);
+
       for (int stroke_index = 0; stroke_index < new_gpf.strokes_num(); stroke_index++) {
         bGPDstroke *old_gps = reinterpret_cast<bGPDstroke *>(
             MEM_mallocN(sizeof(bGPDstroke), __func__));
@@ -94,12 +99,11 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
         old_gps->editcurve = nullptr;
         old_gps->dvert = nullptr;
 
-        Span<float3> new_gps_positions = new_gps.positions();
-
         int point_index{0};
         for (int new_gps_point_index : new_gps.points_for_curve(stroke_index)) {
           bGPDspoint *pt = &old_gps->points[point_index];
           copy_v3_v3(&pt->x, new_gps_positions[new_gps_point_index]);
+          pt->pressure = new_gps_radii[new_gps_point_index];
           ++point_index;
         }
 
