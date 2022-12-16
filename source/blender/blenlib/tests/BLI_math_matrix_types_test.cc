@@ -241,6 +241,18 @@ TEST(math_matrix_types, MatrixMultiplyOperator)
 
   float3x3 result3 = float3x3::diagonal(2) * float3x3::diagonal(6);
   EXPECT_EQ(result3, float3x3::diagonal(12));
+
+  /* Non square matrices. */
+  float3x2 a4(float2(1, 2), float2(3, 4), float2(5, 6));
+  float2x3 b4(float3(11, 7, 5), float3(13, 11, 17));
+
+  float2x2 expect4(float2(57, 80), float2(131, 172));
+
+  float2x2 result4 = a4 * b4;
+  EXPECT_EQ(result4[0][0], expect4[0][0]);
+  EXPECT_EQ(result4[0][1], expect4[0][1]);
+  EXPECT_EQ(result4[1][0], expect4[1][0]);
+  EXPECT_EQ(result4[1][1], expect4[1][1]);
 }
 
 TEST(math_matrix_types, VectorMultiplyOperator)

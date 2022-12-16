@@ -316,17 +316,16 @@ struct alignas(4 * sizeof(T)) MatBase : public vec_struct_base<vec_base<T, NumRo
   }
 
   /** Multiply two matrices using matrix multiplication. */
-  MatBase operator*(const MatBase &b) const
+  MatBase<T, NumRow, NumRow> operator*(const MatBase<T, NumRow, NumCol> &b) const
   {
     const MatBase &a = *this;
     /* This is the reference implementation.
      * Might be overloaded with vectorized / optimized code. */
-    /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
-    MatBase<T, NumCol, NumRow> result{};
-    unroll<NumCol>([&](auto c) {
-      unroll<NumRow>([&](auto r) {
-        /* This is vector multiplication. */
-        result[c] += b[c][r] * a[r];
+    MatBase<T, NumRow, NumRow> result{};
+    unroll<NumRow>([&](auto j) {
+      unroll<NumRow>([&](auto i) {
+        /* Same as dot product, but avoid dependency on vector math. */
+        unroll<NumCol>([&](auto k) { result[j][i] += a[k][i] * b[j][k]; });
       });
     });
     return result;
@@ -657,23 +656,22 @@ struct MatView : NonCopyable, NonMovable {
 
   /** Multiply two matrices using matrix multiplication. */
   template<int OtherSrcNumCol, int OtherSrcNumRow, int OtherSrcStartCol, int OtherSrcStartRow>
-  MatT operator*(const MatView<T,
-                               NumCol,
-                               NumRow,
-                               OtherSrcNumCol,
-                               OtherSrcNumRow,
-                               OtherSrcStartCol,
-                               OtherSrcStartRow> &b) const
+  MatBase<T, NumRow, NumRow> operator*(const MatView<T,
+                                                     NumRow,
+                                                     NumCol,
+                                                     OtherSrcNumCol,
+                                                     OtherSrcNumRow,
+                                                     OtherSrcStartCol,
+                                                     OtherSrcStartRow> &b) const
   {
     const MatView &a = *this;
     /* This is the reference implementation.
      * Might be overloaded with vectorized / optimized code. */
-    /** TODO(fclem): Only tested for square matrices. Might still contain bugs. */
-    MatT result{};
-    unroll<NumCol>([&](auto c) {
-      unroll<NumRow>([&](auto r) {
-        /* This is vector multiplication. */
-        result[c] += b[c][r] * a[r];
+    MatBase<T, NumRow, NumRow> result{};
+    unroll<NumRow>([&](auto j) {
+      unroll<NumRow>([&](auto i) {
+        /* Same as dot product, but avoid dependency on vector math. */
+        unroll<NumCol>([&](auto k) { result[j][i] += a[k][i] * b[j][k]; });
       });
     });
     return result;
