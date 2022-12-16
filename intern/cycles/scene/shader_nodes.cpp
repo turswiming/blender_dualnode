@@ -226,6 +226,7 @@ NODE_DEFINE(ImageTextureNode)
   extension_enum.insert("periodic", EXTENSION_REPEAT);
   extension_enum.insert("clamp", EXTENSION_EXTEND);
   extension_enum.insert("black", EXTENSION_CLIP);
+  extension_enum.insert("mirror", EXTENSION_MIRROR);
   SOCKET_ENUM(extension, "Extension", extension_enum, EXTENSION_REPEAT);
 
   static NodeEnum projection_enum;
@@ -5132,6 +5133,9 @@ void MixFloatNode::constant_fold(const ConstantFolder &folder)
     }
     folder.make_constant(a * (1 - fac) + b * fac);
   }
+  else {
+    folder.fold_mix_float(use_clamp, false);
+  }
 }
 
 /* Mix Vector */
@@ -5184,6 +5188,9 @@ void MixVectorNode::constant_fold(const ConstantFolder &folder)
       fac = clamp(fac, 0.0f, 1.0f);
     }
     folder.make_constant(a * (one_float3() - fac) + b * fac);
+  }
+  else {
+    folder.fold_mix_color(NODE_MIX_BLEND, use_clamp, false);
   }
 }
 
@@ -7211,6 +7218,7 @@ void SetNormalNode::compile(OSLCompiler &compiler)
 OSLNode::OSLNode() : ShaderNode(new NodeType(NodeType::SHADER))
 {
   special_type = SHADER_SPECIAL_TYPE_OSL;
+  has_emission = false;
 }
 
 OSLNode::~OSLNode()
@@ -7257,12 +7265,12 @@ char *OSLNode::input_default_value()
   return (char *)this + align_up(sizeof(OSLNode), 16) + inputs_size;
 }
 
-void OSLNode::add_input(ustring name, SocketType::Type socket_type)
+void OSLNode::add_input(ustring name, SocketType::Type socket_type, const int flags)
 {
   char *memory = input_default_value();
   size_t offset = memory - (char *)this;
   const_cast<NodeType *>(type)->register_input(
-      name, name, socket_type, offset, memory, NULL, NULL, SocketType::LINKABLE);
+      name, name, socket_type, offset, memory, NULL, NULL, flags | SocketType::LINKABLE);
 }
 
 void OSLNode::add_output(ustring name, SocketType::Type socket_type)

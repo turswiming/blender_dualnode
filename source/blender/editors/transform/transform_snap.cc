@@ -612,16 +612,25 @@ static bool bm_face_is_snap_target(BMFace *f, void *UNUSED(user_data))
 static eSnapFlag snap_flag_from_spacetype(TransInfo *t)
 {
   ToolSettings *ts = t->settings;
-  if (t->spacetype == SPACE_NODE) {
-    return eSnapFlag(ts->snap_flag_node);
+  switch (t->spacetype) {
+    case SPACE_VIEW3D:
+      return eSnapFlag(ts->snap_flag);
+    case SPACE_NODE:
+      return eSnapFlag(ts->snap_flag_node);
+    case SPACE_IMAGE:
+      return eSnapFlag(ts->snap_uv_flag);
+    case SPACE_SEQ:
+      return eSnapFlag(ts->snap_flag_seq);
+    case SPACE_GRAPH:
+    case SPACE_ACTION:
+    case SPACE_NLA:
+      /* These editors have their own "Auto-Snap" activation option.
+       * See #getAnimEdit_SnapMode. */
+      return eSnapFlag(0);
   }
-  if (t->spacetype == SPACE_IMAGE) {
-    return eSnapFlag(ts->snap_uv_flag);
-  }
-  if (t->spacetype == SPACE_SEQ) {
-    return eSnapFlag(ts->snap_flag_seq);
-  }
-  return eSnapFlag(ts->snap_flag);
+  /* #SPACE_EMPTY.
+   * It can happen when the operator is called via a handle in `bpy.app.handlers`. */
+  return eSnapFlag(0);
 }
 
 static eSnapMode snap_mode_from_spacetype(TransInfo *t)
@@ -1082,7 +1091,7 @@ static void snap_calc_uv_fn(TransInfo *t, float *UNUSED(vec))
     Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
         t->scene, t->view_layer, nullptr, &objects_len);
 
-    float dist_sq = square_f((float)SNAP_MIN_DISTANCE);
+    float dist_sq = square_f(float(SNAP_MIN_DISTANCE));
     if (ED_uvedit_nearest_uv_multi(&t->region->v2d,
                                    t->scene,
                                    objects,
@@ -1181,36 +1190,19 @@ static void TargetSnapOffset(TransInfo *t, TransData *td)
   if (t->spacetype == SPACE_NODE && td != nullptr) {
     bNode *node = static_cast<bNode *>(td->extra);
     char border = t->tsnap.snapNodeBorder;
-    float width = BLI_rctf_size_x(&node->runtime->totr);
-    float height = BLI_rctf_size_y(&node->runtime->totr);
 
-#ifdef USE_NODE_CENTER
-    if (border & NODE_LEFT) {
-      t->tsnap.snapTarget[0] -= 0.5f * width;
-    }
-    if (border & NODE_RIGHT) {
-      t->tsnap.snapTarget[0] += 0.5f * width;
-    }
-    if (border & NODE_BOTTOM) {
-      t->tsnap.snapTarget[1] -= 0.5f * height;
-    }
-    if (border & NODE_TOP) {
-      t->tsnap.snapTarget[1] += 0.5f * height;
-    }
-#else
     if (border & NODE_LEFT) {
       t->tsnap.snapTarget[0] -= 0.0f;
     }
     if (border & NODE_RIGHT) {
-      t->tsnap.snapTarget[0] += width;
+      t->tsnap.snapTarget[0] += BLI_rctf_size_x(&node->runtime->totr);
     }
     if (border & NODE_BOTTOM) {
-      t->tsnap.snapTarget[1] -= height;
+      t->tsnap.snapTarget[1] -= BLI_rctf_size_y(&node->runtime->totr);
     }
     if (border & NODE_TOP) {
       t->tsnap.snapTarget[1] += 0.0f;
     }
-#endif
   }
 }
 

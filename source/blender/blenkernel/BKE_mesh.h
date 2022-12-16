@@ -72,6 +72,11 @@ void BKE_mesh_tag_coords_changed_uniformly(struct Mesh *mesh);
 
 void BKE_mesh_tag_topology_changed(struct Mesh *mesh);
 
+/**
+ * Call when new edges and vertices have been created but positions and faces haven't changed.
+ */
+void BKE_mesh_tag_edges_split(struct Mesh *mesh);
+
 /* *** mesh.c *** */
 
 struct BMesh *BKE_mesh_to_bmesh_ex(const struct Mesh *me,
@@ -127,7 +132,8 @@ int BKE_mesh_edge_other_vert(const struct MEdge *e, int v);
 /**
  * Sets each output array element to the edge index if it is a real edge, or -1.
  */
-void BKE_mesh_looptri_get_real_edges(const struct Mesh *mesh,
+void BKE_mesh_looptri_get_real_edges(const struct MEdge *edges,
+                                     const struct MLoop *loops,
                                      const struct MLoopTri *looptri,
                                      int r_edges[3]);
 
@@ -249,14 +255,6 @@ void BKE_mesh_texspace_get_reference(struct Mesh *me,
 void BKE_mesh_texspace_copy_from_object(struct Mesh *me, struct Object *ob);
 
 /**
- * Split faces based on the edge angle and loop normals.
- * Matches behavior of face splitting in render engines.
- *
- * \note Will leave #CD_NORMAL loop data layer which is used by render engines to set shading up.
- */
-void BKE_mesh_split_faces(struct Mesh *mesh, bool free_loop_normals);
-
-/**
  * Create new mesh from the given object at its current state.
  * The owner of this mesh is unknown, it is up to the caller to decide.
  *
@@ -280,18 +278,6 @@ struct Mesh *BKE_mesh_new_from_object_to_bmain(struct Main *bmain,
                                                struct Depsgraph *depsgraph,
                                                struct Object *object,
                                                bool preserve_all_data_layers);
-
-/**
- * \param use_virtual_modifiers: When enabled calculate virtual-modifiers before applying `md_eval`
- * support this since virtual-modifiers are not modifiers from a user perspective,
- * allowing shape keys to be included with the modifier being applied, see: T91923.
- */
-struct Mesh *BKE_mesh_create_derived_for_modifier(struct Depsgraph *depsgraph,
-                                                  struct Scene *scene,
-                                                  struct Object *ob_eval,
-                                                  struct ModifierData *md_eval,
-                                                  bool use_virtual_modifiers,
-                                                  bool build_shapekey_layers);
 
 /**
  * Move data from a mesh outside of the main data-base into a mesh in the data-base.
@@ -432,6 +418,15 @@ bool BKE_mesh_vertex_normals_are_dirty(const struct Mesh *mesh);
  */
 bool BKE_mesh_poly_normals_are_dirty(const struct Mesh *mesh);
 
+void BKE_mesh_calc_poly_normal(const struct MPoly *mpoly,
+                               const struct MLoop *loopstart,
+                               const struct MVert *mvarray,
+                               float r_no[3]);
+void BKE_mesh_calc_poly_normal_coords(const struct MPoly *mpoly,
+                                      const struct MLoop *loopstart,
+                                      const float (*vertex_coords)[3],
+                                      float r_no[3]);
+
 /**
  * Calculate face normals directly into a result array.
  *
@@ -481,9 +476,7 @@ void BKE_mesh_ensure_normals_for_display(struct Mesh *mesh);
  * Used when defining an empty custom loop normals data layer,
  * to keep same shading as with auto-smooth!
  */
-void BKE_edges_sharp_from_angle_set(const struct MVert *mverts,
-                                    int numVerts,
-                                    struct MEdge *medges,
+void BKE_edges_sharp_from_angle_set(struct MEdge *medges,
                                     int numEdges,
                                     const struct MLoop *mloops,
                                     int numLoops,
@@ -588,10 +581,10 @@ void BKE_lnor_space_add_loop(MLoopNorSpaceArray *lnors_spacearr,
                              int ml_index,
                              void *bm_loop,
                              bool is_single);
-void BKE_lnor_space_custom_data_to_normal(MLoopNorSpace *lnor_space,
+void BKE_lnor_space_custom_data_to_normal(const MLoopNorSpace *lnor_space,
                                           const short clnor_data[2],
                                           float r_custom_lnor[3]);
-void BKE_lnor_space_custom_normal_to_data(MLoopNorSpace *lnor_space,
+void BKE_lnor_space_custom_normal_to_data(const MLoopNorSpace *lnor_space,
                                           const float custom_lnor[3],
                                           short r_clnor_data[2]);
 
@@ -694,14 +687,6 @@ void BKE_mesh_set_custom_normals_from_verts(struct Mesh *mesh, float (*r_custom_
 
 /* *** mesh_evaluate.cc *** */
 
-void BKE_mesh_calc_poly_normal(const struct MPoly *mpoly,
-                               const struct MLoop *loopstart,
-                               const struct MVert *mvarray,
-                               float r_no[3]);
-void BKE_mesh_calc_poly_normal_coords(const struct MPoly *mpoly,
-                                      const struct MLoop *loopstart,
-                                      const float (*vertex_coords)[3],
-                                      float r_no[3]);
 void BKE_mesh_calc_poly_center(const struct MPoly *mpoly,
                                const struct MLoop *loopstart,
                                const struct MVert *mvarray,
@@ -1113,6 +1098,18 @@ inline blender::Span<MDeformVert> Mesh::deform_verts() const
 inline blender::MutableSpan<MDeformVert> Mesh::deform_verts_for_write()
 {
   return {BKE_mesh_deform_verts_for_write(this), this->totvert};
+}
+
+inline blender::Span<blender::float3> Mesh::poly_normals() const
+{
+  return {reinterpret_cast<const blender::float3 *>(BKE_mesh_poly_normals_ensure(this)),
+          this->totpoly};
+}
+
+inline blender::Span<blender::float3> Mesh::vertex_normals() const
+{
+  return {reinterpret_cast<const blender::float3 *>(BKE_mesh_vertex_normals_ensure(this)),
+          this->totvert};
 }
 
 #endif

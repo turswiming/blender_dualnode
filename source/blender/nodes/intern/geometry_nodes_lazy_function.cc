@@ -135,8 +135,7 @@ class LazyFunctionForGeometryNode : public LazyFunction {
     if (geo_eval_log::GeoModifierLog *modifier_log = user_data->modifier_data->eval_log) {
       geo_eval_log::GeoTreeLogger &tree_logger = modifier_log->get_local_tree_logger(
           *user_data->compute_context);
-      tree_logger.node_execution_times.append(
-          {tree_logger.allocator->copy_string(node_.name), start_time, end_time});
+      tree_logger.node_execution_times.append({node_.identifier, start_time, end_time});
     }
   }
 };
@@ -158,9 +157,11 @@ class LazyFunctionForMultiInput : public LazyFunction {
     BLI_assert(socket.is_multi_input());
     const bNodeTree &btree = socket.owner_tree();
     for (const bNodeLink *link : socket.directly_linked_links()) {
-      if (!(link->is_muted() || nodeIsDanglingReroute(&btree, link->fromnode))) {
-        inputs_.append({"Input", *base_type_});
+      if (link->is_muted() || !link->fromsock->is_available() ||
+          nodeIsDanglingReroute(&btree, link->fromnode)) {
+        continue;
       }
+      inputs_.append({"Input", *base_type_});
     }
     const CPPType *vector_type = get_vector_type(*base_type_);
     BLI_assert(vector_type != nullptr);
@@ -570,8 +571,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
                   used_domain = *detected_domain;
                 }
                 else {
-                  used_domain = type == GEO_COMPONENT_TYPE_MESH ? ATTR_DOMAIN_CORNER :
-                                                                  ATTR_DOMAIN_POINT;
+                  used_domain = ATTR_DOMAIN_POINT;
                 }
               }
               bke::try_capture_field_on_geometry(
@@ -663,7 +663,8 @@ class LazyFunctionForGroupNode : public LazyFunction {
     }
 
     /* The compute context changes when entering a node group. */
-    bke::NodeGroupComputeContext compute_context{user_data->compute_context, group_node_.name};
+    bke::NodeGroupComputeContext compute_context{user_data->compute_context,
+                                                 group_node_.identifier};
     GeoNodesLFUserData group_user_data = *user_data;
     group_user_data.compute_context = &compute_context;
 
@@ -1140,10 +1141,11 @@ struct GeometryNodesLazyFunctionGraphBuilder {
             if (multi_input_link == link) {
               break;
             }
-            if (!(multi_input_link->is_muted() ||
-                  nodeIsDanglingReroute(&btree_, multi_input_link->fromnode))) {
-              link_index++;
+            if (multi_input_link->is_muted() || !multi_input_link->fromsock->is_available() ||
+                nodeIsDanglingReroute(&btree_, multi_input_link->fromnode)) {
+              continue;
             }
+            link_index++;
           }
           if (to_bsocket.owner_node().is_muted()) {
             if (link_index == 0) {
@@ -1399,8 +1401,7 @@ GeometryNodesLazyFunctionGraphInfo::~GeometryNodesLazyFunctionGraphInfo()
       if (!bsockets.is_empty()) {
         const bNodeSocket &bsocket = *bsockets[0];
         const bNode &bnode = bsocket.owner_node();
-        tree_logger.debug_messages.append(
-            {tree_logger.allocator->copy_string(bnode.name), thread_id_str});
+        tree_logger.debug_messages.append({bnode.identifier, thread_id_str});
         return true;
       }
     }

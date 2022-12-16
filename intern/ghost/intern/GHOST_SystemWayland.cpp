@@ -20,6 +20,10 @@
 
 #include "GHOST_ContextEGL.h"
 
+#ifdef WITH_VULKAN_BACKEND
+#  include "GHOST_ContextVK.h"
+#endif
+
 #ifdef WITH_INPUT_NDOF
 #  include "GHOST_NDOFManagerUnix.h"
 #endif
@@ -1240,7 +1244,7 @@ static void ghost_wl_display_report_error(struct wl_display *display)
 {
   int ecode = wl_display_get_error(display);
   GHOST_ASSERT(ecode, "Error not set!");
-  if ((ecode == EPIPE || ecode == ECONNRESET)) {
+  if (ELEM(ecode, EPIPE, ECONNRESET)) {
     fprintf(stderr, "The Wayland connection broke. Did the Wayland compositor die?\n");
   }
   else {
@@ -5312,7 +5316,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
   /* Connect to the Wayland server. */
   display_->wl_display = wl_display_connect(nullptr);
   if (!display_->wl_display) {
-    gwl_display_destroy(display_);
+    this->~GHOST_SystemWayland();
     throw std::runtime_error("Wayland: unable to connect to display!");
   }
 
@@ -5356,7 +5360,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
               "WAYLAND found but libdecor was not, install libdecor for Wayland support, "
               "falling back to X11\n");
 #  endif
-      gwl_display_destroy(display_);
+      this->~GHOST_SystemWayland();
       throw std::runtime_error("Wayland: unable to find libdecor!");
 
       use_libdecor = true;
@@ -5373,7 +5377,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
     GWL_LibDecor_System &decor = *display_->libdecor;
     decor.context = libdecor_new(display_->wl_display, &libdecor_interface);
     if (!decor.context) {
-      gwl_display_destroy(display_);
+      this->~GHOST_SystemWayland();
       throw std::runtime_error("Wayland: unable to create window decorations!");
     }
   }
@@ -5384,7 +5388,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
   {
     GWL_XDG_Decor_System &decor = *display_->xdg_decor;
     if (!decor.shell) {
-      gwl_display_destroy(display_);
+      this->~GHOST_SystemWayland();
       throw std::runtime_error("Wayland: unable to access xdg_shell!");
     }
   }
@@ -5826,8 +5830,36 @@ static GHOST_TSuccess getCursorPositionClientRelative_impl(
     int32_t &y)
 {
   const wl_fixed_t scale = win->scale();
-  x = wl_fixed_to_int(scale * seat_state_pointer->xy[0]);
-  y = wl_fixed_to_int(scale * seat_state_pointer->xy[1]);
+
+  if (win->getCursorGrabModeIsWarp()) {
+    /* As the cursor is restored at the warped location,
+     * apply warping when requesting the cursor location. */
+    GHOST_Rect wrap_bounds{};
+    if (win->getCursorGrabModeIsWarp()) {
+      if (win->getCursorGrabBounds(wrap_bounds) == GHOST_kFailure) {
+        win->getClientBounds(wrap_bounds);
+      }
+    }
+    int xy_wrap[2] = {
+        seat_state_pointer->xy[0],
+        seat_state_pointer->xy[1],
+    };
+
+    GHOST_Rect wrap_bounds_scale;
+    wrap_bounds_scale.m_l = wl_fixed_from_int(wrap_bounds.m_l) / scale;
+    wrap_bounds_scale.m_t = wl_fixed_from_int(wrap_bounds.m_t) / scale;
+    wrap_bounds_scale.m_r = wl_fixed_from_int(wrap_bounds.m_r) / scale;
+    wrap_bounds_scale.m_b = wl_fixed_from_int(wrap_bounds.m_b) / scale;
+    wrap_bounds_scale.wrapPoint(UNPACK2(xy_wrap), 0, win->getCursorGrabAxis());
+
+    x = wl_fixed_to_int(scale * xy_wrap[0]);
+    y = wl_fixed_to_int(scale * xy_wrap[1]);
+  }
+  else {
+    x = wl_fixed_to_int(scale * seat_state_pointer->xy[0]);
+    y = wl_fixed_to_int(scale * seat_state_pointer->xy[1]);
+  }
+
   return GHOST_kSuccess;
 }
 
@@ -6014,7 +6046,7 @@ static GHOST_Context *createOffscreenContext_impl(GHOST_SystemWayland *system,
   return nullptr;
 }
 
-GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GLSettings /*glSettings*/)
+GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GLSettings glSettings)
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
   std::lock_guard lock_server_guard{*server_mutex};
@@ -6022,6 +6054,31 @@ GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GLSettings /*g
 
   /* Create new off-screen window. */
   wl_surface *wl_surface = wl_compositor_create_surface(wl_compositor());
+
+#ifdef WITH_VULKAN_BACKEND
+  const bool debug_context = (glSettings.flags & GHOST_glDebugContext) != 0;
+
+  if (glSettings.context_type == GHOST_kDrawingContextTypeVulkan) {
+    GHOST_Context *context = new GHOST_ContextVK(false,
+                                                 GHOST_kVulkanPlatformWayland,
+                                                 0,
+                                                 NULL,
+                                                 wl_surface,
+                                                 display_->wl_display,
+                                                 1,
+                                                 0,
+                                                 debug_context);
+
+    if (!context->initializeDrawingContext()) {
+      delete context;
+      return nullptr;
+    }
+    return context;
+  }
+#else
+  (void)glSettings;
+#endif
+
   wl_egl_window *egl_window = wl_surface ? wl_egl_window_create(wl_surface, 1, 1) : nullptr;
 
   GHOST_Context *context = createOffscreenContext_impl(this, display_->wl_display, egl_window);

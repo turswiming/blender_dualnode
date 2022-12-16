@@ -2,11 +2,7 @@
 
 #include "DNA_mesh_types.h"
 
-#include "BKE_mesh.h"
-#include "BKE_mesh_runtime.h"
-
-#include "bmesh.h"
-#include "bmesh_tools.h"
+#include "GEO_mesh_split_edges.hh"
 
 #include "node_geometry_util.hh"
 
@@ -19,33 +15,6 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>(N_("Mesh"));
 }
 
-static Mesh *mesh_edge_split(const Mesh &mesh, const IndexMask selection)
-{
-  BMeshCreateParams bmesh_create_params{};
-  bmesh_create_params.use_toolflags = true;
-  const BMAllocTemplate allocsize = {0, 0, 0, 0};
-  BMesh *bm = BM_mesh_create(&allocsize, &bmesh_create_params);
-
-  BMeshFromMeshParams bmesh_from_mesh_params{};
-  bmesh_from_mesh_params.cd_mask_extra.vmask = CD_MASK_ORIGINDEX;
-  bmesh_from_mesh_params.cd_mask_extra.emask = CD_MASK_ORIGINDEX;
-  bmesh_from_mesh_params.cd_mask_extra.pmask = CD_MASK_ORIGINDEX;
-  BM_mesh_bm_from_me(bm, &mesh, &bmesh_from_mesh_params);
-
-  BM_mesh_elem_table_ensure(bm, BM_EDGE);
-  for (const int i : selection) {
-    BMEdge *edge = BM_edge_at_index(bm, i);
-    BM_elem_flag_enable(edge, BM_ELEM_TAG);
-  }
-
-  BM_mesh_edgesplit(bm, false, true, false);
-
-  Mesh *result = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, &mesh);
-  BM_mesh_free(bm);
-
-  return result;
-}
-
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
@@ -53,17 +22,18 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    if (const Mesh *mesh = geometry_set.get_mesh_for_write()) {
+    if (const Mesh *mesh = geometry_set.get_mesh_for_read()) {
 
       bke::MeshFieldContext field_context{*mesh, ATTR_DOMAIN_EDGE};
       fn::FieldEvaluator selection_evaluator{field_context, mesh->totedge};
-      selection_evaluator.add(selection_field);
+      selection_evaluator.set_selection(selection_field);
       selection_evaluator.evaluate();
-      const IndexMask selection = selection_evaluator.get_evaluated_as_mask(0);
+      const IndexMask mask = selection_evaluator.get_evaluated_selection_as_mask();
+      if (mask.is_empty()) {
+        return;
+      }
 
-      Mesh *result = mesh_edge_split(*mesh, selection);
-
-      geometry_set.replace_mesh(result);
+      geometry::split_edges(*geometry_set.get_mesh_for_write(), mask);
     }
   });
 

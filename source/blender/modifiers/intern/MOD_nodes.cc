@@ -861,14 +861,8 @@ static void find_side_effect_nodes_for_viewer_path(
 
   const bNodeTree *group = nmd.node_group;
   Stack<const bNode *> group_node_stack;
-  for (const StringRefNull group_node_name : parsed_path->group_node_names) {
-    const bNode *found_node = nullptr;
-    for (const bNode *node : group->group_nodes()) {
-      if (node->name == group_node_name) {
-        found_node = node;
-        break;
-      }
-    }
+  for (const int32_t group_node_id : parsed_path->group_node_ids) {
+    const bNode *found_node = group->node_by_id(group_node_id);
     if (found_node == nullptr) {
       return;
     }
@@ -880,16 +874,10 @@ static void find_side_effect_nodes_for_viewer_path(
     }
     group_node_stack.push(found_node);
     group = reinterpret_cast<bNodeTree *>(found_node->id);
-    compute_context_builder.push<blender::bke::NodeGroupComputeContext>(group_node_name);
+    compute_context_builder.push<blender::bke::NodeGroupComputeContext>(*found_node);
   }
 
-  const bNode *found_viewer_node = nullptr;
-  for (const bNode *viewer_node : group->nodes_by_type("GeometryNodeViewer")) {
-    if (viewer_node->name == parsed_path->viewer_node_name) {
-      found_viewer_node = viewer_node;
-      break;
-    }
-  }
+  const bNode *found_viewer_node = group->node_by_id(parsed_path->viewer_node_id);
   if (found_viewer_node == nullptr) {
     return;
   }
@@ -1015,9 +1003,6 @@ static Vector<OutputAttributeToStore> compute_attributes_to_store(
       continue;
     }
     const GeometryComponent &component = *geometry.get_component_for_read(component_type);
-    if (component.is_empty()) {
-      continue;
-    }
     const blender::bke::AttributeAccessor attributes = *component.attributes();
     for (const auto item : outputs_by_domain.items()) {
       const eAttrDomain domain = item.key;
@@ -1324,19 +1309,6 @@ static void modifyGeometry(ModifierData *md,
   }
 }
 
-static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
-{
-  GeometrySet geometry_set = GeometrySet::create_with_mesh(mesh, GeometryOwnershipType::Editable);
-
-  modifyGeometry(md, ctx, geometry_set);
-
-  Mesh *new_mesh = geometry_set.get_component_for_write<MeshComponent>().release();
-  if (new_mesh == nullptr) {
-    return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
-  }
-  return new_mesh;
-}
-
 static void modifyGeometrySet(ModifierData *md,
                               const ModifierEvalContext *ctx,
                               GeometrySet *geometry_set)
@@ -1416,7 +1388,7 @@ static void attribute_search_update_fn(
     }
   }
   else {
-    for (const bNode *node : nmd->node_group->nodes_by_type("NodeGroupInput")) {
+    for (const bNode *node : nmd->node_group->group_input_nodes()) {
       for (const bNodeSocket *socket : node->output_sockets()) {
         if (socket->type == SOCK_GEOMETRY) {
           sockets_to_check.append(socket);
@@ -1897,7 +1869,7 @@ ModifierTypeInfo modifierType_Nodes = {
     /* deformMatrices */ nullptr,
     /* deformVertsEM */ nullptr,
     /* deformMatricesEM */ nullptr,
-    /* modifyMesh */ modifyMesh,
+    /* modifyMesh */ nullptr,
     /* modifyGeometrySet */ modifyGeometrySet,
 
     /* initData */ initData,

@@ -285,19 +285,26 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
 )
 
 set(SRC_KERNEL_LIGHT_HEADERS
-  light/light.h
+  light/area.h
   light/background.h
   light/common.h
+  light/distant.h
+  light/distribution.h
+  light/light.h
+  light/point.h
   light/sample.h
+  light/spot.h
+  light/tree.h
+  light/triangle.h
 )
 
 set(SRC_KERNEL_SAMPLE_HEADERS
-  sample/jitter.h
   sample/lcg.h
   sample/mapping.h
   sample/mis.h
   sample/pattern.h
   sample/sobol_burley.h
+  sample/tabulated_sobol.h
   sample/util.h
 )
 
@@ -466,6 +473,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
 
     if(WITH_CYCLES_DEBUG)
       set(cuda_flags ${cuda_flags} -D WITH_CYCLES_DEBUG)
+      set(cuda_flags ${cuda_flags} --ptxas-options="-v")
     endif()
 
     set(_cuda_nvcc_args
@@ -473,7 +481,6 @@ if(WITH_CYCLES_CUDA_BINARIES)
           ${CUDA_NVCC_FLAGS}
           --${format}
           ${CMAKE_CURRENT_SOURCE_DIR}${cuda_kernel_src}
-          --ptxas-options="-v"
           ${cuda_flags})
 
     if(WITH_COMPILER_CCACHE AND CCACHE_PROGRAM)
@@ -853,8 +860,9 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
   else()
     list(APPEND sycl_compiler_flags -fPIC)
 
-    # We avoid getting __FAST_MATH__ to be defined when building on CentOS 7 until the compilation
+    # We avoid getting __FAST_MATH__ to be defined when building on CentOS-7 until the compilation
     # crash it triggers at either AoT or JIT stages gets fixed.
+    # TODO: check if this is still needed on Rocky-8.
     list(APPEND sycl_compiler_flags -fhonor-nans)
 
     # add $ORIGIN to cycles_kernel_oneapi.so rpath so libsycl.so and
