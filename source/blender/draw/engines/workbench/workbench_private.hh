@@ -188,6 +188,9 @@ class OpaquePass {
   TextureFromPool gbuffer_material_tx = {"gbuffer_material_tx"};
   Framebuffer opaque_fb;
 
+  Texture shadow_depth_stencil_tx = {"shadow_depth_stencil_tx"};
+  GPUTexture *deferred_ps_stencil_tx = nullptr;
+
   MeshPass gbuffer_ps_ = {"Opaque.Gbuffer"};
   MeshPass gbuffer_in_front_ps_ = {"Opaque.GbufferInFront"};
   PassSimple deferred_ps_ = {"Opaque.Deferred"};
@@ -197,7 +200,8 @@ class OpaquePass {
             View &view,
             SceneResources &resources,
             int2 resolution,
-            class ShadowPass *shadow_pass);
+            class ShadowPass *shadow_pass,
+            bool accumulation_ps_is_empty);
   bool is_empty() const;
 };
 
@@ -244,6 +248,7 @@ class ShadowPass {
   enum PassType { Pass, Fail, ForcedFail, Length };
 
   class ShadowView : public View {
+    bool force_fail_method_;
     float3 light_direction_;
     UniformBuffer<ExtrudedFrustum> extruded_frustum_;
     ShadowPass::PassType current_pass_type_;
@@ -253,7 +258,7 @@ class ShadowPass {
     VisibilityBuf fail_visibility_buf_;
 
    public:
-    void setup(View &view, float3 light_direction);
+    void setup(View &view, float3 light_direction, bool force_fail_method);
     bool debug_object_culling(Object *ob);
     void set_mode(PassType type);
 
@@ -279,6 +284,7 @@ class ShadowPass {
   GPUShader *shaders_[2][2][2] = {{{nullptr}}};
   GPUShader *get_shader(bool depth_pass, bool manifold, bool cap = false);
 
+  TextureFromPool depth_tx_;
   Framebuffer fb_;
 
  public:
@@ -289,7 +295,13 @@ class ShadowPass {
                    ObjectRef &ob_ref,
                    SceneState &scene_state,
                    const bool has_transp_mat);
-  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+  void draw(
+      Manager &manager,
+      View &view,
+      SceneResources &resources,
+      int2 resolution,
+      GPUTexture &depth_stencil_tx,
+      bool force_fail_method /*Needed when there are opaque "In Front" objects in the scene*/);
 };
 
 class OutlinePass {

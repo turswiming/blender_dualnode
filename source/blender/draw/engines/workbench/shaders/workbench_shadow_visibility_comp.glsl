@@ -86,7 +86,7 @@ void main()
 
 #ifdef DYNAMIC_PASS_SELECTION
   if (is_visible(box)) {
-    bool use_fail_pass = intersects_near_plane(box);
+    bool use_fail_pass = force_fail_method || intersects_near_plane(box);
     set_visibility(!use_fail_pass, use_fail_pass);
   }
   else {

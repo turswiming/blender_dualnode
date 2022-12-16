@@ -28,8 +28,9 @@ namespace blender::workbench {
 
 ShadowPass::ShadowView::ShadowView() : View("ShadowPass.View"){};
 
-void ShadowPass::ShadowView::setup(View &view, float3 light_direction)
+void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool force_fail_method)
 {
+  force_fail_method_ = force_fail_method;
   light_direction_ = light_direction;
   sync(view.viewmat(), view.winmat());
 
@@ -245,6 +246,7 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
     GPU_shader_uniform_1i(shader, "resource_len", resource_len);
     GPU_shader_uniform_1i(shader, "view_len", view_len_);
     GPU_shader_uniform_1i(shader, "visibility_word_per_draw", word_per_draw);
+    GPU_shader_uniform_1b(shader, "force_fail_method", force_fail_method_);
     GPU_shader_uniform_3fv(shader, "shadow_direction", light_direction_);
     GPU_uniformbuf_bind(extruded_frustum_,
                         GPU_shader_get_uniform_block(shader, "extruded_frustum"));
@@ -358,9 +360,6 @@ void ShadowPass::sync()
   pass_ps_.state_set(depth_pass_state);
   pass_ps_.state_stencil(0xFF, 0xFF, 0xFF);
 
-  /* TODO(Miguel Pozo) */
-  pass_ps_.clear_stencil(0);
-
   fail_ps_.init();
   fail_ps_.state_set(depth_fail_state);
   fail_ps_.state_stencil(0xFF, 0xFF, 0xFF);
@@ -416,14 +415,9 @@ void ShadowPass::object_sync(Manager &manager,
       "%s culling : %s\n", ob->id.name, shadow_view.debug_object_culling(ob) ? "true" : "false");
 #endif
 
-  /* TODO (Miguel Pozo):
-   * Force fail pass when there are "in front" objects in the scene? */
-
   /* Shadow pass technique needs object to be have all its surface opaque. */
   /* We cannot use Shadow Pass technique on non-manifold object (see T76168). */
   bool force_fail_pass = has_transp_mat || (!is_manifold && (scene_state.cull_state != 0));
-
-  force_fail_pass = true;
 
   PassType fail_type = force_fail_pass ? ForcedFail : Fail;
 
@@ -454,17 +448,22 @@ void ShadowPass::object_sync(Manager &manager,
   }
 }
 
-void ShadowPass::draw(Manager &manager, View &view, SceneResources &resources, int2 resolution)
+void ShadowPass::draw(Manager &manager,
+                      View &view,
+                      SceneResources &resources,
+                      int2 resolution,
+                      GPUTexture &depth_stencil_tx,
+                      bool force_fail_method)
 {
   if (!enabled_) {
     return;
   }
 
-  fb_.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx),
+  fb_.ensure(GPU_ATTACHMENT_TEXTURE(&depth_stencil_tx),
              GPU_ATTACHMENT_TEXTURE(resources.color_tx));
   fb_.bind();
 
-  view_.setup(view, pass_data_.light_direction_ws);
+  view_.setup(view, pass_data_.light_direction_ws, force_fail_method);
 
   view_.set_mode(Pass);
   manager.submit(pass_ps_, view_);

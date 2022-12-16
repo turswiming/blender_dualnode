@@ -336,7 +336,12 @@ class Instance {
       }
     }
 
-    opaque_ps.draw(manager, view, resources, resolution, &shadow_ps);
+    opaque_ps.draw(manager,
+                   view,
+                   resources,
+                   resolution,
+                   &shadow_ps,
+                   transparent_ps.accumulation_ps_.is_empty());
     transparent_ps.draw(manager, view, resources, resolution);
     transparent_depth_ps.draw(manager, view, resources, resolution);
 

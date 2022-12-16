@@ -122,7 +122,7 @@ void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
   deferred_ps_.bind_texture("normal_tx", &gbuffer_normal_tx);
   deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
   deferred_ps_.bind_texture("depth_tx", &resources.depth_tx);
-  deferred_ps_.bind_texture("stencil_tx", resources.depth_tx.stencil_view());
+  deferred_ps_.bind_texture("stencil_tx", &deferred_ps_stencil_tx);
   deferred_ps_.bind_image("out_color_img", &resources.color_tx);
   resources.cavity.setup_resolve_pass(deferred_ps_, resources);
   deferred_ps_.dispatch(math::divide_ceil(scene_state.resolution, int2(WB_RESOLVE_GROUP_SIZE)));
@@ -133,7 +133,8 @@ void OpaquePass::draw(Manager &manager,
                       View &view,
                       SceneResources &resources,
                       int2 resolution,
-                      ShadowPass *shadow_pass)
+                      ShadowPass *shadow_pass,
+                      bool accumulation_ps_is_empty)
 {
   if (is_empty()) {
     return;
@@ -170,11 +171,43 @@ void OpaquePass::draw(Manager &manager,
     manager.submit(gbuffer_ps_, view);
   }
 
+  bool needs_stencil_copy = shadow_pass && !gbuffer_in_front_ps_.is_empty() &&
+                            !accumulation_ps_is_empty;
+
+  if (needs_stencil_copy) {
+    shadow_depth_stencil_tx.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
+    GPU_texture_copy(shadow_depth_stencil_tx, resources.depth_tx);
+
+    deferred_ps_stencil_tx = shadow_depth_stencil_tx.stencil_view();
+  }
+  else {
+    shadow_depth_stencil_tx.free();
+
+    deferred_ps_stencil_tx = resources.depth_tx.stencil_view();
+  }
+
+  if (shadow_pass && !gbuffer_in_front_ps_.is_empty()) {
+    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(deferred_ps_stencil_tx));
+    opaque_fb.bind();
+    GPU_framebuffer_clear_stencil(opaque_fb, 0);
+  }
+
   if (shadow_pass) {
-    shadow_pass->draw(manager, view, resources, resolution);
+    shadow_pass->draw(manager,
+                      view,
+                      resources,
+                      resolution,
+                      *deferred_ps_stencil_tx,
+                      !gbuffer_in_front_ps_.is_empty());
   }
 
   manager.submit(deferred_ps_, view);
+
+  if (shadow_pass && !needs_stencil_copy) {
+    opaque_fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
+    opaque_fb.bind();
+    GPU_framebuffer_clear_stencil(opaque_fb, 0);
+  }
 
   gbuffer_normal_tx.release();
   gbuffer_material_tx.release();
