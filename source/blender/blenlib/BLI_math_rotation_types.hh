@@ -135,6 +135,7 @@ template<typename T> struct AxisAngle {
   /**
    * Create a rotation from an axis and an angle.
    * \note `axis` does not have to be normalized.
+   * Use `AxisAngleNormalized` instead to skip normalization cost.
    */
   AxisAngle(const vec3_type &axis, T angle);
 
@@ -217,13 +218,13 @@ template<typename T> struct AxisAngleNormalized : public AxisAngle<T> {
 /**
  * Intermediate Types.
  *
- * Some functions need to have higher precision than standard floats.
+ * Some functions need to have higher precision than standard floats for some operations.
  */
 template<typename T> struct TypeTraits {
-  using IntermediateType = T;
+  using DoublePrecision = T;
 };
 template<> struct TypeTraits<float> {
-  using IntermediateType = double;
+  using DoublePrecision = double;
 };
 
 };  // namespace detail

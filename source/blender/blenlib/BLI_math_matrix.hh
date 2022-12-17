@@ -774,17 +774,17 @@ template<typename T, int NumCol, int NumRow>
 MatBase<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
 {
   using MatT = MatBase<T, NumCol, NumRow>;
-  using IntermediateType = typename TypeTraits<T>::IntermediateType;
-  IntermediateType ci = math::cos(rotation.x);
-  IntermediateType cj = math::cos(rotation.y);
-  IntermediateType ch = math::cos(rotation.z);
-  IntermediateType si = math::sin(rotation.x);
-  IntermediateType sj = math::sin(rotation.y);
-  IntermediateType sh = math::sin(rotation.z);
-  IntermediateType cc = ci * ch;
-  IntermediateType cs = ci * sh;
-  IntermediateType sc = si * ch;
-  IntermediateType ss = si * sh;
+  using DoublePrecision = typename TypeTraits<T>::DoublePrecision;
+  DoublePrecision ci = math::cos(rotation.x);
+  DoublePrecision cj = math::cos(rotation.y);
+  DoublePrecision ch = math::cos(rotation.z);
+  DoublePrecision si = math::sin(rotation.x);
+  DoublePrecision sj = math::sin(rotation.y);
+  DoublePrecision sh = math::sin(rotation.z);
+  DoublePrecision cc = ci * ch;
+  DoublePrecision cs = ci * sh;
+  DoublePrecision sc = si * ch;
+  DoublePrecision ss = si * sh;
 
   MatT mat;
   mat[0][0] = T(cj * ch);
@@ -805,21 +805,21 @@ template<typename T, int NumCol, int NumRow>
 MatBase<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation)
 {
   using MatT = MatBase<T, NumCol, NumRow>;
-  using IntermediateType = typename TypeTraits<T>::IntermediateType;
-  IntermediateType q0 = M_SQRT2 * IntermediateType(rotation.x);
-  IntermediateType q1 = M_SQRT2 * IntermediateType(rotation.y);
-  IntermediateType q2 = M_SQRT2 * IntermediateType(rotation.z);
-  IntermediateType q3 = M_SQRT2 * IntermediateType(rotation.w);
+  using DoublePrecision = typename TypeTraits<T>::DoublePrecision;
+  DoublePrecision q0 = M_SQRT2 * DoublePrecision(rotation.x);
+  DoublePrecision q1 = M_SQRT2 * DoublePrecision(rotation.y);
+  DoublePrecision q2 = M_SQRT2 * DoublePrecision(rotation.z);
+  DoublePrecision q3 = M_SQRT2 * DoublePrecision(rotation.w);
 
-  IntermediateType qda = q0 * q1;
-  IntermediateType qdb = q0 * q2;
-  IntermediateType qdc = q0 * q3;
-  IntermediateType qaa = q1 * q1;
-  IntermediateType qab = q1 * q2;
-  IntermediateType qac = q1 * q3;
-  IntermediateType qbb = q2 * q2;
-  IntermediateType qbc = q2 * q3;
-  IntermediateType qcc = q3 * q3;
+  DoublePrecision qda = q0 * q1;
+  DoublePrecision qdb = q0 * q2;
+  DoublePrecision qdc = q0 * q3;
+  DoublePrecision qaa = q1 * q1;
+  DoublePrecision qab = q1 * q2;
+  DoublePrecision qac = q1 * q3;
+  DoublePrecision qbb = q2 * q2;
+  DoublePrecision qbc = q2 * q3;
+  DoublePrecision qcc = q3 * q3;
 
   MatT mat;
   mat[0][0] = T(1.0 - qbb - qcc);

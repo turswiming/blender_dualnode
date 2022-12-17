@@ -12,10 +12,6 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
-using Eigen::Map;
-using Eigen::Matrix;
-using Eigen::Stride;
-
 /* -------------------------------------------------------------------- */
 /** \name Matrix multiplication
  * \{ */
@@ -74,7 +70,7 @@ namespace blender::math {
 
 template<typename T, int Size> T determinant(const MatBase<T, Size, Size> &mat)
 {
-  return Map<const Matrix<T, Size, Size>>(mat.base_ptr()).determinant();
+  return Eigen::Map<const Eigen::Matrix<T, Size, Size>>(mat.base_ptr()).determinant();
 }
 
 template float determinant(const float2x2 &mat);
@@ -86,7 +82,8 @@ template double determinant(const double4x4 &mat);
 
 template<typename T> bool is_negative(const MatBase<T, 4, 4> &mat)
 {
-  return Map<const Matrix<T, 3, 3>, 0, Stride<4, 1>>(mat.base_ptr()).determinant() < T(0);
+  return Eigen::Map<const Eigen::Matrix<T, 3, 3>, 0, Eigen::Stride<4, 1>>(mat.base_ptr())
+             .determinant() < T(0);
 }
 
 template bool is_negative(const float4x4 &mat);
@@ -139,8 +136,8 @@ template<typename T, int Size>
 MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat, bool &r_success)
 {
   MatBase<T, Size, Size> result;
-  Map<const Matrix<T, Size, Size>> M(mat.base_ptr());
-  Map<Matrix<T, Size, Size>> R(result.base_ptr());
+  Eigen::Map<const Eigen::Matrix<T, Size, Size>> M(mat.base_ptr());
+  Eigen::Map<Eigen::Matrix<T, Size, Size>> R(result.base_ptr());
   M.computeInverseWithCheck(R, r_success, 0.0f);
   if (!r_success) {
     R = R.Zero();
@@ -177,21 +174,21 @@ MatBase<T, Size, Size> pseudo_invert(const MatBase<T, Size, Size> &mat, T epsilo
 
   {
     using namespace Eigen;
-    using MatrixT = Matrix<T, Size, Size>;
-    using VectorT = Matrix<T, Size, 1>;
+    using MatrixT = Eigen::Matrix<T, Size, Size>;
+    using VectorT = Eigen::Matrix<T, Size, 1>;
     /* Blender and Eigen matrices are both column-major.
      * Since our matrix is squared, we can use thinU/V. */
     /** WORKAROUND:
      * (ComputeThinU | ComputeThinV) must be set as runtime parameters in Eigen < 3.4.0.
      * But this requires the matrix type to be dynamic to avoid an assert.
      */
-    using MatrixDynamicT = Matrix<T, Dynamic, Dynamic>;
+    using MatrixDynamicT = Eigen::Matrix<T, Dynamic, Dynamic>;
     JacobiSVD<MatrixDynamicT, NoQRPreconditioner> svd(
-        Map<const MatrixDynamicT>(mat.base_ptr(), Size, Size), ComputeThinU | ComputeThinV);
+        Eigen::Map<const MatrixDynamicT>(mat.base_ptr(), Size, Size), ComputeThinU | ComputeThinV);
 
-    (Map<MatrixT>(U.base_ptr())) = svd.matrixU();
-    (Map<VectorT>(S_val)) = svd.singularValues();
-    (Map<MatrixT>(V.base_ptr())) = svd.matrixV();
+    (Eigen::Map<MatrixT>(U.base_ptr())) = svd.matrixU();
+    (Eigen::Map<VectorT>(S_val)) = svd.singularValues();
+    (Eigen::Map<MatrixT>(V.base_ptr())) = svd.matrixV();
   }
 
   /* Invert or nullify component based on epsilon comparison. */
@@ -237,20 +234,20 @@ static void polar_decompose(const MatBase<T, 3, 3> &mat3,
 
   {
     using namespace Eigen;
-    using MatrixT = Matrix<T, 3, 3>;
-    using VectorT = Matrix<T, 3, 1>;
+    using MatrixT = Eigen::Matrix<T, 3, 3>;
+    using VectorT = Eigen::Matrix<T, 3, 1>;
     /* Blender and Eigen matrices are both column-major.
      * Since our matrix is squared, we can use thinU/V. */
     /** WORKAROUND:
      * (ComputeThinU | ComputeThinV) must be set as runtime parameters in Eigen < 3.4.0.
      * But this requires the matrix type to be dynamic to avoid an assert.
      */
-    using MatrixDynamicT = Matrix<T, Dynamic, Dynamic>;
+    using MatrixDynamicT = Eigen::Matrix<T, Dynamic, Dynamic>;
     JacobiSVD<MatrixDynamicT, NoQRPreconditioner> svd(
-        Map<const MatrixDynamicT>(mat3.base_ptr(), 3, 3), ComputeThinU | ComputeThinV);
+        Eigen::Map<const MatrixDynamicT>(mat3.base_ptr(), 3, 3), ComputeThinU | ComputeThinV);
 
-    (Map<MatrixT>(W.base_ptr())) = svd.matrixU();
-    (Map<VectorT>(S_val)) = svd.singularValues();
+    (Eigen::Map<MatrixT>(W.base_ptr())) = svd.matrixU();
+    (Eigen::Map<VectorT>(S_val)) = svd.singularValues();
     (Map<MatrixT>(V.base_ptr())) = svd.matrixV();
   }
 
