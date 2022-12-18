@@ -58,9 +58,7 @@ namespace blender {
 /*
 comment: Reduce algebra script;
 
-on factor;
-off period;
-
+comment: Build bernstein polynomials from linear combination;
 procedure bez(a, b);
   a + (b - a) * t;
 
@@ -70,6 +68,7 @@ cubic := bez(quad, sub(k3=k4, k2=k3, k1=k2, quad));
 
 dcubic := df(cubic, t);
 
+comment: display final equations in fortran;
 on fort;
 cubic;
 dcubic;
@@ -140,7 +139,6 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     return *this;
   }
 
-#if 1
   CubicBezier(CubicBezier &&b)
   {
     *this = b;
@@ -165,7 +163,6 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
 
     return *this;
   }
-#endif
 
   Float length;
 
@@ -311,11 +308,12 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     Float dy = dcubic(ps[0][1], ps[1][1], ps[2][1], ps[3][1], t);
     Float d2y = d2cubic(ps[0][1], ps[1][1], ps[2][1], ps[3][1], t);
 
-    /*
+    /* reduce algebra script
     comment: arc length second derivative;
 
-    comment: build arc length version from abstract derivative operators;
+    comment: build arc length from abstract derivative operators;
     operator x, y, z, dx, dy, dz, d2x, d2y, d2z;
+
     forall t let df(x(t), t) = dx(t);
     forall t let df(y(t), t) = dy(t);
     forall t let df(z(t), t) = dz(t);
@@ -328,6 +326,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     comment: 2d case;
     dlen := sqrt(df(x(t), t)**2 + df(y(t), t)**2);
 
+    comment: final derivatives;
     df(df(x(t), t) / dlen, t);
     df(df(y(t), t) / dlen, t);
 
@@ -335,15 +334,13 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     dlen := sqrt(df(x(t), t)**2 + df(y(t), t)**2 + df(z(t), t)**2);
 
     comment: final derivatives;
-
     df(df(x(t), t) / dlen, t);
     df(df(y(t), t) / dlen, t);
     df(df(z(t), t) / dlen, t);
-
     */
+
     if constexpr (axes == 2) {
       /* Basically the 2d perpidicular normalized tangent multiplied by the curvature. */
-
       Float div = sqrt(dx * dx + dy * dy) * (dx * dx + dy * dy);
 
       r[0] = ((d2x * dy - d2y * dx) * dy) / div;
@@ -633,9 +630,7 @@ class EvenSpline {
     return seg->bezier.dcurvature(s - seg->start);
   }
 
-  /* Find the closest point on the spline.  Uses a bisecting root finding approach.
-   * Note: in thoery we could split the spline into quadratic segments and solve
-   * for the closest point directy.
+  /* Find the closest point on the spline.  Uses a bisecting root finding approach..
    */
   Vector closest_point(const Vector p, Float &r_s, Vector &r_tan, Float &r_dis)
   {
@@ -656,7 +651,11 @@ class EvenSpline {
       Float ds = s - inflection_points[i - 1];
 
       b = evaluate(s);
-      dvb = derivative(s, false); /* False means we don't need fully normalized derivative. */
+
+      /* The extra false parameter means we don't
+       * need fully normalized derivative.
+       */
+      dvb = derivative(s, false); 
 
       if (i == 0) {
         continue;
