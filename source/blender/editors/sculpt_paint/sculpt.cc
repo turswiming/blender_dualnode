@@ -645,7 +645,7 @@ void SCULPT_visibility_sync_all_from_faces(Object *ob)
       BMIter iter;
       BMFace *f;
 
-      /* Hide all verts and edges attached to faces.*/
+      /* Hide all verts and edges attached to faces. */
       BM_ITER_MESH (f, &iter, ss->bm, BM_FACES_OF_MESH) {
         BMLoop *l = f->l_first;
         do {
