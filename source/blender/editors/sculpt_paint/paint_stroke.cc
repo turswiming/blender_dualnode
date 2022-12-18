@@ -218,7 +218,7 @@ static void paint_project_cubic(bContext *C,
   float last_z_pos[3];
   bool have_last_z = false;
 
-  for (int i = 0; i < stroke->world_spline->components(); i++) {
+  for (int i = 0; i < stroke->world_spline->order(); i++) {
     if (!SCULPT_stroke_get_location(C, bezier3d.ps[i], mvals[i], true)) {
       if (!have_last_z) {
         if (stroke->world_spline->segments.size() > 0) {

@@ -55,26 +55,6 @@ namespace blender {
 
 /** Cubic curves */
 
-/*
-comment: Reduce algebra script;
-
-comment: Build bernstein polynomials from linear combination;
-procedure bez(a, b);
-  a + (b - a) * t;
-
-lin := bez(k1, k2);
-quad := bez(lin, sub(k2=k3, k1=k2, lin));
-cubic := bez(quad, sub(k3=k4, k2=k3, k1=k2, quad));
-
-dcubic := df(cubic, t);
-
-comment: display final equations in fortran;
-on fort;
-cubic;
-dcubic;
-off fort;
-
-*/
 template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
   using Vector = vec_base<Float, axes>;
 
@@ -166,6 +146,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
 
   Float length;
 
+  /* Update arc length -> parameterization table. */
   void update()
   {
     Float t = 0.0, dt = 1.0 / (Float)table_size;
@@ -272,6 +253,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     if (exact) {
       Float len = sqrt(_dot(r, r));
 
+      /* Use FLT_EPSILON here? */
       if (len > 0.00001) {
         r = r / len;
       }
@@ -312,6 +294,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     comment: arc length second derivative;
 
     comment: build arc length from abstract derivative operators;
+
     operator x, y, z, dx, dy, dz, d2x, d2y, d2z;
 
     forall t let df(x(t), t) = dx(t);
@@ -380,6 +363,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     return sqrt(_dot(dv2, dv2));
   }
 
+  /* First derivative of curvature. */
   Float dcurvature(Float s)
   {
     const Float ds = 0.0001;
@@ -404,23 +388,27 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
   Float *_arc_to_t;
   bool deleted = false;
 
+  /* Bernstein/bezier polynomial.*/
   Float cubic(Float k1, Float k2, Float k3, Float k4, Float t)
   {
     return -(((3.0 * (t - 1.0) * k3 - k4 * t) * t - 3.0 * (t - 1.0) * (t - 1.0) * k2) * t +
              (t - 1) * (t - 1) * (t - 1) * k1);
   }
 
+  /* First derivative. */
   Float dcubic(Float k1, Float k2, Float k3, Float k4, Float t)
   {
     return -3.0 * ((t - 1.0) * (t - 1.0) * k1 - k4 * t * t + (3.0 * t - 2.0) * k3 * t -
                    (3.0 * t - 1.0) * (t - 1.0) * k2);
   }
 
+  /* Second derivative. */
   Float d2cubic(Float k1, Float k2, Float k3, Float k4, Float t)
   {
     return -6.0 * (k1 * t - k1 - 3.0 * k2 * t + 2.0 * k2 + 3.0 * k3 * t - k3 - k4 * t);
   }
 
+  /* Inlinable dot product. */
   Float _dot(Vector a, Vector b)
   {
     Float sum = 0.0;
@@ -440,6 +428,9 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
     return s;
   }
 
+  /* Convert a unit distance along the curve to parameterization t
+   * using a linearly-interpolated lookup table.
+   */
   Float arc_to_t(Float s)
   {
     if (length == 0.0) {
@@ -537,6 +528,9 @@ class EvenSpline {
     update_inflection_points();
   }
 
+  /* Find inflection points, these are used to speed
+   * up closest point test.
+   */
   void update_inflection_points()
   {
     inflection_points.clear();
@@ -562,7 +556,8 @@ class EvenSpline {
     inflection_points.append(1.0);
   }
 
-  int components() noexcept
+  /* Number of control points inside a curve segment. */
+  int order() noexcept
   {
     return sizeof(segments[0].bezier.ps) / sizeof(*segments[0].bezier.ps);
   }
@@ -574,7 +569,7 @@ class EvenSpline {
     }
 
     if (s >= length) {
-      return segments[segments.size() - 1].bezier.ps[components() - 1];
+      return segments[segments.size() - 1].bezier.ps[order() - 1];
     }
 
     Segment *seg = get_segment(s);
@@ -594,6 +589,7 @@ class EvenSpline {
     return seg->bezier.derivative(s - seg->start, exact);
   }
 
+  /* Second derivative. */
   Vector derivative2(Float s)
   {
     if (segments.size() == 0) {
@@ -618,6 +614,7 @@ class EvenSpline {
     return seg->bezier.curvature(s - seg->start);
   }
 
+  /* First derivative of curvature. */
   Float dcurvature(Float s)
   {
     if (segments.size() == 0) {
@@ -630,7 +627,8 @@ class EvenSpline {
     return seg->bezier.dcurvature(s - seg->start);
   }
 
-  /* Find the closest point on the spline.  Uses a bisecting root finding approach..
+  /* Find the closest point on the spline.  Uses a bisecting root
+   * finding approach.
    */
   Vector closest_point(const Vector p, Float &r_s, Vector &r_tan, Float &r_dis)
   {
@@ -652,10 +650,10 @@ class EvenSpline {
 
       b = evaluate(s);
 
-      /* The extra false parameter means we don't
-       * need fully normalized derivative.
+      /* The extra false parameter signals we can
+       * accept a non-normalized first derivative.
        */
-      dvb = derivative(s, false); 
+      dvb = derivative(s, false);
 
       if (i == 0) {
         continue;
@@ -690,6 +688,7 @@ class EvenSpline {
       Float mid = (start + end) * 0.5;
       const int binary_steps = 10;
 
+      /* Main binary search loop. */
       for (int j = 0; j < binary_steps; j++) {
         Vector dvmid = derivative(mid, false);
         Vector vecmid = evaluate(mid) - p;
@@ -756,7 +755,7 @@ class EvenSpline {
   Float clamp_s(Float s)
   {
     s = s < 0.0 ? 0.0 : s;
-    s = s >= length ? length * 0.999999 : s;
+    s = s >= length ? length * (1.0 - FLT_EPSILON) : s;
 
     return s;
   }
