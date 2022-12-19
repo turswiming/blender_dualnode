@@ -119,8 +119,8 @@ class CavityEffect {
   bool curvature_enabled_;
   bool cavity_enabled_;
 
-  static const int max_samples_ = 512;  // This value must be kept in sync with the one declared at
-                                        // workbench_composite_info.hh (cavity_samples)
+  static const int max_samples_ = 512; /* This value must be kept in sync with the one declared at
+                                        * workbench_composite_info.hh (cavity_samples) */
   UniformArrayBuffer<float4, max_samples_> samples_buf;
 
   void load_samples_buf(int ssao_samples);
@@ -253,7 +253,6 @@ class ShadowPass {
     UniformBuffer<ExtrudedFrustum> extruded_frustum_;
     ShadowPass::PassType current_pass_type_;
 
-    /* TODO(Miguel Pozo): Use multiple views? */
     VisibilityBuf pass_visibility_buf_;
     VisibilityBuf fail_visibility_buf_;
 

@@ -4,10 +4,9 @@
 
 #include "BLI_hash.h"
 /* get_image */
+#include "BKE_node.h"
 #include "DNA_node_types.h"
 #include "ED_uvedit.h"
-//#include "BKE_image.h"
-#include "BKE_node.h"
 /* get_image */
 
 namespace blender::workbench {

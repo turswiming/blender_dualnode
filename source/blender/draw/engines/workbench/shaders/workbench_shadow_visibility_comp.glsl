@@ -1,9 +1,4 @@
 
-/**
- * Compute visibility of each resource bounds for a given view.
- */
-/* TODO(fclem): This could be augmented by a 2 pass occlusion culling system. */
-
 #pragma BLENDER_REQUIRE(common_math_lib.glsl)
 #pragma BLENDER_REQUIRE(common_intersect_lib.glsl)
 

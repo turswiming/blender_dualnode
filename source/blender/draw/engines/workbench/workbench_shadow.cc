@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
@@ -22,7 +21,6 @@
 #include "workbench_private.hh"
 
 #define DEBUG_SHADOW_VOLUME 0
-#define GPU_CULLING 1
 
 namespace blender::workbench {
 
@@ -54,12 +52,12 @@ void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool forc
    */
 
   /* Frustum Planes indices */
-  const int x_neg = 0;  // left
-  const int x_pos = 5;  // right
-  const int y_neg = 1;  // bottom
-  const int y_pos = 3;  // top
-  const int z_pos = 4;  // near
-  const int z_neg = 2;  // far
+  const int x_neg = 0; /* left */
+  const int x_pos = 5; /* right */
+  const int y_neg = 1; /* bottom */
+  const int y_pos = 3; /* top */
+  const int z_pos = 4; /* near */
+  const int z_neg = 2; /* far */
 
   int3 corner_faces[8] = {{x_neg, y_neg, z_pos},
                           {x_neg, y_neg, z_neg},
@@ -152,11 +150,11 @@ void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool forc
       lit_faces += face_lit[corner_faces[i_corner][i_face]] ? 1 : 0;
     }
     if (lit_faces < 3) {
-      // Add original corner
+      /* Add original corner */
       corners_result.append(frustum_corners.vec[i_corner]);
 
       if (lit_faces > 0) {
-        // Add extruded corner
+        /* Add extruded corner */
         corners_result.append(float3(frustum_corners.vec[i_corner]) - (light_direction_ * 1e4f));
       }
     }
@@ -224,7 +222,7 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
     GPU_storagebuf_clear(fail_visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
   }
   else if (current_pass_type_ == ShadowPass::Fail) {
-    // Already computed in the ShadowPass::Pass
+    /* Already computed in the ShadowPass::Pass */
     return;
   }
   else {
