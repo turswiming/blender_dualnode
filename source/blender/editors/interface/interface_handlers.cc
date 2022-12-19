@@ -995,7 +995,7 @@ static void ui_apply_but_funcs_after(bContext *C)
   BLI_listbase_clear(&UIAfterFuncs);
 
   LISTBASE_FOREACH_MUTABLE (uiAfterFunc *, afterf, &funcs) {
-    uiAfterFunc after = *afterf; /* copy to avoid memleak on exit() */
+    uiAfterFunc after = *afterf; /* Copy to avoid memory leak on exit(). */
     BLI_freelinkN(&funcs, afterf);
 
     if (after.context) {
@@ -1629,8 +1629,8 @@ static bool ui_drag_toggle_set_xy_xy(
   bool changed = false;
 
   LISTBASE_FOREACH (uiBlock *, block, &region->uiblocks) {
-    float xy_a_block[2] = {float(xy_src[0]), float(xy_src[0])};
-    float xy_b_block[2] = {float(xy_dst[0]), float(xy_dst[0])};
+    float xy_a_block[2] = {float(xy_src[0]), float(xy_src[1])};
+    float xy_b_block[2] = {float(xy_dst[0]), float(xy_dst[1])};
 
     ui_window_to_block_fl(region, block, &xy_a_block[0], &xy_a_block[1]);
     ui_window_to_block_fl(region, block, &xy_b_block[0], &xy_b_block[1]);
@@ -3283,7 +3283,7 @@ static bool ui_textedit_copypaste(uiBut *but, uiHandleButtonData *data, const in
 
     if (pbuf) {
       if (UI_but_is_utf8(but)) {
-        buf_len -= BLI_str_utf8_invalid_strip(pbuf, (size_t)buf_len);
+        buf_len -= BLI_str_utf8_invalid_strip(pbuf, size_t(buf_len));
       }
 
       ui_textedit_insert_buf(but, data, pbuf, buf_len);
@@ -8306,7 +8306,7 @@ static void button_activate_state(bContext *C, uiBut *but, uiHandleButtonState s
   /* number editing */
   if (state == BUTTON_STATE_NUM_EDITING) {
     if (ui_but_is_cursor_warp(but)) {
-      WM_cursor_grab_enable(CTX_wm_window(C), WM_CURSOR_WRAP_XY, true, nullptr);
+      WM_cursor_grab_enable(CTX_wm_window(C), WM_CURSOR_WRAP_XY, nullptr, true);
     }
     ui_numedit_begin(but, data);
   }
@@ -9052,7 +9052,7 @@ static bool ui_handle_button_activate_by_type(bContext *C, ARegion *region, uiBu
   }
   else {
 #ifdef DEBUG
-    printf("%s: error, unhandled type: %u\n", __func__, but->type);
+    printf("%s: error, unhandled type: %d\n", __func__, but->type);
 #endif
     return false;
   }

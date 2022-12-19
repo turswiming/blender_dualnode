@@ -15,11 +15,16 @@ GPU_SHADER_INTERFACE_INFO(workbench_shadow_iface, "vData")
 
 GPU_SHADER_CREATE_INFO(workbench_shadow_common)
     .vertex_in(0, Type::VEC3, "pos")
-    .vertex_out(workbench_shadow_iface)
     .push_constant(Type::FLOAT, "lightDistance")
     .push_constant(Type::VEC3, "lightDirection")
-    .vertex_source("workbench_shadow_vert.glsl")
     .additional_info("draw_mesh");
+
+/* `workbench_shadow_vert.glsl` only used by geometry shader path.
+ * Vertex output iface not needed by non-geometry shader variants,
+ * as only gl_Position is returned. */
+GPU_SHADER_CREATE_INFO(workbench_shadow_common_geom)
+    .vertex_out(workbench_shadow_iface)
+    .vertex_source("workbench_shadow_vert.glsl");
 
 GPU_SHADER_CREATE_INFO(workbench_next_shadow_common)
     .vertex_in(0, Type::VEC3, "pos")
@@ -28,7 +33,6 @@ GPU_SHADER_CREATE_INFO(workbench_next_shadow_common)
     .uniform_buf(1, "ShadowPassData", "pass_data")
     .push_constant(Type::VEC3, "lightDirection")
     .typedef_source("workbench_shader_shared.h")
-    .vertex_source("workbench_shadow_vert.glsl")
     .additional_info("draw_view")
     .additional_info("draw_modelmat_new")
     .additional_info("draw_resource_handle_new");
@@ -66,12 +70,24 @@ GPU_SHADER_CREATE_INFO(workbench_next_shadow_visibility_compute_static_pass_type
  * \{ */
 
 GPU_SHADER_CREATE_INFO(workbench_shadow_manifold)
+    .additional_info("workbench_shadow_common_geom")
     .geometry_layout(PrimitiveIn::LINES_ADJACENCY, PrimitiveOut::TRIANGLE_STRIP, 4, 1)
     .geometry_source("workbench_shadow_geom.glsl");
 
 GPU_SHADER_CREATE_INFO(workbench_shadow_no_manifold)
+    .additional_info("workbench_shadow_common_geom")
     .geometry_layout(PrimitiveIn::LINES_ADJACENCY, PrimitiveOut::TRIANGLE_STRIP, 4, 2)
     .geometry_source("workbench_shadow_geom.glsl");
+
+GPU_SHADER_CREATE_INFO(workbench_shadow_manifold_no_geom)
+    .vertex_source("workbench_shadow_vert_no_geom.glsl")
+    /* Inject SSBO vertex fetch declaration using 2 output triangles. */
+    .define("VAR_MANIFOLD", "\n#pragma USE_SSBO_VERTEX_FETCH(TriangleList, 6)");
+
+GPU_SHADER_CREATE_INFO(workbench_shadow_no_manifold_no_geom)
+    .vertex_source("workbench_shadow_vert_no_geom.glsl")
+    /* Inject SSBO vertex fetch declaration using 4 output triangles. */
+    .define("VAR_NO_MANIFOLD", "\n#pragma USE_SSBO_VERTEX_FETCH(TriangleList, 12)");
 
 /** \} */
 
@@ -80,8 +96,12 @@ GPU_SHADER_CREATE_INFO(workbench_shadow_no_manifold)
  * \{ */
 
 GPU_SHADER_CREATE_INFO(workbench_shadow_caps)
+    .additional_info("workbench_shadow_common_geom")
     .geometry_layout(PrimitiveIn::TRIANGLES, PrimitiveOut::TRIANGLE_STRIP, 3, 2)
     .geometry_source("workbench_shadow_caps_geom.glsl");
+
+GPU_SHADER_CREATE_INFO(workbench_shadow_caps_no_geom)
+    .vertex_source("workbench_shadow_caps_vert_no_geom.glsl");
 
 /** \} */
 

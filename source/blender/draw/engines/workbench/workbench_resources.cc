@@ -28,6 +28,7 @@ bool get_matcap_tx(Texture &matcap_tx, const StudioLight &studio_light)
 
     matcap_tx = Texture(studio_light.name,
                         GPU_RGBA16F,
+                        GPU_TEXTURE_USAGE_SHADER_READ,
                         int2(matcap_diffuse->x, matcap_diffuse->y),
                         layers,
                         buffer);
@@ -88,7 +89,7 @@ void SceneResources::load_jitter_tx(int total_samples)
   }
 
   jitter_tx.free();
-  jitter_tx.ensure_2d(GPU_RGBA16F, int2(jitter_tx_size), jitter[0]);
+  jitter_tx.ensure_2d(GPU_RGBA16F, int2(jitter_tx_size), GPU_TEXTURE_USAGE_SHADER_READ, jitter[0]);
 }
 
 void SceneResources::init(const SceneState &scene_state)
