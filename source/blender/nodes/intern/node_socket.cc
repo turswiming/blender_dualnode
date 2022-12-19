@@ -258,6 +258,15 @@ void refresh_node_sockets_from_declaration(bNodeTree &ntree,
   nodeSocketDeclarationsUpdate(&node);
 }
 
+void update_node_declaration_and_sockets(bNodeTree &ntree, bNode &node)
+{
+  if (!node.runtime->declaration) {
+    node.runtime->declaration = new NodeDeclaration();
+  }
+  build_node_declaration_dynamic(ntree, node, *node.runtime->declaration);
+  refresh_node_sockets_from_declaration(ntree, node, *node.runtime->declaration, true);
+}
+
 }  // namespace blender::nodes
 
 void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)

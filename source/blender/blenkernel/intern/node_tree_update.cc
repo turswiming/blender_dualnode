@@ -550,10 +550,7 @@ class NodeTreeMainUpdater {
           if (!node->runtime->declaration) {
             node->runtime->declaration = new blender::nodes::NodeDeclaration();
           }
-          build_node_declaration_dynamic(ntree, *node, *node->runtime->declaration);
-          /* TODO: Move this to blenkernel or something. */
-          nodes::refresh_node_sockets_from_declaration(
-              ntree, *node, *node->runtime->declaration, true);
+          nodes::update_node_declaration_and_sockets(ntree, *node);
         }
       }
     }

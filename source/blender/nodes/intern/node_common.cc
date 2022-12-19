@@ -32,6 +32,7 @@
 #include "NOD_common.h"
 #include "NOD_node_declaration.hh"
 #include "NOD_register.hh"
+#include "NOD_socket.h"
 #include "NOD_socket_declarations.hh"
 #include "NOD_socket_declarations_geometry.hh"
 #include "node_common.h"
@@ -452,7 +453,7 @@ static void group_output_declare_dynamic(const bNodeTree &node_tree,
                                          const bNode & /*node*/,
                                          NodeDeclaration &r_declaration)
 {
-  LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.inputs) {
+  LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.outputs) {
     r_declaration.inputs_.append(declataion_for_interface_socket(*input));
     r_declaration.inputs_.last()->in_out_ = SOCK_IN;
   }
@@ -465,18 +466,32 @@ static void group_input_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *li
 {
   BLI_assert(link->tonode != node);
   BLI_assert(link->tosock->in_out == SOCK_IN);
-  if (link->fromsock->identifier == StringRef("__extend__")) {
-    ntreeAddSocketInterfaceFromSocket(ntree, link->tonode, link->tosock);
+  if (link->fromsock->identifier != StringRef("__extend__")) {
+    return;
   }
+  const bNodeSocket *io_socket = ntreeAddSocketInterfaceFromSocket(
+      ntree, link->tonode, link->tosock);
+  if (!io_socket) {
+    return;
+  }
+  update_node_declaration_and_sockets(*ntree, *node);
+  link->fromsock = node_group_input_find_socket(node, io_socket->identifier);
 }
 
 static void group_output_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
 {
   BLI_assert(link->fromnode != node);
   BLI_assert(link->fromsock->in_out == SOCK_OUT);
-  if (link->tosock->identifier == StringRef("__extend__")) {
-    ntreeAddSocketInterfaceFromSocket(ntree, link->fromnode, link->fromsock);
+  if (link->tosock->identifier != StringRef("__extend__")) {
+    return;
   }
+  const bNodeSocket *io_socket = ntreeAddSocketInterfaceFromSocket(
+      ntree, link->fromnode, link->fromsock);
+  if (!io_socket) {
+    return;
+  }
+  update_node_declaration_and_sockets(*ntree, *node);
+  link->tosock = node_group_output_find_socket(node, io_socket->identifier);
 }
 
 }  // namespace blender::nodes
