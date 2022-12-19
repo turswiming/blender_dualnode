@@ -258,7 +258,7 @@ class GHOST_SharedOpenGLResource {
     glGenRenderbuffers(1, &m_gl_render_target);
     glBindRenderbuffer(GL_RENDERBUFFER, m_gl_render_target);
 
-    if (!reregisterSharedObject(TARGET_RENDERBUF)) {
+    if (false && !reregisterSharedObject(TARGET_RENDERBUF)) {
       glBindRenderbuffer(GL_RENDERBUFFER, 0);
       if (m_gl_render_target) {
         glDeleteRenderbuffers(1, &m_gl_render_target);
