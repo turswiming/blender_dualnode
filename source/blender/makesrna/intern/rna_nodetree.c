@@ -1736,7 +1736,7 @@ static void rna_Node_update_reg(bNodeTree *ntree, bNode *node)
   RNA_parameter_list_free(&list);
 }
 
-static void rna_Node_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
+static bool rna_Node_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
 {
   extern FunctionRNA rna_Node_insert_link_func;
 
@@ -1752,6 +1752,7 @@ static void rna_Node_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
   node->typeinfo->rna_ext.call(NULL, &ptr, func, &list);
 
   RNA_parameter_list_free(&list);
+  return true;
 }
 
 static void rna_Node_init(const bContext *C, PointerRNA *ptr)

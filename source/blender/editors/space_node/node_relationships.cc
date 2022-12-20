@@ -911,10 +911,16 @@ static void add_dragged_links_to_tree(bContext &C, bNodeLinkDrag &nldrag)
      * let nodes perform special link insertion handling
      */
     if (link->fromnode->typeinfo->insert_link) {
-      link->fromnode->typeinfo->insert_link(&ntree, link->fromnode, link);
+      if (!link->fromnode->typeinfo->insert_link(&ntree, link->fromnode, link)) {
+        MEM_freeN(link);
+        continue;
+      }
     }
     if (link->tonode->typeinfo->insert_link) {
-      link->tonode->typeinfo->insert_link(&ntree, link->tonode, link);
+      if (!link->tonode->typeinfo->insert_link(&ntree, link->tonode, link)) {
+        MEM_freeN(link);
+        continue;
+      }
     }
 
     /* add link to the node tree */

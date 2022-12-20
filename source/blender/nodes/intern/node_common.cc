@@ -200,6 +200,8 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
     case SOCK_MATERIAL:
       dst = std::make_unique<decl::Material>();
       break;
+    default:
+      break;
   }
   dst->name_ = io_socket.name;
   dst->identifier_ = io_socket.identifier;
@@ -462,36 +464,46 @@ static void group_output_declare_dynamic(const bNodeTree &node_tree,
   }
 }
 
-static void group_input_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
+static bool group_input_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
 {
   BLI_assert(link->tonode != node);
   BLI_assert(link->tosock->in_out == SOCK_IN);
   if (link->fromsock->identifier != StringRef("__extend__")) {
-    return;
+    return true;
+  }
+  if (link->tosock->identifier == StringRef("__extend__")) {
+    /* Don't connect to other "extend" sockets. */
+    return false;
   }
   const bNodeSocket *io_socket = ntreeAddSocketInterfaceFromSocket(
       ntree, link->tonode, link->tosock);
   if (!io_socket) {
-    return;
+    return false;
   }
   update_node_declaration_and_sockets(*ntree, *node);
   link->fromsock = node_group_input_find_socket(node, io_socket->identifier);
+  return true;
 }
 
-static void group_output_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
+static bool group_output_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)
 {
   BLI_assert(link->fromnode != node);
   BLI_assert(link->fromsock->in_out == SOCK_OUT);
   if (link->tosock->identifier != StringRef("__extend__")) {
-    return;
+    return true;
+  }
+  if (link->fromsock->identifier == StringRef("__extend__")) {
+    /* Don't connect to other "extend" sockets. */
+    return false;
   }
   const bNodeSocket *io_socket = ntreeAddSocketInterfaceFromSocket(
       ntree, link->fromnode, link->fromsock);
   if (!io_socket) {
-    return;
+    return false;
   }
   update_node_declaration_and_sockets(*ntree, *node);
   link->tosock = node_group_output_find_socket(node, io_socket->identifier);
+  return true;
 }
 
 }  // namespace blender::nodes
