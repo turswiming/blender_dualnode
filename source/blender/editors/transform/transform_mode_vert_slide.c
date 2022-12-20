@@ -332,18 +332,6 @@ static eRedrawFlag handleEventVertSlide(struct TransInfo *t, const struct wmEven
             return TREDRAW_HARD;
           }
           break;
-#if 0
-        case EVT_MODAL_MAP:
-          switch (event->val) {
-            case TFM_MODAL_EDGESLIDE_DOWN:
-              sld->curr_sv_index = ((sld->curr_sv_index - 1) + sld->totsv) % sld->totsv;
-              break;
-            case TFM_MODAL_EDGESLIDE_UP:
-              sld->curr_sv_index = (sld->curr_sv_index + 1) % sld->totsv;
-              break;
-          }
-          break;
-#endif
         case MOUSEMOVE: {
           /* don't recalculate the best edge */
           const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
@@ -461,7 +449,7 @@ void drawVertSlide(TransInfo *t)
         immUniform1i("colors_len", 0); /* "simple" mode */
         immUniformColor4f(1.0f, 1.0f, 1.0f, 1.0f);
         immUniform1f("dash_width", 6.0f);
-        immUniform1f("dash_factor", 0.5f);
+        immUniform1f("udash_factor", 0.5f);
 
         immBegin(GPU_PRIM_LINES, 2);
         immVertex3fv(shdr_pos, curr_sv->co_orig_3d);

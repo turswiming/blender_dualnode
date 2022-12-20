@@ -552,6 +552,8 @@ void ED_mesh_geometry_clear(struct Mesh *mesh);
 
 void ED_mesh_update(struct Mesh *mesh, struct bContext *C, bool calc_edges, bool calc_edges_loose);
 
+bool ED_mesh_edge_is_loose(const struct Mesh *mesh, int index);
+
 void ED_mesh_uv_ensure(struct Mesh *me, const char *name);
 int ED_mesh_uv_add(
     struct Mesh *me, const char *name, bool active_set, bool do_init, struct ReportList *reports);
@@ -578,6 +580,12 @@ void ED_mesh_report_mirror_ex(struct wmOperator *op, int totmirr, int totfail, c
  * Returns the pinned mesh, the mesh from the pinned object, or the mesh from the active object.
  */
 struct Mesh *ED_mesh_context(struct bContext *C);
+
+/**
+ * Split all edges that would appear sharp based on face and edge sharpness tags and the
+ * auto smooth angle.
+ */
+void ED_mesh_split_faces(struct Mesh *mesh);
 
 /* mesh backup */
 typedef struct BMBackup {

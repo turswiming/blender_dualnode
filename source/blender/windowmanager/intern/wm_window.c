@@ -1626,6 +1626,9 @@ GHOST_TDrawingContextType wm_ghost_drawing_context_type(const eGPUBackendType gp
     case GPU_BACKEND_OPENGL:
       return GHOST_kDrawingContextTypeOpenGL;
     case GPU_BACKEND_VULKAN:
+#ifdef WITH_VULKAN_BACKEND
+      return GHOST_kDrawingContextTypeVulkan;
+#endif
       BLI_assert_unreachable();
       return GHOST_kDrawingContextTypeNone;
     case GPU_BACKEND_METAL:
@@ -1641,6 +1644,23 @@ GHOST_TDrawingContextType wm_ghost_drawing_context_type(const eGPUBackendType gp
    * to error. */
   BLI_assert_unreachable();
   return GHOST_kDrawingContextTypeNone;
+}
+
+eWM_CapabilitiesFlag WM_capabilities_flag(void)
+{
+  static eWM_CapabilitiesFlag flag = -1;
+  if (flag != -1) {
+    return flag;
+  }
+
+  flag = 0;
+  if (GHOST_SupportsCursorWarp()) {
+    flag |= WM_CAPABILITY_CURSOR_WARP;
+  }
+  if (GHOST_SupportsWindowPosition()) {
+    flag |= WM_CAPABILITY_WINDOW_POSITION;
+  }
+  return flag;
 }
 
 /** \} */
@@ -2083,6 +2103,8 @@ void WM_init_input_devices(void)
 
 void WM_cursor_warp(wmWindow *win, int x, int y)
 {
+  /* This function requires access to the GHOST_SystemHandle (`g_system`). */
+
   if (!(win && win->ghostwin)) {
     return;
   }

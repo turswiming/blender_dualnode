@@ -20,6 +20,10 @@
 
 #include "GHOST_ContextEGL.h"
 
+#ifdef WITH_VULKAN_BACKEND
+#  include "GHOST_ContextVK.h"
+#endif
+
 #ifdef WITH_INPUT_NDOF
 #  include "GHOST_NDOFManagerUnix.h"
 #endif
@@ -805,6 +809,21 @@ static GWL_SeatStatePointer *gwl_seat_state_pointer_from_cursor_surface(
   return nullptr;
 }
 
+static bool gwl_seat_key_depressed_suppress_warning(const GWL_Seat *seat)
+{
+  bool suppress_warning = false;
+
+#ifdef USE_GNOME_KEYBOARD_SUPPRESS_WARNING
+  if ((seat->key_depressed_suppress_warning.any_mod_held == true) &&
+      (seat->key_depressed_suppress_warning.any_keys_held_on_enter == false)) {
+    /* The compositor gave us invalid information, don't show a warning. */
+    suppress_warning = true;
+  }
+#endif
+
+  return suppress_warning;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1225,7 +1244,7 @@ static void ghost_wl_display_report_error(struct wl_display *display)
 {
   int ecode = wl_display_get_error(display);
   GHOST_ASSERT(ecode, "Error not set!");
-  if ((ecode == EPIPE || ecode == ECONNRESET)) {
+  if (ELEM(ecode, EPIPE, ECONNRESET)) {
     fprintf(stderr, "The Wayland connection broke. Did the Wayland compositor die?\n");
   }
   else {
@@ -1751,13 +1770,17 @@ static void keyboard_depressed_state_key_event(GWL_Seat *seat,
                                                const GHOST_TKey gkey,
                                                const GHOST_TEventType etype)
 {
+  const bool show_warning = !gwl_seat_key_depressed_suppress_warning(seat);
+
   if (GHOST_KEY_MODIFIER_CHECK(gkey)) {
     const int index = GHOST_KEY_MODIFIER_TO_INDEX(gkey);
     int16_t &value = seat->key_depressed.mods[index];
     if (etype == GHOST_kEventKeyUp) {
       value -= 1;
       if (UNLIKELY(value < 0)) {
-        CLOG_WARN(LOG, "modifier (%d) has negative keys held (%d)!", index, value);
+        if (show_warning) {
+          CLOG_WARN(LOG, "modifier (%d) has negative keys held (%d)!", index, value);
+        }
         value = 0;
       }
     }
@@ -2576,7 +2599,7 @@ static void pointer_handle_enter(void *data,
 
   seat->system->seat_active_set(seat);
 
-  win->setCursorShape(win->getCursorShape());
+  seat->system->cursor_shape_set(win->getCursorShape());
 
   const wl_fixed_t scale = win->scale();
   seat->system->pushEvent_maybe_pending(
@@ -3238,7 +3261,7 @@ static void tablet_tool_handle_proximity_in(void *data,
 
   win->activate();
 
-  win->setCursorShape(win->getCursorShape());
+  seat->system->cursor_shape_set(win->getCursorShape());
 }
 static void tablet_tool_handle_proximity_out(void *data,
                                              struct zwp_tablet_tool_v2 * /*zwp_tablet_tool_v2*/)
@@ -3437,7 +3460,7 @@ static void tablet_tool_handle_frame(void *data,
                               wl_fixed_to_int(scale * seat->tablet.xy[1]),
                               tablet_tool->data));
     if (tablet_tool->proximity == false) {
-      win->setCursorShape(win->getCursorShape());
+      seat->system->cursor_shape_set(win->getCursorShape());
     }
   }
 
@@ -5293,7 +5316,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
   /* Connect to the Wayland server. */
   display_->wl_display = wl_display_connect(nullptr);
   if (!display_->wl_display) {
-    gwl_display_destroy(display_);
+    this->~GHOST_SystemWayland();
     throw std::runtime_error("Wayland: unable to connect to display!");
   }
 
@@ -5337,7 +5360,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
               "WAYLAND found but libdecor was not, install libdecor for Wayland support, "
               "falling back to X11\n");
 #  endif
-      gwl_display_destroy(display_);
+      this->~GHOST_SystemWayland();
       throw std::runtime_error("Wayland: unable to find libdecor!");
 
       use_libdecor = true;
@@ -5354,7 +5377,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
     GWL_LibDecor_System &decor = *display_->libdecor;
     decor.context = libdecor_new(display_->wl_display, &libdecor_interface);
     if (!decor.context) {
-      gwl_display_destroy(display_);
+      this->~GHOST_SystemWayland();
       throw std::runtime_error("Wayland: unable to create window decorations!");
     }
   }
@@ -5365,7 +5388,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
   {
     GWL_XDG_Decor_System &decor = *display_->xdg_decor;
     if (!decor.shell) {
-      gwl_display_destroy(display_);
+      this->~GHOST_SystemWayland();
       throw std::runtime_error("Wayland: unable to access xdg_shell!");
     }
   }
@@ -5514,14 +5537,7 @@ GHOST_TSuccess GHOST_SystemWayland::getModifierKeys(GHOST_ModifierKeys &keys) co
 
   const xkb_mod_mask_t state = xkb_state_serialize_mods(seat->xkb_state, XKB_STATE_MODS_DEPRESSED);
 
-  bool show_warning = true;
-#ifdef USE_GNOME_KEYBOARD_SUPPRESS_WARNING
-  if ((seat->key_depressed_suppress_warning.any_mod_held == true) &&
-      (seat->key_depressed_suppress_warning.any_keys_held_on_enter == false)) {
-    /* The compositor gave us invalid information, don't show a warning. */
-    show_warning = false;
-  }
-#endif
+  const bool show_warning = !gwl_seat_key_depressed_suppress_warning(seat);
 
   /* Use local #GWL_KeyboardDepressedState to check which key is pressed.
    * Use XKB as the source of truth, if there is any discrepancy. */
@@ -5568,6 +5584,10 @@ GHOST_TSuccess GHOST_SystemWayland::getModifierKeys(GHOST_ModifierKeys &keys) co
 
 GHOST_TSuccess GHOST_SystemWayland::getButtons(GHOST_Buttons &buttons) const
 {
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  std::lock_guard lock_server_guard{*server_mutex};
+#endif
+
   GWL_Seat *seat = gwl_display_seat_active_get(display_);
   if (UNLIKELY(!seat)) {
     return GHOST_kFailure;
@@ -5796,6 +5816,10 @@ void GHOST_SystemWayland::putClipboard(const char *buffer, bool selection) const
 
 uint8_t GHOST_SystemWayland::getNumDisplays() const
 {
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  std::lock_guard lock_server_guard{*server_mutex};
+#endif
+
   return display_ ? uint8_t(display_->outputs.size()) : 0;
 }
 
@@ -5806,8 +5830,36 @@ static GHOST_TSuccess getCursorPositionClientRelative_impl(
     int32_t &y)
 {
   const wl_fixed_t scale = win->scale();
-  x = wl_fixed_to_int(scale * seat_state_pointer->xy[0]);
-  y = wl_fixed_to_int(scale * seat_state_pointer->xy[1]);
+
+  if (win->getCursorGrabModeIsWarp()) {
+    /* As the cursor is restored at the warped location,
+     * apply warping when requesting the cursor location. */
+    GHOST_Rect wrap_bounds{};
+    if (win->getCursorGrabModeIsWarp()) {
+      if (win->getCursorGrabBounds(wrap_bounds) == GHOST_kFailure) {
+        win->getClientBounds(wrap_bounds);
+      }
+    }
+    int xy_wrap[2] = {
+        seat_state_pointer->xy[0],
+        seat_state_pointer->xy[1],
+    };
+
+    GHOST_Rect wrap_bounds_scale;
+    wrap_bounds_scale.m_l = wl_fixed_from_int(wrap_bounds.m_l) / scale;
+    wrap_bounds_scale.m_t = wl_fixed_from_int(wrap_bounds.m_t) / scale;
+    wrap_bounds_scale.m_r = wl_fixed_from_int(wrap_bounds.m_r) / scale;
+    wrap_bounds_scale.m_b = wl_fixed_from_int(wrap_bounds.m_b) / scale;
+    wrap_bounds_scale.wrapPoint(UNPACK2(xy_wrap), 0, win->getCursorGrabAxis());
+
+    x = wl_fixed_to_int(scale * xy_wrap[0]);
+    y = wl_fixed_to_int(scale * xy_wrap[1]);
+  }
+  else {
+    x = wl_fixed_to_int(scale * seat_state_pointer->xy[0]);
+    y = wl_fixed_to_int(scale * seat_state_pointer->xy[1]);
+  }
+
   return GHOST_kSuccess;
 }
 
@@ -5914,7 +5966,11 @@ GHOST_TSuccess GHOST_SystemWayland::setCursorPosition(const int32_t x, const int
 
 void GHOST_SystemWayland::getMainDisplayDimensions(uint32_t &width, uint32_t &height) const
 {
-  if (getNumDisplays() == 0) {
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  std::lock_guard lock_server_guard{*server_mutex};
+#endif
+
+  if (display_->outputs.empty()) {
     return;
   }
   /* We assume first output as main. */
@@ -5924,6 +5980,10 @@ void GHOST_SystemWayland::getMainDisplayDimensions(uint32_t &width, uint32_t &he
 
 void GHOST_SystemWayland::getAllDisplayDimensions(uint32_t &width, uint32_t &height) const
 {
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  std::lock_guard lock_server_guard{*server_mutex};
+#endif
+
   int32_t xy_min[2] = {INT32_MAX, INT32_MAX};
   int32_t xy_max[2] = {INT32_MIN, INT32_MIN};
 
@@ -5947,6 +6007,7 @@ static GHOST_Context *createOffscreenContext_impl(GHOST_SystemWayland *system,
                                                   struct wl_display *wl_display,
                                                   wl_egl_window *egl_window)
 {
+  /* Caller must lock `system->server_mutex`. */
   GHOST_Context *context;
 
   for (int minor = 6; minor >= 0; --minor) {
@@ -5985,7 +6046,7 @@ static GHOST_Context *createOffscreenContext_impl(GHOST_SystemWayland *system,
   return nullptr;
 }
 
-GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GLSettings /*glSettings*/)
+GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GLSettings glSettings)
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
   std::lock_guard lock_server_guard{*server_mutex};
@@ -5993,6 +6054,31 @@ GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GLSettings /*g
 
   /* Create new off-screen window. */
   wl_surface *wl_surface = wl_compositor_create_surface(wl_compositor());
+
+#ifdef WITH_VULKAN_BACKEND
+  const bool debug_context = (glSettings.flags & GHOST_glDebugContext) != 0;
+
+  if (glSettings.context_type == GHOST_kDrawingContextTypeVulkan) {
+    GHOST_Context *context = new GHOST_ContextVK(false,
+                                                 GHOST_kVulkanPlatformWayland,
+                                                 0,
+                                                 NULL,
+                                                 wl_surface,
+                                                 display_->wl_display,
+                                                 1,
+                                                 0,
+                                                 debug_context);
+
+    if (!context->initializeDrawingContext()) {
+      delete context;
+      return nullptr;
+    }
+    return context;
+  }
+#else
+  (void)glSettings;
+#endif
+
   wl_egl_window *egl_window = wl_surface ? wl_egl_window_create(wl_surface, 1, 1) : nullptr;
 
   GHOST_Context *context = createOffscreenContext_impl(this, display_->wl_display, egl_window);
@@ -6016,6 +6102,10 @@ GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GLSettings /*g
 
 GHOST_TSuccess GHOST_SystemWayland::disposeContext(GHOST_IContext *context)
 {
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  std::lock_guard lock_server_guard{*server_mutex};
+#endif
+
   struct wl_surface *wl_surface = (struct wl_surface *)((GHOST_Context *)context)->getUserData();
   wl_egl_window *egl_window = (wl_egl_window *)wl_surface_get_user_data(wl_surface);
   wl_egl_window_destroy(egl_window);
@@ -6256,7 +6346,8 @@ static bool cursor_is_software(const GHOST_TGrabCursorMode mode, const bool use_
 
 GHOST_TSuccess GHOST_SystemWayland::cursor_shape_set(const GHOST_TStandardCursor shape)
 {
-  /* No need to lock (caller must lock). */
+  /* Caller must lock `server_mutex`. */
+
   GWL_Seat *seat = gwl_display_seat_active_get(display_);
   if (UNLIKELY(!seat)) {
     return GHOST_kFailure;
@@ -6299,6 +6390,7 @@ GHOST_TSuccess GHOST_SystemWayland::cursor_shape_set(const GHOST_TStandardCursor
 
 GHOST_TSuccess GHOST_SystemWayland::cursor_shape_check(const GHOST_TStandardCursor cursorShape)
 {
+  /* No need to lock `server_mutex`. */
   auto cursor_find = ghost_wl_cursors.find(cursorShape);
   if (cursor_find == ghost_wl_cursors.end()) {
     return GHOST_kFailure;
@@ -6678,6 +6770,8 @@ bool GHOST_SystemWayland::window_cursor_grab_set(const GHOST_TGrabCursorMode mod
                                                  wl_surface *wl_surface,
                                                  const int scale)
 {
+  /* Caller must lock `server_mutex`. */
+
   /* Ignore, if the required protocols are not supported. */
   if (UNLIKELY(!display_->wp_relative_pointer_manager || !display_->wp_pointer_constraints)) {
     return GHOST_kFailure;

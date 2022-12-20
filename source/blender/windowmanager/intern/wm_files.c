@@ -206,6 +206,9 @@ static void wm_window_match_init(bContext *C, ListBase *wmlist)
   }
 
   BLI_listbase_clear(&G_MAIN->wm);
+  if (G_MAIN->name_map != NULL) {
+    BKE_main_namemap_destroy(&G_MAIN->name_map);
+  }
 
   /* reset active window */
   CTX_wm_window_set(C, active_win);
@@ -220,6 +223,11 @@ static void wm_window_match_init(bContext *C, ListBase *wmlist)
   CTX_wm_menu_set(C, NULL);
 
   ED_editors_exit(G_MAIN, true);
+
+  /* Asset loading is done by the UI/editors and they keep pointers into it. So make sure to clear
+   * it after UI/editors. */
+  ED_assetlist_storage_exit();
+  AS_asset_libraries_exit();
 }
 
 static void wm_window_substitute_old(wmWindowManager *oldwm,
@@ -606,12 +614,6 @@ void wm_file_read_report(bContext *C, Main *bmain)
 static void wm_file_read_pre(bContext *C, bool use_data, bool UNUSED(use_userdef))
 {
   if (use_data) {
-    /* XXX Do before executing the callbacks below, otherwise the asset list refers to storage in
-     * the asset library that's destructed through a callback below.
-     * Asset list is weak design and mixes asset representation lifetime management with UI
-     * lifetime. The asset system needs a better defined ownership model. */
-    ED_assetlist_storage_exit();
-
     BKE_callback_exec_null(CTX_data_main(C), BKE_CB_EVT_LOAD_PRE);
     BLI_timer_on_file_load();
   }
@@ -889,14 +891,13 @@ static void file_read_reports_finalize(BlendFileReadReport *bf_reports)
 
   if (bf_reports->count.proxies_to_lib_overrides_success != 0 ||
       bf_reports->count.proxies_to_lib_overrides_failures != 0) {
-    BKE_reportf(
-        bf_reports->reports,
-        RPT_WARNING,
-        "Proxies have been removed from Blender (%d proxies were automatically converted "
-        "to library overrides, %d proxies could not be converted and were cleared). "
-        "Please also consider re-saving any library .blend file with the newest Blender version",
-        bf_reports->count.proxies_to_lib_overrides_success,
-        bf_reports->count.proxies_to_lib_overrides_failures);
+    BKE_reportf(bf_reports->reports,
+                RPT_WARNING,
+                "Proxies have been removed from Blender (%d proxies were automatically converted "
+                "to library overrides, %d proxies could not be converted and were cleared). "
+                "Consider re-saving any library .blend file with the newest Blender version",
+                bf_reports->count.proxies_to_lib_overrides_success,
+                bf_reports->count.proxies_to_lib_overrides_failures);
   }
 
   if (bf_reports->count.sequence_strips_skipped != 0) {

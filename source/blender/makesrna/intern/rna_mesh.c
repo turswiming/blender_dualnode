@@ -716,7 +716,6 @@ static void rna_MeshPolygon_flip(ID *id, MPoly *mp)
   BKE_mesh_polygon_flip(mp, loops, &me->ldata);
   BKE_mesh_tessface_clear(me);
   BKE_mesh_runtime_clear_geometry(me);
-  BKE_mesh_normals_tag_dirty(me);
 }
 
 static void rna_MeshLoopTriangle_verts_get(PointerRNA *ptr, int *values)
@@ -1038,12 +1037,16 @@ static int rna_MeshLoopColorLayer_data_length(PointerRNA *ptr)
 
 static bool rna_MeshLoopColorLayer_active_render_get(PointerRNA *ptr)
 {
-  return rna_CustomDataLayer_active_get(ptr, rna_mesh_ldata(ptr), CD_PROP_BYTE_COLOR, 1);
+  const Mesh *mesh = rna_mesh(ptr);
+  const CustomDataLayer *layer = (const CustomDataLayer *)ptr->data;
+  return mesh->default_color_attribute && STREQ(mesh->default_color_attribute, layer->name);
 }
 
 static bool rna_MeshLoopColorLayer_active_get(PointerRNA *ptr)
 {
-  return rna_CustomDataLayer_active_get(ptr, rna_mesh_ldata(ptr), CD_PROP_BYTE_COLOR, 0);
+  const Mesh *mesh = rna_mesh(ptr);
+  const CustomDataLayer *layer = (const CustomDataLayer *)ptr->data;
+  return mesh->active_color_attribute && STREQ(mesh->active_color_attribute, layer->name);
 }
 
 static void rna_MeshLoopColorLayer_active_render_set(PointerRNA *ptr, bool value)
@@ -1078,12 +1081,16 @@ static int rna_MeshVertColorLayer_data_length(PointerRNA *ptr)
 
 static bool rna_MeshVertColorLayer_active_render_get(PointerRNA *ptr)
 {
-  return rna_CustomDataLayer_active_get(ptr, rna_mesh_vdata(ptr), CD_PROP_COLOR, 1);
+  const Mesh *mesh = rna_mesh(ptr);
+  const CustomDataLayer *layer = (const CustomDataLayer *)ptr->data;
+  return mesh->default_color_attribute && STREQ(mesh->default_color_attribute, layer->name);
 }
 
 static bool rna_MeshVertColorLayer_active_get(PointerRNA *ptr)
 {
-  return rna_CustomDataLayer_active_get(ptr, rna_mesh_vdata(ptr), CD_PROP_COLOR, 0);
+  const Mesh *mesh = rna_mesh(ptr);
+  const CustomDataLayer *layer = (const CustomDataLayer *)ptr->data;
+  return mesh->active_color_attribute && STREQ(mesh->active_color_attribute, layer->name);
 }
 
 static void rna_MeshVertColorLayer_active_render_set(PointerRNA *ptr, bool value)
@@ -1484,6 +1491,13 @@ static void rna_MeshEdge_select_set(PointerRNA *ptr, bool value)
   }
   const int index = rna_MeshEdge_index_get(ptr);
   select_edge[index] = value;
+}
+
+static bool rna_MeshEdge_is_loose_get(PointerRNA *ptr)
+{
+  const Mesh *mesh = rna_mesh(ptr);
+  const int index = rna_MeshEdge_index_get(ptr);
+  return ED_mesh_edge_is_loose(mesh, index);
 }
 
 static int rna_MeshLoopTriangle_material_index_get(PointerRNA *ptr)
@@ -2342,8 +2356,9 @@ static void rna_def_medge(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Mesh_update_data_legacy_deg_tag_all");
 
   prop = RNA_def_property(srna, "is_loose", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", ME_LOOSEEDGE);
-  RNA_def_property_ui_text(prop, "Loose", "Loose edge");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_boolean_funcs(prop, "rna_MeshEdge_is_loose_get", NULL);
+  RNA_def_property_ui_text(prop, "Loose", "Edge is not connected to any faces");
 
   prop = RNA_def_property(srna, "use_freestyle_mark", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(

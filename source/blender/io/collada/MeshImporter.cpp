@@ -16,6 +16,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BKE_attribute.h"
 #include "BKE_customdata.h"
 #include "BKE_displist.h"
 #include "BKE_global.h"
@@ -486,7 +487,8 @@ void MeshImporter::allocate_poly_data(COLLADAFW::Mesh *collada_mesh, Mesh *me)
         CustomData_add_layer_named(
             &me->ldata, CD_PROP_BYTE_COLOR, CD_SET_DEFAULT, nullptr, me->totloop, colname.c_str());
       }
-      CustomData_set_layer_active(&me->ldata, CD_PROP_BYTE_COLOR, 0);
+      BKE_id_attributes_active_color_set(
+          &me->id, CustomData_get_layer_name(&me->ldata, CD_PROP_BYTE_COLOR, 0));
     }
   }
 }
@@ -593,7 +595,6 @@ void MeshImporter::read_lines(COLLADAFW::Mesh *mesh, Mesh *me)
         uint *indices = mp->getPositionIndices().getData();
 
         for (int j = 0; j < edge_count; j++, med++) {
-          med->flag |= ME_LOOSEEDGE;
           med->v1 = indices[2 * j];
           med->v2 = indices[2 * j + 1];
         }

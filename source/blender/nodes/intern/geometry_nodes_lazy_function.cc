@@ -135,8 +135,7 @@ class LazyFunctionForGeometryNode : public LazyFunction {
     if (geo_eval_log::GeoModifierLog *modifier_log = user_data->modifier_data->eval_log) {
       geo_eval_log::GeoTreeLogger &tree_logger = modifier_log->get_local_tree_logger(
           *user_data->compute_context);
-      tree_logger.node_execution_times.append(
-          {tree_logger.allocator->copy_string(node_.name), start_time, end_time});
+      tree_logger.node_execution_times.append({node_.identifier, start_time, end_time});
     }
   }
 };
@@ -158,9 +157,11 @@ class LazyFunctionForMultiInput : public LazyFunction {
     BLI_assert(socket.is_multi_input());
     const bNodeTree &btree = socket.owner_tree();
     for (const bNodeLink *link : socket.directly_linked_links()) {
-      if (!(link->is_muted() || nodeIsDanglingReroute(&btree, link->fromnode))) {
-        inputs_.append({"Input", *base_type_});
+      if (link->is_muted() || !link->fromsock->is_available() ||
+          nodeIsDanglingReroute(&btree, link->fromnode)) {
+        continue;
       }
+      inputs_.append({"Input", *base_type_});
     }
     const CPPType *vector_type = get_vector_type(*base_type_);
     BLI_assert(vector_type != nullptr);
@@ -337,7 +338,7 @@ class LazyFunctionForMutedNode : public LazyFunction {
 
     input_by_output_index_.reinitialize(outputs_.size());
     input_by_output_index_.fill(-1);
-    for (const bNodeLink *internal_link : node.internal_links_span()) {
+    for (const bNodeLink *internal_link : node.internal_links()) {
       const int input_i = r_used_inputs.first_index_of_try(internal_link->fromsock);
       const int output_i = r_used_outputs.first_index_of_try(internal_link->tosock);
       if (ELEM(-1, input_i, output_i)) {
@@ -404,14 +405,12 @@ class LazyFunctionForMultiFunctionConversion : public LazyFunction {
   const MultiFunction &fn_;
   const ValueOrFieldCPPType &from_type_;
   const ValueOrFieldCPPType &to_type_;
-  const Vector<const bNodeSocket *> target_sockets_;
 
  public:
   LazyFunctionForMultiFunctionConversion(const MultiFunction &fn,
                                          const ValueOrFieldCPPType &from,
-                                         const ValueOrFieldCPPType &to,
-                                         Vector<const bNodeSocket *> &&target_sockets)
-      : fn_(fn), from_type_(from), to_type_(to), target_sockets_(std::move(target_sockets))
+                                         const ValueOrFieldCPPType &to)
+      : fn_(fn), from_type_(from), to_type_(to)
   {
     debug_name_ = "Convert";
     inputs_.append({"From", from.self});
@@ -572,8 +571,7 @@ class LazyFunctionForViewerNode : public LazyFunction {
                   used_domain = *detected_domain;
                 }
                 else {
-                  used_domain = type == GEO_COMPONENT_TYPE_MESH ? ATTR_DOMAIN_CORNER :
-                                                                  ATTR_DOMAIN_POINT;
+                  used_domain = ATTR_DOMAIN_POINT;
                 }
               }
               bke::try_capture_field_on_geometry(
@@ -665,7 +663,8 @@ class LazyFunctionForGroupNode : public LazyFunction {
     }
 
     /* The compute context changes when entering a node group. */
-    bke::NodeGroupComputeContext compute_context{user_data->compute_context, group_node_.name};
+    bke::NodeGroupComputeContext compute_context{user_data->compute_context,
+                                                 group_node_.identifier};
     GeoNodesLFUserData group_user_data = *user_data;
     group_user_data.compute_context = &compute_context;
 
@@ -699,6 +698,36 @@ static GMutablePointer get_socket_default_value(LinearAllocator<> &allocator,
   return {type, buffer};
 }
 
+class GroupInputDebugInfo : public lf::DummyDebugInfo {
+ public:
+  Vector<StringRef> socket_names;
+
+  std::string node_name() const override
+  {
+    return "Group Input";
+  }
+
+  std::string output_name(const int i) const override
+  {
+    return this->socket_names[i];
+  }
+};
+
+class GroupOutputDebugInfo : public lf::DummyDebugInfo {
+ public:
+  Vector<StringRef> socket_names;
+
+  std::string node_name() const
+  {
+    return "Group Output";
+  }
+
+  std::string input_name(const int i) const override
+  {
+    return this->socket_names[i];
+  }
+};
+
 /**
  * Utility class to build a lazy-function graph based on a geometry nodes tree.
  * This is mainly a separate class because it makes it easier to have variables that can be
@@ -717,19 +746,8 @@ struct GeometryNodesLazyFunctionGraphBuilder {
 
   /**
    * All group input nodes are combined into one dummy node in the lazy-function graph.
-   * If some input has an invalid type, it is ignored in the new graph. In this case null and -1 is
-   * used in the vectors below.
    */
-  Vector<const CPPType *> group_input_types_;
-  Vector<int> group_input_indices_;
   lf::DummyNode *group_input_lf_node_;
-
-  /**
-   * The output types or null if an output is invalid. Each group output node gets a separate
-   * corresponding dummy node in the new graph.
-   */
-  Vector<const CPPType *> group_output_types_;
-  Vector<int> group_output_indices_;
 
  public:
   GeometryNodesLazyFunctionGraphBuilder(const bNodeTree &btree,
@@ -747,8 +765,6 @@ struct GeometryNodesLazyFunctionGraphBuilder {
     conversions_ = &bke::get_implicit_type_conversions();
 
     this->prepare_node_multi_functions();
-    this->prepare_group_inputs();
-    this->prepare_group_outputs();
     this->build_group_input_node();
     this->handle_nodes();
     this->handle_links();
@@ -764,46 +780,23 @@ struct GeometryNodesLazyFunctionGraphBuilder {
     lf_graph_info_->node_multi_functions = std::make_unique<NodeMultiFunctions>(btree_);
   }
 
-  void prepare_group_inputs()
-  {
-    LISTBASE_FOREACH (const bNodeSocket *, interface_bsocket, &btree_.inputs) {
-      const CPPType *type = get_socket_cpp_type(*interface_bsocket->typeinfo);
-      if (type != nullptr) {
-        const int index = group_input_types_.append_and_get_index(type);
-        group_input_indices_.append(index);
-      }
-      else {
-        group_input_indices_.append(-1);
-      }
-    }
-  }
-
-  void prepare_group_outputs()
-  {
-    LISTBASE_FOREACH (const bNodeSocket *, interface_bsocket, &btree_.outputs) {
-      const CPPType *type = get_socket_cpp_type(*interface_bsocket->typeinfo);
-      if (type != nullptr) {
-        const int index = group_output_types_.append_and_get_index(type);
-        group_output_indices_.append(index);
-      }
-      else {
-        group_output_indices_.append(-1);
-      }
-    }
-  }
-
   void build_group_input_node()
   {
-    /* Create a dummy node for the group inputs. */
-    group_input_lf_node_ = &lf_graph_->add_dummy({}, group_input_types_);
-    for (const int group_input_index : group_input_indices_) {
-      if (group_input_index == -1) {
-        mapping_->group_input_sockets.append(nullptr);
-      }
-      else {
-        mapping_->group_input_sockets.append(&group_input_lf_node_->output(group_input_index));
-      }
+    Vector<const CPPType *, 16> input_cpp_types;
+    const Span<const bNodeSocket *> interface_inputs = btree_.interface_inputs();
+    for (const bNodeSocket *interface_input : interface_inputs) {
+      input_cpp_types.append(interface_input->typeinfo->geometry_nodes_cpp_type);
     }
+
+    /* Create a dummy node for the group inputs. */
+    auto debug_info = std::make_unique<GroupInputDebugInfo>();
+    group_input_lf_node_ = &lf_graph_->add_dummy({}, input_cpp_types, debug_info.get());
+
+    for (const int i : interface_inputs.index_range()) {
+      mapping_->group_input_sockets.append(&group_input_lf_node_->output(i));
+      debug_info->socket_names.append(interface_inputs[i]->name);
+    }
+    lf_graph_info_->dummy_debug_infos_.append(std::move(debug_info));
   }
 
   void handle_nodes()
@@ -911,13 +904,9 @@ struct GeometryNodesLazyFunctionGraphBuilder {
 
   void handle_group_input_node(const bNode &bnode)
   {
-    for (const int btree_index : group_input_indices_.index_range()) {
-      const int lf_index = group_input_indices_[btree_index];
-      if (lf_index == -1) {
-        continue;
-      }
-      const bNodeSocket &bsocket = bnode.output_socket(btree_index);
-      lf::OutputSocket &lf_socket = group_input_lf_node_->output(lf_index);
+    for (const int i : btree_.interface_inputs().index_range()) {
+      const bNodeSocket &bsocket = bnode.output_socket(i);
+      lf::OutputSocket &lf_socket = group_input_lf_node_->output(i);
       output_socket_map_.add_new(&bsocket, &lf_socket);
       mapping_->dummy_socket_map.add_new(&bsocket, &lf_socket);
       mapping_->bsockets_by_lf_socket_map.add(&lf_socket, &bsocket);
@@ -926,18 +915,26 @@ struct GeometryNodesLazyFunctionGraphBuilder {
 
   void handle_group_output_node(const bNode &bnode)
   {
-    lf::DummyNode &group_output_lf_node = lf_graph_->add_dummy(group_output_types_, {});
-    for (const int btree_index : group_output_indices_.index_range()) {
-      const int lf_index = group_output_indices_[btree_index];
-      if (lf_index == -1) {
-        continue;
-      }
-      const bNodeSocket &bsocket = bnode.input_socket(btree_index);
-      lf::InputSocket &lf_socket = group_output_lf_node.input(lf_index);
+    Vector<const CPPType *, 16> output_cpp_types;
+    const Span<const bNodeSocket *> interface_outputs = btree_.interface_outputs();
+    for (const bNodeSocket *interface_input : interface_outputs) {
+      output_cpp_types.append(interface_input->typeinfo->geometry_nodes_cpp_type);
+    }
+
+    auto debug_info = std::make_unique<GroupOutputDebugInfo>();
+    lf::DummyNode &group_output_lf_node = lf_graph_->add_dummy(
+        output_cpp_types, {}, debug_info.get());
+
+    for (const int i : interface_outputs.index_range()) {
+      const bNodeSocket &bsocket = bnode.input_socket(i);
+      lf::InputSocket &lf_socket = group_output_lf_node.input(i);
       input_socket_map_.add(&bsocket, &lf_socket);
       mapping_->dummy_socket_map.add(&bsocket, &lf_socket);
       mapping_->bsockets_by_lf_socket_map.add(&lf_socket, &bsocket);
+      debug_info->socket_names.append(interface_outputs[i]->name);
     }
+
+    lf_graph_info_->dummy_debug_infos_.append(std::move(debug_info));
   }
 
   void handle_group_node(const bNode &bnode)
@@ -1120,13 +1117,8 @@ struct GeometryNodesLazyFunctionGraphBuilder {
       const CPPType &to_type = *type_with_links.type;
       const Span<const bNodeLink *> links = type_with_links.links;
 
-      Vector<const bNodeSocket *> target_bsockets;
-      for (const bNodeLink *link : links) {
-        target_bsockets.append(link->tosock);
-      }
-
       lf::OutputSocket *converted_from_lf_socket = this->insert_type_conversion_if_necessary(
-          from_lf_socket, to_type, std::move(target_bsockets));
+          from_lf_socket, to_type);
 
       auto make_input_link_or_set_default = [&](lf::InputSocket &to_lf_socket) {
         if (converted_from_lf_socket == nullptr) {
@@ -1147,10 +1139,11 @@ struct GeometryNodesLazyFunctionGraphBuilder {
             if (multi_input_link == link) {
               break;
             }
-            if (!(multi_input_link->is_muted() ||
-                  nodeIsDanglingReroute(&btree_, multi_input_link->fromnode))) {
-              link_index++;
+            if (multi_input_link->is_muted() || !multi_input_link->fromsock->is_available() ||
+                nodeIsDanglingReroute(&btree_, multi_input_link->fromnode)) {
+              continue;
             }
+            link_index++;
           }
           if (to_bsocket.owner_node().is_muted()) {
             if (link_index == 0) {
@@ -1177,10 +1170,8 @@ struct GeometryNodesLazyFunctionGraphBuilder {
     }
   }
 
-  lf::OutputSocket *insert_type_conversion_if_necessary(
-      lf::OutputSocket &from_socket,
-      const CPPType &to_type,
-      Vector<const bNodeSocket *> &&target_sockets)
+  lf::OutputSocket *insert_type_conversion_if_necessary(lf::OutputSocket &from_socket,
+                                                        const CPPType &to_type)
   {
     const CPPType &from_type = from_socket.type();
     if (from_type == to_type) {
@@ -1194,7 +1185,7 @@ struct GeometryNodesLazyFunctionGraphBuilder {
             MFDataType::ForSingle(from_field_type->value),
             MFDataType::ForSingle(to_field_type->value));
         auto fn = std::make_unique<LazyFunctionForMultiFunctionConversion>(
-            multi_fn, *from_field_type, *to_field_type, std::move(target_sockets));
+            multi_fn, *from_field_type, *to_field_type);
         lf::Node &conversion_node = lf_graph_->add_function(*fn);
         lf_graph_info_->functions.append(std::move(fn));
         lf_graph_->add_link(from_socket, conversion_node.input(0));
@@ -1270,6 +1261,16 @@ const GeometryNodesLazyFunctionGraphInfo *ensure_geometry_nodes_lazy_function_gr
   }
   if (const ID *id_orig = DEG_get_original_id(const_cast<ID *>(&btree.id))) {
     if (id_orig->tag & LIB_TAG_MISSING) {
+      return nullptr;
+    }
+  }
+  for (const bNodeSocket *interface_bsocket : btree.interface_inputs()) {
+    if (interface_bsocket->typeinfo->geometry_nodes_cpp_type == nullptr) {
+      return nullptr;
+    }
+  }
+  for (const bNodeSocket *interface_bsocket : btree.interface_outputs()) {
+    if (interface_bsocket->typeinfo->geometry_nodes_cpp_type == nullptr) {
       return nullptr;
     }
   }
@@ -1408,8 +1409,7 @@ GeometryNodesLazyFunctionGraphInfo::~GeometryNodesLazyFunctionGraphInfo()
       if (!bsockets.is_empty()) {
         const bNodeSocket &bsocket = *bsockets[0];
         const bNode &bnode = bsocket.owner_node();
-        tree_logger.debug_messages.append(
-            {tree_logger.allocator->copy_string(bnode.name), thread_id_str});
+        tree_logger.debug_messages.append({bnode.identifier, thread_id_str});
         return true;
       }
     }

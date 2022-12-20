@@ -861,14 +861,8 @@ static void find_side_effect_nodes_for_viewer_path(
 
   const bNodeTree *group = nmd.node_group;
   Stack<const bNode *> group_node_stack;
-  for (const StringRefNull group_node_name : parsed_path->group_node_names) {
-    const bNode *found_node = nullptr;
-    for (const bNode *node : group->group_nodes()) {
-      if (node->name == group_node_name) {
-        found_node = node;
-        break;
-      }
-    }
+  for (const int32_t group_node_id : parsed_path->group_node_ids) {
+    const bNode *found_node = group->node_by_id(group_node_id);
     if (found_node == nullptr) {
       return;
     }
@@ -880,16 +874,10 @@ static void find_side_effect_nodes_for_viewer_path(
     }
     group_node_stack.push(found_node);
     group = reinterpret_cast<bNodeTree *>(found_node->id);
-    compute_context_builder.push<blender::bke::NodeGroupComputeContext>(group_node_name);
+    compute_context_builder.push<blender::bke::NodeGroupComputeContext>(*found_node);
   }
 
-  const bNode *found_viewer_node = nullptr;
-  for (const bNode *viewer_node : group->nodes_by_type("GeometryNodeViewer")) {
-    if (viewer_node->name == parsed_path->viewer_node_name) {
-      found_viewer_node = viewer_node;
-      break;
-    }
-  }
+  const bNode *found_viewer_node = group->node_by_id(parsed_path->viewer_node_id);
   if (found_viewer_node == nullptr) {
     return;
   }
@@ -1015,9 +1003,6 @@ static Vector<OutputAttributeToStore> compute_attributes_to_store(
       continue;
     }
     const GeometryComponent &component = *geometry.get_component_for_read(component_type);
-    if (component.is_empty()) {
-      continue;
-    }
     const blender::bke::AttributeAccessor attributes = *component.attributes();
     for (const auto item : outputs_by_domain.items()) {
       const eAttrDomain domain = item.key;
@@ -1297,29 +1282,29 @@ static void modifyGeometry(ModifierData *md,
   bool use_orig_index_verts = false;
   bool use_orig_index_edges = false;
   bool use_orig_index_polys = false;
-  if (geometry_set.has_mesh()) {
-    const Mesh &mesh = *geometry_set.get_mesh_for_read();
-    use_orig_index_verts = CustomData_has_layer(&mesh.vdata, CD_ORIGINDEX);
-    use_orig_index_edges = CustomData_has_layer(&mesh.edata, CD_ORIGINDEX);
-    use_orig_index_polys = CustomData_has_layer(&mesh.pdata, CD_ORIGINDEX);
+  if (const Mesh *mesh = geometry_set.get_mesh_for_read()) {
+    use_orig_index_verts = CustomData_has_layer(&mesh->vdata, CD_ORIGINDEX);
+    use_orig_index_edges = CustomData_has_layer(&mesh->edata, CD_ORIGINDEX);
+    use_orig_index_polys = CustomData_has_layer(&mesh->pdata, CD_ORIGINDEX);
   }
 
   geometry_set = compute_geometry(
       tree, *lf_graph_info, *output_node, std::move(geometry_set), nmd, ctx);
 
-  if (geometry_set.has_mesh()) {
-    /* Add #CD_ORIGINDEX layers if they don't exist already. This is required because the
-     * #eModifierTypeFlag_SupportsMapping flag is set. If the layers did not exist before, it is
-     * assumed that the output mesh does not have a mapping to the original mesh. */
-    Mesh &mesh = *geometry_set.get_mesh_for_write();
-    if (use_orig_index_verts) {
-      CustomData_add_layer(&mesh.vdata, CD_ORIGINDEX, CD_SET_DEFAULT, nullptr, mesh.totvert);
-    }
-    if (use_orig_index_edges) {
-      CustomData_add_layer(&mesh.edata, CD_ORIGINDEX, CD_SET_DEFAULT, nullptr, mesh.totedge);
-    }
-    if (use_orig_index_polys) {
-      CustomData_add_layer(&mesh.pdata, CD_ORIGINDEX, CD_SET_DEFAULT, nullptr, mesh.totpoly);
+  if (use_orig_index_verts || use_orig_index_edges || use_orig_index_polys) {
+    if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
+      /* Add #CD_ORIGINDEX layers if they don't exist already. This is required because the
+       * #eModifierTypeFlag_SupportsMapping flag is set. If the layers did not exist before, it is
+       * assumed that the output mesh does not have a mapping to the original mesh. */
+      if (use_orig_index_verts) {
+        CustomData_add_layer(&mesh->vdata, CD_ORIGINDEX, CD_SET_DEFAULT, nullptr, mesh->totvert);
+      }
+      if (use_orig_index_edges) {
+        CustomData_add_layer(&mesh->edata, CD_ORIGINDEX, CD_SET_DEFAULT, nullptr, mesh->totedge);
+      }
+      if (use_orig_index_polys) {
+        CustomData_add_layer(&mesh->pdata, CD_ORIGINDEX, CD_SET_DEFAULT, nullptr, mesh->totpoly);
+      }
     }
   }
 }
@@ -1416,7 +1401,7 @@ static void attribute_search_update_fn(
     }
   }
   else {
-    for (const bNode *node : nmd->node_group->nodes_by_type("NodeGroupInput")) {
+    for (const bNode *node : nmd->node_group->group_input_nodes()) {
       for (const bNodeSocket *socket : node->output_sockets()) {
         if (socket->type == SOCK_GEOMETRY) {
           sockets_to_check.append(socket);

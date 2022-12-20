@@ -168,8 +168,9 @@ class CLIP_HT_header(Header):
                 r = active_object.reconstruction
 
                 if r.is_valid and sc.view == 'CLIP':
-                    layout.label(text="Solve error: %.2f px" %
-                                 (r.average_error))
+                    layout.label(text=iface_("Solve error: %.2f px") %
+                                 (r.average_error),
+                                 translate=False)
 
                 row = layout.row()
                 row.prop(sc, "pivot_point", text="", icon_only=True)
@@ -744,8 +745,8 @@ class CLIP_PT_track(CLIP_PT_tracking_panel, Panel):
         layout.prop(act_track, "weight_stab")
 
         if act_track.has_bundle:
-            label_text = "Average Error: %.2f px" % (act_track.average_error)
-            layout.label(text=label_text)
+            label_text = iface_("Average Error: %.2f px") % (act_track.average_error)
+            layout.label(text=label_text, translate=False)
 
         layout.use_property_split = False
 
@@ -919,8 +920,7 @@ class CLIP_PT_tracking_lens(Panel):
         col.prop(camera, "units", text="Units")
 
         col = layout.column()
-        col.prop(clip.tracking.camera, "principal", text="Optical Center")
-        col.operator("clip.set_center_principal", text="Set Center")
+        col.prop(clip.tracking.camera, "principal_point", text="Optical Center")
 
         col = layout.column()
         col.prop(camera, "distortion_model", text="Lens Distortion")
@@ -1166,7 +1166,7 @@ from bl_ui.properties_mask_common import (
     MASK_PT_point,
     MASK_PT_display,
     MASK_PT_transforms,
-    MASK_PT_tools
+    MASK_PT_tools,
 )
 
 
@@ -1352,7 +1352,6 @@ class CLIP_MT_clip(Menu):
 
         if clip:
             layout.operator("clip.set_scene_frames")
-            layout.operator("clip.set_center_principal")
             layout.operator("clip.prefetch")
             layout.operator("clip.reload")
             layout.menu("CLIP_MT_proxy")

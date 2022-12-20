@@ -250,15 +250,12 @@ void OBJWriter::write_vertex_coords(FormatHandler &fh,
 {
   const int tot_count = obj_mesh_data.tot_vertices();
 
-  Mesh *mesh = obj_mesh_data.get_mesh();
-  const CustomDataLayer *colors_layer = nullptr;
-  if (write_colors) {
-    colors_layer = BKE_id_attributes_active_color_get(&mesh->id);
-  }
-  if (write_colors && (colors_layer != nullptr)) {
+  const Mesh *mesh = obj_mesh_data.get_mesh();
+  const StringRef name = mesh->active_color_attribute;
+  if (write_colors && !name.is_empty()) {
     const bke::AttributeAccessor attributes = mesh->attributes();
     const VArray<ColorGeometry4f> attribute = attributes.lookup_or_default<ColorGeometry4f>(
-        colors_layer->name, ATTR_DOMAIN_POINT, {0.0f, 0.0f, 0.0f, 0.0f});
+        name, ATTR_DOMAIN_POINT, {0.0f, 0.0f, 0.0f, 0.0f});
 
     BLI_assert(tot_count == attribute.size());
     obj_parallel_chunked_output(fh, tot_count, [&](FormatHandler &buf, int i) {
@@ -416,11 +413,16 @@ void OBJWriter::write_edges_indices(FormatHandler &fh,
                                     const IndexOffsets &offsets,
                                     const OBJMesh &obj_mesh_data) const
 {
-  /* NOTE: ensure_mesh_edges should be called before. */
-  const Span<MEdge> edges = obj_mesh_data.get_mesh()->edges();
-  for (const int i : edges.index_range()) {
-    const MEdge &edge = edges[i];
-    if (edge.flag & ME_LOOSEEDGE) {
+  const Mesh &mesh = *obj_mesh_data.get_mesh();
+  const bke::LooseEdgeCache &loose_edges = mesh.loose_edges();
+  if (loose_edges.count == 0) {
+    return;
+  }
+
+  const Span<MEdge> edges = mesh.edges();
+  for (const int64_t i : edges.index_range()) {
+    if (loose_edges.is_loose_bits[i]) {
+      const MEdge &edge = edges[i];
       fh.write_obj_edge(edge.v1 + offsets.vertex_offset + 1, edge.v2 + offsets.vertex_offset + 1);
     }
   }

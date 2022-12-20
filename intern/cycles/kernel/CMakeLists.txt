@@ -285,19 +285,26 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
 )
 
 set(SRC_KERNEL_LIGHT_HEADERS
-  light/light.h
+  light/area.h
   light/background.h
   light/common.h
+  light/distant.h
+  light/distribution.h
+  light/light.h
+  light/point.h
   light/sample.h
+  light/spot.h
+  light/tree.h
+  light/triangle.h
 )
 
 set(SRC_KERNEL_SAMPLE_HEADERS
-  sample/jitter.h
   sample/lcg.h
   sample/mapping.h
   sample/mis.h
   sample/pattern.h
   sample/sobol_burley.h
+  sample/tabulated_sobol.h
   sample/util.h
 )
 
@@ -466,54 +473,29 @@ if(WITH_CYCLES_CUDA_BINARIES)
 
     if(WITH_CYCLES_DEBUG)
       set(cuda_flags ${cuda_flags} -D WITH_CYCLES_DEBUG)
+      set(cuda_flags ${cuda_flags} --ptxas-options="-v")
     endif()
 
-    if(WITH_CYCLES_CUBIN_COMPILER)
-      string(SUBSTRING ${arch} 3 -1 CUDA_ARCH)
+    set(_cuda_nvcc_args
+          -arch=${arch}
+          ${CUDA_NVCC_FLAGS}
+          --${format}
+          ${CMAKE_CURRENT_SOURCE_DIR}${cuda_kernel_src}
+          ${cuda_flags})
 
-      # Needed to find libnvrtc-builtins.so. Can't do it from inside
-      # cycles_cubin_cc since the env variable is read before main()
-      if(APPLE)
-        set(CUBIN_CC_ENV ${CMAKE_COMMAND}
-          -E env DYLD_LIBRARY_PATH="${cuda_toolkit_root_dir}/lib")
-      elseif(UNIX)
-        set(CUBIN_CC_ENV ${CMAKE_COMMAND}
-          -E env LD_LIBRARY_PATH="${cuda_toolkit_root_dir}/lib64")
-      endif()
-
+    if(WITH_COMPILER_CCACHE AND CCACHE_PROGRAM)
       add_custom_command(
         OUTPUT ${cuda_file}
-        COMMAND ${CUBIN_CC_ENV}
-            "$<TARGET_FILE:cycles_cubin_cc>"
-            -target ${CUDA_ARCH}
-            -i ${CMAKE_CURRENT_SOURCE_DIR}${cuda_kernel_src}
-            ${cuda_flags}
-            -v
-            -cuda-toolkit-dir "${cuda_toolkit_root_dir}"
-        DEPENDS ${kernel_sources} cycles_cubin_cc)
+        COMMAND ${CCACHE_PROGRAM} ${cuda_nvcc_executable} ${_cuda_nvcc_args}
+        DEPENDS ${kernel_sources})
     else()
-      set(_cuda_nvcc_args
-            -arch=${arch}
-            ${CUDA_NVCC_FLAGS}
-            --${format}
-            ${CMAKE_CURRENT_SOURCE_DIR}${cuda_kernel_src}
-            --ptxas-options="-v"
-            ${cuda_flags})
-
-      if(WITH_COMPILER_CCACHE AND CCACHE_PROGRAM)
-        add_custom_command(
-          OUTPUT ${cuda_file}
-          COMMAND ${CCACHE_PROGRAM} ${cuda_nvcc_executable} ${_cuda_nvcc_args}
-          DEPENDS ${kernel_sources})
-      else()
-        add_custom_command(
-          OUTPUT ${cuda_file}
-          COMMAND ${cuda_nvcc_executable} ${_cuda_nvcc_args}
-          DEPENDS ${kernel_sources})
-      endif()
-
-      unset(_cuda_nvcc_args)
+      add_custom_command(
+        OUTPUT ${cuda_file}
+        COMMAND ${cuda_nvcc_executable} ${_cuda_nvcc_args}
+        DEPENDS ${kernel_sources})
     endif()
+
+    unset(_cuda_nvcc_args)
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${cuda_file}" ${CYCLES_INSTALL_PATH}/lib)
     list(APPEND cuda_cubins ${cuda_file})
 
@@ -589,11 +571,20 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
     if(WIN32)
       set(hip_command ${CMAKE_COMMAND})
       set(hip_flags
-        -E env "HIP_PATH=${HIP_ROOT_DIR}" "PATH=${HIP_PERL_DIR}"
+        -E env "HIP_PATH=${HIP_ROOT_DIR}"
         ${HIP_HIPCC_EXECUTABLE}.bat)
     else()
       set(hip_command ${HIP_HIPCC_EXECUTABLE})
       set(hip_flags)
+    endif()
+
+    # There's a bug in the compiler causing some scenes to fail to render on Vega cards
+    # A workaround currently is to set -O1 opt level during kernel compilation for these
+    # cards Remove this when a newer compiler is available with fixes.
+    if(WIN32 AND (${arch} MATCHES "gfx90[a-z0-9]+"))
+      set(hip_opt_flags "-O1")
+    else()
+      set(hip_opt_flags)
     endif()
 
     set(hip_flags
@@ -612,6 +603,7 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
       -Wno-unused-value
       --hipcc-func-supp
       -ffast-math
+      ${hip_opt_flags}
       -o ${CMAKE_CURRENT_BINARY_DIR}/${hip_file})
 
     if(WITH_NANOVDB)
@@ -665,55 +657,25 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
       set(cuda_flags ${cuda_flags} -D WITH_CYCLES_DEBUG)
     endif()
 
-    if(WITH_CYCLES_CUBIN_COMPILER)
-      # Needed to find libnvrtc-builtins.so. Can't do it from inside
-      # cycles_cubin_cc since the env variable is read before main()
-      if(APPLE)
-        set(CUBIN_CC_ENV ${CMAKE_COMMAND}
-          -E env DYLD_LIBRARY_PATH="${CUDA_TOOLKIT_ROOT_DIR}/lib")
-      elseif(UNIX)
-        set(CUBIN_CC_ENV ${CMAKE_COMMAND}
-          -E env LD_LIBRARY_PATH="${CUDA_TOOLKIT_ROOT_DIR}/lib64")
-      endif()
+    add_custom_command(
+      OUTPUT
+        ${output}
+      DEPENDS
+        ${input}
+        ${SRC_KERNEL_HEADERS}
+        ${SRC_KERNEL_DEVICE_GPU_HEADERS}
+        ${SRC_KERNEL_DEVICE_CUDA_HEADERS}
+        ${SRC_KERNEL_DEVICE_OPTIX_HEADERS}
+        ${SRC_UTIL_HEADERS}
+      COMMAND
+        ${CUDA_NVCC_EXECUTABLE}
+        --ptx
+        -arch=sm_50
+        ${cuda_flags}
+        ${input}
+      WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}")
 
-      add_custom_command(
-        OUTPUT ${output}
-        DEPENDS
-          ${input}
-          ${SRC_KERNEL_HEADERS}
-          ${SRC_KERNEL_DEVICE_GPU_HEADERS}
-          ${SRC_KERNEL_DEVICE_CUDA_HEADERS}
-          ${SRC_KERNEL_DEVICE_OPTIX_HEADERS}
-          ${SRC_UTIL_HEADERS}
-        COMMAND ${CUBIN_CC_ENV}
-            "$<TARGET_FILE:cycles_cubin_cc>"
-            -target 50
-            -ptx
-            -i ${CMAKE_CURRENT_SOURCE_DIR}/${input}
-            ${cuda_flags}
-            -v
-            -cuda-toolkit-dir "${CUDA_TOOLKIT_ROOT_DIR}"
-        DEPENDS ${kernel_sources} cycles_cubin_cc)
-    else()
-      add_custom_command(
-        OUTPUT
-          ${output}
-        DEPENDS
-          ${input}
-          ${SRC_KERNEL_HEADERS}
-          ${SRC_KERNEL_DEVICE_GPU_HEADERS}
-          ${SRC_KERNEL_DEVICE_CUDA_HEADERS}
-          ${SRC_KERNEL_DEVICE_OPTIX_HEADERS}
-          ${SRC_UTIL_HEADERS}
-        COMMAND
-          ${CUDA_NVCC_EXECUTABLE}
-          --ptx
-          -arch=sm_50
-          ${cuda_flags}
-          ${input}
-        WORKING_DIRECTORY
-          "${CMAKE_CURRENT_SOURCE_DIR}")
-    endif()
     list(APPEND optix_ptx ${output})
 
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${output}" ${CYCLES_INSTALL_PATH}/lib)
@@ -766,8 +728,8 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
     ${SRC_UTIL_HEADERS}
   )
 
-  set (SYCL_OFFLINE_COMPILER_PARALLEL_JOBS 1 CACHE STRING "Number of parallel compiler instances to use for device binaries compilation (expect ~8GB peak memory usage per instance).")
-  if (WITH_CYCLES_ONEAPI_BINARIES)
+  set(SYCL_OFFLINE_COMPILER_PARALLEL_JOBS 1 CACHE STRING "Number of parallel compiler instances to use for device binaries compilation (expect ~8GB peak memory usage per instance).")
+  if(WITH_CYCLES_ONEAPI_BINARIES)
     message(STATUS "${SYCL_OFFLINE_COMPILER_PARALLEL_JOBS} instance(s) of oneAPI offline compiler will be used.")
   endif()
   # SYCL_CPP_FLAGS is a variable that the user can set to pass extra compiler options
@@ -791,25 +753,25 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
       )
 
   # Set defaults for spir64 and spir64_gen options
-  if (NOT DEFINED CYCLES_ONEAPI_SYCL_OPTIONS_spir64)
+  if(NOT DEFINED CYCLES_ONEAPI_SYCL_OPTIONS_spir64)
     set(CYCLES_ONEAPI_SYCL_OPTIONS_spir64 "-options '-ze-opt-large-register-file -ze-opt-regular-grf-kernel integrator_intersect'")
   endif()
-  if (NOT DEFINED CYCLES_ONEAPI_SYCL_OPTIONS_spir64_gen)
-    SET (CYCLES_ONEAPI_SYCL_OPTIONS_spir64_gen "${CYCLES_ONEAPI_SYCL_OPTIONS_spir64}" CACHE STRING "Extra build options for spir64_gen target")
+  if(NOT DEFINED CYCLES_ONEAPI_SYCL_OPTIONS_spir64_gen)
+    set(CYCLES_ONEAPI_SYCL_OPTIONS_spir64_gen "${CYCLES_ONEAPI_SYCL_OPTIONS_spir64}" CACHE STRING "Extra build options for spir64_gen target")
   endif()
   # Enable zebin, a graphics binary format with improved compatibility.
   string(PREPEND CYCLES_ONEAPI_SYCL_OPTIONS_spir64_gen "--format zebin ")
   string(PREPEND CYCLES_ONEAPI_SYCL_OPTIONS_spir64_gen "-device ${CYCLES_ONEAPI_SPIR64_GEN_DEVICES} ")
 
-  if (WITH_CYCLES_ONEAPI_BINARIES)
+  if(WITH_CYCLES_ONEAPI_BINARIES)
     # AoT binaries aren't currently reused when calling sycl::build.
-    list (APPEND sycl_compiler_flags -DSYCL_SKIP_KERNELS_PRELOAD)
+    list(APPEND sycl_compiler_flags -DSYCL_SKIP_KERNELS_PRELOAD)
     # Iterate over all targest and their options
-    list (JOIN CYCLES_ONEAPI_SYCL_TARGETS "," targets_string)
-    list (APPEND sycl_compiler_flags -fsycl-targets=${targets_string})
+    list(JOIN CYCLES_ONEAPI_SYCL_TARGETS "," targets_string)
+    list(APPEND sycl_compiler_flags -fsycl-targets=${targets_string})
     foreach(target ${CYCLES_ONEAPI_SYCL_TARGETS})
       if(DEFINED CYCLES_ONEAPI_SYCL_OPTIONS_${target})
-        list (APPEND sycl_compiler_flags -Xsycl-target-backend=${target} "${CYCLES_ONEAPI_SYCL_OPTIONS_${target}}")
+        list(APPEND sycl_compiler_flags -Xsycl-target-backend=${target} "${CYCLES_ONEAPI_SYCL_OPTIONS_${target}}")
       endif()
     endforeach()
   else()
@@ -898,8 +860,9 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
   else()
     list(APPEND sycl_compiler_flags -fPIC)
 
-    # We avoid getting __FAST_MATH__ to be defined when building on CentOS 7 until the compilation
+    # We avoid getting __FAST_MATH__ to be defined when building on CentOS-7 until the compilation
     # crash it triggers at either AoT or JIT stages gets fixed.
+    # TODO: check if this is still needed on Rocky-8.
     list(APPEND sycl_compiler_flags -fhonor-nans)
 
     # add $ORIGIN to cycles_kernel_oneapi.so rpath so libsycl.so and

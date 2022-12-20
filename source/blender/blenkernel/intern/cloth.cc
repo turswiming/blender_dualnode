@@ -1186,7 +1186,7 @@ static void cloth_update_spring_lengths(ClothModifierData *clmd, Mesh *mesh)
   LinkNode *search = cloth->springs;
   uint struct_springs = 0;
   uint i = 0;
-  uint mvert_num = (uint)mesh->totvert;
+  uint mvert_num = uint(mesh->totvert);
   float shrink_factor;
 
   clmd->sim_parms->avg_spring_len = 0.0f;
@@ -1456,11 +1456,12 @@ static bool find_internal_spring_target_vertex(BVHTreeFromMesh *treedata,
 
 static bool cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
 {
+  using namespace blender::bke;
   Cloth *cloth = clmd->clothObject;
   ClothSpring *spring = nullptr, *tspring = nullptr, *tspring2 = nullptr;
   uint struct_springs = 0, shear_springs = 0, bend_springs = 0, struct_springs_real = 0;
   uint mvert_num = (uint)mesh->totvert;
-  uint numedges = (uint)mesh->totedge;
+  uint numedges = uint(mesh->totedge);
   uint numpolys = (uint)mesh->totpoly;
   float shrink_factor;
   const MEdge *medge = BKE_mesh_edges(mesh);
@@ -1591,12 +1592,14 @@ static bool cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
   }
 
   /* Structural springs. */
+  const LooseEdgeCache &loose_edges = mesh->loose_edges();
   for (int i = 0; i < numedges; i++) {
     spring = (ClothSpring *)MEM_callocN(sizeof(ClothSpring), "cloth spring");
 
     if (spring) {
       spring_verts_ordered_set(spring, medge[i].v1, medge[i].v2);
-      if (clmd->sim_parms->flags & CLOTH_SIMSETTINGS_FLAG_SEW && medge[i].flag & ME_LOOSEEDGE) {
+      if (clmd->sim_parms->flags & CLOTH_SIMSETTINGS_FLAG_SEW && loose_edges.count > 0 &&
+          loose_edges.is_loose_bits[i]) {
         /* handle sewing (loose edges will be pulled together) */
         spring->restlen = 0.0f;
         spring->lin_stiffness = 1.0f;
@@ -1644,7 +1647,7 @@ static bool cloth_build_springs(ClothModifierData *clmd, Mesh *mesh)
   for (int i = 0; i < mvert_num; i++) {
     if (cloth->verts[i].spring_count > 0) {
       cloth->verts[i].avg_spring_len = cloth->verts[i].avg_spring_len * 0.49f /
-                                       ((float)cloth->verts[i].spring_count);
+                                       (float(cloth->verts[i].spring_count));
     }
   }
 
