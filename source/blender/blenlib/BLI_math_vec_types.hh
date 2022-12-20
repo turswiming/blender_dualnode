@@ -602,6 +602,7 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
   }
 };
 
+using char2 = blender::vec_base<int8_t, 2>;
 using char3 = blender::vec_base<int8_t, 3>;
 
 using uchar3 = blender::vec_base<uint8_t, 3>;
