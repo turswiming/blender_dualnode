@@ -38,7 +38,7 @@ static GPData build_gpencil_data(int num_layers,
   }
 
   for (const int frame_i : gpd.frames().index_range()) {
-    CurvesGeometry &strokes = gpd.frames_for_write(frame_i).strokes_as_curves();
+    CurvesGeometry &strokes = gpd.frames_for_write(frame_i).curves();
     strokes.resize(points_per_stroke * strokes_per_frame, strokes_per_frame);
     strokes.offsets_for_write().drop_back(1).fill(points_per_stroke);
     curves::accumulate_counts_to_offsets(strokes.offsets_for_write());
@@ -157,7 +157,7 @@ static void insert_new_stroke_new_gpencil_data(GPFrame &gpf,
 {
   int stroke_index{gpf.strokes_num()};
   gpf.add_new_stroke(point_num);
-  CurvesGeometry &curves = gpf.strokes_as_curves();
+  CurvesGeometry &curves = gpf.curves();
   MutableAttributeAccessor attributes = curves.attributes_for_write();
 
   int point_index{0};
@@ -245,7 +245,7 @@ static void compare_gpencil_data_structures(const GPData &new_gpd, const bGPdata
         }
 
         // Compare stroke data
-        compare_gpencil_stroke_data(new_gpf.strokes_as_curves(), curve_index, stk);
+        compare_gpencil_stroke_data(new_gpf.curves(), curve_index, stk);
 
         ++curve_index;
       }
@@ -434,7 +434,7 @@ TEST(gpencil_proposal, ChangeStrokePoints)
   const int frame_index = data.add_frame_on_layer(layer1_index, 0);
   EXPECT_NE(frame_index, -1);
 
-  CurvesGeometry &curves = data.frames_for_write(frame_index).strokes_as_curves();
+  CurvesGeometry &curves = data.frames_for_write(frame_index).curves();
   curves.resize(curves.points_num() + test_positions.size(), curves.curves_num() + 1);
   curves.offsets_for_write().last() = curves.offsets().last(1) + test_positions.size();
 
@@ -531,7 +531,7 @@ TEST(gpencil_proposal, TimeMultiFrameTransformStrokes)
     SCOPED_TIMER("TimeMultiFrameTransformStrokes");
     for (const int i : data.frames_on_active_layer()) {
       GPFrame &gpf = data.frames_for_write(i);
-      CurvesGeometry &curves = gpf.strokes_as_curves();
+      CurvesGeometry &curves = gpf.curves();
       curves.transform(translate_mat);
     }
   }

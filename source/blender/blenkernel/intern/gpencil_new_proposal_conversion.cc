@@ -27,7 +27,7 @@ GPData convert_old_to_new_gpencil_data(bGPdata *old_gpd)
         offsets.append(old_gps->totpoints + offsets.last());
       }
 
-      CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
+      CurvesGeometry &new_gps{new_gpf.curves()};
       MutableAttributeAccessor attributes = new_gps.attributes_for_write();
       new_gps.resize(offsets.last(), offsets.size() - 1);
       new_gps.offsets_for_write().copy_from(offsets);
@@ -81,11 +81,12 @@ bGPdata *convert_new_to_old_gpencil_data(const GPData &new_gpd)
       old_gpf->framenum = new_gpf.start_time;
 
       BLI_listbase_clear(&old_gpf->strokes);
-      const CurvesGeometry &new_gps{new_gpf.strokes_as_curves()};
+      const CurvesGeometry &new_gps{new_gpf.curves()};
       AttributeAccessor attributes = new_gps.attributes();
 
       Span<float3> new_gps_positions = new_gps.positions();
-      VArray<float> new_gps_radii = attributes.lookup_or_default<float>(ATTR_RADIUS, ATTR_DOMAIN_POINT, 0);
+      VArray<float> new_gps_radii = attributes.lookup_or_default<float>(
+          ATTR_RADIUS, ATTR_DOMAIN_POINT, 0);
 
       for (int stroke_index = 0; stroke_index < new_gpf.strokes_num(); stroke_index++) {
         bGPDstroke *old_gps = reinterpret_cast<bGPDstroke *>(

@@ -258,8 +258,8 @@ class GPFrame : public ::GPFrame {
 
   bool operator==(const GPFrame &other) const;
 
-  CurvesGeometry &strokes_as_curves();
-  const CurvesGeometry &strokes_as_curves() const;
+  CurvesGeometry &curves();
+  const CurvesGeometry &curves() const;
 
   bool is_empty() const;
   int strokes_num() const;

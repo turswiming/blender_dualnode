@@ -164,7 +164,7 @@ bool GPFrame::operator==(const GPFrame &other) const
   return this->layer_index == other.layer_index && this->start_time == other.start_time;
 }
 
-CurvesGeometry &GPFrame::strokes_as_curves()
+CurvesGeometry &GPFrame::curves()
 {
   if (!this->strokes) {
     this->strokes = MEM_new<CurvesGeometry>(__func__);
@@ -172,7 +172,7 @@ CurvesGeometry &GPFrame::strokes_as_curves()
   return CurvesGeometry::wrap(*this->strokes);
 }
 
-const CurvesGeometry &GPFrame::strokes_as_curves() const
+const CurvesGeometry &GPFrame::curves() const
 {
   BLI_assert(this->strokes != nullptr);
   return CurvesGeometry::wrap(*this->strokes);
@@ -201,7 +201,7 @@ int GPFrame::points_num() const
 
 IndexRange GPFrame::add_new_stroke(int new_points_num)
 {
-  CurvesGeometry &strokes = this->strokes_as_curves();
+  CurvesGeometry &strokes = this->curves();
   int orig_last_offset = strokes.offsets().last();
 
   strokes.resize(strokes.points_num() + new_points_num, strokes.curves_num() + 1);
