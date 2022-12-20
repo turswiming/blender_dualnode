@@ -548,7 +548,7 @@ class NodeTreeMainUpdater {
         }
         if (ntype.declare_dynamic) {
           if (!node->runtime->declaration) {
-            node->runtime->declaration = new blender::nodes::NodeDeclaration();
+            node->runtime->declaration = new nodes::NodeDeclaration();
           }
           nodes::update_node_declaration_and_sockets(ntree, *node);
         }
@@ -566,22 +566,8 @@ class NodeTreeMainUpdater {
     }
     if (ntree.runtime->changed_flag & NTREE_CHANGED_LINK) {
       ntree.ensure_topology_cache();
-      /* Node groups currently always rebuilt their sockets when they are updated.
-       * So avoid calling the update method when no new link was added to it. */
-      if (node.type == NODE_GROUP_INPUT) {
-        if (node.output_sockets().last()->is_directly_linked()) {
-          return true;
-        }
-      }
-      else if (node.type == NODE_GROUP_OUTPUT) {
-        if (node.input_sockets().last()->is_directly_linked()) {
-          return true;
-        }
-      }
-      else {
-        /* Currently we have no way to tell if a node needs to be updated when a link changed. */
-        return true;
-      }
+      /* Currently we have no way to tell if a node needs to be updated when a link changed. */
+      return true;
     }
     if (ntree.runtime->changed_flag & NTREE_CHANGED_INTERFACE) {
       if (ELEM(node.type, NODE_GROUP_INPUT, NODE_GROUP_OUTPUT)) {
