@@ -32,13 +32,18 @@ void MeshPass::init_subpasses(ePipelineType pipeline,
 {
   texture_subpass_map_.clear();
 
+  static std::string pass_names[geometry_type_len][shader_type_len] = {};
+
   for (auto geom : IndexRange(geometry_type_len)) {
     for (auto shader : IndexRange(shader_type_len)) {
       eGeometryType geom_type = static_cast<eGeometryType>(geom);
       eShaderType shader_type = static_cast<eShaderType>(shader);
-      std::string name = std::string(get_name(geom_type)) + std::string(get_name(shader_type));
+      if (pass_names[geom][shader].empty()) {
+        pass_names[geom][shader] = std::string(get_name(geom_type)) +
+                                   std::string(get_name(shader_type));
+      }
       GPUShader *sh = shaders.prepass_shader_get(pipeline, geom_type, shader_type, lighting, clip);
-      PassMain::Sub *pass = &sub(name.c_str());
+      PassMain::Sub *pass = &sub(pass_names[geom][shader].c_str());
       pass->shader_set(sh);
       passes_[geom][shader] = pass;
     }
