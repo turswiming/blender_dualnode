@@ -14,9 +14,12 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_dial_2d.h"
+#include "BLI_float4x4.hh"
 #include "BLI_ghash.h"
 #include "BLI_gsqueue.h"
 #include "BLI_math.h"
+#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_task.h"
 #include "BLI_task.hh"
 #include "BLI_timeit.hh"
@@ -4960,8 +4963,88 @@ static void sculpt_find_nearest_to_ray_cb(PBVHNode *node, void *data_v, float *t
   }
 }
 
+void SCULPT_raycaster_init_from_mouse(ViewContext *vc,
+                                      const float mval[2],
+                                      SculptRaycaster *r_raycaster)
+{
+  r_raycaster->object = nullptr;
+  copy_v2_v2(r_raycaster->mouse, mval);
+}
+
+void SCULPT_raycaster_init_from_object(Object *object, SculptRaycaster *r_raycaster)
+{
+  r_raycaster->object = object;
+  zero_v2(r_raycaster->mouse);
+}
+
+void SCULPT_raycaster_init(ViewContext *vc, const float mval[2], SculptRaycaster *r_raycaster)
+{
+  Object *ob = vc->obact;
+  SculptSession *ss = ob->sculpt;
+  if (ss->brush_object) {
+    SCULPT_raycaster_init_from_object(ss->brush_object, r_raycaster);
+  }
+  else {
+    SCULPT_raycaster_init_from_mouse(vc, mval, r_raycaster);
+  }
+}
+
+static void sculpt_ray_init(blender::float3 position,
+                            blender::float3 direction,
+                            float length,
+                            SculptRay *r_ray)
+{
+  copy_v3_v3(r_ray->position, position);
+  copy_v3_v3(r_ray->direction, direction);
+  r_ray->length = length;
+}
+
+static void sculpt_raycaster_cast_ray_from_object(const SculptRaycaster *raycaster,
+                                                  ViewContext *vc,
+                                                  SculptRay *r_ray)
+{
+  blender::float4x4 mat(raycaster->object->object_to_world);
+  blender::float3 start_position = mat * blender::float3(0.0f);
+  blender::float3 end_position = mat * blender::float3(0.0f, 0.0f, 1.0f);
+  /* Don't clip start of the ray to the view bounds as a raycaster doesn't start at the view
+   * bounds, unline the mouse cursor. */
+  blender::float3 start_position_dummy(start_position);
+  ED_view3d_clip_segment(
+      static_cast<RegionView3D *>(vc->region->regiondata), start_position_dummy, end_position);
+  sculpt_ray_init(start_position,
+                  blender::math::normalize(end_position - start_position),
+                  blender::math::length(end_position - start_position),
+                  r_ray);
+}
+
+static void sculpt_raycaster_cast_ray_from_mouse(const SculptRaycaster *raycaster,
+                                                 ViewContext *vc,
+                                                 SculptRay *r_ray)
+{
+  blender::float3 start_position;
+  blender::float3 end_position;
+  ED_view3d_win_to_segment_clipped(
+      vc->depsgraph, vc->region, vc->v3d, raycaster->mouse, start_position, end_position, true);
+  sculpt_ray_init(start_position,
+                  blender::math::normalize(end_position - start_position),
+                  blender::math::length(end_position - start_position),
+                  r_ray);
+}
+
+static void sculpt_raycaster_cast_ray(const SculptRaycaster *raycaster,
+                                      ViewContext *vc,
+                                      SculptRay *r_ray)
+{
+  if (raycaster->object) {
+    sculpt_raycaster_cast_ray_from_object(raycaster, vc, r_ray);
+  }
+  else {
+    sculpt_raycaster_cast_ray_from_mouse(raycaster, vc, r_ray);
+  }
+}
+
 float SCULPT_raycast_init(ViewContext *vc,
-                          const float mval[2],
+                          const SculptRaycaster *raycaster,
                           float ray_start[3],
                           float ray_end[3],
                           float ray_normal[3],
@@ -4972,11 +5055,11 @@ float SCULPT_raycast_init(ViewContext *vc,
   Object *ob = vc->obact;
   RegionView3D *rv3d = static_cast<RegionView3D *>(vc->region->regiondata);
   View3D *v3d = vc->v3d;
+  SculptRay ray;
+  sculpt_raycaster_cast_ray(raycaster, vc, &ray);
 
-  /* TODO: what if the segment is totally clipped? (return == 0). */
-  ED_view3d_win_to_segment_clipped(
-      vc->depsgraph, vc->region, vc->v3d, mval, ray_start, ray_end, true);
-
+  copy_v3_v3(ray_start, ray.position);
+  madd_v3_v3v3fl(ray_end, ray.position, ray.direction, ray.length);
   invert_m4_m4(obimat, ob->object_to_world);
   mul_m4_v3(obimat, ray_start);
   mul_m4_v3(obimat, ray_end);
@@ -4989,7 +5072,7 @@ float SCULPT_raycast_init(ViewContext *vc,
       !RV3D_CLIPPING_ENABLED(v3d, rv3d)) {
     BKE_pbvh_raycast_project_ray_root(ob->sculpt->pbvh, original, ray_start, ray_end, ray_normal);
 
-    /* rRecalculate the normal. */
+    /* Recalculate the normal. */
     sub_v3_v3v3(ray_normal, ray_end, ray_start);
     dist = normalize_v3(ray_normal);
   }
@@ -5028,7 +5111,9 @@ bool SCULPT_cursor_geometry_info_update(bContext *C,
   }
 
   /* PBVH raycast to get active vertex and face normal. */
-  depth = SCULPT_raycast_init(&vc, mval, ray_start, ray_end, ray_normal, original);
+  SculptRaycaster raycaster;
+  SCULPT_raycaster_init(&vc, mval, &raycaster);
+  depth = SCULPT_raycast_init(&vc, &raycaster, ray_start, ray_end, ray_normal, original);
   SCULPT_stroke_modifiers_check(C, ob, brush);
 
   SculptRaycastData srd{};
@@ -5151,7 +5236,9 @@ bool SCULPT_stroke_get_location(bContext *C,
 
   SCULPT_stroke_modifiers_check(C, ob, brush);
 
-  depth = SCULPT_raycast_init(&vc, mval, ray_start, ray_end, ray_normal, original);
+  SculptRaycaster raycaster;
+  SCULPT_raycaster_init(&vc, mval, &raycaster);
+  depth = SCULPT_raycast_init(&vc, &raycaster, ray_start, ray_end, ray_normal, original);
 
   if (BKE_pbvh_type(ss->pbvh) == PBVH_BMESH) {
     BM_mesh_elem_table_ensure(ss->bm, BM_VERT);
@@ -5734,6 +5821,18 @@ static int sculpt_brush_stroke_invoke(bContext *C, wmOperator *op, const wmEvent
   Brush *brush = BKE_paint_brush(&sd->paint);
   SculptSession *ss = ob->sculpt;
 
+  if (RNA_boolean_get(op->ptr, "use_brush_object")) {
+    if (ss->brush_object == nullptr) {
+      Main *bmain = CTX_data_main(C);
+      Object *brush_object = static_cast<Object *>(
+          BLI_findstring(&bmain->objects, "xr_brush", offsetof(ID, name) + 2));
+      ss->brush_object = brush_object;
+    }
+  }
+  else {
+    ss->brush_object = nullptr;
+  }
+
   if (SCULPT_tool_is_paint(brush->sculpt_tool) &&
       !SCULPT_handles_colors_report(ob->sculpt, op->reports)) {
     return OPERATOR_CANCELLED;
@@ -5880,6 +5979,11 @@ void SCULPT_OT_brush_stroke(wmOperatorType *ot)
                   0,
                   "Ignore Background Click",
                   "Clicks on the background do not start the stroke");
+  RNA_def_boolean(ot->srna,
+                  "use_brush_object",
+                  true,
+                  "Use Brush Object",
+                  "Use Object to use to determine the brush input in stead of using mouse input");
 }
 
 /* Fake Neighbors. */
@@ -6218,8 +6322,10 @@ bool SCULPT_vertex_is_occluded(SculptSession *ss, PBVHVertRef vertex, bool origi
   float mouse[2];
 
   ED_view3d_project_float_v2_m4(ss->cache->vc->region, co, mouse, ss->cache->projection_mat);
-
-  int depth = SCULPT_raycast_init(ss->cache->vc, mouse, ray_end, ray_start, ray_normal, original);
+  SculptRaycaster raycaster;
+  SCULPT_raycaster_init_from_mouse(ss->cache->vc, mouse, &raycaster);
+  int depth = SCULPT_raycast_init(
+      ss->cache->vc, &raycaster, ray_end, ray_start, ray_normal, original);
 
   negate_v3(ray_normal);
 

@@ -663,6 +663,7 @@ typedef struct SculptSession {
   float cursor_normal[3];
   float cursor_sampled_normal[3];
   float cursor_view_normal[3];
+  struct Object *brush_object;
 
   /* For Sculpt trimming gesture tools, initial ray-cast data from the position of the mouse
    * when

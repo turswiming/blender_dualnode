@@ -345,6 +345,17 @@ typedef struct SculptThreadedTaskData {
   int iteration;
 } SculptThreadedTaskData;
 
+typedef struct SculptRaycaster {
+  struct Object *object;
+  float mouse[2];
+} SculptRaycaster;
+
+typedef struct SculptRay {
+  float position[3];
+  float direction[3];
+  float length;
+} SculptRay;
+
 /*************** Brush testing declarations ****************/
 typedef struct SculptBrushTest {
   float radius_squared;
@@ -657,6 +668,8 @@ typedef struct StrokeCache {
   rcti current_r;  /* current redraw rectangle */
 
   int stroke_id;
+
+  Object *brush_object;
 } StrokeCache;
 
 /* -------------------------------------------------------------------- */
@@ -887,8 +900,15 @@ bool SCULPT_cursor_geometry_info_update(bContext *C,
 void SCULPT_geometry_preview_lines_update(bContext *C, struct SculptSession *ss, float radius);
 
 void SCULPT_stroke_modifiers_check(const bContext *C, Object *ob, const Brush *brush);
+void SCULPT_raycaster_init(struct ViewContext *vc,
+                           const float mval[2],
+                           SculptRaycaster *r_raycaster);
+void SCULPT_raycaster_init_from_object(Object *object, SculptRaycaster *r_raycaster);
+void SCULPT_raycaster_init_from_mouse(struct ViewContext *vc,
+                                      const float mval[2],
+                                      SculptRaycaster *r_raycaster);
 float SCULPT_raycast_init(struct ViewContext *vc,
-                          const float mval[2],
+                          const SculptRaycaster *raycaster,
                           float ray_start[3],
                           float ray_end[3],
                           float ray_normal[3],
