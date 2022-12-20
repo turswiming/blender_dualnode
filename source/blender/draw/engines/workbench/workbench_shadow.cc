@@ -223,6 +223,7 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
   }
   else if (current_pass_type_ == ShadowPass::Fail) {
     /* Already computed in the ShadowPass::Pass */
+    GPU_debug_group_end();
     return;
   }
   else {
