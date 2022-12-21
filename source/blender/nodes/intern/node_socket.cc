@@ -260,10 +260,12 @@ void refresh_node_sockets_from_declaration(bNodeTree &ntree,
 
 void update_node_declaration_and_sockets(bNodeTree &ntree, bNode &node)
 {
-  if (!node.runtime->declaration) {
-    node.runtime->declaration = new NodeDeclaration();
+  if (node.typeinfo->declare_dynamic) {
+    if (!node.runtime->declaration) {
+      node.runtime->declaration = new NodeDeclaration();
+    }
+    build_node_declaration_dynamic(ntree, node, *node.runtime->declaration);
   }
-  build_node_declaration_dynamic(ntree, node, *node.runtime->declaration);
   refresh_node_sockets_from_declaration(ntree, node, *node.runtime->declaration, true);
 }
 
@@ -494,7 +496,6 @@ void node_socket_copy_default_value(bNodeSocket *to, const bNodeSocket *from)
 
   to->flag |= (from->flag & SOCK_HIDE_VALUE);
 }
-
 
 static void standard_node_socket_interface_init_socket(bNodeTree * /*ntree*/,
                                                        const bNodeSocket *interface_socket,
