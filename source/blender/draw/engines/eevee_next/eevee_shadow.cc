@@ -800,6 +800,22 @@ void ShadowModule::debug_end_sync()
   debug_draw_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
+/* Compute approximate screen pixel density (as world space radius). */
+static float screen_pixel_radius(const View &view, const int2 &extent)
+{
+  float min_dim = float(min_ii(extent.x, extent.y));
+  float3 p0 = float3(-1.0f, -1.0f, 0.0f);
+  float3 p1 = float3(float2(min_dim / extent) * 2.0f - 1.0f, 0.0f);
+  mul_project_m4_v3(view.viewinv().ptr(), p0);
+  mul_project_m4_v3(view.viewinv().ptr(), p1);
+  /* Compute radius at unit plane from the camera. This is NOT the perspective division. */
+  if (view.is_persp()) {
+    p0 = p0 / p0.z;
+    p1 = p1 / p1.z;
+  }
+  return math::distance(p0, p1) / min_dim;
+}
+
 /* Update all shadow regions visible inside the view.
  * If called multiple time for the same view, it will only do the depth buffer scanning
  * to check any new opaque surfaces.
@@ -810,6 +826,7 @@ void ShadowModule::set_view(View &view)
 
   int3 target_size = inst_.render_buffers.depth_tx.size();
   dispatch_depth_scan_size_ = math::divide_ceil(target_size, int3(SHADOW_DEPTH_SCAN_GROUP_SIZE));
+  screen_pixel_radius_inv_ = 1.0f / screen_pixel_radius(view, int2(target_size));
 
   usage_tag_fb.ensure(int2(target_size));
   render_fb_.ensure(int2(SHADOW_TILEMAP_RES * shadow_page_size_));

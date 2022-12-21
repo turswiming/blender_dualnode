@@ -1,7 +1,7 @@
 
 /**
  * Virtual shadowmapping: Tile page freeing.
-
+ *
  * Releases the allocated pages held by tilemaps that have been become unused.
  * Also reclaim cached pages if the tiles needs them.
  * Note that we also count the number of new page allocations needed.

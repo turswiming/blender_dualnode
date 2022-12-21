@@ -717,7 +717,7 @@ struct ShadowTileData {
   uint lod;
   /** If the tile is needed for rendering. */
   bool is_used;
-  /** True if an update is needed. */
+  /** True if an update is needed. This persists even if the tile gets unused. */
   bool do_update;
   /** True if the tile owns the page (mutually exclusive with `is_cached`). */
   bool is_allocated;

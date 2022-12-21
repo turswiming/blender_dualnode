@@ -41,7 +41,6 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     tile_co = ivec2(floor(lP.xy * clipmap_res_mul - clipmap_offset)) + SHADOW_TILEMAP_RES / 2;
     tile_co = clamp(tile_co, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
     tilemap_index += clipmap_lod_relative;
-    tilemap_index = clamp(tilemap_index, light.tilemap_index, light.tilemap_last);
   }
   else {
     vec3 lL = light_world_to_local(light, P - light._position);
@@ -69,7 +68,11 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     tilemap_index += face_id;
   }
 
-  int tile_index = shadow_tile_offset(tile_co, tilemap_index, lod);
+  if (tilemap_index > light.tilemap_last) {
+    return;
+  }
+
+  int tile_index = shadow_tile_offset(tile_co, tilemaps_buf[tilemap_index].tiles_index, lod);
   atomicOr(tiles_buf[tile_index], SHADOW_IS_USED);
 }
 

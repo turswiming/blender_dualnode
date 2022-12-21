@@ -30,8 +30,9 @@ ivec2 shadow_tile_coord_in_atlas(ivec2 tile, int tilemap_index)
 
 /**
  * Return tile index inside `tiles_buf` for a given tile coordinate inside a specific LOD.
+ * `tiles_index` should be `ShadowTileMapData.tiles_index`.
  */
-int shadow_tile_offset(ivec2 tile, int tilemap_index, int lod)
+int shadow_tile_offset(ivec2 tile, int tiles_index, int lod)
 {
   const int lod0_width = SHADOW_TILEMAP_RES / 1;
   const int lod1_width = SHADOW_TILEMAP_RES / 2;
@@ -44,7 +45,7 @@ int shadow_tile_offset(ivec2 tile, int tilemap_index, int lod)
   const int lod3_size = lod3_width * lod3_width;
   const int lod4_size = lod4_width * lod4_width;
 
-  int offset = tilemap_index * SHADOW_TILEDATA_PER_TILEMAP;
+  int offset = tiles_index * SHADOW_TILEDATA_PER_TILEMAP;
   switch (lod) {
     case 4:
       offset += lod0_size + lod1_size + lod2_size + lod3_size;

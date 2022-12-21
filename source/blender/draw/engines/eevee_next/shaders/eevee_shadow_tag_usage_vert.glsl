@@ -3,8 +3,7 @@
  * Virtual shadowmapping: Usage tagging
  *
  * Shadow pages are only allocated if they are visible.
- * This pass scan the depth buffer and tag all tiles that are needed for light shadowing as
- * needed.
+ * This renders bounding boxes for transparent objects in order to tag the correct shadows.
  */
 
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)

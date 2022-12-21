@@ -19,9 +19,9 @@ void page_clear_buf_append(uint page_packed)
   clear_page_buf[clear_page_index] = page_packed;
 }
 
-void page_tag_as_rendered(ivec2 tile_co, int tilemap_index, int lod)
+void page_tag_as_rendered(ivec2 tile_co, int tiles_index, int lod)
 {
-  int tile_index = shadow_tile_offset(tile_co, tilemap_index, lod);
+  int tile_index = shadow_tile_offset(tile_co, tiles_index, lod);
   tiles_buf[tile_index] |= SHADOW_IS_RENDERED;
 }
 
@@ -51,7 +51,7 @@ void main()
    * to the lowest, keeping track of the lowest one allocated which will be use for shadowing.
    * Also save which page are to be updated. */
   for (int lod = lod_max; lod >= 0; lod--) {
-    int tile_index = shadow_tile_offset(tile_co >> lod, tilemap_index, lod);
+    int tile_index = shadow_tile_offset(tile_co >> lod, tilemap_data.tiles_index, lod);
 
     ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
 
@@ -110,7 +110,7 @@ void main()
       imageStore(render_map_lod0_img, render_map_texel, uvec4(updated_lod_page[0]));
       if (updated_lod_page[0] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[0]);
-        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 0);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_data.tiles_index, 0);
       }
     }
     render_map_texel.xy >>= 1;
@@ -118,7 +118,7 @@ void main()
       imageStore(render_map_lod1_img, render_map_texel, uvec4(updated_lod_page[1]));
       if (updated_lod_page[1] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[1]);
-        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 1);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_data.tiles_index, 1);
       }
     }
     render_map_texel.xy >>= 1;
@@ -126,7 +126,7 @@ void main()
       imageStore(render_map_lod2_img, render_map_texel, uvec4(updated_lod_page[2]));
       if (updated_lod_page[2] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[2]);
-        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 2);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_data.tiles_index, 2);
       }
     }
     render_map_texel.xy >>= 1;
@@ -134,7 +134,7 @@ void main()
       imageStore(render_map_lod3_img, render_map_texel, uvec4(updated_lod_page[3]));
       if (updated_lod_page[3] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[3]);
-        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 3);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_data.tiles_index, 3);
       }
     }
     render_map_texel.xy >>= 1;
@@ -142,7 +142,7 @@ void main()
       imageStore(render_map_lod4_img, render_map_texel, uvec4(updated_lod_page[4]));
       if (updated_lod_page[4] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[4]);
-        page_tag_as_rendered(render_map_texel.xy, tilemap_index, 4);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_data.tiles_index, 4);
       }
     }
   }
