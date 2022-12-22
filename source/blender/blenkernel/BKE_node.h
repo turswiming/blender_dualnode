@@ -346,8 +346,9 @@ typedef struct bNodeType {
   /* Declares which sockets the node has. */
   NodeDeclareFunction declare;
   /**
-   * Declare which sockets the node has, but isn't static per node type. In orther words,
-   * different nodes of this type can have different declarations and different sockets.
+   * Declare which sockets the node has for declarations that aren't static per node type.
+   * In orther words, defining this callback means that different nodes of this type can have
+   * different declarations and different sockets.
    */
   NodeDeclareDynamicFunction declare_dynamic;
 
@@ -1127,9 +1128,9 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 #define SH_NODE_VALTORGB 104
 #define SH_NODE_RGBTOBW 105
 #define SH_NODE_SHADERTORGB 106
-//#define SH_NODE_TEXTURE       106
+// #define SH_NODE_TEXTURE       106
 #define SH_NODE_NORMAL 107
-//#define SH_NODE_GEOMETRY  108
+// #define SH_NODE_GEOMETRY  108
 #define SH_NODE_MAPPING 109
 #define SH_NODE_CURVE_VEC 110
 #define SH_NODE_CURVE_RGB 111
@@ -1137,7 +1138,7 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 #define SH_NODE_MATH 115
 #define SH_NODE_VECTOR_MATH 116
 #define SH_NODE_SQUEEZE 117
-//#define SH_NODE_MATERIAL_EXT  118
+// #define SH_NODE_MATERIAL_EXT  118
 #define SH_NODE_INVERT 119
 #define SH_NODE_SEPRGB_LEGACY 120
 #define SH_NODE_COMBRGB_LEGACY 121
