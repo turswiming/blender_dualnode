@@ -15,15 +15,20 @@ static void node_declare(const bNodeTree &node_tree,
                          const bNode &node,
                          NodeDeclaration &r_declaration)
 {
+  const bNodeTree *group = reinterpret_cast<const bNodeTree *>(node.id);
+  if (!group) {
+    return;
+  }
   node_group_declare_dynamic(node_tree, node, r_declaration);
   if (!node.id) {
     return;
   }
-  /* TODO: Other return early checks. */
+  if (ID_IS_LINKED(&group->id) && (group->id.tag & LIB_TAG_MISSING)) {
+    return;
+  }
 
-  const bNodeTree &group = reinterpret_cast<const bNodeTree &>(*node.id);
   FieldInferencingInterface field_interface;
-  bke::node_field_inferencing::calculate_field_interface(group, field_interface);
+  bke::node_field_inferencing::calculate_field_interface(*group, field_interface);
   for (const int i : r_declaration.inputs_.index_range()) {
     r_declaration.inputs_[i]->input_field_type_ = field_interface.inputs[i];
   }
