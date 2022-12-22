@@ -154,7 +154,7 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
       break;
     }
     case SOCK_SHADER: {
-      std::unique_ptr<decl::Color> decl = std::make_unique<decl::Color>();
+      std::unique_ptr<decl::Shader> decl = std::make_unique<decl::Shader>();
       dst = std::move(decl);
       break;
     }
@@ -223,8 +223,8 @@ void node_group_declare_dynamic(const bNodeTree & /*node_tree*/,
     r_declaration.skip_updating_sockets = true;
     return;
   }
+  r_declaration.skip_updating_sockets = false;
 
-  /* TODO: Specialize for geometry nodes and fields. */
   /* TODO: Figure out how this should work for custom node trees / #SOCK_CUSTOM. */
   LISTBASE_FOREACH (const bNodeSocket *, input, &group->inputs) {
     r_declaration.inputs_.append(declataion_for_interface_socket(*input));
