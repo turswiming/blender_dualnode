@@ -200,7 +200,10 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
     case SOCK_MATERIAL:
       dst = std::make_unique<decl::Material>();
       break;
-    default:
+    case SOCK_CUSTOM:
+      std::unique_ptr<decl::Custom> decl = std::make_unique<decl::Custom>();
+      decl->idname_ = io_socket.idname;
+      dst = std::move(decl);
       break;
   }
   dst->name_ = io_socket.name;

@@ -248,6 +248,16 @@ class Extend : public SocketDeclaration {
 class ExtendBuilder : public SocketDeclarationBuilder<Extend> {
 };
 
+class Custom : public SocketDeclaration {
+ public:
+  const char *idname_;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
 /* -------------------------------------------------------------------- */
 /** \name #FloatBuilder Inline Methods
  * \{ */

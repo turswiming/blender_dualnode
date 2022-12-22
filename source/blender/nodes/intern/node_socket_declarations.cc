@@ -537,4 +537,40 @@ bNodeSocket &Extend::update_or_build(bNodeTree & /*ntree*/,
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name #Custom
+ * \{ */
+
+bNodeSocket &Custom::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *nodeAddSocket(
+      &ntree, &node, in_out_, idname_, identifier_.c_str(), name_.c_str());
+  return socket;
+}
+
+bool Custom::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_CUSTOM) {
+    return false;
+  }
+  return true;
+}
+
+bool Custom::can_connect(const bNodeSocket &socket) const
+{
+  return sockets_can_connect(*this, socket) && STREQ(socket.idname, idname_);
+}
+
+bNodeSocket &Custom::update_or_build(bNodeTree & /*ntree*/,
+                                     bNode & /*node*/,
+                                     bNodeSocket &socket) const
+{
+  return socket;
+}
+
+/** \} */
+
 }  // namespace blender::nodes::decl
