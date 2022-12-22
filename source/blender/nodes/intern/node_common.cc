@@ -214,6 +214,7 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
   dst->in_out_ = eNodeSocketInOut(io_socket.in_out);
   dst->description_ = io_socket.description;
   dst->hide_value_ = io_socket.flag & SOCK_HIDE_VALUE;
+  dst->compact_ = io_socket.flag & SOCK_COLLAPSED;
   return dst;
 }
 
