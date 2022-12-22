@@ -40,10 +40,7 @@ void register_standard_node_socket_types(void);
 
 namespace blender::nodes {
 
-void refresh_node_sockets_from_declaration(bNodeTree &ntree,
-                                           bNode &node,
-                                           const NodeDeclaration &node_decl,
-                                           bool do_id_user);
+
 void update_node_declaration_and_sockets(bNodeTree &ntree, bNode &node);
 
 }  // namespace blender::nodes
