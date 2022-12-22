@@ -311,6 +311,9 @@ class NodeDeclaration {
   Vector<SocketDeclarationPtr> inputs_;
   Vector<SocketDeclarationPtr> outputs_;
 
+  /** Leave the sockets in place, even if they don't match the declaration. Used for dynamic
+   * declarations when the information used to build the declaration is missing, but might become
+   * available again in the future. */
   bool skip_updating_sockets = false;
 
   friend NodeDeclarationBuilder;

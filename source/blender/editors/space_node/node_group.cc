@@ -933,7 +933,7 @@ static void node_group_make_insert_selected(const bContext &C,
   }
   nodeRebuildIDVector(&ntree);
 
-  /* Update the input and output node first, since the group node declaration depends on them. */
+  /* Update input and output node first, since the group node declaration can depend on them. */
   nodes::update_node_declaration_and_sockets(group, *input_node);
   nodes::update_node_declaration_and_sockets(group, *output_node);
   nodes::update_node_declaration_and_sockets(ntree, *gnode);
