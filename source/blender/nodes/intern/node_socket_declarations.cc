@@ -505,20 +505,19 @@ bool Shader::can_connect(const bNodeSocket &socket) const
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name #IDSocketDeclaration
+/** \name #Extend
  * \{ */
 
 bNodeSocket &Extend::build(bNodeTree &ntree, bNode &node) const
 {
   bNodeSocket &socket = *nodeAddSocket(
       &ntree, &node, in_out_, "NodeSocketVirtual", identifier_.c_str(), name_.c_str());
-  this->set_common_flags(socket);
   return socket;
 }
 
 bool Extend::matches(const bNodeSocket &socket) const
 {
-  if (!this->matches_common_data(socket)) {
+  if (socket.identifier != identifier_) {
     return false;
   }
   return true;
@@ -533,7 +532,6 @@ bNodeSocket &Extend::update_or_build(bNodeTree & /*ntree*/,
                                      bNode & /*node*/,
                                      bNodeSocket &socket) const
 {
-  this->set_common_flags(socket);
   return socket;
 }
 
