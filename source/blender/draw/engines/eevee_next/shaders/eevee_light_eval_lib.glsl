@@ -12,6 +12,7 @@
  */
 
 #pragma BLENDER_REQUIRE(eevee_light_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_shadow_lib.glsl)
 #pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
 
 /* TODO(fclem): We could reduce register pressure by only having static branches for sun lights. */
@@ -34,14 +35,12 @@ void light_eval_ex(ClosureDiffuse diffuse,
 
   float visibility = light_attenuation(light, L, dist);
 
-#if 0 /* TODO(fclem): Shadows */
   if (light.tilemap_index != LIGHT_NO_SHADOW && (visibility > 0.0)) {
     vec3 lL = light_world_to_local(light, -L) * dist;
 
-    float shadow_delta = shadow_delta_get(
-        shadow_atlas_tx, shadow_tilemaps_tx, light, light.shadow_data, lL, dist, P);
+    float shadow_delta = shadow_delta_get(shadow_atlas_tx, shadow_tilemaps_tx, light, lL, dist, P);
 
-#  ifdef SSS_TRANSMITTANCE
+#ifdef SSS_TRANSMITTANCE
     /* Transmittance evaluation first to use initial visibility. */
     if (diffuse.sss_id != 0u && light.diffuse_power > 0.0) {
       float delta = max(thickness, shadow_delta);
@@ -57,11 +56,10 @@ void light_eval_ex(ClosureDiffuse diffuse,
                                          delta);
       out_diffuse += light.color * intensity;
     }
-#  endif
-
-    visibility *= float(shadow_delta - light.shadow_data.bias <= 0.0);
-  }
 #endif
+
+    visibility *= float(shadow_delta - light.shadow_bias <= 0.0);
+  }
 
   if (visibility < 1e-6) {
     return;
