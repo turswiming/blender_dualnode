@@ -131,6 +131,7 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
     case SOCK_FLOAT: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueFloat>();
       std::unique_ptr<decl::Float> decl = std::make_unique<decl::Float>();
+      decl->subtype_ = PropertySubType(io_socket.typeinfo->subtype);
       decl->default_value_ = value.value;
       decl->soft_min_value_ = value.min;
       decl->soft_max_value_ = value.max;
@@ -140,6 +141,7 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
     case SOCK_VECTOR: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueVector>();
       std::unique_ptr<decl::Vector> decl = std::make_unique<decl::Vector>();
+      decl->subtype_ = PropertySubType(io_socket.typeinfo->subtype);
       decl->default_value_ = value.value;
       decl->soft_min_value_ = value.min;
       decl->soft_max_value_ = value.max;
@@ -168,6 +170,7 @@ static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &i
     case SOCK_INT: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueInt>();
       std::unique_ptr<decl::Int> decl = std::make_unique<decl::Int>();
+      decl->subtype_ = PropertySubType(io_socket.typeinfo->subtype);
       decl->default_value_ = value.value;
       decl->soft_min_value_ = value.min;
       decl->soft_max_value_ = value.max;
