@@ -446,9 +446,7 @@ static void group_input_declare_dynamic(const bNodeTree &node_tree,
     r_declaration.outputs_.append(declataion_for_interface_socket(*input));
     r_declaration.outputs_.last()->in_out_ = SOCK_OUT;
   }
-  if (!ID_IS_LINKED(&node_tree.id)) {
-    r_declaration.outputs_.append(extend_declaration(SOCK_OUT));
-  }
+  r_declaration.outputs_.append(extend_declaration(SOCK_OUT));
 }
 
 static void group_output_declare_dynamic(const bNodeTree &node_tree,
@@ -459,9 +457,7 @@ static void group_output_declare_dynamic(const bNodeTree &node_tree,
     r_declaration.inputs_.append(declataion_for_interface_socket(*input));
     r_declaration.inputs_.last()->in_out_ = SOCK_IN;
   }
-  if (!ID_IS_LINKED(&node_tree.id)) {
-    r_declaration.inputs_.append(extend_declaration(SOCK_IN));
-  }
+  r_declaration.inputs_.append(extend_declaration(SOCK_IN));
 }
 
 static bool group_input_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *link)

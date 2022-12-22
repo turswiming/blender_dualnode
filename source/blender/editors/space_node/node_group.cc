@@ -933,9 +933,10 @@ static void node_group_make_insert_selected(const bContext &C,
   }
   nodeRebuildIDVector(&ntree);
 
+  /* Update the input and output node first, since the group node declaration depends on them. */
+  nodes::update_node_declaration_and_sockets(group, *input_node);
+  nodes::update_node_declaration_and_sockets(group, *output_node);
   nodes::update_node_declaration_and_sockets(ntree, *gnode);
-  nodes::update_node_declaration_and_sockets(ntree, *input_node);
-  nodes::update_node_declaration_and_sockets(ntree, *output_node);
 
   /* move nodes in the group to the center */
   for (bNode *node : nodes_to_move) {
