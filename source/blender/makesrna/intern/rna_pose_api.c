@@ -108,6 +108,36 @@ static void rna_Pose_apply_pose_from_action(ID *pose_owner,
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE, pose_owner);
 }
 
+static void rna_Pose_blend_pose_from_action(ID *pose_owner,
+                                            bContext *C,
+                                            bAction *action,
+                                            const float blend_factor,
+                                            const float evaluation_time)
+{
+  BLI_assert(GS(pose_owner->name) == ID_OB);
+  Object *pose_owner_ob = (Object *)pose_owner;
+
+  AnimationEvalContext anim_eval_context = {CTX_data_depsgraph_pointer(C), evaluation_time};
+  BKE_pose_apply_action_blend(pose_owner_ob, action, &anim_eval_context, blend_factor);
+
+  /* Do NOT tag with ID_RECALC_ANIMATION, as that would overwrite the just-applied pose. */
+  DEG_id_tag_update(pose_owner, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, pose_owner);
+}
+
+static struct PoseBackup *rna_Pose_backup_create_all_bones(ID *pose_owner, bAction *action)
+{
+  BLI_assert(GS(pose_owner->name) == ID_OB);
+  Object *pose_owner_ob = (Object *)pose_owner;
+
+  return ED_pose_backup_create_all_bones(pose_owner_ob, action);
+}
+
+static void rna_Pose_backup_restore(struct PoseBackup *pose_backup)
+{
+  return ED_pose_backup_restore(pose_backup);
+}
+
 #else
 
 void RNA_api_pose(StructRNA *srna)
@@ -121,10 +151,8 @@ void RNA_api_pose(StructRNA *srna)
       func,
       "Apply the given action to this pose by evaluating it at a specific time. Only updates the "
       "pose of selected bones, or all bones if none are selected.");
-
   parm = RNA_def_pointer(func, "action", "Action", "Action", "The Action containing the pose");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
-
   parm = RNA_def_float(func,
                        "evaluation_time",
                        0.0f,
@@ -134,6 +162,48 @@ void RNA_api_pose(StructRNA *srna)
                        "Time at which the given action is evaluated to obtain the pose",
                        -FLT_MAX,
                        FLT_MAX);
+
+  func = RNA_def_function(srna, "blend_pose_from_action", "rna_Pose_blend_pose_from_action");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  RNA_def_function_ui_description(func,
+                                  "Blend the given action into this pose by evaluating it at a "
+                                  "specific time. Only updates the "
+                                  "pose of selected bones, or all bones if none are selected.");
+  parm = RNA_def_pointer(func, "action", "Action", "Action", "The Action containing the pose");
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+  parm = RNA_def_float(func,
+                       "blend_factor",
+                       1.0f,
+                       0.0f,
+                       1.0f,
+                       "Blend Factor",
+                       "How much the given Action affects the final pose",
+                       0.0f,
+                       1.0f);
+  parm = RNA_def_float(func,
+                       "evaluation_time",
+                       0.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Evaluation Time",
+                       "Time at which the given action is evaluated to obtain the pose",
+                       -FLT_MAX,
+                       FLT_MAX);
+
+  func = RNA_def_function(srna, "backup_create_all_bones", "rna_Pose_backup_create_all_bones");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_NO_SELF);
+  parm = RNA_def_pointer(func, "action", "Action", "Action", "The Action containing the pose");
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+  /* return value */
+  parm = RNA_def_pointer(
+      func, "backup", "PoseBackup", "PoseBackup", "The backup data of the pose");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "backup_restore", "rna_Pose_backup_restore");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_pointer(
+      func, "backup", "PoseBackup", "PoseBackup", "The backup data of the pose");
+  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
 }
 
 void RNA_api_pose_channel(StructRNA *srna)

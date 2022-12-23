@@ -1729,6 +1729,16 @@ static void rna_def_pose(BlenderRNA *brna)
   RNA_api_pose(srna);
 }
 
+static void rna_def_pose_backup(BlenderRNA *brna)
+{
+  StructRNA *srna;
+
+  /* struct definition */
+  srna = RNA_def_struct(brna, "PoseBackup", NULL);
+  RNA_def_struct_sdna(srna, "PoseBackup");
+  RNA_def_struct_ui_text(srna, "Pose", "A backup of a pose, can only be used to restore the pose");
+}
+
 void RNA_def_pose(BlenderRNA *brna)
 {
   rna_def_pose(brna);
@@ -1736,6 +1746,7 @@ void RNA_def_pose(BlenderRNA *brna)
   rna_def_pose_ikparam(brna);
   rna_def_pose_itasc(brna);
   rna_def_bone_group(brna);
+  rna_def_pose_backup(brna);
 }
 
 #endif
