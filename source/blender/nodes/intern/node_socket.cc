@@ -248,8 +248,8 @@ static void refresh_socket_list(bNodeTree &ntree,
 
 static void refresh_node(bNodeTree &ntree,
                          bNode &node,
-                         const NodeDeclaration &node_decl,
-                         const bool do_id_user)
+                         blender::nodes::NodeDeclaration &node_decl,
+                         bool do_id_user)
 {
   if (node_decl.skip_updating_sockets) {
     return;

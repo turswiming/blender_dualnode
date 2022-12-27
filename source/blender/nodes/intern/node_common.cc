@@ -131,27 +131,27 @@ static SocketDeclarationPtr declaration_for_interface_socket(const bNodeSocket &
     case SOCK_FLOAT: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueFloat>();
       std::unique_ptr<decl::Float> decl = std::make_unique<decl::Float>();
-      decl->subtype_ = PropertySubType(io_socket.typeinfo->subtype);
-      decl->default_value_ = value.value;
-      decl->soft_min_value_ = value.min;
-      decl->soft_max_value_ = value.max;
+      decl->subtype = PropertySubType(io_socket.typeinfo->subtype);
+      decl->default_value = value.value;
+      decl->soft_min_value = value.min;
+      decl->soft_max_value = value.max;
       dst = std::move(decl);
       break;
     }
     case SOCK_VECTOR: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueVector>();
       std::unique_ptr<decl::Vector> decl = std::make_unique<decl::Vector>();
-      decl->subtype_ = PropertySubType(io_socket.typeinfo->subtype);
-      decl->default_value_ = value.value;
-      decl->soft_min_value_ = value.min;
-      decl->soft_max_value_ = value.max;
+      decl->subtype = PropertySubType(io_socket.typeinfo->subtype);
+      decl->default_value = value.value;
+      decl->soft_min_value = value.min;
+      decl->soft_max_value = value.max;
       dst = std::move(decl);
       break;
     }
     case SOCK_RGBA: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueRGBA>();
       std::unique_ptr<decl::Color> decl = std::make_unique<decl::Color>();
-      decl->default_value_ = value.value;
+      decl->default_value = value.value;
       dst = std::move(decl);
       break;
     }
@@ -163,29 +163,28 @@ static SocketDeclarationPtr declaration_for_interface_socket(const bNodeSocket &
     case SOCK_BOOLEAN: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueBoolean>();
       std::unique_ptr<decl::Bool> decl = std::make_unique<decl::Bool>();
-      decl->default_value_ = value.value;
+      decl->default_value = value.value;
       dst = std::move(decl);
       break;
     }
     case SOCK_INT: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueInt>();
       std::unique_ptr<decl::Int> decl = std::make_unique<decl::Int>();
-      decl->subtype_ = PropertySubType(io_socket.typeinfo->subtype);
-      decl->default_value_ = value.value;
-      decl->soft_min_value_ = value.min;
-      decl->soft_max_value_ = value.max;
+      decl->subtype = PropertySubType(io_socket.typeinfo->subtype);
+      decl->default_value = value.value;
+      decl->soft_min_value = value.min;
+      decl->soft_max_value = value.max;
       dst = std::move(decl);
       break;
     }
     case SOCK_STRING: {
       const auto &value = *io_socket.default_value_typed<bNodeSocketValueString>();
       std::unique_ptr<decl::String> decl = std::make_unique<decl::String>();
-      decl->default_value_ = value.value;
+      decl->default_value = value.value;
       dst = std::move(decl);
       break;
     }
     case SOCK_OBJECT:
-      /* TODO: What happens to default values of data-block sockets? */
       dst = std::make_unique<decl::Object>();
       break;
     case SOCK_IMAGE:
@@ -232,7 +231,6 @@ void node_group_declare_dynamic(const bNodeTree & /*node_tree*/,
   }
   r_declaration.skip_updating_sockets = false;
 
-  /* TODO: Figure out how this should work for custom node trees / #SOCK_CUSTOM. */
   LISTBASE_FOREACH (const bNodeSocket *, input, &group->inputs) {
     r_declaration.inputs_.append(declaration_for_interface_socket(*input));
   }

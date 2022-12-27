@@ -506,7 +506,7 @@ static void prepare_inferencing_interfaces(
   }
 }
 
-void calculate_field_interface(const bNodeTree &tree, FieldInferencingInterface &r_interface)
+bool update_field_inferencing(const bNodeTree &tree)
 {
   tree.ensure_topology_cache();
 
@@ -516,27 +516,23 @@ void calculate_field_interface(const bNodeTree &tree, FieldInferencingInterface 
   prepare_inferencing_interfaces(nodes, interface_by_node, scope);
 
   /* Create new inferencing interface for this node group. */
-  r_interface.inputs.resize(BLI_listbase_count(&tree.inputs), InputSocketFieldType::IsSupported);
-  r_interface.outputs.resize(BLI_listbase_count(&tree.outputs),
-                             OutputFieldDependency::ForDataSource());
+  std::unique_ptr<FieldInferencingInterface> new_inferencing_interface =
+      std::make_unique<FieldInferencingInterface>();
+  new_inferencing_interface->inputs.resize(BLI_listbase_count(&tree.inputs),
+                                           InputSocketFieldType::IsSupported);
+  new_inferencing_interface->outputs.resize(BLI_listbase_count(&tree.outputs),
+                                            OutputFieldDependency::ForDataSource());
 
   /* Keep track of the state of all sockets. The index into this array is #SocketRef::id(). */
   Array<SocketFieldState> field_state_by_socket_id(tree.all_sockets().size());
 
   propagate_data_requirements_from_right_to_left(
       tree, interface_by_node, field_state_by_socket_id);
-  determine_group_input_states(tree, r_interface, field_state_by_socket_id);
+  determine_group_input_states(tree, *new_inferencing_interface, field_state_by_socket_id);
   propagate_field_status_from_left_to_right(tree, interface_by_node, field_state_by_socket_id);
-  determine_group_output_states(tree, r_interface, interface_by_node, field_state_by_socket_id);
+  determine_group_output_states(
+      tree, *new_inferencing_interface, interface_by_node, field_state_by_socket_id);
   update_socket_shapes(tree, field_state_by_socket_id);
-}
-
-bool update_field_inferencing(const bNodeTree &tree)
-{
-  /* Create new inferencing interface for this node group. */
-  std::unique_ptr<FieldInferencingInterface> new_inferencing_interface =
-      std::make_unique<FieldInferencingInterface>();
-  calculate_field_interface(tree, *new_inferencing_interface);
 
   /* Update the previous group interface. */
   const bool group_interface_changed = !tree.runtime->field_inferencing_interface ||

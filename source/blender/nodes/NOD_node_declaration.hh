@@ -319,11 +319,6 @@ class NodeDeclaration {
   friend NodeDeclarationBuilder;
 
  public:
-  NodeDeclaration() = default;
-  NodeDeclaration(Vector<SocketDeclarationPtr> inputs, Vector<SocketDeclarationPtr> outputs)
-      : inputs_(std::move(inputs)), outputs_(std::move(outputs))
-  {
-  }
   bool matches(const bNode &node) const;
 
   Span<SocketDeclarationPtr> inputs() const;

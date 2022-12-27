@@ -20,7 +20,6 @@ class Float : public SocketDeclaration {
   float soft_max_value = FLT_MAX;
   PropertySubType subtype = PROP_NONE;
 
- private:
   friend FloatBuilder;
 
   using Builder = FloatBuilder;
@@ -48,7 +47,6 @@ class Int : public SocketDeclaration {
   int soft_max_value = INT32_MAX;
   PropertySubType subtype = PROP_NONE;
 
- private:
   friend IntBuilder;
 
   using Builder = IntBuilder;
@@ -76,7 +74,6 @@ class Vector : public SocketDeclaration {
   float soft_max_value = FLT_MAX;
   PropertySubType subtype = PROP_NONE;
 
- private:
   friend VectorBuilder;
 
   using Builder = VectorBuilder;
@@ -121,7 +118,6 @@ class Color : public SocketDeclaration {
  public:
   ColorGeometry4f default_value;
 
- private:
   friend ColorBuilder;
 
   using Builder = ColorBuilder;
@@ -142,7 +138,6 @@ class String : public SocketDeclaration {
  public:
   std::string default_value;
 
- private:
   friend StringBuilder;
 
   using Builder = StringBuilder;
