@@ -347,7 +347,7 @@ typedef struct bNodeType {
   NodeDeclareFunction declare;
   /**
    * Declare which sockets the node has for declarations that aren't static per node type.
-   * In orther words, defining this callback means that different nodes of this type can have
+   * In other words, defining this callback means that different nodes of this type can have
    * different declarations and different sockets.
    */
   NodeDeclareDynamicFunction declare_dynamic;

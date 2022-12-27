@@ -124,7 +124,7 @@ bool nodeGroupPoll(const bNodeTree *nodetree,
 
 namespace blender::nodes {
 
-static SocketDeclarationPtr declataion_for_interface_socket(const bNodeSocket &io_socket)
+static SocketDeclarationPtr declaration_for_interface_socket(const bNodeSocket &io_socket)
 {
   SocketDeclarationPtr dst;
   switch (io_socket.type) {
@@ -234,10 +234,10 @@ void node_group_declare_dynamic(const bNodeTree & /*node_tree*/,
 
   /* TODO: Figure out how this should work for custom node trees / #SOCK_CUSTOM. */
   LISTBASE_FOREACH (const bNodeSocket *, input, &group->inputs) {
-    r_declaration.inputs_.append(declataion_for_interface_socket(*input));
+    r_declaration.inputs_.append(declaration_for_interface_socket(*input));
   }
   LISTBASE_FOREACH (const bNodeSocket *, output, &group->outputs) {
-    r_declaration.outputs_.append(declataion_for_interface_socket(*output));
+    r_declaration.outputs_.append(declaration_for_interface_socket(*output));
   }
 }
 
@@ -450,7 +450,7 @@ static void group_input_declare_dynamic(const bNodeTree &node_tree,
                                         NodeDeclaration &r_declaration)
 {
   LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.inputs) {
-    r_declaration.outputs_.append(declataion_for_interface_socket(*input));
+    r_declaration.outputs_.append(declaration_for_interface_socket(*input));
     r_declaration.outputs_.last()->in_out_ = SOCK_OUT;
   }
   r_declaration.outputs_.append(extend_declaration(SOCK_OUT));
@@ -461,7 +461,7 @@ static void group_output_declare_dynamic(const bNodeTree &node_tree,
                                          NodeDeclaration &r_declaration)
 {
   LISTBASE_FOREACH (const bNodeSocket *, input, &node_tree.outputs) {
-    r_declaration.inputs_.append(declataion_for_interface_socket(*input));
+    r_declaration.inputs_.append(declaration_for_interface_socket(*input));
     r_declaration.inputs_.last()->in_out_ = SOCK_IN;
   }
   r_declaration.inputs_.append(extend_declaration(SOCK_IN));
