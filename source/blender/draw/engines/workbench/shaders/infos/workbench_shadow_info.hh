@@ -11,7 +11,8 @@
 GPU_SHADER_INTERFACE_INFO(workbench_shadow_iface, "vData")
     .smooth(Type::VEC3, "pos")
     .smooth(Type::VEC4, "frontPosition")
-    .smooth(Type::VEC4, "backPosition");
+    .smooth(Type::VEC4, "backPosition")
+    .flat(Type::VEC3, "light_direction_os"); /*Workbench Next*/
 
 GPU_SHADER_CREATE_INFO(workbench_shadow_common)
     .vertex_in(0, Type::VEC3, "pos")
@@ -31,7 +32,8 @@ GPU_SHADER_CREATE_INFO(workbench_next_shadow_common)
     .vertex_out(workbench_shadow_iface)
     .define("WORKBENCH_NEXT")
     .uniform_buf(1, "ShadowPassData", "pass_data")
-    .push_constant(Type::VEC3, "lightDirection")
+    //.push_constant(Type::VEC3, "lightDirection")
+    .define("lightDirection", "vData[0].light_direction_os")
     .typedef_source("workbench_shader_shared.h")
     .additional_info("draw_view")
     .additional_info("draw_modelmat_new")

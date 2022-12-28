@@ -420,31 +420,18 @@ void ShadowPass::object_sync(Manager &manager,
 
   PassType fail_type = force_fail_pass ? ForcedFail : Fail;
 
-  /* TODO(Miguel Pozo): Compute on the visibility compute shader ? */
-  float3 light_direction_os = float4x4(ob->world_to_object).ref_3x3() *
-                              pass_data_.light_direction_ws;
-
   /* Unless we force the Fail Method we add draw commands to both methods,
    * then the visibility compute shader selects the one needed */
 
+  ResourceHandle handle = manager.resource_handle(ob_ref);
+
   if (!force_fail_pass) {
     PassMain::Sub &ps = *get_pass_ptr(Pass, is_manifold);
-    ps.push_constant("lightDirection", light_direction_os);
-    ResourceHandle handle = manager.resource_handle(ob_ref);
     ps.draw(geom_shadow, handle);
   }
-  {
-    PassMain::Sub &ps = *get_pass_ptr(fail_type, is_manifold, true);
-    ps.push_constant("lightDirection", light_direction_os);
-    ResourceHandle handle = manager.resource_handle(ob_ref);
-    ps.draw(DRW_cache_object_surface_get(ob), handle);
-  }
-  {
-    PassMain::Sub &ps = *get_pass_ptr(fail_type, is_manifold, false);
-    ps.push_constant("lightDirection", light_direction_os);
-    ResourceHandle handle = manager.resource_handle(ob_ref);
-    ps.draw(geom_shadow, handle);
-  }
+
+  get_pass_ptr(fail_type, is_manifold, true)->draw(DRW_cache_object_surface_get(ob), handle);
+  get_pass_ptr(fail_type, is_manifold, false)->draw(geom_shadow, handle);
 }
 
 void ShadowPass::draw(Manager &manager,
