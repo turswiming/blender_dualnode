@@ -50,12 +50,13 @@ void MeshPass::init_subpasses(ePipelineType pipeline,
   }
 }
 
-PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
-                                      ::Image *image /* = nullptr */,
-                                      eGPUSamplerState sampler_state /* = GPU_SAMPLER_DEFAULT */,
-                                      ImageUser *iuser /* = nullptr */)
+void MeshPass::draw(ObjectRef &ref,
+                    GPUBatch *batch,
+                    ResourceHandle handle,
+                    ::Image *image /* = nullptr */,
+                    eGPUSamplerState sampler_state /* = GPU_SAMPLER_DEFAULT */,
+                    ImageUser *iuser /* = nullptr */)
 {
-  /*TODO(Miguel Pozo): For now we assume retrieving a subpass means it's not empty anymore*/
   is_empty_ = false;
 
   eGeometryType geometry_type = geometry_type_from_object(ref.object);
@@ -90,11 +91,12 @@ PassMain::Sub &MeshPass::sub_pass_get(ObjectRef &ref,
         return sub_pass;
       };
 
-      return *texture_subpass_map_.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type),
-                                                    add_cb);
+      texture_subpass_map_.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type), add_cb)
+          ->draw(batch, handle);
     }
   }
-  return *passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)];
+  passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)]->draw(batch,
+                                                                                          handle);
 }
 
 void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)

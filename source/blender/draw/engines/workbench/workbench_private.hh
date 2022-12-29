@@ -175,11 +175,12 @@ class MeshPass : public PassMain {
                       bool clip,
                       ShaderCache &shaders);
 
-  PassMain::Sub &sub_pass_get(
-      ObjectRef &ref,
-      ::Image *image = nullptr,
-      eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT,
-      ImageUser *iuser = nullptr);
+  void draw(ObjectRef &ref,
+            GPUBatch *batch,
+            ResourceHandle handle,
+            ::Image *image = nullptr,
+            eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT,
+            ImageUser *iuser = nullptr);
 };
 
 class OpaquePass {

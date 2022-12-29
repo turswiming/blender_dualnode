@@ -273,7 +273,7 @@ class Instance {
     const bool in_front = (ob_ref.object->dtx & OB_DRAW_IN_FRONT) != 0;
 
     auto draw = [&](MeshPass &pass) {
-      pass.sub_pass_get(ob_ref, image, sampler_state, iuser).draw(batch, handle);
+      pass.draw(ob_ref, batch, handle, image, sampler_state, iuser);
     };
 
     if (scene_state.xray_mode || material.is_transparent()) {
