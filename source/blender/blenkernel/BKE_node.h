@@ -183,8 +183,8 @@ typedef struct bNodeSocketType {
                                   const char *data_path);
   void (*interface_from_socket)(struct bNodeTree *ntree,
                                 struct bNodeSocket *interface_socket,
-                                struct bNode *node,
-                                struct bNodeSocket *sock);
+                                const struct bNode *node,
+                                const struct bNodeSocket *sock);
 
   /* RNA integration */
   ExtensionRNA ext_socket;
@@ -299,12 +299,14 @@ typedef struct bNodeType {
    *                         when it's not just a dummy, that is, if it actually wants to access
    *                         the returned disabled-hint (null-check needed!).
    */
-  bool (*poll)(struct bNodeType *ntype, struct bNodeTree *nodetree, const char **r_disabled_hint);
+  bool (*poll)(const struct bNodeType *ntype,
+               const struct bNodeTree *nodetree,
+               const char **r_disabled_hint);
   /** Can this node be added to a node tree?
    * \param r_disabled_hint: See `poll()`.
    */
-  bool (*poll_instance)(struct bNode *node,
-                        struct bNodeTree *nodetree,
+  bool (*poll_instance)(const struct bNode *node,
+                        const struct bNodeTree *nodetree,
                         const char **r_disabled_hint);
 
   /* optional handling of link insertion */
@@ -563,17 +565,17 @@ struct bNodeSocket *ntreeInsertSocketInterface(struct bNodeTree *ntree,
                                                struct bNodeSocket *next_sock,
                                                const char *name);
 struct bNodeSocket *ntreeAddSocketInterfaceFromSocket(struct bNodeTree *ntree,
-                                                      struct bNode *from_node,
-                                                      struct bNodeSocket *from_sock);
+                                                      const struct bNode *from_node,
+                                                      const struct bNodeSocket *from_sock);
 struct bNodeSocket *ntreeAddSocketInterfaceFromSocketWithName(struct bNodeTree *ntree,
-                                                              struct bNode *from_node,
-                                                              struct bNodeSocket *from_sock,
+                                                              const struct bNode *from_node,
+                                                              const struct bNodeSocket *from_sock,
                                                               const char *idname,
                                                               const char *name);
 struct bNodeSocket *ntreeInsertSocketInterfaceFromSocket(struct bNodeTree *ntree,
                                                          struct bNodeSocket *next_sock,
-                                                         struct bNode *from_node,
-                                                         struct bNodeSocket *from_sock);
+                                                         const struct bNode *from_node,
+                                                         const struct bNodeSocket *from_sock);
 void ntreeRemoveSocketInterface(struct bNodeTree *ntree, struct bNodeSocket *sock);
 
 /** \} */
@@ -841,7 +843,6 @@ struct bNode *nodeGetActivePaintCanvas(struct bNodeTree *ntree);
  */
 bool nodeSupportsActiveFlag(const struct bNode *node, int sub_active);
 
-int nodeSocketIsHidden(const struct bNodeSocket *sock);
 void nodeSetSocketAvailability(struct bNodeTree *ntree,
                                struct bNodeSocket *sock,
                                bool is_available);

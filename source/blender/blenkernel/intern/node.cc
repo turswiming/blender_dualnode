@@ -2369,6 +2369,8 @@ bNodeLink *nodeAddLink(
 {
   BLI_assert(fromnode);
   BLI_assert(tonode);
+  BLI_assert(ntree->all_nodes().contains(fromnode));
+  BLI_assert(ntree->all_nodes().contains(tonode));
 
   bNodeLink *link = nullptr;
   if (fromsock->in_out == SOCK_OUT && tosock->in_out == SOCK_IN) {
@@ -2441,7 +2443,7 @@ void nodeRemSocketLinks(bNodeTree *ntree, bNodeSocket *sock)
 
 bool nodeLinkIsHidden(const bNodeLink *link)
 {
-  return nodeSocketIsHidden(link->fromsock) || nodeSocketIsHidden(link->tosock);
+  return !(link->fromsock->is_visible() && link->tosock->is_visible());
 }
 
 bool nodeLinkIsSelected(const bNodeLink *link)
@@ -3388,16 +3390,16 @@ bNodeSocket *ntreeInsertSocketInterface(bNodeTree *ntree,
 }
 
 bNodeSocket *ntreeAddSocketInterfaceFromSocket(bNodeTree *ntree,
-                                               bNode *from_node,
-                                               bNodeSocket *from_sock)
+                                               const bNode *from_node,
+                                               const bNodeSocket *from_sock)
 {
   return ntreeAddSocketInterfaceFromSocketWithName(
       ntree, from_node, from_sock, from_sock->idname, from_sock->name);
 }
 
 bNodeSocket *ntreeAddSocketInterfaceFromSocketWithName(bNodeTree *ntree,
-                                                       bNode *from_node,
-                                                       bNodeSocket *from_sock,
+                                                       const bNode *from_node,
+                                                       const bNodeSocket *from_sock,
                                                        const char *idname,
                                                        const char *name)
 {
@@ -3413,8 +3415,8 @@ bNodeSocket *ntreeAddSocketInterfaceFromSocketWithName(bNodeTree *ntree,
 
 bNodeSocket *ntreeInsertSocketInterfaceFromSocket(bNodeTree *ntree,
                                                   bNodeSocket *next_sock,
-                                                  bNode *from_node,
-                                                  bNodeSocket *from_sock)
+                                                  const bNode *from_node,
+                                                  const bNodeSocket *from_sock)
 {
   bNodeSocket *iosock = ntreeInsertSocketInterface(
       ntree,
@@ -3553,10 +3555,7 @@ void nodeSetActive(bNodeTree *ntree, bNode *node)
   node->flag |= flags_to_set;
 }
 
-int nodeSocketIsHidden(const bNodeSocket *sock)
-{
-  return ((sock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0);
-}
+
 
 void nodeSetSocketAvailability(bNodeTree *ntree, bNodeSocket *sock, bool is_available)
 {
@@ -4032,14 +4031,16 @@ static void node_type_base_defaults(bNodeType *ntype)
 }
 
 /* allow this node for any tree type */
-static bool node_poll_default(bNodeType * /*ntype*/,
-                              bNodeTree * /*ntree*/,
+static bool node_poll_default(const bNodeType * /*ntype*/,
+                              const bNodeTree * /*ntree*/,
                               const char ** /*disabled_hint*/)
 {
   return true;
 }
 
-static bool node_poll_instance_default(bNode *node, bNodeTree *ntree, const char **disabled_hint)
+static bool node_poll_instance_default(const bNode *node,
+                                       const bNodeTree *ntree,
+                                       const char **disabled_hint)
 {
   return node->typeinfo->poll(node->typeinfo, ntree, disabled_hint);
 }

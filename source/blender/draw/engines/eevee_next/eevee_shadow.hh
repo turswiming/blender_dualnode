@@ -280,7 +280,7 @@ class ShadowModule {
    * \{ */
 
   /** Multi-View containing a maximum of 64 view to be rendered with the shadow pipeline. */
-  View shadow_multi_view_ = {"ShadowMultiView", 64};
+  View shadow_multi_view_ = {"ShadowMultiView", 64, true};
   /** Tile to physical page mapping. This is an array texture with one layer per view. */
   Texture render_map_tx_ = {"ShadowRenderMap",
                             GPU_R32UI,

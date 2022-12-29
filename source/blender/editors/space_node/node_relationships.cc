@@ -172,11 +172,11 @@ static void pick_input_link_by_link_intersect(const bContext &C,
 
 static bool socket_is_available(bNodeTree * /*ntree*/, bNodeSocket *sock, const bool allow_used)
 {
-  if (nodeSocketIsHidden(sock)) {
+  if (!sock->is_visible()) {
     return false;
   }
 
-  if (!allow_used && (sock->flag & SOCK_IN_USE)) {
+  if (!allow_used && (sock->flag & SOCK_IS_LINKED)) {
     /* Multi input sockets are available (even if used). */
     if (!(sock->flag & SOCK_MULTI_INPUT)) {
       return false;
@@ -424,7 +424,7 @@ namespace viewer_linking {
 /* Depending on the node tree type, different socket types are supported by viewer nodes. */
 static bool socket_can_be_viewed(const bNodeSocket &socket)
 {
-  if (nodeSocketIsHidden(&socket)) {
+  if (!socket.is_visible()) {
     return false;
   }
   if (STREQ(socket.idname, "NodeSocketVirtual")) {
@@ -1261,6 +1261,7 @@ static int node_make_link_exec(bContext *C, wmOperator *op)
 {
   Main &bmain = *CTX_data_main(C);
   SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &node_tree = *snode.edittree;
   const bool replace = RNA_boolean_get(op->ptr, "replace");
 
   ED_preview_kill_jobs(CTX_wm_manager(C), &bmain);
@@ -1268,10 +1269,10 @@ static int node_make_link_exec(bContext *C, wmOperator *op)
   snode_autoconnect(snode, true, replace);
 
   /* deselect sockets after linking */
-  node_deselect_all_input_sockets(snode, false);
-  node_deselect_all_output_sockets(snode, false);
+  node_deselect_all_input_sockets(node_tree, false);
+  node_deselect_all_output_sockets(node_tree, false);
 
-  ED_node_tree_propagate_change(C, &bmain, snode.edittree);
+  ED_node_tree_propagate_change(C, &bmain, &node_tree);
 
   return OPERATOR_FINISHED;
 }
@@ -2075,7 +2076,7 @@ bNodeSocket *get_main_socket(bNodeTree &ntree, bNode &node, eNodeSocketInOut in_
     int index;
     LISTBASE_FOREACH_INDEX (bNodeSocket *, socket, sockets, index) {
       const nodes::SocketDeclaration &socket_decl = *socket_decls[index];
-      if (nodeSocketIsHidden(socket)) {
+      if (!socket->is_visible()) {
         continue;
       }
       if (socket_decl.is_default_link_socket()) {
@@ -2096,7 +2097,7 @@ bNodeSocket *get_main_socket(bNodeTree &ntree, bNode &node, eNodeSocketInOut in_
   /* try all priorities, starting from 'highest' */
   for (int priority = maxpriority; priority >= 0; priority--) {
     LISTBASE_FOREACH (bNodeSocket *, sock, sockets) {
-      if (!nodeSocketIsHidden(sock) && priority == get_main_socket_priority(sock)) {
+      if (!!sock->is_visible() && priority == get_main_socket_priority(sock)) {
         return sock;
       }
     }
