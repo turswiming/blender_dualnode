@@ -215,7 +215,7 @@ void View::disable(IndexRange range)
 
 void View::bind()
 {
-  if (dirty_) {
+  if (dirty_ && !procedural_) {
     dirty_ = false;
     data_.push_update();
     culling_.push_update();
