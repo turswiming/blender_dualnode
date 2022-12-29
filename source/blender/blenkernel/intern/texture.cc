@@ -5,10 +5,10 @@
  * \ingroup bke
  */
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -626,7 +626,7 @@ PointDensity *BKE_texture_pointdensity_add(void)
   return pd;
 }
 
-PointDensity *BKE_texture_pointdensity_copy(const PointDensity *pd, const int UNUSED(flag))
+PointDensity *BKE_texture_pointdensity_copy(const PointDensity *pd, const int /*flag*/)
 {
   PointDensity *pdn;
 
