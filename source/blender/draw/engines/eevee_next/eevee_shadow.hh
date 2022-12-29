@@ -247,8 +247,8 @@ class ShadowModule {
   StorageArrayBuffer<uint, SHADOW_MAX_PAGE> clear_page_buf_ = {"clear_page_buf"};
 
   int3 dispatch_depth_scan_size_;
-  float tilemap_pixel_radius_;
-  float screen_pixel_radius_inv_;
+  /* Ratio between tilemap pixel world "radius" and film pixel world "radius". */
+  float tilemap_projection_ratio_;
 
   /** \} */
 
@@ -338,6 +338,11 @@ class ShadowModule {
  private:
   void remove_unused();
   void debug_page_map_call(DRWPass *pass);
+
+  /** Compute approximate screen pixel space radius. */
+  float screen_pixel_radius(const View &view, const int2 &extent);
+  /** Compute approximate punctual shadow pixel world space radius, 1 unit away of the light. */
+  float tilemap_pixel_radius();
 };
 
 /** \} */

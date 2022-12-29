@@ -478,8 +478,6 @@ void ShadowModule::init()
   atlas_tx_.filter_mode(false);
 
   render_map_tx_.ensure_mip_views();
-
-  tilemap_pixel_radius_ = M_SQRT2 * 2.0f / (SHADOW_TILEMAP_RES * shadow_page_size_);
 }
 
 void ShadowModule::begin_sync()
@@ -501,8 +499,7 @@ void ShadowModule::begin_sync()
       sub.bind_ssbo("tilemaps_buf", &tilemap_pool.tilemaps_data);
       sub.bind_ssbo("tiles_buf", &tilemap_pool.tiles_data);
       sub.bind_texture("depth_tx", &render_buffers.depth_tx);
-      sub.push_constant("tilemap_pixel_radius", &tilemap_pixel_radius_);
-      sub.push_constant("screen_pixel_radius_inv", &screen_pixel_radius_inv_);
+      sub.push_constant("tilemap_projection_ratio", &tilemap_projection_ratio_);
       inst_.lights.bind_resources(&sub);
       sub.dispatch(&dispatch_depth_scan_size_);
     }
@@ -518,8 +515,7 @@ void ShadowModule::begin_sync()
       sub.bind_ssbo("tilemaps_buf", &tilemap_pool.tilemaps_data);
       sub.bind_ssbo("tiles_buf", &tilemap_pool.tiles_data);
       sub.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
-      sub.push_constant("tilemap_pixel_radius", &tilemap_pixel_radius_);
-      sub.push_constant("screen_pixel_radius_inv", &screen_pixel_radius_inv_);
+      sub.push_constant("tilemap_projection_ratio", &tilemap_projection_ratio_);
       inst_.lights.bind_resources(&sub);
 
       box_batch_ = DRW_cache_cube_get();
@@ -801,19 +797,30 @@ void ShadowModule::debug_end_sync()
 }
 
 /* Compute approximate screen pixel density (as world space radius). */
-static float screen_pixel_radius(const View &view, const int2 &extent)
+float ShadowModule::screen_pixel_radius(const View &view, const int2 &extent)
 {
   float min_dim = float(min_ii(extent.x, extent.y));
   float3 p0 = float3(-1.0f, -1.0f, 0.0f);
   float3 p1 = float3(float2(min_dim / extent) * 2.0f - 1.0f, 0.0f);
-  mul_project_m4_v3(view.viewinv().ptr(), p0);
-  mul_project_m4_v3(view.viewinv().ptr(), p1);
+  mul_project_m4_v3(view.wininv().ptr(), p0);
+  mul_project_m4_v3(view.wininv().ptr(), p1);
   /* Compute radius at unit plane from the camera. This is NOT the perspective division. */
   if (view.is_persp()) {
     p0 = p0 / p0.z;
     p1 = p1 / p1.z;
   }
   return math::distance(p0, p1) / min_dim;
+}
+
+/* Compute approximate screen pixel world space radius at 1 unit away of the light. */
+float ShadowModule::tilemap_pixel_radius()
+{
+  /* This is a really rough approximation. Ideally, the cube-map distortion should be taken into
+   * account per pixel. But this would make this pre-computation impossible.
+   * So for now compute for the center of the cube-map. */
+  const float cubeface_diagonal = M_SQRT2 * 2.0f;
+  const float pixel_count = SHADOW_TILEMAP_RES * shadow_page_size_;
+  return cubeface_diagonal / pixel_count;
 }
 
 /* Update all shadow regions visible inside the view.
@@ -826,7 +833,9 @@ void ShadowModule::set_view(View &view)
 
   int3 target_size = inst_.render_buffers.depth_tx.size();
   dispatch_depth_scan_size_ = math::divide_ceil(target_size, int3(SHADOW_DEPTH_SCAN_GROUP_SIZE));
-  screen_pixel_radius_inv_ = 1.0f / screen_pixel_radius(view, int2(target_size));
+
+  tilemap_projection_ratio_ = tilemap_pixel_radius() /
+                              screen_pixel_radius(view, int2(target_size));
 
   usage_tag_fb.ensure(int2(target_size));
   render_fb_.ensure(int2(SHADOW_TILEMAP_RES * shadow_page_size_));

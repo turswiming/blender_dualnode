@@ -48,14 +48,21 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     if (dist_to_light > light.influence_radius_max) {
       return;
     }
-    /* How much a shadow map pixel covers a final image pixel. */
-    float footprint_ratio = dist_to_light * (tilemap_pixel_radius * screen_pixel_radius_inv);
+    /* How much a shadow map pixel covers a final image pixel.
+     * We project a shadow map pixel (as a sphere for simplicity) to the receiver plane.
+     * We then reproject this sphere onto the camera screen and compare it to the film pixel size.
+     * This gives a good approximation of what LOD to select to get a somewhat uniform shadow map
+     * resolution in screen space. */
+    float footprint_ratio = dist_to_light;
     /* Project the radius to the screen. 1 unit away from the camera the same way
      * pixel_world_radius_inv was computed. Not needed in orthographic mode. */
     bool is_persp = (ProjectionMatrix[3][3] == 0.0);
     if (is_persp) {
       footprint_ratio /= dist_to_cam;
     }
+    /* Apply resolution ratio. */
+    footprint_ratio *= tilemap_projection_ratio;
+
     lod = int(ceil(-log2(footprint_ratio)));
     lod = clamp(lod, 0, SHADOW_TILEMAP_LOD);
 
