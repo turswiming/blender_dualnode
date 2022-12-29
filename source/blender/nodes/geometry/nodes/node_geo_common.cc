@@ -28,11 +28,11 @@ static void node_declare(const bNodeTree &node_tree,
   }
 
   const FieldInferencingInterface &field_interface = *group->runtime->field_inferencing_interface;
-  for (const int i : r_declaration.inputs_.index_range()) {
-    r_declaration.inputs_[i]->input_field_type_ = field_interface.inputs[i];
+  for (const int i : r_declaration.inputs.index_range()) {
+    r_declaration.inputs[i]->input_field_type = field_interface.inputs[i];
   }
-  for (const int i : r_declaration.outputs_.index_range()) {
-    r_declaration.outputs_[i]->output_field_dependency_ = field_interface.outputs[i];
+  for (const int i : r_declaration.outputs.index_range()) {
+    r_declaration.outputs[i]->output_field_dependency = field_interface.outputs[i];
   }
 }
 

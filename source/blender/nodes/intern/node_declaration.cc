@@ -18,8 +18,8 @@ void build_node_declaration_dynamic(const bNodeTree &node_tree,
                                     const bNode &node,
                                     NodeDeclaration &r_declaration)
 {
-  r_declaration.inputs_.clear();
-  r_declaration.outputs_.clear();
+  r_declaration.inputs.clear();
+  r_declaration.outputs.clear();
   node.typeinfo->declare_dynamic(node_tree, node, r_declaration);
 }
 
