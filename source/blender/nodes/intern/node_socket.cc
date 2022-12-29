@@ -186,7 +186,7 @@ static void refresh_socket_list(bNodeTree &ntree,
     bNodeSocket *old_socket_with_same_identifier = nullptr;
     for (const int i : old_sockets.index_range()) {
       bNodeSocket &old_socket = *old_sockets[i];
-      if (old_socket.identifier == socket_decl->identifier()) {
+      if (old_socket.identifier == socket_decl->identifier) {
         old_sockets.remove_and_reorder(i);
         old_socket_with_same_identifier = &old_socket;
         break;
@@ -198,7 +198,7 @@ static void refresh_socket_list(bNodeTree &ntree,
       new_socket = &socket_decl->build(ntree, node);
     }
     else {
-      STRNCPY(old_socket_with_same_identifier->name, socket_decl->name().c_str());
+      STRNCPY(old_socket_with_same_identifier->name, socket_decl->name.c_str());
       if (socket_decl->matches(*old_socket_with_same_identifier)) {
         /* The existing socket matches exactly, just use it. */
         new_socket = old_socket_with_same_identifier;
@@ -210,7 +210,7 @@ static void refresh_socket_list(bNodeTree &ntree,
 
         if (new_socket == old_socket_with_same_identifier) {
           /* The existing socket has been updated, set the correct identifier again. */
-          STRNCPY(new_socket->identifier, socket_decl->identifier().c_str());
+          STRNCPY(new_socket->identifier, socket_decl->identifier.c_str());
         }
         else {
           /* Move links to new socket with same identifier. */
@@ -255,8 +255,8 @@ static void refresh_node(bNodeTree &ntree,
     return;
   }
   if (!node_decl.matches(node)) {
-    refresh_socket_list(ntree, node, node.inputs, node_decl.inputs(), do_id_user);
-    refresh_socket_list(ntree, node, node.outputs, node_decl.outputs(), do_id_user);
+    refresh_socket_list(ntree, node, node.inputs, node_decl.inputs, do_id_user);
+    refresh_socket_list(ntree, node, node.outputs, node_decl.outputs, do_id_user);
   }
   nodeSocketDeclarationsUpdate(&node);
 }
