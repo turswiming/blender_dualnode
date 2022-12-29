@@ -8,8 +8,7 @@
 
 void main()
 {
-  ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
-  vec2 uv = (vec2(texel) + 0.5) / vec2(textureSize(normal_tx, 0));
+  vec2 uv = uvcoordsvar.st;
   /* Normal and Incident vector are in viewspace. Lighting is evaluated in viewspace. */
   vec3 V = get_view_vector_from_screen_uv(uv);
   vec3 N = workbench_normal_decode(texture(normal_tx, uv));
@@ -78,6 +77,9 @@ void main()
 #endif
 
   if (color != world_data.background_color) {
-    imageStore(out_color_img, texel, color);
+    fragColor = color;
+  }
+  else {
+    discard;
   }
 }

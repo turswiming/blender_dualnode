@@ -119,6 +119,7 @@ void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
       ePipelineType::OPAQUE, scene_state.lighting_type, clip, resources.shader_cache);
 
   deferred_ps_.init();
+  deferred_ps_.state_set(DRW_STATE_WRITE_COLOR);
   deferred_ps_.shader_set(resources.shader_cache.resolve_shader_get(ePipelineType::OPAQUE,
                                                                     scene_state.lighting_type,
                                                                     scene_state.draw_cavity,
@@ -130,10 +131,8 @@ void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
   deferred_ps_.bind_texture("material_tx", &gbuffer_material_tx);
   deferred_ps_.bind_texture("depth_tx", &resources.depth_tx);
   deferred_ps_.bind_texture("stencil_tx", &deferred_ps_stencil_tx);
-  deferred_ps_.bind_image("out_color_img", &resources.color_tx);
   resources.cavity.setup_resolve_pass(deferred_ps_, resources);
-  deferred_ps_.dispatch(math::divide_ceil(scene_state.resolution, int2(WB_RESOLVE_GROUP_SIZE)));
-  deferred_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
+  deferred_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
 void OpaquePass::draw(Manager &manager,
@@ -208,6 +207,8 @@ void OpaquePass::draw(Manager &manager,
                       !gbuffer_in_front_ps_.is_empty());
   }
 
+  opaque_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
+  opaque_fb.bind();
   manager.submit(deferred_ps_, view);
 
   if (shadow_pass && !needs_stencil_copy) {

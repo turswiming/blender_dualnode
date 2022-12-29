@@ -47,17 +47,16 @@ GPU_SHADER_CREATE_INFO(workbench_composite_flat)
  * \{ */
 
 GPU_SHADER_CREATE_INFO(workbench_next_composite)
-    .local_group_size(8, 8)
     .sampler(3, ImageType::FLOAT_2D, "normal_tx")
     .sampler(4, ImageType::FLOAT_2D, "material_tx")
     .sampler(5, ImageType::DEPTH_2D, "depth_tx")
     .sampler(6, ImageType::UINT_2D, "stencil_tx")
     .uniform_buf(WB_WORLD_SLOT, "WorldData", "world_data")
-    .push_constant(Type::BOOL, "forceShadowing")
-    .image(0, GPU_RGBA16F, Qualifier::WRITE, ImageType::FLOAT_2D, "out_color_img")
     .typedef_source("workbench_shader_shared.h")
-    .compute_source("workbench_composite_comp.glsl")
-    .additional_info("draw_view");
+    .push_constant(Type::BOOL, "forceShadowing")
+    .fragment_out(0, Type::VEC4, "fragColor")
+    .fragment_source("workbench_next_composite_frag.glsl")
+    .additional_info("draw_fullscreen", "draw_view");
 
 // Lighting
 
