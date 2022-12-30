@@ -82,15 +82,6 @@ inline void ObjectInfos::sync(const blender::draw::ObjectRef ref, bool is_active
   SET_FLAG_FROM_TEST(
       flag, ref.object->transflag & OB_NEG_SCALE, eObjectInfoFlag::OBJECT_NEGATIVE_SCALE);
 
-  if (ref.dupli_object == nullptr) {
-    /* TODO(fclem): this is rather costly to do at draw time. Maybe we can
-     * put it in ob->runtime and make depsgraph ensure it is up to date. */
-    random = BLI_hash_int_2d(BLI_hash_string(ref.object->id.name + 2), 0) *
-             (1.0f / (float)0xFFFFFFFF);
-  }
-  else {
-    random = ref.dupli_object->random_id * (1.0f / (float)0xFFFFFFFF);
-  }
   /* Default values. Set if needed. */
   random = 0.0f;
 
