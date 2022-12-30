@@ -80,7 +80,7 @@ static void APIENTRY debug_callback(GLenum /*source*/,
   const bool use_color = CLG_color_support_get(&LOG);
 
   if (ELEM(severity, GL_DEBUG_SEVERITY_LOW, GL_DEBUG_SEVERITY_NOTIFICATION)) {
-    if ((LOG.type->flag & CLG_FLAG_USE) && (LOG.type->level >= CLG_SEVERITY_INFO)) {
+    if ((LOG.type->flag & CLG_FLAG_USE) && (LOG.type->level <= CLG_SEVERITY_INFO)) {
       const char *format = use_color ? "\033[2m%s\033[0m" : "%s";
       CLG_logf(LOG.type, CLG_SEVERITY_INFO, "Notification", "", format, message);
     }
@@ -131,6 +131,10 @@ static void APIENTRY debug_callback(GLenum /*source*/,
 
 void init_gl_callbacks()
 {
+  if (G.log.level >= CLG_SEVERITY_LEN) {
+    return;
+  }
+
   CLOG_ENSURE(&LOG);
 
   char msg[256] = "";
