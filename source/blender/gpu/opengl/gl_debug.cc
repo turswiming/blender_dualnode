@@ -366,6 +366,9 @@ namespace blender::gpu {
  * Useful for debugging through render-doc. This makes all the API calls grouped into "passes".
  * \{ */
 
+#define PROFILE_DEBUG_GROUPS 0
+#define MAX_DEBUG_GROUPS_STACK_DEPTH 4
+
 void GLContext::debug_group_begin(const char *name, int index)
 {
   if ((G.debug & G_DEBUG_GPU) &&
@@ -373,6 +376,23 @@ void GLContext::debug_group_begin(const char *name, int index)
     /* Add 10 to avoid collision with other indices from other possible callback layers. */
     index += 10;
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, index, -1, name);
+
+#if PROFILE_DEBUG_GROUPS
+    if (frame_timings.is_empty()) {
+      frame_timings.append({});
+    }
+
+    TimeQuery query = {};
+    query.finished = false;
+    query.name = name;
+    query.stack_depth = debug_stack.size();
+    glGetInteger64v(GL_TIMESTAMP, &query.cpu_start);
+
+    /* Use GL_TIMESTAMP instead of GL_ELAPSED_TIME to support nested debug groups */
+    glGenQueries(2, query.handles);
+    glQueryCounter(query.handles[0], GL_TIMESTAMP);
+    frame_timings.last().queries.append(query);
+#endif
   }
 }
 
@@ -381,7 +401,94 @@ void GLContext::debug_group_end()
   if ((G.debug & G_DEBUG_GPU) &&
       (epoxy_gl_version() >= 43 || epoxy_has_gl_extension("GL_KHR_debug"))) {
     glPopDebugGroup();
+
+#if PROFILE_DEBUG_GROUPS
+    Vector<TimeQuery> &queries = frame_timings.last().queries;
+    for (int i = queries.size() - 1; i >= 0; i--) {
+      TimeQuery &query = queries[i];
+      if (!query.finished) {
+        glQueryCounter(query.handles[1], GL_TIMESTAMP);
+        query.finished = true;
+        int64_t cpu_end;
+        glGetInteger64v(GL_TIMESTAMP, &cpu_end);
+        query.cpu_time = (cpu_end - query.cpu_start) / 1000000.0;
+        break;
+      }
+      BLI_assert(i != 0);
+    }
+#endif
   }
+}
+
+void GLContext::process_frame_timings()
+{
+#if PROFILE_DEBUG_GROUPS
+  if (G.debug & G_DEBUG_GPU) {
+    for (int frame_i = 0; frame_i < frame_timings.size(); frame_i++) {
+      Vector<TimeQuery> &queries = frame_timings[frame_i].queries;
+      if (queries.is_empty() || !queries.last().finished /* Group begin/end mismatch */) {
+        frame_timings.remove(frame_i--);
+        continue;
+      }
+
+      GLint ready = 0;
+      glGetQueryObjectiv(queries.last().handles[1], GL_QUERY_RESULT_AVAILABLE, &ready);
+      if (!ready) {
+        break;
+      }
+
+      std::stringstream result;
+      result << "\n";
+      // clang-format off
+      result << " Group                          | GPU  | CPU  | Latency\n";
+      result << "--------------------------------|------|------|--------\n";
+      result << " Total                          | ";
+      // clang-format on
+      GLuint64 begin_timestamp = 0;
+      GLuint64 end_timestamp = 0;
+      glGetQueryObjectui64v(queries.first().handles[0], GL_QUERY_RESULT, &begin_timestamp);
+      glGetQueryObjectui64v(queries.last().handles[1], GL_QUERY_RESULT, &end_timestamp);
+
+      float gpu_total_time = (end_timestamp - begin_timestamp) / 1000000.0;
+      result << std::to_string(gpu_total_time).substr(0, 4) << " | ";
+
+      float cpu_total_time = (queries.last().cpu_start - queries.first().cpu_start) / 1000000.0 +
+                             queries.last().cpu_time;
+      result << std::to_string(cpu_total_time).substr(0, 4) << " | \n";
+
+      for (TimeQuery &query : queries) {
+        if (query.stack_depth >= MAX_DEBUG_GROUPS_STACK_DEPTH) {
+          glDeleteQueries(2, query.handles);
+          continue;
+        }
+        GLuint64 begin_timestamp = 0;
+        GLuint64 end_timestamp = 0;
+        glGetQueryObjectui64v(query.handles[0], GL_QUERY_RESULT, &begin_timestamp);
+        glGetQueryObjectui64v(query.handles[1], GL_QUERY_RESULT, &end_timestamp);
+        glDeleteQueries(2, query.handles);
+
+        result << std::string(query.stack_depth, '.');
+        result << " " << query.name
+               << std::string(max_ii(0, 30 - query.stack_depth - query.name.length()), ' ')
+               << " | ";
+
+        float gpu_time = (end_timestamp - begin_timestamp) / 1000000.0;
+
+        result << std::to_string(gpu_time).substr(0, 4) << " | ";
+        result << std::to_string(query.cpu_time).substr(0, 4) << " | ";
+        result << std::to_string((begin_timestamp - query.cpu_start) / 1000000.0).substr(0, 4)
+               << "\n";
+      }
+
+      std::string print = result.str();
+      printf("%s", print.c_str());
+
+      frame_timings.remove(frame_i--);
+    }
+
+    frame_timings.append({});
+  }
+#endif
 }
 
 /** \} */

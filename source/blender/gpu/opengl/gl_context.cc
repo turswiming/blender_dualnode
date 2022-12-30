@@ -141,6 +141,8 @@ void GLContext::activate()
   bound_ubo_slots = 0;
 
   immActivate();
+
+  process_frame_timings();
 }
 
 void GLContext::deactivate()

@@ -1007,8 +1007,10 @@ void DRW_cache_free_old_batches(Main *bmain)
 
 static void drw_engines_init(void)
 {
+  DRW_stats_group_start("drw_engines.engines_init");
   DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
     PROFILE_START(stime);
+    DRW_stats_group_start(engine->idname);
 
     const DrawEngineDataSize *data_size = engine->vedata_size;
     memset(data->psl->passes, 0, sizeof(*data->psl->passes) * data_size->psl_len);
@@ -1017,15 +1019,19 @@ static void drw_engines_init(void)
       engine->engine_init(data);
     }
 
+    DRW_stats_group_end();
     PROFILE_END_UPDATE(data->init_time, stime);
   }
+  DRW_stats_group_end();
 }
 
 static void drw_engines_cache_init(void)
 {
+  DRW_stats_group_start("drw_engines.cache_init");
   DRW_manager_begin_sync();
 
   DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
+    DRW_stats_group_start(engine->idname);
     if (data->text_draw_cache) {
       DRW_text_cache_destroy(data->text_draw_cache);
       data->text_draw_cache = NULL;
@@ -1037,7 +1043,9 @@ static void drw_engines_cache_init(void)
     if (engine->cache_init) {
       engine->cache_init(data);
     }
+    DRW_stats_group_end();
   }
+  DRW_stats_group_end();
 }
 
 static void drw_engines_world_update(Scene *scene)
@@ -1045,12 +1053,16 @@ static void drw_engines_world_update(Scene *scene)
   if (scene->world == NULL) {
     return;
   }
+  DRW_stats_group_start("drw_engines.world_update");
 
   DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
     if (engine->id_update) {
+      DRW_stats_group_start(engine->idname);
       engine->id_update(data, &scene->world->id);
+      DRW_stats_group_end();
     }
   }
+  DRW_stats_group_end();
 }
 
 static void drw_engines_cache_populate(Object *ob)
@@ -1091,17 +1103,22 @@ static void drw_engines_cache_populate(Object *ob)
 
 static void drw_engines_cache_finish(void)
 {
+  DRW_stats_group_start("drw_engines.cache_finish");
   DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
     if (engine->cache_finish) {
+      DRW_stats_group_start(engine->idname);
       engine->cache_finish(data);
+      DRW_stats_group_end();
     }
   }
 
   DRW_manager_end_sync();
+  DRW_stats_group_end();
 }
 
 static void drw_engines_draw_scene(void)
 {
+  DRW_stats_group_start("drw_engines.draw_scene");
   DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
     PROFILE_START(stime);
     if (engine->draw_scene) {
@@ -1117,6 +1134,7 @@ static void drw_engines_draw_scene(void)
   }
   /* Reset state after drawing */
   DRW_state_reset();
+  DRW_stats_group_end();
 }
 
 static void drw_engines_draw_text(void)
@@ -1678,6 +1696,7 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
   drw_context_state_init();
 
   drw_manager_init(&DST, viewport, NULL);
+
   DRW_viewport_colormanagement_set(viewport);
 
   const int object_type_exclude_viewport = v3d->object_type_exclude_viewport;
@@ -1716,6 +1735,8 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
 
     /* Only iterate over objects for internal engines or when overlays are enabled */
     if (do_populate_loop) {
+      DRW_stats_group_start("drw_render.populate_loop");
+
       DST.dupli_origin = NULL;
       DST.dupli_origin_data = NULL;
       DEGObjectIterSettings deg_iter_settings = {0};
@@ -1737,6 +1758,8 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
         drw_engines_cache_populate(ob);
       }
       DEG_OBJECT_ITER_END;
+
+      DRW_stats_group_end();
     }
 
     drw_duplidata_free();

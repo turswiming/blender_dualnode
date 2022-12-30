@@ -95,6 +95,21 @@ class GLContext : public Context {
   /** #GLBackend owns this data. */
   GLSharedOrphanLists &shared_orphan_list_;
 
+  struct TimeQuery {
+    std::string name;
+    GLuint handles[2];
+    int stack_depth;
+    bool finished;
+    int64_t cpu_start;
+    float cpu_time;
+  };
+  struct FrameQueries {
+    Vector<TimeQuery> queries;
+  };
+  Vector<FrameQueries> frame_timings;
+
+  void process_frame_timings();
+
  public:
   GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list);
   ~GLContext();
