@@ -385,7 +385,9 @@ void GLTexture::clear(eGPUDataFormat data_format, const void *data)
 {
   BLI_assert(validate_data_format(format_, data_format));
 
-  if (GLContext::clear_texture_support) {
+  /* ClearTexImage can be up to 10 times slower */
+  const bool USE_CLEAR_TEX_IMAGE = false;
+  if (USE_CLEAR_TEX_IMAGE && GLContext::clear_texture_support) {
     int mip = 0;
     GLenum gl_format = to_gl_data_format(format_);
     GLenum gl_type = to_gl(data_format);
