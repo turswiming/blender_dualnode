@@ -552,7 +552,7 @@ static bool paint_stroke_use_scene_spacing(Brush *brush, ePaintMode mode)
   return false;
 }
 
-static bool paint_tool_raycast_original(Brush *brush, ePaintMode UNUSED(mode))
+static bool paint_tool_raycast_original(Brush *brush, ePaintMode /*mode*/)
 {
   return brush->flag & (BRUSH_ANCHORED | BRUSH_DRAG_DOT);
 }
@@ -1329,7 +1329,7 @@ PaintStroke *paint_stroke_new(bContext *C,
   return stroke;
 }
 
-void paint_stroke_free(bContext *C, wmOperator *UNUSED(op), PaintStroke *stroke)
+void paint_stroke_free(bContext *C, wmOperator * /*op*/, PaintStroke *stroke)
 {
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
   if (rv3d) {
