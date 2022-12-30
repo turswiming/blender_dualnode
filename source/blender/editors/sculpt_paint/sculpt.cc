@@ -2660,12 +2660,6 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
       if (SCULPT_has_colors(ss)) {
         float color[4] = {point_3d[0], point_3d[1], 0.0f, 1.0f};
 
-#  if 0
-        for (int i = 0; i < 3; i++) {
-          color[i] = tile_point[i] - std::floor(tile_point[i]);
-        }
-#  endif
-
         mul_v3_fl(color, 0.25f / ss->cache->initial_radius);
         color[0] -= floorf(color[0]);
         color[1] -= floorf(color[1]);

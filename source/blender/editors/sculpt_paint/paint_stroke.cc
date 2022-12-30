@@ -49,7 +49,7 @@
 #include <math.h>
 
 //#define DEBUG_TIME
-#define DRAW_DEBUG_VIS
+//#define DRAW_DEBUG_VIS
 
 using blender::float2;
 using blender::float3;
@@ -271,34 +271,20 @@ static void paint_brush_make_spline(bContext *C, PaintStroke *stroke)
 
   float tmp1[2];
   float tmp2[2];
-#if 1
+
   sub_v2_v2v2(tmp1, d, a);
   sub_v2_v2v2(tmp2, a, b);
   interp_v2_v2v2(b, tmp1, tmp2, 0.5f);
   mul_v2_fl(b, scale);
-#else
-  zero_v2(b);
-#endif
 
   add_v2_v2(b, a);
 
-#if 1
   sub_v2_v2v2(tmp1, a, d);
   sub_v2_v2v2(tmp2, d, c);
   interp_v2_v2v2(c, tmp1, tmp2, 0.5f);
   mul_v2_fl(c, scale);
-#else
-  zero_v2(c);
-#endif
 
   add_v2_v2(c, d);
-#if 0
-    printf("\n");
-    printf("a: %.2f: %.2f\n", a[0], a[1]);
-    printf("b: %.2f: %.2f\n", b[0], b[1]);
-    printf("c: %.2f: %.2f\n", c[0], c[1]);
-    printf("d: %.2f: %.2f\n", d[0], d[1]);
-#endif
 
   blender::CubicBezier<float, 2> bez(a, b, c, d);
   bez.update();
@@ -320,7 +306,6 @@ static void paint_brush_make_spline(bContext *C, PaintStroke *stroke)
   }
 }
 
-#ifdef DRAW_DEBUG_VIS
 static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *userdata)
 {
   PaintStroke *stroke = (PaintStroke *)userdata;
@@ -335,6 +320,12 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   if (spline->segments.size() == 0) {
     return;
   }
+
+#ifndef DRAW_DEBUG_VIS
+  if (spline->segments.size() == paint_stroke_max_points(nullptr, stroke)) {
+    return;
+  }
+#endif
 
   GPU_line_smooth(false);
   GPU_depth_test(GPU_DEPTH_NONE);
@@ -352,7 +343,7 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   immBegin(GPU_PRIM_LINE_STRIP, steps);
 
   float s = 0.0f;
-  float ds = 0.999 * spline->length / (steps - 1);
+  float ds = 0.99999f * spline->length / (steps - 1);
 
   for (int i = 0; i < steps; i++, s += ds) {
     float3 co = spline->evaluate(s);
@@ -362,9 +353,10 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   }
   immEnd();
 
-#  if 0  // control points
+/* Control points. */
+#if defined(DRAW_DEBUG_VIS) && 0
   immUniformColor4ub(255, 0, 0, 170);
-  int components = spline->components();
+  int components = spline->order();
 
   immBegin(GPU_PRIM_POINTS, spline->segments.size() * components);
 
@@ -378,9 +370,9 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   }
 
   immEnd();
-#  endif
+#endif
 
-#  if 1  // inflection points
+#if defined(DRAW_DEBUG_VIS) && 1 /* Inflection points. */
   immUniformColor4ub(0, 255, 0, 100);
 
   immBegin(GPU_PRIM_POINTS, spline->inflection_points.size());
@@ -392,44 +384,13 @@ static void paint_brush_cubic_vis(const bContext *C, ARegion *region, void *user
   }
 
   immEnd();
-#  endif
-
-#  if 0
-  s = 0.0f;
-  ds = 0.1f;
-  steps = (int)floorf(spline->length / ds + 0.5f);
-
-  immUniformColor4ub(255, 0, 0, 170);
-  immBegin(GPU_PRIM_POINTS, steps);
-  for (int i = 0; i < steps; i++, s += ds) {
-    float3 co = spline->evaluate(s);
-    mul_v3_m4v3(co, ob->object_to_world, co);
-
-    immVertex3fv(pos, co);
-  }
-
-  immEnd();
-
-  immUniformColor4ub(0, 255, 25, 55);
-  for (int is_points = 0; is_points < 2; is_points++) {
-    immBegin(is_points ? GPU_PRIM_POINTS : GPU_PRIM_LINE_STRIP, stroke->num_points);
-    for (int i = 0; i < stroke->num_points; i++) {
-      int idx = (i + stroke->cur_point) % stroke->num_points;
-      float3 co = stroke->points[idx].location;
-      mul_v3_m4v3(co, ob->object_to_world, co);
-
-      immVertex3fv(pos, co);
-    }
-    immEnd();
-  }
-#  endif
+#endif
 
   immUnbindProgram();
 
   GPU_blend(GPU_BLEND_NONE);
   GPU_line_smooth(false);
 }
-#endif
 
 /*** Cursors ***/
 static void paint_draw_smooth_cursor(bContext *C, int x, int y, void *customdata)
@@ -919,74 +880,80 @@ static void paint_brush_stroke_add_step(
     }
   }
 
-  /* Add to stroke */
-  if (add_step) {
-    PaintStrokePoint *point;
-    PaintStrokePoint temp;
+  paint_stroke_add_point(paint,
+                         stroke,
+                         mval,
+                         mouse_out,
+                         location,
+                         ups->pixel_radius,
+                         pressure,
+                         stroke->pen_flip,
+                         stroke->x_tilt,
+                         stroke->y_tilt);
 
-    int n = 1;
-    int max_points = paint_stroke_max_points(paint, stroke);
-
-    if (stroke->num_points < max_points) {
-      // n = max_points - stroke->num_points;
-    }
-    for (int i = 0; i < n; i++) {
-      paint_stroke_add_point(paint,
-                             stroke,
-                             mval,
-                             mouse_out,
-                             location,
-                             ups->pixel_radius,
-                             pressure,
-                             stroke->pen_flip,
-                             stroke->x_tilt,
-                             stroke->y_tilt);
-      if (stroke->need_roll_mapping) {
-        paint_brush_make_spline(C, stroke);
-      }
-    }
-
-    if (stroke->need_roll_mapping) {
-      if (stroke->spline->segments.size() < paint_stroke_max_points(paint, stroke)) {
-        return;
-      }
-
-      int cur = stroke->cur_point - (paint_stroke_max_points(paint, stroke) >> 1) - 2;
-      cur = (cur + stroke->num_points) % stroke->num_points;
-
-      PaintStrokePoint *p1 = stroke->points + ((cur + stroke->num_points) % stroke->num_points);
-      PaintStrokePoint *p2 = stroke->points +
-                             ((cur - 1 + stroke->num_points) % stroke->num_points);
-
-      point = &temp;
-      temp = *p1;
-
-      interp_v3_v3v3(temp.location, p1->location, p2->location, 0.5f);
-      interp_v2_v2v2(temp.mouse_in, p1->mouse_in, p2->mouse_in, 0.5f);
-      interp_v2_v2v2(temp.mouse_out, p1->mouse_out, p2->mouse_out, 0.5f);
-    }
-    else {
-      point = stroke->points + ((stroke->cur_point - 1 + stroke->num_points) % stroke->num_points);
-    }
-
-    RNA_collection_add(op->ptr, "stroke", &itemptr);
-    RNA_float_set(&itemptr, "size", point->size);
-    RNA_float_set_array(&itemptr, "location", point->location);
-    /* Mouse coordinates modified by the stroke type options. */
-    RNA_float_set_array(&itemptr, "mouse", point->mouse_out);
-    /* Original mouse coordinates. */
-    RNA_float_set_array(&itemptr, "mouse_event", point->mouse_in);
-    RNA_boolean_set(&itemptr, "pen_flip", point->pen_flip);
-    RNA_float_set(&itemptr, "pressure", point->pressure);
-    RNA_float_set(&itemptr, "x_tilt", point->x_tilt);
-    RNA_float_set(&itemptr, "y_tilt", point->y_tilt);
-
-    stroke->update_step(C, op, stroke, &itemptr);
-
-    /* don't record this for now, it takes up a lot of memory when doing long
-     * strokes with small brush size, and operators have register disabled */
-    RNA_collection_clear(op->ptr, "stroke");
+  if (stroke->need_roll_mapping) {
+    paint_brush_make_spline(C, stroke);
   }
+
+  if (!add_step) {
+    ARegion *region = CTX_wm_region(C);
+    if (region) {
+      ED_region_tag_redraw(region);
+    }
+
+    stroke->tot_samples++;
+    return;
+  }
+
+  /* Add to stroke */
+  PaintStrokePoint *point;
+  PaintStrokePoint temp;
+
+  if (stroke->need_roll_mapping) {
+    if (stroke->spline->segments.size() < paint_stroke_max_points(paint, stroke)) {
+      ARegion *region = CTX_wm_region(C);
+      if (region) {
+        ED_region_tag_redraw(region);
+      }
+
+      stroke->tot_samples++;
+      return;
+    }
+
+    int cur = stroke->cur_point - (paint_stroke_max_points(paint, stroke) >> 1) - 2;
+    cur = (cur + stroke->num_points) % stroke->num_points;
+
+    PaintStrokePoint *p1 = stroke->points + ((cur + stroke->num_points) % stroke->num_points);
+    PaintStrokePoint *p2 = stroke->points + ((cur - 1 + stroke->num_points) % stroke->num_points);
+
+    point = &temp;
+    temp = *p1;
+
+    interp_v3_v3v3(temp.location, p1->location, p2->location, 0.5f);
+    interp_v2_v2v2(temp.mouse_in, p1->mouse_in, p2->mouse_in, 0.5f);
+    interp_v2_v2v2(temp.mouse_out, p1->mouse_out, p2->mouse_out, 0.5f);
+  }
+  else {
+    point = stroke->points + ((stroke->cur_point - 1 + stroke->num_points) % stroke->num_points);
+  }
+
+  RNA_collection_add(op->ptr, "stroke", &itemptr);
+  RNA_float_set(&itemptr, "size", point->size);
+  RNA_float_set_array(&itemptr, "location", point->location);
+  /* Mouse coordinates modified by the stroke type options. */
+  RNA_float_set_array(&itemptr, "mouse", point->mouse_out);
+  /* Original mouse coordinates. */
+  RNA_float_set_array(&itemptr, "mouse_event", point->mouse_in);
+  RNA_boolean_set(&itemptr, "pen_flip", point->pen_flip);
+  RNA_float_set(&itemptr, "pressure", point->pressure);
+  RNA_float_set(&itemptr, "x_tilt", point->x_tilt);
+  RNA_float_set(&itemptr, "y_tilt", point->y_tilt);
+
+  stroke->update_step(C, op, stroke, &itemptr);
+
+  /* don't record this for now, it takes up a lot of memory when doing long
+   * strokes with small brush size, and operators have register disabled */
+  RNA_collection_clear(op->ptr, "stroke");
 
   stroke->tot_samples++;
 }
@@ -1262,12 +1229,10 @@ PaintStroke *paint_stroke_new(bContext *C,
 
   ED_view3d_viewcontext_init(C, &stroke->vc, depsgraph);
 
-#ifdef DRAW_DEBUG_VIS
   ARegion *region = CTX_wm_region(C);
 
   stroke->debug_draw_handle = ED_region_draw_cb_activate(
       region->type, paint_brush_cubic_vis, stroke, REGION_DRAW_POST_VIEW);
-#endif
 
   stroke->get_location = get_location;
   stroke->test_start = test_start;
@@ -1360,12 +1325,10 @@ void paint_stroke_free(bContext *C, wmOperator * /*op*/, PaintStroke *stroke)
 
   BLI_freelistN(&stroke->line);
 
-#ifdef DRAW_DEBUG_VIS
   ARegion *region = CTX_wm_region(C);
 
   ED_region_draw_cb_exit(region->type, stroke->debug_draw_handle);
   ED_region_tag_redraw(region);
-#endif
 
   MEM_delete<BezierSpline3f>(stroke->world_spline);
   MEM_delete<BezierSpline2f>(stroke->spline);
