@@ -9,8 +9,8 @@
 
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
-#include "BLI_set.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
 #include "BKE_node.h"
 
@@ -38,11 +38,12 @@ extern const char *node_context_dir[];
 
 namespace blender::ed::space_node {
 
+struct AssetItemTree;
+
 /** Temporary data used in node link drag modal operator. */
 struct bNodeLinkDrag {
   /** Links dragged by the operator. */
-  Vector<bNodeLink *> links;
-  bool from_multi_input_socket;
+  Vector<bNodeLink> links;
   eNodeSocketInOut in_out;
 
   /** Draw handler for the "+" icon when dragging a link in empty space. */
@@ -96,6 +97,15 @@ struct SpaceNode_Runtime {
   /* XXX hack for translate_attach op-macros to pass data from transform op to insert_offset op */
   /** Temporary data for node insert offset (in UI called Auto-offset). */
   struct NodeInsertOfsData *iofsd;
+
+  /**
+   * Temporary data for node add menu in order to provide longer-term storage for context pointers.
+   * Recreated every time the root menu is opened. In the future this will be replaced with an "all
+   * libraries" cache in the asset system itself.
+   *
+   * Stored with a shared pointer so that it can be forward declared.
+   */
+  std::shared_ptr<AssetItemTree> assets_for_menu;
 };
 
 enum NodeResizeDirection {
@@ -172,12 +182,11 @@ void node_keymap(wmKeyConfig *keyconf);
 rctf node_frame_rect_inside(const bNode &node);
 bool node_or_socket_isect_event(const bContext &C, const wmEvent &event);
 
-Set<bNode *> get_selected_nodes(bNodeTree &node_tree);
-void node_deselect_all(SpaceNode &snode);
+void node_deselect_all(bNodeTree &node_tree);
 void node_socket_select(bNode *node, bNodeSocket &sock);
 void node_socket_deselect(bNode *node, bNodeSocket &sock, bool deselect_node);
-void node_deselect_all_input_sockets(SpaceNode &snode, bool deselect_nodes);
-void node_deselect_all_output_sockets(SpaceNode &snode, bool deselect_nodes);
+void node_deselect_all_input_sockets(bNodeTree &node_tree, bool deselect_nodes);
+void node_deselect_all_output_sockets(bNodeTree &node_tree, bool deselect_nodes);
 void node_select_single(bContext &C, bNode &node);
 
 void NODE_OT_select(wmOperatorType *ot);
@@ -253,6 +262,7 @@ bNode *add_static_node(const bContext &C, int type, const float2 &location);
 void NODE_OT_add_reroute(wmOperatorType *ot);
 void NODE_OT_add_search(wmOperatorType *ot);
 void NODE_OT_add_group(wmOperatorType *ot);
+void NODE_OT_add_group_asset(wmOperatorType *ot);
 void NODE_OT_add_object(wmOperatorType *ot);
 void NODE_OT_add_collection(wmOperatorType *ot);
 void NODE_OT_add_file(wmOperatorType *ot);
@@ -382,5 +392,10 @@ void invoke_node_link_drag_add_menu(bContext &C,
 /* add_node_search.cc */
 
 void invoke_add_node_search_menu(bContext &C, const float2 &cursor, bool use_transform);
+
+/* add_menu_assets.cc */
+
+MenuType add_catalog_assets_menu_type();
+MenuType add_root_catalogs_menu_type();
 
 }  // namespace blender::ed::space_node

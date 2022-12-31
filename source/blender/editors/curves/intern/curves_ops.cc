@@ -435,7 +435,7 @@ static bke::CurvesGeometry particles_to_curves(Object &object, ParticleSystem &p
   bke::CurvesGeometry curves(points_num, curves_num);
   curves.offsets_for_write().copy_from(curve_offsets);
 
-  const float4x4 object_to_world_mat = object.obmat;
+  const float4x4 object_to_world_mat = object.object_to_world;
   const float4x4 world_to_object_mat = object_to_world_mat.inverted();
 
   MutableSpan<float3> positions = curves.positions_for_write();
@@ -497,7 +497,7 @@ static int curves_convert_from_particle_system_exec(bContext *C, wmOperator * /*
 
   Object *ob_new = BKE_object_add(&bmain, &scene, &view_layer, OB_CURVES, psys_eval->name);
   Curves *curves_id = static_cast<Curves *>(ob_new->data);
-  BKE_object_apply_mat4(ob_new, ob_from_orig->obmat, true, false);
+  BKE_object_apply_mat4(ob_new, ob_from_orig->object_to_world, true, false);
   bke::CurvesGeometry::wrap(curves_id->geometry) = particles_to_curves(*ob_from_eval, *psys_eval);
 
   DEG_relations_tag_update(&bmain);
@@ -635,7 +635,7 @@ static void snap_curves_to_surface_exec_object(Object &curves_ob,
             continue;
           }
 
-          const MLoopTri &looptri = *lookup_result.looptri;
+          const MLoopTri &looptri = surface_looptris[lookup_result.looptri_index];
           const float3 &bary_coords = lookup_result.bary_weights;
 
           const float3 &p0_su = verts[loops[looptri.tri[0]].v].co;
@@ -744,13 +744,12 @@ static int curves_set_selection_domain_exec(bContext *C, wmOperator *op)
   const eAttrDomain domain = eAttrDomain(RNA_enum_get(op->ptr, "domain"));
 
   for (Curves *curves_id : get_unique_editable_curves(*C)) {
-    if (curves_id->selection_domain == domain && (curves_id->flag & CV_SCULPT_SELECTION_ENABLED)) {
+    if (curves_id->selection_domain == domain) {
       continue;
     }
 
     const eAttrDomain old_domain = eAttrDomain(curves_id->selection_domain);
     curves_id->selection_domain = domain;
-    curves_id->flag |= CV_SCULPT_SELECTION_ENABLED;
 
     CurvesGeometry &curves = CurvesGeometry::wrap(curves_id->geometry);
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
@@ -800,38 +799,6 @@ static void CURVES_OT_set_selection_domain(wmOperatorType *ot)
   ot->prop = prop = RNA_def_enum(
       ot->srna, "domain", rna_enum_attribute_curves_domain_items, 0, "Domain", "");
   RNA_def_property_flag(prop, (PropertyFlag)(PROP_HIDDEN | PROP_SKIP_SAVE));
-}
-
-namespace disable_selection {
-
-static int curves_disable_selection_exec(bContext *C, wmOperator * /*op*/)
-{
-  for (Curves *curves_id : get_unique_editable_curves(*C)) {
-    curves_id->flag &= ~CV_SCULPT_SELECTION_ENABLED;
-
-    /* Use #ID_RECALC_GEOMETRY instead of #ID_RECALC_SELECT because it is handled as a generic
-     * attribute for now. */
-    DEG_id_tag_update(&curves_id->id, ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(C, NC_GEOM | ND_DATA, curves_id);
-  }
-
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_VIEW3D, nullptr);
-
-  return OPERATOR_FINISHED;
-}
-
-}  // namespace disable_selection
-
-static void CURVES_OT_disable_selection(wmOperatorType *ot)
-{
-  ot->name = "Disable Selection";
-  ot->idname = __func__;
-  ot->description = "Disable the drawing of influence of selection in sculpt mode";
-
-  ot->exec = disable_selection::curves_disable_selection_exec;
-  ot->poll = editable_curves_poll;
-
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 static bool varray_contains_nonzero(const VArray<float> &data)
@@ -997,7 +964,7 @@ static int surface_set_exec(bContext *C, wmOperator *op)
 
     DEG_id_tag_update(&curves_ob.id, ID_RECALC_TRANSFORM);
     WM_event_add_notifier(C, NC_GEOM | ND_DATA, &curves_id);
-    WM_event_add_notifier(C, NC_NODE | NA_ADDED, NULL);
+    WM_event_add_notifier(C, NC_NODE | NA_ADDED, nullptr);
 
     /* Required for deformation. */
     new_surface_ob.modifier_flag |= OB_MODIFIER_FLAG_ADD_REST_POSITION;
@@ -1035,6 +1002,5 @@ void ED_operatortypes_curves()
   WM_operatortype_append(CURVES_OT_snap_curves_to_surface);
   WM_operatortype_append(CURVES_OT_set_selection_domain);
   WM_operatortype_append(SCULPT_CURVES_OT_select_all);
-  WM_operatortype_append(CURVES_OT_disable_selection);
   WM_operatortype_append(CURVES_OT_surface_set);
 }

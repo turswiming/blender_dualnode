@@ -89,13 +89,13 @@ typedef struct Report {
 } Report;
 
 /**
- * \note Saved in the wm, don't remove.
+ * \note Saved in the #wmWindowManager, don't remove.
  */
 typedef struct ReportList {
   ListBase list;
-  /** eReportType. */
+  /** #eReportType. */
   int printlevel;
-  /** eReportType. */
+  /** #eReportType. */
   int storelevel;
   int flag;
   char _pad[4];
@@ -277,7 +277,7 @@ typedef struct wmWindow {
   short lastcursor;
   /** The current modal cursor. */
   short modalcursor;
-  /** Cursor grab mode. */
+  /** Cursor grab mode #GHOST_TGrabCursorMode (run-time only) */
   short grabcursor;
   /** Internal: tag this for extra mouse-move event,
    * makes cursors/buttons active on UI switching. */

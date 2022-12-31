@@ -48,7 +48,15 @@ struct GeoNodesModifierData {
    * Some nodes should be executed even when their output is not used (e.g. active viewer nodes and
    * the node groups they are contained in).
    */
-  const MultiValueMap<ComputeContextHash, const lf::FunctionNode *> *side_effect_nodes;
+  const MultiValueMap<ComputeContextHash, const lf::FunctionNode *> *side_effect_nodes = nullptr;
+  /**
+   * Controls in which compute contexts we want to log socket values. Logging them in all contexts
+   * can result in slowdowns. In the majority of cases, the logged socket values are freed without
+   * being looked at anyway.
+   *
+   * If this is null, all socket values will be logged.
+   */
+  const Set<ComputeContextHash> *socket_log_contexts = nullptr;
 };
 
 /**
@@ -64,6 +72,10 @@ struct GeoNodesLFUserData : public lf::UserData {
    * evaluated.
    */
   const ComputeContext *compute_context = nullptr;
+  /**
+   * Log socket values in the current compute context. Child contexts might use logging again.
+   */
+  bool log_socket_values = true;
 };
 
 /**
@@ -110,6 +122,10 @@ struct GeometryNodesLazyFunctionGraphInfo {
    * we have to keep track of them separately.
    */
   Vector<std::unique_ptr<LazyFunction>> functions;
+  /**
+   * Debug info that has to be destructed when the graph is not used anymore.
+   */
+  Vector<std::unique_ptr<lf::DummyDebugInfo>> dummy_debug_infos_;
   /**
    * Many sockets have default values. Since those are not owned by the lazy-function graph, we
    * have to keep track of them separately. This only owns the values, the memory is owned by the

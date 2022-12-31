@@ -588,7 +588,7 @@ static void lineart_shadow_edge_cut(LineartData *ld,
     new_seg_2->ratio = end;
   }
 
-  double r_fb_co_1[4], r_fb_co_2[4], r_gloc_1[3], r_gloc_2[3];
+  double r_fb_co_1[4] = {0}, r_fb_co_2[4] = {0}, r_gloc_1[3] = {0}, r_gloc_2[3] = {0};
   double r_new_in_the_middle[4], r_new_in_the_middle_global[3], r_new_at;
   double *s1_fb_co_1, *s1_fb_co_2, *s1_gloc_1, *s1_gloc_2;
 
@@ -1167,7 +1167,7 @@ bool lineart_main_try_generate_shadow(Depsgraph *depsgraph,
   copy_v3_v3_db(ld->conf.camera_pos_secondary, ld->conf.camera_pos);
   copy_m4_m4(ld->conf.cam_obmat_secondary, ld->conf.cam_obmat);
 
-  copy_m4_m4(ld->conf.cam_obmat, lmd->light_contour_object->obmat);
+  copy_m4_m4(ld->conf.cam_obmat, lmd->light_contour_object->object_to_world);
   copy_v3db_v3fl(ld->conf.camera_pos, ld->conf.cam_obmat[3]);
   ld->conf.cam_is_persp_secondary = ld->conf.cam_is_persp;
   ld->conf.cam_is_persp = is_persp;

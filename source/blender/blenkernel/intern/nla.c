@@ -464,6 +464,7 @@ NlaStrip *BKE_nlastack_add_strip(AnimData *adt, bAction *act, const bool is_libo
      */
     nlt = BKE_nlatrack_add(adt, NULL, is_liboverride);
     BKE_nlatrack_add_strip(nlt, strip, is_liboverride);
+    BLI_strncpy(nlt->name, act->id.name + 2, sizeof(nlt->name));
   }
 
   /* automatically name it too */
@@ -972,19 +973,17 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
   oEnd = ((NlaStrip *)mstrip->strips.last)->end;
   offset = mstrip->start - oStart;
 
+  /* check if scale changed */
+  oLen = oEnd - oStart;
+  nLen = mstrip->end - mstrip->start;
+  scaleChanged = !IS_EQF(oLen, nLen);
+
   /* optimization:
    * don't flush if nothing changed yet
    * TODO: maybe we need a flag to say always flush?
    */
-  if (IS_EQF(oStart, mstrip->start) && IS_EQF(oEnd, mstrip->end)) {
+  if (IS_EQF(oStart, mstrip->start) && IS_EQF(oEnd, mstrip->end) && !scaleChanged) {
     return;
-  }
-
-  /* check if scale changed */
-  oLen = oEnd - oStart;
-  nLen = mstrip->end - mstrip->start;
-  if (IS_EQF(nLen, oLen) == 0) {
-    scaleChanged = 1;
   }
 
   /* for each child-strip, calculate new start/end points based on this new info */
@@ -1000,6 +999,12 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
        * then wait for second pass to flush scale properly. */
       strip->start = (p1 * nLen) + mstrip->start;
       strip->end = (p2 * nLen) + mstrip->start;
+
+      // Recompute the playback scale, given the new start & end frame of the strip.
+      const double action_len = strip->actend - strip->actstart;
+      const double repeated_len = action_len * strip->repeat;
+      const double strip_len = strip->end - strip->start;
+      strip->scale = strip_len / repeated_len;
     }
     else {
       /* just apply the changes in offset to both ends of the strip */
@@ -1357,6 +1362,17 @@ bool BKE_nlastrip_within_bounds(NlaStrip *strip, float min, float max)
 
   /* should be ok! */
   return true;
+}
+
+float BKE_nlastrip_distance_to_frame(const NlaStrip *strip, const float timeline_frame)
+{
+  if (timeline_frame < strip->start) {
+    return strip->start - timeline_frame;
+  }
+  if (strip->end < timeline_frame) {
+    return timeline_frame - strip->end;
+  }
+  return 0.0f;
 }
 
 /* Ensure that strip doesn't overlap those around it after resizing
@@ -1918,7 +1934,7 @@ bool BKE_nla_action_stash(AnimData *adt, const bool is_liboverride)
    * NOTE: this must be done *after* adding the strip to the track, or else
    *       the strip locking will prevent the strip from getting added
    */
-  nlt->flag = (NLATRACK_MUTED | NLATRACK_PROTECTED);
+  nlt->flag |= (NLATRACK_MUTED | NLATRACK_PROTECTED);
   strip->flag &= ~(NLASTRIP_FLAG_SELECT | NLASTRIP_FLAG_ACTIVE);
 
   /* also mark the strip for auto syncing the length, so that the strips accurately
@@ -2054,7 +2070,7 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
   }
 
   /* If block is already in tweak-mode, just leave, but we should report
-   * that this block is in tweak-mode (as our returncode). */
+   * that this block is in tweak-mode (as our return-code). */
   if (adt->flag & ADT_NLA_EDIT_ON) {
     return true;
   }

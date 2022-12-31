@@ -60,8 +60,6 @@
  * and being able to set it to zero is handy. */
 /* #define USE_NUM_NO_ZERO */
 
-static void initSnapSpatial(TransInfo *t, float r_snap[2]);
-
 bool transdata_check_local_islands(TransInfo *t, short around)
 {
   if (t->options & (CTX_CURSOR | CTX_TEXTURE_SPACE)) {
@@ -536,27 +534,6 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
     /* XXX(ton): temp, first hack to get auto-render in compositor work. */
     WM_event_add_notifier(C, NC_SCENE | ND_TRANSFORM_DONE, CTX_data_scene(C));
   }
-
-#if 0 /* TRANSFORM_FIX_ME */
-  if (t->spacetype == SPACE_VIEW3D) {
-    allqueue(REDRAWBUTSOBJECT, 0);
-    allqueue(REDRAWVIEW3D, 0);
-  }
-  else if (t->spacetype == SPACE_IMAGE) {
-    allqueue(REDRAWIMAGE, 0);
-    allqueue(REDRAWVIEW3D, 0);
-  }
-  else if (ELEM(t->spacetype, SPACE_ACTION, SPACE_NLA, SPACE_GRAPH)) {
-    allqueue(REDRAWVIEW3D, 0);
-    allqueue(REDRAWACTION, 0);
-    allqueue(REDRAWNLA, 0);
-    allqueue(REDRAWIPO, 0);
-    allqueue(REDRAWTIME, 0);
-    allqueue(REDRAWBUTSOBJECT, 0);
-  }
-
-  scrarea_queue_headredraw(curarea);
-#endif
 }
 
 /* ************************************************* */
@@ -622,14 +599,9 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       }
       break;
     }
-    case TFM_MODAL_EDGESLIDE_UP:
-    case TFM_MODAL_EDGESLIDE_DOWN: {
-      if (t->mode != TFM_EDGE_SLIDE) {
-        return false;
-      }
-      break;
-    }
-    case TFM_MODAL_INSERTOFS_TOGGLE_DIR: {
+    case TFM_MODAL_INSERTOFS_TOGGLE_DIR:
+    case TFM_MODAL_NODE_ATTACH_ON:
+    case TFM_MODAL_NODE_ATTACH_OFF: {
       if (t->spacetype != SPACE_NODE) {
         return false;
       }
@@ -685,14 +657,14 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
        0,
        "Decrease Max AutoIK Chain Length",
        ""},
-      {TFM_MODAL_EDGESLIDE_UP, "EDGESLIDE_EDGE_NEXT", 0, "Select Next Edge Slide Edge", ""},
-      {TFM_MODAL_EDGESLIDE_DOWN, "EDGESLIDE_PREV_NEXT", 0, "Select Previous Edge Slide Edge", ""},
       {TFM_MODAL_PROPSIZE, "PROPORTIONAL_SIZE", 0, "Adjust Proportional Influence", ""},
       {TFM_MODAL_INSERTOFS_TOGGLE_DIR,
        "INSERTOFS_TOGGLE_DIR",
        0,
        "Toggle Direction for Node Auto-Offset",
        ""},
+      {TFM_MODAL_NODE_ATTACH_ON, "NODE_ATTACH_ON", 0, "Node Attachment", ""},
+      {TFM_MODAL_NODE_ATTACH_OFF, "NODE_ATTACH_OFF", 0, "Node Attachment (Off)", ""},
       {TFM_MODAL_TRANSLATE, "TRANSLATE", 0, "Move", ""},
       {TFM_MODAL_ROTATE, "ROTATE", 0, "Rotate", ""},
       {TFM_MODAL_RESIZE, "RESIZE", 0, "Resize", ""},
@@ -1144,6 +1116,17 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           t->redraw |= TREDRAW_SOFT;
         }
         break;
+      case TFM_MODAL_NODE_ATTACH_ON:
+        t->modifiers |= MOD_NODE_ATTACH;
+        t->redraw |= TREDRAW_HARD;
+        handled = true;
+        break;
+      case TFM_MODAL_NODE_ATTACH_OFF:
+        t->modifiers &= ~MOD_NODE_ATTACH;
+        t->redraw |= TREDRAW_HARD;
+        handled = true;
+        break;
+
       case TFM_MODAL_AUTOCONSTRAINT:
       case TFM_MODAL_AUTOCONSTRAINTPLANE:
         if ((t->flag & T_RELEASE_CONFIRM) && (event->prev_val == KM_RELEASE) &&
@@ -1208,9 +1191,6 @@ int transformEvent(TransInfo *t, const wmEvent *event)
           t->redraw |= TREDRAW_HARD;
         }
         break;
-      /* Those two are only handled in transform's own handler, see T44634! */
-      case TFM_MODAL_EDGESLIDE_UP:
-      case TFM_MODAL_EDGESLIDE_DOWN:
       default:
         break;
     }
@@ -1350,7 +1330,7 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
 
   t->state = TRANS_RUNNING;
 
-  /* avoid calculating PET */
+  /* Avoid calculating proportional editing. */
   t->options = CTX_NO_PET;
 
   t->mode = TFM_DUMMY;
@@ -1596,9 +1576,9 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
       RNA_enum_set(op->ptr, "snap_target", t->tsnap.source_select);
 
       eSnapTargetSelect target = t->tsnap.target_select;
-      RNA_boolean_set(op->ptr, "use_snap_self", (target & SCE_SNAP_TARGET_NOT_ACTIVE) != 0);
-      RNA_boolean_set(op->ptr, "use_snap_edit", (target & SCE_SNAP_TARGET_NOT_EDITED) != 0);
-      RNA_boolean_set(op->ptr, "use_snap_nonedit", (target & SCE_SNAP_TARGET_NOT_NONEDITED) != 0);
+      RNA_boolean_set(op->ptr, "use_snap_self", (target & SCE_SNAP_TARGET_NOT_ACTIVE) == 0);
+      RNA_boolean_set(op->ptr, "use_snap_edit", (target & SCE_SNAP_TARGET_NOT_EDITED) == 0);
+      RNA_boolean_set(op->ptr, "use_snap_nonedit", (target & SCE_SNAP_TARGET_NOT_NONEDITED) == 0);
       RNA_boolean_set(
           op->ptr, "use_snap_selectable", (target & SCE_SNAP_TARGET_ONLY_SELECTABLE) != 0);
     }
@@ -1723,13 +1703,18 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
   }
 }
 
-static void initSnapSpatial(TransInfo *t, float r_snap[2])
+static void initSnapSpatial(TransInfo *t, float r_snap[3], float *r_snap_precision)
 {
+  /* Default values. */
+  r_snap[0] = r_snap[1] = 1.0f;
+  r_snap[2] = 0.0f;
+  *r_snap_precision = 0.1f;
+
   if (t->spacetype == SPACE_VIEW3D) {
     if (t->region->regiondata) {
       View3D *v3d = t->area->spacedata.first;
-      r_snap[0] = ED_view3d_grid_view_scale(t->scene, v3d, t->region, NULL) * 1.0f;
-      r_snap[1] = r_snap[0] * 0.1f;
+      r_snap[0] = r_snap[1] = r_snap[2] = ED_view3d_grid_view_scale(
+          t->scene, v3d, t->region, NULL);
     }
   }
   else if (t->spacetype == SPACE_IMAGE) {
@@ -1737,32 +1722,21 @@ static void initSnapSpatial(TransInfo *t, float r_snap[2])
     View2D *v2d = &t->region->v2d;
     int grid_size = SI_GRID_STEPS_LEN;
     float zoom_factor = ED_space_image_zoom_level(v2d, grid_size);
-    float grid_steps[SI_GRID_STEPS_LEN];
+    float grid_steps_x[SI_GRID_STEPS_LEN];
     float grid_steps_y[SI_GRID_STEPS_LEN];
 
-    ED_space_image_grid_steps(sima, grid_steps, grid_steps_y, grid_size);
+    ED_space_image_grid_steps(sima, grid_steps_x, grid_steps_y, grid_size);
     /* Snapping value based on what type of grid is used (adaptive-subdividing or custom-grid). */
-    r_snap[0] = ED_space_image_increment_snap_value(grid_size, grid_steps, zoom_factor);
-    r_snap[1] = r_snap[0] / 2.0f;
-
-    /* TODO: Implement snapping for custom grid sizes with `grid_steps[0] != grid_steps_y[0]`.
-     * r_snap_y[0] = ED_space_image_increment_snap_value(grid_size, grid_steps_y, zoom_factor);
-     * r_snap_y[1] = r_snap_y[0] / 2.0f;
-     */
+    r_snap[0] = ED_space_image_increment_snap_value(grid_size, grid_steps_x, zoom_factor);
+    r_snap[1] = ED_space_image_increment_snap_value(grid_size, grid_steps_y, zoom_factor);
+    *r_snap_precision = 0.5f;
   }
   else if (t->spacetype == SPACE_CLIP) {
-    r_snap[0] = 0.125f;
-    r_snap[1] = 0.0625f;
+    r_snap[0] = r_snap[1] = 0.125f;
+    *r_snap_precision = 0.5f;
   }
   else if (t->spacetype == SPACE_NODE) {
     r_snap[0] = r_snap[1] = ED_node_grid_size();
-  }
-  else if (t->spacetype == SPACE_GRAPH) {
-    r_snap[0] = 1.0;
-    r_snap[1] = 0.1f;
-  }
-  else {
-    r_snap[0] = r_snap[1] = 1.0f;
   }
 }
 
@@ -1879,9 +1853,7 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
      * lead to keymap conflicts for other modes (see T31584)
      */
     if (ELEM(mode, TFM_TRANSLATION, TFM_ROTATION, TFM_RESIZE)) {
-      wmKeyMapItem *kmi;
-
-      for (kmi = t->keymap->items.first; kmi; kmi = kmi->next) {
+      LISTBASE_FOREACH (const wmKeyMapItem *, kmi, &t->keymap->items) {
         if (kmi->flag & KMI_INACTIVE) {
           continue;
         }
@@ -1899,11 +1871,33 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
         }
       }
     }
+    if (t->data_type == &TransConvertType_Node) {
+      /* Set the initial auto-attach flag based on whether the chosen keymap key is pressed at the
+       * start of the operator. */
+      t->modifiers |= MOD_NODE_ATTACH;
+      LISTBASE_FOREACH (const wmKeyMapItem *, kmi, &t->keymap->items) {
+        if (kmi->flag & KMI_INACTIVE) {
+          continue;
+        }
+
+        if (kmi->propvalue == TFM_MODAL_NODE_ATTACH_OFF && kmi->val == KM_PRESS) {
+          if ((ELEM(kmi->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) &&
+               (event->modifier & KM_CTRL)) ||
+              (ELEM(kmi->type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) &&
+               (event->modifier & KM_SHIFT)) ||
+              (ELEM(kmi->type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && (event->modifier & KM_ALT)) ||
+              ((kmi->type == EVT_OSKEY) && (event->modifier & KM_OSKEY))) {
+            t->modifiers &= ~MOD_NODE_ATTACH;
+          }
+          break;
+        }
+      }
+    }
   }
 
   initSnapping(t, op); /* Initialize snapping data AFTER mode flags */
 
-  initSnapSpatial(t, t->snap_spatial);
+  initSnapSpatial(t, t->snap_spatial, &t->snap_spatial_precision);
 
   /* EVIL! posemode code can switch translation to rotate when 1 bone is selected.
    * will be removed (ton) */

@@ -69,14 +69,22 @@ struct PBVHPublic {
  * intptr_t's in structs.
  */
 
+/* A generic PBVH vertex.
+ *
+ * NOTE: in PBVH_GRIDS we consider the final grid points
+ * to be vertices.  This is not true of edges or faces which are pulled from
+ * the base mesh.
+ */
 typedef struct PBVHVertRef {
   intptr_t i;
 } PBVHVertRef;
 
+/* NOTE: edges in PBVH_GRIDS are always pulled from the base mesh. */
 typedef struct PBVHEdgeRef {
   intptr_t i;
 } PBVHEdgeRef;
 
+/* NOTE: faces in PBVH_GRIDS are always puled from the base mesh. */
 typedef struct PBVHFaceRef {
   intptr_t i;
 } PBVHFaceRef;
@@ -90,6 +98,15 @@ typedef struct {
 typedef struct {
   float (*color)[4];
 } PBVHColorBufferNode;
+
+typedef struct PBVHPixels {
+  /**
+   * Storage for texture painting on PBVH level.
+   *
+   * Contains #blender::bke::pbvh::pixels::PBVHData
+   */
+  void *data;
+} PBVHPixels;
 
 typedef struct PBVHPixelsNode {
   /**
@@ -395,13 +412,16 @@ void BKE_pbvh_bounding_box(const PBVH *pbvh, float min[3], float max[3]);
  */
 unsigned int **BKE_pbvh_grid_hidden(const PBVH *pbvh);
 
+void BKE_pbvh_sync_visibility_from_verts(PBVH *pbvh, struct Mesh *me);
+
 /**
  * Returns the number of visible quads in the nodes' grids.
  */
 int BKE_pbvh_count_grid_quads(BLI_bitmap **grid_hidden,
                               const int *grid_indices,
                               int totgrid,
-                              int gridsize);
+                              int gridsize,
+                              int display_gridsize);
 
 /**
  * Multi-res level, only valid for type == #PBVH_GRIDS.
@@ -422,6 +442,8 @@ typedef enum {
   PBVH_Subdivide = 1,
   PBVH_Collapse = 2,
 } PBVHTopologyUpdateMode;
+ENUM_OPERATORS(PBVHTopologyUpdateMode, PBVH_Collapse);
+
 /**
  * Collapse short edges, subdivide long edges.
  */
@@ -438,6 +460,7 @@ bool BKE_pbvh_bmesh_update_topology(PBVH *pbvh,
 void BKE_pbvh_node_mark_update(PBVHNode *node);
 void BKE_pbvh_node_mark_update_mask(PBVHNode *node);
 void BKE_pbvh_node_mark_update_color(PBVHNode *node);
+void BKE_pbvh_node_mark_update_face_sets(PBVHNode *node);
 void BKE_pbvh_node_mark_update_visibility(PBVHNode *node);
 void BKE_pbvh_node_mark_rebuild_draw(PBVHNode *node);
 void BKE_pbvh_node_mark_redraw(PBVHNode *node);
@@ -469,6 +492,11 @@ void BKE_pbvh_node_get_loops(PBVH *pbvh,
                              PBVHNode *node,
                              const int **r_loop_indices,
                              const struct MLoop **r_loops);
+
+/* Get number of faces in the mesh; for PBVH_GRIDS the
+ * number of base mesh faces is returned.
+ */
+int BKE_pbvh_num_faces(const PBVH *pbvh);
 
 void BKE_pbvh_node_get_BB(PBVHNode *node, float bb_min[3], float bb_max[3]);
 void BKE_pbvh_node_get_original_BB(PBVHNode *node, float bb_min[3], float bb_max[3]);
@@ -511,7 +539,8 @@ void BKE_pbvh_grids_update(PBVH *pbvh,
                            struct CCGElem **grids,
                            void **gridfaces,
                            struct DMFlagMat *flagmats,
-                           unsigned int **grid_hidden);
+                           unsigned int **grid_hidden,
+                           struct CCGKey *key);
 void BKE_pbvh_subdiv_cgg_set(PBVH *pbvh, struct SubdivCCG *subdiv_ccg);
 void BKE_pbvh_face_sets_set(PBVH *pbvh, int *face_sets);
 
@@ -667,6 +696,53 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
   } \
   } \
   ((void)0)
+
+#define PBVH_FACE_ITER_VERTS_RESERVED 8
+
+typedef struct PBVHFaceIter {
+  PBVHFaceRef face;
+  int index;
+  bool *hide;
+  int *face_set;
+  int i;
+
+  PBVHVertRef *verts;
+  int verts_num;
+
+  PBVHVertRef verts_reserved_[PBVH_FACE_ITER_VERTS_RESERVED];
+  const PBVHNode *node_;
+  PBVHType pbvh_type_;
+  int verts_size_;
+  GSetIterator bm_faces_iter_;
+  int cd_hide_poly_, cd_face_set_;
+  bool *hide_poly_;
+  int *face_sets_;
+  const struct MPoly *mpoly_;
+  const struct MLoopTri *looptri_;
+  const struct MLoop *mloop_;
+  int prim_index_;
+  const struct SubdivCCG *subdiv_ccg_;
+  const struct BMesh *bm;
+  CCGKey subdiv_key_;
+
+  int last_face_index_;
+} PBVHFaceIter;
+
+void BKE_pbvh_face_iter_init(PBVH *pbvh, PBVHNode *node, PBVHFaceIter *fd);
+void BKE_pbvh_face_iter_step(PBVHFaceIter *fd);
+bool BKE_pbvh_face_iter_done(PBVHFaceIter *fd);
+void BKE_pbvh_face_iter_finish(PBVHFaceIter *fd);
+
+/** Iterate over faces inside a PBVHNode.  These are either base mesh faces
+ * (for PBVH_FACES and PBVH_GRIDS) or BMesh faces (for PBVH_BMESH).
+ */
+#define BKE_pbvh_face_iter_begin(pbvh, node, fd) \
+  BKE_pbvh_face_iter_init(pbvh, node, &fd); \
+  for (; !BKE_pbvh_face_iter_done(&fd); BKE_pbvh_face_iter_step(&fd)) {
+
+#define BKE_pbvh_face_iter_end(fd) \
+  } \
+  BKE_pbvh_face_iter_finish(&fd)
 
 void BKE_pbvh_node_get_proxies(PBVHNode *node, PBVHProxyNode **proxies, int *proxy_count);
 void BKE_pbvh_node_free_proxies(PBVHNode *node);

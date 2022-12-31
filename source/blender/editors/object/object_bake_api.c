@@ -55,6 +55,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+#include "ED_mesh.h"
 #include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_uvedit.h"
@@ -106,7 +107,7 @@ typedef struct BakeAPIRender {
 
   /* Progress Callbacks. */
   float *progress;
-  short *do_update;
+  bool *do_update;
 
   /* Operator state. */
   ReportList *reports;
@@ -150,12 +151,12 @@ static int bake_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
  * for exec() when there is no render job
  * NOTE: this won't check for the escape key being pressed, but doing so isn't thread-safe.
  */
-static int bake_break(void *UNUSED(rjv))
+static bool bake_break(void *UNUSED(rjv))
 {
   if (G.is_break) {
-    return 1;
+    return true;
   }
-  return 0;
+  return false;
 }
 
 static void bake_update_image(ScrArea *area, Image *image)
@@ -451,7 +452,7 @@ static bool bake_object_check(const Scene *scene,
   }
 
   if (target == R_BAKE_TARGET_VERTEX_COLORS) {
-    if (BKE_id_attributes_active_color_get(&me->id) == NULL) {
+    if (!BKE_id_attributes_color_find(&me->id, me->active_color_attribute)) {
       BKE_reportf(reports,
                   RPT_ERROR,
                   "Mesh does not have an active color attribute \"%s\"",
@@ -467,8 +468,8 @@ static bool bake_object_check(const Scene *scene,
     }
 
     for (int i = 0; i < ob->totcol; i++) {
-      bNodeTree *ntree = NULL;
-      bNode *node = NULL;
+      const bNodeTree *ntree = NULL;
+      const bNode *node = NULL;
       const int mat_nr = i + 1;
       Image *image;
       ED_object_get_active_image(ob, mat_nr, &image, NULL, &node, &ntree);
@@ -670,7 +671,8 @@ static Mesh *bake_mesh_new_from_object(Depsgraph *depsgraph,
   Mesh *me = BKE_mesh_new_from_object(depsgraph, object, false, preserve_origindex);
 
   if (me->flag & ME_AUTOSMOOTH) {
-    BKE_mesh_split_faces(me, true);
+    ED_mesh_split_faces(me);
+    CustomData_free_layers(&me->ldata, CD_NORMAL, me->totloop);
   }
 
   return me;
@@ -893,7 +895,7 @@ static bool bake_targets_output_external(const BakeAPIRender *bkr,
       else {
         /* if everything else fails, use the material index */
         char tmp[5];
-        sprintf(tmp, "%d", i % 1000);
+        BLI_snprintf(tmp, sizeof(tmp), "%d", i % 1000);
         BLI_path_suffix(name, FILE_MAX, tmp, "_");
       }
     }
@@ -948,7 +950,7 @@ static bool bake_targets_init_vertex_colors(Main *bmain,
   }
 
   Mesh *me = ob->data;
-  if (BKE_id_attributes_active_color_get(&me->id) == NULL) {
+  if (!BKE_id_attributes_color_find(&me->id, me->active_color_attribute)) {
     BKE_report(reports, RPT_ERROR, "No active color attribute to bake to");
     return false;
   }
@@ -1129,7 +1131,8 @@ static bool bake_targets_output_vertex_colors(BakeTargets *targets, Object *ob)
 {
   Mesh *me = ob->data;
   BMEditMesh *em = me->edit_mesh;
-  CustomDataLayer *active_color_layer = BKE_id_attributes_active_color_get(&me->id);
+  CustomDataLayer *active_color_layer = BKE_id_attributes_color_find(&me->id,
+                                                                     me->active_color_attribute);
   BLI_assert(active_color_layer != NULL);
   const eAttrDomain domain = BKE_id_attribute_domain(&me->id, active_color_layer);
 
@@ -1518,10 +1521,10 @@ static int bake(const BakeAPIRender *bkr,
       highpoly[i].me = BKE_mesh_new_from_object(NULL, highpoly[i].ob_eval, false, false);
 
       /* Low-poly to high-poly transformation matrix. */
-      copy_m4_m4(highpoly[i].obmat, highpoly[i].ob->obmat);
+      copy_m4_m4(highpoly[i].obmat, highpoly[i].ob->object_to_world);
       invert_m4_m4(highpoly[i].imat, highpoly[i].obmat);
 
-      highpoly[i].is_flip_object = is_negative_m4(highpoly[i].ob->obmat);
+      highpoly[i].is_flip_object = is_negative_m4(highpoly[i].ob->object_to_world);
 
       i++;
     }
@@ -1540,18 +1543,19 @@ static int bake(const BakeAPIRender *bkr,
     pixel_array_high = MEM_mallocN(sizeof(BakePixel) * targets.pixels_num,
                                    "bake pixels high poly");
 
-    if (!RE_bake_pixels_populate_from_objects(me_low_eval,
-                                              pixel_array_low,
-                                              pixel_array_high,
-                                              highpoly,
-                                              tot_highpoly,
-                                              targets.pixels_num,
-                                              ob_cage != NULL,
-                                              bkr->cage_extrusion,
-                                              bkr->max_ray_distance,
-                                              ob_low_eval->obmat,
-                                              (ob_cage ? ob_cage->obmat : ob_low_eval->obmat),
-                                              me_cage_eval)) {
+    if (!RE_bake_pixels_populate_from_objects(
+            me_low_eval,
+            pixel_array_low,
+            pixel_array_high,
+            highpoly,
+            tot_highpoly,
+            targets.pixels_num,
+            ob_cage != NULL,
+            bkr->cage_extrusion,
+            bkr->max_ray_distance,
+            ob_low_eval->object_to_world,
+            (ob_cage ? ob_cage->object_to_world : ob_low_eval->object_to_world),
+            me_cage_eval)) {
       BKE_report(reports, RPT_ERROR, "Error handling selected objects");
       goto cleanup;
     }
@@ -1629,7 +1633,7 @@ static int bake(const BakeAPIRender *bkr,
                                           targets.result,
                                           me_low_eval,
                                           bkr->normal_swizzle,
-                                          ob_low_eval->obmat);
+                                          ob_low_eval->object_to_world);
         }
         else {
           /* From multi-resolution. */
@@ -1655,7 +1659,7 @@ static int bake(const BakeAPIRender *bkr,
                                           targets.result,
                                           (me_nores) ? me_nores : me_low_eval,
                                           bkr->normal_swizzle,
-                                          ob_low_eval->obmat);
+                                          ob_low_eval->object_to_world);
 
           if (md) {
             BKE_id_free(NULL, &me_nores->id);
@@ -1853,7 +1857,7 @@ finally:
   return result;
 }
 
-static void bake_startjob(void *bkv, short *UNUSED(stop), short *do_update, float *progress)
+static void bake_startjob(void *bkv, bool *UNUSED(stop), bool *do_update, float *progress)
 {
   BakeAPIRender *bkr = (BakeAPIRender *)bkv;
 

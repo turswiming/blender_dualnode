@@ -7,8 +7,9 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "BKE_attribute.hh"
 #include "BKE_blender_version.h"
-#include "BKE_geometry_set.hh"
+#include "BKE_mesh.h"
 
 #include "BLI_color.hh"
 #include "BLI_enumerable_thread_specific.hh"
@@ -249,15 +250,12 @@ void OBJWriter::write_vertex_coords(FormatHandler &fh,
 {
   const int tot_count = obj_mesh_data.tot_vertices();
 
-  Mesh *mesh = obj_mesh_data.get_mesh();
-  const CustomDataLayer *colors_layer = nullptr;
-  if (write_colors) {
-    colors_layer = BKE_id_attributes_active_color_get(&mesh->id);
-  }
-  if (write_colors && (colors_layer != nullptr)) {
+  const Mesh *mesh = obj_mesh_data.get_mesh();
+  const StringRef name = mesh->active_color_attribute;
+  if (write_colors && !name.is_empty()) {
     const bke::AttributeAccessor attributes = mesh->attributes();
     const VArray<ColorGeometry4f> attribute = attributes.lookup_or_default<ColorGeometry4f>(
-        colors_layer->name, ATTR_DOMAIN_POINT, {0.0f, 0.0f, 0.0f, 0.0f});
+        name, ATTR_DOMAIN_POINT, {0.0f, 0.0f, 0.0f, 0.0f});
 
     BLI_assert(tot_count == attribute.size());
     obj_parallel_chunked_output(fh, tot_count, [&](FormatHandler &buf, int i) {
@@ -415,16 +413,18 @@ void OBJWriter::write_edges_indices(FormatHandler &fh,
                                     const IndexOffsets &offsets,
                                     const OBJMesh &obj_mesh_data) const
 {
-  /* NOTE: ensure_mesh_edges should be called before. */
-  const int tot_edges = obj_mesh_data.tot_edges();
-  for (int edge_index = 0; edge_index < tot_edges; edge_index++) {
-    const std::optional<std::array<int, 2>> vertex_indices =
-        obj_mesh_data.calc_loose_edge_vert_indices(edge_index);
-    if (!vertex_indices) {
-      continue;
+  const Mesh &mesh = *obj_mesh_data.get_mesh();
+  const bke::LooseEdgeCache &loose_edges = mesh.loose_edges();
+  if (loose_edges.count == 0) {
+    return;
+  }
+
+  const Span<MEdge> edges = mesh.edges();
+  for (const int64_t i : edges.index_range()) {
+    if (loose_edges.is_loose_bits[i]) {
+      const MEdge &edge = edges[i];
+      fh.write_obj_edge(edge.v1 + offsets.vertex_offset + 1, edge.v2 + offsets.vertex_offset + 1);
     }
-    fh.write_obj_edge((*vertex_indices)[0] + offsets.vertex_offset + 1,
-                      (*vertex_indices)[1] + offsets.vertex_offset + 1);
   }
 }
 

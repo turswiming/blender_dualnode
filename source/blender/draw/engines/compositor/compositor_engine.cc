@@ -90,7 +90,7 @@ class Engine {
  public:
   Engine(char *info_message)
       : context_(texture_pool_, info_message),
-        evaluator_(context_, node_tree()),
+        evaluator_(context_),
         last_viewport_size_(context_.get_output_size())
   {
   }
@@ -123,12 +123,6 @@ class Engine {
     if (DEG_id_type_updated(depsgraph, ID_NT)) {
       evaluator_.reset();
     }
-  }
-
-  /* Get a reference to the compositor node tree. */
-  static bNodeTree &node_tree()
-  {
-    return *DRW_context_state_get()->scene->nodetree;
   }
 };
 
@@ -163,7 +157,14 @@ static void compositor_engine_free(void *instance_data)
 
 static void compositor_engine_draw(void *data)
 {
-  const COMPOSITOR_Data *compositor_data = static_cast<COMPOSITOR_Data *>(data);
+  COMPOSITOR_Data *compositor_data = static_cast<COMPOSITOR_Data *>(data);
+
+#if defined(__APPLE__)
+  blender::StringRef("Viewport compositor not supported on MacOS")
+      .copy(compositor_data->info, GPU_INFO_SIZE);
+  return;
+#endif
+
   compositor_data->instance_data->draw();
 }
 

@@ -49,10 +49,10 @@ static const EnumPropertyItem io_obj_export_evaluation_mode[] = {
     {0, NULL, 0, NULL, NULL}};
 
 static const EnumPropertyItem io_obj_path_mode[] = {
-    {PATH_REFERENCE_AUTO, "AUTO", 0, "Auto", "Use Relative paths with subdirectories only"},
+    {PATH_REFERENCE_AUTO, "AUTO", 0, "Auto", "Use relative paths with subdirectories only"},
     {PATH_REFERENCE_ABSOLUTE, "ABSOLUTE", 0, "Absolute", "Always write absolute paths"},
     {PATH_REFERENCE_RELATIVE, "RELATIVE", 0, "Relative", "Write relative paths where possible"},
-    {PATH_REFERENCE_MATCH, "MATCH", 0, "Match", "Match Absolute/Relative setting with input path"},
+    {PATH_REFERENCE_MATCH, "MATCH", 0, "Match", "Match absolute/relative setting with input path"},
     {PATH_REFERENCE_STRIP, "STRIP", 0, "Strip", "Write filename only"},
     {PATH_REFERENCE_COPY, "COPY", 0, "Copy", "Copy the file to the destination path"},
     {0, NULL, 0, NULL, NULL}};
@@ -427,8 +427,7 @@ static int wm_obj_import_exec(bContext *C, wmOperator *op)
     for (int i = 0; i < files_len; i++) {
       RNA_property_collection_lookup_int(op->ptr, prop, i, &fileptr);
       RNA_string_get(&fileptr, "name", file_only);
-      BLI_join_dirfile(
-          import_params.filepath, sizeof(import_params.filepath), dir_only, file_only);
+      BLI_path_join(import_params.filepath, sizeof(import_params.filepath), dir_only, file_only);
       import_params.clear_selection = (i == 0);
       OBJ_import(C, &import_params);
     }

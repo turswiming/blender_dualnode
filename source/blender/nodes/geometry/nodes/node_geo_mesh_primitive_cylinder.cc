@@ -46,6 +46,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Bool>(N_("Top")).field_source();
   b.add_output<decl::Bool>(N_("Side")).field_source();
   b.add_output<decl::Bool>(N_("Bottom")).field_source();
+  b.add_output<decl::Vector>(N_("UV Map")).field_source();
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -115,6 +116,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (params.output_is_required("Side")) {
     attribute_outputs.side_id = StrongAnonymousAttributeID("side_selection");
   }
+  if (params.output_is_required("UV Map")) {
+    attribute_outputs.uv_map_id = StrongAnonymousAttributeID("uv_map");
+  }
 
   /* The cylinder is a special case of the cone mesh where the top and bottom radius are equal. */
   Mesh *mesh = create_cylinder_or_cone_mesh(radius,
@@ -142,6 +146,12 @@ static void node_geo_exec(GeoNodeExecParams params)
                       AnonymousAttributeFieldInput::Create<bool>(
                           std::move(attribute_outputs.side_id), params.attribute_producer_name()));
   }
+  if (attribute_outputs.uv_map_id) {
+    params.set_output(
+        "UV Map",
+        AnonymousAttributeFieldInput::Create<float3>(std::move(attribute_outputs.uv_map_id),
+                                                     params.attribute_producer_name()));
+  }
 
   params.set_output("Mesh", GeometrySet::create_with_mesh(mesh));
 }
@@ -154,8 +164,8 @@ void register_node_type_geo_mesh_primitive_cylinder()
 
   static bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_MESH_PRIMITIVE_CYLINDER, "Cylinder", NODE_CLASS_GEOMETRY);
-  node_type_init(&ntype, file_ns::node_init);
-  node_type_update(&ntype, file_ns::node_update);
+  ntype.initfunc = file_ns::node_init;
+  ntype.updatefunc = file_ns::node_update;
   node_type_storage(
       &ntype, "NodeGeometryMeshCylinder", node_free_standard_storage, node_copy_standard_storage);
   ntype.declare = file_ns::node_declare;

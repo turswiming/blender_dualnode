@@ -22,6 +22,10 @@ static void test_draw_pass_all_commands()
   StorageBuffer<uint4> ssbo;
   ssbo.push_update();
 
+  /* Won't be dereferenced. */
+  GPUVertBuf *vbo = (GPUVertBuf *)1;
+  GPUIndexBuf *ibo = (GPUIndexBuf *)1;
+
   float4 color(1.0f, 1.0f, 1.0f, 0.0f);
   int3 dispatch_size(1);
 
@@ -33,12 +37,16 @@ static void test_draw_pass_all_commands()
   pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
   pass.bind_texture("image", tex);
   pass.bind_texture("image", &tex);
-  pass.bind_image("missing_image", tex);  /* Should not crash. */
-  pass.bind_image("missing_image", &tex); /* Should not crash. */
-  pass.bind_ubo("missing_ubo", ubo);      /* Should not crash. */
-  pass.bind_ubo("missing_ubo", &ubo);     /* Should not crash. */
-  pass.bind_ssbo("missing_ssbo", ssbo);   /* Should not crash. */
-  pass.bind_ssbo("missing_ssbo", &ssbo);  /* Should not crash. */
+  pass.bind_image("missing_image", tex);       /* Should not crash. */
+  pass.bind_image("missing_image", &tex);      /* Should not crash. */
+  pass.bind_ubo("missing_ubo", ubo);           /* Should not crash. */
+  pass.bind_ubo("missing_ubo", &ubo);          /* Should not crash. */
+  pass.bind_ssbo("missing_ssbo", ssbo);        /* Should not crash. */
+  pass.bind_ssbo("missing_ssbo", &ssbo);       /* Should not crash. */
+  pass.bind_ssbo("missing_vbo_as_ssbo", vbo);  /* Should not crash. */
+  pass.bind_ssbo("missing_vbo_as_ssbo", &vbo); /* Should not crash. */
+  pass.bind_ssbo("missing_ibo_as_ssbo", ibo);  /* Should not crash. */
+  pass.bind_ssbo("missing_ibo_as_ssbo", &ibo); /* Should not crash. */
   pass.push_constant("color", color);
   pass.push_constant("color", &color);
   pass.push_constant("ModelViewProjectionMatrix", float4x4::identity());
@@ -61,8 +69,9 @@ static void test_draw_pass_all_commands()
   expected << "  .state_set(6)" << std::endl;
   expected << "  .clear(color=(0.25, 0.5, 100, -2000), depth=0.5, stencil=0b11110000))"
            << std::endl;
-  expected << "  .stencil_set(write_mask=0b10000000, compare_mask=0b00001111, reference=0b10001111"
-           << std::endl;
+  expected
+      << "  .stencil_set(write_mask=0b10000000, reference=0b00001111, compare_mask=0b10001111)"
+      << std::endl;
   expected << "  .shader_bind(gpu_shader_3D_image_color)" << std::endl;
   expected << "  .bind_texture(0)" << std::endl;
   expected << "  .bind_texture_ref(0)" << std::endl;
@@ -72,8 +81,12 @@ static void test_draw_pass_all_commands()
   expected << "  .bind_uniform_buf_ref(-1)" << std::endl;
   expected << "  .bind_storage_buf(-1)" << std::endl;
   expected << "  .bind_storage_buf_ref(-1)" << std::endl;
-  expected << "  .push_constant(1, data=(1, 1, 1, 0))" << std::endl;
-  expected << "  .push_constant(1, data=(1, 1, 1, 1))" << std::endl;
+  expected << "  .bind_vertbuf_as_ssbo(-1)" << std::endl;
+  expected << "  .bind_vertbuf_as_ssbo_ref(-1)" << std::endl;
+  expected << "  .bind_indexbuf_as_ssbo(-1)" << std::endl;
+  expected << "  .bind_indexbuf_as_ssbo_ref(-1)" << std::endl;
+  expected << "  .push_constant(2, data=(1, 1, 1, 0))" << std::endl;
+  expected << "  .push_constant(2, data=(1, 1, 1, 1))" << std::endl;
   expected << "  .push_constant(0, data=(" << std::endl;
   expected << "(   1.000000,    0.000000,    0.000000,    0.000000)" << std::endl;
   expected << "(   0.000000,    1.000000,    0.000000,    0.000000)" << std::endl;
@@ -181,12 +194,19 @@ static void test_draw_pass_multi_draw()
   pass.draw_procedural(GPU_PRIM_LINES, 1, -1, -1, {5});
   pass.draw_procedural(GPU_PRIM_POINTS, 6, -1, -1, {5});
   pass.draw_procedural(GPU_PRIM_TRIS, 3, -1, -1, {6});
+  /* Custom calls should use their own group and never be batched. */
+  pass.draw_procedural(GPU_PRIM_TRIS, 2, 2, 2, {7});
+  pass.draw_procedural(GPU_PRIM_TRIS, 2, 2, 2, {8});
 
   std::string result = pass.serialize();
   std::stringstream expected;
   expected << ".test.multi_draw" << std::endl;
   expected << "  .shader_bind(gpu_shader_3D_image_color)" << std::endl;
   expected << "  .draw_multi(3)" << std::endl;
+  expected << "    .group(id=4, len=2)" << std::endl;
+  expected << "      .proto(instance_len=2, resource_id=8, front_face)" << std::endl;
+  expected << "    .group(id=3, len=2)" << std::endl;
+  expected << "      .proto(instance_len=2, resource_id=7, front_face)" << std::endl;
   expected << "    .group(id=2, len=1)" << std::endl;
   expected << "      .proto(instance_len=1, resource_id=5, front_face)" << std::endl;
   expected << "    .group(id=1, len=15)" << std::endl;

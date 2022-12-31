@@ -84,15 +84,6 @@ bool transform_mode_use_local_origins(const TransInfo *t);
 void transform_around_single_fallback_ex(TransInfo *t, int data_len_all);
 void transform_around_single_fallback(TransInfo *t);
 /**
- * Called during special_aftertrans_update to make sure selected keyframes replace
- * any other keyframes which may reside on that frame (that is not selected).
- *
- * \param sel_flag: The flag (bezt.f1/2/3) value to use to determine selection. Usually `SELECT`,
- *                  but may want to use a different one at times (if caller does not operate on
- *                  selection).
- */
-void posttrans_fcurve_clean(struct FCurve *fcu, int sel_flag, bool use_handle);
-/**
  * Little helper function for ObjectToTransData used to give certain
  * constraints (ChildOf, FollowPath, and others that may be added)
  * inverse corrections for transform, so that they aren't in CrazySpace.
@@ -225,8 +216,6 @@ void transform_convert_mesh_crazyspace_transdata_set(const float mtx[3][3],
                                                      const float quat[4],
                                                      struct TransData *r_td);
 void transform_convert_mesh_crazyspace_free(struct TransMeshDataCrazySpace *r_crazyspace_data);
-
-void special_aftertrans_update__mesh(bContext *C, TransInfo *t);
 
 /* transform_convert_mesh_edge.c */
 

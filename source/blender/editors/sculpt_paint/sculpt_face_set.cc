@@ -18,6 +18,7 @@
 #include "BLI_math_vector.hh"
 #include "BLI_span.hh"
 #include "BLI_task.h"
+#include "BLI_task.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_customdata_types.h"
@@ -124,6 +125,7 @@ static void do_draw_face_sets_brush_task_cb_ex(void *__restrict userdata,
   SCULPT_automasking_node_begin(
       data->ob, ss, ss->cache->automasking, &automask_data, data->nodes[n]);
 
+  bool changed = false;
   BKE_pbvh_vertex_iter_begin (ss->pbvh, data->nodes[n], vd, PBVH_ITER_UNIQUE) {
     SCULPT_automasking_node_update(ss, &automask_data, &vd);
 
@@ -155,6 +157,7 @@ static void do_draw_face_sets_brush_task_cb_ex(void *__restrict userdata,
 
         if (fade > 0.05f) {
           ss->face_sets[vert_map->indices[j]] = ss->cache->paint_face_set;
+          changed = true;
         }
       }
     }
@@ -175,10 +178,15 @@ static void do_draw_face_sets_brush_task_cb_ex(void *__restrict userdata,
 
       if (fade > 0.05f) {
         SCULPT_vertex_face_set_set(ss, vd.vertex, ss->cache->paint_face_set);
+        changed = true;
       }
     }
   }
   BKE_pbvh_vertex_iter_end;
+
+  if (changed) {
+    SCULPT_undo_push_node(data->ob, data->nodes[n], SCULPT_UNDO_FACE_SETS);
+  }
 }
 
 static void do_relax_face_sets_brush_task_cb_ex(void *__restrict userdata,
@@ -313,6 +321,7 @@ static EnumPropertyItem prop_sculpt_face_set_create_types[] = {
 
 static int sculpt_face_set_create_exec(bContext *C, wmOperator *op)
 {
+  using namespace blender;
   Object *ob = CTX_data_active_object(C);
   SculptSession *ss = ob->sculpt;
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
@@ -342,7 +351,9 @@ static int sculpt_face_set_create_exec(bContext *C, wmOperator *op)
   }
 
   SCULPT_undo_push_begin(ob, op);
-  SCULPT_undo_push_node(ob, nodes[0], SCULPT_UNDO_FACE_SETS);
+  for (const int i : blender::IndexRange(totnode)) {
+    SCULPT_undo_push_node(ob, nodes[i], SCULPT_UNDO_FACE_SETS);
+  }
 
   const int next_face_set = SCULPT_face_set_next_available_get(ss);
 
@@ -396,25 +407,16 @@ static int sculpt_face_set_create_exec(bContext *C, wmOperator *op)
   }
 
   if (mode == SCULPT_FACE_SET_SELECTION) {
-    BMesh *bm;
-    const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_ME(mesh);
-    BMeshCreateParams create_params{};
-    create_params.use_toolflags = true;
-    bm = BM_mesh_create(&allocsize, &create_params);
-
-    BMeshFromMeshParams convert_params{};
-    convert_params.calc_vert_normal = true;
-    convert_params.calc_face_normal = true;
-    BM_mesh_bm_from_me(bm, mesh, &convert_params);
-
-    BMIter iter;
-    BMFace *f;
-    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
-        ss->face_sets[BM_elem_index_get(f)] = next_face_set;
+    const bke::AttributeAccessor attributes = mesh->attributes();
+    const VArraySpan<bool> select_poly = attributes.lookup_or_default<bool>(
+        ".select_poly", ATTR_DOMAIN_FACE, false);
+    threading::parallel_for(IndexRange(mesh->totvert), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        if (select_poly[i]) {
+          ss->face_sets[i] = next_face_set;
+        }
       }
-    }
-    BM_mesh_free(bm);
+    });
   }
 
   for (int i = 0; i < totnode; i++) {
@@ -644,7 +646,9 @@ static int sculpt_face_set_init_exec(bContext *C, wmOperator *op)
   }
 
   SCULPT_undo_push_begin(ob, op);
-  SCULPT_undo_push_node(ob, nodes[0], SCULPT_UNDO_FACE_SETS);
+  for (const int i : blender::IndexRange(totnode)) {
+    SCULPT_undo_push_node(ob, nodes[i], SCULPT_UNDO_FACE_SETS);
+  }
 
   const float threshold = RNA_float_get(op->ptr, "threshold");
 
@@ -688,7 +692,7 @@ static int sculpt_face_set_init_exec(bContext *C, wmOperator *op)
           CustomData_get_layer(&mesh->edata, CD_CREASE));
       sculpt_face_sets_init_flood_fill(
           ob, [&](const int /*from_face*/, const int edge, const int /*to_face*/) -> bool {
-            return creases[edge] < threshold;
+            return creases ? creases[edge] < threshold : true;
           });
       break;
     }
@@ -705,7 +709,7 @@ static int sculpt_face_set_init_exec(bContext *C, wmOperator *op)
           CustomData_get_layer(&mesh->edata, CD_BWEIGHT));
       sculpt_face_sets_init_flood_fill(
           ob, [&](const int /*from_face*/, const int edge, const int /*to_face*/) -> bool {
-            return bevel_weights ? bevel_weights[edge] / 255.0f < threshold : true;
+            return bevel_weights ? bevel_weights[edge] < threshold : true;
           });
       break;
     }
@@ -924,7 +928,7 @@ static int sculpt_face_sets_change_visibility_exec(bContext *C, wmOperator *op)
     UnifiedPaintSettings *ups = &CTX_data_tool_settings(C)->unified_paint_settings;
     float location[3];
     copy_v3_v3(location, SCULPT_active_vertex_co_get(ss));
-    mul_m4_v3(ob->obmat, location);
+    mul_m4_v3(ob->object_to_world, location);
     copy_v3_v3(ups->average_stroke_accum, location);
     ups->average_stroke_counter = 1;
     ups->last_stroke_valid = true;
@@ -1373,7 +1377,9 @@ static void sculpt_face_set_edit_modify_face_sets(Object *ob,
     return;
   }
   SCULPT_undo_push_begin(ob, op);
-  SCULPT_undo_push_node(ob, nodes[0], SCULPT_UNDO_FACE_SETS);
+  for (const int i : blender::IndexRange(totnode)) {
+    SCULPT_undo_push_node(ob, nodes[i], SCULPT_UNDO_FACE_SETS);
+  }
   sculpt_face_set_apply_edit(ob, abs(active_face_set), mode, modify_hidden);
   SCULPT_undo_push_end(ob);
   face_set_edit_do_post_visibility_updates(ob, nodes, totnode);
