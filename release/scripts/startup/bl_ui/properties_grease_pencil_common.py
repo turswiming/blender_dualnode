@@ -252,7 +252,7 @@ class GPENCIL_MT_layer_active(Menu):
 
         gpd = context.gpencil_data
         if gpd:
-            layout.operator("gpencil.layer_add", text="New Layer", icon='ADD')
+            layout.operator("gpencil.layer_add", text="New Layer", icon='ADD').layer = -1
 
             layout.separator()
 
@@ -326,7 +326,7 @@ class GPENCIL_MT_cleanup(Menu):
 
         layout.separator()
 
-        layout.operator("gpencil.frame_clean_duplicate", text="Delete Duplicated Frames")
+        layout.operator("gpencil.frame_clean_duplicate", text="Delete Duplicate Frames")
         layout.operator("gpencil.recalc_geometry", text="Recalculate Geometry")
         if ob.mode != 'PAINT_GPENCIL':
             layout.operator("gpencil.reproject")
