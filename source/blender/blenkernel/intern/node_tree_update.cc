@@ -547,9 +547,6 @@ class NodeTreeMainUpdater {
           ntype.updatefunc(&ntree, node);
         }
         if (ntype.declare_dynamic) {
-          if (!node->runtime->declaration) {
-            node->runtime->declaration = new nodes::NodeDeclaration();
-          }
           nodes::update_node_declaration_and_sockets(ntree, *node);
         }
       }
