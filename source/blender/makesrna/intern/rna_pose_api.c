@@ -126,17 +126,20 @@ static void rna_Pose_blend_pose_from_action(ID *pose_owner,
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE, pose_owner);
 }
 
-static struct PoseBackup *rna_Pose_backup_create(ID *pose_owner, bAction *action)
+static void rna_Pose_backup_create(ID *pose_owner, bAction *action)
 {
   BLI_assert(GS(pose_owner->name) == ID_OB);
   Object *pose_owner_ob = (Object *)pose_owner;
 
-  return BKE_pose_backup_create_on_object(pose_owner_ob, action);
+  BKE_pose_backup_create_on_object(pose_owner_ob, action);
 }
 
-static void rna_Pose_backup_restore(struct PoseBackup *pose_backup)
+static bool rna_Pose_backup_restore(ID *pose_owner)
 {
-  return BKE_pose_backup_restore(pose_backup);
+  BLI_assert(GS(pose_owner->name) == ID_OB);
+  Object *pose_owner_ob = (Object *)pose_owner;
+
+  return BKE_pose_backup_restore_on_object(pose_owner_ob);
 }
 
 static void rna_Pose_backup_clear(ID *pose_owner)
@@ -213,14 +216,20 @@ void RNA_api_pose(StructRNA *srna)
                          "An Action with animation data for the bones. Only the animated bones "
                          "will be included in the backup.");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
-  /* return value */
-  parm = RNA_def_pointer(func, "backup", "PoseBackup", "PoseBackup", "the backup of the pose.");
-  RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "backup_restore", "rna_Pose_backup_restore");
-  RNA_def_function_flag(func, FUNC_NO_SELF);
-  parm = RNA_def_pointer(func, "backup", "PoseBackup", "PoseBackup", "the backup to restore.");
-  RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_NO_SELF);
+  RNA_def_function_ui_description(func,
+                                  "Restore the previously made pose backup. This can be called "
+                                  "multiple times. See `Pose.backup_create()` for more info.");
+  /* return value */
+  parm = RNA_def_boolean(
+      func,
+      "success",
+      false,
+      "",
+      "`True` when the backup was restored, `False` if there was no backup to restore.");
+  RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "backup_clear", "rna_Pose_backup_clear");
   RNA_def_function_ui_description(

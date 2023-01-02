@@ -38,8 +38,6 @@ struct PoseBackup {
   ListBase /* PoseChannelBackup* */ backups;
 };
 
-static void pose_backup_store(Object *ob, PoseBackup *pbd);
-
 /**
  * Create a backup of the pose, for only those bones that are animated in the
  * given Action. If `selected_bone_names` is not empty, the set of bones to back
@@ -93,7 +91,6 @@ static PoseBackup *pose_backup_create(const Object *ob,
   PoseBackup *pose_backup = static_cast<PoseBackup *>(MEM_callocN(sizeof(*pose_backup), __func__));
   pose_backup->is_bone_selection_relevant = is_bone_selection_relevant;
   pose_backup->backups = backups;
-
   return pose_backup;
 }
 
@@ -107,14 +104,6 @@ PoseBackup *BKE_pose_backup_create_selected_bones(const Object *ob, const bActio
   const bArmature *armature = static_cast<const bArmature *>(ob->data);
   const BoneNameSet selected_bone_names = BKE_armature_find_selected_bone_names(armature);
   return pose_backup_create(ob, action, selected_bone_names);
-}
-
-PoseBackup *BKE_pose_backup_create_on_object(Object *ob, const bAction *action)
-{
-  BKE_pose_backup_clear(ob);
-  PoseBackup *pose_backup = BKE_pose_backup_create_all_bones(ob, action);
-  pose_backup_store(ob, pose_backup);
-  return pose_backup;
 }
 
 bool BKE_pose_backup_is_selection_relevant(const struct PoseBackup *pose_backup)
@@ -147,6 +136,22 @@ void BKE_pose_backup_free(PoseBackup *pbd)
   MEM_freeN(pbd);
 }
 
+void BKE_pose_backup_create_on_object(Object *ob, const bAction *action)
+{
+  BKE_pose_backup_clear(ob);
+  PoseBackup *pose_backup = BKE_pose_backup_create_all_bones(ob, action);
+  ob->runtime.pose_backup = pose_backup;
+}
+
+bool BKE_pose_backup_restore_on_object(struct Object *ob)
+{
+  if (ob->runtime.pose_backup == nullptr) {
+    return false;
+  }
+  BKE_pose_backup_restore(ob->runtime.pose_backup);
+  return true;
+}
+
 void BKE_pose_backup_clear(Object *ob)
 {
   if (ob->runtime.pose_backup == nullptr) {
@@ -155,10 +160,4 @@ void BKE_pose_backup_clear(Object *ob)
 
   BKE_pose_backup_free(ob->runtime.pose_backup);
   ob->runtime.pose_backup = nullptr;
-}
-
-static void pose_backup_store(Object *ob, PoseBackup *pbd)
-{
-  BKE_pose_backup_clear(ob);
-  ob->runtime.pose_backup = pbd;
 }
