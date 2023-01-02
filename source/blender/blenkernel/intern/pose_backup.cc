@@ -149,16 +149,16 @@ void BKE_pose_backup_free(PoseBackup *pbd)
 
 void BKE_pose_backup_clear(Object *ob)
 {
-  if (ob->runtime.temp_pose_backup == nullptr) {
+  if (ob->runtime.pose_backup == nullptr) {
     return;
   }
 
-  BKE_pose_backup_free(ob->runtime.temp_pose_backup);
-  ob->runtime.temp_pose_backup = nullptr;
+  BKE_pose_backup_free(ob->runtime.pose_backup);
+  ob->runtime.pose_backup = nullptr;
 }
 
 static void pose_backup_store(Object *ob, PoseBackup *pbd)
 {
   BKE_pose_backup_clear(ob);
-  ob->runtime.temp_pose_backup = pbd;
+  ob->runtime.pose_backup = pbd;
 }

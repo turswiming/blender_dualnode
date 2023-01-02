@@ -197,7 +197,7 @@ typedef struct Object_Runtime {
    * calls `object.pose.backup_create_all_bones()`. This memory is owned by the
    * Object.
    */
-  struct PoseBackup *temp_pose_backup;
+  struct PoseBackup *pose_backup;
 
   /**
    * This is a curve representation of corresponding object.
