@@ -193,9 +193,10 @@ typedef struct Object_Runtime {
   struct Mesh *object_as_temp_mesh;
 
   /**
-   * Backup of the pose (might not contain all bones). It is created when Python
-   * calls `object.pose.backup_create_all_bones()`. This memory is owned by the
-   * Object.
+   * Backup of the object's pose (might be a subset, i.e. not contain all bones).
+   *
+   * Created by `BKE_pose_backup_create_on_object()`. This memory is owned by the Object.
+   * It is freed along with the object, or when `BKE_pose_backup_clear()` is called.
    */
   struct PoseBackup *pose_backup;
 
