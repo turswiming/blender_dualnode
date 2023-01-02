@@ -1736,7 +1736,10 @@ static void rna_def_pose_backup(BlenderRNA *brna)
   /* struct definition */
   srna = RNA_def_struct(brna, "PoseBackup", NULL);
   RNA_def_struct_sdna(srna, "PoseBackup");
-  RNA_def_struct_ui_text(srna, "Pose", "A backup of a pose, can only be used to restore the pose");
+  RNA_def_struct_ui_text(srna,
+                         "Pose",
+                         "A backup of a pose, can only be used to restore the pose. See "
+                         "`Pose.backup_create()` for a way to create those backups.");
 }
 
 void RNA_def_pose(BlenderRNA *brna)
