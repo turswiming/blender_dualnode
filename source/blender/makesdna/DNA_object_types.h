@@ -193,6 +193,13 @@ typedef struct Object_Runtime {
   struct Mesh *object_as_temp_mesh;
 
   /**
+   * Backup of the pose (might not contain all bones). It is created when Python
+   * calls `object.pose.backup_create_all_bones()`. This memory is owned by the
+   * Object.
+   */
+  struct PoseBackup *temp_pose_backup;
+
+  /**
    * This is a curve representation of corresponding object.
    * It created when Python calls `object.to_curve()`.
    */
@@ -200,6 +207,7 @@ typedef struct Object_Runtime {
 
   /** Runtime evaluated curve-specific data, not stored in the file. */
   struct CurveCache *curve_cache;
+  void *_pad4;
 
   unsigned short local_collections_bits;
   short _pad2[3];

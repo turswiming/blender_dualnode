@@ -38,13 +38,15 @@ struct PoseBackup {
   ListBase /* PoseChannelBackup* */ backups;
 };
 
+static void pose_backup_store(Object *ob, PoseBackup *pbd);
+
 /**
  * Create a backup of the pose, for only those bones that are animated in the
  * given Action. If `selected_bone_names` is not empty, the set of bones to back
  * up is intersected with these bone names such that only the selected subset is
  * backed up.
  *
- * The caller is responsible for freeing the returned pointer.
+ * The returned pointer is owned by the caller.
  */
 static PoseBackup *pose_backup_create(const Object *ob,
                                       const bAction *action,
@@ -91,6 +93,7 @@ static PoseBackup *pose_backup_create(const Object *ob,
   PoseBackup *pose_backup = static_cast<PoseBackup *>(MEM_callocN(sizeof(*pose_backup), __func__));
   pose_backup->is_bone_selection_relevant = is_bone_selection_relevant;
   pose_backup->backups = backups;
+
   return pose_backup;
 }
 
@@ -104,6 +107,14 @@ PoseBackup *ED_pose_backup_create_selected_bones(const Object *ob, const bAction
   const bArmature *armature = static_cast<const bArmature *>(ob->data);
   const BoneNameSet selected_bone_names = BKE_armature_find_selected_bone_names(armature);
   return pose_backup_create(ob, action, selected_bone_names);
+}
+
+PoseBackup *ED_pose_backup_create_on_object(Object *ob, const bAction *action)
+{
+  ED_pose_backup_clear(ob);
+  PoseBackup *pose_backup = ED_pose_backup_create_all_bones(ob, action);
+  pose_backup_store(ob, pose_backup);
+  return pose_backup;
 }
 
 bool ED_pose_backup_is_selection_relevant(const struct PoseBackup *pose_backup)
@@ -134,4 +145,20 @@ void ED_pose_backup_free(PoseBackup *pbd)
     BLI_freelinkN(&pbd->backups, chan_bak);
   }
   MEM_freeN(pbd);
+}
+
+void ED_pose_backup_clear(Object *ob)
+{
+  if (ob->runtime.temp_pose_backup == nullptr) {
+    return;
+  }
+
+  ED_pose_backup_free(ob->runtime.temp_pose_backup);
+  ob->runtime.temp_pose_backup = nullptr;
+}
+
+static void pose_backup_store(Object *ob, PoseBackup *pbd)
+{
+  ED_pose_backup_clear(ob);
+  ob->runtime.temp_pose_backup = pbd;
 }

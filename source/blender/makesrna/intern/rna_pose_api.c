@@ -125,17 +125,25 @@ static void rna_Pose_blend_pose_from_action(ID *pose_owner,
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE, pose_owner);
 }
 
-static struct PoseBackup *rna_Pose_backup_create_all_bones(ID *pose_owner, bAction *action)
+static struct PoseBackup *rna_Pose_backup_create(ID *pose_owner, bAction *action)
 {
   BLI_assert(GS(pose_owner->name) == ID_OB);
   Object *pose_owner_ob = (Object *)pose_owner;
 
-  return ED_pose_backup_create_all_bones(pose_owner_ob, action);
+  return ED_pose_backup_create_on_object(pose_owner_ob, action);
 }
 
 static void rna_Pose_backup_restore(struct PoseBackup *pose_backup)
 {
   return ED_pose_backup_restore(pose_backup);
+}
+
+static void rna_Pose_backup_clear(ID *pose_owner)
+{
+  BLI_assert(GS(pose_owner->name) == ID_OB);
+  Object *pose_owner_ob = (Object *)pose_owner;
+
+  ED_pose_backup_clear(pose_owner_ob);
 }
 
 #else
@@ -190,7 +198,12 @@ void RNA_api_pose(StructRNA *srna)
                        -FLT_MAX,
                        FLT_MAX);
 
-  func = RNA_def_function(srna, "backup_create_all_bones", "rna_Pose_backup_create_all_bones");
+  func = RNA_def_function(srna, "backup_create", "rna_Pose_backup_create");
+  RNA_def_function_ui_description(
+      func,
+      "Create a backup of the current pose. Only those bones that are animated in the Action are "
+      "backed up. The object owns the backup, and each object can have only one backup at a time. "
+      "When you no longer need it, it must be freed use `backup_clear()`");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_NO_SELF);
   parm = RNA_def_pointer(func, "action", "Action", "Action", "The Action containing the pose");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
@@ -204,6 +217,9 @@ void RNA_api_pose(StructRNA *srna)
   parm = RNA_def_pointer(
       func, "backup", "PoseBackup", "PoseBackup", "The backup data of the pose");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+
+  func = RNA_def_function(srna, "backup_clear", "rna_Pose_backup_clear");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_NO_SELF);
 }
 
 void RNA_api_pose_channel(StructRNA *srna)
