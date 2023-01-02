@@ -25,6 +25,7 @@
 #  include "BKE_animsys.h"
 #  include "BKE_armature.h"
 #  include "BKE_context.h"
+#  include "BKE_pose_backup.h"
 
 #  include "DNA_action_types.h"
 #  include "DNA_anim_types.h"
@@ -130,12 +131,12 @@ static struct PoseBackup *rna_Pose_backup_create(ID *pose_owner, bAction *action
   BLI_assert(GS(pose_owner->name) == ID_OB);
   Object *pose_owner_ob = (Object *)pose_owner;
 
-  return ED_pose_backup_create_on_object(pose_owner_ob, action);
+  return BKE_pose_backup_create_on_object(pose_owner_ob, action);
 }
 
 static void rna_Pose_backup_restore(struct PoseBackup *pose_backup)
 {
-  return ED_pose_backup_restore(pose_backup);
+  return BKE_pose_backup_restore(pose_backup);
 }
 
 static void rna_Pose_backup_clear(ID *pose_owner)
@@ -143,7 +144,7 @@ static void rna_Pose_backup_clear(ID *pose_owner)
   BLI_assert(GS(pose_owner->name) == ID_OB);
   Object *pose_owner_ob = (Object *)pose_owner;
 
-  ED_pose_backup_clear(pose_owner_ob);
+  BKE_pose_backup_clear(pose_owner_ob);
 }
 
 #else

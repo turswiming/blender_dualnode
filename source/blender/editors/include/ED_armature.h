@@ -369,43 +369,6 @@ void ED_mesh_deform_bind_callback(struct Object *object,
                                   int verts_num,
                                   float cagemat[4][4]);
 
-/* Pose backups, pose_backup.c */
-struct PoseBackup;
-
-/**
- * Create a backup of those bones that are selected AND animated in the given action.
- *
- * The backup is owned by the caller, and should be freed with `ED_pose_backup_free()`.
- */
-struct PoseBackup *ED_pose_backup_create_selected_bones(
-    const struct Object *ob, const struct bAction *action) ATTR_WARN_UNUSED_RESULT;
-
-/**
- * Create a backup of those bones that are animated in the given action.
- *
- * The backup is owned by the caller, and should be freed with `ED_pose_backup_free()`.
- */
-struct PoseBackup *ED_pose_backup_create_all_bones(
-    const struct Object *ob, const struct bAction *action) ATTR_WARN_UNUSED_RESULT;
-
-/**
- * Create a backup of those bones that are animated in the given action.
- *
- * The backup is owned by the Object, and there can be only one backup at a time.
- * It should be freed with `ED_pose_backup_clear(ob)`.
- */
-struct PoseBackup *ED_pose_backup_create_on_object(struct Object *ob,
-                                                   const struct bAction *action);
-
-bool ED_pose_backup_is_selection_relevant(const struct PoseBackup *pose_backup);
-void ED_pose_backup_restore(const struct PoseBackup *pbd);
-void ED_pose_backup_free(struct PoseBackup *pbd);
-
-/**
- * Free the pose backup that was stored on this object's runtime data.
- */
-void ED_pose_backup_clear(struct Object *ob);
-
 #ifdef __cplusplus
 }
 #endif
