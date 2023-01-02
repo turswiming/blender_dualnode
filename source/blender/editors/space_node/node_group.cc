@@ -993,8 +993,7 @@ static void node_group_make_insert_selected(const bContext &C,
     }
   }
 
-  ED_node_tree_propagate_change(&C, bmain, &group);
-
+  bke::node_field_inferencing::update_field_inferencing(group);
   nodes::update_node_declaration_and_sockets(ntree, *gnode);
 
   /* Add new links to inputs outside of the group. */
@@ -1011,7 +1010,7 @@ static void node_group_make_insert_selected(const bContext &C,
     info.link->fromsock = node_group_find_output_socket(gnode, info.interface_socket->identifier);
   }
 
-  ED_node_tree_propagate_change(&C, bmain, &ntree);
+  ED_node_tree_propagate_change(&C, bmain, &group);
 }
 
 static bNode *node_group_make_from_nodes(const bContext &C,
