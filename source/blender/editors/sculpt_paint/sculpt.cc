@@ -2656,9 +2656,15 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
         }
       }
 
+      mul_v3_fl(point_3d, 1.0f / ss->cache->initial_radius);
+      float angle = mtex->rot;
+
+      float3 final;
+      rotate_v2_v2fl(final, point_3d, angle);
+
 #if 0 /* Write texture UVs to color attribute*/
       if (SCULPT_has_colors(ss)) {
-        float color[4] = {point_3d[0], point_3d[1], 0.0f, 1.0f};
+        float color[4] = {final[0], final[1], 0.0f, 1.0f};
 
         mul_v3_fl(color, 0.25f / ss->cache->initial_radius);
         color[0] -= floorf(color[0]);
@@ -2669,12 +2675,7 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
       }
 #endif
 
-      mul_v3_fl(point_3d, 1.0f / ss->cache->initial_radius);
-      float angle = mtex->rot - cache->special_rotation;
-      rotate_v2_v2fl(point_3d, point_3d, angle);
-
-
-      avg = paint_get_tex_pixel(mtex, point_3d[0], point_3d[1], ss->tex_pool, thread_id);
+      avg = paint_get_tex_pixel(mtex, final[0], final[1], ss->tex_pool, thread_id);
       avg += br->texture_sample_bias;
     }
     else {
