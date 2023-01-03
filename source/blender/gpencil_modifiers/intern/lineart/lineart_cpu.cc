@@ -17,6 +17,7 @@
 
 #include "PIL_time.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_camera.h"
 #include "BKE_collection.h"
 #include "BKE_customdata.h"
@@ -1478,6 +1479,7 @@ struct EdgeFeatData {
   blender::Span<MLoop> loops;
   blender::Span<MPoly> polys;
   LineartTriangle *tri_array;
+  blender::VArray<bool> sharp_edges;
   LineartVert *v_array;
   float crease_threshold;
   bool use_auto_smooth;
@@ -1683,9 +1685,8 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
       e_feat_data->edges.data(), e_feat_data->loops.data(), &mlooptri[i / 3], real_edges);
 
   if (real_edges[i % 3] >= 0) {
-    const MEdge *medge = &e_feat_data->edges[real_edges[i % 3]];
-
-    if (ld->conf.use_crease && ld->conf.sharp_as_crease && (medge->flag & ME_SHARP)) {
+    if (ld->conf.use_crease && ld->conf.sharp_as_crease &&
+        e_feat_data->sharp_edges[real_edges[i % 3]]) {
       edge_flag_result |= LRT_EDGE_FLAG_CREASE;
     }
 

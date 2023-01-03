@@ -2206,7 +2206,7 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
               }
               medge[edge_index].v1 = last_g->new_vert;
               medge[edge_index].v2 = g->new_vert;
-              medge[edge_index].flag = ME_EDGEDRAW | ((last_flag | flag) & (ME_SEAM | ME_SHARP));
+              medge[edge_index].flag = ME_EDGEDRAW | ((last_flag | flag) & ME_SEAM);
               if (result_edge_crease) {
                 result_edge_crease[edge_index] = max_ff(mv_crease,
                                                         min_ff(last_max_crease, max_crease));
@@ -2239,8 +2239,7 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
               last_g->open_face_edge = edge_index;
               medge[edge_index].v1 = last_g->new_vert;
               medge[edge_index].v2 = first_g->new_vert;
-              medge[edge_index].flag = ME_EDGEDRAW |
-                                       ((last_flag | first_flag) & (ME_SEAM | ME_SHARP));
+              medge[edge_index].flag = ME_EDGEDRAW | ((last_flag | first_flag) & ME_SEAM);
               if (result_edge_crease) {
                 result_edge_crease[edge_index] = max_ff(mv_crease,
                                                         min_ff(last_max_crease, first_max_crease));

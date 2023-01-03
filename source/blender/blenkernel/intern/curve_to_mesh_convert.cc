@@ -18,13 +18,6 @@
 
 namespace blender::bke {
 
-static void mark_edges_sharp(MutableSpan<MEdge> edges)
-{
-  for (MEdge &edge : edges) {
-    edge.flag |= ME_SHARP;
-  }
-}
-
 static void fill_mesh_topology(const int vert_offset,
                                const int edge_offset,
                                const int poly_offset,
@@ -156,9 +149,6 @@ static void fill_mesh_topology(const int vert_offset,
       loop_end.v = last_ring_vert_offset + i;
       loop_end.e = last_ring_edge_offset + i;
     }
-
-    mark_edges_sharp(edges.slice(profile_edges_start, profile_segment_num));
-    mark_edges_sharp(edges.slice(last_ring_edge_offset, profile_segment_num));
   }
 }
 
@@ -167,17 +157,17 @@ static void mark_bezier_vector_edges_sharp(const int profile_point_num,
                                            const Span<int> control_point_offsets,
                                            const Span<int8_t> handle_types_left,
                                            const Span<int8_t> handle_types_right,
-                                           MutableSpan<MEdge> edges)
+                                           MutableSpan<bool> sharp_edges)
 {
   const int main_edges_start = 0;
   if (curves::bezier::point_is_sharp(handle_types_left, handle_types_right, 0)) {
-    mark_edges_sharp(edges.slice(main_edges_start, main_segment_num));
+    sharp_edges.slice(main_edges_start, main_segment_num).fill(true);
   }
 
   for (const int i : IndexRange(profile_point_num).drop_front(1)) {
     if (curves::bezier::point_is_sharp(handle_types_left, handle_types_right, i)) {
-      mark_edges_sharp(edges.slice(
-          main_edges_start + main_segment_num * control_point_offsets[i - 1], main_segment_num));
+      const int offset = main_edges_start + main_segment_num * control_point_offsets[i - 1];
+      sharp_edges.slice(offset, main_segment_num).fill(true);
     }
   }
 }
@@ -627,6 +617,35 @@ static void copy_curve_domain_attribute_to_mesh(const ResultOffsets &mesh_offset
   });
 }
 
+static void write_sharp_bezier_edges(const CurvesInfo &curves_info,
+                                     const ResultOffsets &offsets,
+                                     MutableSpan<bool> sharp_edges)
+{
+  const CurvesGeometry &profile = curves_info.profile;
+  if (!profile.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+    return;
+  }
+  const VArraySpan<int8_t> handle_types_left{profile.handle_types_left()};
+  const VArraySpan<int8_t> handle_types_right{profile.handle_types_right()};
+  if (!handle_types_left.contains(BEZIER_HANDLE_VECTOR) ||
+      handle_types_right.contains(BEZIER_HANDLE_VECTOR)) {
+    return;
+  }
+  const VArray<int8_t> curve_types = profile.curve_types();
+
+  foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
+    if (curve_types[info.i_profile] == CURVE_TYPE_BEZIER) {
+      const IndexRange points = profile.points_for_curve(info.i_profile);
+      mark_bezier_vector_edges_sharp(points.size(),
+                                     info.main_segment_num,
+                                     profile.bezier_evaluated_offsets_for_curve(info.i_profile),
+                                     handle_types_left.slice(points),
+                                     handle_types_right.slice(points),
+                                     sharp_edges.slice(info.edge_range));
+    }
+  });
+}
+
 Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
                           const CurvesGeometry &profile,
                           const bool fill_caps)
@@ -692,24 +711,6 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
                         radii.is_empty() ? radii : radii.slice(info.main_points),
                         verts.slice(info.vert_range));
   });
-
-  if (profile.curve_type_counts()[CURVE_TYPE_BEZIER] > 0) {
-    const VArray<int8_t> curve_types = profile.curve_types();
-    const VArraySpan<int8_t> handle_types_left{profile.handle_types_left()};
-    const VArraySpan<int8_t> handle_types_right{profile.handle_types_right()};
-
-    foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
-      if (curve_types[info.i_profile] == CURVE_TYPE_BEZIER) {
-        const IndexRange points = profile.points_for_curve(info.i_profile);
-        mark_bezier_vector_edges_sharp(points.size(),
-                                       info.main_segment_num,
-                                       profile.bezier_evaluated_offsets_for_curve(info.i_profile),
-                                       handle_types_left.slice(points),
-                                       handle_types_right.slice(points),
-                                       edges.slice(info.edge_range));
-      }
-    });
-  }
 
   Set<AttributeIDRef> main_attributes_set;
 
@@ -783,6 +784,24 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
     dst.finish();
     return true;
   });
+
+  SpanAttributeWriter<bool> sharp_edges = mesh_attributes.lookup_or_add_for_write_span<bool>(
+      ".sharp_edge", ATTR_DOMAIN_EDGE);
+  write_sharp_bezier_edges(curves_info, offsets, sharp_edges.span);
+  if (fill_caps) {
+    foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
+      const int main_edges_start = info.edge_range.start();
+      const int last_ring_index = info.main_points.size() - 1;
+      const int profile_edges_start = main_edges_start +
+                                      info.profile_points.size() * info.main_segment_num;
+      const int last_ring_edge_offset = profile_edges_start +
+                                        info.profile_segment_num * last_ring_index;
+
+      sharp_edges.span.slice(profile_edges_start, info.profile_segment_num).fill(true);
+      sharp_edges.span.slice(last_ring_edge_offset, info.profile_segment_num).fill(true);
+    });
+  }
+  sharp_edges.finish();
 
   return mesh;
 }

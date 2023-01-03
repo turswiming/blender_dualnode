@@ -19,6 +19,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_lib_id.h"
@@ -74,7 +75,9 @@ struct WeightedNormalData {
 
   const MVert *mvert;
   const float (*vert_normals)[3];
-  MEdge *medge;
+  const MEdge *medge;
+
+  bool *sharp_edges;
 
   const MLoop *mloop;
   blender::Span<int> loop_to_poly;
@@ -188,7 +191,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
   const int polys_num = wn_data->polys_num;
 
   const MVert *mvert = wn_data->mvert;
-  MEdge *medge = wn_data->medge;
+  const MEdge *medge = wn_data->medge;
 
   const MLoop *mloop = wn_data->mloop;
   short(*clnors)[2] = wn_data->clnors;
@@ -236,6 +239,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
                                 polys_num,
                                 true,
                                 split_angle,
+                                wn_data->sharp_edges,
                                 loop_to_poly.data(),
                                 &lnors_spacearr,
                                 has_clnors ? clnors : nullptr);
@@ -366,6 +370,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
                                      mpoly,
                                      poly_normals,
                                      polys_num,
+                                     wn_data->sharp_edges,
                                      clnors);
   }
   else {
@@ -397,6 +402,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
                                                   mpoly,
                                                   poly_normals,
                                                   polys_num,
+                                                  wn_data->sharp_edges,
                                                   clnors);
 
       MEM_freeN(vert_normals);
@@ -418,6 +424,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
                                   polys_num,
                                   true,
                                   split_angle,
+                                  wn_data->sharp_edges,
                                   loop_to_poly.data(),
                                   nullptr,
                                   has_clnors ? clnors : nullptr);
@@ -440,6 +447,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
                                        mpoly,
                                        poly_normals,
                                        polys_num,
+                                       wn_data->sharp_edges,
                                        clnors);
     }
   }
@@ -584,7 +592,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   const int loops_num = result->totloop;
   const int polys_num = result->totpoly;
   const MVert *mvert = BKE_mesh_verts(result);
-  MEdge *medge = BKE_mesh_edges_for_write(result);
+  const MEdge *medge = BKE_mesh_edges(result);
   const MPoly *mpoly = BKE_mesh_polys(result);
   const MLoop *mloop = BKE_mesh_loops(result);
 
@@ -624,6 +632,10 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   const Array<int> loop_to_poly_map = bke::mesh_topology::build_loop_to_poly_map(result->polys(),
                                                                                  result->totloop);
 
+  bke::SpanAttributeWriter<bool> sharp_edges =
+      result->attributes_for_write().lookup_or_add_for_write_span<bool>(".sharp_edge",
+                                                                        ATTR_DOMAIN_EDGE);
+
   WeightedNormalData wn_data{};
   wn_data.verts_num = verts_num;
   wn_data.edges_num = edges_num;
@@ -633,6 +645,8 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   wn_data.mvert = mvert;
   wn_data.vert_normals = BKE_mesh_vertex_normals_ensure(result);
   wn_data.medge = medge;
+
+  wn_data.sharp_edges = sharp_edges.span.data();
 
   wn_data.mloop = mloop;
   wn_data.loop_to_poly = loop_to_poly_map;
@@ -668,6 +682,8 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   MEM_SAFE_FREE(wn_data.items_data);
 
   result->runtime->is_original_bmesh = false;
+
+  sharp_edges.finish();
 
   return result;
 }

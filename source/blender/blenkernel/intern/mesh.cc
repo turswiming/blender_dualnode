@@ -257,6 +257,7 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
       BKE_mesh_legacy_bevel_weight_from_layers(mesh);
       BKE_mesh_legacy_face_set_from_generic(mesh, poly_layers);
       BKE_mesh_legacy_edge_crease_from_layers(mesh);
+      BKE_mesh_sharp_edges_to_flags(mesh);
       BKE_mesh_legacy_attribute_strings_to_flags(mesh);
       mesh->active_color_attribute = nullptr;
       mesh->default_color_attribute = nullptr;
@@ -1852,6 +1853,8 @@ void BKE_mesh_calc_normals_split_ex(Mesh *mesh,
                               polys.size(),
                               use_split_normals,
                               split_angle,
+                              static_cast<const bool *>(CustomData_get_layer_named(
+                                  &mesh->edata, CD_PROP_BOOL, ".sharp_edge")),
                               nullptr,
                               r_lnors_spacearr,
                               clnors);

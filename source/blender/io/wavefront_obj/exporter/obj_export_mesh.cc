@@ -192,14 +192,16 @@ void OBJMesh::ensure_mesh_normals() const
 
 void OBJMesh::calc_smooth_groups(const bool use_bitflags)
 {
-  poly_smooth_groups_ = BKE_mesh_calc_smoothgroups(mesh_edges_.data(),
-                                                   mesh_edges_.size(),
-                                                   mesh_polys_.data(),
-                                                   mesh_polys_.size(),
-                                                   mesh_loops_.data(),
-                                                   mesh_loops_.size(),
-                                                   &tot_smooth_groups_,
-                                                   use_bitflags);
+  poly_smooth_groups_ = BKE_mesh_calc_smoothgroups(
+      mesh_edges_.data(),
+      mesh_edges_.size(),
+      mesh_polys_.data(),
+      mesh_polys_.size(),
+      mesh_loops_.data(),
+      mesh_loops_.size(),
+      (const bool *)CustomData_get_layer_named(&export_mesh_->edata, CD_PROP_BOOL, ".sharp_edge"),
+      &tot_smooth_groups_,
+      use_bitflags);
 }
 
 void OBJMesh::calc_poly_order()
