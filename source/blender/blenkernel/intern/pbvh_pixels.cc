@@ -24,8 +24,6 @@
 #include "pbvh_intern.h"
 #include "pbvh_uv_islands.hh"
 
-#include <atomic>
-
 namespace blender::bke::pbvh::pixels {
 
 /**
@@ -54,7 +52,7 @@ static float2 calc_barycentric_delta_x(const ImBuf *image_buffer,
   return calc_barycentric_delta(uvs, start_uv, end_uv);
 }
 
-int count_node_pixels(PBVHNode &node)
+static int count_node_pixels(PBVHNode &node)
 {
   if (!node.pixels.node_data) {
     return 0;
@@ -806,13 +804,7 @@ using namespace blender::bke::pbvh::pixels;
 void BKE_pbvh_build_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image_user)
 {
   if (update_pixels(pbvh, mesh, image, image_user)) {
-    double time_ms = PIL_check_seconds_timer();
-
     split_pixel_nodes(pbvh, mesh, image, image_user);
-
-    time_ms = PIL_check_seconds_timer() - time_ms;
-
-    printf("Nodes split time: %.2fms\n", time_ms * 1000.0);
   }
 }
 

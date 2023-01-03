@@ -13,7 +13,7 @@
 #include "BLI_math_color_blend.h"
 #include "BLI_task.h"
 #ifdef DEBUG_PIXEL_NODES
-#  include "BLI_rand.h"
+#  include "BLI_hash.h"
 #endif
 
 #include "IMB_colormanagement.h"
@@ -349,11 +349,11 @@ static void do_paint_pixels(void *__restrict userdata,
   float brush_color[4];
 
 #ifdef DEBUG_PIXEL_NODES
-  RNG *rng = BLI_rng_new(POINTER_AS_UINT(node));
+  uint hash = BLI_hash_int(POINTER_AS_UINT(node));
 
-  brush_color[0] = BLI_rng_get_float(rng);
-  brush_color[1] = BLI_rng_get_float(rng);
-  brush_color[2] = BLI_rng_get_float(rng);
+  brush_color[0] = (float)(hash & 255) / 255.0f;
+  brush_color[1] = (float)((hash >> 8) & 255) / 255.0f;
+  brush_color[2] = (float)((hash >> 16) & 255) / 255.0f;
 #else
   copy_v3_v3(brush_color,
              ss->cache->invert ? BKE_brush_secondary_color_get(ss->scene, brush) :
