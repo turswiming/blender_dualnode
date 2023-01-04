@@ -1363,14 +1363,14 @@ void BKE_mesh_sharp_edges_from_flags(Mesh *mesh)
   MutableAttributeAccessor attributes = mesh->attributes_for_write();
   if (std::any_of(
           edges.begin(), edges.end(), [](const MEdge &edge) { return edge.flag & ME_SHARP; })) {
-    SpanAttributeWriter<bool> hide_vert = attributes.lookup_or_add_for_write_only_span<bool>(
+    SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_only_span<bool>(
         ".sharp_edge", ATTR_DOMAIN_EDGE);
-    threading::parallel_for(edges.index_range(), 4096, [&](IndexRange range) {
+    threading::parallel_for(edges.index_range(), 4096, [&](const IndexRange range) {
       for (const int i : range) {
-        hide_vert.span[i] = edges[i].flag & ME_SHARP;
+        sharp_edges.span[i] = edges[i].flag & ME_SHARP;
       }
     });
-    hide_vert.finish();
+    sharp_edges.finish();
   }
 }
 
