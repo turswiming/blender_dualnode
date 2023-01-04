@@ -787,7 +787,6 @@ static int mesh_customdata_custom_splitnormals_add_exec(bContext *C, wmOperator 
       bke::MutableAttributeAccessor attributes = me->attributes_for_write();
       bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
           ".sharp_edge", ATTR_DOMAIN_EDGE);
-
       BKE_edges_sharp_from_angle_set(me->totedge,
                                      loops.data(),
                                      loops.size(),
@@ -796,7 +795,6 @@ static int mesh_customdata_custom_splitnormals_add_exec(bContext *C, wmOperator 
                                      polys.size(),
                                      me->smoothresh,
                                      sharp_edges.span.data());
-
       sharp_edges.finish();
     }
 
@@ -1460,7 +1458,6 @@ void ED_mesh_split_faces(Mesh *mesh)
   const float split_angle = (mesh->flag & ME_AUTOSMOOTH) != 0 ? mesh->smoothresh : float(M_PI);
 
   Array<bool> sharp_edges(mesh->totedge, false);
-
   BKE_edges_sharp_from_angle_set(mesh->totedge,
                                  loops.data(),
                                  loops.size(),

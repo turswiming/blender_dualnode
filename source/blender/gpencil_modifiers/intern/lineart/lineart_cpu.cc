@@ -2070,6 +2070,10 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   edge_feat_settings.userdata_chunk_size = sizeof(EdgeFeatReduceData);
   edge_feat_settings.func_reduce = feat_data_sum_reduce;
 
+  const bke::AttributeAccessor attributes = me->attributes();
+  const VArray<bool> sharp_edges = attributes.lookup_or_default<bool>(
+      ".sharp_edge", ATTR_DOMAIN_EDGE, false);
+
   EdgeFeatData edge_feat_data = {nullptr};
   edge_feat_data.ld = la_data;
   edge_feat_data.me = me;
@@ -2079,6 +2083,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   edge_feat_data.edges = me->edges();
   edge_feat_data.polys = me->polys();
   edge_feat_data.loops = me->loops();
+  edge_feat_data.sharp_edges = sharp_edges;
   edge_feat_data.edge_nabr = lineart_build_edge_neighbor(me, total_edges);
   edge_feat_data.tri_array = la_tri_arr;
   edge_feat_data.v_array = la_v_arr;

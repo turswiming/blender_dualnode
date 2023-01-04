@@ -631,10 +631,9 @@ static void write_sharp_bezier_edges(const CurvesInfo &curves_info,
       handle_types_right.contains(BEZIER_HANDLE_VECTOR)) {
     return;
   }
-  const VArray<int8_t> curve_types = profile.curve_types();
-
+  const VArray<int8_t> types = profile.curve_types();
   foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
-    if (curve_types[info.i_profile] == CURVE_TYPE_BEZIER) {
+    if (types[info.i_profile] == CURVE_TYPE_BEZIER) {
       const IndexRange points = profile.points_for_curve(info.i_profile);
       mark_bezier_vector_edges_sharp(points.size(),
                                      info.main_segment_num,

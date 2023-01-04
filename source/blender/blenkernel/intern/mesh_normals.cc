@@ -1612,7 +1612,7 @@ void BKE_mesh_normals_loop_split(const MVert *mverts,
                        loops,
                        loop_to_poly,
                        {reinterpret_cast<const float3 *>(poly_normals), numPolys},
-                       Span<bool>(sharp_edges, numEdges),
+                       Span<bool>(sharp_edges, sharp_edges ? numEdges : 0),
                        check_angle,
                        split_angle,
                        edge_to_loops,
@@ -1974,9 +1974,7 @@ static void mesh_set_custom_normals(Mesh *mesh, float (*r_custom_nors)[3], const
   MutableSpan<MEdge> edges = mesh->edges_for_write();
   const Span<MPoly> polys = mesh->polys();
   const Span<MLoop> loops = mesh->loops();
-
   MutableAttributeAccessor attributes = mesh->attributes_for_write();
-
   SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
       ".sharp_edge", ATTR_DOMAIN_EDGE);
 

@@ -76,7 +76,6 @@ struct WeightedNormalData {
   const MVert *mvert;
   const float (*vert_normals)[3];
   const MEdge *medge;
-
   bool *sharp_edges;
 
   const MLoop *mloop;
@@ -632,9 +631,9 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   const Array<int> loop_to_poly_map = bke::mesh_topology::build_loop_to_poly_map(result->polys(),
                                                                                  result->totloop);
 
-  bke::SpanAttributeWriter<bool> sharp_edges =
-      result->attributes_for_write().lookup_or_add_for_write_span<bool>(".sharp_edge",
-                                                                        ATTR_DOMAIN_EDGE);
+  bke::MutableAttributeAccessor attributes = result->attributes_for_write();
+  bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
+      ".sharp_edge", ATTR_DOMAIN_EDGE);
 
   WeightedNormalData wn_data{};
   wn_data.verts_num = verts_num;
@@ -645,7 +644,6 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   wn_data.mvert = mvert;
   wn_data.vert_normals = BKE_mesh_vertex_normals_ensure(result);
   wn_data.medge = medge;
-
   wn_data.sharp_edges = sharp_edges.span.data();
 
   wn_data.mloop = mloop;

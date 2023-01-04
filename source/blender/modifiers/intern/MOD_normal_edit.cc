@@ -548,9 +548,9 @@ static Mesh *normalEditModifier_do(NormalEditModifierData *enmd,
   const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(result);
   const float(*poly_normals)[3] = BKE_mesh_poly_normals_ensure(result);
 
-  bke::SpanAttributeWriter<bool> sharp_edges =
-      result->attributes_for_write().lookup_or_add_for_write_span<bool>(".sharp_edge",
-                                                                        ATTR_DOMAIN_EDGE);
+  bke::MutableAttributeAccessor attributes = result->attributes_for_write();
+  bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
+      ".sharp_edge", ATTR_DOMAIN_EDGE);
 
   short(*clnors)[2] = static_cast<short(*)[2]>(CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL));
   if (use_current_clnors) {

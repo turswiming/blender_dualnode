@@ -839,7 +839,7 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
 
 static bool poly_is_island_boundary_smooth_cb(const MPoly *mp,
                                               const MLoop * /*ml*/,
-                                              const MEdge *me,
+                                              const MEdge * /*me*/,
                                               const int edge_index,
                                               const bool *sharp_edges,
                                               const int edge_user_count,
