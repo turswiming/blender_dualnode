@@ -997,8 +997,8 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
     }
     if (r_map && cddata_type == CD_FAKE_SHARP) {
       if (!CustomData_get_layer_named(&me_dst->edata, CD_PROP_BOOL, ".sharp_edge")) {
-        CustomData_add_layer(
-            &me_dst->edata, CD_PROP_BOOL, CD_SET_DEFAULT, nullptr, me_dst->totedge);
+        CustomData_add_layer_named(
+            &me_dst->edata, CD_PROP_BOOL, CD_SET_DEFAULT, nullptr, me_dst->totedge, ".sharp_edge");
       }
       data_transfer_layersmapping_add_item_cd(
           r_map,
