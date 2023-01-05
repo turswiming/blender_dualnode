@@ -82,9 +82,9 @@ struct CursorSnapshot {
   int curve_preset;
 };
 
-static TexSnapshot primary_snap = {0};
-static TexSnapshot secondary_snap = {0};
-static CursorSnapshot cursor_snap = {0};
+static TexSnapshot primary_snap = {nullptr};
+static TexSnapshot secondary_snap = {nullptr};
+static CursorSnapshot cursor_snap = {nullptr};
 
 void paint_cursor_delete_textures(void)
 {
@@ -124,7 +124,7 @@ static void make_tex_snap(TexSnapshot *snap, ViewContext *vc, float zoom)
   snap->winy = vc->region->winy;
 }
 
-typedef struct LoadTexData {
+struct LoadTexData {
   Brush *br;
   ViewContext *vc;
 
@@ -132,11 +132,11 @@ typedef struct LoadTexData {
   uchar *buffer;
   bool col;
 
-  struct ImagePool *pool;
+  ImagePool *pool;
   int size;
   float rotation;
   float radius;
-} LoadTexData;
+};
 
 static void load_tex_task_cb_ex(void *__restrict userdata,
                                 const int j,
@@ -150,13 +150,13 @@ static void load_tex_task_cb_ex(void *__restrict userdata,
   uchar *buffer = data->buffer;
   const bool col = data->col;
 
-  struct ImagePool *pool = data->pool;
+  ImagePool *pool = data->pool;
   const int size = data->size;
   const float rotation = data->rotation;
   const float radius = data->radius;
 
   bool convert_to_linear = false;
-  struct ColorSpace *colorspace = nullptr;
+  ColorSpace *colorspace = nullptr;
 
   const int thread_id = BLI_task_parallel_thread_id(tls);
 
@@ -217,7 +217,7 @@ static void load_tex_task_cb_ex(void *__restrict userdata,
 
         /* Clamp to avoid precision overflow. */
         CLAMP(avg, 0.0f, 1.0f);
-        buffer[index] = 255 - (uchar)(255 * avg);
+        buffer[index] = 255 - uchar(255 * avg);
       }
     }
     else {
@@ -253,10 +253,10 @@ static int load_tex(Brush *br, ViewContext *vc, float zoom, bool col, bool prima
   refresh = !target->overlay_texture || (invalid != 0) ||
             !same_tex_snap(target, mtex, vc, col, zoom);
 
-  init = (target->overlay_texture != 0);
+  init = (target->overlay_texture != nullptr);
 
   if (refresh) {
-    struct ImagePool *pool = nullptr;
+    ImagePool *pool = nullptr;
     /* Stencil is rotated later. */
     const float rotation = (mtex->brush_map_mode != MTEX_MAP_MODE_STENCIL) ? -mtex->rot : 0.0f;
     const float radius = BKE_brush_size_get(vc->scene, br) * zoom;
@@ -334,7 +334,8 @@ static int load_tex(Brush *br, ViewContext *vc, float zoom, bool col, bool prima
 
     if (!target->overlay_texture) {
       eGPUTextureFormat format = col ? GPU_RGBA8 : GPU_R8;
-      eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
+      eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT |
+                               GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW;
       target->overlay_texture = GPU_texture_create_2d_ex(
           "paint_cursor_overlay", size, size, 1, format, usage, nullptr);
       GPU_texture_update(target->overlay_texture, GPU_DATA_UBYTE, buffer);
@@ -363,7 +364,7 @@ static int load_tex(Brush *br, ViewContext *vc, float zoom, bool col, bool prima
 
 static void load_tex_cursor_task_cb(void *__restrict userdata,
                                     const int j,
-                                    const TaskParallelTLS *__restrict UNUSED(tls))
+                                    const TaskParallelTLS *__restrict /*tls*/)
 {
   LoadTexData *data = static_cast<LoadTexData *>(userdata);
   Brush *br = data->br;
@@ -385,7 +386,7 @@ static void load_tex_cursor_task_cb(void *__restrict userdata,
       /* Falloff curve. */
       float avg = BKE_brush_curve_strength_clamped(br, len, 1.0f);
 
-      buffer[index] = (uchar)(255 * avg);
+      buffer[index] = uchar(255 * avg);
     }
     else {
       buffer[index] = 0;
@@ -405,7 +406,7 @@ static int load_tex_cursor(Brush *br, ViewContext *vc, float zoom)
                        (overlay_flags & PAINT_OVERLAY_INVALID_CURVE) || cursor_snap.zoom != zoom ||
                        cursor_snap.curve_preset != br->curve_preset;
 
-  init = (cursor_snap.overlay_texture != 0);
+  init = (cursor_snap.overlay_texture != nullptr);
 
   if (refresh) {
     int s, r;
@@ -453,7 +454,8 @@ static int load_tex_cursor(Brush *br, ViewContext *vc, float zoom)
     BLI_task_parallel_range(0, size, &data, load_tex_cursor_task_cb, &settings);
 
     if (!cursor_snap.overlay_texture) {
-      eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
+      eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT |
+                               GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW;
       cursor_snap.overlay_texture = GPU_texture_create_2d_ex(
           "cursor_snap_overaly", size, size, 1, GPU_R8, usage, nullptr);
       GPU_texture_update(cursor_snap.overlay_texture, GPU_DATA_UBYTE, buffer);
@@ -1192,13 +1194,13 @@ static bool paint_use_2d_cursor(ePaintMode mode)
   return false;
 }
 
-typedef enum PaintCursorDrawingType {
+enum PaintCursorDrawingType {
   PAINT_CURSOR_CURVE,
   PAINT_CURSOR_2D,
   PAINT_CURSOR_3D,
-} PaintCursorDrawingType;
+};
 
-typedef struct PaintCursorContext {
+struct PaintCursorContext {
   bContext *C;
   ARegion *region;
   wmWindow *win;
@@ -1244,8 +1246,7 @@ typedef struct PaintCursorContext {
 
   float final_radius;
   int pixel_radius;
-
-} PaintCursorContext;
+};
 
 static bool paint_cursor_context_init(bContext *C,
                                       const int x,
@@ -1893,14 +1894,14 @@ static void paint_cursor_setup_3D_drawing(PaintCursorContext *pcontext)
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 }
 
-static void paint_cursor_restore_drawing_state(void)
+static void paint_cursor_restore_drawing_state()
 {
   immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
   GPU_line_smooth(false);
 }
 
-static void paint_draw_cursor(bContext *C, int x, int y, void *UNUSED(unused))
+static void paint_draw_cursor(bContext *C, int x, int y, void * /*unused*/)
 {
   PaintCursorContext pcontext;
   if (!paint_cursor_context_init(C, x, y, &pcontext)) {

@@ -8,7 +8,7 @@
 
 #include "BLI_bitmap.h"
 #include "BLI_linklist.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 
 #include "BLT_translation.h"
 
@@ -738,7 +738,7 @@ ModifierTypeInfo modifierType_WeightedNormal = {
     /* type */ eModifierTypeType_Constructive,
     /* flags */ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
         eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_EnableInEditmode,
-    /* icon */ ICON_MOD_VERTEX_WEIGHT,
+    /* icon */ ICON_MOD_NORMALEDIT,
 
     /* copyData */ BKE_modifier_copydata_generic,
 

@@ -190,7 +190,7 @@ const PointerRNA *CTX_store_ptr_lookup(const bContextStore *store,
 {
   for (auto entry = store->entries.rbegin(); entry != store->entries.rend(); ++entry) {
     if (entry->name == name) {
-      if (type && RNA_struct_is_a(entry->ptr.type, type)) {
+      if (!type || (type && RNA_struct_is_a(entry->ptr.type, type))) {
         return &entry->ptr;
       }
     }
@@ -1511,8 +1511,8 @@ Depsgraph *CTX_data_expect_evaluated_depsgraph(const bContext *C)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   /* TODO(sergey): Assert that the dependency graph is fully evaluated.
-   * Note that first the depsgraph and scene post-eval hooks needs to run extra round of updates
-   * first to make check here really reliable. */
+   * Note that first the depsgraph and scene post-evaluation hooks needs to run extra round of
+   * updates first to make check here really reliable. */
   return depsgraph;
 }
 

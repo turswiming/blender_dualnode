@@ -307,9 +307,9 @@ static void data_transfer_dtdata_type_preprocess(Mesh *me_src,
   }
 }
 
-static void data_transfer_dtdata_type_postprocess(Object *UNUSED(ob_src),
-                                                  Object *UNUSED(ob_dst),
-                                                  Mesh *UNUSED(me_src),
+static void data_transfer_dtdata_type_postprocess(Object * /*ob_src*/,
+                                                  Object * /*ob_dst*/,
+                                                  Mesh * /*me_src*/,
                                                   Mesh *me_dst,
                                                   const int dtdata_type,
                                                   const bool changed)
@@ -1258,7 +1258,7 @@ bool BKE_object_data_transfer_ex(struct Depsgraph *depsgraph,
   float *weights[DATAMAX] = {nullptr};
 
   MeshPairRemap geom_map[DATAMAX] = {{0}};
-  bool geom_map_init[DATAMAX] = {0};
+  bool geom_map_init[DATAMAX] = {false};
   ListBase lay_map = {nullptr};
   bool changed = false;
   bool is_modifier = false;

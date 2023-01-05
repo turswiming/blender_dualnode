@@ -5,9 +5,9 @@
  * \ingroup bke
  */
 
-#include <math.h>
-#include <stddef.h>
-#include <string.h>
+#include <cmath>
+#include <cstddef>
+#include <cstring>
 
 #include "MEM_guardedalloc.h"
 
@@ -51,10 +51,7 @@
 
 #include "BLO_read_write.h"
 
-static void shapekey_copy_data(Main *UNUSED(bmain),
-                               ID *id_dst,
-                               const ID *id_src,
-                               const int UNUSED(flag))
+static void shapekey_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, const int /*flag*/)
 {
   Key *key_dst = (Key *)id_dst;
   const Key *key_src = (const Key *)id_src;
@@ -234,10 +231,10 @@ IDTypeInfo IDType_ID_KE = {
 #define KEY_MODE_BEZTRIPLE 2
 
 /* Internal use only. */
-typedef struct WeightsArrayCache {
+struct WeightsArrayCache {
   int num_defgroup_weights;
   float **defgroup_weights;
-} WeightsArrayCache;
+};
 
 void BKE_key_free_data(Key *key)
 {
@@ -735,7 +732,7 @@ static void cp_key(const int start,
 
     if (flagflo) {
       ktot += start * kd;
-      a = (int)floor(ktot);
+      a = int(floor(ktot));
       if (a) {
         ktot -= a;
         k1 += a * key->elemsize;
@@ -1081,7 +1078,7 @@ static void do_key(const int start,
     if (flagdo & 1) {
       if (flagflo & 1) {
         k1tot += start * k1d;
-        a = (int)floor(k1tot);
+        a = int(floor(k1tot));
         if (a) {
           k1tot -= a;
           k1 += a * key->elemsize;
@@ -1094,7 +1091,7 @@ static void do_key(const int start,
     if (flagdo & 2) {
       if (flagflo & 2) {
         k2tot += start * k2d;
-        a = (int)floor(k2tot);
+        a = int(floor(k2tot));
         if (a) {
           k2tot -= a;
           k2 += a * key->elemsize;
@@ -1107,7 +1104,7 @@ static void do_key(const int start,
     if (flagdo & 4) {
       if (flagflo & 4) {
         k3tot += start * k3d;
-        a = (int)floor(k3tot);
+        a = int(floor(k3tot));
         if (a) {
           k3tot -= a;
           k3 += a * key->elemsize;
@@ -1120,7 +1117,7 @@ static void do_key(const int start,
     if (flagdo & 8) {
       if (flagflo & 8) {
         k4tot += start * k4d;
-        a = (int)floor(k4tot);
+        a = int(floor(k4tot));
         if (a) {
           k4tot -= a;
           k4 += a * key->elemsize;
@@ -1664,7 +1661,7 @@ int BKE_keyblock_element_count(const Key *key)
 
 size_t BKE_keyblock_element_calc_size_from_shape(const Key *key, const int shape_index)
 {
-  return (size_t)BKE_keyblock_element_count_from_shape(key, shape_index) * key->elemsize;
+  return size_t(BKE_keyblock_element_count_from_shape(key, shape_index)) * key->elemsize;
 }
 
 size_t BKE_keyblock_element_calc_size(const Key *key)
@@ -2064,7 +2061,7 @@ int BKE_keyblock_curve_element_count(const ListBase *nurb)
   return tot;
 }
 
-void BKE_keyblock_update_from_curve(const Curve *UNUSED(cu), KeyBlock *kb, const ListBase *nurb)
+void BKE_keyblock_update_from_curve(const Curve * /*cu*/, KeyBlock *kb, const ListBase *nurb)
 {
   Nurb *nu;
   BezTriple *bezt;
@@ -2178,7 +2175,7 @@ static void keyblock_data_convert_to_curve(const float *fp, ListBase *nurb, int 
   }
 }
 
-void BKE_keyblock_convert_to_curve(KeyBlock *kb, Curve *UNUSED(cu), ListBase *nurb)
+void BKE_keyblock_convert_to_curve(KeyBlock *kb, Curve * /*cu*/, ListBase *nurb)
 {
   const float *fp = static_cast<const float *>(kb->data);
   const int tot = min_ii(kb->totelem, BKE_keyblock_curve_element_count(nurb));
