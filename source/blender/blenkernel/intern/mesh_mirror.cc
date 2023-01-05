@@ -418,7 +418,7 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
                                 true,
                                 mesh->smoothresh,
                                 static_cast<const bool *>(CustomData_get_layer_named(
-                                    &result->edata, CD_PROP_BOOL, ".sharp_edge")),
+                                    &result->edata, CD_PROP_BOOL, "sharp_edge")),
                                 nullptr,
                                 &lnors_spacearr,
                                 clnors);

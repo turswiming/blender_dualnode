@@ -303,7 +303,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *me, const struct BMeshFromMeshPar
   const int *material_indices = (const int *)CustomData_get_layer_named(
       &me->pdata, CD_PROP_INT32, "material_index");
   const bool *sharp_edges = (const bool *)CustomData_get_layer_named(
-      &me->edata, CD_PROP_BOOL, ".sharp_edge");
+      &me->edata, CD_PROP_BOOL, "sharp_edge");
 
   Span<MVert> mvert = me->verts();
   Array<BMVert *> vtable(me->totvert);
@@ -1085,7 +1085,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *me, const struct BMeshToMesh
   if (need_sharp_edge) {
     BM_mesh_elem_table_ensure(bm, BM_EDGE);
     write_fn_to_attribute<bool>(
-        me->attributes_for_write(), ".sharp_edge", ATTR_DOMAIN_EDGE, [&](const int i) {
+        me->attributes_for_write(), "sharp_edge", ATTR_DOMAIN_EDGE, [&](const int i) {
           return !BM_elem_flag_test(BM_edge_at_index(bm, i), BM_ELEM_SMOOTH);
         });
   }
@@ -1309,7 +1309,7 @@ void BM_mesh_bm_to_me_for_eval(BMesh *bm, Mesh *me, const CustomData_MeshMasks *
     if (!BM_elem_flag_test(eed, BM_ELEM_SMOOTH)) {
       if (!sharp_edge_attribute) {
         sharp_edge_attribute = mesh_attributes.lookup_or_add_for_write_span<bool>(
-            ".sharp_edge", ATTR_DOMAIN_EDGE);
+            "sharp_edge", ATTR_DOMAIN_EDGE);
       }
       sharp_edge_attribute.span[i] = true;
     }

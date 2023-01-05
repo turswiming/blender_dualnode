@@ -2072,7 +2072,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
 
   const bke::AttributeAccessor attributes = me->attributes();
   const VArray<bool> sharp_edges = attributes.lookup_or_default<bool>(
-      ".sharp_edge", ATTR_DOMAIN_EDGE, false);
+      "sharp_edge", ATTR_DOMAIN_EDGE, false);
 
   EdgeFeatData edge_feat_data = {nullptr};
   edge_feat_data.ld = la_data;

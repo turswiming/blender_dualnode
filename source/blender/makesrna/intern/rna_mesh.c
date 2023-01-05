@@ -1497,7 +1497,7 @@ static bool rna_MeshEdge_use_edge_sharp_get(PointerRNA *ptr)
 {
   const Mesh *mesh = rna_mesh(ptr);
   const bool *sharp_edge = (const bool *)CustomData_get_layer_named(
-      &mesh->edata, CD_PROP_BOOL, ".sharp_edge");
+      &mesh->edata, CD_PROP_BOOL, "sharp_edge");
   const int index = rna_MeshEdge_index_get(ptr);
   return sharp_edge == NULL ? false : sharp_edge[index];
 }
@@ -1506,14 +1506,14 @@ static void rna_MeshEdge_use_edge_sharp_set(PointerRNA *ptr, bool value)
 {
   Mesh *mesh = rna_mesh(ptr);
   bool *sharp_edge = (bool *)CustomData_duplicate_referenced_layer_named(
-      &mesh->edata, CD_PROP_BOOL, ".sharp_edge", mesh->totedge);
+      &mesh->edata, CD_PROP_BOOL, "sharp_edge", mesh->totedge);
   if (!sharp_edge) {
     if (!value) {
       /* Skip adding layer if it doesn't exist already anyway and we're not hiding an element. */
       return;
     }
     sharp_edge = (bool *)CustomData_add_layer_named(
-        &mesh->edata, CD_PROP_BOOL, CD_SET_DEFAULT, NULL, mesh->totedge, ".sharp_edge");
+        &mesh->edata, CD_PROP_BOOL, CD_SET_DEFAULT, NULL, mesh->totedge, "sharp_edge");
   }
   const int index = rna_MeshEdge_index_get(ptr);
   sharp_edge[index] = value;

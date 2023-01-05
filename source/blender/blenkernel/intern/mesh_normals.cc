@@ -1976,7 +1976,7 @@ static void mesh_set_custom_normals(Mesh *mesh, float (*r_custom_nors)[3], const
   const Span<MLoop> loops = mesh->loops();
   MutableAttributeAccessor attributes = mesh->attributes_for_write();
   SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
-      ".sharp_edge", ATTR_DOMAIN_EDGE);
+      "sharp_edge", ATTR_DOMAIN_EDGE);
 
   mesh_normals_loop_custom_set(verts.data(),
                                BKE_mesh_vertex_normals_ensure(mesh),

@@ -1381,7 +1381,7 @@ void BKE_mesh_remap_calc_loops_from_mesh(const int mode,
                                       use_split_nors_dst,
                                       split_angle_dst,
                                       static_cast<const bool *>(CustomData_get_layer_named(
-                                          &mesh_dst->edata, CD_PROP_BOOL, ".sharp_edge")),
+                                          &mesh_dst->edata, CD_PROP_BOOL, "sharp_edge")),
                                       nullptr,
                                       nullptr,
                                       custom_nors_dst);

@@ -2302,7 +2302,7 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
                                 (mesh->flag & ME_AUTOSMOOTH) != 0,
                                 mesh->smoothresh,
                                 static_cast<const bool *>(CustomData_get_layer_named(
-                                    &mesh->edata, CD_PROP_BOOL, ".sharp_edge")),
+                                    &mesh->edata, CD_PROP_BOOL, "sharp_edge")),
                                 nullptr,
                                 nullptr,
                                 clnors);

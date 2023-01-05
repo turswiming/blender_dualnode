@@ -698,7 +698,7 @@ static int sculpt_face_set_init_exec(bContext *C, wmOperator *op)
     }
     case SCULPT_FACE_SETS_FROM_SHARP_EDGES: {
       const VArraySpan<bool> sharp_edges = mesh->attributes().lookup_or_default<bool>(
-          ".sharp_edge", ATTR_DOMAIN_EDGE, false);
+          "sharp_edge", ATTR_DOMAIN_EDGE, false);
       sculpt_face_sets_init_flood_fill(
           ob, [&](const int /*from_face*/, const int edge, const int /*to_face*/) -> bool {
             return !sharp_edges[edge];

@@ -302,7 +302,7 @@ static void data_transfer_dtdata_type_preprocess(Mesh *me_src,
                                   use_split_nors_dst,
                                   split_angle_dst,
                                   static_cast<const bool *>(CustomData_get_layer_named(
-                                      &me_dst->edata, CD_PROP_BOOL, ".sharp_edge")),
+                                      &me_dst->edata, CD_PROP_BOOL, "sharp_edge")),
                                   nullptr,
                                   nullptr,
                                   custom_nors_dst);
@@ -347,7 +347,7 @@ static void data_transfer_dtdata_type_postprocess(Object * /*ob_src*/,
 
     bke::MutableAttributeAccessor attributes = me_dst->attributes_for_write();
     bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
-        ".sharp_edge", ATTR_DOMAIN_EDGE);
+        "sharp_edge", ATTR_DOMAIN_EDGE);
 
     /* Note loop_nors_dst contains our custom normals as transferred from source... */
     BKE_mesh_normals_loop_custom_set(verts_dst,
@@ -996,9 +996,9 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
       return true;
     }
     if (r_map && cddata_type == CD_FAKE_SHARP) {
-      if (!CustomData_get_layer_named(&me_dst->edata, CD_PROP_BOOL, ".sharp_edge")) {
+      if (!CustomData_get_layer_named(&me_dst->edata, CD_PROP_BOOL, "sharp_edge")) {
         CustomData_add_layer_named(
-            &me_dst->edata, CD_PROP_BOOL, CD_SET_DEFAULT, nullptr, me_dst->totedge, ".sharp_edge");
+            &me_dst->edata, CD_PROP_BOOL, CD_SET_DEFAULT, nullptr, me_dst->totedge, "sharp_edge");
       }
       data_transfer_layersmapping_add_item_cd(
           r_map,
@@ -1006,8 +1006,8 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
           mix_mode,
           mix_factor,
           mix_weights,
-          CustomData_get_layer_named(&me_src->edata, CD_PROP_BOOL, ".sharp_edge"),
-          CustomData_get_layer_named(&me_dst->edata, CD_PROP_BOOL, ".sharp_edge"),
+          CustomData_get_layer_named(&me_src->edata, CD_PROP_BOOL, "sharp_edge"),
+          CustomData_get_layer_named(&me_dst->edata, CD_PROP_BOOL, "sharp_edge"),
           interp,
           interp_data);
       return true;

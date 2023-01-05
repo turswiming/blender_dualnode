@@ -382,7 +382,7 @@ void mesh_render_data_update_normals(MeshRenderData *mr, const eMRDataType data_
                                   is_auto_smooth,
                                   split_angle,
                                   static_cast<const bool *>(CustomData_get_layer_named(
-                                      &mr->me->edata, CD_PROP_BOOL, ".sharp_edge")),
+                                      &mr->me->edata, CD_PROP_BOOL, "sharp_edge")),
                                   nullptr,
                                   nullptr,
                                   clnors);

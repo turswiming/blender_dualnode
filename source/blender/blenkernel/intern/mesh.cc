@@ -1854,7 +1854,7 @@ void BKE_mesh_calc_normals_split_ex(Mesh *mesh,
                               use_split_normals,
                               split_angle,
                               static_cast<const bool *>(CustomData_get_layer_named(
-                                  &mesh->edata, CD_PROP_BOOL, ".sharp_edge")),
+                                  &mesh->edata, CD_PROP_BOOL, "sharp_edge")),
                               nullptr,
                               r_lnors_spacearr,
                               clnors);

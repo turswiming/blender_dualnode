@@ -1297,7 +1297,7 @@ static ComponentAttributeProviders create_attribute_providers_for_mesh()
       make_derived_write_attribute<MPoly, bool, get_shade_smooth, set_shade_smooth>,
       nullptr);
 
-  static BuiltinCustomDataLayerProvider sharp_edge(".sharp_edge",
+  static BuiltinCustomDataLayerProvider sharp_edge("sharp_edge",
                                                    ATTR_DOMAIN_EDGE,
                                                    CD_PROP_BOOL,
                                                    CD_PROP_BOOL,

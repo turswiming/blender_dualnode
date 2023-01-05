@@ -633,8 +633,7 @@ static void write_sharp_bezier_edges(const CurvesInfo &curves_info,
     return;
   }
 
-  sharp_edges = mesh_attributes.lookup_or_add_for_write_span<bool>(".sharp_edge",
-                                                                   ATTR_DOMAIN_EDGE);
+  sharp_edges = mesh_attributes.lookup_or_add_for_write_span<bool>("sharp_edge", ATTR_DOMAIN_EDGE);
 
   const VArray<int8_t> types = profile.curve_types();
   foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
@@ -722,7 +721,7 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
   write_sharp_bezier_edges(curves_info, offsets, mesh_attributes, sharp_edges);
   if (fill_caps) {
     if (!sharp_edges) {
-      sharp_edges = mesh_attributes.lookup_or_add_for_write_span<bool>(".sharp_edge",
+      sharp_edges = mesh_attributes.lookup_or_add_for_write_span<bool>("sharp_edge",
                                                                        ATTR_DOMAIN_EDGE);
     }
     foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {

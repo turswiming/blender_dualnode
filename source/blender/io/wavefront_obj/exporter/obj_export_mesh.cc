@@ -200,7 +200,7 @@ void OBJMesh::calc_smooth_groups(const bool use_bitflags)
       mesh_loops_.data(),
       mesh_loops_.size(),
       static_cast<const bool *>(
-          CustomData_get_layer_named(&export_mesh_->edata, CD_PROP_BOOL, ".sharp_edge")),
+          CustomData_get_layer_named(&export_mesh_->edata, CD_PROP_BOOL, "sharp_edge")),
       &tot_smooth_groups_,
       use_bitflags);
 }

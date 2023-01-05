@@ -633,7 +633,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
 
   bke::MutableAttributeAccessor attributes = result->attributes_for_write();
   bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
-      ".sharp_edge", ATTR_DOMAIN_EDGE);
+      "sharp_edge", ATTR_DOMAIN_EDGE);
 
   WeightedNormalData wn_data{};
   wn_data.verts_num = verts_num;
