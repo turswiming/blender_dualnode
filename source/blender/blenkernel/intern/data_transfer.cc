@@ -345,9 +345,9 @@ static void data_transfer_dtdata_type_postprocess(Object * /*ob_src*/,
           ldata_dst, CD_CUSTOMLOOPNORMAL, CD_SET_DEFAULT, nullptr, num_loops_dst));
     }
 
-    bke::SpanAttributeWriter<bool> sharp_edges =
-        me_dst->attributes_for_write().lookup_or_add_for_write_span<bool>(".sharp_edge",
-                                                                          ATTR_DOMAIN_EDGE);
+    bke::MutableAttributeAccessor attributes = me_dst->attributes_for_write();
+    bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
+        ".sharp_edge", ATTR_DOMAIN_EDGE);
 
     /* Note loop_nors_dst contains our custom normals as transferred from source... */
     BKE_mesh_normals_loop_custom_set(verts_dst,
