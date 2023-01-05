@@ -716,9 +716,33 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
                         verts.slice(info.vert_range));
   });
 
-  Set<AttributeIDRef> main_attributes_set;
-
   MutableAttributeAccessor mesh_attributes = mesh->attributes_for_write();
+
+  SpanAttributeWriter<bool> sharp_edges;
+  write_sharp_bezier_edges(curves_info, offsets, mesh_attributes, sharp_edges);
+  if (fill_caps) {
+    if (!sharp_edges) {
+      sharp_edges = mesh_attributes.lookup_or_add_for_write_span<bool>(".sharp_edge",
+                                                                       ATTR_DOMAIN_EDGE);
+    }
+    foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
+      if (info.main_cyclic || !info.profile_cyclic) {
+        return;
+      }
+      const int main_edges_start = info.edge_range.start();
+      const int last_ring_index = info.main_points.size() - 1;
+      const int profile_edges_start = main_edges_start +
+                                      info.profile_points.size() * info.main_segment_num;
+      const int last_ring_edge_offset = profile_edges_start +
+                                        info.profile_segment_num * last_ring_index;
+
+      sharp_edges.span.slice(profile_edges_start, info.profile_segment_num).fill(true);
+      sharp_edges.span.slice(last_ring_edge_offset, info.profile_segment_num).fill(true);
+    });
+  }
+  sharp_edges.finish();
+
+  Set<AttributeIDRef> main_attributes_set;
 
   main_attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
     if (!should_add_attribute_to_mesh(main_attributes, mesh_attributes, id, meta_data)) {
@@ -788,30 +812,6 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
     dst.finish();
     return true;
   });
-
-  SpanAttributeWriter<bool> sharp_edges;
-  write_sharp_bezier_edges(curves_info, offsets, mesh_attributes, sharp_edges);
-  if (fill_caps) {
-    if (!sharp_edges) {
-      sharp_edges = mesh_attributes.lookup_or_add_for_write_span<bool>(".sharp_edge",
-                                                                       ATTR_DOMAIN_EDGE);
-    }
-    foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
-      if (info.main_cyclic || !info.profile_cyclic) {
-        return;
-      }
-      const int main_edges_start = info.edge_range.start();
-      const int last_ring_index = info.main_points.size() - 1;
-      const int profile_edges_start = main_edges_start +
-                                      info.profile_points.size() * info.main_segment_num;
-      const int last_ring_edge_offset = profile_edges_start +
-                                        info.profile_segment_num * last_ring_index;
-
-      sharp_edges.span.slice(profile_edges_start, info.profile_segment_num).fill(true);
-      sharp_edges.span.slice(last_ring_edge_offset, info.profile_segment_num).fill(true);
-    });
-  }
-  sharp_edges.finish();
 
   return mesh;
 }
