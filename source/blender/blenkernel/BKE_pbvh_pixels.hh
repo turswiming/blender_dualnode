@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "BLI_math.h"
 #include "BLI_math_vec_types.hh"
 #include "BLI_rect.h"
@@ -242,9 +244,129 @@ struct NodeData {
   }
 };
 
+template<typename T, int Channels = 4> struct ImageBufferAccessor {
+  ImBuf &image_buffer;
+
+  ImageBufferAccessor(ImBuf &image_buffer) : image_buffer(image_buffer)
+  {
+  }
+
+  float4 read_pixel(const int2 coordinate)
+  {
+    int offset = (coordinate.y * image_buffer.x + coordinate.x) * Channels;
+    return float4(&image_buffer.rect_float[offset]);
+  }
+
+  void write_pixel(const int2 coordinate, float4 new_value)
+  {
+    int offset = (coordinate.y * image_buffer.x + coordinate.x) * Channels;
+    copy_v4_v4(&image_buffer.rect_float[offset], new_value);
+  }
+};
+
+struct PixelCopyItem {
+  uint8_t delta_destination_x;
+  char2 delta_source_1;
+  char2 delta_source_2;
+  uint8_t mix_factor;
+};
+
+struct PixelCopyGroup {
+  int2 destination;
+  Vector<PixelCopyItem> items;
+};
+
+/** Pixel copy command to mix 2 source pixels and write to a destination pixel. */
+struct PixelCopyCommand {
+  /** Pixel coordinate to write to. */
+  int2 destination;
+  /** Pixel coordinate to read first source from. */
+  int2 source_1;
+  /** Pixel coordinate to read second source from. */
+  int2 source_2;
+  /** Factor to mix between first and second source. */
+  float mix_factor;
+
+  PixelCopyCommand(const PixelCopyGroup &group)
+      : destination(group.destination),
+        source_1(group.destination),
+        source_2(group.destination),
+        mix_factor(0.0f)
+  {
+  }
+
+  template<typename T>
+  void mix_source_and_write_destination(ImageBufferAccessor<T> &tile_buffer) const
+  {
+    float4 source_color_1 = tile_buffer.read_pixel(source_1);
+    float4 source_color_2 = tile_buffer.read_pixel(source_2);
+    float4 destination_color = source_color_1 * (1.0f - mix_factor) + source_color_2 * mix_factor;
+    tile_buffer.write_pixel(destination, destination_color);
+  }
+
+  void apply(const PixelCopyItem &item)
+  {
+    destination.x += int(item.delta_destination_x);
+    source_1 += int2(item.delta_source_1);
+    source_2 += int2(item.delta_source_2);
+    mix_factor = float(item.mix_factor) / 255.0f;
+  }
+};
+
+struct PixelCopyTile {
+  image::TileNumber tile_number;
+  Vector<PixelCopyGroup> groups;
+
+  void copy_pixels(ImBuf &tile_buffer) const
+  {
+    if (tile_buffer.rect_float) {
+      ImageBufferAccessor<float4> accessor(tile_buffer);
+      copy_pixels<float4>(accessor);
+    }
+    else {
+      ImageBufferAccessor<int> accessor(tile_buffer);
+      copy_pixels<int>(accessor);
+    }
+  }
+
+ private:
+  template<typename T> void copy_pixels(ImageBufferAccessor<T> &image_buffer) const
+  {
+    for (const PixelCopyGroup &group : groups) {
+      PixelCopyCommand copy_command(group);
+      for (const PixelCopyItem &item : group.items) {
+        copy_command.apply(item);
+        copy_command.mix_source_and_write_destination<T>(image_buffer);
+      }
+    }
+  }
+};
+
+struct PixelCopyTiles {
+  Vector<PixelCopyTile> tiles;
+
+  std::optional<std::reference_wrapper<PixelCopyTile>> find_tile(image::TileNumber tile_number)
+  {
+    for (PixelCopyTile &tile : tiles) {
+      if (tile.tile_number == tile_number) {
+        return tile;
+      }
+    }
+    return std::nullopt;
+  }
+
+  void clear()
+  {
+    tiles.clear();
+  }
+};
+
 struct PBVHData {
   /* Per UVPRimitive contains the paint data. */
   PaintGeometryPrimitives geom_primitives;
+
+  /** Per ImageTile the pixels to copy to fix non-manifold bleeding. */
+  PixelCopyTiles tiles_copy_pixels;
 
   void clear_data()
   {
@@ -256,4 +378,9 @@ NodeData &BKE_pbvh_pixels_node_data_get(PBVHNode &node);
 void BKE_pbvh_pixels_mark_image_dirty(PBVHNode &node, Image &image, ImageUser &image_user);
 PBVHData &BKE_pbvh_pixels_data_get(PBVH &pbvh);
 
+void BKE_pbvh_pixels_copy_update(PBVH &pbvh, Image &image, ImageUser &image_user);
+void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
+                                 Image &image,
+                                 ImageUser &image_user,
+                                 image::TileNumber tile_number);
 }  // namespace blender::bke::pbvh::pixels
