@@ -1306,7 +1306,7 @@ void BM_mesh_bm_to_me_for_eval(BMesh *bm, Mesh *me, const CustomData_MeshMasks *
       }
       select_edge_attribute.span[i] = true;
     }
-    if (!BM_elem_flag_test(eve, BM_ELEM_SMOOTH)) {
+    if (!BM_elem_flag_test(eed, BM_ELEM_SMOOTH)) {
       if (!sharp_edge_attribute) {
         sharp_edge_attribute = mesh_attributes.lookup_or_add_for_write_span<bool>(
             ".sharp_edge", ATTR_DOMAIN_EDGE);
