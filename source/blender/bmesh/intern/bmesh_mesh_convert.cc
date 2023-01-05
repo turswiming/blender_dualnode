@@ -358,7 +358,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *me, const struct BMeshFromMeshPar
     if (select_edge && select_edge[i]) {
       BM_edge_select_set(bm, e, true);
     }
-    if (!sharp_edges || !sharp_edges[i]) {
+    if (!(sharp_edges && sharp_edges[i])) {
       BM_elem_flag_enable(e, BM_ELEM_SMOOTH);
     }
 
@@ -1086,7 +1086,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *me, const struct BMeshToMesh
     BM_mesh_elem_table_ensure(bm, BM_EDGE);
     write_fn_to_attribute<bool>(
         me->attributes_for_write(), ".sharp_edge", ATTR_DOMAIN_EDGE, [&](const int i) {
-          return !BM_elem_flag_test(BM_edge_at_index(bm, i), BM_ELEM_SELECT);
+          return !BM_elem_flag_test(BM_edge_at_index(bm, i), BM_ELEM_SMOOTH);
         });
   }
 
