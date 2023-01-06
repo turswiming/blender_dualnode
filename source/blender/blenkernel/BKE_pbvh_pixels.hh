@@ -287,6 +287,7 @@ struct PixelCopyCommand {
   /** Factor to mix between first and second source. */
   float mix_factor;
 
+  PixelCopyCommand() = default;
   PixelCopyCommand(const PixelCopyGroup &group)
       : destination(group.destination),
         source_1(group.destination),
@@ -316,6 +317,10 @@ struct PixelCopyCommand {
 struct PixelCopyTile {
   image::TileNumber tile_number;
   Vector<PixelCopyGroup> groups;
+
+  PixelCopyTile(image::TileNumber tile_number) : tile_number(tile_number)
+  {
+  }
 
   void copy_pixels(ImBuf &tile_buffer) const
   {
@@ -378,9 +383,9 @@ NodeData &BKE_pbvh_pixels_node_data_get(PBVHNode &node);
 void BKE_pbvh_pixels_mark_image_dirty(PBVHNode &node, Image &image, ImageUser &image_user);
 PBVHData &BKE_pbvh_pixels_data_get(PBVH &pbvh);
 
-void BKE_pbvh_pixels_copy_update(PBVH &pbvh, Image &image, ImageUser &image_user);
 void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
                                  Image &image,
                                  ImageUser &image_user,
                                  image::TileNumber tile_number);
+
 }  // namespace blender::bke::pbvh::pixels

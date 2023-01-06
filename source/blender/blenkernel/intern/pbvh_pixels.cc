@@ -20,6 +20,7 @@
 #include "bmesh.h"
 
 #include "pbvh_intern.h"
+#include "pbvh_pixels_copy.hh"
 #include "pbvh_uv_islands.hh"
 
 namespace blender::bke::pbvh::pixels {
@@ -404,6 +405,9 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
   if (USE_WATERTIGHT_CHECK) {
     apply_watertight_check(pbvh, image, image_user);
   }
+
+  /* Add solution for non-manifold parts of the model. */
+  BKE_pbvh_pixels_copy_update(*pbvh, *image, *image_user, mesh_data);
 
   /* Rebuild the undo regions. */
   for (PBVHNode *node : nodes_to_update) {
