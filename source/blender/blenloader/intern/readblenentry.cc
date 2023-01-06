@@ -23,6 +23,7 @@
 #include "DNA_genfile.h"
 #include "DNA_sdna_types.h"
 
+#include "BKE_asset.h"
 #include "BKE_icons.h"
 #include "BKE_idtype.h"
 #include "BKE_main.h"
@@ -43,6 +44,23 @@
 void BLO_blendhandle_print_sizes(BlendHandle *bh, void *fp);
 
 /* Access routines used by filesel. */
+
+void BLO_datablock_info_free(BLODataBlockInfo *datablock_info)
+{
+  if (datablock_info->free_asset_data) {
+    BKE_asset_metadata_free(&datablock_info->asset_data);
+    datablock_info->free_asset_data = false;
+  }
+}
+
+void BLO_datablock_info_linklist_free(LinkNode *datablock_infos)
+{
+  BLI_linklist_free(datablock_infos, [](void *link) {
+    BLODataBlockInfo *datablock_info = static_cast<BLODataBlockInfo *>(link);
+    BLO_datablock_info_free(datablock_info);
+    MEM_freeN(datablock_info);
+  });
+}
 
 BlendHandle *BLO_blendhandle_from_file(const char *filepath, BlendFileReadReport *reports)
 {
@@ -138,11 +156,15 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
   BHead *bhead;
   int tot = 0;
 
+  const int sdna_nr_preview_image = DNA_struct_find_nr(fd->filesdna, "PreviewImage");
+
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
     if (bhead->code == ENDB) {
       break;
     }
     if (bhead->code == ofblocktype) {
+      BHead *id_bhead = bhead;
+
       const char *name = blo_bhead_id_name(fd, bhead) + 2;
       AssetMetaData *asset_meta_data = blo_bhead_id_asset_data_address(fd, bhead);
 
@@ -164,6 +186,18 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
 
       STRNCPY(info->name, name);
       info->asset_data = asset_meta_data;
+      info->free_asset_data = true;
+
+      bool has_preview = false;
+      /* See if we can find a preview in the data of this ID. */
+      for (BHead *data_bhead = blo_bhead_next(fd, id_bhead); data_bhead->code == DATA;
+           data_bhead = blo_bhead_next(fd, data_bhead)) {
+        if (data_bhead->SDNAnr == sdna_nr_preview_image) {
+          has_preview = true;
+          break;
+        }
+      }
+      info->no_preview_found = !has_preview;
 
       BLI_linklist_prepend(&infos, info);
       tot++;

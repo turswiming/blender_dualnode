@@ -59,6 +59,8 @@
 
 #include "DEG_depsgraph.h"
 
+#include "wm_window_private.h"
+
 #include "WM_api.h" /* only for WM_main_playanim */
 
 #ifdef WITH_AUDASPACE
@@ -475,7 +477,8 @@ static void draw_display_buffer(PlayState *ps, ImBuf *ibuf)
   void *buffer_cache_handle = NULL;
   display_buffer = ocio_transform_ibuf(ps, ibuf, &glsl_used, &format, &data, &buffer_cache_handle);
 
-  GPUTexture *texture = GPU_texture_create_2d("display_buf", ibuf->x, ibuf->y, 1, format, NULL);
+  GPUTexture *texture = GPU_texture_create_2d_ex(
+      "display_buf", ibuf->x, ibuf->y, 1, format, GPU_TEXTURE_USAGE_SHADER_READ, NULL);
   GPU_texture_update(texture, data, display_buffer);
   GPU_texture_filter_mode(texture, false);
 
@@ -1340,6 +1343,8 @@ static bool ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 static void playanim_window_open(const char *title, int posx, int posy, int sizex, int sizey)
 {
   GHOST_GLSettings glsettings = {0};
+  const eGPUBackendType gpu_backend = GPU_backend_type_selection_get();
+  glsettings.context_type = wm_ghost_drawing_context_type(gpu_backend);
   uint32_t scr_w, scr_h;
 
   GHOST_GetMainDisplayDimensions(g_WS.ghost_system, &scr_w, &scr_h);
@@ -1356,7 +1361,6 @@ static void playanim_window_open(const char *title, int posx, int posy, int size
                                          /* Could optionally start full-screen. */
                                          GHOST_kWindowStateNormal,
                                          false,
-                                         GHOST_kDrawingContextTypeOpenGL,
                                          glsettings);
 }
 

@@ -440,6 +440,11 @@ class IMAGE_MT_uvs(Menu):
 
         layout.separator()
 
+        layout.operator("uv.copy")
+        layout.operator("uv.paste")
+
+        layout.separator()
+
         layout.menu("IMAGE_MT_uvs_showhide")
 
         layout.separator()
@@ -692,7 +697,7 @@ class _draw_tool_settings_context_mode:
                         pressure_name="use_pressure_size",
                         unified_name="use_unified_size",
                         slider=True,
-                        header=True
+                        header=True,
                     )
                     UnifiedPaintPanel.prop_unified(
                         layout,
@@ -702,7 +707,7 @@ class _draw_tool_settings_context_mode:
                         pressure_name="use_pressure_strength",
                         unified_name="use_unified_strength",
                         slider=True,
-                        header=True
+                        header=True,
                     )
 
     @staticmethod

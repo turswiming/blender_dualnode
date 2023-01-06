@@ -15,8 +15,8 @@ namespace blender::nodes::node_geo_flip_faces_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Mesh")).supported_type(GEO_COMPONENT_TYPE_MESH);
-  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().supports_field();
-  b.add_output<decl::Geometry>(N_("Mesh"));
+  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().field_on_all();
+  b.add_output<decl::Geometry>(N_("Mesh")).propagate_all();
 }
 
 static void mesh_flip_faces(Mesh &mesh, const Field<bool> &selection_field)
@@ -47,6 +47,9 @@ static void mesh_flip_faces(Mesh &mesh, const Field<bool> &selection_field)
   MutableAttributeAccessor attributes = mesh.attributes_for_write();
   attributes.for_all(
       [&](const bke::AttributeIDRef &attribute_id, const AttributeMetaData &meta_data) {
+        if (meta_data.data_type == CD_PROP_STRING) {
+          return true;
+        }
         if (meta_data.domain == ATTR_DOMAIN_CORNER) {
           GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
               attribute_id, ATTR_DOMAIN_CORNER, meta_data.data_type);

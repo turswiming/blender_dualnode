@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <numeric>
 
 #include "DNA_anim_types.h"
@@ -18,6 +19,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
+#include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_array.hh"
@@ -43,6 +45,7 @@
 #include "BKE_mesh.h"
 #include "BKE_multires.h"
 #include "BKE_object.h"
+#include "BKE_pointcloud.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_tracking.h"
@@ -527,9 +530,9 @@ static void ignore_parent_tx(Main *bmain, Depsgraph *depsgraph, Scene *scene, Ob
   LISTBASE_FOREACH (Object *, ob_child, &bmain->objects) {
     if (ob_child->parent == ob) {
       Object *ob_child_eval = DEG_get_evaluated_object(depsgraph, ob_child);
-      BKE_object_apply_mat4(ob_child_eval, ob_child_eval->obmat, true, false);
+      BKE_object_apply_mat4(ob_child_eval, ob_child_eval->object_to_world, true, false);
       BKE_object_workob_calc_parent(depsgraph, scene, ob_child_eval, &workob);
-      invert_m4_m4(ob_child->parentinv, workob.obmat);
+      invert_m4_m4(ob_child->parentinv, workob.object_to_world);
       /* Copy result of BKE_object_apply_mat4(). */
       BKE_object_transform_copy(ob_child, ob_child_eval);
       /* Make sure evaluated object is in a consistent state with the original one.
@@ -638,6 +641,17 @@ static bool apply_objects_internal_need_single_user(bContext *C)
   return (ID_REAL_USERS(ob->data) > CTX_DATA_COUNT(C, selected_editable_objects));
 }
 
+static void transform_positions(blender::MutableSpan<blender::float3> positions,
+                                const blender::float4x4 &matrix)
+{
+  using namespace blender;
+  threading::parallel_for(positions.index_range(), 1024, [&](const IndexRange range) {
+    for (float3 &position : positions.slice(range)) {
+      position = matrix * position;
+    }
+  });
+}
+
 static int apply_objects_internal(bContext *C,
                                   ReportList *reports,
                                   bool apply_loc,
@@ -646,6 +660,7 @@ static int apply_objects_internal(bContext *C,
                                   bool do_props,
                                   bool do_single_user)
 {
+  using namespace blender;
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -660,11 +675,11 @@ static int apply_objects_internal(bContext *C,
 
   if (do_multi_user) {
     obact = CTX_data_active_object(C);
-    invert_m4_m4(obact_invmat, obact->obmat);
+    invert_m4_m4(obact_invmat, obact->object_to_world);
 
     Object workob;
     BKE_object_workob_calc_parent(depsgraph, scene, obact, &workob);
-    copy_m4_m4(obact_parent, workob.obmat);
+    copy_m4_m4(obact_parent, workob.object_to_world);
     copy_m4_m4(obact_parentinv, obact->parentinv);
 
     if (apply_objects_internal_need_single_user(C)) {
@@ -695,7 +710,8 @@ static int apply_objects_internal(bContext *C,
              OB_SURF,
              OB_FONT,
              OB_GPENCIL,
-             OB_CURVES)) {
+             OB_CURVES,
+             OB_POINTCLOUD)) {
       ID *obdata = static_cast<ID *>(ob->data);
       if (!do_multi_user && ID_REAL_USERS(obdata) > 1) {
         BKE_reportf(reports,
@@ -745,8 +761,10 @@ static int apply_objects_internal(bContext *C,
 
     if (ob->type == OB_FONT) {
       if (apply_rot || apply_loc) {
-        BKE_reportf(
-            reports, RPT_ERROR, "Font's can only have scale applied: \"%s\"", ob->id.name + 2);
+        BKE_reportf(reports,
+                    RPT_ERROR,
+                    "Text objects can only have their scale applied: \"%s\"",
+                    ob->id.name + 2);
         changed = false;
       }
     }
@@ -929,6 +947,14 @@ static int apply_objects_internal(bContext *C,
       blender::bke::CurvesGeometry::wrap(curves.geometry).transform(mat);
       blender::bke::CurvesGeometry::wrap(curves.geometry).calculate_bezier_auto_handles();
     }
+    else if (ob->type == OB_POINTCLOUD) {
+      PointCloud &pointcloud = *static_cast<PointCloud *>(ob->data);
+      bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
+      bke::SpanAttributeWriter position = attributes.lookup_or_add_for_write_span<float3>(
+          "position", ATTR_DOMAIN_POINT);
+      transform_positions(position.span, float4x4(mat));
+      position.finish();
+    }
     else if (ob->type == OB_CAMERA) {
       MovieClip *clip = BKE_object_movieclip_get(scene, ob, false);
 
@@ -989,7 +1015,7 @@ static int apply_objects_internal(bContext *C,
       float _obmat[4][4], _iobmat[4][4];
       float _mat[4][4];
 
-      copy_m4_m4(_obmat, ob->obmat);
+      copy_m4_m4(_obmat, ob->object_to_world);
       invert_m4_m4(_iobmat, _obmat);
 
       copy_m4_m4(_mat, _obmat);
@@ -1075,7 +1101,7 @@ static int visual_transform_apply_exec(bContext *C, wmOperator * /*op*/)
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
     Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
     BKE_object_where_is_calc(depsgraph, scene, ob_eval);
-    BKE_object_apply_mat4(ob_eval, ob_eval->obmat, true, true);
+    BKE_object_apply_mat4(ob_eval, ob_eval->object_to_world, true, true);
     BKE_object_transform_copy(ob, ob_eval);
 
     /* update for any children that may get moved */
@@ -1227,8 +1253,29 @@ enum {
   ORIGIN_TO_CENTER_OF_MASS_VOLUME,
 };
 
+static float3 calculate_mean(const blender::Span<blender::float3> values)
+{
+  if (values.is_empty()) {
+    return float3(0);
+  }
+  /* TODO: Use a method that avoids overflow. */
+  return std::accumulate(values.begin(), values.end(), float3(0)) / values.size();
+}
+
+static void translate_positions(blender::MutableSpan<blender::float3> positions,
+                                const blender::float3 &translation)
+{
+  using namespace blender;
+  threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
+    for (float3 &position : positions.slice(range)) {
+      position += translation;
+    }
+  });
+}
+
 static int object_origin_set_exec(bContext *C, wmOperator *op)
 {
+  using namespace blender;
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Object *obact = CTX_data_active_object(C);
@@ -1274,8 +1321,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
       if (centermode == ORIGIN_TO_CURSOR) {
         copy_v3_v3(cent, cursor);
-        invert_m4_m4(obedit->imat, obedit->obmat);
-        mul_m4_v3(obedit->imat, cent);
+        invert_m4_m4(obedit->world_to_object, obedit->object_to_world);
+        mul_m4_v3(obedit->world_to_object, cent);
       }
       else {
         if (around == V3D_AROUND_CENTER_BOUNDS) {
@@ -1342,8 +1389,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
     if (centermode == ORIGIN_TO_CURSOR) {
       copy_v3_v3(cent, cursor);
-      invert_m4_m4(ob->imat, ob->obmat);
-      mul_m4_v3(ob->imat, cent);
+      invert_m4_m4(ob->world_to_object, ob->object_to_world);
+      mul_m4_v3(ob->world_to_object, cent);
     }
 
     if (ob->data == nullptr) {
@@ -1363,8 +1410,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
             INIT_MINMAX(min, max);
             BKE_object_minmax_dupli(depsgraph, scene, ob, min, max, true);
             mid_v3_v3v3(cent, min, max);
-            invert_m4_m4(ob->imat, ob->obmat);
-            mul_m4_v3(ob->imat, cent);
+            invert_m4_m4(ob->world_to_object, ob->object_to_world);
+            mul_m4_v3(ob->world_to_object, cent);
           }
 
           add_v3_v3(ob->instance_collection->instance_offset, cent);
@@ -1554,7 +1601,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         if (centermode == ORIGIN_TO_GEOMETRY) {
           zero_v3(gpcenter);
           BKE_gpencil_centroid_3d(gpd, gpcenter);
-          add_v3_v3(gpcenter, ob->obmat[3]);
+          add_v3_v3(gpcenter, ob->object_to_world[3]);
         }
         if (centermode == ORIGIN_TO_CURSOR) {
           copy_v3_v3(gpcenter, cursor);
@@ -1566,8 +1613,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
           float offset_local[3];
           int i;
 
-          sub_v3_v3v3(offset_global, gpcenter, ob->obmat[3]);
-          copy_m3_m4(bmat, obact->obmat);
+          sub_v3_v3v3(offset_global, gpcenter, ob->object_to_world[3]);
+          copy_m3_m4(bmat, obact->object_to_world);
           invert_m3_m3(imat, bmat);
           mul_m3_v3(imat, offset_global);
           mul_v3_m3v3(offset_local, imat, offset_global);
@@ -1643,21 +1690,52 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         /* done */
       }
       else if (around == V3D_AROUND_CENTER_BOUNDS) {
-        float3 min;
-        float3 max;
+        float3 min(std::numeric_limits<float>::max());
+        float3 max(-std::numeric_limits<float>::max());
         if (curves.bounds_min_max(min, max)) {
           cent = math::midpoint(min, max);
         }
       }
       else if (around == V3D_AROUND_CENTER_MEDIAN) {
-        Span<float3> positions = curves.positions();
-        cent = std::accumulate(positions.begin(), positions.end(), float3(0)) /
-               curves.points_num();
+        cent = calculate_mean(curves.positions());
       }
 
       tot_change++;
       curves.translate(-cent);
       curves_id.id.tag |= LIB_TAG_DOIT;
+      do_inverse_offset = true;
+    }
+    else if (ob->type == OB_POINTCLOUD) {
+      PointCloud &pointcloud = *static_cast<PointCloud *>(ob->data);
+      bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
+      bke::SpanAttributeWriter positions = attributes.lookup_or_add_for_write_span<float3>(
+          "position", ATTR_DOMAIN_POINT);
+      if (ELEM(centermode, ORIGIN_TO_CENTER_OF_MASS_SURFACE, ORIGIN_TO_CENTER_OF_MASS_VOLUME) ||
+          !ELEM(around, V3D_AROUND_CENTER_BOUNDS, V3D_AROUND_CENTER_MEDIAN)) {
+        BKE_report(op->reports,
+                   RPT_WARNING,
+                   "Point cloud object does not support this set origin operation");
+        continue;
+      }
+
+      if (centermode == ORIGIN_TO_CURSOR) {
+        /* Done. */
+      }
+      else if (around == V3D_AROUND_CENTER_BOUNDS) {
+        float3 min(std::numeric_limits<float>::max());
+        float3 max(-std::numeric_limits<float>::max());
+        if (pointcloud.bounds_min_max(min, max)) {
+          cent = math::midpoint(min, max);
+        }
+      }
+      else if (around == V3D_AROUND_CENTER_MEDIAN) {
+        cent = calculate_mean(positions.span);
+      }
+
+      tot_change++;
+      translate_positions(positions.span, -cent);
+      positions.finish();
+      pointcloud.id.tag |= LIB_TAG_DOIT;
       do_inverse_offset = true;
     }
 
@@ -1699,7 +1777,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
           ob_other->flag |= OB_DONE;
           DEG_id_tag_update(&ob_other->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 
-          mul_v3_mat3_m4v3(centn, ob_other->obmat, cent); /* omit translation part */
+          mul_v3_mat3_m4v3(centn, ob_other->object_to_world, cent); /* omit translation part */
           add_v3_v3(ob_other->loc, centn);
 
           Object *ob_other_eval = DEG_get_evaluated_object(depsgraph, ob_other);
@@ -1873,9 +1951,9 @@ static void object_transform_axis_target_calc_depth_init(XFormAxisData *xfd, con
   int center_tot = 0;
   for (XFormAxisItem &item : xfd->object_data) {
     const Object *ob = item.ob;
-    const float *ob_co_a = ob->obmat[3];
+    const float *ob_co_a = ob->object_to_world[3];
     float ob_co_b[3];
-    add_v3_v3v3(ob_co_b, ob->obmat[3], ob->obmat[2]);
+    add_v3_v3v3(ob_co_b, ob->object_to_world[3], ob->object_to_world[2]);
     float view_isect[3], ob_isect[3];
     if (isect_line_line_v3(view_co_a, view_co_b, ob_co_a, ob_co_b, view_isect, ob_isect)) {
       add_v3_v3(center, view_isect);
@@ -1946,7 +2024,7 @@ static void object_apply_location(Object *ob, const float loc[3])
   /* quick but weak */
   Object ob_prev = blender::dna::shallow_copy(*ob);
   float mat[4][4];
-  copy_m4_m4(mat, ob->obmat);
+  copy_m4_m4(mat, ob->object_to_world);
   copy_v3_v3(mat[3], loc);
   BKE_object_apply_mat4(ob, mat, true, true);
   copy_v3_v3(mat[3], ob->loc);
@@ -1961,7 +2039,7 @@ static bool object_orient_to_location(Object *ob,
                                       const bool z_flip)
 {
   float delta[3];
-  sub_v3_v3v3(delta, ob->obmat[3], location);
+  sub_v3_v3v3(delta, ob->object_to_world[3], location);
   if (normalize_v3(delta) != 0.0f) {
     if (z_flip) {
       negate_v3(delta);
@@ -2139,7 +2217,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                 float xform_rot_offset_inv_first[3][3];
                 for (const int i : xfd->object_data.index_range()) {
                   XFormAxisItem &item = xfd->object_data[i];
-                  copy_m3_m4(item.xform_rot_offset, item.ob->obmat);
+                  copy_m3_m4(item.xform_rot_offset, item.ob->object_to_world);
                   normalize_m3(item.xform_rot_offset);
 
                   if (i == 0) {
@@ -2158,8 +2236,8 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                 XFormAxisItem &item = xfd->object_data[i];
                 if (is_translate_init) {
                   float ob_axis[3];
-                  item.xform_dist = len_v3v3(item.ob->obmat[3], location_world);
-                  normalize_v3_v3(ob_axis, item.ob->obmat[2]);
+                  item.xform_dist = len_v3v3(item.ob->object_to_world[3], location_world);
+                  normalize_v3_v3(ob_axis, item.ob->object_to_world[2]);
                   /* Scale to avoid adding distance when moving between surfaces. */
                   if (normal_found) {
                     float scale = fabsf(dot_v3v3(ob_axis, normal));
@@ -2173,7 +2251,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                   copy_v3_v3(target_normal, normal);
                 }
                 else {
-                  normalize_v3_v3(target_normal, item.ob->obmat[2]);
+                  normalize_v3_v3(target_normal, item.ob->object_to_world[2]);
                 }
 
 #ifdef USE_RELATIVE_ROTATION
@@ -2190,7 +2268,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                   madd_v3_v3fl(loc, target_normal, item.xform_dist);
                   object_apply_location(item.ob, loc);
                   /* so orient behaves as expected */
-                  copy_v3_v3(item.ob->obmat[3], loc);
+                  copy_v3_v3(item.ob->object_to_world[3], loc);
                 }
 
                 object_orient_to_location(

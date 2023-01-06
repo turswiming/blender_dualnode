@@ -186,9 +186,8 @@ static bool SCULPT_automasking_needs_factors_cache(const Sculpt *sd, const Brush
     return true;
   }
 
-  if (automasking_flags &
-      (BRUSH_AUTOMASKING_BOUNDARY_EDGES | BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS |
-       BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL)) {
+  if (automasking_flags & (BRUSH_AUTOMASKING_BOUNDARY_EDGES |
+                           BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS | BRUSH_AUTOMASKING_VIEW_NORMAL)) {
     return brush && brush->automasking_boundary_edges_propagation_steps != 1;
   }
   return false;
@@ -498,11 +497,49 @@ static float sculpt_automasking_cavity_factor(AutomaskingCache *automasking,
   return factor;
 }
 
-float sculpt_automasking_factor_calc(AutomaskingCache *automasking,
-                                     SculptSession *ss,
-                                     PBVHVertRef vert,
-                                     AutomaskingNodeData *automask_data)
+static float sculpt_automasking_factor_calc(AutomaskingCache *automasking,
+                                            SculptSession *ss,
+                                            PBVHVertRef vert,
+                                            AutomaskingNodeData *automask_data)
 {
+  if (!automasking || vert.i == PBVH_REF_NONE) {
+    return 1.0f;
+  }
+
+  float mask = 1.0f;
+
+  /* Since brush normal mode depends on the current mirror symmetry pass
+   * it is not folded into the factor cache (when it exists). */
+  if ((ss->cache || ss->filter_cache) &&
+      (automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
+    mask *= automasking_brush_normal_factor(automasking, ss, vert, automask_data);
+  }
+
+  /* If the cache is initialized with valid info, use the cache. This is used when the
+   * automasking information can't be computed in real time per vertex and needs to be
+   * initialized for the whole mesh when the stroke starts. */
+  if (ss->attrs.automasking_factor && !(automask_data && automask_data->initializing)) {
+    float factor = *(float *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_factor);
+
+    if (automasking->settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
+      factor *= sculpt_automasking_cavity_factor(automasking, ss, vert);
+    }
+
+    return factor * mask;
+  }
+
+  uchar stroke_id = ss->attrs.automasking_stroke_id ?
+                        *(uchar *)SCULPT_vertex_attr_get(vert, ss->attrs.automasking_stroke_id) :
+                        -1;
+
+  bool do_occlusion = (automasking->settings.flags &
+                       (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL)) ==
+                      (BRUSH_AUTOMASKING_VIEW_OCCLUSION | BRUSH_AUTOMASKING_VIEW_NORMAL);
+  if (do_occlusion &&
+      automasking_view_occlusion_factor(automasking, ss, vert, stroke_id, automask_data)) {
+    return automasking_factor_end(ss, automasking, vert, 0.0f);
+  }
+
   if (automasking->settings.flags & BRUSH_AUTOMASKING_FACE_SETS) {
     if (!SCULPT_vertex_has_face_set(ss, vert, automasking->settings.initial_face_set)) {
       return 0.0f;
@@ -516,16 +553,13 @@ float sculpt_automasking_factor_calc(AutomaskingCache *automasking,
   }
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS) {
-    if (!SCULPT_vertex_has_unique_face_set(ss, vert)) {
+    bool ignore = ss->cache && ss->cache->brush &&
+                  ss->cache->brush->sculpt_tool == SCULPT_TOOL_DRAW_FACE_SETS &&
+                  SCULPT_vertex_face_set_get(ss, vert) == ss->cache->paint_face_set;
+
+    if (!ignore && !SCULPT_vertex_has_unique_face_set(ss, vert)) {
       return 0.0f;
     }
-  }
-
-  float mask = 1.0f;
-
-  if ((ss->cache || ss->filter_cache) &&
-      (automasking->settings.flags & BRUSH_AUTOMASKING_BRUSH_NORMAL)) {
-    mask *= automasking_brush_normal_factor(automasking, ss, vert, automask_data);
   }
 
   if ((ss->cache || ss->filter_cache) &&
@@ -777,7 +811,7 @@ static void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automaski
   SculptSession *ss = ob->sculpt;
   const int totvert = SCULPT_vertex_count_get(ss);
 
-  /* No need to build original data since this is only called at the beginning of strokes.*/
+  /* No need to build original data since this is only called at the beginning of strokes. */
   AutomaskingNodeData nodedata;
   nodedata.have_orig_data = false;
 
@@ -786,9 +820,6 @@ static void sculpt_normal_occlusion_automasking_fill(AutomaskingCache *automaski
 
     float f = *(float *)SCULPT_vertex_attr_get(vertex, ss->attrs.automasking_factor);
 
-    if (int(mode) & BRUSH_AUTOMASKING_BRUSH_NORMAL) {
-      f *= automasking_brush_normal_factor(automasking, ss, vertex, &nodedata);
-    }
     if (int(mode) & BRUSH_AUTOMASKING_VIEW_NORMAL) {
       if (int(mode) & BRUSH_AUTOMASKING_VIEW_OCCLUSION) {
         f *= automasking_view_occlusion_factor(automasking, ss, vertex, -1, &nodedata);
@@ -851,7 +882,10 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
     use_stroke_id = true;
 
     if (SCULPT_is_automasking_mode_enabled(sd, brush, BRUSH_AUTOMASKING_CAVITY_USE_CURVE)) {
-      BKE_curvemapping_init(brush->automasking_cavity_curve);
+      if (brush) {
+        BKE_curvemapping_init(brush->automasking_cavity_curve);
+      }
+
       BKE_curvemapping_init(sd->automasking_cavity_curve);
     }
 
@@ -917,8 +951,7 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
    * from zero which other modes can subtract from.  If none of them are
    * enabled initialize to 1.
    */
-  if (!(mode & (BRUSH_AUTOMASKING_BOUNDARY_EDGES | BRUSH_AUTOMASKING_TOPOLOGY |
-                BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS))) {
+  if (!(mode & BRUSH_AUTOMASKING_TOPOLOGY)) {
     initial_value = 1.0f;
   }
   else {
@@ -957,8 +990,7 @@ AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object
 
   /* Subtractive modes. */
   int normal_bits = sculpt_automasking_mode_effective_bits(sd, brush) &
-                    (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL |
-                     BRUSH_AUTOMASKING_VIEW_OCCLUSION);
+                    (BRUSH_AUTOMASKING_VIEW_NORMAL | BRUSH_AUTOMASKING_VIEW_OCCLUSION);
 
   if (normal_bits) {
     sculpt_normal_occlusion_automasking_fill(automasking, ob, (eAutomasking_flag)normal_bits);
@@ -991,6 +1023,7 @@ void SCULPT_automasking_cache_check(
       AutomaskingNodeData automask_data;
 
       SCULPT_automasking_node_begin(ob, ss, automasking, &automask_data, nodes[i]);
+      automask_data.initializing = true;
 
       BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_ALL) {
         SCULPT_automasking_node_update(ss, &automask_data, &vd);
@@ -999,8 +1032,8 @@ void SCULPT_automasking_cache_check(
           node_other_verts[i].append(vd.vertex);
         }
         else {
-          *(float *)SCULPT_vertex_attr_get(vd.vertex, ss->attrs.automasking_factor) =
-              SCULPT_automasking_factor_get(automasking, ss, ss->active_vertex, &automask_data);
+          float value = SCULPT_automasking_factor_get(automasking, ss, vd.vertex, &automask_data);
+          *(float *)SCULPT_vertex_attr_get(vd.vertex, ss->attrs.automasking_factor) = value;
         }
       }
       BKE_pbvh_vertex_iter_end;
@@ -1014,6 +1047,8 @@ void SCULPT_automasking_cache_check(
     AutomaskingNodeData automask_data;
 
     SCULPT_automasking_node_begin(ob, ss, automasking, &automask_data, node);
+    automask_data.initializing = true;
+
     PBVHVertexIter vd = {0};
 
     for (PBVHVertRef vertex : node_other_verts[i]) {
@@ -1035,8 +1070,8 @@ void SCULPT_automasking_cache_check(
       if (!done_set.contains(vertex.i)) {
         done_set.add(vertex.i);
 
-        *(float *)SCULPT_vertex_attr_get(vd.vertex, ss->attrs.automasking_factor) =
-            SCULPT_automasking_factor_get(automasking, ss, ss->active_vertex, &automask_data);
+        float value = SCULPT_automasking_factor_get(automasking, ss, vd.vertex, &automask_data);
+        *(float *)SCULPT_vertex_attr_get(vd.vertex, ss->attrs.automasking_factor) = value;
       }
     }
   }

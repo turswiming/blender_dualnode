@@ -73,7 +73,7 @@
 
 #include "DEG_depsgraph_query.h"
 
-#include "interface_intern.h"
+#include "interface_intern.hh"
 
 using blender::Vector;
 
@@ -3470,15 +3470,31 @@ void UI_block_free(const bContext *C, uiBlock *block)
     MEM_freeN(block->func_argN);
   }
 
-  CTX_store_free_list(&block->contexts);
+  LISTBASE_FOREACH_MUTABLE (bContextStore *, store, &block->contexts) {
+    CTX_store_free(store);
+  }
 
   BLI_freelistN(&block->saferct);
   BLI_freelistN(&block->color_pickers.list);
+  BLI_freelistN(&block->dynamic_listeners);
 
-  ui_block_free_button_groups(block);
   ui_block_free_views(block);
 
-  MEM_freeN(block);
+  MEM_delete(block);
+}
+
+void UI_block_listen(const uiBlock *block, const wmRegionListenerParams *listener_params)
+{
+  /* Don't need to let invisible blocks (old blocks from previous redraw) listen. */
+  if (!block->active) {
+    return;
+  }
+
+  LISTBASE_FOREACH (uiBlockDynamicListener *, listener, &block->dynamic_listeners) {
+    listener->listener_func(listener_params);
+  }
+
+  ui_block_views_listen(block, listener_params);
 }
 
 void UI_blocklist_update_window_matrix(const bContext *C, const ListBase *lb)
@@ -3580,12 +3596,10 @@ uiBlock *UI_block_begin(const bContext *C, ARegion *region, const char *name, eU
   wmWindow *window = CTX_wm_window(C);
   Scene *scene = CTX_data_scene(C);
 
-  uiBlock *block = MEM_cnew<uiBlock>(__func__);
+  uiBlock *block = MEM_new<uiBlock>(__func__);
   block->active = true;
   block->emboss = emboss;
   block->evil_C = (void *)C; /* XXX */
-
-  BLI_listbase_clear(&block->button_groups);
 
   if (scene) {
     /* store display device name, don't lookup for transformations yet
@@ -4041,7 +4055,7 @@ uiBut *ui_but_change_type(uiBut *but, eButType new_type)
   ui_but_alloc_info(new_type, &alloc_size, &alloc_str, &new_has_custom_type);
 
   if (new_has_custom_type || old_has_custom_type) {
-    const void *old_but_ptr = but;
+    const uiBut *old_but_ptr = but;
     /* Button may have pointer to a member within itself, this will have to be updated. */
     const bool has_str_ptr_to_self = but->str == but->strdata;
     const bool has_poin_ptr_to_self = but->poin == (char *)but;
@@ -4065,7 +4079,7 @@ uiBut *ui_but_change_type(uiBut *but, eButType new_type)
     }
 #ifdef WITH_PYTHON
     if (UI_editsource_enable_check()) {
-      UI_editsource_but_replace(static_cast<const uiBut *>(old_but_ptr), but);
+      UI_editsource_but_replace(old_but_ptr, but);
     }
 #endif
   }
@@ -6450,6 +6464,11 @@ uiBut *uiDefSearchButO_ptr(uiBlock *block,
 void UI_but_hint_drawstr_set(uiBut *but, const char *string)
 {
   ui_but_add_shortcut(but, string, false);
+}
+
+void UI_but_icon_indicator_number_set(uiBut *but, const int indicator_number)
+{
+  UI_icon_text_overlay_init_from_count(&but->icon_overlay_text, indicator_number);
 }
 
 void UI_but_node_link_set(uiBut *but, bNodeSocket *socket, const float draw_color[4])

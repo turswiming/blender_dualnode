@@ -141,7 +141,7 @@ void walk_modal_keymap(wmKeyConfig *keyconf)
       {WALK_MODAL_DIR_DOWN, "DOWN", 0, "Down", ""},
 
       {WALK_MODAL_DIR_FORWARD_STOP, "FORWARD_STOP", 0, "Stop Move Forward", ""},
-      {WALK_MODAL_DIR_BACKWARD_STOP, "BACKWARD_STOP", 0, "Stop Mode Backward", ""},
+      {WALK_MODAL_DIR_BACKWARD_STOP, "BACKWARD_STOP", 0, "Stop Move Backward", ""},
       {WALK_MODAL_DIR_LEFT_STOP, "LEFT_STOP", 0, "Stop Move Left", ""},
       {WALK_MODAL_DIR_RIGHT_STOP, "RIGHT_STOP", 0, "Stop Mode Right", ""},
       {WALK_MODAL_DIR_UP_STOP, "UP_STOP", 0, "Stop Move Up", ""},
@@ -594,7 +594,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const int 
   copy_v2_v2_int(walk->init_mval, mval);
   copy_v2_v2_int(walk->prev_mval, mval);
 
-  WM_cursor_grab_enable(win, 0, true, NULL);
+  WM_cursor_grab_enable(win, 0, NULL, true);
 
   return 1;
 }
@@ -643,7 +643,7 @@ static int walkEnd(bContext *C, WalkInfo *walk)
   }
 #endif
 
-  WM_cursor_grab_enable(win, 0, true, NULL);
+  WM_cursor_grab_disable(win, NULL);
 
   if (walk->state == WALK_CONFIRM) {
     MEM_freeN(walk);
@@ -849,11 +849,15 @@ static void walkEvent(WalkInfo *walk, const wmEvent *event)
 
         if (ret) {
           WalkTeleport *teleport = &walk->teleport;
+
+          /* Store the current navigation mode if we are not already teleporting. */
+          if (teleport->state == WALK_TELEPORT_STATE_OFF) {
+            teleport->navigation_mode = walk->navigation_mode;
+          }
           teleport->state = WALK_TELEPORT_STATE_ON;
           teleport->initial_time = PIL_check_seconds_timer();
           teleport->duration = U.walk_navigation.teleport_time;
 
-          teleport->navigation_mode = walk->navigation_mode;
           walk_navigation_mode_set(walk, WALK_MODE_FREE);
 
           copy_v3_v3(teleport->origin, walk->rv3d->viewinv[3]);
@@ -864,9 +868,7 @@ static void walkEvent(WalkInfo *walk, const wmEvent *event)
 
           sub_v3_v3v3(teleport->direction, loc, teleport->origin);
         }
-        else {
-          walk->teleport.state = WALK_TELEPORT_STATE_OFF;
-        }
+
         break;
       }
 
@@ -1229,11 +1231,11 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
         /* keep moving if we were moving */
         copy_v2_v2(dvec, walk->teleport.direction);
 
-        z_cur = walk->rv3d->viewinv[3][2];
-        z_new = walk->teleport.origin[2] - getFreeFallDistance(walk->gravity, t) * walk->grid;
+        z_cur = walk->rv3d->viewinv[3][2] / walk->grid;
+        z_new = (walk->teleport.origin[2] / walk->grid) - getFreeFallDistance(walk->gravity, t);
 
         /* jump */
-        z_new += t * walk->speed_jump * walk->grid;
+        z_new += t * walk->speed_jump;
 
         /* duration is the jump duration */
         if (t > walk->teleport.duration) {

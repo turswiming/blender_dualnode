@@ -996,14 +996,13 @@ static void blendfile_link_append_proxies_convert(Main *bmain, ReportList *repor
 
   if (bf_reports.count.proxies_to_lib_overrides_success != 0 ||
       bf_reports.count.proxies_to_lib_overrides_failures != 0) {
-    BKE_reportf(
-        bf_reports.reports,
-        RPT_WARNING,
-        "Proxies have been removed from Blender (%d proxies were automatically converted "
-        "to library overrides, %d proxies could not be converted and were cleared). "
-        "Please consider re-saving any library .blend file with the newest Blender version",
-        bf_reports.count.proxies_to_lib_overrides_success,
-        bf_reports.count.proxies_to_lib_overrides_failures);
+    BKE_reportf(bf_reports.reports,
+                RPT_WARNING,
+                "Proxies have been removed from Blender (%d proxies were automatically converted "
+                "to library overrides, %d proxies could not be converted and were cleared). "
+                "Consider re-saving any library .blend file with the newest Blender version",
+                bf_reports.count.proxies_to_lib_overrides_success,
+                bf_reports.count.proxies_to_lib_overrides_failures);
   }
 }
 
@@ -1425,7 +1424,7 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
   /* All override rules need to be up to date, since there will be no do_version here, otherwise
    * older, now-invalid rules might be applied and likely fail, or some changes might be missing,
    * etc. See T93353. */
-  BKE_lib_override_library_main_operations_create(bmain, true);
+  BKE_lib_override_library_main_operations_create(bmain, true, NULL);
 
   /* Remove all IDs to be reloaded from Main. */
   lba_idx = set_listbasepointers(bmain, lbarray);
@@ -1494,6 +1493,7 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
    * code is wrong, we need to redo it here after adding them back to main. */
   BKE_main_id_refcount_recompute(bmain, false);
 
+  BKE_layer_collection_resync_forbid();
   /* Note that in reload case, we also want to replace indirect usages. */
   const short remap_flags = ID_REMAP_SKIP_NEVER_NULL_USAGE |
                             (do_reload ? 0 : ID_REMAP_SKIP_INDIRECT_USAGE);
@@ -1523,6 +1523,8 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
       id_us_plus_no_lib(&old_key->id);
     }
   }
+  BKE_layer_collection_resync_allow();
+  BKE_main_collection_sync_remap(bmain);
 
   BKE_main_unlock(bmain);
 
@@ -1614,6 +1616,9 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
         (id->tag & LIB_TAG_PRE_EXISTING) == 0) {
       continue;
     }
+    if ((id->override_library->reference->tag & LIB_TAG_MISSING) == 0) {
+      id->tag &= ~LIB_TAG_MISSING;
+    }
     if ((id->override_library->reference->tag & LIB_TAG_PRE_EXISTING) == 0) {
       BKE_lib_override_library_update(bmain, id);
     }
@@ -1629,7 +1634,7 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
                                              .reports = reports,
                                          });
     /* We need to rebuild some of the deleted override rules (for UI feedback purpose). */
-    BKE_lib_override_library_main_operations_create(bmain, true);
+    BKE_lib_override_library_main_operations_create(bmain, true, NULL);
   }
 
   BKE_main_collection_sync(bmain);

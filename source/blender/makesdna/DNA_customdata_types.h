@@ -92,7 +92,7 @@ typedef enum eCustomDataType {
 #ifdef DNA_DEPRECATED_ALLOW
   CD_MSTICKY = 1, /* DEPRECATED */
 #endif
-  CD_MDEFORMVERT = 2,
+  CD_MDEFORMVERT = 2, /* Array of `MDeformVert`. */
   CD_MEDGE = 3,
   CD_MFACE = 4,
   CD_MTFACE = 5,
@@ -116,7 +116,7 @@ typedef enum eCustomDataType {
   CD_PROP_BYTE_COLOR = 17,
   CD_TANGENT = 18,
   CD_MDISPS = 19,
-  CD_PREVIEW_MCOL = 20,           /* for displaying weightpaint colors */
+  CD_PREVIEW_MCOL = 20,           /* For displaying weight-paint colors. */
                                   /*  CD_ID_MCOL          = 21, */
   /* CD_TEXTURE_MLOOPCOL = 22, */ /* UNUSED */
   CD_CLOTH_ORCO = 23,
@@ -209,7 +209,7 @@ typedef enum eCustomDataType {
 
 #define CD_MASK_HAIRLENGTH (1ULL << CD_HAIRLENGTH)
 
-/** Multires loop data. */
+/** Multi-resolution loop data. */
 #define CD_MASK_MULTIRES_GRIDS (CD_MASK_MDISPS | CD_GRID_PAINT_MASK)
 
 /* All data layers. */
@@ -244,8 +244,10 @@ enum {
   CD_FLAG_EXTERNAL = (1 << 3),
   /* Indicates external data is read into memory */
   CD_FLAG_IN_MEMORY = (1 << 4),
+#ifdef DNA_DEPRECATED_ALLOW
   CD_FLAG_COLOR_ACTIVE = (1 << 5),
   CD_FLAG_COLOR_RENDER = (1 << 6)
+#endif
 };
 
 /* Limits */

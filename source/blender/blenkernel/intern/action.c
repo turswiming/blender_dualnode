@@ -108,7 +108,7 @@ static void action_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, 
     /* Duplicate F-Curve. */
 
     /* XXX TODO: pass subdata flag?
-     * But surprisingly does not seem to be doing any ID refcounting... */
+     * But surprisingly does not seem to be doing any ID reference-counting. */
     fcurve_dst = BKE_fcurve_copy(fcurve_src);
 
     BLI_addtail(&action_dst->curves, fcurve_dst);
@@ -1738,7 +1738,7 @@ void what_does_obaction(Object *ob,
   BKE_object_workob_clear(workob);
 
   /* init workob */
-  copy_m4_m4(workob->obmat, ob->obmat);
+  copy_m4_m4(workob->object_to_world, ob->object_to_world);
   copy_m4_m4(workob->parentinv, ob->parentinv);
   copy_m4_m4(workob->constinv, ob->constinv);
   workob->parent = ob->parent;

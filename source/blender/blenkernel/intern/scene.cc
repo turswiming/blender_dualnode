@@ -79,6 +79,7 @@
 #include "BKE_main.h"
 #include "BKE_mask.h"
 #include "BKE_node.h"
+#include "BKE_node_runtime.hh"
 #include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_pointcache.h"
@@ -280,6 +281,9 @@ static void scene_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const int
   }
 
   /* View Layers */
+  LISTBASE_FOREACH (ViewLayer *, view_layer, &scene_src->view_layers) {
+    BKE_view_layer_synced_ensure(scene_src, view_layer);
+  }
   BLI_duplicatelist(&scene_dst->view_layers, &scene_src->view_layers);
   for (ViewLayer *view_layer_src = static_cast<ViewLayer *>(scene_src->view_layers.first),
                  *view_layer_dst = static_cast<ViewLayer *>(scene_dst->view_layers.first);
@@ -758,7 +762,7 @@ static void scene_foreach_layer_collection(LibraryForeachIDData *data, ListBase 
                          (lc->collection->id.flag & LIB_EMBEDDED_DATA) != 0) ?
                             IDWALK_CB_EMBEDDED :
                             IDWALK_CB_NOP;
-    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, lc->collection, cb_flag);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, lc->collection, cb_flag | IDWALK_CB_DIRECT_WEAK_LINK);
     scene_foreach_layer_collection(data, &lc->layer_collections);
   }
 }
@@ -832,7 +836,9 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
     BKE_view_layer_synced_ensure(scene, view_layer);
     LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
       BKE_LIB_FOREACHID_PROCESS_IDSUPER(
-          data, base->object, IDWALK_CB_NOP | IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE);
+          data,
+          base->object,
+          IDWALK_CB_NOP | IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE | IDWALK_CB_DIRECT_WEAK_LINK);
     }
 
     BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
@@ -1444,7 +1450,7 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
 /* patch for missing scene IDs, can't be in do-versions */
 static void composite_patch(bNodeTree *ntree, Scene *scene)
 {
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+  for (bNode *node : ntree->all_nodes()) {
     if (node->id == nullptr &&
         ((node->type == CMP_NODE_R_LAYERS) ||
          (node->type == CMP_NODE_CRYPTOMATTE && node->custom1 == CMP_CRYPTOMATTE_SRC_RENDER))) {
@@ -2275,13 +2281,13 @@ int BKE_scene_base_iter_next(
           if (iter->dupli_refob != *ob) {
             if (iter->dupli_refob) {
               /* Restore previous object's real matrix. */
-              copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+              copy_m4_m4(iter->dupli_refob->object_to_world, iter->omat);
             }
             /* Backup new object's real matrix. */
             iter->dupli_refob = *ob;
-            copy_m4_m4(iter->omat, iter->dupli_refob->obmat);
+            copy_m4_m4(iter->omat, iter->dupli_refob->object_to_world);
           }
-          copy_m4_m4((*ob)->obmat, iter->dupob->mat);
+          copy_m4_m4((*ob)->object_to_world, iter->dupob->mat);
 
           iter->dupob = iter->dupob->next;
         }
@@ -2291,7 +2297,7 @@ int BKE_scene_base_iter_next(
 
           if (iter->dupli_refob) {
             /* Restore last object's real matrix. */
-            copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+            copy_m4_m4(iter->dupli_refob->object_to_world, iter->omat);
             iter->dupli_refob = nullptr;
           }
 

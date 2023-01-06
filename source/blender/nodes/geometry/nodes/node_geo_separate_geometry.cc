@@ -15,11 +15,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Bool>(N_("Selection"))
       .default_value(true)
       .hide_value()
-      .supports_field()
+      .field_on_all()
       .description(N_("The parts of the geometry that go into the first output"));
   b.add_output<decl::Geometry>(N_("Selection"))
+      .propagate_all()
       .description(N_("The parts of the geometry in the selection"));
   b.add_output<decl::Geometry>(N_("Inverted"))
+      .propagate_all()
       .description(N_("The parts of the geometry not in the selection"));
 }
 
@@ -87,7 +89,7 @@ void register_node_type_geo_separate_geometry()
                     node_free_standard_storage,
                     node_copy_standard_storage);
 
-  node_type_init(&ntype, file_ns::node_init);
+  ntype.initfunc = file_ns::node_init;
 
   ntype.declare = file_ns::node_declare;
   ntype.geometry_node_execute = file_ns::node_geo_exec;

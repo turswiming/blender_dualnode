@@ -78,8 +78,8 @@ struct LaplacianSystem {
     const MLoop *mloop; /* needed to find vertices by index */
     int verts_num;
     int tris_num;
-    float (*verts)[3]; /* vertex coordinates */
-    float (*vnors)[3]; /* vertex normals */
+    float (*verts)[3];        /* vertex coordinates */
+    float (*vert_normals)[3]; /* vertex normals */
 
     float (*root)[3]; /* bone root */
     float (*tip)[3];  /* bone tip */
@@ -489,7 +489,7 @@ static float heat_source_distance(LaplacianSystem *sys, int vertex, int source)
   dist = normalize_v3(d);
 
   /* if the vertex normal does not point along the bone, increase distance */
-  cosine = dot_v3v3(d, sys->heat.vnors[vertex]);
+  cosine = dot_v3v3(d, sys->heat.vert_normals[vertex]);
 
   return dist / (0.5f * (cosine + 1.001f));
 }
@@ -553,7 +553,7 @@ static void heat_calc_vnormals(LaplacianSystem *sys)
   float fnor[3];
   int a, v1, v2, v3, (*face)[3];
 
-  sys->heat.vnors = MEM_callocN(sizeof(float[3]) * sys->verts_num, "HeatVNors");
+  sys->heat.vert_normals = MEM_callocN(sizeof(float[3]) * sys->verts_num, "HeatVNors");
 
   for (a = 0, face = sys->faces; a < sys->faces_num; a++, face++) {
     v1 = (*face)[0];
@@ -562,13 +562,13 @@ static void heat_calc_vnormals(LaplacianSystem *sys)
 
     normal_tri_v3(fnor, sys->verts[v1], sys->verts[v2], sys->verts[v3]);
 
-    add_v3_v3(sys->heat.vnors[v1], fnor);
-    add_v3_v3(sys->heat.vnors[v2], fnor);
-    add_v3_v3(sys->heat.vnors[v3], fnor);
+    add_v3_v3(sys->heat.vert_normals[v1], fnor);
+    add_v3_v3(sys->heat.vert_normals[v2], fnor);
+    add_v3_v3(sys->heat.vert_normals[v3], fnor);
   }
 
   for (a = 0; a < sys->verts_num; a++) {
-    normalize_v3(sys->heat.vnors[a]);
+    normalize_v3(sys->heat.vert_normals[a]);
   }
 }
 
@@ -615,7 +615,7 @@ static void heat_system_free(LaplacianSystem *sys)
   MEM_freeN(sys->heat.mindist);
   MEM_freeN(sys->heat.H);
   MEM_freeN(sys->heat.p);
-  MEM_freeN(sys->heat.vnors);
+  MEM_freeN(sys->heat.vert_normals);
 }
 
 static float heat_limit_weight(float weight)
@@ -1788,11 +1788,11 @@ void ED_mesh_deform_bind_callback(Object *object,
   mmd_orig->bindcagecos = (float *)mdb.cagecos;
   mmd_orig->verts_num = mdb.verts_num;
   mmd_orig->cage_verts_num = mdb.cage_verts_num;
-  copy_m4_m4(mmd_orig->bindmat, mmd_orig->object->obmat);
+  copy_m4_m4(mmd_orig->bindmat, mmd_orig->object->object_to_world);
 
   /* transform bindcagecos to world space */
   for (a = 0; a < mdb.cage_verts_num; a++) {
-    mul_m4_v3(mmd_orig->object->obmat, mmd_orig->bindcagecos + a * 3);
+    mul_m4_v3(mmd_orig->object->object_to_world, mmd_orig->bindcagecos + a * 3);
   }
 
   /* free */

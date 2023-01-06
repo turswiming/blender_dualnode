@@ -23,7 +23,13 @@
 #  include <libdecor.h>
 #endif
 
+#include <mutex>
 #include <string>
+
+#ifdef USE_EVENT_BACKGROUND_THREAD
+#  include <atomic>
+#  include <thread>
+#endif
 
 class GHOST_WindowWayland;
 
@@ -51,6 +57,8 @@ void ghost_wl_dynload_libraries_exit();
 #endif
 
 struct GWL_Output {
+  GHOST_SystemWayland *system = nullptr;
+
   struct wl_output *wl_output = nullptr;
   struct zxdg_output_v1 *xdg_output = nullptr;
   /** Dimensions in pixels. */
@@ -84,11 +92,12 @@ struct GWL_Output {
 
 class GHOST_SystemWayland : public GHOST_System {
  public:
-  GHOST_SystemWayland();
+  GHOST_SystemWayland(bool background);
+  GHOST_SystemWayland() : GHOST_SystemWayland(true){};
 
   ~GHOST_SystemWayland() override;
 
-  GHOST_TSuccess init();
+  GHOST_TSuccess init() override;
 
   bool processEvents(bool waitForEvent) override;
 
@@ -128,38 +137,40 @@ class GHOST_SystemWayland : public GHOST_System {
                               uint32_t width,
                               uint32_t height,
                               GHOST_TWindowState state,
-                              GHOST_TDrawingContextType type,
                               GHOST_GLSettings glSettings,
                               const bool exclusive,
                               const bool is_dialog,
                               const GHOST_IWindow *parentWindow) override;
 
-  GHOST_TSuccess setCursorShape(GHOST_TStandardCursor shape);
+  bool supportsCursorWarp() override;
+  bool supportsWindowPosition() override;
 
-  GHOST_TSuccess hasCursorShape(GHOST_TStandardCursor cursorShape);
+  /* WAYLAND utility functions (share window/system logic). */
 
-  GHOST_TSuccess setCustomCursorShape(uint8_t *bitmap,
-                                      uint8_t *mask,
-                                      int sizex,
-                                      int sizey,
-                                      int hotX,
-                                      int hotY,
-                                      bool canInvertColor);
+  GHOST_TSuccess cursor_shape_set(GHOST_TStandardCursor shape);
 
-  GHOST_TSuccess getCursorBitmap(GHOST_CursorBitmapRef *bitmap);
+  GHOST_TSuccess cursor_shape_check(GHOST_TStandardCursor cursorShape);
 
-  GHOST_TSuccess setCursorVisibility(bool visible);
+  GHOST_TSuccess cursor_shape_custom_set(uint8_t *bitmap,
+                                         uint8_t *mask,
+                                         int sizex,
+                                         int sizey,
+                                         int hotX,
+                                         int hotY,
+                                         bool canInvertColor);
 
-  bool supportsCursorWarp();
-  bool supportsWindowPosition();
+  GHOST_TSuccess cursor_bitmap_get(GHOST_CursorBitmapRef *bitmap);
 
-  bool getCursorGrabUseSoftwareDisplay(const GHOST_TGrabCursorMode mode);
+  GHOST_TSuccess cursor_visibility_set(bool visible);
+
+  bool cursor_grab_use_software_display_get(const GHOST_TGrabCursorMode mode);
 
   /* WAYLAND direct-data access. */
 
-  wl_display *display();
-
-  wl_compositor *compositor();
+  struct wl_display *wl_display();
+  struct wl_compositor *wl_compositor();
+  struct zwp_primary_selection_device_manager_v1 *wp_primary_selection_manager();
+  struct zwp_pointer_gestures_v1 *wp_pointer_gestures();
 
 #ifdef WITH_GHOST_WAYLAND_LIBDECOR
   libdecor *libdecor_context();
@@ -170,11 +181,18 @@ class GHOST_SystemWayland : public GHOST_System {
 
   const std::vector<GWL_Output *> &outputs() const;
 
-  wl_shm *shm() const;
+  struct wl_shm *wl_shm() const;
 
   /* WAYLAND utility functions. */
 
-  void selection_set(const std::string &selection);
+  /**
+   * Push an event, with support for calling from a thread.
+   * NOTE: only needed for `USE_EVENT_BACKGROUND_THREAD`.
+   */
+  GHOST_TSuccess pushEvent_maybe_pending(GHOST_IEvent *event);
+
+  /** Set this seat to be active. */
+  void seat_active_set(const struct GWL_Seat *seat);
 
   /** Clear all references to this surface to prevent accessing NULL pointers. */
   void window_surface_unref(const wl_surface *wl_surface);
@@ -191,7 +209,21 @@ class GHOST_SystemWayland : public GHOST_System {
   static bool use_libdecor_runtime();
 #endif
 
+#ifdef USE_EVENT_BACKGROUND_THREAD
+  /* NOTE: allocate mutex so `const` functions can lock the mutex. */
+
+  /** Lock to prevent #wl_display_dispatch / #wl_display_roundtrip / #wl_display_flush
+   * from running at the same time. */
+  std::mutex *server_mutex = nullptr;
+
+  /** Threads must lock this before manipulating timers. */
+  std::mutex *timer_mutex = nullptr;
+
+  std::thread::id main_thread_id;
+
+  std::atomic<bool> has_pending_actions_for_window = false;
+#endif
+
  private:
-  struct GWL_Display *d;
-  std::string selection;
+  struct GWL_Display *display_;
 };

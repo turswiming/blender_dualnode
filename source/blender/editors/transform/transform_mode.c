@@ -1029,8 +1029,9 @@ void ElementResize(const TransInfo *t,
       applyNumInput(&num_evil, values_final_evil);
 
       float ratio = values_final_evil[0];
-      *td->val = td->ival * fabs(ratio) * gps->runtime.multi_frame_falloff;
-      CLAMP_MIN(*td->val, 0.001f);
+      float transformed_value = td->ival * fabs(ratio);
+      *td->val = max_ff(interpf(transformed_value, td->ival, gps->runtime.multi_frame_falloff),
+                        0.001f);
     }
   }
   else {
@@ -1041,7 +1042,7 @@ void ElementResize(const TransInfo *t,
     if (t->options & CTX_POSE_BONE) {
       /* Without this, the resulting location of scaled bones aren't correct,
        * especially noticeable scaling root or disconnected bones around the cursor, see T92515. */
-      mul_mat3_m4_v3(tc->poseobj->obmat, vec);
+      mul_mat3_m4_v3(tc->poseobj->object_to_world, vec);
     }
     mul_m3_v3(td->smtx, vec);
   }

@@ -119,15 +119,18 @@ class ImageBufferByte4 {
 };
 
 static float paint_automasking_interp(SculptSession *ss,
-                                      const TrianglePaintInput &triangle,
+                                      const UVPrimitivePaintInput &prim,
                                       const float2 uv)
 {
   if (!ss->cache->automasking) {
     return 1.0f;
   }
 
+  PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(*ss->pbvh);
+
   AutomaskingNodeData automask_data = {};
   automask_data.have_orig_data = false;
+  automask_data.initializing = false;
 
   PBVHVertRef v1, v2, v3;
 
@@ -137,9 +140,11 @@ static float paint_automasking_interp(SculptSession *ss,
 
   BLI_assert(BKE_pbvh_type(ss->pbvh) == PBVH_FACES);
 
-  v1.i = triangle.vert_indices[0];
-  v2.i = triangle.vert_indices[1];
-  v3.i = triangle.vert_indices[2];
+  int3 &tri = pbvh_data.geom_primitives.vert_indices[prim.geometry_primitive_index];
+
+  v1.i = tri[0];
+  v2.i = tri[1];
+  v3.i = tri[2];
 
   float a = SCULPT_automasking_factor_get(ss->cache->automasking, ss, v1, &automask_data);
   float b = SCULPT_automasking_factor_get(ss->cache->automasking, ss, v2, &automask_data);
@@ -176,15 +181,18 @@ template<typename ImageBuffer> class PaintingKernel {
     init_brush_test();
   }
 
-  bool paint(const Triangles &triangles,
+  bool paint(const PaintGeometryPrimitives &geom_primitives,
+             const PaintUVPrimitives &uv_primitives,
              const PackedPixelRow &pixel_row,
              ImBuf *image_buffer,
              AutomaskingNodeData *automask_data)
   {
     image_accessor.set_image_position(image_buffer, pixel_row.start_image_coordinate);
-    const TrianglePaintInput triangle = triangles.get_paint_input(pixel_row.triangle_index);
-    float3 pixel_pos = get_start_pixel_pos(triangle, pixel_row);
-    const float3 delta_pixel_pos = get_delta_pixel_pos(triangle, pixel_row, pixel_pos);
+    const UVPrimitivePaintInput paint_input = uv_primitives.get_paint_input(
+        pixel_row.uv_primitive_index);
+    float3 pixel_pos = get_start_pixel_pos(geom_primitives, paint_input, pixel_row);
+    const float3 delta_pixel_pos = get_delta_pixel_pos(
+        geom_primitives, paint_input, pixel_row, pixel_pos);
     bool pixels_painted = false;
 
     float2 uv = pixel_row.start_barycentric_coord;
@@ -192,7 +200,7 @@ template<typename ImageBuffer> class PaintingKernel {
     for (int x = 0; x < pixel_row.num_pixels; x++) {
       if (!brush_test_fn(&test, pixel_pos)) {
         pixel_pos += delta_pixel_pos;
-        uv += triangle.delta_barycentric_coord_u;
+        uv += paint_input.delta_barycentric_coord_u;
         image_accessor.next_pixel();
         continue;
       }
@@ -213,7 +221,7 @@ template<typename ImageBuffer> class PaintingKernel {
                                                             thread_id,
                                                             automask_data);
 
-      falloff_strength *= paint_automasking_interp(ss, triangle, uv);
+      falloff_strength *= paint_automasking_interp(ss, paint_input, uv);
 
       float4 paint_color = brush_color * falloff_strength * brush_strength;
       float4 buffer_color;
@@ -225,7 +233,7 @@ template<typename ImageBuffer> class PaintingKernel {
 
       image_accessor.next_pixel();
       pixel_pos += delta_pixel_pos;
-      uv += triangle.delta_barycentric_coord_u;
+      uv += paint_input.delta_barycentric_coord_u;
     }
     return pixels_painted;
   }
@@ -268,29 +276,35 @@ template<typename ImageBuffer> class PaintingKernel {
   /**
    * Extract the starting pixel position from the given encoded_pixels belonging to the triangle.
    */
-  float3 get_start_pixel_pos(const TrianglePaintInput &triangle,
+  float3 get_start_pixel_pos(const PaintGeometryPrimitives &geom_primitives,
+                             const UVPrimitivePaintInput &paint_input,
                              const PackedPixelRow &encoded_pixels) const
   {
-    return init_pixel_pos(triangle, encoded_pixels.start_barycentric_coord);
+    return init_pixel_pos(geom_primitives, paint_input, encoded_pixels.start_barycentric_coord);
   }
 
   /**
    * Extract the delta pixel position that will be used to advance a Pixel instance to the next
    * pixel.
    */
-  float3 get_delta_pixel_pos(const TrianglePaintInput &triangle,
+  float3 get_delta_pixel_pos(const PaintGeometryPrimitives &geom_primitives,
+                             const UVPrimitivePaintInput &paint_input,
                              const PackedPixelRow &encoded_pixels,
                              const float3 &start_pixel) const
   {
-    float3 result = init_pixel_pos(
-        triangle, encoded_pixels.start_barycentric_coord + triangle.delta_barycentric_coord_u);
+    float3 result = init_pixel_pos(geom_primitives,
+                                   paint_input,
+                                   encoded_pixels.start_barycentric_coord +
+                                       paint_input.delta_barycentric_coord_u);
     return result - start_pixel;
   }
 
-  float3 init_pixel_pos(const TrianglePaintInput &triangle,
+  float3 init_pixel_pos(const PaintGeometryPrimitives &geom_primitives,
+                        const UVPrimitivePaintInput &paint_input,
                         const float2 &barycentric_weights) const
   {
-    const int3 &vert_indices = triangle.vert_indices;
+    const int3 &vert_indices = geom_primitives.get_vert_indices(
+        paint_input.geometry_primitive_index);
     float3 result;
     const float3 barycentric(barycentric_weights.x,
                              barycentric_weights.y,
@@ -304,11 +318,12 @@ template<typename ImageBuffer> class PaintingKernel {
   }
 };
 
-static std::vector<bool> init_triangle_brush_test(SculptSession *ss,
-                                                  Triangles &triangles,
-                                                  const MVert *mvert)
+static std::vector<bool> init_uv_primitives_brush_test(SculptSession *ss,
+                                                       PaintGeometryPrimitives &geom_primitives,
+                                                       PaintUVPrimitives &uv_primitives,
+                                                       const MVert *mvert)
 {
-  std::vector<bool> brush_test(triangles.size());
+  std::vector<bool> brush_test(uv_primitives.size());
   SculptBrushTest test;
   SCULPT_brush_test_init(ss, &test);
   float3 brush_min_bounds(test.location[0] - test.radius,
@@ -317,13 +332,15 @@ static std::vector<bool> init_triangle_brush_test(SculptSession *ss,
   float3 brush_max_bounds(test.location[0] + test.radius,
                           test.location[1] + test.radius,
                           test.location[2] + test.radius);
-  for (int triangle_index = 0; triangle_index < triangles.size(); triangle_index++) {
-    TrianglePaintInput &triangle = triangles.get_paint_input(triangle_index);
+  for (int uv_prim_index = 0; uv_prim_index < uv_primitives.size(); uv_prim_index++) {
+    const UVPrimitivePaintInput &paint_input = uv_primitives.get_paint_input(uv_prim_index);
+    const int3 &vert_indices = geom_primitives.get_vert_indices(
+        paint_input.geometry_primitive_index);
 
-    float3 triangle_min_bounds(mvert[triangle.vert_indices[0]].co);
+    float3 triangle_min_bounds(mvert[vert_indices[0]].co);
     float3 triangle_max_bounds(triangle_min_bounds);
     for (int i = 1; i < 3; i++) {
-      const float3 &pos = mvert[triangle.vert_indices[i]].co;
+      const float3 &pos = mvert[vert_indices[i]].co;
       triangle_min_bounds.x = min_ff(triangle_min_bounds.x, pos.x);
       triangle_min_bounds.y = min_ff(triangle_min_bounds.y, pos.y);
       triangle_min_bounds.z = min_ff(triangle_min_bounds.z, pos.z);
@@ -331,7 +348,7 @@ static std::vector<bool> init_triangle_brush_test(SculptSession *ss,
       triangle_max_bounds.y = max_ff(triangle_max_bounds.y, pos.y);
       triangle_max_bounds.z = max_ff(triangle_max_bounds.z, pos.z);
     }
-    brush_test[triangle_index] = isect_aabb_aabb_v3(
+    brush_test[uv_prim_index] = isect_aabb_aabb_v3(
         brush_min_bounds, brush_max_bounds, triangle_min_bounds, triangle_max_bounds);
   }
   return brush_test;
@@ -345,13 +362,15 @@ static void do_paint_pixels(void *__restrict userdata,
   Object *ob = data->ob;
   SculptSession *ss = ob->sculpt;
   const Brush *brush = data->brush;
+  PBVH *pbvh = ss->pbvh;
   PBVHNode *node = data->nodes[n];
-
+  PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(*pbvh);
   NodeData &node_data = BKE_pbvh_pixels_node_data_get(*node);
   const int thread_id = BLI_task_parallel_thread_id(tls);
   MVert *mvert = SCULPT_mesh_deformed_mverts_get(ss);
 
-  std::vector<bool> brush_test = init_triangle_brush_test(ss, node_data.triangles, mvert);
+  std::vector<bool> brush_test = init_uv_primitives_brush_test(
+      ss, pbvh_data.geom_primitives, node_data.uv_primitives, mvert);
 
   PaintingKernel<ImageBufferFloat4> kernel_float4(ss, brush, thread_id, mvert);
   PaintingKernel<ImageBufferByte4> kernel_byte4(ss, brush, thread_id, mvert);
@@ -380,17 +399,23 @@ static void do_paint_pixels(void *__restrict userdata,
         }
 
         for (const PackedPixelRow &pixel_row : tile_data.pixel_rows) {
-          if (!brush_test[pixel_row.triangle_index]) {
+          if (!brush_test[pixel_row.uv_primitive_index]) {
             continue;
           }
           bool pixels_painted = false;
           if (image_buffer->rect_float != nullptr) {
-            pixels_painted = kernel_float4.paint(
-                node_data.triangles, pixel_row, image_buffer, &automask_data);
+            pixels_painted = kernel_float4.paint(pbvh_data.geom_primitives,
+                                                 node_data.uv_primitives,
+                                                 pixel_row,
+                                                 image_buffer,
+                                                 &automask_data);
           }
           else {
-            pixels_painted = kernel_byte4.paint(
-                node_data.triangles, pixel_row, image_buffer, &automask_data);
+            pixels_painted = kernel_byte4.paint(pbvh_data.geom_primitives,
+                                                node_data.uv_primitives,
+                                                pixel_row,
+                                                image_buffer,
+                                                &automask_data);
           }
 
           if (pixels_painted) {

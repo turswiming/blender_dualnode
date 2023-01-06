@@ -1903,39 +1903,12 @@ static int gpencil_move_to_layer_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static void layer_new_name_get(bGPdata *gpd, char *rname)
-{
-  int index = 0;
-  LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-    if (strstr(gpl->info, "GP_Layer")) {
-      index++;
-    }
-  }
-
-  if (index == 0) {
-    BLI_strncpy(rname, "GP_Layer", 128);
-    return;
-  }
-  char *name = BLI_sprintfN("%.*s.%03d", 128, "GP_Layer", index);
-  BLI_strncpy(rname, name, 128);
-  MEM_freeN(name);
-}
-
 static int gpencil_move_to_layer_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
-  Object *ob = CTX_data_active_object(C);
-  PropertyRNA *prop;
-  if (RNA_int_get(op->ptr, "layer") == -1) {
-    prop = RNA_struct_find_property(op->ptr, "new_layer_name");
-    if (!RNA_property_is_set(op->ptr, prop)) {
-      char name[MAX_NAME];
-      bGPdata *gpd = ob->data;
-      layer_new_name_get(gpd, name);
-      RNA_property_string_set(op->ptr, prop, name);
-      return WM_operator_props_dialog_popup(C, op, 200);
-    }
+  const int tmp = ED_gpencil_new_layer_dialog(C, op);
+  if (tmp != 0) {
+    return tmp;
   }
-
   return gpencil_move_to_layer_exec(C, op);
 }
 
@@ -3848,7 +3821,12 @@ static int gpencil_stroke_start_set_exec(bContext *C, wmOperator *op)
             for (int i = 0; i < gps->totpoints; i++) {
               pt = &gps->points[i];
               if (pt->flag & GP_SPOINT_SELECT) {
-                BKE_gpencil_stroke_start_set(gps, i);
+                if (i == gps->totpoints - 1) {
+                  BKE_gpencil_stroke_flip(gps);
+                }
+                else {
+                  BKE_gpencil_stroke_start_set(gps, i);
+                }
                 BKE_gpencil_stroke_geometry_update(gpd, gps);
                 changed = true;
                 break;
@@ -4157,7 +4135,7 @@ static int gpencil_stroke_outline_exec(bContext *C, wmOperator *op)
       Scene *scene = CTX_data_scene(C);
       Object *cam_ob = scene->camera;
       if (cam_ob != NULL) {
-        invert_m4_m4(viewmat, cam_ob->obmat);
+        invert_m4_m4(viewmat, cam_ob->object_to_world);
       }
       break;
     }
@@ -4224,7 +4202,7 @@ static int gpencil_stroke_outline_exec(bContext *C, wmOperator *op)
           /* Apply layer thickness change. */
           gps_duplicate->thickness += gpl->line_change;
           /* Apply object scale to thickness. */
-          gps_duplicate->thickness *= mat4_to_scale(ob->obmat);
+          gps_duplicate->thickness *= mat4_to_scale(ob->object_to_world);
           CLAMP_MIN(gps_duplicate->thickness, 1.0f);
 
           /* Stroke. */

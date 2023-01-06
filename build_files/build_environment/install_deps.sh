@@ -40,15 +40,15 @@ ver-ocio:,ver-oiio:,ver-llvm:,ver-osl:,ver-osd:,ver-openvdb:,ver-xr-openxr:,ver-
 force-all,force-python,force-boost,force-tbb,\
 force-ocio,force-imath,force-openexr,force-oiio,force-llvm,force-osl,force-osd,force-openvdb,\
 force-ffmpeg,force-opencollada,force-alembic,force-embree,force-oidn,force-usd,\
-force-xr-openxr,force-level-zero, force-openpgl,\
+force-xr-openxr,force-level-zero,force-openpgl,\
 build-all,build-python,build-boost,build-tbb,\
 build-ocio,build-imath,build-openexr,build-oiio,build-llvm,build-osl,build-osd,build-openvdb,\
 build-ffmpeg,build-opencollada,build-alembic,build-embree,build-oidn,build-usd,\
-build-xr-openxr,build-level-zero, build-openpgl,\
+build-xr-openxr,build-level-zero,build-openpgl,\
 skip-python,skip-boost,skip-tbb,\
 skip-ocio,skip-imath,skip-openexr,skip-oiio,skip-llvm,skip-osl,skip-osd,skip-openvdb,\
 skip-ffmpeg,skip-opencollada,skip-alembic,skip-embree,skip-oidn,skip-usd,\
-skip-xr-openxr,skip-level-zero, skip-openpgl \
+skip-xr-openxr,skip-level-zero,skip-openpgl \
 -- "$@" \
 )
 
@@ -394,7 +394,7 @@ CLANG_FORMAT_VERSION="10.0"
 CLANG_FORMAT_VERSION_MIN="6.0"
 CLANG_FORMAT_VERSION_MEX="14.0"
 
-PYTHON_VERSION="3.10.2"
+PYTHON_VERSION="3.10.9"
 PYTHON_VERSION_SHORT="3.10"
 PYTHON_VERSION_MIN="3.10"
 PYTHON_VERSION_MEX="3.12"
@@ -434,7 +434,7 @@ PYTHON_ZSTANDARD_VERSION_MIN="0.15.2"
 PYTHON_ZSTANDARD_VERSION_MEX="0.20.0"
 PYTHON_ZSTANDARD_NAME="zstandard"
 
-PYTHON_NUMPY_VERSION="1.22.0"
+PYTHON_NUMPY_VERSION="1.23.5"
 PYTHON_NUMPY_VERSION_MIN="1.14"
 PYTHON_NUMPY_VERSION_MEX="2.0"
 PYTHON_NUMPY_NAME="numpy"
@@ -462,8 +462,8 @@ PYTHON_MODULES_PIP=(
 )
 
 
-BOOST_VERSION="1.78.0"
-BOOST_VERSION_SHORT="1.78"
+BOOST_VERSION="1.80.0"
+BOOST_VERSION_SHORT="1.80"
 BOOST_VERSION_MIN="1.49"
 BOOST_VERSION_MEX="2.0"
 BOOST_FORCE_BUILD=false
@@ -479,8 +479,8 @@ TBB_FORCE_BUILD=false
 TBB_FORCE_REBUILD=false
 TBB_SKIP=false
 
-OCIO_VERSION="2.1.1"
-OCIO_VERSION_SHORT="2.1"
+OCIO_VERSION="2.2.0"
+OCIO_VERSION_SHORT="2.2"
 OCIO_VERSION_MIN="2.0"
 OCIO_VERSION_MEX="3.0"
 OCIO_FORCE_BUILD=false
@@ -505,10 +505,10 @@ OPENEXR_FORCE_REBUILD=false
 OPENEXR_SKIP=false
 _with_built_openexr=false
 
-OIIO_VERSION="2.3.13.0"
-OIIO_VERSION_SHORT="2.3"
-OIIO_VERSION_MIN="2.1.12"
-OIIO_VERSION_MEX="2.4.0"
+OIIO_VERSION="2.4.6.0"
+OIIO_VERSION_SHORT="2.4"
+OIIO_VERSION_MIN="2.2.0"
+OIIO_VERSION_MEX="2.5.0"
 OIIO_FORCE_BUILD=false
 OIIO_FORCE_REBUILD=false
 OIIO_SKIP=false
@@ -523,8 +523,8 @@ LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.11.17.0"
-OSL_VERSION_SHORT="1.11"
+OSL_VERSION="1.13.0.2"
+OSL_VERSION_SHORT="1.13"
 OSL_VERSION_MIN="1.11"
 OSL_VERSION_MEX="2.0"
 OSL_FORCE_BUILD=false
@@ -532,9 +532,9 @@ OSL_FORCE_REBUILD=false
 OSL_SKIP=false
 
 # OpenSubdiv needs to be compiled for now
-OSD_VERSION="3.4.4"
-OSD_VERSION_SHORT="3.4"
-OSD_VERSION_MIN="3.4"
+OSD_VERSION="3.5.0"
+OSD_VERSION_SHORT="3.5"
+OSD_VERSION_MIN="3.5"
 OSD_VERSION_MEX="4.0"
 OSD_FORCE_BUILD=false
 OSD_FORCE_REBUILD=false
@@ -543,10 +543,10 @@ OSD_SKIP=false
 # OpenVDB needs to be compiled for now
 OPENVDB_BLOSC_VERSION="1.21.1"
 
-OPENVDB_VERSION="9.0.0"
-OPENVDB_VERSION_SHORT="9.0"
-OPENVDB_VERSION_MIN="9.0"
-OPENVDB_VERSION_MEX="9.1"
+OPENVDB_VERSION="10.0.0"
+OPENVDB_VERSION_SHORT="10.0"
+OPENVDB_VERSION_MIN="10.0"
+OPENVDB_VERSION_MEX="11.0"
 OPENVDB_FORCE_BUILD=false
 OPENVDB_FORCE_REBUILD=false
 OPENVDB_SKIP=false
@@ -560,8 +560,8 @@ ALEMBIC_FORCE_BUILD=false
 ALEMBIC_FORCE_REBUILD=false
 ALEMBIC_SKIP=false
 
-USD_VERSION="22.03"
-USD_VERSION_SHORT="22.03"
+USD_VERSION="22.11"
+USD_VERSION_SHORT="22.11"
 USD_VERSION_MIN="20.05"
 USD_VERSION_MEX="23.00"
 USD_FORCE_BUILD=false
@@ -602,10 +602,10 @@ LEVEL_ZERO_FORCE_BUILD=false
 LEVEL_ZERO_FORCE_REBUILD=false
 LEVEL_ZERO_SKIP=false
 
-OPENPGL_VERSION="0.3.1"
-OPENPGL_VERSION_SHORT="0.3"
-OPENPGL_VERSION_MIN="0.3.1"
-OPENPGL_VERSION_MEX="0.3.2"
+OPENPGL_VERSION="0.4.1"
+OPENPGL_VERSION_SHORT="0.4"
+OPENPGL_VERSION_MIN="0.4.1"
+OPENPGL_VERSION_MEX="0.5"
 OPENPGL_FORCE_BUILD=false
 OPENPGL_FORCE_REBUILD=false
 OPENPGL_SKIP=false
@@ -618,8 +618,8 @@ XR_OPENXR_FORCE_BUILD=false
 XR_OPENXR_FORCE_REBUILD=false
 XR_OPENXR_SKIP=false
 
-FFMPEG_VERSION="5.0"
-FFMPEG_VERSION_SHORT="5.0"
+FFMPEG_VERSION="5.1.2"
+FFMPEG_VERSION_SHORT="5.1"
 FFMPEG_VERSION_MIN="4.0"
 FFMPEG_VERSION_MEX="6.0"
 FFMPEG_FORCE_BUILD=false
@@ -1138,17 +1138,11 @@ _LLVM_SOURCE_ROOT="https://github.com/llvm/llvm-project/releases/download/llvmor
 LLVM_SOURCE=( "$_LLVM_SOURCE_ROOT/llvm-$LLVM_VERSION.src.tar.xz" )
 LLVM_CLANG_SOURCE=( "$_LLVM_SOURCE_ROOT/clang-$LLVM_VERSION.src.tar.xz" "$_LLVM_SOURCE_ROOT/cfe-$LLVM_VERSION.src.tar.xz" )
 
-OSL_USE_REPO=false
-OSL_SOURCE=( "https://github.com/imageworks/OpenShadingLanguage/archive/Release-$OSL_VERSION.tar.gz" )
-#~ OSL_SOURCE_REPO=( "https://github.com/imageworks/OpenShadingLanguage.git" )
-#~ OSL_SOURCE_REPO_BRANCH="master"
-#~ OSL_SOURCE_REPO_UID="85179714e1bc69cd25ecb6bb711c1a156685d395"
-#~ OSL_SOURCE=( "https://github.com/Nazg-Gul/OpenShadingLanguage/archive/Release-1.5.11.tar.gz" )
-#~ OSL_SOURCE_REPO=( "https://github.com/mont29/OpenShadingLanguage.git" )
-#~ OSL_SOURCE_REPO_UID="85179714e1bc69cd25ecb6bb711c1a156685d395"
-#~ OSL_SOURCE_REPO=( "https://github.com/Nazg-Gul/OpenShadingLanguage.git" )
-#~ OSL_SOURCE_REPO_UID="7d40ff5fe8e47b030042afb92d0e955f5aa96f48"
-#~ OSL_SOURCE_REPO_BRANCH="blender-fixes"
+OSL_USE_REPO=true
+OSL_SOURCE=( "https://github.com/imageworks/OpenShadingLanguage/archive/v$OSL_VERSION.tar.gz" )
+OSL_SOURCE_REPO=( "https://github.com/AcademySoftwareFoundation/OpenShadingLanguage.git" )
+OSL_SOURCE_REPO_BRANCH="main"
+OSL_SOURCE_REPO_UID="1a7670600c8b08c2443a78d03c8c27e9a1149140"
 
 OSD_USE_REPO=false
 # Script foo to make the version string compliant with the archive name:
@@ -2243,7 +2237,7 @@ compile_OIIO() {
   fi
 
   # To be changed each time we make edits that would modify the compiled result!
-  oiio_magic=18
+  oiio_magic=19
   _init_oiio
 
   # Force having own builds for the dependencies.
@@ -2323,7 +2317,7 @@ compile_OIIO() {
     cmake_d="$cmake_d -D USE_OPENVDB=OFF"
     cmake_d="$cmake_d -D BUILD_TESTING=OFF"
     cmake_d="$cmake_d -D OIIO_BUILD_TESTS=OFF"
-    cmake_d="$cmake_d -D OIIO_BUILD_TOOLS=OFF"
+    cmake_d="$cmake_d -D OIIO_BUILD_TOOLS=ON"
     cmake_d="$cmake_d -D TXT2MAN="
     #cmake_d="$cmake_d -D CMAKE_EXPORT_COMPILE_COMMANDS=ON"
     #cmake_d="$cmake_d -D CMAKE_VERBOSE_MAKEFILE=ON"
@@ -2404,7 +2398,7 @@ compile_LLVM() {
   fi
 
   # To be changed each time we make edits that would modify the compiled result!
-  llvm_magic=3
+  llvm_magic=4
   _init_llvm
 
   # Force having own builds for the dependencies.
@@ -2453,9 +2447,9 @@ compile_LLVM() {
     mkdir build
     cd build
 
-    LLVM_TARGETS="X86"
+    LLVM_TARGETS="X86;NVPTX"
     if [ $(uname -m) == "aarch64" ]; then
-      LLVM_TARGETS="AArch64"
+      LLVM_TARGETS="AArch64;NVPTX"
     fi
 
     cmake_d="-D CMAKE_BUILD_TYPE=Release"
@@ -2522,7 +2516,7 @@ compile_OSL() {
   fi
 
   # To be changed each time we make edits that would modify the compiled result!
-  osl_magic=21
+  osl_magic=22
   _init_osl
 
   # Force having own builds for the dependencies.
@@ -2553,8 +2547,9 @@ compile_OSL() {
         INFO "Unpacking OpenShadingLanguage-$OSL_VERSION"
         tar -C $SRC --transform "s,(.*/?)OpenShadingLanguage-[^/]*(.*),\1OpenShadingLanguage-$OSL_VERSION\2,x" \
             -xf $_src.tar.gz
+
+        patch -d $_src -p1 < $SCRIPT_DIR/patches/osl.diff
       fi
-      patch -d $_src -p1 < $SCRIPT_DIR/patches/osl.diff
     fi
 
     cd $_src
@@ -2566,6 +2561,8 @@ compile_OSL() {
       # Stick to same rev as windows' libs...
       git checkout $OSL_SOURCE_REPO_UID
       git reset --hard
+
+      patch -d $_src -p1 < $SCRIPT_DIR/patches/osl.diff
     fi
 
     # Always refresh the whole build!
@@ -2969,6 +2966,9 @@ compile_OPENVDB() {
     fi
     if [ -d $INST/tbb ]; then
       cmake_d="$cmake_d -D TBB_ROOT=$INST/tbb"
+      # Work around until we use oneTBB, otherwise OpenVDB forcefully
+      # uses oneTBB if it can find it on the system.
+      cmake_d="$cmake_d -D Tbb_INCLUDE_DIR=$INST/tbb/include"
     fi
 
     if [ "$_with_built_imath" = true ]; then
@@ -3187,7 +3187,6 @@ compile_USD() {
     if [ -d $INST/tbb ]; then
       cmake_d="$cmake_d $cmake_d -D TBB_ROOT_DIR=$INST/tbb"
     fi
-    cmake_d="$cmake_d -DPXR_SET_INTERNAL_NAMESPACE=usdBlender"
     cmake_d="$cmake_d -DPXR_ENABLE_PYTHON_SUPPORT=OFF"
     cmake_d="$cmake_d -DPXR_BUILD_IMAGING=OFF"
     cmake_d="$cmake_d -DPXR_BUILD_TESTS=OFF"

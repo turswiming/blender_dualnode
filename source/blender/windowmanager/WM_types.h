@@ -185,12 +185,12 @@ enum {
 };
 
 /** For #WM_cursor_grab_enable wrap axis. */
-enum {
+typedef enum eWM_CursorWrapAxis {
   WM_CURSOR_WRAP_NONE = 0,
   WM_CURSOR_WRAP_X,
   WM_CURSOR_WRAP_Y,
   WM_CURSOR_WRAP_XY,
-};
+} eWM_CursorWrapAxis;
 
 /**
  * Context to call operator in for #WM_operator_name_call.
@@ -359,7 +359,7 @@ typedef struct wmNotifier {
 /* data type, 256 entries is enough, it can overlap */
 #define NOTE_DATA 0x00FF0000
 
-/* NC_WM windowmanager */
+/* NC_WM (window-manager). */
 #define ND_FILEREAD (1 << 16)
 #define ND_FILESAVE (2 << 16)
 #define ND_DATACHANGED (3 << 16)
