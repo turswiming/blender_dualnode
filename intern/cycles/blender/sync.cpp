@@ -357,7 +357,7 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   }
 
   SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
-      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_PMJ);
+      cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_TABULATED_SOBOL);
   integrator->set_sampling_pattern(sampling_pattern);
 
   int samples = 1;
@@ -866,7 +866,8 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 
   /* Device */
   params.threads = blender_device_threads(b_scene);
-  params.device = blender_device_info(b_preferences, b_scene, params.background);
+  params.device = blender_device_info(
+      b_preferences, b_scene, params.background, b_engine.is_preview());
 
   /* samples */
   int samples = get_int(cscene, "samples");

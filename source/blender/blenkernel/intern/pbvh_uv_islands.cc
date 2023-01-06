@@ -1187,7 +1187,7 @@ UVEdge *UVPrimitive::get_uv_edge(const int v1, const int v2) const
   return nullptr;
 }
 
-const bool UVPrimitive::contains_uv_vertex(const UVVertex *uv_vertex) const
+bool UVPrimitive::contains_uv_vertex(const UVVertex *uv_vertex) const
 {
   for (UVEdge *edge : edges) {
     if (std::find(edge->vertices.begin(), edge->vertices.end(), uv_vertex) !=
@@ -1329,7 +1329,7 @@ static void add_uv_island(const MeshData &mesh_data,
                           const UVIsland &uv_island,
                           int16_t island_index)
 {
-  for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : uv_island.uv_primitives)
+  for (const VectorList<UVPrimitive>::UsedVector &uv_primitives : uv_island.uv_primitives) {
     for (const UVPrimitive &uv_primitive : uv_primitives) {
       const MLoopTri &looptri = mesh_data.looptris[uv_primitive.primitive_i];
 
@@ -1364,6 +1364,7 @@ static void add_uv_island(const MeshData &mesh_data,
         }
       }
     }
+  }
 }
 
 void UVIslandsMask::add(const MeshData &mesh_data, const UVIslands &uv_islands)

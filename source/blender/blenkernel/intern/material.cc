@@ -5,9 +5,9 @@
  * \ingroup bke
  */
 
-#include <math.h>
-#include <stddef.h>
-#include <string.h>
+#include <cmath>
+#include <cstddef>
+#include <cstring>
 
 #include "CLG_log.h"
 
@@ -1374,13 +1374,13 @@ static bNode *nodetree_uv_node_recursive(bNode *node)
 }
 
 /** Bitwise filter for updating paint slots. */
-typedef enum ePaintSlotFilter {
+enum ePaintSlotFilter {
   PAINT_SLOT_IMAGE = 1 << 0,
   PAINT_SLOT_COLOR_ATTRIBUTE = 1 << 1,
-} ePaintSlotFilter;
+};
 ENUM_OPERATORS(ePaintSlotFilter, PAINT_SLOT_COLOR_ATTRIBUTE)
 
-typedef bool (*ForEachTexNodeCallback)(bNode *node, void *userdata);
+using ForEachTexNodeCallback = bool (*)(bNode *node, void *userdata);
 static bool ntree_foreach_texnode_recursive(bNodeTree *nodetree,
                                             ForEachTexNodeCallback callback,
                                             void *userdata,
@@ -1411,7 +1411,7 @@ static bool ntree_foreach_texnode_recursive(bNodeTree *nodetree,
   return true;
 }
 
-static bool count_texture_nodes_cb(bNode *UNUSED(node), void *userdata)
+static bool count_texture_nodes_cb(bNode * /*node*/, void *userdata)
 {
   (*((int *)userdata))++;
   return true;
@@ -1688,6 +1688,14 @@ void ramp_blend(int type, float r_col[3], const float fac, const float col[3])
       r_col[0] = facm * (r_col[0]) + fac * fabsf(r_col[0] - col[0]);
       r_col[1] = facm * (r_col[1]) + fac * fabsf(r_col[1] - col[1]);
       r_col[2] = facm * (r_col[2]) + fac * fabsf(r_col[2] - col[2]);
+      break;
+    case MA_RAMP_EXCLUSION:
+      r_col[0] = max_ff(facm * (r_col[0]) + fac * (r_col[0] + col[0] - 2.0f * r_col[0] * col[0]),
+                        0.0f);
+      r_col[1] = max_ff(facm * (r_col[1]) + fac * (r_col[1] + col[1] - 2.0f * r_col[1] * col[1]),
+                        0.0f);
+      r_col[2] = max_ff(facm * (r_col[2]) + fac * (r_col[2] + col[2] - 2.0f * r_col[2] * col[2]),
+                        0.0f);
       break;
     case MA_RAMP_DARK:
       r_col[0] = min_ff(r_col[0], col[0]) * fac + r_col[0] * facm;
