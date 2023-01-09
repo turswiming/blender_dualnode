@@ -521,6 +521,75 @@ static bool workbench_render_framebuffers_init(void)
 #  define GPU_FINISH_DELIMITER()
 #endif
 
+static void write_render_color_output(struct RenderLayer *layer,
+                                      const char *viewname,
+                                      GPUFrameBuffer *fb,
+                                      const struct rcti *rect)
+{
+  RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_COMBINED, viewname);
+  if (rp) {
+    GPU_framebuffer_bind(fb);
+    GPU_framebuffer_read_color(fb,
+                               rect->xmin,
+                               rect->ymin,
+                               BLI_rcti_size_x(rect),
+                               BLI_rcti_size_y(rect),
+                               4,
+                               0,
+                               GPU_DATA_FLOAT,
+                               rp->rect);
+  }
+}
+
+static void write_render_z_output(struct RenderLayer *layer,
+                                  const char *viewname,
+                                  GPUFrameBuffer *fb,
+                                  const struct rcti *rect,
+                                  float4x4 winmat)
+{
+  RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_Z, viewname);
+  if (rp) {
+    GPU_framebuffer_bind(fb);
+    GPU_framebuffer_read_depth(fb,
+                               rect->xmin,
+                               rect->ymin,
+                               BLI_rcti_size_x(rect),
+                               BLI_rcti_size_y(rect),
+                               GPU_DATA_FLOAT,
+                               rp->rect);
+
+    int pix_num = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
+
+    /* Convert ogl depth [0..1] to view Z [near..far] */
+    if (DRW_view_is_persp_get(nullptr)) {
+      for (float &z : MutableSpan(rp->rect, pix_num)) {
+        if (z == 1.0f) {
+          z = 1e10f; /* Background */
+        }
+        else {
+          z = z * 2.0f - 1.0f;
+          z = winmat[3][2] / (z + winmat[2][2]);
+        }
+      }
+    }
+    else {
+      /* Keep in mind, near and far distance are negatives. */
+      float near = DRW_view_near_distance_get(nullptr);
+      float far = DRW_view_far_distance_get(nullptr);
+      float range = fabsf(far - near);
+
+      for (float &z : MutableSpan(rp->rect, pix_num)) {
+        if (z == 1.0f) {
+          z = 1e10f; /* Background */
+        }
+        else {
+          z = z * range - near;
+        }
+      }
+    }
+  }
+}
+
 static void workbench_render_to_image(void *vedata,
                                       struct RenderEngine *engine,
                                       struct RenderLayer *layer,
@@ -597,66 +666,8 @@ static void workbench_render_to_image(void *vedata,
   } while (ved->instance->scene_state.sample + 1 < ved->instance->scene_state.samples_len);
 
   const char *viewname = RE_GetActiveRenderView(engine->re);
-  /* Write render output. */
-  {
-    RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_COMBINED, viewname);
-    if (rp) {
-      GPU_framebuffer_bind(dfbl->default_fb);
-      GPU_framebuffer_read_color(dfbl->default_fb,
-                                 rect->xmin,
-                                 rect->ymin,
-                                 BLI_rcti_size_x(rect),
-                                 BLI_rcti_size_y(rect),
-                                 4,
-                                 0,
-                                 GPU_DATA_FLOAT,
-                                 rp->rect);
-    }
-  }
-  /* Write render Z output */
-  {
-    RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_Z, viewname);
-    if (rp) {
-      GPU_framebuffer_bind(dfbl->default_fb);
-      GPU_framebuffer_read_depth(dfbl->default_fb,
-                                 rect->xmin,
-                                 rect->ymin,
-                                 BLI_rcti_size_x(rect),
-                                 BLI_rcti_size_y(rect),
-                                 GPU_DATA_FLOAT,
-                                 rp->rect);
-
-      int pix_num = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
-
-      /* Convert ogl depth [0..1] to view Z [near..far] */
-      if (DRW_view_is_persp_get(nullptr)) {
-        for (float &z : MutableSpan(rp->rect, pix_num)) {
-          if (z == 1.0f) {
-            z = 1e10f; /* Background */
-          }
-          else {
-            z = z * 2.0f - 1.0f;
-            z = winmat[3][2] / (z + winmat[2][2]);
-          }
-        }
-      }
-      else {
-        /* Keep in mind, near and far distance are negatives. */
-        float near = DRW_view_near_distance_get(nullptr);
-        float far = DRW_view_far_distance_get(nullptr);
-        float range = fabsf(far - near);
-
-        for (float &z : MutableSpan(rp->rect, pix_num)) {
-          if (z == 1.0f) {
-            z = 1e10f; /* Background */
-          }
-          else {
-            z = z * range - near;
-          }
-        }
-      }
-    }
-  }
+  write_render_color_output(layer, viewname, dfbl->default_fb, rect);
+  write_render_z_output(layer, viewname, dfbl->default_fb, rect, winmat);
 }
 
 static void workbench_render_update_passes(RenderEngine *engine,
