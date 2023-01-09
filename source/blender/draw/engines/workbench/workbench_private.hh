@@ -9,7 +9,7 @@
 #include "workbench_enums.hh"
 #include "workbench_shader_shared.h"
 
-extern DrawEngineType draw_engine_workbench_next;
+extern "C" DrawEngineType draw_engine_workbench_next;
 
 namespace blender::workbench {
 
