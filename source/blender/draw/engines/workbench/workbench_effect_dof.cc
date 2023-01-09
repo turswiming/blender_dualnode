@@ -75,13 +75,13 @@ void DofPass::setup_samples()
         /* Bokeh shape parameterization. */
         if (blades_ > 1.0f) {
           float denom = T - (2.0 * M_PI / blades_) * floorf((blades_ * T + M_PI) / (2.0 * M_PI));
-          r *= cosf(M_PI / blades_) / cosf(denom);
+          r *= math::cos(M_PI / blades_) / math::cos(denom);
         }
 
         T += rotation_;
 
-        sample->x = r * cosf(T) * ratio_;
-        sample->y = r * sinf(T);
+        sample->x = r * math::cos(T) * ratio_;
+        sample->y = r * math::sin(T);
         sample->w = 0;
         sample++;
       }

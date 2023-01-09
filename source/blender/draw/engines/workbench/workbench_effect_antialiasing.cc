@@ -82,7 +82,8 @@ static float filter_blackman_harris(float x, const float width)
     return 0.0f;
   }
   x = 2.0f * M_PI * clamp_f((x / width + 0.5f), 0.0f, 1.0f);
-  return 0.35875f - 0.48829f * cosf(x) + 0.14128f * cosf(2.0f * x) - 0.01168f * cosf(3.0f * x);
+  return 0.35875f - 0.48829f * math::cos(x) + 0.14128f * math::cos(2.0f * x) -
+         0.01168f * math::cos(3.0f * x);
 }
 
 /* Compute weights for the 3x3 neighborhood using a 1.5px filter. */

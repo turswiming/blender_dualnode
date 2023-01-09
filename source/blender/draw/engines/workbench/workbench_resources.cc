@@ -78,8 +78,8 @@ void SceneResources::load_jitter_tx(int total_samples)
   for (int i = 0; i < texel_count; i++) {
     float phi = blue_noise[i][0] * 2.0f * M_PI;
     /* This rotate the sample per pixels */
-    jitter[i].x = cosf(phi);
-    jitter[i].y = sinf(phi);
+    jitter[i].x = math::cos(phi);
+    jitter[i].y = math::sin(phi);
     /* This offset the sample along its direction axis (reduce banding) */
     float bn = blue_noise[i][1] - 0.5f;
     bn = clamp_f(bn, -0.499f, 0.499f); /* fix fireflies */
