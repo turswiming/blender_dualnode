@@ -42,11 +42,11 @@ static void mul_v2_m2_add_v2v2(float r[2],
                                const float b[2])
 {
   /* Compute `r = mat * (a + b)` with high precision. */
-  const double x = static_cast<double>(a[0]) + double(b[0]);
-  const double y = static_cast<double>(a[1]) + double(b[1]);
+  const double x = double(a[0]) + double(b[0]);
+  const double y = double(a[1]) + double(b[1]);
 
-  r[0] = static_cast<float>(mat[0][0] * x + mat[1][0] * y);
-  r[1] = static_cast<float>(mat[0][1] * x + mat[1][1] * y);
+  r[0] = float(mat[0][0] * x + mat[1][0] * y);
+  r[1] = float(mat[0][1] * x + mat[1][1] * y);
 }
 
 static void island_uv_transform(FaceIsland *island,
@@ -618,13 +618,21 @@ static BoxPack *pack_islands_params(const blender::Vector<FaceIsland *> &island_
   return box_array;
 }
 
-static bool island_has_pins(const Scene *scene, FaceIsland *island, const bool pin_unselected)
+static bool island_has_pins(const Scene *scene,
+                            FaceIsland *island,
+                            const UVPackIsland_Params *params)
 {
+  const bool pin_unselected = params->pin_unselected;
+  const bool only_selected_faces = params->only_selected_faces;
   BMLoop *l;
   BMIter iter;
   const int cd_loop_uv_offset = island->cd_loop_uv_offset;
   for (int i = 0; i < island->faces_len; i++) {
-    BM_ITER_ELEM (l, &iter, island->faces[i], BM_LOOPS_OF_FACE) {
+    BMFace *efa = island->faces[i];
+    if (pin_unselected && only_selected_faces && !BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
+      return true;
+    }
+    BM_ITER_ELEM (l, &iter, efa, BM_LOOPS_OF_FACE) {
       MLoopUV *luv = static_cast<MLoopUV *>(BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset));
       if (luv->flag & MLOOPUV_PINNED) {
         return true;
@@ -697,7 +705,7 @@ void ED_uvedit_pack_islands_multi(const Scene *scene,
     /* Remove from linked list and append to blender::Vector. */
     LISTBASE_FOREACH_MUTABLE (struct FaceIsland *, island, &island_list) {
       BLI_remlink(&island_list, island);
-      if (params->ignore_pinned && island_has_pins(scene, island, params->pin_unselected)) {
+      if (params->ignore_pinned && island_has_pins(scene, island, params)) {
         MEM_freeN(island->faces);
         MEM_freeN(island);
         continue;

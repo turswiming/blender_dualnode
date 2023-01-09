@@ -16,7 +16,7 @@
 /** Workaround to forward-declare C++ type in C header. */
 #ifdef __cplusplus
 
-#  include "BLI_math_vec_types.hh"
+#  include "BLI_math_vector_types.hh"
 
 namespace blender {
 template<typename T> class Span;
@@ -150,6 +150,11 @@ typedef struct Mesh {
   /* Stores the initial Face Set to be rendered white. This way the overlay can be enabled by
    * default and Face Sets can be used without affecting the color of the mesh. */
   int face_sets_color_default;
+
+  /** The color attribute currently selected in the list and edited by a user. */
+  char *active_color_attribute;
+  /** The color attribute used by default (i.e. for rendering) if no name is given explicitly. */
+  char *default_color_attribute;
 
   /**
    * User-defined symmetry flag (#eMeshSymmetryType) that causes editing operations to maintain

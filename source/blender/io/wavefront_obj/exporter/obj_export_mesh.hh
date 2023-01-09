@@ -8,12 +8,9 @@
 
 #include <optional>
 
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
-
-#include "bmesh.h"
-#include "bmesh_tools.h"
 
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"

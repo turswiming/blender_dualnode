@@ -1203,10 +1203,6 @@ void GHOST_WindowWayland::setOpaque() const
 }
 #endif
 
-/**
- * \param type: The type of rendering context create.
- * \return Indication of success.
- */
 GHOST_Context *GHOST_WindowWayland::newDrawingContext(GHOST_TDrawingContextType type)
 {
   GHOST_Context *context;
@@ -1365,9 +1361,6 @@ GHOST_TSuccess GHOST_WindowWayland::notify_size()
  * Functionality only used for the WAYLAND implementation.
  * \{ */
 
-/**
- * Return true when the windows scale or DPI changes.
- */
 bool GHOST_WindowWayland::outputs_changed_update_scale()
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD

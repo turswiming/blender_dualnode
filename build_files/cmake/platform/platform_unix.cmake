@@ -10,16 +10,15 @@ if(NOT DEFINED LIBDIR)
   string(TOLOWER ${LIBDIR_NAME} LIBDIR_NAME)
   set(LIBDIR_NATIVE_ABI ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_NAME})
 
-  # Path to precompiled libraries with known CentOS 7 ABI.
-  set(LIBDIR_CENTOS7_ABI ${CMAKE_SOURCE_DIR}/../lib/linux_centos7_x86_64)
+  # Path to precompiled libraries with known glibc 2.28 ABI.
+  set(LIBDIR_GLIBC228_ABI ${CMAKE_SOURCE_DIR}/../lib/linux_x86_64_glibc_228)
 
   # Choose the best suitable libraries.
   if(EXISTS ${LIBDIR_NATIVE_ABI})
     set(LIBDIR ${LIBDIR_NATIVE_ABI})
     set(WITH_LIBC_MALLOC_HOOK_WORKAROUND True)
-  elseif(EXISTS ${LIBDIR_CENTOS7_ABI})
-    set(LIBDIR ${LIBDIR_CENTOS7_ABI})
-    set(WITH_CXX11_ABI OFF)
+  elseif(EXISTS ${LIBDIR_GLIBC228_ABI})
+    set(LIBDIR ${LIBDIR_GLIBC228_ABI})
     if(WITH_MEM_JEMALLOC)
       # jemalloc provides malloc hooks.
       set(WITH_LIBC_MALLOC_HOOK_WORKAROUND False)
@@ -30,7 +29,7 @@ if(NOT DEFINED LIBDIR)
 
   # Avoid namespace pollustion.
   unset(LIBDIR_NATIVE_ABI)
-  unset(LIBDIR_CENTOS7_ABI)
+  unset(LIBDIR_GLIBC228_ABI)
 endif()
 
 # Support restoring this value once pre-compiled libraries have been handled.
@@ -167,11 +166,9 @@ endif()
 if(WITH_IMAGE_OPENEXR)
   find_package_wrapper(OpenEXR)  # our own module
   set_and_warn_library_found("OpenEXR" OPENEXR_FOUND WITH_IMAGE_OPENEXR)
-  if(WITH_IMAGE_OPENEXR)
-    add_bundled_libraries(openexr/lib)
-    add_bundled_libraries(imath/lib)
-  endif()
 endif()
+add_bundled_libraries(openexr/lib)
+add_bundled_libraries(imath/lib)
 
 if(WITH_IMAGE_OPENJPEG)
   find_package_wrapper(OpenJPEG)
@@ -329,13 +326,8 @@ endif()
 if(WITH_OPENVDB)
   find_package(OpenVDB)
   set_and_warn_library_found("OpenVDB" OPENVDB_FOUND WITH_OPENVDB)
-
-  if(OPENVDB_FOUND)
-  add_bundled_libraries(openvdb/lib)
-  find_package_wrapper(Blosc)
-    set_and_warn_library_found("Blosc" BLOSC_FOUND WITH_OPENVDB_BLOSC)
-  endif()
 endif()
+add_bundled_libraries(openvdb/lib)
 
 if(WITH_NANOVDB)
   find_package_wrapper(NanoVDB)
@@ -354,18 +346,14 @@ endif()
 if(WITH_USD)
   find_package_wrapper(USD)
   set_and_warn_library_found("USD" USD_FOUND WITH_USD)
- if(WITH_USD)
-    add_bundled_libraries(usd/lib)
- endif()
 endif()
+add_bundled_libraries(usd/lib)
 
 if(WITH_MATERIALX)
   find_package_wrapper(MaterialX)
   set_and_warn_library_found("MaterialX" MaterialX_FOUND WITH_MATERIALX)
-  if(WITH_MATERIALX)
-    add_bundled_libraries(materialx/lib)
-  endif()
 endif()
+add_bundled_libraries(materialx/lib)
 
 if(WITH_BOOST)
   # uses in build instructions to override include and library variables
@@ -421,9 +409,8 @@ if(WITH_BOOST)
     find_package(IcuLinux)
     list(APPEND BOOST_LIBRARIES ${ICU_LIBRARIES})
   endif()
-
-  add_bundled_libraries(boost/lib)
 endif()
+add_bundled_libraries(boost/lib)
 
 if(WITH_PUGIXML)
   find_package_wrapper(PugiXML)
@@ -458,21 +445,16 @@ if(WITH_OPENIMAGEIO)
   endif()
 
   set_and_warn_library_found("OPENIMAGEIO" OPENIMAGEIO_FOUND WITH_OPENIMAGEIO)
-  if(WITH_OPENIMAGEIO)
-    add_bundled_libraries(openimageio/lib)
-  endif()
 endif()
+add_bundled_libraries(openimageio/lib)
 
 if(WITH_OPENCOLORIO)
   find_package_wrapper(OpenColorIO 2.0.0)
 
   set(OPENCOLORIO_DEFINITIONS)
   set_and_warn_library_found("OpenColorIO" OPENCOLORIO_FOUND WITH_OPENCOLORIO)
-
-  if(WITH_OPENCOLORIO)
-    add_bundled_libraries(opencolorio/lib)
-  endif()
 endif()
+add_bundled_libraries(opencolorio/lib)
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
   find_package(Embree 3.8.0 REQUIRED)
@@ -513,18 +495,14 @@ if(WITH_OPENSUBDIV)
   set(OPENSUBDIV_LIBPATH)  # TODO, remove and reference the absolute path everywhere
 
   set_and_warn_library_found("OpenSubdiv" OPENSUBDIV_FOUND WITH_OPENSUBDIV)
-  if(WITH_OPENSUBDIV)
-    add_bundled_libraries(opensubdiv/lib)
-  endif()
 endif()
+add_bundled_libraries(opensubdiv/lib)
 
 if(WITH_TBB)
   find_package_wrapper(TBB)
   set_and_warn_library_found("TBB" TBB_FOUND WITH_TBB)
-  if(WITH_TBB)
-    add_bundled_libraries(tbb/lib)
-  endif()
 endif()
+add_bundled_libraries(tbb/lib)
 
 if(WITH_XR_OPENXR)
   find_package(XR_OpenXR_SDK)
@@ -667,8 +645,7 @@ if(WITH_GHOST_WAYLAND)
     pkg_check_modules(wayland-protocols wayland-protocols>=1.15)
     pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
   else()
-    # CentOS 7 packages have too old a version, a newer version exist in the
-    # precompiled libraries.
+    # Rocky8 packages have too old a version, a newer version exist in the pre-compiled libraries.
     find_path(WAYLAND_PROTOCOLS_DIR
       NAMES unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
       PATH_SUFFIXES share/wayland-protocols
@@ -793,7 +770,7 @@ if(WITH_GHOST_X11)
   endif()
 
   if(WITH_X11_ALPHA)
-    find_library(X11_Xrender_LIB Xrender  ${X11_LIB_SEARCH_PATH})
+    find_library(X11_Xrender_LIB Xrender ${X11_LIB_SEARCH_PATH})
     mark_as_advanced(X11_Xrender_LIB)
     if(NOT X11_Xrender_LIB)
       message(FATAL_ERROR "libXrender not found. Disable WITH_X11_ALPHA if you
