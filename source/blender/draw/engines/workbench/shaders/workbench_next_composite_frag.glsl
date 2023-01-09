@@ -72,10 +72,10 @@ void main()
   color = mix(color, world_data.object_outline_color, outline_opacity);
 #endif
 
-  if (color != world_data.background_color) {
-    fragColor = color;
+  if (all(equal(color, world_data.background_color))) {
+    discard;
   }
   else {
-    discard;
+    fragColor = color;
   }
 }
