@@ -24,7 +24,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_linklist.h"
 #include "BLI_math.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_task.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
@@ -286,7 +286,7 @@ void DM_ensure_looptri_data(DerivedMesh *dm)
 
   BLI_assert(dm->looptris.array_wip == nullptr);
 
-  SWAP(MLoopTri *, dm->looptris.array, dm->looptris.array_wip);
+  std::swap(dm->looptris.array, dm->looptris.array_wip);
 
   if ((looptris_num > dm->looptris.num_alloc) || (looptris_num < dm->looptris.num_alloc * 2) ||
       (totpoly == 0)) {
