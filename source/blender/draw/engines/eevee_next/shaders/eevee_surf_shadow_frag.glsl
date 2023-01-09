@@ -35,17 +35,38 @@ void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
   }
 }
 
+vec3 slope_bias()
+{
+  return DFDX_SIGN * dFdx(interp.P) + DFDY_SIGN * dFdy(interp.P);
+}
+
+float linear_shadow_depth(vec3 P)
+{
+  bool is_persp = (drw_view.winmat[3][3] == 0.0);
+  if (is_persp) {
+    /* Punctual shadow. Store distance to light. */
+    return distance(cameraPos, P);
+  }
+  else {
+    /* Directionnal shadow. Store distance from origin. */
+    /* TODO(fclem): Bias to near. Otherwise atomics do not work with negative numbers. */
+    return sqrt(dot(cameraForward, P));
+  }
+}
+
 void main()
 {
+  drw_view_id = shadow_interp.view_id;
+
   ivec2 texel_co = ivec2(gl_FragCoord.xy);
   ivec2 tile_co = texel_co / pages_infos_buf.page_size;
-  float depth = gl_FragCoord.z;
+  float depth = linear_shadow_depth(interp.P);
 
   write_depth(texel_co, 0, tile_co, depth);
 
   /* We have to compensate the output pixel position being different than the input pixel's.
    * This is only half a pixel since we chose one pixel inside the quad. */
-  depth -= DFDX_SIGN * 0.5 * dFdx(gl_FragCoord.z) + DFDY_SIGN * 0.5 * dFdy(gl_FragCoord.z);
+  depth = linear_shadow_depth(interp.P - slope_bias() * 0.5);
 
   write_depth(texel_co, 1, tile_co, depth);
   write_depth(texel_co, 2, tile_co, depth);

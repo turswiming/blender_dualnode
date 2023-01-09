@@ -23,6 +23,7 @@ void page_tag_as_rendered(ivec2 tile_co, int tiles_index, int lod)
 {
   int tile_index = shadow_tile_offset(tile_co, tiles_index, lod);
   tiles_buf[tile_index] |= SHADOW_IS_RENDERED;
+  atomicAdd(pages_infos_buf.page_rendered_count, 1);
 }
 
 void main()

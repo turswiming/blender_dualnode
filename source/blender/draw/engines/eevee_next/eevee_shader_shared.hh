@@ -698,12 +698,16 @@ struct ShadowPagesInfoData {
   uint page_cached_start;
   /** Index of the last page in the buffer since the last defrag. */
   uint page_cached_end;
-  /** Number of pages that needs to be rendered in the tilemap LOD being rendered. */
-  int page_rendered;
   /** Number of views to be rendered during the shadow update pass. */
   int view_count;
   /** Physical page size in pixel. Pages are all squares. */
   int page_size;
+
+  int page_used_count;
+  int page_update_count;
+  int page_allocated_count;
+  int page_rendered_count;
+  int page_cached_count;
 };
 BLI_STATIC_ASSERT_ALIGN(ShadowPagesInfoData, 16)
 

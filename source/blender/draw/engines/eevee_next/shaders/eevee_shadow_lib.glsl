@@ -49,23 +49,52 @@ vec3 shadow_punctual_local_position_to_face_local(int face_id, vec3 lL)
   }
 }
 
-ShadowTileData shadow_punctual_tile_get(usampler2D tilemaps_tx,
-                                        LightData light,
-                                        vec3 lL,
-                                        out vec2 uv)
+/* Returns minimum bias needed for a given geometry birlak abd a shadowmap page. */
+float shadow_slope_bias_get(LightData light, vec3 lNg, int lod)
+{
+  if (is_punctual) {
+    /* Assume 90° aperture projection frustum for punctual shadows. Note near/far do not mater. */
+    /* TODO(fclem): Optimize. This can be easily precomputed. */
+    mat4 normal_mat = invert(transpose(projection__perspective(-light.clip_near,
+                                                               light.clip_near,
+                                                               -light.clip_near,
+                                                               light.clip_near,
+                                                               light.clip_near,
+                                                               light.clip_far)));
+    vec3 ndc_Ng = transform_direction(normal_mat, lNg);
+  }
+
+  /* Get slope from normal vector. */
+  vec2 ndc_slope = ndc_Ng.xy / -ndc_Ng.z;
+  /* Slope bias definition from fixed pipeline. */
+  float bias = dot(vec2(1.0), abs(ndc_slope));
+  /* Bias for 1 pixel of LOD 0. */
+  bias *= 1.0 / (SHADOW_TILEMAP_RES * shadow_page_size_);
+  /* Compensate for each increasing lod level as the space between pixels increases. */
+  bias *= float(1u << lod);
+  return bias;
+}
+
+ShadowTileData shadow_punctual_tile_get(
+    usampler2D tilemaps_tx, LightData light, vec3 lL, vec3 lNg, out vec2 uv, out float bias)
 {
   int face_id = shadow_punctual_face_index_get(lL);
   lL = shadow_punctual_local_position_to_face_local(face_id, lL);
+  lNg = shadow_punctual_local_position_to_face_local(face_id, lNg);
+  /* UVs in [-1..+1] range. */
+  uv = lL.xy / abs(lL.z);
   /* UVs in [0..SHADOW_TILEMAP_RES] range. */
   const float lod0_res = float(SHADOW_TILEMAP_RES / 2);
-  uv = (lL.xy / abs(lL.z)) * lod0_res + lod0_res;
+  uv = uv * lod0_res + lod0_res;
   ivec2 tile_co = ivec2(floor(uv));
   int tilemap_index = light.tilemap_index + face_id;
-  return shadow_tile_load(tilemaps_tx, tile_co, tilemap_index);
+  ShadowTileData tile = shadow_tile_load(tilemaps_tx, tile_co, tilemap_index);
+  bias = shadow_slope_bias_get(light, lNg, tile.lod);
+  return tile;
 }
 
 ShadowTileData shadow_directional_tile_get(
-    usampler2D tilemaps_tx, LightData light, vec3 camera_P, vec3 lP, vec3 P, out vec2 uv)
+    usampler2D tilemaps_tx, LightData light, vec3 camera_P, vec3 lP, vec3 P, vec3 lNg, out vec2 uv)
 {
   int clipmap_lod = shadow_directional_clipmap_level(light, distance(P, camera_P));
   int clipmap_lod_relative = clipmap_lod - light.clipmap_lod_min;
@@ -79,7 +108,9 @@ ShadowTileData shadow_directional_tile_get(
 
   uv = (lP.xy * clipmap_res_mul - clipmap_offset) + float(SHADOW_TILEMAP_RES / 2);
   ivec2 tile_co = ivec2(floor(uv));
-  return shadow_tile_load(tilemaps_tx, tile_co, tilemap_index);
+  ShadowTileData tile = shadow_tile_load(tilemaps_tx, tile_co, tilemap_index);
+  bias = shadow_slope_bias_get(light, lNg, tile.lod);
+  return tile;
 }
 
 float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 uv)
@@ -92,26 +123,29 @@ float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 uv)
   return depth;
 }
 
-/* Returns world distance delta from light between shading point and first occluder. */
-float shadow_delta_get(sampler2D atlas_tx,
-                       usampler2D tilemaps_tx,
-                       LightData light,
-                       vec3 lL,
-                       float receiver_dist,
-                       vec3 P)
+/* Return world distance delta from light between shading point and first occluder. */
+float shadow_sample(sampler2D atlas_tx,
+                    usampler2D tilemaps_tx,
+                    LightData light,
+                    vec3 lL,
+                    vec3 lNg,
+                    float receiver_dist,
+                    vec3 P)
 {
+
   if (light.type == LIGHT_SUN) {
     /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
     vec3 lP = transform_point(light.object_mat, P);
     vec2 uv;
-    ShadowTileData tile = shadow_directional_tile_get(tilemaps_tx, light, cameraPos, lP, P, uv);
+    ShadowTileData tile = shadow_directional_tile_get(
+        tilemaps_tx, light, cameraPos, lP, P, lNg, uv, bias);
     float occluder_z = shadow_tile_depth_get(atlas_tx, tile, uv);
     /* Transform to world space distance. */
     return (lP.z - occluder_z) * abs(light.clip_far - light.clip_near);
   }
   else {
     vec2 uv;
-    ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lL, uv);
+    ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lL, uv, bias);
     float occluder_z = shadow_tile_depth_get(atlas_tx, tile, uv);
     /* TODO(fclem): Store linear depth. */
     occluder_z = linear_depth(true, occluder_z, light.clip_far, light.clip_near);

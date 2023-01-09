@@ -21,4 +21,20 @@ void main()
     shadow_page_alloc(tile);
     tiles_buf[tile_index] = shadow_tile_pack(tile);
   }
+
+  if (tile.is_used) {
+    atomicAdd(pages_infos_buf.page_used_count, 1);
+  }
+  if (tile.do_update) {
+    atomicAdd(pages_infos_buf.page_update_count, 1);
+  }
+  if (tile.is_allocated) {
+    atomicAdd(pages_infos_buf.page_allocated_count, 1);
+  }
+  if (tile.is_rendered) {
+    atomicAdd(pages_infos_buf.page_rendered_count, 1);
+  }
+  if (tile.is_cached) {
+    atomicAdd(pages_infos_buf.page_cached_count, 1);
+  }
 }

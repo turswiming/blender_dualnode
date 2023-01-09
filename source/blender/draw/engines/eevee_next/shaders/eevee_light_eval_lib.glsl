@@ -20,6 +20,7 @@ void light_eval_ex(ClosureDiffuse diffuse,
                    ClosureReflection reflection,
                    const bool is_directional,
                    vec3 P,
+                   vec3 Ng,
                    vec3 V,
                    float vP_z,
                    float thickness,
@@ -37,11 +38,13 @@ void light_eval_ex(ClosureDiffuse diffuse,
 
   if (light.tilemap_index != LIGHT_NO_SHADOW && (visibility > 0.0)) {
     vec3 lL = light_world_to_local(light, -L) * dist;
+    vec3 lNg = light_world_to_local(light, Ng);
 
-    float shadow_delta = shadow_delta_get(shadow_atlas_tx, shadow_tilemaps_tx, light, lL, dist, P);
+    vec2 shadow_delta_and_bias = shadow_delta_and_bias_get(
+        shadow_atlas_tx, shadow_tilemaps_tx, light, lL, lNg, dist, P);
 
 #ifdef SSS_TRANSMITTANCE
-    /* Transmittance evaluation first to use initial visibility. */
+    /* Transmittance evaluation first to use initial visibility without shadow. */
     if (diffuse.sss_id != 0u && light.diffuse_power > 0.0) {
       float delta = max(thickness, shadow_delta);
 
@@ -57,8 +60,7 @@ void light_eval_ex(ClosureDiffuse diffuse,
       out_diffuse += light.color * intensity;
     }
 #endif
-
-    visibility *= float(shadow_delta - light.shadow_bias <= 0.0);
+    visibility *= float(shadow_delta <= 0.0);
   }
 
   if (visibility < 1e-6) {
@@ -82,6 +84,7 @@ void light_eval_ex(ClosureDiffuse diffuse,
 void light_eval(ClosureDiffuse diffuse,
                 ClosureReflection reflection,
                 vec3 P,
+                vec3 Ng,
                 vec3 V,
                 float vP_z,
                 float thickness,
@@ -98,6 +101,7 @@ void light_eval(ClosureDiffuse diffuse,
                   reflection,
                   true,
                   P,
+                  Ng,
                   V,
                   vP_z,
                   thickness,
@@ -115,6 +119,7 @@ void light_eval(ClosureDiffuse diffuse,
                   reflection,
                   false,
                   P,
+                  Ng,
                   V,
                   vP_z,
                   thickness,

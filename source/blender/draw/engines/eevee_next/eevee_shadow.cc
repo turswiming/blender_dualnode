@@ -466,6 +466,7 @@ void ShadowModule::init()
   if (!atlas_tx_.is_valid() || atlas_tx_.size() != int3(atlas_extent.x, atlas_extent.y, 1)) {
     do_full_update = true;
   }
+  do_full_update = true;
 
   atlas_tx_.ensure_2d(atlas_type, atlas_extent);
 
