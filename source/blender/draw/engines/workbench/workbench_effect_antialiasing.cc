@@ -234,7 +234,9 @@ void AntiAliasingPass::draw(Manager &manager,
                             GPUTexture *color_tx)
 {
   if (!enabled_) {
-    /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place */
+    /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place.
+     * This requires the use of TextureRefs with stencil_view() support,
+     * but whether TextureRef will stay is still TBD. */
     GPU_texture_copy(color_tx, resources.color_tx);
     GPU_texture_copy(depth_tx, resources.depth_tx);
     return;
@@ -263,7 +265,10 @@ void AntiAliasingPass::draw(Manager &manager,
     if (sample0_depth_tx_.is_valid()) {
       GPU_texture_copy(sample0_depth_tx_, resources.depth_tx);
     }
-    /* TODO(Miguel Pozo): Should render to the input depth_tx in the first place */
+    /* TODO(Miguel Pozo): Should render to the input depth_tx in the first place
+     * This requires the use of TextureRef with stencil_view() support,
+     * but whether TextureRef will stay is still TBD. */
+
     /* Copy back the saved depth buffer for correct overlays. */
     GPU_texture_copy(depth_tx, resources.depth_tx);
   }
