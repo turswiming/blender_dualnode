@@ -259,11 +259,11 @@ static void rasterize_half(const MBakeRast *bake_rast,
     float x_r = l_stable != 0 ? (s0_l + (((s1_l - s0_l) * (y - t0_l)) / (t1_l - t0_l))) : s0_l;
 
     if (is_mid_right != 0) {
-      SWAP(float, x_l, x_r);
+     std::swap( x_l, x_r);
     }
 
-    iXl = (int)ceilf(x_l);
-    iXr = (int)ceilf(x_r);
+    iXl = int(ceilf(x_l));
+    iXr = int(ceilf(x_r));
 
     if (iXr > 0 && iXl < w) {
       iXl = iXl < 0 ? 0 : iXl;
@@ -298,24 +298,24 @@ static void bake_rasterize(const MBakeRast *bake_rast,
 
   /* sort by T */
   if (tlo > tmi && tlo > thi) {
-    SWAP(float, shi, slo);
-    SWAP(float, thi, tlo);
+   std::swap( shi, slo);
+   std::swap( thi, tlo);
   }
   else if (tmi > thi) {
-    SWAP(float, shi, smi);
-    SWAP(float, thi, tmi);
+   std::swap( shi, smi);
+   std::swap( thi, tmi);
   }
 
   if (tlo > tmi) {
-    SWAP(float, slo, smi);
-    SWAP(float, tlo, tmi);
+   std::swap( slo, smi);
+   std::swap( tlo, tmi);
   }
 
   /* check if mid point is to the left or to the right of the lo-hi edge */
   is_mid_right = (-(shi - slo) * (tmi - thi) + (thi - tlo) * (smi - shi)) > 0 ? 1 : 0;
-  ylo = (int)ceilf(tlo);
-  yhi_beg = (int)ceilf(tmi);
-  yhi = (int)ceilf(thi);
+  ylo = int(ceilf(tlo));
+  yhi_beg = int(ceilf(tmi));
+  yhi = int(ceilf(thi));
 
   // if (fTmi>ceilf(fTlo))
   rasterize_half(bake_rast, slo, tlo, smi, tmi, slo, tlo, shi, thi, ylo, yhi_beg, is_mid_right);

@@ -54,7 +54,7 @@
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
 #include "BLI_math.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
@@ -2891,6 +2891,7 @@ void BKE_object_obdata_size_init(struct Object *ob, const float size)
     case OB_LAMP: {
       Light *lamp = (Light *)ob->data;
       lamp->dist *= size;
+      lamp->radius *= size;
       lamp->area_size *= size;
       lamp->area_sizey *= size;
       lamp->area_sizez *= size;

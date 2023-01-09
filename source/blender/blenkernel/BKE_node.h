@@ -108,9 +108,6 @@ class NodeDeclaration;
 class NodeDeclarationBuilder;
 class GatherLinkSearchOpParams;
 }  // namespace nodes
-namespace fn {
-class MFDataType;
-}  // namespace fn
 namespace realtime_compositor {
 class Context;
 class NodeOperation;
@@ -718,6 +715,11 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
 
 bNode *node_copy(bNodeTree *dst_tree, const bNode &src_node, int flag, bool use_unique);
 
+/**
+ * Free the node itself.
+ *
+ * \note ID user reference-counting and changing the `nodes_by_id` vector are up to the caller.
+ */
 void node_free_node(bNodeTree *tree, bNode *node);
 
 }  // namespace blender::bke

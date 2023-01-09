@@ -919,7 +919,7 @@ static void bm_mesh_loops_calc_normals_for_vert_with_clnors(BMesh *bm,
         BLI_linklist_prepend_alloca(&loops_of_vert, l_curr);
         loops_of_vert_count += 1;
 
-        const uint index_test = (uint)BM_elem_index_get(l_curr);
+        const uint index_test = uint(BM_elem_index_get(l_curr));
         if (index_best > index_test) {
           index_best = index_test;
           link_best = loops_of_vert;
@@ -935,7 +935,7 @@ static void bm_mesh_loops_calc_normals_for_vert_with_clnors(BMesh *bm,
      * The order doesn't matter, so swap the links as it's simpler than tracking
      * reference to `link_best`. */
     if (link_best != loops_of_vert) {
-      SWAP(void *, link_best->link, loops_of_vert->link);
+      std::swap(link_best->link, loops_of_vert->link);
     }
   }
 
