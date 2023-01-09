@@ -7,7 +7,7 @@
 #include "RNA_types.h"
 
 #include "BLI_color.hh"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 
 namespace blender::nodes::decl {
 
@@ -306,7 +306,7 @@ inline VectorBuilder &VectorBuilder::max(const float max)
 
 inline VectorBuilder &VectorBuilder::compact()
 {
-  decl_->compact_ = true;
+  decl_->compact = true;
   return *this;
 }
 
