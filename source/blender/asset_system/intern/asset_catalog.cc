@@ -689,7 +689,6 @@ static void copy_catalog_map_into_existing(const OwningAssetCatalogMap &source,
 
 void AssetCatalogCollection::add_catalogs_from_existing(const AssetCatalogCollection &other)
 {
-  has_unsaved_changes_ = true;
   copy_catalog_map_into_existing(other.catalogs_, catalogs_);
 }
 

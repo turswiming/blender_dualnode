@@ -158,7 +158,7 @@ AssetLibrary *AssetLibraryService::get_asset_library_all(const Main *bmain)
     all_library.catalog_service = std::make_unique<AssetCatalogService>(
         AssetCatalogService::read_only_tag());
 
-    /* (Re-)load catalogs on refresh. */
+    /* (Re-)load catalogs on refresh, and merge them into the all library. */
     AssetLibrary::foreach_loaded(
         [&](AssetLibrary &nested) {
           /* On first load the catalogs were read just above, no need to reload. */
