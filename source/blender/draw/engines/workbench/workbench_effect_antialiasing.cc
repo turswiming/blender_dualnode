@@ -8,9 +8,9 @@
 namespace blender::workbench {
 
 class TaaSamples {
-  void init_samples(blender::Array<float2> &samples, const int size)
+  void init_samples(Array<float2> &samples, const int size)
   {
-    samples = blender::Array<float2>(size);
+    samples = Array<float2>(size);
     BLI_jitter_init((float(*)[2])samples.begin(), size);
 
     /* Find closest element to center */
@@ -58,11 +58,11 @@ class TaaSamples {
   }
 
  public:
-  blender::Array<float2> x5;
-  blender::Array<float2> x8;
-  blender::Array<float2> x11;
-  blender::Array<float2> x16;
-  blender::Array<float2> x32;
+  Array<float2> x5;
+  Array<float2> x8;
+  Array<float2> x11;
+  Array<float2> x16;
+  Array<float2> x32;
 
   TaaSamples()
   {

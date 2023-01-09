@@ -99,8 +99,8 @@ void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool forc
   float4 frustum_planes[6];
   DRW_culling_frustum_planes_get(nullptr, (float(*)[4])frustum_planes);
 
-  blender::Vector<float4> faces_result = {};
-  blender::Vector<float3> corners_result = {};
+  Vector<float4> faces_result = {};
+  Vector<float3> corners_result = {};
 
   /* "Unlit" frustum faces are left "as-is" */
 
@@ -214,15 +214,15 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
   words_len = ceil_to_multiple_u(max_ii(1, words_len), 4);
   uint32_t data = 0xFFFFFFFFu;
 
-  if (current_pass_type_ == ShadowPass::Pass) {
+  if (current_pass_type_ == ShadowPass::PASS) {
     /* TODO(fclem): Resize to nearest pow2 to reduce fragmentation. */
     pass_visibility_buf_.resize(words_len);
     GPU_storagebuf_clear(pass_visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
     fail_visibility_buf_.resize(words_len);
     GPU_storagebuf_clear(fail_visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
   }
-  else if (current_pass_type_ == ShadowPass::Fail) {
-    /* Already computed in the ShadowPass::Pass */
+  else if (current_pass_type_ == ShadowPass::FAIL) {
+    /* Already computed in the ShadowPass::PASS */
     GPU_debug_group_end();
     return;
   }
@@ -239,8 +239,8 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
     static GPUShader *static_pass_type_shader = GPU_shader_create_from_info_name(
         "workbench_next_shadow_visibility_compute_static_pass_type");
 
-    GPUShader *shader = current_pass_type_ == ShadowPass::ForcedFail ? static_pass_type_shader :
-                                                                       dynamic_pass_type_shader;
+    GPUShader *shader = current_pass_type_ == ShadowPass::FORCED_FAIL ? static_pass_type_shader :
+                                                                        dynamic_pass_type_shader;
     GPU_shader_bind(shader);
     GPU_shader_uniform_1i(shader, "resource_len", resource_len);
     GPU_shader_uniform_1i(shader, "view_len", view_len_);
@@ -250,7 +250,7 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
     GPU_uniformbuf_bind(extruded_frustum_,
                         GPU_shader_get_uniform_block(shader, "extruded_frustum"));
     GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo(shader, "bounds_buf"));
-    if (current_pass_type_ == ShadowPass::ForcedFail) {
+    if (current_pass_type_ == ShadowPass::FORCED_FAIL) {
       GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo(shader, "visibility_buf"));
     }
     else {
@@ -270,11 +270,11 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
 VisibilityBuf &ShadowPass::ShadowView::get_visibility_buffer()
 {
   switch (current_pass_type_) {
-    case ShadowPass::Pass:
+    case ShadowPass::PASS:
       return pass_visibility_buf_;
-    case ShadowPass::Fail:
+    case ShadowPass::FAIL:
       return fail_visibility_buf_;
-    case ShadowPass::ForcedFail:
+    case ShadowPass::FORCED_FAIL:
       return visibility_buf_;
     default:
       BLI_assert_unreachable();
@@ -369,13 +369,13 @@ void ShadowPass::sync()
 
   /* Stencil Shadow passes. */
   for (bool manifold : {false, true}) {
-    PassMain::Sub *&ps = get_pass_ptr(Pass, manifold);
+    PassMain::Sub *&ps = get_pass_ptr(PASS, manifold);
     ps = &pass_ps_.sub(manifold ? "manifold" : "non_manifold");
     ps->shader_set(get_shader(true, manifold));
     ps->bind_ubo("pass_data", pass_data_);
 
-    for (PassType fail_type : {Fail, ForcedFail}) {
-      PassMain &ps_main = fail_type == Fail ? fail_ps_ : forced_fail_ps_;
+    for (PassType fail_type : {FAIL, FORCED_FAIL}) {
+      PassMain &ps_main = fail_type == FAIL ? fail_ps_ : forced_fail_ps_;
 
       PassMain::Sub *&ps = get_pass_ptr(fail_type, manifold, false);
       ps = &ps_main.sub(manifold ? "NoCaps.manifold" : "NoCaps.non_manifold");
@@ -415,18 +415,18 @@ void ShadowPass::object_sync(Manager &manager,
 #endif
 
   /* Shadow pass technique needs object to be have all its surface opaque. */
-  /* We cannot use Shadow Pass technique on non-manifold object (see T76168). */
+  /* We cannot use the PASS technique on non-manifold object (see T76168). */
   bool force_fail_pass = has_transp_mat || (!is_manifold && (scene_state.cull_state != 0));
 
-  PassType fail_type = force_fail_pass ? ForcedFail : Fail;
+  PassType fail_type = force_fail_pass ? FORCED_FAIL : FAIL;
 
-  /* Unless we force the Fail Method we add draw commands to both methods,
+  /* Unless we force the FAIL Method we add draw commands to both methods,
    * then the visibility compute shader selects the one needed */
 
   ResourceHandle handle = manager.resource_handle(ob_ref);
 
   if (!force_fail_pass) {
-    PassMain::Sub &ps = *get_pass_ptr(Pass, is_manifold);
+    PassMain::Sub &ps = *get_pass_ptr(PASS, is_manifold);
     ps.draw(geom_shadow, handle);
   }
 
@@ -451,11 +451,11 @@ void ShadowPass::draw(Manager &manager,
 
   view_.setup(view, pass_data_.light_direction_ws, force_fail_method);
 
-  view_.set_mode(Pass);
+  view_.set_mode(PASS);
   manager.submit(pass_ps_, view_);
-  view_.set_mode(Fail);
+  view_.set_mode(FAIL);
   manager.submit(fail_ps_, view_);
-  view_.set_mode(ForcedFail);
+  view_.set_mode(FORCED_FAIL);
   manager.submit(forced_fail_ps_, view_);
 }
 
