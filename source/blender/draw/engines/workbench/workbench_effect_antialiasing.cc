@@ -39,7 +39,7 @@ class TaaSamples {
 
     /* Swap center sample to the start of the array */
     if (closest_index != 0) {
-      swap_v2_v2(samples[0], samples[closest_index]);
+      std::swap(samples[0], samples[closest_index]);
     }
 
     /* Sort list based on farthest distance with previous. */
@@ -53,7 +53,7 @@ class TaaSamples {
           index = j;
         }
       }
-      swap_v2_v2(samples[i + 1], samples[index]);
+      std::swap(samples[i + 1], samples[index]);
     }
   }
 
