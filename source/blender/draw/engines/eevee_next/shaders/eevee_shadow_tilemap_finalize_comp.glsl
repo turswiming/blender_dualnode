@@ -97,6 +97,7 @@ void main()
         view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
         view_infos_buf[view_index].winmat = tilemap_data.winmat;
         view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
+        /* TODO(fclem): For directionnal, we need to modify winmat to encompass all casters. */
       }
     }
   }

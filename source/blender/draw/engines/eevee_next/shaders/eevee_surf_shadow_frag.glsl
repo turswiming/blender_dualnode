@@ -50,7 +50,7 @@ float linear_shadow_depth(vec3 P)
   else {
     /* Directionnal shadow. Store distance from origin. */
     /* TODO(fclem): Bias to near. Otherwise atomics do not work with negative numbers. */
-    return sqrt(dot(cameraForward, P));
+    return sqrt(max(0.0, dot(cameraForward, P)));
   }
 }
 

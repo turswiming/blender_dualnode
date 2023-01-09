@@ -52,6 +52,7 @@ vec3 shadow_punctual_local_position_to_face_local(int face_id, vec3 lL)
 /* Returns minimum bias needed for a given geometry birlak abd a shadowmap page. */
 float shadow_slope_bias_get(LightData light, vec3 lNg, int lod)
 {
+#if 0 /* TODO(fclem): finish */
   if (is_punctual) {
     /* Assume 90° aperture projection frustum for punctual shadows. Note near/far do not mater. */
     /* TODO(fclem): Optimize. This can be easily precomputed. */
@@ -67,12 +68,14 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, int lod)
   /* Get slope from normal vector. */
   vec2 ndc_slope = ndc_Ng.xy / -ndc_Ng.z;
   /* Slope bias definition from fixed pipeline. */
-  float bias = dot(vec2(1.0), abs(ndc_slope));
+  float bias = length_manhattan(ndc_slope);
   /* Bias for 1 pixel of LOD 0. */
   bias *= 1.0 / (SHADOW_TILEMAP_RES * shadow_page_size_);
   /* Compensate for each increasing lod level as the space between pixels increases. */
   bias *= float(1u << lod);
   return bias;
+#endif
+  return light.shadow_bias * float(1u << lod);
 }
 
 ShadowTileData shadow_punctual_tile_get(
@@ -115,7 +118,7 @@ ShadowTileData shadow_directional_tile_get(
 
 float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 uv)
 {
-  float depth = 1.0;
+  float depth = FLT_MAX;
   if (tile.is_allocated) {
     vec2 shadow_uv = shadow_page_uv_transform(tile.page, tile.lod, uv);
     depth = texture(atlas_tx, shadow_uv).r;
@@ -123,14 +126,16 @@ float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 uv)
   return depth;
 }
 
-/* Return world distance delta from light between shading point and first occluder. */
+/* Return world occluder distance. Return positive value if not occluded.
+ * /a bias is the amount of bias to apply to the shadow test to avoid shadow acne problem. */
 float shadow_sample(sampler2D atlas_tx,
                     usampler2D tilemaps_tx,
                     LightData light,
                     vec3 lL,
                     vec3 lNg,
                     float receiver_dist,
-                    vec3 P)
+                    vec3 P,
+                    out float bias)
 {
 
   if (light.type == LIGHT_SUN) {
@@ -139,18 +144,13 @@ float shadow_sample(sampler2D atlas_tx,
     vec2 uv;
     ShadowTileData tile = shadow_directional_tile_get(
         tilemaps_tx, light, cameraPos, lP, P, lNg, uv, bias);
-    float occluder_z = shadow_tile_depth_get(atlas_tx, tile, uv);
-    /* Transform to world space distance. */
-    return (lP.z - occluder_z) * abs(light.clip_far - light.clip_near);
+    float occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
+    return lP.z - (occluder_dist - light.clip_near);
   }
   else {
     vec2 uv;
     ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lL, uv, bias);
-    float occluder_z = shadow_tile_depth_get(atlas_tx, tile, uv);
-    /* TODO(fclem): Store linear depth. */
-    occluder_z = linear_depth(true, occluder_z, light.clip_far, light.clip_near);
-    /* Take into account the cubemap projection. We want the radial distance. */
-    float occluder_dist = receiver_dist * occluder_z / max_v3(abs(lL));
+    float occluder_dist = shadw_tile_depth_get(atlas_txo, tile, uv);
     return receiver_dist - occluder_dist;
   }
 }
