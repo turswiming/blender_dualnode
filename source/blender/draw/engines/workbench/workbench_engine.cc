@@ -19,8 +19,6 @@ namespace blender::workbench {
 
 using namespace draw;
 
-GPUMaterial **get_dummy_gpu_materials(int material_count);
-
 class Instance {
  public:
   SceneState scene_state;
@@ -35,6 +33,17 @@ class Instance {
   OutlinePass outline_ps;
   DofPass dof_ps;
   AntiAliasingPass anti_aliasing_ps;
+
+  /* An array of nullptr GPUMaterial pointers so we can call DRW_cache_object_surface_material_get.
+   * They never get actually used. */
+  Vector<GPUMaterial *> dummy_gpu_materials = {1, nullptr, {}};
+  GPUMaterial **get_dummy_gpu_materials(int material_count)
+  {
+    if (material_count > dummy_gpu_materials.size()) {
+      dummy_gpu_materials.resize(material_count, nullptr);
+    }
+    return dummy_gpu_materials.begin();
+  };
 
   void init(Object *camera_ob = nullptr)
   {
@@ -363,18 +372,6 @@ class Instance {
       DRW_viewport_request_redraw();
     }
   }
-};
-
-/* This returns an array of nullptr GPUMaterial pointers so we can call
- * DRW_cache_object_surface_material_get. They never get actually used.
- */
-GPUMaterial **get_dummy_gpu_materials(int material_count)
-{
-  static Vector<GPUMaterial *> dummy_gpu_materials(1, nullptr, {});
-  if (material_count > dummy_gpu_materials.size()) {
-    dummy_gpu_materials.resize(material_count, nullptr);
-  }
-  return dummy_gpu_materials.begin();
 };
 
 }  // namespace blender::workbench
