@@ -108,7 +108,7 @@ void DofPass::init(const SceneState &scene_state)
     resolve_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_resolve");
   }
 
-  offset_ = scene_state.sample / (float)scene_state.samples_len;
+  offset_ = scene_state.sample / float(scene_state.samples_len);
 
   int2 half_res = scene_state.resolution / 2;
   half_res = {max_ii(half_res.x, 1), max_ii(half_res.y, 1)};
