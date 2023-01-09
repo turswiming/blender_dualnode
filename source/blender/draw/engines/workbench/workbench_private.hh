@@ -119,8 +119,9 @@ class CavityEffect {
   bool curvature_enabled_;
   bool cavity_enabled_;
 
-  static const int max_samples_ = 512; /* This value must be kept in sync with the one declared at
-                                        * workbench_composite_info.hh (cavity_samples) */
+  /* This value must be kept in sync with the one declared at
+   * workbench_composite_info.hh (cavity_samples) */
+  static const int max_samples_ = 512;
   UniformArrayBuffer<float4, max_samples_> samples_buf;
 
   void load_samples_buf(int ssao_samples);
@@ -295,13 +296,13 @@ class ShadowPass {
                    ObjectRef &ob_ref,
                    SceneState &scene_state,
                    const bool has_transp_mat);
-  void draw(
-      Manager &manager,
-      View &view,
-      SceneResources &resources,
-      int2 resolution,
-      GPUTexture &depth_stencil_tx,
-      bool force_fail_method /*Needed when there are opaque "In Front" objects in the scene*/);
+  void draw(Manager &manager,
+            View &view,
+            SceneResources &resources,
+            int2 resolution,
+            GPUTexture &depth_stencil_tx,
+            /*Needed when there are opaque "In Front" objects in the scene*/
+            bool force_fail_method);
 };
 
 class OutlinePass {

@@ -128,7 +128,7 @@ void DofPass::init(const SceneState &scene_state)
   float focus_dist = BKE_camera_object_dof_distance(scene_state.camera_object);
   float focal_len = camera->lens;
 
-  /* TODO(fclem): de-duplicate with EEVEE. */
+  /* TODO(fclem): De-duplicate with EEVEE. */
   const float scale_camera = 0.001f;
   /* We want radius here for the aperture number. */
   float aperture = 0.5f * scale_camera * focal_len / fstop;

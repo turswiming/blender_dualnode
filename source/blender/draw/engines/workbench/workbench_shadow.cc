@@ -52,12 +52,12 @@ void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool forc
    */
 
   /* Frustum Planes indices */
-  const int x_neg = 0; /* left */
-  const int x_pos = 5; /* right */
-  const int y_neg = 1; /* bottom */
-  const int y_pos = 3; /* top */
-  const int z_pos = 4; /* near */
-  const int z_neg = 2; /* far */
+  const int x_neg = 0; /* Left */
+  const int x_pos = 5; /* Right */
+  const int y_neg = 1; /* Bottom */
+  const int y_pos = 3; /* Top */
+  const int z_pos = 4; /* Near */
+  const int z_neg = 2; /* Far */
 
   int3 corner_faces[8] = {{x_neg, y_neg, z_pos},
                           {x_neg, y_neg, z_neg},
