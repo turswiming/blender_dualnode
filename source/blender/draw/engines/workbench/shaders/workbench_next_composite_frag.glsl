@@ -41,20 +41,16 @@ void main()
 
 #  ifdef WORKBENCH_CAVITY
     cavity_compute(uv, depth_tx, normal_tx, cavity, edges);
-    // color.rgb = vec3(cavity, edges, 0);
 #  endif
 
 #  ifdef WORKBENCH_CURVATURE
     curvature_compute(uv, object_id_tx, normal_tx, curvature);
-    // color.rgb = vec3(curvature);
 #  endif
 
     float final_cavity_factor = clamp(
         (1.0 - cavity) * (1.0 + edges) * (1.0 + curvature), 0.0, 4.0);
 
     color.rgb *= final_cavity_factor;
-    // color.rgb *= vec3(0, 1, 0);
-
 #endif
 
     bool shadow = texture(stencil_tx, uv).r != 0;

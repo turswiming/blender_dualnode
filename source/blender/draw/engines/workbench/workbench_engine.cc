@@ -319,7 +319,6 @@ class Instance {
       resources.object_id_tx.clear(uint4(0));
     }
 
-    // resources.depth_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
     Framebuffer fb = Framebuffer("Workbench.Clear");
     fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
     fb.bind();
@@ -353,7 +352,6 @@ class Instance {
 
     resources.color_tx.release();
     resources.object_id_tx.release();
-    // resources.depth_tx.release();
     resources.depth_in_front_tx.release();
   }
 
