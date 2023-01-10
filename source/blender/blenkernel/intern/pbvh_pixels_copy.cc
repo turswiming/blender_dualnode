@@ -205,6 +205,7 @@ struct Rows {
       Brush,
       /** This pixel will be copid from another pixel to solve non-manifold edge bleeding. */
       CopyFromClosestEdge,
+      Selected,
     };
 
     struct Elem {
@@ -260,14 +261,12 @@ struct Rows {
       }
     }
 
-    void determine_copy_pixels(const NonManifoldTileEdges &tile_edges,
-                               int search_margin,
-                               const int2 tile_resolution)
+    void mark_for_evaluation(const Rows &rows, const NonManifoldTileEdges &tile_edges)
     {
       for (const Edge<CoordSpace::Tile> &tile_edge : tile_edges) {
         rcti edge_bounds = get_bounds(tile_edge);
-        add_margin(edge_bounds, search_margin);
-        clamp(edge_bounds, tile_resolution);
+        add_margin(edge_bounds, rows.margin);
+        clamp(edge_bounds, rows.resolution);
 
         if (edge_bounds.ymax < row_number) {
           continue;
@@ -282,24 +281,22 @@ struct Rows {
             case PixelType::Brush: {
               break;
             }
-            case PixelType::Undecided:
             case PixelType::CopyFromClosestEdge: {
+              BLI_assert_unreachable();
+              break;
+            }
+            case PixelType::Selected: {
+              break;
+            }
+            case PixelType::Undecided: {
               const float2 point(pixel.copy_command.destination);
               float2 closest_edge_point;
               closest_to_line_v2(closest_edge_point, point, tile_edge.v1.co, tile_edge.v2.co);
               float distance_to_edge = blender::math::distance_squared(closest_edge_point, point);
-              if (distance_to_edge > pixel.distance) {
+              if (distance_to_edge > rows.margin) {
                 break;
               }
-
-              // TODO:
-              //  Find upto 2 valid pixels to copy from.
-              //  Determine the mix factor between the two pixels
-              //  Store result in the pixel.command.
-
-              pixel.distance = distance_to_edge;
-              pixel.type = PixelType::CopyFromClosestEdge;
-
+              pixel.type = PixelType::Selected;
               break;
             }
           }
@@ -307,12 +304,50 @@ struct Rows {
       }
     }
 
-    void solution2(Rows &rows, int margin)
+    int2 find_second_source(Rows &rows, int2 destination, int2 first_source)
+    {
+      rcti search_bounds;
+      BLI_rcti_init(&search_bounds,
+                    max_ii(destination.x - 1, 0),
+                    min_ii(destination.x + 1, rows.resolution.x - 1),
+                    max_ii(destination.y - 1, 0),
+                    min_ii(destination.y + 1, rows.resolution.y - 1));
+      /* Initialize to the first source, so when no other source could be found it will use the
+       * first_source. */
+      int2 found_source = first_source;
+      float found_distance = std::numeric_limits<float>().max();
+      for (int sy : IndexRange(search_bounds.ymin, BLI_rcti_size_y(&search_bounds))) {
+        for (int sx : IndexRange(search_bounds.xmin, BLI_rcti_size_x(&search_bounds))) {
+          int2 source(sx, sy);
+          /* Skip first source as it should be the closest and already selected. */
+          if (source == first_source) {
+            continue;
+          }
+          if (rows.rows[sy].pixels[sx].type != PixelType::Brush) {
+            continue;
+          }
+
+          float new_distance = blender::math::distance(destination, source);
+          if (new_distance < found_distance) {
+            found_distance = new_distance;
+            found_source = source;
+          }
+        }
+      }
+      return found_source;
+    }
+
+    float determine_mix_factor(int2 destination, int2 source_1, int2 source_2)
+    {
+      return dist_to_line_segment_v2(float2(destination), float2(source_1), float2(source_2));
+    }
+
+    void find_copy_source(Rows &rows, int margin)
     {
       for (int x : pixels.index_range()) {
         Elem &elem = pixels[x];
-        /* Skip pixels that already used directly via a brush. */
-        if (elem.type == PixelType::Brush) {
+        /* Skip pixels that are not selected for evaluation. */
+        if (elem.type != PixelType::Selected) {
           continue;
         }
 
@@ -345,9 +380,10 @@ struct Rows {
         elem.type = PixelType::CopyFromClosestEdge;
         elem.distance = found_distance;
         elem.copy_command.source_1 = found_source;
-        // TODO: find second source by looking at neighbouring pixels of source_1.
-        elem.copy_command.source_2 = found_source;
-        elem.copy_command.mix_factor = 0.0f;
+        elem.copy_command.source_2 = find_second_source(
+            rows, elem.copy_command.destination, found_source);
+        elem.copy_command.mix_factor = determine_mix_factor(
+            elem.copy_command.destination, elem.copy_command.source_1, elem.copy_command.source_2);
       }
     }
 
@@ -418,9 +454,24 @@ struct Rows {
   void find_copy_source(int margin)
   {
     for (Row &row : rows) {
-      row.solution2(*this, margin);
+      row.find_copy_source(*this, margin);
     }
   }
+
+  void mark_for_evaluation(const NonManifoldTileEdges &tile_edges)
+  {
+    for (Row &row : rows) {
+      row.mark_for_evaluation(*this, tile_edges);
+    }
+  }
+
+  void pack_into(Vector<PixelCopyGroup> &groups) const
+  {
+    for (const Row &row : rows) {
+      row.pack_into(groups);
+    }
+  }
+
 };  // namespace blender::bke::pbvh::pixels
 
 static void copy_pixels_reinit(PixelCopyTiles &tiles)
@@ -460,14 +511,9 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     PixelCopyTile copy_tile(image_tile.get_tile_number());
 
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
+    rows.mark_for_evaluation(tile_edges);
     rows.find_copy_source(image.seam_margin);
-
-    for (int y = 0; y < tile_resolution.y; y++) {
-      Rows::Row &row = rows.rows[y];
-      // row.determine_copy_pixels(tile_edges, image.seam_margin, tile_resolution);
-      row.pack_into(copy_tile.groups);
-    }
-
+    rows.pack_into(copy_tile.groups);
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
   }
 }
