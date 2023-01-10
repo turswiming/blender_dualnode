@@ -644,8 +644,8 @@ static void workbench_render_to_image(void *vedata,
     workbench_cache_init(vedata);
     auto workbench_render_cache = [](void *vedata,
                                      struct Object *ob,
-                                     struct RenderEngine *UNUSED(engine),
-                                     struct Depsgraph *UNUSED(depsgraph)) {
+                                     struct RenderEngine * /*engine*/,
+                                     struct Depsgraph * /*depsgraph*/) {
       workbench_cache_populate(vedata, ob);
     };
     DRW_render_object_iter(vedata, engine, depsgraph, workbench_render_cache);

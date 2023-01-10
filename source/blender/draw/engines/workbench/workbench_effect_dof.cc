@@ -237,7 +237,7 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
   };
   CallbackData callback_data = {manager, view, down2_ps_};
 
-  auto downsample_level = [](void *callback_data, int UNUSED(level)) {
+  auto downsample_level = [](void *callback_data, int /*level*/) {
     CallbackData *cd = static_cast<CallbackData *>(callback_data);
     cd->manager.submit(cd->pass, cd->view);
   };
