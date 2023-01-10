@@ -19,6 +19,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_node.h"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_update.h"
 
 #include "DNA_collection_types.h"
 #include "DNA_material_types.h"
@@ -234,6 +235,7 @@ static void refresh_socket_list(bNodeTree &ntree,
       }
     }
     new_sockets.add_new(new_socket);
+    BKE_ntree_update_tag_socket_new(&ntree, new_socket);
   }
   LISTBASE_FOREACH_MUTABLE (bNodeSocket *, old_socket, &sockets) {
     if (!new_sockets.contains(old_socket)) {
