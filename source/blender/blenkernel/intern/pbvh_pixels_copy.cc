@@ -198,7 +198,6 @@ class PixelNodesTileData : public Vector<std::reference_wrapper<UDIMTilePixels>>
  */
 
 struct Rows {
-
   struct Row {
     enum class PixelType {
       Undecided,
@@ -308,6 +307,98 @@ struct Rows {
       }
     }
 
+    void solution2(Rows &rows)
+    {
+      for (int x : pixels.index_range()) {
+        Elem &elem = pixels[x];
+        /* Skip pixels that already used directly via a brush. */
+        if (elem.type == PixelType::Brush) {
+          continue;
+        }
+
+        rcti bounds;
+        BLI_rcti_init(&bounds, x, x, row_number, row_number);
+        add_margin(bounds, 8);
+        clamp(bounds, rows.resolution);
+
+        float found_distance = std::numeric_limits<float>().max();
+        int2 found_source(0);
+
+        for (int sy : IndexRange(bounds.ymin, BLI_rcti_size_y(&bounds))) {
+          Row &row = rows.rows[sy];
+          for (int sx : IndexRange(bounds.xmin, BLI_rcti_size_x(&bounds))) {
+            Elem &source = row.pixels[sx];
+            if (source.type != PixelType::Brush) {
+              continue;
+            }
+            float new_distance = blender::math::distance(float2(sx, sy), float2(x, row_number));
+            if (found_distance > new_distance) {
+              found_source = int2(sx, sy);
+              found_distance = new_distance;
+            }
+          }
+        }
+
+        if (found_distance == std::numeric_limits<float>().max()) {
+          continue;
+        }
+        elem.type = PixelType::CopyFromClosestEdge;
+        elem.distance = found_distance;
+        elem.copy_command.source_1 = found_source;
+        // TODO: find second source by looking at neighbouring pixels of source_1.
+        elem.copy_command.source_2 = found_source;
+        elem.copy_command.mix_factor = 0.0f;
+      }
+    }
+
+    static bool can_be_extended_with(const PixelCopyGroup &group, const PixelCopyCommand &command)
+    {
+      PixelCopyCommand last_command = last_copy_command(group);
+      /* Can only extend when pushing the next pixel. */
+      if (last_command.destination.x != command.destination.x - 1 ||
+          last_command.destination.y != command.destination.y) {
+        return false;
+      }
+      /* Can only extend when */
+      int2 delta_source_1 = last_command.source_1 - command.source_1;
+      if (max_ii(UNPACK2(blender::math::abs(delta_source_1))) > 127) {
+        return false;
+      }
+      return true;
+    }
+
+    static void extend_with(PixelCopyGroup &group, const PixelCopyCommand &command)
+    {
+      PixelCopyCommand last_command = last_copy_command(group);
+      PixelCopyItem new_item = {char2(command.source_1 - last_command.source_1),
+                                char2(command.source_2 - command.source_1),
+                                uint8_t(command.mix_factor * 255)};
+      group.items.append(new_item);
+    }
+
+    static PixelCopyCommand last_copy_command(const PixelCopyGroup &group)
+    {
+      PixelCopyCommand last_command(group);
+      for (const PixelCopyItem &item : group.items) {
+        last_command.apply(item);
+      }
+      return last_command;
+    }
+
+    void pack_into(Vector<PixelCopyGroup> groups) const
+    {
+      for (const Elem &elem : pixels) {
+        if (elem.type == PixelType::CopyFromClosestEdge) {
+          if (groups.is_empty() || !can_be_extended_with(groups.last(), elem.copy_command)) {
+            PixelCopyGroup new_group = {
+                elem.copy_command.destination - int2(1, 0), elem.copy_command.source_1, {}};
+            groups.append(new_group);
+          }
+          extend_with(groups.last(), elem.copy_command);
+        }
+      }
+    }
+
     void print_debug() const
     {
       for (const Elem &pixel : pixels) {
@@ -319,16 +410,10 @@ struct Rows {
 
   int2 resolution;
   int margin;
-  int current_row_;
   Vector<Row> rows;
 
-  Row &current_row()
-  {
-    return rows[current_row_];
-  }
-
   Rows(int2 resolution, int margin, const PixelNodesTileData &node_tile_pixels)
-      : resolution(resolution), margin(margin), current_row_(0)
+      : resolution(resolution), margin(margin)
   {
     Row row_template(resolution.x);
     rows.resize(resolution.y, row_template);
@@ -338,11 +423,13 @@ struct Rows {
     }
   }
 
-  void advance_to_row(int row_number)
+  void find_copy_source()
   {
-    current_row_ = row_number;
+    for (Row &row : rows) {
+      row.solution2(*this);
+    }
   }
-};
+};  // namespace blender::bke::pbvh::pixels
 
 static void copy_pixels_reinit(PixelCopyTiles &tiles)
 {
@@ -381,12 +468,13 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     PixelCopyTile copy_tile(image_tile.get_tile_number());
 
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
+    rows.find_copy_source();
 
     for (int y = 0; y < tile_resolution.y; y++) {
       Rows::Row &row = rows.rows[y];
-      row.determine_copy_pixels(tile_edges, image.seam_margin, tile_resolution);
+      // row.determine_copy_pixels(tile_edges, image.seam_margin, tile_resolution);
       row.print_debug();
-      // TODO: pack current_row into copy_tile.
+      row.pack_into(copy_tile.groups);
     }
 
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);

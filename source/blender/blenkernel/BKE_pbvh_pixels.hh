@@ -265,7 +265,6 @@ template<typename T, int Channels = 4> struct ImageBufferAccessor {
 };
 
 struct PixelCopyItem {
-  uint8_t delta_destination_x;
   char2 delta_source_1;
   char2 delta_source_2;
   uint8_t mix_factor;
@@ -273,6 +272,7 @@ struct PixelCopyItem {
 
 struct PixelCopyGroup {
   int2 destination;
+  int2 source;
   Vector<PixelCopyItem> items;
 };
 
@@ -290,8 +290,8 @@ struct PixelCopyCommand {
   PixelCopyCommand() = default;
   PixelCopyCommand(const PixelCopyGroup &group)
       : destination(group.destination),
-        source_1(group.destination),
-        source_2(group.destination),
+        source_1(group.source),
+        source_2(group.source),
         mix_factor(0.0f)
   {
   }
@@ -307,9 +307,9 @@ struct PixelCopyCommand {
 
   void apply(const PixelCopyItem &item)
   {
-    destination.x += int(item.delta_destination_x);
+    destination.x += 1;
     source_1 += int2(item.delta_source_1);
-    source_2 += int2(item.delta_source_2);
+    source_2 = source_1 + int2(item.delta_source_2);
     mix_factor = float(item.mix_factor) / 255.0f;
   }
 };
