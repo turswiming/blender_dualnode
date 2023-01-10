@@ -40,13 +40,13 @@ void light_eval_ex(ClosureDiffuse diffuse,
     vec3 lL = light_world_to_local(light, -L) * dist;
     vec3 lNg = light_world_to_local(light, Ng);
 
-    float occluder_distance = shadow_sample(
+    ShadowSample samp = shadow_sample(
         shadow_atlas_tx, shadow_tilemaps_tx, light, lL, lNg, dist, P);
 
 #ifdef SSS_TRANSMITTANCE
     /* Transmittance evaluation first to use initial visibility without shadow. */
     if (diffuse.sss_id != 0u && light.diffuse_power > 0.0) {
-      float delta = max(thickness, occluder_distance);
+      float delta = max(thickness, samp.occluder_delta + samp.bias);
 
       vec3 intensity = visibility * light.transmit_power *
                        light_translucent(sss_transmittance_tx,
@@ -60,7 +60,7 @@ void light_eval_ex(ClosureDiffuse diffuse,
       out_diffuse += light.color * intensity;
     }
 #endif
-    visibility *= float(occluder_distance < 0.0);
+    visibility *= float(samp.occluder_delta >= 0.0);
   }
 
   if (visibility < 1e-6) {

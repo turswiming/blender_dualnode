@@ -35,22 +35,39 @@ void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
   }
 }
 
-vec3 slope_bias()
+vec3 slope_bias(vec3 P)
 {
-  return DFDX_SIGN * dFdx(interp.P) + DFDY_SIGN * dFdy(interp.P);
+  return DFDX_SIGN * dFdx(P) + DFDY_SIGN * dFdy(P);
+}
+float slope_bias(float P)
+{
+  return DFDX_SIGN * dFdx(P) + DFDY_SIGN * dFdy(P);
 }
 
-float linear_shadow_depth(vec3 P)
+float linear_shadow_depth()
 {
   bool is_persp = (drw_view.winmat[3][3] == 0.0);
   if (is_persp) {
     /* Punctual shadow. Store distance to light. */
-    return distance(cameraPos, P);
+    return distance(cameraPos, interp.P);
   }
   else {
-    /* Directionnal shadow. Store distance from origin. */
-    /* TODO(fclem): Bias to near. Otherwise atomics do not work with negative numbers. */
-    return sqrt(max(0.0, dot(cameraForward, P)));
+    /* Directionnal shadow. Store distance from near clip plane. */
+    return gl_FragCoord.z * -2.0 / drw_view.winmat[2][2];
+  }
+}
+float linear_shadow_depth_with_bias(float bias)
+{
+  bool is_persp = (drw_view.winmat[3][3] == 0.0);
+  if (is_persp) {
+    /* Punctual shadow. Store distance to light. */
+    vec3 P = interp.P + slope_bias(interp.P) * bias;
+    return distance(cameraPos, P * bias);
+  }
+  else {
+    /* Directionnal shadow. Store distance from near clip plane. */
+    float z = gl_FragCoord.z + slope_bias(gl_FragCoord.z) * bias;
+    return z * -2.0 / drw_view.winmat[2][2];
   }
 }
 
@@ -60,16 +77,15 @@ void main()
 
   ivec2 texel_co = ivec2(gl_FragCoord.xy);
   ivec2 tile_co = texel_co / pages_infos_buf.page_size;
-  float depth = linear_shadow_depth(interp.P);
 
-  write_depth(texel_co, 0, tile_co, depth);
+  write_depth(texel_co, 0, tile_co, linear_shadow_depth());
 
   /* We have to compensate the output pixel position being different than the input pixel's.
    * This is only half a pixel since we chose one pixel inside the quad. */
-  depth = linear_shadow_depth(interp.P - slope_bias() * 0.5);
+  float depth_center = linear_shadow_depth_with_bias(0.5);
 
-  write_depth(texel_co, 1, tile_co, depth);
-  write_depth(texel_co, 2, tile_co, depth);
-  write_depth(texel_co, 3, tile_co, depth);
-  write_depth(texel_co, 4, tile_co, depth);
+  write_depth(texel_co, 1, tile_co, depth_center);
+  write_depth(texel_co, 2, tile_co, depth_center);
+  write_depth(texel_co, 3, tile_co, depth_center);
+  write_depth(texel_co, 4, tile_co, depth_center);
 }

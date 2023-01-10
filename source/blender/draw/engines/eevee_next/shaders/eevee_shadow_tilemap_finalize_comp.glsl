@@ -46,6 +46,7 @@ void main()
   int lod_valid = 0;
   /* One bit per lod. */
   int do_lod_update = 0;
+  /* Packed page (packUvec2x16) to render per LOD. */
   uint updated_lod_page[SHADOW_TILEMAP_LOD + 1];
   uvec2 page_valid;
   /* With all threads (LOD0 size dispatch) load each lod tile from the highest lod
@@ -90,6 +91,9 @@ void main()
   barrier();
 
   if (all(equal(gl_LocalInvocationID, uvec3(0)))) {
+    /* No update by default. */
+    view_index = 64;
+
     if (tile_updates_count > 0) {
       view_index = atomicAdd(pages_infos_buf.view_count, 1);
       if (view_index < 64) {
@@ -104,7 +108,7 @@ void main()
 
   barrier();
 
-  if (tile_updates_count > 0 && view_index < 64) {
+  if (view_index < 64) {
     ivec3 render_map_texel = ivec3(tile_co, view_index);
 
     /* Store page indirection for rendering. Update every texel in the view array level. */
@@ -116,7 +120,7 @@ void main()
       }
     }
     render_map_texel.xy >>= 1;
-    if (all(equal(tile_co & ivec2((1 << 1) - 1), ivec2(0)))) {
+    if (all(equal(tile_co, render_map_texel.xy << 1u))) {
       imageStore(render_map_lod1_img, render_map_texel, uvec4(updated_lod_page[1]));
       if (updated_lod_page[1] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[1]);
@@ -124,7 +128,7 @@ void main()
       }
     }
     render_map_texel.xy >>= 1;
-    if (all(equal(tile_co & ivec2((1 << 2) - 1), ivec2(0)))) {
+    if (all(equal(tile_co, render_map_texel.xy << 2u))) {
       imageStore(render_map_lod2_img, render_map_texel, uvec4(updated_lod_page[2]));
       if (updated_lod_page[2] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[2]);
@@ -132,7 +136,7 @@ void main()
       }
     }
     render_map_texel.xy >>= 1;
-    if (all(equal(tile_co & ivec2((1 << 3) - 1), ivec2(0)))) {
+    if (all(equal(tile_co, render_map_texel.xy << 3u))) {
       imageStore(render_map_lod3_img, render_map_texel, uvec4(updated_lod_page[3]));
       if (updated_lod_page[3] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[3]);
@@ -140,7 +144,7 @@ void main()
       }
     }
     render_map_texel.xy >>= 1;
-    if (all(equal(tile_co & ivec2((1 << 4) - 1), ivec2(0)))) {
+    if (all(equal(tile_co, render_map_texel.xy << 4u))) {
       imageStore(render_map_lod4_img, render_map_texel, uvec4(updated_lod_page[4]));
       if (updated_lod_page[4] != 0xFFFFFFFFu) {
         page_clear_buf_append(updated_lod_page[4]);

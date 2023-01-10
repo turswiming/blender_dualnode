@@ -60,15 +60,18 @@ vec3 debug_tile_state_color(ShadowTileData tile)
 
 ShadowTileData debug_tile_get(vec3 P, LightData light)
 {
+  vec3 lNg = vec3(1.0, 0.0, 0.0);
   vec2 uv;
   if (light.type == LIGHT_SUN) {
     /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
     vec3 lP = transform_point(light.object_mat, P);
-    return shadow_directional_tile_get(shadow_tilemaps_tx, light, cameraPos, lP, P, uv);
+    float bias;
+    return shadow_directional_tile_get(shadow_tilemaps_tx, light, cameraPos, lP, P, lNg, uv, bias);
   }
   else {
     vec3 lL = light_world_to_local(light, P - light._position);
-    return shadow_punctual_tile_get(shadow_tilemaps_tx, light, lL, uv);
+    float bias;
+    return shadow_punctual_tile_get(shadow_tilemaps_tx, light, lL, lNg, uv, bias);
   }
 }
 

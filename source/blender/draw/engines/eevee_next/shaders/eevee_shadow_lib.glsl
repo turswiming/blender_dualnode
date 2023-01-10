@@ -50,7 +50,7 @@ vec3 shadow_punctual_local_position_to_face_local(int face_id, vec3 lL)
 }
 
 /* Returns minimum bias needed for a given geometry birlak abd a shadowmap page. */
-float shadow_slope_bias_get(LightData light, vec3 lNg, int lod)
+float shadow_slope_bias_get(LightData light, vec3 lNg, uint lod)
 {
 #if 0 /* TODO(fclem): finish */
   if (is_punctual) {
@@ -96,8 +96,14 @@ ShadowTileData shadow_punctual_tile_get(
   return tile;
 }
 
-ShadowTileData shadow_directional_tile_get(
-    usampler2D tilemaps_tx, LightData light, vec3 camera_P, vec3 lP, vec3 P, vec3 lNg, out vec2 uv)
+ShadowTileData shadow_directional_tile_get(usampler2D tilemaps_tx,
+                                           LightData light,
+                                           vec3 camera_P,
+                                           vec3 lP,
+                                           vec3 P,
+                                           vec3 lNg,
+                                           out vec2 uv,
+                                           out float bias)
 {
   int clipmap_lod = shadow_directional_clipmap_level(light, distance(P, camera_P));
   int clipmap_lod_relative = clipmap_lod - light.clipmap_lod_min;
@@ -126,33 +132,37 @@ float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 uv)
   return depth;
 }
 
-/* Return world occluder distance. Return positive value if not occluded.
- * /a bias is the amount of bias to apply to the shadow test to avoid shadow acne problem. */
-float shadow_sample(sampler2D atlas_tx,
-                    usampler2D tilemaps_tx,
-                    LightData light,
-                    vec3 lL,
-                    vec3 lNg,
-                    float receiver_dist,
-                    vec3 P,
-                    out float bias)
+struct ShadowSample {
+  float occluder_delta;
+  float bias;
+};
+
+ShadowSample shadow_sample(sampler2D atlas_tx,
+                           usampler2D tilemaps_tx,
+                           LightData light,
+                           vec3 lL,
+                           vec3 lNg,
+                           float receiver_dist,
+                           vec3 P)
 {
 
+  ShadowSample samp;
   if (light.type == LIGHT_SUN) {
     /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
     vec3 lP = transform_point(light.object_mat, P);
     vec2 uv;
     ShadowTileData tile = shadow_directional_tile_get(
-        tilemaps_tx, light, cameraPos, lP, P, lNg, uv, bias);
+        tilemaps_tx, light, cameraPos, lP, P, lNg, uv, samp.bias);
     float occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
-    return lP.z - (occluder_dist - light.clip_near);
+    samp.occluder_delta = occluder_dist - lP.z;
   }
   else {
     vec2 uv;
-    ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lL, uv, bias);
-    float occluder_dist = shadw_tile_depth_get(atlas_txo, tile, uv);
-    return receiver_dist - occluder_dist;
+    ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lL, lNg, uv, samp.bias);
+    float occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
+    samp.occluder_delta = occluder_dist - receiver_dist;
   }
+  return samp;
 }
 
 /** \} */

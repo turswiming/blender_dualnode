@@ -20,5 +20,5 @@ void main()
   uvec2 page_co = unpackUvec2x16(clear_page_buf[gl_GlobalInvocationID.z]);
   uvec2 page_texel = page_co * pages_infos_buf.page_size + gl_GlobalInvocationID.xy;
 
-  imageStore(atlas_img, ivec2(page_texel), uvec4(floatBitsToUint(0.0)));
+  imageStore(atlas_img, ivec2(page_texel), uvec4(floatBitsToUint(FLT_MAX)));
 }

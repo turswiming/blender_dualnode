@@ -685,6 +685,9 @@ class Texture : NonCopyable {
 
   GPUTexture *mip_view(int miplvl)
   {
+    BLI_assert_msg(miplvl < mip_views_.size(),
+                   "Incorrect mip level requested. "
+                   "Might be missing call to ensure_mip_views().");
     return mip_views_[miplvl];
   }
 
@@ -1009,8 +1012,7 @@ class TextureRef : public Texture {
  * Dummy type to bind texture as image.
  * It is just a GPUTexture in disguise.
  */
-class Image {
-};
+class Image {};
 
 static inline Image *as_image(GPUTexture *tex)
 {

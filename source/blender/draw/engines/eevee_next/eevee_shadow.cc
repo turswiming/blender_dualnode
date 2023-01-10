@@ -185,7 +185,8 @@ ShadowTileMapPool::ShadowTileMapPool()
   extent.x = min_ii(SHADOW_MAX_TILEMAP, maps_per_row) * ShadowTileMap::tile_map_resolution;
   extent.y = (SHADOW_MAX_TILEMAP / maps_per_row) * ShadowTileMap::tile_map_resolution;
 
-  tilemap_tx.ensure_2d(GPU_R32UI, extent);
+  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
+  tilemap_tx.ensure_2d(GPU_R32UI, extent, usage);
   tilemap_tx.clear(uint4(0));
 }
 
@@ -732,6 +733,7 @@ void ShadowModule::end_sync()
         sub.bind_ssbo("view_infos_buf", &shadow_multi_view_.matrices_ubo_get());
         sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);
         sub.bind_ssbo("clear_page_buf", clear_page_buf_);
+        sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
         sub.bind_image("tilemaps_img", tilemap_pool.tilemap_tx);
         sub.bind_image("render_map_lod0_img", render_map_tx_.mip_view(0));
         sub.bind_image("render_map_lod1_img", render_map_tx_.mip_view(1));
@@ -739,7 +741,7 @@ void ShadowModule::end_sync()
         sub.bind_image("render_map_lod3_img", render_map_tx_.mip_view(3));
         sub.bind_image("render_map_lod4_img", render_map_tx_.mip_view(4));
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM |
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM | GPU_BARRIER_TEXTURE_FETCH |
                     GPU_BARRIER_SHADER_IMAGE_ACCESS);
       }
       {

@@ -80,25 +80,13 @@ void planes_from_projmat(mat4 mat,
    * https://fgiesen.wordpress.com/2012/08/31/frustum-planes-from-the-projection-matrix/
    * http://www8.cs.umu.se/kurser/5DV051/HT12/lab/plane_extraction.pdf
    */
-  /* TODO(fclem): Try transpose + vector op. */
-  for (int i = 0; i < 4; i++) {
-    left[i] = mat[i][3] + mat[i][0];
-  }
-  for (int i = 0; i < 4; i++) {
-    right[i] = mat[i][3] - mat[i][0];
-  }
-  for (int i = 0; i < 4; i++) {
-    bottom[i] = mat[i][3] + mat[i][1];
-  }
-  for (int i = 0; i < 4; i++) {
-    top[i] = mat[i][3] - mat[i][1];
-  }
-  for (int i = 0; i < 4; i++) {
-    near[i] = mat[i][3] + mat[i][2];
-  }
-  for (int i = 0; i < 4; i++) {
-    far[i] = mat[i][3] - mat[i][2];
-  }
+  mat = transpose(mat);
+  left = mat[3] + mat[0];
+  right = mat[3] - mat[0];
+  bottom = mat[3] + mat[1];
+  top = mat[3] - mat[1];
+  near = mat[3] + mat[2];
+  far = mat[3] - mat[2];
 }
 
 void frustum_culling_planes_calc(mat4 winmat, mat4 viewmat, out vec4 planes[6])
