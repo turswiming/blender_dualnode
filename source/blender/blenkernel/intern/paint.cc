@@ -67,6 +67,10 @@
 
 #include "bmesh.h"
 
+using blender::float3;
+using blender::MutableSpan;
+using blender::Span;
+
 static void sculpt_attribute_update_refs(Object *ob);
 static SculptAttribute *sculpt_attribute_ensure_ex(Object *ob,
                                                    eAttrDomain domain,
@@ -76,9 +80,6 @@ static SculptAttribute *sculpt_attribute_ensure_ex(Object *ob,
                                                    PBVHType pbvhtype,
                                                    bool flat_array_for_bmesh);
 static void sculptsession_bmesh_add_layers(Object *ob);
-
-using blender::MutableSpan;
-using blender::Span;
 
 static void palette_init_data(ID *id)
 {
@@ -128,7 +129,7 @@ static void palette_undo_preserve(BlendLibReader * /*reader*/, ID *id_new, ID *i
   /* NOTE: We do not swap IDProperties, as dealing with potential ID pointers in those would be
    *       fairly delicate. */
   BKE_lib_id_swap(nullptr, id_new, id_old);
-  SWAP(IDProperty *, id_new->properties, id_old->properties);
+  std::swap(id_new->properties, id_old->properties);
 }
 
 IDTypeInfo IDType_ID_PAL = {
@@ -1080,7 +1081,7 @@ bool BKE_paint_ensure(ToolSettings *ts, Paint **r_paint)
       Paint paint_test = **r_paint;
       BKE_paint_runtime_init(ts, *r_paint);
       /* Swap so debug doesn't hide errors when release fails. */
-      SWAP(Paint, **r_paint, paint_test);
+      std::swap(**r_paint, paint_test);
       BLI_assert(paint_test.runtime.ob_mode == (*r_paint)->runtime.ob_mode);
       BLI_assert(paint_test.runtime.tool_offset == (*r_paint)->runtime.tool_offset);
 #endif
@@ -1675,8 +1676,6 @@ static void sculpt_update_object(
   ss->depsgraph = depsgraph;
 
   ss->deform_modifiers_active = sculpt_modifiers_active(scene, sd, ob);
-  ss->show_mask = (sd->flags & SCULPT_HIDE_MASK) == 0;
-  ss->show_face_sets = (sd->flags & SCULPT_HIDE_FACE_SETS) == 0;
 
   ss->building_vp_handle = false;
 
@@ -1696,7 +1695,7 @@ static void sculpt_update_object(
 
     /* These are assigned to the base mesh in Multires. This is needed because Face Sets operators
      * and tools use the Face Sets data from the base mesh when Multires is active. */
-    ss->mvert = BKE_mesh_verts_for_write(me);
+    ss->vert_positions = BKE_mesh_vert_positions_for_write(me);
     ss->mpoly = BKE_mesh_polys(me);
     ss->mloop = BKE_mesh_loops(me);
   }
@@ -1704,7 +1703,7 @@ static void sculpt_update_object(
     ss->totvert = me->totvert;
     ss->totpoly = me->totpoly;
     ss->totfaces = me->totpoly;
-    ss->mvert = BKE_mesh_verts_for_write(me);
+    ss->vert_positions = BKE_mesh_vert_positions_for_write(me);
     ss->mpoly = BKE_mesh_polys(me);
     ss->mloop = BKE_mesh_loops(me);
     ss->multires.active = false;
@@ -1774,9 +1773,6 @@ static void sculpt_update_object(
       BKE_pbvh_pmap_set(ss->pbvh, ss->pmap);
     }
   }
-
-  pbvh_show_mask_set(ss->pbvh, ss->show_mask);
-  pbvh_show_face_sets_set(ss->pbvh, ss->show_face_sets);
 
   if (ss->deform_modifiers_active) {
     /* Painting doesn't need crazyspace, use already evaluated mesh coordinates if possible. */
@@ -2173,8 +2169,6 @@ static PBVH *build_pbvh_for_dynamic_topology(Object *ob)
                        ob->sculpt->bm_log,
                        ob->sculpt->attrs.dyntopo_node_id_vertex->bmesh_cd_offset,
                        ob->sculpt->attrs.dyntopo_node_id_face->bmesh_cd_offset);
-  pbvh_show_mask_set(pbvh, ob->sculpt->show_mask);
-  pbvh_show_face_sets_set(pbvh, false);
   return pbvh;
 }
 
@@ -2185,30 +2179,31 @@ static PBVH *build_pbvh_from_regular_mesh(Object *ob, Mesh *me_eval_deform, bool
   PBVH *pbvh = BKE_pbvh_new(PBVH_FACES);
   BKE_pbvh_respect_hide_set(pbvh, respect_hide);
 
-  MutableSpan<MVert> verts = me->verts_for_write();
+  MutableSpan<float3> positions = me->vert_positions_for_write();
   const Span<MPoly> polys = me->polys();
   const Span<MLoop> loops = me->loops();
 
   MLoopTri *looptri = static_cast<MLoopTri *>(
       MEM_malloc_arrayN(looptris_num, sizeof(*looptri), __func__));
 
-  BKE_mesh_recalc_looptri(
-      loops.data(), polys.data(), verts.data(), me->totloop, me->totpoly, looptri);
+  BKE_mesh_recalc_looptri(loops.data(),
+                          polys.data(),
+                          reinterpret_cast<const float(*)[3]>(positions.data()),
+                          me->totloop,
+                          me->totpoly,
+                          looptri);
 
   BKE_pbvh_build_mesh(pbvh,
                       me,
                       polys.data(),
                       loops.data(),
-                      verts.data(),
+                      reinterpret_cast<float(*)[3]>(positions.data()),
                       me->totvert,
                       &me->vdata,
                       &me->ldata,
                       &me->pdata,
                       looptri,
                       looptris_num);
-
-  pbvh_show_mask_set(pbvh, ob->sculpt->show_mask);
-  pbvh_show_face_sets_set(pbvh, ob->sculpt->show_face_sets);
 
   const bool is_deformed = check_sculpt_object_deformed(ob, true);
   if (is_deformed && me_eval_deform != nullptr) {
@@ -2240,8 +2235,6 @@ static PBVH *build_pbvh_from_ccg(Object *ob, SubdivCCG *subdiv_ccg, bool respect
                        subdiv_ccg->grid_hidden,
                        base_mesh,
                        subdiv_ccg);
-  pbvh_show_mask_set(pbvh, ob->sculpt->show_mask);
-  pbvh_show_face_sets_set(pbvh, ob->sculpt->show_face_sets);
   return pbvh;
 }
 

@@ -17,10 +17,10 @@ namespace blender::nodes::node_geo_set_position_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Geometry"));
-  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().supports_field();
-  b.add_input<decl::Vector>(N_("Position")).implicit_field(implicit_field_inputs::position);
-  b.add_input<decl::Vector>(N_("Offset")).supports_field().subtype(PROP_TRANSLATION);
-  b.add_output<decl::Geometry>(N_("Geometry"));
+  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().field_on_all();
+  b.add_input<decl::Vector>(N_("Position")).implicit_field_on_all(implicit_field_inputs::position);
+  b.add_input<decl::Vector>(N_("Offset")).field_on_all().subtype(PROP_TRANSLATION);
+  b.add_output<decl::Geometry>(N_("Geometry")).propagate_all();
 }
 
 static void set_computed_position_and_offset(GeometryComponent &component,
@@ -41,41 +41,6 @@ static void set_computed_position_and_offset(GeometryComponent &component,
   const int grain_size = 10000;
 
   switch (component.type()) {
-    case GEO_COMPONENT_TYPE_MESH: {
-      Mesh *mesh = static_cast<MeshComponent &>(component).get_for_write();
-      MutableSpan<MVert> verts = mesh->verts_for_write();
-      if (in_positions.is_same(positions_read_only)) {
-        devirtualize_varray(in_offsets, [&](const auto in_offsets) {
-          threading::parallel_for(
-              selection.index_range(), grain_size, [&](const IndexRange range) {
-                for (const int i : selection.slice(range)) {
-                  const float3 offset = in_offsets[i];
-                  add_v3_v3(verts[i].co, offset);
-                }
-              });
-        });
-        if (in_offsets.is_single() && selection.size() == verts.size()) {
-          BKE_mesh_tag_coords_changed_uniformly(mesh);
-        }
-        else {
-          BKE_mesh_tag_coords_changed(mesh);
-        }
-      }
-      else {
-        devirtualize_varray2(
-            in_positions, in_offsets, [&](const auto in_positions, const auto in_offsets) {
-              threading::parallel_for(
-                  selection.index_range(), grain_size, [&](const IndexRange range) {
-                    for (const int i : selection.slice(range)) {
-                      const float3 new_position = in_positions[i] + in_offsets[i];
-                      copy_v3_v3(verts[i].co, new_position);
-                    }
-                  });
-            });
-        BKE_mesh_tag_coords_changed(mesh);
-      }
-      break;
-    }
     case GEO_COMPONENT_TYPE_CURVE: {
       if (attributes.contains("handle_right") && attributes.contains("handle_left")) {
         CurveComponent &curve_component = static_cast<CurveComponent &>(component);

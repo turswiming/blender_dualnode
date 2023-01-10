@@ -12,6 +12,12 @@
 #include "GPU_common_types.h"
 #include "GPU_context.h"
 
+/* Don't generate OpenGL deprecation warning. This is a known thing, and is not something easily
+ * solvable in a short term. */
+#ifdef __clang__
+#  pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #include "intern/GHOST_Context.h"
 #include "intern/GHOST_ContextCGL.h"
 #include "intern/GHOST_Window.h"
@@ -658,7 +664,7 @@ class MTLContext : public Context {
 
   /** Dummy Resources */
   /* Maximum of 32 texture types. Though most combinations invalid. */
-  gpu::MTLTexture *dummy_textures_[GPU_SAMPLER_TYPE_MAX][GPU_TEXTURE_BUFFER] = {nullptr};
+  gpu::MTLTexture *dummy_textures_[GPU_SAMPLER_TYPE_MAX][GPU_TEXTURE_BUFFER] = {{nullptr}};
   GPUVertFormat dummy_vertformat_[GPU_SAMPLER_TYPE_MAX];
   GPUVertBuf *dummy_verts_[GPU_SAMPLER_TYPE_MAX] = {nullptr};
 
