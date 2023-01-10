@@ -4,7 +4,7 @@
 #include "BLI_array.hh"
 #include "BLI_bit_vector.hh"
 #include "BLI_math.h"
-#include "BLI_math_vector_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_vector.hh"
 
 #include "IMB_imbuf.h"
@@ -34,6 +34,49 @@ template<CoordSpace Space> struct Edge {
   Vertex<Space> v2;
 };
 
+rcti get_bounds(const Edge<CoordSpace::Tile> &tile_edge)
+{
+  rcti bounds;
+  BLI_rcti_init_minmax(&bounds);
+  BLI_rcti_do_minmax_v(&bounds, int2(tile_edge.v1.co));
+  BLI_rcti_do_minmax_v(&bounds, int2(tile_edge.v2.co));
+  return bounds;
+}
+
+void add_margin(rcti &bounds, int margin)
+{
+  bounds.xmin -= margin;
+  bounds.xmax += margin;
+  bounds.ymin -= margin;
+  bounds.ymax += margin;
+}
+
+void clamp(rcti &bounds, int2 resolution)
+{
+  rcti clamping_bounds;
+  int2 xy;
+  BLI_rcti_init(&clamping_bounds, 0, resolution.x - 1, 0, resolution.y - 1);
+  BLI_rcti_clamp(&bounds, &clamping_bounds, xy);
+}
+
+const Vertex<CoordSpace::Tile> convert_coord_space(const Vertex<CoordSpace::UV> &uv_vertex,
+                                                   const image::ImageTileWrapper image_tile,
+                                                   const int2 tile_resolution)
+{
+  return Vertex<CoordSpace::Tile>{(uv_vertex.co - float2(image_tile.get_tile_offset())) *
+                                  float2(tile_resolution)};
+}
+
+const Edge<CoordSpace::Tile> convert_coord_space(const Edge<CoordSpace::UV> &uv_edge,
+                                                 const image::ImageTileWrapper image_tile,
+                                                 const int2 tile_resolution)
+{
+  return Edge<CoordSpace::Tile>{
+      convert_coord_space(uv_edge.v1, image_tile, tile_resolution),
+      convert_coord_space(uv_edge.v2, image_tile, tile_resolution),
+  };
+}
+
 class NonManifoldTileEdges : public Vector<Edge<CoordSpace::Tile>> {};
 
 class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
@@ -50,18 +93,24 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
         }
         Edge<CoordSpace::UV> edge;
         edge.v1.co = find_uv_vert(mesh_primitive, mesh_edge.vert1).uv;
-        edge.v2.co = find_uv_vert(mesh_primitive, mesh_edge.vert1).uv;
+        edge.v2.co = find_uv_vert(mesh_primitive, mesh_edge.vert2).uv;
         append(edge);
       }
     }
   }
 
   NonManifoldTileEdges extract_tile_edges(const image::ImageTileWrapper image_tile,
-                                          const int2 tile_resolution)
+                                          const int2 tile_resolution) const
   {
     NonManifoldTileEdges result;
-    // TODO add edges that intersects with the given tile.
-    // Convert the space from uv to tile.
+    // TODO: Only add edges that intersects with the given tile.
+    // TODO: Clamp edges to tile bounds.
+
+    for (const Edge<CoordSpace::UV> &uv_edge : *this) {
+      const Edge<CoordSpace::Tile> tile_edge = convert_coord_space(
+          uv_edge, image_tile, tile_resolution);
+      result.append(tile_edge);
+    }
     return result;
   }
 
@@ -148,73 +197,150 @@ class PixelNodesTileData : public Vector<std::reference_wrapper<UDIMTilePixels>>
  * encode pixels.
  */
 
-struct Row {
-  enum class PixelType {
-    Undecided,
-    /** This pixel is directly affected by a brush and doesn't need to be solved. */
-    Brush,
-    /** This pixel will be copid from another pixel to solve non-manifold edge bleeding. */
-    CopyFromClosestEdge,
-  };
+struct Rows {
 
-  struct Elem {
-    PixelType type = PixelType::Undecided;
-    /**
-     * Distance to the closest edge that can be sourced to fix an edge bleed.
-     * A distance of 0.0 means that the pixel is being drawn on directly and
-     * doesn't need to be checked.
-     */
-    float distance = 0.0f;
-    PixelCopyCommand copy_command;
+  struct Row {
+    enum class PixelType {
+      Undecided,
+      /** This pixel is directly affected by a brush and doesn't need to be solved. */
+      Brush,
+      /** This pixel will be copid from another pixel to solve non-manifold edge bleeding. */
+      CopyFromClosestEdge,
+    };
 
-    Elem() = default;
+    struct Elem {
+      PixelType type = PixelType::Undecided;
+      /**
+       * Distance to the closest edge that can be sourced to fix an edge bleed.
+       * A distance of 0.0 means that the pixel is being drawn on directly and
+       * doesn't need to be checked.
+       */
+      float distance = std::numeric_limits<float>::max();
+      PixelCopyCommand copy_command;
 
-    Elem(int2 co)
+      Elem() = default;
+
+      Elem(int2 co)
+      {
+        copy_command.destination = co;
+        copy_command.source_1 = co;
+        copy_command.source_2 = co;
+        copy_command.mix_factor = 0.0f;
+      }
+    };
+
+    int row_number = 0;
+    Array<Elem> pixels;
+    Row() = delete;
+    Row(int64_t width) : pixels(width)
     {
-      copy_command.destination = co;
-      copy_command.source_1 = co;
-      copy_command.source_2 = co;
-      copy_command.mix_factor = 0.0f;
     }
-  };
 
-  int row_number = 0;
-  Array<Elem> pixels;
-
-  Row(int64_t width) : pixels(width)
-  {
-  }
-
-  void reinit(int y)
-  {
-    row_number = y;
-    for (int x = 0; x < pixels.size(); x++) {
-      pixels[x] = Elem(int2(x, y));
+    void reinit(int y)
+    {
+      row_number = y;
+      for (int x = 0; x < pixels.size(); x++) {
+        pixels[x] = Elem(int2(x, y));
+      }
     }
-  }
 
-  void mask_brush_pixels(const PixelNodesTileData &nodes_tile_pixels)
-  {
-    for (const UDIMTilePixels &tile_pixels : nodes_tile_pixels) {
-      for (const PackedPixelRow &encoded_pixels : tile_pixels.pixel_rows) {
-        if (encoded_pixels.start_image_coordinate.y != row_number) {
-          continue;
-        }
-        for (int x = encoded_pixels.start_image_coordinate.x;
-             x < encoded_pixels.start_image_coordinate.x + encoded_pixels.num_pixels;
-             x++) {
-          pixels[x].type = PixelType::Brush;
+    void mask_brush_pixels(const PixelNodesTileData &nodes_tile_pixels)
+    {
+      for (const UDIMTilePixels &tile_pixels : nodes_tile_pixels) {
+        for (const PackedPixelRow &encoded_pixels : tile_pixels.pixel_rows) {
+          if (encoded_pixels.start_image_coordinate.y != row_number) {
+            continue;
+          }
+          for (int x = encoded_pixels.start_image_coordinate.x;
+               x < encoded_pixels.start_image_coordinate.x + encoded_pixels.num_pixels;
+               x++) {
+            pixels[x].type = PixelType::Brush;
+            pixels[x].distance = 0.0f;
+          }
         }
       }
     }
+
+    void determine_copy_pixels(const NonManifoldTileEdges &tile_edges,
+                               int search_margin,
+                               const int2 tile_resolution)
+    {
+      for (const Edge<CoordSpace::Tile> &tile_edge : tile_edges) {
+        rcti edge_bounds = get_bounds(tile_edge);
+        add_margin(edge_bounds, search_margin);
+        clamp(edge_bounds, tile_resolution);
+
+        if (edge_bounds.ymax < row_number) {
+          continue;
+        }
+        if (edge_bounds.ymin > row_number) {
+          continue;
+        }
+
+        for (const int x : IndexRange(edge_bounds.xmin, edge_bounds.xmax - edge_bounds.xmin)) {
+          Elem &pixel = pixels[x];
+          switch (pixel.type) {
+            case PixelType::Brush: {
+              break;
+            }
+            case PixelType::Undecided:
+            case PixelType::CopyFromClosestEdge: {
+              const float2 point(pixel.copy_command.destination);
+              float2 closest_edge_point;
+              closest_to_line_v2(closest_edge_point, point, tile_edge.v1.co, tile_edge.v2.co);
+              float distance_to_edge = blender::math::distance_squared(closest_edge_point, point);
+              if (distance_to_edge > pixel.distance) {
+                break;
+              }
+
+              // TODO:
+              //  Find upto 2 valid pixels to copy from.
+              //  Determine the mix factor between the two pixels
+              //  Store result in the pixel.command.
+
+              pixel.distance = distance_to_edge;
+              pixel.type = PixelType::CopyFromClosestEdge;
+
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    void print_debug() const
+    {
+      for (const Elem &pixel : pixels) {
+        printf("%d", pixel.type);
+      }
+      printf("\n");
+    }
+  };
+
+  int2 resolution;
+  int margin;
+  int current_row_;
+  Vector<Row> rows;
+
+  Row &current_row()
+  {
+    return rows[current_row_];
   }
 
-  void print_debug() const
+  Rows(int2 resolution, int margin, const PixelNodesTileData &node_tile_pixels)
+      : resolution(resolution), margin(margin), current_row_(0)
   {
-    for (const Elem &pixel : pixels) {
-      printf("%d", pixel.type);
+    Row row_template(resolution.x);
+    rows.resize(resolution.y, row_template);
+    for (int row_number : rows.index_range()) {
+      rows[row_number].reinit(row_number);
+      rows[row_number].mask_brush_pixels(node_tile_pixels);
     }
-    printf("\n");
+  }
+
+  void advance_to_row(int row_number)
+  {
+    current_row_ = row_number;
   }
 };
 
@@ -230,7 +356,7 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
 {
   PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(pbvh);
   copy_pixels_reinit(pbvh_data.tiles_copy_pixels);
-  NonManifoldUVEdges non_manifold_edges(mesh_data);
+  const NonManifoldUVEdges non_manifold_edges(mesh_data);
   if (non_manifold_edges.is_empty()) {
     printf("Early exit: No non manifold edges detected\n");
     return;
@@ -247,16 +373,20 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     }
     const PixelNodesTileData nodes_tile_pixels(pbvh, image_tile);
 
-    ushort2 tile_resolution(tile_buffer->x, tile_buffer->y);
+    int2 tile_resolution(tile_buffer->x, tile_buffer->y);
     BKE_image_release_ibuf(&image, tile_buffer, nullptr);
 
+    NonManifoldTileEdges tile_edges = non_manifold_edges.extract_tile_edges(image_tile,
+                                                                            tile_resolution);
     PixelCopyTile copy_tile(image_tile.get_tile_number());
-    Row per_pixel_solution(tile_resolution.x);
+
+    Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
 
     for (int y = 0; y < tile_resolution.y; y++) {
-      per_pixel_solution.reinit(y);
-      per_pixel_solution.mask_brush_pixels(nodes_tile_pixels);
-      per_pixel_solution.print_debug();
+      Rows::Row &row = rows.rows[y];
+      row.determine_copy_pixels(tile_edges, image.seam_margin, tile_resolution);
+      row.print_debug();
+      // TODO: pack current_row into copy_tile.
     }
 
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
