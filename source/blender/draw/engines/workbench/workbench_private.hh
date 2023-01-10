@@ -16,12 +16,6 @@ namespace blender::workbench {
 using namespace draw;
 
 class ShaderCache {
- private:
-  /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
-  GPUShader *prepass_shader_cache_[pipeline_type_len][geometry_type_len][shader_type_len]
-                                  [lighting_type_len][2] = {{{{{nullptr}}}}};
-  GPUShader *resolve_shader_cache_[pipeline_type_len][lighting_type_len][2][2] = {{{{nullptr}}}};
-
  public:
   ~ShaderCache();
 
@@ -35,6 +29,13 @@ class ShaderCache {
                                 eLightingType lighting_type,
                                 bool cavity = false,
                                 bool curvature = false);
+
+ private:
+  /* TODO(fclem): We might want to change to a Map since most shader will never be compiled. */
+  GPUShader *prepass_shader_cache_[pipeline_type_len][geometry_type_len][shader_type_len]
+                                  [lighting_type_len][2 /*clip*/] = {{{{{nullptr}}}}};
+  GPUShader *resolve_shader_cache_[pipeline_type_len][lighting_type_len][2 /*cavity*/]
+                                  [2 /*curvature*/] = {{{{nullptr}}}};
 };
 
 struct Material {
@@ -47,9 +48,9 @@ struct Material {
   Material(::Object &ob, bool random = false);
   Material(::Material &mat);
 
-  bool is_transparent();
-
   static uint32_t pack_data(float metallic, float roughness, float alpha);
+
+  bool is_transparent();
 };
 
 void get_material_image(Object *ob,
@@ -114,24 +115,28 @@ struct ObjectState {
 
 class CavityEffect {
  private:
+  /* This value must be kept in sync with the one declared at
+   * workbench_composite_info.hh (cavity_samples) */
+  static const int max_samples_ = 512;
+
+  UniformArrayBuffer<float4, max_samples_> samples_buf;
+
   int sample_;
   int sample_count_;
   bool curvature_enabled_;
   bool cavity_enabled_;
 
-  /* This value must be kept in sync with the one declared at
-   * workbench_composite_info.hh (cavity_samples) */
-  static const int max_samples_ = 512;
-  UniformArrayBuffer<float4, max_samples_> samples_buf;
-
-  void load_samples_buf(int ssao_samples);
-
  public:
   void init(const SceneState &scene_state, struct SceneResources &resources);
   void setup_resolve_pass(PassSimple &pass, struct SceneResources &resources);
+
+ private:
+  void load_samples_buf(int ssao_samples);
 };
 
 struct SceneResources {
+  static const int jitter_tx_size = 64;
+
   ShaderCache shader_cache;
 
   StringRefNull current_matcap;
@@ -146,28 +151,28 @@ struct SceneResources {
   UniformBuffer<WorldData> world_buf;
   UniformArrayBuffer<float4, 6> clip_planes_buf;
 
-  static const int jitter_tx_size = 64;
   Texture jitter_tx = "wb_jitter_tx";
-  void load_jitter_tx(int total_samples);
 
   CavityEffect cavity;
 
   void init(const SceneState &scene_state);
+  void load_jitter_tx(int total_samples);
 };
 
 class MeshPass : public PassMain {
  private:
-  PassMain::Sub *passes_[geometry_type_len][shader_type_len];
-
   using TextureSubPassKey = std::pair<GPUTexture *, eGeometryType>;
+
   Map<TextureSubPassKey, PassMain::Sub *> texture_subpass_map_;
+
+  PassMain::Sub *passes_[geometry_type_len][shader_type_len];
 
   bool is_empty_;
 
  public:
   MeshPass(const char *name);
 
-  /* Move to draw::Pass */
+  /* TODO: Move to draw::Pass */
   bool is_empty() const;
 
   void init_pass(SceneResources &resources, DRWState state, int clip_planes);
@@ -244,10 +249,8 @@ class TransparentDepthPass {
 };
 
 class ShadowPass {
-
-  bool enabled_;
-
-  enum PassType { Pass, Fail, ForcedFail, Length };
+ private:
+  enum PassType { PASS = 0, FAIL, FORCED_FAIL, MAX };
 
   class ShadowView : public View {
     bool force_fail_method_;
@@ -270,6 +273,8 @@ class ShadowPass {
     virtual VisibilityBuf &get_visibility_buffer();
   } view_ = {};
 
+  bool enabled_;
+
   UniformBuffer<ShadowPassData> pass_data_;
 
   /* Draws are added to both passes and the visibily compute shader selects one of them */
@@ -279,9 +284,11 @@ class ShadowPass {
   /* In some cases, we know beforehand that we need to use the fail technique */
   PassMain forced_fail_ps_ = {"Shadow.ForcedFail"};
 
-  PassMain::Sub *passes_[PassType::Length][2][2] = {{{nullptr}}};
+  /* [PassType][Is Manifold][Is Cap] */
+  PassMain::Sub *passes_[PassType::MAX][2][2] = {{{nullptr}}};
   PassMain::Sub *&get_pass_ptr(PassType type, bool manifold, bool cap = false);
 
+  /* [Is Pass Technique][Is Manifold][Is Cap] */
   GPUShader *shaders_[2][2][2] = {{{nullptr}}};
   GPUShader *get_shader(bool depth_pass, bool manifold, bool cap = false);
 
@@ -301,11 +308,12 @@ class ShadowPass {
             SceneResources &resources,
             int2 resolution,
             GPUTexture &depth_stencil_tx,
-            /*Needed when there are opaque "In Front" objects in the scene*/
+            /* Needed when there are opaque "In Front" objects in the scene */
             bool force_fail_method);
 };
 
 class OutlinePass {
+ private:
   bool enabled_;
 
   PassSimple ps_ = PassSimple("Workbench.Outline");
@@ -319,12 +327,13 @@ class OutlinePass {
 };
 
 class DofPass {
+ private:
+  static const int kernel_radius_ = 3;
+  static const int samples_len_ = (kernel_radius_ * 2 + 1) * (kernel_radius_ * 2 + 1);
+
   bool enabled_;
 
   float offset_;
-
-  static const int kernel_radius_ = 3;
-  static const int samples_len_ = (kernel_radius_ * 2 + 1) * (kernel_radius_ * 2 + 1);
 
   UniformArrayBuffer<float4, samples_len_> samples_buf_;
 
@@ -351,13 +360,14 @@ class DofPass {
   float rotation_;
   float ratio_;
 
-  void setup_samples();
-
  public:
   void init(const SceneState &scene_state);
   void sync(SceneResources &resources);
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
   bool is_enabled();
+
+ private:
+  void setup_samples();
 };
 
 class AntiAliasingPass {
