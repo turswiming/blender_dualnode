@@ -539,5 +539,9 @@ void SCULPT_do_paint_brush_image(
   TaskParallelSettings settings_flush;
   BKE_pbvh_parallel_range_settings(&settings_flush, false, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_mark_dirty_regions, &settings_flush);
+
+  /* TODO: should be done at the end of the stroke.*/
+  BKE_pbvh_pixels_copy_pixels(
+      *ob->sculpt->pbvh, *data.image_data.image, *data.image_data.image_user, 1001);
 }
 }

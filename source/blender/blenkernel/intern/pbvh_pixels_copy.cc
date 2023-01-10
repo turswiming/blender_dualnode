@@ -385,7 +385,7 @@ struct Rows {
       return last_command;
     }
 
-    void pack_into(Vector<PixelCopyGroup> groups) const
+    void pack_into(Vector<PixelCopyGroup> &groups) const
     {
       for (const Elem &elem : pixels) {
         if (elem.type == PixelType::CopyFromClosestEdge) {
@@ -490,6 +490,7 @@ void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
   std::optional<std::reference_wrapper<PixelCopyTile>> pixel_tile =
       pbvh_data.tiles_copy_pixels.find_tile(tile_number);
   if (!pixel_tile.has_value()) {
+    printf("%s: found no pixels to copy for tile %d\n", __func__, tile_number);
     return;
   }
 
@@ -497,6 +498,7 @@ void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
   tile_user.tile = tile_number;
   ImBuf *tile_buffer = BKE_image_acquire_ibuf(&image, &tile_user, nullptr);
   if (tile_buffer == nullptr) {
+    printf("%s: found no tile buffer for tile %d\n", __func__, tile_number);
     return;
   }
   pixel_tile->get().copy_pixels(*tile_buffer);
