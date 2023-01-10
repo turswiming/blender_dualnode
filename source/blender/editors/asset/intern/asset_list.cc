@@ -461,7 +461,7 @@ void ED_assetlist_iterate(const AssetLibraryReference &library_reference, AssetL
   }
 }
 
-asset_system::AssetLibrary *ED_assetlist_library_get(
+asset_system::AssetLibrary *ED_assetlist_library_get_once_available(
     const AssetLibraryReference &library_reference)
 {
   const AssetList *list = AssetListStorage::lookup_list(library_reference);

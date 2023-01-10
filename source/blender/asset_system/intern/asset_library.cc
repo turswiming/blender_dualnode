@@ -160,7 +160,7 @@ void AssetLibrary::load_catalogs()
 void AssetLibrary::refresh()
 {
   if (on_refresh_) {
-    on_refresh_();
+    on_refresh_(*this);
   }
 }
 
