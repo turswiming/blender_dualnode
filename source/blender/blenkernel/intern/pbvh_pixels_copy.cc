@@ -398,14 +398,6 @@ struct Rows {
         }
       }
     }
-
-    void print_debug() const
-    {
-      for (const Elem &pixel : pixels) {
-        printf("%d", pixel.type);
-      }
-      printf("\n");
-    }
   };
 
   int2 resolution;
@@ -473,7 +465,6 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     for (int y = 0; y < tile_resolution.y; y++) {
       Rows::Row &row = rows.rows[y];
       // row.determine_copy_pixels(tile_edges, image.seam_margin, tile_resolution);
-      row.print_debug();
       row.pack_into(copy_tile.groups);
     }
 
