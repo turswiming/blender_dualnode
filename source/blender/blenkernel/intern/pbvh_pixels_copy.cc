@@ -307,7 +307,7 @@ struct Rows {
       }
     }
 
-    void solution2(Rows &rows)
+    void solution2(Rows &rows, int margin)
     {
       for (int x : pixels.index_range()) {
         Elem &elem = pixels[x];
@@ -318,7 +318,7 @@ struct Rows {
 
         rcti bounds;
         BLI_rcti_init(&bounds, x, x, row_number, row_number);
-        add_margin(bounds, 8);
+        add_margin(bounds, margin);
         clamp(bounds, rows.resolution);
 
         float found_distance = std::numeric_limits<float>().max();
@@ -415,10 +415,10 @@ struct Rows {
     }
   }
 
-  void find_copy_source()
+  void find_copy_source(int margin)
   {
     for (Row &row : rows) {
-      row.solution2(*this);
+      row.solution2(*this, margin);
     }
   }
 };  // namespace blender::bke::pbvh::pixels
@@ -460,7 +460,7 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     PixelCopyTile copy_tile(image_tile.get_tile_number());
 
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
-    rows.find_copy_source();
+    rows.find_copy_source(image.seam_margin);
 
     for (int y = 0; y < tile_resolution.y; y++) {
       Rows::Row &row = rows.rows[y];
