@@ -1010,7 +1010,7 @@ static void node_group_make_insert_selected(const bContext &C,
     info.link->fromsock = node_group_find_output_socket(gnode, info.interface_socket->identifier);
   }
 
-  ED_node_tree_propagate_change(&C, bmain, &group);
+  ED_node_tree_propagate_change(&C, bmain, nullptr);
 }
 
 static bNode *node_group_make_from_nodes(const bContext &C,
