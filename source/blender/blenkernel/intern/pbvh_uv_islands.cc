@@ -403,7 +403,7 @@ void UVIsland::extend_border(const UVPrimitive &primitive)
   for (const VectorList<UVPrimitive>::UsedVector &primitives : uv_primitives) {
     for (const UVPrimitive &prim : primitives) {
       if (prim.has_shared_edge(primitive)) {
-        append(primitive);
+        this->append(primitive);
       }
     }
   }
