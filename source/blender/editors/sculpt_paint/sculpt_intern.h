@@ -795,6 +795,9 @@ typedef struct ExpandCache {
    * after finishing the operation. */
   bool reposition_pivot;
 
+  /* If nothing is masked set mask of every vertex to 0. */
+  bool auto_mask;
+
   /* Color target data type related data. */
   float fill_color[4];
   short blend_mode;
@@ -1001,7 +1004,7 @@ void SCULPT_active_vertex_normal_get(SculptSession *ss, float normal[3]);
 
 /* Returns PBVH deformed vertices array if shape keys or deform modifiers are used, otherwise
  * returns mesh original vertices array. */
-struct MVert *SCULPT_mesh_deformed_mverts_get(SculptSession *ss);
+float (*SCULPT_mesh_deformed_positions_get(SculptSession *ss))[3];
 
 /* Fake Neighbors */
 

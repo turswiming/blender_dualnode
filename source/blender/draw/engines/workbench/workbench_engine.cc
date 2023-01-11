@@ -19,8 +19,6 @@ namespace blender::workbench {
 
 using namespace draw;
 
-GPUMaterial **get_dummy_gpu_materials(int material_count);
-
 class Instance {
  public:
   SceneState scene_state;
@@ -35,6 +33,17 @@ class Instance {
   OutlinePass outline_ps;
   DofPass dof_ps;
   AntiAliasingPass anti_aliasing_ps;
+
+  /* An array of nullptr GPUMaterial pointers so we can call DRW_cache_object_surface_material_get.
+   * They never get actually used. */
+  Vector<GPUMaterial *> dummy_gpu_materials = {1, nullptr, {}};
+  GPUMaterial **get_dummy_gpu_materials(int material_count)
+  {
+    if (material_count > dummy_gpu_materials.size()) {
+      dummy_gpu_materials.resize(material_count, nullptr);
+    }
+    return dummy_gpu_materials.begin();
+  };
 
   void init(Object *camera_ob = nullptr)
   {
@@ -319,7 +328,6 @@ class Instance {
       resources.object_id_tx.clear(uint4(0));
     }
 
-    // resources.depth_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
     Framebuffer fb = Framebuffer("Workbench.Clear");
     fb.ensure(GPU_ATTACHMENT_TEXTURE(resources.depth_tx));
     fb.bind();
@@ -353,7 +361,6 @@ class Instance {
 
     resources.color_tx.release();
     resources.object_id_tx.release();
-    // resources.depth_tx.release();
     resources.depth_in_front_tx.release();
   }
 
@@ -365,18 +372,6 @@ class Instance {
       DRW_viewport_request_redraw();
     }
   }
-};
-
-/* This returns an array of nullptr GPUMaterial pointers so we can call
- * DRW_cache_object_surface_material_get. They never get actually used.
- */
-GPUMaterial **get_dummy_gpu_materials(int material_count)
-{
-  static Vector<GPUMaterial *> dummy_gpu_materials(1, nullptr, {});
-  if (material_count > dummy_gpu_materials.size()) {
-    dummy_gpu_materials.resize(material_count, nullptr);
-  }
-  return dummy_gpu_materials.begin();
 };
 
 }  // namespace blender::workbench
@@ -526,6 +521,75 @@ static bool workbench_render_framebuffers_init(void)
 #  define GPU_FINISH_DELIMITER()
 #endif
 
+static void write_render_color_output(struct RenderLayer *layer,
+                                      const char *viewname,
+                                      GPUFrameBuffer *fb,
+                                      const struct rcti *rect)
+{
+  RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_COMBINED, viewname);
+  if (rp) {
+    GPU_framebuffer_bind(fb);
+    GPU_framebuffer_read_color(fb,
+                               rect->xmin,
+                               rect->ymin,
+                               BLI_rcti_size_x(rect),
+                               BLI_rcti_size_y(rect),
+                               4,
+                               0,
+                               GPU_DATA_FLOAT,
+                               rp->rect);
+  }
+}
+
+static void write_render_z_output(struct RenderLayer *layer,
+                                  const char *viewname,
+                                  GPUFrameBuffer *fb,
+                                  const struct rcti *rect,
+                                  float4x4 winmat)
+{
+  RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_Z, viewname);
+  if (rp) {
+    GPU_framebuffer_bind(fb);
+    GPU_framebuffer_read_depth(fb,
+                               rect->xmin,
+                               rect->ymin,
+                               BLI_rcti_size_x(rect),
+                               BLI_rcti_size_y(rect),
+                               GPU_DATA_FLOAT,
+                               rp->rect);
+
+    int pix_num = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
+
+    /* Convert ogl depth [0..1] to view Z [near..far] */
+    if (DRW_view_is_persp_get(nullptr)) {
+      for (float &z : MutableSpan(rp->rect, pix_num)) {
+        if (z == 1.0f) {
+          z = 1e10f; /* Background */
+        }
+        else {
+          z = z * 2.0f - 1.0f;
+          z = winmat[3][2] / (z + winmat[2][2]);
+        }
+      }
+    }
+    else {
+      /* Keep in mind, near and far distance are negatives. */
+      float near = DRW_view_near_distance_get(nullptr);
+      float far = DRW_view_far_distance_get(nullptr);
+      float range = fabsf(far - near);
+
+      for (float &z : MutableSpan(rp->rect, pix_num)) {
+        if (z == 1.0f) {
+          z = 1e10f; /* Background */
+        }
+        else {
+          z = z * range - near;
+        }
+      }
+    }
+  }
+}
+
 static void workbench_render_to_image(void *vedata,
                                       struct RenderEngine *engine,
                                       struct RenderLayer *layer,
@@ -580,8 +644,8 @@ static void workbench_render_to_image(void *vedata,
     workbench_cache_init(vedata);
     auto workbench_render_cache = [](void *vedata,
                                      struct Object *ob,
-                                     struct RenderEngine *UNUSED(engine),
-                                     struct Depsgraph *UNUSED(depsgraph)) {
+                                     struct RenderEngine * /*engine*/,
+                                     struct Depsgraph * /*depsgraph*/) {
       workbench_cache_populate(vedata, ob);
     };
     DRW_render_object_iter(vedata, engine, depsgraph, workbench_render_cache);
@@ -602,66 +666,8 @@ static void workbench_render_to_image(void *vedata,
   } while (ved->instance->scene_state.sample + 1 < ved->instance->scene_state.samples_len);
 
   const char *viewname = RE_GetActiveRenderView(engine->re);
-  /* Write render output. */
-  {
-    RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_COMBINED, viewname);
-    if (rp) {
-      GPU_framebuffer_bind(dfbl->default_fb);
-      GPU_framebuffer_read_color(dfbl->default_fb,
-                                 rect->xmin,
-                                 rect->ymin,
-                                 BLI_rcti_size_x(rect),
-                                 BLI_rcti_size_y(rect),
-                                 4,
-                                 0,
-                                 GPU_DATA_FLOAT,
-                                 rp->rect);
-    }
-  }
-  /* Write render Z output */
-  {
-    RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_Z, viewname);
-    if (rp) {
-      GPU_framebuffer_bind(dfbl->default_fb);
-      GPU_framebuffer_read_depth(dfbl->default_fb,
-                                 rect->xmin,
-                                 rect->ymin,
-                                 BLI_rcti_size_x(rect),
-                                 BLI_rcti_size_y(rect),
-                                 GPU_DATA_FLOAT,
-                                 rp->rect);
-
-      int pix_num = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
-
-      /* Convert ogl depth [0..1] to view Z [near..far] */
-      if (DRW_view_is_persp_get(nullptr)) {
-        for (float &z : MutableSpan(rp->rect, pix_num)) {
-          if (z == 1.0f) {
-            z = 1e10f; /* Background */
-          }
-          else {
-            z = z * 2.0f - 1.0f;
-            z = winmat[3][2] / (z + winmat[2][2]);
-          }
-        }
-      }
-      else {
-        /* Keep in mind, near and far distance are negatives. */
-        float near = DRW_view_near_distance_get(nullptr);
-        float far = DRW_view_far_distance_get(nullptr);
-        float range = fabsf(far - near);
-
-        for (float &z : MutableSpan(rp->rect, pix_num)) {
-          if (z == 1.0f) {
-            z = 1e10f; /* Background */
-          }
-          else {
-            z = z * range - near;
-          }
-        }
-      }
-    }
-  }
+  write_render_color_output(layer, viewname, dfbl->default_fb, rect);
+  write_render_z_output(layer, viewname, dfbl->default_fb, rect, winmat);
 }
 
 static void workbench_render_update_passes(RenderEngine *engine,

@@ -75,13 +75,13 @@ void DofPass::setup_samples()
         /* Bokeh shape parameterization. */
         if (blades_ > 1.0f) {
           float denom = T - (2.0 * M_PI / blades_) * floorf((blades_ * T + M_PI) / (2.0 * M_PI));
-          r *= cosf(M_PI / blades_) / cosf(denom);
+          r *= math::cos(M_PI / blades_) / math::cos(denom);
         }
 
         T += rotation_;
 
-        sample->x = r * cosf(T) * ratio_;
-        sample->y = r * sinf(T);
+        sample->x = r * math::cos(T) * ratio_;
+        sample->y = r * math::sin(T);
         sample->w = 0;
         sample++;
       }
@@ -108,7 +108,7 @@ void DofPass::init(const SceneState &scene_state)
     resolve_sh_ = GPU_shader_create_from_info_name("workbench_effect_dof_resolve");
   }
 
-  offset_ = scene_state.sample / (float)scene_state.samples_len;
+  offset_ = scene_state.sample / float(scene_state.samples_len);
 
   int2 half_res = scene_state.resolution / 2;
   half_res = {max_ii(half_res.x, 1), max_ii(half_res.y, 1)};
@@ -128,7 +128,7 @@ void DofPass::init(const SceneState &scene_state)
   float focus_dist = BKE_camera_object_dof_distance(scene_state.camera_object);
   float focal_len = camera->lens;
 
-  /* TODO(fclem): de-duplicate with EEVEE. */
+  /* TODO(fclem): De-duplicate with EEVEE. */
   const float scale_camera = 0.001f;
   /* We want radius here for the aperture number. */
   float aperture = 0.5f * scale_camera * focal_len / fstop;
@@ -237,7 +237,7 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
   };
   CallbackData callback_data = {manager, view, down2_ps_};
 
-  auto downsample_level = [](void *callback_data, int UNUSED(level)) {
+  auto downsample_level = [](void *callback_data, int /*level*/) {
     CallbackData *cd = static_cast<CallbackData *>(callback_data);
     cd->manager.submit(cd->pass, cd->view);
   };

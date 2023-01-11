@@ -4,6 +4,10 @@
 
 namespace blender::workbench {
 
+/* -------------------------------------------------------------------- */
+/** \name MeshPass
+ * \{ */
+
 MeshPass::MeshPass(const char *name) : PassMain(name){};
 
 /* Move to draw::Pass */
@@ -98,6 +102,12 @@ void MeshPass::draw(ObjectRef &ref,
   passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)]->draw(batch,
                                                                                           handle);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name OpaquePass
+ * \{ */
 
 void OpaquePass::sync(const SceneState &scene_state, SceneResources &resources)
 {
@@ -226,6 +236,12 @@ bool OpaquePass::is_empty() const
   return gbuffer_ps_.is_empty() && gbuffer_in_front_ps_.is_empty();
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name TransparentPass
+ * \{ */
+
 void TransparentPass::sync(const SceneState &scene_state, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_OIT |
@@ -296,6 +312,12 @@ bool TransparentPass::is_empty() const
 {
   return accumulation_ps_.is_empty() && accumulation_in_front_ps_.is_empty();
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name TransparentDepthPass
+ * \{ */
 
 void TransparentDepthPass::sync(const SceneState &scene_state, SceneResources &resources)
 {
@@ -369,5 +391,7 @@ bool TransparentDepthPass::is_empty() const
 {
   return main_ps_.is_empty() && in_front_ps_.is_empty();
 }
+
+/** \} */
 
 }  // namespace blender::workbench

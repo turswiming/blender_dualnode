@@ -51,6 +51,10 @@ static void update_link_vector(const bNodeTree &ntree)
   bNodeTreeRuntime &tree_runtime = *ntree.runtime;
   tree_runtime.links.clear();
   LISTBASE_FOREACH (bNodeLink *, link, &ntree.links) {
+    /* Check that the link connects nodes within this tree. */
+    BLI_assert(tree_runtime.nodes_by_id.contains(link->fromnode));
+    BLI_assert(tree_runtime.nodes_by_id.contains(link->tonode));
+
     tree_runtime.links.append(link);
   }
 }
@@ -91,8 +95,8 @@ static void update_internal_link_inputs(const bNodeTree &ntree)
     for (bNodeSocket *socket : node->runtime->outputs) {
       socket->runtime->internal_link_input = nullptr;
     }
-    for (bNodeLink *link : node->runtime->internal_links) {
-      link->tosock->runtime->internal_link_input = link->fromsock;
+    for (bNodeLink &link : node->runtime->internal_links) {
+      link.tosock->runtime->internal_link_input = link.fromsock;
     }
   }
 }

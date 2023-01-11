@@ -14,4 +14,5 @@ GPU_SHADER_CREATE_INFO(workbench_next_merge_depth)
     .sampler(0, ImageType::DEPTH_2D, "depth_tx")
     .fragment_source("workbench_next_merge_depth_frag.glsl")
     .additional_info("draw_fullscreen")
+    .depth_write(DepthWrite::ANY)
     .do_static_compilation(true);

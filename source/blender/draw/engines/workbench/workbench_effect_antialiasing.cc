@@ -8,12 +8,12 @@
 namespace blender::workbench {
 
 class TaaSamples {
-  void init_samples(blender::Array<float2> &samples, const int size)
+  void init_samples(Array<float2> &samples, const int size)
   {
-    samples = blender::Array<float2>(size);
+    samples = Array<float2>(size);
     BLI_jitter_init((float(*)[2])samples.begin(), size);
 
-    /* find closest element to center */
+    /* Find closest element to center */
     int closest_index = 0;
     float closest_squared_distance = 1.0f;
 
@@ -29,7 +29,7 @@ class TaaSamples {
     float2 closest_sample = samples[closest_index];
 
     for (float2 &sample : samples) {
-      /* move jitter samples so that closest sample is in center */
+      /* Move jitter samples so that closest sample is in center */
       sample -= closest_sample;
       /* Avoid samples outside range (wrap around). */
       sample = {fmodf(sample.x + 0.5f, 1.0f), fmodf(sample.y + 0.5f, 1.0f)};
@@ -37,9 +37,9 @@ class TaaSamples {
       sample = (sample * 2.0f) - 1.0f;
     }
 
-    /* swap center sample to the start of the array */
+    /* Swap center sample to the start of the array */
     if (closest_index != 0) {
-      swap_v2_v2(samples[0], samples[closest_index]);
+      std::swap(samples[0], samples[closest_index]);
     }
 
     /* Sort list based on farthest distance with previous. */
@@ -53,16 +53,16 @@ class TaaSamples {
           index = j;
         }
       }
-      swap_v2_v2(samples[i + 1], samples[index]);
+      std::swap(samples[i + 1], samples[index]);
     }
   }
 
  public:
-  blender::Array<float2> x5;
-  blender::Array<float2> x8;
-  blender::Array<float2> x11;
-  blender::Array<float2> x16;
-  blender::Array<float2> x32;
+  Array<float2> x5;
+  Array<float2> x8;
+  Array<float2> x11;
+  Array<float2> x16;
+  Array<float2> x32;
 
   TaaSamples()
   {
@@ -82,7 +82,8 @@ static float filter_blackman_harris(float x, const float width)
     return 0.0f;
   }
   x = 2.0f * M_PI * clamp_f((x / width + 0.5f), 0.0f, 1.0f);
-  return 0.35875f - 0.48829f * cosf(x) + 0.14128f * cosf(2.0f * x) - 0.01168f * cosf(3.0f * x);
+  return 0.35875f - 0.48829f * math::cos(x) + 0.14128f * math::cos(2.0f * x) -
+         0.01168f * math::cos(3.0f * x);
 }
 
 /* Compute weights for the 3x3 neighborhood using a 1.5px filter. */
@@ -96,7 +97,7 @@ static void setup_taa_weights(const float2 offset, float r_weights[9], float &r_
     for (int y = -1; y <= 1; y++, i++) {
       float2 sample_co = float2(x, y) - offset;
       float r = len_v2(sample_co);
-      /* fclem: is radial distance ok here? */
+      /* fclem: Is radial distance ok here? */
       float weight = filter_blackman_harris(r, filter_width);
       r_weight_sum += weight;
       r_weights[i] = weight;
@@ -215,7 +216,7 @@ void AntiAliasingPass::setup_view(View &view, int2 resolution)
   /* TODO(Miguel Pozo): New API equivalent? */
   const DRWView *default_view = DRW_view_default_get();
   float4x4 winmat, viewmat, persmat;
-  /* construct new matrices from transform delta */
+  /* Construct new matrices from transform delta */
   DRW_view_winmat_get(default_view, winmat.ptr(), false);
   DRW_view_viewmat_get(default_view, viewmat.ptr(), false);
   DRW_view_persmat_get(default_view, persmat.ptr(), false);
@@ -234,7 +235,9 @@ void AntiAliasingPass::draw(Manager &manager,
                             GPUTexture *color_tx)
 {
   if (!enabled_) {
-    /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place */
+    /* TODO(Miguel Pozo): Should render to the input color_tx and depth_tx in the first place.
+     * This requires the use of TextureRefs with stencil_view() support,
+     * but whether TextureRef will stay is still TBD. */
     GPU_texture_copy(color_tx, resources.color_tx);
     GPU_texture_copy(depth_tx, resources.depth_tx);
     return;
@@ -263,7 +266,10 @@ void AntiAliasingPass::draw(Manager &manager,
     if (sample0_depth_tx_.is_valid()) {
       GPU_texture_copy(sample0_depth_tx_, resources.depth_tx);
     }
-    /* TODO(Miguel Pozo): Should render to the input depth_tx in the first place */
+    /* TODO(Miguel Pozo): Should render to the input depth_tx in the first place
+     * This requires the use of TextureRef with stencil_view() support,
+     * but whether TextureRef will stay is still TBD. */
+
     /* Copy back the saved depth buffer for correct overlays. */
     GPU_texture_copy(depth_tx, resources.depth_tx);
   }

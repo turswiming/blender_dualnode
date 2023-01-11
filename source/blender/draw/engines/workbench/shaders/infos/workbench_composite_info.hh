@@ -58,7 +58,7 @@ GPU_SHADER_CREATE_INFO(workbench_next_composite)
     .fragment_source("workbench_next_composite_frag.glsl")
     .additional_info("draw_fullscreen", "draw_view");
 
-// Lighting
+/* Lighting */
 
 GPU_SHADER_CREATE_INFO(workbench_next_resolve_opaque_studio).define("WORKBENCH_LIGHTING_STUDIO");
 
@@ -68,7 +68,7 @@ GPU_SHADER_CREATE_INFO(workbench_next_resolve_opaque_matcap)
 
 GPU_SHADER_CREATE_INFO(workbench_next_resolve_opaque_flat).define("WORKBENCH_LIGHTING_FLAT");
 
-// Effects
+/* Effects */
 
 GPU_SHADER_CREATE_INFO(workbench_next_resolve_curvature)
     .define("WORKBENCH_CURVATURE")
@@ -78,9 +78,9 @@ GPU_SHADER_CREATE_INFO(workbench_next_resolve_cavity)
     .define("WORKBENCH_CAVITY")
     .sampler(8, ImageType::FLOAT_2D, "jitter_tx") /* TODO(Miguel Pozo): GPU_SAMPLER_REPEAT is set
                                                      in CavityEffect, it doesn't work here ? */
-    .uniform_buf(5, "float4", "cavity_samples[512]");
+    .uniform_buf(5, "vec4", "cavity_samples[512]");
 
-// Variations
+/* Variations */
 
 #define WORKBENCH_FINAL_VARIATION(name, ...) \
   GPU_SHADER_CREATE_INFO(name).additional_info(__VA_ARGS__).do_static_compilation(true);
