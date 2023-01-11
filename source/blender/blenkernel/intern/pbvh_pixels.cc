@@ -357,7 +357,7 @@ static void update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
     return;
   }
 
-  const StringRef active_uv_name = CustomData_get_active_layer_name(&mesh->ldata, CD_MLOOPUV);
+  const StringRef active_uv_name = CustomData_get_active_layer_name(&mesh->ldata, CD_PROP_FLOAT2);
   if (active_uv_name.is_empty()) {
     return;
   }
