@@ -151,17 +151,7 @@ inline void ObjectBounds::sync()
 
 inline void ObjectBounds::sync(Object &ob)
 {
-  /* WORKAROUND (Experimental):
-   * Store the last retrieved bbox so each object instance doesn't have to malloc a new one */
-  static const BoundBox *bbox_cache = nullptr;
-  static const void *object_data_cache = nullptr;
-
-  if (ob.data != object_data_cache) {
-    // object_data_cache = ob.data;
-    bbox_cache = BKE_object_boundbox_get(&ob);
-  }
-
-  const BoundBox *bbox = bbox_cache;
+  const BoundBox *bbox = BKE_object_boundbox_get(&ob);
   if (bbox == nullptr) {
     bounding_sphere.w = -1.0f; /* Disable test. */
     return;
