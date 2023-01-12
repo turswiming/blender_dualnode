@@ -224,34 +224,29 @@ struct Rows {
       Undecided,
       /** This pixel is directly affected by a brush and doesn't need to be solved. */
       Brush,
+      Selected,
       /** This pixel will be copid from another pixel to solve non-manifold edge bleeding. */
       CopyFromClosestEdge,
-      Selected,
     };
 
-    struct Elem {
+    struct Pixel {
       PixelType type = PixelType::Undecided;
-      /**
-       * Distance to the closest edge that can be sourced to fix an edge bleed.
-       * A distance of 0.0 means that the pixel is being drawn on directly and
-       * doesn't need to be checked.
-       */
       float distance = std::numeric_limits<float>::max();
       PixelCopyCommand copy_command;
 
-      Elem() = default;
+      Pixel() = default;
 
-      Elem(int2 co)
+      Pixel(int2 coordinate)
       {
-        copy_command.destination = co;
-        copy_command.source_1 = co;
-        copy_command.source_2 = co;
+        copy_command.destination = coordinate;
+        copy_command.source_1 = coordinate;
+        copy_command.source_2 = coordinate;
         copy_command.mix_factor = 0.0f;
       }
     };
 
     int row_number = 0;
-    Array<Elem> pixels;
+    Array<Pixel> pixels;
     Row() = delete;
     Row(int64_t width) : pixels(width)
     {
@@ -261,7 +256,7 @@ struct Rows {
     {
       row_number = y;
       for (int x = 0; x < pixels.size(); x++) {
-        pixels[x] = Elem(int2(x, y));
+        pixels[x] = Pixel(int2(x, y));
       }
     }
 
@@ -297,7 +292,7 @@ struct Rows {
         }
 
         for (const int x : IndexRange(edge_bounds.xmin, BLI_rcti_size_x(&edge_bounds))) {
-          Elem &pixel = pixels[x];
+          Pixel &pixel = pixels[x];
           if (pixel.type != PixelType::Undecided) {
             continue;
           }
@@ -308,7 +303,7 @@ struct Rows {
                                      point,
                                      tile_edge.vertex_1.coordinate,
                                      tile_edge.vertex_2.coordinate);
-          float distance_to_edge = blender::math::distance_squared(closest_edge_point, point);
+          float distance_to_edge = blender::math::distance(closest_edge_point, point);
           if (distance_to_edge < rows.margin) {
             pixel.type = PixelType::Selected;
           }
@@ -357,7 +352,7 @@ struct Rows {
     void find_copy_source(Rows &rows)
     {
       for (int x : pixels.index_range()) {
-        Elem &elem = pixels[x];
+        Pixel &elem = pixels[x];
         /* Skip pixels that are not selected for evaluation. */
         if (elem.type != PixelType::Selected) {
           continue;
@@ -374,7 +369,7 @@ struct Rows {
         for (int sy : IndexRange(bounds.ymin, BLI_rcti_size_y(&bounds))) {
           Row &row = rows.rows[sy];
           for (int sx : IndexRange(bounds.xmin, BLI_rcti_size_x(&bounds))) {
-            Elem &source = row.pixels[sx];
+            Pixel &source = row.pixels[sx];
             if (source.type != PixelType::Brush) {
               continue;
             }
@@ -435,7 +430,7 @@ struct Rows {
 
     void pack_into(Vector<PixelCopyGroup> &groups) const
     {
-      for (const Elem &elem : pixels) {
+      for (const Pixel &elem : pixels) {
         if (elem.type == PixelType::CopyFromClosestEdge) {
           if (groups.is_empty() || !can_be_extended_with(groups.last(), elem.copy_command)) {
             PixelCopyGroup new_group = {
@@ -449,7 +444,7 @@ struct Rows {
 
     void print_debug() const
     {
-      for (const Elem &elem : pixels) {
+      for (const Pixel &elem : pixels) {
         printf("%d", elem.type);
       }
       printf("\n");
