@@ -18,31 +18,46 @@
 #include "pbvh_pixels_copy.hh"
 #include "pbvh_uv_islands.hh"
 
+#include "PIL_time_utildefines.h"
+
 namespace blender::bke::pbvh::pixels {
 
+/** Coordinate space of a coordinate. */
 enum class CoordSpace {
+  /**
+   * Coordinate is in UV coordinate space. As in unmodified from mesh data.
+   */
   UV,
+
+  /**
+   * Coordinate is in Tile coordinate space.
+   *
+   * With tile coordinate space each unit is a single pixel of the tile.
+   * Range is [0..buffer width].
+   */
   Tile,
 };
 
 template<CoordSpace Space> struct Vertex {
-  float2 co;
+  float2 coordinate;
 };
 
 template<CoordSpace Space> struct Edge {
-  Vertex<Space> v1;
-  Vertex<Space> v2;
+  Vertex<Space> vertex_1;
+  Vertex<Space> vertex_2;
 };
 
+/** Calculate the bounds of the given edge. */
 rcti get_bounds(const Edge<CoordSpace::Tile> &tile_edge)
 {
   rcti bounds;
   BLI_rcti_init_minmax(&bounds);
-  BLI_rcti_do_minmax_v(&bounds, int2(tile_edge.v1.co));
-  BLI_rcti_do_minmax_v(&bounds, int2(tile_edge.v2.co));
+  BLI_rcti_do_minmax_v(&bounds, int2(tile_edge.vertex_1.coordinate));
+  BLI_rcti_do_minmax_v(&bounds, int2(tile_edge.vertex_2.coordinate));
   return bounds;
 }
 
+/** Add a margin to the given bounds. */
 void add_margin(rcti &bounds, int margin)
 {
   bounds.xmin -= margin;
@@ -51,6 +66,7 @@ void add_margin(rcti &bounds, int margin)
   bounds.ymax += margin;
 }
 
+/** Clamp bounds to be between 0,0 and the given resolution. */
 void clamp(rcti &bounds, int2 resolution)
 {
   rcti clamping_bounds;
@@ -63,7 +79,7 @@ const Vertex<CoordSpace::Tile> convert_coord_space(const Vertex<CoordSpace::UV> 
                                                    const image::ImageTileWrapper image_tile,
                                                    const int2 tile_resolution)
 {
-  return Vertex<CoordSpace::Tile>{(uv_vertex.co - float2(image_tile.get_tile_offset())) *
+  return Vertex<CoordSpace::Tile>{(uv_vertex.coordinate - float2(image_tile.get_tile_offset())) *
                                   float2(tile_resolution)};
 }
 
@@ -72,8 +88,8 @@ const Edge<CoordSpace::Tile> convert_coord_space(const Edge<CoordSpace::UV> &uv_
                                                  const int2 tile_resolution)
 {
   return Edge<CoordSpace::Tile>{
-      convert_coord_space(uv_edge.v1, image_tile, tile_resolution),
-      convert_coord_space(uv_edge.v2, image_tile, tile_resolution),
+      convert_coord_space(uv_edge.vertex_1, image_tile, tile_resolution),
+      convert_coord_space(uv_edge.vertex_2, image_tile, tile_resolution),
   };
 }
 
@@ -83,19 +99,24 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
  public:
   NonManifoldUVEdges(const uv_islands::MeshData &mesh_data)
   {
-    reserve(count_non_manifold_edges(mesh_data));
+    int num_non_manifold_edges = count_non_manifold_edges(mesh_data);
+    reserve(num_non_manifold_edges);
     for (const int primitive_id : mesh_data.looptris.index_range()) {
       for (const int edge_id : mesh_data.primitive_to_edge_map[primitive_id]) {
         if (is_manifold(mesh_data, edge_id)) {
           continue;
         }
+        const MLoopTri &loop_tri = mesh_data.looptris[primitive_id];
         const uv_islands::MeshEdge &mesh_edge = mesh_data.edges[edge_id];
         Edge<CoordSpace::UV> edge;
-        edge.v1.co = mesh_data.uv_map[mesh_edge.vert1];
-        edge.v2.co = mesh_data.uv_map[mesh_edge.vert2];
+
+        edge.vertex_1.coordinate = find_uv(mesh_data, loop_tri, mesh_edge.vert1);
+        edge.vertex_2.coordinate = find_uv(mesh_data, loop_tri, mesh_edge.vert2);
         append(edge);
       }
     }
+    BLI_assert_msg(size() == num_non_manifold_edges,
+                   "Incorrect number of non manifold edges added. ");
   }
 
   NonManifoldTileEdges extract_tile_edges(const image::ImageTileWrapper image_tile,
@@ -131,6 +152,21 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
   static bool is_manifold(const uv_islands::MeshData &mesh_data, const int edge_id)
   {
     return mesh_data.edge_to_primitive_map[edge_id].size() == 2;
+  }
+
+  static float2 find_uv(const uv_islands::MeshData &mesh_data,
+                        const MLoopTri &loop_tri,
+                        int vertex_i)
+  {
+    for (int i = 0; i < 3; i++) {
+      int loop_i = loop_tri.tri[i];
+      const MLoop &loop = mesh_data.loops[loop_i];
+      if (loop.v == vertex_i) {
+        return mesh_data.uv_map[loop_i];
+      }
+    }
+    BLI_assert_unreachable();
+    return float2(0.0f);
   }
 };
 
@@ -260,30 +296,21 @@ struct Rows {
           continue;
         }
 
-        for (const int x : IndexRange(edge_bounds.xmin, edge_bounds.xmax - edge_bounds.xmin)) {
+        for (const int x : IndexRange(edge_bounds.xmin, BLI_rcti_size_x(&edge_bounds))) {
           Elem &pixel = pixels[x];
-          switch (pixel.type) {
-            case PixelType::Brush: {
-              break;
-            }
-            case PixelType::CopyFromClosestEdge: {
-              BLI_assert_unreachable();
-              break;
-            }
-            case PixelType::Selected: {
-              break;
-            }
-            case PixelType::Undecided: {
-              const float2 point(pixel.copy_command.destination);
-              float2 closest_edge_point;
-              closest_to_line_v2(closest_edge_point, point, tile_edge.v1.co, tile_edge.v2.co);
-              float distance_to_edge = blender::math::distance_squared(closest_edge_point, point);
-              if (distance_to_edge > rows.margin) {
-                break;
-              }
-              pixel.type = PixelType::Selected;
-              break;
-            }
+          if (pixel.type != PixelType::Undecided) {
+            continue;
+          }
+
+          const float2 point(pixel.copy_command.destination);
+          float2 closest_edge_point;
+          closest_to_line_segment_v2(closest_edge_point,
+                                     point,
+                                     tile_edge.vertex_1.coordinate,
+                                     tile_edge.vertex_2.coordinate);
+          float distance_to_edge = blender::math::distance_squared(closest_edge_point, point);
+          if (distance_to_edge < rows.margin) {
+            pixel.type = PixelType::Selected;
           }
         }
       }
@@ -327,7 +354,7 @@ struct Rows {
       return dist_to_line_segment_v2(float2(destination), float2(source_1), float2(source_2));
     }
 
-    void find_copy_source(Rows &rows, int margin)
+    void find_copy_source(Rows &rows)
     {
       for (int x : pixels.index_range()) {
         Elem &elem = pixels[x];
@@ -338,7 +365,7 @@ struct Rows {
 
         rcti bounds;
         BLI_rcti_init(&bounds, x, x, row_number, row_number);
-        add_margin(bounds, margin);
+        add_margin(bounds, rows.margin);
         clamp(bounds, rows.resolution);
 
         float found_distance = std::numeric_limits<float>().max();
@@ -419,6 +446,14 @@ struct Rows {
         }
       }
     }
+
+    void print_debug() const
+    {
+      for (const Elem &elem : pixels) {
+        printf("%d", elem.type);
+      }
+      printf("\n");
+    }
   };
 
   int2 resolution;
@@ -436,10 +471,10 @@ struct Rows {
     }
   }
 
-  void find_copy_source(int margin)
+  void find_copy_source()
   {
     for (Row &row : rows) {
-      row.find_copy_source(*this, margin);
+      row.find_copy_source(*this);
     }
   }
 
@@ -457,6 +492,14 @@ struct Rows {
     }
   }
 
+  void print_debug() const
+  {
+    for (const Row &row : rows) {
+      row.print_debug();
+    }
+    printf("\n");
+  }
+
 };  // namespace blender::bke::pbvh::pixels
 
 static void copy_pixels_reinit(PixelCopyTiles &tiles)
@@ -469,11 +512,12 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
                                  ImageUser &image_user,
                                  const uv_islands::MeshData &mesh_data)
 {
+  TIMEIT_START(pbvh_pixels_copy_update);
   PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(pbvh);
   copy_pixels_reinit(pbvh_data.tiles_copy_pixels);
   const NonManifoldUVEdges non_manifold_edges(mesh_data);
   if (non_manifold_edges.is_empty()) {
-    printf("Early exit: No non manifold edges detected\n");
+    /* Early exit: No non manifold edges detected. */
     return;
   }
 
@@ -497,10 +541,11 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
 
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
     rows.mark_for_evaluation(tile_edges);
-    rows.find_copy_source(image.seam_margin);
+    rows.find_copy_source();
     rows.pack_into(copy_tile.groups);
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
   }
+  TIMEIT_END(pbvh_pixels_copy_update);
 }
 
 void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
@@ -508,11 +553,12 @@ void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
                                  ImageUser &image_user,
                                  image::TileNumber tile_number)
 {
+  // TIMEIT_START(pbvh_pixels_copy_pixels);
   PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(pbvh);
   std::optional<std::reference_wrapper<PixelCopyTile>> pixel_tile =
       pbvh_data.tiles_copy_pixels.find_tile(tile_number);
   if (!pixel_tile.has_value()) {
-    printf("%s: found no pixels to copy for tile %d\n", __func__, tile_number);
+    /* No pixels need to be copied. */
     return;
   }
 
@@ -520,12 +566,13 @@ void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
   tile_user.tile = tile_number;
   ImBuf *tile_buffer = BKE_image_acquire_ibuf(&image, &tile_user, nullptr);
   if (tile_buffer == nullptr) {
-    printf("%s: found no tile buffer for tile %d\n", __func__, tile_number);
+    /* No tile buffer found to copy. */
     return;
   }
   pixel_tile->get().copy_pixels(*tile_buffer);
 
   BKE_image_release_ibuf(&image, tile_buffer, nullptr);
+  // TIMEIT_END(pbvh_pixels_copy_pixels);
 }
 
 }  // namespace blender::bke::pbvh::pixels
