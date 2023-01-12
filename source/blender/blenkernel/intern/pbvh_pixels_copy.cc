@@ -323,8 +323,8 @@ struct Rows {
        * first_source. */
       int2 found_source = first_source;
       float found_distance = std::numeric_limits<float>().max();
-      for (int sy : IndexRange(search_bounds.ymin, BLI_rcti_size_y(&search_bounds))) {
-        for (int sx : IndexRange(search_bounds.xmin, BLI_rcti_size_x(&search_bounds))) {
+      for (int sy : IndexRange(search_bounds.ymin, BLI_rcti_size_y(&search_bounds) + 1)) {
+        for (int sx : IndexRange(search_bounds.xmin, BLI_rcti_size_x(&search_bounds) + 1)) {
           int2 source(sx, sy);
           /* Skip first source as it should be the closest and already selected. */
           if (source == first_source) {
@@ -334,7 +334,7 @@ struct Rows {
             continue;
           }
 
-          float new_distance = blender::math::distance(destination, source);
+          float new_distance = blender::math::distance(float2(destination), float2(source));
           if (new_distance < found_distance) {
             found_distance = new_distance;
             found_source = source;
@@ -346,6 +346,9 @@ struct Rows {
 
     float determine_mix_factor(int2 destination, int2 source_1, int2 source_2)
     {
+      if (source_1 == source_2) {
+        return 0.0f;
+      }
       return dist_to_line_segment_v2(float2(destination), float2(source_1), float2(source_2));
     }
 
@@ -413,10 +416,8 @@ struct Rows {
     static void extend_with(PixelCopyGroup &group, const PixelCopyCommand &command)
     {
       PixelCopyCommand last_command = last_copy_command(group);
-      PixelCopyItem new_item = {char2(command.source_1 - last_command.source_1),
-                                char2(command.source_2 - command.source_1),
-                                uint8_t(command.mix_factor * 255)};
-      group.items.append(new_item);
+      PixelCopyItem delta_command = last_command.encode_delta(command);
+      group.items.append(delta_command);
     }
 
     static PixelCopyCommand last_copy_command(const PixelCopyGroup &group)

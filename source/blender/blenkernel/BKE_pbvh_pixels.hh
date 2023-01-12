@@ -268,6 +268,11 @@ struct PixelCopyItem {
   char2 delta_source_1;
   char2 delta_source_2;
   uint8_t mix_factor;
+
+  PixelCopyItem(char2 delta_source_1, char2 delta_source_2, uint8_t mix_factor)
+      : delta_source_1(delta_source_1), delta_source_2(delta_source_2), mix_factor(mix_factor)
+  {
+  }
 };
 
 struct PixelCopyGroup {
@@ -312,6 +317,13 @@ struct PixelCopyCommand {
     source_2 = source_1 + int2(item.delta_source_2);
     mix_factor = float(item.mix_factor) / 255.0f;
   }
+
+  PixelCopyItem encode_delta(const PixelCopyCommand &next_command) const
+  {
+    return PixelCopyItem(char2(next_command.source_1 - source_1),
+                         char2(next_command.source_2 - next_command.source_1),
+                         uint8_t(next_command.mix_factor * 255));
+  }
 };
 
 struct PixelCopyTile {
@@ -341,6 +353,13 @@ struct PixelCopyTile {
       PixelCopyCommand copy_command(group);
       for (const PixelCopyItem &item : group.items) {
         copy_command.apply(item);
+        /*
+        printf("| %d,%d | %d,%d | %d,%d | %f |\n",
+               UNPACK2(copy_command.destination),
+               UNPACK2(copy_command.source_1),
+               UNPACK2(copy_command.source_2),
+               copy_command.mix_factor);
+               */
         copy_command.mix_source_and_write_destination<T>(image_buffer);
       }
     }
