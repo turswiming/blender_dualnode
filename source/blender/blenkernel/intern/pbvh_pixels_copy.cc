@@ -84,16 +84,15 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
   NonManifoldUVEdges(const uv_islands::MeshData &mesh_data)
   {
     reserve(count_non_manifold_edges(mesh_data));
-
-    for (const uv_islands::MeshPrimitive &mesh_primitive : mesh_data.primitives) {
-      for (int i = 0; i < 3; i++) {
-        const uv_islands::MeshEdge &mesh_edge = *mesh_primitive.edges[i];
-        if (is_manifold(mesh_edge)) {
+    for (const int primitive_id : mesh_data.looptris.index_range()) {
+      for (const int edge_id : mesh_data.primitive_to_edge_map[primitive_id]) {
+        if (is_manifold(mesh_data, edge_id)) {
           continue;
         }
+        const uv_islands::MeshEdge &mesh_edge = mesh_data.edges[edge_id];
         Edge<CoordSpace::UV> edge;
-        edge.v1.co = find_uv_vert(mesh_primitive, mesh_edge.vert1).uv;
-        edge.v2.co = find_uv_vert(mesh_primitive, mesh_edge.vert2).uv;
+        edge.v1.co = mesh_data.uv_map[mesh_edge.vert1];
+        edge.v2.co = mesh_data.uv_map[mesh_edge.vert2];
         append(edge);
       }
     }
@@ -118,10 +117,9 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
   static int64_t count_non_manifold_edges(const uv_islands::MeshData &mesh_data)
   {
     int64_t result = 0;
-    for (const uv_islands::MeshPrimitive &mesh_primitive : mesh_data.primitives) {
-      for (int i = 0; i < 3; i++) {
-        const uv_islands::MeshEdge &mesh_edge = *mesh_primitive.edges[i];
-        if (is_manifold(mesh_edge)) {
+    for (const int primitive_id : mesh_data.looptris.index_range()) {
+      for (const int edge_id : mesh_data.primitive_to_edge_map[primitive_id]) {
+        if (is_manifold(mesh_data, edge_id)) {
           continue;
         }
         result += 1;
@@ -130,22 +128,9 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
     return result;
   }
 
-  static const uv_islands::MeshUVVert &find_uv_vert(
-      const uv_islands::MeshPrimitive &mesh_primitive, const uv_islands::MeshVertex *mesh_vertex)
+  static bool is_manifold(const uv_islands::MeshData &mesh_data, const int edge_id)
   {
-    for (const uv_islands::MeshUVVert &uv_vertex : mesh_primitive.vertices) {
-      if (uv_vertex.vertex == mesh_vertex) {
-        return uv_vertex;
-      }
-    }
-    // TODO: Use cleaner interface.
-    BLI_assert_unreachable();
-    static uv_islands::MeshUVVert dummy;
-    return dummy;
-  }
-  static bool is_manifold(const uv_islands::MeshEdge mesh_edge)
-  {
-    return mesh_edge.primitives.size() == 2;
+    return mesh_data.edge_to_primitive_map[edge_id].size() == 2;
   }
 };
 

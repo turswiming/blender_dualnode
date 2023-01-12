@@ -524,7 +524,7 @@ static void convert_mfaces_to_mpolys(ID *id,
   }
 
   /* NOTE: we don't convert NGons at all, these are not even real ngons,
-   * they have their own UV's, colors etc - its more an editing feature. */
+   * they have their own UVs, colors etc - it's more an editing feature. */
 
   BLI_edgehash_free(eh, nullptr);
 
@@ -1341,6 +1341,48 @@ void BKE_mesh_legacy_edge_crease_to_layers(Mesh *mesh)
   }
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Sharp Edge Conversion
+ * \{ */
+
+void BKE_mesh_legacy_sharp_edges_to_flags(Mesh *mesh)
+{
+  using namespace blender;
+  MutableSpan<MEdge> edges = mesh->edges_for_write();
+  if (const bool *sharp_edges = static_cast<const bool *>(
+          CustomData_get_layer_named(&mesh->edata, CD_PROP_BOOL, "sharp_edge"))) {
+    threading::parallel_for(edges.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        SET_FLAG_FROM_TEST(edges[i].flag, sharp_edges[i], ME_SHARP);
+      }
+    });
+  }
+  else {
+    for (const int i : edges.index_range()) {
+      edges[i].flag &= ~ME_SHARP;
+    }
+  }
+}
+
+void BKE_mesh_legacy_sharp_edges_from_flags(Mesh *mesh)
+{
+  using namespace blender;
+  using namespace blender::bke;
+  const Span<MEdge> edges = mesh->edges();
+  MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  if (std::any_of(
+          edges.begin(), edges.end(), [](const MEdge &edge) { return edge.flag & ME_SHARP; })) {
+    SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_only_span<bool>(
+        "sharp_edge", ATTR_DOMAIN_EDGE);
+    threading::parallel_for(edges.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        sharp_edges.span[i] = edges[i].flag & ME_SHARP;
+      }
+    });
+    sharp_edges.finish();
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1477,7 +1519,7 @@ void BKE_mesh_legacy_convert_mpoly_to_material_indices(Mesh *mesh)
 void BKE_mesh_legacy_convert_uvs_to_struct(
     Mesh *mesh,
     blender::ResourceScope &temp_mloopuv_for_convert,
-    blender::Vector<CustomDataLayer, 16> &face_corner_layers_to_write)
+    blender::Vector<CustomDataLayer, 16> &loop_layers_to_write)
 {
   using namespace blender;
   using namespace blender::bke;
@@ -1489,14 +1531,17 @@ void BKE_mesh_legacy_convert_uvs_to_struct(
   char vert_name[MAX_CUSTOMDATA_LAYER_NAME];
   char edge_name[MAX_CUSTOMDATA_LAYER_NAME];
   char pin_name[MAX_CUSTOMDATA_LAYER_NAME];
-  for (const CustomDataLayer &layer : face_corner_layers_to_write) {
-    uv_sublayers_to_skip.add_multiple_new({BKE_uv_map_vert_select_name_get(layer.name, vert_name),
-                                           BKE_uv_map_edge_select_name_get(layer.name, edge_name),
-                                           BKE_uv_map_pin_name_get(layer.name, pin_name)});
+  for (const CustomDataLayer &layer : loop_layers_to_write) {
+    if (layer.type == CD_PROP_FLOAT2) {
+      uv_sublayers_to_skip.add_multiple_new(
+          {BKE_uv_map_vert_select_name_get(layer.name, vert_name),
+           BKE_uv_map_edge_select_name_get(layer.name, edge_name),
+           BKE_uv_map_pin_name_get(layer.name, pin_name)});
+    }
   }
 
-  for (const CustomDataLayer &layer : face_corner_layers_to_write) {
-    if (uv_sublayers_to_skip.contains_as(layer.name)) {
+  for (const CustomDataLayer &layer : loop_layers_to_write) {
+    if (layer.name[0] && uv_sublayers_to_skip.contains_as(layer.name)) {
       continue;
     }
     if (layer.type != CD_PROP_FLOAT2) {
@@ -1529,7 +1574,7 @@ void BKE_mesh_legacy_convert_uvs_to_struct(
     new_layer_to_write.append(mloopuv_layer);
   }
 
-  face_corner_layers_to_write = new_layer_to_write;
+  loop_layers_to_write = new_layer_to_write;
   mesh->ldata.totlayer = new_layer_to_write.size();
   mesh->ldata.maxlayer = mesh->ldata.totlayer;
 }
