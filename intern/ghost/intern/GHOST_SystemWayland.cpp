@@ -1223,13 +1223,12 @@ static void gwl_registry_entry_update_all(GWL_Display *display, const int interf
       continue;
     }
 
-    GWL_RegisteryUpdate_Params params = {
-        .name = reg->name,
-        .interface_slot = reg->interface_slot,
-        .version = reg->version,
+    GWL_RegisteryUpdate_Params params{};
+    params.name = reg->name;
+    params.interface_slot = reg->interface_slot;
+    params.version = reg->version;
+    params.user_data = reg->user_data;
 
-        .user_data = reg->user_data,
-    };
     handler->update_fn(display, &params);
   }
 }
@@ -4535,18 +4534,7 @@ static void output_handle_scale(void *data, struct wl_output * /*wl_output*/, co
   CLOG_INFO(LOG, 2, "scale");
   GWL_Output *output = static_cast<GWL_Output *>(data);
   output->scale = factor;
-
-  GHOST_WindowManager *window_manager = output->system->getWindowManager();
-  if (window_manager) {
-    for (GHOST_IWindow *iwin : window_manager->getWindows()) {
-      GHOST_WindowWayland *win = static_cast<GHOST_WindowWayland *>(iwin);
-      const std::vector<GWL_Output *> &outputs = win->outputs();
-      if (std::find(outputs.begin(), outputs.end(), output) == outputs.cend()) {
-        continue;
-      }
-      win->outputs_changed_update_scale();
-    }
-  }
+  output->system->output_scale_update(output);
 }
 
 static const struct wl_output_listener output_listener = {
@@ -4736,11 +4724,28 @@ static void gwl_registry_wl_output_update(GWL_Display *display,
 }
 static void gwl_registry_wl_output_remove(GWL_Display *display,
                                           void *user_data,
-                                          const bool /*on_exit*/)
+                                          const bool on_exit)
 {
   /* While windows & cursors hold references to outputs, there is no need to manually remove
-   * these references as the compositor will remove references via #wl_surface_listener.leave. */
+   * these references as the compositor will remove references via #wl_surface_listener.leave.
+   *
+   * WARNING: this is not the case for WLROOTS based compositors which have a (bug?)
+   * where surface leave events don't run. So `system->output_leave(..)` is needed
+   * until the issue is resolved in WLROOTS. */
   GWL_Output *output = static_cast<GWL_Output *>(user_data);
+
+  if (!on_exit) {
+    /* Needed for WLROOTS, does nothing if surface leave callbacks have already run. */
+    if (output->system->output_unref(output->wl_output)) {
+      CLOG_WARN(LOG,
+                "mis-behaving compositor failed to call \"surface_listener.leave\" "
+                "window scale may be invalid!");
+    }
+  }
+
+  if (output->xdg_output) {
+    zxdg_output_v1_destroy(output->xdg_output);
+  }
   wl_output_destroy(output->wl_output);
   std::vector<GWL_Output *>::iterator iter = std::find(
       display->outputs.begin(), display->outputs.end(), output);
@@ -5176,11 +5181,10 @@ static void global_handle_add(void *data,
     const GWL_RegistryEntry *registry_entry_prev = display->registry_entry;
 
     /* The interface name that is ensured not to be freed. */
-    GWL_RegisteryAdd_Params params = {
-        .name = name,
-        .interface_slot = interface_slot,
-        .version = version,
-    };
+    GWL_RegisteryAdd_Params params{};
+    params.name = name;
+    params.interface_slot = interface_slot;
+    params.version = version;
 
     handler->add_fn(display, &params);
 
@@ -6744,11 +6748,13 @@ void GHOST_SystemWayland::seat_active_set(const struct GWL_Seat *seat)
   gwl_display_seat_active_set(display_, seat);
 }
 
-void GHOST_SystemWayland::window_surface_unref(const wl_surface *wl_surface)
+bool GHOST_SystemWayland::window_surface_unref(const wl_surface *wl_surface)
 {
+  bool changed = false;
 #define SURFACE_CLEAR_PTR(surface_test) \
   if (surface_test == wl_surface) { \
     surface_test = nullptr; \
+    changed = true; \
   } \
   ((void)0);
 
@@ -6760,6 +6766,74 @@ void GHOST_SystemWayland::window_surface_unref(const wl_surface *wl_surface)
     SURFACE_CLEAR_PTR(seat->wl_surface_window_focus_dnd);
   }
 #undef SURFACE_CLEAR_PTR
+
+  return changed;
+}
+
+bool GHOST_SystemWayland::output_unref(wl_output *wl_output)
+{
+  bool changed = false;
+  if (!ghost_wl_output_own(wl_output)) {
+    return changed;
+  }
+
+  /* NOTE: keep in sync with `output_scale_update`. */
+  GWL_Output *output = ghost_wl_output_user_data(wl_output);
+  GHOST_WindowManager *window_manager = getWindowManager();
+  if (window_manager) {
+    for (GHOST_IWindow *iwin : window_manager->getWindows()) {
+      GHOST_WindowWayland *win = static_cast<GHOST_WindowWayland *>(iwin);
+      if (win->outputs_leave(output)) {
+        changed = true;
+      }
+    }
+  }
+  for (GWL_Seat *seat : display_->seats) {
+    if (seat->pointer.outputs.erase(output)) {
+      changed = true;
+    }
+    if (seat->tablet.outputs.erase(output)) {
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+void GHOST_SystemWayland::output_scale_update(GWL_Output *output)
+{
+  /* NOTE: keep in sync with `output_unref`. */
+  GHOST_WindowManager *window_manager = getWindowManager();
+  if (window_manager) {
+    for (GHOST_IWindow *iwin : window_manager->getWindows()) {
+      GHOST_WindowWayland *win = static_cast<GHOST_WindowWayland *>(iwin);
+      const std::vector<GWL_Output *> &outputs = win->outputs();
+      if (!(std::find(outputs.begin(), outputs.end(), output) == outputs.cend())) {
+        win->outputs_changed_update_scale();
+      }
+    }
+  }
+
+  for (GWL_Seat *seat : display_->seats) {
+    if (seat->pointer.outputs.count(output)) {
+      if (seat->cursor.wl_surface_cursor != nullptr) {
+        update_cursor_scale(
+            seat->cursor, seat->system->wl_shm(), &seat->pointer, seat->cursor.wl_surface_cursor);
+      }
+    }
+
+    if (seat->tablet.outputs.count(output)) {
+      for (struct zwp_tablet_tool_v2 *zwp_tablet_tool_v2 : seat->tablet_tools) {
+        GWL_TabletTool *tablet_tool = static_cast<GWL_TabletTool *>(
+            zwp_tablet_tool_v2_get_user_data(zwp_tablet_tool_v2));
+        if (tablet_tool->wl_surface_cursor != nullptr) {
+          update_cursor_scale(seat->cursor,
+                              seat->system->wl_shm(),
+                              &seat->pointer,
+                              tablet_tool->wl_surface_cursor);
+        }
+      }
+    }
+  }
 }
 
 bool GHOST_SystemWayland::window_cursor_grab_set(const GHOST_TGrabCursorMode mode,

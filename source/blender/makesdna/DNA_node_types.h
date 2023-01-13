@@ -254,6 +254,7 @@ typedef enum eNodeSocketInOut {
   SOCK_IN = 1 << 0,
   SOCK_OUT = 1 << 1,
 } eNodeSocketInOut;
+ENUM_OPERATORS(eNodeSocketInOut, SOCK_OUT);
 
 /** #bNodeSocket.flag, first bit is selection. */
 typedef enum eNodeSocketFlag {
@@ -374,7 +375,7 @@ typedef struct bNode {
   bool is_group_output() const;
   const blender::nodes::NodeDeclaration *declaration() const;
   /** A span containing all internal links when the node is muted. */
-  blender::Span<const bNodeLink *> internal_links() const;
+  blender::Span<bNodeLink> internal_links() const;
 
   /* The following methods are only available when #bNodeTree.ensure_topology_cache has been
    * called. */
@@ -1135,12 +1136,11 @@ typedef struct NodeShaderTexPointDensity {
   short interpolation;
   short color_source;
   short ob_color_source;
-  /** Vertex attribute layer for color source, MAX_CUSTOMDATA_LAYER_NAME. */
-  char vertex_attribute_name[64];
   /* Used at runtime only by sampling RNA API. */
   PointDensity pd;
   int cached_resolution;
-  char _pad2[4];
+  /** Vertex attribute layer for color source, MAX_CUSTOMDATA_LAYER_NAME. */
+  char vertex_attribute_name[68];
 } NodeShaderTexPointDensity;
 
 typedef struct NodeShaderPrincipled {
