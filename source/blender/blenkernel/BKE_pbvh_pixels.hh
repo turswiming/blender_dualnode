@@ -244,6 +244,12 @@ struct NodeData {
   }
 };
 
+/* -------------------------------------------------------------------- */
+
+/** \name Fix non-manifold edge bleeding.
+ * \{ */
+
+/** TODO: move to image wrappers? */
 template<typename T, int Channels = 4> struct ImageBufferAccessor {
   ImBuf &image_buffer;
 
@@ -264,25 +270,25 @@ template<typename T, int Channels = 4> struct ImageBufferAccessor {
   }
 };
 
-struct PixelCopyItem {
+struct DeltaCopyPixelCommand {
   char2 delta_source_1;
   char2 delta_source_2;
   uint8_t mix_factor;
 
-  PixelCopyItem(char2 delta_source_1, char2 delta_source_2, uint8_t mix_factor)
+  DeltaCopyPixelCommand(char2 delta_source_1, char2 delta_source_2, uint8_t mix_factor)
       : delta_source_1(delta_source_1), delta_source_2(delta_source_2), mix_factor(mix_factor)
   {
   }
 };
 
-struct PixelCopyGroup {
+struct CopyPixelGroup {
   int2 destination;
   int2 source;
-  Vector<PixelCopyItem> items;
+  Vector<DeltaCopyPixelCommand> deltas;
 };
 
 /** Pixel copy command to mix 2 source pixels and write to a destination pixel. */
-struct PixelCopyCommand {
+struct CopyPixelCommand {
   /** Pixel coordinate to write to. */
   int2 destination;
   /** Pixel coordinate to read first source from. */
@@ -292,8 +298,8 @@ struct PixelCopyCommand {
   /** Factor to mix between first and second source. */
   float mix_factor;
 
-  PixelCopyCommand() = default;
-  PixelCopyCommand(const PixelCopyGroup &group)
+  CopyPixelCommand() = default;
+  CopyPixelCommand(const CopyPixelGroup &group)
       : destination(group.destination),
         source_1(group.source),
         source_2(group.source),
@@ -310,7 +316,7 @@ struct PixelCopyCommand {
     tile_buffer.write_pixel(destination, destination_color);
   }
 
-  void apply(const PixelCopyItem &item)
+  void apply(const DeltaCopyPixelCommand &item)
   {
     destination.x += 1;
     source_1 += int2(item.delta_source_1);
@@ -318,19 +324,19 @@ struct PixelCopyCommand {
     mix_factor = float(item.mix_factor) / 255.0f;
   }
 
-  PixelCopyItem encode_delta(const PixelCopyCommand &next_command) const
+  DeltaCopyPixelCommand encode_delta(const CopyPixelCommand &next_command) const
   {
-    return PixelCopyItem(char2(next_command.source_1 - source_1),
-                         char2(next_command.source_2 - next_command.source_1),
-                         uint8_t(next_command.mix_factor * 255));
+    return DeltaCopyPixelCommand(char2(next_command.source_1 - source_1),
+                                 char2(next_command.source_2 - next_command.source_1),
+                                 uint8_t(next_command.mix_factor * 255));
   }
 };
 
-struct PixelCopyTile {
+struct CopyPixelTile {
   image::TileNumber tile_number;
-  Vector<PixelCopyGroup> groups;
+  Vector<CopyPixelGroup> groups;
 
-  PixelCopyTile(image::TileNumber tile_number) : tile_number(tile_number)
+  CopyPixelTile(image::TileNumber tile_number) : tile_number(tile_number)
   {
   }
 
@@ -349,9 +355,9 @@ struct PixelCopyTile {
  private:
   template<typename T> void copy_pixels(ImageBufferAccessor<T> &image_buffer) const
   {
-    for (const PixelCopyGroup &group : groups) {
-      PixelCopyCommand copy_command(group);
-      for (const PixelCopyItem &item : group.items) {
+    for (const CopyPixelGroup &group : groups) {
+      CopyPixelCommand copy_command(group);
+      for (const DeltaCopyPixelCommand &item : group.deltas) {
         copy_command.apply(item);
         /*
         printf("| %d,%d | %d,%d | %d,%d | %f |\n",
@@ -366,12 +372,12 @@ struct PixelCopyTile {
   }
 };
 
-struct PixelCopyTiles {
-  Vector<PixelCopyTile> tiles;
+struct CopyPixelTiles {
+  Vector<CopyPixelTile> tiles;
 
-  std::optional<std::reference_wrapper<PixelCopyTile>> find_tile(image::TileNumber tile_number)
+  std::optional<std::reference_wrapper<CopyPixelTile>> find_tile(image::TileNumber tile_number)
   {
-    for (PixelCopyTile &tile : tiles) {
+    for (CopyPixelTile &tile : tiles) {
       if (tile.tile_number == tile_number) {
         return tile;
       }
@@ -385,12 +391,14 @@ struct PixelCopyTiles {
   }
 };
 
+/** \} */
+
 struct PBVHData {
   /* Per UVPRimitive contains the paint data. */
   PaintGeometryPrimitives geom_primitives;
 
   /** Per ImageTile the pixels to copy to fix non-manifold bleeding. */
-  PixelCopyTiles tiles_copy_pixels;
+  CopyPixelTiles tiles_copy_pixels;
 
   void clear_data()
   {

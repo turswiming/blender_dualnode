@@ -232,7 +232,7 @@ struct Rows {
     struct Pixel {
       PixelType type = PixelType::Undecided;
       float distance = std::numeric_limits<float>::max();
-      PixelCopyCommand copy_command;
+      CopyPixelCommand copy_command;
 
       Pixel() = default;
 
@@ -397,9 +397,9 @@ struct Rows {
       }
     }
 
-    static bool can_be_extended_with(const PixelCopyGroup &group, const PixelCopyCommand &command)
+    static bool can_be_extended_with(const CopyPixelGroup &group, const CopyPixelCommand &command)
     {
-      PixelCopyCommand last_command = last_copy_command(group);
+      CopyPixelCommand last_command = last_copy_command(group);
       /* Can only extend when pushing the next pixel. */
       if (last_command.destination.x != command.destination.x - 1 ||
           last_command.destination.y != command.destination.y) {
@@ -413,28 +413,28 @@ struct Rows {
       return true;
     }
 
-    static void extend_with(PixelCopyGroup &group, const PixelCopyCommand &command)
+    static void extend_with(CopyPixelGroup &group, const CopyPixelCommand &command)
     {
-      PixelCopyCommand last_command = last_copy_command(group);
-      PixelCopyItem delta_command = last_command.encode_delta(command);
-      group.items.append(delta_command);
+      CopyPixelCommand last_command = last_copy_command(group);
+      DeltaCopyPixelCommand delta_command = last_command.encode_delta(command);
+      group.deltas.append(delta_command);
     }
 
-    static PixelCopyCommand last_copy_command(const PixelCopyGroup &group)
+    static CopyPixelCommand last_copy_command(const CopyPixelGroup &group)
     {
-      PixelCopyCommand last_command(group);
-      for (const PixelCopyItem &item : group.items) {
+      CopyPixelCommand last_command(group);
+      for (const DeltaCopyPixelCommand &item : group.deltas) {
         last_command.apply(item);
       }
       return last_command;
     }
 
-    void pack_into(Vector<PixelCopyGroup> &groups) const
+    void pack_into(Vector<CopyPixelGroup> &groups) const
     {
       for (const Pixel &elem : pixels) {
         if (elem.type == PixelType::CopyFromClosestEdge) {
           if (groups.is_empty() || !can_be_extended_with(groups.last(), elem.copy_command)) {
-            PixelCopyGroup new_group = {
+            CopyPixelGroup new_group = {
                 elem.copy_command.destination - int2(1, 0), elem.copy_command.source_1, {}};
             groups.append(new_group);
           }
@@ -481,7 +481,7 @@ struct Rows {
     }
   }
 
-  void pack_into(Vector<PixelCopyGroup> &groups) const
+  void pack_into(Vector<CopyPixelGroup> &groups) const
   {
     for (const Row &row : rows) {
       row.pack_into(groups);
@@ -498,7 +498,7 @@ struct Rows {
 
 };  // namespace blender::bke::pbvh::pixels
 
-static void copy_pixels_reinit(PixelCopyTiles &tiles)
+static void copy_pixels_reinit(CopyPixelTiles &tiles)
 {
   tiles.clear();
 }
@@ -533,7 +533,7 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
 
     NonManifoldTileEdges tile_edges = non_manifold_edges.extract_tile_edges(image_tile,
                                                                             tile_resolution);
-    PixelCopyTile copy_tile(image_tile.get_tile_number());
+    CopyPixelTile copy_tile(image_tile.get_tile_number());
 
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
     rows.mark_for_evaluation(tile_edges);
@@ -551,7 +551,7 @@ void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
 {
   // TIMEIT_START(pbvh_pixels_copy_pixels);
   PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(pbvh);
-  std::optional<std::reference_wrapper<PixelCopyTile>> pixel_tile =
+  std::optional<std::reference_wrapper<CopyPixelTile>> pixel_tile =
       pbvh_data.tiles_copy_pixels.find_tile(tile_number);
   if (!pixel_tile.has_value()) {
     /* No pixels need to be copied. */
