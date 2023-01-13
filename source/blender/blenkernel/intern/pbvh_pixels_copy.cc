@@ -498,6 +498,10 @@ struct Rows {
     for (const Row &row : rows) {
       row.pack_into(copy_tile);
     }
+    /* Shrink vectors to fit the actual data it contains. From now on these vectors should be
+     * immutable. */
+    //copy_tile.groups.resize(copy_tile.groups.size());
+    //copy_tile.command_deltas.resize(copy_tile.command_deltas.size());
   }
 
   void print_debug() const
@@ -551,6 +555,7 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     rows.mark_for_evaluation(tile_edges);
     rows.find_copy_source();
     rows.pack_into(copy_tile);
+    copy_tile.print_compression_rate();
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
   }
   TIMEIT_END(pbvh_pixels_copy_update);

@@ -355,6 +355,18 @@ struct CopyPixelTile {
     }
   }
 
+  void print_compression_rate()
+  {
+    int decoded_size = command_deltas.size() * sizeof(CopyPixelCommand);
+    int encoded_size = groups.size() * sizeof(CopyPixelGroup) +
+                          command_deltas.size() * sizeof(DeltaCopyPixelCommand);
+    printf("Tile %d compression rate: %d->%d = %d%%\n",
+           tile_number,
+           decoded_size,
+           encoded_size,
+           int(100.0 * float(encoded_size) / float(decoded_size)));
+  }
+
  private:
   template<typename T> void copy_pixels(ImageBufferAccessor<T> &image_buffer) const
   {
