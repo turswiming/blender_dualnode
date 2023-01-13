@@ -483,6 +483,19 @@ static void do_mark_dirty_regions(void *__restrict userdata,
   BKE_pbvh_pixels_mark_image_dirty(*node, *data->image_data.image, *data->image_data.image_user);
 }
 
+static void fix_none_manifold_seam_bleeding(Object &ob, TexturePaintingUserData &user_data)
+{
+  PBVH &pbvh = *ob.sculpt->pbvh;
+  LISTBASE_FOREACH (ImageTile *, tile, &user_data.image_data.image->tiles) {
+    image::ImageTileWrapper image_tile(tile);
+    // TODO: only fix seam bleeding of tiles that have been painted on.
+    BKE_pbvh_pixels_copy_pixels(pbvh,
+                                *user_data.image_data.image,
+                                *user_data.image_data.image_user,
+                                image_tile.get_tile_number());
+  }
+}
+
 }  // namespace blender::ed::sculpt_paint::paint::image
 
 extern "C" {
@@ -544,7 +557,6 @@ void SCULPT_do_paint_brush_image(
   BLI_task_parallel_range(0, totnode, &data, do_mark_dirty_regions, &settings_flush);
 
   /* TODO: should be done at the end of the stroke.*/
-  BKE_pbvh_pixels_copy_pixels(
-      *ob->sculpt->pbvh, *data.image_data.image, *data.image_data.image_user, 1001);
+  fix_none_manifold_seam_bleeding(*ob, data);
 }
 }
