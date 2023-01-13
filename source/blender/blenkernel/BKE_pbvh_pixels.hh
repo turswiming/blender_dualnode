@@ -359,7 +359,7 @@ struct CopyPixelTile {
   {
     int decoded_size = command_deltas.size() * sizeof(CopyPixelCommand);
     int encoded_size = groups.size() * sizeof(CopyPixelGroup) +
-                          command_deltas.size() * sizeof(DeltaCopyPixelCommand);
+                       command_deltas.size() * sizeof(DeltaCopyPixelCommand);
     printf("Tile %d compression rate: %d->%d = %d%%\n",
            tile_number,
            decoded_size,
