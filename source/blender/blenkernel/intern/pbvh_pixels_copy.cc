@@ -397,9 +397,14 @@ struct Rows {
       }
     }
 
-    static bool can_be_extended_with(const CopyPixelGroup &group, const CopyPixelCommand &command)
+    static bool can_extend_last_group(const CopyPixelTile &tile_pixels,
+                                      const CopyPixelCommand &command)
     {
-      CopyPixelCommand last_command = last_copy_command(group);
+      if (tile_pixels.groups.is_empty()) {
+        return false;
+      }
+      const CopyPixelGroup &group = tile_pixels.groups.last();
+      CopyPixelCommand last_command = last_copy_command(tile_pixels, group);
       /* Can only extend when pushing the next pixel. */
       if (last_command.destination.x != command.destination.x - 1 ||
           last_command.destination.y != command.destination.y) {
@@ -413,32 +418,39 @@ struct Rows {
       return true;
     }
 
-    static void extend_with(CopyPixelGroup &group, const CopyPixelCommand &command)
+    static void extend_last_group(CopyPixelTile &tile_pixels, const CopyPixelCommand &command)
     {
-      CopyPixelCommand last_command = last_copy_command(group);
+      CopyPixelGroup &group = tile_pixels.groups.last();
+      CopyPixelCommand last_command = last_copy_command(tile_pixels, group);
       DeltaCopyPixelCommand delta_command = last_command.encode_delta(command);
-      group.deltas.append(delta_command);
+      tile_pixels.command_deltas.append(delta_command);
+      group.num_deltas += 1;
     }
 
-    static CopyPixelCommand last_copy_command(const CopyPixelGroup &group)
+    // TODO: move to group. */
+    static CopyPixelCommand last_copy_command(const CopyPixelTile &tile_pixels,
+                                              const CopyPixelGroup &group)
     {
       CopyPixelCommand last_command(group);
-      for (const DeltaCopyPixelCommand &item : group.deltas) {
+      for (const DeltaCopyPixelCommand &item : Span<const DeltaCopyPixelCommand>(
+               &tile_pixels.command_deltas[group.start_delta_index], group.num_deltas)) {
         last_command.apply(item);
       }
       return last_command;
     }
 
-    void pack_into(Vector<CopyPixelGroup> &groups) const
+    void pack_into(CopyPixelTile &copy_tile) const
     {
       for (const Pixel &elem : pixels) {
         if (elem.type == PixelType::CopyFromClosestEdge) {
-          if (groups.is_empty() || !can_be_extended_with(groups.last(), elem.copy_command)) {
-            CopyPixelGroup new_group = {
-                elem.copy_command.destination - int2(1, 0), elem.copy_command.source_1, {}};
-            groups.append(new_group);
+          if (!can_extend_last_group(copy_tile, elem.copy_command)) {
+            CopyPixelGroup new_group = {elem.copy_command.destination - int2(1, 0),
+                                        elem.copy_command.source_1,
+                                        copy_tile.command_deltas.size(),
+                                        0};
+            copy_tile.groups.append(new_group);
           }
-          extend_with(groups.last(), elem.copy_command);
+          extend_last_group(copy_tile, elem.copy_command);
         }
       }
     }
@@ -481,10 +493,10 @@ struct Rows {
     }
   }
 
-  void pack_into(Vector<CopyPixelGroup> &groups) const
+  void pack_into(CopyPixelTile &copy_tile) const
   {
     for (const Row &row : rows) {
-      row.pack_into(groups);
+      row.pack_into(copy_tile);
     }
   }
 
@@ -538,7 +550,7 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
     rows.mark_for_evaluation(tile_edges);
     rows.find_copy_source();
-    rows.pack_into(copy_tile.groups);
+    rows.pack_into(copy_tile);
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
   }
   TIMEIT_END(pbvh_pixels_copy_update);

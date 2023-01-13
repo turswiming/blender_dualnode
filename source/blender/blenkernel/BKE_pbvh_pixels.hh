@@ -282,9 +282,11 @@ struct DeltaCopyPixelCommand {
 };
 
 struct CopyPixelGroup {
-  int2 destination;
-  int2 source;
-  Vector<DeltaCopyPixelCommand> deltas;
+  int2 start_destination;
+  int2 start_source_1;
+  int64_t start_delta_index;
+  // TODO: extract from next group.
+  int num_deltas;
 };
 
 /** Pixel copy command to mix 2 source pixels and write to a destination pixel. */
@@ -300,9 +302,9 @@ struct CopyPixelCommand {
 
   CopyPixelCommand() = default;
   CopyPixelCommand(const CopyPixelGroup &group)
-      : destination(group.destination),
-        source_1(group.source),
-        source_2(group.source),
+      : destination(group.start_destination),
+        source_1(group.start_source_1),
+        source_2(),
         mix_factor(0.0f)
   {
   }
@@ -335,6 +337,7 @@ struct CopyPixelCommand {
 struct CopyPixelTile {
   image::TileNumber tile_number;
   Vector<CopyPixelGroup> groups;
+  Vector<DeltaCopyPixelCommand> command_deltas;
 
   CopyPixelTile(image::TileNumber tile_number) : tile_number(tile_number)
   {
@@ -357,7 +360,8 @@ struct CopyPixelTile {
   {
     for (const CopyPixelGroup &group : groups) {
       CopyPixelCommand copy_command(group);
-      for (const DeltaCopyPixelCommand &item : group.deltas) {
+      for (const DeltaCopyPixelCommand &item : Span<const DeltaCopyPixelCommand>(
+               &command_deltas[group.start_delta_index], group.num_deltas)) {
         copy_command.apply(item);
         /*
         printf("| %d,%d | %d,%d | %d,%d | %f |\n",
