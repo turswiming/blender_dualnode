@@ -483,9 +483,11 @@ struct Rows {
                                               const CopyPixelGroup &group)
     {
       CopyPixelCommand last_command(group);
-      for (const DeltaCopyPixelCommand &item : Span<const DeltaCopyPixelCommand>(
-               &tile_pixels.command_deltas[group.start_delta_index], group.num_deltas)) {
-        last_command.apply(item);
+      if (group.num_deltas) {
+        for (const DeltaCopyPixelCommand &item : Span<const DeltaCopyPixelCommand>(
+                 &tile_pixels.command_deltas[group.start_delta_index], group.num_deltas)) {
+          last_command.apply(item);
+        }
       }
       return last_command;
     }
