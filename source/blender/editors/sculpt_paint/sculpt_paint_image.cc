@@ -483,18 +483,39 @@ static void do_mark_dirty_regions(void *__restrict userdata,
   BKE_pbvh_pixels_mark_image_dirty(*node, *data->image_data.image, *data->image_data.image_user);
 }
 
-static void fix_none_manifold_seam_bleeding(Object &ob, TexturePaintingUserData &user_data)
+/* -------------------------------------------------------------------- */
+
+/** \name Fix non-manifold edge bleeding.
+ * \{ */
+
+static Vector<image::TileNumber> collect_dirty_tiles(Span<PBVHNode *> nodes)
 {
-  PBVH &pbvh = *ob.sculpt->pbvh;
-  LISTBASE_FOREACH (ImageTile *, tile, &user_data.image_data.image->tiles) {
-    image::ImageTileWrapper image_tile(tile);
-    // TODO: only fix seam bleeding of tiles that have been painted on.
-    BKE_pbvh_pixels_copy_pixels(pbvh,
-                                *user_data.image_data.image,
-                                *user_data.image_data.image_user,
-                                image_tile.get_tile_number());
+  Vector<image::TileNumber> dirty_tiles;
+  for (PBVHNode *node : nodes) {
+    BKE_pbvh_pixels_collect_dirty_tiles(*node, dirty_tiles);
+  }
+  return dirty_tiles;
+}
+static void fix_non_manifold_seam_bleeding(PBVH &pbvh,
+                                           TexturePaintingUserData &user_data,
+                                           Span<TileNumber> tile_numbers_to_fix)
+{
+  for (image::TileNumber tile_number : tile_numbers_to_fix) {
+    BKE_pbvh_pixels_copy_pixels(
+        pbvh, *user_data.image_data.image, *user_data.image_data.image_user, tile_number);
   }
 }
+
+static void fix_non_manifold_seam_bleeding(Object &ob,
+                                           const int totnode,
+                                           TexturePaintingUserData &user_data)
+{
+  Vector<image::TileNumber> dirty_tiles = collect_dirty_tiles(
+      Span<PBVHNode *>(user_data.nodes, totnode));
+  fix_non_manifold_seam_bleeding(*ob.sculpt->pbvh, user_data, dirty_tiles);
+}
+
+/** \} */
 
 }  // namespace blender::ed::sculpt_paint::paint::image
 
@@ -551,12 +572,10 @@ void SCULPT_do_paint_brush_image(
   BKE_pbvh_parallel_range_settings(&settings, true, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_push_undo_tile, &settings);
   BLI_task_parallel_range(0, totnode, &data, do_paint_pixels, &settings);
+  fix_non_manifold_seam_bleeding(*ob, totnode, data);
 
   TaskParallelSettings settings_flush;
   BKE_pbvh_parallel_range_settings(&settings_flush, false, totnode);
   BLI_task_parallel_range(0, totnode, &data, do_mark_dirty_regions, &settings_flush);
-
-  /* TODO: should be done at the end of the stroke.*/
-  fix_none_manifold_seam_bleeding(*ob, data);
 }
 }

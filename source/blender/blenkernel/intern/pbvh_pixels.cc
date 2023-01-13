@@ -485,6 +485,12 @@ void BKE_pbvh_pixels_mark_image_dirty(PBVHNode &node, Image &image, ImageUser &i
   }
 }
 
+void BKE_pbvh_pixels_collect_dirty_tiles(PBVHNode &node, Vector<image::TileNumber> &r_dirty_tiles)
+{
+  NodeData *node_data = static_cast<NodeData *>(node.pixels.node_data);
+  node_data->collect_dirty_tiles(r_dirty_tiles);
+}
+
 }  // namespace blender::bke::pbvh::pixels
 
 extern "C" {

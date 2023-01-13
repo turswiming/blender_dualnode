@@ -231,6 +231,15 @@ struct NodeData {
     }
   }
 
+  void collect_dirty_tiles(Vector<image::TileNumber> &r_dirty_tiles)
+  {
+    for (UDIMTilePixels &tile : tiles) {
+      if (tile.flags.dirty) {
+        r_dirty_tiles.append_non_duplicates(tile.tile_number);
+      }
+    }
+  }
+
   void clear_data()
   {
     tiles.clear();
@@ -425,6 +434,7 @@ struct PBVHData {
 NodeData &BKE_pbvh_pixels_node_data_get(PBVHNode &node);
 void BKE_pbvh_pixels_mark_image_dirty(PBVHNode &node, Image &image, ImageUser &image_user);
 PBVHData &BKE_pbvh_pixels_data_get(PBVH &pbvh);
+void BKE_pbvh_pixels_collect_dirty_tiles(PBVHNode &node, Vector<image::TileNumber> &r_dirty_tiles);
 
 void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
                                  Image &image,
