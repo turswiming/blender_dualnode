@@ -124,311 +124,137 @@ IsectFrustum isect_data_setup(Frustum shape)
 /** \} */
 
 /* ---------------------------------------------------------------------- */
-/** \name View Intersection functions.
- * \{ */
-
-bool intersect_view(Pyramid pyramid)
-{
-  bool intersects = true;
-
-  /* Do Pyramid vertices vs Frustum planes. */
-  for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 5; ++v) {
-      float test = dot(drw_view_culling.planes[p], vec4(pyramid.corners[v], 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-
-  if (!intersects) {
-    return intersects;
-  }
-
-  /* Now do Frustum vertices vs Pyramid planes. */
-  IsectPyramid i_pyramid = isect_data_setup(pyramid);
-  for (int p = 0; p < 5; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 8; ++v) {
-      float test = dot(i_pyramid.planes[p], vec4(drw_view_culling.corners[v].xyz, 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-  return intersects;
-}
-
-bool intersect_view(Box box)
-{
-  bool intersects = true;
-
-  /* Do Box vertices vs Frustum planes. */
-  for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 8; ++v) {
-      float test = dot(drw_view_culling.planes[p], vec4(box.corners[v], 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-
-  if (!intersects) {
-    return intersects;
-  }
-
-  /* Now do Frustum vertices vs Box planes. */
-  IsectBox i_box = isect_data_setup(box);
-  for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 8; ++v) {
-      float test = dot(i_box.planes[p], vec4(drw_view_culling.corners[v].xyz, 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-
-  return intersects;
-}
-
-bool intersect_view(IsectBox i_box)
-{
-  bool intersects = true;
-
-  /* Do Box vertices vs Frustum planes. */
-  for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 8; ++v) {
-      float test = dot(drw_view_culling.planes[p], vec4(i_box.corners[v], 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-
-  if (!intersects) {
-    return intersects;
-  }
-
-  for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 8; ++v) {
-      float test = dot(i_box.planes[p], vec4(drw_view_culling.corners[v].xyz, 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-
-  return intersects;
-}
-
-bool intersect_view(Sphere sphere)
-{
-  bool intersects = true;
-
-  for (int p = 0; p < 6 && intersects; ++p) {
-    float dist_to_plane = dot(drw_view_culling.planes[p], vec4(sphere.center, 1.0));
-    if (dist_to_plane < -sphere.radius) {
-      intersects = false;
-    }
-  }
-  /* TODO reject false positive. */
-  return intersects;
-}
-
-/** \} */
-
-/* ---------------------------------------------------------------------- */
 /** \name Shape vs. Shape Intersection functions.
  * \{ */
 
-bool intersect(IsectPyramid i_pyramid, Box box)
+bool intersect(IsectPyramid i_pyramid, IsectBox i_box)
 {
-  bool intersects = true;
-
   /* Do Box vertices vs Pyramid planes. */
   for (int p = 0; p < 5; ++p) {
-    bool is_any_vertex_on_positive_side = false;
+    bool separating_axis = true;
     for (int v = 0; v < 8; ++v) {
-      float test = dot(i_pyramid.planes[p], vec4(box.corners[v], 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
+      float signed_distance = point_plane_projection_dist(i_box.corners[v], i_pyramid.planes[p]);
+      if (signed_distance <= 0.0) {
+        separating_axis = false;
         break;
       }
     }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
+    if (separating_axis) {
+      return false;
     }
-  }
-
-  if (!intersects) {
-    return intersects;
   }
 
   /* Now do Pyramid vertices vs Box planes. */
-  IsectBox i_box = isect_data_setup(box);
   for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
+    bool separating_axis = true;
     for (int v = 0; v < 5; ++v) {
-      float test = dot(i_box.planes[p], vec4(i_pyramid.corners[v], 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
+      float signed_distance = point_plane_projection_dist(i_pyramid.corners[v], i_box.planes[p]);
+      if (signed_distance <= 0.0) {
+        separating_axis = false;
         break;
       }
     }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
+    if (separating_axis) {
+      return false;
     }
   }
-  return intersects;
+
+  return true;
+}
+
+bool intersect(IsectPyramid i_pyramid, Box box)
+{
+  return intersect(i_pyramid, isect_data_setup(box));
 }
 
 bool intersect(IsectFrustum i_frustum, Pyramid pyramid)
 {
-  bool intersects = true;
-
   /* Do Pyramid vertices vs Frustum planes. */
   for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
+    bool separating_axis = true;
     for (int v = 0; v < 5; ++v) {
-      float test = dot(i_frustum.planes[p], vec4(pyramid.corners[v], 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
+      float signed_distance = point_plane_projection_dist(pyramid.corners[v], i_frustum.planes[p]);
+      if (signed_distance <= 0.0) {
+        separating_axis = false;
         break;
       }
     }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
+    if (separating_axis) {
+      return false;
     }
-  }
-
-  if (!intersects) {
-    return intersects;
   }
 
   /* Now do Frustum vertices vs Pyramid planes. */
   IsectPyramid i_pyramid = isect_data_setup(pyramid);
   for (int p = 0; p < 5; ++p) {
-    bool is_any_vertex_on_positive_side = false;
+    bool separating_axis = true;
     for (int v = 0; v < 8; ++v) {
-      float test = dot(i_pyramid.planes[p], vec4(i_frustum.corners[v].xyz, 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
+      float signed_distance = point_plane_projection_dist(i_frustum.corners[v].xyz,
+                                                          i_pyramid.planes[p]);
+      if (signed_distance <= 0.0) {
+        separating_axis = false;
         break;
       }
     }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
+    if (separating_axis) {
+      return false;
     }
   }
-  return intersects;
+
+  return true;
+}
+
+bool intersect(IsectFrustum i_frustum, IsectBox i_box)
+{
+  /* Do Box vertices vs Frustum planes. */
+  for (int p = 0; p < 6; ++p) {
+    bool separating_axis = true;
+    for (int v = 0; v < 8; ++v) {
+      float signed_distance = point_plane_projection_dist(i_box.corners[v], i_frustum.planes[p]);
+      if (signed_distance <= 0.0) {
+        separating_axis = false;
+        break;
+      }
+    }
+    if (separating_axis) {
+      return false;
+    }
+  }
+
+  /* Now do Frustum vertices vs Box planes. */
+  for (int p = 0; p < 6; ++p) {
+    bool separating_axis = true;
+    for (int v = 0; v < 8; ++v) {
+      float signed_distance = point_plane_projection_dist(i_frustum.corners[v].xyz,
+                                                          i_box.planes[p]);
+      if (signed_distance <= 0.0) {
+        separating_axis = false;
+        break;
+      }
+    }
+    if (separating_axis) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool intersect(IsectFrustum i_frustum, Box box)
 {
-  bool intersects = true;
-
-  /* Do Box vertices vs Frustum planes. */
-  for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 8; ++v) {
-      float test = dot(i_frustum.planes[p], vec4(box.corners[v], 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-
-  if (!intersects) {
-    return intersects;
-  }
-
-  /* Now do Frustum vertices vs Box planes. */
-  IsectBox i_box = isect_data_setup(box);
-  for (int p = 0; p < 6; ++p) {
-    bool is_any_vertex_on_positive_side = false;
-    for (int v = 0; v < 8; ++v) {
-      float test = dot(i_box.planes[p], vec4(i_frustum.corners[v].xyz, 1.0));
-      if (test > 0.0) {
-        is_any_vertex_on_positive_side = true;
-        break;
-      }
-    }
-    bool all_vertex_on_negative_side = !is_any_vertex_on_positive_side;
-    if (all_vertex_on_negative_side) {
-      intersects = false;
-      break;
-    }
-  }
-
-  return intersects;
+  return intersect(i_frustum, isect_data_setup(box));
 }
 
 bool intersect(IsectFrustum i_frustum, Sphere sphere)
 {
-  bool intersects = true;
   for (int p = 0; p < 6; ++p) {
-    float dist_to_plane = dot(i_frustum.planes[p], vec4(sphere.center, 1.0));
-    if (dist_to_plane < -sphere.radius) {
-      intersects = false;
-      break;
+    float signed_distance = point_plane_projection_dist(sphere.center, i_frustum.planes[p]);
+    if (signed_distance > sphere.radius) {
+      return false;
     }
   }
-  return intersects;
+
+  return true;
 }
 
 bool intersect(Cone cone, Sphere sphere)
@@ -454,13 +280,51 @@ bool intersect(Cone cone, Sphere sphere)
    * only in the monotonic region [0 .. M_PI / 2]. This saves costly acos() calls. */
   bool intersects = (cone_sphere_center_cos >= cone_sphere_angle_sum_cos);
 
-  return intersects;
+  return true;
 }
 
 bool intersect(Circle circle_a, Circle circle_b)
 {
   return distance_squared(circle_a.center, circle_b.center) <
          sqr(circle_a.radius + circle_b.radius);
+}
+
+/** \} */
+
+/* ---------------------------------------------------------------------- */
+/** \name View Intersection functions.
+ * \{ */
+
+IsectFrustum IsectFrustum_from_view()
+{
+  IsectFrustum result;
+  for (int i = 0; i < 8; i++) {
+    result.corners[i] = drw_view_culling.corners[i].xyz;
+  }
+  for (int i = 0; i < 6; i++) {
+    result.planes[i] = drw_view_culling.planes[i];
+  }
+  return result;
+}
+
+bool intersect_view(Pyramid pyramid)
+{
+  return intersect(IsectFrustum_from_view(), pyramid);
+}
+
+bool intersect_view(Box box)
+{
+  return intersect(IsectFrustum_from_view(), box);
+}
+
+bool intersect_view(IsectBox i_box)
+{
+  return intersect(IsectFrustum_from_view(), i_box);
+}
+
+bool intersect_view(Sphere sphere)
+{
+  return intersect(IsectFrustum_from_view(), sphere);
 }
 
 /** \} */
