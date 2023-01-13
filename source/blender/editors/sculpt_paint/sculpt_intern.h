@@ -22,6 +22,8 @@
 #include "BLI_gsqueue.h"
 #include "BLI_threads.h"
 
+#include "ED_view3d.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -487,6 +489,8 @@ typedef struct FilterCache {
 
   /* Pre-smoothed colors used by sharpening. Colors are HSL. */
   float (*pre_smoothed_color)[4];
+
+  ViewContext vc;
 } FilterCache;
 
 /**
