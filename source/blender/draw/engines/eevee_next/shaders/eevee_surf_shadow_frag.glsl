@@ -62,7 +62,7 @@ float linear_shadow_depth_with_bias(float bias)
   if (is_persp) {
     /* Punctual shadow. Store distance to light. */
     vec3 P = interp.P + slope_bias(interp.P) * bias;
-    return distance(cameraPos, P * bias);
+    return distance(cameraPos, P);
   }
   else {
     /* Directionnal shadow. Store distance from near clip plane. */

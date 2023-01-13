@@ -446,6 +446,9 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
   light.clipmap_base_offset = base_offset_;
   light.clipmap_lod_min = min_resolution_;
   light.clipmap_lod_max = min_resolution_ + tilemaps_.size() - 1;
+
+  float half_dim = ShadowTileMap::tilemap_coverage_get(light.clipmap_lod_max) / 2.0f;
+  light._clipmap_scale = float(SHADOW_TILEMAP_RES / 2) / half_dim;
 }
 
 /** \} */
@@ -762,7 +765,10 @@ void ShadowModule::end_sync()
 
 void ShadowModule::debug_end_sync()
 {
-  if (!ELEM(inst_.debug_mode, eDebugMode::DEBUG_SHADOW_TILEMAPS)) {
+  if (!ELEM(inst_.debug_mode,
+            eDebugMode::DEBUG_SHADOW_TILEMAPS,
+            eDebugMode::DEBUG_SHADOW_VALUES,
+            eDebugMode::DEBUG_SHADOW_TILE_RANDOM_COLOR)) {
     return;
   }
 
@@ -793,6 +799,8 @@ void ShadowModule::debug_end_sync()
   debug_draw_ps_.shader_set(inst_.shaders.static_shader_get(SHADOW_DEBUG));
   debug_draw_ps_.push_constant("debug_mode", (int)inst_.debug_mode);
   debug_draw_ps_.push_constant("debug_tilemap_index", light.tilemap_index);
+  debug_draw_ps_.bind_ssbo("tilemaps_buf", &tilemap_pool.tilemaps_data);
+  debug_draw_ps_.bind_ssbo("tiles_buf", &tilemap_pool.tiles_data);
   inst_.hiz_buffer.bind_resources(&debug_draw_ps_);
   inst_.lights.bind_resources(&debug_draw_ps_);
   inst_.shadows.bind_resources(&debug_draw_ps_);
@@ -866,11 +874,26 @@ void ShadowModule::set_view(View &view)
 
 void ShadowModule::debug_draw(View &view, GPUFrameBuffer *view_fb)
 {
-  if (!ELEM(inst_.debug_mode, eDebugMode::DEBUG_SHADOW_TILEMAPS)) {
+  if (!ELEM(inst_.debug_mode,
+            eDebugMode::DEBUG_SHADOW_TILEMAPS,
+            eDebugMode::DEBUG_SHADOW_VALUES,
+            eDebugMode::DEBUG_SHADOW_TILE_RANDOM_COLOR)) {
     return;
   }
 
-  inst_.info = "Debug Mode: Shadow Tilemap\n";
+  switch (inst_.debug_mode) {
+    case DEBUG_SHADOW_TILEMAPS:
+      inst_.info = "Debug Mode: Shadow Tilemap\n";
+      break;
+    case DEBUG_SHADOW_VALUES:
+      inst_.info = "Debug Mode: Shadow Values\n";
+      break;
+    case DEBUG_SHADOW_TILE_RANDOM_COLOR:
+      inst_.info = "Debug Mode: Shadow Tile Random Color\n";
+      break;
+    default:
+      break;
+  }
 
   inst_.hiz_buffer.update();
 

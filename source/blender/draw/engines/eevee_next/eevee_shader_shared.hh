@@ -49,9 +49,17 @@ enum eDebugMode : uint32_t {
    */
   DEBUG_HIZ_VALIDATION = 2u,
   /**
-   * Tile-maps to screen. Is also present in other modes.
+   * Show tiles depending on their status.
    */
   DEBUG_SHADOW_TILEMAPS = 10u,
+  /**
+   * Show content of shadow map. Used to verify projection code.
+   */
+  DEBUG_SHADOW_VALUES = 11u,
+  /**
+   * Show random color for each tile. Verify allocation and LOD assignment.
+   */
+  DEBUG_SHADOW_TILE_RANDOM_COLOR = 12u,
 };
 
 /** \} */
@@ -583,6 +591,8 @@ struct LightData {
 #define _radius _area_size_x
 #define _spot_mul object_mat[2][3]
 #define _spot_bias object_mat[3][3]
+  /** Scale to convert from world units to tile space of the clipmap_lod_max. */
+#define _clipmap_scale _spot_mul
   /** Aliases for axes. */
 #ifndef USE_GPU_SHADER_CREATE_INFO
 #  define _right object_mat[0]

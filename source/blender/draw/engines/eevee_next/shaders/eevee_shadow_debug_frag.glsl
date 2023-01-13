@@ -38,14 +38,15 @@ void debug_tile_print(ShadowTileData tile, ivec4 tile_coord)
 vec3 debug_tile_state_color(ShadowTileData tile)
 {
   if (tile.lod > 0) {
-    return vec3(1, 0.5, 0) * float(tile.lod) / float(SHADOW_TILEMAP_LOD);
+    /* Uses data from another LOD. */
+    return neon_gradient(float(tile.lod) / float(SHADOW_TILEMAP_LOD));
   }
   if (tile.do_update && tile.is_used) {
-    /* Error color because at this point (at the end of the frame), there should be no visible
-     * update remaining. */
-    return vec3(1, 0, 0);
+    /* Updated. */
+    return vec3(0.5, 1, 0);
   }
   if (tile.is_used) {
+    /* Used but was cached. */
     return vec3(0, 1, 0);
   }
   vec3 col = vec3(0);
@@ -58,10 +59,9 @@ vec3 debug_tile_state_color(ShadowTileData tile)
   return col;
 }
 
-ShadowTileData debug_tile_get(vec3 P, LightData light)
+ShadowTileData debug_tile_get(vec3 P, LightData light, out vec2 uv)
 {
   vec3 lNg = vec3(1.0, 0.0, 0.0);
-  vec2 uv;
   if (light.type == LIGHT_SUN) {
     /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
     vec3 lP = transform_point(light.object_mat, P);
@@ -98,9 +98,50 @@ LightData debug_light_get()
 
 void debug_tile_state(vec3 P, LightData light)
 {
-  ShadowTileData tile = debug_tile_get(P, light);
+  const int debug_tile_size_px = 4;
+  ivec2 px = ivec2(gl_FragCoord.xy) / debug_tile_size_px;
+  int tilemap = px.x / SHADOW_TILEMAP_RES;
+  if ((px.y < SHADOW_TILEMAP_RES) && (tilemap < light.tilemap_last - light.tilemap_index)) {
+    int tilemap_index = light.tilemap_index + tilemap;
+    /* Debug actual values in the tilemap buffer. */
+    ShadowTileMapData tilemap = tilemaps_buf[tilemap_index];
+    int tile_index = shadow_tile_offset(px % SHADOW_TILEMAP_RES, tilemap.tiles_index, 0);
+    ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
+    /* Leave 1 px border between tilemaps. */
+    if (!any(
+            equal(ivec2(gl_FragCoord.xy) % (SHADOW_TILEMAP_RES * debug_tile_size_px), ivec2(0)))) {
+      gl_FragDepth = 0.0;
+      out_color_add = vec4(debug_tile_state_color(tile), 1.0);
+      out_color_mul = vec4(0.0);
+      return;
+    }
+  }
+
+  vec2 unused_uv;
+  ShadowTileData tile = debug_tile_get(P, light, unused_uv);
   out_color_add = vec4(debug_tile_state_color(tile), 0) * 0.5;
   out_color_mul = vec4(0.5);
+}
+
+void debug_atlas_values(vec3 P, LightData light)
+{
+  vec2 uv;
+  ShadowTileData tile = debug_tile_get(P, light, uv);
+  float depth = shadow_tile_depth_get(shadow_atlas_tx, tile, uv);
+
+  out_color_add = vec4(vec3(1.0 / (1.0 + depth)), 0);
+  out_color_mul = vec4(0.0);
+}
+
+void debug_random_tile_color(vec3 P, LightData light)
+{
+  vec2 unused_uv;
+
+  vec3 lP = transform_point(light.object_mat, P);
+
+  ShadowTileData tile = debug_tile_get(P, light, unused_uv);
+  out_color_add = vec4(debug_random_color(ivec2(tile.page)), 0) * 0.9;
+  out_color_mul = vec4(0.1);
 }
 
 void main()
@@ -121,6 +162,12 @@ void main()
     switch (eDebugMode(debug_mode)) {
       case DEBUG_SHADOW_TILEMAPS:
         debug_tile_state(P, light);
+        break;
+      case DEBUG_SHADOW_VALUES:
+        debug_atlas_values(P, light);
+        break;
+      case DEBUG_SHADOW_TILE_RANDOM_COLOR:
+        debug_random_tile_color(P, light);
         break;
     }
   }

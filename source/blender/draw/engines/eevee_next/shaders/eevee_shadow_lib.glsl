@@ -15,7 +15,8 @@ vec2 shadow_page_uv_transform(uvec2 page, uint lod, vec2 unormalized_uv)
 /** \name Shadow Sampling Functions
  * \{ */
 
-/* Turns local light coordinate into shadow region index. Matches eCubeFace order. */
+/* Turns local light coordinate into shadow region index. Matches eCubeFace order.
+ * \note lL does not need to be normalized. */
 int shadow_punctual_face_index_get(vec3 lL)
 {
   vec3 aP = abs(lL);
@@ -75,7 +76,8 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, uint lod)
   bias *= float(1u << lod);
   return bias;
 #endif
-  return light.shadow_bias * float(1u << lod);
+  const float quantization_bias = 1e-20;
+  return light.shadow_bias * float(1u << lod) + quantization_bias;
 }
 
 ShadowTileData shadow_punctual_tile_get(
@@ -133,6 +135,7 @@ float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 uv)
 }
 
 struct ShadowSample {
+  /* Signed delta in world units from the shading point to the occluder. Negative if occluded. */
   float occluder_delta;
   float bias;
 };
@@ -145,10 +148,8 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
                            float receiver_dist,
                            vec3 P)
 {
-
   ShadowSample samp;
   if (light.type == LIGHT_SUN) {
-    /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
     vec3 lP = transform_point(light.object_mat, P);
     vec2 uv;
     ShadowTileData tile = shadow_directional_tile_get(

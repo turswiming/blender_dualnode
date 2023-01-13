@@ -60,7 +60,7 @@ void light_eval_ex(ClosureDiffuse diffuse,
       out_diffuse += light.color * intensity;
     }
 #endif
-    visibility *= float(samp.occluder_delta >= 0.0);
+    visibility *= float(samp.occluder_delta + samp.bias > 0.0);
   }
 
   if (visibility < 1e-6) {

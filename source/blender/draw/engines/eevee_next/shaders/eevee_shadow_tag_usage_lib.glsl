@@ -26,6 +26,7 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
   ivec2 tile_co;
   int tilemap_index = light.tilemap_index;
   if (is_directional) {
+    vec3 lP = transform_point(light.object_mat, P);
     int clipmap_lod = shadow_directional_clipmap_level(light, dist_to_cam);
     int clipmap_lod_relative = clipmap_lod - light.clipmap_lod_min;
     /* Compute how many time we need to subdivide. */
@@ -35,9 +36,7 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
                           sign(light.clipmap_base_offset);
 
     /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
-    /* TODO mat only rotate to light space. Need to apply offset + scale to remap to
-     * [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] */
-    vec3 lP = transform_point(light.object_mat, P);
+    lP *= light._clipmap_scale;
     tile_co = ivec2(floor(lP.xy * clipmap_res_mul - clipmap_offset)) + SHADOW_TILEMAP_RES / 2;
     tile_co = clamp(tile_co, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
     tilemap_index += clipmap_lod_relative;
@@ -48,6 +47,11 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     if (dist_to_light > light.influence_radius_max) {
       return;
     }
+    /* TODO(fclem) Early out if out of cone. */
+    // float angle_cos = lL.z / dist_to_light;
+    // if (angle_cos > light.influence_angle_max_cos) {
+    //   return;
+    // }
     /* How much a shadow map pixel covers a final image pixel.
      * We project a shadow map pixel (as a sphere for simplicity) to the receiver plane.
      * We then reproject this sphere onto the camera screen and compare it to the film pixel size.
