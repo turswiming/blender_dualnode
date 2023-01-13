@@ -258,7 +258,8 @@ struct NodeData {
 /** \name Fix non-manifold edge bleeding.
  * \{ */
 
-/** TODO: move to image wrappers? */
+// TODO: move to image wrappers?
+// TODO: Add compile time checks.
 template<typename T, int Channels = 4> struct ImageBufferAccessor {
   ImBuf &image_buffer;
 
@@ -268,14 +269,31 @@ template<typename T, int Channels = 4> struct ImageBufferAccessor {
 
   float4 read_pixel(const int2 coordinate)
   {
-    int offset = (coordinate.y * image_buffer.x + coordinate.x) * Channels;
-    return float4(&image_buffer.rect_float[offset]);
+    if constexpr ((std::is_same_v<T, float>)) {
+      int offset = (coordinate.y * image_buffer.x + coordinate.x) * Channels;
+      return float4(&image_buffer.rect_float[offset]);
+    }
+    if constexpr ((std::is_same_v<T, int>)) {
+      int offset = (coordinate.y * image_buffer.x + coordinate.x);
+      float4 result;
+      rgba_uchar_to_float(result,
+                          static_cast<uchar *>(static_cast<void *>(&image_buffer.rect[offset])));
+      return result;
+    }
+    return float4();
   }
 
   void write_pixel(const int2 coordinate, float4 new_value)
   {
-    int offset = (coordinate.y * image_buffer.x + coordinate.x) * Channels;
-    copy_v4_v4(&image_buffer.rect_float[offset], new_value);
+    if constexpr ((std::is_same_v<T, float>)) {
+      int offset = (coordinate.y * image_buffer.x + coordinate.x) * Channels;
+      copy_v4_v4(&image_buffer.rect_float[offset], new_value);
+    }
+    if constexpr ((std::is_same_v<T, int>)) {
+      int offset = (coordinate.y * image_buffer.x + coordinate.x);
+      rgba_float_to_uchar(static_cast<uchar *>(static_cast<void *>(&image_buffer.rect[offset])),
+                          new_value);
+    }
   }
 };
 
