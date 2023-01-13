@@ -519,8 +519,8 @@ char *MSLGeneratorInterface::msl_patch_default_get()
   }
 
   std::stringstream ss_patch;
-  ss_patch << datatoc_mtl_shader_shared_h << std::endl;
   ss_patch << datatoc_mtl_shader_defines_msl << std::endl;
+  ss_patch << datatoc_mtl_shader_shared_h << std::endl;
   size_t len = strlen(ss_patch.str().c_str());
 
   msl_patch_default = (char *)malloc(len * sizeof(char));
@@ -607,7 +607,7 @@ bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
   /*** Regex Commands ***/
   /* Source cleanup and syntax replacement. */
   static std::regex remove_excess_newlines("\\n+");
-  static std::regex replace_mat3("mat3\\s*\\(");
+  static std::regex replace_matrix_construct("mat([234](x[234])?)\\s*\\(");
 
   /* Special condition - mat3 and array constructor replacement.
    * Also replace excessive new lines to ensure cases are not missed.
@@ -615,14 +615,14 @@ bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
   shd_builder_->glsl_vertex_source_ = std::regex_replace(
       shd_builder_->glsl_vertex_source_, remove_excess_newlines, "\n");
   shd_builder_->glsl_vertex_source_ = std::regex_replace(
-      shd_builder_->glsl_vertex_source_, replace_mat3, "MAT3(");
+      shd_builder_->glsl_vertex_source_, replace_matrix_construct, "MAT$1(");
   replace_array_initializers_func(shd_builder_->glsl_vertex_source_);
 
   if (!msl_iface.uses_transform_feedback) {
     shd_builder_->glsl_fragment_source_ = std::regex_replace(
         shd_builder_->glsl_fragment_source_, remove_excess_newlines, "\n");
     shd_builder_->glsl_fragment_source_ = std::regex_replace(
-        shd_builder_->glsl_fragment_source_, replace_mat3, "MAT3(");
+        shd_builder_->glsl_fragment_source_, replace_matrix_construct, "MAT$1(");
     replace_array_initializers_func(shd_builder_->glsl_fragment_source_);
   }
 
@@ -669,6 +669,9 @@ bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
     msl_iface.uses_barycentrics = bool(info->builtins_ & BuiltinBits::BARYCENTRIC_COORD);
     msl_iface.uses_gl_FrontFacing = bool(info->builtins_ & BuiltinBits::FRONT_FACING) ||
                                     shd_builder_->glsl_fragment_source_.find("gl_FrontFacing") !=
+                                        std::string::npos;
+    msl_iface.uses_gl_PrimitiveID = bool(info->builtins_ & BuiltinBits::PRIMITIVE_ID) ||
+                                    shd_builder_->glsl_fragment_source_.find("gl_PrimitiveID") !=
                                         std::string::npos;
 
     /* NOTE(Metal): If FragColor is not used, then we treat the first fragment output attachment
@@ -989,6 +992,9 @@ bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
     }
     if (msl_iface.uses_gl_FrontFacing) {
       ss_fragment << "MTLBOOL gl_FrontFacing;" << std::endl;
+    }
+    if (msl_iface.uses_gl_PrimitiveID) {
+      ss_fragment << "uint gl_PrimitiveID;" << std::endl;
     }
 
     /* Add Texture members. */
@@ -1515,6 +1521,9 @@ std::string MSLGeneratorInterface::generate_msl_fragment_entry_stub()
   if (this->uses_gl_FrontFacing) {
     out << "fragment_shader_instance.gl_FrontFacing = gl_FrontFacing;" << std::endl;
   }
+  if (this->uses_gl_PrimitiveID) {
+    out << "fragment_shader_instance.gl_PrimitiveID = gl_PrimitiveID;" << std::endl;
+  }
 
   /* Copy vertex attributes into local variable.s */
   out << this->generate_msl_fragment_input_population();
@@ -1689,6 +1698,9 @@ std::string MSLGeneratorInterface::generate_msl_fragment_inputs_string()
   }
   if (this->uses_gl_FrontFacing) {
     out << ",\n\tconst MTLBOOL gl_FrontFacing [[front_facing]]";
+  }
+  if (this->uses_gl_PrimitiveID) {
+    out << ",\n\tconst uint gl_PrimitiveID [[primitive_id]]";
   }
 
   /* Barycentrics. */
