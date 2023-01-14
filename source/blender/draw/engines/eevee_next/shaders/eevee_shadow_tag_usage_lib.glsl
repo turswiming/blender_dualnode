@@ -26,20 +26,12 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
   ivec2 tile_co;
   int tilemap_index = light.tilemap_index;
   if (is_directional) {
-    vec3 lP = transform_point(light.object_mat, P);
-    int clipmap_lod = shadow_directional_clipmap_level(light, dist_to_cam);
-    int clipmap_lod_relative = clipmap_lod - light.clipmap_lod_min;
-    /* Compute how many time we need to subdivide. */
-    float clipmap_res_mul = float(1 << (light.clipmap_lod_max - clipmap_lod));
-    /* Compute offset of the clipmap from the largest LOD. */
-    vec2 clipmap_offset = vec2(abs(light.clipmap_base_offset) >> clipmap_lod_relative) *
-                          sign(light.clipmap_base_offset);
+    vec3 lP = shadow_world_to_local(light, P);
 
-    /* [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for highest LOD. */
-    lP *= light._clipmap_scale;
-    tile_co = ivec2(floor(lP.xy * clipmap_res_mul - clipmap_offset)) + SHADOW_TILEMAP_RES / 2;
-    tile_co = clamp(tile_co, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
-    tilemap_index += clipmap_lod_relative;
+    ShadowClipmapCoordinates coord = shadow_directional_coordinates(light, lP, dist_to_cam);
+
+    tile_co = coord.tile_coord;
+    tilemap_index = coord.tilemap_index;
   }
   else {
     vec3 lL = light_world_to_local(light, P - light._position);

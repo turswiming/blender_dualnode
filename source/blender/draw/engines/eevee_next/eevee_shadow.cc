@@ -74,10 +74,6 @@ void ShadowTileMap::sync_clipmap(const float3 &camera_position,
   corners[2] = (corners[2] - corners[0]) / float(SHADOW_TILEMAP_RES);
   corners[3] -= corners[0];
 
-  /* Need to be after the corners arithmetic because they are stored inside the last component. */
-  _min_usage_depth = -1.0f;
-  _max_usage_depth = 1.0f;
-
   viewmat = viewinv.inverted_affine();
   winmat = winmat_get();
 }
@@ -110,7 +106,7 @@ void ShadowTileMap::sync_cubeface(
   viewmat = float4x4(shadow_face_mat[cubeface]) * object_mat.inverted_affine();
 
   /* Update corners. */
-  float4x4 viewinv = viewmat.inverted_affine();
+  float4x4 viewinv = object_mat;
   *reinterpret_cast<float3 *>(&corners[0]) = viewinv.translation();
   *reinterpret_cast<float3 *>(&corners[1]) = viewinv * float3(-far, -far, -far);
   *reinterpret_cast<float3 *>(&corners[2]) = viewinv * float3(far, -far, -far);
@@ -118,11 +114,6 @@ void ShadowTileMap::sync_cubeface(
   /* Store deltas. */
   corners[2] = (corners[2] - corners[1]) / float(SHADOW_TILEMAP_RES);
   corners[3] = (corners[3] - corners[1]) / float(SHADOW_TILEMAP_RES);
-  /* Need to be after the corners arithmetic because they are stored inside the last component. */
-  _min_usage_depth = -1.0f;
-  _max_usage_depth = 1.0f;
-  _punctual_far = far_;
-  _punctual_near = near_;
 }
 
 float4x4 ShadowTileMap::winmat_get() const
@@ -345,9 +336,10 @@ IndexRange ShadowDirectional::clipmap_level_range(const Camera &camera)
 {
   int user_min_level = floorf(log2(min_resolution_));
   /* Covers the farthest points of the view. */
-  int max_level = ceil(log2(camera.bound_radius()));
+  int max_level = ceil(
+      log2(camera.bound_radius() + math::distance(camera.bound_center(), camera.position())));
   /* Covers the closest points of the view. */
-  int min_level = floor(log2(camera.data_get().clip_near));
+  int min_level = floor(log2(abs(camera.data_get().clip_near)));
   min_level = clamp_i(user_min_level, min_level, max_level);
 
   if (camera.is_orthographic()) {
@@ -389,9 +381,13 @@ void ShadowDirectional::release_excess_tilemaps(const Camera &camera)
                          lods_range.one_after_last() - isect_range.one_after_last());
 
   auto span = tilemaps_.as_span();
+  std::cout << "span " << span.index_range() << std::endl;
+  std::cout << "before_range " << before_range.shift(-lods_range.start()) << std::endl;
+  std::cout << "after_range " << after_range.shift(-lods_range.start()) << std::endl;
+  std::cout << "isect_range " << isect_range.shift(-lods_range.start()) << std::endl;
   shadows_.tilemap_pool.release(span.slice(before_range.shift(-lods_range.start())));
   shadows_.tilemap_pool.release(span.slice(after_range.shift(-lods_range.start())));
-  tilemaps_ = span.slice(isect_range);
+  tilemaps_ = span.slice(isect_range.shift(-lods_range.start()));
   lods_range = isect_range;
 }
 
@@ -431,21 +427,19 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
 
   for (int level : IndexRange(lods_range.size())) {
     ShadowTileMap *tilemap = tilemaps_[level];
+    int2 offset = (math::abs(base_offset_) >> level) * math::sign(base_offset_);
     tilemap->sync_clipmap(
-        camera_pos, object_mat_, near_, far_, base_offset_ >> level, lods_range.start() + level);
+        camera_pos, object_mat_, near_, far_, offset, lods_range.first() + level);
+
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
     tilemap_pool.tilemaps_data.append(*tilemap);
     tilemap->set_updated();
   }
-  int max_level_shift = lods_range.size() - 1;
-  int2 max_level_offset = (base_offset_ >> max_level_shift) << max_level_shift;
-  /* Save only the offset from the first clip-map level to the last. */
-  base_offset_ -= max_level_offset;
 
   light.shadow_bias = bias_;
   light.clipmap_base_offset = base_offset_;
-  light.clipmap_lod_min = min_resolution_;
-  light.clipmap_lod_max = min_resolution_ + tilemaps_.size() - 1;
+  light.clipmap_lod_min = lods_range.first();
+  light.clipmap_lod_max = lods_range.last();
 
   float half_dim = ShadowTileMap::tilemap_coverage_get(light.clipmap_lod_max) / 2.0f;
   light._clipmap_scale = float(SHADOW_TILEMAP_RES / 2) / half_dim;

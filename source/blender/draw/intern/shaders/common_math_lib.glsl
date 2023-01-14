@@ -134,6 +134,8 @@ void set_flag_from_test(inout int value, bool test, int flag) { if (test) { valu
 #define in_texture_range(texel, tex) \
   (all(greaterThanEqual(texel, ivec2(0))) && all(lessThan(texel, textureSize(tex, 0).xy)))
 
+/* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
+#ifndef GPU_SHADER_MATH_BASE_LIB_GLSL
 uint divide_ceil(uint visible_count, uint divisor)
 {
   return (visible_count + (divisor - 1u)) / divisor;
@@ -143,11 +145,15 @@ int divide_ceil(int visible_count, int divisor)
 {
   return (visible_count + (divisor - 1)) / divisor;
 }
+#endif
 
+/* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
+#ifndef GPU_SHADER_MATH_VECTOR_LIB_GLSL
 ivec2 divide_ceil(ivec2 visible_count, ivec2 divisor)
 {
   return (visible_count + (divisor - 1)) / divisor;
 }
+#endif
 
 uint bit_field_mask(uint bit_width, uint bit_min)
 {
@@ -178,6 +184,8 @@ uint packUvec4x8(uvec4 data)
   return data.x | data.y | data.z | data.w;
 }
 
+/* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
+#ifndef GPU_SHADER_MATH_VECTOR_LIB_GLSL
 float distance_squared(vec2 a, vec2 b)
 {
   a -= b;
@@ -189,6 +197,7 @@ float distance_squared(vec3 a, vec3 b)
   a -= b;
   return dot(a, a);
 }
+#endif
 
 vec3 safe_normalize(vec3 v)
 {

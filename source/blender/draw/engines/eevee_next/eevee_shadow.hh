@@ -417,7 +417,7 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   float bias_;
   /** Near and far clip distances. For clip-map, when they are updated after sync. */
   float near_, far_;
-  /** Offset of the lowest clip-map relative to the highest one. */
+  /** Offset of the smallest clip-map. In tiles. */
   int2 base_offset_;
   /** Copy of object matrix. Normalized. */
   float4x4 object_mat_;
