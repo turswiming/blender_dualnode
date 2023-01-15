@@ -145,6 +145,12 @@ struct ShadowSample {
   float bias;
 };
 
+/* TODO(fclem) use utildef version. */
+float shadow_orderedIntBitsToFloat(int int_value)
+{
+  return intBitsToFloat((int_value < 0) ? (int_value ^ 0x7FFFFFFF) : int_value);
+}
+
 ShadowSample shadow_sample(sampler2D atlas_tx,
                            usampler2D tilemaps_tx,
                            LightData light,
@@ -161,7 +167,7 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
     ShadowTileData tile = shadow_directional_tile_get(
         tilemaps_tx, light, camera_P, lP, P, lNg, uv, samp.bias);
     float occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
-    samp.occluder_delta = occluder_dist - lP.z;
+    samp.occluder_delta = occluder_dist - (lP.z + shadow_orderedIntBitsToFloat(light.clip_near));
   }
   else {
     vec2 uv;

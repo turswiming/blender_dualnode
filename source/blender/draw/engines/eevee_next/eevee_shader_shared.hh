@@ -639,9 +639,9 @@ struct LightData {
   int tilemap_index;
   /** Index of the last tile-map. */
   int tilemap_last;
-  /** Near and far clipping distance to convert shadow map to world space distances. */
-  float clip_near;
-  float clip_far;
+  /** Near and far clip distances for directional. Float stored as int for atomic operations. */
+  int clip_near;
+  int clip_far;
 };
 BLI_STATIC_ASSERT_ALIGN(LightData, 16)
 
@@ -675,12 +675,21 @@ struct ShadowTileMapData {
   float4x4 viewmat, winmat;
   /** Corners of the frustum. (vec3 padded to vec4) */
   float4 corners[4];
+#ifdef USE_GPU_SHADER_CREATE_INFO
+  /** Clip distances that were used to render the pages. */
+#  define _clip_near_stored corners[0].w
+#  define _clip_far_stored corners[1].w
+#  define _clip_near_new corners[0].w
+#  define _clip_far_new corners[1].w
+#endif
   /** Integer offset of the center of the 16x16 tiles from the origin of the tile space. */
   int2 grid_offset;
   /** Shift between previous and current grid_offset. Allows update tagging. */
   int2 grid_shift;
 
-  int2 _pad0;
+  /** Near and far clip distances for directional. Float stored as int for atomic operations. */
+  int clip_near;
+  int clip_far;
   /** True for punctual lights. */
   bool1 is_cubeface;
   /** Must be multiplied by SHADOW_TILEDATA_PER_TILEMAP to get offset inside the tile buffer. */

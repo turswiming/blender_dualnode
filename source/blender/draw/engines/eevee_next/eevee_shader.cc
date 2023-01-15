@@ -152,6 +152,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_shadow_page_defrag";
     case SHADOW_PAGE_FREE:
       return "eevee_shadow_page_free";
+    case SHADOW_TILEMAP_BOUNDS:
+      return "eevee_shadow_tilemap_bounds";
     case SHADOW_TILEMAP_FINALIZE:
       return "eevee_shadow_tilemap_finalize";
     case SHADOW_TILEMAP_INIT:

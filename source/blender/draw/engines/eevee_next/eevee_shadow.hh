@@ -64,11 +64,6 @@ constexpr static const float shadow_clipmap_scale_mat[4][4] = {{SHADOW_TILEMAP_R
 struct ShadowTileMap : public ShadowTileMapData {
   static constexpr int64_t tile_map_resolution = SHADOW_TILEMAP_RES;
   static constexpr int64_t tiles_count = tile_map_resolution * tile_map_resolution;
-  /**
-   * Maximum "bounding" angle of a tile inside a cube-map.
-   * Half the diagonal of tile since we test using the tile center.
-   */
-  static float tile_cone_half_angle;
 
   /** Level of detail for clipmap. */
   int level = INT_MAX;
@@ -88,8 +83,6 @@ struct ShadowTileMap : public ShadowTileMapData {
 
   void sync_clipmap(const float3 &camera_position,
                     const float4x4 &object_mat_,
-                    float near_,
-                    float far_,
                     int2 origin_offset,
                     int clipmap_level);
 
@@ -240,6 +233,8 @@ class ShadowModule {
   /** List of Resource IDs (to get bounds) for tagging passes. */
   StorageVectorBuffer<uint, 128> past_casters_updated_ = {"PastCastersUpdated"};
   StorageVectorBuffer<uint, 128> curr_casters_updated_ = {"CurrCastersUpdated"};
+  /** List of Resource IDs (to get bounds) for getting minimum clip-maps bounds. */
+  StorageVectorBuffer<uint, 128> curr_casters_ = {"CurrCasters"};
 
   /** Indirect arguments for page clearing. */
   StorageBuffer<DispatchCommand> clear_dispatch_buf_;
@@ -415,8 +410,6 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   float min_resolution_;
   /** View space offset to apply to the shadow. */
   float bias_;
-  /** Near and far clip distances. For clip-map, when they are updated after sync. */
-  float near_, far_;
   /** Offset of the smallest clip-map. In tiles. */
   int2 base_offset_;
   /** Copy of object matrix. Normalized. */

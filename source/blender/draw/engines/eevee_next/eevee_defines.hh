@@ -49,6 +49,7 @@
 #define SHADOW_MAX_PAGE 4096
 #define SHADOW_PAGE_PER_ROW 64
 #define SHADOW_ATLAS_SLOT 5
+#define SHADOW_BOUNDS_GROUP_SIZE 64
 
 /* Ray-tracing. */
 #define RAYTRACE_GROUP_SIZE 16

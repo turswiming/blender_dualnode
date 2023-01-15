@@ -49,7 +49,7 @@ float linear_shadow_depth()
   }
   else {
     /* Directionnal shadow. Store distance from near clip plane. */
-    return abs(gl_FragCoord.z * -2.0 / drw_view.winmat[2][2]);
+    return gl_FragCoord.z * abs(2.0 / drw_view.winmat[2][2]);
   }
 }
 float linear_shadow_depth_with_bias(float bias)

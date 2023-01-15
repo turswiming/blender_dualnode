@@ -116,6 +116,19 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_page_clear)
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_page_clear_comp.glsl");
 
+GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_bounds)
+    .do_static_compilation(true)
+    .local_group_size(SHADOW_BOUNDS_GROUP_SIZE)
+    .storage_buf(LIGHT_BUF_SLOT, Qualifier::READ_WRITE, "LightData", "light_buf[]")
+    .storage_buf(LIGHT_CULL_BUF_SLOT, Qualifier::READ, "LightCullingData", "light_cull_buf")
+    .storage_buf(4, Qualifier::READ, "uint", "casters_id_buf[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "ShadowTileMapData", "tilemaps_buf[]")
+    .storage_buf(6, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
+    .push_constant(Type::INT, "resource_len")
+    .typedef_source("draw_shader_shared.h")
+    .additional_info("eevee_shared")
+    .compute_source("eevee_shadow_tilemap_bounds_comp.glsl");
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

@@ -4,7 +4,6 @@
  * Results are meant to be conservative.
  */
 
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(common_math_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(common_shape_lib.glsl)
 
@@ -126,6 +125,8 @@ IsectFrustum isect_data_setup(Frustum shape)
 /* ---------------------------------------------------------------------- */
 /** \name View Intersection functions.
  * \{ */
+
+#ifdef COMMON_VIEW_LIB_GLSL
 
 bool intersect_view(Pyramid pyramid)
 {
@@ -275,6 +276,8 @@ bool intersect_view(Sphere sphere)
   /* TODO reject false positive. */
   return intersects;
 }
+
+#endif
 
 /** \} */
 

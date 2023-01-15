@@ -113,12 +113,15 @@ float pow8(float x) { return sqr(sqr(sqr(x))); }
 float len_squared(vec3 a) { return dot(a, a); }
 float len_squared(vec2 a) { return dot(a, a); }
 
+/* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
+#ifndef GPU_SHADER_UTILDEFINES_GLSL
 bool flag_test(uint flag, uint val) { return (flag & val) != 0u; }
 bool flag_test(int flag, uint val) { return flag_test(uint(flag), val); }
 bool flag_test(int flag, int val) { return (flag & val) != 0; }
 
 void set_flag_from_test(inout uint value, bool test, uint flag) { if (test) { value |= flag; } else { value &= ~flag; } }
 void set_flag_from_test(inout int value, bool test, int flag) { if (test) { value |= flag; } else { value &= ~flag; } }
+#endif
 
 #define weighted_sum(val0, val1, val2, val3, weights) ((val0 * weights[0] + val1 * weights[1] + val2 * weights[2] + val3 * weights[3]) * safe_rcp(sum(weights)))
 #define weighted_sum_array(val, weights) ((val[0] * weights[0] + val[1] * weights[1] + val[2] * weights[2] + val[3] * weights[3]) * safe_rcp(sum(weights)))
@@ -162,6 +165,8 @@ uint bit_field_mask(uint bit_width, uint bit_min)
   return ~mask << bit_min;
 }
 
+/* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
+#ifndef GPU_SHADER_UTILDEFINES_GLSL
 uvec2 unpackUvec2x16(uint data)
 {
   return (uvec2(data) >> uvec2(0u, 16u)) & uvec2(0xFFFFu);
@@ -183,6 +188,7 @@ uint packUvec4x8(uvec4 data)
   data = (data & 0xFFu) << uvec4(0u, 8u, 16u, 24u);
   return data.x | data.y | data.z | data.w;
 }
+#endif
 
 /* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
 #ifndef GPU_SHADER_MATH_VECTOR_LIB_GLSL

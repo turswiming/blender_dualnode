@@ -7,6 +7,7 @@
  * to use a sampler instead of a SSBO bind.
  */
 
+#pragma BLENDER_REQUIRE(gpu_shader_utildefines_lib.glsl)
 #pragma BLENDER_REQUIRE(common_math_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_shadow_tilemap_lib.glsl)
 
@@ -99,9 +100,20 @@ void main()
       if (view_index < 64) {
         view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
         view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
+
+        if (!tilemap_data.is_cubeface) {
+          /* For directionnal, we need to modify winmat to encompass all casters. */
+          float clip_far = -tilemap_data._clip_far_new;
+          float clip_near = -tilemap_data._clip_near_new;
+          float rcp_zdelta = 1.0 / (clip_far - clip_near);
+          tilemap_data.winmat[2][2] = -2.0 * rcp_zdelta;
+          tilemap_data.winmat[3][2] = -(clip_far + clip_near) * rcp_zdelta;
+          drw_print(clip_far);
+          drw_print(clip_near);
+          drw_print(rcp_zdelta);
+        }
         view_infos_buf[view_index].winmat = tilemap_data.winmat;
         view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);
-        /* TODO(fclem): For directionnal, we need to modify winmat to encompass all casters. */
       }
     }
   }

@@ -17,8 +17,6 @@
 
 namespace blender::eevee {
 
-float ShadowTileMap::tile_cone_half_angle = atan(0.5 * M_SQRT2 / (SHADOW_TILEMAP_RES / 2));
-
 /* -------------------------------------------------------------------- */
 /** \name Tile map
  *
@@ -26,20 +24,19 @@ float ShadowTileMap::tile_cone_half_angle = atan(0.5 * M_SQRT2 / (SHADOW_TILEMAP
 
 void ShadowTileMap::sync_clipmap(const float3 &camera_position,
                                  const float4x4 &object_mat_,
-                                 float near_,
-                                 float far_,
                                  int2 origin_offset,
                                  int clipmap_level)
 {
-  if (is_cubeface || (level != clipmap_level) || (near != near_) || (far != far_)) {
+  if (is_cubeface || (level != clipmap_level)) {
     set_dirty();
   }
   is_cubeface = false;
   level = clipmap_level;
-  near = near_;
-  far = far_;
   cone_direction = float3(1.0f);
   cone_angle_cos = -2.0f;
+
+  clip_far = 0x7F7FFFFF;                /* floatBitsToOrderedInt(FLT_MAX) */
+  clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
 
   if (grid_shift == int2(0)) {
     /* Only replace shift if it is not already dirty. */
@@ -90,10 +87,10 @@ void ShadowTileMap::sync_cubeface(
   far = far_;
 
   if (cone_aperture > DEG2RADF(180.0f)) {
-    cone_angle_cos = -2.0;
+    cone_angle_cos = -2.0f;
   }
   else {
-    cone_angle_cos = cosf(min_ff((cone_aperture * 0.5f) + tile_cone_half_angle, M_PI_2));
+    cone_angle_cos = cosf(min_ff((cone_aperture * 0.5f) + 0.0001, M_PI_2));
   }
   cone_direction = -float3(object_mat_.values[2]);
 
@@ -124,7 +121,7 @@ float4x4 ShadowTileMap::winmat_get() const
   }
   else {
     float half_size = tilemap_coverage_get(level) / 2.0f;
-    orthographic_m4(winmat.ptr(), -half_size, half_size, -half_size, half_size, 1.0, -1.0);
+    orthographic_m4(winmat.ptr(), -half_size, half_size, -half_size, half_size, -1.0, 1.0);
   }
   return winmat;
 }
@@ -417,6 +414,8 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
 
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
   light.tilemap_last = light.tilemap_index + lods_range.size() - 1;
+  light.clip_far = 0x7F7FFFFF;                /* floatBitsToOrderedInt(FLT_MAX) */
+  light.clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
 
   /* Compute full offset from world origin to the smallest clipmap tile centered around the camera
    * position. The offset is computed in smallest tile unit. */
@@ -428,8 +427,7 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
   for (int level : IndexRange(lods_range.size())) {
     ShadowTileMap *tilemap = tilemaps_[level];
     int2 offset = (math::abs(base_offset_) >> level) * math::sign(base_offset_);
-    tilemap->sync_clipmap(
-        camera_pos, object_mat_, near_, far_, offset, lods_range.first() + level);
+    tilemap->sync_clipmap(camera_pos, object_mat_, offset, lods_range.first() + level);
 
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
     tilemap_pool.tilemaps_data.append(*tilemap);
@@ -483,6 +481,7 @@ void ShadowModule::begin_sync()
 {
   past_casters_updated_.clear();
   curr_casters_updated_.clear();
+  curr_casters_.clear();
 
   {
     Manager &manager = *inst_.manager;
@@ -546,6 +545,10 @@ void ShadowModule::sync_object(const ObjectHandle &handle,
   }
   shadow_ob.resource_handle = resource_handle;
 
+  if (is_shadow_caster) {
+    curr_casters_.append(resource_handle.raw);
+  }
+
   if (is_alpha_blend) {
     tilemap_usage_transparent_ps_->draw(box_batch_, resource_handle);
   }
@@ -601,6 +604,8 @@ void ShadowModule::end_sync()
   past_casters_updated_.push_update();
   curr_casters_updated_.push_update();
 
+  curr_casters_.push_update();
+
   if (do_full_update) {
     do_full_update = false;
     /* Put all pages in the free heap. */
@@ -634,6 +639,18 @@ void ShadowModule::end_sync()
       PassSimple &pass = tilemap_setup_ps_;
       pass.init();
 
+      {
+        /** Compute near/far clip distances for directional shadows based on casters bounds. */
+        PassSimple::Sub &sub = pass.sub("DirectionalBounds");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_BOUNDS));
+        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("casters_id_buf", curr_casters_);
+        sub.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
+        sub.push_constant("resource_len", int(curr_casters_.size()));
+        inst_.lights.bind_resources(&sub);
+        sub.dispatch(int3(divide_ceil_u(curr_casters_.size(), SHADOW_BOUNDS_GROUP_SIZE), 1, 1));
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
       {
         /** Clear usage bits. Tag update from the tilemap for sun shadow clip-maps shifting. */
         PassSimple::Sub &sub = pass.sub("Init");
