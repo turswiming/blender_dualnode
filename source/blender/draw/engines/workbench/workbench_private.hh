@@ -300,8 +300,9 @@ class ShadowPass {
   void update();
   void sync();
   void object_sync(Manager &manager,
-                   ObjectRef &ob_ref,
                    SceneState &scene_state,
+                   ObjectRef &ob_ref,
+                   ResourceHandle handle,
                    const bool has_transp_mat);
   void draw(Manager &manager,
             View &view,

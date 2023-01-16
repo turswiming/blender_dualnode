@@ -165,6 +165,7 @@ class Instance {
 
   void mesh_sync(Manager &manager, ObjectRef &ob_ref, const ObjectState &object_state)
   {
+    ResourceHandle handle = manager.resource_handle(ob_ref);
     bool has_transparent_material = false;
 
     if (object_state.sculpt_pbvh) {
@@ -193,8 +194,8 @@ class Instance {
             /* TODO(fclem): This create a cull-able instance for each sub-object. This is done
              * for simplicity to reduce complexity. But this increase the overhead per object.
              * Instead, we should use an indirection buffer to the material buffer. */
+            ResourceHandle handle = i == 0 ? handle : manager.resource_handle(ob_ref);
 
-            ResourceHandle handle = manager.resource_handle(ob_ref);
             Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
 
             if (::Material *_mat = BKE_object_material_get_eval(ob_ref.object, i + 1)) {
@@ -235,7 +236,6 @@ class Instance {
         }
 
         if (batch) {
-          ResourceHandle handle = manager.resource_handle(ob_ref);
           Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
 
           if (object_state.color_type == V3D_SHADING_OBJECT_COLOR) {
@@ -267,7 +267,7 @@ class Instance {
     }
 
     if (object_state.draw_shadow) {
-      shadow_ps.object_sync(manager, ob_ref, scene_state, has_transparent_material);
+      shadow_ps.object_sync(manager, scene_state, ob_ref, handle, has_transparent_material);
     }
   }
 
