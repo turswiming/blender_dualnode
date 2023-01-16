@@ -108,9 +108,6 @@ void main()
           float rcp_zdelta = 1.0 / (clip_far - clip_near);
           tilemap_data.winmat[2][2] = -2.0 * rcp_zdelta;
           tilemap_data.winmat[3][2] = -(clip_far + clip_near) * rcp_zdelta;
-          drw_print(clip_far);
-          drw_print(clip_near);
-          drw_print(rcp_zdelta);
         }
         view_infos_buf[view_index].winmat = tilemap_data.winmat;
         view_infos_buf[view_index].wininv = inverse(tilemap_data.winmat);

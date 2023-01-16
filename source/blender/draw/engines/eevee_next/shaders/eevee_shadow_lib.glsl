@@ -161,20 +161,28 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
                            vec3 camera_P)
 {
   ShadowSample samp;
+  float occluder_dist;
   if (light.type == LIGHT_SUN) {
     vec3 lP = shadow_world_to_local(light, P);
     vec2 uv;
     ShadowTileData tile = shadow_directional_tile_get(
         tilemaps_tx, light, camera_P, lP, P, lNg, uv, samp.bias);
-    float occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
-    samp.occluder_delta = occluder_dist - (lP.z + shadow_orderedIntBitsToFloat(light.clip_near));
+
+    occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
+    /* Shadow is stored positive only for atomic operation.
+     * So the encoded distance is positive and increasing from the near plane.
+     * Bias back to get world distance. */
+    occluder_dist = occluder_dist - shadow_orderedIntBitsToFloat(light.clip_near);
+    /* Receiver distance needs to also be increasing.
+     * Negate since Z distance follows opengl convention of neg Z as forward. */
+    receiver_dist = -lP.z;
   }
   else {
     vec2 uv;
     ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lL, lNg, uv, samp.bias);
-    float occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
-    samp.occluder_delta = occluder_dist - receiver_dist;
+    occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
   }
+  samp.occluder_delta = occluder_dist - receiver_dist;
   return samp;
 }
 
