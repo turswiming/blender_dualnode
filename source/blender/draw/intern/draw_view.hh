@@ -64,13 +64,13 @@ class View {
   View(const char *name, const DRWView *view)
       : visibility_buf_(name), debug_name_(name), view_len_(1)
   {
-    float4x4 view_mat, win_mat;
-    DRW_view_viewmat_get(view, view_mat.ptr(), false);
-    DRW_view_winmat_get(view, win_mat.ptr(), false);
-    this->sync(view_mat, win_mat);
+    this->sync(view);
   }
 
   void sync(const float4x4 &view_mat, const float4x4 &win_mat, int view_id = 0);
+
+  /* For compatibility with old system. Will be removed at some point. */
+  void sync(const DRWView *view);
 
   bool is_persp(int view_id = 0) const
   {

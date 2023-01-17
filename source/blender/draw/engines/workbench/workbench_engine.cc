@@ -21,6 +21,8 @@ using namespace draw;
 
 class Instance {
  public:
+  View view = {"DefaultView"};
+
   SceneState scene_state;
 
   SceneResources resources;
@@ -309,8 +311,10 @@ class Instance {
     }
   }
 
-  void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
+  void draw(Manager &manager, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
+    view.sync(DRW_view_default_get());
+
     int2 resolution = scene_state.resolution;
 
     if (scene_state.render_finished) {
@@ -364,9 +368,9 @@ class Instance {
     resources.depth_in_front_tx.release();
   }
 
-  void draw_viewport(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
+  void draw_viewport(Manager &manager, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
-    this->draw(manager, view, depth_tx, color_tx);
+    this->draw(manager, depth_tx, color_tx);
 
     if (scene_state.sample + 1 < scene_state.samples_len) {
       DRW_viewport_request_redraw();
@@ -389,6 +393,7 @@ struct WORKBENCH_Data {
   DRWViewportEmptyList *psl;
   DRWViewportEmptyList *stl;
   workbench::Instance *instance;
+  draw::View *view;
 
   char info[GPU_INFO_SIZE];
 };
@@ -403,6 +408,7 @@ static void workbench_engine_init(void *vedata)
   WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
   if (ved->instance == nullptr) {
     ved->instance = new workbench::Instance();
+    ved->view = new draw::View("Default View");
   }
 
   ved->instance->init();
@@ -447,10 +453,8 @@ static void workbench_draw_scene(void *vedata)
     return;
   }
   DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
-  const DRWView *default_view = DRW_view_default_get();
   draw::Manager *manager = DRW_manager_get();
-  draw::View view("DefaultView", default_view);
-  ved->instance->draw_viewport(*manager, view, dtxl->depth, dtxl->color);
+  ved->instance->draw_viewport(*manager, dtxl->depth, dtxl->color);
 }
 
 static void workbench_instance_free(void *instance)
