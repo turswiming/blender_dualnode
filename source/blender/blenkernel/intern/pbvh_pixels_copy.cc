@@ -344,10 +344,10 @@ struct Rows {
     {
       rcti search_bounds;
       BLI_rcti_init(&search_bounds,
-                    max_ii(destination.x - 1, 0),
-                    min_ii(destination.x + 1, rows.resolution.x - 1),
-                    max_ii(destination.y - 1, 0),
-                    min_ii(destination.y + 1, rows.resolution.y - 1));
+                    max_ii(first_source.x - 1, 0),
+                    min_ii(first_source.x + 1, rows.resolution.x - 1),
+                    max_ii(first_source.y - 1, 0),
+                    min_ii(first_source.y + 1, rows.resolution.y - 1));
       /* Initialize to the first source, so when no other source could be found it will use the
        * first_source. */
       int2 found_source = first_source;
@@ -425,7 +425,7 @@ struct Rows {
               continue;
             }
             float new_distance = blender::math::distance(float2(sx, sy), float2(x, row_number));
-            if (found_distance > new_distance) {
+            if (new_distance < found_distance) {
               found_source = int2(sx, sy);
               found_distance = new_distance;
             }
