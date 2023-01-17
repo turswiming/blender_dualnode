@@ -470,18 +470,31 @@ struct Rows {
 
     static void extend_last_group(CopyPixelTile &tile_pixels, const CopyPixelCommand &command)
     {
-      /*
-      printf("(%d,%d) = mix((%d,%d), (%d,%d), %f);\n",
-             UNPACK2(command.destination),
-             UNPACK2(command.source_1),
-             UNPACK2(command.source_2),
-             command.mix_factor);
-             */
       CopyPixelGroup &group = tile_pixels.groups.last();
       CopyPixelCommand last_command = last_copy_command(tile_pixels, group);
       DeltaCopyPixelCommand delta_command = last_command.encode_delta(command);
       tile_pixels.command_deltas.append(delta_command);
       group.num_deltas += 1;
+
+#ifndef NDEBUG
+      /* Check if decoding the encoded command gives the same result.*/
+      CopyPixelCommand test_command = last_copy_command(tile_pixels, group);
+#  if 0
+      printf("(%d,%d) = mix((%d,%d), (%d,%d), %f); -> (%d,%d) = mix((%d,%d), (%d,%d), %f);\n",
+             UNPACK2(command.destination),
+             UNPACK2(command.source_1),
+             UNPACK2(command.source_2),
+             command.mix_factor,
+             UNPACK2(test_command.destination),
+             UNPACK2(test_command.source_1),
+             UNPACK2(test_command.source_2),
+             test_command.mix_factor);
+#  endif
+      BLI_assert(test_command.destination == command.destination);
+      BLI_assert(test_command.source_1 == command.source_1);
+      BLI_assert(test_command.source_2 == command.source_2);
+      BLI_assert(abs(test_command.mix_factor - command.mix_factor) < (1.0 / 255) + 0.001);
+#endif
     }
 
     // TODO: move to group. */
