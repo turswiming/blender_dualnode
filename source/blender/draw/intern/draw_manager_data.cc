@@ -719,16 +719,12 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
 
 static void drw_call_culling_init(DRWCullingState *cull, Object *ob)
 {
-  if (ob != nullptr) {
-    float3 min, max;
-    BKE_object_minmax(ob, min, max, false);
-    BoundBox bbox;
-    BKE_boundbox_init_from_minmax(&bbox, min, max);
-
+  const BoundBox *bbox;
+  if (ob != nullptr && (bbox = BKE_object_boundbox_get(ob))) {
     float corner[3];
     /* Get BoundSphere center and radius from the BoundBox. */
-    mid_v3_v3v3(cull->bsphere.center, bbox.vec[0], bbox.vec[6]);
-    mul_v3_m4v3(corner, ob->object_to_world, bbox.vec[0]);
+    mid_v3_v3v3(cull->bsphere.center, bbox->vec[0], bbox->vec[6]);
+    mul_v3_m4v3(corner, ob->object_to_world, bbox->vec[0]);
     mul_m4_v3(ob->object_to_world, cull->bsphere.center);
     cull->bsphere.radius = len_v3v3(cull->bsphere.center, corner);
 
