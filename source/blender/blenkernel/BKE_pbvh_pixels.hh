@@ -370,15 +370,15 @@ struct CopyPixelTile {
   {
   }
 
-  void copy_pixels(ImBuf &tile_buffer) const
+  void copy_pixels(ImBuf &tile_buffer, IndexRange group_range) const
   {
     if (tile_buffer.rect_float) {
       ImageBufferAccessor<float4> accessor(tile_buffer);
-      copy_pixels<float4>(accessor);
+      copy_pixels<float4>(accessor, group_range);
     }
     else {
       ImageBufferAccessor<int> accessor(tile_buffer);
-      copy_pixels<int>(accessor);
+      copy_pixels<int>(accessor, group_range);
     }
   }
 
@@ -395,9 +395,11 @@ struct CopyPixelTile {
   }
 
  private:
-  template<typename T> void copy_pixels(ImageBufferAccessor<T> &image_buffer) const
+  template<typename T>
+  void copy_pixels(ImageBufferAccessor<T> &image_buffer, IndexRange group_range) const
   {
-    for (const CopyPixelGroup &group : groups) {
+    for (const int64_t group_index : group_range) {
+      const CopyPixelGroup &group = groups[group_index];
       CopyPixelCommand copy_command(group);
       for (const DeltaCopyPixelCommand &item : Span<const DeltaCopyPixelCommand>(
                &command_deltas[group.start_delta_index], group.num_deltas)) {

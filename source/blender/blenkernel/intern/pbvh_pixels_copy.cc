@@ -5,6 +5,7 @@
 #include "BLI_bit_vector.hh"
 #include "BLI_math.h"
 #include "BLI_math_vector.hh"
+#include "BLI_task.hh"
 #include "BLI_vector.hh"
 
 #include "IMB_imbuf.h"
@@ -652,7 +653,12 @@ void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
     /* No tile buffer found to copy. */
     return;
   }
-  pixel_tile->get().copy_pixels(*tile_buffer);
+
+  CopyPixelTile &tile = pixel_tile->get();
+  const int grain_size = 128;
+  threading::parallel_for(tile.groups.index_range(), grain_size, [&](IndexRange range) {
+    tile.copy_pixels(*tile_buffer, range);
+  });
 
   BKE_image_release_ibuf(&image, tile_buffer, nullptr);
   // TIMEIT_END(pbvh_pixels_copy_pixels);
