@@ -70,9 +70,8 @@ void add_margin(rcti &bounds, int margin)
 void clamp(rcti &bounds, int2 resolution)
 {
   rcti clamping_bounds;
-  int2 xy;
   BLI_rcti_init(&clamping_bounds, 0, resolution.x - 1, 0, resolution.y - 1);
-  BLI_rcti_clamp(&bounds, &clamping_bounds, xy);
+  BLI_rcti_isect(&bounds, &clamping_bounds, &bounds);
 }
 
 const Vertex<CoordSpace::Tile> convert_coord_space(const Vertex<CoordSpace::UV> &uv_vertex,
@@ -471,6 +470,13 @@ struct Rows {
 
     static void extend_last_group(CopyPixelTile &tile_pixels, const CopyPixelCommand &command)
     {
+      /*
+      printf("(%d,%d) = mix((%d,%d), (%d,%d), %f);\n",
+             UNPACK2(command.destination),
+             UNPACK2(command.source_1),
+             UNPACK2(command.source_2),
+             command.mix_factor);
+             */
       CopyPixelGroup &group = tile_pixels.groups.last();
       CopyPixelCommand last_command = last_copy_command(tile_pixels, group);
       DeltaCopyPixelCommand delta_command = last_command.encode_delta(command);
