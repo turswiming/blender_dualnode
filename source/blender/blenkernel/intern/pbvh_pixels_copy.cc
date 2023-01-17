@@ -99,6 +99,7 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
  public:
   NonManifoldUVEdges(const uv_islands::MeshData &mesh_data)
   {
+    TIMEIT_START(det_edges);
     int num_non_manifold_edges = count_non_manifold_edges(mesh_data);
     reserve(num_non_manifold_edges);
     for (const int primitive_id : mesh_data.looptris.index_range()) {
@@ -117,12 +118,14 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
     }
     BLI_assert_msg(size() == num_non_manifold_edges,
                    "Incorrect number of non manifold edges added. ");
+    TIMEIT_END(det_edges);
   }
 
   NonManifoldTileEdges extract_tile_edges(const image::ImageTileWrapper image_tile,
                                           const int2 tile_resolution) const
   {
     NonManifoldTileEdges result;
+    TIMEIT_START(extract_edges);
     // TODO: Only add edges that intersects with the given tile.
     // TODO: Clamp edges to tile bounds.
 
@@ -131,6 +134,7 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
           uv_edge, image_tile, tile_resolution);
       result.append(tile_edge);
     }
+    TIMEIT_END(extract_edges);
     return result;
   }
 
@@ -174,6 +178,7 @@ class PixelNodesTileData : public Vector<std::reference_wrapper<UDIMTilePixels>>
  public:
   PixelNodesTileData(PBVH &pbvh, const image::ImageTileWrapper &image_tile)
   {
+    TIMEIT_START(pixel_nodes_tile_data);
     reserve(count_nodes(pbvh, image_tile));
 
     for (PBVHNode &node : MutableSpan(pbvh.nodes, pbvh.totnode)) {
@@ -183,6 +188,7 @@ class PixelNodesTileData : public Vector<std::reference_wrapper<UDIMTilePixels>>
         append(tile_pixels);
       }
     }
+    TIMEIT_END(pixel_nodes_tile_data);
   }
 
  private:
@@ -623,9 +629,17 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     CopyPixelTile copy_tile(image_tile.get_tile_number());
 
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
+    TIMEIT_START(mark_for_eval);
     rows.mark_for_evaluation(tile_edges);
+    TIMEIT_END(mark_for_eval);
+
+    TIMEIT_START(find_source);
     rows.find_copy_source(tile_edges);
+    TIMEIT_END(find_source);
+
+    TIMEIT_START(pack);
     rows.pack_into(copy_tile);
+    TIMEIT_END(pack);
     copy_tile.print_compression_rate();
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
   }
