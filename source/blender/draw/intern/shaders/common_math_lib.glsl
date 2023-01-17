@@ -30,6 +30,8 @@ mat3 mul(mat3 m1, mat3 m2)
 {
   return m1 * m2;
 }
+/* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
+#ifndef GPU_SHADER_MATH_MATRIX_LIB_GLSL
 vec3 transform_direction(mat4 m, vec3 v)
 {
   return mat3(m) * v;
@@ -43,6 +45,7 @@ vec3 project_point(mat4 m, vec3 v)
   vec4 tmp = m * vec4(v, 1.0);
   return tmp.xyz / tmp.w;
 }
+#endif
 
 mat2 rot2_from_angle(float a)
 {

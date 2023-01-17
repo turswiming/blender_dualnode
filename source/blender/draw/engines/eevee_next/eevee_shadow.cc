@@ -297,10 +297,6 @@ void ShadowPunctual::end_sync(Light &light)
     tilemaps_.append(tilemap_pool.acquire());
   }
 
-  light.shadow_bias = bias_;
-  light.clip_near = near_;
-  light.clip_far = far_;
-
   tilemaps_[Z_NEG]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, Z_NEG);
   if (tilemaps_needed_ >= 5) {
     tilemaps_[X_POS]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, X_POS);
@@ -311,6 +307,12 @@ void ShadowPunctual::end_sync(Light &light)
   if (tilemaps_needed_ == 6) {
     tilemaps_[Z_POS]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, Z_POS);
   }
+
+  /* Normal matrix to convert geometric normal to optimal bias. */
+  float4x4 winmat = tilemaps_[Z_NEG]->winmat_get();
+  float4x4 normal_mat = winmat.transposed().inverted();
+  light.normal_mat_packed.x = normal_mat[3][2];
+  light.normal_mat_packed.y = normal_mat[3][3];
 
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
   light.tilemap_last = light.tilemap_index + tilemaps_needed_ - 1;
@@ -414,7 +416,6 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
 
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
   light.tilemap_last = light.tilemap_index + lods_range.size() - 1;
-  light.clip_far = 0x7F7FFFFF;                /* floatBitsToOrderedInt(FLT_MAX) */
   light.clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
 
   /* Compute full offset from world origin to the smallest clipmap tile centered around the camera
@@ -434,10 +435,10 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
     tilemap->set_updated();
   }
 
-  light.shadow_bias = bias_;
   light.clipmap_base_offset = base_offset_;
   light.clipmap_lod_min = lods_range.first();
   light.clipmap_lod_max = lods_range.last();
+  light.normal_mat_packed.x = exp2f(light.clipmap_lod_min);
 
   float half_dim = ShadowTileMap::tilemap_coverage_get(light.clipmap_lod_max) / 2.0f;
   light._clipmap_scale = float(SHADOW_TILEMAP_RES / 2) / half_dim;

@@ -82,12 +82,12 @@ void main()
     page_cached_free(src % max_page);
   }
 
-  drw_print("page_free_count", pages_infos_buf.page_free_count);
-  drw_print("page_alloc_count", pages_infos_buf.page_alloc_count);
-  drw_print("page_cached_next", pages_infos_buf.page_cached_next);
-  drw_print("page_cached_start", pages_infos_buf.page_cached_start);
-  drw_print("page_cached_end", pages_infos_buf.page_cached_end);
-  drw_print("view_count", pages_infos_buf.view_count);
+  // drw_print("page_free_count", pages_infos_buf.page_free_count);
+  // drw_print("page_alloc_count", pages_infos_buf.page_alloc_count);
+  // drw_print("page_cached_next", pages_infos_buf.page_cached_next);
+  // drw_print("page_cached_start", pages_infos_buf.page_cached_start);
+  // drw_print("page_cached_end", pages_infos_buf.page_cached_end);
+  // drw_print("view_count", pages_infos_buf.view_count);
 
   pages_infos_buf.page_cached_start = src;
   pages_infos_buf.page_cached_end = end;

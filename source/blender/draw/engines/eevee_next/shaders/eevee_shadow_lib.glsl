@@ -63,34 +63,42 @@ vec3 shadow_punctual_local_position_to_face_local(int face_id, vec3 lL)
   }
 }
 
-/* Returns minimum bias needed for a given geometry birlak abd a shadowmap page. */
-float shadow_slope_bias_get(LightData light, vec3 lNg, uint lod)
+mat4x4 shadow_load_normal_matrix(LightData light)
 {
-#if 0 /* TODO(fclem): finish */
-  if (is_punctual) {
-    /* Assume 90° aperture projection frustum for punctual shadows. Note near/far do not mater. */
-    /* TODO(fclem): Optimize. This can be easily precomputed. */
-    mat4 normal_mat = invert(transpose(projection__perspective(-light.clip_near,
-                                                               light.clip_near,
-                                                               -light.clip_near,
-                                                               light.clip_near,
-                                                               light.clip_near,
-                                                               light.clip_far)));
-    vec3 ndc_Ng = transform_direction(normal_mat, lNg);
+  if (light.type != LIGHT_SUN) {
+    return mat4x4(vec4(1.0, 0.0, 0.0, 0.0),
+                  vec4(0.0, 1.0, 0.0, 0.0),
+                  vec4(0.0, 0.0, 0.0, -1.0),
+                  vec4(0.0, 0.0, light.normal_mat_packed.x, light.normal_mat_packed.y));
   }
+  else {
+    return mat4x4(vec4(light.normal_mat_packed.x, 0.0, 0.0, 0.0),
+                  vec4(0.0, light.normal_mat_packed.x, 0.0, 0.0),
+                  vec4(0.0, 0.0, 1.0, 0.0),
+                  vec4(0.0, 0.0, 0.0, 1.0));
+  }
+}
 
+/* Returns minimum Z bias needed for a given geometry normal and a shadowmap page. */
+float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
+{
+  /* Create a normal plane equation and go through the normal projection matrix. */
+  vec4 lNg_plane = vec4(lNg, -dot(lNg, lP));
+  vec4 ndc_Ng = shadow_load_normal_matrix(light) * lNg_plane;
   /* Get slope from normal vector. */
-  vec2 ndc_slope = ndc_Ng.xy / -ndc_Ng.z;
+  vec2 ndc_slope = ndc_Ng.xy / ndc_Ng.z;
   /* Slope bias definition from fixed pipeline. */
-  float bias = length_manhattan(ndc_slope);
+  float bias = abs(ndc_slope.x) + abs(ndc_slope.y);
   /* Bias for 1 pixel of LOD 0. */
-  bias *= 1.0 / (SHADOW_TILEMAP_RES * shadow_page_size_);
+  bias *= 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   /* Compensate for each increasing lod level as the space between pixels increases. */
   bias *= float(1u << lod);
+  /* Add quantization error bias. */
+  bias += 1e-20;
+  /* Clamp out to avoid the bias going to infinity. */
+  bias = min(bias, 1.0e5);
+
   return bias;
-#endif
-  const float quantization_bias = 1e-20;
-  return light.shadow_bias * float(1u << lod) + quantization_bias;
 }
 
 ShadowTileData shadow_punctual_tile_get(
@@ -107,7 +115,7 @@ ShadowTileData shadow_punctual_tile_get(
   ivec2 tile_co = ivec2(floor(uv));
   int tilemap_index = light.tilemap_index + face_id;
   ShadowTileData tile = shadow_tile_load(tilemaps_tx, tile_co, tilemap_index);
-  bias = shadow_slope_bias_get(light, lNg, tile.lod);
+  bias = shadow_slope_bias_get(light, lNg, -lL, tile.lod);
   return tile;
 }
 
@@ -125,7 +133,7 @@ ShadowTileData shadow_directional_tile_get(usampler2D tilemaps_tx,
   uv = coord.uv;
 
   ShadowTileData tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
-  bias = shadow_slope_bias_get(light, lNg, tile.lod);
+  bias = shadow_slope_bias_get(light, lNg, lP, coord.clipmap_lod_relative + tile.lod);
   return tile;
 }
 

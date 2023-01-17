@@ -299,7 +299,7 @@ class ShadowModule {
   /** \} */
 
   /** Scene immutable parameters. */
-  int shadow_page_size_ = 256;
+  int shadow_page_size_ = SHADOW_PAGE_RES;
   /** Maximum number of allocated pages. Maximum value is SHADOW_MAX_TILEMAP. */
   int shadow_page_len_ = SHADOW_MAX_TILEMAP;
 
@@ -364,7 +364,7 @@ class ShadowPunctual : public NonCopyable, NonMovable {
   /** Near and far clip distances. */
   float far_, near_;
   /** View space offset to apply to the shadow. */
-  float bias_;
+  float bias_; /* TODO remove */
   /** Number of tile-maps needed to cover the light angular extents. */
   int tilemaps_needed_;
   /** Visibility cone angle from the light source. */

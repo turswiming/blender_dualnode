@@ -490,8 +490,7 @@ static inline float regular_polygon_side_length(float sides_count)
  * Start first corners at theta == 0. */
 static inline float circle_to_polygon_radius(float sides_count, float theta)
 {
-  /* From Graphics Gems from CryENGINE 3 (Siggraph 2013) by Tiago Sousa (slide
-   * 36). */
+  /* From Graphics Gems from CryENGINE 3 (Siggraph 2013) by Tiago Sousa (slide 36). */
   float side_angle = (2.0f * M_PI) / sides_count;
   return cosf(side_angle * 0.5f) /
          cosf(theta - side_angle * floorf((sides_count * theta + M_PI) / (2.0f * M_PI)));
@@ -628,8 +627,8 @@ struct LightData {
   float transmit_power;
 
   /** --- Shadow Data --- */
-  /** Shadow bias in world space. */
-  float shadow_bias;
+  /** Directional : Near clip distance. Float stored as int for atomic operations. */
+  int clip_near;
   /** Directional : Offset of the lod min in lod min tile units. */
   int2 clipmap_base_offset;
   /** Directional : Clip-map lod range to avoid sampling outside of valid range. */
@@ -639,9 +638,8 @@ struct LightData {
   int tilemap_index;
   /** Index of the last tile-map. */
   int tilemap_last;
-  /** Near and far clip distances for directional. Float stored as int for atomic operations. */
-  int clip_near;
-  int clip_far;
+  /** Punctual : Normal matrix packed for automatic bias. */
+  float2 normal_mat_packed;
 };
 BLI_STATIC_ASSERT_ALIGN(LightData, 16)
 

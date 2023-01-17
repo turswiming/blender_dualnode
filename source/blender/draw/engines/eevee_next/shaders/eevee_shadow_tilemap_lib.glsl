@@ -102,6 +102,8 @@ int shadow_directional_clipmap_level(LightData light, float distance_to_camera)
 struct ShadowClipmapCoordinates {
   /* Index of the tilemap to containing the tile. */
   int tilemap_index;
+  /* LOD of the tile to load relative to the min level. Always positive */
+  int clipmap_lod_relative;
   /* Tile coordinate inside the tilemap. */
   ivec2 tile_coord;
   /* UV coordinates in [0..SHADOW_TILEMAP_RES) range. */
@@ -121,16 +123,17 @@ ShadowClipmapCoordinates shadow_directional_coordinates(LightData light,
                                                         vec3 lP,
                                                         float distance_to_camera)
 {
+  ShadowClipmapCoordinates ret;
+
   int clipmap_lod = shadow_directional_clipmap_level(light, distance_to_camera);
   /* This difference needs to be less than 32 for the later shift to be valid.
    * This is ensured by ShadowDirectional::clipmap_level_range(). */
-  int clipmap_lod_relative = clipmap_lod - light.clipmap_lod_min;
+  ret.clipmap_lod_relative = clipmap_lod - light.clipmap_lod_min;
 
-  ShadowClipmapCoordinates ret;
-  ret.tilemap_index = light.tilemap_index + clipmap_lod_relative;
+  ret.tilemap_index = light.tilemap_index + ret.clipmap_lod_relative;
 
   /* Compute offset of the clipmap from the largest LOD. */
-  ivec2 clipmap_offset = divide_by_two_n(light.clipmap_base_offset, clipmap_lod_relative);
+  ivec2 clipmap_offset = divide_by_two_n(light.clipmap_base_offset, ret.clipmap_lod_relative);
   // clipmap_offset += float(SHADOW_TILEMAP_RES / 2);
 
   /* Compute how many time we need to subdivide. */
