@@ -411,8 +411,6 @@ struct Rows {
         BLI_rcti_init(&bounds, x, x, row_number, row_number);
         add_margin(bounds, rows.margin);
         clamp(bounds, rows.resolution);
-        // TODO: improvement is to clamp it with the bounds of the edge that is assigned to the
-        // pixel.
 
         float found_distance = std::numeric_limits<float>().max();
         int2 found_source(0);
