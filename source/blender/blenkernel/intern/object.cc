@@ -3882,8 +3882,12 @@ void BKE_object_minmax(Object *ob, float r_min[3], float r_max[3], const bool us
       break;
     }
     case OB_MESH: {
-      const BoundBox bb = *BKE_mesh_boundbox_get(ob);
-      BKE_boundbox_minmax(&bb, ob->object_to_world, r_min, r_max);
+      Mesh *me = (Mesh *)ob->data;
+      INIT_MINMAX(r_min, r_max);
+      if (!BKE_mesh_wrapper_minmax(me, r_min, r_max)) {
+        r_min[0] = r_min[1] = r_min[2] = -1.0f;
+        r_max[0] = r_max[1] = r_max[2] = 1.0f;
+      }
       changed = true;
       break;
     }
