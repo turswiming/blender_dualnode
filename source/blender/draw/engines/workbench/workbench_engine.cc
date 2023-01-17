@@ -196,9 +196,9 @@ class Instance {
             /* TODO(fclem): This create a cull-able instance for each sub-object. This is done
              * for simplicity to reduce complexity. But this increase the overhead per object.
              * Instead, we should use an indirection buffer to the material buffer. */
-            ResourceHandle handle = i == 0 ? handle : manager.resource_handle(ob_ref);
+            ResourceHandle _handle = i == 0 ? handle : manager.resource_handle(ob_ref);
 
-            Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+            Material &mat = resources.material_buf.get_or_resize(_handle.resource_index());
 
             if (::Material *_mat = BKE_object_material_get_eval(ob_ref.object, i + 1)) {
               mat = Material(*_mat);
@@ -216,7 +216,7 @@ class Instance {
               get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
             }
 
-            draw_mesh(ob_ref, mat, batches[i], handle, image, sampler_state, iuser);
+            draw_mesh(ob_ref, mat, batches[i], _handle, image, sampler_state, iuser);
           }
         }
       }
