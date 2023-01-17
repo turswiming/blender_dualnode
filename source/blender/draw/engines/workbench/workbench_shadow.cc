@@ -391,8 +391,9 @@ void ShadowPass::sync()
 }
 
 void ShadowPass::object_sync(Manager &manager,
-                             ObjectRef &ob_ref,
                              SceneState &scene_state,
+                             ObjectRef &ob_ref,
+                             ResourceHandle handle,
                              const bool has_transp_mat)
 {
   if (!enabled_) {
@@ -422,8 +423,6 @@ void ShadowPass::object_sync(Manager &manager,
 
   /* Unless we force the FAIL Method we add draw commands to both methods,
    * then the visibility compute shader selects the one needed */
-
-  ResourceHandle handle = manager.resource_handle(ob_ref);
 
   if (!force_fail_pass) {
     PassMain::Sub &ps = *get_pass_ptr(PASS, is_manifold);

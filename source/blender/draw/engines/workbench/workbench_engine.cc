@@ -21,6 +21,8 @@ using namespace draw;
 
 class Instance {
  public:
+  View view = {"DefaultView"};
+
   SceneState scene_state;
 
   SceneResources resources;
@@ -165,6 +167,7 @@ class Instance {
 
   void mesh_sync(Manager &manager, ObjectRef &ob_ref, const ObjectState &object_state)
   {
+    ResourceHandle handle = manager.resource_handle(ob_ref);
     bool has_transparent_material = false;
 
     if (object_state.sculpt_pbvh) {
@@ -193,9 +196,9 @@ class Instance {
             /* TODO(fclem): This create a cull-able instance for each sub-object. This is done
              * for simplicity to reduce complexity. But this increase the overhead per object.
              * Instead, we should use an indirection buffer to the material buffer. */
+            ResourceHandle _handle = i == 0 ? handle : manager.resource_handle(ob_ref);
 
-            ResourceHandle handle = manager.resource_handle(ob_ref);
-            Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+            Material &mat = resources.material_buf.get_or_resize(_handle.resource_index());
 
             if (::Material *_mat = BKE_object_material_get_eval(ob_ref.object, i + 1)) {
               mat = Material(*_mat);
@@ -213,7 +216,7 @@ class Instance {
               get_material_image(ob_ref.object, i + 1, image, iuser, sampler_state);
             }
 
-            draw_mesh(ob_ref, mat, batches[i], handle, image, sampler_state, iuser);
+            draw_mesh(ob_ref, mat, batches[i], _handle, image, sampler_state, iuser);
           }
         }
       }
@@ -235,7 +238,6 @@ class Instance {
         }
 
         if (batch) {
-          ResourceHandle handle = manager.resource_handle(ob_ref);
           Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
 
           if (object_state.color_type == V3D_SHADING_OBJECT_COLOR) {
@@ -267,7 +269,7 @@ class Instance {
     }
 
     if (object_state.draw_shadow) {
-      shadow_ps.object_sync(manager, ob_ref, scene_state, has_transparent_material);
+      shadow_ps.object_sync(manager, scene_state, ob_ref, handle, has_transparent_material);
     }
   }
 
@@ -309,8 +311,10 @@ class Instance {
     }
   }
 
-  void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
+  void draw(Manager &manager, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
+    view.sync(DRW_view_default_get());
+
     int2 resolution = scene_state.resolution;
 
     if (scene_state.render_finished) {
@@ -364,9 +368,9 @@ class Instance {
     resources.depth_in_front_tx.release();
   }
 
-  void draw_viewport(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx)
+  void draw_viewport(Manager &manager, GPUTexture *depth_tx, GPUTexture *color_tx)
   {
-    this->draw(manager, view, depth_tx, color_tx);
+    this->draw(manager, depth_tx, color_tx);
 
     if (scene_state.sample + 1 < scene_state.samples_len) {
       DRW_viewport_request_redraw();
@@ -389,6 +393,7 @@ struct WORKBENCH_Data {
   DRWViewportEmptyList *psl;
   DRWViewportEmptyList *stl;
   workbench::Instance *instance;
+  draw::View *view;
 
   char info[GPU_INFO_SIZE];
 };
@@ -403,6 +408,7 @@ static void workbench_engine_init(void *vedata)
   WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
   if (ved->instance == nullptr) {
     ved->instance = new workbench::Instance();
+    ved->view = new draw::View("Default View");
   }
 
   ved->instance->init();
@@ -447,10 +453,8 @@ static void workbench_draw_scene(void *vedata)
     return;
   }
   DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
-  const DRWView *default_view = DRW_view_default_get();
   draw::Manager *manager = DRW_manager_get();
-  draw::View view("DefaultView", default_view);
-  ved->instance->draw_viewport(*manager, view, dtxl->depth, dtxl->color);
+  ved->instance->draw_viewport(*manager, dtxl->depth, dtxl->color);
 }
 
 static void workbench_instance_free(void *instance)
