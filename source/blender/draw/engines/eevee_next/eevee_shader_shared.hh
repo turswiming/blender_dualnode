@@ -604,10 +604,10 @@ struct LightData {
 #  define _back object_mat[2].xyz
 #  define _position object_mat[3].xyz
 #endif
-  /** Influence radius (inverted and squared) adjusted for Surface / Volume power. */
+  /** Punctual : Influence radius (inverted and squared) adjusted for Surface / Volume power. */
   float influence_radius_invsqr_surface;
   float influence_radius_invsqr_volume;
-  /** Maximum influence radius. Used for culling. */
+  /** Punctual : Maximum influence radius. Used for culling. Equal to clip far distance. */
   float influence_radius_max;
   /** Special radius factor for point lighting. */
   float radius_squared;
@@ -628,6 +628,8 @@ struct LightData {
 
   /** --- Shadow Data --- */
   /** Directional : Near clip distance. Float stored as int for atomic operations. */
+  /** \note: clip_far is not needed for directional sampling, and is equal to influence_radius_max
+   * for punctual. */
   int clip_near;
   /** Directional : Offset of the lod min in lod min tile units. */
   int2 clipmap_base_offset;

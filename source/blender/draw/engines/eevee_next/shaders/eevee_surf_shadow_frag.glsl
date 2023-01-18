@@ -35,17 +35,12 @@ void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
   }
 }
 
-vec3 slope_bias(vec3 P)
-{
-  return DFDX_SIGN * dFdx(P) + DFDY_SIGN * dFdy(P);
-}
-
 float linear_shadow_depth()
 {
   bool is_persp = (drw_view.winmat[3][3] == 0.0);
   if (is_persp) {
-    /* Punctual shadow. Store distance to light. */
-    return distance(cameraPos, interp.P);
+    /* Punctual shadow. Store NDC Z [0..1]. */
+    return gl_FragCoord.z;
   }
   else {
     /* Directionnal shadow. Store distance from near clip plane. */
@@ -54,9 +49,9 @@ float linear_shadow_depth()
 }
 float linear_shadow_depth_with_bias(float bias)
 {
-  /* Punctual shadow. Store distance to light. */
-  vec3 P = interp.P + slope_bias(interp.P) * bias;
-  return distance(cameraPos, P);
+  /* Punctual shadow. Store NDC Z [0..1]. */
+  float slope = DFDX_SIGN * dFdx(gl_FragCoord.z) + DFDY_SIGN * dFdy(gl_FragCoord.z);
+  return gl_FragCoord.z + slope * bias;
 }
 
 void main()

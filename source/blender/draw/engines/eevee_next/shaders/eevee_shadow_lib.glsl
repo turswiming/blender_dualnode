@@ -24,6 +24,17 @@ vec3 shadow_world_to_local(LightData ld, vec3 L)
   return lL;
 }
 
+/* TODO(fclem) use utildef version. */
+float shadow_orderedIntBitsToFloat(int int_value)
+{
+  return intBitsToFloat((int_value < 0) ? (int_value ^ 0x7FFFFFFF) : int_value);
+}
+
+float shadow_punctual_linear_depth(float z, float zf, float zn)
+{
+  return (zn * zf) / (z * (zn - zf) + zf);
+}
+
 /* ---------------------------------------------------------------------- */
 /** \name Shadow Sampling Functions
  * \{ */
@@ -79,7 +90,8 @@ mat4x4 shadow_load_normal_matrix(LightData light)
   }
 }
 
-/* Returns minimum Z bias needed for a given geometry normal and a shadowmap page. */
+/* Returns minimum bias (in world space unit) needed for a given geometry normal and a shadowmap
+ * page to avoid self shadowing artifacts. */
 float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
 {
   /* Create a normal plane equation and go through the normal projection matrix. */
@@ -102,20 +114,20 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
 }
 
 ShadowTileData shadow_punctual_tile_get(
-    usampler2D tilemaps_tx, LightData light, vec3 lL, vec3 lNg, out vec2 uv, out float bias)
+    usampler2D tilemaps_tx, LightData light, vec3 lP, vec3 lNg, out vec2 uv, out float bias)
 {
-  int face_id = shadow_punctual_face_index_get(lL);
-  lL = shadow_punctual_local_position_to_face_local(face_id, lL);
+  int face_id = shadow_punctual_face_index_get(lP);
+  lP = shadow_punctual_local_position_to_face_local(face_id, lP);
   lNg = shadow_punctual_local_position_to_face_local(face_id, lNg);
   /* UVs in [-1..+1] range. */
-  uv = lL.xy / abs(lL.z);
+  uv = lP.xy / abs(lP.z);
   /* UVs in [0..SHADOW_TILEMAP_RES] range. */
   const float lod0_res = float(SHADOW_TILEMAP_RES / 2);
   uv = uv * lod0_res + lod0_res;
   ivec2 tile_co = ivec2(floor(uv));
   int tilemap_index = light.tilemap_index + face_id;
   ShadowTileData tile = shadow_tile_load(tilemaps_tx, tile_co, tilemap_index);
-  bias = shadow_slope_bias_get(light, lNg, -lL, tile.lod);
+  bias = shadow_slope_bias_get(light, lNg, lP, tile.lod);
   return tile;
 }
 
@@ -153,12 +165,6 @@ struct ShadowSample {
   float bias;
 };
 
-/* TODO(fclem) use utildef version. */
-float shadow_orderedIntBitsToFloat(int int_value)
-{
-  return intBitsToFloat((int_value < 0) ? (int_value ^ 0x7FFFFFFF) : int_value);
-}
-
 ShadowSample shadow_sample(sampler2D atlas_tx,
                            usampler2D tilemaps_tx,
                            LightData light,
@@ -186,9 +192,18 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
     receiver_dist = -lP.z;
   }
   else {
+    vec3 lP = lL;
     vec2 uv;
-    ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lL, lNg, uv, samp.bias);
-    occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
+    ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lP, lNg, uv, samp.bias);
+    float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile, uv);
+    /* Shadow is stored as gl_FragCoord.z. Convert to radial distance along with the bias. */
+    float near = shadow_orderedIntBitsToFloat(light.clip_near);
+    float far = light.influence_radius_max;
+    float occluder_z = shadow_punctual_linear_depth(occluder_ndc, far, near);
+    float occluder_z_bias = shadow_punctual_linear_depth(occluder_ndc + samp.bias, far, near);
+    float radius_divisor = receiver_dist / max_v3(abs(lL));
+    occluder_dist = occluder_z * radius_divisor;
+    samp.bias = (occluder_z_bias - occluder_z) * radius_divisor;
   }
   samp.occluder_delta = occluder_dist - receiver_dist;
   return samp;

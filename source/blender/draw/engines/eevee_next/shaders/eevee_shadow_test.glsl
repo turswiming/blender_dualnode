@@ -192,6 +192,8 @@ void main()
     mat4 normal_mat = invert(transpose(pers_mat));
 
     LightData light;
+    light.clip_near = floatBitsToInt(near);
+    light.influence_radius_max = far;
     light.type = LIGHT_SPOT;
     light.normal_mat_packed.x = normal_mat[3][2];
     light.normal_mat_packed.y = normal_mat[3][3];

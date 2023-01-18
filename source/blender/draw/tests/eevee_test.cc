@@ -10,6 +10,7 @@
 #include "DEG_depsgraph.h"
 #include "RNA_define.h"
 
+#include "GPU_batch.h"
 #include "draw_shader.h"
 #include "draw_testing.hh"
 #include "engines/eevee_next/eevee_instance.hh"

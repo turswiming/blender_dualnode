@@ -317,6 +317,13 @@ void ShadowPunctual::end_sync(Light &light)
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
   light.tilemap_last = light.tilemap_index + tilemaps_needed_ - 1;
 
+  union {
+    float f;
+    int32_t i;
+  } near_as_int;
+  near_as_int.f = near_;
+  light.clip_near = near_as_int.i;
+
   for (ShadowTileMap *tilemap : tilemaps_) {
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
     tilemap_pool.tilemaps_data.append(*tilemap);
