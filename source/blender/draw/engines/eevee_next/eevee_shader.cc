@@ -220,8 +220,17 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
   /* WORKAROUND: Avoid utility texture merge error. TODO: find a cleaner fix. */
   for (auto &resource : info.batch_resources_) {
     if (resource.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER) {
-      if (resource.slot == RBUFS_UTILITY_TEX_SLOT) {
-        resource.slot = GPU_max_textures_frag() - 1;
+      switch (resource.slot) {
+        case RBUFS_UTILITY_TEX_SLOT:
+          resource.slot = GPU_max_textures_frag() - 1;
+          break;
+        // case SHADOW_RENDER_MAP_SLOT: /* Does not compile because it is a define. */
+        case SHADOW_ATLAS_TEX_SLOT:
+          resource.slot = GPU_max_textures_frag() - 2;
+          break;
+        case SHADOW_TILEMAPS_TEX_SLOT:
+          resource.slot = GPU_max_textures_frag() - 3;
+          break;
       }
     }
   }

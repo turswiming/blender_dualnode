@@ -387,10 +387,6 @@ void ShadowDirectional::release_excess_tilemaps(const Camera &camera)
                          lods_range.one_after_last() - isect_range.one_after_last());
 
   auto span = tilemaps_.as_span();
-  std::cout << "span " << span.index_range() << std::endl;
-  std::cout << "before_range " << before_range.shift(-lods_range.start()) << std::endl;
-  std::cout << "after_range " << after_range.shift(-lods_range.start()) << std::endl;
-  std::cout << "isect_range " << isect_range.shift(-lods_range.start()) << std::endl;
   shadows_.tilemap_pool.release(span.slice(before_range.shift(-lods_range.start())));
   shadows_.tilemap_pool.release(span.slice(after_range.shift(-lods_range.start())));
   tilemaps_ = span.slice(isect_range.shift(-lods_range.start()));
