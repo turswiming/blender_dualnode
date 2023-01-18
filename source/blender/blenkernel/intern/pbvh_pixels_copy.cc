@@ -274,26 +274,6 @@ struct Rows {
     }
 
     /**
-     * Mark pixels that are painted on by the brush. Those pixels don't need to be updated.
-     */
-    void mark_pixels_effected_by_brush(const PixelNodesTileData &nodes_tile_pixels)
-    {
-      for (const UDIMTilePixels &tile_pixels : nodes_tile_pixels) {
-        for (const PackedPixelRow &encoded_pixels : tile_pixels.pixel_rows) {
-          if (encoded_pixels.start_image_coordinate.y != row_number) {
-            continue;
-          }
-          for (int x = encoded_pixels.start_image_coordinate.x;
-               x < encoded_pixels.start_image_coordinate.x + encoded_pixels.num_pixels;
-               x++) {
-            pixels[x].type = PixelType::Brush;
-            pixels[x].distance = 0.0f;
-          }
-        }
-      }
-    }
-
-    /**
      * Mark pixels that needs to be evaluated. Pixels that are marked will have its `edge_index`
      * filled.
      */
@@ -548,26 +528,45 @@ struct Rows {
   Rows(int2 resolution, int margin, const PixelNodesTileData &node_tile_pixels)
       : resolution(resolution), margin(margin)
   {
+    TIMEIT_START(mark_brush);
     Row row_template(resolution.x);
     rows.resize(resolution.y, row_template);
     for (int row_number : rows.index_range()) {
       rows[row_number].reinit(row_number);
-      rows[row_number].mark_pixels_effected_by_brush(node_tile_pixels);
+    }
+    mark_pixels_effected_by_brush(node_tile_pixels);
+    TIMEIT_END(mark_brush);
+  }
+
+  /**
+   * Mark pixels that are painted on by the brush. Those pixels don't need to be updated, but will
+   * act as a source for other pixels.
+   */
+  void mark_pixels_effected_by_brush(const PixelNodesTileData &nodes_tile_pixels)
+  {
+    for (const UDIMTilePixels &tile_pixels : nodes_tile_pixels) {
+      threading::parallel_for_each(
+          tile_pixels.pixel_rows, [&](const PackedPixelRow &encoded_pixels) {
+            Row &row = rows[encoded_pixels.start_image_coordinate.y];
+            for (int x = encoded_pixels.start_image_coordinate.x;
+                 x < encoded_pixels.start_image_coordinate.x + encoded_pixels.num_pixels;
+                 x++) {
+              row.pixels[x].type = Row::PixelType::Brush;
+              row.pixels[x].distance = 0.0f;
+            }
+          });
     }
   }
 
   void find_copy_source(const NonManifoldTileEdges &tile_edges)
   {
-    for (Row &row : rows) {
-      row.find_copy_source(*this, tile_edges);
-    }
+    threading::parallel_for_each(rows, [&](Row &row) { row.find_copy_source(*this, tile_edges); });
   }
 
   void mark_for_evaluation(const NonManifoldTileEdges &tile_edges)
   {
-    for (Row &row : rows) {
-      row.mark_for_evaluation(*this, tile_edges);
-    }
+    threading::parallel_for_each(rows,
+                                 [&](Row &row) { row.mark_for_evaluation(*this, tile_edges); });
   }
 
   void pack_into(CopyPixelTile &copy_tile) const
