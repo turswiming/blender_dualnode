@@ -363,8 +363,6 @@ class ShadowPunctual : public NonCopyable, NonMovable {
   float3 position_;
   /** Near and far clip distances. */
   float far_, near_;
-  /** View space offset to apply to the shadow. */
-  float bias_; /* TODO remove */
   /** Number of tile-maps needed to cover the light angular extents. */
   int tilemaps_needed_;
   /** Visibility cone angle from the light source. */
@@ -387,8 +385,7 @@ class ShadowPunctual : public NonCopyable, NonMovable {
             const float4x4 &object_mat,
             float cone_aperture,
             float near_clip,
-            float far_clip,
-            float bias);
+            float far_clip);
 
   /**
    * Release the tile-maps that will not be used in the current frame.
@@ -408,8 +405,6 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   Vector<ShadowTileMap *> tilemaps_;
   /** User minimum resolution. */
   float min_resolution_;
-  /** View space offset to apply to the shadow. */
-  float bias_;
   /** Offset of the smallest clip-map. In tiles. */
   int2 base_offset_;
   /** Copy of object matrix. Normalized. */
@@ -430,7 +425,7 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   /**
    * Sync shadow parameters but do not allocate any shadow tile-maps.
    */
-  void sync(const float4x4 &object_mat, float bias, float min_resolution);
+  void sync(const float4x4 &object_mat, float min_resolution);
 
   /**
    * Release the tile-maps that will not be used in the current frame.

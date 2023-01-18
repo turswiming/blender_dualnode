@@ -82,15 +82,11 @@ void Light::sync(ShadowModule &shadows, const Object *ob, float threshold)
   if (la->mode & LA_SHADOW) {
     shadow_ensure(shadows);
     if (this->type == LIGHT_SUN) {
-      this->directional->sync(this->object_mat, la->bias * 0.05f, 1.0f);
+      this->directional->sync(this->object_mat, 1.0f);
     }
     else {
-      this->punctual->sync(this->type,
-                           this->object_mat,
-                           la->spotsize,
-                           la->clipsta,
-                           this->influence_radius_max,
-                           la->bias * 0.05f);
+      this->punctual->sync(
+          this->type, this->object_mat, la->spotsize, la->clipsta, this->influence_radius_max);
     }
   }
   else {

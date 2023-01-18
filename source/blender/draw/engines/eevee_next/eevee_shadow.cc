@@ -244,8 +244,7 @@ void ShadowPunctual::sync(eLightType light_type,
                           const float4x4 &object_mat,
                           float cone_aperture,
                           float near_clip,
-                          float far_clip,
-                          float bias)
+                          float far_clip)
 {
   if (light_type == LIGHT_SPOT) {
     tilemaps_needed_ = (cone_aperture > DEG2RADF(90.0f)) ? 5 : 1;
@@ -262,7 +261,6 @@ void ShadowPunctual::sync(eLightType light_type,
 
   far_ = max_ff(far_clip, 3e-4f);
   near_ = min_ff(near_clip, far_clip - 1e-4f);
-  bias_ = bias;
   light_type_ = light_type;
 
   /* Keep custom data. */
@@ -361,7 +359,7 @@ IndexRange ShadowDirectional::clipmap_level_range(const Camera &camera)
   return range;
 }
 
-void ShadowDirectional::sync(const float4x4 &object_mat, float bias, float min_resolution)
+void ShadowDirectional::sync(const float4x4 &object_mat, float min_resolution)
 {
   object_mat_ = object_mat;
   /* Clear embedded custom data. */
@@ -371,7 +369,6 @@ void ShadowDirectional::sync(const float4x4 &object_mat, float bias, float min_r
   zero_v3(object_mat_.values[3]);
 
   min_resolution_ = min_resolution;
-  bias_ = bias;
 }
 
 void ShadowDirectional::release_excess_tilemaps(const Camera &camera)

@@ -163,7 +163,8 @@ class DATA_PT_EEVEE_shadow(DataButtonsPanel, Panel):
         if light.type != 'SUN':
             sub.prop(light, "shadow_buffer_clip_start", text="Clip Start")
 
-        col.prop(light, "shadow_buffer_bias", text="Bias")
+        if context.engine != 'BLENDER_EEVEE_NEXT':
+            col.prop(light, "shadow_buffer_bias", text="Bias")
 
 
 class DATA_PT_EEVEE_shadow_cascaded_shadow_map(DataButtonsPanel, Panel):
