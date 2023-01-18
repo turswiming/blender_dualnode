@@ -35,7 +35,7 @@ void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
   }
 }
 
-float linear_shadow_depth()
+float shadow_depth()
 {
   bool is_persp = (drw_view.winmat[3][3] == 0.0);
   if (is_persp) {
@@ -47,7 +47,7 @@ float linear_shadow_depth()
     return gl_FragCoord.z * abs(2.0 / drw_view.winmat[2][2]);
   }
 }
-float linear_shadow_depth_with_bias(float bias)
+float shadow_depth_with_slope_bias(float bias)
 {
   /* Punctual shadow. Store NDC Z [0..1]. */
   float slope = DFDX_SIGN * dFdx(gl_FragCoord.z) + DFDY_SIGN * dFdy(gl_FragCoord.z);
@@ -61,14 +61,14 @@ void main()
   ivec2 texel_co = ivec2(gl_FragCoord.xy);
   ivec2 tile_co = texel_co / pages_infos_buf.page_size;
 
-  write_depth(texel_co, 0, tile_co, linear_shadow_depth());
+  write_depth(texel_co, 0, tile_co, shadow_depth());
 
   /* Only needed for local lights. */
   bool is_persp = (drw_view.winmat[3][3] == 0.0);
   if (is_persp) {
     /* We have to compensate the output pixel position being different than the input pixel's.
      * This is only half a pixel since we chose one pixel inside the quad. */
-    float depth_center = linear_shadow_depth_with_bias(0.5);
+    float depth_center = shadow_depth_with_slope_bias(0.5);
 
     write_depth(texel_co, 1, tile_co, depth_center);
     write_depth(texel_co, 2, tile_co, depth_center);
