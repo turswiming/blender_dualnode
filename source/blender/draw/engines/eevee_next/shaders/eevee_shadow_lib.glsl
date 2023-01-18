@@ -106,9 +106,10 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
   /* Compensate for each increasing lod level as the space between pixels increases. */
   bias *= float(1u << lod);
   /* Add quantization error bias. */
-  bias += 1e-20;
+  /* TODO(fclem): This shouldn't exist ideally. */
+  bias += 2e-7;
   /* Clamp out to avoid the bias going to infinity. */
-  bias = min(bias, 1.0e5);
+  bias = clamp(bias, 0.0, 1.0e5);
 
   return bias;
 }
