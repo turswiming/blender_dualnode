@@ -60,6 +60,11 @@ AssetLibrary *AssetLibraryService::get_asset_library(
   const eAssetLibraryType type = eAssetLibraryType(library_reference.type);
 
   switch (type) {
+    case ASSET_LIBRARY_BUNDLED: {
+      const std::string root_path =
+          "/home/jacques/blender/build_release/bin/3.5/datafiles/assets/base_meshes";
+      return get_asset_library_on_disk(root_path);
+    }
     case ASSET_LIBRARY_LOCAL: {
       /* For the "Current File" library  we get the asset library root path based on main. */
       std::string root_path = bmain ? AS_asset_library_find_suitable_root_path_from_main(bmain) :

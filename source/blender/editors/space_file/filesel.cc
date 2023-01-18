@@ -424,7 +424,13 @@ static void fileselect_refresh_asset_params(FileAssetSelectParams *asset_params)
     }
   }
 
-  switch (library->type) {
+  switch (eAssetLibraryType(library->type)) {
+    case ASSET_LIBRARY_BUNDLED:
+      BLI_strncpy(base_params->dir,
+                  "/home/jacques/blender/build_release/bin/3.5/datafiles/assets/base_meshes",
+                  sizeof(base_params->dir));
+      base_params->type = FILE_ASSET_LIBRARY;
+      break;
     case ASSET_LIBRARY_ALL:
       base_params->dir[0] = '\0';
       base_params->type = FILE_ASSET_LIBRARY_ALL;

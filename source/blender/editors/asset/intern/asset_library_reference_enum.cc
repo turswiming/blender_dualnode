@@ -47,7 +47,7 @@ AssetLibraryReference ED_asset_library_reference_from_enum_value(int value)
   if (value < ASSET_LIBRARY_CUSTOM) {
     library.type = value;
     library.custom_library_index = -1;
-    BLI_assert(ELEM(value, ASSET_LIBRARY_ALL, ASSET_LIBRARY_LOCAL));
+    BLI_assert(ELEM(value, ASSET_LIBRARY_ALL, ASSET_LIBRARY_LOCAL, ASSET_LIBRARY_BUNDLED));
     return library;
   }
 
@@ -99,6 +99,18 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
   if (!BLI_listbase_is_empty(&U.asset_libraries)) {
     RNA_enum_item_add_separator(&item, &totitem);
   }
+
+  {
+    AssetLibraryReference library_reference;
+    library_reference.type = ASSET_LIBRARY_BUNDLED;
+    library_reference.custom_library_index = -1;
+    const int enum_value = ED_asset_library_reference_to_enum_value(&library_reference);
+    EnumPropertyItem tmp = {
+        enum_value, "BUNDLED", ICON_NONE, "Bundled", "Show assets that came bundled with Blender"};
+    RNA_enum_item_add(&item, &totitem, &tmp);
+  }
+
+  RNA_enum_item_add_separator(&item, &totitem);
 
   int i;
   LISTBASE_FOREACH_INDEX (bUserAssetLibrary *, user_library, &U.asset_libraries, i) {
