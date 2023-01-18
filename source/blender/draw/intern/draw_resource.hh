@@ -13,6 +13,7 @@
 #include "BKE_curve.h"
 #include "BKE_duplilist.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_wrapper.h"
 #include "BKE_object.h"
 #include "BKE_volume.h"
 #include "BLI_hash.h"
@@ -151,25 +152,30 @@ inline void ObjectBounds::sync()
 
 inline void ObjectBounds::sync(Object &ob)
 {
-  const BoundBox *bbox = BKE_object_boundbox_get(&ob);
-  if (bbox == nullptr) {
-    bounding_sphere.w = -1.0f; /* Disable test. */
-    return;
+  BoundBox _bbox;
+  const BoundBox *bbox = &_bbox;
+
+  if (ob.type == OB_MESH) {
+    /* Optimization: Retrieve the mesh cached min max directly.
+     * Avoids allocating a BoundBox on every sample for each DupliObject instance.
+     * TODO(Miguel Pozo): Remove once T92963 or T96968 are done */
+    float3 min, max;
+    BKE_mesh_wrapper_minmax(static_cast<Mesh *>(ob.data), min, max);
+    BKE_boundbox_init_from_minmax(&_bbox, min, max);
   }
+  else {
+    bbox = BKE_object_boundbox_get(&ob);
+    if (bbox == nullptr) {
+      bounding_sphere.w = -1.0f; /* Disable test. */
+      return;
+    }
+  }
+
   *reinterpret_cast<float3 *>(&bounding_corners[0]) = bbox->vec[0];
   *reinterpret_cast<float3 *>(&bounding_corners[1]) = bbox->vec[4];
   *reinterpret_cast<float3 *>(&bounding_corners[2]) = bbox->vec[3];
   *reinterpret_cast<float3 *>(&bounding_corners[3]) = bbox->vec[1];
   bounding_sphere.w = 0.0f; /* Enable test. */
-}
-
-inline void ObjectBounds::sync(const float3 &center, const float3 &size)
-{
-  *reinterpret_cast<float3 *>(&bounding_corners[0]) = center - size;
-  *reinterpret_cast<float3 *>(&bounding_corners[1]) = center + float3(+size.x, -size.y, -size.z);
-  *reinterpret_cast<float3 *>(&bounding_corners[2]) = center + float3(-size.x, +size.y, -size.z);
-  *reinterpret_cast<float3 *>(&bounding_corners[3]) = center + float3(-size.x, -size.y, +size.z);
-  bounding_sphere.w = 0.0; /* Enable test. */
 }
 
 inline std::ostream &operator<<(std::ostream &stream, const ObjectBounds &bounds)

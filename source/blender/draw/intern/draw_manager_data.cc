@@ -16,6 +16,7 @@
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_wrapper.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
@@ -695,7 +696,7 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
   drw_call_calc_orco(ob, ob_infos->orcotexfac);
   /* Random float value. */
   uint random = (DST.dupli_source) ?
-                     DST.dupli_source->random_id :
+                    DST.dupli_source->random_id :
                      /* TODO(fclem): this is rather costly to do at runtime. Maybe we can
                       * put it in ob->runtime and make depsgraph ensure it is up to date. */
                      BLI_hash_int_2d(BLI_hash_string(ob->id.name + 2), 0);
@@ -719,26 +720,41 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
 
 static void drw_call_culling_init(DRWCullingState *cull, Object *ob)
 {
-  const BoundBox *bbox;
-  if (ob != nullptr && (bbox = BKE_object_boundbox_get(ob))) {
-    float corner[3];
-    /* Get BoundSphere center and radius from the BoundBox. */
-    mid_v3_v3v3(cull->bsphere.center, bbox->vec[0], bbox->vec[6]);
-    mul_v3_m4v3(corner, ob->object_to_world, bbox->vec[0]);
-    mul_m4_v3(ob->object_to_world, cull->bsphere.center);
-    cull->bsphere.radius = len_v3v3(cull->bsphere.center, corner);
+  /* Bypass test */
+  cull->bsphere.radius = -1.0f;
+  /* Reset user data */
+  cull->user_data = nullptr;
+
+  if (ob != nullptr) {
+    if (ob->type == OB_MESH) {
+      /* Optimization: Retrieve the mesh cached min max directly.
+       * Avoids allocating a BoundBox on every sample for each DupliObject instance.
+       * TODO(Miguel Pozo): Remove once T92963 or T96968 are done */
+      float3 min, max;
+      INIT_MINMAX(min, max);
+      BKE_mesh_wrapper_minmax(static_cast<Mesh *>(ob->data), min, max);
+
+      /* Get BoundSphere center and radius from min/max. */
+      float3 min_world = float4x4(ob->object_to_world) * min;
+      float3 max_world = float4x4(ob->object_to_world) * max;
+
+      mid_v3_v3v3(cull->bsphere.center, min_world, max_world);
+      cull->bsphere.radius = len_v3v3(cull->bsphere.center, max_world);
+    }
+    else if (const BoundBox *bbox = BKE_object_boundbox_get(ob)) {
+      float corner[3];
+      /* Get BoundSphere center and radius from the BoundBox. */
+      mid_v3_v3v3(cull->bsphere.center, bbox->vec[0], bbox->vec[6]);
+      mul_v3_m4v3(corner, ob->object_to_world, bbox->vec[0]);
+      mul_m4_v3(ob->object_to_world, cull->bsphere.center);
+      cull->bsphere.radius = len_v3v3(cull->bsphere.center, corner);
+    }
 
     /* Bypass test for very large objects (see T67319). */
     if (UNLIKELY(cull->bsphere.radius > 1e12)) {
       cull->bsphere.radius = -1.0f;
     }
   }
-  else {
-    /* Bypass test. */
-    cull->bsphere.radius = -1.0f;
-  }
-  /* Reset user data */
-  cull->user_data = nullptr;
 }
 
 static DRWResourceHandle drw_resource_handle_new(float (*obmat)[4], Object *ob)
