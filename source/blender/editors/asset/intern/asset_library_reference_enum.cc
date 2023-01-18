@@ -95,18 +95,16 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
     RNA_enum_items_add(&item, &totitem, generated_items);
   }
 
-  /* Add separator if needed. */
-  if (!BLI_listbase_is_empty(&U.asset_libraries)) {
-    RNA_enum_item_add_separator(&item, &totitem);
-  }
-
   {
     AssetLibraryReference library_reference;
     library_reference.type = ASSET_LIBRARY_BUNDLED;
     library_reference.custom_library_index = -1;
     const int enum_value = ED_asset_library_reference_to_enum_value(&library_reference);
-    EnumPropertyItem tmp = {
-        enum_value, "BUNDLED", ICON_NONE, "Bundled", "Show assets that came bundled with Blender"};
+    EnumPropertyItem tmp = {enum_value,
+                            "ESSENTIALS",
+                            ICON_NONE,
+                            "Essentials",
+                            "Show assets that came bundled with Blender"};
     RNA_enum_item_add(&item, &totitem, &tmp);
   }
 
