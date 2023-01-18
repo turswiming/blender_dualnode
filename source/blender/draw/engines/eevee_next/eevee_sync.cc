@@ -127,13 +127,13 @@ void SyncModule::sync_mesh(Object *ob,
     if (geom == nullptr) {
       continue;
     }
-    Material *material = material_array.materials[i];
-    geometry_call(material->shading.sub_pass, geom, res_handle);
-    geometry_call(material->prepass.sub_pass, geom, res_handle);
-    geometry_call(material->shadow.sub_pass, geom, res_handle);
+    Material &material = material_array.materials[i];
+    geometry_call(material.shading.sub_pass, geom, res_handle);
+    geometry_call(material.prepass.sub_pass, geom, res_handle);
+    geometry_call(material.shadow.sub_pass, geom, res_handle);
 
-    is_shadow_caster = is_shadow_caster || material->shadow.sub_pass != nullptr;
-    is_alpha_blend = is_alpha_blend || material->is_alpha_blend_transparent;
+    is_shadow_caster = is_shadow_caster || material.shadow.sub_pass != nullptr;
+    is_alpha_blend = is_alpha_blend || material.is_alpha_blend_transparent;
 
     GPUMaterial *gpu_material = material_array.gpu_materials[i];
     ::Material *mat = GPU_material_get_material(gpu_material);
@@ -237,7 +237,7 @@ static void gpencil_stroke_sync(bGPDlayer * /*gpl*/,
 {
   gpIterData &iter = *(gpIterData *)thunk;
 
-  Material *material = iter.material_array.materials[gps->mat_nr];
+  Material *material = &iter.material_array.materials[gps->mat_nr];
   MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(iter.ob, gps->mat_nr + 1);
 
   bool hide_material = (gp_style->flag & GP_MATERIAL_HIDE) != 0;
