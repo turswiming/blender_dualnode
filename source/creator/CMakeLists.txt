@@ -1472,6 +1472,20 @@ install(
 
 
 # -----------------------------------------------------------------------------
+# Bundle assets
+
+set(ASSET_BUNDLE_DIR ${CMAKE_SOURCE_DIR}/../lib/assets)
+
+if(EXISTS "${ASSET_BUNDLE_DIR}")
+  install(
+    DIRECTORY ${ASSET_BUNDLE_DIR}
+    DESTINATION ${TARGETDIR_VER}/datafiles
+    PATTERN ".svn" EXCLUDE
+  )
+endif()
+
+
+# -----------------------------------------------------------------------------
 # Setup link libraries
 
 add_dependencies(blender makesdna)
