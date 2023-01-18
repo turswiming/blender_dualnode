@@ -39,11 +39,20 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     if (dist_to_light > light.influence_radius_max) {
       return;
     }
-    /* TODO(fclem) Early out if out of cone. */
-    // float angle_cos = lL.z / dist_to_light;
-    // if (angle_cos > light.influence_angle_max_cos) {
-    //   return;
-    // }
+    if (light.type == LIGHT_SPOT) {
+      /* Early out if out of cone. */
+      float angle_tan = length(lL.xy / dist_to_light);
+      if (angle_tan > light.spot_tan) {
+        return;
+      }
+    }
+    else if (is_area_light(light.type)) {
+      /* Early out if on the wrong side. */
+      if (lL.z > 0.0) {
+        return;
+      }
+    }
+
     /* How much a shadow map pixel covers a final image pixel.
      * We project a shadow map pixel (as a sphere for simplicity) to the receiver plane.
      * We then reproject this sphere onto the camera screen and compare it to the film pixel size.
