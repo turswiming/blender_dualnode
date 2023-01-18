@@ -14,6 +14,7 @@
 
 #include "CLG_log.h"
 
+#include "AS_asset_bundled.hh"
 #include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.hh"
 #include "asset_library_service.hh"
@@ -61,8 +62,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
 
   switch (type) {
     case ASSET_LIBRARY_BUNDLED: {
-      const std::string root_path =
-          "/home/jacques/blender/build_release/bin/3.5/datafiles/assets/base_meshes";
+      const StringRefNull root_path = bundled_assets_directory_path();
       return get_asset_library_on_disk(root_path);
     }
     case ASSET_LIBRARY_LOCAL: {

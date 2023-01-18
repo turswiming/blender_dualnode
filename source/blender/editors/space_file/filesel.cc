@@ -58,6 +58,8 @@
 #include "UI_interface_icons.h"
 #include "UI_view2d.h"
 
+#include "AS_asset_bundled.hh"
+
 #include "file_intern.h"
 #include "filelist.h"
 
@@ -427,7 +429,7 @@ static void fileselect_refresh_asset_params(FileAssetSelectParams *asset_params)
   switch (eAssetLibraryType(library->type)) {
     case ASSET_LIBRARY_BUNDLED:
       BLI_strncpy(base_params->dir,
-                  "/home/jacques/blender/build_release/bin/3.5/datafiles/assets/base_meshes",
+                  blender::asset_system::bundled_assets_directory_path().c_str(),
                   sizeof(base_params->dir));
       base_params->type = FILE_ASSET_LIBRARY;
       break;

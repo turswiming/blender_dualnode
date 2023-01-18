@@ -14,6 +14,7 @@ set(INC_SYS
 )
 
 set(SRC
+  intern/asset_bundled.cc
   intern/asset_catalog.cc
   intern/asset_catalog_path.cc
   intern/asset_catalog_tree.cc
@@ -24,6 +25,7 @@ set(SRC
   intern/asset_storage.cc
   intern/utils.cc
 
+  AS_asset_bundled.hh
   AS_asset_catalog.hh
   AS_asset_catalog_path.hh
   AS_asset_catalog_tree.hh
