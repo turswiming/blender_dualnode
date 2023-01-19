@@ -25,17 +25,18 @@ void main()
     tilemaps_buf[tilemap_index].grid_shift = ivec2(0);
 
     if (!tilemap.is_cubeface) {
-      directional_range_changed = int(
-          (orderedIntBitsToFloat(tilemap.clip_near) != tilemap._clip_near_new) ||
-          (orderedIntBitsToFloat(tilemap.clip_far) != tilemap._clip_far_new));
+      ShadowTileMapClip clip_data = tilemaps_clip_buf[tilemap_index];
+      float clip_near_new = orderedIntBitsToFloat(clip_data.clip_near);
+      float clip_far_new = orderedIntBitsToFloat(clip_data.clip_far);
+      directional_range_changed = int((clip_near_new != clip_data.clip_near_stored) ||
+                                      (clip_far_new != clip_data.clip_far_stored));
       if (directional_range_changed != 0) {
         /* NOTE(fclem): This assumes clip near/far are computed each time the init phase runs. */
-        tilemaps_buf[tilemap_index]._clip_far_stored = tilemaps_buf[tilemap_index]._clip_far_new;
-        tilemaps_buf[tilemap_index]._clip_near_stored = tilemaps_buf[tilemap_index]._clip_near_new;
-        tilemaps_buf[tilemap_index]._clip_far_new = orderedIntBitsToFloat(tilemap.clip_far);
-        tilemaps_buf[tilemap_index]._clip_near_new = orderedIntBitsToFloat(tilemap.clip_near);
-        tilemaps_buf[tilemap_index].clip_far = floatBitsToOrderedInt(FLT_MAX);
-        tilemaps_buf[tilemap_index].clip_near = floatBitsToOrderedInt(-FLT_MAX);
+        tilemaps_clip_buf[tilemap_index].clip_near_stored = clip_near_new;
+        tilemaps_clip_buf[tilemap_index].clip_far_stored = clip_far_new;
+        /* Reset for next update. */
+        tilemaps_clip_buf[tilemap_index].clip_near = floatBitsToOrderedInt(-FLT_MAX);
+        tilemaps_clip_buf[tilemap_index].clip_far = floatBitsToOrderedInt(FLT_MAX);
       }
     }
   }
@@ -51,7 +52,7 @@ void main()
   bool do_update = !in_range_inclusive(tile_shifted, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
 
   /* TODO(fclem): Might be better to resize the depth stored instead of a full render update. */
-  if (directional_range_changed != 0) {
+  if (!tilemap.is_cubeface && directional_range_changed != 0) {
     do_update = true;
   }
 
@@ -62,12 +63,11 @@ void main()
       int tile_index = shadow_tile_offset(tile_co, tilemap.tiles_index, lod);
       ShadowTileDataPacked tile = tiles_buf[tile_index];
 
+      if (flag_test(tile, SHADOW_IS_RENDERED)) {
+        tile &= ~(SHADOW_DO_UPDATE | SHADOW_IS_RENDERED);
+      }
       if (do_update) {
         tile |= SHADOW_DO_UPDATE;
-      }
-      else if (flag_test(tile, SHADOW_IS_RENDERED)) {
-        tile &= ~SHADOW_DO_UPDATE;
-        tile &= ~SHADOW_IS_RENDERED;
       }
       tile &= ~SHADOW_IS_USED;
 

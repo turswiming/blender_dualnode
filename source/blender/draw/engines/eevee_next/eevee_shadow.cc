@@ -32,11 +32,6 @@ void ShadowTileMap::sync_clipmap(const float3 &camera_position,
   }
   is_cubeface = false;
   level = clipmap_level;
-  cone_direction = float3(1.0f);
-  cone_angle_cos = -2.0f;
-
-  clip_far = 0x7F7FFFFF;                /* floatBitsToOrderedInt(FLT_MAX) */
-  clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
 
   if (grid_shift == int2(0)) {
     /* Only replace shift if it is not already dirty. */
@@ -75,8 +70,10 @@ void ShadowTileMap::sync_clipmap(const float3 &camera_position,
   winmat = winmat_get();
 }
 
-void ShadowTileMap::sync_cubeface(
-    const float4x4 &object_mat_, float near_, float far_, float cone_aperture, eCubeFace face)
+void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
+                                  float near_,
+                                  float far_,
+                                  eCubeFace face)
 {
   if (!is_cubeface || (cubeface != face) || (near != near_) || (far != far_)) {
     set_dirty();
@@ -85,14 +82,7 @@ void ShadowTileMap::sync_cubeface(
   cubeface = face;
   near = near_;
   far = far_;
-
-  if (cone_aperture > DEG2RADF(180.0f)) {
-    cone_angle_cos = -2.0f;
-  }
-  else {
-    cone_angle_cos = cosf(min_ff((cone_aperture * 0.5f) + 0.0001, M_PI_2));
-  }
-  cone_direction = -float3(object_mat_.values[2]);
+  grid_offset = int2(0);
 
   if (!equals_m4m4(object_mat.ptr(), object_mat_.ptr())) {
     object_mat = object_mat_;
@@ -165,8 +155,9 @@ void ShadowTileMap::debug_draw() const
 ShadowTileMapPool::ShadowTileMapPool()
 {
   free_indices.reserve(SHADOW_MAX_TILEMAP);
-  for (auto i : IndexRange(SHADOW_MAX_TILEMAP)) {
-    free_indices.append(i);
+  /* Reverse order to help debugging (first allocated tilemap will get 0). */
+  for (int i = SHADOW_MAX_TILEMAP - 1; i >= 0; i--) {
+    free_indices.append(i * SHADOW_TILEDATA_PER_TILEMAP);
   }
 
   int2 extent;
@@ -183,7 +174,7 @@ ShadowTileMap *ShadowTileMapPool::acquire()
   if (free_indices.is_empty()) {
     /* Grow the tilemap buffer. See `end_sync`. */
     for (auto i : IndexRange(free_indices.size(), SHADOW_MAX_TILEMAP)) {
-      free_indices.append(i);
+      free_indices.append(i * SHADOW_TILEDATA_PER_TILEMAP);
     }
   }
   int index = free_indices.pop_last();
@@ -202,10 +193,10 @@ void ShadowTileMapPool::end_sync(ShadowModule &module)
 {
   tilemaps_data.push_update();
 
-  uint needed_tile_capacity = (free_indices.size() + tilemap_pool.size()) *
-                              SHADOW_TILEDATA_PER_TILEMAP;
-  if (needed_tile_capacity != tiles_data.size()) {
-    tiles_data.resize(needed_tile_capacity);
+  uint needed_tilemap_capacity = (free_indices.size() + tilemap_pool.size());
+  if (needed_tilemap_capacity != (tiles_data.size() / SHADOW_TILEDATA_PER_TILEMAP)) {
+    tiles_data.resize(needed_tilemap_capacity * SHADOW_TILEDATA_PER_TILEMAP);
+    tilemaps_clip.resize(needed_tilemap_capacity);
     /* We reallocated the tile-map buffer, discarding all the data it contained.
      * We need to re-init the page heaps. */
     module.do_full_update = true;
@@ -222,6 +213,7 @@ void ShadowTileMapPool::end_sync(ShadowModule &module)
        * the setup steps to release the pages. */
       ShadowTileMapData tilemap_data = {};
       tilemap_data.tiles_index = index;
+      tilemap_data.clip_data_index = 0;
       tilemap_data.grid_shift = int2(SHADOW_TILEMAP_RES);
       tilemap_data.is_cubeface = true;
 
@@ -248,15 +240,12 @@ void ShadowPunctual::sync(eLightType light_type,
 {
   if (light_type == LIGHT_SPOT) {
     tilemaps_needed_ = (cone_aperture > DEG2RADF(90.0f)) ? 5 : 1;
-    cone_aperture_ = cone_aperture;
   }
   else if (is_area_light(light_type)) {
     tilemaps_needed_ = 5;
-    cone_aperture_ = DEG2RADF(179.9f);
   }
   else {
     tilemaps_needed_ = 6;
-    cone_aperture_ = DEG2RADF(360.0f);
   }
 
   far_ = max_ff(far_clip, 3e-4f);
@@ -295,15 +284,15 @@ void ShadowPunctual::end_sync(Light &light)
     tilemaps_.append(tilemap_pool.acquire());
   }
 
-  tilemaps_[Z_NEG]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, Z_NEG);
+  tilemaps_[Z_NEG]->sync_cubeface(obmat_tmp, near_, far_, Z_NEG);
   if (tilemaps_needed_ >= 5) {
-    tilemaps_[X_POS]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, X_POS);
-    tilemaps_[X_NEG]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, X_NEG);
-    tilemaps_[Y_POS]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, Y_POS);
-    tilemaps_[Y_NEG]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, Y_NEG);
+    tilemaps_[X_POS]->sync_cubeface(obmat_tmp, near_, far_, X_POS);
+    tilemaps_[X_NEG]->sync_cubeface(obmat_tmp, near_, far_, X_NEG);
+    tilemaps_[Y_POS]->sync_cubeface(obmat_tmp, near_, far_, Y_POS);
+    tilemaps_[Y_NEG]->sync_cubeface(obmat_tmp, near_, far_, Y_NEG);
   }
   if (tilemaps_needed_ == 6) {
-    tilemaps_[Z_POS]->sync_cubeface(obmat_tmp, near_, far_, cone_aperture_, Z_POS);
+    tilemaps_[Z_POS]->sync_cubeface(obmat_tmp, near_, far_, Z_POS);
   }
 
   /* Normal matrix to convert geometric normal to optimal bias. */
@@ -459,13 +448,11 @@ void ShadowModule::init()
   int2 atlas_extent = int2(shadow_page_size_ * SHADOW_PAGE_PER_ROW,
                            shadow_page_size_ * (shadow_page_len_ / SHADOW_PAGE_PER_ROW));
 
-  /* Global update. */
-  if (!atlas_tx_.is_valid() || atlas_tx_.size() != int3(atlas_extent.x, atlas_extent.y, 1)) {
+  eGPUTextureUsage tex_usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
+  if (atlas_tx_.ensure_2d(atlas_type, atlas_extent, tex_usage)) {
+    /* Global update. */
     do_full_update = true;
   }
-  do_full_update = true;
-
-  atlas_tx_.ensure_2d(atlas_type, atlas_extent);
 
   /* Make allocation safe. Avoids crash later on. */
   if (!atlas_tx_.is_valid()) {
@@ -623,6 +610,17 @@ void ShadowModule::end_sync()
     int2 data = {-1, -1};
     GPU_storagebuf_clear(pages_cached_data_, GPU_RG32I, GPU_DATA_INT, &data);
 
+    /* Clear cached page buffer. */
+    union {
+      ShadowTileMapClip clip;
+      int4 i;
+    } u;
+    u.clip.clip_near_stored = 0.0f;
+    u.clip.clip_far_stored = 0.0f;
+    u.clip.clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
+    u.clip.clip_far = 0x7F7FFFFF;                /* floatBitsToOrderedInt(FLT_MAX) */
+    GPU_storagebuf_clear(pages_cached_data_, GPU_RGBA32I, GPU_DATA_INT, &u.i);
+
     /* Reset info to match new state. */
     pages_infos_data_.page_free_count = SHADOW_MAX_PAGE;
     pages_infos_data_.page_alloc_count = 0;
@@ -645,6 +643,7 @@ void ShadowModule::end_sync()
         PassSimple::Sub &sub = pass.sub("DirectionalBounds");
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_BOUNDS));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tilemaps_clip_buf", tilemap_pool.tilemaps_clip);
         sub.bind_ssbo("casters_id_buf", curr_casters_);
         sub.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
         sub.push_constant("resource_len", int(curr_casters_.size()));
@@ -657,6 +656,7 @@ void ShadowModule::end_sync()
         PassSimple::Sub &sub = pass.sub("Init");
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_INIT));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tilemaps_clip_buf", tilemap_pool.tilemaps_clip);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         /** Free unused tiles from tile-maps not used by any shadow. */
@@ -693,7 +693,6 @@ void ShadowModule::end_sync()
     {
       PassSimple &pass = tilemap_update_ps_;
       pass.init();
-
       {
         /** Mark tiles that are redundant in the mipmap chain as unused. */
         PassSimple::Sub &sub = pass.sub("MaskLod");
@@ -744,6 +743,7 @@ void ShadowModule::end_sync()
         PassSimple::Sub &sub = pass.sub("Finalize");
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_FINALIZE));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tilemaps_clip_buf", tilemap_pool.tilemaps_clip);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
         sub.bind_ssbo("view_infos_buf", &shadow_multi_view_.matrices_ubo_get());
         sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);

@@ -71,13 +71,15 @@ struct ShadowTileMap : public ShadowTileMapData {
   eCubeFace cubeface = Z_NEG;
   /** Cached, used for detecting updates. */
   float4x4 object_mat;
-  /** Near and far clip distances. For clip-map they are updated after sync. */
+  /** Near and far clip distances. For clip-map, computed on the GPU using casters BBoxes. */
   float near, far;
 
  public:
   ShadowTileMap(int tiles_index_)
   {
     tiles_index = tiles_index_;
+    /* For now just the same index. */
+    clip_data_index = tiles_index_ / SHADOW_TILEDATA_PER_TILEMAP;
     this->set_dirty();
   }
 
@@ -86,8 +88,7 @@ struct ShadowTileMap : public ShadowTileMapData {
                     int2 origin_offset,
                     int clipmap_level);
 
-  void sync_cubeface(
-      const float4x4 &object_mat, float near, float far, float cone_aperture, eCubeFace face);
+  void sync_cubeface(const float4x4 &object_mat, float near, float far, eCubeFace face);
 
   static float tilemap_coverage_get(int lvl)
   {
@@ -147,7 +148,7 @@ struct ShadowTileMapPool {
   /** Limit the width of the texture. */
   static constexpr int64_t maps_per_row = SHADOW_TILEMAP_PER_ROW;
 
-  /** Vector containing available tile range indices in the ShadowTileDataBuf. */
+  /** Vector containing available offset to tile range in the ShadowTileDataBuf. */
   Vector<uint> free_indices;
   /** Pool containing shadow tile structure on CPU. */
   Pool<ShadowTileMap> tilemap_pool;
@@ -157,10 +158,10 @@ struct ShadowTileMapPool {
   ShadowTileMapDataBuf tilemaps_unused = {"tilemaps_unused"};
   /** All possible tiles. A range of tiles tile is referenced by a tile-map. */
   ShadowTileDataBuf tiles_data = {"tiles_data"};
+  /** Clip range for directional shadows. Updated on GPU. Persistent. */
+  ShadowTileMapClipBuf tilemaps_clip = {"tilemaps_clip"};
   /** Texture equivalent of ShadowTileDataBuf but grouped by light. */
   Texture tilemap_tx = {"tilemap_tx"};
-  /** If false a clear pass will be issue to init the page heaps and clear the tiles ownership. */
-  bool tilemap_initialized = false;
   /** Number of free tile-maps at the end of the previous sync. */
   int64_t last_free_len = 0;
 

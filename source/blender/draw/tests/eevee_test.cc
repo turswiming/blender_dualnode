@@ -118,7 +118,7 @@ static void test_eevee_shadow_tag_update()
 
   {
     ShadowTileMap tilemap(0);
-    tilemap.sync_cubeface(float4x4::identity(), 0.01f, 1.0f, DEG2RADF(75.0f), Z_NEG);
+    tilemap.sync_cubeface(float4x4::identity(), 0.01f, 1.0f, Z_NEG);
     tilemaps_data.append(tilemap);
   }
   {

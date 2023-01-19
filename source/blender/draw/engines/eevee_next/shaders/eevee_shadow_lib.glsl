@@ -197,6 +197,8 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
     vec2 uv;
     ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lP, lNg, uv, samp.bias);
     float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile, uv);
+    /* FIXME: We clear to FLT_MAX for directionals. So we have to clamp to 1.0. */
+    occluder_ndc = min(1.0, occluder_ndc);
     /* Shadow is stored as gl_FragCoord.z. Convert to radial distance along with the bias. */
     float near = shadow_orderedIntBitsToFloat(light.clip_near);
     float far = light.influence_radius_max;

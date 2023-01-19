@@ -668,38 +668,40 @@ static inline float2 shadow_tile_coord_to_ndc(int2 tile)
 }
 
 /**
- * Small descriptor used for the tile update phase.
+ * Small descriptor used for the tile update phase. Overriden by CPU uploading to GPU each redraw.
  */
 struct ShadowTileMapData {
   /** Cached, used for rendering. */
   float4x4 viewmat, winmat;
   /** Corners of the frustum. (vec3 padded to vec4) */
   float4 corners[4];
-#ifdef USE_GPU_SHADER_CREATE_INFO
-  /** Clip distances that were used to render the pages. */
-#  define _clip_near_stored corners[0].w
-#  define _clip_far_stored corners[1].w
-#  define _clip_near_new corners[0].w
-#  define _clip_far_new corners[1].w
-#endif
   /** Integer offset of the center of the 16x16 tiles from the origin of the tile space. */
   int2 grid_offset;
   /** Shift between previous and current grid_offset. Allows update tagging. */
   int2 grid_shift;
+  /** True for punctual lights. */
+  bool1 is_cubeface;
+  /** Multiple of SHADOW_TILEDATA_PER_TILEMAP. Offset inside the tile buffer. */
+  int tiles_index;
+  /** Index of persistent data in the persistent data buffer. */
+  int clip_data_index;
 
+  int _pad0;
+};
+BLI_STATIC_ASSERT_ALIGN(ShadowTileMapData, 16)
+
+/**
+ * Per tilemap data persistent on GPU.
+ */
+struct ShadowTileMapClip {
+  /** Clip distances that were used to render the pages. */
+  float clip_near_stored;
+  float clip_far_stored;
   /** Near and far clip distances for directional. Float stored as int for atomic operations. */
   int clip_near;
   int clip_far;
-  /** True for punctual lights. */
-  bool1 is_cubeface;
-  /** Must be multiplied by SHADOW_TILEDATA_PER_TILEMAP to get offset inside the tile buffer. */
-  int tiles_index;
-  /** Cone direction for punctual shadows. */
-  float3 cone_direction;
-  /** Cosine of the max angle. Offset to take into account the max tile angle. */
-  float cone_angle_cos;
 };
-BLI_STATIC_ASSERT_ALIGN(ShadowTileMapData, 16)
+BLI_STATIC_ASSERT_ALIGN(ShadowTileMapClip, 16)
 
 struct ShadowPagesInfoData {
   /** Number of free pages in the free page buffer. */
@@ -915,6 +917,7 @@ using ShadowPagesInfoDataBuf = draw::StorageBuffer<ShadowPagesInfoData>;
 using ShadowPageHeapBuf = draw::StorageVectorBuffer<uint, SHADOW_MAX_PAGE>;
 using ShadowPageCacheBuf = draw::StorageArrayBuffer<uint2, SHADOW_MAX_PAGE, true>;
 using ShadowTileMapDataBuf = draw::StorageVectorBuffer<ShadowTileMapData, SHADOW_MAX_TILEMAP>;
+using ShadowTileMapClipBuf = draw::StorageArrayBuffer<ShadowTileMapClip, SHADOW_MAX_TILEMAP, true>;
 using ShadowTileDataBuf = draw::StorageArrayBuffer<ShadowTileDataPacked, SHADOW_MAX_TILE, true>;
 using VelocityGeometryBuf = draw::StorageArrayBuffer<float4, 16, true>;
 using VelocityIndexBuf = draw::StorageArrayBuffer<VelocityIndex, 16>;

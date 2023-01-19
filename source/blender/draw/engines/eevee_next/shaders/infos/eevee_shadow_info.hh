@@ -7,11 +7,26 @@
 /** \name Shadow pipeline
  * \{ */
 
+GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_bounds)
+    .do_static_compilation(true)
+    .local_group_size(SHADOW_BOUNDS_GROUP_SIZE)
+    .storage_buf(LIGHT_BUF_SLOT, Qualifier::READ_WRITE, "LightData", "light_buf[]")
+    .storage_buf(LIGHT_CULL_BUF_SLOT, Qualifier::READ, "LightCullingData", "light_cull_buf")
+    .storage_buf(4, Qualifier::READ, "uint", "casters_id_buf[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "ShadowTileMapData", "tilemaps_buf[]")
+    .storage_buf(6, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "ShadowTileMapClip", "tilemaps_clip_buf[]")
+    .push_constant(Type::INT, "resource_len")
+    .typedef_source("draw_shader_shared.h")
+    .additional_info("eevee_shared")
+    .compute_source("eevee_shadow_tilemap_bounds_comp.glsl");
+
 GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_init)
     .do_static_compilation(true)
     .local_group_size(SHADOW_TILEMAP_RES, SHADOW_TILEMAP_RES)
     .storage_buf(0, Qualifier::READ_WRITE, "ShadowTileMapData", "tilemaps_buf[]")
     .storage_buf(1, Qualifier::READ_WRITE, "ShadowTileDataPacked", "tiles_buf[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "ShadowTileMapClip", "tilemaps_clip_buf[]")
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_tilemap_init_comp.glsl");
 
@@ -98,6 +113,7 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_finalize)
     .storage_buf(4, Qualifier::WRITE, "int", "view_to_tilemap_buf[64]")
     .storage_buf(5, Qualifier::READ_WRITE, "DispatchCommand", "clear_dispatch_buf")
     .storage_buf(6, Qualifier::READ_WRITE, "uint", "clear_page_buf[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "ShadowTileMapClip", "tilemaps_clip_buf[]")
     .image(0, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D, "tilemaps_img")
     .image(1, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D_ARRAY, "render_map_lod0_img")
     .image(2, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D_ARRAY, "render_map_lod1_img")
@@ -115,19 +131,6 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_page_clear)
     .image(0, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D, "atlas_img")
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_page_clear_comp.glsl");
-
-GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_bounds)
-    .do_static_compilation(true)
-    .local_group_size(SHADOW_BOUNDS_GROUP_SIZE)
-    .storage_buf(LIGHT_BUF_SLOT, Qualifier::READ_WRITE, "LightData", "light_buf[]")
-    .storage_buf(LIGHT_CULL_BUF_SLOT, Qualifier::READ, "LightCullingData", "light_cull_buf")
-    .storage_buf(4, Qualifier::READ, "uint", "casters_id_buf[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "ShadowTileMapData", "tilemaps_buf[]")
-    .storage_buf(6, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
-    .push_constant(Type::INT, "resource_len")
-    .typedef_source("draw_shader_shared.h")
-    .additional_info("eevee_shared")
-    .compute_source("eevee_shadow_tilemap_bounds_comp.glsl");
 
 /** \} */
 

@@ -14,8 +14,7 @@ void main()
 {
   ShadowTileMapData tilemap_data = tilemaps_buf[gl_GlobalInvocationID.z];
 
-  int tile_index = tilemap_data.tiles_index * SHADOW_TILEDATA_PER_TILEMAP +
-                   int(gl_LocalInvocationID.x);
+  int tile_index = tilemap_data.tiles_index + int(gl_LocalInvocationID.x);
 
   ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
 

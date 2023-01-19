@@ -102,9 +102,10 @@ void main()
         view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
 
         if (!tilemap_data.is_cubeface) {
+          int clip_index = tilemap_data.clip_data_index;
           /* For directionnal, we need to modify winmat to encompass all casters. */
-          float clip_far = -tilemap_data._clip_far_new;
-          float clip_near = -tilemap_data._clip_near_new;
+          float clip_far = -tilemaps_clip_buf[clip_index].clip_far_stored;
+          float clip_near = -tilemaps_clip_buf[clip_index].clip_near_stored;
           float rcp_zdelta = 1.0 / (clip_far - clip_near);
           tilemap_data.winmat[2][2] = -2.0 * rcp_zdelta;
           tilemap_data.winmat[3][2] = -(clip_far + clip_near) * rcp_zdelta;
