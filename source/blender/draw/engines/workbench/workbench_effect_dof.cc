@@ -222,7 +222,8 @@ void DofPass::draw(Manager &manager, View &view, SceneResources &resources, int2
   DRW_stats_group_start("Depth Of Field");
 
   int2 half_res = {max_ii(resolution.x / 2, 1), max_ii(resolution.y / 2, 1)};
-  blur_tx_.acquire(half_res, GPU_RGBA16F);
+  blur_tx_.acquire(
+      half_res, GPU_RGBA16F, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
 
   downsample_fb_.ensure(GPU_ATTACHMENT_NONE,
                         GPU_ATTACHMENT_TEXTURE(source_tx_),

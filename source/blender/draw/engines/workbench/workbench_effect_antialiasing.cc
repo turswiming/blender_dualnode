@@ -112,11 +112,12 @@ AntiAliasingPass::AntiAliasingPass()
   smaa_aa_weight_sh_ = GPU_shader_create_from_info_name("workbench_smaa_stage_1");
   smaa_resolve_sh_ = GPU_shader_create_from_info_name("workbench_smaa_stage_2");
 
-  smaa_search_tx_.ensure_2d(GPU_R8, {SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT});
+  smaa_search_tx_.ensure_2d(
+      GPU_R8, {SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT}, GPU_TEXTURE_USAGE_SHADER_READ);
   GPU_texture_update(smaa_search_tx_, GPU_DATA_UBYTE, searchTexBytes);
   GPU_texture_filter_mode(smaa_search_tx_, true);
 
-  smaa_area_tx_.ensure_2d(GPU_RG8, {AREATEX_WIDTH, AREATEX_HEIGHT});
+  smaa_area_tx_.ensure_2d(GPU_RG8, {AREATEX_WIDTH, AREATEX_HEIGHT}, GPU_TEXTURE_USAGE_SHADER_READ);
   GPU_texture_update(smaa_area_tx_, GPU_DATA_UBYTE, areaTexBytes);
   GPU_texture_filter_mode(smaa_area_tx_, true);
 }
@@ -144,8 +145,11 @@ void AntiAliasingPass::sync(SceneResources &resources, int2 resolution)
     return;
   }
 
-  taa_accumulation_tx_.ensure_2d(GPU_RGBA16F, resolution);
-  sample0_depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
+  taa_accumulation_tx_.ensure_2d(
+      GPU_RGBA16F, resolution, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
+  sample0_depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8,
+                              resolution,
+                              GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
 
   taa_accumulation_ps_.init();
   taa_accumulation_ps_.state_set(sample_ == 0 ? DRW_STATE_WRITE_COLOR :
@@ -279,13 +283,15 @@ void AntiAliasingPass::draw(Manager &manager,
   }
 
   if (!DRW_state_is_image_render() || last_sample) {
-    smaa_weight_tx_.acquire(resolution, GPU_RGBA8);
+    smaa_weight_tx_.acquire(
+        resolution, GPU_RGBA8, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
     smaa_mix_factor_ = 1.0f - clamp_f(sample_ / 4.0f, 0.0f, 1.0f);
     smaa_viewport_metrics_ = float4(float2(1.0f / float2(resolution)), resolution);
 
     /* After a certain point SMAA is no longer necessary. */
     if (smaa_mix_factor_ > 0.0f) {
-      smaa_edge_tx_.acquire(resolution, GPU_RG8);
+      smaa_edge_tx_.acquire(
+          resolution, GPU_RG8, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
       smaa_edge_fb_.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(smaa_edge_tx_));
       smaa_edge_fb_.bind();
       manager.submit(smaa_edge_detect_ps_, view);
