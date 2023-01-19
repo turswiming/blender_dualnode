@@ -51,7 +51,7 @@ template<CoordSpace Space> struct Edge {
 };
 
 /** Calculate the bounds of the given edge. */
-rcti get_bounds(const Edge<CoordSpace::Tile> &tile_edge)
+static rcti get_bounds(const Edge<CoordSpace::Tile> &tile_edge)
 {
   rcti bounds;
   BLI_rcti_init_minmax(&bounds);
@@ -61,7 +61,7 @@ rcti get_bounds(const Edge<CoordSpace::Tile> &tile_edge)
 }
 
 /** Add a margin to the given bounds. */
-void add_margin(rcti &bounds, int margin)
+static void add_margin(rcti &bounds, int margin)
 {
   bounds.xmin -= margin;
   bounds.xmax += margin;
@@ -70,24 +70,24 @@ void add_margin(rcti &bounds, int margin)
 }
 
 /** Clamp bounds to be between 0,0 and the given resolution. */
-void clamp(rcti &bounds, int2 resolution)
+static void clamp(rcti &bounds, int2 resolution)
 {
   rcti clamping_bounds;
   BLI_rcti_init(&clamping_bounds, 0, resolution.x - 1, 0, resolution.y - 1);
   BLI_rcti_isect(&bounds, &clamping_bounds, &bounds);
 }
 
-const Vertex<CoordSpace::Tile> convert_coord_space(const Vertex<CoordSpace::UV> &uv_vertex,
-                                                   const image::ImageTileWrapper image_tile,
-                                                   const int2 tile_resolution)
+static const Vertex<CoordSpace::Tile> convert_coord_space(const Vertex<CoordSpace::UV> &uv_vertex,
+                                                          const image::ImageTileWrapper image_tile,
+                                                          const int2 tile_resolution)
 {
   return Vertex<CoordSpace::Tile>{(uv_vertex.coordinate - float2(image_tile.get_tile_offset())) *
                                   float2(tile_resolution)};
 }
 
-const Edge<CoordSpace::Tile> convert_coord_space(const Edge<CoordSpace::UV> &uv_edge,
-                                                 const image::ImageTileWrapper image_tile,
-                                                 const int2 tile_resolution)
+static const Edge<CoordSpace::Tile> convert_coord_space(const Edge<CoordSpace::UV> &uv_edge,
+                                                        const image::ImageTileWrapper image_tile,
+                                                        const int2 tile_resolution)
 {
   return Edge<CoordSpace::Tile>{
       convert_coord_space(uv_edge.vertex_1, image_tile, tile_resolution),
@@ -483,23 +483,19 @@ struct Rows {
     }
   };
 
-  Rows(int2 resolution, int margin, const PixelNodesTileData &node_tile_pixels)
-      : resolution(resolution), margin(margin)
+  Rows(int2 resolution, int margin)
+      : resolution(resolution), margin(margin), pixels(resolution.x * resolution.y)
   {
-    TIMEIT_START(mark_brush);
-    pixels.resize(resolution.x * resolution.y);
-    init_pixels();
-    mark_pixels_effected_by_brush(node_tile_pixels);
-    TIMEIT_END(mark_brush);
   }
 
   void init_pixels()
   {
-    for (int64_t y : IndexRange(resolution.y)) {
+    pixels.resize(resolution.x * resolution.y);
+    int64_t index = 0;
+    for (int y : IndexRange(resolution.y)) {
       for (int64_t x : IndexRange(resolution.x)) {
-        int64_t index = y * resolution.y + x;
         int2 position(x, y);
-        pixels[index].init(position);
+        pixels[index++].init(position);
       }
     }
   }
@@ -635,7 +631,9 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     CopyPixelTile copy_tile(image_tile.get_tile_number());
     TIMEIT_START(rows_usage);
 
-    Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
+    Rows rows(tile_resolution, image.seam_margin);
+    rows.init_pixels();
+    rows.mark_pixels_effected_by_brush(nodes_tile_pixels);
     TIMEIT_START(mark_for_eval);
     rows.mark_for_evaluation(tile_edges);
     TIMEIT_END(mark_for_eval);
