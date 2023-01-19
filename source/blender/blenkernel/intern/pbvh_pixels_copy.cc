@@ -237,8 +237,8 @@ struct Rows {
   };
 
   struct Pixel {
-    PixelType type = PixelType::Undecided;
-    float distance = std::numeric_limits<float>::max();
+    PixelType type;
+    float distance;
     CopyPixelCommand copy_command;
     /**
      * Index of the edge in the list of non-manifold edges.
@@ -246,22 +246,25 @@ struct Rows {
      * The edge is kept to calculate athe mix factor between the two pixels that have chosen to
      * be mixed.
      */
-    int64_t edge_index = -1;
+    int64_t edge_index;
 
     Pixel() = default;
 
-    Pixel(int2 coordinate)
+    void init(int2 coordinate)
     {
       copy_command.destination = coordinate;
       copy_command.source_1 = coordinate;
       copy_command.source_2 = coordinate;
       copy_command.mix_factor = 0.0f;
+      type = PixelType::Undecided;
+      distance = std::numeric_limits<float>::max();
+      edge_index = -1;
     }
   };
 
   int2 resolution;
   int margin;
-  Array<Pixel> pixels;
+  Vector<Pixel> pixels;
 
   struct RowView {
     int row_number = 0;
@@ -481,9 +484,10 @@ struct Rows {
   };
 
   Rows(int2 resolution, int margin, const PixelNodesTileData &node_tile_pixels)
-      : resolution(resolution), margin(margin), pixels(resolution.x * resolution.y)
+      : resolution(resolution), margin(margin)
   {
     TIMEIT_START(mark_brush);
+    pixels.resize(resolution.x * resolution.y);
     init_pixels();
     mark_pixels_effected_by_brush(node_tile_pixels);
     TIMEIT_END(mark_brush);
@@ -495,7 +499,7 @@ struct Rows {
       for (int64_t x : IndexRange(resolution.x)) {
         int64_t index = y * resolution.y + x;
         int2 position(x, y);
-        pixels[index] = Pixel(position);
+        pixels[index].init(position);
       }
     }
   }
@@ -629,6 +633,7 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     NonManifoldTileEdges tile_edges = non_manifold_edges.extract_tile_edges(image_tile,
                                                                             tile_resolution);
     CopyPixelTile copy_tile(image_tile.get_tile_number());
+    TIMEIT_START(rows_usage);
 
     Rows rows(tile_resolution, image.seam_margin, nodes_tile_pixels);
     TIMEIT_START(mark_for_eval);
@@ -642,8 +647,11 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     TIMEIT_START(pack);
     rows.pack_into(copy_tile);
     TIMEIT_END(pack);
+    TIMEIT_END(rows_usage);
+    TIMEIT_START(store_result);
     copy_tile.print_compression_rate();
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
+    TIMEIT_END(store_result);
   }
   TIMEIT_END(pbvh_pixels_copy_update);
 }
