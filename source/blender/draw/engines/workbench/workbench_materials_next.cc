@@ -69,17 +69,19 @@ void get_material_image(Object *ob,
   if (node && image) {
     switch (node->type) {
       case SH_NODE_TEX_IMAGE: {
-        NodeTexImage *storage = static_cast<NodeTexImage *>(node->storage);
+        const NodeTexImage *storage = static_cast<NodeTexImage *>(node->storage);
         const bool use_filter = (storage->interpolation != SHD_INTERP_CLOSEST);
-        const bool use_repeat = (storage->extension == SHD_IMAGE_EXTENSION_REPEAT);
+        const bool use_mirror = (storage->extension == SHD_IMAGE_EXTENSION_MIRROR);
+        const bool use_repeat = use_mirror || (storage->extension == SHD_IMAGE_EXTENSION_REPEAT);
         const bool use_clip = (storage->extension == SHD_IMAGE_EXTENSION_CLIP);
         SET_FLAG_FROM_TEST(sampler_state, use_filter, GPU_SAMPLER_FILTER);
         SET_FLAG_FROM_TEST(sampler_state, use_repeat, GPU_SAMPLER_REPEAT);
         SET_FLAG_FROM_TEST(sampler_state, use_clip, GPU_SAMPLER_CLAMP_BORDER);
+        SET_FLAG_FROM_TEST(sampler_state, use_mirror, GPU_SAMPLER_MIRROR_REPEAT);
         break;
       }
       case SH_NODE_TEX_ENVIRONMENT: {
-        NodeTexEnvironment *storage = static_cast<NodeTexEnvironment *>(node->storage);
+        const NodeTexEnvironment *storage = static_cast<NodeTexEnvironment *>(node->storage);
         const bool use_filter = (storage->interpolation != SHD_INTERP_CLOSEST);
         SET_FLAG_FROM_TEST(sampler_state, use_filter, GPU_SAMPLER_FILTER);
         break;
