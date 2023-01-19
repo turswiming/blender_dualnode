@@ -23,7 +23,7 @@
 
 namespace blender::bke::pbvh::pixels {
 
-const int GRAIN_SIZE = 128;
+const int THREADING_GRAIN_SIZE = 128;
 
 /** Coordinate space of a coordinate. */
 enum class CoordSpace {
@@ -125,9 +125,6 @@ class NonManifoldUVEdges : public Vector<Edge<CoordSpace::UV>> {
                                           const int2 tile_resolution) const
   {
     NonManifoldTileEdges result;
-    // TODO: Only add edges that intersects with the given tile.
-    // TODO: Clamp edges to tile bounds.
-
     for (const Edge<CoordSpace::UV> &uv_edge : *this) {
       const Edge<CoordSpace::Tile> tile_edge = convert_coord_space(
           uv_edge, image_tile, tile_resolution);
@@ -392,10 +389,9 @@ struct Rows {
     int2 found_source(0);
 
     for (int sy : IndexRange(bounds.ymin, BLI_rcti_size_y(&bounds))) {
-      // TODO don't use row view here.
-      RowView row(*this, sy);
+      int pixel_index = sy * resolution.x;
       for (int sx : IndexRange(bounds.xmin, BLI_rcti_size_x(&bounds))) {
-        Pixel &source = row.pixels[sx];
+        Pixel &source = pixels[pixel_index + sx];
         if (source.type != PixelType::Brush) {
           continue;
         }
@@ -424,18 +420,15 @@ struct Rows {
   void find_copy_source(Vector<std::reference_wrapper<Pixel>> &selected_pixels,
                         const NonManifoldTileEdges &tile_edges)
   {
-    threading::parallel_for(IndexRange(selected_pixels.size()), GRAIN_SIZE, [&](IndexRange range) {
-      for (int selected_pixel_index : range) {
-        Pixel &current_pixel = selected_pixels[selected_pixel_index];
-        find_copy_source(current_pixel, tile_edges);
-      }
-    });
+    threading::parallel_for(
+        IndexRange(selected_pixels.size()), THREADING_GRAIN_SIZE, [&](IndexRange range) {
+          for (int selected_pixel_index : range) {
+            Pixel &current_pixel = selected_pixels[selected_pixel_index];
+            find_copy_source(current_pixel, tile_edges);
+          }
+        });
   }
 
-  /**
-   * Mark pixels that needs to be evaluated. Pixels that are marked will have its `edge_index`
-   * filled.
-   */
   Vector<std::reference_wrapper<Pixel>> filter_pixels_for_closer_examination(
       const NonManifoldTileEdges &tile_edges)
   {
@@ -504,19 +497,9 @@ struct Rows {
         last_command = elem.copy_command;
       }
     }
-
-    /* Shrink vectors to fit the actual data it contains. From now on these vectors should be
-     * immutable. */
-    // copy_tile.groups.resize(copy_tile.groups.size());
-    // copy_tile.command_deltas.resize(copy_tile.command_deltas.size());
   }
 
 };  // namespace blender::bke::pbvh::pixels
-
-static void copy_pixels_reinit(CopyPixelTiles &tiles)
-{
-  tiles.clear();
-}
 
 void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
                                  Image &image,
@@ -525,7 +508,7 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
 {
   TIMEIT_START(pbvh_pixels_copy_update);
   PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(pbvh);
-  copy_pixels_reinit(pbvh_data.tiles_copy_pixels);
+  pbvh_data.tiles_copy_pixels.clear();
   const NonManifoldUVEdges non_manifold_edges(mesh_data);
   if (non_manifold_edges.is_empty()) {
     /* Early exit: No non manifold edges detected. */
@@ -588,8 +571,7 @@ void BKE_pbvh_pixels_copy_pixels(PBVH &pbvh,
   }
 
   CopyPixelTile &tile = pixel_tile->get();
-  const int grain_size = 128;
-  threading::parallel_for(tile.groups.index_range(), grain_size, [&](IndexRange range) {
+  threading::parallel_for(tile.groups.index_range(), THREADING_GRAIN_SIZE, [&](IndexRange range) {
     tile.copy_pixels(*tile_buffer, range);
   });
 

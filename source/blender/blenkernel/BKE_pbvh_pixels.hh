@@ -261,6 +261,8 @@ struct NodeData {
 // TODO: move to image wrappers?
 // TODO: Add compile time checks.
 template<typename T, int Channels = 4> struct ImageBufferAccessor {
+ // BLI_static_assert(constexpr(std::is_same_v<T, int> || std::is_same_v<T, float>);
+
   ImBuf &image_buffer;
 
   ImageBufferAccessor(ImBuf &image_buffer) : image_buffer(image_buffer)
@@ -312,7 +314,6 @@ struct CopyPixelGroup {
   int2 start_destination;
   int2 start_source_1;
   int64_t start_delta_index;
-  // TODO: extract from next group.
   int num_deltas;
 };
 
