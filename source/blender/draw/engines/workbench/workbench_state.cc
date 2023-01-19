@@ -257,8 +257,10 @@ ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
                       CustomData_has_layer(cd_ldata, CD_PROP_COLOR) ||
                       CustomData_has_layer(cd_ldata, CD_PROP_BYTE_COLOR));
 
+    bool has_uv = CustomData_has_layer(cd_ldata, CD_PROP_FLOAT2);
+
     if (color_type == V3D_SHADING_TEXTURE_COLOR) {
-      if (ob->dt < OB_TEXTURE || !CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
+      if (ob->dt < OB_TEXTURE || !has_uv) {
         color_type = V3D_SHADING_MATERIAL_COLOR;
       }
     }
@@ -275,7 +277,7 @@ ObjectState::ObjectState(const SceneState &scene_state, Object *ob)
       if (is_vertpaint_mode && has_color) {
         color_type = V3D_SHADING_VERTEX_COLOR;
       }
-      else if (is_texpaint_mode && CustomData_has_layer(cd_ldata, CD_MLOOPUV)) {
+      else if (is_texpaint_mode && has_uv) {
         color_type = V3D_SHADING_TEXTURE_COLOR;
         texture_paint_mode = true;
 
