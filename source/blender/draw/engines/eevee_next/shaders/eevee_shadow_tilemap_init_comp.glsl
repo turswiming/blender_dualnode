@@ -13,6 +13,18 @@
 
 shared int directional_range_changed;
 
+ShadowTileDataPacked init_tile_data(ShadowTileDataPacked tile, bool do_update)
+{
+  if (flag_test(tile, SHADOW_IS_RENDERED)) {
+    tile &= ~(SHADOW_DO_UPDATE | SHADOW_IS_RENDERED);
+  }
+  if (do_update) {
+    tile |= SHADOW_DO_UPDATE;
+  }
+  tile &= ~SHADOW_IS_USED;
+  return tile;
+}
+
 void main()
 {
   uint tilemap_index = gl_GlobalInvocationID.z;
@@ -44,10 +56,10 @@ void main()
   barrier();
 
   ivec2 tile_co = ivec2(gl_GlobalInvocationID.xy);
-  ivec2 tile_shifted = ivec2(uvec2(tile_co + tilemap.grid_offset) % SHADOW_TILEMAP_RES);
-  tile_shifted += tilemap.grid_shift;
+  ivec2 tile_shifted = tile_co + tilemap.grid_shift;
+  ivec2 tile_wrapped = ivec2(tile_shifted % SHADOW_TILEMAP_RES);
 
-  /* This tile was shifted in and contains old information.
+  /* If this tile was shifted in and contains old information, update it.
    * Note that cubemap always shift all tiles on update. */
   bool do_update = !in_range_inclusive(tile_shifted, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
 
@@ -59,19 +71,19 @@ void main()
   int lod_max = (tilemap.is_cubeface) ? SHADOW_TILEMAP_LOD : 0;
   uint lod_size = uint(SHADOW_TILEMAP_RES);
   for (int lod = 0; lod <= lod_max; lod++, lod_size >>= 1u) {
-    if (all(lessThan(tile_co, ivec2(lod_size)))) {
-      int tile_index = shadow_tile_offset(tile_co, tilemap.tiles_index, lod);
-      ShadowTileDataPacked tile = tiles_buf[tile_index];
+    bool thread_active = all(lessThan(tile_co, ivec2(lod_size)));
+    ShadowTileDataPacked tile;
+    if (thread_active) {
+      int tile_load = shadow_tile_offset(tile_wrapped, tilemap.tiles_index, lod);
+      tile = init_tile_data(tiles_buf[tile_load], do_update);
+    }
 
-      if (flag_test(tile, SHADOW_IS_RENDERED)) {
-        tile &= ~(SHADOW_DO_UPDATE | SHADOW_IS_RENDERED);
-      }
-      if (do_update) {
-        tile |= SHADOW_DO_UPDATE;
-      }
-      tile &= ~SHADOW_IS_USED;
+    /* Uniform control flow for barrier. Needed to avoid race condition on shifted loads. */
+    barrier();
 
-      tiles_buf[tile_index] = tile;
+    if (thread_active) {
+      int tile_store = shadow_tile_offset(tile_co, tilemap.tiles_index, lod);
+      tiles_buf[tile_store] = tile;
     }
   }
 }

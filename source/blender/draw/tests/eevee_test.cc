@@ -34,7 +34,7 @@ static void test_eevee_shadow_shift_clear()
 
   {
     ShadowTileMapData tilemap = {};
-    tilemap.tiles_index = tiles_index;
+    tilemap.tiles_index = tiles_index * SHADOW_TILEDATA_PER_TILEMAP;
     tilemap.grid_shift = int2(SHADOW_TILEMAP_RES);
     tilemap.is_cubeface = true;
 
@@ -45,10 +45,12 @@ static void test_eevee_shadow_shift_clear()
   {
     ShadowTileData tile;
 
+    tile.page = uint2(1, 2);
     tile.is_used = true;
     tile.do_update = true;
     tiles_data[tile_lod0] = shadow_tile_pack(tile);
 
+    tile.page = uint2(3, 4);
     tile.is_used = false;
     tile.do_update = false;
     tiles_data[tile_lod1] = shadow_tile_pack(tile);
@@ -72,8 +74,10 @@ static void test_eevee_shadow_shift_clear()
   tiles_data.read();
 
   EXPECT_EQ(tilemaps_data[0].grid_offset, int2(0));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[tile_lod0]).page, uint2(1, 2));
   EXPECT_EQ(shadow_tile_unpack(tiles_data[tile_lod0]).is_used, false);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[tile_lod0]).do_update, true);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[tile_lod1]).page, uint2(3, 4));
   EXPECT_EQ(shadow_tile_unpack(tiles_data[tile_lod1]).is_used, false);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[tile_lod1]).do_update, true);
 
@@ -81,6 +85,77 @@ static void test_eevee_shadow_shift_clear()
   DRW_shaders_free();
 }
 DRAW_TEST(eevee_shadow_shift_clear)
+
+static void test_eevee_shadow_shift()
+{
+  ShadowTileMapDataBuf tilemaps_data = {"tilemaps_data"};
+  ShadowTileDataBuf tiles_data = {"tiles_data"};
+
+  {
+    ShadowTileMapData tilemap = {};
+    tilemap.tiles_index = 0;
+    tilemap.clip_data_index = 0;
+    tilemap.grid_shift = int2(-1, 2);
+    tilemap.is_cubeface = false;
+
+    tilemaps_data.append(tilemap);
+
+    tilemaps_data.push_update();
+  }
+  {
+
+    ShadowTileData tile = shadow_tile_unpack(ShadowTileDataPacked(SHADOW_NO_DATA));
+
+    for (auto x : IndexRange(SHADOW_TILEMAP_RES)) {
+      for (auto y : IndexRange(SHADOW_TILEMAP_RES)) {
+        tile.is_allocated = true;
+        tile.is_rendered = true;
+        tile.do_update = true;
+        tile.page = uint2(x, y);
+        tiles_data[x + y * SHADOW_TILEMAP_RES] = shadow_tile_pack(tile);
+      }
+    }
+
+    tiles_data.push_update();
+  }
+
+  GPUShader *sh = GPU_shader_create_from_info_name("eevee_shadow_tilemap_init");
+
+  PassSimple pass("Test");
+  pass.shader_set(sh);
+  pass.bind_ssbo("tilemaps_buf", tilemaps_data);
+  pass.bind_ssbo("tiles_buf", tiles_data);
+  pass.dispatch(int3(1, 1, tilemaps_data.size()));
+
+  Manager manager;
+  manager.submit(pass);
+  GPU_finish();
+
+  tilemaps_data.read();
+  tiles_data.read();
+
+  EXPECT_EQ(tilemaps_data[0].grid_offset, int2(0));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).page, uint2(15, 2));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).do_update, true);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).is_rendered, false);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).is_allocated, true);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1]).page, uint2(0, 2));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1]).do_update, false);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1]).is_rendered, false);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1]).is_allocated, true);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).page, uint2(15, 4));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).do_update, true);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).is_rendered, false);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).is_allocated, true);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1 + SHADOW_TILEMAP_RES * 2]).page, uint2(0, 4));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1 + SHADOW_TILEMAP_RES * 2]).do_update, false);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1 + SHADOW_TILEMAP_RES * 2]).is_rendered, false);
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[1 + SHADOW_TILEMAP_RES * 2]).is_allocated, true);
+
+  GPU_shader_free(sh);
+  DRW_shaders_free();
+}
+DRAW_TEST(eevee_shadow_shift)
 
 static void test_eevee_shadow_tag_update()
 {
@@ -91,8 +166,8 @@ static void test_eevee_shadow_tag_update()
   {
     /* Simulate 1 object moving and 1 object static with changing resource index. */
     float4x4 obmat = float4x4::identity();
-    float4x4 obmat2 = float4x4::from_loc_eul_scale(float3(10.0f), float3(0.0f), float3(0.5f));
-    float3 half_extent = float3(0.249f, 0.249f, 0.001f);
+    float4x4 obmat2 = float4x4::from_loc_eul_scale(float3(1.0f), float3(0.0f), float3(0.5f));
+    float3 half_extent = float3(0.24f, 0.249f, 0.001f);
 
     {
       manager.begin_sync();
@@ -117,12 +192,12 @@ static void test_eevee_shadow_tag_update()
   tiles_data.clear_to_zero();
 
   {
-    ShadowTileMap tilemap(0);
+    ShadowTileMap tilemap(0 * SHADOW_TILEDATA_PER_TILEMAP);
     tilemap.sync_cubeface(float4x4::identity(), 0.01f, 1.0f, Z_NEG);
     tilemaps_data.append(tilemap);
   }
   {
-    ShadowTileMap tilemap(1);
+    ShadowTileMap tilemap(1 * SHADOW_TILEDATA_PER_TILEMAP);
     tilemap.sync_clipmap(float3(0.0f), float4x4::identity(), int2(0), 1);
     tilemaps_data.append(tilemap);
   }
@@ -290,7 +365,7 @@ static void test_eevee_shadow_free()
   }
   {
     ShadowTileMapData tilemap = {};
-    tilemap.tiles_index = tiles_index;
+    tilemap.tiles_index = tiles_index * SHADOW_TILEDATA_PER_TILEMAP;
     tilemaps_data.append(tilemap);
     tilemaps_data.push_update();
   }
@@ -518,7 +593,7 @@ class TestAlloc {
     }
     {
       ShadowTileMapData tilemap = {};
-      tilemap.tiles_index = tiles_index;
+      tilemap.tiles_index = tiles_index * SHADOW_TILEDATA_PER_TILEMAP;
       tilemaps_data.append(tilemap);
       tilemaps_data.push_update();
     }

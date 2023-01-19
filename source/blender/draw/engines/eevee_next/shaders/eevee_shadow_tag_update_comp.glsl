@@ -71,9 +71,9 @@ void main()
   }
 
   /* Raster the bounding rectangle of the Box projection. */
-  const uint tilemap_half_res = SHADOW_TILEMAP_RES / 2;
-  ivec2 box_min = ivec2(aabb_tag.min.xy * float(tilemap_half_res) + tilemap_half_res);
-  ivec2 box_max = ivec2(aabb_tag.max.xy * float(tilemap_half_res) + tilemap_half_res);
+  const float tilemap_half_res = float(SHADOW_TILEMAP_RES / 2);
+  ivec2 box_min = ivec2(aabb_tag.min.xy * tilemap_half_res + tilemap_half_res);
+  ivec2 box_max = ivec2(aabb_tag.max.xy * tilemap_half_res + tilemap_half_res);
 
   for (int lod = 0; lod <= SHADOW_TILEMAP_LOD; lod++, box_min >>= 1, box_max >>= 1) {
     for (int y = box_min.y; y <= box_max.y; y++) {
