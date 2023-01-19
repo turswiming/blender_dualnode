@@ -23,6 +23,8 @@
 
 namespace blender::bke::pbvh::pixels {
 
+const int GRAIN_SIZE = 128;
+
 /** Coordinate space of a coordinate. */
 enum class CoordSpace {
   /**
@@ -225,96 +227,52 @@ class PixelNodesTileData : public Vector<std::reference_wrapper<UDIMTilePixels>>
  */
 
 struct Rows {
-  struct Row {
-    enum class PixelType {
-      Undecided,
-      /** This pixel is directly affected by a brush and doesn't need to be solved. */
-      Brush,
-      Selected,
-      /** This pixel will be copid from another pixel to solve non-manifold edge bleeding. */
-      CopyFromClosestEdge,
-    };
+  enum class PixelType {
+    Undecided,
+    /** This pixel is directly affected by a brush and doesn't need to be solved. */
+    Brush,
+    Selected,
+    /** This pixel will be copid from another pixel to solve non-manifold edge bleeding. */
+    CopyFromClosestEdge,
+  };
 
-    struct Pixel {
-      PixelType type = PixelType::Undecided;
-      float distance = std::numeric_limits<float>::max();
-      CopyPixelCommand copy_command;
-      /**
-       * Index of the edge in the list of non-manifold edges.
-       *
-       * The edge is kept to calculate athe mix factor between the two pixels that have chosen to
-       * be mixed.
-       */
-      int64_t edge_index = -1;
-
-      Pixel() = default;
-
-      Pixel(int2 coordinate)
-      {
-        copy_command.destination = coordinate;
-        copy_command.source_1 = coordinate;
-        copy_command.source_2 = coordinate;
-        copy_command.mix_factor = 0.0f;
-      }
-    };
-
-    int row_number = 0;
-    Array<Pixel> pixels;
-    Row() = delete;
-    Row(int64_t width) : pixels(width)
-    {
-    }
-
-    void reinit(int y)
-    {
-      row_number = y;
-      for (int x = 0; x < pixels.size(); x++) {
-        pixels[x] = Pixel(int2(x, y));
-      }
-    }
-
+  struct Pixel {
+    PixelType type = PixelType::Undecided;
+    float distance = std::numeric_limits<float>::max();
+    CopyPixelCommand copy_command;
     /**
-     * Mark pixels that needs to be evaluated. Pixels that are marked will have its `edge_index`
-     * filled.
+     * Index of the edge in the list of non-manifold edges.
+     *
+     * The edge is kept to calculate athe mix factor between the two pixels that have chosen to
+     * be mixed.
      */
-    void mark_for_evaluation(const Rows &rows, const NonManifoldTileEdges &tile_edges)
+    int64_t edge_index = -1;
+
+    Pixel() = default;
+
+    Pixel(int2 coordinate)
     {
-      for (int tile_edge_index : tile_edges.index_range()) {
-        const Edge<CoordSpace::Tile> &tile_edge = tile_edges[tile_edge_index];
-        rcti edge_bounds = get_bounds(tile_edge);
-        add_margin(edge_bounds, rows.margin);
-        clamp(edge_bounds, rows.resolution);
+      copy_command.destination = coordinate;
+      copy_command.source_1 = coordinate;
+      copy_command.source_2 = coordinate;
+      copy_command.mix_factor = 0.0f;
+    }
+  };
 
-        if (edge_bounds.ymax < row_number) {
-          continue;
-        }
-        if (edge_bounds.ymin > row_number) {
-          continue;
-        }
+  int2 resolution;
+  int margin;
+  Array<Pixel> pixels;
 
-        for (const int x : IndexRange(edge_bounds.xmin, BLI_rcti_size_x(&edge_bounds))) {
-          Pixel &pixel = pixels[x];
-          if (pixel.type == PixelType::Brush) {
-            continue;
-          }
-          BLI_assert_msg(pixel.type != PixelType::CopyFromClosestEdge,
-                         "PixelType::CopyFromClosestEdge isn't allowed to be set as it is set "
-                         "when finding the pixels to copy.");
-
-          const float2 point(pixel.copy_command.destination);
-          float2 closest_edge_point;
-          closest_to_line_segment_v2(closest_edge_point,
-                                     point,
-                                     tile_edge.vertex_1.coordinate,
-                                     tile_edge.vertex_2.coordinate);
-          float distance_to_edge = blender::math::distance(closest_edge_point, point);
-          if (distance_to_edge < rows.margin && distance_to_edge < pixel.distance) {
-            pixel.type = PixelType::Selected;
-            pixel.distance = distance_to_edge;
-            pixel.edge_index = tile_edge_index;
-          }
-        }
-      }
+  struct RowView {
+    int row_number = 0;
+    /** Not owning pointer into Row.pixels starts at the start of the row.*/
+    MutableSpan<Pixel> pixels;
+    RowView() = delete;
+    RowView(Rows &rows, int64_t row_number)
+        : row_number(row_number),
+          pixels(
+              MutableSpan<Pixel>(&rows.pixels[row_number * rows.resolution.x], rows.resolution.x))
+    {
     }
 
     /**
@@ -346,7 +304,8 @@ struct Rows {
           if (source == first_source) {
             continue;
           }
-          if (rows.rows[sy].pixels[sx].type != PixelType::Brush) {
+          int pixel_index = sy * rows.resolution.y + sx;
+          if (rows.pixels[pixel_index].type != PixelType::Brush) {
             continue;
           }
 
@@ -403,7 +362,7 @@ struct Rows {
         int2 found_source(0);
 
         for (int sy : IndexRange(bounds.ymin, BLI_rcti_size_y(&bounds))) {
-          Row &row = rows.rows[sy];
+          RowView row(rows, sy);
           for (int sx : IndexRange(bounds.xmin, BLI_rcti_size_x(&bounds))) {
             Pixel &source = row.pixels[sx];
             if (source.type != PixelType::Brush) {
@@ -521,21 +480,24 @@ struct Rows {
     }
   };
 
-  int2 resolution;
-  int margin;
-  Vector<Row> rows;
-
   Rows(int2 resolution, int margin, const PixelNodesTileData &node_tile_pixels)
-      : resolution(resolution), margin(margin)
+      : resolution(resolution), margin(margin), pixels(resolution.x * resolution.y)
   {
     TIMEIT_START(mark_brush);
-    Row row_template(resolution.x);
-    rows.resize(resolution.y, row_template);
-    for (int row_number : rows.index_range()) {
-      rows[row_number].reinit(row_number);
-    }
+    init_pixels();
     mark_pixels_effected_by_brush(node_tile_pixels);
     TIMEIT_END(mark_brush);
+  }
+
+  void init_pixels()
+  {
+    for (int64_t y : IndexRange(resolution.y)) {
+      for (int64_t x : IndexRange(resolution.x)) {
+        int64_t index = y * resolution.y + x;
+        int2 position(x, y);
+        pixels[index] = Pixel(position);
+      }
+    }
   }
 
   /**
@@ -547,12 +509,12 @@ struct Rows {
     for (const UDIMTilePixels &tile_pixels : nodes_tile_pixels) {
       threading::parallel_for_each(
           tile_pixels.pixel_rows, [&](const PackedPixelRow &encoded_pixels) {
-            Row &row = rows[encoded_pixels.start_image_coordinate.y];
             for (int x = encoded_pixels.start_image_coordinate.x;
                  x < encoded_pixels.start_image_coordinate.x + encoded_pixels.num_pixels;
                  x++) {
-              row.pixels[x].type = Row::PixelType::Brush;
-              row.pixels[x].distance = 0.0f;
+              int64_t index = encoded_pixels.start_image_coordinate.y * resolution.x + x;
+              pixels[index].type = PixelType::Brush;
+              pixels[index].distance = 0.0f;
             }
           });
     }
@@ -560,18 +522,58 @@ struct Rows {
 
   void find_copy_source(const NonManifoldTileEdges &tile_edges)
   {
-    threading::parallel_for_each(rows, [&](Row &row) { row.find_copy_source(*this, tile_edges); });
+    threading::parallel_for(IndexRange(resolution.y), GRAIN_SIZE, [&](IndexRange range) {
+      for (int row_number : range) {
+        RowView row(*this, row_number);
+        row.find_copy_source(*this, tile_edges);
+      }
+    });
   }
 
+  /**
+   * Mark pixels that needs to be evaluated. Pixels that are marked will have its `edge_index`
+   * filled.
+   */
   void mark_for_evaluation(const NonManifoldTileEdges &tile_edges)
   {
-    threading::parallel_for_each(rows,
-                                 [&](Row &row) { row.mark_for_evaluation(*this, tile_edges); });
+    for (int tile_edge_index : tile_edges.index_range()) {
+      const Edge<CoordSpace::Tile> &tile_edge = tile_edges[tile_edge_index];
+      rcti edge_bounds = get_bounds(tile_edge);
+      add_margin(edge_bounds, margin);
+      clamp(edge_bounds, resolution);
+
+      for (const int64_t sy : IndexRange(edge_bounds.ymin, BLI_rcti_size_y(&edge_bounds))) {
+        for (const int64_t sx : IndexRange(edge_bounds.xmin, BLI_rcti_size_x(&edge_bounds))) {
+          const int64_t index = sy * resolution.x + sx;
+          Pixel &pixel = pixels[index];
+          if (pixel.type == PixelType::Brush) {
+            continue;
+          }
+          BLI_assert_msg(pixel.type != PixelType::CopyFromClosestEdge,
+                         "PixelType::CopyFromClosestEdge isn't allowed to be set as it is set "
+                         "when finding the pixels to copy.");
+
+          const float2 point(sx, sy);
+          float2 closest_edge_point;
+          closest_to_line_segment_v2(closest_edge_point,
+                                     point,
+                                     tile_edge.vertex_1.coordinate,
+                                     tile_edge.vertex_2.coordinate);
+          float distance_to_edge = blender::math::distance(closest_edge_point, point);
+          if (distance_to_edge < margin && distance_to_edge < pixel.distance) {
+            pixel.type = PixelType::Selected;
+            pixel.distance = distance_to_edge;
+            pixel.edge_index = tile_edge_index;
+          }
+        }
+      }
+    }
   }
 
-  void pack_into(CopyPixelTile &copy_tile) const
+  void pack_into(CopyPixelTile &copy_tile)
   {
-    for (const Row &row : rows) {
+    for (int row_number : IndexRange(resolution.y)) {
+      RowView row(*this, row_number);
       row.pack_into(copy_tile);
     }
     /* Shrink vectors to fit the actual data it contains. From now on these vectors should be
@@ -580,9 +582,10 @@ struct Rows {
     // copy_tile.command_deltas.resize(copy_tile.command_deltas.size());
   }
 
-  void print_debug() const
+  void print_debug()
   {
-    for (const Row &row : rows) {
+    for (int row_number : IndexRange(resolution.y)) {
+      RowView row(*this, row_number);
       row.print_debug();
     }
     printf("\n");
