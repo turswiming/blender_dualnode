@@ -6,7 +6,7 @@
 #include <functional>
 
 #include "BLI_math.h"
-#include "BLI_math_vector_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_rect.h"
 #include "BLI_vector.hh"
 
@@ -358,6 +358,21 @@ struct CopyPixelCommand {
     return DeltaCopyPixelCommand(char2(next_command.source_1 - source_1),
                                  char2(next_command.source_2 - next_command.source_1),
                                  uint8_t(next_command.mix_factor * 255));
+  }
+
+  bool can_be_extended(const CopyPixelCommand &command) const
+  {
+    /* Can only extend sequential pixels. */
+    if (destination.x != command.destination.x - 1 || destination.y != command.destination.y) {
+      return false;
+    }
+
+    /* Can only extend when the delta between with the previous source fits in a single byte.*/
+    int2 delta_source_1 = source_1 - command.source_1;
+    if (max_ii(UNPACK2(blender::math::abs(delta_source_1))) > 127) {
+      return false;
+    }
+    return true;
   }
 };
 
