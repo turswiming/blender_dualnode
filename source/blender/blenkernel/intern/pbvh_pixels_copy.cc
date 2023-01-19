@@ -550,7 +550,6 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
                                                                             tile_resolution);
     CopyPixelTile copy_tile(image_tile.get_tile_number());
 
-    TIMEIT_START(rows_usage);
     Rows rows(tile_resolution, image.seam_margin);
     rows.init_pixels();
     rows.mark_pixels_effected_by_brush(nodes_tile_pixels);
@@ -560,7 +559,6 @@ void BKE_pbvh_pixels_copy_update(PBVH &pbvh,
     rows.find_copy_source(selected_pixels, tile_edges);
     rows.pack_into(selected_pixels, copy_tile);
 
-    TIMEIT_END(rows_usage);
     copy_tile.print_compression_rate();
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
   }
