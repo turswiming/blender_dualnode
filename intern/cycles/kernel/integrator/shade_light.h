@@ -35,17 +35,13 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
   }
 
   /* Use visibility flag to skip lights. */
+  Spectrum light_visibility = one_spectrum();
 #ifdef __PASSES__
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-
   if (ls.shader & SHADER_EXCLUDE_ANY) {
-    if (((ls.shader & SHADER_EXCLUDE_DIFFUSE) && (path_flag & PATH_RAY_DIFFUSE)) ||
-        ((ls.shader & SHADER_EXCLUDE_GLOSSY) &&
-         ((path_flag & (PATH_RAY_GLOSSY | PATH_RAY_REFLECT)) ==
-          (PATH_RAY_GLOSSY | PATH_RAY_REFLECT))) ||
-        ((ls.shader & SHADER_EXCLUDE_TRANSMIT) && (path_flag & PATH_RAY_TRANSMIT)) ||
-        ((ls.shader & SHADER_EXCLUDE_SCATTER) && (path_flag & PATH_RAY_VOLUME_SCATTER)))
+    if (((ls.shader & SHADER_EXCLUDE_SCATTER) && (path_flag & PATH_RAY_VOLUME_SCATTER)))
       return;
+    light_visibility_correction(kg, state, ls.shader, &light_visibility);
   }
 #endif
 
@@ -54,6 +50,7 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
   ShaderDataTinyStorage emission_sd_storage;
   ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
   Spectrum light_eval = light_sample_shader_eval(kg, state, emission_sd, &ls, ray_time);
+  light_eval *= light_visibility;
   if (is_zero(light_eval)) {
     return;
   }

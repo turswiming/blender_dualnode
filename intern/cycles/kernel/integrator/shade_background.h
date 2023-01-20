@@ -11,6 +11,7 @@
 
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"
+#include "kernel/light/visibility.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -22,20 +23,18 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
 
   /* Use visibility flag to skip lights. */
+  Spectrum light_visibility = one_spectrum();
   if (shader & SHADER_EXCLUDE_ANY) {
-    if (((shader & SHADER_EXCLUDE_DIFFUSE) && (path_flag & PATH_RAY_DIFFUSE)) ||
-        ((shader & SHADER_EXCLUDE_GLOSSY) && ((path_flag & (PATH_RAY_GLOSSY | PATH_RAY_REFLECT)) ==
-                                              (PATH_RAY_GLOSSY | PATH_RAY_REFLECT))) ||
-        ((shader & SHADER_EXCLUDE_TRANSMIT) && (path_flag & PATH_RAY_TRANSMIT)) ||
-        ((shader & SHADER_EXCLUDE_CAMERA) && (path_flag & PATH_RAY_CAMERA)) ||
+    if (((shader & SHADER_EXCLUDE_CAMERA) && (path_flag & PATH_RAY_CAMERA)) ||
         ((shader & SHADER_EXCLUDE_SCATTER) && (path_flag & PATH_RAY_VOLUME_SCATTER)))
       return zero_spectrum();
+    light_visibility_correction(kg, state, shader, &light_visibility);
   }
 
   /* Use fast constant background color if available. */
   Spectrum L = zero_spectrum();
   if (surface_shader_constant_emission(kg, shader, &L)) {
-    return L;
+    return light_visibility * L;
   }
 
   /* Evaluate background shader. */
@@ -57,7 +56,7 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
   surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_BACKGROUND>(
       kg, state, emission_sd, render_buffer, path_flag | PATH_RAY_EMISSION);
 
-  return surface_shader_background(emission_sd);
+  return light_visibility * surface_shader_background(emission_sd);
 }
 
 ccl_device_inline void integrate_background(KernelGlobals kg,
@@ -138,18 +137,14 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
   for (int lamp = 0; lamp < kernel_data.integrator.num_lights; lamp++) {
     if (distant_light_sample_from_intersection(kg, ray_D, lamp, &ls)) {
       /* Use visibility flag to skip lights. */
+      Spectrum light_visibility = one_spectrum();
 #ifdef __PASSES__
       const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-
       if (ls.shader & SHADER_EXCLUDE_ANY) {
-        if (((ls.shader & SHADER_EXCLUDE_DIFFUSE) && (path_flag & PATH_RAY_DIFFUSE)) ||
-            ((ls.shader & SHADER_EXCLUDE_GLOSSY) &&
-             ((path_flag & (PATH_RAY_GLOSSY | PATH_RAY_REFLECT)) ==
-              (PATH_RAY_GLOSSY | PATH_RAY_REFLECT))) ||
-            ((ls.shader & SHADER_EXCLUDE_TRANSMIT) && (path_flag & PATH_RAY_TRANSMIT)) ||
-            ((ls.shader & SHADER_EXCLUDE_CAMERA) && (path_flag & PATH_RAY_CAMERA)) ||
+        if (((ls.shader & SHADER_EXCLUDE_CAMERA) && (path_flag & PATH_RAY_CAMERA)) ||
             ((ls.shader & SHADER_EXCLUDE_SCATTER) && (path_flag & PATH_RAY_VOLUME_SCATTER)))
           return;
+        light_visibility_correction(kg, state, ls.shader, &light_visibility);
       }
 #endif
 
@@ -168,6 +163,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
       ShaderDataTinyStorage emission_sd_storage;
       ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
       Spectrum light_eval = light_sample_shader_eval(kg, state, emission_sd, &ls, ray_time);
+      light_eval *= light_visibility;
       if (is_zero(light_eval)) {
         return;
       }

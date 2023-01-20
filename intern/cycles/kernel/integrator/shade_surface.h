@@ -16,6 +16,7 @@
 #include "kernel/integrator/volume_stack.h"
 
 #include "kernel/light/sample.h"
+#include "kernel/light/visibility.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -426,6 +427,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   /* Update throughput. */
   const Spectrum bsdf_weight = bsdf_eval_sum(&bsdf_eval) / bsdf_pdf;
   INTEGRATOR_STATE_WRITE(state, path, throughput) *= bsdf_weight;
+  INTEGRATOR_STATE_WRITE(state, path, scatter_eval) = bsdf_eval;
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
     if (INTEGRATOR_STATE(state, path, bounce) == 0) {

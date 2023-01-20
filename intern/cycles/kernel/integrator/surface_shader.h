@@ -235,12 +235,14 @@ ccl_device_inline float _surface_shader_bsdf_eval_mis(KernelGlobals kg,
     }
 
     if (CLOSURE_IS_BSDF_OR_BSSRDF(sc->type)) {
-      if (CLOSURE_IS_BSDF(sc->type) && !_surface_shader_exclude(sc->type, light_shader_flags)) {
+      if (CLOSURE_IS_BSDF(sc->type)) {
         float bsdf_pdf = 0.0f;
         Spectrum eval = bsdf_eval(kg, sd, sc, wo, &bsdf_pdf);
 
         if (bsdf_pdf != 0.0f) {
-          bsdf_eval_accum(result_eval, sc->type, eval * sc->weight);
+          if (!_surface_shader_exclude(sc->type, light_shader_flags)) {
+            bsdf_eval_accum(result_eval, sc->type, eval * sc->weight);
+          }
           sum_pdf += bsdf_pdf * sc->sample_weight;
         }
       }
