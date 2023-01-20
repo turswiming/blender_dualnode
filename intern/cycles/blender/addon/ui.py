@@ -316,6 +316,8 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
 
         layout.prop(cscene, "guiding_training_samples")
 
+        layout.prop(cscene, "guiding_directional_sampling_type", text="Directional Sampling Type")
+
         col = layout.column(align=True)
         col.prop(cscene, "use_surface_guiding", text="Surface")
         col.prop(cscene, "use_volume_guiding", text="Volume")

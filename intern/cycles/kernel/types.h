@@ -500,6 +500,16 @@ typedef enum GuidingDistributionType {
   GUIDING_NUM_TYPES,
 } GuidingDistributionType;
 
+/* Guiding Directional Sampling Type */
+
+typedef enum GuidingDirectionalSamplingType {
+  GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT = 0,
+  GUIDING_DIRECTIONAL_SAMPLING_TYPE_RIS = 1,
+  GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS = 2,
+
+  GUIDING_DIRECTIONAL_SAMPLING_NUM_TYPES,
+} GuidingDirectionalSamplingType;
+
 /* Camera Type */
 
 enum CameraType { CAMERA_PERSPECTIVE, CAMERA_ORTHOGRAPHIC, CAMERA_PANORAMA };

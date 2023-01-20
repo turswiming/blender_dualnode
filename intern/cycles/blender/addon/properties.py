@@ -208,6 +208,11 @@ enum_guiding_distribution = (
     ('VMM', "VMM", "Use von Mises-Fisher models as directional distribution", 2),
 )
 
+enum_guiding_directional_sampling_types = (
+    ('PRODUCT', "Diffuse Product", "Guided diffuse BSDF component based on the incoming light distribution and the cosine product (closed form product)", 0),
+    ('RIS', "Re-sampled Importance Sampling", "Perform RIS sampling to guided based on the product of the incoming light distribution and the BSDF", 1),
+    ('ROUGHNESS', "Roughness-based", "Adjust the guiding probability based on the roughness of the material components", 2),
+)
 
 def enum_openimagedenoise_denoiser(self, context):
     import _cycles
@@ -565,6 +570,13 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         description="Type of representation for the guiding distribution",
         items=enum_guiding_distribution,
         default='PARALLAX_AWARE_VMM',
+    )
+
+    guiding_directional_sampling_type: EnumProperty(
+        name="Directional Sampling Type",
+        description="Type of the directional sampling used for guiding",
+        items=enum_guiding_directional_sampling_types,
+        default='PRODUCT',
     )
 
     use_surface_guiding: BoolProperty(
