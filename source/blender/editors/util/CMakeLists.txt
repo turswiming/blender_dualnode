@@ -22,6 +22,8 @@ set(INC
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
+set(INC_SYS
+)
 
 set(SRC
   ed_draw.c
@@ -63,6 +65,7 @@ set(SRC
   ../include/ED_mball.h
   ../include/ED_mesh.h
   ../include/ED_node.h
+  ../include/ED_node.hh
   ../include/ED_numinput.h
   ../include/ED_object.h
   ../include/ED_outliner.h

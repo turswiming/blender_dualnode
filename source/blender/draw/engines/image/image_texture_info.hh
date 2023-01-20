@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_rect.h"
 
 #include "GPU_batch.h"
@@ -35,14 +35,14 @@ struct TextureInfo {
    * `pos` (2xF32) is relative to the origin of the space.
    * `uv` (2xF32) reflect the uv bounds.
    */
-  GPUBatch *batch;
+  GPUBatch *batch = nullptr;
 
   /**
    * \brief GPU Texture for a partial region of the image editor.
    */
-  GPUTexture *texture;
+  GPUTexture *texture = nullptr;
 
-  float2 last_viewport_size = float2(0.0f, 0.0f);
+  int2 last_texture_size = int2(0);
 
   ~TextureInfo()
   {
@@ -71,7 +71,7 @@ struct TextureInfo {
   /**
    * \brief Update the region bounds from the uv bounds by applying the given transform matrix.
    */
-  void calc_region_bounds_from_uv_bounds(const float4x4 &uv_to_region)
+  void update_region_bounds_from_uv_bounds(const float4x4 &uv_to_region)
   {
     float3 bottom_left_uv = float3(clipping_uv_bounds.xmin, clipping_uv_bounds.ymin, 0.0f);
     float3 top_right_uv = float3(clipping_uv_bounds.xmax, clipping_uv_bounds.ymax, 0.0f);
@@ -82,6 +82,28 @@ struct TextureInfo {
                   top_right_region.x,
                   bottom_left_region.y,
                   top_right_region.y);
+  }
+
+  void ensure_gpu_texture(int2 texture_size)
+  {
+    const bool is_allocated = texture != nullptr;
+    const bool resolution_changed = assign_if_different(last_texture_size, texture_size);
+    const bool should_be_freed = is_allocated && resolution_changed;
+    const bool should_be_created = !is_allocated || resolution_changed;
+
+    if (should_be_freed) {
+      GPU_texture_free(texture);
+      texture = nullptr;
+    }
+
+    if (should_be_created) {
+      texture = DRW_texture_create_2d_ex(UNPACK2(texture_size),
+                                         GPU_RGBA16F,
+                                         GPU_TEXTURE_USAGE_GENERAL,
+                                         static_cast<DRWTextureFlag>(0),
+                                         nullptr);
+    }
+    need_full_update |= should_be_created;
   }
 };
 

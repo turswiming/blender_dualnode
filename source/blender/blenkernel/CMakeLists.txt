@@ -64,7 +64,7 @@ set(SRC
   intern/anim_path.c
   intern/anim_sys.c
   intern/anim_visualization.c
-  intern/anonymous_attribute.cc
+  intern/anonymous_attribute_id.cc
   intern/appdir.c
   intern/armature.c
   intern/armature_deform.c
@@ -97,7 +97,7 @@ set(SRC
   intern/colortools.c
   intern/compute_contexts.cc
   intern/constraint.c
-  intern/context.c
+  intern/context.cc
   intern/cpp_types.cc
   intern/crazyspace.cc
   intern/cryptomatte.cc
@@ -229,6 +229,8 @@ set(SRC
   intern/nla.c
   intern/node.cc
   intern/node_runtime.cc
+  intern/node_tree_anonymous_attributes.cc
+  intern/node_tree_field_inferencing.cc
   intern/node_tree_update.cc
   intern/object.cc
   intern/object_deform.c
@@ -242,7 +244,7 @@ set(SRC
   intern/paint.cc
   intern/paint_canvas.cc
   intern/paint_toolslots.c
-  intern/particle.c
+  intern/particle.cc
   intern/particle_child.c
   intern/particle_distribute.c
   intern/particle_system.c
@@ -253,6 +255,7 @@ set(SRC
   intern/pbvh_uv_islands.cc
   intern/pointcache.c
   intern/pointcloud.cc
+  intern/pose_backup.cc
   intern/preferences.c
   intern/report.c
   intern/rigidbody.c
@@ -265,22 +268,22 @@ set(SRC
   intern/sound.c
   intern/speaker.c
   intern/studiolight.c
-  intern/subdiv.c
+  intern/subdiv.cc
   intern/subdiv_ccg.cc
-  intern/subdiv_ccg_mask.c
-  intern/subdiv_ccg_material.c
-  intern/subdiv_converter.c
-  intern/subdiv_converter_mesh.c
-  intern/subdiv_deform.c
-  intern/subdiv_displacement.c
-  intern/subdiv_displacement_multires.c
-  intern/subdiv_eval.c
-  intern/subdiv_foreach.c
+  intern/subdiv_ccg_mask.cc
+  intern/subdiv_ccg_material.cc
+  intern/subdiv_converter.cc
+  intern/subdiv_converter_mesh.cc
+  intern/subdiv_deform.cc
+  intern/subdiv_displacement.cc
+  intern/subdiv_displacement_multires.cc
+  intern/subdiv_eval.cc
+  intern/subdiv_foreach.cc
   intern/subdiv_mesh.cc
   intern/subdiv_modifier.cc
-  intern/subdiv_stats.c
-  intern/subdiv_topology.c
-  intern/subsurf_ccg.c
+  intern/subdiv_stats.cc
+  intern/subdiv_topology.cc
+  intern/subsurf_ccg.cc
   intern/text.c
   intern/text_suggestions.c
   intern/texture.cc
@@ -313,8 +316,7 @@ set(SRC
   BKE_anim_path.h
   BKE_anim_visualization.h
   BKE_animsys.h
-  BKE_anonymous_attribute.h
-  BKE_anonymous_attribute.hh
+  BKE_anonymous_attribute_id.hh
   BKE_appdir.h
   BKE_armature.h
   BKE_armature.hh
@@ -450,6 +452,7 @@ set(SRC
   BKE_pbvh_pixels.hh
   BKE_pointcache.h
   BKE_pointcloud.h
+  BKE_pose_backup.h
   BKE_preferences.h
   BKE_report.h
   BKE_rigidbody.h
@@ -503,6 +506,7 @@ set(SRC
   intern/multires_unsubdivide.h
   intern/ocean_intern.h
   intern/pbvh_intern.h
+  intern/pbvh_uv_islands.hh
   intern/subdiv_converter.h
   intern/subdiv_inline.h
 )
@@ -555,15 +559,16 @@ if(WIN32)
 endif()
 
 if(WITH_AUDASPACE)
-  add_definitions(-DWITH_AUDASPACE)
-
   list(APPEND INC_SYS
     ${AUDASPACE_C_INCLUDE_DIRS}
   )
-  list(APPEND LIB
-    ${AUDASPACE_C_LIBRARIES}
-    ${AUDASPACE_PY_LIBRARIES}
-  )
+  if(WITH_SYSTEM_AUDASPACE)
+    list(APPEND LIB
+      ${AUDASPACE_C_LIBRARIES}
+      ${AUDASPACE_PY_LIBRARIES}
+    )
+  endif()
+  add_definitions(-DWITH_AUDASPACE)
 endif()
 
 if(WITH_BULLET)
@@ -573,13 +578,6 @@ if(WITH_BULLET)
   list(APPEND INC
     ../../../intern/rigidbody
   )
-
-  if(NOT WITH_SYSTEM_BULLET)
-    list(APPEND LIB
-      extern_bullet
-    )
-  endif()
-
   list(APPEND LIB
     bf_intern_rigidbody
 
@@ -839,6 +837,7 @@ if(WITH_GTESTS)
     intern/lib_id_remapper_test.cc
     intern/lib_id_test.cc
     intern/lib_remap_test.cc
+    intern/nla_test.cc
     intern/tracking_test.cc
   )
   set(TEST_INC

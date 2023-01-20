@@ -34,16 +34,36 @@ static bool use_translate(const float3 rotation, const float3 scale)
   return true;
 }
 
+static void translate_positions(MutableSpan<float3> positions, const float3 &translation)
+{
+  threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
+    for (float3 &position : positions.slice(range)) {
+      position += translation;
+    }
+  });
+}
+
+static void transform_positions(MutableSpan<float3> positions, const float4x4 &matrix)
+{
+  threading::parallel_for(positions.index_range(), 1024, [&](const IndexRange range) {
+    for (float3 &position : positions.slice(range)) {
+      position = matrix * position;
+    }
+  });
+}
+
 static void translate_mesh(Mesh &mesh, const float3 translation)
 {
   if (!math::is_zero(translation)) {
-    BKE_mesh_translate(&mesh, translation, false);
+    translate_positions(mesh.vert_positions_for_write(), translation);
+    BKE_mesh_tag_coords_changed_uniformly(&mesh);
   }
 }
 
 static void transform_mesh(Mesh &mesh, const float4x4 &transform)
 {
-  BKE_mesh_transform(&mesh, transform.values, false);
+  transform_positions(mesh.vert_positions_for_write(), transform);
+  BKE_mesh_tag_coords_changed(&mesh);
 }
 
 static void translate_pointcloud(PointCloud &pointcloud, const float3 translation)
@@ -51,9 +71,7 @@ static void translate_pointcloud(PointCloud &pointcloud, const float3 translatio
   MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
   SpanAttributeWriter position = attributes.lookup_or_add_for_write_span<float3>(
       "position", ATTR_DOMAIN_POINT);
-  for (const int i : position.span.index_range()) {
-    position.span[i] += translation;
-  }
+  translate_positions(position.span, translation);
   position.finish();
 }
 
@@ -62,26 +80,28 @@ static void transform_pointcloud(PointCloud &pointcloud, const float4x4 &transfo
   MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
   SpanAttributeWriter position = attributes.lookup_or_add_for_write_span<float3>(
       "position", ATTR_DOMAIN_POINT);
-  for (const int i : position.span.index_range()) {
-    position.span[i] = transform * position.span[i];
-  }
+  transform_positions(position.span, transform);
   position.finish();
 }
 
 static void translate_instances(bke::Instances &instances, const float3 translation)
 {
   MutableSpan<float4x4> transforms = instances.transforms();
-  for (float4x4 &transform : transforms) {
-    add_v3_v3(transform.ptr()[3], translation);
-  }
+  threading::parallel_for(transforms.index_range(), 1024, [&](const IndexRange range) {
+    for (float4x4 &instance_transform : transforms.slice(range)) {
+      add_v3_v3(instance_transform.ptr()[3], translation);
+    }
+  });
 }
 
 static void transform_instances(bke::Instances &instances, const float4x4 &transform)
 {
   MutableSpan<float4x4> transforms = instances.transforms();
-  for (float4x4 &instance_transform : transforms) {
-    instance_transform = transform * instance_transform;
-  }
+  threading::parallel_for(transforms.index_range(), 1024, [&](const IndexRange range) {
+    for (float4x4 &instance_transform : transforms.slice(range)) {
+      instance_transform = transform * instance_transform;
+    }
+  });
 }
 
 static void transform_volume(GeoNodeExecParams &params,
@@ -144,16 +164,17 @@ static void translate_volume(GeoNodeExecParams &params,
 static void transform_curve_edit_hints(bke::CurvesEditHints &edit_hints, const float4x4 &transform)
 {
   if (edit_hints.positions.has_value()) {
-    for (float3 &pos : *edit_hints.positions) {
-      pos = transform * pos;
-    }
+    transform_positions(*edit_hints.positions, transform);
   }
   float3x3 deform_mat;
   copy_m3_m4(deform_mat.values, transform.values);
   if (edit_hints.deform_mats.has_value()) {
-    for (float3x3 &mat : *edit_hints.deform_mats) {
-      mat = deform_mat * mat;
-    }
+    MutableSpan<float3x3> deform_mats = *edit_hints.deform_mats;
+    threading::parallel_for(deform_mats.index_range(), 1024, [&](const IndexRange range) {
+      for (const int64_t i : range) {
+        deform_mats[i] = deform_mat * deform_mats[i];
+      }
+    });
   }
   else {
     edit_hints.deform_mats.emplace(edit_hints.curves_id_orig.geometry.point_num, deform_mat);
@@ -163,9 +184,7 @@ static void transform_curve_edit_hints(bke::CurvesEditHints &edit_hints, const f
 static void translate_curve_edit_hints(bke::CurvesEditHints &edit_hints, const float3 &translation)
 {
   if (edit_hints.positions.has_value()) {
-    for (float3 &pos : *edit_hints.positions) {
-      pos += translation;
-    }
+    translate_positions(*edit_hints.positions, translation);
   }
 }
 
@@ -238,7 +257,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>(N_("Translation")).subtype(PROP_TRANSLATION);
   b.add_input<decl::Vector>(N_("Rotation")).subtype(PROP_EULER);
   b.add_input<decl::Vector>(N_("Scale")).default_value({1, 1, 1}).subtype(PROP_XYZ);
-  b.add_output<decl::Geometry>(N_("Geometry"));
+  b.add_output<decl::Geometry>(N_("Geometry")).propagate_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)

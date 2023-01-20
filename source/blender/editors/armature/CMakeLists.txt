@@ -19,6 +19,9 @@ set(INC
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
+set(INC_SYS
+)
+
 set(SRC
   armature_add.c
   armature_edit.c
@@ -30,7 +33,6 @@ set(SRC
   armature_utils.c
   editarmature_undo.c
   meshlaplacian.c
-  pose_backup.cc
   pose_edit.c
   pose_group.c
   pose_lib_2.c

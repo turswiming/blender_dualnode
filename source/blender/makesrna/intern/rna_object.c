@@ -782,10 +782,11 @@ static void rna_Object_dup_collection_set(PointerRNA *ptr,
     }
   }
   else {
-    BKE_report(NULL,
-               RPT_ERROR,
-               "Cannot set instance-collection as object belongs in group being instanced, thus "
-               "causing a cycle");
+    BKE_report(
+        NULL,
+        RPT_ERROR,
+        "Cannot set instance-collection as object belongs in collection being instanced, thus "
+        "causing a cycle");
   }
 }
 
@@ -1055,7 +1056,7 @@ void rna_object_uvlayer_name_set(PointerRNA *ptr, const char *value, char *resul
     for (a = 0; a < me->ldata.totlayer; a++) {
       layer = &me->ldata.layers[a];
 
-      if (layer->type == CD_MLOOPUV && STREQ(layer->name, value)) {
+      if (layer->type == CD_PROP_FLOAT2 && STREQ(layer->name, value)) {
         BLI_strncpy(result, value, maxlen);
         return;
       }

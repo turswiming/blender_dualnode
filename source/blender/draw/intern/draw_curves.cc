@@ -11,10 +11,8 @@
 #include "BLI_utildefines.h"
 
 #include "DNA_curves_types.h"
-#include "DNA_customdata_types.h"
 
 #include "BKE_curves.hh"
-#include "BKE_geometry_set.hh"
 
 #include "GPU_batch.h"
 #include "GPU_capabilities.h"
@@ -334,7 +332,7 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
   if (curves.curves_num() >= 1) {
     blender::VArray<float> radii = curves.attributes().lookup_or_default(
         "radius", ATTR_DOMAIN_POINT, 0.005f);
-    const blender::IndexRange first_curve_points = curves.points_for_curve(0);
+    const blender::IndexRange first_curve_points = curves.points_by_curve()[0];
     const float first_radius = radii[first_curve_points.first()];
     const float last_radius = radii[first_curve_points.last()];
     const float middle_radius = radii[first_curve_points.size() / 2];
@@ -395,7 +393,7 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
   DRW_shgroup_uniform_float_copy(shgrp, "hairRadTip", hair_rad_tip);
   DRW_shgroup_uniform_bool_copy(shgrp, "hairCloseTip", hair_close_tip);
   if (gpu_material) {
-    /* \note: This needs to happen before the drawcall to allow correct attribute extraction.
+    /* NOTE: This needs to happen before the drawcall to allow correct attribute extraction.
      * (see T101896) */
     DRW_shgroup_add_material_resources(shgrp, gpu_material);
   }

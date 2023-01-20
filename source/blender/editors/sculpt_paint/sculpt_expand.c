@@ -133,10 +133,8 @@ static bool sculpt_expand_is_vert_in_active_component(SculptSession *ss,
                                                       ExpandCache *expand_cache,
                                                       const PBVHVertRef v)
 {
-  int v_i = BKE_pbvh_vertex_to_index(ss->pbvh, v);
-
   for (int i = 0; i < EXPAND_SYMM_AREAS; i++) {
-    if (ss->vertex_info.connected_component[v_i] == expand_cache->active_connected_components[i]) {
+    if (SCULPT_vertex_island_get(ss, v) == expand_cache->active_connected_islands[i]) {
       return true;
     }
   }
@@ -193,7 +191,8 @@ static float sculpt_expand_max_vertex_falloff_get(ExpandCache *expand_cache)
     return expand_cache->max_vert_falloff;
   }
 
-  if (!expand_cache->brush->mtex.tex) {
+  const MTex *mask_tex = BKE_brush_mask_texture_get(expand_cache->brush, OB_MODE_SCULPT);
+  if (!mask_tex->tex) {
     return expand_cache->max_vert_falloff;
   }
 
@@ -255,7 +254,7 @@ static bool sculpt_expand_state_get(SculptSession *ss,
  */
 static bool sculpt_expand_face_state_get(SculptSession *ss, ExpandCache *expand_cache, const int f)
 {
-  if (expand_cache->original_face_sets[f] <= 0) {
+  if (ss->hide_poly && ss->hide_poly[f]) {
     return false;
   }
 
@@ -387,6 +386,22 @@ static BLI_bitmap *sculpt_expand_boundary_from_enabled(SculptSession *ss,
   }
 
   return boundary_verts;
+}
+
+static void sculpt_expand_check_topology_islands(Object *ob)
+{
+  SculptSession *ss = ob->sculpt;
+
+  ss->expand_cache->check_islands = ELEM(ss->expand_cache->falloff_type,
+                                         SCULPT_EXPAND_FALLOFF_GEODESIC,
+                                         SCULPT_EXPAND_FALLOFF_TOPOLOGY,
+                                         SCULPT_EXPAND_FALLOFF_TOPOLOGY_DIAGONALS,
+                                         SCULPT_EXPAND_FALLOFF_BOUNDARY_TOPOLOGY,
+                                         SCULPT_EXPAND_FALLOFF_NORMALS);
+
+  if (ss->expand_cache->check_islands) {
+    SCULPT_topology_islands_ensure(ob);
+  }
 }
 
 /* Functions implementing different algorithms for initializing falloff values. */
@@ -1249,6 +1264,11 @@ static void sculpt_expand_mask_update_task_cb(void *__restrict userdata,
     const float initial_mask = *vd.mask;
     const bool enabled = sculpt_expand_state_get(ss, expand_cache, vd.vertex);
 
+    if (expand_cache->check_islands &&
+        !sculpt_expand_is_vert_in_active_component(ss, expand_cache, vd.vertex)) {
+      continue;
+    }
+
     float new_mask;
 
     if (enabled) {
@@ -1259,7 +1279,12 @@ static void sculpt_expand_mask_update_task_cb(void *__restrict userdata,
     }
 
     if (expand_cache->preserve) {
-      new_mask = max_ff(new_mask, expand_cache->original_mask[vd.index]);
+      if (expand_cache->invert) {
+        new_mask = min_ff(new_mask, expand_cache->original_mask[vd.index]);
+      }
+      else {
+        new_mask = max_ff(new_mask, expand_cache->original_mask[vd.index]);
+      }
     }
 
     if (new_mask == initial_mask) {
@@ -1603,7 +1628,7 @@ static void sculpt_expand_find_active_connected_components_from_vert(
 {
   SculptSession *ss = ob->sculpt;
   for (int i = 0; i < EXPAND_SYMM_AREAS; i++) {
-    expand_cache->active_connected_components[i] = EXPAND_ACTIVE_COMPONENT_NONE;
+    expand_cache->active_connected_islands[i] = EXPAND_ACTIVE_COMPONENT_NONE;
   }
 
   const char symm = SCULPT_mesh_symmetry_xyz_get(ob);
@@ -1615,10 +1640,8 @@ static void sculpt_expand_find_active_connected_components_from_vert(
     const PBVHVertRef symm_vertex = sculpt_expand_get_vertex_index_for_symmetry_pass(
         ob, symm_it, initial_vertex);
 
-    int symm_vertex_i = BKE_pbvh_vertex_to_index(ss->pbvh, symm_vertex);
-
-    expand_cache->active_connected_components[(int)symm_it] =
-        ss->vertex_info.connected_component[symm_vertex_i];
+    expand_cache->active_connected_islands[(int)symm_it] = SCULPT_vertex_island_get(
+        ss, symm_vertex);
   }
 }
 
@@ -1698,8 +1721,8 @@ static void sculpt_expand_move_propagation_origin(bContext *C,
 static void sculpt_expand_ensure_sculptsession_data(Object *ob)
 {
   SculptSession *ss = ob->sculpt;
+  SCULPT_topology_islands_ensure(ob);
   SCULPT_vertex_random_access_ensure(ss);
-  SCULPT_connected_components_ensure(ob);
   SCULPT_boundary_info_ensure(ob);
   if (!ss->tex_pool) {
     ss->tex_pool = BKE_image_pool_new();
@@ -1836,6 +1859,9 @@ static int sculpt_expand_modal(bContext *C, wmOperator *op, const wmEvent *event
         return OPERATOR_FINISHED;
       }
       case SCULPT_EXPAND_MODAL_FALLOFF_GEODESIC: {
+        expand_cache->falloff_gradient = SCULPT_EXPAND_MODAL_FALLOFF_GEODESIC;
+        sculpt_expand_check_topology_islands(ob);
+
         sculpt_expand_falloff_factors_from_vertex_and_symm_create(
             expand_cache,
             sd,
@@ -1845,6 +1871,9 @@ static int sculpt_expand_modal(bContext *C, wmOperator *op, const wmEvent *event
         break;
       }
       case SCULPT_EXPAND_MODAL_FALLOFF_TOPOLOGY: {
+        expand_cache->falloff_gradient = SCULPT_EXPAND_FALLOFF_TOPOLOGY;
+        sculpt_expand_check_topology_islands(ob);
+
         sculpt_expand_falloff_factors_from_vertex_and_symm_create(
             expand_cache,
             sd,
@@ -1854,6 +1883,9 @@ static int sculpt_expand_modal(bContext *C, wmOperator *op, const wmEvent *event
         break;
       }
       case SCULPT_EXPAND_MODAL_FALLOFF_TOPOLOGY_DIAGONALS: {
+        expand_cache->falloff_gradient = SCULPT_EXPAND_MODAL_FALLOFF_TOPOLOGY_DIAGONALS;
+        sculpt_expand_check_topology_islands(ob);
+
         sculpt_expand_falloff_factors_from_vertex_and_symm_create(
             expand_cache,
             sd,
@@ -1863,6 +1895,7 @@ static int sculpt_expand_modal(bContext *C, wmOperator *op, const wmEvent *event
         break;
       }
       case SCULPT_EXPAND_MODAL_FALLOFF_SPHERICAL: {
+        expand_cache->check_islands = false;
         sculpt_expand_falloff_factors_from_vertex_and_symm_create(
             expand_cache,
             sd,
@@ -1882,13 +1915,14 @@ static int sculpt_expand_modal(bContext *C, wmOperator *op, const wmEvent *event
       }
       case SCULPT_EXPAND_MODAL_TEXTURE_DISTORTION_INCREASE: {
         if (expand_cache->texture_distortion_strength == 0.0f) {
-          if (expand_cache->brush->mtex.tex == NULL) {
+          const MTex *mask_tex = BKE_brush_mask_texture_get(expand_cache->brush, OB_MODE_SCULPT);
+          if (mask_tex->tex == NULL) {
             BKE_report(op->reports,
                        RPT_WARNING,
                        "Active brush does not contain any texture to distort the expand boundary");
             break;
           }
-          if (expand_cache->brush->mtex.brush_map_mode != MTEX_MAP_MODE_3D) {
+          if (mask_tex->brush_map_mode != MTEX_MAP_MODE_3D) {
             BKE_report(op->reports,
                        RPT_WARNING,
                        "Texture mapping not set to 3D, results may be unpredictable");
@@ -2031,6 +2065,7 @@ static void sculpt_expand_cache_initial_config_set(bContext *C,
   /* RNA properties. */
   expand_cache->invert = RNA_boolean_get(op->ptr, "invert");
   expand_cache->preserve = RNA_boolean_get(op->ptr, "use_mask_preserve");
+  expand_cache->auto_mask = RNA_boolean_get(op->ptr, "use_auto_mask");
   expand_cache->falloff_gradient = RNA_boolean_get(op->ptr, "use_falloff_gradient");
   expand_cache->target = RNA_enum_get(op->ptr, "target");
   expand_cache->modify_active_face_set = RNA_boolean_get(op->ptr, "use_modify_active");
@@ -2052,7 +2087,6 @@ static void sculpt_expand_cache_initial_config_set(bContext *C,
   IMB_colormanagement_srgb_to_scene_linear_v3(expand_cache->fill_color, expand_cache->fill_color);
 
   expand_cache->scene = CTX_data_scene(C);
-  expand_cache->mtex = &expand_cache->brush->mtex;
   expand_cache->texture_distortion_strength = 0.0f;
   expand_cache->blend_mode = expand_cache->brush->blend;
 }
@@ -2114,6 +2148,39 @@ static int sculpt_expand_invoke(bContext *C, wmOperator *op, const wmEvent *even
   if (ss->expand_cache->target == SCULPT_EXPAND_TARGET_MASK) {
     MultiresModifierData *mmd = BKE_sculpt_multires_active(ss->scene, ob);
     BKE_sculpt_mask_layers_ensure(depsgraph, CTX_data_main(C), ob, mmd);
+
+    if (RNA_boolean_get(op->ptr, "use_auto_mask")) {
+      int verts_num = SCULPT_vertex_count_get(ss);
+      bool ok = true;
+
+      for (int i = 0; i < verts_num; i++) {
+        PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
+
+        if (SCULPT_vertex_mask_get(ss, vertex) != 0.0f) {
+          ok = false;
+          break;
+        }
+      }
+
+      if (ok) {
+        int nodes_num;
+        PBVHNode **nodes;
+
+        /* TODO: implement SCULPT_vertex_mask_set and use it here. */
+
+        BKE_pbvh_search_gather(ss->pbvh, NULL, NULL, &nodes, &nodes_num);
+        for (int i = 0; i < nodes_num; i++) {
+          PBVHVertexIter vd;
+
+          BKE_pbvh_vertex_iter_begin (ss->pbvh, nodes[i], vd, PBVH_ITER_UNIQUE) {
+            *vd.mask = 1.0f;
+          }
+          BKE_pbvh_vertex_iter_end;
+
+          BKE_pbvh_node_mark_update_mask(nodes[i]);
+        }
+      }
+    }
   }
 
   BKE_sculpt_update_object_for_edit(depsgraph, ob, true, true, needs_colors);
@@ -2172,6 +2239,8 @@ static int sculpt_expand_invoke(bContext *C, wmOperator *op, const wmEvent *even
 
   sculpt_expand_falloff_factors_from_vertex_and_symm_create(
       ss->expand_cache, sd, ob, ss->expand_cache->initial_active_vertex, falloff_type);
+
+  sculpt_expand_check_topology_islands(ob);
 
   /* Initial mesh data update, resets all target data in the sculpt mesh. */
   sculpt_expand_update_for_vertex(C, ob, ss->expand_cache->initial_active_vertex);
@@ -2261,7 +2330,7 @@ void SCULPT_OT_expand(wmOperatorType *ot)
   ot->cancel = sculpt_expand_cancel;
   ot->poll = SCULPT_mode_poll;
 
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
 
   static EnumPropertyItem prop_sculpt_expand_falloff_type_items[] = {
       {SCULPT_EXPAND_FALLOFF_GEODESIC, "GEODESIC", 0, "Geodesic", ""},
@@ -2337,4 +2406,9 @@ void SCULPT_OT_expand(wmOperatorType *ot)
                          "than this value, the falloff will be set to spherical when moving",
                          0,
                          1000000);
+  ot->prop = RNA_def_boolean(ot->srna,
+                             "use_auto_mask",
+                             false,
+                             "Auto Create",
+                             "Fill in mask if nothing is already masked");
 }

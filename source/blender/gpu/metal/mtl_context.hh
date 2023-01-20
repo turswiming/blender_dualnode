@@ -12,6 +12,12 @@
 #include "GPU_common_types.h"
 #include "GPU_context.h"
 
+/* Don't generate OpenGL deprecation warning. This is a known thing, and is not something easily
+ * solvable in a short term. */
+#ifdef __clang__
+#  pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #include "intern/GHOST_Context.h"
 #include "intern/GHOST_ContextCGL.h"
 #include "intern/GHOST_Window.h"
@@ -460,6 +466,9 @@ struct MTLContextGlobalShaderPipelineState {
   /* Render parameters. */
   float point_size = 1.0f;
   float line_width = 1.0f;
+
+  /* Clipping plane enablement. */
+  bool clip_distance_enabled[6] = {false};
 };
 
 /* Command Buffer Manager - Owned by MTLContext.
@@ -655,9 +664,9 @@ class MTLContext : public Context {
 
   /** Dummy Resources */
   /* Maximum of 32 texture types. Though most combinations invalid. */
-  gpu::MTLTexture *dummy_textures_[GPU_TEXTURE_BUFFER] = {nullptr};
-  GPUVertFormat dummy_vertformat_;
-  GPUVertBuf *dummy_verts_ = nullptr;
+  gpu::MTLTexture *dummy_textures_[GPU_SAMPLER_TYPE_MAX][GPU_TEXTURE_BUFFER] = {{nullptr}};
+  GPUVertFormat dummy_vertformat_[GPU_SAMPLER_TYPE_MAX];
+  GPUVertBuf *dummy_verts_[GPU_SAMPLER_TYPE_MAX] = {nullptr};
 
  public:
   /* GPUContext interface. */
@@ -743,7 +752,7 @@ class MTLContext : public Context {
 
   id<MTLBuffer> get_null_buffer();
   id<MTLBuffer> get_null_attribute_buffer();
-  gpu::MTLTexture *get_dummy_texture(eGPUTextureType type);
+  gpu::MTLTexture *get_dummy_texture(eGPUTextureType type, eGPUSamplerFormat sampler_format);
   void free_dummy_resources();
 
   /* State assignment. */

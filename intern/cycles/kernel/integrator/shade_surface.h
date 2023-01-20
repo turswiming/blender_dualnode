@@ -147,10 +147,11 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
   {
     const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
-    const float2 rand_light = path_state_rng_2D(kg, rng_state, PRNG_LIGHT);
+    const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
 
     if (!light_sample_from_position(kg,
                                     rng_state,
+                                    rand_light.z,
                                     rand_light.x,
                                     rand_light.y,
                                     sd->time,
@@ -263,7 +264,6 @@ ccl_device_forceinline void integrate_surface_direct_light(KernelGlobals kg,
 
   /* Copy state from main path to shadow path. */
   uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
-  shadow_flag |= (is_light) ? PATH_RAY_SHADOW_FOR_LIGHT : 0;
   const Spectrum unlit_throughput = INTEGRATOR_STATE(state, path, throughput);
   const Spectrum throughput = unlit_throughput * bsdf_eval_sum(&bsdf_eval);
 
@@ -363,7 +363,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   /* BSDF closure, sample direction. */
   float bsdf_pdf = 0.0f, unguided_bsdf_pdf = 0.0f;
   BsdfEval bsdf_eval ccl_optional_struct_init;
-  float3 bsdf_omega_in ccl_optional_struct_init;
+  float3 bsdf_wo ccl_optional_struct_init;
   int label;
 
   float2 bsdf_sampled_roughness = make_float2(1.0f, 1.0f);
@@ -377,7 +377,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                                       sc,
                                                       rand_bsdf,
                                                       &bsdf_eval,
-                                                      &bsdf_omega_in,
+                                                      &bsdf_wo,
                                                       &bsdf_pdf,
                                                       &unguided_bsdf_pdf,
                                                       &bsdf_sampled_roughness,
@@ -397,7 +397,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                                sc,
                                                rand_bsdf,
                                                &bsdf_eval,
-                                               &bsdf_omega_in,
+                                               &bsdf_wo,
                                                &bsdf_pdf,
                                                &bsdf_sampled_roughness,
                                                &bsdf_eta);
@@ -415,7 +415,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
   }
   else {
     /* Setup ray with changed origin and direction. */
-    const float3 D = normalize(bsdf_omega_in);
+    const float3 D = normalize(bsdf_wo);
     INTEGRATOR_STATE_WRITE(state, ray, P) = integrate_surface_ray_offset(kg, sd, sd->P, D);
     INTEGRATOR_STATE_WRITE(state, ray, D) = D;
     INTEGRATOR_STATE_WRITE(state, ray, tmin) = 0.0f;
@@ -454,7 +454,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                 bsdf_weight,
                                 bsdf_pdf,
                                 sd->N,
-                                normalize(bsdf_omega_in),
+                                normalize(bsdf_wo),
                                 bsdf_sampled_roughness,
                                 bsdf_eta);
 
@@ -501,8 +501,15 @@ ccl_device_forceinline void integrate_surface_ao(KernelGlobals kg,
                                                      rng_state,
                                                  ccl_global float *ccl_restrict render_buffer)
 {
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+
   if (!(kernel_data.kernel_features & KERNEL_FEATURE_AO_ADDITIVE) &&
-      !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_CAMERA)) {
+      !(path_flag & PATH_RAY_CAMERA)) {
+    return;
+  }
+
+  /* Skip AO for paths that were split off for shadow catchers to avoid double-counting. */
+  if (path_flag & PATH_RAY_SHADOW_CATCHER_PASS) {
     return;
   }
 

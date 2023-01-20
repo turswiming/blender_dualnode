@@ -84,24 +84,24 @@ static void group_copy_inputs(bNode *gnode, bNodeStack **in, bNodeStack *gstack)
  */
 static void group_copy_outputs(bNode *gnode, bNodeStack **out, bNodeStack *gstack)
 {
-  bNodeTree *ngroup = (bNodeTree *)gnode->id;
-  bNode *node;
-  bNodeSocket *sock;
-  bNodeStack *ns;
-  int a;
+  const bNodeTree &ngroup = *reinterpret_cast<bNodeTree *>(gnode->id);
 
-  for (node = static_cast<bNode *>(ngroup->nodes.first); node; node = node->next) {
-    if (node->type == NODE_GROUP_OUTPUT && (node->flag & NODE_DO_OUTPUT)) {
-      for (sock = static_cast<bNodeSocket *>(node->inputs.first), a = 0; sock;
-           sock = sock->next, a++) {
-        if (out[a]) { /* shouldn't need to check this T36694. */
-          ns = node_get_socket_stack(gstack, sock);
-          if (ns) {
-            copy_stack(out[a], ns);
-          }
-        }
-      }
-      break; /* only one active output node */
+  ngroup.ensure_topology_cache();
+  const bNode *group_output_node = ngroup.group_output_node();
+  if (!group_output_node) {
+    return;
+  }
+
+  int a;
+  LISTBASE_FOREACH_INDEX (bNodeSocket *, sock, &group_output_node->inputs, a) {
+    if (!out[a]) {
+      /* shouldn't need to check this T36694. */
+      continue;
+    }
+
+    bNodeStack *ns = node_get_socket_stack(gstack, sock);
+    if (ns) {
+      copy_stack(out[a], ns);
     }
   }
 }
@@ -157,7 +157,7 @@ void register_node_type_tex_group(void)
 
   node_type_size(&ntype, 140, 60, 400);
   ntype.labelfunc = node_group_label;
-  ntype.group_update_func = node_group_update;
+  ntype.declare_dynamic = blender::nodes::node_group_declare_dynamic;
   ntype.init_exec_fn = group_initexec;
   ntype.free_exec_fn = group_freeexec;
   ntype.exec_fn = group_execute;

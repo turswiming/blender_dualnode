@@ -35,7 +35,6 @@ set(INC
 
   # dna_type_offsets.h
   ${CMAKE_CURRENT_BINARY_DIR}/../makesdna/intern
-  ${OPENSUBDIV_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -280,6 +279,7 @@ set(SRC
   engines/image/image_buffer_cache.hh
   engines/image/image_drawing_mode.hh
   engines/image/image_engine.h
+  engines/image/image_enums.hh
   engines/image/image_instance_data.hh
   engines/image/image_partial_updater.hh
   engines/image/image_private.hh
@@ -529,11 +529,13 @@ set(GLSL_SRC
   intern/shaders/draw_debug_print_display_frag.glsl
   intern/shaders/draw_debug_print_display_vert.glsl
   intern/shaders/draw_resource_finalize_comp.glsl
+  intern/shaders/draw_view_finalize_comp.glsl
   intern/shaders/draw_visibility_comp.glsl
 
   intern/draw_command_shared.hh
   intern/draw_common_shader_shared.h
   intern/draw_defines.h
+  intern/draw_pointcloud_private.hh
   intern/draw_shader_shared.h
 
   engines/gpencil/shaders/gpencil_frag.glsl
@@ -719,6 +721,12 @@ if(WITH_DRAW_DEBUG)
     engines/select/select_debug_engine.c
   )
   add_definitions(-DWITH_DRAW_DEBUG)
+endif()
+
+if(WITH_OPENSUBDIV)
+  list(APPEND INC_SYS
+    ${OPENSUBDIV_INCLUDE_DIRS}
+  )
 endif()
 
 if(WITH_MOD_FLUID)
