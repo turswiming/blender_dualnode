@@ -227,7 +227,10 @@ void View::bind()
   GPU_uniformbuf_bind(culling_, DRW_VIEW_CULLING_UBO_SLOT);
 }
 
-void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze)
+void View::compute_visibility(ObjectMatricesBuf &matrices,
+                              ObjectBoundsBuf &bounds,
+                              uint resource_len,
+                              bool debug_freeze)
 {
   if (debug_freeze && frozen_ == false) {
     data_freeze_[0] = static_cast<ViewMatrices>(data_[0]);
@@ -264,6 +267,7 @@ void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool d
     GPU_shader_uniform_1i(shader, "resource_len", resource_len);
     GPU_shader_uniform_1i(shader, "view_len", view_len_);
     GPU_shader_uniform_1i(shader, "visibility_word_per_draw", word_per_draw);
+    GPU_storagebuf_bind(matrices, GPU_shader_get_ssbo(shader, "matrix_buf"));
     GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo(shader, "bounds_buf"));
     GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo(shader, "visibility_buf"));
     GPU_uniformbuf_bind(frozen_ ? data_freeze_ : data_, DRW_VIEW_UBO_SLOT);

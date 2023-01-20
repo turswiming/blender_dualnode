@@ -14,6 +14,8 @@ void main()
 
   mat4 model_mat = matrix_buf[resource_id].model;
   ObjectInfos infos = infos_buf[resource_id];
+
+#if 0
   ObjectBounds bounds = bounds_buf[resource_id];
 
   if (bounds.bounding_sphere.w != -1.0) {
@@ -51,6 +53,7 @@ void main()
       bounds_buf[resource_id].bounding_sphere.w = -1.0;
     }
   }
+#endif
 
   vec3 loc = infos.orco_add;  /* Box center. */
   vec3 size = infos.orco_mul; /* Box half-extent. */

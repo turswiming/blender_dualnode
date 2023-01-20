@@ -201,7 +201,8 @@ void ShadowPass::ShadowView::set_mode(ShadowPass::PassType type)
   current_pass_type_ = type;
 }
 
-void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
+void ShadowPass::ShadowView::compute_visibility(ObjectMatricesBuf &matrices,
+                                                ObjectBoundsBuf &bounds,
                                                 uint resource_len,
                                                 bool debug_freeze)
 {
@@ -231,6 +232,8 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
     GPU_storagebuf_clear(visibility_buf_, GPU_R32UI, GPU_DATA_UINT, &data);
   }
 
+  /* TODO(Miguel Pozo): Disabled in the optimization branch */
+  do_visibility_ = false;
   if (do_visibility_) {
     /* TODO(Miguel Pozo): Use regular culling for the caps pass */
 
@@ -249,6 +252,7 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
     GPU_shader_uniform_3fv(shader, "shadow_direction", light_direction_);
     GPU_uniformbuf_bind(extruded_frustum_,
                         GPU_shader_get_uniform_block(shader, "extruded_frustum"));
+    GPU_storagebuf_bind(matrices, GPU_shader_get_ssbo(shader, "matrix_buf"));
     GPU_storagebuf_bind(bounds, GPU_shader_get_ssbo(shader, "bounds_buf"));
     if (current_pass_type_ == ShadowPass::FORCED_FAIL) {
       GPU_storagebuf_bind(visibility_buf_, GPU_shader_get_ssbo(shader, "visibility_buf"));

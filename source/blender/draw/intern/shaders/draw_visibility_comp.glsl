@@ -26,25 +26,31 @@ void main()
     return;
   }
 
+  mat4 model_mat = matrix_buf[gl_GlobalInvocationID.x].model;
   ObjectBounds bounds = bounds_buf[gl_GlobalInvocationID.x];
 
-  if (bounds.bounding_sphere.w != -1.0) {
-    IsectBox box = isect_data_setup(bounds.bounding_corners[0].xyz,
-                                    bounds.bounding_corners[1].xyz,
-                                    bounds.bounding_corners[2].xyz,
-                                    bounds.bounding_corners[3].xyz);
-    Sphere bounding_sphere = Sphere(bounds.bounding_sphere.xyz, bounds.bounding_sphere.w);
-    Sphere inscribed_sphere = Sphere(bounds.bounding_sphere.xyz, bounds._inner_sphere_radius);
+  if (bounds.test_enabled) {
+    vec3 origin = transform_point(model_mat, bounds.center - bounds.size);
+    vec3 side_x = transform_point(model_mat, bounds.center + bounds.size * vec3(1, -1, -1)) -
+                  origin;
+    vec3 side_y = transform_point(model_mat, bounds.center + bounds.size * vec3(-1, 1, -1)) -
+                  origin;
+    vec3 side_z = transform_point(model_mat, bounds.center + bounds.size * vec3(-1, -1, 1)) -
+                  origin;
+
+    vec3 center = origin + ((side_x + side_y + side_z) / 2.0f);
+    float radius = distance(origin, center);
+    float inscribed_radius = min(min(bounds.size.x, bounds.size.y), bounds.size.z);
+
+    IsectBox box = isect_data_setup(origin, side_x, side_y, side_z);
+    Sphere bounding_sphere = Sphere(center, radius);
+    Sphere inscribed_sphere = Sphere(center, inscribed_radius);
 
     for (drw_view_id = 0; drw_view_id < view_len; drw_view_id++) {
-      if (intersect_view(inscribed_sphere) == true) {
-        /* Visible. */
+      if (intersect_view(inscribed_sphere)) {
+        /* Visible */
       }
-      else if (intersect_view(bounding_sphere) == false) {
-        /* Not visible. */
-        mask_visibility_bit(drw_view_id);
-      }
-      else if (intersect_view(box) == false) {
+      else if (intersect_view(bounding_sphere) == false || intersect_view(box) == false) {
         /* Not visible. */
         mask_visibility_bit(drw_view_id);
       }

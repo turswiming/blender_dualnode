@@ -26,6 +26,7 @@ namespace blender::draw {
 class Manager;
 
 /* TODO: de-duplicate. */
+using ObjectMatricesBuf = StorageArrayBuffer<ObjectMatrices, 128>;
 using ObjectBoundsBuf = StorageArrayBuffer<ObjectBounds, 128>;
 using VisibilityBuf = StorageArrayBuffer<uint, 4, true>;
 
@@ -135,7 +136,10 @@ class View {
  protected:
   /** Called from draw manager. */
   void bind();
-  virtual void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze);
+  virtual void compute_visibility(ObjectMatricesBuf &matrices,
+                                  ObjectBoundsBuf &bounds,
+                                  uint resource_len,
+                                  bool debug_freeze);
   virtual VisibilityBuf &get_visibility_buffer();
 
   void update_viewport_size();

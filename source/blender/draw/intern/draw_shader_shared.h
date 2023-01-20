@@ -175,15 +175,11 @@ struct ObjectInfos {
 BLI_STATIC_ASSERT_ALIGN(ObjectInfos, 16)
 
 struct ObjectBounds {
-  /**
-   * Uploaded as vertex (0, 4, 3, 1) of the bbox in local space, matching XYZ axis order.
-   * Then processed by GPU and stored as (0, 4-0, 3-0, 1-0) in world space for faster culling.
-   */
-  float4 bounding_corners[4];
-  /** Bounding sphere derived from the bounding corner. Computed on GPU. */
-  float4 bounding_sphere;
-  /** Radius of the inscribed sphere derived from the bounding corner. Computed on GPU. */
-#define _inner_sphere_radius bounding_corners[3].w
+  float3 center;
+  bool test_enabled;
+  /* TODO(Miguel Pozo): This is actually half size */
+  float3 size;
+  uint _pad;
 
 #if !defined(GPU_SHADER) && defined(__cplusplus)
   void sync();

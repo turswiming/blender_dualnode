@@ -147,56 +147,54 @@ inline std::ostream &operator<<(std::ostream &stream, const ObjectInfos &infos)
 
 inline void ObjectBounds::sync()
 {
-  bounding_sphere.w = -1.0f; /* Disable test. */
+  test_enabled = false;
 }
 
 inline void ObjectBounds::sync(Object &ob)
 {
-  BoundBox _bbox;
-  const BoundBox *bbox = &_bbox;
+  float3 min, max;
+  INIT_MINMAX(min, max);
 
   if (ob.type == OB_MESH) {
     /* Optimization: Retrieve the mesh cached min max directly.
      * Avoids allocating a BoundBox on every sample for each DupliObject instance.
      * TODO(Miguel Pozo): Remove once T92963 or T96968 are done */
-    float3 min, max;
     BKE_mesh_wrapper_minmax(static_cast<Mesh *>(ob.data), min, max);
-    BKE_boundbox_init_from_minmax(&_bbox, min, max);
   }
   else {
-    bbox = BKE_object_boundbox_get(&ob);
+    const BoundBox *bbox = BKE_object_boundbox_get(&ob);
     if (bbox == nullptr) {
-      bounding_sphere.w = -1.0f; /* Disable test. */
+      test_enabled = false;
       return;
+    }
+
+    for (const float3 &corner : bbox->vec) {
+      minmax_v3v3_v3(min, max, corner);
     }
   }
 
-  *reinterpret_cast<float3 *>(&bounding_corners[0]) = bbox->vec[0];
-  *reinterpret_cast<float3 *>(&bounding_corners[1]) = bbox->vec[4];
-  *reinterpret_cast<float3 *>(&bounding_corners[2]) = bbox->vec[3];
-  *reinterpret_cast<float3 *>(&bounding_corners[3]) = bbox->vec[1];
-  bounding_sphere.w = 0.0f; /* Enable test. */
+  size = (max - min) / 2.0f;
+  center = min + size;
+  test_enabled = true;
+}
+
+inline void ObjectBounds::sync(const float3 &center, const float3 &size)
+{
+  this->center = center;
+  this->size = size;
+  test_enabled = true;
 }
 
 inline std::ostream &operator<<(std::ostream &stream, const ObjectBounds &bounds)
 {
   stream << "ObjectBounds(";
-  if (bounds.bounding_sphere.w == -1.0f) {
+  if (!bounds.test_enabled) {
     stream << "skipped)" << std::endl;
     return stream;
   }
   stream << std::endl;
-  stream << ".bounding_corners[0]"
-         << *reinterpret_cast<const float3 *>(&bounds.bounding_corners[0]) << std::endl;
-  stream << ".bounding_corners[1]"
-         << *reinterpret_cast<const float3 *>(&bounds.bounding_corners[1]) << std::endl;
-  stream << ".bounding_corners[2]"
-         << *reinterpret_cast<const float3 *>(&bounds.bounding_corners[2]) << std::endl;
-  stream << ".bounding_corners[3]"
-         << *reinterpret_cast<const float3 *>(&bounds.bounding_corners[3]) << std::endl;
-  stream << ".sphere=(pos=" << float3(bounds.bounding_sphere)
-         << ", rad=" << bounds.bounding_sphere.w << std::endl;
-  stream << ")" << std::endl;
+  stream << ".center" << bounds.center << std::endl;
+  stream << ".size" << bounds.size << std::endl;
   return stream;
 }
 

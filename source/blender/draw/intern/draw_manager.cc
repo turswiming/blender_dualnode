@@ -166,7 +166,7 @@ void Manager::submit(PassMain &pass, View &view)
   bool freeze_culling = (U.experimental.use_viewport_debug && DST.draw_ctx.v3d &&
                          (DST.draw_ctx.v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
 
-  view.compute_visibility(bounds_buf, resource_len_, freeze_culling);
+  view.compute_visibility(matrix_buf, bounds_buf, resource_len_, freeze_culling);
 
   command::RecordingState state;
   state.inverted_view = view.is_inverted();
