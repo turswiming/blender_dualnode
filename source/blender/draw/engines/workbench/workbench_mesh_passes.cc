@@ -155,8 +155,10 @@ void OpaquePass::draw(Manager &manager,
   if (is_empty()) {
     return;
   }
-  gbuffer_material_tx.acquire(resolution, GPU_RGBA16F);
-  gbuffer_normal_tx.acquire(resolution, GPU_RG16F);
+  gbuffer_material_tx.acquire(
+      resolution, GPU_RGBA16F, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
+  gbuffer_normal_tx.acquire(
+      resolution, GPU_RG16F, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
 
   GPUAttachment object_id_attachment = GPU_ATTACHMENT_NONE;
   if (resources.object_id_tx.is_valid()) {
@@ -191,7 +193,11 @@ void OpaquePass::draw(Manager &manager,
                             !accumulation_ps_is_empty;
 
   if (needs_stencil_copy) {
-    shadow_depth_stencil_tx.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
+    shadow_depth_stencil_tx.ensure_2d(GPU_DEPTH24_STENCIL8,
+                                      resolution,
+                                      GPU_TEXTURE_USAGE_SHADER_READ |
+                                          GPU_TEXTURE_USAGE_ATTACHMENT |
+                                          GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW);
     GPU_texture_copy(shadow_depth_stencil_tx, resources.depth_tx);
 
     deferred_ps_stencil_tx = shadow_depth_stencil_tx.stencil_view();
@@ -280,8 +286,10 @@ void TransparentPass::draw(Manager &manager,
   if (is_empty()) {
     return;
   }
-  accumulation_tx.acquire(resolution, GPU_RGBA16F);
-  reveal_tx.acquire(resolution, GPU_R16F);
+  accumulation_tx.acquire(
+      resolution, GPU_RGBA16F, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
+  reveal_tx.acquire(
+      resolution, GPU_R16F, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
 
   resolve_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(resources.color_tx));
 

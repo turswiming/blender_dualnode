@@ -62,7 +62,10 @@ class Instance {
   {
     const float2 viewport_size = DRW_viewport_size_get();
     const int2 resolution = {int(viewport_size.x), int(viewport_size.y)};
-    resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8, resolution);
+    resources.depth_tx.ensure_2d(GPU_DEPTH24_STENCIL8,
+                                 resolution,
+                                 GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT |
+                                     GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW);
 
     opaque_ps.sync(scene_state, resources);
     transparent_ps.sync(scene_state, resources);
@@ -325,10 +328,12 @@ class Instance {
 
     anti_aliasing_ps.setup_view(view, resolution);
 
-    resources.color_tx.acquire(resolution, GPU_RGBA16F);
+    resources.color_tx.acquire(
+        resolution, GPU_RGBA16F, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
     resources.color_tx.clear(resources.world_buf.background_color);
     if (scene_state.draw_object_id) {
-      resources.object_id_tx.acquire(resolution, GPU_R16UI);
+      resources.object_id_tx.acquire(
+          resolution, GPU_R16UI, GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT);
       resources.object_id_tx.clear(uint4(0));
     }
 
@@ -338,7 +343,10 @@ class Instance {
     GPU_framebuffer_clear_depth_stencil(fb, 1.0f, 0x00);
 
     if (!transparent_ps.accumulation_in_front_ps_.is_empty()) {
-      resources.depth_in_front_tx.acquire(resolution, GPU_DEPTH24_STENCIL8);
+      resources.depth_in_front_tx.acquire(resolution,
+                                          GPU_DEPTH24_STENCIL8,
+                                          GPU_TEXTURE_USAGE_SHADER_READ |
+                                              GPU_TEXTURE_USAGE_ATTACHMENT);
       if (opaque_ps.gbuffer_in_front_ps_.is_empty()) {
         /* Clear only if it wont be overwitten by opaque_ps */
         Framebuffer fb = Framebuffer("Workbench.Clear");
