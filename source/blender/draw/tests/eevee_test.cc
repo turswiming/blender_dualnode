@@ -868,4 +868,142 @@ static void test_eevee_shadow_finalize()
 }
 DRAW_TEST(eevee_shadow_finalize)
 
+static void test_eevee_shadow_page_mask()
+{
+  ShadowTileMapDataBuf tilemaps_data = {"tilemaps_data"};
+  ShadowTileDataBuf tiles_data = {"tiles_data"};
+
+  {
+    ShadowTileMap tilemap(0);
+    tilemap.sync_cubeface(float4x4::identity(), 0.01f, 1.0f, Z_NEG);
+    tilemaps_data.append(tilemap);
+  }
+
+  const uint lod0_len = square_i(SHADOW_TILEMAP_RES);
+  const uint lod1_len = square_i(SHADOW_TILEMAP_RES / 2);
+  const uint lod2_len = square_i(SHADOW_TILEMAP_RES / 4);
+  const uint lod3_len = square_i(SHADOW_TILEMAP_RES / 8);
+  const uint lod4_len = square_i(SHADOW_TILEMAP_RES / 16);
+
+  {
+    ShadowTileData tile;
+    /* Init all LOD to true. */
+    for (auto i : IndexRange(SHADOW_TILEDATA_PER_TILEMAP)) {
+      tile.is_used = true;
+      tiles_data[i] = shadow_tile_pack(tile);
+    }
+
+    /* Init all of LOD0 to false. */
+    for (auto i : IndexRange(square_i(SHADOW_TILEMAP_RES))) {
+      tile.is_used = false;
+      tiles_data[i] = shadow_tile_pack(tile);
+    }
+
+    /* Bottom Left of the LOD0 to true. */
+    for (auto y : IndexRange((SHADOW_TILEMAP_RES / 2) + 1)) {
+      for (auto x : IndexRange((SHADOW_TILEMAP_RES / 2) + 1)) {
+        tile.is_used = true;
+        tiles_data[x + y * SHADOW_TILEMAP_RES] = shadow_tile_pack(tile);
+      }
+    }
+
+    /* All Bottom of the LOD0 to true. */
+    for (auto x : IndexRange(SHADOW_TILEMAP_RES)) {
+      tile.is_used = true;
+      tiles_data[x] = shadow_tile_pack(tile);
+    }
+
+    /* Bottom Left of the LOD1 to false. */
+    /* Should still cover bottom LODs since it is itself fully masked */
+    for (auto y : IndexRange((SHADOW_TILEMAP_RES / 8))) {
+      for (auto x : IndexRange((SHADOW_TILEMAP_RES / 8))) {
+        tile.is_used = false;
+        tiles_data[x + y * (SHADOW_TILEMAP_RES / 2) + lod0_len] = shadow_tile_pack(tile);
+      }
+    }
+
+    /* Top right Center of the LOD1 to false. */
+    /* Should un-cover 1 LOD2 tile. */
+    {
+      int x = SHADOW_TILEMAP_RES / 4;
+      int y = SHADOW_TILEMAP_RES / 4;
+      tile.is_used = false;
+      tiles_data[x + y * (SHADOW_TILEMAP_RES / 2) + lod0_len] = shadow_tile_pack(tile);
+    }
+
+    tiles_data.push_update();
+  }
+
+  tilemaps_data.push_update();
+
+  GPUShader *sh = GPU_shader_create_from_info_name("eevee_shadow_page_mask");
+
+  PassSimple pass("Test");
+  pass.shader_set(sh);
+  pass.bind_ssbo("tilemaps_buf", tilemaps_data);
+  pass.bind_ssbo("tiles_buf", tiles_data);
+  pass.dispatch(int3(1, 1, tilemaps_data.size()));
+
+  Manager manager;
+  manager.submit(pass);
+  GPU_finish();
+
+  tiles_data.read();
+
+  /** The layout of these expected strings is Y down. */
+  StringRefNull expected_lod0 =
+      "xxxxxxxxxxxxxxxx"
+      "xxxxxxxxx-------"
+      "xxxxxxxxx-------"
+      "xxxxxxxxx-------"
+      "xxxxxxxxx-------"
+      "xxxxxxxxx-------"
+      "xxxxxxxxx-------"
+      "xxxxxxxxx-------"
+      "xxxxxxxxx-------"
+      "----------------"
+      "----------------"
+      "----------------"
+      "----------------"
+      "----------------"
+      "----------------"
+      "----------------";
+  StringRefNull expected_lod1 =
+      "----xxxx"
+      "----xxxx"
+      "----xxxx"
+      "----xxxx"
+      "xxxx-xxx"
+      "xxxxxxxx"
+      "xxxxxxxx"
+      "xxxxxxxx";
+  StringRefNull expected_lod2 =
+      "----"
+      "----"
+      "--x-"
+      "----";
+  StringRefNull expected_lod3 =
+      "--"
+      "--";
+  StringRefNull expected_lod4 = "-";
+
+  auto stringify_result = [&](uint start, uint len) -> std::string {
+    std::string result = "";
+    for (auto i : IndexRange(start, len)) {
+      result += (shadow_tile_unpack(tiles_data[i]).is_used) ? "x" : "-";
+    }
+    return result;
+  };
+
+  EXPECT_EQ(stringify_result(0, lod0_len), expected_lod0);
+  EXPECT_EQ(stringify_result(lod0_len, lod1_len), expected_lod1);
+  EXPECT_EQ(stringify_result(lod0_len + lod1_len, lod2_len), expected_lod2);
+  EXPECT_EQ(stringify_result(lod0_len + lod1_len + lod2_len, lod3_len), expected_lod3);
+  EXPECT_EQ(stringify_result(lod0_len + lod1_len + lod2_len + lod3_len, lod4_len), expected_lod4);
+
+  GPU_shader_free(sh);
+  DRW_shaders_free();
+}
+DRAW_TEST(eevee_shadow_page_mask)
+
 }  // namespace blender::draw

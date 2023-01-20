@@ -67,6 +67,14 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tag_usage_transparent)
     .vertex_source("eevee_shadow_tag_usage_vert.glsl")
     .fragment_source("eevee_shadow_tag_usage_frag.glsl");
 
+GPU_SHADER_CREATE_INFO(eevee_shadow_page_mask)
+    .do_static_compilation(true)
+    .local_group_size(SHADOW_TILEMAP_RES, SHADOW_TILEMAP_RES)
+    .storage_buf(0, Qualifier::READ, "ShadowTileMapData", "tilemaps_buf[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "ShadowTileDataPacked", "tiles_buf[]")
+    .additional_info("eevee_shared")
+    .compute_source("eevee_shadow_page_mask_comp.glsl");
+
 GPU_SHADER_CREATE_INFO(eevee_shadow_page_free)
     .do_static_compilation(true)
     .local_group_size(SHADOW_TILEDATA_PER_TILEMAP)

@@ -696,6 +696,10 @@ void ShadowModule::end_sync()
       {
         /** Mark tiles that are redundant in the mipmap chain as unused. */
         PassSimple::Sub &sub = pass.sub("MaskLod");
+        sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_MASK));
+        sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
       {
