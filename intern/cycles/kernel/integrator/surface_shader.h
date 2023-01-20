@@ -21,6 +21,8 @@
 
 CCL_NAMESPACE_BEGIN
 
+//#define RIS_COSINE
+
 /* Guiding */
 
 #ifdef __PATH_GUIDING__
@@ -322,12 +324,19 @@ ccl_device_inline
       kg, sd, wo, NULL, bsdf_eval, 0.0f, 0.0f, light_shader_flags);
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
-  if (state->guiding.use_surface_guiding) {
+  if (pdf > 0.f && state->guiding.use_surface_guiding) {
     const float guiding_sampling_prob = state->guiding.surface_guiding_sampling_prob;
     const float bssrdf_sampling_prob = state->guiding.bssrdf_sampling_prob;
     const float guide_pdf = guiding_bsdf_pdf(kg, state, wo);
-    pdf = (guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob)) +
-          (1.0f - guiding_sampling_prob) * pdf;
+
+    if (kernel_data.integrator.guiding_directional_sampling_type ==
+        GUIDING_DIRECTIONAL_SAMPLING_TYPE_RIS) {
+      pdf = (0.5f * guide_pdf * (1.0f - bssrdf_sampling_prob)) + 0.5f * pdf;
+    }
+    else {
+      pdf = (guiding_sampling_prob * guide_pdf * (1.0f - bssrdf_sampling_prob)) +
+            (1.0f - guiding_sampling_prob) * pdf;
+    }
   }
 #endif
 
@@ -403,17 +412,17 @@ surface_shader_bssrdf_sample_weight(ccl_private const ShaderData *ccl_restrict s
 /* Sample direction for picked BSDF, and return evaluation and pdf for all
  * BSDFs combined using MIS. */
 
-ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
-                                                         IntegratorState state,
-                                                         ccl_private ShaderData *sd,
-                                                         ccl_private const ShaderClosure *sc,
-                                                         const float2 rand_bsdf,
-                                                         ccl_private BsdfEval *bsdf_eval,
-                                                         ccl_private float3 *wo,
-                                                         ccl_private float *bsdf_pdf,
-                                                         ccl_private float *unguided_bsdf_pdf,
-                                                         ccl_private float2 *sampled_rougness,
-                                                         ccl_private float *eta)
+ccl_device int surface_shader_bsdf_guided_sample_closure_mis(KernelGlobals kg,
+                                                             IntegratorState state,
+                                                             ccl_private ShaderData *sd,
+                                                             ccl_private const ShaderClosure *sc,
+                                                             const float2 rand_bsdf,
+                                                             ccl_private BsdfEval *bsdf_eval,
+                                                             ccl_private float3 *wo,
+                                                             ccl_private float *bsdf_pdf,
+                                                             ccl_private float *unguided_bsdf_pdf,
+                                                             ccl_private float2 *sampled_rougness,
+                                                             ccl_private float *eta)
 {
   /* BSSRDF should already have been handled elsewhere. */
   kernel_assert(CLOSURE_IS_BSDF(sc->type));
@@ -475,6 +484,10 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
 
         label = bsdf_label(kg, &sd->closure[idx], *wo);
       }
+      else {
+        *bsdf_pdf = 0.0f;
+        *unguided_bsdf_pdf = 0.0f;
+      }
     }
 
     kernel_assert(reduce_min(bsdf_eval_sum(bsdf_eval)) >= 0.0f);
@@ -518,6 +531,278 @@ ccl_device int surface_shader_bsdf_guided_sample_closure(KernelGlobals kg,
 
   return label;
 }
+
+ccl_device int surface_shader_bsdf_guided_sample_closure_ris(KernelGlobals kg,
+                                                             IntegratorState state,
+                                                             ccl_private ShaderData *sd,
+                                                             ccl_private const ShaderClosure *sc,
+                                                             const float2 rand_bsdf,
+                                                             ccl_private const RNGState *rng_state,
+                                                             ccl_private BsdfEval *bsdf_eval,
+                                                             ccl_private float3 *omega_in,
+                                                             ccl_private float *bsdf_pdf,
+                                                             ccl_private float *mis_pdf,
+                                                             ccl_private float *unguided_bsdf_pdf,
+                                                             ccl_private float2 *sampled_rougness,
+                                                             ccl_private float *eta)
+{
+  /* BSSRDF should already have been handled elsewhere. */
+  kernel_assert(CLOSURE_IS_BSDF(sc->type));
+
+  const bool use_surface_guiding = state->guiding.use_surface_guiding;
+  // const bool use_surface_guiding = true;
+  const float guiding_sampling_prob = state->guiding.surface_guiding_sampling_prob;
+  const float bssrdf_sampling_prob = state->guiding.bssrdf_sampling_prob;
+
+  /* Decide between sampling guiding distribution and BSDF. */
+  float rand_bsdf_guiding = state->guiding.sample_surface_guiding_rand;
+
+  /* Initialize to zero. */
+  int label = LABEL_NONE;
+  Spectrum eval = zero_spectrum();
+  bsdf_eval_init(bsdf_eval, CLOSURE_NONE_ID, eval);
+
+  *unguided_bsdf_pdf = 0.0f;
+  float guide_pdf = 0.0f;
+
+  if (use_surface_guiding && guiding_sampling_prob > 0.f) {
+    /* Sample guiding distribution. */
+    float2 rand_guiding_bsdf_ris[2];
+    rand_guiding_bsdf_ris[0] = path_state_rng_2D(kg, rng_state, PRNG_SURFACE_RIS_GUIDING_0);
+    rand_guiding_bsdf_ris[1] = path_state_rng_2D(kg, rng_state, PRNG_SURFACE_RIS_GUIDING_1);
+
+    float2 sampled_rougness_ris[2];
+    float eta_ris[2];
+    int label_ris[2];
+
+    float3 omega_in_ris[2];
+    float ris_pdfs[2];
+    float guide_pdfs[2];
+    float bsdf_pdfs[2];
+    float cosines[2];
+    BsdfEval bsdf_evals[2];
+    float avg_bsdf_evals[2];
+    Spectrum evals[2];
+
+    // RIS0 - sample BSDF
+    label_ris[0] = bsdf_sample(kg,
+                               sd,
+                               sc,
+                               rand_guiding_bsdf_ris[0].x,
+                               rand_guiding_bsdf_ris[0].y,
+                               &evals[0],
+                               &omega_in_ris[0],
+                               &bsdf_pdfs[0],
+                               &sampled_rougness_ris[0],
+                               &eta_ris[0]);
+
+    bsdf_eval_init(&bsdf_evals[0], sc->type, evals[0] * sc->weight);
+    cosines[0] = max(0.01f, fabsf(dot(sd->N, omega_in_ris[0])));
+    if (sd->num_closure > 1) {
+      float sweight = sc->sample_weight;
+      bsdf_pdfs[0] = _surface_shader_bsdf_eval_mis(
+          kg, sd, omega_in_ris[0], sc, &bsdf_evals[0], (bsdf_pdfs[0]) * sweight, sweight, 0);
+      kernel_assert(reduce_min(bsdf_eval_sum(&bsdf_evals[0])) >= 0.0f);
+    }
+    avg_bsdf_evals[0] = (bsdf_evals[0].sum[0] + bsdf_evals[0].sum[1] + bsdf_evals[0].sum[2]) /
+                        3.0f;
+    guide_pdfs[0] = guiding_bsdf_pdf(kg, state, omega_in_ris[0]);
+    bsdf_pdfs[0] = max(0.f, bsdf_pdfs[0]);
+
+    // assert(bsdf_pdfs[0] >= 1e-20f);
+    // assert(guide_pdfs[0] >= 1e-20f);
+
+    // RIS1 - sample guiding
+    float unguided_bsdf_pdfs[MAX_CLOSURE];
+    bsdf_eval_init(&bsdf_evals[1], CLOSURE_NONE_ID, eval);
+    guide_pdfs[1] = guiding_bsdf_sample(kg, state, rand_guiding_bsdf_ris[1], &omega_in_ris[1]);
+    cosines[1] = max(0.01f, fabsf(dot(sd->N, omega_in_ris[1])));
+    // bsdf_pdfs[1] = _surface_shader_bsdf_eval_mis(
+    //      kg, sd, omega_in_ris[1], nullptr, &bsdf_evals[1], 0.f, 0.f, 0);
+    bsdf_pdfs[1] = 0.f;
+    bsdf_pdfs[1] = surface_shader_bsdf_eval_pdfs(
+        kg, sd, omega_in_ris[1], &bsdf_evals[1], unguided_bsdf_pdfs, 0);
+    label_ris[1] = label_ris[0];
+    avg_bsdf_evals[1] = (bsdf_evals[1].sum[0] + bsdf_evals[1].sum[1] + bsdf_evals[1].sum[2]) /
+                        3.0f;
+    bsdf_pdfs[1] = max(0.f, bsdf_pdfs[1]);
+
+    // assert(bsdf_pdfs[1] >= 1e-20f);
+    // assert(guide_pdfs[1] >= 1e-20f);
+
+    int num_samples = 0;
+    float sum_ris_pdfs = 0.f;
+    if (avg_bsdf_evals[0] > 0.f && bsdf_pdfs[0] > 1e-10f && guide_pdfs[0] > 0.f) {
+#  ifdef RIS_COSINE
+      ris_pdfs[0] = (avg_bsdf_evals[0] / cosines[0] *
+                     (0.5f * ((1.0f / (4.0f * float(M_PI))) + guide_pdfs[0]))) /
+                    (0.5f * (bsdf_pdfs[0] + guide_pdfs[0]));
+      //(0.5f * (bsdf_pdfs[0] + bsdf_pdfs[0]));
+#  else
+      ris_pdfs[0] = (avg_bsdf_evals[0] *
+                     (0.5f * ((1.0f / (4.0f * float(M_PI))) + guide_pdfs[0]))) /
+                    (0.5f * (bsdf_pdfs[0] + guide_pdfs[0]));
+#  endif
+      sum_ris_pdfs += ris_pdfs[0];
+      num_samples++;
+    }
+    else {
+      ris_pdfs[0] = 0.f;
+    }
+    assert(sum_ris_pdfs >= 0.f);
+    /* */
+    if (avg_bsdf_evals[1] > 0.f && bsdf_pdfs[1] > 1e-10f && guide_pdfs[1] > 0.f) {
+#  ifdef RIS_COSINE
+      ris_pdfs[1] = (avg_bsdf_evals[1] / cosines[1] *
+                     (0.5f * ((1.0f / (4.0f * float(M_PI))) + guide_pdfs[1]))) /
+                    (0.5f * (bsdf_pdfs[1] + guide_pdfs[1]));
+#  else
+      ris_pdfs[1] = (avg_bsdf_evals[1] *
+                     (0.5f * ((1.0f / (4.0f * float(M_PI))) + guide_pdfs[1]))) /
+                    (0.5f * (bsdf_pdfs[1] + guide_pdfs[1]));
+#  endif
+      sum_ris_pdfs += ris_pdfs[1];
+      num_samples++;
+    }
+    else {
+      ris_pdfs[1] = 0.f;
+    }
+    assert(sum_ris_pdfs >= 0.f);
+    /* */
+    if (num_samples == 0 || !(sum_ris_pdfs > 1e-10f)) {
+      *bsdf_pdf = 0.0f;
+      *mis_pdf = 0.0f;
+      return label;
+    }
+
+    /**/
+    float rand_ris_select = rand_bsdf_guiding * sum_ris_pdfs;
+    int ris_idx = 0;
+    /* */
+    float sum_ris = 0.0f;
+    for (int i = 0; i < 2; i++) {
+      sum_ris += ris_pdfs[i];
+      if (rand_ris_select <= sum_ris) {
+        ris_idx = i;
+        break;
+      }
+    }
+    /**/
+    assert(sum_ris_pdfs >= 0.f);
+
+    assert(ris_idx < 2);
+#  ifdef RIS_COSINE
+    guide_pdf = (avg_bsdf_evals[ris_idx] / cosines[ris_idx] *
+                 (0.5f * ((1.0f / (4.0f * float(M_PI))) + guide_pdfs[ris_idx]))) *
+                (float(2) / sum_ris_pdfs);
+#  else
+    guide_pdf = (avg_bsdf_evals[ris_idx] *
+                 (0.5f * ((1.0f / (4.0f * float(M_PI))) + guide_pdfs[ris_idx]))) *
+                (float(2) / sum_ris_pdfs);
+#  endif
+    *unguided_bsdf_pdf = bsdf_pdfs[ris_idx];
+    *mis_pdf = 0.5f * (bsdf_pdfs[ris_idx] + guide_pdfs[ris_idx]);
+    //*mis_pdf = *unguided_bsdf_pdf;
+    *bsdf_pdf = guide_pdf;
+
+    *omega_in = omega_in_ris[ris_idx];
+    label = label_ris[ris_idx];
+
+    *sampled_rougness = sampled_rougness_ris[ris_idx];
+    *eta = eta_ris[ris_idx];
+    *bsdf_eval = bsdf_evals[ris_idx];
+
+    // assert(bsdf_pdfs[ris_idx] >= 1e-20f);
+    // assert(guide_pdfs[ris_idx] >= 1e-20f);
+
+    assert(std::isfinite(guide_pdf));
+    assert(std::isfinite(*bsdf_pdf));
+
+    if (!(*bsdf_pdf > 1e-10f)) {
+      *bsdf_pdf = 0.0f;
+      *mis_pdf = 0.0f;
+      return label;
+    }
+
+    assert(*bsdf_pdf > 0.f);
+    assert(*bsdf_pdf >= 1e-20f);
+    assert(guide_pdf >= 0.f);
+
+    /// select label sampled_roughness and eta
+    if (ris_idx == 1) {
+      // if (!(label | LABEL_SINGULAR) && !(label | LABEL_TRANSPARENT)) {
+      float sum_pdfs = 0.0f;
+      float rnd = path_state_rng_1D(kg, rng_state, PRNG_SURFACE_RIS_GUIDING_2);
+
+      // bsdf_pdfs[1] = surface_shader_bsdf_eval_pdfs(
+      //  kg, sd, omega_in_ris[ris_idx], &bsdf_evals[1], unguided_bsdf_pdfs, 0);
+
+      if (bsdf_pdfs[1] > 0.0f) {
+        int idx = -1;
+        for (int i = 0; i < sd->num_closure; i++) {
+          sum_pdfs += unguided_bsdf_pdfs[i];
+          if (rnd <= sum_pdfs) {
+            idx = i;
+            break;
+          }
+        }
+        //        kernel_assert(idx >= 0);
+        /* Set the default idx to the last in the list.
+         * in case of numerical problems and rand_bsdf_guiding is just >=1.0f and
+         * the sum of all unguided_bsdf_pdfs is just < 1.0f. */
+        idx = (rnd > sum_pdfs) ? sd->num_closure - 1 : idx;
+
+        label = bsdf_label(kg, &sd->closure[idx], *omega_in);
+      }
+    }
+
+    assert(std::isfinite(*bsdf_pdf));
+    assert(*bsdf_pdf >= 0.f);
+    kernel_assert(reduce_min(bsdf_eval_sum(bsdf_eval)) >= 0.0f);
+
+    //*sampled_rougness = make_float2(1.0f, 1.0f);
+    //*eta = 1.0f;
+  }
+  else {
+    /* Sample BSDF. */
+    *bsdf_pdf = 0.0f;
+    label = bsdf_sample(kg,
+                        sd,
+                        sc,
+                        rand_bsdf.x,
+                        rand_bsdf.y,
+                        &eval,
+                        omega_in,
+                        unguided_bsdf_pdf,
+                        sampled_rougness,
+                        eta);
+#  if 0
+    if (*unguided_bsdf_pdf > 0.0f) {
+      surface_shader_validate_bsdf_sample(kg, sc, *omega_in, label, sampled_roughness, eta);
+    }
+#  endif
+
+    if (*unguided_bsdf_pdf != 0.0f) {
+      bsdf_eval_init(bsdf_eval, sc->type, eval * sc->weight);
+
+      kernel_assert(reduce_min(bsdf_eval_sum(bsdf_eval)) >= 0.0f);
+
+      if (sd->num_closure > 1) {
+        float sweight = sc->sample_weight;
+        *unguided_bsdf_pdf = _surface_shader_bsdf_eval_mis(
+            kg, sd, *omega_in, sc, bsdf_eval, (*unguided_bsdf_pdf) * sweight, sweight, 0);
+        kernel_assert(reduce_min(bsdf_eval_sum(bsdf_eval)) >= 0.0f);
+      }
+      *bsdf_pdf = *unguided_bsdf_pdf;
+      *mis_pdf = *bsdf_pdf;
+    }
+
+    kernel_assert(reduce_min(bsdf_eval_sum(bsdf_eval)) >= 0.0f);
+  }
+
+  return label;
+}
+
 #endif
 
 /* Sample direction for picked BSDF, and return evaluation and pdf for all

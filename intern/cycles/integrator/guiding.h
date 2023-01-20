@@ -25,7 +25,8 @@ struct GuidingParams {
   {
     return !((use == other.use) && (use_surface_guiding == other.use_surface_guiding) &&
              (use_volume_guiding == other.use_volume_guiding) && (type == other.type) &&
-             (sampling_type == other.sampling_type) && (training_samples == other.training_samples) &&
+             (sampling_type == other.sampling_type) &&
+             (training_samples == other.training_samples) &&
              (deterministic == other.deterministic));
   }
 };

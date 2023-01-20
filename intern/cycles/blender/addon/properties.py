@@ -209,10 +209,20 @@ enum_guiding_distribution = (
 )
 
 enum_guiding_directional_sampling_types = (
-    ('PRODUCT', "Diffuse Product", "Guided diffuse BSDF component based on the incoming light distribution and the cosine product (closed form product)", 0),
-    ('RIS', "Re-sampled Importance Sampling", "Perform RIS sampling to guided based on the product of the incoming light distribution and the BSDF", 1),
-    ('ROUGHNESS', "Roughness-based", "Adjust the guiding probability based on the roughness of the material components", 2),
+    ('PRODUCT',
+     "Diffuse Product",
+     "Guided diffuse BSDF component based on the incoming light distribution and the cosine product (closed form product)",
+     0),
+    ('RIS',
+     "Re-sampled Importance Sampling",
+     "Perform RIS sampling to guided based on the product of the incoming light distribution and the BSDF",
+     1),
+    ('ROUGHNESS',
+     "Roughness-based",
+     "Adjust the guiding probability based on the roughness of the material components",
+     2),
 )
+
 
 def enum_openimagedenoise_denoiser(self, context):
     import _cycles

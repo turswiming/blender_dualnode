@@ -66,9 +66,11 @@ NODE_DEFINE(Integrator)
   guiding_distribution_enum.insert("VMM", GUIDING_TYPE_VMM);
 
   static NodeEnum guiding_directional_sampling_type_enum;
-  guiding_directional_sampling_type_enum.insert("PRODUCT", GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT);
+  guiding_directional_sampling_type_enum.insert("PRODUCT",
+                                                GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT);
   guiding_directional_sampling_type_enum.insert("RIS", GUIDING_DIRECTIONAL_SAMPLING_TYPE_RIS);
-  guiding_directional_sampling_type_enum.insert("ROUGHNESS", GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS);
+  guiding_directional_sampling_type_enum.insert("ROUGHNESS",
+                                                GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
   SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
@@ -251,7 +253,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->use_guiding_direct_light = use_guiding_direct_light;
   kintegrator->use_guiding_mis_weights = use_guiding_mis_weights;
   kintegrator->guiding_distribution_type = guiding_params.type;
-  kintegrator->guiding_directional_sampling_type = guiding_params.sampling_type;  
+  kintegrator->guiding_directional_sampling_type = guiding_params.sampling_type;
 
   kintegrator->seed = seed;
 

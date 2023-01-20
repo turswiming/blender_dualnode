@@ -367,21 +367,45 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
   float2 bsdf_sampled_roughness = make_float2(1.0f, 1.0f);
   float bsdf_eta = 1.0f;
+  float mis_pdf = 1.0f;
 
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (kernel_data.integrator.use_surface_guiding) {
-    label = surface_shader_bsdf_guided_sample_closure(kg,
-                                                      state,
-                                                      sd,
-                                                      sc,
-                                                      rand_bsdf,
-                                                      &bsdf_eval,
-                                                      &bsdf_wo,
-                                                      &bsdf_pdf,
-                                                      &unguided_bsdf_pdf,
-                                                      &bsdf_sampled_roughness,
-                                                      &bsdf_eta);
-
+    if (kernel_data.integrator.guiding_directional_sampling_type ==
+        GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT) {
+      label = surface_shader_bsdf_guided_sample_closure_mis(kg,
+                                                            state,
+                                                            sd,
+                                                            sc,
+                                                            rand_bsdf,
+                                                            &bsdf_eval,
+                                                            &bsdf_wo,
+                                                            &bsdf_pdf,
+                                                            &unguided_bsdf_pdf,
+                                                            &bsdf_sampled_roughness,
+                                                            &bsdf_eta);
+      mis_pdf = (unguided_bsdf_pdf > 0.f) ? bsdf_pdf : 0.f;
+    }
+    else if (kernel_data.integrator.guiding_directional_sampling_type ==
+             GUIDING_DIRECTIONAL_SAMPLING_TYPE_RIS) {
+      label = surface_shader_bsdf_guided_sample_closure_ris(kg,
+                                                            state,
+                                                            sd,
+                                                            sc,
+                                                            rand_bsdf,
+                                                            rng_state,
+                                                            &bsdf_eval,
+                                                            &bsdf_wo,
+                                                            &bsdf_pdf,
+                                                            &mis_pdf,
+                                                            &unguided_bsdf_pdf,
+                                                            &bsdf_sampled_roughness,
+                                                            &bsdf_eta);
+    }
+    if (!(unguided_bsdf_pdf > 0.f)) {
+      bsdf_pdf = 0.f;
+      mis_pdf = 0.f;
+    }
     if (bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
       return LABEL_NONE;
     }
@@ -404,7 +428,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
     if (bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval)) {
       return LABEL_NONE;
     }
-
+    mis_pdf = bsdf_pdf;
     unguided_bsdf_pdf = bsdf_pdf;
   }
 
@@ -440,7 +464,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 
   /* Update path state */
   if (!(label & LABEL_TRANSPARENT)) {
-    INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = bsdf_pdf;
+    INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = mis_pdf;
     INTEGRATOR_STATE_WRITE(state, path, mis_origin_n) = sd->N;
     INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = fminf(
         unguided_bsdf_pdf, INTEGRATOR_STATE(state, path, min_ray_pdf));
