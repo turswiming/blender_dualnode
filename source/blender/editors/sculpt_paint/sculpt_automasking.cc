@@ -522,7 +522,7 @@ static float sculpt_automasking_factor_calc(AutomaskingCache *automasking,
       factor *= sculpt_automasking_cavity_factor(automasking, ss, vert);
     }
 
-    return factor * mask;
+    return automasking_factor_end(ss, automasking, vert, factor * mask);
   }
 
   uchar stroke_id = ss->attrs.automasking_stroke_id ?
