@@ -59,18 +59,16 @@ vec3 debug_tile_state_color(ShadowTileData tile)
   return col;
 }
 
-ShadowTileData debug_tile_get(vec3 P, LightData light, out vec2 uv)
+ShadowTileSample debug_tile_get(vec3 P, LightData light)
 {
   vec3 lNg = vec3(1.0, 0.0, 0.0);
   if (light.type == LIGHT_SUN) {
     vec3 lP = shadow_world_to_local(light, P);
-    float bias;
-    return shadow_directional_tile_get(shadow_tilemaps_tx, light, cameraPos, lP, P, lNg, uv, bias);
+    return shadow_directional_tile_get(shadow_tilemaps_tx, light, cameraPos, lP, P, lNg);
   }
   else {
     vec3 lL = light_world_to_local(light, P - light._position);
-    float bias;
-    return shadow_punctual_tile_get(shadow_tilemaps_tx, light, lL, lNg, uv, bias);
+    return shadow_punctual_tile_get(shadow_tilemaps_tx, light, lL, lNg);
   }
 }
 
@@ -125,17 +123,15 @@ bool debug_tilemaps(vec3 P, LightData light)
 
 void debug_tile_state(vec3 P, LightData light)
 {
-  vec2 unused_uv;
-  ShadowTileData tile = debug_tile_get(P, light, unused_uv);
-  out_color_add = vec4(debug_tile_state_color(tile), 0) * 0.5;
+  ShadowTileSample samp = debug_tile_get(P, light);
+  out_color_add = vec4(debug_tile_state_color(samp.tile), 0) * 0.5;
   out_color_mul = vec4(0.5);
 }
 
 void debug_atlas_values(vec3 P, LightData light)
 {
-  vec2 uv;
-  ShadowTileData tile = debug_tile_get(P, light, uv);
-  float depth = shadow_tile_depth_get(shadow_atlas_tx, tile, uv);
+  ShadowTileSample samp = debug_tile_get(P, light);
+  float depth = shadow_tile_depth_get(shadow_atlas_tx, samp);
 
   out_color_add = vec4(vec3(1.0 / (1.0 + depth)), 0);
   out_color_mul = vec4(0.0);
@@ -143,9 +139,8 @@ void debug_atlas_values(vec3 P, LightData light)
 
 void debug_random_tile_color(vec3 P, LightData light)
 {
-  vec2 unused_uv;
-  ShadowTileData tile = debug_tile_get(P, light, unused_uv);
-  out_color_add = vec4(debug_random_color(ivec2(tile.page)), 0) * 0.9;
+  ShadowTileSample samp = debug_tile_get(P, light);
+  out_color_add = vec4(debug_random_color(ivec2(samp.tile.page)), 0) * 0.9;
   out_color_mul = vec4(0.1);
 }
 

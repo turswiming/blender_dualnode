@@ -2,12 +2,12 @@
 #pragma BLENDER_REQUIRE(eevee_shadow_tilemap_lib.glsl)
 
 /** \a unormalized_uv is the uv coordinates for the whole tilemap [0..SHADOW_TILEMAP_RES]. */
-vec2 shadow_page_uv_transform(uvec2 page, uint lod, vec2 unormalized_uv)
+vec2 shadow_page_uv_transform(uvec2 page, uint lod, vec2 unormalized_uv, ivec2 tile_coord)
 {
   /* TODO(fclem): It should be possible to just saturate(unormalized_uv - tile_co << lod). */
-  vec2 page_texel = fract(unormalized_uv / float(1u << lod));
+  vec2 page_texel = unormalized_uv / float(1u << lod);
   /* Fix float imprecision that can make some pixel sample the wrong page. */
-  page_texel *= 0.999999;
+  page_texel = saturate(page_texel - vec2(tile_coord >> lod));
   /* Assumes atlas is squared. */
   return (vec2(page) + page_texel) / vec2(SHADOW_PAGE_PER_ROW);
 }
@@ -101,6 +101,8 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
   vec2 ndc_slope = ndc_Ng.xy / ndc_Ng.z;
   /* Slope bias definition from fixed pipeline. */
   float bias = abs(ndc_slope.x) + abs(ndc_slope.y);
+  /* Clamp out to avoid the bias going to infinity. Remeber this is in NDC space. */
+  bias = clamp(bias, 0.0, 100.0);
   /* Bias for 1 pixel of LOD 0. */
   bias *= 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   /* Compensate for each increasing lod level as the space between pixels increases. */
@@ -108,53 +110,71 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
   /* Add quantization error bias. */
   /* TODO(fclem): This shouldn't exist ideally. */
   bias += 2e-7;
-  /* Clamp out to avoid the bias going to infinity. */
-  bias = clamp(bias, 0.0, 1.0e5);
 
   return bias;
 }
 
-ShadowTileData shadow_punctual_tile_get(
-    usampler2D tilemaps_tx, LightData light, vec3 lP, vec3 lNg, out vec2 uv, out float bias)
+struct ShadowTileSample {
+  /* Signed delta in world units from the shading point to the occluder. Negative if occluded. */
+  ShadowTileData tile;
+  /* Tile coordinate inside the tilemap [0..SHADOW_TILEMAP_RES). */
+  ivec2 tile_coord;
+  /* UV coordinate inside the tilemap [0..SHADOW_TILEMAP_RES). */
+  vec2 uv;
+  /* Minimum slope bias to apply during comparison. */
+  float bias;
+};
+
+ShadowTileSample shadow_punctual_tile_get(usampler2D tilemaps_tx,
+                                          LightData light,
+                                          vec3 lP,
+                                          vec3 lNg)
 {
+  ShadowTileSample samp;
+
   int face_id = shadow_punctual_face_index_get(lP);
   lP = shadow_punctual_local_position_to_face_local(face_id, lP);
   lNg = shadow_punctual_local_position_to_face_local(face_id, lNg);
   /* UVs in [-1..+1] range. */
-  uv = lP.xy / abs(lP.z);
+  samp.uv = lP.xy / abs(lP.z);
   /* UVs in [0..SHADOW_TILEMAP_RES] range. */
   const float lod0_res = float(SHADOW_TILEMAP_RES / 2);
-  uv = uv * lod0_res + lod0_res;
-  ivec2 tile_co = ivec2(floor(uv));
+  samp.uv = samp.uv * lod0_res + lod0_res;
+  samp.tile_coord = ivec2(floor(samp.uv));
+
   int tilemap_index = light.tilemap_index + face_id;
-  ShadowTileData tile = shadow_tile_load(tilemaps_tx, tile_co, tilemap_index);
-  bias = shadow_slope_bias_get(light, lNg, lP, tile.lod);
-  return tile;
+
+  samp.tile = shadow_tile_load(tilemaps_tx, samp.tile_coord, tilemap_index);
+  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.tile.lod);
+  /* Bias uv sample for LODs since custom raster aligns LOD0 and LOD1 pixels
+   * instead of centering them. */
+  if (samp.tile.lod != 0.0) {
+    samp.uv -= 0.5 / float(SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
+  }
+  return samp;
 }
 
-ShadowTileData shadow_directional_tile_get(usampler2D tilemaps_tx,
-                                           LightData light,
-                                           vec3 camera_P,
-                                           vec3 lP,
-                                           vec3 P,
-                                           vec3 lNg,
-                                           out vec2 uv,
-                                           out float bias)
+ShadowTileSample shadow_directional_tile_get(
+    usampler2D tilemaps_tx, LightData light, vec3 camera_P, vec3 lP, vec3 P, vec3 lNg)
 {
+  ShadowTileSample samp;
+
   ShadowClipmapCoordinates coord = shadow_directional_coordinates(
       light, lP, distance(camera_P, P));
-  uv = coord.uv;
+  samp.uv = coord.uv;
+  samp.tile_coord = coord.tile_coord;
 
-  ShadowTileData tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
-  bias = shadow_slope_bias_get(light, lNg, lP, coord.clipmap_lod_relative + tile.lod);
-  return tile;
+  samp.tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
+  samp.bias = shadow_slope_bias_get(light, lNg, lP, coord.clipmap_lod_relative + samp.tile.lod);
+  return samp;
 }
 
-float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 uv)
+float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileSample samp)
 {
   float depth = FLT_MAX;
-  if (tile.is_allocated) {
-    vec2 shadow_uv = shadow_page_uv_transform(tile.page, tile.lod, uv);
+  if (samp.tile.is_allocated) {
+    vec2 shadow_uv = shadow_page_uv_transform(
+        samp.tile.page, samp.tile.lod, samp.uv, samp.tile_coord);
     depth = texture(atlas_tx, shadow_uv).r;
   }
   return depth;
@@ -179,11 +199,9 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
   float occluder_dist;
   if (light.type == LIGHT_SUN) {
     vec3 lP = shadow_world_to_local(light, P);
-    vec2 uv;
-    ShadowTileData tile = shadow_directional_tile_get(
-        tilemaps_tx, light, camera_P, lP, P, lNg, uv, samp.bias);
+    ShadowTileSample tile = shadow_directional_tile_get(tilemaps_tx, light, camera_P, lP, P, lNg);
 
-    occluder_dist = shadow_tile_depth_get(atlas_tx, tile, uv);
+    occluder_dist = shadow_tile_depth_get(atlas_tx, tile);
     /* Shadow is stored positive only for atomic operation.
      * So the encoded distance is positive and increasing from the near plane.
      * Bias back to get world distance. */
@@ -191,19 +209,19 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
     /* Receiver distance needs to also be increasing.
      * Negate since Z distance follows opengl convention of neg Z as forward. */
     receiver_dist = -lP.z;
+    samp.bias = tile.bias;
   }
   else {
     vec3 lP = lL;
-    vec2 uv;
-    ShadowTileData tile = shadow_punctual_tile_get(tilemaps_tx, light, lP, lNg, uv, samp.bias);
-    float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile, uv);
+    ShadowTileSample tile = shadow_punctual_tile_get(tilemaps_tx, light, lP, lNg);
+    float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile);
     /* FIXME: We clear to FLT_MAX for directionals. So we have to clamp to 1.0. */
     occluder_ndc = min(1.0, occluder_ndc);
     /* Shadow is stored as gl_FragCoord.z. Convert to radial distance along with the bias. */
     float near = shadow_orderedIntBitsToFloat(light.clip_near);
     float far = light.influence_radius_max;
     float occluder_z = shadow_punctual_linear_depth(occluder_ndc, far, near);
-    float occluder_z_bias = shadow_punctual_linear_depth(occluder_ndc + samp.bias, far, near);
+    float occluder_z_bias = shadow_punctual_linear_depth(occluder_ndc + tile.bias, far, near);
     float radius_divisor = receiver_dist / max_v3(abs(lL));
     occluder_dist = occluder_z * radius_divisor;
     samp.bias = (occluder_z_bias - occluder_z) * radius_divisor;

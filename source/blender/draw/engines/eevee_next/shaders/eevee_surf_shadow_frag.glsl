@@ -47,12 +47,6 @@ float shadow_depth()
     return gl_FragCoord.z * abs(2.0 / drw_view.winmat[2][2]);
   }
 }
-float shadow_depth_with_slope_bias(float bias)
-{
-  /* Punctual shadow. Store NDC Z [0..1]. */
-  float slope = DFDX_SIGN * dFdx(gl_FragCoord.z) + DFDY_SIGN * dFdy(gl_FragCoord.z);
-  return gl_FragCoord.z + slope * bias;
-}
 
 void main()
 {
@@ -61,18 +55,18 @@ void main()
   ivec2 texel_co = ivec2(gl_FragCoord.xy);
   ivec2 tile_co = texel_co / pages_infos_buf.page_size;
 
-  write_depth(texel_co, 0, tile_co, shadow_depth());
+  float depth = shadow_depth();
+  float slope_bias = fwidth(depth);
+  write_depth(texel_co, 0, tile_co, depth + slope_bias);
 
   /* Only needed for local lights. */
   bool is_persp = (drw_view.winmat[3][3] == 0.0);
   if (is_persp) {
-    /* We have to compensate the output pixel position being different than the input pixel's.
-     * This is only half a pixel since we chose one pixel inside the quad. */
-    float depth_center = shadow_depth_with_slope_bias(0.5);
-
-    write_depth(texel_co, 1, tile_co, depth_center);
-    write_depth(texel_co, 2, tile_co, depth_center);
-    write_depth(texel_co, 3, tile_co, depth_center);
-    write_depth(texel_co, 4, tile_co, depth_center);
+    /* Note that even if texel center is offset, we store unmodified depth.
+     * We increase bias instead at sampling time. */
+    write_depth(texel_co, 1, tile_co, depth + slope_bias * 2.0);
+    write_depth(texel_co, 2, tile_co, depth + slope_bias * 4.0);
+    write_depth(texel_co, 3, tile_co, depth + slope_bias * 8.0);
+    write_depth(texel_co, 4, tile_co, depth + slope_bias * 16.0);
   }
 }
