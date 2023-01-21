@@ -515,9 +515,6 @@ void ShadowModule::sync_object(const ObjectHandle &handle,
                                bool is_shadow_caster,
                                bool is_alpha_blend)
 {
-#if 1 /* TEST */
-  is_alpha_blend = true;
-#endif
   if (!is_shadow_caster && !is_alpha_blend) {
     return;
   }

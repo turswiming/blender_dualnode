@@ -260,7 +260,7 @@ void ForwardPipeline::render(View &view,
   //   inst_.hiz_buffer.update();
   // }
 
-  // inst_.shadows.set_view(view, depth_tx);
+  inst_.shadows.set_view(view);
 
   GPU_framebuffer_bind(combined_fb);
   inst_.manager->submit(opaque_ps_, view);

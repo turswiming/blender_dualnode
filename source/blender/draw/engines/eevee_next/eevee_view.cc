@@ -122,7 +122,6 @@ void ShadingView::render()
 
   /* TODO(fclem): Move it after the first prepass (and hiz update) once pipeline is stabilized. */
   inst_.lights.set_view(render_view_new_, extent_);
-  inst_.shadows.set_view(render_view_new_);
 
   // inst_.pipelines.deferred.render(
   //     render_view_, rt_buffer_opaque_, rt_buffer_refract_, depth_tx_, combined_tx_);
