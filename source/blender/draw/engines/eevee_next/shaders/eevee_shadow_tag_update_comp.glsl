@@ -66,6 +66,14 @@ void main()
 
   AABB aabb_tag;
   AABB aabb_map = AABB(vec3(-0.99999), vec3(0.99999));
+
+  /* Directionnal winmat have no correct near/far in the Z dimension at this point.
+   * Do not clip in this dimension. */
+  if (!tilemap.is_cubeface) {
+    aabb_map.min.z = -FLT_MAX;
+    aabb_map.max.z = FLT_MAX;
+  }
+
   if (!aabb_clip(aabb_map, aabb_ndc, aabb_tag)) {
     return;
   }
