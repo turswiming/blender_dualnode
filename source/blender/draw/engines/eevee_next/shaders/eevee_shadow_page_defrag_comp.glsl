@@ -39,6 +39,21 @@ void page_cached_free(uint page_index)
   tiles_buf[tile_index] = shadow_tile_pack(tile);
 }
 
+#if 0 /* Can be used to debug heap and invalid pages inside the free buffer. */
+#  define check_heap_integrity(heap, start, size, invalid_val, result) \
+    result = true; \
+    for (int i = 0; i < max_page; i++) { \
+      if ((i >= start) && (i < (start + size))) { \
+        result = result && (heap[i].x != invalid_val); \
+      } \
+      else { \
+        result = result && (heap[i].x == invalid_val); \
+      } \
+    }
+#else
+#  define check_heap_integrity(heap, start, size, invalid_val, result)
+#endif
+
 void main()
 {
   /* Pages we need to get off the cache for the allocation pass. */
@@ -48,6 +63,9 @@ void main()
   uint end = pages_infos_buf.page_cached_end;
 
   find_first_valid(src, end);
+
+  bool valid_pre;
+  check_heap_integrity(pages_free_buf, 0, pages_infos_buf.page_free_count, uint(-1), valid_pre);
 
   /* First free as much pages as needed from the end of the cached range to fulfill the allocation.
    * Avoid defragmenting to then free them. */
@@ -81,6 +99,9 @@ void main()
   for (; additional_pages > 0 && src < end; additional_pages--, src++) {
     page_cached_free(src % max_page);
   }
+
+  bool valid_post;
+  check_heap_integrity(pages_free_buf, 0, pages_infos_buf.page_free_count, uint(-1), valid_post);
 
   pages_infos_buf.page_cached_start = src;
   pages_infos_buf.page_cached_end = end;

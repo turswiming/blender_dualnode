@@ -658,6 +658,7 @@ void ShadowModule::end_sync()
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tilemaps_clip_buf", tilemap_pool.tilemaps_clip);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         /** Free unused tiles from tile-maps not used by any shadow. */
         if (tilemap_pool.tilemaps_unused.size() > 0) {

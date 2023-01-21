@@ -95,11 +95,14 @@ void shadow_page_cache_remove(inout ShadowTileData tile)
 /* Update cached page reference when a cached page moves inside the cached page buffer. */
 void shadow_page_cache_update_page_ref(uint page_index, uint new_page_index)
 {
-  assert(!tile.is_allocated);
-  assert(tile.is_cached);
-
   uint tile_index = pages_cached_buf[page_index].y;
   ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
   tile.cache_index = new_page_index;
   tiles_buf[tile_index] = shadow_tile_pack(tile);
+}
+
+/* Update cached page reference when a tile referencing a cached page moves inside the tilemap. */
+void shadow_page_cache_update_tile_ref(uint page_index, uint new_tile_index)
+{
+  pages_cached_buf[page_index].y = new_tile_index;
 }
