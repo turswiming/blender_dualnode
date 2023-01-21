@@ -95,7 +95,12 @@ int shadow_directional_clipmap_level(LightData light, float distance_to_camera)
   /* Since the distance is centered around the camera (and thus by extension the tilemap),
    * we need to multiply by 2 to get the lod level which covers the following range:
    * [-tilemap_coverage_get(lod)/2..tilemap_coverage_get(lod)/2] */
-  int clipmap_lod = int(ceil(log2(distance_to_camera))) + 1;
+  /* WORKAROUND(fclem): This bias is needed because the clipmap offset scheme (based on LOD0 offset
+   * being shifted for each level) is imprecise and will lead to rounding errors in the position of
+   * some tilemap. The correct way would be to round the camera position for each clipmap level
+   * instead of flooring. So we need to narrow down the visibility of each tilemap by one tile. */
+  const float narrowing = float(SHADOW_TILEMAP_RES) / float(SHADOW_TILEMAP_RES - 1);
+  int clipmap_lod = int(ceil(log2(distance_to_camera * narrowing))) + 1;
   return clamp(clipmap_lod, light.clipmap_lod_min, light.clipmap_lod_max);
 }
 
