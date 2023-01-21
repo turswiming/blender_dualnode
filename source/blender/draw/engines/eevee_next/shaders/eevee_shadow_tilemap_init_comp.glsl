@@ -37,19 +37,19 @@ void main()
     tilemaps_buf[tilemap_index].grid_shift = ivec2(0);
 
     if (!tilemap.is_cubeface) {
-      ShadowTileMapClip clip_data = tilemaps_clip_buf[tilemap_index];
+      int clip_index = tilemap.clip_data_index;
+      ShadowTileMapClip clip_data = tilemaps_clip_buf[clip_index];
       float clip_near_new = orderedIntBitsToFloat(clip_data.clip_near);
       float clip_far_new = orderedIntBitsToFloat(clip_data.clip_far);
-      directional_range_changed = int((clip_near_new != clip_data.clip_near_stored) ||
-                                      (clip_far_new != clip_data.clip_far_stored));
-      if (directional_range_changed != 0) {
-        /* NOTE(fclem): This assumes clip near/far are computed each time the init phase runs. */
-        tilemaps_clip_buf[tilemap_index].clip_near_stored = clip_near_new;
-        tilemaps_clip_buf[tilemap_index].clip_far_stored = clip_far_new;
-        /* Reset for next update. */
-        tilemaps_clip_buf[tilemap_index].clip_near = floatBitsToOrderedInt(-FLT_MAX);
-        tilemaps_clip_buf[tilemap_index].clip_far = floatBitsToOrderedInt(FLT_MAX);
-      }
+      bool near_changed = clip_near_new != clip_data.clip_near_stored;
+      bool far_changed = clip_far_new != clip_data.clip_far_stored;
+      directional_range_changed = int(near_changed || far_changed);
+      /* NOTE(fclem): This assumes clip near/far are computed each time the init phase runs. */
+      tilemaps_clip_buf[clip_index].clip_near_stored = clip_near_new;
+      tilemaps_clip_buf[clip_index].clip_far_stored = clip_far_new;
+      /* Reset for next update. */
+      tilemaps_clip_buf[clip_index].clip_near = floatBitsToOrderedInt(-FLT_MAX);
+      tilemaps_clip_buf[clip_index].clip_far = floatBitsToOrderedInt(FLT_MAX);
     }
   }
 
