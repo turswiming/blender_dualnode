@@ -386,7 +386,7 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
 
   if (lods_range != lods_new) {
     /* Acquire missing tilemaps. */
-    IndexRange isect_range = lods_range.intersect(lods_new);
+    IndexRange isect_range = lods_new.intersect(lods_range);
     int64_t before_range = isect_range.start() - lods_new.start();
     int64_t after_range = lods_new.one_after_last() - isect_range.one_after_last();
 
