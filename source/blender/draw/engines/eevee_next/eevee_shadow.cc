@@ -302,14 +302,19 @@ void ShadowPunctual::end_sync(Light &light)
   light.normal_mat_packed.y = normal_mat[3][3];
 
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
-  light.tilemap_last = light.tilemap_index + tilemaps_needed_ - 1;
+
+  /* A bit weird, but this is to make light_tilemap_max_get() work. */
+  light.clipmap_lod_min = 0;
+  light.clipmap_lod_max = tilemaps_needed_ - 1;
 
   union {
     float f;
     int32_t i;
-  } near_as_int;
-  near_as_int.f = near_;
-  light.clip_near = near_as_int.i;
+  } as_int;
+  as_int.f = near_;
+  light.clip_near = as_int.i;
+  as_int.f = far_;
+  light.clip_far = as_int.i;
 
   for (ShadowTileMap *tilemap : tilemaps_) {
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
@@ -404,7 +409,6 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
   }
 
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
-  light.tilemap_last = light.tilemap_index + lods_range.size() - 1;
   light.clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
 
   /* Compute full offset from world origin to the smallest clipmap tile centered around the camera

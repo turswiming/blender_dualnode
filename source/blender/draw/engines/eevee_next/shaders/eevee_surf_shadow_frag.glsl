@@ -16,36 +16,26 @@
 
 void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
 {
-  /* We need to select the lod0 pixel closest to the lod pixel which is
-   * located at the center of a lod0 pixel quad.
-   * From the 4 possible pixels we choose the top left corner. */
-  const int lod_center_offset = (lod > 0) ? (1 << (lod - 1)) : 0;
-  if (!all(equal(((texel_co >> lod) << lod) + lod_center_offset, texel_co))) {
+  ivec2 texel_co_lod = texel_co >> lod;
+  if (!all(equal(texel_co_lod << lod, texel_co))) {
     return;
   }
 
   ivec3 render_map_coord = ivec3(tile_co >> lod, shadow_interp.view_id);
   uint page_packed = texelFetch(shadow_render_map_tx, render_map_coord, lod).r;
-  if (page_packed != 0xFFFFFFFFu) {
-    ivec2 page = ivec2(unpackUvec2x16(page_packed));
-    ivec2 texel_in_page = (texel_co >> lod) % pages_infos_buf.page_size;
-    ivec2 out_texel = page * pages_infos_buf.page_size + texel_in_page;
+  /* Return if no valid page. */
+  if (page_packed == 0xFFFFFFFFu) {
+    return;
+  }
+  ivec2 page = ivec2(unpackUvec2x16(page_packed));
+  ivec2 texel_in_page = texel_co_lod % pages_infos_buf.page_size;
+  ivec2 out_texel = page * pages_infos_buf.page_size + texel_in_page;
 
-    imageAtomicMin(shadow_atlas_img, out_texel, floatBitsToUint(depth));
-  }
-}
+  uint u_depth = floatBitsToUint(depth);
+  /* Quantization bias. Equivalent to nextafter in C without all the safety. 1 is not enough. */
+  u_depth += 2;
 
-float shadow_depth()
-{
-  bool is_persp = (drw_view.winmat[3][3] == 0.0);
-  if (is_persp) {
-    /* Punctual shadow. Store NDC Z [0..1]. */
-    return gl_FragCoord.z;
-  }
-  else {
-    /* Directionnal shadow. Store distance from near clip plane. */
-    return gl_FragCoord.z * abs(2.0 / drw_view.winmat[2][2]);
-  }
+  imageAtomicMin(shadow_atlas_img, out_texel, u_depth);
 }
 
 void main()
@@ -55,8 +45,9 @@ void main()
   ivec2 texel_co = ivec2(gl_FragCoord.xy);
   ivec2 tile_co = texel_co / pages_infos_buf.page_size;
 
-  float depth = shadow_depth();
-  float slope_bias = fwidth(depth);
+  float depth = gl_FragCoord.z;
+  float slope_bias = 0.0;
+  fwidth(depth);
   write_depth(texel_co, 0, tile_co, depth + slope_bias);
 
   /* Only needed for local lights. */

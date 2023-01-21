@@ -628,22 +628,25 @@ struct LightData {
 
   /** --- Shadow Data --- */
   /** Directional : Near clip distance. Float stored as int for atomic operations. */
-  /** \note: clip_far is not needed for directional sampling, and is equal to influence_radius_max
-   * for punctual. */
   int clip_near;
-  /** Directional : Offset of the lod min in lod min tile units. */
-  int2 clipmap_base_offset;
+  int clip_far;
   /** Directional : Clip-map lod range to avoid sampling outside of valid range. */
   int clipmap_lod_min;
   int clipmap_lod_max;
   /** Index of the first tile-map. */
   int tilemap_index;
-  /** Index of the last tile-map. */
-  int tilemap_last;
+  /** Directional : Offset of the lod min in lod min tile units. */
+  int2 clipmap_base_offset;
   /** Punctual : Normal matrix packed for automatic bias. */
   float2 normal_mat_packed;
 };
 BLI_STATIC_ASSERT_ALIGN(LightData, 16)
+
+static inline int light_tilemap_max_get(LightData light)
+{
+  /* This is not something we need in performance critical code. */
+  return light.tilemap_index + (light.clipmap_lod_max - light.clipmap_lod_min);
+}
 
 /** \} */
 
@@ -718,7 +721,7 @@ struct ShadowPagesInfoData {
   int view_count;
   /** Physical page size in pixel. Pages are all squares. */
   int page_size;
-
+  /** Statistics. */
   int page_used_count;
   int page_update_count;
   int page_allocated_count;

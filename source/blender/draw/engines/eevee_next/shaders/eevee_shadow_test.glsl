@@ -18,19 +18,20 @@ void main()
     LightData light;
     light.clipmap_lod_min = -5;
     light.clipmap_lod_max = 8;
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 0.0), light.clipmap_lod_min);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 0.49), 0);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 0.5), 0);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 0.51), 1);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 0.99), 1);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 1.0), 1);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 1.01), 2);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 12.5), 5);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 12.51), 5);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 15.9999), 5);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 16.0), 5);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 16.00001), 6);
-    EXPECT_EQ(shadow_directional_clipmap_level(light, 5000.0), light.clipmap_lod_max);
+    float fac = float(SHADOW_TILEMAP_RES - 1) / float(SHADOW_TILEMAP_RES);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 0.0), light.clipmap_lod_min);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 0.49), 0);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 0.5), 0);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 0.51), 1);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 0.99), 1);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 1.0), 1);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 1.01), 2);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 12.5), 5);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 12.51), 5);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 15.9999), 5);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 16.0), 5);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 16.00001), 6);
+    EXPECT_EQ(shadow_directional_clipmap_level(light, fac * 5000.0), light.clipmap_lod_max);
     /* Produces NaN / Inf, Undefined behavior. */
     // EXPECT_EQ(shadow_directional_clipmap_level(light, FLT_MAX), light.clipmap_lod_max);
   }
@@ -44,7 +45,6 @@ void main()
     light.clipmap_lod_min = 0; /* Range [-0.5..0.5]. */
     light.clipmap_lod_max = 2; /* Range [-2..2]. */
     light.tilemap_index = light.clipmap_lod_min;
-    light.tilemap_last = light.clipmap_lod_max;
     float lod_min_tile_size = pow(2.0, float(light.clipmap_lod_min)) / float(SHADOW_TILEMAP_RES);
     float lod_max_half_size = pow(2.0, float(light.clipmap_lod_max)) / 2.0;
     light._clipmap_scale = float(SHADOW_TILEMAP_RES / 2) / lod_max_half_size;
@@ -193,6 +193,7 @@ void main()
 
     LightData light;
     light.clip_near = floatBitsToInt(near);
+    light.clip_far = floatBitsToInt(far);
     light.influence_radius_max = far;
     light.type = LIGHT_SPOT;
     light.normal_mat_packed.x = normal_mat[3][2];

@@ -100,7 +100,7 @@ bool debug_tilemaps(vec3 P, LightData light)
   ivec2 px = ivec2(gl_FragCoord.xy) / debug_tile_size_px;
   int tilemap = px.x / SHADOW_TILEMAP_RES;
   int tilemap_index = light.tilemap_index + tilemap;
-  if ((px.y < SHADOW_TILEMAP_RES) && (tilemap_index <= light.tilemap_last)) {
+  if ((px.y < SHADOW_TILEMAP_RES) && (tilemap_index <= light_tilemap_max_get(light))) {
     /* Debug actual values in the tilemap buffer. */
     ShadowTileMapData tilemap = tilemaps_buf[tilemap_index];
     int tile_index = shadow_tile_offset(px % SHADOW_TILEMAP_RES, tilemap.tiles_index, 0);
@@ -133,7 +133,7 @@ void debug_atlas_values(vec3 P, LightData light)
   ShadowTileSample samp = debug_tile_get(P, light);
   float depth = shadow_tile_depth_get(shadow_atlas_tx, samp);
 
-  out_color_add = vec4(vec3(1.0 / (1.0 + depth)), 0);
+  out_color_add = vec4(vec3(depth), 0);
   out_color_mul = vec4(0.0);
 }
 

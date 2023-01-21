@@ -121,6 +121,16 @@ ivec2 divide_by_two_n(ivec2 val, int exponent)
   return (abs(val) >> exponent) * sign(val);
 }
 
+/* Avoid the use of transcendental function. */
+float power_of_two_float(int e)
+{
+  float f = float(1 << abs(e));
+  if (e < 0) {
+    f = 1.0 / f;
+  }
+  return f;
+}
+
 /**
  * \a lP shading point position in light space (world unit).
  */
@@ -146,10 +156,9 @@ ShadowClipmapCoordinates shadow_directional_coordinates(LightData light,
   /* Scale to [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for largest LOD. */
   // clipmap_res_mul *= light._clipmap_scale; /* TODO !!!! DOESNT MATCH OFFSET SCALING */
 
-  /* TODO(fclem): This could be optimized. */
-  float level_size = pow(2.0, float(clipmap_lod));
+  float level_size_inv = power_of_two_float(-clipmap_lod);
   /* [0..SHADOW_TILEMAP_RES] range for target LOD. */
-  ret.uv = ((lP.xy / level_size) + 0.5) * float(SHADOW_TILEMAP_RES) - vec2(clipmap_offset);
+  ret.uv = ((lP.xy * level_size_inv) + 0.5) * float(SHADOW_TILEMAP_RES) - vec2(clipmap_offset);
 
   /* Clamp to avoid out of tilemap access. */
   ret.tile_coord = clamp(ivec2(ret.uv), ivec2(0.0), ivec2(SHADOW_TILEMAP_RES - 1));

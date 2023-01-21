@@ -57,10 +57,11 @@ void main()
 
     if (gl_LocalInvocationID.x == 0) {
       /* Final result. Min/Max of the whole dispatch. */
+      atomicMin(light_buf[l_idx].clip_far, global_min);
       atomicMax(light_buf[l_idx].clip_near, global_max);
       /* TODO(fclem): This feel unecessary but we currently have no indexing from
        * tilemap to lights. This is because the lights are selected by culling phase. */
-      for (int i = light.tilemap_index; i <= light.tilemap_last; i++) {
+      for (int i = light.tilemap_index; i <= light_tilemap_max_get(light); i++) {
         int index = tilemaps_buf[i].clip_data_index;
         atomicMin(tilemaps_clip_buf[index].clip_far, global_min);
         atomicMax(tilemaps_clip_buf[index].clip_near, global_max);

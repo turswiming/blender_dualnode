@@ -30,9 +30,14 @@ float shadow_orderedIntBitsToFloat(int int_value)
   return intBitsToFloat((int_value < 0) ? (int_value ^ 0x7FFFFFFF) : int_value);
 }
 
-float shadow_punctual_linear_depth(float z, float zf, float zn)
+float shadow_punctual_linear_depth(float z, float near, float far)
 {
-  return (zn * zf) / (z * (zn - zf) + zf);
+  return (near * far) / (z * (near - far) + far);
+}
+
+float shadow_directional_linear_depth(float z, float near, float far)
+{
+  return z * (near - far) - near;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -101,15 +106,12 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
   vec2 ndc_slope = ndc_Ng.xy / ndc_Ng.z;
   /* Slope bias definition from fixed pipeline. */
   float bias = abs(ndc_slope.x) + abs(ndc_slope.y);
-  /* Clamp out to avoid the bias going to infinity. Remeber this is in NDC space. */
+  /* Clamp out to avoid the bias going to infinity. Remember this is in NDC space. */
   bias = clamp(bias, 0.0, 100.0);
   /* Bias for 1 pixel of LOD 0. */
   bias *= 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   /* Compensate for each increasing lod level as the space between pixels increases. */
   bias *= float(1u << lod);
-  /* Add quantization error bias. */
-  /* TODO(fclem): This shouldn't exist ideally. */
-  bias += 2e-7;
 
   return bias;
 }
@@ -149,7 +151,7 @@ ShadowTileSample shadow_punctual_tile_get(usampler2D tilemaps_tx,
   /* Bias uv sample for LODs since custom raster aligns LOD0 and LOD1 pixels
    * instead of centering them. */
   if (samp.tile.lod != 0.0) {
-    samp.uv -= 0.5 / float(SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
+    samp.uv += 0.5 / float(SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   }
   return samp;
 }
@@ -171,7 +173,10 @@ ShadowTileSample shadow_directional_tile_get(
 
 float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileSample samp)
 {
-  float depth = FLT_MAX;
+  /* Far plane distance but with a bias to make sure there will be no shadowing.
+   * But also not FLT_MAX since it can cause issue with projection. */
+  float depth = 1.1;
+
   if (samp.tile.is_allocated) {
     vec2 shadow_uv = shadow_page_uv_transform(
         samp.tile.page, samp.tile.lod, samp.uv, samp.tile_coord);
@@ -201,27 +206,27 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
     vec3 lP = shadow_world_to_local(light, P);
     ShadowTileSample tile = shadow_directional_tile_get(tilemaps_tx, light, camera_P, lP, P, lNg);
 
-    occluder_dist = shadow_tile_depth_get(atlas_tx, tile);
-    /* Shadow is stored positive only for atomic operation.
-     * So the encoded distance is positive and increasing from the near plane.
-     * Bias back to get world distance. */
-    occluder_dist = occluder_dist - shadow_orderedIntBitsToFloat(light.clip_near);
+    float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile);
+
+    float near = shadow_orderedIntBitsToFloat(light.clip_near);
+    float far = shadow_orderedIntBitsToFloat(light.clip_far);
+    occluder_dist = shadow_directional_linear_depth(occluder_ndc, near, far);
     /* Receiver distance needs to also be increasing.
      * Negate since Z distance follows opengl convention of neg Z as forward. */
     receiver_dist = -lP.z;
-    samp.bias = tile.bias;
+    samp.bias = 0.0;
+    // tile.bias *(near - far);
   }
   else {
     vec3 lP = lL;
     ShadowTileSample tile = shadow_punctual_tile_get(tilemaps_tx, light, lP, lNg);
     float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile);
-    /* FIXME: We clear to FLT_MAX for directionals. So we have to clamp to 1.0. */
-    occluder_ndc = min(1.0, occluder_ndc);
-    /* Shadow is stored as gl_FragCoord.z. Convert to radial distance along with the bias. */
+
     float near = shadow_orderedIntBitsToFloat(light.clip_near);
-    float far = light.influence_radius_max;
-    float occluder_z = shadow_punctual_linear_depth(occluder_ndc, far, near);
-    float occluder_z_bias = shadow_punctual_linear_depth(occluder_ndc + tile.bias, far, near);
+    float far = shadow_orderedIntBitsToFloat(light.clip_far);
+    /* Shadow is stored as gl_FragCoord.z. Convert to radial distance along with the bias. */
+    float occluder_z = shadow_punctual_linear_depth(occluder_ndc, near, far);
+    float occluder_z_bias = shadow_punctual_linear_depth(occluder_ndc + tile.bias, near, far);
     float radius_divisor = receiver_dist / max_v3(abs(lL));
     occluder_dist = occluder_z * radius_divisor;
     samp.bias = (occluder_z_bias - occluder_z) * radius_divisor;

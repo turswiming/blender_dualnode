@@ -80,7 +80,7 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     tilemap_index += face_id;
   }
 
-  if (tilemap_index > light.tilemap_last) {
+  if (tilemap_index > light_tilemap_max_get(light)) {
     return;
   }
 
