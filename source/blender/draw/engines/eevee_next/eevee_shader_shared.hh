@@ -591,7 +591,8 @@ struct LightData {
 #define _spot_mul object_mat[2][3]
 #define _spot_bias object_mat[3][3]
   /** Scale to convert from world units to tile space of the clipmap_lod_max. */
-#define _clipmap_scale _spot_mul
+#define _clipmap_origin_x object_mat[2][3]
+#define _clipmap_origin_y object_mat[3][3]
   /** Aliases for axes. */
 #ifndef USE_GPU_SHADER_CREATE_INFO
 #  define _right object_mat[0]

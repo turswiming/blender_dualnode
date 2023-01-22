@@ -64,7 +64,7 @@ ShadowTileSample debug_tile_get(vec3 P, LightData light)
   vec3 lNg = vec3(1.0, 0.0, 0.0);
   if (light.type == LIGHT_SUN) {
     vec3 lP = shadow_world_to_local(light, P);
-    return shadow_directional_tile_get(shadow_tilemaps_tx, light, cameraPos, lP, P, lNg);
+    return shadow_directional_tile_get(shadow_tilemaps_tx, light, lP, lNg);
   }
   else {
     vec3 lL = light_world_to_local(light, P - light._position);

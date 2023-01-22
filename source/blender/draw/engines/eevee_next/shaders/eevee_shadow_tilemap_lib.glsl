@@ -90,17 +90,17 @@ ShadowTileData shadow_tile_load(usampler2D tilemaps_tx, ivec2 tile_co, int tilem
 }
 
 /* This function should be the inverse of ShadowTileMap::tilemap_coverage_get. */
-int shadow_directional_clipmap_level(LightData light, float distance_to_camera)
+int shadow_directional_clipmap_level(LightData light, vec3 lP)
 {
+  /* WORKAROUND(fclem): We need to hide one tile worth of data to hide the moving transition.
+   * This could be avoided by preselecting 2 levels and checking which one is available based on
+   * tile boundaries. But this is expensive. */
+  const float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 1.0001);
+  int clipmap_lod = int(ceil(log2(length(lP) * narrowing)));
   /* Since the distance is centered around the camera (and thus by extension the tilemap),
    * we need to multiply by 2 to get the lod level which covers the following range:
    * [-tilemap_coverage_get(lod)/2..tilemap_coverage_get(lod)/2] */
-  /* WORKAROUND(fclem): This bias is needed because the clipmap offset scheme (based on LOD0 offset
-   * being shifted for each level) is imprecise and will lead to rounding errors in the position of
-   * some tilemap. The correct way would be to round the camera position for each clipmap level
-   * instead of flooring. So we need to narrow down the visibility of each tilemap by one tile. */
-  const float narrowing = float(SHADOW_TILEMAP_RES) / float(SHADOW_TILEMAP_RES - 1);
-  int clipmap_lod = int(ceil(log2(distance_to_camera * narrowing))) + 1;
+  clipmap_lod += 1;
   return clamp(clipmap_lod, light.clipmap_lod_min, light.clipmap_lod_max);
 }
 
@@ -116,49 +116,35 @@ struct ShadowClipmapCoordinates {
 };
 
 /* Retain sign bit and avoid costly int division. */
-ivec2 divide_by_two_n(ivec2 val, int exponent)
+ivec2 shadow_decompress_grid_offset(ivec2 ofs, int relative_lod)
 {
-  return (abs(val) >> exponent) * sign(val);
-}
-
-/* Avoid the use of transcendental function. */
-float power_of_two_float(int e)
-{
-  float f = float(1 << abs(e));
-  if (e < 0) {
-    f = 1.0 / f;
-  }
-  return f;
+  return ((ofs & 0xFFFF) >> relative_lod) - ((ofs >> 16) >> relative_lod);
 }
 
 /**
- * \a lP shading point position in light space (world unit).
+ * \a lP shading point position in light space (world unit) and translated to camera position
+ * snapped to smallest clipmap level.
  */
-ShadowClipmapCoordinates shadow_directional_coordinates(LightData light,
-                                                        vec3 lP,
-                                                        float distance_to_camera)
+ShadowClipmapCoordinates shadow_directional_coordinates(LightData light, vec3 lP)
 {
   ShadowClipmapCoordinates ret;
 
-  int clipmap_lod = shadow_directional_clipmap_level(light, distance_to_camera);
+  int clipmap_lod = shadow_directional_clipmap_level(light, lP - light._position);
   /* This difference needs to be less than 32 for the later shift to be valid.
    * This is ensured by ShadowDirectional::clipmap_level_range(). */
   ret.clipmap_lod_relative = clipmap_lod - light.clipmap_lod_min;
 
   ret.tilemap_index = light.tilemap_index + ret.clipmap_lod_relative;
 
-  /* Compute offset of the clipmap from the largest LOD. */
-  ivec2 clipmap_offset = divide_by_two_n(light.clipmap_base_offset, ret.clipmap_lod_relative);
-  // clipmap_offset += float(SHADOW_TILEMAP_RES / 2);
+  /* Compute offset in tile. */
+  ivec2 clipmap_offset = shadow_decompress_grid_offset(light.clipmap_base_offset,
+                                                       ret.clipmap_lod_relative);
 
-  /* Compute how many time we need to subdivide. */
-  // float clipmap_res_mul = float(1 << (light.clipmap_lod_max - clipmap_lod));
-  /* Scale to [-SHADOW_TILEMAP_RES/2..SHADOW_TILEMAP_RES/2] range for largest LOD. */
-  // clipmap_res_mul *= light._clipmap_scale; /* TODO !!!! DOESNT MATCH OFFSET SCALING */
-
-  float level_size_inv = power_of_two_float(-clipmap_lod);
-  /* [0..SHADOW_TILEMAP_RES] range for target LOD. */
-  ret.uv = ((lP.xy * level_size_inv) + 0.5) * float(SHADOW_TILEMAP_RES) - vec2(clipmap_offset);
+  ret.uv = lP.xy - vec2(light._clipmap_origin_x, light._clipmap_origin_y);
+  ret.uv /= exp2(clipmap_lod);
+  ret.uv += 0.5;
+  ret.uv *= float(SHADOW_TILEMAP_RES);
+  ret.uv -= vec2(clipmap_offset);
 
   /* Clamp to avoid out of tilemap access. */
   ret.tile_coord = clamp(ivec2(ret.uv), ivec2(0.0), ivec2(SHADOW_TILEMAP_RES - 1));

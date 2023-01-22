@@ -28,7 +28,7 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
   if (is_directional) {
     vec3 lP = shadow_world_to_local(light, P);
 
-    ShadowClipmapCoordinates coord = shadow_directional_coordinates(light, lP, dist_to_cam);
+    ShadowClipmapCoordinates coord = shadow_directional_coordinates(light, lP);
 
     tile_co = coord.tile_coord;
     tilemap_index = coord.tilemap_index;

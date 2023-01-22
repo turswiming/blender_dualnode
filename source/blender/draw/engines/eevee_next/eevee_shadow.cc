@@ -45,6 +45,8 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
 
   float tile_size = tile_size_get(level);
 
+  /* object_mat is a rotation matrix. Reduce imprecision by taking the transpose which is also the
+   * inverse in this particular case. */
   viewmat = object_mat.transposed();
   winmat = winmat_get(grid_offset.x * tile_size, grid_offset.y * tile_size);
 }
@@ -320,6 +322,8 @@ IndexRange ShadowDirectional::clipmap_level_range(const Camera &camera)
   /* Covers the farthest points of the view. */
   int max_level = ceil(
       log2(camera.bound_radius() + math::distance(camera.bound_center(), camera.position())));
+  /* We actually need to cover a bit more because of clipmap origin snapping. */
+  max_level += 1;
   /* Covers the closest points of the view. */
   int min_level = floor(log2(abs(camera.data_get().clip_near)));
   min_level = clamp_i(user_min_level, min_level, max_level);
@@ -332,7 +336,8 @@ IndexRange ShadowDirectional::clipmap_level_range(const Camera &camera)
   IndexRange range(min_level, max_level - min_level + 1);
   /* The maximum level count is bounded by the mantissa of a 32bit float. Take top-most level to
    * still cover the whole view. */
-  range = range.take_back(23);
+  /* Take 16 to be able to pack offset into a single int2. */
+  range = range.take_back(16);
 
   return range;
 }
@@ -396,30 +401,63 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
   light.clip_near = int(0xFF7FFFFFu ^ 0x7FFFFFFFu); /* floatBitsToOrderedInt(-FLT_MAX) */
   light.clip_far = 0x7F7FFFFF;                      /* floatBitsToOrderedInt(FLT_MAX) */
 
-  /* Compute full offset from world origin to the smallest clipmap tile centered around the camera
-   * position. The offset is computed in smallest tile unit. */
-  float3 camera_pos = camera.position();
-  float tile_size = ShadowTileMap::tile_size_get(lods_range.first());
-  base_offset_ = int2(roundf(math::dot(float3(object_mat_.values[0]), camera_pos) / tile_size),
-                      roundf(math::dot(float3(object_mat_.values[1]), camera_pos) / tile_size));
+  for (int lod : IndexRange(lods_range.size())) {
+    ShadowTileMap *tilemap = tilemaps_[lod];
 
-  for (int level : IndexRange(lods_range.size())) {
-    ShadowTileMap *tilemap = tilemaps_[level];
-    int2 offset = (math::abs(base_offset_) >> level) * math::sign(base_offset_);
-    tilemap->sync_clipmap(object_mat_, offset, lods_range.first() + level);
+    int level = lods_range.first() + lod;
+    /* Compute full offset from world origin to the smallest clipmap tile centered around the
+     * camera position. The offset is computed in smallest tile unit. */
+    float tile_size = ShadowTileMap::tile_size_get(level);
+    int2 level_offset = int2(
+        roundf(math::dot(float3(object_mat_.values[0]), camera.position()) / tile_size),
+        roundf(math::dot(float3(object_mat_.values[1]), camera.position()) / tile_size));
+
+    tilemap->sync_clipmap(object_mat_, level_offset, level);
 
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
     tilemap_pool.tilemaps_data.append(*tilemap);
     tilemap->set_updated();
   }
 
-  light.clipmap_base_offset = base_offset_;
+  int2 pos_offset = int2(0);
+  int2 neg_offset = int2(0);
+  for (int lod : IndexRange(lods_range.size() - 1)) {
+    /* Since offset can only differ by one tile from the higher level, we can compress that as a
+     * single integer where one bit contains offset between 2 levels. Then a single bit shift in
+     * the shader gives the number of tile to offset in the given tilemap space. However we need
+     * also the sign of the offset for each level offset. To this end, we split the negative
+     * offsets to a separate int.
+     * Recovering the offset with: (pos_offset >> lod) - (neg_offset >> lod). */
+    int2 lvl_offset_next = tilemaps_[lod + 1]->grid_offset;
+    int2 lvl_offset = tilemaps_[lod]->grid_offset;
+    int2 lvl_delta = lvl_offset - (lvl_offset_next << 1);
+    BLI_assert(math::abs(lvl_delta.x) <= 1 && math::abs(lvl_delta.y) <= 1);
+    pos_offset |= math::max(lvl_delta, int2(0)) << lod;
+    neg_offset |= math::max(-lvl_delta, int2(0)) << lod;
+  }
+
+  /* Compressing to a single value to save up storage in light data. Number of levels is limited to
+   * 16 by `clipmap_level_range()` for this reason. */
+  light.clipmap_base_offset = pos_offset | (neg_offset << 16);
+
+  // float tile_size_min = ShadowTileMap::tile_size_get(lods_range.first());
+  float tile_size_max = ShadowTileMap::tile_size_get(lods_range.last());
+  // int2 level_offset_min = tilemaps_[0]->grid_offset;
+  int2 level_offset_max = tilemaps_[lods_range.size() - 1]->grid_offset;
+
+  /* Used for selecting the clipmap level. */
+  float camera_x = math::dot(float3(object_mat_.values[0]), camera.position());
+  float camera_y = math::dot(float3(object_mat_.values[1]), camera.position());
+  float camera_z = math::dot(float3(object_mat_.values[2]), camera.position());
+  /* TODO(fclem): Cleanup this once matrix API rolls out. */
+  *reinterpret_cast<float3 *>(light._position) = float3(camera_x, camera_y, camera_z);
+  /* Used as origin for the clipmap_base_offset trick. */
+  light._clipmap_origin_x = level_offset_max.x * tile_size_max;
+  light._clipmap_origin_y = level_offset_max.y * tile_size_max;
+
   light.clipmap_lod_min = lods_range.first();
   light.clipmap_lod_max = lods_range.last();
-  light.normal_mat_packed.x = exp2f(light.clipmap_lod_min);
-
-  float half_dim = ShadowTileMap::tilemap_coverage_get(light.clipmap_lod_max) / 2.0f;
-  light._clipmap_scale = float(SHADOW_TILEMAP_RES / 2) / half_dim;
+  light.normal_mat_packed.x = ShadowTileMap::tilemap_coverage_get(light.clipmap_lod_min);
 }
 
 /** \} */

@@ -12,7 +12,7 @@ vec2 shadow_page_uv_transform(uvec2 page, uint lod, vec2 unormalized_uv, ivec2 t
   return (vec2(page) + page_texel) / vec2(SHADOW_PAGE_PER_ROW);
 }
 
-/* Rotate vector to light's local space. Used for directional shadows. */
+/* Rotate vector to light's local space and apply location. Used for directional shadows. */
 vec3 shadow_world_to_local(LightData ld, vec3 L)
 {
   /* Avoid relying on compiler to optimize this.
@@ -28,16 +28,6 @@ vec3 shadow_world_to_local(LightData ld, vec3 L)
 float shadow_orderedIntBitsToFloat(int int_value)
 {
   return intBitsToFloat((int_value < 0) ? (int_value ^ 0x7FFFFFFF) : int_value);
-}
-
-float shadow_punctual_linear_depth(float z, float near, float far)
-{
-  return (near * far) / (z * (near - far) + far);
-}
-
-float shadow_directional_linear_depth(float z, float near, float far)
-{
-  return z * (near - far) - near;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -156,13 +146,14 @@ ShadowTileSample shadow_punctual_tile_get(usampler2D tilemaps_tx,
   return samp;
 }
 
-ShadowTileSample shadow_directional_tile_get(
-    usampler2D tilemaps_tx, LightData light, vec3 camera_P, vec3 lP, vec3 P, vec3 lNg)
+ShadowTileSample shadow_directional_tile_get(usampler2D tilemaps_tx,
+                                             LightData light,
+                                             vec3 lP,
+                                             vec3 lNg)
 {
   ShadowTileSample samp;
 
-  ShadowClipmapCoordinates coord = shadow_directional_coordinates(
-      light, lP, distance(camera_P, P));
+  ShadowClipmapCoordinates coord = shadow_directional_coordinates(light, lP);
   samp.uv = coord.uv;
   samp.tile_coord = coord.tile_coord;
 
@@ -191,20 +182,29 @@ struct ShadowSample {
   float bias;
 };
 
+float shadow_punctual_linear_depth(float z, float near, float far)
+{
+  return (near * far) / (z * (near - far) + far);
+}
+
+float shadow_directional_linear_depth(float z, float near, float far)
+{
+  return z * (near - far) - near;
+}
+
 ShadowSample shadow_sample(sampler2D atlas_tx,
                            usampler2D tilemaps_tx,
                            LightData light,
                            vec3 lL,
                            vec3 lNg,
                            float receiver_dist,
-                           vec3 P,
-                           vec3 camera_P)
+                           vec3 P)
 {
   ShadowSample samp;
   float occluder_dist;
   if (light.type == LIGHT_SUN) {
     vec3 lP = shadow_world_to_local(light, P);
-    ShadowTileSample tile = shadow_directional_tile_get(tilemaps_tx, light, camera_P, lP, P, lNg);
+    ShadowTileSample tile = shadow_directional_tile_get(tilemaps_tx, light, lP, lNg);
 
     float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile);
 

@@ -91,7 +91,7 @@ struct ShadowTileMap : public ShadowTileMapData {
   {
     /* This function should be kept in sync with shadow_directional_clipmap_level(). */
     /* \note: If we would to introduce a global scaling option it would be here. */
-    return powf(2.0f, lvl);
+    return exp2(lvl);
   }
 
   static float tile_size_get(int lvl)
@@ -403,8 +403,6 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   Vector<ShadowTileMap *> tilemaps_;
   /** User minimum resolution. */
   float min_resolution_;
-  /** Offset of the smallest clip-map. In tiles. */
-  int2 base_offset_;
   /** Copy of object matrix. Normalized. */
   float4x4 object_mat_;
   /** Current range of clip-map levels covered by this shadow. */
