@@ -592,20 +592,20 @@ void ShadowModule::end_sync()
     /* Clear tiles to not reference any page. */
     tilemap_pool.tiles_data.clear_to_zero();
 
-    /* Clear cached page buffer. */
-    int2 data = {-1, -1};
-    GPU_storagebuf_clear(pages_cached_data_, GPU_RG32I, GPU_DATA_INT, &data);
-
-    /* Clear cached page buffer. */
+    /* Clear tilemap clip buffer. */
     union {
       ShadowTileMapClip clip;
       int4 i;
     } u;
     u.clip.clip_near_stored = 0.0f;
     u.clip.clip_far_stored = 0.0f;
-    u.clip.clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
-    u.clip.clip_far = 0x7F7FFFFF;                /* floatBitsToOrderedInt(FLT_MAX) */
-    GPU_storagebuf_clear(pages_cached_data_, GPU_RGBA32I, GPU_DATA_INT, &u.i);
+    u.clip.clip_near = int(0xFF7FFFFFu ^ 0x7FFFFFFFu); /* floatBitsToOrderedInt(-FLT_MAX) */
+    u.clip.clip_far = 0x7F7FFFFF;                      /* floatBitsToOrderedInt(FLT_MAX) */
+    GPU_storagebuf_clear(tilemap_pool.tilemaps_clip, GPU_RGBA32I, GPU_DATA_INT, &u.i);
+
+    /* Clear cached page buffer. */
+    int2 data = {-1, -1};
+    GPU_storagebuf_clear(pages_cached_data_, GPU_RG32I, GPU_DATA_INT, &data);
 
     /* Reset info to match new state. */
     pages_infos_data_.page_free_count = SHADOW_MAX_PAGE;
