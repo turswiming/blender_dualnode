@@ -83,10 +83,7 @@ struct ShadowTileMap : public ShadowTileMapData {
     this->set_dirty();
   }
 
-  void sync_clipmap(const float3 &camera_position,
-                    const float4x4 &object_mat_,
-                    int2 origin_offset,
-                    int clipmap_level);
+  void sync_clipmap(const float4x4 &object_mat_, int2 origin_offset, int clipmap_level);
 
   void sync_cubeface(const float4x4 &object_mat, float near, float far, eCubeFace face);
 
@@ -102,7 +99,7 @@ struct ShadowTileMap : public ShadowTileMapData {
     return tilemap_coverage_get(lvl) / tile_map_resolution;
   }
 
-  float4x4 winmat_get() const;
+  float4x4 winmat_get(float offset_right, float offset_top) const;
 
   void debug_draw() const;
 

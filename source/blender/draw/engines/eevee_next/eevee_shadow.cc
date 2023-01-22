@@ -22,8 +22,7 @@ namespace blender::eevee {
  *
  * \{ */
 
-void ShadowTileMap::sync_clipmap(const float3 &camera_position,
-                                 const float4x4 &object_mat_,
+void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
                                  int2 origin_offset,
                                  int clipmap_level)
 {
@@ -44,30 +43,10 @@ void ShadowTileMap::sync_clipmap(const float3 &camera_position,
     set_dirty();
   }
 
-  float half_size = tilemap_coverage_get(level) / 2.0f;
   float tile_size = tile_size_get(level);
-  float3 tilemap_center = object_mat *
-                          float3(grid_offset.x * tile_size, grid_offset.y * tile_size, 0.0f);
 
-  float camera_distance_to_plane = math::dot(float3(object_mat.values[2]), camera_position);
-  float visible_near = camera_distance_to_plane - half_size;
-  float visible_far = camera_distance_to_plane + half_size;
-
-  float4x4 viewinv = object_mat;
-  copy_v3_v3(viewinv.values[3], tilemap_center);
-
-  /* Update corners. Used for visibility test of each tile. */
-  *(float3 *)(&corners[0]) = viewinv * float3(-half_size, -half_size, visible_near);
-  *(float3 *)(&corners[1]) = viewinv * float3(half_size, -half_size, visible_near);
-  *(float3 *)(&corners[2]) = viewinv * float3(-half_size, half_size, visible_near);
-  *(float3 *)(&corners[3]) = viewinv * float3(-half_size, -half_size, visible_far);
-  /* Store deltas. */
-  corners[1] = (corners[1] - corners[0]) / float(SHADOW_TILEMAP_RES);
-  corners[2] = (corners[2] - corners[0]) / float(SHADOW_TILEMAP_RES);
-  corners[3] -= corners[0];
-
-  viewmat = viewinv.inverted_affine();
-  winmat = winmat_get();
+  viewmat = object_mat.transposed();
+  winmat = winmat_get(grid_offset.x * tile_size, grid_offset.y * tile_size);
 }
 
 void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
@@ -89,7 +68,7 @@ void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
     set_dirty();
   }
 
-  winmat = winmat_get();
+  winmat = winmat_get(0.0f, 0.0f);
   viewmat = float4x4(shadow_face_mat[cubeface]) * object_mat.inverted_affine();
 
   /* Update corners. */
@@ -103,7 +82,7 @@ void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
   corners[3] = (corners[3] - corners[1]) / float(SHADOW_TILEMAP_RES);
 }
 
-float4x4 ShadowTileMap::winmat_get() const
+float4x4 ShadowTileMap::winmat_get(float offset_right, float offset_top) const
 {
   float4x4 winmat;
   if (is_cubeface) {
@@ -111,7 +90,13 @@ float4x4 ShadowTileMap::winmat_get() const
   }
   else {
     float half_size = tilemap_coverage_get(level) / 2.0f;
-    orthographic_m4(winmat.ptr(), -half_size, half_size, -half_size, half_size, -1.0, 1.0);
+    orthographic_m4(winmat.ptr(),
+                    -half_size + offset_right,
+                    half_size + offset_right,
+                    -half_size + offset_top,
+                    half_size + offset_top,
+                    -1.0,
+                    1.0);
   }
   return winmat;
 }
@@ -127,7 +112,6 @@ void ShadowTileMap::debug_draw() const
                            {1.0f, 1.0f, 1.0f, 1.0f}};
   float4 color = debug_color[((is_cubeface ? cubeface : level) + 9999) % 6];
 
-  float4x4 winmat = winmat_get();
   float4x4 persinv = winmat * viewmat;
   drw_debug_matrix_as_bbox(persinv.inverted(), color);
 
@@ -296,7 +280,7 @@ void ShadowPunctual::end_sync(Light &light)
   }
 
   /* Normal matrix to convert geometric normal to optimal bias. */
-  float4x4 winmat = tilemaps_[Z_NEG]->winmat_get();
+  float4x4 winmat = tilemaps_[Z_NEG]->winmat_get(0.0f, 0.0f);
   float4x4 normal_mat = winmat.transposed().inverted();
   light.normal_mat_packed.x = normal_mat[3][2];
   light.normal_mat_packed.y = normal_mat[3][3];
@@ -409,7 +393,8 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
   }
 
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
-  light.clip_near = -0x7F7FFFFF ^ 0x7FFFFFFF; /* floatBitsToOrderedInt(-FLT_MAX) */
+  light.clip_near = int(0xFF7FFFFFu ^ 0x7FFFFFFFu); /* floatBitsToOrderedInt(-FLT_MAX) */
+  light.clip_far = 0x7F7FFFFF;                      /* floatBitsToOrderedInt(FLT_MAX) */
 
   /* Compute full offset from world origin to the smallest clipmap tile centered around the camera
    * position. The offset is computed in smallest tile unit. */
@@ -421,7 +406,7 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
   for (int level : IndexRange(lods_range.size())) {
     ShadowTileMap *tilemap = tilemaps_[level];
     int2 offset = (math::abs(base_offset_) >> level) * math::sign(base_offset_);
-    tilemap->sync_clipmap(camera_pos, object_mat_, offset, lods_range.first() + level);
+    tilemap->sync_clipmap(object_mat_, offset, lods_range.first() + level);
 
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
     tilemap_pool.tilemaps_data.append(*tilemap);

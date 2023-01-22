@@ -33,13 +33,6 @@ void main()
   {
     LightData light = light_buf[l_idx];
 
-    if (gl_LocalInvocationID.x == 0) {
-      global_min = floatBitsToOrderedInt(FLT_MAX);
-      global_max = floatBitsToOrderedInt(-FLT_MAX);
-    }
-
-    barrier();
-
     float local_min = FLT_MAX;
     float local_max = -FLT_MAX;
     for (int i = 0; i < 8; i++) {
@@ -48,6 +41,13 @@ void main()
       local_min = min(local_min, z - epsilon);
       local_max = max(local_max, z + epsilon);
     }
+
+    if (gl_LocalInvocationID.x == 0) {
+      global_min = floatBitsToOrderedInt(FLT_MAX);
+      global_max = floatBitsToOrderedInt(-FLT_MAX);
+    }
+
+    barrier();
 
     /* Intermediate result. Min/Max of a compute group. */
     atomicMin(global_min, floatBitsToOrderedInt(local_min));
@@ -67,6 +67,9 @@ void main()
         atomicMax(tilemaps_clip_buf[index].clip_near, global_max);
       }
     }
+
+    /* No need for barrier here since global_min/max is only read by thread 0 before being reset by
+     * thread 0. */
   }
   LIGHT_FOREACH_END
 }

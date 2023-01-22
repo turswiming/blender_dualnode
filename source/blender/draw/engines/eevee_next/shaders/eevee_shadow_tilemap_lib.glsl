@@ -190,24 +190,4 @@ Pyramid shadow_tilemap_cubeface_bounds(ShadowTileMapData tilemap,
   return shape;
 }
 
-vec3 shadow_tile_corner_ortho(ShadowTileMapData tilemap, ivec2 tile, const bool far)
-{
-  return tilemap.corners[0].xyz + tilemap.corners[1].xyz * float(tile.x) +
-         tilemap.corners[2].xyz * float(tile.y) + tilemap.corners[3].xyz * float(far);
-}
-
-Box shadow_tilemap_clipmap_bounds(ShadowTileMapData tilemap, ivec2 tile_start, const ivec2 extent)
-{
-  Box shape;
-  shape.corners[0] = shadow_tile_corner_ortho(tilemap, tile_start + ivec2(0, 0), false);
-  shape.corners[1] = shadow_tile_corner_ortho(tilemap, tile_start + ivec2(extent.x, 0), false);
-  shape.corners[2] = shadow_tile_corner_ortho(tilemap, tile_start + extent, false);
-  shape.corners[3] = shadow_tile_corner_ortho(tilemap, tile_start + ivec2(0, extent.y), false);
-  shape.corners[4] = shadow_tile_corner_ortho(tilemap, tile_start + ivec2(0, 0), true);
-  shape.corners[5] = shadow_tile_corner_ortho(tilemap, tile_start + ivec2(extent.x, 0), true);
-  shape.corners[6] = shadow_tile_corner_ortho(tilemap, tile_start + extent, true);
-  shape.corners[7] = shadow_tile_corner_ortho(tilemap, tile_start + ivec2(0, extent.y), true);
-  return shape;
-}
-
 /** \} */

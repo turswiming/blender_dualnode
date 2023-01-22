@@ -676,7 +676,7 @@ static inline float2 shadow_tile_coord_to_ndc(int2 tile)
 struct ShadowTileMapData {
   /** Cached, used for rendering. */
   float4x4 viewmat, winmat;
-  /** Corners of the frustum. (vec3 padded to vec4) */
+  /** Punctual : Corners of the frustum. (vec3 padded to vec4) */
   float4 corners[4];
   /** Integer offset of the center of the 16x16 tiles from the origin of the tile space. */
   int2 grid_offset;
