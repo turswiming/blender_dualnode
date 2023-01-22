@@ -36,10 +36,9 @@ void main()
     float local_min = FLT_MAX;
     float local_max = -FLT_MAX;
     for (int i = 0; i < 8; i++) {
-      const float epsilon = 1e-16;
       float z = dot(box.corners[i].xyz, light._back);
-      local_min = min(local_min, z - epsilon);
-      local_max = max(local_max, z + epsilon);
+      local_min = min(local_min, z);
+      local_max = max(local_max, z);
     }
 
     if (gl_LocalInvocationID.x == 0) {
@@ -48,6 +47,10 @@ void main()
     }
 
     barrier();
+
+    /* Quantization bias. */
+    local_min -= abs(local_min) * 0.01;
+    local_max += abs(local_max) * 0.01;
 
     /* Intermediate result. Min/Max of a compute group. */
     atomicMin(global_min, floatBitsToOrderedInt(local_min));
