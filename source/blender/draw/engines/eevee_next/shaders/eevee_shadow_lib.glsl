@@ -91,7 +91,7 @@ mat4x4 shadow_load_normal_matrix(LightData light)
 
 /* Returns minimum bias (in world space unit) needed for a given geometry normal and a shadowmap
  * page to avoid self shadowing artifacts. */
-float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
+float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, vec2 uv, uint lod)
 {
   /* Create a normal plane equation and go through the normal projection matrix. */
   vec4 lNg_plane = vec4(lNg, -dot(lNg, lP));
@@ -101,7 +101,7 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
   /* Clamp out to avoid the bias going to infinity. Remember this is in NDC space. */
   ndc_slope = clamp(ndc_slope, 0.0, 100.0);
   /* Slope bias definition from fixed pipeline. */
-  float bias = abs(ndc_slope.x) + abs(ndc_slope.y);
+  float bias = dot(ndc_slope, sub_pixel_delta);
   /* Bias for 1 pixel of LOD 0. */
   bias *= 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   /* Compensate for each increasing lod level as the space between pixels increases. */
@@ -141,12 +141,13 @@ ShadowTileSample shadow_punctual_tile_get(usampler2D tilemaps_tx,
   int tilemap_index = light.tilemap_index + face_id;
 
   samp.tile = shadow_tile_load(tilemaps_tx, samp.tile_coord, tilemap_index);
-  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.tile.lod);
   /* Bias uv sample for LODs since custom raster aligns LOD0 and LOD1 pixels
    * instead of centering them. */
   if (samp.tile.lod != 0.0) {
     samp.uv += 0.5 / float(SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   }
+  samp.uv = shadow_page_uv_transform(samp.tile.page, samp.tile.lod, samp.uv, samp.tile_coord);
+  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.uv, samp.tile.lod);
   return samp;
 }
 
@@ -158,26 +159,23 @@ ShadowTileSample shadow_directional_tile_get(usampler2D tilemaps_tx,
   ShadowTileSample samp;
 
   ShadowClipmapCoordinates coord = shadow_directional_coordinates(light, lP);
-  samp.uv = coord.uv;
   samp.tile_coord = coord.tile_coord;
 
   samp.tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
-  samp.bias = shadow_slope_bias_get(light, lNg, lP, coord.clipmap_lod_relative + samp.tile.lod);
+  samp.uv = shadow_page_uv_transform(samp.tile.page, samp.tile.lod, coord.uv, samp.tile_coord);
+  samp.bias = shadow_slope_bias_get(
+      light, lNg, lP, samp.uv, coord.clipmap_lod_relative + samp.tile.lod);
   return samp;
 }
 
 float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileSample samp)
 {
-  /* Far plane distance but with a bias to make sure there will be no shadowing.
-   * But also not FLT_MAX since it can cause issue with projection. */
-  float depth = 1.1;
-
-  if (samp.tile.is_allocated) {
-    vec2 shadow_uv = shadow_page_uv_transform(
-        samp.tile.page, samp.tile.lod, samp.uv, samp.tile_coord);
-    depth = texture(atlas_tx, shadow_uv).r;
+  if (!samp.tile.is_allocated) {
+    /* Far plane distance but with a bias to make sure there will be no shadowing.
+     * But also not FLT_MAX since it can cause issue with projection. */
+    return 1.1;
   }
-  return depth;
+  return texture(atlas_tx, samp.uv).r;
 }
 
 struct ShadowSample {

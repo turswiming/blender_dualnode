@@ -158,31 +158,31 @@ void main()
     vec3 lP = vec3(0.0);
     {
       vec3 lNg = vec3(0.0, 0.0, 1.0);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 0), 0.0, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 1), 0.0, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 2), 0.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 0), 0.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 1), 0.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 2), 0.0, 3e-7);
     }
     {
       vec3 lNg = normalize(vec3(0.0, 1.0, 1.0));
       float expect = 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 0), expect, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 1), expect * 2.0, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 2), expect * 4.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 0), expect, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 1), expect * 2.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 2), expect * 4.0, 3e-7);
     }
     {
       vec3 lNg = normalize(vec3(1.0, 1.0, 1.0));
       float expect = 2.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 0), expect, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 1), expect * 2.0, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 2), expect * 4.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 0), expect, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 1), expect * 2.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 2), expect * 4.0, 3e-7);
     }
     light.clipmap_lod_min = -1;
     {
       vec3 lNg = normalize(vec3(1.0, 1.0, 1.0));
       float expect = 0.5 * (2.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES));
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 0), expect, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 1), expect * 2.0, 3e-7);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 2), expect * 4.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 0), expect, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 1), expect * 2.0, 3e-7);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, vec2(0.0), 2), expect * 4.0, 3e-7);
     }
   }
 
@@ -208,9 +208,9 @@ void main()
       vec3 lNg = vec3(-lTg.z, 0.0, lTg.x);
 
       float expect = 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 0), expect, 1e-4);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 1), expect * 2.0, 1e-4);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 2), expect * 4.0, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 0), expect, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 1), expect * 2.0, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 2), expect * 4.0, 1e-4);
     }
     {
       /* Simulate a "2D" plane crossing the near plane at the center diagonaly. */
@@ -220,9 +220,9 @@ void main()
       vec3 lNg = vec3(-lTg.z, 0.0, lTg.x);
 
       float expect = 2.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 0), expect, 1e-4);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 1), expect * 2.0, 1e-4);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 2), expect * 4.0, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 0), expect, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 1), expect * 2.0, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 2), expect * 4.0, 1e-4);
     }
     {
       /* Simulate a "2D" plane parallel to near clip plane. */
@@ -231,9 +231,9 @@ void main()
       vec3 lTg = normalize(lP1 - lP0);
       vec3 lNg = vec3(-lTg.z, 0.0, lTg.x);
 
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 0), 0.0, 1e-4);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 1), 0.0, 1e-4);
-      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, 2), 0.0, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 0), 0.0, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 1), 0.0, 1e-4);
+      EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP0, vec2(0.0), 2), 0.0, 1e-4);
     }
   }
 }
