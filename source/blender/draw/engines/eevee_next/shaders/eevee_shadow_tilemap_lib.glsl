@@ -34,6 +34,9 @@ ivec2 shadow_tile_coord_in_atlas(ivec2 tile, int tilemap_index)
  */
 int shadow_tile_offset(ivec2 tile, int tiles_index, int lod)
 {
+#if SHADOW_TILEMAP_LOD != 5
+#  error This needs to be adjusted
+#endif
   const int lod0_width = SHADOW_TILEMAP_RES / 1;
   const int lod1_width = SHADOW_TILEMAP_RES / 2;
   const int lod2_width = SHADOW_TILEMAP_RES / 4;

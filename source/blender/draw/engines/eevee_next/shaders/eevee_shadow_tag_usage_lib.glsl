@@ -74,9 +74,9 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     int face_id = shadow_punctual_face_index_get(lL);
     lL = shadow_punctual_local_position_to_face_local(face_id, lL);
 
-    uint lod_res = uint(SHADOW_TILEMAP_RES) >> uint(lod);
-    tile_co = ivec2(((lL.xy / abs(lL.z)) * 0.5 + 0.5) * float(lod_res));
-    tile_co = clamp(tile_co, ivec2(0), ivec2(lod_res - 1));
+    tile_co = ivec2(((lL.xy / abs(lL.z)) * 0.5 + 0.5) * float(SHADOW_TILEMAP_RES));
+    tile_co = clamp(tile_co, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
+    tile_co >>= lod;
     tilemap_index += face_id;
   }
 

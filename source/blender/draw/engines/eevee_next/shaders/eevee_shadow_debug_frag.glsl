@@ -133,6 +133,11 @@ void debug_atlas_values(vec3 P, LightData light)
   ShadowTileSample samp = debug_tile_get(P, light);
   float depth = shadow_tile_depth_get(shadow_atlas_tx, samp);
 
+  if (light.type != LIGHT_SUN) {
+    float near = intBitsToFloat(light.clip_near);
+    float far = intBitsToFloat(light.clip_far);
+    depth = shadow_punctual_linear_depth(vec2(depth), near, far).x;
+  }
   out_color_add = vec4(vec3(depth), 0);
   out_color_mul = vec4(0.0);
 }
