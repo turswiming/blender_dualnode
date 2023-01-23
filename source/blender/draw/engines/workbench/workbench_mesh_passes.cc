@@ -97,6 +97,7 @@ void MeshPass::draw(ObjectRef &ref,
 
       texture_subpass_map_.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type), add_cb)
           ->draw(batch, handle);
+      return;
     }
   }
   passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)]->draw(batch,
