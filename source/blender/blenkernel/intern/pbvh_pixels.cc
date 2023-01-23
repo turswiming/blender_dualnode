@@ -174,7 +174,7 @@ static void split_pixel_node(PBVH *pbvh,
       continue;
     }
 
-    const MVert *mvert = BKE_pbvh_get_verts(pbvh);
+    const float(*vert_cos)[3] = BKE_pbvh_get_vert_positions(pbvh);
     PBVHData &pbvh_data = BKE_pbvh_pixels_data_get(*pbvh);
 
     for (const PackedPixelRow &row : tile.pixel_rows) {
@@ -186,9 +186,9 @@ static void split_pixel_node(PBVH *pbvh,
 
       float verts[3][3];
 
-      copy_v3_v3(verts[0], mvert[tri[0]].co);
-      copy_v3_v3(verts[1], mvert[tri[1]].co);
-      copy_v3_v3(verts[2], mvert[tri[2]].co);
+      copy_v3_v3(verts[0], vert_cos[tri[0]]);
+      copy_v3_v3(verts[1], vert_cos[tri[1]]);
+      copy_v3_v3(verts[2], vert_cos[tri[2]]);
 
       float2 delta = uv_prim.delta_barycentric_coord_u;
       float2 uv1 = row.start_barycentric_coord;
@@ -667,7 +667,7 @@ static bool update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
 
   const StringRef active_uv_name = CustomData_get_active_layer_name(&mesh->ldata, CD_PROP_FLOAT2);
   if (active_uv_name.is_empty()) {
-    return;
+    return false;
   }
 
   const AttributeAccessor attributes = mesh->attributes();
