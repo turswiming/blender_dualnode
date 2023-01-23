@@ -401,7 +401,6 @@ struct WORKBENCH_Data {
   DRWViewportEmptyList *psl;
   DRWViewportEmptyList *stl;
   workbench::Instance *instance;
-  draw::View *view;
 
   char info[GPU_INFO_SIZE];
 };
@@ -416,7 +415,6 @@ static void workbench_engine_init(void *vedata)
   WORKBENCH_Data *ved = reinterpret_cast<WORKBENCH_Data *>(vedata);
   if (ved->instance == nullptr) {
     ved->instance = new workbench::Instance();
-    ved->view = new draw::View("Default View");
   }
 
   ved->instance->init();
