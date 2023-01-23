@@ -43,13 +43,13 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
     set_dirty();
   }
 
-  float tile_size = tile_size_get(level);
+  float tile_size = clipmap_tile_size_get(level);
 
   /* object_mat is a rotation matrix. Reduce imprecision by taking the transpose which is also the
    * inverse in this particular case. */
   viewmat = object_mat.transposed();
 
-  float half_size = tilemap_coverage_get(level) / 2.0f;
+  float half_size = clipmap_level_coverage_get(level) / 2.0f;
   float2 win_offset = float2(grid_offset) * tile_size;
   orthographic_m4(winmat.ptr(),
                   -half_size + win_offset.x,
@@ -398,7 +398,7 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
     int level = lods_range.first() + lod;
     /* Compute full offset from world origin to the smallest clipmap tile centered around the
      * camera position. The offset is computed in smallest tile unit. */
-    float tile_size = ShadowTileMap::tile_size_get(level);
+    float tile_size = ShadowTileMap::clipmap_tile_size_get(level);
     int2 level_offset = int2(
         roundf(math::dot(float3(object_mat_.values[0]), camera.position()) / tile_size),
         roundf(math::dot(float3(object_mat_.values[1]), camera.position()) / tile_size));
@@ -431,8 +431,8 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
    * 16 by `clipmap_level_range()` for this reason. */
   light.clipmap_base_offset = pos_offset | (neg_offset << 16);
 
-  // float tile_size_min = ShadowTileMap::tile_size_get(lods_range.first());
-  float tile_size_max = ShadowTileMap::tile_size_get(lods_range.last());
+  // float tile_size_min = ShadowTileMap::clipmap_tile_size_get(lods_range.first());
+  float tile_size_max = ShadowTileMap::clipmap_tile_size_get(lods_range.last());
   // int2 level_offset_min = tilemaps_[0]->grid_offset;
   int2 level_offset_max = tilemaps_[lods_range.size() - 1]->grid_offset;
 
@@ -448,6 +448,10 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
 
   light.clipmap_lod_min = lods_range.first();
   light.clipmap_lod_max = lods_range.last();
+
+  /* Half size of the min level. */
+  float half_size = ShadowTileMap::clipmap_tile_size_get(lods_range.first()) / 2.0f;
+  light.normal_mat_packed.x = half_size;
 }
 
 /** \} */

@@ -87,16 +87,16 @@ struct ShadowTileMap : public ShadowTileMapData {
 
   void sync_cubeface(const float4x4 &object_mat, float near, float far, eCubeFace face);
 
-  static float tilemap_coverage_get(int lvl)
+  static float clipmap_level_coverage_get(int lvl)
   {
     /* This function should be kept in sync with shadow_directional_clipmap_level(). */
     /* \note: If we would to introduce a global scaling option it would be here. */
     return exp2(lvl);
   }
 
-  static float tile_size_get(int lvl)
+  static float clipmap_tile_size_get(int lvl)
   {
-    return tilemap_coverage_get(lvl) / tile_map_resolution;
+    return clipmap_level_coverage_get(lvl) / tile_map_resolution;
   }
 
   void debug_draw() const;

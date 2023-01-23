@@ -78,19 +78,13 @@ mat4x4 shadow_load_normal_matrix(LightData light)
                   vec4(0.0, 0.0, light.normal_mat_packed.x, light.normal_mat_packed.y));
   }
   else {
-    /* TODO store precomputed inside the light struct. */
-    /* TODO(fclem): A lot of this simplifies. Do the homework and derive it. */
     float near = shadow_orderedIntBitsToFloat(light.clip_near);
     float far = shadow_orderedIntBitsToFloat(light.clip_far);
-    mat4x4 winmat = mat4x4(1);
-    winmat[2][2] = -2.0 / (far - near);
-    winmat[3][2] = -(far + near) / (far - near);
-    mat4x4 normal_mat = inverse(transpose(winmat));
-    /* -1 because LOD0 covers [-0.5..0.5]. */
-    float scale = exp2(light.clipmap_lod_min - 1);
-    return mat4x4(vec4(scale, 0.0, 0.0, 0.0),
-                  vec4(0.0, scale, 0.0, 0.0),
-                  vec4(0.0, 0.0, normal_mat[2][2], normal_mat[2][3]),
+    /* Could be store precomputed inside the light struct. Just have to find a how to update it. */
+    float z_scale = (far - near) * 0.5;
+    return mat4x4(vec4(light.normal_mat_packed.x, 0.0, 0.0, 0.0),
+                  vec4(0.0, light.normal_mat_packed.x, 0.0, 0.0),
+                  vec4(0.0, 0.0, z_scale, 0.0),
                   vec4(0.0, 0.0, 0.0, 1.0));
   }
 }
@@ -103,11 +97,11 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, uint lod)
   vec4 lNg_plane = vec4(lNg, -dot(lNg, lP));
   vec4 ndc_Ng = shadow_load_normal_matrix(light) * lNg_plane;
   /* Get slope from normal vector. */
-  vec2 ndc_slope = ndc_Ng.xy / ndc_Ng.z;
+  vec2 ndc_slope = ndc_Ng.xy / abs(ndc_Ng.z);
+  /* Clamp out to avoid the bias going to infinity. Remember this is in NDC space. */
+  ndc_slope = clamp(ndc_slope, 0.0, 100.0);
   /* Slope bias definition from fixed pipeline. */
   float bias = abs(ndc_slope.x) + abs(ndc_slope.y);
-  /* Clamp out to avoid the bias going to infinity. Remember this is in NDC space. */
-  bias = clamp(bias, 0.0, 100.0);
   /* Bias for 1 pixel of LOD 0. */
   bias *= 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   /* Compensate for each increasing lod level as the space between pixels increases. */
@@ -215,7 +209,6 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
   if (light.type == LIGHT_SUN) {
     vec3 lP = shadow_world_to_local(light, P);
     ShadowTileSample tile = shadow_directional_tile_get(tilemaps_tx, light, lP, lNg);
-
     float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile);
 
     float near = shadow_orderedIntBitsToFloat(light.clip_near);
