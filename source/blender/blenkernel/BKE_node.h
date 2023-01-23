@@ -29,27 +29,19 @@ extern "C" {
 /* not very important, but the stack solver likes to know a maximum */
 #define MAX_SOCKET 512
 
-struct ARegion;
 struct BlendDataReader;
 struct BlendExpander;
 struct BlendLibReader;
 struct BlendWriter;
-struct ColorManagedDisplaySettings;
-struct ColorManagedViewSettings;
-struct CryptomatteSession;
 struct FreestyleLineStyle;
 struct GPUMaterial;
 struct GPUNodeStack;
 struct ID;
 struct ImBuf;
-struct ImageFormatData;
 struct Light;
-struct ListBase;
-struct MTex;
 struct Main;
 struct Material;
 struct PointerRNA;
-struct RenderData;
 struct Scene;
 struct SpaceNode;
 struct Tex;
@@ -368,7 +360,7 @@ typedef struct bNodeType {
   ExtensionRNA rna_ext;
 } bNodeType;
 
-/* nodetype->nclass, for add-menu and themes */
+/** #bNodeType.nclass (for add-menu and themes). */
 #define NODE_CLASS_INPUT 0
 #define NODE_CLASS_OUTPUT 1
 #define NODE_CLASS_OP_COLOR 3
@@ -1355,8 +1347,6 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 /** \name Texture Nodes
  * \{ */
 
-struct TexResult;
-
 #define TEX_NODE_OUTPUT 401
 #define TEX_NODE_CHECKER 402
 #define TEX_NODE_TEXTURE 403
@@ -1522,7 +1512,7 @@ struct TexResult;
 #define GEO_NODE_INPUT_SHORTEST_EDGE_PATHS 1168
 #define GEO_NODE_EDGE_PATHS_TO_CURVES 1169
 #define GEO_NODE_EDGE_PATHS_TO_SELECTION 1170
-#define GEO_NODE_MESH_FACE_SET_BOUNDARIES 1171
+#define GEO_NODE_MESH_FACE_GROUP_BOUNDARIES 1171
 #define GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME 1172
 #define GEO_NODE_SELF_OBJECT 1173
 #define GEO_NODE_SAMPLE_INDEX 1174
@@ -1543,6 +1533,7 @@ struct TexResult;
 #define GEO_NODE_IMAGE_INFO 1189
 #define GEO_NODE_BLUR_ATTRIBUTE 1190
 #define GEO_NODE_IMAGE 1191
+#define GEO_NODE_INTERPOLATE_CURVES 1192
 
 /** \} */
 
