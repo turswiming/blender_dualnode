@@ -986,7 +986,7 @@ void SCULPT_automasking_cache_check(
     }
   });
 
-  Set<intptr_t> done_set;
+  Set<PBVHVertRef> done_set;
 
   for (int i : IndexRange(totnode)) {
     PBVHNode *node = nodes[i];
@@ -1013,8 +1013,8 @@ void SCULPT_automasking_cache_check(
 
       SCULPT_automasking_node_update(ss, &automask_data, &vd);
 
-      if (!done_set.contains(vertex.i)) {
-        done_set.add(vertex.i);
+      if (!done_set.contains(vertex)) {
+        done_set.add(vertex);
 
         float value = SCULPT_automasking_factor_get(automasking, ss, vd.vertex, &automask_data);
         *(float *)SCULPT_vertex_attr_get(vd.vertex, ss->attrs.automasking_factor) = value;
