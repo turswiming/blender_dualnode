@@ -39,8 +39,6 @@ void main()
 
   ivec2 atlas_texel = shadow_tile_coord_in_atlas(tile_co, tilemap_index);
 
-  uint lod_size = uint(SHADOW_TILEMAP_RES);
-
   ShadowTileMapData tilemap_data = tilemaps_buf[tilemap_index];
   int lod_max = tilemap_data.is_cubeface ? SHADOW_TILEMAP_LOD : 0;
 

@@ -39,14 +39,20 @@ int shadow_tile_offset(ivec2 tile, int tiles_index, int lod)
   const int lod2_width = SHADOW_TILEMAP_RES / 4;
   const int lod3_width = SHADOW_TILEMAP_RES / 8;
   const int lod4_width = SHADOW_TILEMAP_RES / 16;
+  const int lod5_width = SHADOW_TILEMAP_RES / 32;
   const int lod0_size = lod0_width * lod0_width;
   const int lod1_size = lod1_width * lod1_width;
   const int lod2_size = lod2_width * lod2_width;
   const int lod3_size = lod3_width * lod3_width;
   const int lod4_size = lod4_width * lod4_width;
+  const int lod5_size = lod5_width * lod5_width;
 
   int offset = tiles_index;
   switch (lod) {
+    case 5:
+      offset += lod0_size + lod1_size + lod2_size + lod3_size + lod4_size;
+      offset += tile.y * lod5_width;
+      break;
     case 4:
       offset += lod0_size + lod1_size + lod2_size + lod3_size;
       offset += tile.y * lod4_width;

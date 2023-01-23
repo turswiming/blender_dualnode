@@ -280,7 +280,8 @@ void ShadowPunctual::end_sync(Light &light)
 
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
 
-  /* A bit weird, but this is to make light_tilemap_max_get() work. */
+  /* A bit weird give we are inside a punctual shadow, but this is
+   * in order to make light_tilemap_max_get() work. */
   light.clipmap_lod_min = 0;
   light.clipmap_lod_max = tilemaps_needed_ - 1;
 

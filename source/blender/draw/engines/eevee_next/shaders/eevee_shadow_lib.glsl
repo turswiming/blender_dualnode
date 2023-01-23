@@ -4,7 +4,6 @@
 /** \a unormalized_uv is the uv coordinates for the whole tilemap [0..SHADOW_TILEMAP_RES]. */
 vec2 shadow_page_uv_transform(uvec2 page, uint lod, vec2 unormalized_uv, ivec2 tile_coord)
 {
-  /* TODO(fclem): It should be possible to just saturate(unormalized_uv - tile_co << lod). */
   vec2 page_texel = unormalized_uv / float(1u << lod);
   /* Fix float imprecision that can make some pixel sample the wrong page. */
   page_texel = saturate(page_texel - vec2(tile_coord >> lod));
@@ -101,7 +100,7 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, vec2 uv, uint lo
   /* Clamp out to avoid the bias going to infinity. Remember this is in NDC space. */
   ndc_slope = clamp(ndc_slope, 0.0, 100.0);
   /* Slope bias definition from fixed pipeline. */
-  float bias = dot(ndc_slope, sub_pixel_delta);
+  float bias = dot(ndc_slope, vec2(1.0));
   /* Bias for 1 pixel of LOD 0. */
   bias *= 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
   /* Compensate for each increasing lod level as the space between pixels increases. */
@@ -213,7 +212,7 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
     float far = shadow_orderedIntBitsToFloat(light.clip_far);
     occluder_dist = shadow_directional_linear_depth(occluder_ndc, near, far);
     /* Receiver distance needs to also be increasing.
-     * Negate since Z distance follows opengl convention of neg Z as forward. */
+     * Negate since Z distance follows blender camera convention of -Z as forward. */
     receiver_dist = -lP.z;
     samp.bias = tile.bias * (near - far);
   }
