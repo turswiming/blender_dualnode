@@ -48,7 +48,17 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
   /* object_mat is a rotation matrix. Reduce imprecision by taking the transpose which is also the
    * inverse in this particular case. */
   viewmat = object_mat.transposed();
-  winmat = winmat_get(grid_offset.x * tile_size, grid_offset.y * tile_size);
+
+  float half_size = tilemap_coverage_get(level) / 2.0f;
+  float2 win_offset = float2(grid_offset) * tile_size;
+  orthographic_m4(winmat.ptr(),
+                  -half_size + win_offset.x,
+                  half_size + win_offset.x,
+                  -half_size + win_offset.y,
+                  half_size + win_offset.y,
+                  /* Near/far is computed on GPU using casters bounds. */
+                  -1.0,
+                  1.0);
 }
 
 void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
@@ -70,7 +80,7 @@ void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
     set_dirty();
   }
 
-  winmat = winmat_get(0.0f, 0.0f);
+  perspective_m4(winmat.ptr(), -near, near, -near, near, near, far);
   viewmat = float4x4(shadow_face_mat[cubeface]) * object_mat.inverted_affine();
 
   /* Update corners. */
@@ -82,25 +92,6 @@ void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
   /* Store deltas. */
   corners[2] = (corners[2] - corners[1]) / float(SHADOW_TILEMAP_RES);
   corners[3] = (corners[3] - corners[1]) / float(SHADOW_TILEMAP_RES);
-}
-
-float4x4 ShadowTileMap::winmat_get(float offset_right, float offset_top) const
-{
-  float4x4 winmat;
-  if (is_cubeface) {
-    perspective_m4(winmat.ptr(), -near, near, -near, near, near, far);
-  }
-  else {
-    float half_size = tilemap_coverage_get(level) / 2.0f;
-    orthographic_m4(winmat.ptr(),
-                    -half_size + offset_right,
-                    half_size + offset_right,
-                    -half_size + offset_top,
-                    half_size + offset_top,
-                    -1.0,
-                    1.0);
-  }
-  return winmat;
 }
 
 void ShadowTileMap::debug_draw() const
@@ -282,7 +273,7 @@ void ShadowPunctual::end_sync(Light &light)
   }
 
   /* Normal matrix to convert geometric normal to optimal bias. */
-  float4x4 winmat = tilemaps_[Z_NEG]->winmat_get(0.0f, 0.0f);
+  float4x4 &winmat = tilemaps_[Z_NEG]->winmat;
   float4x4 normal_mat = winmat.transposed().inverted();
   light.normal_mat_packed.x = normal_mat[3][2];
   light.normal_mat_packed.y = normal_mat[3][3];
@@ -457,7 +448,6 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
 
   light.clipmap_lod_min = lods_range.first();
   light.clipmap_lod_max = lods_range.last();
-  light.normal_mat_packed.x = ShadowTileMap::tilemap_coverage_get(light.clipmap_lod_min);
 }
 
 /** \} */

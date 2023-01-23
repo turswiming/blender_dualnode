@@ -142,8 +142,7 @@ ShadowClipmapCoordinates shadow_directional_coordinates(LightData light, vec3 lP
 
   ret.uv = lP.xy - vec2(light._clipmap_origin_x, light._clipmap_origin_y);
   ret.uv /= exp2(clipmap_lod);
-  ret.uv += 0.5;
-  ret.uv *= float(SHADOW_TILEMAP_RES);
+  ret.uv = ret.uv * float(SHADOW_TILEMAP_RES) + float(SHADOW_TILEMAP_RES / 2);
   ret.uv -= vec2(clipmap_offset);
 
   /* Clamp to avoid out of tilemap access. */

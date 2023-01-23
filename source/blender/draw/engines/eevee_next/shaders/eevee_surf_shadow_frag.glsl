@@ -46,8 +46,7 @@ void main()
   ivec2 tile_co = texel_co / pages_infos_buf.page_size;
 
   float depth = gl_FragCoord.z;
-  float slope_bias = 0.0;
-  fwidth(depth);
+  float slope_bias = fwidth(depth);
   write_depth(texel_co, 0, tile_co, depth + slope_bias);
 
   /* Only needed for local lights. */

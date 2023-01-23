@@ -99,8 +99,6 @@ struct ShadowTileMap : public ShadowTileMapData {
     return tilemap_coverage_get(lvl) / tile_map_resolution;
   }
 
-  float4x4 winmat_get(float offset_right, float offset_top) const;
-
   void debug_draw() const;
 
   /* For external callers. Use this in order to not miss an update. */

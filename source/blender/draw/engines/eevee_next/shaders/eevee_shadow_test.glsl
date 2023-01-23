@@ -147,10 +147,13 @@ void main()
 
   TEST(eevee_shadow, DirectionalSlopeBias)
   {
+    float near = 0.0, far = 1.0;
     LightData light;
     light.type = LIGHT_SUN;
+    light.clip_near = floatBitsToInt(near);
+    light.clip_far = floatBitsToInt(far);
     light.clipmap_lod_min = 0;
-    light.normal_mat_packed.x = exp2(light.clipmap_lod_min);
+
     /* Position has no effect for directionnal. */
     vec3 lP = vec3(0.0);
     {
@@ -174,10 +177,9 @@ void main()
       EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 2), expect * 4.0, 3e-7);
     }
     light.clipmap_lod_min = -1;
-    light.normal_mat_packed.x = exp2(light.clipmap_lod_min);
     {
       vec3 lNg = normalize(vec3(1.0, 1.0, 1.0));
-      float expect = 1.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
+      float expect = 0.5 * (2.0 / (SHADOW_TILEMAP_RES * SHADOW_PAGE_RES));
       EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 0), expect, 3e-7);
       EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 1), expect * 2.0, 3e-7);
       EXPECT_NEAR(shadow_slope_bias_get(light, lNg, lP, 2), expect * 4.0, 3e-7);

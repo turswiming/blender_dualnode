@@ -78,9 +78,19 @@ mat4x4 shadow_load_normal_matrix(LightData light)
                   vec4(0.0, 0.0, light.normal_mat_packed.x, light.normal_mat_packed.y));
   }
   else {
-    return mat4x4(vec4(light.normal_mat_packed.x, 0.0, 0.0, 0.0),
-                  vec4(0.0, light.normal_mat_packed.x, 0.0, 0.0),
-                  vec4(0.0, 0.0, 1.0, 0.0),
+    /* TODO store precomputed inside the light struct. */
+    /* TODO(fclem): A lot of this simplifies. Do the homework and derive it. */
+    float near = shadow_orderedIntBitsToFloat(light.clip_near);
+    float far = shadow_orderedIntBitsToFloat(light.clip_far);
+    mat4x4 winmat = mat4x4(1);
+    winmat[2][2] = -2.0 / (far - near);
+    winmat[3][2] = -(far + near) / (far - near);
+    mat4x4 normal_mat = inverse(transpose(winmat));
+    /* -1 because LOD0 covers [-0.5..0.5]. */
+    float scale = exp2(light.clipmap_lod_min - 1);
+    return mat4x4(vec4(scale, 0.0, 0.0, 0.0),
+                  vec4(0.0, scale, 0.0, 0.0),
+                  vec4(0.0, 0.0, normal_mat[2][2], normal_mat[2][3]),
                   vec4(0.0, 0.0, 0.0, 1.0));
   }
 }
@@ -214,8 +224,7 @@ ShadowSample shadow_sample(sampler2D atlas_tx,
     /* Receiver distance needs to also be increasing.
      * Negate since Z distance follows opengl convention of neg Z as forward. */
     receiver_dist = -lP.z;
-    samp.bias = 0.0;
-    // tile.bias *(near - far);
+    samp.bias = tile.bias * (near - far);
   }
   else {
     vec3 lP = lL;
