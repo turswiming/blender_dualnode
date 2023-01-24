@@ -4,7 +4,7 @@
 #include "BLI_compiler_compat.h"
 
 #include "BLI_math.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
 #include <algorithm>
@@ -36,7 +36,7 @@ namespace blender {
  Abstract class interface:
 
     template<typename Float> class Curve {
-      using Vector = vec_base<Float, 2>;
+      using Vector = VecBase<Float, 2>;
 
      public:
       Float length;
@@ -56,7 +56,7 @@ namespace blender {
 /** Cubic curves */
 
 template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
-  using Vector = vec_base<Float, axes>;
+  using Vector = VecBase<Float, axes>;
 
  public:
   Vector ps[4];
@@ -455,7 +455,7 @@ template<typename Float, int axes = 2, int table_size = 512> class CubicBezier {
 
 template<typename Float, int axes = 2, typename BezierType = CubicBezier<Float, axes>>
 class EvenSpline {
-  using Vector = vec_base<Float, axes>;
+  using Vector = VecBase<Float, axes>;
   struct Segment {
     BezierType bezier;
     Float start = 0.0;
