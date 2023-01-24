@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-bool ED_asset_bundle_contains_path(const char *path);
+bool ED_asset_bundled_contains_path(const char *path);
 
 #ifdef __cplusplus
 }

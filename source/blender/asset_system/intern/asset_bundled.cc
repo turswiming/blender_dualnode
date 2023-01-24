@@ -4,7 +4,7 @@
  * \ingroup asset_system
  */
 
-#include "BLI_string.h"
+#include "BLI_path_util.h"
 
 #include "BKE_appdir.h"
 
@@ -23,9 +23,9 @@ StringRefNull bundled_assets_directory_path()
 
 }  // namespace blender::asset_system
 
-bool ED_asset_bundle_contains_path(const char *path)
+bool ED_asset_bundled_contains_path(const char *path)
 {
   const blender::StringRefNull bundled_path =
       blender::asset_system::bundled_assets_directory_path();
-  return BLI_str_startswith(path, bundled_path.c_str());
+  return BLI_path_contains(bundled_path.c_str(), path);
 }
