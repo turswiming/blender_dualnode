@@ -13,6 +13,8 @@
 #pragma BLENDER_REQUIRE(eevee_attributes_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_surf_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_nodetree_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_transparency_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
 
 void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
 {
@@ -48,6 +50,21 @@ void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
 
 void main()
 {
+#ifdef MAT_TRANSPARENT
+  init_globals();
+
+  nodetree_surface();
+
+  float noise_offset = sampling_rng_1D_get(SAMPLING_TRANSPARENCY);
+  float random_threshold = transparency_hashed_alpha_threshold(1.0, noise_offset, g_data.P);
+
+  float transparency = avg(g_transmittance);
+  if (transparency > random_threshold) {
+    discard;
+    return;
+  }
+#endif
+
   drw_view_id = shadow_interp.view_id;
 
   ivec2 texel_co = ivec2(gl_FragCoord.xy);

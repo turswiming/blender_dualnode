@@ -128,8 +128,7 @@ GPU_SHADER_CREATE_INFO(eevee_surf_forward)
     .fragment_out(0, Type::VEC4, "out_radiance", DualBlend::SRC_0)
     .fragment_out(0, Type::VEC4, "out_transmittance", DualBlend::SRC_1)
     .fragment_source("eevee_surf_forward_frag.glsl")
-    .additional_info(
-                     "eevee_light_data",
+    .additional_info("eevee_light_data",
                      "eevee_camera",
                      "eevee_utility_texture",
                      "eevee_sampling_data",
@@ -173,7 +172,7 @@ GPU_SHADER_CREATE_INFO(eevee_surf_shadow)
            "shadow_atlas_img")
     .storage_buf(SHADOW_PAGE_INFO_SLOT, Qualifier::READ, "ShadowPagesInfoData", "pages_infos_buf")
     .fragment_source("eevee_surf_shadow_frag.glsl")
-    .additional_info("eevee_camera", "eevee_utility_texture");
+    .additional_info("eevee_camera", "eevee_utility_texture", "eevee_sampling_data");
 
 #undef image_out
 #undef image_array_out
