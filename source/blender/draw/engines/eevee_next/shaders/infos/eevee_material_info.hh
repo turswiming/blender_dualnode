@@ -95,8 +95,8 @@ GPU_SHADER_CREATE_INFO(eevee_render_pass_out)
     .image_out(RBUFS_EMISSION_SLOT, Qualifier::READ_WRITE, GPU_RGBA16F, "rp_emission_img");
 
 GPU_SHADER_CREATE_INFO(eevee_cryptomatte_out)
-    .storage_buf(7, Qualifier::READ, "vec2", "cryptomatte_object_buf[]", Frequency::PASS)
-    .image_out(7, Qualifier::WRITE, GPU_RGBA32F, "rp_cryptomatte_img");
+    .storage_buf(CRYPTOMATTE_BUF_SLOT, Qualifier::READ, "vec2", "cryptomatte_object_buf[]")
+    .image_out(RBUFS_CRYPTOMATTE_SLOT, Qualifier::WRITE, GPU_RGBA32F, "rp_cryptomatte_img");
 
 GPU_SHADER_CREATE_INFO(eevee_surf_deferred)
     .vertex_out(eevee_surf_iface)
@@ -128,13 +128,14 @@ GPU_SHADER_CREATE_INFO(eevee_surf_forward)
     .fragment_out(0, Type::VEC4, "out_radiance", DualBlend::SRC_0)
     .fragment_out(0, Type::VEC4, "out_transmittance", DualBlend::SRC_1)
     .fragment_source("eevee_surf_forward_frag.glsl")
-    .additional_info("eevee_cryptomatte_out",
+    .additional_info(
                      "eevee_light_data",
                      "eevee_camera",
                      "eevee_utility_texture",
                      "eevee_sampling_data",
                      "eevee_shadow_data"
                      /* Optionally added depending on the material. */
+                     // "eevee_cryptomatte_out",
                      // "eevee_raytrace_data",
                      // "eevee_transmittance_data",
                      // "eevee_aov_out",
