@@ -829,9 +829,6 @@ static bool asset_tag_matches_filter(const char *filter_search, const AssetMetaD
 static bool is_filtered_asset(FileListInternEntry *file, FileListFilter *filter)
 {
   const AssetMetaData *asset_data = filelist_file_internal_get_asset_data(file);
-  if (asset_data == nullptr) {
-    return false;
-  }
 
   /* Not used yet for the asset view template. */
   if (filter->asset_catalog_filter && !file_is_asset_visible_in_catalog_filter_settings(
