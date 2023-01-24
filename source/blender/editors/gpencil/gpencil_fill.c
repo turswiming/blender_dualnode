@@ -314,11 +314,6 @@ static void add_endpoint_radius_help(tGPDfill *tgpf,
     pt->z = endpoint[2] + radius * sinf(angle);
     pt->strength = 1.0f;
     pt->pressure = 1.0f;
-
-    /* Rotate to object rotation. */
-    sub_v3_v3(&pt->x, endpoint);
-    mul_mat3_m4_v3(tgpf->ob->object_to_world, &pt->x);
-    add_v3_v3(&pt->x, endpoint);
   }
 }
 
@@ -2919,6 +2914,7 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
               }
 
               if (extend_lines) {
+                stroke_array_free(tgpf);
                 gpencil_delete_temp_stroke_extension(tgpf, true);
               }
 

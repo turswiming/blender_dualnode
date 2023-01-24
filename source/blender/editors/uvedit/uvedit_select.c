@@ -3315,12 +3315,12 @@ static void uv_select_flush_from_tag_face(const Scene *scene, Object *obedit, co
       if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
         BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
           if (select) {
-            BM_ELEM_CD_SET_BOOL(l, offsets.select_vert, true);
+            BM_ELEM_CD_SET_BOOL(l, offsets.select_edge, true);
             uv_select_flush_from_tag_sticky_loc_internal(
                 scene, em, vmap, efa_index, l, select, offsets);
           }
           else {
-            BM_ELEM_CD_SET_BOOL(l, offsets.select_vert, false);
+            BM_ELEM_CD_SET_BOOL(l, offsets.select_edge, false);
             if (!uvedit_vert_is_face_select_any_other(scene, l, offsets)) {
               uv_select_flush_from_tag_sticky_loc_internal(
                   scene, em, vmap, efa_index, l, select, offsets);
@@ -4399,13 +4399,13 @@ static int uv_select_overlap(bContext *C, const bool extend)
         copy_v2_v2(uv_verts[vert_index], luv);
       }
 
-      /* The winding order of the coordinates is not guaranteed, determine it automatically. */
+      /* The UV coordinates winding could be positive of negative,
+       * determine it automatically. */
       const int coords_sign = 0;
       BLI_polyfill_calc_arena(uv_verts, face_len, coords_sign, indices, arena);
 
       /* A beauty fill is necessary to remove degenerate triangles that may be produced from the
-       * above polyfill (see T103913), otherwise the overlap tests can fail.
-       */
+       * above poly-fill (see T103913), otherwise the overlap tests can fail. */
       BLI_polyfill_beautify(uv_verts, face_len, indices, arena, heap);
 
       for (int t = 0; t < tri_len; t++) {
