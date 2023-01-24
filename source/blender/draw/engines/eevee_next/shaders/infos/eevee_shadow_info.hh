@@ -129,6 +129,7 @@ GPU_SHADER_CREATE_INFO(eevee_shadow_tilemap_finalize)
     .image(3, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D_ARRAY, "render_map_lod2_img")
     .image(4, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D_ARRAY, "render_map_lod3_img")
     .image(5, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D_ARRAY, "render_map_lod4_img")
+    .image(6, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D_ARRAY, "render_map_lod5_img")
     .additional_info("eevee_shared")
     .compute_source("eevee_shadow_tilemap_finalize_comp.glsl");
 

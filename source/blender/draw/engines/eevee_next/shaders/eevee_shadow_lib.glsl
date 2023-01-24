@@ -4,15 +4,15 @@
 /** \a unormalized_uv is the uv coordinates for the whole tilemap [0..SHADOW_TILEMAP_RES]. */
 vec2 shadow_page_uv_transform(uvec2 page, uint lod, vec2 unormalized_uv, ivec2 tile_lod0_coord)
 {
-  vec2 target_tile = vec2(tile_lod0_coord >> lod);
-  vec2 page_uv = unormalized_uv * exp2(-float(lod));
-  page_uv = (page_uv - target_tile);
-  /* Assumes atlas is squared. */
-  vec2 atlas_uv = (vec2(page) + page_uv) / vec2(SHADOW_PAGE_PER_ROW);
   /* Bias uv sample for LODs since custom raster aligns LOD pixels instead of centering them. */
   if (lod != 0) {
-    atlas_uv -= 0.5 / float(SHADOW_TILEMAP_RES * SHADOW_PAGE_RES);
+    unormalized_uv += 0.5 / float(SHADOW_PAGE_RES * SHADOW_TILEMAP_RES);
   }
+  float lod_scaling = exp2(-float(lod));
+  vec2 target_tile = vec2(tile_lod0_coord >> lod);
+  vec2 page_uv = unormalized_uv * lod_scaling - target_tile;
+  /* Assumes atlas is squared. */
+  vec2 atlas_uv = (vec2(page) + min(page_uv, 0.99999)) / vec2(SHADOW_PAGE_PER_ROW);
   return atlas_uv;
 }
 
@@ -76,14 +76,18 @@ vec3 shadow_punctual_local_position_to_face_local(int face_id, vec3 lL)
 mat4x4 shadow_load_normal_matrix(LightData light)
 {
   if (light.type != LIGHT_SUN) {
-    return mat4x4(vec4(1.0, 0.0, 0.0, 0.0),
-                  vec4(0.0, 1.0, 0.0, 0.0),
+    /* FIXME: Why? */
+    float scale = 0.5;
+    return mat4x4(vec4(scale, 0.0, 0.0, 0.0),
+                  vec4(0.0, scale, 0.0, 0.0),
                   vec4(0.0, 0.0, 0.0, -1.0),
                   vec4(0.0, 0.0, light.normal_mat_packed.x, light.normal_mat_packed.y));
   }
   else {
     float near = shadow_orderedIntBitsToFloat(light.clip_near);
     float far = shadow_orderedIntBitsToFloat(light.clip_far);
+    /* FIXME: Why? */
+    float scale = light.normal_mat_packed.x * 16.0;
     /* Could be store precomputed inside the light struct. Just have to find a how to update it. */
     float z_scale = (far - near) * 0.5;
     return mat4x4(vec4(light.normal_mat_packed.x, 0.0, 0.0, 0.0),
@@ -100,6 +104,8 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, vec2 uv, uint lo
 {
   /* Compute coordinate inside the pixel we are sampling. */
   vec2 uv_subpixel_coord = fract(uv * float(SHADOW_PAGE_PER_ROW * SHADOW_PAGE_RES));
+  /* Bias uv sample for LODs since custom raster aligns LOD pixels instead of centering them. */
+  uv_subpixel_coord += (lod > 0) ? -exp2(-1.0 - float(lod)) : 0.0;
   /* Compute delta to the texel center (where the sample is). */
   vec2 ndc_texel_center_delta = uv_subpixel_coord * 2.0 - 1.0;
   /* Create a normal plane equation and go through the normal projection matrix. */
@@ -113,8 +119,7 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, vec2 uv, uint lo
   float bias = dot(ndc_slope, ndc_texel_center_delta);
   /* Bias for 1 pixel of the sampled LOD. */
   bias /= ((SHADOW_TILEMAP_RES * SHADOW_PAGE_RES) >> lod);
-  /* No idea why we need a factor of 16.0 here. */
-  return bias * 16.0;
+  return bias;
 }
 
 struct ShadowTileSample {
@@ -165,8 +170,8 @@ ShadowTileSample shadow_directional_tile_get(usampler2D tilemaps_tx,
 
   samp.tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
   samp.uv = shadow_page_uv_transform(samp.tile.page, samp.tile.lod, coord.uv, samp.tile_coord);
-  samp.bias = shadow_slope_bias_get(
-      light, lNg, lP, samp.uv, coord.clipmap_lod_relative + samp.tile.lod);
+  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.uv, samp.tile.lod);
+  samp.bias *= exp2(float(coord.clipmap_lod_relative));
   return samp;
 }
 

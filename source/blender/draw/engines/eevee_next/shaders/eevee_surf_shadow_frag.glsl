@@ -22,8 +22,8 @@ void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
   /* Add half of the lod to get the top right pixel nearest to the lod pixel.
    * This way we never get more than half a LOD0 pixel of offset from the center of any LOD.
    * This offset is taken into account during sampling. */
-  const int texel_offset = (1 << lod) / 2;
-  ivec2 closest_lod0_texel = lod_corner_in_lod0 + texel_offset;
+  const int lod_half_stride_in_lod0 = (1 << lod) / 2;
+  ivec2 closest_lod0_texel = lod_corner_in_lod0 + lod_half_stride_in_lod0;
 
   if (!all(equal(closest_lod0_texel, texel_co))) {
     return;
@@ -62,6 +62,9 @@ void main()
   if (is_persp) {
     /* Note that even if texel center is offset, we store unmodified depth.
      * We increase bias instead at sampling time. */
+#if SHADOW_TILEMAP_LOD != 5
+#  error This needs to be adjusted
+#endif
     write_depth(texel_co, 1, tile_co, depth + slope_bias * 2.0);
     write_depth(texel_co, 2, tile_co, depth + slope_bias * 4.0);
     write_depth(texel_co, 3, tile_co, depth + slope_bias * 8.0);

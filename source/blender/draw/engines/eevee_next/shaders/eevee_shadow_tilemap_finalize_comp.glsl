@@ -158,6 +158,14 @@ void main()
         page_tag_as_rendered(render_map_texel.xy, tilemap_data.tiles_index, 4);
       }
     }
+    render_map_texel.xy >>= 1;
+    if (all(equal(tile_co, render_map_texel.xy << 5u))) {
+      imageStore(render_map_lod5_img, render_map_texel, uvec4(updated_lod_page[5]));
+      if (updated_lod_page[5] != 0xFFFFFFFFu) {
+        page_clear_buf_append(updated_lod_page[5]);
+        page_tag_as_rendered(render_map_texel.xy, tilemap_data.tiles_index, 5);
+      }
+    }
   }
 
   if (all(equal(gl_GlobalInvocationID, uvec3(0)))) {

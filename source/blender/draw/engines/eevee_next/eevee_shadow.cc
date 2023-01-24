@@ -779,6 +779,7 @@ void ShadowModule::end_sync()
         sub.bind_image("render_map_lod2_img", render_map_tx_.mip_view(2));
         sub.bind_image("render_map_lod3_img", render_map_tx_.mip_view(3));
         sub.bind_image("render_map_lod4_img", render_map_tx_.mip_view(4));
+        sub.bind_image("render_map_lod5_img", render_map_tx_.mip_view(5));
         sub.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_UNIFORM | GPU_BARRIER_TEXTURE_FETCH |
                     GPU_BARRIER_SHADER_IMAGE_ACCESS);
