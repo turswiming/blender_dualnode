@@ -113,7 +113,7 @@ int shadow_directional_clipmap_level(LightData light, vec3 lP)
   return clamp(clipmap_lod, light.clipmap_lod_min, light.clipmap_lod_max);
 }
 
-struct ShadowClipmapCoordinates {
+struct ShadowCoordinates {
   /* Index of the tilemap to containing the tile. */
   int tilemap_index;
   /* LOD of the tile to load relative to the min level. Always positive */
@@ -134,9 +134,9 @@ ivec2 shadow_decompress_grid_offset(ivec2 ofs, int relative_lod)
  * \a lP shading point position in light space (world unit) and translated to camera position
  * snapped to smallest clipmap level.
  */
-ShadowClipmapCoordinates shadow_directional_coordinates(LightData light, vec3 lP)
+ShadowCoordinates shadow_directional_coordinates(LightData light, vec3 lP)
 {
-  ShadowClipmapCoordinates ret;
+  ShadowCoordinates ret;
 
   int clipmap_lod = shadow_directional_clipmap_level(light, lP - light._position);
   /* This difference needs to be less than 32 for the later shift to be valid.
@@ -153,9 +153,44 @@ ShadowClipmapCoordinates shadow_directional_coordinates(LightData light, vec3 lP
   ret.uv /= exp2(clipmap_lod);
   ret.uv = ret.uv * float(SHADOW_TILEMAP_RES) + float(SHADOW_TILEMAP_RES / 2);
   ret.uv -= vec2(clipmap_offset);
-
   /* Clamp to avoid out of tilemap access. */
   ret.tile_coord = clamp(ivec2(ret.uv), ivec2(0.0), ivec2(SHADOW_TILEMAP_RES - 1));
+  return ret;
+}
+
+/* Transform vector to face local coordinate. */
+vec3 shadow_punctual_local_position_to_face_local(int face_id, vec3 lL)
+{
+  switch (face_id) {
+    case 1:
+      return vec3(-lL.y, lL.z, -lL.x);
+    case 2:
+      return vec3(lL.y, lL.z, lL.x);
+    case 3:
+      return vec3(lL.x, lL.z, -lL.y);
+    case 4:
+      return vec3(-lL.x, lL.z, lL.y);
+    case 5:
+      return vec3(lL.x, -lL.y, -lL.z);
+    default:
+      return lL;
+  }
+}
+
+/**
+ * \a lP shading point position in face local space (world unit).
+ * \a face_id is the one used to rotate lP using shadow_punctual_local_position_to_face_local().
+ */
+ShadowCoordinates shadow_punctual_coordinates(LightData light, vec3 lP, int face_id)
+{
+  ShadowCoordinates ret;
+  ret.tilemap_index = light.tilemap_index + face_id;
+  /* UVs in [-1..+1] range. */
+  ret.uv = lP.xy / abs(lP.z);
+  /* UVs in [0..SHADOW_TILEMAP_RES] range. */
+  ret.uv = ret.uv * float(SHADOW_TILEMAP_RES / 2) + float(SHADOW_TILEMAP_RES / 2);
+  /* Clamp to avoid out of tilemap access. */
+  ret.tile_coord = clamp(ivec2(ret.uv), ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
   return ret;
 }
 

@@ -38,7 +38,7 @@ void main()
 
   TEST(eevee_shadow, DirectionalClipmapCoordinates)
   {
-    ShadowClipmapCoordinates coords;
+    ShadowCoordinates coords;
     vec3 lP, camera_lP;
 
     LightData light;

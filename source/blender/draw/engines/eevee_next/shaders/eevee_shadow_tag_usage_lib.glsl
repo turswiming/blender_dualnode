@@ -28,27 +28,27 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
   if (is_directional) {
     vec3 lP = shadow_world_to_local(light, P);
 
-    ShadowClipmapCoordinates coord = shadow_directional_coordinates(light, lP);
+    ShadowCoordinates coord = shadow_directional_coordinates(light, lP);
 
     tile_co = coord.tile_coord;
     tilemap_index = coord.tilemap_index;
   }
   else {
-    vec3 lL = light_world_to_local(light, P - light._position);
-    float dist_to_light = length(lL);
+    vec3 lP = light_world_to_local(light, P - light._position);
+    float dist_to_light = length(lP);
     if (dist_to_light > light.influence_radius_max) {
       return;
     }
     if (light.type == LIGHT_SPOT) {
       /* Early out if out of cone. */
-      float angle_tan = length(lL.xy / dist_to_light);
+      float angle_tan = length(lP.xy / dist_to_light);
       if (angle_tan > light.spot_tan) {
         return;
       }
     }
     else if (is_area_light(light.type)) {
       /* Early out if on the wrong side. */
-      if (lL.z > 0.0) {
+      if (lP.z > 0.0) {
         return;
       }
     }
@@ -71,14 +71,15 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     lod = int(ceil(-log2(footprint_ratio)));
     lod = clamp(lod, 0, SHADOW_TILEMAP_LOD);
 
-    int face_id = shadow_punctual_face_index_get(lL);
-    lL = shadow_punctual_local_position_to_face_local(face_id, lL);
+    int face_id = shadow_punctual_face_index_get(lP);
+    lP = shadow_punctual_local_position_to_face_local(face_id, lP);
 
-    tile_co = ivec2(((lL.xy / abs(lL.z)) * 0.5 + 0.5) * float(SHADOW_TILEMAP_RES));
-    tile_co = clamp(tile_co, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
-    tile_co >>= lod;
-    tilemap_index += face_id;
+    ShadowCoordinates coord = shadow_punctual_coordinates(light, lP, face_id);
+
+    tile_co = coord.tile_coord;
+    tilemap_index = coord.tilemap_index;
   }
+  tile_co >>= lod;
 
   if (tilemap_index > light_tilemap_max_get(light)) {
     return;

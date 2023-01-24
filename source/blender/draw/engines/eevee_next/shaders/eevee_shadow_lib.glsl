@@ -16,7 +16,7 @@ vec2 shadow_page_uv_transform(uvec2 page, uint lod, vec2 unormalized_uv, ivec2 t
   return atlas_uv;
 }
 
-/* Rotate vector to light's local space and apply location. Used for directional shadows. */
+/* Rotate vector to light's local space . Used for directional shadows. */
 vec3 shadow_world_to_local(LightData ld, vec3 L)
 {
   /* Avoid relying on compiler to optimize this.
@@ -51,25 +51,6 @@ int shadow_punctual_face_index_get(vec3 lL)
   }
   else {
     return (lL.z > 0.0) ? 5 : 0;
-  }
-}
-
-/* Transform vector to face local coordinate. */
-vec3 shadow_punctual_local_position_to_face_local(int face_id, vec3 lL)
-{
-  switch (face_id) {
-    case 1:
-      return vec3(-lL.y, lL.z, -lL.x);
-    case 2:
-      return vec3(lL.y, lL.z, lL.x);
-    case 3:
-      return vec3(lL.x, lL.z, -lL.y);
-    case 4:
-      return vec3(-lL.x, lL.z, lL.y);
-    case 5:
-      return vec3(lL.x, -lL.y, -lL.z);
-    default:
-      return lL;
   }
 }
 
@@ -122,74 +103,30 @@ float shadow_slope_bias_get(LightData light, vec3 lNg, vec3 lP, vec2 uv, uint lo
   return bias;
 }
 
-struct ShadowTileSample {
+struct ShadowSample {
   /* Signed delta in world units from the shading point to the occluder. Negative if occluded. */
-  ShadowTileData tile;
+  float occluder_delta;
   /* Tile coordinate inside the tilemap [0..SHADOW_TILEMAP_RES). */
   ivec2 tile_coord;
   /* UV coordinate inside the tilemap [0..SHADOW_TILEMAP_RES). */
   vec2 uv;
   /* Minimum slope bias to apply during comparison. */
   float bias;
+  /* Distance from near clip plane in world space units. */
+  float occluder_dist;
+  /* Tile used loaded for page indirection. */
+  ShadowTileData tile;
 };
 
-ShadowTileSample shadow_punctual_tile_get(usampler2D tilemaps_tx,
-                                          LightData light,
-                                          vec3 lP,
-                                          vec3 lNg)
+float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileData tile, vec2 atlas_uv)
 {
-  ShadowTileSample samp;
-
-  int face_id = shadow_punctual_face_index_get(lP);
-  lP = shadow_punctual_local_position_to_face_local(face_id, lP);
-  lNg = shadow_punctual_local_position_to_face_local(face_id, lNg);
-  /* UVs in [-1..+1] range. */
-  samp.uv = lP.xy / abs(lP.z);
-  /* UVs in [0..SHADOW_TILEMAP_RES] range. */
-  const float lod0_res = float(SHADOW_TILEMAP_RES / 2);
-  samp.uv = samp.uv * lod0_res + lod0_res;
-  samp.tile_coord = clamp(ivec2(samp.uv), ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
-
-  int tilemap_index = light.tilemap_index + face_id;
-
-  samp.tile = shadow_tile_load(tilemaps_tx, samp.tile_coord, tilemap_index);
-  samp.uv = shadow_page_uv_transform(samp.tile.page, samp.tile.lod, samp.uv, samp.tile_coord);
-  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.uv, samp.tile.lod);
-  return samp;
-}
-
-ShadowTileSample shadow_directional_tile_get(usampler2D tilemaps_tx,
-                                             LightData light,
-                                             vec3 lP,
-                                             vec3 lNg)
-{
-  ShadowTileSample samp;
-
-  ShadowClipmapCoordinates coord = shadow_directional_coordinates(light, lP);
-  samp.tile_coord = coord.tile_coord;
-
-  samp.tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
-  samp.uv = shadow_page_uv_transform(samp.tile.page, samp.tile.lod, coord.uv, samp.tile_coord);
-  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.uv, samp.tile.lod);
-  samp.bias *= exp2(float(coord.clipmap_lod_relative));
-  return samp;
-}
-
-float shadow_tile_depth_get(sampler2D atlas_tx, ShadowTileSample samp)
-{
-  if (!samp.tile.is_allocated) {
+  if (!tile.is_allocated) {
     /* Far plane distance but with a bias to make sure there will be no shadowing.
      * But also not FLT_MAX since it can cause issue with projection. */
     return 1.1;
   }
-  return texture(atlas_tx, samp.uv).r;
+  return texture(atlas_tx, atlas_uv).r;
 }
-
-struct ShadowSample {
-  /* Signed delta in world units from the shading point to the occluder. Negative if occluded. */
-  float occluder_delta;
-  float bias;
-};
 
 vec2 shadow_punctual_linear_depth(vec2 z, float near, float far)
 {
@@ -204,45 +141,75 @@ float shadow_directional_linear_depth(float z, float near, float far)
   return z * (near - far) - near;
 }
 
-ShadowSample shadow_sample(sampler2D atlas_tx,
+ShadowSample shadow_punctual_sample_get(
+    sampler2D atlas_tx, usampler2D tilemaps_tx, LightData light, vec3 lP, vec3 lNg)
+{
+  int face_id = shadow_punctual_face_index_get(lP);
+  lNg = shadow_punctual_local_position_to_face_local(face_id, lNg);
+  lP = shadow_punctual_local_position_to_face_local(face_id, lP);
+
+  ShadowCoordinates coord = shadow_punctual_coordinates(light, lP, face_id);
+
+  ShadowSample samp;
+  samp.tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
+  samp.uv = shadow_page_uv_transform(samp.tile.page, samp.tile.lod, coord.uv, coord.tile_coord);
+  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.uv, samp.tile.lod);
+
+  float occluder_ndc = shadow_tile_depth_get(atlas_tx, samp.tile, samp.uv);
+
+  /* NOTE: Given to be both positive, so can use intBitsToFloat instead of orderedInt version. */
+  float near = intBitsToFloat(light.clip_near);
+  float far = intBitsToFloat(light.clip_far);
+  /* Shadow is stored as gl_FragCoord.z. Convert to radial distance along with the bias. */
+  vec2 occluder = vec2(occluder_ndc, saturate(occluder_ndc + samp.bias));
+  vec2 occluder_z = shadow_punctual_linear_depth(occluder, near, far);
+  float receiver_dist = length(lP);
+  float radius_divisor = receiver_dist / abs(lP.z);
+  samp.occluder_dist = occluder_z.x * radius_divisor;
+  samp.bias = (occluder_z.y - occluder_z.x) * radius_divisor;
+  samp.occluder_delta = samp.occluder_dist - receiver_dist;
+  return samp;
+}
+
+ShadowSample shadow_directional_sample_get(
+    sampler2D atlas_tx, usampler2D tilemaps_tx, LightData light, vec3 P, vec3 lNg)
+{
+  vec3 lP = shadow_world_to_local(light, P);
+  ShadowCoordinates coord = shadow_directional_coordinates(light, lP);
+
+  ShadowSample samp;
+  samp.tile = shadow_tile_load(tilemaps_tx, coord.tile_coord, coord.tilemap_index);
+  samp.uv = shadow_page_uv_transform(samp.tile.page, samp.tile.lod, coord.uv, coord.tile_coord);
+  samp.bias = shadow_slope_bias_get(light, lNg, lP, samp.uv, samp.tile.lod);
+  samp.bias *= exp2(float(coord.clipmap_lod_relative));
+
+  float occluder_ndc = shadow_tile_depth_get(atlas_tx, samp.tile, samp.uv);
+
+  float near = shadow_orderedIntBitsToFloat(light.clip_near);
+  float far = shadow_orderedIntBitsToFloat(light.clip_far);
+  samp.occluder_dist = shadow_directional_linear_depth(occluder_ndc, near, far);
+  /* Receiver distance needs to also be increasing.
+   * Negate since Z distance follows blender camera convention of -Z as forward. */
+  float receiver_dist = -lP.z;
+  samp.bias *= near - far;
+  samp.occluder_delta = samp.occluder_dist - receiver_dist;
+  return samp;
+}
+
+ShadowSample shadow_sample(const bool is_directional,
+                           sampler2D atlas_tx,
                            usampler2D tilemaps_tx,
                            LightData light,
                            vec3 lL,
                            vec3 lNg,
-                           float receiver_dist,
                            vec3 P)
 {
-  ShadowSample samp;
-  float occluder_dist;
-  if (light.type == LIGHT_SUN) {
-    vec3 lP = shadow_world_to_local(light, P);
-    ShadowTileSample tile = shadow_directional_tile_get(tilemaps_tx, light, lP, lNg);
-    float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile);
-
-    float near = shadow_orderedIntBitsToFloat(light.clip_near);
-    float far = shadow_orderedIntBitsToFloat(light.clip_far);
-    occluder_dist = shadow_directional_linear_depth(occluder_ndc, near, far);
-    /* Receiver distance needs to also be increasing.
-     * Negate since Z distance follows blender camera convention of -Z as forward. */
-    receiver_dist = -lP.z;
-    samp.bias = tile.bias * (near - far);
+  if (is_directional) {
+    return shadow_directional_sample_get(atlas_tx, tilemaps_tx, light, P, lNg);
   }
   else {
-    vec3 lP = lL;
-    ShadowTileSample tile = shadow_punctual_tile_get(tilemaps_tx, light, lP, lNg);
-    float occluder_ndc = shadow_tile_depth_get(atlas_tx, tile);
-    /* NOTE: Given to be both positive. */
-    float near = intBitsToFloat(light.clip_near);
-    float far = intBitsToFloat(light.clip_far);
-    /* Shadow is stored as gl_FragCoord.z. Convert to radial distance along with the bias. */
-    vec2 occluder = vec2(occluder_ndc, saturate(occluder_ndc + tile.bias));
-    vec2 occluder_z = shadow_punctual_linear_depth(occluder, near, far);
-    float radius_divisor = receiver_dist / max_v3(abs(lL));
-    occluder_dist = occluder_z.x * radius_divisor;
-    samp.bias = (occluder_z.y - occluder_z.x) * radius_divisor;
+    return shadow_punctual_sample_get(atlas_tx, tilemaps_tx, light, lL, lNg);
   }
-  samp.occluder_delta = occluder_dist - receiver_dist;
-  return samp;
 }
 
 /** \} */

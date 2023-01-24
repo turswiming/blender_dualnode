@@ -59,16 +59,16 @@ vec3 debug_tile_state_color(ShadowTileData tile)
   return col;
 }
 
-ShadowTileSample debug_tile_get(vec3 P, LightData light)
+ShadowSample debug_tile_get(vec3 P, LightData light)
 {
   vec3 lNg = vec3(1.0, 0.0, 0.0);
   if (light.type == LIGHT_SUN) {
     vec3 lP = shadow_world_to_local(light, P);
-    return shadow_directional_tile_get(shadow_tilemaps_tx, light, lP, lNg);
+    return shadow_directional_sample_get(shadow_atlas_tx, shadow_tilemaps_tx, light, lP, lNg);
   }
   else {
     vec3 lL = light_world_to_local(light, P - light._position);
-    return shadow_punctual_tile_get(shadow_tilemaps_tx, light, lL, lNg);
+    return shadow_punctual_sample_get(shadow_atlas_tx, shadow_tilemaps_tx, light, lL, lNg);
   }
 }
 
@@ -123,28 +123,21 @@ bool debug_tilemaps(vec3 P, LightData light)
 
 void debug_tile_state(vec3 P, LightData light)
 {
-  ShadowTileSample samp = debug_tile_get(P, light);
+  ShadowSample samp = debug_tile_get(P, light);
   out_color_add = vec4(debug_tile_state_color(samp.tile), 0) * 0.5;
   out_color_mul = vec4(0.5);
 }
 
 void debug_atlas_values(vec3 P, LightData light)
 {
-  ShadowTileSample samp = debug_tile_get(P, light);
-  float depth = shadow_tile_depth_get(shadow_atlas_tx, samp);
-
-  if (light.type != LIGHT_SUN) {
-    float near = intBitsToFloat(light.clip_near);
-    float far = intBitsToFloat(light.clip_far);
-    depth = shadow_punctual_linear_depth(vec2(depth), near, far).x;
-  }
-  out_color_add = vec4(vec3(depth), 0);
+  ShadowSample samp = debug_tile_get(P, light);
+  out_color_add = vec4(vec3(samp.occluder_dist), 0);
   out_color_mul = vec4(0.0);
 }
 
 void debug_random_tile_color(vec3 P, LightData light)
 {
-  ShadowTileSample samp = debug_tile_get(P, light);
+  ShadowSample samp = debug_tile_get(P, light);
   out_color_add = vec4(debug_random_color(ivec2(samp.tile.page)), 0) * 0.9;
   out_color_mul = vec4(0.1);
 }
