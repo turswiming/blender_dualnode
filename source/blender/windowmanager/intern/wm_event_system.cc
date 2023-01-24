@@ -77,6 +77,7 @@
 #include "wm_event_types.h"
 #include "wm_surface.h"
 #include "wm_window.h"
+#include "wm_window_private.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -704,6 +705,8 @@ void wm_event_do_notifiers(bContext *C)
 
   /* Auto-run warning. */
   wm_test_autorun_warning(C);
+  /* Deprecation warning. */
+  wm_test_opengl_deprecation_warning(C);
 
   GPU_render_end();
 }
@@ -5588,7 +5591,7 @@ void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, void 
           }
           else if (event.keymodifier == EVT_UNKNOWNKEY) {
             /* This case happens with an external number-pad, and also when using 'dead keys'
-             * (to compose complex latin characters e.g.), it's not really clear why.
+             * (to compose complex Latin characters e.g.), it's not really clear why.
              * Since it's impossible to map a key modifier to an unknown key,
              * it shouldn't harm to clear it. */
             event_state->keymodifier = event.keymodifier = 0;

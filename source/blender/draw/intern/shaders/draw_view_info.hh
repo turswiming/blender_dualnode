@@ -156,6 +156,14 @@ GPU_SHADER_CREATE_INFO(draw_resource_finalize)
     .push_constant(Type::INT, "resource_len")
     .compute_source("draw_resource_finalize_comp.glsl");
 
+GPU_SHADER_CREATE_INFO(draw_view_finalize)
+    .do_static_compilation(true)
+    .local_group_size(64) /* DRW_VIEW_MAX */
+    .define("DRW_VIEW_LEN", "64")
+    .storage_buf(0, Qualifier::READ_WRITE, "ViewCullingData", "view_culling_buf[DRW_VIEW_LEN]")
+    .compute_source("draw_view_finalize_comp.glsl")
+    .additional_info("draw_view");
+
 GPU_SHADER_CREATE_INFO(draw_visibility_compute)
     .do_static_compilation(true)
     .local_group_size(DRW_VISIBILITY_GROUP_SIZE)
@@ -201,6 +209,9 @@ GPU_SHADER_CREATE_INFO(draw_resource_id_new)
 GPU_SHADER_CREATE_INFO(draw_resource_id_fallback)
     .define("UNIFORM_RESOURCE_ID_NEW")
     .vertex_in(15, Type::INT, "drw_ResourceID");
+
+/** TODO mask view id bits. */
+GPU_SHADER_CREATE_INFO(draw_resource_handle_new).define("resource_handle", "drw_ResourceID");
 
 /** \} */
 

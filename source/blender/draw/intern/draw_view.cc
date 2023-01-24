@@ -31,6 +31,14 @@ void View::sync(const float4x4 &view_mat, const float4x4 &win_mat, int view_id)
   dirty_ = true;
 }
 
+void View::sync(const DRWView *view)
+{
+  float4x4 view_mat, win_mat;
+  DRW_view_viewmat_get(view, view_mat.ptr(), false);
+  DRW_view_winmat_get(view, win_mat.ptr(), false);
+  this->sync(view_mat, win_mat);
+}
+
 void View::frustum_boundbox_calc(int view_id)
 {
   /* Extract the 8 corners from a Projection Matrix. */
@@ -207,6 +215,16 @@ void View::frustum_culling_sphere_calc(int view_id)
   }
 }
 
+void View::disable(IndexRange range)
+{
+  /* Set bounding sphere to -1.0f radius will bypass the culling test and treat every instance as
+   * invisible. */
+  range = IndexRange(view_len_).intersect(range);
+  for (auto view_id : range) {
+    reinterpret_cast<BoundSphere *>(&culling_[view_id].bound_sphere)->radius = -1.0f;
+  }
+}
+
 void View::bind()
 {
   if (dirty_ && !procedural_) {
@@ -217,6 +235,20 @@ void View::bind()
 
   GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
   GPU_uniformbuf_bind(culling_, DRW_VIEW_CULLING_UBO_SLOT);
+}
+
+void View::compute_procedural_bounds()
+{
+  GPU_debug_group_begin("View.compute_procedural_bounds");
+
+  GPUShader *shader = DRW_shader_draw_view_finalize_get();
+  GPU_shader_bind(shader);
+  GPU_uniformbuf_bind_as_ssbo(culling_, GPU_shader_get_ssbo(shader, "view_culling_buf"));
+  GPU_uniformbuf_bind(data_, DRW_VIEW_UBO_SLOT);
+  GPU_compute_dispatch(shader, 1, 1, 1);
+  GPU_memory_barrier(GPU_BARRIER_UNIFORM);
+
+  GPU_debug_group_end();
 }
 
 void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze)
@@ -271,6 +303,11 @@ void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool d
   }
 
   GPU_debug_group_end();
+}
+
+VisibilityBuf &View::get_visibility_buffer()
+{
+  return visibility_buf_;
 }
 
 }  // namespace blender::draw

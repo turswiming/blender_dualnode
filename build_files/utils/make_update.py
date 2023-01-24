@@ -107,7 +107,7 @@ def svn_update(args: argparse.Namespace, release_version: Optional[str]) -> None
     lib_assets = "assets"
     lib_assets_dirpath = os.path.join(lib_dirpath, lib_assets)
 
-    if os.path.exists(lib_assets_dirpath):
+    if not os.path.exists(lib_assets_dirpath):
         print_stage("Checking out Assets")
 
         if make_utils.command_missing(args.svn_command):
@@ -117,17 +117,17 @@ def svn_update(args: argparse.Namespace, release_version: Optional[str]) -> None
         svn_url_assets = svn_url + lib_assets
         call(svn_non_interactive + ["checkout", svn_url_assets, lib_assets_dirpath])
 
-    # Update precompiled libraries and tests
+    # Update precompiled libraries, assets and tests
 
     if not os.path.isdir(lib_dirpath):
         print("Library path: %r, not found, skipping" % lib_dirpath)
     else:
         paths_local_and_remote = []
         if os.path.exists(os.path.join(lib_dirpath, ".svn")):
-            print_stage("Updating Precompiled Libraries and Tests (one repository)")
+            print_stage("Updating Precompiled Libraries, Assets and Tests (one repository)")
             paths_local_and_remote.append((lib_dirpath, svn_url))
         else:
-            print_stage("Updating Precompiled Libraries and Tests (multiple repositories)")
+            print_stage("Updating Precompiled Libraries, Assets and Tests (multiple repositories)")
             # Separate paths checked out.
             for dirname in os.listdir(lib_dirpath):
                 if dirname.startswith("."):
