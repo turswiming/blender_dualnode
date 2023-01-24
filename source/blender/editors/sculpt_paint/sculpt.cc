@@ -2697,7 +2697,7 @@ float SCULPT_brush_strength_factor(SculptSession *ss,
     }
     else {
       const float point_3d[3] = {point_2d[0], point_2d[1], 0.0f};
-      avg = BKE_brush_sample_tex_3d(scene, br, mtex, point_3d, rgba, 0, ss->tex_pool);
+      avg = BKE_brush_sample_tex_3d(scene, br, mtex, point_3d, rgba, thread_id, ss->tex_pool);
     }
   }
 
