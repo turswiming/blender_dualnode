@@ -17,7 +17,15 @@
 void write_depth(ivec2 texel_co, const int lod, ivec2 tile_co, float depth)
 {
   ivec2 texel_co_lod = texel_co >> lod;
-  if (!all(equal(texel_co_lod << lod, texel_co))) {
+
+  ivec2 lod_corner_in_lod0 = texel_co_lod << lod;
+  /* Add half of the lod to get the top right pixel nearest to the lod pixel.
+   * This way we never get more than half a LOD0 pixel of offset from the center of any LOD.
+   * This offset is taken into account during sampling. */
+  const int texel_offset = (1 << lod) / 2;
+  ivec2 closest_lod0_texel = lod_corner_in_lod0 + texel_offset;
+
+  if (!all(equal(closest_lod0_texel, texel_co))) {
     return;
   }
 
@@ -58,5 +66,6 @@ void main()
     write_depth(texel_co, 2, tile_co, depth + slope_bias * 4.0);
     write_depth(texel_co, 3, tile_co, depth + slope_bias * 8.0);
     write_depth(texel_co, 4, tile_co, depth + slope_bias * 16.0);
+    write_depth(texel_co, 5, tile_co, depth + slope_bias * 32.0);
   }
 }
