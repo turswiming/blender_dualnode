@@ -480,8 +480,11 @@ void ShadowModule::init()
   ::Scene &scene = *inst_.scene;
   shadow_page_len_ = clamp_i(
       scene.eevee.shadow_pool_size * 4, SHADOW_PAGE_PER_ROW, SHADOW_MAX_PAGE);
-  float simplify_shadows = inst_.is_viewport() ? scene.r.simplify_shadows :
-                                                 scene.r.simplify_shadows_render;
+  float simplify_shadows = 1.0f;
+  if (scene.r.mode & R_SIMPLIFY) {
+    simplify_shadows = inst_.is_viewport() ? scene.r.simplify_shadows :
+                                             scene.r.simplify_shadows_render;
+  }
   lod_bias_ = math::interpolate(float(SHADOW_TILEMAP_LOD), 0.0f, simplify_shadows);
 
   int2 atlas_extent = shadow_page_size_ *
