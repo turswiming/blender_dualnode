@@ -51,7 +51,12 @@ void main()
   /* With all threads (LOD0 size dispatch) load each lod tile from the highest lod
    * to the lowest, keeping track of the lowest one allocated which will be use for shadowing.
    * Also save which page are to be updated. */
-  for (int lod = lod_max; lod >= 0; lod--) {
+  for (int lod = SHADOW_TILEMAP_LOD; lod >= 0; lod--) {
+    if (lod > lod_max) {
+      updated_lod_page[lod] = 0xFFFFFFFFu;
+      continue;
+    }
+
     int tile_index = shadow_tile_offset(tile_co >> lod, tilemap_data.tiles_index, lod);
 
     ShadowTileData tile = shadow_tile_unpack(tiles_buf[tile_index]);
