@@ -241,6 +241,9 @@ class ShadowModule {
   /* Ratio between tilemap pixel world "radius" and film pixel world "radius". */
   float tilemap_projection_ratio_;
 
+  /* Statistics that are read back to CPU after a few frame (to avoid stall). */
+  SwapChain<ShadowStatisticsBuf, 5> statistics_buf_;
+
   /** \} */
 
   /* -------------------------------------------------------------------- */
@@ -271,7 +274,7 @@ class ShadowModule {
    * \{ */
 
   /** Multi-View containing a maximum of 64 view to be rendered with the shadow pipeline. */
-  View shadow_multi_view_ = {"ShadowMultiView", 64, true};
+  View shadow_multi_view_ = {"ShadowMultiView", SHADOW_VIEW_MAX, true};
   /** Tile to physical page mapping. This is an array texture with one layer per view. */
   Texture render_map_tx_ = {"ShadowRenderMap",
                             GPU_R32UI,
@@ -300,7 +303,7 @@ class ShadowModule {
   int shadow_page_len_ = SHADOW_MAX_TILEMAP;
 
  public:
-  ShadowModule(Instance &inst) : inst_(inst){};
+  ShadowModule(Instance &inst);
   ~ShadowModule(){};
 
   void init();

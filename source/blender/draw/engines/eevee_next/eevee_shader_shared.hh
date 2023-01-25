@@ -722,14 +722,19 @@ struct ShadowPagesInfoData {
   int view_count;
   /** Physical page size in pixel. Pages are all squares. */
   int page_size;
-  /** Statistics. */
+
+  int _pad0;
+};
+BLI_STATIC_ASSERT_ALIGN(ShadowPagesInfoData, 16)
+
+struct ShadowStatistics {
+  /** Statistics that are read back to CPU after a few frame (to avoid stall). */
   int page_used_count;
   int page_update_count;
   int page_allocated_count;
   int page_rendered_count;
-  int page_cached_count;
 };
-BLI_STATIC_ASSERT_ALIGN(ShadowPagesInfoData, 16)
+BLI_STATIC_ASSERT_ALIGN(ShadowStatistics, 16)
 
 /** Decoded tile data structure. */
 struct ShadowTileData {
@@ -917,6 +922,7 @@ using LightDataBuf = draw::StorageArrayBuffer<LightData, LIGHT_CHUNK>;
 using MotionBlurDataBuf = draw::UniformBuffer<MotionBlurData>;
 using MotionBlurTileIndirectionBuf = draw::StorageBuffer<MotionBlurTileIndirection, true>;
 using SamplingDataBuf = draw::StorageBuffer<SamplingData>;
+using ShadowStatisticsBuf = draw::StorageBuffer<ShadowStatistics>;
 using ShadowPagesInfoDataBuf = draw::StorageBuffer<ShadowPagesInfoData>;
 using ShadowPageHeapBuf = draw::StorageVectorBuffer<uint, SHADOW_MAX_PAGE>;
 using ShadowPageCacheBuf = draw::StorageArrayBuffer<uint2, SHADOW_MAX_PAGE, true>;

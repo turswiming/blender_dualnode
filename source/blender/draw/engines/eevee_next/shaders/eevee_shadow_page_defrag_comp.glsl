@@ -109,11 +109,10 @@ void main()
   pages_infos_buf.view_count = 0;
 
   /* Stats. */
-  pages_infos_buf.page_used_count = 0;
-  pages_infos_buf.page_update_count = 0;
-  pages_infos_buf.page_allocated_count = 0;
-  pages_infos_buf.page_rendered_count = 0;
-  pages_infos_buf.page_cached_count = 0;
+  statistics_buf.page_used_count = 0;
+  statistics_buf.page_update_count = 0;
+  statistics_buf.page_allocated_count = 0;
+  statistics_buf.page_rendered_count = 0;
 
   /* Wrap the cursor to avoid unsigned overflow. We do not do modulo arithmetic because it would
    * produce a 0 length buffer if the buffer is full. */

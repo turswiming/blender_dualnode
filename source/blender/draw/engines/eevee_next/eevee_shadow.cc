@@ -462,13 +462,23 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
  *
  * \{ */
 
+ShadowModule::ShadowModule(Instance &inst) : inst_(inst)
+{
+  for (int i = 0; i < statistics_buf_.size(); i++) {
+    UNUSED_VARS(i);
+    statistics_buf_.current().clear_to_zero();
+    statistics_buf_.swap();
+  }
+}
+
 void ShadowModule::init()
 {
   /* TODO(@fclem): Make atlas size dependent on the final resolution. This would give roughly same
    * memory usage for multiple viewport versus one big viewport. */
 
-  int2 atlas_extent = int2(shadow_page_size_ * SHADOW_PAGE_PER_ROW,
-                           shadow_page_size_ * (shadow_page_len_ / SHADOW_PAGE_PER_ROW));
+  int2 atlas_extent = shadow_page_size_ *
+                      int2(SHADOW_PAGE_PER_ROW,
+                           divide_ceil_u(shadow_page_len_, SHADOW_PAGE_PER_ROW));
 
   eGPUTextureUsage tex_usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
   if (atlas_tx_.ensure_2d(atlas_type, atlas_extent, tex_usage)) {
@@ -480,6 +490,28 @@ void ShadowModule::init()
   if (!atlas_tx_.is_valid()) {
     atlas_tx_.ensure_2d(atlas_type, int2(1));
     inst_.info = "Error: Could not allocate shadow atlas. Most likely out of GPU memory.";
+  }
+
+  /* Read end of the swapchain to avoid stall. */
+  {
+    if (inst_.sampling.finished_viewport()) {
+      /* Swap enough to read the last one. */
+      for (int i = 0; i < statistics_buf_.size(); i++) {
+        statistics_buf_.swap();
+      }
+    }
+    else {
+      statistics_buf_.swap();
+    }
+    statistics_buf_.current().read();
+    ShadowStatistics stats = statistics_buf_.current();
+
+    if (stats.page_used_count > shadow_page_len_) {
+      std::stringstream ss;
+      ss << "Error: Shadow buffer full, may result in missing shadows and lower performance. ("
+         << stats.page_used_count << " / " << shadow_page_len_ << ")\n";
+      inst_.info = ss.str();
+    }
   }
 
   atlas_tx_.filter_mode(false);
@@ -746,6 +778,7 @@ void ShadowModule::end_sync()
         sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
         sub.bind_ssbo("pages_free_buf", pages_free_data_);
         sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
+        sub.bind_ssbo("statistics_buf", statistics_buf_.current());
         sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);
         sub.dispatch(int3(1, 1, 1));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -756,6 +789,7 @@ void ShadowModule::end_sync()
         sub.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_ALLOCATE));
         sub.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        sub.bind_ssbo("statistics_buf", statistics_buf_.current());
         sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
         sub.bind_ssbo("pages_free_buf", pages_free_data_);
         sub.bind_ssbo("pages_cached_buf", pages_cached_data_);
@@ -770,6 +804,7 @@ void ShadowModule::end_sync()
         sub.bind_ssbo("tilemaps_clip_buf", tilemap_pool.tilemaps_clip);
         sub.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
         sub.bind_ssbo("view_infos_buf", &shadow_multi_view_.matrices_ubo_get());
+        sub.bind_ssbo("statistics_buf", statistics_buf_.current());
         sub.bind_ssbo("clear_dispatch_buf", clear_dispatch_buf_);
         sub.bind_ssbo("clear_page_buf", clear_page_buf_);
         sub.bind_ssbo("pages_infos_buf", pages_infos_data_);
@@ -888,21 +923,45 @@ void ShadowModule::set_view(View &view)
   usage_tag_fb.ensure(int2(target_size));
   render_fb_.ensure(int2(SHADOW_TILEMAP_RES * shadow_page_size_));
 
-  GPU_uniformbuf_clear_to_zero(shadow_multi_view_.matrices_ubo_get());
+  bool tile_update_remains = true;
+  while (tile_update_remains) {
+    DRW_stats_group_start("Shadow");
+    {
+      GPU_uniformbuf_clear_to_zero(shadow_multi_view_.matrices_ubo_get());
 
-  DRW_stats_group_start("Shadow");
-  {
-    inst_.manager->submit(tilemap_setup_ps_, view);
+      inst_.manager->submit(tilemap_setup_ps_, view);
 
-    inst_.manager->submit(tilemap_usage_ps_, view);
+      inst_.manager->submit(tilemap_usage_ps_, view);
 
-    inst_.manager->submit(tilemap_update_ps_, view);
+      inst_.manager->submit(tilemap_update_ps_, view);
 
-    shadow_multi_view_.compute_procedural_bounds();
+      shadow_multi_view_.compute_procedural_bounds();
 
-    inst_.pipelines.shadow.render(shadow_multi_view_);
+      inst_.pipelines.shadow.render(shadow_multi_view_);
+    }
+    DRW_stats_group_end();
+
+    if (inst_.is_viewport()) {
+      tile_update_remains = false;
+    }
+    else {
+      /* This provoke a GPU/CPU sync. Avoid it if we are sure that all tilemaps will be rendered in
+       * a single iteration. */
+      bool enough_tilemap_for_single_iteration = tilemap_pool.tilemaps_data.size() <=
+                                                 SHADOW_VIEW_MAX;
+      if (enough_tilemap_for_single_iteration) {
+        tile_update_remains = false;
+      }
+      else {
+        /* Readback and check if there is still tilemap to update. */
+        tile_update_remains = false;
+        statistics_buf_.current().read();
+        ShadowStatistics stats = statistics_buf_.current();
+        /* FIXME: Currenty page_rendered_count is way higher, suspect uneeded rendered pages. */
+        tile_update_remains = stats.page_rendered_count < stats.page_update_count;
+      }
+    }
   }
-  DRW_stats_group_end();
 
   if (prev_fb) {
     GPU_framebuffer_bind(prev_fb);
