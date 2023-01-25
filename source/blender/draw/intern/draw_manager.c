@@ -1183,6 +1183,11 @@ static void drw_engines_enable_from_engine(const RenderEngineType *engine_type, 
   switch (drawtype) {
     case OB_WIRE:
     case OB_SOLID:
+      if (U.experimental.enable_workbench_next &&
+          strcmp(engine_type->idname, "BLENDER_WORKBENCH_NEXT") == 0) {
+        use_drw_engine(DRW_engine_viewport_workbench_next_type.draw_engine);
+        break;
+      }
       use_drw_engine(DRW_engine_viewport_workbench_type.draw_engine);
       break;
     case OB_MATERIAL:
@@ -1474,7 +1479,7 @@ void DRW_draw_callbacks_post_scene(void)
     /* XXX: Or should we use a proper draw/overlay engine for this case? */
     if (do_annotations) {
       GPU_depth_test(GPU_DEPTH_NONE);
-      /* XXX: as scene->gpd is not copied for COW yet */
+      /* XXX: as `scene->gpd` is not copied for COW yet. */
       ED_annotation_draw_view3d(DEG_get_input_scene(depsgraph), depsgraph, v3d, region, true);
       GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
     }
@@ -2015,7 +2020,7 @@ void DRW_render_to_image(RenderEngine *engine, struct Depsgraph *depsgraph)
                                                        size[0],
                                                        size[1],
                                                        view_layer->name,
-                                                       /* RR_ALL_VIEWS */ NULL);
+                                                       /*RR_ALL_VIEWS*/ NULL);
   RenderLayer *render_layer = render_result->layers.first;
   for (RenderView *render_view = render_result->views.first; render_view != NULL;
        render_view = render_view->next) {
@@ -2183,7 +2188,7 @@ void DRW_draw_render_loop_2d_ex(struct Depsgraph *depsgraph,
   DRW_viewport_colormanagement_set(viewport);
 
   /* TODO(jbakker): Only populate when editor needs to draw object.
-   * for the image editor this is when showing UV's. */
+   * for the image editor this is when showing UVs. */
   const bool do_populate_loop = (DST.draw_ctx.space_data->spacetype == SPACE_IMAGE);
   const bool do_annotations = drw_draw_show_annotation();
   const bool do_draw_gizmos = (DST.draw_ctx.space_data->spacetype != SPACE_IMAGE);
@@ -2246,7 +2251,7 @@ void DRW_draw_render_loop_2d_ex(struct Depsgraph *depsgraph,
 
   drw_engines_draw_scene();
 
-  /* Fix 3D view being "laggy" on macos and win+nvidia. (See T56996, T61474) */
+  /* Fix 3D view being "laggy" on MACOS and MS-Windows+NVIDIA. (See T56996, T61474) */
   if (GPU_type_matches_ex(GPU_DEVICE_ANY, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
     GPU_flush();
   }
@@ -2989,6 +2994,9 @@ void DRW_engines_register_experimental(void)
 {
   if (U.experimental.enable_eevee_next) {
     RE_engines_register(&DRW_engine_viewport_eevee_next_type);
+  }
+  if (U.experimental.enable_workbench_next) {
+    RE_engines_register(&DRW_engine_viewport_workbench_next_type);
   }
 }
 

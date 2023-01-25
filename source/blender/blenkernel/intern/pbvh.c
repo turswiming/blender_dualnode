@@ -825,7 +825,8 @@ void BKE_pbvh_build_mesh(PBVH *pbvh,
   pbvh->mesh = mesh;
   pbvh->header.type = PBVH_FACES;
   pbvh->mpoly = mpoly;
-  pbvh->hide_poly = (bool *)CustomData_get_layer_named(&mesh->pdata, CD_PROP_BOOL, ".hide_poly");
+  pbvh->hide_poly = (bool *)CustomData_get_layer_named_for_write(
+      &mesh->pdata, CD_PROP_BOOL, ".hide_poly", mesh->totpoly);
   pbvh->material_indices = (const int *)CustomData_get_layer_named(
       &mesh->pdata, CD_PROP_INT32, "material_index");
   pbvh->mloop = mloop;
@@ -833,7 +834,8 @@ void BKE_pbvh_build_mesh(PBVH *pbvh,
   pbvh->vert_positions = vert_positions;
   BKE_mesh_vertex_normals_ensure(mesh);
   pbvh->vert_normals = BKE_mesh_vertex_normals_for_write(mesh);
-  pbvh->hide_vert = (bool *)CustomData_get_layer_named(&mesh->vdata, CD_PROP_BOOL, ".hide_vert");
+  pbvh->hide_vert = (bool *)CustomData_get_layer_named_for_write(
+      &mesh->vdata, CD_PROP_BOOL, ".hide_vert", mesh->totvert);
   pbvh->vert_bitmap = MEM_calloc_arrayN(totvert, sizeof(bool), "bvh->vert_bitmap");
   pbvh->totvert = totvert;
 
@@ -1018,7 +1020,9 @@ void BKE_pbvh_free(PBVH *pbvh)
       if (node->bm_other_verts) {
         BLI_gset_free(node->bm_other_verts, NULL);
       }
+    }
 
+    if (node->flag & (PBVH_Leaf | PBVH_TexLeaf)) {
       pbvh_node_pixels_free(node);
     }
   }
@@ -1092,7 +1096,7 @@ static void pbvh_stack_push(PBVHIter *iter, PBVHNode *node, bool revisiting)
   iter->stacksize++;
 }
 
-static PBVHNode *pbvh_iter_next(PBVHIter *iter)
+static PBVHNode *pbvh_iter_next(PBVHIter *iter, PBVHNodeFlags leaf_flag)
 {
   /* purpose here is to traverse tree, visiting child nodes before their
    * parents, this order is necessary for e.g. computing bounding boxes */
@@ -1119,7 +1123,7 @@ static PBVHNode *pbvh_iter_next(PBVHIter *iter)
       continue; /* don't traverse, outside of search zone */
     }
 
-    if (node->flag & PBVH_Leaf) {
+    if (node->flag & leaf_flag) {
       /* immediately hit leaf node */
       return node;
     }
@@ -1164,8 +1168,12 @@ static PBVHNode *pbvh_iter_next_occluded(PBVHIter *iter)
   return NULL;
 }
 
-void BKE_pbvh_search_gather(
-    PBVH *pbvh, BKE_pbvh_SearchCallback scb, void *search_data, PBVHNode ***r_array, int *r_tot)
+void BKE_pbvh_search_gather_ex(PBVH *pbvh,
+                               BKE_pbvh_SearchCallback scb,
+                               void *search_data,
+                               PBVHNode ***r_array,
+                               int *r_tot,
+                               PBVHNodeFlags leaf_flag)
 {
   PBVHIter iter;
   PBVHNode **array = NULL, *node;
@@ -1173,8 +1181,8 @@ void BKE_pbvh_search_gather(
 
   pbvh_iter_begin(&iter, pbvh, scb, search_data);
 
-  while ((node = pbvh_iter_next(&iter))) {
-    if (node->flag & PBVH_Leaf) {
+  while ((node = pbvh_iter_next(&iter, leaf_flag))) {
+    if (node->flag & leaf_flag) {
       if (UNLIKELY(tot == space)) {
         /* resize array if needed */
         space = (tot == 0) ? 32 : space * 2;
@@ -1197,6 +1205,12 @@ void BKE_pbvh_search_gather(
   *r_tot = tot;
 }
 
+void BKE_pbvh_search_gather(
+    PBVH *pbvh, BKE_pbvh_SearchCallback scb, void *search_data, PBVHNode ***r_array, int *r_tot)
+{
+  BKE_pbvh_search_gather_ex(pbvh, scb, search_data, r_array, r_tot, PBVH_Leaf);
+}
+
 void BKE_pbvh_search_callback(PBVH *pbvh,
                               BKE_pbvh_SearchCallback scb,
                               void *search_data,
@@ -1208,7 +1222,7 @@ void BKE_pbvh_search_callback(PBVH *pbvh,
 
   pbvh_iter_begin(&iter, pbvh, scb, search_data);
 
-  while ((node = pbvh_iter_next(&iter))) {
+  while ((node = pbvh_iter_next(&iter, PBVH_Leaf))) {
     if (node->flag & PBVH_Leaf) {
       hcb(node, hit_data);
     }
@@ -1944,7 +1958,7 @@ void BKE_pbvh_redraw_BB(PBVH *pbvh, float bb_min[3], float bb_max[3])
 
   pbvh_iter_begin(&iter, pbvh, NULL, NULL);
 
-  while ((node = pbvh_iter_next(&iter))) {
+  while ((node = pbvh_iter_next(&iter, PBVH_Leaf))) {
     if (node->flag & PBVH_UpdateRedraw) {
       BB_expand_with_bb(&bb, &node->vb);
     }
@@ -1964,7 +1978,7 @@ void BKE_pbvh_get_grid_updates(PBVH *pbvh, bool clear, void ***r_gridfaces, int 
 
   pbvh_iter_begin(&iter, pbvh, NULL, NULL);
 
-  while ((node = pbvh_iter_next(&iter))) {
+  while ((node = pbvh_iter_next(&iter, PBVH_Leaf))) {
     if (node->flag & PBVH_UpdateNormals) {
       for (uint i = 0; i < node->totprim; i++) {
         void *face = pbvh->gridfaces[node->prim_indices[i]];
@@ -3145,8 +3159,23 @@ void BKE_pbvh_draw_debug_cb(PBVH *pbvh,
                                             PBVHNodeFlags flag),
                             void *user_data)
 {
+  PBVHNodeFlags flag = PBVH_Leaf;
+
   for (int a = 0; a < pbvh->totnode; a++) {
     PBVHNode *node = &pbvh->nodes[a];
+
+    if (node->flag & PBVH_TexLeaf) {
+      flag = PBVH_TexLeaf;
+      break;
+    }
+  }
+
+  for (int a = 0; a < pbvh->totnode; a++) {
+    PBVHNode *node = &pbvh->nodes[a];
+
+    if (!(node->flag & flag)) {
+      continue;
+    }
 
     draw_fn(node, user_data, node->vb.bmin, node->vb.bmax, node->flag);
   }
@@ -3369,7 +3398,7 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
     vi->vert_normals = pbvh->vert_normals;
     vi->hide_vert = pbvh->hide_vert;
 
-    vi->vmask = CustomData_get_layer(pbvh->vdata, CD_PAINT_MASK);
+    vi->vmask = CustomData_get_layer_for_write(pbvh->vdata, CD_PAINT_MASK, pbvh->mesh->totvert);
   }
 }
 
@@ -3456,7 +3485,8 @@ bool *BKE_pbvh_get_vert_hide_for_write(PBVH *pbvh)
   if (pbvh->hide_vert) {
     return pbvh->hide_vert;
   }
-  pbvh->hide_vert = CustomData_get_layer_named(&pbvh->mesh->vdata, CD_PROP_BOOL, ".hide_vert");
+  pbvh->hide_vert = CustomData_get_layer_named_for_write(
+      &pbvh->mesh->vdata, CD_PROP_BOOL, ".hide_vert", pbvh->mesh->totvert);
   if (pbvh->hide_vert) {
     return pbvh->hide_vert;
   }
@@ -3478,8 +3508,10 @@ void BKE_pbvh_face_sets_set(PBVH *pbvh, int *face_sets)
 void BKE_pbvh_update_hide_attributes_from_mesh(PBVH *pbvh)
 {
   if (pbvh->header.type == PBVH_FACES) {
-    pbvh->hide_vert = CustomData_get_layer_named(&pbvh->mesh->vdata, CD_PROP_BOOL, ".hide_vert");
-    pbvh->hide_poly = CustomData_get_layer_named(&pbvh->mesh->pdata, CD_PROP_BOOL, ".hide_poly");
+    pbvh->hide_vert = CustomData_get_layer_named_for_write(
+        &pbvh->mesh->vdata, CD_PROP_BOOL, ".hide_vert", pbvh->mesh->totvert);
+    pbvh->hide_poly = CustomData_get_layer_named_for_write(
+        &pbvh->mesh->pdata, CD_PROP_BOOL, ".hide_poly", pbvh->mesh->totpoly);
   }
 }
 
@@ -3799,8 +3831,8 @@ void BKE_pbvh_sync_visibility_from_verts(PBVH *pbvh, Mesh *mesh)
       const MPoly *mp = BKE_mesh_polys(mesh);
       CCGKey key = pbvh->gridkey;
 
-      bool *hide_poly = (bool *)CustomData_get_layer_named(
-          &mesh->pdata, CD_PROP_BOOL, ".hide_poly");
+      bool *hide_poly = (bool *)CustomData_get_layer_named_for_write(
+          &mesh->pdata, CD_PROP_BOOL, ".hide_poly", mesh->totpoly);
 
       bool delete_hide_poly = true;
       for (int face_index = 0; face_index < mesh->totpoly; face_index++, mp++) {
@@ -3818,14 +3850,15 @@ void BKE_pbvh_sync_visibility_from_verts(PBVH *pbvh, Mesh *mesh)
         }
 
         if (hidden && !hide_poly) {
-          hide_poly = (bool *)CustomData_get_layer_named(&mesh->pdata, CD_PROP_BOOL, ".hide_poly");
+          hide_poly = (bool *)CustomData_get_layer_named_for_write(
+              &mesh->pdata, CD_PROP_BOOL, ".hide_poly", mesh->totpoly);
 
           if (!hide_poly) {
             CustomData_add_layer_named(
                 &mesh->pdata, CD_PROP_BOOL, CD_CONSTRUCT, NULL, mesh->totpoly, ".hide_poly");
 
-            hide_poly = (bool *)CustomData_get_layer_named(
-                &mesh->pdata, CD_PROP_BOOL, ".hide_poly");
+            hide_poly = (bool *)CustomData_get_layer_named_for_write(
+                &mesh->pdata, CD_PROP_BOOL, ".hide_poly", mesh->totpoly);
           }
         }
 
