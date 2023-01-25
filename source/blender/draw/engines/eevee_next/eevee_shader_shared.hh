@@ -621,6 +621,8 @@ struct LightData {
   float2 spot_size_inv;
   /** Spot angle tangent. */
   float spot_tan;
+  /** Reuse for directionnal lod bias. */
+#define _clipmap_lod_bias spot_tan
   /** Power depending on shader type. */
   float diffuse_power;
   float specular_power;

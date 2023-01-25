@@ -452,6 +452,8 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera, float lod_b
   light.clipmap_lod_min = lods_range.first();
   light.clipmap_lod_max = lods_range.last();
 
+  light._clipmap_lod_bias = lod_bias;
+
   /* Half size of the min level. */
   float half_size = ShadowTileMap::clipmap_tile_size_get(lods_range.first()) / 2.0f;
   light.normal_mat_packed.x = half_size;

@@ -105,7 +105,7 @@ int shadow_directional_clipmap_level(LightData light, vec3 lP)
    * This could be avoided by preselecting 2 levels and checking which one is available based on
    * tile boundaries. But this is expensive. */
   const float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 1.0001);
-  int clipmap_lod = int(ceil(log2(length(lP) * narrowing)));
+  int clipmap_lod = int(ceil(log2(length(lP) * narrowing) + light._clipmap_lod_bias));
   /* Since the distance is centered around the camera (and thus by extension the tilemap),
    * we need to multiply by 2 to get the lod level which covers the following range:
    * [-tilemap_coverage_get(lod)/2..tilemap_coverage_get(lod)/2] */
