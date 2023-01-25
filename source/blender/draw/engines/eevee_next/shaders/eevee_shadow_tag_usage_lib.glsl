@@ -68,16 +68,15 @@ void shadow_tag_usage_tilemap(uint l_idx, vec3 P, float dist_to_cam, const bool 
     /* Apply resolution ratio. */
     footprint_ratio *= tilemap_projection_ratio;
 
-    lod = int(ceil(-log2(footprint_ratio)));
-    lod = clamp(lod, 0, SHADOW_TILEMAP_LOD);
-
     int face_id = shadow_punctual_face_index_get(lP);
     lP = shadow_punctual_local_position_to_face_local(face_id, lP);
 
     ShadowCoordinates coord = shadow_punctual_coordinates(light, lP, face_id);
-
     tile_co = coord.tile_coord;
     tilemap_index = coord.tilemap_index;
+
+    lod = int(ceil(-log2(footprint_ratio) + tilemaps_buf[tilemap_index].lod_bias));
+    lod = clamp(lod, 0, SHADOW_TILEMAP_LOD);
   }
   tile_co >>= lod;
 

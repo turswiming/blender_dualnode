@@ -24,7 +24,8 @@ namespace blender::eevee {
 
 void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
                                  int2 origin_offset,
-                                 int clipmap_level)
+                                 int clipmap_level,
+                                 float lod_bias_)
 {
   if (is_cubeface || (level != clipmap_level)) {
     set_dirty();
@@ -42,6 +43,8 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
     object_mat = object_mat_;
     set_dirty();
   }
+
+  lod_bias = lod_bias_;
 
   float tile_size = clipmap_tile_size_get(level);
 
@@ -61,10 +64,8 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
                   1.0);
 }
 
-void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
-                                  float near_,
-                                  float far_,
-                                  eCubeFace face)
+void ShadowTileMap::sync_cubeface(
+    const float4x4 &object_mat_, float near_, float far_, eCubeFace face, float lod_bias_)
 {
   if (!is_cubeface || (cubeface != face) || (near != near_) || (far != far_)) {
     set_dirty();
@@ -73,6 +74,7 @@ void ShadowTileMap::sync_cubeface(const float4x4 &object_mat_,
   cubeface = face;
   near = near_;
   far = far_;
+  lod_bias = lod_bias_;
   grid_offset = int2(0);
 
   if (!equals_m4m4(object_mat.ptr(), object_mat_.ptr())) {
@@ -246,7 +248,7 @@ void ShadowPunctual::release_excess_tilemaps()
   tilemaps_ = span.take_front(tilemaps_needed_);
 }
 
-void ShadowPunctual::end_sync(Light &light)
+void ShadowPunctual::end_sync(Light &light, float lod_bias)
 {
   ShadowTileMapPool &tilemap_pool = shadows_.tilemap_pool;
 
@@ -261,15 +263,15 @@ void ShadowPunctual::end_sync(Light &light)
     tilemaps_.append(tilemap_pool.acquire());
   }
 
-  tilemaps_[Z_NEG]->sync_cubeface(obmat_tmp, near_, far_, Z_NEG);
+  tilemaps_[Z_NEG]->sync_cubeface(obmat_tmp, near_, far_, Z_NEG, lod_bias);
   if (tilemaps_needed_ >= 5) {
-    tilemaps_[X_POS]->sync_cubeface(obmat_tmp, near_, far_, X_POS);
-    tilemaps_[X_NEG]->sync_cubeface(obmat_tmp, near_, far_, X_NEG);
-    tilemaps_[Y_POS]->sync_cubeface(obmat_tmp, near_, far_, Y_POS);
-    tilemaps_[Y_NEG]->sync_cubeface(obmat_tmp, near_, far_, Y_NEG);
+    tilemaps_[X_POS]->sync_cubeface(obmat_tmp, near_, far_, X_POS, lod_bias);
+    tilemaps_[X_NEG]->sync_cubeface(obmat_tmp, near_, far_, X_NEG, lod_bias);
+    tilemaps_[Y_POS]->sync_cubeface(obmat_tmp, near_, far_, Y_POS, lod_bias);
+    tilemaps_[Y_NEG]->sync_cubeface(obmat_tmp, near_, far_, Y_NEG, lod_bias);
   }
   if (tilemaps_needed_ == 6) {
-    tilemaps_[Z_POS]->sync_cubeface(obmat_tmp, near_, far_, Z_POS);
+    tilemaps_[Z_POS]->sync_cubeface(obmat_tmp, near_, far_, Z_POS, lod_bias);
   }
 
   /* Normal matrix to convert geometric normal to optimal bias. */
@@ -365,7 +367,7 @@ void ShadowDirectional::release_excess_tilemaps(const Camera &camera)
   lods_range = isect_range;
 }
 
-void ShadowDirectional::end_sync(Light &light, const Camera &camera)
+void ShadowDirectional::end_sync(Light &light, const Camera &camera, float lod_bias)
 {
   ShadowTileMapPool &tilemap_pool = shadows_.tilemap_pool;
   IndexRange lods_new = clipmap_level_range(camera);
@@ -404,7 +406,7 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera)
         roundf(math::dot(float3(object_mat_.values[0]), camera.position()) / tile_size),
         roundf(math::dot(float3(object_mat_.values[1]), camera.position()) / tile_size));
 
-    tilemap->sync_clipmap(object_mat_, level_offset, level);
+    tilemap->sync_clipmap(object_mat_, level_offset, level, lod_bias);
 
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
     tilemap_pool.tilemaps_data.append(*tilemap);
@@ -473,12 +475,15 @@ ShadowModule::ShadowModule(Instance &inst) : inst_(inst)
 
 void ShadowModule::init()
 {
-  /* TODO(@fclem): Make atlas size dependent on the final resolution. This would give roughly same
-   * memory usage for multiple viewport versus one big viewport. */
+  ::Scene &scene = *inst_.scene;
+  shadow_page_len_ = clamp_i(
+      scene.eevee.shadow_pool_size * 4, SHADOW_PAGE_PER_ROW, SHADOW_MAX_PAGE);
+  float simplify_shadows = inst_.is_viewport() ? scene.r.simplify_shadows :
+                                                 scene.r.simplify_shadows_render;
+  lod_bias_ = math::interpolate(float(SHADOW_TILEMAP_LOD), 0.0f, simplify_shadows);
 
   int2 atlas_extent = shadow_page_size_ *
-                      int2(SHADOW_PAGE_PER_ROW,
-                           divide_ceil_u(shadow_page_len_, SHADOW_PAGE_PER_ROW));
+                      int2(SHADOW_PAGE_PER_ROW, shadow_page_len_ / SHADOW_PAGE_PER_ROW);
 
   eGPUTextureUsage tex_usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
   if (atlas_tx_.ensure_2d(atlas_type, atlas_extent, tex_usage)) {
@@ -612,10 +617,10 @@ void ShadowModule::end_sync()
   tilemap_pool.tilemaps_data.clear();
   for (Light &light : inst_.lights.light_map_.values()) {
     if (light.directional != nullptr) {
-      light.directional->end_sync(light, inst_.camera);
+      light.directional->end_sync(light, inst_.camera, lod_bias_);
     }
     else if (light.punctual != nullptr) {
-      light.punctual->end_sync(light);
+      light.punctual->end_sync(light, lod_bias_);
     }
     else {
       light.tilemap_index = LIGHT_NO_SHADOW;
@@ -648,7 +653,7 @@ void ShadowModule::end_sync()
   if (do_full_update) {
     do_full_update = false;
     /* Put all pages in the free heap. */
-    for (uint i : IndexRange(SHADOW_MAX_PAGE)) {
+    for (uint i : IndexRange(shadow_page_len_)) {
       uint2 page = {i % SHADOW_PAGE_PER_ROW, i / SHADOW_PAGE_PER_ROW};
       pages_free_data_[i] = page.x | (page.y << 16u);
     }
@@ -673,7 +678,7 @@ void ShadowModule::end_sync()
     GPU_storagebuf_clear(pages_cached_data_, GPU_RG32I, GPU_DATA_INT, &data);
 
     /* Reset info to match new state. */
-    pages_infos_data_.page_free_count = SHADOW_MAX_PAGE;
+    pages_infos_data_.page_free_count = shadow_page_len_;
     pages_infos_data_.page_alloc_count = 0;
     pages_infos_data_.page_cached_next = 0u;
     pages_infos_data_.page_cached_start = 0u;
@@ -957,7 +962,6 @@ void ShadowModule::set_view(View &view)
         tile_update_remains = false;
         statistics_buf_.current().read();
         ShadowStatistics stats = statistics_buf_.current();
-        /* FIXME: Currenty page_rendered_count is way higher, suspect uneeded rendered pages. */
         tile_update_remains = stats.page_rendered_count < stats.page_update_count;
       }
     }

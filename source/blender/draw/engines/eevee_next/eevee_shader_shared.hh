@@ -672,7 +672,7 @@ static inline float2 shadow_tile_coord_to_ndc(int2 tile)
 }
 
 /**
- * Small descriptor used for the tile update phase. Overriden by CPU uploading to GPU each redraw.
+ * Small descriptor used for the tile update phase. Updated by CPU & uploaded to GPU each redraw.
  */
 struct ShadowTileMapData {
   /** Cached, used for rendering. */
@@ -689,8 +689,8 @@ struct ShadowTileMapData {
   int tiles_index;
   /** Index of persistent data in the persistent data buffer. */
   int clip_data_index;
-
-  int _pad0;
+  /** Bias LOD to tag for usage to lower the amount of tile used. */
+  float lod_bias;
 };
 BLI_STATIC_ASSERT_ALIGN(ShadowTileMapData, 16)
 

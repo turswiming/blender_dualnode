@@ -83,9 +83,13 @@ struct ShadowTileMap : public ShadowTileMapData {
     this->set_dirty();
   }
 
-  void sync_clipmap(const float4x4 &object_mat_, int2 origin_offset, int clipmap_level);
+  void sync_clipmap(const float4x4 &object_mat_,
+                    int2 origin_offset,
+                    int clipmap_level,
+                    float lod_bias_);
 
-  void sync_cubeface(const float4x4 &object_mat, float near, float far, eCubeFace face);
+  void sync_cubeface(
+      const float4x4 &object_mat, float near, float far, eCubeFace face, float lod_bias_);
 
   static float clipmap_level_coverage_get(int lvl)
   {
@@ -135,8 +139,6 @@ struct ShadowTileMap : public ShadowTileMapData {
  *
  * At sync end, all tile-maps are grouped by light inside the ShadowTileMapDataBuf so that each
  * light has a contiguous range of tile-maps to refer to.
- *
- * The tile-map atlas has a fixed 64x64 size. So it can contain 4096 tile-map of 16x16 pixels each.
  */
 struct ShadowTileMapPool {
  public:
@@ -298,7 +300,11 @@ class ShadowModule {
   /** \} */
 
   /** Scene immutable parameters. */
+
+  /** For now, needs to be hardcoded. */
   int shadow_page_size_ = SHADOW_PAGE_RES;
+  /** Amount of bias to apply to the LOD computed at the tile usage tagging stage. */
+  float lod_bias_ = 0.0f;
   /** Maximum number of allocated pages. Maximum value is SHADOW_MAX_TILEMAP. */
   int shadow_page_len_ = SHADOW_MAX_TILEMAP;
 
@@ -394,7 +400,7 @@ class ShadowPunctual : public NonCopyable, NonMovable {
   /**
    * Allocate shadow tile-maps and setup views for rendering.
    */
-  void end_sync(Light &light);
+  void end_sync(Light &light, float lod_bias);
 };
 
 class ShadowDirectional : public NonCopyable, NonMovable {
@@ -432,7 +438,7 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   /**
    * Allocate shadow tile-maps and setup views for rendering.
    */
-  void end_sync(Light &light, const Camera &camera);
+  void end_sync(Light &light, const Camera &camera, float lod_bias);
 
  private:
   IndexRange clipmap_level_range(const Camera &camera);
