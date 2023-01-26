@@ -47,7 +47,12 @@ class RENDER_PT_color_management(RenderButtonsPanel, Panel):
     bl_label = "Color Management"
     bl_options = {'DEFAULT_CLOSED'}
     bl_order = 100
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH_NEXT'}
 
     def draw(self, context):
         layout = self.layout
@@ -80,7 +85,12 @@ class RENDER_PT_color_management_curves(RenderButtonsPanel, Panel):
     bl_label = "Use Curves"
     bl_parent_id = "RENDER_PT_color_management"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH_NEXT'}
 
     def draw_header(self, context):
 
@@ -661,7 +671,7 @@ class RENDER_PT_eevee_hair(RenderButtonsPanel, Panel):
 class RENDER_PT_eevee_performance(RenderButtonsPanel, Panel):
     bl_label = "Performance"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -682,7 +692,12 @@ class RENDER_PT_gpencil(RenderButtonsPanel, Panel):
     bl_label = "Grease Pencil"
     bl_options = {'DEFAULT_CLOSED'}
     bl_order = 10
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH_NEXT'}
 
     def draw(self, context):
         layout = self.layout
@@ -698,7 +713,7 @@ class RENDER_PT_gpencil(RenderButtonsPanel, Panel):
 
 class RENDER_PT_opengl_sampling(RenderButtonsPanel, Panel):
     bl_label = "Sampling"
-    COMPAT_ENGINES = {'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -720,7 +735,7 @@ class RENDER_PT_opengl_sampling(RenderButtonsPanel, Panel):
 class RENDER_PT_opengl_film(RenderButtonsPanel, Panel):
     bl_label = "Film"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
 
     def draw(self, context):
         layout = self.layout
@@ -733,7 +748,7 @@ class RENDER_PT_opengl_film(RenderButtonsPanel, Panel):
 
 class RENDER_PT_opengl_lighting(RenderButtonsPanel, Panel):
     bl_label = "Lighting"
-    COMPAT_ENGINES = {'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -745,7 +760,7 @@ class RENDER_PT_opengl_lighting(RenderButtonsPanel, Panel):
 
 class RENDER_PT_opengl_color(RenderButtonsPanel, Panel):
     bl_label = "Color"
-    COMPAT_ENGINES = {'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -757,7 +772,7 @@ class RENDER_PT_opengl_color(RenderButtonsPanel, Panel):
 
 class RENDER_PT_opengl_options(RenderButtonsPanel, Panel):
     bl_label = "Options"
-    COMPAT_ENGINES = {'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -770,7 +785,12 @@ class RENDER_PT_opengl_options(RenderButtonsPanel, Panel):
 class RENDER_PT_simplify(RenderButtonsPanel, Panel):
     bl_label = "Simplify"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH_NEXT'}
 
     def draw_header(self, context):
         rd = context.scene.render
@@ -783,7 +803,12 @@ class RENDER_PT_simplify(RenderButtonsPanel, Panel):
 class RENDER_PT_simplify_viewport(RenderButtonsPanel, Panel):
     bl_label = "Viewport"
     bl_parent_id = "RENDER_PT_simplify"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH_NEXT'}
 
     def draw(self, context):
         layout = self.layout
@@ -812,7 +837,12 @@ class RENDER_PT_simplify_viewport(RenderButtonsPanel, Panel):
 class RENDER_PT_simplify_render(RenderButtonsPanel, Panel):
     bl_label = "Render"
     bl_parent_id = "RENDER_PT_simplify"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH_NEXT'}
 
     def draw(self, context):
         layout = self.layout
@@ -844,7 +874,7 @@ class RENDER_PT_simplify_greasepencil(RenderButtonsPanel, Panel, GreasePencilSim
         'BLENDER_CLAY',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT',
     }
     bl_options = {'DEFAULT_CLOSED'}
 
