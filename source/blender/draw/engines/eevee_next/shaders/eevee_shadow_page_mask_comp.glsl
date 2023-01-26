@@ -14,7 +14,7 @@ void main()
   uint tilemap_index = gl_GlobalInvocationID.z;
   ShadowTileMapData tilemap = tilemaps_buf[tilemap_index];
 
-  if (tilemap.is_cubeface) {
+  if (tilemap.projection_type == SHADOW_PROJECTION_CUBEFACE) {
     /* For each level collect the number of used (or masked) tile that are covering the tile from
      * the level underneath. If this adds up to 4 the underneath tile is flag unused as its data
      * is not needed for rendering.

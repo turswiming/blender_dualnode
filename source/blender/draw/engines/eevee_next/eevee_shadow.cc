@@ -27,10 +27,11 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
                                  int clipmap_level,
                                  float lod_bias_)
 {
-  if (is_cubeface || (level != clipmap_level)) {
+  eShadowProjectionType proj_type = SHADOW_PROJECTION_CLIPMAP;
+  if (projection_type != proj_type || (level != clipmap_level)) {
     set_dirty();
   }
-  is_cubeface = false;
+  projection_type = proj_type;
   level = clipmap_level;
 
   if (grid_shift == int2(0)) {
@@ -67,10 +68,11 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
 void ShadowTileMap::sync_cubeface(
     const float4x4 &object_mat_, float near_, float far_, eCubeFace face, float lod_bias_)
 {
-  if (!is_cubeface || (cubeface != face) || (near != near_) || (far != far_)) {
+  if (projection_type != SHADOW_PROJECTION_CUBEFACE || (cubeface != face) || (near != near_) ||
+      (far != far_)) {
     set_dirty();
   }
-  is_cubeface = true;
+  projection_type = SHADOW_PROJECTION_CUBEFACE;
   cubeface = face;
   near = near_;
   far = far_;
@@ -105,7 +107,8 @@ void ShadowTileMap::debug_draw() const
                            {1.0f, 1.0f, 0.3f, 1.0f},
                            {0.1f, 0.1f, 0.1f, 1.0f},
                            {1.0f, 1.0f, 1.0f, 1.0f}};
-  float4 color = debug_color[((is_cubeface ? cubeface : level) + 9999) % 6];
+  float4 color =
+      debug_color[((projection_type == SHADOW_PROJECTION_CUBEFACE ? cubeface : level) + 9999) % 6];
 
   float4x4 persinv = winmat * viewmat;
   drw_debug_matrix_as_bbox(persinv.inverted(), color);
@@ -115,7 +118,7 @@ void ShadowTileMap::debug_draw() const
   // ss << "[" << tiles_index % div << ":" << tiles_index / div << "]";
   // std::string text = ss.str();
 
-  // float3 pos = persinv * float3(0.0f, 0.0f, (is_cubeface) ? 1.0f : 0.0f);
+  // float3 pos = persinv * float3(0.0f, 0.0f, (projection_type) ? 1.0f : 0.0f);
 
   // uchar ucolor[4];
   // rgba_float_to_uchar(ucolor, color);
@@ -194,7 +197,7 @@ void ShadowTileMapPool::end_sync(ShadowModule &module)
       tilemap_data.tiles_index = index;
       tilemap_data.clip_data_index = 0;
       tilemap_data.grid_shift = int2(SHADOW_TILEMAP_RES);
-      tilemap_data.is_cubeface = true;
+      tilemap_data.projection_type = SHADOW_PROJECTION_CUBEFACE;
 
       tilemaps_unused.append(tilemap_data);
     }

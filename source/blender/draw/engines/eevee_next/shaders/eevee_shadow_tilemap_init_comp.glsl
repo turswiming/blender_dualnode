@@ -36,7 +36,7 @@ void main()
     /* Reset shift to not tag for update more than once per sync cycle. */
     tilemaps_buf[tilemap_index].grid_shift = ivec2(0);
 
-    if (!tilemap.is_cubeface) {
+    if (tilemap.projection_type != SHADOW_PROJECTION_CUBEFACE) {
       int clip_index = tilemap.clip_data_index;
       ShadowTileMapClip clip_data = tilemaps_clip_buf[clip_index];
       float clip_near_new = orderedIntBitsToFloat(clip_data.clip_near);
@@ -64,11 +64,11 @@ void main()
   bool do_update = !in_range_inclusive(tile_shifted, ivec2(0), ivec2(SHADOW_TILEMAP_RES - 1));
 
   /* TODO(fclem): Might be better to resize the depth stored instead of a full render update. */
-  if (!tilemap.is_cubeface && directional_range_changed != 0) {
+  if (tilemap.projection_type != SHADOW_PROJECTION_CUBEFACE && directional_range_changed != 0) {
     do_update = true;
   }
 
-  int lod_max = (tilemap.is_cubeface) ? SHADOW_TILEMAP_LOD : 0;
+  int lod_max = (tilemap.projection_type == SHADOW_PROJECTION_CUBEFACE) ? SHADOW_TILEMAP_LOD : 0;
   uint lod_size = uint(SHADOW_TILEMAP_RES);
   for (int lod = 0; lod <= lod_max; lod++, lod_size >>= 1u) {
     bool thread_active = all(lessThan(tile_co, ivec2(lod_size)));

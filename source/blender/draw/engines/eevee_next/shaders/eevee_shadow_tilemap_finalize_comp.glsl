@@ -40,7 +40,8 @@ void main()
   ivec2 atlas_texel = shadow_tile_coord_in_atlas(tile_co, tilemap_index);
 
   ShadowTileMapData tilemap_data = tilemaps_buf[tilemap_index];
-  int lod_max = tilemap_data.is_cubeface ? SHADOW_TILEMAP_LOD : 0;
+  int lod_max = (tilemap_data.projection_type == SHADOW_PROJECTION_CUBEFACE) ? SHADOW_TILEMAP_LOD :
+                                                                               0;
 
   int lod_valid = 0;
   /* One bit per lod. */
@@ -104,7 +105,7 @@ void main()
         view_infos_buf[view_index].viewmat = tilemap_data.viewmat;
         view_infos_buf[view_index].viewinv = inverse(tilemap_data.viewmat);
 
-        if (!tilemap_data.is_cubeface) {
+        if (tilemap_data.projection_type != SHADOW_PROJECTION_CUBEFACE) {
           int clip_index = tilemap_data.clip_data_index;
           /* For directionnal, we need to modify winmat to encompass all casters. */
           float clip_far = -tilemaps_clip_buf[clip_index].clip_far_stored;

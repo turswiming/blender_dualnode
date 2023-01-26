@@ -26,7 +26,7 @@ void main()
   ShadowTileMapData tilemap = tilemaps_buf[gl_GlobalInvocationID.z];
 
   IsectPyramid frustum;
-  if (tilemap.is_cubeface) {
+  if (tilemap.projection_type == SHADOW_PROJECTION_CUBEFACE) {
     Pyramid pyramid = shadow_tilemap_cubeface_bounds(tilemap, ivec2(0), ivec2(SHADOW_TILEMAP_RES));
     frustum = isect_data_setup(pyramid);
   }
@@ -45,7 +45,7 @@ void main()
     aabb_merge(aabb_ndc, safe_project(tilemap.winmat, tilemap.viewmat, clipped, box.corners[v]));
   }
 
-  if (tilemap.is_cubeface) {
+  if (tilemap.projection_type == SHADOW_PROJECTION_CUBEFACE) {
     if (clipped == 8) {
       /* All verts are behind the camera. */
       return;
@@ -69,7 +69,7 @@ void main()
 
   /* Directionnal winmat have no correct near/far in the Z dimension at this point.
    * Do not clip in this dimension. */
-  if (!tilemap.is_cubeface) {
+  if (tilemap.projection_type != SHADOW_PROJECTION_CUBEFACE) {
     aabb_map.min.z = -FLT_MAX;
     aabb_map.max.z = FLT_MAX;
   }

@@ -36,7 +36,7 @@ static void test_eevee_shadow_shift_clear()
     ShadowTileMapData tilemap = {};
     tilemap.tiles_index = tiles_index * SHADOW_TILEDATA_PER_TILEMAP;
     tilemap.grid_shift = int2(SHADOW_TILEMAP_RES);
-    tilemap.is_cubeface = true;
+    tilemap.projection_type = SHADOW_PROJECTION_CUBEFACE;
 
     tilemaps_data.append(tilemap);
 
@@ -96,7 +96,7 @@ static void test_eevee_shadow_shift()
     tilemap.tiles_index = 0;
     tilemap.clip_data_index = 0;
     tilemap.grid_shift = int2(-1, 2);
-    tilemap.is_cubeface = false;
+    tilemap.projection_type = SHADOW_PROJECTION_CLIPMAP;
 
     tilemaps_data.append(tilemap);
 
@@ -694,7 +694,7 @@ static void test_eevee_shadow_finalize()
   {
     ShadowTileMapData tilemap = {};
     tilemap.tiles_index = 0;
-    tilemap.is_cubeface = true;
+    tilemap.projection_type = SHADOW_PROJECTION_CUBEFACE;
     tilemaps_data.append(tilemap);
 
     tilemaps_data.push_update();

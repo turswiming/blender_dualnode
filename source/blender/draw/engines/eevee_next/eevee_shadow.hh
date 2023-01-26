@@ -105,21 +105,6 @@ struct ShadowTileMap : public ShadowTileMapData {
 
   void debug_draw() const;
 
-  /* For external callers. Use this in order to not miss an update. */
-  void set_level(int clipmap_level)
-  {
-    if (assign_if_different(level, clipmap_level)) {
-      set_dirty();
-    }
-  }
-
-  void set_is_cubemap(bool1 is_cubemap_)
-  {
-    if (assign_if_different(is_cubeface, is_cubemap_)) {
-      set_dirty();
-    }
-  }
-
   void set_dirty()
   {
     grid_shift = int2(SHADOW_TILEMAP_RES);

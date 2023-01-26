@@ -666,12 +666,10 @@ static inline int light_tilemap_max_get(LightData light)
  * covering twice as much area as the previous one.
  * \{ */
 
-/* Given an input tile coordinate [0..SHADOW_TILEMAP_RES] returns the coordinate in NDC [-1..1]. */
-static inline float2 shadow_tile_coord_to_ndc(int2 tile)
-{
-  float2 co = float2(tile.x, tile.y) / float(SHADOW_TILEMAP_RES);
-  return co * 2.0f - 1.0f;
-}
+enum eShadowProjectionType : uint32_t {
+  SHADOW_PROJECTION_CUBEFACE = 0u,
+  SHADOW_PROJECTION_CLIPMAP = 1u,
+};
 
 /**
  * Small descriptor used for the tile update phase. Updated by CPU & uploaded to GPU each redraw.
@@ -686,7 +684,7 @@ struct ShadowTileMapData {
   /** Shift between previous and current grid_offset. Allows update tagging. */
   int2 grid_shift;
   /** True for punctual lights. */
-  bool1 is_cubeface;
+  eShadowProjectionType projection_type;
   /** Multiple of SHADOW_TILEDATA_PER_TILEMAP. Offset inside the tile buffer. */
   int tiles_index;
   /** Index of persistent data in the persistent data buffer. */
