@@ -372,7 +372,9 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
   if (kernel_data.integrator.use_surface_guiding) {
     if (kernel_data.integrator.guiding_directional_sampling_type ==
-        GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT) {
+            GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT ||
+        kernel_data.integrator.guiding_directional_sampling_type ==
+            GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS) {
       label = surface_shader_bsdf_guided_sample_closure_mis(kg,
                                                             state,
                                                             sd,
