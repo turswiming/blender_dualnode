@@ -675,6 +675,7 @@ static inline int light_tilemap_max_get(LightData light)
 enum eShadowProjectionType : uint32_t {
   SHADOW_PROJECTION_CUBEFACE = 0u,
   SHADOW_PROJECTION_CLIPMAP = 1u,
+  SHADOW_PROJECTION_CASCADE = 2u,
 };
 
 /**

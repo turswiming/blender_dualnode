@@ -83,25 +83,14 @@ struct ShadowTileMap : public ShadowTileMapData {
     this->set_dirty();
   }
 
-  void sync_clipmap(const float4x4 &object_mat_,
-                    int2 origin_offset,
-                    int clipmap_level,
-                    float lod_bias_);
+  void sync_orthographic(const float4x4 &object_mat_,
+                         int2 origin_offset,
+                         int clipmap_level,
+                         float lod_bias_,
+                         eShadowProjectionType projection_type_);
 
   void sync_cubeface(
       const float4x4 &object_mat, float near, float far, eCubeFace face, float lod_bias_);
-
-  static float clipmap_level_coverage_get(int lvl)
-  {
-    /* This function should be kept in sync with shadow_directional_clipmap_level(). */
-    /* \note: If we would to introduce a global scaling option it would be here. */
-    return exp2(lvl);
-  }
-
-  static float clipmap_tile_size_get(int lvl)
-  {
-    return clipmap_level_coverage_get(lvl) / tile_map_resolution;
-  }
 
   void debug_draw() const;
 
@@ -397,8 +386,8 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   float min_resolution_;
   /** Copy of object matrix. Normalized. */
   float4x4 object_mat_;
-  /** Current range of clip-map levels covered by this shadow. */
-  IndexRange lods_range;
+  /** Current range of clip-map / cascades levels covered by this shadow. */
+  IndexRange levels_range;
 
  public:
   ShadowDirectional(ShadowModule &module) : shadows_(module){};
@@ -418,15 +407,41 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   /**
    * Release the tile-maps that will not be used in the current frame.
    */
-  void release_excess_tilemaps(const Camera &camera);
+  void release_excess_tilemaps(const Camera &camera, float lod_bias);
 
   /**
    * Allocate shadow tile-maps and setup views for rendering.
    */
   void end_sync(Light &light, const Camera &camera, float lod_bias);
 
+  /* Return coverage of the whole tilemap in world unit. */
+  static float coverage_get(int lvl)
+  {
+    /* This function should be kept in sync with shadow_directional_level(). */
+    /* \note: If we would to introduce a global scaling option it would be here. */
+    return exp2(lvl);
+  }
+
+  /* Return coverage of a single tile for a tilemap of this LOD in world unit. */
+  static float tile_size_get(int lvl)
+  {
+    return coverage_get(lvl) / SHADOW_TILEMAP_RES;
+  }
+
  private:
   IndexRange clipmap_level_range(const Camera &camera);
+  IndexRange cascade_level_range(const Camera &camera, float lod_bias);
+
+  void cascade_tilemaps_distribution(Light &light, const Camera &camera);
+  void clipmap_tilemaps_distribution(Light &light, const Camera &camera, float lod_bias);
+
+  void cascade_tilemaps_distribution_near_far_points(const Camera &camera,
+                                                     float3 &near_point,
+                                                     float3 &far_point);
+
+  /* Choose between clipmap and cascade distribution of shadowmap precision depending on the camera
+   * projection type and bounds. */
+  static eShadowProjectionType directional_distribution_type_get(const Camera &camera);
 };
 
 /** \} */

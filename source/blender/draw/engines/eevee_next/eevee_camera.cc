@@ -135,8 +135,9 @@ void Camera::sync()
 #endif
   }
   else if (inst_.drw_view) {
-    data.clip_near = DRW_view_near_distance_get(inst_.drw_view);
-    data.clip_far = DRW_view_far_distance_get(inst_.drw_view);
+    /* \note: Follow camera parameters where distances are positive in front of the camera. */
+    data.clip_near = -DRW_view_near_distance_get(inst_.drw_view);
+    data.clip_far = -DRW_view_far_distance_get(inst_.drw_view);
     data.fisheye_fov = data.fisheye_lens = -1.0f;
     data.equirect_bias = float2(0.0f);
     data.equirect_scale = float2(0.0f);

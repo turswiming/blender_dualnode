@@ -198,7 +198,7 @@ static void test_eevee_shadow_tag_update()
   }
   {
     ShadowTileMap tilemap(1 * SHADOW_TILEDATA_PER_TILEMAP);
-    tilemap.sync_clipmap(float4x4::identity(), int2(0), 1, 0.0f);
+    tilemap.sync_orthographic(float4x4::identity(), int2(0), 1, 0.0f, SHADOW_PROJECTION_CLIPMAP);
     tilemaps_data.append(tilemap);
   }
 

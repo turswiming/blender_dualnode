@@ -188,7 +188,7 @@ ShadowSample shadow_directional_sample_get(
   samp.uv = shadow_page_uv_transform(
       atlas_size, samp.tile.page, samp.tile.lod, coord.uv, coord.tile_coord);
   samp.bias = shadow_slope_bias_get(atlas_size, light, lNg, lP, samp.uv, samp.tile.lod);
-  samp.bias *= exp2(float(coord.clipmap_lod_relative));
+  samp.bias *= exp2(float(coord.lod_relative));
 
   float occluder_ndc = shadow_tile_depth_get(atlas_tx, samp.tile, samp.uv);
 

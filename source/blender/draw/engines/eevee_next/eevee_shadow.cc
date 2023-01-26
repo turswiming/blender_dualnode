@@ -22,16 +22,16 @@ namespace blender::eevee {
  *
  * \{ */
 
-void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
-                                 int2 origin_offset,
-                                 int clipmap_level,
-                                 float lod_bias_)
+void ShadowTileMap::sync_orthographic(const float4x4 &object_mat_,
+                                      int2 origin_offset,
+                                      int clipmap_level,
+                                      float lod_bias_,
+                                      eShadowProjectionType projection_type_)
 {
-  eShadowProjectionType proj_type = SHADOW_PROJECTION_CLIPMAP;
-  if (projection_type != proj_type || (level != clipmap_level)) {
+  if (projection_type != projection_type_ || (level != clipmap_level)) {
     set_dirty();
   }
-  projection_type = proj_type;
+  projection_type = projection_type_;
   level = clipmap_level;
 
   if (grid_shift == int2(0)) {
@@ -47,13 +47,13 @@ void ShadowTileMap::sync_clipmap(const float4x4 &object_mat_,
 
   lod_bias = lod_bias_;
 
-  float tile_size = clipmap_tile_size_get(level);
+  float tile_size = ShadowDirectional::tile_size_get(level);
 
   /* object_mat is a rotation matrix. Reduce imprecision by taking the transpose which is also the
    * inverse in this particular case. */
   viewmat = object_mat.transposed();
 
-  float half_size = clipmap_level_coverage_get(level) / 2.0f;
+  float half_size = ShadowDirectional::coverage_get(level) / 2.0f;
   float2 win_offset = float2(grid_offset) * tile_size;
   orthographic_m4(winmat.ptr(),
                   -half_size + win_offset.x,
@@ -311,114 +311,207 @@ void ShadowPunctual::end_sync(Light &light, float lod_bias)
 /* -------------------------------------------------------------------- */
 /** \name Directional Shadow Maps
  *
+ * In order to inprove shadow map density, we switch between two tilemap distribution mode.
+ * One is beter suited for large FOV (clipmap), the other for really small FOV or Orthographic
+ * projections (cascade).
+ *
+ * Clipmap distribution centers a number of log2 sized tilemaps around the view position.
+ * https://developer.nvidia.com/gpugems/gpugems2/part-i-geometric-complexity/chapter-2-terrain-rendering-using-gpu-based-geometry
+ *
+ * Cascade distribution puts tilemaps along the frustum projection to the light space.
+ * https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-10-parallel-split-shadow-maps-programmable-gpus
+ *
+ * We choose to distribute cascades linearly to acheive uniform density and simplify lookup.
+ * Using clipmap instead of cascades for perspective view also allows for better caching.
  * \{ */
+
+eShadowProjectionType ShadowDirectional::directional_distribution_type_get(const Camera &camera)
+{
+  /* TODO(fclem): Enable the cascade projection if the fov is tiny in perspective mode. */
+  return camera.is_perspective() ? SHADOW_PROJECTION_CLIPMAP : SHADOW_PROJECTION_CASCADE;
+}
+
+/************************************************************************
+ *                         Cascade Distribution                         *
+ ************************************************************************/
+
+void ShadowDirectional::cascade_tilemaps_distribution_near_far_points(const Camera &camera,
+                                                                      float3 &near_point,
+                                                                      float3 &far_point)
+{
+  const CameraData &cam_data = camera.data_get();
+  /* Ideally we should only take the intersection with the scene bounds. */
+  far_point = camera.position() + camera.forward() * cam_data.clip_near;
+  near_point = camera.position() + camera.forward() * cam_data.clip_far;
+  /* TODO(fclem): Cleanup this once matrix API rolls out. */
+  mul_m4_v3(object_mat_.ptr(), far_point);
+  mul_m4_v3(object_mat_.ptr(), near_point);
+}
+
+/* \note All tilemaps are meant to have the same LOD but we still return a range starting at the
+ * unique LOD. */
+IndexRange ShadowDirectional::cascade_level_range(const Camera &camera, float lod_bias)
+{
+  using namespace blender::math;
+
+  /* 16 is arbitrary. To avoid too much tilemap per directional lights. */
+  const int max_tilemap_per_shadows = 16;
+  const CameraData &cam_data = camera.data_get();
+
+  float3 near_point, far_point;
+  cascade_tilemaps_distribution_near_far_points(camera, near_point, far_point);
+
+  /* This gives the maximum resolution in depth we can have with a fixed set of tilemaps. Gives
+   * the best results when view direction is orthogonal to the light direction. */
+  float depth_range_in_shadow_space = distance(float2(far_point), float2(near_point));
+  float min_depth_tilemap_size = 2 * (depth_range_in_shadow_space / max_tilemap_per_shadows);
+  /* This allow coverage of the whole view with a single tilemap if camera forward is colinear
+   * with the light direction. */
+  float min_diagonal_tilemap_size = cam_data.screen_diagonal_length;
+
+  if (camera.is_perspective()) {
+    /* Use the far plane diagonal if using perspective. */
+    min_diagonal_tilemap_size *= cam_data.clip_far / cam_data.clip_near;
+  }
+
+  /* Allow better tilemap usage without missing pages near end of view. */
+  lod_bias += 0.50f;
+  /* Level of detail (or size) of every tilemaps of this light. */
+  int lod_level = ceil(log2(max_ff(min_depth_tilemap_size, min_diagonal_tilemap_size)) + lod_bias);
+
+  /* Tilemaps "rotate" around the first one so their effective range is only half their size. */
+  float per_tilemap_coverage = ShadowDirectional::coverage_get(lod_level) * 0.5f;
+  /* Number of tilemaps needed to cover the whole view. */
+  int tilemap_len = floor(depth_range_in_shadow_space / per_tilemap_coverage) + 1;
+
+  return IndexRange(lod_level, tilemap_len);
+}
+
+/**
+ * Distribute tilemaps in a linear pattern along camera forward vector instead of a clipmap
+ * centered on camera position.
+ */
+void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera &camera)
+{
+  using namespace blender::math;
+
+  float inverted_level_len = (levels_range.size() > 1) ? (1.0f / (levels_range.size() - 1)) : 0.0f;
+
+  /* All tilemaps use the first level size. */
+  float half_size = ShadowDirectional::coverage_get(levels_range.first()) / 2.0f;
+  float tile_size = ShadowDirectional::tile_size_get(levels_range.first());
+
+  float3 near_point, far_point;
+  cascade_tilemaps_distribution_near_far_points(camera, near_point, far_point);
+  float3 farthest_tilemap_center = near_point +
+                                   camera.forward() * half_size * (levels_range.size() - 1);
+
+  /* Offset for smooth level transitions. */
+  *reinterpret_cast<float3 *>(light._position) = near_point;
+
+  /* Offset in tiles from the origin to the center of the first tilemaps. */
+  float2 origin_offset = round(float2(near_point) / tile_size);
+  /* Offset in tiles between the first and the last tilemaps. */
+  float2 offset_vector = round(float2(farthest_tilemap_center - near_point) / tile_size);
+
+  /* \note: cascade_level_range starts the range at the unique LOD to apply to all tilemaps. */
+  int level = levels_range.first();
+  for (int i : IndexRange(levels_range.size())) {
+    ShadowTileMap *tilemap = tilemaps_[i];
+
+    /* Equal spacing between cascades layers since we want uniform shadow density. */
+    /* Should match shadow_decompress_grid_offset(). */
+    int2 level_offset = int2(origin_offset - floor(offset_vector * (i * inverted_level_len)));
+
+    tilemap->sync_orthographic(object_mat_, level_offset, level, 0.0f, SHADOW_PROJECTION_CASCADE);
+
+    /* Add shadow tile-maps grouped by lights to the GPU buffer. */
+    shadows_.tilemap_pool.tilemaps_data.append(*tilemap);
+    tilemap->set_updated();
+  }
+
+  light._clipmap_origin_x = origin_offset.x * tile_size;
+  light._clipmap_origin_y = origin_offset.y * tile_size;
+
+  union {
+    float2 f;
+    int2 i;
+  } float2_int2_union;
+  float2_int2_union.f = offset_vector * inverted_level_len;
+  /* Using intBitsToFloat in the shader. */
+  light.clipmap_base_offset = float2_int2_union.i;
+
+  light.type = LIGHT_SUN_ORTHO;
+
+  /* Not really clipmaps, but this is in order to make light_tilemap_max_get() work and determine
+   * the scalling. */
+  light.clipmap_lod_min = levels_range.first();
+  light.clipmap_lod_max = levels_range.last();
+
+  /* The bias is applied in cascade_level_range().
+   * Using clipmap_lod_min here simplify code in shadow_directional_level().
+   * Minus 1 because of the ceil().*/
+  light._clipmap_lod_bias = light.clipmap_lod_min - 1;
+
+  /* Scaling is handled by ShadowCoordinates.lod_relative. */
+  light.normal_mat_packed.x = 1.0f;
+}
+
+/************************************************************************
+ *                         Clipmap Distribution                         *
+ ************************************************************************/
 
 IndexRange ShadowDirectional::clipmap_level_range(const Camera &camera)
 {
+  using namespace blender::math;
+
+  /* Take 16 to be able to pack offset into a single int2. */
+  const int max_tilemap_per_shadows = 16;
+
   int user_min_level = floorf(log2(min_resolution_));
   /* Covers the farthest points of the view. */
   int max_level = ceil(
-      log2(camera.bound_radius() + math::distance(camera.bound_center(), camera.position())));
+      log2(camera.bound_radius() + distance(camera.bound_center(), camera.position())));
   /* We actually need to cover a bit more because of clipmap origin snapping. */
   max_level += 1;
   /* Covers the closest points of the view. */
   int min_level = floor(log2(abs(camera.data_get().clip_near)));
   min_level = clamp_i(user_min_level, min_level, max_level);
 
-  if (camera.is_orthographic()) {
-    /* FIXME: Single level for now. Should find a better mapping. */
-    min_level = max_level;
-  }
-
   IndexRange range(min_level, max_level - min_level + 1);
   /* The maximum level count is bounded by the mantissa of a 32bit float. Take top-most level to
    * still cover the whole view. */
-  /* Take 16 to be able to pack offset into a single int2. */
-  range = range.take_back(16);
+  range = range.take_back(max_tilemap_per_shadows);
 
   return range;
 }
 
-void ShadowDirectional::sync(const float4x4 &object_mat, float min_resolution)
+void ShadowDirectional::clipmap_tilemaps_distribution(Light &light,
+                                                      const Camera &camera,
+                                                      float lod_bias)
 {
-  object_mat_ = object_mat;
-  /* Clear embedded custom data. */
-  object_mat_.values[0][3] = object_mat_.values[1][3] = object_mat_.values[2][3] = 0.0f;
-  object_mat_.values[3][3] = 1.0f;
-  /* Remove translation. */
-  zero_v3(object_mat_.values[3]);
-
-  min_resolution_ = min_resolution;
-}
-
-void ShadowDirectional::release_excess_tilemaps(const Camera &camera)
-{
-  IndexRange lods_new = clipmap_level_range(camera);
-  if (lods_range == lods_new) {
-    return;
-  }
-
-  IndexRange isect_range = lods_range.intersect(lods_new);
-  IndexRange before_range(lods_range.start(), isect_range.start() - lods_range.start());
-  IndexRange after_range(isect_range.one_after_last(),
-                         lods_range.one_after_last() - isect_range.one_after_last());
-
-  auto span = tilemaps_.as_span();
-  shadows_.tilemap_pool.release(span.slice(before_range.shift(-lods_range.start())));
-  shadows_.tilemap_pool.release(span.slice(after_range.shift(-lods_range.start())));
-  tilemaps_ = span.slice(isect_range.shift(-lods_range.start()));
-  lods_range = isect_range;
-}
-
-void ShadowDirectional::end_sync(Light &light, const Camera &camera, float lod_bias)
-{
-  ShadowTileMapPool &tilemap_pool = shadows_.tilemap_pool;
-  IndexRange lods_new = clipmap_level_range(camera);
-
-  if (lods_range != lods_new) {
-    /* Acquire missing tilemaps. */
-    IndexRange isect_range = lods_new.intersect(lods_range);
-    int64_t before_range = isect_range.start() - lods_new.start();
-    int64_t after_range = lods_new.one_after_last() - isect_range.one_after_last();
-
-    Vector<ShadowTileMap *> cached_tilemaps = tilemaps_;
-    tilemaps_.clear();
-    for (int64_t i = 0; i < before_range; i++) {
-      tilemaps_.append(tilemap_pool.acquire());
-    }
-    /* Keep cached lods. */
-    tilemaps_.extend(cached_tilemaps);
-    for (int64_t i = 0; i < after_range; i++) {
-      tilemaps_.append(tilemap_pool.acquire());
-    }
-    lods_range = lods_new;
-  }
-
-  light.tilemap_index = tilemap_pool.tilemaps_data.size();
-  light.clip_near = int(0xFF7FFFFFu ^ 0x7FFFFFFFu); /* floatBitsToOrderedInt(-FLT_MAX) */
-  light.clip_far = 0x7F7FFFFF;                      /* floatBitsToOrderedInt(FLT_MAX) */
-
-  for (int lod : IndexRange(lods_range.size())) {
+  for (int lod : IndexRange(levels_range.size())) {
     ShadowTileMap *tilemap = tilemaps_[lod];
 
-    int level = lods_range.first() + lod;
+    int level = levels_range.first() + lod;
     /* Compute full offset from world origin to the smallest clipmap tile centered around the
      * camera position. The offset is computed in smallest tile unit. */
-    float tile_size = ShadowTileMap::clipmap_tile_size_get(level);
+    float tile_size = ShadowDirectional::tile_size_get(level);
     int2 level_offset = int2(
         roundf(math::dot(float3(object_mat_.values[0]), camera.position()) / tile_size),
         roundf(math::dot(float3(object_mat_.values[1]), camera.position()) / tile_size));
 
-    tilemap->sync_clipmap(object_mat_, level_offset, level, lod_bias);
+    tilemap->sync_orthographic(
+        object_mat_, level_offset, level, lod_bias, SHADOW_PROJECTION_CLIPMAP);
 
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
-    tilemap_pool.tilemaps_data.append(*tilemap);
+    shadows_.tilemap_pool.tilemaps_data.append(*tilemap);
     tilemap->set_updated();
   }
 
   int2 pos_offset = int2(0);
   int2 neg_offset = int2(0);
-  for (int lod : IndexRange(lods_range.size() - 1)) {
+  for (int lod : IndexRange(levels_range.size() - 1)) {
     /* Since offset can only differ by one tile from the higher level, we can compress that as a
      * single integer where one bit contains offset between 2 levels. Then a single bit shift in
      * the shader gives the number of tile to offset in the given tilemap space. However we need
@@ -437,10 +530,10 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera, float lod_b
    * 16 by `clipmap_level_range()` for this reason. */
   light.clipmap_base_offset = pos_offset | (neg_offset << 16);
 
-  // float tile_size_min = ShadowTileMap::clipmap_tile_size_get(lods_range.first());
-  float tile_size_max = ShadowTileMap::clipmap_tile_size_get(lods_range.last());
-  // int2 level_offset_min = tilemaps_[0]->grid_offset;
-  int2 level_offset_max = tilemaps_[lods_range.size() - 1]->grid_offset;
+  float tile_size_max = ShadowDirectional::tile_size_get(levels_range.last());
+  int2 level_offset_max = tilemaps_[levels_range.size() - 1]->grid_offset;
+
+  light.type = LIGHT_SUN;
 
   /* Used for selecting the clipmap level. */
   float camera_x = math::dot(float3(object_mat_.values[0]), camera.position());
@@ -452,14 +545,85 @@ void ShadowDirectional::end_sync(Light &light, const Camera &camera, float lod_b
   light._clipmap_origin_x = level_offset_max.x * tile_size_max;
   light._clipmap_origin_y = level_offset_max.y * tile_size_max;
 
-  light.clipmap_lod_min = lods_range.first();
-  light.clipmap_lod_max = lods_range.last();
+  light.clipmap_lod_min = levels_range.first();
+  light.clipmap_lod_max = levels_range.last();
 
   light._clipmap_lod_bias = lod_bias;
 
   /* Half size of the min level. */
-  float half_size = ShadowTileMap::clipmap_tile_size_get(lods_range.first()) / 2.0f;
-  light.normal_mat_packed.x = half_size;
+  light.normal_mat_packed.x = ShadowDirectional::tile_size_get(levels_range.first()) / 2.0f;
+}
+
+void ShadowDirectional::sync(const float4x4 &object_mat, float min_resolution)
+{
+  object_mat_ = object_mat;
+  /* Clear embedded custom data. */
+  object_mat_.values[0][3] = object_mat_.values[1][3] = object_mat_.values[2][3] = 0.0f;
+  object_mat_.values[3][3] = 1.0f;
+  /* Remove translation. */
+  zero_v3(object_mat_.values[3]);
+
+  min_resolution_ = min_resolution;
+}
+
+void ShadowDirectional::release_excess_tilemaps(const Camera &camera, float lod_bias)
+{
+  IndexRange levels_new = directional_distribution_type_get(camera) == SHADOW_PROJECTION_CASCADE ?
+                              cascade_level_range(camera, lod_bias) :
+                              clipmap_level_range(camera);
+
+  if (levels_range == levels_new) {
+    return;
+  }
+
+  IndexRange isect_range = levels_range.intersect(levels_new);
+  IndexRange before_range(levels_range.start(), isect_range.start() - levels_range.start());
+  IndexRange after_range(isect_range.one_after_last(),
+                         levels_range.one_after_last() - isect_range.one_after_last());
+
+  auto span = tilemaps_.as_span();
+  shadows_.tilemap_pool.release(span.slice(before_range.shift(-levels_range.start())));
+  shadows_.tilemap_pool.release(span.slice(after_range.shift(-levels_range.start())));
+  tilemaps_ = span.slice(isect_range.shift(-levels_range.start()));
+  levels_range = isect_range;
+}
+
+void ShadowDirectional::end_sync(Light &light, const Camera &camera, float lod_bias)
+{
+  ShadowTileMapPool &tilemap_pool = shadows_.tilemap_pool;
+  IndexRange levels_new = directional_distribution_type_get(camera) == SHADOW_PROJECTION_CASCADE ?
+                              cascade_level_range(camera, lod_bias) :
+                              clipmap_level_range(camera);
+
+  if (levels_range != levels_new) {
+    /* Acquire missing tilemaps. */
+    IndexRange isect_range = levels_new.intersect(levels_range);
+    int64_t before_range = isect_range.start() - levels_new.start();
+    int64_t after_range = levels_new.one_after_last() - isect_range.one_after_last();
+
+    Vector<ShadowTileMap *> cached_tilemaps = tilemaps_;
+    tilemaps_.clear();
+    for (int64_t i = 0; i < before_range; i++) {
+      tilemaps_.append(tilemap_pool.acquire());
+    }
+    /* Keep cached lods. */
+    tilemaps_.extend(cached_tilemaps);
+    for (int64_t i = 0; i < after_range; i++) {
+      tilemaps_.append(tilemap_pool.acquire());
+    }
+    levels_range = levels_new;
+  }
+
+  light.tilemap_index = tilemap_pool.tilemaps_data.size();
+  light.clip_near = int(0xFF7FFFFFu ^ 0x7FFFFFFFu); /* floatBitsToOrderedInt(-FLT_MAX) */
+  light.clip_far = 0x7F7FFFFF;                      /* floatBitsToOrderedInt(FLT_MAX) */
+
+  if (directional_distribution_type_get(camera) == SHADOW_PROJECTION_CASCADE) {
+    cascade_tilemaps_distribution(light, camera);
+  }
+  else {
+    clipmap_tilemaps_distribution(light, camera, lod_bias);
+  }
 }
 
 /** \} */
@@ -614,7 +778,7 @@ void ShadowModule::end_sync()
       light.shadow_discard_safe(*this);
     }
     else if (light.directional != nullptr) {
-      light.directional->release_excess_tilemaps(inst_.camera);
+      light.directional->release_excess_tilemaps(inst_.camera, lod_bias_);
     }
     else if (light.punctual != nullptr) {
       light.punctual->release_excess_tilemaps();
