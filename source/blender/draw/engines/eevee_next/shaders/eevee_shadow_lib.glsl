@@ -57,7 +57,7 @@ int shadow_punctual_face_index_get(vec3 lL)
 
 mat4x4 shadow_load_normal_matrix(LightData light)
 {
-  if (light.type != LIGHT_SUN) {
+  if (!is_sun_light(light.type)) {
     /* FIXME: Why? */
     float scale = 0.5;
     return mat4x4(vec4(scale, 0.0, 0.0, 0.0),

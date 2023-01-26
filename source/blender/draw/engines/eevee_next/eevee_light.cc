@@ -81,7 +81,7 @@ void Light::sync(ShadowModule &shadows, const Object *ob, float threshold)
 
   if (la->mode & LA_SHADOW) {
     shadow_ensure(shadows);
-    if (this->type == LIGHT_SUN) {
+    if (is_sun_light(this->type)) {
       this->directional->sync(this->object_mat, 1.0f);
     }
     else {
@@ -110,7 +110,7 @@ void Light::shadow_discard_safe(ShadowModule &shadows)
 
 void Light::shadow_ensure(ShadowModule &shadows)
 {
-  if (this->type == LIGHT_SUN && this->directional == nullptr) {
+  if (is_sun_light(this->type) && this->directional == nullptr) {
     this->directional = &shadows.directional_pool.construct(shadows);
   }
   else if (this->punctual == nullptr) {
@@ -275,8 +275,8 @@ void LightModule::sync_light(const Object *ob, ObjectHandle &handle)
     light.initialized = true;
     light.sync(inst_.shadows, ob, light_threshold_);
   }
-  sun_lights_len_ += int(light.type == LIGHT_SUN);
-  local_lights_len_ += int(light.type != LIGHT_SUN);
+  sun_lights_len_ += int(is_sun_light(light.type));
+  local_lights_len_ += int(!is_sun_light(light.type));
 }
 
 void LightModule::end_sync()
@@ -300,7 +300,7 @@ void LightModule::end_sync()
       continue;
     }
 
-    int dst_idx = (light.type == LIGHT_SUN) ? sun_lights_idx++ : local_lights_idx++;
+    int dst_idx = is_sun_light(light.type) ? sun_lights_idx++ : local_lights_idx++;
     /* Put all light data into global data SSBO. */
     light_buf_[dst_idx] = light;
 

@@ -570,15 +570,21 @@ BLI_STATIC_ASSERT_ALIGN(LightCullingData, 16)
 
 enum eLightType : uint32_t {
   LIGHT_SUN = 0u,
-  LIGHT_POINT = 1u,
-  LIGHT_SPOT = 2u,
-  LIGHT_RECT = 3u,
-  LIGHT_ELLIPSE = 4u
+  LIGHT_SUN_ORTHO = 1u,
+  LIGHT_POINT = 10u,
+  LIGHT_SPOT = 11u,
+  LIGHT_RECT = 20u,
+  LIGHT_ELLIPSE = 21u
 };
 
 static inline bool is_area_light(eLightType type)
 {
   return type >= LIGHT_RECT;
+}
+
+static inline bool is_sun_light(eLightType type)
+{
+  return type < LIGHT_POINT;
 }
 
 struct LightData {
@@ -640,7 +646,7 @@ struct LightData {
   int tilemap_index;
   /** Directional : Offset of the lod min in lod min tile units. */
   int2 clipmap_base_offset;
-  /** Punctual : Normal matrix packed for automatic bias. */
+  /** Punctual & Directional : Normal matrix packed for automatic bias. */
   float2 normal_mat_packed;
 };
 BLI_STATIC_ASSERT_ALIGN(LightData, 16)

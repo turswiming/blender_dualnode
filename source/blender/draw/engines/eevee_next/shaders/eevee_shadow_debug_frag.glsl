@@ -62,7 +62,7 @@ vec3 debug_tile_state_color(ShadowTileData tile)
 ShadowSample debug_tile_get(vec3 P, LightData light)
 {
   vec3 lNg = vec3(1.0, 0.0, 0.0);
-  if (light.type == LIGHT_SUN) {
+  if (is_sun_light(light.type)) {
     vec3 lP = shadow_world_to_local(light, P);
     return shadow_directional_sample_get(shadow_atlas_tx, shadow_tilemaps_tx, light, lP, lNg);
   }
