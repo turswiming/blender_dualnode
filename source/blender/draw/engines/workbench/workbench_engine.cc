@@ -80,6 +80,7 @@ class Instance {
   void end_sync()
   {
     resources.material_buf.push_update();
+    resources.object_id_buf.push_update();
   }
 
   void object_sync(Manager &manager, ObjectRef &ob_ref)
@@ -202,6 +203,8 @@ class Instance {
             ResourceHandle _handle = i == 0 ? handle : manager.resource_handle(ob_ref);
 
             Material &mat = resources.material_buf.get_or_resize(_handle.resource_index());
+            resources.object_id_buf.get_or_resize(
+                _handle.resource_index()) = handle.resource_index();
 
             if (::Material *_mat = BKE_object_material_get_eval(ob_ref.object, i + 1)) {
               mat = Material(*_mat);
@@ -242,6 +245,7 @@ class Instance {
 
         if (batch) {
           Material &mat = resources.material_buf.get_or_resize(handle.resource_index());
+          resources.object_id_buf.get_or_resize(handle.resource_index()) = handle.resource_index();
 
           if (object_state.color_type == V3D_SHADING_OBJECT_COLOR) {
             mat = Material(*ob_ref.object);
