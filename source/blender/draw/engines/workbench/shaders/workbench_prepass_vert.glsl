@@ -19,9 +19,5 @@ void main()
   workbench_material_data_get(
       resource_handle, ac.rgb, color_interp, alpha_interp, _roughness, metallic);
 
-#ifdef WORKBENCH_NEXT
-  object_id = int(uint(object_id_data[resource_handle]) & 0xFFFFu) + 1;
-#else
   object_id = int(uint(resource_handle) & 0xFFFFu) + 1;
-#endif
 }
