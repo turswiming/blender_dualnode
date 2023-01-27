@@ -51,6 +51,16 @@ struct Material {
   static uint32_t pack_data(float metallic, float roughness, float alpha);
 
   bool is_transparent();
+
+  inline bool operator==(const Material &a) const
+  {
+    return packed_data == a.packed_data && base_color == a.base_color;
+  }
+
+  inline uint64_t hash() const
+  {
+    return get_default_hash_4(base_color.x, base_color.y, base_color.z, packed_data);
+  }
 };
 
 void get_material_image(Object *ob,
@@ -161,8 +171,10 @@ struct SceneResources {
 
 class MeshPass : public PassMain {
  private:
+  using MaterialSubPassKey = std::pair<Material, eGeometryType>;
   using TextureSubPassKey = std::pair<GPUTexture *, eGeometryType>;
 
+  Map<MaterialSubPassKey, PassMain::Sub *> material_subpass_map_ = {};
   Map<TextureSubPassKey, PassMain::Sub *> texture_subpass_map_ = {};
 
   PassMain::Sub *passes_[geometry_type_len][shader_type_len] = {{nullptr}};
@@ -184,6 +196,7 @@ class MeshPass : public PassMain {
   void draw(ObjectRef &ref,
             GPUBatch *batch,
             ResourceHandle handle,
+            Material material,
             ::Image *image = nullptr,
             eGPUSamplerState sampler_state = eGPUSamplerState::GPU_SAMPLER_DEFAULT,
             ImageUser *iuser = nullptr);

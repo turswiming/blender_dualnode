@@ -34,6 +34,7 @@ void MeshPass::init_subpasses(ePipelineType pipeline,
                               bool clip,
                               ShaderCache &shaders)
 {
+  material_subpass_map_.clear();
   texture_subpass_map_.clear();
 
   static std::string pass_names[geometry_type_len][shader_type_len] = {};
@@ -57,6 +58,7 @@ void MeshPass::init_subpasses(ePipelineType pipeline,
 void MeshPass::draw(ObjectRef &ref,
                     GPUBatch *batch,
                     ResourceHandle handle,
+                    Material material,
                     ::Image *image /* = nullptr */,
                     eGPUSamplerState sampler_state /* = GPU_SAMPLER_DEFAULT */,
                     ImageUser *iuser /* = nullptr */)
@@ -64,6 +66,7 @@ void MeshPass::draw(ObjectRef &ref,
   is_empty_ = false;
 
   eGeometryType geometry_type = geometry_type_from_object(ref.object);
+
   if (image) {
     GPUTexture *texture = nullptr;
     GPUTexture *tilemap = nullptr;
@@ -75,33 +78,47 @@ void MeshPass::draw(ObjectRef &ref,
       texture = BKE_image_get_gpu_texture(image, iuser, nullptr);
     }
     if (texture) {
-      auto add_cb = [&] {
-        PassMain::Sub *sub_pass =
-            passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::TEXTURE)];
-        sub_pass = &sub_pass->sub(image->id.name);
+      auto add_texture_cb = [&] {
+        PassMain::Sub &sub_pass =
+            passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::TEXTURE)]->sub(
+                image->id.name);
+
+        sub_pass.push_constant("material_data", *reinterpret_cast<float4 *>(&material));
         if (tilemap) {
-          sub_pass->bind_texture(WB_TILE_ARRAY_SLOT, texture, sampler_state);
-          sub_pass->bind_texture(WB_TILE_DATA_SLOT, tilemap);
+          sub_pass.bind_texture(WB_TILE_ARRAY_SLOT, texture, sampler_state);
+          sub_pass.bind_texture(WB_TILE_DATA_SLOT, tilemap);
         }
         else {
-          sub_pass->bind_texture(WB_TEXTURE_SLOT, texture, sampler_state);
+          sub_pass.bind_texture(WB_TEXTURE_SLOT, texture, sampler_state);
         }
-        sub_pass->push_constant("isImageTile", tilemap != nullptr);
-        sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
+        sub_pass.push_constant("isImageTile", tilemap != nullptr);
+        sub_pass.push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
         /* TODO(Miguel Pozo): This setting should be exposed on the user side,
          * either as a global parameter (and set it here)
          * or by reading the Material Clipping Threshold (and set it per material) */
-        sub_pass->push_constant("imageTransparencyCutoff", 0.1f);
-        return sub_pass;
+        sub_pass.push_constant("imageTransparencyCutoff", 0.1f);
+        return &sub_pass;
       };
 
-      texture_subpass_map_.lookup_or_add_cb(TextureSubPassKey(texture, geometry_type), add_cb)
+      texture_subpass_map_
+          .lookup_or_add_cb(TextureSubPassKey(texture, geometry_type), add_texture_cb)
           ->draw(batch, handle);
       return;
     }
   }
-  passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)]->draw(batch,
-                                                                                          handle);
+
+  auto add_material_cb = [&] {
+    PassMain::Sub &sub_pass =
+        passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)]->sub(
+            "Material");
+
+    sub_pass.push_constant("material_data", *reinterpret_cast<float4 *>(&material));
+    return &sub_pass;
+  };
+
+  material_subpass_map_
+      .lookup_or_add_cb(MaterialSubPassKey(material, geometry_type), add_material_cb)
+      ->draw(batch, handle);
 }
 
 /** \} */
