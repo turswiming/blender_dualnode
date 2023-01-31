@@ -79,6 +79,7 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
   using vec3_type = VecBase<T, 3>;
   using col_type = VecBase<T, NumRow>;
   using row_type = VecBase<T, NumCol>;
+  using loc_type = VecBase<T, (NumRow < NumCol) ? NumRow : (NumRow - 1)>;
   static constexpr int min_dim = (NumRow < NumCol) ? NumRow : NumCol;
   static constexpr int col_len = NumCol;
   static constexpr int row_len = NumRow;
@@ -258,11 +259,11 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
     return *reinterpret_cast<vec3_type *>(&(*this)[2]);
   }
 
-  vec3_type &location()
+  loc_type &location()
   {
-    BLI_STATIC_ASSERT(NumCol >= 4, "Wrong Matrix dimension");
-    BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");
-    return *reinterpret_cast<vec3_type *>(&(*this)[3]);
+    BLI_STATIC_ASSERT(NumCol >= 3, "Wrong Matrix dimension");
+    BLI_STATIC_ASSERT(NumRow >= 2, "Wrong Matrix dimension");
+    return *reinterpret_cast<loc_type *>(&(*this)[NumCol - 1]);
   }
 
   const vec3_type &x_axis() const
@@ -286,11 +287,11 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
     return *reinterpret_cast<const vec3_type *>(&(*this)[2]);
   }
 
-  const vec3_type &location() const
+  const loc_type &location() const
   {
-    BLI_STATIC_ASSERT(NumCol >= 4, "Wrong Matrix dimension");
-    BLI_STATIC_ASSERT(NumRow >= 3, "Wrong Matrix dimension");
-    return *reinterpret_cast<const vec3_type *>(&(*this)[3]);
+    BLI_STATIC_ASSERT(NumCol >= 3, "Wrong Matrix dimension");
+    BLI_STATIC_ASSERT(NumRow >= 2, "Wrong Matrix dimension");
+    return *reinterpret_cast<const loc_type *>(&(*this)[NumCol - 1]);
   }
 
   /** Matrix operators. */
@@ -481,7 +482,7 @@ struct alignas(Alignment) MatBase : public vec_struct_base<VecBase<T, NumRow>, N
   {
     uint64_t h = 435109;
     unroll<NumCol * NumRow>([&](auto i) {
-      T value = (static_cast<const T *>(this))[i];
+      T value = (reinterpret_cast<const T *>(this))[i];
       h = h * 33 + *reinterpret_cast<const as_uint_type<T> *>(&value);
     });
     return h;
