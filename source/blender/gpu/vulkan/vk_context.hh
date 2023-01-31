@@ -9,6 +9,8 @@
 
 #include "gpu_context_private.hh"
 
+#include "vk_descriptor_pools.hh"
+
 #include "vk_mem_alloc.h"
 
 #ifdef __APPLE__
@@ -29,6 +31,7 @@ class VKContext : public Context {
 
   /** Allocator used for texture and buffers and other resources. */
   VmaAllocator mem_allocator_ = VK_NULL_HANDLE;
+  VKDescriptorPools descriptor_pools_;
 
  public:
   VKContext(void *ghost_window, void *ghost_context);

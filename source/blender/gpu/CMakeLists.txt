@@ -191,6 +191,7 @@ set(VULKAN_SRC
   vulkan/vk_backend.cc
   vulkan/vk_batch.cc
   vulkan/vk_context.cc
+  vulkan/vk_descriptor_pools.cc
   vulkan/vk_drawlist.cc
   vulkan/vk_fence.cc
   vulkan/vk_framebuffer.cc
@@ -207,6 +208,7 @@ set(VULKAN_SRC
   vulkan/vk_backend.hh
   vulkan/vk_batch.hh
   vulkan/vk_context.hh
+  vulkan/vk_descriptor_pools.hh
   vulkan/vk_drawlist.hh
   vulkan/vk_fence.hh
   vulkan/vk_framebuffer.hh

@@ -641,52 +641,195 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
     return false;
   }
 
-  if (vertex_module_ != VK_NULL_HANDLE) {
+  VkDevice vk_device = context_->device_get();
+  if (!finalize_descriptor_set_layouts(vk_device, info)) {
+    return false;
+  }
+  if (!finalize_pipeline_layout(vk_device, info)) {
+    return false;
+  }
+
+  /* TODO we might need to move the actual pipeline construction to a later stage as the graphics
+   * pipeline requires more data before it can be constructed.*/
+  const bool is_graphics_shader = vertex_module_ != VK_NULL_HANDLE;
+  if (is_graphics_shader) {
     BLI_assert((fragment_module_ != VK_NULL_HANDLE && info->tf_type_ == GPU_SHADER_TFB_NONE) ||
                (fragment_module_ == VK_NULL_HANDLE && info->tf_type_ != GPU_SHADER_TFB_NONE));
     BLI_assert(compute_module_ == VK_NULL_HANDLE);
-
-    VkPipelineShaderStageCreateInfo vertex_stage_info = {};
-    vertex_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertex_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertex_stage_info.module = vertex_module_;
-    vertex_stage_info.pName = "main";
-    pipeline_infos_.append(vertex_stage_info);
-
-    if (geometry_module_ != VK_NULL_HANDLE) {
-      VkPipelineShaderStageCreateInfo geo_stage_info = {};
-      geo_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-      geo_stage_info.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
-      geo_stage_info.module = geometry_module_;
-      geo_stage_info.pName = "main";
-      pipeline_infos_.append(geo_stage_info);
-    }
-    if (fragment_module_ != VK_NULL_HANDLE) {
-      VkPipelineShaderStageCreateInfo fragment_stage_info = {};
-      fragment_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-      fragment_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-      fragment_stage_info.module = fragment_module_;
-      fragment_stage_info.pName = "main";
-      pipeline_infos_.append(fragment_stage_info);
-    }
+    return finalize_graphics_pipeline(vk_device);
   }
   else {
     BLI_assert(vertex_module_ == VK_NULL_HANDLE);
     BLI_assert(geometry_module_ == VK_NULL_HANDLE);
     BLI_assert(fragment_module_ == VK_NULL_HANDLE);
     BLI_assert(compute_module_ != VK_NULL_HANDLE);
+    return finalize_compute_pipeline(vk_device);
+  }
+}
 
-    VkPipelineShaderStageCreateInfo compute_stage_info = {};
-    compute_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    compute_stage_info.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
-    compute_stage_info.module = compute_module_;
-    compute_stage_info.pName = "main";
-    pipeline_infos_.append(compute_stage_info);
+bool VKShader::finalize_graphics_pipeline(VkDevice /*vk_device */)
+{
+  Vector<VkPipelineShaderStageCreateInfo> pipeline_stages;
+  VkPipelineShaderStageCreateInfo vertex_stage_info = {};
+  vertex_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  vertex_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+  vertex_stage_info.module = vertex_module_;
+  vertex_stage_info.pName = "main";
+  pipeline_stages.append(vertex_stage_info);
+
+  if (geometry_module_ != VK_NULL_HANDLE) {
+    VkPipelineShaderStageCreateInfo geo_stage_info = {};
+    geo_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    geo_stage_info.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+    geo_stage_info.module = geometry_module_;
+    geo_stage_info.pName = "main";
+    pipeline_stages.append(geo_stage_info);
+  }
+  if (fragment_module_ != VK_NULL_HANDLE) {
+    VkPipelineShaderStageCreateInfo fragment_stage_info = {};
+    fragment_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragment_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragment_stage_info.module = fragment_module_;
+    fragment_stage_info.pName = "main";
+    pipeline_stages.append(fragment_stage_info);
   }
 
-#ifdef NDEBUG
-  UNUSED_VARS(info);
-#endif
+  /*
+    VkGraphicsPipelineCreateInfo pipeline_info = {};
+    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_info.flags = 0;
+    pipeline_info.stageCount = pipeline_stages.size();
+    pipeline_info.pStages = pipeline_stages.data();
+    pipeline_info.layout = pipeline_layout_;
+  */
+
+  /* TODO: Graphics pipeline should be added. Note that it requries rendered passes and might need
+   * some more refactorings, when it should be used. TODO: Research what is a vulkan renderpass.
+   * As we are currently focussing on Compute pipeline we will not spent to much effort in this at
+   * the current time.
+   *
+   * It seems like we will not be able to construct the graphics pipeline at this moment as it
+   * would be part of the binding process. */
+
+  return true;
+}
+
+bool VKShader::finalize_compute_pipeline(VkDevice vk_device)
+{
+
+  VkComputePipelineCreateInfo pipeline_info = {};
+  pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+  pipeline_info.flags = 0;
+  pipeline_info.stage = {};
+  pipeline_info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  pipeline_info.stage.flags = 0;
+  pipeline_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+  pipeline_info.stage.module = compute_module_;
+  pipeline_info.layout = pipeline_layout_;
+  pipeline_info.stage.pName = "main";
+
+  if (vkCreateComputePipelines(vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline_) !=
+      VK_SUCCESS) {
+    return false;
+  }
+
+  return true;
+}
+
+bool VKShader::finalize_pipeline_layout(VkDevice vk_device,
+                                        const shader::ShaderCreateInfo * /*info*/)
+{
+  VkPipelineLayoutCreateInfo pipeline_info = {};
+  pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipeline_info.flags = 0;
+  pipeline_info.setLayoutCount = layouts_.size();
+  pipeline_info.pSetLayouts = layouts_.data();
+
+  if (vkCreatePipelineLayout(vk_device, &pipeline_info, nullptr, &pipeline_layout_) !=
+      VK_SUCCESS) {
+    return false;
+  };
+
+  return true;
+}
+
+static VkDescriptorType descriptor_type(
+    const shader::ShaderCreateInfo::Resource::BindType bind_type)
+{
+  switch (bind_type) {
+    case shader::ShaderCreateInfo::Resource::BindType::IMAGE:
+      return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case shader::ShaderCreateInfo::Resource::BindType::SAMPLER:
+      return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    case shader::ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
+      return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
+      return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  }
+  BLI_assert_unreachable();
+  return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+}
+
+static VkDescriptorSetLayoutBinding create_descriptor_set_layout_binding(
+    const shader::ShaderCreateInfo::Resource &resource)
+{
+  VkDescriptorSetLayoutBinding binding = {};
+  binding.binding = resource.slot;
+  binding.descriptorType = descriptor_type(resource.bind_type);
+  binding.descriptorCount = 1;
+  binding.stageFlags = VK_SHADER_STAGE_ALL;
+  binding.pImmutableSamplers = nullptr;
+
+  return binding;
+}
+
+static void add_descriptor_set_layout_bindings(
+    const Vector<shader::ShaderCreateInfo::Resource> &resources,
+    Vector<VkDescriptorSetLayoutBinding> &r_bindings)
+{
+  for (const shader::ShaderCreateInfo::Resource &resource : resources) {
+    r_bindings.append(create_descriptor_set_layout_binding(resource));
+  }
+}
+
+static VkDescriptorSetLayoutCreateInfo create_descriptor_set_layout(
+    const Vector<shader::ShaderCreateInfo::Resource> &resources,
+    Vector<VkDescriptorSetLayoutBinding> &r_bindings)
+{
+  add_descriptor_set_layout_bindings(resources, r_bindings);
+  VkDescriptorSetLayoutCreateInfo set_info = {};
+  set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  set_info.flags = 0;
+  set_info.pNext = nullptr;
+  set_info.bindingCount = r_bindings.size();
+  set_info.pBindings = r_bindings.data();
+  return set_info;
+}
+
+bool VKShader::finalize_descriptor_set_layouts(VkDevice vk_device,
+                                               const shader::ShaderCreateInfo *info)
+{
+
+  if (!info->pass_resources_.is_empty()) {
+    Vector<VkDescriptorSetLayoutBinding> bindings;
+    VkDescriptorSetLayoutCreateInfo layout_info = create_descriptor_set_layout(
+        info->pass_resources_, bindings);
+    VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+    if (vkCreateDescriptorSetLayout(vk_device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
+      return false;
+    };
+    layouts_.append(layout);
+  }
+  if (!info->batch_resources_.is_empty()) {
+    Vector<VkDescriptorSetLayoutBinding> bindings;
+    VkDescriptorSetLayoutCreateInfo layout_info = create_descriptor_set_layout(
+        info->batch_resources_, bindings);
+    VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+    if (vkCreateDescriptorSetLayout(vk_device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
+      return false;
+    }
+    layouts_.append(layout);
+  }
 
   return true;
 }

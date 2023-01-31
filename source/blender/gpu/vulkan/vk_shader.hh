@@ -24,7 +24,9 @@ class VKShader : public Shader {
   VkShaderModule fragment_module_ = VK_NULL_HANDLE;
   VkShaderModule compute_module_ = VK_NULL_HANDLE;
   bool compilation_failed_ = false;
-  Vector<VkPipelineShaderStageCreateInfo> pipeline_infos_;
+  Vector<VkDescriptorSetLayout> layouts_;
+  VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
+  VkPipeline pipeline_ = VK_NULL_HANDLE;
 
  public:
   VKShader(const char *name);
@@ -63,6 +65,10 @@ class VKShader : public Shader {
   void build_shader_module(MutableSpan<const char *> sources,
                            shaderc_shader_kind stage,
                            VkShaderModule *r_shader_module);
+  bool finalize_descriptor_set_layouts(VkDevice vk_device, const shader::ShaderCreateInfo *info);
+  bool finalize_pipeline_layout(VkDevice vk_device, const shader::ShaderCreateInfo *info);
+  bool finalize_graphics_pipeline(VkDevice vk_device);
+  bool finalize_compute_pipeline(VkDevice vk_device);
 };
 
 }  // namespace blender::gpu
