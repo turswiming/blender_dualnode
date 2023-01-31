@@ -68,7 +68,7 @@ class VKShader : public Shader {
   bool finalize_descriptor_set_layouts(VkDevice vk_device, const shader::ShaderCreateInfo *info);
   bool finalize_pipeline_layout(VkDevice vk_device, const shader::ShaderCreateInfo *info);
   bool finalize_graphics_pipeline(VkDevice vk_device);
-  bool finalize_compute_pipeline(VkDevice vk_device);
+  bool bake_compute_pipeline(VkDevice vk_device);
 };
 
 }  // namespace blender::gpu

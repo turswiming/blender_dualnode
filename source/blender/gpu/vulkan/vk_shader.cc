@@ -663,7 +663,7 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
     BLI_assert(geometry_module_ == VK_NULL_HANDLE);
     BLI_assert(fragment_module_ == VK_NULL_HANDLE);
     BLI_assert(compute_module_ != VK_NULL_HANDLE);
-    return finalize_compute_pipeline(vk_device);
+    return bake_compute_pipeline(vk_device);
   }
 }
 
@@ -694,27 +694,10 @@ bool VKShader::finalize_graphics_pipeline(VkDevice /*vk_device */)
     pipeline_stages.append(fragment_stage_info);
   }
 
-  /*
-    VkGraphicsPipelineCreateInfo pipeline_info = {};
-    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipeline_info.flags = 0;
-    pipeline_info.stageCount = pipeline_stages.size();
-    pipeline_info.pStages = pipeline_stages.data();
-    pipeline_info.layout = pipeline_layout_;
-  */
-
-  /* TODO: Graphics pipeline should be added. Note that it requries rendered passes and might need
-   * some more refactorings, when it should be used. TODO: Research what is a vulkan renderpass.
-   * As we are currently focussing on Compute pipeline we will not spent to much effort in this at
-   * the current time.
-   *
-   * It seems like we will not be able to construct the graphics pipeline at this moment as it
-   * would be part of the binding process. */
-
   return true;
 }
 
-bool VKShader::finalize_compute_pipeline(VkDevice vk_device)
+bool VKShader::bake_compute_pipeline(VkDevice vk_device)
 {
 
   VkComputePipelineCreateInfo pipeline_info = {};
