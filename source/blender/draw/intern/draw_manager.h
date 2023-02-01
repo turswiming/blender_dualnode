@@ -439,15 +439,15 @@ struct DRWPass {
 #define MAX_CULLED_VIEWS 32
 
 struct DRWView {
+  float4x4 persmat;
+  float4x4 persinv;
+  ViewMatrices storage;
+
   /** Parent view if this is a sub view. NULL otherwise. */
   struct DRWView *parent;
 
-  ViewMatrices storage;
-
   float4 clip_planes[6];
 
-  float4x4 persmat;
-  float4x4 persinv;
   /** Number of active clip planes. */
   int clip_planes_len;
   /** Does culling result needs to be updated. */
