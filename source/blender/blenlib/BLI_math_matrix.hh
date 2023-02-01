@@ -811,7 +811,7 @@ MatBase<T, NumCol, NumRow> from_rotation(const EulerXYZ<T> &rotation)
   DoublePrecision sc = si * ch;
   DoublePrecision ss = si * sh;
 
-  MatT mat;
+  MatT mat = MatT::identity();
   mat[0][0] = T(cj * ch);
   mat[1][0] = T(sj * sc - cs);
   mat[2][0] = T(sj * cc + ss);
@@ -846,7 +846,7 @@ MatBase<T, NumCol, NumRow> from_rotation(const Quaternion<T> &rotation)
   DoublePrecision qbc = q2 * q3;
   DoublePrecision qcc = q3 * q3;
 
-  MatT mat;
+  MatT mat = MatT::identity();
   mat[0][0] = T(1.0 - qbb - qcc);
   mat[0][1] = T(qdc + qab);
   mat[0][2] = T(-qdb + qac);

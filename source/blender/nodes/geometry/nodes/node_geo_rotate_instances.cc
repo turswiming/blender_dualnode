@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_rotation.hh"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_rotation.hh"
 #include "BLI_task.hh"
 
 #include "BKE_instances.hh"
@@ -70,8 +70,12 @@ static void rotate_instances(GeoNodeExecParams &params, bke::Instances &instance
         used_pivot = pivot;
         rotation_matrix = from_rotation<float4x4>(EulerXYZ(euler));
       }
-      /* Move the pivot to the origin so that we can rotate around it and translate back. */
-      instance_transform = from_origin_transform<float4x4>(rotation_matrix, used_pivot);
+      /* Move the pivot to the origin so that we can rotate around it. */
+      instance_transform.location() -= used_pivot;
+      /* Perform the actual rotation. */
+      instance_transform = rotation_matrix * instance_transform;
+      /* Undo the pivot shifting done before. */
+      instance_transform.location() += used_pivot;
     }
   });
 }
