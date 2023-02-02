@@ -643,10 +643,10 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
   }
 
   VkDevice vk_device = context_->device_get();
-  if (!finalize_descriptor_set_layouts(vk_device, info)) {
+  if (!finalize_descriptor_set_layouts(vk_device, *info)) {
     return false;
   }
-  if (!finalize_pipeline_layout(vk_device, info)) {
+  if (!finalize_pipeline_layout(vk_device, *info)) {
     return false;
   }
 
@@ -729,7 +729,7 @@ bool VKShader::bake_compute_pipeline(VkDevice vk_device)
 }
 
 bool VKShader::finalize_pipeline_layout(VkDevice vk_device,
-                                        const shader::ShaderCreateInfo * /*info*/)
+                                        const shader::ShaderCreateInfo & /*info*/)
 {
   VkPipelineLayoutCreateInfo pipeline_info = {};
   pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -799,29 +799,28 @@ static VkDescriptorSetLayoutCreateInfo create_descriptor_set_layout(
 }
 
 bool VKShader::finalize_descriptor_set_layouts(VkDevice vk_device,
-                                               const shader::ShaderCreateInfo *info)
+                                               const shader::ShaderCreateInfo &info)
 {
+  if (info.pass_resources_.is_empty() && info.batch_resources_.is_empty()) {
+    return true;
+  }
 
-  if (!info->pass_resources_.is_empty()) {
-    Vector<VkDescriptorSetLayoutBinding> bindings;
-    VkDescriptorSetLayoutCreateInfo layout_info = create_descriptor_set_layout(
-        info->pass_resources_, bindings);
-    VkDescriptorSetLayout layout = VK_NULL_HANDLE;
-    if (vkCreateDescriptorSetLayout(vk_device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
-      return false;
-    };
-    layouts_.append(layout);
-  }
-  if (!info->batch_resources_.is_empty()) {
-    Vector<VkDescriptorSetLayoutBinding> bindings;
-    VkDescriptorSetLayoutCreateInfo layout_info = create_descriptor_set_layout(
-        info->batch_resources_, bindings);
-    VkDescriptorSetLayout layout = VK_NULL_HANDLE;
-    if (vkCreateDescriptorSetLayout(vk_device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
-      return false;
-    }
-    layouts_.append(layout);
-  }
+  /* Currently we create a single descriptor set. The goal would be to create one descriptor set
+   * for Frequency::PASS/BATCH. This isn't possible as areas expect that the binding location is
+   * static and predictable (eevee-next) or the binding location can be mapped to a single number
+   * (python). */
+  Vector<ShaderCreateInfo::Resource> all_resources;
+  all_resources.extend(info.pass_resources_);
+  all_resources.extend(info.batch_resources_);
+
+  Vector<VkDescriptorSetLayoutBinding> bindings;
+  VkDescriptorSetLayoutCreateInfo layout_info = create_descriptor_set_layout(all_resources,
+                                                                             bindings);
+  VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+  if (vkCreateDescriptorSetLayout(vk_device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
+    return false;
+  };
+  layouts_.append(layout);
 
   return true;
 }

@@ -65,8 +65,8 @@ class VKShader : public Shader {
   void build_shader_module(MutableSpan<const char *> sources,
                            shaderc_shader_kind stage,
                            VkShaderModule *r_shader_module);
-  bool finalize_descriptor_set_layouts(VkDevice vk_device, const shader::ShaderCreateInfo *info);
-  bool finalize_pipeline_layout(VkDevice vk_device, const shader::ShaderCreateInfo *info);
+  bool finalize_descriptor_set_layouts(VkDevice vk_device, const shader::ShaderCreateInfo &info);
+  bool finalize_pipeline_layout(VkDevice vk_device, const shader::ShaderCreateInfo &info);
   bool finalize_graphics_pipeline(VkDevice vk_device);
   bool bake_compute_pipeline(VkDevice vk_device);
 };
