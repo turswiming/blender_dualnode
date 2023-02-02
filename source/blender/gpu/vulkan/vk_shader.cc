@@ -8,6 +8,7 @@
 #include "vk_shader.hh"
 
 #include "vk_backend.hh"
+#include "vk_shader_interface.hh"
 #include "vk_shader_log.hh"
 
 #include "BLI_string_utils.h"
@@ -652,19 +653,27 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
   /* TODO we might need to move the actual pipeline construction to a later stage as the graphics
    * pipeline requires more data before it can be constructed.*/
   const bool is_graphics_shader = vertex_module_ != VK_NULL_HANDLE;
+  bool result;
   if (is_graphics_shader) {
     BLI_assert((fragment_module_ != VK_NULL_HANDLE && info->tf_type_ == GPU_SHADER_TFB_NONE) ||
                (fragment_module_ == VK_NULL_HANDLE && info->tf_type_ != GPU_SHADER_TFB_NONE));
     BLI_assert(compute_module_ == VK_NULL_HANDLE);
-    return finalize_graphics_pipeline(vk_device);
+    result = finalize_graphics_pipeline(vk_device);
   }
   else {
     BLI_assert(vertex_module_ == VK_NULL_HANDLE);
     BLI_assert(geometry_module_ == VK_NULL_HANDLE);
     BLI_assert(fragment_module_ == VK_NULL_HANDLE);
     BLI_assert(compute_module_ != VK_NULL_HANDLE);
-    return bake_compute_pipeline(vk_device);
+    result = bake_compute_pipeline(vk_device);
   }
+
+  if (result) {
+    VKShaderInterface *vk_interface = new VKShaderInterface();
+    vk_interface->init(*info);
+    interface = vk_interface;
+  }
+  return result;
 }
 
 bool VKShader::finalize_graphics_pipeline(VkDevice /*vk_device */)

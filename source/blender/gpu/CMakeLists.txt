@@ -199,6 +199,7 @@ set(VULKAN_SRC
   vulkan/vk_pixel_buffer.cc
   vulkan/vk_query.cc
   vulkan/vk_shader.cc
+  vulkan/vk_shader_interface.cc
   vulkan/vk_shader_log.cc
   vulkan/vk_storage_buffer.cc
   vulkan/vk_texture.cc
@@ -216,6 +217,7 @@ set(VULKAN_SRC
   vulkan/vk_pixel_buffer.hh
   vulkan/vk_query.hh
   vulkan/vk_shader.hh
+  vulkan/vk_shader_interface.hh
   vulkan/vk_shader_log.hh
   vulkan/vk_storage_buffer.hh
   vulkan/vk_texture.hh
