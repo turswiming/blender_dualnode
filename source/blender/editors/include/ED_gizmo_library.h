@@ -106,12 +106,18 @@ enum {
 
 /* draw_style */
 enum {
+  /* Display the hover region (edge or corner) of the underlying bounding box. */
   ED_GIZMO_CAGE2D_STYLE_BOX = 0,
-  ED_GIZMO_CAGE2D_STYLE_CIRCLE = 1,
+  /* Display the bounding box plus dots on four corners while hovering, usually used for
+     transforming a 2D shape. */
+  ED_GIZMO_CAGE2D_STYLE_BOX_TRANSFORM,
+  /* Display the bounding circle while hovering. */
+  ED_GIZMO_CAGE2D_STYLE_CIRCLE,
 };
 
 enum {
   ED_GIZMO_CAGE3D_STYLE_BOX = 0,
+  /* TODO: rename */
   ED_GIZMO_CAGE3D_STYLE_CIRCLE = 1,
 };
 
@@ -125,17 +131,20 @@ enum {
 /** #wmGizmo.highlight_part */
 enum {
   ED_GIZMO_CAGE2D_PART_TRANSLATE = 0,
-  ED_GIZMO_CAGE2D_PART_SCALE_MIN_X = 1,
-  ED_GIZMO_CAGE2D_PART_SCALE_MAX_X = 2,
-  ED_GIZMO_CAGE2D_PART_SCALE_MIN_Y = 3,
-  ED_GIZMO_CAGE2D_PART_SCALE_MAX_Y = 4,
-  /* Corners */
-  ED_GIZMO_CAGE2D_PART_SCALE_MIN_X_MIN_Y = 5,
-  ED_GIZMO_CAGE2D_PART_SCALE_MIN_X_MAX_Y = 6,
-  ED_GIZMO_CAGE2D_PART_SCALE_MAX_X_MIN_Y = 7,
-  ED_GIZMO_CAGE2D_PART_SCALE_MAX_X_MAX_Y = 8,
 
-  ED_GIZMO_CAGE2D_PART_ROTATE = 9,
+  ED_GIZMO_CAGE2D_PART_SCALE,
+  /* Edges */
+  ED_GIZMO_CAGE2D_PART_SCALE_MIN_X,
+  ED_GIZMO_CAGE2D_PART_SCALE_MAX_X,
+  ED_GIZMO_CAGE2D_PART_SCALE_MIN_Y,
+  ED_GIZMO_CAGE2D_PART_SCALE_MAX_Y,
+  /* Corners */
+  ED_GIZMO_CAGE2D_PART_SCALE_MIN_X_MIN_Y,
+  ED_GIZMO_CAGE2D_PART_SCALE_MIN_X_MAX_Y,
+  ED_GIZMO_CAGE2D_PART_SCALE_MAX_X_MIN_Y,
+  ED_GIZMO_CAGE2D_PART_SCALE_MAX_X_MAX_Y,
+
+  ED_GIZMO_CAGE2D_PART_ROTATE,
 };
 
 /** #wmGizmo.highlight_part */
