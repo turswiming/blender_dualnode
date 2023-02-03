@@ -599,6 +599,12 @@ VKShader::~VKShader()
     vkDestroyShaderModule(device, compute_module_, nullptr);
     compute_module_ = VK_NULL_HANDLE;
   }
+  if (pipeline_layout_ != VK_NULL_HANDLE) {
+    vkDestroyPipelineLayout(device, pipeline_layout_, nullptr);
+  }
+  for (VkDescriptorSetLayout &layout : layouts_) {
+    vkDestroyDescriptorSetLayout(device, layout, nullptr);
+  }
 }
 
 void VKShader::build_shader_module(MutableSpan<const char *> sources,

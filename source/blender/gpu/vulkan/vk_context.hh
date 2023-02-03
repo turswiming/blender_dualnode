@@ -60,6 +60,11 @@ class VKContext : public Context {
     return device_;
   }
 
+  const uint32_t *queue_family_ptr_get() const
+  {
+    return &graphic_queue_familly_;
+  }
+
   VmaAllocator mem_allocator_get() const
   {
     return mem_allocator_;

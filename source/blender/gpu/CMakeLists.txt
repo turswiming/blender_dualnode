@@ -190,6 +190,7 @@ set(OPENGL_SRC
 set(VULKAN_SRC
   vulkan/vk_backend.cc
   vulkan/vk_batch.cc
+  vulkan/vk_buffer.cc
   vulkan/vk_context.cc
   vulkan/vk_descriptor_pools.cc
   vulkan/vk_drawlist.cc
@@ -208,6 +209,7 @@ set(VULKAN_SRC
 
   vulkan/vk_backend.hh
   vulkan/vk_batch.hh
+  vulkan/vk_buffer.hh
   vulkan/vk_context.hh
   vulkan/vk_descriptor_pools.hh
   vulkan/vk_drawlist.hh
@@ -784,6 +786,7 @@ if(WITH_GTESTS)
       tests/gpu_index_buffer_test.cc
       tests/gpu_shader_builtin_test.cc
       tests/gpu_shader_test.cc
+      tests/gpu_storage_buffer_test.cc
 
       tests/gpu_testing.hh
     )

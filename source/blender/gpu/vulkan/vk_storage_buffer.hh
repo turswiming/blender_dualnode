@@ -11,11 +11,17 @@
 
 #include "gpu_storage_buffer_private.hh"
 
+#include "vk_buffer.hh"
+
 namespace blender::gpu {
 
 class VKStorageBuffer : public StorageBuf {
+  GPUUsageType usage_;
+  VKBuffer buffer_;
+
  public:
-  VKStorageBuffer(int size, const char *name) : StorageBuf(size, name)
+  VKStorageBuffer(int size, GPUUsageType usage, const char *name)
+      : StorageBuf(size, name), usage_(usage)
   {
   }
 
@@ -25,6 +31,9 @@ class VKStorageBuffer : public StorageBuf {
   void clear(eGPUTextureFormat internal_format, eGPUDataFormat data_format, void *data) override;
   void copy_sub(VertBuf *src, uint dst_offset, uint src_offset, uint copy_size) override;
   void read(void *data) override;
+
+ private:
+  void allocate(VKContext &context);
 };
 
 }  // namespace blender::gpu

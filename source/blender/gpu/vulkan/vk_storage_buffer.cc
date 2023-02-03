@@ -11,8 +11,18 @@
 
 namespace blender::gpu {
 
-void VKStorageBuffer::update(const void * /*data*/)
+void VKStorageBuffer::update(const void *data)
 {
+  VKContext &context = *VKContext::get();
+  if (!buffer_.is_allocated()) {
+    allocate(context);
+  }
+  buffer_.update(context, data);
+}
+
+void VKStorageBuffer::allocate(VKContext &context)
+{
+  buffer_.create(context, size_in_bytes_, usage_, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 }
 
 void VKStorageBuffer::bind(int /*slot*/)
@@ -35,8 +45,18 @@ void VKStorageBuffer::copy_sub(VertBuf * /*src*/,
 {
 }
 
-void VKStorageBuffer::read(void * /*data*/)
+void VKStorageBuffer::read(void *data)
 {
+  VKContext &context = *VKContext::get();
+  if (!buffer_.is_allocated()) {
+    allocate(context);
+  }
+
+  void *mapped_memory;
+  if (buffer_.map(context, &mapped_memory)) {
+    memcpy(data, mapped_memory, size_in_bytes_);
+    buffer_.unmap(context);
+  }
 }
 
 }  // namespace blender::gpu

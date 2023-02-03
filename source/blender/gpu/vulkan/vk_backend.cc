@@ -123,9 +123,9 @@ UniformBuf *VKBackend::uniformbuf_alloc(int size, const char *name)
   return new VKUniformBuffer(size, name);
 }
 
-StorageBuf *VKBackend::storagebuf_alloc(int size, GPUUsageType /*usage*/, const char *name)
+StorageBuf *VKBackend::storagebuf_alloc(int size, GPUUsageType usage, const char *name)
 {
-  return new VKStorageBuffer(size, name);
+  return new VKStorageBuffer(size, usage, name);
 }
 
 VertBuf *VKBackend::vertbuf_alloc()
