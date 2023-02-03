@@ -62,7 +62,7 @@ class VKContext : public Context {
 
   const uint32_t *queue_family_ptr_get() const
   {
-    return &graphic_queue_familly_;
+    return &graphic_queue_family_;
   }
 
   VmaAllocator mem_allocator_get() const
