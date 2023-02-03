@@ -15,8 +15,9 @@ namespace blender::gpu {
 void GPUTest::SetUp()
 {
   GPU_backend_type_selection_set(gpu_backend_type);
-  GHOST_GLSettings glSettings = {0};
+  GHOST_GLSettings glSettings = {};
   glSettings.context_type = draw_context_type;
+  glSettings.flags = GHOST_glDebugContext;
   CLG_init();
   ghost_system = GHOST_CreateSystem();
   ghost_context = GHOST_CreateOpenGLContext(ghost_system, glSettings);
