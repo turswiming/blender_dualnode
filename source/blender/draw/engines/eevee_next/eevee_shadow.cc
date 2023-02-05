@@ -341,8 +341,8 @@ void ShadowDirectional::cascade_tilemaps_distribution_near_far_points(const Came
 {
   const CameraData &cam_data = camera.data_get();
   /* Ideally we should only take the intersection with the scene bounds. */
-  far_point = camera.position() + camera.forward() * cam_data.clip_near;
-  near_point = camera.position() + camera.forward() * cam_data.clip_far;
+  far_point = camera.position() - camera.forward() * cam_data.clip_far;
+  near_point = camera.position() - camera.forward() * cam_data.clip_near;
   /* TODO(fclem): Cleanup this once matrix API rolls out. */
   mul_m4_v3(object_mat_.ptr(), far_point);
   mul_m4_v3(object_mat_.ptr(), near_point);
@@ -375,15 +375,15 @@ IndexRange ShadowDirectional::cascade_level_range(const Camera &camera, float lo
   }
 
   /* Allow better tilemap usage without missing pages near end of view. */
-  lod_bias += 0.50f;
+  lod_bias += 0.5f;
   /* Level of detail (or size) of every tilemaps of this light. */
   int lod_level = ceil(log2(max_ff(min_depth_tilemap_size, min_diagonal_tilemap_size)) + lod_bias);
 
   /* Tilemaps "rotate" around the first one so their effective range is only half their size. */
   float per_tilemap_coverage = ShadowDirectional::coverage_get(lod_level) * 0.5f;
   /* Number of tilemaps needed to cover the whole view. */
+  /* Note: floor + 1 to avoid 0 when parallel. */
   int tilemap_len = floor(depth_range_in_shadow_space / per_tilemap_coverage) + 1;
-
   return IndexRange(lod_level, tilemap_len);
 }
 
@@ -395,24 +395,25 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
 {
   using namespace blender::math;
 
-  float inverted_level_len = (levels_range.size() > 1) ? (1.0f / (levels_range.size() - 1)) : 0.0f;
-
   /* All tilemaps use the first level size. */
   float half_size = ShadowDirectional::coverage_get(levels_range.first()) / 2.0f;
   float tile_size = ShadowDirectional::tile_size_get(levels_range.first());
 
   float3 near_point, far_point;
   cascade_tilemaps_distribution_near_far_points(camera, near_point, far_point);
-  float3 farthest_tilemap_center = near_point +
-                                   camera.forward() * half_size * (levels_range.size() - 1);
+
+  float2 local_view_direction = normalize(float2(far_point) - float2(near_point));
+  float2 farthest_tilemap_center = local_view_direction * half_size * (levels_range.size() - 1);
 
   /* Offset for smooth level transitions. */
   *reinterpret_cast<float3 *>(light._position) = near_point;
 
   /* Offset in tiles from the origin to the center of the first tilemaps. */
-  float2 origin_offset = round(float2(near_point) / tile_size);
-  /* Offset in tiles between the first and the last tilemaps. */
-  float2 offset_vector = round(float2(farthest_tilemap_center - near_point) / tile_size);
+  int2 origin_offset = int2(round(float2(near_point) / tile_size));
+  /* Offset in tiles between the first andlod the last tilemaps. */
+  int2 offset_vector = int2(round(farthest_tilemap_center / tile_size));
+
+  light.clipmap_base_offset = (offset_vector * (1 << 16)) / max_ii(levels_range.size() - 1, 1);
 
   /* \note: cascade_level_range starts the range at the unique LOD to apply to all tilemaps. */
   int level = levels_range.first();
@@ -420,9 +421,7 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
     ShadowTileMap *tilemap = tilemaps_[i];
 
     /* Equal spacing between cascades layers since we want uniform shadow density. */
-    /* Should match shadow_decompress_grid_offset(). */
-    int2 level_offset = int2(origin_offset - floor(offset_vector * (i * inverted_level_len)));
-
+    int2 level_offset = origin_offset + shadow_cascade_grid_offset(light.clipmap_base_offset, i);
     tilemap->sync_orthographic(object_mat_, level_offset, level, 0.0f, SHADOW_PROJECTION_CASCADE);
 
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
@@ -432,14 +431,6 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
 
   light._clipmap_origin_x = origin_offset.x * tile_size;
   light._clipmap_origin_y = origin_offset.y * tile_size;
-
-  union {
-    float2 f;
-    int2 i;
-  } float2_int2_union;
-  float2_int2_union.f = offset_vector * inverted_level_len;
-  /* Using intBitsToFloat in the shader. */
-  light.clipmap_base_offset = float2_int2_union.i;
 
   light.type = LIGHT_SUN_ORTHO;
 
@@ -454,7 +445,8 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
   light._clipmap_lod_bias = light.clipmap_lod_min - 1;
 
   /* Scaling is handled by ShadowCoordinates.lod_relative. */
-  light.normal_mat_packed.x = 1.0f;
+  /* NOTE: Not sure why 0.25 is needed here. Some zero level scaling. */
+  light.normal_mat_packed.x = 0.25f;
 }
 
 /************************************************************************
@@ -1017,7 +1009,8 @@ void ShadowModule::debug_end_sync()
   if (!ELEM(inst_.debug_mode,
             eDebugMode::DEBUG_SHADOW_TILEMAPS,
             eDebugMode::DEBUG_SHADOW_VALUES,
-            eDebugMode::DEBUG_SHADOW_TILE_RANDOM_COLOR)) {
+            eDebugMode::DEBUG_SHADOW_TILE_RANDOM_COLOR,
+            eDebugMode::DEBUG_SHADOW_TILEMAP_RANDOM_COLOR)) {
     return;
   }
 
@@ -1149,7 +1142,8 @@ void ShadowModule::debug_draw(View &view, GPUFrameBuffer *view_fb)
   if (!ELEM(inst_.debug_mode,
             eDebugMode::DEBUG_SHADOW_TILEMAPS,
             eDebugMode::DEBUG_SHADOW_VALUES,
-            eDebugMode::DEBUG_SHADOW_TILE_RANDOM_COLOR)) {
+            eDebugMode::DEBUG_SHADOW_TILE_RANDOM_COLOR,
+            eDebugMode::DEBUG_SHADOW_TILEMAP_RANDOM_COLOR)) {
     return;
   }
 
@@ -1162,6 +1156,9 @@ void ShadowModule::debug_draw(View &view, GPUFrameBuffer *view_fb)
       break;
     case DEBUG_SHADOW_TILE_RANDOM_COLOR:
       inst_.info = "Debug Mode: Shadow Tile Random Color\n";
+      break;
+    case DEBUG_SHADOW_TILEMAP_RANDOM_COLOR:
+      inst_.info = "Debug Mode: Shadow Tilemap Random Color\n";
       break;
     default:
       break;

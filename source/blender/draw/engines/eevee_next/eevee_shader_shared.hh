@@ -60,6 +60,10 @@ enum eDebugMode : uint32_t {
    * Show random color for each tile. Verify allocation and LOD assignment.
    */
   DEBUG_SHADOW_TILE_RANDOM_COLOR = 12u,
+  /**
+   * Show random color for each tile. Verify distribution and LOD transitions.
+   */
+  DEBUG_SHADOW_TILEMAP_RANDOM_COLOR = 13u,
 };
 
 /** \} */
@@ -677,6 +681,11 @@ enum eShadowProjectionType : uint32_t {
   SHADOW_PROJECTION_CLIPMAP = 1u,
   SHADOW_PROJECTION_CASCADE = 2u,
 };
+
+static inline int2 shadow_cascade_grid_offset(int2 base_offset, int level_relative)
+{
+  return (base_offset * level_relative) / (1 << 16);
+}
 
 /**
  * Small descriptor used for the tile update phase. Updated by CPU & uploaded to GPU each redraw.

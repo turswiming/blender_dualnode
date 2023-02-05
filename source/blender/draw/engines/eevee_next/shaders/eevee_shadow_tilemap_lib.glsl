@@ -101,21 +101,23 @@ ShadowTileData shadow_tile_load(usampler2D tilemaps_tx, ivec2 tile_co, int tilem
 /* This function should be the inverse of ShadowDirectional::coverage_get(). */
 int shadow_directional_level(LightData light, vec3 lP)
 {
-  /* We need to hide one tile worth of data to hide the moving transition. */
-  const float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 1.0001);
-  float distance_from_shadow_origin = length(lP) * narrowing;
+  float lod;
   if (light.type == LIGHT_SUN) {
-    distance_from_shadow_origin = log2(distance_from_shadow_origin);
+    /* We need to hide one tile worth of data to hide the moving transition. */
+    const float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 1.0001);
     /* Since the distance is centered around the camera (and thus by extension the tilemap),
      * we need to multiply by 2 to get the lod level which covers the following range:
      * [-coverage_get(lod)/2..coverage_get(lod)/2] */
-    distance_from_shadow_origin += 1.0;
+    lod = log2(length(lP) * narrowing * 2.0);
   }
   else {
+    /* The narrowing need to be stronger since the tilemap position is not rounded but floored. */
+    const float narrowing = float(SHADOW_TILEMAP_RES) / (float(SHADOW_TILEMAP_RES) - 2.5001);
     /* Since we want half of the size, bias the level by -1. */
-    distance_from_shadow_origin /= exp2(float(light.clipmap_lod_min - 1));
+    float lod_min_half_size = exp2(float(light.clipmap_lod_min - 1));
+    lod = length(lP.xy) * narrowing / lod_min_half_size;
   }
-  int clipmap_lod = int(ceil(distance_from_shadow_origin + light._clipmap_lod_bias));
+  int clipmap_lod = int(ceil(lod + light._clipmap_lod_bias));
   return clamp(clipmap_lod, light.clipmap_lod_min, light.clipmap_lod_max);
 }
 
@@ -131,14 +133,13 @@ struct ShadowCoordinates {
 };
 
 /* Retain sign bit and avoid costly int division. */
-ivec2 shadow_decompress_grid_offset(eLightType light_type, ivec2 ofs, int level_relative)
+ivec2 shadow_decompress_grid_offset(eLightType light_type, ivec2 offset, int level_relative)
 {
   if (light_type == LIGHT_SUN_ORTHO) {
-    /* Should match cascade_tilemaps_distribution(). */
-    return -ivec2(floor(intBitsToFloat(ofs) * float(level_relative)));
+    return shadow_cascade_grid_offset(offset, level_relative);
   }
   else {
-    return ((ofs & 0xFFFF) >> level_relative) - ((ofs >> 16) >> level_relative);
+    return ((offset & 0xFFFF) >> level_relative) - ((offset >> 16) >> level_relative);
   }
 }
 

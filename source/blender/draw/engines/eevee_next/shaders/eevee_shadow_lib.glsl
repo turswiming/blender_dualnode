@@ -68,8 +68,6 @@ mat4x4 shadow_load_normal_matrix(LightData light)
   else {
     float near = shadow_orderedIntBitsToFloat(light.clip_near);
     float far = shadow_orderedIntBitsToFloat(light.clip_far);
-    /* FIXME: Why? */
-    float scale = light.normal_mat_packed.x * 16.0;
     /* Could be store precomputed inside the light struct. Just have to find a how to update it. */
     float z_scale = (far - near) * 0.5;
     return mat4x4(vec4(light.normal_mat_packed.x, 0.0, 0.0, 0.0),

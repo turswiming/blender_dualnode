@@ -137,8 +137,26 @@ void debug_atlas_values(vec3 P, LightData light)
 void debug_random_tile_color(vec3 P, LightData light)
 {
   ShadowSample samp = debug_tile_get(P, light);
-  out_color_add = vec4(debug_random_color(ivec2(samp.tile.page)), 0) * 0.9;
-  out_color_mul = vec4(0.1);
+  out_color_add = vec4(debug_random_color(ivec2(samp.tile.page)), 0) * 0.5;
+  out_color_mul = vec4(0.5);
+}
+
+void debug_random_tilemap_color(vec3 P, LightData light)
+{
+  ShadowCoordinates coord;
+  if (is_sun_light(light.type)) {
+    vec3 lP = shadow_world_to_local(light, P);
+    coord = shadow_directional_coordinates(light, lP);
+  }
+  else {
+    vec3 lP = light_world_to_local(light, P - light._position);
+    int face_id = shadow_punctual_face_index_get(lP);
+    lP = shadow_punctual_local_position_to_face_local(face_id, lP);
+    coord = shadow_punctual_coordinates(light, lP, face_id);
+  }
+
+  out_color_add = vec4(debug_random_color(ivec2(coord.tilemap_index)), 0) * 0.5;
+  out_color_mul = vec4(0.5);
 }
 
 void main()
@@ -169,6 +187,9 @@ void main()
         break;
       case DEBUG_SHADOW_TILE_RANDOM_COLOR:
         debug_random_tile_color(P, light);
+        break;
+      case DEBUG_SHADOW_TILEMAP_RANDOM_COLOR:
+        debug_random_tilemap_color(P, light);
         break;
     }
   }
