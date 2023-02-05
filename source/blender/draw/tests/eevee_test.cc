@@ -135,7 +135,7 @@ static void test_eevee_shadow_shift()
   tiles_data.read();
 
   EXPECT_EQ(tilemaps_data[0].grid_offset, int2(0));
-  EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).page, uint2(15, 2));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).page, uint2(SHADOW_TILEMAP_RES - 1, 2));
   EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).do_update, true);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).is_rendered, false);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[0]).is_allocated, true);
@@ -143,7 +143,8 @@ static void test_eevee_shadow_shift()
   EXPECT_EQ(shadow_tile_unpack(tiles_data[1]).do_update, false);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[1]).is_rendered, false);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[1]).is_allocated, true);
-  EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).page, uint2(15, 4));
+  EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).page,
+            uint2(SHADOW_TILEMAP_RES - 1, 4));
   EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).do_update, true);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).is_rendered, false);
   EXPECT_EQ(shadow_tile_unpack(tiles_data[0 + SHADOW_TILEMAP_RES * 2]).is_allocated, true);
@@ -224,6 +225,39 @@ static void test_eevee_shadow_tag_update()
 
   /** The layout of these expected strings is Y down. */
   StringRefNull expected_lod0 =
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "xxxx----------------xxxxxxxx----"
+      "xxxx----------------xxxxxxxx----"
+      "xxxx----------------xxxxxxxx----"
+      "xxxx----------------xxxxxxxx----"
+      "xxxx----------------xxxxxxxx----"
+      "xxxx----------------xxxxxxxx----"
+      "xxxx----------------xxxxxxxx----"
+      "xxxx----------------xxxxxxxx----"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------";
+  StringRefNull expected_lod1 =
       "----------------"
       "----------------"
       "----------------"
@@ -240,7 +274,7 @@ static void test_eevee_shadow_tag_update()
       "xx--------xxxx--"
       "----------------"
       "----------------";
-  StringRefNull expected_lod1 =
+  StringRefNull expected_lod2 =
       "--------"
       "--------"
       "--------"
@@ -249,20 +283,21 @@ static void test_eevee_shadow_tag_update()
       "x----xx-"
       "x----xx-"
       "--------";
-  StringRefNull expected_lod2 =
+  StringRefNull expected_lod3 =
       "----"
       "----"
       "x-xx"
       "x-xx";
-  StringRefNull expected_lod3 =
+  StringRefNull expected_lod4 =
       "--"
       "xx";
-  StringRefNull expected_lod4 = "x";
-  const uint lod0_len = square_i(SHADOW_TILEMAP_RES);
-  const uint lod1_len = square_i(SHADOW_TILEMAP_RES / 2);
-  const uint lod2_len = square_i(SHADOW_TILEMAP_RES / 4);
-  const uint lod3_len = square_i(SHADOW_TILEMAP_RES / 8);
-  const uint lod4_len = square_i(SHADOW_TILEMAP_RES / 16);
+  StringRefNull expected_lod5 = "x";
+  const uint lod0_len = SHADOW_TILEMAP_LOD0_LEN;
+  const uint lod1_len = SHADOW_TILEMAP_LOD1_LEN;
+  const uint lod2_len = SHADOW_TILEMAP_LOD2_LEN;
+  const uint lod3_len = SHADOW_TILEMAP_LOD3_LEN;
+  const uint lod4_len = SHADOW_TILEMAP_LOD4_LEN;
+  const uint lod5_len = SHADOW_TILEMAP_LOD5_LEN;
 
   auto stringify_result = [&](uint start, uint len) -> std::string {
     std::string result = "";
@@ -277,6 +312,8 @@ static void test_eevee_shadow_tag_update()
   EXPECT_EQ(stringify_result(lod0_len + lod1_len, lod2_len), expected_lod2);
   EXPECT_EQ(stringify_result(lod0_len + lod1_len + lod2_len, lod3_len), expected_lod3);
   EXPECT_EQ(stringify_result(lod0_len + lod1_len + lod2_len + lod3_len, lod4_len), expected_lod4);
+  EXPECT_EQ(stringify_result(lod0_len + lod1_len + lod2_len + lod3_len + lod4_len, lod5_len),
+            expected_lod5);
 
   GPU_shader_free(sh);
   DRW_shaders_free();
@@ -645,16 +682,18 @@ static void test_eevee_shadow_finalize()
   ShadowPageCacheBuf pages_cached_data = {"PagesCachedBuf"};
   ShadowPagesInfoDataBuf pages_infos_data = {"PagesInfosBuf"};
 
-  const uint lod0_len = square_i(SHADOW_TILEMAP_RES);
-  const uint lod1_len = square_i(SHADOW_TILEMAP_RES / 2);
-  const uint lod2_len = square_i(SHADOW_TILEMAP_RES / 4);
-  const uint lod3_len = square_i(SHADOW_TILEMAP_RES / 8);
+  const uint lod0_len = SHADOW_TILEMAP_LOD0_LEN;
+  const uint lod1_len = SHADOW_TILEMAP_LOD1_LEN;
+  const uint lod2_len = SHADOW_TILEMAP_LOD2_LEN;
+  const uint lod3_len = SHADOW_TILEMAP_LOD3_LEN;
+  const uint lod4_len = SHADOW_TILEMAP_LOD4_LEN;
 
   const uint lod0_ofs = 0;
   const uint lod1_ofs = lod0_len;
   const uint lod2_ofs = lod1_ofs + lod1_len;
   const uint lod3_ofs = lod2_ofs + lod2_len;
   const uint lod4_ofs = lod3_ofs + lod3_len;
+  const uint lod5_ofs = lod4_ofs + lod4_len;
 
   for (auto i : IndexRange(SHADOW_TILEDATA_PER_TILEMAP)) {
     tiles_data[i] = 0;
@@ -686,6 +725,10 @@ static void test_eevee_shadow_finalize()
     tiles_data[lod4_ofs] = shadow_tile_pack(tile);
 
     tile.page = uint2(6, 0);
+    tile.do_update = true;
+    tiles_data[lod5_ofs] = shadow_tile_pack(tile);
+
+    tile.page = uint2(7, 0);
     tile.do_update = true;
     tiles_data[lod0_ofs + 8] = shadow_tile_pack(tile);
 
@@ -747,6 +790,7 @@ static void test_eevee_shadow_finalize()
   pass.bind_image("render_map_lod2_img", render_map_tx.mip_view(2));
   pass.bind_image("render_map_lod3_img", render_map_tx.mip_view(3));
   pass.bind_image("render_map_lod4_img", render_map_tx.mip_view(4));
+  pass.bind_image("render_map_lod5_img", render_map_tx.mip_view(5));
   pass.dispatch(int3(1, 1, tilemaps_data.size()));
 
   Manager manager;
@@ -769,22 +813,38 @@ static void test_eevee_shadow_finalize()
 
     /** The layout of these expected strings is Y down. */
     StringRefNull expected_pages =
-        "1233444465555555"
-        "2233444455555555"
-        "3333444455555555"
-        "3333444455555555"
-        "4444444455555555"
-        "4444444455555555"
-        "4444444455555555"
-        "4444444455555555"
-        "5555555555555555"
-        "5555555555555555"
-        "5555555555555555"
-        "5555555555555555"
-        "5555555555555555"
-        "5555555555555555"
-        "5555555555555555"
-        "5555555555555555";
+        "12334444755555556666666666666666"
+        "22334444555555556666666666666666"
+        "33334444555555556666666666666666"
+        "33334444555555556666666666666666"
+        "44444444555555556666666666666666"
+        "44444444555555556666666666666666"
+        "44444444555555556666666666666666"
+        "44444444555555556666666666666666"
+        "55555555555555556666666666666666"
+        "55555555555555556666666666666666"
+        "55555555555555556666666666666666"
+        "55555555555555556666666666666666"
+        "55555555555555556666666666666666"
+        "55555555555555556666666666666666"
+        "55555555555555556666666666666666"
+        "55555555555555556666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666"
+        "66666666666666666666666666666666";
 
     EXPECT_EQ(expected_pages, result);
   }
@@ -793,70 +853,106 @@ static void test_eevee_shadow_finalize()
     auto stringify_lod = [](Span<uint> data) -> std::string {
       std::string result = "";
       for (auto x : data) {
-        /* Take only X page location since we allocated manually. */
-        result += std::to_string(x & 0x7u);
+        result += (x == 0xFFFFFFFFu) ? '-' : '0' + (x % 10);
       }
       return result;
     };
 
     /** The layout of these expected strings is Y down. */
     StringRefNull expected_lod0 =
-        "7777777767777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777"
-        "7777777777777777";
+        "--------7-----------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------"
+        "--------------------------------";
 
     StringRefNull expected_lod1 =
-        "77777777"
-        "77777777"
-        "77777777"
-        "77777777"
-        "77777777"
-        "77777777"
-        "77777777"
-        "77777777";
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------"
+        "----------------";
 
     StringRefNull expected_lod2 =
-        "3777"
-        "7777"
-        "7777"
-        "7777";
+        "3-------"
+        "--------"
+        "--------"
+        "--------"
+        "--------"
+        "--------"
+        "--------"
+        "--------";
 
     StringRefNull expected_lod3 =
-        "77"
-        "77";
+        "----"
+        "----"
+        "----"
+        "----";
 
-    StringRefNull expected_lod4 = "5";
+    StringRefNull expected_lod4 =
+        "5-"
+        "--";
+
+    StringRefNull expected_lod5 = "6";
 
     uint *pixels_lod0 = render_map_tx.read<uint32_t>(GPU_DATA_UINT, 0);
     uint *pixels_lod1 = render_map_tx.read<uint32_t>(GPU_DATA_UINT, 1);
     uint *pixels_lod2 = render_map_tx.read<uint32_t>(GPU_DATA_UINT, 2);
     uint *pixels_lod3 = render_map_tx.read<uint32_t>(GPU_DATA_UINT, 3);
     uint *pixels_lod4 = render_map_tx.read<uint32_t>(GPU_DATA_UINT, 4);
+    uint *pixels_lod5 = render_map_tx.read<uint32_t>(GPU_DATA_UINT, 5);
 
     EXPECT_EQ(stringify_lod(Span<uint>(pixels_lod0, lod0_len)), expected_lod0);
     EXPECT_EQ(stringify_lod(Span<uint>(pixels_lod1, lod1_len)), expected_lod1);
     EXPECT_EQ(stringify_lod(Span<uint>(pixels_lod2, lod2_len)), expected_lod2);
     EXPECT_EQ(stringify_lod(Span<uint>(pixels_lod3, lod3_len)), expected_lod3);
-    EXPECT_EQ(stringify_lod(Span<uint>(pixels_lod4, 1)), expected_lod4);
+    EXPECT_EQ(stringify_lod(Span<uint>(pixels_lod4, lod4_len)), expected_lod4);
+    EXPECT_EQ(stringify_lod(Span<uint>(pixels_lod5, 1)), expected_lod5);
 
     MEM_SAFE_FREE(pixels_lod0);
     MEM_SAFE_FREE(pixels_lod1);
     MEM_SAFE_FREE(pixels_lod2);
     MEM_SAFE_FREE(pixels_lod3);
     MEM_SAFE_FREE(pixels_lod4);
+    MEM_SAFE_FREE(pixels_lod5);
   }
 
   pages_infos_data.read();
@@ -879,11 +975,19 @@ static void test_eevee_shadow_page_mask()
     tilemaps_data.append(tilemap);
   }
 
-  const uint lod0_len = square_i(SHADOW_TILEMAP_RES);
-  const uint lod1_len = square_i(SHADOW_TILEMAP_RES / 2);
-  const uint lod2_len = square_i(SHADOW_TILEMAP_RES / 4);
-  const uint lod3_len = square_i(SHADOW_TILEMAP_RES / 8);
-  const uint lod4_len = square_i(SHADOW_TILEMAP_RES / 16);
+  const uint lod0_len = SHADOW_TILEMAP_LOD0_LEN;
+  const uint lod1_len = SHADOW_TILEMAP_LOD1_LEN;
+  const uint lod2_len = SHADOW_TILEMAP_LOD2_LEN;
+  const uint lod3_len = SHADOW_TILEMAP_LOD3_LEN;
+  const uint lod4_len = SHADOW_TILEMAP_LOD4_LEN;
+  const uint lod5_len = SHADOW_TILEMAP_LOD5_LEN;
+
+  const uint lod0_ofs = 0;
+  const uint lod1_ofs = lod0_ofs + lod0_len;
+  const uint lod2_ofs = lod1_ofs + lod1_len;
+  const uint lod3_ofs = lod2_ofs + lod2_len;
+  const uint lod4_ofs = lod3_ofs + lod3_len;
+  const uint lod5_ofs = lod4_ofs + lod4_len;
 
   {
     ShadowTileData tile;
@@ -952,40 +1056,73 @@ static void test_eevee_shadow_page_mask()
 
   /** The layout of these expected strings is Y down. */
   StringRefNull expected_lod0 =
-      "xxxxxxxxxxxxxxxx"
-      "xxxxxxxxx-------"
-      "xxxxxxxxx-------"
-      "xxxxxxxxx-------"
-      "xxxxxxxxx-------"
-      "xxxxxxxxx-------"
-      "xxxxxxxxx-------"
-      "xxxxxxxxx-------"
-      "xxxxxxxxx-------"
-      "----------------"
-      "----------------"
-      "----------------"
-      "----------------"
-      "----------------"
-      "----------------"
-      "----------------";
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "xxxxxxxxxxxxxxxxx---------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------"
+      "--------------------------------";
   StringRefNull expected_lod1 =
-      "----xxxx"
-      "----xxxx"
-      "----xxxx"
-      "----xxxx"
-      "xxxx-xxx"
-      "xxxxxxxx"
-      "xxxxxxxx"
-      "xxxxxxxx";
+      "--------xxxxxxxx"
+      "--------xxxxxxxx"
+      "--------xxxxxxxx"
+      "--------xxxxxxxx"
+      "--------xxxxxxxx"
+      "--------xxxxxxxx"
+      "--------xxxxxxxx"
+      "--------xxxxxxxx"
+      "xxxxxxxx-xxxxxxx"
+      "xxxxxxxxxxxxxxxx"
+      "xxxxxxxxxxxxxxxx"
+      "xxxxxxxxxxxxxxxx"
+      "xxxxxxxxxxxxxxxx"
+      "xxxxxxxxxxxxxxxx"
+      "xxxxxxxxxxxxxxxx"
+      "xxxxxxxxxxxxxxxx";
   StringRefNull expected_lod2 =
-      "----"
-      "----"
-      "--x-"
-      "----";
+      "--------"
+      "--------"
+      "--------"
+      "--------"
+      "----x---"
+      "--------"
+      "--------"
+      "--------";
   StringRefNull expected_lod3 =
+      "----"
+      "----"
+      "----"
+      "----";
+  StringRefNull expected_lod4 =
       "--"
       "--";
-  StringRefNull expected_lod4 = "-";
+  StringRefNull expected_lod5 = "-";
 
   auto stringify_result = [&](uint start, uint len) -> std::string {
     std::string result = "";
@@ -995,11 +1132,12 @@ static void test_eevee_shadow_page_mask()
     return result;
   };
 
-  EXPECT_EQ(stringify_result(0, lod0_len), expected_lod0);
-  EXPECT_EQ(stringify_result(lod0_len, lod1_len), expected_lod1);
-  EXPECT_EQ(stringify_result(lod0_len + lod1_len, lod2_len), expected_lod2);
-  EXPECT_EQ(stringify_result(lod0_len + lod1_len + lod2_len, lod3_len), expected_lod3);
-  EXPECT_EQ(stringify_result(lod0_len + lod1_len + lod2_len + lod3_len, lod4_len), expected_lod4);
+  EXPECT_EQ(stringify_result(lod0_ofs, lod0_len), expected_lod0);
+  EXPECT_EQ(stringify_result(lod1_ofs, lod1_len), expected_lod1);
+  EXPECT_EQ(stringify_result(lod2_ofs, lod2_len), expected_lod2);
+  EXPECT_EQ(stringify_result(lod3_ofs, lod3_len), expected_lod3);
+  EXPECT_EQ(stringify_result(lod4_ofs, lod4_len), expected_lod4);
+  EXPECT_EQ(stringify_result(lod5_ofs, lod5_len), expected_lod5);
 
   GPU_shader_free(sh);
   DRW_shaders_free();
