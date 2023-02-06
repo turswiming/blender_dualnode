@@ -605,8 +605,8 @@ VKShader::~VKShader()
   for (VkDescriptorSetLayout &layout : layouts_) {
     vkDestroyDescriptorSetLayout(device, layout, nullptr);
   }
-  if (pipeline_ != VK_NULL_HANDLE) {
-    vkDestroyPipeline(device, pipeline_, nullptr);
+  if (compute_pipeline_ != VK_NULL_HANDLE) {
+    vkDestroyPipeline(device, compute_pipeline_, nullptr);
   }
 }
 
@@ -661,9 +661,8 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
 
   /* TODO we might need to move the actual pipeline construction to a later stage as the graphics
    * pipeline requires more data before it can be constructed.*/
-  const bool is_graphics_shader = vertex_module_ != VK_NULL_HANDLE;
   bool result;
-  if (is_graphics_shader) {
+  if (is_graphics_shader()) {
     BLI_assert((fragment_module_ != VK_NULL_HANDLE && info->tf_type_ == GPU_SHADER_TFB_NONE) ||
                (fragment_module_ == VK_NULL_HANDLE && info->tf_type_ != GPU_SHADER_TFB_NONE));
     BLI_assert(compute_module_ == VK_NULL_HANDLE);
@@ -729,8 +728,8 @@ bool VKShader::bake_compute_pipeline(VkDevice vk_device)
   pipeline_info.layout = pipeline_layout_;
   pipeline_info.stage.pName = "main";
 
-  if (vkCreateComputePipelines(vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline_) !=
-      VK_SUCCESS) {
+  if (vkCreateComputePipelines(
+          vk_device, nullptr, 1, &pipeline_info, nullptr, &compute_pipeline_) != VK_SUCCESS) {
     return false;
   }
 
@@ -850,6 +849,15 @@ void VKShader::transform_feedback_disable()
 
 void VKShader::bind()
 {
+  VKContext *context = VKContext::get();
+
+  if (is_compute_shader()) {
+    vkCmdBindPipeline(
+        context->compute_command_buffer_get(), VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline_);
+  }
+  else {
+    BLI_assert_unreachable();
+  }
 }
 
 void VKShader::unbind()

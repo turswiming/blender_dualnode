@@ -113,6 +113,7 @@ class GHOST_ContextVK : public GHOST_Context {
   GHOST_TSuccess getVulkanHandles(void *r_instance,
                                   void *r_physical_device,
                                   void *r_device,
+                                  void *r_compute_command_buffer,
                                   uint32_t *r_graphic_queue_family);
   /**
    * Gets the Vulkan framebuffer related resource handles associated with the Vulkan context.
@@ -182,6 +183,7 @@ class GHOST_ContextVK : public GHOST_Context {
   std::vector<VkImage> m_swapchain_images;
   std::vector<VkImageView> m_swapchain_image_views;
   std::vector<VkFramebuffer> m_swapchain_framebuffers;
+  VkCommandBuffer m_compute_command_buffer;
   std::vector<VkCommandBuffer> m_command_buffers;
   VkRenderPass m_render_pass;
   VkExtent2D m_render_extent;
@@ -200,6 +202,8 @@ class GHOST_ContextVK : public GHOST_Context {
   GHOST_TSuccess pickPhysicalDevice(std::vector<const char *> required_exts);
   GHOST_TSuccess createSwapchain();
   GHOST_TSuccess destroySwapchain();
-  GHOST_TSuccess createCommandBuffers();
+  GHOST_TSuccess createCommandPools();
+  GHOST_TSuccess createGraphicsCommandBuffers();
+  GHOST_TSuccess createComputeCommandBuffer();
   GHOST_TSuccess recordCommandBuffers();
 };

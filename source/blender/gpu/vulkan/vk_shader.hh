@@ -26,7 +26,7 @@ class VKShader : public Shader {
   bool compilation_failed_ = false;
   Vector<VkDescriptorSetLayout> layouts_;
   VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
-  VkPipeline pipeline_ = VK_NULL_HANDLE;
+  VkPipeline compute_pipeline_ = VK_NULL_HANDLE;
 
  public:
   VKShader(const char *name);
@@ -69,6 +69,16 @@ class VKShader : public Shader {
   bool finalize_pipeline_layout(VkDevice vk_device, const shader::ShaderCreateInfo &info);
   bool finalize_graphics_pipeline(VkDevice vk_device);
   bool bake_compute_pipeline(VkDevice vk_device);
+
+  bool is_graphics_shader() const
+  {
+    return !is_compute_shader();
+  }
+
+  bool is_compute_shader() const
+  {
+    return compute_module_ != VK_NULL_HANDLE;
+  }
 };
 
 }  // namespace blender::gpu

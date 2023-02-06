@@ -192,6 +192,9 @@ GHOST_TSuccess GHOST_ContextVK::destroySwapchain()
   if (m_render_pass != VK_NULL_HANDLE) {
     vkDestroyRenderPass(m_device, m_render_pass, NULL);
   }
+  if (m_compute_command_buffer != VK_NULL_HANDLE) {
+    vkFreeCommandBuffers(m_device, m_command_pool, 1, &m_compute_command_buffer);
+  }
   for (auto command_buffer : m_command_buffers) {
     vkFreeCommandBuffers(m_device, m_command_pool, 1, &command_buffer);
   }
@@ -311,11 +314,13 @@ GHOST_TSuccess GHOST_ContextVK::getVulkanBackbuffer(void *image,
 GHOST_TSuccess GHOST_ContextVK::getVulkanHandles(void *r_instance,
                                                  void *r_physical_device,
                                                  void *r_device,
+                                                 void *r_compute_command_buffer,
                                                  uint32_t *r_graphic_queue_family)
 {
   *((VkInstance *)r_instance) = m_instance;
   *((VkPhysicalDevice *)r_physical_device) = m_physical_device;
   *((VkDevice *)r_device) = m_device;
+  *((VkCommandBuffer *)r_compute_command_buffer) = m_compute_command_buffer;
   *r_graphic_queue_family = m_queue_family_graphic;
 
   return GHOST_kSuccess;
@@ -619,16 +624,34 @@ static GHOST_TSuccess selectPresentMode(VkPhysicalDevice device,
   return GHOST_kFailure;
 }
 
-GHOST_TSuccess GHOST_ContextVK::createCommandBuffers()
+GHOST_TSuccess GHOST_ContextVK::createCommandPools()
 {
-  m_command_buffers.resize(m_swapchain_image_views.size());
-
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
   poolInfo.queueFamilyIndex = m_queue_family_graphic;
 
   VK_CHECK(vkCreateCommandPool(m_device, &poolInfo, NULL, &m_command_pool));
+  return GHOST_kSuccess;
+}
+
+GHOST_TSuccess GHOST_ContextVK::createComputeCommandBuffer()
+{
+  assert(m_command_pool != VK_NULL_HANDLE);
+  VkCommandBufferAllocateInfo alloc_info = {};
+  alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  alloc_info.commandPool = m_command_pool;
+  alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  alloc_info.commandBufferCount = 1;
+
+  VK_CHECK(vkAllocateCommandBuffers(m_device, &alloc_info, &m_compute_command_buffer));
+  return GHOST_kSuccess;
+}
+
+GHOST_TSuccess GHOST_ContextVK::createGraphicsCommandBuffers()
+{
+  assert(m_command_pool != VK_NULL_HANDLE);
+  m_command_buffers.resize(m_swapchain_image_views.size());
 
   VkCommandBufferAllocateInfo alloc_info = {};
   alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -637,7 +660,6 @@ GHOST_TSuccess GHOST_ContextVK::createCommandBuffers()
   alloc_info.commandBufferCount = static_cast<uint32_t>(m_command_buffers.size());
 
   VK_CHECK(vkAllocateCommandBuffers(m_device, &alloc_info, m_command_buffers.data()));
-
   return GHOST_kSuccess;
 }
 
@@ -776,7 +798,7 @@ GHOST_TSuccess GHOST_ContextVK::createSwapchain()
     VK_CHECK(vkCreateFence(m_device, &fence_info, NULL, &m_in_flight_fences[i]));
   }
 
-  createCommandBuffers();
+  createGraphicsCommandBuffers();
 
   return GHOST_kSuccess;
 }
@@ -975,6 +997,9 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
   device_create_info.pEnabledFeatures = &device_features;
 
   VK_CHECK(vkCreateDevice(m_physical_device, &device_create_info, NULL, &m_device));
+
+  createCommandPools();
+  createComputeCommandBuffer();
 
   vkGetDeviceQueue(m_device, m_queue_family_graphic, 0, &m_graphic_queue);
 

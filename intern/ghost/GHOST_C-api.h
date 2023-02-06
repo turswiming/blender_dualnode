@@ -1201,6 +1201,7 @@ void GHOST_GetVulkanHandles(GHOST_ContextHandle context,
                             void *r_instance,
                             void *r_physical_device,
                             void *r_device,
+                            void *r_compute_command_buffer,
                             uint32_t *r_graphic_queue_family);
 
 /**

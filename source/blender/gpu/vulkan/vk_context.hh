@@ -27,6 +27,7 @@ class VKContext : public Context {
   VkInstance instance_ = VK_NULL_HANDLE;
   VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
   VkDevice device_ = VK_NULL_HANDLE;
+  VkCommandBuffer compute_command_buffer_ = VK_NULL_HANDLE;
   uint32_t graphic_queue_family_ = 0;
 
   /** Allocator used for texture and buffers and other resources. */
@@ -58,6 +59,11 @@ class VKContext : public Context {
   VkDevice device_get() const
   {
     return device_;
+  }
+  
+  VkCommandBuffer compute_command_buffer_get() const
+  {
+    return compute_command_buffer_;
   }
 
   const uint32_t *queue_family_ptr_get() const

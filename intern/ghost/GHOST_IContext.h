@@ -40,7 +40,7 @@ class GHOST_IContext {
 
   virtual unsigned int getDefaultFramebuffer() = 0;
 
-  virtual GHOST_TSuccess getVulkanHandles(void *, void *, void *, uint32_t *) = 0;
+  virtual GHOST_TSuccess getVulkanHandles(void *, void *, void *, void *, uint32_t *) = 0;
 
   /**
    * Gets the Vulkan framebuffer related resource handles associated with the Vulkan context.
