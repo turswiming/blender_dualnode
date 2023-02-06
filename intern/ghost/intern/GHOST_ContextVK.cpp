@@ -842,6 +842,7 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
     extensions_device.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
   }
   extensions_device.push_back("VK_KHR_dedicated_allocation");
+  extensions_device.push_back("VK_KHR_get_memory_requirements2");
   /* Enable MoltenVK required instance extensions.*/
 #ifdef VK_MVK_MOLTENVK_EXTENSION_NAME
   requireExtension(
@@ -909,12 +910,14 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
     return GHOST_kFailure;
   }
 
+#ifdef VK_MVK_MOLTENVK_EXTENSION_NAME
   /* According to the Vulkan specs, when `VK_KHR_portability_subset` is available it should be
    * enabled. See
    * https://vulkan.lunarg.com/doc/view/1.2.198.1/mac/1.2-extensions/vkspec.html#VUID-VkDeviceCreateInfo-pProperties-04451*/
   if (device_extensions_support(m_physical_device, {VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME})) {
     extensions_device.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
   }
+#endif
 
   vector<VkDeviceQueueCreateInfo> queue_create_infos;
 
