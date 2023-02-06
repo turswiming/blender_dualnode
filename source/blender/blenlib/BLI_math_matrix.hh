@@ -504,7 +504,8 @@ template<typename T, int Size>
 [[nodiscard]] MatBase<T, Size, Size> invert(const MatBase<T, Size, Size> &mat)
 {
   bool success;
-  return invert(mat, success);
+  /* Explicit template parameter to please MSVC. */
+  return invert<T, Size>(mat, success);
 }
 
 template<typename T, int NumCol, int NumRow>
