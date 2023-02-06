@@ -22,14 +22,16 @@
 CCL_NAMESPACE_BEGIN
 
 #define RIS_COSINE
-#  if OPENPGL_VERSION_MINOR >= 5
-#define RIS_INCOMMING_RADIANCE
+#if OPENPGL_VERSION_MINOR >= 5
+#  define RIS_INCOMMING_RADIANCE
 #endif
 /* Guiding */
 
 #ifdef __PATH_GUIDING__
 
-ccl_device float surface_shader_average_sample_weight_squared_roughness(ccl_private const ShaderData *sd){
+ccl_device float surface_shader_average_sample_weight_squared_roughness(
+    ccl_private const ShaderData *sd)
+{
   float avg_roughness = 0.0f;
   float sum_sample_weight = 0.0f;
   for (int i = 0; i < sd->num_closure; i++) {
@@ -98,7 +100,7 @@ ccl_device_inline void surface_shader_prepare_guiding(KernelGlobals kg,
   float avg_roughness = surface_shader_average_sample_weight_squared_roughness(sd);
   avg_roughness = safe_sqrtf(avg_roughness);
   /* Init guiding (diffuse BSDFs only for now). */
-  if (!fully_opaque || avg_roughness < guiding_roughness_threshold*guiding_roughness_threshold ||
+  if (!fully_opaque || avg_roughness < guiding_roughness_threshold * guiding_roughness_threshold ||
       ((guiding_directional_sampling_type == GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT) &&
        (diffuse_sampling_fraction <= 0.f)) ||
       !guiding_bsdf_init(kg, state, sd->P, sd->N, rand_bsdf_guiding)) {
@@ -623,9 +625,9 @@ ccl_device int surface_shader_bsdf_guided_sample_closure_ris(KernelGlobals kg,
     float3 omega_in_ris[2];
     float ris_pdfs[2] = {0.f, 0.f};
     float guide_pdfs[2] = {0.f, 0.f};
-#ifdef RIS_INCOMMING_RADIANCE
+#  ifdef RIS_INCOMMING_RADIANCE
     float incomming_radiance_pdfs[2] = {0.f, 0.f};
-#endif
+#  endif
     float bsdf_pdfs[2] = {0.f, 0.f};
     float cosines[2] = {0.f, 0.f};
     BsdfEval bsdf_evals[2];
@@ -659,9 +661,10 @@ ccl_device int surface_shader_bsdf_guided_sample_closure_ris(KernelGlobals kg,
                           3.0f;
       guide_pdfs[0] = guiding_bsdf_pdf(kg, state, omega_in_ris[0]);
       guide_pdfs[0] *= (1.0f - bssrdf_sampling_prob);
-#ifdef RIS_INCOMMING_RADIANCE
-      incomming_radiance_pdfs[0] = guiding_surface_incomming_radiance_pdf(kg, state, omega_in_ris[0]);
-#endif
+#  ifdef RIS_INCOMMING_RADIANCE
+      incomming_radiance_pdfs[0] = guiding_surface_incomming_radiance_pdf(
+          kg, state, omega_in_ris[0]);
+#  endif
       bsdf_pdfs[0] = max(0.f, bsdf_pdfs[0]);
     }
 
@@ -670,9 +673,10 @@ ccl_device int surface_shader_bsdf_guided_sample_closure_ris(KernelGlobals kg,
     bsdf_eval_init(&bsdf_evals[1], CLOSURE_NONE_ID, eval);
     guide_pdfs[1] = guiding_bsdf_sample(kg, state, rand_guiding_bsdf_ris[1], &omega_in_ris[1]);
     guide_pdfs[1] *= (1.0f - bssrdf_sampling_prob);
-#ifdef RIS_INCOMMING_RADIANCE
-    incomming_radiance_pdfs[1] = guiding_surface_incomming_radiance_pdf(kg, state, omega_in_ris[1]);
-#endif
+#  ifdef RIS_INCOMMING_RADIANCE
+    incomming_radiance_pdfs[1] = guiding_surface_incomming_radiance_pdf(
+        kg, state, omega_in_ris[1]);
+#  endif
     cosines[1] = max(0.01f, fabsf(dot(sd->N, omega_in_ris[1])));
     bsdf_pdfs[1] = surface_shader_bsdf_eval_pdfs(
         kg, sd, omega_in_ris[1], &bsdf_evals[1], unguided_bsdf_pdfs, 0);
@@ -685,18 +689,21 @@ ccl_device int surface_shader_bsdf_guided_sample_closure_ris(KernelGlobals kg,
     float sum_ris_pdfs = 0.f;
     if (avg_bsdf_evals[0] > 0.f && bsdf_pdfs[0] > 1e-10f && guide_pdfs[0] > 0.f) {
 #  ifdef RIS_COSINE
-#  ifdef RIS_INCOMMING_RADIANCE
+#    ifdef RIS_INCOMMING_RADIANCE
       ris_pdfs[0] = (avg_bsdf_evals[0] *
-                     ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * incomming_radiance_pdfs[0]))) )/
+                     ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                       (guiding_sampling_prob * incomming_radiance_pdfs[0])))) /
                     (0.5f * (bsdf_pdfs[0] + guide_pdfs[0]));
-#else
+#    else
       ris_pdfs[0] = (avg_bsdf_evals[0] / cosines[0] *
-                     ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * guide_pdfs[0]))) )/
+                     ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                       (guiding_sampling_prob * guide_pdfs[0])))) /
                     (0.5f * (bsdf_pdfs[0] + guide_pdfs[0]));
-# endif
+#    endif
 #  else
       ris_pdfs[0] = (avg_bsdf_evals[0] *
-                     ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * guide_pdfs[0]))) )/
+                     ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                       (guiding_sampling_prob * guide_pdfs[0])))) /
                     (0.5f * (bsdf_pdfs[0] + guide_pdfs[0]));
 #  endif
       sum_ris_pdfs += ris_pdfs[0];
@@ -709,18 +716,21 @@ ccl_device int surface_shader_bsdf_guided_sample_closure_ris(KernelGlobals kg,
 
     if (avg_bsdf_evals[1] > 0.f && bsdf_pdfs[1] > 1e-10f && guide_pdfs[1] > 0.f) {
 #  ifdef RIS_COSINE
-#  ifdef RIS_INCOMMING_RADIANCE
+#    ifdef RIS_INCOMMING_RADIANCE
       ris_pdfs[1] = (avg_bsdf_evals[1] *
-                     ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * incomming_radiance_pdfs[1]))) ) /
+                     ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                       (guiding_sampling_prob * incomming_radiance_pdfs[1])))) /
                     (0.5f * (bsdf_pdfs[1] + guide_pdfs[1]));
-#else
+#    else
       ris_pdfs[1] = (avg_bsdf_evals[1] / cosines[1] *
-                     ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * guide_pdfs[1]))) ) /
+                     ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                       (guiding_sampling_prob * guide_pdfs[1])))) /
                     (0.5f * (bsdf_pdfs[1] + guide_pdfs[1]));
-#endif
+#    endif
 #  else
       ris_pdfs[1] = (avg_bsdf_evals[1] *
-                    ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * guide_pdfs[1]))) ) /
+                     ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                       (guiding_sampling_prob * guide_pdfs[1])))) /
                     (0.5f * (bsdf_pdfs[1] + guide_pdfs[1]));
 #  endif
       sum_ris_pdfs += ris_pdfs[1];
@@ -752,18 +762,21 @@ ccl_device int surface_shader_bsdf_guided_sample_closure_ris(KernelGlobals kg,
     assert(ris_idx < 2);
 
 #  ifdef RIS_COSINE
-#  ifdef RIS_INCOMMING_RADIANCE
+#    ifdef RIS_INCOMMING_RADIANCE
     guide_pdf = (avg_bsdf_evals[ris_idx] *
-                 ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * incomming_radiance_pdfs[ris_idx]))) ) *
+                 ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                   (guiding_sampling_prob * incomming_radiance_pdfs[ris_idx])))) *
                 (float(2) / sum_ris_pdfs);
-#else
+#    else
     guide_pdf = (avg_bsdf_evals[ris_idx] / cosines[ris_idx] *
-                 ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * guide_pdfs[ris_idx]))) ) *
+                 ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                   (guiding_sampling_prob * guide_pdfs[ris_idx])))) *
                 (float(2) / sum_ris_pdfs);
-#endif
+#    endif
 #  else
     guide_pdf = (avg_bsdf_evals[ris_idx] *
-                ( (((1.0f-guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) + (guiding_sampling_prob * guide_pdfs[ris_idx]))) ) *
+                 ((((1.0f - guiding_sampling_prob) * (1.0f / (pi_factor * float(M_PI)))) +
+                   (guiding_sampling_prob * guide_pdfs[ris_idx])))) *
                 (float(2) / sum_ris_pdfs);
 #  endif
     *unguided_bsdf_pdf = bsdf_pdfs[ris_idx];

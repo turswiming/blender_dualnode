@@ -462,13 +462,13 @@ ccl_device_forceinline bool guiding_bsdf_init(KernelGlobals kg,
     kg->opgl_surface_sampling_distribution->ApplyCosineProduct(guiding_point3f(N));
     return true;
   }
-#else
+#  else
   if (kg->opgl_surface_sampling_distribution->Init(
           kg->opgl_guiding_field, guiding_point3f(P), rand, true)) {
     kg->opgl_surface_sampling_distribution->ApplyCosineProduct(guiding_point3f(N));
     return true;
   }
-#endif
+#  endif
 #endif
 
   return false;
@@ -502,8 +502,8 @@ ccl_device_forceinline float guiding_bsdf_pdf(KernelGlobals kg,
 }
 
 ccl_device_forceinline float guiding_surface_incomming_radiance_pdf(KernelGlobals kg,
-                                              IntegratorState state,
-                                              const float3 wo)
+                                                                    IntegratorState state,
+                                                                    const float3 wo)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4 && OPENPGL_VERSION_MINOR >= 5
   return kg->opgl_surface_sampling_distribution->IncommingRadiancePDF(guiding_vec3f(wo));
@@ -533,14 +533,14 @@ ccl_device_forceinline bool guiding_phase_init(KernelGlobals kg,
                                                                                   g);
     return true;
   }
-#else
+#  else
   if (kg->opgl_volume_sampling_distribution->Init(
           kg->opgl_guiding_field, guiding_point3f(P), rand, true)) {
     kg->opgl_volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(guiding_vec3f(D),
                                                                                   g);
     return true;
   }
-#endif
+#  endif
 #endif
 
   return false;
