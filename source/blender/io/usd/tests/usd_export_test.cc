@@ -98,9 +98,9 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
     return pxr::UsdPrim();
   }
 
-  /*
-   * Loop the sockets on the Blender bNode, and fail if any of their values do
-   * not match the equivalent Attribtue values on the UsdPrim.
+  /**
+   * Loop the sockets on the Blender `bNode`, and fail if any of their values do
+   * not match the equivalent Attribute values on the `UsdPrim`.
    */
   const void compare_blender_node_to_usd_prim(const bNode *bsdf_node,
                                               const pxr::UsdPrim &bsdf_prim)
@@ -294,7 +294,7 @@ TEST_F(UsdExportTest, usd_export_material)
 
   const std::string prim_name = pxr::TfMakeValidIdentifier(bsdf_node->name);
   const pxr::UsdPrim bsdf_prim = stage->GetPrimAtPath(
-      pxr::SdfPath("/_materials/Material/preview/" + prim_name));
+      pxr::SdfPath("/_materials/Material/" + prim_name));
 
   compare_blender_node_to_usd_prim(bsdf_node, bsdf_prim);
 
@@ -305,7 +305,7 @@ TEST_F(UsdExportTest, usd_export_material)
   const std::string image_prim_name = pxr::TfMakeValidIdentifier(image_node->name);
 
   const pxr::UsdPrim image_prim = stage->GetPrimAtPath(
-      pxr::SdfPath("/_materials/Material/preview/" + image_prim_name));
+      pxr::SdfPath("/_materials/Material/" + image_prim_name));
 
   ASSERT_TRUE(bool(image_prim)) << "Unable to find Material prim from exported stage "
                                 << output_filename;

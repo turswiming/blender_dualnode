@@ -978,7 +978,7 @@ ccl_device Spectrum surface_shader_diffuse(KernelGlobals kg, ccl_private const S
     ccl_private const ShaderClosure *sc = &sd->closure[i];
 
     if (CLOSURE_IS_BSDF_DIFFUSE(sc->type) || CLOSURE_IS_BSSRDF(sc->type))
-      eval += sc->weight;
+      eval += bsdf_albedo(sd, sc);
   }
 
   return eval;
@@ -992,7 +992,7 @@ ccl_device Spectrum surface_shader_glossy(KernelGlobals kg, ccl_private const Sh
     ccl_private const ShaderClosure *sc = &sd->closure[i];
 
     if (CLOSURE_IS_BSDF_GLOSSY(sc->type))
-      eval += sc->weight;
+      eval += bsdf_albedo(sd, sc);
   }
 
   return eval;
@@ -1006,7 +1006,7 @@ ccl_device Spectrum surface_shader_transmission(KernelGlobals kg, ccl_private co
     ccl_private const ShaderClosure *sc = &sd->closure[i];
 
     if (CLOSURE_IS_BSDF_TRANSMISSION(sc->type))
-      eval += sc->weight;
+      eval += bsdf_albedo(sd, sc);
   }
 
   return eval;
