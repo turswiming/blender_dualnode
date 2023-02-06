@@ -447,6 +447,7 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
                                                  GUIDING_DIRECTIONAL_SAMPLING_NUM_TYPES,
                                                  GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT);
     integrator->set_guiding_directional_sampling_type(guiding_directional_sampling_type);
+    integrator->set_guiding_roughness_threshold(get_float(cscene, "guiding_roughness_threshold"));
   }
 
   DenoiseParams denoise_params = get_denoise_params(b_scene, b_view_layer, background);

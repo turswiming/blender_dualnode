@@ -638,6 +638,13 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
+    guiding_roughness_threshold: FloatProperty(
+        name="Guiding Roughness Threshold",
+        description="The minimal roughness value of a material to apply guiding",
+        min=0.0, max=1.0,
+        default=0.05,
+    )
+
     max_bounces: IntProperty(
         name="Max Bounces",
         description="Total maximum number of bounces",

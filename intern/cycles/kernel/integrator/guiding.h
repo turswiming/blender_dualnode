@@ -7,6 +7,8 @@
 #include "kernel/closure/bsdf.h"
 #include "kernel/film/write.h"
 
+#include <iostream>
+
 CCL_NAMESPACE_BEGIN
 
 /* Utilities. */
@@ -454,11 +456,19 @@ ccl_device_forceinline bool guiding_bsdf_init(KernelGlobals kg,
                                               ccl_private float &rand)
 {
 #if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4
+#  if OPENPGL_VERSION_MINOR >= 5
+  if (kg->opgl_surface_sampling_distribution->Init(
+          kg->opgl_guiding_field, guiding_point3f(P), rand)) {
+    kg->opgl_surface_sampling_distribution->ApplyCosineProduct(guiding_point3f(N));
+    return true;
+  }
+#else
   if (kg->opgl_surface_sampling_distribution->Init(
           kg->opgl_guiding_field, guiding_point3f(P), rand, true)) {
     kg->opgl_surface_sampling_distribution->ApplyCosineProduct(guiding_point3f(N));
     return true;
   }
+#endif
 #endif
 
   return false;
@@ -491,6 +501,17 @@ ccl_device_forceinline float guiding_bsdf_pdf(KernelGlobals kg,
 #endif
 }
 
+ccl_device_forceinline float guiding_surface_incomming_radiance_pdf(KernelGlobals kg,
+                                              IntegratorState state,
+                                              const float3 wo)
+{
+#if defined(__PATH_GUIDING__) && PATH_GUIDING_LEVEL >= 4 && OPENPGL_VERSION_MINOR >= 5
+  return kg->opgl_surface_sampling_distribution->IncommingRadiancePDF(guiding_vec3f(wo));
+#else
+  return 0.0f;
+#endif
+}
+
 /* Guided Volume Phases */
 
 ccl_device_forceinline bool guiding_phase_init(KernelGlobals kg,
@@ -505,13 +526,21 @@ ccl_device_forceinline bool guiding_phase_init(KernelGlobals kg,
   if (fabsf(g) >= 0.99f) {
     return false;
   }
-
+#  if OPENPGL_VERSION_MINOR >= 5
+  if (kg->opgl_volume_sampling_distribution->Init(
+          kg->opgl_guiding_field, guiding_point3f(P), rand)) {
+    kg->opgl_volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(guiding_vec3f(D),
+                                                                                  g);
+    return true;
+  }
+#else
   if (kg->opgl_volume_sampling_distribution->Init(
           kg->opgl_guiding_field, guiding_point3f(P), rand, true)) {
     kg->opgl_volume_sampling_distribution->ApplySingleLobeHenyeyGreensteinProduct(guiding_vec3f(D),
                                                                                   g);
     return true;
   }
+#endif
 #endif
 
   return false;

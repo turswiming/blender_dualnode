@@ -89,6 +89,7 @@ NODE_DEFINE(Integrator)
               "Guiding Directional Sampling Type",
               guiding_directional_sampling_type_enum,
               GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT);
+  SOCKET_FLOAT(guiding_roughness_threshold, "Guiding Roughness Threshold", 0.05f);
 
   SOCKET_BOOLEAN(caustics_reflective, "Reflective Caustics", true);
   SOCKET_BOOLEAN(caustics_refractive, "Refractive Caustics", true);
@@ -254,6 +255,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->use_guiding_mis_weights = use_guiding_mis_weights;
   kintegrator->guiding_distribution_type = guiding_params.type;
   kintegrator->guiding_directional_sampling_type = guiding_params.sampling_type;
+  kintegrator->guiding_roughness_threshold = guiding_params.roughness_threshold;
 
   kintegrator->seed = seed;
 
@@ -422,6 +424,7 @@ GuidingParams Integrator::get_guiding_params(const Device *device) const
   guiding_params.training_samples = guiding_training_samples;
   guiding_params.deterministic = deterministic_guiding;
   guiding_params.sampling_type = guiding_directional_sampling_type;
+  guiding_params.roughness_threshold = guiding_roughness_threshold;
   return guiding_params;
 }
 CCL_NAMESPACE_END
