@@ -439,6 +439,13 @@ struct DRWPass {
 #define MAX_CULLED_VIEWS 32
 
 struct DRWView {
+  /**
+   * These float4x4 (as well as the ViewMatrices) have alignment requirements in C++
+   * (see math::MatBase) that isn't fulfilled in C. So they need to be manually aligned.
+   * Since the DRWView are allocated using BLI_memblock, the chunks are given to be 16 bytes
+   * aligned (equal to the alignment of float4x4). We then assert that the DRWView itself is 16
+   * bytes aligned.
+   */
   float4x4 persmat;
   float4x4 persinv;
   ViewMatrices storage;
@@ -463,6 +470,8 @@ struct DRWView {
   DRWCallVisibilityFn *visibility_fn;
   void *user_data;
 };
+/* Needed to assert that alignment is the same in C++ and C. */
+BLI_STATIC_ASSERT_ALIGN(DRWView, 16);
 
 /* ------------ Data Chunks --------------- */
 /**

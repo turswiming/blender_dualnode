@@ -267,8 +267,8 @@ static void test_draw_resource_id_gen()
 
   Manager drw;
 
-  float4x4 obmat_1 = math::from_scale<float4x4>(float3(-0.5f)));
-  float4x4 obmat_2 = math::from_scale<float4x4>(float3(0.5f)));
+  float4x4 obmat_1 = math::from_scale<float4x4>(float3(-0.5f));
+  float4x4 obmat_2 = math::from_scale<float4x4>(float3(0.5f));
 
   drw.begin_sync();
   ResourceHandle handle1 = drw.resource_handle(obmat_1);
