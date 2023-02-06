@@ -30,8 +30,17 @@ static void test_gpu_storage_buffer_create_update_read()
 
   /* Upload some dummy data. */
   const Vector<int32_t> data = test_data();
-
   GPU_storagebuf_update(ssbo, data.data());
+
+  /* Read back data from SSBO. */
+  Vector<int32_t> read_data;
+  read_data.resize(SIZE, 0);
+  GPU_storagebuf_read(ssbo, read_data.data());
+
+  /* Check if data is the same.*/
+  for (int i : IndexRange(SIZE)) {
+    EXPECT_EQ(data[i], read_data[i]);
+  }
 
   GPU_storagebuf_free(ssbo);
 }
