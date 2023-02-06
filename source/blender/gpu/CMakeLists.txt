@@ -510,6 +510,7 @@ set(GLSL_SRC_TEST
   tests/shaders/gpu_compute_1d_test.glsl
   tests/shaders/gpu_compute_2d_test.glsl
   tests/shaders/gpu_compute_ibo_test.glsl
+  tests/shaders/gpu_compute_ssbo_test.glsl
   tests/shaders/gpu_compute_vbo_test.glsl
   tests/shaders/gpu_compute_dummy_test.glsl
 )
