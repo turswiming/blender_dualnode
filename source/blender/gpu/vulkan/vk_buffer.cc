@@ -62,12 +62,9 @@ bool VKBuffer::create(VKContext &context,
   create_info.pQueueFamilyIndices = context.queue_family_ptr_get();
 
   VmaAllocationCreateInfo vma_create_info = {};
-  /*
   vma_create_info.flags = vma_allocation_flags(usage);
   vma_create_info.priority = 1.0f;
   vma_create_info.usage = VMA_MEMORY_USAGE_AUTO;
-  vma_create_inf
-  */
 
   VkResult result = vmaCreateBuffer(
       allocator, &create_info, &vma_create_info, &vk_buffer_, &allocation_, nullptr);
