@@ -76,8 +76,7 @@ void MeshPass::draw(ObjectRef &ref,
     }
     if (texture) {
       auto add_cb = [&] {
-        PassMain::Sub *sub_pass =
-            passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::TEXTURE)];
+        PassMain::Sub *sub_pass = passes_[int(geometry_type)][int(eShaderType::TEXTURE)];
         sub_pass = &sub_pass->sub(image->id.name);
         if (tilemap) {
           sub_pass->bind_texture(WB_TILE_ARRAY_SLOT, texture, sampler_state);
@@ -88,7 +87,7 @@ void MeshPass::draw(ObjectRef &ref,
         }
         sub_pass->push_constant("isImageTile", tilemap != nullptr);
         sub_pass->push_constant("imagePremult", image && image->alpha_mode == IMA_ALPHA_PREMUL);
-        /* TODO(Miguel Pozo): This setting should be exposed on the user side,
+        /* TODO(@pragma37): This setting should be exposed on the user side,
          * either as a global parameter (and set it here)
          * or by reading the Material Clipping Threshold (and set it per material) */
         sub_pass->push_constant("imageTransparencyCutoff", 0.1f);
@@ -100,8 +99,7 @@ void MeshPass::draw(ObjectRef &ref,
       return;
     }
   }
-  passes_[static_cast<int>(geometry_type)][static_cast<int>(eShaderType::MATERIAL)]->draw(batch,
-                                                                                          handle);
+  passes_[int(geometry_type)][int(eShaderType::MATERIAL)]->draw(batch, handle);
 }
 
 /** \} */
@@ -245,6 +243,11 @@ bool OpaquePass::is_empty() const
 /** \name TransparentPass
  * \{ */
 
+TransparentPass::~TransparentPass()
+{
+  DRW_SHADER_FREE_SAFE(resolve_sh_);
+}
+
 void TransparentPass::sync(const SceneState &scene_state, SceneResources &resources)
 {
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_OIT |
@@ -323,6 +326,11 @@ bool TransparentPass::is_empty() const
 /* -------------------------------------------------------------------- */
 /** \name TransparentDepthPass
  * \{ */
+
+TransparentDepthPass::~TransparentDepthPass()
+{
+  DRW_SHADER_FREE_SAFE(merge_sh_);
+}
 
 void TransparentDepthPass::sync(const SceneState &scene_state, SceneResources &resources)
 {

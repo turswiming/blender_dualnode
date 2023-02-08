@@ -325,10 +325,10 @@ float *SCULPT_brush_deform_target_vertex_co_get(SculptSession *ss,
   return iter->co;
 }
 
-char SCULPT_mesh_symmetry_xyz_get(Object *object)
+ePaintSymmetryFlags SCULPT_mesh_symmetry_xyz_get(Object *object)
 {
   const Mesh *mesh = BKE_mesh_from_object(object);
-  return mesh->symmetry;
+  return ePaintSymmetryFlags(mesh->symmetry);
 }
 
 /* Sculpt Face Sets and Visibility. */
@@ -3471,7 +3471,7 @@ static void do_brush_action(Sculpt *sd,
 {
   SculptSession *ss = ob->sculpt;
   int totnode, texnodes_num = 0;
-  PBVHNode **nodes, **texnodes = NULL;
+  PBVHNode **nodes, **texnodes = nullptr;
 
   /* Check for unsupported features. */
   PBVHType type = BKE_pbvh_type(ss->pbvh);
