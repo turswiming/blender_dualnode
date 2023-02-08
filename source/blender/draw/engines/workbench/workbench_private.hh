@@ -226,6 +226,8 @@ class TransparentPass {
   PassSimple resolve_ps_ = {"Transparent.Resolve"};
   Framebuffer resolve_fb = {};
 
+  ~TransparentPass();
+
   void sync(const SceneState &scene_state, SceneResources &resources);
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
   bool is_empty() const;
@@ -243,8 +245,10 @@ class TransparentDepthPass {
   PassSimple merge_ps_ = {"TransparentDepth.Merge"};
   Framebuffer merge_fb = {"TransparentDepth.Merge"};
 
+  ~TransparentDepthPass();
+
   void sync(const SceneState &scene_state, SceneResources &resources);
-  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+  void draw(Manager &manager, View &view, SceneResources &resources);
   bool is_empty() const;
 };
 
@@ -261,23 +265,29 @@ class ShadowPass {
     VisibilityBuf pass_visibility_buf_ = {};
     VisibilityBuf fail_visibility_buf_ = {};
 
+    GPUShader *dynamic_pass_type_shader_;
+    GPUShader *static_pass_type_shader_;
+
    public:
+    ShadowView();
+    ~ShadowView();
+
     void setup(View &view, float3 light_direction, bool force_fail_method);
     bool debug_object_culling(Object *ob);
     void set_mode(PassType type);
 
-    ShadowView();
-
    protected:
-    virtual void compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool debug_freeze);
-    virtual VisibilityBuf &get_visibility_buffer();
+    virtual void compute_visibility(ObjectBoundsBuf &bounds,
+                                    uint resource_len,
+                                    bool debug_freeze) override;
+    virtual VisibilityBuf &get_visibility_buffer() override;
   } view_ = {};
 
   bool enabled_;
 
   UniformBuffer<ShadowPassData> pass_data_ = {};
 
-  /* Draws are added to both passes and the visibily compute shader selects one of them */
+  /* Draws are added to both passes and the visibly compute shader selects one of them */
   PassMain pass_ps_ = {"Shadow.Pass"};
   PassMain fail_ps_ = {"Shadow.Fail"};
 
@@ -296,18 +306,18 @@ class ShadowPass {
   Framebuffer fb_ = {};
 
  public:
+  ~ShadowPass();
+
   void init(const SceneState &scene_state, SceneResources &resources);
   void update();
   void sync();
-  void object_sync(Manager &manager,
-                   SceneState &scene_state,
+  void object_sync(SceneState &scene_state,
                    ObjectRef &ob_ref,
                    ResourceHandle handle,
                    const bool has_transp_mat);
   void draw(Manager &manager,
             View &view,
             SceneResources &resources,
-            int2 resolution,
             GPUTexture &depth_stencil_tx,
             /* Needed when there are opaque "In Front" objects in the scene */
             bool force_fail_method);
@@ -322,9 +332,11 @@ class OutlinePass {
   Framebuffer fb_ = Framebuffer("Workbench.Outline");
 
  public:
+  ~OutlinePass();
+
   void init(const SceneState &scene_state);
   void sync(SceneResources &resources);
-  void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);
+  void draw(Manager &manager, SceneResources &resources);
 };
 
 class DofPass {
@@ -369,6 +381,8 @@ class DofPass {
   float ratio_ = 0;
 
  public:
+  ~DofPass();
+
   void init(const SceneState &scene_state);
   void sync(SceneResources &resources);
   void draw(Manager &manager, View &view, SceneResources &resources, int2 resolution);

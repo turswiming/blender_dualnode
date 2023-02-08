@@ -22,7 +22,7 @@
 
 #include "bmesh.h"
 
-#include "pbvh_intern.h"
+#include "pbvh_intern.hh"
 #include "pbvh_uv_islands.hh"
 
 namespace blender::bke::pbvh::pixels {
@@ -99,12 +99,8 @@ struct SplitNodePair {
 
 static void split_thread_job(TaskPool *__restrict pool, void *taskdata);
 
-static void split_pixel_node(PBVH *pbvh,
-                             SplitNodePair *split,
-                             Mesh *mesh,
-                             Image *image,
-                             ImageUser *image_user,
-                             SplitQueueData *tdata)
+static void split_pixel_node(
+    PBVH *pbvh, SplitNodePair *split, Image *image, ImageUser *image_user, SplitQueueData *tdata)
 {
   BB cb;
   PBVHNode *node = &split->node;
@@ -120,7 +116,7 @@ static void split_pixel_node(PBVH *pbvh,
   const int axis = BB_widest_axis(&cb);
   const float mid = (cb.bmax[axis] + cb.bmin[axis]) * 0.5f;
 
-  node->flag = (PBVHNodeFlags)((int)node->flag & (int)~PBVH_TexLeaf);
+  node->flag = (PBVHNodeFlags)(int(node->flag) & int(~PBVH_TexLeaf));
 
   SplitNodePair *split1 = MEM_new<SplitNodePair>("split_pixel_node split1", split);
   SplitNodePair *split2 = MEM_new<SplitNodePair>("split_pixel_node split1", split);
@@ -192,7 +188,7 @@ static void split_pixel_node(PBVH *pbvh,
 
       float2 delta = uv_prim.delta_barycentric_coord_u;
       float2 uv1 = row.start_barycentric_coord;
-      float2 uv2 = row.start_barycentric_coord + delta * (float)row.num_pixels;
+      float2 uv2 = row.start_barycentric_coord + delta * float(row.num_pixels);
 
       float co1[3];
       float co2[3];
@@ -214,7 +210,7 @@ static void split_pixel_node(PBVH *pbvh,
           t = (mid - co1[axis]) / (co2[axis] - co1[axis]);
         }
 
-        int num_pixels = (int)floorf((float)row.num_pixels * t);
+        int num_pixels = int(floorf(float(row.num_pixels) * t));
 
         if (num_pixels) {
           row1.num_pixels = num_pixels;
@@ -227,7 +223,7 @@ static void split_pixel_node(PBVH *pbvh,
           row2.num_pixels = row.num_pixels - num_pixels;
 
           row2.start_barycentric_coord = row.start_barycentric_coord +
-                                         uv_prim.delta_barycentric_coord_u * (float)num_pixels;
+                                         uv_prim.delta_barycentric_coord_u * float(num_pixels);
           row2.start_image_coordinate = row.start_image_coordinate;
           row2.start_image_coordinate[0] += num_pixels;
 
@@ -304,7 +300,7 @@ static void split_thread_job(TaskPool *__restrict pool, void *taskdata)
   SplitQueueData *tdata = static_cast<SplitQueueData *>(BLI_task_pool_user_data(pool));
   SplitNodePair *split = static_cast<SplitNodePair *>(taskdata);
 
-  split_pixel_node(tdata->pbvh, split, tdata->mesh, tdata->image, tdata->image_user, tdata);
+  split_pixel_node(tdata->pbvh, split, tdata->image, tdata->image_user, tdata);
 }
 
 static void split_pixel_nodes(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image_user)
@@ -735,7 +731,7 @@ static bool update_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image
     PBVHNode &node = pbvh->nodes[i];
 
     if (node.flag & PBVH_Leaf) {
-      node.flag = (PBVHNodeFlags)((int)node.flag | (int)PBVH_TexLeaf);
+      node.flag = (PBVHNodeFlags)(int(node.flag) | int(PBVH_TexLeaf));
     }
   }
 
@@ -804,7 +800,6 @@ void BKE_pbvh_pixels_mark_image_dirty(PBVHNode &node, Image &image, ImageUser &i
 }
 }  // namespace blender::bke::pbvh::pixels
 
-extern "C" {
 using namespace blender::bke::pbvh::pixels;
 
 void BKE_pbvh_build_pixels(PBVH *pbvh, Mesh *mesh, Image *image, ImageUser *image_user)
@@ -831,5 +826,4 @@ void pbvh_pixels_free(PBVH *pbvh)
   PBVHData *pbvh_data = static_cast<PBVHData *>(pbvh->pixels.data);
   MEM_delete(pbvh_data);
   pbvh->pixels.data = nullptr;
-}
 }

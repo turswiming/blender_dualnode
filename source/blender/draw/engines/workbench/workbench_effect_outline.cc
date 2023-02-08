@@ -12,6 +12,11 @@
 
 namespace blender::workbench {
 
+OutlinePass::~OutlinePass()
+{
+  DRW_SHADER_FREE_SAFE(sh_);
+}
+
 void OutlinePass::init(const SceneState &scene_state)
 {
   enabled_ = scene_state.draw_outline;
@@ -38,7 +43,7 @@ void OutlinePass::sync(SceneResources &resources)
   ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
-void OutlinePass::draw(Manager &manager, View &view, SceneResources &resources, int2 resolution)
+void OutlinePass::draw(Manager &manager, SceneResources &resources)
 {
   if (!enabled_) {
     return;

@@ -25,6 +25,11 @@
 namespace blender::workbench {
 
 ShadowPass::ShadowView::ShadowView() : View("ShadowPass.View"){};
+ShadowPass::ShadowView::~ShadowView()
+{
+  DRW_SHADER_FREE_SAFE(dynamic_pass_type_shader_);
+  DRW_SHADER_FREE_SAFE(static_pass_type_shader_);
+}
 
 void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool force_fail_method)
 {
@@ -135,6 +140,7 @@ void ShadowPass::ShadowView::setup(View &view, float3 light_direction, bool forc
       for (float3 corner : frustum_corners.vec) {
         if (math::dot(float3(extruded_face), corner) > (extruded_face.w + 0.1)) {
           BLI_assert(!flipped);
+          UNUSED_VARS_NDEBUG(flipped);
           flipped = true;
           extruded_face *= -1;
         }
@@ -181,7 +187,7 @@ bool ShadowPass::ShadowView::debug_object_culling(Object *ob)
     float4 plane = extruded_frustum_.planes[p];
     bool separating_axis = true;
     for (float3 corner : _bbox->vec) {
-      corner = float4x4(ob->object_to_world) * corner;
+      corner = math::transform_point(float4x4(ob->object_to_world), corner);
       float signed_distance = math::dot(corner, float3(plane)) - plane.w;
       if (signed_distance <= 0) {
         separating_axis = false;
@@ -203,8 +209,10 @@ void ShadowPass::ShadowView::set_mode(ShadowPass::PassType type)
 
 void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
                                                 uint resource_len,
-                                                bool debug_freeze)
+                                                bool /*debug_freeze*/)
 {
+  /* TODO (Miguel Pozo): Add debug_freeze support */
+
   GPU_debug_group_begin("ShadowView.compute_visibility");
 
   uint word_per_draw = this->visibility_word_per_draw();
@@ -232,15 +240,19 @@ void ShadowPass::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
   }
 
   if (do_visibility_) {
-    /* TODO(Miguel Pozo): Use regular culling for the caps pass */
+    /* TODO(@pragma37): Use regular culling for the caps pass. */
 
-    static GPUShader *dynamic_pass_type_shader = GPU_shader_create_from_info_name(
-        "workbench_next_shadow_visibility_compute_dynamic_pass_type");
-    static GPUShader *static_pass_type_shader = GPU_shader_create_from_info_name(
-        "workbench_next_shadow_visibility_compute_static_pass_type");
+    if (dynamic_pass_type_shader_ == nullptr) {
+      dynamic_pass_type_shader_ = GPU_shader_create_from_info_name(
+          "workbench_next_shadow_visibility_compute_dynamic_pass_type");
+    }
+    if (static_pass_type_shader_ == nullptr) {
+      static_pass_type_shader_ = GPU_shader_create_from_info_name(
+          "workbench_next_shadow_visibility_compute_static_pass_type");
+    }
 
-    GPUShader *shader = current_pass_type_ == ShadowPass::FORCED_FAIL ? static_pass_type_shader :
-                                                                        dynamic_pass_type_shader;
+    GPUShader *shader = current_pass_type_ == ShadowPass::FORCED_FAIL ? static_pass_type_shader_ :
+                                                                        dynamic_pass_type_shader_;
     GPU_shader_bind(shader);
     GPU_shader_uniform_1i(shader, "resource_len", resource_len);
     GPU_shader_uniform_1i(shader, "view_len", view_len_);
@@ -280,6 +292,17 @@ VisibilityBuf &ShadowPass::ShadowView::get_visibility_buffer()
       BLI_assert_unreachable();
   }
   return visibility_buf_;
+}
+
+ShadowPass::~ShadowPass()
+{
+  for (int depth_pass : IndexRange(2)) {
+    for (int manifold : IndexRange(2)) {
+      for (int cap : IndexRange(2)) {
+        DRW_SHADER_FREE_SAFE(shaders_[depth_pass][manifold][cap]);
+      }
+    }
+  }
 }
 
 PassMain::Sub *&ShadowPass::get_pass_ptr(PassType type, bool manifold, bool cap /*= false*/)
@@ -328,8 +351,9 @@ void ShadowPass::init(const SceneState &scene_state, SceneResources &resources)
 
   /* Shadow direction. */
   float4x4 view_matrix;
-  DRW_view_viewmat_get(NULL, view_matrix.ptr(), false);
-  resources.world_buf.shadow_direction_vs = float4(view_matrix.ref_3x3() * direction_ws);
+  DRW_view_viewmat_get(nullptr, view_matrix.ptr(), false);
+  resources.world_buf.shadow_direction_vs = float4(
+      math::transform_direction(view_matrix, direction_ws));
 
   /* Clamp to avoid overshadowing and shading errors. */
   float focus = clamp_f(scene.display.shadow_focus, 0.0001f, 0.99999f);
@@ -390,8 +414,7 @@ void ShadowPass::sync()
   }
 }
 
-void ShadowPass::object_sync(Manager &manager,
-                             SceneState &scene_state,
+void ShadowPass::object_sync(SceneState &scene_state,
                              ObjectRef &ob_ref,
                              ResourceHandle handle,
                              const bool has_transp_mat)
@@ -436,7 +459,6 @@ void ShadowPass::object_sync(Manager &manager,
 void ShadowPass::draw(Manager &manager,
                       View &view,
                       SceneResources &resources,
-                      int2 resolution,
                       GPUTexture &depth_stencil_tx,
                       bool force_fail_method)
 {

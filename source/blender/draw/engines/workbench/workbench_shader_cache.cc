@@ -6,21 +6,21 @@ namespace blender::workbench {
 
 ShaderCache::~ShaderCache()
 {
-  for (auto i : IndexRange(lighting_type_len)) {
-    for (auto j : IndexRange(shader_type_len)) {
-      for (auto k : IndexRange(geometry_type_len)) {
-        for (auto l : IndexRange(pipeline_type_len)) {
-          for (auto m : IndexRange(2)) {
+  for (auto i : IndexRange(pipeline_type_len)) {
+    for (auto j : IndexRange(geometry_type_len)) {
+      for (auto k : IndexRange(shader_type_len)) {
+        for (auto l : IndexRange(lighting_type_len)) {
+          for (auto m : IndexRange(2) /*clip*/) {
             DRW_SHADER_FREE_SAFE(prepass_shader_cache_[i][j][k][l][m]);
           }
         }
       }
     }
   }
-  for (auto i : IndexRange(lighting_type_len)) {
-    for (auto j : IndexRange(pipeline_type_len)) {
-      for (auto k : IndexRange(2)) {
-        for (auto l : IndexRange(2)) {
+  for (auto i : IndexRange(pipeline_type_len)) {
+    for (auto j : IndexRange(lighting_type_len)) {
+      for (auto k : IndexRange(2) /*cavity*/) {
+        for (auto l : IndexRange(2) /*curvature*/) {
           DRW_SHADER_FREE_SAFE(resolve_shader_cache_[i][j][k][l]);
         }
       }
@@ -34,9 +34,8 @@ GPUShader *ShaderCache::prepass_shader_get(ePipelineType pipeline_type,
                                            eLightingType lighting_type,
                                            bool clip)
 {
-  GPUShader *&shader_ptr = prepass_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(
-      geometry_type)][static_cast<int>(shader_type)][static_cast<int>(lighting_type)]
-                                                [clip ? 1 : 0];
+  GPUShader *&shader_ptr = prepass_shader_cache_[int(pipeline_type)][int(geometry_type)][int(
+      shader_type)][int(lighting_type)][clip ? 1 : 0];
 
   if (shader_ptr != nullptr) {
     return shader_ptr;
@@ -93,8 +92,8 @@ GPUShader *ShaderCache::resolve_shader_get(ePipelineType pipeline_type,
                                            bool cavity,
                                            bool curvature)
 {
-  GPUShader *&shader_ptr = resolve_shader_cache_[static_cast<int>(pipeline_type)][static_cast<int>(
-      lighting_type)][cavity][curvature];
+  GPUShader *&shader_ptr =
+      resolve_shader_cache_[int(pipeline_type)][int(lighting_type)][cavity][curvature];
 
   if (shader_ptr != nullptr) {
     return shader_ptr;
