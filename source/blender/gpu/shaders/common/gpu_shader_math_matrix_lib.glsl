@@ -469,6 +469,7 @@ mat4x4 invert(mat4x4 mat, out bool r_success)
   return r_success ? inverse(mat) : mat4x4(0.0);
 }
 
+#  if defined(GPU_OPENGL) || defined(GPU_METAL)
 vec2 normalize(vec2 a)
 {
   return a * inversesqrt(length_squared(a));
@@ -481,6 +482,7 @@ vec4 normalize(vec4 a)
 {
   return a * inversesqrt(length_squared(a));
 }
+#  endif
 
 mat2x2 normalize(mat2x2 mat)
 {
@@ -1119,9 +1121,8 @@ Quaternion normalized_to_quat_fast(mat3 mat)
       }
     }
     else {
-      /* NOTE(@campbellbarton): A zero matrix will fall through to this block,
-       * needed so a zero scaled matrices to return a quaternion without rotation, see: T101848.
-       */
+      /* NOTE(@ideasman42): A zero matrix will fall through to this block,
+       * needed so a zero scaled matrices to return a quaternion without rotation, see: T101848. */
       float trace = 1.0f + mat[0][0] + mat[1][1] + mat[2][2];
       float s = 2.0f * sqrt(trace);
       q.x = 0.25f * s;

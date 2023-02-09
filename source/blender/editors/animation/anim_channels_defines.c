@@ -929,7 +929,7 @@ static bool acf_group_setting_valid(bAnimContext *ac,
       return (ac->spacetype == SPACE_GRAPH);
 
     case ACHANNEL_SETTING_ALWAYS_VISIBLE:
-      return (ac->spacetype == SPACE_GRAPH);
+      return ELEM(ac->spacetype, SPACE_ACTION, SPACE_GRAPH);
 
     default: /* always supported */
       return true;
@@ -4373,6 +4373,53 @@ static bool achannel_is_being_renamed(const bAnimContext *ac,
   return false;
 }
 
+float ANIM_UI_get_keyframe_scale_factor(void)
+{
+  bTheme *btheme = UI_GetTheme();
+  const float yscale_fac = btheme->space_action.keyframe_scale_fac;
+
+  /* clamp to avoid problems with uninitialized values... */
+  if (yscale_fac < 0.1f) {
+    return 1.0f;
+  }
+  return yscale_fac;
+}
+
+float ANIM_UI_get_channel_height(void)
+{
+  return 0.8f * ANIM_UI_get_keyframe_scale_factor() * U.widget_unit;
+}
+
+float ANIM_UI_get_channel_skip(void)
+{
+  return 0.1f * U.widget_unit;
+}
+
+float ANIM_UI_get_first_channel_top(View2D *v2d)
+{
+  return UI_view2d_scale_get_y(v2d) * -UI_TIME_SCRUB_MARGIN_Y - ANIM_UI_get_channel_skip();
+}
+
+float ANIM_UI_get_channel_step(void)
+{
+  return ANIM_UI_get_channel_height() + ANIM_UI_get_channel_skip();
+}
+
+float ANIM_UI_get_channels_total_height(View2D *v2d, const int item_count)
+{
+  return -ANIM_UI_get_first_channel_top(v2d) + ANIM_UI_get_channel_step() * (item_count + 1);
+}
+
+float ANIM_UI_get_channel_name_width(void)
+{
+  return 10 * U.widget_unit;
+}
+
+float ANIM_UI_get_channel_button_width(void)
+{
+  return 0.8f * U.widget_unit;
+}
+
 void ANIM_channel_draw(
     bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc, size_t channel_index)
 {
@@ -4434,7 +4481,7 @@ void ANIM_channel_draw(
    * - in Grease Pencil mode, color swatches for layer color
    */
   if (ac->sl) {
-    if ((ac->spacetype == SPACE_GRAPH) &&
+    if (ELEM(ac->spacetype, SPACE_ACTION, SPACE_GRAPH) &&
         (acf->has_setting(ac, ale, ACHANNEL_SETTING_VISIBLE) ||
          acf->has_setting(ac, ale, ACHANNEL_SETTING_ALWAYS_VISIBLE))) {
       /* for F-Curves, draw color-preview of curve left to the visibility icon */
@@ -4566,7 +4613,8 @@ void ANIM_channel_draw(
     }
 
     /* check if there's enough space for the toggles if the sliders are drawn too */
-    if (!(draw_sliders) || (BLI_rcti_size_x(&v2d->mask) > ACHANNEL_BUTTON_WIDTH / 2)) {
+    if (!(draw_sliders) ||
+        (BLI_rcti_size_x(&v2d->mask) > ANIM_UI_get_channel_button_width() / 2)) {
       /* protect... */
       if (acf->has_setting(ac, ale, ACHANNEL_SETTING_PROTECT)) {
         offset += ICON_WIDTH;
@@ -5177,7 +5225,7 @@ void ANIM_channel_draw_widgets(const bContext *C,
    * - in Grease Pencil mode, color swatches for layer color
    */
   if (ac->sl) {
-    if ((ac->spacetype == SPACE_GRAPH) &&
+    if (ELEM(ac->spacetype, SPACE_ACTION, SPACE_GRAPH) &&
         (acf->has_setting(ac, ale, ACHANNEL_SETTING_VISIBLE) ||
          acf->has_setting(ac, ale, ACHANNEL_SETTING_ALWAYS_VISIBLE))) {
       /* Pin toggle. */
@@ -5279,7 +5327,8 @@ void ANIM_channel_draw_widgets(const bContext *C,
     }
 
     /* check if there's enough space for the toggles if the sliders are drawn too */
-    if (!(draw_sliders) || (BLI_rcti_size_x(&v2d->mask) > ACHANNEL_BUTTON_WIDTH / 2)) {
+    if (!(draw_sliders) ||
+        (BLI_rcti_size_x(&v2d->mask) > ANIM_UI_get_channel_button_width() / 2)) {
       /* protect... */
       if (acf->has_setting(ac, ale, ACHANNEL_SETTING_PROTECT)) {
         offset -= ICON_WIDTH;

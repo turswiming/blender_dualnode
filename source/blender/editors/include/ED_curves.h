@@ -9,6 +9,9 @@
 struct bContext;
 struct Curves;
 struct UndoType;
+struct SelectPick_Params;
+struct ViewContext;
+struct rcti;
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +46,8 @@ float (*ED_curves_point_normals_array_create(const struct Curves *curves_id))[3]
 #  include "BLI_vector_set.hh"
 
 #  include "BKE_curves.hh"
+
+#  include "ED_select_utils.h"
 
 namespace blender::ed::curves {
 
@@ -134,6 +139,24 @@ void select_random(bke::CurvesGeometry &curves,
                    const eAttrDomain selection_domain,
                    uint32_t random_seed,
                    float probability);
+
+/**
+ * Select point or curve under the cursor.
+ */
+bool select_pick(const ViewContext &vc,
+                 bke::CurvesGeometry &curves,
+                 const eAttrDomain selection_domain,
+                 const SelectPick_Params &params,
+                 const int2 mval);
+
+/**
+ * Select points or curves in a (screenspace) rectangle.
+ */
+bool select_box(const ViewContext &vc,
+                bke::CurvesGeometry &curves,
+                const eAttrDomain selection_domain,
+                const rcti& rect,
+                const eSelectOp sel_op);
 /** \} */
 
 }  // namespace blender::ed::curves

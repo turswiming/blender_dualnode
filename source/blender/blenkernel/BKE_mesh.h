@@ -212,7 +212,7 @@ void BKE_mesh_to_curve(struct Main *bmain,
                        struct Depsgraph *depsgraph,
                        struct Scene *scene,
                        struct Object *ob);
-void BKE_pointcloud_from_mesh(struct Mesh *me, struct PointCloud *pointcloud);
+void BKE_pointcloud_from_mesh(const struct Mesh *me, struct PointCloud *pointcloud);
 void BKE_mesh_to_pointcloud(struct Main *bmain,
                             struct Depsgraph *depsgraph,
                             struct Scene *scene,
@@ -229,10 +229,6 @@ void BKE_mesh_material_remap(struct Mesh *me, const unsigned int *remap, unsigne
 void BKE_mesh_smooth_flag_set(struct Mesh *me, bool use_smooth);
 void BKE_mesh_auto_smooth_flag_set(struct Mesh *me, bool use_auto_smooth, float auto_smooth_angle);
 
-/**
- * Needed after converting a mesh with subsurf optimal display to mesh.
- */
-void BKE_mesh_edges_set_draw_render(struct Mesh *me);
 
 /**
  * Used for unit testing; compares two meshes, checking only

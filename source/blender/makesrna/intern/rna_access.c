@@ -1415,6 +1415,16 @@ int RNA_property_string_maxlength(PropertyRNA *prop)
 
 StructRNA *RNA_property_pointer_type(PointerRNA *ptr, PropertyRNA *prop)
 {
+  if (prop->magic != RNA_MAGIC) {
+    const IDProperty *idprop = (IDProperty *)prop;
+    if (idprop->type == IDP_ID) {
+      const IDPropertyUIDataID *ui_data = (const IDPropertyUIDataID *)idprop->ui_data;
+      if (ui_data) {
+        return ID_code_to_RNA_type(ui_data->id_type);
+      }
+    }
+  }
+
   prop = rna_ensure_property(prop);
 
   if (prop->type == PROP_POINTER) {
@@ -2084,7 +2094,7 @@ static void rna_property_update(
     }
 
 #if 1
-    /* TODO(@campbellbarton): Should eventually be replaced entirely by message bus (below)
+    /* TODO(@ideasman42): Should eventually be replaced entirely by message bus (below)
      * for now keep since COW, bugs are hard to track when we have other missing updates. */
     if (prop->noteflag) {
       WM_main_add_notifier(prop->noteflag, ptr->owner_id);

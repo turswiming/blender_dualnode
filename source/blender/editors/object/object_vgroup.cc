@@ -915,7 +915,7 @@ void ED_vgroup_vert_remove(Object *ob, bDeformGroup *dg, int vertnum)
    * deform group.
    */
 
-  /* TODO(@campbellbarton): This is slow in a loop, better pass def_nr directly,
+  /* TODO(@ideasman42): This is slow in a loop, better pass def_nr directly,
    * but leave for later. */
   const ListBase *defbase = BKE_object_defgroup_list(ob);
   const int def_nr = BLI_findindex(defbase, dg);
@@ -1142,7 +1142,7 @@ static void vgroup_duplicate(Object *ob)
   BKE_object_defgroup_active_index_set(ob, BLI_listbase_count(defbase));
   icdg = BKE_object_defgroup_active_index_get(ob) - 1;
 
-  /* TODO(@campbellbarton): we might want to allow only copy selected verts here? */
+  /* TODO(@ideasman42): we might want to allow only copy selected verts here? */
   ED_vgroup_parray_alloc(static_cast<ID *>(ob->data), &dvert_array, &dvert_tot, false);
 
   if (dvert_array) {
@@ -1150,7 +1150,7 @@ static void vgroup_duplicate(Object *ob)
       MDeformVert *dv = dvert_array[i];
       dw_org = BKE_defvert_find_index(dv, idg);
       if (dw_org) {
-        /* BKE_defvert_ensure_index re-allocs org so need to store the weight first */
+        /* #BKE_defvert_ensure_index re-allocates org so need to store the weight first. */
         const float weight = dw_org->weight;
         dw_cpy = BKE_defvert_ensure_index(dv, icdg);
         dw_cpy->weight = weight;
@@ -2130,8 +2130,8 @@ static void vgroup_smooth_subset(Object *ob,
 
 static int inv_cmp_mdef_vert_weights(const void *a1, const void *a2)
 {
-  /* qsort sorts in ascending order.  We want descending order to save a memcopy
-   * so this compare function is inverted from the standard greater than comparison qsort needs.
+  /* #qsort sorts in ascending order. We want descending order to save a #memcpy
+   * so this compare function is inverted from the standard greater than comparison #qsort needs.
    * A normal compare function is called with two pointer arguments and should return an integer
    * less than, equal to, or greater than zero corresponding to whether its first argument is
    * considered less than, equal to, or greater than its second argument.

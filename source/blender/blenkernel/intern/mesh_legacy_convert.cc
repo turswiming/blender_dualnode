@@ -89,7 +89,6 @@ static void mesh_calc_edges_mdata(const MVert * /*allvert*/,
                                   int totface,
                                   int /*totloop*/,
                                   int totpoly,
-                                  const bool use_old,
                                   MEdge **r_medge,
                                   int *r_totedge)
 {
@@ -156,9 +155,6 @@ static void mesh_calc_edges_mdata(const MVert * /*allvert*/,
     if (ed->v1 != (ed + 1)->v1 || ed->v2 != (ed + 1)->v2) {
       med->v1 = ed->v1;
       med->v2 = ed->v2;
-      if (use_old == false || ed->is_draw) {
-        med->flag = ME_EDGEDRAW;
-      }
 
       /* order is swapped so extruding this edge as a surface won't flip face normals
        * with cyclic curves */
@@ -175,7 +171,6 @@ static void mesh_calc_edges_mdata(const MVert * /*allvert*/,
   /* last edge */
   med->v1 = ed->v1;
   med->v2 = ed->v2;
-  med->flag = ME_EDGEDRAW;
 
   MEM_freeN(edsort);
 
@@ -206,7 +201,7 @@ static void mesh_calc_edges_mdata(const MVert * /*allvert*/,
   *r_totedge = totedge_final;
 }
 
-void BKE_mesh_calc_edges_legacy(Mesh *me, const bool use_old)
+void BKE_mesh_calc_edges_legacy(Mesh *me)
 {
   using namespace blender;
   MEdge *medge;
@@ -224,7 +219,6 @@ void BKE_mesh_calc_edges_legacy(Mesh *me, const bool use_old)
                         me->totface,
                         loops.size(),
                         polys.size(),
-                        use_old,
                         &medge,
                         &totedge);
 
@@ -1163,17 +1157,17 @@ static int mesh_tessface_calc(Mesh &mesh,
   CustomData_add_layer(fdata, CD_ORIGINDEX, CD_ASSIGN, mface_to_poly_map, totface);
   add_mface_layers(mesh, fdata, ldata, totface);
 
-  /* NOTE: quad detection issue - fourth vertidx vs fourth loopidx:
+  /* NOTE: quad detection issue - fourth vertex-index vs fourth loop-index:
    * Polygons take care of their loops ordering, hence not of their vertices ordering.
    * Currently, our tfaces' fourth vertex index might be 0 even for a quad.
    * However, we know our fourth loop index is never 0 for quads
    * (because they are sorted for polygons, and our quads are still mere copies of their polygons).
-   * So we pass nullptr as MFace pointer, and #mesh_loops_to_tessdata
+   * So we pass nullptr as #MFace pointer, and #mesh_loops_to_tessdata
    * will use the fourth loop index as quad test. */
   mesh_loops_to_tessdata(fdata, ldata, nullptr, mface_to_poly_map, lindices, totface);
 
-  /* NOTE: quad detection issue - fourth vertidx vs fourth loopidx:
-   * ...However, most TFace code uses 'MFace->v4 == 0' test to check whether it is a tri or quad.
+  /* NOTE: quad detection issue - fourth vert-index vs fourth loop-index:
+   * ...However, most #TFace code uses `MFace->v4 == 0` test to check whether it is a tri or quad.
    * BKE_mesh_mface_index_validate() will check this and rotate the tessellated face if needed.
    */
 #ifdef USE_TESSFACE_QUADS
@@ -1224,16 +1218,26 @@ void BKE_mesh_tessface_ensure(struct Mesh *mesh)
 /** \name Face Set Conversion
  * \{ */
 
-void BKE_mesh_legacy_face_set_from_generic(Mesh *mesh,
-                                           blender::MutableSpan<CustomDataLayer> poly_layers)
+void BKE_mesh_legacy_face_set_from_generic(blender::MutableSpan<CustomDataLayer> poly_layers)
 {
   using namespace blender;
+  bool changed = false;
   for (CustomDataLayer &layer : poly_layers) {
     if (StringRef(layer.name) == ".sculpt_face_set") {
       layer.type = CD_SCULPT_FACE_SETS;
+      layer.name[0] = '\0';
+      changed = true;
+      break;
     }
   }
-  CustomData_update_typemap(&mesh->pdata);
+  if (!changed) {
+    return;
+  }
+  /* #CustomData expects the layers to be sorted in increasing order based on type. */
+  std::stable_sort(
+      poly_layers.begin(),
+      poly_layers.end(),
+      [](const CustomDataLayer &a, const CustomDataLayer &b) { return a.type < b.type; });
 }
 
 void BKE_mesh_legacy_face_set_to_generic(Mesh *mesh)
@@ -1242,13 +1246,19 @@ void BKE_mesh_legacy_face_set_to_generic(Mesh *mesh)
   if (mesh->attributes().contains(".sculpt_face_set")) {
     return;
   }
-  for (CustomDataLayer &layer : MutableSpan(mesh->pdata.layers, mesh->pdata.totlayer)) {
-    if (layer.type == CD_SCULPT_FACE_SETS) {
-      BLI_strncpy(layer.name, ".sculpt_face_set", sizeof(layer.name));
-      layer.type = CD_PROP_INT32;
+  void *faceset_data = nullptr;
+  for (const int i : IndexRange(mesh->pdata.totlayer)) {
+    if (mesh->pdata.layers[i].type == CD_SCULPT_FACE_SETS) {
+      faceset_data = mesh->pdata.layers[i].data;
+      mesh->pdata.layers[i].data = nullptr;
+      CustomData_free_layer(&mesh->pdata, CD_SCULPT_FACE_SETS, mesh->totpoly, i);
+      break;
     }
   }
-  CustomData_update_typemap(&mesh->pdata);
+  if (faceset_data != nullptr) {
+    CustomData_add_layer_named(
+        &mesh->pdata, CD_PROP_INT32, CD_ASSIGN, faceset_data, mesh->totpoly, ".sculpt_face_set");
+  }
 }
 
 /** \} */
@@ -1608,6 +1618,9 @@ void BKE_mesh_legacy_convert_uvs_to_generic(Mesh *mesh)
 {
   using namespace blender;
   using namespace blender::bke;
+  if (!CustomData_has_layer(&mesh->ldata, CD_MLOOPUV)) {
+    return;
+  }
 
   /* Store layer names since they will be removed, used to set the active status of new layers.
    * Use intermediate #StringRef because the names can be null. */

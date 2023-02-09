@@ -214,7 +214,7 @@ static void ed_undo_step_post(bContext *C,
     Object *obact = CTX_data_active_object(C);
     if (obact && (obact->type == OB_GPENCIL)) {
       /* set cursor */
-      if ((obact->mode & OB_MODE_ALL_PAINT_GPENCIL)) {
+      if (obact->mode & OB_MODE_ALL_PAINT_GPENCIL) {
         ED_gpencil_toggle_brush_cursor(C, true, nullptr);
       }
       else {
@@ -265,7 +265,7 @@ static int ed_undo_step_direction(bContext *C, enum eUndoStepDir step, ReportLis
 
   CLOG_INFO(&LOG, 1, "direction=%s", (step == STEP_UNDO) ? "STEP_UNDO" : "STEP_REDO");
 
-  /* TODO(@campbellbarton): undo_system: use undo system */
+  /* TODO(@ideasman42): undo_system: use undo system */
   /* grease pencil can be can be used in plenty of spaces, so check it first */
   /* FIXME: This gpencil undo effectively only supports the one step undo/redo, undo based on name
    * or index is fully not implemented.

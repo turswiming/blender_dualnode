@@ -91,7 +91,6 @@ static Mesh *cdt_to_mesh(const meshintersect::CDT_result<double> &result)
   for (const int i : IndexRange(result.edge.size())) {
     edges[i].v1 = result.edge[i].first;
     edges[i].v2 = result.edge[i].second;
-    edges[i].flag = ME_EDGEDRAW;
   }
   int i_loop = 0;
   for (const int i : IndexRange(result.face.size())) {
@@ -116,7 +115,7 @@ static void curve_fill_calculate(GeometrySet &geometry_set, const GeometryNodeCu
   }
 
   const Curves &curves_id = *geometry_set.get_curves_for_read();
-  const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
+  const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
   if (curves.curves_num() == 0) {
     geometry_set.replace_curves(nullptr);
     return;

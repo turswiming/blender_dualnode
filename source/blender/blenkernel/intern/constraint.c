@@ -1558,7 +1558,7 @@ static void followpath_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *
 
     /* un-apply scaling caused by path */
     if ((data->followflag & FOLLOWPATH_RADIUS) == 0) {
-      /* XXX(@campbellbarton): Assume that scale correction means that radius
+      /* XXX(@ideasman42): Assume that scale correction means that radius
        * will have some scale error in it. */
       float obsize[3];
 
@@ -3835,7 +3835,7 @@ static void clampto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
 
     unit_m4(targetMatrix);
     INIT_MINMAX(curveMin, curveMax);
-    /* XXX(@campbellbarton): don't think this is good calling this here because
+    /* XXX(@ideasman42): don't think this is good calling this here because
      * the other object's data is lazily initializing bounding-box information.
      * This could cause issues when evaluating from a thread.
      * If the depsgraph ensures the bound-box is always available, a code-path could
@@ -4528,7 +4528,7 @@ static void damptrack_do_transform(float matrix[4][4], const float tarvec_in[3],
       }
     }
     else if (norm < 0.1f) {
-      /* near 0 and Pi arcsin has way better precision than arccos */
+      /* Near 0 and Pi `arcsin` has way better precision than `arccos`. */
       rangle = (rangle > M_PI_2) ? M_PI - asinf(norm) : asinf(norm);
     }
 

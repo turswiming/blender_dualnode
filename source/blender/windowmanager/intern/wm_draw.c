@@ -824,12 +824,12 @@ void wm_draw_region_blend(ARegion *region, int view, bool blend)
     alpha = 1.0f;
   }
 
-  /* Not the same layout as rectf/recti. */
+  /* Not the same layout as #rctf/#rcti. */
   const float rectt[4] = {rect_tex.xmin, rect_tex.ymin, rect_tex.xmax, rect_tex.ymax};
   const float rectg[4] = {rect_geo.xmin, rect_geo.ymin, rect_geo.xmax, rect_geo.ymax};
 
   if (blend) {
-    /* Regions drawn offscreen have premultiplied alpha. */
+    /* Regions drawn off-screen have pre-multiplied alpha. */
     GPU_blend(GPU_BLEND_ALPHA_PREMULT);
   }
 
@@ -1206,7 +1206,7 @@ static void wm_draw_surface(bContext *C, wmSurface *surface)
 
 uint *WM_window_pixels_read_offscreen(bContext *C, wmWindow *win, int r_size[2])
 {
-  /* NOTE(@campbellbarton): There is a problem reading the windows front-buffer after redrawing
+  /* NOTE(@ideasman42): There is a problem reading the windows front-buffer after redrawing
    * the window in some cases (typically to clear UI elements such as menus or search popup).
    * With EGL `eglSurfaceAttrib(..)` may support setting the `EGL_SWAP_BEHAVIOR` attribute to
    * `EGL_BUFFER_PRESERVED` however not all implementations support this.

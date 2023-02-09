@@ -134,12 +134,12 @@ static void smoothModifier_do(
         }
         float *vco_new = accumulated_vecs[i];
 
-        const float f_new = invert_vgroup ?
-                                (1.0f - BKE_defvert_find_weight(dv, defgrp_index)) * fac_new :
-                                BKE_defvert_find_weight(dv, defgrp_index) * fac_new;
-        if (f_new <= 0.0f) {
+        const float f_vgroup = invert_vgroup ? (1.0f - BKE_defvert_find_weight(dv, defgrp_index)) :
+                                               BKE_defvert_find_weight(dv, defgrp_index);
+        if (f_vgroup <= 0.0f) {
           continue;
         }
+        const float f_new = f_vgroup * fac_new;
         const float f_orig = 1.0f - f_new;
 
         if (flag & MOD_SMOOTH_X) {
@@ -210,7 +210,7 @@ static void deformVertsEM(ModifierData *md,
   /* mesh_src is needed for vgroups, and taking edges into account. */
   mesh_src = MOD_deform_mesh_eval_get(ctx->object, editData, mesh, NULL, verts_num, false);
 
-  /* TODO(@campbellbarton): use edit-mode data only (remove this line). */
+  /* TODO(@ideasman42): use edit-mode data only (remove this line). */
   BKE_mesh_wrapper_ensure_mdata(mesh_src);
 
   smoothModifier_do(smd, ctx->object, mesh_src, vertexCos, verts_num);
