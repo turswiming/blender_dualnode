@@ -14,10 +14,10 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           N_("The corner to retrieve data from. Defaults to the corner from the context"));
   b.add_output<decl::Int>(N_("Face Index"))
-      .dependent_field()
+      .field_source_reference_all()
       .description(N_("The index of the face the corner is a part of"));
   b.add_output<decl::Int>(N_("Index in Face"))
-      .dependent_field()
+      .field_source_reference_all()
       .description(N_("The index of the corner starting from the first corner in the face"));
 }
 
@@ -36,7 +36,7 @@ class CornerFaceIndexInput final : public bke::MeshFieldInput {
       return {};
     }
     return VArray<int>::ForContainer(
-        mesh_topology::build_loop_to_poly_map(mesh.polys(), mesh.totloop));
+        bke::mesh_topology::build_loop_to_poly_map(mesh.polys(), mesh.totloop));
   }
 
   uint64_t hash() const final
@@ -65,7 +65,7 @@ class CornerIndexInFaceInput final : public bke::MeshFieldInput {
       return {};
     }
     const Span<MPoly> polys = mesh.polys();
-    Array<int> loop_to_poly_map = mesh_topology::build_loop_to_poly_map(polys, mesh.totloop);
+    Array<int> loop_to_poly_map = bke::mesh_topology::build_loop_to_poly_map(polys, mesh.totloop);
     return VArray<int>::ForFunc(
         mesh.totloop, [polys, loop_to_poly_map = std::move(loop_to_poly_map)](const int corner_i) {
           const int poly_i = loop_to_poly_map[corner_i];
@@ -84,6 +84,11 @@ class CornerIndexInFaceInput final : public bke::MeshFieldInput {
       return true;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  {
+    return ATTR_DOMAIN_CORNER;
   }
 };
 

@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "CLG_log.h"
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_anim_types.h"
@@ -21,6 +23,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_force_types.h"
+#include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
@@ -92,7 +95,10 @@
 
 #include "object_intern.h"
 
+using blender::float3;
 using blender::Span;
+
+static CLG_LogRef LOG = {"ed.object"};
 
 static void modifier_skin_customdata_delete(struct Object *ob);
 
@@ -217,7 +223,7 @@ ModifierData *ED_object_modifier_add(
 
       if (ob->mode & OB_MODE_SCULPT) {
         /* ensure that grid paint mask layer is created */
-        BKE_sculpt_mask_layers_ensure(ob, (MultiresModifierData *)new_md);
+        BKE_sculpt_mask_layers_ensure(nullptr, nullptr, ob, (MultiresModifierData *)new_md);
       }
     }
     else if (type == eModifierType_Skin) {
@@ -409,83 +415,139 @@ void ED_object_modifier_clear(Main *bmain, Scene *scene, Object *ob)
   DEG_relations_tag_update(bmain);
 }
 
-bool ED_object_modifier_move_up(ReportList *reports, Object *ob, ModifierData *md)
+static bool object_modifier_check_move_before(ReportList *reports,
+                                              eReportType error_type,
+                                              ModifierData *md,
+                                              ModifierData *md_prev)
 {
-  if (md->prev) {
+  if (md_prev) {
     const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
 
     if (mti->type != eModifierTypeType_OnlyDeform) {
-      const ModifierTypeInfo *nmti = BKE_modifier_get_info((ModifierType)md->prev->type);
+      const ModifierTypeInfo *nmti = BKE_modifier_get_info((ModifierType)md_prev->type);
 
       if (nmti->flags & eModifierTypeFlag_RequiresOriginalData) {
-        BKE_report(reports, RPT_WARNING, "Cannot move above a modifier requiring original data");
+        BKE_report(reports, error_type, "Cannot move above a modifier requiring original data");
         return false;
       }
     }
-
-    BLI_listbase_swaplinks(&ob->modifiers, md, md->prev);
   }
   else {
-    BKE_report(reports, RPT_WARNING, "Cannot move modifier beyond the start of the list");
+    BKE_report(reports, error_type, "Cannot move modifier beyond the start of the list");
     return false;
   }
 
   return true;
 }
 
-bool ED_object_modifier_move_down(ReportList *reports, Object *ob, ModifierData *md)
+bool ED_object_modifier_move_up(ReportList *reports,
+                                eReportType error_type,
+                                Object *ob,
+                                ModifierData *md)
 {
-  if (md->next) {
+  if (object_modifier_check_move_before(reports, error_type, md, md->prev)) {
+    BLI_listbase_swaplinks(&ob->modifiers, md, md->prev);
+    return true;
+  }
+
+  return false;
+}
+
+static bool object_modifier_check_move_after(ReportList *reports,
+                                             eReportType error_type,
+                                             ModifierData *md,
+                                             ModifierData *md_next)
+{
+  if (md_next) {
     const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
 
     if (mti->flags & eModifierTypeFlag_RequiresOriginalData) {
-      const ModifierTypeInfo *nmti = BKE_modifier_get_info((ModifierType)md->next->type);
+      const ModifierTypeInfo *nmti = BKE_modifier_get_info((ModifierType)md_next->type);
 
       if (nmti->type != eModifierTypeType_OnlyDeform) {
-        BKE_report(reports, RPT_WARNING, "Cannot move beyond a non-deforming modifier");
+        BKE_report(reports, error_type, "Cannot move beyond a non-deforming modifier");
         return false;
       }
     }
-
-    BLI_listbase_swaplinks(&ob->modifiers, md, md->next);
   }
   else {
-    BKE_report(reports, RPT_WARNING, "Cannot move modifier beyond the end of the list");
+    BKE_report(reports, error_type, "Cannot move modifier beyond the end of the list");
     return false;
   }
 
   return true;
 }
 
+bool ED_object_modifier_move_down(ReportList *reports,
+                                  eReportType error_type,
+                                  Object *ob,
+                                  ModifierData *md)
+{
+  if (object_modifier_check_move_after(reports, error_type, md, md->next)) {
+    BLI_listbase_swaplinks(&ob->modifiers, md, md->next);
+    return true;
+  }
+
+  return false;
+}
+
 bool ED_object_modifier_move_to_index(ReportList *reports,
+                                      eReportType error_type,
                                       Object *ob,
                                       ModifierData *md,
-                                      const int index)
+                                      const int index,
+                                      bool allow_partial)
 {
   BLI_assert(md != nullptr);
-  BLI_assert(index >= 0);
-  if (index >= BLI_listbase_count(&ob->modifiers)) {
-    BKE_report(reports, RPT_WARNING, "Cannot move modifier beyond the end of the stack");
+
+  if (index < 0 || index >= BLI_listbase_count(&ob->modifiers)) {
+    BKE_report(reports, error_type, "Cannot move modifier beyond the end of the stack");
     return false;
   }
 
   int md_index = BLI_findindex(&ob->modifiers, md);
   BLI_assert(md_index != -1);
+
   if (md_index < index) {
     /* Move modifier down in list. */
-    for (; md_index < index; md_index++) {
-      if (!ED_object_modifier_move_down(reports, ob, md)) {
+    ModifierData *md_target = md;
+
+    for (; md_index < index; md_index++, md_target = md_target->next) {
+      if (!object_modifier_check_move_after(reports, error_type, md, md_target->next)) {
+        if (!allow_partial || md == md_target) {
+          return false;
+        }
+
         break;
       }
     }
+
+    BLI_assert(md != md_target && md_target);
+
+    BLI_remlink(&ob->modifiers, md);
+    BLI_insertlinkafter(&ob->modifiers, md_target, md);
+  }
+  else if (md_index > index) {
+    /* Move modifier up in list. */
+    ModifierData *md_target = md;
+
+    for (; md_index > index; md_index--, md_target = md_target->prev) {
+      if (!object_modifier_check_move_before(reports, error_type, md, md_target->prev)) {
+        if (!allow_partial || md == md_target) {
+          return false;
+        }
+
+        break;
+      }
+    }
+
+    BLI_assert(md != md_target && md_target);
+
+    BLI_remlink(&ob->modifiers, md);
+    BLI_insertlinkbefore(&ob->modifiers, md_target, md);
   }
   else {
-    /* Move modifier up in list. */
-    for (; md_index > index; md_index--) {
-      if (!ED_object_modifier_move_up(reports, ob, md)) {
-        break;
-      }
-    }
+    return true;
   }
 
   /* NOTE: Dependency graph only uses modifier nodes for visibility updates, and exact order of
@@ -589,13 +651,13 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList * /*reports*/,
   me->totvert = verts_num;
   me->totedge = edges_num;
 
-  CustomData_add_layer(&me->vdata, CD_MVERT, CD_SET_DEFAULT, nullptr, verts_num);
+  CustomData_add_layer_named(
+      &me->vdata, CD_PROP_FLOAT3, CD_CONSTRUCT, nullptr, verts_num, "position");
   CustomData_add_layer(&me->edata, CD_MEDGE, CD_SET_DEFAULT, nullptr, edges_num);
   CustomData_add_layer(&me->fdata, CD_MFACE, CD_SET_DEFAULT, nullptr, 0);
 
-  blender::MutableSpan<MVert> verts = me->verts_for_write();
+  blender::MutableSpan<float3> positions = me->vert_positions_for_write();
   blender::MutableSpan<MEdge> edges = me->edges_for_write();
-  MVert *mvert = verts.data();
   MEdge *medge = edges.data();
 
   bke::MutableAttributeAccessor attributes = me->attributes_for_write();
@@ -609,11 +671,11 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList * /*reports*/,
     ParticleCacheKey *key = cache[a];
     int kmax = key->segments;
     for (int k = 0; k <= kmax; k++, key++, cvert++, vert_index++) {
-      copy_v3_v3(mvert[vert_index].co, key->co);
+      positions[vert_index] = key->co;
       if (k) {
         medge->v1 = cvert - 1;
         medge->v2 = cvert;
-        medge->flag = ME_EDGEDRAW | ME_EDGERENDER | ME_LOOSEEDGE;
+        medge->flag = ME_EDGEDRAW;
         medge++;
       }
       else {
@@ -628,11 +690,11 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList * /*reports*/,
     ParticleCacheKey *key = cache[a];
     int kmax = key->segments;
     for (int k = 0; k <= kmax; k++, key++, cvert++, vert_index++) {
-      copy_v3_v3(mvert[vert_index].co, key->co);
+      copy_v3_v3(positions[vert_index], key->co);
       if (k) {
         medge->v1 = cvert - 1;
         medge->v2 = cvert;
-        medge->flag = ME_EDGEDRAW | ME_EDGERENDER | ME_LOOSEEDGE;
+        medge->flag = ME_EDGEDRAW;
         medge++;
       }
       else {
@@ -649,18 +711,143 @@ bool ED_object_modifier_convert_psys_to_mesh(ReportList * /*reports*/,
   return true;
 }
 
-/* Gets mesh for the modifier which corresponds to an evaluated state. */
-static Mesh *modifier_apply_create_mesh_for_modifier(Depsgraph *depsgraph,
-                                                     Object *object,
-                                                     ModifierData *md_eval,
-                                                     bool use_virtual_modifiers,
-                                                     bool build_shapekey_layers)
+static void add_shapekey_layers(Mesh &mesh_dest, const Mesh &mesh_src)
 {
-  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
-  Object *object_eval = DEG_get_evaluated_object(depsgraph, object);
-  Mesh *mesh_applied = BKE_mesh_create_derived_for_modifier(
-      depsgraph, scene_eval, object_eval, md_eval, use_virtual_modifiers, build_shapekey_layers);
-  return mesh_applied;
+  if (!mesh_src.key) {
+    return;
+  }
+  int i;
+  LISTBASE_FOREACH_INDEX (const KeyBlock *, kb, &mesh_src.key->block, i) {
+    void *array;
+    if (mesh_src.totvert != kb->totelem) {
+      CLOG_ERROR(&LOG,
+                 "vertex size mismatch (Mesh '%s':%d != KeyBlock '%s':%d)",
+                 mesh_src.id.name + 2,
+                 mesh_src.totvert,
+                 kb->name,
+                 kb->totelem);
+      array = MEM_calloc_arrayN(size_t(mesh_src.totvert), sizeof(float[3]), __func__);
+    }
+    else {
+      array = MEM_malloc_arrayN(size_t(mesh_src.totvert), sizeof(float[3]), __func__);
+      memcpy(array, kb->data, sizeof(float[3]) * size_t(mesh_src.totvert));
+    }
+
+    CustomData_add_layer_named(
+        &mesh_dest.vdata, CD_SHAPEKEY, CD_ASSIGN, array, mesh_dest.totvert, kb->name);
+    const int ci = CustomData_get_layer_index_n(&mesh_dest.vdata, CD_SHAPEKEY, i);
+
+    mesh_dest.vdata.layers[ci].uid = kb->uid;
+  }
+}
+
+/**
+ * \param use_virtual_modifiers: When enabled, calculate virtual-modifiers before applying
+ * `md_eval`. This is supported because virtual-modifiers are not modifiers from a user
+ * perspective, allowing shape keys to be included with the modifier being applied, see: T91923.
+ */
+static Mesh *create_applied_mesh_for_modifier(Depsgraph *depsgraph,
+                                              Scene *scene,
+                                              Object *ob_eval,
+                                              ModifierData *md_eval,
+                                              const bool use_virtual_modifiers,
+                                              const bool build_shapekey_layers,
+                                              ReportList *reports)
+{
+  Mesh *me = ob_eval->runtime.data_orig ? reinterpret_cast<Mesh *>(ob_eval->runtime.data_orig) :
+                                          reinterpret_cast<Mesh *>(ob_eval->data);
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md_eval->type));
+  const ModifierEvalContext mectx = {depsgraph, ob_eval, MOD_APPLY_TO_BASE_MESH};
+
+  if (!(md_eval->mode & eModifierMode_Realtime)) {
+    return nullptr;
+  }
+
+  if (mti->isDisabled && mti->isDisabled(scene, md_eval, false)) {
+    return nullptr;
+  }
+
+  if (build_shapekey_layers && me->key) {
+    if (KeyBlock *kb = static_cast<KeyBlock *>(
+            BLI_findlink(&me->key->block, ob_eval->shapenr - 1))) {
+      BKE_keyblock_convert_to_mesh(
+          kb, reinterpret_cast<float(*)[3]>(me->vert_positions_for_write().data()), me->totvert);
+    }
+  }
+
+  Mesh *mesh_temp = reinterpret_cast<Mesh *>(
+      BKE_id_copy_ex(nullptr, &me->id, nullptr, LIB_ID_COPY_LOCALIZE));
+  int numVerts = 0;
+  float(*deformedVerts)[3] = nullptr;
+
+  if (use_virtual_modifiers) {
+    VirtualModifierData virtualModifierData;
+    for (ModifierData *md_eval_virt =
+             BKE_modifiers_get_virtual_modifierlist(ob_eval, &virtualModifierData);
+         md_eval_virt && (md_eval_virt != ob_eval->modifiers.first);
+         md_eval_virt = md_eval_virt->next) {
+      if (!BKE_modifier_is_enabled(scene, md_eval_virt, eModifierMode_Realtime)) {
+        continue;
+      }
+      /* All virtual modifiers are deform modifiers. */
+      const ModifierTypeInfo *mti_virt = BKE_modifier_get_info(ModifierType(md_eval_virt->type));
+      BLI_assert(mti_virt->type == eModifierTypeType_OnlyDeform);
+      if (mti_virt->type != eModifierTypeType_OnlyDeform) {
+        continue;
+      }
+
+      if (deformedVerts == nullptr) {
+        deformedVerts = BKE_mesh_vert_coords_alloc(me, &numVerts);
+      }
+      mti_virt->deformVerts(md_eval_virt, &mectx, mesh_temp, deformedVerts, numVerts);
+    }
+  }
+
+  Mesh *result = nullptr;
+  if (mti->type == eModifierTypeType_OnlyDeform) {
+    if (deformedVerts == nullptr) {
+      deformedVerts = BKE_mesh_vert_coords_alloc(me, &numVerts);
+    }
+    result = mesh_temp;
+    mti->deformVerts(md_eval, &mectx, result, deformedVerts, numVerts);
+    BKE_mesh_vert_coords_apply(result, deformedVerts);
+
+    if (build_shapekey_layers) {
+      add_shapekey_layers(*result, *me);
+    }
+  }
+  else {
+    if (deformedVerts != nullptr) {
+      BKE_mesh_vert_coords_apply(mesh_temp, deformedVerts);
+    }
+
+    if (build_shapekey_layers) {
+      add_shapekey_layers(*mesh_temp, *me);
+    }
+
+    if (mti->modifyGeometrySet) {
+      GeometrySet geometry_set = GeometrySet::create_with_mesh(mesh_temp,
+                                                               GeometryOwnershipType::Owned);
+      mti->modifyGeometrySet(md_eval, &mectx, &geometry_set);
+      if (!geometry_set.has_mesh()) {
+        BKE_report(reports, RPT_ERROR, "Evaluated geometry from modifier does not contain a mesh");
+        return nullptr;
+      }
+      result = geometry_set.get_component_for_write<MeshComponent>().release();
+    }
+    else {
+      result = mti->modifyMesh(md_eval, &mectx, mesh_temp);
+      if (mesh_temp != result) {
+        BKE_id_free(nullptr, mesh_temp);
+      }
+    }
+  }
+
+  if (deformedVerts != nullptr) {
+    MEM_freeN(deformedVerts);
+  }
+
+  return result;
 }
 
 static bool modifier_apply_shape(Main *bmain,
@@ -696,8 +883,13 @@ static bool modifier_apply_shape(Main *bmain,
       return false;
     }
 
-    Mesh *mesh_applied = modifier_apply_create_mesh_for_modifier(
-        depsgraph, ob, md_eval, true, false);
+    Mesh *mesh_applied = create_applied_mesh_for_modifier(depsgraph,
+                                                          DEG_get_evaluated_scene(depsgraph),
+                                                          DEG_get_evaluated_object(depsgraph, ob),
+                                                          md_eval,
+                                                          true,
+                                                          false,
+                                                          reports);
     if (!mesh_applied) {
       BKE_report(reports, RPT_ERROR, "Modifier is disabled or returned error, skipping apply");
       return false;
@@ -722,6 +914,38 @@ static bool modifier_apply_shape(Main *bmain,
     return false;
   }
   return true;
+}
+
+static bool meta_data_matches(const std::optional<blender::bke::AttributeMetaData> meta_data,
+                              const eAttrDomainMask domains,
+                              const eCustomDataMask types)
+{
+  if (!meta_data) {
+    return false;
+  }
+  if (!(ATTR_DOMAIN_AS_MASK(meta_data->domain) & domains)) {
+    return false;
+  }
+  if (!(CD_TYPE_AS_MASK(meta_data->data_type) & types)) {
+    return false;
+  }
+  return true;
+}
+
+static void remove_invalid_attribute_strings(Mesh &mesh)
+{
+  using namespace blender;
+  bke::AttributeAccessor attributes = mesh.attributes();
+  if (!meta_data_matches(attributes.lookup_meta_data(mesh.active_color_attribute),
+                         ATTR_DOMAIN_MASK_COLOR,
+                         CD_MASK_COLOR_ALL)) {
+    MEM_SAFE_FREE(mesh.active_color_attribute);
+  }
+  if (!meta_data_matches(attributes.lookup_meta_data(mesh.default_color_attribute),
+                         ATTR_DOMAIN_MASK_COLOR,
+                         CD_MASK_COLOR_ALL)) {
+    MEM_SAFE_FREE(mesh.default_color_attribute);
+  }
 }
 
 static bool modifier_apply_obdata(
@@ -755,16 +979,17 @@ static bool modifier_apply_obdata(
       }
     }
     else {
-      Mesh *mesh_applied = modifier_apply_create_mesh_for_modifier(
+      Mesh *mesh_applied = create_applied_mesh_for_modifier(
           depsgraph,
-          ob,
+          DEG_get_evaluated_scene(depsgraph),
+          DEG_get_evaluated_object(depsgraph, ob),
           md_eval,
           /* It's important not to apply virtual modifiers (e.g. shape-keys) because they're kept,
            * causing them to be applied twice, see: T97758. */
           false,
-          true);
+          true,
+          reports);
       if (!mesh_applied) {
-        BKE_report(reports, RPT_ERROR, "Modifier returned error, skipping apply");
         return false;
       }
 
@@ -774,6 +999,9 @@ static bool modifier_apply_obdata(
 
       /* Anonymous attributes shouldn't be available on the applied geometry. */
       me->attributes_for_write().remove_anonymous();
+
+      /* Remove strings referring to attributes if they no longer exist. */
+      remove_invalid_attribute_strings(*me);
 
       if (md_eval->type == eModifierType_Multires) {
         multires_customdata_delete(me);
@@ -788,7 +1016,9 @@ static bool modifier_apply_obdata(
 
     if (ELEM(mti->type, eModifierTypeType_Constructive, eModifierTypeType_Nonconstructive)) {
       BKE_report(
-          reports, RPT_ERROR, "Transform curve to mesh in order to apply constructive modifiers");
+          reports,
+          RPT_ERROR,
+          "Cannot apply constructive modifiers on curve. Convert curve to mesh in order to apply");
       return false;
     }
 
@@ -845,18 +1075,45 @@ static bool modifier_apply_obdata(
     Curves &curves_eval = *geometry_set.get_curves_for_write();
 
     /* Anonymous attributes shouldn't be available on the applied geometry. */
-    blender::bke::CurvesGeometry::wrap(curves_eval.geometry)
-        .attributes_for_write()
-        .remove_anonymous();
+    curves_eval.geometry.wrap().attributes_for_write().remove_anonymous();
 
     /* Copy the relevant information to the original. */
-    blender::bke::CurvesGeometry::wrap(curves.geometry) = std::move(
-        blender::bke::CurvesGeometry::wrap(curves_eval.geometry));
+    curves.geometry.wrap() = std::move(curves_eval.geometry.wrap());
     Main *bmain = DEG_get_bmain(depsgraph);
     BKE_object_material_from_eval_data(bmain, ob, &curves_eval.id);
   }
+  else if (ob->type == OB_POINTCLOUD) {
+    PointCloud &points = *static_cast<PointCloud *>(ob->data);
+    if (mti->modifyGeometrySet == nullptr) {
+      BLI_assert_unreachable();
+      return false;
+    }
+
+    /* Create a temporary geometry set and component. */
+    GeometrySet geometry_set;
+    geometry_set.get_component_for_write<PointCloudComponent>().replace(
+        &points, GeometryOwnershipType::ReadOnly);
+
+    ModifierEvalContext mectx = {depsgraph, ob, (ModifierApplyFlag)0};
+    mti->modifyGeometrySet(md_eval, &mectx, &geometry_set);
+    if (!geometry_set.has_pointcloud()) {
+      BKE_report(
+          reports, RPT_ERROR, "Evaluated geometry from modifier does not contain a point cloud");
+      return false;
+    }
+    PointCloud *pointcloud_eval =
+        geometry_set.get_component_for_write<PointCloudComponent>().release();
+
+    /* Anonymous attributes shouldn't be available on the applied geometry. */
+    pointcloud_eval->attributes_for_write().remove_anonymous();
+
+    /* Copy the relevant information to the original. */
+    Main *bmain = DEG_get_bmain(depsgraph);
+    BKE_object_material_from_eval_data(bmain, ob, &pointcloud_eval->id);
+    BKE_pointcloud_nomain_to_pointcloud(pointcloud_eval, &points, true);
+  }
   else {
-    /* TODO: implement for point clouds and volumes. */
+    /* TODO: implement for volumes. */
     BKE_report(reports, RPT_ERROR, "Cannot apply modifier for this object type");
     return false;
   }
@@ -909,31 +1166,56 @@ bool ED_object_modifier_apply(Main *bmain,
   Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
   ModifierData *md_eval = (ob_eval) ? BKE_modifiers_findby_name(ob_eval, md->name) : md;
 
-  /* Allow apply of a non-real-time modifier, by first re-enabling real-time. */
-  int prev_mode = md_eval->mode;
-  md_eval->mode |= eModifierMode_Realtime;
+  Depsgraph *apply_depsgraph = depsgraph;
+  Depsgraph *local_depsgraph = nullptr;
 
+  /* If the object is hidden or the modifier is not enabled for the viewport is disabled a special
+   * handling is required. This is because the viewport dependency graph optimizes out evaluation
+   * of objects which are used by hidden objects and disabled modifiers.
+   *
+   * The idea is to create a dependency graph which does not perform those optimizations. */
+  if ((ob_eval->base_flag & BASE_ENABLED_VIEWPORT) == 0 ||
+      (md_eval->mode & eModifierMode_Realtime) == 0) {
+    ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
+
+    local_depsgraph = DEG_graph_new(bmain, scene, view_layer, DAG_EVAL_VIEWPORT);
+    DEG_disable_visibility_optimization(local_depsgraph);
+
+    ID *ids[] = {&ob->id};
+
+    DEG_graph_build_from_ids(local_depsgraph, ids, 1);
+    DEG_evaluate_on_refresh(local_depsgraph);
+
+    apply_depsgraph = local_depsgraph;
+
+    /* The evaluated object and modifier are now from the different dependency graph. */
+    ob_eval = DEG_get_evaluated_object(local_depsgraph, ob);
+    md_eval = BKE_modifiers_findby_name(ob_eval, md->name);
+
+    /* Force mode on the evaluated modifier, enforcing the modifier evaluation in the apply()
+     * functions. */
+    md_eval->mode |= eModifierMode_Realtime;
+  }
+
+  bool did_apply = false;
   if (mode == MODIFIER_APPLY_SHAPE) {
-    if (!modifier_apply_shape(bmain, reports, depsgraph, scene, ob, md_eval)) {
-      md_eval->mode = prev_mode;
-      return false;
-    }
+    did_apply = modifier_apply_shape(bmain, reports, apply_depsgraph, scene, ob, md_eval);
   }
   else {
-    if (!modifier_apply_obdata(reports, depsgraph, scene, ob, md_eval)) {
-      md_eval->mode = prev_mode;
-      return false;
+    did_apply = modifier_apply_obdata(reports, apply_depsgraph, scene, ob, md_eval);
+  }
+
+  if (did_apply) {
+    if (!keep_modifier) {
+      BKE_modifier_remove_from_list(ob, md);
+      BKE_modifier_free(md);
     }
+    BKE_object_free_derived_caches(ob);
   }
 
-  md_eval->mode = prev_mode;
-
-  if (!keep_modifier) {
-    BKE_modifier_remove_from_list(ob, md);
-    BKE_modifier_free(md);
+  if (local_depsgraph != nullptr) {
+    DEG_graph_free(local_depsgraph);
   }
-
-  BKE_object_free_derived_caches(ob);
 
   return true;
 }
@@ -1289,7 +1571,7 @@ static int modifier_move_up_exec(bContext *C, wmOperator *op)
   Object *ob = ED_object_active_context(C);
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
 
-  if (!md || !ED_object_modifier_move_up(op->reports, ob, md)) {
+  if (!md || !ED_object_modifier_move_up(op->reports, RPT_WARNING, ob, md)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1334,7 +1616,7 @@ static int modifier_move_down_exec(bContext *C, wmOperator *op)
   Object *ob = ED_object_active_context(C);
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
 
-  if (!md || !ED_object_modifier_move_down(op->reports, ob, md)) {
+  if (!md || !ED_object_modifier_move_down(op->reports, RPT_WARNING, ob, md)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1380,7 +1662,7 @@ static int modifier_move_to_index_exec(bContext *C, wmOperator *op)
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
   int index = RNA_int_get(op->ptr, "index");
 
-  if (!(md && ED_object_modifier_move_to_index(op->reports, ob, md, index))) {
+  if (!(md && ED_object_modifier_move_to_index(op->reports, RPT_WARNING, ob, md, index, true))) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1548,7 +1830,7 @@ void OBJECT_OT_modifier_apply(wmOperatorType *ot)
   RNA_def_boolean(ot->srna,
                   "merge_customdata",
                   true,
-                  "Merge UV's",
+                  "Merge UVs",
                   "For mesh objects, merge UV coordinates that share a vertex to account for "
                   "imprecision in some modifiers");
   PropertyRNA *prop = RNA_def_boolean(ot->srna,
@@ -2008,7 +2290,8 @@ static int multires_subdivide_exec(bContext *C, wmOperator *op)
 
   if (object->mode & OB_MODE_SCULPT) {
     /* ensure that grid paint mask layer is created */
-    BKE_sculpt_mask_layers_ensure(object, mmd);
+    BKE_sculpt_mask_layers_ensure(
+        CTX_data_ensure_evaluated_depsgraph(C), CTX_data_main(C), object, mmd);
   }
 
   return OPERATOR_FINISHED;
@@ -2600,7 +2883,7 @@ void OBJECT_OT_skin_radii_equalize(wmOperatorType *ot)
 }
 
 static void skin_armature_bone_create(Object *skin_ob,
-                                      const MVert *mvert,
+                                      const Span<float3> positions,
                                       const MEdge *medge,
                                       bArmature *arm,
                                       BLI_bitmap *edges_visited,
@@ -2627,8 +2910,8 @@ static void skin_armature_bone_create(Object *skin_ob,
       bone->flag |= BONE_CONNECTED;
     }
 
-    copy_v3_v3(bone->head, mvert[parent_v].co);
-    copy_v3_v3(bone->tail, mvert[v].co);
+    copy_v3_v3(bone->head, positions[parent_v]);
+    copy_v3_v3(bone->tail, positions[v]);
     bone->rad_head = bone->rad_tail = 0.25;
     BLI_snprintf(bone->name, sizeof(bone->name), "Bone.%.2d", endx);
 
@@ -2639,14 +2922,14 @@ static void skin_armature_bone_create(Object *skin_ob,
       ED_vgroup_vert_add(skin_ob, dg, v, 1, WEIGHT_REPLACE);
     }
 
-    skin_armature_bone_create(skin_ob, mvert, medge, arm, edges_visited, emap, bone, v);
+    skin_armature_bone_create(skin_ob, positions, medge, arm, edges_visited, emap, bone, v);
   }
 }
 
 static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, Object *skin_ob)
 {
   Mesh *me = static_cast<Mesh *>(skin_ob->data);
-  const Span<MVert> me_verts = me->verts();
+  const Span<float3> me_positions = me->vert_positions();
   const Span<MEdge> me_edges = me->edges();
 
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
@@ -2654,7 +2937,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
 
   const Mesh *me_eval_deform = mesh_get_eval_deform(
       depsgraph, scene_eval, ob_eval, &CD_MASK_BAREMESH);
-  const Span<MVert> verts_eval = me_eval_deform->verts();
+  const Span<float3> positions_eval = me_eval_deform->vert_positions();
 
   /* add vertex weights to original mesh */
   CustomData_add_layer(&me->vdata, CD_MDEFORMVERT, CD_SET_DEFAULT, nullptr, me->totvert);
@@ -2670,7 +2953,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
   arm->edbo = MEM_cnew<ListBase>("edbo armature");
 
   MVertSkin *mvert_skin = static_cast<MVertSkin *>(
-      CustomData_get_layer(&me->vdata, CD_MVERT_SKIN));
+      CustomData_get_layer_for_write(&me->vdata, CD_MVERT_SKIN, me->totvert));
   int *emap_mem;
   MeshElemMap *emap;
   BKE_mesh_vert_edge_map_create(&emap, &emap_mem, me_edges.data(), me->totvert, me->totedge);
@@ -2689,8 +2972,8 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
       if (emap[v].count > 1) {
         bone = ED_armature_ebone_add(arm, "Bone");
 
-        copy_v3_v3(bone->head, me_verts[v].co);
-        copy_v3_v3(bone->tail, me_verts[v].co);
+        copy_v3_v3(bone->head, me_positions[v]);
+        copy_v3_v3(bone->tail, me_positions[v]);
 
         bone->head[1] = 1.0f;
         bone->rad_head = bone->rad_tail = 0.25;
@@ -2698,7 +2981,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
 
       if (emap[v].count >= 1) {
         skin_armature_bone_create(
-            skin_ob, verts_eval.data(), me_edges.data(), arm, edges_visited, emap, bone, v);
+            skin_ob, positions_eval, me_edges.data(), arm, edges_visited, emap, bone, v);
       }
     }
   }
@@ -2989,7 +3272,7 @@ static bool ocean_bake_poll(bContext *C)
 struct OceanBakeJob {
   /* from wmJob */
   struct Object *owner;
-  short *stop, *do_update;
+  bool *stop, *do_update;
   float *progress;
   int current_frame;
   struct OceanCache *och;
@@ -3028,7 +3311,7 @@ static void oceanbake_update(void *customdata, float progress, int *cancel)
   *(oj->progress) = progress;
 }
 
-static void oceanbake_startjob(void *customdata, short *stop, short *do_update, float *progress)
+static void oceanbake_startjob(void *customdata, bool *stop, bool *do_update, float *progress)
 {
   OceanBakeJob *oj = static_cast<OceanBakeJob *>(customdata);
 
@@ -3041,7 +3324,7 @@ static void oceanbake_startjob(void *customdata, short *stop, short *do_update, 
   BKE_ocean_bake(oj->ocean, oj->och, oceanbake_update, (void *)oj);
 
   *do_update = true;
-  *stop = 0;
+  *stop = false;
 }
 
 static void oceanbake_endjob(void *customdata)

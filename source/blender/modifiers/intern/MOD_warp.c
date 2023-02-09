@@ -93,11 +93,11 @@ static void matrix_from_obj_pchan(float mat[4][4],
   bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, bonename);
   if (pchan) {
     float mat_bone_world[4][4];
-    mul_m4_m4m4(mat_bone_world, ob->obmat, pchan->pose_mat);
+    mul_m4_m4m4(mat_bone_world, ob->object_to_world, pchan->pose_mat);
     mul_m4_m4m4(mat, obinv, mat_bone_world);
   }
   else {
-    mul_m4_m4m4(mat, obinv, ob->obmat);
+    mul_m4_m4m4(mat, obinv, ob->object_to_world);
   }
 }
 
@@ -215,7 +215,7 @@ static void warpModifier_do(WarpModifierData *wmd,
     BKE_curvemapping_init(wmd->curfalloff);
   }
 
-  invert_m4_m4(obinv, ob->obmat);
+  invert_m4_m4(obinv, ob->object_to_world);
 
   /* Checks that the objects/bones are available. */
   matrix_from_obj_pchan(mat_from, obinv, wmd->object_from, wmd->bone_from);
@@ -508,34 +508,34 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Warp = {
-    /* name */ N_("Warp"),
-    /* structName */ "WarpModifierData",
-    /* structSize */ sizeof(WarpModifierData),
-    /* srna */ &RNA_WarpModifier,
-    /* type */ eModifierTypeType_OnlyDeform,
-    /* flags */ eModifierTypeFlag_AcceptsCVs | eModifierTypeFlag_AcceptsVertexCosOnly |
+    /*name*/ N_("Warp"),
+    /*structName*/ "WarpModifierData",
+    /*structSize*/ sizeof(WarpModifierData),
+    /*srna*/ &RNA_WarpModifier,
+    /*type*/ eModifierTypeType_OnlyDeform,
+    /*flags*/ eModifierTypeFlag_AcceptsCVs | eModifierTypeFlag_AcceptsVertexCosOnly |
         eModifierTypeFlag_SupportsEditmode,
-    /* icon */ ICON_MOD_WARP,
-    /* copyData */ copyData,
+    /*icon*/ ICON_MOD_WARP,
+    /*copyData*/ copyData,
 
-    /* deformVerts */ deformVerts,
-    /* deformMatrices */ NULL,
-    /* deformVertsEM */ deformVertsEM,
-    /* deformMatricesEM */ NULL,
-    /* modifyMesh */ NULL,
-    /* modifyGeometrySet */ NULL,
+    /*deformVerts*/ deformVerts,
+    /*deformMatrices*/ NULL,
+    /*deformVertsEM*/ deformVertsEM,
+    /*deformMatricesEM*/ NULL,
+    /*modifyMesh*/ NULL,
+    /*modifyGeometrySet*/ NULL,
 
-    /* initData */ initData,
-    /* requiredDataMask */ requiredDataMask,
-    /* freeData */ freeData,
-    /* isDisabled */ isDisabled,
-    /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ dependsOnTime,
-    /* dependsOnNormals */ NULL,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ foreachTexLink,
-    /* freeRuntimeData */ NULL,
-    /* panelRegister */ panelRegister,
-    /* blendWrite */ blendWrite,
-    /* blendRead */ blendRead,
+    /*initData*/ initData,
+    /*requiredDataMask*/ requiredDataMask,
+    /*freeData*/ freeData,
+    /*isDisabled*/ isDisabled,
+    /*updateDepsgraph*/ updateDepsgraph,
+    /*dependsOnTime*/ dependsOnTime,
+    /*dependsOnNormals*/ NULL,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ foreachTexLink,
+    /*freeRuntimeData*/ NULL,
+    /*panelRegister*/ panelRegister,
+    /*blendWrite*/ blendWrite,
+    /*blendRead*/ blendRead,
 };

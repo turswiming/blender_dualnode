@@ -103,7 +103,6 @@ class GHOST_SystemWin32 : public GHOST_System {
    * \param width: The width the window.
    * \param height: The height the window.
    * \param state: The state of the window when opened.
-   * \param type: The type of drawing context installed in this window.
    * \param glSettings: Misc OpenGL settings.
    * \param exclusive: Use to show the window on top and ignore others (used full-screen).
    * \param parentWindow: Parent window.
@@ -115,7 +114,6 @@ class GHOST_SystemWin32 : public GHOST_System {
                               uint32_t width,
                               uint32_t height,
                               GHOST_TWindowState state,
-                              GHOST_TDrawingContextType type,
                               GHOST_GLSettings glSettings,
                               const bool exclusive = false,
                               const bool is_dialog = false,
@@ -284,7 +282,7 @@ class GHOST_SystemWin32 : public GHOST_System {
   GHOST_TSuccess exit();
 
   /**
-   * Converts raw WIN32 key codes from the wndproc to GHOST keys.
+   * Converts raw WIN32 key codes from the `wndproc` to GHOST keys.
    * \param vKey: The virtual key from #hardKey.
    * \param ScanCode: The ScanCode of pressed key (similar to PS/2 Set 1).
    * \param extend: Flag if key is not primly (left or right).
@@ -293,7 +291,7 @@ class GHOST_SystemWin32 : public GHOST_System {
   GHOST_TKey convertKey(short vKey, short ScanCode, short extend) const;
 
   /**
-   * Catches raw WIN32 key codes from WM_INPUT in the wndproc.
+   * Catches raw WIN32 key codes from WM_INPUT in the `wndproc`.
    * \param raw: RawInput structure with detailed info about the key event.
    * \param r_key_down: Set true when the key is pressed, otherwise false.
    * \return The GHOST key (GHOST_kKeyUnknown if no match).
@@ -321,8 +319,8 @@ class GHOST_SystemWin32 : public GHOST_System {
    * Creates tablet events from pointer events.
    * \param type: The type of pointer event.
    * \param window: The window receiving the event (the active window).
-   * \param wParam: The wParam from the wndproc.
-   * \param lParam: The lParam from the wndproc.
+   * \param wParam: The wParam from the `wndproc`.
+   * \param lParam: The lParam from the `wndproc`.
    * \param eventhandled: True if the method handled the event.
    */
   static void processPointerEvent(
@@ -333,13 +331,14 @@ class GHOST_SystemWin32 : public GHOST_System {
    * \param window: The window receiving the event (the active window).
    * \return The event created.
    */
-  static GHOST_EventCursor *processCursorEvent(GHOST_WindowWin32 *window);
+  static GHOST_EventCursor *processCursorEvent(GHOST_WindowWin32 *window,
+                                               const int32_t screen_co[2]);
 
   /**
    * Handles a mouse wheel event.
    * \param window: The window receiving the event (the active window).
-   * \param wParam: The wParam from the wndproc.
-   * \param lParam: The lParam from the wndproc.
+   * \param wParam: The wParam from the `wndproc`.
+   * \param lParam: The lParam from the `wndproc`.
    */
   static void processWheelEvent(GHOST_WindowWin32 *window, WPARAM wParam, LPARAM lParam);
 

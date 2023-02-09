@@ -73,6 +73,7 @@
 #include "IMB_imbuf_types.h"
 
 #include "ED_fileselect.h"
+#include "ED_gpencil.h"
 #include "ED_numinput.h"
 #include "ED_screen.h"
 #include "ED_undo.h"
@@ -107,19 +108,32 @@
 /** \name Operator API
  * \{ */
 
+#define OP_BL_SEP_STRING "_OT_"
+#define OP_BL_SEP_LEN 4
+
+#define OP_PY_SEP_CHAR '.'
+#define OP_PY_SEP_LEN 1
+
+/* Difference between python 'identifier' and BL/C code one ("." separator replaced by "_OT_"),
+ * and final `\0` char. */
+#define OP_MAX_PY_IDNAME (OP_MAX_TYPENAME - OP_BL_SEP_LEN + OP_PY_SEP_LEN - 1)
+
 size_t WM_operator_py_idname(char *dst, const char *src)
 {
-  const char *sep = strstr(src, "_OT_");
+  const char *sep = strstr(src, OP_BL_SEP_STRING);
   if (sep) {
-    int ofs = (sep - src);
+    const size_t sep_offset = (size_t)(sep - src);
 
     /* NOTE: we use ascii `tolower` instead of system `tolower`, because the
      * latter depends on the locale, and can lead to `idname` mismatch. */
-    memcpy(dst, src, sizeof(char) * ofs);
-    BLI_str_tolower_ascii(dst, ofs);
+    memcpy(dst, src, sep_offset);
+    BLI_str_tolower_ascii(dst, sep_offset);
 
-    dst[ofs] = '.';
-    return BLI_strncpy_rlen(dst + (ofs + 1), sep + 4, OP_MAX_TYPENAME - (ofs + 1)) + (ofs + 1);
+    dst[sep_offset] = OP_PY_SEP_CHAR;
+    return BLI_strncpy_rlen(dst + (sep_offset + OP_PY_SEP_LEN),
+                            sep + OP_BL_SEP_LEN,
+                            OP_MAX_TYPENAME - sep_offset - OP_PY_SEP_LEN) +
+           (sep_offset + OP_PY_SEP_LEN);
   }
   /* Should not happen but support just in case. */
   return BLI_strncpy_rlen(dst, src, OP_MAX_TYPENAME);
@@ -127,15 +141,19 @@ size_t WM_operator_py_idname(char *dst, const char *src)
 
 size_t WM_operator_bl_idname(char *dst, const char *src)
 {
-  const char *sep = strchr(src, '.');
-  int from_len;
-  if (sep && (from_len = strlen(src)) < OP_MAX_TYPENAME - 3) {
-    const int ofs = (sep - src);
-    memcpy(dst, src, sizeof(char) * ofs);
-    BLI_str_toupper_ascii(dst, ofs);
-    memcpy(dst + ofs, "_OT_", 4);
-    memcpy(dst + (ofs + 4), sep + 1, (from_len - ofs));
-    return (from_len - ofs) - 1;
+  const size_t from_len = (size_t)strlen(src);
+
+  const char *sep = strchr(src, OP_PY_SEP_CHAR);
+  if (sep && (from_len <= OP_MAX_PY_IDNAME)) {
+    const size_t sep_offset = (size_t)(sep - src);
+    memcpy(dst, src, sep_offset);
+    BLI_str_toupper_ascii(dst, sep_offset);
+
+    memcpy(dst + sep_offset, OP_BL_SEP_STRING, OP_BL_SEP_LEN);
+    BLI_strncpy(dst + sep_offset + OP_BL_SEP_LEN,
+                sep + OP_PY_SEP_LEN,
+                from_len - sep_offset - OP_PY_SEP_LEN + 1);
+    return from_len + OP_BL_SEP_LEN - OP_PY_SEP_LEN;
   }
   /* Should not happen but support just in case. */
   return BLI_strncpy_rlen(dst, src, OP_MAX_TYPENAME);
@@ -166,14 +184,14 @@ bool WM_operator_py_idname_ok_or_report(ReportList *reports,
     }
   }
 
-  if (i > (MAX_NAME - 3)) {
+  if (i > OP_MAX_PY_IDNAME) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Registering operator class: '%s', invalid bl_idname '%s', "
                 "is too long, maximum length is %d",
                 classname,
                 idname,
-                MAX_NAME - 3);
+                OP_MAX_PY_IDNAME);
     return false;
   }
 
@@ -2174,6 +2192,7 @@ typedef struct {
   int initial_co[2];
   int slow_mouse[2];
   bool slow_mode;
+  float scale_fac;
   Dial *dial;
   GPUTexture *texture;
   ListBase orig_paintcursors;
@@ -2227,7 +2246,7 @@ static void radial_control_update_header(wmOperator *op, bContext *C)
   ED_area_status_text(area, msg);
 }
 
-static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *event)
+static void radial_control_set_initial_mouse(bContext *C, RadialControl *rc, const wmEvent *event)
 {
   float d[2] = {0, 0};
   float zoom[2] = {1, 1};
@@ -2262,6 +2281,15 @@ static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *e
     d[0] *= zoom[0];
     d[1] *= zoom[1];
   }
+  /* Grease pencil draw tool needs to rescale the cursor size. If we don't do that
+   * the size of the radial is not equals to the actual stroke size. */
+  if (rc->ptr.owner_id && GS(rc->ptr.owner_id->name) == ID_BR && rc->prop == &rna_Brush_size) {
+    rc->scale_fac = ED_gpencil_radial_control_scale(
+        C, (Brush *)rc->ptr.owner_id, rc->initial_value, event->mval);
+  }
+  else {
+    rc->scale_fac = 1.0f;
+  }
 
   rc->initial_mouse[0] -= d[0];
   rc->initial_mouse[1] -= d[1];
@@ -2278,8 +2306,14 @@ static void radial_control_set_tex(RadialControl *rc)
                rc->use_secondary_tex,
                !ELEM(rc->subtype, PROP_NONE, PROP_PIXEL, PROP_DISTANCE)))) {
 
-        rc->texture = GPU_texture_create_2d(
-            "radial_control", ibuf->x, ibuf->y, 1, GPU_R8, ibuf->rect_float);
+        rc->texture = GPU_texture_create_2d_ex("radial_control",
+                                               ibuf->x,
+                                               ibuf->y,
+                                               1,
+                                               GPU_R8,
+                                               GPU_TEXTURE_USAGE_SHADER_READ |
+                                                   GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW,
+                                               ibuf->rect_float);
 
         GPU_texture_filter_mode(rc->texture, true);
         GPU_texture_swizzle_set(rc->texture, "111r");
@@ -2459,6 +2493,9 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
     RNA_property_float_get_array(&rc->zoom_ptr, rc->zoom_prop, zoom);
     GPU_matrix_scale_2fv(zoom);
   }
+
+  /* Apply scale correction (used by grease pencil brushes). */
+  GPU_matrix_scale_2f(rc->scale_fac, rc->scale_fac);
 
   /* draw rotated texture */
   radial_control_paint_tex(rc, tex_radius, alpha);
@@ -2793,7 +2830,7 @@ static int radial_control_invoke(bContext *C, wmOperator *op, const wmEvent *eve
   }
 
   rc->current_value = rc->initial_value;
-  radial_control_set_initial_mouse(rc, event);
+  radial_control_set_initial_mouse(C, rc, event);
   radial_control_set_tex(rc);
 
   rc->init_event = WM_userdef_event_type_from_keymap_type(event->type);
@@ -3308,7 +3345,8 @@ static int redraw_timer_exec(bContext *C, wmOperator *op)
   const int cfra = scene->r.cfra;
   const char *infostr = "";
 
-  /* NOTE: Depsgraph is used to update scene for a new state, so no need to ensure evaluation here.
+  /* NOTE: Depsgraph is used to update scene for a new state, so no need to ensure evaluation
+   * here.
    */
   struct Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
 

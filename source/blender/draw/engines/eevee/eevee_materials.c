@@ -15,6 +15,7 @@
 #include "BLI_rand.h"
 #include "BLI_string_utils.h"
 
+#include "BKE_global.h"
 #include "BKE_paint.h"
 #include "BKE_particle.h"
 
@@ -759,7 +760,8 @@ BLI_INLINE Material *eevee_object_material_get(Object *ob, int slot, bool holdou
 BLI_INLINE EeveeMaterialCache eevee_material_cache_get(
     EEVEE_Data *vedata, EEVEE_ViewLayerData *sldata, Object *ob, int slot, bool is_hair)
 {
-  const bool holdout = (ob->base_flag & BASE_HOLDOUT) != 0;
+  const bool holdout = ((ob->base_flag & BASE_HOLDOUT) != 0) ||
+                       ((ob->visibility_flag & OB_HOLDOUT) != 0);
   EeveeMaterialCache matcache;
   Material *ma = eevee_object_material_get(ob, slot, holdout);
   switch (ma->blend_method) {
@@ -809,7 +811,7 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
   const DRWContextState *draw_ctx = DRW_context_state_get();
   Scene *scene = draw_ctx->scene;
 
-  bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) &&
+  bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->rv3d) &&
                          !DRW_state_is_image_render();
 
   if (ob->sculpt && ob->sculpt->pbvh) {
@@ -846,6 +848,8 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
 
         MATCACHE_AS_ARRAY(matcache, shadow_grp, materials_len, shgrps_array);
         DRW_shgroup_call_sculpt_with_materials(shgrps_array, gpumat_array, materials_len, ob);
+
+        *cast_shadow = true;
       }
       else {
         struct GPUMaterial **gpumat_array = BLI_array_alloca(gpumat_array, materials_len);
@@ -881,6 +885,12 @@ void EEVEE_materials_cache_populate(EEVEE_Data *vedata,
             ADD_SHGROUP_CALL_SAFE(matcache[i].shadow_grp, ob, mat_geom[i], oedata);
             *cast_shadow = *cast_shadow || (matcache[i].shadow_grp != NULL);
           }
+        }
+
+        if (G.debug_value == 889 && ob->sculpt && ob->sculpt->pbvh) {
+          int debug_node_nr = 0;
+          DRW_debug_modelmat(ob->object_to_world);
+          BKE_pbvh_draw_debug_cb(ob->sculpt->pbvh, DRW_sculpt_debug_cb, &debug_node_nr);
         }
       }
 
@@ -923,17 +933,14 @@ void EEVEE_particle_hair_cache_populate(EEVEE_Data *vedata,
         if (matcache.depth_grp) {
           *matcache.depth_grp_p = DRW_shgroup_hair_create_sub(
               ob, psys, md, matcache.depth_grp, NULL);
-          DRW_shgroup_add_material_resources(*matcache.depth_grp_p, matcache.shading_gpumat);
         }
         if (matcache.shading_grp) {
           *matcache.shading_grp_p = DRW_shgroup_hair_create_sub(
               ob, psys, md, matcache.shading_grp, matcache.shading_gpumat);
-          DRW_shgroup_add_material_resources(*matcache.shading_grp_p, matcache.shading_gpumat);
         }
         if (matcache.shadow_grp) {
           *matcache.shadow_grp_p = DRW_shgroup_hair_create_sub(
               ob, psys, md, matcache.shadow_grp, NULL);
-          DRW_shgroup_add_material_resources(*matcache.shadow_grp_p, matcache.shading_gpumat);
           *cast_shadow = true;
         }
 
@@ -953,16 +960,13 @@ void EEVEE_object_curves_cache_populate(EEVEE_Data *vedata,
 
   if (matcache.depth_grp) {
     *matcache.depth_grp_p = DRW_shgroup_curves_create_sub(ob, matcache.depth_grp, NULL);
-    DRW_shgroup_add_material_resources(*matcache.depth_grp_p, matcache.shading_gpumat);
   }
   if (matcache.shading_grp) {
     *matcache.shading_grp_p = DRW_shgroup_curves_create_sub(
         ob, matcache.shading_grp, matcache.shading_gpumat);
-    DRW_shgroup_add_material_resources(*matcache.shading_grp_p, matcache.shading_gpumat);
   }
   if (matcache.shadow_grp) {
     *matcache.shadow_grp_p = DRW_shgroup_curves_create_sub(ob, matcache.shadow_grp, NULL);
-    DRW_shgroup_add_material_resources(*matcache.shadow_grp_p, matcache.shading_gpumat);
     *cast_shadow = true;
   }
 

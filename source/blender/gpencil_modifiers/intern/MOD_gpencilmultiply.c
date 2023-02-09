@@ -109,7 +109,7 @@ static void duplicateStroke(Object *ob,
   float opacity_factor;
 
   /* Apply object scale to offset distance. */
-  offset *= mat4_to_scale(ob->obmat);
+  offset *= mat4_to_scale(ob->object_to_world);
 
   BKE_gpencil_stroke_normal(gps, stroke_normal);
   if (len_v3(stroke_normal) < FLT_EPSILON) {
@@ -313,25 +313,25 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Multiply = {
-    /* name */ N_("MultipleStrokes"),
-    /* structName */ "MultiplyGpencilModifierData",
-    /* structSize */ sizeof(MultiplyGpencilModifierData),
-    /* type */ eGpencilModifierTypeType_Gpencil,
-    /* flags */ 0,
+    /*name*/ N_("MultipleStrokes"),
+    /*structName*/ "MultiplyGpencilModifierData",
+    /*structSize*/ sizeof(MultiplyGpencilModifierData),
+    /*type*/ eGpencilModifierTypeType_Gpencil,
+    /*flags*/ 0,
 
-    /* copyData */ copyData,
+    /*copyData*/ copyData,
 
-    /* deformStroke */ NULL,
-    /* generateStrokes */ generateStrokes,
-    /* bakeModifier */ bakeModifier,
-    /* remapTime */ NULL,
+    /*deformStroke*/ NULL,
+    /*generateStrokes*/ generateStrokes,
+    /*bakeModifier*/ bakeModifier,
+    /*remapTime*/ NULL,
 
-    /* initData */ initData,
-    /* freeData */ NULL,
-    /* isDisabled */ NULL,
-    /* updateDepsgraph */ NULL,
-    /* dependsOnTime */ NULL,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ NULL,
-    /* panelRegister */ panelRegister,
+    /*initData*/ initData,
+    /*freeData*/ NULL,
+    /*isDisabled*/ NULL,
+    /*updateDepsgraph*/ NULL,
+    /*dependsOnTime*/ NULL,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ NULL,
+    /*panelRegister*/ panelRegister,
 };

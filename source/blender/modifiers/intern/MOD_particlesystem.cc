@@ -159,7 +159,7 @@ static void deformVerts(ModifierData *md,
 
   BKE_mesh_tessface_ensure(psmd->mesh_final);
 
-  if (!psmd->mesh_final->runtime.deformed_only) {
+  if (!psmd->mesh_final->runtime->deformed_only) {
     /* Get the original mesh from the object, this is what the particles
      * are attached to so in case of non-deform modifiers we need to remap
      * them to the final mesh (typically subdivision surfaces). */
@@ -298,39 +298,39 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_ParticleSystem = {
-    /* name */ N_("ParticleSystem"),
-    /* structName */ "ParticleSystemModifierData",
-    /* structSize */ sizeof(ParticleSystemModifierData),
-    /* srna */ &RNA_ParticleSystemModifier,
-    /* type */ eModifierTypeType_OnlyDeform,
-    /* flags */ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
+    /*name*/ N_("ParticleSystem"),
+    /*structName*/ "ParticleSystemModifierData",
+    /*structSize*/ sizeof(ParticleSystemModifierData),
+    /*srna*/ &RNA_ParticleSystemModifier,
+    /*type*/ eModifierTypeType_OnlyDeform,
+    /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
         eModifierTypeFlag_UsesPointCache
 #if 0
         | eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_EnableInEditmode
 #endif
     ,
-    /* icon */ ICON_MOD_PARTICLES,
+    /*icon*/ ICON_MOD_PARTICLES,
 
-    /* copyData */ copyData,
+    /*copyData*/ copyData,
 
-    /* deformVerts */ deformVerts,
-    /* deformMatrices */ nullptr,
-    /* deformVertsEM */ nullptr,
-    /* deformMatricesEM */ nullptr,
-    /* modifyMesh */ nullptr,
-    /* modifyGeometrySet */ nullptr,
+    /*deformVerts*/ deformVerts,
+    /*deformMatrices*/ nullptr,
+    /*deformVertsEM*/ nullptr,
+    /*deformMatricesEM*/ nullptr,
+    /*modifyMesh*/ nullptr,
+    /*modifyGeometrySet*/ nullptr,
 
-    /* initData */ initData,
-    /* requiredDataMask */ requiredDataMask,
-    /* freeData */ freeData,
-    /* isDisabled */ nullptr,
-    /* updateDepsgraph */ nullptr,
-    /* dependsOnTime */ nullptr,
-    /* dependsOnNormals */ nullptr,
-    /* foreachIDLink */ nullptr,
-    /* foreachTexLink */ nullptr,
-    /* freeRuntimeData */ nullptr,
-    /* panelRegister */ panelRegister,
-    /* blendWrite */ nullptr,
-    /* blendRead */ blendRead,
+    /*initData*/ initData,
+    /*requiredDataMask*/ requiredDataMask,
+    /*freeData*/ freeData,
+    /*isDisabled*/ nullptr,
+    /*updateDepsgraph*/ nullptr,
+    /*dependsOnTime*/ nullptr,
+    /*dependsOnNormals*/ nullptr,
+    /*foreachIDLink*/ nullptr,
+    /*foreachTexLink*/ nullptr,
+    /*freeRuntimeData*/ nullptr,
+    /*panelRegister*/ panelRegister,
+    /*blendWrite*/ nullptr,
+    /*blendRead*/ blendRead,
 };

@@ -11,6 +11,7 @@
 #define DNA_DEPRECATED_ALLOW
 
 #include <cfloat>
+#include <chrono>
 #include <cmath>
 #include <cstdarg>
 #include <cstddef>
@@ -349,7 +350,7 @@ void BKE_modifier_copydata_generic(const ModifierData *md_src,
   const size_t data_size = sizeof(ModifierData);
   const char *md_src_data = ((const char *)md_src) + data_size;
   char *md_dst_data = ((char *)md_dst) + data_size;
-  BLI_assert(data_size <= (size_t)mti->structSize);
+  BLI_assert(data_size <= size_t(mti->structSize));
   memcpy(md_dst_data, md_src_data, size_t(mti->structSize) - data_size);
 
   /* Runtime fields are never to be preserved. */
@@ -955,7 +956,7 @@ const char *BKE_modifier_path_relbase_from_global(Object *ob)
 void BKE_modifier_path_init(char *path, int path_maxlen, const char *name)
 {
   const char *blendfile_path = BKE_main_blendfile_path_from_global();
-  BLI_join_dirfile(path, path_maxlen, blendfile_path[0] ? "//" : BKE_tempdir_session(), name);
+  BLI_path_join(path, path_maxlen, blendfile_path[0] ? "//" : BKE_tempdir_session(), name);
 }
 
 /**
@@ -963,9 +964,9 @@ void BKE_modifier_path_init(char *path, int path_maxlen, const char *name)
  */
 static void modwrap_dependsOnNormals(Mesh *me)
 {
-  switch ((eMeshWrapperType)me->runtime.wrapper_type) {
+  switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_BMESH: {
-      EditMeshData *edit_data = me->runtime.edit_data;
+      EditMeshData *edit_data = me->runtime->edit_data;
       if (edit_data->vertexCos) {
         /* Note that 'ensure' is acceptable here since these values aren't modified in-place.
          * If that changes we'll need to recalculate. */
@@ -993,7 +994,7 @@ struct Mesh *BKE_modifier_modify_mesh(ModifierData *md,
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
 
-  if (me->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
+  if (me->runtime->wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     if ((mti->flags & eModifierTypeFlag_AcceptsBMesh) == 0) {
       BKE_mesh_wrapper_ensure_mdata(me);
     }
@@ -1016,6 +1017,9 @@ void BKE_modifier_deform_verts(ModifierData *md,
     modwrap_dependsOnNormals(me);
   }
   mti->deformVerts(md, ctx, me, vertexCos, numVerts);
+  if (me) {
+    BKE_mesh_tag_coords_changed(me);
+  }
 }
 
 void BKE_modifier_deform_vertsEM(ModifierData *md,
@@ -1189,8 +1193,8 @@ void BKE_modifier_blend_write(BlendWriter *writer, const ID *id_owner, ListBase 
       CollisionModifierData *collmd = (CollisionModifierData *)md;
       /* TODO: CollisionModifier should use pointcache
        * + have proper reset events before enabling this. */
-      writestruct(wd, DATA, MVert, collmd->numverts, collmd->x);
-      writestruct(wd, DATA, MVert, collmd->numverts, collmd->xnew);
+      writestruct(wd, DATA, float[3], collmd->numverts, collmd->x);
+      writestruct(wd, DATA, float[3], collmd->numverts, collmd->xnew);
       writestruct(wd, DATA, MFace, collmd->numfaces, collmd->mfaces);
 #endif
     }
@@ -1514,3 +1518,28 @@ void BKE_modifier_blend_read_lib(BlendLibReader *reader, Object *ob)
     }
   }
 }
+
+namespace blender::bke {
+
+using Clock = std::chrono::high_resolution_clock;
+
+static double get_current_time_in_seconds()
+{
+  return std::chrono::duration<double, std::chrono::seconds::period>(
+             Clock::now().time_since_epoch())
+      .count();
+}
+
+ScopedModifierTimer::ScopedModifierTimer(ModifierData &md) : md_(md)
+{
+  start_time_ = get_current_time_in_seconds();
+}
+
+ScopedModifierTimer::~ScopedModifierTimer()
+{
+  const double end_time = get_current_time_in_seconds();
+  const double duration = end_time - start_time_;
+  md_.execution_time = duration;
+}
+
+}  // namespace blender::bke

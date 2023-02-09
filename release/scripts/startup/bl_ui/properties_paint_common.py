@@ -928,60 +928,81 @@ def brush_settings_advanced(layout, context, brush, popover=False):
     use_frontface = False
 
     if mode == 'SCULPT':
+        sculpt = context.tool_settings.sculpt
         capabilities = brush.sculpt_capabilities
         use_accumulate = capabilities.has_accumulate
         use_frontface = True
 
         col = layout.column(heading="Auto-Masking", align=True)
 
-        # topology automasking
+        col = layout.column(align=True)
         col.prop(brush, "use_automasking_topology", text="Topology")
-
-        # face masks automasking
         col.prop(brush, "use_automasking_face_sets", text="Face Sets")
 
-        # boundary edges/face sets automasking
+        layout.separator()
+
+        col = layout.column(align=True)
         col.prop(brush, "use_automasking_boundary_edges", text="Mesh Boundary")
         col.prop(brush, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
-        col.prop(brush, "use_automasking_cavity", text="Cavity")
-        col.prop(brush, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
-        col.prop(brush, "use_automasking_start_normal", text="Area Normal")
-        col.prop(brush, "use_automasking_view_normal", text="View Normal")
 
-        col.separator()
-        col.prop(brush, "automasking_boundary_edges_propagation_steps")
+        if brush.use_automasking_boundary_edges or brush.use_automasking_boundary_face_sets:
+            col = layout.column()
+            col.use_property_split = False
+            split = col.split(factor=0.4)
+            col = split.column()
+            split.prop(brush, "automasking_boundary_edges_propagation_steps")
 
-        sculpt = context.tool_settings.sculpt
+        layout.separator()
 
-        if brush.use_automasking_start_normal:
-            col.separator()
+        col = layout.column(align=True)
+        row = col.row()
+        row.prop(brush, "use_automasking_cavity", text="Cavity")
 
-            col.prop(sculpt, "automasking_start_normal_limit")
-            col.prop(sculpt, "automasking_start_normal_falloff")
+        is_cavity_active = brush.use_automasking_cavity or brush.use_automasking_cavity_inverted
 
-        if brush.use_automasking_view_normal:
-            col.separator()
+        if is_cavity_active:
+            props = row.operator("sculpt.mask_from_cavity", text="Create Mask")
+            props.settings_source = "BRUSH"
 
-            col.prop(brush, "use_automasking_view_occlusion", text="Occlusion")
-            col.prop(sculpt, "automasking_view_normal_limit")
-            col.prop(sculpt, "automasking_view_normal_falloff")
+        col.prop(brush, "use_automasking_cavity_inverted", text="Cavity (inverted)")
 
-        if brush.use_automasking_cavity or brush.use_automasking_cavity_inverted:
-            col.separator()
+        if is_cavity_active:
+            col = layout.column(align=True)
+            col.prop(brush, "automasking_cavity_factor", text="Factor")
+            col.prop(brush, "automasking_cavity_blur_steps", text="Blur")
 
-            col.prop(brush, "automasking_cavity_factor", text="Cavity Factor")
-            col.prop(brush, "automasking_cavity_blur_steps", text="Cavity Blur")
-            col.prop(brush, "use_automasking_custom_cavity_curve", text="Use Curve")
+            col = layout.column()
+            col.prop(brush, "use_automasking_custom_cavity_curve", text="Custom Curve")
 
             if brush.use_automasking_custom_cavity_curve:
                 col.template_curve_mapping(brush, "automasking_cavity_curve")
 
         layout.separator()
 
+        col = layout.column(align=True)
+        col.prop(brush, "use_automasking_view_normal", text="View Normal")
+
+        if brush.use_automasking_view_normal:
+            col.prop(brush, "use_automasking_view_occlusion", text="Occlusion")
+            subcol = col.column(align=True)
+            subcol.active = not brush.use_automasking_view_occlusion
+            subcol.prop(sculpt, "automasking_view_normal_limit", text="Limit")
+            subcol.prop(sculpt, "automasking_view_normal_falloff", text="Falloff")
+
+        col = layout.column()
+        col.prop(brush, "use_automasking_start_normal", text="Area Normal")
+
+        if brush.use_automasking_start_normal:
+            col = layout.column(align=True)
+            col.prop(sculpt, "automasking_start_normal_limit", text="Limit")
+            col.prop(sculpt, "automasking_start_normal_falloff", text="Falloff")
+
+        layout.separator()
+
         # sculpt plane settings
         if capabilities.has_sculpt_plane:
             layout.prop(brush, "sculpt_plane")
-            col = layout.column(heading="Use Original", align=True)
+            col = layout.column(heading="Original", align=True)
             col.prop(brush, "use_original_normal", text="Normal")
             col.prop(brush, "use_original_plane", text="Plane")
             layout.separator()
@@ -1175,7 +1196,7 @@ def brush_basic_texpaint_settings(layout, context, brush, *, compact=False):
         unified_name="use_unified_size",
         slider=True,
         text="Radius",
-        header=True
+        header=True,
     )
     UnifiedPaintPanel.prop_unified(
         layout,
@@ -1184,7 +1205,7 @@ def brush_basic_texpaint_settings(layout, context, brush, *, compact=False):
         "strength",
         pressure_name="use_pressure_strength",
         unified_name="use_unified_strength",
-        header=True
+        header=True,
     )
 
 
@@ -1266,9 +1287,6 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
             row = layout.row(align=True)
             row.prop(gp_settings, "eraser_thickness_factor")
 
-        row = layout.row(align=True)
-        row.prop(settings, "show_brush", text="Display Cursor")
-
     # FIXME: tools must use their own UI drawing!
     elif brush.gpencil_tool == 'FILL':
         use_property_split_prev = layout.use_property_split
@@ -1324,7 +1342,7 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
             "builtin.line",
             "builtin.box",
             "builtin.circle",
-            "builtin.polyline"
+            "builtin.polyline",
     }:
         settings = context.tool_settings.gpencil_sculpt
         if compact:

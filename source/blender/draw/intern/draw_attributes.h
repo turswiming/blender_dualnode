@@ -9,8 +9,11 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#  include <mutex>
+#endif
+
 #include "DNA_customdata_types.h"
-#include "DNA_meshdata_types.h"
 
 #include "BKE_attribute.h"
 
@@ -56,9 +59,11 @@ BLI_STATIC_ASSERT(sizeof(DRW_MeshCDMask) <= sizeof(uint32_t), "DRW_MeshCDMask ex
 
 void drw_attributes_clear(DRW_Attributes *attributes);
 
+#ifdef __cplusplus
 void drw_attributes_merge(DRW_Attributes *dst,
                           const DRW_Attributes *src,
-                          ThreadMutex *render_mutex);
+                          std::mutex &render_mutex);
+#endif
 
 /* Return true if all requests in b are in a. */
 bool drw_attributes_overlap(const DRW_Attributes *a, const DRW_Attributes *b);

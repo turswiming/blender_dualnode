@@ -97,7 +97,7 @@ static void deformStroke(GpencilModifierData *md,
 
   /* Apply the rotation of the object. */
   if (mmd->space == GP_SPACE_LOCAL) {
-    mul_mat3_m4_v3(ob->obmat, vec_ref);
+    mul_mat3_m4_v3(ob->object_to_world, vec_ref);
   }
 
   /* Ensure there is a vertex group. */
@@ -122,8 +122,8 @@ static void deformStroke(GpencilModifierData *md,
     bGPDspoint *pt1 = (i > 0) ? &gps->points[i] : &gps->points[i + 1];
     bGPDspoint *pt2 = (i > 0) ? &gps->points[i - 1] : &gps->points[i];
     float fpt1[3], fpt2[3];
-    mul_v3_m4v3(fpt1, ob->obmat, &pt1->x);
-    mul_v3_m4v3(fpt2, ob->obmat, &pt2->x);
+    mul_v3_m4v3(fpt1, ob->object_to_world, &pt1->x);
+    mul_v3_m4v3(fpt2, ob->object_to_world, &pt2->x);
 
     float vec[3];
     sub_v3_v3v3(vec, fpt1, fpt2);
@@ -211,25 +211,25 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_WeightAngle = {
-    /* name */ N_("Vertex Weight Angle"),
-    /* structName */ "WeightAngleGpencilModifierData",
-    /* structSize */ sizeof(WeightAngleGpencilModifierData),
-    /* type */ eGpencilModifierTypeType_Gpencil,
-    /* flags */ 0,
+    /*name*/ N_("Vertex Weight Angle"),
+    /*structName*/ "WeightAngleGpencilModifierData",
+    /*structSize*/ sizeof(WeightAngleGpencilModifierData),
+    /*type*/ eGpencilModifierTypeType_Gpencil,
+    /*flags*/ 0,
 
-    /* copyData */ copyData,
+    /*copyData*/ copyData,
 
-    /* deformStroke */ deformStroke,
-    /* generateStrokes */ NULL,
-    /* bakeModifier */ bakeModifier,
-    /* remapTime */ NULL,
+    /*deformStroke*/ deformStroke,
+    /*generateStrokes*/ NULL,
+    /*bakeModifier*/ bakeModifier,
+    /*remapTime*/ NULL,
 
-    /* initData */ initData,
-    /* freeData */ NULL,
-    /* isDisabled */ isDisabled,
-    /* updateDepsgraph */ NULL,
-    /* dependsOnTime */ NULL,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ NULL,
-    /* panelRegister */ panelRegister,
+    /*initData*/ initData,
+    /*freeData*/ NULL,
+    /*isDisabled*/ isDisabled,
+    /*updateDepsgraph*/ NULL,
+    /*dependsOnTime*/ NULL,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ NULL,
+    /*panelRegister*/ panelRegister,
 };

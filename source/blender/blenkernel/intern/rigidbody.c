@@ -264,13 +264,13 @@ static RigidBodyCon *rigidbody_copy_constraint(const Object *ob, const int UNUSE
   RigidBodyCon *rbcN = NULL;
 
   if (ob->rigidbody_constraint) {
-    /* just duplicate the whole struct first (to catch all the settings) */
+    /* Just duplicate the whole struct first (to catch all the settings). */
     rbcN = MEM_dupallocN(ob->rigidbody_constraint);
 
-    /* tag object as needing to be verified */
+    /* Tag object as needing to be verified. */
     rbcN->flag |= RBC_FLAG_NEEDS_VALIDATE;
 
-    /* clear out all the fields which need to be revalidated later */
+    /* Clear out all the fields which need to be re-validated later. */
     rbcN->physics_constraint = NULL;
   }
 
@@ -359,12 +359,12 @@ static rbCollisionShape *rigidbody_get_shape_convexhull_from_mesh(Object *ob,
 {
   rbCollisionShape *shape = NULL;
   Mesh *mesh = NULL;
-  MVert *mvert = NULL;
+  float(*positions)[3] = NULL;
   int totvert = 0;
 
   if (ob->type == OB_MESH && ob->data) {
     mesh = rigidbody_get_mesh(ob);
-    mvert = (mesh) ? BKE_mesh_verts_for_write(mesh) : NULL;
+    positions = (mesh) ? BKE_mesh_vert_positions_for_write(mesh) : NULL;
     totvert = (mesh) ? mesh->totvert : 0;
   }
   else {
@@ -372,7 +372,8 @@ static rbCollisionShape *rigidbody_get_shape_convexhull_from_mesh(Object *ob,
   }
 
   if (totvert) {
-    shape = RB_shape_new_convex_hull((float *)mvert, sizeof(MVert), totvert, margin, can_embed);
+    shape = RB_shape_new_convex_hull(
+        (float *)positions, sizeof(float[3]), totvert, margin, can_embed);
   }
   else {
     CLOG_ERROR(&LOG, "no vertices to define Convex Hull collision shape with");
@@ -401,10 +402,10 @@ static rbCollisionShape *rigidbody_get_shape_trimesh_from_mesh(Object *ob)
       return NULL;
     }
 
-    const MVert *mvert = BKE_mesh_verts(mesh);
+    const float(*positions)[3] = BKE_mesh_vert_positions(mesh);
     totvert = mesh->totvert;
     looptri = BKE_mesh_runtime_looptri_ensure(mesh);
-    tottri = mesh->runtime.looptris.len;
+    tottri = BKE_mesh_runtime_looptri_len(mesh);
     const MLoop *mloop = BKE_mesh_loops(mesh);
 
     /* sanity checking - potential case when no data will be present */
@@ -419,12 +420,12 @@ static rbCollisionShape *rigidbody_get_shape_trimesh_from_mesh(Object *ob)
       /* init mesh data for collision shape */
       mdata = RB_trimesh_data_new(tottri, totvert);
 
-      RB_trimesh_add_vertices(mdata, (float *)mvert, totvert, sizeof(MVert));
+      RB_trimesh_add_vertices(mdata, (float *)positions, totvert, sizeof(float[3]));
 
       /* loop over all faces, adding them as triangles to the collision shape
        * (so for some faces, more than triangle will get added)
        */
-      if (mvert && looptri) {
+      if (positions && looptri) {
         for (i = 0; i < tottri; i++) {
           /* add first triangle - verts 1,2,3 */
           const MLoopTri *lt = &looptri[i];
@@ -676,15 +677,15 @@ void BKE_rigidbody_calc_volume(Object *ob, float *r_vol)
           return;
         }
 
-        const MVert *mvert = BKE_mesh_verts(mesh);
+        const float(*positions)[3] = BKE_mesh_vert_positions(mesh);
         totvert = mesh->totvert;
         lt = BKE_mesh_runtime_looptri_ensure(mesh);
-        tottri = mesh->runtime.looptris.len;
+        tottri = BKE_mesh_runtime_looptri_len(mesh);
         const MLoop *mloop = BKE_mesh_loops(mesh);
 
         if (totvert > 0 && tottri > 0) {
-          BKE_mesh_calc_volume(mvert, totvert, lt, tottri, mloop, &volume, NULL);
-          const float volume_scale = mat4_to_volume_scale(ob->obmat);
+          BKE_mesh_calc_volume(positions, totvert, lt, tottri, mloop, &volume, NULL);
+          const float volume_scale = mat4_to_volume_scale(ob->object_to_world);
           volume *= fabsf(volume_scale);
         }
       }
@@ -750,14 +751,14 @@ void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_center[3])
           return;
         }
 
-        const MVert *mvert = BKE_mesh_verts(mesh);
+        const float(*positions)[3] = BKE_mesh_vert_positions(mesh);
         totvert = mesh->totvert;
         looptri = BKE_mesh_runtime_looptri_ensure(mesh);
-        tottri = mesh->runtime.looptris.len;
+        tottri = BKE_mesh_runtime_looptri_len(mesh);
         const MLoop *mloop = BKE_mesh_loops(mesh);
 
         if (totvert > 0 && tottri > 0) {
-          BKE_mesh_calc_volume(mvert, totvert, looptri, tottri, mloop, NULL, r_center);
+          BKE_mesh_calc_volume(positions, totvert, looptri, tottri, mloop, NULL, r_center);
         }
       }
       break;
@@ -809,7 +810,7 @@ static void rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, bool 
       return;
     }
 
-    mat4_to_loc_quat(loc, rot, ob->obmat);
+    mat4_to_loc_quat(loc, rot, ob->object_to_world);
 
     rbo->shared->physics_object = RB_body_new(rbo->shared->physics_shape, loc, rot);
 
@@ -974,7 +975,7 @@ static void rigidbody_validate_sim_constraint(RigidBodyWorld *rbw, Object *ob, b
       rbc->physics_constraint = NULL;
     }
 
-    mat4_to_loc_quat(loc, rot, ob->obmat);
+    mat4_to_loc_quat(loc, rot, ob->object_to_world);
 
     if (rb1 && rb2) {
       switch (rbc->type) {
@@ -1266,7 +1267,7 @@ RigidBodyOb *BKE_rigidbody_create_object(Scene *scene, Object *ob, short type)
   rbo->mesh_source = RBO_MESH_DEFORM;
 
   /* set initial transform */
-  mat4_to_loc_quat(rbo->pos, rbo->orn, ob->obmat);
+  mat4_to_loc_quat(rbo->pos, rbo->orn, ob->object_to_world);
 
   /* flag cache as outdated */
   BKE_rigidbody_cache_reset(rbw);
@@ -1673,14 +1674,14 @@ static void rigidbody_update_sim_ob(Depsgraph *depsgraph, Object *ob, RigidBodyO
   if (rbo->shape == RB_SHAPE_TRIMESH && rbo->flag & RBO_FLAG_USE_DEFORM) {
     Mesh *mesh = ob->runtime.mesh_deform_eval;
     if (mesh) {
-      MVert *mvert = BKE_mesh_verts_for_write(mesh);
+      float(*positions)[3] = BKE_mesh_vert_positions_for_write(mesh);
       int totvert = mesh->totvert;
       const BoundBox *bb = BKE_object_boundbox_get(ob);
 
       RB_shape_trimesh_update(rbo->shared->physics_shape,
-                              (float *)mvert,
+                              (float *)positions,
                               totvert,
-                              sizeof(MVert),
+                              sizeof(float[3]),
                               bb->vec[0],
                               bb->vec[6]);
     }
@@ -1689,7 +1690,7 @@ static void rigidbody_update_sim_ob(Depsgraph *depsgraph, Object *ob, RigidBodyO
   if (!(rbo->flag & RBO_FLAG_KINEMATIC)) {
     /* update scale for all non kinematic objects */
     float new_scale[3], old_scale[3];
-    mat4_to_size(new_scale, ob->obmat);
+    mat4_to_size(new_scale, ob->object_to_world);
     RB_body_get_scale(rbo->shared->physics_object, old_scale);
 
     /* Avoid updating collision shape AABBs if scale didn't change. */
@@ -1886,7 +1887,7 @@ static ListBase rigidbody_create_substep_data(RigidBodyWorld *rbw)
       copy_v4_v4(data->old_rot, rot);
       copy_v3_v3(data->old_scale, scale);
 
-      mat4_decompose(loc, rot, scale, ob->obmat);
+      mat4_decompose(loc, rot, scale, ob->object_to_world);
 
       copy_v3_v3(data->new_pos, loc);
       copy_v4_v4(data->new_rot, rot);
@@ -2055,15 +2056,15 @@ void BKE_rigidbody_sync_transforms(RigidBodyWorld *rbw, Object *ob, float ctime)
     quat_to_mat4(mat, rbo->orn);
     copy_v3_v3(mat[3], rbo->pos);
 
-    mat4_to_size(size, ob->obmat);
+    mat4_to_size(size, ob->object_to_world);
     size_to_mat4(size_mat, size);
     mul_m4_m4m4(mat, mat, size_mat);
 
-    copy_m4_m4(ob->obmat, mat);
+    copy_m4_m4(ob->object_to_world, mat);
   }
   /* otherwise set rigid body transform to current obmat */
   else {
-    mat4_to_loc_quat(rbo->pos, rbo->orn, ob->obmat);
+    mat4_to_loc_quat(rbo->pos, rbo->orn, ob->object_to_world);
   }
 }
 

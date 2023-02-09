@@ -270,7 +270,7 @@ static void armature_vert_task_with_dvert(const ArmatureUserdata *data,
   float *vec = NULL, (*smat)[3] = NULL;
   float contrib = 0.0f;
   float armature_weight = 1.0f; /* default to 1 if no overall def group */
-  float prevco_weight = 1.0f;   /* weight for optional cached vertexcos */
+  float prevco_weight = 0.0f;   /* weight for optional cached vertexcos */
 
   if (use_quaternion) {
     memset(&sumdq, 0, sizeof(DualQuat));
@@ -295,7 +295,9 @@ static void armature_vert_task_with_dvert(const ArmatureUserdata *data,
 
     /* hackish: the blending factor can be used for blending with vert_coords_prev too */
     if (vert_coords_prev) {
-      prevco_weight = armature_weight;
+      /* This weight specifies the contribution from the coordinates at the start of this
+       * modifier evaluation, while armature_weight is normally the opposite of that. */
+      prevco_weight = 1.0f - armature_weight;
       armature_weight = 1.0f;
     }
   }
@@ -582,9 +584,9 @@ static void armature_deform_coords_impl(const Object *ob_arm,
   };
 
   float obinv[4][4];
-  invert_m4_m4(obinv, ob_target->obmat);
+  invert_m4_m4(obinv, ob_target->object_to_world);
 
-  mul_m4_m4m4(data.postmat, obinv, ob_arm->obmat);
+  mul_m4_m4m4(data.postmat, obinv, ob_arm->object_to_world);
   invert_m4_m4(data.premat, data.postmat);
 
   if (em_target != NULL) {

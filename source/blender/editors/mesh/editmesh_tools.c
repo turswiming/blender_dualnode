@@ -733,7 +733,7 @@ void MESH_OT_edge_collapse(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Collapse Edges & Faces";
   ot->description =
-      "Collapse isolated edge and face regions, merging data such as UV's and color attributes. "
+      "Collapse isolated edge and face regions, merging data such as UVs and color attributes. "
       "This can collapse edge-rings as well as regions of connected faces into vertices";
   ot->idname = "MESH_OT_edge_collapse";
 
@@ -2061,7 +2061,7 @@ static int edbm_duplicate_exec(bContext *C, wmOperator *op)
     BMO_slot_buffer_hflag_enable(
         bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, true);
 
-    /* rebuild editselection */
+    /* Rebuild edit-selection. */
     BM_SELECT_HISTORY_RESTORE(bm);
 
     if (!EDBM_op_finish(em, &bmop, op, true)) {
@@ -2227,6 +2227,18 @@ static void edbm_flip_normals_custom_loop_normals(Object *obedit, BMEditMesh *em
               });
 }
 
+static void edbm_flip_quad_tessellation(wmOperator *op, Object *obedit, BMEditMesh *em)
+{
+  if (EDBM_op_callf(em, op, "flip_quad_tessellation faces=%hf", BM_ELEM_SELECT)) {
+    EDBM_update(obedit->data,
+                &(const struct EDBMUpdate_Params){
+                    .calc_looptri = true,
+                    .calc_normals = false,
+                    .is_destructive = false,
+                });
+  }
+}
+
 static void edbm_flip_normals_face_winding(wmOperator *op, Object *obedit, BMEditMesh *em)
 {
 
@@ -2251,6 +2263,27 @@ static void edbm_flip_normals_face_winding(wmOperator *op, Object *obedit, BMEdi
   if (lnors_ed_arr != NULL) {
     BM_loop_normal_editdata_array_free(lnors_ed_arr);
   }
+}
+
+static int edbm_flip_quad_tessellation_exec(bContext *C, wmOperator *op)
+{
+  const Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  uint objects_len = 0;
+  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C), &objects_len);
+
+  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+    Object *obedit = objects[ob_index];
+    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    if (em->bm->totfacesel == 0) {
+      continue;
+    }
+    edbm_flip_quad_tessellation(op, obedit, em);
+  }
+
+  MEM_freeN(objects);
+  return OPERATOR_FINISHED;
 }
 
 static int edbm_flip_normals_exec(bContext *C, wmOperator *op)
@@ -3356,8 +3389,8 @@ static bool merge_target(BMEditMesh *em,
   if (use_cursor) {
     vco = scene->cursor.location;
     copy_v3_v3(co, vco);
-    invert_m4_m4(ob->imat, ob->obmat);
-    mul_m4_v3(ob->imat, co);
+    invert_m4_m4(ob->world_to_object, ob->object_to_world);
+    mul_m4_v3(ob->world_to_object, co);
   }
   else {
     float fac;
@@ -4315,7 +4348,7 @@ static int edbm_knife_cut_exec(bContext *C, wmOperator *op)
     BMO_edge_flag_set(bm, be, ELE_EDGE_CUT, is_cut);
   }
 
-  /* free all allocs */
+  /* Free all allocations. */
   MEM_freeN(screen_vert_coords);
   MEM_freeN(mouse_path);
 
@@ -4401,7 +4434,7 @@ static Base *mesh_separate_tagged(
                                  &((struct BMeshCreateParams){
                                      .use_toolflags = true,
                                  }));
-  BM_mesh_elem_toolflags_ensure(bm_new); /* needed for 'duplicate' bmo */
+  BM_mesh_elem_toolflags_ensure(bm_new); /* Needed for 'duplicate' BMO. */
 
   BM_mesh_copy_init_customdata(bm_new, bm_old, &bm_mesh_allocsize_default);
 
@@ -6684,7 +6717,7 @@ static void sort_bmelem_flag(bContext *C,
     int coidx = (action == SRT_VIEW_ZAXIS) ? 2 : 0;
 
     /* Apply the view matrix to the object matrix. */
-    mul_m4_m4m4(mat, rv3d->viewmat, ob->obmat);
+    mul_m4_m4m4(mat, rv3d->viewmat, ob->object_to_world);
 
     if (totelem[0]) {
       pb = pblock[0] = MEM_callocN(sizeof(char) * totelem[0], "sort_bmelem vert pblock");
@@ -6753,7 +6786,7 @@ static void sort_bmelem_flag(bContext *C,
 
     copy_v3_v3(cur, scene->cursor.location);
 
-    invert_m4_m4(mat, ob->obmat);
+    invert_m4_m4(mat, ob->object_to_world);
     mul_m4_v3(mat, cur);
 
     if (totelem[0]) {
@@ -8687,7 +8720,7 @@ static int edbm_point_normals_modal(bContext *C, wmOperator *op, const wmEvent *
             break;
 
           default:
-            BKE_report(op->reports, RPT_WARNING, "Does not support Individual Origin as pivot");
+            BKE_report(op->reports, RPT_WARNING, "Does not support Individual Origins as pivot");
             copy_v3_v3(target, obedit->loc);
         }
         ret = OPERATOR_RUNNING_MODAL;
@@ -9627,11 +9660,11 @@ static int edbm_set_normals_from_faces_exec(bContext *C, wmOperator *op)
     BKE_editmesh_ensure_autosmooth(em, obedit->data);
     BKE_editmesh_lnorspace_update(em, obedit->data);
 
-    float(*vnors)[3] = MEM_mallocN(sizeof(*vnors) * bm->totvert, __func__);
+    float(*vert_normals)[3] = MEM_mallocN(sizeof(*vert_normals) * bm->totvert, __func__);
     {
       int v_index;
       BM_ITER_MESH_INDEX (v, &viter, bm, BM_VERTS_OF_MESH, v_index) {
-        BM_vert_calc_normal_ex(v, BM_ELEM_SELECT, vnors[v_index]);
+        BM_vert_calc_normal_ex(v, BM_ELEM_SELECT, vert_normals[v_index]);
       }
     }
 
@@ -9647,10 +9680,10 @@ static int edbm_set_normals_from_faces_exec(bContext *C, wmOperator *op)
             const int l_index = BM_elem_index_get(l);
             const int v_index = BM_elem_index_get(l->v);
 
-            if (!is_zero_v3(vnors[v_index])) {
+            if (!is_zero_v3(vert_normals[v_index])) {
               short *clnors = BM_ELEM_CD_GET_VOID_P(l, cd_clnors_offset);
               BKE_lnor_space_custom_normal_to_data(
-                  bm->lnor_spacearr->lspacearr[l_index], vnors[v_index], clnors);
+                  bm->lnor_spacearr->lspacearr[l_index], vert_normals[v_index], clnors);
 
               if (bm->lnor_spacearr->lspacearr[l_index]->flags & MLNOR_SPACE_IS_SINGLE) {
                 BLI_BITMAP_ENABLE(loop_set, l_index);
@@ -9674,13 +9707,13 @@ static int edbm_set_normals_from_faces_exec(bContext *C, wmOperator *op)
           const int loop_index = BM_elem_index_get(l);
           short *clnors = BM_ELEM_CD_GET_VOID_P(l, cd_clnors_offset);
           BKE_lnor_space_custom_normal_to_data(
-              bm->lnor_spacearr->lspacearr[loop_index], vnors[v_index], clnors);
+              bm->lnor_spacearr->lspacearr[loop_index], vert_normals[v_index], clnors);
         }
       }
     }
 
     MEM_freeN(loop_set);
-    MEM_freeN(vnors);
+    MEM_freeN(vert_normals);
     EDBM_update(obedit->data,
                 &(const struct EDBMUpdate_Params){
                     .calc_looptri = true,
@@ -9932,6 +9965,20 @@ void MESH_OT_mod_weighted_strength(struct wmOperatorType *ot)
       FACE_STRENGTH_MEDIUM,
       "Face Strength",
       "Strength to use for assigning or selecting face influence for weighted normal modifier");
+}
+
+void MESH_OT_flip_quad_tessellation(struct wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Flip Quad Tessellation";
+  ot->description = "Flips the tessellation of selected quads";
+  ot->idname = "MESH_OT_flip_quad_tessellation";
+
+  ot->exec = edbm_flip_quad_tessellation_exec;
+  ot->poll = ED_operator_editmesh;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */

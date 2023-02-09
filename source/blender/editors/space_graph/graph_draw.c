@@ -89,7 +89,7 @@ static void draw_fcurve_modifier_controls_envelope(FModifier *fcm,
   immUniform1i("colors_len", 0); /* Simple dashes. */
   immUniformColor3f(0.0f, 0.0f, 0.0f);
   immUniform1f("dash_width", 10.0f);
-  immUniform1f("dash_factor", 0.5f);
+  immUniform1f("udash_factor", 0.5f);
 
   /* draw two black lines showing the standard reference levels */
 
@@ -389,10 +389,7 @@ static bool draw_fcurve_handles_check(SpaceGraph *sipo, FCurve *fcu)
       (fcu->flag & FCURVE_INT_VALUES) ||
 #endif
       /* group that curve belongs to is not editable */
-      ((fcu->grp) && (fcu->grp->flag & AGRP_PROTECTED)) ||
-      /* Do not show handles if there is only 1 keyframe,
-       * otherwise they all clump together in an ugly ball. */
-      (fcu->totvert <= 1)) {
+      ((fcu->grp) && (fcu->grp->flag & AGRP_PROTECTED))) {
     return false;
   }
   return true;
@@ -707,7 +704,7 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
                                       const uint shdr_pos,
                                       const bool draw_extrapolation)
 {
-  if (!draw_extrapolation && fcu->totvert == 1) {
+  if (!draw_extrapolation) {
     return;
   }
 
@@ -820,7 +817,7 @@ static bool fcurve_can_use_simple_bezt_drawing(FCurve *fcu)
 static void draw_fcurve_curve_bezts(
     bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d, uint pos, const bool draw_extrapolation)
 {
-  if (!draw_extrapolation && fcu->totvert == 1) {
+  if (!draw_extrapolation) {
     return;
   }
 
@@ -852,7 +849,7 @@ static void draw_fcurve_curve_bezts(
 
     /* y-value depends on the interpolation */
     if ((fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) || (prevbezt->ipo == BEZT_IPO_CONST) ||
-        (fcu->totvert == 1)) {
+        (prevbezt->ipo == BEZT_IPO_LIN && fcu->totvert == 1)) {
       /* just extend across the first keyframe's value */
       v1[1] = prevbezt->vec[1][1];
     }
@@ -971,7 +968,8 @@ static void draw_fcurve_curve_bezts(
 
     /* y-value depends on the interpolation */
     if ((fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) || (fcu->flag & FCURVE_INT_VALUES) ||
-        (prevbezt->ipo == BEZT_IPO_CONST) || (fcu->totvert == 1)) {
+        (prevbezt->ipo == BEZT_IPO_CONST) ||
+        (prevbezt->ipo == BEZT_IPO_LIN && fcu->totvert == 1)) {
       /* based on last keyframe's value */
       v1[1] = prevbezt->vec[1][1];
     }
@@ -1049,7 +1047,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
       immUniform2f("viewport_size", viewport_size[2] / UI_DPI_FAC, viewport_size[3] / UI_DPI_FAC);
       immUniform1i("colors_len", 0); /* Simple dashes. */
       immUniform1f("dash_width", 4.0f);
-      immUniform1f("dash_factor", 0.5f);
+      immUniform1f("udash_factor", 0.5f);
     }
     else {
       immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
@@ -1208,7 +1206,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
     immUniformColor3fv(fcu->color);
 
     immUniform1f("dash_width", 40.0f);
-    immUniform1f("dash_factor", 0.5f);
+    immUniform1f("udash_factor", 0.5f);
     GPU_line_width(2.0f);
 
     /* draw 1-1 line, stretching just past the screen limits
@@ -1238,7 +1236,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
       /* draw dotted lines leading towards this point from both axes ....... */
       immUniformColor3f(0.9f, 0.9f, 0.9f);
       immUniform1f("dash_width", 10.0f);
-      immUniform1f("dash_factor", 0.5f);
+      immUniform1f("udash_factor", 0.5f);
       GPU_line_width(1.0f);
 
       immBegin(GPU_PRIM_LINES, (y <= v2d->cur.ymax) ? 4 : 2);
@@ -1318,7 +1316,7 @@ void graph_draw_ghost_curves(bAnimContext *ac, SpaceGraph *sipo, ARegion *region
 
   immUniform1i("colors_len", 0); /* Simple dashes. */
   immUniform1f("dash_width", 20.0f);
-  immUniform1f("dash_factor", 0.5f);
+  immUniform1f("udash_factor", 0.5f);
 
   const bool draw_extrapolation = (sipo->flag & SIPO_NO_DRAW_EXTRAPOLATION) == 0;
   /* the ghost curves are simply sampled F-Curves stored in sipo->runtime.ghost_curves */
@@ -1446,7 +1444,7 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *region)
     GPU_blend(GPU_BLEND_NONE);
   }
 
-  /* free tempolary channels */
+  /* Free temporary channels. */
   ANIM_animdata_freelist(&anim_data);
 }
 

@@ -95,7 +95,7 @@ static void createTransParticleVerts(bContext *UNUSED(C), TransInfo *t)
 
     unit_m4(mat);
 
-    invert_m4_m4(ob->imat, ob->obmat);
+    invert_m4_m4(ob->world_to_object, ob->object_to_world);
 
     for (i = 0, point = edit->points; i < edit->totpoint; i++, point++) {
       TransData *head, *tail;
@@ -241,7 +241,7 @@ static void flushTransParticles(TransInfo *t)
 static void recalcData_particles(TransInfo *t)
 {
   if (t->state != TRANS_CANCEL) {
-    applySnappingIndividual(t);
+    transform_snap_project_individual_apply(t);
   }
   flushTransParticles(t);
 }
@@ -249,8 +249,8 @@ static void recalcData_particles(TransInfo *t)
 /** \} */
 
 TransConvertTypeInfo TransConvertType_Particle = {
-    /* flags */ T_POINTS,
-    /* createTransData */ createTransParticleVerts,
-    /* recalcData */ recalcData_particles,
-    /* special_aftertrans_update */ NULL,
+    /*flags*/ T_POINTS,
+    /*createTransData*/ createTransParticleVerts,
+    /*recalcData*/ recalcData_particles,
+    /*special_aftertrans_update*/ NULL,
 };

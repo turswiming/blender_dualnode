@@ -1398,7 +1398,7 @@ static int light_cache_bake_exec(bContext *C, wmOperator *op)
 
   light_cache_bake_tag_cache(scene, op);
 
-  short stop = 0, do_update;
+  bool stop = false, do_update;
   float progress; /* Not actually used. */
   EEVEE_lightbake_job(rj, &stop, &do_update, &progress);
   EEVEE_lightbake_job_data_free(rj);
@@ -2603,10 +2603,10 @@ static void copy_mtex_copybuf(ID *id)
 
   switch (GS(id->name)) {
     case ID_PA:
-      mtex = &(((ParticleSettings *)id)->mtex[(int)((ParticleSettings *)id)->texact]);
+      mtex = &(((ParticleSettings *)id)->mtex[int(((ParticleSettings *)id)->texact)]);
       break;
     case ID_LS:
-      mtex = &(((FreestyleLineStyle *)id)->mtex[(int)((FreestyleLineStyle *)id)->texact]);
+      mtex = &(((FreestyleLineStyle *)id)->mtex[int(((FreestyleLineStyle *)id)->texact)]);
       break;
     default:
       break;
@@ -2631,10 +2631,10 @@ static void paste_mtex_copybuf(ID *id)
 
   switch (GS(id->name)) {
     case ID_PA:
-      mtex = &(((ParticleSettings *)id)->mtex[(int)((ParticleSettings *)id)->texact]);
+      mtex = &(((ParticleSettings *)id)->mtex[int(((ParticleSettings *)id)->texact)]);
       break;
     case ID_LS:
-      mtex = &(((FreestyleLineStyle *)id)->mtex[(int)((FreestyleLineStyle *)id)->texact]);
+      mtex = &(((FreestyleLineStyle *)id)->mtex[int(((FreestyleLineStyle *)id)->texact)]);
       break;
     default:
       BLI_assert_msg(0, "invalid id type");

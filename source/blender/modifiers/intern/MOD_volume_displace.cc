@@ -231,7 +231,8 @@ struct DisplaceGridOp {
     openvdb::tools::foreach (temp_grid->beginValueOn(),
                              displace_op,
                              true,
-                             /* Disable sharing of the operator. */ false);
+                             /* Disable sharing of the operator. */
+                             false);
 
     /* It is likely that we produced too many active cells. Those are removed here, to avoid
      * slowing down subsequent operations. */
@@ -254,15 +255,16 @@ struct DisplaceGridOp {
         return index_to_object;
       }
       case MOD_VOLUME_DISPLACE_MAP_GLOBAL: {
-        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->obmat);
+        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->object_to_world);
         return index_to_object * object_to_world;
       }
       case MOD_VOLUME_DISPLACE_MAP_OBJECT: {
         if (vdmd.texture_map_object == nullptr) {
           return index_to_object;
         }
-        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->obmat);
-        const openvdb::Mat4s world_to_texture = matrix_to_openvdb(vdmd.texture_map_object->imat);
+        const openvdb::Mat4s object_to_world = matrix_to_openvdb(ctx.object->object_to_world);
+        const openvdb::Mat4s world_to_texture = matrix_to_openvdb(
+            vdmd.texture_map_object->world_to_object);
         return index_to_object * object_to_world * world_to_texture;
       }
     }
@@ -309,34 +311,34 @@ static void modifyGeometrySet(ModifierData *md,
 }
 
 ModifierTypeInfo modifierType_VolumeDisplace = {
-    /* name */ N_("Volume Displace"),
-    /* structName */ "VolumeDisplaceModifierData",
-    /* structSize */ sizeof(VolumeDisplaceModifierData),
-    /* srna */ &RNA_VolumeDisplaceModifier,
-    /* type */ eModifierTypeType_NonGeometrical,
-    /* flags */ static_cast<ModifierTypeFlag>(0),
-    /* icon */ ICON_VOLUME_DATA, /* TODO: Use correct icon. */
+    /*name*/ N_("Volume Displace"),
+    /*structName*/ "VolumeDisplaceModifierData",
+    /*structSize*/ sizeof(VolumeDisplaceModifierData),
+    /*srna*/ &RNA_VolumeDisplaceModifier,
+    /*type*/ eModifierTypeType_NonGeometrical,
+    /*flags*/ static_cast<ModifierTypeFlag>(0),
+    /*icon*/ ICON_VOLUME_DATA, /* TODO: Use correct icon. */
 
-    /* copyData */ BKE_modifier_copydata_generic,
+    /*copyData*/ BKE_modifier_copydata_generic,
 
-    /* deformVerts */ nullptr,
-    /* deformMatrices */ nullptr,
-    /* deformVertsEM */ nullptr,
-    /* deformMatricesEM */ nullptr,
-    /* modifyMesh */ nullptr,
-    /* modifyGeometrySet */ modifyGeometrySet,
+    /*deformVerts*/ nullptr,
+    /*deformMatrices*/ nullptr,
+    /*deformVertsEM*/ nullptr,
+    /*deformMatricesEM*/ nullptr,
+    /*modifyMesh*/ nullptr,
+    /*modifyGeometrySet*/ modifyGeometrySet,
 
-    /* initData */ initData,
-    /* requiredDataMask */ nullptr,
-    /* freeData */ nullptr,
-    /* isDisabled */ nullptr,
-    /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ dependsOnTime,
-    /* dependsOnNormals */ nullptr,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ foreachTexLink,
-    /* freeRuntimeData */ nullptr,
-    /* panelRegister */ panelRegister,
-    /* blendWrite */ nullptr,
-    /* blendRead */ nullptr,
+    /*initData*/ initData,
+    /*requiredDataMask*/ nullptr,
+    /*freeData*/ nullptr,
+    /*isDisabled*/ nullptr,
+    /*updateDepsgraph*/ updateDepsgraph,
+    /*dependsOnTime*/ dependsOnTime,
+    /*dependsOnNormals*/ nullptr,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ foreachTexLink,
+    /*freeRuntimeData*/ nullptr,
+    /*panelRegister*/ panelRegister,
+    /*blendWrite*/ nullptr,
+    /*blendRead*/ nullptr,
 };

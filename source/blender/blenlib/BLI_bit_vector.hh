@@ -169,7 +169,7 @@ template<
     /**
      * Number of bits that can be stored in the vector without doing an allocation.
      */
-    int64_t InlineBufferCapacity = 32,
+    int64_t InlineBufferCapacity = 64,
     /**
      * The allocator used by this vector. Should rarely be changed, except when you don't want that
      * MEM_* is used internally.
@@ -200,10 +200,10 @@ class BitVector {
   int64_t capacity_in_bits_;
 
   /** Used for allocations when the inline buffer is too small. */
-  Allocator allocator_;
+  BLI_NO_UNIQUE_ADDRESS Allocator allocator_;
 
   /** Contains the bits as long as the vector is small enough. */
-  TypedBuffer<uint8_t, BytesInInlineBuffer> inline_buffer_;
+  BLI_NO_UNIQUE_ADDRESS TypedBuffer<uint8_t, BytesInInlineBuffer> inline_buffer_;
 
  public:
   BitVector(Allocator allocator = {}) noexcept : allocator_(allocator)
@@ -301,6 +301,11 @@ class BitVector {
   int64_t size() const
   {
     return size_in_bits_;
+  }
+
+  bool is_empty() const
+  {
+    return this->size() == 0;
   }
 
   /**
@@ -471,6 +476,28 @@ class BitVector {
   void reserve(const int new_capacity_in_bits)
   {
     this->realloc_to_at_least(new_capacity_in_bits);
+  }
+
+  /**
+   * Reset the size of the vector to zero elements, but keep the same memory capacity to be
+   * refilled again.
+   */
+  void clear()
+  {
+    size_in_bits_ = 0;
+  }
+
+  /**
+   * Free memory and reset the vector to zero elements.
+   */
+  void clear_and_shrink()
+  {
+    size_in_bits_ = 0;
+    capacity_in_bits_ = 0;
+    if (!this->is_inline()) {
+      allocator_.deallocate(data_);
+    }
+    data_ = inline_buffer_;
   }
 
  private:

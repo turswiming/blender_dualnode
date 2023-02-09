@@ -22,7 +22,9 @@
 #include "BKE_customdata.h"
 #include "BKE_deform.h"
 #include "BKE_editmesh.h"
+#include "BKE_editmesh_cache.h"
 #include "BKE_layer.h"
+#include "BKE_mesh.h"
 #include "BKE_report.h"
 
 #include "WM_api.h"
@@ -264,8 +266,8 @@ BMVert *EDBM_vert_find_nearest_ex(ViewContext *vc,
   uint base_index = 0;
 
   if (!XRAY_FLAG_ENABLED(vc->v3d)) {
-    uint dist_px_manhattan_test = (uint)ED_view3d_backbuf_sample_size_clamp(vc->region,
-                                                                            *dist_px_manhattan_p);
+    uint dist_px_manhattan_test = uint(
+        ED_view3d_backbuf_sample_size_clamp(vc->region, *dist_px_manhattan_p));
     uint index;
     BMVert *eve;
 
@@ -490,8 +492,8 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
   uint base_index = 0;
 
   if (!XRAY_FLAG_ENABLED(vc->v3d)) {
-    uint dist_px_manhattan_test = (uint)ED_view3d_backbuf_sample_size_clamp(vc->region,
-                                                                            *dist_px_manhattan_p);
+    uint dist_px_manhattan_test = uint(
+        ED_view3d_backbuf_sample_size_clamp(vc->region, *dist_px_manhattan_p));
     uint index;
     BMEdge *eed;
 
@@ -711,8 +713,8 @@ BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
     {
       uint dist_px_manhattan_test = 0;
       if (*dist_px_manhattan_p != 0.0f && (use_zbuf_single_px == false)) {
-        dist_px_manhattan_test = (uint)ED_view3d_backbuf_sample_size_clamp(vc->region,
-                                                                           *dist_px_manhattan_p);
+        dist_px_manhattan_test = uint(
+            ED_view3d_backbuf_sample_size_clamp(vc->region, *dist_px_manhattan_p));
       }
 
       DRW_select_buffer_context_create(bases, bases_len, SCE_SELECT_FACE);
@@ -1058,15 +1060,15 @@ bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
       float imat3[3][3];
 
       ED_view3d_viewcontext_init_object(vc, obedit);
-      copy_m3_m4(imat3, obedit->obmat);
+      copy_m3_m4(imat3, obedit->object_to_world);
       invert_m3(imat3);
 
       const float(*coords)[3] = nullptr;
       {
         Mesh *me_eval = (Mesh *)DEG_get_evaluated_id(vc->depsgraph,
                                                      static_cast<ID *>(obedit->data));
-        if (me_eval->runtime.edit_data) {
-          coords = me_eval->runtime.edit_data->vertexCos;
+        if (me_eval->runtime->edit_data) {
+          coords = me_eval->runtime->edit_data->vertexCos;
         }
       }
 
@@ -1083,7 +1085,8 @@ bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
               for (uint j = 0; j < 2; j++) {
                 BMVert *v = *((&e->v1) + j);
                 float point[3];
-                mul_v3_m4v3(point, obedit->obmat, coords ? coords[BM_elem_index_get(v)] : v->co);
+                mul_v3_m4v3(
+                    point, obedit->object_to_world, coords ? coords[BM_elem_index_get(v)] : v->co);
                 const float dist_sq_test = dist_squared_to_ray_v3_normalized(
                     ray_origin, ray_direction, point);
                 if (dist_sq_test < dist_sq_best_vert) {
@@ -1112,7 +1115,7 @@ bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
               else {
                 mid_v3_v3v3(point, e->v1->co, e->v2->co);
               }
-              mul_m4_v3(obedit->obmat, point);
+              mul_m4_v3(obedit->object_to_world, point);
               const float dist_sq_test = dist_squared_to_ray_v3_normalized(
                   ray_origin, ray_direction, point);
               if (dist_sq_test < dist_sq_best_edge) {
@@ -1137,7 +1140,8 @@ bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
         BM_ITER_MESH (v, &viter, bm, BM_VERTS_OF_MESH) {
           if (BM_elem_flag_test(v, BM_ELEM_HIDDEN) == false) {
             float point[3];
-            mul_v3_m4v3(point, obedit->obmat, coords ? coords[BM_elem_index_get(v)] : v->co);
+            mul_v3_m4v3(
+                point, obedit->object_to_world, coords ? coords[BM_elem_index_get(v)] : v->co);
             const float dist_sq_test = dist_squared_to_ray_v3_normalized(
                 ray_origin, ray_direction, point);
             if (dist_sq_test < dist_sq_best_vert) {
@@ -1167,7 +1171,7 @@ bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
             else {
               mid_v3_v3v3(point, e->v1->co, e->v2->co);
             }
-            mul_m4_v3(obedit->obmat, point);
+            mul_m4_v3(obedit->object_to_world, point);
             const float dist_sq_test = dist_squared_to_ray_v3_normalized(
                 ray_origin, ray_direction, point);
             if (dist_sq_test < dist_sq_best_edge) {
@@ -1196,7 +1200,7 @@ bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
             else {
               BM_face_calc_center_median(f, point);
             }
-            mul_m4_v3(obedit->obmat, point);
+            mul_m4_v3(obedit->object_to_world, point);
             const float dist_sq_test = dist_squared_to_ray_v3_normalized(
                 ray_origin, ray_direction, point);
             if (dist_sq_test < dist_sq_best_face) {
@@ -3044,7 +3048,7 @@ bool EDBM_select_interior_faces(BMEditMesh *em)
             /* Only for predictable results that don't depend on the order of radial loops,
              * not essential. */
             if (i_a > i_b) {
-              SWAP(int, i_a, i_b);
+              std::swap(i_a, i_b);
             }
 
             /* Merge the groups. */
@@ -3207,7 +3211,7 @@ static int select_linked_delimit_default_from_op(wmOperator *op, const int selec
 static void select_linked_delimit_validate(BMesh *bm, int *delimit)
 {
   if ((*delimit) & BMO_DELIM_UV) {
-    if (!CustomData_has_layer(&bm->ldata, CD_MLOOPUV)) {
+    if (!CustomData_has_layer(&bm->ldata, CD_PROP_FLOAT2)) {
       (*delimit) &= ~BMO_DELIM_UV;
     }
   }
@@ -3218,7 +3222,7 @@ static void select_linked_delimit_begin(BMesh *bm, int delimit)
   DelimitData delimit_data = {0};
 
   if (delimit & BMO_DELIM_UV) {
-    delimit_data.cd_loop_type = CD_MLOOPUV;
+    delimit_data.cd_loop_type = CD_PROP_FLOAT2;
     delimit_data.cd_loop_offset = CustomData_get_offset(&bm->ldata, delimit_data.cd_loop_type);
     if (delimit_data.cd_loop_offset == -1) {
       delimit &= ~BMO_DELIM_UV;
@@ -4945,7 +4949,7 @@ static int edbm_select_axis_exec(bContext *C, wmOperator *op)
 
   {
     float vertex_world[3];
-    mul_v3_m4v3(vertex_world, obedit->obmat, v_act->co);
+    mul_v3_m4v3(vertex_world, obedit->object_to_world, v_act->co);
     value = dot_v3v3(axis_vector, vertex_world);
   }
 
@@ -4975,7 +4979,7 @@ static int edbm_select_axis_exec(bContext *C, wmOperator *op)
     BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
       if (!BM_elem_flag_test(v, BM_ELEM_HIDDEN | BM_ELEM_SELECT)) {
         float v_iter_world[3];
-        mul_v3_m4v3(v_iter_world, obedit_iter->obmat, v->co);
+        mul_v3_m4v3(v_iter_world, obedit_iter->object_to_world, v->co);
         const float value_iter = dot_v3v3(axis_vector, v_iter_world);
         switch (sign) {
           case SELECT_AXIS_ALIGN:

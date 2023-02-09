@@ -202,6 +202,9 @@ MetalDeviceQueue::~MetalDeviceQueue()
   assert(mtlCommandBuffer_ == nil);
   assert(command_buffers_submitted_ == command_buffers_completed_);
 
+  close_compute_encoder();
+  close_blit_encoder();
+
   if (@available(macos 10.14, *)) {
     [shared_event_listener_ release];
     [shared_event_ release];
@@ -264,38 +267,57 @@ MetalDeviceQueue::~MetalDeviceQueue()
   }
 }
 
-int MetalDeviceQueue::num_concurrent_states(const size_t /*state_size*/) const
+int MetalDeviceQueue::num_concurrent_states(const size_t state_size) const
 {
-  /* METAL_WIP */
-  /* TODO: compute automatically. */
-  /* TODO: must have at least num_threads_per_block. */
-  int result = 1048576;
-  if (metal_device_->device_vendor == METAL_GPU_AMD) {
-    result *= 2;
+  static int result = 0;
+  if (result) {
+    return result;
   }
-  else if (metal_device_->device_vendor == METAL_GPU_APPLE) {
+
+  result = 1048576;
+  if (metal_device_->device_vendor == METAL_GPU_APPLE) {
     result *= 4;
+
+    /* Increasing the state count doesn't notably benefit M1-family systems.  */
+    if (MetalInfo::get_apple_gpu_architecture(metal_device_->mtlDevice) != APPLE_M1) {
+      size_t system_ram = system_physical_ram();
+      size_t allocated_so_far = [metal_device_->mtlDevice currentAllocatedSize];
+      size_t max_recommended_working_set = [metal_device_->mtlDevice recommendedMaxWorkingSetSize];
+
+      /* Determine whether we can double the state count, and leave enough GPU-available memory
+       * (1/8 the system RAM or 1GB - whichever is largest). Enlarging the state size allows us to
+       * keep dispatch sizes high and minimize work submission overheads. */
+      size_t min_headroom = std::max(system_ram / 8, size_t(1024 * 1024 * 1024));
+      size_t total_state_size = result * state_size;
+      if (max_recommended_working_set - allocated_so_far - total_state_size * 2 >= min_headroom) {
+        result *= 2;
+        metal_printf("Doubling state count to exploit available RAM (new size = %d)\n", result);
+      }
+    }
+  }
+  else if (metal_device_->device_vendor == METAL_GPU_AMD) {
+    /* METAL_WIP */
+    /* TODO: compute automatically. */
+    /* TODO: must have at least num_threads_per_block. */
+    result *= 2;
   }
   return result;
 }
 
-int MetalDeviceQueue::num_concurrent_busy_states() const
+int MetalDeviceQueue::num_concurrent_busy_states(const size_t state_size) const
 {
-  /* METAL_WIP */
-  /* TODO: compute automatically. */
-  int result = 65536;
-  if (metal_device_->device_vendor == METAL_GPU_AMD) {
-    result *= 2;
-  }
-  else if (metal_device_->device_vendor == METAL_GPU_APPLE) {
-    result *= 4;
-  }
-  return result;
+  /* A 1:4 busy:total ratio gives best rendering performance, independent of total state count. */
+  return num_concurrent_states(state_size) / 4;
 }
 
 int MetalDeviceQueue::num_sort_partition_elements() const
 {
   return MetalInfo::optimal_sort_partition_elements(metal_device_->mtlDevice);
+}
+
+bool MetalDeviceQueue::supports_local_atomic_sort() const
+{
+  return metal_device_->use_local_atomic_sort();
 }
 
 void MetalDeviceQueue::init_execution()
@@ -460,6 +482,12 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
       if (metal_device_->bvhMetalRT) {
         id<MTLAccelerationStructure> accel_struct = metal_device_->bvhMetalRT->accel_struct;
         [metal_device_->mtlAncillaryArgEncoder setAccelerationStructure:accel_struct atIndex:2];
+        [metal_device_->mtlAncillaryArgEncoder setBuffer:metal_device_->blas_buffer
+                                                  offset:0
+                                                 atIndex:7];
+        [metal_device_->mtlAncillaryArgEncoder setBuffer:metal_device_->blas_lookup_buffer
+                                                  offset:0
+                                                 atIndex:8];
       }
 
       for (int table = 0; table < METALRT_TABLE_NUM; table++) {
@@ -510,6 +538,10 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
       if (bvhMetalRT) {
         /* Mark all Accelerations resources as used */
         [mtlComputeCommandEncoder useResource:bvhMetalRT->accel_struct usage:MTLResourceUsageRead];
+        [mtlComputeCommandEncoder useResource:metal_device_->blas_buffer
+                                        usage:MTLResourceUsageRead];
+        [mtlComputeCommandEncoder useResource:metal_device_->blas_lookup_buffer
+                                        usage:MTLResourceUsageRead];
         [mtlComputeCommandEncoder useResources:bvhMetalRT->blas_array.data()
                                          count:bvhMetalRT->blas_array.size()
                                          usage:MTLResourceUsageRead];
@@ -536,11 +568,22 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
       /* See parallel_active_index.h for why this amount of shared memory is needed.
        * Rounded up to 16 bytes for Metal */
       shared_mem_bytes = (int)round_up((num_threads_per_block + 1) * sizeof(int), 16);
-      [mtlComputeCommandEncoder setThreadgroupMemoryLength:shared_mem_bytes atIndex:0];
       break;
+
+    case DEVICE_KERNEL_INTEGRATOR_SORT_BUCKET_PASS:
+    case DEVICE_KERNEL_INTEGRATOR_SORT_WRITE_PASS: {
+      int key_count = metal_device_->launch_params.data.max_shaders;
+      shared_mem_bytes = (int)round_up(key_count * sizeof(int), 16);
+      break;
+    }
 
     default:
       break;
+  }
+
+  if (shared_mem_bytes) {
+    assert(shared_mem_bytes <= 32 * 1024);
+    [mtlComputeCommandEncoder setThreadgroupMemoryLength:shared_mem_bytes atIndex:0];
   }
 
   MTLSize size_threadgroups_per_dispatch = MTLSizeMake(
@@ -624,9 +667,7 @@ bool MetalDeviceQueue::synchronize()
     return false;
   }
 
-  if (mtlComputeEncoder_) {
-    close_compute_encoder();
-  }
+  close_compute_encoder();
   close_blit_encoder();
 
   if (mtlCommandBuffer_) {
@@ -689,6 +730,10 @@ bool MetalDeviceQueue::synchronize()
 
 void MetalDeviceQueue::zero_to_device(device_memory &mem)
 {
+  if (metal_device_->have_error()) {
+    return;
+  }
+
   assert(mem.type != MEM_GLOBAL && mem.type != MEM_TEXTURE);
 
   if (mem.memory_size() == 0) {
@@ -716,6 +761,10 @@ void MetalDeviceQueue::zero_to_device(device_memory &mem)
 
 void MetalDeviceQueue::copy_to_device(device_memory &mem)
 {
+  if (metal_device_->have_error()) {
+    return;
+  }
+
   if (mem.memory_size() == 0) {
     return;
   }
@@ -758,6 +807,10 @@ void MetalDeviceQueue::copy_to_device(device_memory &mem)
 
 void MetalDeviceQueue::copy_from_device(device_memory &mem)
 {
+  if (metal_device_->have_error()) {
+    return;
+  }
+
   assert(mem.type != MEM_GLOBAL && mem.type != MEM_TEXTURE);
 
   if (mem.memory_size() == 0) {
@@ -830,9 +883,7 @@ id<MTLComputeCommandEncoder> MetalDeviceQueue::get_compute_encoder(DeviceKernel 
   if (@available(macos 10.14, *)) {
     if (timing_shared_event_) {
       /* Close the current encoder to ensure we're able to capture per-encoder timing data. */
-      if (mtlComputeEncoder_) {
-        close_compute_encoder();
-      }
+      close_compute_encoder();
     }
 
     if (mtlComputeEncoder_) {
@@ -872,9 +923,7 @@ id<MTLBlitCommandEncoder> MetalDeviceQueue::get_blit_encoder()
     return mtlBlitEncoder_;
   }
 
-  if (mtlComputeEncoder_) {
-    close_compute_encoder();
-  }
+  close_compute_encoder();
 
   if (!mtlCommandBuffer_) {
     mtlCommandBuffer_ = [mtlCommandQueue_ commandBuffer];
@@ -888,12 +937,14 @@ id<MTLBlitCommandEncoder> MetalDeviceQueue::get_blit_encoder()
 
 void MetalDeviceQueue::close_compute_encoder()
 {
-  [mtlComputeEncoder_ endEncoding];
-  mtlComputeEncoder_ = nil;
+  if (mtlComputeEncoder_) {
+    [mtlComputeEncoder_ endEncoding];
+    mtlComputeEncoder_ = nil;
 
-  if (@available(macos 10.14, *)) {
-    if (timing_shared_event_) {
-      [mtlCommandBuffer_ encodeSignalEvent:timing_shared_event_ value:timing_shared_event_id_++];
+    if (@available(macos 10.14, *)) {
+      if (timing_shared_event_) {
+        [mtlCommandBuffer_ encodeSignalEvent:timing_shared_event_ value:timing_shared_event_id_++];
+      }
     }
   }
 }

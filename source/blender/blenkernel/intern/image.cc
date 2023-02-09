@@ -71,6 +71,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.h"
 #include "BKE_packedFile.h"
 #include "BKE_report.h"
@@ -234,6 +235,11 @@ static void image_foreach_cache(ID *id,
   key.offset_in_ID = offsetof(Image, cache);
   function_callback(id, &key, (void **)&image->cache, 0, user_data);
 
+  key.offset_in_ID = offsetof(Image, anims.first);
+  function_callback(id, &key, (void **)&image->anims.first, 0, user_data);
+  key.offset_in_ID = offsetof(Image, anims.last);
+  function_callback(id, &key, (void **)&image->anims.last, 0, user_data);
+
   auto gputexture_offset = [image](int target, int eye) {
     constexpr size_t base_offset = offsetof(Image, gputexture);
     struct GPUTexture **first = &image->gputexture[0][0];
@@ -297,7 +303,7 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
       /* Put the filepath back together using the new directory and the original file name. */
       char new_dir[FILE_MAXDIR];
       BLI_split_dir_part(temp_path, new_dir, sizeof(new_dir));
-      BLI_join_dirfile(ima->filepath, sizeof(ima->filepath), new_dir, orig_file);
+      BLI_path_join(ima->filepath, sizeof(ima->filepath), new_dir, orig_file);
     }
   }
   else {
@@ -2738,7 +2744,7 @@ static void image_walk_ntree_all_users(
 {
   switch (ntree->type) {
     case NTREE_SHADER:
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+      for (bNode *node : ntree->all_nodes()) {
         if (node->id) {
           if (node->type == SH_NODE_TEX_IMAGE) {
             NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
@@ -2754,7 +2760,7 @@ static void image_walk_ntree_all_users(
       }
       break;
     case NTREE_TEXTURE:
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+      for (bNode *node : ntree->all_nodes()) {
         if (node->id && node->type == TEX_NODE_IMAGE) {
           Image *ima = (Image *)node->id;
           ImageUser *iuser = static_cast<ImageUser *>(node->storage);
@@ -2763,7 +2769,7 @@ static void image_walk_ntree_all_users(
       }
       break;
     case NTREE_COMPOSIT:
-      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+      for (bNode *node : ntree->all_nodes()) {
         if (node->id && node->type == CMP_NODE_IMAGE) {
           Image *ima = (Image *)node->id;
           ImageUser *iuser = static_cast<ImageUser *>(node->storage);
@@ -3082,16 +3088,10 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
         /* Free all but the first tile. */
         image_remove_all_tiles(ima);
 
-        /* If the remaining tile is generated, we need to again ensure that we
-         * wouldn't continue to use the old filepath.
-         *
-         * Otherwise, if this used to be a UDIM image, get the concrete filepath associated
+        /* If this used to be a UDIM image, get the concrete filepath associated
          * with the remaining tile and use that as the new filepath. */
         ImageTile *base_tile = BKE_image_get_tile(ima, 0);
-        if ((base_tile->gen_flag & IMA_GEN_TILE) != 0) {
-          ima->filepath[0] = '\0';
-        }
-        else if (BKE_image_is_filename_tokenized(ima->filepath)) {
+        if (BKE_image_is_filename_tokenized(ima->filepath)) {
           const bool was_relative = BLI_path_is_rel(ima->filepath);
 
           eUDIM_TILE_FORMAT tile_format;
@@ -3183,10 +3183,14 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
            * left. */
           image_remove_all_tiles(ima);
 
-          int remaining_tile_number = ((ImageTile *)ima->tiles.first)->tile_number;
+          ImageTile *base_tile = BKE_image_get_tile(ima, 0);
+          int remaining_tile_number = base_tile->tile_number;
           bool needs_final_cleanup = true;
 
-          /* Add in all the new tiles. */
+          /* Add in all the new tiles. As the image is proven to be on disk at this point, remove
+           * the generation flag from the remaining tile in case this was previously a generated
+           * image. */
+          base_tile->gen_flag &= ~IMA_GEN_TILE;
           LISTBASE_FOREACH (LinkData *, new_tile, &new_tiles) {
             int new_tile_number = POINTER_AS_INT(new_tile->data);
             BKE_image_add_tile(ima, new_tile_number, nullptr);
@@ -3201,6 +3205,11 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
           }
         }
         BLI_freelistN(&new_tiles);
+      }
+      else if (ima->filepath[0] != '\0') {
+        /* If the filepath is set at this point remove the generation flag. */
+        ImageTile *base_tile = BKE_image_get_tile(ima, 0);
+        base_tile->gen_flag &= ~IMA_GEN_TILE;
       }
 
       if (iuser) {
@@ -3331,7 +3340,7 @@ bool BKE_image_get_tile_info(char *filepath, ListBase *tiles, int *r_tile_start,
   MEM_SAFE_FREE(udim_pattern);
 
   if (all_valid_udim && min_udim <= IMA_UDIM_MAX) {
-    BLI_join_dirfile(filepath, FILE_MAX, dirname, filename);
+    BLI_path_join(filepath, FILE_MAX, dirname, filename);
 
     *r_tile_start = min_udim;
     *r_tile_range = max_udim - min_udim + 1;
@@ -3607,12 +3616,12 @@ void BKE_image_set_filepath_from_tile_number(char *filepath,
   }
 
   if (tile_format == UDIM_TILE_FORMAT_UDIM) {
-    sprintf(filepath, pattern, tile_number);
+    BLI_sprintf(filepath, pattern, tile_number);
   }
   else if (tile_format == UDIM_TILE_FORMAT_UVTILE) {
     int u = ((tile_number - 1001) % 10);
     int v = ((tile_number - 1001) / 10);
-    sprintf(filepath, pattern, u + 1, v + 1);
+    BLI_sprintf(filepath, pattern, u + 1, v + 1);
   }
 }
 

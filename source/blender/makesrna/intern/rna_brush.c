@@ -94,7 +94,7 @@ static const EnumPropertyItem rna_enum_brush_texture_slot_map_texture_mode_items
 /* clang-format off */
 /* Note: we don't actually turn these into a single enum bit-mask property,
  * instead we construct individual boolean properties. */
-const EnumPropertyItem RNA_automasking_flags[] = {
+const EnumPropertyItem rna_enum_brush_automasking_flag_items[] = {
   {BRUSH_AUTOMASKING_TOPOLOGY, "use_automasking_topology", 0,"Topology", "Affect only vertices connected to the active vertex under the brush"},
   {BRUSH_AUTOMASKING_FACE_SETS, "use_automasking_face_sets", 0,"Face Sets", "Affect only vertices that share Face Sets with the active vertex"},
   {BRUSH_AUTOMASKING_BOUNDARY_EDGES, "use_automasking_boundary_edges", 0,"Mesh Boundary Auto-Masking", "Do not affect non manifold boundary edges"},
@@ -968,7 +968,7 @@ static const EnumPropertyItem *rna_Brush_stroke_itemf(bContext *C,
 /* Grease Pencil Drawing Brushes Settings */
 static char *rna_BrushGpencilSettings_path(const PointerRNA *UNUSED(ptr))
 {
-  return BLI_strdup("tool_settings.gpencil_paint.brush.gpencil_settings");
+  return BLI_strdup("gpencil_settings");
 }
 
 static void rna_BrushGpencilSettings_default_eraser_update(Main *bmain,
@@ -1121,6 +1121,11 @@ static void rna_Brush_automasking_cavity_set(PointerRNA *ptr, bool val)
   else {
     brush->automasking_flags &= ~BRUSH_AUTOMASKING_CAVITY_NORMAL;
   }
+}
+
+static char *rna_BrushCurvesSculptSettings_path(const PointerRNA *UNUSED(ptr))
+{
+  return BLI_strdup("curves_sculpt_settings");
 }
 
 #else
@@ -1919,26 +1924,6 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
-  prop = RNA_def_property(srna, "use_automasking_stroke", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(
-      prop, NULL, "sculpt_mode_flag", GP_SCULPT_FLAGMODE_AUTOMASK_STROKE);
-  RNA_def_property_ui_text(prop, "Auto-Masking Strokes", "Mask strokes below brush cursor");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-  prop = RNA_def_property(srna, "use_automasking_layer", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "sculpt_mode_flag", GP_SCULPT_FLAGMODE_AUTOMASK_LAYER);
-  RNA_def_property_ui_text(prop, "Auto-Masking Layer", "Mask strokes using active layer");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-  prop = RNA_def_property(srna, "use_automasking_material", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(
-      prop, NULL, "sculpt_mode_flag", GP_SCULPT_FLAGMODE_AUTOMASK_MATERIAL);
-  RNA_def_property_ui_text(prop, "Auto-Masking Material", "Mask strokes using active material");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
   /* Material */
   prop = RNA_def_property(srna, "material", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "Material");
@@ -2057,6 +2042,7 @@ static void rna_def_curves_sculpt_options(BlenderRNA *brna)
   };
 
   srna = RNA_def_struct(brna, "BrushCurvesSculptSettings", NULL);
+  RNA_def_struct_path_func(srna, "rna_BrushCurvesSculptSettings_path");
   RNA_def_struct_sdna(srna, "BrushCurvesSculptSettings");
   RNA_def_struct_ui_text(srna, "Curves Sculpt Brush Settings", "");
 
@@ -3224,7 +3210,7 @@ static void rna_def_brush(BlenderRNA *brna)
       "When locked keep using the plane origin of surface where stroke was initiated");
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
-  const EnumPropertyItem *entry = RNA_automasking_flags;
+  const EnumPropertyItem *entry = rna_enum_brush_automasking_flag_items;
   do {
     prop = RNA_def_property(srna, entry->identifier, PROP_BOOLEAN, PROP_NONE);
     RNA_def_property_boolean_sdna(prop, NULL, "automasking_flags", entry->value);
@@ -3240,18 +3226,20 @@ static void rna_def_brush(BlenderRNA *brna)
     RNA_def_property_update(prop, 0, "rna_Brush_update");
   } while ((++entry)->identifier);
 
-  prop = RNA_def_property(srna, "automasking_cavity_factor", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "automasking_cavity_factor", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "automasking_cavity_factor");
   RNA_def_property_ui_text(prop, "Cavity Factor", "The contrast of the cavity mask");
-  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 3);
   RNA_def_property_range(prop, 0.0f, 5.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1, 3);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
   prop = RNA_def_property(srna, "automasking_cavity_blur_steps", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "automasking_cavity_blur_steps");
+  RNA_def_property_int_default(prop, 0);
   RNA_def_property_ui_text(prop, "Blur Steps", "The number of times the cavity mask is blurred");
-  RNA_def_property_range(prop, 0.0f, 25.0f);
+  RNA_def_property_range(prop, 0, 25);
+  RNA_def_property_ui_range(prop, 0, 10, 1, 1);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
@@ -3614,6 +3602,10 @@ static void rna_def_brush(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Use Vertex", "Use this brush in grease pencil vertex color mode");
 
+  prop = RNA_def_property(srna, "use_paint_sculpt_curves", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "ob_mode", OB_MODE_SCULPT_CURVES);
+  RNA_def_property_ui_text(prop, "Use Sculpt", "Use this brush in sculpt curves mode");
+
   /* texture */
   prop = RNA_def_property(srna, "texture_slot", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "BrushTextureSlot");
@@ -3657,13 +3649,13 @@ static void rna_def_brush(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Mask Texture Overlay Alpha", "");
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
-  prop = RNA_def_property(srna, "cursor_color_add", PROP_FLOAT, PROP_COLOR);
+  prop = RNA_def_property(srna, "cursor_color_add", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, NULL, "add_col");
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(prop, "Add Color", "Color of cursor when adding");
   RNA_def_property_update(prop, 0, "rna_Brush_update");
 
-  prop = RNA_def_property(srna, "cursor_color_subtract", PROP_FLOAT, PROP_COLOR);
+  prop = RNA_def_property(srna, "cursor_color_subtract", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, NULL, "sub_col");
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(prop, "Subtract Color", "Color of cursor when subtracting");

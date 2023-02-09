@@ -139,6 +139,10 @@ void EEVEE_shadows_caster_register(EEVEE_ViewLayerData *sldata, Object *ob)
       BLI_BITMAP_SET(backbuffer->update, past_id, oedata->need_update);
     }
     update = oedata->need_update;
+
+    /* Always update shadow buffers in sculpt modes. */
+    update |= ob->sculpt != NULL;
+
     oedata->need_update = false;
   }
 
@@ -153,7 +157,7 @@ void EEVEE_shadows_caster_register(EEVEE_ViewLayerData *sldata, Object *ob)
   for (int i = 0; i < 8; i++) {
     float vec[3];
     copy_v3_v3(vec, bb->vec[i]);
-    mul_m4_v3(ob->obmat, vec);
+    mul_m4_v3(ob->object_to_world, vec);
     minmax_v3v3_v3(min, max, vec);
   }
 

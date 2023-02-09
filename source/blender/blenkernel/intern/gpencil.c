@@ -1273,6 +1273,10 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
           gpl->actframe = gpf;
         }
         else if (addnew == GP_GETFRAME_ADD_COPY) {
+          /* The frame_addcopy function copies the active frame of gpl,
+             so we need to set the active frame before copying.
+          */
+          gpl->actframe = gpf;
           gpl->actframe = BKE_gpencil_frame_addcopy(gpl, cframe);
         }
         else {
@@ -1300,6 +1304,10 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
           gpl->actframe = gpf;
         }
         else if (addnew == GP_GETFRAME_ADD_COPY) {
+          /* The frame_addcopy function copies the active frame of gpl;
+             so we need to set the active frame before copying.
+          */
+          gpl->actframe = gpf;
           gpl->actframe = BKE_gpencil_frame_addcopy(gpl, cframe);
         }
         else {
@@ -1566,7 +1574,6 @@ bGPDlayer *BKE_gpencil_layer_active_get(bGPdata *gpd)
 bGPDlayer *BKE_gpencil_layer_get_by_name(bGPdata *gpd, char *name, int first_if_not_found)
 {
   bGPDlayer *gpl;
-  int i = 0;
 
   /* error checking */
   if (ELEM(NULL, gpd, gpd->layers.first)) {
@@ -1578,7 +1585,6 @@ bGPDlayer *BKE_gpencil_layer_get_by_name(bGPdata *gpd, char *name, int first_if_
     if (STREQ(name, gpl->info)) {
       return gpl;
     }
-    i++;
   }
 
   /* no such layer */
@@ -1863,6 +1869,18 @@ void BKE_gpencil_vgroup_remove(Object *ob, bDeformGroup *defgroup)
 
   /* Remove the group */
   BLI_freelinkN(&gpd->vertex_group_names, defgroup);
+
+  /* Update the active deform index if necessary. */
+  const int active_index = BKE_object_defgroup_active_index_get(ob);
+  if (active_index > def_nr) {
+    BKE_object_defgroup_active_index_set(ob, active_index - 1);
+  }
+  /* Keep a valid active index if we still have some vertex groups. */
+  if (!BLI_listbase_is_empty(&gpd->vertex_group_names) &&
+      BKE_object_defgroup_active_index_get(ob) < 1) {
+    BKE_object_defgroup_active_index_set(ob, 1);
+  }
+
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 }
 
@@ -2691,7 +2709,7 @@ void BKE_gpencil_layer_transform_matrix_get(const Depsgraph *depsgraph,
   /* if not layer parented, try with object parented */
   if (obparent_eval == NULL) {
     if ((ob_eval != NULL) && (ob_eval->type == OB_GPENCIL)) {
-      copy_m4_m4(diff_mat, ob_eval->obmat);
+      copy_m4_m4(diff_mat, ob_eval->object_to_world);
       mul_m4_m4m4(diff_mat, diff_mat, gpl->layer_mat);
       return;
     }
@@ -2701,8 +2719,8 @@ void BKE_gpencil_layer_transform_matrix_get(const Depsgraph *depsgraph,
   }
 
   if (ELEM(gpl->partype, PAROBJECT, PARSKEL)) {
-    mul_m4_m4m4(diff_mat, obparent_eval->obmat, gpl->inverse);
-    add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
+    mul_m4_m4m4(diff_mat, obparent_eval->object_to_world, gpl->inverse);
+    add_v3_v3(diff_mat[3], ob_eval->object_to_world[3]);
     mul_m4_m4m4(diff_mat, diff_mat, gpl->layer_mat);
     return;
   }
@@ -2710,14 +2728,14 @@ void BKE_gpencil_layer_transform_matrix_get(const Depsgraph *depsgraph,
     bPoseChannel *pchan = BKE_pose_channel_find_name(obparent_eval->pose, gpl->parsubstr);
     if (pchan) {
       float tmp_mat[4][4];
-      mul_m4_m4m4(tmp_mat, obparent_eval->obmat, pchan->pose_mat);
+      mul_m4_m4m4(tmp_mat, obparent_eval->object_to_world, pchan->pose_mat);
       mul_m4_m4m4(diff_mat, tmp_mat, gpl->inverse);
-      add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
+      add_v3_v3(diff_mat[3], ob_eval->object_to_world[3]);
     }
     else {
       /* if bone not found use object (armature) */
-      mul_m4_m4m4(diff_mat, obparent_eval->obmat, gpl->inverse);
-      add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
+      mul_m4_m4m4(diff_mat, obparent_eval->object_to_world, gpl->inverse);
+      add_v3_v3(diff_mat[3], ob_eval->object_to_world[3]);
     }
     mul_m4_m4m4(diff_mat, diff_mat, gpl->layer_mat);
     return;
@@ -2771,12 +2789,12 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
       Object *ob_parent = DEG_get_evaluated_object(depsgraph, gpl->parent);
       /* calculate new matrix */
       if (ELEM(gpl->partype, PAROBJECT, PARSKEL)) {
-        mul_m4_m4m4(cur_mat, ob->imat, ob_parent->obmat);
+        mul_m4_m4m4(cur_mat, ob->world_to_object, ob_parent->object_to_world);
       }
       else if (gpl->partype == PARBONE) {
         bPoseChannel *pchan = BKE_pose_channel_find_name(ob_parent->pose, gpl->parsubstr);
         if (pchan != NULL) {
-          mul_m4_series(cur_mat, ob->imat, ob_parent->obmat, pchan->pose_mat);
+          mul_m4_series(cur_mat, ob->world_to_object, ob_parent->object_to_world, pchan->pose_mat);
         }
         else {
           unit_m4(cur_mat);

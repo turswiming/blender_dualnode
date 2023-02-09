@@ -25,10 +25,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .supports_field()
       .description(N_("Which of the sorted corners to output"));
   b.add_output<decl::Int>(N_("Corner Index"))
-      .dependent_field()
+      .field_source_reference_all()
       .description(N_("A corner connected to the face, chosen by the sort index"));
   b.add_output<decl::Int>(N_("Total"))
-      .dependent_field()
+      .field_source()
+      .reference_pass({0})
       .description(N_("The number of faces or corners connected to each vertex"));
 }
 
@@ -60,8 +61,8 @@ class CornersOfVertInput final : public bke::MeshFieldInput {
   {
     const IndexRange vert_range(mesh.totvert);
     const Span<MLoop> loops = mesh.loops();
-    Array<Vector<int>> vert_to_loop_map = mesh_topology::build_vert_to_loop_map(loops,
-                                                                                mesh.totvert);
+    Array<Vector<int>> vert_to_loop_map = bke::mesh_topology::build_vert_to_loop_map(loops,
+                                                                                     mesh.totvert);
 
     const bke::MeshFieldContext context{mesh, domain};
     fn::FieldEvaluator evaluator{context, &mask};
@@ -76,6 +77,7 @@ class CornersOfVertInput final : public bke::MeshFieldInput {
     corner_evaluator.add(sort_weight_);
     corner_evaluator.evaluate();
     const VArray<float> all_sort_weights = corner_evaluator.get_evaluated<float>(0);
+    const bool use_sorting = !all_sort_weights.is_single();
 
     Array<int> corner_of_vertex(mask.min_array_size());
     threading::parallel_for(mask.index_range(), 1024, [&](const IndexRange range) {
@@ -93,32 +95,47 @@ class CornersOfVertInput final : public bke::MeshFieldInput {
         }
 
         const Span<int> corners = vert_to_loop_map[vert_i];
-
-        /* Retrieve the connected edge indices as 64 bit integers for #materialize_compressed. */
-        corner_indices.reinitialize(corners.size());
-        convert_span(corners, corner_indices);
-
-        /* Retrieve a compressed array of weights for each edge. */
-        sort_weights.reinitialize(corners.size());
-        all_sort_weights.materialize_compressed(IndexMask(corner_indices),
-                                                sort_weights.as_mutable_span());
-
-        /* Sort a separate array of compressed indices corresponding to the compressed weights.
-         * This allows using `materialize_compressed` to avoid virtual function call overhead
-         * when accessing values in the sort weights. However, it means a separate array of
-         * indices within the compressed array is necessary for sorting. */
-        sort_indices.reinitialize(corners.size());
-        std::iota(sort_indices.begin(), sort_indices.end(), 0);
-        std::stable_sort(sort_indices.begin(), sort_indices.end(), [&](int a, int b) {
-          return sort_weights[a] < sort_weights[b];
-        });
+        if (corners.is_empty()) {
+          corner_of_vertex[selection_i] = 0;
+          continue;
+        }
 
         const int index_in_sort_wrapped = mod_i(index_in_sort, corners.size());
-        corner_of_vertex[selection_i] = corner_indices[sort_indices[index_in_sort_wrapped]];
+        if (use_sorting) {
+          /* Retrieve the connected edge indices as 64 bit integers for #materialize_compressed. */
+          corner_indices.reinitialize(corners.size());
+          convert_span(corners, corner_indices);
+
+          /* Retrieve a compressed array of weights for each edge. */
+          sort_weights.reinitialize(corners.size());
+          all_sort_weights.materialize_compressed(IndexMask(corner_indices),
+                                                  sort_weights.as_mutable_span());
+
+          /* Sort a separate array of compressed indices corresponding to the compressed weights.
+           * This allows using `materialize_compressed` to avoid virtual function call overhead
+           * when accessing values in the sort weights. However, it means a separate array of
+           * indices within the compressed array is necessary for sorting. */
+          sort_indices.reinitialize(corners.size());
+          std::iota(sort_indices.begin(), sort_indices.end(), 0);
+          std::stable_sort(sort_indices.begin(), sort_indices.end(), [&](int a, int b) {
+            return sort_weights[a] < sort_weights[b];
+          });
+          corner_of_vertex[selection_i] = corner_indices[sort_indices[index_in_sort_wrapped]];
+        }
+        else {
+          corner_of_vertex[selection_i] = corners[index_in_sort_wrapped];
+        }
       }
     });
 
     return VArray<int>::ForContainer(std::move(corner_of_vertex));
+  }
+
+  void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
+  {
+    vert_index_.node().for_each_field_input_recursive(fn);
+    sort_index_.node().for_each_field_input_recursive(fn);
+    sort_weight_.node().for_each_field_input_recursive(fn);
   }
 
   uint64_t hash() const final
@@ -133,6 +150,11 @@ class CornersOfVertInput final : public bke::MeshFieldInput {
              typed->sort_weight_ == sort_weight_;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  {
+    return ATTR_DOMAIN_POINT;
   }
 };
 
@@ -169,6 +191,11 @@ class CornersOfVertCountInput final : public bke::MeshFieldInput {
       return true;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  {
+    return ATTR_DOMAIN_POINT;
   }
 };
 

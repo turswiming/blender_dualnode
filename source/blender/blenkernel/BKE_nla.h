@@ -10,6 +10,8 @@
 /** Temp constant defined for these functions only. */
 #define NLASTRIP_MIN_LEN_THRESH 0.1f
 
+#include "DNA_listBase.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -131,7 +133,19 @@ void BKE_nlastrips_sort_strips(ListBase *strips);
 
 /**
  * Add the given NLA-Strip to the given list of strips, assuming that it
- * isn't currently a member of another list
+ * isn't currently a member of another list, NULL, or conflicting with existing
+ * strips position.
+ */
+void BKE_nlastrips_add_strip_unsafe(ListBase *strips, struct NlaStrip *strip);
+
+/**
+ * \brief NULL checks incoming strip and verifies no overlap / invalid
+ * configuration against other strips in NLA Track.
+ *
+ * \param strips:
+ * \param strip:
+ * \return true
+ * \return false
  */
 bool BKE_nlastrips_add_strip(ListBase *strips, struct NlaStrip *strip);
 
@@ -249,8 +263,8 @@ float BKE_nlastrip_compute_frame_to_next_strip(struct NlaStrip *strip);
 /**
  * Returns the next strip in this strip's NLA track, or a null pointer.
  *
- * \param strip The strip to find the next trip from.
- * \param check_transitions Whether or not to skip transitions.
+ * \param strip: The strip to find the next trip from.
+ * \param check_transitions: Whether or not to skip transitions.
  * \return The next strip in the track, or NULL if none are present.
  */
 struct NlaStrip *BKE_nlastrip_next_in_track(struct NlaStrip *strip, bool skip_transitions);
@@ -258,8 +272,8 @@ struct NlaStrip *BKE_nlastrip_next_in_track(struct NlaStrip *strip, bool skip_tr
 /**
  * Returns the previous strip in this strip's NLA track, or a null pointer.
  *
- * \param strip The strip to find the previous trip from.
- * \param check_transitions Whether or not to skip transitions.
+ * \param strip: The strip to find the previous trip from.
+ * \param check_transitions: Whether or not to skip transitions.
  * \return The previous strip in the track, or NULL if none are present.
  */
 struct NlaStrip *BKE_nlastrip_prev_in_track(struct NlaStrip *strip, bool skip_transitions);
@@ -280,6 +294,11 @@ void BKE_nlastrip_set_active(struct AnimData *adt, struct NlaStrip *strip);
  */
 bool BKE_nlastrip_within_bounds(struct NlaStrip *strip, float min, float max);
 /**
+ * Return the distance from the given frame to the NLA strip, measured in frames.
+ * If the given frame intersects the NLA strip, the distance is zero.
+ */
+float BKE_nlastrip_distance_to_frame(const struct NlaStrip *strip, float timeline_frame);
+/**
  * Recalculate the start and end frames for the current strip, after changing
  * the extents of the action or the mapping (repeats or scale factor) info.
  */
@@ -289,6 +308,11 @@ void BKE_nlastrip_recalculate_bounds(struct NlaStrip *strip);
  * the overall NLA animation result is unchanged.
  */
 void BKE_nlastrip_recalculate_bounds_sync_action(struct NlaStrip *strip);
+
+/**
+ * Recalculate the blend-in and blend-out values after a strip transform update.
+ */
+void BKE_nlastrip_recalculate_blend(struct NlaStrip *strip);
 
 /**
  * Find (and set) a unique name for a strip from the whole AnimData block

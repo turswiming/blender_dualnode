@@ -279,7 +279,8 @@ IDTypeInfo IDType_ID_SCR = {
     .name = "Screen",
     .name_plural = "screens",
     .translation_context = BLT_I18NCONTEXT_ID_SCREEN,
-    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA,
+    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA |
+             IDTYPE_FLAGS_NO_MEMFILE_UNDO,
     .asset_type_info = NULL,
 
     .init_data = NULL,
@@ -304,7 +305,7 @@ IDTypeInfo IDType_ID_SCR = {
 
 /* ************ Space-type/region-type handling ************** */
 
-/* keep global; this has to be accessible outside of windowmanager */
+/** Keep global; this has to be accessible outside of window-manager. */
 static ListBase spacetypes = {NULL, NULL};
 
 /* not SpaceType itself */

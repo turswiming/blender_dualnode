@@ -371,8 +371,14 @@ void BPY_python_start(bContext *C, int argc, const char **argv)
      * While harmless, it's noisy. */
     config.pathconfig_warnings = 0;
 
-    /* When using the system's Python, allow the site-directory as well. */
-    config.user_site_directory = py_use_system_env;
+    /* Allow the user site directory because this is used
+     * when PIP installing packages from Blender, see: T104000.
+     *
+     * NOTE(@campbellbarton): While an argument can be made for isolating Blender's Python
+     * from the users home directory entirely, an alternative directory should be used in that
+     * case - so PIP can be used to install packages. Otherwise PIP will install packages to a
+     * directory which us not in the users `sys.path`, see `site.USER_BASE` for details. */
+    // config.user_site_directory = py_use_system_env;
 
     /* While `sys.argv` is set, we don't want Python to interpret it. */
     config.parse_argv = 0;
@@ -768,14 +774,14 @@ extern void main_python_exit(void);
 
 static struct PyModuleDef bpy_proxy_def = {
     PyModuleDef_HEAD_INIT,
-    "bpy",           /* m_name */
-    NULL,            /* m_doc */
-    0,               /* m_size */
-    NULL,            /* m_methods */
-    NULL,            /* m_slots */
-    NULL,            /* m_traverse */
-    NULL,            /* m_clear */
-    bpy_module_free, /* m_free */
+    /*m_name*/ "bpy",
+    /*m_doc*/ NULL,
+    /*m_size*/ 0,
+    /*m_methods*/ NULL,
+    /*m_slots*/ NULL,
+    /*m_traverse*/ NULL,
+    /*m_clear*/ NULL,
+    /*m_free*/ bpy_module_free,
 };
 
 typedef struct {

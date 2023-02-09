@@ -129,7 +129,7 @@ bool bc_set_parent(Object *ob, Object *par, bContext *C, bool is_parent_space)
   const bool keep_transform = false;
 
   if (par && is_parent_space) {
-    mul_m4_m4m4(ob->obmat, par->obmat, ob->obmat);
+    mul_m4_m4m4(ob->object_to_world, par->object_to_world, ob->object_to_world);
   }
 
   bool ok = ED_object_parent_set(
@@ -322,7 +322,7 @@ bool bc_is_root_bone(Bone *aBone, bool deform_bones_only)
 int bc_get_active_UVLayer(Object *ob)
 {
   Mesh *me = (Mesh *)ob->data;
-  return CustomData_get_active_layer_index(&me->ldata, CD_MLOOPUV);
+  return CustomData_get_active_layer_index(&me->ldata, CD_PROP_FLOAT2);
 }
 
 std::string bc_url_encode(std::string data)
@@ -348,10 +348,10 @@ std::string bc_replace_string(std::string data,
 void bc_match_scale(Object *ob, UnitConverter &bc_unit, bool scale_to_scene)
 {
   if (scale_to_scene) {
-    mul_m4_m4m4(ob->obmat, bc_unit.get_scale(), ob->obmat);
+    mul_m4_m4m4(ob->object_to_world, bc_unit.get_scale(), ob->object_to_world);
   }
-  mul_m4_m4m4(ob->obmat, bc_unit.get_rotation(), ob->obmat);
-  BKE_object_apply_mat4(ob, ob->obmat, false, false);
+  mul_m4_m4m4(ob->object_to_world, bc_unit.get_rotation(), ob->object_to_world);
+  BKE_object_apply_mat4(ob, ob->object_to_world, false, false);
 }
 
 void bc_match_scale(std::vector<Object *> *objects_done,
@@ -718,6 +718,9 @@ float bc_get_property(Bone *bone, std::string key, float def)
       case IDP_DOUBLE:
         result = float(IDP_Double(property));
         break;
+      case IDP_BOOLEAN:
+        result = (float)(IDP_Bool(property));
+        break;
       default:
         result = def;
     }
@@ -1071,9 +1074,9 @@ void bc_copy_m4d_v44(double (&r)[4][4], std::vector<std::vector<double>> &a)
  */
 static std::string bc_get_active_uvlayer_name(Mesh *me)
 {
-  int num_layers = CustomData_number_of_layers(&me->ldata, CD_MLOOPUV);
+  int num_layers = CustomData_number_of_layers(&me->ldata, CD_PROP_FLOAT2);
   if (num_layers) {
-    char *layer_name = bc_CustomData_get_active_layer_name(&me->ldata, CD_MLOOPUV);
+    char *layer_name = bc_CustomData_get_active_layer_name(&me->ldata, CD_PROP_FLOAT2);
     if (layer_name) {
       return std::string(layer_name);
     }
@@ -1096,9 +1099,9 @@ static std::string bc_get_active_uvlayer_name(Object *ob)
  */
 static std::string bc_get_uvlayer_name(Mesh *me, int layer)
 {
-  int num_layers = CustomData_number_of_layers(&me->ldata, CD_MLOOPUV);
+  int num_layers = CustomData_number_of_layers(&me->ldata, CD_PROP_FLOAT2);
   if (num_layers && layer < num_layers) {
-    char *layer_name = bc_CustomData_get_layer_name(&me->ldata, CD_MLOOPUV, layer);
+    char *layer_name = bc_CustomData_get_layer_name(&me->ldata, CD_PROP_FLOAT2, layer);
     if (layer_name) {
       return std::string(layer_name);
     }

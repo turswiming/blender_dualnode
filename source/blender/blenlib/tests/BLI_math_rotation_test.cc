@@ -3,8 +3,10 @@
 #include "testing/testing.h"
 
 #include "BLI_math_base.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_rotation.hh"
+#include "BLI_math_rotation_legacy.hh"
 #include "BLI_math_vector.hh"
 
 #include "BLI_vector.hh"
@@ -138,6 +140,21 @@ TEST(math_rotation, quat_to_mat_to_quat_near_0001)
   test_quat_to_mat_to_quat(0.30f, -0.030f, -0.30f, 0.95f);
 }
 
+/* A zeroed matrix converted to a quaternion and back should not add rotation, see: T101848 */
+TEST(math_rotation, quat_to_mat_to_quat_zeroed_matrix)
+{
+  float matrix_zeroed[3][3] = {{0.0f}};
+  float matrix_result[3][3];
+  float matrix_unit[3][3];
+  float out_quat[4];
+
+  unit_m3(matrix_unit);
+  mat3_normalized_to_quat(out_quat, matrix_zeroed);
+  quat_to_mat3(matrix_result, out_quat);
+
+  EXPECT_M3_NEAR(matrix_unit, matrix_result, FLT_EPSILON);
+}
+
 TEST(math_rotation, quat_split_swing_and_twist_negative)
 {
   const float input[4] = {-0.5f, 0, sqrtf(3) / 2, 0};
@@ -204,7 +221,7 @@ static void test_sin_cos_from_fraction_symmetry(const int range)
         sin_cos_fl[0] = fabsf(sin_cos_fl[0]);
         sin_cos_fl[1] = fabsf(sin_cos_fl[1]);
         if (sin_cos_fl[0] > sin_cos_fl[1]) {
-          SWAP(float, sin_cos_fl[0], sin_cos_fl[1]);
+          std::swap(sin_cos_fl[0], sin_cos_fl[1]);
         }
         break;
       }
@@ -255,6 +272,20 @@ TEST(math_rotation, sin_cos_from_fraction_symmetry)
 
 namespace blender::math::tests {
 
+TEST(math_rotation, DefaultConstructor)
+{
+  Quaternion quat{};
+  EXPECT_EQ(quat.x, 0.0f);
+  EXPECT_EQ(quat.y, 0.0f);
+  EXPECT_EQ(quat.z, 0.0f);
+  EXPECT_EQ(quat.w, 0.0f);
+
+  EulerXYZ eul{};
+  EXPECT_EQ(eul.x, 0.0f);
+  EXPECT_EQ(eul.y, 0.0f);
+  EXPECT_EQ(eul.z, 0.0f);
+}
+
 TEST(math_rotation, RotateDirectionAroundAxis)
 {
   const float3 a = rotate_direction_around_axis({1, 0, 0}, {0, 0, 1}, M_PI_2);
@@ -269,6 +300,43 @@ TEST(math_rotation, RotateDirectionAroundAxis)
   EXPECT_NEAR(c.x, 0.0f, FLT_EPSILON);
   EXPECT_NEAR(c.y, 0.0f, FLT_EPSILON);
   EXPECT_NEAR(c.z, 1.0f, FLT_EPSILON);
+}
+
+TEST(math_rotation, AxisAngleConstructors)
+{
+  AxisAngle a({0.0f, 0.0f, 2.0f}, M_PI_2);
+  EXPECT_V3_NEAR(a.axis(), float3(0, 0, 1), 1e-4);
+  EXPECT_NEAR(a.angle(), M_PI_2, 1e-4);
+
+  AxisAngleNormalized b({0.0f, 0.0f, 1.0f}, M_PI_2);
+  EXPECT_V3_NEAR(b.axis(), float3(0, 0, 1), 1e-4);
+  EXPECT_NEAR(b.angle(), M_PI_2, 1e-4);
+
+  AxisAngle c({1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+  EXPECT_V3_NEAR(c.axis(), float3(0, 0, 1), 1e-4);
+  EXPECT_NEAR(c.angle(), M_PI_2, 1e-4);
+
+  AxisAngle d({1.0f, 0.0f, 0.0f}, {0.0f, -1.0f, 0.0f});
+  EXPECT_V3_NEAR(d.axis(), float3(0, 0, -1), 1e-4);
+  EXPECT_NEAR(d.angle(), M_PI_2, 1e-4);
+}
+
+TEST(math_rotation, TypeConversion)
+{
+  EulerXYZ euler(0, 0, M_PI_2);
+  Quaternion quat(M_SQRT1_2, 0.0f, 0.0f, M_SQRT1_2);
+  AxisAngle axis_angle({0.0f, 0.0f, 2.0f}, M_PI_2);
+
+  EXPECT_V4_NEAR(float4(Quaternion(euler)), float4(quat), 1e-4);
+  EXPECT_V3_NEAR(AxisAngle(euler).axis(), axis_angle.axis(), 1e-4);
+  EXPECT_NEAR(AxisAngle(euler).angle(), axis_angle.angle(), 1e-4);
+
+  EXPECT_V3_NEAR(float3(EulerXYZ(quat)), float3(euler), 1e-4);
+  EXPECT_V3_NEAR(AxisAngle(quat).axis(), axis_angle.axis(), 1e-4);
+  EXPECT_NEAR(AxisAngle(quat).angle(), axis_angle.angle(), 1e-4);
+
+  EXPECT_V3_NEAR(float3(EulerXYZ(axis_angle)), float3(euler), 1e-4);
+  EXPECT_V4_NEAR(float4(Quaternion(axis_angle)), float4(quat), 1e-4);
 }
 
 }  // namespace blender::math::tests

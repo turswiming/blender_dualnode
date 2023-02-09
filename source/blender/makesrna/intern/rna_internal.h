@@ -20,11 +20,9 @@ extern "C" {
 
 #define RNA_MAGIC ((int)~0)
 
-struct AssetLibraryReference;
 struct FreestyleSettings;
 struct ID;
 struct IDOverrideLibrary;
-struct IDOverrideLibraryenOperation;
 struct IDProperty;
 struct Main;
 struct Object;
@@ -322,7 +320,9 @@ void rna_object_vcollayer_name_set(struct PointerRNA *ptr,
 PointerRNA rna_object_shapekey_index_get(struct ID *id, int value);
 int rna_object_shapekey_index_set(struct ID *id, PointerRNA value, int current);
 
-void rna_def_object_type_visibility_flags_common(StructRNA *srna, int noteflag);
+void rna_def_object_type_visibility_flags_common(StructRNA *srna,
+                                                 int noteflag,
+                                                 const char *update_func);
 int rna_object_type_visibility_icon_get_common(int object_type_exclude_viewport,
                                                const int *object_type_exclude_select);
 
@@ -550,7 +550,7 @@ int rna_property_override_diff_default(struct Main *bmain,
                                        const char *rna_path,
                                        size_t rna_path_len,
                                        int flags,
-                                       bool *r_override_changed);
+                                       eRNAOverrideMatchResult *r_report_flag);
 
 bool rna_property_override_store_default(struct Main *bmain,
                                          struct PointerRNA *ptr_local,
@@ -662,7 +662,7 @@ const char *rna_translate_ui_text(const char *text,
                                   struct PropertyRNA *prop,
                                   bool translate);
 
-/* Internal functions that cycles uses so we need to declare (tsk!). */
+/* Internal functions that cycles uses so we need to declare (not ideal!). */
 void rna_RenderPass_rect_set(PointerRNA *ptr, const float *values);
 
 #ifdef RNA_RUNTIME

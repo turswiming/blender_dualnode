@@ -103,13 +103,20 @@ class DeviceQueue {
   /* Number of states which keeps the device occupied with work without losing performance.
    * The renderer will add more work (when available) when number of active paths falls below this
    * value. */
-  virtual int num_concurrent_busy_states() const = 0;
+  virtual int num_concurrent_busy_states(const size_t state_size) const = 0;
 
   /* Number of elements in a partition of sorted shaders, that improves memory locality of
    * integrator state fetch at the cost of decreased coherence for shader kernel execution. */
   virtual int num_sort_partition_elements() const
   {
     return 65536;
+  }
+
+  /* Does device support local atomic sorting kernels (INTEGRATOR_SORT_BUCKET_PASS and
+   * INTEGRATOR_SORT_WRITE_PASS)? */
+  virtual bool supports_local_atomic_sort() const
+  {
+    return false;
   }
 
   /* Initialize execution of kernels on this queue.

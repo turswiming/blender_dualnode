@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "BLI_math_vector_types.hh"
+
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
@@ -16,6 +18,8 @@
 
 #include "BKE_customdata.h"
 #include "BKE_editmesh.h"
+#include "BKE_editmesh_cache.h"
+#include "BKE_mesh.h"
 
 #include "draw_cache_extract.hh"
 
@@ -70,7 +74,7 @@ struct MeshRenderData {
   int freestyle_face_ofs;
   /** Mesh */
   Mesh *me;
-  const MVert *mvert;
+  const blender::float3 *vert_positions;
   const MEdge *medge;
   const MLoop *mloop;
   const MPoly *mpoly;
@@ -116,7 +120,7 @@ BLI_INLINE const Mesh *editmesh_final_or_this(const Object *object, const Mesh *
 
 BLI_INLINE const CustomData *mesh_cd_ldata_get_from_mesh(const Mesh *me)
 {
-  switch ((eMeshWrapperType)me->runtime.wrapper_type) {
+  switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_SUBD:
     case ME_WRAPPER_TYPE_MDATA:
       return &me->ldata;
@@ -132,7 +136,7 @@ BLI_INLINE const CustomData *mesh_cd_ldata_get_from_mesh(const Mesh *me)
 
 BLI_INLINE const CustomData *mesh_cd_pdata_get_from_mesh(const Mesh *me)
 {
-  switch ((eMeshWrapperType)me->runtime.wrapper_type) {
+  switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_SUBD:
     case ME_WRAPPER_TYPE_MDATA:
       return &me->pdata;
@@ -148,7 +152,7 @@ BLI_INLINE const CustomData *mesh_cd_pdata_get_from_mesh(const Mesh *me)
 
 BLI_INLINE const CustomData *mesh_cd_edata_get_from_mesh(const Mesh *me)
 {
-  switch ((eMeshWrapperType)me->runtime.wrapper_type) {
+  switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_SUBD:
     case ME_WRAPPER_TYPE_MDATA:
       return &me->edata;
@@ -164,7 +168,7 @@ BLI_INLINE const CustomData *mesh_cd_edata_get_from_mesh(const Mesh *me)
 
 BLI_INLINE const CustomData *mesh_cd_vdata_get_from_mesh(const Mesh *me)
 {
-  switch ((eMeshWrapperType)me->runtime.wrapper_type) {
+  switch (me->runtime->wrapper_type) {
     case ME_WRAPPER_TYPE_SUBD:
     case ME_WRAPPER_TYPE_MDATA:
       return &me->vdata;
@@ -265,10 +269,7 @@ using ExtractLVertBMeshFn = void(const MeshRenderData *mr,
                                  const BMVert *eve,
                                  int lvert_index,
                                  void *data);
-using ExtractLVertMeshFn = void(const MeshRenderData *mr,
-                                const MVert *mv,
-                                int lvert_index,
-                                void *data);
+using ExtractLVertMeshFn = void(const MeshRenderData *mr, int lvert_index, void *data);
 using ExtractLooseGeomSubdivFn = void(const DRWSubdivCache *subdiv_cache,
                                       const MeshRenderData *mr,
                                       void *buffer,
@@ -388,15 +389,15 @@ const MeshExtract *mesh_extract_override_get(const MeshExtract *extractor,
                                              bool do_single_mat);
 void mesh_render_data_face_flag(const MeshRenderData *mr,
                                 const BMFace *efa,
-                                int cd_ofs,
+                                BMUVOffsets offsets,
                                 EditLoopData *eattr);
 void mesh_render_data_loop_flag(const MeshRenderData *mr,
                                 BMLoop *l,
-                                int cd_ofs,
+                                BMUVOffsets offsets,
                                 EditLoopData *eattr);
 void mesh_render_data_loop_edge_flag(const MeshRenderData *mr,
                                      BMLoop *l,
-                                     int cd_ofs,
+                                     BMUVOffsets offsets,
                                      EditLoopData *eattr);
 
 extern const MeshExtract extract_tris;

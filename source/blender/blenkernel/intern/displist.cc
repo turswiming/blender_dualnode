@@ -532,6 +532,12 @@ static ModifierData *curve_get_tessellate_point(const Scene *scene,
       return pretessellatePoint;
     }
 
+    if (md->type == eModifierType_Smooth) {
+      /* Smooth modifier works with mesh edges explicitly
+       * (so needs tessellation, thus cannot work on control points). */
+      md->mode &= ~eModifierMode_ApplyOnSpline;
+      return pretessellatePoint;
+    }
     if (ELEM(md->type, eModifierType_Hook, eModifierType_Softbody, eModifierType_MeshDeform)) {
       pretessellatePoint = md;
 
@@ -606,6 +612,8 @@ void BKE_curve_calc_modifiers_pre(Depsgraph *depsgraph,
       if (mti->type != eModifierTypeType_OnlyDeform) {
         continue;
       }
+
+      blender::bke::ScopedModifierTimer modifier_timer{*md};
 
       if (!deformedVerts) {
         deformedVerts = BKE_curve_nurbs_vert_coords_alloc(source_nurb, &numVerts);
@@ -726,6 +734,8 @@ static GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
       mti->modifyGeometrySet(md, &mectx_apply, &geometry_set);
       continue;
     }
+
+    blender::bke::ScopedModifierTimer modifier_timer{*md};
 
     if (!geometry_set.has_mesh()) {
       geometry_set.replace_mesh(BKE_mesh_new_nomain(0, 0, 0, 0, 0));
@@ -1084,7 +1094,7 @@ static void calc_bevfac_mapping(const Curve *cu,
   }
 
   if (end < *r_start || (end == *r_start && *r_lastblend < 1.0f - *r_firstblend)) {
-    SWAP(int, *r_start, end);
+    std::swap(*r_start, end);
     tmpf = *r_lastblend;
     *r_lastblend = 1.0f - *r_firstblend;
     *r_firstblend = 1.0f - tmpf;
@@ -1194,7 +1204,7 @@ static GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
         }
 
         LISTBASE_FOREACH (DispList *, dlb, &dlbev) {
-          /* for each part of the bevel use a separate displblock */
+          /* For each part of the bevel use a separate display-block. */
           DispList *dl = MEM_cnew<DispList>(__func__);
           dl->verts = data = (float *)MEM_mallocN(sizeof(float[3]) * dlb->nr * steps, __func__);
           BLI_addtail(r_dispbase, dl);

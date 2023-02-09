@@ -223,9 +223,9 @@ static void get_vert2ob_distance(
 
   while (i-- > 0) {
     /* Get world-coordinates of the vertex (constraints and anim included). */
-    mul_v3_m4v3(v_wco, ob->obmat, v_cos[i]);
+    mul_v3_m4v3(v_wco, ob->object_to_world, v_cos[i]);
     /* Return distance between both coordinates. */
-    dist[i] = len_v3v3(v_wco, obr->obmat[3]);
+    dist[i] = len_v3v3(v_wco, obr->object_to_world[3]);
   }
 }
 
@@ -235,7 +235,7 @@ static void get_vert2ob_distance(
  */
 static float get_ob2ob_distance(const Object *ob, const Object *obr)
 {
-  return len_v3v3(ob->obmat[3], obr->obmat[3]);
+  return len_v3v3(ob->object_to_world[3], obr->object_to_world[3]);
 }
 
 /**
@@ -639,7 +639,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   TIMEIT_END(perf);
 #endif
 
-  mesh->runtime.is_original_bmesh = false;
+  mesh->runtime->is_original_bmesh = false;
 
   /* Return the vgroup-modified mesh. */
   return mesh;
@@ -736,35 +736,35 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_WeightVGProximity = {
-    /* name */ N_("VertexWeightProximity"),
-    /* structName */ "WeightVGProximityModifierData",
-    /* structSize */ sizeof(WeightVGProximityModifierData),
-    /* srna */ &RNA_VertexWeightProximityModifier,
-    /* type */ eModifierTypeType_NonGeometrical,
-    /* flags */ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
+    /*name*/ N_("VertexWeightProximity"),
+    /*structName*/ "WeightVGProximityModifierData",
+    /*structSize*/ sizeof(WeightVGProximityModifierData),
+    /*srna*/ &RNA_VertexWeightProximityModifier,
+    /*type*/ eModifierTypeType_NonGeometrical,
+    /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
         eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_UsesPreview,
-    /* icon */ ICON_MOD_VERTEX_WEIGHT,
+    /*icon*/ ICON_MOD_VERTEX_WEIGHT,
 
-    /* copyData */ copyData,
+    /*copyData*/ copyData,
 
-    /* deformVerts */ nullptr,
-    /* deformMatrices */ nullptr,
-    /* deformVertsEM */ nullptr,
-    /* deformMatricesEM */ nullptr,
-    /* modifyMesh */ modifyMesh,
-    /* modifyGeometrySet */ nullptr,
+    /*deformVerts*/ nullptr,
+    /*deformMatrices*/ nullptr,
+    /*deformVertsEM*/ nullptr,
+    /*deformMatricesEM*/ nullptr,
+    /*modifyMesh*/ modifyMesh,
+    /*modifyGeometrySet*/ nullptr,
 
-    /* initData */ initData,
-    /* requiredDataMask */ requiredDataMask,
-    /* freeData */ freeData,
-    /* isDisabled */ isDisabled,
-    /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ dependsOnTime,
-    /* dependsOnNormals */ nullptr,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ foreachTexLink,
-    /* freeRuntimeData */ nullptr,
-    /* panelRegister */ panelRegister,
-    /* blendWrite */ blendWrite,
-    /* blendRead */ blendRead,
+    /*initData*/ initData,
+    /*requiredDataMask*/ requiredDataMask,
+    /*freeData*/ freeData,
+    /*isDisabled*/ isDisabled,
+    /*updateDepsgraph*/ updateDepsgraph,
+    /*dependsOnTime*/ dependsOnTime,
+    /*dependsOnNormals*/ nullptr,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ foreachTexLink,
+    /*freeRuntimeData*/ nullptr,
+    /*panelRegister*/ panelRegister,
+    /*blendWrite*/ blendWrite,
+    /*blendRead*/ blendRead,
 };

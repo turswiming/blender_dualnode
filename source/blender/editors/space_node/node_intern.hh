@@ -9,8 +9,8 @@
 
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
-#include "BLI_set.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
 #include "BKE_node.h"
 
@@ -19,8 +19,6 @@
 #include "UI_view2d.h"
 
 struct ARegion;
-struct ARegionType;
-struct Main;
 struct NodeInsertOfsData;
 struct View2D;
 struct bContext;
@@ -38,24 +36,31 @@ extern const char *node_context_dir[];
 
 namespace blender::ed::space_node {
 
+struct AssetItemTree;
+
 /** Temporary data used in node link drag modal operator. */
 struct bNodeLinkDrag {
   /** Links dragged by the operator. */
-  Vector<bNodeLink *> links;
-  bool from_multi_input_socket;
+  Vector<bNodeLink> links;
   eNodeSocketInOut in_out;
 
-  /** Draw handler for the "+" icon when dragging a link in empty space. */
+  /** Draw handler for the tooltip icon when dragging a link in empty space. */
   void *draw_handle;
 
   /** Temporarily stores the last picked link from multi-input socket operator. */
   bNodeLink *last_picked_multi_input_socket_link;
 
   /**
-   * Temporarily stores the last hovered socket for multi-input socket operator.
+   * Temporarily stores the last hovered node for multi-input socket operator.
    * Store it to recalculate sorting after it is no longer hovered.
    */
   bNode *last_node_hovered_while_dragging_a_link;
+
+  /**
+   * Temporarily stores the currently hovered socket for link swapping to allow reliably swap links
+   * even when dragging multiple links at once. `nullptr`, when no socket is hovered.
+   */
+  bNodeSocket *hovered_socket;
 
   /* The cursor position, used for drawing a + icon when dragging a node link. */
   std::array<int, 2> cursor;
@@ -67,11 +72,19 @@ struct bNodeLinkDrag {
   /** The number of links connected to the #start_socket when the drag started. */
   int start_link_count;
 
+  bool swap_links = false;
+
   /* Data for edge panning */
   View2DEdgePanData pan_data;
 };
 
 struct SpaceNode_Runtime {
+  /**
+   * The location of all sockets in the tree, calculated while drawing the nodes.
+   * To be indexed with #bNodeSocket::index_in_tree().
+   */
+  Vector<float2> all_socket_locations;
+
   float aspect;
 
   /** Mouse position for drawing socket-less links and adding nodes. */
@@ -96,6 +109,15 @@ struct SpaceNode_Runtime {
   /* XXX hack for translate_attach op-macros to pass data from transform op to insert_offset op */
   /** Temporary data for node insert offset (in UI called Auto-offset). */
   struct NodeInsertOfsData *iofsd;
+
+  /**
+   * Temporary data for node add menu in order to provide longer-term storage for context pointers.
+   * Recreated every time the root menu is opened. In the future this will be replaced with an "all
+   * libraries" cache in the asset system itself.
+   *
+   * Stored with a shared pointer so that it can be forward declared.
+   */
+  std::shared_ptr<AssetItemTree> assets_for_menu;
 };
 
 enum NodeResizeDirection {
@@ -145,10 +167,7 @@ void node_socket_color_get(const bContext &C,
 
 void node_draw_space(const bContext &C, ARegion &region);
 
-void node_socket_add_tooltip(const bNodeTree &ntree,
-                             const bNode &node,
-                             const bNodeSocket &sock,
-                             uiLayout &layout);
+void node_socket_add_tooltip(const bNodeTree &ntree, const bNodeSocket &sock, uiLayout &layout);
 
 /**
  * Sort nodes by selection: unselected nodes first, then selected,
@@ -172,12 +191,11 @@ void node_keymap(wmKeyConfig *keyconf);
 rctf node_frame_rect_inside(const bNode &node);
 bool node_or_socket_isect_event(const bContext &C, const wmEvent &event);
 
-Set<bNode *> get_selected_nodes(bNodeTree &node_tree);
-void node_deselect_all(SpaceNode &snode);
+void node_deselect_all(bNodeTree &node_tree);
 void node_socket_select(bNode *node, bNodeSocket &sock);
 void node_socket_deselect(bNode *node, bNodeSocket &sock, bool deselect_node);
-void node_deselect_all_input_sockets(SpaceNode &snode, bool deselect_nodes);
-void node_deselect_all_output_sockets(SpaceNode &snode, bool deselect_nodes);
+void node_deselect_all_input_sockets(bNodeTree &node_tree, bool deselect_nodes);
+void node_deselect_all_output_sockets(bNodeTree &node_tree, bool deselect_nodes);
 void node_select_single(bContext &C, bNode &node);
 
 void NODE_OT_select(wmOperatorType *ot);
@@ -235,10 +253,13 @@ void node_draw_link_bezier(const bContext &C,
                            int th_col3,
                            bool selected);
 
-void node_link_bezier_points_evaluated(const bNodeLink &link,
+void node_link_bezier_points_evaluated(Span<float2> all_socket_locations,
+                                       const bNodeLink &link,
                                        std::array<float2, NODE_LINK_RESOL + 1> &coords);
 
-std::optional<float2> link_path_intersection(const bNodeLink &link, Span<float2> path);
+std::optional<float2> link_path_intersection(Span<float2> socket_locations,
+                                             const bNodeLink &link,
+                                             Span<float2> path);
 
 void draw_nodespace_back_pix(const bContext &C,
                              ARegion &region,
@@ -253,6 +274,7 @@ bNode *add_static_node(const bContext &C, int type, const float2 &location);
 void NODE_OT_add_reroute(wmOperatorType *ot);
 void NODE_OT_add_search(wmOperatorType *ot);
 void NODE_OT_add_group(wmOperatorType *ot);
+void NODE_OT_add_group_asset(wmOperatorType *ot);
 void NODE_OT_add_object(wmOperatorType *ot);
 void NODE_OT_add_collection(wmOperatorType *ot);
 void NODE_OT_add_file(wmOperatorType *ot);
@@ -270,6 +292,8 @@ void NODE_OT_group_edit(wmOperatorType *ot);
 
 /* node_relationships.cc */
 
+void update_multi_input_indices_for_removed_links(bNode &node);
+
 void NODE_OT_link(wmOperatorType *ot);
 void NODE_OT_link_make(wmOperatorType *ot);
 void NODE_OT_links_cut(wmOperatorType *ot);
@@ -284,6 +308,8 @@ void NODE_OT_detach(wmOperatorType *ot);
 void NODE_OT_link_viewer(wmOperatorType *ot);
 
 void NODE_OT_insert_offset(wmOperatorType *ot);
+
+struct wmKeyMap *node_link_modal_keymap(struct wmKeyConfig *keyconf);
 
 /* node_edit.cc */
 
@@ -302,14 +328,15 @@ bool composite_node_editable(bContext *C);
 bool node_has_hidden_sockets(bNode *node);
 void node_set_hidden_sockets(SpaceNode *snode, bNode *node, int set);
 int node_render_changed_exec(bContext *, wmOperator *);
-/** Type is #SOCK_IN and/or #SOCK_OUT. */
-bool node_find_indicated_socket(SpaceNode &snode,
-                                bNode **nodep,
-                                bNodeSocket **sockp,
-                                const float2 &cursor,
-                                eNodeSocketInOut in_out);
-float node_link_dim_factor(const View2D &v2d, const bNodeLink &link);
-bool node_link_is_hidden_or_dimmed(const View2D &v2d, const bNodeLink &link);
+bNodeSocket *node_find_indicated_socket(SpaceNode &snode,
+                                        const float2 &cursor,
+                                        eNodeSocketInOut in_out);
+float node_link_dim_factor(Span<float2> socket_locations,
+                           const View2D &v2d,
+                           const bNodeLink &link);
+bool node_link_is_hidden_or_dimmed(Span<float2> socket_locations,
+                                   const View2D &v2d,
+                                   const bNodeLink &link);
 
 void NODE_OT_duplicate(wmOperatorType *ot);
 void NODE_OT_delete(wmOperatorType *ot);
@@ -380,5 +407,10 @@ void invoke_node_link_drag_add_menu(bContext &C,
 /* add_node_search.cc */
 
 void invoke_add_node_search_menu(bContext &C, const float2 &cursor, bool use_transform);
+
+/* add_menu_assets.cc */
+
+MenuType add_catalog_assets_menu_type();
+MenuType add_root_catalogs_menu_type();
 
 }  // namespace blender::ed::space_node

@@ -245,8 +245,8 @@ static void gizmo_mesh_placement_setup(const bContext *C, wmGizmoGroup *gzgroup)
 
   RNA_enum_set(ggd->cage->ptr,
                "transform",
-               ED_GIZMO_CAGE2D_XFORM_FLAG_SCALE | ED_GIZMO_CAGE2D_XFORM_FLAG_TRANSLATE |
-                   ED_GIZMO_CAGE2D_XFORM_FLAG_SCALE_SIGNED);
+               ED_GIZMO_CAGE_XFORM_FLAG_SCALE | ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE |
+                   ED_GIZMO_CAGE_XFORM_FLAG_SCALE_SIGNED);
 
   WM_gizmo_set_flag(ggd->cage, WM_GIZMO_DRAW_VALUE, true);
 
@@ -316,8 +316,8 @@ static int add_primitive_cube_gizmo_exec(bContext *C, wmOperator *op)
     PropertyRNA *prop_matrix = RNA_struct_find_property(op->ptr, "matrix");
     if (RNA_property_is_set(op->ptr, prop_matrix)) {
       RNA_property_float_get_array(op->ptr, prop_matrix, &matrix[0][0]);
-      invert_m4_m4(obedit->imat, obedit->obmat);
-      mul_m4_m4m4(matrix, obedit->imat, matrix);
+      invert_m4_m4(obedit->world_to_object, obedit->object_to_world);
+      mul_m4_m4m4(matrix, obedit->world_to_object, matrix);
     }
     else {
       /* For the first update the widget may not set the matrix. */

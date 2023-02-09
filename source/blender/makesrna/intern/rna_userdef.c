@@ -29,6 +29,8 @@
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
+#include "GPU_platform.h"
+
 #include "UI_interface_icons.h"
 
 #include "rna_internal.h"
@@ -135,6 +137,13 @@ static const EnumPropertyItem rna_enum_userdef_viewport_aa_items[] = {
      0,
      "32 Samples",
      "Scene will be rendered using 32 anti-aliasing samples"},
+    {0, NULL, 0, NULL, NULL},
+};
+
+static const EnumPropertyItem rna_enum_preference_gpu_backend_items[] = {
+    {GPU_BACKEND_OPENGL, "OPENGL", 0, "OpenGL", "Use OpenGL backend"},
+    {GPU_BACKEND_METAL, "METAL", 0, "Metal", "Use Metal backend"},
+    {GPU_BACKEND_VULKAN, "VULKAN", 0, "Vulkan", "Use Vulkan backend"},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -574,7 +583,7 @@ static void rna_Userdef_disk_cache_dir_update(Main *UNUSED(bmain),
 {
   if (U.sequencer_disk_cache_dir[0] != '\0') {
     BLI_path_abs(U.sequencer_disk_cache_dir, BKE_main_blendfile_path_from_global());
-    BLI_path_slash_ensure(U.sequencer_disk_cache_dir);
+    BLI_path_slash_ensure(U.sequencer_disk_cache_dir, sizeof(U.sequencer_disk_cache_dir));
     BLI_path_make_safe(U.sequencer_disk_cache_dir);
   }
 
@@ -1029,6 +1038,33 @@ static void rna_UserDef_studiolight_light_ambient_get(PointerRNA *ptr, float *va
 int rna_show_statusbar_vram_editable(struct PointerRNA *UNUSED(ptr), const char **UNUSED(r_info))
 {
   return GPU_mem_stats_supported() ? PROP_EDITABLE : 0;
+}
+
+static const EnumPropertyItem *rna_preference_gpu_backend_itemf(struct bContext *UNUSED(C),
+                                                                PointerRNA *UNUSED(ptr),
+                                                                PropertyRNA *UNUSED(prop),
+                                                                bool *r_free)
+{
+  int totitem = 0;
+  EnumPropertyItem *result = NULL;
+  for (int i = 0; rna_enum_preference_gpu_backend_items[i].identifier != NULL; i++) {
+    const EnumPropertyItem *item = &rna_enum_preference_gpu_backend_items[i];
+#  ifndef WITH_METAL_BACKEND
+    if (item->value == GPU_BACKEND_METAL) {
+      continue;
+    }
+#  endif
+#  ifndef WITH_VULKAN_BACKEND
+    if (item->value == GPU_BACKEND_VULKAN) {
+      continue;
+    }
+#  endif
+    RNA_enum_item_add(&result, &totitem, item);
+  }
+
+  RNA_enum_item_end(&result, &totitem);
+  *r_free = true;
+  return result;
 }
 
 #else
@@ -5232,6 +5268,12 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Duplicate Volume", "Causes volume data to be duplicated with the object");
 
+  prop = RNA_def_property(srna, "use_duplicate_node_tree", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "dupflag", USER_DUP_NTREE);
+  RNA_def_property_ui_text(prop,
+                           "Duplicate Node Tree",
+                           "Make copies of node groups when duplicating nodes in the node editor");
+
   /* Currently only used for insert offset (aka auto-offset),
    * maybe also be useful for later stuff though. */
   prop = RNA_def_property(srna, "node_margin", PROP_INT, PROP_PIXEL);
@@ -5597,6 +5639,16 @@ static void rna_def_userdef_system(BlenderRNA *brna)
                            "Enable GPU acceleration for evaluating the last subdivision surface "
                            "modifiers in the stack");
   RNA_def_property_update(prop, 0, "rna_UserDef_subdivision_update");
+
+  /* GPU backend selection */
+  prop = RNA_def_property(srna, "gpu_backend", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "gpu_backend");
+  RNA_def_property_enum_items(prop, rna_enum_preference_gpu_backend_items);
+  RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_preference_gpu_backend_itemf");
+  RNA_def_property_ui_text(
+      prop,
+      "GPU Backend",
+      "GPU backend to use (requires restarting Blender for changes to take effect)");
 
   /* Audio */
 
@@ -6175,7 +6227,7 @@ static void rna_def_userdef_filepaths(BlenderRNA *brna)
       prop,
       "Python Scripts Directory",
       "Alternate script path, matching the default layout with subdirectories: "
-      "startup, add-ons, modules, and presets (requires restart)");
+      "`startup`, `addons`, `modules`, and `presets` (requires restart)");
   /* TODO: editing should reset sys.path! */
 
   prop = RNA_def_property(srna, "i18n_branches_directory", PROP_STRING, PROP_DIRPATH);
@@ -6340,18 +6392,9 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Sculpt Mode Tilt Support", "Support for pen tablet tilt events in Sculpt Mode");
 
-  prop = RNA_def_property(srna, "use_realtime_compositor", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "use_realtime_compositor", 1);
-  RNA_def_property_ui_text(prop, "Realtime Compositor", "Enable the new realtime compositor");
-
   prop = RNA_def_property(srna, "use_sculpt_texture_paint", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "use_sculpt_texture_paint", 1);
   RNA_def_property_ui_text(prop, "Sculpt Texture Paint", "Use texture painting in Sculpt Mode");
-
-  prop = RNA_def_property(srna, "use_draw_manager_acquire_lock", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "use_draw_manager_acquire_lock", 1);
-  RNA_def_property_ui_text(
-      prop, "Draw Manager Locking", "Don't lock UI during background rendering");
 
   prop = RNA_def_property(srna, "use_extended_asset_browser", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_ui_text(prop,
@@ -6383,6 +6426,13 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "enable_eevee_next", 1);
   RNA_def_property_ui_text(prop, "EEVEE Next", "Enable the new EEVEE codebase, requires restart");
 
+  prop = RNA_def_property(srna, "enable_workbench_next", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "enable_workbench_next", 1);
+  RNA_def_property_ui_text(prop,
+                           "Workbench Next",
+                           "Enable the new Workbench codebase, requires "
+                           "restart");
+
   prop = RNA_def_property(srna, "use_viewport_debug", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "use_viewport_debug", 1);
   RNA_def_property_ui_text(prop,
@@ -6395,6 +6445,13 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "enable_overlay_next", 1);
   RNA_def_property_ui_text(
       prop, "Overlay Next", "Enable the new Overlay codebase, requires restart");
+
+  prop = RNA_def_property(srna, "use_all_linked_data_direct", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "All Linked Data Direct",
+      "Forces all linked data to be considered as directly linked. Workaround for current "
+      "issues/limitations in BAT (Blender studio pipeline tool)");
 }
 
 static void rna_def_userdef_addon_collection(BlenderRNA *brna, PropertyRNA *cprop)

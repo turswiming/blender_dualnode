@@ -46,8 +46,10 @@ int GHOST_ContextCGL::s_sharedCount = 0;
 GHOST_ContextCGL::GHOST_ContextCGL(bool stereoVisual,
                                    NSView *metalView,
                                    CAMetalLayer *metalLayer,
-                                   NSOpenGLView *openGLView)
+                                   NSOpenGLView *openGLView,
+                                   GHOST_TDrawingContextType type)
     : GHOST_Context(stereoVisual),
+      m_useMetalForRendering(type == GHOST_kDrawingContextTypeMetal),
       m_metalView(metalView),
       m_metalLayer(metalLayer),
       m_metalCmdQueue(nil),
@@ -527,7 +529,8 @@ void GHOST_ContextCGL::metalInit()
     id<MTLDevice> device = m_metalLayer.device;
 
     /* Create a command queue for blit/present operation. */
-    m_metalCmdQueue = (MTLCommandQueue *)[device newCommandQueue];
+    m_metalCmdQueue = (MTLCommandQueue *)[device
+        newCommandQueueWithMaxCommandBufferCount:GHOST_ContextCGL::max_command_buffer_count];
     [m_metalCmdQueue retain];
 
     /* Create shaders for blit operation. */

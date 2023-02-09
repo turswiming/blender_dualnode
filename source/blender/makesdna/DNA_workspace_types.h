@@ -186,7 +186,7 @@ typedef struct WorkSpaceDataRelation {
   /** The value for this parent-data/workspace relation. */
   void *value;
 
-  /** Reference to the actual parent window, wmWindow->winid. Used in read/write code. */
+  /** Reference to the actual parent window, #wmWindow.winid. Used in read/write code. */
   int parentid;
   char _pad_0[4];
 } WorkSpaceDataRelation;
@@ -199,8 +199,10 @@ typedef struct WorkSpaceInstanceHook {
   WorkSpace *active;
   struct WorkSpaceLayout *act_layout;
 
-  /** Needed because we can't change workspaces/layouts in running handler loop,
-   * it would break context. */
+  /**
+   * Needed because we can't change work-spaces/layouts in running handler loop,
+   * it would break context.
+   */
   WorkSpace *temp_workspace_store;
   struct WorkSpaceLayout *temp_layout_store;
 } WorkSpaceInstanceHook;

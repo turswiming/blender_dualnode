@@ -14,6 +14,8 @@
 #include "Stroke.h"
 #include "StrokeIterators.h"
 
+#include "BLI_sys_types.h"
+
 #include "BKE_global.h"
 
 namespace Freestyle {
@@ -873,13 +875,13 @@ static int __recursiveSplit(Chain *_curve,
   ++it;
   // real mean = 0.0f;
   // soc unused - real variance                              = 0.0f;
-  uint count = 0;
+  // uint count = 0;
   CurveInternal::CurvePointIterator next = it;
   ++next;
 
   bool bsplit = false;
   for (; ((it != end) && (next != end)); ++it, ++next) {
-    ++count;
+    // ++count;
     it0d = it.castToInterface0DIterator();
     if (pred0d(it0d) < 0) {
       return -1;

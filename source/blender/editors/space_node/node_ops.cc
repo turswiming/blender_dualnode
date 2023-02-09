@@ -78,6 +78,7 @@ void node_operatortypes()
 
   WM_operatortype_append(NODE_OT_add_search);
   WM_operatortype_append(NODE_OT_add_group);
+  WM_operatortype_append(NODE_OT_add_group_asset);
   WM_operatortype_append(NODE_OT_add_object);
   WM_operatortype_append(NODE_OT_add_collection);
   WM_operatortype_append(NODE_OT_add_file);
@@ -120,6 +121,8 @@ void node_keymap(wmKeyConfig *keyconf)
 
   /* Main Region only ----------------- */
   WM_keymap_ensure(keyconf, "Node Editor", SPACE_NODE, 0);
+
+  node_link_modal_keymap(keyconf);
 }
 
 }  // namespace blender::ed::space_node
@@ -174,7 +177,17 @@ void ED_operatormacros_node()
                                     "Duplicate",
                                     "Duplicate selected nodes and move them",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
-  WM_operatortype_macro_define(ot, "NODE_OT_duplicate");
+  mot = WM_operatortype_macro_define(ot, "NODE_OT_duplicate");
+  RNA_boolean_set(mot->ptr, "linked", false);
+  WM_operatortype_macro_define(ot, "NODE_OT_translate_attach");
+
+  ot = WM_operatortype_append_macro(
+      "NODE_OT_duplicate_move_linked",
+      "Duplicate Linked",
+      "Duplicate selected nodes, but not their node trees, and move them",
+      OPTYPE_UNDO | OPTYPE_REGISTER);
+  mot = WM_operatortype_macro_define(ot, "NODE_OT_duplicate");
+  RNA_boolean_set(mot->ptr, "linked", true);
   WM_operatortype_macro_define(ot, "NODE_OT_translate_attach");
 
   /* modified operator call for duplicating with input links */

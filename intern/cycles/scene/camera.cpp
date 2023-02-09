@@ -32,7 +32,7 @@ static float shutter_curve_eval(float x, array<float> &shutter_curve)
     return 1.0f;
   }
 
-  x *= shutter_curve.size();
+  x = saturatef(x) * shutter_curve.size() - 1;
   int index = (int)x;
   float frac = x - index;
   if (index < shutter_curve.size() - 1) {
@@ -84,6 +84,7 @@ NODE_DEFINE(Camera)
 
   static NodeEnum panorama_type_enum;
   panorama_type_enum.insert("equirectangular", PANORAMA_EQUIRECTANGULAR);
+  panorama_type_enum.insert("equiangular_cubemap_face", PANORAMA_EQUIANGULAR_CUBEMAP_FACE);
   panorama_type_enum.insert("mirrorball", PANORAMA_MIRRORBALL);
   panorama_type_enum.insert("fisheye_equidistant", PANORAMA_FISHEYE_EQUIDISTANT);
   panorama_type_enum.insert("fisheye_equisolid", PANORAMA_FISHEYE_EQUISOLID);

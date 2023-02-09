@@ -203,10 +203,9 @@ static bool view3d_project_segment_to_screen_with_clip_tag(const ARegion *region
  * \{ */
 
 struct foreachScreenObjectVert_userData {
-  void (*func)(void *userData, MVert *mv, const float screen_co[2], int index);
+  void (*func)(void *userData, const float screen_co[2], int index);
   void *userData;
   ViewContext vc;
-  MVert *verts;
   const bool *hide_vert;
   eV3DProjTest clip_flag;
 };
@@ -269,7 +268,6 @@ static void meshobject_foreachScreenVert__mapFunc(void *userData,
   if (data->hide_vert && data->hide_vert[index]) {
     return;
   }
-  MVert *mv = &data->verts[index];
 
   float screen_co[2];
 
@@ -278,14 +276,15 @@ static void meshobject_foreachScreenVert__mapFunc(void *userData,
     return;
   }
 
-  data->func(data->userData, mv, screen_co, index);
+  data->func(data->userData, screen_co, index);
 }
 
-void meshobject_foreachScreenVert(
-    ViewContext *vc,
-    void (*func)(void *userData, MVert *eve, const float screen_co[2], int index),
-    void *userData,
-    eV3DProjTest clip_flag)
+void meshobject_foreachScreenVert(ViewContext *vc,
+                                  void (*func)(void *userData,
+                                               const float screen_co[2],
+                                               int index),
+                                  void *userData,
+                                  eV3DProjTest clip_flag)
 {
   BLI_assert((clip_flag & V3D_PROJ_TEST_CLIP_CONTENT) == 0);
   foreachScreenObjectVert_userData data;
@@ -302,12 +301,11 @@ void meshobject_foreachScreenVert(
   data.func = func;
   data.userData = userData;
   data.clip_flag = clip_flag;
-  data.verts = BKE_mesh_verts_for_write((Mesh *)vc->obact->data);
   data.hide_vert = (const bool *)CustomData_get_layer_named(
       &me->vdata, CD_PROP_BOOL, ".hide_vert");
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d, vc->obact->obmat);
+    ED_view3d_clipping_local(vc->rv3d, vc->obact->object_to_world);
   }
 
   BKE_mesh_foreach_mapped_vert(me, meshobject_foreachScreenVert__mapFunc, &data, MESH_FOREACH_NOP);
@@ -353,7 +351,8 @@ void mesh_foreachScreenVert(
   data.clip_flag = clip_flag;
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d, vc->obedit->obmat); /* for local clipping lookups */
+    ED_view3d_clipping_local(vc->rv3d,
+                             vc->obedit->object_to_world); /* for local clipping lookups */
   }
 
   BM_mesh_elem_table_ensure(vc->em->bm, BM_VERT);
@@ -422,7 +421,8 @@ void mesh_foreachScreenEdge(ViewContext *vc,
   data.clip_flag = clip_flag;
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d, vc->obedit->obmat); /* for local clipping lookups */
+    ED_view3d_clipping_local(vc->rv3d,
+                             vc->obedit->object_to_world); /* for local clipping lookups */
   }
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_CONTENT) {
@@ -520,7 +520,8 @@ void mesh_foreachScreenEdge_clip_bb_segment(ViewContext *vc,
   BM_mesh_elem_table_ensure(vc->em->bm, BM_EDGE);
 
   if ((clip_flag & V3D_PROJ_TEST_CLIP_BB) && (vc->rv3d->clipbb != nullptr)) {
-    ED_view3d_clipping_local(vc->rv3d, vc->obedit->obmat); /* for local clipping lookups. */
+    ED_view3d_clipping_local(vc->rv3d,
+                             vc->obedit->object_to_world); /* for local clipping lookups. */
     BKE_mesh_foreach_mapped_edge(
         me, vc->em->bm->totedge, mesh_foreachScreenEdge_clip_bb_segment__mapFunc, &data);
   }
@@ -576,12 +577,12 @@ void mesh_foreachScreenFace(
 
   BM_mesh_elem_table_ensure(vc->em->bm, BM_FACE);
 
-  if (me->runtime.subsurf_face_dot_tags != nullptr) {
-    BKE_mesh_foreach_mapped_subdiv_face_center(
+  if (me->runtime->subsurf_face_dot_tags.size() == me->totvert) {
+    BKE_mesh_foreach_mapped_face_center(
         me, mesh_foreachScreenFace__mapFunc, &data, MESH_FOREACH_NOP);
   }
   else {
-    BKE_mesh_foreach_mapped_face_center(
+    BKE_mesh_foreach_mapped_subdiv_face_center(
         me, mesh_foreachScreenFace__mapFunc, &data, MESH_FOREACH_NOP);
   }
 }
@@ -612,7 +613,8 @@ void nurbs_foreachScreenVert(ViewContext *vc,
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d, vc->obedit->obmat); /* for local clipping lookups */
+    ED_view3d_clipping_local(vc->rv3d,
+                             vc->obedit->object_to_world); /* for local clipping lookups */
   }
 
   LISTBASE_FOREACH (Nurb *, nu, nurbs) {
@@ -732,7 +734,7 @@ void lattice_foreachScreenVert(ViewContext *vc,
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
   if (clip_flag & V3D_PROJ_TEST_CLIP_BB) {
-    ED_view3d_clipping_local(vc->rv3d, obedit->obmat); /* for local clipping lookups */
+    ED_view3d_clipping_local(vc->rv3d, obedit->object_to_world); /* for local clipping lookups */
   }
 
   for (i = 0; i < N; i++, bp++, co += 3) {

@@ -20,6 +20,7 @@
 #include "WM_api.h"
 
 #include "BLI_length_parameterize.hh"
+#include "BLI_math_matrix.hh"
 
 #include "GEO_add_curves_on_mesh.hh"
 
@@ -70,7 +71,7 @@ struct PuffOperationExecutor {
 
   Object *surface_ob_ = nullptr;
   Mesh *surface_ = nullptr;
-  Span<MVert> surface_verts_;
+  Span<float3> surface_positions_;
   Span<MLoop> surface_loops_;
   Span<MLoopTri> surface_looptris_;
   Span<float3> corner_normals_su_;
@@ -87,11 +88,12 @@ struct PuffOperationExecutor {
 
     object_ = CTX_data_active_object(&C);
     curves_id_ = static_cast<Curves *>(object_->data);
-    curves_ = &CurvesGeometry::wrap(curves_id_->geometry);
+    curves_ = &curves_id_->geometry.wrap();
     if (curves_->curves_num() == 0) {
       return;
     }
     if (curves_id_->surface == nullptr || curves_id_->surface->type != OB_MESH) {
+      report_missing_surface(stroke_extension.reports);
       return;
     }
 
@@ -102,8 +104,9 @@ struct PuffOperationExecutor {
     brush_strength_ = brush_strength_get(*ctx_.scene, *brush_, stroke_extension);
     brush_pos_re_ = stroke_extension.mouse_position;
 
-    point_factors_ = get_point_selection(*curves_id_);
-    curve_selection_ = retrieve_selected_curves(*curves_id_, selected_curve_indices_);
+    point_factors_ = curves_->attributes().lookup_or_default<float>(
+        ".selection", ATTR_DOMAIN_POINT, 1.0f);
+    curve_selection_ = curves::retrieve_selected_curves(*curves_id_, selected_curve_indices_);
 
     falloff_shape_ = static_cast<eBrushFalloffShape>(brush_->falloff_shape);
 
@@ -119,7 +122,7 @@ struct PuffOperationExecutor {
         reinterpret_cast<const float3 *>(CustomData_get_layer(&surface_->ldata, CD_NORMAL)),
         surface_->totloop};
 
-    surface_verts_ = surface_->verts();
+    surface_positions_ = surface_->vert_positions();
     surface_loops_ = surface_->loops();
     surface_looptris_ = surface_->looptris();
     BKE_bvhtree_from_mesh_get(&surface_bvh_, surface_, BVHTREE_FROM_LOOPTRI, 2);
@@ -171,28 +174,31 @@ struct PuffOperationExecutor {
   void find_curve_weights_projected(const float4x4 &brush_transform,
                                     MutableSpan<float> r_curve_weights)
   {
-    const float4x4 brush_transform_inv = brush_transform.inverted();
+    const float4x4 brush_transform_inv = math::invert(brush_transform);
 
     float4x4 projection;
-    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.values);
+    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.ptr());
 
     const float brush_radius_re = brush_radius_base_re_ * brush_radius_factor_;
     const float brush_radius_sq_re = pow2f(brush_radius_re);
 
     const bke::crazyspace::GeometryDeformation deformation =
         bke::crazyspace::get_evaluated_curves_deformation(*ctx_.depsgraph, *object_);
+    const OffsetIndices points_by_curve = curves_->points_by_curve();
 
     threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
       for (const int curve_selection_i : range) {
         const int curve_i = curve_selection_[curve_selection_i];
-        const IndexRange points = curves_->points_for_curve(curve_i);
-        const float3 first_pos_cu = brush_transform_inv * deformation.positions[points[0]];
+        const IndexRange points = points_by_curve[curve_i];
+        const float3 first_pos_cu = math::transform_point(brush_transform_inv,
+                                                          deformation.positions[points[0]]);
         float2 prev_pos_re;
-        ED_view3d_project_float_v2_m4(ctx_.region, first_pos_cu, prev_pos_re, projection.values);
+        ED_view3d_project_float_v2_m4(ctx_.region, first_pos_cu, prev_pos_re, projection.ptr());
         for (const int point_i : points.drop_front(1)) {
-          const float3 pos_cu = brush_transform_inv * deformation.positions[point_i];
+          const float3 pos_cu = math::transform_point(brush_transform_inv,
+                                                      deformation.positions[point_i]);
           float2 pos_re;
-          ED_view3d_project_float_v2_m4(ctx_.region, pos_cu, pos_re, projection.values);
+          ED_view3d_project_float_v2_m4(ctx_.region, pos_cu, pos_re, projection.ptr());
           BLI_SCOPED_DEFER([&]() { prev_pos_re = pos_re; });
 
           const float dist_to_brush_sq_re = dist_squared_to_line_segment_v2(
@@ -214,22 +220,23 @@ struct PuffOperationExecutor {
   void find_curves_weights_spherical_with_symmetry(MutableSpan<float> r_curve_weights)
   {
     float4x4 projection;
-    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.values);
+    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.ptr());
 
     float3 brush_pos_wo;
-    ED_view3d_win_to_3d(ctx_.v3d,
-                        ctx_.region,
-                        transforms_.curves_to_world * self_->brush_3d_.position_cu,
-                        brush_pos_re_,
-                        brush_pos_wo);
-    const float3 brush_pos_cu = transforms_.world_to_curves * brush_pos_wo;
+    ED_view3d_win_to_3d(
+        ctx_.v3d,
+        ctx_.region,
+        math::transform_point(transforms_.curves_to_world, self_->brush_3d_.position_cu),
+        brush_pos_re_,
+        brush_pos_wo);
+    const float3 brush_pos_cu = math::transform_point(transforms_.world_to_curves, brush_pos_wo);
     const float brush_radius_cu = self_->brush_3d_.radius_cu * brush_radius_factor_;
 
     const Vector<float4x4> symmetry_brush_transforms = get_symmetry_brush_transforms(
         eCurvesSymmetryType(curves_id_->symmetry));
     for (const float4x4 &brush_transform : symmetry_brush_transforms) {
       this->find_curves_weights_spherical(
-          brush_transform * brush_pos_cu, brush_radius_cu, r_curve_weights);
+          math::transform_point(brush_transform, brush_pos_cu), brush_radius_cu, r_curve_weights);
     }
   }
 
@@ -241,11 +248,12 @@ struct PuffOperationExecutor {
 
     const bke::crazyspace::GeometryDeformation deformation =
         bke::crazyspace::get_evaluated_curves_deformation(*ctx_.depsgraph, *object_);
+    const OffsetIndices points_by_curve = curves_->points_by_curve();
 
     threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
       for (const int curve_selection_i : range) {
         const int curve_i = curve_selection_[curve_selection_i];
-        const IndexRange points = curves_->points_for_curve(curve_i);
+        const IndexRange points = points_by_curve[curve_i];
         for (const int point_i : points.drop_front(1)) {
           const float3 &prev_pos_cu = deformation.positions[point_i - 1];
           const float3 &pos_cu = deformation.positions[point_i];
@@ -268,16 +276,18 @@ struct PuffOperationExecutor {
   void puff(const Span<float> curve_weights)
   {
     BLI_assert(curve_weights.size() == curve_selection_.size());
+    const OffsetIndices points_by_curve = curves_->points_by_curve();
     MutableSpan<float3> positions_cu = curves_->positions_for_write();
 
     threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
       Vector<float> accumulated_lengths_cu;
       for (const int curve_selection_i : range) {
         const int curve_i = curve_selection_[curve_selection_i];
-        const IndexRange points = curves_->points_for_curve(curve_i);
+        const IndexRange points = points_by_curve[curve_i];
         const int first_point_i = points[0];
         const float3 first_pos_cu = positions_cu[first_point_i];
-        const float3 first_pos_su = transforms_.curves_to_surface * first_pos_cu;
+        const float3 first_pos_su = math::transform_point(transforms_.curves_to_surface,
+                                                          first_pos_cu);
 
         /* Find the nearest position on the surface. The curve will be aligned to the normal of
          * that point. */
@@ -291,14 +301,15 @@ struct PuffOperationExecutor {
 
         const MLoopTri &looptri = surface_looptris_[nearest.index];
         const float3 closest_pos_su = nearest.co;
-        const float3 &v0_su = surface_verts_[surface_loops_[looptri.tri[0]].v].co;
-        const float3 &v1_su = surface_verts_[surface_loops_[looptri.tri[1]].v].co;
-        const float3 &v2_su = surface_verts_[surface_loops_[looptri.tri[2]].v].co;
+        const float3 &v0_su = surface_positions_[surface_loops_[looptri.tri[0]].v];
+        const float3 &v1_su = surface_positions_[surface_loops_[looptri.tri[1]].v];
+        const float3 &v2_su = surface_positions_[surface_loops_[looptri.tri[2]].v];
         float3 bary_coords;
         interp_weights_tri_v3(bary_coords, v0_su, v1_su, v2_su, closest_pos_su);
         const float3 normal_su = geometry::compute_surface_point_normal(
             looptri, bary_coords, corner_normals_su_);
-        const float3 normal_cu = math::normalize(transforms_.surface_to_curves_normal * normal_su);
+        const float3 normal_cu = math::normalize(
+            math::transform_direction(transforms_.surface_to_curves_normal, normal_su));
 
         accumulated_lengths_cu.reinitialize(points.size() - 1);
         length_parameterize::accumulate_lengths<float3>(
@@ -335,11 +346,12 @@ struct PuffOperationExecutor {
 
   void initialize_segment_lengths()
   {
+    const OffsetIndices points_by_curve = curves_->points_by_curve();
     const Span<float3> positions_cu = curves_->positions();
     self_->segment_lengths_cu_.reinitialize(curves_->points_num());
     threading::parallel_for(curves_->curves_range(), 128, [&](const IndexRange range) {
       for (const int curve_i : range) {
-        const IndexRange points = curves_->points_for_curve(curve_i);
+        const IndexRange points = points_by_curve[curve_i];
         for (const int point_i : points.drop_back(1)) {
           const float3 &p1_cu = positions_cu[point_i];
           const float3 &p2_cu = positions_cu[point_i + 1];
@@ -353,11 +365,12 @@ struct PuffOperationExecutor {
   void restore_segment_lengths()
   {
     const Span<float> expected_lengths_cu = self_->segment_lengths_cu_;
+    const OffsetIndices points_by_curve = curves_->points_by_curve();
     MutableSpan<float3> positions_cu = curves_->positions_for_write();
 
     threading::parallel_for(curves_->curves_range(), 256, [&](const IndexRange range) {
       for (const int curve_i : range) {
-        const IndexRange points = curves_->points_for_curve(curve_i);
+        const IndexRange points = points_by_curve[curve_i];
         for (const int segment_i : points.drop_back(1)) {
           const float3 &p1_cu = positions_cu[segment_i];
           float3 &p2_cu = positions_cu[segment_i + 1];

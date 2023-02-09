@@ -181,7 +181,7 @@ static uint partition_mainb(MetaElem **mainb, uint start, uint end, uint s, floa
       break;
     }
 
-    SWAP(MetaElem *, mainb[i], mainb[j]);
+    std::swap(mainb[i], mainb[j]);
     i++;
     j--;
   }
@@ -1188,8 +1188,9 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
   const eEvaluationMode deg_eval_mode = DEG_get_mode(depsgraph);
   const short parenting_dupli_transflag = (OB_DUPLIFACES | OB_DUPLIVERTS);
 
-  copy_m4_m4(obmat, ob->obmat); /* to cope with duplicators from BKE_scene_base_iter_next */
-  invert_m4_m4(obinv, ob->obmat);
+  copy_m4_m4(obmat,
+             ob->object_to_world); /* to cope with duplicators from BKE_scene_base_iter_next */
+  invert_m4_m4(obinv, ob->object_to_world);
 
   BLI_split_name_num(obname, &obnr, ob->id.name + 2, '.');
 
@@ -1237,13 +1238,13 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
 
       /* when metaball object has zero scale, then MetaElem to this MetaBall
        * will not be put to mainb array */
-      if (has_zero_axis_m4(bob->obmat)) {
+      if (has_zero_axis_m4(bob->object_to_world)) {
         zero_size = 1;
       }
       else if (bob->parent) {
         struct Object *pob = bob->parent;
         while (pob) {
-          if (has_zero_axis_m4(pob->obmat)) {
+          if (has_zero_axis_m4(pob->object_to_world)) {
             zero_size = 1;
             break;
           }
@@ -1307,7 +1308,7 @@ static void init_meta(Depsgraph *depsgraph, PROCESS *process, Scene *scene, Obje
              *   rotation ->
              *   ml local space
              */
-            mul_m4_series((float(*)[4])new_ml->mat, obinv, bob->obmat, pos, rot);
+            mul_m4_series((float(*)[4])new_ml->mat, obinv, bob->object_to_world, pos, rot);
             /* ml local space -> basis object space */
             invert_m4_m4((float(*)[4])new_ml->imat, (float(*)[4])new_ml->mat);
 
@@ -1462,12 +1463,9 @@ Mesh *BKE_mball_polygonize(Depsgraph *depsgraph, Scene *scene, Object *ob)
   Mesh *mesh = (Mesh *)BKE_id_new_nomain(ID_ME, ((ID *)ob->data)->name + 2);
 
   mesh->totvert = int(process.curvertex);
-  MVert *mvert = static_cast<MVert *>(
-      CustomData_add_layer(&mesh->vdata, CD_MVERT, CD_CONSTRUCT, nullptr, mesh->totvert));
-  for (int i = 0; i < mesh->totvert; i++) {
-    copy_v3_v3(mvert[i].co, process.co[i]);
-  }
-  MEM_freeN(process.co);
+  CustomData_add_layer_named(
+      &mesh->vdata, CD_PROP_FLOAT3, CD_ASSIGN, process.co, mesh->totvert, "position");
+  process.co = nullptr;
 
   mesh->totpoly = int(process.curindex);
   MPoly *mpoly = static_cast<MPoly *>(
@@ -1498,7 +1496,10 @@ Mesh *BKE_mball_polygonize(Depsgraph *depsgraph, Scene *scene, Object *ob)
   for (int i = 0; i < mesh->totvert; i++) {
     normalize_v3(process.no[i]);
   }
-  mesh->runtime.vert_normals = process.no;
+  memcpy(BKE_mesh_vertex_normals_for_write(mesh),
+         process.no,
+         sizeof(float[3]) * size_t(mesh->totvert));
+  MEM_freeN(process.no);
   BKE_mesh_vertex_normals_clear_dirty(mesh);
 
   mesh->totloop = loop_offset;

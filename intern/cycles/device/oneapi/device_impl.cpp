@@ -43,7 +43,7 @@ OneapiDevice::OneapiDevice(const DeviceInfo &info, Stats &stats, Profiler &profi
   }
 
   size_t globals_segment_size;
-  is_finished_ok = kernel_globals_size(device_queue_, globals_segment_size);
+  is_finished_ok = kernel_globals_size(globals_segment_size);
   if (is_finished_ok == false) {
     set_error("oneAPI constant memory initialization got runtime exception \"" +
               oneapi_error_string_ + "\"");
@@ -377,7 +377,7 @@ void OneapiDevice::tex_alloc(device_texture &mem)
   generic_alloc(mem);
   generic_copy_to(mem);
 
-  /* Resize if needed. Also, in case of resize - allocate in advance for future allocs. */
+  /* Resize if needed. Also, in case of resize - allocate in advance for future allocations. */
   const uint slot = mem.slot;
   if (slot >= texture_info_.size()) {
     texture_info_.resize(slot + 128);
@@ -429,10 +429,20 @@ void OneapiDevice::check_usm(SyclQueue *queue_, const void *usm_ptr, bool allow_
       queue->get_device().get_info<sycl::info::device::device_type>();
   sycl::usm::alloc usm_type = get_pointer_type(usm_ptr, queue->get_context());
   (void)usm_type;
-  assert(usm_type == sycl::usm::alloc::device ||
-         ((device_type == sycl::info::device_type::host ||
-           device_type == sycl::info::device_type::cpu || allow_host) &&
-          usm_type == sycl::usm::alloc::host));
+#    ifndef WITH_ONEAPI_SYCL_HOST_TASK
+  const sycl::usm::alloc main_memory_type = sycl::usm::alloc::device;
+#    else
+  const sycl::usm::alloc main_memory_type = sycl::usm::alloc::host;
+#    endif
+  assert(usm_type == main_memory_type ||
+         (usm_type == sycl::usm::alloc::host &&
+          (allow_host || device_type == sycl::info::device_type::cpu)) ||
+         usm_type == sycl::usm::alloc::unknown);
+#  else
+  /* Silence warning about unused arguments. */
+  (void)queue_;
+  (void)usm_ptr;
+  (void)allow_host;
 #  endif
 }
 
@@ -473,7 +483,11 @@ void *OneapiDevice::usm_alloc_device(SyclQueue *queue_, size_t memory_size)
 {
   assert(queue_);
   sycl::queue *queue = reinterpret_cast<sycl::queue *>(queue_);
+#  ifndef WITH_ONEAPI_SYCL_HOST_TASK
   return sycl::malloc_device(memory_size, *queue);
+#  else
+  return sycl::malloc_host(memory_size, *queue);
+#  endif
 }
 
 void OneapiDevice::usm_free(SyclQueue *queue_, void *usm_ptr)
@@ -560,7 +574,7 @@ bool OneapiDevice::queue_synchronize(SyclQueue *queue_)
   }
 }
 
-bool OneapiDevice::kernel_globals_size(SyclQueue *queue_, size_t &kernel_global_size)
+bool OneapiDevice::kernel_globals_size(size_t &kernel_global_size)
 {
   kernel_global_size = sizeof(KernelGlobalsGPU);
 
@@ -617,9 +631,9 @@ bool OneapiDevice::enqueue_kernel(KernelContext *kernel_context,
 /* Compute-runtime (ie. NEO) version is what gets returned by sycl/L0 on Windows
  * since Windows driver 101.3268. */
 /* The same min compute-runtime version is currently required across Windows and Linux.
- * For Windows driver 101.3430, compute-runtime version is 23904. */
-static const int lowest_supported_driver_version_win = 1013430;
-static const int lowest_supported_driver_version_neo = 23904;
+ * For Windows driver 101.4032, compute-runtime version is 24931. */
+static const int lowest_supported_driver_version_win = 1014032;
+static const int lowest_supported_driver_version_neo = 24931;
 
 int OneapiDevice::parse_driver_build_version(const sycl::device &device)
 {
@@ -663,16 +677,9 @@ int OneapiDevice::parse_driver_build_version(const sycl::device &device)
 std::vector<sycl::device> OneapiDevice::available_devices()
 {
   bool allow_all_devices = false;
-  if (getenv("CYCLES_ONEAPI_ALL_DEVICES") != nullptr)
+  if (getenv("CYCLES_ONEAPI_ALL_DEVICES") != nullptr) {
     allow_all_devices = true;
-
-    /* Host device is useful only for debugging at the moment
-     * so we hide this device with default build settings. */
-#  ifdef WITH_ONEAPI_SYCL_HOST_ENABLED
-  bool allow_host = true;
-#  else
-  bool allow_host = false;
-#  endif
+  }
 
   const std::vector<sycl::platform> &oneapi_platforms = sycl::platform::get_platforms();
 
@@ -685,33 +692,28 @@ std::vector<sycl::device> OneapiDevice::available_devices()
     }
 
     const std::vector<sycl::device> &oneapi_devices =
-        (allow_all_devices || allow_host) ? platform.get_devices(sycl::info::device_type::all) :
-                                            platform.get_devices(sycl::info::device_type::gpu);
+        (allow_all_devices) ? platform.get_devices(sycl::info::device_type::all) :
+                              platform.get_devices(sycl::info::device_type::gpu);
 
     for (const sycl::device &device : oneapi_devices) {
-      if (allow_all_devices) {
-        /* still filter out host device if build doesn't support it. */
-        if (allow_host || !device.is_host()) {
-          available_devices.push_back(device);
-        }
-      }
-      else {
-        bool filter_out = false;
-
+      bool filter_out = false;
+      if (!allow_all_devices) {
         /* For now we support all Intel(R) Arc(TM) devices and likely any future GPU,
          * assuming they have either more than 96 Execution Units or not 7 threads per EU.
          * Official support can be broaden to older and smaller GPUs once ready. */
-        if (device.is_gpu() && platform.get_backend() == sycl::backend::ext_oneapi_level_zero) {
-          /* Filtered-out defaults in-case these values aren't available through too old L0
-           * runtime. */
+        if (!device.is_gpu() || platform.get_backend() != sycl::backend::ext_oneapi_level_zero) {
+          filter_out = true;
+        }
+        else {
+          /* Filtered-out defaults in-case these values aren't available. */
           int number_of_eus = 96;
           int threads_per_eu = 7;
           if (device.has(sycl::aspect::ext_intel_gpu_eu_count)) {
-            number_of_eus = device.get_info<sycl::info::device::ext_intel_gpu_eu_count>();
+            number_of_eus = device.get_info<sycl::ext::intel::info::device::gpu_eu_count>();
           }
           if (device.has(sycl::aspect::ext_intel_gpu_hw_threads_per_eu)) {
             threads_per_eu =
-                device.get_info<sycl::info::device::ext_intel_gpu_hw_threads_per_eu>();
+                device.get_info<sycl::ext::intel::info::device::gpu_hw_threads_per_eu>();
           }
           /* This filters out all Level-Zero supported GPUs from older generation than Arc. */
           if (number_of_eus <= 96 && threads_per_eu == 7) {
@@ -727,16 +729,9 @@ std::vector<sycl::device> OneapiDevice::available_devices()
             }
           }
         }
-        else if (!allow_host && device.is_host()) {
-          filter_out = true;
-        }
-        else if (!allow_all_devices) {
-          filter_out = true;
-        }
-
-        if (!filter_out) {
-          available_devices.push_back(device);
-        }
+      }
+      if (!filter_out) {
+        available_devices.push_back(device);
       }
     }
   }
@@ -750,7 +745,11 @@ char *OneapiDevice::device_capabilities()
 
   const std::vector<sycl::device> &oneapi_devices = available_devices();
   for (const sycl::device &device : oneapi_devices) {
+#  ifndef WITH_ONEAPI_SYCL_HOST_TASK
     const std::string &name = device.get_info<sycl::info::device::name>();
+#  else
+    const std::string &name = "SYCL Host Task (Debug)";
+#  endif
 
     capabilities << std::string("\t") << name << "\n";
 #  define WRITE_ATTR(attribute_name, attribute_variable) \
@@ -792,9 +791,7 @@ char *OneapiDevice::device_capabilities()
     GET_NUM_ATTR(native_vector_width_double)
     GET_NUM_ATTR(native_vector_width_half)
 
-    size_t max_clock_frequency =
-        (size_t)(device.is_host() ? (size_t)0 :
-                                    device.get_info<sycl::info::device::max_clock_frequency>());
+    size_t max_clock_frequency = device.get_info<sycl::info::device::max_clock_frequency>();
     WRITE_ATTR("max_clock_frequency", max_clock_frequency)
 
     GET_NUM_ATTR(address_bits)
@@ -829,10 +826,14 @@ void OneapiDevice::iterate_devices(OneAPIDeviceIteratorCallback cb, void *user_p
   for (sycl::device &device : devices) {
     const std::string &platform_name =
         device.get_platform().get_info<sycl::info::platform::name>();
+#  ifndef WITH_ONEAPI_SYCL_HOST_TASK
     std::string name = device.get_info<sycl::info::device::name>();
+#  else
+    std::string name = "SYCL Host Task (Debug)";
+#  endif
     std::string id = "ONEAPI_" + platform_name + "_" + name;
     if (device.has(sycl::aspect::ext_intel_pci_address)) {
-      id.append("_" + device.get_info<sycl::info::device::ext_intel_pci_address>());
+      id.append("_" + device.get_info<sycl::ext::intel::info::device::pci_address>());
     }
     (cb)(id.c_str(), name.c_str(), num, user_ptr);
     num++;
@@ -850,7 +851,7 @@ int OneapiDevice::get_num_multiprocessors()
 {
   const sycl::device &device = reinterpret_cast<sycl::queue *>(device_queue_)->get_device();
   if (device.has(sycl::aspect::ext_intel_gpu_eu_count)) {
-    return device.get_info<sycl::info::device::ext_intel_gpu_eu_count>();
+    return device.get_info<sycl::ext::intel::info::device::gpu_eu_count>();
   }
   else
     return 0;
@@ -861,8 +862,8 @@ int OneapiDevice::get_max_num_threads_per_multiprocessor()
   const sycl::device &device = reinterpret_cast<sycl::queue *>(device_queue_)->get_device();
   if (device.has(sycl::aspect::ext_intel_gpu_eu_simd_width) &&
       device.has(sycl::aspect::ext_intel_gpu_hw_threads_per_eu)) {
-    return device.get_info<sycl::info::device::ext_intel_gpu_eu_simd_width>() *
-           device.get_info<sycl::info::device::ext_intel_gpu_hw_threads_per_eu>();
+    return device.get_info<sycl::ext::intel::info::device::gpu_eu_simd_width>() *
+           device.get_info<sycl::ext::intel::info::device::gpu_hw_threads_per_eu>();
   }
   else
     return 0;

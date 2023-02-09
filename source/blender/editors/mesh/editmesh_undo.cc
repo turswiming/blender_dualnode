@@ -398,13 +398,13 @@ static void um_arraystore_compact_with_info(UndoMesh *um, const UndoMesh *um_ref
         &um_arraystore.bs_stride, &size_expanded, &size_compacted);
 
     const double percent_total = size_expanded ?
-                                     (((double)size_compacted / (double)size_expanded) * 100.0) :
+                                     ((double(size_compacted) / double(size_expanded)) * 100.0) :
                                      -1.0;
 
     size_t size_expanded_step = size_expanded - size_expanded_prev;
     size_t size_compacted_step = size_compacted - size_compacted_prev;
     const double percent_step = size_expanded_step ?
-                                    (((double)size_compacted_step / (double)size_expanded_step) *
+                                    ((double(size_compacted_step) / double(size_expanded_step)) *
                                      100.0) :
                                     -1.0;
 
@@ -596,6 +596,11 @@ static void *undomesh_from_editmesh(UndoMesh *um, BMEditMesh *em, Key *key, Undo
   /* Copy the ID name characters to the mesh so code that depends on accessing the ID type can work
    * on it. Necessary to use the attribute API. */
   strcpy(um->me.id.name, "MEundomesh_from_editmesh");
+
+  /* Runtime data is necessary for some asserts in other code, and the overhead of creating it for
+   * undo meshes should be low. */
+  BLI_assert(um->me.runtime == nullptr);
+  um->me.runtime = new blender::bke::MeshRuntime();
 
   CustomData_MeshMasks cd_mask_extra{};
   cd_mask_extra.vmask = CD_MASK_SHAPE_KEYINDEX;

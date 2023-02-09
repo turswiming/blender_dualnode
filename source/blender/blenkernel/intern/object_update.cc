@@ -61,7 +61,7 @@ void BKE_object_eval_local_transform(Depsgraph *depsgraph, Object *ob)
   DEG_debug_print_eval(depsgraph, __func__, ob->id.name, ob);
 
   /* calculate local matrix */
-  BKE_object_to_mat4(ob, ob->obmat);
+  BKE_object_to_mat4(ob, ob->object_to_world);
 }
 
 void BKE_object_eval_parent(Depsgraph *depsgraph, Object *ob)
@@ -78,18 +78,18 @@ void BKE_object_eval_parent(Depsgraph *depsgraph, Object *ob)
 
   /* get local matrix (but don't calculate it, as that was done already!) */
   /* XXX: redundant? */
-  copy_m4_m4(locmat, ob->obmat);
+  copy_m4_m4(locmat, ob->object_to_world);
 
   /* get parent effect matrix */
   BKE_object_get_parent_matrix(ob, par, totmat);
 
   /* total */
   mul_m4_m4m4(tmat, totmat, ob->parentinv);
-  mul_m4_m4m4(ob->obmat, tmat, locmat);
+  mul_m4_m4m4(ob->object_to_world, tmat, locmat);
 
   /* origin, for help line */
   if ((ob->partype & PARTYPE) == PARSKEL) {
-    copy_v3_v3(ob->runtime.parent_display_origin, par->obmat[3]);
+    copy_v3_v3(ob->runtime.parent_display_origin, par->object_to_world[3]);
   }
   else {
     copy_v3_v3(ob->runtime.parent_display_origin, totmat[3]);
@@ -121,9 +121,9 @@ void BKE_object_eval_transform_final(Depsgraph *depsgraph, Object *ob)
   DEG_debug_print_eval(depsgraph, __func__, ob->id.name, ob);
   /* Make sure inverse matrix is always up to date. This way users of it
    * do not need to worry about recalculating it. */
-  invert_m4_m4_safe(ob->imat, ob->obmat);
+  invert_m4_m4_safe(ob->world_to_object, ob->object_to_world);
   /* Set negative scale flag in object. */
-  if (is_negative_m4(ob->obmat)) {
+  if (is_negative_m4(ob->object_to_world)) {
     ob->transflag |= OB_NEG_SCALE;
   }
   else {
@@ -141,9 +141,9 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
       CustomData_MeshMasks cddata_masks = scene->customdata_mask;
       CustomData_MeshMasks_update(&cddata_masks, &CD_MASK_BAREMESH);
       /* Custom attributes should not be removed automatically. They might be used by the render
-       * engine or scripts. They can still be removed explicitly using geometry nodes.
-       * Crease can be be used in generic situations with geometry nodes as well. */
-      cddata_masks.vmask |= CD_MASK_PROP_ALL | CD_MASK_CREASE;
+       * engine or scripts. They can still be removed explicitly using geometry nodes. Crease and
+       * vertex groups can be used in arbitrary situations with geometry nodes as well. */
+      cddata_masks.vmask |= CD_MASK_PROP_ALL | CD_MASK_CREASE | CD_MASK_MDEFORMVERT;
       cddata_masks.emask |= CD_MASK_PROP_ALL | CD_MASK_CREASE;
       cddata_masks.fmask |= CD_MASK_PROP_ALL;
       cddata_masks.pmask |= CD_MASK_PROP_ALL;
@@ -154,12 +154,10 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
 #ifdef WITH_FREESTYLE
       cddata_masks.emask |= CD_MASK_FREESTYLE_EDGE;
       cddata_masks.pmask |= CD_MASK_FREESTYLE_FACE;
-      cddata_masks.vmask |= CD_MASK_MDEFORMVERT;
 #endif
       if (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER) {
         /* Always compute UVs, vertex colors as orcos for render. */
-        cddata_masks.lmask |= CD_MASK_MLOOPUV | CD_MASK_PROP_BYTE_COLOR;
-        cddata_masks.vmask |= CD_MASK_ORCO | CD_MASK_PROP_COLOR;
+        cddata_masks.vmask |= CD_MASK_ORCO;
       }
       makeDerivedMesh(depsgraph, scene, ob, &cddata_masks); /* was CD_MASK_BAREMESH */
       break;
@@ -257,8 +255,8 @@ void BKE_object_sync_to_original(Depsgraph *depsgraph, Object *object)
   /* Base flags. */
   object_orig->base_flag = object->base_flag;
   /* Transformation flags. */
-  copy_m4_m4(object_orig->obmat, object->obmat);
-  copy_m4_m4(object_orig->imat, object->imat);
+  copy_m4_m4(object_orig->object_to_world, object->object_to_world);
+  copy_m4_m4(object_orig->world_to_object, object->world_to_object);
   copy_m4_m4(object_orig->constinv, object->constinv);
   object_orig->transflag = object->transflag;
   object_orig->flag = object->flag;
@@ -292,6 +290,8 @@ void BKE_object_batch_cache_dirty_tag(Object *ob)
       BKE_lattice_batch_cache_dirty_tag((struct Lattice *)ob->data, BKE_LATTICE_BATCH_DIRTY_ALL);
       break;
     case OB_CURVES_LEGACY:
+    case OB_SURF:
+    case OB_FONT:
       BKE_curve_batch_cache_dirty_tag((struct Curve *)ob->data, BKE_CURVE_BATCH_DIRTY_ALL);
       break;
     case OB_MBALL: {
@@ -373,10 +373,8 @@ void BKE_object_select_update(Depsgraph *depsgraph, Object *object)
   DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);
   if (object->type == OB_MESH && !object->runtime.is_data_eval_owned) {
     Mesh *mesh_input = (Mesh *)object->runtime.data_orig;
-    Mesh_Runtime *mesh_runtime = &mesh_input->runtime;
-    BLI_mutex_lock(static_cast<ThreadMutex *>(mesh_runtime->eval_mutex));
+    std::lock_guard lock{mesh_input->runtime->eval_mutex};
     BKE_object_data_select_update(depsgraph, static_cast<ID *>(object->data));
-    BLI_mutex_unlock(static_cast<ThreadMutex *>(mesh_runtime->eval_mutex));
   }
   else {
     BKE_object_data_select_update(depsgraph, static_cast<ID *>(object->data));

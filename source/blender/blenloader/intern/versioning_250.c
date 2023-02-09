@@ -630,7 +630,7 @@ static bool seq_sound_proxy_update_cb(Sequence *seq, void *user_data)
   Main *bmain = (Main *)user_data;
   if (seq->type == SEQ_TYPE_SOUND_HD) {
     char str[FILE_MAX];
-    BLI_join_dirfile(str, sizeof(str), seq->strip->dir, seq->strip->stripdata->name);
+    BLI_path_join(str, sizeof(str), seq->strip->dir, seq->strip->stripdata->name);
     BLI_path_abs(str, BKE_main_blendfile_path(bmain));
     seq->sound = BKE_sound_new_file(bmain, str);
   }
@@ -996,9 +996,9 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
       if ((key = blo_do_versions_newlibadr(fd, lib, me->key)) && key->refkey) {
         data = key->refkey->data;
         tot = MIN2(me->totvert, key->refkey->totelem);
-        MVert *verts = BKE_mesh_verts_for_write(me);
+        MVert *verts = (MVert *)CustomData_get_layer_for_write(&me->vdata, CD_MVERT, me->totvert);
         for (a = 0; a < tot; a++, data += 3) {
-          copy_v3_v3(verts[a].co, data);
+          copy_v3_v3(verts[a].co_legacy, data);
         }
       }
     }
@@ -1465,7 +1465,7 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
     } /* sequencer changes */
   }
 
-  if (bmain->versionfile <= 251) { /* 2.5.1 had no subversions */
+  if (bmain->versionfile <= 251) { /* 2.5.1 had no sub-versions */
     bScreen *screen;
 
     /* Blender 2.5.2 - subversion 0 introduced a new setting: V3D_HIDE_OVERLAYS.
@@ -1987,7 +1987,7 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
       /* add ntree->inputs/ntree->outputs sockets for all unlinked sockets in the group tree. */
       for (node = ntree->nodes.first; node; node = node->next) {
         for (sock = node->inputs.first; sock; sock = sock->next) {
-          if (!sock->link && !nodeSocketIsHidden(sock)) {
+          if (!sock->link && !((sock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0)) {
 
             gsock = do_versions_node_group_add_socket_2_56_2(
                 ntree, sock->name, sock->type, SOCK_IN);
@@ -2001,6 +2001,7 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
              */
             link = MEM_callocN(sizeof(bNodeLink), "link");
             BLI_addtail(&ntree->links, link);
+            nodeUniqueID(ntree, node);
             link->fromnode = NULL;
             link->fromsock = gsock;
             link->tonode = node;
@@ -2011,7 +2012,8 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
           }
         }
         for (sock = node->outputs.first; sock; sock = sock->next) {
-          if (nodeCountSocketLinks(ntree, sock) == 0 && !nodeSocketIsHidden(sock)) {
+          if (nodeCountSocketLinks(ntree, sock) == 0 &&
+              !((sock->flag & (SOCK_HIDDEN | SOCK_UNAVAIL)) != 0)) {
             gsock = do_versions_node_group_add_socket_2_56_2(
                 ntree, sock->name, sock->type, SOCK_OUT);
 
@@ -2024,6 +2026,7 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
              */
             link = MEM_callocN(sizeof(bNodeLink), "link");
             BLI_addtail(&ntree->links, link);
+            nodeUniqueID(ntree, node);
             link->fromnode = node;
             link->fromsock = sock;
             link->tonode = NULL;
@@ -2272,18 +2275,6 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *bmain)
       }
       FOREACH_NODETREE_END;
     }
-
-    {
-      /* Initialize group tree nodetypes.
-       * These are used to distinguish tree types and
-       * associate them with specific node types for polling.
-       */
-      bNodeTree *ntree;
-      /* all node trees in bmain->nodetree are considered groups */
-      for (ntree = bmain->nodetrees.first; ntree; ntree = ntree->id.next) {
-        ntree->nodetype = NODE_GROUP;
-      }
-    }
   }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 259, 4)) {
@@ -2316,7 +2307,6 @@ static void lib_node_do_versions_group_indices(bNode *gnode)
         /* deprecated */
         sock->own_index = link->fromsock->own_index;
         sock->to_index = 0;
-        sock->groupsock = NULL;
       }
     }
   }
@@ -2329,7 +2319,6 @@ static void lib_node_do_versions_group_indices(bNode *gnode)
         /* deprecated */
         sock->own_index = link->tosock->own_index;
         sock->to_index = 0;
-        sock->groupsock = NULL;
       }
     }
   }

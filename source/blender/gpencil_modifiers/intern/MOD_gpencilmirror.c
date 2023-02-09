@@ -81,8 +81,8 @@ static void update_mirror_object(Object *ob,
 
   float tmp[4][4];
   float itmp[4][4];
-  invert_m4_m4(tmp, mmd->object->obmat);
-  mul_m4_m4m4(tmp, tmp, ob->obmat);
+  invert_m4_m4(tmp, mmd->object->object_to_world);
+  mul_m4_m4m4(tmp, tmp, ob->object_to_world);
   invert_m4_m4(itmp, tmp);
   mul_m4_series(mtx, itmp, mtx, tmp);
 
@@ -243,25 +243,25 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Mirror = {
-    /* name */ N_("Mirror"),
-    /* structName */ "MirrorGpencilModifierData",
-    /* structSize */ sizeof(MirrorGpencilModifierData),
-    /* type */ eGpencilModifierTypeType_Gpencil,
-    /* flags */ eGpencilModifierTypeFlag_SupportsEditmode,
+    /*name*/ N_("Mirror"),
+    /*structName*/ "MirrorGpencilModifierData",
+    /*structSize*/ sizeof(MirrorGpencilModifierData),
+    /*type*/ eGpencilModifierTypeType_Gpencil,
+    /*flags*/ eGpencilModifierTypeFlag_SupportsEditmode,
 
-    /* copyData */ copyData,
+    /*copyData*/ copyData,
 
-    /* deformStroke */ NULL,
-    /* generateStrokes */ generateStrokes,
-    /* bakeModifier */ bakeModifier,
-    /* remapTime */ NULL,
+    /*deformStroke*/ NULL,
+    /*generateStrokes*/ generateStrokes,
+    /*bakeModifier*/ bakeModifier,
+    /*remapTime*/ NULL,
 
-    /* initData */ initData,
-    /* freeData */ NULL,
-    /* isDisabled */ isDisabled,
-    /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ NULL,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ NULL,
-    /* panelRegister */ panelRegister,
+    /*initData*/ initData,
+    /*freeData*/ NULL,
+    /*isDisabled*/ isDisabled,
+    /*updateDepsgraph*/ updateDepsgraph,
+    /*dependsOnTime*/ NULL,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ NULL,
+    /*panelRegister*/ panelRegister,
 };

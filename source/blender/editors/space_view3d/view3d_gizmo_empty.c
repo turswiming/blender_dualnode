@@ -120,7 +120,7 @@ static void WIDGETGROUP_empty_image_setup(const bContext *UNUSED(C), wmGizmoGrou
                                                        __func__);
   igzgroup->gizmo = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, NULL);
   wmGizmo *gz = igzgroup->gizmo;
-  RNA_enum_set(gz->ptr, "transform", ED_GIZMO_CAGE2D_XFORM_FLAG_SCALE);
+  RNA_enum_set(gz->ptr, "transform", ED_GIZMO_CAGE_XFORM_FLAG_SCALE);
 
   gzgroup->customdata = igzgroup;
 
@@ -139,12 +139,12 @@ static void WIDGETGROUP_empty_image_refresh(const bContext *C, wmGizmoGroup *gzg
   BKE_view_layer_synced_ensure(scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
-  copy_m4_m4(gz->matrix_basis, ob->obmat);
+  copy_m4_m4(gz->matrix_basis, ob->object_to_world);
 
   RNA_enum_set(gz->ptr,
                "transform",
-               ED_GIZMO_CAGE2D_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE2D_XFORM_FLAG_SCALE |
-                   ED_GIZMO_CAGE2D_XFORM_FLAG_SCALE_UNIFORM);
+               ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE_XFORM_FLAG_SCALE |
+                   ED_GIZMO_CAGE_XFORM_FLAG_SCALE_UNIFORM);
 
   igzgroup->state.ob = ob;
 

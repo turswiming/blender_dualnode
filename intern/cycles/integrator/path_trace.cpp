@@ -390,6 +390,9 @@ void PathTrace::path_trace(RenderWork &render_work)
     const int num_samples = render_work.path_trace.num_samples;
 
     PathTraceWork *path_trace_work = path_trace_works_[i].get();
+    if (path_trace_work->get_device()->have_error()) {
+      return;
+    }
 
     PathTraceWork::RenderStatistics statistics;
     path_trace_work->render_samples(statistics,
@@ -1296,6 +1299,7 @@ void PathTrace::set_guiding_params(const GuidingParams &guiding_params, const bo
 #  if OPENPGL_VERSION_MINOR >= 4
       field_args.deterministic = guiding_params.deterministic;
 #  endif
+      reinterpret_cast<PGLKDTreeArguments *>(field_args.spatialSturctureArguments)->maxDepth = 16;
       openpgl::cpp::Device *guiding_device = static_cast<openpgl::cpp::Device *>(
           device_->get_guiding_device());
       if (guiding_device) {

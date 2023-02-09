@@ -5,7 +5,7 @@
  * \ingroup draw
  */
 
-#include "DRW_pbvh.h"
+#include "DRW_pbvh.hh"
 
 #include "draw_attributes.h"
 #include "draw_manager.h"
@@ -589,7 +589,7 @@ void DRW_shgroup_buffer_texture(DRWShadingGroup *shgroup,
                                 const char *name,
                                 GPUVertBuf *vertex_buffer)
 {
-  int location = GPU_shader_get_ssbo(shgroup->shader, name);
+  int location = GPU_shader_get_texture_binding(shgroup->shader, name);
   if (location == -1) {
     return;
   }
@@ -606,7 +606,7 @@ void DRW_shgroup_buffer_texture_ref(DRWShadingGroup *shgroup,
                                     const char *name,
                                     GPUVertBuf **vertex_buffer)
 {
-  int location = GPU_shader_get_ssbo(shgroup->shader, name);
+  int location = GPU_shader_get_texture_binding(shgroup->shader, name);
   if (location == -1) {
     return;
   }
@@ -627,33 +627,36 @@ void DRW_shgroup_buffer_texture_ref(DRWShadingGroup *shgroup,
 static void drw_call_calc_orco(Object *ob, float (*r_orcofacs)[4])
 {
   ID *ob_data = (ob) ? static_cast<ID *>(ob->data) : nullptr;
-  float loc[3], size[3];
-  float *texcoloc = nullptr;
-  float *texcosize = nullptr;
+  struct {
+    float texspace_location[3], texspace_size[3];
+  } static_buf;
+  float *texspace_location = nullptr;
+  float *texspace_size = nullptr;
   if (ob_data != nullptr) {
     switch (GS(ob_data->name)) {
       case ID_VO: {
         BoundBox *bbox = BKE_volume_boundbox_get(ob);
-        mid_v3_v3v3(loc, bbox->vec[0], bbox->vec[6]);
-        sub_v3_v3v3(size, bbox->vec[0], bbox->vec[6]);
-        texcoloc = loc;
-        texcosize = size;
+        mid_v3_v3v3(static_buf.texspace_location, bbox->vec[0], bbox->vec[6]);
+        sub_v3_v3v3(static_buf.texspace_size, bbox->vec[0], bbox->vec[6]);
+        texspace_location = static_buf.texspace_location;
+        texspace_size = static_buf.texspace_size;
         break;
       }
       case ID_ME:
-        BKE_mesh_texspace_get_reference((Mesh *)ob_data, nullptr, &texcoloc, &texcosize);
+        BKE_mesh_texspace_get_reference(
+            (Mesh *)ob_data, nullptr, &texspace_location, &texspace_size);
         break;
       case ID_CU_LEGACY: {
         Curve *cu = (Curve *)ob_data;
         BKE_curve_texspace_ensure(cu);
-        texcoloc = cu->loc;
-        texcosize = cu->size;
+        texspace_location = cu->texspace_location;
+        texspace_size = cu->texspace_size;
         break;
       }
       case ID_MB: {
         MetaBall *mb = (MetaBall *)ob_data;
-        texcoloc = mb->loc;
-        texcosize = mb->size;
+        texspace_location = mb->texspace_location;
+        texspace_size = mb->texspace_size;
         break;
       }
       default:
@@ -661,10 +664,10 @@ static void drw_call_calc_orco(Object *ob, float (*r_orcofacs)[4])
     }
   }
 
-  if ((texcoloc != nullptr) && (texcosize != nullptr)) {
-    mul_v3_v3fl(r_orcofacs[1], texcosize, 2.0f);
+  if ((texspace_location != nullptr) && (texspace_size != nullptr)) {
+    mul_v3_v3fl(r_orcofacs[1], texspace_size, 2.0f);
     invert_v3(r_orcofacs[1]);
-    sub_v3_v3v3(r_orcofacs[0], texcoloc, texcosize);
+    sub_v3_v3v3(r_orcofacs[0], texspace_location, texspace_size);
     negate_v3(r_orcofacs[0]);
     mul_v3_v3(r_orcofacs[0], r_orcofacs[1]); /* result in a nice MADD in the shader */
   }
@@ -678,7 +681,7 @@ BLI_INLINE void drw_call_matrix_init(DRWObjectMatrix *ob_mats, Object *ob, float
 {
   copy_m4_m4(ob_mats->model, obmat);
   if (ob) {
-    copy_m4_m4(ob_mats->modelinverse, ob->imat);
+    copy_m4_m4(ob_mats->modelinverse, ob->world_to_object);
   }
   else {
     /* WATCH: Can be costly. */
@@ -724,8 +727,8 @@ static void drw_call_culling_init(DRWCullingState *cull, Object *ob)
     float corner[3];
     /* Get BoundSphere center and radius from the BoundBox. */
     mid_v3_v3v3(cull->bsphere.center, bbox->vec[0], bbox->vec[6]);
-    mul_v3_m4v3(corner, ob->obmat, bbox->vec[0]);
-    mul_m4_v3(ob->obmat, cull->bsphere.center);
+    mul_v3_m4v3(corner, ob->object_to_world, bbox->vec[0]);
+    mul_m4_v3(ob->object_to_world, cull->bsphere.center);
     cull->bsphere.radius = len_v3v3(cull->bsphere.center, corner);
 
     /* Bypass test for very large objects (see T67319). */
@@ -1017,7 +1020,7 @@ void DRW_shgroup_call_ex(DRWShadingGroup *shgroup,
   if (G.f & G_FLAG_PICKSEL) {
     drw_command_set_select_id(shgroup, nullptr, DST.select_id);
   }
-  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : obmat, ob);
+  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->object_to_world : obmat, ob);
   drw_command_draw(shgroup, geom, handle);
 
   /* Culling data. */
@@ -1042,7 +1045,7 @@ void DRW_shgroup_call_range(
   if (G.f & G_FLAG_PICKSEL) {
     drw_command_set_select_id(shgroup, nullptr, DST.select_id);
   }
-  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : nullptr, ob);
+  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->object_to_world : nullptr, ob);
   drw_command_draw_range(shgroup, geom, handle, v_sta, v_num);
 }
 
@@ -1053,7 +1056,7 @@ void DRW_shgroup_call_instance_range(
   if (G.f & G_FLAG_PICKSEL) {
     drw_command_set_select_id(shgroup, nullptr, DST.select_id);
   }
-  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : nullptr, ob);
+  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->object_to_world : nullptr, ob);
   drw_command_draw_intance_range(shgroup, geom, handle, i_sta, i_num);
 }
 
@@ -1099,7 +1102,7 @@ static void drw_shgroup_call_procedural_add_ex(DRWShadingGroup *shgroup,
   if (G.f & G_FLAG_PICKSEL) {
     drw_command_set_select_id(shgroup, nullptr, DST.select_id);
   }
-  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : nullptr, ob);
+  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->object_to_world : nullptr, ob);
   drw_command_draw_procedural(shgroup, geom, handle, vert_count);
 }
 
@@ -1149,7 +1152,7 @@ void DRW_shgroup_call_procedural_indirect(DRWShadingGroup *shgroup,
   if (G.f & G_FLAG_PICKSEL) {
     drw_command_set_select_id(shgroup, nullptr, DST.select_id);
   }
-  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : nullptr, ob);
+  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->object_to_world : nullptr, ob);
   drw_command_draw_indirect(shgroup, geom, handle, indirect_buf);
 }
 
@@ -1159,7 +1162,7 @@ void DRW_shgroup_call_instances(DRWShadingGroup *shgroup, Object *ob, GPUBatch *
   if (G.f & G_FLAG_PICKSEL) {
     drw_command_set_select_id(shgroup, nullptr, DST.select_id);
   }
-  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : nullptr, ob);
+  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->object_to_world : nullptr, ob);
   drw_command_draw_instance(shgroup, geom, handle, count, false);
 }
 
@@ -1173,7 +1176,7 @@ void DRW_shgroup_call_instances_with_attrs(DRWShadingGroup *shgroup,
   if (G.f & G_FLAG_PICKSEL) {
     drw_command_set_select_id(shgroup, nullptr, DST.select_id);
   }
-  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : nullptr, ob);
+  DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->object_to_world : nullptr, ob);
   GPUBatch *batch = DRW_temp_batch_instance_request(
       DST.vmempool->idatalist, nullptr, inst_attributes, geom);
   drw_command_draw_instance(shgroup, batch, handle, 0, true);
@@ -1220,10 +1223,12 @@ static void sculpt_draw_cb(DRWSculptCallbackData *scd,
   GPUBatch *geom;
 
   if (!scd->use_wire) {
-    geom = DRW_pbvh_tris_get(batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount);
+    geom = DRW_pbvh_tris_get(
+        batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount, scd->fast_mode);
   }
   else {
-    geom = DRW_pbvh_lines_get(batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount);
+    geom = DRW_pbvh_lines_get(
+        batches, scd->attrs, scd->attrs_num, pbvh_draw_args, &primcount, scd->fast_mode);
   }
 
   short index = 0;
@@ -1250,7 +1255,7 @@ static void sculpt_draw_cb(DRWSculptCallbackData *scd,
   }
 }
 
-static void sculpt_debug_cb(
+void DRW_sculpt_debug_cb(
     PBVHNode *node, void *user_data, const float bmin[3], const float bmax[3], PBVHNodeFlags flag)
 {
   int *debug_node_nr = (int *)user_data;
@@ -1265,7 +1270,8 @@ static void sculpt_debug_cb(
     DRW_debug_bbox(&bb, (float[4]){0.5f, 0.5f, 0.5f, 0.6f});
   }
 #else /* Color coded leaf bounds. */
-  if (flag & PBVH_Leaf) {
+  if (flag & (PBVH_Leaf | PBVH_TexLeaf)) {
+    DRW_debug_bbox(&bb, SCULPT_DEBUG_COLOR((*debug_node_nr)++));
     int color = (*debug_node_nr)++;
     color += BKE_pbvh_debug_draw_gen_get(node);
 
@@ -1283,7 +1289,7 @@ static void drw_sculpt_get_frustum_planes(Object *ob, float planes[6][4])
    * 4x4 matrix is done by multiplying with the transpose inverse.
    * The inverse cancels out here since we transform by inverse(obmat). */
   float tmat[4][4];
-  transpose_m4_m4(tmat, ob->obmat);
+  transpose_m4_m4(tmat, ob->object_to_world);
   for (int i = 0; i < 6; i++) {
     mul_m4_v4(tmat, planes[i]);
   }
@@ -1347,7 +1353,7 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
   }
 
   Mesh *mesh = static_cast<Mesh *>(scd->ob->data);
-  BKE_pbvh_update_normals(pbvh, mesh->runtime.subdiv_ccg);
+  BKE_pbvh_update_normals(pbvh, mesh->runtime->subdiv_ccg);
 
   BKE_pbvh_draw_cb(pbvh,
                    update_only_visible,
@@ -1361,11 +1367,11 @@ static void drw_sculpt_generate_calls(DRWSculptCallbackData *scd)
 
   if (SCULPT_DEBUG_BUFFERS) {
     int debug_node_nr = 0;
-    DRW_debug_modelmat(scd->ob->obmat);
+    DRW_debug_modelmat(scd->ob->object_to_world);
     BKE_pbvh_draw_debug_cb(
         pbvh,
         (void (*)(PBVHNode * n, void *d, const float min[3], const float max[3], PBVHNodeFlags f))
-            sculpt_debug_cb,
+            DRW_sculpt_debug_cb,
         &debug_node_nr);
   }
 }
@@ -1406,8 +1412,8 @@ void DRW_shgroup_call_sculpt(DRWShadingGroup *shgroup,
   Mesh *me = BKE_object_get_original_mesh(ob);
 
   if (use_color) {
-    CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
-
+    const CustomDataLayer *layer = BKE_id_attributes_color_find(&me->id,
+                                                                me->active_color_attribute);
     if (layer) {
       eAttrDomain domain = BKE_id_attribute_domain(&me->id, layer);
 
@@ -1420,11 +1426,11 @@ void DRW_shgroup_call_sculpt(DRWShadingGroup *shgroup,
   }
 
   if (use_uv) {
-    int layer_i = CustomData_get_active_layer_index(&me->ldata, CD_MLOOPUV);
+    int layer_i = CustomData_get_active_layer_index(&me->ldata, CD_PROP_FLOAT2);
     if (layer_i != -1) {
       CustomDataLayer *layer = me->ldata.layers + layer_i;
 
-      attrs[attrs_num].type = CD_MLOOPUV;
+      attrs[attrs_num].type = CD_PROP_FLOAT2;
       attrs[attrs_num].domain = ATTR_DOMAIN_CORNER;
       BLI_strncpy(attrs[attrs_num].name, layer->name, sizeof(attrs[attrs_num].name));
 
@@ -1481,11 +1487,11 @@ void DRW_shgroup_call_sculpt_with_materials(DRWShadingGroup **shgroups,
 
   for (uint i = 0; i < 32; i++) {
     if (cd_needed.uv & (1 << i)) {
-      int layer_i = CustomData_get_layer_index_n(&me->ldata, CD_MLOOPUV, i);
+      int layer_i = CustomData_get_layer_index_n(&me->ldata, CD_PROP_FLOAT2, i);
       CustomDataLayer *layer = layer_i != -1 ? me->ldata.layers + layer_i : nullptr;
 
       if (layer) {
-        attrs[attrs_i].type = CD_MLOOPUV;
+        attrs[attrs_i].type = CD_PROP_FLOAT2;
         attrs[attrs_i].domain = ATTR_DOMAIN_CORNER;
         BLI_strncpy(attrs[attrs_i].name, layer->name, sizeof(PBVHAttrReq::name));
         attrs_i++;
@@ -1714,23 +1720,32 @@ static void drw_shgroup_init(DRWShadingGroup *shgroup, GPUShader *shader)
   }
 
 #ifdef DEBUG
-  int debug_print_location = GPU_shader_get_builtin_ssbo(shader, GPU_STORAGE_BUFFER_DEBUG_PRINT);
-  if (debug_print_location != -1) {
-    GPUStorageBuf *buf = drw_debug_gpu_print_buf_get();
-    drw_shgroup_uniform_create_ex(
-        shgroup, debug_print_location, DRW_UNIFORM_STORAGE_BLOCK, buf, GPU_SAMPLER_DEFAULT, 0, 1);
+  /* TODO(Metal): Support Shader debug print.
+   * This is not currently supported by Metal Backend. */
+  if (GPU_backend_get_type() != GPU_BACKEND_METAL) {
+    int debug_print_location = GPU_shader_get_builtin_ssbo(shader, GPU_STORAGE_BUFFER_DEBUG_PRINT);
+    if (debug_print_location != -1) {
+      GPUStorageBuf *buf = drw_debug_gpu_print_buf_get();
+      drw_shgroup_uniform_create_ex(shgroup,
+                                    debug_print_location,
+                                    DRW_UNIFORM_STORAGE_BLOCK,
+                                    buf,
+                                    GPU_SAMPLER_DEFAULT,
+                                    0,
+                                    1);
 #  ifndef DISABLE_DEBUG_SHADER_PRINT_BARRIER
-    /* Add a barrier to allow multiple shader writing to the same buffer. */
-    DRW_shgroup_barrier(shgroup, GPU_BARRIER_SHADER_STORAGE);
+      /* Add a barrier to allow multiple shader writing to the same buffer. */
+      DRW_shgroup_barrier(shgroup, GPU_BARRIER_SHADER_STORAGE);
 #  endif
-  }
+    }
 
-  int debug_draw_location = GPU_shader_get_builtin_ssbo(shader, GPU_STORAGE_BUFFER_DEBUG_VERTS);
-  if (debug_draw_location != -1) {
-    GPUStorageBuf *buf = drw_debug_gpu_draw_buf_get();
-    drw_shgroup_uniform_create_ex(
-        shgroup, debug_draw_location, DRW_UNIFORM_STORAGE_BLOCK, buf, GPU_SAMPLER_DEFAULT, 0, 1);
-    /* NOTE(fclem): No barrier as ordering is not important. */
+    int debug_draw_location = GPU_shader_get_builtin_ssbo(shader, GPU_STORAGE_BUFFER_DEBUG_VERTS);
+    if (debug_draw_location != -1) {
+      GPUStorageBuf *buf = drw_debug_gpu_draw_buf_get();
+      drw_shgroup_uniform_create_ex(
+          shgroup, debug_draw_location, DRW_UNIFORM_STORAGE_BLOCK, buf, GPU_SAMPLER_DEFAULT, 0, 1);
+      /* NOTE(fclem): No barrier as ordering is not important. */
+    }
   }
 #endif
 
@@ -1841,7 +1856,7 @@ void DRW_shgroup_add_material_resources(DRWShadingGroup *grp, GPUMaterial *mater
     grp->uniform_attrs = uattrs;
   }
 
-  if (GPU_material_layer_attributes(material) != NULL) {
+  if (GPU_material_layer_attributes(material) != nullptr) {
     int loc = GPU_shader_get_uniform_block_binding(grp->shader,
                                                    GPU_LAYER_ATTRIBUTE_UBO_BLOCK_NAME);
     drw_shgroup_uniform_create_ex(
@@ -2154,14 +2169,14 @@ static void draw_view_matrix_state_update(DRWView *view,
 {
   ViewMatrices *storage = &view->storage;
 
-  copy_m4_m4(storage->viewmat.values, viewmat);
-  invert_m4_m4(storage->viewinv.values, storage->viewmat.values);
+  copy_m4_m4(storage->viewmat.ptr(), viewmat);
+  invert_m4_m4(storage->viewinv.ptr(), storage->viewmat.ptr());
 
-  copy_m4_m4(storage->winmat.values, winmat);
-  invert_m4_m4(storage->wininv.values, storage->winmat.values);
+  copy_m4_m4(storage->winmat.ptr(), winmat);
+  invert_m4_m4(storage->wininv.ptr(), storage->winmat.ptr());
 
-  mul_m4_m4m4(view->persmat.values, winmat, viewmat);
-  invert_m4_m4(view->persinv.values, view->persmat.values);
+  mul_m4_m4m4(view->persmat.ptr(), winmat, viewmat);
+  invert_m4_m4(view->persinv.ptr(), view->persmat.ptr());
 }
 
 DRWView *DRW_view_create(const float viewmat[4][4],
@@ -2265,7 +2280,7 @@ void DRW_view_update(DRWView *view,
     invert_m4_m4(wininv, winmat);
   }
   else {
-    copy_m4_m4(wininv, view->storage.wininv.values);
+    copy_m4_m4(wininv, view->storage.wininv.ptr());
   }
 
   float viewinv[4][4];
@@ -2274,11 +2289,11 @@ void DRW_view_update(DRWView *view,
     invert_m4_m4(viewinv, viewmat);
   }
   else {
-    copy_m4_m4(viewinv, view->storage.viewinv.values);
+    copy_m4_m4(viewinv, view->storage.viewinv.ptr());
   }
 
   draw_frustum_boundbox_calc(viewinv, winmat, &view->frustum_corners);
-  draw_frustum_culling_planes_calc(view->persmat.values, view->frustum_planes);
+  draw_frustum_culling_planes_calc(view->persmat.ptr(), view->frustum_planes);
   draw_frustum_bound_sphere_calc(
       &view->frustum_corners, viewinv, winmat, wininv, &view->frustum_bsphere);
 
@@ -2362,20 +2377,20 @@ void DRW_view_viewmat_get(const DRWView *view, float mat[4][4], bool inverse)
 {
   view = (view) ? view : DST.view_default;
   const ViewMatrices *storage = &view->storage;
-  copy_m4_m4(mat, (inverse) ? storage->viewinv.values : storage->viewmat.values);
+  copy_m4_m4(mat, (inverse) ? storage->viewinv.ptr() : storage->viewmat.ptr());
 }
 
 void DRW_view_winmat_get(const DRWView *view, float mat[4][4], bool inverse)
 {
   view = (view) ? view : DST.view_default;
   const ViewMatrices *storage = &view->storage;
-  copy_m4_m4(mat, (inverse) ? storage->wininv.values : storage->winmat.values);
+  copy_m4_m4(mat, (inverse) ? storage->wininv.ptr() : storage->winmat.ptr());
 }
 
 void DRW_view_persmat_get(const DRWView *view, float mat[4][4], bool inverse)
 {
   view = (view) ? view : DST.view_default;
-  copy_m4_m4(mat, (inverse) ? view->persinv.values : view->persmat.values);
+  copy_m4_m4(mat, (inverse) ? view->persinv.ptr() : view->persmat.ptr());
 }
 
 /** \} */

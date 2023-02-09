@@ -104,7 +104,7 @@ void draw_channel_names(bContext *C, bAnimContext *ac, ARegion *region)
     UI_block_draw(C, block);
   }
 
-  /* free tempolary channels */
+  /* Free temporary channels. */
   ANIM_animdata_freelist(&anim_data);
 }
 
@@ -266,6 +266,20 @@ void draw_channel_strips(bAnimContext *ac, SpaceAction *saction, ARegion *region
               FCurve *fcu = ale->data;
               if (show_group_colors && fcu->grp && fcu->grp->customCol) {
                 immUniformColor3ubvAlpha((uchar *)fcu->grp->cs.active, sel ? col1[3] : col2[3]);
+              }
+              else {
+                immUniformColor4ubv(sel ? col1 : col2);
+              }
+              break;
+            }
+            case ANIMTYPE_GPLAYER: {
+              if (show_group_colors) {
+                uchar gpl_col[4];
+                bGPDlayer *gpl = (bGPDlayer *)ale->data;
+                rgb_float_to_uchar(gpl_col, gpl->color);
+                gpl_col[3] = col1[3];
+
+                immUniformColor4ubv(sel ? col1 : gpl_col);
               }
               else {
                 immUniformColor4ubv(sel ? col1 : col2);

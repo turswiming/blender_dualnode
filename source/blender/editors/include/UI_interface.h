@@ -22,10 +22,8 @@ extern "C" {
 struct ARegion;
 struct AssetFilterSettings;
 struct AssetHandle;
-struct AssetMetaData;
 struct AutoComplete;
 struct EnumPropertyItem;
-struct FileDirEntry;
 struct FileSelectParams;
 struct ID;
 struct IDProperty;
@@ -48,7 +46,6 @@ struct bNodeTree;
 struct bScreen;
 struct rctf;
 struct rcti;
-struct uiBlockInteraction_Handle;
 struct uiButSearch;
 struct uiFontStyle;
 struct uiList;
@@ -79,7 +76,11 @@ typedef struct uiViewItemHandle uiViewItemHandle;
 
 /* Defines */
 
-/* char for splitting strings, aligning shortcuts in menus, users never see */
+/**
+ * Character used for splitting labels (right align text after this character).
+ * Users should never see this character.
+ * Only applied when #UI_BUT_HAS_SEP_CHAR flag is enabled, see it's doc-string for details.
+ */
 #define UI_SEP_CHAR '|'
 #define UI_SEP_CHAR_S "|"
 
@@ -133,6 +134,8 @@ enum {
 /** #uiBlock.flag (controls) */
 enum {
   UI_BLOCK_LOOP = 1 << 0,
+  /** Indicate that items in a popup are drawn with inverted order. Used for arrow key navigation
+   *  so that it knows to invert the navigation direction to match the drawing order. */
   UI_BLOCK_IS_FLIP = 1 << 1,
   UI_BLOCK_NO_FLIP = 1 << 2,
   UI_BLOCK_NUMSELECT = 1 << 3,
@@ -218,7 +221,12 @@ enum {
   /** Use for popups to start editing the button on initialization. */
   UI_BUT_ACTIVATE_ON_INIT = 1 << 26,
 
-  /** #uiBut.str contains #UI_SEP_CHAR, used for key shortcuts */
+  /**
+   * #uiBut.str contains #UI_SEP_CHAR, used to show key-shortcuts right aligned.
+   *
+   * Since a label may contain #UI_SEP_CHAR, it's important to split on the last occurrence
+   * (meaning the right aligned text can't contain this character).
+   */
   UI_BUT_HAS_SEP_CHAR = 1 << 27,
   /** Don't run updates while dragging (needed in rare cases). */
   UI_BUT_UPDATE_DELAY = 1 << 28,
@@ -314,6 +322,8 @@ enum {
  * - bit  9-15: button type (now 6 bits, 64 types)
  */
 typedef enum {
+  UI_BUT_POIN_NONE = 0,
+
   UI_BUT_POIN_CHAR = 32,
   UI_BUT_POIN_SHORT = 64,
   UI_BUT_POIN_INT = 96,
@@ -386,7 +396,7 @@ typedef enum {
   UI_BTYPE_SEPR_LINE = 55 << 9,
   /** Dynamically fill available space. */
   UI_BTYPE_SEPR_SPACER = 56 << 9,
-  /** Resize handle (resize uilist). */
+  /** Resize handle (resize UI-list). */
   UI_BTYPE_GRIP = 57 << 9,
   UI_BTYPE_DECORATOR = 58 << 9,
   /* An item a view (see #ui::AbstractViewItem). */
@@ -451,7 +461,7 @@ void UI_draw_safe_areas(uint pos,
                         const float title_aspect[2],
                         const float action_aspect[2]);
 
-/** State for scrolldrawing. */
+/** State for scroll-drawing. */
 enum {
   UI_SCROLL_PRESSED = 1 << 0,
   UI_SCROLL_ARROWS = 1 << 1,
@@ -784,6 +794,9 @@ void UI_block_set_search_only(uiBlock *block, bool search_only);
  * Can be called with C==NULL.
  */
 void UI_block_free(const struct bContext *C, uiBlock *block);
+
+void UI_block_listen(const uiBlock *block, const struct wmRegionListenerParams *listener_params);
+
 /**
  * Can be called with C==NULL.
  */
@@ -1683,6 +1696,7 @@ int UI_search_items_find_index(uiSearchItems *items, const char *name);
  * Adds a hint to the button which draws right aligned, grayed out and never clipped.
  */
 void UI_but_hint_drawstr_set(uiBut *but, const char *string);
+void UI_but_icon_indicator_number_set(uiBut *but, const int indicator_number);
 
 void UI_but_node_link_set(uiBut *but, struct bNodeSocket *socket, const float draw_color[4]);
 
@@ -1783,7 +1797,6 @@ void UI_but_drag_attach_image(uiBut *but, struct ImBuf *imb, float scale);
 void UI_but_drag_set_asset(uiBut *but,
                            const struct AssetHandle *asset,
                            const char *path,
-                           struct AssetMetaData *metadata,
                            int import_type, /* eFileAssetImportType */
                            int icon,
                            struct ImBuf *imb,
@@ -2025,7 +2038,7 @@ enum {
   UI_TEMPLATE_OP_PROPS_NO_SPLIT_LAYOUT = 1 << 4,
 };
 
-/* used for transp checkers */
+/* Used for transparent checkers shown under color buttons that have an alpha component. */
 #define UI_ALPHA_CHECKER_DARK 100
 #define UI_ALPHA_CHECKER_LIGHT 160
 
@@ -2524,6 +2537,7 @@ void uiTemplateNodeView(uiLayout *layout,
                         struct bNodeTree *ntree,
                         struct bNode *node,
                         struct bNodeSocket *input);
+void uiTemplateNodeAssetMenuItems(uiLayout *layout, struct bContext *C, const char *catalog_path);
 void uiTemplateTextureUser(uiLayout *layout, struct bContext *C);
 /**
  * Button to quickly show texture in Properties Editor texture tab.
@@ -2788,7 +2802,8 @@ typedef struct uiPropertySplitWrapper {
 uiPropertySplitWrapper uiItemPropertySplitWrapperCreate(uiLayout *parent_layout);
 
 void uiItemL(uiLayout *layout, const char *name, int icon); /* label */
-void uiItemL_ex(uiLayout *layout, const char *name, int icon, bool highlight, bool redalert);
+struct uiBut *uiItemL_ex(
+    uiLayout *layout, const char *name, int icon, bool highlight, bool redalert);
 /**
  * Helper to add a label and creates a property split layout if needed.
  */
@@ -3114,6 +3129,20 @@ void UI_butstore_register(uiButStore *bs_handle, uiBut **but_p);
 bool UI_butstore_register_update(uiBlock *block, uiBut *but_dst, const uiBut *but_src);
 void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p);
 
+/**
+ * A version of #WM_key_event_operator_string that's limited to UI elements.
+ *
+ * This supports showing shortcuts in context-menus (for example),
+ * for actions that can also be activated using shortcuts while the cursor is over the button.
+ * Without this those shortcuts aren't discoverable for users.
+ */
+const char *UI_key_event_operator_string(const struct bContext *C,
+                                         const char *opname,
+                                         IDProperty *properties,
+                                         const bool is_strict,
+                                         char *result,
+                                         const int result_len);
+
 /* ui_interface_region_tooltip.c */
 
 /**
@@ -3194,9 +3223,6 @@ void UI_interface_tag_script_reload(void);
 
 /* Support click-drag motion which presses the button and closes a popover (like a menu). */
 #define USE_UI_POPOVER_ONCE
-
-void UI_block_views_listen(const uiBlock *block,
-                           const struct wmRegionListenerParams *listener_params);
 
 bool UI_view_item_is_active(const uiViewItemHandle *item_handle);
 bool UI_view_item_matches(const uiViewItemHandle *a_handle, const uiViewItemHandle *b_handle);

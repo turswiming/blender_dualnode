@@ -22,6 +22,8 @@
 #include "BLI_gsqueue.h"
 #include "BLI_threads.h"
 
+#include "ED_view3d.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -97,6 +99,13 @@ typedef struct {
   float mask;
   const float *col;
 } SculptOrigVertData;
+
+typedef struct SculptOrigFaceData {
+  struct SculptUndoNode *unode;
+  struct BMLog *bm_log;
+  const int *face_sets;
+  int face_set;
+} SculptOrigFaceData;
 
 /* Flood Fill. */
 typedef struct {
@@ -200,6 +209,9 @@ typedef struct SculptUndoNode {
 
   /* Sculpt Face Sets */
   int *face_sets;
+
+  PBVHFaceRef *faces;
+  int faces_num;
 
   size_t undo_size;
 } SculptUndoNode;
@@ -332,7 +344,7 @@ typedef struct SculptThreadedTaskData {
   int mask_init_seed;
 
   ThreadMutex mutex;
-
+  int iteration;
 } SculptThreadedTaskData;
 
 /*************** Brush testing declarations ****************/
@@ -341,7 +353,7 @@ typedef struct SculptBrushTest {
   float radius;
   float location[3];
   float dist;
-  int mirror_symmetry_pass;
+  ePaintSymmetryFlags mirror_symmetry_pass;
 
   int radial_symmetry_pass;
   float symm_rot_mat_inv[4][4];
@@ -398,6 +410,7 @@ typedef struct AutomaskingSettings {
   /* Flags from eAutomasking_flag. */
   int flags;
   int initial_face_set;
+  int initial_island_nr;
 
   float cavity_factor;
   int cavity_blur_steps;
@@ -405,6 +418,8 @@ typedef struct AutomaskingSettings {
 
   float start_normal_limit, start_normal_falloff;
   float view_normal_limit, view_normal_falloff;
+
+  bool topology_use_brush_limit;
 } AutomaskingSettings;
 
 typedef struct AutomaskingCache {
@@ -476,6 +491,8 @@ typedef struct FilterCache {
 
   /* Pre-smoothed colors used by sharpening. Colors are HSL. */
   float (*pre_smoothed_color)[4];
+
+  ViewContext vc;
 } FilterCache;
 
 /**
@@ -556,7 +573,8 @@ typedef struct StrokeCache {
   /* Symmetry index between 0 and 7 bit combo 0 is Brush only;
    * 1 is X mirror; 2 is Y mirror; 3 is XY; 4 is Z; 5 is XZ; 6 is YZ; 7 is XYZ */
   int symmetry;
-  int mirror_symmetry_pass; /* The symmetry pass we are currently on between 0 and 7. */
+  ePaintSymmetryFlags
+      mirror_symmetry_pass; /* The symmetry pass we are currently on between 0 and 7. */
   float true_view_normal[3];
   float view_normal[3];
 
@@ -728,11 +746,11 @@ typedef struct ExpandCache {
    * initial position of Expand. */
   float original_mouse_move[2];
 
-  /* Active components checks. */
-  /* Indexed by symmetry pass index, contains the connected component ID found in
-   * SculptSession->vertex_info.connected_component. Other connected components not found in this
+  /* Active island checks. */
+  /* Indexed by symmetry pass index, contains the connected island ID for that
+   * symmetry pass. Other connected island IDs not found in this
    * array will be ignored by Expand. */
-  int active_connected_components[EXPAND_SYMM_AREAS];
+  int active_connected_islands[EXPAND_SYMM_AREAS];
 
   /* Snapping. */
   /* GSet containing all Face Sets IDs that Expand will use to snap the new data. */
@@ -741,7 +759,7 @@ typedef struct ExpandCache {
   /* Texture distortion data. */
   Brush *brush;
   struct Scene *scene;
-  struct MTex *mtex;
+  // struct MTex *mtex;
 
   /* Controls how much texture distortion will be applied to the current falloff */
   float texture_distortion_strength;
@@ -784,6 +802,9 @@ typedef struct ExpandCache {
    * after finishing the operation. */
   bool reposition_pivot;
 
+  /* If nothing is masked set mask of every vertex to 0. */
+  bool auto_mask;
+
   /* Color target data type related data. */
   float fill_color[4];
   short blend_mode;
@@ -799,6 +820,9 @@ typedef struct ExpandCache {
   float *original_mask;
   int *original_face_sets;
   float (*original_colors)[4];
+
+  bool check_islands;
+  int normal_falloff_blur_steps;
 } ExpandCache;
 /** \} */
 
@@ -884,7 +908,7 @@ float SCULPT_raycast_init(struct ViewContext *vc,
                           bool original);
 
 /* Symmetry */
-char SCULPT_mesh_symmetry_xyz_get(Object *object);
+ePaintSymmetryFlags SCULPT_mesh_symmetry_xyz_get(Object *object);
 
 /**
  * Returns true when the step belongs to the stroke that is directly performed by the brush and
@@ -990,7 +1014,7 @@ void SCULPT_active_vertex_normal_get(SculptSession *ss, float normal[3]);
 
 /* Returns PBVH deformed vertices array if shape keys or deform modifiers are used, otherwise
  * returns mesh original vertices array. */
-struct MVert *SCULPT_mesh_deformed_mverts_get(SculptSession *ss);
+float (*SCULPT_mesh_deformed_positions_get(SculptSession *ss))[3];
 
 /* Fake Neighbors */
 
@@ -1005,8 +1029,6 @@ void SCULPT_fake_neighbors_free(struct Object *ob);
 void SCULPT_boundary_info_ensure(Object *object);
 /* Boundary Info needs to be initialized in order to use this function. */
 bool SCULPT_vertex_is_boundary(const SculptSession *ss, PBVHVertRef vertex);
-
-void SCULPT_connected_components_ensure(Object *ob);
 
 /** \} */
 
@@ -1033,6 +1055,9 @@ void SCULPT_visibility_sync_all_from_faces(struct Object *ob);
 int SCULPT_active_face_set_get(SculptSession *ss);
 int SCULPT_vertex_face_set_get(SculptSession *ss, PBVHVertRef vertex);
 void SCULPT_vertex_face_set_set(SculptSession *ss, PBVHVertRef vertex, int face_set);
+
+int SCULPT_face_set_get(const SculptSession *ss, PBVHFaceRef face);
+void SCULPT_face_set_set(SculptSession *ss, PBVHFaceRef face, int fset);
 
 bool SCULPT_vertex_has_face_set(SculptSession *ss, PBVHVertRef vertex, int face_set);
 bool SCULPT_vertex_has_unique_face_set(SculptSession *ss, PBVHVertRef vertex);
@@ -1064,6 +1089,25 @@ void SCULPT_orig_vert_data_update(SculptOrigVertData *orig_data, PBVHVertexIter 
  * handles #BMesh, #Mesh, and multi-resolution.
  */
 void SCULPT_orig_vert_data_unode_init(SculptOrigVertData *data,
+                                      Object *ob,
+                                      struct SculptUndoNode *unode);
+/**
+ * Initialize a #SculptOrigFaceData for accessing original face data;
+ * handles #BMesh, #Mesh, and multi-resolution.
+ */
+void SCULPT_orig_face_data_init(SculptOrigFaceData *data,
+                                Object *ob,
+                                PBVHNode *node,
+                                SculptUndoType type);
+/**
+ * Update a #SculptOrigFaceData for a particular vertex from the PBVH iterator.
+ */
+void SCULPT_orig_face_data_update(SculptOrigFaceData *orig_data, PBVHFaceIter *iter);
+/**
+ * Initialize a #SculptOrigVertData for accessing original vertex data;
+ * handles #BMesh, #Mesh, and multi-resolution.
+ */
+void SCULPT_orig_face_data_unode_init(SculptOrigFaceData *data,
                                       Object *ob,
                                       struct SculptUndoNode *unode);
 /** \} */
@@ -1263,6 +1307,7 @@ enum eDynTopoWarnFlag {
   DYNTOPO_WARN_LDATA = (1 << 2),
   DYNTOPO_WARN_MODIFIER = (1 << 3),
 };
+ENUM_OPERATORS(eDynTopoWarnFlag, DYNTOPO_WARN_MODIFIER);
 
 /** Enable dynamic topology; mesh will be triangulated */
 void SCULPT_dynamic_topology_enable_ex(struct Main *bmain,
@@ -1324,6 +1369,7 @@ float SCULPT_automasking_factor_get(struct AutomaskingCache *automasking,
  * brushes and filter. */
 struct AutomaskingCache *SCULPT_automasking_active_cache_get(SculptSession *ss);
 
+/* Brush can be null. */
 struct AutomaskingCache *SCULPT_automasking_cache_init(Sculpt *sd, Brush *brush, Object *ob);
 void SCULPT_automasking_cache_free(struct AutomaskingCache *automasking);
 
@@ -1526,7 +1572,10 @@ bool SCULPT_pbvh_calc_area_normal(const struct Brush *brush,
  * Flip all the edit-data across the axis/axes specified by \a symm.
  * Used to calculate multiple modifications to the mesh when symmetry is enabled.
  */
-void SCULPT_cache_calc_brushdata_symm(StrokeCache *cache, char symm, char axis, float angle);
+void SCULPT_cache_calc_brushdata_symm(StrokeCache *cache,
+                                      ePaintSymmetryFlags symm,
+                                      char axis,
+                                      float angle);
 void SCULPT_cache_free(StrokeCache *cache);
 
 /* -------------------------------------------------------------------- */
@@ -1662,7 +1711,7 @@ void SCULPT_OT_dyntopo_detail_size_edit(struct wmOperatorType *ot);
 
 void SCULPT_OT_dynamic_topology_toggle(struct wmOperatorType *ot);
 
-/* sculpt_brush_types.c */
+/* sculpt_brush_types.cc */
 
 /* -------------------------------------------------------------------- */
 /** \name Brushes
@@ -1743,7 +1792,9 @@ void SCULPT_do_paint_brush(struct PaintModeSettings *paint_mode_settings,
                            Sculpt *sd,
                            Object *ob,
                            PBVHNode **nodes,
-                           int totnode) ATTR_NONNULL();
+                           int totnode,
+                           PBVHNode **texnodes,
+                           int texnodes_num) ATTR_NONNULL();
 
 /**
  * \brief Get the image canvas for painting on the given object.
@@ -1759,8 +1810,8 @@ bool SCULPT_paint_image_canvas_get(struct PaintModeSettings *paint_mode_settings
 void SCULPT_do_paint_brush_image(struct PaintModeSettings *paint_mode_settings,
                                  Sculpt *sd,
                                  Object *ob,
-                                 PBVHNode **nodes,
-                                 int totnode) ATTR_NONNULL();
+                                 PBVHNode **texnodes,
+                                 int texnode_num) ATTR_NONNULL();
 bool SCULPT_use_image_paint_brush(struct PaintModeSettings *settings, Object *ob) ATTR_NONNULL();
 
 /* Smear Brush. */
@@ -1867,13 +1918,13 @@ void SCULPT_do_mask_brush(struct Sculpt *sd,
 void SCULPT_bmesh_topology_rake(
     struct Sculpt *sd, struct Object *ob, struct PBVHNode **nodes, int totnode, float bstrength);
 
-/* end sculpt_brush_types.c */
+/* end sculpt_brush_types.cc */
 
-/* sculpt_ops.c */
+/* sculpt_ops.cc */
 
 void SCULPT_OT_brush_stroke(struct wmOperatorType *ot);
 
-/* end sculpt_ops.c */
+/* end sculpt_ops.cc */
 
 BLI_INLINE bool SCULPT_tool_is_paint(int tool)
 {
@@ -1893,6 +1944,29 @@ BLI_INLINE bool SCULPT_tool_is_face_sets(int tool)
 void SCULPT_stroke_id_ensure(struct Object *ob);
 void SCULPT_stroke_id_next(struct Object *ob);
 bool SCULPT_tool_can_reuse_automask(int sculpt_tool);
+
+void SCULPT_ensure_valid_pivot(const struct Object *ob, struct Scene *scene);
+
+/* -------------------------------------------------------------------- */
+/** \name Topology island API
+ * \{
+ * Each mesh island shell gets its own integer
+ * key; these are temporary and internally limited to 8 bits.
+ * Uses the `ss->topology_island_key` attribute.
+ */
+
+/* Ensures vertex island keys exist and are valid. */
+void SCULPT_topology_islands_ensure(struct Object *ob);
+
+/* Mark vertex island keys as invalid.  Call when adding or hiding
+ * geometry.
+ */
+void SCULPT_topology_islands_invalidate(SculptSession *ss);
+
+/* Get vertex island key.*/
+int SCULPT_vertex_island_get(SculptSession *ss, PBVHVertRef vertex);
+
+/** \} */
 
 #ifdef __cplusplus
 }

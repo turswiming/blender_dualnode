@@ -306,8 +306,9 @@ static short pose_grab_with_ik_add(bPoseChannel *pchan)
            * just make things obey standard rotation locks too */
           if (data->rootbone == 0) {
             for (bPoseChannel *pchan_iter = pchan; pchan_iter; pchan_iter = pchan_iter->parent) {
-              /* here, we set ik-settings for bone from pchan->protectflag */
-              /* XXX: careful with quats/axis-angle rotations where we're locking 4d components. */
+              /* Here, we set IK-settings for bone from `pchan->protectflag`. */
+              /* XXX: careful with quaternion/axis-angle rotations
+               * where we're locking 4d components. */
               if (pchan_iter->protectflag & OB_LOCK_ROTX) {
                 pchan_iter->ikflag |= BONE_IK_NO_XDOF_TEMP;
               }
@@ -342,8 +343,8 @@ static short pose_grab_with_ik_add(bPoseChannel *pchan)
 
   /* we only include bones that are part of a continual connected chain */
   do {
-    /* here, we set ik-settings for bone from pchan->protectflag */
-    /* XXX: careful with quats/axis-angle rotations where we're locking 4d components. */
+    /* Here, we set IK-settings for bone from `pchan->protectflag`. */
+    /* XXX: careful with quaternion/axis-angle rotations where we're locking 4D components. */
     if (pchan->protectflag & OB_LOCK_ROTX) {
       pchan->ikflag |= BONE_IK_NO_XDOF_TEMP;
     }
@@ -592,7 +593,7 @@ static void add_pose_transdata(TransInfo *t, bPoseChannel *pchan, Object *ob, Tr
   td->ext->rotOrder = pchan->rotmode;
 
   /* proper way to get parent transform + own transform + constraints transform */
-  copy_m3_m4(omat, ob->obmat);
+  copy_m3_m4(omat, ob->object_to_world);
 
   /* New code, using "generic" BKE_bone_parent_transform_calc_from_pchan(). */
   {
@@ -863,7 +864,7 @@ static void createTransPose(bContext *UNUSED(C), TransInfo *t)
     }
   }
 
-  /* initialize initial auto=ik chainlen's? */
+  /* Initialize initial auto=IK chain-length's? */
   if (t->flag & T_AUTOIK) {
     transform_autoik_update(t, 0);
   }
@@ -954,7 +955,7 @@ static void createTransArmatureVerts(bContext *UNUSED(C), TransInfo *t)
     bool mirror = ((arm->flag & ARM_MIRROR_EDIT) != 0);
     BoneInitData *bid = tc->custom.type.data;
 
-    copy_m3_m4(mtx, tc->obedit->obmat);
+    copy_m3_m4(mtx, tc->obedit->object_to_world);
     pseudoinverse_m3_m3(smtx, mtx, PSEUDOINVERSE_EPSILON);
 
     td = tc->data = MEM_callocN(tc->data_len * sizeof(TransData), "TransEditBone");
@@ -1192,7 +1193,7 @@ static void restoreBones(TransDataContainer *tc)
 static void recalcData_edit_armature(TransInfo *t)
 {
   if (t->state != TRANS_CANCEL) {
-    applySnappingIndividual(t);
+    transform_snap_project_individual_apply(t);
   }
 
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
@@ -1770,15 +1771,15 @@ static void special_aftertrans_update__pose(bContext *C, TransInfo *t)
 /** \} */
 
 TransConvertTypeInfo TransConvertType_EditArmature = {
-    /* flags */ (T_EDIT | T_POINTS),
-    /* createTransData */ createTransArmatureVerts,
-    /* recalcData */ recalcData_edit_armature,
-    /* special_aftertrans_update */ NULL,
+    /*flags*/ (T_EDIT | T_POINTS),
+    /*createTransData*/ createTransArmatureVerts,
+    /*recalcData*/ recalcData_edit_armature,
+    /*special_aftertrans_update*/ NULL,
 };
 
 TransConvertTypeInfo TransConvertType_Pose = {
-    /* flags */ 0,
-    /* createTransData */ createTransPose,
-    /* recalcData */ recalcData_pose,
-    /* special_aftertrans_update */ special_aftertrans_update__pose,
+    /*flags*/ 0,
+    /*createTransData*/ createTransPose,
+    /*recalcData*/ recalcData_pose,
+    /*special_aftertrans_update*/ special_aftertrans_update__pose,
 };

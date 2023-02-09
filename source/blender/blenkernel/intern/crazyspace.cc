@@ -70,47 +70,48 @@ static void set_crazy_vertex_quat(float r_quat[4],
   sub_qt_qtqt(r_quat, q2, q1);
 }
 
-static bool modifiers_disable_subsurf_temporary(struct Scene *scene, Object *ob)
+static bool modifiers_disable_subsurf_temporary(Object *ob, const int cageIndex)
 {
-  bool disabled = false;
-  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, true);
+  bool changed = false;
 
   ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
   for (int i = 0; md && i <= cageIndex; i++, md = md->next) {
     if (md->type == eModifierType_Subsurf) {
       md->mode ^= eModifierMode_DisableTemporary;
-      disabled = true;
+      changed = true;
     }
   }
 
-  return disabled;
+  return changed;
 }
 
 float (*BKE_crazyspace_get_mapped_editverts(struct Depsgraph *depsgraph, Object *obedit))[3]
 {
-  Scene *scene = DEG_get_input_scene(depsgraph);
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Object *obedit_eval = DEG_get_evaluated_object(depsgraph, obedit);
-  Mesh *mesh_eval = static_cast<Mesh *>(obedit_eval->data);
-  BMEditMesh *editmesh_eval = mesh_eval->edit_mesh;
+  const int cageIndex = BKE_modifiers_get_cage_index(scene_eval, obedit_eval, nullptr, true);
 
-  /* disable subsurf temporal, get mapped cos, and enable it */
-  if (modifiers_disable_subsurf_temporary(scene_eval, obedit_eval)) {
-    /* Need to make new derived-mesh. */
+  /* Disable subsurf temporal, get mapped cos, and enable it. */
+  if (modifiers_disable_subsurf_temporary(obedit_eval, cageIndex)) {
+    /* Need to make new cage.
+     * TODO: Avoid losing original evaluated geometry. */
     makeDerivedMesh(depsgraph, scene_eval, obedit_eval, &CD_MASK_BAREMESH);
   }
 
-  /* now get the cage */
-  Mesh *mesh_eval_cage = editbmesh_get_eval_cage_from_orig(
-      depsgraph, scene, obedit, &CD_MASK_BAREMESH);
+  /* Now get the cage. */
+  BMEditMesh *em_eval = BKE_editmesh_from_object(obedit_eval);
+  Mesh *mesh_eval_cage = editbmesh_get_eval_cage(
+      depsgraph, scene_eval, obedit_eval, em_eval, &CD_MASK_BAREMESH);
 
-  const int nverts = editmesh_eval->bm->totvert;
+  const int nverts = em_eval->bm->totvert;
   float(*vertexcos)[3] = static_cast<float(*)[3]>(
       MEM_mallocN(sizeof(*vertexcos) * nverts, "vertexcos map"));
   mesh_get_mapped_verts_coords(mesh_eval_cage, vertexcos, nverts);
 
-  /* set back the flag, no new cage needs to be built, transform does it */
-  modifiers_disable_subsurf_temporary(scene_eval, obedit_eval);
+  /* Set back the flag, and ensure new cage needs to be built. */
+  if (modifiers_disable_subsurf_temporary(obedit_eval, cageIndex)) {
+    DEG_id_tag_update(&obedit->id, ID_RECALC_GEOMETRY);
+  }
 
   return vertexcos;
 }
@@ -187,7 +188,7 @@ void BKE_crazyspace_set_quats_mesh(Mesh *me,
   BLI_bitmap *vert_tag = BLI_BITMAP_NEW(me->totvert, __func__);
 
   /* first store two sets of tangent vectors in vertices, we derive it just from the face-edges */
-  const Span<MVert> verts = me->verts();
+  const Span<float3> positions = me->vert_positions();
   const Span<MPoly> polys = me->polys();
   const Span<MLoop> loops = me->loops();
 
@@ -213,9 +214,9 @@ void BKE_crazyspace_set_quats_mesh(Mesh *me,
           co_next = origcos[ml_next->v];
         }
         else {
-          co_prev = verts[ml_prev->v].co;
-          co_curr = verts[ml_curr->v].co;
-          co_next = verts[ml_next->v].co;
+          co_prev = positions[ml_prev->v];
+          co_curr = positions[ml_curr->v];
+          co_next = positions[ml_next->v];
         }
 
         set_crazy_vertex_quat(
@@ -570,7 +571,7 @@ void BKE_crazyspace_api_displacement_to_original(struct Object *object,
   if (vertex_index < 0 || vertex_index >= object->runtime.crazyspace_verts_num) {
     BKE_reportf(reports,
                 RPT_ERROR,
-                "Invalid vertex index %d (expected to be within 0 to %d range))",
+                "Invalid vertex index %d (expected to be within 0 to %d range)",
                 vertex_index,
                 object->runtime.crazyspace_verts_num);
     return;
@@ -600,7 +601,7 @@ GeometryDeformation get_evaluated_curves_deformation(const Depsgraph &depsgraph,
 {
   BLI_assert(ob_orig.type == OB_CURVES);
   const Curves &curves_id_orig = *static_cast<const Curves *>(ob_orig.data);
-  const CurvesGeometry &curves_orig = CurvesGeometry::wrap(curves_id_orig.geometry);
+  const CurvesGeometry &curves_orig = curves_id_orig.geometry.wrap();
   const int points_num = curves_orig.points_num();
 
   GeometryDeformation deformation;
@@ -642,7 +643,7 @@ GeometryDeformation get_evaluated_curves_deformation(const Depsgraph &depsgraph,
     if (curves_component_eval != nullptr) {
       const Curves *curves_id_eval = curves_component_eval->get_for_read();
       if (curves_id_eval != nullptr) {
-        const CurvesGeometry &curves_eval = CurvesGeometry::wrap(curves_id_eval->geometry);
+        const CurvesGeometry &curves_eval = curves_id_eval->geometry.wrap();
         if (curves_eval.points_num() == points_num) {
           deformation.positions = curves_eval.positions();
         }

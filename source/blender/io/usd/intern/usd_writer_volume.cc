@@ -13,6 +13,7 @@
 
 #include "BLI_fileops.h"
 #include "BLI_index_range.hh"
+#include "BLI_math_base.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
@@ -152,7 +153,7 @@ std::optional<std::string> USDVolumeWriter::construct_vdb_file_path(const Volume
   strcat(vdb_file_name, ".vdb");
 
   char vdb_file_path[FILE_MAX];
-  BLI_path_join(vdb_file_path, sizeof(vdb_file_path), vdb_directory_path, vdb_file_name, nullptr);
+  BLI_path_join(vdb_file_path, sizeof(vdb_file_path), vdb_directory_path, vdb_file_name);
 
   return vdb_file_path;
 }
