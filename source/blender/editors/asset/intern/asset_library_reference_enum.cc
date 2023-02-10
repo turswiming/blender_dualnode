@@ -76,12 +76,6 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
   int totitem = 0;
 
   if (include_generated) {
-    AssetLibraryReference essentials_library_reference;
-    essentials_library_reference.type = ASSET_LIBRARY_ESSENTIALS;
-    essentials_library_reference.custom_library_index = -1;
-    const int essentials_enum_value = ED_asset_library_reference_to_enum_value(
-        &essentials_library_reference);
-
     const EnumPropertyItem generated_items[] = {
         {ASSET_LIBRARY_ALL,
          "ALL",
@@ -93,7 +87,7 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
          ICON_CURRENT_FILE,
          "Current File",
          "Show the assets currently available in this Blender session"},
-        {essentials_enum_value,
+        {ASSET_LIBRARY_ESSENTIALS,
          "ESSENTIALS",
          ICON_NONE,
          "Essentials",
