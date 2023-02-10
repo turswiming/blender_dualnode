@@ -850,15 +850,15 @@ float ED_scene_grid_scale(const Scene *scene, const char **r_grid_unit)
   return 1.0f;
 }
 
-float ED_view3d_grid_scale(const Scene *scene, View3D *v3d, const char **r_grid_unit)
+float ED_view3d_grid_scale(const Scene *scene, const View3D *v3d, const char **r_grid_unit)
 {
   return v3d->grid * ED_scene_grid_scale(scene, r_grid_unit);
 }
 
 #define STEPS_LEN 8
 void ED_view3d_grid_steps(const Scene *scene,
-                          View3D *v3d,
-                          RegionView3D *rv3d,
+                          const View3D *v3d,
+                          const RegionView3D *rv3d,
                           float r_grid_steps[STEPS_LEN])
 {
   const void *usys;

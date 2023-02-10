@@ -9,8 +9,10 @@
 #include "draw_manager.hh"
 
 #include "overlay_background.hh"
+#include "overlay_empty.hh"
 #include "overlay_grid.hh"
 #include "overlay_metaball.hh"
+#include "overlay_shape.hh"
 
 namespace blender::draw::overlay {
 
@@ -49,6 +51,7 @@ class SceneResources {
 class Instance {
  public:
   ShaderCache shaders;
+  ShapeCache shapes;
 
   /* WORKAROUND: Legacy. Move to grid pass. */
   GPUUniformBuf *grid_ubo = nullptr;
@@ -60,6 +63,7 @@ class Instance {
   /** Overlay types. */
   Background background;
   Metaballs metaballs;
+  Empties empties;
   Grid grid;
 
   ~Instance()

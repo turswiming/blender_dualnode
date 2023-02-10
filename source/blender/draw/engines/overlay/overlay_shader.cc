@@ -490,6 +490,18 @@ GPUShader *OVERLAY_shader_extra(bool is_select)
   OVERLAY_Shaders *sh_data = &e_data.sh_data[draw_ctx->sh_cfg];
   GPUShader **sh = (is_select) ? &sh_data->extra_select : &sh_data->extra;
   if (!*sh) {
+    using namespace blender::gpu::shader;
+    ShaderCreateInfo &info = const_cast<ShaderCreateInfo &>(
+        *reinterpret_cast<const ShaderCreateInfo *>(GPU_shader_create_info_get("overlay_extra")));
+
+    if (U.experimental.enable_overlay_next) {
+      info.storage_buf(0, Qualifier::READ, "ExtraInstanceData", "data_buf[]");
+      info.define("color", "data_buf[gl_InstanceID].color_");
+      info.define("inst_obmat", "data_buf[gl_InstanceID].object_to_world_");
+      info.vertex_inputs_.pop_last();
+      info.vertex_inputs_.pop_last();
+    }
+
     *sh = GPU_shader_create_from_info_name(
         (draw_ctx->sh_cfg == GPU_SHADER_CFG_CLIPPED) ?
             (is_select ? "overlay_extra_select_clipped" : "overlay_extra_clipped") :

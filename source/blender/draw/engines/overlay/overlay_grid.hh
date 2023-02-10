@@ -42,8 +42,8 @@ class Grid {
     /* Default, nothing is drawn. */
     grid_flag_ = zneg_flag_ = zpos_flag_ = OVERLAY_GridBits(0);
 
-    View3D *v3d = state.v3d;
-    RegionView3D *rv3d = state.rv3d;
+    const View3D *v3d = state.v3d;
+    const RegionView3D *rv3d = state.rv3d;
 
     const bool show_axis_x = (state.v3d_gridflag & V3D_SHOW_X) != 0;
     const bool show_axis_y = (state.v3d_gridflag & V3D_SHOW_Y) != 0;

@@ -4,8 +4,9 @@
  * \ingroup overlay
  */
 
-#include "overlay_instance.hh"
 #include "draw_debug.hh"
+
+#include "overlay_instance.hh"
 
 namespace blender::draw::overlay {
 
@@ -18,12 +19,16 @@ void Instance::init()
 
   /* TODO(fclem): Remove DRW global usage. */
   const DRWContextState *ctx = DRW_context_state_get();
+  /* Was needed by `object_wire_theme_id()` when doing the port. Not sure if needed nowadays. */
+  BKE_view_layer_synced_ensure(ctx->scene, ctx->view_layer);
 
   state.depsgraph = ctx->depsgraph;
   state.view_layer = ctx->view_layer;
   state.scene = ctx->scene;
   state.v3d = ctx->v3d;
   state.rv3d = ctx->rv3d;
+  state.active_base = BKE_view_layer_active_base_get(ctx->view_layer);
+  state.object_mode = ctx->object_mode;
 
   state.pixelsize = U.pixelsize;
   state.ctx_mode = CTX_data_mode_enum_ex(ctx->object_edit, ctx->obact, ctx->object_mode);
@@ -66,6 +71,7 @@ void Instance::begin_sync()
   View view("OverlayView", view_legacy);
 
   background.begin_sync(resources, state);
+  empties.begin_sync();
   metaballs.begin_sync();
   grid.begin_sync(resources, state, view);
 }
@@ -98,6 +104,9 @@ void Instance::object_sync(ObjectRef &ob_ref)
 
   if (!state.hide_overlays) {
     switch (ob_ref.object->type) {
+      case OB_EMPTY:
+        empties.object_sync(ob_ref, resources, state);
+        break;
       case OB_ARMATURE:
         break;
       case OB_MBALL:
@@ -114,6 +123,7 @@ void Instance::object_sync(ObjectRef &ob_ref)
 void Instance::end_sync()
 {
   metaballs.end_sync(resources, state);
+  empties.end_sync(resources, shapes, state);
 }
 
 void Instance::draw(Manager &manager)
@@ -158,10 +168,12 @@ void Instance::draw(Manager &manager)
 
   background.draw(resources, manager);
 
+  empties.draw(resources, manager, view);
   metaballs.draw(resources, manager, view);
 
   grid.draw(resources, manager, view);
 
+  empties.draw_in_front(resources, manager, view);
   metaballs.draw_in_front(resources, manager, view);
 
   // anti_aliasing.draw(resources, manager, view);

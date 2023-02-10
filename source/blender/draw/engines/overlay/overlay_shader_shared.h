@@ -15,6 +15,7 @@ typedef enum OVERLAY_GridBits OVERLAY_GridBits;
 #  endif
 typedef struct OVERLAY_GridData OVERLAY_GridData;
 typedef struct ThemeColorData ThemeColorData;
+typedef struct ExtraInstanceData ExtraInstanceData;
 #endif
 
 /* TODO(fclem): Should eventually become OVERLAY_BackgroundType.
@@ -190,6 +191,22 @@ struct ThemeColorData {
   float4 color_uv_shadow;
 };
 BLI_STATIC_ASSERT_ALIGN(ThemeColorData, 16)
+
+/* TODO Move to overlay engine. */
+struct ExtraInstanceData {
+  float4 color_;
+  float4x4 object_to_world_;
+
+#if !defined(GPU_SHADER) && defined(__cplusplus)
+  ExtraInstanceData(const float4x4 &object_to_world, float4 &color, float draw_size)
+  {
+    this->color_ = color;
+    this->object_to_world_ = object_to_world;
+    this->object_to_world_[3][3] = draw_size;
+  };
+#endif
+};
+BLI_STATIC_ASSERT_ALIGN(ExtraInstanceData, 16)
 
 #ifndef GPU_SHADER
 #  ifdef __cplusplus

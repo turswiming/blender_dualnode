@@ -86,10 +86,7 @@ class Metaballs {
                                       data_buf_;
     MetaBall *mb = static_cast<MetaBall *>(ob_ref.object->data);
 
-    float *color;
-    /* TODO(fclem): Remove DRW global usage. */
-    UNUSED_VARS(res);
-    DRW_object_wire_theme_get(ob_ref.object, state.view_layer, &color);
+    const float4 &color = res.object_wire_color(ob_ref, state);
 
     LISTBASE_FOREACH (MetaElem *, ml, &mb->elems) {
       /* Draw radius only. */
