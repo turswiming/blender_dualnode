@@ -25,6 +25,7 @@ StringRefNull essentials_directory_path()
 
 bool ED_asset_essentials_contains_path(const char *path)
 {
-  const blender::StringRefNull bundled_path = blender::asset_system::essentials_directory_path();
-  return BLI_path_contains(bundled_path.c_str(), path);
+  const blender::StringRefNull essentials_path =
+      blender::asset_system::essentials_directory_path();
+  return BLI_path_contains(essentials_path.c_str(), path);
 }

@@ -61,7 +61,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
   const eAssetLibraryType type = eAssetLibraryType(library_reference.type);
 
   switch (type) {
-    case ASSET_LIBRARY_BUNDLED: {
+    case ASSET_LIBRARY_ESSENTIALS: {
       const StringRefNull root_path = essentials_directory_path();
       return get_asset_library_on_disk(root_path);
     }

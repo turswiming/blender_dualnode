@@ -47,7 +47,7 @@ AssetLibraryReference ED_asset_library_reference_from_enum_value(int value)
   if (value < ASSET_LIBRARY_CUSTOM) {
     library.type = value;
     library.custom_library_index = -1;
-    BLI_assert(ELEM(value, ASSET_LIBRARY_ALL, ASSET_LIBRARY_LOCAL, ASSET_LIBRARY_BUNDLED));
+    BLI_assert(ELEM(value, ASSET_LIBRARY_ALL, ASSET_LIBRARY_LOCAL, ASSET_LIBRARY_ESSENTIALS));
     return library;
   }
 
@@ -76,11 +76,11 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
   int totitem = 0;
 
   if (include_generated) {
-    AssetLibraryReference bundled_library_reference;
-    bundled_library_reference.type = ASSET_LIBRARY_BUNDLED;
-    bundled_library_reference.custom_library_index = -1;
-    const int bundle_enum_value = ED_asset_library_reference_to_enum_value(
-        &bundled_library_reference);
+    AssetLibraryReference essentials_library_reference;
+    essentials_library_reference.type = ASSET_LIBRARY_ESSENTIALS;
+    essentials_library_reference.custom_library_index = -1;
+    const int essentials_enum_value = ED_asset_library_reference_to_enum_value(
+        &essentials_library_reference);
 
     const EnumPropertyItem generated_items[] = {
         {ASSET_LIBRARY_ALL,
@@ -93,7 +93,7 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
          ICON_CURRENT_FILE,
          "Current File",
          "Show the assets currently available in this Blender session"},
-        {bundle_enum_value,
+        {essentials_enum_value,
          "ESSENTIALS",
          ICON_NONE,
          "Essentials",

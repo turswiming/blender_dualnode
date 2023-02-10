@@ -262,7 +262,7 @@ Vector<AssetLibraryReference> all_valid_asset_library_refs()
   {
     AssetLibraryReference library_ref{};
     library_ref.custom_library_index = -1;
-    library_ref.type = ASSET_LIBRARY_BUNDLED;
+    library_ref.type = ASSET_LIBRARY_ESSENTIALS;
     result.append(library_ref);
   }
   int i;
