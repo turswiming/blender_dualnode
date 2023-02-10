@@ -104,7 +104,7 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
                             "ESSENTIALS",
                             ICON_NONE,
                             "Essentials",
-                            "Show assets that came bundled with Blender"};
+                            "Show the basic building blocks and utilities coming with Blender"};
     RNA_enum_item_add(&item, &totitem, &tmp);
   }
 
