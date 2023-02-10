@@ -23,7 +23,7 @@ StringRefNull essentials_directory_path()
 
 }  // namespace blender::asset_system
 
-bool ED_asset_essentials_contains_path(const char *path)
+bool AS_asset_essentials_contains_path(const char *path)
 {
   const blender::StringRefNull essentials_path =
       blender::asset_system::essentials_directory_path();
