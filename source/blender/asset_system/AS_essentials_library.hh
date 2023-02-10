@@ -8,8 +8,6 @@
 
 #include "BLI_string_ref.hh"
 
-#include "AS_essentials_library.hh"
-
 namespace blender::asset_system {
 
 StringRefNull essentials_directory_path();
