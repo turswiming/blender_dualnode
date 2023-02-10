@@ -31,7 +31,6 @@ set(SRC
   AS_asset_identifier.hh
   AS_asset_library.hh
   AS_asset_representation.hh
-  AS_essentials_library.h
   AS_essentials_library.hh
   intern/asset_library_service.hh
   intern/asset_storage.hh

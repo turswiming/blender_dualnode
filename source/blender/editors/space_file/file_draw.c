@@ -55,7 +55,7 @@
 #include "GPU_immediate_util.h"
 #include "GPU_state.h"
 
-#include "AS_essentials_library.h"
+#include "AS_asset_representation.h"
 
 #include "filelist.h"
 
@@ -128,14 +128,17 @@ static void draw_tile_background(const rcti *draw_rect, int colorid, int shade)
   UI_draw_roundbox_aa(&draw_rect_fl, true, 5.0f, color);
 }
 
-static eFileAssetImportType get_asset_import_type(const SpaceFile *sfile, const char *blend_path)
+static eFileAssetImportType get_asset_import_type(const SpaceFile *sfile, const FileDirEntry *file)
 {
-  if (AS_asset_essentials_contains_path(blend_path)) {
-    return FILE_ASSET_IMPORT_APPEND_REUSE;
-  }
   const FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile);
   BLI_assert(asset_params != NULL);
-  return asset_params->import_type;
+  if (asset_params->import_type != FILE_ASSET_IMPORT_LINK) {
+    return asset_params->import_type;
+  }
+  if (AS_asset_representation_never_link(file->asset)) {
+    return FILE_ASSET_IMPORT_APPEND_REUSE;
+  }
+  return FILE_ASSET_IMPORT_LINK;
 }
 
 static void file_draw_icon(const SpaceFile *sfile,
@@ -180,7 +183,7 @@ static void file_draw_icon(const SpaceFile *sfile,
         UI_but_drag_set_asset(but,
                               &(AssetHandle){.file_data = file},
                               BLI_strdup(blend_path),
-                              get_asset_import_type(sfile, blend_path),
+                              get_asset_import_type(sfile, file),
                               icon,
                               preview_image,
                               UI_DPI_FAC);
@@ -570,7 +573,7 @@ static void file_draw_preview(const SpaceFile *sfile,
         UI_but_drag_set_asset(but,
                               &(AssetHandle){.file_data = file},
                               BLI_strdup(blend_path),
-                              get_asset_import_type(sfile, blend_path),
+                              get_asset_import_type(sfile, file),
                               icon,
                               imb,
                               scale);

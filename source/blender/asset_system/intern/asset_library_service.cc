@@ -63,7 +63,9 @@ AssetLibrary *AssetLibraryService::get_asset_library(
   switch (type) {
     case ASSET_LIBRARY_ESSENTIALS: {
       const StringRefNull root_path = essentials_directory_path();
-      return get_asset_library_on_disk(root_path);
+      AssetLibrary *asset_library = get_asset_library_on_disk(root_path);
+      asset_library->never_link = true;
+      return asset_library;
     }
     case ASSET_LIBRARY_LOCAL: {
       /* For the "Current File" library  we get the asset library root path based on main. */

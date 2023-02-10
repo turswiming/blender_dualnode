@@ -8,7 +8,7 @@
 
 #include "BLI_string_ref.hh"
 
-#include "AS_essentials_library.h"
+#include "AS_essentials_library.hh"
 
 namespace blender::asset_system {
 

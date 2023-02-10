@@ -22,10 +22,3 @@ StringRefNull essentials_directory_path()
 }
 
 }  // namespace blender::asset_system
-
-bool AS_asset_essentials_contains_path(const char *path)
-{
-  const blender::StringRefNull essentials_path =
-      blender::asset_system::essentials_directory_path();
-  return BLI_path_contains(essentials_path.c_str(), path);
-}

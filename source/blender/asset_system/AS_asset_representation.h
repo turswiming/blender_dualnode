@@ -22,6 +22,7 @@ const char *AS_asset_representation_name_get(const AssetRepresentation *asset)
 AssetMetaData *AS_asset_representation_metadata_get(const AssetRepresentation *asset)
     ATTR_WARN_UNUSED_RESULT;
 bool AS_asset_representation_is_local_id(const AssetRepresentation *asset) ATTR_WARN_UNUSED_RESULT;
+bool AS_asset_representation_never_link(const AssetRepresentation *asset) ATTR_WARN_UNUSED_RESULT;
 
 #ifdef __cplusplus
 }
