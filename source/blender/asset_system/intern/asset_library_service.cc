@@ -14,9 +14,9 @@
 
 #include "CLG_log.h"
 
-#include "AS_asset_bundled.hh"
 #include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.hh"
+#include "AS_essentials_library.hh"
 #include "asset_library_service.hh"
 #include "utils.hh"
 

@@ -8,7 +8,7 @@
 
 #include "BKE_appdir.h"
 
-#include "AS_asset_bundled.hh"
+#include "AS_essentials_library.hh"
 
 namespace blender::asset_system {
 

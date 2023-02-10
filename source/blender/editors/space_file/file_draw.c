@@ -55,7 +55,7 @@
 #include "GPU_immediate_util.h"
 #include "GPU_state.h"
 
-#include "AS_asset_bundled.h"
+#include "AS_essentials_library.h"
 
 #include "filelist.h"
 

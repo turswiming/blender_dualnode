@@ -58,7 +58,7 @@
 #include "UI_interface_icons.h"
 #include "UI_view2d.h"
 
-#include "AS_asset_bundled.hh"
+#include "AS_essentials_library.hh"
 
 #include "file_intern.h"
 #include "filelist.h"
