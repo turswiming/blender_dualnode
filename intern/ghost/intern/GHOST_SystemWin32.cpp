@@ -424,10 +424,9 @@ bool GHOST_SystemWin32::processEvents(bool waitForEvent)
 
     processTrackpad();
 
-    /* PeekMessage above is allowed to dispatch messages to the wndproc without us
+    /* `PeekMessage` above is allowed to dispatch messages to the `wndproc` without us
      * noticing, so we need to check the event manager here to see if there are
-     * events waiting in the queue.
-     */
+     * events waiting in the queue. */
     hasEventHandled |= this->m_eventManager->getNumEvents() > 0;
 
   } while (waitForEvent && !hasEventHandled);
@@ -1080,7 +1079,7 @@ GHOST_EventCursor *GHOST_SystemWin32::processCursorEvent(GHOST_WindowWin32 *wind
       if (window->getCursorGrabMode() == GHOST_kGrabHide) {
         window->getClientBounds(bounds);
 
-        /* WARNING(@campbellbarton): The current warping logic fails to warp on every event,
+        /* WARNING(@ideasman42): The current warping logic fails to warp on every event,
          * so the box needs to small enough not to let the cursor escape the window but large
          * enough that the cursor isn't being warped every time.
          * If this was not the case it would be less trouble to simply warp the cursor to the
@@ -1179,7 +1178,7 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_WindowWin32 *window, RA
   GHOST_TKey key = system->hardKey(raw, &key_down);
   GHOST_EventKey *event;
 
-  /* NOTE(@campbellbarton): key repeat in WIN32 also applies to modifier-keys.
+  /* NOTE(@ideasman42): key repeat in WIN32 also applies to modifier-keys.
    * Check for this case and filter out modifier-repeat.
    * Typically keyboard events are *not* filtered as part of GHOST's event handling.
    * As other GHOST back-ends don't have the behavior, it's simplest not to send them through.
