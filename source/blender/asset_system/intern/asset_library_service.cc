@@ -62,7 +62,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
 
   switch (type) {
     case ASSET_LIBRARY_BUNDLED: {
-      const StringRefNull root_path = bundled_assets_directory_path();
+      const StringRefNull root_path = essentials_directory_path();
       return get_asset_library_on_disk(root_path);
     }
     case ASSET_LIBRARY_LOCAL: {

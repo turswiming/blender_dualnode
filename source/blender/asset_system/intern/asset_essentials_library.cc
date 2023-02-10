@@ -12,7 +12,7 @@
 
 namespace blender::asset_system {
 
-StringRefNull bundled_assets_directory_path()
+StringRefNull essentials_directory_path()
 {
   static std::string path = []() {
     const char *datafiles_path = BKE_appdir_folder_id(BLENDER_DATAFILES, "assets");
@@ -23,9 +23,8 @@ StringRefNull bundled_assets_directory_path()
 
 }  // namespace blender::asset_system
 
-bool ED_asset_bundled_contains_path(const char *path)
+bool ED_asset_essentials_contains_path(const char *path)
 {
-  const blender::StringRefNull bundled_path =
-      blender::asset_system::bundled_assets_directory_path();
+  const blender::StringRefNull bundled_path = blender::asset_system::essentials_directory_path();
   return BLI_path_contains(bundled_path.c_str(), path);
 }

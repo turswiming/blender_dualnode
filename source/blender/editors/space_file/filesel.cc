@@ -429,7 +429,7 @@ static void fileselect_refresh_asset_params(FileAssetSelectParams *asset_params)
   switch (eAssetLibraryType(library->type)) {
     case ASSET_LIBRARY_BUNDLED:
       BLI_strncpy(base_params->dir,
-                  blender::asset_system::bundled_assets_directory_path().c_str(),
+                  blender::asset_system::essentials_directory_path().c_str(),
                   sizeof(base_params->dir));
       base_params->type = FILE_ASSET_LIBRARY;
       break;

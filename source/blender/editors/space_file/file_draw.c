@@ -130,7 +130,7 @@ static void draw_tile_background(const rcti *draw_rect, int colorid, int shade)
 
 static eFileAssetImportType get_asset_import_type(const SpaceFile *sfile, const char *blend_path)
 {
-  if (ED_asset_bundled_contains_path(blend_path)) {
+  if (ED_asset_essentials_contains_path(blend_path)) {
     return FILE_ASSET_IMPORT_APPEND_REUSE;
   }
   const FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile);

@@ -12,6 +12,6 @@
 
 namespace blender::asset_system {
 
-StringRefNull bundled_assets_directory_path();
+StringRefNull essentials_directory_path();
 
 }
