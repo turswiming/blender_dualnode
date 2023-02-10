@@ -76,6 +76,12 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
   int totitem = 0;
 
   if (include_generated) {
+    AssetLibraryReference bundled_library_reference;
+    bundled_library_reference.type = ASSET_LIBRARY_BUNDLED;
+    bundled_library_reference.custom_library_index = -1;
+    const int bundle_enum_value = ED_asset_library_reference_to_enum_value(
+        &bundled_library_reference);
+
     const EnumPropertyItem generated_items[] = {
         {ASSET_LIBRARY_ALL,
          "ALL",
@@ -87,25 +93,17 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
          ICON_CURRENT_FILE,
          "Current File",
          "Show the assets currently available in this Blender session"},
+        {bundle_enum_value,
+         "ESSENTIALS",
+         ICON_NONE,
+         "Essentials",
+         "Show the basic building blocks and utilities coming with Blender"},
         {0, nullptr, 0, nullptr, nullptr},
     };
 
     /* Add predefined libraries that are generated and not simple directories that can be written
      * to. */
     RNA_enum_items_add(&item, &totitem, generated_items);
-  }
-
-  {
-    AssetLibraryReference library_reference;
-    library_reference.type = ASSET_LIBRARY_BUNDLED;
-    library_reference.custom_library_index = -1;
-    const int enum_value = ED_asset_library_reference_to_enum_value(&library_reference);
-    EnumPropertyItem tmp = {enum_value,
-                            "ESSENTIALS",
-                            ICON_NONE,
-                            "Essentials",
-                            "Show the basic building blocks and utilities coming with Blender"};
-    RNA_enum_item_add(&item, &totitem, &tmp);
   }
 
   RNA_enum_item_add_separator(&item, &totitem);
