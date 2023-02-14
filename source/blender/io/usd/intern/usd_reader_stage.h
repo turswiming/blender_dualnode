@@ -130,6 +130,10 @@ class USDStageReader {
 
   bool merge_with_parent(USDPrimReader *reader) const;
 
+  /*
+   * Returns true if the specified UsdPrim is a UsdGeom primitive,
+   * procedural shape, such as UsdGeomCube.
+   */
   bool is_primitive_prim(const pxr::UsdPrim &prim) const;
 };
 

@@ -76,7 +76,6 @@ set(SRC
   intern/usd_reader_camera.cc
   intern/usd_reader_curve.cc
   intern/usd_reader_geom.cc
-		intern/usd_reader_shape.cc
   intern/usd_reader_instance.cc
   intern/usd_reader_light.cc
   intern/usd_reader_material.cc
@@ -84,6 +83,7 @@ set(SRC
   intern/usd_reader_nurbs.cc
   intern/usd_reader_prim.cc
   intern/usd_reader_skeleton.cc
+  intern/usd_reader_shape.cc
   intern/usd_reader_stage.cc
   intern/usd_reader_volume.cc
   intern/usd_reader_xform.cc
@@ -118,7 +118,6 @@ set(SRC
   intern/usd_reader_camera.h
   intern/usd_reader_curve.h
   intern/usd_reader_geom.h
-		intern/usd_reader_shape.h
   intern/usd_reader_instance.h
   intern/usd_reader_light.h
   intern/usd_reader_material.h
@@ -126,6 +125,7 @@ set(SRC
   intern/usd_reader_nurbs.h
   intern/usd_reader_prim.h
   intern/usd_reader_skeleton.h
+  intern/usd_reader_shape.h
   intern/usd_reader_stage.h
   intern/usd_reader_volume.h 
   intern/usd_reader_xform.h
@@ -179,8 +179,8 @@ blender_add_lib(bf_usd "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
 if(WITH_GTESTS)
   set(TEST_SRC
-    tests/usd_stage_creation_test.cc
     tests/usd_export_test.cc
+    tests/usd_stage_creation_test.cc
     tests/usd_tests_common.cc
     tests/usd_tests_common.h
 

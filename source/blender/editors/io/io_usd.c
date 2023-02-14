@@ -176,7 +176,7 @@ const EnumPropertyItem prop_default_prim_kind_items[] = {
 const EnumPropertyItem rna_enum_usd_tex_import_mode_items[] = {
     {USD_TEX_IMPORT_NONE, "IMPORT_NONE", 0, "None", "Don't import textures"},
     {USD_TEX_IMPORT_PACK, "IMPORT_PACK", 0, "Packed", "Import textures as packed data"},
-    {USD_TEX_IMPORT_COPY, "IMPORT_COPY", 0, "Copy", "Copy files to Textures Directory"},
+    {USD_TEX_IMPORT_COPY, "IMPORT_COPY", 0, "Copy", "Copy files to textures directory"},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -1203,6 +1203,7 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
                                    .import_volumes = import_volumes,
                                    .import_skeletons = import_skeletons,
                                    .prim_path_mask = prim_path_mask,
+                                   .import_shapes = import_shapes,
                                    .import_subdiv = import_subdiv,
                                    .import_instance_proxies = import_instance_proxies,
                                    .create_collection = create_collection,
@@ -1220,7 +1221,6 @@ static int wm_usd_import_exec(bContext *C, wmOperator *op)
                                    .create_background_shader = create_background_shader,
                                    .mtl_name_collision_mode = mtl_name_collision_mode,
                                    .attr_import_mode = attr_import_mode,
-                                   .import_shapes = import_shapes,
                                    .import_defined_only = import_defined_only,
                                    .mtl_name_collision_mode = mtl_name_collision_mode,
                                    .import_textures_mode = import_textures_mode,
@@ -1536,7 +1536,7 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
                  "//textures/",
                  FILE_MAXDIR,
                  "Textures Directory",
-                 "Path to the directory where imported textures will be copied ");
+                 "Path to the directory where imported textures will be copied");
 
   RNA_def_enum(
       ot->srna,

@@ -18,10 +18,15 @@
 #include <pxr/pxr.h>
 #include <pxr/usd/usd/primRange.h>
 #include <pxr/usd/usdGeom/camera.h>
+#include <pxr/usd/usdGeom/capsule.h>
+#include <pxr/usd/usdGeom/cone.h>
+#include <pxr/usd/usdGeom/cube.h>
 #include <pxr/usd/usdGeom/curves.h>
+#include <pxr/usd/usdGeom/cylinder.h>
 #include <pxr/usd/usdGeom/mesh.h>
 #include <pxr/usd/usdGeom/nurbsCurves.h>
 #include <pxr/usd/usdGeom/scope.h>
+#include <pxr/usd/usdGeom/sphere.h>
 #include <pxr/usd/usdGeom/xform.h>
 #include <pxr/usd/usdLux/domeLight.h>
 #include <pxr/usd/usdShade/material.h>
@@ -130,6 +135,9 @@ USDPrimReader *USDStageReader::create_reader_if_allowed(const pxr::UsdPrim &prim
 USDPrimReader *USDStageReader::create_reader(const pxr::UsdPrim &prim,
                                              pxr::UsdGeomXformCache *xf_cache)
 {
+  if (is_primitive_prim(prim)) {
+    return new USDShapeReader(prim, params_, settings_);
+  }
   if (prim.IsA<pxr::UsdGeomCamera>()) {
     return new USDCameraReader(prim, params_, settings_);
   }
