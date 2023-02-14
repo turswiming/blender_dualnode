@@ -100,7 +100,10 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
     RNA_enum_items_add(&item, &totitem, generated_items);
   }
 
-  RNA_enum_item_add_separator(&item, &totitem);
+  /* Add separator if needed. */
+  if (!BLI_listbase_is_empty(&U.asset_libraries)) {
+    RNA_enum_item_add_separator(&item, &totitem);
+  }
 
   int i;
   LISTBASE_FOREACH_INDEX (bUserAssetLibrary *, user_library, &U.asset_libraries, i) {
