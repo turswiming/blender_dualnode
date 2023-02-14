@@ -143,13 +143,12 @@ struct Mesh *USDShapeReader::read_mesh(struct Mesh *existing_mesh,
         existing_mesh, positions.size(), 0, 0, face_indices.size(), face_counts.size());
   }
 
-  MutableSpan<MVert> verts = active_mesh->verts_for_write();
+  MutableSpan<float3> vert_positions = active_mesh->vert_positions_for_write();
 
   for (int i = 0; i < positions.size(); i++) {
-    MVert &mvert = verts[i];
-    mvert.co[0] = positions[i][0];
-    mvert.co[1] = positions[i][1];
-    mvert.co[2] = positions[i][2];
+    vert_positions[i][0] = positions[i][0];
+    vert_positions[i][1] = positions[i][1];
+    vert_positions[i][2] = positions[i][2];
   }
 
   MutableSpan<MPoly> polys = active_mesh->polys_for_write();

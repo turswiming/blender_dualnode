@@ -162,7 +162,7 @@ static int dgroup_skinnable_cb(Object *ob, Bone *bone, void *datap)
           defgroup = BKE_object_defgroup_add_name(ob, bone->name);
         }
         else if (defgroup->flag & DG_LOCK_WEIGHT) {
-          /* In case vgroup already exists and is locked, do not modify it here. See T43814. */
+          /* In case vgroup already exists and is locked, do not modify it here. See #43814. */
           defgroup = NULL;
         }
       }
@@ -409,10 +409,10 @@ static void add_verts_to_dgroups(ReportList *reports,
   }
 
   /* transform verts to global space */
-  const MVert *mesh_verts = BKE_mesh_verts(mesh);
+  const float(*positions)[3] = BKE_mesh_vert_positions(mesh);
   for (int i = 0; i < mesh->totvert; i++) {
     if (!vertsfilled) {
-      copy_v3_v3(verts[i], mesh_verts[i].co);
+      copy_v3_v3(verts[i], positions[i]);
     }
     mul_m4_v3(ob->object_to_world, verts[i]);
   }
@@ -477,7 +477,7 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
 
     if (defbase_add) {
       /* It's possible there are DWeights outside the range of the current
-       * object's deform groups. In this case the new groups won't be empty T33889. */
+       * object's deform groups. In this case the new groups won't be empty #33889. */
       ED_vgroup_data_clamp_range(ob->data, defbase_tot);
     }
   }

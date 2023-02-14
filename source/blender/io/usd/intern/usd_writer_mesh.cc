@@ -10,6 +10,7 @@
 
 #include "BLI_assert.h"
 #include "BLI_math_vector.h"
+#include "BLI_math_vector_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
@@ -280,10 +281,10 @@ void USDGenericMeshWriter::write_uv_maps(const Mesh *mesh,
   pxr::UsdGeomPrimvar uv_coords_primvar = primvarsAPI.CreatePrimvar(
       primvar_name, pxr::SdfValueTypeNames->TexCoord2fArray, pxr::UsdGeomTokens->faceVarying);
 
-  MLoopUV *mloopuv = static_cast<MLoopUV *>(layer->data);
+  const float2 *mloopuv = static_cast<const float2 *>(layer->data);
   pxr::VtArray<pxr::GfVec2f> uv_coords;
   for (int loop_idx = 0; loop_idx < mesh->totloop; loop_idx++) {
-    uv_coords.push_back(pxr::GfVec2f(mloopuv[loop_idx].uv));
+    uv_coords.push_back(pxr::GfVec2f(mloopuv[loop_idx].x, mloopuv[loop_idx].y));
   }
 
   // NOTE (Marcelo Sercheli): Code to set values at default time was removed since
@@ -518,7 +519,7 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
   write_visibility(context, timecode, usd_mesh);
 
   USDMeshData usd_mesh_data;
-  /* ensure data exists if currently in edit mode */
+  /* Ensure data exists if currently in edit mode. */
   BKE_mesh_wrapper_ensure_mdata(mesh);
   get_geometry_data(mesh, usd_mesh_data);
 
@@ -610,9 +611,10 @@ static void get_vertices(const Mesh *mesh, USDMeshData &usd_mesh_data)
 {
   usd_mesh_data.points.reserve(mesh->totvert);
 
-  const Span<MVert> verts = mesh->verts();
-  for (const int i : verts.index_range()) {
-    usd_mesh_data.points.push_back(pxr::GfVec3f(verts[i].co));
+  const Span<float3> positions = mesh->vert_positions();
+  for (const int i : positions.index_range()) {
+    const float3 &position = positions[i];
+    usd_mesh_data.points.push_back(pxr::GfVec3f(position.x, position.y, position.z));
   }
 }
 
@@ -706,7 +708,8 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
    * which is why we always bind the first material to the entire mesh. See
    * https://github.com/PixarAnimationStudios/USD/issues/542 for more info. */
   bool mesh_material_bound = false;
-  pxr::UsdShadeMaterialBindingAPI material_binding_api(usd_mesh.GetPrim());
+  auto mesh_prim = usd_mesh.GetPrim();
+  pxr::UsdShadeMaterialBindingAPI material_binding_api(mesh_prim);
   for (int mat_num = 0; mat_num < context.object->totcol; mat_num++) {
     Material *material = BKE_object_material_get(context.object, mat_num + 1);
     if (material == nullptr) {
@@ -725,7 +728,13 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
     break;
   }
 
-  if (!mesh_material_bound) {
+  if (mesh_material_bound) {
+    /* USD will require that prims with material bindings have the MaterialBindingAPI applied
+     * schema. While Bind() above will create the binding attribute, Apply() needs to be called as
+     * well to add the MaterialBindingAPI schema to the prim itself.*/
+    material_binding_api.Apply(mesh_prim);
+  }
+  else {
     /* Blender defaults to double-sided, but USD to single-sided. */
     usd_mesh.CreateDoubleSidedAttr(pxr::VtValue(true));
   }
@@ -750,16 +759,21 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
     pxr::UsdShadeMaterial usd_material = ensure_usd_material(context, material);
     pxr::TfToken material_name = usd_material.GetPath().GetNameToken();
 
-    pxr::UsdShadeMaterialBindingAPI api = pxr::UsdShadeMaterialBindingAPI(usd_mesh.GetPrim());
-    pxr::UsdGeomSubset usd_face_subset = api.CreateMaterialBindSubset(material_name, face_indices);
-    pxr::UsdShadeMaterialBindingAPI(usd_face_subset.GetPrim()).Bind(usd_material);
+    pxr::UsdGeomSubset usd_face_subset = material_binding_api.CreateMaterialBindSubset(
+        material_name, face_indices);
+    auto subset_prim = usd_face_subset.GetPrim();
+    auto subset_material_api = pxr::UsdShadeMaterialBindingAPI(subset_prim);
+    subset_material_api.Bind(usd_material);
+    /* Apply the MaterialBindingAPI applied schema, as required by USD.*/
+    subset_material_api.Apply(subset_prim);
   }
 }
 
 void USDGenericMeshWriter::write_normals(const Mesh *mesh, pxr::UsdGeomMesh usd_mesh)
 {
   pxr::UsdTimeCode timecode = get_export_time_code();
-  const float(*lnors)[3] = static_cast<float(*)[3]>(CustomData_get_layer(&mesh->ldata, CD_NORMAL));
+  const float(*lnors)[3] = static_cast<const float(*)[3]>(
+      CustomData_get_layer(&mesh->ldata, CD_NORMAL));
   const Span<MPoly> polys = mesh->polys();
   const Span<MLoop> loops = mesh->loops();
 

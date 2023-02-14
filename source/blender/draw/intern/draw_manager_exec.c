@@ -1161,9 +1161,6 @@ static void drw_update_view(void)
   GPU_uniformbuf_update(G_draw.view_ubo, &DST.view_active->storage);
   GPU_uniformbuf_update(G_draw.clipping_ubo, &DST.view_active->clip_planes);
 
-  /* TODO: get rid of this. */
-  DST.view_storage_cpy = DST.view_active->storage;
-
   draw_compute_culling(DST.view_active);
 }
 
@@ -1221,7 +1218,7 @@ static void drw_draw_pass_ex(DRWPass *pass,
     DST.batch = NULL;
   }
 
-  /* Fix T67342 for some reason. AMD Pro driver bug. */
+  /* Fix #67342 for some reason. AMD Pro driver bug. */
   if ((DST.state & DRW_STATE_BLEND_CUSTOM) != 0 &&
       GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL)) {
     drw_state_set(DST.state & ~DRW_STATE_BLEND_CUSTOM);

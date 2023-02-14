@@ -222,7 +222,8 @@ static void geom_add_polygon(Geometry *geom,
     else {
       geom->track_vertex_index(corner.vert_index);
     }
-    if (got_uv) {
+    /* Ignore UV index, if the geometry does not have any UVs (#103212). */
+    if (got_uv && !global_vertices.uv_vertices.is_empty()) {
       corner.uv_vert_index += corner.uv_vert_index < 0 ? global_vertices.uv_vertices.size() : -1;
       if (corner.uv_vert_index < 0 || corner.uv_vert_index >= global_vertices.uv_vertices.size()) {
         fprintf(stderr,
@@ -234,7 +235,7 @@ static void geom_add_polygon(Geometry *geom,
     }
     /* Ignore corner normal index, if the geometry does not have any normals.
      * Some obj files out there do have face definitions that refer to normal indices,
-     * without any normals being present (T98782). */
+     * without any normals being present (#98782). */
     if (got_normal && !global_vertices.vertex_normals.is_empty()) {
       corner.vertex_normal_index += corner.vertex_normal_index < 0 ?
                                         global_vertices.vertex_normals.size() :
@@ -251,6 +252,8 @@ static void geom_add_polygon(Geometry *geom,
     geom->face_corners_.append(corner);
     curr_face.corner_count_++;
 
+    /* Some files contain extra stuff per face (e.g. 4 indices); skip any remainder (#103441). */
+    p = drop_non_whitespace(p, end);
     /* Skip whitespace to get to the next face corner. */
     p = drop_whitespace(p, end);
   }
@@ -358,6 +361,24 @@ static void geom_update_smooth_group(const char *p, const char *end, bool &r_sta
   int smooth = 0;
   parse_int(p, end, 0, smooth);
   r_state_shaded_smooth = smooth != 0;
+}
+
+static void geom_new_object(const char *p,
+                            const char *end,
+                            bool &r_state_shaded_smooth,
+                            std::string &r_state_group_name,
+                            int &r_state_material_index,
+                            Geometry *&r_curr_geom,
+                            Vector<std::unique_ptr<Geometry>> &r_all_geometries)
+{
+  r_state_shaded_smooth = false;
+  r_state_group_name = "";
+  /* Reset object-local material index that's used in face infos.
+   * NOTE: do not reset the material name; that has to carry over
+   * into the next object if needed. */
+  r_state_material_index = -1;
+  r_curr_geom = create_geometry(
+      r_curr_geom, GEOM_MESH, StringRef(p, end).trim(), r_all_geometries);
 }
 
 OBJParser::OBJParser(const OBJImportParams &import_params, size_t read_buffer_size = 64 * 1024)
@@ -531,22 +552,34 @@ void OBJParser::parse(Vector<std::unique_ptr<Geometry>> &r_all_geometries,
       }
       /* Objects. */
       else if (parse_keyword(p, end, "o")) {
-        state_shaded_smooth = false;
-        state_group_name = "";
-        /* Reset object-local material index that's used in face infos.
-         * NOTE: do not reset the material name; that has to carry over
-         * into the next object if needed. */
-        state_material_index = -1;
-        curr_geom = create_geometry(
-            curr_geom, GEOM_MESH, StringRef(p, end).trim(), r_all_geometries);
+        if (import_params_.use_split_objects) {
+          geom_new_object(p,
+                          end,
+                          state_shaded_smooth,
+                          state_group_name,
+                          state_material_index,
+                          curr_geom,
+                          r_all_geometries);
+        }
       }
       /* Groups. */
       else if (parse_keyword(p, end, "g")) {
-        geom_update_group(StringRef(p, end).trim(), state_group_name);
-        int new_index = curr_geom->group_indices_.size();
-        state_group_index = curr_geom->group_indices_.lookup_or_add(state_group_name, new_index);
-        if (new_index == state_group_index) {
-          curr_geom->group_order_.append(state_group_name);
+        if (import_params_.use_split_groups) {
+          geom_new_object(p,
+                          end,
+                          state_shaded_smooth,
+                          state_group_name,
+                          state_material_index,
+                          curr_geom,
+                          r_all_geometries);
+        }
+        else {
+          geom_update_group(StringRef(p, end).trim(), state_group_name);
+          int new_index = curr_geom->group_indices_.size();
+          state_group_index = curr_geom->group_indices_.lookup_or_add(state_group_name, new_index);
+          if (new_index == state_group_index) {
+            curr_geom->group_order_.append(state_group_name);
+          }
         }
       }
       /* Smoothing groups. */
@@ -734,7 +767,7 @@ Span<std::string> OBJParser::mtl_libraries() const
 
 void OBJParser::add_mtl_library(StringRef path)
 {
-  /* Remove any quotes from start and end (T67266, T97794). */
+  /* Remove any quotes from start and end (#67266, #97794). */
   if (path.size() > 2 && path.startswith("\"") && path.endswith("\"")) {
     path = path.drop_prefix(1).drop_suffix(1);
   }
@@ -750,7 +783,7 @@ void OBJParser::add_default_mtl_library()
    * into candidate .mtl files to search through. This is not technically following the
    * spec, but the old python importer was doing it, and there are user files out there
    * that contain "mtllib bar.mtl" for a foo.obj, and depend on finding materials
-   * from foo.mtl (see T97757). */
+   * from foo.mtl (see #97757). */
   char mtl_file_path[FILE_MAX];
   BLI_strncpy(mtl_file_path, import_params_.filepath, sizeof(mtl_file_path));
   BLI_path_extension_replace(mtl_file_path, sizeof(mtl_file_path), ".mtl");
@@ -822,7 +855,7 @@ void MTLParser::parse_and_store(Map<string, std::unique_ptr<MTLMaterial>> &r_mat
         parse_float(p, end, 1.0f, material->alpha);
       }
       else if (parse_keyword(p, end, "illum")) {
-        /* Some files incorrectly use a float (T60135). */
+        /* Some files incorrectly use a float (#60135). */
         float val;
         parse_float(p, end, 1.0f, val);
         material->illum_mode = val;

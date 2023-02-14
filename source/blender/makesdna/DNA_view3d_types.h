@@ -12,7 +12,6 @@ struct Object;
 struct RenderEngine;
 struct SmoothView3DStore;
 struct SpaceLink;
-struct ViewDepths;
 struct bGPdata;
 struct wmTimer;
 
@@ -401,7 +400,7 @@ enum {
 /*#define RV3D_IS_GAME_ENGINE       (1 << 5) */ /* UNUSED */
 /**
  * Disable Z-buffer offset, skip calls to #ED_view3d_polygon_offset.
- * Use when precise surface depth is needed and picking bias isn't, see T45434).
+ * Use when precise surface depth is needed and picking bias isn't, see #45434).
  */
 #define RV3D_ZOFFSET_DISABLED 64
 
@@ -546,6 +545,8 @@ enum {
   V3D_OVERLAY_STATS = (1 << 11),
   V3D_OVERLAY_FADE_INACTIVE = (1 << 12),
   V3D_OVERLAY_VIEWER_ATTRIBUTE = (1 << 13),
+  V3D_OVERLAY_SCULPT_SHOW_MASK = (1 << 14),
+  V3D_OVERLAY_SCULPT_SHOW_FACE_SETS = (1 << 15),
 };
 
 /** #View3DOverlay.edit_flag */

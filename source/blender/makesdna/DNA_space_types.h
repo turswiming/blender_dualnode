@@ -100,7 +100,7 @@ enum {
   /**
    * Used to mark a space as active but "overlapped" by temporary full-screen spaces. Without this
    * we wouldn't be able to restore the correct active space after closing temp full-screens
-   * reliably if the same space type is opened twice in a full-screen stack (see T19296). We don't
+   * reliably if the same space type is opened twice in a full-screen stack (see #19296). We don't
    * actually open the same space twice, we have to pretend it is by managing area order carefully.
    */
   SPACE_FLAG_TYPE_WAS_ACTIVE = (1 << 1),
@@ -1001,6 +1001,8 @@ typedef enum eFileSelectType {
   FILE_MAIN_ASSET = 3,
   /** Load assets of an asset library containing external files. */
   FILE_ASSET_LIBRARY = 4,
+  /** Load all asset libraries. */
+  FILE_ASSET_LIBRARY_ALL = 5,
 
   FILE_UNIX = 8,
   FILE_BLENDER = 8, /* don't display relative paths */

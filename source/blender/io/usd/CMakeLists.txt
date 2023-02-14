@@ -65,6 +65,7 @@ set(INC_SYS
 )
 
 set(SRC
+  intern/usd_asset_utils.cc
   intern/usd_capi_export.cc
   intern/usd_capi_import.cc
   intern/usd_common.cc
@@ -107,6 +108,7 @@ set(SRC
 
   usd.h
 
+  intern/usd_asset_utils.h
   intern/usd_common.h
   intern/usd_exporter_context.h
   intern/usd_hierarchy_iterator.h
@@ -159,6 +161,8 @@ list(APPEND LIB
   ${PYTHON_LINKFLAGS}
   ${BOOST_PYTHON_LIBRARIES}
   ${PYTHON_LIBRARIES}
+  ${USD_LIBRARIES}
+  ${TBB_LIBRARIES}
 )
 
 if(WITH_OPENVDB)
@@ -173,37 +177,20 @@ endif()
 
 blender_add_lib(bf_usd "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-if(WIN32)
-  set_property(TARGET bf_usd APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:Debug>:/WHOLEARCHIVE:${USD_DEBUG_LIB}>")
-  set_property(TARGET bf_usd APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:Release>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
-  set_property(TARGET bf_usd APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:RelWithDebInfo>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
-  set_property(TARGET bf_usd APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:MinSizeRel>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
-endif()
-
-# Source:
-# https://github.com/PixarAnimationStudios/USD/blob/master/BUILDING.md#linking-whole-archives
-if(WIN32)
-  target_link_libraries(bf_usd INTERFACE ${USD_LIBRARIES})
-  target_compile_options(bf_usd PRIVATE /w34101)
-elseif(APPLE)
-  target_link_libraries(bf_usd INTERFACE -Wl,-force_load ${USD_LIBRARIES})
-elseif(UNIX)
-  target_link_libraries(bf_usd INTERFACE "-Wl,--whole-archive ${USD_LIBRARIES} -Wl,--no-whole-archive ${TBB_LIBRARIES}")
-else()
-  message(FATAL_ERROR "Unknown how to link USD with your compiler ${CMAKE_CXX_COMPILER_ID}")
-endif()
-
-target_link_libraries(bf_usd INTERFACE ${TBB_LIBRARIES})
-
 if(WITH_GTESTS)
   set(TEST_SRC
     tests/usd_stage_creation_test.cc
+    tests/usd_export_test.cc
     tests/usd_tests_common.cc
     tests/usd_tests_common.h
+
+    intern/usd_writer_material.h
   )
   if(USD_IMAGING_HEADERS)
     list(APPEND TEST_SRC tests/usd_imaging_test.cc)
   endif()
+
+  include_directories(intern)
 
   set(TEST_INC
   )
