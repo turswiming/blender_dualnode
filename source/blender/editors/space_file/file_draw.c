@@ -135,7 +135,7 @@ static eFileAssetImportType get_asset_import_type(const SpaceFile *sfile, const 
   if (asset_params->import_type != FILE_ASSET_IMPORT_LINK) {
     return asset_params->import_type;
   }
-  if (AS_asset_representation_never_link(file->asset)) {
+  if (AS_asset_representation_is_never_link(file->asset)) {
     return FILE_ASSET_IMPORT_APPEND_REUSE;
   }
   return FILE_ASSET_IMPORT_LINK;
