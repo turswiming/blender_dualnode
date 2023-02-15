@@ -164,7 +164,7 @@ static void set_mapped_co(void *vuserdata, int index, const float co[3], const f
     tv = &tv[BM_elem_index_get(eve)];
 
     /* Be clever, get the closest vertex to the original,
-     * behaves most logically when the mirror modifier is used for eg T33051. */
+     * behaves most logically when the mirror modifier is used for eg #33051. */
     if ((tv->flag & TX_VERT_USE_MAPLOC) == 0) {
       /* first time */
       copy_v3_v3(tv->maploc, co);
@@ -318,8 +318,8 @@ void ED_transverts_create_from_obedit(TransVertStore *tvs, const Object *obedit,
       if (ebo->layer & arm->layer) {
         const bool tipsel = (ebo->flag & BONE_TIPSEL) != 0;
         const bool rootsel = (ebo->flag & BONE_ROOTSEL) != 0;
-        const bool rootok = (!(ebo->parent && (ebo->flag & BONE_CONNECTED) &&
-                               (ebo->parent->flag & BONE_TIPSEL)));
+        const bool rootok = !(ebo->parent && (ebo->flag & BONE_CONNECTED) &&
+                              (ebo->parent->flag & BONE_TIPSEL));
 
         if ((tipsel && rootsel) || (rootsel)) {
           /* Don't add the tip (unless mode & TM_ALL_JOINTS, for getting all joints),

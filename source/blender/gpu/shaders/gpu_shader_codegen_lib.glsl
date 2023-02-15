@@ -67,7 +67,7 @@ vec3 orco_get(vec3 local_pos, mat4 modelmatinv, vec4 orco_madd[2], vec4 orco)
   /* If the object does not have any deformation, the orco layer calculation is done on the fly
    * using the orco_madd factors.
    * We know when there is no orco layer when orco.w is 1.0 because it uses the generic vertex
-   * attrib (which is [0,0,0,1]). */
+   * attribute (which is [0,0,0,1]). */
   if (orco.w == 0.0) {
     return orco.xyz * 0.5 + 0.5;
   }
@@ -228,6 +228,11 @@ void dF_branch(float fn, out vec2 result)
   result = vec2(0.0);
 }
 
+void dF_branch_incomplete(float fn, out vec2 result)
+{
+  result = vec2(0.0);
+}
+
 #elif 0 /* TODO(@fclem): User Option? */
 /* Fast derivatives */
 vec3 dF_impl(vec3 v)
@@ -266,6 +271,15 @@ vec3 dF_impl(vec3 v)
       result -= vec2((fn)); \
     }
 
+/* Used when the non-offset value is already computed elsewhere */
+#  define dF_branch_incomplete(fn, result) \
+    if (true) { \
+      g_derivative_flag = 1; \
+      result.x = (fn); \
+      g_derivative_flag = -1; \
+      result.y = (fn); \
+      g_derivative_flag = 0; \
+    }
 #endif
 
 /* TODO(fclem): Remove. */

@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0
  * Copyright 2011-2022 Blender Foundation */
 
+#include "kernel/integrator/guiding.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* BSSRDF using disk based importance sampling.
@@ -118,7 +120,7 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
     if (path_flag & PATH_RAY_SUBSURFACE_BACKFACING) {
       hit_Ng = -hit_Ng;
     }
-    if (object_flag & SD_OBJECT_NEGATIVE_SCALE_APPLIED) {
+    if (object_negative_scale_applied(object_flag)) {
       hit_Ng = -hit_Ng;
     }
 
@@ -173,8 +175,8 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
 
     if (r < next_sum) {
       /* Return exit point. */
-      INTEGRATOR_STATE_WRITE(state, path, throughput) *= weight * sum_weights / sample_weight;
-
+      const Spectrum resampled_weight = weight * sum_weights / sample_weight;
+      INTEGRATOR_STATE_WRITE(state, path, throughput) *= resampled_weight;
       ss_isect.hits[0] = ss_isect.hits[hit];
       ss_isect.Ng[0] = ss_isect.Ng[hit];
 
@@ -182,6 +184,9 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
       ray.D = ss_isect.Ng[hit];
       ray.tmin = 0.0f;
       ray.tmax = 1.0f;
+
+      guiding_record_bssrdf_bounce(
+          kg, state, 1.0f, Ng, -Ng, resampled_weight, INTEGRATOR_STATE(state, subsurface, albedo));
       return true;
     }
 

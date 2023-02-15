@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_float3x3.hh"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "GPU_shader.h"
 #include "GPU_state.h"
@@ -16,6 +16,13 @@ namespace blender::realtime_compositor {
 Result::Result(ResultType type, TexturePool &texture_pool)
     : type_(type), texture_pool_(&texture_pool)
 {
+}
+
+Result Result::Temporary(ResultType type, TexturePool &texture_pool)
+{
+  Result result = Result(type, texture_pool);
+  result.increment_reference_count();
+  return result;
 }
 
 void Result::allocate_texture(Domain domain)
@@ -62,7 +69,7 @@ void Result::allocate_invalid()
       set_float_value(0.0f);
       break;
     case ResultType::Vector:
-      set_vector_value(float3(0.0f));
+      set_vector_value(float4(0.0f));
       break;
     case ResultType::Color:
       set_color_value(float4(0.0f));
@@ -75,13 +82,18 @@ void Result::bind_as_texture(GPUShader *shader, const char *texture_name) const
   /* Make sure any prior writes to the texture are reflected before reading from it. */
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH);
 
-  const int texture_image_unit = GPU_shader_get_texture_binding(shader, texture_name);
+  const int texture_image_unit = GPU_shader_get_sampler_binding(shader, texture_name);
   GPU_texture_bind(texture_, texture_image_unit);
 }
 
-void Result::bind_as_image(GPUShader *shader, const char *image_name) const
+void Result::bind_as_image(GPUShader *shader, const char *image_name, bool read) const
 {
-  const int image_unit = GPU_shader_get_texture_binding(shader, image_name);
+  /* Make sure any prior writes to the texture are reflected before reading from it. */
+  if (read) {
+    GPU_memory_barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
+  }
+
+  const int image_unit = GPU_shader_get_sampler_binding(shader, image_name);
   GPU_texture_image_bind(texture_, image_unit);
 }
 
@@ -125,7 +137,7 @@ float Result::get_float_value() const
   return float_value_;
 }
 
-float3 Result::get_vector_value() const
+float4 Result::get_vector_value() const
 {
   return vector_value_;
 }
@@ -143,7 +155,7 @@ float Result::get_float_value_default(float default_value) const
   return default_value;
 }
 
-float3 Result::get_vector_value_default(const float3 &default_value) const
+float4 Result::get_vector_value_default(const float4 &default_value) const
 {
   if (is_single_value()) {
     return get_vector_value();
@@ -165,7 +177,7 @@ void Result::set_float_value(float value)
   GPU_texture_update(texture_, GPU_DATA_FLOAT, &float_value_);
 }
 
-void Result::set_vector_value(const float3 &value)
+void Result::set_vector_value(const float4 &value)
 {
   vector_value_ = value;
   GPU_texture_update(texture_, GPU_DATA_FLOAT, vector_value_);

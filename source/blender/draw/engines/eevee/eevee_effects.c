@@ -29,7 +29,7 @@ static struct {
 
 #define SETUP_BUFFER(tex, fb, fb_color) \
   { \
-    eGPUTextureFormat format = (DRW_state_is_scene_render()) ? GPU_RGBA32F : GPU_RGBA16F; \
+    eGPUTextureFormat format = DRW_state_is_scene_render() ? GPU_RGBA32F : GPU_RGBA16F; \
     DRW_texture_ensure_fullscreen_2d(&tex, format, DRW_TEX_FILTER); \
     GPU_framebuffer_ensure_config(&fb, \
                                   { \
@@ -93,7 +93,7 @@ void EEVEE_effects_init(EEVEE_ViewLayerData *sldata,
   effects->enabled_effects |= EEVEE_screen_raytrace_init(sldata, vedata);
 
   /* Update matrices here because EEVEE_screen_raytrace_init can have reset the
-   * taa_current_sample. (See T66811) */
+   * taa_current_sample. (See #66811) */
   EEVEE_temporal_sampling_update_matrices(vedata);
 
   EEVEE_volumes_init(sldata, vedata);

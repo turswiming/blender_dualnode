@@ -168,7 +168,7 @@ bool ED_armature_pose_select_pick_bone(const Scene *scene,
 
     /* Since we do unified select, we don't shift+select a bone if the
      * armature object was not active yet.
-     * NOTE(@campbellbarton): special exception for armature mode so we can do multi-select
+     * NOTE(@ideasman42): special exception for armature mode so we can do multi-select
      * we could check for multi-select explicitly but think its fine to
      * always give predictable behavior in weight paint mode. */
     if ((ob_act == NULL) || ((ob_act != ob) && (ob_act->mode & OB_MODE_ALL_WEIGHT_PAINT) == 0)) {
@@ -230,7 +230,7 @@ bool ED_armature_pose_select_pick_bone(const Scene *scene,
        */
       else if (arm->flag & ARM_HAS_VIZ_DEPS) {
         /* NOTE: ob not ob_act here is intentional - it's the source of the
-         *       bones being selected  [T37247]
+         *       bones being selected [#37247].
          */
         DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       }
@@ -1237,7 +1237,7 @@ static int pose_select_mirror_exec(bContext *C, wmOperator *op)
         int flag_new = extend ? PBONE_PREV_FLAG_GET(pchan) : 0;
 
         if ((pchan_mirror = BKE_pose_channel_get_mirrored(ob->pose, pchan->name)) &&
-            (PBONE_VISIBLE(arm, pchan_mirror->bone))) {
+            PBONE_VISIBLE(arm, pchan_mirror->bone)) {
           const int flag_mirror = PBONE_PREV_FLAG_GET(pchan_mirror);
           flag_new |= flag_mirror;
 

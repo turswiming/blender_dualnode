@@ -62,9 +62,11 @@ void USDHairWriter::do_write(HierarchyContext &context)
     colors.push_back(pxr::GfVec3f(cache[0]->col));
     curves.CreateDisplayColorAttr(pxr::VtValue(colors));
   }
+
+  this->author_extent(timecode, curves);
 }
 
-bool USDHairWriter::check_is_animated(const HierarchyContext &UNUSED(context)) const
+bool USDHairWriter::check_is_animated(const HierarchyContext & /*context*/) const
 {
   return true;
 }

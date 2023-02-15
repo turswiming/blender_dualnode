@@ -329,7 +329,7 @@ void view3d_winmatrix_set(Depsgraph *depsgraph,
          clipend);
 #endif
 
-  /* Note the code here was tweaked to avoid an apparent compiler bug in clang 13 (see T91680). */
+  /* Note the code here was tweaked to avoid an apparent compiler bug in clang 13 (see #91680). */
   rctf viewplane;
   if (rect) {
     /* Smaller viewplane subset for selection picking. */
@@ -365,7 +365,7 @@ static void obmat_to_viewmat(RegionView3D *rv3d, Object *ob)
 
   rv3d->view = RV3D_VIEW_USER; /* don't show the grid */
 
-  normalize_m4_m4(bmat, ob->obmat);
+  normalize_m4_m4(bmat, ob->object_to_world);
   invert_m4_m4(rv3d->viewmat, bmat);
 
   /* view quat calculation, needed for add object */
@@ -404,12 +404,12 @@ void view3d_viewmatrix_set(Depsgraph *depsgraph,
       Object *ob_eval = DEG_get_evaluated_object(depsgraph, v3d->ob_center);
       float vec[3];
 
-      copy_v3_v3(vec, ob_eval->obmat[3]);
+      copy_v3_v3(vec, ob_eval->object_to_world[3]);
       if (ob_eval->type == OB_ARMATURE && v3d->ob_center_bone[0]) {
         bPoseChannel *pchan = BKE_pose_channel_find_name(ob_eval->pose, v3d->ob_center_bone);
         if (pchan) {
           copy_v3_v3(vec, pchan->pose_mat[3]);
-          mul_m4_v3(ob_eval->obmat, vec);
+          mul_m4_v3(ob_eval->object_to_world, vec);
         }
       }
       translate_m4(rv3d->viewmat, -vec[0], -vec[1], -vec[2]);
@@ -667,7 +667,7 @@ int view3d_opengl_select_ex(ViewContext *vc,
   G.f |= G_FLAG_PICKSEL;
 
   /* Important we use the 'viewmat' and don't re-calculate since
-   * the object & bone view locking takes 'rect' into account, see: T51629. */
+   * the object & bone view locking takes 'rect' into account, see: #51629. */
   ED_view3d_draw_setup_view(
       wm, vc->win, depsgraph, scene, region, v3d, vc->rv3d->viewmat, NULL, &rect);
 
@@ -702,7 +702,7 @@ int view3d_opengl_select_ex(ViewContext *vc,
                          object_filter.user_data);
     hits = drw_select_loop_user_data.hits;
     /* FIX: This cleanup the state before doing another selection pass.
-     * (see T56695) */
+     * (see #56695) */
     GPU_select_cache_end();
   }
 

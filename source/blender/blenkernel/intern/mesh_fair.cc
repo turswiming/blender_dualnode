@@ -26,6 +26,8 @@
 #include "MEM_guardedalloc.h"
 #include "eigen_capi.h"
 
+using blender::Array;
+using blender::float3;
 using blender::Map;
 using blender::MutableSpan;
 using blender::Span;
@@ -82,7 +84,7 @@ class FairingContext {
                   LoopWeight *loop_weight)
   {
 
-    fair_verts_ex(affected, (int)depth, vertex_weight, loop_weight);
+    fair_verts_ex(affected, int(depth), vertex_weight, loop_weight);
   }
 
  protected:
@@ -190,12 +192,12 @@ class FairingContext {
 
 class MeshFairingContext : public FairingContext {
  public:
-  MeshFairingContext(Mesh *mesh, MVert *deform_mverts)
+  MeshFairingContext(Mesh *mesh, MutableSpan<float3> deform_positions)
   {
     totvert_ = mesh->totvert;
     totloop_ = mesh->totloop;
 
-    MutableSpan<MVert> verts = mesh->verts_for_write();
+    MutableSpan<float3> positions = mesh->vert_positions_for_write();
     medge_ = mesh->edges();
     mpoly_ = mesh->polys();
     mloop_ = mesh->loops();
@@ -209,23 +211,18 @@ class MeshFairingContext : public FairingContext {
 
     /* Deformation coords. */
     co_.reserve(mesh->totvert);
-    if (deform_mverts) {
+    if (!deform_positions.is_empty()) {
       for (int i = 0; i < mesh->totvert; i++) {
-        co_[i] = deform_mverts[i].co;
+        co_[i] = deform_positions[i];
       }
     }
     else {
       for (int i = 0; i < mesh->totvert; i++) {
-        co_[i] = verts[i].co;
+        co_[i] = positions[i];
       }
     }
 
-    loop_to_poly_map_.reserve(mesh->totloop);
-    for (int i = 0; i < mesh->totpoly; i++) {
-      for (int l = 0; l < mpoly_[i].totloop; l++) {
-        loop_to_poly_map_[l + mpoly_[i].loopstart] = i;
-      }
-    }
+    loop_to_poly_map_ = blender::bke::mesh_topology::build_loop_to_poly_map(mpoly_, mloop_.size());
   }
 
   ~MeshFairingContext() override
@@ -259,7 +256,7 @@ class MeshFairingContext : public FairingContext {
   Span<MLoop> mloop_;
   Span<MPoly> mpoly_;
   Span<MEdge> medge_;
-  Vector<int> loop_to_poly_map_;
+  Array<int> loop_to_poly_map_;
 };
 
 class BMeshFairingContext : public FairingContext {
@@ -444,7 +441,7 @@ class VoronoiVertexWeight : public VertexWeight {
 
 class UniformLoopWeight : public LoopWeight {
  public:
-  float weight_at_index(const int UNUSED(index)) override
+  float weight_at_index(const int /*index*/) override
   {
     return 1.0f;
   }
@@ -470,11 +467,15 @@ static void prefair_and_fair_verts(FairingContext *fairing_context,
 }
 
 void BKE_mesh_prefair_and_fair_verts(struct Mesh *mesh,
-                                     struct MVert *deform_mverts,
+                                     float (*deform_vert_positions)[3],
                                      bool *affect_verts,
                                      const eMeshFairingDepth depth)
 {
-  MeshFairingContext *fairing_context = new MeshFairingContext(mesh, deform_mverts);
+  MutableSpan<float3> deform_positions_span;
+  if (deform_vert_positions) {
+    deform_positions_span = {reinterpret_cast<float3 *>(deform_vert_positions), mesh->totvert};
+  }
+  MeshFairingContext *fairing_context = new MeshFairingContext(mesh, deform_positions_span);
   prefair_and_fair_verts(fairing_context, affect_verts, depth);
   delete fairing_context;
 }

@@ -47,7 +47,7 @@
 #include "WM_types.h"
 
 #include "UI_interface.h"
-#include "interface_intern.h"
+#include "interface_intern.hh"
 
 /* For key-map item access. */
 #include "wm_event_system.h"
@@ -191,7 +191,7 @@ static bool menu_items_from_ui_create_item_from_button(MenuSearch_Data *data,
 
     if (drawstr_is_empty) {
       if (prop_type == PROP_ENUM) {
-        const int value_enum = (int)but->hardmax;
+        const int value_enum = int(but->hardmax);
         EnumPropertyItem enum_item;
         if (RNA_property_enum_item_from_value_gettexted((bContext *)but->block->evil_C,
                                                         &but->rnapoin,
@@ -227,7 +227,7 @@ static bool menu_items_from_ui_create_item_from_button(MenuSearch_Data *data,
       item->rna.index = but->rnaindex;
 
       if (prop_type == PROP_ENUM) {
-        item->rna.enum_value = (int)but->hardmax;
+        item->rna.enum_value = int(but->hardmax);
       }
     }
   }
@@ -468,13 +468,12 @@ static MenuSearch_Data *menu_items_from_ui_create(
     /* Exclude context menus because:
      * - The menu items are available elsewhere (and will show up multiple times).
      * - Menu items depend on exact context, making search results unpredictable
-     *   (exact number of items selected for example). See design doc T74158.
+     *   (exact number of items selected for example). See design doc #74158.
      * There is one exception,
      * as the outliner only exposes functionality via the context menu. */
     GHashIterator iter;
 
-    for (WM_menutype_iter(&iter); (!BLI_ghashIterator_done(&iter));
-         (BLI_ghashIterator_step(&iter))) {
+    for (WM_menutype_iter(&iter); !BLI_ghashIterator_done(&iter); BLI_ghashIterator_step(&iter)) {
       MenuType *mt = (MenuType *)BLI_ghashIterator_getValue(&iter);
       if (BLI_str_endswith(mt->idname, "_context_menu")) {
         BLI_gset_add(menu_tagged, mt);
@@ -544,8 +543,8 @@ static MenuSearch_Data *menu_items_from_ui_create(
 
         if (wm_contexts[space_type_ui_index].space_type_ui_index != -1) {
           ScrArea *area_best = wm_contexts[space_type_ui_index].area;
-          const uint value_best = (uint)area_best->winx * (uint)area_best->winy;
-          const uint value_test = (uint)area->winx * (uint)area->winy;
+          const uint value_best = uint(area_best->winx) * uint(area_best->winy);
+          const uint value_test = uint(area->winx) * uint(area->winy);
           if (value_best > value_test) {
             continue;
           }
@@ -898,7 +897,7 @@ static MenuSearch_Data *menu_items_from_ui_create(
    * unless searching for something that isn't already in a menu (or scroll down).
    *
    * Keep this behind a developer only check:
-   * - Many operators need options to be set to give useful results, see: T74157.
+   * - Many operators need options to be set to give useful results, see: #74157.
    * - User who really prefer to list all operators can use #WM_OT_search_operator.
    */
   if (U.flag & USER_DEVELOPER_UI) {
@@ -931,7 +930,7 @@ static void menu_search_arg_free_fn(void *data_v)
   MEM_freeN(data);
 }
 
-static void menu_search_exec_fn(bContext *C, void *UNUSED(arg1), void *arg2)
+static void menu_search_exec_fn(bContext *C, void * /*arg1*/, void *arg2)
 {
   MenuSearch_Item *item = (MenuSearch_Item *)arg2;
   if (item == nullptr) {
@@ -994,11 +993,11 @@ static void menu_search_exec_fn(bContext *C, void *UNUSED(arg1), void *arg2)
   }
 }
 
-static void menu_search_update_fn(const bContext *UNUSED(C),
+static void menu_search_update_fn(const bContext * /*C*/,
                                   void *arg,
                                   const char *str,
                                   uiSearchItems *items,
-                                  const bool UNUSED(is_first))
+                                  const bool /*is_first*/)
 {
   MenuSearch_Data *data = (MenuSearch_Data *)arg;
 
@@ -1041,7 +1040,8 @@ static bool ui_search_menu_create_context_menu(struct bContext *C,
   MenuSearch_Item *item = (MenuSearch_Item *)active;
   bool has_menu = false;
 
-  memset(&data->context_menu_data, 0x0, sizeof(data->context_menu_data));
+  new (&data->context_menu_data.but) uiBut();
+  new (&data->context_menu_data.block) uiBlock();
   uiBut *but = &data->context_menu_data.but;
   uiBlock *block = &data->context_menu_data.block;
 
@@ -1077,14 +1077,15 @@ static bool ui_search_menu_create_context_menu(struct bContext *C,
 
 static struct ARegion *ui_search_menu_create_tooltip(struct bContext *C,
                                                      struct ARegion *region,
-                                                     const rcti *UNUSED(item_rect),
+                                                     const rcti * /*item_rect*/,
                                                      void *arg,
                                                      void *active)
 {
   MenuSearch_Data *data = (MenuSearch_Data *)arg;
   MenuSearch_Item *item = (MenuSearch_Item *)active;
 
-  memset(&data->context_menu_data, 0x0, sizeof(data->context_menu_data));
+  new (&data->context_menu_data.but) uiBut();
+  new (&data->context_menu_data.block) uiBlock();
   uiBut *but = &data->context_menu_data.but;
   uiBlock *block = &data->context_menu_data.block;
   unit_m4(block->winmat);

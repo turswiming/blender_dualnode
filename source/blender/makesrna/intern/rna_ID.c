@@ -108,7 +108,7 @@ static const EnumPropertyItem rna_enum_override_library_property_operation_items
      "INSERT_BEFORE",
      0,
      "Insert Before",
-     "Insert a new item into collection after the one referenced in subitem_reference_name or "
+     "Insert a new item into collection before the one referenced in subitem_reference_name or "
      "_index (NOT USED)"},
     {0, NULL, 0, NULL, NULL},
 };
@@ -574,6 +574,33 @@ IDProperty **rna_ID_idprops(PointerRNA *ptr)
   return &id->properties;
 }
 
+int rna_ID_is_runtime_editable(PointerRNA *ptr, const char **r_info)
+{
+  ID *id = (ID *)ptr->data;
+  /* TODO: This should be abstracted in a BKE function or define, somewhat related to #88555. */
+  if (id->tag & (LIB_TAG_NO_MAIN | LIB_TAG_TEMP_MAIN | LIB_TAG_LOCALIZED |
+                 LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT | LIB_TAG_COPIED_ON_WRITE)) {
+    *r_info =
+        "Cannot edit 'runtime' status of non-blendfile data-blocks, as they are by definition "
+        "always runtime";
+    return 0;
+  }
+
+  return PROP_EDITABLE;
+}
+
+bool rna_ID_is_runtime_get(PointerRNA *ptr)
+{
+  ID *id = (ID *)ptr->data;
+  /* TODO: This should be abstracted in a BKE function or define, somewhat related to #88555. */
+  if (id->tag & (LIB_TAG_NO_MAIN | LIB_TAG_TEMP_MAIN | LIB_TAG_LOCALIZED |
+                 LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT | LIB_TAG_COPIED_ON_WRITE)) {
+    return true;
+  }
+
+  return (id->tag & LIB_TAG_RUNTIME) != 0;
+}
+
 void rna_ID_fake_user_set(PointerRNA *ptr, bool value)
 {
   ID *id = (ID *)ptr->data;
@@ -720,8 +747,12 @@ static ID *rna_ID_override_create(ID *id, Main *bmain, bool remap_local_usages)
   return local_id;
 }
 
-static ID *rna_ID_override_hierarchy_create(
-    ID *id, Main *bmain, Scene *scene, ViewLayer *view_layer, ID *id_instance_hint)
+static ID *rna_ID_override_hierarchy_create(ID *id,
+                                            Main *bmain,
+                                            Scene *scene,
+                                            ViewLayer *view_layer,
+                                            ID *id_instance_hint,
+                                            bool do_fully_editable)
 {
   if (!ID_IS_OVERRIDABLE_LIBRARY(id)) {
     return NULL;
@@ -735,8 +766,15 @@ static ID *rna_ID_override_hierarchy_create(
   BPy_BEGIN_ALLOW_THREADS;
 #  endif
 
-  BKE_lib_override_library_create(
-      bmain, scene, view_layer, NULL, id, id, id_instance_hint, &id_root_override, false);
+  BKE_lib_override_library_create(bmain,
+                                  scene,
+                                  view_layer,
+                                  NULL,
+                                  id,
+                                  id,
+                                  id_instance_hint,
+                                  &id_root_override,
+                                  do_fully_editable);
 
 #  ifdef WITH_PYTHON
   BPy_END_ALLOW_THREADS;
@@ -783,7 +821,7 @@ static void rna_ID_override_library_operations_update(ID *id,
     return;
   }
 
-  BKE_lib_override_library_operations_create(bmain, id);
+  BKE_lib_override_library_operations_create(bmain, id, NULL);
 
   WM_main_add_notifier(NC_WM | ND_LIB_OVERRIDE_CHANGED, NULL);
 }
@@ -1140,7 +1178,7 @@ static void rna_ImagePreview_size_set(PointerRNA *ptr, const int *values, enum e
   BKE_previewimg_clear_single(prv_img, size);
 
   if (values[0] && values[1]) {
-    prv_img->rect[size] = MEM_callocN(values[0] * values[1] * sizeof(unsigned int), "prv_rect");
+    prv_img->rect[size] = MEM_callocN(values[0] * values[1] * sizeof(uint), "prv_rect");
 
     prv_img->w[size] = values[0];
     prv_img->h[size] = values[1];
@@ -1178,7 +1216,7 @@ static void rna_ImagePreview_pixels_get(PointerRNA *ptr, int *values, enum eIcon
 
   BKE_previewimg_ensure(prv_img, size);
 
-  memcpy(values, prv_img->rect[size], prv_img->w[size] * prv_img->h[size] * sizeof(unsigned int));
+  memcpy(values, prv_img->rect[size], prv_img->w[size] * prv_img->h[size] * sizeof(uint));
 }
 
 static void rna_ImagePreview_pixels_set(PointerRNA *ptr, const int *values, enum eIconSizes size)
@@ -1190,7 +1228,7 @@ static void rna_ImagePreview_pixels_set(PointerRNA *ptr, const int *values, enum
     BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
   }
 
-  memcpy(prv_img->rect[size], values, prv_img->w[size] * prv_img->h[size] * sizeof(unsigned int));
+  memcpy(prv_img->rect[size], values, prv_img->w[size] * prv_img->h[size] * sizeof(uint));
   prv_img->flag[size] |= PRV_USER_EDITED;
 }
 
@@ -1201,7 +1239,7 @@ static int rna_ImagePreview_pixels_float_get_length(const PointerRNA *ptr,
   ID *id = ptr->owner_id;
   PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
-  BLI_assert(sizeof(unsigned int) == 4);
+  BLI_assert(sizeof(uint) == 4);
 
   if (id != NULL) {
     BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
@@ -1219,11 +1257,11 @@ static void rna_ImagePreview_pixels_float_get(PointerRNA *ptr, float *values, en
   ID *id = ptr->owner_id;
   PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
-  unsigned char *data = (unsigned char *)prv_img->rect[size];
+  uchar *data = (uchar *)prv_img->rect[size];
   const size_t len = prv_img->w[size] * prv_img->h[size] * 4;
   size_t i;
 
-  BLI_assert(sizeof(unsigned int) == 4);
+  BLI_assert(sizeof(uint) == 4);
 
   if (id != NULL) {
     BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
@@ -1243,11 +1281,11 @@ static void rna_ImagePreview_pixels_float_set(PointerRNA *ptr,
   ID *id = ptr->owner_id;
   PreviewImage *prv_img = (PreviewImage *)ptr->data;
 
-  unsigned char *data = (unsigned char *)prv_img->rect[size];
+  uchar *data = (uchar *)prv_img->rect[size];
   const size_t len = prv_img->w[size] * prv_img->h[size] * 4;
   size_t i;
 
-  BLI_assert(sizeof(unsigned int) == 4);
+  BLI_assert(sizeof(uint) == 4);
 
   if (id != NULL) {
     BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
@@ -1392,6 +1430,19 @@ static void rna_Library_version_get(PointerRNA *ptr, int *value)
   value[2] = lib->subversionfile;
 }
 
+static void rna_Library_reload(Library *lib, bContext *C, ReportList *reports)
+{
+#  ifdef WITH_PYTHON
+  BPy_BEGIN_ALLOW_THREADS;
+#  endif
+
+  WM_lib_reload(lib, C, reports);
+
+#  ifdef WITH_PYTHON
+  BPy_END_ALLOW_THREADS;
+#  endif
+}
+
 #else
 
 static void rna_def_ID_properties(BlenderRNA *brna)
@@ -1431,6 +1482,15 @@ static void rna_def_ID_properties(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_IDPROPERTY);
 
   prop = RNA_def_property(srna, "double_array", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_IDPROPERTY);
+  RNA_def_property_array(prop, 1);
+
+  /* IDP_BOOLEAN */
+  prop = RNA_def_property(srna, "bool", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_IDPROPERTY);
+  RNA_def_property_array(prop, 1);
+
+  prop = RNA_def_property(srna, "bool_array", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_flag(prop, PROP_IDPROPERTY);
   RNA_def_property_array(prop, 1);
 
@@ -1537,7 +1597,7 @@ static void rna_def_image_preview(BlenderRNA *brna)
   RNA_def_property_boolean_funcs(prop, NULL, "rna_ImagePreview_is_image_custom_set");
   RNA_def_property_ui_text(prop,
                            "Custom Image",
-                           "True if this preview image has been modified by py script,"
+                           "True if this preview image has been modified by py script, "
                            "and is no more auto-generated by Blender");
 
   prop = RNA_def_int_vector(
@@ -1570,7 +1630,7 @@ static void rna_def_image_preview(BlenderRNA *brna)
   RNA_def_property_boolean_funcs(prop, NULL, "rna_ImagePreview_is_icon_custom_set");
   RNA_def_property_ui_text(prop,
                            "Custom Icon",
-                           "True if this preview icon has been modified by py script,"
+                           "True if this preview icon has been modified by py script, "
                            "and is no more auto-generated by Blender");
 
   prop = RNA_def_int_vector(
@@ -2006,6 +2066,17 @@ static void rna_def_ID(BlenderRNA *brna)
       "This data-block is not an independent one, but is actually a sub-data of another ID "
       "(typical example: root node trees or master collections)");
 
+  prop = RNA_def_property(srna, "is_runtime_data", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_RUNTIME);
+  RNA_def_property_editable_func(prop, "rna_ID_is_runtime_editable");
+  RNA_def_property_boolean_funcs(prop, "rna_ID_is_runtime_get", NULL);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
+  RNA_def_property_ui_text(prop,
+                           "Runtime Data",
+                           "This data-block is runtime data, i.e. it won't be saved in .blend "
+                           "file. Note that e.g. evaluated IDs are always runtime, so this value "
+                           "is only editable for data-blocks in Main data-base");
+
   prop = RNA_def_property(srna, "tag", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_DOIT);
   RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
@@ -2128,6 +2199,12 @@ static void rna_def_ID(BlenderRNA *brna)
                   "",
                   "Another ID (usually an Object or Collection) used as a hint to decide where to "
                   "instantiate the new overrides");
+  RNA_def_boolean(func,
+                  "do_fully_editable",
+                  false,
+                  "",
+                  "Make all library overrides generated by this call fully editable by the user "
+                  "(none will be 'system overrides')");
 
   func = RNA_def_function(srna, "override_template_create", "rna_ID_override_template_create");
   RNA_def_function_ui_description(func, "Create an override template for this ID");
@@ -2239,7 +2316,7 @@ static void rna_def_library(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_flag(prop, PROP_THICK_WRAP);
 
-  func = RNA_def_function(srna, "reload", "WM_lib_reload");
+  func = RNA_def_function(srna, "reload", "rna_Library_reload");
   RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_CONTEXT);
   RNA_def_function_ui_description(func, "Reload this library and all its linked data-blocks");
 }

@@ -7,7 +7,7 @@
 
 #include <cmath>
 
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -32,7 +32,7 @@ static void cmp_node_ellipsemask_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>(N_("Mask"));
 }
 
-static void node_composit_init_ellipsemask(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_composit_init_ellipsemask(bNodeTree * /*ntree*/, bNode *node)
 {
   NodeEllipseMask *data = MEM_cnew<NodeEllipseMask>(__func__);
   data->x = 0.5;
@@ -43,7 +43,7 @@ static void node_composit_init_ellipsemask(bNodeTree *UNUSED(ntree), bNode *node
   node->storage = data;
 }
 
-static void node_composit_buts_ellipsemask(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_composit_buts_ellipsemask(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiLayout *row;
   row = uiLayoutRow(layout, true);
@@ -98,7 +98,7 @@ class EllipseMaskOperation : public NodeOperation {
   Domain compute_domain() override
   {
     if (get_input("Mask").is_single_value()) {
-      return Domain(context().get_output_size());
+      return Domain(context().get_compositing_region_size());
     }
     return get_input("Mask").domain();
   }
@@ -156,7 +156,7 @@ void register_node_type_cmp_ellipsemask()
   ntype.declare = file_ns::cmp_node_ellipsemask_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_ellipsemask;
   node_type_size(&ntype, 260, 110, 320);
-  node_type_init(&ntype, file_ns::node_composit_init_ellipsemask);
+  ntype.initfunc = file_ns::node_composit_init_ellipsemask;
   node_type_storage(
       &ntype, "NodeEllipseMask", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;

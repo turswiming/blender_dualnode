@@ -54,7 +54,7 @@ typedef struct {
     BMBackup mesh_backup;
     bool is_valid;
     bool is_dirty;
-  } * backup;
+  } *backup;
   int backup_len;
 } BisectData;
 
@@ -314,9 +314,9 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
     copy_v3_v3(plane_co_local, plane_co);
     copy_v3_v3(plane_no_local, plane_no);
 
-    invert_m4_m4(imat, obedit->obmat);
+    invert_m4_m4(imat, obedit->object_to_world);
     mul_m4_v3(imat, plane_co_local);
-    mul_transposed_mat3_m4_v3(obedit->obmat, plane_no_local);
+    mul_transposed_mat3_m4_v3(obedit->object_to_world, plane_no_local);
 
     BMOperator bmop;
     EDBM_op_init(
@@ -528,15 +528,7 @@ static void gizmo_mesh_bisect_update_from_op(GizmoGroup *ggd)
     normalize_v3(ggd->data.rotate_up);
 
     WM_gizmo_set_matrix_rotation_from_z_axis(ggd->translate_c, plane_no);
-
-    float plane_no_cross[3];
-    cross_v3_v3v3(plane_no_cross, plane_no, ggd->data.rotate_axis);
-
-    WM_gizmo_set_matrix_offset_rotation_from_yz_axis(
-        ggd->rotate_c, plane_no_cross, ggd->data.rotate_axis);
-    RNA_enum_set(ggd->rotate_c->ptr,
-                 "draw_options",
-                 ED_GIZMO_DIAL_DRAW_FLAG_ANGLE_MIRROR | ED_GIZMO_DIAL_DRAW_FLAG_ANGLE_START_Y);
+    WM_gizmo_set_matrix_rotation_from_z_axis(ggd->rotate_c, ggd->data.rotate_axis);
   }
 }
 

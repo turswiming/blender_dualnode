@@ -26,8 +26,8 @@ struct MeshExtract_LinePaintMask_Data {
 };
 
 static void extract_lines_paint_mask_init(const MeshRenderData *mr,
-                                          MeshBatchCache *UNUSED(cache),
-                                          void *UNUSED(ibo),
+                                          MeshBatchCache * /*cache*/,
+                                          void * /*ibo*/,
                                           void *tls_data)
 {
   MeshExtract_LinePaintMask_Data *data = static_cast<MeshExtract_LinePaintMask_Data *>(tls_data);
@@ -75,8 +75,8 @@ static void extract_lines_paint_mask_iter_poly_mesh(const MeshRenderData *mr,
   }
 }
 
-static void extract_lines_paint_mask_finish(const MeshRenderData *UNUSED(mr),
-                                            MeshBatchCache *UNUSED(cache),
+static void extract_lines_paint_mask_finish(const MeshRenderData * /*mr*/,
+                                            MeshBatchCache * /*cache*/,
                                             void *buf,
                                             void *_data)
 {
@@ -88,8 +88,8 @@ static void extract_lines_paint_mask_finish(const MeshRenderData *UNUSED(mr),
 
 static void extract_lines_paint_mask_init_subdiv(const DRWSubdivCache *subdiv_cache,
                                                  const MeshRenderData *mr,
-                                                 MeshBatchCache *UNUSED(cache),
-                                                 void *UNUSED(buf),
+                                                 MeshBatchCache * /*cache*/,
+                                                 void * /*buf*/,
                                                  void *tls_data)
 {
   MeshExtract_LinePaintMask_Data *data = static_cast<MeshExtract_LinePaintMask_Data *>(tls_data);
@@ -115,8 +115,8 @@ static void extract_lines_paint_mask_iter_subdiv_mesh(const DRWSubdivCache *subd
   uint start_loop_idx = subdiv_quad_index * 4;
   uint end_loop_idx = (subdiv_quad_index + 1) * 4;
   for (uint loop_idx = start_loop_idx; loop_idx < end_loop_idx; loop_idx++) {
-    const uint coarse_edge_index = (uint)subdiv_loop_edge_index[loop_idx];
-    const uint subdiv_edge_index = (uint)subdiv_loop_subdiv_edge_index[loop_idx];
+    const uint coarse_edge_index = uint(subdiv_loop_edge_index[loop_idx]);
+    const uint subdiv_edge_index = uint(subdiv_loop_subdiv_edge_index[loop_idx]);
 
     if (coarse_edge_index == -1u) {
       GPU_indexbuf_set_line_restart(&data->elb, subdiv_edge_index);
@@ -150,12 +150,11 @@ static void extract_lines_paint_mask_iter_subdiv_mesh(const DRWSubdivCache *subd
   }
 }
 
-static void extract_lines_paint_mask_finish_subdiv(
-    const struct DRWSubdivCache *UNUSED(subdiv_cache),
-    const MeshRenderData *mr,
-    MeshBatchCache *cache,
-    void *buf,
-    void *_data)
+static void extract_lines_paint_mask_finish_subdiv(const struct DRWSubdivCache * /*subdiv_cache*/,
+                                                   const MeshRenderData *mr,
+                                                   MeshBatchCache *cache,
+                                                   void *buf,
+                                                   void *_data)
 {
   extract_lines_paint_mask_finish(mr, cache, buf, _data);
 }

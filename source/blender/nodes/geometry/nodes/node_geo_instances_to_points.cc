@@ -3,6 +3,7 @@
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_attribute_math.hh"
+#include "BKE_instances.hh"
 #include "BKE_pointcloud.h"
 
 #include "node_geometry_util.hh"
@@ -12,22 +13,23 @@ namespace blender::nodes::node_geo_instances_to_points_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Instances")).only_instances();
-  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().supports_field();
-  b.add_input<decl::Vector>(N_("Position")).implicit_field();
+  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().field_on_all();
+  b.add_input<decl::Vector>(N_("Position")).implicit_field_on_all(implicit_field_inputs::position);
   b.add_input<decl::Float>(N_("Radius"))
       .default_value(0.05f)
       .min(0.0f)
       .subtype(PROP_DISTANCE)
-      .supports_field();
-  b.add_output<decl::Geometry>(N_("Points"));
+      .field_on_all();
+  b.add_output<decl::Geometry>(N_("Points")).propagate_all();
 }
 
 static void convert_instances_to_points(GeometrySet &geometry_set,
                                         Field<float3> position_field,
                                         Field<float> radius_field,
-                                        const Field<bool> selection_field)
+                                        const Field<bool> selection_field,
+                                        const AnonymousAttributePropagationInfo &propagation_info)
 {
-  const InstancesComponent &instances = *geometry_set.get_component_for_read<InstancesComponent>();
+  const bke::Instances &instances = *geometry_set.get_instances_for_read();
 
   const bke::InstancesFieldContext context{instances};
   fn::FieldEvaluator evaluator{context, instances.instances_num()};
@@ -61,6 +63,7 @@ static void convert_instances_to_points(GeometrySet &geometry_set,
   geometry_set.gather_attributes_for_propagation({GEO_COMPONENT_TYPE_INSTANCES},
                                                  GEO_COMPONENT_TYPE_POINT_CLOUD,
                                                  false,
+                                                 propagation_info,
                                                  attributes_to_propagate);
   /* These two attributes are added by the implicit inputs above. */
   attributes_to_propagate.remove("position");
@@ -70,7 +73,7 @@ static void convert_instances_to_points(GeometrySet &geometry_set,
     const AttributeIDRef &attribute_id = item.key;
     const AttributeKind attribute_kind = item.value;
 
-    const GVArray src = instances.attributes()->lookup_or_default(
+    const GVArray src = instances.attributes().lookup_or_default(
         attribute_id, ATTR_DOMAIN_INSTANCE, attribute_kind.data_type);
     BLI_assert(src);
     GSpanAttributeWriter dst = point_attributes.lookup_or_add_for_write_only_span(
@@ -90,7 +93,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     convert_instances_to_points(geometry_set,
                                 params.extract_input<Field<float3>>("Position"),
                                 params.extract_input<Field<float>>("Radius"),
-                                params.extract_input<Field<bool>>("Selection"));
+                                params.extract_input<Field<bool>>("Selection"),
+                                params.get_output_propagation_info("Points"));
     geometry_set.keep_only({GEO_COMPONENT_TYPE_POINT_CLOUD, GEO_COMPONENT_TYPE_EDIT});
     params.set_output("Points", std::move(geometry_set));
   }

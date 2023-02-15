@@ -81,7 +81,7 @@ void main()
   }
   else {
     dist = gl_FragCoord.z * 2.0 - 1.0;
-    /* Avoid fading in +Z direction in camera view (see T70193). */
+    /* Avoid fading in +Z direction in camera view (see #70193). */
     dist = flag_test(grid_flag, GRID_CAMERA) ? clamp(dist, 0.0, 1.0) : abs(dist);
     fade = 1.0 - smoothstep(0.0, 0.5, dist - 0.5);
     dist = 1.0; /* Avoid branch after. */
@@ -95,9 +95,9 @@ void main()
   }
 
   if (flag_test(grid_flag, SHOW_GRID)) {
-    /* Using `max(dot(dFdxPos, screenVecs[0]), dot(dFdyPos, screenVecs[1]))`
+    /* Using `max(dot(dFdxPos, ViewMatrixInverse[0]), dot(dFdyPos, ViewMatrixInverse[1]))`
      * would be more accurate, but not really necessary. */
-    float grid_res = dot(dFdxPos, screenVecs[0].xyz);
+    float grid_res = dot(dFdxPos, ViewMatrixInverse[0].xyz);
 
     /* The grid begins to appear when it comprises 4 pixels. */
     grid_res *= 4;

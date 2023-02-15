@@ -835,11 +835,11 @@ static void pyc_exception_buffer_handle_system_exit(PyObject *error_type,
     return;
   }
 
-  /* NOTE(@campbellbarton): A `SystemExit` exception will exit immediately (unless inspecting).
+  /* NOTE(@ideasman42): A `SystemExit` exception will exit immediately (unless inspecting).
    * So print the error and exit now. This is necessary as the call to #PyErr_Print exits,
    * the temporary `sys.stderr` assignment causes the output to be suppressed, failing silently.
    * Instead, restore the error and print it. If Python changes it's behavior and doesn't exit in
-   * the future - continue to create the exception buffer, see: T99966.
+   * the future - continue to create the exception buffer, see: #99966.
    *
    * Arguably accessing a `SystemExit` exception as a buffer should be supported without exiting.
    * (by temporarily enabling inspection for example) however - it's not obvious exactly when this
@@ -1475,7 +1475,7 @@ bool PyC_RunString_AsNumber(const char *imports[],
     PyErr_Clear();
   }
 
-  if (imports && (!PyC_NameSpace_ImportArray(py_dict, imports))) {
+  if (imports && !PyC_NameSpace_ImportArray(py_dict, imports)) {
     ok = false;
   }
   else if ((retval = PyRun_String(expr, Py_eval_input, py_dict, py_dict)) == NULL) {
@@ -1533,7 +1533,7 @@ bool PyC_RunString_AsIntPtr(const char *imports[],
 
   py_dict = PyC_DefaultNameSpace(filename);
 
-  if (imports && (!PyC_NameSpace_ImportArray(py_dict, imports))) {
+  if (imports && !PyC_NameSpace_ImportArray(py_dict, imports)) {
     ok = false;
   }
   else if ((retval = PyRun_String(expr, Py_eval_input, py_dict, py_dict)) == NULL) {
@@ -1572,7 +1572,7 @@ bool PyC_RunString_AsStringAndSize(const char *imports[],
 
   py_dict = PyC_DefaultNameSpace(filename);
 
-  if (imports && (!PyC_NameSpace_ImportArray(py_dict, imports))) {
+  if (imports && !PyC_NameSpace_ImportArray(py_dict, imports)) {
     ok = false;
   }
   else if ((retval = PyRun_String(expr, Py_eval_input, py_dict, py_dict)) == NULL) {

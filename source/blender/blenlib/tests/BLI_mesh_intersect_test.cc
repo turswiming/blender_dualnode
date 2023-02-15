@@ -10,7 +10,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_math_mpq.hh"
-#include "BLI_math_vec_mpq_types.hh"
+#include "BLI_math_vector_mpq_types.hh"
 #include "BLI_mesh_intersect.hh"
 #include "BLI_task.h"
 #include "BLI_vector.hh"
@@ -153,7 +153,7 @@ static int find_edge_pos_in_tri(const Vert *v0, const Vert *v1, const Face *f)
   for (int pos : f->index_range()) {
     int nextpos = f->next_pos(pos);
     if (((*f)[pos] == v0 && (*f)[nextpos] == v1) || ((*f)[pos] == v1 && (*f)[nextpos] == v0)) {
-      return static_cast<int>(pos);
+      return int(pos);
     }
   }
   return -1;

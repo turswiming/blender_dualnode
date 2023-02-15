@@ -304,7 +304,7 @@ static void graphedit_activekey_handles_cb(bContext *C, void *fcu_ptr, void *bez
 
 /* update callback for editing coordinates of right handle in active keyframe properties
  * NOTE: we cannot just do graphedit_activekey_handles_cb() due to "order of computation"
- *       weirdness (see calchandleNurb_intern() and T39911)
+ *       weirdness (see calchandleNurb_intern() and #39911)
  */
 static void graphedit_activekey_left_handle_coord_cb(bContext *C, void *fcu_ptr, void *bezt_ptr)
 {
@@ -528,7 +528,7 @@ static void graph_panel_key_properties(const bContext *C, Panel *panel)
 
     /* next handle - only if current is Bezier interpolation */
     if (bezt->ipo == BEZT_IPO_BEZ) {
-      /* NOTE: special update callbacks are needed on the coords here due to T39911 */
+      /* NOTE: special update callbacks are needed on the coords here due to #39911 */
 
       col = uiLayoutColumn(layout, true);
       uiItemL_respect_property_split(col, IFACE_("Right Handle Type"), ICON_NONE);
@@ -905,6 +905,45 @@ static void graph_panel_driverVar__transChan(uiLayout *layout, ID *id, DriverVar
 /* ----------------------------------------------------------------- */
 
 /* property driven by the driver - duplicates Active FCurve, but useful for clarity */
+
+static void graph_draw_driven_property_enabled_btn(uiLayout *layout,
+                                                   ID *id,
+                                                   FCurve *fcu,
+                                                   const char *label)
+{
+  PointerRNA fcurve_ptr;
+  RNA_pointer_create(id, &RNA_FCurve, fcu, &fcurve_ptr);
+
+  uiBlock *block = uiLayoutGetBlock(layout);
+  uiDefButR(block,
+            UI_BTYPE_CHECKBOX_N,
+            0,
+            label,
+            0,
+            0,
+            UI_UNIT_X,
+            UI_UNIT_Y,
+            &fcurve_ptr,
+            "mute",
+            0,
+            0,
+            0,
+            0,
+            0,
+            TIP_("Let the driver determine this property's value"));
+}
+
+static void graph_panel_drivers_header(const bContext *C, Panel *panel)
+{
+  bAnimListElem *ale;
+  FCurve *fcu;
+  if (!graph_panel_context(C, &ale, &fcu)) {
+    return;
+  }
+
+  graph_draw_driven_property_enabled_btn(panel->layout, ale->id, fcu, IFACE_("Driver"));
+}
+
 static void graph_draw_driven_property_panel(uiLayout *layout, ID *id, FCurve *fcu)
 {
   PointerRNA fcu_ptr;
@@ -1315,7 +1354,7 @@ static void graph_panel_drivers_popover(const bContext *C, Panel *panel)
       uiItemS(layout);
 
       /* Drivers Settings */
-      uiItemL(layout, IFACE_("Driver Settings:"), ICON_NONE);
+      graph_draw_driven_property_enabled_btn(panel->layout, id, fcu, IFACE_("Driver:"));
       graph_draw_driver_settings_panel(panel->layout, id, fcu, true);
     }
   }
@@ -1432,6 +1471,7 @@ void graph_buttons_register(ARegionType *art)
   strcpy(pt->category, "Drivers");
   strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
   pt->draw = graph_panel_drivers;
+  pt->draw_header = graph_panel_drivers_header;
   pt->poll = graph_panel_drivers_poll;
   BLI_addtail(&art->paneltypes, pt);
 

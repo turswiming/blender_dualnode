@@ -22,8 +22,11 @@
 #include "gpu_shader_create_info.hh"
 #include "gpu_shader_dependency_private.h"
 
+#include "GPU_context.h"
+
 extern "C" {
 #define SHADER_SOURCE(datatoc, filename, filepath) extern char datatoc[];
+#include "glsl_compositor_source_list.h"
 #include "glsl_draw_source_list.h"
 #include "glsl_gpu_source_list.h"
 #ifdef WITH_OCIO
@@ -109,7 +112,7 @@ struct GPUSource {
       }
       if ((source.find("drw_debug_") != StringRef::not_found) &&
           /* Avoid these two files where it makes no sense to add the dependency. */
-          (!ELEM(filename, "common_debug_draw_lib.glsl", "draw_debug_draw_display_vert.glsl"))) {
+          !ELEM(filename, "common_debug_draw_lib.glsl", "draw_debug_draw_display_vert.glsl")) {
         builtins |= shader::BuiltinBits::USE_DEBUG_DRAW;
       }
       check_no_quotes();
@@ -140,7 +143,7 @@ struct GPUSource {
         if constexpr (check_whole_word) {
           /* Fix false positive if something has "enum" as suffix. */
           char previous_char = input[offset - 1];
-          if (!(ELEM(previous_char, '\n', '\t', ' ', ':', '(', ','))) {
+          if (!ELEM(previous_char, '\n', '\t', ' ', ':', '(', ',')) {
             offset += (reversed) ? -1 : 1;
             continue;
           }
@@ -191,7 +194,7 @@ struct GPUSource {
   /**
    * Some drivers completely forbid quote characters even in unused preprocessor directives.
    * We fix the cases where we can't manually patch in `enum_preprocess()`.
-   * This check ensure none are present in non-patched sources. (see T97545)
+   * This check ensure none are present in non-patched sources. (see #97545)
    */
   void check_no_quotes()
   {
@@ -211,7 +214,7 @@ struct GPUSource {
 
   /**
    * Some drivers completely forbid string characters even in unused preprocessor directives.
-   * This fixes the cases we cannot manually patch: Shared headers #includes. (see T97545)
+   * This fixes the cases we cannot manually patch: Shared headers #includes. (see #97545)
    * TODO(fclem): This could be done during the datatoc step.
    */
   void quote_preprocess()
@@ -266,6 +269,12 @@ struct GPUSource {
     int64_t cursor = -1;
     int64_t last_pos = 0;
     const bool is_cpp = filename.endswith(".hh");
+
+    /* Metal Shading language is based on C++ and supports C++-style enumerations.
+     * For these cases, we do not need to perform auto-replacement. */
+    if (is_cpp && GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      return;
+    }
 
     while (true) {
       cursor = find_keyword(input, "enum ", cursor + 1);
@@ -801,6 +810,8 @@ struct GPUSource {
       }
       dependencies.append_non_duplicates(dependency_source);
     }
+    /* Precedes an eternal loop (quiet CLANG's `unreachable-code` warning). */
+    BLI_assert_unreachable();
     return 0;
   }
 
@@ -845,6 +856,7 @@ void gpu_shader_dependency_init()
 
 #define SHADER_SOURCE(datatoc, filename, filepath) \
   g_sources->add_new(filename, new GPUSource(filepath, filename, datatoc, g_functions));
+#include "glsl_compositor_source_list.h"
 #include "glsl_draw_source_list.h"
 #include "glsl_gpu_source_list.h"
 #ifdef WITH_OCIO

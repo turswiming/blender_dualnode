@@ -45,7 +45,7 @@ static const size_t utf8_skip_data[256] = {
 
 ptrdiff_t BLI_str_utf8_invalid_byte(const char *str, size_t length)
 {
-  /* NOTE(@campbellbarton): from libswish3, originally called u8_isvalid(),
+  /* NOTE(@ideasman42): from libswish3, originally called u8_isvalid(),
    * modified to return the index of the bad character (byte index not UTF).
    * http://svn.swish-e.org/libswish3/trunk/src/libswish3/utf8.c r3044.
    *
@@ -55,11 +55,11 @@ ptrdiff_t BLI_str_utf8_invalid_byte(const char *str, size_t length)
    * length is in bytes, since without knowing whether the string is valid
    * it's hard to know how many characters there are! */
 
-  const unsigned char *p, *perr, *pend = (const unsigned char *)str + length;
-  unsigned char c;
+  const uchar *p, *perr, *pend = (const uchar *)str + length;
+  uchar c;
   int ab;
 
-  for (p = (const unsigned char *)str; p < pend; p++, length--) {
+  for (p = (const uchar *)str; p < pend; p++, length--) {
     c = *p;
     perr = p; /* Erroneous char is always the first of an invalid utf8 sequence... */
     if (ELEM(c, 0xfe, 0xff, 0x00)) {
@@ -267,7 +267,7 @@ size_t BLI_strncpy_utf8_rlen(char *__restrict dst, const char *__restrict src, s
 
 #undef BLI_STR_UTF8_CPY
 
-/* --------------------------------------------------------------------------*/
+/* -------------------------------------------------------------------- */
 /* wchar_t / utf8 functions */
 
 size_t BLI_strncpy_wchar_as_utf8(char *__restrict dst,
@@ -359,7 +359,7 @@ size_t BLI_strncpy_wchar_from_utf8(wchar_t *__restrict dst_w,
 }
 
 /* end wchar_t / utf8 functions */
-/* --------------------------------------------------------------------------*/
+/* -------------------------------------------------------------------- */
 
 int BLI_wcwidth(char32_t ucs)
 {
@@ -399,11 +399,11 @@ int BLI_str_utf8_char_width_safe(const char *p)
   return (columns < 0) ? 1 : columns;
 }
 
-/* --------------------------------------------------------------------------*/
+/* -------------------------------------------------------------------- */
 
 /* copied from glib's gutf8.c, added 'Err' arg */
 
-/* NOTE(@campbellbarton): glib uses uint for unicode, best we do the same,
+/* NOTE(@ideasman42): glib uses uint for unicode, best we do the same,
  * though we don't typedef it. */
 
 #define UTF8_COMPUTE(Char, Mask, Len, Err) \
@@ -454,7 +454,7 @@ int BLI_str_utf8_size(const char *p)
   /* NOTE: uses glib functions but not from GLIB. */
 
   int mask = 0, len;
-  const unsigned char c = (unsigned char)*p;
+  const uchar c = (uchar)*p;
 
   UTF8_COMPUTE(c, mask, len, -1);
 
@@ -466,7 +466,7 @@ int BLI_str_utf8_size(const char *p)
 int BLI_str_utf8_size_safe(const char *p)
 {
   int mask = 0, len;
-  const unsigned char c = (unsigned char)*p;
+  const uchar c = (uchar)*p;
 
   UTF8_COMPUTE(c, mask, len, 1);
 
@@ -482,7 +482,7 @@ uint BLI_str_utf8_as_unicode(const char *p)
   int i, len;
   uint mask = 0;
   uint result;
-  const unsigned char c = (unsigned char)*p;
+  const uchar c = (uchar)*p;
 
   UTF8_COMPUTE(c, mask, len, -1);
   if (UNLIKELY(len == -1)) {
@@ -500,7 +500,7 @@ uint BLI_str_utf8_as_unicode_step_or_error(const char *__restrict p,
   int i, len;
   uint mask = 0;
   uint result;
-  const unsigned char c = (unsigned char)*(p += *index);
+  const uchar c = (uchar) * (p += *index);
 
   BLI_assert(*index < p_len);
   BLI_assert(c != '\0');

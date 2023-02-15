@@ -4,7 +4,7 @@
  * \ingroup bke
  *
  * Functions for accessing mesh connectivity data.
- * eg: polys connected to verts, UV's connected to verts.
+ * eg: polys connected to verts, UVs connected to verts.
  */
 
 #include "MEM_guardedalloc.h"
@@ -15,7 +15,9 @@
 #include "BLI_array.hh"
 #include "BLI_bitmap.h"
 #include "BLI_buffer.h"
+#include "BLI_function_ref.hh"
 #include "BLI_math.h"
+#include "BLI_task.hh"
 #include "BLI_utildefines.h"
 
 #include "BKE_customdata.h"
@@ -28,25 +30,25 @@
 /** \name Mesh Connectivity Mapping
  * \{ */
 
-/* ngon version wip, based on BM_uv_vert_map_create */
 UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
                                        const bool *hide_poly,
                                        const bool *select_poly,
                                        const MLoop *mloop,
-                                       const MLoopUV *mloopuv,
+                                       const float (*mloopuv)[2],
                                        uint totpoly,
                                        uint totvert,
                                        const float limit[2],
                                        const bool selected,
                                        const bool use_winding)
 {
+  /* NOTE: N-gon version WIP, based on #BM_uv_vert_map_create. */
+
   UvVertMap *vmap;
   UvMapVert *buf;
   const MPoly *mp;
   uint a;
   int i, totuv, nverts;
 
-  bool *winding = NULL;
   BLI_buffer_declare_static(vec2f, tf_uv_buf, BLI_BUFFER_NOP, 32);
 
   totuv = 0;
@@ -60,55 +62,57 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
   }
 
   if (totuv == 0) {
-    return NULL;
+    return nullptr;
   }
 
   vmap = (UvVertMap *)MEM_callocN(sizeof(*vmap), "UvVertMap");
-  buf = vmap->buf = (UvMapVert *)MEM_callocN(sizeof(*vmap->buf) * (size_t)totuv, "UvMapVert");
+  buf = vmap->buf = (UvMapVert *)MEM_callocN(sizeof(*vmap->buf) * size_t(totuv), "UvMapVert");
   vmap->vert = (UvMapVert **)MEM_callocN(sizeof(*vmap->vert) * totvert, "UvMapVert*");
-  if (use_winding) {
-    winding = static_cast<bool *>(MEM_callocN(sizeof(*winding) * totpoly, "winding"));
-  }
 
   if (!vmap->vert || !vmap->buf) {
     BKE_mesh_uv_vert_map_free(vmap);
-    return NULL;
+    return nullptr;
+  }
+
+  bool *winding = nullptr;
+  if (use_winding) {
+    winding = static_cast<bool *>(MEM_callocN(sizeof(*winding) * totpoly, "winding"));
   }
 
   mp = mpoly;
   for (a = 0; a < totpoly; a++, mp++) {
     if (!selected || (!(hide_poly && hide_poly[a]) && (select_poly && select_poly[a]))) {
-      float(*tf_uv)[2] = NULL;
+      float(*tf_uv)[2] = nullptr;
 
       if (use_winding) {
-        tf_uv = (float(*)[2])BLI_buffer_reinit_data(&tf_uv_buf, vec2f, (size_t)mp->totloop);
+        tf_uv = (float(*)[2])BLI_buffer_reinit_data(&tf_uv_buf, vec2f, size_t(mp->totloop));
       }
 
       nverts = mp->totloop;
 
       for (i = 0; i < nverts; i++) {
-        buf->loop_of_poly_index = (unsigned short)i;
+        buf->loop_of_poly_index = ushort(i);
         buf->poly_index = a;
-        buf->separate = 0;
+        buf->separate = false;
         buf->next = vmap->vert[mloop[mp->loopstart + i].v];
         vmap->vert[mloop[mp->loopstart + i].v] = buf;
 
         if (use_winding) {
-          copy_v2_v2(tf_uv[i], mloopuv[mpoly[a].loopstart + i].uv);
+          copy_v2_v2(tf_uv[i], mloopuv[mpoly[a].loopstart + i]);
         }
 
         buf++;
       }
 
       if (use_winding) {
-        winding[a] = cross_poly_v2(tf_uv, (uint)nverts) > 0;
+        winding[a] = cross_poly_v2(tf_uv, uint(nverts)) > 0;
       }
     }
   }
 
   /* sort individual uvs for each vert */
   for (a = 0; a < totvert; a++) {
-    UvMapVert *newvlist = NULL, *vlist = vmap->vert[a];
+    UvMapVert *newvlist = nullptr, *vlist = vmap->vert[a];
     UvMapVert *iterv, *v, *lastv, *next;
     const float *uv, *uv2;
     float uvdiff[2];
@@ -119,14 +123,14 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
       v->next = newvlist;
       newvlist = v;
 
-      uv = mloopuv[mpoly[v->poly_index].loopstart + v->loop_of_poly_index].uv;
-      lastv = NULL;
+      uv = mloopuv[mpoly[v->poly_index].loopstart + v->loop_of_poly_index];
+      lastv = nullptr;
       iterv = vlist;
 
       while (iterv) {
         next = iterv->next;
 
-        uv2 = mloopuv[mpoly[iterv->poly_index].loopstart + iterv->loop_of_poly_index].uv;
+        uv2 = mloopuv[mpoly[iterv->poly_index].loopstart + iterv->loop_of_poly_index];
         sub_v2_v2v2(uvdiff, uv2, uv);
 
         if (fabsf(uv[0] - uv2[0]) < limit[0] && fabsf(uv[1] - uv2[1]) < limit[1] &&
@@ -147,7 +151,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
         iterv = next;
       }
 
-      newvlist->separate = 1;
+      newvlist->separate = true;
     }
 
     vmap->vert[a] = newvlist;
@@ -196,11 +200,11 @@ static void mesh_vert_poly_or_loop_map_create(MeshElemMap **r_map,
                                               int totloop,
                                               const bool do_loops)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)totvert, __func__);
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totvert), __func__);
   int *indices, *index_iter;
   int i, j;
 
-  indices = static_cast<int *>(MEM_mallocN(sizeof(int) * (size_t)totloop, __func__));
+  indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(totloop), __func__));
   index_iter = indices;
 
   /* Count number of polys for each vertex */
@@ -261,15 +265,14 @@ void BKE_mesh_vert_loop_map_create(MeshElemMap **r_map,
 
 void BKE_mesh_vert_looptri_map_create(MeshElemMap **r_map,
                                       int **r_mem,
-                                      const MVert *UNUSED(mvert),
                                       const int totvert,
                                       const MLoopTri *mlooptri,
                                       const int totlooptri,
                                       const MLoop *mloop,
-                                      const int UNUSED(totloop))
+                                      const int /*totloop*/)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)totvert, __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * (size_t)totlooptri * 3, __func__));
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totvert), __func__);
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(totlooptri) * 3, __func__));
   int *index_step;
   const MLoopTri *mlt;
   int i;
@@ -306,8 +309,8 @@ void BKE_mesh_vert_looptri_map_create(MeshElemMap **r_map,
 void BKE_mesh_vert_edge_map_create(
     MeshElemMap **r_map, int **r_mem, const MEdge *medge, int totvert, int totedge)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)totvert, __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int[2]) * (size_t)totedge, __func__));
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totvert), __func__);
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int[2]) * size_t(totedge), __func__));
   int *i_pt = indices;
 
   int i;
@@ -345,8 +348,8 @@ void BKE_mesh_vert_edge_map_create(
 void BKE_mesh_vert_edge_vert_map_create(
     MeshElemMap **r_map, int **r_mem, const MEdge *medge, int totvert, int totedge)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)totvert, __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int[2]) * (size_t)totedge, __func__));
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totvert), __func__);
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int[2]) * size_t(totedge), __func__));
   int *i_pt = indices;
 
   int i;
@@ -370,8 +373,8 @@ void BKE_mesh_vert_edge_vert_map_create(
   for (i = 0; i < totedge; i++) {
     const uint v[2] = {medge[i].v1, medge[i].v2};
 
-    map[v[0]].indices[map[v[0]].count] = (int)v[1];
-    map[v[1]].indices[map[v[1]].count] = (int)v[0];
+    map[v[0]].indices[map[v[0]].count] = int(v[1]);
+    map[v[1]].indices[map[v[1]].count] = int(v[0]);
 
     map[v[0]].count++;
     map[v[1]].count++;
@@ -383,15 +386,14 @@ void BKE_mesh_vert_edge_vert_map_create(
 
 void BKE_mesh_edge_loop_map_create(MeshElemMap **r_map,
                                    int **r_mem,
-                                   const MEdge *UNUSED(medge),
                                    const int totedge,
                                    const MPoly *mpoly,
                                    const int totpoly,
                                    const MLoop *mloop,
                                    const int totloop)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)totedge, __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * (size_t)totloop * 2, __func__));
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totedge), __func__);
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(totloop) * 2, __func__));
   int *index_step;
   const MPoly *mp;
   int i;
@@ -436,15 +438,14 @@ void BKE_mesh_edge_loop_map_create(MeshElemMap **r_map,
 
 void BKE_mesh_edge_poly_map_create(MeshElemMap **r_map,
                                    int **r_mem,
-                                   const MEdge *UNUSED(medge),
                                    const int totedge,
                                    const MPoly *mpoly,
                                    const int totpoly,
                                    const MLoop *mloop,
                                    const int totloop)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)totedge, __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * (size_t)totloop, __func__));
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totedge), __func__);
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(totloop), __func__));
   int *index_step;
   const MPoly *mp;
   int i;
@@ -488,8 +489,8 @@ void BKE_mesh_origindex_map_create(MeshElemMap **r_map,
                                    const int *final_origindex,
                                    const int totfinal)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)totsource, __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * (size_t)totfinal, __func__));
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totsource), __func__);
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(totfinal), __func__));
   int *index_step;
   int i;
 
@@ -530,8 +531,8 @@ void BKE_mesh_origindex_map_create_looptri(MeshElemMap **r_map,
                                            const MLoopTri *looptri,
                                            const int looptri_num)
 {
-  MeshElemMap *map = MEM_cnew_array<MeshElemMap>((size_t)mpoly_num, __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * (size_t)looptri_num, __func__));
+  MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(mpoly_num), __func__);
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(looptri_num), __func__));
   int *index_step;
   int i;
 
@@ -552,6 +553,87 @@ void BKE_mesh_origindex_map_create_looptri(MeshElemMap **r_map,
   *r_mem = indices;
 }
 
+namespace blender::bke::mesh_topology {
+
+Array<int> build_loop_to_poly_map(const Span<MPoly> polys, const int loops_num)
+{
+  Array<int> map(loops_num);
+  threading::parallel_for(polys.index_range(), 1024, [&](IndexRange range) {
+    for (const int64_t poly_i : range) {
+      const MPoly &poly = polys[poly_i];
+      map.as_mutable_span().slice(poly.loopstart, poly.totloop).fill(int(poly_i));
+    }
+  });
+  return map;
+}
+
+Array<Vector<int>> build_vert_to_edge_map(const Span<MEdge> edges, const int verts_num)
+{
+  Array<Vector<int>> map(verts_num);
+  for (const int64_t i : edges.index_range()) {
+    map[edges[i].v1].append(int(i));
+    map[edges[i].v2].append(int(i));
+  }
+  return map;
+}
+
+Array<Vector<int>> build_vert_to_poly_map(const Span<MPoly> polys,
+                                          const Span<MLoop> loops,
+                                          int verts_num)
+{
+  Array<Vector<int>> map(verts_num);
+  for (const int64_t i : polys.index_range()) {
+    const MPoly &poly = polys[i];
+    for (const MLoop &loop : loops.slice(poly.loopstart, poly.totloop)) {
+      map[loop.v].append(int(i));
+    }
+  }
+  return map;
+}
+
+Array<Vector<int>> build_vert_to_loop_map(const Span<MLoop> loops, const int verts_num)
+{
+  Array<Vector<int>> map(verts_num);
+  for (const int64_t i : loops.index_range()) {
+    map[loops[i].v].append(int(i));
+  }
+  return map;
+}
+
+Array<Vector<int>> build_edge_to_loop_map(const Span<MLoop> loops, const int edges_num)
+{
+  Array<Vector<int>> map(edges_num);
+  for (const int64_t i : loops.index_range()) {
+    map[loops[i].e].append(int(i));
+  }
+  return map;
+}
+
+Array<Vector<int, 2>> build_edge_to_poly_map(const Span<MPoly> polys,
+                                             const Span<MLoop> loops,
+                                             const int edges_num)
+{
+  Array<Vector<int, 2>> map(edges_num);
+  for (const int64_t i : polys.index_range()) {
+    const MPoly &poly = polys[i];
+    for (const MLoop &loop : loops.slice(poly.loopstart, poly.totloop)) {
+      map[loop.e].append(int(i));
+    }
+  }
+  return map;
+}
+
+Vector<Vector<int>> build_edge_to_loop_map_resizable(const Span<MLoop> loops, const int edges_num)
+{
+  Vector<Vector<int>> map(edges_num);
+  for (const int64_t i : loops.index_range()) {
+    map[loops[i].e].append(int(i));
+  }
+  return map;
+}
+
+}  // namespace blender::bke::mesh_topology
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -562,24 +644,19 @@ void BKE_mesh_origindex_map_create_looptri(MeshElemMap **r_map,
 /**
  * Callback deciding whether the given poly/loop/edge define an island boundary or not.
  */
-using MeshRemap_CheckIslandBoundary = bool (*)(const MPoly *mpoly,
-                                               const MLoop *mloop,
-                                               const MEdge *medge,
-                                               const int edge_user_count,
-                                               const MPoly *mpoly_array,
-                                               const MeshElemMap *edge_poly_map,
-                                               void *user_data);
+using MeshRemap_CheckIslandBoundary =
+    blender::FunctionRef<bool(int poly_index,
+                              int loop_index,
+                              int edge_index,
+                              int edge_user_count,
+                              const MeshElemMap &edge_poly_map_elem)>;
 
-static void poly_edge_loop_islands_calc(const MEdge *medge,
-                                        const int totedge,
-                                        const MPoly *mpoly,
-                                        const int totpoly,
-                                        const MLoop *mloop,
-                                        const int totloop,
+static void poly_edge_loop_islands_calc(const int totedge,
+                                        const blender::Span<MPoly> polys,
+                                        const blender::Span<MLoop> loops,
                                         MeshElemMap *edge_poly_map,
                                         const bool use_bitflags,
                                         MeshRemap_CheckIslandBoundary edge_boundary_check,
-                                        void *edge_boundary_check_data,
                                         int **r_poly_groups,
                                         int *r_totgroup,
                                         BLI_bitmap **r_edge_borders,
@@ -588,7 +665,7 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
   int *poly_groups;
   int *poly_stack;
 
-  BLI_bitmap *edge_borders = NULL;
+  BLI_bitmap *edge_borders = nullptr;
   int num_edgeborders = 0;
 
   int poly_prev = 0;
@@ -601,13 +678,13 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
   bool group_id_overflow = false;
 
   /* map vars */
-  int *edge_poly_mem = NULL;
+  int *edge_poly_mem = nullptr;
 
-  if (totpoly == 0) {
+  if (polys.size() == 0) {
     *r_totgroup = 0;
-    *r_poly_groups = NULL;
+    *r_poly_groups = nullptr;
     if (r_edge_borders) {
-      *r_edge_borders = NULL;
+      *r_edge_borders = nullptr;
       *r_totedgeborder = 0;
     }
     return;
@@ -619,12 +696,17 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
   }
 
   if (!edge_poly_map) {
-    BKE_mesh_edge_poly_map_create(
-        &edge_poly_map, &edge_poly_mem, medge, totedge, mpoly, totpoly, mloop, totloop);
+    BKE_mesh_edge_poly_map_create(&edge_poly_map,
+                                  &edge_poly_mem,
+                                  totedge,
+                                  polys.data(),
+                                  int(polys.size()),
+                                  loops.data(),
+                                  int(loops.size()));
   }
 
-  poly_groups = static_cast<int *>(MEM_callocN(sizeof(int) * (size_t)totpoly, __func__));
-  poly_stack = static_cast<int *>(MEM_mallocN(sizeof(int) * (size_t)totpoly, __func__));
+  poly_groups = static_cast<int *>(MEM_callocN(sizeof(int) * size_t(polys.size()), __func__));
+  poly_stack = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(polys.size()), __func__));
 
   while (true) {
     int poly;
@@ -632,13 +714,13 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
     int poly_group_id;
     int ps_curr_idx = 0, ps_end_idx = 0; /* stack indices */
 
-    for (poly = poly_prev; poly < totpoly; poly++) {
+    for (poly = poly_prev; poly < int(polys.size()); poly++) {
       if (poly_groups[poly] == 0) {
         break;
       }
     }
 
-    if (poly == totpoly) {
+    if (poly == int(polys.size())) {
       /* all done */
       break;
     }
@@ -652,22 +734,16 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
     poly_stack[ps_end_idx++] = poly;
 
     while (ps_curr_idx != ps_end_idx) {
-      const MPoly *mp;
-      const MLoop *ml;
-      int j;
-
       poly = poly_stack[ps_curr_idx++];
       BLI_assert(poly_groups[poly] == poly_group_id);
 
-      mp = &mpoly[poly];
-      for (ml = &mloop[mp->loopstart], j = mp->totloop; j--; ml++) {
+      for (const int64_t loop : blender::IndexRange(polys[poly].loopstart, polys[poly].totloop)) {
+        const int edge = int(loops[loop].e);
         /* loop over poly users */
-        const int me_idx = (int)ml->e;
-        const MEdge *me = &medge[me_idx];
-        const MeshElemMap *map_ele = &edge_poly_map[me_idx];
-        const int *p = map_ele->indices;
-        int i = map_ele->count;
-        if (!edge_boundary_check(mp, ml, me, i, mpoly, map_ele, edge_boundary_check_data)) {
+        const MeshElemMap &map_ele = edge_poly_map[edge];
+        const int *p = map_ele.indices;
+        int i = map_ele.count;
+        if (!edge_boundary_check(poly, int(loop), edge, i, map_ele)) {
           for (; i--; p++) {
             /* if we meet other non initialized its a bug */
             BLI_assert(ELEM(poly_groups[*p], 0, poly_group_id));
@@ -679,8 +755,8 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
           }
         }
         else {
-          if (edge_borders && !BLI_BITMAP_TEST(edge_borders, me_idx)) {
-            BLI_BITMAP_ENABLE(edge_borders, me_idx);
+          if (edge_borders && !BLI_BITMAP_TEST(edge_borders, edge)) {
+            BLI_BITMAP_ENABLE(edge_borders, edge);
             num_edgeborders++;
           }
           if (use_bitflags) {
@@ -741,7 +817,7 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
   }
 
   if (UNLIKELY(group_id_overflow)) {
-    int i = totpoly, *gid = poly_groups;
+    int i = int(polys.size()), *gid = poly_groups;
     for (; i--; gid++) {
       if (*gid == poly_group_id_overflowed) {
         *gid = 0;
@@ -765,51 +841,45 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
   }
 }
 
-static bool poly_is_island_boundary_smooth_cb(const MPoly *mp,
-                                              const MLoop *UNUSED(ml),
-                                              const MEdge *me,
-                                              const int edge_user_count,
-                                              const MPoly *mpoly_array,
-                                              const MeshElemMap *edge_poly_map,
-                                              void *UNUSED(user_data))
-{
-  /* Edge is sharp if one of its polys is flat, or edge itself is sharp,
-   * or edge is not used by exactly two polygons. */
-  if ((mp->flag & ME_SMOOTH) && !(me->flag & ME_SHARP) && (edge_user_count == 2)) {
-    /* In that case, edge appears to be smooth, but we need to check its other poly too. */
-    const MPoly *mp_other = (mp == &mpoly_array[edge_poly_map->indices[0]]) ?
-                                &mpoly_array[edge_poly_map->indices[1]] :
-                                &mpoly_array[edge_poly_map->indices[0]];
-    return (mp_other->flag & ME_SMOOTH) == 0;
-  }
-  return true;
-}
-
-int *BKE_mesh_calc_smoothgroups(const MEdge *medge,
-                                const int totedge,
+int *BKE_mesh_calc_smoothgroups(const int totedge,
                                 const MPoly *mpoly,
                                 const int totpoly,
                                 const MLoop *mloop,
                                 const int totloop,
+                                const bool *sharp_edges,
                                 int *r_totgroup,
                                 const bool use_bitflags)
 {
-  int *poly_groups = NULL;
+  int *poly_groups = nullptr;
 
-  poly_edge_loop_islands_calc(medge,
-                              totedge,
-                              mpoly,
-                              totpoly,
-                              mloop,
-                              totloop,
-                              NULL,
+  auto poly_is_island_boundary_smooth = [&](const int poly_index,
+                                            const int /*loop_index*/,
+                                            const int edge_index,
+                                            const int edge_user_count,
+                                            const MeshElemMap &edge_poly_map_elem) {
+    /* Edge is sharp if one of its polys is flat, or edge itself is sharp,
+     * or edge is not used by exactly two polygons. */
+    if ((mpoly[poly_index].flag & ME_SMOOTH) && !(sharp_edges && sharp_edges[edge_index]) &&
+        (edge_user_count == 2)) {
+      /* In that case, edge appears to be smooth, but we need to check its other poly too. */
+      const int other_poly_index = (poly_index == edge_poly_map_elem.indices[0]) ?
+                                       edge_poly_map_elem.indices[1] :
+                                       edge_poly_map_elem.indices[0];
+      return (mpoly[other_poly_index].flag & ME_SMOOTH) == 0;
+    }
+    return true;
+  };
+
+  poly_edge_loop_islands_calc(totedge,
+                              {mpoly, totpoly},
+                              {mloop, totloop},
+                              nullptr,
                               use_bitflags,
-                              poly_is_island_boundary_smooth_cb,
-                              NULL,
+                              poly_is_island_boundary_smooth,
                               &poly_groups,
                               r_totgroup,
-                              NULL,
-                              NULL);
+                              nullptr,
+                              nullptr);
 
   return poly_groups;
 }
@@ -824,7 +894,7 @@ void BKE_mesh_loop_islands_init(MeshIslandStore *island_store,
 {
   MemArena *mem = island_store->mem;
 
-  if (mem == NULL) {
+  if (mem == nullptr) {
     mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
     island_store->mem = mem;
   }
@@ -838,7 +908,7 @@ void BKE_mesh_loop_islands_init(MeshIslandStore *island_store,
   island_store->item_type = item_type;
   island_store->items_to_islands_num = items_num;
   island_store->items_to_islands = static_cast<int *>(
-      BLI_memarena_alloc(mem, sizeof(*island_store->items_to_islands) * (size_t)items_num));
+      BLI_memarena_alloc(mem, sizeof(*island_store->items_to_islands) * size_t(items_num)));
 
   island_store->island_type = island_type;
   island_store->islands_num_alloc = MISLAND_DEFAULT_BUFSIZE;
@@ -854,14 +924,14 @@ void BKE_mesh_loop_islands_clear(MeshIslandStore *island_store)
 {
   island_store->item_type = MISLAND_TYPE_NONE;
   island_store->items_to_islands_num = 0;
-  island_store->items_to_islands = NULL;
+  island_store->items_to_islands = nullptr;
 
   island_store->island_type = MISLAND_TYPE_NONE;
   island_store->islands_num = 0;
-  island_store->islands = NULL;
+  island_store->islands = nullptr;
 
   island_store->innercut_type = MISLAND_TYPE_NONE;
-  island_store->innercuts = NULL;
+  island_store->innercuts = nullptr;
 
   if (island_store->mem) {
     BLI_memarena_clear(island_store->mem);
@@ -874,7 +944,7 @@ void BKE_mesh_loop_islands_free(MeshIslandStore *island_store)
 {
   if (island_store->mem) {
     BLI_memarena_free(island_store->mem);
-    island_store->mem = NULL;
+    island_store->mem = nullptr;
   }
 }
 
@@ -890,7 +960,7 @@ void BKE_mesh_loop_islands_add(MeshIslandStore *island_store,
 
   MeshElemMap *isld, *innrcut;
   const int curr_island_idx = island_store->islands_num++;
-  const size_t curr_num_islands = (size_t)island_store->islands_num;
+  const size_t curr_num_islands = size_t(island_store->islands_num);
   int i = item_num;
 
   while (i--) {
@@ -916,87 +986,29 @@ void BKE_mesh_loop_islands_add(MeshIslandStore *island_store,
       BLI_memarena_alloc(mem, sizeof(*isld)));
   isld->count = num_island_items;
   isld->indices = static_cast<int *>(
-      BLI_memarena_alloc(mem, sizeof(*isld->indices) * (size_t)num_island_items));
-  memcpy(isld->indices, island_item_indices, sizeof(*isld->indices) * (size_t)num_island_items);
+      BLI_memarena_alloc(mem, sizeof(*isld->indices) * size_t(num_island_items)));
+  memcpy(isld->indices, island_item_indices, sizeof(*isld->indices) * size_t(num_island_items));
 
   island_store->innercuts[curr_island_idx] = innrcut = static_cast<MeshElemMap *>(
       BLI_memarena_alloc(mem, sizeof(*innrcut)));
   innrcut->count = num_innercut_items;
   innrcut->indices = static_cast<int *>(
-      BLI_memarena_alloc(mem, sizeof(*innrcut->indices) * (size_t)num_innercut_items));
+      BLI_memarena_alloc(mem, sizeof(*innrcut->indices) * size_t(num_innercut_items)));
   memcpy(innrcut->indices,
          innercut_item_indices,
-         sizeof(*innrcut->indices) * (size_t)num_innercut_items);
+         sizeof(*innrcut->indices) * size_t(num_innercut_items));
 }
 
-/* TODO: I'm not sure edge seam flag is enough to define UV islands?
- *       Maybe we should also consider UV-maps values
- *       themselves (i.e. different UV-edges for a same mesh-edge => boundary edge too?).
- *       Would make things much more complex though,
- *       and each UVMap would then need its own mesh mapping, not sure we want that at all!
- */
-struct MeshCheckIslandBoundaryUv {
-  const MLoop *loops;
-  const MLoopUV *luvs;
-  const MeshElemMap *edge_loop_map;
-};
-
-static bool mesh_check_island_boundary_uv(const MPoly *UNUSED(mp),
-                                          const MLoop *ml,
-                                          const MEdge *me,
-                                          const int UNUSED(edge_user_count),
-                                          const MPoly *UNUSED(mpoly_array),
-                                          const MeshElemMap *UNUSED(edge_poly_map),
-                                          void *user_data)
-{
-  if (user_data) {
-    const MeshCheckIslandBoundaryUv *data = static_cast<const MeshCheckIslandBoundaryUv *>(
-        user_data);
-    const MLoop *loops = data->loops;
-    const MLoopUV *luvs = data->luvs;
-    const MeshElemMap *edge_to_loops = &data->edge_loop_map[ml->e];
-
-    BLI_assert(edge_to_loops->count >= 2 && (edge_to_loops->count % 2) == 0);
-
-    const uint v1 = loops[edge_to_loops->indices[0]].v;
-    const uint v2 = loops[edge_to_loops->indices[1]].v;
-    const float *uvco_v1 = luvs[edge_to_loops->indices[0]].uv;
-    const float *uvco_v2 = luvs[edge_to_loops->indices[1]].uv;
-    for (int i = 2; i < edge_to_loops->count; i += 2) {
-      if (loops[edge_to_loops->indices[i]].v == v1) {
-        if (!equals_v2v2(uvco_v1, luvs[edge_to_loops->indices[i]].uv) ||
-            !equals_v2v2(uvco_v2, luvs[edge_to_loops->indices[i + 1]].uv)) {
-          return true;
-        }
-      }
-      else {
-        BLI_assert(loops[edge_to_loops->indices[i]].v == v2);
-        UNUSED_VARS_NDEBUG(v2);
-        if (!equals_v2v2(uvco_v2, luvs[edge_to_loops->indices[i]].uv) ||
-            !equals_v2v2(uvco_v1, luvs[edge_to_loops->indices[i + 1]].uv)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /* Edge is UV boundary if tagged as seam. */
-  return (me->flag & ME_SEAM) != 0;
-}
-
-static bool mesh_calc_islands_loop_poly_uv(const MVert *UNUSED(verts),
-                                           const int UNUSED(totvert),
-                                           const MEdge *edges,
+static bool mesh_calc_islands_loop_poly_uv(const MEdge *edges,
                                            const int totedge,
                                            const MPoly *polys,
                                            const int totpoly,
                                            const MLoop *loops,
                                            const int totloop,
-                                           const MLoopUV *luvs,
+                                           const float (*luvs)[2],
                                            MeshIslandStore *r_island_store)
 {
-  int *poly_groups = NULL;
+  int *poly_groups = nullptr;
   int num_poly_groups;
 
   /* map vars */
@@ -1006,8 +1018,6 @@ static bool mesh_calc_islands_loop_poly_uv(const MVert *UNUSED(verts),
   MeshElemMap *edge_loop_map;
   int *edge_loop_mem;
 
-  MeshCheckIslandBoundaryUv edge_boundary_check_data;
-
   int *poly_indices;
   int *loop_indices;
   int num_pidx, num_lidx;
@@ -1015,10 +1025,10 @@ static bool mesh_calc_islands_loop_poly_uv(const MVert *UNUSED(verts),
   /* Those are used to detect 'inner cuts', i.e. edges that are borders,
    * and yet have two or more polys of a same group using them
    * (typical case: seam used to unwrap properly a cylinder). */
-  BLI_bitmap *edge_borders = NULL;
+  BLI_bitmap *edge_borders = nullptr;
   int num_edge_borders = 0;
-  char *edge_border_count = NULL;
-  int *edge_innercut_indices = NULL;
+  char *edge_border_count = nullptr;
+  int *edge_innercut_indices = nullptr;
   int num_einnercuts = 0;
 
   int grp_idx, p_idx, pl_idx, l_idx;
@@ -1028,26 +1038,62 @@ static bool mesh_calc_islands_loop_poly_uv(const MVert *UNUSED(verts),
       r_island_store, MISLAND_TYPE_LOOP, totloop, MISLAND_TYPE_POLY, MISLAND_TYPE_EDGE);
 
   BKE_mesh_edge_poly_map_create(
-      &edge_poly_map, &edge_poly_mem, edges, totedge, polys, totpoly, loops, totloop);
+      &edge_poly_map, &edge_poly_mem, totedge, polys, totpoly, loops, totloop);
 
   if (luvs) {
     BKE_mesh_edge_loop_map_create(
-        &edge_loop_map, &edge_loop_mem, edges, totedge, polys, totpoly, loops, totloop);
-    edge_boundary_check_data.loops = loops;
-    edge_boundary_check_data.luvs = luvs;
-    edge_boundary_check_data.edge_loop_map = edge_loop_map;
+        &edge_loop_map, &edge_loop_mem, totedge, polys, totpoly, loops, totloop);
   }
 
-  poly_edge_loop_islands_calc(edges,
-                              totedge,
-                              polys,
-                              totpoly,
-                              loops,
-                              totloop,
+  /* TODO: I'm not sure edge seam flag is enough to define UV islands?
+   *       Maybe we should also consider UV-maps values
+   *       themselves (i.e. different UV-edges for a same mesh-edge => boundary edge too?).
+   *       Would make things much more complex though,
+   *       and each UVMap would then need its own mesh mapping, not sure we want that at all!
+   */
+  auto mesh_check_island_boundary_uv = [&](const int /*poly_index*/,
+                                           const int loop_index,
+                                           const int edge_index,
+                                           const int /*edge_user_count*/,
+                                           const MeshElemMap & /*edge_poly_map_elem*/) -> bool {
+    if (luvs) {
+      const MeshElemMap &edge_to_loops = edge_loop_map[loops[loop_index].e];
+
+      BLI_assert(edge_to_loops.count >= 2 && (edge_to_loops.count % 2) == 0);
+
+      const uint v1 = loops[edge_to_loops.indices[0]].v;
+      const uint v2 = loops[edge_to_loops.indices[1]].v;
+      const float *uvco_v1 = luvs[edge_to_loops.indices[0]];
+      const float *uvco_v2 = luvs[edge_to_loops.indices[1]];
+      for (int i = 2; i < edge_to_loops.count; i += 2) {
+        if (loops[edge_to_loops.indices[i]].v == v1) {
+          if (!equals_v2v2(uvco_v1, luvs[edge_to_loops.indices[i]]) ||
+              !equals_v2v2(uvco_v2, luvs[edge_to_loops.indices[i + 1]])) {
+            return true;
+          }
+        }
+        else {
+          BLI_assert(loops[edge_to_loops.indices[i]].v == v2);
+          UNUSED_VARS_NDEBUG(v2);
+          if (!equals_v2v2(uvco_v2, luvs[edge_to_loops.indices[i]]) ||
+              !equals_v2v2(uvco_v1, luvs[edge_to_loops.indices[i + 1]])) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    /* Edge is UV boundary if tagged as seam. */
+    return (edges[edge_index].flag & ME_SEAM) != 0;
+  };
+
+  poly_edge_loop_islands_calc(totedge,
+                              {polys, totpoly},
+                              {loops, totloop},
                               edge_poly_map,
                               false,
                               mesh_check_island_boundary_uv,
-                              luvs ? &edge_boundary_check_data : NULL,
                               &poly_groups,
                               &num_poly_groups,
                               &edge_borders,
@@ -1066,22 +1112,22 @@ static bool mesh_calc_islands_loop_poly_uv(const MVert *UNUSED(verts),
 
   if (num_edge_borders) {
     edge_border_count = static_cast<char *>(
-        MEM_mallocN(sizeof(*edge_border_count) * (size_t)totedge, __func__));
+        MEM_mallocN(sizeof(*edge_border_count) * size_t(totedge), __func__));
     edge_innercut_indices = static_cast<int *>(
-        MEM_mallocN(sizeof(*edge_innercut_indices) * (size_t)num_edge_borders, __func__));
+        MEM_mallocN(sizeof(*edge_innercut_indices) * size_t(num_edge_borders), __func__));
   }
 
   poly_indices = static_cast<int *>(
-      MEM_mallocN(sizeof(*poly_indices) * (size_t)totpoly, __func__));
+      MEM_mallocN(sizeof(*poly_indices) * size_t(totpoly), __func__));
   loop_indices = static_cast<int *>(
-      MEM_mallocN(sizeof(*loop_indices) * (size_t)totloop, __func__));
+      MEM_mallocN(sizeof(*loop_indices) * size_t(totloop), __func__));
 
   /* NOTE: here we ignore '0' invalid group - this should *never* happen in this case anyway? */
   for (grp_idx = 1; grp_idx <= num_poly_groups; grp_idx++) {
     num_pidx = num_lidx = 0;
     if (num_edge_borders) {
       num_einnercuts = 0;
-      memset(edge_border_count, 0, sizeof(*edge_border_count) * (size_t)totedge);
+      memset(edge_border_count, 0, sizeof(*edge_border_count) * size_t(totedge));
     }
 
     for (p_idx = 0; p_idx < totpoly; p_idx++) {
@@ -1097,7 +1143,7 @@ static bool mesh_calc_islands_loop_poly_uv(const MVert *UNUSED(verts),
             (edge_border_count[ml->e] < 2)) {
           edge_border_count[ml->e]++;
           if (edge_border_count[ml->e] == 2) {
-            edge_innercut_indices[num_einnercuts++] = (int)ml->e;
+            edge_innercut_indices[num_einnercuts++] = int(ml->e);
           }
         }
       }
@@ -1135,7 +1181,7 @@ static bool mesh_calc_islands_loop_poly_uv(const MVert *UNUSED(verts),
   return true;
 }
 
-bool BKE_mesh_calc_islands_loop_poly_edgeseam(const MVert *verts,
+bool BKE_mesh_calc_islands_loop_poly_edgeseam(const float (*vert_positions)[3],
                                               const int totvert,
                                               const MEdge *edges,
                                               const int totedge,
@@ -1145,11 +1191,12 @@ bool BKE_mesh_calc_islands_loop_poly_edgeseam(const MVert *verts,
                                               const int totloop,
                                               MeshIslandStore *r_island_store)
 {
+  UNUSED_VARS(vert_positions, totvert);
   return mesh_calc_islands_loop_poly_uv(
-      verts, totvert, edges, totedge, polys, totpoly, loops, totloop, NULL, r_island_store);
+      edges, totedge, polys, totpoly, loops, totloop, nullptr, r_island_store);
 }
 
-bool BKE_mesh_calc_islands_loop_poly_uvmap(MVert *verts,
+bool BKE_mesh_calc_islands_loop_poly_uvmap(float (*vert_positions)[3],
                                            const int totvert,
                                            MEdge *edges,
                                            const int totedge,
@@ -1157,12 +1204,13 @@ bool BKE_mesh_calc_islands_loop_poly_uvmap(MVert *verts,
                                            const int totpoly,
                                            MLoop *loops,
                                            const int totloop,
-                                           const MLoopUV *luvs,
+                                           const float (*luvs)[2],
                                            MeshIslandStore *r_island_store)
 {
-  BLI_assert(luvs != NULL);
+  UNUSED_VARS(vert_positions, totvert);
+  BLI_assert(luvs != nullptr);
   return mesh_calc_islands_loop_poly_uv(
-      verts, totvert, edges, totedge, polys, totpoly, loops, totloop, luvs, r_island_store);
+      edges, totedge, polys, totpoly, loops, totloop, luvs, r_island_store);
 }
 
 /** \} */

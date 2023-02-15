@@ -36,7 +36,7 @@ static GPUVertFormat *get_fdots_nor_format_subdiv()
 }
 
 static void extract_fdots_pos_init(const MeshRenderData *mr,
-                                   MeshBatchCache *UNUSED(cache),
+                                   MeshBatchCache * /*cache*/,
                                    void *buf,
                                    void *tls_data)
 {
@@ -63,7 +63,7 @@ static void extract_fdots_pos_iter_poly_bm(const MeshRenderData *mr,
   do {
     add_v3_v3(co, bm_vert_co_get(mr, l_iter->v));
   } while ((l_iter = l_iter->next) != l_first);
-  mul_v3_fl(co, 1.0f / (float)f->len);
+  mul_v3_fl(co, 1.0f / float(f->len));
 }
 
 static void extract_fdots_pos_iter_poly_mesh(const MeshRenderData *mr,
@@ -75,35 +75,33 @@ static void extract_fdots_pos_iter_poly_mesh(const MeshRenderData *mr,
   float *co = center[mp_index];
   zero_v3(co);
 
-  const MVert *mvert = mr->mvert;
   const MLoop *mloop = mr->mloop;
-  const BLI_bitmap *facedot_tags = mr->me->runtime.subsurf_face_dot_tags;
+  const BitVector<> &facedot_tags = mr->me->runtime->subsurf_face_dot_tags;
 
   const int ml_index_end = mp->loopstart + mp->totloop;
   for (int ml_index = mp->loopstart; ml_index < ml_index_end; ml_index += 1) {
     const MLoop *ml = &mloop[ml_index];
     if (mr->use_subsurf_fdots) {
-      if (BLI_BITMAP_TEST(facedot_tags, ml->v)) {
-        copy_v3_v3(center[mp_index], mvert[ml->v].co);
+      if (facedot_tags[ml->v]) {
+        copy_v3_v3(center[mp_index], mr->vert_positions[ml->v]);
         break;
       }
     }
     else {
-      const MVert *mv = &mvert[ml->v];
-      add_v3_v3(center[mp_index], mv->co);
+      add_v3_v3(center[mp_index], mr->vert_positions[ml->v]);
     }
   }
 
   if (!mr->use_subsurf_fdots) {
-    mul_v3_fl(co, 1.0f / (float)mp->totloop);
+    mul_v3_fl(co, 1.0f / float(mp->totloop));
   }
 }
 
 static void extract_fdots_init_subdiv(const DRWSubdivCache *subdiv_cache,
-                                      const MeshRenderData *UNUSED(mr),
+                                      const MeshRenderData * /*mr*/,
                                       MeshBatchCache *cache,
                                       void *buffer,
-                                      void *UNUSED(data))
+                                      void * /*data*/)
 {
   /* We "extract" positions, normals, and indices at once. */
   GPUVertBuf *fdots_pos_vbo = static_cast<GPUVertBuf *>(buffer);

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <stdio.h> /* Include header using off_t before poisoning it below. */
+
 #ifdef WIN32
 #  include "BLI_winstuff.h"
 #endif
@@ -21,7 +23,6 @@
 extern "C" {
 #endif
 
-struct BLI_mmap_file;
 struct BLOCacheStorage;
 struct IDNameLib_Map;
 struct Key;

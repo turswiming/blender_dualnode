@@ -5,8 +5,6 @@
 
 #pragma BLENDER_REQUIRE(closure_eval_surface_lib.glsl)
 
-in vec2 pos;
-
 RESOURCE_ID_VARYING
 
 void main()
@@ -17,7 +15,7 @@ void main()
 
   gl_Position = vec4(pos, 1.0, 1.0);
   viewPosition = project_point(ProjectionMatrixInverse, vec3(pos, 0.0));
-  worldPosition = project_point(ViewProjectionMatrixInverse, vec3(pos, 0.0));
+  worldPosition = transform_point(ViewMatrixInverse, viewPosition);
   /* Not usable. */
   viewNormal = vec3(0.0);
   worldNormal = vec3(0.0);

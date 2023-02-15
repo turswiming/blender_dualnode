@@ -57,7 +57,7 @@ bool transdata_check_local_center(const TransInfo *t, short around)
   return ((around == V3D_AROUND_LOCAL_ORIGINS) &&
           ((t->options & (CTX_OBJECT | CTX_POSE_BONE)) ||
            /* implicit: (t->flag & T_EDIT) */
-           (ELEM(t->obedit_type, OB_MESH, OB_CURVES_LEGACY, OB_MBALL, OB_ARMATURE, OB_GPENCIL)) ||
+           ELEM(t->obedit_type, OB_MESH, OB_CURVES_LEGACY, OB_MBALL, OB_ARMATURE, OB_GPENCIL) ||
            (t->spacetype == SPACE_GRAPH) ||
            (t->options & (CTX_MOVIECLIP | CTX_MASK | CTX_PAINT_CURVE | CTX_SEQUENCER_IMAGE))));
 }
@@ -884,7 +884,7 @@ void headerResize(TransInfo *t, const float vec[3], char *str, const int str_siz
 /**
  * \a smat is reference matrix only.
  *
- * \note this is a tricky area, before making changes see: T29633, T42444
+ * \note this is a tricky area, before making changes see: #29633, #42444
  */
 static void TransMat3ToSize(const float mat[3][3], const float smat[3][3], float size[3])
 {
@@ -1029,8 +1029,9 @@ void ElementResize(const TransInfo *t,
       applyNumInput(&num_evil, values_final_evil);
 
       float ratio = values_final_evil[0];
-      *td->val = td->ival * fabs(ratio) * gps->runtime.multi_frame_falloff;
-      CLAMP_MIN(*td->val, 0.001f);
+      float transformed_value = td->ival * fabs(ratio);
+      *td->val = max_ff(interpf(transformed_value, td->ival, gps->runtime.multi_frame_falloff),
+                        0.001f);
     }
   }
   else {
@@ -1040,8 +1041,8 @@ void ElementResize(const TransInfo *t,
   if (t->options & (CTX_OBJECT | CTX_POSE_BONE)) {
     if (t->options & CTX_POSE_BONE) {
       /* Without this, the resulting location of scaled bones aren't correct,
-       * especially noticeable scaling root or disconnected bones around the cursor, see T92515. */
-      mul_mat3_m4_v3(tc->poseobj->obmat, vec);
+       * especially noticeable scaling root or disconnected bones around the cursor, see #92515. */
+      mul_mat3_m4_v3(tc->poseobj->object_to_world, vec);
     }
     mul_m3_v3(td->smtx, vec);
   }
@@ -1213,6 +1214,8 @@ void transform_mode_init(TransInfo *t, wmOperator *op, const int mode)
      * Ideally this should be called when creating the TransData. */
     transform_convert_mesh_customdatacorrect_init(t);
   }
+
+  transform_gizmo_3d_model_from_constraint_and_mode_set(t);
 
   /* TODO(@germano): Some of these operations change the `t->mode`.
    * This can be bad for Redo. */

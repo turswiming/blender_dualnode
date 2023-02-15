@@ -25,7 +25,7 @@ std::string LazyFunction::output_name(int index) const
   return outputs_[index].debug_name;
 }
 
-void *LazyFunction::init_storage(LinearAllocator<> &UNUSED(allocator)) const
+void *LazyFunction::init_storage(LinearAllocator<> & /*allocator*/) const
 {
   return nullptr;
 }
@@ -36,8 +36,22 @@ void LazyFunction::destruct_storage(void *storage) const
   UNUSED_VARS_NDEBUG(storage);
 }
 
+void LazyFunction::possible_output_dependencies(const int /*output_index*/,
+                                                const FunctionRef<void(Span<int>)> fn) const
+{
+  /* The output depends on all inputs by default. */
+  Vector<int, 16> indices(inputs_.size());
+  for (const int i : inputs_.index_range()) {
+    indices[i] = i;
+  }
+  fn(indices);
+}
+
 bool LazyFunction::always_used_inputs_available(const Params &params) const
 {
+  if (allow_missing_requested_inputs_) {
+    return true;
+  }
   for (const int i : inputs_.index_range()) {
     const Input &fn_input = inputs_[i];
     if (fn_input.usage == ValueUsage::Used) {

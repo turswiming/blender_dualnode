@@ -113,8 +113,8 @@ void ED_armature_origin_set(
   /* Find the center-point. */
   if (centermode == 2) {
     copy_v3_v3(cent, cursor);
-    invert_m4_m4(ob->imat, ob->obmat);
-    mul_m4_v3(ob->imat, cent);
+    invert_m4_m4(ob->world_to_object, ob->object_to_world);
+    mul_m4_v3(ob->world_to_object, cent);
   }
   else {
     if (around == V3D_AROUND_CENTER_BOUNDS) {
@@ -154,7 +154,7 @@ void ED_armature_origin_set(
 
   /* Adjust object location for new center-point. */
   if (centermode && (is_editmode == false)) {
-    mul_mat3_m4_v3(ob->obmat, cent); /* omit translation part */
+    mul_mat3_m4_v3(ob->object_to_world, cent); /* omit translation part */
     add_v3_v3(ob->loc, cent);
   }
 }
@@ -282,16 +282,16 @@ static int armature_calc_roll_exec(bContext *C, wmOperator *op)
       axis_flip = true;
     }
 
-    copy_m3_m4(imat, ob->obmat);
+    copy_m3_m4(imat, ob->object_to_world);
     invert_m3(imat);
 
     if (type == CALC_ROLL_CURSOR) { /* Cursor */
       float cursor_local[3];
       const View3DCursor *cursor = &scene->cursor;
 
-      invert_m4_m4(ob->imat, ob->obmat);
+      invert_m4_m4(ob->world_to_object, ob->object_to_world);
       copy_v3_v3(cursor_local, cursor->location);
-      mul_m4_v3(ob->imat, cursor_local);
+      mul_m4_v3(ob->world_to_object, cursor_local);
 
       /* cursor */
       for (ebone = arm->edbo->first; ebone; ebone = ebone->next) {
@@ -388,8 +388,8 @@ static int armature_calc_roll_exec(bContext *C, wmOperator *op)
         ED_armature_ebone_to_mat3(ebone, mat);
         copy_v3_v3(vec, mat[2]);
       }
-      else { /* Axis */
-        BLI_assert(type <= 5);
+      else if (type < 6) { /* NOTE: always true, check to quiet GCC12.2 `-Warray-bounds`. */
+        /* Axis */
         if (type < 3) {
           vec[type] = 1.0f;
         }
@@ -398,6 +398,10 @@ static int armature_calc_roll_exec(bContext *C, wmOperator *op)
         }
         mul_m3_v3(imat, vec);
         normalize_v3(vec);
+      }
+      else {
+        /* The previous block should handle all remaining cases. */
+        BLI_assert_unreachable();
       }
 
       if (axis_flip) {
@@ -730,8 +734,8 @@ static int armature_fill_bones_exec(bContext *C, wmOperator *op)
     ebp = points.first;
 
     /* Get points - cursor (tail) */
-    invert_m4_m4(obedit->imat, obedit->obmat);
-    mul_v3_m4v3(curs, obedit->imat, scene->cursor.location);
+    invert_m4_m4(obedit->world_to_object, obedit->object_to_world);
+    mul_v3_m4v3(curs, obedit->world_to_object, scene->cursor.location);
 
     /* Create a bone */
     newbone = add_points_bone(obedit, ebp->vec, curs);
@@ -767,8 +771,8 @@ static int armature_fill_bones_exec(bContext *C, wmOperator *op)
         float dist_sq_a, dist_sq_b;
 
         /* get cursor location */
-        invert_m4_m4(obedit->imat, obedit->obmat);
-        mul_v3_m4v3(curs, obedit->imat, scene->cursor.location);
+        invert_m4_m4(obedit->world_to_object, obedit->object_to_world);
+        mul_v3_m4v3(curs, obedit->world_to_object, scene->cursor.location);
 
         /* get distances */
         dist_sq_a = len_squared_v3v3(ebp_a->vec, curs);
@@ -908,7 +912,7 @@ static int armature_switch_direction_exec(bContext *C, wmOperator *UNUSED(op))
     armature_tag_select_mirrored(arm);
 
     /* Clear BONE_TRANSFORM flags
-     * - Used to prevent duplicate/canceling operations from occurring T34123.
+     * - Used to prevent duplicate/canceling operations from occurring #34123.
      * - #BONE_DONE cannot be used here as that's already used for mirroring.
      */
     armature_clear_swap_done_flags(arm);
@@ -925,7 +929,7 @@ static int armature_switch_direction_exec(bContext *C, wmOperator *UNUSED(op))
          */
         parent = ebo->parent;
 
-        /* skip bone if already handled, see T34123. */
+        /* skip bone if already handled, see #34123. */
         if ((ebo->flag & BONE_TRANSFORM) == 0) {
           /* only if selected and editable */
           if (EBONE_VISIBLE(arm, ebo) && EBONE_EDITABLE(ebo)) {
@@ -1377,12 +1381,12 @@ static int armature_dissolve_selected_exec(bContext *C, wmOperator *UNUSED(op))
     for (ebone = arm->edbo->first; ebone; ebone = ebone->next) {
       /* break connections for unseen bones */
       if (((arm->layer & ebone->layer) &&
-           ((ED_armature_ebone_selectflag_get(ebone) & (BONE_TIPSEL | BONE_SELECTED)))) == 0) {
+           (ED_armature_ebone_selectflag_get(ebone) & (BONE_TIPSEL | BONE_SELECTED))) == 0) {
         ebone->temp.ebone = NULL;
       }
 
       if (((arm->layer & ebone->layer) &&
-           ((ED_armature_ebone_selectflag_get(ebone) & (BONE_ROOTSEL | BONE_SELECTED)))) == 0) {
+           (ED_armature_ebone_selectflag_get(ebone) & (BONE_ROOTSEL | BONE_SELECTED))) == 0) {
         if (ebone->parent && (ebone->flag & BONE_CONNECTED)) {
           ebone->parent->temp.ebone = NULL;
         }

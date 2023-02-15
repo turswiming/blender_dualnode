@@ -261,10 +261,10 @@ void *ED_image_paint_tile_push(PaintTileMap *paint_tile_map,
               ED_IMAGE_UNDO_TILE_SIZE);
 
   if (has_float) {
-    SWAP(float *, ptile->rect.fp, (*tmpibuf)->rect_float);
+    std::swap(ptile->rect.fp, (*tmpibuf)->rect_float);
   }
   else {
-    SWAP(uint32_t *, ptile->rect.uint, (*tmpibuf)->rect);
+    std::swap(ptile->rect.uint, (*tmpibuf)->rect);
   }
 
   PaintTileKey key = {};
@@ -299,10 +299,10 @@ static void ptile_restore_runtime_map(PaintTileMap *paint_tile_map)
     const bool has_float = (ibuf->rect_float != nullptr);
 
     if (has_float) {
-      SWAP(float *, ptile->rect.fp, tmpibuf->rect_float);
+      std::swap(ptile->rect.fp, tmpibuf->rect_float);
     }
     else {
-      SWAP(uint32_t *, ptile->rect.uint, tmpibuf->rect);
+      std::swap(ptile->rect.uint, tmpibuf->rect);
     }
 
     IMB_rectcpy(ibuf,
@@ -315,10 +315,10 @@ static void ptile_restore_runtime_map(PaintTileMap *paint_tile_map)
                 ED_IMAGE_UNDO_TILE_SIZE);
 
     if (has_float) {
-      SWAP(float *, ptile->rect.fp, tmpibuf->rect_float);
+      std::swap(ptile->rect.fp, tmpibuf->rect_float);
     }
     else {
-      SWAP(uint32_t *, ptile->rect.uint, tmpibuf->rect);
+      std::swap(ptile->rect.uint, tmpibuf->rect);
     }
 
     /* Force OpenGL reload (maybe partial update will operate better?) */
@@ -380,19 +380,19 @@ static void utile_init_from_imbuf(
   const bool has_float = ibuf->rect_float;
 
   if (has_float) {
-    SWAP(float *, utile->rect.fp, tmpibuf->rect_float);
+    std::swap(utile->rect.fp, tmpibuf->rect_float);
   }
   else {
-    SWAP(uint32_t *, utile->rect.uint_ptr, tmpibuf->rect);
+    std::swap(utile->rect.uint_ptr, tmpibuf->rect);
   }
 
   IMB_rectcpy(tmpibuf, ibuf, 0, 0, x, y, ED_IMAGE_UNDO_TILE_SIZE, ED_IMAGE_UNDO_TILE_SIZE);
 
   if (has_float) {
-    SWAP(float *, utile->rect.fp, tmpibuf->rect_float);
+    std::swap(utile->rect.fp, tmpibuf->rect_float);
   }
   else {
-    SWAP(uint32_t *, utile->rect.uint_ptr, tmpibuf->rect);
+    std::swap(utile->rect.uint_ptr, tmpibuf->rect);
   }
 }
 
@@ -637,7 +637,7 @@ static void uhandle_free_list(ListBase *undo_handles)
 /** #UndoImageHandle utilities */
 
 static UndoImageBuf *uhandle_lookup_ubuf(UndoImageHandle *uh,
-                                         const Image *UNUSED(image),
+                                         const Image * /*image*/,
                                          const char *ibuf_name)
 {
   LISTBASE_FOREACH (UndoImageBuf *, ubuf, &uh->buffers) {
@@ -775,7 +775,7 @@ static bool image_undosys_poll(bContext *C)
   return false;
 }
 
-static void image_undosys_step_encode_init(struct bContext *UNUSED(C), UndoStep *us_p)
+static void image_undosys_step_encode_init(struct bContext * /*C*/, UndoStep *us_p)
 {
   ImageUndoStep *us = reinterpret_cast<ImageUndoStep *>(us_p);
   /* dummy, memory is cleared anyway. */
@@ -784,9 +784,7 @@ static void image_undosys_step_encode_init(struct bContext *UNUSED(C), UndoStep 
   us->paint_tile_map = MEM_new<PaintTileMap>(__func__);
 }
 
-static bool image_undosys_step_encode(struct bContext *C,
-                                      struct Main *UNUSED(bmain),
-                                      UndoStep *us_p)
+static bool image_undosys_step_encode(struct bContext *C, struct Main * /*bmain*/, UndoStep *us_p)
 {
   /* Encoding is done along the way by adding tiles
    * to the current 'ImageUndoStep' added by encode_init.

@@ -330,7 +330,6 @@ static void rna_Sequence_start_frame_final_set(PointerRNA *ptr, int value)
   Scene *scene = (Scene *)ptr->owner_id;
 
   SEQ_time_left_handle_frame_set(scene, seq, value);
-  SEQ_transform_fix_single_image_seq_offsets(scene, seq);
   do_sequence_frame_change_update(scene, seq);
   SEQ_relations_invalidate_cache_composite(scene, seq);
 }
@@ -341,7 +340,6 @@ static void rna_Sequence_end_frame_final_set(PointerRNA *ptr, int value)
   Scene *scene = (Scene *)ptr->owner_id;
 
   SEQ_time_right_handle_frame_set(scene, seq, value);
-  SEQ_transform_fix_single_image_seq_offsets(scene, seq);
   do_sequence_frame_change_update(scene, seq);
   SEQ_relations_invalidate_cache_composite(scene, seq);
 }
@@ -778,7 +776,7 @@ static void rna_Sequence_filepath_get(PointerRNA *ptr, char *value)
 {
   Sequence *seq = (Sequence *)(ptr->data);
 
-  BLI_join_dirfile(value, FILE_MAX, seq->strip->dir, seq->strip->stripdata->name);
+  BLI_path_join(value, FILE_MAX, seq->strip->dir, seq->strip->stripdata->name);
 }
 
 static int rna_Sequence_filepath_length(PointerRNA *ptr)
@@ -786,7 +784,7 @@ static int rna_Sequence_filepath_length(PointerRNA *ptr)
   Sequence *seq = (Sequence *)(ptr->data);
   char path[FILE_MAX];
 
-  BLI_join_dirfile(path, sizeof(path), seq->strip->dir, seq->strip->stripdata->name);
+  BLI_path_join(path, sizeof(path), seq->strip->dir, seq->strip->stripdata->name);
   return strlen(path);
 }
 
@@ -804,7 +802,7 @@ static void rna_Sequence_proxy_filepath_get(PointerRNA *ptr, char *value)
 {
   StripProxy *proxy = (StripProxy *)(ptr->data);
 
-  BLI_join_dirfile(value, FILE_MAX, proxy->dir, proxy->file);
+  BLI_path_join(value, FILE_MAX, proxy->dir, proxy->file);
 }
 
 static int rna_Sequence_proxy_filepath_length(PointerRNA *ptr)
@@ -812,7 +810,7 @@ static int rna_Sequence_proxy_filepath_length(PointerRNA *ptr)
   StripProxy *proxy = (StripProxy *)(ptr->data);
   char path[FILE_MAX];
 
-  BLI_join_dirfile(path, sizeof(path), proxy->dir, proxy->file);
+  BLI_path_join(path, sizeof(path), proxy->dir, proxy->file);
   return strlen(path);
 }
 
@@ -1418,6 +1416,28 @@ static void rna_SequenceTimelineChannel_name_set(PointerRNA *ptr, const char *va
                  sizeof(channel->name));
 }
 
+static void rna_SequenceTimelineChannel_mute_update(Main *UNUSED(bmain),
+                                                    Scene *UNUSED(active_scene),
+                                                    PointerRNA *ptr)
+{
+  Scene *scene = (Scene *)ptr->owner_id;
+  Editing *ed = SEQ_editing_get(scene);
+  SeqTimelineChannel *channel = (SeqTimelineChannel *)ptr;
+
+  Sequence *channel_owner = rna_SeqTimelineChannel_owner_get(ed, channel);
+  ListBase *seqbase;
+  if (channel_owner == NULL) {
+    seqbase = &ed->seqbase;
+  }
+  else {
+    seqbase = &channel_owner->seqbase;
+  }
+
+  LISTBASE_FOREACH (Sequence *, seq, seqbase) {
+    SEQ_relations_invalidate_cache_composite(scene, seq);
+  }
+}
+
 static char *rna_SeqTimelineChannel_path(const PointerRNA *ptr)
 {
   Scene *scene = (Scene *)ptr->owner_id;
@@ -1512,6 +1532,11 @@ static void rna_def_strip_crop(BlenderRNA *brna)
 static const EnumPropertyItem transform_filter_items[] = {
     {SEQ_TRANSFORM_FILTER_NEAREST, "NEAREST", 0, "Nearest", ""},
     {SEQ_TRANSFORM_FILTER_BILINEAR, "BILINEAR", 0, "Bilinear", ""},
+    {SEQ_TRANSFORM_FILTER_NEAREST_3x3,
+     "SUBSAMPLING_3x3",
+     0,
+     "Subsampling (3x3)",
+     "Use nearest with 3x3 subsamples during rendering"},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -2162,7 +2187,8 @@ static void rna_def_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "mute", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_CHANNEL_MUTE);
   RNA_def_property_ui_text(prop, "Mute channel", "");
-  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_sound_update");
+  RNA_def_property_update(
+      prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceTimelineChannel_mute_update");
 }
 
 static void rna_def_editor(BlenderRNA *brna)
@@ -2274,7 +2300,7 @@ static void rna_def_editor(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "show_cache_preprocessed", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "cache_flag", SEQ_CACHE_VIEW_PREPROCESSED);
-  RNA_def_property_ui_text(prop, "Pre-processed Images", "Visualize cached pre-processed images");
+  RNA_def_property_ui_text(prop, "Preprocessed Images", "Visualize cached pre-processed images");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, NULL);
 
   prop = RNA_def_property(srna, "show_cache_composite", PROP_BOOLEAN, PROP_NONE);
@@ -2293,8 +2319,8 @@ static void rna_def_editor(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, NULL, "cache_flag", SEQ_CACHE_STORE_PREPROCESSED);
   RNA_def_property_ui_text(
       prop,
-      "Cache Pre-processed",
-      "Cache pre-processed images, for faster tweaking of effects at the cost of memory usage");
+      "Cache Preprocessed",
+      "Cache preprocessed images, for faster tweaking of effects at the cost of memory usage");
 
   prop = RNA_def_property(srna, "use_cache_composite", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "cache_flag", SEQ_CACHE_STORE_COMPOSITE);
@@ -2814,6 +2840,7 @@ static void rna_def_sound(BlenderRNA *brna)
   RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
   RNA_def_property_ui_range(prop, -2, 2, 1, 2);
   RNA_def_property_ui_text(prop, "Pan", "Playback panning of the sound (only for Mono sources)");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SOUND);
   RNA_def_property_float_funcs(prop, NULL, NULL, "rna_Sequence_pan_range");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_audio_update");
 
@@ -2893,6 +2920,7 @@ static void rna_def_wipe(StructRNA *srna)
   RNA_def_property_enum_sdna(prop, NULL, "forward");
   RNA_def_property_enum_items(prop, wipe_direction_items);
   RNA_def_property_ui_text(prop, "Direction", "Wipe direction");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SEQUENCE);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "transition_type", PROP_ENUM, PROP_NONE);
@@ -3100,7 +3128,7 @@ static void rna_def_gaussian_blur(StructRNA *srna)
 
 static void rna_def_text(StructRNA *srna)
 {
-  /* Avoid text icons because they imply this aligns within a frame, see: T71082 */
+  /* Avoid text icons because they imply this aligns within a frame, see: #71082 */
   static const EnumPropertyItem text_align_x_items[] = {
       {SEQ_TEXT_ALIGN_X_LEFT, "LEFT", ICON_ANCHOR_LEFT, "Left", ""},
       {SEQ_TEXT_ALIGN_X_CENTER, "CENTER", ICON_ANCHOR_CENTER, "Center", ""},
@@ -3196,6 +3224,7 @@ static void rna_def_text(StructRNA *srna)
   prop = RNA_def_property(srna, "use_box", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_TEXT_BOX);
   RNA_def_property_ui_text(prop, "Box", "Display colored box behind text");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SEQUENCE);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "use_bold", PROP_BOOLEAN, PROP_NONE);

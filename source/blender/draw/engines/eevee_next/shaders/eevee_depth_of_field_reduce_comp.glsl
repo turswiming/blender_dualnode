@@ -73,7 +73,7 @@ float fast_luma(vec3 color)
   return (2.0 * color.g) + color.r + color.b;
 }
 
-const uint cache_size = gl_WorkGroupSize.x;
+#define cache_size (gl_WorkGroupSize.x)
 shared vec4 color_cache[cache_size][cache_size];
 shared float coc_cache[cache_size][cache_size];
 shared float do_scatter[cache_size][cache_size];
@@ -82,7 +82,7 @@ void main()
 {
   ivec2 texel = min(ivec2(gl_GlobalInvocationID.xy), imageSize(inout_color_lod0_img) - 1);
   uvec2 texel_local = gl_LocalInvocationID.xy;
-  /* Increase readablility. */
+  /* Increase readability. */
 #define LOCAL_INDEX texel_local.y][texel_local.x
 #define LOCAL_OFFSET(x_, y_) texel_local.y + (y_)][texel_local.x + (x_)
 

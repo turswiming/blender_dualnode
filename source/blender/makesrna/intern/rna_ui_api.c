@@ -312,7 +312,7 @@ static PointerRNA rna_uiItemO(uiLayout *layout,
 {
   wmOperatorType *ot;
 
-  ot = WM_operatortype_find(opname, 0); /* print error next */
+  ot = WM_operatortype_find(opname, false); /* print error next */
   if (!ot || !ot->srna) {
     RNA_warning("%s '%s'", ot ? "unknown operator" : "operator missing srna", opname);
     return PointerRNA_NULL;
@@ -343,7 +343,7 @@ static PointerRNA rna_uiItemOMenuHold(uiLayout *layout,
                                       int icon_value,
                                       const char *menu)
 {
-  wmOperatorType *ot = WM_operatortype_find(opname, 0); /* print error next */
+  wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
   if (!ot || !ot->srna) {
     RNA_warning("%s '%s'", ot ? "unknown operator" : "operator missing srna", opname);
     return PointerRNA_NULL;
@@ -381,7 +381,7 @@ static PointerRNA rna_uiItemMenuEnumO(uiLayout *layout,
                                       bool translate,
                                       int icon)
 {
-  wmOperatorType *ot = WM_operatortype_find(opname, 0); /* print error next */
+  wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
 
   if (!ot || !ot->srna) {
     RNA_warning("%s '%s'", ot ? "unknown operator" : "operator missing srna", opname);
@@ -1784,6 +1784,10 @@ void RNA_api_ui_layout(StructRNA *srna)
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
   parm = RNA_def_pointer(func, "socket", "NodeSocket", "", "");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
+
+  func = RNA_def_function(srna, "template_node_asset_menu_items", "uiTemplateNodeAssetMenuItems");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_string(func, "catalog_path", NULL, 0, "", "");
 
   func = RNA_def_function(srna, "template_texture_user", "uiTemplateTextureUser");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);

@@ -219,7 +219,7 @@ static int wm_collada_export_exec(bContext *C, wmOperator *op)
   }
 
   char buff[100];
-  sprintf(buff, "Exported %d Objects", export_count);
+  BLI_snprintf(buff, sizeof(buff), "Exported %d Objects", export_count);
   BKE_report(op->reports, RPT_INFO, buff);
   return OPERATOR_FINISHED;
 }
@@ -261,17 +261,8 @@ static void uiCollada_exportSettings(uiLayout *layout, PointerRNA *imfptr)
     uiItemL(row, IFACE_("Global Orientation"), ICON_ORIENTATION_GLOBAL);
 
     uiItemR(box, imfptr, "apply_global_orientation", 0, IFACE_("Apply"), ICON_NONE);
-
-    row = uiLayoutRow(box, false);
-    uiItemR(row,
-            imfptr,
-            "export_global_forward_selection",
-            UI_ITEM_R_EXPAND,
-            IFACE_("Forward Axis"),
-            ICON_NONE);
-    row = uiLayoutRow(box, false);
-    uiItemR(
-        row, imfptr, "export_global_up_selection", UI_ITEM_R_EXPAND, IFACE_("Up Axis"), ICON_NONE);
+    uiItemR(box, imfptr, "export_global_forward_selection", 0, IFACE_("Forward Axis"), ICON_NONE);
+    uiItemR(box, imfptr, "export_global_up_selection", 0, IFACE_("Up Axis"), ICON_NONE);
 
     /* Texture options */
     box = uiLayoutBox(layout);
@@ -770,13 +761,11 @@ void WM_OT_collada_import(wmOperatorType *ot)
   ot->name = "Import COLLADA";
   ot->description = "Load a Collada file";
   ot->idname = "WM_OT_collada_import";
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_PRESET;
 
   ot->invoke = WM_operator_filesel;
   ot->exec = wm_collada_import_exec;
   ot->poll = WM_operator_winactive;
-
-  // ot->flag = OPTYPE_PRESET;
 
   ot->ui = wm_collada_import_draw;
 

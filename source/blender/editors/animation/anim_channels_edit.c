@@ -54,10 +54,9 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-/* ************************************************************************** */
-/* CHANNELS API - Exposed API */
-
-/* -------------------------- Selection ------------------------------------- */
+/* -------------------------------------------------------------------- */
+/** \name Public Channel Selection API
+ * \{ */
 
 void ANIM_set_active_channel(bAnimContext *ac,
                              void *data,
@@ -217,7 +216,7 @@ void ANIM_set_active_channel(bAnimContext *ac,
 static void select_pchan_for_action_group(bAnimContext *ac, bActionGroup *agrp, bAnimListElem *ale)
 {
   /* Armatures-Specific Feature:
-   * See mouse_anim_channels() -> ANIMTYPE_GROUP case for more details (T38737)
+   * See mouse_anim_channels() -> ANIMTYPE_GROUP case for more details (#38737)
    */
   if ((ac->ads->filterflag & ADS_FILTER_ONLYSEL) == 0) {
     if ((ale->id) && (GS(ale->id->name) == ID_OB)) {
@@ -241,7 +240,7 @@ static void select_pchan_for_action_group(bAnimContext *ac, bActionGroup *agrp, 
   }
 }
 
-static ListBase /* bAnimListElem */ anim_channels_for_selection(bAnimContext *ac)
+static ListBase /*bAnimListElem*/ anim_channels_for_selection(bAnimContext *ac)
 {
   ListBase anim_data = {NULL, NULL};
 
@@ -463,7 +462,11 @@ void ANIM_anim_channels_select_toggle(bAnimContext *ac)
   ANIM_animdata_freelist(&anim_data);
 }
 
-/* ---------------------------- Graph Editor ------------------------------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Public Graph Editor API
+ * \{ */
 
 /* Copy a certain channel setting to parents of the modified channel. */
 static void anim_flush_channel_setting_up(bAnimContext *ac,
@@ -627,7 +630,11 @@ void ANIM_flush_setting_anim_channels(bAnimContext *ac,
   anim_flush_channel_setting_down(ac, setting, mode, match, matchLevel);
 }
 
-/* -------------------------- F-Curves ------------------------------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Public F-Curves API
+ * \{ */
 
 void ANIM_fcurve_delete_from_animdata(bAnimContext *ac, AnimData *adt, FCurve *fcu)
 {
@@ -660,7 +667,7 @@ void ANIM_fcurve_delete_from_animdata(bAnimContext *ac, AnimData *adt, FCurve *f
       action_groups_remove_channel(act, fcu);
 
       /* if group has no more channels, remove it too,
-       * otherwise can have many dangling groups T33541.
+       * otherwise can have many dangling groups #33541.
        */
       if (BLI_listbase_is_empty(&agrp->channels)) {
         BLI_freelinkN(&act->groups, agrp);
@@ -699,10 +706,11 @@ bool ANIM_remove_empty_action_from_animdata(struct AnimData *adt)
   return false;
 }
 
-/* ************************************************************************** */
-/* OPERATORS */
+/** \} */
 
-/* ****************** Operator Utilities ********************************** */
+/* -------------------------------------------------------------------- */
+/** \name Operator Utilities
+ * \{ */
 
 /* poll callback for being in an Animation Editor channels list region */
 static bool animedit_poll_channels_active(bContext *C)
@@ -748,7 +756,11 @@ static bool animedit_poll_channels_nla_tweakmode_off(bContext *C)
   return true;
 }
 
-/* ****************** Rearrange Channels Operator ******************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Move (Rearrange) Channels Operator
+ * \{ */
 
 /* constants for channel rearranging */
 /* WARNING: don't change existing ones without modifying rearrange func accordingly */
@@ -1432,15 +1444,20 @@ static void rearrange_gpencil_channels(bAnimContext *ac, eRearrangeAnimChan_Mode
   }
 
   /* get Grease Pencil datablocks */
-  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA);
+  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA |
+            ANIMFILTER_LIST_CHANNELS);
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
   for (ale = anim_data.first; ale; ale = ale->next) {
+    /* only consider grease pencil container channels */
+    if (!ELEM(ale->type, ANIMTYPE_GPDATABLOCK, ANIMTYPE_DSGPENCIL)) {
+      continue;
+    }
+
     ListBase anim_data_visible = {NULL, NULL};
     bGPdata *gpd = ale->data;
 
     /* only consider layers if this datablock is open */
-    BLI_assert(ale->type == ANIMTYPE_GPDATABLOCK);
     if ((gpd->flag & GP_DATA_EXPAND) == 0) {
       continue;
     }
@@ -1497,6 +1514,10 @@ static int animchannels_rearrange_exec(bContext *C, wmOperator *op)
     ListBase anim_data = {NULL, NULL};
     bAnimListElem *ale;
     int filter;
+
+    if (ELEM(ac.datatype, ANIMCONT_DOPESHEET, ANIMCONT_TIMELINE)) {
+      rearrange_gpencil_channels(&ac, mode);
+    }
 
     /* get animdata blocks */
     filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA |
@@ -1581,7 +1602,11 @@ static void ANIM_OT_channels_move(wmOperatorType *ot)
                           "");
 }
 
-/* ******************** Group Channel Operator ************************ */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Group Channel Operator
+ * \{ */
 
 static bool animchannels_grouping_poll(bContext *C)
 {
@@ -1739,7 +1764,11 @@ static void ANIM_OT_channels_group(wmOperatorType *ot)
   // RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 }
 
-/* ----------------------------------------------------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Ungroup Channels Operator
+ * \{ */
 
 static int animchannels_ungroup_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -1805,7 +1834,11 @@ static void ANIM_OT_channels_ungroup(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* ******************** Delete Channel Operator *********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Channel Operator
+ * \{ */
 
 static void tag_update_animation_element(bAnimListElem *ale)
 {
@@ -1976,7 +2009,11 @@ static void ANIM_OT_channels_delete(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* ********************** Set Flags Operator *********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Set/Toggle Channel Flags Operator Utilities
+ * \{ */
 
 /* defines for setting animation-channel flags */
 static const EnumPropertyItem prop_animchannel_setflag_types[] = {
@@ -2031,7 +2068,7 @@ static void setflag_anim_channels(bAnimContext *ac,
    *   since we only want to apply this to channels we can "see",
    *   and have these affect their relatives
    * - but for Graph Editor, this gets used also from main region
-   *   where hierarchy doesn't apply T21276.
+   *   where hierarchy doesn't apply #21276.
    */
   if ((ac->spacetype == SPACE_GRAPH) && (ac->regiontype != RGN_TYPE_CHANNELS)) {
     /* graph editor (case 2) */
@@ -2223,7 +2260,11 @@ static void ANIM_OT_channels_editable_toggle(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN); /* internal hack - don't expose */
 }
 
-/* ********************** Expand Channels Operator *********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Expand Channels Operator
+ * \{ */
 
 static int animchannels_expand_exec(bContext *C, wmOperator *op)
 {
@@ -2268,7 +2309,11 @@ static void ANIM_OT_channels_expand(wmOperatorType *ot)
       ot->srna, "all", 1, "All", "Expand all channels (not just selected ones)");
 }
 
-/* ********************** Collapse Channels Operator *********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Collapse Channels Operator
+ * \{ */
 
 static int animchannels_collapse_exec(bContext *C, wmOperator *op)
 {
@@ -2313,17 +2358,22 @@ static void ANIM_OT_channels_collapse(wmOperatorType *ot)
       ot->srna, "all", true, "All", "Collapse all channels (not just selected ones)");
 }
 
-/* ************ Remove All "Empty" AnimData Blocks Operator ********* */
-/* We define "empty" AnimData blocks here as those which have all 3 of criteria:
- *  1) No active action OR that active actions are empty
- *     Assuming that all legitimate entries will have an action,
- *     and that empty actions
- *  2) No NLA Tracks + NLA Strips
- *     Assuming that users haven't set up any of these as "placeholders"
- *     for convenience sake, and that most that exist were either unintentional
- *     or are no longer wanted
- *  3) No drivers
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Remove All "Empty" AnimData Blocks Operator
+ *
+ * We define "empty" AnimData blocks here as those which have all 3 of criteria:
+ *
+ * 1) No active action OR that active actions are empty
+ *    Assuming that all legitimate entries will have an action,
+ *    and that empty actions
+ * 2) No NLA Tracks + NLA Strips
+ *    Assuming that users haven't set up any of these as "placeholders"
+ *    for convenience sake, and that most that exist were either unintentional
+ *    or are no longer wanted
+ * 3) No drivers
+ * \{ */
 
 static int animchannels_clean_empty_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -2422,7 +2472,11 @@ static void ANIM_OT_channels_clean_empty(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* ******************* Reenable Disabled Operator ******************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Re-enable Disabled Operator
+ * \{ */
 
 static bool animchannels_enable_poll(bContext *C)
 {
@@ -2489,7 +2543,7 @@ static void ANIM_OT_channels_fcurves_enable(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Revive Disabled F-Curves";
   ot->idname = "ANIM_OT_channels_fcurves_enable";
-  ot->description = "Clears 'disabled' tag from all F-Curves to get broken F-Curves working again";
+  ot->description = "Clear 'disabled' tag from all F-Curves to get broken F-Curves working again";
 
   /* api callbacks */
   ot->exec = animchannels_enable_exec;
@@ -2499,7 +2553,11 @@ static void ANIM_OT_channels_fcurves_enable(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* ****************** Select Filter Textbox Operator ******************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select Filter Text-box Operator
+ * \{ */
 
 /* XXX: make this generic? */
 static bool animchannels_select_filter_poll(bContext *C)
@@ -2572,7 +2630,11 @@ static void ANIM_OT_channels_select_filter(wmOperatorType *ot)
   ot->poll = animchannels_select_filter_poll;
 }
 
-/* ********************** Select All Operator *********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select All Operator
+ * \{ */
 
 static int animchannels_selectall_exec(bContext *C, wmOperator *op)
 {
@@ -2627,7 +2689,11 @@ static void ANIM_OT_channels_select_all(wmOperatorType *ot)
   WM_operator_properties_select_all(ot);
 }
 
-/* ******************** Box Select Operator *********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Box Select Operator
+ * \{ */
 
 static void box_select_anim_channels(bAnimContext *ac, rcti *rect, short selectmode)
 {
@@ -2652,7 +2718,7 @@ static void box_select_anim_channels(bAnimContext *ac, rcti *rect, short selectm
     ymax = NLACHANNEL_FIRST_TOP(ac);
   }
   else {
-    ymax = ACHANNEL_FIRST_TOP(ac);
+    ymax = ANIM_UI_get_first_channel_top(v2d);
   }
 
   /* loop over data, doing box select */
@@ -2660,7 +2726,7 @@ static void box_select_anim_channels(bAnimContext *ac, rcti *rect, short selectm
     float ymin;
 
     if (ale->type == ANIMTYPE_GPDATABLOCK) {
-      ymax -= ACHANNEL_STEP(ac);
+      ymax -= ANIM_UI_get_channel_step();
       continue;
     }
 
@@ -2668,7 +2734,7 @@ static void box_select_anim_channels(bAnimContext *ac, rcti *rect, short selectm
       ymin = ymax - NLACHANNEL_STEP(snla);
     }
     else {
-      ymin = ymax - ACHANNEL_STEP(ac);
+      ymin = ymax - ANIM_UI_get_channel_step();
     }
 
     /* if channel is within border-select region, alter it */
@@ -2704,8 +2770,6 @@ static void box_select_anim_channels(bAnimContext *ac, rcti *rect, short selectm
   /* cleanup */
   ANIM_animdata_freelist(&anim_data);
 }
-
-/* ------------------- */
 
 static int animchannels_box_select_exec(bContext *C, wmOperator *op)
 {
@@ -2765,8 +2829,13 @@ static void ANIM_OT_channels_select_box(wmOperatorType *ot)
   WM_operator_properties_gesture_box_select(ot);
 }
 
-/* ******************* Rename Operator ***************************** */
-/* Allow renaming some channels by clicking on them */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Rename Channel Operator
+ *
+ * Allow renaming some channels by clicking on them.
+ * \{ */
 
 static bool rename_anim_channels(bAnimContext *ac, int channel_index)
 {
@@ -2776,12 +2845,15 @@ static bool rename_anim_channels(bAnimContext *ac, int channel_index)
   int filter;
   bool success = false;
 
-  /* get the channel that was clicked on */
-  /* filter channels */
+  /* Filter relevant channels (note that grease-pencil/annotations are not displayed in Graph
+   * Editor). */
   filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_LIST_CHANNELS);
+  if (ELEM(ac->datatype, ANIMCONT_FCURVES, ANIMCONT_NLA)) {
+    filter |= ANIMFILTER_FCURVESONLY;
+  }
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
-  /* get channel from index */
+  /* Get channel that was clicked on from index. */
   ale = BLI_findlink(&anim_data, channel_index);
   if (ale == NULL) {
     /* channel not found */
@@ -2876,10 +2948,10 @@ static int animchannels_channel_get(bAnimContext *ac, const int mval[2])
                                     &channel_index);
   }
   else {
-    UI_view2d_listview_view_to_cell(ACHANNEL_NAMEWIDTH,
-                                    ACHANNEL_STEP(ac),
+    UI_view2d_listview_view_to_cell(ANIM_UI_get_channel_name_width(),
+                                    ANIM_UI_get_channel_step(),
                                     0,
-                                    ACHANNEL_FIRST_TOP(ac),
+                                    ANIM_UI_get_first_channel_top(v2d),
                                     x,
                                     y,
                                     NULL,
@@ -2923,7 +2995,12 @@ static void ANIM_OT_channels_rename(wmOperatorType *ot)
   ot->poll = animedit_poll_channels_active;
 }
 
-/* ******************** Mouse-Click Operator *********************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select Channel Keyframes Operator (Internal Logic)
+ * \{ */
+
 /* Handle selection changes due to clicking on channels. Settings will get caught by UI code... */
 
 static int click_select_channel_scene(bAnimListElem *ale,
@@ -2990,10 +3067,10 @@ static int click_select_channel_object(bContext *C,
     }
   }
 
-  /* Change active object - regardless of whether it is now selected, see: T37883.
+  /* Change active object - regardless of whether it is now selected, see: #37883.
    *
    * Ensure we exit edit-mode on whatever object was active before
-   * to avoid getting stuck there, see: T48747. */
+   * to avoid getting stuck there, see: #48747. */
   ED_object_base_activate_with_mode_exit_if_needed(C, base); /* adds notifier */
 
   if ((adt) && (adt->flag & ADT_UI_SELECTED)) {
@@ -3366,9 +3443,13 @@ static int mouse_anim_channels(bContext *C,
   return notifierFlags;
 }
 
-/* ------------------- */
+/** \} */
 
-/* handle clicking */
+/* -------------------------------------------------------------------- */
+/** \name Select Channel Keyframes Operator
+ * \{ */
+
+/** Handle picking logic. */
 static int animchannels_mouseclick_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   bAnimContext ac;
@@ -3403,10 +3484,10 @@ static int animchannels_mouseclick_invoke(bContext *C, wmOperator *op, const wmE
 
   /* figure out which channel user clicked in */
   UI_view2d_region_to_view(v2d, event->mval[0], event->mval[1], &x, &y);
-  UI_view2d_listview_view_to_cell(ACHANNEL_NAMEWIDTH,
-                                  ACHANNEL_STEP(&ac),
+  UI_view2d_listview_view_to_cell(ANIM_UI_get_channel_name_width(),
+                                  ANIM_UI_get_channel_step(),
                                   0,
-                                  ACHANNEL_FIRST_TOP(&ac),
+                                  ANIM_UI_get_first_channel_top(v2d),
                                   x,
                                   y,
                                   NULL,
@@ -3418,7 +3499,8 @@ static int animchannels_mouseclick_invoke(bContext *C, wmOperator *op, const wmE
   /* set notifier that things have changed */
   WM_event_add_notifier(C, NC_ANIMATION | notifierFlags, NULL);
 
-  return OPERATOR_FINISHED;
+  return WM_operator_flag_only_pass_through_on_press(OPERATOR_FINISHED | OPERATOR_PASS_THROUGH,
+                                                     event);
 }
 
 static void ANIM_OT_channels_click(wmOperatorType *ot)
@@ -3554,8 +3636,11 @@ static void ANIM_OT_channel_select_keys(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-/* ************************************************************************** */
-/* Operator Registration */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Operator Registration
+ * \{ */
 
 void ED_operatortypes_animchannels(void)
 {
@@ -3596,4 +3681,4 @@ void ED_keymap_animchannels(wmKeyConfig *keyconf)
   WM_keymap_ensure(keyconf, "Animation Channels", 0, 0);
 }
 
-/* ************************************************************************** */
+/** \} */

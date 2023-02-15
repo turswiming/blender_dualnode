@@ -423,7 +423,7 @@ VFont *BKE_vfont_builtin_get(void)
   return BKE_vfont_load(G_MAIN, FO_BUILTIN_NAME);
 }
 
-static VChar *find_vfont_char(VFontData *vfd, unsigned int character)
+static VChar *find_vfont_char(VFontData *vfd, uint character)
 {
   return BLI_ghash_lookup(vfd->characters, POINTER_FROM_UINT(character));
 }
@@ -494,7 +494,7 @@ static void build_underline(Curve *cu,
 
 void BKE_vfont_build_char(Curve *cu,
                           ListBase *nubase,
-                          unsigned int character,
+                          uint character,
                           CharInfo *info,
                           float ofsx,
                           float ofsy,
@@ -720,10 +720,10 @@ typedef struct VFontToCurveIter {
    * Wrap words that extends beyond the text-box width (enabled by default).
    *
    * Currently only disabled when scale-to-fit is enabled,
-   * so floating-point error doesn't cause unexpected wrapping, see T89241.
+   * so floating-point error doesn't cause unexpected wrapping, see #89241.
    *
    * \note This should only be set once, in the #VFONT_TO_CURVE_INIT pass
-   * otherwise iterations wont behave predictably, see T91401.
+   * otherwise iterations wont behave predictably, see #91401.
    */
   bool word_wrap;
   int status;
@@ -974,7 +974,7 @@ static bool vfont_to_curve(Object *ob,
          *
          * Floating precision error can cause the text to be slightly larger.
          * Assert this is a small value as large values indicate incorrect
-         * calculations with scale-to-fit which shouldn't be ignored. See T89241. */
+         * calculations with scale-to-fit which shouldn't be ignored. See #89241. */
         if (x_used > x_available) {
           BLI_assert_msg(compare_ff_relative(x_used, x_available, FLT_EPSILON, 64),
                          "VFontToCurveIter.scale_to_fit not set correctly!");
@@ -993,7 +993,7 @@ static bool vfont_to_curve(Object *ob,
                * Typically when a text-box has any height and overflow is set to scale
                * the text will wrap to fit the width as necessary. When wrapping isn't
                * possible it's important to use the same code-path as zero-height lines.
-               * Without this exception a single word will not scale-to-fit (see: T95116). */
+               * Without this exception a single word will not scale-to-fit (see: #95116). */
               tb_scale.h = 0.0f;
             }
             break;
@@ -1044,7 +1044,7 @@ static bool vfont_to_curve(Object *ob,
 
       CLAMP_MIN(maxlen, lineinfo[lnr].x_min);
 
-      if ((tb_scale.h != 0.0f) && ((-(yof - tb_scale.y)) > (tb_scale.h - linedist) - yof_scale)) {
+      if ((tb_scale.h != 0.0f) && (-(yof - tb_scale.y) > (tb_scale.h - linedist) - yof_scale)) {
         if (cu->totbox > (curbox + 1)) {
           maxlen = 0;
           curbox++;
@@ -1175,7 +1175,7 @@ static bool vfont_to_curve(Object *ob,
         }
       }
       for (i = 0; i <= slen; i++) {
-        for (j = i; (!ELEM(mem[j], '\0', '\n')) && (chartransdata[j].dobreak == 0) && (j < slen);
+        for (j = i; !ELEM(mem[j], '\0', '\n') && (chartransdata[j].dobreak == 0) && (j < slen);
              j++) {
           /* do nothing */
         }
@@ -1194,7 +1194,7 @@ static bool vfont_to_curve(Object *ob,
           /* pass */
         }
 
-        if ((mem[j] != '\n') && ((chartransdata[j].dobreak != 0))) {
+        if ((mem[j] != '\n') && (chartransdata[j].dobreak != 0)) {
           if (mem[i] == ' ') {
             struct TempLineInfo *li;
 
@@ -1229,7 +1229,7 @@ static bool vfont_to_curve(Object *ob,
 
         if (cu->overflow == CU_OVERFLOW_TRUNCATE) {
           /* Ensure overflow doesn't truncate text, before centering vertically
-           * giving odd/buggy results, see: T66614. */
+           * giving odd/buggy results, see: #66614. */
           if ((tb_index == cu->totbox - 1) && (last_line != -1)) {
             lines = last_line - ct_first->linenr;
           }
@@ -1310,14 +1310,14 @@ static bool vfont_to_curve(Object *ob,
       float timeofs, sizefac;
 
       if (ob != NULL) {
-        invert_m4_m4(imat, ob->obmat);
+        invert_m4_m4(imat, ob->object_to_world);
       }
       else {
         unit_m4(imat);
       }
       copy_m3_m4(imat3, imat);
 
-      copy_m3_m4(cmat, cu->textoncurve->obmat);
+      copy_m3_m4(cmat, cu->textoncurve->object_to_world);
       mul_m3_m3m3(cmat, cmat, imat3);
       sizefac = normalize_v3(cmat[0]) / font_size;
 
@@ -1505,7 +1505,7 @@ static bool vfont_to_curve(Object *ob,
 
     ct = chartransdata;
     for (i = 0; i < slen; i++) {
-      unsigned int cha = (unsigned int)mem[i];
+      uint cha = (uint)mem[i];
       info = &(custrinfo[i]);
 
       if ((cu->overflow == CU_OVERFLOW_TRUNCATE) && (ob && ob->mode != OB_MODE_EDIT) &&

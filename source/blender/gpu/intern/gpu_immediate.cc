@@ -45,7 +45,7 @@ void immBindShader(GPUShader *shader)
   BLI_assert(imm->shader == nullptr);
 
   imm->shader = shader;
-  imm->builtin_shader_bound = GPU_SHADER_TEXT; /* Default value. */
+  imm->builtin_shader_bound = std::nullopt;
 
   if (!imm->vertex_format.packed) {
     VertexFormat_pack(&imm->vertex_format);
@@ -54,7 +54,7 @@ void immBindShader(GPUShader *shader)
 
   GPU_shader_bind(shader);
   GPU_matrix_bind(shader);
-  GPU_shader_set_srgb_uniform(shader);
+  Shader::set_srgb_uniform(shader);
 }
 
 void immBindBuiltinProgram(eGPUBuiltinShader shader_id)
@@ -125,9 +125,12 @@ static void wide_line_workaround_start(GPUPrimType prim_type)
     /* No need to change the shader. */
     return;
   }
+  if (!imm->builtin_shader_bound) {
+    return;
+  }
 
   eGPUBuiltinShader polyline_sh;
-  switch (imm->builtin_shader_bound) {
+  switch (*imm->builtin_shader_bound) {
     case GPU_SHADER_3D_CLIPPED_UNIFORM_COLOR:
       polyline_sh = GPU_SHADER_3D_POLYLINE_CLIPPED_UNIFORM_COLOR;
       break;
@@ -160,7 +163,7 @@ static void wide_line_workaround_start(GPUPrimType prim_type)
   immUniform1f("lineWidth", line_width);
 
   if (GPU_blend_get() == GPU_BLEND_NONE) {
-    /* Disable line smoothing when blending is disabled (see T81827). */
+    /* Disable line smoothing when blending is disabled (see #81827). */
     immUniform1i("lineSmooth", 0);
   }
 
@@ -180,8 +183,8 @@ static void wide_line_workaround_end()
     }
     immUnbindProgram();
 
-    immBindBuiltinProgram(imm->prev_builtin_shader);
-    imm->prev_builtin_shader = GPU_SHADER_TEXT;
+    immBindBuiltinProgram(*imm->prev_builtin_shader);
+    imm->prev_builtin_shader = std::nullopt;
   }
 }
 
@@ -599,19 +602,19 @@ void immUniform1i(const char *name, int x)
 
 void immBindTexture(const char *name, GPUTexture *tex)
 {
-  int binding = GPU_shader_get_texture_binding(imm->shader, name);
+  int binding = GPU_shader_get_sampler_binding(imm->shader, name);
   GPU_texture_bind(tex, binding);
 }
 
 void immBindTextureSampler(const char *name, GPUTexture *tex, eGPUSamplerState state)
 {
-  int binding = GPU_shader_get_texture_binding(imm->shader, name);
+  int binding = GPU_shader_get_sampler_binding(imm->shader, name);
   GPU_texture_bind_ex(tex, state, binding, true);
 }
 
 void immBindUniformBuf(const char *name, GPUUniformBuf *ubo)
 {
-  int binding = GPU_shader_get_uniform_block_binding(imm->shader, name);
+  int binding = GPU_shader_get_ubo_binding(imm->shader, name);
   GPU_uniformbuf_bind(ubo, binding);
 }
 
@@ -622,7 +625,7 @@ void immUniformColor4f(float r, float g, float b, float a)
   int32_t uniform_loc = GPU_shader_get_builtin_uniform(imm->shader, GPU_UNIFORM_COLOR);
   BLI_assert(uniform_loc != -1);
   float data[4] = {r, g, b, a};
-  GPU_shader_uniform_vector(imm->shader, uniform_loc, 4, 1, data);
+  GPU_shader_uniform_float_ex(imm->shader, uniform_loc, 4, 1, data);
   /* For wide Line workaround. */
   copy_v4_v4(imm->uniform_color, data);
 }

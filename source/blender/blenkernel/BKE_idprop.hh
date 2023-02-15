@@ -32,6 +32,9 @@ class IDPropertyDeleter {
   }
 };
 
+/** \brief Allocate a new IDProperty of type IDP_BOOLEAN, set its name and value. */
+std::unique_ptr<IDProperty, IDPropertyDeleter> create_bool(StringRefNull prop_name, bool value);
+
 /** \brief Allocate a new IDProperty of type IDP_INT, set its name and value. */
 std::unique_ptr<IDProperty, IDPropertyDeleter> create(StringRefNull prop_name, int32_t value);
 
@@ -46,7 +49,7 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create(StringRefNull prop_name,
                                                       const StringRefNull value);
 
 /** \brief Allocate a new IDProperty of type IDP_ID, set its name and value. */
-std::unique_ptr<IDProperty, IDPropertyDeleter> create(StringRefNull prop_name, ID *id);
+std::unique_ptr<IDProperty, IDPropertyDeleter> create(StringRefNull prop_name, ID *value);
 
 /**
  * \brief Allocate a new IDProperty of type IDP_ARRAY and sub-type IDP_INT.

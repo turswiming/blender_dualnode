@@ -35,7 +35,7 @@ static void view3d_smoothview_apply_with_interp(
  * undo is pushed then the change is rewound, and smooth-view completes from it's timer.
  * In the case smooth-view executed the change immediately - an undo push is called.
  *
- * NOTE(@campbellbarton): While this is not ideal it's necessary as making the undo-push
+ * NOTE(@ideasman42): While this is not ideal it's necessary as making the undo-push
  * once smooth-view is complete because smooth-view is non-blocking and it's possible other
  * operations are executed once smooth-view has started.
  * \{ */
@@ -85,7 +85,7 @@ void ED_view3d_smooth_view_undo_end(bContext *C,
     return;
   }
 
-  /* NOTE(@campbellbarton): It is not possible that a single viewport references different cameras
+  /* NOTE(@ideasman42): It is not possible that a single viewport references different cameras
    * so even in the case there is a quad-view with multiple camera views set, these will all
    * reference the same camera. In this case it doesn't matter which region is used.
    * If in the future multiple cameras are supported, this logic can be extended. */
@@ -259,7 +259,7 @@ void ED_view3d_smooth_view_ex(
     Object *ob_camera_eval = DEG_get_evaluated_object(depsgraph, sview->camera);
     if (sview->ofs != NULL) {
       sms.dst.dist = ED_view3d_offset_distance(
-          ob_camera_eval->obmat, sview->ofs, VIEW3D_DIST_FALLBACK);
+          ob_camera_eval->object_to_world, sview->ofs, VIEW3D_DIST_FALLBACK);
     }
     ED_view3d_from_object(ob_camera_eval, sms.dst.ofs, sms.dst.quat, &sms.dst.dist, &sms.dst.lens);
     sms.to_camera = true; /* restore view3d values in end */
@@ -282,7 +282,8 @@ void ED_view3d_smooth_view_ex(
     if (sview->camera_old) {
       Object *ob_camera_old_eval = DEG_get_evaluated_object(depsgraph, sview->camera_old);
       if (sview->ofs != NULL) {
-        sms.src.dist = ED_view3d_offset_distance(ob_camera_old_eval->obmat, sview->ofs, 0.0f);
+        sms.src.dist = ED_view3d_offset_distance(
+            ob_camera_old_eval->object_to_world, sview->ofs, 0.0f);
       }
       ED_view3d_from_object(
           ob_camera_old_eval, sms.src.ofs, sms.src.quat, &sms.src.dist, &sms.src.lens);

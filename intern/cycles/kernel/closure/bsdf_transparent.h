@@ -59,19 +59,10 @@ ccl_device void bsdf_transparent_setup(ccl_private ShaderData *sd,
   }
 }
 
-ccl_device Spectrum bsdf_transparent_eval_reflect(ccl_private const ShaderClosure *sc,
-                                                  const float3 I,
-                                                  const float3 omega_in,
-                                                  ccl_private float *pdf)
-{
-  *pdf = 0.0f;
-  return zero_spectrum();
-}
-
-ccl_device Spectrum bsdf_transparent_eval_transmit(ccl_private const ShaderClosure *sc,
-                                                   const float3 I,
-                                                   const float3 omega_in,
-                                                   ccl_private float *pdf)
+ccl_device Spectrum bsdf_transparent_eval(ccl_private const ShaderClosure *sc,
+                                          const float3 wi,
+                                          const float3 wo,
+                                          ccl_private float *pdf)
 {
   *pdf = 0.0f;
   return zero_spectrum();
@@ -79,15 +70,15 @@ ccl_device Spectrum bsdf_transparent_eval_transmit(ccl_private const ShaderClosu
 
 ccl_device int bsdf_transparent_sample(ccl_private const ShaderClosure *sc,
                                        float3 Ng,
-                                       float3 I,
+                                       float3 wi,
                                        float randu,
                                        float randv,
                                        ccl_private Spectrum *eval,
-                                       ccl_private float3 *omega_in,
+                                       ccl_private float3 *wo,
                                        ccl_private float *pdf)
 {
   // only one direction is possible
-  *omega_in = -I;
+  *wo = -wi;
   *pdf = 1;
   *eval = one_spectrum();
   return LABEL_TRANSMIT | LABEL_TRANSPARENT;

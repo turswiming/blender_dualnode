@@ -9,7 +9,7 @@
 
 void main()
 {
-  gl_Position = drw_view.persmat * vec4(pos, 1.0);
+  gl_Position = drw_view.winmat * (drw_view.viewmat * vec4(pos, 1.0));
   gl_PointSize = float(pointSize + 2);
 
   int frame = gl_VertexID + cacheStart;
@@ -24,7 +24,7 @@ void main()
   }
 
   if (showKeyFrames) {
-    if ((flag & MOTIONPATH_VERT_KEY) != 0) {
+    if ((flag & MOTIONPATH_VERT_KEY) != 0u) {
       gl_PointSize = float(pointSize + 5);
       finalColor = colorVertexSelect;
       /* Bias more to get these on top of regular points */

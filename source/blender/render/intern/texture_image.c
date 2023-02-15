@@ -220,7 +220,7 @@ int imagewrap(Tex *tex,
     }
   }
 
-  /* Keep this before interpolation T29761. */
+  /* Keep this before interpolation #29761. */
   if (ima) {
     if ((tex->imaflag & TEX_USEALPHA) && (ima->alpha_mode != IMA_ALPHA_IGNORE)) {
       if ((tex->imaflag & TEX_CALCALPHA) == 0) {
@@ -235,7 +235,7 @@ int imagewrap(Tex *tex,
     filterx = (0.5f * tex->filtersize) / ibuf->x;
     filtery = (0.5f * tex->filtersize) / ibuf->y;
 
-    /* Important that this value is wrapped T27782.
+    /* Important that this value is wrapped #27782.
      * this applies the modifications made by the checks above,
      * back to the floating point values */
     fx -= (float)(xi - x) / (float)ibuf->x;
@@ -889,7 +889,7 @@ static void alpha_clip_aniso(
   /* TXF alpha: we're doing the same alpha-clip here as box-sample, but I'm doubting
    * if this is actually correct for the all the filtering algorithms. */
 
-  if (!(ELEM(extflag, TXC_REPT, TXC_EXTD))) {
+  if (!ELEM(extflag, TXC_REPT, TXC_EXTD)) {
     rf.xmin = minx * (ibuf->x);
     rf.xmax = maxx * (ibuf->x);
     rf.ymin = miny * (ibuf->y);

@@ -7,6 +7,7 @@ void main()
    * If we could get rid of it would be nice because of performance drain of discard. */
   if (edgeStart.r == -1.0) {
     discard;
+    return;
   }
 
 #ifndef SELECT_EDGES
@@ -17,10 +18,10 @@ void main()
   vec2 dir = lineOutput.xy * 2.0 - 1.0;
   bool dir_horiz = abs(dir.x) > abs(dir.y);
 
-  vec2 uv = gl_FragCoord.xy * drw_view.viewport_size_inverse;
+  vec2 uv = gl_FragCoord.xy * sizeViewportInv;
   float depth_occluder = texture(depthTex, uv).r;
   float depth_min = depth_occluder;
-  vec2 texel_uv_size = drw_view.viewport_size_inverse;
+  vec2 texel_uv_size = sizeViewportInv;
 
   if (dir_horiz) {
     depth_min = min(depth_min, texture(depthTex, uv + vec2(-texel_uv_size.x, 0.0)).r);

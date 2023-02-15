@@ -57,7 +57,7 @@ struct IDNameLib_Map {
   struct GSet *valid_id_pointers;
   int idmap_types;
 
-  /* For storage of keys for the TypeMap ghash, avoids many single allocs. */
+  /* For storage of keys for the #TypeMap #GHash, avoids many single allocations. */
   BLI_mempool *type_maps_keys_pool;
 };
 
@@ -184,10 +184,10 @@ struct Main *BKE_main_idmap_main_get(struct IDNameLib_Map *id_map)
   return id_map->bmain;
 }
 
-static unsigned int idkey_hash(const void *ptr)
+static uint idkey_hash(const void *ptr)
 {
   const struct IDNameLib_Key *idkey = ptr;
-  unsigned int key = BLI_ghashutil_strhash(idkey->name);
+  uint key = BLI_ghashutil_strhash(idkey->name);
   if (idkey->lib) {
     key ^= BLI_ghashutil_ptrhash(idkey->lib);
   }

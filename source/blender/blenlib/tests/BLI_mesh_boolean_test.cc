@@ -11,7 +11,7 @@
 #include "BLI_array.hh"
 #include "BLI_map.hh"
 #include "BLI_math_mpq.hh"
-#include "BLI_math_vec_mpq_types.hh"
+#include "BLI_math_vector_mpq_types.hh"
 #include "BLI_mesh_boolean.hh"
 #include "BLI_vector.hh"
 
@@ -106,7 +106,7 @@ class IMeshBuilder {
   }
 };
 
-static int all_shape_zero(int UNUSED(t))
+static int all_shape_zero(int /*t*/)
 {
   return 0;
 }

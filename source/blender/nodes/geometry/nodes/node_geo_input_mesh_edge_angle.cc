@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_math_matrix.hh"
+#include "BLI_math_vector.h"
+
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
@@ -62,22 +65,29 @@ class AngleFieldInput final : public bke::MeshFieldInput {
 
   GVArray get_varray_for_context(const Mesh &mesh,
                                  const eAttrDomain domain,
-                                 IndexMask UNUSED(mask)) const final
+                                 const IndexMask /*mask*/) const final
   {
-    const Span<MVert> verts = mesh.verts();
+    const Span<float3> positions = mesh.vert_positions();
     const Span<MPoly> polys = mesh.polys();
     const Span<MLoop> loops = mesh.loops();
     Array<EdgeMapEntry> edge_map = create_edge_map(polys, loops, mesh.totedge);
 
-    auto angle_fn = [edge_map = std::move(edge_map), verts, polys, loops](const int i) -> float {
+    auto angle_fn =
+        [edge_map = std::move(edge_map), positions, polys, loops](const int i) -> float {
       if (edge_map[i].face_count != 2) {
         return 0.0f;
       }
       const MPoly &mpoly_1 = polys[edge_map[i].face_index_1];
       const MPoly &mpoly_2 = polys[edge_map[i].face_index_2];
       float3 normal_1, normal_2;
-      BKE_mesh_calc_poly_normal(&mpoly_1, &loops[mpoly_1.loopstart], verts.data(), normal_1);
-      BKE_mesh_calc_poly_normal(&mpoly_2, &loops[mpoly_2.loopstart], verts.data(), normal_2);
+      BKE_mesh_calc_poly_normal(&mpoly_1,
+                                &loops[mpoly_1.loopstart],
+                                reinterpret_cast<const float(*)[3]>(positions.data()),
+                                normal_1);
+      BKE_mesh_calc_poly_normal(&mpoly_2,
+                                &loops[mpoly_2.loopstart],
+                                reinterpret_cast<const float(*)[3]>(positions.data()),
+                                normal_2);
       return angle_normalized_v3v3(normal_1, normal_2);
     };
 
@@ -95,6 +105,11 @@ class AngleFieldInput final : public bke::MeshFieldInput {
   {
     return dynamic_cast<const AngleFieldInput *>(&other) != nullptr;
   }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  {
+    return ATTR_DOMAIN_EDGE;
+  }
 };
 
 class SignedAngleFieldInput final : public bke::MeshFieldInput {
@@ -106,16 +121,16 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
 
   GVArray get_varray_for_context(const Mesh &mesh,
                                  const eAttrDomain domain,
-                                 IndexMask UNUSED(mask)) const final
+                                 const IndexMask /*mask*/) const final
   {
-    const Span<MVert> verts = mesh.verts();
+    const Span<float3> positions = mesh.vert_positions();
     const Span<MEdge> edges = mesh.edges();
     const Span<MPoly> polys = mesh.polys();
     const Span<MLoop> loops = mesh.loops();
     Array<EdgeMapEntry> edge_map = create_edge_map(polys, loops, mesh.totedge);
 
     auto angle_fn =
-        [edge_map = std::move(edge_map), verts, edges, polys, loops](const int i) -> float {
+        [edge_map = std::move(edge_map), positions, edges, polys, loops](const int i) -> float {
       if (edge_map[i].face_count != 2) {
         return 0.0f;
       }
@@ -124,18 +139,25 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
 
       /* Find the normals of the 2 polys. */
       float3 poly_1_normal, poly_2_normal;
-      BKE_mesh_calc_poly_normal(&mpoly_1, &loops[mpoly_1.loopstart], verts.data(), poly_1_normal);
-      BKE_mesh_calc_poly_normal(&mpoly_2, &loops[mpoly_2.loopstart], verts.data(), poly_2_normal);
+      BKE_mesh_calc_poly_normal(&mpoly_1,
+                                &loops[mpoly_1.loopstart],
+                                reinterpret_cast<const float(*)[3]>(positions.data()),
+                                poly_1_normal);
+      BKE_mesh_calc_poly_normal(&mpoly_2,
+                                &loops[mpoly_2.loopstart],
+                                reinterpret_cast<const float(*)[3]>(positions.data()),
+                                poly_2_normal);
 
       /* Find the centerpoint of the axis edge */
-      const float3 edge_centerpoint = (float3(verts[edges[i].v1].co) +
-                                       float3(verts[edges[i].v2].co)) *
-                                      0.5f;
+      const float3 edge_centerpoint = (positions[edges[i].v1] + positions[edges[i].v2]) * 0.5f;
 
       /* Get the centerpoint of poly 2 and subtract the edge centerpoint to get a tangent
        * normal for poly 2. */
       float3 poly_center_2;
-      BKE_mesh_calc_poly_center(&mpoly_2, &loops[mpoly_2.loopstart], verts.data(), poly_center_2);
+      BKE_mesh_calc_poly_center(&mpoly_2,
+                                &loops[mpoly_2.loopstart],
+                                reinterpret_cast<const float(*)[3]>(positions.data()),
+                                poly_center_2);
       const float3 poly_2_tangent = math::normalize(poly_center_2 - edge_centerpoint);
       const float concavity = math::dot(poly_1_normal, poly_2_tangent);
 
@@ -161,6 +183,11 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
   bool is_equal_to(const fn::FieldNode &other) const override
   {
     return dynamic_cast<const SignedAngleFieldInput *>(&other) != nullptr;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  {
+    return ATTR_DOMAIN_EDGE;
   }
 };
 

@@ -35,8 +35,7 @@ struct OrderedEdge {
     }
   }
 
-  OrderedEdge(const uint v1, const uint v2)
-      : OrderedEdge(static_cast<int>(v1), static_cast<int>(v2))
+  OrderedEdge(const uint v1, const uint v2) : OrderedEdge(int(v1), int(v2))
   {
   }
 
@@ -147,7 +146,6 @@ static void serialize_and_initialize_deduplicated_edges(MutableSpan<EdgeMap> edg
         /* Initialize new edge. */
         new_edge.v1 = item.key.v_low;
         new_edge.v2 = item.key.v_high;
-        new_edge.flag = ME_EDGEDRAW | ME_EDGERENDER;
       }
       item.value.index = new_edge_index;
       new_edge_index++;
@@ -178,7 +176,7 @@ static void update_edge_indices_in_poly_loops(Mesh *mesh,
         else {
           /* This is an invalid edge; normally this does not happen in Blender,
            * but it can be part of an imported mesh with invalid geometry. See
-           * T76514. */
+           * #76514. */
           edge_index = 0;
         }
         prev_loop->e = edge_index;
@@ -217,7 +215,7 @@ void BKE_mesh_calc_edges(Mesh *mesh, bool keep_existing_edges, const bool select
    * Each edge is assigned to one of the hash maps based on the lower bits of a hash value. */
   const int parallel_maps = get_parallel_maps_count(mesh);
   BLI_assert(is_power_of_2_i(parallel_maps));
-  const uint32_t parallel_mask = static_cast<uint32_t>(parallel_maps) - 1;
+  const uint32_t parallel_mask = uint32_t(parallel_maps) - 1;
   Array<EdgeMap> edge_maps(parallel_maps);
   reserve_hash_maps(mesh, keep_existing_edges, edge_maps);
 
@@ -261,6 +259,11 @@ void BKE_mesh_calc_edges(Mesh *mesh, bool keep_existing_edges, const bool select
       }
       select_edge.finish();
     }
+  }
+
+  if (!keep_existing_edges) {
+    /* All edges are rebuilt from the faces, so there are no loose edges. */
+    mesh->loose_edges_tag_none();
   }
 
   /* Explicitly clear edge maps, because that way it can be parallelized. */

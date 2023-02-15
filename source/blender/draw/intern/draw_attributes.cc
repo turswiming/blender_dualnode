@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2022 Blender Foundation. All rights reserved. */
 
-#include "draw_attributes.h"
+#include "draw_attributes.hh"
 
 /* Return true if the given DRW_AttributeRequest is already in the requests. */
 static bool drw_attributes_has_request(const DRW_Attributes *requests, DRW_AttributeRequest req)
@@ -44,13 +44,10 @@ void drw_attributes_clear(DRW_Attributes *attributes)
   memset(attributes, 0, sizeof(DRW_Attributes));
 }
 
-void drw_attributes_merge(DRW_Attributes *dst,
-                          const DRW_Attributes *src,
-                          ThreadMutex *render_mutex)
+void drw_attributes_merge(DRW_Attributes *dst, const DRW_Attributes *src, std::mutex &render_mutex)
 {
-  BLI_mutex_lock(render_mutex);
+  std::lock_guard lock{render_mutex};
   drw_attributes_merge_requests(src, dst);
-  BLI_mutex_unlock(render_mutex);
 }
 
 bool drw_attributes_overlap(const DRW_Attributes *a, const DRW_Attributes *b)

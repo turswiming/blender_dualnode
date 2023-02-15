@@ -9,11 +9,8 @@
 #include <stdlib.h>
 
 #include "DNA_armature_types.h"
-#include "DNA_brush_types.h"
-#include "DNA_cachefile_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_gpencil_types.h"
-#include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_force_types.h"
 #include "DNA_object_types.h"
@@ -21,20 +18,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
-#include "BLI_rand.h"
+#include "BLI_math_base.h"
+#include "BLI_math_rotation.h"
 #include "BLI_string_utils.h"
 
 #include "BLT_translation.h"
 
 #include "BKE_animsys.h"
-#include "BKE_data_transfer.h"
-#include "BKE_dynamicpaint.h"
-#include "BKE_effect.h"
-#include "BKE_fluid.h" /* For BKE_fluid_modifier_free & BKE_fluid_modifier_create_type_data */
-#include "BKE_mesh_mapping.h"
-#include "BKE_mesh_remap.h"
-#include "BKE_multires.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -82,7 +72,7 @@ const EnumPropertyItem rna_enum_object_greasepencil_modifier_type_items[] = {
      "Generate dot-dash styled strokes"},
     {eGpencilModifierType_Envelope,
      "GP_ENVELOPE",
-     ICON_MOD_SKIN,
+     ICON_MOD_ENVELOPE,
      "Envelope",
      "Create an envelope shape"},
     {eGpencilModifierType_Length,
@@ -105,6 +95,11 @@ const EnumPropertyItem rna_enum_object_greasepencil_modifier_type_items[] = {
      ICON_GP_MULTIFRAME_EDITING,
      "Multiple Strokes",
      "Produce multiple strokes along one stroke"},
+    {eGpencilModifierType_Outline,
+     "GP_OUTLINE",
+     ICON_MOD_OUTLINE,
+     "Outline",
+     "Convert stroke to perimeter"},
     {eGpencilModifierType_Simplify,
      "GP_SIMPLIFY",
      ICON_MOD_SIMPLIFY,
@@ -163,6 +158,25 @@ const EnumPropertyItem rna_enum_object_greasepencil_modifier_type_items[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
+static const EnumPropertyItem gpencil_build_time_mode_items[] = {
+    {GP_BUILD_TIMEMODE_DRAWSPEED,
+     "DRAWSPEED",
+     0,
+     "Natural Drawing Speed",
+     "Use recorded speed multiplied by a factor"},
+    {GP_BUILD_TIMEMODE_FRAMES,
+     "FRAMES",
+     0,
+     "Number of Frames",
+     "Set a fixed number of frames for all build animations"},
+    {GP_BUILD_TIMEMODE_PERCENTAGE,
+     "PERCENTAGE",
+     0,
+     "Percentage Factor",
+     "Set a manual percentage to build"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 #ifndef RNA_RUNTIME
 static const EnumPropertyItem modifier_modify_color_items[] = {
     {GP_MODIFY_COLOR_BOTH, "BOTH", 0, "Stroke & Fill", "Modify fill and stroke colors"},
@@ -196,7 +210,19 @@ static const EnumPropertyItem rna_enum_time_mode_items[] = {
     {GP_TIME_MODE_NORMAL, "NORMAL", 0, "Regular", "Apply offset in usual animation direction"},
     {GP_TIME_MODE_REVERSE, "REVERSE", 0, "Reverse", "Apply offset in reverse animation direction"},
     {GP_TIME_MODE_FIX, "FIX", 0, "Fixed Frame", "Keep frame and do not change with time"},
-    {GP_TIME_MODE_PINGPONG, "PINGPONG", 0, "Ping Pong", "Loop back and forth"},
+    {GP_TIME_MODE_PINGPONG, "PINGPONG", 0, "Ping Pong", "Loop back and forth starting in reverse"},
+    {GP_TIME_MODE_CHAIN, "CHAIN", 0, "Chain", "List of chained animation segments"},
+    {0, NULL, 0, NULL, NULL},
+};
+
+static const EnumPropertyItem rna_enum_time_seg_mode_items[] = {
+    {GP_TIME_SEG_MODE_NORMAL, "NORMAL", 0, "Regular", "Apply offset in usual animation direction"},
+    {GP_TIME_SEG_MODE_REVERSE,
+     "REVERSE",
+     0,
+     "Reverse",
+     "Apply offset in reverse animation direction"},
+    {GP_TIME_SEG_MODE_PINGPONG, "PINGPONG", 0, "Ping Pong", "Loop back and forth"},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -286,6 +312,8 @@ static StructRNA *rna_GpencilModifier_refine(struct PointerRNA *ptr)
       return &RNA_BuildGpencilModifier;
     case eGpencilModifierType_Opacity:
       return &RNA_OpacityGpencilModifier;
+    case eGpencilModifierType_Outline:
+      return &RNA_OutlineGpencilModifier;
     case eGpencilModifierType_Lattice:
       return &RNA_LatticeGpencilModifier;
     case eGpencilModifierType_Length:
@@ -668,6 +696,37 @@ static void rna_OpacityGpencilModifier_material_set(PointerRNA *ptr,
   rna_GpencilModifier_material_set(ptr, value, ma_target, reports);
 }
 
+static void rna_OutlineGpencilModifier_object_set(PointerRNA *ptr,
+                                                  PointerRNA value,
+                                                  struct ReportList *UNUSED(reports))
+{
+  OutlineGpencilModifierData *omd = ptr->data;
+  Object *ob = (Object *)value.data;
+
+  omd->object = ob;
+  id_lib_extern((ID *)ob);
+}
+
+static void rna_OutlineGpencilModifier_material_set(PointerRNA *ptr,
+                                                    PointerRNA value,
+                                                    struct ReportList *reports)
+{
+  OutlineGpencilModifierData *omd = (OutlineGpencilModifierData *)ptr->data;
+  Material **ma_target = &omd->material;
+
+  rna_GpencilModifier_material_set(ptr, value, ma_target, reports);
+}
+
+static void rna_OutlineStrokeGpencilModifier_material_set(PointerRNA *ptr,
+                                                          PointerRNA value,
+                                                          struct ReportList *reports)
+{
+  OutlineGpencilModifierData *omd = (OutlineGpencilModifierData *)ptr->data;
+  Material **ma_target = &omd->outline_material;
+
+  rna_GpencilModifier_material_set(ptr, value, ma_target, reports);
+}
+
 static void rna_LatticeGpencilModifier_material_set(PointerRNA *ptr,
                                                     PointerRNA value,
                                                     struct ReportList *reports)
@@ -753,7 +812,32 @@ static void rna_GpencilDash_segments_begin(CollectionPropertyIterator *iter, Poi
       iter, dmd->segments, sizeof(DashGpencilModifierSegment), dmd->segments_len, false, NULL);
 }
 
+static void rna_GpencilTime_segments_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+  TimeGpencilModifierData *gpmd = (TimeGpencilModifierData *)ptr->data;
+  rna_iterator_array_begin(
+      iter, gpmd->segments, sizeof(TimeGpencilModifierSegment), gpmd->segments_len, false, NULL);
+}
+
+static char *rna_TimeGpencilModifierSegment_path(const PointerRNA *ptr)
+{
+  TimeGpencilModifierSegment *ds = (TimeGpencilModifierSegment *)ptr->data;
+
+  TimeGpencilModifierData *gpmd = (TimeGpencilModifierData *)ds->gpmd;
+
+  BLI_assert(gpmd != NULL);
+
+  char name_esc[sizeof(gpmd->modifier.name) * 2];
+  BLI_str_escape(name_esc, gpmd->modifier.name, sizeof(name_esc));
+
+  char ds_name_esc[sizeof(ds->name) * 2];
+  BLI_str_escape(ds_name_esc, ds->name, sizeof(ds_name_esc));
+
+  return BLI_sprintfN("grease_pencil_modifiers[\"%s\"].segments[\"%s\"]", name_esc, ds_name_esc);
+}
+
 static char *rna_DashGpencilModifierSegment_path(const PointerRNA *ptr)
+
 {
   const DashGpencilModifierSegment *ds = (DashGpencilModifierSegment *)ptr->data;
 
@@ -775,6 +859,17 @@ static bool dash_segment_name_exists_fn(void *arg, const char *name)
   const DashGpencilModifierData *dmd = (const DashGpencilModifierData *)arg;
   for (int i = 0; i < dmd->segments_len; i++) {
     if (STREQ(dmd->segments[i].name, name) && dmd->segments[i].name != name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool time_segment_name_exists_fn(void *arg, const char *name)
+{
+  const TimeGpencilModifierData *gpmd = (const TimeGpencilModifierData *)arg;
+  for (int i = 0; i < gpmd->segments_len; i++) {
+    if (STREQ(gpmd->segments[i].name, name) && gpmd->segments[i].name != name) {
       return true;
     }
   }
@@ -804,6 +899,29 @@ static void rna_DashGpencilModifierSegment_name_set(PointerRNA *ptr, const char 
   BKE_animdata_fix_paths_rename_all(NULL, prefix, oldname, ds->name);
 }
 
+static void rna_TimeGpencilModifierSegment_name_set(PointerRNA *ptr, const char *value)
+{
+  TimeGpencilModifierSegment *ds = ptr->data;
+
+  char oldname[sizeof(ds->name)];
+  BLI_strncpy(oldname, ds->name, sizeof(ds->name));
+
+  BLI_strncpy_utf8(ds->name, value, sizeof(ds->name));
+
+  BLI_assert(ds->gpmd != NULL);
+  BLI_uniquename_cb(
+      time_segment_name_exists_fn, ds->gpmd, "Segment", '.', ds->name, sizeof(ds->name));
+
+  char name_esc[sizeof(ds->gpmd->modifier.name) * 2];
+  BLI_str_escape(name_esc, ds->gpmd->modifier.name, sizeof(name_esc));
+
+  char prefix[36 + sizeof(name_esc) + 1];
+  SNPRINTF(prefix, "grease_pencil_modifiers[\"%s\"].segments", name_esc);
+
+  /* Fix all the animation data which may link to this. */
+  BKE_animdata_fix_paths_rename_all(NULL, prefix, oldname, ds->name);
+}
+
 static int rna_ShrinkwrapGpencilModifier_face_cull_get(PointerRNA *ptr)
 {
   ShrinkwrapGpencilModifierData *swm = (ShrinkwrapGpencilModifierData *)ptr->data;
@@ -824,6 +942,33 @@ static void rna_EnvelopeGpencilModifier_material_set(PointerRNA *ptr,
   Material **ma_target = &emd->material;
 
   rna_GpencilModifier_material_set(ptr, value, ma_target, reports);
+}
+
+const EnumPropertyItem *gpencil_build_time_mode_filter(bContext *UNUSED(C),
+                                                       PointerRNA *ptr,
+                                                       PropertyRNA *UNUSED(prop),
+                                                       bool *r_free)
+{
+
+  GpencilModifierData *md = ptr->data;
+  BuildGpencilModifierData *mmd = (BuildGpencilModifierData *)md;
+  const bool is_concurrent = (mmd->mode == GP_BUILD_MODE_CONCURRENT);
+
+  EnumPropertyItem *item_list = NULL;
+  int totitem = 0;
+
+  for (const EnumPropertyItem *item = gpencil_build_time_mode_items; item->identifier != NULL;
+       item++) {
+    if (is_concurrent && (item->value == GP_BUILD_TIMEMODE_DRAWSPEED)) {
+      continue;
+    }
+    RNA_enum_item_add(&item_list, &totitem, item);
+  }
+
+  RNA_enum_item_end(&item_list, &totitem);
+  *r_free = true;
+
+  return item_list;
 }
 
 #else
@@ -1129,7 +1274,8 @@ static void rna_def_modifier_gpencilsubdiv(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "level", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "level");
-  RNA_def_property_range(prop, 0, 5);
+  RNA_def_property_range(prop, 0, 16);
+  RNA_def_property_ui_range(prop, 0.0, 5.0, 1, 0);
   RNA_def_property_ui_text(prop, "Level", "Number of subdivisions");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
@@ -1279,8 +1425,8 @@ static void rna_def_modifier_gpencilsimplify(BlenderRNA *brna)
   /* Sample */
   prop = RNA_def_property(srna, "length", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_float_sdna(prop, NULL, "length");
-  RNA_def_property_range(prop, 0.005, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0, 1.0, 0.05, 3);
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.005, 1.0, 0.05, 3);
   RNA_def_property_ui_text(prop, "Length", "Length of each segment");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
@@ -1415,10 +1561,29 @@ static void rna_def_modifier_gpenciloffset(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
+  RNA_define_lib_overridable(true);
+  static EnumPropertyItem rna_enum_offset_mode_items[] = {
+      {GP_OFFSET_RANDOM, "RANDOM", 0, "Random", "Randomize stroke offset"},
+      {GP_OFFSET_LAYER, "LAYER", 0, "Layer", "Offset layers by the same factor"},
+      {GP_OFFSET_STROKE,
+       "STROKE",
+       0,
+       "Stroke",
+       "Offset strokes by the same factor based on stroke draw order"},
+      {GP_OFFSET_MATERIAL, "MATERIAL", 0, "Material", "Offset materials by the same factor"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
   srna = RNA_def_struct(brna, "OffsetGpencilModifier", "GpencilModifier");
   RNA_def_struct_ui_text(srna, "Offset Modifier", "Offset Stroke modifier");
   RNA_def_struct_sdna(srna, "OffsetGpencilModifierData");
   RNA_def_struct_ui_icon(srna, ICON_MOD_OFFSET);
+
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "mode");
+  RNA_def_property_enum_items(prop, rna_enum_offset_mode_items);
+  RNA_def_property_ui_text(prop, "Mode", "");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   RNA_define_lib_overridable(true);
 
@@ -1520,12 +1685,20 @@ static void rna_def_modifier_gpenciloffset(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Seed", "Random seed");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
+  prop = RNA_def_property(srna, "stroke_step", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_ui_text(prop, "Step", "Number of elements that will be grouped");
+  RNA_def_property_range(prop, 1, 500);
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "stroke_start_offset", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_ui_text(prop, "Start Offset", "Offset starting point");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
   prop = RNA_def_property(srna, "use_uniform_random_scale", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_OFFSET_UNIFORM_RANDOM_SCALE);
   RNA_def_property_ui_text(
       prop, "Uniform Scale", "Use the same random seed for each scale axis for a uniform scale");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
-
   RNA_define_lib_overridable(false);
 }
 
@@ -1680,6 +1853,38 @@ static void rna_def_modifier_gpenciltime(BlenderRNA *brna)
 {
   StructRNA *srna;
   PropertyRNA *prop;
+  srna = RNA_def_struct(brna, "TimeGpencilModifierSegment", NULL);
+  RNA_def_struct_ui_text(srna, "Time Modifier Segment", "Configuration for a single dash segment");
+  RNA_def_struct_sdna(srna, "TimeGpencilModifierSegment");
+  RNA_def_struct_path_func(srna, "rna_TimeGpencilModifierSegment_path");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Name of the dash segment");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+  RNA_def_property_string_funcs(prop, NULL, NULL, "rna_TimeGpencilModifierSegment_name_set");
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER | NA_RENAME, NULL);
+  RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "seg_start", PROP_INT, PROP_NONE);
+  RNA_def_property_range(prop, 0, INT16_MAX);
+  RNA_def_property_ui_text(prop, "Frame Start", "First frame of the segment");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "seg_end", PROP_INT, PROP_NONE);
+  RNA_def_property_range(prop, 0, INT16_MAX);
+  RNA_def_property_ui_text(prop, "End", "Last frame of the segment");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "seg_repeat", PROP_INT, PROP_NONE);
+  RNA_def_property_range(prop, 1, INT16_MAX);
+  RNA_def_property_ui_text(prop, "Repeat", "Number of cycle repeats");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "seg_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "seg_mode");
+  RNA_def_property_enum_items(prop, rna_enum_time_seg_mode_items);
+  RNA_def_property_ui_text(prop, "Mode", "");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   srna = RNA_def_struct(brna, "TimeGpencilModifier", "GpencilModifier");
   RNA_def_struct_ui_text(srna, "Time Offset Modifier", "Time offset modifier");
@@ -1687,6 +1892,24 @@ static void rna_def_modifier_gpenciltime(BlenderRNA *brna)
   RNA_def_struct_ui_icon(srna, ICON_MOD_TIME);
 
   RNA_define_lib_overridable(true);
+
+  prop = RNA_def_property(srna, "segments", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "TimeGpencilModifierSegment");
+  RNA_def_property_collection_sdna(prop, NULL, "segments", NULL);
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_GpencilTime_segments_begin",
+                                    "rna_iterator_array_next",
+                                    "rna_iterator_array_end",
+                                    "rna_iterator_array_get",
+                                    NULL,
+                                    NULL,
+                                    NULL,
+                                    NULL);
+  RNA_def_property_ui_text(prop, "Segments", "");
+
+  prop = RNA_def_property(srna, "segment_active_index", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(prop, "Active Dash Segment Index", "Active index in the segment list");
 
   prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "mode");
@@ -1972,6 +2195,107 @@ static void rna_def_modifier_gpencilopacity(BlenderRNA *brna)
   RNA_define_lib_overridable(false);
 }
 
+static void rna_def_modifier_gpenciloutline(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "OutlineGpencilModifier", "GpencilModifier");
+  RNA_def_struct_ui_text(srna, "Outline Modifier", "Outline of Strokes modifier from camera view");
+  RNA_def_struct_sdna(srna, "OutlineGpencilModifierData");
+  RNA_def_struct_ui_icon(srna, ICON_MOD_OUTLINE);
+
+  RNA_define_lib_overridable(true);
+
+  prop = RNA_def_property(srna, "layer", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, NULL, "layername");
+  RNA_def_property_ui_text(prop, "Layer", "Layer name");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "material", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_pointer_funcs(prop,
+                                 NULL,
+                                 "rna_OutlineGpencilModifier_material_set",
+                                 NULL,
+                                 "rna_GpencilModifier_material_poll");
+  RNA_def_property_ui_text(prop, "Material", "Material used for filtering effect");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "pass_index", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "pass_index");
+  RNA_def_property_range(prop, 0, 100);
+  RNA_def_property_ui_text(prop, "Pass", "Pass index");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "invert_layers", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_OUTLINE_INVERT_LAYER);
+  RNA_def_property_ui_text(prop, "Inverse Layers", "Inverse filter");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "invert_materials", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_OUTLINE_INVERT_MATERIAL);
+  RNA_def_property_ui_text(prop, "Inverse Materials", "Inverse filter");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "invert_material_pass", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_OUTLINE_INVERT_PASS);
+  RNA_def_property_ui_text(prop, "Inverse Pass", "Inverse filter");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "layer_pass", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "layer_pass");
+  RNA_def_property_range(prop, 0, 100);
+  RNA_def_property_ui_text(prop, "Pass", "Layer pass index");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "invert_layer_pass", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_OUTLINE_INVERT_LAYERPASS);
+  RNA_def_property_ui_text(prop, "Inverse Pass", "Inverse filter");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "thickness", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "thickness");
+  RNA_def_property_range(prop, 1, 1000);
+  RNA_def_property_ui_text(prop, "Thickness", "Thickness of the perimeter stroke");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "sample_length", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, NULL, "sample_length");
+  RNA_def_property_ui_range(prop, 0.0f, 100.0f, 0.1f, 2);
+  RNA_def_property_ui_text(prop, "Sample Length", "");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "subdivision", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "subdiv");
+  RNA_def_property_range(prop, 0, 10);
+  RNA_def_property_ui_text(prop, "Subdivisions", "Number of subdivisions");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "use_keep_shape", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_OUTLINE_KEEP_SHAPE);
+  RNA_def_property_ui_text(prop, "Keep Shape", "Try to keep global shape");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "outline_material", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_pointer_funcs(prop,
+                                 NULL,
+                                 "rna_OutlineStrokeGpencilModifier_material_set",
+                                 NULL,
+                                 "rna_GpencilModifier_material_poll");
+  RNA_def_property_ui_text(prop, "Outline Material", "Material used for outline strokes");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  prop = RNA_def_property(srna, "object", PROP_POINTER, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Target Object", "Target object to define stroke start");
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
+  RNA_def_property_pointer_funcs(prop, NULL, "rna_OutlineGpencilModifier_object_set", NULL, NULL);
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_dependency_update");
+
+  RNA_define_lib_overridable(false);
+}
+
 static void rna_def_modifier_gpencilarray(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -2016,7 +2340,7 @@ static void rna_def_modifier_gpencilarray(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, NULL, "object");
   RNA_def_property_ui_text(
       prop,
-      "Object Offset",
+      "Offset Object",
       "Use the location and rotation of another object to determine the distance and "
       "rotational change between arrayed items");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
@@ -2101,7 +2425,7 @@ static void rna_def_modifier_gpencilarray(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_object_offset", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_ARRAY_USE_OB_OFFSET);
-  RNA_def_property_ui_text(prop, "Object Offset", "Enable object offset");
+  RNA_def_property_ui_text(prop, "Use Object Offset", "Enable object offset");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   prop = RNA_def_property(srna, "use_relative_offset", PROP_BOOLEAN, PROP_NONE);
@@ -2188,7 +2512,7 @@ static void rna_def_modifier_gpencilbuild(BlenderRNA *brna)
   /* Mode */
   prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, prop_gpencil_build_mode_items);
-  RNA_def_property_ui_text(prop, "Mode", "How many strokes are being animated at a time");
+  RNA_def_property_ui_text(prop, "Mode", "How strokes are being built");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   /* Direction */
@@ -2202,9 +2526,7 @@ static void rna_def_modifier_gpencilbuild(BlenderRNA *brna)
   prop = RNA_def_property(srna, "start_delay", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, NULL, "start_delay");
   RNA_def_property_ui_text(
-      prop,
-      "Start Delay",
-      "Number of frames after each GP keyframe before the modifier has any effect");
+      prop, "Delay", "Number of frames after each GP keyframe before the modifier has any effect");
   RNA_def_property_range(prop, 0, MAXFRAMEF);
   RNA_def_property_ui_range(prop, 0, 200, 1, -1);
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
@@ -2223,8 +2545,35 @@ static void rna_def_modifier_gpencilbuild(BlenderRNA *brna)
   prop = RNA_def_property(srna, "concurrent_time_alignment", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "time_alignment");
   RNA_def_property_enum_items(prop, prop_gpencil_build_time_align_items);
+  RNA_def_property_ui_text(prop, "Time Alignment", "How should strokes start to appear/disappear");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  /* Which time mode to use: Current frames, manual percentage, or drawspeed.  */
+  prop = RNA_def_property(srna, "time_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "time_mode");
+  RNA_def_property_enum_items(prop, gpencil_build_time_mode_items);
+  RNA_def_property_enum_funcs(prop, NULL, NULL, "gpencil_build_time_mode_filter");
   RNA_def_property_ui_text(
-      prop, "Time Alignment", "When should strokes start to appear/disappear");
+      prop,
+      "Timing",
+      "Use drawing speed, a number of frames, or a manual factor to build strokes");
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  /* Speed factor for GP_BUILD_TIMEMODE_DRAWSPEED. */
+  /* Todo: Does it work? */
+  prop = RNA_def_property(srna, "speed_factor", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(prop, NULL, "speed_fac");
+  RNA_def_property_ui_text(prop, "Speed Factor", "Multiply recorded drawing speed by a factor");
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_range(prop, 0, 5, 0.001, -1);
+  RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
+
+  /* Max gap in seconds between strokes for GP_BUILD_TIMEMODE_DRAWSPEED. */
+  prop = RNA_def_property(srna, "speed_maxgap", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, NULL, "speed_maxgap");
+  RNA_def_property_ui_text(prop, "Maximum Gap", "The maximum gap between strokes in seconds");
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_range(prop, 0, 4, 0.01, -1);
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   /* Time Limits */
@@ -2234,9 +2583,9 @@ static void rna_def_modifier_gpencilbuild(BlenderRNA *brna)
       prop, "Restrict Frame Range", "Only modify strokes during the specified frame range");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
-  /* Use percentage */
+  /* Use percentage bool (used by sequential & concurrent modes) */
   prop = RNA_def_property(srna, "use_percentage", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "flag", GP_BUILD_PERCENTAGE);
+  RNA_def_property_boolean_sdna(prop, NULL, "time_mode", GP_BUILD_TIMEMODE_PERCENTAGE);
   RNA_def_property_ui_text(
       prop, "Restrict Visible Points", "Use a percentage factor to determine the visible points");
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
@@ -3258,10 +3607,9 @@ static void rna_def_modifier_gpencillineart(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_object_instances", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "calculation_flags", LRT_ALLOW_DUPLI_OBJECTS);
-  RNA_def_property_ui_text(
-      prop,
-      "Instanced Objects",
-      "Support particle objects and face/vertex instances to show in line art");
+  RNA_def_property_ui_text(prop,
+                           "Instanced Objects",
+                           "Allow particle objects and face/vertex instances to show in line art");
   RNA_def_property_update(prop, NC_SCENE, "rna_GpencilModifier_update");
 
   prop = RNA_def_property(srna, "use_edge_overlap", PROP_BOOLEAN, PROP_NONE);
@@ -3642,11 +3990,12 @@ static void rna_def_modifier_gpencillineart(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_GpencilModifier_update");
 
   prop = RNA_def_property(srna, "shadow_camera_size", PROP_FLOAT, PROP_NONE);
-  RNA_def_property_ui_text(prop,
-                           "Shadow Camera Size",
-                           "This value represent the \"Orthographic Scale\" of an ortho camera."
-                           "If the camera is put at the lamps position with this scale, it will "
-                           "represent the coverage of the shadow \"camera\" ");
+  RNA_def_property_ui_text(
+      prop,
+      "Shadow Camera Size",
+      "Represents the \"Orthographic Scale\" of an orthographic camera. "
+      "If the camera is positioned at the light's location with this scale, it will "
+      "represent the coverage of the shadow \"camera\"");
   RNA_def_property_ui_range(prop, 0.0f, 500.0f, 0.1f, 2);
   RNA_def_property_range(prop, 0.0f, 10000.0f);
 
@@ -4170,7 +4519,7 @@ static void rna_def_modifier_gpencilenvelope(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "EnvelopeGpencilModifier", "GpencilModifier");
   RNA_def_struct_ui_text(srna, "Envelope Modifier", "Envelope stroke effect modifier");
   RNA_def_struct_sdna(srna, "EnvelopeGpencilModifierData");
-  RNA_def_struct_ui_icon(srna, ICON_MOD_SKIN);
+  RNA_def_struct_ui_icon(srna, ICON_MOD_ENVELOPE);
 
   RNA_define_lib_overridable(true);
 
@@ -4353,6 +4702,7 @@ void RNA_def_greasepencil_modifier(BlenderRNA *brna)
   rna_def_modifier_gpencilarray(brna);
   rna_def_modifier_gpencilbuild(brna);
   rna_def_modifier_gpencilopacity(brna);
+  rna_def_modifier_gpenciloutline(brna);
   rna_def_modifier_gpencillattice(brna);
   rna_def_modifier_gpencilmirror(brna);
   rna_def_modifier_gpencilhook(brna);

@@ -8,8 +8,11 @@
 #include "node_composite_util.hh"
 
 #include "BLI_linklist.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
+#include "BLI_rect.h"
 #include "BLI_utildefines.h"
+
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -21,6 +24,7 @@
 #include "DEG_depsgraph_query.h"
 
 #include "DNA_scene_types.h"
+#include "DNA_vec_types.h"
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
@@ -80,7 +84,7 @@ static void cmp_node_image_add_pass_output(bNodeTree *ntree,
                                            const char *passname,
                                            int rres_index,
                                            eNodeSocketDatatype type,
-                                           int UNUSED(is_rlayers),
+                                           int /*is_rlayers*/,
                                            LinkNodePair *available_sockets,
                                            int *prev_index)
 {
@@ -273,8 +277,8 @@ static void cmp_node_rlayer_create_outputs_cb(void *userdata,
                                               Scene *scene,
                                               ViewLayer *view_layer,
                                               const char *name,
-                                              int UNUSED(channels),
-                                              const char *UNUSED(chanid),
+                                              int /*channels*/,
+                                              const char * /*chanid*/,
                                               eNodeSocketDatatype type)
 {
   CreateOutputUserData &data = *(CreateOutputUserData *)userdata;
@@ -397,7 +401,7 @@ namespace blender::nodes::node_composite_image_cc {
 static void cmp_node_image_update(bNodeTree *ntree, bNode *node)
 {
   /* avoid unnecessary updates, only changes to the image/image user data are of interest */
-  if (node->update & NODE_UPDATE_ID) {
+  if (node->runtime->update & NODE_UPDATE_ID) {
     cmp_node_image_verify_outputs(ntree, node, false);
   }
 
@@ -426,7 +430,7 @@ static void node_composit_free_image(bNode *node)
   MEM_freeN(node->storage);
 }
 
-static void node_composit_copy_image(bNodeTree *UNUSED(dest_ntree),
+static void node_composit_copy_image(bNodeTree * /*dst_ntree*/,
                                      bNode *dest_node,
                                      const bNode *src_node)
 {
@@ -521,7 +525,7 @@ class ImageOperation : public NodeOperation {
     GPUShader *shader = shader_manager().get(get_shader_name(identifier));
     GPU_shader_bind(shader);
 
-    const int input_unit = GPU_shader_get_texture_binding(shader, "input_tx");
+    const int input_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
     GPU_texture_bind(image_texture, input_unit);
 
     result.bind_as_image(shader, "output_img");
@@ -660,10 +664,10 @@ void register_node_type_cmp_image()
   static bNodeType ntype;
 
   cmp_node_type_base(&ntype, CMP_NODE_IMAGE, "Image", NODE_CLASS_INPUT);
-  node_type_init(&ntype, file_ns::node_composit_init_image);
+  ntype.initfunc = file_ns::node_composit_init_image;
   node_type_storage(
       &ntype, "ImageUser", file_ns::node_composit_free_image, file_ns::node_composit_copy_image);
-  node_type_update(&ntype, file_ns::cmp_node_image_update);
+  ntype.updatefunc = file_ns::cmp_node_image_update;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
   ntype.labelfunc = node_image_label;
   ntype.flag |= NODE_PREVIEW;
@@ -685,7 +689,7 @@ const char *node_cmp_rlayers_sock_to_pass(int sock_index)
   }
   const char *name = cmp_node_rlayers_out[sock_index].name;
   /* Exception for alpha, which is derived from Combined. */
-  return (STREQ(name, "Alpha")) ? RE_PASSNAME_COMBINED : name;
+  return STREQ(name, "Alpha") ? RE_PASSNAME_COMBINED : name;
 }
 
 namespace blender::nodes::node_composite_render_layer_cc {
@@ -710,8 +714,8 @@ static void node_composit_init_rlayers(const bContext *C, PointerRNA *ptr)
   }
 }
 
-static bool node_composit_poll_rlayers(bNodeType *UNUSED(ntype),
-                                       bNodeTree *ntree,
+static bool node_composit_poll_rlayers(const bNodeType * /*ntype*/,
+                                       const bNodeTree *ntree,
                                        const char **r_disabled_hint)
 {
   if (!STREQ(ntree->idname, "CompositorNodeTree")) {
@@ -749,7 +753,7 @@ static void node_composit_free_rlayers(bNode *node)
   }
 }
 
-static void node_composit_copy_rlayers(bNodeTree *UNUSED(dest_ntree),
+static void node_composit_copy_rlayers(bNodeTree * /*dst_ntree*/,
                                        bNode *dest_node,
                                        const bNode *src_node)
 {
@@ -797,8 +801,7 @@ static void node_composit_buts_viewlayers(uiLayout *layout, bContext *C, Pointer
 
   PropertyRNA *prop = RNA_struct_find_property(ptr, "layer");
   const char *layer_name;
-  if (!(RNA_property_enum_identifier(
-          C, ptr, prop, RNA_property_enum_get(ptr, prop), &layer_name))) {
+  if (!RNA_property_enum_identifier(C, ptr, prop, RNA_property_enum_get(ptr, prop), &layer_name)) {
     return;
   }
 
@@ -824,37 +827,80 @@ class RenderLayerOperation : public NodeOperation {
   {
     const int view_layer = bnode().custom1;
     GPUTexture *pass_texture = context().get_input_texture(view_layer, SCE_PASS_COMBINED);
-    const int2 size = int2(GPU_texture_width(pass_texture), GPU_texture_height(pass_texture));
 
-    /* Compute image output. */
+    execute_image(pass_texture);
+    execute_alpha(pass_texture);
+
+    /* Other output passes are not supported for now, so allocate them as invalid. */
+    for (const bNodeSocket *output : this->node()->output_sockets()) {
+      if (!STR_ELEM(output->identifier, "Image", "Alpha")) {
+        Result &unsupported_result = get_result(output->identifier);
+        if (unsupported_result.should_compute()) {
+          unsupported_result.allocate_invalid();
+          context().set_info_message("Viewport compositor setup not fully supported");
+        }
+      }
+    }
+  }
+
+  void execute_image(GPUTexture *pass_texture)
+  {
     Result &image_result = get_result("Image");
-    image_result.allocate_texture(Domain(size));
-    GPU_texture_copy(image_result.texture(), pass_texture);
+    if (!image_result.should_compute()) {
+      return;
+    }
 
-    /* Compute alpha output. */
-    Result &alpha_result = get_result("Alpha");
-    alpha_result.allocate_texture(Domain(size));
-
-    GPUShader *shader = shader_manager().get("compositor_extract_alpha_from_color");
+    GPUShader *shader = shader_manager().get("compositor_read_pass");
     GPU_shader_bind(shader);
 
-    const int input_unit = GPU_shader_get_texture_binding(shader, "input_tx");
+    /* The compositing space might be limited to a subset of the pass texture, so only read that
+     * compositing region into an appropriately sized texture. */
+    const rcti compositing_region = context().get_compositing_region();
+    const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
+    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+
+    const int input_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
     GPU_texture_bind(pass_texture, input_unit);
 
+    const int2 compositing_region_size = context().get_compositing_region_size();
+    image_result.allocate_texture(Domain(compositing_region_size));
+    image_result.bind_as_image(shader, "output_img");
+
+    compute_dispatch_threads_at_least(shader, compositing_region_size);
+
+    GPU_shader_unbind();
+    GPU_texture_unbind(pass_texture);
+    image_result.unbind_as_image();
+  }
+
+  void execute_alpha(GPUTexture *pass_texture)
+  {
+    Result &alpha_result = get_result("Alpha");
+    if (!alpha_result.should_compute()) {
+      return;
+    }
+
+    GPUShader *shader = shader_manager().get("compositor_read_pass_alpha");
+    GPU_shader_bind(shader);
+
+    /* The compositing space might be limited to a subset of the pass texture, so only read that
+     * compositing region into an appropriately sized texture. */
+    const rcti compositing_region = context().get_compositing_region();
+    const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
+    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+
+    const int input_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
+    GPU_texture_bind(pass_texture, input_unit);
+
+    const int2 compositing_region_size = context().get_compositing_region_size();
+    alpha_result.allocate_texture(Domain(compositing_region_size));
     alpha_result.bind_as_image(shader, "output_img");
 
-    compute_dispatch_threads_at_least(shader, size);
+    compute_dispatch_threads_at_least(shader, compositing_region_size);
 
     GPU_shader_unbind();
     GPU_texture_unbind(pass_texture);
     alpha_result.unbind_as_image();
-
-    /* Other output passes are not supported for now, so allocate them as invalid. */
-    for (const bNodeSocket *output : this->node()->output_sockets()) {
-      if (!STREQ(output->identifier, "Image") && !STREQ(output->identifier, "Alpha")) {
-        get_result(output->identifier).allocate_invalid();
-      }
-    }
   }
 };
 
@@ -877,11 +923,13 @@ void register_node_type_cmp_rlayers()
   ntype.initfunc_api = file_ns::node_composit_init_rlayers;
   ntype.poll = file_ns::node_composit_poll_rlayers;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.realtime_compositor_unsupported_message = N_(
+      "Render passes not supported in the Viewport compositor");
   ntype.flag |= NODE_PREVIEW;
   node_type_storage(
       &ntype, nullptr, file_ns::node_composit_free_rlayers, file_ns::node_composit_copy_rlayers);
-  node_type_update(&ntype, file_ns::cmp_node_rlayers_update);
-  node_type_init(&ntype, node_cmp_rlayers_outputs);
+  ntype.updatefunc = file_ns::cmp_node_rlayers_update;
+  ntype.initfunc = node_cmp_rlayers_outputs;
   node_type_size_preset(&ntype, NODE_SIZE_LARGE);
 
   nodeRegisterType(&ntype);

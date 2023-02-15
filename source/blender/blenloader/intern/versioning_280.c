@@ -53,6 +53,7 @@
 #include "DNA_world_types.h"
 
 #include "BKE_animsys.h"
+#include "BKE_blender.h"
 #include "BKE_brush.h"
 #include "BKE_cloth.h"
 #include "BKE_collection.h"
@@ -594,7 +595,7 @@ static void do_versions_fix_annotations(bGPdata *gpd)
 
         LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
           LISTBASE_FOREACH (bGPDstroke *, gps, &gpf->strokes) {
-            if ((gps->colorname[0] != '\0') && (STREQ(gps->colorname, palcolor->info))) {
+            if ((gps->colorname[0] != '\0') && STREQ(gps->colorname, palcolor->info)) {
               /* copy color settings */
               copy_v4_v4(gpl->color, palcolor->color);
             }
@@ -1205,7 +1206,7 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
           }
           if (collection_hidden == NULL) {
             /* This should never happen (objects are always supposed to be instantiated in a
-             * scene), but it does sometimes, see e.g. T81168.
+             * scene), but it does sometimes, see e.g. #81168.
              * Just put them in first hidden collection in those cases. */
             collection_hidden = &hidden_collection_array[0];
           }
@@ -1296,7 +1297,7 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
     }
   }
 
-  /* New workspace design */
+  /* New workspace design. */
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 1)) {
     do_version_workspaces_after_lib_link(bmain);
   }
@@ -1613,12 +1614,13 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
       if (me->totface && !me->totpoly) {
         /* temporarily switch main so that reading from
          * external CustomData works */
-        Main *gmain = G_MAIN;
-        G_MAIN = bmain;
+        Main *orig_gmain = BKE_blender_globals_main_swap(bmain);
 
         BKE_mesh_do_versions_convert_mfaces_to_mpolys(me);
 
-        G_MAIN = gmain;
+        Main *tmp_gmain = BKE_blender_globals_main_swap(orig_gmain);
+        BLI_assert(tmp_gmain == bmain);
+        UNUSED_VARS_NDEBUG(tmp_gmain);
       }
 
       /* Deprecated, only kept for conversion. */
@@ -1737,7 +1739,7 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
 /* NOTE: This version patch is intended for versions < 2.52.2,
  * but was initially introduced in 2.27 already.
  * But in 2.79 another case generating non-unique names was discovered
- * (see T55668, involving Meta strips). */
+ * (see #55668, involving Meta strips). */
 static void do_versions_seq_unique_name_all_strips(Scene *sce, ListBase *seqbasep)
 {
   for (Sequence *seq = seqbasep->first; seq != NULL; seq = seq->next) {
@@ -1780,12 +1782,6 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
   }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 1)) {
-    if (!DNA_struct_elem_find(fd->filesdna, "Lamp", "float", "bleedexp")) {
-      for (Light *la = bmain->lights.first; la; la = la->id.next) {
-        la->bleedexp = 2.5f;
-      }
-    }
-
     if (!DNA_struct_elem_find(fd->filesdna, "GPUDOFSettings", "float", "ratio")) {
       for (Camera *ca = bmain->cameras.first; ca; ca = ca->id.next) {
         ca->gpu_dof.ratio = 1.0f;
@@ -1795,8 +1791,9 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     /* MTexPoly now removed. */
     if (DNA_struct_find(fd->filesdna, "MTexPoly")) {
       for (Mesh *me = bmain->meshes.first; me; me = me->id.next) {
-        /* If we have UV's, so this file will have MTexPoly layers too! */
-        if (CustomData_has_layer(&me->ldata, CD_MLOOPUV)) {
+        /* If we have UVs, so this file will have MTexPoly layers too! */
+        if (CustomData_has_layer(&me->ldata, CD_MLOOPUV) ||
+            CustomData_has_layer(&me->ldata, CD_PROP_FLOAT2)) {
           CustomData_update_typemap(&me->pdata);
           CustomData_free_layers(&me->pdata, CD_MTEXPOLY, me->totpoly);
         }
@@ -1818,7 +1815,6 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
       for (Light *la = bmain->lights.first; la; la = la->id.next) {
         la->contact_dist = 0.2f;
         la->contact_bias = 0.03f;
-        la->contact_spread = 0.2f;
         la->contact_thickness = 0.2f;
       }
     }
@@ -1973,6 +1969,16 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 #endif
+
+  /* Files from this version included do get a valid `win->screen` pointer written for backward
+   * compatibility, however this should never be used nor needed, so clear these pointers here. */
+  if (MAIN_VERSION_ATLEAST(bmain, 280, 1)) {
+    for (wmWindowManager *wm = bmain->wm.first; wm; wm = wm->id.next) {
+      LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
+        win->screen = NULL;
+      }
+    }
+  }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 3)) {
     /* init grease pencil grids and paper */
@@ -2967,12 +2973,6 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_ATLEAST(bmain, 280, 28)) {
-    for (Mesh *mesh = bmain->meshes.first; mesh; mesh = mesh->id.next) {
-      BKE_mesh_calc_edges_loose(mesh);
-    }
-  }
-
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 29)) {
     for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
       LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
@@ -3377,7 +3377,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
               SpaceImage *sima = (SpaceImage *)sl;
               sima->flag &= ~(SI_FLAG_UNUSED_0 | SI_FLAG_UNUSED_1 | SI_FLAG_UNUSED_3 |
                               SI_FLAG_UNUSED_6 | SI_FLAG_UNUSED_7 | SI_FLAG_UNUSED_8 |
-                              SI_FLAG_UNUSED_17 | SI_CUSTOM_GRID | SI_FLAG_UNUSED_23 |
+                              SI_FLAG_UNUSED_17 | SI_FLAG_UNUSED_18 | SI_FLAG_UNUSED_23 |
                               SI_FLAG_UNUSED_24);
               break;
             }
@@ -3385,7 +3385,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
               View3D *v3d = (View3D *)sl;
               v3d->flag &= ~(V3D_LOCAL_COLLECTIONS | V3D_FLAG_UNUSED_1 | V3D_FLAG_UNUSED_10 |
                              V3D_FLAG_UNUSED_12);
-              v3d->flag2 &= ~(V3D_FLAG2_UNUSED_3 | V3D_FLAG2_UNUSED_6 | V3D_FLAG2_UNUSED_12 |
+              v3d->flag2 &= ~((1 << 3) | V3D_FLAG2_UNUSED_6 | V3D_FLAG2_UNUSED_12 |
                               V3D_FLAG2_UNUSED_13 | V3D_FLAG2_UNUSED_14 | V3D_FLAG2_UNUSED_15);
               break;
             }

@@ -241,7 +241,7 @@ bool ED_operator_animview_active(bContext *C)
 {
   if (ED_operator_areaactive(C)) {
     SpaceLink *sl = (SpaceLink *)CTX_wm_space_data(C);
-    if (sl && (ELEM(sl->spacetype, SPACE_SEQ, SPACE_ACTION, SPACE_NLA, SPACE_GRAPH))) {
+    if (sl && ELEM(sl->spacetype, SPACE_SEQ, SPACE_ACTION, SPACE_NLA, SPACE_GRAPH)) {
       return true;
     }
   }
@@ -834,8 +834,7 @@ static AZone *area_actionzone_refresh_xy(ScrArea *area, const int xy[2], const b
               az->alpha = 1.0f;
             }
             else if (mouse_sq < fadeout_sq) {
-              az->alpha = 1.0f -
-                          ((float)(mouse_sq - fadein_sq)) / ((float)(fadeout_sq - fadein_sq));
+              az->alpha = 1.0f - (float)(mouse_sq - fadein_sq) / (float)(fadeout_sq - fadein_sq);
             }
             else {
               az->alpha = 0.0f;
@@ -1584,28 +1583,28 @@ static void area_move_set_limits(wmWindow *win,
 
       /* logic here is only tested for lower edge :) */
       /* left edge */
-      if ((area->v1->editflag && area->v2->editflag)) {
+      if (area->v1->editflag && area->v2->editflag) {
         *smaller = area->v4->vec.x - size_max;
         *bigger = area->v4->vec.x - size_min;
         *use_bigger_smaller_snap = true;
         return;
       }
       /* top edge */
-      if ((area->v2->editflag && area->v3->editflag)) {
+      if (area->v2->editflag && area->v3->editflag) {
         *smaller = area->v1->vec.y + size_min;
         *bigger = area->v1->vec.y + size_max;
         *use_bigger_smaller_snap = true;
         return;
       }
       /* right edge */
-      if ((area->v3->editflag && area->v4->editflag)) {
+      if (area->v3->editflag && area->v4->editflag) {
         *smaller = area->v1->vec.x + size_min;
         *bigger = area->v1->vec.x + size_max;
         *use_bigger_smaller_snap = true;
         return;
       }
       /* lower edge */
-      if ((area->v4->editflag && area->v1->editflag)) {
+      if (area->v4->editflag && area->v1->editflag) {
         *smaller = area->v2->vec.y - size_max;
         *bigger = area->v2->vec.y - size_min;
         *use_bigger_smaller_snap = true;
@@ -2277,8 +2276,8 @@ static int area_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     }
 
     /* The factor will be close to 1.0f when near the top-left and the bottom-right corners. */
-    const float factor_v = ((float)(event->xy[1] - sad->sa1->v1->vec.y)) / (float)sad->sa1->winy;
-    const float factor_h = ((float)(event->xy[0] - sad->sa1->v1->vec.x)) / (float)sad->sa1->winx;
+    const float factor_v = (float)(event->xy[1] - sad->sa1->v1->vec.y) / (float)sad->sa1->winy;
+    const float factor_h = (float)(event->xy[0] - sad->sa1->v1->vec.x) / (float)sad->sa1->winx;
     const bool is_left = factor_v < 0.5f;
     const bool is_bottom = factor_h < 0.5f;
     const bool is_right = !is_left;
@@ -2316,11 +2315,11 @@ static int area_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     dir_axis = RNA_property_enum_get(op->ptr, prop_dir);
     if (dir_axis == SCREEN_AXIS_H) {
       RNA_property_float_set(
-          op->ptr, prop_factor, ((float)(event->xy[0] - area->v1->vec.x)) / (float)area->winx);
+          op->ptr, prop_factor, (float)(event->xy[0] - area->v1->vec.x) / (float)area->winx);
     }
     else {
       RNA_property_float_set(
-          op->ptr, prop_factor, ((float)(event->xy[1] - area->v1->vec.y)) / (float)area->winy);
+          op->ptr, prop_factor, (float)(event->xy[1] - area->v1->vec.y) / (float)area->winy);
     }
 
     if (!area_split_init(C, op)) {
@@ -2587,21 +2586,21 @@ typedef struct RegionMoveData {
 
 } RegionMoveData;
 
-static int area_max_regionsize(ScrArea *area, ARegion *scalear, AZEdge edge)
+static int area_max_regionsize(ScrArea *area, ARegion *scale_region, AZEdge edge)
 {
   int dist;
 
   /* regions in regions. */
-  if (scalear->alignment & RGN_SPLIT_PREV) {
-    const int align = RGN_ALIGN_ENUM_FROM_MASK(scalear->alignment);
+  if (scale_region->alignment & RGN_SPLIT_PREV) {
+    const int align = RGN_ALIGN_ENUM_FROM_MASK(scale_region->alignment);
 
     if (ELEM(align, RGN_ALIGN_TOP, RGN_ALIGN_BOTTOM)) {
-      ARegion *region = scalear->prev;
-      dist = region->winy + scalear->winy - U.pixelsize;
+      ARegion *region = scale_region->prev;
+      dist = region->winy + scale_region->winy - U.pixelsize;
     }
     else /* if (ELEM(align, RGN_ALIGN_LEFT, RGN_ALIGN_RIGHT)) */ {
-      ARegion *region = scalear->prev;
-      dist = region->winx + scalear->winx - U.pixelsize;
+      ARegion *region = scale_region->prev;
+      dist = region->winx + scale_region->winx - U.pixelsize;
     }
   }
   else {
@@ -2615,23 +2614,23 @@ static int area_max_regionsize(ScrArea *area, ARegion *scalear, AZEdge edge)
     /* Subtract the width of regions on opposite side
      * prevents dragging regions into other opposite regions. */
     LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-      if (region == scalear) {
+      if (region == scale_region) {
         continue;
       }
 
-      if (scalear->alignment == RGN_ALIGN_LEFT && region->alignment == RGN_ALIGN_RIGHT) {
+      if (scale_region->alignment == RGN_ALIGN_LEFT && region->alignment == RGN_ALIGN_RIGHT) {
         dist -= region->winx;
       }
-      else if (scalear->alignment == RGN_ALIGN_RIGHT && region->alignment == RGN_ALIGN_LEFT) {
+      else if (scale_region->alignment == RGN_ALIGN_RIGHT && region->alignment == RGN_ALIGN_LEFT) {
         dist -= region->winx;
       }
-      else if (scalear->alignment == RGN_ALIGN_TOP &&
+      else if (scale_region->alignment == RGN_ALIGN_TOP &&
                (region->alignment == RGN_ALIGN_BOTTOM ||
                 ELEM(
                     region->regiontype, RGN_TYPE_HEADER, RGN_TYPE_TOOL_HEADER, RGN_TYPE_FOOTER))) {
         dist -= region->winy;
       }
-      else if (scalear->alignment == RGN_ALIGN_BOTTOM &&
+      else if (scale_region->alignment == RGN_ALIGN_BOTTOM &&
                (region->alignment == RGN_ALIGN_TOP ||
                 ELEM(
                     region->regiontype, RGN_TYPE_HEADER, RGN_TYPE_TOOL_HEADER, RGN_TYPE_FOOTER))) {
@@ -2743,7 +2742,7 @@ static void region_scale_validate_size(RegionMoveData *rmd)
 static void region_scale_toggle_hidden(bContext *C, RegionMoveData *rmd)
 {
   /* hidden areas may have bad 'View2D.cur' value,
-   * correct before displaying. see T45156 */
+   * correct before displaying. see #45156 */
   if (rmd->region->flag & RGN_FLAG_HIDDEN) {
     UI_view2d_curRect_validate(&rmd->region->v2d);
   }
@@ -2952,6 +2951,11 @@ static int frame_offset_exec(bContext *C, wmOperator *op)
 
   int delta = RNA_int_get(op->ptr, "delta");
 
+  /* In order to jump from e.g. 1.5 to 1 the delta needs to be incremented by 1 since the sub-frame
+   * is always zeroed. Otherwise it would jump to 0. */
+  if (delta < 0 && scene->r.subframe > 0) {
+    delta += 1;
+  }
   scene->r.cfra += delta;
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
   scene->r.subframe = 0.0f;
@@ -3063,7 +3067,7 @@ static int keyframe_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  float cfra = (float)(scene->r.cfra);
+  const float cfra = BKE_scene_frame_get(scene);
 
   /* Initialize binary-tree-list for getting keyframes. */
   struct AnimKeylist *keylist = ED_keylist_create();
@@ -3097,23 +3101,26 @@ static int keyframe_jump_exec(bContext *C, wmOperator *op)
 
   /* find matching keyframe in the right direction */
   const ActKeyColumn *ak;
+
   if (next) {
     ak = ED_keylist_find_next(keylist, cfra);
-  }
-  else {
-    ak = ED_keylist_find_prev(keylist, cfra);
+    while ((ak != NULL) && (done == false)) {
+      if (cfra < ak->cfra) {
+        BKE_scene_frame_set(scene, ak->cfra);
+        done = true;
+      }
+      else {
+        ak = ak->next;
+      }
+    }
   }
 
-  while ((ak != NULL) && (done == false)) {
-    if (scene->r.cfra != (int)ak->cfra) {
-      /* this changes the frame, so set the frame and we're done */
-      scene->r.cfra = (int)ak->cfra;
-      done = true;
-    }
-    else {
-      /* take another step... */
-      if (next) {
-        ak = ak->next;
+  else {
+    ak = ED_keylist_find_prev(keylist, cfra);
+    while ((ak != NULL) && (done == false)) {
+      if (cfra > ak->cfra) {
+        BKE_scene_frame_set(scene, ak->cfra);
+        done = true;
       }
       else {
         ak = ak->prev;
@@ -3939,7 +3946,7 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
       rv3d->viewlock_quad = RV3D_VIEWLOCK_INIT;
       rv3d->viewlock = 0;
 
-      /* FIXME: This fixes missing update to workbench TAA. (see T76216)
+      /* FIXME: This fixes missing update to workbench TAA. (see #76216)
        * However, it would be nice if the tagging should be done in a more conventional way. */
       rv3d->rflag |= RV3D_GPULIGHT_UPDATE;
 
@@ -3981,7 +3988,7 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
 
       /* run ED_view3d_lock() so the correct 'rv3d->viewquat' is set,
        * otherwise when restoring rv3d->localvd the 'viewquat' won't
-       * match the 'view', set on entering localview See: T26315,
+       * match the 'view', set on entering localview See: #26315,
        *
        * We could avoid manipulating rv3d->localvd here if exiting
        * localview with a 4-split would assign these view locks */
@@ -4503,7 +4510,7 @@ static void screen_animation_region_tag_redraw(
 {
   /* Do follow time here if editor type supports it */
   if ((redraws & TIME_FOLLOW) &&
-      (screen_animation_region_supports_time_follow(area->spacetype, region->regiontype))) {
+      screen_animation_region_supports_time_follow(area->spacetype, region->regiontype)) {
     float w = BLI_rctf_size_x(&region->v2d.cur);
     if (scene->r.cfra < region->v2d.cur.xmin) {
       region->v2d.cur.xmax = scene->r.cfra;
@@ -4842,11 +4849,11 @@ int ED_screen_animation_play(bContext *C, int sync, int mode)
 
 static int screen_animation_play_exec(bContext *C, wmOperator *op)
 {
-  int mode = (RNA_boolean_get(op->ptr, "reverse")) ? -1 : 1;
+  int mode = RNA_boolean_get(op->ptr, "reverse") ? -1 : 1;
   int sync = -1;
 
   if (RNA_struct_property_is_set(op->ptr, "sync")) {
-    sync = (RNA_boolean_get(op->ptr, "sync"));
+    sync = RNA_boolean_get(op->ptr, "sync");
   }
 
   return ED_screen_animation_play(C, sync, mode);
@@ -5742,7 +5749,7 @@ static void keymap_modal_set(wmKeyConfig *keyconf)
 static bool blend_file_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   if (drag->type == WM_DRAG_PATH) {
-    if (ELEM(drag->icon, ICON_FILE_BLEND, ICON_BLENDER)) {
+    if (ELEM(drag->icon, ICON_FILE_BLEND, ICON_FILE_BACKUP, ICON_BLENDER)) {
       return true;
     }
   }

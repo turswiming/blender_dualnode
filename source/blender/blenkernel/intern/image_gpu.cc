@@ -111,7 +111,8 @@ static GPUTexture *gpu_texture_create_tile_mapping(Image *ima, const int multivi
     tile_info[3] = tile_runtime->tilearray_size[1] / array_h;
   }
 
-  GPUTexture *tex = GPU_texture_create_1d_array(ima->id.name + 2, width, 2, 1, GPU_RGBA32F, data);
+  GPUTexture *tex = GPU_texture_create_1d_array_ex(
+      ima->id.name + 2, width, 2, 1, GPU_RGBA32F, GPU_TEXTURE_USAGE_SHADER_READ, data);
   GPU_texture_mipmap_mode(tex, false, false);
 
   MEM_freeN(data);
@@ -263,7 +264,7 @@ static GPUTexture **get_image_gpu_texture_ptr(Image *ima,
                                               eGPUTextureTarget textarget,
                                               const int multiview_eye)
 {
-  const bool in_range = (textarget >= 0) && (textarget < TEXTARGET_COUNT);
+  const bool in_range = (int(textarget) >= 0) && (textarget < TEXTARGET_COUNT);
   BLI_assert(in_range);
   BLI_assert(ELEM(multiview_eye, 0, 1));
 
@@ -551,7 +552,7 @@ void BKE_image_free_anim_gputextures(Main *bmain)
 void BKE_image_free_old_gputextures(Main *bmain)
 {
   static int lasttime = 0;
-  int ctime = (int)PIL_check_seconds_timer();
+  int ctime = int(PIL_check_seconds_timer());
 
   /*
    * Run garbage collector once for every collecting period of time
@@ -602,8 +603,8 @@ static ImBuf *update_do_scale(uchar *rect,
                               int full_h)
 {
   /* Partial update with scaling. */
-  float xratio = limit_w / (float)full_w;
-  float yratio = limit_h / (float)full_h;
+  float xratio = limit_w / float(full_w);
+  float yratio = limit_h / float(full_h);
 
   int part_w = *w, part_h = *h;
 
@@ -611,8 +612,8 @@ static ImBuf *update_do_scale(uchar *rect,
    * losing 1 pixel due to rounding errors in x,y. */
   *x *= xratio;
   *y *= yratio;
-  *w = (int)ceil(xratio * (*w));
-  *h = (int)ceil(yratio * (*h));
+  *w = int(ceil(xratio * (*w)));
+  *h = int(ceil(yratio * (*h)));
 
   /* ...but take back if we are over the limit! */
   if (*x + *w > limit_w) {

@@ -23,7 +23,7 @@
  *
  * \note Regarding manifold edge stepping: #BM_vert_is_edge_pair_manifold usage.
  * Logic to skip a chain of vertices is not applied at boundaries because it gives
- * strange behavior from a user perspective especially with boundary quads, see: T52701
+ * strange behavior from a user perspective especially with boundary quads, see: #52701
  *
  * Restrict walking over a vertex chain to cases where the edges share the same faces.
  * This is more typical of what a user would consider a vertex chain.
@@ -228,7 +228,7 @@ static LinkNode *mesh_calc_path_region_elem(BMesh *bm,
             /* Walk along the chain, fill in values until we reach a vertex with 3+ edges. */
             {
               BMEdge *e_chain = e;
-              while (BM_vert_is_edge_pair_manifold(v_b) && ((depths[side][v_b_index] == -1))) {
+              while (BM_vert_is_edge_pair_manifold(v_b) && (depths[side][v_b_index] == -1)) {
                 depths[side][v_b_index] = pass;
 
                 BMEdge *e_chain_next = BM_DISK_EDGE_NEXT(e_chain, v_b);

@@ -62,7 +62,7 @@ bool BM_disk_dissolve(BMesh *bm, BMVert *v)
     e = v->e;
     do {
       e = bmesh_disk_edge_next(e, v);
-      if (!(BM_edge_share_face_check(e, v->e))) {
+      if (!BM_edge_share_face_check(e, v->e)) {
         keepedge = e;
         baseedge = v->e;
         break;
@@ -192,7 +192,7 @@ BMFace *BM_face_split(BMesh *bm,
   BLI_assert(!BM_loop_is_adjacent(l_a, l_b));
 
   /* could be an assert */
-  if (UNLIKELY(BM_loop_is_adjacent(l_a, l_b)) || UNLIKELY((f != l_a->f || f != l_b->f))) {
+  if (UNLIKELY(BM_loop_is_adjacent(l_a, l_b)) || UNLIKELY(f != l_a->f || f != l_b->f)) {
     if (r_l) {
       *r_l = NULL;
     }
@@ -414,7 +414,7 @@ BMEdge *BM_vert_collapse_edge(BMesh *bm,
   /* Collapse between 2 edges */
 
   /* in this case we want to keep all faces and not join them,
-   * rather just get rid of the vertex - see bug T28645. */
+   * rather just get rid of the vertex - see bug #28645. */
   BMVert *tv = BM_edge_other_vert(e_kill, v_kill);
   if (tv) {
     BMEdge *e2 = bmesh_disk_edge_next(e_kill, v_kill);

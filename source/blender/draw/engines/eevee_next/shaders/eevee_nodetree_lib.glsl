@@ -277,7 +277,7 @@ void output_aov(vec4 color, float value, uint hash)
 /* Return new shading normal. */
 vec3 displacement_bump()
 {
-#  ifdef GPU_FRAGMENT_SHADER
+#  if defined(GPU_FRAGMENT_SHADER) && !defined(MAT_GEOM_CURVES)
   vec2 dHd;
   dF_branch(dot(nodetree_displacement(), g_data.N + dF_impl(g_data.N)), dHd);
 
@@ -344,8 +344,8 @@ vec3 coordinate_screen(vec3 P)
   }
   else {
     /* TODO(fclem): Actual camera transform. */
-    window.xy = project_point(ViewProjectionMatrix, P).xy * 0.5 + 0.5;
-    window.xy = window.xy * CameraTexCoFactors.xy + CameraTexCoFactors.zw;
+    window.xy = project_point(ProjectionMatrix, transform_point(ViewMatrix, P)).xy * 0.5 + 0.5;
+    window.xy = window.xy * camera_buf.uv_scale + camera_buf.uv_bias;
   }
   return window;
 }

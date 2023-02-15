@@ -134,9 +134,17 @@ typedef struct Main {
 
   /**
    * When linking, disallow creation of new data-blocks.
-   * Make sure we don't do this by accident, see T76738.
+   * Make sure we don't do this by accident, see #76738.
    */
   bool is_locked_for_linking;
+
+  /**
+   * True if this main is the 'GMAIN' of current Blender.
+   *
+   * \note There should always be only one global main, all others generated temporarily for
+   * various data management process must have this property set to false..
+   */
+  bool is_global_main;
 
   BlendThumbnail *blen_thumb;
 
@@ -202,6 +210,12 @@ typedef struct Main {
   struct MainLock *lock;
 } Main;
 
+/**
+ * Create a new Main data-base.
+ *
+ * \note Always generate a non-global Main, use #BKE_blender_globals_main_replace to put a newly
+ * created one in `G_MAIN`.
+ */
 struct Main *BKE_main_new(void);
 void BKE_main_free(struct Main *mainvar);
 
@@ -411,7 +425,7 @@ int set_listbasepointers(struct Main *main, struct ListBase *lb[]);
 /**
  * The size of thumbnails (optionally) stored in the `.blend` files header.
  *
- * NOTE(@campbellbarton): This is kept small as it's stored uncompressed in the `.blend` file,
+ * NOTE(@ideasman42): This is kept small as it's stored uncompressed in the `.blend` file,
  * where a larger size would increase the size of every `.blend` file unreasonably.
  * If we wanted to increase the size, we'd want to use compression (JPEG or similar).
  */

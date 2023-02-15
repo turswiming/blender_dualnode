@@ -65,10 +65,7 @@ static void metaball_init_data(ID *id)
   MEMCPY_STRUCT_AFTER(metaball, DNA_struct_default_get(MetaBall), id);
 }
 
-static void metaball_copy_data(Main *UNUSED(bmain),
-                               ID *id_dst,
-                               const ID *id_src,
-                               const int UNUSED(flag))
+static void metaball_copy_data(Main * /*bmain*/, ID *id_dst, const ID *id_src, const int /*flag*/)
 {
   MetaBall *metaball_dst = (MetaBall *)id_dst;
   const MetaBall *metaball_src = (const MetaBall *)id_src;
@@ -88,9 +85,6 @@ static void metaball_free_data(ID *id)
   MEM_SAFE_FREE(metaball->mat);
 
   BLI_freelistN(&metaball->elems);
-  if (metaball->disp.first) {
-    BKE_displist_free(&metaball->disp);
-  }
 }
 
 static void metaball_foreach_id(ID *id, LibraryForeachIDData *data)
@@ -106,7 +100,6 @@ static void metaball_blend_write(BlendWriter *writer, ID *id, const void *id_add
   MetaBall *mb = (MetaBall *)id;
 
   /* Clean up, important in undo case to reduce false detection of changed datablocks. */
-  BLI_listbase_clear(&mb->disp);
   mb->editelems = nullptr;
   /* Must always be cleared (meta's don't have their own edit-data). */
   mb->needs_flush_to_id = 0;
@@ -137,7 +130,6 @@ static void metaball_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_list(reader, &(mb->elems));
 
-  BLI_listbase_clear(&mb->disp);
   mb->editelems = nullptr;
   /* Must always be cleared (meta's don't have their own edit-data). */
   mb->needs_flush_to_id = 0;
@@ -164,33 +156,33 @@ static void metaball_blend_read_expand(BlendExpander *expander, ID *id)
 }
 
 IDTypeInfo IDType_ID_MB = {
-    /* id_code */ ID_MB,
-    /* id_filter */ FILTER_ID_MB,
-    /* main_listbase_index */ INDEX_ID_MB,
-    /* struct_size */ sizeof(MetaBall),
-    /* name */ "Metaball",
-    /* name_plural */ "metaballs",
-    /* translation_context */ BLT_I18NCONTEXT_ID_METABALL,
-    /* flags */ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /* asset_type_info */ nullptr,
+    /*id_code*/ ID_MB,
+    /*id_filter*/ FILTER_ID_MB,
+    /*main_listbase_index*/ INDEX_ID_MB,
+    /*struct_size*/ sizeof(MetaBall),
+    /*name*/ "Metaball",
+    /*name_plural*/ "metaballs",
+    /*translation_context*/ BLT_I18NCONTEXT_ID_METABALL,
+    /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    /*asset_type_info*/ nullptr,
 
-    /* init_data */ metaball_init_data,
-    /* copy_data */ metaball_copy_data,
-    /* free_data */ metaball_free_data,
-    /* make_local */ nullptr,
-    /* foreach_id */ metaball_foreach_id,
-    /* foreach_cache */ nullptr,
-    /* foreach_path */ nullptr,
-    /* owner_pointer_get */ nullptr,
+    /*init_data*/ metaball_init_data,
+    /*copy_data*/ metaball_copy_data,
+    /*free_data*/ metaball_free_data,
+    /*make_local*/ nullptr,
+    /*foreach_id*/ metaball_foreach_id,
+    /*foreach_cache*/ nullptr,
+    /*foreach_path*/ nullptr,
+    /*owner_pointer_get*/ nullptr,
 
-    /* blend_write */ metaball_blend_write,
-    /* blend_read_data */ metaball_blend_read_data,
-    /* blend_read_lib */ metaball_blend_read_lib,
-    /* blend_read_expand */ metaball_blend_read_expand,
+    /*blend_write*/ metaball_blend_write,
+    /*blend_read_data*/ metaball_blend_read_data,
+    /*blend_read_lib*/ metaball_blend_read_lib,
+    /*blend_read_expand*/ metaball_blend_read_expand,
 
-    /* blend_read_undo_preserve */ nullptr,
+    /*blend_read_undo_preserve*/ nullptr,
 
-    /* lib_override_apply_post */ nullptr,
+    /*lib_override_apply_post*/ nullptr,
 };
 
 /* Functions */
@@ -285,7 +277,7 @@ bool BKE_mball_is_basis(const Object *ob)
   /* Meta-Ball Basis Notes from Blender-2.5x
    * =======================================
    *
-   * NOTE(@campbellbarton): This is a can of worms.
+   * NOTE(@ideasman42): This is a can of worms.
    *
    * This really needs a rewrite/refactor its totally broken in anything other than basic cases
    * Multiple Scenes + Set Scenes & mixing meta-ball basis _should_ work but fails to update the
@@ -300,7 +292,7 @@ bool BKE_mball_is_basis(const Object *ob)
 
   /* Just a quick test. */
   const int len = strlen(ob->id.name);
-  return (!isdigit(ob->id.name[len - 1]));
+  return !isdigit(ob->id.name[len - 1]);
 }
 
 bool BKE_mball_is_same_group(const Object *ob1, const Object *ob2)
@@ -493,7 +485,7 @@ bool BKE_mball_minmax_ex(
         copy_v3_v3(centroid, &ml->x);
       }
 
-      /* TODO(@campbellbarton): non circle shapes cubes etc, probably nobody notices. */
+      /* TODO(@ideasman42): non circle shapes cubes etc, probably nobody notices. */
       for (int i = -1; i != 3; i += 2) {
         copy_v3_v3(vec, centroid);
         add_v3_fl(vec, scale_mb * i);
@@ -529,7 +521,7 @@ bool BKE_mball_center_median(const MetaBall *mb, float r_cent[3])
   }
 
   if (total) {
-    mul_v3_fl(r_cent, 1.0f / (float)total);
+    mul_v3_fl(r_cent, 1.0f / float(total));
   }
 
   return (total != 0);

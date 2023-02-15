@@ -79,7 +79,7 @@ PartDeflect *BKE_partdeflect_new(int type)
   pd->pdef_sbift = 0.2f;
   pd->pdef_sboft = 0.02f;
   pd->pdef_cfrict = 5.0f;
-  pd->seed = ((uint)(ceil(PIL_check_seconds_timer())) + 1) % 128;
+  pd->seed = ((uint)ceil(PIL_check_seconds_timer()) + 1) % 128;
   pd->f_strength = 1.0f;
   pd->f_damp = 1.0f;
 
@@ -154,8 +154,8 @@ static void precalculate_effector(struct Depsgraph *depsgraph, EffectorCache *ef
       if (eff->ob->runtime.curve_cache->anim_path_accum_length) {
         BKE_where_on_path(
             eff->ob, 0.0, eff->guide_loc, eff->guide_dir, NULL, &eff->guide_radius, NULL);
-        mul_m4_v3(eff->ob->obmat, eff->guide_loc);
-        mul_mat3_m4_v3(eff->ob->obmat, eff->guide_dir);
+        mul_m4_v3(eff->ob->object_to_world, eff->guide_loc);
+        mul_mat3_m4_v3(eff->ob->object_to_world, eff->guide_dir);
       }
     }
   }
@@ -644,13 +644,13 @@ bool closest_point_on_surface(SurfaceModifierData *surmd,
                               float surface_nor[3],
                               float surface_vel[3])
 {
+  BVHTreeFromMesh *bvhtree = surmd->runtime.bvhtree;
   BVHTreeNearest nearest;
 
   nearest.index = -1;
   nearest.dist_sq = FLT_MAX;
 
-  BLI_bvhtree_find_nearest(
-      surmd->bvhtree->tree, co, &nearest, surmd->bvhtree->nearest_callback, surmd->bvhtree);
+  BLI_bvhtree_find_nearest(bvhtree->tree, co, &nearest, bvhtree->nearest_callback, bvhtree);
 
   if (nearest.index != -1) {
     copy_v3_v3(surface_co, nearest.co);
@@ -660,12 +660,12 @@ bool closest_point_on_surface(SurfaceModifierData *surmd,
     }
 
     if (surface_vel) {
-      const MLoop *mloop = surmd->bvhtree->loop;
-      const MLoopTri *lt = &surmd->bvhtree->looptri[nearest.index];
+      const MLoop *mloop = bvhtree->loop;
+      const MLoopTri *lt = &bvhtree->looptri[nearest.index];
 
-      copy_v3_v3(surface_vel, surmd->v[mloop[lt->tri[0]].v].co);
-      add_v3_v3(surface_vel, surmd->v[mloop[lt->tri[1]].v].co);
-      add_v3_v3(surface_vel, surmd->v[mloop[lt->tri[2]].v].co);
+      copy_v3_v3(surface_vel, surmd->runtime.vert_velocities[mloop[lt->tri[0]].v]);
+      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[mloop[lt->tri[1]].v]);
+      add_v3_v3(surface_vel, surmd->runtime.vert_velocities[mloop[lt->tri[2]].v]);
 
       mul_v3_fl(surface_vel, (1.0f / 3.0f));
     }
@@ -683,8 +683,9 @@ bool get_effector_data(EffectorCache *eff,
   bool ret = false;
 
   /* In case surface object is in Edit mode when loading the .blend,
-   * surface modifier is never executed and bvhtree never built, see T48415. */
-  if (eff->pd && eff->pd->shape == PFIELD_SHAPE_SURFACE && eff->surmd && eff->surmd->bvhtree) {
+   * surface modifier is never executed and bvhtree never built, see #48415. */
+  if (eff->pd && eff->pd->shape == PFIELD_SHAPE_SURFACE && eff->surmd &&
+      eff->surmd->runtime.bvhtree) {
     /* closest point in the object surface is an effector */
     float vec[3];
 
@@ -701,14 +702,14 @@ bool get_effector_data(EffectorCache *eff,
   else if (eff->pd && eff->pd->shape == PFIELD_SHAPE_POINTS) {
     /* TODO: hair and points object support */
     const Mesh *me_eval = BKE_object_get_evaluated_mesh(eff->ob);
-    const MVert *verts = BKE_mesh_verts(me_eval);
+    const float(*positions)[3] = BKE_mesh_vert_positions(me_eval);
     const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(me_eval);
     if (me_eval != NULL) {
-      copy_v3_v3(efd->loc, verts[*efd->index].co);
+      copy_v3_v3(efd->loc, positions[*efd->index]);
       copy_v3_v3(efd->nor, vert_normals[*efd->index]);
 
-      mul_m4_v3(eff->ob->obmat, efd->loc);
-      mul_mat3_m4_v3(eff->ob->obmat, efd->nor);
+      mul_m4_v3(eff->ob->object_to_world, efd->loc);
+      mul_mat3_m4_v3(eff->ob->object_to_world, efd->nor);
 
       normalize_v3(efd->nor);
 
@@ -760,23 +761,23 @@ bool get_effector_data(EffectorCache *eff,
     const Object *ob = eff->ob;
 
     /* Use z-axis as normal. */
-    normalize_v3_v3(efd->nor, ob->obmat[2]);
+    normalize_v3_v3(efd->nor, ob->object_to_world[2]);
 
     if (eff->pd && ELEM(eff->pd->shape, PFIELD_SHAPE_PLANE, PFIELD_SHAPE_LINE)) {
       float temp[3], translate[3];
-      sub_v3_v3v3(temp, point->loc, ob->obmat[3]);
+      sub_v3_v3v3(temp, point->loc, ob->object_to_world[3]);
       project_v3_v3v3(translate, temp, efd->nor);
 
       /* for vortex the shape chooses between old / new force */
       if (eff->pd->forcefield == PFIELD_VORTEX || eff->pd->shape == PFIELD_SHAPE_LINE) {
-        add_v3_v3v3(efd->loc, ob->obmat[3], translate);
+        add_v3_v3v3(efd->loc, ob->object_to_world[3], translate);
       }
-      else { /* normally efd->loc is closest point on effector xy-plane */
+      else { /* Normally `efd->loc` is closest point on effector XY-plane. */
         sub_v3_v3v3(efd->loc, point->loc, translate);
       }
     }
     else {
-      copy_v3_v3(efd->loc, ob->obmat[3]);
+      copy_v3_v3(efd->loc, ob->object_to_world[3]);
     }
 
     zero_v3(efd->vel);
@@ -801,8 +802,8 @@ bool get_effector_data(EffectorCache *eff,
     }
     else {
       /* for some effectors we need the object center every time */
-      sub_v3_v3v3(efd->vec_to_point2, point->loc, eff->ob->obmat[3]);
-      normalize_v3_v3(efd->nor2, eff->ob->obmat[2]);
+      sub_v3_v3v3(efd->vec_to_point2, point->loc, eff->ob->object_to_world[3]);
+      normalize_v3_v3(efd->nor2, eff->ob->object_to_world[2]);
     }
   }
 
@@ -875,7 +876,7 @@ static void do_texture_effector(EffectorCache *eff,
   copy_v3_v3(tex_co, point->loc);
 
   if (eff->pd->flag & PFIELD_TEX_OBJECT) {
-    mul_m4_v3(eff->ob->imat, tex_co);
+    mul_m4_v3(eff->ob->world_to_object, tex_co);
 
     if (eff->pd->flag & PFIELD_TEX_2D) {
       tex_co[2] = 0.0f;
@@ -1121,34 +1122,34 @@ void BKE_effectors_apply(ListBase *effectors,
                          float *wind_force,
                          float *impulse)
 {
-  /* WARNING(@campbellbarton): historic comment?
+  /* WARNING(@ideasman42): historic comment?
    * Many of these parameters don't exist!
    *
-   * scene        = scene where it runs in, for time and stuff.
-   * lb           = listbase with objects that take part in effecting.
-   * opco         = global coord, as input.
-   * force        = accumulator for force.
-   * wind_force   = accumulator for force only acting perpendicular to a surface.
-   * speed        = actual current speed which can be altered.
-   * cur_time     = "external" time in frames, is constant for static particles.
-   * loc_time     = "local" time in frames, range <0-1> for the lifetime of particle.
-   * par_layer    = layer the caller is in.
-   * flags        = only used for soft-body wind now.
-   * guide        = old speed of particle.
+   * `scene`      = scene where it runs in, for time and stuff.
+   * `lb`         = listbase with objects that take part in effecting.
+   * `opco`       = global coord, as input.
+   * `force`      = accumulator for force.
+   * `wind_force` = accumulator for force only acting perpendicular to a surface.
+   * `speed`      = actual current speed which can be altered.
+   * `cur_time`   = "external" time in frames, is constant for static particles.
+   * `loc_time`   = "local" time in frames, range <0-1> for the lifetime of particle.
+   * `par_layer`  = layer the caller is in.
+   * `flags`      = only used for soft-body wind now.
+   * `guide`      = old speed of particle.
    */
 
   /*
    * Modifies the force on a particle according to its
    * relation with the effector object
    * Different kind of effectors include:
-   *     Force-fields: Gravity-like attractor
-   *     (force power is related to the inverse of distance to the power of a falloff value)
-   *     Vortex fields: swirling effectors
-   *     (particles rotate around Z-axis of the object. otherwise, same relation as)
-   *     (Force-fields, but this is not done through a force/acceleration)
-   *     Guide: particles on a path
-   *     (particles are guided along a curve bezier or old nurbs)
-   *     (is independent of other effectors)
+   * - Force-fields: Gravity-like attractor
+   *   (force power is related to the inverse of distance to the power of a falloff value)
+   * - Vortex fields: swirling effectors
+   *   (particles rotate around Z-axis of the object. otherwise, same relation as)
+   *   (Force-fields, but this is not done through a force/acceleration)
+   * - Guide: particles on a path
+   *   (particles are guided along a curve bezier or old nurbs)
+   *   (is independent of other effectors)
    */
   EffectorCache *eff;
   EffectorData efd;

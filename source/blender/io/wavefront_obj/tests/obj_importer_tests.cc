@@ -8,13 +8,14 @@
 #include "BKE_curve.h"
 #include "BKE_customdata.h"
 #include "BKE_main.h"
+#include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
 
 #include "BLI_listbase.h"
 #include "BLI_math_base.hh"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "BLO_readfile.h"
 
@@ -22,6 +23,7 @@
 #include "DEG_depsgraph_query.h"
 
 #include "DNA_curve_types.h"
+#include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_scene_types.h"
@@ -41,10 +43,24 @@ struct Expectation {
   float3 normal_first;
   float2 uv_first;
   float4 color_first = {-1, -1, -1, -1};
+  std::string first_mat;
 };
 
 class obj_importer_test : public BlendfileLoadingBaseTest {
  public:
+  obj_importer_test()
+  {
+    params.global_scale = 1.0f;
+    params.clamp_size = 0;
+    params.forward_axis = IO_AXIS_NEGATIVE_Z;
+    params.up_axis = IO_AXIS_Y;
+    params.validate_meshes = true;
+    params.use_split_objects = true;
+    params.use_split_groups = false;
+    params.import_vertex_groups = false;
+    params.relative_paths = true;
+    params.clear_selection = true;
+  }
   void import_and_check(const char *path,
                         const Expectation *expect,
                         size_t expect_count,
@@ -55,15 +71,6 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
       ADD_FAILURE();
       return;
     }
-
-    OBJImportParams params;
-    params.clamp_size = 0;
-    params.forward_axis = IO_AXIS_NEGATIVE_Z;
-    params.up_axis = IO_AXIS_Y;
-    params.validate_meshes = true;
-    params.import_vertex_groups = false;
-    params.relative_paths = true;
-    params.clear_selection = true;
 
     std::string obj_path = blender::tests::flags_test_asset_dir() + "/io_tests/obj/" + path;
     strncpy(params.filepath, obj_path.c_str(), FILE_MAX - 1);
@@ -77,6 +84,32 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
     deg_iter_settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
                               DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET | DEG_ITER_OBJECT_FLAG_VISIBLE |
                               DEG_ITER_OBJECT_FLAG_DUPLI;
+
+    constexpr bool print_result_scene = false;
+    if (print_result_scene) {
+      printf("Result was:\n");
+      DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, object) {
+        printf("  {\"%s\", ", object->id.name);
+        if (object->type == OB_MESH) {
+          Mesh *mesh = BKE_object_get_evaluated_mesh(object);
+          const Span<float3> positions = mesh->vert_positions();
+          printf("OB_MESH, %i, %i, %i, %i, float3(%g, %g, %g), float3(%g, %g, %g)",
+                 mesh->totvert,
+                 mesh->totedge,
+                 mesh->totpoly,
+                 mesh->totloop,
+                 positions.first().x,
+                 positions.first().y,
+                 positions.first().z,
+                 positions.last().x,
+                 positions.last().y,
+                 positions.last().z);
+        }
+        printf("},\n");
+      }
+      DEG_OBJECT_ITER_END;
+    }
+
     size_t object_index = 0;
     DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, object) {
       if (object_index >= expect_count) {
@@ -87,7 +120,7 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
       ASSERT_STREQ(object->id.name, exp.name.c_str());
       EXPECT_EQ(object->type, exp.type);
       EXPECT_V3_NEAR(object->loc, float3(0, 0, 0), 0.0001f);
-      if (strcmp(object->id.name, "OBCube") != 0) {
+      if (!STREQ(object->id.name, "OBCube")) {
         EXPECT_V3_NEAR(object->rot, float3(M_PI_2, 0, 0), 0.0001f);
       }
       EXPECT_V3_NEAR(object->scale, float3(1, 1, 1), 0.0001f);
@@ -97,19 +130,18 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
         EXPECT_EQ(mesh->totedge, exp.mesh_totedge_or_curve_endp);
         EXPECT_EQ(mesh->totpoly, exp.mesh_totpoly_or_curve_order);
         EXPECT_EQ(mesh->totloop, exp.mesh_totloop_or_curve_cyclic);
-        const Span<MVert> verts = mesh->verts();
-        EXPECT_V3_NEAR(verts.first().co, exp.vert_first, 0.0001f);
-        EXPECT_V3_NEAR(verts.last().co, exp.vert_last, 0.0001f);
-        const float3 *lnors = (const float3 *)(CustomData_get_layer(&mesh->ldata, CD_NORMAL));
+        const Span<float3> positions = mesh->vert_positions();
+        EXPECT_V3_NEAR(positions.first(), exp.vert_first, 0.0001f);
+        EXPECT_V3_NEAR(positions.last(), exp.vert_last, 0.0001f);
+        const float3 *lnors = (const float3 *)CustomData_get_layer(&mesh->ldata, CD_NORMAL);
         float3 normal_first = lnors != nullptr ? lnors[0] : float3(0, 0, 0);
         EXPECT_V3_NEAR(normal_first, exp.normal_first, 0.0001f);
-        const MLoopUV *mloopuv = static_cast<const MLoopUV *>(
-            CustomData_get_layer(&mesh->ldata, CD_MLOOPUV));
-        float2 uv_first = mloopuv ? float2(mloopuv->uv) : float2(0, 0);
+        const float2 *mloopuv = static_cast<const float2 *>(
+            CustomData_get_layer(&mesh->ldata, CD_PROP_FLOAT2));
+        float2 uv_first = mloopuv ? *mloopuv : float2(0, 0);
         EXPECT_V2_NEAR(uv_first, exp.uv_first, 0.0001f);
         if (exp.color_first.x >= 0) {
-          const float4 *colors = (const float4 *)(CustomData_get_layer(&mesh->vdata,
-                                                                       CD_PROP_COLOR));
+          const float4 *colors = (const float4 *)CustomData_get_layer(&mesh->vdata, CD_PROP_COLOR);
           EXPECT_TRUE(colors != nullptr);
           EXPECT_V4_NEAR(colors[0], exp.color_first, 0.0001f);
         }
@@ -133,6 +165,10 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
         // int cyclic = (nurb->flagu & CU_NURB_CYCLIC) ? 1 : 0;
         // EXPECT_EQ(cyclic, exp.mesh_totloop_or_curve_cyclic);
       }
+      if (!exp.first_mat.empty()) {
+        Material *mat = BKE_object_material_get(object, 1);
+        ASSERT_STREQ(mat ? mat->id.name : "<null>", exp.first_mat.c_str());
+      }
       ++object_index;
     }
     DEG_OBJECT_ITER_END;
@@ -145,6 +181,8 @@ class obj_importer_test : public BlendfileLoadingBaseTest {
     const int ima_count = BLI_listbase_count(&bfile->main->images);
     EXPECT_EQ(ima_count, expect_image_count);
   }
+
+  OBJImportParams params;
 };
 
 TEST_F(obj_importer_test, import_cube)
@@ -310,7 +348,42 @@ TEST_F(obj_importer_test, import_materials)
 {
   Expectation expect[] = {
       {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
-      {"OBmaterials", OB_MESH, 8, 12, 6, 24, float3(-1, -1, 1), float3(1, -1, -1)},
+      {"OBmaterials",
+       OB_MESH,
+       8,
+       12,
+       6,
+       24,
+       float3(-1, -1, 1),
+       float3(1, -1, -1),
+       float3(0),
+       float2(0),
+       float4(-1),
+       "MAno_textures_red"},
+      {"OBObjMtlAfter",
+       OB_MESH,
+       3,
+       3,
+       1,
+       3,
+       float3(3, 0, 0),
+       float3(5, 0, 0),
+       float3(0),
+       float2(0),
+       float4(-1),
+       "MAno_textures_red"},
+      {"OBObjMtlBefore",
+       OB_MESH,
+       3,
+       3,
+       1,
+       3,
+       float3(6, 0, 0),
+       float3(8, 0, 0),
+       float3(0),
+       float2(0),
+       float4(-1),
+       "MAClay"},
   };
   import_and_check("materials.obj", expect, std::size(expect), 4, 8);
 }
@@ -328,7 +401,9 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        float3(1, 1, -1),
        float3(-1, -1, 1),
        float3(0, 1, 0),
-       float2(0.9935f, 0.0020f)},
+       float2(0.9935f, 0.0020f),
+       float4(-1),
+       "MAMat_BaseRoughEmissNormal10"},
       {"OBCubeTexMul",
        OB_MESH,
        8,
@@ -338,7 +413,9 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        float3(4, -2, -1),
        float3(2, -4, 1),
        float3(0, 1, 0),
-       float2(0.9935f, 0.0020f)},
+       float2(0.9935f, 0.0020f),
+       float4(-1),
+       "MAMat_BaseMul"},
       {"OBCubeTiledTex",
        OB_MESH,
        8,
@@ -348,7 +425,9 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        float3(4, 1, -1),
        float3(2, -1, 1),
        float3(0, 1, 0),
-       float2(0.9935f, 0.0020f)},
+       float2(0.9935f, 0.0020f),
+       float4(-1),
+       "MAMat_BaseTiled"},
       {"OBCubeTiledTexFromAnotherFolder",
        OB_MESH,
        8,
@@ -358,7 +437,9 @@ TEST_F(obj_importer_test, import_cubes_with_textures_rel)
        float3(7, 1, -1),
        float3(5, -1, 1),
        float3(0, 1, 0),
-       float2(0.9935f, 0.0020f)},
+       float2(0.9935f, 0.0020f),
+       float4(-1),
+       "MAMat_EmissTiledAnotherFolder"},
   };
   import_and_check("cubes_with_textures_rel.obj", expect, std::size(expect), 4, 4);
 }
@@ -456,7 +537,10 @@ TEST_F(obj_importer_test, import_all_objects)
        26,
        float3(28, 1, -1),
        float3(26, 1, 1),
-       float3(-1, 0, 0)},
+       float3(-1, 0, 0),
+       float2(0),
+       float4(-1),
+       "MARed"},
       {"OBNurbsCircle",
        OB_MESH,
        96,
@@ -492,7 +576,10 @@ TEST_F(obj_importer_test, import_all_objects)
        26,
        float3(4, 1, -1),
        float3(2, 1, 1),
-       float3(0.5774f, 0.5773f, 0.5774f)},
+       float3(0.5774f, 0.5773f, 0.5774f),
+       float2(0),
+       float4(-1),
+       "MAMaterial"},
       {"OBSurface",
        OB_MESH,
        256,
@@ -726,6 +813,69 @@ TEST_F(obj_importer_test, import_vertices)
       {"OBCube.001", OB_MESH, 8, 0, 0, 0, float3(1, 1, -1), float3(-1, 1, 1)},
   };
   import_and_check("vertices.obj", expect, std::size(expect), 0);
+}
+
+TEST_F(obj_importer_test, import_split_options_by_object)
+{
+  /* Default is to split by object */
+  Expectation expect[] = {
+      {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBBox", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, -1, 1)},
+      {"OBPyramid", OB_MESH, 5, 8, 5, 16, float3(3, 1, -1), float3(4, 0, 2)},
+  };
+  import_and_check("split_options.obj", expect, std::size(expect), 0);
+}
+
+TEST_F(obj_importer_test, import_split_options_by_group)
+{
+  params.use_split_objects = false;
+  params.use_split_groups = true;
+  Expectation expect[] = {
+      {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBBoxOne", OB_MESH, 4, 4, 1, 4, float3(1, -1, -1), float3(-1, -1, 1)},
+      {"OBBoxTwo", OB_MESH, 6, 7, 2, 8, float3(1, 1, 1), float3(-1, -1, 1)},
+      {"OBBoxTwo.001", OB_MESH, 6, 7, 2, 8, float3(1, 1, -1), float3(-1, -1, -1)},
+      {"OBPyrBottom", OB_MESH, 4, 4, 1, 4, float3(3, 1, -1), float3(3, -1, -1)},
+      {"OBPyrSides", OB_MESH, 5, 8, 4, 12, float3(3, 1, -1), float3(4, 0, 2)},
+      {"OBsplit_options", OB_MESH, 4, 4, 1, 4, float3(1, 1, -1), float3(-1, 1, 1)},
+  };
+  import_and_check("split_options.obj", expect, std::size(expect), 0);
+}
+
+TEST_F(obj_importer_test, import_split_options_by_object_and_group)
+{
+  params.use_split_objects = true;
+  params.use_split_groups = true;
+  Expectation expect[] = {
+      {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBBox", OB_MESH, 4, 4, 1, 4, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBBoxOne", OB_MESH, 4, 4, 1, 4, float3(1, -1, -1), float3(-1, -1, 1)},
+      {"OBBoxTwo", OB_MESH, 6, 7, 2, 8, float3(1, 1, 1), float3(-1, -1, 1)},
+      {"OBBoxTwo.001", OB_MESH, 6, 7, 2, 8, float3(1, 1, -1), float3(-1, -1, -1)},
+      {"OBPyrBottom", OB_MESH, 4, 4, 1, 4, float3(3, 1, -1), float3(3, -1, -1)},
+      {"OBPyrSides", OB_MESH, 5, 8, 4, 12, float3(3, 1, -1), float3(4, 0, 2)},
+  };
+  import_and_check("split_options.obj", expect, std::size(expect), 0);
+}
+
+TEST_F(obj_importer_test, import_split_options_none)
+{
+  params.use_split_objects = false;
+  params.use_split_groups = false;
+  Expectation expect[] = {
+      {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBsplit_options", OB_MESH, 13, 20, 11, 40, float3(1, 1, -1), float3(4, 0, 2)},
+  };
+  import_and_check("split_options.obj", expect, std::size(expect), 0);
+}
+
+TEST_F(obj_importer_test, import_polylines)
+{
+  Expectation expect[] = {
+      {"OBCube", OB_MESH, 8, 12, 6, 24, float3(1, 1, -1), float3(-1, 1, 1)},
+      {"OBpolylines", OB_MESH, 13, 8, 0, 0, float3(1, 0, 0), float3(.7, .7, 2)},
+  };
+  import_and_check("polylines.obj", expect, std::size(expect), 0);
 }
 
 }  // namespace blender::io::obj

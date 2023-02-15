@@ -48,7 +48,7 @@ typedef struct RNA_DepsgraphIterator {
 #  ifdef WITH_PYTHON
   /**
    * Store the Python instance so the #BPy_StructRNA can be set as invalid iteration is completed.
-   * Otherwise accessing from Python (console auto-complete for e.g.) crashes, see: T100286. */
+   * Otherwise accessing from Python (console auto-complete for e.g.) crashes, see: #100286. */
   void *py_instance;
 #  endif
 } RNA_DepsgraphIterator;
@@ -60,6 +60,14 @@ void **rna_DepsgraphIterator_instance(PointerRNA *ptr)
   return &di->py_instance;
 }
 #  endif
+
+/* Temporary hack for Cycles until it is changed to work with the C API directly. */
+DupliObject *rna_hack_DepsgraphObjectInstance_dupli_object_get(PointerRNA *ptr)
+{
+  RNA_DepsgraphIterator *di = ptr->data;
+  DEGObjectIterData *deg_iter = (DEGObjectIterData *)di->iter.data;
+  return deg_iter->dupli_object_current;
+}
 
 static PointerRNA rna_DepsgraphObjectInstance_object_get(PointerRNA *ptr)
 {
@@ -160,7 +168,7 @@ static void rna_DepsgraphObjectInstance_matrix_world_get(PointerRNA *ptr, float 
     /* We can return actual object's matrix here, no reason to return identity matrix
      * when this is not actually an instance... */
     Object *ob = (Object *)di->iter.current;
-    copy_m4_m4((float(*)[4])mat, ob->obmat);
+    copy_m4_m4((float(*)[4])mat, ob->object_to_world);
   }
 }
 
@@ -340,7 +348,7 @@ static PointerRNA rna_Depsgraph_objects_get(CollectionPropertyIterator *iter)
  * Contains extra information about duplicator and persistent ID.
  */
 
-/* XXX Ugly python seems to query next item of an iterator before using current one (see T57558).
+/* XXX Ugly python seems to query next item of an iterator before using current one (see #57558).
  * This forces us to use that nasty ping-pong game between two sets of iterator data,
  * so that previous one remains valid memory for python to access to. Yuck.
  */

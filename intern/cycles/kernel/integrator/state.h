@@ -31,6 +31,10 @@
 
 #include "util/types.h"
 
+#ifdef __PATH_GUIDING__
+#  include "util/guiding.h"
+#endif
+
 #pragma once
 
 CCL_NAMESPACE_BEGIN
@@ -127,6 +131,9 @@ typedef struct IntegratorStateGPU {
 
   /* Index of main path which will be used by a next shadow catcher split.  */
   ccl_global int *next_main_path_index;
+
+  /* Partition/key offsets used when writing sorted active indices. */
+  ccl_global int *sort_partition_key_offsets;
 
   /* Divisor used to partition active indices by locality when sorting by material.  */
   uint sort_partition_divisor;

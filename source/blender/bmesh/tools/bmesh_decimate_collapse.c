@@ -41,14 +41,14 @@
 /** if the cost from #BLI_quadric_evaluate is 'noise', fallback to topology */
 #define USE_TOPOLOGY_FALLBACK
 #ifdef USE_TOPOLOGY_FALLBACK
-/** cost is calculated with double precision, it's ok to use a very small epsilon, see T48154. */
+/** cost is calculated with double precision, it's ok to use a very small epsilon, see #48154. */
 #  define TOPOLOGY_FALLBACK_EPS 1e-12f
 #endif
 
 #define BOUNDARY_PRESERVE_WEIGHT 100.0f
 /**
  * Uses double precision, impacts behavior on near-flat surfaces,
- * cane give issues with very small faces. 1e-2 is too big, see: T48154.
+ * cane give issues with very small faces. 1e-2 is too big, see: #48154.
  */
 #define OPTIMIZE_EPS 1e-8
 #define COST_INVALID FLT_MAX
@@ -272,7 +272,7 @@ static void bm_decim_build_edge_cost_single(BMEdge *e,
   }
 
   /* NOTE: 'cost' shouldn't be negative but happens sometimes with small values.
-   * this can cause faces that make up a flat surface to over-collapse, see T37121. */
+   * this can cause faces that make up a flat surface to over-collapse, see #37121. */
   cost = fabsf(cost);
 
 #ifdef USE_TOPOLOGY_FALLBACK
@@ -304,7 +304,7 @@ static void bm_decim_build_edge_cost_single(BMEdge *e,
     const float e_weight = 2.0f - (vweights[BM_elem_index_get(e->v1)] +
                                    vweights[BM_elem_index_get(e->v2)]);
     if (e_weight) {
-      cost += (BM_edge_calc_length(e) * ((e_weight * vweight_factor)));
+      cost += (BM_edge_calc_length(e) * (e_weight * vweight_factor));
     }
   }
 
@@ -618,9 +618,9 @@ static void bm_decim_triangulate_end(BMesh *bm, const int edges_tri_tot)
     (BM_loop_is_manifold(l) && ((l)->v != (l)->radial_next->v) && \
      (l_a_index == BM_elem_index_get(l)) && (l_a_index == BM_elem_index_get((l)->radial_next)))
 
-            if ((l_a->f->len == 3 && l_b->f->len == 3) && (!CAN_LOOP_MERGE(l_a->next)) &&
-                (!CAN_LOOP_MERGE(l_a->prev)) && (!CAN_LOOP_MERGE(l_b->next)) &&
-                (!CAN_LOOP_MERGE(l_b->prev))) {
+            if ((l_a->f->len == 3 && l_b->f->len == 3) && !CAN_LOOP_MERGE(l_a->next) &&
+                !CAN_LOOP_MERGE(l_a->prev) && !CAN_LOOP_MERGE(l_b->next) &&
+                !CAN_LOOP_MERGE(l_b->prev)) {
               BMVert *vquad[4] = {
                   e->v1,
                   BM_vert_in_edge(e, l_a->next->v) ? l_a->prev->v : l_a->next->v,

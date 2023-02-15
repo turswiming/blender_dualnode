@@ -42,6 +42,11 @@ typedef struct AssetFilterSettings {
  *       more than that from the file. So pointers to other IDs or ID data are strictly forbidden.
  */
 typedef struct AssetMetaData {
+#ifdef __cplusplus
+  /** Enables use with `std::unique_ptr<AssetMetaData>`. */
+  ~AssetMetaData();
+#endif
+
   /** Runtime type, to reference event callbacks. Only valid for local assets. */
   struct AssetTypeInfo *local_type_info;
 
@@ -80,12 +85,11 @@ typedef struct AssetMetaData {
 } AssetMetaData;
 
 typedef enum eAssetLibraryType {
-  /* For the future. Display assets bundled with Blender by default. */
-  // ASSET_LIBRARY_BUNDLED = 0,
   /** Display assets from the current session (current "Main"). */
   ASSET_LIBRARY_LOCAL = 1,
-  /* For the future. Display assets for the current project. */
-  // ASSET_LIBRARY_PROJECT = 2,
+  ASSET_LIBRARY_ALL = 2,
+  /** Display assets bundled with Blender by default. */
+  ASSET_LIBRARY_ESSENTIALS = 3,
 
   /** Display assets from custom asset libraries, as defined in the preferences
    * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library_ref.idname
@@ -114,6 +118,8 @@ typedef struct AssetLibraryReference {
 } AssetLibraryReference;
 
 /**
+ * To be replaced by #AssetRepresentation!
+ *
  * Not part of the core design, we should try to get rid of it. Only needed to wrap FileDirEntry
  * into a type with PropertyGroup as base, so we can have an RNA collection of #AssetHandle's to
  * pass to the UI.

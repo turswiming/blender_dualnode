@@ -48,7 +48,7 @@ if(MSVC)
   else()
     set(PACKAGE_ARCH windows32)
   endif()
-else(MSVC)
+else()
   set(PACKAGE_ARCH ${CMAKE_SYSTEM_PROCESSOR})
 endif()
 
@@ -106,8 +106,8 @@ if(WIN32)
   set(CPACK_WIX_LIGHT_EXTRA_FLAGS -dcl:medium)
 endif()
 
-set(CPACK_PACKAGE_EXECUTABLES "blender-launcher" "Blender")
-set(CPACK_CREATE_DESKTOP_LINKS "blender-launcher" "Blender")
+set(CPACK_PACKAGE_EXECUTABLES "blender-launcher" "Blender ${MAJOR_VERSION}.${MINOR_VERSION}")
+set(CPACK_CREATE_DESKTOP_LINKS "blender-launcher" "Blender ${MAJOR_VERSION}.${MINOR_VERSION}")
 
 include(CPack)
 

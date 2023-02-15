@@ -81,7 +81,7 @@ void BlendfileLoadingBaseTest::TearDownTestCase()
     G.main->wm.first = nullptr;
   }
 
-  /* Copied from WM_exit_ex() in wm_init_exit.c, and cherry-picked those lines that match the
+  /* Copied from WM_exit_ex() in wm_init_exit.cc, and cherry-picked those lines that match the
    * allocation/initialization done in SetUpTestCase(). */
   BKE_blender_free();
   RNA_exit();
@@ -103,8 +103,8 @@ void BlendfileLoadingBaseTest::TearDownTestCase()
 void BlendfileLoadingBaseTest::TearDown()
 {
   BKE_mball_cubeTable_free();
-  depsgraph_free();
   blendfile_free();
+  depsgraph_free();
 
   testing::Test::TearDown();
 }
@@ -117,7 +117,7 @@ bool BlendfileLoadingBaseTest::blendfile_load(const char *filepath)
   }
 
   char abspath[FILENAME_MAX];
-  BLI_path_join(abspath, sizeof(abspath), test_assets_dir.c_str(), filepath, nullptr);
+  BLI_path_join(abspath, sizeof(abspath), test_assets_dir.c_str(), filepath);
 
   BlendFileReadReport bf_reports = {nullptr};
   bfile = BLO_read_from_file(abspath, BLO_READ_SKIP_NONE, &bf_reports);

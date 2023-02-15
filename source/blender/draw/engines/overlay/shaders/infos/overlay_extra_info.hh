@@ -110,12 +110,12 @@ GPU_SHADER_CREATE_INFO(overlay_extra_wire)
 GPU_SHADER_CREATE_INFO(overlay_extra_wire_select)
     .do_static_compilation(true)
     .define("SELECT_EDGES")
-    .additional_info("overlay_extra_wire", "drw_clipped");
+    .additional_info("overlay_extra_wire");
 
 GPU_SHADER_CREATE_INFO(overlay_extra_wire_object)
     .do_static_compilation(true)
     .define("OBJECT_WIRE")
-    .additional_info("overlay_extra_wire", "drw_clipped");
+    .additional_info("overlay_extra_wire");
 
 GPU_SHADER_CREATE_INFO(overlay_extra_wire_select_clipped)
     .do_static_compilation(true)
@@ -203,6 +203,7 @@ GPU_SHADER_CREATE_INFO(overlay_motion_path_line)
     .additional_info("draw_view", "draw_globals");
 
 GPU_SHADER_CREATE_INFO(overlay_motion_path_line_no_geom)
+    .metal_backend_only(true)
     .do_static_compilation(true)
     .vertex_in(0, Type::VEC3, "pos")
     .push_constant(Type::IVEC4, "mpathLineSettings")
@@ -220,6 +221,7 @@ GPU_SHADER_CREATE_INFO(overlay_motion_path_line_clipped)
     .additional_info("overlay_motion_path_line", "drw_clipped");
 
 GPU_SHADER_CREATE_INFO(overlay_motion_path_line_clipped_no_geom)
+    .metal_backend_only(true)
     .do_static_compilation(true)
     .additional_info("overlay_motion_path_line_no_geom", "drw_clipped");
 
@@ -229,7 +231,7 @@ GPU_SHADER_CREATE_INFO(overlay_motion_path_point)
     .do_static_compilation(true)
     .typedef_source("overlay_shader_shared.h")
     .vertex_in(0, Type::VEC3, "pos")
-    .vertex_in(1, Type::INT, "flag")
+    .vertex_in(1, Type::UINT, "flag")
     .push_constant(Type::IVEC4, "mpathPointSettings")
     .push_constant(Type::BOOL, "showKeyFrames")
     .push_constant(Type::VEC3, "customColor")

@@ -36,11 +36,11 @@
 /* Forward declarations. */
 static void overlay_edit_uv_cache_populate(OVERLAY_Data *vedata, Object *ob);
 
-typedef struct OVERLAY_StretchingAreaTotals {
+struct OVERLAY_StretchingAreaTotals {
   void *next, *prev;
   float *total_area;
   float *total_area_uv;
-} OVERLAY_StretchingAreaTotals;
+};
 
 static OVERLAY_UVLineStyle edit_uv_line_style_from_space_image(const SpaceImage *sima)
 {
@@ -68,7 +68,7 @@ static OVERLAY_UVLineStyle edit_uv_line_style_from_space_image(const SpaceImage 
 static GPUTexture *edit_uv_mask_texture(
     Mask *mask, const int width, const int height_, const float aspx, const float aspy)
 {
-  const int height = (float)height_ * (aspy / aspx);
+  const int height = float(height_) * (aspy / aspx);
   MaskRasterHandle *handle;
   float *buffer = static_cast<float *>(MEM_mallocN(sizeof(float) * height * width, __func__));
 
@@ -80,7 +80,8 @@ static GPUTexture *edit_uv_mask_texture(
 
   /* Free memory. */
   BKE_maskrasterize_handle_free(handle);
-  GPUTexture *texture = GPU_texture_create_2d(mask->id.name, width, height, 1, GPU_R16F, buffer);
+  GPUTexture *texture = GPU_texture_create_2d_ex(
+      mask->id.name, width, height, 1, GPU_R16F, GPU_TEXTURE_USAGE_SHADER_READ, buffer);
   MEM_freeN(buffer);
   return texture;
 }
@@ -101,7 +102,7 @@ void OVERLAY_edit_uv_init(OVERLAY_Data *vedata)
   const bool show_overlays = !pd->hide_overlays;
 
   Image *image = sima->image;
-  /* By design no image is an image type. This so editor shows UV's by default. */
+  /* By design no image is an image type. This so editor shows UVs by default. */
   const bool is_image_type = (image == nullptr) || ELEM(image->type,
                                                         IMA_TYPE_IMAGE,
                                                         IMA_TYPE_MULTILAYER,
@@ -139,6 +140,8 @@ void OVERLAY_edit_uv_init(OVERLAY_Data *vedata)
                                      ((is_paint_mode && do_tex_paint_shadows &&
                                        ((draw_ctx->object_mode &
                                          (OB_MODE_TEXTURE_PAINT | OB_MODE_EDIT)) != 0)) ||
+                                      (is_uv_editor && do_tex_paint_shadows &&
+                                       ((draw_ctx->object_mode & (OB_MODE_TEXTURE_PAINT)) != 0)) ||
                                       (is_view_mode && do_tex_paint_shadows &&
                                        ((draw_ctx->object_mode & (OB_MODE_TEXTURE_PAINT)) != 0)) ||
                                       (do_uv_overlay && (show_modified_uvs)));
@@ -308,8 +311,8 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
     LISTBASE_FOREACH (ImageTile *, tile, &image->tiles) {
       const int tile_x = ((tile->tile_number - 1001) % 10);
       const int tile_y = ((tile->tile_number - 1001) / 10);
-      obmat[3][1] = (float)tile_y;
-      obmat[3][0] = (float)tile_x;
+      obmat[3][1] = float(tile_y);
+      obmat[3][0] = float(tile_x);
       DRW_shgroup_call_obmat(grp, geom, obmat);
     }
     /* Only mark active border when overlays are enabled. */
@@ -318,8 +321,8 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
       ImageTile *active_tile = static_cast<ImageTile *>(
           BLI_findlink(&image->tiles, image->active_tile_index));
       if (active_tile) {
-        obmat[3][0] = (float)((active_tile->tile_number - 1001) % 10);
-        obmat[3][1] = (float)((active_tile->tile_number - 1001) / 10);
+        obmat[3][0] = float((active_tile->tile_number - 1001) % 10);
+        obmat[3][1] = float((active_tile->tile_number - 1001) / 10);
         grp = DRW_shgroup_create(sh, psl->edit_uv_tiled_image_borders_ps);
         DRW_shgroup_uniform_vec4_copy(grp, "color", selected_color);
         DRW_shgroup_call_obmat(grp, geom, obmat);
@@ -328,16 +331,15 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
   }
 
   if (pd->edit_uv.do_tiled_image_overlay) {
-    struct DRWTextStore *dt = DRW_text_cache_ensure();
+    DRWTextStore *dt = DRW_text_cache_ensure();
     uchar color[4];
     /* Color Management: Exception here as texts are drawn in sRGB space directly. */
     UI_GetThemeColorShade4ubv(TH_BACK, 60, color);
     char text[16];
     LISTBASE_FOREACH (ImageTile *, tile, &image->tiles) {
       BLI_snprintf(text, 5, "%d", tile->tile_number);
-      float tile_location[3] = {static_cast<float>((tile->tile_number - 1001) % 10),
-                                static_cast<float>((tile->tile_number - 1001) / 10),
-                                0.0f};
+      float tile_location[3] = {
+          float((tile->tile_number - 1001) % 10), float((tile->tile_number - 1001) / 10), 0.0f};
       DRW_text_cache_add(
           dt, tile_location, text, strlen(text), 10, 10, DRW_TEXT_CACHE_GLOBALSPACE, color);
     }
@@ -372,8 +374,7 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
 
       float size_image[2];
       BKE_image_get_size_fl(image, nullptr, size_image);
-      float size_stencil_image[2] = {static_cast<float>(stencil_ibuf->x),
-                                     static_cast<float>(stencil_ibuf->y)};
+      float size_stencil_image[2] = {float(stencil_ibuf->x), float(stencil_ibuf->y)};
 
       float obmat[4][4];
       unit_m4(obmat);
@@ -413,7 +414,7 @@ void OVERLAY_edit_uv_cache_init(OVERLAY_Data *vedata)
 
   /* HACK: When editing objects that share the same mesh we should only draw the
    * first one in the order that is used during uv editing. We can only trust that the first object
-   * has the correct batches with the correct selection state. See T83187. */
+   * has the correct batches with the correct selection state. See #83187. */
   if ((pd->edit_uv.do_uv_overlay || pd->edit_uv.do_uv_shadow_overlay) &&
       draw_ctx->obact->type == OB_MESH) {
     uint objects_len = 0;
@@ -441,10 +442,11 @@ static void overlay_edit_uv_cache_populate(OVERLAY_Data *vedata, Object *ob)
   const DRWContextState *draw_ctx = DRW_context_state_get();
   const bool is_edit_object = DRW_object_is_in_edit_mode(ob);
   Mesh *me = (Mesh *)ob->data;
-  const bool has_active_object_uvmap = CustomData_get_active_layer(&me->ldata, CD_MLOOPUV) != -1;
+  const bool has_active_object_uvmap = CustomData_get_active_layer(&me->ldata, CD_PROP_FLOAT2) !=
+                                       -1;
   const bool has_active_edit_uvmap = is_edit_object &&
                                      (CustomData_get_active_layer(&me->edit_mesh->bm->ldata,
-                                                                  CD_MLOOPUV) != -1);
+                                                                  CD_PROP_FLOAT2) != -1);
   const bool draw_shadows = (draw_ctx->object_mode != OB_MODE_OBJECT) &&
                             (ob->mode == draw_ctx->object_mode);
 

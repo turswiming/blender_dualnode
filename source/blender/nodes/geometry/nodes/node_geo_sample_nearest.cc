@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_task.hh"
-
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_bvhutils.h"
@@ -52,16 +50,16 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Geometry"))
       .supported_type({GEO_COMPONENT_TYPE_MESH, GEO_COMPONENT_TYPE_POINT_CLOUD});
-  b.add_input<decl::Vector>(N_("Sample Position")).implicit_field();
+  b.add_input<decl::Vector>(N_("Sample Position")).implicit_field(implicit_field_inputs::position);
   b.add_output<decl::Int>(N_("Index")).dependent_field({1});
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = CD_PROP_FLOAT;
   node->custom2 = ATTR_DOMAIN_POINT;
@@ -149,8 +147,7 @@ static void get_closest_mesh_polys(const Mesh &mesh,
   Array<int> looptri_indices(positions.size());
   get_closest_mesh_looptris(mesh, positions, mask, looptri_indices, r_distances_sq, r_positions);
 
-  const Span<MLoopTri> looptris{BKE_mesh_runtime_looptri_ensure(&mesh),
-                                BKE_mesh_runtime_looptri_len(&mesh)};
+  const Span<MLoopTri> looptris = mesh.looptris();
 
   for (const int i : mask) {
     const MLoopTri &looptri = looptris[looptri_indices[i]];
@@ -166,7 +163,7 @@ static void get_closest_mesh_corners(const Mesh &mesh,
                                      const MutableSpan<float> r_distances_sq,
                                      const MutableSpan<float3> r_positions)
 {
-  const Span<MVert> verts = mesh.verts();
+  const Span<float3> vert_positions = mesh.vert_positions();
   const Span<MPoly> polys = mesh.polys();
   const Span<MLoop> loops = mesh.loops();
 
@@ -181,24 +178,23 @@ static void get_closest_mesh_corners(const Mesh &mesh,
 
     /* Find the closest vertex in the polygon. */
     float min_distance_sq = FLT_MAX;
-    const MVert *closest_mvert;
+    int closest_vert_index = 0;
     int closest_loop_index = 0;
     for (const int loop_index : IndexRange(poly.loopstart, poly.totloop)) {
       const MLoop &loop = loops[loop_index];
       const int vertex_index = loop.v;
-      const MVert &mvert = verts[vertex_index];
-      const float distance_sq = math::distance_squared(position, float3(mvert.co));
+      const float distance_sq = math::distance_squared(position, vert_positions[vertex_index]);
       if (distance_sq < min_distance_sq) {
         min_distance_sq = distance_sq;
         closest_loop_index = loop_index;
-        closest_mvert = &mvert;
+        closest_vert_index = vertex_index;
       }
     }
     if (!r_corner_indices.is_empty()) {
       r_corner_indices[i] = closest_loop_index;
     }
     if (!r_positions.is_empty()) {
-      r_positions[i] = closest_mvert->co;
+      r_positions[i] = vert_positions[closest_vert_index];
     }
     if (!r_distances_sq.is_empty()) {
       r_distances_sq[i] = min_distance_sq;
@@ -214,9 +210,6 @@ static bool component_is_available(const GeometrySet &geometry,
     return false;
   }
   const GeometryComponent &component = *geometry.get_component_for_read(type);
-  if (component.is_empty()) {
-    return false;
-  }
   return component.attribute_domain_size(domain) != 0;
 }
 
@@ -238,34 +231,28 @@ static const GeometryComponent *find_source_component(const GeometrySet &geometr
   return nullptr;
 }
 
-class SampleNearestFunction : public fn::MultiFunction {
+class SampleNearestFunction : public mf::MultiFunction {
   GeometrySet source_;
   eAttrDomain domain_;
 
   const GeometryComponent *src_component_;
 
-  fn::MFSignature signature_;
+  mf::Signature signature_;
 
  public:
   SampleNearestFunction(GeometrySet geometry, eAttrDomain domain)
       : source_(std::move(geometry)), domain_(domain)
   {
     source_.ensure_owns_direct_data();
-    signature_ = this->create_signature();
-    this->set_signature(&signature_);
-
     this->src_component_ = find_source_component(source_, domain_);
+
+    mf::SignatureBuilder builder{"Sample Nearest", signature_};
+    builder.single_input<float3>("Position");
+    builder.single_output<int>("Index");
+    this->set_signature(&signature_);
   }
 
-  fn::MFSignature create_signature()
-  {
-    blender::fn::MFSignatureBuilder signature{"Sample Nearest"};
-    signature.single_input<float3>("Position");
-    signature.single_output<int>("Index");
-    return signature.build();
-  }
-
-  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, mf::Params params, mf::Context /*context*/) const override
   {
     const VArray<float3> &positions = params.readonly_single_input<float3>(0, "Position");
     MutableSpan<int> indices = params.uninitialized_single_output<int>(1, "Index");
@@ -337,7 +324,7 @@ void register_node_type_geo_sample_nearest()
   static bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_SAMPLE_NEAREST, "Sample Nearest", NODE_CLASS_GEOMETRY);
-  node_type_init(&ntype, file_ns::node_init);
+  ntype.initfunc = file_ns::node_init;
   ntype.declare = file_ns::node_declare;
   ntype.geometry_node_execute = file_ns::node_geo_exec;
   ntype.draw_buttons = file_ns::node_layout;

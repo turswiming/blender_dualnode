@@ -39,7 +39,7 @@ void ShadingView::sync()
   int2 render_extent = inst_.film.render_extent_get();
 
   if (false /* inst_.camera.is_panoramic() */) {
-    int64_t render_pixel_count = render_extent.x * (int64_t)render_extent.y;
+    int64_t render_pixel_count = render_extent.x * int64_t(render_extent.y);
     /* Divide pixel count between the 6 views. Rendering to a square target. */
     extent_[0] = extent_[1] = ceilf(sqrtf(1 + (render_pixel_count / 6)));
     /* TODO(@fclem): Clip unused views here. */
@@ -134,12 +134,11 @@ void ShadingView::render()
 
   inst_.lights.debug_draw(render_view_new_, combined_fb_);
   inst_.hiz_buffer.debug_draw(render_view_new_, combined_fb_);
+  inst_.shadows.debug_draw(render_view_new_, combined_fb_);
 
   GPUTexture *combined_final_tx = render_postfx(rbufs.combined_tx);
 
   inst_.film.accumulate(sub_view_, combined_final_tx);
-
-  // inst_.shadows.debug_draw();
 
   rbufs.release();
   postfx_tx_.release();

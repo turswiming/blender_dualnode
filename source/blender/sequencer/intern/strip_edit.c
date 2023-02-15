@@ -258,50 +258,61 @@ bool SEQ_edit_move_strip_to_meta(Scene *scene,
   return true;
 }
 
-static void seq_split_set_left_hold_offset(Scene *scene, Sequence *seq, int timeline_frame)
+static void seq_split_set_right_hold_offset(Main *bmain,
+                                            Scene *scene,
+                                            Sequence *seq,
+                                            int timeline_frame)
 {
+  const float content_start = SEQ_time_start_frame_get(seq);
+  const float content_end = SEQ_time_content_end_frame_get(scene, seq);
+
   /* Adjust within range of extended still-frames before strip. */
-  if (timeline_frame < seq->start) {
-    seq->start = timeline_frame - 1;
-    seq->anim_endofs += SEQ_time_strip_length_get(scene, seq) - 1;
-    seq->startstill = timeline_frame - seq->startdisp - 1;
-    seq->endstill = 0;
+  if (timeline_frame < content_start) {
+    const float offset = content_start + 1 - timeline_frame;
+    seq->start -= offset;
+    seq->startofs += offset;
   }
   /* Adjust within range of strip contents. */
-  else if ((timeline_frame >= seq->start) &&
-           (timeline_frame <= (seq->start + SEQ_time_strip_length_get(scene, seq)))) {
+  else if ((timeline_frame >= content_start) && (timeline_frame <= content_end)) {
     seq->endofs = 0;
-    seq->endstill = 0;
-    seq->anim_endofs += (seq->start + SEQ_time_strip_length_get(scene, seq)) - timeline_frame;
+    float speed_factor = (seq->type == SEQ_TYPE_SOUND_RAM) ?
+                             seq_time_media_playback_rate_factor_get(scene, seq) :
+                             seq_time_playback_rate_factor_get(scene, seq);
+    seq->anim_endofs += round_fl_to_int((content_end - timeline_frame) * speed_factor);
   }
-  /* Adjust within range of extended still-frames after strip. */
-  else if ((seq->start + SEQ_time_strip_length_get(scene, seq)) < timeline_frame) {
-    seq->endstill = timeline_frame - seq->start - SEQ_time_strip_length_get(scene, seq);
-  }
+
+  /* Needed only to set `seq->len`. */
+  SEQ_add_reload_new_file(bmain, scene, seq, false);
+  SEQ_time_right_handle_frame_set(scene, seq, timeline_frame);
 }
 
-static void seq_split_set_right_hold_offset(Scene *scene, Sequence *seq, int timeline_frame)
+static void seq_split_set_left_hold_offset(Main *bmain,
+                                           Scene *scene,
+                                           Sequence *seq,
+                                           int timeline_frame)
 {
-  /* Adjust within range of extended still-frames before strip. */
-  if (timeline_frame < seq->start) {
-    seq->startstill = seq->start - timeline_frame;
-  }
+  const float content_start = SEQ_time_start_frame_get(seq);
+  const float content_end = SEQ_time_content_end_frame_get(scene, seq);
+
   /* Adjust within range of strip contents. */
-  else if ((timeline_frame >= seq->start) &&
-           (timeline_frame <= (seq->start + SEQ_time_strip_length_get(scene, seq)))) {
-    seq->anim_startofs += timeline_frame - seq->start;
+  if ((timeline_frame >= content_start) && (timeline_frame <= content_end)) {
+    float speed_factor = (seq->type == SEQ_TYPE_SOUND_RAM) ?
+                             seq_time_media_playback_rate_factor_get(scene, seq) :
+                             seq_time_playback_rate_factor_get(scene, seq);
+    seq->anim_startofs += round_fl_to_int((timeline_frame - content_start) * speed_factor);
     seq->start = timeline_frame;
-    seq->startstill = 0;
     seq->startofs = 0;
   }
   /* Adjust within range of extended still-frames after strip. */
-  else if ((seq->start + SEQ_time_strip_length_get(scene, seq)) < timeline_frame) {
-    seq->start = timeline_frame;
-    seq->startofs = 0;
-    seq->anim_startofs += SEQ_time_strip_length_get(scene, seq) - 1;
-    seq->endstill = seq->enddisp - timeline_frame - 1;
-    seq->startstill = 0;
+  else if (timeline_frame > content_end) {
+    const float offset = timeline_frame - content_end + 1;
+    seq->start += offset;
+    seq->endofs += offset;
   }
+
+  /* Needed only to set `seq->len`. */
+  SEQ_add_reload_new_file(bmain, scene, seq, false);
+  SEQ_time_left_handle_frame_set(scene, seq, timeline_frame);
 }
 
 static bool seq_edit_split_effect_intersect_check(const Scene *scene,
@@ -325,8 +336,7 @@ static void seq_edit_split_handle_strip_offsets(Main *bmain,
         SEQ_time_left_handle_frame_set(scene, right_seq, timeline_frame);
         break;
       case SEQ_SPLIT_HARD:
-        seq_split_set_left_hold_offset(scene, right_seq, timeline_frame);
-        SEQ_add_reload_new_file(bmain, scene, right_seq, false);
+        seq_split_set_left_hold_offset(bmain, scene, right_seq, timeline_frame);
         break;
     }
   }
@@ -337,8 +347,7 @@ static void seq_edit_split_handle_strip_offsets(Main *bmain,
         SEQ_time_right_handle_frame_set(scene, left_seq, timeline_frame);
         break;
       case SEQ_SPLIT_HARD:
-        seq_split_set_right_hold_offset(scene, left_seq, timeline_frame);
-        SEQ_add_reload_new_file(bmain, scene, left_seq, false);
+        seq_split_set_right_hold_offset(bmain, scene, left_seq, timeline_frame);
         break;
     }
   }
@@ -427,8 +436,8 @@ Sequence *SEQ_edit_strip_split(Main *bmain,
   }
 
   /* Store `F-Curves`, so original ones aren't renamed. */
-  ListBase fcurves_original_backup = {NULL, NULL};
-  SEQ_animation_backup_original(scene, &fcurves_original_backup);
+  SeqAnimationBackup animation_backup = {0};
+  SEQ_animation_backup_original(scene, &animation_backup);
 
   ListBase left_strips = {NULL, NULL};
   SEQ_ITERATOR_FOREACH (seq, collection) {
@@ -437,7 +446,7 @@ Sequence *SEQ_edit_strip_split(Main *bmain,
     BLI_addtail(&left_strips, seq);
 
     /* Duplicate curves from backup, so they can be renamed along with split strips. */
-    SEQ_animation_duplicate(scene, seq, &fcurves_original_backup);
+    SEQ_animation_duplicate_backup_to_scene(scene, seq, &animation_backup);
   }
 
   SEQ_collection_free(collection);
@@ -480,7 +489,7 @@ Sequence *SEQ_edit_strip_split(Main *bmain,
   }
 
   SEQ_edit_remove_flagged_sequences(scene, seqbase);
-  SEQ_animation_restore_original(scene, &fcurves_original_backup);
+  SEQ_animation_restore_original(scene, &animation_backup);
 
   return return_seq;
 }

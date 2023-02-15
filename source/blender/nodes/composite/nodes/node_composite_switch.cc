@@ -23,7 +23,7 @@ static void cmp_node_switch_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Color>(N_("Image"));
 }
 
-static void node_composit_buts_switch(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_composit_buts_switch(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "check", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 }
@@ -63,7 +63,7 @@ void register_node_type_cmp_switch()
   cmp_node_type_base(&ntype, CMP_NODE_SWITCH, "Switch", NODE_CLASS_LAYOUT);
   ntype.declare = file_ns::cmp_node_switch_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_switch;
-  node_type_size_preset(&ntype, NODE_SIZE_SMALL);
+  node_type_size_preset(&ntype, NODE_SIZE_DEFAULT);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
   nodeRegisterType(&ntype);

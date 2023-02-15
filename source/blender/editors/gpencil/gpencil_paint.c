@@ -434,8 +434,7 @@ static void gpencil_stroke_convertcoords(tGPsdata *p,
     rmval[1] = mval[1] - 0.5f;
     round_v2i_v2fl(mval_i, rmval);
 
-    if (gpencil_project_check(p) &&
-        (ED_view3d_autodist_simple(p->region, mval_i, out, 0, depth))) {
+    if (gpencil_project_check(p) && ED_view3d_autodist_simple(p->region, mval_i, out, 0, depth)) {
       /* projecting onto 3D-Geometry
        * - nothing more needs to be done here, since view_autodist_simple() has already done it
        */
@@ -765,7 +764,7 @@ static short gpencil_stroke_addpoint(tGPsdata *p,
 
       /* store settings */
       copy_v2_v2(pt->m_xy, mval);
-      /* T44932 - Pressure vals are unreliable, so ignore for now */
+      /* Pressure values are unreliable, so ignore for now, see #44932. */
       pt->pressure = 1.0f;
       pt->strength = 1.0f;
       pt->time = (float)(curtime - p->inittime);
@@ -781,7 +780,7 @@ static short gpencil_stroke_addpoint(tGPsdata *p,
 
       /* store settings */
       copy_v2_v2(pt->m_xy, mval);
-      /* T44932 - Pressure vals are unreliable, so ignore for now */
+      /* Pressure values are unreliable, so ignore for now, see #44932. */
       pt->pressure = 1.0f;
       pt->strength = 1.0f;
       pt->time = (float)(curtime - p->inittime);
@@ -937,7 +936,7 @@ static bGPDstroke *gpencil_stroke_to_outline(tGPsdata *p, bGPDstroke *gps)
   /* Apply layer thickness change. */
   gps_duplicate->thickness += gpl->line_change;
   /* Apply object scale to thickness. */
-  gps_duplicate->thickness *= mat4_to_scale(p->ob->obmat);
+  gps_duplicate->thickness *= mat4_to_scale(p->ob->object_to_world);
   CLAMP_MIN(gps_duplicate->thickness, 1.0f);
 
   /* Stroke. */
@@ -963,11 +962,15 @@ static bGPDstroke *gpencil_stroke_to_outline(tGPsdata *p, bGPDstroke *gps)
 
   /* Set pressure constant. */
   gps_perimeter->thickness = max_ii((int)outline_thickness, 1);
+  /* Apply Fill Vertex Color data. */
+  ED_gpencil_fill_vertex_color_set(p->scene->toolsettings, brush, gps_perimeter);
 
   bGPDspoint *pt;
   for (int i = 0; i < gps_perimeter->totpoints; i++) {
     pt = &gps_perimeter->points[i];
     pt->pressure = 1.0f;
+    /* Apply Point Vertex Color data. */
+    ED_gpencil_point_vertex_color_set(p->scene->toolsettings, brush, pt, NULL);
   }
 
   /* Remove original stroke. */
@@ -1134,11 +1137,9 @@ static void gpencil_stroke_newfrombuffer(tGPsdata *p)
 
     /* reproject to plane (only in 3d space) */
     gpencil_reproject_toplane(p, gps);
-    pt = gps->points;
-    for (int i = 0; i < gps->totpoints; i++, pt++) {
-      /* if parented change position relative to parent object */
-      gpencil_apply_parent_point(depsgraph, obact, gpl, pt);
-    }
+
+    /* Change position relative to object. */
+    gpencil_world_to_object_space(depsgraph, obact, gpl, gps);
 
     /* If camera view or view projection, reproject flat to view to avoid perspective effect. */
     if ((!is_depth) &&
@@ -1301,8 +1302,8 @@ static void gpencil_stroke_newfrombuffer(tGPsdata *p)
 
     /* reproject to plane (only in 3d space) */
     gpencil_reproject_toplane(p, gps);
-    /* change position relative to parent object */
-    gpencil_apply_parent(depsgraph, obact, gpl, gps);
+    /* Change position relative to parent object. */
+    gpencil_world_to_object_space(depsgraph, obact, gpl, gps);
     /* If camera view or view projection, reproject flat to view to avoid perspective effect. */
     if ((!is_depth) && (((align_flag & GP_PROJECT_VIEWSPACE) && is_lock_axis_view) || is_camera)) {
       ED_gpencil_project_stroke_to_view(p->C, p->gpl, gps);
@@ -1387,7 +1388,8 @@ static void gpencil_stroke_newfrombuffer(tGPsdata *p)
   }
 
   gpencil_update_cache(p->gpd);
-  BKE_gpencil_tag_full_update(p->gpd, gpl, p->gpf, NULL);
+  BKE_gpencil_tag_full_update(
+      p->gpd, gpl, GPENCIL_MULTIEDIT_SESSIONS_ON(p->gpd) ? NULL : p->gpf, NULL);
 }
 
 /* --- 'Eraser' for 'Paint' Tool ------ */
@@ -1551,10 +1553,10 @@ static void gpencil_stroke_eraser_dostroke(tGPsdata *p,
     /* only process if it hasn't been masked out... */
     if (!(p->flags & GP_PAINTFLAG_SELECTMASK) || (gps->points->flag & GP_SPOINT_SELECT)) {
       bGPDspoint pt_temp;
-      gpencil_point_to_parent_space(gps->points, p->diff_mat, &pt_temp);
+      gpencil_point_to_world_space(gps->points, p->diff_mat, &pt_temp);
       gpencil_point_to_xy(&p->gsc, gps, &pt_temp, &pc1[0], &pc1[1]);
       /* Do bound-box check first. */
-      if ((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
+      if (!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1]) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
         /* only check if point is inside */
         if (len_v2v2_int(mval_i, pc1) <= radius) {
           /* free stroke */
@@ -1575,11 +1577,11 @@ static void gpencil_stroke_eraser_dostroke(tGPsdata *p,
       /* get points to work with */
       pt1 = gps->points + i;
       bGPDspoint npt;
-      gpencil_point_to_parent_space(pt1, p->diff_mat, &npt);
+      gpencil_point_to_world_space(pt1, p->diff_mat, &npt);
       gpencil_point_to_xy(&p->gsc, gps, &npt, &pc1[0], &pc1[1]);
 
       /* Do bound-box check first. */
-      if ((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
+      if (!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1]) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
         /* only check if point is inside */
         if (len_v2v2_int(mval_i, pc1) <= radius) {
           /* free stroke */
@@ -1633,14 +1635,14 @@ static void gpencil_stroke_eraser_dostroke(tGPsdata *p,
       }
 
       bGPDspoint npt;
-      gpencil_point_to_parent_space(pt1, p->diff_mat, &npt);
+      gpencil_point_to_world_space(pt1, p->diff_mat, &npt);
       gpencil_point_to_xy(&p->gsc, gps, &npt, &pc1[0], &pc1[1]);
 
-      gpencil_point_to_parent_space(pt2, p->diff_mat, &npt);
+      gpencil_point_to_world_space(pt2, p->diff_mat, &npt);
       gpencil_point_to_xy(&p->gsc, gps, &npt, &pc2[0], &pc2[1]);
 
       if (pt0) {
-        gpencil_point_to_parent_space(pt0, p->diff_mat, &npt);
+        gpencil_point_to_world_space(pt0, p->diff_mat, &npt);
         gpencil_point_to_xy(&p->gsc, gps, &npt, &pc0[0], &pc0[1]);
       }
       else {
@@ -1649,9 +1651,9 @@ static void gpencil_stroke_eraser_dostroke(tGPsdata *p,
       }
 
       /* Check that point segment of the bound-box of the eraser stroke. */
-      if (((!ELEM(V2D_IS_CLIPPED, pc0[0], pc0[1])) && BLI_rcti_isect_pt(rect, pc0[0], pc0[1])) ||
-          ((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) ||
-          ((!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1])) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
+      if ((!ELEM(V2D_IS_CLIPPED, pc0[0], pc0[1]) && BLI_rcti_isect_pt(rect, pc0[0], pc0[1])) ||
+          (!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1]) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) ||
+          (!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1]) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
         /* Check if point segment of stroke had anything to do with
          * eraser region  (either within stroke painted, or on its lines)
          * - this assumes that line-width is irrelevant.
@@ -1743,14 +1745,14 @@ static void gpencil_stroke_eraser_dostroke(tGPsdata *p,
 
             /* 2) Tag any point with overly low influence for removal in the next pass */
             if ((inf1 > 0.0f) &&
-                (((pt1->pressure < cull_thresh) || (p->flags & GP_PAINTFLAG_HARD_ERASER) ||
-                  (eraser->gpencil_settings->eraser_mode == GP_BRUSH_ERASER_HARD)))) {
+                ((pt1->pressure < cull_thresh) || (p->flags & GP_PAINTFLAG_HARD_ERASER) ||
+                 (eraser->gpencil_settings->eraser_mode == GP_BRUSH_ERASER_HARD))) {
               pt1->flag |= GP_SPOINT_TAG;
               do_cull = true;
             }
             if ((inf1 > 2.0f) &&
-                (((pt2->pressure < cull_thresh) || (p->flags & GP_PAINTFLAG_HARD_ERASER) ||
-                  (eraser->gpencil_settings->eraser_mode == GP_BRUSH_ERASER_HARD)))) {
+                ((pt2->pressure < cull_thresh) || (p->flags & GP_PAINTFLAG_HARD_ERASER) ||
+                 (eraser->gpencil_settings->eraser_mode == GP_BRUSH_ERASER_HARD))) {
               pt2->flag |= GP_SPOINT_TAG;
               do_cull = true;
             }
@@ -2231,10 +2233,8 @@ static void gpencil_paint_initstroke(tGPsdata *p,
        *       -> If there are no strokes in that frame, don't add a new empty frame
        */
       if (gpl->actframe && gpl->actframe->strokes.first) {
-        if (ts->gpencil_flags & GP_TOOL_FLAG_RETAIN_LAST) {
-          short frame_mode = IS_AUTOKEY_ON(scene) ? GP_GETFRAME_ADD_COPY : GP_GETFRAME_USE_PREV;
-          gpl->actframe = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, frame_mode);
-        }
+        short frame_mode = IS_AUTOKEY_ON(scene) ? GP_GETFRAME_ADD_COPY : GP_GETFRAME_USE_PREV;
+        gpl->actframe = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, frame_mode);
         has_layer_to_erase = true;
         break;
       }
@@ -2429,7 +2429,7 @@ static void gpencil_draw_eraser(bContext *UNUSED(C), int x, int y, void *p_ptr)
     immUniformColor4f(1.0f, 0.39f, 0.39f, 0.78f);
     immUniform1i("colors_len", 0); /* "simple" mode */
     immUniform1f("dash_width", 12.0f);
-    immUniform1f("dash_factor", 0.5f);
+    immUniform1f("udash_factor", 0.5f);
 
     imm_draw_circle_wire_2d(shdr_pos,
                             x,
@@ -2935,7 +2935,7 @@ static void gpencil_draw_apply_event(bContext *C,
 
   /* Hack for pressure sensitive eraser on D+RMB when using a tablet:
    * The pen has to float over the tablet surface, resulting in
-   * zero pressure (T47101). Ignore pressure values if floating
+   * zero pressure (#47101). Ignore pressure values if floating
    * (i.e. "effectively zero" pressure), and only when the "active"
    * end is the stylus (i.e. the default when not eraser)
    */
@@ -3343,7 +3343,7 @@ static tGPsdata *gpencil_stroke_begin(bContext *C, wmOperator *op)
   tGPsdata *p = op->customdata;
 
   /* we must check that we're still within the area that we're set up to work from
-   * otherwise we could crash (see bug T20586)
+   * otherwise we could crash (see bug #20586)
    */
   if (CTX_wm_area(C) != p->area) {
     printf("\t\t\tGP - wrong area execution abort!\n");
@@ -3685,11 +3685,11 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   /* We don't pass on key events, GP is used with key-modifiers -
-   * prevents Dkey to insert drivers. */
+   * prevents D-key to insert drivers. */
   if (ISKEYBOARD(event->type)) {
     if (ELEM(event->type, EVT_LEFTARROWKEY, EVT_DOWNARROWKEY, EVT_RIGHTARROWKEY, EVT_UPARROWKEY)) {
       /* allow some keys:
-       *   - For frame changing T33412.
+       *   - For frame changing #33412.
        *   - For undo (during sketching sessions).
        */
     }
@@ -3716,7 +3716,7 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
        *   is essential for ensuring that they can quickly return to that view.
        */
     }
-    else if ((!ELEM(p->paintmode, GP_PAINTMODE_ERASER, GP_PAINTMODE_SET_CP))) {
+    else if (!ELEM(p->paintmode, GP_PAINTMODE_ERASER, GP_PAINTMODE_SET_CP)) {
       gpencil_guide_event_handling(C, op, event, p);
       estate = OPERATOR_RUNNING_MODAL;
     }
@@ -3735,10 +3735,10 @@ static int gpencil_draw_modal(bContext *C, wmOperator *op, const wmEvent *event)
   /* toggle painting mode upon mouse-button movement
    * - LEFTMOUSE  = standard drawing (all) / straight line drawing (all)
    * - RIGHTMOUSE = eraser (all)
-   *   (Disabling RIGHTMOUSE case here results in bugs like T32647)
+   *   (Disabling RIGHTMOUSE case here results in bugs like #32647)
    * also making sure we have a valid event value, to not exit too early
    */
-  if (ELEM(event->type, LEFTMOUSE, RIGHTMOUSE) && (ELEM(event->val, KM_PRESS, KM_RELEASE))) {
+  if (ELEM(event->type, LEFTMOUSE, RIGHTMOUSE) && ELEM(event->val, KM_PRESS, KM_RELEASE)) {
     /* if painting, end stroke */
     if (p->status == GP_STATUS_PAINTING) {
       p->status = GP_STATUS_DONE;

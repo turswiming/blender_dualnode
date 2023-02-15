@@ -204,7 +204,7 @@ void SEQ_add_image_init_alpha_mode(Sequence *seq)
     char name[FILE_MAX];
     ImBuf *ibuf;
 
-    BLI_join_dirfile(name, sizeof(name), seq->strip->dir, seq->strip->stripdata->name);
+    BLI_path_join(name, sizeof(name), seq->strip->dir, seq->strip->stripdata->name);
     BLI_path_abs(name, BKE_main_blendfile_path_from_global());
 
     /* Initialize input color space. */
@@ -314,7 +314,7 @@ Sequence *SEQ_add_sound_strip(Main *bmain, Scene *scene, ListBase *seqbase, SeqL
    * line up with the video frames. Therefore we round this number to the
    * nearest frame as the audio track usually overshoots or undershoots the
    * end frame of the video by a little bit.
-   * See T47135 for under shoot example. */
+   * See #47135 for under shoot example. */
   seq->len = MAX2(1, round((info.length - sound->offset_time) * FPS));
 
   Strip *strip = seq->strip;
@@ -366,6 +366,8 @@ Sequence *SEQ_add_meta_strip(Scene *scene, ListBase *seqbase, SeqLoadData *load_
   /* Set frames start and length. */
   seqm->start = load_data->start_frame;
   seqm->len = 1;
+
+  seq_add_generic_update(scene, seqm);
 
   return seqm;
 }
@@ -545,7 +547,7 @@ void SEQ_add_reload_new_file(Main *bmain, Scene *scene, Sequence *seq, const boo
       const bool is_multiview = (seq->flag & SEQ_USE_VIEWS) != 0 &&
                                 (scene->r.scemode & R_MULTIVIEW) != 0;
 
-      BLI_join_dirfile(path, sizeof(path), seq->strip->dir, seq->strip->stripdata->name);
+      BLI_path_join(path, sizeof(path), seq->strip->dir, seq->strip->stripdata->name);
       BLI_path_abs(path, BKE_main_blendfile_path_from_global());
 
       SEQ_relations_sequence_free_anim(seq);
@@ -668,7 +670,6 @@ void SEQ_add_reload_new_file(Main *bmain, Scene *scene, Sequence *seq, const boo
   if (lock_range) {
     SEQ_time_left_handle_frame_set(scene, seq, prev_startdisp);
     SEQ_time_right_handle_frame_set(scene, seq, prev_enddisp);
-    SEQ_transform_fix_single_image_seq_offsets(scene, seq);
   }
 
   SEQ_relations_invalidate_cache_raw(scene, seq);

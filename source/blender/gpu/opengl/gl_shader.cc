@@ -486,9 +486,9 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
     }
     ss << ";\n";
   }
-#if 0 /* T95278: This is not be enough to prevent some compilers think it is recursive. */
+#if 0 /* #95278: This is not be enough to prevent some compilers think it is recursive. */
   for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    /* T95278: Double macro to avoid some compilers think it is recursive. */
+    /* #95278: Double macro to avoid some compilers think it is recursive. */
     ss << "#define " << uniform.name << "_ " << uniform.name << "\n";
     ss << "#define " << uniform.name << " (" << uniform.name << "_)\n";
   }
@@ -568,7 +568,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
   std::string pre_main;
 
   ss << "\n/* Interfaces. */\n";
-  const Vector<StageInterfaceInfo *> &in_interfaces = (info.geometry_source_.is_empty()) ?
+  const Vector<StageInterfaceInfo *> &in_interfaces = info.geometry_source_.is_empty() ?
                                                           info.vertex_out_interfaces_ :
                                                           info.geometry_out_interfaces_;
   for (const StageInterfaceInfo *iface : in_interfaces) {
@@ -817,7 +817,7 @@ static char *glsl_patch_default_get()
   if (GLContext::texture_gather_support) {
     STR_CONCAT(patch, slen, "#extension GL_ARB_texture_gather: enable\n");
     /* Some drivers don't agree on epoxy_has_gl_extension("GL_ARB_texture_gather") and the actual
-     * support in the shader so double check the preprocessor define (see T56544). */
+     * support in the shader so double check the preprocessor define (see #56544). */
     STR_CONCAT(patch, slen, "#ifdef GL_ARB_texture_gather\n");
     STR_CONCAT(patch, slen, "#  define GPU_ARB_texture_gather\n");
     STR_CONCAT(patch, slen, "#endif\n");
@@ -1051,6 +1051,10 @@ bool GLShader::transform_feedback_enable(GPUVertBuf *buf_)
 
   GLVertBuf *buf = static_cast<GLVertBuf *>(unwrap(buf_));
 
+  if (buf->vbo_id_ == 0) {
+    buf->bind();
+  }
+
   BLI_assert(buf->vbo_id_ != 0);
 
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, buf->vbo_id_);
@@ -1138,7 +1142,7 @@ void GLShader::uniform_int(int location, int comp_len, int array_size, const int
 
 int GLShader::program_handle_get() const
 {
-  return (int)this->shader_program_;
+  return int(this->shader_program_);
 }
 
 /** \} */

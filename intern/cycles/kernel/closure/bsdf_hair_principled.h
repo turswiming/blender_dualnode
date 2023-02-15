@@ -41,11 +41,6 @@ static_assert(sizeof(ShaderClosure) >= sizeof(PrincipledHairBSDF),
 static_assert(sizeof(ShaderClosure) >= sizeof(PrincipledHairExtra),
               "PrincipledHairExtra is too large!");
 
-ccl_device_inline float cos_from_sin(const float s)
-{
-  return safe_sqrtf(1.0f - s * s);
-}
-
 /* Gives the change in direction in the normal plane for the given angles and p-th-order
  * scattering. */
 ccl_device_inline float delta_phi(int p, float gamma_o, float gamma_t)
@@ -56,13 +51,7 @@ ccl_device_inline float delta_phi(int p, float gamma_o, float gamma_t)
 /* Remaps the given angle to [-pi, pi]. */
 ccl_device_inline float wrap_angle(float a)
 {
-  while (a > M_PI_F) {
-    a -= M_2PI_F;
-  }
-  while (a < -M_PI_F) {
-    a += M_2PI_F;
-  }
-  return a;
+  return (a + M_PI_F) - M_2PI_F * floorf((a + M_PI_F) / M_2PI_F) - M_PI_F;
 }
 
 /* Logistic distribution function. */
@@ -185,7 +174,7 @@ ccl_device int bsdf_principled_hair_setup(ccl_private ShaderData *sd,
 
   /* Compute local frame, aligned to curve tangent and ray direction. */
   float3 X = safe_normalize(sd->dPdu);
-  float3 Y = safe_normalize(cross(X, sd->I));
+  float3 Y = safe_normalize(cross(X, sd->wi));
   float3 Z = safe_normalize(cross(X, Y));
 
   /* h -1..0..1 means the rays goes from grazing the hair, to hitting it at
@@ -202,7 +191,7 @@ ccl_device int bsdf_principled_hair_setup(ccl_private ShaderData *sd,
 
   bsdf->extra->geom = make_float4(Y.x, Y.y, Y.z, h);
 
-  return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_NEEDS_LCG;
+  return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_NEEDS_LCG | SD_BSDF_HAS_TRANSMISSION;
 }
 
 #endif /* __HAIR__ */
@@ -265,82 +254,79 @@ ccl_device_inline void hair_alpha_angles(float sin_theta_i,
 ccl_device Spectrum bsdf_principled_hair_eval(KernelGlobals kg,
                                               ccl_private const ShaderData *sd,
                                               ccl_private const ShaderClosure *sc,
-                                              const float3 omega_in,
+                                              const float3 wo,
                                               ccl_private float *pdf)
 {
   kernel_assert(isfinite_safe(sd->P) && isfinite_safe(sd->ray_length));
 
   ccl_private const PrincipledHairBSDF *bsdf = (ccl_private const PrincipledHairBSDF *)sc;
-  float3 Y = float4_to_float3(bsdf->extra->geom);
+  const float3 Y = float4_to_float3(bsdf->extra->geom);
 
-  float3 X = safe_normalize(sd->dPdu);
+  const float3 X = safe_normalize(sd->dPdu);
   kernel_assert(fabsf(dot(X, Y)) < 1e-3f);
-  float3 Z = safe_normalize(cross(X, Y));
+  const float3 Z = safe_normalize(cross(X, Y));
 
-  float3 wo = make_float3(dot(sd->I, X), dot(sd->I, Y), dot(sd->I, Z));
-  float3 wi = make_float3(dot(omega_in, X), dot(omega_in, Y), dot(omega_in, Z));
+  /* local_I is the illumination direction. */
+  const float3 local_O = make_float3(dot(sd->wi, X), dot(sd->wi, Y), dot(sd->wi, Z));
+  const float3 local_I = make_float3(dot(wo, X), dot(wo, Y), dot(wo, Z));
 
-  float sin_theta_o = wo.x;
-  float cos_theta_o = cos_from_sin(sin_theta_o);
-  float phi_o = atan2f(wo.z, wo.y);
+  const float sin_theta_o = local_O.x;
+  const float cos_theta_o = cos_from_sin(sin_theta_o);
+  const float phi_o = atan2f(local_O.z, local_O.y);
 
-  float sin_theta_t = sin_theta_o / bsdf->eta;
-  float cos_theta_t = cos_from_sin(sin_theta_t);
+  const float sin_theta_t = sin_theta_o / bsdf->eta;
+  const float cos_theta_t = cos_from_sin(sin_theta_t);
 
-  float sin_gamma_o = bsdf->extra->geom.w;
-  float cos_gamma_o = cos_from_sin(sin_gamma_o);
-  float gamma_o = safe_asinf(sin_gamma_o);
+  const float sin_gamma_o = bsdf->extra->geom.w;
+  const float cos_gamma_o = cos_from_sin(sin_gamma_o);
+  const float gamma_o = safe_asinf(sin_gamma_o);
 
-  float sin_gamma_t = sin_gamma_o * cos_theta_o / sqrtf(sqr(bsdf->eta) - sqr(sin_theta_o));
-  float cos_gamma_t = cos_from_sin(sin_gamma_t);
-  float gamma_t = safe_asinf(sin_gamma_t);
+  const float sin_gamma_t = sin_gamma_o * cos_theta_o / sqrtf(sqr(bsdf->eta) - sqr(sin_theta_o));
+  const float cos_gamma_t = cos_from_sin(sin_gamma_t);
+  const float gamma_t = safe_asinf(sin_gamma_t);
 
-  Spectrum T = exp(-bsdf->sigma * (2.0f * cos_gamma_t / cos_theta_t));
+  const Spectrum T = exp(-bsdf->sigma * (2.0f * cos_gamma_t / cos_theta_t));
   Spectrum Ap[4];
   float Ap_energy[4];
   hair_attenuation(
       kg, fresnel_dielectric_cos(cos_theta_o * cos_gamma_o, bsdf->eta), T, Ap, Ap_energy);
 
-  float sin_theta_i = wi.x;
-  float cos_theta_i = cos_from_sin(sin_theta_i);
-  float phi_i = atan2f(wi.z, wi.y);
+  const float sin_theta_i = local_I.x;
+  const float cos_theta_i = cos_from_sin(sin_theta_i);
+  const float phi_i = atan2f(local_I.z, local_I.y);
 
-  float phi = phi_i - phi_o;
+  const float phi = phi_i - phi_o;
 
   float angles[6];
   hair_alpha_angles(sin_theta_i, cos_theta_i, bsdf->alpha, angles);
 
-  Spectrum F;
-  float F_energy;
-  float Mp, Np;
+  Spectrum F = zero_spectrum();
+  float F_energy = 0.0f;
 
-  /* Primary specular (R). */
-  Mp = longitudinal_scattering(angles[0], angles[1], sin_theta_o, cos_theta_o, bsdf->m0_roughness);
-  Np = azimuthal_scattering(phi, 0, bsdf->s, gamma_o, gamma_t);
-  F = Ap[0] * Mp * Np;
-  F_energy = Ap_energy[0] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
-
-  /* Transmission (TT). */
-  Mp = longitudinal_scattering(angles[2], angles[3], sin_theta_o, cos_theta_o, 0.25f * bsdf->v);
-  Np = azimuthal_scattering(phi, 1, bsdf->s, gamma_o, gamma_t);
-  F += Ap[1] * Mp * Np;
-  F_energy += Ap_energy[1] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
-
-  /* Secondary specular (TRT). */
-  Mp = longitudinal_scattering(angles[4], angles[5], sin_theta_o, cos_theta_o, 4.0f * bsdf->v);
-  Np = azimuthal_scattering(phi, 2, bsdf->s, gamma_o, gamma_t);
-  F += Ap[2] * Mp * Np;
-  F_energy += Ap_energy[2] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  /* Primary specular (R), Transmission (TT) and Secondary Specular (TRT). */
+  for (int i = 0; i < 3; i++) {
+    const float Mp = longitudinal_scattering(angles[2 * i],
+                                             angles[2 * i + 1],
+                                             sin_theta_o,
+                                             cos_theta_o,
+                                             (i == 0) ? bsdf->m0_roughness :
+                                             (i == 1) ? 0.25f * bsdf->v :
+                                                        4.0f * bsdf->v);
+    const float Np = azimuthal_scattering(phi, i, bsdf->s, gamma_o, gamma_t);
+    F += Ap[i] * Mp * Np;
+    F_energy += Ap_energy[i] * Mp * Np;
+    kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  }
 
   /* Residual component (TRRT+). */
-  Mp = longitudinal_scattering(sin_theta_i, cos_theta_i, sin_theta_o, cos_theta_o, 4.0f * bsdf->v);
-  Np = M_1_2PI_F;
-  F += Ap[3] * Mp * Np;
-  F_energy += Ap_energy[3] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  {
+    const float Mp = longitudinal_scattering(
+        sin_theta_i, cos_theta_i, sin_theta_o, cos_theta_o, 4.0f * bsdf->v);
+    const float Np = M_1_2PI_F;
+    F += Ap[3] * Mp * Np;
+    F_energy += Ap_energy[3] * Mp * Np;
+    kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  }
 
   *pdf = F_energy;
   return F;
@@ -353,40 +339,45 @@ ccl_device int bsdf_principled_hair_sample(KernelGlobals kg,
                                            float randu,
                                            float randv,
                                            ccl_private Spectrum *eval,
-                                           ccl_private float3 *omega_in,
-                                           ccl_private float *pdf)
+                                           ccl_private float3 *wo,
+                                           ccl_private float *pdf,
+                                           ccl_private float2 *sampled_roughness,
+                                           ccl_private float *eta)
 {
   ccl_private PrincipledHairBSDF *bsdf = (ccl_private PrincipledHairBSDF *)sc;
 
-  float3 Y = float4_to_float3(bsdf->extra->geom);
+  *sampled_roughness = make_float2(bsdf->m0_roughness, bsdf->m0_roughness);
+  *eta = bsdf->eta;
 
-  float3 X = safe_normalize(sd->dPdu);
+  const float3 Y = float4_to_float3(bsdf->extra->geom);
+
+  const float3 X = safe_normalize(sd->dPdu);
   kernel_assert(fabsf(dot(X, Y)) < 1e-3f);
-  float3 Z = safe_normalize(cross(X, Y));
+  const float3 Z = safe_normalize(cross(X, Y));
 
-  float3 wo = make_float3(dot(sd->I, X), dot(sd->I, Y), dot(sd->I, Z));
+  const float3 local_O = make_float3(dot(sd->wi, X), dot(sd->wi, Y), dot(sd->wi, Z));
 
   float2 u[2];
   u[0] = make_float2(randu, randv);
   u[1].x = lcg_step_float(&sd->lcg_state);
   u[1].y = lcg_step_float(&sd->lcg_state);
 
-  float sin_theta_o = wo.x;
-  float cos_theta_o = cos_from_sin(sin_theta_o);
-  float phi_o = atan2f(wo.z, wo.y);
+  const float sin_theta_o = local_O.x;
+  const float cos_theta_o = cos_from_sin(sin_theta_o);
+  const float phi_o = atan2f(local_O.z, local_O.y);
 
-  float sin_theta_t = sin_theta_o / bsdf->eta;
-  float cos_theta_t = cos_from_sin(sin_theta_t);
+  const float sin_theta_t = sin_theta_o / bsdf->eta;
+  const float cos_theta_t = cos_from_sin(sin_theta_t);
 
-  float sin_gamma_o = bsdf->extra->geom.w;
-  float cos_gamma_o = cos_from_sin(sin_gamma_o);
-  float gamma_o = safe_asinf(sin_gamma_o);
+  const float sin_gamma_o = bsdf->extra->geom.w;
+  const float cos_gamma_o = cos_from_sin(sin_gamma_o);
+  const float gamma_o = safe_asinf(sin_gamma_o);
 
-  float sin_gamma_t = sin_gamma_o * cos_theta_o / sqrtf(sqr(bsdf->eta) - sqr(sin_theta_o));
-  float cos_gamma_t = cos_from_sin(sin_gamma_t);
-  float gamma_t = safe_asinf(sin_gamma_t);
+  const float sin_gamma_t = sin_gamma_o * cos_theta_o / sqrtf(sqr(bsdf->eta) - sqr(sin_theta_o));
+  const float cos_gamma_t = cos_from_sin(sin_gamma_t);
+  const float gamma_t = safe_asinf(sin_gamma_t);
 
-  Spectrum T = exp(-bsdf->sigma * (2.0f * cos_gamma_t / cos_theta_t));
+  const Spectrum T = exp(-bsdf->sigma * (2.0f * cos_gamma_t / cos_theta_t));
   Spectrum Ap[4];
   float Ap_energy[4];
   hair_attenuation(
@@ -409,7 +400,7 @@ ccl_device int bsdf_principled_hair_sample(KernelGlobals kg,
   }
 
   u[1].x = max(u[1].x, 1e-5f);
-  float fac = 1.0f + v * logf(u[1].x + (1.0f - u[1].x) * expf(-2.0f / v));
+  const float fac = 1.0f + v * logf(u[1].x + (1.0f - u[1].x) * expf(-2.0f / v));
   float sin_theta_i = -fac * sin_theta_o +
                       cos_from_sin(fac) * cosf(M_2PI_F * u[1].y) * cos_theta_o;
   float cos_theta_i = cos_from_sin(sin_theta_i);
@@ -428,46 +419,42 @@ ccl_device int bsdf_principled_hair_sample(KernelGlobals kg,
   else {
     phi = M_2PI_F * u[0].y;
   }
-  float phi_i = phi_o + phi;
+  const float phi_i = phi_o + phi;
 
   hair_alpha_angles(sin_theta_i, cos_theta_i, bsdf->alpha, angles);
 
-  Spectrum F;
-  float F_energy;
-  float Mp, Np;
+  Spectrum F = zero_spectrum();
+  float F_energy = 0.0f;
 
-  /* Primary specular (R). */
-  Mp = longitudinal_scattering(angles[0], angles[1], sin_theta_o, cos_theta_o, bsdf->m0_roughness);
-  Np = azimuthal_scattering(phi, 0, bsdf->s, gamma_o, gamma_t);
-  F = Ap[0] * Mp * Np;
-  F_energy = Ap_energy[0] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
-
-  /* Transmission (TT). */
-  Mp = longitudinal_scattering(angles[2], angles[3], sin_theta_o, cos_theta_o, 0.25f * bsdf->v);
-  Np = azimuthal_scattering(phi, 1, bsdf->s, gamma_o, gamma_t);
-  F += Ap[1] * Mp * Np;
-  F_energy += Ap_energy[1] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
-
-  /* Secondary specular (TRT). */
-  Mp = longitudinal_scattering(angles[4], angles[5], sin_theta_o, cos_theta_o, 4.0f * bsdf->v);
-  Np = azimuthal_scattering(phi, 2, bsdf->s, gamma_o, gamma_t);
-  F += Ap[2] * Mp * Np;
-  F_energy += Ap_energy[2] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  /* Primary specular (R), Transmission (TT) and Secondary Specular (TRT). */
+  for (int i = 0; i < 3; i++) {
+    const float Mp = longitudinal_scattering(angles[2 * i],
+                                             angles[2 * i + 1],
+                                             sin_theta_o,
+                                             cos_theta_o,
+                                             (i == 0) ? bsdf->m0_roughness :
+                                             (i == 1) ? 0.25f * bsdf->v :
+                                                        4.0f * bsdf->v);
+    const float Np = azimuthal_scattering(phi, i, bsdf->s, gamma_o, gamma_t);
+    F += Ap[i] * Mp * Np;
+    F_energy += Ap_energy[i] * Mp * Np;
+    kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  }
 
   /* Residual component (TRRT+). */
-  Mp = longitudinal_scattering(sin_theta_i, cos_theta_i, sin_theta_o, cos_theta_o, 4.0f * bsdf->v);
-  Np = M_1_2PI_F;
-  F += Ap[3] * Mp * Np;
-  F_energy += Ap_energy[3] * Mp * Np;
-  kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  {
+    const float Mp = longitudinal_scattering(
+        sin_theta_i, cos_theta_i, sin_theta_o, cos_theta_o, 4.0f * bsdf->v);
+    const float Np = M_1_2PI_F;
+    F += Ap[3] * Mp * Np;
+    F_energy += Ap_energy[3] * Mp * Np;
+    kernel_assert(isfinite_safe(F) && isfinite_safe(F_energy));
+  }
 
   *eval = F;
   *pdf = F_energy;
 
-  *omega_in = X * sin_theta_i + Y * cos_theta_i * cosf(phi_i) + Z * cos_theta_i * sinf(phi_i);
+  *wo = X * sin_theta_i + Y * cos_theta_i * cosf(phi_i) + Z * cos_theta_i * sinf(phi_i);
 
   return LABEL_GLOSSY | ((p == 0) ? LABEL_REFLECT : LABEL_TRANSMIT);
 }
@@ -491,10 +478,18 @@ ccl_device_inline float bsdf_principled_hair_albedo_roughness_scale(
   return (((((0.245f * x) + 5.574f) * x - 10.73f) * x + 2.532f) * x - 0.215f) * x + 5.969f;
 }
 
-ccl_device Spectrum bsdf_principled_hair_albedo(ccl_private const ShaderClosure *sc)
+ccl_device Spectrum bsdf_principled_hair_albedo(ccl_private const ShaderData *sd,
+                                                ccl_private const ShaderClosure *sc)
 {
   ccl_private PrincipledHairBSDF *bsdf = (ccl_private PrincipledHairBSDF *)sc;
-  return exp(-sqrt(bsdf->sigma) * bsdf_principled_hair_albedo_roughness_scale(bsdf->v));
+
+  const float cos_theta_o = cos_from_sin(dot(sd->wi, safe_normalize(sd->dPdu)));
+  const float cos_gamma_o = cos_from_sin(bsdf->extra->geom.w);
+  const float f = fresnel_dielectric_cos(cos_theta_o * cos_gamma_o, bsdf->eta);
+
+  const float roughness_scale = bsdf_principled_hair_albedo_roughness_scale(bsdf->v);
+  /* TODO(lukas): Adding the Fresnel term here as a workaround until the proper refactor. */
+  return exp(-sqrt(bsdf->sigma) * roughness_scale) + make_spectrum(f);
 }
 
 ccl_device_inline Spectrum

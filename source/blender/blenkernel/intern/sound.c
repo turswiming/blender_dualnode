@@ -556,7 +556,7 @@ static void sound_load_audio(Main *bmain, bSound *sound, bool free_waveform)
 
     /* but we need a packed file then */
     if (pf) {
-      sound->handle = AUD_Sound_bufferFile((unsigned char *)pf->data, pf->size);
+      sound->handle = AUD_Sound_bufferFile((uchar *)pf->data, pf->size);
     }
     else {
       /* or else load it from disk */
@@ -854,7 +854,7 @@ static double get_cur_time(Scene *scene)
 {
   /* We divide by the current framelen to take into account time remapping.
    * Otherwise we will get the wrong starting time which will break A/V sync.
-   * See T74111 for further details. */
+   * See #74111 for further details. */
   return FRA2TIME((scene->r.cfra + scene->r.subframe) / (double)scene->r.framelen);
 }
 
@@ -1025,7 +1025,7 @@ void BKE_sound_free_waveform(bSound *sound)
   sound->tags &= ~SOUND_TAGS_WAVEFORM_NO_RELOAD;
 }
 
-void BKE_sound_read_waveform(Main *bmain, bSound *sound, short *stop)
+void BKE_sound_read_waveform(Main *bmain, bSound *sound, bool *stop)
 {
   bool need_close_audio_handles = false;
   if (sound->playback_handle == NULL) {
@@ -1041,8 +1041,11 @@ void BKE_sound_read_waveform(Main *bmain, bSound *sound, short *stop)
     int length = info.length * SOUND_WAVE_SAMPLES_PER_SECOND;
 
     waveform->data = MEM_mallocN(sizeof(float[3]) * length, "SoundWaveform.samples");
+    /* Ideally this would take a boolean argument. */
+    short stop_i16 = *stop;
     waveform->length = AUD_readSound(
-        sound->playback_handle, waveform->data, length, SOUND_WAVE_SAMPLES_PER_SECOND, stop);
+        sound->playback_handle, waveform->data, length, SOUND_WAVE_SAMPLES_PER_SECOND, &stop_i16);
+    *stop = stop_i16 != 0;
   }
   else {
     /* Create an empty waveform here if the sound couldn't be
@@ -1129,9 +1132,9 @@ static void sound_update_base(Scene *scene, Object *object, void *new_set)
         AUD_SequenceEntry_setConeAngleInner(strip->speaker_handle, speaker->cone_angle_inner);
         AUD_SequenceEntry_setConeVolumeOuter(strip->speaker_handle, speaker->cone_volume_outer);
 
-        mat4_to_quat(quat, object->obmat);
+        mat4_to_quat(quat, object->object_to_world);
         AUD_SequenceEntry_setAnimationData(
-            strip->speaker_handle, AUD_AP_LOCATION, scene->r.cfra, object->obmat[3], 1);
+            strip->speaker_handle, AUD_AP_LOCATION, scene->r.cfra, object->object_to_world[3], 1);
         AUD_SequenceEntry_setAnimationData(
             strip->speaker_handle, AUD_AP_ORIENTATION, scene->r.cfra, quat, 1);
         AUD_SequenceEntry_setAnimationData(
@@ -1171,9 +1174,9 @@ void BKE_sound_update_scene(Depsgraph *depsgraph, Scene *scene)
   }
 
   if (scene->camera) {
-    mat4_to_quat(quat, scene->camera->obmat);
+    mat4_to_quat(quat, scene->camera->object_to_world);
     AUD_Sequence_setAnimationData(
-        scene->sound_scene, AUD_AP_LOCATION, scene->r.cfra, scene->camera->obmat[3], 1);
+        scene->sound_scene, AUD_AP_LOCATION, scene->r.cfra, scene->camera->object_to_world[3], 1);
     AUD_Sequence_setAnimationData(scene->sound_scene, AUD_AP_ORIENTATION, scene->r.cfra, quat, 1);
   }
 
@@ -1227,7 +1230,7 @@ bool BKE_sound_info_get(struct Main *main, struct bSound *sound, SoundInfo *soun
   }
   /* TODO(sergey): Make it fully independent audio handle. */
   /* Don't free waveforms during non-destructive queries.
-   * This causes unnecessary recalculation - see T69921 */
+   * This causes unnecessary recalculation - see #69921 */
   sound_load_audio(main, sound, false);
   const bool result = sound_info_from_playback_handle(sound->playback_handle, sound_info);
   sound_free_audio(sound);
@@ -1381,7 +1384,7 @@ int BKE_sound_scene_playing(Scene *UNUSED(scene))
 void BKE_sound_read_waveform(Main *bmain,
                              bSound *sound,
                              /* NOLINTNEXTLINE: readability-non-const-parameter. */
-                             short *stop)
+                             bool *stop)
 {
   UNUSED_VARS(sound, stop, bmain);
 }
@@ -1519,6 +1522,12 @@ void BKE_sound_jack_scene_update(Scene *scene, int mode, double time)
 void BKE_sound_evaluate(Depsgraph *depsgraph, Main *bmain, bSound *sound)
 {
   DEG_debug_print_eval(depsgraph, __func__, sound->id.name, sound);
+  if (sound->id.recalc & ID_RECALC_SOURCE) {
+    /* Sequencer checks this flag to see if the strip sound is to be updated from the Audaspace
+     * side. */
+    sound->id.recalc |= ID_RECALC_AUDIO;
+  }
+
   if (sound->id.recalc & ID_RECALC_AUDIO) {
     BKE_sound_load(bmain, sound);
     return;

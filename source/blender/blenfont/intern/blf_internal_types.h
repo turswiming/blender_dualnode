@@ -40,7 +40,7 @@ typedef int32_t ft_pix;
 /* Macros copied from `include/freetype/internal/ftobjs.h`. */
 
 /**
- * FIXME(@campbellbarton): Follow rounding from Blender 3.1x and older.
+ * FIXME(@ideasman42): Follow rounding from Blender 3.1x and older.
  * This is what users will expect and changing this creates wider spaced text.
  * Use this macro to communicate that rounding should be used, using floor is to avoid
  * user visible changes, which can be reviewed and handled separately.
@@ -141,9 +141,6 @@ typedef struct GlyphCacheBLF {
 
   /** Font size. */
   float size;
-
-  /** DPI. */
-  unsigned int dpi;
 
   float char_weight;
   float char_slant;
@@ -299,9 +296,6 @@ typedef struct FontBLF {
 
   /** The width to wrap the text, see #BLF_WORD_WRAP. */
   int wrap_width;
-
-  /** Font DPI (default 72). */
-  unsigned int dpi;
 
   /** Font size. */
   float size;

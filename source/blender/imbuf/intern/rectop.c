@@ -810,7 +810,7 @@ void IMB_rectblend(ImBuf *dbuf,
           else {
             for (x = width; x > 0; x--, dr++, or ++, sr++, cmr++) {
               uchar *src = (uchar *)sr;
-              float mask = (float)mask_max * ((float)(*cmr));
+              float mask = (float)mask_max * (float)(*cmr);
 
               if (texmaskrect) {
                 mask *= ((float)(*tmr++) / 65535.0f);
@@ -908,7 +908,7 @@ void IMB_rectblend(ImBuf *dbuf,
           /* no destination mask buffer, do regular blend with masktexture if present */
           else {
             for (x = width; x > 0; x--, drf += 4, orf += 4, srf += 4, cmr++) {
-              float mask = (float)mask_max * ((float)(*cmr));
+              float mask = (float)mask_max * (float)(*cmr);
 
               if (texmaskrect) {
                 mask *= ((float)(*tmr++) / 65535.0f);
@@ -1112,12 +1112,12 @@ void IMB_rectfill_area_replace(
 
       if (ibuf->rect) {
         uchar *rrect = (uchar *)ibuf->rect + offset;
-        memcpy(rrect, &col_char, sizeof(uchar) * 4);
+        memcpy(rrect, col_char, sizeof(uchar[4]));
       }
 
       if (ibuf->rect_float) {
         float *rrectf = ibuf->rect_float + offset;
-        memcpy(rrectf, &col, sizeof(float) * 4);
+        memcpy(rrectf, col, sizeof(float[4]));
       }
     }
   }

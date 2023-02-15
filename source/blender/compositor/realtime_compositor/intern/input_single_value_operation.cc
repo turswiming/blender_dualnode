@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "COM_input_single_value_operation.hh"
 #include "COM_operation.hh"
@@ -38,7 +38,7 @@ void InputSingleValueOperation::execute()
       break;
     case ResultType::Vector:
       result.set_vector_value(
-          float3(bsocket->default_value_typed<bNodeSocketValueVector>()->value));
+          float4(float3(bsocket->default_value_typed<bNodeSocketValueVector>()->value), 0.0f));
       break;
     case ResultType::Color:
       result.set_color_value(float4(bsocket->default_value_typed<bNodeSocketValueRGBA>()->value));

@@ -4,9 +4,9 @@
  * \ingroup bke
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "BLI_listbase.h"
 #include "BLI_string.h"
@@ -24,6 +24,7 @@
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
+#include "BKE_viewer_path.h"
 #include "BKE_workspace.h"
 
 #include "DNA_object_types.h"
@@ -61,6 +62,7 @@ static void workspace_free_data(ID *id)
   }
 
   MEM_SAFE_FREE(workspace->status_text);
+  BKE_viewer_path_clear(&workspace->viewer_path);
 }
 
 static void workspace_foreach_id(ID *id, LibraryForeachIDData *data)
@@ -72,6 +74,8 @@ static void workspace_foreach_id(ID *id, LibraryForeachIDData *data)
   LISTBASE_FOREACH (WorkSpaceLayout *, layout, &workspace->layouts) {
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, layout->screen, IDWALK_CB_USER);
   }
+
+  BKE_viewer_path_foreach_id(data, &workspace->viewer_path);
 }
 
 static void workspace_blend_write(BlendWriter *writer, ID *id, const void *id_address)
@@ -89,6 +93,8 @@ static void workspace_blend_write(BlendWriter *writer, ID *id, const void *id_ad
       IDP_BlendWrite(writer, tref->properties);
     }
   }
+
+  BKE_viewer_path_blend_write(writer, &workspace->viewer_path);
 }
 
 static void workspace_blend_read_data(BlendDataReader *reader, ID *id)
@@ -115,6 +121,8 @@ static void workspace_blend_read_data(BlendDataReader *reader, ID *id)
   workspace->status_text = nullptr;
 
   id_us_ensure_real(&workspace->id);
+
+  BKE_viewer_path_blend_read_data(reader, &workspace->viewer_path);
 }
 
 static void workspace_blend_read_lib(BlendLibReader *reader, ID *id)
@@ -164,6 +172,8 @@ static void workspace_blend_read_lib(BlendLibReader *reader, ID *id)
       BKE_workspace_layout_remove(bmain, workspace, layout);
     }
   }
+
+  BKE_viewer_path_blend_read_lib(reader, id->lib, &workspace->viewer_path);
 }
 
 static void workspace_blend_read_expand(BlendExpander *expander, ID *id)
@@ -176,33 +186,34 @@ static void workspace_blend_read_expand(BlendExpander *expander, ID *id)
 }
 
 IDTypeInfo IDType_ID_WS = {
-    /* id_code */ ID_WS,
-    /* id_filter */ FILTER_ID_WS,
-    /* main_listbase_index */ INDEX_ID_WS,
-    /* struct_size */ sizeof(WorkSpace),
-    /* name */ "WorkSpace",
-    /* name_plural */ "workspaces",
-    /* translation_context */ BLT_I18NCONTEXT_ID_WORKSPACE,
-    /* flags */ IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA,
-    /* asset_type_info */ nullptr,
+    /*id_code*/ ID_WS,
+    /*id_filter*/ FILTER_ID_WS,
+    /*main_listbase_index*/ INDEX_ID_WS,
+    /*struct_size*/ sizeof(WorkSpace),
+    /*name*/ "WorkSpace",
+    /*name_plural*/ "workspaces",
+    /*translation_context*/ BLT_I18NCONTEXT_ID_WORKSPACE,
+    /*flags*/ IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA |
+        IDTYPE_FLAGS_NO_MEMFILE_UNDO,
+    /*asset_type_info*/ nullptr,
 
-    /* init_data */ workspace_init_data,
-    /* copy_data */ nullptr,
-    /* free_data */ workspace_free_data,
-    /* make_local */ nullptr,
-    /* foreach_id */ workspace_foreach_id,
-    /* foreach_cache */ nullptr,
-    /* foreach_path */ nullptr,
-    /* owner_pointer_get */ nullptr,
+    /*init_data*/ workspace_init_data,
+    /*copy_data*/ nullptr,
+    /*free_data*/ workspace_free_data,
+    /*make_local*/ nullptr,
+    /*foreach_id*/ workspace_foreach_id,
+    /*foreach_cache*/ nullptr,
+    /*foreach_path*/ nullptr,
+    /*owner_pointer_get*/ nullptr,
 
-    /* blend_write */ workspace_blend_write,
-    /* blend_read_data */ workspace_blend_read_data,
-    /* blend_read_lib */ workspace_blend_read_lib,
-    /* blend_read_expand */ workspace_blend_read_expand,
+    /*blend_write*/ workspace_blend_write,
+    /*blend_read_data*/ workspace_blend_read_data,
+    /*blend_read_lib*/ workspace_blend_read_lib,
+    /*blend_read_expand*/ workspace_blend_read_expand,
 
-    /* blend_read_undo_preserve */ nullptr,
+    /*blend_read_undo_preserve*/ nullptr,
 
-    /* lib_override_apply_post */ nullptr,
+    /*lib_override_apply_post*/ nullptr,
 };
 
 /* -------------------------------------------------------------------- */

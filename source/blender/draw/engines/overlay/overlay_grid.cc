@@ -59,16 +59,18 @@ void OVERLAY_grid_init(OVERLAY_Data *vedata)
     const bool draw_grid = is_uv_edit || !ED_space_image_has_buffer(sima);
     if (background_enabled && draw_grid) {
       grid_flag |= SHOW_GRID;
-      if (is_uv_edit && (sima->flag & SI_CUSTOM_GRID) != 0) {
-        grid_flag |= CUSTOM_GRID;
+      if (is_uv_edit) {
+        if (sima->grid_shape_source != SI_GRID_SHAPE_DYNAMIC) {
+          grid_flag |= CUSTOM_GRID;
+        }
       }
     }
 
     grid->distance = 1.0f;
     copy_v3_fl3(grid->size, 1.0f, 1.0f, 1.0f);
     if (is_uv_edit) {
-      grid->size[0] = (float)sima->tile_grid_shape[0];
-      grid->size[1] = (float)sima->tile_grid_shape[1];
+      grid->size[0] = float(sima->tile_grid_shape[0]);
+      grid->size[1] = float(sima->tile_grid_shape[1]);
     }
 
     grid->zoom_factor = ED_space_image_zoom_level(v2d, SI_GRID_STEPS_LEN);
@@ -122,9 +124,9 @@ void OVERLAY_grid_init(OVERLAY_Data *vedata)
       }
     }
 
-    grid_axes[0] = (float)((grid_flag & (PLANE_XZ | PLANE_XY)) != 0);
-    grid_axes[1] = (float)((grid_flag & (PLANE_YZ | PLANE_XY)) != 0);
-    grid_axes[2] = (float)((grid_flag & (PLANE_YZ | PLANE_XZ)) != 0);
+    grid_axes[0] = float((grid_flag & (PLANE_XZ | PLANE_XY)) != 0);
+    grid_axes[1] = float((grid_flag & (PLANE_YZ | PLANE_XY)) != 0);
+    grid_axes[2] = float((grid_flag & (PLANE_YZ | PLANE_XZ)) != 0);
 
     /* Z axis if needed */
     if (((rv3d->view == RV3D_VIEW_USER) || (rv3d->persp != RV3D_ORTHO)) && show_axis_z) {
@@ -144,8 +146,8 @@ void OVERLAY_grid_init(OVERLAY_Data *vedata)
 
       zneg_flag = zpos_flag;
 
-      /* Persp : If camera is below floor plane, we switch clipping
-       * Ortho : If eye vector is looking up, we switch clipping */
+      /* Perspective: If camera is below floor plane, we switch clipping.
+       * Orthographic: If eye vector is looking up, we switch clipping. */
       if (((winmat[3][3] == 0.0f) && (campos[2] > 0.0f)) ||
           ((winmat[3][3] != 0.0f) && (zvec[2] < 0.0f))) {
         zpos_flag |= CLIP_ZPOS;
@@ -156,9 +158,9 @@ void OVERLAY_grid_init(OVERLAY_Data *vedata)
         zneg_flag |= CLIP_ZPOS;
       }
 
-      zplane_axes[0] = (float)((zpos_flag & (PLANE_XZ | PLANE_XY)) != 0);
-      zplane_axes[1] = (float)((zpos_flag & (PLANE_YZ | PLANE_XY)) != 0);
-      zplane_axes[2] = (float)((zpos_flag & (PLANE_YZ | PLANE_XZ)) != 0);
+      zplane_axes[0] = float((zpos_flag & (PLANE_XZ | PLANE_XY)) != 0);
+      zplane_axes[1] = float((zpos_flag & (PLANE_YZ | PLANE_XY)) != 0);
+      zplane_axes[2] = float((zpos_flag & (PLANE_YZ | PLANE_XZ)) != 0);
     }
     else {
       zneg_flag = zpos_flag = CLIP_ZNEG | CLIP_ZPOS;
@@ -239,7 +241,7 @@ void OVERLAY_grid_cache_init(OVERLAY_Data *ved)
     DRWShadingGroup *grp = DRW_shgroup_create(sh, psl->grid_ps);
     float color_back[4];
     interp_v4_v4v4(color_back, G_draw.block.color_background, G_draw.block.color_grid, 0.5);
-    DRW_shgroup_uniform_vec4_copy(grp, "color", color_back);
+    DRW_shgroup_uniform_vec4_copy(grp, "ucolor", color_back);
     DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &dtxl->depth);
     unit_m4(mat);
     mat[0][0] = grid->size[0];

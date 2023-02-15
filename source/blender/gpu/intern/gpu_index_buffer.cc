@@ -76,7 +76,7 @@ void GPU_indexbuf_init(GPUIndexBufBuilder *builder,
 #if TRUST_NO_ONE
   assert(verts_per_prim != -1);
 #endif
-  GPU_indexbuf_init_ex(builder, prim_type, prim_len * (uint)verts_per_prim, vertex_len);
+  GPU_indexbuf_init_ex(builder, prim_type, prim_len * uint(verts_per_prim), vertex_len);
 }
 
 GPUIndexBuf *GPU_indexbuf_build_on_device(uint index_len)
@@ -388,23 +388,15 @@ void IndexBuf::squeeze_indices_short(uint min_idx,
                                  0xFFFFu :
                                  (max_idx - min_idx);
     for (uint i = 0; i < index_len_; i++) {
-      ushort_idx[i] = (uint16_t)MIN2(clamp_max_idx, uint_idx[i] - min_idx);
+      ushort_idx[i] = uint16_t(MIN2(clamp_max_idx, uint_idx[i] - min_idx));
     }
   }
   else {
     index_base_ = 0;
     for (uint i = 0; i < index_len_; i++) {
-      ushort_idx[i] = (uint16_t)(uint_idx[i]);
+      ushort_idx[i] = uint16_t(uint_idx[i]);
     }
   }
-}
-
-uint32_t *IndexBuf::unmap(const uint32_t *mapped_memory) const
-{
-  size_t size = size_get();
-  uint32_t *result = static_cast<uint32_t *>(MEM_mallocN(size, __func__));
-  memcpy(result, mapped_memory, size);
-  return result;
 }
 
 }  // namespace blender::gpu
@@ -456,14 +448,9 @@ void GPU_indexbuf_create_subrange_in_place(GPUIndexBuf *elem,
   unwrap(elem)->init_subrange(unwrap(elem_src), start, length);
 }
 
-const uint32_t *GPU_indexbuf_read(GPUIndexBuf *elem)
+void GPU_indexbuf_read(GPUIndexBuf *elem, uint32_t *data)
 {
-  return unwrap(elem)->read();
-}
-
-uint32_t *GPU_indexbuf_unmap(const GPUIndexBuf *elem, const uint32_t *mapped_buffer)
-{
-  return unwrap(elem)->unmap(mapped_buffer);
+  return unwrap(elem)->read(data);
 }
 
 void GPU_indexbuf_discard(GPUIndexBuf *elem)

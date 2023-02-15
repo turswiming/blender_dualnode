@@ -40,7 +40,7 @@
 
 static bool socket_is_used(bNodeSocket *sock)
 {
-  return sock->flag & SOCK_IN_USE;
+  return sock->flag & SOCK_IS_LINKED;
 }
 
 static float *cycles_node_socket_float_value(bNodeSocket *socket)
@@ -371,7 +371,7 @@ static void light_emission_node_to_energy(Light *light, float *energy, float col
   bNodeSocket *strength_socket = nodeFindSocket(emission_node, SOCK_IN, "Strength");
   bNodeSocket *color_socket = nodeFindSocket(emission_node, SOCK_IN, "Color");
 
-  if ((strength_socket->flag & SOCK_IN_USE) || (color_socket->flag & SOCK_IN_USE)) {
+  if ((strength_socket->flag & SOCK_IS_LINKED) || (color_socket->flag & SOCK_IS_LINKED)) {
     return;
   }
 
@@ -1194,7 +1194,7 @@ static void update_voronoi_node_square_distance(bNodeTree *ntree)
       NodeTexVoronoi *tex = (NodeTexVoronoi *)node->storage;
       bNodeSocket *sockDistance = nodeFindSocket(node, SOCK_OUT, "Distance");
       if (tex->distance == SHD_VORONOI_EUCLIDEAN &&
-          (ELEM(tex->feature, SHD_VORONOI_F1, SHD_VORONOI_F2)) && socket_is_used(sockDistance)) {
+          ELEM(tex->feature, SHD_VORONOI_F1, SHD_VORONOI_F2) && socket_is_used(sockDistance)) {
         bNode *multiplyNode = nodeAddStaticNode(NULL, ntree, SH_NODE_MATH);
         multiplyNode->custom1 = NODE_MATH_MULTIPLY;
         multiplyNode->locx = node->locx + node->width + 20.0f;

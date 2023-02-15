@@ -3,6 +3,7 @@
 set(INC
   ../include
   ../space_sequencer
+  ../../asset_system
   ../../blenfont
   ../../blenkernel
   ../../blenlib
@@ -21,13 +22,16 @@ set(INC
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
+set(INC_SYS
+)
 
 set(SRC
   ed_draw.c
   ed_transverts.c
-  ed_util.c
+  ed_util.cc
   ed_util_imbuf.c
   ed_util_ops.cc
+  ed_viewer_path.cc
   gizmo_utils.c
   numinput.c
   select_utils.c
@@ -61,6 +65,7 @@ set(SRC
   ../include/ED_mball.h
   ../include/ED_mesh.h
   ../include/ED_node.h
+  ../include/ED_node.hh
   ../include/ED_numinput.h
   ../include/ED_object.h
   ../include/ED_outliner.h
@@ -89,6 +94,7 @@ set(SRC
   ../include/ED_uvedit.h
   ../include/ED_view3d.h
   ../include/ED_view3d_offscreen.h
+  ../include/ED_viewer_path.hh
   ../include/UI_abstract_view.hh
   ../include/UI_grid_view.hh
   ../include/UI_icons.h

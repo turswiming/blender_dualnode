@@ -64,7 +64,7 @@ static void bpy_text_filepath_get(char *filepath,
                text->id.name + 2);
 }
 
-/* Very annoying! Undo #_PyModule_Clear(), see T23871. */
+/* Very annoying! Undo #_PyModule_Clear(), see #23871. */
 #define PYMODULE_CLEAR_WORKAROUND
 
 #ifdef PYMODULE_CLEAR_WORKAROUND
@@ -154,7 +154,7 @@ static bool python_script_exec(bContext *C,
        * Note on use of 'globals()', it's important not copy the dictionary because
        * tools may inspect 'sys.modules["__main__"]' for variables defined in the code
        * where using a copy of 'globals()' causes code execution
-       * to leave the main namespace untouched. see: T51444
+       * to leave the main namespace untouched. see: #51444
        *
        * This leaves us with the problem of variables being included,
        * currently this is worked around using 'dict.__del__' it's ugly but works.
@@ -259,7 +259,7 @@ static bool bpy_run_string_impl(bContext *C,
 
   py_dict = PyC_DefaultNameSpace("<blender string>");
 
-  if (imports && (!PyC_NameSpace_ImportArray(py_dict, imports))) {
+  if (imports && !PyC_NameSpace_ImportArray(py_dict, imports)) {
     Py_DECREF(py_dict);
     retval = NULL;
   }

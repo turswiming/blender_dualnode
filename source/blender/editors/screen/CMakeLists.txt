@@ -20,6 +20,9 @@ set(INC
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
+set(INC_SYS
+)
+
 set(SRC
   area.c
   area_query.c
@@ -34,6 +37,7 @@ set(SRC
   screendump.c
   workspace_edit.c
   workspace_layout_edit.c
+  workspace_listen.cc
 
   screen_intern.h
 )

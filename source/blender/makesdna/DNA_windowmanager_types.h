@@ -23,7 +23,6 @@ struct wmWindow;
 struct wmWindowManager;
 
 struct wmEvent;
-struct wmGesture;
 struct wmKeyConfig;
 struct wmKeyMap;
 struct wmMsgBus;
@@ -89,13 +88,13 @@ typedef struct Report {
 } Report;
 
 /**
- * \note Saved in the wm, don't remove.
+ * \note Saved in the #wmWindowManager, don't remove.
  */
 typedef struct ReportList {
   ListBase list;
-  /** eReportType. */
+  /** #eReportType. */
   int printlevel;
-  /** eReportType. */
+  /** #eReportType. */
   int storelevel;
   int flag;
   char _pad[4];
@@ -263,7 +262,7 @@ typedef struct wmWindow {
 
   struct bScreen *screen DNA_DEPRECATED;
 
-  /** Winid also in screens, is for retrieving this window after read. */
+  /** Window-ID also in screens, is for retrieving this window after read. */
   int winid;
   /** Window coords. */
   short posx, posy, sizex, sizey;
@@ -277,7 +276,7 @@ typedef struct wmWindow {
   short lastcursor;
   /** The current modal cursor. */
   short modalcursor;
-  /** Cursor grab mode. */
+  /** Cursor grab mode #GHOST_TGrabCursorMode (run-time only) */
   short grabcursor;
   /** Internal: tag this for extra mouse-move event,
    * makes cursors/buttons active on UI switching. */
@@ -293,7 +292,7 @@ typedef struct wmWindow {
   /**
    * Enable when the drag was handled,
    * to avoid mouse-motion continually triggering drag events which are not handled
-   * but add overhead to gizmo handling (for example), see T87511.
+   * but add overhead to gizmo handling (for example), see #87511.
    */
   char event_queue_check_drag_handled;
 
@@ -364,7 +363,7 @@ typedef struct wmOperatorTypeMacro {
   struct wmOperatorTypeMacro *next, *prev;
 
   /* operator id */
-  char idname[64];
+  char idname[64]; /* OP_MAX_TYPENAME */
   /* rna pointer to access properties, like keymap */
   /** Operator properties, assigned to ptr->data and can be written to a file. */
   struct IDProperty *properties;
@@ -390,11 +389,14 @@ typedef struct wmKeyMapItem {
   short propvalue;
 
   /* event */
-  /** Event code itself. */
+  /** Event code itself (#EVT_LEFTCTRLKEY, #LEFTMOUSE etc). */
   short type;
-  /** KM_ANY, KM_PRESS, KM_NOTHING etc. */
+  /** Button state (#KM_ANY, #KM_PRESS, #KM_DBL_CLICK, #KM_CLICK_DRAG, #KM_NOTHING etc). */
   int8_t val;
-  /** Use when `val == KM_CLICK_DRAG`. */
+  /**
+   * The 2D direction of the event to use when `val == KM_CLICK_DRAG`.
+   * Set to #KM_DIRECTION_N, #KM_DIRECTION_S & related values, #KM_NOTHING for any direction.
+   */
   int8_t direction;
   /** `oskey` also known as apple, windows-key or super. */
   short shift, ctrl, alt, oskey;
@@ -510,7 +512,7 @@ enum {
 
 /**
  * This is similar to addon-preferences,
- * however unlike add-ons key-config's aren't saved to disk.
+ * however unlike add-ons key-configurations aren't saved to disk.
  *
  * #wmKeyConfigPref is written to DNA,
  * #wmKeyConfigPrefType_Runtime has the RNA type.
@@ -551,7 +553,7 @@ typedef struct wmOperator {
 
   /* saved */
   /** Used to retrieve type pointer. */
-  char idname[64];
+  char idname[64]; /* OP_MAX_TYPENAME */
   /** Saved, user-settable properties. */
   IDProperty *properties;
 
@@ -618,7 +620,7 @@ enum {
    * This difference can be important because previous settings may be used,
    * even with #PROP_SKIP_SAVE the repeat last operator will use the previous settings.
    * Unlike #OP_IS_REPEAT the selection (and context generally) may be different each time.
-   * See T60777 for an example of when this is needed.
+   * See #60777 for an example of when this is needed.
    */
   OP_IS_REPEAT_LAST = (1 << 1),
 

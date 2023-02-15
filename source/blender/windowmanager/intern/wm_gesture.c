@@ -185,7 +185,7 @@ static void wm_gesture_draw_line(wmGesture *gt)
   immUniform4f("color", 0.4f, 0.4f, 0.4f, 1.0f);
   immUniform4f("color2", 1.0f, 1.0f, 1.0f, 1.0f);
   immUniform1f("dash_width", 8.0f);
-  immUniform1f("dash_factor", 0.5f);
+  immUniform1f("udash_factor", 0.5f);
 
   float xmin = (float)rect->xmin;
   float ymin = (float)rect->ymin;
@@ -228,7 +228,7 @@ static void wm_gesture_draw_rect(wmGesture *gt)
   immUniform4f("color", 0.4f, 0.4f, 0.4f, 1.0f);
   immUniform4f("color2", 1.0f, 1.0f, 1.0f, 1.0f);
   immUniform1f("dash_width", 8.0f);
-  immUniform1f("dash_factor", 0.5f);
+  immUniform1f("udash_factor", 0.5f);
 
   imm_draw_box_wire_2d(
       shdr_pos, (float)rect->xmin, (float)rect->ymin, (float)rect->xmax, (float)rect->ymax);
@@ -267,7 +267,7 @@ static void wm_gesture_draw_circle(wmGesture *gt)
   immUniform4f("color", 0.4f, 0.4f, 0.4f, 1.0f);
   immUniform4f("color2", 1.0f, 1.0f, 1.0f, 1.0f);
   immUniform1f("dash_width", 4.0f);
-  immUniform1f("dash_factor", 0.5f);
+  immUniform1f("udash_factor", 0.5f);
 
   imm_draw_circle_wire_2d(shdr_pos, (float)rect->xmin, (float)rect->ymin, (float)rect->xmax, 40);
 
@@ -275,14 +275,14 @@ static void wm_gesture_draw_circle(wmGesture *gt)
 }
 
 struct LassoFillData {
-  unsigned char *px;
+  uchar *px;
   int width;
 };
 
 static void draw_filled_lasso_px_cb(int x, int x_end, int y, void *user_data)
 {
   struct LassoFillData *data = user_data;
-  unsigned char *col = &(data->px[(y * data->width) + x]);
+  uchar *col = &(data->px[(y * data->width) + x]);
   memset(col, 0x10, x_end - x);
 }
 
@@ -310,7 +310,7 @@ static void draw_filled_lasso(wmGesture *gt)
   if (BLI_rcti_is_empty(&rect) == false) {
     const int w = BLI_rcti_size_x(&rect);
     const int h = BLI_rcti_size_y(&rect);
-    unsigned char *pixel_buf = MEM_callocN(sizeof(*pixel_buf) * w * h, __func__);
+    uchar *pixel_buf = MEM_callocN(sizeof(*pixel_buf) * w * h, __func__);
     struct LassoFillData lasso_fill_data = {pixel_buf, w};
 
     BLI_bitmap_draw_2d_poly_v2i_n(rect.xmin,
@@ -326,7 +326,7 @@ static void draw_filled_lasso(wmGesture *gt)
 
     IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_SHUFFLE_COLOR);
     GPU_shader_bind(state.shader);
-    GPU_shader_uniform_vector(
+    GPU_shader_uniform_float_ex(
         state.shader, GPU_shader_get_uniform(state.shader, "shuffle"), 4, 1, red);
 
     immDrawPixelsTexTiled(
@@ -371,7 +371,7 @@ static void wm_gesture_draw_lasso(wmGesture *gt, bool filled)
   immUniform4f("color", 0.4f, 0.4f, 0.4f, 1.0f);
   immUniform4f("color2", 1.0f, 1.0f, 1.0f, 1.0f);
   immUniform1f("dash_width", 2.0f);
-  immUniform1f("dash_factor", 0.5f);
+  immUniform1f("udash_factor", 0.5f);
 
   immBegin((gt->type == WM_GESTURE_LASSO) ? GPU_PRIM_LINE_LOOP : GPU_PRIM_LINE_STRIP, numverts);
 
@@ -405,7 +405,7 @@ static void wm_gesture_draw_cross(wmWindow *win, wmGesture *gt)
   immUniform4f("color", 0.4f, 0.4f, 0.4f, 1.0f);
   immUniform4f("color2", 1.0f, 1.0f, 1.0f, 1.0f);
   immUniform1f("dash_width", 8.0f);
-  immUniform1f("dash_factor", 0.5f);
+  immUniform1f("udash_factor", 0.5f);
 
   immBegin(GPU_PRIM_LINES, 4);
 

@@ -60,6 +60,27 @@ struct DofGatherData {
   float transparency;
 
   float layer_opacity;
+
+#ifdef GPU_METAL
+  /* Explicit constructors -- To support GLSL syntax. */
+  inline DofGatherData() = default;
+  inline DofGatherData(vec4 in_color,
+                       float in_weight,
+                       float in_dist,
+                       float in_coc,
+                       float in_coc_sqr,
+                       float in_transparency,
+                       float in_layer_opacity)
+      : color(in_color),
+        weight(in_weight),
+        dist(in_dist),
+        coc(in_coc),
+        coc_sqr(in_coc_sqr),
+        transparency(in_transparency),
+        layer_opacity(in_layer_opacity)
+  {
+  }
+#endif
 };
 
 #define GATHER_DATA_INIT DofGatherData(vec4(0.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -239,7 +260,7 @@ void dof_gather_accumulate_sample_ring(DofGatherData ring_data,
   }
 }
 
-/* FIXME(fclem) Seems to be wrong since it needs ringcount+1 as input for
+/* FIXME(fclem) Seems to be wrong since it needs `ringcount + 1` as input for
  * slightfocus gather. */
 /* This should be replaced by web_sample_count_get() but doing so is breaking other things. */
 int dof_gather_total_sample_count(const int ring_count, const int ring_density)

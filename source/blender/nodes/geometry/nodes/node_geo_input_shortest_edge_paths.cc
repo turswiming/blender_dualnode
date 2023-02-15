@@ -3,7 +3,7 @@
 #include <queue>
 
 #include "BLI_map.hh"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 #include "BLI_task.hh"
 
@@ -129,6 +129,12 @@ class ShortestEdgePathsNextVertFieldInput final : public bke::MeshFieldInput {
         VArray<int>::ForContainer(std::move(next_index)), ATTR_DOMAIN_POINT, domain);
   }
 
+  void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
+  {
+    end_selection_.node().for_each_field_input_recursive(fn);
+    cost_.node().for_each_field_input_recursive(fn);
+  }
+
   uint64_t hash() const override
   {
     /* Some random constant hash. */
@@ -142,6 +148,11 @@ class ShortestEdgePathsNextVertFieldInput final : public bke::MeshFieldInput {
       return other_field->end_selection_ == end_selection_ && other_field->cost_ == cost_;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  {
+    return ATTR_DOMAIN_POINT;
   }
 };
 
@@ -205,6 +216,11 @@ class ShortestEdgePathsCostFieldInput final : public bke::MeshFieldInput {
       return other_field->end_selection_ == end_selection_ && other_field->cost_ == cost_;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  {
+    return ATTR_DOMAIN_POINT;
   }
 };
 

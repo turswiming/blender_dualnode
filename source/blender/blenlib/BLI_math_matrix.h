@@ -83,16 +83,12 @@ void mul_m3_m4m4(float R[3][3], const float A[4][4], const float B[4][4]);
 
 /**
  * Special matrix multiplies
- * - uniq: `R <-- AB`, R is neither A nor B
  * - pre:  `R <-- AR`
  * - post: `R <-- RB`.
  */
-void mul_m3_m3m3_uniq(float R[3][3], const float A[3][3], const float B[3][3]);
 void mul_m3_m3_pre(float R[3][3], const float A[3][3]);
 void mul_m3_m3_post(float R[3][3], const float B[3][3]);
-void mul_m4_m4m4_uniq(float R[4][4], const float A[4][4], const float B[4][4]);
-void mul_m4_m4m4_db_uniq(double R[4][4], const double A[4][4], const double B[4][4]);
-void mul_m4db_m4db_m4fl_uniq(double R[4][4], const double A[4][4], const float B[4][4]);
+void mul_m4db_m4db_m4fl(double R[4][4], const double A[4][4], const float B[4][4]);
 void mul_m4_m4_pre(float R[4][4], const float A[4][4]);
 void mul_m4_m4_post(float R[4][4], const float B[4][4]);
 
@@ -250,7 +246,7 @@ bool invert_m4_m4(float inverse[4][4], const float mat[4][4]);
  *
  * \note this has worse performance than #EIG_invert_m4_m4 (Eigen), but e.g.
  * for non-invertible scale matrices, finding a partial solution can
- * be useful to have a valid local transform center, see T57767.
+ * be useful to have a valid local transform center, see #57767.
  */
 bool invert_m4_m4_fallback(float inverse[4][4], const float mat[4][4]);
 
@@ -367,6 +363,8 @@ void pseudoinverse_m4_m4(float inverse[4][4], const float mat[4][4], float epsil
 void pseudoinverse_m3_m3(float inverse[3][3], const float mat[3][3], float epsilon);
 
 bool has_zero_axis_m4(const float matrix[4][4]);
+/** Fix any zero scale axis adding a small bias orthogonal to the other valid axis. */
+void zero_axis_bias_m4(float mat[4][4]);
 
 void invert_m4_m4_safe(float inverse[4][4], const float mat[4][4]);
 
@@ -521,7 +519,7 @@ void blend_m4_m4m4(float out[4][4], const float dst[4][4], const float src[4][4]
  * (it typically remains below 2 usec on an average i74700,
  * while #blend_m3_m3m3 remains below 0.4 usec).
  * However, it gives expected results even with non-uniformly scaled matrices,
- * see T46418 for an example.
+ * see #46418 for an example.
  *
  * Based on "Matrix Animation and Polar Decomposition", by Ken Shoemake & Tom Duff
  *
@@ -622,7 +620,7 @@ void BLI_space_transform_apply_normal(const struct SpaceTransform *data, float n
 void BLI_space_transform_invert_normal(const struct SpaceTransform *data, float no[3]);
 
 #define BLI_SPACE_TRANSFORM_SETUP(data, local, target) \
-  BLI_space_transform_from_matrices((data), (local)->obmat, (target)->obmat)
+  BLI_space_transform_from_matrices((data), (local)->object_to_world, (target)->object_to_world)
 
 /** \} */
 

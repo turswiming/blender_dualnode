@@ -131,7 +131,7 @@ static int an_stringdec(const char *string, char *head, char *tail, ushort *numl
     strcpy(head, string);
     head[nums] = '\0';
     *numlen = nume - nums + 1;
-    return ((int)atoi(&(string[nums])));
+    return (int)atoi(&(string[nums]));
   }
   tail[0] = '\0';
   strcpy(head, string);
@@ -593,7 +593,7 @@ static int startffmpeg(struct anim *anim)
     anim->duration_in_frames = video_stream->nb_frames;
 
     /* Sanity check on the detected duration. This is to work around corruption like reported in
-     * T68091. */
+     * #68091. */
     if (frame_rate.den != 0 && pFormatCtx->duration > 0) {
       double stream_sec = anim->duration_in_frames * av_q2d(frame_rate);
       double container_sec = pFormatCtx->duration / (double)AV_TIME_BASE;
@@ -927,7 +927,7 @@ static bool ffmpeg_pts_isect(int64_t pts_start, int64_t pts_end, int64_t pts_to_
 static AVFrame *ffmpeg_frame_by_pts_get(struct anim *anim, int64_t pts_to_search)
 {
   /* NOTE: `frame->pts + frame->pkt_duration` does not always match pts of next frame.
-   * See footage from T86361. Here it is OK to use, because PTS must match current or backup frame.
+   * See footage from #86361. Here it is OK to use, because PTS must match current or backup frame.
    * If there is no current frame, return NULL.
    */
   if (!anim->pFrame_complete) {
@@ -986,7 +986,7 @@ static int ffmpeg_decode_video_frame(struct anim *anim)
   av_log(anim->pFormatCtx, AV_LOG_DEBUG, "  DECODE VIDEO FRAME\n");
 
   /* Sometimes, decoder returns more than one frame per sent packet. Check if frames are available.
-   * This frames must be read, otherwise decoding will fail. See T91405. */
+   * This frames must be read, otherwise decoding will fail. See #91405. */
   anim->pFrame_complete = avcodec_receive_frame(anim->pCodecCtx, anim->pFrame) == 0;
   if (anim->pFrame_complete) {
     av_log(anim->pFormatCtx, AV_LOG_DEBUG, "  DECODE FROM CODEC BUFFER\n");
@@ -1093,12 +1093,19 @@ static int ffmpeg_seek_by_byte(AVFormatContext *pFormatCtx)
 
 static int64_t ffmpeg_get_seek_pts(struct anim *anim, int64_t pts_to_search)
 {
-  /* Step back half a frame position to make sure that we get the requested
-   * frame and not the one after it. This is a workaround as ffmpeg will
-   * sometimes not seek to a frame after the requested pts even if
-   * AVSEEK_FLAG_BACKWARD is specified.
+  /* FFmpeg seeks internally using DTS values instead of PTS. In some files DTS and PTS values are
+   * offset and sometimes ffmpeg fails to take this into account when seeking.
+   * Therefore we need to seek backwards a certain offset to make sure the frame we want is in
+   * front of us. It is not possible to determine the exact needed offset, this value is determined
+   * experimentally. Note: Too big offset can impact performance. Current 3 frame offset has no
+   * measurable impact.
    */
-  return pts_to_search - (ffmpeg_steps_per_frame_get(anim) / 2);
+  int64_t seek_pts = pts_to_search - (ffmpeg_steps_per_frame_get(anim) * 3);
+
+  if (seek_pts < 0) {
+    seek_pts = 0;
+  }
+  return seek_pts;
 }
 
 /* This gives us an estimate of which pts our requested frame will have.
@@ -1168,8 +1175,7 @@ static void ffmpeg_decode_video_frame_scan(struct anim *anim, int64_t pts_to_sea
 /* Wrapper over av_seek_frame(), for formats that doesn't have its own read_seek() or
  * read_seek2() functions defined. When seeking in these formats, rule to seek to last
  * necessary I-frame is not honored. It is not even guaranteed that I-frame, that must be
- * decoded will be read. See https://trac.ffmpeg.org/ticket/1607 and
- * https://developer.blender.org/T86944. */
+ * decoded will be read. See https://trac.ffmpeg.org/ticket/1607 & #86944. */
 static int ffmpeg_generic_seek_workaround(struct anim *anim,
                                           int64_t *requested_pts,
                                           int64_t pts_to_search)
@@ -1406,7 +1412,7 @@ static ImBuf *ffmpeg_fetchibuf(struct anim *anim, int position, IMB_Timecode_Typ
 
   ffmpeg_decode_video_frame_scan(anim, pts_to_search);
 
-  /* Update resolution as it can change per-frame with WebM. See T100741 & T100081. */
+  /* Update resolution as it can change per-frame with WebM. See #100741 & #100081. */
   anim->x = anim->pCodecCtx->width;
   anim->y = anim->pCodecCtx->height;
 

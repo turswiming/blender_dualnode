@@ -128,7 +128,7 @@ void ED_render_scene_update(const DEGEditorUpdateContext *update_ctx, const bool
     return;
   }
 
-  /* Do not call if no WM available, see T42688. */
+  /* Do not call if no WM available, see #42688. */
   if (BLI_listbase_is_empty(&bmain->wm)) {
     return;
   }
@@ -226,13 +226,13 @@ void ED_render_view_layer_changed(Main *bmain, bScreen *screen)
  * we can get rid of the manual dependency checks.
  * \{ */
 
-static void material_changed(Main *UNUSED(bmain), Material *ma)
+static void material_changed(Main * /*bmain*/, Material *ma)
 {
   /* icons */
   BKE_icon_changed(BKE_icon_id_ensure(&ma->id));
 }
 
-static void lamp_changed(Main *UNUSED(bmain), Light *la)
+static void lamp_changed(Main * /*bmain*/, Light *la)
 {
   /* icons */
   BKE_icon_changed(BKE_icon_id_ensure(&la->id));
@@ -265,7 +265,7 @@ static void texture_changed(Main *bmain, Tex *tex)
   }
 }
 
-static void world_changed(Main *UNUSED(bmain), World *wo)
+static void world_changed(Main * /*bmain*/, World *wo)
 {
   /* icons */
   BKE_icon_changed(BKE_icon_id_ensure(&wo->id));

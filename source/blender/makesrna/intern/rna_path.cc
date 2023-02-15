@@ -583,7 +583,7 @@ bool RNA_path_resolve_elements(PointerRNA *ptr, const char *path, ListBase *r_el
 }
 
 char *RNA_path_append(const char *path,
-                      const PointerRNA *UNUSED(ptr),
+                      const PointerRNA * /*ptr*/,
                       PropertyRNA *prop,
                       int intkey,
                       const char *strkey)
@@ -708,7 +708,7 @@ const char *RNA_path_array_index_token_find(const char *rna_path, const Property
   if (UNLIKELY(rna_path[0] == '\0')) {
     return nullptr;
   }
-  size_t rna_path_len = (size_t)strlen(rna_path) - 1;
+  size_t rna_path_len = size_t(strlen(rna_path)) - 1;
   if (rna_path[rna_path_len] != ']') {
     return nullptr;
   }
@@ -757,7 +757,6 @@ static char *rna_idp_path_create(IDP_Chain *child_link)
   char *path;
   bool is_first = true;
 
-  int tot = 0;
   IDP_Chain *link = child_link;
 
   /* reverse the list */
@@ -768,7 +767,6 @@ static char *rna_idp_path_create(IDP_Chain *child_link)
     link->up = link_prev;
     link_prev = link;
     link = link_next;
-    tot++;
   }
 
   for (link = link_prev; link; link = link->up) {
@@ -834,7 +832,7 @@ static char *rna_idp_path(PointerRNA *ptr,
      * That case must be ignored here, we only want to deal with runtime RNA properties stored in
      * IDProps.
      *
-     * See T84091. */
+     * See #84091. */
     PropertyRNA *prop = RNA_struct_find_property(ptr, iter->name);
     if (prop == nullptr || (prop->flag & PROP_IDPROPERTY) == 0) {
       continue;
@@ -861,7 +859,7 @@ static char *rna_idp_path(PointerRNA *ptr,
         IDProperty *array = IDP_IDPArray(iter);
         if (needle >= array && needle < (iter->len + array)) { /* found! */
           link.name = iter->name;
-          link.index = (int)(needle - array);
+          link.index = int(needle - array);
           path = rna_idp_path_create(&link);
           break;
         }
@@ -908,7 +906,7 @@ static char *rna_path_from_ID_to_idpgroup(const PointerRNA *ptr)
   BLI_assert(ptr->owner_id != nullptr);
 
   /* TODO: Support Bones/PoseBones. no pointers stored to the bones from here, only the ID.
-   *       See example in T25746.
+   *       See example in #25746.
    *       Unless this is added only way to find this is to also search
    *       all bones and pose bones of an armature or object.
    */
@@ -1229,7 +1227,7 @@ char *RNA_path_full_struct_py(const PointerRNA *ptr)
 
   data_path = RNA_path_from_ID_to_struct(ptr);
 
-  /* XXX data_path may be NULL (see T36788),
+  /* XXX data_path may be NULL (see #36788),
    * do we want to get the 'bpy.data.foo["bar"].(null)' stuff? */
   ret = BLI_sprintfN("%s.%s", id_path, data_path);
 
@@ -1333,7 +1331,7 @@ char *RNA_path_struct_property_py(PointerRNA *ptr, PropertyRNA *prop, int index)
   return ret;
 }
 
-char *RNA_path_property_py(const PointerRNA *UNUSED(ptr), PropertyRNA *prop, int index)
+char *RNA_path_property_py(const PointerRNA * /*ptr*/, PropertyRNA *prop, int index)
 {
   const bool is_rna = (prop->magic == RNA_MAGIC);
   const char *propname = RNA_property_identifier(prop);

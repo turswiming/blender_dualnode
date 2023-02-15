@@ -217,7 +217,8 @@ void ED_area_tag_refresh(ScrArea *area);
 void ED_area_do_refresh(struct bContext *C, ScrArea *area);
 struct AZone *ED_area_azones_update(ScrArea *area, const int mouse_xy[2]);
 /**
- * Use NULL to disable it.
+ * Show the given text in the area's header, instead of its regular contents.
+ * Use NULL to disable this and show the regular header contents again.
  */
 void ED_area_status_text(ScrArea *area, const char *str);
 /**
@@ -468,6 +469,8 @@ bool ED_workspace_layout_cycle(struct WorkSpace *workspace, short direction, str
     ATTR_NONNULL();
 
 void ED_workspace_status_text(struct bContext *C, const char *str);
+
+void ED_workspace_do_listen(struct bContext *C, const struct wmNotifier *note);
 
 /* anim */
 /**

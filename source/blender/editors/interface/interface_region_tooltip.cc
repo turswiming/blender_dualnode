@@ -7,7 +7,7 @@
  * ToolTip Region and Construction
  */
 
-/* TODO(@campbellbarton):
+/* TODO(@ideasman42):
  * We may want to have a higher level API that initializes a timer,
  * checks for mouse motion and clears the tool-tip afterwards.
  * We never want multiple tool-tips at once
@@ -52,11 +52,11 @@
 
 #include "ED_screen.h"
 
-#include "interface_intern.h"
+#include "interface_intern.hh"
 #include "interface_regions_intern.hh"
 
 #define UI_TIP_PAD_FAC 1.3f
-#define UI_TIP_PADDING (int)(UI_TIP_PAD_FAC * UI_UNIT_Y)
+#define UI_TIP_PADDING int(UI_TIP_PAD_FAC * UI_UNIT_Y)
 #define UI_TIP_MAXWIDTH 600
 
 #define UI_TIP_STR_MAX 1024
@@ -109,8 +109,7 @@ struct uiTooltipData {
 
 #define UI_TIP_LC_MAX 6
 
-BLI_STATIC_ASSERT(UI_TIP_LC_MAX == static_cast<int>(uiTooltipFormat::ColorID::Alert) + 1,
-                  "invalid lc-max");
+BLI_STATIC_ASSERT(UI_TIP_LC_MAX == int(uiTooltipFormat::ColorID::Alert) + 1, "invalid lc-max");
 BLI_STATIC_ASSERT(sizeof(uiTooltipFormat) <= sizeof(int), "oversize");
 
 static uiTooltipField *text_field_add_only(uiTooltipData *data)
@@ -136,7 +135,8 @@ static uiTooltipField *text_field_add(uiTooltipData *data,
   uiTooltipField *field = text_field_add_only(data);
   field->format = {};
   field->format.style = style;
-  field->format.color_id = color, field->format.is_pad = is_pad;
+  field->format.color_id = color;
+  field->format.is_pad = is_pad;
   return field;
 }
 
@@ -158,7 +158,7 @@ static void rgb_tint(float col[3], float h, float h_strength, float v, float v_s
   hsv_to_rgb_v(col_hsv_to, col);
 }
 
-static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *region)
+static void ui_tooltip_region_draw_cb(const bContext * /*C*/, ARegion *region)
 {
   const float pad_px = UI_TIP_PADDING;
   uiTooltipData *data = static_cast<uiTooltipData *>(region->regiondata);
@@ -168,12 +168,12 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *region
   uchar drawcol[4] = {0, 0, 0, 255}; /* to store color in while drawing (alpha is always 255) */
 
   /* The color from the theme. */
-  float *main_color = tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Main)];
-  float *value_color = tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Value)];
-  float *active_color = tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Active)];
-  float *normal_color = tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Normal)];
-  float *python_color = tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Python)];
-  float *alert_color = tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Alert)];
+  float *main_color = tip_colors[int(uiTooltipFormat::ColorID::Main)];
+  float *value_color = tip_colors[int(uiTooltipFormat::ColorID::Value)];
+  float *active_color = tip_colors[int(uiTooltipFormat::ColorID::Active)];
+  float *normal_color = tip_colors[int(uiTooltipFormat::ColorID::Normal)];
+  float *python_color = tip_colors[int(uiTooltipFormat::ColorID::Python)];
+  float *alert_color = tip_colors[int(uiTooltipFormat::ColorID::Alert)];
 
   float background_color[3];
 
@@ -224,7 +224,7 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *region
       fs_params.word_wrap = true;
 
       /* Draw header and active data (is done here to be able to change color). */
-      rgb_float_to_uchar(drawcol, tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Main)]);
+      rgb_float_to_uchar(drawcol, tip_colors[int(uiTooltipFormat::ColorID::Main)]);
       UI_fontstyle_set(&data->fstyle);
       UI_fontstyle_draw(&data->fstyle, &bbox, field->text, UI_TIP_STR_MAX, drawcol, &fs_params);
 
@@ -235,8 +235,7 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *region
         bbox.xmin += xofs;
         bbox.ymax -= yofs;
 
-        rgb_float_to_uchar(drawcol,
-                           tip_colors[static_cast<int>(uiTooltipFormat::ColorID::Active)]);
+        rgb_float_to_uchar(drawcol, tip_colors[int(uiTooltipFormat::ColorID::Active)]);
         UI_fontstyle_draw(
             &data->fstyle, &bbox, field->text_suffix, UI_TIP_STR_MAX, drawcol, &fs_params);
 
@@ -254,8 +253,8 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *region
 
       UI_fontstyle_set(&fstyle_mono);
       /* XXX: needed because we don't have mono in 'U.uifonts'. */
-      BLF_size(fstyle_mono.uifont_id, fstyle_mono.points * U.pixelsize, U.dpi);
-      rgb_float_to_uchar(drawcol, tip_colors[static_cast<int>(field->format.color_id)]);
+      BLF_size(fstyle_mono.uifont_id, fstyle_mono.points * U.dpi_fac);
+      rgb_float_to_uchar(drawcol, tip_colors[int(field->format.color_id)]);
       UI_fontstyle_draw(&fstyle_mono, &bbox, field->text, UI_TIP_STR_MAX, drawcol, &fs_params);
     }
     else {
@@ -265,7 +264,7 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *region
       fs_params.word_wrap = true;
 
       /* Draw remaining data. */
-      rgb_float_to_uchar(drawcol, tip_colors[static_cast<int>(field->format.color_id)]);
+      rgb_float_to_uchar(drawcol, tip_colors[int(field->format.color_id)]);
       UI_fontstyle_set(&data->fstyle);
       UI_fontstyle_draw(&data->fstyle, &bbox, field->text, UI_TIP_STR_MAX, drawcol, &fs_params);
     }
@@ -997,7 +996,7 @@ static uiTooltipData *ui_tooltip_data_from_gizmo(bContext *C, wmGizmo *gz)
 {
   uiTooltipData *data = MEM_cnew<uiTooltipData>(__func__);
 
-  /* TODO(@campbellbarton): a way for gizmos to have their own descriptions (low priority). */
+  /* TODO(@ideasman42): a way for gizmos to have their own descriptions (low priority). */
 
   /* Operator Actions */
   {
@@ -1059,7 +1058,7 @@ static uiTooltipData *ui_tooltip_data_from_gizmo(bContext *C, wmGizmo *gz)
   if (gz->type->target_property_defs_len) {
     wmGizmoProperty *gz_prop_array = WM_gizmo_target_property_array(gz);
     for (int i = 0; i < gz->type->target_property_defs_len; i++) {
-      /* TODO(@campbellbarton): function callback descriptions. */
+      /* TODO(@ideasman42): function callback descriptions. */
       wmGizmoProperty *gz_prop = &gz_prop_array[i];
       if (gz_prop->prop != nullptr) {
         const char *info = RNA_property_ui_description(gz_prop->prop);
@@ -1133,7 +1132,7 @@ static ARegion *ui_tooltip_create_with_data(bContext *C,
     int font_id;
 
     if (field->format.style == uiTooltipFormat::Style::Mono) {
-      BLF_size(blf_mono_font, data->fstyle.points * U.pixelsize, U.dpi);
+      BLF_size(blf_mono_font, data->fstyle.points * U.dpi_fac);
       font_id = blf_mono_font;
     }
     else {
@@ -1398,8 +1397,7 @@ ARegion *UI_tooltip_create_from_gizmo(bContext *C, wmGizmo *gz)
 {
   wmWindow *win = CTX_wm_window(C);
   const float aspect = 1.0f;
-  float init_position[2] = {static_cast<float>(win->eventstate->xy[0]),
-                            static_cast<float>(win->eventstate->xy[1])};
+  float init_position[2] = {float(win->eventstate->xy[0]), float(win->eventstate->xy[1])};
 
   uiTooltipData *data = ui_tooltip_data_from_gizmo(C, gz);
   if (data == nullptr) {

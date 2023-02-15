@@ -2,7 +2,10 @@
 import bpy
 from bpy.types import Header, Menu, Panel
 
-from bpy.app.translations import pgettext_iface as iface_
+from bpy.app.translations import (
+    pgettext_iface as iface_,
+    contexts as i18n_contexts,
+)
 
 
 class TOPBAR_HT_upper_bar(Header):
@@ -269,7 +272,7 @@ class TOPBAR_MT_file(Menu):
         layout = self.layout
 
         layout.operator_context = 'INVOKE_AREA'
-        layout.menu("TOPBAR_MT_file_new", text="New", icon='FILE_NEW')
+        layout.menu("TOPBAR_MT_file_new", text="New", text_ctxt=i18n_contexts.id_windowmanager, icon='FILE_NEW')
         layout.operator("wm.open_mainfile", text="Open...", icon='FILE_FOLDER')
         layout.menu("TOPBAR_MT_file_open_recent")
         layout.operator("wm.revert_mainfile")
@@ -323,7 +326,7 @@ class TOPBAR_MT_file_new(Menu):
         # Expand template paths.
 
         # Use a set to avoid duplicate user/system templates.
-        # This is a corner case, but users managed to do it! T76849.
+        # This is a corner case, but users managed to do it! #76849.
         app_templates = set()
         for path in template_paths:
             for d in os.listdir(path):
@@ -404,13 +407,25 @@ class TOPBAR_MT_file_defaults(Menu):
             app_template = None
 
         if app_template:
-            layout.label(text=bpy.path.display_name(
-                app_template, has_ext=False))
+            layout.label(
+                text=iface_(bpy.path.display_name(app_template, has_ext=False),
+                            i18n_contexts.id_workspace), translate=False)
 
         layout.operator("wm.save_homefile")
-        props = layout.operator("wm.read_factory_settings")
         if app_template:
+            display_name = bpy.path.display_name(iface_(app_template))
+            props = layout.operator("wm.read_factory_settings",
+                                    text="Load Factory Blender Settings")
             props.app_template = app_template
+            props = layout.operator("wm.read_factory_settings",
+                                    text=iface_("Load Factory %s Settings",
+                                                i18n_contexts.operator_default) % display_name,
+                                    translate=False)
+            props.app_template = app_template
+            props.use_factory_startup_app_template_only = True
+            del display_name
+        else:
+            layout.operator("wm.read_factory_settings")
 
 
 # Include technical operators here which would otherwise have no way for users to access.
@@ -453,7 +468,7 @@ class TOPBAR_MT_file_import(Menu):
             self.layout.operator("wm.alembic_import", text="Alembic (.abc)")
         if bpy.app.build_options.usd:
             self.layout.operator(
-                "wm.usd_import", text="Universal Scene Description (.usd, .usdc, .usda)")
+                "wm.usd_import", text="Universal Scene Description (.usd*)")
 
         if bpy.app.build_options.io_gpencil:
             self.layout.operator("wm.gpencil_import_svg", text="SVG as Grease Pencil")
@@ -724,7 +739,7 @@ class TOPBAR_MT_file_context_menu(Menu):
         layout = self.layout
 
         layout.operator_context = 'INVOKE_AREA'
-        layout.menu("TOPBAR_MT_file_new", text="New", icon='FILE_NEW')
+        layout.menu("TOPBAR_MT_file_new", text="New", text_ctxt=i18n_contexts.id_windowmanager, icon='FILE_NEW')
         layout.operator("wm.open_mainfile", text="Open...", icon='FILE_FOLDER')
 
         layout.separator()

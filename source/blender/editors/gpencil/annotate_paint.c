@@ -13,9 +13,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
-#include "BLI_math.h"
-#include "BLI_math_geom.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -321,7 +318,7 @@ static void annotation_stroke_convertcoords(tGPsdata *p,
     int mval_i[2];
     round_v2i_v2fl(mval_i, mval);
     if (annotation_project_check(p) &&
-        (ED_view3d_autodist_simple(p->region, mval_i, out, 0, depth))) {
+        ED_view3d_autodist_simple(p->region, mval_i, out, 0, depth)) {
       /* projecting onto 3D-Geometry
        * - nothing more needs to be done here, since view_autodist_simple() has already done it
        */
@@ -531,7 +528,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
 
       /* store settings */
       copy_v2_v2(pt->m_xy, mval);
-      /* T44932 - Pressure vals are unreliable, so ignore for now */
+      /* Pressure values are unreliable, so ignore for now, see #44932. */
       pt->pressure = 1.0f;
       pt->strength = 1.0f;
       pt->time = (float)(curtime - p->inittime);
@@ -547,7 +544,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
 
       /* store settings */
       copy_v2_v2(pt->m_xy, mval);
-      /* T44932 - Pressure vals are unreliable, so ignore for now */
+      /* Pressure values are unreliable, so ignore for now, see #44932. */
       pt->pressure = 1.0f;
       pt->strength = 1.0f;
       pt->time = (float)(curtime - p->inittime);
@@ -623,7 +620,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
 
     /* store settings */
     copy_v2_v2(pt->m_xy, mval);
-    /* T44932 - Pressure vals are unreliable, so ignore for now */
+    /* Pressure values are unreliable, so ignore for now, see #44932. */
     pt->pressure = 1.0f;
     pt->strength = 1.0f;
     pt->time = (float)(curtime - p->inittime);
@@ -1120,7 +1117,7 @@ static void annotation_stroke_eraser_dostroke(tGPsdata *p,
       gpencil_point_to_xy(&p->gsc, gps, gps->points, &pc1[0], &pc1[1]);
 
       /* Do bound-box check first. */
-      if ((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
+      if (!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1]) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
         /* only check if point is inside */
         if (len_v2v2_int(mval_i, pc1) <= radius) {
           /* free stroke */
@@ -1162,8 +1159,8 @@ static void annotation_stroke_eraser_dostroke(tGPsdata *p,
       gpencil_point_to_xy(&p->gsc, gps, pt2, &pc2[0], &pc2[1]);
 
       /* Check that point segment of the bound-box of the eraser stroke. */
-      if (((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) ||
-          ((!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1])) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
+      if ((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1]) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) ||
+          (!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1]) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
         /* Check if point segment of stroke had anything to do with
          * eraser region  (either within stroke painted, or on its lines)
          *  - this assumes that line-width is irrelevant.
@@ -1351,7 +1348,9 @@ static bool annotation_session_initdata(bContext *C, tGPsdata *p)
 
       if (sc->gpencil_src == SC_GPENCIL_SRC_TRACK) {
         int framenr = ED_space_clip_get_clip_frame_number(sc);
-        MovieTrackingTrack *track = BKE_tracking_track_get_active(&clip->tracking);
+        const MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(
+            &clip->tracking);
+        MovieTrackingTrack *track = tracking_object->active_track;
         MovieTrackingMarker *marker = track ? BKE_tracking_marker_get(track, framenr) : NULL;
 
         if (marker) {
@@ -1734,7 +1733,7 @@ static void annotation_draw_eraser(bContext *UNUSED(C), int x, int y, void *p_pt
     immUniformColor4f(1.0f, 0.39f, 0.39f, 0.78f);
     immUniform1i("colors_len", 0); /* "simple" mode */
     immUniform1f("dash_width", 12.0f);
-    immUniform1f("dash_factor", 0.5f);
+    immUniform1f("udash_factor", 0.5f);
 
     imm_draw_circle_wire_2d(shdr_pos,
                             x,
@@ -2065,7 +2064,7 @@ static void annotation_draw_apply_event(
   /* Convert from window-space to area-space mouse coordinates
    * add any x,y override position for fake events. */
   if (p->flags & GP_PAINTFLAG_FIRSTRUN) {
-    /* The first run may be a drag event, see: T99368. */
+    /* The first run may be a drag event, see: #99368. */
     WM_event_drag_start_mval_fl(event, p->region, p->mval);
     p->mval[0] -= x;
     p->mval[1] -= y;
@@ -2137,7 +2136,7 @@ static void annotation_draw_apply_event(
 
   /* Hack for pressure sensitive eraser on D+RMB when using a tablet:
    * The pen has to float over the tablet surface, resulting in
-   * zero pressure (T47101). Ignore pressure values if floating
+   * zero pressure (#47101). Ignore pressure values if floating
    * (i.e. "effectively zero" pressure), and only when the "active"
    * end is the stylus (i.e. the default when not eraser)
    */
@@ -2358,7 +2357,7 @@ static tGPsdata *annotation_stroke_begin(bContext *C, wmOperator *op)
   tGPsdata *p = op->customdata;
 
   /* we must check that we're still within the area that we're set up to work from
-   * otherwise we could crash (see bug T20586)
+   * otherwise we could crash (see bug #20586)
    */
   if (CTX_wm_area(C) != p->area) {
     printf("\t\t\tGP - wrong area execution abort!\n");
@@ -2467,7 +2466,7 @@ static int annotation_draw_modal(bContext *C, wmOperator *op, const wmEvent *eve
              EVT_UPARROWKEY,
              EVT_ZKEY)) {
       /* allow some keys:
-       *   - For frame changing T33412.
+       *   - For frame changing #33412.
        *   - For undo (during sketching sessions).
        */
     }
@@ -2504,7 +2503,7 @@ static int annotation_draw_modal(bContext *C, wmOperator *op, const wmEvent *eve
   /* Exit painting mode (and/or end current stroke)
    *
    * NOTE: cannot do RIGHTMOUSE (as is standard for canceling)
-   * as that would break polyline T32647.
+   * as that would break polyline #32647.
    */
   if (event->val == KM_PRESS &&
       ELEM(event->type, EVT_RETKEY, EVT_PADENTER, EVT_ESCKEY, EVT_SPACEKEY, EVT_EKEY)) {
@@ -2517,10 +2516,10 @@ static int annotation_draw_modal(bContext *C, wmOperator *op, const wmEvent *eve
    *  - LEFTMOUSE  = standard drawing (all) / straight line drawing (all) / polyline (toolbox
    * only)
    *  - RIGHTMOUSE = polyline (hotkey) / eraser (all)
-   *    (Disabling RIGHTMOUSE case here results in bugs like T32647)
+   *    (Disabling RIGHTMOUSE case here results in bugs like #32647)
    * also making sure we have a valid event value, to not exit too early
    */
-  if (ELEM(event->type, LEFTMOUSE, RIGHTMOUSE) && (ELEM(event->val, KM_PRESS, KM_RELEASE))) {
+  if (ELEM(event->type, LEFTMOUSE, RIGHTMOUSE) && ELEM(event->val, KM_PRESS, KM_RELEASE)) {
     /* if painting, end stroke */
     if (p->status == GP_STATUS_PAINTING) {
       int sketch = 0;
@@ -2705,7 +2704,7 @@ static int annotation_draw_modal(bContext *C, wmOperator *op, const wmEvent *eve
   else {
     /* update status indicators - cursor, header, etc. */
     annotation_draw_status_indicators(C, p);
-    /* cursor may have changed outside our control - T44084 */
+    /* cursor may have changed outside our control - #44084 */
     annotation_draw_cursor_set(p);
   }
 

@@ -5,14 +5,20 @@ set(INC
   ../../blenfont
   ../../blenkernel
   ../../blenlib
+  ../../blenloader
   ../../blentranslation
   ../../gpu
   ../../makesdna
   ../../makesrna
   ../../windowmanager
   ../../../../intern/guardedalloc
+
+  # dna_type_offsets.h
+  ${CMAKE_CURRENT_BINARY_DIR}/../../makesdna/intern
 )
 
+set(INC_SYS
+)
 
 set(SRC
   space_text.c
@@ -26,7 +32,7 @@ set(SRC
   text_format_py.c
   text_header.c
   text_ops.c
-  text_undo.c
+  text_undo.cc
 
   text_format.h
   text_intern.h
@@ -47,3 +53,6 @@ endif()
 
 
 blender_add_lib(bf_editor_space_text "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+# dna_type_offsets.h
+add_dependencies(bf_editor_space_text bf_dna)

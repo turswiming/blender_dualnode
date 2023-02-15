@@ -32,9 +32,9 @@ static GPUVertFormat *get_sculpt_data_format()
 }
 
 static void extract_sculpt_data_init(const MeshRenderData *mr,
-                                     MeshBatchCache *UNUSED(cache),
+                                     MeshBatchCache * /*cache*/,
                                      void *buf,
-                                     void *UNUSED(tls_data))
+                                     void * /*tls_data*/)
 {
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
   GPUVertFormat *format = get_sculpt_data_format();
@@ -115,9 +115,9 @@ static void extract_sculpt_data_init(const MeshRenderData *mr,
 
 static void extract_sculpt_data_init_subdiv(const DRWSubdivCache *subdiv_cache,
                                             const MeshRenderData *mr,
-                                            MeshBatchCache *UNUSED(cache),
+                                            MeshBatchCache * /*cache*/,
                                             void *buffer,
-                                            void *UNUSED(data))
+                                            void * /*data*/)
 {
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buffer);
 
@@ -156,7 +156,7 @@ static void extract_sculpt_data_init_subdiv(const DRWSubdivCache *subdiv_cache,
     GPU_vertbuf_init_build_on_device(
         subdiv_mask_vbo, &mask_format, subdiv_cache->num_subdiv_loops);
 
-    draw_subdiv_interp_custom_data(subdiv_cache, mask_vbo, subdiv_mask_vbo, 1, 0, false);
+    draw_subdiv_interp_custom_data(subdiv_cache, mask_vbo, subdiv_mask_vbo, GPU_COMP_F32, 1, 0);
   }
 
   /* Then, gather face sets. */

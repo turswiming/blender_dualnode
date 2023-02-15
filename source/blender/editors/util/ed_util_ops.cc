@@ -50,15 +50,15 @@ static bool lib_id_preview_editing_poll(bContext *C)
     return false;
   }
   if (ID_IS_LINKED(id)) {
-    CTX_wm_operator_poll_msg_set(C, TIP_("Can't edit external library data"));
+    CTX_wm_operator_poll_msg_set(C, "Can't edit external library data");
     return false;
   }
   if (ID_IS_OVERRIDE_LIBRARY(id)) {
-    CTX_wm_operator_poll_msg_set(C, TIP_("Can't edit previews of overridden library data"));
+    CTX_wm_operator_poll_msg_set(C, "Can't edit previews of overridden library data");
     return false;
   }
   if (!BKE_previewimg_id_get_p(id)) {
-    CTX_wm_operator_poll_msg_set(C, TIP_("Data-block does not support previews"));
+    CTX_wm_operator_poll_msg_set(C, "Data-block does not support previews");
     return false;
   }
 
@@ -118,14 +118,14 @@ static bool lib_id_generate_preview_poll(bContext *C)
   const PointerRNA idptr = CTX_data_pointer_get(C, "id");
   const ID *id = (ID *)idptr.data;
   if (GS(id->name) == ID_NT) {
-    CTX_wm_operator_poll_msg_set(C, TIP_("Can't generate automatic preview for node group"));
+    CTX_wm_operator_poll_msg_set(C, "Can't generate automatic preview for node group");
     return false;
   }
 
   return true;
 }
 
-static int lib_id_generate_preview_exec(bContext *C, wmOperator *UNUSED(op))
+static int lib_id_generate_preview_exec(bContext *C, wmOperator * /*op*/)
 {
   PointerRNA idptr = CTX_data_pointer_get(C, "id");
   ID *id = (ID *)idptr.data;
@@ -170,7 +170,7 @@ static bool lib_id_generate_preview_from_object_poll(bContext *C)
   return true;
 }
 
-static int lib_id_generate_preview_from_object_exec(bContext *C, wmOperator *UNUSED(op))
+static int lib_id_generate_preview_from_object_exec(bContext *C, wmOperator * /*op*/)
 {
   PointerRNA idptr = CTX_data_pointer_get(C, "id");
   ID *id = (ID *)idptr.data;
@@ -229,7 +229,7 @@ static int lib_id_fake_user_toggle_exec(bContext *C, wmOperator *op)
   ID *id = (ID *)idptr.data;
 
   if (!BKE_id_is_editable(CTX_data_main(C), id) ||
-      (ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_TXT, ID_OB, ID_WS))) {
+      ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_TXT, ID_OB, ID_WS)) {
     BKE_report(op->reports, RPT_ERROR, "Data-block type does not support fake user");
     return OPERATOR_CANCELLED;
   }
@@ -304,7 +304,7 @@ static bool lib_id_override_editable_toggle_poll(bContext *C)
   return id && ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_LINKED(id);
 }
 
-static int lib_id_override_editable_toggle_exec(bContext *C, wmOperator *UNUSED(op))
+static int lib_id_override_editable_toggle_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
   const PointerRNA id_ptr = CTX_data_pointer_get_type(C, "id", &RNA_ID);
@@ -346,7 +346,7 @@ static void ED_OT_lib_id_override_editable_toggle(wmOperatorType *ot)
 /** \name General editor utils.
  * \{ */
 
-static int ed_flush_edits_exec(bContext *C, wmOperator *UNUSED(op))
+static int ed_flush_edits_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
   ED_editors_flush_edits(bmain);

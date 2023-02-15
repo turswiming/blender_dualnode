@@ -125,26 +125,20 @@ void GLVertBuf::bind_as_texture(uint binding)
   GPU_texture_bind(buffer_texture_, binding);
 }
 
-const void *GLVertBuf::read() const
+void GLVertBuf::read(void *data) const
 {
   BLI_assert(is_active());
   void *result = glMapBuffer(GL_ARRAY_BUFFER, GL_READ_ONLY);
-  return result;
-}
-
-void *GLVertBuf::unmap(const void *mapped_data) const
-{
-  void *result = MEM_mallocN(vbo_size_, __func__);
-  memcpy(result, mapped_data, vbo_size_);
-  return result;
+  memcpy(data, result, size_used_get());
+  glUnmapBuffer(GL_ARRAY_BUFFER);
 }
 
 void GLVertBuf::wrap_handle(uint64_t handle)
 {
   BLI_assert(vbo_id_ == 0);
-  BLI_assert(glIsBuffer(static_cast<uint>(handle)));
+  BLI_assert(glIsBuffer(uint(handle)));
   is_wrapper_ = true;
-  vbo_id_ = static_cast<uint>(handle);
+  vbo_id_ = uint(handle);
   /* We assume the data is already on the device, so no need to allocate or send it. */
   flag = GPU_VERTBUF_DATA_UPLOADED;
 }

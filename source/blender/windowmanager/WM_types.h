@@ -185,12 +185,12 @@ enum {
 };
 
 /** For #WM_cursor_grab_enable wrap axis. */
-enum {
+typedef enum eWM_CursorWrapAxis {
   WM_CURSOR_WRAP_NONE = 0,
   WM_CURSOR_WRAP_X,
   WM_CURSOR_WRAP_Y,
   WM_CURSOR_WRAP_XY,
-};
+} eWM_CursorWrapAxis;
 
 /**
  * Context to call operator in for #WM_operator_name_call.
@@ -353,11 +353,13 @@ typedef struct wmNotifier {
 #define NC_LIGHTPROBE (26 << 24)
 /* Changes to asset data in the current .blend. */
 #define NC_ASSET (27 << 24)
+/* Changes to the active viewer path. */
+#define NC_VIEWER_PATH (28 << 24)
 
 /* data type, 256 entries is enough, it can overlap */
 #define NOTE_DATA 0x00FF0000
 
-/* NC_WM windowmanager */
+/* NC_WM (window-manager). */
 #define ND_FILEREAD (1 << 16)
 #define ND_FILESAVE (2 << 16)
 #define ND_DATACHANGED (3 << 16)
@@ -586,13 +588,13 @@ typedef struct wmGesture {
   /**
    * customdata
    * - for border is a #rcti.
-   * - for circle is recti, (xmin, ymin) is center, xmax radius.
+   * - for circle is #rcti, (xmin, ymin) is center, xmax radius.
    * - for lasso is short array.
-   * - for straight line is a recti: (xmin,ymin) is start, (xmax, ymax) is end.
+   * - for straight line is a #rcti: (xmin, ymin) is start, (xmax, ymax) is end.
    */
   void *customdata;
 
-  /** Free pointer to use for operator allocs (if set, its freed on exit). */
+  /** Free pointer to use for operator allocations (if set, its freed on exit). */
   wmGenericUserData user_data;
 } wmGesture;
 
@@ -666,7 +668,7 @@ typedef struct wmTabletData {
  * - The reason to differentiate between "press" and the previous event state is
  *   the previous event may be set by key-release events. In the case of a single key click
  *   this isn't a problem however releasing other keys such as modifiers prevents click/click-drag
- *   events from being detected, see: T89989.
+ *   events from being detected, see: #89989.
  *
  * - Mouse-wheel events are excluded even though they generate #KM_PRESS
  *   as clicking and dragging don't make sense for mouse wheel events.
@@ -1268,7 +1270,7 @@ typedef struct RecentFile {
 
 /* Logging */
 struct CLG_LogRef;
-/* wm_init_exit.c */
+/* wm_init_exit.cc */
 
 extern struct CLG_LogRef *WM_LOG_OPERATORS;
 extern struct CLG_LogRef *WM_LOG_HANDLERS;

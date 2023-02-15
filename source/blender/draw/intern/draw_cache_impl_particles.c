@@ -89,21 +89,21 @@ typedef struct HairAttributeID {
 
 typedef struct EditStrandData {
   float pos[3];
-  float color;
+  float selection;
 } EditStrandData;
 
-static GPUVertFormat *edit_points_vert_format_get(uint *r_pos_id, uint *r_color_id)
+static GPUVertFormat *edit_points_vert_format_get(uint *r_pos_id, uint *r_selection_id)
 {
   static GPUVertFormat edit_point_format = {0};
-  static uint pos_id, color_id;
+  static uint pos_id, selection_id;
   if (edit_point_format.attr_len == 0) {
     /* Keep in sync with EditStrandData */
     pos_id = GPU_vertformat_attr_add(&edit_point_format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    color_id = GPU_vertformat_attr_add(
-        &edit_point_format, "color", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    selection_id = GPU_vertformat_attr_add(
+        &edit_point_format, "selection", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
   }
   *r_pos_id = pos_id;
-  *r_color_id = color_id;
+  *r_selection_id = selection_id;
   return &edit_point_format;
 }
 
@@ -173,13 +173,9 @@ static void particle_batch_cache_clear_hair(ParticleHairCache *hair_cache)
   /* TODO: more granular update tagging. */
   GPU_VERTBUF_DISCARD_SAFE(hair_cache->proc_point_buf);
   GPU_VERTBUF_DISCARD_SAFE(hair_cache->proc_length_buf);
-  DRW_TEXTURE_FREE_SAFE(hair_cache->point_tex);
-  DRW_TEXTURE_FREE_SAFE(hair_cache->length_tex);
 
   GPU_VERTBUF_DISCARD_SAFE(hair_cache->proc_strand_buf);
   GPU_VERTBUF_DISCARD_SAFE(hair_cache->proc_strand_seg_buf);
-  DRW_TEXTURE_FREE_SAFE(hair_cache->strand_tex);
-  DRW_TEXTURE_FREE_SAFE(hair_cache->strand_seg_tex);
 
   for (int i = 0; i < MAX_MTFACE; i++) {
     GPU_VERTBUF_DISCARD_SAFE(hair_cache->proc_uv_buf[i]);
@@ -192,7 +188,6 @@ static void particle_batch_cache_clear_hair(ParticleHairCache *hair_cache)
 
   for (int i = 0; i < MAX_HAIR_SUBDIV; i++) {
     GPU_VERTBUF_DISCARD_SAFE(hair_cache->final[i].proc_buf);
-    DRW_TEXTURE_FREE_SAFE(hair_cache->final[i].proc_tex);
     for (int j = 0; j < MAX_THICKRES; j++) {
       GPU_BATCH_DISCARD_SAFE(hair_cache->final[i].proc_hairs[j]);
     }
@@ -315,8 +310,13 @@ static void particle_calculate_parent_uvs(ParticleSystem *psys,
     }
   }
   if (!ELEM(num, DMCACHE_NOTFOUND, DMCACHE_ISCHILD)) {
-    MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
-    MFace *mface = &mfaces[num];
+    const MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
+    if (UNLIKELY(mfaces == NULL)) {
+      BLI_assert_msg(psmd->mesh_final->totpoly == 0,
+                     "A mesh with polygons should always have a generated 'CD_MFACE' layer!");
+      return;
+    }
+    const MFace *mface = &mfaces[num];
     for (int j = 0; j < num_uv_layers; j++) {
       psys_interpolate_uvs(mtfaces[j] + num, mface->v4, particle->fuv, r_uv[j]);
     }
@@ -345,8 +345,13 @@ static void particle_calculate_parent_mcol(ParticleSystem *psys,
     }
   }
   if (!ELEM(num, DMCACHE_NOTFOUND, DMCACHE_ISCHILD)) {
-    MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
-    MFace *mface = &mfaces[num];
+    const MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
+    if (UNLIKELY(mfaces == NULL)) {
+      BLI_assert_msg(psmd->mesh_final->totpoly == 0,
+                     "A mesh with polygons should always have a generated 'CD_MFACE' layer!");
+      return;
+    }
+    const MFace *mface = &mfaces[num];
     for (int j = 0; j < num_col_layers; j++) {
       /* CustomDataLayer CD_MCOL has 4 structs per face. */
       psys_interpolate_mcol(mcols[j] + num * 4, mface->v4, particle->fuv, &r_mcol[j]);
@@ -372,8 +377,8 @@ static void particle_interpolate_children_uvs(ParticleSystem *psys,
   ChildParticle *particle = &psys->child[child_index];
   int num = particle->num;
   if (num != DMCACHE_NOTFOUND) {
-    MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
-    MFace *mface = &mfaces[num];
+    const MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
+    const MFace *mface = &mfaces[num];
     for (int j = 0; j < num_uv_layers; j++) {
       psys_interpolate_uvs(mtfaces[j] + num, mface->v4, particle->fuv, r_uv[j]);
     }
@@ -397,8 +402,8 @@ static void particle_interpolate_children_mcol(ParticleSystem *psys,
   ChildParticle *particle = &psys->child[child_index];
   int num = particle->num;
   if (num != DMCACHE_NOTFOUND) {
-    MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
-    MFace *mface = &mfaces[num];
+    const MFace *mfaces = CustomData_get_layer(&psmd->mesh_final->fdata, CD_MFACE);
+    const MFace *mface = &mfaces[num];
     for (int j = 0; j < num_col_layers; j++) {
       /* CustomDataLayer CD_MCOL has 4 structs per face. */
       psys_interpolate_mcol(mcols[j] + num * 4, mface->v4, particle->fuv, &r_mcol[j]);
@@ -692,11 +697,11 @@ static int particle_batch_cache_fill_segments_edit(
       if (particle) {
         float weight = particle_key_weight(particle, i, strand_t);
         /* NaN or unclamped become 1.0f */
-        seg_data->color = (weight < 1.0f) ? weight : 1.0f;
+        seg_data->selection = (weight < 1.0f) ? weight : 1.0f;
       }
       else {
         /* Computed in psys_cache_edit_paths_iter(). */
-        seg_data->color = path[j].col[0];
+        seg_data->selection = path[j].col[0];
       }
       GPU_indexbuf_add_generic_vert(elb, curr_point);
       curr_point++;
@@ -810,7 +815,7 @@ static int particle_batch_cache_fill_strands_data(ParticleSystem *psys,
 static void particle_batch_cache_ensure_procedural_final_points(ParticleHairCache *cache,
                                                                 int subdiv)
 {
-  /* Same format as point_tex. */
+  /* Same format as proc_point_buf. */
   GPUVertFormat format = {0};
   GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
@@ -823,12 +828,6 @@ static void particle_batch_cache_ensure_procedural_final_points(ParticleHairCach
   /* Those are points! not line segments. */
   GPU_vertbuf_data_alloc(cache->final[subdiv].proc_buf,
                          cache->final[subdiv].strands_res * cache->strands_len);
-
-  /* Create vbo immediately to bind to texture buffer. */
-  GPU_vertbuf_use(cache->final[subdiv].proc_buf);
-
-  cache->final[subdiv].proc_tex = GPU_texture_create_from_vertbuf("part_proc",
-                                                                  cache->final[subdiv].proc_buf);
 }
 
 static void particle_batch_cache_ensure_procedural_strand_data(PTCacheEdit *edit,
@@ -844,16 +843,24 @@ static void particle_batch_cache_ensure_procedural_strand_data(PTCacheEdit *edit
   ParticleSystemModifierData *psmd = (ParticleSystemModifierData *)md;
 
   if (psmd != NULL && psmd->mesh_final != NULL) {
-    if (CustomData_has_layer(&psmd->mesh_final->ldata, CD_MLOOPUV)) {
-      cache->num_uv_layers = CustomData_number_of_layers(&psmd->mesh_final->ldata, CD_MLOOPUV);
-      active_uv = CustomData_get_active_layer(&psmd->mesh_final->ldata, CD_MLOOPUV);
-      render_uv = CustomData_get_render_layer(&psmd->mesh_final->ldata, CD_MLOOPUV);
+    if (CustomData_has_layer(&psmd->mesh_final->ldata, CD_PROP_FLOAT2)) {
+      cache->num_uv_layers = CustomData_number_of_layers(&psmd->mesh_final->ldata, CD_PROP_FLOAT2);
+      active_uv = CustomData_get_active_layer(&psmd->mesh_final->ldata, CD_PROP_FLOAT2);
+      render_uv = CustomData_get_render_layer(&psmd->mesh_final->ldata, CD_PROP_FLOAT2);
     }
     if (CustomData_has_layer(&psmd->mesh_final->ldata, CD_PROP_BYTE_COLOR)) {
       cache->num_col_layers = CustomData_number_of_layers(&psmd->mesh_final->ldata,
                                                           CD_PROP_BYTE_COLOR);
-      active_col = CustomData_get_active_layer(&psmd->mesh_final->ldata, CD_PROP_BYTE_COLOR);
-      render_col = CustomData_get_render_layer(&psmd->mesh_final->ldata, CD_PROP_BYTE_COLOR);
+      if (psmd->mesh_final->active_color_attribute != NULL) {
+        active_col = CustomData_get_named_layer(&psmd->mesh_final->ldata,
+                                                CD_PROP_BYTE_COLOR,
+                                                psmd->mesh_final->active_color_attribute);
+      }
+      if (psmd->mesh_final->default_color_attribute != NULL) {
+        render_col = CustomData_get_named_layer(&psmd->mesh_final->ldata,
+                                                CD_PROP_BYTE_COLOR,
+                                                psmd->mesh_final->default_color_attribute);
+      }
     }
   }
 
@@ -900,7 +907,7 @@ static void particle_batch_cache_ensure_procedural_strand_data(PTCacheEdit *edit
     GPU_vertbuf_attr_get_raw_data(cache->proc_uv_buf[i], uv_id, &uv_step[i]);
 
     char attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
-    const char *name = CustomData_get_layer_name(&psmd->mesh_final->ldata, CD_MLOOPUV, i);
+    const char *name = CustomData_get_layer_name(&psmd->mesh_final->ldata, CD_PROP_FLOAT2, i);
     GPU_vertformat_safe_attr_name(name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
 
     int n = 0;
@@ -1034,14 +1041,6 @@ static void particle_batch_cache_ensure_procedural_strand_data(PTCacheEdit *edit
     MEM_freeN(parent_mcol);
   }
 
-  /* Create vbo immediately to bind to texture buffer. */
-  GPU_vertbuf_use(cache->proc_strand_buf);
-  cache->strand_tex = GPU_texture_create_from_vertbuf("part_strand", cache->proc_strand_buf);
-
-  GPU_vertbuf_use(cache->proc_strand_seg_buf);
-  cache->strand_seg_tex = GPU_texture_create_from_vertbuf("part_strand_seg",
-                                                          cache->proc_strand_seg_buf);
-
   for (int i = 0; i < cache->num_uv_layers; i++) {
     GPU_vertbuf_use(cache->proc_uv_buf[i]);
     cache->uv_tex[i] = GPU_texture_create_from_vertbuf("part_uv", cache->proc_uv_buf[i]);
@@ -1107,7 +1106,7 @@ static void particle_batch_cache_ensure_procedural_indices(PTCacheEdit *edit,
 static void particle_batch_cache_ensure_procedural_pos(PTCacheEdit *edit,
                                                        ParticleSystem *psys,
                                                        ParticleHairCache *cache,
-                                                       GPUMaterial *gpu_material)
+                                                       GPUMaterial *UNUSED(gpu_material))
 {
   if (cache->proc_point_buf == NULL) {
     /* initialize vertex format */
@@ -1149,22 +1148,6 @@ static void particle_batch_cache_ensure_procedural_pos(PTCacheEdit *edit,
             psys->childcache, child_count, &pos_step, &length_step);
       }
     }
-
-    /* Create vbo immediately to bind to texture buffer. */
-    GPU_vertbuf_use(cache->proc_point_buf);
-    cache->point_tex = GPU_texture_create_from_vertbuf("part_point", cache->proc_point_buf);
-  }
-
-  /* Checking hair length separately, only allocating gpu memory when needed. */
-  if (gpu_material && cache->proc_length_buf != NULL && cache->length_tex == NULL) {
-    ListBase gpu_attrs = GPU_material_attributes(gpu_material);
-    LISTBASE_FOREACH (GPUMaterialAttribute *, attr, &gpu_attrs) {
-      if (attr->type == CD_HAIRLENGTH) {
-        GPU_vertbuf_use(cache->proc_length_buf);
-        cache->length_tex = GPU_texture_create_from_vertbuf("hair_length", cache->proc_length_buf);
-        break;
-      }
-    }
   }
 }
 
@@ -1197,13 +1180,17 @@ static void particle_batch_cache_ensure_pos_and_seg(PTCacheEdit *edit,
   MCol **parent_mcol = NULL;
 
   if (psmd != NULL) {
-    if (CustomData_has_layer(&psmd->mesh_final->ldata, CD_MLOOPUV)) {
-      num_uv_layers = CustomData_number_of_layers(&psmd->mesh_final->ldata, CD_MLOOPUV);
-      active_uv = CustomData_get_active_layer(&psmd->mesh_final->ldata, CD_MLOOPUV);
+    if (CustomData_has_layer(&psmd->mesh_final->ldata, CD_PROP_FLOAT2)) {
+      num_uv_layers = CustomData_number_of_layers(&psmd->mesh_final->ldata, CD_PROP_FLOAT2);
+      active_uv = CustomData_get_active_layer(&psmd->mesh_final->ldata, CD_PROP_FLOAT2);
     }
     if (CustomData_has_layer(&psmd->mesh_final->ldata, CD_PROP_BYTE_COLOR)) {
       num_col_layers = CustomData_number_of_layers(&psmd->mesh_final->ldata, CD_PROP_BYTE_COLOR);
-      active_col = CustomData_get_active_layer(&psmd->mesh_final->ldata, CD_PROP_BYTE_COLOR);
+      if (psmd->mesh_final->active_color_attribute != NULL) {
+        active_col = CustomData_get_named_layer(&psmd->mesh_final->ldata,
+                                                CD_PROP_BYTE_COLOR,
+                                                psmd->mesh_final->active_color_attribute);
+      }
     }
   }
 
@@ -1221,7 +1208,7 @@ static void particle_batch_cache_ensure_pos_and_seg(PTCacheEdit *edit,
     for (int i = 0; i < num_uv_layers; i++) {
 
       char uuid[32], attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
-      const char *name = CustomData_get_layer_name(&psmd->mesh_final->ldata, CD_MLOOPUV, i);
+      const char *name = CustomData_get_layer_name(&psmd->mesh_final->ldata, CD_PROP_FLOAT2, i);
       GPU_vertformat_safe_attr_name(name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
 
       BLI_snprintf(uuid, sizeof(uuid), "a%s", attr_safe_name);
@@ -1381,7 +1368,7 @@ static void particle_batch_cache_ensure_pos(Object *object,
   sim.ob = object;
   sim.psys = psys;
   sim.psmd = psys_get_modifier(object, psys);
-  sim.psys->lattice_deform_data = psys_create_lattice_deform_data(&sim);
+  psys_sim_data_init(&sim);
 
   GPU_VERTBUF_DISCARD_SAFE(point_cache->pos);
 
@@ -1427,6 +1414,8 @@ static void particle_batch_cache_ensure_pos(Object *object,
   if (curr_point != psys->totpart) {
     GPU_vertbuf_data_resize(point_cache->pos, curr_point);
   }
+
+  psys_sim_data_free(&sim);
 }
 
 static void drw_particle_update_ptcache_edit(Object *object_eval,
@@ -1541,8 +1530,8 @@ static void particle_batch_cache_ensure_edit_pos_and_seg(PTCacheEdit *edit,
 
   GPUVertBufRaw data_step;
   GPUIndexBufBuilder elb;
-  uint pos_id, color_id;
-  GPUVertFormat *edit_point_format = edit_points_vert_format_get(&pos_id, &color_id);
+  uint pos_id, selection_id;
+  GPUVertFormat *edit_point_format = edit_points_vert_format_get(&pos_id, &selection_id);
 
   hair_cache->pos = GPU_vertbuf_create_with_format(edit_point_format);
   GPU_vertbuf_data_alloc(hair_cache->pos, hair_cache->point_len);
@@ -1605,8 +1594,8 @@ static void particle_batch_cache_ensure_edit_inner_pos(PTCacheEdit *edit,
     return;
   }
 
-  uint pos_id, color_id;
-  GPUVertFormat *edit_point_format = edit_points_vert_format_get(&pos_id, &color_id);
+  uint pos_id, selection_id;
+  GPUVertFormat *edit_point_format = edit_points_vert_format_get(&pos_id, &selection_id);
 
   cache->edit_inner_pos = GPU_vertbuf_create_with_format(edit_point_format);
   GPU_vertbuf_data_alloc(cache->edit_inner_pos, cache->edit_inner_point_len);
@@ -1619,9 +1608,9 @@ static void particle_batch_cache_ensure_edit_inner_pos(PTCacheEdit *edit,
     }
     for (int key_index = 0; key_index < point->totkey - 1; key_index++) {
       PTCacheEditKey *key = &point->keys[key_index];
-      float color = (key->flag & PEK_SELECT) ? 1.0f : 0.0f;
+      float selection = (key->flag & PEK_SELECT) ? 1.0f : 0.0f;
       GPU_vertbuf_attr_set(cache->edit_inner_pos, pos_id, global_key_index, key->world_co);
-      GPU_vertbuf_attr_set(cache->edit_inner_pos, color_id, global_key_index, &color);
+      GPU_vertbuf_attr_set(cache->edit_inner_pos, selection_id, global_key_index, &selection);
       global_key_index++;
     }
   }
@@ -1663,8 +1652,8 @@ static void particle_batch_cache_ensure_edit_tip_pos(PTCacheEdit *edit, Particle
     return;
   }
 
-  uint pos_id, color_id;
-  GPUVertFormat *edit_point_format = edit_points_vert_format_get(&pos_id, &color_id);
+  uint pos_id, selection_id;
+  GPUVertFormat *edit_point_format = edit_points_vert_format_get(&pos_id, &selection_id);
 
   cache->edit_tip_pos = GPU_vertbuf_create_with_format(edit_point_format);
   GPU_vertbuf_data_alloc(cache->edit_tip_pos, cache->edit_tip_point_len);
@@ -1676,10 +1665,10 @@ static void particle_batch_cache_ensure_edit_tip_pos(PTCacheEdit *edit, Particle
       continue;
     }
     PTCacheEditKey *key = &point->keys[point->totkey - 1];
-    float color = (key->flag & PEK_SELECT) ? 1.0f : 0.0f;
+    float selection = (key->flag & PEK_SELECT) ? 1.0f : 0.0f;
 
     GPU_vertbuf_attr_set(cache->edit_tip_pos, pos_id, global_point_index, key->world_co);
-    GPU_vertbuf_attr_set(cache->edit_tip_pos, color_id, global_point_index, &color);
+    GPU_vertbuf_attr_set(cache->edit_tip_pos, selection_id, global_point_index, &selection);
     global_point_index++;
   }
 }
@@ -1722,7 +1711,7 @@ bool particles_ensure_procedural_data(Object *object,
 
   /* Refreshed on combing and simulation. */
   if ((*r_hair_cache)->proc_point_buf == NULL ||
-      (gpu_material && (*r_hair_cache)->length_tex == NULL)) {
+      (gpu_material && (*r_hair_cache)->proc_length_buf == NULL)) {
     ensure_seg_pt_count(source.edit, source.psys, &cache->hair);
     particle_batch_cache_ensure_procedural_pos(
         source.edit, source.psys, &cache->hair, gpu_material);
@@ -1730,7 +1719,7 @@ bool particles_ensure_procedural_data(Object *object,
   }
 
   /* Refreshed if active layer or custom data changes. */
-  if ((*r_hair_cache)->strand_tex == NULL) {
+  if ((*r_hair_cache)->proc_strand_buf == NULL) {
     particle_batch_cache_ensure_procedural_strand_data(
         source.edit, source.psys, source.md, &cache->hair);
   }

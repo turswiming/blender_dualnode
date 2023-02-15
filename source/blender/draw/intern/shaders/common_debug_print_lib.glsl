@@ -21,7 +21,7 @@
  *
  * NOTE: Floating point representation might not be very precise (see drw_print_value(float)).
  *
- * IMPORTANT: Multipler drawcalls can write to the buffer in sequence (if they are from different
+ * IMPORTANT: Multiple drawcalls can write to the buffer in sequence (if they are from different
  * shgroups). However, we add barriers to support this case and it might change the application
  * behavior. Uncomment DISABLE_DEBUG_SHADER_drw_print_BARRIER to remove the barriers if that
  * happens. But then you are limited to a single invocation output.
@@ -92,7 +92,7 @@ void drw_print_char4(uint data)
  * it is referenced as an index for char4 and thus do not capture the right
  * reference. I do not know if this is undefined behavior. As a matter of
  * precaution, we implement all the append function separately. This behavior
- * was observed on both Mesa & amdgpu-pro.
+ * was observed on both MESA & AMDGPU-PRO.
  */
 /* Using ascii char code. Expect char1 to be less or equal to 0xFF. Appends chars to the right. */
 void drw_print_append_char(uint char1, inout uint char4)
@@ -334,7 +334,7 @@ void drw_print_value(vec2 value)
 
 void drw_print_value(vec3 value)
 {
-  drw_print_no_endl("vec3(", value[0], ", ", value[1], ", ", value[1], ")");
+  drw_print_no_endl("vec3(", value[0], ", ", value[1], ", ", value[2], ")");
 }
 
 void drw_print_value(vec4 value)
@@ -349,7 +349,7 @@ void drw_print_value(ivec2 value)
 
 void drw_print_value(ivec3 value)
 {
-  drw_print_no_endl("ivec3(", value[0], ", ", value[1], ", ", value[1], ")");
+  drw_print_no_endl("ivec3(", value[0], ", ", value[1], ", ", value[2], ")");
 }
 
 void drw_print_value(ivec4 value)
@@ -364,7 +364,7 @@ void drw_print_value(uvec2 value)
 
 void drw_print_value(uvec3 value)
 {
-  drw_print_no_endl("uvec3(", value[0], ", ", value[1], ", ", value[1], ")");
+  drw_print_no_endl("uvec3(", value[0], ", ", value[1], ", ", value[2], ")");
 }
 
 void drw_print_value(uvec4 value)
@@ -379,10 +379,20 @@ void drw_print_value(bvec2 value)
 
 void drw_print_value(bvec3 value)
 {
-  drw_print_no_endl("bvec3(", value[0], ", ", value[1], ", ", value[1], ")");
+  drw_print_no_endl("bvec3(", value[0], ", ", value[1], ", ", value[2], ")");
 }
 
 void drw_print_value(bvec4 value)
 {
   drw_print_no_endl("bvec4(", value[0], ", ", value[1], ", ", value[2], ", ", value[3], ")");
+}
+
+void drw_print_value(mat4 value)
+{
+  drw_print("mat4x4(");
+  drw_print("  ", value[0]);
+  drw_print("  ", value[1]);
+  drw_print("  ", value[2]);
+  drw_print("  ", value[3]);
+  drw_print(")");
 }

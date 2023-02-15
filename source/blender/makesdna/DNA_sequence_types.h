@@ -184,7 +184,7 @@ typedef struct Sequence {
   /** Old animation system, deprecated for 2.5. */
   struct Ipo *ipo DNA_DEPRECATED;
 
-  /** these ID vars should never be NULL but can be when linked libs fail to load,
+  /** these ID vars should never be NULL but can be when linked libraries fail to load,
    * so check on access */
   struct Scene *scene;
   /** Override scene camera. */
@@ -795,6 +795,7 @@ typedef enum SequenceColorTag {
 enum {
   SEQ_TRANSFORM_FILTER_NEAREST = 0,
   SEQ_TRANSFORM_FILTER_BILINEAR = 1,
+  SEQ_TRANSFORM_FILTER_NEAREST_3x3 = 2,
 };
 
 typedef enum eSeqChannelFlag {

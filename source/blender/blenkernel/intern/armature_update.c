@@ -249,11 +249,11 @@ static void apply_curve_transform(
    * unless the option to allow curve to be positioned elsewhere is activated (i.e. no root).
    */
   if ((ik_data->flag & CONSTRAINT_SPLINEIK_NO_ROOT) == 0) {
-    mul_m4_v3(ik_data->tar->obmat, r_vec);
+    mul_m4_v3(ik_data->tar->object_to_world, r_vec);
   }
 
   /* Convert the position to pose-space. */
-  mul_m4_v3(ob->imat, r_vec);
+  mul_m4_v3(ob->world_to_object, r_vec);
 
   /* Set the new radius (it should be the average value). */
   *r_radius = (radius + *r_radius) / 2;
@@ -818,8 +818,8 @@ void BKE_pose_eval_init(struct Depsgraph *depsgraph, Scene *UNUSED(scene), Objec
   BLI_assert(object->pose != NULL);
   BLI_assert((object->pose->flag & POSE_RECALC) == 0);
 
-  /* imat is needed for solvers. */
-  invert_m4_m4(object->imat, object->obmat);
+  /* world_to_object is needed for solvers. */
+  invert_m4_m4(object->world_to_object, object->object_to_world);
 
   /* clear flags */
   for (bPoseChannel *pchan = pose->chanbase.first; pchan != NULL; pchan = pchan->next) {
@@ -925,7 +925,7 @@ static void pose_channel_flush_to_orig_if_needed(struct Depsgraph *depsgraph,
     return;
   }
   bPoseChannel *pchan_orig = pchan->orig_pchan;
-  /* TODO(sergey): Using BKE_pose_copy_pchan_result() introduces T70901, but why? */
+  /* TODO(sergey): Using BKE_pose_copy_pchan_result() introduces #70901, but why? */
   copy_m4_m4(pchan_orig->pose_mat, pchan->pose_mat);
   copy_m4_m4(pchan_orig->chan_mat, pchan->chan_mat);
   copy_v3_v3(pchan_orig->pose_head, pchan->pose_mat[3]);

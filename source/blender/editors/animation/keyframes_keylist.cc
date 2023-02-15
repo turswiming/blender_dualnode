@@ -61,7 +61,7 @@ struct AnimKeylist {
 
   /* Before initializing the runtime, the key_columns list base is used to quickly add columns.
    * Contains `ActKeyColumn`. Should not be used after runtime is initialized. */
-  ListBase /* ActKeyColumn */ key_columns;
+  ListBase /*ActKeyColumn*/ key_columns;
   /* Last accessed column in the key_columns list base. Inserting columns are typically done in
    * order. The last accessed column is used as starting point to search for a location to add or
    * update the next column. */
@@ -71,9 +71,9 @@ struct AnimKeylist {
     /* When initializing the runtime the columns from the list base `AnimKeyList.key_columns` are
      * transferred to an array to support binary searching and index based access. */
     blender::Array<ActKeyColumn> key_columns;
-    /* Wrapper around runtime.key_columns so it can still be accessed as a ListBase. Elements are
-     * owned by runtime.key_columns. */
-    ListBase /* ActKeyColumn */ list_wrapper;
+    /* Wrapper around runtime.key_columns so it can still be accessed as a ListBase.
+     * Elements are owned by `runtime.key_columns`. */
+    ListBase /*ActKeyColumn*/ list_wrapper;
   } runtime;
 
   AnimKeylist()
@@ -1110,7 +1110,7 @@ void gpencil_to_keylist(bDopeSheet *ads, bGPdata *gpd, AnimKeylist *keylist, con
   }
 }
 
-void gpl_to_keylist(bDopeSheet *UNUSED(ads), bGPDlayer *gpl, AnimKeylist *keylist)
+void gpl_to_keylist(bDopeSheet * /*ads*/, bGPDlayer *gpl, AnimKeylist *keylist)
 {
   if (gpl && keylist) {
     ED_keylist_reset_last_accessed(keylist);
@@ -1124,7 +1124,7 @@ void gpl_to_keylist(bDopeSheet *UNUSED(ads), bGPDlayer *gpl, AnimKeylist *keylis
   }
 }
 
-void mask_to_keylist(bDopeSheet *UNUSED(ads), MaskLayer *masklay, AnimKeylist *keylist)
+void mask_to_keylist(bDopeSheet * /*ads*/, MaskLayer *masklay, AnimKeylist *keylist)
 {
   if (masklay && keylist) {
     ED_keylist_reset_last_accessed(keylist);

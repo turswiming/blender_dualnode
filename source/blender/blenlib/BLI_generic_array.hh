@@ -89,11 +89,8 @@ class GArray {
    */
   GArray(const GSpan span, Allocator allocator = {}) : GArray(span.type(), span.size(), allocator)
   {
-    if (span.data() != nullptr) {
-      BLI_assert(span.size() != 0);
-      /* Use copy assign rather than construct since the memory is already initialized. */
-      type_->copy_assign_n(span.data(), data_, size_);
-    }
+    /* Use copy assign rather than construct since the memory is already initialized. */
+    type_->copy_assign_n(span.data(), data_, size_);
   }
 
   /**
@@ -231,7 +228,9 @@ class GArray {
         this->deallocate(new_data);
         throw;
       }
-      this->deallocate(data_);
+      if (this->data_) {
+        this->deallocate(data_);
+      }
       data_ = new_data;
     }
 
@@ -243,7 +242,7 @@ class GArray {
   {
     const int64_t item_size = type_->size();
     const int64_t alignment = type_->alignment();
-    return allocator_.allocate(static_cast<size_t>(size) * item_size, alignment, AT);
+    return allocator_.allocate(size_t(size) * item_size, alignment, AT);
   }
 
   void deallocate(void *ptr)

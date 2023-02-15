@@ -18,6 +18,7 @@ struct BMElem;
 struct BMOperator;
 struct EnumPropertyItem;
 struct LinkNode;
+struct Object;
 struct bContext;
 struct wmKeyConfig;
 struct wmKeyMap;
@@ -177,6 +178,8 @@ void MESH_OT_knife_project(struct wmOperatorType *ot);
  * \param use_tag: When set, tag all faces inside the polylines.
  */
 void EDBM_mesh_knife(struct ViewContext *vc,
+                     struct Object **objects,
+                     int objects_len,
                      struct LinkNode *polys,
                      bool use_tag,
                      bool cut_through);
@@ -192,7 +195,7 @@ void MESH_OT_loopcut(struct wmOperatorType *ot);
 void MESH_OT_rip(struct wmOperatorType *ot);
 void MESH_OT_rip_edge(struct wmOperatorType *ot);
 
-/* *** editmesh_select.c *** */
+/* *** editmesh_select.cc *** */
 
 void MESH_OT_select_similar(struct wmOperatorType *ot);
 void MESH_OT_select_similar_region(struct wmOperatorType *ot);
@@ -291,8 +294,9 @@ void MESH_OT_set_normals_from_faces(struct wmOperatorType *ot);
 void MESH_OT_average_normals(struct wmOperatorType *ot);
 void MESH_OT_smooth_normals(struct wmOperatorType *ot);
 void MESH_OT_mod_weighted_strength(struct wmOperatorType *ot);
+void MESH_OT_flip_quad_tessellation(struct wmOperatorType *ot);
 
-/* *** editmesh_mask_extract.c *** */
+/* *** editmesh_mask_extract.cc *** */
 
 void MESH_OT_paint_mask_extract(struct wmOperatorType *ot);
 void MESH_OT_face_set_extract(struct wmOperatorType *ot);

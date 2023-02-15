@@ -10,7 +10,7 @@
 
 #include "BLI_map.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
@@ -110,7 +110,7 @@ struct Geometry {
 
   int get_vertex_count() const
   {
-    return (int)vertices_.size();
+    return int(vertices_.size());
   }
   void track_vertex_index(int index)
   {

@@ -157,8 +157,6 @@ void EEVEE_render_view_sync(EEVEE_Data *vedata, RenderEngine *engine, struct Dep
   DRW_view_reset();
   DRW_view_default_set(view);
   DRW_view_set_active(view);
-
-  DRW_view_camtexco_set(view, g_data->camtexcofac);
 }
 
 void EEVEE_render_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
@@ -208,7 +206,7 @@ void EEVEE_render_cache(void *vedata,
 
   /* Don't print dupli objects as this can be very verbose and
    * increase the render time on Windows because of slow windows term.
-   * (see T59649) */
+   * (see #59649) */
   if (engine && (ob->base_flag & BASE_FROM_DUPLI) == 0) {
     char info[42];
     BLI_snprintf(info, sizeof(info), "Syncing %s", ob->id.name + 2);
@@ -573,7 +571,7 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
       EEVEE_temporal_sampling_reset(vedata);
       stl->effects->ssr_was_valid_double_buffer = stl->g_data->valid_double_buffer;
     }
-    /* Don't print every samples as it can lead to bad performance. (see T59649) */
+    /* Don't print every samples as it can lead to bad performance. (see #59649) */
     else if ((render_samples % 25) == 0 || (render_samples + 1) == tot_sample) {
       char info[42];
       BLI_snprintf(

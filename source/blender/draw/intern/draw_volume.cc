@@ -56,7 +56,6 @@ struct VolumeUniformBufPool {
     if (used >= ubos.size()) {
       VolumeInfosBuf *buf = new VolumeInfosBuf();
       ubos.append(buf);
-      return buf;
     }
     return ubos[used++];
   }
@@ -71,10 +70,10 @@ static void drw_volume_globals_init()
 {
   const float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   const float one[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-  g_data.dummy_zero = GPU_texture_create_3d(
-      "dummy_zero", 1, 1, 1, 1, GPU_RGBA8, GPU_DATA_FLOAT, zero);
-  g_data.dummy_one = GPU_texture_create_3d(
-      "dummy_one", 1, 1, 1, 1, GPU_RGBA8, GPU_DATA_FLOAT, one);
+  g_data.dummy_zero = GPU_texture_create_3d_ex(
+      "dummy_zero", 1, 1, 1, 1, GPU_RGBA8, GPU_DATA_FLOAT, GPU_TEXTURE_USAGE_SHADER_READ, zero);
+  g_data.dummy_one = GPU_texture_create_3d_ex(
+      "dummy_one", 1, 1, 1, 1, GPU_RGBA8, GPU_DATA_FLOAT, GPU_TEXTURE_USAGE_SHADER_READ, one);
   GPU_texture_wrap_mode(g_data.dummy_zero, true, true);
   GPU_texture_wrap_mode(g_data.dummy_one, true, true);
 
@@ -127,7 +126,7 @@ static DRWShadingGroup *drw_volume_object_grids_init(Object *ob,
 
   grp = DRW_shgroup_create_sub(grp);
 
-  volume_infos.density_scale = BKE_volume_density_scale(volume, ob->obmat);
+  volume_infos.density_scale = BKE_volume_density_scale(volume, ob->object_to_world);
   volume_infos.color_mul = float4(1.0f);
   volume_infos.temperature_mul = 1.0f;
   volume_infos.temperature_bias = 0.0f;
@@ -184,7 +183,7 @@ static DRWShadingGroup *drw_volume_object_mesh_init(Scene *scene,
 
   /* Smoke Simulation */
   if ((md = BKE_modifiers_findby_type(ob, eModifierType_Fluid)) &&
-      (BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime)) &&
+      BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime) &&
       ((FluidModifierData *)md)->domain != nullptr) {
     FluidModifierData *fmd = (FluidModifierData *)md;
     FluidDomainSettings *fds = fmd->domain;

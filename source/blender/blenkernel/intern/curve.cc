@@ -16,7 +16,7 @@
 #include "BLI_ghash.h"
 #include "BLI_index_range.hh"
 #include "BLI_math.h"
-#include "BLI_math_vec_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 #include "BLT_translation.h"
@@ -258,7 +258,7 @@ static void curve_blend_read_data(BlendDataReader *reader, ID *id)
       switch_endian_knots(nu);
     }
   }
-  cu->texflag &= ~CU_AUTOSPACE_EVALUATED;
+  cu->texspace_flag &= ~CU_TEXSPACE_FLAG_AUTO_EVALUATED;
 
   BLO_read_data_address(reader, &cu->bevel_profile);
   if (cu->bevel_profile != nullptr) {
@@ -304,33 +304,33 @@ static void curve_blend_read_expand(BlendExpander *expander, ID *id)
 }
 
 IDTypeInfo IDType_ID_CU_LEGACY = {
-    /* id_code */ ID_CU_LEGACY,
-    /* id_filter */ FILTER_ID_CU_LEGACY,
-    /* main_listbase_index */ INDEX_ID_CU_LEGACY,
-    /* struct_size */ sizeof(Curve),
-    /* name */ "Curve",
-    /* name_plural */ "curves",
-    /* translation_context */ BLT_I18NCONTEXT_ID_CURVE_LEGACY,
-    /* flags */ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /* asset_type_info */ nullptr,
+    /*id_code*/ ID_CU_LEGACY,
+    /*id_filter*/ FILTER_ID_CU_LEGACY,
+    /*main_listbase_index*/ INDEX_ID_CU_LEGACY,
+    /*struct_size*/ sizeof(Curve),
+    /*name*/ "Curve",
+    /*name_plural*/ "curves",
+    /*translation_context*/ BLT_I18NCONTEXT_ID_CURVE_LEGACY,
+    /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    /*asset_type_info*/ nullptr,
 
-    /* init_data */ curve_init_data,
-    /* copy_data */ curve_copy_data,
-    /* free_data */ curve_free_data,
-    /* make_local */ nullptr,
-    /* foreach_id */ curve_foreach_id,
-    /* foreach_cache */ nullptr,
-    /* foreach_path */ nullptr,
-    /* owner_pointer_get */ nullptr,
+    /*init_data*/ curve_init_data,
+    /*copy_data*/ curve_copy_data,
+    /*free_data*/ curve_free_data,
+    /*make_local*/ nullptr,
+    /*foreach_id*/ curve_foreach_id,
+    /*foreach_cache*/ nullptr,
+    /*foreach_path*/ nullptr,
+    /*owner_pointer_get*/ nullptr,
 
-    /* blend_write */ curve_blend_write,
-    /* blend_read_data */ curve_blend_read_data,
-    /* blend_read_lib */ curve_blend_read_lib,
-    /* blend_read_expand */ curve_blend_read_expand,
+    /*blend_write*/ curve_blend_write,
+    /*blend_read_data*/ curve_blend_read_data,
+    /*blend_read_lib*/ curve_blend_read_lib,
+    /*blend_read_expand*/ curve_blend_read_expand,
 
-    /* blend_read_undo_preserve */ nullptr,
+    /*blend_read_undo_preserve*/ nullptr,
 
-    /* lib_override_apply_post */ nullptr,
+    /*lib_override_apply_post*/ nullptr,
 };
 
 void BKE_curve_editfont_free(Curve *cu)
@@ -395,7 +395,7 @@ void BKE_curve_init(Curve *cu, const short curve_type)
     cu->flag |= CU_FRONT | CU_BACK;
     cu->vfont = cu->vfontb = cu->vfonti = cu->vfontbi = BKE_vfont_builtin_get();
     cu->vfont->id.us += 4;
-    cu->str = (char *)MEM_malloc_arrayN(12, sizeof(unsigned char), "str");
+    cu->str = (char *)MEM_malloc_arrayN(12, sizeof(uchar), "str");
     BLI_strncpy(cu->str, "Text", 12);
     cu->len = cu->len_char32 = cu->pos = 4;
     cu->strinfo = (CharInfo *)MEM_calloc_arrayN(12, sizeof(CharInfo), "strinfo new");
@@ -517,7 +517,7 @@ BoundBox *BKE_curve_boundbox_get(Object *ob)
 
 void BKE_curve_texspace_calc(Curve *cu)
 {
-  if (cu->texflag & CU_AUTOSPACE) {
+  if (cu->texspace_flag & CU_TEXSPACE_FLAG_AUTO) {
     float min[3], max[3];
 
     INIT_MINMAX(min, max);
@@ -526,35 +526,36 @@ void BKE_curve_texspace_calc(Curve *cu)
       max[0] = max[1] = max[2] = 1.0f;
     }
 
-    float loc[3], size[3];
-    mid_v3_v3v3(loc, min, max);
+    float texspace_location[3], texspace_size[3];
+    mid_v3_v3v3(texspace_location, min, max);
 
-    size[0] = (max[0] - min[0]) / 2.0f;
-    size[1] = (max[1] - min[1]) / 2.0f;
-    size[2] = (max[2] - min[2]) / 2.0f;
+    texspace_size[0] = (max[0] - min[0]) / 2.0f;
+    texspace_size[1] = (max[1] - min[1]) / 2.0f;
+    texspace_size[2] = (max[2] - min[2]) / 2.0f;
 
     for (int a = 0; a < 3; a++) {
-      if (size[a] == 0.0f) {
-        size[a] = 1.0f;
+      if (texspace_size[a] == 0.0f) {
+        texspace_size[a] = 1.0f;
       }
-      else if (size[a] > 0.0f && size[a] < 0.00001f) {
-        size[a] = 0.00001f;
+      else if (texspace_size[a] > 0.0f && texspace_size[a] < 0.00001f) {
+        texspace_size[a] = 0.00001f;
       }
-      else if (size[a] < 0.0f && size[a] > -0.00001f) {
-        size[a] = -0.00001f;
+      else if (texspace_size[a] < 0.0f && texspace_size[a] > -0.00001f) {
+        texspace_size[a] = -0.00001f;
       }
     }
 
-    copy_v3_v3(cu->loc, loc);
-    copy_v3_v3(cu->size, size);
+    copy_v3_v3(cu->texspace_location, texspace_location);
+    copy_v3_v3(cu->texspace_size, texspace_size);
 
-    cu->texflag |= CU_AUTOSPACE_EVALUATED;
+    cu->texspace_flag |= CU_TEXSPACE_FLAG_AUTO_EVALUATED;
   }
 }
 
 void BKE_curve_texspace_ensure(Curve *cu)
 {
-  if ((cu->texflag & CU_AUTOSPACE) && !(cu->texflag & CU_AUTOSPACE_EVALUATED)) {
+  if ((cu->texspace_flag & CU_TEXSPACE_FLAG_AUTO) &&
+      (cu->texspace_flag & CU_TEXSPACE_FLAG_AUTO_EVALUATED) == 0) {
     BKE_curve_texspace_calc(cu);
   }
 }
@@ -704,7 +705,7 @@ Nurb *BKE_nurb_copy(Nurb *src, int pntsu, int pntsv)
   *newnu = blender::dna::shallow_copy(*src);
 
   if (pntsu == 1) {
-    SWAP(int, pntsu, pntsv);
+    std::swap(pntsu, pntsv);
   }
   newnu->pntsu = pntsu;
   newnu->pntsv = pntsv;
@@ -1056,7 +1057,7 @@ BPoint *BKE_nurb_bpoint_get_prev(Nurb *nu, BPoint *bp)
   return bp_prev;
 }
 
-void BKE_nurb_bezt_calc_normal(struct Nurb *UNUSED(nu), BezTriple *bezt, float r_normal[3])
+void BKE_nurb_bezt_calc_normal(struct Nurb * /*nu*/, BezTriple *bezt, float r_normal[3])
 {
   /* calculate the axis matrix from the spline */
   float dir_prev[3], dir_next[3];
@@ -1499,7 +1500,7 @@ void BKE_nurb_makeFaces(const Nurb *nu, float *coord_array, int rowstride, int r
     }
     u += ustep;
     if (rowstride != 0) {
-      in = (float *)(((unsigned char *)in) + (rowstride - 3 * totv * sizeof(*in)));
+      in = (float *)(((uchar *)in) + (rowstride - 3 * totv * sizeof(*in)));
     }
   }
 
@@ -1647,35 +1648,34 @@ void BKE_nurb_makeCurve(const Nurb *nu,
   MEM_freeN(basisu);
 }
 
-unsigned int BKE_curve_calc_coords_axis_len(const unsigned int bezt_array_len,
-                                            const unsigned int resolu,
-                                            const bool is_cyclic,
-                                            const bool use_cyclic_duplicate_endpoint)
+uint BKE_curve_calc_coords_axis_len(const uint bezt_array_len,
+                                    const uint resolu,
+                                    const bool is_cyclic,
+                                    const bool use_cyclic_duplicate_endpoint)
 {
-  const unsigned int segments = bezt_array_len - (is_cyclic ? 0 : 1);
-  const unsigned int points_len = (segments * resolu) +
-                                  (is_cyclic ? (use_cyclic_duplicate_endpoint) : 1);
+  const uint segments = bezt_array_len - (is_cyclic ? 0 : 1);
+  const uint points_len = (segments * resolu) + (is_cyclic ? (use_cyclic_duplicate_endpoint) : 1);
   return points_len;
 }
 
 void BKE_curve_calc_coords_axis(const BezTriple *bezt_array,
-                                const unsigned int bezt_array_len,
-                                const unsigned int resolu,
+                                const uint bezt_array_len,
+                                const uint resolu,
                                 const bool is_cyclic,
                                 const bool use_cyclic_duplicate_endpoint,
                                 /* array params */
-                                const unsigned int axis,
-                                const unsigned int stride,
+                                const uint axis,
+                                const uint stride,
                                 float *r_points)
 {
-  const unsigned int points_len = BKE_curve_calc_coords_axis_len(
+  const uint points_len = BKE_curve_calc_coords_axis_len(
       bezt_array_len, resolu, is_cyclic, use_cyclic_duplicate_endpoint);
   float *r_points_offset = r_points;
 
-  const unsigned int resolu_stride = resolu * stride;
-  const unsigned int bezt_array_last = bezt_array_len - 1;
+  const uint resolu_stride = resolu * stride;
+  const uint bezt_array_last = bezt_array_len - 1;
 
-  for (unsigned int i = 0; i < bezt_array_last; i++) {
+  for (uint i = 0; i < bezt_array_last; i++) {
     const BezTriple *bezt_curr = &bezt_array[i];
     const BezTriple *bezt_next = &bezt_array[i + 1];
     BKE_curve_forward_diff_bezier(bezt_curr->vec[1][axis],
@@ -1683,7 +1683,7 @@ void BKE_curve_calc_coords_axis(const BezTriple *bezt_array,
                                   bezt_next->vec[0][axis],
                                   bezt_next->vec[1][axis],
                                   r_points_offset,
-                                  (int)resolu,
+                                  int(resolu),
                                   stride);
     r_points_offset = (float *)POINTER_OFFSET(r_points_offset, resolu_stride);
   }
@@ -1696,7 +1696,7 @@ void BKE_curve_calc_coords_axis(const BezTriple *bezt_array,
                                   bezt_next->vec[0][axis],
                                   bezt_next->vec[1][axis],
                                   r_points_offset,
-                                  (int)resolu,
+                                  int(resolu),
                                   stride);
     r_points_offset = (float *)POINTER_OFFSET(r_points_offset, resolu_stride);
     if (use_cyclic_duplicate_endpoint) {
@@ -1720,7 +1720,7 @@ void BKE_curve_forward_diff_bezier(
   float rt0, rt1, rt2, rt3, f;
   int a;
 
-  f = (float)it;
+  f = float(it);
   rt0 = q0;
   rt1 = 3.0f * (q1 - q0) / f;
   f *= f;
@@ -1748,7 +1748,7 @@ void BKE_curve_forward_diff_tangent_bezier(
   float rt0, rt1, rt2, f;
   int a;
 
-  f = 1.0f / (float)it;
+  f = 1.0f / float(it);
 
   rt0 = 3.0f * (q1 - q0);
   rt1 = f * (3.0f * (q3 - q0) + 9.0f * (q1 - q2));
@@ -1779,7 +1779,7 @@ static void forward_diff_bezier_cotangent(const float p0[3],
    *
    * This could also be optimized like BKE_curve_forward_diff_bezier */
   for (int a = 0; a <= it; a++) {
-    float t = (float)a / (float)it;
+    float t = float(a) / float(it);
 
     for (int i = 0; i < 3; i++) {
       p[i] = (-6.0f * t + 6.0f) * p0[i] + (18.0f * t - 12.0f) * p1[i] +
@@ -1936,7 +1936,7 @@ static void calc_bevel_sin_cos(
     t02 = M_PI_2;
   }
   else {
-    t02 = (saacos(t02)) / 2.0f;
+    t02 = saacos(t02) / 2.0f;
   }
 
   t02 = sinf(t02);
@@ -2006,7 +2006,7 @@ static void tilt_bezpart(const BezTriple *prevbezt,
   }
 
   fac = 0.0;
-  dfac = 1.0f / (float)resolu;
+  dfac = 1.0f / float(resolu);
 
   for (a = 0; a < resolu; a++, fac += dfac) {
     if (tilt_array) {
@@ -2063,7 +2063,7 @@ static void bevel_list_calc_bisect(BevList *bl)
 {
   BevPoint *bevp2, *bevp1, *bevp0;
   int nr;
-  bool is_cyclic = bl->poly != -1;
+  const bool is_cyclic = bl->poly != -1;
 
   if (is_cyclic) {
     bevp2 = bl->bevpoints;
@@ -2097,10 +2097,10 @@ static void bevel_list_calc_bisect(BevList *bl)
   }
 
   /* In the unlikely situation that handles define a zeroed direction,
-   * calculate it from the adjacent points, see T80742.
+   * calculate it from the adjacent points, see #80742.
    *
    * Only do this as a fallback since we typically want the end-point directions
-   * to be exactly aligned with the handles at the end-point, see T83117. */
+   * to be exactly aligned with the handles at the end-point, see #83117. */
   if (is_cyclic == false) {
     bevp0 = &bl->bevpoints[0];
     bevp1 = &bl->bevpoints[1];
@@ -2229,19 +2229,19 @@ static void make_bevel_list_3D_zup(BevList *bl)
   }
 }
 
-static void minimum_twist_between_two_points(BevPoint *current_point, BevPoint *previous_point)
+static void minimum_twist_between_two_points(BevPoint *bevp_curr, const BevPoint *bevp_prev)
 {
-  float angle = angle_normalized_v3v3(previous_point->dir, current_point->dir);
-  float q[4];
+  float angle = angle_normalized_v3v3(bevp_prev->dir, bevp_curr->dir);
 
   if (angle > 0.0f) { /* otherwise we can keep as is */
+    float q[4];
     float cross_tmp[3];
-    cross_v3_v3v3(cross_tmp, previous_point->dir, current_point->dir);
+    cross_v3_v3v3(cross_tmp, bevp_prev->dir, bevp_curr->dir);
     axis_angle_to_quat(q, cross_tmp, angle);
-    mul_qt_qtqt(current_point->quat, q, previous_point->quat);
+    mul_qt_qtqt(bevp_curr->quat, q, bevp_prev->quat);
   }
   else {
-    copy_qt_qt(current_point->quat, previous_point->quat);
+    copy_qt_qt(bevp_curr->quat, bevp_prev->quat);
   }
 }
 
@@ -2250,6 +2250,19 @@ static void make_bevel_list_3D_minimum_twist(BevList *bl)
   BevPoint *bevp2, *bevp1, *bevp0; /* Standard for all make_bevel_list_3D_* functions. */
   int nr;
   float q[4];
+  const bool is_cyclic = bl->poly != -1;
+  /* NOTE(@ideasman42): For non-cyclic curves only initialize the first direction
+   * (via `vec_to_quat`), necessary for symmetry, see #71137.
+   * Otherwise initialize the first and second points before propagating rotation forward.
+   * This is historical as changing this can cause significantly different output.
+   * Specifically: `deform_modifiers` test: (`CurveMeshDeform`).
+   *
+   * While it would seem correct to only use the first point for non-cyclic curves as well
+   * the end-points direction is initialized from the input handles (instead of the directions
+   * between points), there is often a bigger difference in the first and second directions
+   * than you'd otherwise expect. So using only the first direction breaks compatibility
+   * enough it's best to leave it as-is. */
+  const int nr_init = bl->nr - (is_cyclic ? 1 : 2);
 
   bevel_list_calc_bisect(bl);
 
@@ -2257,21 +2270,18 @@ static void make_bevel_list_3D_minimum_twist(BevList *bl)
   bevp1 = bevp2 + (bl->nr - 1);
   bevp0 = bevp1 - 1;
 
-  /* The ordinal of the point being adjusted (bevp2). First point is 1. */
+  nr = bl->nr;
+  while (nr--) {
 
-  /* First point is the reference, don't adjust.
-   * Skip this point in the following loop. */
-  if (bl->nr > 0) {
-    vec_to_quat(bevp2->quat, bevp2->dir, 5, 1);
+    if (nr >= nr_init) {
+      /* Initialize the rotation, otherwise propagate the previous rotation forward. */
+      vec_to_quat(bevp1->quat, bevp1->dir, 5, 1);
+    }
+    else {
+      minimum_twist_between_two_points(bevp1, bevp0);
+    }
 
-    bevp0 = bevp1; /* bevp0 is unused */
-    bevp1 = bevp2;
-    bevp2++;
-  }
-  for (nr = 1; nr < bl->nr; nr++) {
-    minimum_twist_between_two_points(bevp2, bevp1);
-
-    bevp0 = bevp1; /* bevp0 is unused */
+    bevp0 = bevp1;
     bevp1 = bevp2;
     bevp2++;
   }
@@ -2329,7 +2339,7 @@ static void make_bevel_list_3D_minimum_twist(BevList *bl)
 
     nr = bl->nr;
     while (nr--) {
-      ang_fac = angle * (1.0f - ((float)nr / bl->nr)); /* also works */
+      ang_fac = angle * (1.0f - (float(nr) / bl->nr)); /* also works */
 
       axis_angle_to_quat(q, bevp1->dir, ang_fac);
       mul_qt_qtqt(bevp1->quat, q, bevp1->quat);
@@ -2470,7 +2480,7 @@ static void make_bevel_list_segment_2D(BevList *bl)
 
 static void make_bevel_list_2D(BevList *bl)
 {
-  /* NOTE(@campbellbarton): `bevp->dir` and `bevp->quat` are not needed for beveling but are
+  /* NOTE(@ideasman42): `bevp->dir` and `bevp->quat` are not needed for beveling but are
    * used when making a path from a 2D curve, therefore they need to be set. */
 
   BevPoint *bevp0, *bevp1, *bevp2;
@@ -2516,7 +2526,7 @@ static void make_bevel_list_2D(BevList *bl)
 
     /* first */
     bevp = bl->bevpoints;
-    angle = atan2f(bevp->dir[0], bevp->dir[1]) - (float)M_PI_2;
+    angle = atan2f(bevp->dir[0], bevp->dir[1]) - float(M_PI_2);
     bevp->sina = sinf(angle);
     bevp->cosa = cosf(angle);
     vec_to_quat(bevp->quat, bevp->dir, 5, 1);
@@ -2524,7 +2534,7 @@ static void make_bevel_list_2D(BevList *bl)
     /* last */
     bevp = bl->bevpoints;
     bevp += (bl->nr - 1);
-    angle = atan2f(bevp->dir[0], bevp->dir[1]) - (float)M_PI_2;
+    angle = atan2f(bevp->dir[0], bevp->dir[1]) - float(M_PI_2);
     bevp->sina = sinf(angle);
     bevp->cosa = cosf(angle);
     vec_to_quat(bevp->quat, bevp->dir, 5, 1);
@@ -2896,9 +2906,9 @@ void BKE_curve_bevelList_make(Object *ob, const ListBase *nurbs, const bool for_
       continue;
     }
 
-    /* Scale the threshold so high resolution shapes don't get over reduced, see: T49850. */
+    /* Scale the threshold so high resolution shapes don't get over reduced, see: #49850. */
     const float threshold_resolu = 0.00001f / resolu;
-    bool is_cyclic = bl->poly != -1;
+    const bool is_cyclic = bl->poly != -1;
     nr = bl->nr;
     if (is_cyclic) {
       bevp1 = bl->bevpoints;
@@ -3049,7 +3059,7 @@ void BKE_curve_bevelList_make(Object *ob, const ListBase *nurbs, const bool for_
           bevp2 = bevp1 + (bl->nr - 1);
           nr = bl->nr / 2;
           while (nr--) {
-            SWAP(BevPoint, *bevp1, *bevp2);
+            std::swap(*bevp1, *bevp2);
             bevp1++;
             bevp2--;
           }
@@ -3086,7 +3096,7 @@ void BKE_curve_bevelList_make(Object *ob, const ListBase *nurbs, const bool for_
         make_bevel_list_segment_3D(bl);
       }
       else {
-        make_bevel_list_3D(bl, (int)(resolu * cu->twist_smooth), cu->twist_mode);
+        make_bevel_list_3D(bl, int(resolu * cu->twist_smooth), cu->twist_mode);
       }
     }
   }
@@ -3274,7 +3284,7 @@ static void calchandleNurb_intern(BezTriple *bezt,
   }
 
   if (skip_align ||
-      /* When one handle is free, aligning makes no sense, see: T35952 */
+      /* When one handle is free, aligning makes no sense, see: #35952 */
       ELEM(HD_FREE, bezt->h1, bezt->h2) ||
       /* Also when no handles are aligned, skip this step. */
       (!ELEM(HD_ALIGN, bezt->h1, bezt->h2) && !ELEM(HD_ALIGN_DOUBLESIDE, bezt->h1, bezt->h2))) {
@@ -4086,12 +4096,12 @@ void BKE_nurb_bezt_handle_test(BezTriple *bezt,
     }
 
     if (bezt->h1 == HD_VECT) {
-      if ((!(flag & SEL_F1)) != (!(flag & SEL_F2))) {
+      if (!(flag & SEL_F1) != !(flag & SEL_F2)) {
         bezt->h1 = HD_FREE;
       }
     }
     if (bezt->h2 == HD_VECT) {
-      if ((!(flag & SEL_F3)) != (!(flag & SEL_F2))) {
+      if (!(flag & SEL_F3) != !(flag & SEL_F2)) {
         bezt->h2 = HD_FREE;
       }
     }
@@ -4438,7 +4448,7 @@ void BKE_nurb_direction_switch(Nurb *nu)
     a /= 2;
     while (a > 0) {
       if (bezt1 != bezt2) {
-        SWAP(BezTriple, *bezt1, *bezt2);
+        std::swap(*bezt1, *bezt2);
       }
 
       swap_v3_v3(bezt1->vec[0], bezt1->vec[2]);
@@ -4447,12 +4457,12 @@ void BKE_nurb_direction_switch(Nurb *nu)
         swap_v3_v3(bezt2->vec[0], bezt2->vec[2]);
       }
 
-      SWAP(uint8_t, bezt1->h1, bezt1->h2);
-      SWAP(uint8_t, bezt1->f1, bezt1->f3);
+      std::swap(bezt1->h1, bezt1->h2);
+      std::swap(bezt1->f1, bezt1->f3);
 
       if (bezt1 != bezt2) {
-        SWAP(uint8_t, bezt2->h1, bezt2->h2);
-        SWAP(uint8_t, bezt2->f1, bezt2->f3);
+        std::swap(bezt2->h1, bezt2->h2);
+        std::swap(bezt2->f1, bezt2->f3);
         bezt1->tilt = -bezt1->tilt;
         bezt2->tilt = -bezt2->tilt;
       }
@@ -4470,7 +4480,7 @@ void BKE_nurb_direction_switch(Nurb *nu)
     bp2 = bp1 + (a - 1);
     a /= 2;
     while (bp1 != bp2 && a > 0) {
-      SWAP(BPoint, *bp1, *bp2);
+      std::swap(*bp1, *bp2);
       a--;
       bp1->tilt = -bp1->tilt;
       bp2->tilt = -bp2->tilt;
@@ -4492,7 +4502,7 @@ void BKE_nurb_direction_switch(Nurb *nu)
         fp2 = fp1 + (a - 1);
         a /= 2;
         while (fp1 != fp2 && a > 0) {
-          SWAP(float, *fp1, *fp2);
+          std::swap(*fp1, *fp2);
           a--;
           fp1++;
           fp2--;
@@ -4531,7 +4541,7 @@ void BKE_nurb_direction_switch(Nurb *nu)
       a /= 2;
 
       while (bp1 != bp2 && a > 0) {
-        SWAP(BPoint, *bp1, *bp2);
+        std::swap(*bp1, *bp2);
         a--;
         bp1++;
         bp2--;
@@ -5102,7 +5112,7 @@ bool BKE_curve_minmax(Curve *cu, bool use_radius, float min[3], float max[3])
 {
   ListBase *nurb_lb = BKE_curve_nurbs_get(cu);
   ListBase temp_nurb_lb = {nullptr, nullptr};
-  const bool is_font = (BLI_listbase_is_empty(nurb_lb)) && (cu->len != 0);
+  const bool is_font = BLI_listbase_is_empty(nurb_lb) && (cu->len != 0);
   /* For font curves we generate temp list of splines.
    *
    * This is likely to be fine, this function is not supposed to be called
@@ -5154,7 +5164,7 @@ bool BKE_curve_center_median(Curve *cu, float cent[3])
   }
 
   if (total) {
-    mul_v3_fl(cent, 1.0f / (float)total);
+    mul_v3_fl(cent, 1.0f / float(total));
   }
 
   return (total != 0);
@@ -5390,10 +5400,10 @@ bool BKE_curve_material_index_validate(Curve *cu)
   return false;
 }
 
-void BKE_curve_material_remap(Curve *cu, const unsigned int *remap, unsigned int remap_len)
+void BKE_curve_material_remap(Curve *cu, const uint *remap, uint remap_len)
 {
   const int curvetype = BKE_curve_type_get(cu);
-  const short remap_len_short = (short)remap_len;
+  const short remap_len_short = short(remap_len);
 
 #define MAT_NR_REMAP(n) \
   if (n < remap_len_short) { \
@@ -5509,10 +5519,10 @@ void BKE_curve_eval_geometry(Depsgraph *depsgraph, Curve *curve)
   BKE_curve_texspace_calc(curve);
   if (DEG_is_active(depsgraph)) {
     Curve *curve_orig = (Curve *)DEG_get_original_id(&curve->id);
-    if (curve->texflag & CU_AUTOSPACE_EVALUATED) {
-      curve_orig->texflag |= CU_AUTOSPACE_EVALUATED;
-      copy_v3_v3(curve_orig->loc, curve->loc);
-      copy_v3_v3(curve_orig->size, curve->size);
+    if (curve->texspace_flag & CU_TEXSPACE_FLAG_AUTO_EVALUATED) {
+      curve_orig->texspace_flag |= CU_TEXSPACE_FLAG_AUTO_EVALUATED;
+      copy_v3_v3(curve_orig->texspace_location, curve->texspace_location);
+      copy_v3_v3(curve_orig->texspace_size, curve->texspace_size);
     }
   }
 }

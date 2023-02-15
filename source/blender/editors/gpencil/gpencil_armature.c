@@ -207,7 +207,7 @@ static int dgroup_skinnable_cb(Object *ob, Bone *bone, void *datap)
           defgroup = BKE_object_defgroup_add_name(ob, bone->name);
         }
         else if (defgroup->flag & DG_LOCK_WEIGHT) {
-          /* In case vgroup already exists and is locked, do not modify it here. See T43814. */
+          /* In case vgroup already exists and is locked, do not modify it here. See #43814. */
           defgroup = NULL;
         }
       }
@@ -329,8 +329,8 @@ static void gpencil_add_verts_to_dgroups(
       copy_v3_v3(tip[j], bone->arm_tail);
     }
 
-    mul_m4_v3(ob_arm->obmat, root[j]);
-    mul_m4_v3(ob_arm->obmat, tip[j]);
+    mul_m4_v3(ob_arm->object_to_world, root[j]);
+    mul_m4_v3(ob_arm->object_to_world, tip[j]);
 
     selected[j] = 1;
 
@@ -364,7 +364,7 @@ static void gpencil_add_verts_to_dgroups(
           /* transform stroke points to global space */
           for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
             copy_v3_v3(verts[i], &pt->x);
-            mul_m4_v3(ob->obmat, verts[i]);
+            mul_m4_v3(ob->object_to_world, verts[i]);
           }
 
           /* loop groups and assign weight */

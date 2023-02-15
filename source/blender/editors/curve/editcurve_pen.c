@@ -152,8 +152,8 @@ static void update_location_for_2d_curve(const ViewContext *vc, float location[3
     /* Get the plane. */
     float plane[4];
     /* Only normalize to avoid precision errors. */
-    normalize_v3_v3(plane, vc->obedit->obmat[2]);
-    plane[3] = -dot_v3v3(plane, vc->obedit->obmat[3]);
+    normalize_v3_v3(plane, vc->obedit->object_to_world[2]);
+    plane[3] = -dot_v3v3(plane, vc->obedit->object_to_world[3]);
 
     if (fabsf(dot_v3v3(view_dir, plane)) < eps) {
       /* Can't project on an aligned plane. */
@@ -173,7 +173,7 @@ static void update_location_for_2d_curve(const ViewContext *vc, float location[3
   }
 
   float imat[4][4];
-  invert_m4_m4(imat, vc->obedit->obmat);
+  invert_m4_m4(imat, vc->obedit->object_to_world);
   mul_m4_v3(imat, location);
 
   if (CU_IS_2D(cu)) {
@@ -186,7 +186,7 @@ static void screenspace_to_worldspace(const ViewContext *vc,
                                       const float depth[3],
                                       float r_pos_3d[3])
 {
-  mul_v3_m4v3(r_pos_3d, vc->obedit->obmat, depth);
+  mul_v3_m4v3(r_pos_3d, vc->obedit->object_to_world, depth);
   ED_view3d_win_to_3d(vc->v3d, vc->region, r_pos_3d, pos_2d, r_pos_3d);
   update_location_for_2d_curve(vc, r_pos_3d);
 }
@@ -497,7 +497,8 @@ static bool get_closest_vertex_to_point_in_nurbs(const ViewContext *vc,
         int handle_display = vc->v3d->overlay.handle_display;
         if (handle_display == CURVE_HANDLE_NONE ||
             (handle_display == CURVE_HANDLE_SELECTED && !BEZT_ISSEL_ANY(bezt))) {
-          start = 1, end = 2;
+          start = 1;
+          end = 2;
         }
 
         /* Loop over each of the 3 points of the #BezTriple and update data of closest bezt. */
@@ -1082,7 +1083,7 @@ static void extrude_points_from_selected_vertices(const ViewContext *vc,
 
   float location[3];
   if (sel_exists) {
-    mul_v3_m4v3(location, vc->obedit->obmat, center);
+    mul_v3_m4v3(location, vc->obedit->object_to_world, center);
   }
   else {
     copy_v3_v3(location, vc->scene->cursor.location);
@@ -1169,7 +1170,8 @@ static void move_segment(ViewContext *vc, MoveSegmentData *seg_data, const wmEve
     BezTriple *temp_bezt = bezt2;
     bezt2 = bezt1;
     bezt1 = temp_bezt;
-    h1 = 0, h2 = 2;
+    h1 = 0;
+    h2 = 2;
   }
 
   const float t = max_ff(min_ff(seg_data->t, 0.9f), 0.1f);

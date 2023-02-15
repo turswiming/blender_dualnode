@@ -16,6 +16,7 @@
 
 #include "UI_interface.h"
 
+#include "BKE_duplilist.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
 
@@ -50,7 +51,7 @@ static void OVERLAY_engine_init(void *vedata)
   }
 
   OVERLAY_PrivateData *pd = stl->pd;
-  pd->space_type = v3d != nullptr ? (int)SPACE_VIEW3D : draw_ctx->space_data->spacetype;
+  pd->space_type = v3d != nullptr ? int(SPACE_VIEW3D) : draw_ctx->space_data->spacetype;
 
   if (pd->space_type == SPACE_IMAGE) {
     const SpaceImage *sima = (SpaceImage *)draw_ctx->space_data;
@@ -91,10 +92,10 @@ static void OVERLAY_engine_init(void *vedata)
   }
 
   if (ts->sculpt) {
-    if (ts->sculpt->flags & SCULPT_HIDE_FACE_SETS) {
+    if (!(v3d->overlay.flag & int(V3D_OVERLAY_SCULPT_SHOW_FACE_SETS))) {
       pd->overlay.sculpt_mode_face_sets_opacity = 0.0f;
     }
-    if (ts->sculpt->flags & SCULPT_HIDE_MASK) {
+    if (!(v3d->overlay.flag & int(V3D_OVERLAY_SCULPT_SHOW_MASK))) {
       pd->overlay.sculpt_mode_mask_opacity = 0.0f;
     }
   }
@@ -204,6 +205,7 @@ static void OVERLAY_cache_init(void *vedata)
   }
   OVERLAY_antialiasing_cache_init(data);
   OVERLAY_armature_cache_init(data);
+  OVERLAY_viewer_attribute_cache_init(data);
   OVERLAY_background_cache_init(data);
   OVERLAY_fade_cache_init(data);
   OVERLAY_mode_transfer_cache_init(data);
@@ -246,7 +248,7 @@ BLI_INLINE OVERLAY_DupliData *OVERLAY_duplidata_get(Object *ob, void *vedata, bo
 static bool overlay_object_is_edit_mode(const OVERLAY_PrivateData *pd, const Object *ob)
 {
   if (DRW_object_is_in_edit_mode(ob)) {
-    /* Also check for context mode as the object mode is not 100% reliable. (see T72490) */
+    /* Also check for context mode as the object mode is not 100% reliable. (see #72490) */
     switch (ob->type) {
       case OB_MESH:
         return pd->ctx_mode == CTX_MODE_EDIT_MESH;
@@ -300,8 +302,12 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
   }
 
   const DRWContextState *draw_ctx = DRW_context_state_get();
+  DupliObject *dupli_object = DRW_object_get_dupli(ob);
+  Object *dupli_parent = DRW_object_get_dupli_parent(ob);
   const bool is_select = DRW_state_is_select();
   const bool renderable = DRW_object_is_renderable(ob);
+  const bool is_preview = dupli_object != nullptr &&
+                          dupli_object->preview_base_geometry != nullptr;
   const bool in_pose_mode = ob->type == OB_ARMATURE && OVERLAY_armature_is_pose_mode(ob, draw_ctx);
   const bool in_edit_mode = overlay_object_is_edit_mode(pd, ob);
   const bool is_instance = (ob->base_flag & BASE_FROM_DUPLI);
@@ -313,12 +319,11 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
                                      (pd->ctx_mode == CTX_MODE_PARTICLE);
   const bool in_paint_mode = (ob == draw_ctx->obact) &&
                              (draw_ctx->object_mode & OB_MODE_ALL_PAINT);
-  const bool in_sculpt_curve_mode = (ob == draw_ctx->obact) &&
+  const bool in_sculpt_curve_mode = (ob == draw_ctx->obact ||
+                                     (is_preview && dupli_parent == draw_ctx->obact)) &&
                                     (draw_ctx->object_mode & OB_MODE_SCULPT_CURVES);
   const bool in_sculpt_mode = (ob == draw_ctx->obact) && (ob->sculpt != nullptr) &&
                               (ob->sculpt->mode_type == OB_MODE_SCULPT);
-  const bool in_curves_sculpt_mode = (ob == draw_ctx->obact) &&
-                                     (ob->mode == OB_MODE_SCULPT_CURVES);
   const bool has_surface = ELEM(ob->type,
                                 OB_MESH,
                                 OB_CURVES_LEGACY,
@@ -372,6 +377,12 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
   }
   if (draw_bone_selection) {
     OVERLAY_pose_cache_populate(data, ob);
+  }
+
+  if (pd->overlay.flag & V3D_OVERLAY_VIEWER_ATTRIBUTE) {
+    if (is_preview) {
+      OVERLAY_viewer_attribute_cache_populate(data, ob);
+    }
   }
 
   if (ob->type == OB_VOLUME) {
@@ -436,7 +447,7 @@ static void OVERLAY_cache_populate(void *vedata, Object *ob)
   if (in_sculpt_mode) {
     OVERLAY_sculpt_cache_populate(data, ob);
   }
-  else if (in_curves_sculpt_mode) {
+  else if (in_sculpt_curve_mode) {
     OVERLAY_sculpt_curves_cache_populate(data, ob);
   }
 
@@ -621,12 +632,19 @@ static void OVERLAY_draw_scene(void *vedata)
     GPU_framebuffer_bind(fbl->overlay_line_fb);
   }
 
+  if (pd->ctx_mode == CTX_MODE_SCULPT_CURVES) {
+    OVERLAY_sculpt_curves_draw_wires(data);
+  }
+
   OVERLAY_wireframe_draw(data);
   OVERLAY_armature_draw(data);
   OVERLAY_particle_draw(data);
   OVERLAY_metaball_draw(data);
   OVERLAY_gpencil_draw(data);
   OVERLAY_extra_draw(data);
+  if (pd->overlay.flag & V3D_OVERLAY_VIEWER_ATTRIBUTE) {
+    OVERLAY_viewer_attribute_draw(data);
+  }
 
   if (DRW_state_is_fbo()) {
     GPU_framebuffer_bind(fbl->overlay_color_only_fb);
@@ -708,7 +726,7 @@ static void OVERLAY_draw_scene(void *vedata)
   OVERLAY_antialiasing_end(data);
 }
 
-static void OVERLAY_engine_free(void)
+static void OVERLAY_engine_free()
 {
   OVERLAY_shader_free();
 }

@@ -440,6 +440,11 @@ class IMAGE_MT_uvs(Menu):
 
         layout.separator()
 
+        layout.operator("uv.copy")
+        layout.operator("uv.paste")
+
+        layout.separator()
+
         layout.menu("IMAGE_MT_uvs_showhide")
 
         layout.separator()
@@ -692,7 +697,7 @@ class _draw_tool_settings_context_mode:
                         pressure_name="use_pressure_size",
                         unified_name="use_unified_size",
                         slider=True,
-                        header=True
+                        header=True,
                     )
                     UnifiedPaintPanel.prop_unified(
                         layout,
@@ -702,7 +707,7 @@ class _draw_tool_settings_context_mode:
                         pressure_name="use_pressure_strength",
                         unified_name="use_unified_strength",
                         slider=True,
-                        header=True
+                        header=True,
                     )
 
     @staticmethod
@@ -737,7 +742,7 @@ class IMAGE_HT_header(Header):
 
             # Snap.
             snap_uv_element = tool_settings.snap_uv_element
-            act_snap_uv_element = tool_settings.bl_rna.properties['snap_uv_element'].enum_items[snap_uv_element]
+            act_snap_uv_element = tool_settings.bl_rna.properties["snap_uv_element"].enum_items[snap_uv_element]
 
             row = layout.row(align=True)
             row.prop(tool_settings, "use_snap_uv", text="")
@@ -1528,36 +1533,23 @@ class IMAGE_PT_overlay_guides(Panel):
         layout.active = overlay.show_overlays
 
         row = layout.row()
-        row_el = row.column()
-        row_el.prop(overlay, "show_grid_background", text="Grid")
+        row.prop(overlay, "show_grid_background", text="Grid")
 
         if overlay.show_grid_background:
-            layout.use_property_split = True
-
-            col = layout.column(align=False, heading="Grid Over Image")
-            col.use_property_decorate = False
-            row = col.row(align=True)
-            sub = row.row(align=True)
-            sub.prop(uvedit, "show_grid_over_image", text="")
+            sub = row.row()
+            sub.prop(uvedit, "show_grid_over_image", text="Over Image")
             sub.active = sima.image is not None
 
-            col = layout.column(align=False, heading="Fixed Subdivisions")
-            col.use_property_decorate = False
+            layout.row().prop(uvedit, "grid_shape_source", expand=True)
 
-            row = col.row(align=True)
-            sub = row.row(align=True)
-            sub.prop(uvedit, "use_custom_grid", text="")
-            if uvedit.use_custom_grid:
-                row = layout.row()
-                row.use_property_split = True
-                row.use_property_decorate = False
-                sub = sub.row(align=True)
-                sub.prop(uvedit, "custom_grid_subdivisions", text="")
+            layout.use_property_split = True
+            layout.use_property_decorate = False
 
             row = layout.row()
-            row.use_property_split = True
-            row.use_property_decorate = False
-            row.prop(uvedit, "tile_grid_shape", text="Tiles")
+            row.prop(uvedit, "custom_grid_subdivisions", text="Fixed Subdivisions")
+            row.active = uvedit.grid_shape_source == 'FIXED'
+
+            layout.prop(uvedit, "tile_grid_shape", text="Tiles")
 
 
 class IMAGE_PT_overlay_uv_edit(Panel):

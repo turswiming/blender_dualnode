@@ -363,7 +363,7 @@ static UUID_Int bm_uuidwalk_calc_face_uuid(UUIDWalk *uuidwalk, BMFace *f)
 static void bm_uuidwalk_rehash_reserve(UUIDWalk *uuidwalk, uint rehash_store_len_new)
 {
   if (UNLIKELY(rehash_store_len_new > uuidwalk->cache.rehash_store_len)) {
-    /* avoid re-allocs */
+    /* Avoid re-allocations. */
     rehash_store_len_new *= 2;
     uuidwalk->cache.rehash_store = MEM_reallocN(uuidwalk->cache.rehash_store,
                                                 rehash_store_len_new *
@@ -510,7 +510,7 @@ static void bm_uuidwalk_pass_add(UUIDWalk *uuidwalk,
         do {
           if (!BLI_ghash_haskey(uuidwalk->faces_uuid, l_iter_radial->f) &&
               !BLI_gset_haskey(faces_step_next, l_iter_radial->f) &&
-              (bm_uuidwalk_face_test(uuidwalk, l_iter_radial->f))) {
+              bm_uuidwalk_face_test(uuidwalk, l_iter_radial->f)) {
             BLI_gset_insert(faces_step_next, l_iter_radial->f);
 
             /* add to fstep */

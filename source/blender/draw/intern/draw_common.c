@@ -172,20 +172,14 @@ void DRW_globals_update(void)
 
   /* M_SQRT2 to be at least the same size of the old square */
   gb->size_vertex = U.pixelsize *
-                    (max_ff(1.0f, UI_GetThemeValuef(TH_VERTEX_SIZE) * (float)M_SQRT2 / 2.0f));
+                    max_ff(1.0f, UI_GetThemeValuef(TH_VERTEX_SIZE) * (float)M_SQRT2 / 2.0f);
   gb->size_vertex_gpencil = U.pixelsize * UI_GetThemeValuef(TH_GP_VERTEX_SIZE);
   gb->size_face_dot = U.pixelsize * UI_GetThemeValuef(TH_FACEDOT_SIZE);
   gb->size_edge = U.pixelsize * (1.0f / 2.0f); /* TODO: Theme. */
   gb->size_edge_fix = U.pixelsize * (0.5f + 2.0f * (2.0f * (gb->size_edge * (float)M_SQRT1_2)));
 
-  const float(*screen_vecs)[3] = (float(*)[3])DRW_viewport_screenvecs_get();
-  for (int i = 0; i < 2; i++) {
-    copy_v3_v3(gb->screen_vecs[i], screen_vecs[i]);
-  }
-
   gb->pixel_fac = *DRW_viewport_pixelsize_get();
 
-  /* Deprecated, use drw_view.viewport_size instead */
   copy_v2_v2(&gb->size_viewport[0], DRW_viewport_size_get());
   copy_v2_v2(&gb->size_viewport[2], &gb->size_viewport[0]);
   invert_v2(&gb->size_viewport[2]);
@@ -225,7 +219,8 @@ void DRW_globals_update(void)
 
     BKE_colorband_evaluate_table_rgba(&ramp, &colors, &col_size);
 
-    G_draw.ramp = GPU_texture_create_1d("ramp", col_size, 1, GPU_RGBA8, colors);
+    G_draw.ramp = GPU_texture_create_1d_ex(
+        "ramp", col_size, 1, GPU_RGBA8, GPU_TEXTURE_USAGE_SHADER_READ, colors);
 
     MEM_freeN(colors);
   }
@@ -482,5 +477,6 @@ static GPUTexture *DRW_create_weight_colorramp_texture(void)
     pixels[i][3] = 1.0f;
   }
 
-  return GPU_texture_create_1d("weight_color_ramp", 256, 1, GPU_SRGB8_A8, pixels[0]);
+  return GPU_texture_create_1d_ex(
+      "weight_color_ramp", 256, 1, GPU_SRGB8_A8, GPU_TEXTURE_USAGE_SHADER_READ, pixels[0]);
 }

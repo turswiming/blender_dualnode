@@ -49,10 +49,10 @@ static const EnumPropertyItem io_obj_export_evaluation_mode[] = {
     {0, NULL, 0, NULL, NULL}};
 
 static const EnumPropertyItem io_obj_path_mode[] = {
-    {PATH_REFERENCE_AUTO, "AUTO", 0, "Auto", "Use Relative paths with subdirectories only"},
+    {PATH_REFERENCE_AUTO, "AUTO", 0, "Auto", "Use relative paths with subdirectories only"},
     {PATH_REFERENCE_ABSOLUTE, "ABSOLUTE", 0, "Absolute", "Always write absolute paths"},
     {PATH_REFERENCE_RELATIVE, "RELATIVE", 0, "Relative", "Write relative paths where possible"},
-    {PATH_REFERENCE_MATCH, "MATCH", 0, "Match", "Match Absolute/Relative setting with input path"},
+    {PATH_REFERENCE_MATCH, "MATCH", 0, "Match", "Match absolute/relative setting with input path"},
     {PATH_REFERENCE_STRIP, "STRIP", 0, "Strip", "Write filename only"},
     {PATH_REFERENCE_COPY, "COPY", 0, "Copy", "Copy the file to the destination path"},
     {0, NULL, 0, NULL, NULL}};
@@ -81,7 +81,7 @@ static int wm_obj_export_exec(bContext *C, wmOperator *op)
 
   export_params.forward_axis = RNA_enum_get(op->ptr, "forward_axis");
   export_params.up_axis = RNA_enum_get(op->ptr, "up_axis");
-  export_params.scaling_factor = RNA_float_get(op->ptr, "scaling_factor");
+  export_params.global_scale = RNA_float_get(op->ptr, "global_scale");
   export_params.apply_modifiers = RNA_boolean_get(op->ptr, "apply_modifiers");
   export_params.export_eval_mode = RNA_enum_get(op->ptr, "export_eval_mode");
 
@@ -115,19 +115,16 @@ static void ui_obj_export_settings(uiLayout *layout, PointerRNA *imfptr)
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
-  uiLayout *box, *col, *sub, *row;
+  uiLayout *box, *col, *sub;
 
   /* Object Transform options. */
   box = uiLayoutBox(layout);
   col = uiLayoutColumn(box, false);
   sub = uiLayoutColumnWithHeading(col, false, IFACE_("Limit to"));
   uiItemR(sub, imfptr, "export_selected_objects", 0, IFACE_("Selected Only"), ICON_NONE);
-  uiItemR(sub, imfptr, "scaling_factor", 0, NULL, ICON_NONE);
-
-  row = uiLayoutRow(box, false);
-  uiItemR(row, imfptr, "forward_axis", UI_ITEM_R_EXPAND, IFACE_("Forward Axis"), ICON_NONE);
-  row = uiLayoutRow(box, false);
-  uiItemR(row, imfptr, "up_axis", UI_ITEM_R_EXPAND, IFACE_("Up Axis"), ICON_NONE);
+  uiItemR(sub, imfptr, "global_scale", 0, NULL, ICON_NONE);
+  uiItemR(sub, imfptr, "forward_axis", 0, IFACE_("Forward Axis"), ICON_NONE);
+  uiItemR(sub, imfptr, "up_axis", 0, IFACE_("Up Axis"), ICON_NONE);
 
   col = uiLayoutColumn(box, false);
   sub = uiLayoutColumn(col, false);
@@ -301,15 +298,16 @@ void WM_OT_obj_export(struct wmOperatorType *ot)
   RNA_def_property_update_runtime(prop, (void *)forward_axis_update);
   prop = RNA_def_enum(ot->srna, "up_axis", io_transform_axis, IO_AXIS_Y, "Up Axis", "");
   RNA_def_property_update_runtime(prop, (void *)up_axis_update);
-  RNA_def_float(ot->srna,
-                "scaling_factor",
-                1.0f,
-                0.001f,
-                10000.0f,
-                "Scale",
-                "Upscale the object by this factor",
-                0.01,
-                1000.0f);
+  RNA_def_float(
+      ot->srna,
+      "global_scale",
+      1.0f,
+      0.0001f,
+      10000.0f,
+      "Scale",
+      "Value by which to enlarge or shrink the objects with respect to the world's origin",
+      0.0001f,
+      10000.0f);
   /* File Writer options. */
   RNA_def_boolean(
       ot->srna, "apply_modifiers", true, "Apply Modifiers", "Apply modifiers to exported meshes");
@@ -405,9 +403,12 @@ static int wm_obj_import_exec(bContext *C, wmOperator *op)
 {
   struct OBJImportParams import_params;
   RNA_string_get(op->ptr, "filepath", import_params.filepath);
+  import_params.global_scale = RNA_float_get(op->ptr, "global_scale");
   import_params.clamp_size = RNA_float_get(op->ptr, "clamp_size");
   import_params.forward_axis = RNA_enum_get(op->ptr, "forward_axis");
   import_params.up_axis = RNA_enum_get(op->ptr, "up_axis");
+  import_params.use_split_objects = RNA_boolean_get(op->ptr, "use_split_objects");
+  import_params.use_split_groups = RNA_boolean_get(op->ptr, "use_split_groups");
   import_params.import_vertex_groups = RNA_boolean_get(op->ptr, "import_vertex_groups");
   import_params.validate_meshes = RNA_boolean_get(op->ptr, "validate_meshes");
   import_params.relative_paths = ((U.flag & USER_RELPATHS) != 0);
@@ -425,8 +426,7 @@ static int wm_obj_import_exec(bContext *C, wmOperator *op)
     for (int i = 0; i < files_len; i++) {
       RNA_property_collection_lookup_int(op->ptr, prop, i, &fileptr);
       RNA_string_get(&fileptr, "name", file_only);
-      BLI_join_dirfile(
-          import_params.filepath, sizeof(import_params.filepath), dir_only, file_only);
+      BLI_path_join(import_params.filepath, sizeof(import_params.filepath), dir_only, file_only);
       import_params.clear_selection = (i == 0);
       OBJ_import(C, &import_params);
     }
@@ -459,17 +459,18 @@ static void ui_obj_import_settings(uiLayout *layout, PointerRNA *imfptr)
   uiItemL(box, IFACE_("Transform"), ICON_OBJECT_DATA);
   uiLayout *col = uiLayoutColumn(box, false);
   uiLayout *sub = uiLayoutColumn(col, false);
+  uiItemR(sub, imfptr, "global_scale", 0, NULL, ICON_NONE);
   uiItemR(sub, imfptr, "clamp_size", 0, NULL, ICON_NONE);
   sub = uiLayoutColumn(col, false);
 
-  uiLayout *row = uiLayoutRow(box, false);
-  uiItemR(row, imfptr, "forward_axis", UI_ITEM_R_EXPAND, IFACE_("Forward Axis"), ICON_NONE);
-  row = uiLayoutRow(box, false);
-  uiItemR(row, imfptr, "up_axis", UI_ITEM_R_EXPAND, IFACE_("Up Axis"), ICON_NONE);
+  uiItemR(sub, imfptr, "forward_axis", 0, IFACE_("Forward Axis"), ICON_NONE);
+  uiItemR(sub, imfptr, "up_axis", 0, IFACE_("Up Axis"), ICON_NONE);
 
   box = uiLayoutBox(layout);
   uiItemL(box, IFACE_("Options"), ICON_EXPORT);
   col = uiLayoutColumn(box, false);
+  uiItemR(col, imfptr, "use_split_objects", 0, NULL, ICON_NONE);
+  uiItemR(col, imfptr, "use_split_groups", 0, NULL, ICON_NONE);
   uiItemR(col, imfptr, "import_vertex_groups", 0, NULL, ICON_NONE);
   uiItemR(col, imfptr, "validate_meshes", 0, NULL, ICON_NONE);
 }
@@ -489,7 +490,7 @@ void WM_OT_obj_import(struct wmOperatorType *ot)
   ot->name = "Import Wavefront OBJ";
   ot->description = "Load a Wavefront OBJ scene";
   ot->idname = "WM_OT_obj_import";
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_PRESET;
 
   ot->invoke = wm_obj_import_invoke;
   ot->exec = wm_obj_import_exec;
@@ -506,6 +507,16 @@ void WM_OT_obj_import(struct wmOperatorType *ot)
                                  FILE_SORT_DEFAULT);
   RNA_def_float(
       ot->srna,
+      "global_scale",
+      1.0f,
+      0.0001f,
+      10000.0f,
+      "Scale",
+      "Value by which to enlarge or shrink the objects with respect to the world's origin",
+      0.0001f,
+      10000.0f);
+  RNA_def_float(
+      ot->srna,
       "clamp_size",
       0.0f,
       0.0f,
@@ -519,6 +530,16 @@ void WM_OT_obj_import(struct wmOperatorType *ot)
   RNA_def_property_update_runtime(prop, (void *)forward_axis_update);
   prop = RNA_def_enum(ot->srna, "up_axis", io_transform_axis, IO_AXIS_Y, "Up Axis", "");
   RNA_def_property_update_runtime(prop, (void *)up_axis_update);
+  RNA_def_boolean(ot->srna,
+                  "use_split_objects",
+                  true,
+                  "Split By Object",
+                  "Import each OBJ 'o' as a separate object");
+  RNA_def_boolean(ot->srna,
+                  "use_split_groups",
+                  false,
+                  "Split By Group",
+                  "Import each OBJ 'g' as a separate object");
   RNA_def_boolean(ot->srna,
                   "import_vertex_groups",
                   false,

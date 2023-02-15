@@ -271,7 +271,7 @@ void MEM_use_guarded_allocator(void);
 template<typename T, typename... Args>
 inline T *MEM_new(const char *allocation_name, Args &&...args)
 {
-  void *buffer = MEM_mallocN(sizeof(T), allocation_name);
+  void *buffer = MEM_mallocN_aligned(sizeof(T), alignof(T), allocation_name);
   return new (buffer) T(std::forward<Args>(args)...);
 }
 
@@ -281,6 +281,8 @@ inline T *MEM_new(const char *allocation_name, Args &&...args)
  */
 template<typename T> inline void MEM_delete(const T *ptr)
 {
+  static_assert(!std::is_void_v<T>,
+                "MEM_delete on a void pointer not possible. Cast it to a non-void type?");
   if (ptr == nullptr) {
     /* Support #ptr being null, because C++ `delete` supports that as well. */
     return;

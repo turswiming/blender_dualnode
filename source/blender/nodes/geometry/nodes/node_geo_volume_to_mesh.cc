@@ -48,14 +48,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>(N_("Mesh"));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
   uiItemR(layout, ptr, "resolution_mode", 0, IFACE_("Resolution"), ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryVolumeToMesh *data = MEM_cnew<NodeGeometryVolumeToMesh>(__func__);
   data->resolution_mode = VOLUME_TO_MESH_RESOLUTION_MODE_GRID;
@@ -123,7 +123,7 @@ static Mesh *create_mesh_from_volume_grids(Span<openvdb::GridBase::ConstPtr> gri
 
   Mesh *mesh = BKE_mesh_new_nomain(vert_offset, 0, 0, loop_offset, poly_offset);
   BKE_id_material_eval_ensure_default_slot(&mesh->id);
-  MutableSpan<MVert> verts = mesh->verts_for_write();
+  MutableSpan<float3> positions = mesh->vert_positions_for_write();
   MutableSpan<MPoly> polys = mesh->polys_for_write();
   MutableSpan<MLoop> loops = mesh->loops_for_write();
 
@@ -135,7 +135,7 @@ static Mesh *create_mesh_from_volume_grids(Span<openvdb::GridBase::ConstPtr> gri
                                      vert_offsets[i],
                                      poly_offsets[i],
                                      loop_offsets[i],
-                                     verts,
+                                     positions,
                                      polys,
                                      loops);
   }
@@ -215,8 +215,8 @@ void register_node_type_geo_volume_to_mesh()
   node_type_storage(
       &ntype, "NodeGeometryVolumeToMesh", node_free_standard_storage, node_copy_standard_storage);
   node_type_size(&ntype, 170, 120, 700);
-  node_type_init(&ntype, file_ns::node_init);
-  node_type_update(&ntype, file_ns::node_update);
+  ntype.initfunc = file_ns::node_init;
+  ntype.updatefunc = file_ns::node_update;
   ntype.geometry_node_execute = file_ns::node_geo_exec;
   ntype.draw_buttons = file_ns::node_layout;
   nodeRegisterType(&ntype);

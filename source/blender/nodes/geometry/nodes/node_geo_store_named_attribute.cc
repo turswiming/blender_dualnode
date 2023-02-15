@@ -20,17 +20,18 @@ NODE_STORAGE_FUNCS(NodeGeometryStoreNamedAttribute)
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Geometry"));
+  b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().field_on_all();
   b.add_input<decl::String>(N_("Name")).is_attribute_name();
-  b.add_input<decl::Vector>(N_("Value"), "Value_Vector").supports_field();
-  b.add_input<decl::Float>(N_("Value"), "Value_Float").supports_field();
-  b.add_input<decl::Color>(N_("Value"), "Value_Color").supports_field();
-  b.add_input<decl::Bool>(N_("Value"), "Value_Bool").supports_field();
-  b.add_input<decl::Int>(N_("Value"), "Value_Int").supports_field();
+  b.add_input<decl::Vector>(N_("Value"), "Value_Vector").field_on_all();
+  b.add_input<decl::Float>(N_("Value"), "Value_Float").field_on_all();
+  b.add_input<decl::Color>(N_("Value"), "Value_Color").field_on_all();
+  b.add_input<decl::Bool>(N_("Value"), "Value_Bool").field_on_all();
+  b.add_input<decl::Int>(N_("Value"), "Value_Int").field_on_all();
 
-  b.add_output<decl::Geometry>(N_("Geometry"));
+  b.add_output<decl::Geometry>(N_("Geometry")).propagate_all();
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
@@ -38,7 +39,7 @@ static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
   uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryStoreNamedAttribute *data = MEM_cnew<NodeGeometryStoreNamedAttribute>(__func__);
   data->data_type = CD_PROP_FLOAT;
@@ -49,17 +50,17 @@ static void node_init(bNodeTree *UNUSED(tree), bNode *node)
 static void node_update(bNodeTree *ntree, bNode *node)
 {
   const NodeGeometryStoreNamedAttribute &storage = node_storage(*node);
-  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
+  const eCustomDataType data_type = eCustomDataType(storage.data_type);
 
-  bNodeSocket *socket_geometry = (bNodeSocket *)node->inputs.first;
-  bNodeSocket *socket_name = socket_geometry->next;
+  bNodeSocket *socket_geometry = static_cast<bNodeSocket *>(node->inputs.first);
+  bNodeSocket *socket_name = socket_geometry->next->next;
   bNodeSocket *socket_vector = socket_name->next;
   bNodeSocket *socket_float = socket_vector->next;
   bNodeSocket *socket_color4f = socket_float->next;
   bNodeSocket *socket_boolean = socket_color4f->next;
   bNodeSocket *socket_int32 = socket_boolean->next;
 
-  nodeSetSocketAvailability(ntree, socket_vector, data_type == CD_PROP_FLOAT3);
+  nodeSetSocketAvailability(ntree, socket_vector, ELEM(data_type, CD_PROP_FLOAT2, CD_PROP_FLOAT3));
   nodeSetSocketAvailability(ntree, socket_float, data_type == CD_PROP_FLOAT);
   nodeSetSocketAvailability(
       ntree, socket_color4f, ELEM(data_type, CD_PROP_COLOR, CD_PROP_BYTE_COLOR));
@@ -70,12 +71,12 @@ static void node_update(bNodeTree *ntree, bNode *node)
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const NodeDeclaration &declaration = *params.node_type().fixed_declaration;
-  search_link_ops_for_declarations(params, declaration.inputs().take_front(2));
-  search_link_ops_for_declarations(params, declaration.outputs().take_front(1));
+  search_link_ops_for_declarations(params, declaration.inputs.as_span().take_front(2));
+  search_link_ops_for_declarations(params, declaration.outputs.as_span().take_front(1));
 
   if (params.in_out() == SOCK_IN) {
     const std::optional<eCustomDataType> type = node_data_type_to_custom_data_type(
-        static_cast<eNodeSocketDatatype>(params.other_socket().type));
+        eNodeSocketDatatype(params.other_socket().type));
     if (type && *type != CD_PROP_STRING) {
       /* The input and output sockets have the same name. */
       params.add_item(IFACE_("Value"), [type](LinkSearchOpParams &params) {
@@ -85,56 +86,6 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
       });
     }
   }
-}
-
-static void try_capture_field_on_geometry(GeometryComponent &component,
-                                          const StringRef name,
-                                          const eAttrDomain domain,
-                                          const GField &field,
-                                          std::atomic<bool> &r_failure)
-{
-  MutableAttributeAccessor attributes = *component.attributes_for_write();
-  const int domain_size = attributes.domain_size(domain);
-  if (domain_size == 0) {
-    return;
-  }
-
-  bke::GeometryFieldContext field_context{component, domain};
-  const IndexMask mask{IndexMask(domain_size)};
-
-  const CPPType &type = field.cpp_type();
-  const eCustomDataType data_type = bke::cpp_type_to_custom_data_type(type);
-  const bke::AttributeValidator validator = attributes.lookup_validator(name);
-
-  /* Could avoid allocating a new buffer if:
-   * - We are writing to an attribute that exists already with the correct domain and type.
-   * - The field does not depend on that attribute (we can't easily check for that yet). */
-  void *buffer = MEM_mallocN(type.size() * domain_size, __func__);
-
-  fn::FieldEvaluator evaluator{field_context, &mask};
-  evaluator.add_with_destination(validator.validate_field_if_necessary(field),
-                                 GMutableSpan{type, buffer, domain_size});
-  evaluator.evaluate();
-
-  if (GAttributeWriter attribute = attributes.lookup_for_write(name)) {
-    if (attribute.domain == domain && attribute.varray.type() == type) {
-      attribute.varray.set_all(buffer);
-      attribute.finish();
-      type.destruct_n(buffer, domain_size);
-      MEM_freeN(buffer);
-      return;
-    }
-  }
-  attributes.remove(name);
-  if (attributes.add(name, domain, data_type, bke::AttributeInitMoveArray{buffer})) {
-    return;
-  }
-
-  /* If the name corresponds to a builtin attribute, removing the attribute might fail if
-   * it's required, and adding the attribute might fail if the domain or type is incorrect. */
-  type.destruct_n(buffer, domain_size);
-  MEM_freeN(buffer);
-  r_failure = true;
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -155,14 +106,21 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.used_named_attribute(name, NamedAttributeUsage::Write);
 
   const NodeGeometryStoreNamedAttribute &storage = node_storage(params.node());
-  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
-  const eAttrDomain domain = static_cast<eAttrDomain>(storage.domain);
+  const eCustomDataType data_type = eCustomDataType(storage.data_type);
+  const eAttrDomain domain = eAttrDomain(storage.domain);
+
+  const Field<bool> selection = params.extract_input<Field<bool>>("Selection");
 
   GField field;
   switch (data_type) {
     case CD_PROP_FLOAT:
       field = params.get_input<Field<float>>("Value_Float");
       break;
+    case CD_PROP_FLOAT2: {
+      field = params.get_input<Field<float3>>("Value_Vector");
+      field = bke::get_implicit_type_conversions().try_convert(field, CPPType::get<float2>());
+      break;
+    }
     case CD_PROP_FLOAT3:
       field = params.get_input<Field<float3>>("Value_Vector");
       break;
@@ -192,7 +150,11 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (geometry_set.has_instances()) {
       GeometryComponent &component = geometry_set.get_component_for_write(
           GEO_COMPONENT_TYPE_INSTANCES);
-      try_capture_field_on_geometry(component, name, domain, field, failure);
+      if (!bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
+        if (component.attribute_domain_size(domain) != 0) {
+          failure.store(true);
+        }
+      }
     }
   }
   else {
@@ -201,7 +163,11 @@ static void node_geo_exec(GeoNodeExecParams params)
            {GEO_COMPONENT_TYPE_MESH, GEO_COMPONENT_TYPE_POINT_CLOUD, GEO_COMPONENT_TYPE_CURVE}) {
         if (geometry_set.has(type)) {
           GeometryComponent &component = geometry_set.get_component_for_write(type);
-          try_capture_field_on_geometry(component, name, domain, field, failure);
+          if (!bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
+            if (component.attribute_domain_size(domain) != 0) {
+              failure.store(true);
+            }
+          }
         }
       }
     });
@@ -238,7 +204,7 @@ void register_node_type_geo_store_named_attribute()
                     node_free_standard_storage,
                     node_copy_standard_storage);
   node_type_size(&ntype, 140, 100, 700);
-  node_type_init(&ntype, file_ns::node_init);
+  ntype.initfunc = file_ns::node_init;
   ntype.updatefunc = file_ns::node_update;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = file_ns::node_gather_link_searches;

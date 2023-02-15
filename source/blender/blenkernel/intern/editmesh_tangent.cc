@@ -33,9 +33,9 @@ struct SGLSLEditMeshToTangent {
   uint GetNumFaces()
   {
 #ifdef USE_LOOPTRI_DETECT_QUADS
-    return (uint)num_face_as_quad_map;
+    return uint(num_face_as_quad_map);
 #else
-    return (uint)numTessFaces;
+    return uint(numTessFaces);
 #endif
   }
 
@@ -94,12 +94,10 @@ struct SGLSLEditMeshToTangent {
       const float *uv = (const float *)BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
       return mikk::float3(uv[0], uv[1], 1.0f);
     }
-    else {
-      const float *orco_p = orco[BM_elem_index_get(l->v)];
-      float u, v;
-      map_to_sphere(&u, &v, orco_p[0], orco_p[1], orco_p[2]);
-      return mikk::float3(u, v, 1.0f);
-    }
+    const float *orco_p = orco[BM_elem_index_get(l->v)];
+    float u, v;
+    map_to_sphere(&u, &v, orco_p[0], orco_p[1], orco_p[2]);
+    return mikk::float3(u, v, 1.0f);
   }
 
   mikk::float3 GetNormal(const uint face_num, const uint vert_index)
@@ -108,17 +106,13 @@ struct SGLSLEditMeshToTangent {
     if (precomputedLoopNormals) {
       return mikk::float3(precomputedLoopNormals[BM_elem_index_get(l)]);
     }
-    else if (BM_elem_flag_test(l->f, BM_ELEM_SMOOTH) == 0) { /* flat */
+    if (BM_elem_flag_test(l->f, BM_ELEM_SMOOTH) == 0) { /* flat */
       if (precomputedFaceNormals) {
         return mikk::float3(precomputedFaceNormals[BM_elem_index_get(l->f)]);
       }
-      else {
-        return mikk::float3(l->f->no);
-      }
+      return mikk::float3(l->f->no);
     }
-    else {
-      return mikk::float3(l->v->no);
-    }
+    return mikk::float3(l->v->no);
   }
 
   void SetTangentSpace(const uint face_num,
@@ -147,7 +141,7 @@ struct SGLSLEditMeshToTangent {
 #endif
 };
 
-static void emDM_calc_loop_tangents_thread(TaskPool *__restrict UNUSED(pool), void *taskdata)
+static void emDM_calc_loop_tangents_thread(TaskPool *__restrict /*pool*/, void *taskdata)
 {
   SGLSLEditMeshToTangent *mesh_data = static_cast<SGLSLEditMeshToTangent *>(taskdata);
 
@@ -157,7 +151,7 @@ static void emDM_calc_loop_tangents_thread(TaskPool *__restrict UNUSED(pool), vo
 
 void BKE_editmesh_loop_tangent_calc(BMEditMesh *em,
                                     bool calc_active_tangent,
-                                    const char (*tangent_names)[MAX_NAME],
+                                    const char (*tangent_names)[MAX_CUSTOMDATA_LAYER_NAME],
                                     int tangent_names_len,
                                     const float (*poly_normals)[3],
                                     const float (*loop_normals)[3],
@@ -194,21 +188,21 @@ void BKE_editmesh_loop_tangent_calc(BMEditMesh *em,
     for (int i = 0; i < tangent_names_len; i++) {
       if (tangent_names[i][0]) {
         BKE_mesh_add_loop_tangent_named_layer_for_uv(
-            &bm->ldata, loopdata_out, (int)loopdata_out_len, tangent_names[i]);
+            &bm->ldata, loopdata_out, int(loopdata_out_len), tangent_names[i]);
       }
     }
     if ((tangent_mask & DM_TANGENT_MASK_ORCO) &&
         CustomData_get_named_layer_index(loopdata_out, CD_TANGENT, "") == -1) {
       CustomData_add_layer_named(
-          loopdata_out, CD_TANGENT, CD_SET_DEFAULT, nullptr, (int)loopdata_out_len, "");
+          loopdata_out, CD_TANGENT, CD_SET_DEFAULT, nullptr, int(loopdata_out_len), "");
     }
     if (calc_act && act_uv_name[0]) {
       BKE_mesh_add_loop_tangent_named_layer_for_uv(
-          &bm->ldata, loopdata_out, (int)loopdata_out_len, act_uv_name);
+          &bm->ldata, loopdata_out, int(loopdata_out_len), act_uv_name);
     }
     if (calc_ren && ren_uv_name[0]) {
       BKE_mesh_add_loop_tangent_named_layer_for_uv(
-          &bm->ldata, loopdata_out, (int)loopdata_out_len, ren_uv_name);
+          &bm->ldata, loopdata_out, int(loopdata_out_len), ren_uv_name);
     }
     int totface = em->tottri;
 #ifdef USE_LOOPTRI_DETECT_QUADS
@@ -260,7 +254,7 @@ void BKE_editmesh_loop_tangent_calc(BMEditMesh *em,
         /* NOTE: we assume we do have tessellated loop normals at this point
          * (in case it is object-enabled), have to check this is valid. */
         mesh2tangent->precomputedLoopNormals = loop_normals;
-        mesh2tangent->cd_loop_uv_offset = CustomData_get_n_offset(&bm->ldata, CD_MLOOPUV, n);
+        mesh2tangent->cd_loop_uv_offset = CustomData_get_n_offset(&bm->ldata, CD_PROP_FLOAT2, n);
 
         /* needed for indexing loop-tangents */
         int htype_index = BM_LOOP;
@@ -276,8 +270,8 @@ void BKE_editmesh_loop_tangent_calc(BMEditMesh *em,
         else {
           /* Fill the resulting tangent_mask */
           int uv_ind = CustomData_get_named_layer_index(
-              &bm->ldata, CD_MLOOPUV, loopdata_out->layers[index].name);
-          int uv_start = CustomData_get_layer_index(&bm->ldata, CD_MLOOPUV);
+              &bm->ldata, CD_PROP_FLOAT2, loopdata_out->layers[index].name);
+          int uv_start = CustomData_get_layer_index(&bm->ldata, CD_PROP_FLOAT2);
           BLI_assert(uv_ind != -1 && uv_start != -1);
           BLI_assert(uv_ind - uv_start < MAX_MTFACE);
           tangent_mask_curr |= 1 << (uv_ind - uv_start);
@@ -312,7 +306,7 @@ void BKE_editmesh_loop_tangent_calc(BMEditMesh *em,
 
   *tangent_mask_curr_p = tangent_mask_curr;
 
-  int act_uv_index = CustomData_get_layer_index_n(&bm->ldata, CD_MLOOPUV, act_uv_n);
+  int act_uv_index = CustomData_get_layer_index_n(&bm->ldata, CD_PROP_FLOAT2, act_uv_n);
   if (act_uv_index >= 0) {
     int tan_index = CustomData_get_named_layer_index(
         loopdata_out, CD_TANGENT, bm->ldata.layers[act_uv_index].name);
@@ -320,7 +314,7 @@ void BKE_editmesh_loop_tangent_calc(BMEditMesh *em,
   } /* else tangent has been built from orco */
 
   /* Update render layer index */
-  int ren_uv_index = CustomData_get_layer_index_n(&bm->ldata, CD_MLOOPUV, ren_uv_n);
+  int ren_uv_index = CustomData_get_layer_index_n(&bm->ldata, CD_PROP_FLOAT2, ren_uv_n);
   if (ren_uv_index >= 0) {
     int tan_index = CustomData_get_named_layer_index(
         loopdata_out, CD_TANGENT, bm->ldata.layers[ren_uv_index].name);

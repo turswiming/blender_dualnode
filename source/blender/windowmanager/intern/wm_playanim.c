@@ -59,6 +59,8 @@
 
 #include "DEG_depsgraph.h"
 
+#include "wm_window_private.h"
+
 #include "WM_api.h" /* only for WM_main_playanim */
 
 #ifdef WITH_AUDASPACE
@@ -475,7 +477,8 @@ static void draw_display_buffer(PlayState *ps, ImBuf *ibuf)
   void *buffer_cache_handle = NULL;
   display_buffer = ocio_transform_ibuf(ps, ibuf, &glsl_used, &format, &data, &buffer_cache_handle);
 
-  GPUTexture *texture = GPU_texture_create_2d("display_buf", ibuf->x, ibuf->y, 1, format, NULL);
+  GPUTexture *texture = GPU_texture_create_2d_ex(
+      "display_buf", ibuf->x, ibuf->y, 1, format, GPU_TEXTURE_USAGE_SHADER_READ, NULL);
   GPU_texture_update(texture, data, display_buffer);
   GPU_texture_filter_mode(texture, false);
 
@@ -647,7 +650,7 @@ static void build_pict_list_ex(
   }
   else {
     /* Load images into cache until the cache is full,
-     * this resolves choppiness for images that are slow to load, see: T81751. */
+     * this resolves choppiness for images that are slow to load, see: #81751. */
 #ifdef USE_FRAME_CACHE_LIMIT
     bool fill_cache = true;
 #else
@@ -659,7 +662,7 @@ static void build_pict_list_ex(
     int fp_framenr;
     struct {
       char head[FILE_MAX], tail[FILE_MAX];
-      unsigned short digits;
+      ushort digits;
     } fp_decoded;
 
     char filepath[FILE_MAX];
@@ -1340,6 +1343,8 @@ static bool ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 static void playanim_window_open(const char *title, int posx, int posy, int sizex, int sizey)
 {
   GHOST_GLSettings glsettings = {0};
+  const eGPUBackendType gpu_backend = GPU_backend_type_selection_get();
+  glsettings.context_type = wm_ghost_drawing_context_type(gpu_backend);
   uint32_t scr_w, scr_h;
 
   GHOST_GetMainDisplayDimensions(g_WS.ghost_system, &scr_w, &scr_h);
@@ -1356,7 +1361,6 @@ static void playanim_window_open(const char *title, int posx, int posy, int size
                                          /* Could optionally start full-screen. */
                                          GHOST_kWindowStateNormal,
                                          false,
-                                         GHOST_kDrawingContextTypeOpenGL,
                                          glsettings);
 }
 
@@ -1539,6 +1543,14 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
     GHOST_SetBacktraceHandler((GHOST_TBacktraceFn)BLI_system_backtrace);
 
     g_WS.ghost_system = GHOST_CreateSystem();
+
+    if (UNLIKELY(g_WS.ghost_system == NULL)) {
+      /* GHOST will have reported the back-ends that failed to load. */
+      fprintf(stderr, "GHOST: unable to initialize, exiting!\n");
+      /* This will leak memory, it's preferable to crashing. */
+      exit(1);
+    }
+
     GHOST_AddEventConsumer(g_WS.ghost_system, consumer);
 
     playanim_window_open("Blender Animation Player", start_x, start_y, ibuf->x, ibuf->y);
@@ -1556,7 +1568,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
   BLF_init();
   BLF_load_font_stack();
   ps.fontid = BLF_load_mono_default(false);
-  BLF_size(ps.fontid, 11.0f, 72);
+  BLF_size(ps.fontid, 11.0f);
 
   ps.ibufx = ibuf->x;
   ps.ibufy = ibuf->y;

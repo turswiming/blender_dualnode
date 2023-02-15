@@ -199,7 +199,7 @@ void GPU_vertformat_multiload_enable(GPUVertFormat *format, int load_count)
   for (int i = 0; i < attr_len; i++, attr++) {
     const char *attr_name = GPU_vertformat_attr_name_get(format, attr, 0);
     for (int j = 1; j < load_count; j++) {
-      char load_name[64];
+      char load_name[68 /* MAX_CUSTOMDATA_LAYER_NAME */];
       BLI_snprintf(load_name, sizeof(load_name), "%s%d", attr_name, j);
       GPUVertAttr *dst_attr = &format->attrs[format->attr_len++];
       *dst_attr = *attr;
@@ -251,7 +251,7 @@ static void safe_bytes(char out[11], const char data[8])
   }
 }
 
-void GPU_vertformat_safe_attr_name(const char *attr_name, char *r_safe_name, uint UNUSED(max_len))
+void GPU_vertformat_safe_attr_name(const char *attr_name, char *r_safe_name, uint /*max_len*/)
 {
   char data[8] = {0};
   uint len = strlen(attr_name);
@@ -361,8 +361,12 @@ void VertexFormat_texture_buffer_pack(GPUVertFormat *format)
    * minimum per-vertex stride, which mandates 4-byte alignment in Metal.
    * This additional alignment padding caused smaller data types, e.g. U16,
    * to mis-align. */
-  BLI_assert_msg(format->attr_len == 1,
-                 "Texture buffer mode should only use a single vertex attribute.");
+  for (int i = 0; i < format->attr_len; i++) {
+    /* The buffer texture setup uses the first attribute for type and size.
+     * Make sure all attributes use the same size. */
+    BLI_assert_msg(format->attrs[i].size == format->attrs[0].size,
+                   "Texture buffer mode should only use a attributes with the same size.");
+  }
 
   /* Pack vertex format without minimum stride, as this is not required by texture buffers. */
   VertexFormat_pack_impl(format, 1);

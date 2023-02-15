@@ -41,10 +41,10 @@
 #include "ED_screen.h"
 
 #include "GPU_state.h"
-#include "interface_intern.h"
+#include "interface_intern.hh"
 #include "interface_regions_intern.hh"
 
-#define MENU_BORDER (int)(0.3f * U.widget_unit)
+#define MENU_BORDER int(0.3f * U.widget_unit)
 
 /* -------------------------------------------------------------------- */
 /** \name Search Box Creation
@@ -307,8 +307,8 @@ bool ui_searchbox_apply(uiBut *but, ARegion *region)
 
 static struct ARegion *wm_searchbox_tooltip_init(struct bContext *C,
                                                  struct ARegion *region,
-                                                 int *UNUSED(r_pass),
-                                                 double *UNUSED(pass_delay),
+                                                 int * /*r_pass*/,
+                                                 double * /*pass_delay*/,
                                                  bool *r_exit_on_event)
 {
   *r_exit_on_event = true;
@@ -433,17 +433,17 @@ bool ui_searchbox_event(
 
 /** Wrap #uiButSearchUpdateFn callback. */
 static void ui_searchbox_update_fn(bContext *C,
-                                   uiButSearch *search_but,
+                                   uiButSearch *but,
                                    const char *str,
                                    uiSearchItems *items)
 {
   /* While the button is in text editing mode (searchbox open), remove tooltips on every update. */
-  if (search_but->but.editstr) {
+  if (but->editstr) {
     wmWindow *win = CTX_wm_window(C);
     WM_tooltip_clear(C, win);
   }
-  const bool is_first_search = !search_but->but.changed;
-  search_but->items_update_fn(C, search_but->arg, str, items, is_first_search);
+  const bool is_first_search = !but->changed;
+  but->items_update_fn(C, but->arg, str, items, is_first_search);
 }
 
 void ui_searchbox_update(bContext *C, ARegion *region, uiBut *but, const bool reset)
@@ -464,7 +464,7 @@ void ui_searchbox_update(bContext *C, ARegion *region, uiBut *but, const bool re
     data->active = -1;
 
     /* On init, find and center active item. */
-    const bool is_first_search = !search_but->but.changed;
+    const bool is_first_search = !but->changed;
     if (is_first_search && search_but->items_update_fn && search_but->item_active) {
       data->items.active = search_but->item_active;
       ui_searchbox_update_fn(C, search_but, but->editstr, &data->items);
@@ -704,12 +704,11 @@ static void ui_searchbox_region_listen_fn(const wmRegionListenerParams *params)
 
 static ARegion *ui_searchbox_create_generic_ex(bContext *C,
                                                ARegion *butregion,
-                                               uiButSearch *search_but,
+                                               uiButSearch *but,
                                                const bool use_shortcut_sep)
 {
   wmWindow *win = CTX_wm_window(C);
   const uiStyle *style = UI_style_get();
-  uiBut *but = &search_but->but;
   const float aspect = but->block->aspect;
   const int margin = UI_POPUP_MARGIN;
 
@@ -726,8 +725,8 @@ static ARegion *ui_searchbox_create_generic_ex(bContext *C,
 
   /* Create search-box data. */
   uiSearchboxData *data = MEM_cnew<uiSearchboxData>(__func__);
-  data->search_arg = search_but->arg;
-  data->search_listener = search_but->listen_fn;
+  data->search_arg = but->arg;
+  data->search_listener = but->listen_fn;
 
   /* Set font, get the bounding-box. */
   data->fstyle = style->widget; /* copy struct */
@@ -751,7 +750,7 @@ static ARegion *ui_searchbox_create_generic_ex(bContext *C,
   if (but->optype != nullptr || use_shortcut_sep) {
     data->use_shortcut_sep = true;
   }
-  data->sep_string = search_but->item_sep_string;
+  data->sep_string = but->item_sep_string;
 
   /* compute position */
   if (but->block->flag & UI_BLOCK_SEARCH_MENU) {
@@ -903,7 +902,7 @@ static void str_tolower_titlecaps_ascii(char *str, const size_t len)
   }
 }
 
-static void ui_searchbox_region_draw_cb__operator(const bContext *UNUSED(C), ARegion *region)
+static void ui_searchbox_region_draw_cb__operator(const bContext * /*C*/, ARegion *region)
 {
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
 
@@ -997,7 +996,7 @@ void ui_searchbox_free(bContext *C, ARegion *region)
   ui_region_temp_remove(C, CTX_wm_screen(C), region);
 }
 
-static void ui_searchbox_region_draw_cb__menu(const bContext *UNUSED(C), ARegion *UNUSED(region))
+static void ui_searchbox_region_draw_cb__menu(const bContext * /*C*/, ARegion * /*region*/)
 {
   /* Currently unused. */
 }
@@ -1013,10 +1012,8 @@ ARegion *ui_searchbox_create_menu(bContext *C, ARegion *butregion, uiButSearch *
   return region;
 }
 
-void ui_but_search_refresh(uiButSearch *search_but)
+void ui_but_search_refresh(uiButSearch *but)
 {
-  uiBut *but = &search_but->but;
-
   /* possibly very large lists (such as ID datablocks) only
    * only validate string RNA buts (not pointers) */
   if (but->rnaprop && RNA_property_type(but->rnaprop) != PROP_STRING) {
@@ -1033,9 +1030,9 @@ void ui_but_search_refresh(uiButSearch *search_but)
     items->names[i] = (char *)MEM_callocN(but->hardmax + 1, __func__);
   }
 
-  ui_searchbox_update_fn((bContext *)but->block->evil_C, search_but, but->drawstr, items);
+  ui_searchbox_update_fn((bContext *)but->block->evil_C, but, but->drawstr, items);
 
-  if (!search_but->results_are_suggestions) {
+  if (!but->results_are_suggestions) {
     /* Only red-alert when we are sure of it, this can miss cases when >10 matches. */
     if (items->totitem == 0) {
       UI_but_flag_enable(but, UI_BUT_REDALERT);

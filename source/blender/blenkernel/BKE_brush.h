@@ -19,6 +19,7 @@ struct Brush;
 struct ImBuf;
 struct ImagePool;
 struct Main;
+struct MTex;
 struct Scene;
 struct ToolSettings;
 struct UnifiedPaintSettings;
@@ -109,6 +110,7 @@ float BKE_brush_curve_strength(const struct Brush *br, float p, float len);
  */
 float BKE_brush_sample_tex_3d(const struct Scene *scene,
                               const struct Brush *br,
+                              const struct MTex *mtex,
                               const float point[3],
                               float rgba[4],
                               int thread,
@@ -118,6 +120,24 @@ float BKE_brush_sample_masktex(const struct Scene *scene,
                                const float point[2],
                                int thread,
                                struct ImagePool *pool);
+
+/**
+ * Get the mask texture for this given object mode.
+ *
+ * This is preferred above using mtex/mask_mtex attributes directly as due to legacy these
+ * attributes got switched in sculpt mode.
+ */
+const struct MTex *BKE_brush_mask_texture_get(const struct Brush *brush,
+                                              const eObjectMode object_mode);
+
+/**
+ * Get the color texture for this given object mode.
+ *
+ * This is preferred above using mtex/mask_mtex attributes directly as due to legacy these
+ * attributes got switched in sculpt mode.
+ */
+const struct MTex *BKE_brush_color_texture_get(const struct Brush *brush,
+                                               const eObjectMode object_mode);
 
 /**
  * Radial control.

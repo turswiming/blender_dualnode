@@ -123,12 +123,8 @@ void seq_imbuf_to_sequencer_space(Scene *scene, ImBuf *ibuf, bool make_float)
        * However, this might also have negative effect by adding weird
        * artifacts which will then not happen in final render.
        */
-      IMB_colormanagement_transform_byte_threaded((unsigned char *)ibuf->rect,
-                                                  ibuf->x,
-                                                  ibuf->y,
-                                                  ibuf->channels,
-                                                  from_colorspace,
-                                                  to_colorspace);
+      IMB_colormanagement_transform_byte_threaded(
+          (uchar *)ibuf->rect, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace);
     }
     else {
       /* We perform conversion to a float buffer so we don't worry about
@@ -136,7 +132,7 @@ void seq_imbuf_to_sequencer_space(Scene *scene, ImBuf *ibuf, bool make_float)
        */
       imb_addrectfloatImBuf(ibuf, 4);
       IMB_colormanagement_transform_from_byte_threaded(ibuf->rect_float,
-                                                       (unsigned char *)ibuf->rect,
+                                                       (uchar *)ibuf->rect,
                                                        ibuf->x,
                                                        ibuf->y,
                                                        ibuf->channels,
@@ -449,8 +445,14 @@ static void sequencer_thumbnail_transform(ImBuf *in, ImBuf *out)
                        (const float[]){scale_x, scale_y, 1.0f});
   transform_pivot_set_m4(transform_matrix, pivot);
   invert_m4(transform_matrix);
-
-  IMB_transform(in, out, IMB_TRANSFORM_MODE_REGULAR, IMB_FILTER_NEAREST, transform_matrix, NULL);
+  const int num_subsamples = 1;
+  IMB_transform(in,
+                out,
+                IMB_TRANSFORM_MODE_REGULAR,
+                IMB_FILTER_NEAREST,
+                num_subsamples,
+                transform_matrix,
+                NULL);
 }
 
 /* Check whether transform introduces transparent ares in the result (happens when the transformed
@@ -513,16 +515,31 @@ static void sequencer_preprocess_transform_crop(
   const float crop_scale_factor = do_scale_to_render_size ? preview_scale_factor : 1.0f;
   sequencer_image_crop_init(seq, in, crop_scale_factor, &source_crop);
 
-  eIMBInterpolationFilterMode filter;
   const StripTransform *transform = seq->strip->transform;
-  if (transform->filter == SEQ_TRANSFORM_FILTER_NEAREST) {
-    filter = IMB_FILTER_NEAREST;
-  }
-  else {
-    filter = IMB_FILTER_BILINEAR;
+  eIMBInterpolationFilterMode filter;
+  int num_subsamples = 1;
+  switch (transform->filter) {
+    case SEQ_TRANSFORM_FILTER_NEAREST:
+      filter = IMB_FILTER_NEAREST;
+      num_subsamples = 1;
+      break;
+    case SEQ_TRANSFORM_FILTER_BILINEAR:
+      filter = IMB_FILTER_BILINEAR;
+      num_subsamples = 1;
+      break;
+    case SEQ_TRANSFORM_FILTER_NEAREST_3x3:
+      filter = IMB_FILTER_NEAREST;
+      num_subsamples = context->for_render ? 3 : 1;
+      break;
   }
 
-  IMB_transform(in, out, IMB_TRANSFORM_MODE_CROP_SRC, filter, transform_matrix, &source_crop);
+  IMB_transform(in,
+                out,
+                IMB_TRANSFORM_MODE_CROP_SRC,
+                filter,
+                num_subsamples,
+                transform_matrix,
+                &source_crop);
 
   if (!seq_image_transform_transparency_gained(context, seq)) {
     out->planes = in->planes;
@@ -942,7 +959,7 @@ static ImBuf *seq_render_image_strip(const SeqRenderData *context,
     return NULL;
   }
 
-  BLI_join_dirfile(name, sizeof(name), seq->strip->dir, s_elem->name);
+  BLI_path_join(name, sizeof(name), seq->strip->dir, s_elem->name);
   BLI_path_abs(name, BKE_main_blendfile_path_from_global());
 
   /* Try to get a proxy image. */
@@ -1030,6 +1047,15 @@ static ImBuf *seq_render_movie_strip_custom_file_proxy(const SeqRenderData *cont
   return IMB_anim_absolute(proxy->anim, frameno, IMB_TC_NONE, IMB_PROXY_NONE);
 }
 
+static IMB_Timecode_Type seq_render_movie_strip_timecode_get(Sequence *seq)
+{
+  bool use_timecodes = (seq->flag & SEQ_USE_PROXY) != 0;
+  if (!use_timecodes) {
+    return IMB_TC_NONE;
+  }
+  return seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_NONE;
+}
+
 /**
  * Render individual view for multi-view or single (default view) for mono-view.
  */
@@ -1053,7 +1079,7 @@ static ImBuf *seq_render_movie_strip_view(const SeqRenderData *context,
     else {
       ibuf = IMB_anim_absolute(sanim->anim,
                                frame_index + seq->anim_startofs,
-                               seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+                               seq_render_movie_strip_timecode_get(seq),
                                psize);
     }
 
@@ -1066,7 +1092,7 @@ static ImBuf *seq_render_movie_strip_view(const SeqRenderData *context,
   if (ibuf == NULL) {
     ibuf = IMB_anim_absolute(sanim->anim,
                              frame_index + seq->anim_startofs,
-                             seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+                             seq_render_movie_strip_timecode_get(seq),
                              IMB_PROXY_NONE);
   }
   if (ibuf == NULL) {
@@ -1298,15 +1324,15 @@ ImBuf *seq_render_mask(const SeqRenderData *context,
   else {
     /* pixels */
     const float *fp_src;
-    unsigned char *ub_dst;
+    uchar *ub_dst;
 
     ibuf = IMB_allocImBuf(context->rectx, context->recty, 32, IB_rect);
 
     fp_src = maskbuf;
-    ub_dst = (unsigned char *)ibuf->rect;
+    ub_dst = (uchar *)ibuf->rect;
     i = context->rectx * context->recty;
     while (--i) {
-      ub_dst[0] = ub_dst[1] = ub_dst[2] = (unsigned char)(*fp_src * 255.0f); /* already clamped */
+      ub_dst[0] = ub_dst[1] = ub_dst[2] = (uchar)(*fp_src * 255.0f); /* already clamped */
       ub_dst[3] = 255;
 
       fp_src += 1;
@@ -1451,7 +1477,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
     BKE_render_resolution(&scene->r, false, &width, &height);
     const char *viewname = BKE_scene_multiview_render_view_name_get(&scene->r, context->view_id);
 
-    unsigned int draw_flags = V3D_OFSDRAW_NONE;
+    uint draw_flags = V3D_OFSDRAW_NONE;
     draw_flags |= (use_gpencil) ? V3D_OFSDRAW_SHOW_ANNOTATION : 0;
     draw_flags |= (context->scene->r.seq_flag & R_SEQ_OVERRIDE_SCENE_SETTINGS) ?
                       V3D_OFSDRAW_OVERRIDE_SCENE_SETTINGS :
@@ -2005,7 +2031,7 @@ ImBuf *SEQ_render_give_ibuf_direct(const SeqRenderData *context,
 float SEQ_render_thumbnail_first_frame_get(const Scene *scene,
                                            Sequence *seq,
                                            float frame_step,
-                                           rctf *view_area)
+                                           const rctf *view_area)
 {
   int first_drawable_frame = max_iii(
       SEQ_time_left_handle_frame_get(scene, seq), seq->start, view_area->xmin);
@@ -2097,8 +2123,8 @@ void SEQ_render_thumbnails(const SeqRenderData *context,
                            Sequence *seq,
                            Sequence *seq_orig,
                            float frame_step,
-                           rctf *view_area,
-                           const short *stop)
+                           const rctf *view_area,
+                           const bool *stop)
 {
   SeqRenderState state;
   seq_render_state_init(&state);
@@ -2107,7 +2133,7 @@ void SEQ_render_thumbnails(const SeqRenderData *context,
   /* Adding the hold offset value (seq->anim_startofs) to the start frame. Position of image not
    * affected, but frame loaded affected. */
   float upper_thumb_bound = SEQ_time_has_right_still_frames(scene, seq) ?
-                                (seq->start + seq->len) :
+                                SEQ_time_content_end_frame_get(scene, seq) :
                                 SEQ_time_right_handle_frame_get(scene, seq);
   upper_thumb_bound = (upper_thumb_bound > view_area->xmax) ? view_area->xmax + frame_step :
                                                               upper_thumb_bound;
@@ -2141,9 +2167,10 @@ void SEQ_render_thumbnails(const SeqRenderData *context,
 
 int SEQ_render_thumbnails_guaranteed_set_frame_step_get(const Scene *scene, const Sequence *seq)
 {
-  const int content_start = max_ii(SEQ_time_left_handle_frame_get(scene, seq), seq->start);
+  const int content_start = max_ii(SEQ_time_left_handle_frame_get(scene, seq),
+                                   SEQ_time_start_frame_get(seq));
   const int content_end = min_ii(SEQ_time_right_handle_frame_get(scene, seq),
-                                 seq->start + seq->len);
+                                 SEQ_time_content_end_frame_get(scene, seq));
   const int content_len = content_end - content_start;
 
   /* Arbitrary, but due to performance reasons should be as low as possible. */
@@ -2157,8 +2184,8 @@ int SEQ_render_thumbnails_guaranteed_set_frame_step_get(const Scene *scene, cons
 void SEQ_render_thumbnails_base_set(const SeqRenderData *context,
                                     Sequence *seq,
                                     Sequence *seq_orig,
-                                    rctf *view_area,
-                                    const short *stop)
+                                    const rctf *view_area,
+                                    const bool *stop)
 {
   SeqRenderState state;
   seq_render_state_init(&state);

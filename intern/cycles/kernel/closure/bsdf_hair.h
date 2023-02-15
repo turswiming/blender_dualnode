@@ -34,30 +34,35 @@ ccl_device int bsdf_hair_transmission_setup(ccl_private HairBsdf *bsdf)
   bsdf->type = CLOSURE_BSDF_HAIR_TRANSMISSION_ID;
   bsdf->roughness1 = clamp(bsdf->roughness1, 0.001f, 1.0f);
   bsdf->roughness2 = clamp(bsdf->roughness2, 0.001f, 1.0f);
-  return SD_BSDF | SD_BSDF_HAS_EVAL;
+  return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_HAS_TRANSMISSION;
 }
 
-ccl_device Spectrum bsdf_hair_reflection_eval_reflect(ccl_private const ShaderClosure *sc,
-                                                      const float3 I,
-                                                      const float3 omega_in,
-                                                      ccl_private float *pdf)
+ccl_device Spectrum bsdf_hair_reflection_eval(ccl_private const ShaderClosure *sc,
+                                              const float3 wi,
+                                              const float3 wo,
+                                              ccl_private float *pdf)
 {
   ccl_private const HairBsdf *bsdf = (ccl_private const HairBsdf *)sc;
+  if (dot(bsdf->N, wo) < 0.0f) {
+    *pdf = 0.0f;
+    return zero_spectrum();
+  }
+
   float offset = bsdf->offset;
   float3 Tg = bsdf->T;
   float roughness1 = bsdf->roughness1;
   float roughness2 = bsdf->roughness2;
 
-  float Iz = dot(Tg, I);
-  float3 locy = normalize(I - Tg * Iz);
+  float Iz = dot(Tg, wi);
+  float3 locy = normalize(wi - Tg * Iz);
 
   float theta_r = M_PI_2_F - fast_acosf(Iz);
 
-  float omega_in_z = dot(Tg, omega_in);
-  float3 omega_in_y = normalize(omega_in - Tg * omega_in_z);
+  float wo_z = dot(Tg, wo);
+  float3 wo_y = normalize(wo - Tg * wo_z);
 
-  float theta_i = M_PI_2_F - fast_acosf(omega_in_z);
-  float cosphi_i = dot(omega_in_y, locy);
+  float theta_i = M_PI_2_F - fast_acosf(wo_z);
+  float cosphi_i = dot(wo_y, locy);
 
   if (M_PI_2_F - fabsf(theta_i) < 0.001f || cosphi_i < 0.0f) {
     *pdf = 0.0f;
@@ -84,44 +89,31 @@ ccl_device Spectrum bsdf_hair_reflection_eval_reflect(ccl_private const ShaderCl
   return make_spectrum(*pdf);
 }
 
-ccl_device Spectrum bsdf_hair_transmission_eval_reflect(ccl_private const ShaderClosure *sc,
-                                                        const float3 I,
-                                                        const float3 omega_in,
-                                                        ccl_private float *pdf)
-{
-  *pdf = 0.0f;
-  return zero_spectrum();
-}
-
-ccl_device Spectrum bsdf_hair_reflection_eval_transmit(ccl_private const ShaderClosure *sc,
-                                                       const float3 I,
-                                                       const float3 omega_in,
-                                                       ccl_private float *pdf)
-{
-  *pdf = 0.0f;
-  return zero_spectrum();
-}
-
-ccl_device Spectrum bsdf_hair_transmission_eval_transmit(ccl_private const ShaderClosure *sc,
-                                                         const float3 I,
-                                                         const float3 omega_in,
-                                                         ccl_private float *pdf)
+ccl_device Spectrum bsdf_hair_transmission_eval(ccl_private const ShaderClosure *sc,
+                                                const float3 wi,
+                                                const float3 wo,
+                                                ccl_private float *pdf)
 {
   ccl_private const HairBsdf *bsdf = (ccl_private const HairBsdf *)sc;
+  if (dot(bsdf->N, wo) >= 0.0f) {
+    *pdf = 0.0f;
+    return zero_spectrum();
+  }
+
   float offset = bsdf->offset;
   float3 Tg = bsdf->T;
   float roughness1 = bsdf->roughness1;
   float roughness2 = bsdf->roughness2;
-  float Iz = dot(Tg, I);
-  float3 locy = normalize(I - Tg * Iz);
+  float Iz = dot(Tg, wi);
+  float3 locy = normalize(wi - Tg * Iz);
 
   float theta_r = M_PI_2_F - fast_acosf(Iz);
 
-  float omega_in_z = dot(Tg, omega_in);
-  float3 omega_in_y = normalize(omega_in - Tg * omega_in_z);
+  float wo_z = dot(Tg, wo);
+  float3 wo_y = normalize(wo - Tg * wo_z);
 
-  float theta_i = M_PI_2_F - fast_acosf(omega_in_z);
-  float phi_i = fast_acosf(dot(omega_in_y, locy));
+  float theta_i = M_PI_2_F - fast_acosf(wo_z);
+  float phi_i = fast_acosf(dot(wo_y, locy));
 
   if (M_PI_2_F - fabsf(theta_i) < 0.001f) {
     *pdf = 0.0f;
@@ -150,20 +142,22 @@ ccl_device Spectrum bsdf_hair_transmission_eval_transmit(ccl_private const Shade
 
 ccl_device int bsdf_hair_reflection_sample(ccl_private const ShaderClosure *sc,
                                            float3 Ng,
-                                           float3 I,
+                                           float3 wi,
                                            float randu,
                                            float randv,
                                            ccl_private Spectrum *eval,
-                                           ccl_private float3 *omega_in,
-                                           ccl_private float *pdf)
+                                           ccl_private float3 *wo,
+                                           ccl_private float *pdf,
+                                           ccl_private float2 *sampled_roughness)
 {
   ccl_private const HairBsdf *bsdf = (ccl_private const HairBsdf *)sc;
   float offset = bsdf->offset;
   float3 Tg = bsdf->T;
   float roughness1 = bsdf->roughness1;
   float roughness2 = bsdf->roughness2;
-  float Iz = dot(Tg, I);
-  float3 locy = normalize(I - Tg * Iz);
+  *sampled_roughness = make_float2(roughness1, roughness2);
+  float Iz = dot(Tg, wi);
+  float3 locy = normalize(wi - Tg * Iz);
   float3 locx = cross(locy, Tg);
   float theta_r = M_PI_2_F - fast_acosf(Iz);
 
@@ -188,7 +182,7 @@ ccl_device int bsdf_hair_reflection_sample(ccl_private const ShaderClosure *sc,
 
   float sinphi, cosphi;
   fast_sincosf(phi, &sinphi, &cosphi);
-  *omega_in = (cosphi * costheta_i) * locy - (sinphi * costheta_i) * locx + (sintheta_i)*Tg;
+  *wo = (cosphi * costheta_i) * locy - (sinphi * costheta_i) * locx + (sintheta_i)*Tg;
 
   *pdf = fabsf(phi_pdf * theta_pdf);
   if (M_PI_2_F - fabsf(theta_i) < 0.001f)
@@ -201,20 +195,22 @@ ccl_device int bsdf_hair_reflection_sample(ccl_private const ShaderClosure *sc,
 
 ccl_device int bsdf_hair_transmission_sample(ccl_private const ShaderClosure *sc,
                                              float3 Ng,
-                                             float3 I,
+                                             float3 wi,
                                              float randu,
                                              float randv,
                                              ccl_private Spectrum *eval,
-                                             ccl_private float3 *omega_in,
-                                             ccl_private float *pdf)
+                                             ccl_private float3 *wo,
+                                             ccl_private float *pdf,
+                                             ccl_private float2 *sampled_roughness)
 {
   ccl_private const HairBsdf *bsdf = (ccl_private const HairBsdf *)sc;
   float offset = bsdf->offset;
   float3 Tg = bsdf->T;
   float roughness1 = bsdf->roughness1;
   float roughness2 = bsdf->roughness2;
-  float Iz = dot(Tg, I);
-  float3 locy = normalize(I - Tg * Iz);
+  *sampled_roughness = make_float2(roughness1, roughness2);
+  float Iz = dot(Tg, wi);
+  float3 locy = normalize(wi - Tg * Iz);
   float3 locx = cross(locy, Tg);
   float theta_r = M_PI_2_F - fast_acosf(Iz);
 
@@ -239,7 +235,7 @@ ccl_device int bsdf_hair_transmission_sample(ccl_private const ShaderClosure *sc
 
   float sinphi, cosphi;
   fast_sincosf(phi, &sinphi, &cosphi);
-  *omega_in = (cosphi * costheta_i) * locy - (sinphi * costheta_i) * locx + (sintheta_i)*Tg;
+  *wo = (cosphi * costheta_i) * locy - (sinphi * costheta_i) * locx + (sintheta_i)*Tg;
 
   *pdf = fabsf(phi_pdf * theta_pdf);
   if (M_PI_2_F - fabsf(theta_i) < 0.001f) {
@@ -251,7 +247,7 @@ ccl_device int bsdf_hair_transmission_sample(ccl_private const ShaderClosure *sc
   /* TODO(sergey): Should always be negative, but seems some precision issue
    * is involved here.
    */
-  kernel_assert(dot(locy, *omega_in) < 1e-4f);
+  kernel_assert(dot(locy, *wo) < 1e-4f);
 
   return LABEL_TRANSMIT | LABEL_GLOSSY;
 }

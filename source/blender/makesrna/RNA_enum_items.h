@@ -19,6 +19,7 @@ DEF_ENUM(rna_enum_object_empty_drawtype_items)
 DEF_ENUM(rna_enum_object_gpencil_type_items)
 DEF_ENUM(rna_enum_metaelem_type_items)
 
+DEF_ENUM(rna_enum_color_space_convert_default_items)
 DEF_ENUM(rna_enum_proportional_falloff_items)
 DEF_ENUM(rna_enum_proportional_falloff_curve_only_items)
 DEF_ENUM(rna_enum_snap_source_items)
@@ -100,6 +101,7 @@ DEF_ENUM(rna_enum_operator_type_flag_items)
 DEF_ENUM(rna_enum_operator_return_items)
 DEF_ENUM(rna_enum_operator_property_tags)
 
+DEF_ENUM(rna_enum_brush_automasking_flag_items)
 DEF_ENUM(rna_enum_brush_sculpt_tool_items)
 DEF_ENUM(rna_enum_brush_uv_sculpt_tool_items)
 DEF_ENUM(rna_enum_brush_vertex_tool_items)
@@ -230,6 +232,7 @@ DEF_ENUM(rna_enum_transform_orientation_items)
 DEF_ENUM(rna_enum_velocity_unit_items)
 
 DEF_ENUM(rna_enum_curves_types)
+DEF_ENUM(rna_enum_curve_normal_modes)
 
 /* Not available to RNA pre-processing (`makesrna`).
  * Defined in editors for example. */

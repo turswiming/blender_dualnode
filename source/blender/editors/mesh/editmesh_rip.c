@@ -291,6 +291,7 @@ static EdgeLoopPair *edbm_ripsel_looptag_helper(BMesh *bm)
     BM_edge_loop_pair(e_last, &lp->l_a, &lp->l_b);
 
     BLI_assert(tot == uid_end - uid_start);
+    UNUSED_VARS_NDEBUG(tot);
 
 #if 0
     printf("%s: found contiguous edge loop of (%d)\n", __func__, uid_end - uid_start);
@@ -326,7 +327,7 @@ static BMVert *edbm_ripsel_edloop_pair_start_vert(BMEdge *e)
 {
   /* try step in a direction, if it fails we know do go the other way */
   BMVert *v_test = e->v1;
-  return (edbm_ripsel_edge_uid_step(e, &v_test)) ? e->v1 : e->v2;
+  return edbm_ripsel_edge_uid_step(e, &v_test) ? e->v1 : e->v2;
 }
 
 static void edbm_ripsel_deselect_helper(BMesh *bm,
@@ -767,7 +768,7 @@ static int edbm_rip_invoke__vert(bContext *C, const wmEvent *event, Object *obed
           if (do_fill) {
             /* Only needed when filling...
              * Also, we never want to tag best edge,
-             * that one won't change during split. See T44618. */
+             * that one won't change during split. See #44618. */
             if (larr[larr_len]->e == e_best) {
               BM_elem_flag_enable(larr[larr_len]->prev->e, BM_ELEM_TAG);
             }
@@ -914,7 +915,7 @@ static int edbm_rip_invoke__edge(bContext *C, const wmEvent *event, Object *obed
       /* NOTE: if the case of 3 edges has one change in loop stepping,
        * if this becomes more involved we may be better off splitting
        * the 3 edge case into its own else-if branch */
-      if ((ELEM(totedge_manifold, 4, 3)) || (all_manifold == false)) {
+      if (ELEM(totedge_manifold, 4, 3) || (all_manifold == false)) {
         BMLoop *l_a = e_best->l;
         BMLoop *l_b = l_a->radial_next;
 

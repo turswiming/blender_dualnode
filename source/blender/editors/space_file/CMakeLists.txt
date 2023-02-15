@@ -3,6 +3,7 @@
 set(INC
   ../asset
   ../include
+  ../../asset_system
   ../../blenfont
   ../../blenkernel
   ../../blenlib
@@ -16,8 +17,14 @@ set(INC
   ../../windowmanager
   ../../../../intern/atomic
   ../../../../intern/guardedalloc
+
+  # dna_type_offsets.h
+  ${CMAKE_CURRENT_BINARY_DIR}/../../makesdna/intern
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
+)
+
+set(INC_SYS
 )
 
 set(SRC
@@ -28,7 +35,7 @@ set(SRC
   file_panels.c
   file_utils.c
   filelist.cc
-  filesel.c
+  filesel.cc
   folder_history.cc
   fsmenu.c
   space_file.c
@@ -42,6 +49,10 @@ set(SRC
 set(LIB
   bf_blenkernel
 )
+
+if(WIN32)
+  add_definitions(-DNOMINMAX)
+endif()
 
 if(WITH_HEADLESS)
   add_definitions(-DWITH_HEADLESS)
@@ -89,5 +100,5 @@ endif()
 
 blender_add_lib(bf_editor_space_file "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# RNA_prototypes.h
+# RNA_prototypes.h dna_type_offsets.h
 add_dependencies(bf_editor_space_file bf_rna)

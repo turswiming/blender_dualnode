@@ -43,6 +43,10 @@ Session::Session(const SessionParams &params_, const SceneParams &scene_params)
 
   device = Device::create(params.device, stats, profiler);
 
+  if (device->have_error()) {
+    progress.set_error(device->error_message());
+  }
+
   scene = new Scene(scene_params, device);
 
   /* Configure path tracer. */
@@ -109,6 +113,9 @@ void Session::start()
 
 void Session::cancel(bool quick)
 {
+  /* Cancel any long running device operations (e.g. shader compilations). */
+  device->cancel();
+
   /* Check if session thread is rendering. */
   const bool rendering = is_session_thread_rendering();
 
@@ -282,19 +289,24 @@ RenderWork Session::run_update_for_next_iteration()
   RenderWork render_work;
 
   thread_scoped_lock scene_lock(scene->mutex);
-  thread_scoped_lock reset_lock(delayed_reset_.mutex);
 
   bool have_tiles = true;
   bool switched_to_new_tile = false;
+  bool did_reset = false;
 
-  const bool did_reset = delayed_reset_.do_reset;
-  if (delayed_reset_.do_reset) {
-    thread_scoped_lock buffers_lock(buffers_mutex_);
-    do_delayed_reset();
+  /* Perform delayed reset if requested. */
+  {
+    thread_scoped_lock reset_lock(delayed_reset_.mutex);
+    if (delayed_reset_.do_reset) {
+      did_reset = true;
 
-    /* After reset make sure the tile manager is at the first big tile. */
-    have_tiles = tile_manager_.next();
-    switched_to_new_tile = true;
+      thread_scoped_lock buffers_lock(buffers_mutex_);
+      do_delayed_reset();
+
+      /* After reset make sure the tile manager is at the first big tile. */
+      have_tiles = tile_manager_.next();
+      switched_to_new_tile = true;
+    }
   }
 
   /* Update number of samples in the integrator.
@@ -316,6 +328,13 @@ RenderWork Session::run_update_for_next_iteration()
   {
     const AdaptiveSampling adaptive_sampling = scene->integrator->get_adaptive_sampling();
     path_trace_->set_adaptive_sampling(adaptive_sampling);
+  }
+
+  /* Update path guiding. */
+  {
+    const GuidingParams guiding_params = scene->integrator->get_guiding_params(device);
+    const bool guiding_reset = (guiding_params.use) ? scene->need_reset(false) : false;
+    path_trace_->set_guiding_params(guiding_params, guiding_reset);
   }
 
   render_scheduler_.set_num_samples(params.samples);
@@ -367,6 +386,18 @@ RenderWork Session::run_update_for_next_iteration()
     const int width = max(1, buffer_params_.full_width / resolution);
     const int height = max(1, buffer_params_.full_height / resolution);
 
+    {
+      /* Load render kernels, before device update where we upload data to the GPU.
+       * Do it outside of the scene mutex since the heavy part of the loading (i.e. kernel
+       * compilation) does not depend on the scene and some other functionality (like display
+       * driver) might be waiting on the scene mutex to synchronize display pass.
+       *
+       * The scene will lock itself for the short period if it needs to update kernel features. */
+      scene_lock.unlock();
+      scene->load_kernels(progress);
+      scene_lock.lock();
+    }
+
     if (update_scene(width, height)) {
       profiler.reset(scene->shaders.size(), scene->objects.size());
     }
@@ -377,6 +408,16 @@ RenderWork Session::run_update_for_next_iteration()
 
     path_trace_->load_kernels();
     path_trace_->alloc_work_memory();
+
+    /* Wait for device to be ready (e.g. finish any background compilations). */
+    string device_status;
+    while (!device->is_ready(device_status)) {
+      progress.set_status(device_status);
+      if (progress.get_cancel()) {
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
 
     progress.add_skip_time(update_timer, params.background);
   }

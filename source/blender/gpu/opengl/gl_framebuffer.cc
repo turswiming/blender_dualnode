@@ -280,7 +280,7 @@ void GLFrameBuffer::bind(bool enabled_srgb)
     else {
       glDisable(GL_FRAMEBUFFER_SRGB);
     }
-    GPU_shader_set_framebuffer_srgb_target(enabled_srgb && srgb_);
+    Shader::set_framebuffer_srgb_target(enabled_srgb && srgb_);
   }
 
   if (context_->active_fb != this) {
@@ -352,7 +352,7 @@ void GLFrameBuffer::clear_attachment(GPUAttachmentType type,
 
   if (type == GPU_FB_DEPTH_STENCIL_ATTACHMENT) {
     BLI_assert(data_format == GPU_DATA_UINT_24_8);
-    float depth = ((*(uint32_t *)clear_value) & 0x00FFFFFFu) / (float)0x00FFFFFFu;
+    float depth = ((*(uint32_t *)clear_value) & 0x00FFFFFFu) / float(0x00FFFFFFu);
     int stencil = ((*(uint32_t *)clear_value) >> 24);
     glClearBufferfi(GL_DEPTH_STENCIL, 0, depth, stencil);
   }
@@ -361,7 +361,7 @@ void GLFrameBuffer::clear_attachment(GPUAttachmentType type,
       glClearBufferfv(GL_DEPTH, 0, (GLfloat *)clear_value);
     }
     else if (data_format == GPU_DATA_UINT) {
-      float depth = *(uint32_t *)clear_value / (float)0xFFFFFFFFu;
+      float depth = *(uint32_t *)clear_value / float(0xFFFFFFFFu);
       glClearBufferfv(GL_DEPTH, 0, &depth);
     }
     else {

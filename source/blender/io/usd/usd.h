@@ -10,7 +10,6 @@ extern "C" {
 #endif
 
 struct CacheArchiveHandle;
-struct CacheFile;
 struct CacheReader;
 struct Object;
 struct bContext;
@@ -30,6 +29,21 @@ typedef enum eUSDMtlPurpose {
   USD_MTL_PURPOSE_PREVIEW = 1,
   USD_MTL_PURPOSE_FULL = 2
 } eUSDMtlPurpose;
+
+/* Behavior when importing textures from a package
+ * (e.g., USDZ archive) or from a URI path. */
+typedef enum eUSDTexImportMode {
+  USD_TEX_IMPORT_NONE = 0,
+  USD_TEX_IMPORT_PACK,
+  USD_TEX_IMPORT_COPY,
+} eUSDTexImportMode;
+
+/* Behavior when the name of an imported texture
+ * file conflicts with an existing file. */
+typedef enum eUSDTexNameCollisionMode {
+  USD_TEX_NAME_COLLISION_USE_EXISTING = 0,
+  USD_TEX_NAME_COLLISION_OVERWRITE = 1,
+} eUSDTexNameCollisionMode;
 
 struct USDExportParams {
   bool export_animation;
@@ -61,6 +75,7 @@ struct USDImportParams {
   bool import_materials;
   bool import_meshes;
   bool import_volumes;
+  bool import_shapes;
   char prim_path_mask[1024];
   bool import_subdiv;
   bool import_instance_proxies;
@@ -75,6 +90,10 @@ struct USDImportParams {
   float light_intensity_scale;
   eUSDMtlNameCollisionMode mtl_name_collision_mode;
   eUSDMtlPurpose mtl_purpose;
+  eUSDTexImportMode import_textures_mode;
+  char import_textures_dir[768]; /* FILE_MAXDIR */
+  eUSDTexNameCollisionMode tex_name_collision_mode;
+  bool import_all_materials;
 };
 
 /* The USD_export takes a as_background_job parameter, and returns a boolean.
@@ -117,8 +136,8 @@ struct Mesh *USD_read_mesh(struct CacheReader *reader,
                            int read_flag);
 
 bool USD_mesh_topology_changed(struct CacheReader *reader,
-                               struct Object *ob,
-                               struct Mesh *existing_mesh,
+                               const struct Object *ob,
+                               const struct Mesh *existing_mesh,
                                double time,
                                const char **err_str);
 
@@ -129,7 +148,7 @@ struct CacheReader *CacheReader_open_usd_object(struct CacheArchiveHandle *handl
 
 void USD_CacheReader_incref(struct CacheReader *reader);
 void USD_CacheReader_free(struct CacheReader *reader);
-
+void USD_ensure_plugin_path_registered(void);
 #ifdef __cplusplus
 }
 #endif

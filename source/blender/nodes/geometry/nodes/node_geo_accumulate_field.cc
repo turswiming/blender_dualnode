@@ -34,49 +34,49 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(1)
       .supports_field()
       .description(N_(value_in_description));
-  b.add_input<decl::Int>(N_("Group Index"))
+  b.add_input<decl::Int>(N_("Group ID"), "Group Index")
       .supports_field()
       .description(
           N_("An index used to group values together for multiple separate accumulations"));
 
   b.add_output<decl::Vector>(N_("Leading"), "Leading Vector")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(leading_out_description));
   b.add_output<decl::Float>(N_("Leading"), "Leading Float")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(leading_out_description));
   b.add_output<decl::Int>(N_("Leading"), "Leading Int")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(leading_out_description));
 
   b.add_output<decl::Vector>(N_("Trailing"), "Trailing Vector")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(trailing_out_description));
   b.add_output<decl::Float>(N_("Trailing"), "Trailing Float")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(trailing_out_description));
   b.add_output<decl::Int>(N_("Trailing"), "Trailing Int")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(trailing_out_description));
 
   b.add_output<decl::Vector>(N_("Total"), "Total Vector")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(total_out_description));
   b.add_output<decl::Float>(N_("Total"), "Total Float")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(total_out_description));
   b.add_output<decl::Int>(N_("Total"), "Total Int")
-      .field_source()
+      .field_source_reference_all()
       .description(N_(total_out_description));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "data_type", 0, "", ICON_NONE);
   uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeAccumulateField *data = MEM_cnew<NodeAccumulateField>(__func__);
   data->data_type = CD_PROP_FLOAT;
@@ -87,13 +87,13 @@ static void node_init(bNodeTree *UNUSED(tree), bNode *node)
 static void node_update(bNodeTree *ntree, bNode *node)
 {
   const NodeAccumulateField &storage = node_storage(*node);
-  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
+  const eCustomDataType data_type = eCustomDataType(storage.data_type);
 
-  bNodeSocket *sock_in_vector = (bNodeSocket *)node->inputs.first;
+  bNodeSocket *sock_in_vector = static_cast<bNodeSocket *>(node->inputs.first);
   bNodeSocket *sock_in_float = sock_in_vector->next;
   bNodeSocket *sock_in_int = sock_in_float->next;
 
-  bNodeSocket *sock_out_vector = (bNodeSocket *)node->outputs.first;
+  bNodeSocket *sock_out_vector = static_cast<bNodeSocket *>(node->outputs.first);
   bNodeSocket *sock_out_float = sock_out_vector->next;
   bNodeSocket *sock_out_int = sock_out_float->next;
 
@@ -182,7 +182,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
         0);
 
     params.add_item(
-        IFACE_("Group Index"),
+        IFACE_("Group ID"),
         [type](LinkSearchOpParams &params) {
           bNode &node = params.add_node("GeometryNodeAccumulateField");
           node_storage(node).data_type = *type;
@@ -285,6 +285,12 @@ template<typename T> class AccumulateFieldInput final : public bke::GeometryFiel
     }
     return false;
   }
+
+  std::optional<eAttrDomain> preferred_domain(
+      const GeometryComponent & /*component*/) const override
+  {
+    return source_domain_;
+  }
 };
 
 template<typename T> class TotalFieldInput final : public bke::GeometryFieldInput {
@@ -355,6 +361,12 @@ template<typename T> class TotalFieldInput final : public bke::GeometryFieldInpu
     }
     return false;
   }
+
+  std::optional<eAttrDomain> preferred_domain(
+      const GeometryComponent & /*component*/) const override
+  {
+    return source_domain_;
+  }
 };
 
 template<typename T> std::string identifier_suffix()
@@ -373,8 +385,8 @@ template<typename T> std::string identifier_suffix()
 static void node_geo_exec(GeoNodeExecParams params)
 {
   const NodeAccumulateField &storage = node_storage(params.node());
-  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
-  const eAttrDomain source_domain = static_cast<eAttrDomain>(storage.domain);
+  const eCustomDataType data_type = eCustomDataType(storage.data_type);
+  const eAttrDomain source_domain = eAttrDomain(storage.domain);
 
   Field<int> group_index_field = params.extract_input<Field<int>>("Group Index");
   attribute_math::convert_to_static_type(data_type, [&](auto dummy) {
@@ -413,8 +425,8 @@ void register_node_type_geo_accumulate_field()
 
   geo_node_type_base(&ntype, GEO_NODE_ACCUMULATE_FIELD, "Accumulate Field", NODE_CLASS_CONVERTER);
   ntype.geometry_node_execute = file_ns::node_geo_exec;
-  node_type_init(&ntype, file_ns::node_init);
-  node_type_update(&ntype, file_ns::node_update);
+  ntype.initfunc = file_ns::node_init;
+  ntype.updatefunc = file_ns::node_update;
   ntype.draw_buttons = file_ns::node_layout;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = file_ns::node_gather_link_searches;

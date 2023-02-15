@@ -6,7 +6,7 @@
  */
 
 #include "BLI_assert.h"
-#include "BLI_float3x3.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
 
 #include "UI_interface.h"
@@ -49,12 +49,13 @@ static void cmp_node_transform_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Color>(N_("Image"));
 }
 
-static void node_composit_buts_transform(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_composit_buts_transform(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "filter_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
 using namespace blender::realtime_compositor;
+using namespace blender::math;
 
 class TransformOperation : public NodeOperation {
  public:
@@ -68,11 +69,10 @@ class TransformOperation : public NodeOperation {
 
     const float2 translation = float2(get_input("X").get_float_value_default(0.0f),
                                       get_input("Y").get_float_value_default(0.0f));
-    const float rotation = get_input("Angle").get_float_value_default(0.0f);
+    const AngleRadian rotation = AngleRadian(get_input("Angle").get_float_value_default(0.0f));
     const float2 scale = float2(get_input("Scale").get_float_value_default(1.0f));
 
-    const float3x3 transformation = float3x3::from_translation_rotation_scale(
-        translation, rotation, scale);
+    const float3x3 transformation = from_loc_rot_scale<float3x3>(translation, rotation, scale);
 
     result.transform(transformation);
     result.get_realization_options().interpolation = get_interpolation();

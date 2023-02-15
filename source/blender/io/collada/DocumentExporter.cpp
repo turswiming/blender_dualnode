@@ -109,7 +109,7 @@ extern "C" char build_hash[];
 
 #include <cerrno>
 
-char *bc_CustomData_get_layer_name(const struct CustomData *data, int type, int n)
+const char *bc_CustomData_get_layer_name(const struct CustomData *data, int type, int n)
 {
   int layer_index = CustomData_get_layer_index(data, type);
   if (layer_index < 0) {
@@ -119,7 +119,7 @@ char *bc_CustomData_get_layer_name(const struct CustomData *data, int type, int 
   return data->layers[layer_index + n].name;
 }
 
-char *bc_CustomData_get_active_layer_name(const CustomData *data, int type)
+const char *bc_CustomData_get_active_layer_name(const CustomData *data, int type)
 {
   /* get the layer index of the active layer of type */
   int layer_index = CustomData_get_active_layer_index(data, type);
@@ -145,7 +145,7 @@ static COLLADABU::NativeString make_temp_filepath(const char *name, const char *
     name = "untitled";
   }
 
-  BLI_join_dirfile(tempfile, sizeof(tempfile), BKE_tempdir_session(), name);
+  BLI_path_join(tempfile, sizeof(tempfile), BKE_tempdir_session(), name);
 
   if (extension) {
     BLI_path_extension_ensure(tempfile, FILE_MAX, extension);

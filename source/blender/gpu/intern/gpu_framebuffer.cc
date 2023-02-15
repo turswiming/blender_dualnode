@@ -148,9 +148,9 @@ void FrameBuffer::load_store_config_array(const GPULoadStore *load_store_actions
   }
 }
 
-unsigned int FrameBuffer::get_bits_per_pixel()
+uint FrameBuffer::get_bits_per_pixel()
 {
-  unsigned int total_bits = 0;
+  uint total_bits = 0;
   for (GPUAttachment &attachment : attachments_) {
     Texture *tex = reinterpret_cast<Texture *>(attachment.tex);
     if (tex != nullptr) {
@@ -179,7 +179,7 @@ void FrameBuffer::recursive_downsample(int max_lvl,
         /* Some Intel HDXXX have issue with rendering to a mipmap that is below
          * the texture GL_TEXTURE_MAX_LEVEL. So even if it not correct, in this case
          * we allow GL_TEXTURE_MAX_LEVEL to be one level lower. In practice it does work! */
-        int mip_max = (GPU_mip_render_workaround()) ? mip_lvl : (mip_lvl - 1);
+        int mip_max = GPU_mip_render_workaround() ? mip_lvl : (mip_lvl - 1);
         /* Restrict fetches only to previous level. */
         tex->mip_range_set(mip_lvl - 1, mip_max);
         /* Bind next level. */
@@ -236,6 +236,11 @@ GPUFrameBuffer *GPU_framebuffer_create(const char *name)
 void GPU_framebuffer_free(GPUFrameBuffer *gpu_fb)
 {
   delete unwrap(gpu_fb);
+}
+
+const char *GPU_framebuffer_get_name(GPUFrameBuffer *gpu_fb)
+{
+  return unwrap(gpu_fb)->name_get();
 }
 
 /* ---------- Binding ----------- */
@@ -617,11 +622,12 @@ GPUOffScreen *GPU_offscreen_create(
   height = max_ii(1, height);
   width = max_ii(1, width);
 
-  ofs->color = GPU_texture_create_2d("ofs_color", width, height, 1, format, nullptr);
+  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
+  ofs->color = GPU_texture_create_2d_ex("ofs_color", width, height, 1, format, usage, nullptr);
 
   if (depth) {
-    ofs->depth = GPU_texture_create_2d(
-        "ofs_depth", width, height, 1, GPU_DEPTH24_STENCIL8, nullptr);
+    ofs->depth = GPU_texture_create_2d_ex(
+        "ofs_depth", width, height, 1, GPU_DEPTH24_STENCIL8, usage, nullptr);
   }
 
   if ((depth && !ofs->depth) || !ofs->color) {
@@ -673,7 +679,7 @@ void GPU_offscreen_bind(GPUOffScreen *ofs, bool save)
   unwrap(gpu_offscreen_fb_get(ofs))->bind(false);
 }
 
-void GPU_offscreen_unbind(GPUOffScreen *UNUSED(ofs), bool restore)
+void GPU_offscreen_unbind(GPUOffScreen * /*ofs*/, bool restore)
 {
   GPUFrameBuffer *fb = nullptr;
   if (restore) {

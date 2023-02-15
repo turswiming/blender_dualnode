@@ -633,7 +633,7 @@ static int wm_alembic_import_exec(bContext *C, wmOperator *op)
     }
   }
 
-  /* Switch out of edit mode to avoid being stuck in it (T54326). */
+  /* Switch out of edit mode to avoid being stuck in it (#54326). */
   Object *obedit = CTX_data_edit_object(C);
   if (obedit) {
     ED_object_mode_set(C, OB_MODE_OBJECT);
@@ -658,7 +658,7 @@ void WM_OT_alembic_import(wmOperatorType *ot)
   ot->name = "Import Alembic";
   ot->description = "Load an Alembic archive";
   ot->idname = "WM_OT_alembic_import";
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_PRESET;
 
   ot->invoke = wm_alembic_import_invoke;
   ot->exec = wm_alembic_import_exec;

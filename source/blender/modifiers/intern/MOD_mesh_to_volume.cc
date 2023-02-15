@@ -37,8 +37,8 @@
 #include "MOD_modifiertypes.h"
 #include "MOD_ui_common.h"
 
-#include "BLI_float4x4.hh"
 #include "BLI_index_range.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_span.hh"
 
 #include "RNA_access.h"
@@ -75,7 +75,7 @@ static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *u
   walk(userData, ob, (ID **)&mvmd->object, IDWALK_CB_NOP);
 }
 
-static void panel_draw(const bContext *UNUSED(C), Panel *panel)
+static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
   uiLayout *layout = panel->layout;
 
@@ -134,8 +134,8 @@ static Volume *mesh_to_volume(ModifierData *md,
   }
   BKE_mesh_wrapper_ensure_mdata(mesh);
 
-  const float4x4 mesh_to_own_object_space_transform = float4x4(ctx->object->imat) *
-                                                      float4x4(object_to_convert->obmat);
+  const float4x4 mesh_to_own_object_space_transform = float4x4(ctx->object->world_to_object) *
+                                                      float4x4(object_to_convert->object_to_world);
   geometry::MeshToVolumeResolution resolution;
   resolution.mode = (MeshToVolumeModifierResolutionMode)mvmd->resolution_mode;
   if (resolution.mode == MESH_TO_VOLUME_RESOLUTION_MODE_VOXEL_AMOUNT) {
@@ -204,34 +204,34 @@ static void modifyGeometrySet(ModifierData *md,
 }
 
 ModifierTypeInfo modifierType_MeshToVolume = {
-    /* name */ N_("Mesh to Volume"),
-    /* structName */ "MeshToVolumeModifierData",
-    /* structSize */ sizeof(MeshToVolumeModifierData),
-    /* srna */ &RNA_MeshToVolumeModifier,
-    /* type */ eModifierTypeType_Constructive,
-    /* flags */ static_cast<ModifierTypeFlag>(0),
-    /* icon */ ICON_VOLUME_DATA, /* TODO: Use correct icon. */
+    /*name*/ N_("Mesh to Volume"),
+    /*structName*/ "MeshToVolumeModifierData",
+    /*structSize*/ sizeof(MeshToVolumeModifierData),
+    /*srna*/ &RNA_MeshToVolumeModifier,
+    /*type*/ eModifierTypeType_Constructive,
+    /*flags*/ static_cast<ModifierTypeFlag>(0),
+    /*icon*/ ICON_VOLUME_DATA, /* TODO: Use correct icon. */
 
-    /* copyData */ BKE_modifier_copydata_generic,
+    /*copyData*/ BKE_modifier_copydata_generic,
 
-    /* deformVerts */ nullptr,
-    /* deformMatrices */ nullptr,
-    /* deformVertsEM */ nullptr,
-    /* deformMatricesEM */ nullptr,
-    /* modifyMesh */ nullptr,
-    /* modifyGeometrySet */ modifyGeometrySet,
+    /*deformVerts*/ nullptr,
+    /*deformMatrices*/ nullptr,
+    /*deformVertsEM*/ nullptr,
+    /*deformMatricesEM*/ nullptr,
+    /*modifyMesh*/ nullptr,
+    /*modifyGeometrySet*/ modifyGeometrySet,
 
-    /* initData */ initData,
-    /* requiredDataMask */ nullptr,
-    /* freeData */ nullptr,
-    /* isDisabled */ nullptr,
-    /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ nullptr,
-    /* dependsOnNormals */ nullptr,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ nullptr,
-    /* freeRuntimeData */ nullptr,
-    /* panelRegister */ panelRegister,
-    /* blendWrite */ nullptr,
-    /* blendRead */ nullptr,
+    /*initData*/ initData,
+    /*requiredDataMask*/ nullptr,
+    /*freeData*/ nullptr,
+    /*isDisabled*/ nullptr,
+    /*updateDepsgraph*/ updateDepsgraph,
+    /*dependsOnTime*/ nullptr,
+    /*dependsOnNormals*/ nullptr,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ nullptr,
+    /*freeRuntimeData*/ nullptr,
+    /*panelRegister*/ panelRegister,
+    /*blendWrite*/ nullptr,
+    /*blendRead*/ nullptr,
 };

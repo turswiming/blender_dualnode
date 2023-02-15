@@ -40,6 +40,15 @@ struct IDRemapper {
     source_types |= BKE_idtype_idcode_to_idfilter(GS(old_id->name));
   }
 
+  void add_overwrite(ID *old_id, ID *new_id)
+  {
+    BLI_assert(old_id != nullptr);
+    BLI_assert(new_id == nullptr || (GS(old_id->name) == GS(new_id->name)));
+    mappings.add_overwrite(old_id, new_id);
+    BLI_assert(BKE_idtype_idcode_to_idfilter(GS(old_id->name)) != 0);
+    source_types |= BKE_idtype_idcode_to_idfilter(GS(old_id->name));
+  }
+
   bool contains_mappings_for_any(IDTypeFilter filter) const
   {
     return (source_types & filter) != 0;
@@ -159,6 +168,12 @@ void BKE_id_remapper_add(IDRemapper *id_remapper, ID *old_id, ID *new_id)
   remapper->add(old_id, new_id);
 }
 
+void BKE_id_remapper_add_overwrite(IDRemapper *id_remapper, ID *old_id, ID *new_id)
+{
+  blender::bke::id::remapper::IDRemapper *remapper = unwrap(id_remapper);
+  remapper->add_overwrite(old_id, new_id);
+}
+
 bool BKE_id_remapper_has_mapping_for(const struct IDRemapper *id_remapper, uint64_t type_filter)
 {
   const blender::bke::id::remapper::IDRemapper *remapper = unwrap(id_remapper);
@@ -221,7 +236,7 @@ const char *BKE_id_remapper_result_string(const IDRemapperApplyResult result)
   return "";
 }
 
-static void id_remapper_print_item_cb(ID *old_id, ID *new_id, void *UNUSED(user_data))
+static void id_remapper_print_item_cb(ID *old_id, ID *new_id, void * /*user_data*/)
 {
   if (old_id != nullptr && new_id != nullptr) {
     printf("Remap %s(%p) to %s(%p)\n", old_id->name, old_id, new_id->name, new_id);

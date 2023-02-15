@@ -429,7 +429,7 @@ void GPU_matrix_frustum_set(
 
 void GPU_matrix_perspective_set(float fovy, float aspect, float near, float far)
 {
-  float half_height = tanf(fovy * (float)(M_PI / 360.0)) * near;
+  float half_height = tanf(fovy * float(M_PI / 360.0)) * near;
   float half_width = half_height * aspect;
   GPU_matrix_frustum_set(-half_width, +half_width, -half_height, +half_height, near, far);
 }
@@ -623,30 +623,31 @@ void GPU_matrix_bind(GPUShader *shader)
   int32_t P_inv = GPU_shader_get_builtin_uniform(shader, GPU_UNIFORM_PROJECTION_INV);
 
   if (MV != -1) {
-    GPU_shader_uniform_vector(
+    GPU_shader_uniform_float_ex(
         shader, MV, 16, 1, (const float *)GPU_matrix_model_view_get(nullptr));
   }
   if (P != -1) {
-    GPU_shader_uniform_vector(shader, P, 16, 1, (const float *)GPU_matrix_projection_get(nullptr));
+    GPU_shader_uniform_float_ex(
+        shader, P, 16, 1, (const float *)GPU_matrix_projection_get(nullptr));
   }
   if (MVP != -1) {
-    GPU_shader_uniform_vector(
+    GPU_shader_uniform_float_ex(
         shader, MVP, 16, 1, (const float *)GPU_matrix_model_view_projection_get(nullptr));
   }
   if (N != -1) {
-    GPU_shader_uniform_vector(shader, N, 9, 1, (const float *)GPU_matrix_normal_get(nullptr));
+    GPU_shader_uniform_float_ex(shader, N, 9, 1, (const float *)GPU_matrix_normal_get(nullptr));
   }
   if (MV_inv != -1) {
     Mat4 m;
     GPU_matrix_model_view_get(m);
     invert_m4(m);
-    GPU_shader_uniform_vector(shader, MV_inv, 16, 1, (const float *)m);
+    GPU_shader_uniform_float_ex(shader, MV_inv, 16, 1, (const float *)m);
   }
   if (P_inv != -1) {
     Mat4 m;
     GPU_matrix_projection_get(m);
     invert_m4(m);
-    GPU_shader_uniform_vector(shader, P_inv, 16, 1, (const float *)m);
+    GPU_shader_uniform_float_ex(shader, P_inv, 16, 1, (const float *)m);
   }
 
   gpu_matrix_state_active_set_dirty(false);
@@ -669,13 +670,13 @@ BLI_STATIC_ASSERT(GPU_PY_MATRIX_STACK_LEN + 1 == MATRIX_STACK_DEPTH, "define mis
 int GPU_matrix_stack_level_get_model_view()
 {
   GPUMatrixState *state = Context::get()->matrix_state;
-  return (int)state->model_view_stack.top;
+  return int(state->model_view_stack.top);
 }
 
 int GPU_matrix_stack_level_get_projection()
 {
   GPUMatrixState *state = Context::get()->matrix_state;
-  return (int)state->projection_stack.top;
+  return int(state->projection_stack.top);
 }
 
 /** \} */
@@ -700,7 +701,7 @@ float GPU_polygon_offset_calc(const float (*winmat)[4], float viewdist, float di
     if (depth_fac == 0.0f) {
       /* Hard-code for 24 bit precision. */
       int depthbits = 24;
-      depth_fac = 1.0f / (float)((1 << depthbits) - 1);
+      depth_fac = 1.0f / float((1 << depthbits) - 1);
     }
     ofs = (-1.0 / winmat[2][2]) * dist * depth_fac;
 

@@ -8,7 +8,6 @@
  * Common field utilities and field definitions for geometry components.
  */
 
-#include "BKE_attribute.h"
 #include "BKE_geometry_set.hh"
 
 #include "FN_field.hh"
@@ -75,14 +74,14 @@ class PointCloudFieldContext : public fn::FieldContext {
 
 class InstancesFieldContext : public fn::FieldContext {
  private:
-  const InstancesComponent &instances_;
+  const Instances &instances_;
 
  public:
-  InstancesFieldContext(const InstancesComponent &instances) : instances_(instances)
+  InstancesFieldContext(const Instances &instances) : instances_(instances)
   {
   }
 
-  const InstancesComponent &instances() const
+  const Instances &instances() const
   {
     return instances_;
   }
@@ -128,13 +127,13 @@ class GeometryFieldContext : public fn::FieldContext {
   const Mesh *mesh() const;
   const CurvesGeometry *curves() const;
   const PointCloud *pointcloud() const;
-  const InstancesComponent *instances() const;
+  const Instances *instances() const;
 
  private:
   GeometryFieldContext(const Mesh &mesh, eAttrDomain domain);
   GeometryFieldContext(const CurvesGeometry &curves, eAttrDomain domain);
   GeometryFieldContext(const PointCloud &points);
-  GeometryFieldContext(const InstancesComponent &instances);
+  GeometryFieldContext(const Instances &instances);
 };
 
 class GeometryFieldInput : public fn::FieldInput {
@@ -145,6 +144,7 @@ class GeometryFieldInput : public fn::FieldInput {
                                  ResourceScope &scope) const override;
   virtual GVArray get_varray_for_context(const GeometryFieldContext &context,
                                          IndexMask mask) const = 0;
+  virtual std::optional<eAttrDomain> preferred_domain(const GeometryComponent &component) const;
 };
 
 class MeshFieldInput : public fn::FieldInput {
@@ -156,6 +156,7 @@ class MeshFieldInput : public fn::FieldInput {
   virtual GVArray get_varray_for_context(const Mesh &mesh,
                                          eAttrDomain domain,
                                          IndexMask mask) const = 0;
+  virtual std::optional<eAttrDomain> preferred_domain(const Mesh &mesh) const;
 };
 
 class CurvesFieldInput : public fn::FieldInput {
@@ -167,6 +168,7 @@ class CurvesFieldInput : public fn::FieldInput {
   virtual GVArray get_varray_for_context(const CurvesGeometry &curves,
                                          eAttrDomain domain,
                                          IndexMask mask) const = 0;
+  virtual std::optional<eAttrDomain> preferred_domain(const CurvesGeometry &curves) const;
 };
 
 class PointCloudFieldInput : public fn::FieldInput {
@@ -184,8 +186,7 @@ class InstancesFieldInput : public fn::FieldInput {
   GVArray get_varray_for_context(const fn::FieldContext &context,
                                  IndexMask mask,
                                  ResourceScope &scope) const override;
-  virtual GVArray get_varray_for_context(const InstancesComponent &instances,
-                                         IndexMask mask) const = 0;
+  virtual GVArray get_varray_for_context(const Instances &instances, IndexMask mask) const = 0;
 };
 
 class AttributeFieldInput : public GeometryFieldInput {
@@ -218,6 +219,7 @@ class AttributeFieldInput : public GeometryFieldInput {
 
   uint64_t hash() const override;
   bool is_equal_to(const fn::FieldNode &other) const override;
+  std::optional<eAttrDomain> preferred_domain(const GeometryComponent &component) const override;
 };
 
 class IDAttributeFieldInput : public GeometryFieldInput {
@@ -258,18 +260,14 @@ class NormalFieldInput : public GeometryFieldInput {
 
 class AnonymousAttributeFieldInput : public GeometryFieldInput {
  private:
-  /**
-   * A strong reference is required to make sure that the referenced attribute is not removed
-   * automatically.
-   */
-  StrongAnonymousAttributeID anonymous_id_;
+  AutoAnonymousAttributeID anonymous_id_;
   std::string producer_name_;
 
  public:
-  AnonymousAttributeFieldInput(StrongAnonymousAttributeID anonymous_id,
+  AnonymousAttributeFieldInput(AutoAnonymousAttributeID anonymous_id,
                                const CPPType &type,
                                std::string producer_name)
-      : GeometryFieldInput(type, anonymous_id.debug_name()),
+      : GeometryFieldInput(type, anonymous_id->user_name()),
         anonymous_id_(std::move(anonymous_id)),
         producer_name_(producer_name)
   {
@@ -277,12 +275,17 @@ class AnonymousAttributeFieldInput : public GeometryFieldInput {
   }
 
   template<typename T>
-  static fn::Field<T> Create(StrongAnonymousAttributeID anonymous_id, std::string producer_name)
+  static fn::Field<T> Create(AutoAnonymousAttributeID anonymous_id, std::string producer_name)
   {
     const CPPType &type = CPPType::get<T>();
     auto field_input = std::make_shared<AnonymousAttributeFieldInput>(
         std::move(anonymous_id), type, std::move(producer_name));
     return fn::Field<T>{field_input};
+  }
+
+  const AutoAnonymousAttributeID &anonymous_id() const
+  {
+    return anonymous_id_;
   }
 
   GVArray get_varray_for_context(const GeometryFieldContext &context,
@@ -292,6 +295,7 @@ class AnonymousAttributeFieldInput : public GeometryFieldInput {
 
   uint64_t hash() const override;
   bool is_equal_to(const fn::FieldNode &other) const override;
+  std::optional<eAttrDomain> preferred_domain(const GeometryComponent &component) const override;
 };
 
 class CurveLengthFieldInput final : public CurvesFieldInput {
@@ -302,6 +306,25 @@ class CurveLengthFieldInput final : public CurvesFieldInput {
                                  IndexMask mask) const final;
   uint64_t hash() const override;
   bool is_equal_to(const fn::FieldNode &other) const override;
+  std::optional<eAttrDomain> preferred_domain(const bke::CurvesGeometry &curves) const final;
 };
+
+bool try_capture_field_on_geometry(GeometryComponent &component,
+                                   const AttributeIDRef &attribute_id,
+                                   const eAttrDomain domain,
+                                   const fn::GField &field);
+
+bool try_capture_field_on_geometry(GeometryComponent &component,
+                                   const AttributeIDRef &attribute_id,
+                                   const eAttrDomain domain,
+                                   const fn::Field<bool> &selection,
+                                   const fn::GField &field);
+
+/**
+ * Try to find the geometry domain that the field should be evaluated on. If it is not obvious
+ * which domain is correct, none is returned.
+ */
+std::optional<eAttrDomain> try_detect_field_domain(const GeometryComponent &component,
+                                                   const fn::GField &field);
 
 }  // namespace blender::bke

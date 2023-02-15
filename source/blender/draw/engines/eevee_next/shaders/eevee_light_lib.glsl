@@ -9,7 +9,8 @@
 
 void light_vector_get(LightData ld, vec3 P, out vec3 L, out float dist)
 {
-  if (ld.type == LIGHT_SUN) {
+  /* TODO(fclem): Static branching. */
+  if (is_sun_light(ld.type)) {
     L = ld._back;
     dist = 1.0;
   }
@@ -57,10 +58,13 @@ float light_attenuation(LightData ld, vec3 L, float dist)
   if (ld.type == LIGHT_SPOT) {
     vis *= light_spot_attenuation(ld, L);
   }
+
   if (ld.type >= LIGHT_SPOT) {
     vis *= step(0.0, -dot(L, -ld._back));
   }
-  if (ld.type != LIGHT_SUN) {
+
+  /* TODO(fclem): Static branching. */
+  if (!is_sun_light(ld.type)) {
 #ifdef VOLUME_LIGHTING
     vis *= light_influence_attenuation(dist, ld.influence_radius_invsqr_volume);
 #else
@@ -84,7 +88,7 @@ float light_point_light(LightData ld, const bool is_directional, vec3 L, float d
    **/
   float d_sqr = sqr(dist);
   float r_sqr = ld.radius_squared;
-  /* Using reformulation that has better numerical percision. */
+  /* Using reformulation that has better numerical precision. */
   float power = 2.0 / (d_sqr + r_sqr + dist * sqrt(d_sqr + r_sqr));
 
   if (is_area_light(ld.type)) {

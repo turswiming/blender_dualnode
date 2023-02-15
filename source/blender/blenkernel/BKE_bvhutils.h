@@ -6,9 +6,14 @@
  * \ingroup bke
  */
 
-#include "BLI_bitmap.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_threads.h"
+
+#ifdef __cplusplus
+#  include <mutex>
+
+#  include "BLI_bit_vector.hh"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,7 +25,6 @@ extern "C" {
 
 struct BMEditMesh;
 struct MFace;
-struct MVert;
 struct Mesh;
 struct PointCloud;
 
@@ -54,8 +58,7 @@ typedef struct BVHTreeFromMesh {
   BVHTree_RayCastCallback raycast_callback;
 
   /* Vertex array, so that callbacks have instant access to data. */
-  const struct MVert *vert;
-  const float (*vert_normals)[3];
+  const float (*vert_positions)[3];
   const struct MEdge *edge;
   const struct MFace *face;
   const struct MLoop *loop;
@@ -98,12 +101,14 @@ typedef enum BVHCacheType {
 BVHTree *bvhtree_from_editmesh_verts(
     BVHTreeFromEditMesh *data, struct BMEditMesh *em, float epsilon, int tree_type, int axis);
 
+#ifdef __cplusplus
+
 /**
  * Builds a BVH-tree where nodes are the vertices of the given `em`.
  */
 BVHTree *bvhtree_from_editmesh_verts_ex(BVHTreeFromEditMesh *data,
                                         struct BMEditMesh *em,
-                                        const BLI_bitmap *mask,
+                                        const blender::BitVector<> &mask,
                                         int verts_num_active,
                                         float epsilon,
                                         int tree_type,
@@ -117,9 +122,9 @@ BVHTree *bvhtree_from_editmesh_verts_ex(BVHTreeFromEditMesh *data,
  * (else will be computed from mask).
  */
 BVHTree *bvhtree_from_mesh_verts_ex(struct BVHTreeFromMesh *data,
-                                    const struct MVert *vert,
+                                    const float (*vert_positions)[3],
                                     int verts_num,
-                                    const BLI_bitmap *verts_mask,
+                                    const blender::BitVector<> &verts_mask,
                                     int verts_num_active,
                                     float epsilon,
                                     int tree_type,
@@ -133,7 +138,7 @@ BVHTree *bvhtree_from_editmesh_edges(
  */
 BVHTree *bvhtree_from_editmesh_edges_ex(BVHTreeFromEditMesh *data,
                                         struct BMEditMesh *em,
-                                        const BLI_bitmap *edges_mask,
+                                        const blender::BitVector<> &edges_mask,
                                         int edges_num_active,
                                         float epsilon,
                                         int tree_type,
@@ -148,10 +153,10 @@ BVHTree *bvhtree_from_editmesh_edges_ex(BVHTreeFromEditMesh *data,
  * (else will be computed from mask).
  */
 BVHTree *bvhtree_from_mesh_edges_ex(struct BVHTreeFromMesh *data,
-                                    const struct MVert *vert,
+                                    const float (*vert_positions)[3],
                                     const struct MEdge *edge,
                                     int edges_num,
-                                    const BLI_bitmap *edges_mask,
+                                    const blender::BitVector<> &edges_mask,
                                     int edges_num_active,
                                     float epsilon,
                                     int tree_type,
@@ -165,7 +170,7 @@ BVHTree *bvhtree_from_editmesh_looptri(
  */
 BVHTree *bvhtree_from_editmesh_looptri_ex(BVHTreeFromEditMesh *data,
                                           struct BMEditMesh *em,
-                                          const BLI_bitmap *mask,
+                                          const blender::BitVector<> &mask,
                                           int looptri_num_active,
                                           float epsilon,
                                           int tree_type,
@@ -175,15 +180,17 @@ BVHTree *bvhtree_from_editmesh_looptri_ex(BVHTreeFromEditMesh *data,
  * Builds a BVH-tree where nodes are the looptri faces of the given mesh.
  */
 BVHTree *bvhtree_from_mesh_looptri_ex(struct BVHTreeFromMesh *data,
-                                      const struct MVert *vert,
+                                      const float (*vert_positions)[3],
                                       const struct MLoop *mloop,
                                       const struct MLoopTri *looptri,
                                       int looptri_num,
-                                      const BLI_bitmap *mask,
+                                      const blender::BitVector<> &mask,
                                       int looptri_num_active,
                                       float epsilon,
                                       int tree_type,
                                       int axis);
+
+#endif
 
 /**
  * Builds or queries a BVH-cache for the cache BVH-tree of the request type.
@@ -196,6 +203,8 @@ BVHTree *BKE_bvhtree_from_mesh_get(struct BVHTreeFromMesh *data,
                                    BVHCacheType bvh_cache_type,
                                    int tree_type);
 
+#ifdef __cplusplus
+
 /**
  * Builds or queries a BVH-cache for the cache BVH-tree of the request type.
  */
@@ -204,7 +213,9 @@ BVHTree *BKE_bvhtree_from_editmesh_get(BVHTreeFromEditMesh *data,
                                        int tree_type,
                                        BVHCacheType bvh_cache_type,
                                        struct BVHCache **bvh_cache_p,
-                                       ThreadMutex *mesh_eval_mutex);
+                                       std::mutex *mesh_eval_mutex);
+
+#endif
 
 /**
  * Frees data allocated by a call to `bvhtree_from_editmesh_*`.

@@ -12,7 +12,7 @@
 
 #include "overlay_private.hh"
 
-void OVERLAY_fade_init(OVERLAY_Data *UNUSED(vedata))
+void OVERLAY_fade_init(OVERLAY_Data * /*vedata*/)
 {
 }
 
@@ -53,12 +53,12 @@ void OVERLAY_fade_cache_populate(OVERLAY_Data *vedata, Object *ob)
   }
 
   const DRWContextState *draw_ctx = DRW_context_state_get();
-  const bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->v3d) &&
+  const bool use_sculpt_pbvh = BKE_sculptsession_use_pbvh_draw(ob, draw_ctx->rv3d) &&
                                !DRW_state_is_image_render();
   const bool is_xray = (ob->dtx & OB_DRAW_IN_FRONT) != 0;
 
   if (use_sculpt_pbvh) {
-    DRW_shgroup_call_sculpt(pd->fade_grp[is_xray], ob, false, false);
+    DRW_shgroup_call_sculpt(pd->fade_grp[is_xray], ob, false, false, false, false, false);
   }
   else {
     struct GPUBatch *geom = DRW_cache_object_surface_get(ob);

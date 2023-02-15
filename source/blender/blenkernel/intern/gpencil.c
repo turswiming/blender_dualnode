@@ -83,8 +83,8 @@ static void greasepencil_copy_data(Main *UNUSED(bmain),
     /* Apply local layer transform to all frames. Calc the active frame is not enough
      * because onion skin can use more frames. This is more slow but required here. */
     if (gpl_dst->actframe != NULL) {
-      bool transformed = ((!is_zero_v3(gpl_dst->location)) || (!is_zero_v3(gpl_dst->rotation)) ||
-                          (!is_one_v3(gpl_dst->scale)));
+      bool transformed = (!is_zero_v3(gpl_dst->location) || !is_zero_v3(gpl_dst->rotation) ||
+                          !is_one_v3(gpl_dst->scale));
       if (transformed) {
         loc_eul_size_to_mat4(
             gpl_dst->layer_mat, gpl_dst->location, gpl_dst->rotation, gpl_dst->scale);
@@ -1261,7 +1261,9 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
           found = true;
           break;
         }
-        if ((gpf->next) && (gpf->next->framenum > cframe)) {
+        /* If this is the last frame or the next frame is at a later time, we found the right
+         * frame. */
+        if (!(gpf->next) || (gpf->next->framenum > cframe)) {
           found = true;
           break;
         }
@@ -1273,6 +1275,10 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
           gpl->actframe = gpf;
         }
         else if (addnew == GP_GETFRAME_ADD_COPY) {
+          /* The frame_addcopy function copies the active frame of gpl,
+             so we need to set the active frame before copying.
+          */
+          gpl->actframe = gpf;
           gpl->actframe = BKE_gpencil_frame_addcopy(gpl, cframe);
         }
         else {
@@ -1300,6 +1306,10 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
           gpl->actframe = gpf;
         }
         else if (addnew == GP_GETFRAME_ADD_COPY) {
+          /* The frame_addcopy function copies the active frame of gpl;
+             so we need to set the active frame before copying.
+          */
+          gpl->actframe = gpf;
           gpl->actframe = BKE_gpencil_frame_addcopy(gpl, cframe);
         }
         else {
@@ -1566,7 +1576,6 @@ bGPDlayer *BKE_gpencil_layer_active_get(bGPdata *gpd)
 bGPDlayer *BKE_gpencil_layer_get_by_name(bGPdata *gpd, char *name, int first_if_not_found)
 {
   bGPDlayer *gpl;
-  int i = 0;
 
   /* error checking */
   if (ELEM(NULL, gpd, gpd->layers.first)) {
@@ -1578,7 +1587,6 @@ bGPDlayer *BKE_gpencil_layer_get_by_name(bGPdata *gpd, char *name, int first_if_
     if (STREQ(name, gpl->info)) {
       return gpl;
     }
-    i++;
   }
 
   /* no such layer */
@@ -1863,6 +1871,18 @@ void BKE_gpencil_vgroup_remove(Object *ob, bDeformGroup *defgroup)
 
   /* Remove the group */
   BLI_freelinkN(&gpd->vertex_group_names, defgroup);
+
+  /* Update the active deform index if necessary. */
+  const int active_index = BKE_object_defgroup_active_index_get(ob);
+  if (active_index > def_nr) {
+    BKE_object_defgroup_active_index_set(ob, active_index - 1);
+  }
+  /* Keep a valid active index if we still have some vertex groups. */
+  if (!BLI_listbase_is_empty(&gpd->vertex_group_names) &&
+      BKE_object_defgroup_active_index_get(ob) < 1) {
+    BKE_object_defgroup_active_index_set(ob, 1);
+  }
+
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 }
 
@@ -1953,9 +1973,7 @@ bool BKE_gpencil_material_index_used(bGPdata *gpd, int index)
   return false;
 }
 
-void BKE_gpencil_material_remap(struct bGPdata *gpd,
-                                const unsigned int *remap,
-                                unsigned int remap_len)
+void BKE_gpencil_material_remap(struct bGPdata *gpd, const uint *remap, uint remap_len)
 {
   const short remap_len_short = (short)remap_len;
 
@@ -2015,7 +2033,7 @@ bool BKE_gpencil_merge_materials_table_get(Object *ob,
       /* Read secondary material to compare with primary material. */
       ma_secondary = BKE_gpencil_material(ob, idx_secondary + 1);
       if ((ma_secondary == NULL) ||
-          (BLI_ghash_haskey(r_mat_table, POINTER_FROM_INT(idx_secondary)))) {
+          BLI_ghash_haskey(r_mat_table, POINTER_FROM_INT(idx_secondary))) {
         continue;
       }
       gp_style_primary = ma_primary->gp_style;
@@ -2065,17 +2083,17 @@ bool BKE_gpencil_merge_materials_table_get(Object *ob,
       rgb_to_hsv_compat_v(col, f_hsv_b);
 
       /* Check stroke and fill color. */
-      if ((!compare_ff(s_hsv_a[0], s_hsv_b[0], hue_threshold)) ||
-          (!compare_ff(s_hsv_a[1], s_hsv_b[1], sat_threshold)) ||
-          (!compare_ff(s_hsv_a[2], s_hsv_b[2], val_threshold)) ||
-          (!compare_ff(f_hsv_a[0], f_hsv_b[0], hue_threshold)) ||
-          (!compare_ff(f_hsv_a[1], f_hsv_b[1], sat_threshold)) ||
-          (!compare_ff(f_hsv_a[2], f_hsv_b[2], val_threshold)) ||
-          (!compare_ff(gp_style_primary->stroke_rgba[3],
-                       gp_style_secondary->stroke_rgba[3],
-                       val_threshold)) ||
-          (!compare_ff(
-              gp_style_primary->fill_rgba[3], gp_style_secondary->fill_rgba[3], val_threshold))) {
+      if (!compare_ff(s_hsv_a[0], s_hsv_b[0], hue_threshold) ||
+          !compare_ff(s_hsv_a[1], s_hsv_b[1], sat_threshold) ||
+          !compare_ff(s_hsv_a[2], s_hsv_b[2], val_threshold) ||
+          !compare_ff(f_hsv_a[0], f_hsv_b[0], hue_threshold) ||
+          !compare_ff(f_hsv_a[1], f_hsv_b[1], sat_threshold) ||
+          !compare_ff(f_hsv_a[2], f_hsv_b[2], val_threshold) ||
+          !compare_ff(gp_style_primary->stroke_rgba[3],
+                      gp_style_secondary->stroke_rgba[3],
+                      val_threshold) ||
+          !compare_ff(
+              gp_style_primary->fill_rgba[3], gp_style_secondary->fill_rgba[3], val_threshold)) {
         continue;
       }
 
@@ -2339,7 +2357,7 @@ bool BKE_gpencil_from_image(
 static bool gpencil_is_layer_mask(ViewLayer *view_layer, bGPdata *gpd, bGPDlayer *gpl_mask)
 {
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-    if ((gpl->viewlayername[0] != '\0') && (!STREQ(view_layer->name, gpl->viewlayername))) {
+    if ((gpl->viewlayername[0] != '\0') && !STREQ(view_layer->name, gpl->viewlayername)) {
       continue;
     }
 
@@ -2414,7 +2432,7 @@ void BKE_gpencil_visible_stroke_advanced_iter(ViewLayer *view_layer,
                                               int cfra)
 {
   bGPdata *gpd = (bGPdata *)ob->data;
-  const bool is_multiedit = (GPENCIL_MULTIEDIT_SESSIONS_ON(gpd) && (!GPENCIL_PLAY_ON(gpd)));
+  const bool is_multiedit = (GPENCIL_MULTIEDIT_SESSIONS_ON(gpd) && !GPENCIL_PLAY_ON(gpd));
   const bool is_onion = do_onion && ((gpd->flag & GP_DATA_STROKE_WEIGHTMODE) == 0);
   const bool is_drawing = (gpd->runtime.sbuffer_used > 0);
 
@@ -2446,7 +2464,7 @@ void BKE_gpencil_visible_stroke_advanced_iter(ViewLayer *view_layer,
      * generate renders, putting only selected GP layers for each View Layer.
      * This is used only in final render and never in Viewport. */
     if ((view_layer != NULL) && (gpl->viewlayername[0] != '\0') &&
-        (!STREQ(view_layer->name, gpl->viewlayername))) {
+        !STREQ(view_layer->name, gpl->viewlayername)) {
       /* Do not skip masks when rendering the view-layer so that it can still be used to clip
        * other layers. Instead set their opacity to zero. */
       if (gpencil_is_layer_mask(view_layer, gpd, gpl)) {
@@ -2693,7 +2711,7 @@ void BKE_gpencil_layer_transform_matrix_get(const Depsgraph *depsgraph,
   /* if not layer parented, try with object parented */
   if (obparent_eval == NULL) {
     if ((ob_eval != NULL) && (ob_eval->type == OB_GPENCIL)) {
-      copy_m4_m4(diff_mat, ob_eval->obmat);
+      copy_m4_m4(diff_mat, ob_eval->object_to_world);
       mul_m4_m4m4(diff_mat, diff_mat, gpl->layer_mat);
       return;
     }
@@ -2703,8 +2721,8 @@ void BKE_gpencil_layer_transform_matrix_get(const Depsgraph *depsgraph,
   }
 
   if (ELEM(gpl->partype, PAROBJECT, PARSKEL)) {
-    mul_m4_m4m4(diff_mat, obparent_eval->obmat, gpl->inverse);
-    add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
+    mul_m4_m4m4(diff_mat, obparent_eval->object_to_world, gpl->inverse);
+    add_v3_v3(diff_mat[3], ob_eval->object_to_world[3]);
     mul_m4_m4m4(diff_mat, diff_mat, gpl->layer_mat);
     return;
   }
@@ -2712,14 +2730,14 @@ void BKE_gpencil_layer_transform_matrix_get(const Depsgraph *depsgraph,
     bPoseChannel *pchan = BKE_pose_channel_find_name(obparent_eval->pose, gpl->parsubstr);
     if (pchan) {
       float tmp_mat[4][4];
-      mul_m4_m4m4(tmp_mat, obparent_eval->obmat, pchan->pose_mat);
+      mul_m4_m4m4(tmp_mat, obparent_eval->object_to_world, pchan->pose_mat);
       mul_m4_m4m4(diff_mat, tmp_mat, gpl->inverse);
-      add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
+      add_v3_v3(diff_mat[3], ob_eval->object_to_world[3]);
     }
     else {
       /* if bone not found use object (armature) */
-      mul_m4_m4m4(diff_mat, obparent_eval->obmat, gpl->inverse);
-      add_v3_v3(diff_mat[3], ob_eval->obmat[3]);
+      mul_m4_m4m4(diff_mat, obparent_eval->object_to_world, gpl->inverse);
+      add_v3_v3(diff_mat[3], ob_eval->object_to_world[3]);
     }
     mul_m4_m4m4(diff_mat, diff_mat, gpl->layer_mat);
     return;
@@ -2773,12 +2791,12 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
       Object *ob_parent = DEG_get_evaluated_object(depsgraph, gpl->parent);
       /* calculate new matrix */
       if (ELEM(gpl->partype, PAROBJECT, PARSKEL)) {
-        mul_m4_m4m4(cur_mat, ob->imat, ob_parent->obmat);
+        mul_m4_m4m4(cur_mat, ob->world_to_object, ob_parent->object_to_world);
       }
       else if (gpl->partype == PARBONE) {
         bPoseChannel *pchan = BKE_pose_channel_find_name(ob_parent->pose, gpl->parsubstr);
         if (pchan != NULL) {
-          mul_m4_series(cur_mat, ob->imat, ob_parent->obmat, pchan->pose_mat);
+          mul_m4_series(cur_mat, ob->world_to_object, ob_parent->object_to_world, pchan->pose_mat);
         }
         else {
           unit_m4(cur_mat);
@@ -2787,11 +2805,14 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
       changed = !equals_m4m4(gpl->inverse, cur_mat);
     }
 
-    /* Calc local layer transform. */
-    bool transformed = ((!is_zero_v3(gpl->location)) || (!is_zero_v3(gpl->rotation)) ||
-                        (!is_one_v3(gpl->scale)));
+    /* Calc local layer transform. Early out if we have non-animated zero transforms. */
+    bool transformed = (!is_zero_v3(gpl->location) || !is_zero_v3(gpl->rotation) ||
+                        !is_one_v3(gpl->scale));
+    float tmp_mat[4][4];
+    loc_eul_size_to_mat4(tmp_mat, gpl->location, gpl->rotation, gpl->scale);
+    transformed |= !equals_m4m4(gpl->layer_mat, tmp_mat);
     if (transformed) {
-      loc_eul_size_to_mat4(gpl->layer_mat, gpl->location, gpl->rotation, gpl->scale);
+      copy_m4_m4(gpl->layer_mat, tmp_mat);
     }
 
     /* Continue if no transformations are applied to this layer. */
@@ -2833,7 +2854,7 @@ int BKE_gpencil_material_find_index_by_name_prefix(Object *ob, const char *name_
   for (int i = 0; i < ob->totcol; i++) {
     Material *ma = BKE_object_material_get(ob, i + 1);
     if ((ma != NULL) && (ma->gp_style != NULL) &&
-        (STREQLEN(ma->id.name + 2, name_prefix, name_prefix_len))) {
+        STREQLEN(ma->id.name + 2, name_prefix, name_prefix_len)) {
       return i;
     }
   }

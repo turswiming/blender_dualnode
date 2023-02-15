@@ -6,7 +6,7 @@
  */
 
 #include "BLI_assert.h"
-#include "BLI_float3x3.hh"
+#include "BLI_math_matrix.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -33,12 +33,12 @@ static void cmp_node_rotate_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Color>(N_("Image"));
 }
 
-static void node_composit_init_rotate(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_composit_init_rotate(bNodeTree * /*ntree*/, bNode *node)
 {
   node->custom1 = 1; /* Bilinear Filter. */
 }
 
-static void node_composit_buts_rotate(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_composit_buts_rotate(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "filter_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
@@ -55,9 +55,9 @@ class RotateOperation : public NodeOperation {
     Result &result = get_result("Image");
     input.pass_through(result);
 
-    const float rotation = get_input("Degr").get_float_value_default(0.0f);
+    const math::AngleRadian rotation = get_input("Degr").get_float_value_default(0.0f);
 
-    const float3x3 transformation = float3x3::from_rotation(rotation);
+    const float3x3 transformation = math::from_rotation<float3x3>(rotation);
 
     result.transform(transformation);
     result.get_realization_options().interpolation = get_interpolation();
@@ -95,7 +95,7 @@ void register_node_type_cmp_rotate()
   cmp_node_type_base(&ntype, CMP_NODE_ROTATE, "Rotate", NODE_CLASS_DISTORT);
   ntype.declare = file_ns::cmp_node_rotate_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_rotate;
-  node_type_init(&ntype, file_ns::node_composit_init_rotate);
+  ntype.initfunc = file_ns::node_composit_init_rotate;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
   nodeRegisterType(&ntype);

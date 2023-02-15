@@ -62,7 +62,7 @@ static bool id_name_final_build(char *name, char *base_name, size_t base_name_le
 
     /* Code above may have generated invalid utf-8 string, due to raw truncation.
      * Ensure we get a valid one now. */
-    base_name_len -= (size_t)BLI_str_utf8_invalid_strip(base_name, base_name_len);
+    base_name_len -= size_t(BLI_str_utf8_invalid_strip(base_name, base_name_len));
 
     /* Also truncate orig name, and start the whole check again. */
     name[base_name_len] = '\0';
@@ -97,7 +97,7 @@ struct UniqueName_Key {
  *   one larger.
  */
 struct UniqueName_Value {
-  static constexpr unsigned max_exact_tracking = 1024;
+  static constexpr uint max_exact_tracking = 1024;
   BLI_BITMAP_DECLARE(mask, max_exact_tracking);
   int max_value = 0;
 
@@ -193,6 +193,22 @@ void BKE_main_namemap_destroy(struct UniqueName_Map **r_name_map)
 #endif
   MEM_delete<UniqueName_Map>(*r_name_map);
   *r_name_map = nullptr;
+}
+
+void BKE_main_namemap_clear(Main *bmain)
+{
+  for (Main *bmain_iter = bmain; bmain_iter != nullptr; bmain_iter = bmain_iter->next) {
+    if (bmain_iter->name_map != nullptr) {
+      BKE_main_namemap_destroy(&bmain_iter->name_map);
+    }
+    for (Library *lib_iter = static_cast<Library *>(bmain_iter->libraries.first);
+         lib_iter != nullptr;
+         lib_iter = static_cast<Library *>(lib_iter->id.next)) {
+      if (lib_iter->runtime.name_map != nullptr) {
+        BKE_main_namemap_destroy(&lib_iter->runtime.name_map);
+      }
+    }
+  }
 }
 
 static void main_namemap_populate(UniqueName_Map *name_map, struct Main *bmain, ID *ignore_id)

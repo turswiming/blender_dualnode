@@ -10,6 +10,8 @@
 
 #include "SphericalGrid.h"
 
+#include "BLI_sys_types.h"
+
 #include "BKE_global.h"
 
 using namespace std;
@@ -115,7 +117,7 @@ void SphericalGrid::assignCells(OccluderSource & /*source*/,
   // Now allocate the cell table and fill it with default (empty) cells
   _cells.resize(_cellsX * _cellsY);
   for (cellContainer::iterator i = _cells.begin(), end = _cells.end(); i != end; ++i) {
-    (*i) = NULL;
+    (*i) = nullptr;
   }
 
   // Identify cells that will be used, and set the dimensions for each
@@ -124,7 +126,7 @@ void SphericalGrid::assignCells(OccluderSource & /*source*/,
        ++f) {
     if ((*f)->isInImage()) {
       Vec3r point = SphericalGrid::Transform::sphericalProjection((*f)->center3d());
-      unsigned i, j;
+      uint i, j;
       getCellCoordinates(point, i, j);
       if (_cells[i * _cellsY + j] == nullptr) {
         // This is an uninitialized cell
@@ -146,8 +148,8 @@ void SphericalGrid::assignCells(OccluderSource & /*source*/,
 
 void SphericalGrid::distributePolygons(OccluderSource &source)
 {
-  unsigned long nFaces = 0;
-  unsigned long nKeptFaces = 0;
+  ulong nFaces = 0;
+  ulong nKeptFaces = 0;
 
   for (source.begin(); source.isValid(); source.next()) {
     OccluderData *occluder = nullptr;
@@ -176,21 +178,21 @@ void SphericalGrid::reorganizeCells()
 {
   // Sort the occluders by shallowest point
   for (vector<Cell *>::iterator i = _cells.begin(), end = _cells.end(); i != end; ++i) {
-    if (*i != NULL) {
+    if (*i != nullptr) {
       (*i)->indexPolygons();
     }
   }
 }
 
-void SphericalGrid::getCellCoordinates(const Vec3r &point, unsigned &x, unsigned &y)
+void SphericalGrid::getCellCoordinates(const Vec3r &point, uint &x, uint &y)
 {
-  x = min(_cellsX - 1, (unsigned)floor(max((double)0.0f, point[0] - _cellOrigin[0]) / _cellSize));
-  y = min(_cellsY - 1, (unsigned)floor(max((double)0.0f, point[1] - _cellOrigin[1]) / _cellSize));
+  x = min(_cellsX - 1, uint(floor(max(double(0.0f), point[0] - _cellOrigin[0]) / _cellSize)));
+  y = min(_cellsY - 1, uint(floor(max(double(0.0f), point[1] - _cellOrigin[1]) / _cellSize)));
 }
 
 SphericalGrid::Cell *SphericalGrid::findCell(const Vec3r &point)
 {
-  unsigned x, y;
+  uint x, y;
   getCellCoordinates(point, x, y);
   return _cells[x * _cellsY + y];
 }

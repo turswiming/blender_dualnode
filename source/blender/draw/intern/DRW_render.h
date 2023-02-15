@@ -17,6 +17,7 @@
 #include "BKE_context.h"
 #include "BKE_layer.h"
 #include "BKE_material.h"
+#include "BKE_pbvh.h"
 #include "BKE_scene.h"
 
 #include "BLT_translation.h"
@@ -179,6 +180,61 @@ void DRW_texture_ensure_fullscreen_2d(struct GPUTexture **tex,
 void DRW_texture_ensure_2d(
     struct GPUTexture **tex, int w, int h, eGPUTextureFormat format, DRWTextureFlag flags);
 
+/* Explicit parameter variants. */
+struct GPUTexture *DRW_texture_pool_query_2d_ex(
+    int w, int h, eGPUTextureFormat format, eGPUTextureUsage usage, DrawEngineType *engine_type);
+struct GPUTexture *DRW_texture_pool_query_fullscreen_ex(eGPUTextureFormat format,
+                                                        eGPUTextureUsage usage,
+                                                        DrawEngineType *engine_type);
+
+struct GPUTexture *DRW_texture_create_1d_ex(int w,
+                                            eGPUTextureFormat format,
+                                            eGPUTextureUsage usage_flags,
+                                            DRWTextureFlag flags,
+                                            const float *fpixels);
+struct GPUTexture *DRW_texture_create_2d_ex(int w,
+                                            int h,
+                                            eGPUTextureFormat format,
+                                            eGPUTextureUsage usage_flags,
+                                            DRWTextureFlag flags,
+                                            const float *fpixels);
+struct GPUTexture *DRW_texture_create_2d_array_ex(int w,
+                                                  int h,
+                                                  int d,
+                                                  eGPUTextureFormat format,
+                                                  eGPUTextureUsage usage_flags,
+                                                  DRWTextureFlag flags,
+                                                  const float *fpixels);
+struct GPUTexture *DRW_texture_create_3d_ex(int w,
+                                            int h,
+                                            int d,
+                                            eGPUTextureFormat format,
+                                            eGPUTextureUsage usage_flags,
+                                            DRWTextureFlag flags,
+                                            const float *fpixels);
+struct GPUTexture *DRW_texture_create_cube_ex(int w,
+                                              eGPUTextureFormat format,
+                                              eGPUTextureUsage usage_flags,
+                                              DRWTextureFlag flags,
+                                              const float *fpixels);
+struct GPUTexture *DRW_texture_create_cube_array_ex(int w,
+                                                    int d,
+                                                    eGPUTextureFormat format,
+                                                    eGPUTextureUsage usage_flags,
+                                                    DRWTextureFlag flags,
+                                                    const float *fpixels);
+
+void DRW_texture_ensure_fullscreen_2d_ex(struct GPUTexture **tex,
+                                         eGPUTextureFormat format,
+                                         eGPUTextureUsage usage,
+                                         DRWTextureFlag flags);
+void DRW_texture_ensure_2d_ex(struct GPUTexture **tex,
+                              int w,
+                              int h,
+                              eGPUTextureFormat format,
+                              eGPUTextureUsage usage,
+                              DRWTextureFlag flags);
+
 void DRW_texture_generate_mipmaps(struct GPUTexture *tex);
 void DRW_texture_free(struct GPUTexture *tex);
 #define DRW_TEXTURE_FREE_SAFE(tex) \
@@ -198,7 +254,7 @@ void DRW_texture_free(struct GPUTexture *tex);
   } while (0)
 
 /* Shaders */
-
+struct GPUShader *DRW_shader_create_from_info_name(const char *info_name);
 struct GPUShader *DRW_shader_create_ex(
     const char *vert, const char *geom, const char *frag, const char *defines, const char *name);
 struct GPUShader *DRW_shader_create_with_lib_ex(const char *vert,
@@ -251,7 +307,6 @@ struct GPUMaterial *DRW_shader_from_material(struct Material *ma,
                                              bool deferred,
                                              GPUCodegenCallbackFn callback,
                                              void *thunk);
-void DRW_shader_queue_optimize_material(struct GPUMaterial *mat);
 void DRW_shader_free(struct GPUShader *shader);
 #define DRW_SHADER_FREE_SAFE(shader) \
   do { \
@@ -271,6 +326,9 @@ void DRW_shader_library_add_file(DRWShaderLibrary *lib,
                                  const char *lib_name);
 #define DRW_SHADER_LIB_ADD(lib, lib_name) \
   DRW_shader_library_add_file(lib, datatoc_##lib_name##_glsl, STRINGIFY(lib_name) ".glsl")
+
+#define DRW_SHADER_LIB_ADD_SHARED(lib, lib_name) \
+  DRW_shader_library_add_file(lib, datatoc_##lib_name##_h, STRINGIFY(lib_name) ".h")
 
 /**
  * \return an allocN'ed string containing the shader code with its dependencies prepended.
@@ -399,8 +457,18 @@ void DRW_shgroup_call_instances_with_attrs(DRWShadingGroup *shgroup,
                                            struct GPUBatch *geom,
                                            struct GPUBatch *inst_attributes);
 
-void DRW_shgroup_call_sculpt(DRWShadingGroup *sh, Object *ob, bool wire, bool mask);
-void DRW_shgroup_call_sculpt_with_materials(DRWShadingGroup **sh, int num_sh, Object *ob);
+void DRW_shgroup_call_sculpt(DRWShadingGroup *shgroup,
+                             Object *ob,
+                             bool use_wire,
+                             bool use_mask,
+                             bool use_fset,
+                             bool use_color,
+                             bool use_uv);
+
+void DRW_shgroup_call_sculpt_with_materials(DRWShadingGroup **shgroups,
+                                            struct GPUMaterial **gpumats,
+                                            int num_shgroups,
+                                            Object *ob);
 
 DRWCallBuffer *DRW_shgroup_call_buffer(DRWShadingGroup *shgroup,
                                        struct GPUVertFormat *format,
@@ -674,8 +742,6 @@ const DRWView *DRW_view_get_active(void);
  * \note planes must be in world space.
  */
 void DRW_view_clip_planes_set(DRWView *view, float (*planes)[4], int plane_len);
-void DRW_view_camtexco_set(DRWView *view, float texco[4]);
-void DRW_view_camtexco_get(const DRWView *view, float r_texco[4]);
 
 /* For all getters, if view is NULL, default view is assumed. */
 
@@ -731,7 +797,6 @@ void DRW_culling_frustum_planes_get(const DRWView *view, float planes[6][4]);
 
 const float *DRW_viewport_size_get(void);
 const float *DRW_viewport_invert_size_get(void);
-const float *DRW_viewport_screenvecs_get(void);
 const float *DRW_viewport_pixelsize_get(void);
 
 struct DefaultFramebufferList *DRW_viewport_framebuffer_list_get(void);
@@ -934,6 +999,17 @@ typedef struct DRWContextState {
 } DRWContextState;
 
 const DRWContextState *DRW_context_state_get(void);
+
+struct DRW_Attributes;
+struct DRW_MeshCDMask;
+
+void DRW_mesh_batch_cache_get_attributes(struct Object *object,
+                                         struct Mesh *me,
+                                         struct DRW_Attributes **r_attrs,
+                                         struct DRW_MeshCDMask **r_cd_needed);
+
+void DRW_sculpt_debug_cb(
+    PBVHNode *node, void *user_data, const float bmin[3], const float bmax[3], PBVHNodeFlags flag);
 
 #ifdef __cplusplus
 }

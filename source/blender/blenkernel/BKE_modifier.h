@@ -127,6 +127,7 @@ typedef enum ModifierApplyFlag {
    * See `OBJECT_OT_modifier_apply` operator. */
   MOD_APPLY_TO_BASE_MESH = 1 << 4,
 } ModifierApplyFlag;
+ENUM_OPERATORS(ModifierApplyFlag, MOD_APPLY_TO_BASE_MESH);
 
 typedef struct ModifierUpdateDepsgraphContext {
   struct Scene *scene;
@@ -610,4 +611,26 @@ void BKE_modifier_blend_read_lib(struct BlendLibReader *reader, struct Object *o
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef __cplusplus
+
+namespace blender::bke {
+
+/**
+ * A convenience class that can be used to set `ModifierData::execution_time` based on the lifetime
+ * of this class.
+ */
+class ScopedModifierTimer {
+ private:
+  ModifierData &md_;
+  double start_time_;
+
+ public:
+  ScopedModifierTimer(ModifierData &md);
+  ~ScopedModifierTimer();
+};
+
+}  // namespace blender::bke
+
 #endif

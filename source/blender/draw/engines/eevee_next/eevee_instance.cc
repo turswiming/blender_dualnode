@@ -67,6 +67,7 @@ void Instance::init(const int2 &output_res,
   film.init(output_res, output_rect);
   velocity.init();
   depth_of_field.init();
+  shadows.init();
   motion_blur.init();
   main_view.init();
 }
@@ -102,9 +103,12 @@ void Instance::begin_sync()
   materials.begin_sync();
   velocity.begin_sync(); /* NOTE: Also syncs camera. */
   lights.begin_sync();
+  shadows.begin_sync();
   cryptomatte.begin_sync();
 
   gpencil_engine_enabled = false;
+
+  scene_sync();
 
   depth_of_field.sync();
   motion_blur.sync();
@@ -113,6 +117,21 @@ void Instance::begin_sync()
   main_view.sync();
   world.sync();
   film.sync();
+}
+
+void Instance::scene_sync()
+{
+  SceneHandle &sc_handle = sync.sync_scene(scene);
+
+  sc_handle.reset_recalc_flag();
+
+  /* This refers specifically to the Scene camera that can be accessed
+   * via View Layer Attribute nodes, rather than the actual render camera. */
+  if (scene->camera != nullptr) {
+    ObjectHandle &ob_handle = sync.sync_object(scene->camera);
+
+    ob_handle.reset_recalc_flag();
+  }
 }
 
 void Instance::object_sync(Object *ob)
@@ -180,6 +199,7 @@ void Instance::object_sync_render(void *instance_,
 void Instance::end_sync()
 {
   velocity.end_sync();
+  shadows.end_sync(); /** \note: Needs to be before lights. */
   lights.end_sync();
   sampling.end_sync();
   film.end_sync();
@@ -320,7 +340,7 @@ void Instance::draw_viewport(DefaultFramebufferList *dfbl)
 
   if (materials.queued_shaders_count > 0) {
     std::stringstream ss;
-    ss << "Compiling Shaders " << materials.queued_shaders_count;
+    ss << "Compiling Shaders (" << materials.queued_shaders_count << " remaining)";
     info = ss.str();
   }
 }

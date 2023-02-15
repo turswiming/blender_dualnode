@@ -301,10 +301,13 @@ static void ruler_state_set(RulerInfo *ruler_info, int state)
   }
 
   if (state == RULER_STATE_NORMAL) {
-    /* pass */
+    WM_gizmo_set_flag(ruler_info->snap_data.gizmo, WM_GIZMO_DRAW_VALUE, false);
   }
   else if (state == RULER_STATE_DRAG) {
     memset(&ruler_info->drag_state_prev, 0x0, sizeof(ruler_info->drag_state_prev));
+
+    /* Force the snap cursor to appear even though it is not highlighted. */
+    WM_gizmo_set_flag(ruler_info->snap_data.gizmo, WM_GIZMO_DRAW_VALUE, true);
   }
   else {
     BLI_assert(0);
@@ -464,7 +467,7 @@ static bool view3d_ruler_item_mousemove(const bContext *C,
  * in 3.0 this happened because left-click drag would both select and add a new ruler,
  * significantly increasing the likelihood of this happening.
  * Workaround this crash by checking the gizmo's custom-data has not been cleared.
- * The key-map has also been modified not to trigger this bug, see T95591.
+ * The key-map has also been modified not to trigger this bug, see #95591.
  */
 static bool gizmo_ruler_check_for_operator(const wmGizmoGroup *gzgroup)
 {
@@ -647,7 +650,7 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
   GPU_line_width(1.0f);
 
   BLF_enable(blf_mono_font, BLF_ROTATION);
-  BLF_size(blf_mono_font, 14.0f * U.pixelsize, U.dpi);
+  BLF_size(blf_mono_font, 14.0f * U.dpi_fac);
   BLF_rotation(blf_mono_font, 0.0f);
 
   UI_GetThemeColor3ubv(TH_TEXT, color_text);
@@ -695,7 +698,7 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
     immUniform4f("color", 0.67f, 0.67f, 0.67f, 1.0f);
     immUniform4f("color2", col[0], col[1], col[2], col[3]);
     immUniform1f("dash_width", 6.0f);
-    immUniform1f("dash_factor", 0.5f);
+    immUniform1f("udash_factor", 0.5f);
 
     immBegin(GPU_PRIM_LINE_STRIP, 3);
 
@@ -764,7 +767,7 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
     immUniform4f("color", 0.67f, 0.67f, 0.67f, 1.0f);
     immUniform4f("color2", col[0], col[1], col[2], col[3]);
     immUniform1f("dash_width", 6.0f);
-    immUniform1f("dash_factor", 0.5f);
+    immUniform1f("udash_factor", 0.5f);
 
     immBegin(GPU_PRIM_LINES, 2);
 
@@ -1040,7 +1043,7 @@ static int gizmo_ruler_modal(bContext *C,
   const bool do_snap = !(tweak_flag & WM_GIZMO_TWEAK_SNAP);
 #endif
   const bool do_thickness = tweak_flag & WM_GIZMO_TWEAK_PRECISE;
-  if ((ruler_info->drag_state_prev.do_thickness != do_thickness)) {
+  if (ruler_info->drag_state_prev.do_thickness != do_thickness) {
     do_cursor_update = true;
   }
 

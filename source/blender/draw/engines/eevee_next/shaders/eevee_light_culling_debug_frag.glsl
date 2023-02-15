@@ -1,6 +1,6 @@
 
 /**
- * Debug Shader outputing a gradient of orange - white - blue to mark culling hotspots.
+ * Debug Shader outputting a gradient of orange - white - blue to mark culling hotspots.
  * Green pixels are error pixels that are missing lights from the culling pass (i.e: when culling
  * pass is not conservative enough).
  */
@@ -21,8 +21,7 @@ void main()
   float light_count = 0.0;
   uint light_cull = 0u;
   vec2 px = gl_FragCoord.xy;
-  LIGHT_FOREACH_BEGIN_LOCAL(light_cull_buf, light_zbin_buf, light_tile_buf, px, vP_z, l_idx)
-  {
+  LIGHT_FOREACH_BEGIN_LOCAL (light_cull_buf, light_zbin_buf, light_tile_buf, px, vP_z, l_idx) {
     LightData light = light_buf[l_idx];
     light_cull |= 1u << l_idx;
     light_count += 1.0;

@@ -503,7 +503,7 @@ static float displist_calc_taper(Depsgraph *depsgraph,
 float BKE_displist_calc_taper(
     Depsgraph *depsgraph, const Scene *scene, Object *taperobj, int cur, int tot)
 {
-  const float fac = ((float)cur) / (float)(tot - 1);
+  const float fac = float(cur) / float(tot - 1);
 
   return displist_calc_taper(depsgraph, scene, taperobj, fac);
 }
@@ -518,7 +518,7 @@ static ModifierData *curve_get_tessellate_point(const Scene *scene,
 
   ModifierMode required_mode = for_render ? eModifierMode_Render : eModifierMode_Realtime;
   if (editmode) {
-    required_mode = (ModifierMode)((int)required_mode | eModifierMode_Editmode);
+    required_mode = (ModifierMode)(int(required_mode) | eModifierMode_Editmode);
   }
 
   ModifierData *pretessellatePoint = nullptr;
@@ -532,6 +532,12 @@ static ModifierData *curve_get_tessellate_point(const Scene *scene,
       return pretessellatePoint;
     }
 
+    if (md->type == eModifierType_Smooth) {
+      /* Smooth modifier works with mesh edges explicitly
+       * (so needs tessellation, thus cannot work on control points). */
+      md->mode &= ~eModifierMode_ApplyOnSpline;
+      return pretessellatePoint;
+    }
     if (ELEM(md->type, eModifierType_Hook, eModifierType_Softbody, eModifierType_MeshDeform)) {
       pretessellatePoint = md;
 
@@ -562,7 +568,7 @@ void BKE_curve_calc_modifiers_pre(Depsgraph *depsgraph,
   const bool editmode = (!for_render && (cu->editnurb || cu->editfont));
   ModifierMode required_mode = for_render ? eModifierMode_Render : eModifierMode_Realtime;
   if (editmode) {
-    required_mode = (ModifierMode)((int)required_mode | eModifierMode_Editmode);
+    required_mode = (ModifierMode)(int(required_mode) | eModifierMode_Editmode);
   }
 
   ModifierApplyFlag apply_flag = (ModifierApplyFlag)0;
@@ -606,6 +612,8 @@ void BKE_curve_calc_modifiers_pre(Depsgraph *depsgraph,
       if (mti->type != eModifierTypeType_OnlyDeform) {
         continue;
       }
+
+      blender::bke::ScopedModifierTimer modifier_timer{*md};
 
       if (!deformedVerts) {
         deformedVerts = BKE_curve_nurbs_vert_coords_alloc(source_nurb, &numVerts);
@@ -689,7 +697,7 @@ static GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
   ModifierApplyFlag apply_flag = for_render ? MOD_APPLY_RENDER : (ModifierApplyFlag)0;
   ModifierMode required_mode = for_render ? eModifierMode_Render : eModifierMode_Realtime;
   if (editmode) {
-    required_mode = (ModifierMode)((int)required_mode | eModifierMode_Editmode);
+    required_mode = (ModifierMode)(int(required_mode) | eModifierMode_Editmode);
   }
 
   const ModifierEvalContext mectx_deform = {
@@ -726,6 +734,8 @@ static GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
       mti->modifyGeometrySet(md, &mectx_apply, &geometry_set);
       continue;
     }
+
+    blender::bke::ScopedModifierTimer modifier_timer{*md};
 
     if (!geometry_set.has_mesh()) {
       geometry_set.replace_mesh(BKE_mesh_new_nomain(0, 0, 0, 0, 0));
@@ -970,13 +980,13 @@ static void calc_bevfac_segment_mapping(
   int bevcount = 0, nr = bl->nr;
 
   float bev_fl = bevfac * (bl->nr - 1);
-  *r_bev = (int)bev_fl;
+  *r_bev = int(bev_fl);
 
   while (bevcount < nr - 1) {
     float normlen = *seglen / spline_length;
     if (normsum + normlen > bevfac) {
       bev_fl = bevcount + (bevfac - normsum) / normlen * *segbevcount;
-      *r_bev = (int)bev_fl;
+      *r_bev = int(bev_fl);
       *r_blend = bev_fl - *r_bev;
       break;
     }
@@ -1046,7 +1056,7 @@ static void calc_bevfac_mapping(const Curve *cu,
   switch (cu->bevfac1_mapping) {
     case CU_BEVFAC_MAP_RESOLU: {
       const float start_fl = cu->bevfac1 * (bl->nr - 1);
-      *r_start = (int)start_fl;
+      *r_start = int(start_fl);
       *r_firstblend = 1.0f - (start_fl - (*r_start));
       break;
     }
@@ -1065,7 +1075,7 @@ static void calc_bevfac_mapping(const Curve *cu,
   switch (cu->bevfac2_mapping) {
     case CU_BEVFAC_MAP_RESOLU: {
       const float end_fl = cu->bevfac2 * (bl->nr - 1);
-      end = (int)end_fl;
+      end = int(end_fl);
 
       *r_steps = 2 + end - *r_start;
       *r_lastblend = end_fl - end;
@@ -1084,7 +1094,7 @@ static void calc_bevfac_mapping(const Curve *cu,
   }
 
   if (end < *r_start || (end == *r_start && *r_lastblend < 1.0f - *r_firstblend)) {
-    SWAP(int, *r_start, end);
+    std::swap(*r_start, end);
     tmpf = *r_lastblend;
     *r_lastblend = 1.0f - *r_firstblend;
     *r_firstblend = 1.0f - tmpf;
@@ -1194,7 +1204,7 @@ static GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
         }
 
         LISTBASE_FOREACH (DispList *, dlb, &dlbev) {
-          /* for each part of the bevel use a separate displblock */
+          /* For each part of the bevel use a separate display-block. */
           DispList *dl = MEM_cnew<DispList>(__func__);
           dl->verts = data = (float *)MEM_mallocN(sizeof(float[3]) * dlb->nr * steps, __func__);
           BLI_addtail(r_dispbase, dl);
@@ -1238,12 +1248,12 @@ static GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
                   taper_factor = 1.0f;
                 }
                 else {
-                  taper_factor = ((float)a - (1.0f - first_blend)) / len;
+                  taper_factor = (float(a) - (1.0f - first_blend)) / len;
                 }
               }
               else {
                 float len = bl->nr - 1;
-                taper_factor = (float)i / len;
+                taper_factor = float(i) / len;
 
                 if (a == 0) {
                   taper_factor += (1.0f - first_blend) / len;
@@ -1343,7 +1353,7 @@ void BKE_displist_make_curveTypes(Depsgraph *depsgraph,
        *   but it doesn't seem to work in this case.
        *
        * Since the plan is to replace this legacy curve object with the curves data-block
-       * (see T95355), this somewhat hacky inefficient solution is relatively temporary.
+       * (see #95355), this somewhat hacky inefficient solution is relatively temporary.
        */
       Curve &cow_curve = *reinterpret_cast<Curve *>(
           BKE_id_copy_ex(nullptr, &original_curve.id, nullptr, LIB_ID_COPY_LOCALIZE));

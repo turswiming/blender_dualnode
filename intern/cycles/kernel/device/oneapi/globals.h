@@ -23,12 +23,12 @@ typedef struct KernelGlobalsGPU {
 #undef KERNEL_DATA_ARRAY
   IntegratorStateGPU *integrator_state;
   const KernelData *__data;
-#ifdef WITH_ONEAPI_SYCL_HOST_ENABLED
+
+#ifdef WITH_ONEAPI_SYCL_HOST_TASK
   size_t nd_item_local_id_0;
   size_t nd_item_local_range_0;
-  size_t nd_item_group_0;
+  size_t nd_item_group_id_0;
   size_t nd_item_group_range_0;
-
   size_t nd_item_global_id_0;
   size_t nd_item_global_range_0;
 #endif

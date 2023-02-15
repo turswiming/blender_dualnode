@@ -338,14 +338,14 @@ static void deformVerts_do(HookModifierData *hmd,
   /* get world-space matrix of target, corrected for the space the verts are in */
   if (hmd->subtarget[0] && pchan) {
     /* bone target if there's a matching pose-channel */
-    mul_m4_m4m4(dmat, ob_target->obmat, pchan->pose_mat);
+    mul_m4_m4m4(dmat, ob_target->object_to_world, pchan->pose_mat);
   }
   else {
     /* just object target */
-    copy_m4_m4(dmat, ob_target->obmat);
+    copy_m4_m4(dmat, ob_target->object_to_world);
   }
-  invert_m4_m4(ob->imat, ob->obmat);
-  mul_m4_series(hd.mat, ob->imat, dmat, hmd->parentinv);
+  invert_m4_m4(ob->world_to_object, ob->object_to_world);
+  mul_m4_series(hd.mat, ob->world_to_object, dmat, hmd->parentinv);
   /* --- done with 'hd' init --- */
 
   /* Regarding index range checking below.
@@ -542,34 +542,34 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Hook = {
-    /* name */ N_("Hook"),
-    /* structName */ "HookModifierData",
-    /* structSize */ sizeof(HookModifierData),
-    /* srna */ &RNA_HookModifier,
-    /* type */ eModifierTypeType_OnlyDeform,
-    /* flags */ eModifierTypeFlag_AcceptsCVs | eModifierTypeFlag_AcceptsVertexCosOnly |
+    /*name*/ N_("Hook"),
+    /*structName*/ "HookModifierData",
+    /*structSize*/ sizeof(HookModifierData),
+    /*srna*/ &RNA_HookModifier,
+    /*type*/ eModifierTypeType_OnlyDeform,
+    /*flags*/ eModifierTypeFlag_AcceptsCVs | eModifierTypeFlag_AcceptsVertexCosOnly |
         eModifierTypeFlag_SupportsEditmode,
-    /* icon */ ICON_HOOK,
-    /* copyData */ copyData,
+    /*icon*/ ICON_HOOK,
+    /*copyData*/ copyData,
 
-    /* deformVerts */ deformVerts,
-    /* deformMatrices */ NULL,
-    /* deformVertsEM */ deformVertsEM,
-    /* deformMatricesEM */ NULL,
-    /* modifyMesh */ NULL,
-    /* modifyGeometrySet */ NULL,
+    /*deformVerts*/ deformVerts,
+    /*deformMatrices*/ NULL,
+    /*deformVertsEM*/ deformVertsEM,
+    /*deformMatricesEM*/ NULL,
+    /*modifyMesh*/ NULL,
+    /*modifyGeometrySet*/ NULL,
 
-    /* initData */ initData,
-    /* requiredDataMask */ requiredDataMask,
-    /* freeData */ freeData,
-    /* isDisabled */ isDisabled,
-    /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ NULL,
-    /* dependsOnNormals */ NULL,
-    /* foreachIDLink */ foreachIDLink,
-    /* foreachTexLink */ NULL,
-    /* freeRuntimeData */ NULL,
-    /* panelRegister */ panelRegister,
-    /* blendWrite */ blendWrite,
-    /* blendRead */ blendRead,
+    /*initData*/ initData,
+    /*requiredDataMask*/ requiredDataMask,
+    /*freeData*/ freeData,
+    /*isDisabled*/ isDisabled,
+    /*updateDepsgraph*/ updateDepsgraph,
+    /*dependsOnTime*/ NULL,
+    /*dependsOnNormals*/ NULL,
+    /*foreachIDLink*/ foreachIDLink,
+    /*foreachTexLink*/ NULL,
+    /*freeRuntimeData*/ NULL,
+    /*panelRegister*/ panelRegister,
+    /*blendWrite*/ blendWrite,
+    /*blendRead*/ blendRead,
 };

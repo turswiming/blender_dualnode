@@ -29,9 +29,9 @@ static std::string getActiveUVLayerName(Object *ob)
 {
   Mesh *me = (Mesh *)ob->data;
 
-  int num_layers = CustomData_number_of_layers(&me->ldata, CD_MLOOPUV);
+  int num_layers = CustomData_number_of_layers(&me->ldata, CD_PROP_FLOAT2);
   if (num_layers) {
-    return std::string(bc_CustomData_get_active_layer_name(&me->ldata, CD_MLOOPUV));
+    return std::string(bc_CustomData_get_active_layer_name(&me->ldata, CD_PROP_FLOAT2));
   }
 
   return "";
@@ -217,7 +217,7 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
   create_image_samplers(ep, material_image_map, active_uv);
 
 #if 0
-  unsigned int a, b;
+  uint a, b;
   for (a = 0, b = 0; a < tex_indices.size(); a++) {
     MTex *t = ma->mtex[tex_indices[a]];
     Image *ima = t->tex->ima;

@@ -15,14 +15,22 @@
 
 /** Workaround to forward-declare C++ type in C header. */
 #ifdef __cplusplus
+
+#  include "BLI_math_vector_types.hh"
+
 namespace blender {
 template<typename T> class Span;
 template<typename T> class MutableSpan;
 namespace bke {
+struct MeshRuntime;
 class AttributeAccessor;
 class MutableAttributeAccessor;
+struct LooseEdgeCache;
 }  // namespace bke
 }  // namespace blender
+using MeshRuntimeHandle = blender::bke::MeshRuntime;
+#else
+typedef struct MeshRuntimeHandle MeshRuntimeHandle;
 #endif
 
 #ifdef __cplusplus
@@ -30,133 +38,13 @@ extern "C" {
 #endif
 
 struct AnimData;
-struct BVHCache;
 struct Ipo;
 struct Key;
 struct MCol;
 struct MEdge;
 struct MFace;
-struct MLoopCol;
 struct MLoopTri;
-struct MVert;
 struct Material;
-struct Mesh;
-struct SubdivCCG;
-struct SubsurfRuntimeData;
-
-#
-#
-typedef struct EditMeshData {
-  /** when set, \a vertexNos, polyNos are lazy initialized */
-  const float (*vertexCos)[3];
-
-  /** lazy initialize (when \a vertexCos is set) */
-  float const (*vertexNos)[3];
-  float const (*polyNos)[3];
-  /** also lazy init but don't depend on \a vertexCos */
-  const float (*polyCos)[3];
-} EditMeshData;
-
-/**
- * \warning Typical access is done via
- * #BKE_mesh_runtime_looptri_ensure, #BKE_mesh_runtime_looptri_len.
- */
-struct MLoopTri_Store {
-  DNA_DEFINE_CXX_METHODS(MLoopTri_Store)
-
-  /* WARNING! swapping between array (ready-to-be-used data) and array_wip
-   * (where data is actually computed)
-   * shall always be protected by same lock as one used for looptris computing. */
-  struct MLoopTri *array, *array_wip;
-  int len;
-  int len_alloc;
-};
-
-/** Runtime data, not saved in files. */
-typedef struct Mesh_Runtime {
-  DNA_DEFINE_CXX_METHODS(Mesh_Runtime)
-
-  /* Evaluated mesh for objects which do not have effective modifiers.
-   * This mesh is used as a result of modifier stack evaluation.
-   * Since modifier stack evaluation is threaded on object level we need some synchronization. */
-  struct Mesh *mesh_eval;
-  void *eval_mutex;
-
-  /* A separate mutex is needed for normal calculation, because sometimes
-   * the normals are needed while #eval_mutex is already locked. */
-  void *normals_mutex;
-
-  /** Needed to ensure some thread-safety during render data pre-processing. */
-  void *render_mutex;
-
-  /** Lazily initialized SoA data from the #edit_mesh field in #Mesh. */
-  struct EditMeshData *edit_data;
-
-  /**
-   * Data used to efficiently draw the mesh in the viewport, especially useful when
-   * the same mesh is used in many objects or instances. See `draw_cache_impl_mesh.cc`.
-   */
-  void *batch_cache;
-
-  /** Cache for derived triangulation of the mesh. */
-  struct MLoopTri_Store looptris;
-
-  /** Cache for BVH trees generated for the mesh. Defined in 'BKE_bvhutil.c' */
-  struct BVHCache *bvh_cache;
-
-  /** Cache of non-manifold boundary data for Shrinkwrap Target Project. */
-  struct ShrinkwrapBoundaryData *shrinkwrap_data;
-
-  /** Needed in case we need to lazily initialize the mesh. */
-  CustomData_MeshMasks cd_mask_extra;
-
-  struct SubdivCCG *subdiv_ccg;
-  int subdiv_ccg_tot_level;
-
-  /** Set by modifier stack if only deformed from original. */
-  char deformed_only;
-  /**
-   * Copied from edit-mesh (hint, draw with edit-mesh data when true).
-   *
-   * Modifiers that edit the mesh data in-place must set this to false
-   * (most #eModifierTypeType_NonGeometrical modifiers). Otherwise the edit-mesh
-   * data will be used for drawing, missing changes from modifiers. See T79517.
-   */
-  char is_original_bmesh;
-
-  /** #eMeshWrapperType and others. */
-  char wrapper_type;
-  /**
-   * A type mask from wrapper_type,
-   * in case there are differences in finalizing logic between types.
-   */
-  char wrapper_type_finalize;
-
-  /**
-   * Settings for lazily evaluating the subdivision on the CPU if needed. These are
-   * set in the modifier when GPU subdivision can be performed, and owned by the by
-   * the modifier in the object.
-   */
-  struct SubsurfRuntimeData *subsurf_runtime_data;
-  void *_pad1;
-
-  /**
-   * Caches for lazily computed vertex and polygon normals. These are stored here rather than in
-   * #CustomData because they can be calculated on a const mesh, and adding custom data layers on a
-   * const mesh is not thread-safe.
-   */
-  char _pad2[6];
-  char vert_normals_dirty;
-  char poly_normals_dirty;
-  float (*vert_normals)[3];
-  float (*poly_normals)[3];
-
-  /**
-   * A #BLI_bitmap containing tags for the center vertices of subdivided polygons, set by the
-   * subdivision surface modifier and used by drawing code instead of polygon center face dots.
-   */
-  uint32_t *subsurf_face_dot_tags;
-} Mesh_Runtime;
 
 typedef struct Mesh {
   DNA_DEFINE_CXX_METHODS(Mesh)
@@ -176,7 +64,7 @@ typedef struct Mesh {
    */
   struct Material **mat;
 
-  /** The number of vertices (#MVert) in the mesh, and the size of #vdata. */
+  /** The number of vertices in the mesh, and the size of #vdata. */
   int totvert;
   /** The number of edges (#MEdge) in the mesh, and the size of #edata. */
   int totedge;
@@ -239,9 +127,9 @@ typedef struct Mesh {
   struct Mesh *texcomesh;
 
   /** Texture space location and size, used for procedural coordinates when rendering. */
-  float loc[3];
-  float size[3];
-  char texflag;
+  float texspace_location[3];
+  float texspace_size[3];
+  char texspace_flag;
 
   /** Various flags used when editing the mesh. */
   char editflag;
@@ -252,6 +140,20 @@ typedef struct Mesh {
    * The angle for auto smooth in radians. `M_PI` (180 degrees) causes all edges to be smooth.
    */
   float smoothresh;
+
+  /** Per-mesh settings for voxel remesh. */
+  float remesh_voxel_size;
+  float remesh_voxel_adaptivity;
+
+  int face_sets_color_seed;
+  /* Stores the initial Face Set to be rendered white. This way the overlay can be enabled by
+   * default and Face Sets can be used without affecting the color of the mesh. */
+  int face_sets_color_default;
+
+  /** The color attribute currently selected in the list and edited by a user. */
+  char *active_color_attribute;
+  /** The color attribute used by default (i.e. for rendering) if no name is given explicitly. */
+  char *default_color_attribute;
 
   /**
    * User-defined symmetry flag (#eMeshSymmetryType) that causes editing operations to maintain
@@ -305,28 +207,22 @@ typedef struct Mesh {
   /* Deprecated size of #fdata. */
   int totface;
 
-  /** Per-mesh settings for voxel remesh. */
-  float remesh_voxel_size;
-  float remesh_voxel_adaptivity;
-
-  int face_sets_color_seed;
-  /* Stores the initial Face Set to be rendered white. This way the overlay can be enabled by
-   * default and Face Sets can be used without affecting the color of the mesh. */
-  int face_sets_color_default;
-
   char _pad1[4];
 
-  void *_pad2;
-
-  Mesh_Runtime runtime;
+  /**
+   * Data that isn't saved in files, including caches of derived data, temporary data to improve
+   * the editing experience, etc. The struct is created when reading files and can be accessed
+   * without null checks, with the exception of some temporary meshes which should allocate and
+   * free the data if they are passed to functions that expect run-time data.
+   */
+  MeshRuntimeHandle *runtime;
 #ifdef __cplusplus
   /**
-   * Array of vertex positions (and various other data). Edges and faces are defined by indices
-   * into this array.
+   * Array of vertex positions. Edges and faces are defined by indices into this array.
    */
-  blender::Span<MVert> verts() const;
+  blender::Span<blender::float3> vert_positions() const;
   /** Write access to vertex data. */
-  blender::MutableSpan<MVert> verts_for_write();
+  blender::MutableSpan<blender::float3> vert_positions_for_write();
   /**
    * Array of edges, containing vertex indices. For simple triangle or quad meshes, edges could be
    * calculated from the #MPoly and #MLoop arrays, however, edges need to be stored explicitly to
@@ -360,6 +256,34 @@ typedef struct Mesh {
   /** Write access to vertex group data. */
   blender::MutableSpan<MDeformVert> deform_verts_for_write();
 
+  /**
+   * Cached triangulation of the mesh.
+   */
+  blender::Span<MLoopTri> looptris() const;
+
+  /**
+   * Cached information about loose edges, calculated lazily when necessary.
+   */
+  const blender::bke::LooseEdgeCache &loose_edges() const;
+  /**
+   * Explicitly set the cached number of loose edges to zero. This can improve performance
+   * later on, because finding loose edges lazily can be skipped entirely.
+   *
+   * \note To allow setting this status on meshes without changing them, this does not tag the
+   * cache dirty. If the mesh was changed first, the relevant dirty tags should be called first.
+   */
+  void loose_edges_tag_none() const;
+
+  /**
+   * Normal direction of every polygon, which is defined by the winding direction of its corners.
+   */
+  blender::Span<blender::float3> poly_normals() const;
+  /**
+   * Normal direction for each vertex, which is defined as the weighted average of the normals
+   * from a vertices surrounding faces, or the normalized position of vertices connected to no
+   * faces.
+   */
+  blender::Span<blender::float3> vertex_normals() const;
 #endif
 } Mesh;
 
@@ -379,20 +303,10 @@ typedef struct TFace {
 
 /* **************** MESH ********************* */
 
-/** #Mesh_Runtime.wrapper_type */
-typedef enum eMeshWrapperType {
-  /** Use mesh data (#Mesh.mvert, #Mesh.medge, #Mesh.mloop, #Mesh.mpoly). */
-  ME_WRAPPER_TYPE_MDATA = 0,
-  /** Use edit-mesh data (#Mesh.edit_mesh, #Mesh_Runtime.edit_data). */
-  ME_WRAPPER_TYPE_BMESH = 1,
-  /** Use subdivision mesh data (#Mesh_Runtime.mesh_eval). */
-  ME_WRAPPER_TYPE_SUBD = 2,
-} eMeshWrapperType;
-
-/** #Mesh.texflag */
+/** #Mesh.texspace_flag */
 enum {
-  ME_AUTOSPACE = 1,
-  ME_AUTOSPACE_EVALUATED = 2,
+  ME_TEXSPACE_FLAG_AUTO = 1 << 0,
+  ME_TEXSPACE_FLAG_AUTO_EVALUATED = 1 << 1,
 };
 
 /** #Mesh.editflag */

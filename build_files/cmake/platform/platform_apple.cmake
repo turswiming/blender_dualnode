@@ -21,24 +21,8 @@ function(print_found_status
   endif()
 endfunction()
 
-# Utility to install precompiled shared libraries.
-macro(add_bundled_libraries library)
-  if(EXISTS ${LIBDIR})
-    set(_library_dir ${LIBDIR}/${library}/lib)
-    file(GLOB _all_library_versions ${_library_dir}/*\.dylib*)
-    list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_all_library_versions})
-    list(APPEND PLATFORM_BUNDLED_LIBRARY_DIRS ${_library_dir})
-    unset(_all_library_versions)
-    unset(_library_dir)
- endif()
-endmacro()
-
 # ------------------------------------------------------------------------
 # Find system provided libraries.
-
-# Avoid searching for headers since this would otherwise override our lib
-# directory as well as PYTHON_ROOT_DIR.
-set(CMAKE_FIND_FRAMEWORK NEVER)
 
 # Find system ZLIB, not the pre-compiled one supplied with OpenCollada.
 set(ZLIB_ROOT /usr)
@@ -47,22 +31,18 @@ find_package(BZip2 REQUIRED)
 list(APPEND ZLIB_LIBRARIES ${BZIP2_LIBRARIES})
 
 if(WITH_OPENAL)
-  find_package(OpenAL)
-  if(NOT OPENAL_FOUND)
-    message(WARNING "OpenAL not found, disabling WITH_OPENAL")
-    set(WITH_OPENAL OFF)
-  endif()
+  find_package(OpenAL REQUIRED)
 endif()
 
 if(WITH_JACK)
   find_library(JACK_FRAMEWORK
     NAMES jackmp
   )
-  if(NOT JACK_FRAMEWORK)
-    message(STATUS "JACK not found, disabling WITH_JACK")
-    set(WITH_JACK OFF)
-  else()
+
+  if(JACK_FRAMEWORK)
     set(JACK_INCLUDE_DIRS ${JACK_FRAMEWORK}/headers)
+  else()
+    set_and_warn_library_found("JACK" JACK_FRAMEWORK WITH_JACK)
   endif()
 endif()
 
@@ -78,6 +58,10 @@ endif()
 if(NOT EXISTS "${LIBDIR}/")
   message(FATAL_ERROR "Mac OSX requires pre-compiled libs at: '${LIBDIR}'")
 endif()
+
+# Avoid searching for headers since this would otherwise override our lib
+# directory as well as PYTHON_ROOT_DIR.
+set(CMAKE_FIND_FRAMEWORK NEVER)
 
 # Optionally use system Python if PYTHON_ROOT_DIR is specified.
 if(WITH_PYTHON AND (WITH_PYTHON_MODULE AND PYTHON_ROOT_DIR))
@@ -101,16 +85,26 @@ if(WITH_ALEMBIC)
 endif()
 
 if(WITH_USD)
-  find_package(USD)
-  if(NOT USD_FOUND)
-    message(STATUS "USD not found, disabling WITH_USD")
-    set(WITH_USD OFF)
-  endif()
+  find_package(USD REQUIRED)
+endif()
+add_bundled_libraries(usd/lib)
+
+if(WITH_MATERIALX)
+  find_package(MaterialX)
+  set_and_warn_library_found("MaterialX" MaterialX_FOUND WITH_MATERIALX)
+endif()
+add_bundled_libraries(materialx/lib)
+
+if(WITH_VULKAN_BACKEND)
+  find_package(MoltenVK REQUIRED)
+  find_package(ShaderC REQUIRED)
+  find_package(Vulkan REQUIRED)
 endif()
 
 if(WITH_OPENSUBDIV)
   find_package(OpenSubdiv)
 endif()
+add_bundled_libraries(opensubdiv/lib)
 
 if(WITH_CODEC_SNDFILE)
   find_package(SndFile)
@@ -149,6 +143,8 @@ list(APPEND FREETYPE_LIBRARIES
 if(WITH_IMAGE_OPENEXR)
   find_package(OpenEXR)
 endif()
+add_bundled_libraries(openexr/lib)
+add_bundled_libraries(imath/lib)
 
 if(WITH_CODEC_FFMPEG)
   set(FFMPEG_ROOT_DIR ${LIBDIR}/ffmpeg)
@@ -227,20 +223,12 @@ find_package(JPEG REQUIRED)
 
 if(WITH_IMAGE_TIFF)
   set(TIFF_ROOT ${LIBDIR}/tiff)
-  find_package(TIFF)
-  if(NOT TIFF_FOUND)
-    message(WARNING "TIFF not found, disabling WITH_IMAGE_TIFF")
-    set(WITH_IMAGE_TIFF OFF)
-  endif()
+  find_package(TIFF REQUIRED)
 endif()
 
 if(WITH_IMAGE_WEBP)
   set(WEBP_ROOT_DIR ${LIBDIR}/webp)
-  find_package(WebP)
-  if(NOT WEBP_FOUND)
-    message(WARNING "WebP not found, disabling WITH_IMAGE_WEBP")
-    set(WITH_IMAGE_WEBP OFF)
-  endif()
+  find_package(WebP REQUIRED)
 endif()
 
 if(WITH_BOOST)
@@ -254,9 +242,17 @@ if(WITH_BOOST)
   if(WITH_OPENVDB)
     list(APPEND _boost_FIND_COMPONENTS iostreams)
   endif()
+  if(WITH_USD AND USD_PYTHON_SUPPORT)
+    list(APPEND _boost_FIND_COMPONENTS python${PYTHON_VERSION_NO_DOTS})
+  endif()
   find_package(Boost COMPONENTS ${_boost_FIND_COMPONENTS})
 
+  # Boost Python is separate to avoid linking Python into tests that don't need it.
   set(BOOST_LIBRARIES ${Boost_LIBRARIES})
+  if(WITH_USD AND USD_PYTHON_SUPPORT)
+    set(BOOST_PYTHON_LIBRARIES ${Boost_PYTHON${PYTHON_VERSION_NO_DOTS}_LIBRARY})
+    list(REMOVE_ITEM BOOST_LIBRARIES ${BOOST_PYTHON_LIBRARIES})
+  endif()
   set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
   set(BOOST_DEFINITIONS)
 
@@ -264,17 +260,14 @@ if(WITH_BOOST)
   mark_as_advanced(Boost_INCLUDE_DIRS)
   unset(_boost_FIND_COMPONENTS)
 endif()
+add_bundled_libraries(boost/lib)
 
 if(WITH_INTERNATIONAL OR WITH_CODEC_FFMPEG)
   string(APPEND PLATFORM_LINKFLAGS " -liconv") # boost_locale and ffmpeg needs it !
 endif()
 
 if(WITH_PUGIXML)
-  find_package(PugiXML)
-  if(NOT PUGIXML_FOUND)
-    message(WARNING "PugiXML not found, disabling WITH_PUGIXML")
-    set(WITH_PUGIXML OFF)
-  endif()
+  find_package(PugiXML REQUIRED)
 endif()
 
 if(WITH_OPENIMAGEIO)
@@ -290,23 +283,24 @@ if(WITH_OPENIMAGEIO)
   set(OPENIMAGEIO_DEFINITIONS "-DOIIO_STATIC_BUILD")
   set(OPENIMAGEIO_IDIFF "${LIBDIR}/openimageio/bin/idiff")
 endif()
+add_bundled_libraries(openimageio/lib)
 
 if(WITH_OPENCOLORIO)
-  find_package(OpenColorIO 2.0.0)
-
-  if(NOT OPENCOLORIO_FOUND)
-    set(WITH_OPENCOLORIO OFF)
-    message(STATUS "OpenColorIO not found, disabling WITH_OPENCOLORIO")
-  endif()
+  find_package(OpenColorIO 2.0.0 REQUIRED)
 endif()
+add_bundled_libraries(opencolorio/lib)
 
 if(WITH_OPENVDB)
   find_package(OpenVDB)
   find_library(BLOSC_LIBRARIES NAMES blosc HINTS ${LIBDIR}/openvdb/lib)
-  print_found_status("Blosc" "${BLOSC_LIBRARIES}")
-  list(APPEND OPENVDB_LIBRARIES ${BLOSC_LIBRARIES})
+  if(BLOSC_LIBRARIES)
+    list(APPEND OPENVDB_LIBRARIES ${BLOSC_LIBRARIES})
+  else()
+    unset(BLOSC_LIBRARIES CACHE)
+  endif()
   set(OPENVDB_DEFINITIONS)
 endif()
+add_bundled_libraries(openvdb/lib)
 
 if(WITH_NANOVDB)
   find_package(NanoVDB)
@@ -324,30 +318,14 @@ if(WITH_LLVM)
   if(WITH_CLANG)
     find_package(Clang)
     if(NOT CLANG_FOUND)
-       message(FATAL_ERROR "Clang not found.")
+      message(FATAL_ERROR "Clang not found.")
     endif()
   endif()
 
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_OSL)
-  set(CYCLES_OSL ${LIBDIR}/osl)
-
-  find_library(OSL_LIB_EXEC NAMES oslexec PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_COMP NAMES oslcomp PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_QUERY NAMES oslquery PATHS ${CYCLES_OSL}/lib)
-  # WARNING! depends on correct order of OSL libs linking
-  list(APPEND OSL_LIBRARIES ${OSL_LIB_COMP} -force_load ${OSL_LIB_EXEC} ${OSL_LIB_QUERY})
-  find_path(OSL_INCLUDE_DIR OSL/oslclosure.h PATHS ${CYCLES_OSL}/include)
-  find_program(OSL_COMPILER NAMES oslc PATHS ${CYCLES_OSL}/bin)
-  find_path(OSL_SHADER_DIR NAMES stdosl.h PATHS ${CYCLES_OSL}/share/OSL/shaders)
-
-  if(OSL_INCLUDE_DIR AND OSL_LIBRARIES AND OSL_COMPILER AND OSL_SHADER_DIR)
-    set(OSL_FOUND TRUE)
-  else()
-    message(WARNING "OSL not found, disabling WITH_CYCLES_OSL")
-    set(WITH_CYCLES_OSL OFF)
-  endif()
+  find_package(OSL REQUIRED)
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
@@ -365,28 +343,16 @@ if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
 endif()
 
 if(WITH_OPENIMAGEDENOISE)
-  find_package(OpenImageDenoise)
-
-  if(NOT OPENIMAGEDENOISE_FOUND)
-    set(WITH_OPENIMAGEDENOISE OFF)
-    message(STATUS "OpenImageDenoise not found, disabling WITH_OPENIMAGEDENOISE")
-  endif()
+  find_package(OpenImageDenoise REQUIRED)
 endif()
 
 if(WITH_TBB)
-  find_package(TBB)
-  if(NOT TBB_FOUND)
-    message(WARNING "TBB not found, disabling WITH_TBB")
-    set(WITH_TBB OFF)
-  endif()
+  find_package(TBB REQUIRED)
 endif()
+add_bundled_libraries(tbb/lib)
 
 if(WITH_POTRACE)
-  find_package(Potrace)
-  if(NOT POTRACE_FOUND)
-    message(WARNING "potrace not found, disabling WITH_POTRACE")
-    set(WITH_POTRACE OFF)
-  endif()
+  find_package(Potrace REQUIRED)
 endif()
 
 # CMake FindOpenMP doesn't know about AppleClang before 3.12, so provide custom flags.
@@ -401,31 +367,31 @@ if(WITH_OPENMP)
     set(OpenMP_LIBRARY_DIR "${LIBDIR}/openmp/lib/")
     set(OpenMP_LINKER_FLAGS "-L'${OpenMP_LIBRARY_DIR}' -lomp")
     set(OpenMP_LIBRARY "${OpenMP_LIBRARY_DIR}/libomp.dylib")
-    add_bundled_libraries(openmp)
   endif()
 endif()
+add_bundled_libraries(openmp/lib)
 
 if(WITH_XR_OPENXR)
-  find_package(XR_OpenXR_SDK)
-  if(NOT XR_OPENXR_SDK_FOUND)
-    message(WARNING "OpenXR-SDK was not found, disabling WITH_XR_OPENXR")
-    set(WITH_XR_OPENXR OFF)
-  endif()
+  find_package(XR_OpenXR_SDK REQUIRED)
 endif()
 
 if(WITH_GMP)
-  find_package(GMP)
-  if(NOT GMP_FOUND)
-    message(WARNING "GMP not found, disabling WITH_GMP")
-    set(WITH_GMP OFF)
-  endif()
+  find_package(GMP REQUIRED)
 endif()
 
 if(WITH_HARU)
-  find_package(Haru)
-  if(NOT HARU_FOUND)
-    message(WARNING "Haru not found, disabling WITH_HARU")
-    set(WITH_HARU OFF)
+  find_package(Haru REQUIRED)
+endif()
+
+if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
+  find_package(openpgl QUIET)
+  if(openpgl_FOUND)
+    get_target_property(OPENPGL_LIBRARIES openpgl::openpgl LOCATION)
+    get_target_property(OPENPGL_INCLUDE_DIR openpgl::openpgl INTERFACE_INCLUDE_DIRECTORIES)
+    message(STATUS "Found OpenPGL: ${OPENPGL_LIBRARIES}")
+  else()
+    set(WITH_CYCLES_PATH_GUIDING OFF)
+    message(STATUS "OpenPGL not found, disabling WITH_CYCLES_PATH_GUIDING")
   endif()
 endif()
 
@@ -474,7 +440,7 @@ string(APPEND PLATFORM_LINKFLAGS " -stdlib=libc++")
 # Make stack size more similar to Embree, required for Embree.
 string(APPEND PLATFORM_LINKFLAGS_EXECUTABLE " -Wl,-stack_size,0x100000")
 
-# Suppress ranlib "has no symbols" warnings (workaround for T48250)
+# Suppress ranlib "has no symbols" warnings (workaround for #48250).
 set(CMAKE_C_ARCHIVE_CREATE   "<CMAKE_AR> Scr <TARGET> <LINK_FLAGS> <OBJECTS>")
 set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> Scr <TARGET> <LINK_FLAGS> <OBJECTS>")
 # llvm-ranlib doesn't support this flag. Xcode's libtool does.
@@ -517,6 +483,12 @@ if(PLATFORM_BUNDLED_LIBRARIES)
   # different.
   set(CMAKE_SKIP_BUILD_RPATH FALSE)
   list(APPEND CMAKE_BUILD_RPATH ${PLATFORM_BUNDLED_LIBRARY_DIRS})
+
+  # Environment variables to run precompiled executables that needed libraries.
+  list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
+  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};${DYLD_LIBRARY_PATH}\"")
+  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/;$DYLD_LIBRARY_PATH")
+  unset(_library_paths)
 endif()
 
 # Same as `CFBundleIdentifier` in Info.plist.
