@@ -1345,6 +1345,7 @@ rna_custom_property_name = StringProperty(
     maxlen=63,
 )
 
+# Most useful entries of rna_enum_property_subtype_items:
 rna_custom_property_type_items = (
     ('FLOAT', "Float", "A single floating-point value"),
     ('FLOAT_ARRAY', "Float Array", "An array of floating-point values"),
@@ -1375,27 +1376,25 @@ rna_vector_subtype_items = (
 )
 
 
-def subtype_items_cb(self, context):
-    subtype_items = [
-        ('NONE', "Plain Data", "Data values without special behavior")
-    ]
-    if self.property_type == 'FLOAT':
-        subtype_items.extend(rna_number_subtype_items)
-    elif self.property_type == 'FLOAT_ARRAY':
-        subtype_items.extend(rna_vector_subtype_items)
-    return subtype_items
-
-
-def property_type_update_cb(self, context):
-    self.subtype = 'NONE'
-
-
 class WM_OT_properties_edit(Operator):
     """Change a custom property's type, or adjust how it is displayed in the interface"""
     bl_idname = "wm.properties_edit"
     bl_label = "Edit Property"
     # register only because invoke_props_popup requires.
     bl_options = {'REGISTER', 'INTERNAL'}
+    
+    def subtype_items_cb(self, context):
+        subtype_items = [
+            ('NONE', "Plain Data", "Data values without special behavior")
+        ]
+        if self.property_type == 'FLOAT':
+            subtype_items.extend(rna_number_subtype_items)
+        elif self.property_type == 'FLOAT_ARRAY':
+            subtype_items.extend(rna_vector_subtype_items)
+        return subtype_items
+
+    def property_type_update_cb(self, context):
+        self.subtype = 'NONE'
 
     # Common settings used for all property types. Generally, separate properties are used for each
     # type to improve the experience when choosing UI data values.
