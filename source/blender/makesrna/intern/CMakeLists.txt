@@ -50,7 +50,7 @@ set(DEFSRC
   rna_material.c
   rna_mesh.c
   rna_meta.c
-  rna_modifier.c
+        rna_modifier.c
   rna_movieclip.c
   rna_nla.c
   rna_nodetree.c

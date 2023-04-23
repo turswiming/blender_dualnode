@@ -84,6 +84,7 @@ typedef enum ModifierType {
   eModifierType_MeshToVolume = 58,
   eModifierType_VolumeDisplace = 59,
   eModifierType_VolumeToMesh = 60,
+  eModifierType_Nothing=61,
   NUM_MODIFIER_TYPES,
 } ModifierType;
 
@@ -2405,6 +2406,9 @@ typedef enum VolumeToMeshResolutionMode {
 typedef enum VolumeToMeshFlag {
   VOLUME_TO_MESH_USE_SMOOTH_SHADE = 1 << 0,
 } VolumeToMeshFlag;
+typedef struct NothingModifierData {
+  ModifierData modifier;
+} NothingModifierData;
 
 #ifdef __cplusplus
 }

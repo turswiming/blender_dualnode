@@ -298,6 +298,12 @@ const EnumPropertyItem rna_enum_object_modifier_type_items[] = {
      "Spawn particles from the shape"},
     {eModifierType_Softbody, "SOFT_BODY", ICON_MOD_SOFT, "Soft Body", ""},
     {eModifierType_Surface, "SURFACE", ICON_MODIFIER, "Surface", ""},
+    {eModifierType_Nothing,
+     "Nothing",
+     ICON_VOLUME_DATA,
+     "nothing",
+     ""}, /* TODO: Use correct icon. */
+
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -7178,7 +7184,17 @@ static void rna_def_modifier_volume_displace(BlenderRNA *brna)
 
   RNA_define_lib_overridable(false);
 }
+static void rna_def_modifier_Nothing(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+  srna = RNA_def_struct(brna, "NothingModifier", "Modifier");
+  RNA_def_struct_ui_text(srna, "Nothing Modifier", "");
+  RNA_def_struct_sdna(srna, "NothingModifierData");
+  RNA_def_struct_ui_icon(srna, ICON_VOLUME_DATA); /* TODO: Use correct icon. */
 
+  RNA_define_lib_overridable(true);
+}
 static void rna_def_modifier_volume_to_mesh(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -7421,6 +7437,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   rna_def_modifier_mesh_to_volume(brna);
   rna_def_modifier_volume_displace(brna);
   rna_def_modifier_volume_to_mesh(brna);
+  rna_def_modifier_Nothing(brna);
 }
 
 #endif
